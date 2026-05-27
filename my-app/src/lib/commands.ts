@@ -1,3 +1,5 @@
+import type { UiMessageKey } from "./i18n";
+
 export type CommandGroup = "Create" | "Go to" | "Actions";
 
 export type CommandAction =
@@ -11,6 +13,7 @@ export type AppCommand = {
   id: string;
   group: CommandGroup;
   label: string;
+  labelKey?: UiMessageKey;
   shortcut?: string;
   keywords?: string[];
   action: CommandAction;
@@ -89,6 +92,7 @@ export const APP_COMMANDS: AppCommand[] = [
     id: "quick-start",
     group: "Actions",
     label: "Replay onboarding",
+    labelKey: "onboarding.replay",
     keywords: ["start", "setup"],
     action: { type: "replay-onboarding" },
   },

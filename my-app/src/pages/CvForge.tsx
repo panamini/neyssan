@@ -67,6 +67,8 @@ import { useDocumentCommandLayerPosition } from "../hooks/use-document-command-l
 import {
   getCommandLayerToolbarDensity,
 } from "../lib/document-command-layer-layout";
+import { translateUi } from "../lib/i18n";
+import { useUiLanguagePreference } from "../lib/ui-preferences";
 import type { CvAiSurfacePosition } from "../lib/cv-ai-surface-position";
 import {
   buildAuthoritativeResumeDebugSnapshot,
@@ -2413,7 +2415,7 @@ function useCvForgeDrawerRecentSearches(storageKey: string) {
 function CvForgeDrawerSearch({
   value,
   onChange,
-  placeholder = "Search library",
+  placeholder,
   storageKey = "twoweeks:forge-drawer:recent-cvforge-library-searches",
 }: {
   value: string;
@@ -2422,6 +2424,9 @@ function CvForgeDrawerSearch({
   storageKey?: string;
 }): JSX.Element {
   const [focused, setFocused] = React.useState(false);
+  const { resolvedLanguage } = useUiLanguagePreference();
+  const resolvedPlaceholder =
+    placeholder ?? translateUi(resolvedLanguage, "search.library");
   const { recentSearches, rememberSearch, clearRecentSearches } =
     useCvForgeDrawerRecentSearches(storageKey);
   const showRecentSearches =
@@ -2433,7 +2438,7 @@ function CvForgeDrawerSearch({
   return (
     <div className="forge-rail-drawer__search-wrap">
       <label className="forge-rail-drawer__search">
-        <span className="sr-only">{placeholder}</span>
+        <span className="sr-only">{resolvedPlaceholder}</span>
         <input
           type="search"
           value={value}
@@ -2446,19 +2451,19 @@ function CvForgeDrawerSearch({
           onKeyDown={(event) => {
             if (event.key === "Enter") commitSearch();
           }}
-          placeholder={placeholder}
+          placeholder={resolvedPlaceholder}
         />
       </label>
       {showRecentSearches ? (
         <div className="forge-rail-drawer__recent-searches" role="listbox">
           <div className="forge-rail-drawer__recent-searches-head">
-            <span>Recent searches</span>
+            <span>{translateUi(resolvedLanguage, "search.recent")}</span>
             <button
               type="button"
               onMouseDown={(event) => event.preventDefault()}
               onClick={clearRecentSearches}
             >
-              Clear
+              {translateUi(resolvedLanguage, "search.clear")}
             </button>
           </div>
           {recentSearches.map((recent) => (
@@ -2585,8 +2590,16 @@ export function CvForgeCvDrawer({
   onSelectCv: (id: string) => void;
   onOpenCv: (id: string) => void;
 }): JSX.Element {
+  const { resolvedLanguage } = useUiLanguagePreference();
   const [query, setQuery] = React.useState("");
   const allResultsRef = React.useRef<HTMLDivElement | null>(null);
+  const currentLabel = translateUi(resolvedLanguage, "workspace.current");
+  const openCvLabel = translateUi(resolvedLanguage, "workspace.openCv");
+  const openFullCvLabel = translateUi(
+    resolvedLanguage,
+    "workspace.openFullCv",
+  );
+  const switchCvLabel = translateUi(resolvedLanguage, "workspace.switchCv");
   const normalizedQuery = query.trim().toLowerCase();
   const filteredItems = items.filter((item) => {
     if (item.type !== "cv") return false;
@@ -2627,22 +2640,22 @@ export function CvForgeCvDrawer({
         <button
           type="button"
           className="forge-template-card forge-rail-drawer__thumb-button"
-          aria-label={`Open CV: ${item.title}`}
+          aria-label={`${openCvLabel}: ${item.title}`}
           aria-pressed={selected}
           onClick={() => onSelectCv(sourceId)}
         >
           <CvForgeDrawerPreview
             item={item}
             hydrateCvDocument={hydrateCvDocument}
-            badge={selected ? "Current" : null}
-            actionPill="Switch CV"
+            badge={selected ? currentLabel : null}
+            actionPill={switchCvLabel}
           />
         </button>
         <button
           type="button"
           className="forge-rail-drawer__thumb-menu forge-rail-drawer__thumb-menu--direct"
-          aria-label={`Open full CV: ${item.title}`}
-          data-toolbar-tooltip="Open full CV"
+          aria-label={`${openFullCvLabel}: ${item.title}`}
+          data-toolbar-tooltip={openFullCvLabel}
           onClick={(event) => {
             event.stopPropagation();
             onOpenCv(sourceId);
@@ -2659,28 +2672,30 @@ export function CvForgeCvDrawer({
       <CvForgeDrawerSearch
         value={query}
         onChange={setQuery}
-        placeholder="Search CVs"
+        placeholder={translateUi(resolvedLanguage, "search.cvs")}
         storageKey="twoweeks:forge-drawer:recent-cvforge-cv-searches"
       />
       <div className="forge-rail-drawer__grid" role="list">
         <CvForgeDrawerSectionTitle
-          title="Recently viewed"
+          title={translateUi(resolvedLanguage, "workspace.recentlyViewed")}
           actionLabel={
             filteredItems.length > recentItems.length
-              ? "Show all CVs"
+              ? translateUi(resolvedLanguage, "workspace.showAllCvs")
               : undefined
           }
           onAction={handleShowAll}
         />
         {recentItems.map((item) => renderItem(item, "recent-"))}
         <CvForgeDrawerSectionTitle
-          title="All results"
+          title={translateUi(resolvedLanguage, "workspace.allResults")}
           sectionRef={allResultsRef}
           focusable
         />
         {filteredItems.map((item) => renderItem(item))}
         {filteredItems.length === 0 ? (
-          <p className="forge-rail-drawer__empty">No CVs found.</p>
+          <p className="forge-rail-drawer__empty">
+            {translateUi(resolvedLanguage, "emptyState.noCvsFound")}
+          </p>
         ) : null}
       </div>
     </div>
@@ -2702,11 +2717,26 @@ export function CvForgeLibraryDrawer({
   onOpenItem: (item: LibraryItem) => void;
   onOpenLibraryType: (type: "cvs" | "proposals") => void;
 }): JSX.Element {
+  const { resolvedLanguage } = useUiLanguagePreference();
   const [query, setQuery] = React.useState("");
   const [filter, setFilter] = React.useState<"all" | "cvs" | "proposals">(
     "cvs",
   );
   const allResultsRef = React.useRef<HTMLDivElement | null>(null);
+  const currentLabel = translateUi(resolvedLanguage, "workspace.current");
+  const openCvLabel = translateUi(resolvedLanguage, "workspace.openCv");
+  const openProposalLabel = translateUi(
+    resolvedLanguage,
+    "workspace.openProposal",
+  );
+  const openCvLibraryLabel = translateUi(
+    resolvedLanguage,
+    "workspace.openCvLibrary",
+  );
+  const openProposalsLibraryLabel = translateUi(
+    resolvedLanguage,
+    "workspace.openProposalsLibrary",
+  );
   const normalizedQuery = query.trim().toLowerCase();
   const filteredItems = items.filter((item) => {
     if (filter === "cvs" && item.type !== "cv") return false;
@@ -2745,8 +2775,8 @@ export function CvForgeLibraryDrawer({
           className="forge-template-card forge-rail-drawer__thumb-button"
           aria-label={
             item.type === "cv"
-              ? `Open CV: ${item.title}`
-              : `Open proposal: ${item.title}`
+              ? `${openCvLabel}: ${item.title}`
+              : `${openProposalLabel}: ${item.title}`
           }
           aria-pressed={item.type === "cv" ? selected : undefined}
           onClick={() => {
@@ -2760,7 +2790,7 @@ export function CvForgeLibraryDrawer({
           <CvForgeDrawerPreview
             item={item}
             hydrateCvDocument={hydrateCvDocument}
-            badge={selected ? "Current" : null}
+            badge={selected ? currentLabel : null}
           />
         </button>
         <button
@@ -2768,11 +2798,13 @@ export function CvForgeLibraryDrawer({
           className="forge-rail-drawer__thumb-menu forge-rail-drawer__thumb-menu--direct"
           aria-label={
             item.type === "cv"
-              ? `Open CV library for ${item.title}`
-              : `Open proposals library for ${item.title}`
+              ? `${openCvLibraryLabel}: ${item.title}`
+              : `${openProposalsLibraryLabel}: ${item.title}`
           }
           data-toolbar-tooltip={
-            item.type === "cv" ? "Open CV library" : "Open proposals"
+            item.type === "cv"
+              ? openCvLibraryLabel
+              : openProposalsLibraryLabel
           }
           onClick={(event) => {
             event.stopPropagation();
@@ -2790,17 +2822,17 @@ export function CvForgeLibraryDrawer({
       <CvForgeDrawerSearch
         value={query}
         onChange={setQuery}
-        placeholder="Search library"
+        placeholder={translateUi(resolvedLanguage, "search.library")}
       />
       <div
         className="forge-rail-drawer__tabs"
         role="tablist"
-        aria-label="Library filter"
+        aria-label={translateUi(resolvedLanguage, "workspace.libraryFilter")}
       >
         {[
-          ["all", "All"],
-          ["cvs", "CVs"],
-          ["proposals", "Proposals"],
+          ["all", translateUi(resolvedLanguage, "projects.all")],
+          ["cvs", translateUi(resolvedLanguage, "projects.cvs")],
+          ["proposals", translateUi(resolvedLanguage, "projects.proposals")],
         ].map(([id, label]) => (
           <button
             key={id}
@@ -2818,15 +2850,15 @@ export function CvForgeLibraryDrawer({
       </div>
       <div className="forge-rail-drawer__grid" role="list">
         <CvForgeDrawerSectionTitle
-          title="Recently viewed"
+          title={translateUi(resolvedLanguage, "workspace.recentlyViewed")}
           actionLabel={
             filteredItems.length <= recentItems.length
               ? undefined
               : filter === "cvs"
-                ? "Show all CVs"
+                ? translateUi(resolvedLanguage, "workspace.showAllCvs")
                 : filter === "proposals"
-                  ? "Show all proposals"
-                  : "Show all"
+                  ? translateUi(resolvedLanguage, "workspace.showAllProposals")
+                  : translateUi(resolvedLanguage, "workspace.showAll")
           }
           onAction={() => {
             setQuery("");
@@ -2838,13 +2870,15 @@ export function CvForgeLibraryDrawer({
         />
         {recentItems.map((item) => renderItem(item, "recent-"))}
         <CvForgeDrawerSectionTitle
-          title="All results"
+          title={translateUi(resolvedLanguage, "workspace.allResults")}
           sectionRef={allResultsRef}
           focusable
         />
         {filteredItems.map((item) => renderItem(item))}
         {filteredItems.length === 0 ? (
-          <p className="forge-rail-drawer__empty">No documents found.</p>
+          <p className="forge-rail-drawer__empty">
+            {translateUi(resolvedLanguage, "emptyState.noDocumentsFound")}
+          </p>
         ) : null}
       </div>
     </div>
@@ -2862,6 +2896,7 @@ export function CvForge(): JSX.Element {
   const location = useLocation();
   const { search } = location;
   const navigate = useNavigate();
+  const { resolvedLanguage } = useUiLanguagePreference();
   const {
     activeSurface: activeTemplateSurface,
     open: templatePanelOpen,
@@ -5902,7 +5937,7 @@ export function CvForge(): JSX.Element {
   const cvTemplatePanelRegistration = React.useMemo(
     () => ({
       surface: "cv" as const,
-      title: "CV templates",
+      title: translateUi(resolvedLanguage, "workspace.cvTemplatesPanel"),
       subtitle: "A4 · 21 × 29.7 cm",
       activeItemId: activeCvTemplatePanelItemId,
       items: cvTemplatePanelItems,
@@ -5912,7 +5947,12 @@ export function CvForge(): JSX.Element {
         }
       },
     }),
-    [activeCvTemplatePanelItemId, cvTemplatePanelItems, handleSelectTemplate],
+    [
+      activeCvTemplatePanelItemId,
+      cvTemplatePanelItems,
+      handleSelectTemplate,
+      resolvedLanguage,
+    ],
   );
   useRegisterForgeTemplates(cvTemplatePanelRegistration);
   const cvLibraryDrawerItems = React.useMemo(
@@ -5957,7 +5997,7 @@ export function CvForge(): JSX.Element {
   const cvOnlyPanelRegistration = React.useMemo(
     () => ({
       surface: "cvs" as const,
-      title: "CV library",
+      title: translateUi(resolvedLanguage, "workspace.cvLibrary"),
       icon: <FileUser size={16} aria-hidden="true" />,
       renderContent: () => (
         <CvForgeCvDrawer
@@ -5969,7 +6009,7 @@ export function CvForge(): JSX.Element {
         />
       ),
       footer: {
-        label: "Open Library",
+        label: translateUi(resolvedLanguage, "workspace.openLibrary"),
         icon: <FolderSimple size={13} aria-hidden="true" />,
         onSelect: () => navigate("/documents?type=cvs"),
       },
@@ -5981,13 +6021,14 @@ export function CvForge(): JSX.Element {
       handleSelectCvFromLibraryDrawer,
       hydrateCvDocument,
       navigate,
+      resolvedLanguage,
     ],
   );
   useRegisterForgePanel(cvOnlyPanelRegistration);
   const cvLibraryPanelRegistration = React.useMemo(
     () => ({
       surface: "documents" as const,
-      title: "Library",
+      title: translateUi(resolvedLanguage, "workspace.library"),
       icon: <FileUser size={16} aria-hidden="true" />,
       renderContent: () => (
         <CvForgeLibraryDrawer
@@ -6000,7 +6041,7 @@ export function CvForge(): JSX.Element {
         />
       ),
       footer: {
-        label: "Open Library",
+        label: translateUi(resolvedLanguage, "workspace.openLibrary"),
         icon: <FolderSimple size={13} aria-hidden="true" />,
         onSelect: () => navigate("/documents?type=cvs"),
       },
@@ -6013,6 +6054,7 @@ export function CvForge(): JSX.Element {
       handleSelectCvFromLibraryDrawer,
       hydrateCvDocument,
       navigate,
+      resolvedLanguage,
     ],
   );
   useRegisterForgePanel(cvLibraryPanelRegistration);
@@ -6093,8 +6135,8 @@ export function CvForge(): JSX.Element {
   const cvDesignPanelRegistration = React.useMemo(
     () => ({
       surface: "cv-design" as const,
-      title: "Design",
-      ariaLabel: "CV design",
+      title: translateUi(resolvedLanguage, "workspace.design"),
+      ariaLabel: translateUi(resolvedLanguage, "workspace.cvDesignPanel"),
       renderContent: () => (
         <CvDesignFields
           stylePreset={stylePreset}
@@ -6116,6 +6158,7 @@ export function CvForge(): JSX.Element {
       handleSelectFontPair,
       handleSelectStyleSlot,
       handleSelectTemplate,
+      resolvedLanguage,
       selectedStyleSlot,
       selectedStyleSlotIsCustom,
       stylePreset,
@@ -6448,8 +6491,8 @@ export function CvForge(): JSX.Element {
   const cvSectionsPanelRegistration = React.useMemo(
     () => ({
       surface: "cv-sections" as const,
-      title: "Sections",
-      ariaLabel: "CV sections",
+      title: translateUi(resolvedLanguage, "workspace.sections"),
+      ariaLabel: translateUi(resolvedLanguage, "workspace.cvSectionsPanel"),
       renderContent: () => (
         <div className="dasti-cv-sections-drawer">
           <CvSectionsOrganizer
@@ -6482,6 +6525,7 @@ export function CvForge(): JSX.Element {
       handleSelectSection,
       handleToggleHiddenSection,
       hiddenSectionIds,
+      resolvedLanguage,
     ],
   );
   useRegisterForgePanel(cvSectionsPanelRegistration);

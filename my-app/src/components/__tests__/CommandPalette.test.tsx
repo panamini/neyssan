@@ -61,7 +61,7 @@ describe("CommandPalette", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("listbox", { name: "Commands" })).toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText("Search or run a command..."), {
+    fireEvent.change(screen.getByPlaceholderText("Search"), {
       target: { value: "zzzz" },
     });
 
@@ -72,16 +72,20 @@ describe("CommandPalette", () => {
     {
       locale: "fr",
       title: "Palette de commandes",
-      emptyState: "Aucune commande trouvee.",
+      emptyState: "Aucune commande trouvée.",
+      placeholder: "Rechercher",
+      oldPlaceholder: ["Rechercher", " ou lancer", " une commande..."].join(""),
     },
     {
       locale: "es",
       title: "Paleta de comandos",
       emptyState: "No se encontraron comandos.",
+      placeholder: "Buscar",
+      oldPlaceholder: ["Buscar", " o ejecutar", " un comando..."].join(""),
     },
   ])(
-    "renders command palette shell chrome in $locale without migrating command items",
-    ({ locale, title, emptyState }) => {
+    "renders command palette shell chrome and replay action in $locale",
+    ({ locale, title, emptyState, placeholder, oldPlaceholder }) => {
       window.localStorage.setItem("twoweeks:ui-language", locale);
       window.localStorage.setItem("twoweeks:document-language", "ar");
 
@@ -103,16 +107,16 @@ describe("CommandPalette", () => {
       ).toBeInTheDocument();
       expect(screen.getByRole("option", { name: /Today/i })).toBeInTheDocument();
 
-      fireEvent.change(
-        screen.getByPlaceholderText(
-          locale === "fr"
-            ? "Rechercher ou lancer une commande..."
-            : "Buscar o ejecutar un comando...",
-        ),
-        {
-          target: { value: "zzzz" },
-        },
-      );
+      expect(screen.queryByPlaceholderText(oldPlaceholder)).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("option", {
+          name: locale === "fr" ? /Revoir l'accueil/i : /Repetir bienvenida/i,
+        }),
+      ).toBeInTheDocument();
+
+      fireEvent.change(screen.getByPlaceholderText(placeholder), {
+        target: { value: "zzzz" },
+      });
 
       expect(screen.getByText(emptyState)).toBeInTheDocument();
       expect(window.localStorage.getItem("twoweeks:document-language")).toBe(
@@ -169,5 +173,32 @@ describe("CommandPalette", () => {
     fireEvent.click(screen.getByRole("option", { name: /Toggle light or dark/i }));
 
     expect(onToggleTheme).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs localized onboarding replay without changing document language", () => {
+    const onReplayOnboarding = vi.fn();
+    window.localStorage.setItem("twoweeks:ui-language", "fr");
+    window.localStorage.setItem("twoweeks:document-language", "es");
+
+    render(
+      <MemoryRouter initialEntries={["/jobs"]}>
+        <Routes>
+          <Route
+            path="*"
+            element={<PaletteHarness onReplayOnboarding={onReplayOnboarding} />}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    fireEvent.click(
+      screen.getByRole("option", { name: /Revoir l'accueil/i }),
+    );
+
+    expect(onReplayOnboarding).toHaveBeenCalledTimes(1);
+    expect(window.localStorage.getItem("twoweeks:document-language")).toBe(
+      "es",
+    );
   });
 });

@@ -296,7 +296,7 @@ describe("ProposalDocumentStage proposal actions", () => {
       "outside",
       "icon",
       "iconOnly",
-      409,
+      370,
       300,
     ],
     [
@@ -332,10 +332,10 @@ describe("ProposalDocumentStage proposal actions", () => {
       "wide",
       null,
       "full",
-      "outside",
+      "edge-tab",
       "icon",
-      "iconOnly",
-      934,
+      "edgeTab",
+      844,
       680,
     ],
     [
@@ -345,10 +345,10 @@ describe("ProposalDocumentStage proposal actions", () => {
       "wide",
       null,
       "full",
-      "outside",
+      "edge-tab",
       "icon",
-      "iconOnly",
-      930,
+      "edgeTab",
+      844,
       680,
     ],
   ])(
@@ -435,7 +435,7 @@ describe("ProposalDocumentStage proposal actions", () => {
           askHandleLayer?.style.getPropertyValue(
             "--proposal-ask-handle-block-start",
           ),
-        ).toBe("40px");
+        ).toBe("112px");
         expect(
           askHandleLayer?.style.getPropertyValue(
             "--proposal-ask-handle-inline-start",
@@ -662,7 +662,7 @@ describe("ProposalDocumentStage proposal actions", () => {
         askHandleLayer?.style.getPropertyValue(
           "--proposal-ask-handle-block-start",
         ),
-      ).toBe("40px");
+      ).toBe("112px");
     } finally {
       rectSpy.mockRestore();
       requestAnimationFrameSpy.mockRestore();
@@ -690,4 +690,67 @@ describe("ProposalDocumentStage proposal actions", () => {
     expect(ask).toHaveAttribute("data-toolbar-tooltip", "Ask");
     expect(edit.closest(".dasti-toolbar--surface-tooltips")).toBeTruthy();
   });
+
+  it.each([
+    {
+      locale: "fr",
+      heading: "Titre",
+      design: "Style",
+      templates: "Modèles",
+      draft: "Rédiger la lettre",
+      ask: "Demander",
+    },
+    {
+      locale: "es",
+      heading: "Título",
+      design: "Diseño",
+      templates: "Plantillas",
+      draft: "Redactar carta",
+      ask: "Preguntar",
+    },
+  ])(
+    "renders proposal toolbar chrome in $locale and keeps actions wired",
+    ({ locale, heading, design, templates, draft, ask }) => {
+      const onOpenHeading = vi.fn();
+      const onOpenDesign = vi.fn();
+      const onOpenTemplates = vi.fn();
+      const onOpenDraft = vi.fn();
+      const onOpenAsk = vi.fn();
+      window.localStorage.setItem("twoweeks:ui-language", locale);
+      window.localStorage.setItem("twoweeks:document-language", "ar");
+
+      renderStage({
+        labels: {
+          heading,
+          design,
+          templates,
+          draftProposal: draft,
+          ask,
+        },
+        onOpenHeading,
+        onOpenDesign,
+        onOpenTemplates,
+        onOpenDraft,
+        onOpenAsk,
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: heading }));
+      fireEvent.click(screen.getByRole("button", { name: design }));
+      fireEvent.click(screen.getByRole("button", { name: templates }));
+      fireEvent.click(screen.getByRole("button", { name: draft }));
+      fireEvent.click(screen.getByRole("button", { name: ask }));
+
+      expect(onOpenHeading).toHaveBeenCalledTimes(1);
+      expect(onOpenDesign).toHaveBeenCalledTimes(1);
+      expect(onOpenTemplates).toHaveBeenCalledTimes(1);
+      expect(onOpenDraft).toHaveBeenCalledTimes(1);
+      expect(onOpenAsk).toHaveBeenCalledTimes(1);
+      expect(
+        screen.queryByRole("button", { name: /Proposition|Propuesta/i }),
+      ).not.toBeInTheDocument();
+      expect(window.localStorage.getItem("twoweeks:document-language")).toBe(
+        "ar",
+      );
+    },
+  );
 });

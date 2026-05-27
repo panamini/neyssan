@@ -9,6 +9,8 @@ import {
 } from "@/lib/icons";
 import { Button } from "../ui";
 import type { CommandLayerModeControlMode } from "@/lib/document-command-layer-layout";
+import { translateUi } from "../../lib/i18n";
+import { useUiLanguagePreference } from "../../lib/ui-preferences";
 
 type CvStageBarProps = {
   mode: "edit" | "preview";
@@ -43,11 +45,28 @@ export function CvStageBar({
   askOpen = false,
   onOpenAsk,
 }: CvStageBarProps): JSX.Element {
+  const { resolvedLanguage } = useUiLanguagePreference();
   const stageIconSize = 18;
   const isUltraCompactToolbar = modeControlMode === "toggle";
   const nextMode = mode === "edit" ? "preview" : "edit";
   const modeToggleLabel =
-    mode === "edit" ? "Switch to Preview" : "Switch to Edit";
+    mode === "edit"
+      ? translateUi(resolvedLanguage, "workspace.switchToPreview")
+      : translateUi(resolvedLanguage, "workspace.switchToEdit");
+  const cvToolbarLabel = translateUi(resolvedLanguage, "workspace.cvToolbar");
+  const documentControlsLabel = translateUi(
+    resolvedLanguage,
+    "workspace.documentControls",
+  );
+  const editLabel = translateUi(resolvedLanguage, "workspace.edit");
+  const pagePreviewLabel = translateUi(
+    resolvedLanguage,
+    "workspace.pagePreview",
+  );
+  const sectionsLabel = translateUi(resolvedLanguage, "workspace.sections");
+  const designLabel = translateUi(resolvedLanguage, "workspace.design");
+  const templatesLabel = translateUi(resolvedLanguage, "workspace.templates");
+  const askLabel = translateUi(resolvedLanguage, "workspace.ask");
   const showAskHandle = mode === "preview" && Boolean(onOpenAsk);
 
   return (
@@ -62,12 +81,12 @@ export function CvStageBar({
         <div
           className="dasti-proposal-skeleton-stage__toolbar-main dasti-cv-stage-bar"
           role="group"
-          aria-label="CV toolbar"
+          aria-label={cvToolbarLabel}
         >
           <div
             className="dasti-icon-cluster dasti-icon-cluster--tight dasti-proposal-skeleton-stage__actions dasti-proposal-skeleton-stage__actions--document dasti-cv-stage-bar__actions"
             role="group"
-            aria-label="Document controls"
+            aria-label={documentControlsLabel}
           >
             {isUltraCompactToolbar ? (
               <button
@@ -102,8 +121,8 @@ export function CvStageBar({
                   className="dasti-proposal-mode-toggle dasti-cv-mode-toggle"
                   data-selected={mode === "edit" ? "true" : undefined}
                   onClick={() => onModeChange("edit")}
-                  aria-label="Edit"
-                  data-toolbar-tooltip="Edit"
+                  aria-label={editLabel}
+                  data-toolbar-tooltip={editLabel}
                 >
                   <PenLine
                     size={stageIconSize}
@@ -116,8 +135,11 @@ export function CvStageBar({
                   className="dasti-proposal-mode-toggle dasti-cv-mode-toggle"
                   data-selected={mode === "preview" ? "true" : undefined}
                   onClick={() => onModeChange("preview")}
-                  aria-label="Page preview"
-                  data-toolbar-tooltip="Preview"
+                  aria-label={pagePreviewLabel}
+                  data-toolbar-tooltip={translateUi(
+                    resolvedLanguage,
+                    "workspace.preview",
+                  )}
                 >
                   <Eye
                     size={stageIconSize}
@@ -137,13 +159,13 @@ export function CvStageBar({
                   <ListNumbers size={stageIconSize} strokeWidth={1.8} />
                 }
                 aria-expanded={sectionsOpen}
-                aria-label="Sections"
-                data-toolbar-tooltip="Sections"
+                aria-label={sectionsLabel}
+                data-toolbar-tooltip={sectionsLabel}
                 data-stage-tooltip-mode="compact"
                 onClick={onOpenSections}
               >
                 <span className="dasti-proposal-skeleton-stage__action-label dasti-cv-stage-bar__action-label">
-                  Sections
+                  {sectionsLabel}
                 </span>
               </Button>
             ) : null}
@@ -155,13 +177,13 @@ export function CvStageBar({
                 className="dasti-proposal-skeleton-stage__primary-action dasti-cv-stage-bar__primary-action"
                 iconLeft={<Palette size={stageIconSize} strokeWidth={1.8} />}
                 aria-expanded={designOpen}
-                aria-label="Design"
-                data-toolbar-tooltip="Design"
+                aria-label={designLabel}
+                data-toolbar-tooltip={designLabel}
                 data-stage-tooltip-mode="compact"
                 onClick={onOpenDesign}
               >
                 <span className="dasti-proposal-skeleton-stage__action-label dasti-cv-stage-bar__action-label">
-                  Design
+                  {designLabel}
                 </span>
               </Button>
             ) : null}
@@ -173,13 +195,13 @@ export function CvStageBar({
                 className="dasti-proposal-skeleton-stage__primary-action dasti-cv-stage-bar__primary-action"
                 iconLeft={<Layout size={stageIconSize} strokeWidth={1.8} />}
                 aria-expanded={templatesOpen}
-                aria-label="Templates"
-                data-toolbar-tooltip="Templates"
+                aria-label={templatesLabel}
+                data-toolbar-tooltip={templatesLabel}
                 data-stage-tooltip-mode="compact"
                 onClick={onOpenTemplates}
               >
                 <span className="dasti-proposal-skeleton-stage__action-label dasti-cv-stage-bar__action-label">
-                  Templates
+                  {templatesLabel}
                 </span>
               </Button>
             ) : null}
@@ -196,10 +218,10 @@ export function CvStageBar({
             type="button"
             className="dasti-icon-button dasti-proposal-skeleton-stage__ask-handle"
             aria-expanded={askOpen}
-            aria-label="Ask"
-            title="Ask"
+            aria-label={askLabel}
+            title={askLabel}
             data-testid="cv-ask-handle"
-            data-toolbar-tooltip="Ask"
+            data-toolbar-tooltip={askLabel}
             data-stage-tooltip-mode="compact"
             onClick={onOpenAsk}
           >

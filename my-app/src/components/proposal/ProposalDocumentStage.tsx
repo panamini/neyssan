@@ -50,6 +50,59 @@ type ProposalDocumentStageProps = {
   finalExportReviewed?: boolean;
   onReviewMatch?: () => void;
   onResolveImportIssues?: () => void;
+  labels?: Partial<ProposalDocumentStageLabels>;
+};
+
+export type ProposalDocumentStageLabels = {
+  proposalToolbar: string;
+  proposalViewMode: string;
+  documentControls: string;
+  switchToPreview: string;
+  switchToEdit: string;
+  edit: string;
+  preview: string;
+  editProposal: string;
+  previewProposal: string;
+  heading: string;
+  design: string;
+  templates: string;
+  proposalUndoRedoActions: string;
+  undo: string;
+  redo: string;
+  proposalLibraryActions: string;
+  saveProposalToLibrary: string;
+  saveToLibrary: string;
+  deleteDraft: string;
+  primaryWritingAction: string;
+  draftProposal: string;
+  draftProposalShort: string;
+  ask: string;
+};
+
+const DEFAULT_LABELS: ProposalDocumentStageLabels = {
+  proposalToolbar: "Proposal toolbar",
+  proposalViewMode: "Proposal view mode",
+  documentControls: "Document controls",
+  switchToPreview: "Switch to Preview",
+  switchToEdit: "Switch to Edit",
+  edit: "Edit",
+  preview: "Preview",
+  editProposal: "Edit proposal",
+  previewProposal: "Preview proposal",
+  heading: "Heading",
+  design: "Design",
+  templates: "Templates",
+  proposalUndoRedoActions: "Proposal undo redo actions",
+  undo: "Undo",
+  redo: "Redo",
+  proposalLibraryActions: "Proposal library actions",
+  saveProposalToLibrary: "Save proposal to library",
+  saveToLibrary: "Save to library",
+  deleteDraft: "Delete draft",
+  primaryWritingAction: "Primary writing action",
+  draftProposal: "Draft proposal",
+  draftProposalShort: "Draft",
+  ask: "Ask",
 };
 
 const COMMAND_LAYER_TOOLBAR_MIN_WIDTH = 300;
@@ -94,6 +147,7 @@ export function ProposalDocumentStage({
   composerMode = null,
   onDeleteDraft,
   onSaveToLibrary,
+  labels,
 }: ProposalDocumentStageProps): JSX.Element {
   const stageIconSize = 18;
   const stageRef = React.useRef<HTMLElement | null>(null);
@@ -121,11 +175,11 @@ export function ProposalDocumentStage({
     askOffsetFromPaperTop: ASK_OFFSET_FROM_PAPER_TOP,
     refreshKey: mode,
   });
+  const uiLabels = { ...DEFAULT_LABELS, ...labels };
   const isUltraCompactToolbar = modeControlMode === "toggle";
   const nextMode = mode === "edit" ? "preview" : "edit";
   const modeToggleLabel =
-    mode === "edit" ? "Switch to Preview" : "Switch to Edit";
-  const askTooltip = "Ask";
+    mode === "edit" ? uiLabels.switchToPreview : uiLabels.switchToEdit;
 
   return (
     <section
@@ -152,12 +206,12 @@ export function ProposalDocumentStage({
         <div
           className="dasti-proposal-skeleton-stage__toolbar-main"
           role="group"
-          aria-label="Proposal toolbar"
+          aria-label={uiLabels.proposalToolbar}
         >
           <div
             className="dasti-icon-cluster dasti-icon-cluster--tight dasti-proposal-skeleton-stage__actions dasti-proposal-skeleton-stage__actions--document"
             role="group"
-            aria-label="Document controls"
+            aria-label={uiLabels.documentControls}
           >
             {isUltraCompactToolbar ? (
               <button
@@ -185,15 +239,15 @@ export function ProposalDocumentStage({
               <div
                 className="style-segmented dasti-proposal-skeleton-stage__mode"
                 role="group"
-                aria-label="Proposal view mode"
+                aria-label={uiLabels.proposalViewMode}
               >
                 <button
                   type="button"
                   className="dasti-proposal-mode-toggle"
                   data-selected={mode === "edit" ? "true" : undefined}
                   onClick={() => onModeChange("edit")}
-                  aria-label="Edit proposal"
-                  data-toolbar-tooltip="Edit"
+                  aria-label={uiLabels.editProposal}
+                  data-toolbar-tooltip={uiLabels.edit}
                 >
                   <PenLine
                     size={stageIconSize}
@@ -206,8 +260,8 @@ export function ProposalDocumentStage({
                   className="dasti-proposal-mode-toggle"
                   data-selected={mode === "preview" ? "true" : undefined}
                   onClick={() => onModeChange("preview")}
-                  aria-label="Preview proposal"
-                  data-toolbar-tooltip="Preview"
+                  aria-label={uiLabels.previewProposal}
+                  data-toolbar-tooltip={uiLabels.preview}
                 >
                   <Eye
                     size={stageIconSize}
@@ -232,13 +286,13 @@ export function ProposalDocumentStage({
                   <NewspaperClipping size={stageIconSize} strokeWidth={1.8} />
                 }
                 aria-expanded={headingOpen}
-                aria-label="Heading"
-                data-toolbar-tooltip="Heading"
+                aria-label={uiLabels.heading}
+                data-toolbar-tooltip={uiLabels.heading}
                 data-stage-tooltip-mode="compact"
                 onClick={onOpenHeading}
               >
                 <span className="dasti-proposal-skeleton-stage__action-label">
-                  Heading
+                  {uiLabels.heading}
                 </span>
               </Button>
             ) : null}
@@ -250,13 +304,13 @@ export function ProposalDocumentStage({
                 className="dasti-proposal-skeleton-stage__primary-action"
                 iconLeft={<Palette size={stageIconSize} strokeWidth={1.8} />}
                 aria-expanded={designOpen}
-                aria-label="Design"
-                data-toolbar-tooltip="Design"
+                aria-label={uiLabels.design}
+                data-toolbar-tooltip={uiLabels.design}
                 data-stage-tooltip-mode="compact"
                 onClick={onOpenDesign}
               >
                 <span className="dasti-proposal-skeleton-stage__action-label">
-                  Design
+                  {uiLabels.design}
                 </span>
               </Button>
             ) : null}
@@ -268,13 +322,13 @@ export function ProposalDocumentStage({
                 className="dasti-proposal-skeleton-stage__primary-action"
                 iconLeft={<Layout size={stageIconSize} strokeWidth={1.8} />}
                 aria-expanded={templatesOpen}
-                aria-label="Templates"
-                data-toolbar-tooltip="Templates"
+                aria-label={uiLabels.templates}
+                data-toolbar-tooltip={uiLabels.templates}
                 data-stage-tooltip-mode="compact"
                 onClick={onOpenTemplates}
               >
                 <span className="dasti-proposal-skeleton-stage__action-label">
-                  Templates
+                  {uiLabels.templates}
                 </span>
               </Button>
             ) : null}
@@ -283,14 +337,14 @@ export function ProposalDocumentStage({
             <div
               className="dasti-icon-cluster dasti-icon-cluster--tight dasti-proposal-skeleton-stage__right-actions dasti-proposal-skeleton-stage__right-actions--history"
               role="group"
-              aria-label="Proposal undo redo actions"
+              aria-label={uiLabels.proposalUndoRedoActions}
             >
               <button
                 type="button"
                 className="dasti-icon-button dasti-proposal-skeleton-stage__action-plain"
                 onClick={() => runBrowserCommand("undo")}
-                aria-label="Undo"
-                data-toolbar-tooltip="Undo"
+                aria-label={uiLabels.undo}
+                data-toolbar-tooltip={uiLabels.undo}
               >
                 <ArrowUUpLeft
                   size={stageIconSize}
@@ -302,8 +356,8 @@ export function ProposalDocumentStage({
                 type="button"
                 className="dasti-icon-button dasti-proposal-skeleton-stage__action-plain"
                 onClick={() => runBrowserCommand("redo")}
-                aria-label="Redo"
-                data-toolbar-tooltip="Redo"
+                aria-label={uiLabels.redo}
+                data-toolbar-tooltip={uiLabels.redo}
               >
                 <ArrowUDownRight
                   size={stageIconSize}
@@ -317,7 +371,7 @@ export function ProposalDocumentStage({
             <div
               className="dasti-icon-cluster dasti-icon-cluster--tight dasti-proposal-skeleton-stage__right-actions dasti-proposal-skeleton-stage__right-actions--library"
               role="group"
-              aria-label="Proposal library actions"
+              aria-label={uiLabels.proposalLibraryActions}
             >
               {onSaveToLibrary ? (
                 <button
@@ -325,8 +379,8 @@ export function ProposalDocumentStage({
                   className="dasti-icon-button dasti-proposal-skeleton-stage__action-plain"
                   onClick={onSaveToLibrary}
                   disabled={!hasProposalContent}
-                  aria-label="Save proposal to library"
-                  data-toolbar-tooltip="Save to library"
+                  aria-label={uiLabels.saveProposalToLibrary}
+                  data-toolbar-tooltip={uiLabels.saveToLibrary}
                 >
                   <ClipboardText
                     size={stageIconSize}
@@ -341,8 +395,8 @@ export function ProposalDocumentStage({
                   className="dasti-icon-button dasti-proposal-skeleton-stage__action-plain"
                   onClick={onDeleteDraft}
                   disabled={!hasProposalContent}
-                  aria-label="Delete draft"
-                  data-toolbar-tooltip="Delete draft"
+                  aria-label={uiLabels.deleteDraft}
+                  data-toolbar-tooltip={uiLabels.deleteDraft}
                 >
                   <TrashSimple
                     size={stageIconSize}
@@ -357,7 +411,7 @@ export function ProposalDocumentStage({
             <div
               className="dasti-icon-cluster dasti-icon-cluster--tight dasti-proposal-skeleton-stage__actions dasti-proposal-skeleton-stage__actions--writing"
               role="group"
-              aria-label="Primary writing action"
+              aria-label={uiLabels.primaryWritingAction}
             >
               <Button
                 type="button"
@@ -368,17 +422,17 @@ export function ProposalDocumentStage({
                   <PaperPlaneRight size={stageIconSize} strokeWidth={1.8} />
                 }
                 aria-expanded={composerMode === "draft"}
-                aria-label="Draft proposal"
+                aria-label={uiLabels.draftProposal}
                 data-testid="proposal-draft-button"
-                data-toolbar-tooltip="Draft proposal"
+                data-toolbar-tooltip={uiLabels.draftProposal}
                 data-stage-tooltip-mode="compact"
                 onClick={onOpenDraft}
               >
                 <span className="dasti-proposal-skeleton-stage__action-label dasti-proposal-skeleton-stage__action-label--full">
-                  Draft proposal
+                  {uiLabels.draftProposal}
                 </span>
                 <span className="dasti-proposal-skeleton-stage__action-label dasti-proposal-skeleton-stage__action-label--short">
-                  Draft
+                  {uiLabels.draftProposalShort}
                 </span>
               </Button>
             </div>
@@ -395,10 +449,10 @@ export function ProposalDocumentStage({
             type="button"
             className="dasti-icon-button dasti-proposal-skeleton-stage__ask-handle"
             aria-expanded={composerMode === "ask"}
-            aria-label="Ask"
-            title="Ask"
+            aria-label={uiLabels.ask}
+            title={uiLabels.ask}
             data-testid="proposal-ask-handle"
-            data-toolbar-tooltip={askTooltip}
+            data-toolbar-tooltip={uiLabels.ask}
             data-stage-tooltip-mode="compact"
             onClick={onOpenAsk}
           >
