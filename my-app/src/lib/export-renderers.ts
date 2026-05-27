@@ -76,6 +76,15 @@ type DocxParagraphDefaults = {
   bodyLineTwip: number;
   bodyGapTwip: number;
   colorHex: string;
+  locale: DocxLocaleMetadata;
+};
+
+type DocxLocaleMetadata = {
+  language: {
+    value: string;
+    bidirectional?: string;
+  };
+  rightToLeft?: boolean;
 };
 
 function escapeHtml(value: string): string {
@@ -97,6 +106,40 @@ function normalizeStylePreset(
   stylePreset?: VerbatiStylePreset | null,
 ): VerbatiStylePreset {
   return resolveVerbatiStyle(stylePreset ?? DEFAULT_VERBATI_STYLE);
+}
+
+function resolveDocxLocaleMetadata(
+  locale: string | null | undefined,
+): DocxLocaleMetadata {
+  const language = getExportHtmlLang(locale);
+  const isRightToLeft = getExportHtmlDir(locale) === "rtl";
+
+  return {
+    language: {
+      value: language,
+      ...(isRightToLeft ? { bidirectional: language } : null),
+    },
+    ...(isRightToLeft ? { rightToLeft: true } : null),
+  };
+}
+
+function buildDocxTextRun(args: {
+  text: string;
+  defaults: DocxParagraphDefaults;
+  bold?: boolean;
+  color?: string;
+  font?: string;
+  size?: number;
+}): TextRun {
+  return new TextRun({
+    text: args.text,
+    bold: args.bold,
+    color: args.color ?? args.defaults.colorHex,
+    font: args.font,
+    size: args.size ?? args.defaults.bodySizeHalfPt,
+    language: args.defaults.locale.language,
+    rightToLeft: args.defaults.locale.rightToLeft,
+  });
 }
 
 function buildCssVarBlock(vars: Record<string, string>): string {
@@ -2391,6 +2434,7 @@ function buildDocxParagraph(
 ): Paragraph {
   return new Paragraph({
     alignment: options.alignment,
+    bidirectional: defaults.locale.rightToLeft,
     heading: options.heading,
     keepLines: options.keepLines ?? true,
     keepNext: options.keepNext ?? false,
@@ -2401,8 +2445,9 @@ function buildDocxParagraph(
       lineRule: LineRuleType.AUTO,
     },
     children: [
-      new TextRun({
+      buildDocxTextRun({
         text,
+        defaults,
         bold: options.bold,
         color: options.color ?? defaults.colorHex,
         font: options.font,
@@ -2440,6 +2485,7 @@ export async function buildResumeDocxBuffer(args: {
     bodyLineTwip: docxTokens.bodyLineTwip,
     bodyGapTwip: docxTokens.bodyGapTwip,
     colorHex: docxInk,
+    locale: resolveDocxLocaleMetadata(locale),
   };
   const bodyParagraphs: Paragraph[] = [
     buildDocxParagraph(args.data.profile.name, docxDefaults, {
@@ -2559,6 +2605,7 @@ export async function buildResumeDocxBuffer(args: {
       item.bullets.forEach((bullet, index) => {
         bodyParagraphs.push(
           new Paragraph({
+            bidirectional: docxDefaults.locale.rightToLeft,
             keepLines: true,
             spacing: {
               after:
@@ -2570,8 +2617,9 @@ export async function buildResumeDocxBuffer(args: {
             },
             bullet: { level: 0 },
             children: [
-              new TextRun({
+              buildDocxTextRun({
                 text: bullet,
+                defaults: docxDefaults,
                 font: bodyFont,
                 size: docxTokens.bodySizeHalfPt,
                 color: docxInk,
@@ -2679,6 +2727,7 @@ export async function buildResumeDocxBuffer(args: {
     args.data.achievements.forEach((item, index) => {
       bodyParagraphs.push(
         new Paragraph({
+          bidirectional: docxDefaults.locale.rightToLeft,
           keepLines: true,
           spacing: {
             after:
@@ -2690,8 +2739,9 @@ export async function buildResumeDocxBuffer(args: {
           },
           bullet: { level: 0 },
           children: [
-            new TextRun({
+            buildDocxTextRun({
               text: item,
+              defaults: docxDefaults,
               font: bodyFont,
               size: docxTokens.bodySizeHalfPt,
               color: docxInk,
@@ -2768,6 +2818,8 @@ export async function buildResumeDocxBuffer(args: {
             color: docxInk,
             font: bodyFont,
             size: docxTokens.bodySizeHalfPt,
+            language: docxDefaults.locale.language,
+            rightToLeft: docxDefaults.locale.rightToLeft,
           },
           paragraph: {
             spacing: {
@@ -2830,6 +2882,7 @@ export async function buildProposalDocxBuffer(args: {
     bodyLineTwip: docxTokens.bodyLineTwip,
     bodyGapTwip: docxTokens.bodyGapTwip,
     colorHex: docxInk,
+    locale: resolveDocxLocaleMetadata(locale),
   };
   const bodyParagraphs: Paragraph[] = [];
 
@@ -2983,6 +3036,8 @@ export async function buildProposalDocxBuffer(args: {
             color: docxInk,
             font: bodyFont,
             size: docxTokens.bodySizeHalfPt,
+            language: docxDefaults.locale.language,
+            rightToLeft: docxDefaults.locale.rightToLeft,
           },
           paragraph: {
             spacing: {
