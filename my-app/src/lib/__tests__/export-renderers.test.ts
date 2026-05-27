@@ -483,16 +483,32 @@ describe("export-renderers", () => {
       title: "Сопроводительное письмо",
       bodyText:
         "Я создаю масштабируемые интерфейсы React и TypeScript с акцентом на дизайн-системы и производительность.",
+      fallbackStack: '"Noto Sans", "Segoe UI", Tahoma, Arial, sans-serif',
+    },
+    {
+      locale: "el",
+      title: "Συνοδευτική επιστολή",
+      bodyText:
+        "Δημιουργώ επεκτάσιμες διεπαφές React και TypeScript με έμφαση στα συστήματα σχεδιασμού.",
+      fallbackStack: '"Noto Sans", "Segoe UI", Tahoma, Arial, sans-serif',
+    },
+    {
+      locale: "ga",
+      title: "Litir iarratais",
+      bodyText:
+        "Tógaim córais cháipéise iontaofa do tháirgí agus d'fhoirne oibríochtaí.",
+      fallbackStack: '"Noto Sans", system-ui, sans-serif',
     },
     {
       locale: "pl",
       title: "List motywacyjny",
       bodyText:
         "Tworzę skalowalne interfejsy React i TypeScript z naciskiem na systemy projektowe i wydajność.",
+      fallbackStack: '"Noto Sans", system-ui, sans-serif',
     },
   ])(
-    "uses bundled Noto Sans for $locale proposal exports without exposing app RTL",
-    ({ locale, title, bodyText }) => {
+    "appends bundled Noto Sans fallback coverage for $locale proposal exports without exposing app RTL",
+    ({ locale, title, bodyText, fallbackStack }) => {
       document.documentElement.lang = "en";
       document.documentElement.dir = "ltr";
 
@@ -522,13 +538,39 @@ describe("export-renderers", () => {
         'font-family:"Noto Sans"',
       );
       expect(getInlineStyles(localizedExportDocument)).toContain(
-        '--body-font: "Noto Sans", "Segoe UI", Tahoma, Arial, sans-serif;',
+        `--heading-font: Fraunces, Georgia, serif, ${fallbackStack};`,
+      );
+      expect(getInlineStyles(localizedExportDocument)).toContain(
+        `--body-font: Syne, "Avenir Next", system-ui, sans-serif, ${fallbackStack};`,
       );
       expect(localizedExportDocument.body.textContent).toContain(title);
       expect(document.documentElement.lang).toBe("en");
       expect(document.documentElement.dir).toBe("ltr");
     },
   );
+
+  it.each([
+    { locale: "en" },
+    { locale: "fr" },
+  ])("preserves selected typography before Latin fallback fonts for $locale exports", ({ locale }) => {
+    const localizedProposalFixture: ProposalPrintSource = {
+      ...proposalFixture,
+      locale,
+    };
+
+    const localizedExportDocument = parseExportHtml(
+      renderProposalAtsExportDocument(localizedProposalFixture, {
+        layout: "swiss",
+        typography: "quiet-editorial",
+        palette: "sauge",
+      }),
+    );
+    const css = getInlineStyles(localizedExportDocument);
+
+    expect(localizedExportDocument.documentElement.lang).toBe(locale);
+    expect(css).toContain('--heading-font: Fraunces, Georgia, serif, "Noto Sans", system-ui, sans-serif;');
+    expect(css).toContain('--body-font: Syne, "Avenir Next", system-ui, sans-serif, "Noto Sans", system-ui, sans-serif;');
+  });
 
   it("keeps ATS and styled proposal closing blocks structurally aligned and casing-safe", () => {
     const atsDocument = parseExportHtml(
