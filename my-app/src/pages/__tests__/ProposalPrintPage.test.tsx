@@ -135,6 +135,39 @@ describe("ProposalPrintPage", () => {
     );
   });
 
+  it.each([
+    ["director-letterhead", "proposal-cover-letter--director"],
+    ["volk-letterhead", "proposal-cover-letter--volk"],
+    ["film-foto-letterhead", "proposal-cover-letter--film-foto"],
+  ] as const)(
+    "renders the %s letterhead template through the print route",
+    async (templateId, scope) => {
+      window.__DASTI_PROPOSAL_PRINT_PAYLOAD__ = {
+        ...buildPayload(),
+        templateId,
+      };
+
+      render(<ProposalPrintPage />);
+
+      expect(
+        document
+          .querySelector(".dasti-proposal-print-route")
+          ?.getAttribute("data-template-id"),
+      ).toBe(templateId);
+      expect(document.querySelector(`.${scope}`)).toBeTruthy();
+      expect(document.querySelector(".dasti-proposal-document__page")).toBeTruthy();
+
+      await waitFor(() => {
+        expect(window.__DASTI_PROPOSAL_PRINT_STATUS__?.status).toBe("ready");
+      });
+      expect(window.__DASTI_PROPOSAL_PRINT_STATUS__?.snapshot).toEqual(
+        expect.objectContaining({
+          templateId,
+        }),
+      );
+    },
+  );
+
   it("reports an explicit error when the print payload is missing", async () => {
     render(<ProposalPrintPage />);
 

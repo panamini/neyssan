@@ -459,4 +459,144 @@ describe("ProposalDocumentRenderer volk register layout", () => {
       "Application for Operations Specialist",
     );
   });
+
+  it.each([
+    {
+      templateId: "director-letterhead" as const,
+      scope: ".proposal-cover-letter--director",
+      heading: "Jane Doe",
+    },
+    {
+      templateId: "volk-letterhead" as const,
+      scope: ".proposal-cover-letter--volk",
+      heading: "Jane Doe",
+    },
+    {
+      templateId: "film-foto-letterhead" as const,
+      scope: ".proposal-cover-letter--film-foto",
+      heading: "Northwind",
+    },
+  ])(
+    "renders real proposal data in order for $templateId",
+    ({ templateId, scope, heading }) => {
+      const { container } = render(
+        <ProposalDocumentRenderer
+          content={[
+            "Dear Hiring Manager,",
+            "First body paragraph for the live proposal.",
+            "Second body paragraph keeps the order stable.",
+            "Third body paragraph closes the argument.",
+            "Best regards,\nJane Doe",
+          ].join("\n\n")}
+          proposalType="cover_letter"
+          templateId={templateId}
+          railTitle="Jane Doe"
+          railMeta="Operations Specialist"
+          contactLine="jane@example.com · Paris"
+          letterDate="April 6, 2026"
+          recipientDetails={"Avery Stone\nHiring Manager\nNorthwind"}
+          documentTitle="Application for Operations Specialist"
+          documentTypography={{
+            fontFamily: "Georgia, serif",
+            fontSize: "14px",
+            lineHeight: 1.5,
+            fontWeight: 400,
+            letterSpacing: "0em",
+          }}
+          applicantHeader={{
+            name: "Jane Doe",
+            role: "Operations Specialist",
+            email: "jane@example.com",
+            phone: "+33 6 00 00 00 00",
+            linkedin: null,
+            website: "janedoe.dev",
+            location: "Paris",
+            tag: null,
+          }}
+        />,
+      );
+
+      const root = container.querySelector(scope);
+      const visibleBody = Array.from(
+        container.querySelectorAll(".proposal-cover-letter__body"),
+      ).at(-1);
+      const paragraphs = Array.from(
+        visibleBody?.querySelectorAll(".dasti-proposal-document__paragraph") ??
+          [],
+      ).map((node) => node.textContent);
+      const text = root?.textContent ?? "";
+
+      expect(root).toBeTruthy();
+      expect(text).toContain(heading);
+      expect(
+        root?.querySelector(".proposal-cover-letter__film-kicker"),
+      ).toBeNull();
+      expect(text).toContain("Northwind");
+      expect(text).toContain("Application for Operations Specialist");
+      expect(paragraphs).toEqual([
+        "First body paragraph for the live proposal.",
+        "Second body paragraph keeps the order stable.",
+        "Third body paragraph closes the argument.",
+      ]);
+      expect(text).not.toContain("undefined");
+      expect(text).not.toContain("null");
+      expect(text).not.toContain("[object Object]");
+      expect(text).not.toMatch(
+        /Graphische|Berufsschule|volksverband|Werkbund|Postcheckkonto|Bankkonto|tschichold/i,
+      );
+    },
+  );
+
+  it("tolerates missing optional letterhead metadata without placeholder leaks", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content={"I can support the team with clear written execution."}
+        proposalType="cover_letter"
+        templateId="director-letterhead"
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+      />,
+    );
+
+    expect(container.textContent).toContain(
+      "I can support the team with clear written execution.",
+    );
+    expect(container.textContent).not.toContain("undefined");
+    expect(container.textContent).not.toContain("null");
+    expect(container.textContent).not.toContain("[object Object]");
+  });
+
+  it("maps phone typed in the combined contact line into the director T block", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content="Dear Hiring Manager,\n\nI can support the team."
+        proposalType="cover_letter"
+        templateId="director-letterhead"
+        railTitle="Zoe Lund"
+        railMeta="Security Guard"
+        contactLine="zoe@loi.com · 09898777 · Paris · @zoe.com"
+        documentTitle="Security Guard"
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+      />,
+    );
+
+    const phoneBlock = container.querySelector(
+      ".proposal-cover-letter--director .proposal-cover-letter__phone-block",
+    );
+
+    expect(phoneBlock?.textContent).toContain("T");
+    expect(phoneBlock?.textContent).toContain("09898777");
+    expect(phoneBlock?.textContent).not.toContain("zoe@loi.com");
+  });
 });

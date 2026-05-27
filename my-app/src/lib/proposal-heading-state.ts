@@ -29,6 +29,15 @@ type ProposalContactFields = {
   location?: string | null;
 };
 
+export type ProposalStructuredContactFields = {
+  email: string;
+  phone: string;
+  location: string;
+  linkedin: string;
+  website: string;
+  other: string;
+};
+
 function hasOwn(value: object, key: PropertyKey): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
 }
@@ -75,6 +84,81 @@ export function normalizeProposalContactLine(
     .map((part) => part.trim())
     .filter(Boolean)
     .join(" · ");
+}
+
+function splitProposalContactLine(value: string | null | undefined): string[] {
+  return normalizeProposalContactLine(value)
+    .split(" · ")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function isPhoneContactPart(value: string): boolean {
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 6 && /^[+()0-9][+()0-9.\-\s]*$/.test(value);
+}
+
+function isLinkedinContactPart(value: string): boolean {
+  return /\blinkedin\.com\b/i.test(value) || /^@[a-z0-9._-]+$/i.test(value);
+}
+
+function isWebsiteContactPart(value: string): boolean {
+  return (
+    /\bhttps?:\/\//i.test(value) ||
+    /\bwww\./i.test(value) ||
+    /^[a-z0-9][a-z0-9-]*(?:\.[a-z0-9][a-z0-9-]*)+\S*$/i.test(value)
+  );
+}
+
+export function parseProposalContactLine(
+  value: string | null | undefined,
+): ProposalStructuredContactFields {
+  const result: ProposalStructuredContactFields = {
+    email: "",
+    phone: "",
+    location: "",
+    linkedin: "",
+    website: "",
+    other: "",
+  };
+  const other: string[] = [];
+
+  for (const part of splitProposalContactLine(value)) {
+    if (!result.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(part)) {
+      result.email = part;
+    } else if (!result.phone && isPhoneContactPart(part)) {
+      result.phone = part;
+    } else if (!result.linkedin && isLinkedinContactPart(part)) {
+      result.linkedin = part;
+    } else if (!result.website && isWebsiteContactPart(part)) {
+      result.website = part;
+    } else if (!result.location) {
+      result.location = part;
+    } else {
+      other.push(part);
+    }
+  }
+
+  result.other = other.join(" · ");
+  return result;
+}
+
+export function buildProposalContactLineFromParts(
+  parts: Partial<ProposalStructuredContactFields>,
+): string {
+  return normalizeProposalContactLine(
+    [
+      parts.email,
+      parts.phone,
+      parts.location,
+      parts.linkedin,
+      parts.website,
+      parts.other,
+    ]
+      .map((value) => value?.trim() ?? "")
+      .filter(Boolean)
+      .join(" · "),
+  );
 }
 
 export function buildProposalApplicantContactLine(

@@ -29,7 +29,6 @@ import ProposalHeadingFields, {
 } from "../components/proposal/ProposalHeadingFields";
 import ProposalDesignFields from "../components/proposal/ProposalDesignFields";
 import ProposalRail, {
-  PROPOSAL_STYLE_OPTIONS,
   type ProposalRailAskReview,
   type ProposalRailJobMatchSummary,
   type ProposalRailTab,
@@ -107,8 +106,12 @@ import { createQuickStartLocationState } from "../lib/quick-start-routing";
 import { translateUi } from "../lib/i18n";
 import { useUiLanguagePreference } from "../lib/ui-preferences";
 import { readStoredSavedProposalFixtures } from "../lib/proposal-saved-fixtures";
+import { resolveProposalStyleCommitTemplateId } from "../lib/proposal-style-commit";
 import {
   CANONICAL_PROPOSAL_TEMPLATE_ID,
+  PROPOSAL_TEMPLATE_DEFINITIONS,
+  isProposalTemplateId,
+  resolveProposalTemplateId,
   type ProposalTemplateId,
 } from "../../convex/lib/proposals/renderTemplates";
 import {
@@ -201,12 +204,15 @@ import {
 } from "../lib/proposal-header";
 import {
   buildProposalApplicantContactLine,
+  buildProposalContactLineFromParts,
   buildProposalApplicantHeaderFromMetadata,
   buildProposalHeadingMetadataPatch,
   mergeProposalContactDefaults,
   normalizeProposalContactLine,
+  parseProposalContactLine,
   resolveAutoHeadingField,
   resolveProposalHeadingText,
+  type ProposalStructuredContactFields,
 } from "../lib/proposal-heading-state";
 import {
   buildProposalExportSource,
@@ -2805,6 +2811,10 @@ export function ProposalForge(): JSX.Element {
       ),
     [search],
   );
+  const proposalDirectTemplateIntent = React.useMemo(() => {
+    const value = new URLSearchParams(search).get("templateId");
+    return isProposalTemplateId(value) ? resolveProposalTemplateId(value) : null;
+  }, [search]);
   const proposalStyleIntent = React.useMemo(
     () =>
       proposalStyleSlotIntent
@@ -2820,17 +2830,20 @@ export function ProposalForge(): JSX.Element {
   );
   const proposalTemplateIntent = React.useMemo(
     () =>
-      proposalStyleIntent
+      proposalDirectTemplateIntent ??
+      (proposalStyleIntent
         ? getProposalTwinTemplateId(proposalStyleIntent)
-        : null,
-    [proposalStyleIntent],
+        : null),
+    [proposalDirectTemplateIntent, proposalStyleIntent],
   );
   const proposalTemplateBundleIntent = React.useMemo(
     () =>
-      proposalStyleSlotIntent
+      proposalDirectTemplateIntent
+        ? null
+        : proposalStyleSlotIntent
         ? getProposalBundleForDocumentStyleSlot(proposalStyleSlotIntent)
         : null,
-    [proposalStyleSlotIntent],
+    [proposalDirectTemplateIntent, proposalStyleSlotIntent],
   );
   const requestedView = React.useMemo<ProposalForgeView>(() => {
     const params = new URLSearchParams(search);
@@ -3448,6 +3461,22 @@ export function ProposalForge(): JSX.Element {
   const handleProposalContactLineCommit = React.useCallback(() => {
     setProposalContactLine((current) => normalizeProposalContactLine(current));
   }, []);
+  const proposalStructuredContactFields = React.useMemo(
+    () => parseProposalContactLine(proposalContactLine),
+    [proposalContactLine],
+  );
+  const handleProposalStructuredContactChange = React.useCallback(
+    (field: keyof ProposalStructuredContactFields, value: string) => {
+      markHeadingFieldDirty("contactLine");
+      setProposalContactLine((current) =>
+        buildProposalContactLineFromParts({
+          ...parseProposalContactLine(current),
+          [field]: value,
+        }),
+      );
+    },
+    [markHeadingFieldDirty],
+  );
   const handleProposalLetterDateChange = React.useCallback(
     (value: string) => {
       markHeadingFieldDirty("letterDate");
@@ -4551,6 +4580,10 @@ export function ProposalForge(): JSX.Element {
     }
 
     if (resolvedStyleLinkMode !== "proposal_local") {
+      return;
+    }
+
+    if (proposalTemplateIntent) {
       return;
     }
 
@@ -7551,13 +7584,18 @@ export function ProposalForge(): JSX.Element {
         | ReturnType<typeof resolveVerbatiStyle>
         | Partial<ReturnType<typeof resolveVerbatiStyle>>,
       helpers: {
+        templateId?: ProposalTemplateId | null;
         templateBundleId?: ProposalTemplateBundleId | null;
         paletteOverride?: ProposalPaletteId | null;
         customAccentHex?: string | null;
       } = {},
     ) => {
       const resolvedStylePreset = resolveVerbatiStyle(nextStyle);
-      const nextTemplateId = getProposalTwinTemplateId(resolvedStylePreset);
+      const nextTemplateId = resolveProposalStyleCommitTemplateId({
+        currentTemplateId: effectiveProposalTemplateId,
+        requestedTemplateId: helpers.templateId,
+        stylePreset: resolvedStylePreset,
+      });
       const nextTemplateBundleId =
         helpers.templateBundleId === undefined
           ? proposalTemplateBundleId
@@ -7616,7 +7654,12 @@ export function ProposalForge(): JSX.Element {
           : null),
       };
     },
-    [proposalSettingsPresets, proposalStyleChoice, proposalTemplateBundleId],
+    [
+      effectiveProposalTemplateId,
+      proposalSettingsPresets,
+      proposalStyleChoice,
+      proposalTemplateBundleId,
+    ],
   );
 
   const applyProposalDirectStyle = React.useCallback(
@@ -7677,13 +7720,12 @@ export function ProposalForge(): JSX.Element {
 
       setProposalStyleLinkMode("proposal_local");
       setProposalTemplateId(templateId);
+      setProposalTemplateBundleId(null);
       setProposalStyleChoice(nextStyleChoice);
       setHasUserEditedStyle(true);
 
       latestProposalStyleCommitRevisionRef.current += 1;
-      const documentStyleSlotId = getDocumentStyleSlotIdForProposalBundle(
-        proposalTemplateBundleId,
-      );
+      const documentStyleSlotId = getDocumentStyleSlotIdForProposalBundle(null);
       const documentStyleSlotSource =
         documentStyleSlotId &&
         getProposalSettingsPresetForSlot(
@@ -7716,16 +7758,12 @@ export function ProposalForge(): JSX.Element {
         styleLinkMode: "proposal_local",
         styleChoice: nextStyleChoice,
         ...documentStyleMetadata,
-        ...(proposalTemplateBundleId
-          ? { templateBundleId: proposalTemplateBundleId }
-          : null),
       };
     },
     [
       effectiveProposalStylePresetWithPalette,
       proposalSettingsPresets,
       proposalStyleChoice,
-      proposalTemplateBundleId,
     ],
   );
 
@@ -10890,16 +10928,24 @@ export function ProposalForge(): JSX.Element {
   );
   const proposalTemplatePanelItems = React.useMemo(
     () =>
-      PROPOSAL_STYLE_OPTIONS.map((option) => {
+      PROPOSAL_TEMPLATE_DEFINITIONS.map((template) => {
         const family =
-          option.id === "magazine_editorial"
-            ? "letterpress"
-            : option.id === "grid_mono"
-              ? "bold"
-              : "minimal";
+          template.id === "director-letterhead"
+            ? "director-letterhead"
+            : template.id === "volk-letterhead"
+              ? "volk-letterhead"
+              : template.id === "film-foto-letterhead"
+                ? "film-foto-letterhead"
+                : template.id === "modernist_signal"
+                  ? "bold"
+                  : template.id === "quire_margin"
+                    ? "letterpress"
+                    : "minimal";
         return {
-          id: option.id,
-          label: option.label,
+          id: template.id,
+          label: template.name,
+          description: template.description,
+          meta: template.shortLabel,
           preview: { kind: "Cover letter" as const, family },
         };
       }),
@@ -10913,13 +10959,14 @@ export function ProposalForge(): JSX.Element {
         "workspace.proposalTemplatesPanel",
       ),
       subtitle: "A4 · 21 × 29.7 cm",
-      activeItemId: effectiveProposalTemplateBundleId,
+      activeItemId: effectiveProposalTemplateId,
       items: proposalTemplatePanelItems,
-      onSelect: handleProposalStyleBundleSelect,
+      onSelect: (itemId: string) =>
+        handleProposalLayoutSelect(resolveProposalTemplateId(itemId)),
     }),
     [
-      effectiveProposalTemplateBundleId,
-      handleProposalStyleBundleSelect,
+      effectiveProposalTemplateId,
+      handleProposalLayoutSelect,
       proposalTemplatePanelItems,
       resolvedLanguage,
     ],
@@ -10967,16 +11014,81 @@ export function ProposalForge(): JSX.Element {
         },
       },
       {
-        id: "contact-line",
-        label: "Contact information",
-        value: proposalContactLine,
-        placeholder: "email · phone · location · LinkedIn · website",
-        onChange: handleProposalContactLineChange,
+        id: "contact-email",
+        label: "Email",
+        value: proposalStructuredContactFields.email,
+        placeholder: "email@example.com",
+        onChange: (value) =>
+          handleProposalStructuredContactChange("email", value),
         onBlur: () => {
           handleProposalContactLineCommit();
           void handleProposalDocumentCommit();
         },
       },
+      {
+        id: "contact-phone",
+        label: "Phone",
+        value: proposalStructuredContactFields.phone,
+        placeholder: "+33 6 00 00 00 00",
+        onChange: (value) =>
+          handleProposalStructuredContactChange("phone", value),
+        onBlur: () => {
+          handleProposalContactLineCommit();
+          void handleProposalDocumentCommit();
+        },
+      },
+      {
+        id: "contact-location",
+        label: "City / location",
+        value: proposalStructuredContactFields.location,
+        placeholder: "Paris",
+        onChange: (value) =>
+          handleProposalStructuredContactChange("location", value),
+        onBlur: () => {
+          handleProposalContactLineCommit();
+          void handleProposalDocumentCommit();
+        },
+      },
+      {
+        id: "contact-linkedin",
+        label: "LinkedIn",
+        value: proposalStructuredContactFields.linkedin,
+        placeholder: "linkedin.com/in/name",
+        onChange: (value) =>
+          handleProposalStructuredContactChange("linkedin", value),
+        onBlur: () => {
+          handleProposalContactLineCommit();
+          void handleProposalDocumentCommit();
+        },
+      },
+      {
+        id: "contact-website",
+        label: "Website / portfolio",
+        value: proposalStructuredContactFields.website,
+        placeholder: "portfolio.example.com",
+        onChange: (value) =>
+          handleProposalStructuredContactChange("website", value),
+        onBlur: () => {
+          handleProposalContactLineCommit();
+          void handleProposalDocumentCommit();
+        },
+      },
+      ...(proposalStructuredContactFields.other
+        ? [
+            {
+              id: "contact-other",
+              label: "Other contact",
+              value: proposalStructuredContactFields.other,
+              placeholder: "Other contact information",
+              onChange: (value: string) =>
+                handleProposalStructuredContactChange("other", value),
+              onBlur: () => {
+                handleProposalContactLineCommit();
+                void handleProposalDocumentCommit();
+              },
+            },
+          ]
+        : []),
       {
         id: "letter-date",
         label: "Date",
@@ -11011,18 +11123,18 @@ export function ProposalForge(): JSX.Element {
       },
     ],
     [
-      handleProposalContactLineChange,
       handleProposalContactLineCommit,
       handleProposalDocumentCommit,
       handleProposalDocumentTitleChange,
       handleProposalApplicantNameChange,
       handleProposalApplicantRoleChange,
+      handleProposalStructuredContactChange,
       handleProposalLetterDateChange,
       handleProposalRecipientDetailsChange,
       handleProposalSalutationChange,
       proposalApplicantName,
       proposalApplicantRole,
-      proposalContactLine,
+      proposalStructuredContactFields,
       proposalDocumentTitle,
       proposalLetterDate,
       proposalRecipientDetails,
