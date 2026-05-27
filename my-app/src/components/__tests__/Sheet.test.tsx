@@ -38,7 +38,7 @@ describe("Sheet", () => {
     });
     expect(dialog.parentElement).toBe(document.body.querySelector(".ds-sheet-root"));
     expect(dialog).toHaveClass("ds-sheet");
-    expect(dialog).toHaveAttribute("data-state", "open");
+    await waitFor(() => expect(dialog).toHaveAttribute("data-state", "open"));
 
     fireEvent.keyDown(document, { key: "Escape" });
     expect(onOpenChange).toHaveBeenCalledWith(false);

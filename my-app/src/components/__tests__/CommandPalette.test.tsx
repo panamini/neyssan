@@ -59,6 +59,7 @@ describe("CommandPalette", () => {
     expect(
       screen.getByRole("dialog", { name: "Command palette" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("listbox", { name: "Commands" })).toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText("Search or run a command..."), {
       target: { value: "zzzz" },
@@ -95,10 +96,19 @@ describe("CommandPalette", () => {
       fireEvent.keyDown(window, { key: "k", metaKey: true });
 
       expect(screen.getByRole("dialog", { name: title })).toBeInTheDocument();
+      expect(
+        screen.getByRole("listbox", {
+          name: locale === "fr" ? "Commandes" : "Comandos",
+        }),
+      ).toBeInTheDocument();
       expect(screen.getByRole("option", { name: /Today/i })).toBeInTheDocument();
 
       fireEvent.change(
-        screen.getByPlaceholderText("Search or run a command..."),
+        screen.getByPlaceholderText(
+          locale === "fr"
+            ? "Rechercher ou lancer une commande..."
+            : "Buscar o ejecutar un comando...",
+        ),
         {
           target: { value: "zzzz" },
         },
