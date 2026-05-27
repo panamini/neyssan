@@ -23,6 +23,8 @@ import {
   WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
   type ResumeTemplateId,
 } from "../../lib/layout/resumeTemplates";
+import { translateUi, type UiMessageKey, type UiMessageLocale } from "../../lib/i18n";
+import { useUiLanguagePreference } from "../../lib/ui-preferences";
 
 type OnboardingNavigateOptions = {
   state?: unknown;
@@ -38,8 +40,8 @@ type OnboardingReplayProps = {
 };
 
 type OnboardingChoice = {
-  label: string;
-  description?: string;
+  labelKey: UiMessageKey;
+  descriptionKey?: UiMessageKey;
   action:
     | "select-tone"
     | "select-style"
@@ -68,11 +70,11 @@ export type OnboardingStepId =
 
 type OnboardingStep = {
   id: OnboardingStepId;
-  title: string;
-  progressLabel: string;
-  copy: string;
-  helperText?: string;
-  pills?: string[];
+  titleKey: UiMessageKey;
+  progressLabelKey: UiMessageKey;
+  copyKey: UiMessageKey;
+  helperTextKey?: UiMessageKey;
+  pillKeys?: UiMessageKey[];
   choices: OnboardingChoice[];
 };
 
@@ -191,10 +193,17 @@ function resolveOnboardingStyleSlot(
   };
 }
 
-function getOnboardingLayoutName(templateId: ResumeTemplateId): string {
-  if (templateId === WORKSHOP_RESUME_ONECOL_TEMPLATE_ID) return "Minimal";
-  if (templateId === WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID) return "French";
-  return "Auto";
+function getOnboardingLayoutName(
+  templateId: ResumeTemplateId,
+  resolvedLanguage: UiMessageLocale,
+): string {
+  if (templateId === WORKSHOP_RESUME_ONECOL_TEMPLATE_ID) {
+    return translateUi(resolvedLanguage, "settings.style.minimal.label");
+  }
+  if (templateId === WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID) {
+    return translateUi(resolvedLanguage, "settings.style.french.label");
+  }
+  return translateUi(resolvedLanguage, "settings.style.auto.label");
 }
 
 function getOnboardingStyleChoiceClassName(choice: OnboardingChoice): string {
@@ -274,32 +283,36 @@ function OnboardingStylePreviewContent({
 const ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: "intro",
-    title: "Two weeks. One offer.",
-    progressLabel: "Intro",
-    copy: "twoweeks turns your CV into tailored cover letters for jobs that actually match your profile. Let's get you set up in three minutes.",
-    pills: ["No spinners.", "No fluff.", "Edit everything."],
+    titleKey: "onboarding.intro.title",
+    progressLabelKey: "onboarding.intro.progress",
+    copyKey: "onboarding.intro.copy",
+    pillKeys: [
+      "onboarding.intro.pill.noSpinners",
+      "onboarding.intro.pill.noFluff",
+      "onboarding.intro.pill.editEverything",
+    ],
     choices: [],
   },
   {
     id: "style",
-    title: "Pick a starting style.",
-    progressLabel: "Style",
-    copy: "You can change it any time. Fonts, sizes, accent — everything is editable.",
+    titleKey: "onboarding.style.title",
+    progressLabelKey: "onboarding.style.progress",
+    copyKey: "onboarding.style.copy",
     choices: [
       {
-        label: "Style 1",
+        labelKey: "onboarding.style.choice1",
         action: "select-style",
         value: "style-1",
         stylePreview: "style-1",
       },
       {
-        label: "Style 2",
+        labelKey: "onboarding.style.choice2",
         action: "select-style",
         value: "style-2",
         stylePreview: "style-2",
       },
       {
-        label: "Style 3",
+        labelKey: "onboarding.style.choice3",
         action: "select-style",
         value: "style-3",
         stylePreview: "style-3",
@@ -308,27 +321,27 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
   },
   {
     id: "tone",
-    title: "How do you sound?",
-    progressLabel: "Tone",
-    copy: "Your default voice. Change it per letter.",
+    titleKey: "onboarding.tone.title",
+    progressLabelKey: "onboarding.tone.progress",
+    copyKey: "onboarding.tone.copy",
     choices: [
       {
-        label: "Warm",
-        description: "Human. Direct.\nStill professional.",
+        labelKey: "onboarding.tone.warm",
+        descriptionKey: "onboarding.tone.warmDescription",
         action: "select-tone",
         value: "warm",
         tone: "warm",
       },
       {
-        label: "Natural",
-        description: "Plain prose.\nClear. Done.",
+        labelKey: "onboarding.tone.natural",
+        descriptionKey: "onboarding.tone.naturalDescription",
         action: "select-tone",
         value: "natural",
         tone: "natural",
       },
       {
-        label: "Formal",
-        description: "Structured. Senior.\nNo theater.",
+        labelKey: "onboarding.tone.formal",
+        descriptionKey: "onboarding.tone.formalDescription",
         action: "select-tone",
         value: "formal",
         tone: "formal",
@@ -337,52 +350,50 @@ const ONBOARDING_STEPS: OnboardingStep[] = [
   },
   {
     id: "cv",
-    title: "Bring your CV.",
-    progressLabel: "CV",
-    copy: "Import a PDF, paste text, or start from scratch. We'll keep your style and tone choices in place.",
+    titleKey: "onboarding.cv.title",
+    progressLabelKey: "onboarding.cv.progress",
+    copyKey: "onboarding.cv.copy",
     choices: [
       {
-        label: "Upload PDF",
-        description: "Choose a PDF now, then continue when it is ready.",
+        labelKey: "onboarding.cv.uploadPdf",
+        descriptionKey: "onboarding.cv.uploadPdfDescription",
         action: "upload-resume",
       },
       {
-        label: "Start blank",
-        description: "Create a blank CV setup and continue.",
+        labelKey: "onboarding.cv.startBlank",
+        descriptionKey: "onboarding.cv.startBlankDescription",
         action: "new-resume",
       },
     ],
   },
   {
     id: "jobs",
-    title: "Catch jobs instantly",
-    progressLabel: "Jobs",
-    copy: "Set up the twoweeks extension. Capture roles from supported job sites.",
+    titleKey: "onboarding.jobs.title",
+    progressLabelKey: "onboarding.jobs.progress",
+    copyKey: "onboarding.jobs.copy",
     choices: [
       {
-        label: "Install for Chrome",
-        description:
-          "One click install. Pin it for fastest capture.",
+        labelKey: "onboarding.jobs.installChrome",
+        descriptionKey: "onboarding.jobs.installChromeDescription",
         action: "install-chrome",
       },
       {
-        label: "Supported websites",
-        description:
-          "Open a supported site, then capture the job with the extension.",
+        labelKey: "onboarding.jobs.supportedWebsites",
+        descriptionKey: "onboarding.jobs.supportedWebsitesDescription",
         action: "supported-sites",
       },
     ],
   },
   {
     id: "done",
-    title: "You're set.",
-    progressLabel: "Done",
-    copy: "Start with the next document step that matters most.",
-    helperText: "⌘K opens the command palette from anywhere.",
+    titleKey: "onboarding.done.title",
+    progressLabelKey: "onboarding.done.progress",
+    copyKey: "onboarding.done.copy",
+    helperTextKey: "onboarding.done.helper",
     choices: [
-      { label: "Import CV", action: "upload-resume" },
-      { label: "Match a job", action: "match-job" },
-      { label: "Write first proposal", action: "write-proposal" },
+      { labelKey: "onboarding.done.importCv", action: "upload-resume" },
+      { labelKey: "onboarding.done.matchJob", action: "match-job" },
+      { labelKey: "onboarding.done.writeProposal", action: "write-proposal" },
     ],
   },
 ];
@@ -401,6 +412,7 @@ export function OnboardingReplay({
   onNavigate,
   onOpenCommandPalette,
 }: OnboardingReplayProps): JSX.Element | null {
+  const { resolvedLanguage } = useUiLanguagePreference();
   const [stepIndex, setStepIndex] = React.useState(0);
   const [supportedSitesOpen, setSupportedSitesOpen] = React.useState(false);
   const [selectedTone, setSelectedTone] = React.useState("warm");
@@ -420,6 +432,13 @@ export function OnboardingReplay({
     () => getProposalExtensionSourceLinks(),
     [],
   );
+  const currentStepLabel = `${translateUi(
+    resolvedLanguage,
+    "onboarding.stepPrefix",
+  )} ${stepIndex + 1} ${translateUi(
+    resolvedLanguage,
+    "onboarding.stepConnector",
+  )} ${total}`;
   const resolvedStyleSlots = React.useMemo(
     () => ({
       "style-1": resolveOnboardingStyleSlot("style-1", stylePresetsQuery),
@@ -565,39 +584,44 @@ export function OnboardingReplay({
         </div>
         <div
           className="onb-replay__steps"
-          aria-label={`Step ${stepIndex + 1} of ${total}`}
+          aria-label={currentStepLabel}
         >
           {ONBOARDING_STEPS.map((item, index) => (
             <span
-              key={item.title}
+              key={item.id}
               className="onb-replay__segment"
               data-state={index <= stepIndex ? "active" : "pending"}
               aria-current={index === stepIndex ? "step" : undefined}
             >
               <span className="onb-replay__dot" aria-hidden="true" />
-              <span>{item.progressLabel}</span>
+              <span>{translateUi(resolvedLanguage, item.progressLabelKey)}</span>
             </span>
           ))}
         </div>
         <Button variant="ghost" size="sm" onClick={onClose}>
-          Skip for now
+          {translateUi(resolvedLanguage, "onboarding.skipForNow")}
         </Button>
       </div>
 
       <div className="onb-replay__body">
         <section className="onb-replay__pane">
           <h2 id="onboarding-title" className="onb-replay__title">
-            {step.title}
+            {translateUi(resolvedLanguage, step.titleKey)}
           </h2>
-          <p className="onb-replay__copy">{step.copy}</p>
-          {step.pills ? (
+          <p className="onb-replay__copy">
+            {translateUi(resolvedLanguage, step.copyKey)}
+          </p>
+          {step.pillKeys ? (
             <div
               className="onb-replay__pills"
-              aria-label="Quick start promises"
+              aria-label={translateUi(
+                resolvedLanguage,
+                "onboarding.quickStartPromises",
+              )}
             >
-              {step.pills.map((pill) => (
-                <span key={pill} className="ds-pill ds-pill--accent">
-                  {pill}
+              {step.pillKeys.map((pillKey) => (
+                <span key={pillKey} className="ds-pill ds-pill--accent">
+                  {translateUi(resolvedLanguage, pillKey)}
                 </span>
               ))}
             </div>
@@ -608,9 +632,13 @@ export function OnboardingReplay({
                 const styleSlot = choice.stylePreview
                   ? resolvedStyleSlots[choice.stylePreview]
                   : null;
+                const choiceLabel = translateUi(
+                  resolvedLanguage,
+                  choice.labelKey,
+                );
                 const choiceButton = (
                   <button
-                    key={choice.label}
+                    key={choice.labelKey}
                     type="button"
                     className={getOnboardingStyleChoiceClassName(choice)}
                     data-selected={isSelected(choice)}
@@ -627,12 +655,15 @@ export function OnboardingReplay({
                     {choice.stylePreview && styleSlot ? (
                       <>
                         <span className="onb-replay__choice-title">
-                          {choice.label}
+                          {choiceLabel}
                         </span>
                         <OnboardingStylePreviewContent styleSlot={styleSlot} />
                         <span className="onb-replay__choice-footer">
                           <span className="onb-replay__choice-layout">
-                            {getOnboardingLayoutName(styleSlot.resumeTemplateId)}
+                            {getOnboardingLayoutName(
+                              styleSlot.resumeTemplateId,
+                              resolvedLanguage,
+                            )}
                           </span>
                           <span className="onb-replay__choice-meta">
                             {getOnboardingStyleFontLabel(styleSlot)}
@@ -642,18 +673,18 @@ export function OnboardingReplay({
                     ) : choice.tone ? (
                       <span className="onb-replay__choice-icon">
                         <span className={`ds-tone ds-tone--${choice.tone}`}>
-                          {choice.label}
+                          {choiceLabel}
                         </span>
                       </span>
                     ) : null}
                     {!choice.stylePreview && !choice.tone && (
                       <span className="onb-replay__choice-title">
-                        {choice.label}
+                        {choiceLabel}
                       </span>
                     )}
-                    {!choice.stylePreview && choice.description ? (
+                    {!choice.stylePreview && choice.descriptionKey ? (
                       <span className="onb-replay__choice-desc">
-                        {choice.description}
+                        {translateUi(resolvedLanguage, choice.descriptionKey)}
                       </span>
                     ) : null}
                   </button>
@@ -670,7 +701,10 @@ export function OnboardingReplay({
                 type="file"
                 accept="application/pdf,.pdf"
                 className="sr-only"
-                aria-label="Choose CV PDF"
+                aria-label={translateUi(
+                  resolvedLanguage,
+                  "onboarding.chooseCvPdf",
+                )}
                 onChange={(event) => {
                   const file = event.currentTarget.files?.[0] ?? null;
                   setCvChoice("upload");
@@ -680,10 +714,13 @@ export function OnboardingReplay({
               {cvChoice ? (
                 <p className="onb-replay__helper" aria-live="polite">
                   {cvChoice === "blank"
-                    ? "Blank CV setup is ready. Your style and tone choices are saved for this onboarding run."
+                    ? translateUi(resolvedLanguage, "onboarding.cv.blankReady")
                     : selectedCvFileName
-                      ? `${selectedCvFileName} is ready for the next step.`
-                      : "PDF import is selected. Choose a file now or continue and import it from the final step."}
+                      ? `${selectedCvFileName} ${translateUi(
+                          resolvedLanguage,
+                          "onboarding.cv.fileReadySuffix",
+                        )}`
+                      : translateUi(resolvedLanguage, "onboarding.cv.pdfSelected")}
                 </p>
               ) : null}
             </>
@@ -691,12 +728,20 @@ export function OnboardingReplay({
           {supportedSitesOpen ? (
             <div
               className="onb-replay__supported-sites"
-              aria-label="Supported job websites"
+              aria-label={translateUi(
+                resolvedLanguage,
+                "onboarding.supportedJobWebsites",
+              )}
             >
               <div className="onb-replay__supported-sites-head">
-                <strong>Supported websites</strong>
+                <strong>
+                  {translateUi(resolvedLanguage, "onboarding.supportedWebsites")}
+                </strong>
                 <span>
-                  Open a site, then capture the job with the extension.
+                  {translateUi(
+                    resolvedLanguage,
+                    "onboarding.supportedWebsitesHelp",
+                  )}
                 </span>
               </div>
               <div className="onb-replay__site-grid">
@@ -714,8 +759,10 @@ export function OnboardingReplay({
               </div>
             </div>
           ) : null}
-          {step.helperText ? (
-            <p className="onb-replay__helper">{step.helperText}</p>
+          {step.helperTextKey ? (
+            <p className="onb-replay__helper">
+              {translateUi(resolvedLanguage, step.helperTextKey)}
+            </p>
           ) : null}
         </section>
       </div>
@@ -727,13 +774,13 @@ export function OnboardingReplay({
           disabled={stepIndex === 0}
           onClick={() => setStepIndex((current) => Math.max(0, current - 1))}
         >
-          Back
+          {translateUi(resolvedLanguage, "common.back")}
         </Button>
-        <span>
-          Step {stepIndex + 1} of {total}
-        </span>
+        <span>{currentStepLabel}</span>
         <Button size="md" onClick={goNext}>
-          {stepIndex === total - 1 ? "Done" : "Continue"}
+          {stepIndex === total - 1
+            ? translateUi(resolvedLanguage, "common.done")
+            : translateUi(resolvedLanguage, "common.continue")}
         </Button>
       </div>
     </div>

@@ -91,7 +91,7 @@ export const APP_COMMANDS: AppCommand[] = [
   {
     id: "quick-start",
     group: "Actions",
-    label: "Replay onboarding",
+    label: "Starter tour",
     labelKey: "onboarding.replay",
     keywords: ["start", "setup"],
     action: { type: "replay-onboarding" },
