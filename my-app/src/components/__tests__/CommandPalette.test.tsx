@@ -84,7 +84,7 @@ describe("CommandPalette", () => {
       oldPlaceholder: ["Buscar", " o ejecutar", " un comando..."].join(""),
     },
   ])(
-    "renders command palette shell chrome in $locale without migrating command items",
+    "renders command palette shell chrome and replay action in $locale",
     ({ locale, title, emptyState, placeholder, oldPlaceholder }) => {
       window.localStorage.setItem("twoweeks:ui-language", locale);
       window.localStorage.setItem("twoweeks:document-language", "ar");
@@ -108,6 +108,11 @@ describe("CommandPalette", () => {
       expect(screen.getByRole("option", { name: /Today/i })).toBeInTheDocument();
 
       expect(screen.queryByPlaceholderText(oldPlaceholder)).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("option", {
+          name: locale === "fr" ? /Revoir l'accueil/i : /Repetir bienvenida/i,
+        }),
+      ).toBeInTheDocument();
 
       fireEvent.change(screen.getByPlaceholderText(placeholder), {
         target: { value: "zzzz" },
@@ -168,5 +173,32 @@ describe("CommandPalette", () => {
     fireEvent.click(screen.getByRole("option", { name: /Toggle light or dark/i }));
 
     expect(onToggleTheme).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs localized onboarding replay without changing document language", () => {
+    const onReplayOnboarding = vi.fn();
+    window.localStorage.setItem("twoweeks:ui-language", "fr");
+    window.localStorage.setItem("twoweeks:document-language", "es");
+
+    render(
+      <MemoryRouter initialEntries={["/jobs"]}>
+        <Routes>
+          <Route
+            path="*"
+            element={<PaletteHarness onReplayOnboarding={onReplayOnboarding} />}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    fireEvent.click(
+      screen.getByRole("option", { name: /Revoir l'accueil/i }),
+    );
+
+    expect(onReplayOnboarding).toHaveBeenCalledTimes(1);
+    expect(window.localStorage.getItem("twoweeks:document-language")).toBe(
+      "es",
+    );
   });
 });
