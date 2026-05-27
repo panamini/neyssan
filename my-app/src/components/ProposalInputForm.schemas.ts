@@ -64,7 +64,7 @@ export const formSchema = z.object({
         required_error: "You must select a model type.",
       },
     )
-    .default("chatgpt"),
+    .default("mistral-medium-latest"),
 });
 
 export type FormValues = z.infer<typeof formSchema>;

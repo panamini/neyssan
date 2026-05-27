@@ -16,9 +16,7 @@ import {
   TrashSimple,
   X,
 } from "@/lib/icons";
-import { BodyPortal } from "../components/ui/body-portal";
 import { Menu, type MenuSection } from "../components/ui/menu";
-import { LibraryFilterMenu } from "../components/LibraryFilterMenu";
 import ProposalInputForm, {
   type ProposalGenerateControl,
 } from "../components/ProposalInputForm";
@@ -282,6 +280,11 @@ import {
   type ProposalStyleTraceMetadataSnapshot,
   type ProposalStyleTraceWinnerSource,
 } from "../lib/proposal-style-trace";
+import {
+  isProposalLlmModelType,
+  readStoredProposalLlmModel,
+  useProposalLlmModelPreference,
+} from "../lib/proposal-llm-preference";
 
 type ProposalForgePrefill = {
   handoffId: string;
@@ -300,13 +303,6 @@ type ProposalForgeHandoffRecord = {
   platform?: string;
   createdAt?: number;
 } | null;
-
-const PROPOSAL_MODEL_SELECTOR_OPTIONS = [
-  { value: "chatgpt", label: "GPT-5.5" },
-  { value: "qwen3.7-max", label: "Qwen3.7-Max" },
-  { value: "mistral-medium-latest", label: "Med" },
-  { value: "mistral-large-latest", label: "Lrg" },
-] as const;
 
 // Browser width-map audit confirmed the workspace's visible Proposal paper
 // matches the renderer A4 width at the current design scale (~793.7px), while
@@ -2407,6 +2403,7 @@ export function ProposalForge(): JSX.Element {
   const { currentCvId, importCv, cvs, hydrateCvDocument, deleteCv } =
     useCvLibrary();
   const { showToast } = useToast();
+  const { model: proposalLlmModel } = useProposalLlmModelPreference();
   const shouldStartFromEmptyProposalWorkspace = isPlainProposalWorkspaceRoute(
     search,
     location.state,
@@ -3193,15 +3190,19 @@ export function ProposalForge(): JSX.Element {
     FormValues["modelType"]
   >(() => {
     const storedComposeDraft = readStoredProposalComposeDraft();
-    return storedComposeDraft?.modelType === "chatgpt" ||
-      storedComposeDraft?.modelType === "qwen3.7-max" ||
-      storedComposeDraft?.modelType === "mistral-small-latest" ||
-      storedComposeDraft?.modelType === "mistral-medium-latest" ||
-      storedComposeDraft?.modelType === "mistral-large-latest" ||
-      storedComposeDraft?.modelType === "mistral-agent"
+    return isProposalLlmModelType(storedComposeDraft?.modelType)
       ? storedComposeDraft.modelType
-      : "chatgpt";
+      : readStoredProposalLlmModel();
   });
+  const proposalLlmModelMountedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!proposalLlmModelMountedRef.current) {
+      proposalLlmModelMountedRef.current = true;
+      return;
+    }
+
+    setComposeToolbarModelType(proposalLlmModel);
+  }, [proposalLlmModel]);
   const [cvPickerRequestKey, setCvPickerRequestKey] = React.useState(0);
   const [duplicateSourceJobId, setDuplicateSourceJobId] = React.useState<
     string | null
@@ -9035,12 +9036,7 @@ export function ProposalForge(): JSX.Element {
         try {
           const existingComposeDraft = readStoredProposalComposeDraft() ?? {};
           restoredModelType =
-            existingComposeDraft.modelType === "chatgpt" ||
-            existingComposeDraft.modelType === "qwen3.7-max" ||
-            existingComposeDraft.modelType === "mistral-small-latest" ||
-            existingComposeDraft.modelType === "mistral-medium-latest" ||
-            existingComposeDraft.modelType === "mistral-large-latest" ||
-            existingComposeDraft.modelType === "mistral-agent"
+            isProposalLlmModelType(existingComposeDraft.modelType)
               ? existingComposeDraft.modelType
               : composeToolbarModelType;
           const composeDraft: StoredProposalComposeDraft = {
@@ -11631,28 +11627,6 @@ export function ProposalForge(): JSX.Element {
           } as React.CSSProperties
         }
       >
-        {!shouldShowSavedList ? (
-          <BodyPortal>
-            <div
-              style={{
-                position: "fixed",
-                top: "calc(var(--space-3) + env(safe-area-inset-top))",
-                right: "var(--space-3)",
-                zIndex: 80,
-              }}
-            >
-              <LibraryFilterMenu
-                label="Debug model"
-                value={composeToolbarModelType}
-                onChange={setComposeToolbarModelType}
-                options={PROPOSAL_MODEL_SELECTOR_OPTIONS.map((option) => ({
-                  value: option.value,
-                  label: option.label,
-                }))}
-              />
-            </div>
-          </BodyPortal>
-        ) : null}
         {shouldShowSavedList ? (
           <section aria-hidden={false}>
             <ProposalsList
