@@ -2489,16 +2489,6 @@ html[data-reduce-motion="true"] *::after {
   color: var(--color-accent);
 }
 
-.settings-language-note {
-  padding: var(--s3);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--r-control);
-  background: color-mix(in srgb, var(--sf2) 34%, var(--sfr) 66%);
-  color: var(--tm2);
-  font-size: var(--tx);
-  line-height: 1.5;
-}
-
 .style-swatches {
   display: flex;
   flex-wrap: wrap;

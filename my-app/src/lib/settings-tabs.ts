@@ -1,3 +1,6 @@
+import { translateUi, type UiMessageKey } from "./i18n";
+import type { ProductionUiLocale } from "./locale-registry";
+
 export type SettingsTab =
   | "account"
   | "theme"
@@ -10,48 +13,48 @@ export type SettingsTab =
 
 export const SETTINGS_TABS: Array<{
   id: SettingsTab;
-  label: string;
-  description: string;
+  labelKey: UiMessageKey;
+  descriptionKey: UiMessageKey;
 }> = [
   {
     id: "account",
-    label: "Profile",
-    description: "Profile, contact defaults, connected accounts.",
+    labelKey: "settings.tabs.account.label",
+    descriptionKey: "settings.tabs.account.description",
   },
   {
     id: "theme",
-    label: "Theme",
-    description: "Interface mode and accent color.",
+    labelKey: "settings.tabs.theme.label",
+    descriptionKey: "settings.tabs.theme.description",
   },
   {
     id: "language",
-    label: "Language",
-    description: "Interface language defaults.",
+    labelKey: "settings.tabs.language.label",
+    descriptionKey: "settings.tabs.language.description",
   },
   {
     id: "docstyle",
-    label: "Document style",
-    description: "Fonts, colors, layouts, and printed name.",
+    labelKey: "settings.tabs.docstyle.label",
+    descriptionKey: "settings.tabs.docstyle.description",
   },
   {
     id: "voice",
-    label: "Voice & tone",
-    description: "Default writing tone for new proposals.",
+    labelKey: "settings.tabs.voice.label",
+    descriptionKey: "settings.tabs.voice.description",
   },
   {
     id: "billing",
-    label: "Billing",
-    description: "Plan and payment controls.",
+    labelKey: "settings.tabs.billing.label",
+    descriptionKey: "settings.tabs.billing.description",
   },
   {
     id: "team",
-    label: "Team",
-    description: "Members and workspace access.",
+    labelKey: "settings.tabs.team.label",
+    descriptionKey: "settings.tabs.team.description",
   },
   {
     id: "danger",
-    label: "Danger zone",
-    description: "Account deletion and irreversible actions.",
+    labelKey: "settings.tabs.danger.label",
+    descriptionKey: "settings.tabs.danger.description",
   },
 ];
 
@@ -61,8 +64,22 @@ export function normalizeSettingsTab(value: string | null): SettingsTab {
     : "account";
 }
 
-export function getSettingsTabLabel(tabId: SettingsTab): string {
-  return SETTINGS_TABS.find((tab) => tab.id === tabId)?.label ?? "Settings";
+export function getSettingsTabLabel(
+  tabId: SettingsTab,
+  locale: ProductionUiLocale = "en",
+): string {
+  const tab = SETTINGS_TABS.find((candidate) => candidate.id === tabId);
+  return tab ? translateUi(locale, tab.labelKey) : translateUi(locale, "nav.settings");
+}
+
+export function getSettingsTabDescription(
+  tabId: SettingsTab,
+  locale: ProductionUiLocale = "en",
+): string {
+  const tab = SETTINGS_TABS.find((candidate) => candidate.id === tabId);
+  return tab
+    ? translateUi(locale, tab.descriptionKey)
+    : translateUi(locale, "nav.settings");
 }
 
 export function getSettingsTabPath(tabId: SettingsTab): string {
