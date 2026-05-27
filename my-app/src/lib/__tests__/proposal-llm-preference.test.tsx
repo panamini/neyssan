@@ -27,7 +27,9 @@ describe("proposal LLM preference", () => {
   it("defaults to ChatGPT and updates same-tab subscribers", () => {
     render(<ModelPreferenceProbe />);
 
-    expect(screen.getByLabelText("selected model")).toHaveTextContent("chatgpt");
+    expect(screen.getByLabelText("selected model")).toHaveTextContent(
+      "mistral-medium-latest",
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Use Mistral Large" }));
 
@@ -40,6 +42,6 @@ describe("proposal LLM preference", () => {
   it("falls back to ChatGPT for unknown stored values", () => {
     window.localStorage.setItem("twoweeks:proposal-llm-model", "unknown");
 
-    expect(readStoredProposalLlmModel()).toBe("chatgpt");
+    expect(readStoredProposalLlmModel()).toBe("mistral-medium-latest");
   });
 });

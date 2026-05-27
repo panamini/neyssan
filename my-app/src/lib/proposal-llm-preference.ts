@@ -18,7 +18,7 @@ export const PROPOSAL_LLM_MODEL_VALUES = [
 
 export type ProposalLlmModelType = (typeof PROPOSAL_LLM_MODEL_VALUES)[number];
 
-const DEFAULT_PROPOSAL_LLM_MODEL: ProposalLlmModelType = "chatgpt";
+const DEFAULT_PROPOSAL_LLM_MODEL: ProposalLlmModelType = "mistral-medium-latest";
 const PROPOSAL_LLM_MODEL_STORAGE_KEY = "twoweeks:proposal-llm-model";
 const PROPOSAL_LLM_MODEL_CHANGE_EVENT = "twoweeks:proposal-llm-model-change";
 

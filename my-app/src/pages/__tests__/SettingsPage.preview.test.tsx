@@ -153,6 +153,9 @@ describe("SettingsPage preview controls", () => {
       name: "Letter Model",
     });
     const toneGroup = screen.getByRole("group", { name: "Default tone" });
+    expect(
+      within(llmGroup).getByRole("button", { name: "Mistral Medium" }),
+    ).toHaveAttribute("aria-pressed", "true");
 
     await user.click(
       within(llmGroup).getByRole("button", { name: "Qwen3.7-Max" }),
