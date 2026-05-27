@@ -6,6 +6,9 @@ export const PROPOSAL_ACTIVE_TEMPLATE_IDS = [
   "modernist_signal",
   "quire_margin",
   "workshop_proposal_margin",
+  "director-letterhead",
+  "volk-letterhead",
+  "film-foto-letterhead",
 ] as const;
 
 export const PROPOSAL_LEGACY_TEMPLATE_IDS = [
@@ -64,18 +67,18 @@ export type ProposalTemplateDefinition = {
   description: string;
   twinLabel: string;
   exportShell: ProposalTemplateExportShell;
-  leftMarginMm: 17 | 35;
-  leftZoneMm: 35 | 52;
-  gutterMm: 18;
-  topOffsetMm: 35 | 52;
+  leftMarginMm: number;
+  leftZoneMm: number;
+  gutterMm: number;
+  topOffsetMm: number;
   bodyStartMm: number;
-  bottomMarginMm: 18;
-  rightMarginMm: 18;
-  readingMeasureCh: 54 | 56 | 58 | 60 | 64;
-  titleScaleMm: 6.4 | 6.6 | 7 | 7.1 | 7.8;
-  gridStepAMm: 17;
-  gridStepBMm: 18;
-  gridHalfStepMm: 8.5;
+  bottomMarginMm: number;
+  rightMarginMm: number;
+  readingMeasureCh: number;
+  titleScaleMm: number;
+  gridStepAMm: number;
+  gridStepBMm: number;
+  gridHalfStepMm: number;
 };
 
 export const PROPOSAL_TEMPLATE_DEFINITIONS: readonly ProposalTemplateDefinition[] =
@@ -227,7 +230,83 @@ export const PROPOSAL_TEMPLATE_DEFINITIONS: readonly ProposalTemplateDefinition[
       gridStepBMm: CANONICAL_PROPOSAL_LAYOUT.grid.stepBMm,
       gridHalfStepMm: CANONICAL_PROPOSAL_LAYOUT.grid.halfStepMm,
     },
+    {
+      id: "director-letterhead",
+      name: "Director Letterhead",
+      shortLabel: "25 mm letterhead",
+      description:
+        "A strong institutional masthead cover-letter sheet with a precise sender block, phone register, meta row, and open body field.",
+      twinLabel: "Cover letter",
+      exportShell: "onecol",
+      leftMarginMm: 25,
+      leftZoneMm: 0,
+      gutterMm: 0,
+      topOffsetMm: 0,
+      bodyStartMm: 118,
+      bottomMarginMm: 18,
+      rightMarginMm: 25,
+      readingMeasureCh: 62,
+      titleScaleMm: 6.15,
+      gridStepAMm: ROBIAL_PROPOSAL_GRID.stepAMm,
+      gridStepBMm: ROBIAL_PROPOSAL_GRID.stepBMm,
+      gridHalfStepMm: ROBIAL_PROPOSAL_GRID.halfStepMm,
+    },
+    {
+      id: "volk-letterhead",
+      name: "Volk Letterhead",
+      shortLabel: "24 mm register",
+      description:
+        "An asymmetric orange civic-letter cover sheet with a Swiss active margin, sender line, meta row, subject register, and lower red dot.",
+      twinLabel: "Cover letter",
+      exportShell: "onecol",
+      leftMarginMm: 24,
+      leftZoneMm: 0,
+      gutterMm: 0,
+      topOffsetMm: 0,
+      bodyStartMm: 122,
+      bottomMarginMm: 18,
+      rightMarginMm: 26,
+      readingMeasureCh: 62,
+      titleScaleMm: 5.95,
+      gridStepAMm: ROBIAL_PROPOSAL_GRID.stepAMm,
+      gridStepBMm: ROBIAL_PROPOSAL_GRID.stepBMm,
+      gridHalfStepMm: ROBIAL_PROPOSAL_GRID.halfStepMm,
+    },
+    {
+      id: "film-foto-letterhead",
+      name: "Film und Foto Letterhead",
+      shortLabel: "20 mm header rule",
+      description:
+        "A horizontal-rule cover-letter sheet with compact top information blocks, a large right title, meta row, and measured body field.",
+      twinLabel: "Cover letter",
+      exportShell: "onecol",
+      leftMarginMm: 20,
+      leftZoneMm: 0,
+      gutterMm: 0,
+      topOffsetMm: 0,
+      bodyStartMm: 120,
+      bottomMarginMm: 18,
+      rightMarginMm: 22,
+      readingMeasureCh: 66,
+      titleScaleMm: 8.1,
+      gridStepAMm: ROBIAL_PROPOSAL_GRID.stepAMm,
+      gridStepBMm: ROBIAL_PROPOSAL_GRID.stepBMm,
+      gridHalfStepMm: ROBIAL_PROPOSAL_GRID.halfStepMm,
+    },
   ] as const;
+
+export function isProposalLetterheadTemplateId(
+  value: unknown,
+): value is Extract<
+  ProposalTemplateId,
+  "director-letterhead" | "volk-letterhead" | "film-foto-letterhead"
+> {
+  return (
+    value === "director-letterhead" ||
+    value === "volk-letterhead" ||
+    value === "film-foto-letterhead"
+  );
+}
 
 export function isProposalTemplateId(
   value: unknown,

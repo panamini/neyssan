@@ -2,6 +2,7 @@ import React from "react";
 import type { FormValues } from "../ProposalInputForm.schemas";
 import {
   getProposalTemplateDefinition,
+  isProposalLetterheadTemplateId,
   resolveProposalTemplateId,
   type ProposalTemplateId,
 } from "../../../convex/lib/proposals/renderTemplates";
@@ -14,6 +15,10 @@ import {
   resolveProposalRecipientLines,
   type ProposalHeaderVisibility,
 } from "../../lib/proposal-header";
+import {
+  buildProposalContactLineFromParts,
+  parseProposalContactLine,
+} from "../../lib/proposal-heading-state";
 import {
   extractProposalClosingBlockFromParagraphs,
   formatProposalSignatureName,
@@ -99,6 +104,31 @@ type StructuredHeaderValues = {
   subject: string;
   toLines: string[];
   recipientDetailLines: string[];
+};
+
+type ProposalLetterheadViewModel = {
+  candidateName: string;
+  candidateRole: string;
+  candidateContactLine: string;
+  candidateDirectorContactLine: string;
+  candidateFilmSenderLine: string;
+  candidateLocationLine: string;
+  candidatePhone: string;
+  candidateEmail: string;
+  candidateWebsite: string;
+  recipientName: string;
+  recipientCompany: string;
+  recipientRole: string;
+  date: string;
+  subject: string;
+  secondaryTitle: string;
+};
+
+type ProposalCoverLetterTemplateProps = {
+  bodyRef?: React.Ref<HTMLDivElement> | null;
+  bodyContent: React.ReactNode;
+  isContinuationPage: boolean;
+  viewModel: ProposalLetterheadViewModel;
 };
 
 function resolveLineHeightPx(styles: CSSStyleDeclaration) {
@@ -204,6 +234,300 @@ function normalizeDocumentContactLine(
     .map((part) => part.trim())
     .filter(Boolean)
     .join(" · ");
+}
+
+function joinNonEmpty(parts: Array<string | null | undefined>): string {
+  return parts
+    .map((part) => part?.trim() ?? "")
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function buildProposalLetterheadViewModel(args: {
+  applicantHeader?: ProposalApplicantHeaderData | null;
+  railTitle?: string | null;
+  railMeta?: string | null;
+  contactLine?: string | null;
+  letterDate?: string | null;
+  recipientDetails?: string | null;
+  documentTitle?: string | null;
+  documentMeta?: string | null;
+  headerVisibility?: ProposalHeaderVisibility | null;
+}): ProposalLetterheadViewModel {
+  const visibility = resolveProposalHeaderVisibility(args.headerVisibility);
+  const recipientFields = parseProposalRecipientDetails(args.recipientDetails);
+  const candidateName =
+    args.applicantHeader?.name?.trim() || args.railTitle?.trim() || "";
+  const candidateRole =
+    args.applicantHeader?.role?.trim() ||
+    args.railMeta?.trim() ||
+    args.documentMeta?.trim() ||
+    "";
+  const candidatePhone = args.applicantHeader?.phone?.trim() ?? "";
+  const candidateEmail = args.applicantHeader?.email?.trim() ?? "";
+  const candidateWebsite = args.applicantHeader?.website?.trim() ?? "";
+  const candidateLinkedin = args.applicantHeader?.linkedin?.trim() ?? "";
+  const candidateLocationLine = args.applicantHeader?.location?.trim() ?? "";
+  const explicitContactLine = normalizeDocumentContactLine(args.contactLine);
+  const explicitContactParts = parseProposalContactLine(explicitContactLine);
+  const resolvedContactParts = {
+    email: candidateEmail || explicitContactParts.email,
+    phone: candidatePhone || explicitContactParts.phone,
+    location: candidateLocationLine || explicitContactParts.location,
+    linkedin: candidateLinkedin || explicitContactParts.linkedin,
+    website: candidateWebsite || explicitContactParts.website,
+    other: explicitContactParts.other,
+  };
+  const candidateContactLine =
+    buildProposalContactLineFromParts(resolvedContactParts) ||
+    explicitContactLine;
+  const candidateDirectorContactLine = buildProposalContactLineFromParts({
+    email: resolvedContactParts.email,
+    linkedin: resolvedContactParts.linkedin,
+    website: resolvedContactParts.website,
+    other: resolvedContactParts.other,
+  });
+  const candidateFilmSenderLine = buildProposalContactLineFromParts({
+    email: resolvedContactParts.email,
+    location: resolvedContactParts.location,
+    other: resolvedContactParts.other,
+  });
+  const recipientName = visibility.showRecipient
+    ? recipientFields.name?.trim() ?? ""
+    : "";
+  const recipientCompany = visibility.showRecipient
+    ? recipientFields.company?.trim() ?? ""
+    : "";
+  const recipientRole = visibility.showRecipient
+    ? recipientFields.role?.trim() ?? ""
+    : "";
+  const subject = visibility.showSubject ? args.documentTitle?.trim() ?? "" : "";
+  const secondaryTitle =
+    recipientCompany || subject || candidateRole || args.documentMeta?.trim() || "";
+
+  return {
+    candidateName,
+    candidateRole,
+    candidateContactLine,
+    candidateDirectorContactLine,
+    candidateFilmSenderLine,
+    candidateLocationLine: resolvedContactParts.location,
+    candidatePhone: resolvedContactParts.phone,
+    candidateEmail: resolvedContactParts.email,
+    candidateWebsite:
+      resolvedContactParts.website || resolvedContactParts.linkedin,
+    recipientName,
+    recipientCompany,
+    recipientRole,
+    date: visibility.showDate ? args.letterDate?.trim() ?? "" : "",
+    subject,
+    secondaryTitle,
+  };
+}
+
+function ProposalCoverLetterMetaRow({
+  viewModel,
+}: {
+  viewModel: ProposalLetterheadViewModel;
+}): JSX.Element {
+  const values = [
+    viewModel.recipientName,
+    viewModel.recipientCompany,
+    viewModel.recipientRole || viewModel.subject,
+    viewModel.date,
+  ];
+
+  return (
+    <div className="proposal-cover-letter__meta-row" aria-label="Letter metadata">
+      {values.map((value, index) => (
+        <p key={`meta-${index}`} className="proposal-cover-letter__meta-item">
+          {value}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function ProposalCoverLetterSubjectRow({
+  viewModel,
+  prefix = "Re:",
+}: {
+  viewModel: ProposalLetterheadViewModel;
+  prefix?: string;
+}): JSX.Element | null {
+  if (!viewModel.subject) {
+    return null;
+  }
+
+  return (
+    <div className="proposal-cover-letter__subject-row">
+      <span className="proposal-cover-letter__subject-label">{prefix}</span>
+      <span className="proposal-cover-letter__subject-value">
+        {viewModel.subject}
+      </span>
+    </div>
+  );
+}
+
+export function ProposalCoverLetterDirectorTemplate({
+  bodyRef,
+  bodyContent,
+  isContinuationPage,
+  viewModel,
+}: ProposalCoverLetterTemplateProps): JSX.Element {
+  return (
+    <>
+      {!isContinuationPage ? (
+        <>
+          <header className="proposal-cover-letter__masthead">
+            {viewModel.candidateName ? (
+              <p className="proposal-cover-letter__masthead-primary">
+                {viewModel.candidateName}
+              </p>
+            ) : null}
+            {viewModel.secondaryTitle ? (
+              <p className="proposal-cover-letter__masthead-secondary">
+                {viewModel.secondaryTitle}
+              </p>
+            ) : null}
+            {viewModel.candidateRole ? (
+              <p className="proposal-cover-letter__masthead-role">
+                {viewModel.candidateRole}
+              </p>
+            ) : null}
+          </header>
+          <section className="proposal-cover-letter__sender-block">
+            <p className="proposal-cover-letter__sender-label">Sender</p>
+            <div className="proposal-cover-letter__sender-lines">
+              {viewModel.candidateName ? <p>{viewModel.candidateName}</p> : null}
+              {viewModel.candidateLocationLine ? (
+                <p>{viewModel.candidateLocationLine}</p>
+              ) : null}
+              {viewModel.candidateDirectorContactLine ? (
+                <p>{viewModel.candidateDirectorContactLine}</p>
+              ) : null}
+            </div>
+          </section>
+          {viewModel.candidatePhone ? (
+            <section className="proposal-cover-letter__phone-block">
+              <p className="proposal-cover-letter__phone-mark">T</p>
+              <div>
+                <p>{viewModel.candidatePhone}</p>
+              </div>
+            </section>
+          ) : null}
+          <ProposalCoverLetterMetaRow viewModel={viewModel} />
+          <ProposalCoverLetterSubjectRow viewModel={viewModel} />
+        </>
+      ) : null}
+      <div ref={bodyRef ?? undefined} className="proposal-cover-letter__body">
+        {bodyContent}
+      </div>
+    </>
+  );
+}
+
+export function ProposalCoverLetterVolkTemplate({
+  bodyRef,
+  bodyContent,
+  isContinuationPage,
+  viewModel,
+}: ProposalCoverLetterTemplateProps): JSX.Element {
+  return (
+    <>
+      {!isContinuationPage ? (
+        <>
+          <header className="proposal-cover-letter__volk-header">
+            {viewModel.candidateName ? (
+              <p className="proposal-cover-letter__volk-title">
+                {viewModel.candidateName}
+              </p>
+            ) : null}
+            {viewModel.secondaryTitle ? (
+              <p className="proposal-cover-letter__volk-title proposal-cover-letter__volk-title--right">
+                {viewModel.secondaryTitle}
+              </p>
+            ) : null}
+            {viewModel.candidateRole ? (
+              <p className="proposal-cover-letter__volk-subtitle">
+                {viewModel.candidateRole}
+              </p>
+            ) : null}
+            {viewModel.candidateContactLine ? (
+              <p className="proposal-cover-letter__volk-sender">
+                sender: {viewModel.candidateContactLine}
+              </p>
+            ) : null}
+          </header>
+          <ProposalCoverLetterMetaRow viewModel={viewModel} />
+          <ProposalCoverLetterSubjectRow viewModel={viewModel} prefix="re:" />
+          <span className="proposal-cover-letter__dot" aria-hidden="true" />
+        </>
+      ) : null}
+      <div ref={bodyRef ?? undefined} className="proposal-cover-letter__body">
+        {bodyContent}
+      </div>
+    </>
+  );
+}
+
+export function ProposalCoverLetterFilmFotoTemplate({
+  bodyRef,
+  bodyContent,
+  isContinuationPage,
+  viewModel,
+}: ProposalCoverLetterTemplateProps): JSX.Element {
+  const largeTitle = viewModel.secondaryTitle || viewModel.subject;
+
+  return (
+    <>
+      {!isContinuationPage ? (
+        <>
+          <header className="proposal-cover-letter__film-header">
+            {viewModel.candidateName ? (
+              <p className="proposal-cover-letter__film-heading">
+                {viewModel.candidateName}
+              </p>
+            ) : null}
+            {largeTitle ? (
+              <p className="proposal-cover-letter__film-title">{largeTitle}</p>
+            ) : null}
+            <span className="proposal-cover-letter__film-rule" />
+          </header>
+          <section className="proposal-cover-letter__info-blocks">
+            <div>
+              <p className="proposal-cover-letter__info-label">sender</p>
+              {viewModel.candidateFilmSenderLine ? (
+                <p>{viewModel.candidateFilmSenderLine}</p>
+              ) : null}
+            </div>
+            <div>
+              <p className="proposal-cover-letter__info-label">phone</p>
+              {viewModel.candidatePhone ? <p>{viewModel.candidatePhone}</p> : null}
+            </div>
+            <div>
+              <p className="proposal-cover-letter__info-label">portfolio</p>
+              {viewModel.candidateWebsite ? (
+                <p>{viewModel.candidateWebsite}</p>
+              ) : null}
+            </div>
+            <div>
+              <p className="proposal-cover-letter__info-label">company</p>
+              {viewModel.recipientCompany ? (
+                <p>{viewModel.recipientCompany}</p>
+              ) : null}
+            </div>
+          </section>
+          <ProposalCoverLetterMetaRow viewModel={viewModel} />
+          <ProposalCoverLetterSubjectRow viewModel={viewModel} />
+          <span className="proposal-cover-letter__dot" aria-hidden="true" />
+        </>
+      ) : null}
+      <div ref={bodyRef ?? undefined} className="proposal-cover-letter__body">
+        {bodyContent}
+      </div>
+    </>
+  );
 }
 
 function buildStructuredHeaderValues(args: {
@@ -957,6 +1281,31 @@ export function ProposalDocumentRenderer({
       }),
     [documentTitle, letterDate, recipientDetails, resolvedHeaderVisibility],
   );
+  const letterheadViewModel = React.useMemo(
+    () =>
+      buildProposalLetterheadViewModel({
+        applicantHeader,
+        railTitle: resolvedRailTitle,
+        railMeta: resolvedRailMeta,
+        contactLine: resolvedSenderLine,
+        letterDate,
+        recipientDetails,
+        documentTitle,
+        documentMeta,
+        headerVisibility: resolvedHeaderVisibility,
+      }),
+    [
+      applicantHeader,
+      documentMeta,
+      documentTitle,
+      letterDate,
+      recipientDetails,
+      resolvedHeaderVisibility,
+      resolvedRailMeta,
+      resolvedRailTitle,
+      resolvedSenderLine,
+    ],
+  );
   const volkFallbackParagraphs = React.useMemo(
     () =>
       buildVolkFallbackParagraphs({
@@ -1255,6 +1604,77 @@ export function ProposalDocumentRenderer({
       volkMetaEntries,
     ],
   );
+  const renderLetterheadBodyContent = React.useCallback(
+    (args: {
+      pageBlocks: ProposalDocumentBlock[];
+      isContinuationPage: boolean;
+      measurement: boolean;
+    }) => {
+      const { pageBlocks, isContinuationPage, measurement } = args;
+
+      if (pageBlocks.length > 0) {
+        return measurement
+          ? pageBlocks.map((block) => renderDocumentBlock(block))
+          : renderVisibleDocumentBlocks(pageBlocks);
+      }
+
+      if (isContinuationPage) {
+        return null;
+      }
+
+      const fallbackText =
+        stripInlineProposalMarkdown(parsedDocument.rawBody || content) ||
+        emptyBodyPlaceholder;
+
+      return fallbackText ? (
+        <div
+          className="dasti-proposal-document__raw-body"
+          data-proposal-block={measurement ? true : undefined}
+        >
+          {fallbackText}
+        </div>
+      ) : null;
+    },
+    [
+      content,
+      emptyBodyPlaceholder,
+      parsedDocument.rawBody,
+      renderDocumentBlock,
+      renderVisibleDocumentBlocks,
+    ],
+  );
+  const renderLetterheadShell = React.useCallback(
+    (args: {
+      bodyRef?: React.Ref<HTMLDivElement> | null;
+      pageBlocks: ProposalDocumentBlock[];
+      isContinuationPage: boolean;
+      measurement: boolean;
+    }) => {
+      const bodyContent = renderLetterheadBodyContent({
+        pageBlocks: args.pageBlocks,
+        isContinuationPage: args.isContinuationPage,
+        measurement: args.measurement,
+      });
+      const templateProps: ProposalCoverLetterTemplateProps = {
+        bodyRef: args.bodyRef,
+        bodyContent,
+        isContinuationPage: args.isContinuationPage,
+        viewModel: letterheadViewModel,
+      };
+
+      switch (resolvedTemplateId) {
+        case "director-letterhead":
+          return <ProposalCoverLetterDirectorTemplate {...templateProps} />;
+        case "volk-letterhead":
+          return <ProposalCoverLetterVolkTemplate {...templateProps} />;
+        case "film-foto-letterhead":
+          return <ProposalCoverLetterFilmFotoTemplate {...templateProps} />;
+        default:
+          return null;
+      }
+    },
+    [letterheadViewModel, renderLetterheadBodyContent, resolvedTemplateId],
+  );
 
   return (
     <div
@@ -1262,8 +1682,19 @@ export function ProposalDocumentRenderer({
       className={[
         "dasti-proposal-document",
         `dasti-proposal-document--${resolvedTemplateId.replace(/_/g, "-")}`,
+        resolvedTemplateId === "director-letterhead"
+          ? "proposal-cover-letter--director"
+          : "",
+        resolvedTemplateId === "volk-letterhead"
+          ? "proposal-cover-letter--volk"
+          : "",
+        resolvedTemplateId === "film-foto-letterhead"
+          ? "proposal-cover-letter--film-foto"
+          : "",
         `dasti-proposal-document--${parsedDocument.kind}`,
-      ].join(" ")}
+      ]
+        .filter(Boolean)
+        .join(" ")}
       data-proposal-template={resolvedTemplateId}
       style={
         {
@@ -1279,7 +1710,14 @@ export function ProposalDocumentRenderer({
           className="dasti-proposal-document__page"
           data-fit="0"
         >
-          {resolvedTemplateId === "volk_register"
+          {isProposalLetterheadTemplateId(resolvedTemplateId)
+            ? renderLetterheadShell({
+                bodyRef: measurementBodyRef,
+                pageBlocks: documentBlocks,
+                isContinuationPage: false,
+                measurement: true,
+              })
+            : resolvedTemplateId === "volk_register"
             ? renderVolkRegisterShell({
                 bodyRef: measurementBodyRef,
                 pageBlocks: documentBlocks,
@@ -1322,7 +1760,17 @@ export function ProposalDocumentRenderer({
               .join(" ")}
             data-fit="0"
           >
-            {resolvedTemplateId === "volk_register"
+            {isProposalLetterheadTemplateId(resolvedTemplateId)
+              ? renderLetterheadShell({
+                  bodyRef:
+                    pageIndex === 0 && resolvedPageGroups.length === 1
+                      ? bodyRef
+                      : null,
+                  pageBlocks,
+                  isContinuationPage,
+                  measurement: false,
+                })
+              : resolvedTemplateId === "volk_register"
               ? renderVolkRegisterShell({
                   bodyRef:
                     pageIndex === 0 && resolvedPageGroups.length === 1

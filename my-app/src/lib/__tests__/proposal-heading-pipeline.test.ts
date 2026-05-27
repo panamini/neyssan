@@ -7,8 +7,10 @@ import {
 } from "../document-export-models";
 import {
   buildProposalApplicantContactLine,
+  buildProposalContactLineFromParts,
   buildProposalHeadingMetadataPatch,
   mergeProposalContactDefaults,
+  parseProposalContactLine,
   resolveAutoHeadingField,
 } from "../proposal-heading-state";
 import {
@@ -360,6 +362,37 @@ describe("proposal heading JSON pipeline", () => {
   afterEach(() => {
     clearProposalAttachedCvId();
     window.localStorage.clear();
+  });
+
+  it("keeps combined contact-line storage while exposing structured contact fields", () => {
+    const parts = parseProposalContactLine(
+      "zoe@loi.com · 09898777 · Paris · @zoe · zoe.com",
+    );
+
+    expect(parts).toEqual({
+      email: "zoe@loi.com",
+      phone: "09898777",
+      location: "Paris",
+      linkedin: "@zoe",
+      website: "zoe.com",
+      other: "",
+    });
+    expect(
+      buildProposalContactLineFromParts({
+        ...parts,
+        phone: "+33 6 00 00 00 00",
+      }),
+    ).toBe("zoe@loi.com · +33 6 00 00 00 00 · Paris · @zoe · zoe.com");
+    expect(
+      parseProposalContactLine("Letter · zoe@loi.com · 09898777 · Paris"),
+    ).toEqual({
+      email: "zoe@loi.com",
+      phone: "09898777",
+      location: "Paris",
+      linkedin: "",
+      website: "",
+      other: "",
+    });
   });
 
   it("keeps CV contact ahead of settings, applies manual overrides, and emits placeholder-free export and preview payloads", () => {

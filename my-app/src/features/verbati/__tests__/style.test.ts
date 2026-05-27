@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   CANONICAL_PROPOSAL_TEMPLATE_ID,
+  PROPOSAL_TEMPLATE_DEFINITIONS,
+  isProposalLetterheadTemplateId,
   resolveProposalTemplateId,
 } from "../../../../convex/lib/proposals/renderTemplates";
+import { RESUME_TEMPLATE_IDS } from "../../../lib/layout/resumeTemplates";
 import {
   DEFAULT_VERBATI_STYLE,
   getProposalTwinTemplateId,
@@ -115,6 +118,28 @@ describe("verbati style normalization", () => {
       "editorial_wide",
     );
     expect(resolveProposalTemplateId("quiet_margin")).toBe("quire_margin");
+  });
+
+  it("registers letterhead templates as proposal templates without CV registry pollution", () => {
+    const letterheadIds = [
+      "director-letterhead",
+      "volk-letterhead",
+      "film-foto-letterhead",
+    ] as const;
+
+    expect(PROPOSAL_TEMPLATE_DEFINITIONS.map((template) => template.id)).toEqual(
+      expect.arrayContaining(letterheadIds),
+    );
+    letterheadIds.forEach((id) => {
+      const definition = PROPOSAL_TEMPLATE_DEFINITIONS.find(
+        (template) => template.id === id,
+      );
+      expect(isProposalLetterheadTemplateId(id)).toBe(true);
+      expect(resolveProposalTemplateId(id)).toBe(id);
+      expect(definition?.exportShell).toBe("onecol");
+      expect(definition?.twinLabel).toBe("Cover letter");
+      expect(RESUME_TEMPLATE_IDS).not.toContain(id);
+    });
   });
 
   it("canonicalizes family identity while mirroring layout for persistence", () => {
