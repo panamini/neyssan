@@ -23,6 +23,7 @@ export type ComputeDocumentCommandLayerLayoutInput = {
   toolbarNaturalWidth: number;
   toolbarMinWidth: number;
   toolbarHeight: number;
+  toolbarTop?: number;
   stickyTop: number;
   askHandle: {
     iconWidth: number;
@@ -154,8 +155,9 @@ export function computeDocumentCommandLayerLayout(
       Math.max(input.paperRect.width, input.toolbarMinWidth),
     ),
   );
+  const toolbarTopAnchor = input.toolbarTop ?? input.paperRect.top;
   const commandLayerNormalY =
-    input.paperRect.top - input.gap - input.toolbarHeight;
+    toolbarTopAnchor - input.gap - input.toolbarHeight;
   const commandLayerSticky = commandLayerNormalY < input.stickyTop;
   const commandLayerY = Math.max(commandLayerNormalY, input.stickyTop);
 

@@ -46,6 +46,7 @@ type TemplateCard = {
 
 type ResumeTemplateIntent = "minimal" | "french";
 type CoverLetterTemplateIntent = "minimal" | "direct" | "editorial";
+type TemplateRouteIntent = ResumeTemplateIntent | CoverLetterTemplateIntent | ProposalTemplateId;
 
 const TEMPLATES: TemplateCard[] = [
   {
@@ -198,6 +199,18 @@ function getCoverLetterTemplateIntent(
   return null;
 }
 
+function getCoverLetterRouteTemplateIntent(
+  template: TemplateCard,
+): TemplateRouteIntent | null {
+  const styleSlotIntent = getCoverLetterTemplateIntent(template.family);
+  if (styleSlotIntent) return styleSlotIntent;
+
+  const directTemplateId = PROPOSAL_PREVIEW_TEMPLATES[template.family] ?? null;
+  return directTemplateId && template.family.includes("letterhead")
+    ? directTemplateId
+    : null;
+}
+
 export function TemplateDocumentPreview({
   kind,
   family,
@@ -275,12 +288,42 @@ export function TemplatesPage(): JSX.Element {
   );
   const { currentCv, cvs } = useCvLibrary();
   const [activeFilter, setActiveFilter] = React.useState<TemplateFilter>("cover letters");
+  const [selectedTemplate, setSelectedTemplate] =
+    React.useState<TemplateCard | null>(null);
+  const closePreviewButtonRef = React.useRef<HTMLButtonElement | null>(null);
   const previewCv = React.useMemo(() => currentCv ?? cvs[0] ?? null, [currentCv, cvs]);
   const visibleTemplates = React.useMemo(
     () => TEMPLATES.filter((template) => filterMatches(template, activeFilter)),
     [activeFilter],
   );
-  const handleUseTemplate = React.useCallback(
+
+  React.useEffect(() => {
+    if (!selectedTemplate) return;
+    closePreviewButtonRef.current?.focus();
+  }, [selectedTemplate]);
+
+  React.useEffect(() => {
+    if (!selectedTemplate) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSelectedTemplate(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedTemplate]);
+
+  const handleSelectTemplate = React.useCallback((template: TemplateCard) => {
+    setSelectedTemplate(template);
+  }, []);
+
+  const handleCloseTemplatePreview = React.useCallback(() => {
+    setSelectedTemplate(null);
+  }, []);
+
+  const handleCreateFromTemplate = React.useCallback(
     (template: TemplateCard) => {
       if (template.kind === "Resume") {
         const templateIntent = getResumeTemplateIntent(template.family);
@@ -292,15 +335,24 @@ export function TemplatesPage(): JSX.Element {
         return;
       }
 
-      const templateIntent = getCoverLetterTemplateIntent(template.family);
-      const directTemplateId = PROPOSAL_PREVIEW_TEMPLATES[template.family] ?? null;
-      const templateIdParam =
-        templateIntent ?? (directTemplateId && template.family.includes("letterhead")
-          ? directTemplateId
-          : null);
+      const templateIdParam = getCoverLetterRouteTemplateIntent(template);
       navigate(`/proposal${templateIdParam ? `?templateId=${templateIdParam}` : ""}`, {
         state: createProposalWorkspaceResetState(),
       });
+    },
+    [navigate],
+  );
+
+  const handleApplyTemplate = React.useCallback(
+    (template: TemplateCard) => {
+      if (template.kind === "Resume") {
+        // TODO: Add a CvForge route/state action that applies a template to the
+        // current CV without creating a blank document before enabling this.
+        return;
+      }
+
+      const templateIdParam = getCoverLetterRouteTemplateIntent(template);
+      navigate(`/proposal${templateIdParam ? `?templateId=${templateIdParam}` : ""}`);
     },
     [navigate],
   );
@@ -361,11 +413,13 @@ export function TemplatesPage(): JSX.Element {
                 tabIndex={0}
                 className={`dasti-template-card dasti-template-card--${template.family}`}
                 aria-label={useTemplateLabel}
-                onClick={() => handleUseTemplate(template)}
+                aria-pressed={selectedTemplate?.id === template.id}
+                data-selected={selectedTemplate?.id === template.id ? "true" : undefined}
+                onClick={() => handleSelectTemplate(template)}
                 onKeyDown={(event) => {
                   if (event.key !== "Enter" && event.key !== " ") return;
                   event.preventDefault();
-                  handleUseTemplate(template);
+                  handleSelectTemplate(template);
                 }}
               >
                 <span className="dasti-template-card__head">
@@ -392,6 +446,82 @@ export function TemplatesPage(): JSX.Element {
             );
           })}
         </div>
+
+        {selectedTemplate ? (
+          <div
+            className="dasti-template-preview"
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) {
+                handleCloseTemplatePreview();
+              }
+            }}
+          >
+            <section
+              className="dasti-template-preview__panel"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="template-preview-title"
+              aria-describedby="template-preview-description"
+            >
+              <div className="dasti-template-preview__body">
+                <div className="dasti-template-preview__copy">
+                  <span className="dasti-template-preview__kind">
+                    {templateKindLabelI18n(selectedTemplate.kind, t)}
+                  </span>
+                  <h2 id="template-preview-title">
+                    {selectedTemplate.name}
+                  </h2>
+                  <p id="template-preview-description">
+                    {t(selectedTemplate.descriptionKey)}
+                  </p>
+                </div>
+                <div
+                  className="dasti-template-preview__document"
+                  data-testid="selected-template-document-preview"
+                  aria-hidden="true"
+                >
+                  <TemplateDocumentPreview
+                    kind={selectedTemplate.kind}
+                    family={selectedTemplate.family}
+                    previewCv={previewCv}
+                  />
+                </div>
+              </div>
+              <div className="dasti-template-preview__actions">
+                <button
+                  ref={closePreviewButtonRef}
+                  type="button"
+                  onClick={handleCloseTemplatePreview}
+                  className="ds-btn ds-btn--md ds-btn--ghost dasti-template-preview__close"
+                >
+                  {t("templates.preview.close")}
+                </button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="md"
+                  onClick={() => handleApplyTemplate(selectedTemplate)}
+                  disabled={selectedTemplate.kind === "Resume"}
+                >
+                  {selectedTemplate.kind === "Resume"
+                    ? t("templates.preview.applyCurrentCv")
+                    : t("templates.preview.applyCurrentProposal")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="md"
+                  onClick={() => handleCreateFromTemplate(selectedTemplate)}
+                >
+                  {selectedTemplate.kind === "Resume"
+                    ? t("templates.preview.createNewCv")
+                    : t("templates.preview.createNewProposal")}
+                </Button>
+              </div>
+            </section>
+          </div>
+        ) : null}
       </div>
     </div>
   );

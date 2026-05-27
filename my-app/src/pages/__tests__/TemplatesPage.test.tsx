@@ -118,7 +118,7 @@ describe("TemplatesPage", () => {
     expect(navigateMock).toHaveBeenCalledWith("/settings?tab=docstyle");
   });
 
-  it("uses template cards directly", async () => {
+  it("opens a cover-letter template action surface without navigating", async () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={["/templates"]}>
@@ -133,6 +133,37 @@ describe("TemplatesPage", () => {
 
     await user.click(editorialCard as HTMLElement);
 
+    expect(navigateMock).not.toHaveBeenCalled();
+    const dialog = screen.getByRole("dialog", {
+      name: "Editorial",
+    });
+    expect(dialog).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: "Create new proposal" }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: "Apply to current proposal" }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByTestId("selected-template-document-preview"),
+    ).toBeInTheDocument();
+  });
+
+  it("creates a new proposal from the selected template with reset state", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/templates"]}>
+        <TemplatesPage />
+      </MemoryRouter>,
+    );
+
+    const editorialCard = screen
+      .getByText("Editorial", { selector: ".dasti-template-card__title" })
+      .closest(".dasti-template-card");
+    expect(editorialCard).toBeTruthy();
+    await user.click(editorialCard as HTMLElement);
+    await user.click(screen.getByRole("button", { name: "Create new proposal" }));
+
     expect(navigateMock).toHaveBeenCalledWith(
       "/proposal?templateId=editorial",
       {
@@ -141,6 +172,27 @@ describe("TemplatesPage", () => {
         }),
       },
     );
+  });
+
+  it("applies a cover-letter template without proposal reset state", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/templates"]}>
+        <TemplatesPage />
+      </MemoryRouter>,
+    );
+
+    const editorialCard = screen
+      .getByText("Editorial", { selector: ".dasti-template-card__title" })
+      .closest(".dasti-template-card");
+    expect(editorialCard).toBeTruthy();
+    await user.click(editorialCard as HTMLElement);
+    await user.click(
+      screen.getByRole("button", { name: "Apply to current proposal" }),
+    );
+
+    expect(navigateMock).toHaveBeenCalledTimes(1);
+    expect(navigateMock).toHaveBeenCalledWith("/proposal?templateId=editorial");
   });
 
   it("keeps template cards compact without an explicit arrow action", () => {
@@ -164,7 +216,7 @@ describe("TemplatesPage", () => {
     expect(frenchCard?.querySelector(".dasti-template-card__quick-action")).toBeNull();
   });
 
-  it("uses the selected resume template from the card click", async () => {
+  it("opens a resume template action surface without creating a blank CV", async () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={["/templates"]}>
@@ -179,10 +231,67 @@ describe("TemplatesPage", () => {
     expect(frenchCard).toBeTruthy();
     await user.click(frenchCard as HTMLElement);
 
+    expect(navigateMock).not.toHaveBeenCalled();
+    const dialog = screen.getByRole("dialog", {
+      name: "French",
+    });
+    expect(dialog).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("button", { name: "Apply to current CV" }),
+    ).toBeDisabled();
+    expect(
+      within(dialog).getByRole("button", { name: "Create new CV" }),
+    ).toBeInTheDocument();
+  });
+
+  it("creates a new CV from the selected resume template", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/templates"]}>
+        <TemplatesPage />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Resume" }));
+    const frenchCard = screen
+      .getByText("French", { selector: ".dasti-template-card__title" })
+      .closest(".dasti-template-card");
+    expect(frenchCard).toBeTruthy();
+    await user.click(frenchCard as HTMLElement);
+    await user.click(screen.getByRole("button", { name: "Create new CV" }));
+
     expect(navigateMock).toHaveBeenCalledTimes(1);
     expect(navigateMock).toHaveBeenCalledWith(
       "/cv?cvForgeAction=createBlank&templateId=french",
     );
+  });
+
+  it("opens the action surface from keyboard selection", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/templates"]}>
+        <TemplatesPage />
+      </MemoryRouter>,
+    );
+
+    const minimalCard = screen.getByRole("button", {
+      name: "Use Minimal template",
+    });
+    minimalCard.focus();
+    await user.keyboard("{Enter}");
+
+    expect(navigateMock).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("dialog", { name: "Minimal" }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    minimalCard.focus();
+    await user.keyboard(" ");
+
+    expect(
+      screen.getByRole("dialog", { name: "Minimal" }),
+    ).toBeInTheDocument();
   });
 
   it("starts cover-letter creation with the selected template intent", async () => {
@@ -198,6 +307,7 @@ describe("TemplatesPage", () => {
       .closest(".dasti-template-card");
     expect(editorialCard).toBeTruthy();
     await user.click(editorialCard as HTMLElement);
+    await user.click(screen.getByRole("button", { name: "Create new proposal" }));
 
     expect(navigateMock).toHaveBeenCalledWith(
       "/proposal?templateId=editorial",
@@ -225,6 +335,7 @@ describe("TemplatesPage", () => {
       .closest(".dasti-template-card");
     expect(directorCard).toBeTruthy();
     await user.click(directorCard as HTMLElement);
+    await user.click(screen.getByRole("button", { name: "Create new proposal" }));
 
     expect(navigateMock).toHaveBeenCalledWith(
       "/proposal?templateId=director-letterhead",
