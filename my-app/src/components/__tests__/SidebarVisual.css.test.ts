@@ -45,6 +45,9 @@ describe("sidebar visual CSS contracts", () => {
       /\.sb\[data-rail-compact="true"\] \.sb-rail-button\[data-toolbar-tooltip\]\s*\{[\s\S]*--dasti-toolbar-tooltip-inset-block-start:\s*calc\([\s\S]*100%\s*-\s*var\(--control-sm\)\s*-\s*var\(--app-nav-icon-label-gap\)\s*-[\s\S]*var\(--app-nav-label-line\)[\s\S]*\/[\s\S]*2\s*\+\s*var\(--control-sm\)\s*\+\s*2px[\s\S]*\);/,
     );
     expect(productCss).toMatch(
+      /\.sb\[data-rail-compact="true"\]\s+\.sb-rail-button\[data-toolbar-tooltip\]\[aria-expanded="true"\]::after\s*\{[\s\S]*display:\s*block;/,
+    );
+    expect(productCss).toMatch(
       /@media \(max-width:\s*767px\)\s*\{[\s\S]*--app-nav-rail-width:\s*var\(--app-nav-rail-width-compact\);[\s\S]*\.sb-rail-button\s*\{[\s\S]*position:\s*relative;[\s\S]*\.sb-rail-button__label\s*\{[\s\S]*visibility:\s*hidden;[\s\S]*opacity:\s*0;[\s\S]*pointer-events:\s*none;/,
     );
     const baseRailLabelRule =
