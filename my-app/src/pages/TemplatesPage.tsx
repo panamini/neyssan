@@ -38,7 +38,7 @@ type TemplateCard = {
   name: string;
   kind: "Cover letter" | "Resume";
   family: TemplateFamily;
-  description: string;
+  descriptionKey: UiMessageKey;
 };
 
 type ResumeTemplateIntent = "minimal" | "french";
@@ -50,35 +50,35 @@ const TEMPLATES: TemplateCard[] = [
     name: "Minimal",
     kind: "Resume",
     family: "workshop-onecol",
-    description: "Clean, readable, safe.",
+    descriptionKey: "templates.description.workshopOneColumnResume",
   },
   {
     id: "workshop-two-column-resume",
     name: "French",
     kind: "Resume",
     family: "workshop-twocol",
-    description: "Structured European layout.",
+    descriptionKey: "templates.description.workshopTwoColumnResume",
   },
   {
     id: "minimal-letter",
     name: "Minimal",
     kind: "Cover letter",
     family: "minimal",
-    description: "Quiet spacing, clear hierarchy.",
+    descriptionKey: "templates.description.minimalLetter",
   },
   {
     id: "bold-letter",
     name: "French",
     kind: "Cover letter",
     family: "bold",
-    description: "Sharper opening, direct tone.",
+    descriptionKey: "templates.description.boldLetter",
   },
   {
     id: "letterpress-letter",
     name: "Editorial",
     kind: "Cover letter",
     family: "letterpress",
-    description: "Warmer, more personal.",
+    descriptionKey: "templates.description.letterpressLetter",
   },
 ];
 
@@ -130,6 +130,13 @@ function filterLabelI18n(
   return filter === "resume"
     ? t("templates.resume")
     : t("templates.coverLetters");
+}
+
+function templateKindLabelI18n(
+  kind: TemplateCard["kind"],
+  t: (key: UiMessageKey) => string,
+): string {
+  return kind === "Resume" ? t("templates.resume") : t("templates.coverLetter");
 }
 
 function getResumeTemplateIntent(
@@ -270,7 +277,7 @@ export function TemplatesPage(): JSX.Element {
               size="md"
               onClick={() => navigate("/settings?tab=docstyle")}
             >
-              Customize style
+              {t("templates.customizeStyle")}
             </Button>
           </div>
         </div>
@@ -317,9 +324,13 @@ export function TemplatesPage(): JSX.Element {
                 <span className="dasti-template-card__head">
                   <span className="dasti-template-card__title-line">
                     <span className="dasti-template-card__title">{template.name}</span>
-                    <span className="dasti-template-card__kind">{template.kind}</span>
+                    <span className="dasti-template-card__kind">
+                      {templateKindLabelI18n(template.kind, t)}
+                    </span>
                   </span>
-                  <span className="dasti-template-card__description">{template.description}</span>
+                  <span className="dasti-template-card__description">
+                    {t(template.descriptionKey)}
+                  </span>
                 </span>
                 <span className="dasti-template-card__preview" aria-hidden="true">
                   <span className="dasti-template-card__document-scale" data-testid="template-document-preview">

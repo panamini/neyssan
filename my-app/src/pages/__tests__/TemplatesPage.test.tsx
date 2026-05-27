@@ -21,6 +21,7 @@ vi.mock("react-router-dom", async () => {
 
 describe("TemplatesPage", () => {
   beforeEach(() => {
+    window.localStorage.clear();
     navigateMock.mockClear();
   });
 
@@ -41,6 +42,55 @@ describe("TemplatesPage", () => {
     expect(document.querySelector(".dasti-template-card__badge")).toBeNull();
     expect(screen.queryByRole("tab", { name: "CVs" })).toBeNull();
     expect(screen.getAllByTestId("template-document-preview")).toHaveLength(3);
+  });
+
+  it("renders template chrome and descriptions in French without renaming templates", () => {
+    window.localStorage.setItem("twoweeks:ui-language", "fr");
+    window.localStorage.setItem("twoweeks:document-language", "es");
+
+    render(
+      <MemoryRouter initialEntries={["/templates"]}>
+        <TemplatesPage />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("heading", { name: "Modèles" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Lettres" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("button", { name: "Personnaliser le style" })).toBeInTheDocument();
+    expect(screen.getAllByText("Lettre", { selector: ".dasti-template-card__kind" })).toHaveLength(3);
+    expect(screen.getByText("Espacement calme, hiérarchie nette.")).toBeInTheDocument();
+    expect(screen.getByText("Ouverture directe, ton net.")).toBeInTheDocument();
+    expect(screen.getByText("Plus chaleureux, plus personnel.")).toBeInTheDocument();
+    expect(screen.getByText("Editorial", { selector: ".dasti-template-card__title" })).toBeInTheDocument();
+    expect(screen.queryByText(/Proposition|proposition/)).not.toBeInTheDocument();
+    expect(window.localStorage.getItem("twoweeks:document-language")).toBe("es");
+  });
+
+  it("renders template chrome and descriptions in Spanish", async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem("twoweeks:ui-language", "es");
+    window.localStorage.setItem("twoweeks:document-language", "fr");
+
+    render(
+      <MemoryRouter initialEntries={["/templates"]}>
+        <TemplatesPage />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("heading", { name: "Plantillas" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Cartas" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("button", { name: "Personalizar estilo" })).toBeInTheDocument();
+    expect(screen.getAllByText("Carta", { selector: ".dasti-template-card__kind" })).toHaveLength(3);
+    expect(screen.getByText("Espaciado sobrio, jerarquía clara.")).toBeInTheDocument();
+    expect(screen.getByText("Apertura directa, tono claro.")).toBeInTheDocument();
+    expect(screen.getByText("Más cercano, más personal.")).toBeInTheDocument();
+    expect(screen.queryByText(/Propuesta|propuesta/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "CV" }));
+
+    expect(screen.getByText("Claro, legible, seguro.")).toBeInTheDocument();
+    expect(screen.getByText("Diseño europeo estructurado.")).toBeInTheDocument();
+    expect(window.localStorage.getItem("twoweeks:document-language")).toBe("fr");
   });
 
   it("filters to resume templates and links style customization to settings", async () => {
