@@ -55,7 +55,10 @@ import {
 } from "./layout/documentAppearance";
 import { formatProposalSignatureName } from "./proposal-closing";
 import { resolveProposalSignatureRender } from "./proposal-signature-settings";
-import { parseProposalRecipientDetails } from "./proposal-header";
+import {
+  parseProposalRecipientDetails,
+  resolveProposalLetterheadShortTitle,
+} from "./proposal-header";
 import {
   buildProposalContactLineFromParts,
   parseProposalContactLine,
@@ -1116,6 +1119,19 @@ function buildStyledProposalAppearanceCss(): string {
       justify-self: end;
       max-width: 48mm;
       text-align: right;
+    }
+
+    .proposal-cover-letter--director .proposal-cover-letter__masthead-primary,
+    .proposal-cover-letter--director .proposal-cover-letter__masthead-secondary,
+    .proposal-cover-letter--director .proposal-cover-letter__masthead-role,
+    .proposal-cover-letter--volk .proposal-cover-letter__volk-title,
+    .proposal-cover-letter--film-foto .proposal-cover-letter__film-company,
+    .proposal-cover-letter--film-foto .proposal-cover-letter__film-title {
+      min-width: 0;
+      overflow: hidden;
+      overflow-wrap: normal;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .proposal-cover-letter--film-foto .proposal-cover-letter__film-rule {
@@ -2755,10 +2771,21 @@ function buildProposalLetterheadExportViewModel(
   const directorContactLines = resolvedContactParts.phone
     ? [resolvedContactParts.phone]
     : digitalContactLines.slice(0, 2);
+  const shortLocationLine = resolveProposalLetterheadShortTitle({
+    recipientFields,
+    candidateLocation: resolvedContactParts.location,
+    showRecipient: false,
+  });
+  const volkSenderLine = buildProposalContactLineFromParts({
+    email: resolvedContactParts.email,
+    phone: resolvedContactParts.phone,
+    location: shortLocationLine,
+    linkedin: resolvedContactParts.linkedin,
+    website: resolvedContactParts.website,
+  });
   const filmSenderLine = buildProposalContactLineFromParts({
     email: resolvedContactParts.email,
-    location: resolvedContactParts.location,
-    other: resolvedContactParts.other,
+    location: shortLocationLine,
   });
   const subject = data.headerVisibility.showSubject
     ? normalizeLocaleTypography(data.documentTitle, locale).trim()
@@ -2776,11 +2803,11 @@ function buildProposalLetterheadExportViewModel(
     data.headerVisibility.showDate && data.letterDate
       ? normalizeLocaleTypography(data.letterDate, locale).trim()
       : "";
-  const secondaryTitle =
-    recipientCompany ||
-    (data.headerVisibility.showRecipient ? recipientFields.city?.trim() ?? "" : "") ||
-    resolvedContactParts.location ||
-    "";
+  const secondaryTitle = resolveProposalLetterheadShortTitle({
+    recipientFields,
+    candidateLocation: resolvedContactParts.location,
+    showRecipient: data.headerVisibility.showRecipient,
+  });
   const metaRole = recipientRole || candidateRole;
   const shortRoleTitle = candidateRole || recipientRole;
 
@@ -2796,6 +2823,7 @@ function buildProposalLetterheadExportViewModel(
     directorContactLine,
     directorContactMark,
     directorContactLines,
+    volkSenderLine,
     filmSenderLine,
     recipientName,
     recipientCompany,
@@ -2893,7 +2921,7 @@ function renderProposalLetterheadExportPage(args: {
         ${renderExportParagraph(viewModel.candidateName, "proposal-cover-letter__volk-title")}
         ${renderExportParagraph(viewModel.secondaryTitle, "proposal-cover-letter__volk-title proposal-cover-letter__volk-title--right")}
         ${renderExportParagraph(viewModel.candidateRole, "proposal-cover-letter__volk-subtitle")}
-        ${renderExportParagraph(viewModel.contactLine ? `sender: ${viewModel.contactLine}` : "", "proposal-cover-letter__volk-sender")}
+        ${renderExportParagraph(viewModel.volkSenderLine ? `sender: ${viewModel.volkSenderLine}` : "", "proposal-cover-letter__volk-sender")}
       </header>
       ${renderProposalLetterheadMetaRow(viewModel)}
       ${renderProposalLetterheadSubjectRow(viewModel, "re:")}

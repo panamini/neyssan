@@ -653,6 +653,64 @@ describe("export-renderers", () => {
     {
       templateId: "director-letterhead" as const,
       scope: "proposal-cover-letter--director",
+      headerSelector: ".proposal-cover-letter__masthead",
+    },
+    {
+      templateId: "volk-letterhead" as const,
+      scope: "proposal-cover-letter--volk",
+      headerSelector: ".proposal-cover-letter__volk-header",
+    },
+    {
+      templateId: "film-foto-letterhead" as const,
+      scope: "proposal-cover-letter--film-foto",
+      headerSelector: ".proposal-cover-letter__film-header",
+    },
+  ])(
+    "keeps full postal addresses out of the exported top title row for $templateId",
+    ({ templateId, scope, headerSelector }) => {
+      const document = parseExportHtml(
+        renderProposalStyledExportDocument({
+          data: {
+            ...proposalFixture,
+            templateId,
+            contactLine:
+              "email@email.com · 1515 Pacific Ave Los Angeles · CA 90291 United States",
+            recipientDetails: "Hiring Manager",
+            documentTitle: "Application for Security Guard",
+            applicantHeader: {
+              ...proposalFixture.applicantHeader,
+              name: "Robert Cooper",
+              role: "Security Guard",
+              email: "",
+              phone: "",
+              linkedin: "",
+              website: "",
+              location: "",
+              tag: "",
+            },
+          },
+          stylePreset: {
+            familyId: "workshop",
+            layout: "workshop",
+            typography: "expert",
+            palette: "terre",
+          },
+        }),
+      );
+      const page = document.querySelector(`.${scope}`);
+      const header = page?.querySelector(headerSelector);
+
+      expect(header?.textContent).toContain("Los Angeles");
+      expect(header?.textContent).not.toContain("1515 Pacific Ave");
+      expect(header?.textContent).not.toContain("CA 90291");
+      expect(header?.textContent).not.toContain("United States");
+    },
+  );
+
+  it.each([
+    {
+      templateId: "director-letterhead" as const,
+      scope: "proposal-cover-letter--director",
     },
     {
       templateId: "volk-letterhead" as const,

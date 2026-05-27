@@ -66,6 +66,72 @@ function looksLikeOrganization(value: string): boolean {
   );
 }
 
+function looksLikeLetterheadOrganization(value: string): boolean {
+  return /\b(?:inc|llc|ltd|corp|co\.|company|studio|group|labs|systems|partners|agency|technologies|solutions|gmbh|sas|sa|school|university|cinema|tools|works|atelier|collective)\b/i.test(
+    value,
+  );
+}
+
+function extractShortLetterheadPlace(value: string | null | undefined): string {
+  const normalized = normalizeHeaderValue(value).replace(/\s+/g, " ");
+  if (!normalized) {
+    return "";
+  }
+
+  if (
+    !/\d/.test(normalized) &&
+    !/\b(?:street|st\.?|road|rd\.?|avenue|ave\.?|boulevard|blvd\.?|lane|ln\.?|drive|dr\.?|place|pl\.?|plaza|suite|floor|zip|postal|united states|usa)\b/i.test(
+      normalized,
+    )
+  ) {
+    return normalized;
+  }
+
+  const withoutStreet = normalized
+    .replace(
+      /^\d+\s+.*?\b(?:street|st\.?|road|rd\.?|avenue|ave\.?|boulevard|blvd\.?|lane|ln\.?|drive|dr\.?|place|pl\.?|plaza|way)\s+/i,
+      "",
+    )
+    .replace(/\b(?:[A-Z]{2}\s*)?\d{4,6}\b.*$/i, "")
+    .replace(/\b(?:united states|usa|united kingdom|france|germany|spain|italy|canada)\b.*$/i, "")
+    .trim();
+
+  if (
+    /^[\p{L}.'’-]+(?:\s+[\p{L}.'’-]+){0,2}$/u.test(withoutStreet)
+  ) {
+    return withoutStreet;
+  }
+
+  return "";
+}
+
+export function resolveProposalLetterheadShortTitle(args: {
+  recipientFields: ProposalRecipientFields;
+  candidateLocation?: string | null;
+  showRecipient: boolean;
+}): string {
+  if (args.showRecipient) {
+    const company = normalizeHeaderValue(args.recipientFields.company);
+    if (company) {
+      return company;
+    }
+
+    const name = normalizeHeaderValue(args.recipientFields.name);
+    if (name && looksLikeLetterheadOrganization(name)) {
+      return name;
+    }
+
+    const city =
+      extractShortLetterheadPlace(args.recipientFields.city) ||
+      extractShortLetterheadPlace(args.recipientFields.address);
+    if (city) {
+      return city;
+    }
+  }
+
+  return extractShortLetterheadPlace(args.candidateLocation);
+}
+
 export function parseProposalRecipientDetails(
   recipientDetails?: string | null,
 ): ProposalRecipientFields {

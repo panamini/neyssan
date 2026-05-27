@@ -11,6 +11,7 @@ import { VOLK_REGISTER_GRID } from "../../features/verbati/volkGrid";
 import type { ProposalApplicantHeaderData } from "../../lib/proposal-personalization";
 import {
   parseProposalRecipientDetails,
+  resolveProposalLetterheadShortTitle,
   resolveProposalHeaderVisibility,
   resolveProposalRecipientLines,
   type ProposalHeaderVisibility,
@@ -113,6 +114,7 @@ type ProposalLetterheadViewModel = {
   candidateDirectorContactLine: string;
   candidateDirectorContactMark: "T" | "@";
   candidateDirectorContactLines: string[];
+  candidateVolkSenderLine: string;
   candidateFilmSenderLine: string;
   candidateLocationLine: string;
   candidatePhone: string;
@@ -299,10 +301,21 @@ function buildProposalLetterheadViewModel(args: {
   const candidateDirectorContactLines = resolvedContactParts.phone
     ? [resolvedContactParts.phone]
     : candidateDigitalContactLines.slice(0, 2);
+  const candidateShortLocationLine = resolveProposalLetterheadShortTitle({
+    recipientFields,
+    candidateLocation: resolvedContactParts.location,
+    showRecipient: false,
+  });
+  const candidateVolkSenderLine = buildProposalContactLineFromParts({
+    email: resolvedContactParts.email,
+    phone: resolvedContactParts.phone,
+    location: candidateShortLocationLine,
+    linkedin: resolvedContactParts.linkedin,
+    website: resolvedContactParts.website,
+  });
   const candidateFilmSenderLine = buildProposalContactLineFromParts({
     email: resolvedContactParts.email,
-    location: resolvedContactParts.location,
-    other: resolvedContactParts.other,
+    location: candidateShortLocationLine,
   });
   const recipientName = visibility.showRecipient
     ? recipientFields.name?.trim() ?? ""
@@ -314,11 +327,11 @@ function buildProposalLetterheadViewModel(args: {
     ? recipientFields.role?.trim() ?? ""
     : "";
   const subject = visibility.showSubject ? args.documentTitle?.trim() ?? "" : "";
-  const secondaryTitle =
-    recipientCompany ||
-    (visibility.showRecipient ? recipientFields.city?.trim() ?? "" : "") ||
-    resolvedContactParts.location ||
-    "";
+  const secondaryTitle = resolveProposalLetterheadShortTitle({
+    recipientFields,
+    candidateLocation: resolvedContactParts.location,
+    showRecipient: visibility.showRecipient,
+  });
   const metaRole = recipientRole || candidateRole;
   const shortRoleTitle = candidateRole || recipientRole;
 
@@ -329,6 +342,7 @@ function buildProposalLetterheadViewModel(args: {
     candidateDirectorContactLine,
     candidateDirectorContactMark,
     candidateDirectorContactLines,
+    candidateVolkSenderLine,
     candidateFilmSenderLine,
     candidateLocationLine: resolvedContactParts.location,
     candidatePhone: resolvedContactParts.phone,
@@ -478,9 +492,9 @@ export function ProposalCoverLetterVolkTemplate({
                 {viewModel.candidateRole}
               </p>
             ) : null}
-            {viewModel.candidateContactLine ? (
+            {viewModel.candidateVolkSenderLine ? (
               <p className="proposal-cover-letter__volk-sender">
-                sender: {viewModel.candidateContactLine}
+                sender: {viewModel.candidateVolkSenderLine}
               </p>
             ) : null}
           </header>
