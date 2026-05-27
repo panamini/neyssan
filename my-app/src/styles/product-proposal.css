@@ -3904,11 +3904,12 @@
   top: 23.1mm;
   right: 3mm;
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 70mm) minmax(0, 1fr);
   align-items: baseline;
 }
 
 .proposal-cover-letter--film-foto .proposal-cover-letter__film-title,
+.proposal-cover-letter--film-foto .proposal-cover-letter__film-heading,
 .proposal-cover-letter--film-foto .proposal-cover-letter__info-blocks p,
 .proposal-cover-letter--film-foto .proposal-cover-letter__meta-item,
 .proposal-cover-letter--film-foto .proposal-cover-letter__subject-label,
@@ -3918,9 +3919,19 @@
 }
 
 .proposal-cover-letter--film-foto .proposal-cover-letter__film-title,
+.proposal-cover-letter--film-foto .proposal-cover-letter__film-heading,
 .proposal-cover-letter--film-foto .proposal-cover-letter__subject-label,
 .proposal-cover-letter--film-foto .proposal-cover-letter__subject-value {
   font-family: var(--heading-font, var(--font-heading-family));
+}
+
+.proposal-cover-letter--film-foto .proposal-cover-letter__film-heading {
+  min-width: 0;
+  font-size: 3.25mm;
+  line-height: 1;
+  font-weight: 700;
+  text-transform: lowercase;
+  overflow-wrap: anywhere;
 }
 
 .proposal-cover-letter--film-foto .proposal-cover-letter__info-blocks p,
@@ -3929,6 +3940,7 @@
 }
 
 .proposal-cover-letter--film-foto .proposal-cover-letter__film-title {
+  grid-column: 2;
   justify-self: end;
   max-width: 178mm;
   text-align: right;

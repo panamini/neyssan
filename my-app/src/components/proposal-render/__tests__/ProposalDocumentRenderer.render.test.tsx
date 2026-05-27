@@ -4,6 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ProposalDocumentRenderer } from "../ProposalDocumentRenderer";
 
+function countTextOccurrences(value: string, search: string): number {
+  return value.split(search).length - 1;
+}
+
 describe("ProposalDocumentRenderer volk register layout", () => {
   beforeEach(() => {
     class ResizeObserverMock {
@@ -528,6 +532,7 @@ describe("ProposalDocumentRenderer volk register layout", () => {
 
       expect(root).toBeTruthy();
       expect(text).toContain(heading);
+      expect(text).toContain("Jane Doe");
       expect(
         root?.querySelector(".proposal-cover-letter__film-kicker"),
       ).toBeNull();
@@ -544,6 +549,78 @@ describe("ProposalDocumentRenderer volk register layout", () => {
       expect(text).not.toMatch(
         /Graphische|Berufsschule|volksverband|Werkbund|Postcheckkonto|Bankkonto|tschichold/i,
       );
+    },
+  );
+
+  it.each([
+    {
+      templateId: "director-letterhead" as const,
+      scope: ".proposal-cover-letter--director",
+    },
+    {
+      templateId: "volk-letterhead" as const,
+      scope: ".proposal-cover-letter--volk",
+    },
+    {
+      templateId: "film-foto-letterhead" as const,
+      scope: ".proposal-cover-letter--film-foto",
+    },
+  ])(
+    "keeps sender contact fields de-duplicated for $templateId",
+    ({ templateId, scope }) => {
+      const { container } = render(
+        <ProposalDocumentRenderer
+          content="Dear Hiring Manager,\n\nI can support the team."
+          proposalType="cover_letter"
+          templateId={templateId}
+          railTitle="Zoe Lund"
+          railMeta="Security Guard"
+          contactLine="Letter · 09898777 · Paris · zoe.com"
+          letterDate="May 12, 2026"
+          recipientDetails={"Abel Ferrarra\nCinema\nNew York"}
+          documentTitle="Killer job"
+          documentMeta="Letter"
+          documentTypography={{
+            fontFamily: "Georgia, serif",
+            fontSize: "14px",
+            lineHeight: 1.5,
+            fontWeight: 400,
+            letterSpacing: "0em",
+          }}
+          applicantHeader={{
+            name: "Zoe Lund",
+            role: "Security Guard",
+            email: "zoe@loi.com",
+            phone: "09898777",
+            linkedin: null,
+            website: "zoe.com",
+            location: "Paris",
+            tag: null,
+          }}
+        />,
+      );
+      const root = container.querySelector(scope);
+      const renderedPage = Array.from(
+        root?.querySelectorAll(".dasti-proposal-document__page") ?? [],
+      ).at(-1);
+      const text = renderedPage?.textContent ?? "";
+
+      expect(text).toContain("Zoe Lund");
+      expect(text).toContain("zoe@loi.com");
+      expect(text).toContain("09898777");
+      expect(text).toContain("Paris");
+      expect(text).toContain("zoe.com");
+      expect(text).not.toContain("Letter");
+      expect(countTextOccurrences(text, "09898777")).toBe(1);
+      expect(countTextOccurrences(text, "Paris")).toBe(1);
+      expect(countTextOccurrences(text, "zoe.com")).toBe(1);
+
+      if (templateId === "film-foto-letterhead") {
+        expect(
+          renderedPage?.querySelector(".proposal-cover-letter__film-heading")
+            ?.textContent,
+        ).toBe("Zoe Lund");
+      }
     },
   );
 

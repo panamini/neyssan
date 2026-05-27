@@ -23,6 +23,10 @@ function parseExportHtml(html: string): Document {
   return new DOMParser().parseFromString(html, "text/html");
 }
 
+function countTextOccurrences(value: string, search: string): number {
+  return value.split(search).length - 1;
+}
+
 function makeDenseTokenBlock(token: string, usefulLines: number) {
   return token.repeat(usefulLines * 70);
 }
@@ -546,6 +550,72 @@ describe("export-renderers", () => {
     expect(phoneBlock?.textContent).toContain("09898777");
     expect(phoneBlock?.textContent).not.toContain("zoe@loi.com");
   });
+
+  it.each([
+    {
+      templateId: "director-letterhead" as const,
+      scope: "proposal-cover-letter--director",
+    },
+    {
+      templateId: "volk-letterhead" as const,
+      scope: "proposal-cover-letter--volk",
+    },
+    {
+      templateId: "film-foto-letterhead" as const,
+      scope: "proposal-cover-letter--film-foto",
+    },
+  ])(
+    "keeps $templateId sender contacts de-duplicated during export",
+    ({ templateId, scope }) => {
+      const document = parseExportHtml(
+        renderProposalStyledExportDocument({
+          data: {
+            ...proposalFixture,
+            templateId,
+            contactLine: "Letter · 09898777 · Paris · zoe.com",
+            recipientDetails: "Abel Ferrarra\nCinema\nNew York",
+            documentTitle: "Killer job",
+            documentMeta: "Letter",
+            applicantHeader: {
+              name: "Zoe Lund",
+              role: "Security Guard",
+              email: "zoe@loi.com",
+              phone: "09898777",
+              linkedin: "",
+              website: "zoe.com",
+              location: "Paris",
+              tag: "",
+            },
+          },
+          stylePreset: {
+            familyId: "workshop",
+            layout: "workshop",
+            typography: "expert",
+            palette: "terre",
+          },
+        }),
+      );
+      const root = document.querySelector(`.${scope}`);
+      const text = root?.textContent ?? "";
+
+      expect(text).toContain("Zoe Lund");
+      expect(text).toContain("zoe@loi.com");
+      expect(text).toContain("09898777");
+      expect(text).toContain("Paris");
+      expect(text).toContain("zoe.com");
+      expect(text).not.toContain("Letter");
+      expect(countTextOccurrences(text, "09898777")).toBe(1);
+      expect(countTextOccurrences(text, "Paris")).toBe(1);
+      expect(countTextOccurrences(text, "zoe.com")).toBe(1);
+
+      if (templateId === "film-foto-letterhead") {
+        expect(
+          root?.querySelector(".proposal-cover-letter__film-heading")
+            ?.textContent,
+        ).toBe("Zoe Lund");
+      }
+    },
+  );
 
   it("scopes Arabic proposal export language direction to the generated document root", () => {
     document.documentElement.lang = "en";

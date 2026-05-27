@@ -383,6 +383,16 @@ describe("proposal heading JSON pipeline", () => {
         phone: "+33 6 00 00 00 00",
       }),
     ).toBe("zoe@loi.com · +33 6 00 00 00 00 · Paris · @zoe · zoe.com");
+    expect(
+      parseProposalContactLine("Letter · zoe@loi.com · 09898777 · Paris"),
+    ).toEqual({
+      email: "zoe@loi.com",
+      phone: "09898777",
+      location: "Paris",
+      linkedin: "",
+      website: "",
+      other: "",
+    });
   });
 
   it("keeps CV contact ahead of settings, applies manual overrides, and emits placeholder-free export and preview payloads", () => {
