@@ -422,17 +422,6 @@ export function TemplatesPage(): JSX.Element {
                   handleSelectTemplate(template);
                 }}
               >
-                <span className="dasti-template-card__head">
-                  <span className="dasti-template-card__title-line">
-                    <span className="dasti-template-card__title">{template.name}</span>
-                    <span className="dasti-template-card__kind">
-                      {templateKindLabelI18n(template.kind, t)}
-                    </span>
-                  </span>
-                  <span className="dasti-template-card__description">
-                    {t(template.descriptionKey)}
-                  </span>
-                </span>
                 <span className="dasti-template-card__preview" aria-hidden="true">
                   <span className="dasti-template-card__document-scale" data-testid="template-document-preview">
                     <TemplateDocumentPreview
@@ -440,6 +429,14 @@ export function TemplatesPage(): JSX.Element {
                       family={template.family}
                       previewCv={previewCv}
                     />
+                  </span>
+                </span>
+                <span className="dasti-template-card__head">
+                  <span className="dasti-template-card__title-line">
+                    <span className="dasti-template-card__title">{template.name}</span>
+                    <span className="dasti-template-card__kind">
+                      {templateKindLabelI18n(template.kind, t)}
+                    </span>
                   </span>
                 </span>
               </article>
