@@ -4466,6 +4466,7 @@ body,
 
 .today-preview-board__side {
   gap: var(--space-2);
+  align-items: start;
 }
 
 .today-recent-grid {
