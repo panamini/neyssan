@@ -262,6 +262,8 @@ describe("DocumentsPage", () => {
   });
 
   it("renders real CV and proposal work without Application cards", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-28T12:00:00.000Z"));
     renderProjects();
 
     expect(screen.getByRole("heading", { name: "Recent work" })).toBeInTheDocument();
@@ -270,6 +272,21 @@ describe("DocumentsPage", () => {
     expect(screen.getAllByText("Frontend Engineer · Editorial v3").length).toBeGreaterThan(0);
     expect(screen.queryByText("Application")).not.toBeInTheDocument();
     expect(document.querySelectorAll(".projects-card").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll(".document-specimen-card").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll(".document-specimen-card__mount").length).toBeGreaterThan(0);
+    const typeChips = Array.from(
+      document.querySelectorAll(".document-specimen-card__type-chip"),
+    );
+    const typeLabels = typeChips.map((chip) => chip.getAttribute("aria-label"));
+    expect(typeLabels).toContain("CV");
+    expect(typeLabels).toContain("PROPOSAL");
+    expect(typeLabels).toContain("PACK");
+    expect(typeChips.every((chip) => chip.textContent?.trim() === "")).toBe(true);
+    expect(typeLabels.every((label) => !/^\d+$/.test(label ?? ""))).toBe(true);
+    expect(screen.queryByText("Updated just now")).not.toBeInTheDocument();
+    expect(screen.queryByText("Updated 3 weeks ago")).not.toBeInTheDocument();
+    expect(screen.queryByText("CV profile")).not.toBeInTheDocument();
+    expect(screen.queryByText("No job · No CV linked")).not.toBeInTheDocument();
     expect(document.querySelectorAll(".library-doc-preview").length).toBeGreaterThan(0);
     expect(document.querySelectorAll(".library-doc-preview--rendered").length).toBeGreaterThan(0);
     expect(document.querySelector(".forge-rail-document-tile")).not.toBeInTheDocument();
@@ -359,6 +376,13 @@ describe("DocumentsPage", () => {
     const user = userEvent.setup();
     renderProjects();
 
+    await user.click(document.querySelector(".projects-card") as HTMLElement);
+
+    expect(screen.getByRole("status", { name: "1 item selected" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open" })).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: "Clear selection" }));
+
     const checkbox = screen.getByLabelText("Select proposal Senior Frontend Engineer · Linear");
     await user.click(checkbox);
 
@@ -366,7 +390,11 @@ describe("DocumentsPage", () => {
     expect(checkbox.closest(".projects-card")).toHaveAttribute("data-selected", "true");
     expect(screen.getByRole("status", { name: "1 item selected" })).toBeInTheDocument();
     expect(screen.getByText("1 item selected")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Download" })).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: "Open" }));
+    expect(navigateMock).toHaveBeenCalled();
 
     await user.click(screen.getByRole("button", { name: "Download" }));
     expect(downloadLibraryItemsMock).toHaveBeenCalledWith([
@@ -395,30 +423,21 @@ describe("DocumentsPage", () => {
     ], expect.any(Object));
   });
 
-  it("card menu Download PDF works for CV and proposal items", async () => {
-    const user = userEvent.setup();
+  it("renders grid card action menus in the details row", () => {
     renderProjects();
 
-    await user.click(
+    expect(
       screen.getByRole("button", {
         name: "More actions for Senior Frontend Engineer · Linear",
       }),
-    );
-    await user.click(await screen.findByRole("menuitem", { name: "Download PDF" }));
-    expect(downloadLibraryItemsMock).toHaveBeenCalledWith([
-      expect.objectContaining({ id: "proposal:proposal_1", type: "proposal" }),
-    ], expect.any(Object));
-
-    downloadLibraryItemsMock.mockClear();
-    await user.click(
+    ).toBeInTheDocument();
+    expect(
       screen.getByRole("button", {
         name: "More actions for Frontend Engineer · Editorial v3",
       }),
-    );
-    await user.click(await screen.findByRole("menuitem", { name: "Download PDF" }));
-    expect(downloadLibraryItemsMock).toHaveBeenCalledWith([
-      expect.objectContaining({ id: "cv:cv_1", type: "cv" }),
-    ], expect.any(Object));
+    ).toBeInTheDocument();
+    expect(document.querySelectorAll(".document-specimen-card__caption .projects-card__menu")).toHaveLength(3);
+    expect(document.querySelector(".projects-card__preview-shell .projects-card__menu")).not.toBeInTheDocument();
   });
 
   it("bulk delete confirms and deletes selected supported items", async () => {
@@ -458,6 +477,7 @@ describe("DocumentsPage", () => {
     };
     renderProjects();
 
+    await user.click(within(viewTabs()).getByRole("tab", { name: /List/ }));
     await user.click(within(typeTabs()).getByRole("tab", { name: "Proposals" }));
 
     expect(screen.getAllByText("Senior Frontend Engineer · Linear").length).toBeGreaterThan(0);
@@ -490,9 +510,7 @@ describe("DocumentsPage", () => {
     await user.click(within(typeTabs()).getByRole("tab", { name: "Proposals" }));
 
     expect(screen.getAllByText("Job linked · CV: Frontend Engineer · Editorial v3").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Job linked").length).toBeGreaterThan(0);
-    expect(screen.queryByText("No CV linked")).not.toBeInTheDocument();
-    expect(screen.queryByText("No job")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Job linked · No CV linked").length).toBeGreaterThan(0);
     expect(screen.queryByText("Needs review")).not.toBeInTheDocument();
     expect(screen.queryByText("Ready")).not.toBeInTheDocument();
     expect(screen.queryByText("Saved")).not.toBeInTheDocument();
@@ -508,10 +526,9 @@ describe("DocumentsPage", () => {
     expect(screen.queryByText("Staff Designer draft")).not.toBeInTheDocument();
 
     await user.clear(screen.getByLabelText("Search projects"));
-    await user.type(screen.getByLabelText("Search projects"), "job linked");
+    await user.type(screen.getByLabelText("Search projects"), "no cv linked");
     expect(screen.getAllByText("Staff Designer draft").length).toBeGreaterThan(0);
-    expect(screen.queryByText("No CV linked")).not.toBeInTheDocument();
-    expect(screen.queryByText("No job")).not.toBeInTheDocument();
+    expect(screen.queryByText("Frontend Engineer · Editorial v3")).not.toBeInTheDocument();
   });
 
   it("list view renders rows with expected columns", async () => {
@@ -575,29 +592,17 @@ describe("DocumentsPage", () => {
     renderProjects();
 
     await user.click(within(typeTabs()).getByRole("tab", { name: "Proposals" }));
-    await user.click(
-      screen.getByRole("button", {
-        name: "More actions for Senior Frontend Engineer · Linear",
-      }),
-    );
-    await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
+    await user.click(screen.getByLabelText("Select proposal Senior Frontend Engineer · Linear"));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
     expect(deleteProposalMock).toHaveBeenCalledWith({ id: "proposal_1" });
 
-    await user.click(
-      screen.getByRole("button", {
-        name: "More actions for Local generated proposal",
-      }),
-    );
-    await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
+    await user.click(screen.getByLabelText("Select proposal Local generated proposal"));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
     expect(clearStoredProposalWorkspaceStateMock).toHaveBeenCalled();
 
     await user.click(within(typeTabs()).getByRole("tab", { name: "CVs" }));
-    await user.click(
-      screen.getByRole("button", {
-        name: "More actions for Frontend Engineer · Editorial v3",
-      }),
-    );
-    await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
+    await user.click(screen.getByLabelText("Select cv Frontend Engineer · Editorial v3"));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
     expect(deleteCvMock).toHaveBeenCalledWith("cv_1");
   });
 });

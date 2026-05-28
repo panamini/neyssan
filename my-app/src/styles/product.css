@@ -4462,10 +4462,12 @@ body,
 .today-recent-grid {
   display: grid;
   gap: var(--space-2);
+  align-items: start;
 }
 
 .today-recent-grid {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 232px), 1fr));
+  grid-auto-rows: max-content;
 }
 
 .today-preview-card {
@@ -4475,9 +4477,11 @@ body,
   --work-paper-radius: var(--space-1);
   --work-preview-stage: transparent;
   --work-preview-stage-radius: calc(var(--radius-card) - 3px);
+  --work-card-media-footer-gap: var(--s2);
   position: relative;
   min-width: 0;
   min-height: 0;
+  align-self: start;
   padding: var(--work-card-pad);
   border-radius: var(--work-card-radius);
   background: var(--work-card-bg);
@@ -4512,36 +4516,38 @@ body,
 }
 
 .today-preview-card .dasti-documents-card__menu {
-  border-color: color-mix(in srgb, var(--border) 64%, transparent);
-  background: color-mix(in srgb, var(--paper) 72%, var(--sf1));
-  color: var(--tm2);
+  border-color: transparent;
+  background: transparent;
+  color: color-mix(in srgb, var(--tm2) 78%, transparent);
   box-shadow: none;
 }
 
 .today-preview-card .dasti-documents-card__menu:hover,
 .today-preview-card .dasti-documents-card__menu:focus-visible {
-  border-color: var(--border-strong);
-  background: color-mix(in srgb, var(--paper) 84%, var(--sf1));
+  border-color: transparent;
+  background: color-mix(in srgb, var(--sf2) 64%, transparent);
   color: var(--ti);
 }
 
 .dark .today-preview-card .dasti-documents-card__menu {
-  border-color: color-mix(in srgb, var(--border) 72%, transparent);
-  background: color-mix(in srgb, var(--sf2) 86%, transparent);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
 }
 
 .dark .today-preview-card .dasti-documents-card__menu:hover,
 .dark .today-preview-card .dasti-documents-card__menu:focus-visible {
-  border-color: var(--border-strong);
-  background: color-mix(in srgb, var(--sfr) 90%, transparent);
+  border-color: transparent;
+  background: color-mix(in srgb, var(--sf2) 64%, transparent);
 }
 
 .today-preview-card__surface {
   width: 100%;
   min-width: 0;
-  display: grid;
-  gap: var(--s2);
-  align-content: start;
+  display: flex;
+  flex-direction: column;
+  gap: var(--work-card-media-footer-gap);
+  align-self: start;
   border: 0;
   padding: 0;
   background: transparent;
@@ -4567,7 +4573,7 @@ body,
 
 .today-preview-card__meta {
   display: grid;
-  gap: var(--space-1);
+  gap: 0;
   min-width: 0;
   padding-block-start: 0;
   padding-block-end: var(--s2);
@@ -4618,8 +4624,8 @@ body,
 .work-doc-preview {
   display: grid;
   place-items: start center;
-  min-height: 288px;
-  block-size: 288px;
+  min-height: 196px;
+  block-size: 196px;
   padding: 0;
   border-radius: var(--work-preview-stage-radius);
   background: var(--work-preview-stage);
@@ -4629,13 +4635,13 @@ body,
 }
 
 .today-preview-card[data-variant="secondary"] .work-doc-preview {
-  min-height: 144px;
-  block-size: 144px;
+  min-height: 196px;
+  block-size: 196px;
 }
 
 .today-preview-card[data-variant="compact"] .work-doc-preview {
-  min-height: 168px;
-  block-size: 168px;
+  min-height: 196px;
+  block-size: 196px;
 }
 
 .work-doc-preview--rendered {
@@ -4671,7 +4677,7 @@ body,
   overflow: hidden;
   background: var(--paper);
   border: 1px solid color-mix(in srgb, var(--paper-ink) 5%, transparent);
-  border-radius: var(--work-paper-radius, var(--space-1)) var(--work-paper-radius, var(--space-1)) 0 0;
+  border-radius: var(--work-paper-radius, var(--space-1));
   box-shadow:
     0 1px 3px color-mix(in srgb, var(--paper-ink) 10%, transparent),
     0 12px 30px color-mix(in srgb, var(--paper-ink) 16%, transparent);
@@ -4702,7 +4708,7 @@ body,
   overflow: hidden;
   background: var(--paper);
   border: 1px solid color-mix(in srgb, var(--paper-ink) 5%, transparent);
-  border-radius: var(--work-paper-radius, var(--space-1)) var(--work-paper-radius, var(--space-1)) 0 0;
+  border-radius: var(--work-paper-radius, var(--space-1));
   box-shadow:
     0 1px 3px color-mix(in srgb, var(--paper-ink) 10%, transparent),
     0 12px 30px color-mix(in srgb, var(--paper-ink) 16%, transparent);
