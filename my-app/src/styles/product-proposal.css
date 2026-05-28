@@ -3689,6 +3689,8 @@
   font-size: 2.15mm;
   line-height: 1.35;
   font-weight: 700;
+  white-space: nowrap;
+  overflow-wrap: normal;
 }
 
 .proposal-cover-letter--director .proposal-cover-letter__sender-lines {
@@ -3924,11 +3926,6 @@
   grid-template-columns: minmax(0, 70mm) minmax(0, 1fr);
 }
 
-.proposal-cover-letter--film-foto
-  .proposal-cover-letter__film-header--role-priority {
-  grid-template-columns: minmax(0, 70mm) minmax(0, 1fr);
-}
-
 .proposal-cover-letter--film-foto .proposal-cover-letter__film-title,
 .proposal-cover-letter--film-foto .proposal-cover-letter__film-company,
 .proposal-cover-letter--film-foto .proposal-cover-letter__film-heading,
@@ -3976,6 +3973,11 @@
 }
 
 .proposal-cover-letter--film-foto .proposal-cover-letter__film-title {
+  overflow-wrap: normal;
+}
+
+.proposal-cover-letter--film-foto .proposal-cover-letter__info-block--phone p:not(.proposal-cover-letter__info-label) {
+  white-space: nowrap;
   overflow-wrap: normal;
 }
 

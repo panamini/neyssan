@@ -103,7 +103,11 @@ function isPhoneContactPart(value: string): boolean {
 }
 
 function isLinkedinContactPart(value: string): boolean {
-  return /\blinkedin\.com\b/i.test(value) || /^@[a-z0-9._-]+$/i.test(value);
+  return (
+    /\blinkedin\.com\b/i.test(value) ||
+    /^linkedin$/i.test(value.trim()) ||
+    /^@[a-z0-9._-]+$/i.test(value)
+  );
 }
 
 function isWebsiteContactPart(value: string): boolean {

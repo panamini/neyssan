@@ -352,8 +352,10 @@ function buildProposalLetterheadViewModel(args: {
     candidateLocationLine: resolvedContactParts.location,
     candidatePhone: resolvedContactParts.phone,
     candidateEmail: resolvedContactParts.email,
-    candidateWebsite:
-      resolvedContactParts.website || resolvedContactParts.linkedin,
+    candidateWebsite: joinNonEmpty([
+      resolvedContactParts.linkedin,
+      resolvedContactParts.website,
+    ]),
     recipientName,
     recipientCompany,
     recipientRole,
@@ -533,9 +535,7 @@ export function ProposalCoverLetterFilmFotoTemplate({
   viewModel,
 }: ProposalCoverLetterTemplateProps): JSX.Element {
   const largeTitle = viewModel.shortRoleTitle || viewModel.secondaryTitle;
-  const rolePriority =
-    Boolean(viewModel.secondaryTitle) && largeTitle.trim().length > 10;
-  const hasSecondaryTitle = Boolean(viewModel.secondaryTitle) && !rolePriority;
+  const hasSecondaryTitle = Boolean(viewModel.secondaryTitle);
 
   return (
     <>
@@ -547,9 +547,6 @@ export function ProposalCoverLetterFilmFotoTemplate({
               hasSecondaryTitle
                 ? ""
                 : "proposal-cover-letter__film-header--no-company",
-              rolePriority
-                ? "proposal-cover-letter__film-header--role-priority"
-                : "",
             ]
               .filter(Boolean)
               .join(" ")}

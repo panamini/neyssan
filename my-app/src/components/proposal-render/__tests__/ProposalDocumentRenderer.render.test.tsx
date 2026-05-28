@@ -600,7 +600,7 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     ]);
   });
 
-  it("prioritizes a long Film und Foto role over the optional center title", () => {
+  it("keeps Film und Foto applicant company visible beside a long role", () => {
     const { container } = render(
       <ProposalDocumentRenderer
         content="Dear Hiring Manager,\n\nI can support the team."
@@ -637,12 +637,9 @@ describe("ProposalDocumentRenderer volk register layout", () => {
       ".proposal-cover-letter--film-foto .proposal-cover-letter__film-header",
     );
 
-    expect(header?.className).toContain(
-      "proposal-cover-letter__film-header--role-priority",
-    );
     expect(
-      header?.querySelector(".proposal-cover-letter__film-company"),
-    ).toBeNull();
+      header?.querySelector(".proposal-cover-letter__film-company")?.textContent,
+    ).toBe("Acme");
     expect(
       header?.querySelector(".proposal-cover-letter__film-title")?.textContent,
     ).toBe("Security Guard");
@@ -707,6 +704,52 @@ describe("ProposalDocumentRenderer volk register layout", () => {
       expect(root?.textContent).toContain("Designer");
     },
   );
+
+  it("keeps applicant company visible in Film und Foto when the role is long", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content="Dear Hiring Manager,\n\nI can support the team."
+        proposalType="cover_letter"
+        templateId="film-foto-letterhead"
+        railTitle="Robert Cooper"
+        railMeta="Security Guard"
+        contactLine="email@email.com · +38686834400002 · CA 90291 United States · LINKEDIN · PORTFOLIO.COM"
+        letterDate="May 12, 2026"
+        recipientDetails="Hiring Manager"
+        documentTitle="Application for Security Guard"
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        applicantHeader={{
+          name: "Robert Cooper",
+          role: "Security Guard",
+          company: "Companii",
+          email: "",
+          phone: "",
+          linkedin: null,
+          website: "",
+          location: "",
+          tag: null,
+        }}
+      />,
+    );
+
+    const root = container.querySelector(".proposal-cover-letter--film-foto");
+    expect(
+      root?.querySelector(".proposal-cover-letter__film-company")?.textContent,
+    ).toBe("Companii");
+    expect(
+      root?.querySelector(".proposal-cover-letter__film-title")?.textContent,
+    ).toBe("Security Guard");
+    expect(root?.querySelector(".proposal-cover-letter__info-blocks")?.textContent)
+      .toContain("LINKEDIN");
+    expect(root?.querySelector(".proposal-cover-letter__info-block--phone")?.textContent)
+      .toContain("+38686834400002");
+  });
 
   it.each([
     {
