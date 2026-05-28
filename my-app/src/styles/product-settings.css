@@ -1566,7 +1566,7 @@
   padding-right: 2px;
 }
 
-.dasti-template-card {
+.dasti-template-gallery__grid .dasti-template-card {
   position: relative;
   display: grid;
   gap: var(--s2);
@@ -1588,8 +1588,8 @@
   }
 }
 
-.dasti-template-card:hover,
-.dasti-template-card:focus-visible {
+.dasti-template-gallery__grid .dasti-template-card:hover,
+.dasti-template-gallery__grid .dasti-template-card:focus-visible {
   transform: translateY(-1px);
   border-color: color-mix(
     in srgb,
@@ -1599,13 +1599,13 @@
   outline: none;
 }
 
-.dasti-template-card--active {
+.dasti-template-gallery__grid .dasti-template-card--active {
   border-color: color-mix(in srgb, var(--color-accent) 48%, transparent);
   box-shadow: 0 0 0 3px
     color-mix(in srgb, var(--color-accent-soft) 28%, transparent);
 }
 
-.dasti-template-card__status {
+.dasti-template-gallery__grid .dasti-template-card__status {
   position: absolute;
   top: 10px;
   right: 10px;
@@ -1620,14 +1620,14 @@
   box-shadow: var(--shadow-sm);
 }
 
-.dasti-template-card__preview {
+.dasti-template-gallery__grid .dasti-template-card__preview {
   overflow: hidden;
   border-radius: calc(var(--radius-card) - 4px);
   border: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent);
   background: var(--document-viewer-frame-surface, var(--sf2));
 }
 
-.dasti-template-card__preview-shell {
+.dasti-template-gallery__grid .dasti-template-card__preview-shell {
   padding: 10px;
   transform: scale(0.56);
   transform-origin: top left;
@@ -1635,32 +1635,32 @@
   min-height: 0;
 }
 
-.dasti-template-card__body {
+.dasti-template-gallery__grid .dasti-template-card__body {
   display: grid;
   gap: 4px;
 }
 
-.dasti-template-card__title-row {
+.dasti-template-gallery__grid .dasti-template-card__title-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--s2);
 }
 
-.dasti-template-card__title {
+.dasti-template-gallery__grid .dasti-template-card__title {
   font-size: var(--ts);
   font-weight: 700;
   color: var(--ti);
 }
 
-.dasti-template-card__description {
+.dasti-template-gallery__grid .dasti-template-card__description {
   margin: 0;
   font-size: var(--tx);
   color: var(--tm2);
   line-height: 1.45;
 }
 
-.dasti-template-card__meta {
+.dasti-template-gallery__grid .dasti-template-card__meta {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;

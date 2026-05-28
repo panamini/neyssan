@@ -377,11 +377,8 @@ describe("DocumentsPage", () => {
     renderProjects();
 
     await user.click(document.querySelector(".projects-card") as HTMLElement);
-
-    expect(screen.getByRole("status", { name: "1 item selected" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open" })).toBeEnabled();
-
-    await user.click(screen.getByRole("button", { name: "Clear selection" }));
+    expect(navigateMock).toHaveBeenCalledWith("/proposal?view=saved&id=proposal_1");
+    expect(screen.queryByRole("status", { name: /item selected/ })).not.toBeInTheDocument();
 
     const checkbox = screen.getByLabelText("Select proposal Senior Frontend Engineer · Linear");
     await user.click(checkbox);
@@ -438,6 +435,22 @@ describe("DocumentsPage", () => {
     ).toBeInTheDocument();
     expect(document.querySelectorAll(".document-specimen-card__caption .projects-card__menu")).toHaveLength(3);
     expect(document.querySelector(".projects-card__preview-shell .projects-card__menu")).not.toBeInTheDocument();
+  });
+
+  it("keeps item menus scoped to secondary single-item actions", async () => {
+    const user = userEvent.setup();
+    renderProjects();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "More actions for Senior Frontend Engineer · Linear",
+      }),
+    );
+
+    expect(screen.queryByRole("menuitem", { name: "Continue" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Open" })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Download PDF" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Delete" })).toBeInTheDocument();
   });
 
   it("bulk delete confirms and deletes selected supported items", async () => {

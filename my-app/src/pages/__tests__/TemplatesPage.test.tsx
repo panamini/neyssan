@@ -47,7 +47,7 @@ describe("TemplatesPage", () => {
     expect(screen.getAllByTestId("template-document-preview")).toHaveLength(6);
   });
 
-  it("renders template chrome and descriptions in French without renaming templates", () => {
+  it("renders template chrome in French without renaming templates", () => {
     window.localStorage.setItem("twoweeks:ui-language", "fr");
     window.localStorage.setItem("twoweeks:document-language", "es");
 
@@ -61,15 +61,15 @@ describe("TemplatesPage", () => {
     expect(screen.getByRole("tab", { name: "Lettres" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("button", { name: "Personnaliser le style" })).toBeInTheDocument();
     expect(screen.getAllByText("Lettre", { selector: ".dasti-template-card__kind" })).toHaveLength(6);
-    expect(screen.getAllByText("Espacement calme, hiérarchie nette.").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Ouverture directe, ton net.").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Plus chaleureux, plus personnel.").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Espacement calme, hiérarchie nette.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ouverture directe, ton net.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Plus chaleureux, plus personnel.")).not.toBeInTheDocument();
     expect(screen.getByText("Editorial", { selector: ".dasti-template-card__title" })).toBeInTheDocument();
     expect(screen.queryByText(/Proposition|proposition/)).not.toBeInTheDocument();
     expect(window.localStorage.getItem("twoweeks:document-language")).toBe("es");
   });
 
-  it("renders template chrome and descriptions in Spanish", async () => {
+  it("renders template chrome in Spanish", async () => {
     const user = userEvent.setup();
     window.localStorage.setItem("twoweeks:ui-language", "es");
     window.localStorage.setItem("twoweeks:document-language", "fr");
@@ -84,15 +84,15 @@ describe("TemplatesPage", () => {
     expect(screen.getByRole("tab", { name: "Cartas" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("button", { name: "Personalizar estilo" })).toBeInTheDocument();
     expect(screen.getAllByText("Carta", { selector: ".dasti-template-card__kind" })).toHaveLength(6);
-    expect(screen.getAllByText("Espaciado sobrio, jerarquía clara.").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Apertura directa, tono claro.").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Más cercano, más personal.").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Espaciado sobrio, jerarquía clara.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Apertura directa, tono claro.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Más cercano, más personal.")).not.toBeInTheDocument();
     expect(screen.queryByText(/Propuesta|propuesta/)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "CV" }));
 
-    expect(screen.getByText("Claro, legible, seguro.")).toBeInTheDocument();
-    expect(screen.getByText("Diseño europeo estructurado.")).toBeInTheDocument();
+    expect(screen.queryByText("Claro, legible, seguro.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Diseño europeo estructurado.")).not.toBeInTheDocument();
     expect(window.localStorage.getItem("twoweeks:document-language")).toBe("fr");
   });
 
@@ -350,7 +350,7 @@ describe("TemplatesPage", () => {
     );
   });
 
-  it("keeps resume template previews to card plus real paper without a shell frame", async () => {
+  it("keeps template previews as square-framed A4 paper with meta underneath", async () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={["/templates"]}>
@@ -377,8 +377,24 @@ describe("TemplatesPage", () => {
       "../../styles/product-libraries.css",
     );
     const styles = fs.readFileSync(stylesPath, "utf8");
+    const settingsStyles = fs.readFileSync(
+      path.resolve(__dirname, "../../styles/product-settings.css"),
+      "utf8",
+    );
     expect(styles).not.toMatch(
       /\.dasti-template-card__document-scale\s+\.resume-template-page-shell/,
+    );
+    expect(styles).toMatch(
+      /\.dasti-template-card__preview\s*\{[\s\S]*inline-size:\s*fit-content;[\s\S]*padding:\s*var\(--template-frame-pad\);[\s\S]*border-radius:\s*0;[\s\S]*background:\s*var\(--template-frame-bg\);/,
+    );
+    expect(styles).toMatch(
+      /\.dasti-template-card__document-scale\s*\{[\s\S]*aspect-ratio:\s*210 \/ 297;[\s\S]*border-radius:\s*0;/,
+    );
+    expect(styles).toMatch(
+      /\.dasti-template-card__head\s*\{[\s\S]*inline-size:\s*min\(100%,\s*var\(--template-frame-inline\)\);[\s\S]*padding-block-start:\s*var\(--space-1\);[\s\S]*border-block-end:/,
+    );
+    expect(settingsStyles).not.toMatch(
+      /^\.dasti-template-card(?:__preview|__title|__description|\s|\{)/m,
     );
   });
 });

@@ -647,7 +647,6 @@ function LibraryItemCard({
 }) {
   const typeLabel = itemTypeLabel(item);
   const specimenTypeLabel = itemSpecimenTypeLabel(item);
-  const action = item.type === "proposal" ? "Continue" : "Open";
   const previewShellRef = React.useRef<HTMLButtonElement | null>(null);
   const shouldRenderPreview = previewLoaded || selected;
 
@@ -684,7 +683,7 @@ function LibraryItemCard({
       typeLabel={specimenTypeLabel}
       selected={selected}
       showUpdatedLabel={false}
-      onCardClick={onToggleSelected}
+      onCardClick={onOpen}
       previewRef={previewShellRef}
       onPreviewPointerEnter={onRequestPreview}
       onPreviewFocusCapture={onRequestPreview}
@@ -697,7 +696,6 @@ function LibraryItemCard({
             sections={[
               {
                 items: [
-                  { id: "open", label: action, onSelect: onOpen },
                   {
                     id: "download",
                     label: "Download PDF",
@@ -859,7 +857,6 @@ function ProjectsListRow({
             sections={[
               {
                 items: [
-                  { id: "open", label: action, onSelect: onOpen },
                   {
                     id: "download",
                     label: "Download PDF",
