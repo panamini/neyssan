@@ -1,4 +1,6 @@
 import React from "react";
+import fs from "node:fs";
+import path from "node:path";
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
@@ -557,11 +559,37 @@ describe("DocumentsPage", () => {
     expect(screen.getByRole("columnheader", { name: "Updated" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Action" })).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "Projects list" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Name" })).toHaveClass(
+      "projects-list__cell--name",
+    );
+    expect(screen.getByRole("columnheader", { name: "Updated" })).toHaveClass(
+      "projects-list__cell--updated",
+    );
     expect(
       screen.getByRole("button", {
         name: "More actions for Senior Frontend Engineer · Linear",
       }),
     ).toBeInTheDocument();
+  });
+
+  it("keeps projects toolbar and list column geometry polished", () => {
+    const styles = fs.readFileSync(
+      path.resolve(process.cwd(), "src/styles/product-libraries.css"),
+      "utf8",
+    );
+
+    expect(styles).toMatch(
+      /\.projects-toolbar\s*\{[\s\S]*display:\s*grid;[\s\S]*grid-template-columns:\s*max-content max-content minmax\(240px,\s*280px\);[\s\S]*align-items:\s*end;/,
+    );
+    expect(styles).toMatch(
+      /\.projects-list__head,[\s\S]*?\.projects-list__row\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1\.75fr\)[\s\S]*128px;/,
+    );
+    expect(styles).toMatch(
+      /\.projects-list__cell--updated\s*\{[\s\S]*text-align:\s*right;[\s\S]*justify-self:\s*end;/,
+    );
+    expect(styles).toMatch(
+      /\.projects-list__name-cell\s*\{[\s\S]*grid-template-columns:\s*24px minmax\(0,\s*1fr\);/,
+    );
   });
 
   it("list view supports row selection", async () => {
