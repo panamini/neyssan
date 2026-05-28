@@ -386,6 +386,10 @@ describe("TemplatesPage", () => {
       path.resolve(__dirname, "../../styles/product.css"),
       "utf8",
     );
+    const proposalStyles = fs.readFileSync(
+      path.resolve(__dirname, "../../styles/product-proposal.css"),
+      "utf8",
+    );
     const settingsStyles = fs.readFileSync(
       path.resolve(__dirname, "../../styles/product-settings.css"),
       "utf8",
@@ -407,6 +411,18 @@ describe("TemplatesPage", () => {
     );
     expect(styles).toMatch(
       /\.dasti-template-grid\s*\{[\s\S]*gap:\s*var\(--library-gallery-row-gap\)\s*var\(--library-gallery-column-gap\);/,
+    );
+    expect(styles).not.toMatch(
+      /\.dasti-template-grid[\s\S]*minmax\(min\(100%,\s*304px\),\s*1fr\)/,
+    );
+    expect(styles).not.toMatch(
+      /\.dasti-template-grid,\s*\.dasti-template-grid\[data-template-filter="resume"\]\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\);/,
+    );
+    expect(proposalStyles).toMatch(
+      /@media \(max-width:\s*760px\)\s*\{[\s\S]*?\.dasti-proposal-document__page,[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\);/,
+    );
+    expect(styles).toMatch(
+      /\.dasti-template-card__document-scale\s+\.dasti-proposal-document__page,[\s\S]*?\.dasti-template-card__document-scale\s+\.dasti-proposal-document--quiet-margin\s+\.dasti-proposal-document__page\s*\{[\s\S]*?grid-template-columns:\s*calc\(var\(--proposal-inline-mm\) \* var\(--proposal-template-left-zone-mm\)\)\s*minmax\(0,\s*1fr\);[\s\S]*?row-gap:\s*0;/,
     );
     expect(productStyles).toMatch(
       /\.today-recent-grid\s*\{[\s\S]*gap:\s*var\(--library-gallery-row-gap\)\s*var\(--library-gallery-column-gap\);/,

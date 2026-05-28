@@ -2663,6 +2663,52 @@
   background: transparent;
 }
 
+.dasti-template-card__document-scale .dasti-proposal-document__page,
+.dasti-template-card__document-scale
+  .dasti-proposal-document--quiet-margin
+  .dasti-proposal-document__page {
+  grid-template-columns:
+    calc(var(--proposal-inline-mm) * var(--proposal-template-left-zone-mm))
+    minmax(0, 1fr);
+  row-gap: 0;
+}
+
+.dasti-template-card__document-scale .dasti-proposal-document__rail {
+  gap: var(--proposal-grid-half-step-block);
+  padding-inline-end: var(--proposal-grid-half-step-inline);
+}
+
+.dasti-template-card__document-scale .dasti-proposal-document__meta {
+  max-width: 17ch;
+}
+
+.dasti-template-card__document-scale .dasti-proposal-document__body,
+.dasti-template-card__document-scale
+  .dasti-proposal-document--quiet-margin
+  .dasti-proposal-document__body,
+.dasti-template-card__document-scale
+  .dasti-proposal-document--message
+  .dasti-proposal-document__body,
+.dasti-template-card__document-scale
+  .dasti-proposal-document--proposal
+  .dasti-proposal-document__body {
+  padding-inline-end: calc(
+    var(--proposal-inline-mm) * var(--proposal-template-right-margin-mm)
+  );
+  max-inline-size: min(
+    100%,
+    calc(
+      var(--proposal-document-reading-measure-max) +
+        (var(--proposal-inline-mm) * var(--proposal-template-right-margin-mm))
+    )
+  );
+}
+
+.dasti-template-card__document-scale
+  .dasti-proposal-document__structured-header {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .dasti-template-card__document-scale .dasti-proposal-document > .dasti-proposal-document__page ~ .dasti-proposal-document__page {
   display: none;
 }
@@ -2777,19 +2823,7 @@
   gap: var(--s2);
 }
 
-@media (max-width: 1080px) {
-  .dasti-template-grid,
-  .dasti-template-grid[data-template-filter="resume"] {
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 304px), 1fr));
-  }
-}
-
 @media (max-width: 720px) {
-  .dasti-template-grid,
-  .dasti-template-grid[data-template-filter="resume"] {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .dasti-template-preview {
     padding: var(--s2);
     align-items: end;
