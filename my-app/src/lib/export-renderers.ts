@@ -866,18 +866,21 @@ function buildStyledProposalAppearanceCss(): string {
 
     .proposal-cover-letter--director .proposal-cover-letter__masthead,
     .proposal-cover-letter--director .proposal-cover-letter__sender-block,
-    .proposal-cover-letter--director .proposal-cover-letter__phone-block,
+    .proposal-cover-letter--director .proposal-cover-letter__contact-grid,
     .proposal-cover-letter--director .proposal-cover-letter__meta-row,
+    .proposal-cover-letter--director .proposal-cover-letter__recipient-block,
     .proposal-cover-letter--director .proposal-cover-letter__subject-row,
     .proposal-cover-letter--director .proposal-cover-letter__body,
     .proposal-cover-letter--volk .proposal-cover-letter__volk-header,
     .proposal-cover-letter--volk .proposal-cover-letter__meta-row,
+    .proposal-cover-letter--volk .proposal-cover-letter__recipient-block,
     .proposal-cover-letter--volk .proposal-cover-letter__subject-row,
     .proposal-cover-letter--volk .proposal-cover-letter__body,
     .proposal-cover-letter--volk .proposal-cover-letter__dot,
     .proposal-cover-letter--film-foto .proposal-cover-letter__film-header,
     .proposal-cover-letter--film-foto .proposal-cover-letter__info-blocks,
     .proposal-cover-letter--film-foto .proposal-cover-letter__meta-row,
+    .proposal-cover-letter--film-foto .proposal-cover-letter__recipient-block,
     .proposal-cover-letter--film-foto .proposal-cover-letter__subject-row,
     .proposal-cover-letter--film-foto .proposal-cover-letter__body,
     .proposal-cover-letter--film-foto .proposal-cover-letter__dot {
@@ -887,7 +890,7 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--director .proposal-cover-letter__masthead-primary,
     .proposal-cover-letter--director .proposal-cover-letter__masthead-secondary,
     .proposal-cover-letter--director .proposal-cover-letter__masthead-role,
-    .proposal-cover-letter--director .proposal-cover-letter__phone-mark,
+    .proposal-cover-letter--director .proposal-cover-letter__contact-mark,
     .proposal-cover-letter--director .proposal-cover-letter__subject-label,
     .proposal-cover-letter--director .proposal-cover-letter__subject-value,
     .proposal-cover-letter--volk .proposal-cover-letter__volk-title,
@@ -904,11 +907,14 @@ function buildStyledProposalAppearanceCss(): string {
 
     .proposal-cover-letter--director .proposal-cover-letter__sender-label,
     .proposal-cover-letter--director .proposal-cover-letter__sender-lines p,
-    .proposal-cover-letter--director .proposal-cover-letter__phone-block p,
+    .proposal-cover-letter--director .proposal-cover-letter__contact-lines p,
+    .proposal-cover-letter--director .proposal-cover-letter__recipient-block p,
     .proposal-cover-letter--director .proposal-cover-letter__meta-item,
     .proposal-cover-letter--volk .proposal-cover-letter__volk-sender,
+    .proposal-cover-letter--volk .proposal-cover-letter__recipient-block p,
     .proposal-cover-letter--volk .proposal-cover-letter__meta-item,
     .proposal-cover-letter--film-foto .proposal-cover-letter__info-blocks p,
+    .proposal-cover-letter--film-foto .proposal-cover-letter__recipient-block p,
     .proposal-cover-letter--film-foto .proposal-cover-letter__meta-item {
       font-family: var(--body-font, var(--font-body-family));
     }
@@ -930,7 +936,7 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--director .proposal-cover-letter__masthead--no-secondary
       .proposal-cover-letter__masthead-role {
       grid-column: 2;
-      max-width: 84mm;
+      max-width: 106mm;
       white-space: normal;
     }
 
@@ -962,34 +968,46 @@ function buildStyledProposalAppearanceCss(): string {
       align-items: start;
     }
 
-    .proposal-cover-letter--director .proposal-cover-letter__phone-block {
+    .proposal-cover-letter--director .proposal-cover-letter__contact-grid {
       left: 111mm;
       top: 43.5mm;
       display: grid;
-      grid-template-columns: 3.4mm minmax(0, 54mm);
-      column-gap: 2mm;
-      align-items: start;
+      grid-template-columns: 4mm minmax(0, 30mm) 4mm minmax(0, 40mm);
+      column-gap: 2.2mm;
+      align-items: baseline;
+      max-width: 80mm;
     }
 
     .proposal-cover-letter--director .proposal-cover-letter__sender-label,
     .proposal-cover-letter--director .proposal-cover-letter__sender-lines p,
-    .proposal-cover-letter--director .proposal-cover-letter__phone-block p {
+    .proposal-cover-letter--director .proposal-cover-letter__contact-lines p,
+    .proposal-cover-letter--director .proposal-cover-letter__recipient-block p {
       margin: 0;
       font-size: 2.15mm;
       line-height: 1.35;
       font-weight: 700;
-      overflow-wrap: anywhere;
-    }
-
-    .proposal-cover-letter--director .proposal-cover-letter__phone-block p {
-      white-space: nowrap;
       overflow-wrap: normal;
+      white-space: nowrap;
     }
 
-    .proposal-cover-letter--director .proposal-cover-letter__phone-mark {
+    .proposal-cover-letter--director .proposal-cover-letter__contact-lines {
+      display: grid;
+      gap: 0.2mm;
+      min-width: 0;
+    }
+
+    .proposal-cover-letter--director .proposal-cover-letter__contact-lines p {
+      min-width: 0;
+      overflow: visible;
+      text-overflow: clip;
+    }
+
+    .proposal-cover-letter--director .proposal-cover-letter__contact-mark {
+      margin: 0;
       font-size: 6mm !important;
-      line-height: 1;
+      line-height: 0.85;
       font-weight: 800 !important;
+      transform: translateY(0.35mm);
     }
 
     .proposal-cover-letter--director .proposal-cover-letter__meta-row {
@@ -1011,10 +1029,35 @@ function buildStyledProposalAppearanceCss(): string {
       align-items: baseline;
     }
 
+    .proposal-cover-letter--director .proposal-cover-letter__recipient-block {
+      left: 25mm;
+      top: 98.2mm;
+      width: 112mm;
+      display: grid;
+      gap: 0.6mm;
+    }
+
+    .proposal-cover-letter--director .proposal-cover-letter__recipient-block p {
+      color: var(--ink);
+      font-size: 2.25mm;
+      line-height: 1.25;
+      font-weight: 600;
+    }
+
+    .proposal-cover-letter--director.proposal-cover-letter--has-recipient-block
+      .proposal-cover-letter__subject-row {
+      top: 111mm;
+    }
+
     .proposal-cover-letter--director .proposal-cover-letter__body {
       left: 25mm;
       top: 118mm;
       width: min(112mm, 66ch);
+    }
+
+    .proposal-cover-letter--director.proposal-cover-letter--has-recipient-block
+      .proposal-cover-letter__body {
+      top: 131mm;
     }
 
     .proposal-cover-letter--volk .proposal-cover-letter__volk-header {
@@ -1079,10 +1122,38 @@ function buildStyledProposalAppearanceCss(): string {
       align-items: baseline;
     }
 
+    .proposal-cover-letter--volk .proposal-cover-letter__recipient-block {
+      left: 24mm;
+      top: 101.7mm;
+      width: 112mm;
+      display: grid;
+      gap: 0.6mm;
+    }
+
+    .proposal-cover-letter--volk .proposal-cover-letter__recipient-block p {
+      margin: 0;
+      font-size: 2.35mm;
+      line-height: 1.25;
+      font-weight: 700;
+      color: var(--accent);
+      overflow-wrap: anywhere;
+      text-transform: lowercase;
+    }
+
+    .proposal-cover-letter--volk.proposal-cover-letter--has-recipient-block
+      .proposal-cover-letter__subject-row {
+      top: 114mm;
+    }
+
     .proposal-cover-letter--volk .proposal-cover-letter__body {
       left: 24mm;
       top: 122mm;
       width: min(112mm, 66ch);
+    }
+
+    .proposal-cover-letter--volk.proposal-cover-letter--has-recipient-block
+      .proposal-cover-letter__body {
+      top: 134mm;
     }
 
     .proposal-cover-letter--volk .proposal-cover-letter__dot {
@@ -1202,10 +1273,39 @@ function buildStyledProposalAppearanceCss(): string {
       align-items: baseline;
     }
 
+    .proposal-cover-letter--film-foto .proposal-cover-letter__recipient-block {
+      left: 20mm;
+      top: 102mm;
+      width: 112mm;
+      display: grid;
+      gap: 0.6mm;
+    }
+
+    .proposal-cover-letter--film-foto .proposal-cover-letter__recipient-block p {
+      margin: 0;
+      min-width: 0;
+      font-size: 2.55mm;
+      line-height: 1.25;
+      font-weight: 600;
+      color: var(--accent);
+      overflow-wrap: anywhere;
+      text-transform: lowercase;
+    }
+
+    .proposal-cover-letter--film-foto.proposal-cover-letter--has-recipient-block
+      .proposal-cover-letter__subject-row {
+      top: 114mm;
+    }
+
     .proposal-cover-letter--film-foto .proposal-cover-letter__body {
       left: 20mm;
       top: 120mm;
       width: min(112mm, 66ch);
+    }
+
+    .proposal-cover-letter--film-foto.proposal-cover-letter--has-recipient-block
+      .proposal-cover-letter__body {
+      top: 132mm;
     }
 
     .proposal-cover-letter--film-foto .proposal-cover-letter__dot {
@@ -2764,6 +2864,48 @@ function joinExportNonEmpty(parts: Array<string | null | undefined>): string {
     .join(" · ");
 }
 
+function uniqueExportNonEmptyLines(
+  parts: Array<string | null | undefined>,
+  excludedParts: Array<string | null | undefined> = [],
+): string[] {
+  const excluded = new Set(
+    excludedParts
+      .map((part) => part?.trim().toLowerCase() ?? "")
+      .filter(Boolean),
+  );
+  const seen = new Set<string>();
+  const lines: string[] = [];
+
+  parts.forEach((part) => {
+    const line = part?.trim() ?? "";
+    const key = line.toLowerCase();
+    if (!line || excluded.has(key) || seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    lines.push(line);
+  });
+
+  return lines;
+}
+
+function buildDirectorExportDigitalContactLines(
+  parts: ReturnType<typeof parseProposalContactLine>,
+): string[] {
+  const values = uniqueExportNonEmptyLines([
+    parts.email,
+    parts.website,
+    parts.linkedin,
+    parts.other,
+  ]);
+
+  if (values.length <= 2) {
+    return values;
+  }
+
+  return [values[0], values.slice(1).join(" · ")];
+}
+
 function renderExportParagraph(value: string, className: string): string {
   if (!value) {
     return "";
@@ -2804,14 +2946,22 @@ function buildProposalLetterheadExportViewModel(
     website: resolvedContactParts.website,
     other: resolvedContactParts.other,
   });
-  const digitalContactLines = [
-    resolvedContactParts.email,
-    resolvedContactParts.website || resolvedContactParts.linkedin,
-  ].filter(Boolean);
+  const digitalContactLines =
+    buildDirectorExportDigitalContactLines(resolvedContactParts);
   const directorContactMark = resolvedContactParts.phone ? "T" : "@";
   const directorContactLines = resolvedContactParts.phone
     ? [resolvedContactParts.phone]
     : digitalContactLines.slice(0, 2);
+  const directorContactGroups = [
+    resolvedContactParts.phone
+      ? { mark: "T" as const, lines: [resolvedContactParts.phone] }
+      : null,
+    digitalContactLines.length
+      ? { mark: "@" as const, lines: digitalContactLines }
+      : null,
+  ].filter(
+    (group): group is { mark: "T" | "@"; lines: string[] } => Boolean(group),
+  );
   const shortLocationLine = resolveProposalLetterheadShortTitle({
     recipientFields,
     candidateLocation: resolvedContactParts.location,
@@ -2840,17 +2990,30 @@ function buildProposalLetterheadExportViewModel(
   const recipientRole = data.headerVisibility.showRecipient
     ? recipientFields.role?.trim() ?? ""
     : "";
+  const recipientAddress =
+    data.headerVisibility.showRecipient &&
+    data.headerVisibility.showRecipientDetails
+      ? recipientFields.address?.trim() ?? ""
+      : "";
+  const recipientEmail =
+    data.headerVisibility.showRecipient &&
+    data.headerVisibility.showRecipientDetails
+      ? recipientFields.email?.trim() ?? ""
+      : "";
+  const recipientCity =
+    data.headerVisibility.showRecipient &&
+    data.headerVisibility.showRecipientDetails
+      ? recipientFields.city?.trim() ?? ""
+      : "";
+  const recipientContactLines = uniqueExportNonEmptyLines(
+    [recipientAddress, recipientCity, recipientEmail],
+    [recipientName, recipientCompany, recipientRole],
+  );
   const date =
     data.headerVisibility.showDate && data.letterDate
       ? normalizeLocaleTypography(data.letterDate, locale).trim()
       : "";
-  const secondaryTitle =
-    candidateCompany ||
-    resolveProposalLetterheadShortTitle({
-      recipientFields,
-      candidateLocation: "",
-      showRecipient: data.headerVisibility.showRecipient,
-    });
+  const secondaryTitle = candidateCompany;
   const metaRole = recipientRole;
   const shortRoleTitle = candidateRole || recipientRole;
 
@@ -2869,11 +3032,16 @@ function buildProposalLetterheadExportViewModel(
     directorContactLine,
     directorContactMark,
     directorContactLines,
+    directorContactGroups,
     volkSenderLine,
     filmSenderLine,
     recipientName,
     recipientCompany,
     recipientRole,
+    recipientAddress,
+    recipientEmail,
+    recipientCity,
+    recipientContactLines,
     date,
     subject,
     secondaryTitle,
@@ -2909,6 +3077,40 @@ function renderProposalLetterheadSubjectRow(
   </div>`;
 }
 
+function renderProposalLetterheadRecipientBlock(
+  viewModel: ReturnType<typeof buildProposalLetterheadExportViewModel>,
+): string {
+  if (viewModel.recipientContactLines.length === 0) {
+    return "";
+  }
+
+  return `<section class="proposal-cover-letter__recipient-block" aria-label="Recipient contact details">
+    ${viewModel.recipientContactLines
+      .map((line) => renderExportParagraph(line, ""))
+      .join("")}
+  </section>`;
+}
+
+function renderProposalDirectorContactGrid(
+  viewModel: ReturnType<typeof buildProposalLetterheadExportViewModel>,
+): string {
+  if (viewModel.directorContactGroups.length === 0) {
+    return "";
+  }
+
+  return `<section class="proposal-cover-letter__contact-grid" aria-label="Sender contact details">
+    ${viewModel.directorContactGroups
+      .map(
+        (group) => `<p class="proposal-cover-letter__contact-mark">${escapeHtml(
+          group.mark,
+        )}</p><div class="proposal-cover-letter__contact-lines">${group.lines
+          .map((line) => renderExportParagraph(line, ""))
+          .join("")}</div>`,
+      )
+      .join("")}
+  </section>`;
+}
+
 function renderProposalLetterheadExportPage(args: {
   data: ProposalPrintSource;
   locale?: string | null;
@@ -2933,12 +3135,15 @@ function renderProposalLetterheadExportPage(args: {
       : args.templateId === "volk-letterhead"
         ? "proposal-cover-letter--volk"
         : "proposal-cover-letter--film-foto";
+  const recipientBlockClass = viewModel.recipientContactLines.length
+    ? " proposal-cover-letter--has-recipient-block"
+    : "";
 
   if (args.templateId === "director-letterhead") {
     const mastheadClass = viewModel.secondaryTitle
       ? "proposal-cover-letter__masthead"
       : "proposal-cover-letter__masthead proposal-cover-letter__masthead--no-secondary";
-    return `<main class="export-page ${scopeClass}" data-export-doc="proposal">
+    return `<main class="export-page ${scopeClass}${recipientBlockClass}" data-export-doc="proposal">
       <header class="${mastheadClass}">
         ${renderExportParagraph(viewModel.candidateName, "proposal-cover-letter__masthead-primary")}
         ${renderExportParagraph(viewModel.secondaryTitle, "proposal-cover-letter__masthead-secondary")}
@@ -2949,23 +3154,18 @@ function renderProposalLetterheadExportPage(args: {
         <div class="proposal-cover-letter__sender-lines">
           ${renderExportParagraph(viewModel.candidateName, "")}
           ${renderExportParagraph(viewModel.candidateLocationLine, "")}
-          ${renderExportParagraph(viewModel.directorContactLine, "")}
         </div>
       </section>
-      ${viewModel.directorContactLines.length ? `<section class="proposal-cover-letter__phone-block">
-        <p class="proposal-cover-letter__phone-mark">${escapeHtml(viewModel.directorContactMark)}</p>
-        <div>
-          ${viewModel.directorContactLines.map((line) => renderExportParagraph(line, "")).join("")}
-        </div>
-      </section>` : ""}
+      ${renderProposalDirectorContactGrid(viewModel)}
       ${renderProposalLetterheadMetaRow(viewModel)}
+      ${renderProposalLetterheadRecipientBlock(viewModel)}
       ${renderProposalLetterheadSubjectRow(viewModel)}
       <section class="proposal-cover-letter__body" data-block="body">${bodyMarkup}</section>
     </main>`;
   }
 
   if (args.templateId === "volk-letterhead") {
-    return `<main class="export-page ${scopeClass}" data-export-doc="proposal">
+    return `<main class="export-page ${scopeClass}${recipientBlockClass}" data-export-doc="proposal">
       <header class="proposal-cover-letter__volk-header">
         ${renderExportParagraph(viewModel.candidateName, "proposal-cover-letter__volk-title")}
         ${renderExportParagraph(viewModel.secondaryTitle, "proposal-cover-letter__volk-title proposal-cover-letter__volk-title--right")}
@@ -2973,6 +3173,7 @@ function renderProposalLetterheadExportPage(args: {
         ${renderExportParagraph(viewModel.volkSenderLine ? `sender: ${viewModel.volkSenderLine}` : "", "proposal-cover-letter__volk-sender")}
       </header>
       ${renderProposalLetterheadMetaRow(viewModel)}
+      ${renderProposalLetterheadRecipientBlock(viewModel)}
       ${renderProposalLetterheadSubjectRow(viewModel, "re:")}
       <span class="proposal-cover-letter__dot" aria-hidden="true"></span>
       <section class="proposal-cover-letter__body" data-block="body">${bodyMarkup}</section>
@@ -2985,7 +3186,7 @@ function renderProposalLetterheadExportPage(args: {
       ? "proposal-cover-letter__film-header"
       : "proposal-cover-letter__film-header proposal-cover-letter__film-header--no-company";
 
-  return `<main class="export-page ${scopeClass}" data-export-doc="proposal">
+  return `<main class="export-page ${scopeClass}${recipientBlockClass}" data-export-doc="proposal">
     <header class="${filmHeaderClass}">
       ${renderExportParagraph(viewModel.candidateName, "proposal-cover-letter__film-heading")}
       ${renderExportParagraph(viewModel.secondaryTitle, "proposal-cover-letter__film-company")}
@@ -2999,6 +3200,7 @@ function renderProposalLetterheadExportPage(args: {
       ${viewModel.recipientCompany ? `<div><p class="proposal-cover-letter__info-label">company</p>${renderExportParagraph(viewModel.recipientCompany, "")}</div>` : ""}
     </section>
     ${renderProposalLetterheadMetaRow(viewModel)}
+    ${renderProposalLetterheadRecipientBlock(viewModel)}
     ${renderProposalLetterheadSubjectRow(viewModel)}
     <span class="proposal-cover-letter__dot" aria-hidden="true"></span>
     <section class="proposal-cover-letter__body" data-block="body">${bodyMarkup}</section>
