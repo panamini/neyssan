@@ -156,12 +156,23 @@ export function Menu({
     const canUseHorizontalSide =
       (side === "left" || side === "right") &&
       sideAvailable >= Math.min(naturalMenuWidth, 300);
-    const resolvedSide =
-      canUseHorizontalSide || side === "top" || side === "bottom"
-        ? side
-        : availableBottom >= availableTop
-          ? "bottom"
-          : "top";
+    const menuHeightCandidate = menuRect.height || 0;
+    const requestedVertical = side === "top" || side === "bottom";
+    let resolvedSide: "top" | "bottom" | "left" | "right";
+    if (canUseHorizontalSide) {
+      resolvedSide = side;
+    } else if (requestedVertical) {
+      const requestedAvailable = side === "top" ? availableTop : availableBottom;
+      const oppositeAvailable = side === "top" ? availableBottom : availableTop;
+      const oppositeSide = side === "top" ? "bottom" : "top";
+      resolvedSide =
+        requestedAvailable >= menuHeightCandidate ||
+        requestedAvailable >= oppositeAvailable
+          ? side
+          : oppositeSide;
+    } else {
+      resolvedSide = availableBottom >= availableTop ? "bottom" : "top";
+    }
     const maxHeight =
       resolvedSide === "left" || resolvedSide === "right"
         ? Math.max(0, viewportHeight - viewportInset * 2)
