@@ -1,4 +1,6 @@
 import React from "react";
+import fs from "node:fs";
+import path from "node:path";
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
@@ -377,11 +379,8 @@ describe("DocumentsPage", () => {
     renderProjects();
 
     await user.click(document.querySelector(".projects-card") as HTMLElement);
-
-    expect(screen.getByRole("status", { name: "1 item selected" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Open" })).toBeEnabled();
-
-    await user.click(screen.getByRole("button", { name: "Clear selection" }));
+    expect(navigateMock).toHaveBeenCalledWith("/proposal?view=saved&id=proposal_1");
+    expect(screen.queryByRole("status", { name: /item selected/ })).not.toBeInTheDocument();
 
     const checkbox = screen.getByLabelText("Select proposal Senior Frontend Engineer · Linear");
     await user.click(checkbox);
@@ -438,6 +437,22 @@ describe("DocumentsPage", () => {
     ).toBeInTheDocument();
     expect(document.querySelectorAll(".document-specimen-card__caption .projects-card__menu")).toHaveLength(3);
     expect(document.querySelector(".projects-card__preview-shell .projects-card__menu")).not.toBeInTheDocument();
+  });
+
+  it("keeps item menus scoped to secondary single-item actions", async () => {
+    const user = userEvent.setup();
+    renderProjects();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "More actions for Senior Frontend Engineer · Linear",
+      }),
+    );
+
+    expect(screen.queryByRole("menuitem", { name: "Continue" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Open" })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Download PDF" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Delete" })).toBeInTheDocument();
   });
 
   it("bulk delete confirms and deletes selected supported items", async () => {
@@ -544,11 +559,37 @@ describe("DocumentsPage", () => {
     expect(screen.getByRole("columnheader", { name: "Updated" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Action" })).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "Projects list" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Name" })).toHaveClass(
+      "projects-list__cell--name",
+    );
+    expect(screen.getByRole("columnheader", { name: "Updated" })).toHaveClass(
+      "projects-list__cell--updated",
+    );
     expect(
       screen.getByRole("button", {
         name: "More actions for Senior Frontend Engineer · Linear",
       }),
     ).toBeInTheDocument();
+  });
+
+  it("keeps projects toolbar and list column geometry polished", () => {
+    const styles = fs.readFileSync(
+      path.resolve(process.cwd(), "src/styles/product-libraries.css"),
+      "utf8",
+    );
+
+    expect(styles).toMatch(
+      /\.projects-toolbar\s*\{[\s\S]*display:\s*grid;[\s\S]*grid-template-columns:\s*max-content max-content minmax\(240px,\s*280px\);[\s\S]*align-items:\s*end;/,
+    );
+    expect(styles).toMatch(
+      /\.projects-list__head,[\s\S]*?\.projects-list__row\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1\.75fr\)[\s\S]*128px;/,
+    );
+    expect(styles).toMatch(
+      /\.projects-list__cell--updated\s*\{[\s\S]*text-align:\s*right;[\s\S]*justify-self:\s*end;/,
+    );
+    expect(styles).toMatch(
+      /\.projects-list__name-cell\s*\{[\s\S]*grid-template-columns:\s*24px minmax\(0,\s*1fr\);/,
+    );
   });
 
   it("list view supports row selection", async () => {

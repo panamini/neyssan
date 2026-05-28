@@ -647,7 +647,6 @@ function LibraryItemCard({
 }) {
   const typeLabel = itemTypeLabel(item);
   const specimenTypeLabel = itemSpecimenTypeLabel(item);
-  const action = item.type === "proposal" ? "Continue" : "Open";
   const previewShellRef = React.useRef<HTMLButtonElement | null>(null);
   const shouldRenderPreview = previewLoaded || selected;
 
@@ -684,7 +683,7 @@ function LibraryItemCard({
       typeLabel={specimenTypeLabel}
       selected={selected}
       showUpdatedLabel={false}
-      onCardClick={onToggleSelected}
+      onCardClick={onOpen}
       previewRef={previewShellRef}
       onPreviewPointerEnter={onRequestPreview}
       onPreviewFocusCapture={onRequestPreview}
@@ -697,7 +696,6 @@ function LibraryItemCard({
             sections={[
               {
                 items: [
-                  { id: "open", label: action, onSelect: onOpen },
                   {
                     id: "download",
                     label: "Download PDF",
@@ -767,11 +765,11 @@ function ProjectsList({
   return (
     <div className="projects-list" role="table" aria-label="Projects list">
       <div className="projects-list__head" role="row">
-        <span role="columnheader">Name</span>
-        <span role="columnheader">Type</span>
-        <span role="columnheader">Context</span>
-        <span role="columnheader">Updated</span>
-        <span role="columnheader">Action</span>
+        <span role="columnheader" className="projects-list__cell projects-list__cell--name">Name</span>
+        <span role="columnheader" className="projects-list__cell projects-list__cell--type">Type</span>
+        <span role="columnheader" className="projects-list__cell projects-list__cell--context">Context</span>
+        <span role="columnheader" className="projects-list__cell projects-list__cell--updated">Updated</span>
+        <span role="columnheader" className="projects-list__cell projects-list__cell--actions">Action</span>
       </div>
       {entries.map((entry) => (
         <ProjectsListRow
@@ -821,7 +819,7 @@ function ProjectsListRow({
         }
       }}
     >
-      <span role="cell" className="projects-list__name-cell">
+      <span role="cell" className="projects-list__cell projects-list__name-cell">
         <label className="projects-list__select">
           <input
             type="checkbox"
@@ -832,15 +830,15 @@ function ProjectsListRow({
             onKeyDown={(event) => event.stopPropagation()}
           />
         </label>
-        <span>
+        <span className="projects-list__name-copy">
           <strong>{item.title}</strong>
           <small>{item.subtitle ?? ""}</small>
         </span>
       </span>
-      <span role="cell">{type}</span>
-      <span role="cell">{context}</span>
-      <span role="cell">{formatUpdatedLabel(item.updatedAt)}</span>
-      <span role="cell" className="projects-list__actions">
+      <span role="cell" className="projects-list__cell projects-list__cell--type">{type}</span>
+      <span role="cell" className="projects-list__cell projects-list__cell--context">{context}</span>
+      <span role="cell" className="projects-list__cell projects-list__cell--updated">{formatUpdatedLabel(item.updatedAt)}</span>
+      <span role="cell" className="projects-list__cell projects-list__cell--actions projects-list__actions">
         <Button
           type="button"
           variant="secondary"
@@ -859,7 +857,6 @@ function ProjectsListRow({
             sections={[
               {
                 items: [
-                  { id: "open", label: action, onSelect: onOpen },
                   {
                     id: "download",
                     label: "Download PDF",
