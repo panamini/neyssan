@@ -2,7 +2,11 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@clerk/clerk-react";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
-import { Button, Card, Menu, Pill } from "../components/ui";
+import { Button, Menu } from "../components/ui";
+import {
+  DocumentSpecimenCard,
+  type DocumentSpecimenTypeLabel,
+} from "../components/library/DocumentSpecimenCard";
 import { ProposalDocumentRenderer } from "../components/proposal-render/ProposalDocumentRenderer";
 import ResumeTemplateRenderer from "../features/verbati/resume/ResumeTemplateRenderer";
 import { api } from "../../convex/_generated/api";
@@ -118,10 +122,10 @@ function itemSourceId(item: LibraryItem): string {
   return item.id.slice(item.id.indexOf(":") + 1);
 }
 
-function itemTypeLabel(item: LibraryItem): "CV" | "Proposal" | "Job" {
+function itemTypeLabel(item: LibraryItem): DocumentSpecimenTypeLabel {
   if (item.type === "cv") return "CV";
-  if (item.type === "job") return "Job";
-  return "Proposal";
+  if (item.type === "job") return "PACK";
+  return "PROPOSAL";
 }
 
 function itemActionLabelI18n(
@@ -139,16 +143,13 @@ function itemContextLabel(
 ): string {
   if (item.type === "cv") return t("dashboard.cvProfile");
   if (item.type === "job") return t("dashboard.job");
-  return [
-    item.jobId || item.jobTitle ? t("dashboard.jobLinked") : null,
-    item.linkedCvTitle
-      ? `CV: ${item.linkedCvTitle}`
-      : item.linkedCvId
-        ? t("dashboard.cvLinked")
-        : null,
-  ]
-    .filter(Boolean)
-    .join(" · ") || itemTypeLabel(item);
+  const jobPart = item.jobId || item.jobTitle ? t("dashboard.jobLinked") : t("dashboard.noJob");
+  const cvPart = item.linkedCvTitle
+    ? `CV: ${item.linkedCvTitle}`
+    : item.linkedCvId
+      ? t("dashboard.cvLinked")
+      : t("dashboard.noCvLinked");
+  return `${jobPart} · ${cvPart}`;
 }
 
 export function DashboardPage(): JSX.Element {
@@ -360,16 +361,16 @@ export function DashboardPage(): JSX.Element {
           {recentItems.length > 0 ? (
             <div className="today-recent-grid">
               {recentItems.map((item) => (
-                    <WorkPreviewCard
-                      key={item.id}
-                      item={item}
-                  variant="compact"
+                <WorkPreviewCard
+                  key={item.id}
+                  item={item}
+                  variant="secondary"
                   onOpen={() => navigateTarget(item.routeTarget, navigate)}
                   onDelete={() => deleteItem(item)}
                   onDownload={() => downloadItem(item)}
                   t={t}
-                    />
-                  ))}
+                />
+              ))}
             </div>
           ) : (
             <p className="dash-tip">{t("today.recentWork.empty")}</p>
@@ -521,9 +522,20 @@ function WorkPreviewCard({
   t: (key: UiMessageKey) => string;
 }) {
   const label = itemTypeLabel(item);
+  const context = itemContextLabel(item, t);
   return (
-    <Card interactive className="today-preview-card" data-variant={variant}>
-      <div className="today-preview-card__menu">
+    <DocumentSpecimenCard
+      className="today-preview-card"
+      typeChipClassName="today-preview-card__type"
+      title={item.title}
+      context={context}
+      updatedLabel=""
+      typeLabel={label}
+      size={variant === "primary" ? "full" : "compact"}
+      showUpdatedLabel={false}
+      data-variant={variant}
+      onOpen={onOpen}
+      actions={
         <Menu
           ariaLabel={`More actions for ${item.title}`}
           align="end"
@@ -551,34 +563,21 @@ function WorkPreviewCard({
           trigger={
             <button
               type="button"
-              className="dasti-documents-card__menu"
+              className="dasti-documents-card__menu today-preview-card__menu"
               aria-label={`More actions for ${item.title}`}
             >
               <DotsThree size={16} aria-hidden="true" />
             </button>
           }
         />
-      </div>
-      <button type="button" className="today-preview-card__surface" onClick={onOpen}>
-        <span className="today-preview-card__preview-shell">
-          <WorkDocumentPreview
-            item={item}
-            scale={variant === "compact" ? "small" : "default"}
-            t={t}
-          />
-        </span>
-        <span className="today-preview-card__meta">
-          {item.type === "proposal" ? (
-            <span className="today-preview-card__type">{label}</span>
-          ) : null}
-          <strong>{item.title}</strong>
-          <span className="today-preview-card__bottom">
-            <span>{itemContextLabel(item, t)}</span>
-            <span>{formatUpdatedLabel(item.updatedAt, t)}</span>
-          </span>
-        </span>
-      </button>
-    </Card>
+      }
+    >
+      <WorkDocumentPreview
+        item={item}
+        scale={variant === "primary" ? "default" : "small"}
+        t={t}
+      />
+    </DocumentSpecimenCard>
   );
 }
 

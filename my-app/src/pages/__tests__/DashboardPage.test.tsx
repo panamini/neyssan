@@ -353,7 +353,17 @@ describe("DashboardPage", () => {
     expect(within(recentSection).queryByText("Aurelien CV")).not.toBeInTheDocument();
     expect(within(recentSection).getAllByText("Senior Frontend Engineer").length).toBeGreaterThan(0);
     expect(document.querySelectorAll(".today-preview-card").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll(".document-specimen-card").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll(".document-specimen-card__mount").length).toBeGreaterThan(0);
     expect(document.querySelectorAll(".today-preview-card__type").length).toBeGreaterThan(0);
+    const typeChips = Array.from(
+      document.querySelectorAll(".document-specimen-card__type-chip"),
+    );
+    const typeLabels = typeChips.map((chip) => chip.getAttribute("aria-label"));
+    expect(typeLabels).toContain("CV");
+    expect(typeLabels).toContain("PROPOSAL");
+    expect(typeChips.every((chip) => chip.textContent?.trim() === "")).toBe(true);
+    expect(typeLabels.every((label) => !/^\d+$/.test(label ?? ""))).toBe(true);
     expect(document.querySelectorAll(".work-doc-preview").length).toBeGreaterThan(0);
     expect(document.querySelectorAll(".work-doc-preview--rendered").length).toBeGreaterThan(0);
     expect(document.querySelectorAll(".work-doc-preview--resume-rendered").length).toBeGreaterThan(0);
