@@ -63,6 +63,7 @@ const DRAFT_PROPOSALS = [
       templateBundleId: "magazine_editorial",
       applicantName: "Applicant B",
       applicantRole: "Role B",
+      applicantCompany: "Studio B",
       contactLine: "b@example.com",
       letterDate: "Paris, 2 May 2026",
       recipientDetails: "Recipient B",
@@ -144,6 +145,7 @@ describe("ProposalForge draft heading hydration", () => {
     expect(stored).toMatchObject({
       proposalApplicantName: "Applicant B",
       proposalApplicantRole: "Role B",
+      proposalApplicantCompany: "Studio B",
       proposalContactLine: "b@example.com",
       proposalLetterDate: "Paris, 2 May 2026",
       proposalRecipientDetails: "Recipient B",

@@ -490,8 +490,15 @@ describe("export-renderers", () => {
       expect(css).toContain(`.${scope}.export-page`);
       expect(css).toContain("width: 210mm;");
       expect(css).toContain("min-height: 297mm;");
-      expect(css).toContain("width: min(112mm, 66ch);");
-      expect(css).toContain("max-width: min(112mm, 66ch);");
+      const expectedBodyLeft =
+        templateId === "director-letterhead"
+          ? "left: 25mm;"
+          : templateId === "volk-letterhead"
+            ? "left: 24mm;"
+            : "left: 20mm;";
+      expect(css).toContain(expectedBodyLeft);
+      expect(css).toContain("width: min(96mm, 58ch);");
+      expect(css).toContain("max-width: min(96mm, 58ch);");
       expect(css).toContain("overflow-wrap: break-word;");
       expect(css).toContain(
         "font-family: var(--heading-font, var(--font-heading-family));",
@@ -543,13 +550,421 @@ describe("export-renderers", () => {
       }),
     );
     const phoneBlock = document.querySelector(
-      ".proposal-cover-letter--director .proposal-cover-letter__phone-block",
+      ".proposal-cover-letter--director .proposal-cover-letter__contact-grid",
+    );
+    const contactGroups = Array.from(
+      phoneBlock?.querySelectorAll(".proposal-cover-letter__contact-group") ??
+        [],
     );
 
+    expect(contactGroups).toHaveLength(2);
+    expect(contactGroups[0]?.querySelector(".proposal-cover-letter__contact-mark")?.textContent)
+      .toBe("T");
+    expect(contactGroups[0]?.querySelector(".proposal-cover-letter__contact-lines")?.textContent)
+      .toContain("09898777");
+    expect(contactGroups[1]?.querySelector(".proposal-cover-letter__contact-mark")?.textContent)
+      .toBe("@");
     expect(phoneBlock?.textContent).toContain("T");
     expect(phoneBlock?.textContent).toContain("09898777");
-    expect(phoneBlock?.textContent).not.toContain("zoe@loi.com");
+    expect(phoneBlock?.textContent).toContain("@");
+    expect(phoneBlock?.textContent).toContain("zoe@loi.com");
+    expect(phoneBlock?.textContent).toContain("@zoe.com");
   });
+
+  it("uses a digital @ contact block in the director letterhead export when no phone exists", () => {
+    const document = parseExportHtml(
+      renderProposalStyledExportDocument({
+        data: {
+          ...proposalFixture,
+          templateId: "director-letterhead",
+          contactLine: "zoe@loi.com · Paris · zoe.com",
+          applicantHeader: {
+            ...proposalFixture.applicantHeader,
+            email: "",
+            phone: "",
+            location: "",
+            linkedin: "",
+            website: "",
+          },
+        },
+        stylePreset: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "expert",
+          palette: "terre",
+        },
+      }),
+    );
+    const phoneBlock = document.querySelector(
+      ".proposal-cover-letter--director .proposal-cover-letter__contact-grid",
+    );
+
+    expect(phoneBlock?.textContent).toContain("@");
+    expect(phoneBlock?.textContent).toContain("zoe@loi.com");
+    expect(phoneBlock?.textContent).toContain("zoe.com");
+    expect(phoneBlock?.textContent).not.toContain("T");
+  });
+
+  it.each([
+    {
+      templateId: "director-letterhead" as const,
+      scope: "proposal-cover-letter--director",
+      headerSelector: ".proposal-cover-letter__masthead",
+    },
+    {
+      templateId: "volk-letterhead" as const,
+      scope: "proposal-cover-letter--volk",
+      headerSelector: ".proposal-cover-letter__volk-header",
+    },
+    {
+      templateId: "film-foto-letterhead" as const,
+      scope: "proposal-cover-letter--film-foto",
+      headerSelector: ".proposal-cover-letter__film-header",
+    },
+  ])(
+    "keeps the long generated subject out of short export title regions for $templateId",
+    ({ templateId, scope, headerSelector }) => {
+      const longSubject =
+        "Application for the position of Security Guard Full Time Airport Unarmed at Us Smart Tools";
+      const document = parseExportHtml(
+        renderProposalStyledExportDocument({
+          data: {
+            ...proposalFixture,
+            templateId,
+            documentTitle: longSubject,
+            documentMeta: "Security Guard",
+            recipientDetails: "Hiring Manager\nSecurity Guard\nUs Smart Tools",
+            applicantHeader: {
+              name: "Robert Cooper",
+              role: "Security Guard",
+              email: "email@email.com",
+              phone: "+3586853442",
+              linkedin: "",
+              website: "",
+              location: "CA 90291 United States",
+              tag: "",
+            },
+            body: [
+              { type: "salutation", text: "Dear Hiring Manager," },
+              { type: "paragraph", text: "I can support the team." },
+            ],
+          },
+          stylePreset: {
+            familyId: "workshop",
+            layout: "workshop",
+            typography: "expert",
+            palette: "terre",
+          },
+        }),
+      );
+      const page = document.querySelector(`.${scope}`);
+      const header = page?.querySelector(headerSelector);
+      const metaRow = page?.querySelector(".proposal-cover-letter__meta-row");
+
+      expect(countTextOccurrences(page?.textContent ?? "", longSubject)).toBe(1);
+      expect(header?.textContent).not.toContain(longSubject);
+      expect(metaRow?.textContent).not.toContain(longSubject);
+      expect(page?.textContent).toContain("Security Guard");
+      expect(page?.textContent).toContain("Us Smart Tools");
+    },
+  );
+
+  it.each([
+    {
+      templateId: "director-letterhead" as const,
+      scope: "proposal-cover-letter--director",
+      secondarySelector: ".proposal-cover-letter__masthead-secondary",
+    },
+    {
+      templateId: "volk-letterhead" as const,
+      scope: "proposal-cover-letter--volk",
+      secondarySelector: ".proposal-cover-letter__volk-title--right",
+    },
+  ])(
+    "renders applicant company as the optional exported letterhead title for $templateId",
+    ({ templateId, scope, secondarySelector }) => {
+      const document = parseExportHtml(
+        renderProposalStyledExportDocument({
+          data: {
+            ...proposalFixture,
+            templateId,
+            recipientDetails: "Hiring Manager",
+            applicantHeader: {
+              ...proposalFixture.applicantHeader,
+              name: "Robert Cooper",
+              role: "Designer",
+              company: "Cooper Studio",
+              email: "email@email.com",
+              phone: "",
+              linkedin: "",
+              website: "",
+              location: "Los Angeles",
+              tag: "",
+            },
+          },
+          stylePreset: {
+            familyId: "workshop",
+            layout: "workshop",
+            typography: "expert",
+            palette: "terre",
+          },
+        }),
+      );
+      const page = document.querySelector(`.${scope}`);
+
+      expect(page?.querySelector(secondarySelector)?.textContent).toBe(
+        "Cooper Studio",
+      );
+      expect(page?.textContent).toContain("Designer");
+    },
+  );
+
+  it.each([
+    {
+      templateId: "director-letterhead" as const,
+      scope: "proposal-cover-letter--director",
+    },
+    {
+      templateId: "volk-letterhead" as const,
+      scope: "proposal-cover-letter--volk",
+    },
+    {
+      templateId: "film-foto-letterhead" as const,
+      scope: "proposal-cover-letter--film-foto",
+    },
+  ])(
+    "exports recipient postal contact details in the letterhead recipient block for $templateId",
+    ({ templateId, scope }) => {
+      const document = parseExportHtml(
+        renderProposalStyledExportDocument({
+          data: {
+            ...proposalFixture,
+            templateId,
+            recipientDetails:
+              "Hiring Manager\nTalent Acquisition\nCompany Name\nStreet address\nrecipient@example.com\nCompany City",
+            documentTitle: "Subject line",
+            applicantHeader: {
+              ...proposalFixture.applicantHeader,
+              name: "Robert Cooper",
+              role: "Security Guard",
+              company: "",
+              email: "name@email.com",
+              phone: "+321 08 98 43 23 43",
+              linkedin: "LINKEDIN",
+              website: "PORTFOLIO.COM",
+              location: "",
+              tag: "",
+            },
+            headerVisibility: {
+              showSender: true,
+              showDate: true,
+              showSubject: true,
+              showRecipient: true,
+              showRecipientDetails: true,
+            },
+          },
+          stylePreset: {
+            familyId: "workshop",
+            layout: "workshop",
+            typography: "expert",
+            palette: "terre",
+          },
+        }),
+      );
+      const page = document.querySelector(`.${scope}`);
+      const recipientBlock = page?.querySelector(
+        ".proposal-cover-letter__recipient-block",
+      );
+      const metaItems = Array.from(
+        page?.querySelectorAll(".proposal-cover-letter__meta-item") ?? [],
+      ).map((node) => node.textContent);
+
+      expect(page?.classList.contains("proposal-cover-letter--has-recipient-block"))
+        .toBe(true);
+      expect(recipientBlock?.textContent).toContain("Street address");
+      expect(recipientBlock?.textContent).toContain("Company City");
+      expect(recipientBlock?.textContent).toContain("recipient@example.com");
+      expect(metaItems).toEqual([
+        "Hiring Manager",
+        "Company Name",
+        "Talent Acquisition",
+        expect.stringContaining("15 avril 2026"),
+      ]);
+      expect(page?.textContent).not.toContain("undefined");
+      expect(page?.textContent).not.toContain("null");
+      expect(page?.textContent).not.toContain("[object Object]");
+    },
+  );
+
+  it.each([
+    {
+      templateId: "director-letterhead" as const,
+      scope: "proposal-cover-letter--director",
+      secondarySelector: ".proposal-cover-letter__masthead-secondary",
+    },
+    {
+      templateId: "volk-letterhead" as const,
+      scope: "proposal-cover-letter--volk",
+      secondarySelector: ".proposal-cover-letter__volk-title--right",
+    },
+    {
+      templateId: "film-foto-letterhead" as const,
+      scope: "proposal-cover-letter--film-foto",
+      secondarySelector: ".proposal-cover-letter__film-company",
+    },
+  ])(
+    "does not export recipient fields as fallback applicant company titles for $templateId",
+    ({ templateId, scope, secondarySelector }) => {
+      const document = parseExportHtml(
+        renderProposalStyledExportDocument({
+          data: {
+            ...proposalFixture,
+            templateId,
+            recipientDetails:
+              "Hiring Manager\nTalent Acquisition\nUs Smart Tools\nStreet address\nrecipient@example.com\nParis",
+            applicantHeader: {
+              ...proposalFixture.applicantHeader,
+              name: "Robert Cooper",
+              role: "Security Guard",
+              company: "",
+              email: "email@email.com",
+              phone: "",
+              linkedin: "",
+              website: "",
+              location: "Los Angeles",
+              tag: "",
+            },
+            headerVisibility: {
+              showSender: true,
+              showDate: true,
+              showSubject: true,
+              showRecipient: true,
+              showRecipientDetails: true,
+            },
+          },
+          stylePreset: {
+            familyId: "workshop",
+            layout: "workshop",
+            typography: "expert",
+            palette: "terre",
+          },
+        }),
+      );
+      const page = document.querySelector(`.${scope}`);
+
+      expect(page?.querySelector(secondarySelector)).toBeNull();
+      expect(page?.textContent).toContain("Security Guard");
+      expect(page?.querySelector(".proposal-cover-letter__recipient-block")?.textContent)
+        .toContain("recipient@example.com");
+    },
+  );
+
+  it("keeps Film und Foto export metadata recipient-only and maps role left with name right", () => {
+    const document = parseExportHtml(
+      renderProposalStyledExportDocument({
+        data: {
+          ...proposalFixture,
+          templateId: "film-foto-letterhead",
+          recipientDetails: "Hiring Manager\n\nUs Smart Tools\n\n\nParis",
+          documentTitle: "Application for Security Guard",
+          applicantHeader: {
+            ...proposalFixture.applicantHeader,
+            name: "Robert Cooper",
+            role: "Security Guard",
+            company: "Acme",
+            email: "email@email.com",
+            phone: "3868683442",
+            linkedin: "linkedin.in",
+            website: "",
+            location: "Los Angeles",
+            tag: "",
+          },
+        },
+        stylePreset: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "expert",
+          palette: "terre",
+        },
+      }),
+    );
+    const page = document.querySelector(".proposal-cover-letter--film-foto");
+    const header = page?.querySelector(".proposal-cover-letter__film-header");
+    const metaItems = Array.from(
+      page?.querySelectorAll(".proposal-cover-letter__meta-item") ?? [],
+    ).map((node) => node.textContent);
+
+    expect(header?.querySelector(".proposal-cover-letter__film-heading")?.textContent).toBe(
+      "Security Guard",
+    );
+    expect(header?.querySelector(".proposal-cover-letter__film-title")?.textContent).toBe(
+      "Robert Cooper",
+    );
+    expect(header?.querySelector(".proposal-cover-letter__film-company")).toBeNull();
+    expect(metaItems).toEqual([
+      "Hiring Manager",
+      "Us Smart Tools",
+      "",
+      expect.stringContaining("15 avril 2026"),
+    ]);
+  });
+
+  it.each([
+    {
+      templateId: "director-letterhead" as const,
+      scope: "proposal-cover-letter--director",
+      headerSelector: ".proposal-cover-letter__masthead",
+    },
+    {
+      templateId: "volk-letterhead" as const,
+      scope: "proposal-cover-letter--volk",
+      headerSelector: ".proposal-cover-letter__volk-header",
+    },
+    {
+      templateId: "film-foto-letterhead" as const,
+      scope: "proposal-cover-letter--film-foto",
+      headerSelector: ".proposal-cover-letter__film-header",
+    },
+  ])(
+    "keeps full postal addresses out of the exported top title row for $templateId",
+    ({ templateId, scope, headerSelector }) => {
+      const document = parseExportHtml(
+        renderProposalStyledExportDocument({
+          data: {
+            ...proposalFixture,
+            templateId,
+            contactLine:
+              "email@email.com · 1515 Pacific Ave Los Angeles · CA 90291 United States",
+            recipientDetails: "Hiring Manager",
+            documentTitle: "Application for Security Guard",
+            applicantHeader: {
+              ...proposalFixture.applicantHeader,
+              name: "Robert Cooper",
+              role: "Security Guard",
+              email: "",
+              phone: "",
+              linkedin: "",
+              website: "",
+              location: "",
+              tag: "",
+            },
+          },
+          stylePreset: {
+            familyId: "workshop",
+            layout: "workshop",
+            typography: "expert",
+            palette: "terre",
+          },
+        }),
+      );
+      const page = document.querySelector(`.${scope}`);
+      const header = page?.querySelector(headerSelector);
+
+      expect(header?.textContent).not.toContain("1515 Pacific Ave");
+      expect(header?.textContent).not.toContain("CA 90291");
+      expect(header?.textContent).not.toContain("United States");
+    },
+  );
 
   it.each([
     {
@@ -612,6 +1027,9 @@ describe("export-renderers", () => {
         expect(
           root?.querySelector(".proposal-cover-letter__film-heading")
             ?.textContent,
+        ).toBe("Security Guard");
+        expect(
+          root?.querySelector(".proposal-cover-letter__film-title")?.textContent,
         ).toBe("Zoe Lund");
       }
     },
