@@ -1332,16 +1332,20 @@
   gap: var(--grid-gap-content);
 }
 
+.dasti-documents-grid.projects-grid,
+.dasti-template-grid {
+  --library-gallery-row-gap: clamp(var(--space-6), 3vw, var(--space-9));
+  --library-gallery-column-gap: clamp(var(--space-6), 3.4vw, var(--space-9));
+}
+
 .dasti-documents-grid.projects-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: clamp(var(--space-6), 3vw, var(--space-9))
-    clamp(var(--space-6), 3.4vw, var(--space-9));
+  gap: var(--library-gallery-row-gap) var(--library-gallery-column-gap);
 }
 
 .dasti-template-grid {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 260px));
-  gap: clamp(var(--space-5), 2.4vw, var(--space-7))
-    clamp(var(--space-5), 2.8vw, var(--space-7));
+  gap: var(--library-gallery-row-gap) var(--library-gallery-column-gap);
   align-items: start;
   justify-content: start;
 }
