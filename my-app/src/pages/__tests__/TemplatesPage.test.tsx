@@ -398,7 +398,22 @@ describe("TemplatesPage", () => {
       /\.dasti-template-card__document-scale\s+\.resume-template-page-shell/,
     );
     expect(styles).toMatch(
-      /\.dasti-template-card__preview\s*\{[\s\S]*inline-size:\s*fit-content;[\s\S]*padding:\s*var\(--template-frame-pad\);[\s\S]*border-radius:\s*0;[\s\S]*background:\s*var\(--template-frame-bg\);/,
+      /--library-preview-frame-bg:\s*color-mix\(in srgb,\s*var\(--sf2\) 82%,\s*var\(--sf1\)\);/,
+    );
+    expect(styles).toMatch(
+      /\.dark\s*\{[\s\S]*--library-preview-frame-bg:\s*color-mix\(in srgb,\s*var\(--sf2\) 86%,\s*var\(--sfr\)\);/,
+    );
+    expect(styles).toMatch(
+      /\.dasti-template-card\s*\{[\s\S]*--template-frame-bg:\s*var\(--library-preview-frame-bg\);/,
+    );
+    expect(styles).toMatch(
+      /\.dasti-template-card__preview\s*\{[\s\S]*inline-size:\s*fit-content;[\s\S]*padding:\s*var\(--template-frame-pad\);[\s\S]*border-radius:\s*0;[\s\S]*background:\s*var\(--template-frame-bg\);[\s\S]*transition:\s*transform var\(--motion-duration-fast\) var\(--motion-ease-standard\);/,
+    );
+    expect(styles).toMatch(
+      /\.dasti-template-card:hover\s+\.dasti-template-card__preview,[\s\S]*?\.dasti-template-card:focus-visible\s+\.dasti-template-card__preview\s*\{[\s\S]*transform:\s*translateY\(-1px\);/,
+    );
+    expect(styles).not.toMatch(
+      /\.dasti-template-card:hover\s+\.dasti-template-card__document-scale,[\s\S]*?\.dasti-template-card:focus-visible\s+\.dasti-template-card__document-scale\s*\{[\s\S]*border-color:/,
     );
     expect(styles).toMatch(
       /\.dasti-template-card__document-scale\s*\{[\s\S]*aspect-ratio:\s*210 \/ 297;[\s\S]*border-radius:\s*0;/,

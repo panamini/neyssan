@@ -36,10 +36,10 @@ describe("DocumentSpecimenCard CSS contract", () => {
 
     expect(sharedCard).toContain("--specimen-caption-gap: var(--space-1);");
     expect(sharedCard).toContain(
-      "--specimen-stage-bg: color-mix(in srgb, var(--sf2) 82%, var(--sf1));",
+      "--specimen-stage-bg: var(--library-preview-frame-bg);",
     );
     expect(sharedCard).toContain(
-      "--specimen-mount-bg: color-mix(in srgb, var(--sf1) 76%, var(--bg));",
+      "--specimen-mount-bg: var(--library-preview-frame-bg);",
     );
     expect(sharedCard).toContain("--specimen-title-gap: var(--specimen-caption-gap);");
     expect(sharedCard).toContain("--specimen-rule-gap: var(--specimen-caption-gap);");
@@ -55,7 +55,6 @@ describe("DocumentSpecimenCard CSS contract", () => {
       expect(pageOverride).not.toMatch(/--specimen-rule-gap\s*:/);
       expect(pageOverride).not.toMatch(/gap:\s*var\(--specimen-title-gap\)/);
     }
-
     expect(specimenMenu).toContain("inline-size: var(--control-xs);");
     expect(specimenMenu).toContain("block-size: var(--control-xs);");
     expect(specimenMenu).toContain("min-inline-size: var(--control-xs);");
@@ -77,6 +76,8 @@ describe("DocumentSpecimenCard CSS contract", () => {
     expect(board).toContain("grid-template-columns: minmax(0, 1fr);");
     expect(board).toContain("justify-items: center;");
     expect(board).toContain("align-items: start;");
-    expect(primary).not.toMatch(/--specimen-stage-bg\s*:/);
+    expect(primary).toContain(
+      "--specimen-stage-bg: color-mix(in srgb, var(--sf1) 76%, var(--bg));",
+    );
   });
 });

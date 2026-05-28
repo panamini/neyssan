@@ -1183,6 +1183,14 @@
 
 /* PR5 documents/templates skeleton surfaces. */
 
+:root {
+  --library-preview-frame-bg: color-mix(in srgb, var(--sf2) 82%, var(--sf1));
+}
+
+.dark {
+  --library-preview-frame-bg: color-mix(in srgb, var(--sf2) 86%, var(--sfr));
+}
+
 .library-tabs {
   display: inline-flex;
   gap: var(--s1);
@@ -1817,8 +1825,8 @@
   --specimen-title-gap: var(--specimen-caption-gap);
   --specimen-meta-gap: var(--space-1);
   --specimen-rule-gap: var(--specimen-caption-gap);
-  --specimen-stage-bg: color-mix(in srgb, var(--sf2) 82%, var(--sf1));
-  --specimen-mount-bg: color-mix(in srgb, var(--sf1) 76%, var(--bg));
+  --specimen-stage-bg: var(--library-preview-frame-bg);
+  --specimen-mount-bg: var(--library-preview-frame-bg);
   --specimen-frame-bg: var(--paper);
   --specimen-accent: var(--ac);
   --specimen-chip-bg: var(--am-soft, var(--ap));
@@ -2193,8 +2201,6 @@
 }
 
 .dark .document-specimen-card.ds-card {
-  --specimen-stage-bg: color-mix(in srgb, var(--sf2) 86%, var(--sfr));
-  --specimen-mount-bg: color-mix(in srgb, var(--sf1) 72%, var(--bg));
   --specimen-chip-bg: var(--paper);
 }
 
@@ -2232,8 +2238,13 @@
 }
 
 .today-preview-card.document-specimen-card[data-variant="primary"] {
+  --specimen-stage-bg: color-mix(in srgb, var(--sf1) 76%, var(--bg));
   --specimen-badge-size: var(--control-md);
   min-height: 0;
+}
+
+.dark .today-preview-card.document-specimen-card[data-variant="primary"] {
+  --specimen-stage-bg: color-mix(in srgb, var(--sf1) 72%, var(--bg));
 }
 
 .today-preview-card.document-specimen-card[data-variant="secondary"],
@@ -2575,7 +2586,7 @@
 }
 
 .dasti-template-card {
-  --template-frame-bg: color-mix(in srgb, var(--sf2) 82%, var(--sf1));
+  --template-frame-bg: var(--library-preview-frame-bg);
   --template-paper-bg: var(--paper);
   --template-frame-pad: clamp(7px, 2.45cqi, 14px);
   --template-preview-scale: 0.27;
@@ -2605,10 +2616,6 @@
     transform var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
-.dark .dasti-template-card {
-  --template-frame-bg: color-mix(in srgb, var(--sf2) 86%, var(--sfr));
-}
-
 .dasti-template-grid[data-template-filter="resume"] .dasti-template-card {
   --template-preview-scale: 0.27;
 }
@@ -2619,9 +2626,9 @@
   outline: none;
 }
 
-.dasti-template-card:hover .dasti-template-card__document-scale,
-.dasti-template-card:focus-visible .dasti-template-card__document-scale {
-  border-color: var(--border-strong);
+.dasti-template-card:hover .dasti-template-card__preview,
+.dasti-template-card:focus-visible .dasti-template-card__preview {
+  transform: translateY(-1px);
 }
 
 .dasti-template-card[data-selected="true"] {
@@ -2713,6 +2720,7 @@
   overflow: hidden;
   pointer-events: none;
   user-select: none;
+  transition: transform var(--motion-duration-fast) var(--motion-ease-standard);
 }
 
 @media (hover: none), (pointer: coarse), (max-width: 720px) {
