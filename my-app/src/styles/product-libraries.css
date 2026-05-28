@@ -1799,8 +1799,8 @@
   --specimen-title-gap: var(--specimen-caption-gap);
   --specimen-meta-gap: var(--space-1);
   --specimen-rule-gap: var(--specimen-caption-gap);
-  --specimen-stage-bg: color-mix(in srgb, var(--sf1) 72%, var(--bg));
-  --specimen-mount-bg: var(--specimen-stage-bg);
+  --specimen-stage-bg: color-mix(in srgb, var(--sf2) 82%, var(--sf1));
+  --specimen-mount-bg: color-mix(in srgb, var(--sf1) 76%, var(--bg));
   --specimen-frame-bg: var(--paper);
   --specimen-accent: var(--ac);
   --specimen-chip-bg: var(--am-soft, var(--ap));
@@ -1906,7 +1906,7 @@
   padding: 0;
   border: 0;
   border-radius: 0;
-  background: transparent;
+  background: var(--specimen-stage-bg);
   overflow: hidden;
 }
 
@@ -2175,8 +2175,8 @@
 }
 
 .dark .document-specimen-card.ds-card {
-  --specimen-stage-bg: color-mix(in srgb, var(--sf2) 72%, var(--bg));
-  --specimen-mount-bg: var(--specimen-stage-bg);
+  --specimen-stage-bg: color-mix(in srgb, var(--sf2) 86%, var(--sfr));
+  --specimen-mount-bg: color-mix(in srgb, var(--sf1) 72%, var(--bg));
   --specimen-chip-bg: var(--paper);
 }
 
