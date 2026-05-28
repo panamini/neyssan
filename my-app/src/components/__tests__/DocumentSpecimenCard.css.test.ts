@@ -36,7 +36,10 @@ describe("DocumentSpecimenCard CSS contract", () => {
 
     expect(sharedCard).toContain("--specimen-caption-gap: var(--space-1);");
     expect(sharedCard).toContain(
-      "--specimen-stage-bg: color-mix(in srgb, var(--sf1) 72%, var(--bg));",
+      "--specimen-stage-bg: color-mix(in srgb, var(--sf2) 82%, var(--sf1));",
+    );
+    expect(sharedCard).toContain(
+      "--specimen-mount-bg: color-mix(in srgb, var(--sf1) 76%, var(--bg));",
     );
     expect(sharedCard).toContain("--specimen-title-gap: var(--specimen-caption-gap);");
     expect(sharedCard).toContain("--specimen-rule-gap: var(--specimen-caption-gap);");
@@ -60,6 +63,9 @@ describe("DocumentSpecimenCard CSS contract", () => {
     const actions = cssBlock(".document-specimen-card__actions");
     expect(actions).toContain("position: absolute;");
     expect(actions).toContain("inset-inline-end: 0;");
+
+    const previewStage = cssBlock(".document-specimen-card__preview-stage");
+    expect(previewStage).toContain("background: var(--specimen-stage-bg);");
   });
 
   it("keeps the Today Continue hero card centered above the two secondary cards", () => {
