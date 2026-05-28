@@ -356,10 +356,9 @@
 .dasti-doc-card--proposal-library .dasti-doc-card__footer-meta {
   align-items: center;
   column-gap: var(--space-1);
-  row-gap: 0;
   font-family: var(--font-body-family);
   font-size: var(--text-body-sm-size);
-  line-height: 1.05;
+  line-height: var(--text-body-sm-line);
 }
 
 .dasti-doc-card--proposal-library .dasti-proposal-tone-badge--compact {
@@ -1334,8 +1333,9 @@
 }
 
 .dasti-documents-grid.projects-grid {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 304px), 1fr));
-  gap: clamp(var(--space-2), 1.2vw, var(--space-4));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(var(--space-6), 3vw, var(--space-9))
+    clamp(var(--space-6), 3.4vw, var(--space-9));
 }
 
 .dasti-template-grid {
@@ -1355,7 +1355,7 @@
   }
 
   .dasti-documents-grid.projects-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -1367,8 +1367,9 @@
 
 .dasti-documents-card {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  align-content: stretch;
+  grid-template-rows: auto auto auto;
+  align-content: start;
+  align-items: start;
   min-height: 152px;
   padding: var(--card-pad-compact);
 }
@@ -1380,8 +1381,7 @@
   --work-paper-radius: var(--space-1);
   --work-preview-stage: transparent;
   --work-preview-stage-radius: calc(var(--radius-card) - 3px);
-  grid-template-rows: auto auto auto;
-  align-content: start;
+  gap: var(--s2);
   min-height: 0;
   padding: var(--work-card-pad);
   border-radius: var(--work-card-radius);
@@ -1417,8 +1417,8 @@
   width: 100%;
   min-width: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: var(--s2);
+  grid-template-rows: auto;
+  gap: var(--space-1);
   border: 0;
   padding: 0;
   background: transparent;
@@ -1450,17 +1450,20 @@
 .projects-card__select {
   position: absolute;
   z-index: 4;
-  inset-block-start: var(--s2);
-  inset-inline-start: var(--s2);
+  inset-block-start: calc(var(--control-md) / 2);
+  inset-inline-start: auto;
+  inset-inline-end: 0;
   display: grid;
   place-items: center;
-  inline-size: 28px;
-  block-size: 28px;
-  border: 1px solid color-mix(in srgb, var(--border) 64%, transparent);
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--paper) 72%, var(--sf1));
-  color: var(--tm2);
-  box-shadow: none;
+  inline-size: var(--control-sm);
+  block-size: var(--control-sm);
+  border: 1px solid color-mix(in srgb, var(--border-strong) 82%, transparent);
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--sfr) 86%, var(--paper));
+  color: var(--ti);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--paper) 82%, transparent),
+    0 8px 16px color-mix(in srgb, var(--paper-ink) 8%, transparent);
   opacity: 0;
   transition:
     opacity var(--motion-duration-fast) var(--motion-ease-standard),
@@ -1479,8 +1482,8 @@
 .projects-card__select-mark {
   display: inline-grid;
   place-items: center;
-  inline-size: 16px;
-  block-size: 16px;
+  inline-size: var(--space-4);
+  block-size: var(--space-4);
   border: 0;
   border-radius: 0;
   color: transparent;
@@ -1493,19 +1496,25 @@
 }
 
 .projects-card__select input:checked + .projects-card__select-mark {
-  color: var(--ti);
+  color: var(--ac);
   background: transparent;
 }
 
 .projects-card__select:has(input:checked) {
-  border-color: color-mix(in srgb, var(--border-strong) 82%, transparent);
-  background: color-mix(in srgb, var(--paper) 82%, var(--sf1));
+  border-color: color-mix(in srgb, var(--ac) 56%, var(--border-strong));
+  background: color-mix(in srgb, var(--paper) 94%, var(--ap));
+  opacity: 1;
 }
 
-.projects-card:hover .projects-card__select,
-.projects-card:focus-within .projects-card__select,
-.projects-card[data-selected="true"] .projects-card__select {
+.document-specimen-card[data-selected="true"] .projects-card__select,
+.document-specimen-card .projects-card__select:has(input:focus-visible) {
   opacity: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .document-specimen-card:hover .projects-card__select {
+    opacity: 1;
+  }
 }
 
 .projects-list__select input {
@@ -1527,26 +1536,28 @@
 .projects-card__menu {
   position: absolute;
   z-index: 4;
-  inset-block-start: var(--s2);
-  inset-inline-end: var(--s2);
-  border-color: color-mix(in srgb, var(--border) 64%, transparent);
-  background: color-mix(in srgb, var(--paper) 72%, var(--sf1));
+  inset-block-start: var(--space-1);
+  inset-inline-end: var(--space-1);
+  inline-size: var(--control-xs);
+  block-size: var(--control-xs);
+  border-color: transparent;
+  background: transparent;
   color: var(--tm2);
   box-shadow: none;
 }
 
 .projects-card__menu:hover,
 .projects-card__menu:focus-visible {
-  border-color: var(--border-strong);
-  background: color-mix(in srgb, var(--paper) 84%, var(--sf1));
+  border-color: transparent;
+  background: var(--sf2);
   color: var(--ti);
 }
 
 .library-doc-preview {
   display: grid;
   place-items: start center;
-  min-height: 244px;
-  block-size: 244px;
+  min-height: 196px;
+  block-size: 196px;
   padding: 0;
   border: 0;
   border-radius: var(--work-preview-stage-radius);
@@ -1572,7 +1583,7 @@
   overflow: hidden;
   background: var(--paper);
   border: 1px solid color-mix(in srgb, var(--paper-ink) 5%, transparent);
-  border-radius: var(--work-paper-radius, var(--space-1)) var(--work-paper-radius, var(--space-1)) 0 0;
+  border-radius: var(--work-paper-radius, var(--space-1));
   box-shadow:
     0 1px 3px color-mix(in srgb, var(--paper-ink) 10%, transparent),
     0 12px 30px color-mix(in srgb, var(--paper-ink) 16%, transparent);
@@ -1603,7 +1614,7 @@
   overflow: hidden;
   background: var(--paper);
   border: 1px solid color-mix(in srgb, var(--paper-ink) 5%, transparent);
-  border-radius: var(--work-paper-radius, var(--space-1)) var(--work-paper-radius, var(--space-1)) 0 0;
+  border-radius: var(--work-paper-radius, var(--space-1));
   box-shadow:
     0 1px 3px color-mix(in srgb, var(--paper-ink) 10%, transparent),
     0 12px 30px color-mix(in srgb, var(--paper-ink) 16%, transparent);
@@ -1717,7 +1728,8 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: var(--s2);
-  padding-top: var(--s2);
+  margin-top: 0;
+  padding-top: 0;
   padding-bottom: var(--s2);
   border-bottom: 1px solid color-mix(in srgb, var(--border-strong) 54%, transparent);
   color: var(--tm2);
@@ -1778,6 +1790,536 @@
 .dark .dasti-documents-card__menu:focus-visible {
   background: color-mix(in srgb, var(--sfr) 90%, transparent);
   border-color: var(--border-strong);
+}
+
+/* Shared mounted document specimen cards for Today and Projects. */
+
+.document-specimen-card.ds-card {
+  --specimen-caption-gap: var(--space-1);
+  --specimen-title-gap: var(--specimen-caption-gap);
+  --specimen-meta-gap: var(--space-1);
+  --specimen-rule-gap: var(--specimen-caption-gap);
+  --specimen-stage-bg: color-mix(in srgb, var(--sf2) 82%, var(--sf1));
+  --specimen-mount-bg: color-mix(in srgb, var(--sf1) 76%, var(--bg));
+  --specimen-frame-bg: var(--paper);
+  --specimen-accent: var(--ac);
+  --specimen-chip-bg: var(--am-soft, var(--ap));
+  --specimen-chip-ink: var(--ac);
+  --specimen-frame-pad: clamp(7px, 2.45cqi, 14px);
+  --specimen-frame-radius: 0;
+  --specimen-preview-scale: 0.385;
+  --specimen-compact-preview-scale: 0.24;
+  --specimen-fit-width-scale: var(--specimen-compact-preview-scale);
+  --specimen-badge-size: calc(var(--control-md) - var(--space-1));
+  position: relative;
+  container-type: inline-size;
+  min-width: 0;
+  display: grid;
+  gap: var(--specimen-title-gap);
+  padding: calc((var(--specimen-badge-size) / 2) - var(--space-1)) 0 0;
+  border: 0;
+  border-radius: var(--radius-2);
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.document-specimen-card.ds-card[data-interactive="true"]:hover,
+.document-specimen-card.ds-card[data-interactive="true"]:active {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.document-specimen-card[data-size="full"] {
+  --specimen-preview-scale: 0.32;
+}
+
+.document-specimen-card__preview-button {
+  width: 100%;
+  min-width: 0;
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.document-specimen-card__mount {
+  position: relative;
+  isolation: isolate;
+  display: block;
+  min-width: 0;
+  padding: var(--specimen-frame-pad);
+  border: 0;
+  border-radius: var(--specimen-frame-radius);
+  background: var(--specimen-mount-bg);
+  overflow: visible;
+  box-shadow: none;
+  transition:
+    border-color var(--motion-duration-fast) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-fast) var(--motion-ease-standard),
+    transform var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.document-specimen-card:hover .document-specimen-card__mount,
+.document-specimen-card:focus-within .document-specimen-card__mount {
+  box-shadow: none;
+}
+
+.document-specimen-card:hover .document-specimen-card__mount {
+  transform: translateY(-1px);
+}
+
+.document-specimen-card__preview-button:focus-visible {
+  outline: none;
+}
+
+.document-specimen-card__preview-button:focus-visible .document-specimen-card__mount,
+.document-specimen-card__title-button:focus-visible {
+  outline: 2px solid var(--fr);
+  outline-offset: 3px;
+}
+
+.document-specimen-card__stack-sheet {
+  position: absolute;
+  z-index: 0;
+  inset: calc(var(--specimen-frame-pad) + var(--space-2))
+    var(--specimen-frame-pad) var(--specimen-frame-pad)
+    calc(var(--specimen-frame-pad) + var(--space-3));
+  border: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--paper) 86%, var(--sf1));
+  transform: translate(6px, -6px);
+}
+
+.document-specimen-card__preview-stage {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  container-type: inline-size;
+  min-width: 0;
+  aspect-ratio: 4 / 3;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--specimen-stage-bg);
+  overflow: hidden;
+}
+
+.document-specimen-card__preview-stage[data-size="full"] {
+  place-items: start center;
+}
+
+.document-specimen-card__preview-stage[data-size="compact"] {
+  padding: 0;
+  place-items: start center;
+}
+
+.document-specimen-card__type-chip {
+  position: absolute;
+  z-index: 3;
+  inset-block-start: calc(var(--space-1) * -1);
+  inset-inline-start: calc(var(--space-1) * -1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--specimen-badge-size);
+  block-size: var(--specimen-badge-size);
+  padding: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-pill);
+  background: var(--specimen-chip-bg);
+  color: var(--specimen-chip-ink);
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.document-specimen-card__type-chip svg {
+  flex: 0 0 auto;
+  inline-size: var(--space-3);
+  block-size: var(--space-3);
+}
+
+.document-specimen-card__caption {
+  position: relative;
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  margin-block-start: 0;
+  padding-inline: 0 calc(var(--control-xs) + var(--space-1));
+  padding-block-start: 0;
+  padding-block-end: var(--specimen-rule-gap);
+  border-block-end: 1px solid color-mix(in srgb, var(--ac) 24%, transparent);
+}
+
+.document-specimen-card__caption-row,
+.document-specimen-card__meta-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  min-width: 0;
+  gap: var(--space-3);
+}
+
+.document-specimen-card__title-button {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-inline);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.document-specimen-card__title-button strong {
+  display: block;
+  min-width: 0;
+  color: var(--ti);
+  font-family: var(--font-body-family);
+  font-size: var(--ts);
+  line-height: 1.22;
+  font-weight: var(--font-label-weight);
+  letter-spacing: var(--tracking-tight);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-specimen-card__actions {
+  position: absolute;
+  inset-block-start: calc((var(--ts) * 1.22 - var(--control-xs)) / 2);
+  inset-inline-end: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.document-specimen-card__actions .today-preview-card__menu,
+.document-specimen-card__actions .projects-card__menu {
+  position: static;
+  inset: auto;
+}
+
+.document-specimen-card__actions .projects-card__menu {
+  justify-self: end;
+  inline-size: var(--control-xs);
+  block-size: var(--control-xs);
+  min-inline-size: var(--control-xs);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--tm2);
+  box-shadow: none;
+}
+
+.document-specimen-card .projects-card__select {
+  inset-block-start: calc(
+    ((var(--specimen-badge-size) / 2) - var(--space-1)) + var(--space-2)
+  );
+  inset-inline-start: auto;
+  inset-inline-end: var(--space-2);
+  inline-size: var(--control-sm);
+  block-size: var(--control-sm);
+  border-radius: var(--radius-control);
+}
+
+.document-specimen-card .projects-card__select:has(input:checked) {
+  background: color-mix(in srgb, var(--paper) 94%, var(--ap));
+}
+
+.document-specimen-card .dasti-documents-card__menu {
+  inline-size: var(--control-sm);
+  block-size: var(--control-sm);
+  min-inline-size: var(--control-sm);
+  border-color: transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--tm2);
+}
+
+.document-specimen-card
+  .document-specimen-card__actions
+  .dasti-documents-card__menu {
+  inline-size: var(--control-xs);
+  block-size: var(--control-xs);
+  min-inline-size: var(--control-xs);
+}
+
+.dark .document-specimen-card .dasti-documents-card__menu {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.document-specimen-card .dasti-documents-card__menu:hover,
+.document-specimen-card .dasti-documents-card__menu:focus-visible,
+.document-specimen-card .dasti-documents-card__menu[aria-expanded="true"] {
+  border-color: transparent;
+  background: var(--sf2);
+  color: var(--ti);
+}
+
+.document-specimen-card__meta-row {
+  color: var(--tm2);
+  font: var(--type-small);
+  padding-block-end: 0;
+}
+
+.document-specimen-card__meta-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-specimen-card__meta-row span:first-child {
+  color: var(--ti);
+  font-weight: var(--font-label-weight);
+}
+
+.document-specimen-card__meta-row span:last-child {
+  flex: 0 0 auto;
+  max-width: 46%;
+  text-align: right;
+}
+
+.document-specimen-card[data-kind="cv"] .document-specimen-card__meta-row {
+  display: none;
+}
+
+.document-specimen-card .work-doc-preview,
+.document-specimen-card .library-doc-preview {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: transparent;
+  border-radius: 0;
+  place-items: center;
+}
+
+.document-specimen-card[data-size="full"] .work-doc-preview {
+  block-size: 100%;
+}
+
+.document-specimen-card[data-size="full"] .work-doc-preview--rendered,
+.document-specimen-card[data-size="full"] .work-doc-preview--resume-rendered {
+  --today-proposal-preview-scale: var(--specimen-preview-scale);
+  --today-resume-preview-scale: var(--specimen-preview-scale);
+}
+
+.document-specimen-card[data-size="full"] .work-doc-preview__document-scale,
+.document-specimen-card[data-size="full"] .work-doc-preview__resume-scale {
+  border-radius: 0;
+}
+
+.document-specimen-card[data-size="compact"] .work-doc-preview__document-scale,
+.document-specimen-card[data-size="compact"] .work-doc-preview__resume-scale,
+.document-specimen-card .library-doc-preview__document-scale,
+.document-specimen-card .library-doc-preview__resume-scale {
+  border-radius: 0;
+}
+
+.document-specimen-card .work-doc-preview__document-scale,
+.document-specimen-card .work-doc-preview__resume-scale,
+.document-specimen-card .library-doc-preview__document-scale,
+.document-specimen-card .library-doc-preview__resume-scale {
+  inline-size: calc(794px * var(--specimen-fit-width-scale));
+  block-size: calc(1123px * var(--specimen-fit-width-scale));
+  background: var(--specimen-frame-bg);
+  border: 1px solid color-mix(in srgb, var(--border-soft) 82%, transparent);
+  border-radius: var(--specimen-frame-radius);
+  overflow: hidden;
+  transform-origin: top left;
+  box-shadow: none;
+}
+
+.document-specimen-card .work-doc-preview__document-scale {
+  transform: none;
+}
+
+.document-specimen-card .work-doc-preview__resume-scale {
+  transform: none;
+}
+
+.document-specimen-card .library-doc-preview__document-scale {
+  transform: none;
+}
+
+.document-specimen-card .library-doc-preview__resume-scale {
+  transform: none;
+}
+
+.document-specimen-card
+  .work-doc-preview__document-scale
+  > .dasti-proposal-document,
+.document-specimen-card
+  .work-doc-preview__resume-scale
+  > .resume-template-renderer,
+.document-specimen-card
+  .library-doc-preview__document-scale
+  > .dasti-proposal-document,
+.document-specimen-card
+  .library-doc-preview__resume-scale
+  > .resume-template-renderer {
+  transform: scale(var(--specimen-fit-width-scale));
+  transform-origin: top left;
+}
+
+.document-specimen-card .dasti-proposal-document__page,
+.document-specimen-card .resume-template-page-shell {
+  box-shadow: none;
+}
+
+.dark .document-specimen-card.ds-card {
+  --specimen-stage-bg: color-mix(in srgb, var(--sf2) 86%, var(--sfr));
+  --specimen-mount-bg: color-mix(in srgb, var(--sf1) 72%, var(--bg));
+  --specimen-chip-bg: var(--paper);
+}
+
+.dark .document-specimen-card__mount {
+  box-shadow: none;
+}
+
+.dark .document-specimen-card__type-chip {
+  background: var(--sfr);
+  border-color: var(--border-soft);
+  color: var(--ti);
+}
+
+.dark .document-specimen-card__caption {
+  border-block-end-color: color-mix(in srgb, var(--ac) 18%, transparent);
+}
+
+.today-preview-board {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  justify-items: center;
+  gap: var(--layout-card-grid, var(--space-4));
+}
+
+.today-preview-board > .today-preview-card {
+  width: min(100%, 620px);
+}
+
+.today-preview-board__side {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--layout-card-grid, var(--space-4));
+}
+
+.today-preview-card.document-specimen-card[data-variant="primary"] {
+  --specimen-badge-size: var(--control-md);
+  min-height: 0;
+}
+
+.today-preview-card.document-specimen-card[data-variant="secondary"],
+.today-preview-card.document-specimen-card[data-variant="compact"] {
+  --specimen-badge-size: calc(var(--control-md) - var(--space-1));
+  min-height: 0;
+}
+
+.today-preview-card.document-specimen-card .work-doc-preview {
+  block-size: 100%;
+}
+
+.today-preview-card.document-specimen-card .work-doc-preview--rendered {
+  --today-proposal-preview-scale: var(--specimen-compact-preview-scale);
+}
+
+.today-preview-card.document-specimen-card .work-doc-preview--resume-rendered {
+  --today-resume-preview-scale: var(--specimen-compact-preview-scale);
+}
+
+.projects-card.document-specimen-card {
+  --specimen-badge-size: var(--control-sm);
+  grid-template-rows: auto auto auto;
+  align-content: start;
+  min-height: 0;
+}
+
+.projects-card.document-specimen-card .document-specimen-card__preview-button {
+  margin-block-end: 0;
+}
+
+.projects-card.document-specimen-card .document-specimen-card__caption {
+  gap: var(--specimen-meta-gap);
+  padding-block-start: 0;
+  padding-block-end: var(--specimen-rule-gap);
+  border-block-end: 1px solid color-mix(in srgb, var(--ac) 24%, transparent);
+}
+
+.projects-card.document-specimen-card .document-specimen-card__caption-row {
+  align-items: baseline;
+}
+
+.projects-card.document-specimen-card .document-specimen-card__meta-row {
+  font-size: var(--tx);
+  line-height: var(--lx);
+  font-weight: var(--font-body-weight);
+}
+
+.projects-card .dasti-library-card__footer,
+.projects-card__footer {
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.projects-card.document-specimen-card .document-specimen-card__stack-sheet {
+  display: none;
+}
+
+.projects-card.document-specimen-card::after {
+  content: none;
+}
+
+.dark .projects-card.document-specimen-card::after {
+  background: var(--border-soft);
+}
+
+.document-specimen-card .dasti-documents-card__menu svg {
+  inline-size: var(--space-3);
+  block-size: var(--space-3);
+}
+
+.projects-card.document-specimen-card .library-doc-preview--rendered {
+  --library-proposal-preview-scale: var(--specimen-compact-preview-scale);
+}
+
+.projects-card.document-specimen-card .library-doc-preview--resume-rendered {
+  --library-resume-preview-scale: var(--specimen-compact-preview-scale);
+}
+
+@media (max-width: 760px) {
+  .dasti-documents-grid.projects-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .today-preview-board {
+    grid-template-columns: 1fr;
+  }
+
+  .today-preview-board__side {
+    grid-template-columns: 1fr;
+  }
+
+  .document-specimen-card[data-size="full"] {
+    --specimen-preview-scale: min(0.34, calc((100vw - 112px) / 794));
+  }
+
+  .document-specimen-card.ds-card {
+    --specimen-compact-preview-scale: min(0.36, calc((100vw - 112px) / 794));
+  }
+
+  .document-specimen-card__caption-row,
+  .document-specimen-card__meta-row {
+    gap: var(--space-2);
+  }
 }
 
 .dasti-documents-card--new {
@@ -2118,111 +2660,6 @@
   display: block;
 }
 
-.dasti-template-preview {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-modal, 50);
-  display: grid;
-  place-items: center;
-  padding: var(--s4);
-  background: color-mix(in srgb, var(--bg) 58%, transparent);
-  backdrop-filter: blur(10px);
-}
-
-.dasti-template-preview__panel {
-  inline-size: min(100%, 940px);
-  max-block-size: min(88vh, 760px);
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  gap: var(--s3);
-  padding: var(--s3);
-  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
-  border-radius: var(--radius-2);
-  background: var(--sf0);
-  box-shadow: var(--shc);
-  overflow: hidden;
-}
-
-.dasti-template-preview__body {
-  min-block-size: 0;
-  display: grid;
-  grid-template-columns: minmax(220px, 0.8fr) minmax(280px, 1fr);
-  gap: var(--s3);
-  align-items: stretch;
-}
-
-.dasti-template-preview__copy {
-  min-width: 0;
-  display: grid;
-  align-content: start;
-  gap: var(--s1);
-}
-
-.dasti-template-preview__kind {
-  color: var(--tm2);
-  font-size: var(--tx);
-  line-height: var(--lx);
-  font-weight: var(--font-label-weight);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.dasti-template-preview__copy h2 {
-  margin: 0;
-  color: var(--ti);
-  font-size: var(--t3);
-  line-height: var(--l3);
-  letter-spacing: 0;
-}
-
-.dasti-template-preview__copy p {
-  margin: 0;
-  color: var(--tm);
-  font-size: var(--tb);
-  line-height: var(--lb);
-}
-
-.dasti-template-preview__document {
-  --template-preview-scale: 0.48;
-  min-block-size: 0;
-  justify-self: center;
-  display: block;
-  inline-size: calc(794px * var(--template-preview-scale));
-  aspect-ratio: 210 / 297;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--paper-ink) 6%, transparent);
-  border-radius: var(--space-1);
-  background: var(--paper);
-  box-shadow:
-    0 1px 3px color-mix(in srgb, var(--paper-ink) 10%, transparent),
-    0 16px 40px color-mix(in srgb, var(--paper-ink) 16%, transparent);
-}
-
-.dasti-template-preview__document > .resume-preview-shell,
-.dasti-template-preview__document > .resume-template-renderer,
-.dasti-template-preview__document > .dasti-proposal-document {
-  inline-size: 794px;
-  block-size: 1123px;
-  pointer-events: none;
-  transform: scale(var(--template-preview-scale));
-  transform-origin: top left;
-}
-
-.dasti-template-preview__document .dasti-proposal-document {
-  background: transparent;
-}
-
-.dasti-template-preview__document .dasti-proposal-document > .dasti-proposal-document__page ~ .dasti-proposal-document__page {
-  display: none;
-}
-
-.dasti-template-preview__actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--s2);
-}
-
 @media (max-width: 1080px) {
   .dasti-template-grid,
   .dasti-template-grid[data-template-filter="resume"] {
@@ -2234,32 +2671,6 @@
   .dasti-template-grid,
   .dasti-template-grid[data-template-filter="resume"] {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .dasti-template-preview {
-    padding: var(--s2);
-    align-items: end;
-  }
-
-  .dasti-template-preview__panel {
-    max-block-size: 92vh;
-    overflow: auto;
-  }
-
-  .dasti-template-preview__body {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .dasti-template-preview__document {
-    --template-preview-scale: 0.38;
-  }
-
-  .dasti-template-preview__actions {
-    justify-content: stretch;
-  }
-
-  .dasti-template-preview__actions > * {
-    flex: 1 1 auto;
   }
 }
 
