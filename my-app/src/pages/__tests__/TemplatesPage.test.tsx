@@ -5,7 +5,8 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { TemplatesPage } from "../TemplatesPage";
+import { generateCvTemplate } from "../../lib/cv-template";
+import { TemplateDocumentPreview, TemplatesPage } from "../TemplatesPage";
 
 const navigateMock = vi.fn();
 
@@ -393,8 +394,60 @@ describe("TemplatesPage", () => {
     expect(styles).toMatch(
       /\.dasti-template-card__head\s*\{[\s\S]*inline-size:\s*min\(100%,\s*var\(--template-frame-inline\)\);[\s\S]*padding-block-start:\s*var\(--space-1\);[\s\S]*border-block-end:/,
     );
+    expect(styles).toMatch(
+      /\.dasti-template-preview\s*\{[\s\S]*position:\s*fixed;[\s\S]*inset:\s*0;[\s\S]*z-index:\s*var\(--z-modal\);/,
+    );
+    expect(styles).toMatch(
+      /\.dasti-template-preview__panel\s*\{[\s\S]*grid-template-rows:\s*minmax\(0,\s*1fr\)\s*auto;[\s\S]*background:\s*var\(--sfr\);/,
+    );
     expect(settingsStyles).not.toMatch(
       /^\.dasti-template-card(?:__preview|__title|__description|\s|\{)/m,
+    );
+  });
+
+  it("forces resume gallery cards to render their own workshop template ids", () => {
+    const previewCv = generateCvTemplate("Preview CV with saved two-column style");
+    previewCv.metadata.verbatiStyle = {
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "geist-baskervville",
+      palette: "sauge",
+      resumeTemplateId: "workshop_resume_twocol_ats",
+    };
+
+    const { rerender } = render(
+      <TemplateDocumentPreview
+        kind="Resume"
+        family="workshop-onecol"
+        previewCv={previewCv}
+      />,
+    );
+
+    expect(screen.getByTestId("resume-template-renderer")).toHaveAttribute(
+      "data-resume-template-id",
+      "workshop_resume_onecol_ats",
+    );
+    expect(
+      screen.queryByTestId("resume-template-page")?.getAttribute(
+        "data-resume-template-layout",
+      ),
+    ).not.toBe("workshop-two-column");
+
+    rerender(
+      <TemplateDocumentPreview
+        kind="Resume"
+        family="workshop-twocol"
+        previewCv={previewCv}
+      />,
+    );
+
+    expect(screen.getByTestId("resume-template-renderer")).toHaveAttribute(
+      "data-resume-template-id",
+      "workshop_resume_twocol_ats",
+    );
+    expect(screen.getByTestId("resume-template-page")).toHaveAttribute(
+      "data-resume-template-layout",
+      "workshop-two-column",
     );
   });
 });

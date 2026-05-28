@@ -233,6 +233,7 @@ export function ResumeTemplateRenderer({
   return (
     <div
       data-testid="resume-template-renderer"
+      data-resume-template-id={templateDefinition.id}
       className="resume-template-renderer"
       style={{
         ...previewVars,

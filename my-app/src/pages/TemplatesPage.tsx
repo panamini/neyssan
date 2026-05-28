@@ -228,7 +228,7 @@ export function TemplateDocumentPreview({
         ? "workshop_resume_onecol_ats"
         : "workshop_resume_twocol_ats";
     const cvPreviewSource = previewCv
-      ? buildStyledResumePrintSource({ currentCv: previewCv })
+      ? buildStyledResumePrintSource({ currentCv: previewCv, stylePreset })
       : null;
     const previewData =
       cvPreviewSource?.resumeData ??
