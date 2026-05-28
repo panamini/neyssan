@@ -984,6 +984,8 @@
   --grid-gap-content: var(--space-5);
   --grid-gap-tight: var(--space-3);
   --grid-gap: var(--layout-card-grid);
+  --library-gallery-row-gap: clamp(var(--space-6), 3vw, var(--space-9));
+  --library-gallery-column-gap: clamp(var(--space-6), 3.4vw, var(--space-9));
   --rail-width: var(--card-rail-md);
 
   /* Forge drawer spacing */

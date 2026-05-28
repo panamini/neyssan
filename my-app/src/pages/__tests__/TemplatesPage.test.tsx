@@ -5,7 +5,8 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { TemplatesPage } from "../TemplatesPage";
+import { generateCvTemplate } from "../../lib/cv-template";
+import { TemplateDocumentPreview, TemplatesPage } from "../TemplatesPage";
 
 const navigateMock = vi.fn();
 
@@ -47,7 +48,7 @@ describe("TemplatesPage", () => {
     expect(screen.getAllByTestId("template-document-preview")).toHaveLength(6);
   });
 
-  it("renders template chrome and descriptions in French without renaming templates", () => {
+  it("renders template chrome in French without renaming templates", () => {
     window.localStorage.setItem("twoweeks:ui-language", "fr");
     window.localStorage.setItem("twoweeks:document-language", "es");
 
@@ -61,15 +62,15 @@ describe("TemplatesPage", () => {
     expect(screen.getByRole("tab", { name: "Lettres" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("button", { name: "Personnaliser le style" })).toBeInTheDocument();
     expect(screen.getAllByText("Lettre", { selector: ".dasti-template-card__kind" })).toHaveLength(6);
-    expect(screen.getAllByText("Espacement calme, hiérarchie nette.").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Ouverture directe, ton net.").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Plus chaleureux, plus personnel.").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Espacement calme, hiérarchie nette.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ouverture directe, ton net.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Plus chaleureux, plus personnel.")).not.toBeInTheDocument();
     expect(screen.getByText("Editorial", { selector: ".dasti-template-card__title" })).toBeInTheDocument();
     expect(screen.queryByText(/Proposition|proposition/)).not.toBeInTheDocument();
     expect(window.localStorage.getItem("twoweeks:document-language")).toBe("es");
   });
 
-  it("renders template chrome and descriptions in Spanish", async () => {
+  it("renders template chrome in Spanish", async () => {
     const user = userEvent.setup();
     window.localStorage.setItem("twoweeks:ui-language", "es");
     window.localStorage.setItem("twoweeks:document-language", "fr");
@@ -84,15 +85,15 @@ describe("TemplatesPage", () => {
     expect(screen.getByRole("tab", { name: "Cartas" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("button", { name: "Personalizar estilo" })).toBeInTheDocument();
     expect(screen.getAllByText("Carta", { selector: ".dasti-template-card__kind" })).toHaveLength(6);
-    expect(screen.getAllByText("Espaciado sobrio, jerarquía clara.").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Apertura directa, tono claro.").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Más cercano, más personal.").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Espaciado sobrio, jerarquía clara.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Apertura directa, tono claro.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Más cercano, más personal.")).not.toBeInTheDocument();
     expect(screen.queryByText(/Propuesta|propuesta/)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "CV" }));
 
-    expect(screen.getByText("Claro, legible, seguro.")).toBeInTheDocument();
-    expect(screen.getByText("Diseño europeo estructurado.")).toBeInTheDocument();
+    expect(screen.queryByText("Claro, legible, seguro.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Diseño europeo estructurado.")).not.toBeInTheDocument();
     expect(window.localStorage.getItem("twoweeks:document-language")).toBe("fr");
   });
 
@@ -350,7 +351,7 @@ describe("TemplatesPage", () => {
     );
   });
 
-  it("keeps resume template previews to card plus real paper without a shell frame", async () => {
+  it("keeps template previews as square-framed A4 paper with meta underneath", async () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={["/templates"]}>
@@ -377,8 +378,124 @@ describe("TemplatesPage", () => {
       "../../styles/product-libraries.css",
     );
     const styles = fs.readFileSync(stylesPath, "utf8");
+    const foundationStyles = fs.readFileSync(
+      path.resolve(__dirname, "../../styles/foundation.css"),
+      "utf8",
+    );
+    const productStyles = fs.readFileSync(
+      path.resolve(__dirname, "../../styles/product.css"),
+      "utf8",
+    );
+    const proposalStyles = fs.readFileSync(
+      path.resolve(__dirname, "../../styles/product-proposal.css"),
+      "utf8",
+    );
+    const settingsStyles = fs.readFileSync(
+      path.resolve(__dirname, "../../styles/product-settings.css"),
+      "utf8",
+    );
     expect(styles).not.toMatch(
       /\.dasti-template-card__document-scale\s+\.resume-template-page-shell/,
+    );
+    expect(styles).toMatch(
+      /--library-preview-frame-bg:\s*color-mix\(in srgb,\s*var\(--sf2\) 82%,\s*var\(--sf1\)\);/,
+    );
+    expect(styles).toMatch(
+      /\.dark\s*\{[\s\S]*--library-preview-frame-bg:\s*color-mix\(in srgb,\s*var\(--sf2\) 86%,\s*var\(--sfr\)\);/,
+    );
+    expect(styles).toMatch(
+      /\.dasti-template-card\s*\{[\s\S]*--template-frame-bg:\s*var\(--library-preview-frame-bg\);/,
+    );
+    expect(styles).toMatch(
+      /\.dasti-template-card__preview\s*\{[\s\S]*inline-size:\s*fit-content;[\s\S]*padding:\s*var\(--template-frame-pad\);[\s\S]*border-radius:\s*0;[\s\S]*background:\s*var\(--template-frame-bg\);[\s\S]*transition:\s*transform var\(--motion-duration-fast\) var\(--motion-ease-standard\);/,
+    );
+    expect(styles).toMatch(
+      /\.dasti-template-card:hover\s+\.dasti-template-card__preview,[\s\S]*?\.dasti-template-card:focus-visible\s+\.dasti-template-card__preview\s*\{[\s\S]*transform:\s*translateY\(-1px\);/,
+    );
+    expect(styles).not.toMatch(
+      /\.dasti-template-card:hover\s+\.dasti-template-card__document-scale,[\s\S]*?\.dasti-template-card:focus-visible\s+\.dasti-template-card__document-scale\s*\{[\s\S]*border-color:/,
+    );
+    expect(styles).toMatch(
+      /\.dasti-template-card__document-scale\s*\{[\s\S]*aspect-ratio:\s*210 \/ 297;[\s\S]*border-radius:\s*0;/,
+    );
+    expect(styles).toMatch(
+      /\.dasti-template-card__head\s*\{[\s\S]*inline-size:\s*min\(100%,\s*var\(--template-frame-inline\)\);[\s\S]*padding-block-start:\s*var\(--space-1\);[\s\S]*border-block-end:/,
+    );
+    expect(foundationStyles).toMatch(
+      /--library-gallery-row-gap:\s*clamp\(var\(--space-6\),\s*3vw,\s*var\(--space-9\)\);[\s\S]*--library-gallery-column-gap:\s*clamp\(var\(--space-6\),\s*3\.4vw,\s*var\(--space-9\)\);/,
+    );
+    expect(styles).toMatch(
+      /\.dasti-template-grid\s*\{[\s\S]*gap:\s*var\(--library-gallery-row-gap\)\s*var\(--library-gallery-column-gap\);/,
+    );
+    expect(styles).not.toMatch(
+      /\.dasti-template-grid[\s\S]*minmax\(min\(100%,\s*304px\),\s*1fr\)/,
+    );
+    expect(styles).not.toMatch(
+      /\.dasti-template-grid,\s*\.dasti-template-grid\[data-template-filter="resume"\]\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\);/,
+    );
+    expect(proposalStyles).toMatch(
+      /@media \(max-width:\s*760px\)\s*\{[\s\S]*?\.dasti-proposal-document__page,[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\);/,
+    );
+    expect(styles).toMatch(
+      /\.dasti-template-card__document-scale\s+\.dasti-proposal-document__page,[\s\S]*?\.dasti-template-card__document-scale\s+\.dasti-proposal-document--quiet-margin\s+\.dasti-proposal-document__page\s*\{[\s\S]*?grid-template-columns:\s*calc\(var\(--proposal-inline-mm\) \* var\(--proposal-template-left-zone-mm\)\)\s*minmax\(0,\s*1fr\);[\s\S]*?row-gap:\s*0;/,
+    );
+    expect(productStyles).toMatch(
+      /\.today-recent-grid\s*\{[\s\S]*gap:\s*var\(--library-gallery-row-gap\)\s*var\(--library-gallery-column-gap\);/,
+    );
+    expect(styles).toMatch(
+      /\.dasti-template-preview\s*\{[\s\S]*position:\s*fixed;[\s\S]*inset:\s*0;[\s\S]*z-index:\s*var\(--z-modal\);/,
+    );
+    expect(styles).toMatch(
+      /\.dasti-template-preview__panel\s*\{[\s\S]*grid-template-rows:\s*minmax\(0,\s*1fr\)\s*auto;[\s\S]*background:\s*var\(--sfr\);/,
+    );
+    expect(settingsStyles).not.toMatch(
+      /^\.dasti-template-card(?:__preview|__title|__description|\s|\{)/m,
+    );
+  });
+
+  it("forces resume gallery cards to render their own workshop template ids", () => {
+    const previewCv = generateCvTemplate("Preview CV with saved two-column style");
+    previewCv.metadata.verbatiStyle = {
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "geist-baskervville",
+      palette: "sauge",
+      resumeTemplateId: "workshop_resume_twocol_ats",
+    };
+
+    const { rerender } = render(
+      <TemplateDocumentPreview
+        kind="Resume"
+        family="workshop-onecol"
+        previewCv={previewCv}
+      />,
+    );
+
+    expect(screen.getByTestId("resume-template-renderer")).toHaveAttribute(
+      "data-resume-template-id",
+      "workshop_resume_onecol_ats",
+    );
+    expect(
+      screen.queryByTestId("resume-template-page")?.getAttribute(
+        "data-resume-template-layout",
+      ),
+    ).not.toBe("workshop-two-column");
+
+    rerender(
+      <TemplateDocumentPreview
+        kind="Resume"
+        family="workshop-twocol"
+        previewCv={previewCv}
+      />,
+    );
+
+    expect(screen.getByTestId("resume-template-renderer")).toHaveAttribute(
+      "data-resume-template-id",
+      "workshop_resume_twocol_ats",
+    );
+    expect(screen.getByTestId("resume-template-page")).toHaveAttribute(
+      "data-resume-template-layout",
+      "workshop-two-column",
     );
   });
 });
