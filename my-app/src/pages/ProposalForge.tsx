@@ -195,12 +195,15 @@ import { deriveCvTitleFromSections } from "../lib/normalize-cv";
 import {
   buildProposalHeaderVisibilityFromContent,
   buildProposalLetterDateLine,
+  buildProposalRecipientDetails,
   buildProposalRecipientPrefill,
   buildProposalSalutation,
+  parseProposalRecipientDetails,
   readProposalSalutation,
   replaceProposalSalutation,
   resolveProposalHeaderVisibility,
   type ProposalHeaderVisibility,
+  type ProposalRecipientFields,
 } from "../lib/proposal-header";
 import {
   buildProposalApplicantContactLine,
@@ -647,6 +650,7 @@ const COMPOSE_TOOLBAR_VISIBLE_VOICE_PRESETS = new Set<
 const FALLBACK_PROPOSAL_APPLICANT_HEADER: ProposalApplicantHeaderData = {
   name: null,
   role: null,
+  company: null,
   email: null,
   phone: null,
   linkedin: null,
@@ -665,6 +669,7 @@ function hasApplicantHeaderContent(
   return Boolean(
     header.name ||
       header.role ||
+      header.company ||
       header.email ||
       header.phone ||
       header.website ||
@@ -787,6 +792,7 @@ type ProposalDocumentMetadata = DocumentStyleMetadata & {
   templateBundleId?: ProposalTemplateBundleId;
   applicantName?: string;
   applicantRole?: string;
+  applicantCompany?: string;
   contactLine?: string;
   letterDate?: string;
   recipientDetails?: string;
@@ -835,13 +841,16 @@ function forgeDrawerSourceId(item: LibraryItem): string {
 
 function forgeDrawerProposalContext(item: LibraryItem): string {
   if (item.type === "cv") return "CV profile";
-  const jobPart = item.jobId || item.jobTitle ? "Job linked" : "No job";
-  const cvPart = item.linkedCvTitle
-    ? `CV: ${item.linkedCvTitle}`
-    : item.linkedCvId
-      ? "CV linked"
-      : "No CV linked";
-  return `${jobPart} · ${cvPart}`;
+  return [
+    item.jobId || item.jobTitle ? "Job linked" : null,
+    item.linkedCvTitle
+      ? `CV: ${item.linkedCvTitle}`
+      : item.linkedCvId
+        ? "CV linked"
+        : null,
+  ]
+    .filter(Boolean)
+    .join(" · ") || "Proposal";
 }
 
 function readForgeDrawerRecentSearches(storageKey: string): string[] {
@@ -3132,6 +3141,8 @@ export function ProposalForge(): JSX.Element {
         defaultPreviewApplicantHeader.role ||
         "",
     );
+  const [proposalApplicantCompany, setProposalApplicantCompany] =
+    React.useState<string>(storedOutputDraft?.proposalApplicantCompany || "");
   const [proposalContactLine, setProposalContactLine] = React.useState<string>(
     storedOutputDraft?.proposalContactLine ?? defaultPreviewContactLine,
   );
@@ -3147,6 +3158,10 @@ export function ProposalForge(): JSX.Element {
   );
   const [proposalRecipientDetails, setProposalRecipientDetails] =
     React.useState<string>(storedOutputDraft?.proposalRecipientDetails || "");
+  const [proposalRecipientFieldDraft, setProposalRecipientFieldDraft] =
+    React.useState<ProposalRecipientFields>(() =>
+      parseProposalRecipientDetails(storedOutputDraft?.proposalRecipientDetails),
+    );
   const [proposalHeaderVisibility, setProposalHeaderVisibility] =
     React.useState<ProposalHeaderVisibility>(initialProposalHeaderVisibility);
   const [proposalDocumentTitle, setProposalDocumentTitle] =
@@ -3370,6 +3385,7 @@ export function ProposalForge(): JSX.Element {
   const suppressStoredOutputDraftSyncRef = React.useRef(false);
   const skipNextStoredOutputDraftSyncRef = React.useRef(false);
   const skipNextStructuredContactSyncRef = React.useRef(false);
+  const skipNextStructuredRecipientSyncRef = React.useRef(false);
   const lastAutoApplicantHeaderRef = React.useRef({
     name: defaultPreviewApplicantHeader.name ?? "",
     role: defaultPreviewApplicantHeader.role ?? "",
@@ -3383,6 +3399,7 @@ export function ProposalForge(): JSX.Element {
   const headingDirtyRef = React.useRef({
     applicantName: Boolean(storedOutputDraft?.proposalApplicantName),
     applicantRole: Boolean(storedOutputDraft?.proposalApplicantRole),
+    applicantCompany: Boolean(storedOutputDraft?.proposalApplicantCompany),
     contactLine: Boolean(storedOutputDraft?.proposalContactLine),
     letterDate: Boolean(storedOutputDraft?.proposalLetterDate),
     recipientDetails: Boolean(storedOutputDraft?.proposalRecipientDetails),
@@ -3400,6 +3417,7 @@ export function ProposalForge(): JSX.Element {
       headingDirtyRef.current = {
         applicantName: false,
         applicantRole: false,
+        applicantCompany: false,
         contactLine: false,
         letterDate: false,
         recipientDetails: false,
@@ -3459,6 +3477,13 @@ export function ProposalForge(): JSX.Element {
     },
     [markHeadingFieldDirty],
   );
+  const handleProposalApplicantCompanyChange = React.useCallback(
+    (value: string) => {
+      markHeadingFieldDirty("applicantCompany");
+      setProposalApplicantCompany(value);
+    },
+    [markHeadingFieldDirty],
+  );
   const handleProposalContactLineChange = React.useCallback(
     (value: string) => {
       markHeadingFieldDirty("contactLine");
@@ -3509,6 +3534,32 @@ export function ProposalForge(): JSX.Element {
     },
     [markHeadingFieldDirty],
   );
+  React.useEffect(() => {
+    if (skipNextStructuredRecipientSyncRef.current) {
+      skipNextStructuredRecipientSyncRef.current = false;
+      return;
+    }
+    setProposalRecipientFieldDraft(
+      parseProposalRecipientDetails(proposalRecipientDetails),
+    );
+  }, [proposalRecipientDetails]);
+
+  const proposalRecipientFields = proposalRecipientFieldDraft;
+  const handleProposalRecipientFieldChange = React.useCallback(
+    (field: keyof ProposalRecipientFields, value: string) => {
+      markHeadingFieldDirty("recipientDetails");
+      const nextRecipientFields = {
+        ...proposalRecipientFieldDraft,
+        [field]: value,
+      };
+      setProposalRecipientFieldDraft(nextRecipientFields);
+      skipNextStructuredRecipientSyncRef.current = true;
+      setProposalRecipientDetails(
+        buildProposalRecipientDetails(nextRecipientFields),
+      );
+    },
+    [markHeadingFieldDirty, proposalRecipientFieldDraft],
+  );
 
   React.useEffect(() => {
     hasCompletedInitialRenderRef.current = true;
@@ -3537,6 +3588,13 @@ export function ProposalForge(): JSX.Element {
         current,
         previousAuto: previousAuto.role,
         nextAuto: nextAuto.role,
+      });
+    });
+    setProposalApplicantCompany((current) => {
+      return resolveHeadingFieldFromAuto("applicantCompany", {
+        current,
+        previousAuto: "",
+        nextAuto: "",
       });
     });
     setProposalContactLine((current) => {
@@ -4924,6 +4982,7 @@ export function ProposalForge(): JSX.Element {
       buildProposalHeadingMetadataPatch({
         applicantName: sanitizeProposalApplicantName(proposalApplicantName),
         applicantRole: proposalApplicantRole,
+        applicantCompany: proposalApplicantCompany,
         contactLine: proposalContactLine,
         letterDate: proposalLetterDate,
         recipientDetails: proposalRecipientDetails,
@@ -4955,6 +5014,7 @@ export function ProposalForge(): JSX.Element {
     proposalRenderMetadata,
     proposalApplicantName,
     proposalApplicantRole,
+    proposalApplicantCompany,
     proposalContactLine,
     proposalContent,
     proposalHeaderVisibility,
@@ -6400,6 +6460,7 @@ export function ProposalForge(): JSX.Element {
       );
       setProposalApplicantName(defaultPreviewApplicantHeader.name || "");
       setProposalApplicantRole(defaultPreviewApplicantHeader.role || "");
+      setProposalApplicantCompany("");
       setProposalContactLine(defaultPreviewContactLine);
       setProposalLetterDate(
         getDefaultProposalLetterDate(defaultPreviewApplicantHeader.location),
@@ -6489,6 +6550,7 @@ export function ProposalForge(): JSX.Element {
       proposalStyleChoice: "auto",
       proposalApplicantName: nextApplicantName,
       proposalApplicantRole: nextApplicantRole,
+      proposalApplicantCompany: "",
       proposalContactLine: defaultPreviewContactLine,
       proposalLetterDate: nextLetterDate,
       proposalRecipientDetails: "",
@@ -6991,6 +7053,12 @@ export function ProposalForge(): JSX.Element {
           "applicantRole",
         ) ?? "",
       );
+      setProposalApplicantCompany(
+        resolveProposalHeadingText(
+          openedSavedProposal.metadata,
+          "applicantCompany",
+        ) ?? "",
+      );
       setProposalContactLine(
         resolveProposalHeadingText(
           openedSavedProposal.metadata,
@@ -7102,6 +7170,9 @@ export function ProposalForge(): JSX.Element {
       resolveProposalHeadingText(draftProposal.metadata, "applicantName") ?? "";
     const nextApplicantRole =
       resolveProposalHeadingText(draftProposal.metadata, "applicantRole") ?? "";
+    const nextApplicantCompany =
+      resolveProposalHeadingText(draftProposal.metadata, "applicantCompany") ??
+      "";
     const nextContactLine =
       resolveProposalHeadingText(draftProposal.metadata, "contactLine") ?? "";
     const nextLetterDate =
@@ -7174,6 +7245,7 @@ export function ProposalForge(): JSX.Element {
     setComposeDraftInitialSeed(nextSourceComposeDraft);
     setProposalApplicantName(nextApplicantName);
     setProposalApplicantRole(nextApplicantRole);
+    setProposalApplicantCompany(nextApplicantCompany);
     setProposalContactLine(nextContactLine);
     setProposalLetterDate(nextLetterDate);
     setProposalRecipientDetails(nextRecipientDetails);
@@ -7212,6 +7284,7 @@ export function ProposalForge(): JSX.Element {
       proposalStyleChoice: nextStyleChoice,
       proposalApplicantName: nextApplicantName,
       proposalApplicantRole: nextApplicantRole,
+      proposalApplicantCompany: nextApplicantCompany,
       proposalContactLine: nextContactLine,
       proposalLetterDate: nextLetterDate,
       proposalRecipientDetails: nextRecipientDetails,
@@ -8061,6 +8134,7 @@ export function ProposalForge(): JSX.Element {
         proposalStyleChoice,
         proposalApplicantName: nextApplicantName,
         proposalApplicantRole: nextApplicantRole,
+        proposalApplicantCompany,
         proposalContactLine: nextContactLine,
         proposalLetterDate,
         proposalRecipientDetails,
@@ -8140,6 +8214,7 @@ export function ProposalForge(): JSX.Element {
           ...buildProposalHeadingMetadataPatch({
             applicantName: nextApplicantName,
             applicantRole: nextApplicantRole,
+            applicantCompany: proposalApplicantCompany,
             contactLine: nextContactLine,
             letterDate:
               proposalLetterDate ||
@@ -8208,6 +8283,7 @@ export function ProposalForge(): JSX.Element {
       formatProposalTypeLabel,
       proposalApplicantName,
       proposalApplicantRole,
+      proposalApplicantCompany,
       proposalContactLine,
       proposalCustomAccentHex,
       proposalDocumentTitle,
@@ -8519,11 +8595,6 @@ export function ProposalForge(): JSX.Element {
         });
         return;
       }
-      showToast("Save failed.", {
-        variant: "error",
-        description:
-          "The proposal text changed locally but could not be saved.",
-      });
     }
   }, [
     buildComposeSaveSnapshot,
@@ -8561,10 +8632,6 @@ export function ProposalForge(): JSX.Element {
       });
     } catch (error) {
       console.error("Failed to persist saved proposal edits:", error);
-      showToast("Save failed.", {
-        variant: "error",
-        description: "The saved proposal could not be updated.",
-      });
     } finally {
       setIsSavingSavedProposal(false);
     }
@@ -8675,6 +8742,7 @@ export function ProposalForge(): JSX.Element {
       proposalStyleChoice,
       proposalApplicantName,
       proposalApplicantRole,
+      proposalApplicantCompany,
       proposalContactLine,
       proposalLetterDate,
       proposalRecipientDetails,
@@ -8716,6 +8784,7 @@ export function ProposalForge(): JSX.Element {
     proposalContent,
     proposalApplicantName,
     proposalApplicantRole,
+    proposalApplicantCompany,
     proposalContactLine,
     proposalHeaderVisibility,
     proposalLetterDate,
@@ -9128,6 +9197,11 @@ export function ProposalForge(): JSX.Element {
           openedSavedProposal.metadata,
           "applicantRole",
         ) ?? "";
+      const restoredApplicantCompany =
+        resolveProposalHeadingText(
+          openedSavedProposal.metadata,
+          "applicantCompany",
+        ) ?? "";
       const restoredContactLine =
         resolveProposalHeadingText(
           openedSavedProposal.metadata,
@@ -9169,6 +9243,7 @@ export function ProposalForge(): JSX.Element {
           ...buildProposalHeadingMetadataPatch({
             applicantName: restoredApplicantName,
             applicantRole: restoredApplicantRole,
+            applicantCompany: restoredApplicantCompany,
             contactLine: restoredContactLine,
             letterDate: restoredLetterDate,
             recipientDetails: restoredRecipientDetails,
@@ -9256,6 +9331,7 @@ export function ProposalForge(): JSX.Element {
       setProposalCustomAccentHex(restoredCustomAccentHex);
       setProposalApplicantName(restoredApplicantName);
       setProposalApplicantRole(restoredApplicantRole);
+      setProposalApplicantCompany(restoredApplicantCompany);
       setProposalContactLine(restoredContactLine);
       setProposalLetterDate(restoredLetterDate);
       setProposalRecipientDetails(restoredRecipientDetails);
@@ -9405,6 +9481,7 @@ export function ProposalForge(): JSX.Element {
       setProposalWorkspaceStyle(null);
       setProposalApplicantName(defaultPreviewApplicantHeader.name || "");
       setProposalApplicantRole(defaultPreviewApplicantHeader.role || "");
+      setProposalApplicantCompany("");
       setProposalContactLine(defaultPreviewContactLine);
       setProposalLetterDate(
         getDefaultProposalLetterDate(defaultPreviewApplicantHeader.location),
@@ -9903,6 +9980,7 @@ export function ProposalForge(): JSX.Element {
     () => ({
       name: sanitizeProposalApplicantName(proposalApplicantName) || null,
       role: proposalApplicantRole.trim() || null,
+      company: proposalApplicantCompany.trim() || null,
       email: null,
       phone: null,
       linkedin: null,
@@ -9910,7 +9988,7 @@ export function ProposalForge(): JSX.Element {
       location: null,
       tag: null,
     }),
-    [proposalApplicantName, proposalApplicantRole],
+    [proposalApplicantName, proposalApplicantRole, proposalApplicantCompany],
   );
   const proposalContentSalutation = React.useMemo(
     () => readProposalSalutation(proposalContent),
@@ -10633,10 +10711,6 @@ export function ProposalForge(): JSX.Element {
           lastSavedProposalTitleRef.current = normalizedTitle;
         } catch (saveError) {
           console.error("Failed to persist proposal title:", saveError);
-          showToast("Save failed.", {
-            variant: "error",
-            description: "The proposal title could not be updated.",
-          });
         }
         return;
       }
@@ -10648,10 +10722,6 @@ export function ProposalForge(): JSX.Element {
         }
       } catch (saveError) {
         console.error("Failed to persist proposal title:", saveError);
-        showToast("Save failed.", {
-          variant: "error",
-          description: "The proposal title changed locally but could not be saved.",
-        });
       }
     },
     [
@@ -11032,6 +11102,16 @@ export function ProposalForge(): JSX.Element {
         },
       },
       {
+        id: "applicant-company",
+        label: "Applicant company / studio",
+        value: proposalApplicantCompany,
+        placeholder: "Studio, company, or practice",
+        onChange: handleProposalApplicantCompanyChange,
+        onBlur: () => {
+          void handleProposalDocumentCommit();
+        },
+      },
+      {
         id: "contact-email",
         label: "Email",
         value: proposalStructuredContactFields.email,
@@ -11118,13 +11198,63 @@ export function ProposalForge(): JSX.Element {
         },
       },
       {
-        id: "recipient-details",
-        label: "Recipient information",
-        value: proposalRecipientDetails,
-        placeholder:
-          "Hiring manager or team\nCompany name\nCompany city / remote",
-        multiline: true,
-        onChange: handleProposalRecipientDetailsChange,
+        id: "recipient-name",
+        label: "Recipient name / team",
+        value: proposalRecipientFields.name,
+        placeholder: "Hiring manager or team",
+        onChange: (value) => handleProposalRecipientFieldChange("name", value),
+        onBlur: () => {
+          void handleProposalDocumentCommit();
+        },
+      },
+      {
+        id: "recipient-company",
+        label: "Recipient company",
+        value: proposalRecipientFields.company,
+        placeholder: "Company name",
+        onChange: (value) =>
+          handleProposalRecipientFieldChange("company", value),
+        onBlur: () => {
+          void handleProposalDocumentCommit();
+        },
+      },
+      {
+        id: "recipient-city",
+        label: "Recipient city / location",
+        value: proposalRecipientFields.city,
+        placeholder: "Company city / remote",
+        onChange: (value) => handleProposalRecipientFieldChange("city", value),
+        onBlur: () => {
+          void handleProposalDocumentCommit();
+        },
+      },
+      {
+        id: "recipient-role",
+        label: "Recipient role / contact title",
+        value: proposalRecipientFields.role,
+        placeholder: "Talent acquisition, recruiter, or contact title",
+        onChange: (value) => handleProposalRecipientFieldChange("role", value),
+        onBlur: () => {
+          void handleProposalDocumentCommit();
+        },
+      },
+      {
+        id: "recipient-address",
+        label: "Recipient address",
+        value: proposalRecipientFields.address,
+        placeholder: "Street address",
+        onChange: (value) =>
+          handleProposalRecipientFieldChange("address", value),
+        onBlur: () => {
+          void handleProposalDocumentCommit();
+        },
+      },
+      {
+        id: "recipient-email",
+        label: "Recipient email",
+        value: proposalRecipientFields.email,
+        placeholder: "recipient@example.com",
+        onChange: (value) => handleProposalRecipientFieldChange("email", value),
         onBlur: () => {
           void handleProposalDocumentCommit();
         },
@@ -11146,15 +11276,19 @@ export function ProposalForge(): JSX.Element {
       handleProposalDocumentTitleChange,
       handleProposalApplicantNameChange,
       handleProposalApplicantRoleChange,
+      handleProposalApplicantCompanyChange,
       handleProposalStructuredContactChange,
       handleProposalLetterDateChange,
+      handleProposalRecipientFieldChange,
       handleProposalRecipientDetailsChange,
       handleProposalSalutationChange,
       proposalApplicantName,
       proposalApplicantRole,
+      proposalApplicantCompany,
       proposalStructuredContactFields,
       proposalDocumentTitle,
       proposalLetterDate,
+      proposalRecipientFields,
       proposalRecipientDetails,
       proposalSalutationValue,
     ],

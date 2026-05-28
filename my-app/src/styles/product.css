@@ -4477,6 +4477,7 @@ body,
   --work-preview-stage-radius: calc(var(--radius-card) - 3px);
   position: relative;
   min-width: 0;
+  min-height: 0;
   padding: var(--work-card-pad);
   border-radius: var(--work-card-radius);
   background: var(--work-card-bg);
@@ -4487,15 +4488,15 @@ body,
 }
 
 .today-preview-card[data-variant="primary"] {
-  min-height: 408px;
+  min-height: 0;
 }
 
 .today-preview-card[data-variant="secondary"] {
-  min-height: 220px;
+  min-height: 0;
 }
 
 .today-preview-card[data-variant="compact"] {
-  min-height: 248px;
+  min-height: 0;
 }
 
 .today-preview-card__menu {
@@ -4539,7 +4540,8 @@ body,
   width: 100%;
   min-width: 0;
   display: grid;
-  gap: var(--space-3);
+  gap: var(--s2);
+  align-content: start;
   border: 0;
   padding: 0;
   background: transparent;
@@ -4568,6 +4570,8 @@ body,
   gap: var(--space-1);
   min-width: 0;
   padding-block-start: 0;
+  padding-block-end: var(--s2);
+  border-block-end: 1px solid color-mix(in srgb, var(--border-strong) 54%, transparent);
 }
 
 .today-preview-card__meta strong {

@@ -490,7 +490,9 @@ describe("DocumentsPage", () => {
     await user.click(within(typeTabs()).getByRole("tab", { name: "Proposals" }));
 
     expect(screen.getAllByText("Job linked · CV: Frontend Engineer · Editorial v3").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Job linked · No CV linked").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Job linked").length).toBeGreaterThan(0);
+    expect(screen.queryByText("No CV linked")).not.toBeInTheDocument();
+    expect(screen.queryByText("No job")).not.toBeInTheDocument();
     expect(screen.queryByText("Needs review")).not.toBeInTheDocument();
     expect(screen.queryByText("Ready")).not.toBeInTheDocument();
     expect(screen.queryByText("Saved")).not.toBeInTheDocument();
@@ -506,9 +508,10 @@ describe("DocumentsPage", () => {
     expect(screen.queryByText("Staff Designer draft")).not.toBeInTheDocument();
 
     await user.clear(screen.getByLabelText("Search projects"));
-    await user.type(screen.getByLabelText("Search projects"), "no cv linked");
+    await user.type(screen.getByLabelText("Search projects"), "job linked");
     expect(screen.getAllByText("Staff Designer draft").length).toBeGreaterThan(0);
-    expect(screen.queryByText("Frontend Engineer · Editorial v3")).not.toBeInTheDocument();
+    expect(screen.queryByText("No CV linked")).not.toBeInTheDocument();
+    expect(screen.queryByText("No job")).not.toBeInTheDocument();
   });
 
   it("list view renders rows with expected columns", async () => {

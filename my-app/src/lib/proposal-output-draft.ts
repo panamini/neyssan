@@ -68,6 +68,7 @@ export type StoredProposalOutputDraft = {
   proposalStyleChoice: ProposalStyleChoice;
   proposalApplicantName: string;
   proposalApplicantRole: string;
+  proposalApplicantCompany?: string;
   proposalContactLine?: string;
   proposalLetterDate?: string;
   proposalRecipientDetails?: string;
@@ -326,6 +327,10 @@ export function readStoredProposalOutputDraft(): StoredProposalOutputDraft | nul
         typeof parsed.proposalApplicantRole === "string"
           ? parsed.proposalApplicantRole
           : "",
+      proposalApplicantCompany:
+        typeof parsed.proposalApplicantCompany === "string"
+          ? parsed.proposalApplicantCompany
+          : "",
       proposalContactLine:
         typeof parsed.proposalContactLine === "string"
           ? parsed.proposalContactLine
@@ -498,6 +503,10 @@ function buildSanitizedStoredProposalOutputDraft(
     proposalApplicantRole:
       typeof draft.proposalApplicantRole === "string"
         ? draft.proposalApplicantRole
+        : "",
+    proposalApplicantCompany:
+      typeof draft.proposalApplicantCompany === "string"
+        ? draft.proposalApplicantCompany
         : "",
     proposalContactLine:
       typeof draft.proposalContactLine === "string"

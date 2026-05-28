@@ -233,13 +233,16 @@ function navigateTarget(
 
 function proposalContext(item: LibraryItem): string {
   if (item.type === "cv") return "CV profile";
-  const jobPart = item.jobId || item.jobTitle ? "Job linked" : "No job";
-  const cvPart = item.linkedCvTitle
-    ? `CV: ${item.linkedCvTitle}`
-    : item.linkedCvId
-      ? "CV linked"
-      : "No CV linked";
-  return `${jobPart} · ${cvPart}`;
+  return [
+    item.jobId || item.jobTitle ? "Job linked" : null,
+    item.linkedCvTitle
+      ? `CV: ${item.linkedCvTitle}`
+      : item.linkedCvId
+        ? "CV linked"
+        : null,
+  ]
+    .filter(Boolean)
+    .join(" · ") || "Proposal";
 }
 
 function matchesType(typeFilter: TypeFilter, item: LibraryItem): boolean {

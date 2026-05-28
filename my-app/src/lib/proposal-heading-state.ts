@@ -4,6 +4,7 @@ import type { ProposalApplicantHeaderData } from "./proposal-personalization";
 export type ProposalHeadingMetadata = {
   applicantName?: string;
   applicantRole?: string;
+  applicantCompany?: string;
   contactLine?: string;
   letterDate?: string;
   recipientDetails?: string;
@@ -17,6 +18,7 @@ export type ProposalHeadingMetadata = {
 export type ProposalHeadingTextKey =
   | "applicantName"
   | "applicantRole"
+  | "applicantCompany"
   | "contactLine"
   | "letterDate"
   | "recipientDetails";
@@ -59,14 +61,16 @@ export function buildProposalApplicantHeaderFromMetadata(
 ): ProposalApplicantHeaderData | null {
   const name = resolveProposalHeadingText(metadata, "applicantName");
   const role = resolveProposalHeadingText(metadata, "applicantRole");
+  const company = resolveProposalHeadingText(metadata, "applicantCompany");
 
-  if (name === null && role === null) {
+  if (name === null && role === null && company === null) {
     return null;
   }
 
   return {
     name,
     role,
+    company,
     email: null,
     phone: null,
     linkedin: null,
@@ -99,7 +103,11 @@ function isPhoneContactPart(value: string): boolean {
 }
 
 function isLinkedinContactPart(value: string): boolean {
-  return /\blinkedin\.com\b/i.test(value) || /^@[a-z0-9._-]+$/i.test(value);
+  return (
+    /\blinkedin\.com\b/i.test(value) ||
+    /^linkedin$/i.test(value.trim()) ||
+    /^@[a-z0-9._-]+$/i.test(value)
+  );
 }
 
 function isWebsiteContactPart(value: string): boolean {
@@ -221,6 +229,7 @@ export function resolveAutoHeadingField(args: {
 export function buildProposalHeadingMetadataPatch(args: {
   applicantName: string;
   applicantRole: string;
+  applicantCompany?: string;
   contactLine: string;
   letterDate: string;
   recipientDetails: string;
@@ -229,6 +238,7 @@ export function buildProposalHeadingMetadataPatch(args: {
   return {
     applicantName: args.applicantName.trim(),
     applicantRole: args.applicantRole.trim(),
+    applicantCompany: args.applicantCompany?.trim() ?? "",
     contactLine: args.contactLine.trim(),
     letterDate: args.letterDate.trim(),
     recipientDetails: args.recipientDetails.trim(),

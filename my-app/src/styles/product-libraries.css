@@ -356,9 +356,10 @@
 .dasti-doc-card--proposal-library .dasti-doc-card__footer-meta {
   align-items: center;
   column-gap: var(--space-1);
+  row-gap: 0;
   font-family: var(--font-body-family);
   font-size: var(--text-body-sm-size);
-  line-height: var(--text-body-sm-line);
+  line-height: 1.05;
 }
 
 .dasti-doc-card--proposal-library .dasti-proposal-tone-badge--compact {
@@ -1379,7 +1380,9 @@
   --work-paper-radius: var(--space-1);
   --work-preview-stage: transparent;
   --work-preview-stage-radius: calc(var(--radius-card) - 3px);
-  min-height: 376px;
+  grid-template-rows: auto auto auto;
+  align-content: start;
+  min-height: 0;
   padding: var(--work-card-pad);
   border-radius: var(--work-card-radius);
   background: var(--work-card-bg);
@@ -1714,8 +1717,9 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: var(--s2);
-  margin-top: auto;
   padding-top: var(--s2);
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid color-mix(in srgb, var(--border-strong) 54%, transparent);
   color: var(--tm2);
   font: var(--type-small);
 }

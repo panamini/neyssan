@@ -14,6 +14,11 @@ type ProposalHeadingFieldsProps = {
   variableFields: ProposalHeadingField[];
 };
 
+type PendingSelection = {
+  start: number;
+  end: number;
+};
+
 const HEADING_FIELD_GROUPS = [
   {
     id: "applicant",
@@ -21,6 +26,7 @@ const HEADING_FIELD_GROUPS = [
     fieldIds: [
       "applicant-name",
       "applicant-role",
+      "applicant-company",
       "contact-email",
       "contact-phone",
       "contact-location",
@@ -32,7 +38,15 @@ const HEADING_FIELD_GROUPS = [
   {
     id: "recipient",
     label: "Recipient details",
-    fieldIds: ["recipient-details"],
+    fieldIds: [
+      "recipient-name",
+      "recipient-company",
+      "recipient-city",
+      "recipient-role",
+      "recipient-address",
+      "recipient-email",
+      "recipient-details",
+    ],
   },
   {
     id: "letter-formulas",
@@ -41,7 +55,15 @@ const HEADING_FIELD_GROUPS = [
   },
 ] as const;
 
-function renderVariableField(field: ProposalHeadingField): JSX.Element {
+function ProposalHeadingTextField({
+  field,
+}: {
+  field: ProposalHeadingField;
+}): JSX.Element {
+  const fieldRef = React.useRef<HTMLInputElement | HTMLTextAreaElement | null>(
+    null,
+  );
+  const pendingSelectionRef = React.useRef<PendingSelection | null>(null);
   const textareaRows = field.multiline
     ? Math.max(
         3,
@@ -50,9 +72,38 @@ function renderVariableField(field: ProposalHeadingField): JSX.Element {
       )
     : undefined;
 
+  React.useLayoutEffect(() => {
+    const pendingSelection = pendingSelectionRef.current;
+    const input = fieldRef.current;
+    if (!pendingSelection || !input || document.activeElement !== input) {
+      return;
+    }
+
+    const maxSelection = input.value.length;
+    input.setSelectionRange(
+      Math.min(pendingSelection.start, maxSelection),
+      Math.min(pendingSelection.end, maxSelection),
+    );
+    pendingSelectionRef.current = null;
+  }, [field.value]);
+
+  const handleChange = React.useCallback(
+    (
+      event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+    ) => {
+      const target = event.currentTarget;
+      const fallbackSelection = target.value.length;
+      pendingSelectionRef.current = {
+        start: target.selectionStart ?? fallbackSelection,
+        end: target.selectionEnd ?? target.selectionStart ?? fallbackSelection,
+      };
+      field.onChange(target.value);
+    },
+    [field],
+  );
+
   return (
     <label
-      key={field.id}
       className={[
         "dasti-proposal-skeleton-rail__variable-field",
         field.multiline
@@ -64,26 +115,36 @@ function renderVariableField(field: ProposalHeadingField): JSX.Element {
     >
       {field.multiline ? (
         <textarea
+          ref={(node) => {
+            fieldRef.current = node;
+          }}
           className="ds-field ds-field--textarea"
           aria-label={field.label}
           value={field.value}
           placeholder={field.placeholder}
           rows={textareaRows}
-          onChange={(event) => field.onChange(event.target.value)}
+          onChange={handleChange}
           onBlur={field.onBlur}
         />
       ) : (
         <input
+          ref={(node) => {
+            fieldRef.current = node;
+          }}
           className="ds-field"
           aria-label={field.label}
           value={field.value}
           placeholder={field.placeholder}
-          onChange={(event) => field.onChange(event.target.value)}
+          onChange={handleChange}
           onBlur={field.onBlur}
         />
       )}
     </label>
   );
+}
+
+function renderVariableField(field: ProposalHeadingField): JSX.Element {
+  return <ProposalHeadingTextField key={field.id} field={field} />;
 }
 
 export function ProposalHeadingFields({

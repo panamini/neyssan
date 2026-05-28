@@ -177,6 +177,7 @@ export type ProposalPrintBlock =
 export type ProposalPrintApplicantHeader = {
   name: string;
   role: string;
+  company: string;
   email: string;
   phone: string;
   linkedin: string;
@@ -535,6 +536,7 @@ export function buildProposalPreviewPrintSource(args: {
     applicantHeader: {
       name: cleanString(args.applicantHeader?.name),
       role: cleanString(args.applicantHeader?.role),
+      company: cleanString(args.applicantHeader?.company),
       email: cleanString(args.applicantHeader?.email),
       phone: cleanString(args.applicantHeader?.phone),
       linkedin: cleanString(args.applicantHeader?.linkedin),
@@ -737,6 +739,7 @@ export function buildProposalExportSource(args: {
     applicantHeader: {
       name: cleanString(args.applicantHeader?.name),
       role: cleanString(args.applicantHeader?.role),
+      company: cleanString(args.applicantHeader?.company),
       email: cleanString(args.applicantHeader?.email),
       phone: cleanString(args.applicantHeader?.phone),
       linkedin: cleanString(args.applicantHeader?.linkedin),
