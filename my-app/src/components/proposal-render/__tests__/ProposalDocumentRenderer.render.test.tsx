@@ -984,12 +984,14 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     );
 
     const phoneBlock = container.querySelector(
-      ".proposal-cover-letter--director .proposal-cover-letter__phone-block",
+      ".proposal-cover-letter--director .proposal-cover-letter__contact-grid",
     );
 
     expect(phoneBlock?.textContent).toContain("T");
     expect(phoneBlock?.textContent).toContain("09898777");
-    expect(phoneBlock?.textContent).not.toContain("zoe@loi.com");
+    expect(phoneBlock?.textContent).toContain("@");
+    expect(phoneBlock?.textContent).toContain("zoe@loi.com");
+    expect(phoneBlock?.textContent).toContain("zoe.com");
   });
 
   it("uses a digital @ contact block in the director letterhead when no phone exists", () => {
@@ -1013,7 +1015,7 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     );
 
     const phoneBlock = container.querySelector(
-      ".proposal-cover-letter--director .proposal-cover-letter__phone-block",
+      ".proposal-cover-letter--director .proposal-cover-letter__contact-grid",
     );
 
     expect(phoneBlock?.textContent).toContain("@");
@@ -1021,4 +1023,157 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     expect(phoneBlock?.textContent).toContain("zoe.com");
     expect(phoneBlock?.textContent).not.toContain("T");
   });
+
+  it.each([
+    {
+      templateId: "director-letterhead" as const,
+      scope: ".proposal-cover-letter--director",
+    },
+    {
+      templateId: "volk-letterhead" as const,
+      scope: ".proposal-cover-letter--volk",
+    },
+    {
+      templateId: "film-foto-letterhead" as const,
+      scope: ".proposal-cover-letter--film-foto",
+    },
+  ])(
+    "renders recipient postal contact details in a compact block for $templateId",
+    ({ templateId, scope }) => {
+      const { container } = render(
+        <ProposalDocumentRenderer
+          content={[
+            "Dear Hiring Manager,",
+            "First body paragraph.",
+            "Second body paragraph.",
+          ].join("\n\n")}
+          proposalType="cover_letter"
+          templateId={templateId}
+          railTitle="Robert Cooper"
+          railMeta="Security Guard"
+          contactLine="name@email.com · +321 08 98 43 23 43 · LINKEDIN · PORTFOLIO.COM"
+          letterDate="May 12, 2026"
+          recipientDetails={
+            "Hiring Manager\nTalent Acquisition\nCompany Name\nStreet address\nrecipient@example.com\nCompany City"
+          }
+          documentTitle="Subject line"
+          headerVisibility={{
+            showSender: true,
+            showDate: true,
+            showSubject: true,
+            showRecipient: true,
+            showRecipientDetails: true,
+          }}
+          documentTypography={{
+            fontFamily: "Georgia, serif",
+            fontSize: "14px",
+            lineHeight: 1.5,
+            fontWeight: 400,
+            letterSpacing: "0em",
+          }}
+        />,
+      );
+
+      const root = container.querySelector(scope);
+      const renderedPage = Array.from(
+        root?.querySelectorAll(".dasti-proposal-document__page") ?? [],
+      ).at(-1);
+      const recipientBlock = renderedPage?.querySelector(
+        ".proposal-cover-letter__recipient-block",
+      );
+      const metaItems = Array.from(
+        renderedPage?.querySelectorAll(".proposal-cover-letter__meta-item") ??
+          [],
+      ).map((node) => node.textContent);
+      const paragraphs = Array.from(
+        renderedPage?.querySelectorAll(".dasti-proposal-document__paragraph") ??
+          [],
+      ).map((node) => node.textContent);
+
+      expect(recipientBlock?.textContent).toContain("Street address");
+      expect(recipientBlock?.textContent).toContain("Company City");
+      expect(recipientBlock?.textContent).toContain("recipient@example.com");
+      expect(metaItems).toEqual([
+        "Hiring Manager",
+        "Company Name",
+        "Talent Acquisition",
+        "May 12, 2026",
+      ]);
+      expect(paragraphs).toEqual([
+        "First body paragraph.",
+        "Second body paragraph.",
+      ]);
+      expect(renderedPage?.textContent).not.toContain("undefined");
+      expect(renderedPage?.textContent).not.toContain("null");
+      expect(renderedPage?.textContent).not.toContain("[object Object]");
+    },
+  );
+
+  it.each([
+    {
+      templateId: "director-letterhead" as const,
+      scope: ".proposal-cover-letter--director",
+      secondarySelector: ".proposal-cover-letter__masthead-secondary",
+    },
+    {
+      templateId: "volk-letterhead" as const,
+      scope: ".proposal-cover-letter--volk",
+      secondarySelector: ".proposal-cover-letter__volk-title--right",
+    },
+    {
+      templateId: "film-foto-letterhead" as const,
+      scope: ".proposal-cover-letter--film-foto",
+      secondarySelector: ".proposal-cover-letter__film-company",
+    },
+  ])(
+    "does not fall back to recipient fields for the applicant company title in $templateId",
+    ({ templateId, scope, secondarySelector }) => {
+      const { container } = render(
+        <ProposalDocumentRenderer
+          content="Dear Hiring Manager,\n\nI can support the team."
+          proposalType="cover_letter"
+          templateId={templateId}
+          railTitle="Robert Cooper"
+          railMeta="Security Guard"
+          contactLine="email@email.com · Los Angeles"
+          letterDate="May 12, 2026"
+          recipientDetails={
+            "Hiring Manager\nTalent Acquisition\nUs Smart Tools\nStreet address\nrecipient@example.com\nParis"
+          }
+          documentTitle="Application for Security Guard"
+          headerVisibility={{
+            showSender: true,
+            showDate: true,
+            showSubject: true,
+            showRecipient: true,
+            showRecipientDetails: true,
+          }}
+          documentTypography={{
+            fontFamily: "Georgia, serif",
+            fontSize: "14px",
+            lineHeight: 1.5,
+            fontWeight: 400,
+            letterSpacing: "0em",
+          }}
+          applicantHeader={{
+            name: "Robert Cooper",
+            role: "Security Guard",
+            company: "",
+            email: "email@email.com",
+            phone: "",
+            linkedin: null,
+            website: "",
+            location: "Los Angeles",
+            tag: null,
+          }}
+        />,
+      );
+      const root = container.querySelector(scope);
+
+      expect(root?.querySelector(secondarySelector)).toBeNull();
+      expect(root?.textContent).toContain("Security Guard");
+      expect(root?.querySelector(".proposal-cover-letter__recipient-block")?.textContent)
+        .toContain("recipient@example.com");
+    },
+  );
 });

@@ -115,6 +115,7 @@ type ProposalLetterheadViewModel = {
   candidateDirectorContactLine: string;
   candidateDirectorContactMark: "T" | "@";
   candidateDirectorContactLines: string[];
+  candidateDirectorContactGroups: Array<{ mark: "T" | "@"; lines: string[] }>;
   candidateVolkSenderLine: string;
   candidateFilmSenderLine: string;
   candidateLocationLine: string;
@@ -124,6 +125,10 @@ type ProposalLetterheadViewModel = {
   recipientName: string;
   recipientCompany: string;
   recipientRole: string;
+  recipientAddress: string;
+  recipientEmail: string;
+  recipientCity: string;
+  recipientContactLines: string[];
   date: string;
   subject: string;
   secondaryTitle: string;
@@ -250,6 +255,48 @@ function joinNonEmpty(parts: Array<string | null | undefined>): string {
     .join(" · ");
 }
 
+function uniqueNonEmptyLines(
+  parts: Array<string | null | undefined>,
+  excludedParts: Array<string | null | undefined> = [],
+): string[] {
+  const excluded = new Set(
+    excludedParts
+      .map((part) => part?.trim().toLowerCase() ?? "")
+      .filter(Boolean),
+  );
+  const seen = new Set<string>();
+  const lines: string[] = [];
+
+  parts.forEach((part) => {
+    const line = part?.trim() ?? "";
+    const key = line.toLowerCase();
+    if (!line || excluded.has(key) || seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    lines.push(line);
+  });
+
+  return lines;
+}
+
+function buildDirectorDigitalContactLines(
+  parts: ReturnType<typeof parseProposalContactLine>,
+): string[] {
+  const values = uniqueNonEmptyLines([
+    parts.email,
+    parts.website,
+    parts.linkedin,
+    parts.other,
+  ]);
+
+  if (values.length <= 2) {
+    return values;
+  }
+
+  return [values[0], values.slice(1).join(" · ")];
+}
+
 function buildProposalLetterheadViewModel(args: {
   applicantHeader?: ProposalApplicantHeaderData | null;
   railTitle?: string | null;
@@ -295,14 +342,22 @@ function buildProposalLetterheadViewModel(args: {
     website: resolvedContactParts.website,
     other: resolvedContactParts.other,
   });
-  const candidateDigitalContactLines = [
-    resolvedContactParts.email,
-    resolvedContactParts.website || resolvedContactParts.linkedin,
-  ].filter(Boolean);
+  const candidateDigitalContactLines =
+    buildDirectorDigitalContactLines(resolvedContactParts);
   const candidateDirectorContactMark = resolvedContactParts.phone ? "T" : "@";
   const candidateDirectorContactLines = resolvedContactParts.phone
     ? [resolvedContactParts.phone]
     : candidateDigitalContactLines.slice(0, 2);
+  const candidateDirectorContactGroups = [
+    resolvedContactParts.phone
+      ? { mark: "T" as const, lines: [resolvedContactParts.phone] }
+      : null,
+    candidateDigitalContactLines.length
+      ? { mark: "@" as const, lines: candidateDigitalContactLines }
+      : null,
+  ].filter(
+    (group): group is { mark: "T" | "@"; lines: string[] } => Boolean(group),
+  );
   const candidateShortLocationLine = resolveProposalLetterheadShortTitle({
     recipientFields,
     candidateLocation: resolvedContactParts.location,
@@ -328,14 +383,24 @@ function buildProposalLetterheadViewModel(args: {
   const recipientRole = visibility.showRecipient
     ? recipientFields.role?.trim() ?? ""
     : "";
+  const recipientAddress =
+    visibility.showRecipient && visibility.showRecipientDetails
+      ? recipientFields.address?.trim() ?? ""
+      : "";
+  const recipientEmail =
+    visibility.showRecipient && visibility.showRecipientDetails
+      ? recipientFields.email?.trim() ?? ""
+      : "";
+  const recipientCity =
+    visibility.showRecipient && visibility.showRecipientDetails
+      ? recipientFields.city?.trim() ?? ""
+      : "";
+  const recipientContactLines = uniqueNonEmptyLines(
+    [recipientAddress, recipientCity, recipientEmail],
+    [recipientName, recipientCompany, recipientRole],
+  );
   const subject = visibility.showSubject ? args.documentTitle?.trim() ?? "" : "";
-  const secondaryTitle =
-    candidateCompany ||
-    resolveProposalLetterheadShortTitle({
-      recipientFields,
-      candidateLocation: "",
-      showRecipient: visibility.showRecipient,
-    });
+  const secondaryTitle = candidateCompany;
   const metaRole = recipientRole;
   const shortRoleTitle = candidateRole || recipientRole;
 
@@ -347,6 +412,7 @@ function buildProposalLetterheadViewModel(args: {
     candidateDirectorContactLine,
     candidateDirectorContactMark,
     candidateDirectorContactLines,
+    candidateDirectorContactGroups,
     candidateVolkSenderLine,
     candidateFilmSenderLine,
     candidateLocationLine: resolvedContactParts.location,
@@ -359,6 +425,10 @@ function buildProposalLetterheadViewModel(args: {
     recipientName,
     recipientCompany,
     recipientRole,
+    recipientAddress,
+    recipientEmail,
+    recipientCity,
+    recipientContactLines,
     date: visibility.showDate ? args.letterDate?.trim() ?? "" : "",
     subject,
     secondaryTitle,
@@ -411,6 +481,55 @@ function ProposalCoverLetterSubjectRow({
   );
 }
 
+function ProposalCoverLetterRecipientBlock({
+  viewModel,
+}: {
+  viewModel: ProposalLetterheadViewModel;
+}): JSX.Element | null {
+  if (viewModel.recipientContactLines.length === 0) {
+    return null;
+  }
+
+  return (
+    <section
+      className="proposal-cover-letter__recipient-block"
+      aria-label="Recipient contact details"
+    >
+      {viewModel.recipientContactLines.map((line) => (
+        <p key={line}>{line}</p>
+      ))}
+    </section>
+  );
+}
+
+function ProposalCoverLetterDirectorContactGrid({
+  viewModel,
+}: {
+  viewModel: ProposalLetterheadViewModel;
+}): JSX.Element | null {
+  if (viewModel.candidateDirectorContactGroups.length === 0) {
+    return null;
+  }
+
+  return (
+    <section
+      className="proposal-cover-letter__contact-grid"
+      aria-label="Sender contact details"
+    >
+      {viewModel.candidateDirectorContactGroups.map((group) => (
+        <React.Fragment key={group.mark}>
+          <p className="proposal-cover-letter__contact-mark">{group.mark}</p>
+          <div className="proposal-cover-letter__contact-lines">
+            {group.lines.map((line) => (
+              <p key={`${group.mark}-${line}`}>{line}</p>
+            ))}
+          </div>
+        </React.Fragment>
+      ))}
+    </section>
+  );
+}
+
 export function ProposalCoverLetterDirectorTemplate({
   bodyRef,
   bodyContent,
@@ -456,24 +575,11 @@ export function ProposalCoverLetterDirectorTemplate({
               {viewModel.candidateLocationLine ? (
                 <p>{viewModel.candidateLocationLine}</p>
               ) : null}
-              {viewModel.candidateDirectorContactLine ? (
-                <p>{viewModel.candidateDirectorContactLine}</p>
-              ) : null}
             </div>
           </section>
-          {viewModel.candidateDirectorContactLines.length ? (
-            <section className="proposal-cover-letter__phone-block">
-              <p className="proposal-cover-letter__phone-mark">
-                {viewModel.candidateDirectorContactMark}
-              </p>
-              <div>
-                {viewModel.candidateDirectorContactLines.map((line) => (
-                  <p key={line}>{line}</p>
-                ))}
-              </div>
-            </section>
-          ) : null}
+          <ProposalCoverLetterDirectorContactGrid viewModel={viewModel} />
           <ProposalCoverLetterMetaRow viewModel={viewModel} />
+          <ProposalCoverLetterRecipientBlock viewModel={viewModel} />
           <ProposalCoverLetterSubjectRow viewModel={viewModel} />
         </>
       ) : null}
@@ -517,6 +623,7 @@ export function ProposalCoverLetterVolkTemplate({
             ) : null}
           </header>
           <ProposalCoverLetterMetaRow viewModel={viewModel} />
+          <ProposalCoverLetterRecipientBlock viewModel={viewModel} />
           <ProposalCoverLetterSubjectRow viewModel={viewModel} prefix="re:" />
           <span className="proposal-cover-letter__dot" aria-hidden="true" />
         </>
@@ -593,6 +700,7 @@ export function ProposalCoverLetterFilmFotoTemplate({
             ) : null}
           </section>
           <ProposalCoverLetterMetaRow viewModel={viewModel} />
+          <ProposalCoverLetterRecipientBlock viewModel={viewModel} />
           <ProposalCoverLetterSubjectRow viewModel={viewModel} />
           <span className="proposal-cover-letter__dot" aria-hidden="true" />
         </>
@@ -1764,6 +1872,9 @@ export function ProposalDocumentRenderer({
           : "",
         resolvedTemplateId === "film-foto-letterhead"
           ? "proposal-cover-letter--film-foto"
+          : "",
+        letterheadViewModel.recipientContactLines.length > 0
+          ? "proposal-cover-letter--has-recipient-block"
           : "",
         `dasti-proposal-document--${parsedDocument.kind}`,
       ]

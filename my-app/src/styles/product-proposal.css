@@ -3588,18 +3588,21 @@
 
 .proposal-cover-letter--director .proposal-cover-letter__masthead,
 .proposal-cover-letter--director .proposal-cover-letter__sender-block,
-.proposal-cover-letter--director .proposal-cover-letter__phone-block,
+.proposal-cover-letter--director .proposal-cover-letter__contact-grid,
 .proposal-cover-letter--director .proposal-cover-letter__meta-row,
+.proposal-cover-letter--director .proposal-cover-letter__recipient-block,
 .proposal-cover-letter--director .proposal-cover-letter__subject-row,
 .proposal-cover-letter--director .proposal-cover-letter__body,
 .proposal-cover-letter--volk .proposal-cover-letter__volk-header,
 .proposal-cover-letter--volk .proposal-cover-letter__meta-row,
+.proposal-cover-letter--volk .proposal-cover-letter__recipient-block,
 .proposal-cover-letter--volk .proposal-cover-letter__subject-row,
 .proposal-cover-letter--volk .proposal-cover-letter__body,
 .proposal-cover-letter--volk .proposal-cover-letter__dot,
 .proposal-cover-letter--film-foto .proposal-cover-letter__film-header,
 .proposal-cover-letter--film-foto .proposal-cover-letter__info-blocks,
 .proposal-cover-letter--film-foto .proposal-cover-letter__meta-row,
+.proposal-cover-letter--film-foto .proposal-cover-letter__recipient-block,
 .proposal-cover-letter--film-foto .proposal-cover-letter__subject-row,
 .proposal-cover-letter--film-foto .proposal-cover-letter__body,
 .proposal-cover-letter--film-foto .proposal-cover-letter__dot {
@@ -3623,7 +3626,7 @@
 .proposal-cover-letter--director .proposal-cover-letter__masthead--no-secondary
   .proposal-cover-letter__masthead-role {
   grid-column: 2;
-  max-width: 84mm;
+  max-width: 106mm;
   white-space: normal;
 }
 
@@ -3632,7 +3635,8 @@
 .proposal-cover-letter--director .proposal-cover-letter__masthead-role,
 .proposal-cover-letter--director .proposal-cover-letter__sender-label,
 .proposal-cover-letter--director .proposal-cover-letter__sender-lines p,
-.proposal-cover-letter--director .proposal-cover-letter__phone-block p,
+.proposal-cover-letter--director .proposal-cover-letter__contact-grid p,
+.proposal-cover-letter--director .proposal-cover-letter__recipient-block p,
 .proposal-cover-letter--director .proposal-cover-letter__meta-item,
 .proposal-cover-letter--director .proposal-cover-letter__subject-label,
 .proposal-cover-letter--director .proposal-cover-letter__subject-value {
@@ -3642,7 +3646,7 @@
 .proposal-cover-letter--director .proposal-cover-letter__masthead-primary,
 .proposal-cover-letter--director .proposal-cover-letter__masthead-secondary,
 .proposal-cover-letter--director .proposal-cover-letter__masthead-role,
-.proposal-cover-letter--director .proposal-cover-letter__phone-mark,
+.proposal-cover-letter--director .proposal-cover-letter__contact-mark,
 .proposal-cover-letter--director .proposal-cover-letter__subject-label,
 .proposal-cover-letter--director .proposal-cover-letter__subject-value {
   font-family: var(--heading-font, var(--font-heading-family));
@@ -3650,7 +3654,8 @@
 
 .proposal-cover-letter--director .proposal-cover-letter__sender-label,
 .proposal-cover-letter--director .proposal-cover-letter__sender-lines p,
-.proposal-cover-letter--director .proposal-cover-letter__phone-block p,
+.proposal-cover-letter--director .proposal-cover-letter__contact-lines p,
+.proposal-cover-letter--director .proposal-cover-letter__recipient-block p,
 .proposal-cover-letter--director .proposal-cover-letter__meta-item {
   font-family: var(--body-font, var(--font-body-family));
 }
@@ -3685,7 +3690,8 @@
 
 .proposal-cover-letter--director .proposal-cover-letter__sender-label,
 .proposal-cover-letter--director .proposal-cover-letter__sender-lines p,
-.proposal-cover-letter--director .proposal-cover-letter__phone-block p {
+.proposal-cover-letter--director .proposal-cover-letter__contact-lines p,
+.proposal-cover-letter--director .proposal-cover-letter__recipient-block p {
   font-size: 2.15mm;
   line-height: 1.35;
   font-weight: 700;
@@ -3700,19 +3706,33 @@
   overflow-wrap: anywhere;
 }
 
-.proposal-cover-letter--director .proposal-cover-letter__phone-block {
+.proposal-cover-letter--director .proposal-cover-letter__contact-grid {
   left: 111mm;
   top: 43.5mm;
   display: grid;
-  grid-template-columns: 3.4mm minmax(0, 54mm);
-  column-gap: 2mm;
-  align-items: start;
+  grid-template-columns: 4mm minmax(0, 30mm) 4mm minmax(0, 40mm);
+  column-gap: 2.2mm;
+  align-items: baseline;
+  max-width: 80mm;
 }
 
-.proposal-cover-letter--director .proposal-cover-letter__phone-mark {
+.proposal-cover-letter--director .proposal-cover-letter__contact-mark {
   font-size: 6mm !important;
-  line-height: 1;
+  line-height: 0.85;
   font-weight: 800 !important;
+  transform: translateY(0.35mm);
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__contact-lines {
+  display: grid;
+  gap: 0.2mm;
+  min-width: 0;
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__contact-lines p {
+  min-width: 0;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .proposal-cover-letter--director .proposal-cover-letter__meta-row {
@@ -3734,6 +3754,21 @@
 
 .proposal-cover-letter--director .proposal-cover-letter__meta-item:nth-child(n + 3) {
   color: var(--proposal-document-accent-ink);
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__recipient-block {
+  left: 25mm;
+  top: 98.2mm;
+  width: 112mm;
+  display: grid;
+  gap: 0.6mm;
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__recipient-block p {
+  color: var(--proposal-document-ink);
+  font-size: 2.25mm;
+  line-height: 1.25;
+  font-weight: 600;
 }
 
 .proposal-cover-letter--director .proposal-cover-letter__subject-row {
@@ -3761,10 +3796,20 @@
   overflow-wrap: anywhere;
 }
 
+.proposal-cover-letter--director.proposal-cover-letter--has-recipient-block
+  .proposal-cover-letter__subject-row {
+  top: 111mm;
+}
+
 .proposal-cover-letter--director .proposal-cover-letter__body {
   left: 25mm;
   top: 118mm;
   width: min(112mm, 66ch);
+}
+
+.proposal-cover-letter--director.proposal-cover-letter--has-recipient-block
+  .proposal-cover-letter__body {
+  top: 131mm;
 }
 
 .proposal-cover-letter--volk .dasti-proposal-document__page {
@@ -3794,6 +3839,7 @@
 .proposal-cover-letter--volk .proposal-cover-letter__volk-title,
 .proposal-cover-letter--volk .proposal-cover-letter__volk-subtitle,
 .proposal-cover-letter--volk .proposal-cover-letter__volk-sender,
+.proposal-cover-letter--volk .proposal-cover-letter__recipient-block p,
 .proposal-cover-letter--volk .proposal-cover-letter__meta-item,
 .proposal-cover-letter--volk .proposal-cover-letter__subject-label,
 .proposal-cover-letter--volk .proposal-cover-letter__subject-value {
@@ -3809,6 +3855,7 @@
 }
 
 .proposal-cover-letter--volk .proposal-cover-letter__volk-sender,
+.proposal-cover-letter--volk .proposal-cover-letter__recipient-block p,
 .proposal-cover-letter--volk .proposal-cover-letter__meta-item {
   font-family: var(--body-font, var(--font-body-family));
 }
@@ -3860,6 +3907,22 @@
   overflow-wrap: anywhere;
 }
 
+.proposal-cover-letter--volk .proposal-cover-letter__recipient-block {
+  left: 24mm;
+  top: 101.7mm;
+  width: 112mm;
+  display: grid;
+  gap: 0.6mm;
+}
+
+.proposal-cover-letter--volk .proposal-cover-letter__recipient-block p {
+  font-size: 2.35mm;
+  line-height: 1.25;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  text-transform: lowercase;
+}
+
 .proposal-cover-letter--volk .proposal-cover-letter__subject-row {
   left: 24mm;
   right: 24mm;
@@ -3868,6 +3931,11 @@
   grid-template-columns: auto minmax(0, 1fr);
   column-gap: 3mm;
   align-items: baseline;
+}
+
+.proposal-cover-letter--volk.proposal-cover-letter--has-recipient-block
+  .proposal-cover-letter__subject-row {
+  top: 114mm;
 }
 
 .proposal-cover-letter--volk .proposal-cover-letter__subject-label,
@@ -3887,6 +3955,11 @@
   left: 24mm;
   top: 122mm;
   width: min(112mm, 66ch);
+}
+
+.proposal-cover-letter--volk.proposal-cover-letter--has-recipient-block
+  .proposal-cover-letter__body {
+  top: 134mm;
 }
 
 .proposal-cover-letter--volk .proposal-cover-letter__dot {
@@ -3930,6 +4003,7 @@
 .proposal-cover-letter--film-foto .proposal-cover-letter__film-company,
 .proposal-cover-letter--film-foto .proposal-cover-letter__film-heading,
 .proposal-cover-letter--film-foto .proposal-cover-letter__info-blocks p,
+.proposal-cover-letter--film-foto .proposal-cover-letter__recipient-block p,
 .proposal-cover-letter--film-foto .proposal-cover-letter__meta-item,
 .proposal-cover-letter--film-foto .proposal-cover-letter__subject-label,
 .proposal-cover-letter--film-foto .proposal-cover-letter__subject-value {
@@ -3955,6 +4029,7 @@
 }
 
 .proposal-cover-letter--film-foto .proposal-cover-letter__info-blocks p,
+.proposal-cover-letter--film-foto .proposal-cover-letter__recipient-block p,
 .proposal-cover-letter--film-foto .proposal-cover-letter__meta-item {
   font-family: var(--body-font, var(--font-body-family));
 }
@@ -4065,6 +4140,24 @@
   overflow-wrap: anywhere;
 }
 
+.proposal-cover-letter--film-foto .proposal-cover-letter__recipient-block {
+  left: 20mm;
+  top: 102mm;
+  width: 112mm;
+  display: grid;
+  gap: 0.6mm;
+}
+
+.proposal-cover-letter--film-foto .proposal-cover-letter__recipient-block p {
+  min-width: 0;
+  font-size: 2.55mm;
+  line-height: 1.25;
+  font-weight: 600;
+  color: var(--proposal-document-accent-ink);
+  overflow-wrap: anywhere;
+  text-transform: lowercase;
+}
+
 .proposal-cover-letter--film-foto .proposal-cover-letter__subject-row {
   left: 20mm;
   right: 22mm;
@@ -4073,6 +4166,11 @@
   grid-template-columns: auto minmax(0, 1fr);
   column-gap: 2mm;
   align-items: baseline;
+}
+
+.proposal-cover-letter--film-foto.proposal-cover-letter--has-recipient-block
+  .proposal-cover-letter__subject-row {
+  top: 114mm;
 }
 
 .proposal-cover-letter--film-foto .proposal-cover-letter__subject-label,
@@ -4091,6 +4189,11 @@
   left: 20mm;
   top: 120mm;
   width: min(112mm, 66ch);
+}
+
+.proposal-cover-letter--film-foto.proposal-cover-letter--has-recipient-block
+  .proposal-cover-letter__body {
+  top: 132mm;
 }
 
 .proposal-cover-letter--film-foto .proposal-cover-letter__dot {

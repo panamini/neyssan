@@ -95,7 +95,47 @@ describe("proposal letterhead CSS", () => {
       /\.proposal-cover-letter--film-foto[\s\S]*?\.proposal-cover-letter__info-block--phone[\s\S]*?\{[\s\S]*overflow-wrap:\s*normal;[\s\S]*white-space:\s*nowrap;[\s\S]*\}/,
     );
     expect(proposalCss).toMatch(
-      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__phone-block p\s*\{[\s\S]*white-space:\s*nowrap;[\s\S]*overflow-wrap:\s*normal;[\s\S]*\}/,
+      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__contact-lines p\s*\{[\s\S]*overflow:\s*visible;[\s\S]*text-overflow:\s*clip;[\s\S]*\}/,
+    );
+  });
+
+  it("places recipient overflow details in scoped blocks and shifts the letter flow only when present", () => {
+    [
+      ".proposal-cover-letter--director",
+      ".proposal-cover-letter--volk",
+      ".proposal-cover-letter--film-foto",
+    ].forEach((scope) => {
+      expect(proposalCss).toContain(
+        `${scope} .proposal-cover-letter__recipient-block`,
+      );
+      expect(proposalCss).toContain(
+        `${scope}.proposal-cover-letter--has-recipient-block`,
+      );
+    });
+
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--director\.proposal-cover-letter--has-recipient-block[\s\S]*?\.proposal-cover-letter__subject-row\s*\{[\s\S]*top:\s*111mm;[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--volk\.proposal-cover-letter--has-recipient-block[\s\S]*?\.proposal-cover-letter__body\s*\{[\s\S]*top:\s*134mm;[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--film-foto\.proposal-cover-letter--has-recipient-block[\s\S]*?\.proposal-cover-letter__body\s*\{[\s\S]*top:\s*132mm;[\s\S]*\}/,
+    );
+  });
+
+  it("uses a grid-aligned Director contact strip for separate telephone and digital contacts", () => {
+    expect(proposalCss).toContain(
+      ".proposal-cover-letter--director .proposal-cover-letter__contact-grid",
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__contact-grid\s*\{[\s\S]*grid-template-columns:\s*4mm minmax\(0,\s*30mm\) 4mm minmax\(0,\s*40mm\);[\s\S]*align-items:\s*baseline;[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__contact-mark\s*\{[\s\S]*line-height:\s*0\.85;[\s\S]*transform:\s*translateY\(0\.35mm\);[\s\S]*\}/,
+    );
+    expect(proposalCss).not.toContain(
+      ".proposal-cover-letter--director .proposal-cover-letter__phone-block",
     );
   });
 });

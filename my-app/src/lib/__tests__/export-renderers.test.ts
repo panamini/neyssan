@@ -543,12 +543,14 @@ describe("export-renderers", () => {
       }),
     );
     const phoneBlock = document.querySelector(
-      ".proposal-cover-letter--director .proposal-cover-letter__phone-block",
+      ".proposal-cover-letter--director .proposal-cover-letter__contact-grid",
     );
 
     expect(phoneBlock?.textContent).toContain("T");
     expect(phoneBlock?.textContent).toContain("09898777");
-    expect(phoneBlock?.textContent).not.toContain("zoe@loi.com");
+    expect(phoneBlock?.textContent).toContain("@");
+    expect(phoneBlock?.textContent).toContain("zoe@loi.com");
+    expect(phoneBlock?.textContent).toContain("@zoe.com");
   });
 
   it("uses a digital @ contact block in the director letterhead export when no phone exists", () => {
@@ -576,7 +578,7 @@ describe("export-renderers", () => {
       }),
     );
     const phoneBlock = document.querySelector(
-      ".proposal-cover-letter--director .proposal-cover-letter__phone-block",
+      ".proposal-cover-letter--director .proposal-cover-letter__contact-grid",
     );
 
     expect(phoneBlock?.textContent).toContain("@");
@@ -701,6 +703,146 @@ describe("export-renderers", () => {
         "Cooper Studio",
       );
       expect(page?.textContent).toContain("Designer");
+    },
+  );
+
+  it.each([
+    {
+      templateId: "director-letterhead" as const,
+      scope: "proposal-cover-letter--director",
+    },
+    {
+      templateId: "volk-letterhead" as const,
+      scope: "proposal-cover-letter--volk",
+    },
+    {
+      templateId: "film-foto-letterhead" as const,
+      scope: "proposal-cover-letter--film-foto",
+    },
+  ])(
+    "exports recipient postal contact details in the letterhead recipient block for $templateId",
+    ({ templateId, scope }) => {
+      const document = parseExportHtml(
+        renderProposalStyledExportDocument({
+          data: {
+            ...proposalFixture,
+            templateId,
+            recipientDetails:
+              "Hiring Manager\nTalent Acquisition\nCompany Name\nStreet address\nrecipient@example.com\nCompany City",
+            documentTitle: "Subject line",
+            applicantHeader: {
+              ...proposalFixture.applicantHeader,
+              name: "Robert Cooper",
+              role: "Security Guard",
+              company: "",
+              email: "name@email.com",
+              phone: "+321 08 98 43 23 43",
+              linkedin: "LINKEDIN",
+              website: "PORTFOLIO.COM",
+              location: "",
+              tag: "",
+            },
+            headerVisibility: {
+              showSender: true,
+              showDate: true,
+              showSubject: true,
+              showRecipient: true,
+              showRecipientDetails: true,
+            },
+          },
+          stylePreset: {
+            familyId: "workshop",
+            layout: "workshop",
+            typography: "expert",
+            palette: "terre",
+          },
+        }),
+      );
+      const page = document.querySelector(`.${scope}`);
+      const recipientBlock = page?.querySelector(
+        ".proposal-cover-letter__recipient-block",
+      );
+      const metaItems = Array.from(
+        page?.querySelectorAll(".proposal-cover-letter__meta-item") ?? [],
+      ).map((node) => node.textContent);
+
+      expect(page?.classList.contains("proposal-cover-letter--has-recipient-block"))
+        .toBe(true);
+      expect(recipientBlock?.textContent).toContain("Street address");
+      expect(recipientBlock?.textContent).toContain("Company City");
+      expect(recipientBlock?.textContent).toContain("recipient@example.com");
+      expect(metaItems).toEqual([
+        "Hiring Manager",
+        "Company Name",
+        "Talent Acquisition",
+        expect.stringContaining("15 avril 2026"),
+      ]);
+      expect(page?.textContent).not.toContain("undefined");
+      expect(page?.textContent).not.toContain("null");
+      expect(page?.textContent).not.toContain("[object Object]");
+    },
+  );
+
+  it.each([
+    {
+      templateId: "director-letterhead" as const,
+      scope: "proposal-cover-letter--director",
+      secondarySelector: ".proposal-cover-letter__masthead-secondary",
+    },
+    {
+      templateId: "volk-letterhead" as const,
+      scope: "proposal-cover-letter--volk",
+      secondarySelector: ".proposal-cover-letter__volk-title--right",
+    },
+    {
+      templateId: "film-foto-letterhead" as const,
+      scope: "proposal-cover-letter--film-foto",
+      secondarySelector: ".proposal-cover-letter__film-company",
+    },
+  ])(
+    "does not export recipient fields as fallback applicant company titles for $templateId",
+    ({ templateId, scope, secondarySelector }) => {
+      const document = parseExportHtml(
+        renderProposalStyledExportDocument({
+          data: {
+            ...proposalFixture,
+            templateId,
+            recipientDetails:
+              "Hiring Manager\nTalent Acquisition\nUs Smart Tools\nStreet address\nrecipient@example.com\nParis",
+            applicantHeader: {
+              ...proposalFixture.applicantHeader,
+              name: "Robert Cooper",
+              role: "Security Guard",
+              company: "",
+              email: "email@email.com",
+              phone: "",
+              linkedin: "",
+              website: "",
+              location: "Los Angeles",
+              tag: "",
+            },
+            headerVisibility: {
+              showSender: true,
+              showDate: true,
+              showSubject: true,
+              showRecipient: true,
+              showRecipientDetails: true,
+            },
+          },
+          stylePreset: {
+            familyId: "workshop",
+            layout: "workshop",
+            typography: "expert",
+            palette: "terre",
+          },
+        }),
+      );
+      const page = document.querySelector(`.${scope}`);
+
+      expect(page?.querySelector(secondarySelector)).toBeNull();
+      expect(page?.textContent).toContain("Security Guard");
+      expect(page?.querySelector(".proposal-cover-letter__recipient-block")?.textContent)
+        .toContain("recipient@example.com");
     },
   );
 
