@@ -174,6 +174,43 @@ describe("Menu", () => {
     expect(menu).toHaveStyle({ left: "32px", top: "160px" });
   });
 
+  it("flips a bottom menu upward when the viewport would crop it", async () => {
+    stubViewport(390, 360);
+    render(
+      <Menu
+        ariaLabel="Card actions"
+        align="end"
+        sections={[
+          {
+            items: [
+              { id: "open", label: "Open" },
+              { id: "delete", label: "Delete" },
+            ],
+          },
+        ]}
+        trigger={<button type="button">More actions</button>}
+      />,
+    );
+
+    const trigger = screen.getByRole("button", { name: "More actions" });
+    stubRect(trigger, {
+      top: 300,
+      left: 320,
+      right: 352,
+      bottom: 332,
+      width: 32,
+      height: 32,
+    });
+    fireEvent.click(trigger);
+
+    const menu = await screen.findByRole("menu", { name: "Card actions" });
+    stubRect(menu, { width: 200, height: 112 });
+    fireEvent(window, new Event("resize"));
+
+    await waitFor(() => expect(menu).toHaveAttribute("data-side", "top"));
+    expect(menu).toHaveStyle({ top: "180px", left: "152px" });
+  });
+
   it("uses a sheet-style placement on narrow viewports when requested", async () => {
     stubViewport(390, 720);
     render(

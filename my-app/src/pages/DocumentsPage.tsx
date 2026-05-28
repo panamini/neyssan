@@ -6,12 +6,13 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import {
   Button,
-  Card,
-  CardFooter,
-  CardTitle,
   Input,
   Menu,
 } from "../components/ui";
+import {
+  DocumentSpecimenCard,
+  type DocumentSpecimenTypeLabel,
+} from "../components/library/DocumentSpecimenCard";
 import { ProposalDocumentRenderer } from "../components/proposal-render/ProposalDocumentRenderer";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import ResumeTemplateRenderer from "../features/verbati/resume/ResumeTemplateRenderer";
@@ -116,6 +117,11 @@ function formatUpdatedLabel(value: number): string {
 
 function itemTypeLabel(item: LibraryItem): "CV" | "Proposal" {
   return item.type === "cv" ? "CV" : "Proposal";
+}
+
+function itemSpecimenTypeLabel(item: LibraryItem): DocumentSpecimenTypeLabel {
+  if (item.type === "cv") return "CV";
+  return item.linkedCvId ? "PACK" : "PROPOSAL";
 }
 
 function itemSourceId(item: LibraryItem): string {
@@ -232,17 +238,14 @@ function navigateTarget(
 }
 
 function proposalContext(item: LibraryItem): string {
-  if (item.type === "cv") return "CV profile";
-  return [
-    item.jobId || item.jobTitle ? "Job linked" : null,
-    item.linkedCvTitle
-      ? `CV: ${item.linkedCvTitle}`
-      : item.linkedCvId
-        ? "CV linked"
-        : null,
-  ]
-    .filter(Boolean)
-    .join(" · ") || "Proposal";
+  if (item.type === "cv") return "";
+  const jobPart = item.jobId || item.jobTitle ? "Job linked" : "No job";
+  const cvPart = item.linkedCvTitle
+    ? `CV: ${item.linkedCvTitle}`
+    : item.linkedCvId
+      ? "CV linked"
+      : "No CV linked";
+  return `${jobPart} · ${cvPart}`;
 }
 
 function matchesType(typeFilter: TypeFilter, item: LibraryItem): boolean {
@@ -593,6 +596,7 @@ export function DocumentsPage(): JSX.Element {
             selectedCount={selectedItems.length}
             downloadableCount={selectedDownloadableCount}
             onClear={clearSelection}
+            onOpen={() => openItem(selectedItems[0])}
             onDownload={downloadSelected}
             onDelete={deleteSelected}
           />
@@ -642,8 +646,9 @@ function LibraryItemCard({
   onToggleSelected: () => void;
 }) {
   const typeLabel = itemTypeLabel(item);
-  const context = proposalContext(item);
-  const previewShellRef = React.useRef<HTMLDivElement | null>(null);
+  const specimenTypeLabel = itemSpecimenTypeLabel(item);
+  const action = item.type === "proposal" ? "Continue" : "Open";
+  const previewShellRef = React.useRef<HTMLButtonElement | null>(null);
   const shouldRenderPreview = previewLoaded || selected;
 
   React.useEffect(() => {
@@ -669,19 +674,61 @@ function LibraryItemCard({
   }, [onRequestPreview, previewLoaded]);
 
   return (
-    <Card
+    <DocumentSpecimenCard
       as="article"
-      interactive
       className="dasti-documents-card projects-card"
-      aria-selected={selected}
-      data-selected={selected ? "true" : undefined}
-    >
-      <div
-        className="projects-card__preview-shell"
-        ref={previewShellRef}
-        onPointerEnter={onRequestPreview}
-        onFocusCapture={onRequestPreview}
-      >
+      typeChipClassName="projects-card__type"
+      title={item.title}
+      context=""
+      updatedLabel={formatUpdatedLabel(item.updatedAt)}
+      typeLabel={specimenTypeLabel}
+      selected={selected}
+      showUpdatedLabel={false}
+      onCardClick={onToggleSelected}
+      previewRef={previewShellRef}
+      onPreviewPointerEnter={onRequestPreview}
+      onPreviewFocusCapture={onRequestPreview}
+      onOpen={onOpen}
+      actions={
+        <span onClick={(event) => event.stopPropagation()}>
+          <Menu
+            ariaLabel={`More actions for ${item.title}`}
+            align="end"
+            sections={[
+              {
+                items: [
+                  { id: "open", label: action, onSelect: onOpen },
+                  {
+                    id: "download",
+                    label: "Download PDF",
+                    icon: <FilePdf size={14} aria-hidden="true" />,
+                    disabled: !isLibraryItemDownloadable(item),
+                    onSelect: onDownload,
+                  },
+                  {
+                    id: "delete",
+                    label: "Delete",
+                    icon: <TrashSimple size={14} aria-hidden="true" />,
+                    tone: "danger",
+                    onSelect: onDelete,
+                  },
+                ],
+              },
+            ]}
+            trigger={
+              <button
+                type="button"
+                className="dasti-documents-card__menu projects-card__menu"
+                aria-label={`More actions for ${item.title}`}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <DotsThree size={16} aria-hidden="true" />
+              </button>
+            }
+          />
+        </span>
+      }
+      selector={
         <label className="projects-card__select">
           <input
             type="checkbox"
@@ -692,86 +739,13 @@ function LibraryItemCard({
             onKeyDown={(event) => event.stopPropagation()}
           />
           <span className="projects-card__select-mark" aria-hidden="true">
-            <Check size={13} strokeWidth={2.2} />
+            {selected ? <Check size={14} strokeWidth={2.2} /> : null}
           </span>
         </label>
-        <Menu
-          ariaLabel={`More actions for ${item.title}`}
-          align="end"
-          sections={[
-            {
-              items: [
-                {
-                  id: "open",
-                  label: item.type === "proposal" ? "Continue" : "Open",
-                  icon: <ArrowSquareOut size={14} aria-hidden="true" />,
-                  onSelect: onOpen,
-                },
-                {
-                  id: "download",
-                  label: "Download PDF",
-                  icon: <FilePdf size={14} aria-hidden="true" />,
-                  disabled: !isLibraryItemDownloadable(item),
-                  onSelect: onDownload,
-                },
-                ...(item.type === "proposal"
-                  ? [
-                      item.linkedCvId
-                        ? {
-                            id: "bundle",
-                            label: "Download CV + proposal",
-                            icon: <FilePlus size={14} aria-hidden="true" />,
-                            disabled: true,
-                            description: "Bundle export is not available yet.",
-                          }
-                        : {
-                            id: "pick-cv",
-                            label: "Pick CV",
-                            icon: <FileUser size={14} aria-hidden="true" />,
-                            onSelect: onOpen,
-                          },
-                    ]
-                  : []),
-                {
-                  id: "delete",
-                  label: "Delete",
-                  icon: <TrashSimple size={14} aria-hidden="true" />,
-                  tone: "danger" as const,
-                  onSelect: onDelete,
-                },
-              ],
-            },
-          ]}
-          trigger={
-            <button
-              type="button"
-              className="dasti-documents-card__menu projects-card__menu"
-              aria-label={`More actions for ${item.title}`}
-              title={`More actions for ${item.title}`}
-            >
-              <DotsThree size={16} strokeWidth={1.7} aria-hidden="true" />
-            </button>
-          }
-        />
-        <button
-          type="button"
-          className="projects-card__preview-button"
-          onClick={onOpen}
-        >
-          <LibraryDocumentPreview item={item} renderPreview={shouldRenderPreview} />
-        </button>
-      </div>
-      <button type="button" className="dasti-documents-card__surface" onClick={onOpen}>
-        {item.type === "proposal" ? (
-          <span className="projects-card__type">{typeLabel}</span>
-        ) : null}
-        <CardTitle className="dasti-library-card__title">{item.title}</CardTitle>
-      </button>
-      <CardFooter className="dasti-library-card__footer">
-        <span className="dasti-library-card__context">{context}</span>
-        <span className="dasti-library-card__updated">{formatUpdatedLabel(item.updatedAt)}</span>
-      </CardFooter>
-    </Card>
+      }
+    >
+      <LibraryDocumentPreview item={item} renderPreview={shouldRenderPreview} />
+    </DocumentSpecimenCard>
   );
 }
 
@@ -923,12 +897,14 @@ function ProjectsBulkActionBar({
   selectedCount,
   downloadableCount,
   onClear,
+  onOpen,
   onDownload,
   onDelete,
 }: {
   selectedCount: number;
   downloadableCount: number;
   onClear: () => void;
+  onOpen: () => void;
   onDownload: () => void;
   onDelete: () => void;
 }) {
@@ -952,6 +928,20 @@ function ProjectsBulkActionBar({
         {selectedCount} item{selectedCount === 1 ? "" : "s"} selected
       </span>
       <div className="projects-bulk-bar__actions">
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={selectedCount !== 1}
+          title={
+            selectedCount !== 1
+              ? "Select one item to open."
+              : "Open the selected item."
+          }
+          onClick={onOpen}
+          iconLeft={<ArrowSquareOut size={15} aria-hidden="true" />}
+        >
+          Open
+        </Button>
         <Button
           variant="secondary"
           size="sm"
