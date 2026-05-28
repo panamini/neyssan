@@ -490,8 +490,15 @@ describe("export-renderers", () => {
       expect(css).toContain(`.${scope}.export-page`);
       expect(css).toContain("width: 210mm;");
       expect(css).toContain("min-height: 297mm;");
-      expect(css).toContain("width: min(112mm, 66ch);");
-      expect(css).toContain("max-width: min(112mm, 66ch);");
+      const expectedBodyLeft =
+        templateId === "director-letterhead"
+          ? "left: 25mm;"
+          : templateId === "volk-letterhead"
+            ? "left: 24mm;"
+            : "left: 20mm;";
+      expect(css).toContain(expectedBodyLeft);
+      expect(css).toContain("width: min(96mm, 58ch);");
+      expect(css).toContain("max-width: min(96mm, 58ch);");
       expect(css).toContain("overflow-wrap: break-word;");
       expect(css).toContain(
         "font-family: var(--heading-font, var(--font-heading-family));",
@@ -545,7 +552,18 @@ describe("export-renderers", () => {
     const phoneBlock = document.querySelector(
       ".proposal-cover-letter--director .proposal-cover-letter__contact-grid",
     );
+    const contactGroups = Array.from(
+      phoneBlock?.querySelectorAll(".proposal-cover-letter__contact-group") ??
+        [],
+    );
 
+    expect(contactGroups).toHaveLength(2);
+    expect(contactGroups[0]?.querySelector(".proposal-cover-letter__contact-mark")?.textContent)
+      .toBe("T");
+    expect(contactGroups[0]?.querySelector(".proposal-cover-letter__contact-lines")?.textContent)
+      .toContain("09898777");
+    expect(contactGroups[1]?.querySelector(".proposal-cover-letter__contact-mark")?.textContent)
+      .toBe("@");
     expect(phoneBlock?.textContent).toContain("T");
     expect(phoneBlock?.textContent).toContain("09898777");
     expect(phoneBlock?.textContent).toContain("@");
@@ -661,11 +679,6 @@ describe("export-renderers", () => {
       templateId: "volk-letterhead" as const,
       scope: "proposal-cover-letter--volk",
       secondarySelector: ".proposal-cover-letter__volk-title--right",
-    },
-    {
-      templateId: "film-foto-letterhead" as const,
-      scope: "proposal-cover-letter--film-foto",
-      secondarySelector: ".proposal-cover-letter__film-company",
     },
   ])(
     "renders applicant company as the optional exported letterhead title for $templateId",
@@ -846,7 +859,7 @@ describe("export-renderers", () => {
     },
   );
 
-  it("keeps Film und Foto export metadata recipient-only and keeps company beside long role titles", () => {
+  it("keeps Film und Foto export metadata recipient-only and maps role left with name right", () => {
     const document = parseExportHtml(
       renderProposalStyledExportDocument({
         data: {
@@ -881,12 +894,13 @@ describe("export-renderers", () => {
       page?.querySelectorAll(".proposal-cover-letter__meta-item") ?? [],
     ).map((node) => node.textContent);
 
-    expect(header?.querySelector(".proposal-cover-letter__film-company")?.textContent).toBe(
-      "Acme",
-    );
-    expect(header?.querySelector(".proposal-cover-letter__film-title")?.textContent).toBe(
+    expect(header?.querySelector(".proposal-cover-letter__film-heading")?.textContent).toBe(
       "Security Guard",
     );
+    expect(header?.querySelector(".proposal-cover-letter__film-title")?.textContent).toBe(
+      "Robert Cooper",
+    );
+    expect(header?.querySelector(".proposal-cover-letter__film-company")).toBeNull();
     expect(metaItems).toEqual([
       "Hiring Manager",
       "Us Smart Tools",
@@ -1013,6 +1027,9 @@ describe("export-renderers", () => {
         expect(
           root?.querySelector(".proposal-cover-letter__film-heading")
             ?.textContent,
+        ).toBe("Security Guard");
+        expect(
+          root?.querySelector(".proposal-cover-letter__film-title")?.textContent,
         ).toBe("Zoe Lund");
       }
     },

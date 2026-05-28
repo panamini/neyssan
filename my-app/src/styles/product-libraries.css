@@ -356,9 +356,10 @@
 .dasti-doc-card--proposal-library .dasti-doc-card__footer-meta {
   align-items: center;
   column-gap: var(--space-1);
+  row-gap: 0;
   font-family: var(--font-body-family);
   font-size: var(--text-body-sm-size);
-  line-height: var(--text-body-sm-line);
+  line-height: 1.05;
 }
 
 .dasti-doc-card--proposal-library .dasti-proposal-tone-badge--compact {

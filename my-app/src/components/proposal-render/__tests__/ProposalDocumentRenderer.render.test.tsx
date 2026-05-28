@@ -600,7 +600,7 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     ]);
   });
 
-  it("keeps Film und Foto applicant company visible beside a long role", () => {
+  it("maps Film und Foto role to the light left kicker and name to the bold title", () => {
     const { container } = render(
       <ProposalDocumentRenderer
         content="Dear Hiring Manager,\n\nI can support the team."
@@ -638,11 +638,12 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     );
 
     expect(
-      header?.querySelector(".proposal-cover-letter__film-company")?.textContent,
-    ).toBe("Acme");
+      header?.querySelector(".proposal-cover-letter__film-heading")?.textContent,
+    ).toBe("Security Guard");
     expect(
       header?.querySelector(".proposal-cover-letter__film-title")?.textContent,
-    ).toBe("Security Guard");
+    ).toBe("Robert Cooper");
+    expect(header?.querySelector(".proposal-cover-letter__film-company")).toBeNull();
     expect(container.textContent).toContain("Us Smart Tools");
   });
 
@@ -656,11 +657,6 @@ describe("ProposalDocumentRenderer volk register layout", () => {
       templateId: "volk-letterhead" as const,
       scope: ".proposal-cover-letter--volk",
       secondarySelector: ".proposal-cover-letter__volk-title--right",
-    },
-    {
-      templateId: "film-foto-letterhead" as const,
-      scope: ".proposal-cover-letter--film-foto",
-      secondarySelector: ".proposal-cover-letter__film-company",
     },
   ])(
     "renders applicant company as the optional letterhead title for $templateId",
@@ -705,7 +701,7 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     },
   );
 
-  it("keeps applicant company visible in Film und Foto when the role is long", () => {
+  it("keeps Film und Foto contacts visible when the role is long", () => {
     const { container } = render(
       <ProposalDocumentRenderer
         content="Dear Hiring Manager,\n\nI can support the team."
@@ -740,11 +736,12 @@ describe("ProposalDocumentRenderer volk register layout", () => {
 
     const root = container.querySelector(".proposal-cover-letter--film-foto");
     expect(
-      root?.querySelector(".proposal-cover-letter__film-company")?.textContent,
-    ).toBe("Companii");
+      root?.querySelector(".proposal-cover-letter__film-heading")?.textContent,
+    ).toBe("Security Guard");
     expect(
       root?.querySelector(".proposal-cover-letter__film-title")?.textContent,
-    ).toBe("Security Guard");
+    ).toBe("Robert Cooper");
+    expect(root?.querySelector(".proposal-cover-letter__film-company")).toBeNull();
     expect(root?.querySelector(".proposal-cover-letter__info-blocks")?.textContent)
       .toContain("LINKEDIN");
     expect(root?.querySelector(".proposal-cover-letter__info-block--phone")?.textContent)
@@ -934,6 +931,10 @@ describe("ProposalDocumentRenderer volk register layout", () => {
         expect(
           renderedPage?.querySelector(".proposal-cover-letter__film-heading")
             ?.textContent,
+        ).toBe("Security Guard");
+        expect(
+          renderedPage?.querySelector(".proposal-cover-letter__film-title")
+            ?.textContent,
         ).toBe("Zoe Lund");
       }
     },
@@ -986,7 +987,18 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     const phoneBlock = container.querySelector(
       ".proposal-cover-letter--director .proposal-cover-letter__contact-grid",
     );
+    const contactGroups = Array.from(
+      phoneBlock?.querySelectorAll(".proposal-cover-letter__contact-group") ??
+        [],
+    );
 
+    expect(contactGroups).toHaveLength(2);
+    expect(contactGroups[0]?.querySelector(".proposal-cover-letter__contact-mark")?.textContent)
+      .toBe("T");
+    expect(contactGroups[0]?.querySelector(".proposal-cover-letter__contact-lines")?.textContent)
+      .toContain("09898777");
+    expect(contactGroups[1]?.querySelector(".proposal-cover-letter__contact-mark")?.textContent)
+      .toBe("@");
     expect(phoneBlock?.textContent).toContain("T");
     expect(phoneBlock?.textContent).toContain("09898777");
     expect(phoneBlock?.textContent).toContain("@");
