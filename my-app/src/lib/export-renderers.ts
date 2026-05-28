@@ -981,6 +981,11 @@ function buildStyledProposalAppearanceCss(): string {
       overflow-wrap: anywhere;
     }
 
+    .proposal-cover-letter--director .proposal-cover-letter__phone-block p {
+      white-space: nowrap;
+      overflow-wrap: normal;
+    }
+
     .proposal-cover-letter--director .proposal-cover-letter__phone-mark {
       font-size: 6mm !important;
       line-height: 1;
@@ -1100,11 +1105,6 @@ function buildStyledProposalAppearanceCss(): string {
     }
 
     .proposal-cover-letter--film-foto .proposal-cover-letter__film-header--no-company {
-      grid-template-columns: minmax(0, 70mm) minmax(0, 1fr);
-    }
-
-    .proposal-cover-letter--film-foto
-      .proposal-cover-letter__film-header--role-priority {
       grid-template-columns: minmax(0, 70mm) minmax(0, 1fr);
     }
 
@@ -2860,8 +2860,10 @@ function buildProposalLetterheadExportViewModel(
     candidateCompany,
     candidatePhone: resolvedContactParts.phone,
     candidateEmail: resolvedContactParts.email,
-    candidateWebsite:
-      resolvedContactParts.website || resolvedContactParts.linkedin,
+    candidateWebsite: joinExportNonEmpty([
+      resolvedContactParts.linkedin,
+      resolvedContactParts.website,
+    ]),
     candidateLocationLine: resolvedContactParts.location,
     contactLine,
     directorContactLine,
@@ -2978,19 +2980,15 @@ function renderProposalLetterheadExportPage(args: {
   }
 
   const largeTitle = viewModel.shortRoleTitle || viewModel.secondaryTitle;
-  const rolePriority =
-    Boolean(viewModel.secondaryTitle) && largeTitle.trim().length > 10;
   const filmHeaderClass =
-    viewModel.secondaryTitle && !rolePriority
+    viewModel.secondaryTitle
       ? "proposal-cover-letter__film-header"
-      : `proposal-cover-letter__film-header proposal-cover-letter__film-header--no-company${
-          rolePriority ? " proposal-cover-letter__film-header--role-priority" : ""
-        }`;
+      : "proposal-cover-letter__film-header proposal-cover-letter__film-header--no-company";
 
   return `<main class="export-page ${scopeClass}" data-export-doc="proposal">
     <header class="${filmHeaderClass}">
       ${renderExportParagraph(viewModel.candidateName, "proposal-cover-letter__film-heading")}
-      ${!rolePriority ? renderExportParagraph(viewModel.secondaryTitle, "proposal-cover-letter__film-company") : ""}
+      ${renderExportParagraph(viewModel.secondaryTitle, "proposal-cover-letter__film-company")}
       ${renderExportParagraph(largeTitle, "proposal-cover-letter__film-title")}
       <span class="proposal-cover-letter__film-rule"></span>
     </header>

@@ -3155,6 +3155,10 @@ export function ProposalForge(): JSX.Element {
   );
   const [proposalRecipientDetails, setProposalRecipientDetails] =
     React.useState<string>(storedOutputDraft?.proposalRecipientDetails || "");
+  const [proposalRecipientFieldDraft, setProposalRecipientFieldDraft] =
+    React.useState<ProposalRecipientFields>(() =>
+      parseProposalRecipientDetails(storedOutputDraft?.proposalRecipientDetails),
+    );
   const [proposalHeaderVisibility, setProposalHeaderVisibility] =
     React.useState<ProposalHeaderVisibility>(initialProposalHeaderVisibility);
   const [proposalDocumentTitle, setProposalDocumentTitle] =
@@ -3378,6 +3382,7 @@ export function ProposalForge(): JSX.Element {
   const suppressStoredOutputDraftSyncRef = React.useRef(false);
   const skipNextStoredOutputDraftSyncRef = React.useRef(false);
   const skipNextStructuredContactSyncRef = React.useRef(false);
+  const skipNextStructuredRecipientSyncRef = React.useRef(false);
   const lastAutoApplicantHeaderRef = React.useRef({
     name: defaultPreviewApplicantHeader.name ?? "",
     role: defaultPreviewApplicantHeader.role ?? "",
@@ -3526,21 +3531,31 @@ export function ProposalForge(): JSX.Element {
     },
     [markHeadingFieldDirty],
   );
-  const proposalRecipientFields = React.useMemo(
-    () => parseProposalRecipientDetails(proposalRecipientDetails),
-    [proposalRecipientDetails],
-  );
+  React.useEffect(() => {
+    if (skipNextStructuredRecipientSyncRef.current) {
+      skipNextStructuredRecipientSyncRef.current = false;
+      return;
+    }
+    setProposalRecipientFieldDraft(
+      parseProposalRecipientDetails(proposalRecipientDetails),
+    );
+  }, [proposalRecipientDetails]);
+
+  const proposalRecipientFields = proposalRecipientFieldDraft;
   const handleProposalRecipientFieldChange = React.useCallback(
     (field: keyof ProposalRecipientFields, value: string) => {
       markHeadingFieldDirty("recipientDetails");
-      setProposalRecipientDetails((current) =>
-        buildProposalRecipientDetails({
-          ...parseProposalRecipientDetails(current),
-          [field]: value,
-        }),
+      const nextRecipientFields = {
+        ...proposalRecipientFieldDraft,
+        [field]: value,
+      };
+      setProposalRecipientFieldDraft(nextRecipientFields);
+      skipNextStructuredRecipientSyncRef.current = true;
+      setProposalRecipientDetails(
+        buildProposalRecipientDetails(nextRecipientFields),
       );
     },
-    [markHeadingFieldDirty],
+    [markHeadingFieldDirty, proposalRecipientFieldDraft],
   );
 
   React.useEffect(() => {

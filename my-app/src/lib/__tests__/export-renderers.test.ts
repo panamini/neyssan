@@ -704,7 +704,7 @@ describe("export-renderers", () => {
     },
   );
 
-  it("keeps Film und Foto export metadata recipient-only and prioritizes long role titles", () => {
+  it("keeps Film und Foto export metadata recipient-only and keeps company beside long role titles", () => {
     const document = parseExportHtml(
       renderProposalStyledExportDocument({
         data: {
@@ -739,10 +739,9 @@ describe("export-renderers", () => {
       page?.querySelectorAll(".proposal-cover-letter__meta-item") ?? [],
     ).map((node) => node.textContent);
 
-    expect(header?.className).toContain(
-      "proposal-cover-letter__film-header--role-priority",
+    expect(header?.querySelector(".proposal-cover-letter__film-company")?.textContent).toBe(
+      "Acme",
     );
-    expect(header?.querySelector(".proposal-cover-letter__film-company")).toBeNull();
     expect(header?.querySelector(".proposal-cover-letter__film-title")?.textContent).toBe(
       "Security Guard",
     );

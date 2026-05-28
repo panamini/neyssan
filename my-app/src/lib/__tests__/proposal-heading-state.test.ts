@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildProposalApplicantContactLine,
   mergeProposalContactDefaults,
+  parseProposalContactLine,
   resolveAutoHeadingField,
 } from "../proposal-heading-state";
 
@@ -29,6 +30,20 @@ describe("proposal heading state", () => {
         website: "https://alex.example",
       }),
     ).toBe("alex@example.com · Paris · https://alex.example");
+  });
+
+  it("keeps a literal LinkedIn drawer value in the structured contact fields", () => {
+    expect(
+      parseProposalContactLine(
+        "eggyugyail@email.com · +38686834400002 · CA 90291 United States · LINKEDIN · PORTFOLIO.COM",
+      ),
+    ).toMatchObject({
+      email: "eggyugyail@email.com",
+      phone: "+38686834400002",
+      location: "CA 90291 United States",
+      linkedin: "LINKEDIN",
+      website: "PORTFOLIO.COM",
+    });
   });
 
   it("keeps attached CV contact values ahead of settings defaults", () => {
