@@ -378,6 +378,14 @@ describe("TemplatesPage", () => {
       "../../styles/product-libraries.css",
     );
     const styles = fs.readFileSync(stylesPath, "utf8");
+    const foundationStyles = fs.readFileSync(
+      path.resolve(__dirname, "../../styles/foundation.css"),
+      "utf8",
+    );
+    const productStyles = fs.readFileSync(
+      path.resolve(__dirname, "../../styles/product.css"),
+      "utf8",
+    );
     const settingsStyles = fs.readFileSync(
       path.resolve(__dirname, "../../styles/product-settings.css"),
       "utf8",
@@ -394,11 +402,14 @@ describe("TemplatesPage", () => {
     expect(styles).toMatch(
       /\.dasti-template-card__head\s*\{[\s\S]*inline-size:\s*min\(100%,\s*var\(--template-frame-inline\)\);[\s\S]*padding-block-start:\s*var\(--space-1\);[\s\S]*border-block-end:/,
     );
-    expect(styles).toMatch(
-      /\.dasti-documents-grid\.projects-grid,\s*\.dasti-template-grid\s*\{[\s\S]*--library-gallery-row-gap:\s*clamp\(var\(--space-6\),\s*3vw,\s*var\(--space-9\)\);[\s\S]*--library-gallery-column-gap:\s*clamp\(var\(--space-6\),\s*3\.4vw,\s*var\(--space-9\)\);/,
+    expect(foundationStyles).toMatch(
+      /--library-gallery-row-gap:\s*clamp\(var\(--space-6\),\s*3vw,\s*var\(--space-9\)\);[\s\S]*--library-gallery-column-gap:\s*clamp\(var\(--space-6\),\s*3\.4vw,\s*var\(--space-9\)\);/,
     );
     expect(styles).toMatch(
       /\.dasti-template-grid\s*\{[\s\S]*gap:\s*var\(--library-gallery-row-gap\)\s*var\(--library-gallery-column-gap\);/,
+    );
+    expect(productStyles).toMatch(
+      /\.today-recent-grid\s*\{[\s\S]*gap:\s*var\(--library-gallery-row-gap\)\s*var\(--library-gallery-column-gap\);/,
     );
     expect(styles).toMatch(
       /\.dasti-template-preview\s*\{[\s\S]*position:\s*fixed;[\s\S]*inset:\s*0;[\s\S]*z-index:\s*var\(--z-modal\);/,
