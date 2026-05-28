@@ -139,13 +139,16 @@ function itemContextLabel(
 ): string {
   if (item.type === "cv") return t("dashboard.cvProfile");
   if (item.type === "job") return t("dashboard.job");
-  const jobPart = item.jobId || item.jobTitle ? t("dashboard.jobLinked") : t("dashboard.noJob");
-  const cvPart = item.linkedCvTitle
-    ? `CV: ${item.linkedCvTitle}`
-    : item.linkedCvId
-      ? t("dashboard.cvLinked")
-      : t("dashboard.noCvLinked");
-  return `${jobPart} · ${cvPart}`;
+  return [
+    item.jobId || item.jobTitle ? t("dashboard.jobLinked") : null,
+    item.linkedCvTitle
+      ? `CV: ${item.linkedCvTitle}`
+      : item.linkedCvId
+        ? t("dashboard.cvLinked")
+        : null,
+  ]
+    .filter(Boolean)
+    .join(" · ") || itemTypeLabel(item);
 }
 
 export function DashboardPage(): JSX.Element {

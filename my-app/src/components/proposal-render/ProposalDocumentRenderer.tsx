@@ -517,14 +517,30 @@ function ProposalCoverLetterDirectorContactGrid({
       aria-label="Sender contact details"
     >
       {viewModel.candidateDirectorContactGroups.map((group) => (
-        <React.Fragment key={group.mark}>
+        <div
+          className={[
+            "proposal-cover-letter__contact-group",
+            group.mark === "T"
+              ? "proposal-cover-letter__contact-group--telephone"
+              : "",
+            group.mark === "@"
+              ? "proposal-cover-letter__contact-group--digital"
+              : "",
+            group.lines.length === 1
+              ? "proposal-cover-letter__contact-group--single-line"
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          key={group.mark}
+        >
           <p className="proposal-cover-letter__contact-mark">{group.mark}</p>
           <div className="proposal-cover-letter__contact-lines">
             {group.lines.map((line) => (
               <p key={`${group.mark}-${line}`}>{line}</p>
             ))}
           </div>
-        </React.Fragment>
+        </div>
       ))}
     </section>
   );
@@ -641,35 +657,21 @@ export function ProposalCoverLetterFilmFotoTemplate({
   isContinuationPage,
   viewModel,
 }: ProposalCoverLetterTemplateProps): JSX.Element {
-  const largeTitle = viewModel.shortRoleTitle || viewModel.secondaryTitle;
-  const hasSecondaryTitle = Boolean(viewModel.secondaryTitle);
+  const filmKicker = viewModel.candidateRole || viewModel.secondaryTitle;
+  const filmTitle = viewModel.candidateName || viewModel.secondaryTitle;
 
   return (
     <>
       {!isContinuationPage ? (
         <>
-          <header
-            className={[
-              "proposal-cover-letter__film-header",
-              hasSecondaryTitle
-                ? ""
-                : "proposal-cover-letter__film-header--no-company",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-          >
-            {viewModel.candidateName ? (
+          <header className="proposal-cover-letter__film-header">
+            {filmKicker ? (
               <p className="proposal-cover-letter__film-heading">
-                {viewModel.candidateName}
+                {filmKicker}
               </p>
             ) : null}
-            {hasSecondaryTitle ? (
-              <p className="proposal-cover-letter__film-company">
-                {viewModel.secondaryTitle}
-              </p>
-            ) : null}
-            {largeTitle ? (
-              <p className="proposal-cover-letter__film-title">{largeTitle}</p>
+            {filmTitle ? (
+              <p className="proposal-cover-letter__film-title">{filmTitle}</p>
             ) : null}
             <span className="proposal-cover-letter__film-rule" />
           </header>

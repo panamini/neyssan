@@ -52,19 +52,19 @@ describe("proposal letterhead CSS", () => {
 
   it("caps cover letter body measure to the 50-70 character reading range", () => {
     [
-      ".proposal-cover-letter--director",
-      ".proposal-cover-letter--volk",
-      ".proposal-cover-letter--film-foto",
-    ].forEach((scope) => {
+      [".proposal-cover-letter--director", "25mm"],
+      [".proposal-cover-letter--volk", "24mm"],
+      [".proposal-cover-letter--film-foto", "20mm"],
+    ].forEach(([scope, left]) => {
       expect(proposalCss).toMatch(
         new RegExp(
-          `${scope.replace(".", "\\.")}\\s+\\.proposal-cover-letter__body\\s*\\{[\\s\\S]*width:\\s*min\\(112mm,\\s*66ch\\);`,
+          `${scope.replace(".", "\\.")}\\s+\\.proposal-cover-letter__body\\s*\\{[\\s\\S]*left:\\s*${left};[\\s\\S]*width:\\s*min\\(96mm,\\s*58ch\\);`,
         ),
       );
     });
 
     expect(proposalCss).toMatch(
-      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__body,[\s\S]*?\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__body\s*\{[\s\S]*max-width:\s*min\(112mm,\s*66ch\);[\s\S]*\}/,
+      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__body,[\s\S]*?\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__body\s*\{[\s\S]*max-width:\s*min\(96mm,\s*58ch\);[\s\S]*\}/,
     );
     expect(proposalCss).toContain("overflow-wrap: break-word;");
     expect(proposalCss).not.toContain("width: 158mm;");
@@ -74,7 +74,7 @@ describe("proposal letterhead CSS", () => {
 
   it("truncates optional top title slots without ellipsizing the role", () => {
     expect(proposalCss).toMatch(
-      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__masthead-primary,[\s\S]*?\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__film-company\s*\{[\s\S]*white-space:\s*nowrap;[\s\S]*text-overflow:\s*ellipsis;[\s\S]*\}/,
+      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__masthead-primary,[\s\S]*?\.proposal-cover-letter--volk\s+\.proposal-cover-letter__volk-title\s*\{[\s\S]*white-space:\s*nowrap;[\s\S]*text-overflow:\s*ellipsis;[\s\S]*\}/,
     );
     expect(proposalCss).not.toMatch(
       /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__film-title\s*\{[^}]*text-overflow:\s*ellipsis;/,
@@ -87,6 +87,15 @@ describe("proposal letterhead CSS", () => {
   it("keeps Film und Foto role and phone fields from arbitrary wrapping", () => {
     expect(proposalCss).not.toContain(
       ".proposal-cover-letter__film-header--role-priority",
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__film-header\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*105mm\)\s*minmax\(0,\s*1fr\);[\s\S]*align-items:\s*end;[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__film-heading\s*\{[\s\S]*font-weight:\s*500;[\s\S]*white-space:\s*nowrap;[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__film-title\s*\{[\s\S]*font-weight:\s*800;[\s\S]*white-space:\s*nowrap;[\s\S]*\}/,
     );
     expect(proposalCss).toMatch(
       /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__film-title\s*\{[\s\S]*overflow-wrap:\s*normal;[\s\S]*\}/,
@@ -129,13 +138,32 @@ describe("proposal letterhead CSS", () => {
       ".proposal-cover-letter--director .proposal-cover-letter__contact-grid",
     );
     expect(proposalCss).toMatch(
-      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__contact-grid\s*\{[\s\S]*grid-template-columns:\s*4mm minmax\(0,\s*30mm\) 4mm minmax\(0,\s*40mm\);[\s\S]*align-items:\s*baseline;[\s\S]*\}/,
+      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__contact-grid\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*36\.2mm\) minmax\(0,\s*46\.2mm\);[\s\S]*align-items:\s*center;[\s\S]*\}/,
     );
     expect(proposalCss).toMatch(
-      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__contact-mark\s*\{[\s\S]*line-height:\s*0\.85;[\s\S]*transform:\s*translateY\(0\.35mm\);[\s\S]*\}/,
+      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__contact-group\s*\{[\s\S]*grid-template-columns:\s*4mm minmax\(0,\s*1fr\);[\s\S]*align-items:\s*center;[\s\S]*\}/,
     );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__contact-group--telephone\s*\{[\s\S]*column-gap:\s*1\.25mm;[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__contact-group--digital\s*\{[\s\S]*column-gap:\s*3mm;[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__contact-mark\s*\{[\s\S]*inline-size:\s*4mm;[\s\S]*text-align:\s*center;[\s\S]*line-height:\s*1;[\s\S]*\}/,
+    );
+    expect(proposalCss).not.toContain("padding-block-start: 0.85mm;");
     expect(proposalCss).not.toContain(
       ".proposal-cover-letter--director .proposal-cover-letter__phone-block",
+    );
+  });
+
+  it("keeps the Director metadata date in one fixed-width grid cell", () => {
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__meta-row\s*\{[\s\S]*grid-template-columns:\s*43mm 48mm 42mm 24mm;[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__meta-item:last-child\s*\{[\s\S]*white-space:\s*nowrap;[\s\S]*overflow-wrap:\s*normal;[\s\S]*\}/,
     );
   });
 });

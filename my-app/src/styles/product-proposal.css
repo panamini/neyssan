@@ -3710,23 +3710,47 @@
   left: 111mm;
   top: 43.5mm;
   display: grid;
-  grid-template-columns: 4mm minmax(0, 30mm) 4mm minmax(0, 40mm);
+  grid-template-columns: minmax(0, 36.2mm) minmax(0, 46.2mm);
+  column-gap: 4mm;
+  align-items: center;
+  max-width: 86.4mm;
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__contact-group {
+  display: grid;
+  grid-template-columns: 4mm minmax(0, 1fr);
   column-gap: 2.2mm;
-  align-items: baseline;
-  max-width: 80mm;
+  align-items: center;
+  min-width: 0;
+  min-height: 6mm;
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__contact-group--telephone {
+  column-gap: 1.25mm;
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__contact-group--digital {
+  column-gap: 3mm;
 }
 
 .proposal-cover-letter--director .proposal-cover-letter__contact-mark {
+  inline-size: 4mm;
+  text-align: center;
   font-size: 6mm !important;
-  line-height: 0.85;
+  line-height: 1;
   font-weight: 800 !important;
-  transform: translateY(0.35mm);
 }
 
 .proposal-cover-letter--director .proposal-cover-letter__contact-lines {
   display: grid;
   gap: 0.2mm;
   min-width: 0;
+}
+
+.proposal-cover-letter--director
+  .proposal-cover-letter__contact-group--telephone.proposal-cover-letter__contact-group--single-line
+  .proposal-cover-letter__contact-lines {
+  align-self: end;
 }
 
 .proposal-cover-letter--director .proposal-cover-letter__contact-lines p {
@@ -3740,7 +3764,7 @@
   right: 14mm;
   top: 87.8mm;
   display: grid;
-  grid-template-columns: 45mm 51mm 44mm minmax(0, 1fr);
+  grid-template-columns: 43mm 48mm 42mm 24mm;
   column-gap: 8mm;
 }
 
@@ -3750,6 +3774,11 @@
   line-height: 1.25;
   font-weight: 800;
   overflow-wrap: anywhere;
+}
+
+.proposal-cover-letter--director .proposal-cover-letter__meta-item:last-child {
+  white-space: nowrap;
+  overflow-wrap: normal;
 }
 
 .proposal-cover-letter--director .proposal-cover-letter__meta-item:nth-child(n + 3) {
@@ -3804,7 +3833,7 @@
 .proposal-cover-letter--director .proposal-cover-letter__body {
   left: 25mm;
   top: 118mm;
-  width: min(112mm, 66ch);
+  width: min(96mm, 58ch);
 }
 
 .proposal-cover-letter--director.proposal-cover-letter--has-recipient-block
@@ -3954,7 +3983,7 @@
 .proposal-cover-letter--volk .proposal-cover-letter__body {
   left: 24mm;
   top: 122mm;
-  width: min(112mm, 66ch);
+  width: min(96mm, 58ch);
 }
 
 .proposal-cover-letter--volk.proposal-cover-letter--has-recipient-block
@@ -3990,17 +4019,12 @@
   top: 23.1mm;
   right: 3mm;
   display: grid;
-  grid-template-columns: minmax(0, 70mm) minmax(0, 58mm) minmax(0, 1fr);
-  column-gap: 8mm;
-  align-items: baseline;
-}
-
-.proposal-cover-letter--film-foto .proposal-cover-letter__film-header--no-company {
-  grid-template-columns: minmax(0, 70mm) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 105mm) minmax(0, 1fr);
+  column-gap: 5mm;
+  align-items: end;
 }
 
 .proposal-cover-letter--film-foto .proposal-cover-letter__film-title,
-.proposal-cover-letter--film-foto .proposal-cover-letter__film-company,
 .proposal-cover-letter--film-foto .proposal-cover-letter__film-heading,
 .proposal-cover-letter--film-foto .proposal-cover-letter__info-blocks p,
 .proposal-cover-letter--film-foto .proposal-cover-letter__recipient-block p,
@@ -4012,7 +4036,6 @@
 }
 
 .proposal-cover-letter--film-foto .proposal-cover-letter__film-title,
-.proposal-cover-letter--film-foto .proposal-cover-letter__film-company,
 .proposal-cover-letter--film-foto .proposal-cover-letter__film-heading,
 .proposal-cover-letter--film-foto .proposal-cover-letter__subject-label,
 .proposal-cover-letter--film-foto .proposal-cover-letter__subject-value {
@@ -4021,11 +4044,12 @@
 
 .proposal-cover-letter--film-foto .proposal-cover-letter__film-heading {
   min-width: 0;
-  font-size: 3.25mm;
+  font-size: 3.55mm;
   line-height: 1;
-  font-weight: 700;
+  font-weight: 500;
   text-transform: lowercase;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  white-space: nowrap;
 }
 
 .proposal-cover-letter--film-foto .proposal-cover-letter__info-blocks p,
@@ -4034,21 +4058,18 @@
   font-family: var(--body-font, var(--font-body-family));
 }
 
-.proposal-cover-letter--film-foto .proposal-cover-letter__film-company,
 .proposal-cover-letter--film-foto .proposal-cover-letter__film-title {
-  font-size: 8.1mm;
+  font-size: 7.6mm;
   line-height: 1;
   font-weight: 800;
   letter-spacing: 0;
   text-transform: lowercase;
-}
-
-.proposal-cover-letter--film-foto .proposal-cover-letter__film-company {
-  overflow-wrap: anywhere;
-}
-
-.proposal-cover-letter--film-foto .proposal-cover-letter__film-title {
   overflow-wrap: normal;
+  grid-column: 2;
+  justify-self: end;
+  max-width: none;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .proposal-cover-letter--film-foto .proposal-cover-letter__info-block--phone p:not(.proposal-cover-letter__info-label) {
@@ -4056,30 +4077,9 @@
   overflow-wrap: normal;
 }
 
-.proposal-cover-letter--film-foto .proposal-cover-letter__film-company {
-  grid-column: 2;
-  min-width: 0;
-}
-
-.proposal-cover-letter--film-foto .proposal-cover-letter__film-title {
-  grid-column: 3;
-  justify-self: end;
-  max-width: 64mm;
-  text-align: right;
-  white-space: normal;
-}
-
-.proposal-cover-letter--film-foto
-  .proposal-cover-letter__film-header--no-company
-  .proposal-cover-letter__film-title {
-  grid-column: 2;
-  max-width: 96mm;
-}
-
 .proposal-cover-letter--director .proposal-cover-letter__masthead-primary,
 .proposal-cover-letter--director .proposal-cover-letter__masthead-secondary,
-.proposal-cover-letter--volk .proposal-cover-letter__volk-title,
-.proposal-cover-letter--film-foto .proposal-cover-letter__film-company {
+.proposal-cover-letter--volk .proposal-cover-letter__volk-title {
   min-width: 0;
   overflow: hidden;
   overflow-wrap: normal;
@@ -4188,7 +4188,7 @@
 .proposal-cover-letter--film-foto .proposal-cover-letter__body {
   left: 20mm;
   top: 120mm;
-  width: min(112mm, 66ch);
+  width: min(96mm, 58ch);
 }
 
 .proposal-cover-letter--film-foto.proposal-cover-letter--has-recipient-block
@@ -4211,7 +4211,7 @@
   display: grid;
   align-content: start;
   min-width: 0;
-  max-width: min(112mm, 66ch);
+  max-width: min(96mm, 58ch);
   padding: 0;
 }
 
