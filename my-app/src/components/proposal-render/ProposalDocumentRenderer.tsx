@@ -15,6 +15,7 @@ import {
   resolveProposalHeaderVisibility,
   resolveProposalRecipientLines,
   type ProposalHeaderVisibility,
+  type ProposalRecipientFields,
 } from "../../lib/proposal-header";
 import {
   buildProposalContactLineFromParts,
@@ -118,6 +119,8 @@ type ProposalLetterheadViewModel = {
   candidateDirectorContactGroups: Array<{ mark: "T" | "@"; lines: string[] }>;
   candidateVolkSenderLine: string;
   candidateFilmSenderLine: string;
+  candidateJoellaWordmark: string;
+  candidateJoellaFooterLine: string;
   candidateLocationLine: string;
   candidatePhone: string;
   candidateEmail: string;
@@ -130,6 +133,12 @@ type ProposalLetterheadViewModel = {
   recipientCity: string;
   recipientContactLines: string[];
   recipientHeadingLines: string[];
+  joellaLetterBlock: {
+    senderLines: string[];
+    dateLine: string;
+    recipientLines: string[];
+    subjectLine: string;
+  };
   date: string;
   subject: string;
   secondaryTitle: string;
@@ -288,6 +297,17 @@ function resolveBauhausWordmark(args: {
   return firstWordmarkToken(fullTitle);
 }
 
+function normalizeJoellaDisplayText(value: string | null | undefined): string {
+  return String(value ?? "").replace(/\s+/g, " ").trim().toUpperCase();
+}
+
+function resolveJoellaWordmark(args: {
+  candidateCompany: string;
+  candidateName: string;
+}): string {
+  return normalizeJoellaDisplayText(args.candidateCompany || args.candidateName);
+}
+
 function uniqueNonEmptyLines(
   parts: Array<string | null | undefined>,
   excludedParts: Array<string | null | undefined> = [],
@@ -311,6 +331,128 @@ function uniqueNonEmptyLines(
   });
 
   return lines;
+}
+
+function buildJoellaFooterLine(args: {
+  location: string;
+  email: string;
+  phone: string;
+}): string {
+  return uniqueNonEmptyLines([args.location, args.email, args.phone])
+    .map(normalizeJoellaDisplayText)
+    .filter(Boolean)
+    .join("  ");
+}
+
+function buildJoellaHeaderContactLine(args: {
+  phone: string;
+  email: string;
+  linkedin: string;
+  website: string;
+  other: string;
+}): string {
+  return uniqueNonEmptyLines([
+    args.email,
+    args.phone,
+    args.linkedin,
+    args.website,
+    args.other,
+  ]).join(" · ");
+}
+
+function buildJoellaSubjectLine(args: {
+  subject: string;
+  candidateRole: string;
+}): string {
+  const subject = args.subject.trim();
+  if (subject) {
+    return `Subject: ${subject}`;
+  }
+
+  const role = args.candidateRole.trim();
+  return role ? `Subject: Application for ${role}` : "";
+}
+
+const JOELLA_RECIPIENT_KNOWN_LABELS = new Set([
+  "recipient",
+  "name",
+  "contact",
+  "role",
+  "title",
+  "company",
+  "organization",
+  "address",
+  "email",
+  "mail",
+  "city",
+  "location",
+  "country",
+  "phone",
+  "telephone",
+  "website",
+  "portfolio",
+]);
+
+function normalizeJoellaRecipientLineKey(value: string): string {
+  return value.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function normalizeJoellaRecipientRawLine(line: string): string {
+  const match = line.match(/^([A-Za-z][A-Za-z -]{0,32})\s*:\s*(.+)$/);
+  if (!match) {
+    return line;
+  }
+
+  return JOELLA_RECIPIENT_KNOWN_LABELS.has(match[1].toLowerCase())
+    ? match[2].trim()
+    : line;
+}
+
+function buildJoellaRecipientBlockLines(args: {
+  recipientDetails?: string | null;
+  recipientFields: ProposalRecipientFields;
+  showDetails: boolean;
+}): string[] {
+  const primaryLines = [
+    args.recipientFields.name,
+    args.recipientFields.role,
+    args.recipientFields.company,
+  ];
+
+  if (!args.showDetails) {
+    return uniqueNonEmptyLines(primaryLines);
+  }
+
+  const fieldValues = [
+    args.recipientFields.name,
+    args.recipientFields.role,
+    args.recipientFields.company,
+    args.recipientFields.address,
+    args.recipientFields.city,
+    args.recipientFields.email,
+  ];
+  const fieldKeys = new Set(
+    fieldValues
+      .map((value) => normalizeJoellaRecipientLineKey(value))
+      .filter(Boolean),
+  );
+  const extraLines = String(args.recipientDetails ?? "")
+    .split("\n")
+    .map((line) => normalizeJoellaRecipientRawLine(line.trim()))
+    .filter((line) => {
+      if (!line) {
+        return false;
+      }
+      return !fieldKeys.has(normalizeJoellaRecipientLineKey(line));
+    });
+
+  return uniqueNonEmptyLines([
+    ...primaryLines,
+    args.recipientFields.email,
+    args.recipientFields.address,
+    args.recipientFields.city,
+    ...extraLines,
+  ]);
 }
 
 function buildDirectorDigitalContactLines(
@@ -407,6 +549,22 @@ function buildProposalLetterheadViewModel(args: {
     email: resolvedContactParts.email,
     location: candidateShortLocationLine,
   });
+  const explicitJoellaCandidateName =
+    args.applicantHeader?.name?.trim() ||
+    (args.railTitle?.trim() &&
+    args.railTitle.trim() !== args.documentTitle?.trim()
+      ? args.railTitle.trim()
+      : "");
+  const joellaSenderName = explicitJoellaCandidateName;
+  const candidateJoellaWordmark = resolveJoellaWordmark({
+    candidateCompany,
+    candidateName: explicitJoellaCandidateName,
+  });
+  const candidateJoellaFooterLine = buildJoellaFooterLine({
+    location: resolvedContactParts.location,
+    email: resolvedContactParts.email,
+    phone: resolvedContactParts.phone,
+  });
   const recipientName = visibility.showRecipient
     ? recipientFields.name?.trim() ?? ""
     : "";
@@ -429,7 +587,7 @@ function buildProposalLetterheadViewModel(args: {
       ? recipientFields.city?.trim() ?? ""
       : "";
   const recipientContactLines = uniqueNonEmptyLines(
-    [recipientAddress, recipientCity, recipientEmail],
+    [recipientEmail, recipientAddress, recipientCity],
     [recipientName, recipientCompany, recipientRole],
   );
   const recipientHeadingLines = visibility.showRecipient
@@ -437,12 +595,43 @@ function buildProposalLetterheadViewModel(args: {
         recipientFields.name,
         recipientFields.role,
         recipientFields.company,
+        recipientFields.email,
         recipientFields.address,
         recipientFields.city,
-        recipientFields.email,
       ])
     : [];
   const subject = visibility.showSubject ? args.documentTitle?.trim() ?? "" : "";
+  const joellaLetterBlock = {
+    senderLines: visibility.showSender
+      ? uniqueNonEmptyLines([
+          joellaSenderName,
+          candidateRole,
+          candidateCompany,
+          buildJoellaHeaderContactLine({
+            phone: resolvedContactParts.phone,
+            email: resolvedContactParts.email,
+            linkedin: resolvedContactParts.linkedin,
+            website: resolvedContactParts.website,
+            other: resolvedContactParts.other,
+          }),
+          resolvedContactParts.location,
+        ])
+      : [],
+    dateLine: visibility.showDate ? args.letterDate?.trim() ?? "" : "",
+    recipientLines: visibility.showRecipient
+      ? buildJoellaRecipientBlockLines({
+          recipientDetails: args.recipientDetails,
+          recipientFields,
+          showDetails: true,
+        })
+      : [],
+    subjectLine: visibility.showSubject
+      ? buildJoellaSubjectLine({
+          subject,
+          candidateRole,
+        })
+      : "",
+  };
   const secondaryTitle = candidateCompany;
   const metaRole = recipientRole;
   const shortRoleTitle = candidateRole || recipientRole;
@@ -458,6 +647,8 @@ function buildProposalLetterheadViewModel(args: {
     candidateDirectorContactGroups,
     candidateVolkSenderLine,
     candidateFilmSenderLine,
+    candidateJoellaWordmark,
+    candidateJoellaFooterLine,
     candidateLocationLine: resolvedContactParts.location,
     candidatePhone: resolvedContactParts.phone,
     candidateEmail: resolvedContactParts.email,
@@ -473,6 +664,7 @@ function buildProposalLetterheadViewModel(args: {
     recipientCity,
     recipientContactLines,
     recipientHeadingLines,
+    joellaLetterBlock,
     date: visibility.showDate ? args.letterDate?.trim() ?? "" : "",
     subject,
     secondaryTitle,
@@ -855,6 +1047,65 @@ export function ProposalCoverLetterMomaBauhausTemplate({
   );
 }
 
+export function ProposalCoverLetterJoellaTemplate({
+  bodyRef,
+  bodyContent,
+  isContinuationPage,
+  viewModel,
+}: ProposalCoverLetterTemplateProps): JSX.Element {
+  const joellaLetterBlockGroups = [
+    viewModel.joellaLetterBlock.senderLines,
+    viewModel.joellaLetterBlock.dateLine
+      ? [viewModel.joellaLetterBlock.dateLine]
+      : [],
+    viewModel.joellaLetterBlock.recipientLines,
+    viewModel.joellaLetterBlock.subjectLine
+      ? [viewModel.joellaLetterBlock.subjectLine]
+      : [],
+  ].filter((group) => group.length > 0);
+
+  return (
+    <>
+      {!isContinuationPage ? (
+        <>
+          <span className="proposal-cover-letter__joella-frame" aria-hidden="true" />
+          <span className="proposal-cover-letter__joella-divider" aria-hidden="true" />
+          {viewModel.candidateJoellaWordmark ? (
+            <p className="proposal-cover-letter__joella-wordmark">
+              {viewModel.candidateJoellaWordmark}
+            </p>
+          ) : null}
+          {viewModel.candidateJoellaFooterLine ? (
+            <p className="proposal-cover-letter__joella-footer">
+              {viewModel.candidateJoellaFooterLine}
+            </p>
+          ) : null}
+        </>
+      ) : null}
+      <div ref={bodyRef ?? undefined} className="proposal-cover-letter__body">
+        {!isContinuationPage && joellaLetterBlockGroups.length > 0 ? (
+          <section
+            className="proposal-cover-letter__joella-letter-block"
+            aria-label="Letter details"
+          >
+            {joellaLetterBlockGroups.map((group, groupIndex) => (
+              <div
+                key={`joella-letter-block-group-${groupIndex}`}
+                className="proposal-cover-letter__joella-letter-block-group"
+              >
+                {group.map((line) => (
+                  <p key={`joella-letter-block-${groupIndex}-${line}`}>{line}</p>
+                ))}
+              </div>
+            ))}
+          </section>
+        ) : null}
+        {bodyContent}
+      </div>
+    </>
+  );
+}
+
 function buildStructuredHeaderValues(args: {
   letterDate?: string | null;
   recipientDetails?: string | null;
@@ -877,8 +1128,8 @@ function buildStructuredHeaderValues(args: {
   const recipientDetailLines =
     visibility.showRecipient && visibility.showRecipientDetails
       ? [
-          recipientFields.address,
           recipientFields.email,
+          recipientFields.address,
           recipientFields.city,
         ].filter(Boolean)
       : [];
@@ -1996,6 +2247,8 @@ export function ProposalDocumentRenderer({
           return <ProposalCoverLetterFilmFotoTemplate {...templateProps} />;
         case "moma-bauhaus-letterhead":
           return <ProposalCoverLetterMomaBauhausTemplate {...templateProps} />;
+        case "joella-frame-letterhead":
+          return <ProposalCoverLetterJoellaTemplate {...templateProps} />;
         default:
           return null;
       }
@@ -2020,6 +2273,9 @@ export function ProposalDocumentRenderer({
           : "",
         resolvedTemplateId === "moma-bauhaus-letterhead"
           ? "proposal-cover-letter--moma-bauhaus"
+          : "",
+        resolvedTemplateId === "joella-frame-letterhead"
+          ? "proposal-cover-letter--joella"
           : "",
         letterheadViewModel.recipientContactLines.length > 0
           ? "proposal-cover-letter--has-recipient-block"

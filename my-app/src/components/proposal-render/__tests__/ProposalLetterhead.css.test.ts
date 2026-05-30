@@ -19,6 +19,7 @@ describe("proposal letterhead CSS", () => {
       ".proposal-cover-letter--volk",
       ".proposal-cover-letter--film-foto",
       ".proposal-cover-letter--moma-bauhaus",
+      ".proposal-cover-letter--joella",
     ].forEach((scope) => {
       expect(proposalCss).toContain(`${scope} .dasti-proposal-document__page`);
       expect(proposalCss).toContain(`${scope} .proposal-cover-letter__body`);
@@ -30,7 +31,9 @@ describe("proposal letterhead CSS", () => {
     expect(proposalCss).not.toContain("director-letterhead html");
     expect(proposalCss).not.toContain("body.proposal-cover-letter--director");
     expect(proposalCss).not.toContain("body.proposal-cover-letter--moma-bauhaus");
+    expect(proposalCss).not.toContain("body.proposal-cover-letter--joella");
     expect(proposalCss).not.toContain("moma-bauhaus-letterhead html");
+    expect(proposalCss).not.toContain("joella-frame-letterhead html");
     expect(proposalCss).not.toContain("Vorbereitungssekretariat");
     expect(proposalCss).not.toContain("Institut für Auslandsbeziehungen");
   });
@@ -60,6 +63,9 @@ describe("proposal letterhead CSS", () => {
     expect(proposalCss).toMatch(
       /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-sender,[\s\S]*?\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-footer\s*\{[\s\S]*font-family:\s*var\(--body-font,\s*var\(--font-body-family\)\);[\s\S]*\}/,
     );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--joella\s+\.proposal-cover-letter__joella-recipient,[\s\S]*?\.proposal-cover-letter--joella\s+\.proposal-cover-letter__joella-footer\s*\{[\s\S]*font-family:\s*Arial,\s*"Helvetica Neue",\s*Helvetica,\s*sans-serif;[\s\S]*\}/,
+    );
     expect(proposalCss).not.toMatch(
       /\.proposal-cover-letter--(?:director|volk|film-foto)[^{]+(?:masthead-primary|volk-title|film-title)[^{]*\{[^}]*font-family:\s*var\(--font-body-family\)/,
     );
@@ -71,10 +77,11 @@ describe("proposal letterhead CSS", () => {
       [".proposal-cover-letter--volk", "24mm"],
       [".proposal-cover-letter--film-foto", "20mm"],
       [".proposal-cover-letter--moma-bauhaus", "32mm"],
+      [".proposal-cover-letter--joella", "35mm"],
     ].forEach(([scope, left]) => {
       expect(proposalCss).toMatch(
         new RegExp(
-          `${scope.replace(".", "\\.")}\\s+\\.proposal-cover-letter__body\\s*\\{[\\s\\S]*left:\\s*${left};[\\s\\S]*width:\\s*min\\((?:96|132)mm,\\s*(?:58|70)ch\\);`,
+          `${scope.replace(".", "\\.")}\\s+\\.proposal-cover-letter__body\\s*\\{[\\s\\S]*left:\\s*${left};[\\s\\S]*width:\\s*min\\((?:96|132|140)mm,\\s*(?:58|70)ch\\);`,
         ),
       );
     });
@@ -132,13 +139,17 @@ describe("proposal letterhead CSS", () => {
       proposalCss.indexOf(
         ".proposal-cover-letter--moma-bauhaus .dasti-proposal-document__page",
       ),
-      proposalCss.indexOf(".dasti-proposal-document--volk-register"),
+      proposalCss.indexOf(
+        ".proposal-cover-letter--joella .dasti-proposal-document__page",
+      ),
     );
     const exportMomaCss = exportRendererSource.slice(
       exportRendererSource.lastIndexOf(
         ".proposal-cover-letter--moma-bauhaus.export-page",
       ),
-      exportRendererSource.indexOf("const LATIN_EXPORT_FALLBACK_LOCALES"),
+      exportRendererSource.lastIndexOf(
+        ".proposal-cover-letter--joella.export-page",
+      ),
     );
 
     expect(momaCss).not.toMatch(/\d+\.\d+mm/);
@@ -225,6 +236,81 @@ describe("proposal letterhead CSS", () => {
     );
     expect(proposalCss).toMatch(
       /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-footer\s*\{[\s\S]*top:\s*284mm;[\s\S]*\}/,
+    );
+  });
+
+  it("keeps Joella geometry scoped to the historical A4 frame in preview and export", () => {
+    const joellaCss = proposalCss.slice(
+      proposalCss.indexOf(
+        ".proposal-cover-letter--joella .dasti-proposal-document__page",
+      ),
+      proposalCss.indexOf(".dasti-proposal-document--volk-register"),
+    );
+    const exportJoellaCss = exportRendererSource.slice(
+      exportRendererSource.lastIndexOf(
+        ".proposal-cover-letter--joella.export-page",
+      ),
+      exportRendererSource.indexOf("const LATIN_EXPORT_FALLBACK_LOCALES"),
+    );
+
+    [
+      "left: 5.5mm;",
+      "top: 6.8mm;",
+      "width: 198.5mm;",
+      "height: 282.8mm;",
+      "border: 1.32mm solid #74a0c5;",
+      "top: 19.65mm;",
+      "height: 0;",
+      "border-top: 1.32mm solid #74a0c5;",
+      "left: 9.8mm;",
+      "height: 12.85mm;",
+      "padding-top: 2mm;",
+      "font-size: 23pt;",
+      "letter-spacing: -0.035em;",
+      "left: 35mm;",
+      "top: 45mm;",
+      "right: 34mm;",
+      "top: 35mm;",
+      "width: min(140mm, 70ch);",
+      "margin-bottom: 9.3mm;",
+      "font-size: 8pt;",
+      "font-size: 10pt;",
+      "line-height: 4.65mm;",
+      "left: 10.4mm;",
+      "top: 285.75mm;",
+      "font-size: 6pt;",
+    ].forEach((declaration) => {
+      expect(joellaCss).toContain(declaration);
+      expect(exportJoellaCss).toContain(declaration);
+    });
+
+    expect(joellaCss).toContain(
+      "background-color: var(--proposal-document-paper, var(--paper, #FAF9F5));",
+    );
+    expect(exportJoellaCss).toContain(
+      "background: var(--paper, #FAF9F5) !important;",
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--joella\s+\.proposal-cover-letter__joella-wordmark\s*\{[\s\S]*transform:\s*none;[\s\S]*display:\s*flex;[\s\S]*align-items:\s*center;[\s\S]*color:\s*#8f332f;[\s\S]*font-weight:\s*700;[\s\S]*text-transform:\s*uppercase;[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--joella\s+\.proposal-cover-letter__joella-recipient,[\s\S]*?\.proposal-cover-letter--joella\s+\.proposal-cover-letter__joella-meta\s*\{[\s\S]*font-size:\s*8pt;[\s\S]*line-height:\s*3.7mm;[\s\S]*font-weight:\s*600;[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--joella\s+\.proposal-cover-letter__body\s+\.dasti-proposal-document__salutation\s*\{[\s\S]*font-weight:\s*400;[\s\S]*margin-bottom:\s*4.65mm;[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--joella\s+\.proposal-cover-letter__joella-letter-block\s*\{[\s\S]*margin-bottom:\s*9.3mm;[\s\S]*font-size:\s*8pt;[\s\S]*line-height:\s*3.7mm;[\s\S]*font-weight:\s*400;[\s\S]*\}/,
+    );
+    expect(joellaCss).not.toMatch(/font-size:\s*\d+(?:\.\d+)?mm;/);
+    expect(exportJoellaCss).not.toMatch(/font-size:\s*\d+(?:\.\d+)?mm;/);
+    expect(joellaCss).not.toMatch(/font-size:\s*\d+\.\d+pt;/);
+    expect(exportJoellaCss).not.toMatch(/font-size:\s*\d+\.\d+pt;/);
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--joella\s+\.proposal-cover-letter__body\s+\.dasti-proposal-document__paragraph\s+\+\s+\.dasti-proposal-document__paragraph\s*\{[\s\S]*margin-top:\s*4.65mm;[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--joella\s+\.proposal-cover-letter__joella-footer\s*\{[\s\S]*letter-spacing:\s*0.018em;[\s\S]*color:\s*#86accd;[\s\S]*\}/,
     );
   });
 

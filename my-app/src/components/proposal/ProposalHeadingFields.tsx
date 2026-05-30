@@ -29,8 +29,8 @@ const HEADING_FIELD_GROUPS = [
       "applicant-company",
       "contact-email",
       "contact-phone",
-      "contact-location",
       "contact-linkedin",
+      "contact-location",
       "contact-website",
       "contact-line",
     ],
@@ -40,18 +40,18 @@ const HEADING_FIELD_GROUPS = [
     label: "Recipient details",
     fieldIds: [
       "recipient-name",
-      "recipient-company",
-      "recipient-city",
       "recipient-role",
-      "recipient-address",
+      "recipient-company",
       "recipient-email",
+      "recipient-address",
+      "recipient-city",
       "recipient-details",
     ],
   },
   {
     id: "letter-formulas",
     label: "Letter details",
-    fieldIds: ["proposal-subject", "letter-date", "salutation"],
+    fieldIds: ["proposal-subject", "letter-date", "salutation", "signature-signoff"],
   },
 ] as const;
 
