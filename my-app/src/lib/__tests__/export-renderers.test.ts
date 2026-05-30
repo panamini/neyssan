@@ -506,12 +506,12 @@ describe("export-renderers", () => {
       expect(css).toContain(expectedBodyLeft);
       expect(css).toContain(
         templateId === "moma-bauhaus-letterhead"
-          ? "width: min(112mm, 62ch);"
+          ? "width: min(132mm, 70ch);"
           : "width: min(96mm, 58ch);",
       );
       expect(css).toContain(
         templateId === "moma-bauhaus-letterhead"
-          ? "max-width: min(112mm, 62ch);"
+          ? "max-width: min(132mm, 70ch);"
           : "max-width: min(96mm, 58ch);",
       );
       expect(css).toContain("overflow-wrap: break-word;");
