@@ -74,7 +74,7 @@ describe("proposal letterhead CSS", () => {
     ].forEach(([scope, left]) => {
       expect(proposalCss).toMatch(
         new RegExp(
-          `${scope.replace(".", "\\.")}\\s+\\.proposal-cover-letter__body\\s*\\{[\\s\\S]*left:\\s*${left};[\\s\\S]*width:\\s*min\\((?:96|112)mm,\\s*(?:58|62)ch\\);`,
+          `${scope.replace(".", "\\.")}\\s+\\.proposal-cover-letter__body\\s*\\{[\\s\\S]*left:\\s*${left};[\\s\\S]*width:\\s*min\\((?:96|132)mm,\\s*(?:58|70)ch\\);`,
         ),
       );
     });
@@ -148,15 +148,15 @@ describe("proposal letterhead CSS", () => {
       "top: 11mm;",
       "bottom: auto;",
       "top: 42mm;",
-      "font-size: 19mm;",
+      "font-size: 54pt;",
       "top: 18mm;",
-      "line-height: 4mm;",
+      "line-height: 11pt;",
       "left: 5mm;",
       "top: 94mm;",
       "width: 197mm;",
       "height: 196mm;",
       "top: 121mm;",
-      "top: 136mm;",
+      "top: 141mm;",
       "top: 284mm;",
       "left: 102mm;",
     ].forEach((declaration) => {
@@ -173,7 +173,7 @@ describe("proposal letterhead CSS", () => {
       /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-header\s*\{[\s\S]*left:\s*102mm;[\s\S]*top:\s*10mm;[\s\S]*right:\s*8mm;[\s\S]*\}/,
     );
     expect(proposalCss).toMatch(
-      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-logo\s*\{[\s\S]*font-size:\s*19mm;[\s\S]*overflow:\s*visible;[\s\S]*white-space:\s*nowrap;[\s\S]*\}/,
+      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-logo\s*\{[\s\S]*font-size:\s*54pt;[\s\S]*overflow:\s*visible;[\s\S]*white-space:\s*nowrap;[\s\S]*\}/,
     );
     expect(
       momaCss.slice(
@@ -188,25 +188,40 @@ describe("proposal letterhead CSS", () => {
       ),
     ).not.toMatch(/text-overflow:\s*ellipsis/);
     expect(proposalCss).toMatch(
-      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-subtitle\s*\{[\s\S]*position:\s*absolute;[\s\S]*left:\s*1mm;[\s\S]*top:\s*18mm;[\s\S]*font-size:\s*2mm;[\s\S]*line-height:\s*1\.28;[\s\S]*\}/,
+      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-subtitle\s*\{[\s\S]*position:\s*absolute;[\s\S]*left:\s*1mm;[\s\S]*top:\s*18mm;[\s\S]*font-size:\s*7pt;[\s\S]*line-height:\s*9pt;[\s\S]*\}/,
     );
     expect(proposalCss).toMatch(
       /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-recipient\s*\{[\s\S]*left:\s*32mm;[\s\S]*top:\s*42mm;[\s\S]*width:\s*58mm;[\s\S]*gap:\s*0;[\s\S]*\}/,
     );
     expect(proposalCss).toMatch(
-      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-sender p,[\s\S]*?\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-recipient p\s*\{[\s\S]*line-height:\s*4mm;[\s\S]*\}/,
+      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-sender p,[\s\S]*?\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-recipient p\s*\{[\s\S]*line-height:\s*11pt;[\s\S]*\}/,
     );
     expect(proposalCss).toMatch(
       /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-meta\s*\{[\s\S]*left:\s*32mm;[\s\S]*top:\s*121mm;[\s\S]*right:\s*18mm;[\s\S]*gap:\s*1mm;[\s\S]*\}/,
     );
     expect(proposalCss).toMatch(
-      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-meta-item\s*\{[\s\S]*font-size:\s*3mm;[\s\S]*line-height:\s*1\.48;[\s\S]*font-weight:\s*400;[\s\S]*\}/,
+      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-meta-item\s*\{[\s\S]*font-size:\s*10pt;[\s\S]*line-height:\s*14pt;[\s\S]*font-weight:\s*400;[\s\S]*\}/,
     );
     expect(proposalCss).toMatch(
       /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-meta-item--subject\s*\{[\s\S]*font-weight:\s*800;[\s\S]*\}/,
     );
     expect(proposalCss).toMatch(
-      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__body\s*\{[\s\S]*left:\s*32mm;[\s\S]*top:\s*136mm;[\s\S]*width:\s*min\(112mm,\s*62ch\);[\s\S]*\}/,
+      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__body\s*\{[\s\S]*left:\s*32mm;[\s\S]*top:\s*141mm;[\s\S]*width:\s*min\(132mm,\s*70ch\);[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__body\s+\.dasti-proposal-document__salutation\s*\{[\s\S]*margin-bottom:\s*6pt;[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__body\s+\.dasti-proposal-document__paragraph\s+\+\s+\.dasti-proposal-document__paragraph\s*\{[\s\S]*margin-top:\s*6pt;[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__body\s+\.dasti-proposal-document__closing\s*\{[\s\S]*gap:\s*6pt;[\s\S]*padding-top:\s*10pt;[\s\S]*\}/,
+    );
+    expect(exportMomaCss).toMatch(
+      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__body\s+\.proposal-block\s+\+\s+\.proposal-block:not\(\.proposal-block--closing\)\s*\{[\s\S]*margin-top:\s*6pt;[\s\S]*\}/,
+    );
+    expect(exportMomaCss).toMatch(
+      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__body\s+\.proposal-block--closing\s*\{[\s\S]*gap:\s*6pt;[\s\S]*padding-top:\s*10pt;[\s\S]*\}/,
     );
     expect(proposalCss).toMatch(
       /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-footer\s*\{[\s\S]*top:\s*284mm;[\s\S]*\}/,
