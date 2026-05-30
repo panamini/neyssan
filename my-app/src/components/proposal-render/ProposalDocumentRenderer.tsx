@@ -129,6 +129,7 @@ type ProposalLetterheadViewModel = {
   recipientEmail: string;
   recipientCity: string;
   recipientContactLines: string[];
+  recipientHeadingLines: string[];
   date: string;
   subject: string;
   secondaryTitle: string;
@@ -399,6 +400,16 @@ function buildProposalLetterheadViewModel(args: {
     [recipientAddress, recipientCity, recipientEmail],
     [recipientName, recipientCompany, recipientRole],
   );
+  const recipientHeadingLines = visibility.showRecipient
+    ? uniqueNonEmptyLines([
+        recipientFields.name,
+        recipientFields.company,
+        recipientFields.city,
+        recipientFields.role,
+        recipientFields.address,
+        recipientFields.email,
+      ])
+    : [];
   const subject = visibility.showSubject ? args.documentTitle?.trim() ?? "" : "";
   const secondaryTitle = candidateCompany;
   const metaRole = recipientRole;
@@ -429,6 +440,7 @@ function buildProposalLetterheadViewModel(args: {
     recipientEmail,
     recipientCity,
     recipientContactLines,
+    recipientHeadingLines,
     date: visibility.showDate ? args.letterDate?.trim() ?? "" : "",
     subject,
     secondaryTitle,
@@ -726,12 +738,7 @@ export function ProposalCoverLetterMomaBauhausTemplate({
     viewModel.candidateRole,
     viewModel.candidateLocationLine,
   ]);
-  const recipientLines = uniqueNonEmptyLines([
-    viewModel.recipientName,
-    viewModel.recipientRole,
-    viewModel.recipientCompany,
-    ...viewModel.recipientContactLines,
-  ]);
+  const recipientLines = viewModel.recipientHeadingLines;
   const displayTitle =
     viewModel.candidateCompany ||
     viewModel.candidateName ||
@@ -741,10 +748,7 @@ export function ProposalCoverLetterMomaBauhausTemplate({
     viewModel.candidateEmail,
     viewModel.candidatePhone,
   ]);
-  const footerRight = joinNonEmpty([
-    viewModel.candidateWebsite,
-    viewModel.candidateLocationLine,
-  ]);
+  const footerRight = viewModel.candidateWebsite;
 
   return (
     <>
@@ -788,12 +792,12 @@ export function ProposalCoverLetterMomaBauhausTemplate({
             <div className="proposal-cover-letter__bauhaus-meta">
               {viewModel.date ? (
                 <p className="proposal-cover-letter__bauhaus-meta-item">
-                  {viewModel.date}
+                  date: {viewModel.date}
                 </p>
               ) : null}
               {viewModel.subject ? (
                 <p className="proposal-cover-letter__bauhaus-meta-item">
-                  Re: {viewModel.subject}
+                  RE: {viewModel.subject}
                 </p>
               ) : null}
             </div>

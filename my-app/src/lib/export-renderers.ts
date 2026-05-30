@@ -1454,7 +1454,8 @@ function buildStyledProposalAppearanceCss(): string {
 
     .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-sender {
       left: 32mm;
-      top: 14mm;
+      top: auto;
+      bottom: 266.75mm;
       width: 58mm;
       display: grid;
       gap: 1.05mm;
@@ -1518,8 +1519,7 @@ function buildStyledProposalAppearanceCss(): string {
       top: 106mm;
       right: 18mm;
       display: grid;
-      grid-template-columns: 28mm minmax(0, 1fr);
-      column-gap: 10mm;
+      gap: 1.05mm;
       align-items: start;
       min-width: 0;
     }
@@ -3179,6 +3179,16 @@ function buildProposalLetterheadExportViewModel(
     [recipientAddress, recipientCity, recipientEmail],
     [recipientName, recipientCompany, recipientRole],
   );
+  const recipientHeadingLines = data.headerVisibility.showRecipient
+    ? uniqueExportNonEmptyLines([
+        recipientFields.name,
+        recipientFields.company,
+        recipientFields.city,
+        recipientFields.role,
+        recipientFields.address,
+        recipientFields.email,
+      ])
+    : [];
   const date =
     data.headerVisibility.showDate && data.letterDate
       ? normalizeLocaleTypography(data.letterDate, locale).trim()
@@ -3212,6 +3222,7 @@ function buildProposalLetterheadExportViewModel(
     recipientEmail,
     recipientCity,
     recipientContactLines,
+    recipientHeadingLines,
     date,
     subject,
     secondaryTitle,
@@ -3378,12 +3389,7 @@ function renderProposalLetterheadExportPage(args: {
       viewModel.candidateRole,
       viewModel.candidateLocationLine,
     ]);
-    const recipientLines = uniqueExportNonEmptyLines([
-      viewModel.recipientName,
-      viewModel.recipientRole,
-      viewModel.recipientCompany,
-      ...viewModel.recipientContactLines,
-    ]);
+    const recipientLines = viewModel.recipientHeadingLines;
     const displayTitle =
       viewModel.candidateCompany ||
       viewModel.candidateName ||
@@ -3393,10 +3399,7 @@ function renderProposalLetterheadExportPage(args: {
       viewModel.candidateEmail,
       viewModel.candidatePhone,
     ]);
-    const footerRight = joinExportNonEmpty([
-      viewModel.candidateWebsite,
-      viewModel.candidateLocationLine,
-    ]);
+    const footerRight = viewModel.candidateWebsite;
 
     return `<main class="export-page ${scopeClass}${recipientBlockClass}" data-export-doc="proposal">
       ${
@@ -3416,7 +3419,7 @@ function renderProposalLetterheadExportPage(args: {
       }
       ${
         viewModel.date || viewModel.subject
-          ? `<div class="proposal-cover-letter__bauhaus-meta">${viewModel.date ? renderExportParagraph(viewModel.date, "proposal-cover-letter__bauhaus-meta-item") : ""}${viewModel.subject ? renderExportParagraph(`Re: ${viewModel.subject}`, "proposal-cover-letter__bauhaus-meta-item") : ""}</div>`
+          ? `<div class="proposal-cover-letter__bauhaus-meta">${viewModel.date ? renderExportParagraph(`date: ${viewModel.date}`, "proposal-cover-letter__bauhaus-meta-item") : ""}${viewModel.subject ? renderExportParagraph(`RE: ${viewModel.subject}`, "proposal-cover-letter__bauhaus-meta-item") : ""}</div>`
           : ""
       }
       <span class="proposal-cover-letter__bauhaus-frame" aria-hidden="true"></span>
