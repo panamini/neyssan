@@ -1515,11 +1515,12 @@ function buildStyledProposalAppearanceCss(): string {
 
     .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-meta {
       left: 32mm;
-      top: 86.5mm;
-      right: 8mm;
-      display: flex;
-      gap: 7mm;
-      align-items: baseline;
+      top: 106mm;
+      right: 18mm;
+      display: grid;
+      grid-template-columns: 28mm minmax(0, 1fr);
+      column-gap: 10mm;
+      align-items: start;
       min-width: 0;
     }
 
@@ -1537,7 +1538,7 @@ function buildStyledProposalAppearanceCss(): string {
 
     .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__body {
       left: 32mm;
-      top: 116mm;
+      top: 128mm;
       width: min(112mm, 62ch);
       max-width: min(112mm, 62ch);
       display: grid;
@@ -3373,11 +3374,9 @@ function renderProposalLetterheadExportPage(args: {
   if (args.templateId === "moma-bauhaus-letterhead") {
     const senderLines = uniqueExportNonEmptyLines([
       viewModel.candidateName,
-      viewModel.secondaryTitle,
+      viewModel.candidateCompany,
       viewModel.candidateRole,
       viewModel.candidateLocationLine,
-      viewModel.candidateEmail,
-      viewModel.candidatePhone,
     ]);
     const recipientLines = uniqueExportNonEmptyLines([
       viewModel.recipientName,
@@ -3386,11 +3385,10 @@ function renderProposalLetterheadExportPage(args: {
       ...viewModel.recipientContactLines,
     ]);
     const displayTitle =
-      viewModel.secondaryTitle ||
+      viewModel.candidateCompany ||
       viewModel.candidateName ||
       viewModel.recipientCompany;
-    const subtitle =
-      viewModel.subject || viewModel.candidateRole || viewModel.shortRoleTitle;
+    const subtitle = viewModel.candidateRole || viewModel.shortRoleTitle;
     const footerLeft = joinExportNonEmpty([
       viewModel.candidateEmail,
       viewModel.candidatePhone,

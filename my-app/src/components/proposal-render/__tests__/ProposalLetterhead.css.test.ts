@@ -123,6 +123,24 @@ describe("proposal letterhead CSS", () => {
     );
   });
 
+  it("keeps MoMA Bauhaus recipient routing in the top-left block and moves letter flow inside the frame", () => {
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-frame\s*\{[\s\S]*left:\s*5mm;[\s\S]*top:\s*94\.2mm;[\s\S]*width:\s*197\.2mm;[\s\S]*height:\s*196\.3mm;[\s\S]*border:\s*1\.2mm solid var\(--proposal-document-accent-ink\);[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-recipient\s*\{[\s\S]*left:\s*32mm;[\s\S]*top:\s*44\.7mm;[\s\S]*width:\s*58mm;[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-meta\s*\{[\s\S]*left:\s*32mm;[\s\S]*top:\s*106mm;[\s\S]*right:\s*18mm;[\s\S]*grid-template-columns:\s*28mm minmax\(0,\s*1fr\);[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__body\s*\{[\s\S]*left:\s*32mm;[\s\S]*top:\s*128mm;[\s\S]*width:\s*min\(112mm,\s*62ch\);[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-footer\s*\{[\s\S]*top:\s*285\.7mm;[\s\S]*\}/,
+    );
+  });
+
   it("places recipient overflow details in scoped blocks and shifts the letter flow only when present", () => {
     [
       ".proposal-cover-letter--director",
