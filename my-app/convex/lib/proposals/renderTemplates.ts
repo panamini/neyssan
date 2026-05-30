@@ -9,6 +9,7 @@ export const PROPOSAL_ACTIVE_TEMPLATE_IDS = [
   "director-letterhead",
   "volk-letterhead",
   "film-foto-letterhead",
+  "moma-bauhaus-letterhead",
 ] as const;
 
 export const PROPOSAL_LEGACY_TEMPLATE_IDS = [
@@ -293,18 +294,43 @@ export const PROPOSAL_TEMPLATE_DEFINITIONS: readonly ProposalTemplateDefinition[
       gridStepBMm: ROBIAL_PROPOSAL_GRID.stepBMm,
       gridHalfStepMm: ROBIAL_PROPOSAL_GRID.halfStepMm,
     },
+    {
+      id: "moma-bauhaus-letterhead",
+      name: "MoMA Bauhaus Letterhead",
+      shortLabel: "5 mm blue frame",
+      description:
+        "A Bauhaus archive cover-letter sheet with a fixed blue A4 frame, compact sender/recipient register, and measured body field.",
+      twinLabel: "Cover letter",
+      exportShell: "onecol",
+      leftMarginMm: 32,
+      leftZoneMm: 0,
+      gutterMm: 0,
+      topOffsetMm: 0,
+      bodyStartMm: 116,
+      bottomMarginMm: 18,
+      rightMarginMm: 8,
+      readingMeasureCh: 62,
+      titleScaleMm: 8.6,
+      gridStepAMm: ROBIAL_PROPOSAL_GRID.stepAMm,
+      gridStepBMm: ROBIAL_PROPOSAL_GRID.stepBMm,
+      gridHalfStepMm: ROBIAL_PROPOSAL_GRID.halfStepMm,
+    },
   ] as const;
 
 export function isProposalLetterheadTemplateId(
   value: unknown,
 ): value is Extract<
   ProposalTemplateId,
-  "director-letterhead" | "volk-letterhead" | "film-foto-letterhead"
+  | "director-letterhead"
+  | "volk-letterhead"
+  | "film-foto-letterhead"
+  | "moma-bauhaus-letterhead"
 > {
   return (
     value === "director-letterhead" ||
     value === "volk-letterhead" ||
-    value === "film-foto-letterhead"
+    value === "film-foto-letterhead" ||
+    value === "moma-bauhaus-letterhead"
   );
 }
 

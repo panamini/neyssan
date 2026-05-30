@@ -11024,6 +11024,8 @@ export function ProposalForge(): JSX.Element {
               ? "volk-letterhead"
               : template.id === "film-foto-letterhead"
                 ? "film-foto-letterhead"
+                : template.id === "moma-bauhaus-letterhead"
+                  ? "moma-bauhaus-letterhead"
                 : template.id === "modernist_signal"
                   ? "bold"
                   : template.id === "quire_margin"

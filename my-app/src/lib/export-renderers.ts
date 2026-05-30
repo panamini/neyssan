@@ -851,7 +851,8 @@ function buildStyledProposalAppearanceCss(): string {
 
     .proposal-cover-letter--director.export-page,
     .proposal-cover-letter--volk.export-page,
-    .proposal-cover-letter--film-foto.export-page {
+    .proposal-cover-letter--film-foto.export-page,
+    .proposal-cover-letter--moma-bauhaus.export-page {
       position: relative;
       width: 210mm;
       min-height: 297mm;
@@ -1415,6 +1416,172 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--volk .proposal-cover-letter__body .proposal-block + .proposal-block,
     .proposal-cover-letter--film-foto .proposal-cover-letter__body .proposal-block + .proposal-block {
       margin-top: 4mm;
+    }
+
+    .proposal-cover-letter--moma-bauhaus.export-page {
+      background:
+        linear-gradient(
+          180deg,
+          color-mix(in srgb, var(--paper) 94%, white 6%),
+          color-mix(in srgb, var(--paper) 96%, var(--accent) 4%)
+        );
+    }
+
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-sender,
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-recipient,
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-header,
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-meta,
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-frame,
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-footer,
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__body {
+      position: absolute;
+    }
+
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-sender,
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-recipient,
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-meta,
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-footer {
+      font-family: var(--body-font, var(--font-body-family));
+      color: var(--accent);
+    }
+
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-header,
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-logo,
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-subtitle {
+      font-family: var(--heading-font, var(--font-heading-family));
+      color: var(--accent);
+    }
+
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-sender {
+      left: 32mm;
+      top: 14mm;
+      width: 58mm;
+      display: grid;
+      gap: 1.05mm;
+    }
+
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-recipient {
+      left: 32mm;
+      top: 44.7mm;
+      width: 58mm;
+      display: grid;
+      gap: 1.05mm;
+    }
+
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-sender p,
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-recipient p,
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-meta-item,
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-footer {
+      margin: 0;
+      min-width: 0;
+      font-size: 2.05mm;
+      line-height: 1.28;
+      font-weight: 800;
+      letter-spacing: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-header {
+      left: 102mm;
+      top: 16.4mm;
+      right: 7.8mm;
+      display: grid;
+      align-content: start;
+      justify-items: start;
+      min-width: 0;
+    }
+
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-logo {
+      margin: 0;
+      max-width: 100%;
+      font-size: 16.4mm;
+      line-height: 0.88;
+      font-weight: 900;
+      letter-spacing: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-subtitle {
+      margin: 1.2mm 0 0 0.5mm;
+      max-width: 94mm;
+      font-size: 2.35mm;
+      line-height: 1.2;
+      font-weight: 800;
+      letter-spacing: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-meta {
+      left: 32mm;
+      top: 86.5mm;
+      right: 8mm;
+      display: flex;
+      gap: 7mm;
+      align-items: baseline;
+      min-width: 0;
+    }
+
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-meta-item {
+      color: var(--ink);
+    }
+
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-frame {
+      left: 5mm;
+      top: 94.2mm;
+      width: 197.2mm;
+      height: 196.3mm;
+      border: 1.2mm solid var(--accent);
+    }
+
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__body {
+      left: 32mm;
+      top: 116mm;
+      width: min(112mm, 62ch);
+      max-width: min(112mm, 62ch);
+      display: grid;
+      align-content: start;
+      min-width: 0;
+      padding: 0;
+    }
+
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__body .proposal-block,
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__body .proposal-signoff,
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__body .proposal-signature {
+      margin: 0;
+      font-family: var(--body-font, var(--font-body-family));
+      font-size: 3.15mm;
+      line-height: 1.48;
+      color: var(--ink);
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+    }
+
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__body .proposal-block + .proposal-block {
+      margin-top: 4mm;
+    }
+
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__body .proposal-signature {
+      font-family: var(--proposal-signature-font-family, var(--body-font));
+      font-weight: var(--decor-signature-font-weight, inherit);
+    }
+
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-footer {
+      top: 285.7mm;
+      max-width: 72mm;
+      color: var(--accent);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-footer--left {
+      left: 32mm;
+    }
+
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-footer--right {
+      left: 101.8mm;
     }
   `;
 }
@@ -3135,7 +3302,10 @@ function renderProposalLetterheadExportPage(args: {
   signatureRender?: ReturnType<typeof resolveProposalSignatureRender>;
   templateId: Extract<
     ProposalTemplateId,
-    "director-letterhead" | "volk-letterhead" | "film-foto-letterhead"
+    | "director-letterhead"
+    | "volk-letterhead"
+    | "film-foto-letterhead"
+    | "moma-bauhaus-letterhead"
   >;
 }): string {
   const viewModel = buildProposalLetterheadExportViewModel(
@@ -3152,7 +3322,9 @@ function renderProposalLetterheadExportPage(args: {
       ? "proposal-cover-letter--director"
       : args.templateId === "volk-letterhead"
         ? "proposal-cover-letter--volk"
-        : "proposal-cover-letter--film-foto";
+        : args.templateId === "film-foto-letterhead"
+          ? "proposal-cover-letter--film-foto"
+          : "proposal-cover-letter--moma-bauhaus";
   const recipientBlockClass = viewModel.recipientContactLines.length
     ? " proposal-cover-letter--has-recipient-block"
     : "";
@@ -3194,6 +3366,64 @@ function renderProposalLetterheadExportPage(args: {
       ${renderProposalLetterheadRecipientBlock(viewModel)}
       ${renderProposalLetterheadSubjectRow(viewModel, "re:")}
       <span class="proposal-cover-letter__dot" aria-hidden="true"></span>
+      <section class="proposal-cover-letter__body" data-block="body">${bodyMarkup}</section>
+  </main>`;
+  }
+
+  if (args.templateId === "moma-bauhaus-letterhead") {
+    const senderLines = uniqueExportNonEmptyLines([
+      viewModel.candidateName,
+      viewModel.secondaryTitle,
+      viewModel.candidateRole,
+      viewModel.candidateLocationLine,
+      viewModel.candidateEmail,
+      viewModel.candidatePhone,
+    ]);
+    const recipientLines = uniqueExportNonEmptyLines([
+      viewModel.recipientName,
+      viewModel.recipientRole,
+      viewModel.recipientCompany,
+      ...viewModel.recipientContactLines,
+    ]);
+    const displayTitle =
+      viewModel.secondaryTitle ||
+      viewModel.candidateName ||
+      viewModel.recipientCompany;
+    const subtitle =
+      viewModel.subject || viewModel.candidateRole || viewModel.shortRoleTitle;
+    const footerLeft = joinExportNonEmpty([
+      viewModel.candidateEmail,
+      viewModel.candidatePhone,
+    ]);
+    const footerRight = joinExportNonEmpty([
+      viewModel.candidateWebsite,
+      viewModel.candidateLocationLine,
+    ]);
+
+    return `<main class="export-page ${scopeClass}${recipientBlockClass}" data-export-doc="proposal">
+      ${
+        senderLines.length
+          ? `<section class="proposal-cover-letter__bauhaus-sender" aria-label="Sender details">${senderLines.map((line) => renderExportParagraph(line, "")).join("")}</section>`
+          : ""
+      }
+      ${
+        recipientLines.length
+          ? `<section class="proposal-cover-letter__bauhaus-recipient" aria-label="Recipient details">${recipientLines.map((line) => renderExportParagraph(line, "")).join("")}</section>`
+          : ""
+      }
+      ${
+        displayTitle || subtitle
+          ? `<header class="proposal-cover-letter__bauhaus-header">${renderExportParagraph(displayTitle, "proposal-cover-letter__bauhaus-logo")}${renderExportParagraph(subtitle, "proposal-cover-letter__bauhaus-subtitle")}</header>`
+          : ""
+      }
+      ${
+        viewModel.date || viewModel.subject
+          ? `<div class="proposal-cover-letter__bauhaus-meta">${viewModel.date ? renderExportParagraph(viewModel.date, "proposal-cover-letter__bauhaus-meta-item") : ""}${viewModel.subject ? renderExportParagraph(`Re: ${viewModel.subject}`, "proposal-cover-letter__bauhaus-meta-item") : ""}</div>`
+          : ""
+      }
+      <span class="proposal-cover-letter__bauhaus-frame" aria-hidden="true"></span>
+      ${renderExportParagraph(footerLeft, "proposal-cover-letter__bauhaus-footer proposal-cover-letter__bauhaus-footer--left")}
+      ${renderExportParagraph(footerRight, "proposal-cover-letter__bauhaus-footer proposal-cover-letter__bauhaus-footer--right")}
       <section class="proposal-cover-letter__body" data-block="body">${bodyMarkup}</section>
     </main>`;
   }

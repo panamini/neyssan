@@ -14,6 +14,7 @@ describe("proposal letterhead CSS", () => {
       ".proposal-cover-letter--director",
       ".proposal-cover-letter--volk",
       ".proposal-cover-letter--film-foto",
+      ".proposal-cover-letter--moma-bauhaus",
     ].forEach((scope) => {
       expect(proposalCss).toContain(`${scope} .dasti-proposal-document__page`);
       expect(proposalCss).toContain(`${scope} .proposal-cover-letter__body`);
@@ -24,6 +25,10 @@ describe("proposal letterhead CSS", () => {
     );
     expect(proposalCss).not.toContain("director-letterhead html");
     expect(proposalCss).not.toContain("body.proposal-cover-letter--director");
+    expect(proposalCss).not.toContain("body.proposal-cover-letter--moma-bauhaus");
+    expect(proposalCss).not.toContain("moma-bauhaus-letterhead html");
+    expect(proposalCss).not.toContain("Vorbereitungssekretariat");
+    expect(proposalCss).not.toContain("Institut für Auslandsbeziehungen");
   });
 
   it("keeps letterhead display roles on heading fonts and metadata roles on body fonts", () => {
@@ -37,6 +42,9 @@ describe("proposal letterhead CSS", () => {
       /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__film-title,[\s\S]*?\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__subject-value\s*\{[\s\S]*font-family:\s*var\(--heading-font,\s*var\(--font-heading-family\)\);[\s\S]*\}/,
     );
     expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-header,[\s\S]*?\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-subtitle\s*\{[\s\S]*font-family:\s*var\(--heading-font,\s*var\(--font-heading-family\)\);[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
       /\.proposal-cover-letter--director\s+\.proposal-cover-letter__sender-label,[\s\S]*?\.proposal-cover-letter--director\s+\.proposal-cover-letter__meta-item\s*\{[\s\S]*font-family:\s*var\(--body-font,\s*var\(--font-body-family\)\);[\s\S]*\}/,
     );
     expect(proposalCss).toMatch(
@@ -44,6 +52,9 @@ describe("proposal letterhead CSS", () => {
     );
     expect(proposalCss).toMatch(
       /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__info-blocks p,[\s\S]*?\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__meta-item\s*\{[\s\S]*font-family:\s*var\(--body-font,\s*var\(--font-body-family\)\);[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-sender,[\s\S]*?\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-footer\s*\{[\s\S]*font-family:\s*var\(--body-font,\s*var\(--font-body-family\)\);[\s\S]*\}/,
     );
     expect(proposalCss).not.toMatch(
       /\.proposal-cover-letter--(?:director|volk|film-foto)[^{]+(?:masthead-primary|volk-title|film-title)[^{]*\{[^}]*font-family:\s*var\(--font-body-family\)/,
@@ -55,10 +66,11 @@ describe("proposal letterhead CSS", () => {
       [".proposal-cover-letter--director", "25mm"],
       [".proposal-cover-letter--volk", "24mm"],
       [".proposal-cover-letter--film-foto", "20mm"],
+      [".proposal-cover-letter--moma-bauhaus", "32mm"],
     ].forEach(([scope, left]) => {
       expect(proposalCss).toMatch(
         new RegExp(
-          `${scope.replace(".", "\\.")}\\s+\\.proposal-cover-letter__body\\s*\\{[\\s\\S]*left:\\s*${left};[\\s\\S]*width:\\s*min\\(96mm,\\s*58ch\\);`,
+          `${scope.replace(".", "\\.")}\\s+\\.proposal-cover-letter__body\\s*\\{[\\s\\S]*left:\\s*${left};[\\s\\S]*width:\\s*min\\((?:96|112)mm,\\s*(?:58|62)ch\\);`,
         ),
       );
     });
@@ -87,6 +99,9 @@ describe("proposal letterhead CSS", () => {
   it("keeps Film und Foto role and phone fields from arbitrary wrapping", () => {
     expect(proposalCss).not.toContain(
       ".proposal-cover-letter__film-header--role-priority",
+    );
+    expect(proposalCss).toContain(
+      ".proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-frame",
     );
     expect(proposalCss).toMatch(
       /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__film-header\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*105mm\)\s*minmax\(0,\s*1fr\);[\s\S]*align-items:\s*end;[\s\S]*\}/,

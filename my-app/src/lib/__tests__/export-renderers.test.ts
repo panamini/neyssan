@@ -446,6 +446,11 @@ describe("export-renderers", () => {
       scope: "proposal-cover-letter--film-foto",
       label: "Film und Foto Letterhead",
     },
+    {
+      templateId: "moma-bauhaus-letterhead" as const,
+      scope: "proposal-cover-letter--moma-bauhaus",
+      label: "MoMA Bauhaus Letterhead",
+    },
   ])(
     "renders $label through styled proposal HTML export with scoped A4 CSS",
     ({ templateId, scope }) => {
@@ -495,10 +500,20 @@ describe("export-renderers", () => {
           ? "left: 25mm;"
           : templateId === "volk-letterhead"
             ? "left: 24mm;"
-            : "left: 20mm;";
+            : templateId === "film-foto-letterhead"
+              ? "left: 20mm;"
+              : "left: 32mm;";
       expect(css).toContain(expectedBodyLeft);
-      expect(css).toContain("width: min(96mm, 58ch);");
-      expect(css).toContain("max-width: min(96mm, 58ch);");
+      expect(css).toContain(
+        templateId === "moma-bauhaus-letterhead"
+          ? "width: min(112mm, 62ch);"
+          : "width: min(96mm, 58ch);",
+      );
+      expect(css).toContain(
+        templateId === "moma-bauhaus-letterhead"
+          ? "max-width: min(112mm, 62ch);"
+          : "max-width: min(96mm, 58ch);",
+      );
       expect(css).toContain("overflow-wrap: break-word;");
       expect(css).toContain(
         "font-family: var(--heading-font, var(--font-heading-family));",
@@ -522,6 +537,15 @@ describe("export-renderers", () => {
       expect(document.body.textContent).not.toMatch(
         /Graphische|Berufsschule|volksverband|Werkbund|Postcheckkonto|Bankkonto|tschichold/i,
       );
+      expect(document.body.textContent).not.toContain("Vorbereitungssekretariat");
+      expect(document.body.textContent).not.toContain("Institut für Auslandsbeziehungen");
+      if (templateId === "moma-bauhaus-letterhead") {
+        expect(page?.querySelector(".proposal-cover-letter__bauhaus-frame")).toBeTruthy();
+        expect(page?.querySelector(".proposal-cover-letter__bauhaus-sender")?.textContent)
+          .toContain("Alex Mercer");
+        expect(page?.querySelector(".proposal-cover-letter__bauhaus-recipient")?.textContent)
+          .toContain("Studio Nord");
+      }
     },
   );
 
