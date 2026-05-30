@@ -1279,16 +1279,16 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     expect(recipient?.textContent).toContain("morgan@northwind.example");
     expect(recipientLines).toEqual([
       "Morgan Lee",
-      "Northwind Studio",
-      "Berlin",
       "Talent Director",
+      "Northwind Studio",
       "10 Gallery Road",
+      "Berlin",
       "morgan@northwind.example",
     ]);
     expect(
       renderedPage?.querySelector(".proposal-cover-letter__bauhaus-logo")
         ?.textContent,
-    ).toBe("Stone Systems");
+    ).toBe("Avery");
     expect(
       renderedPage?.querySelector(".proposal-cover-letter__bauhaus-subtitle")
         ?.textContent,
@@ -1297,10 +1297,15 @@ describe("ProposalDocumentRenderer volk register layout", () => {
       renderedPage?.querySelector(".proposal-cover-letter__bauhaus-header")
         ?.textContent,
     ).not.toContain("Application for Operations Lead");
-    expect(renderedPage?.textContent).toContain("date: May 30, 2026");
+    expect(renderedPage?.textContent).toContain("May 30, 2026");
     expect(renderedPage?.textContent).toContain(
-      "RE: Application for Operations Lead",
+      "Subject: Application for Operations Lead",
     );
+    expect(
+      renderedPage
+        ?.querySelector(".proposal-cover-letter__bauhaus-meta-item--subject")
+        ?.textContent,
+    ).toBe("Subject: Application for Operations Lead");
     expect(
       renderedPage?.querySelector(".proposal-cover-letter__bauhaus-footer--left")
         ?.textContent,

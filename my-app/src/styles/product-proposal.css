@@ -4296,19 +4296,19 @@
 
 .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-sender {
   left: 32mm;
-  top: auto;
-  bottom: 266.75mm;
+  top: 11mm;
+  bottom: auto;
   width: 58mm;
   display: grid;
-  gap: 1.05mm;
+  gap: 0;
 }
 
 .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-recipient {
   left: 32mm;
-  top: 44.7mm;
+  top: 42mm;
   width: 58mm;
   display: grid;
-  gap: 1.05mm;
+  gap: 0;
 }
 
 .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-sender p,
@@ -4317,17 +4317,22 @@
 .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-footer {
   margin: 0;
   min-width: 0;
-  font-size: 2.05mm;
+  font-size: 2mm;
   line-height: 1.28;
   font-weight: 800;
   letter-spacing: 0;
   overflow-wrap: anywhere;
 }
 
+.proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-sender p,
+.proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-recipient p {
+  line-height: 4mm;
+}
+
 .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-header {
   left: 102mm;
-  top: 16.4mm;
-  right: 7.8mm;
+  top: 10mm;
+  right: 8mm;
   display: grid;
   align-content: start;
   justify-items: start;
@@ -4337,22 +4342,21 @@
 .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-logo {
   margin: 0;
   max-width: 100%;
-  font-size: 16.4mm;
+  font-size: 19mm;
   line-height: 0.88;
   font-weight: 900;
   letter-spacing: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
   white-space: nowrap;
 }
 
 .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-subtitle {
   position: absolute;
-  left: 0.5mm;
-  top: 11.23mm;
+  left: 1mm;
+  top: 18mm;
   margin: 0;
   max-width: 94mm;
-  font-size: 2.05mm;
+  font-size: 2mm;
   line-height: 1.28;
   font-weight: 800;
   letter-spacing: 0;
@@ -4361,29 +4365,36 @@
 
 .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-meta {
   left: 32mm;
-  top: 106mm;
+  top: 121mm;
   right: 18mm;
   display: grid;
-  gap: 1.05mm;
+  gap: 1mm;
   align-items: start;
   min-width: 0;
 }
 
 .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-meta-item {
+  font-size: 3mm;
+  line-height: 1.48;
+  font-weight: 400;
   color: var(--proposal-document-ink);
+}
+
+.proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-meta-item--subject {
+  font-weight: 800;
 }
 
 .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-frame {
   left: 5mm;
-  top: 94.2mm;
-  width: 197.2mm;
-  height: 196.3mm;
-  border: 1.2mm solid var(--proposal-document-accent-ink);
+  top: 94mm;
+  width: 197mm;
+  height: 196mm;
+  border: 1mm solid var(--proposal-document-accent-ink);
 }
 
 .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__body {
   left: 32mm;
-  top: 128mm;
+  top: 136mm;
   width: min(112mm, 62ch);
   max-width: min(112mm, 62ch);
   display: grid;
@@ -4398,7 +4409,7 @@
 .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__body .dasti-proposal-document__signature,
 .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__body .dasti-proposal-document__raw-body {
   font-family: var(--proposal-document-font-family);
-  font-size: 3.15mm;
+  font-size: 3mm;
   line-height: 1.48;
   color: var(--proposal-document-ink);
   overflow-wrap: break-word;
@@ -4410,7 +4421,7 @@
 }
 
 .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-footer {
-  top: 285.7mm;
+  top: 284mm;
   max-width: 72mm;
   color: var(--proposal-document-accent-ink);
   white-space: nowrap;
@@ -4423,7 +4434,7 @@
 }
 
 .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-footer--right {
-  left: 101.8mm;
+  left: 102mm;
 }
 
 .proposal-cover-letter--moma-bauhaus .dasti-proposal-document__page--continuation .proposal-cover-letter__body {

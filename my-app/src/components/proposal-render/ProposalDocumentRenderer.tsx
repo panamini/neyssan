@@ -144,6 +144,8 @@ type ProposalCoverLetterTemplateProps = {
   viewModel: ProposalLetterheadViewModel;
 };
 
+const BAUHAUS_WORDMARK_MAX_COMPACT_CHARS = 8;
+
 function resolveLineHeightPx(styles: CSSStyleDeclaration) {
   const parsedLineHeight = Number.parseFloat(styles.lineHeight || "");
   if (Number.isFinite(parsedLineHeight) && parsedLineHeight > 0) {
@@ -254,6 +256,36 @@ function joinNonEmpty(parts: Array<string | null | undefined>): string {
     .map((part) => part?.trim() ?? "")
     .filter(Boolean)
     .join(" · ");
+}
+
+function countCompactWordmarkChars(value: string): number {
+  return Array.from(value.replace(/\s+/g, "")).length;
+}
+
+function firstWordmarkToken(value: string): string {
+  return value.trim().split(/\s+/u)[0] ?? "";
+}
+
+function resolveBauhausWordmark(args: {
+  candidateCompany: string;
+  candidateName: string;
+  recipientCompany: string;
+}): string {
+  const fullTitle =
+    args.candidateCompany || args.candidateName || args.recipientCompany;
+
+  if (
+    !fullTitle ||
+    countCompactWordmarkChars(fullTitle) <= BAUHAUS_WORDMARK_MAX_COMPACT_CHARS
+  ) {
+    return fullTitle;
+  }
+
+  if (args.candidateCompany && args.candidateName) {
+    return firstWordmarkToken(args.candidateName);
+  }
+
+  return firstWordmarkToken(fullTitle);
 }
 
 function uniqueNonEmptyLines(
@@ -403,10 +435,10 @@ function buildProposalLetterheadViewModel(args: {
   const recipientHeadingLines = visibility.showRecipient
     ? uniqueNonEmptyLines([
         recipientFields.name,
-        recipientFields.company,
-        recipientFields.city,
         recipientFields.role,
+        recipientFields.company,
         recipientFields.address,
+        recipientFields.city,
         recipientFields.email,
       ])
     : [];
@@ -739,10 +771,11 @@ export function ProposalCoverLetterMomaBauhausTemplate({
     viewModel.candidateLocationLine,
   ]);
   const recipientLines = viewModel.recipientHeadingLines;
-  const displayTitle =
-    viewModel.candidateCompany ||
-    viewModel.candidateName ||
-    viewModel.recipientCompany;
+  const displayTitle = resolveBauhausWordmark({
+    candidateCompany: viewModel.candidateCompany,
+    candidateName: viewModel.candidateName,
+    recipientCompany: viewModel.recipientCompany,
+  });
   const subtitle = viewModel.candidateRole || viewModel.shortRoleTitle;
   const footerLeft = joinNonEmpty([
     viewModel.candidateEmail,
@@ -792,12 +825,12 @@ export function ProposalCoverLetterMomaBauhausTemplate({
             <div className="proposal-cover-letter__bauhaus-meta">
               {viewModel.date ? (
                 <p className="proposal-cover-letter__bauhaus-meta-item">
-                  date: {viewModel.date}
+                  {viewModel.date}
                 </p>
               ) : null}
               {viewModel.subject ? (
-                <p className="proposal-cover-letter__bauhaus-meta-item">
-                  RE: {viewModel.subject}
+                <p className="proposal-cover-letter__bauhaus-meta-item proposal-cover-letter__bauhaus-meta-item--subject">
+                  Subject: {viewModel.subject}
                 </p>
               ) : null}
             </div>
