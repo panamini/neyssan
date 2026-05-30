@@ -94,6 +94,7 @@ export interface ProposalDoc extends Doc<"proposals"> {
     layoutOverride?: "swiss" | "editorial" | "modernist" | "quire" | null;
     applicantName?: string;
     applicantRole?: string;
+    applicantCompany?: string;
     contactLine?: string;
     letterDate?: string;
     recipientDetails?: string;

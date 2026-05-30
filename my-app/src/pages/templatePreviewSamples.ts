@@ -4,6 +4,7 @@ import type { ProposalApplicantHeaderData } from "../lib/proposal-personalizatio
 export const templatePreviewApplicant: ProposalApplicantHeaderData = {
   name: "Elena Marlowe",
   role: "Senior Product Designer",
+  company: "Marlowe Studio",
   email: "elena@sample.design",
   phone: "+31 6 5555 2381",
   website: "elenamarlowe.design",

@@ -446,6 +446,21 @@ describe("export-renderers", () => {
       scope: "proposal-cover-letter--film-foto",
       label: "Film und Foto Letterhead",
     },
+    {
+      templateId: "moma-bauhaus-letterhead" as const,
+      scope: "proposal-cover-letter--moma-bauhaus",
+      label: "MoMA Bauhaus Letterhead",
+    },
+    {
+      templateId: "joella-frame-letterhead" as const,
+      scope: "proposal-cover-letter--joella",
+      label: "Joella Frame Letterhead",
+    },
+    {
+      templateId: "bayer-letterhead" as const,
+      scope: "proposal-cover-letter--bayer",
+      label: "Bayer",
+    },
   ])(
     "renders $label through styled proposal HTML export with scoped A4 CSS",
     ({ templateId, scope }) => {
@@ -454,6 +469,19 @@ describe("export-renderers", () => {
           data: {
             ...proposalFixture,
             templateId,
+            recipientDetails:
+              templateId === "joella-frame-letterhead" ||
+              templateId === "bayer-letterhead"
+                ? [
+                    "recipient: Studio Nord : Paris",
+                    'title: "Équipe produit"',
+                    "company: Collectif Nord",
+                    "address: 10 Rue Bleue",
+                    "city: Paris 75010",
+                    "France",
+                    "email: hiring@studio.example",
+                  ].join("\n")
+                : proposalFixture.recipientDetails,
             body: [
               { type: "salutation", text: "Dear Hiring Manager," },
               { type: "paragraph", text: "First export paragraph." },
@@ -495,10 +523,30 @@ describe("export-renderers", () => {
           ? "left: 25mm;"
           : templateId === "volk-letterhead"
             ? "left: 24mm;"
-            : "left: 20mm;";
+            : templateId === "film-foto-letterhead"
+              ? "left: 20mm;"
+              : templateId === "moma-bauhaus-letterhead"
+                ? "left: 32mm;"
+                : "left: 35mm;";
       expect(css).toContain(expectedBodyLeft);
-      expect(css).toContain("width: min(96mm, 58ch);");
-      expect(css).toContain("max-width: min(96mm, 58ch);");
+      expect(css).toContain(
+        templateId === "moma-bauhaus-letterhead"
+          ? "width: min(132mm, 70ch);"
+          : templateId === "joella-frame-letterhead"
+            ? "width: min(140mm, 70ch);"
+            : templateId === "bayer-letterhead"
+              ? "width: 157mm;"
+          : "width: min(96mm, 58ch);",
+      );
+      expect(css).toContain(
+        templateId === "moma-bauhaus-letterhead"
+          ? "max-width: min(132mm, 70ch);"
+          : templateId === "joella-frame-letterhead"
+            ? "max-width: min(140mm, 70ch);"
+            : templateId === "bayer-letterhead"
+              ? "max-width: 157mm;"
+          : "max-width: min(96mm, 58ch);",
+      );
       expect(css).toContain("overflow-wrap: break-word;");
       expect(css).toContain(
         "font-family: var(--heading-font, var(--font-heading-family));",
@@ -522,8 +570,346 @@ describe("export-renderers", () => {
       expect(document.body.textContent).not.toMatch(
         /Graphische|Berufsschule|volksverband|Werkbund|Postcheckkonto|Bankkonto|tschichold/i,
       );
+      expect(document.body.textContent).not.toContain("Vorbereitungssekretariat");
+      expect(document.body.textContent).not.toContain("Institut für Auslandsbeziehungen");
+      if (templateId === "moma-bauhaus-letterhead") {
+        const momaCss = css.slice(
+          css.lastIndexOf(".proposal-cover-letter--moma-bauhaus.export-page"),
+          css.lastIndexOf(".proposal-cover-letter--joella.export-page"),
+        );
+        const senderText =
+          page?.querySelector(".proposal-cover-letter__bauhaus-sender")
+            ?.textContent ?? "";
+        const recipientText =
+          page?.querySelector(".proposal-cover-letter__bauhaus-recipient")
+            ?.textContent ?? "";
+        const headerText =
+          page?.querySelector(".proposal-cover-letter__bauhaus-header")
+            ?.textContent ?? "";
+        const footerLeftText =
+          page?.querySelector(".proposal-cover-letter__bauhaus-footer--left")
+            ?.textContent ?? "";
+        const footerRightText =
+          page?.querySelector(".proposal-cover-letter__bauhaus-footer--right")
+            ?.textContent ?? "";
+
+        expect(momaCss).not.toMatch(/\d+\.\d+mm/);
+        expect(page?.querySelector(".proposal-cover-letter__bauhaus-frame")).toBeTruthy();
+        expect(senderText).toContain("Alex Mercer");
+        expect(senderText).toContain("Designer de systèmes");
+        expect(senderText).toContain("Paris");
+        expect(senderText).not.toContain("alex@example.com");
+        expect(senderText).not.toContain("+33 6 00 00 00 00");
+        expect(senderText).not.toContain("portfolio.example.com");
+        expect(recipientText).toContain("Studio Nord");
+        expect(recipientText).not.toContain("Candidature");
+        expect(headerText).not.toContain("Candidature");
+        expect(headerText).toContain("Alex");
+        expect(headerText).not.toContain("Alex Mercer");
+        expect(headerText).toContain("Designer de systèmes");
+        expect(
+          page?.querySelector(".proposal-cover-letter__bauhaus-meta")
+            ?.textContent,
+        ).toContain("Subject: Candidature");
+        expect(footerLeftText).toContain("alex@example.com");
+        expect(footerLeftText).toContain("+33 6 00 00 00 00");
+        expect(footerRightText).toContain("portfolio.example.com");
+        expect(footerRightText).not.toContain("Paris");
+      }
+      if (templateId === "joella-frame-letterhead") {
+        const joellaCss = css.slice(
+          css.lastIndexOf(".proposal-cover-letter--joella.export-page"),
+        );
+        const wordmarkText =
+          page?.querySelector(".proposal-cover-letter__joella-wordmark")
+            ?.textContent ?? "";
+        const recipientText =
+          page?.querySelector(".proposal-cover-letter__joella-recipient")
+            ?.textContent ?? "";
+        const letterBlockLines = Array.from(
+          page?.querySelectorAll(".proposal-cover-letter__joella-letter-block p") ??
+            [],
+        ).map((node) => node.textContent);
+        const metaText =
+          page?.querySelector(".proposal-cover-letter__joella-meta")?.textContent ??
+          "";
+        const footerText =
+          page?.querySelector(".proposal-cover-letter__joella-footer")
+            ?.textContent ?? "";
+
+        expect(joellaCss).toContain("left: 5.5mm;");
+        expect(joellaCss).toContain("top: 19.65mm;");
+        expect(joellaCss).toContain(
+          "border: 1.32mm solid var(--proposal-joella-structure-color, #74a0c5);",
+        );
+        expect(joellaCss).toContain(
+          "border-top: 1.32mm solid var(--proposal-joella-structure-color, #74a0c5);",
+        );
+        expect(joellaCss).toContain("top: 35mm;");
+        expect(joellaCss).toContain("margin-bottom: 9.3mm;");
+        expect(joellaCss).toContain("top: 285.75mm;");
+        expect(page?.querySelector(".proposal-cover-letter__joella-frame")).toBeTruthy();
+        expect(page?.querySelector(".proposal-cover-letter__joella-divider")).toBeTruthy();
+        expect(wordmarkText).toBe("ALEX MERCER");
+        expect(wordmarkText).not.toContain("Candidature");
+        expect(page?.querySelector(".proposal-cover-letter__joella-recipient"))
+          .toBeNull();
+        expect(page?.querySelector(".proposal-cover-letter__joella-meta"))
+          .toBeNull();
+        expect(recipientText).toBe("");
+        expect(metaText).toBe("");
+        expect(letterBlockLines).toEqual([
+          "Alex Mercer",
+          "Designer de systèmes",
+          "alex@example.com · +33 6 00 00 00 00 · portfolio.example.com",
+          "Paris",
+          "15 avril 2026\u00a0!",
+          "Studio Nord : Paris",
+          '"Équipe produit"',
+          "Collectif Nord",
+          "hiring@studio.example",
+          "10 Rue Bleue",
+          "Paris 75010",
+          "France",
+          "Subject: Candidature «\u00a0Produit\u00a0» 1,5\u00a0mm",
+        ]);
+        expect(letterBlockLines.join(" ")).not.toContain("Re:");
+        expect(letterBlockLines.join(" ")).not.toContain("Date:");
+        expect(footerText).toBe("PARIS · ALEX@EXAMPLE.COM · +33 6 00 00 00 00");
+        expect(footerText).toContain("PARIS");
+        expect(footerText).toContain("ALEX@EXAMPLE.COM");
+        expect(footerText).toContain("+33 6 00 00 00 00");
+        expect(footerText).not.toContain("portfolio.example.com");
+        expect(footerText).not.toContain("Candidature");
+      }
+      if (templateId === "bayer-letterhead") {
+        const bayerCss = css.slice(
+          css.lastIndexOf(".proposal-cover-letter--bayer.export-page"),
+          css.lastIndexOf(".proposal-cover-letter--joella.export-page"),
+        );
+        const headerText =
+          page?.querySelector(".proposal-cover-letter__bayer-header")
+            ?.textContent ?? "";
+        const recipientLines = Array.from(
+          page?.querySelectorAll(".proposal-cover-letter__bayer-recipient p") ??
+            [],
+        ).map((node) => node.textContent);
+        const footerText =
+          page?.querySelector(".proposal-cover-letter__bayer-footer")
+            ?.textContent ?? "";
+
+        expect(bayerCss).not.toMatch(/\d+\.\d+mm/);
+        expect(bayerCss).toContain("left: 35mm;");
+        expect(bayerCss).toContain("top: 35mm;");
+        expect(bayerCss).toContain("left: 140mm;");
+        expect(bayerCss).toContain("top: 116mm;");
+        expect(bayerCss).toContain("top: 135mm;");
+        expect(bayerCss).toContain("top: 280mm;");
+        expect(bayerCss).toContain("var(--paper");
+        expect(bayerCss).toContain("var(--ink");
+        expect(bayerCss).toContain("var(--accent");
+        expect(headerText).toContain("Alex Mercer");
+        expect(headerText).toContain("Designer de systèmes");
+        expect(headerText).toContain("alex@example.com");
+        expect(headerText).not.toContain("Candidature");
+        expect(headerText).not.toContain("+33 6 00 00 00 00");
+        expect(recipientLines).toEqual([
+          "TO",
+          "Studio Nord : Paris",
+          '"Équipe produit"',
+          "Collectif Nord",
+          "hiring@studio.example",
+          "10 Rue Bleue · Paris 75010",
+          "France",
+        ]);
+        expect(
+          page?.querySelector(".proposal-cover-letter__bayer-date")?.textContent,
+        ).toContain("15 avril 2026");
+        expect(
+          page?.querySelector(".proposal-cover-letter__bayer-date")?.textContent,
+        ).not.toContain("Date:");
+        expect(
+          page?.querySelector(".proposal-cover-letter__bayer-subject")
+            ?.textContent,
+        ).toBe("SUBJECTCandidature «\u00a0Produit\u00a0» 1,5\u00a0mm");
+        expect(footerText).toContain("+33 6 00 00 00 00");
+        expect(footerText).toContain("Paris");
+        expect(footerText).toContain("portfolio.example.com");
+        expect(footerText).not.toContain("alex@example.com");
+      }
     },
   );
+
+  it.each([
+    {
+      templateId: "director-letterhead" as const,
+      scope: "proposal-cover-letter--director",
+      recipientSelector: ".proposal-cover-letter__recipient-block",
+    },
+    {
+      templateId: "volk-letterhead" as const,
+      scope: "proposal-cover-letter--volk",
+      recipientSelector: ".proposal-cover-letter__recipient-block",
+    },
+    {
+      templateId: "film-foto-letterhead" as const,
+      scope: "proposal-cover-letter--film-foto",
+      recipientSelector: ".proposal-cover-letter__recipient-block",
+    },
+    {
+      templateId: "moma-bauhaus-letterhead" as const,
+      scope: "proposal-cover-letter--moma-bauhaus",
+      recipientSelector: ".proposal-cover-letter__bauhaus-recipient",
+    },
+    {
+      templateId: "joella-frame-letterhead" as const,
+      scope: "proposal-cover-letter--joella",
+      recipientSelector: ".proposal-cover-letter__joella-letter-block",
+    },
+    {
+      templateId: "bayer-letterhead" as const,
+      scope: "proposal-cover-letter--bayer",
+      recipientSelector: ".proposal-cover-letter__bayer-recipient",
+    },
+  ])(
+    "exports every heading drawer field into $templateId letterhead",
+    ({ templateId, scope, recipientSelector }) => {
+      const document = parseExportHtml(
+        renderProposalStyledExportDocument({
+          data: {
+            ...proposalFixture,
+            locale: "en",
+            templateId,
+            documentTitle: "Application for Operations Lead",
+            letterDate: "May 30, 2026",
+            contactLine:
+              "avery@example.com · +33 6 01 02 03 04 · Paris / Remote · linkedin.com/in/avery · avery.work",
+            recipientDetails:
+              "Hiring Manager\nHead of Talent\nNorthwind\nhiring@northwind.com\n12 Rue de la Paix\nParis\nAdditional address line",
+            applicantHeader: {
+              ...proposalFixture.applicantHeader,
+              name: "Avery Stone",
+              role: "Operations Lead",
+              company: "Stone Systems",
+              email: "avery@example.com",
+              phone: "+33 6 01 02 03 04",
+              linkedin: "linkedin.com/in/avery",
+              website: "avery.work",
+              location: "Paris / Remote",
+            },
+            headerVisibility: {
+              showSender: true,
+              showDate: true,
+              showRecipient: true,
+              showRecipientDetails: true,
+              showSubject: true,
+            },
+          },
+        }),
+      );
+      const page = document.querySelector(`.${scope}`);
+      const pageText = page?.textContent ?? "";
+      const recipientText =
+        page?.querySelector(recipientSelector)?.textContent ?? "";
+
+      [
+        "Avery Stone",
+        "Operations Lead",
+        "Stone Systems",
+        "avery@example.com",
+        "+33 6 01 02 03 04",
+        "linkedin.com/in/avery",
+        "avery.work",
+        "Paris / Remote",
+      ].forEach((value) => {
+        expect(pageText).toContain(value);
+      });
+
+      [
+        "Hiring Manager",
+        "Head of Talent",
+        "Northwind",
+        "hiring@northwind.com",
+        "12 Rue de la Paix",
+        "Paris",
+        "Additional address line",
+      ].forEach((value) => {
+        expect(recipientText).toContain(value);
+      });
+      if (templateId === "joella-frame-letterhead") {
+        expect(pageText).toContain("may 30, 2026");
+        expect(pageText).not.toContain("May 30, 2026");
+        expect(
+          Array.from(
+            page?.querySelectorAll(
+              ".proposal-cover-letter__joella-letter-block-line--strong",
+            ) ?? [],
+          ).map((node) => node.textContent),
+        ).toEqual(["Avery Stone", "Hiring Manager"]);
+        expect(
+          page?.querySelector(
+            ".proposal-cover-letter__joella-letter-block-subject-value",
+          )?.textContent,
+        ).toBe(" Application for Operations Lead");
+      }
+    },
+  );
+
+  it("renders MoMA Bauhaus profile metadata in the styled export footer from the contact line", () => {
+    const document = parseExportHtml(
+      renderProposalStyledExportDocument({
+        data: {
+          ...proposalFixture,
+          templateId: "moma-bauhaus-letterhead",
+          contactLine:
+            "alex@example.com · +33 6 00 00 00 00 · Paris · Upwork: alex profile · Website: portfolio on request",
+          recipientDetails:
+            "recipient: Recipient Person\ncompany: Recipient Company\ncity: Company City\nrole: Recipient Role\naddress: Recipient Address\nemail: recipient@mail.com",
+          headerVisibility: {
+            showSender: true,
+            showDate: true,
+            showRecipient: true,
+            showRecipientDetails: false,
+            showSubject: true,
+          },
+          applicantHeader: {
+            ...proposalFixture.applicantHeader,
+            linkedin: "",
+            website: "",
+          },
+        },
+        stylePreset: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "expert",
+          palette: "terre",
+        },
+      }),
+    );
+
+    const senderText =
+      document.querySelector(".proposal-cover-letter__bauhaus-sender")
+        ?.textContent ?? "";
+    const footerRightText =
+      document.querySelector(".proposal-cover-letter__bauhaus-footer--right")
+        ?.textContent ?? "";
+    const recipientLines = Array.from(
+      document.querySelectorAll(".proposal-cover-letter__bauhaus-recipient p"),
+    ).map((node) => node.textContent);
+
+    expect(senderText).not.toContain("Upwork: alex profile");
+    expect(footerRightText).toContain("Upwork: alex profile");
+    expect(footerRightText).toContain("portfolio on request");
+    expect(footerRightText).not.toContain("Paris");
+    expect(recipientLines).toEqual([
+      "Recipient Person",
+      "Recipient Role",
+      "Recipient Company",
+      "recipient@mail.com",
+      "Recipient Address",
+      "Company City",
+    ]);
+  });
 
   it("maps contact-line phone into the director letterhead telephone slot during export", () => {
     const document = parseExportHtml(
@@ -741,7 +1127,7 @@ describe("export-renderers", () => {
             ...proposalFixture,
             templateId,
             recipientDetails:
-              "Hiring Manager\nTalent Acquisition\nCompany Name\nStreet address\nrecipient@example.com\nCompany City",
+              "Hiring Manager\nTalent Acquisition\nCompany Name\nrecipient@example.com\nStreet address\nCompany City",
             documentTitle: "Subject line",
             applicantHeader: {
               ...proposalFixture.applicantHeader,
@@ -821,7 +1207,7 @@ describe("export-renderers", () => {
             ...proposalFixture,
             templateId,
             recipientDetails:
-              "Hiring Manager\nTalent Acquisition\nUs Smart Tools\nStreet address\nrecipient@example.com\nParis",
+              "Hiring Manager\nTalent Acquisition\nUs Smart Tools\nrecipient@example.com\nStreet address\nParis",
             applicantHeader: {
               ...proposalFixture.applicantHeader,
               name: "Robert Cooper",

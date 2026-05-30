@@ -9,6 +9,9 @@ export const PROPOSAL_ACTIVE_TEMPLATE_IDS = [
   "director-letterhead",
   "volk-letterhead",
   "film-foto-letterhead",
+  "moma-bauhaus-letterhead",
+  "joella-frame-letterhead",
+  "bayer-letterhead",
 ] as const;
 
 export const PROPOSAL_LEGACY_TEMPLATE_IDS = [
@@ -293,18 +296,89 @@ export const PROPOSAL_TEMPLATE_DEFINITIONS: readonly ProposalTemplateDefinition[
       gridStepBMm: ROBIAL_PROPOSAL_GRID.stepBMm,
       gridHalfStepMm: ROBIAL_PROPOSAL_GRID.halfStepMm,
     },
+    {
+      id: "moma-bauhaus-letterhead",
+      name: "MoMA Bauhaus Letterhead",
+      shortLabel: "5 mm blue frame",
+      description:
+        "A Bauhaus archive cover-letter sheet with a fixed blue A4 frame, compact sender/recipient register, and measured body field.",
+      twinLabel: "Cover letter",
+      exportShell: "onecol",
+      leftMarginMm: 32,
+      leftZoneMm: 0,
+      gutterMm: 0,
+      topOffsetMm: 0,
+      bodyStartMm: 116,
+      bottomMarginMm: 18,
+      rightMarginMm: 8,
+      readingMeasureCh: 62,
+      titleScaleMm: 8.6,
+      gridStepAMm: ROBIAL_PROPOSAL_GRID.stepAMm,
+      gridStepBMm: ROBIAL_PROPOSAL_GRID.stepBMm,
+      gridHalfStepMm: ROBIAL_PROPOSAL_GRID.halfStepMm,
+    },
+    {
+      id: "joella-frame-letterhead",
+      name: "Joella Frame Letterhead",
+      shortLabel: "35 mm blue frame",
+      description:
+        "A Joella archive cover-letter sheet with a fixed A4 frame, formal letter block, and a first-third 35 mm letter column.",
+      twinLabel: "Cover letter",
+      exportShell: "onecol",
+      leftMarginMm: 35,
+      leftZoneMm: 0,
+      gutterMm: 0,
+      topOffsetMm: 35,
+      bodyStartMm: 96,
+      bottomMarginMm: 18,
+      rightMarginMm: 35,
+      readingMeasureCh: 70,
+      titleScaleMm: 8.1,
+      gridStepAMm: ROBIAL_PROPOSAL_GRID.stepAMm,
+      gridStepBMm: ROBIAL_PROPOSAL_GRID.stepBMm,
+      gridHalfStepMm: ROBIAL_PROPOSAL_GRID.halfStepMm,
+    },
+    {
+      id: "bayer-letterhead",
+      name: "Bayer",
+      shortLabel: "35 mm grid",
+      description:
+        "A Gropius-grid cover-letter sheet with a 35 mm register, bold sender wordmark, split recipient/date row, and subordinate contact footer.",
+      twinLabel: "Cover letter",
+      exportShell: "onecol",
+      leftMarginMm: 35,
+      leftZoneMm: 0,
+      gutterMm: 0,
+      topOffsetMm: 35,
+      bodyStartMm: 135,
+      bottomMarginMm: 17,
+      rightMarginMm: 18,
+      readingMeasureCh: 70,
+      titleScaleMm: 6.2,
+      gridStepAMm: ROBIAL_PROPOSAL_GRID.stepAMm,
+      gridStepBMm: ROBIAL_PROPOSAL_GRID.stepBMm,
+      gridHalfStepMm: ROBIAL_PROPOSAL_GRID.halfStepMm,
+    },
   ] as const;
 
 export function isProposalLetterheadTemplateId(
   value: unknown,
 ): value is Extract<
   ProposalTemplateId,
-  "director-letterhead" | "volk-letterhead" | "film-foto-letterhead"
+  | "director-letterhead"
+  | "volk-letterhead"
+  | "film-foto-letterhead"
+  | "moma-bauhaus-letterhead"
+  | "joella-frame-letterhead"
+  | "bayer-letterhead"
 > {
   return (
     value === "director-letterhead" ||
     value === "volk-letterhead" ||
-    value === "film-foto-letterhead"
+    value === "film-foto-letterhead" ||
+    value === "moma-bauhaus-letterhead" ||
+    value === "joella-frame-letterhead" ||
+    value === "bayer-letterhead"
   );
 }
 

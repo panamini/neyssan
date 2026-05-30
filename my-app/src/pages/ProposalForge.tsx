@@ -114,6 +114,7 @@ import {
   resolveProposalTemplateId,
   type ProposalTemplateId,
 } from "../../convex/lib/proposals/renderTemplates";
+import type { TemplateFamily } from "./TemplatesPage";
 import {
   DEFAULT_VERBATI_STYLE,
   getProposalTwinTemplateId,
@@ -196,6 +197,7 @@ import {
   buildProposalHeaderVisibilityFromContent,
   buildProposalLetterDateLine,
   buildProposalRecipientDetails,
+  buildProposalRecipientDetailsPreservingExtraLines,
   buildProposalRecipientPrefill,
   buildProposalSalutation,
   parseProposalRecipientDetails,
@@ -210,6 +212,7 @@ import {
   buildProposalContactLineFromParts,
   buildProposalApplicantHeaderFromMetadata,
   buildProposalHeadingMetadataPatch,
+  hasManualProposalHeadingDraft,
   mergeProposalContactDefaults,
   normalizeProposalContactLine,
   parseProposalContactLine,
@@ -2584,8 +2587,19 @@ export function ProposalForge(): JSX.Element {
     React.useState<StoredProposalOutputDraft | null>(() =>
       readStoredProposalOutputDraft(),
     );
-  const storedOutputProposalClosing =
+  const persistedOutputProposalClosing =
     storedOutputDraft?.proposalClosing ?? null;
+  const persistedOutputProposalClosingToken = React.useMemo(
+    () => JSON.stringify(persistedOutputProposalClosing),
+    [persistedOutputProposalClosing],
+  );
+  const [proposalClosingDraft, setProposalClosingDraft] =
+    React.useState<ProposalClosingRef | null>(persistedOutputProposalClosing);
+  React.useEffect(() => {
+    setProposalClosingDraft(persistedOutputProposalClosing);
+  }, [persistedOutputProposalClosingToken]);
+  const storedOutputProposalClosing =
+    proposalClosingDraft ?? persistedOutputProposalClosing;
   const storedOutputProposalClosingToken = React.useMemo(
     () => JSON.stringify(storedOutputProposalClosing),
     [storedOutputProposalClosing],
@@ -3405,6 +3419,7 @@ export function ProposalForge(): JSX.Element {
     recipientDetails: Boolean(storedOutputDraft?.proposalRecipientDetails),
     subject: Boolean(storedOutputDraft?.proposalDocumentTitleManual),
     salutation: Boolean(proposalSalutationValue),
+    signatureSignOff: Boolean(storedOutputDraft?.proposalClosing?.signOff),
   });
   const markHeadingFieldDirty = React.useCallback(
     (field: keyof typeof headingDirtyRef.current) => {
@@ -3423,6 +3438,7 @@ export function ProposalForge(): JSX.Element {
         recipientDetails: false,
         subject: false,
         salutation: false,
+        signatureSignOff: false,
         ...next,
       };
     },
@@ -3555,10 +3571,13 @@ export function ProposalForge(): JSX.Element {
       setProposalRecipientFieldDraft(nextRecipientFields);
       skipNextStructuredRecipientSyncRef.current = true;
       setProposalRecipientDetails(
-        buildProposalRecipientDetails(nextRecipientFields),
+        buildProposalRecipientDetailsPreservingExtraLines({
+          currentDetails: proposalRecipientDetails,
+          fields: nextRecipientFields,
+        }),
       );
     },
-    [markHeadingFieldDirty, proposalRecipientFieldDraft],
+    [markHeadingFieldDirty, proposalRecipientDetails, proposalRecipientFieldDraft],
   );
 
   React.useEffect(() => {
@@ -8544,6 +8563,54 @@ export function ProposalForge(): JSX.Element {
     },
     [markHeadingFieldDirty],
   );
+  const handleProposalSignOffChange = React.useCallback(
+    (value: string) => {
+      markHeadingFieldDirty("signatureSignOff");
+      const currentClosing = resolveProposalClosingRef({
+        closing: storedOutputProposalClosing,
+        content: proposalContent || storedOutputDraft?.proposalContent || null,
+        proposalType,
+        applicantName: sanitizeProposalApplicantName(proposalApplicantName),
+        voicePreset: proposalVoicePreset,
+        defaultEnabled: true,
+      });
+      const nextClosing: ProposalClosingRef = {
+        ...(currentClosing ?? {
+          enabled: true,
+          signatureName:
+            sanitizeProposalApplicantName(proposalApplicantName) || "",
+          handwrittenSignatureEnabled: false,
+        }),
+        enabled: true,
+        signOff: value,
+        source: "settings",
+      };
+      setProposalClosingDraft(nextClosing);
+
+      const latestStoredOutputDraft =
+        readStoredProposalOutputDraft() ?? storedOutputDraft;
+      if (!latestStoredOutputDraft) {
+        return;
+      }
+
+      writeStoredOutputDraft({
+        ...latestStoredOutputDraft,
+        proposalClosing: nextClosing,
+        proposalOutputMode,
+      });
+    },
+    [
+      markHeadingFieldDirty,
+      proposalApplicantName,
+      proposalContent,
+      proposalOutputMode,
+      proposalType,
+      proposalVoicePreset,
+      storedOutputDraft,
+      storedOutputProposalClosing,
+      writeStoredOutputDraft,
+    ],
+  );
 
   const handleProposalStop = React.useCallback(() => {
     setLoading(false);
@@ -8700,15 +8767,21 @@ export function ProposalForge(): JSX.Element {
       return;
     }
 
+    const hasManualHeadingDraft = hasManualProposalHeadingDraft(
+      headingDirtyRef.current,
+    );
     const hasDraft =
       Boolean(proposalContent) ||
       Boolean(proposalDocumentTitle) ||
       Boolean(proposalDocumentMeta) ||
       Boolean(proposalLetterDate) ||
       Boolean(proposalRecipientDetails) ||
-      Boolean(generatedProposalId);
+      Boolean(generatedProposalId) ||
+      hasManualHeadingDraft;
     const hasPersistableOutput =
-      proposalContent !== null || Boolean(generatedProposalId);
+      proposalContent !== null ||
+      Boolean(generatedProposalId) ||
+      hasManualHeadingDraft;
 
     if (!hasDraft) {
       if (hasCompletedInitialRenderRef.current) {
@@ -11017,18 +11090,24 @@ export function ProposalForge(): JSX.Element {
   const proposalTemplatePanelItems = React.useMemo(
     () =>
       PROPOSAL_TEMPLATE_DEFINITIONS.map((template) => {
-        const family =
+        const family: TemplateFamily =
           template.id === "director-letterhead"
             ? "director-letterhead"
             : template.id === "volk-letterhead"
               ? "volk-letterhead"
               : template.id === "film-foto-letterhead"
                 ? "film-foto-letterhead"
-                : template.id === "modernist_signal"
-                  ? "bold"
-                  : template.id === "quire_margin"
-                    ? "letterpress"
-                    : "minimal";
+                : template.id === "moma-bauhaus-letterhead"
+                  ? "moma-bauhaus-letterhead"
+                  : template.id === "joella-frame-letterhead"
+                    ? "joella-frame-letterhead"
+                    : template.id === "bayer-letterhead"
+                      ? "bayer-letterhead"
+                    : template.id === "modernist_signal"
+                      ? "bold"
+                      : template.id === "quire_margin"
+                        ? "letterpress"
+                        : "minimal";
         return {
           id: template.id,
           label: template.name,
@@ -11208,6 +11287,16 @@ export function ProposalForge(): JSX.Element {
         },
       },
       {
+        id: "recipient-role",
+        label: "Recipient role / contact title",
+        value: proposalRecipientFields.role,
+        placeholder: "Talent acquisition, recruiter, or contact title",
+        onChange: (value) => handleProposalRecipientFieldChange("role", value),
+        onBlur: () => {
+          void handleProposalDocumentCommit();
+        },
+      },
+      {
         id: "recipient-company",
         label: "Recipient company",
         value: proposalRecipientFields.company,
@@ -11219,21 +11308,11 @@ export function ProposalForge(): JSX.Element {
         },
       },
       {
-        id: "recipient-city",
-        label: "Recipient city / location",
-        value: proposalRecipientFields.city,
-        placeholder: "Company city / remote",
-        onChange: (value) => handleProposalRecipientFieldChange("city", value),
-        onBlur: () => {
-          void handleProposalDocumentCommit();
-        },
-      },
-      {
-        id: "recipient-role",
-        label: "Recipient role / contact title",
-        value: proposalRecipientFields.role,
-        placeholder: "Talent acquisition, recruiter, or contact title",
-        onChange: (value) => handleProposalRecipientFieldChange("role", value),
+        id: "recipient-email",
+        label: "Recipient email",
+        value: proposalRecipientFields.email,
+        placeholder: "recipient@example.com",
+        onChange: (value) => handleProposalRecipientFieldChange("email", value),
         onBlur: () => {
           void handleProposalDocumentCommit();
         },
@@ -11250,11 +11329,11 @@ export function ProposalForge(): JSX.Element {
         },
       },
       {
-        id: "recipient-email",
-        label: "Recipient email",
-        value: proposalRecipientFields.email,
-        placeholder: "recipient@example.com",
-        onChange: (value) => handleProposalRecipientFieldChange("email", value),
+        id: "recipient-city",
+        label: "Recipient city / location",
+        value: proposalRecipientFields.city,
+        placeholder: "Company city / remote",
+        onChange: (value) => handleProposalRecipientFieldChange("city", value),
         onBlur: () => {
           void handleProposalDocumentCommit();
         },
@@ -11269,8 +11348,19 @@ export function ProposalForge(): JSX.Element {
           void handleProposalDocumentCommit();
         },
       },
+      {
+        id: "signature-signoff",
+        label: "Signature / politeness formula",
+        value: effectiveProposalClosing?.signOff ?? "",
+        placeholder: "Kind regards,",
+        onChange: handleProposalSignOffChange,
+        onBlur: () => {
+          void handleProposalDocumentCommit();
+        },
+      },
     ],
     [
+      effectiveProposalClosing?.signOff,
       handleProposalContactLineCommit,
       handleProposalDocumentCommit,
       handleProposalDocumentTitleChange,
@@ -11282,6 +11372,7 @@ export function ProposalForge(): JSX.Element {
       handleProposalRecipientFieldChange,
       handleProposalRecipientDetailsChange,
       handleProposalSalutationChange,
+      handleProposalSignOffChange,
       proposalApplicantName,
       proposalApplicantRole,
       proposalApplicantCompany,
@@ -12587,6 +12678,10 @@ export function ProposalForge(): JSX.Element {
                               proposalSalutationPlaceholder
                             }
                             onSalutationChange={handleProposalSalutationChange}
+                            signOffEditable={proposalOutputMode === "edit"}
+                            signOffValue={effectiveProposalClosing?.signOff ?? ""}
+                            signOffPlaceholder="Kind regards,"
+                            onSignOffChange={handleProposalSignOffChange}
                             onHeaderVisibilityChange={(value) => {
                               setProposalHeaderVisibility((current) => ({
                                 ...current,

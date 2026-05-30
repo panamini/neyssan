@@ -7,10 +7,19 @@ import {
   PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
   readStoredProposalOutputDraft,
 } from "../../lib/proposal-output-draft";
+import {
+  getProposalRecipientExtraLines,
+  parseProposalRecipientDetails,
+} from "../../lib/proposal-header";
+import { parseProposalContactLine } from "../../lib/proposal-heading-state";
 
 const mockUpdateProposal = vi.fn().mockResolvedValue(undefined);
 const mockCreateProposal = vi.fn().mockResolvedValue("created_proposal");
 const proposalDisplayProps: any[] = [];
+const draftBContactLine =
+  "avery@example.com · +33 6 01 02 03 04 · Paris / Remote · linkedin.com/in/avery · avery.work";
+const draftBRecipientDetails =
+  "Hiring Manager\nHead of Talent\nNorthwind\nhiring@northwind.com\n12 Rue de la Paix\nParis\nAdditional address line";
 
 const DRAFT_PROPOSALS = [
   {
@@ -64,9 +73,9 @@ const DRAFT_PROPOSALS = [
       applicantName: "Applicant B",
       applicantRole: "Role B",
       applicantCompany: "Studio B",
-      contactLine: "b@example.com",
+      contactLine: draftBContactLine,
       letterDate: "Paris, 2 May 2026",
-      recipientDetails: "Recipient B",
+      recipientDetails: draftBRecipientDetails,
       headerShowSender: true,
       headerShowDate: true,
       headerShowSubject: true,
@@ -146,18 +155,44 @@ describe("ProposalForge draft heading hydration", () => {
       proposalApplicantName: "Applicant B",
       proposalApplicantRole: "Role B",
       proposalApplicantCompany: "Studio B",
-      proposalContactLine: "b@example.com",
+      proposalContactLine: draftBContactLine,
       proposalLetterDate: "Paris, 2 May 2026",
-      proposalRecipientDetails: "Recipient B",
+      proposalRecipientDetails: draftBRecipientDetails,
     });
+    expect(
+      parseProposalContactLine(stored?.proposalContactLine),
+    ).toMatchObject({
+      email: "avery@example.com",
+      phone: "+33 6 01 02 03 04",
+      location: "Paris / Remote",
+      linkedin: "linkedin.com/in/avery",
+      website: "avery.work",
+    });
+    const recipientFields = parseProposalRecipientDetails(
+      stored?.proposalRecipientDetails,
+    );
+    expect(recipientFields).toMatchObject({
+      name: "Hiring Manager",
+      role: "Head of Talent",
+      company: "Northwind",
+      email: "hiring@northwind.com",
+      address: "12 Rue de la Paix",
+      city: "Paris",
+    });
+    expect(
+      getProposalRecipientExtraLines(
+        stored?.proposalRecipientDetails,
+        recipientFields,
+      ),
+    ).toEqual(["Additional address line"]);
 
     await waitFor(() => {
       expect(proposalDisplayProps.at(-1)).toMatchObject({
         railTitle: "Applicant B",
         railMeta: "Role B",
-        contactLine: "b@example.com",
+        contactLine: draftBContactLine,
         letterDate: "Paris, 2 May 2026",
-        recipientDetails: "Recipient B",
+        recipientDetails: draftBRecipientDetails,
       });
     });
   });
@@ -179,9 +214,9 @@ describe("ProposalForge draft heading hydration", () => {
         proposalStyleChoice: "warm",
         proposalApplicantName: "Applicant B",
         proposalApplicantRole: "Role B",
-        proposalContactLine: "b@example.com",
+        proposalContactLine: draftBContactLine,
         proposalLetterDate: "Paris, 2 May 2026",
-        proposalRecipientDetails: "Recipient B",
+        proposalRecipientDetails: draftBRecipientDetails,
         proposalDocumentTitle: "Draft B Subject",
         proposalDocumentMeta: "Draft",
         generatedProposalId: "draft_b",
