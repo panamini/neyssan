@@ -1505,10 +1505,13 @@ function buildStyledProposalAppearanceCss(): string {
     }
 
     .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-subtitle {
-      margin: 1.2mm 0 0 0.5mm;
+      position: absolute;
+      left: 0.5mm;
+      top: 11.23mm;
+      margin: 0;
       max-width: 94mm;
-      font-size: 2.35mm;
-      line-height: 1.2;
+      font-size: 2.05mm;
+      line-height: 1.28;
       font-weight: 800;
       letter-spacing: 0;
       overflow-wrap: anywhere;

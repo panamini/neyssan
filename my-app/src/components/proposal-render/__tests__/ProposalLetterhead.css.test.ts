@@ -131,6 +131,9 @@ describe("proposal letterhead CSS", () => {
       /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-sender\s*\{[\s\S]*left:\s*32mm;[\s\S]*top:\s*auto;[\s\S]*bottom:\s*266\.75mm;[\s\S]*width:\s*58mm;[\s\S]*\}/,
     );
     expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-subtitle\s*\{[\s\S]*position:\s*absolute;[\s\S]*left:\s*0\.5mm;[\s\S]*top:\s*11\.23mm;[\s\S]*font-size:\s*2\.05mm;[\s\S]*line-height:\s*1\.28;[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
       /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-recipient\s*\{[\s\S]*left:\s*32mm;[\s\S]*top:\s*44\.7mm;[\s\S]*width:\s*58mm;[\s\S]*\}/,
     );
     expect(proposalCss).toMatch(
