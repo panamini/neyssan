@@ -17,6 +17,7 @@ const savePresetMock = vi.fn(() => Promise.resolve(null));
 const setActivePresetMock = vi.fn(() => Promise.resolve(null));
 const setCurrentSettingsMock = vi.fn(() => Promise.resolve(null));
 const presetsQueryMock = vi.fn();
+const currentSettingsQueryMock = vi.fn();
 
 function getLastSavePresetPayload(): unknown {
   return (savePresetMock.mock.calls as unknown as Array<[unknown]>).at(-1)?.[0];
@@ -35,7 +36,17 @@ const { api } = vi.hoisted(() => ({
 }));
 
 vi.mock("convex/react", () => ({
-  useQuery: () => presetsQueryMock(),
+  useQuery: (reference: unknown) => {
+    if (reference === (api.proposalSettings.getPresets as unknown)) {
+      return presetsQueryMock();
+    }
+
+    if (reference === (api.proposalSettings.getCurrent as unknown)) {
+      return currentSettingsQueryMock();
+    }
+
+    return undefined;
+  },
   useMutation: (reference: unknown) => {
     if (reference === (api.proposalSettings.savePreset as unknown)) {
       return savePresetMock;
@@ -84,6 +95,7 @@ describe("SettingsPage preview controls", () => {
     savePresetMock.mockClear();
     setActivePresetMock.mockClear();
     setCurrentSettingsMock.mockClear();
+    currentSettingsQueryMock.mockReset();
     window.localStorage.clear();
     document.documentElement.dataset.theme = "light";
     document.documentElement.dataset.reduceMotion = "false";
@@ -122,6 +134,19 @@ describe("SettingsPage preview controls", () => {
         voicePreset: null,
         name: "Style 3",
       },
+    });
+    currentSettingsQueryMock.mockReturnValue({
+      savedVoicePreset: null,
+      signatureSettings: {
+        mode: "auto",
+        fontId: null,
+        imageDataUrl: null,
+      },
+      proposalDefaultContactEmail: null,
+      proposalDefaultContactPhone: null,
+      proposalDefaultContactLinkedin: null,
+      proposalDefaultContactWebsite: null,
+      proposalDefaultContactLocation: null,
     });
   });
 
@@ -1061,27 +1086,22 @@ describe("SettingsPage preview controls", () => {
     );
   });
 
-  it("saves an explicit signature font on the current preset", async () => {
+  it("saves an explicit signature font as canonical user settings", async () => {
     const user = userEvent.setup();
     const imageDataUrl =
       "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADElEQVR42mP8z8AARQAHAQGByp7K7wAAAABJRU5ErkJggg==";
-    presetsQueryMock.mockReturnValue({
-      activeSlot: 1,
-      preset1: {
-        fontPairId: "geist-baskervville",
-        styleChoice: "balanced",
-        paletteOverride: null,
-        accentHex: null,
-        voicePreset: null,
-        signatureSettings: {
-          mode: "image",
-          fontId: null,
-          imageDataUrl,
-        },
-        name: "Style 1",
+    currentSettingsQueryMock.mockReturnValue({
+      savedVoicePreset: null,
+      signatureSettings: {
+        mode: "image",
+        fontId: null,
+        imageDataUrl,
       },
-      preset2: null,
-      preset3: null,
+      proposalDefaultContactEmail: null,
+      proposalDefaultContactPhone: null,
+      proposalDefaultContactLinkedin: null,
+      proposalDefaultContactWebsite: null,
+      proposalDefaultContactLocation: null,
     });
     renderSettings();
 
@@ -1093,20 +1113,16 @@ describe("SettingsPage preview controls", () => {
     );
 
     await waitFor(() => {
-      expect(savePresetMock).toHaveBeenCalled();
-    });
-
-    const lastCall = getLastSavePresetPayload();
-    expect(lastCall).toMatchObject({
-      slot: 1,
-      preset: expect.objectContaining({
+      expect(setCurrentSettingsMock).toHaveBeenCalledWith({
         signatureSettings: {
           mode: "font",
           fontId: "fd-garamond",
           imageDataUrl,
         },
-      }),
+      });
     });
+
+    expect(savePresetMock).not.toHaveBeenCalled();
   });
 
   it("shows auto plus both template style cards", () => {

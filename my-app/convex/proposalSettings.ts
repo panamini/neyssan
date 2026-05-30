@@ -212,7 +212,7 @@ export const getCurrent = query({
       proposalDefaultContactWebsite: user?.proposalDefaultContactWebsite ?? null,
       proposalDefaultContactLocation: user?.proposalDefaultContactLocation ?? null,
       signatureSettings: cleanProposalSignatureSettings(
-        (activePreset?.signatureSettings ?? user?.proposalSignatureSettings) as
+        (user?.proposalSignatureSettings ?? activePreset?.signatureSettings) as
           | ProposalSignatureSettingsData
           | null
           | undefined,
@@ -327,8 +327,6 @@ function applyPresetToCurrentProposalFields(
       : null;
   nextReplacement.proposalAccentHex = nextAccentHex;
   nextReplacement.proposalFontPairId = preset.fontPairId;
-  nextReplacement.proposalSignatureSettings =
-    cleanProposalSignatureSettings(preset.signatureSettings);
 
   if (preset.verbatiStyle) {
     const nextVerbatiAccentHex =

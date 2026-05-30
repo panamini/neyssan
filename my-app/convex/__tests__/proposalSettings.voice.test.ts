@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { getCurrent, setActivePreset } from "../proposalSettings";
+import { getCurrent, savePreset, setActivePreset } from "../proposalSettings";
 
 function createCtx(user: Record<string, unknown> | null) {
   const replace = vi.fn();
@@ -29,6 +29,99 @@ function createCtx(user: Record<string, unknown> | null) {
 }
 
 describe("proposalSettings voice authority", () => {
+  it("uses canonical user-wide signature settings over active visual style slot signatures", async () => {
+    const imageDataUrl =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADElEQVR42mP8z8AARQAHAQGByp7K7wAAAABJRU5ErkJggg==";
+    const result = await getCurrent._handler(
+      createCtx({
+        _id: "user_1",
+        clerkId: "clerk_1",
+        proposalActivePresetSlot: 2,
+        proposalSignatureSettings: {
+          mode: "image",
+          fontId: null,
+          imageDataUrl,
+        },
+        proposalPreset2: {
+          fontPairId: "quiet-editorial",
+          styleChoice: "balanced",
+          paletteOverride: "cobalt",
+          accentHex: null,
+          voicePreset: null,
+          signatureSettings: {
+            mode: "auto",
+            fontId: null,
+            imageDataUrl: null,
+          },
+          verbatiStyle: {
+            familyId: "workshop",
+            layout: "workshop",
+            typography: "quiet-editorial",
+            palette: "cobalt",
+          },
+        },
+      }),
+      {},
+    );
+
+    expect(result.signatureSettings).toEqual({
+      mode: "image",
+      fontId: null,
+      imageDataUrl,
+    });
+  });
+
+  it("does not overwrite canonical signature settings when saving the active visual style slot", async () => {
+    const imageDataUrl =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADElEQVR42mP8z8AARQAHAQGByp7K7wAAAABJRU5ErkJggg==";
+    const ctx = createCtx({
+      _id: "user_1",
+      _creationTime: 1,
+      clerkId: "clerk_1",
+      proposalActivePresetSlot: 1,
+      proposalSignatureSettings: {
+        mode: "image",
+        fontId: null,
+        imageDataUrl,
+      },
+      updatedAt: 1,
+      version: 1,
+    });
+
+    await savePreset._handler(ctx, {
+      slot: 1,
+      preset: {
+        fontPairId: "quiet-editorial",
+        styleChoice: "balanced",
+        paletteOverride: "cobalt",
+        accentHex: null,
+        voicePreset: null,
+        signatureSettings: {
+          mode: "auto",
+          fontId: null,
+          imageDataUrl: null,
+        },
+        verbatiStyle: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "cobalt",
+        },
+      },
+    });
+
+    expect(ctx.replace).toHaveBeenCalledWith(
+      "user_1",
+      expect.objectContaining({
+        proposalSignatureSettings: {
+          mode: "image",
+          fontId: null,
+          imageDataUrl,
+        },
+      }),
+    );
+  });
+
   it("uses the user-wide voice default instead of the active visual style slot voice", async () => {
     const result = await getCurrent._handler(
       createCtx({
