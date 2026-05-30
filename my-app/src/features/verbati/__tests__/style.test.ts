@@ -125,6 +125,9 @@ describe("verbati style normalization", () => {
       "director-letterhead",
       "volk-letterhead",
       "film-foto-letterhead",
+      "moma-bauhaus-letterhead",
+      "joella-frame-letterhead",
+      "bayer-letterhead",
     ] as const;
 
     expect(PROPOSAL_TEMPLATE_DEFINITIONS.map((template) => template.id)).toEqual(

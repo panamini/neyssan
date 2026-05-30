@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildProposalRecipientDetails,
+  buildProposalRecipientDetailsPreservingExtraLines,
   buildProposalRecipientPrefill,
+  getProposalRecipientExtraLines,
   parseProposalRecipientDetails,
   replaceProposalSalutation,
 } from "../proposal-header";
@@ -47,6 +49,52 @@ describe("proposal recipient heading fields", () => {
       company: "Acme",
       city: "Paris",
     });
+  });
+
+  it("serializes the recipient email before the postal address block", () => {
+    const recipientDetails = buildProposalRecipientDetails({
+      name: "Hiring Manager",
+      role: "Head of Talent",
+      company: "Northwind",
+      email: "hiring@northwind.com",
+      address: "12 Rue de la Paix",
+      city: "Paris",
+    });
+
+    expect(recipientDetails).toBe(
+      "Hiring Manager\nHead of Talent\nNorthwind\nhiring@northwind.com\n12 Rue de la Paix\nParis",
+    );
+    expect(parseProposalRecipientDetails(recipientDetails)).toMatchObject({
+      name: "Hiring Manager",
+      role: "Head of Talent",
+      company: "Northwind",
+      email: "hiring@northwind.com",
+      address: "12 Rue de la Paix",
+      city: "Paris",
+    });
+  });
+
+  it("preserves extra recipient lines when a structured field is edited", () => {
+    const recipientDetails = buildProposalRecipientDetailsPreservingExtraLines({
+      currentDetails:
+        "Hiring Manager\nHead of Talent\nNorthwind\nhiring@northwind.com\n12 Rue de la Paix\nParis\nAdditional address line",
+      fields: {
+        name: "Hiring Manager",
+        role: "Head of Talent",
+        company: "Northwind",
+        email: "hiring@northwind.com",
+        address: "14 Rue de la Paix",
+        city: "Paris",
+      },
+    });
+
+    expect(recipientDetails).toBe(
+      "Hiring Manager\nHead of Talent\nNorthwind\nhiring@northwind.com\n14 Rue de la Paix\nParis\nAdditional address line",
+    );
+    expect(recipientDetails).not.toContain("\n12 Rue de la Paix\n");
+    expect(getProposalRecipientExtraLines(recipientDetails)).toEqual([
+      "Additional address line",
+    ]);
   });
 
   it("does not shift imported company into the recipient name slot", () => {

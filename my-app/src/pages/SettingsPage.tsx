@@ -114,6 +114,7 @@ type ProposalContactSettings = {
   proposalDefaultContactWebsite?: string | null;
   proposalDefaultContactLocation?: string | null;
   savedVoicePreset?: ToneId;
+  signatureSettings?: ProposalSignatureSettings | null;
 };
 
 type ProposalContactField = keyof ProposalContactSettings;
@@ -1227,6 +1228,10 @@ export function SettingsPage(): JSX.Element {
   >(EMPTY_PROPOSAL_CONTACT_FIELDS);
   const [defaultVoicePreset, setDefaultVoicePreset] =
     React.useState<ToneId>(null);
+  const [canonicalSignatureSettings, setCanonicalSignatureSettings] =
+    React.useState<ProposalSignatureSettings>(
+      DEFAULT_PROPOSAL_SIGNATURE_SETTINGS,
+    );
   const savedTickTimeoutRef = React.useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
@@ -1241,6 +1246,7 @@ export function SettingsPage(): JSX.Element {
   const localPresetInteractionRef = React.useRef(false);
   const contactHydrated = React.useRef(false);
   const voiceHydrated = React.useRef(false);
+  const signatureHydrated = React.useRef(false);
   const [isCustomColorPickerOpen, setIsCustomColorPickerOpen] =
     React.useState(false);
   const [isUiCustomColorPickerOpen, setIsUiCustomColorPickerOpen] =
@@ -1398,6 +1404,19 @@ export function SettingsPage(): JSX.Element {
     setDefaultVoicePreset(currentProposalSettings.savedVoicePreset ?? null);
   }, [currentProposalSettings]);
 
+  React.useEffect(() => {
+    if (currentProposalSettings === undefined || signatureHydrated.current) {
+      return;
+    }
+
+    signatureHydrated.current = true;
+    setCanonicalSignatureSettings(
+      sanitizeProposalSignatureSettings(
+        currentProposalSettings.signatureSettings,
+      ),
+    );
+  }, [currentProposalSettings]);
+
   // Update a field on the currently editing preset and debounce-save
   const updatePreset = React.useCallback(
     (patch: Partial<PresetSlot>) => {
@@ -1456,6 +1475,34 @@ export function SettingsPage(): JSX.Element {
       });
     },
     [activeSlot, editingSlot, flashSaved, isSignedIn, savePreset],
+  );
+
+  const updateCanonicalSignatureSettings = React.useCallback(
+    (signatureSettings: ProposalSignatureSettings) => {
+      const nextSignatureSettings =
+        sanitizeProposalSignatureSettings(signatureSettings);
+      signatureHydrated.current = true;
+      setSaveError(null);
+      setCanonicalSignatureSettings(nextSignatureSettings);
+
+      if (!isSignedIn) {
+        setSaveError("Sign in to save document styles.");
+        return;
+      }
+
+      void setCurrentProposalSettings({
+        signatureSettings: nextSignatureSettings,
+      })
+        .then(() => flashSaved())
+        .catch((error: unknown) => {
+          const message =
+            error instanceof Error && error.message
+              ? error.message
+              : "Could not save document style.";
+          setSaveError(message);
+        });
+    },
+    [flashSaved, isSignedIn, setCurrentProposalSettings],
   );
 
   const handleSetActive = React.useCallback(
@@ -1904,18 +1951,11 @@ export function SettingsPage(): JSX.Element {
                             </div>
                           </div>
                           <SignatureSelector
-                            settings={currentPreset.signatureSettings}
+                            settings={canonicalSignatureSettings}
                             bodyFontFamily={
                               currentFontPair?.bodyFamily ?? "inherit"
                             }
-                            onChange={(signatureSettings) =>
-                              updatePreset({
-                                signatureSettings:
-                                  sanitizeProposalSignatureSettings(
-                                    signatureSettings,
-                                  ),
-                              })
-                            }
+                            onChange={updateCanonicalSignatureSettings}
                           />
                         </div>
                       </div>

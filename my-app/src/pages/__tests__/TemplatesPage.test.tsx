@@ -42,10 +42,12 @@ describe("TemplatesPage", () => {
     expect(screen.getByText("Director Letterhead")).toBeInTheDocument();
     expect(screen.getByText("Volk Letterhead")).toBeInTheDocument();
     expect(screen.getByText("Film und Foto Letterhead")).toBeInTheDocument();
-    expect(screen.getAllByText("Cover letter")).toHaveLength(6);
+    expect(screen.getByText("MoMA Bauhaus Letterhead")).toBeInTheDocument();
+    expect(screen.getByText("Bayer")).toBeInTheDocument();
+    expect(screen.getAllByText("Cover letter")).toHaveLength(8);
     expect(document.querySelector(".dasti-template-card__badge")).toBeNull();
     expect(screen.queryByRole("tab", { name: "CVs" })).toBeNull();
-    expect(screen.getAllByTestId("template-document-preview")).toHaveLength(6);
+    expect(screen.getAllByTestId("template-document-preview")).toHaveLength(8);
   });
 
   it("renders template chrome in French without renaming templates", () => {
@@ -61,7 +63,7 @@ describe("TemplatesPage", () => {
     expect(screen.getByRole("heading", { name: "Modèles" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Lettres" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("button", { name: "Personnaliser le style" })).toBeInTheDocument();
-    expect(screen.getAllByText("Lettre", { selector: ".dasti-template-card__kind" })).toHaveLength(6);
+    expect(screen.getAllByText("Lettre", { selector: ".dasti-template-card__kind" })).toHaveLength(8);
     expect(screen.queryByText("Espacement calme, hiérarchie nette.")).not.toBeInTheDocument();
     expect(screen.queryByText("Ouverture directe, ton net.")).not.toBeInTheDocument();
     expect(screen.queryByText("Plus chaleureux, plus personnel.")).not.toBeInTheDocument();
@@ -84,7 +86,7 @@ describe("TemplatesPage", () => {
     expect(screen.getByRole("heading", { name: "Plantillas" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Cartas" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("button", { name: "Personalizar estilo" })).toBeInTheDocument();
-    expect(screen.getAllByText("Carta", { selector: ".dasti-template-card__kind" })).toHaveLength(6);
+    expect(screen.getAllByText("Carta", { selector: ".dasti-template-card__kind" })).toHaveLength(8);
     expect(screen.queryByText("Espaciado sobrio, jerarquía clara.")).not.toBeInTheDocument();
     expect(screen.queryByText("Apertura directa, tono claro.")).not.toBeInTheDocument();
     expect(screen.queryByText("Más cercano, más personal.")).not.toBeInTheDocument();
@@ -323,7 +325,13 @@ describe("TemplatesPage", () => {
     );
   });
 
-  it("starts cover-letter creation with a selected letterhead template id", async () => {
+  it.each([
+    ["Director Letterhead", "director-letterhead"],
+    ["MoMA Bauhaus Letterhead", "moma-bauhaus-letterhead"],
+    ["Bayer", "bayer-letterhead"],
+  ])(
+    "starts cover-letter creation with selected %s template id",
+    async (label, templateId) => {
     const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={["/templates"]}>
@@ -331,15 +339,15 @@ describe("TemplatesPage", () => {
       </MemoryRouter>,
     );
 
-    const directorCard = screen
-      .getByText("Director Letterhead", { selector: ".dasti-template-card__title" })
+    const letterheadCard = screen
+      .getByText(label, { selector: ".dasti-template-card__title" })
       .closest(".dasti-template-card");
-    expect(directorCard).toBeTruthy();
-    await user.click(directorCard as HTMLElement);
+    expect(letterheadCard).toBeTruthy();
+    await user.click(letterheadCard as HTMLElement);
     await user.click(screen.getByRole("button", { name: "Create new proposal" }));
 
     expect(navigateMock).toHaveBeenCalledWith(
-      "/proposal?templateId=director-letterhead",
+      `/proposal?templateId=${templateId}`,
       {
         state: expect.objectContaining({
           proposalWorkspaceResetToken: expect.any(String),
@@ -349,7 +357,8 @@ describe("TemplatesPage", () => {
     expect(navigateMock.mock.calls[0]?.[1]?.state).not.toHaveProperty(
       "proposalEntryIntent",
     );
-  });
+    },
+  );
 
   it("keeps template previews as square-framed A4 paper with meta underneath", async () => {
     const user = userEvent.setup();

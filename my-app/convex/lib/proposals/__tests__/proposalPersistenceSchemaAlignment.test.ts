@@ -82,7 +82,9 @@ function getMetadataFieldNamesFromValidator(
     throw new Error("Expected metadata validator to be a call expression.");
   }
 
-  const validatorObject = getObjectLiteralFromCallChain(validatorExpression);
+  const validatorObject = getNestedObjectLiteralFromValidatorCall(
+    validatorExpression,
+  );
   return validatorObject.properties
     .filter(ts.isPropertyAssignment)
     .map((property) => getPropertyName(property.name));
@@ -129,6 +131,29 @@ function getStoreProposalMetadataFields(filePath: string): string[] {
   }
 
   throw new Error("Unable to locate storeProposal args metadata validator.");
+}
+
+function getDefaultMutationMetadataFields(filePath: string): string[] {
+  const sourceFile = parseSourceFile(filePath);
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isExportAssignment(statement)) continue;
+    if (!ts.isCallExpression(statement.expression)) continue;
+
+    const mutationConfig = getObjectLiteralFromCallChain(statement.expression);
+    const argsProperty = getPropertyAssignment(mutationConfig, "args");
+    if (!ts.isObjectLiteralExpression(argsProperty.initializer)) {
+      throw new Error("Expected default mutation args to be an object literal.");
+    }
+
+    const metadataProperty = getPropertyAssignment(
+      argsProperty.initializer,
+      "metadata",
+    );
+    return getMetadataFieldNamesFromValidator(metadataProperty.initializer);
+  }
+
+  throw new Error("Unable to locate default mutation args metadata validator.");
 }
 
 function getProposalSchemaMetadataFields(filePath: string): string[] {
@@ -180,6 +205,20 @@ function getProposalsPublicReturnMetadataFields(filePath: string): string[] {
 }
 
 describe("proposal persistence schema alignment", () => {
+  const proposalHeadingMetadataFields = [
+    "applicantName",
+    "applicantRole",
+    "applicantCompany",
+    "contactLine",
+    "letterDate",
+    "recipientDetails",
+    "headerShowSender",
+    "headerShowDate",
+    "headerShowSubject",
+    "headerShowRecipient",
+    "headerShowRecipientDetails",
+  ];
+
   it("keeps storeProposal metadata fields aligned with the proposals table schema and public query return shape", () => {
     const proposalsFile = path.resolve(process.cwd(), "convex/proposals.ts");
     const schemaFile = path.resolve(process.cwd(), "convex/schema.ts");
@@ -196,4 +235,35 @@ describe("proposal persistence schema alignment", () => {
     expect(schemaFields).toEqual(storeProposalFields);
     expect(publicReturnFields).toEqual(storeProposalFields);
   });
+
+  it("accepts every proposal heading metadata field written by the v1 client", () => {
+    const proposalsFile = path.resolve(process.cwd(), "convex/proposals.ts");
+    const schemaFile = path.resolve(process.cwd(), "convex/schema.ts");
+    const proposalsPublicFile = path.resolve(
+      process.cwd(),
+      "convex/proposalsPublic.ts",
+    );
+    const createProposalPublicFile = path.resolve(
+      process.cwd(),
+      "convex/createProposalPublic.ts",
+    );
+    const updateProposalPublicFile = path.resolve(
+      process.cwd(),
+      "convex/updateProposalPublic.ts",
+    );
+    const metadataContracts = [
+      getStoreProposalMetadataFields(proposalsFile),
+      getProposalSchemaMetadataFields(schemaFile),
+      getProposalsPublicReturnMetadataFields(proposalsPublicFile),
+      getDefaultMutationMetadataFields(createProposalPublicFile),
+      getDefaultMutationMetadataFields(updateProposalPublicFile),
+    ];
+
+    metadataContracts.forEach((fields) => {
+      expect(fields).toEqual(
+        expect.arrayContaining(proposalHeadingMetadataFields),
+      );
+    });
+  });
+
 });
