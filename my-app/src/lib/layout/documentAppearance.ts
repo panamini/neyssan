@@ -131,6 +131,34 @@ export const ALL_VERBATI_PALETTE_OPTIONS: VerbatiPaletteOption[] = [
 
 export const DEFAULT_VERBATI_ACCENT = VERBATI_PALETTE_OPTIONS[0].accentHex;
 
+type ProposalJoellaColorPair = {
+  mark: string;
+  structure: string;
+};
+
+const CUSTOM_JOELLA_COLOR_PAIR: ProposalJoellaColorPair = {
+  mark: "color-mix(in srgb, var(--proposal-document-accent-ink) 82%, var(--proposal-document-ink) 18%)",
+  structure:
+    "color-mix(in srgb, var(--proposal-document-accent-ink) 62%, var(--proposal-document-paper) 38%)",
+};
+
+const JOELLA_PALETTE_COLOR_PAIRS: Partial<
+  Record<VerbatiPalettePreset, ProposalJoellaColorPair>
+> = {
+  cobalt: { mark: "#DA291C", structure: "#74a0c5" },
+  terre: { mark: "#bb5522", structure: "#789fa4" },
+  sauge: { mark: "#3b6e4e", structure: "#b06835" },
+  plum: { mark: "#0f0c08", structure: "#6d3f78" },
+  ochre: { mark: "#a7472f", structure: "#2f2d29" },
+  ink: { mark: "#1f1d1a", structure: "#878f8d" },
+};
+
+function resolveJoellaColorPair(
+  style: VerbatiStylePreset,
+): ProposalJoellaColorPair {
+  return JOELLA_PALETTE_COLOR_PAIRS[style.palette] ?? CUSTOM_JOELLA_COLOR_PAIR;
+}
+
 function clampChannel(value: number): number {
   return Math.max(0, Math.min(255, Math.round(value)));
 }
@@ -278,6 +306,7 @@ function buildPreviewAppearanceTheme(
     0.3,
   );
   const documentAccentInk = mixHex(PREVIEW_NEUTRAL_THEME.text, accent, 0.62);
+  const joellaColorPair = resolveJoellaColorPair(style);
 
   return {
     font: {
@@ -317,6 +346,8 @@ function buildPreviewAppearanceTheme(
       proposalDocumentInk: PREVIEW_NEUTRAL_THEME.text,
       proposalDocumentMetaInk: PREVIEW_NEUTRAL_THEME.textMuted,
       proposalDocumentAccentInk: documentAccentInk,
+      proposalJoellaMarkColor: joellaColorPair.mark,
+      proposalJoellaStructureColor: joellaColorPair.structure,
     },
     decor: {
       preview: {
@@ -436,7 +467,8 @@ function buildProposalExportDecor(
     proposalTitleFontWeight: "700",
     proposalTitleLetterSpacing: "-0.015em",
     proposalTitleFontStyle: "normal",
-    proposalMetaColor: "color-mix(in srgb, var(--muted) 72%, var(--accent) 28%)",
+    proposalMetaColor:
+      "color-mix(in srgb, var(--muted) 72%, var(--accent) 28%)",
     proposalMetaFontStyle: "normal",
     subjectBackground:
       "linear-gradient(180deg, color-mix(in srgb, var(--accent) 10%, transparent), transparent 88%)",
@@ -466,7 +498,8 @@ function buildProposalExportDecor(
         proposalTitleFontStyle: "italic",
         proposalMetaFontStyle: "italic",
         sectionTitleColor: "color-mix(in srgb, var(--accent) 82%, var(--ink))",
-        metaValueColor: "color-mix(in srgb, var(--muted) 82%, var(--accent) 18%)",
+        metaValueColor:
+          "color-mix(in srgb, var(--muted) 82%, var(--accent) 18%)",
         signoffFontStyle: "italic",
         headerAuxShadow: decor.headerShadow,
       };
@@ -492,7 +525,8 @@ function buildProposalExportDecor(
         proposalTitleFontStyle: "italic",
         proposalMetaFontStyle: "italic",
         signoffFontStyle: "italic",
-        metaValueColor: "color-mix(in srgb, var(--muted) 80%, var(--accent) 20%)",
+        metaValueColor:
+          "color-mix(in srgb, var(--muted) 80%, var(--accent) 20%)",
         headerAuxShadow: decor.headerShadow,
       };
     case "two_column_rail":
@@ -511,7 +545,8 @@ function buildProposalExportDecor(
           "linear-gradient(to right, transparent 0%, transparent 52%, color-mix(in srgb, var(--accent) 7%, transparent) 52.2%, transparent 52.5%, transparent 60%, color-mix(in srgb, var(--accent) 4%, transparent) 60.2%, transparent 60.5%), radial-gradient(circle at 18% 8%, rgba(255, 255, 255, 0.2), transparent 28%), linear-gradient(180deg, color-mix(in srgb, var(--paper) 90%, #ffffff 10%), var(--paper))",
         sectionTitleColor: "color-mix(in srgb, var(--accent) 72%, var(--ink))",
         metaLabelColor: "color-mix(in srgb, var(--accent) 72%, var(--ink))",
-        proposalMetaColor: "color-mix(in srgb, var(--ink) 76%, var(--accent) 24%)",
+        proposalMetaColor:
+          "color-mix(in srgb, var(--ink) 76%, var(--accent) 24%)",
         metaValueColor: "color-mix(in srgb, var(--ink) 76%, var(--accent) 24%)",
         subjectBackground:
           "linear-gradient(90deg, color-mix(in srgb, var(--accent) 8%, transparent), transparent 55%)",
@@ -656,6 +691,9 @@ export function serializeVerbatiThemeVars(
     "--proposal-document-meta-ink": appearance.theme.proposalDocumentMetaInk,
     "--proposal-document-accent-ink":
       appearance.theme.proposalDocumentAccentInk,
+    "--proposal-joella-mark-color": appearance.theme.proposalJoellaMarkColor,
+    "--proposal-joella-structure-color":
+      appearance.theme.proposalJoellaStructureColor,
     "--color-on-accent": appearance.theme.onAccent,
     "--bg": appearance.theme.canvas,
     "--sf1": appearance.theme.surface,
@@ -689,6 +727,9 @@ export function serializeProposalDocumentThemeVars(
     "--proposal-document-meta-ink": appearance.theme.proposalDocumentMetaInk,
     "--proposal-document-accent-ink":
       appearance.theme.proposalDocumentAccentInk,
+    "--proposal-joella-mark-color": appearance.theme.proposalJoellaMarkColor,
+    "--proposal-joella-structure-color":
+      appearance.theme.proposalJoellaStructureColor,
   } as React.CSSProperties;
 }
 
@@ -707,7 +748,9 @@ export function resolveDocxSafeColorHex(
 
   const rgbaMatch = value
     .trim()
-    .match(/^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*[\d.]+)?\s*\)$/i);
+    .match(
+      /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*[\d.]+)?\s*\)$/i,
+    );
   if (rgbaMatch) {
     return rgbToHex({
       r: Number.parseInt(rgbaMatch[1], 10),

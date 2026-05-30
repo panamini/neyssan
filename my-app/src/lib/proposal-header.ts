@@ -184,6 +184,7 @@ export function parseProposalRecipientDetails(
     }
     if (label === "city" || label === "location") {
       labeledFields.city = value;
+      return;
     }
   });
 
@@ -295,6 +296,87 @@ export function buildProposalRecipientDetails(
   }
 
   return lines.join("\n");
+}
+
+function normalizeProposalRecipientLineKey(value: string): string {
+  return value.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function normalizeProposalRecipientComparableLine(line: string): string {
+  const match = line.match(
+    /^(recipient|name|contact|role|title|company|organization|address|email|city|location)\s*:\s*(.+)$/i,
+  );
+  return normalizeProposalRecipientLineKey(match?.[2] ?? line);
+}
+
+function collectProposalRecipientExtraLines(
+  recipientDetails: string | null | undefined,
+  knownFieldValues: Array<string | null | undefined>,
+): string[] {
+  const knownFieldKeys = new Set(
+    knownFieldValues
+      .map((value) => normalizeProposalRecipientLineKey(value ?? ""))
+      .filter(Boolean),
+  );
+
+  return String(recipientDetails ?? "")
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => {
+      if (!line) {
+        return false;
+      }
+      return !knownFieldKeys.has(normalizeProposalRecipientComparableLine(line));
+    });
+}
+
+export function getProposalRecipientExtraLines(
+  recipientDetails?: string | null,
+  fields: Partial<ProposalRecipientFields> = parseProposalRecipientDetails(
+    recipientDetails,
+  ),
+): string[] {
+  return collectProposalRecipientExtraLines(recipientDetails, [
+    fields.name,
+    fields.role,
+    fields.company,
+    fields.email,
+    fields.address,
+    fields.city,
+  ]);
+}
+
+export function buildProposalRecipientDetailsPreservingExtraLines(args: {
+  currentDetails?: string | null;
+  fields: Partial<ProposalRecipientFields>;
+}): string {
+  const currentFields = parseProposalRecipientDetails(args.currentDetails);
+  const extraLines = collectProposalRecipientExtraLines(args.currentDetails, [
+    currentFields.name,
+    currentFields.role,
+    currentFields.company,
+    currentFields.email,
+    currentFields.address,
+    currentFields.city,
+    args.fields.name,
+    args.fields.role,
+    args.fields.company,
+    args.fields.email,
+    args.fields.address,
+    args.fields.city,
+  ]);
+  const baseDetails = buildProposalRecipientDetails(args.fields);
+  const mergedLines = [
+    ...(baseDetails ? baseDetails.split("\n") : []),
+    ...extraLines,
+  ];
+
+  while (mergedLines.length > 0 && !mergedLines[mergedLines.length - 1]) {
+    mergedLines.pop();
+  }
+
+  return mergedLines.join("\n");
 }
 
 export function buildProposalRecipientPrefill(args: {
@@ -454,7 +536,10 @@ export function buildProposalHeaderVisibilityFromContent(
   return {
     ...DEFAULT_PROPOSAL_HEADER_VISIBILITY,
     showRecipientDetails: Boolean(
-      recipientFields.address || recipientFields.email || recipientFields.city,
+      recipientFields.address ||
+        recipientFields.email ||
+        recipientFields.city ||
+        getProposalRecipientExtraLines(recipientDetails, recipientFields).length > 0,
     ),
   };
 }
@@ -477,6 +562,7 @@ export function resolveProposalRecipientLines(
     fields.email,
     fields.address,
     fields.city,
+    ...getProposalRecipientExtraLines(recipientDetails, fields),
   ].filter(Boolean);
 
   return {

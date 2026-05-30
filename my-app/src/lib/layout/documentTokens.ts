@@ -187,6 +187,8 @@ export type CanonicalDocumentTokens = {
       proposalDocumentInk?: string;
       proposalDocumentMetaInk?: string;
       proposalDocumentAccentInk?: string;
+      proposalJoellaMarkColor?: string;
+      proposalJoellaStructureColor?: string;
     };
     decor: {
       preview?: {

@@ -4868,6 +4868,13 @@
   font-weight: 700;
 }
 
+.proposal-cover-letter--joella
+  .proposal-cover-letter__joella-letter-block-subject-value {
+  text-decoration: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.18em;
+}
+
 .proposal-cover-letter--joella .proposal-cover-letter__body .dasti-proposal-document__salutation,
 .proposal-cover-letter--joella .proposal-cover-letter__body .dasti-proposal-document__paragraph,
 .proposal-cover-letter--joella .proposal-cover-letter__body .dasti-proposal-document__signoff,

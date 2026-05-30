@@ -1237,6 +1237,42 @@ export const EXPORT_VAR_DESCRIPTORS: CanonicalVarDescriptor[] = [
     resolve: (tokens) => tokens.appearance.theme.paper,
   },
   {
+    name: "--proposal-document-paper",
+    fieldPath: "appearance.theme.paper",
+    classification: "canonical",
+    resolve: (tokens) => tokens.appearance.theme.paper,
+  },
+  {
+    name: "--proposal-document-ink",
+    fieldPath: "appearance.theme.proposalDocumentInk",
+    classification: "canonical",
+    resolve: (tokens) => tokens.appearance.theme.proposalDocumentInk,
+  },
+  {
+    name: "--proposal-document-meta-ink",
+    fieldPath: "appearance.theme.proposalDocumentMetaInk",
+    classification: "canonical",
+    resolve: (tokens) => tokens.appearance.theme.proposalDocumentMetaInk,
+  },
+  {
+    name: "--proposal-document-accent-ink",
+    fieldPath: "appearance.theme.proposalDocumentAccentInk",
+    classification: "canonical",
+    resolve: (tokens) => tokens.appearance.theme.proposalDocumentAccentInk,
+  },
+  {
+    name: "--proposal-joella-mark-color",
+    fieldPath: "appearance.theme.proposalJoellaMarkColor",
+    classification: "canonical",
+    resolve: (tokens) => tokens.appearance.theme.proposalJoellaMarkColor,
+  },
+  {
+    name: "--proposal-joella-structure-color",
+    fieldPath: "appearance.theme.proposalJoellaStructureColor",
+    classification: "canonical",
+    resolve: (tokens) => tokens.appearance.theme.proposalJoellaStructureColor,
+  },
+  {
     name: "--heading-font",
     fieldPath: "appearance.font.heading.family",
     classification: "canonical",

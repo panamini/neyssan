@@ -1462,6 +1462,42 @@ describe("ProposalDisplay", () => {
     expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
   });
 
+  it("preserves extra recipient block lines when editing structured recipient fields", () => {
+    const handleRecipientDetailsChange = vi.fn();
+
+    render(
+      <ProposalDisplay
+        proposalContent={
+          "Dear Hiring Manager,\n\nProposal body.\n\nBest,\nJane"
+        }
+        loading={false}
+        error={null}
+        proposalType="cover_letter"
+        mode="edit"
+        railTitle="Jane Doe"
+        railMeta="Human Resources Administrator"
+        recipientDetails={
+          "Hiring Manager\nHead of Talent\nNorthwind\nhiring@northwind.com\n12 Rue de la Paix\nParis\nAdditional address line"
+        }
+        documentTitle="Human Resources Administrator"
+        recipientDetailsEditable
+        onRecipientDetailsChange={handleRecipientDetailsChange}
+        onContentChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show applicant details" }),
+    );
+    fireEvent.change(screen.getByLabelText("Address"), {
+      target: { value: "14 Rue de la Paix" },
+    });
+
+    expect(handleRecipientDetailsChange).toHaveBeenLastCalledWith(
+      "Hiring Manager\nHead of Talent\nNorthwind\nhiring@northwind.com\n14 Rue de la Paix\nParis\nAdditional address line",
+    );
+  });
+
   it("activates editable proposal header visibility pills with one click", () => {
     function Harness({
       initialHeaderVisibility = {

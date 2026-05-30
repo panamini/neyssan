@@ -1572,6 +1572,10 @@ describe("ProposalDocumentRenderer volk register layout", () => {
         ".proposal-cover-letter__joella-letter-block-line--strong",
       ) ?? [],
     ).map((node) => node.textContent);
+    const underlinedSubject =
+      renderedPage?.querySelector(
+        ".proposal-cover-letter__joella-letter-block-subject-value",
+      )?.textContent ?? "";
     const footerText =
       renderedPage?.querySelector(".proposal-cover-letter__joella-footer")
         ?.textContent ?? "";
@@ -1602,6 +1606,7 @@ describe("ProposalDocumentRenderer volk register layout", () => {
       "Subject: Application for Operations Lead",
     ]);
     expect(boldLetterBlockLines).toEqual(["Avery Stone", "Hiring Manager"]);
+    expect(underlinedSubject).toBe(" Application for Operations Lead");
     expect(renderedPage?.querySelector(".proposal-cover-letter__joella-recipient"))
       .toBeNull();
     expect(renderedPage?.querySelector(".proposal-cover-letter__joella-meta"))
