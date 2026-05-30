@@ -4326,7 +4326,8 @@
 
 .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-sender p,
 .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-recipient p {
-  line-height: 11pt;
+  font-size: 9pt;
+  line-height: 13pt;
 }
 
 .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-sender p:first-child,
@@ -4459,6 +4460,258 @@
   top: 35mm;
 }
 
+.proposal-cover-letter--bayer .dasti-proposal-document__page {
+  position: relative;
+  width: 210mm;
+  min-height: 297mm;
+  height: 297mm;
+  max-height: 297mm;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: var(--proposal-document-paper, var(--paper, #FAF9F5));
+  background-image: none;
+  color: var(--proposal-document-ink);
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-header,
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-recipient,
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-date,
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-footer,
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-flow {
+  position: absolute;
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-header {
+  left: 35mm;
+  top: 35mm;
+  width: 157mm;
+  height: 29mm;
+  color: var(--proposal-document-ink);
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-header--has-company {
+  height: 35mm;
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-name,
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-role,
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-company,
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-email,
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-label,
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-recipient p,
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-date-value,
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-subject-value,
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-footer {
+  margin: 0;
+  letter-spacing: 0;
+  min-width: 0;
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-name,
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-role,
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-company,
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-email,
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-recipient p:not(.proposal-cover-letter__bayer-label),
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-date-value,
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-subject-value,
+.proposal-cover-letter--bayer .proposal-cover-letter__body .dasti-proposal-document__salutation,
+.proposal-cover-letter--bayer .proposal-cover-letter__body .dasti-proposal-document__paragraph,
+.proposal-cover-letter--bayer .proposal-cover-letter__body .dasti-proposal-document__signoff,
+.proposal-cover-letter--bayer .proposal-cover-letter__body .dasti-proposal-document__signature,
+.proposal-cover-letter--bayer .proposal-cover-letter__body .dasti-proposal-document__raw-body {
+  font-family: var(--proposal-document-font-family, var(--body-font, var(--font-body-family)));
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-name {
+  width: 157mm;
+  font-family: var(--heading-font, var(--font-heading-family));
+  font-size: 16pt;
+  line-height: 16pt;
+  font-weight: 850;
+  color: var(--proposal-document-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-rule {
+  position: absolute;
+  left: 0;
+  top: 8mm;
+  width: 157mm;
+  height: 2pt;
+  background-color: var(--proposal-document-accent-ink, var(--proposal-document-ink));
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-role,
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-company,
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-email {
+  position: absolute;
+  left: 0;
+  width: 157mm;
+  font-size: 12pt;
+  line-height: 6mm;
+  overflow-wrap: anywhere;
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-role {
+  top: 17mm;
+  font-weight: 720;
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-company,
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-email {
+  top: 23mm;
+  font-weight: 400;
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-header--has-company .proposal-cover-letter__bayer-email {
+  top: 29mm;
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-recipient {
+  left: 35mm;
+  top: 76mm;
+  width: 87mm;
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-date {
+  left: 140mm;
+  top: 76mm;
+  width: 52mm;
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-label {
+  font-family: var(--proposal-document-font-family, var(--body-font, var(--font-body-family)));
+  font-size: 7pt;
+  line-height: 6mm;
+  font-weight: 720;
+  text-transform: uppercase;
+  color: color-mix(
+    in srgb,
+    var(--proposal-document-ink, var(--ink, #1F1D1A)) 62%,
+    var(--proposal-document-paper, var(--paper, #FAF9F5)) 38%
+  );
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-recipient p:not(.proposal-cover-letter__bayer-label),
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-date-value,
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-subject-value {
+  font-size: 12pt;
+  line-height: 6mm;
+  font-weight: 400;
+  color: var(--proposal-document-ink);
+  overflow-wrap: anywhere;
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-recipient-name {
+  font-weight: 720;
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-flow {
+  left: 35mm;
+  width: 157mm;
+  overflow: hidden;
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-flow--with-subject {
+  top: 116mm;
+  max-height: 158mm;
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-flow--no-subject {
+  top: 135mm;
+  max-height: 139mm;
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-subject {
+  position: static;
+  width: 157mm;
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-subject-value {
+  max-width: 157mm;
+  font-weight: 400;
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__body {
+  position: static;
+  width: 157mm;
+  max-width: 157mm;
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  padding: 0;
+  overflow: visible;
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-flow--with-subject .proposal-cover-letter__body {
+  margin-top: 6mm;
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-flow--no-subject .proposal-cover-letter__body {
+  margin-top: 0;
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__body .dasti-proposal-document__salutation,
+.proposal-cover-letter--bayer .proposal-cover-letter__body .dasti-proposal-document__paragraph,
+.proposal-cover-letter--bayer .proposal-cover-letter__body .dasti-proposal-document__signoff,
+.proposal-cover-letter--bayer .proposal-cover-letter__body .dasti-proposal-document__signature,
+.proposal-cover-letter--bayer .proposal-cover-letter__body .dasti-proposal-document__raw-body {
+  font-size: 12pt;
+  line-height: 6mm;
+  color: var(--proposal-document-ink);
+  overflow-wrap: break-word;
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__body .dasti-proposal-document__signature {
+  font-family: var(--proposal-signature-font-family, var(--proposal-document-font-family));
+  font-weight: var(--proposal-signature-font-weight, inherit);
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__body .dasti-proposal-document__paragraph + .dasti-proposal-document__paragraph {
+  margin-top: 6mm;
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__body .dasti-proposal-document__closing {
+  gap: 6mm;
+  padding-top: 6mm;
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__body .proposal-block + .proposal-block:not(.proposal-block--closing) {
+  margin-top: 6mm;
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__body .proposal-block--closing {
+  gap: 6mm;
+  padding-top: 6mm;
+}
+
+.proposal-cover-letter--bayer .proposal-cover-letter__bayer-footer {
+  left: 35mm;
+  top: 280mm;
+  max-width: 157mm;
+  font-family: var(--proposal-document-font-family, var(--body-font, var(--font-body-family)));
+  font-size: 8.5pt;
+  line-height: 3mm;
+  font-weight: 680;
+  color: color-mix(
+    in srgb,
+    var(--proposal-document-ink, var(--ink, #1F1D1A)) 62%,
+    var(--proposal-document-paper, var(--paper, #FAF9F5)) 38%
+  );
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.proposal-cover-letter--bayer .dasti-proposal-document__page--continuation .proposal-cover-letter__bayer-flow {
+  top: 35mm;
+  max-height: 227mm;
+}
+
 .proposal-cover-letter--joella .dasti-proposal-document__page {
   position: relative;
   width: 210mm;
@@ -4489,7 +4742,7 @@
   top: 6.8mm;
   width: 198.5mm;
   height: 282.8mm;
-  border: 1.32mm solid #74a0c5;
+  border: 1.32mm solid var(--proposal-joella-structure-color, #74a0c5);
   pointer-events: none;
 }
 
@@ -4498,7 +4751,7 @@
   right: 6mm;
   top: 19.65mm;
   height: 0;
-  border-top: 1.32mm solid #74a0c5;
+  border-top: 1.32mm solid var(--proposal-joella-structure-color, #74a0c5);
   background: transparent;
   pointer-events: none;
 }
@@ -4526,7 +4779,7 @@
   line-height: 1;
   font-weight: 700;
   letter-spacing: -0.035em;
-  color: #8f332f;
+  color: var(--proposal-joella-mark-color, #8f332f);
   text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
@@ -4539,7 +4792,7 @@
   width: 70mm;
   display: grid;
   gap: 0;
-  color: #86accd;
+  color: var(--proposal-joella-structure-color, #74a0c5);
 }
 
 .proposal-cover-letter--joella .proposal-cover-letter__joella-meta {
@@ -4548,7 +4801,7 @@
   width: 76mm;
   display: grid;
   gap: 0;
-  color: #86accd;
+  color: var(--proposal-joella-structure-color, #74a0c5);
   text-align: right;
 }
 
@@ -4556,8 +4809,8 @@
 .proposal-cover-letter--joella .proposal-cover-letter__joella-meta p {
   margin: 0;
   min-width: 0;
-  font-size: 8pt;
-  line-height: 3.7mm;
+  font-size: 10pt;
+  line-height: 4.65mm;
   font-weight: 600;
   letter-spacing: 0.01em;
   overflow-wrap: anywhere;
@@ -4586,8 +4839,8 @@
   margin-bottom: 9.3mm;
   min-width: 0;
   font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
-  font-size: 8pt;
-  line-height: 3.7mm;
+  font-size: 10pt;
+  line-height: 4.65mm;
   font-weight: 400;
   color: #26231e;
 }
@@ -4607,6 +4860,12 @@
   margin: 0;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.proposal-cover-letter--joella
+  .proposal-cover-letter__joella-letter-block-line--strong,
+.proposal-cover-letter--joella .proposal-cover-letter__joella-recipient p:first-child {
+  font-weight: 700;
 }
 
 .proposal-cover-letter--joella .proposal-cover-letter__body .dasti-proposal-document__salutation,
@@ -4654,7 +4913,7 @@
   line-height: 1;
   font-weight: 700;
   letter-spacing: 0.018em;
-  color: #86accd;
+  color: var(--proposal-joella-structure-color, #74a0c5);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

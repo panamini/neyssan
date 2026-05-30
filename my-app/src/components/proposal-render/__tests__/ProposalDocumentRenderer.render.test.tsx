@@ -1189,6 +1189,112 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     },
   );
 
+  it.each([
+    {
+      templateId: "director-letterhead" as const,
+      scope: ".proposal-cover-letter--director",
+      recipientSelector: ".proposal-cover-letter__recipient-block",
+    },
+    {
+      templateId: "volk-letterhead" as const,
+      scope: ".proposal-cover-letter--volk",
+      recipientSelector: ".proposal-cover-letter__recipient-block",
+    },
+    {
+      templateId: "film-foto-letterhead" as const,
+      scope: ".proposal-cover-letter--film-foto",
+      recipientSelector: ".proposal-cover-letter__recipient-block",
+    },
+    {
+      templateId: "moma-bauhaus-letterhead" as const,
+      scope: ".proposal-cover-letter--moma-bauhaus",
+      recipientSelector: ".proposal-cover-letter__bauhaus-recipient",
+    },
+    {
+      templateId: "joella-frame-letterhead" as const,
+      scope: ".proposal-cover-letter--joella",
+      recipientSelector: ".proposal-cover-letter__joella-letter-block",
+    },
+    {
+      templateId: "bayer-letterhead" as const,
+      scope: ".proposal-cover-letter--bayer",
+      recipientSelector: ".proposal-cover-letter__bayer-recipient",
+    },
+  ])(
+    "routes every heading drawer field into $templateId letterhead",
+    ({ templateId, scope, recipientSelector }) => {
+      const { container } = render(
+        <ProposalDocumentRenderer
+          content="Dear Hiring Manager,\n\nI can support the team."
+          proposalType="cover_letter"
+          templateId={templateId}
+          railTitle="Avery Stone"
+          railMeta="Operations Lead"
+          contactLine="avery@example.com · +33 6 01 02 03 04 · Paris / Remote · linkedin.com/in/avery · avery.work"
+          letterDate="May 30, 2026"
+          recipientDetails={
+            "Hiring Manager\nHead of Talent\nNorthwind\nhiring@northwind.com\n12 Rue de la Paix\nParis\nAdditional address line"
+          }
+          documentTitle="Application for Operations Lead"
+          headerVisibility={{
+            showSender: true,
+            showDate: true,
+            showSubject: true,
+            showRecipient: true,
+            showRecipientDetails: true,
+          }}
+          documentTypography={{
+            fontFamily: "Georgia, serif",
+            fontSize: "14px",
+            lineHeight: 1.5,
+            fontWeight: 400,
+            letterSpacing: "0em",
+          }}
+          applicantHeader={{
+            name: "Avery Stone",
+            role: "Operations Lead",
+            company: "Stone Systems",
+            email: "avery@example.com",
+            phone: "+33 6 01 02 03 04",
+            linkedin: "linkedin.com/in/avery",
+            website: "avery.work",
+            location: "Paris / Remote",
+            tag: null,
+          }}
+        />,
+      );
+
+      const root = container.querySelector(scope);
+      const pageText = root?.textContent ?? "";
+      const recipientText = root?.querySelector(recipientSelector)?.textContent ?? "";
+
+      [
+        "Avery Stone",
+        "Operations Lead",
+        "Stone Systems",
+        "avery@example.com",
+        "+33 6 01 02 03 04",
+        "linkedin.com/in/avery",
+        "avery.work",
+        "Paris / Remote",
+      ].forEach((value) => {
+        expect(pageText).toContain(value);
+      });
+
+      [
+        "Hiring Manager",
+        "Head of Talent",
+        "Northwind",
+        "hiring@northwind.com",
+        "12 Rue de la Paix",
+        "Paris",
+        "Additional address line",
+      ].forEach((value) => {
+        expect(recipientText).toContain(value);
+      });
+    },
+  );
+
   it("renders the MoMA Bauhaus letterhead with real heading fields, ordered body, and closing", () => {
     const { container } = render(
       <ProposalDocumentRenderer
@@ -1413,7 +1519,7 @@ describe("ProposalDocumentRenderer volk register layout", () => {
         contactLine="avery@example.com · +33 6 01 02 03 04 · Paris / Remote · linkedin.com/in/avery · avery.work"
         letterDate="May 30, 2026"
         recipientDetails={
-          "Walter Gropius\nDirector\nBauhaus Dessau\noffice@bauhaus.de\nGropiusallee 38\n06846 Dessau-Roßlau\nGermany"
+          "Hiring Manager\nHead of Talent\nNorthwind\nhiring@northwind.com\n12 Rue de la Paix\nParis\nAdditional address line"
         }
         documentTitle="Application for Operations Lead"
         headerVisibility={{
@@ -1461,6 +1567,11 @@ describe("ProposalDocumentRenderer volk register layout", () => {
       renderedPage?.querySelectorAll(".proposal-cover-letter__joella-letter-block p") ??
         [],
     ).map((node) => node.textContent);
+    const boldLetterBlockLines = Array.from(
+      renderedPage?.querySelectorAll(
+        ".proposal-cover-letter__joella-letter-block-line--strong",
+      ) ?? [],
+    ).map((node) => node.textContent);
     const footerText =
       renderedPage?.querySelector(".proposal-cover-letter__joella-footer")
         ?.textContent ?? "";
@@ -1480,23 +1591,24 @@ describe("ProposalDocumentRenderer volk register layout", () => {
       "Stone Systems",
       "avery@example.com · +33 6 01 02 03 04 · linkedin.com/in/avery · avery.work",
       "Paris / Remote",
-      "May 30, 2026",
-      "Walter Gropius",
-      "Director",
-      "Bauhaus Dessau",
-      "office@bauhaus.de",
-      "Gropiusallee 38",
-      "06846 Dessau-Roßlau",
-      "Germany",
+      "may 30, 2026",
+      "Hiring Manager",
+      "Head of Talent",
+      "Northwind",
+      "hiring@northwind.com",
+      "12 Rue de la Paix",
+      "Paris",
+      "Additional address line",
       "Subject: Application for Operations Lead",
     ]);
+    expect(boldLetterBlockLines).toEqual(["Avery Stone", "Hiring Manager"]);
     expect(renderedPage?.querySelector(".proposal-cover-letter__joella-recipient"))
       .toBeNull();
     expect(renderedPage?.querySelector(".proposal-cover-letter__joella-meta"))
       .toBeNull();
     expect(letterBlockLines.join(" ")).not.toContain("Date:");
     expect(letterBlockLines.join(" ")).not.toContain("Re:");
-    expect(letterBlockLines.join(" ")).toContain("office@bauhaus.de");
+    expect(letterBlockLines.join(" ")).toContain("hiring@northwind.com");
     expect(footerText).toContain("PARIS / REMOTE");
     expect(footerText).toContain("AVERY@EXAMPLE.COM");
     expect(footerText).toContain("+33 6 01 02 03 04");
@@ -1551,6 +1663,174 @@ describe("ProposalDocumentRenderer volk register layout", () => {
       ).map((node) => node.textContent),
     ).toEqual(["Subject: Long subject should not become a wordmark"]);
     expect(root?.querySelector(".proposal-cover-letter__joella-footer")).toBeNull();
+    expect(root?.textContent).toContain(
+      "I can support the team with clear written execution.",
+    );
+    expect(root?.textContent).not.toContain("undefined");
+    expect(root?.textContent).not.toContain("null");
+    expect(root?.textContent).not.toContain("[object Object]");
+  });
+
+  it("renders the Bayer letterhead with recipient field routing and style variables", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content={[
+          "Dear Hiring Manager,",
+          "First Bayer body paragraph.",
+          "Second Bayer body paragraph.",
+        ].join("\n\n")}
+        proposalType="cover_letter"
+        templateId="bayer-letterhead"
+        railTitle="Avery Stone"
+        railMeta="Operations Lead"
+        contactLine="avery@example.com · +33 6 01 02 03 04 · Paris / Remote · linkedin.com/in/avery · avery.work"
+        letterDate="May 30, 2026"
+        recipientDetails={
+          "Hiring Manager\nHead of Talent\nNorthwind\nhiring@northwind.com\n12 Rue de la Paix\nParis"
+        }
+        documentTitle="Application for Operations Lead"
+        headerVisibility={{
+          showSender: true,
+          showDate: true,
+          showSubject: true,
+          showRecipient: true,
+          showRecipientDetails: true,
+        }}
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        documentThemeVars={{
+          "--proposal-document-paper": "#fff7df",
+          "--proposal-document-ink": "#14213d",
+          "--proposal-document-accent-ink": "#ba2d0b",
+        }}
+        applicantHeader={{
+          name: "Avery Stone",
+          role: "Operations Lead",
+          company: "Stone Systems",
+          email: "avery@example.com",
+          phone: "+33 6 01 02 03 04",
+          linkedin: "linkedin.com/in/avery",
+          website: "avery.work",
+          location: "Paris / Remote",
+          tag: null,
+        }}
+        closing={{
+          enabled: true,
+          signOff: "Sincerely,",
+          signatureName: "Avery Stone",
+          source: "document",
+        }}
+      />,
+    );
+
+    const root = container.querySelector(".proposal-cover-letter--bayer");
+    const renderedPage = Array.from(
+      root?.querySelectorAll(".dasti-proposal-document__page") ?? [],
+    ).at(-1);
+    const header =
+      renderedPage?.querySelector(".proposal-cover-letter__bayer-header")
+        ?.textContent ?? "";
+    const recipientLines = Array.from(
+      renderedPage?.querySelectorAll(".proposal-cover-letter__bayer-recipient p") ??
+        [],
+    ).map((node) => node.textContent);
+    const paragraphs = Array.from(
+      renderedPage?.querySelectorAll(".dasti-proposal-document__paragraph") ??
+        [],
+    ).map((node) => node.textContent);
+    const footerText =
+      renderedPage?.querySelector(".proposal-cover-letter__bayer-footer")
+        ?.textContent ?? "";
+
+    expect(root?.getAttribute("data-proposal-template")).toBe("bayer-letterhead");
+    expect(root?.getAttribute("style")).toContain(
+      "--proposal-document-paper: #fff7df",
+    );
+    expect(root?.getAttribute("style")).toContain(
+      "--proposal-document-accent-ink: #ba2d0b",
+    );
+    expect(header).toContain("Avery Stone");
+    expect(header).toContain("Operations Lead");
+    expect(header).toContain("Stone Systems");
+    expect(header).toContain("avery@example.com");
+    expect(header).not.toContain("Application for Operations Lead");
+    expect(header).not.toContain("+33 6 01 02 03 04");
+    expect(header).not.toContain("linkedin.com/in/avery");
+    expect(recipientLines).toEqual([
+      "TO",
+      "Hiring Manager",
+      "Head of Talent",
+      "Northwind",
+      "hiring@northwind.com",
+      "12 Rue de la Paix · Paris",
+    ]);
+    expect(
+      renderedPage?.querySelector(".proposal-cover-letter__bayer-date")
+        ?.textContent,
+    ).toBe("DATEMay 30, 2026");
+    expect(
+      renderedPage?.querySelector(".proposal-cover-letter__bayer-subject")
+        ?.textContent,
+    ).toBe("SUBJECTApplication for Operations Lead");
+    expect(
+      renderedPage?.querySelector(".proposal-cover-letter__bayer-subject-value")
+        ?.textContent,
+    ).toBe("Application for Operations Lead");
+    expect(footerText).toBe(
+      "+33 6 01 02 03 04 · Paris / Remote · linkedin.com/in/avery · avery.work",
+    );
+    expect(footerText).not.toContain("avery@example.com");
+    expect(footerText).not.toContain("Stone Systems");
+    expect(paragraphs).toEqual([
+      "First Bayer body paragraph.",
+      "Second Bayer body paragraph.",
+    ]);
+    expect(renderedPage?.textContent).toContain("Sincerely,");
+    expect(renderedPage?.textContent).toContain("avery stone");
+    expect(renderedPage?.textContent).not.toContain("undefined");
+    expect(renderedPage?.textContent).not.toContain("null");
+    expect(renderedPage?.textContent).not.toContain("[object Object]");
+    expect(renderedPage?.textContent).not.toContain(" ·  · ");
+  });
+
+  it("keeps optional Bayer fields empty without routing subject into the sender block", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content="I can support the team with clear written execution."
+        proposalType="cover_letter"
+        templateId="bayer-letterhead"
+        documentTitle="Long subject should remain in the subject row"
+        headerVisibility={{
+          showSender: true,
+          showDate: true,
+          showSubject: true,
+          showRecipient: true,
+          showRecipientDetails: true,
+        }}
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+      />,
+    );
+
+    const root = container.querySelector(".proposal-cover-letter--bayer");
+
+    expect(root?.querySelector(".proposal-cover-letter__bayer-header")).toBeNull();
+    expect(root?.querySelector(".proposal-cover-letter__bayer-recipient")).toBeNull();
+    expect(root?.querySelector(".proposal-cover-letter__bayer-date")).toBeNull();
+    expect(
+      root?.querySelector(".proposal-cover-letter__bayer-subject")?.textContent,
+    ).toBe("SUBJECTLong subject should remain in the subject row");
+    expect(root?.querySelector(".proposal-cover-letter__bayer-footer")).toBeNull();
     expect(root?.textContent).toContain(
       "I can support the team with clear written execution.",
     );

@@ -56,4 +56,28 @@ describe("proposal render templates", () => {
       }),
     );
   });
+
+  it("registers the Bayer template as proposal cover-letter only", () => {
+    expect(PROPOSAL_ACTIVE_TEMPLATE_IDS).toContain("bayer-letterhead");
+    expect(isProposalTemplateId("bayer-letterhead")).toBe(true);
+    expect(isProposalLetterheadTemplateId("bayer-letterhead")).toBe(true);
+    expect(RESUME_TEMPLATE_IDS as readonly string[]).not.toContain(
+      "bayer-letterhead",
+    );
+  });
+
+  it("exposes Bayer preview and export metadata through the live registry", () => {
+    expect(getProposalTemplateDefinition("bayer-letterhead")).toEqual(
+      expect.objectContaining({
+        id: "bayer-letterhead",
+        name: "Bayer",
+        shortLabel: "35 mm grid",
+        twinLabel: "Cover letter",
+        exportShell: "onecol",
+        leftMarginMm: 35,
+        bodyStartMm: 135,
+        readingMeasureCh: 70,
+      }),
+    );
+  });
 });

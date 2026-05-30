@@ -10,6 +10,7 @@ import type { ProposalDocumentTypography } from "../../lib/proposal-document-typ
 import { VOLK_REGISTER_GRID } from "../../features/verbati/volkGrid";
 import type { ProposalApplicantHeaderData } from "../../lib/proposal-personalization";
 import {
+  getProposalRecipientExtraLines,
   parseProposalRecipientDetails,
   resolveProposalLetterheadShortTitle,
   resolveProposalHeaderVisibility,
@@ -121,6 +122,7 @@ type ProposalLetterheadViewModel = {
   candidateFilmSenderLine: string;
   candidateJoellaWordmark: string;
   candidateJoellaFooterLine: string;
+  candidateBayerFooterLine: string;
   candidateLocationLine: string;
   candidatePhone: string;
   candidateEmail: string;
@@ -131,6 +133,7 @@ type ProposalLetterheadViewModel = {
   recipientAddress: string;
   recipientEmail: string;
   recipientCity: string;
+  recipientExtraLines: string[];
   recipientContactLines: string[];
   recipientHeadingLines: string[];
   joellaLetterBlock: {
@@ -144,6 +147,7 @@ type ProposalLetterheadViewModel = {
   secondaryTitle: string;
   metaRole: string;
   shortRoleTitle: string;
+  showSender: boolean;
 };
 
 type ProposalCoverLetterTemplateProps = {
@@ -301,6 +305,13 @@ function normalizeJoellaDisplayText(value: string | null | undefined): string {
   return String(value ?? "").replace(/\s+/g, " ").trim().toUpperCase();
 }
 
+function lowercaseEnglishMonthNames(value: string): string {
+  return value.replace(
+    /\b(January|February|March|April|May|June|July|August|September|October|November|December)\b/g,
+    (month) => month.toLowerCase(),
+  );
+}
+
 function resolveJoellaWordmark(args: {
   candidateCompany: string;
   candidateName: string;
@@ -342,6 +353,22 @@ function buildJoellaFooterLine(args: {
     .map(normalizeJoellaDisplayText)
     .filter(Boolean)
     .join("  ");
+}
+
+function buildBayerFooterLine(args: {
+  phone: string;
+  location: string;
+  linkedin: string;
+  website: string;
+  other: string;
+}): string {
+  return uniqueNonEmptyLines([
+    args.phone,
+    args.location,
+    args.linkedin,
+    args.website,
+    args.other,
+  ]).join(" · ");
 }
 
 function buildJoellaHeaderContactLine(args: {
@@ -386,7 +413,6 @@ const JOELLA_RECIPIENT_KNOWN_LABELS = new Set([
   "mail",
   "city",
   "location",
-  "country",
   "phone",
   "telephone",
   "website",
@@ -565,6 +591,13 @@ function buildProposalLetterheadViewModel(args: {
     email: resolvedContactParts.email,
     phone: resolvedContactParts.phone,
   });
+  const candidateBayerFooterLine = buildBayerFooterLine({
+    phone: resolvedContactParts.phone,
+    location: resolvedContactParts.location,
+    linkedin: resolvedContactParts.linkedin,
+    website: resolvedContactParts.website,
+    other: resolvedContactParts.other,
+  });
   const recipientName = visibility.showRecipient
     ? recipientFields.name?.trim() ?? ""
     : "";
@@ -586,8 +619,12 @@ function buildProposalLetterheadViewModel(args: {
     visibility.showRecipient && visibility.showRecipientDetails
       ? recipientFields.city?.trim() ?? ""
       : "";
+  const recipientExtraLines =
+    visibility.showRecipient && visibility.showRecipientDetails
+      ? getProposalRecipientExtraLines(args.recipientDetails, recipientFields)
+      : [];
   const recipientContactLines = uniqueNonEmptyLines(
-    [recipientEmail, recipientAddress, recipientCity],
+    [recipientEmail, recipientAddress, recipientCity, ...recipientExtraLines],
     [recipientName, recipientCompany, recipientRole],
   );
   const recipientHeadingLines = visibility.showRecipient
@@ -598,6 +635,7 @@ function buildProposalLetterheadViewModel(args: {
         recipientFields.email,
         recipientFields.address,
         recipientFields.city,
+        ...recipientExtraLines,
       ])
     : [];
   const subject = visibility.showSubject ? args.documentTitle?.trim() ?? "" : "";
@@ -617,7 +655,9 @@ function buildProposalLetterheadViewModel(args: {
           resolvedContactParts.location,
         ])
       : [],
-    dateLine: visibility.showDate ? args.letterDate?.trim() ?? "" : "",
+    dateLine: visibility.showDate
+      ? lowercaseEnglishMonthNames(args.letterDate?.trim() ?? "")
+      : "",
     recipientLines: visibility.showRecipient
       ? buildJoellaRecipientBlockLines({
           recipientDetails: args.recipientDetails,
@@ -649,6 +689,7 @@ function buildProposalLetterheadViewModel(args: {
     candidateFilmSenderLine,
     candidateJoellaWordmark,
     candidateJoellaFooterLine,
+    candidateBayerFooterLine,
     candidateLocationLine: resolvedContactParts.location,
     candidatePhone: resolvedContactParts.phone,
     candidateEmail: resolvedContactParts.email,
@@ -662,6 +703,7 @@ function buildProposalLetterheadViewModel(args: {
     recipientAddress,
     recipientEmail,
     recipientCity,
+    recipientExtraLines,
     recipientContactLines,
     recipientHeadingLines,
     joellaLetterBlock,
@@ -670,6 +712,7 @@ function buildProposalLetterheadViewModel(args: {
     secondaryTitle,
     metaRole,
     shortRoleTitle,
+    showSender: visibility.showSender,
   };
 }
 
@@ -722,7 +765,7 @@ function ProposalCoverLetterRecipientBlock({
 }: {
   viewModel: ProposalLetterheadViewModel;
 }): JSX.Element | null {
-  if (viewModel.recipientContactLines.length === 0) {
+  if (viewModel.recipientHeadingLines.length === 0) {
     return null;
   }
 
@@ -731,7 +774,7 @@ function ProposalCoverLetterRecipientBlock({
       className="proposal-cover-letter__recipient-block"
       aria-label="Recipient contact details"
     >
-      {viewModel.recipientContactLines.map((line) => (
+      {viewModel.recipientHeadingLines.map((line) => (
         <p key={line}>{line}</p>
       ))}
     </section>
@@ -924,6 +967,12 @@ export function ProposalCoverLetterFilmFotoTemplate({
                 <p>{viewModel.candidatePhone}</p>
               </div>
             ) : null}
+            {viewModel.candidateCompany ? (
+              <div>
+                <p className="proposal-cover-letter__info-label">studio</p>
+                <p>{viewModel.candidateCompany}</p>
+              </div>
+            ) : null}
             {viewModel.candidateWebsite ? (
               <div>
                 <p className="proposal-cover-letter__info-label">portfolio</p>
@@ -1054,15 +1103,18 @@ export function ProposalCoverLetterJoellaTemplate({
   viewModel,
 }: ProposalCoverLetterTemplateProps): JSX.Element {
   const joellaLetterBlockGroups = [
-    viewModel.joellaLetterBlock.senderLines,
+    { kind: "sender", lines: viewModel.joellaLetterBlock.senderLines },
     viewModel.joellaLetterBlock.dateLine
-      ? [viewModel.joellaLetterBlock.dateLine]
-      : [],
-    viewModel.joellaLetterBlock.recipientLines,
+      ? { kind: "date", lines: [viewModel.joellaLetterBlock.dateLine] }
+      : null,
+    { kind: "recipient", lines: viewModel.joellaLetterBlock.recipientLines },
     viewModel.joellaLetterBlock.subjectLine
-      ? [viewModel.joellaLetterBlock.subjectLine]
-      : [],
-  ].filter((group) => group.length > 0);
+      ? { kind: "subject", lines: [viewModel.joellaLetterBlock.subjectLine] }
+      : null,
+  ].filter(
+    (group): group is { kind: string; lines: string[] } =>
+      Boolean(group && group.lines.length > 0),
+  );
 
   return (
     <>
@@ -1093,8 +1145,18 @@ export function ProposalCoverLetterJoellaTemplate({
                 key={`joella-letter-block-group-${groupIndex}`}
                 className="proposal-cover-letter__joella-letter-block-group"
               >
-                {group.map((line) => (
-                  <p key={`joella-letter-block-${groupIndex}-${line}`}>{line}</p>
+                {group.lines.map((line, lineIndex) => (
+                  <p
+                    key={`joella-letter-block-${groupIndex}-${line}`}
+                    className={
+                      lineIndex === 0 &&
+                      (group.kind === "sender" || group.kind === "recipient")
+                        ? "proposal-cover-letter__joella-letter-block-line--strong"
+                        : undefined
+                    }
+                  >
+                    {line}
+                  </p>
                 ))}
               </div>
             ))}
@@ -1102,6 +1164,145 @@ export function ProposalCoverLetterJoellaTemplate({
         ) : null}
         {bodyContent}
       </div>
+    </>
+  );
+}
+
+export function ProposalCoverLetterBayerTemplate({
+  bodyRef,
+  bodyContent,
+  isContinuationPage,
+  viewModel,
+}: ProposalCoverLetterTemplateProps): JSX.Element {
+  const bayerName =
+    viewModel.candidateName === viewModel.subject ? "" : viewModel.candidateName;
+  const recipientAddressLine = joinNonEmpty([
+    viewModel.recipientAddress,
+    viewModel.recipientCity,
+  ]);
+  const recipientLines = [
+    { className: "proposal-cover-letter__bayer-recipient-name", value: viewModel.recipientName },
+    { className: "", value: viewModel.recipientRole },
+    { className: "", value: viewModel.recipientCompany },
+    { className: "", value: viewModel.recipientEmail },
+    { className: "", value: recipientAddressLine },
+    ...viewModel.recipientExtraLines.map((line) => ({
+      className: "",
+      value: line,
+    })),
+  ].filter((line) => line.value);
+  const showSender =
+    viewModel.showSender &&
+      Boolean(
+      bayerName ||
+        viewModel.candidateRole ||
+        viewModel.candidateCompany ||
+        viewModel.candidateEmail,
+    );
+  const flowClassName = [
+    "proposal-cover-letter__bayer-flow",
+    !isContinuationPage && viewModel.subject
+      ? "proposal-cover-letter__bayer-flow--with-subject"
+      : "proposal-cover-letter__bayer-flow--no-subject",
+    isContinuationPage
+      ? "proposal-cover-letter__bayer-flow--continuation"
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <>
+      {!isContinuationPage ? (
+        <>
+          {showSender ? (
+            <header
+              className={[
+                "proposal-cover-letter__bayer-header",
+                viewModel.candidateCompany
+                  ? "proposal-cover-letter__bayer-header--has-company"
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              aria-label="Sender details"
+            >
+              {bayerName ? (
+                <p className="proposal-cover-letter__bayer-name">
+                  {bayerName}
+                </p>
+              ) : null}
+              <span
+                className="proposal-cover-letter__bayer-rule"
+                aria-hidden="true"
+              />
+              {viewModel.candidateRole ? (
+                <p className="proposal-cover-letter__bayer-role">
+                  {viewModel.candidateRole}
+                </p>
+              ) : null}
+              {viewModel.candidateCompany ? (
+                <p className="proposal-cover-letter__bayer-company">
+                  {viewModel.candidateCompany}
+                </p>
+              ) : null}
+              {viewModel.candidateEmail ? (
+                <p className="proposal-cover-letter__bayer-email">
+                  {viewModel.candidateEmail}
+                </p>
+              ) : null}
+            </header>
+          ) : null}
+          {recipientLines.length > 0 ? (
+            <section
+              className="proposal-cover-letter__bayer-recipient"
+              aria-label="Recipient details"
+            >
+              <p className="proposal-cover-letter__bayer-label">TO</p>
+              {recipientLines.map((line) => (
+                <p
+                  key={`bayer-recipient-${line.value}`}
+                  className={line.className || undefined}
+                >
+                  {line.value}
+                </p>
+              ))}
+            </section>
+          ) : null}
+          {viewModel.date ? (
+            <section
+              className="proposal-cover-letter__bayer-date"
+              aria-label="Letter date"
+            >
+              <p className="proposal-cover-letter__bayer-label">DATE</p>
+              <p className="proposal-cover-letter__bayer-date-value">
+                {viewModel.date}
+              </p>
+            </section>
+          ) : null}
+          {viewModel.candidateBayerFooterLine ? (
+            <p className="proposal-cover-letter__bayer-footer">
+              {viewModel.candidateBayerFooterLine}
+            </p>
+          ) : null}
+        </>
+      ) : null}
+      <section className={flowClassName}>
+        {!isContinuationPage && viewModel.subject ? (
+          <section
+            className="proposal-cover-letter__bayer-subject"
+            aria-label="Letter subject"
+          >
+            <p className="proposal-cover-letter__bayer-label">SUBJECT</p>
+            <p className="proposal-cover-letter__bayer-subject-value">
+              {viewModel.subject}
+            </p>
+          </section>
+        ) : null}
+        <div ref={bodyRef ?? undefined} className="proposal-cover-letter__body">
+          {bodyContent}
+        </div>
+      </section>
     </>
   );
 }
@@ -1131,6 +1332,7 @@ function buildStructuredHeaderValues(args: {
           recipientFields.email,
           recipientFields.address,
           recipientFields.city,
+          ...getProposalRecipientExtraLines(args.recipientDetails, recipientFields),
         ].filter(Boolean)
       : [];
 
@@ -2249,6 +2451,8 @@ export function ProposalDocumentRenderer({
           return <ProposalCoverLetterMomaBauhausTemplate {...templateProps} />;
         case "joella-frame-letterhead":
           return <ProposalCoverLetterJoellaTemplate {...templateProps} />;
+        case "bayer-letterhead":
+          return <ProposalCoverLetterBayerTemplate {...templateProps} />;
         default:
           return null;
       }
@@ -2277,7 +2481,10 @@ export function ProposalDocumentRenderer({
         resolvedTemplateId === "joella-frame-letterhead"
           ? "proposal-cover-letter--joella"
           : "",
-        letterheadViewModel.recipientContactLines.length > 0
+        resolvedTemplateId === "bayer-letterhead"
+          ? "proposal-cover-letter--bayer"
+          : "",
+        letterheadViewModel.recipientHeadingLines.length > 0
           ? "proposal-cover-letter--has-recipient-block"
           : "",
         `dasti-proposal-document--${parsedDocument.kind}`,

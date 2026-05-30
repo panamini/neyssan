@@ -197,6 +197,7 @@ import {
   buildProposalHeaderVisibilityFromContent,
   buildProposalLetterDateLine,
   buildProposalRecipientDetails,
+  buildProposalRecipientDetailsPreservingExtraLines,
   buildProposalRecipientPrefill,
   buildProposalSalutation,
   parseProposalRecipientDetails,
@@ -3570,10 +3571,13 @@ export function ProposalForge(): JSX.Element {
       setProposalRecipientFieldDraft(nextRecipientFields);
       skipNextStructuredRecipientSyncRef.current = true;
       setProposalRecipientDetails(
-        buildProposalRecipientDetails(nextRecipientFields),
+        buildProposalRecipientDetailsPreservingExtraLines({
+          currentDetails: proposalRecipientDetails,
+          fields: nextRecipientFields,
+        }),
       );
     },
-    [markHeadingFieldDirty, proposalRecipientFieldDraft],
+    [markHeadingFieldDirty, proposalRecipientDetails, proposalRecipientFieldDraft],
   );
 
   React.useEffect(() => {
@@ -11097,6 +11101,8 @@ export function ProposalForge(): JSX.Element {
                   ? "moma-bauhaus-letterhead"
                   : template.id === "joella-frame-letterhead"
                     ? "joella-frame-letterhead"
+                    : template.id === "bayer-letterhead"
+                      ? "bayer-letterhead"
                     : template.id === "modernist_signal"
                       ? "bold"
                       : template.id === "quire_margin"
