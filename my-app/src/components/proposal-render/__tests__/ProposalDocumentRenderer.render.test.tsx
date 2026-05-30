@@ -1188,4 +1188,154 @@ describe("ProposalDocumentRenderer volk register layout", () => {
         .toContain("recipient@example.com");
     },
   );
+
+  it("renders the MoMA Bauhaus letterhead with real heading fields, ordered body, and closing", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content={[
+          "Dear Morgan,",
+          "First Bauhaus body paragraph.",
+          "Second Bauhaus body paragraph.",
+        ].join("\n\n")}
+        proposalType="cover_letter"
+        templateId="moma-bauhaus-letterhead"
+        railTitle="Avery Stone"
+        railMeta="Operations Lead"
+        contactLine="avery@example.com · +33 6 01 02 03 04 · Paris · linkedin.com/in/avery · avery.work"
+        letterDate="May 30, 2026"
+        recipientDetails={
+          "Morgan Lee\nTalent Director\nNorthwind Studio\n10 Gallery Road\nmorgan@northwind.example\nBerlin"
+        }
+        documentTitle="Application for Operations Lead"
+        headerVisibility={{
+          showSender: true,
+          showDate: true,
+          showSubject: true,
+          showRecipient: true,
+          showRecipientDetails: true,
+        }}
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        applicantHeader={{
+          name: "Avery Stone",
+          role: "Operations Lead",
+          company: "Stone Systems",
+          email: "avery@example.com",
+          phone: "+33 6 01 02 03 04",
+          linkedin: "linkedin.com/in/avery",
+          website: "avery.work",
+          location: "Paris",
+          tag: null,
+        }}
+        closing={{
+          enabled: true,
+          signOff: "Sincerely,",
+          signatureName: "Avery Stone",
+          source: "document",
+        }}
+      />,
+    );
+
+    const root = container.querySelector(".proposal-cover-letter--moma-bauhaus");
+    const renderedPage = Array.from(
+      root?.querySelectorAll(".dasti-proposal-document__page") ?? [],
+    ).at(-1);
+    const sender = renderedPage?.querySelector(
+      ".proposal-cover-letter__bauhaus-sender",
+    );
+    const recipient = renderedPage?.querySelector(
+      ".proposal-cover-letter__bauhaus-recipient",
+    );
+    const paragraphs = Array.from(
+      renderedPage?.querySelectorAll(".dasti-proposal-document__paragraph") ??
+        [],
+    ).map((node) => node.textContent);
+
+    expect(root?.getAttribute("data-proposal-template")).toBe(
+      "moma-bauhaus-letterhead",
+    );
+    expect(sender?.textContent).toContain("Avery Stone");
+    expect(sender?.textContent).toContain("Stone Systems");
+    expect(sender?.textContent).toContain("Operations Lead");
+    expect(sender?.textContent).toContain("avery@example.com");
+    expect(sender?.textContent).toContain("+33 6 01 02 03 04");
+    expect(sender?.textContent).toContain("Paris");
+    expect(recipient?.textContent).toContain("Morgan Lee");
+    expect(recipient?.textContent).toContain("Talent Director");
+    expect(recipient?.textContent).toContain("Northwind Studio");
+    expect(recipient?.textContent).toContain("10 Gallery Road");
+    expect(recipient?.textContent).toContain("Berlin");
+    expect(recipient?.textContent).toContain("morgan@northwind.example");
+    expect(
+      renderedPage?.querySelector(".proposal-cover-letter__bauhaus-logo")
+        ?.textContent,
+    ).toBe("Stone Systems");
+    expect(
+      renderedPage?.querySelector(".proposal-cover-letter__bauhaus-subtitle")
+        ?.textContent,
+    ).toBe("Application for Operations Lead");
+    expect(renderedPage?.textContent).toContain("May 30, 2026");
+    expect(renderedPage?.textContent).toContain(
+      "Re: Application for Operations Lead",
+    );
+    expect(
+      renderedPage?.querySelector(".proposal-cover-letter__bauhaus-footer--left")
+        ?.textContent,
+    ).toContain("avery@example.com");
+    expect(
+      renderedPage?.querySelector(".proposal-cover-letter__bauhaus-footer--right")
+        ?.textContent,
+    ).toContain("linkedin.com/in/avery");
+    expect(
+      renderedPage?.querySelector(".proposal-cover-letter__bauhaus-footer--right")
+        ?.textContent,
+    ).toContain("avery.work");
+    expect(paragraphs).toEqual([
+      "First Bauhaus body paragraph.",
+      "Second Bauhaus body paragraph.",
+    ]);
+    expect(renderedPage?.textContent).toContain("Sincerely,");
+    expect(renderedPage?.textContent).toContain("avery stone");
+    expect(renderedPage?.textContent).not.toContain("undefined");
+    expect(renderedPage?.textContent).not.toContain("null");
+    expect(renderedPage?.textContent).not.toContain("[object Object]");
+    expect(renderedPage?.textContent).not.toContain("Vorbereitungssekretariat");
+    expect(renderedPage?.textContent).not.toContain("Institut für Auslandsbeziehungen");
+    expect(renderedPage?.textContent).not.toContain(" ·  · ");
+  });
+
+  it("omits optional MoMA Bauhaus heading slots when data is missing", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content="I can support the team with clear written execution."
+        proposalType="cover_letter"
+        templateId="moma-bauhaus-letterhead"
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+      />,
+    );
+
+    const root = container.querySelector(".proposal-cover-letter--moma-bauhaus");
+
+    expect(root?.querySelector(".proposal-cover-letter__bauhaus-sender")).toBeNull();
+    expect(root?.querySelector(".proposal-cover-letter__bauhaus-recipient")).toBeNull();
+    expect(root?.querySelector(".proposal-cover-letter__bauhaus-header")).toBeNull();
+    expect(root?.querySelector(".proposal-cover-letter__bauhaus-meta")).toBeNull();
+    expect(root?.textContent).toContain(
+      "I can support the team with clear written execution.",
+    );
+    expect(root?.textContent).not.toContain("undefined");
+    expect(root?.textContent).not.toContain("null");
+    expect(root?.textContent).not.toContain("[object Object]");
+  });
 });

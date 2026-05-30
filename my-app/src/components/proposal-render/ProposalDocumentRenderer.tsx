@@ -714,6 +714,113 @@ export function ProposalCoverLetterFilmFotoTemplate({
   );
 }
 
+export function ProposalCoverLetterMomaBauhausTemplate({
+  bodyRef,
+  bodyContent,
+  isContinuationPage,
+  viewModel,
+}: ProposalCoverLetterTemplateProps): JSX.Element {
+  const senderLines = uniqueNonEmptyLines([
+    viewModel.candidateName,
+    viewModel.candidateCompany,
+    viewModel.candidateRole,
+    viewModel.candidateLocationLine,
+    viewModel.candidateEmail,
+    viewModel.candidatePhone,
+  ]);
+  const recipientLines = uniqueNonEmptyLines([
+    viewModel.recipientName,
+    viewModel.recipientRole,
+    viewModel.recipientCompany,
+    ...viewModel.recipientContactLines,
+  ]);
+  const displayTitle =
+    viewModel.candidateCompany ||
+    viewModel.candidateName ||
+    viewModel.recipientCompany;
+  const subtitle =
+    viewModel.subject || viewModel.candidateRole || viewModel.shortRoleTitle;
+  const footerLeft = joinNonEmpty([
+    viewModel.candidateEmail,
+    viewModel.candidatePhone,
+  ]);
+  const footerRight = joinNonEmpty([
+    viewModel.candidateWebsite,
+    viewModel.candidateLocationLine,
+  ]);
+
+  return (
+    <>
+      {!isContinuationPage ? (
+        <>
+          {senderLines.length > 0 ? (
+            <section
+              className="proposal-cover-letter__bauhaus-sender"
+              aria-label="Sender details"
+            >
+              {senderLines.map((line) => (
+                <p key={`sender-${line}`}>{line}</p>
+              ))}
+            </section>
+          ) : null}
+          {recipientLines.length > 0 ? (
+            <section
+              className="proposal-cover-letter__bauhaus-recipient"
+              aria-label="Recipient details"
+            >
+              {recipientLines.map((line) => (
+                <p key={`recipient-${line}`}>{line}</p>
+              ))}
+            </section>
+          ) : null}
+          {displayTitle || subtitle ? (
+            <header className="proposal-cover-letter__bauhaus-header">
+              {displayTitle ? (
+                <p className="proposal-cover-letter__bauhaus-logo">
+                  {displayTitle}
+                </p>
+              ) : null}
+              {subtitle ? (
+                <p className="proposal-cover-letter__bauhaus-subtitle">
+                  {subtitle}
+                </p>
+              ) : null}
+            </header>
+          ) : null}
+          {(viewModel.date || viewModel.subject) ? (
+            <div className="proposal-cover-letter__bauhaus-meta">
+              {viewModel.date ? (
+                <p className="proposal-cover-letter__bauhaus-meta-item">
+                  {viewModel.date}
+                </p>
+              ) : null}
+              {viewModel.subject ? (
+                <p className="proposal-cover-letter__bauhaus-meta-item">
+                  Re: {viewModel.subject}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          <span className="proposal-cover-letter__bauhaus-frame" aria-hidden="true" />
+          {footerLeft ? (
+            <p className="proposal-cover-letter__bauhaus-footer proposal-cover-letter__bauhaus-footer--left">
+              {footerLeft}
+            </p>
+          ) : null}
+          {footerRight ? (
+            <p className="proposal-cover-letter__bauhaus-footer proposal-cover-letter__bauhaus-footer--right">
+              {footerRight}
+            </p>
+          ) : null}
+        </>
+      ) : null}
+      <div ref={bodyRef ?? undefined} className="proposal-cover-letter__body">
+        {bodyContent}
+      </div>
+    </>
+  );
+}
+
 function buildStructuredHeaderValues(args: {
   letterDate?: string | null;
   recipientDetails?: string | null;
@@ -1853,6 +1960,8 @@ export function ProposalDocumentRenderer({
           return <ProposalCoverLetterVolkTemplate {...templateProps} />;
         case "film-foto-letterhead":
           return <ProposalCoverLetterFilmFotoTemplate {...templateProps} />;
+        case "moma-bauhaus-letterhead":
+          return <ProposalCoverLetterMomaBauhausTemplate {...templateProps} />;
         default:
           return null;
       }
@@ -1874,6 +1983,9 @@ export function ProposalDocumentRenderer({
           : "",
         resolvedTemplateId === "film-foto-letterhead"
           ? "proposal-cover-letter--film-foto"
+          : "",
+        resolvedTemplateId === "moma-bauhaus-letterhead"
+          ? "proposal-cover-letter--moma-bauhaus"
           : "",
         letterheadViewModel.recipientContactLines.length > 0
           ? "proposal-cover-letter--has-recipient-block"
