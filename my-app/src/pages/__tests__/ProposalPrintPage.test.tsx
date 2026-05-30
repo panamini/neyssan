@@ -140,6 +140,7 @@ describe("ProposalPrintPage", () => {
     ["volk-letterhead", "proposal-cover-letter--volk"],
     ["film-foto-letterhead", "proposal-cover-letter--film-foto"],
     ["moma-bauhaus-letterhead", "proposal-cover-letter--moma-bauhaus"],
+    ["bayer-letterhead", "proposal-cover-letter--bayer"],
   ] as const)(
     "renders the %s letterhead template through the print route",
     async (templateId, scope) => {
