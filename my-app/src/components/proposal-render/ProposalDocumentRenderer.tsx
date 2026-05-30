@@ -367,7 +367,7 @@ function buildJoellaFooterLine(args: {
   return uniqueNonEmptyLines([args.location, args.email, args.phone])
     .map(normalizeJoellaDisplayText)
     .filter(Boolean)
-    .join("  ");
+    .join(" · ");
 }
 
 function buildBayerFooterLine(args: {

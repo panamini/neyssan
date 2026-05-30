@@ -146,10 +146,10 @@ const JOELLA_PALETTE_COLOR_PAIRS: Partial<
   Record<VerbatiPalettePreset, ProposalJoellaColorPair>
 > = {
   cobalt: { mark: "#DA291C", structure: "#74a0c5" },
-  terre: { mark: "#bb5522", structure: "#789fa4" },
+  terre: { mark: "#a84e2e", structure: "#878f8d" },
   sauge: { mark: "#3b6e4e", structure: "#b06835" },
   plum: { mark: "#0f0c08", structure: "#6d3f78" },
-  ochre: { mark: "#a7472f", structure: "#2f2d29" },
+  ochre: { mark: "#b8843a", structure: "#3b6e4e" },
   ink: { mark: "#1f1d1a", structure: "#878f8d" },
 };
 

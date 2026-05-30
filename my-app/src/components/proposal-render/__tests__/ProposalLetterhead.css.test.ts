@@ -373,7 +373,7 @@ describe("proposal letterhead CSS", () => {
       "line-height: 4.65mm;",
       "left: 10.4mm;",
       "top: 285.75mm;",
-      "font-size: 6pt;",
+      "font-size: 7pt;",
     ].forEach((declaration) => {
       expect(joellaCss).toContain(declaration);
       expect(exportJoellaCss).toContain(declaration);

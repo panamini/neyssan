@@ -675,6 +675,7 @@ describe("export-renderers", () => {
         ]);
         expect(letterBlockLines.join(" ")).not.toContain("Re:");
         expect(letterBlockLines.join(" ")).not.toContain("Date:");
+        expect(footerText).toBe("PARIS · ALEX@EXAMPLE.COM · +33 6 00 00 00 00");
         expect(footerText).toContain("PARIS");
         expect(footerText).toContain("ALEX@EXAMPLE.COM");
         expect(footerText).toContain("+33 6 00 00 00 00");
