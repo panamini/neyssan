@@ -570,14 +570,69 @@ describe("export-renderers", () => {
         expect(
           page?.querySelector(".proposal-cover-letter__bauhaus-meta")
             ?.textContent,
-        ).toContain("Re: Candidature");
+        ).toContain("RE: Candidature");
         expect(footerLeftText).toContain("alex@example.com");
         expect(footerLeftText).toContain("+33 6 00 00 00 00");
         expect(footerRightText).toContain("portfolio.example.com");
-        expect(footerRightText).toContain("Paris");
+        expect(footerRightText).not.toContain("Paris");
       }
     },
   );
+
+  it("renders MoMA Bauhaus LinkedIn metadata in the styled export footer from the contact line", () => {
+    const document = parseExportHtml(
+      renderProposalStyledExportDocument({
+        data: {
+          ...proposalFixture,
+          templateId: "moma-bauhaus-letterhead",
+          contactLine:
+            "alex@example.com · +33 6 00 00 00 00 · Paris · linkedin.com/in/alex",
+          recipientDetails:
+            "recipient: Recipient Person\ncompany: Recipient Company\ncity: Company City\nrole: Recipient Role\naddress: Recipient Address\nemail: recipient@mail.com",
+          headerVisibility: {
+            showSender: true,
+            showDate: true,
+            showRecipient: true,
+            showRecipientDetails: false,
+            showSubject: true,
+          },
+          applicantHeader: {
+            ...proposalFixture.applicantHeader,
+            linkedin: "",
+            website: "",
+          },
+        },
+        stylePreset: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "expert",
+          palette: "terre",
+        },
+      }),
+    );
+
+    const senderText =
+      document.querySelector(".proposal-cover-letter__bauhaus-sender")
+        ?.textContent ?? "";
+    const footerRightText =
+      document.querySelector(".proposal-cover-letter__bauhaus-footer--right")
+        ?.textContent ?? "";
+    const recipientLines = Array.from(
+      document.querySelectorAll(".proposal-cover-letter__bauhaus-recipient p"),
+    ).map((node) => node.textContent);
+
+    expect(senderText).not.toContain("linkedin.com/in/alex");
+    expect(footerRightText).toContain("linkedin.com/in/alex");
+    expect(footerRightText).not.toContain("Paris");
+    expect(recipientLines).toEqual([
+      "Recipient Person",
+      "Recipient Company",
+      "Company City",
+      "Recipient Role",
+      "Recipient Address",
+      "recipient@mail.com",
+    ]);
+  });
 
   it("maps contact-line phone into the director letterhead telephone slot during export", () => {
     const document = parseExportHtml(

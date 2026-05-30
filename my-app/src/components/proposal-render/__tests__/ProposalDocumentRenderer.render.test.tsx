@@ -1212,7 +1212,7 @@ describe("ProposalDocumentRenderer volk register layout", () => {
           showDate: true,
           showSubject: true,
           showRecipient: true,
-          showRecipientDetails: true,
+          showRecipientDetails: false,
         }}
         documentTypography={{
           fontFamily: "Georgia, serif",
@@ -1251,6 +1251,9 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     const recipient = renderedPage?.querySelector(
       ".proposal-cover-letter__bauhaus-recipient",
     );
+    const recipientLines = Array.from(
+      recipient?.querySelectorAll("p") ?? [],
+    ).map((node) => node.textContent);
     const paragraphs = Array.from(
       renderedPage?.querySelectorAll(".dasti-proposal-document__paragraph") ??
         [],
@@ -1274,6 +1277,14 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     expect(recipient?.textContent).toContain("10 Gallery Road");
     expect(recipient?.textContent).toContain("Berlin");
     expect(recipient?.textContent).toContain("morgan@northwind.example");
+    expect(recipientLines).toEqual([
+      "Morgan Lee",
+      "Northwind Studio",
+      "Berlin",
+      "Talent Director",
+      "10 Gallery Road",
+      "morgan@northwind.example",
+    ]);
     expect(
       renderedPage?.querySelector(".proposal-cover-letter__bauhaus-logo")
         ?.textContent,
@@ -1286,9 +1297,9 @@ describe("ProposalDocumentRenderer volk register layout", () => {
       renderedPage?.querySelector(".proposal-cover-letter__bauhaus-header")
         ?.textContent,
     ).not.toContain("Application for Operations Lead");
-    expect(renderedPage?.textContent).toContain("May 30, 2026");
+    expect(renderedPage?.textContent).toContain("date: May 30, 2026");
     expect(renderedPage?.textContent).toContain(
-      "Re: Application for Operations Lead",
+      "RE: Application for Operations Lead",
     );
     expect(
       renderedPage?.querySelector(".proposal-cover-letter__bauhaus-footer--left")
@@ -1309,7 +1320,7 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     expect(
       renderedPage?.querySelector(".proposal-cover-letter__bauhaus-footer--right")
         ?.textContent,
-    ).toContain("Paris");
+    ).not.toContain("Paris");
     expect(paragraphs).toEqual([
       "First Bauhaus body paragraph.",
       "Second Bauhaus body paragraph.",

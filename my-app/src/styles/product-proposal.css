@@ -4296,7 +4296,8 @@
 
 .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-sender {
   left: 32mm;
-  top: 14mm;
+  top: auto;
+  bottom: 266.75mm;
   width: 58mm;
   display: grid;
   gap: 1.05mm;
@@ -4360,8 +4361,7 @@
   top: 106mm;
   right: 18mm;
   display: grid;
-  grid-template-columns: 28mm minmax(0, 1fr);
-  column-gap: 10mm;
+  gap: 1.05mm;
   align-items: start;
   min-width: 0;
 }
