@@ -1454,19 +1454,19 @@ function buildStyledProposalAppearanceCss(): string {
 
     .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-sender {
       left: 32mm;
-      top: auto;
-      bottom: 266.75mm;
+      top: 11mm;
+      bottom: auto;
       width: 58mm;
       display: grid;
-      gap: 1.05mm;
+      gap: 0;
     }
 
     .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-recipient {
       left: 32mm;
-      top: 44.7mm;
+      top: 42mm;
       width: 58mm;
       display: grid;
-      gap: 1.05mm;
+      gap: 0;
     }
 
     .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-sender p,
@@ -1475,17 +1475,22 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-footer {
       margin: 0;
       min-width: 0;
-      font-size: 2.05mm;
+      font-size: 2mm;
       line-height: 1.28;
       font-weight: 800;
       letter-spacing: 0;
       overflow-wrap: anywhere;
     }
 
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-sender p,
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-recipient p {
+      line-height: 4mm;
+    }
+
     .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-header {
       left: 102mm;
-      top: 16.4mm;
-      right: 7.8mm;
+      top: 10mm;
+      right: 8mm;
       display: grid;
       align-content: start;
       justify-items: start;
@@ -1495,22 +1500,21 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-logo {
       margin: 0;
       max-width: 100%;
-      font-size: 16.4mm;
+      font-size: 19mm;
       line-height: 0.88;
       font-weight: 900;
       letter-spacing: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      overflow: visible;
       white-space: nowrap;
     }
 
     .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-subtitle {
       position: absolute;
-      left: 0.5mm;
-      top: 11.23mm;
+      left: 1mm;
+      top: 18mm;
       margin: 0;
       max-width: 94mm;
-      font-size: 2.05mm;
+      font-size: 2mm;
       line-height: 1.28;
       font-weight: 800;
       letter-spacing: 0;
@@ -1519,29 +1523,36 @@ function buildStyledProposalAppearanceCss(): string {
 
     .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-meta {
       left: 32mm;
-      top: 106mm;
+      top: 121mm;
       right: 18mm;
       display: grid;
-      gap: 1.05mm;
+      gap: 1mm;
       align-items: start;
       min-width: 0;
     }
 
     .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-meta-item {
+      font-size: 3mm;
+      line-height: 1.48;
+      font-weight: 400;
       color: var(--ink);
+    }
+
+    .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-meta-item--subject {
+      font-weight: 800;
     }
 
     .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-frame {
       left: 5mm;
-      top: 94.2mm;
-      width: 197.2mm;
-      height: 196.3mm;
-      border: 1.2mm solid var(--accent);
+      top: 94mm;
+      width: 197mm;
+      height: 196mm;
+      border: 1mm solid var(--accent);
     }
 
     .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__body {
       left: 32mm;
-      top: 128mm;
+      top: 136mm;
       width: min(112mm, 62ch);
       max-width: min(112mm, 62ch);
       display: grid;
@@ -1555,7 +1566,7 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__body .proposal-signature {
       margin: 0;
       font-family: var(--body-font, var(--font-body-family));
-      font-size: 3.15mm;
+      font-size: 3mm;
       line-height: 1.48;
       color: var(--ink);
       white-space: pre-wrap;
@@ -1572,7 +1583,7 @@ function buildStyledProposalAppearanceCss(): string {
     }
 
     .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-footer {
-      top: 285.7mm;
+      top: 284mm;
       max-width: 72mm;
       color: var(--accent);
       white-space: nowrap;
@@ -1585,7 +1596,7 @@ function buildStyledProposalAppearanceCss(): string {
     }
 
     .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-footer--right {
-      left: 101.8mm;
+      left: 102mm;
     }
   `;
 }
@@ -3088,6 +3099,38 @@ function renderExportParagraph(value: string, className: string): string {
   return `<p${classAttribute}>${escapeHtml(value)}</p>`;
 }
 
+const BAUHAUS_WORDMARK_MAX_COMPACT_CHARS = 8;
+
+function countExportCompactWordmarkChars(value: string): number {
+  return Array.from(value.replace(/\s+/g, "")).length;
+}
+
+function firstExportWordmarkToken(value: string): string {
+  return value.trim().split(/\s+/u)[0] ?? "";
+}
+
+function resolveExportBauhausWordmark(args: {
+  candidateCompany: string;
+  candidateName: string;
+  recipientCompany: string;
+}): string {
+  const fullTitle =
+    args.candidateCompany || args.candidateName || args.recipientCompany;
+
+  if (
+    !fullTitle ||
+    countExportCompactWordmarkChars(fullTitle) <= BAUHAUS_WORDMARK_MAX_COMPACT_CHARS
+  ) {
+    return fullTitle;
+  }
+
+  if (args.candidateCompany && args.candidateName) {
+    return firstExportWordmarkToken(args.candidateName);
+  }
+
+  return firstExportWordmarkToken(fullTitle);
+}
+
 function buildProposalLetterheadExportViewModel(
   data: ProposalPrintSource,
   locale?: string | null,
@@ -3185,10 +3228,10 @@ function buildProposalLetterheadExportViewModel(
   const recipientHeadingLines = data.headerVisibility.showRecipient
     ? uniqueExportNonEmptyLines([
         recipientFields.name,
-        recipientFields.company,
-        recipientFields.city,
         recipientFields.role,
+        recipientFields.company,
         recipientFields.address,
+        recipientFields.city,
         recipientFields.email,
       ])
     : [];
@@ -3393,10 +3436,11 @@ function renderProposalLetterheadExportPage(args: {
       viewModel.candidateLocationLine,
     ]);
     const recipientLines = viewModel.recipientHeadingLines;
-    const displayTitle =
-      viewModel.candidateCompany ||
-      viewModel.candidateName ||
-      viewModel.recipientCompany;
+    const displayTitle = resolveExportBauhausWordmark({
+      candidateCompany: viewModel.candidateCompany,
+      candidateName: viewModel.candidateName,
+      recipientCompany: viewModel.recipientCompany,
+    });
     const subtitle = viewModel.candidateRole || viewModel.shortRoleTitle;
     const footerLeft = joinExportNonEmpty([
       viewModel.candidateEmail,
@@ -3422,7 +3466,7 @@ function renderProposalLetterheadExportPage(args: {
       }
       ${
         viewModel.date || viewModel.subject
-          ? `<div class="proposal-cover-letter__bauhaus-meta">${viewModel.date ? renderExportParagraph(`date: ${viewModel.date}`, "proposal-cover-letter__bauhaus-meta-item") : ""}${viewModel.subject ? renderExportParagraph(`RE: ${viewModel.subject}`, "proposal-cover-letter__bauhaus-meta-item") : ""}</div>`
+          ? `<div class="proposal-cover-letter__bauhaus-meta">${viewModel.date ? renderExportParagraph(viewModel.date, "proposal-cover-letter__bauhaus-meta-item") : ""}${viewModel.subject ? renderExportParagraph(`Subject: ${viewModel.subject}`, "proposal-cover-letter__bauhaus-meta-item proposal-cover-letter__bauhaus-meta-item--subject") : ""}</div>`
           : ""
       }
       <span class="proposal-cover-letter__bauhaus-frame" aria-hidden="true"></span>

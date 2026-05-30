@@ -540,6 +540,9 @@ describe("export-renderers", () => {
       expect(document.body.textContent).not.toContain("Vorbereitungssekretariat");
       expect(document.body.textContent).not.toContain("Institut für Auslandsbeziehungen");
       if (templateId === "moma-bauhaus-letterhead") {
+        const momaCss = css.slice(
+          css.lastIndexOf(".proposal-cover-letter--moma-bauhaus.export-page"),
+        );
         const senderText =
           page?.querySelector(".proposal-cover-letter__bauhaus-sender")
             ?.textContent ?? "";
@@ -556,6 +559,7 @@ describe("export-renderers", () => {
           page?.querySelector(".proposal-cover-letter__bauhaus-footer--right")
             ?.textContent ?? "";
 
+        expect(momaCss).not.toMatch(/\d+\.\d+mm/);
         expect(page?.querySelector(".proposal-cover-letter__bauhaus-frame")).toBeTruthy();
         expect(senderText).toContain("Alex Mercer");
         expect(senderText).toContain("Designer de systèmes");
@@ -566,11 +570,13 @@ describe("export-renderers", () => {
         expect(recipientText).toContain("Studio Nord");
         expect(recipientText).not.toContain("Candidature");
         expect(headerText).not.toContain("Candidature");
+        expect(headerText).toContain("Alex");
+        expect(headerText).not.toContain("Alex Mercer");
         expect(headerText).toContain("Designer de systèmes");
         expect(
           page?.querySelector(".proposal-cover-letter__bauhaus-meta")
             ?.textContent,
-        ).toContain("RE: Candidature");
+        ).toContain("Subject: Candidature");
         expect(footerLeftText).toContain("alex@example.com");
         expect(footerLeftText).toContain("+33 6 00 00 00 00");
         expect(footerRightText).toContain("portfolio.example.com");
@@ -626,10 +632,10 @@ describe("export-renderers", () => {
     expect(footerRightText).not.toContain("Paris");
     expect(recipientLines).toEqual([
       "Recipient Person",
-      "Recipient Company",
-      "Company City",
       "Recipient Role",
+      "Recipient Company",
       "Recipient Address",
+      "Company City",
       "recipient@mail.com",
     ]);
   });
