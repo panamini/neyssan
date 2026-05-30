@@ -1340,6 +1340,63 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     expect(renderedPage?.textContent).not.toContain(" ·  · ");
   });
 
+  it("renders arbitrary MoMA Bauhaus profile and website text in the footer", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content="Dear Morgan,\n\nFirst Bauhaus body paragraph."
+        proposalType="cover_letter"
+        templateId="moma-bauhaus-letterhead"
+        railTitle="Avery Stone"
+        railMeta="Operations Lead"
+        contactLine="avery@example.com · +33 6 01 02 03 04 · Paris · Profile: public profile on request · Website: portfolio on request"
+        letterDate="May 30, 2026"
+        recipientDetails="Morgan Lee\nTalent Director\nNorthwind Studio"
+        documentTitle="Application for Operations Lead"
+        headerVisibility={{
+          showSender: true,
+          showDate: true,
+          showSubject: true,
+          showRecipient: true,
+          showRecipientDetails: false,
+        }}
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        applicantHeader={{
+          name: "Avery Stone",
+          role: "Operations Lead",
+          company: "Stone Systems",
+          email: "avery@example.com",
+          phone: "+33 6 01 02 03 04",
+          linkedin: "",
+          website: "",
+          location: "Paris",
+          tag: null,
+        }}
+      />,
+    );
+
+    const root = container.querySelector(".proposal-cover-letter--moma-bauhaus");
+    const renderedPage = Array.from(
+      root?.querySelectorAll(".dasti-proposal-document__page") ?? [],
+    ).at(-1);
+    const senderText =
+      renderedPage?.querySelector(".proposal-cover-letter__bauhaus-sender")
+        ?.textContent ?? "";
+    const footerRightText =
+      renderedPage?.querySelector(".proposal-cover-letter__bauhaus-footer--right")
+        ?.textContent ?? "";
+
+    expect(senderText).not.toContain("public profile on request");
+    expect(senderText).not.toContain("portfolio on request");
+    expect(footerRightText).toContain("public profile on request");
+    expect(footerRightText).toContain("portfolio on request");
+  });
+
   it("omits optional MoMA Bauhaus heading slots when data is missing", () => {
     const { container } = render(
       <ProposalDocumentRenderer

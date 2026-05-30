@@ -585,14 +585,14 @@ describe("export-renderers", () => {
     },
   );
 
-  it("renders MoMA Bauhaus LinkedIn metadata in the styled export footer from the contact line", () => {
+  it("renders MoMA Bauhaus profile metadata in the styled export footer from the contact line", () => {
     const document = parseExportHtml(
       renderProposalStyledExportDocument({
         data: {
           ...proposalFixture,
           templateId: "moma-bauhaus-letterhead",
           contactLine:
-            "alex@example.com · +33 6 00 00 00 00 · Paris · linkedin.com/in/alex",
+            "alex@example.com · +33 6 00 00 00 00 · Paris · Upwork: alex profile · Website: portfolio on request",
           recipientDetails:
             "recipient: Recipient Person\ncompany: Recipient Company\ncity: Company City\nrole: Recipient Role\naddress: Recipient Address\nemail: recipient@mail.com",
           headerVisibility: {
@@ -627,8 +627,9 @@ describe("export-renderers", () => {
       document.querySelectorAll(".proposal-cover-letter__bauhaus-recipient p"),
     ).map((node) => node.textContent);
 
-    expect(senderText).not.toContain("linkedin.com/in/alex");
-    expect(footerRightText).toContain("linkedin.com/in/alex");
+    expect(senderText).not.toContain("Upwork: alex profile");
+    expect(footerRightText).toContain("Upwork: alex profile");
+    expect(footerRightText).toContain("portfolio on request");
     expect(footerRightText).not.toContain("Paris");
     expect(recipientLines).toEqual([
       "Recipient Person",

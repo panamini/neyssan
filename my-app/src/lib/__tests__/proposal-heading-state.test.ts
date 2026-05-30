@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildProposalApplicantContactLine,
+  buildProposalContactLineFromParts,
   mergeProposalContactDefaults,
   parseProposalContactLine,
   resolveAutoHeadingField,
@@ -43,6 +44,54 @@ describe("proposal heading state", () => {
       location: "CA 90291 United States",
       linkedin: "LINKEDIN",
       website: "PORTFOLIO.COM",
+    });
+  });
+
+  it("round-trips arbitrary profile and website drawer text", () => {
+    const contactLine = buildProposalContactLineFromParts({
+      email: "alex@example.com",
+      phone: "+33 6 00 00 00 00",
+      location: "Paris",
+      linkedin: "public profile, Upwork on request",
+      website: "portfolio, GitHub on request",
+    });
+
+    expect(contactLine).toBe(
+      "alex@example.com · +33 6 00 00 00 00 · Paris · Profile: public profile, Upwork on request · Website: portfolio, GitHub on request",
+    );
+    expect(parseProposalContactLine(contactLine)).toMatchObject({
+      email: "alex@example.com",
+      phone: "+33 6 00 00 00 00",
+      location: "Paris",
+      linkedin: "public profile, Upwork on request",
+      website: "portfolio, GitHub on request",
+    });
+  });
+
+  it("treats Upwork text as profile contact metadata", () => {
+    expect(
+      parseProposalContactLine(
+        "alex@example.com · Paris · Upwork: robert cooper · Website: portfolio text",
+      ),
+    ).toMatchObject({
+      email: "alex@example.com",
+      location: "Paris",
+      linkedin: "Upwork: robert cooper",
+      website: "portfolio text",
+    });
+  });
+
+  it("recovers ordered unlabeled profile and website values from existing contact lines", () => {
+    expect(
+      parseProposalContactLine(
+        "alex@example.com · +33 6 00 00 00 00 · Paris · public profile · portfolio text",
+      ),
+    ).toMatchObject({
+      email: "alex@example.com",
+      phone: "+33 6 00 00 00 00",
+      location: "Paris",
+      linkedin: "public profile",
+      website: "portfolio text",
     });
   });
 
