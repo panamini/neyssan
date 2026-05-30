@@ -1298,6 +1298,7 @@ describe("ProposalDisplay", () => {
     const handleRecipientDetailsChange = vi.fn();
     const handleSubjectChange = vi.fn();
     const handleSalutationChange = vi.fn();
+    const handleSignOffChange = vi.fn();
     const handleHeaderVisibilityChange = vi.fn();
 
     render(
@@ -1315,6 +1316,8 @@ describe("ProposalDisplay", () => {
         letterDate="April 5, 2026"
         recipientDetails={"Hiring Manager\nPeople Operations\nModine"}
         salutationValue="Dear Hiring Manager,"
+        signOffEditable
+        signOffValue="Kind regards,"
         documentTitle="Human Resources Administrator"
         documentTitleEditable
         onDocumentTitleChange={handleSubjectChange}
@@ -1328,6 +1331,7 @@ describe("ProposalDisplay", () => {
         onRecipientDetailsChange={handleRecipientDetailsChange}
         salutationEditable
         onSalutationChange={handleSalutationChange}
+        onSignOffChange={handleSignOffChange}
         headerVisibility={{
           showSender: true,
           showRecipient: true,
@@ -1388,6 +1392,9 @@ describe("ProposalDisplay", () => {
     expect(screen.getByLabelText("Salutation")).toHaveValue(
       "Dear Hiring Manager,",
     );
+    expect(screen.getByLabelText("Signature / politeness formula")).toHaveValue(
+      "Kind regards,",
+    );
     expect(screen.getByLabelText("Subject")).toHaveValue(
       "Human Resources Administrator",
     );
@@ -1411,6 +1418,9 @@ describe("ProposalDisplay", () => {
     fireEvent.change(screen.getByLabelText("Salutation"), {
       target: { value: "Dear Elena Marlowe," },
     });
+    fireEvent.change(screen.getByLabelText("Signature / politeness formula"), {
+      target: { value: "With kind regards," },
+    });
     fireEvent.change(screen.getByLabelText("Recipient"), {
       target: {
         value: "Elena Marlowe",
@@ -1424,7 +1434,7 @@ describe("ProposalDisplay", () => {
     fireEvent.change(screen.getByLabelText("Recipient block"), {
       target: {
         value:
-          "Elena Marlowe\nHead of Design\nAcme Studio\n12 Rue de la Paix\nelena@acme.studio\nParis",
+          "Elena Marlowe\nHead of Design\nAcme Studio\nelena@acme.studio\n12 Rue de la Paix\nParis",
       },
     });
     fireEvent.change(screen.getByLabelText("Subject"), {
@@ -1440,8 +1450,9 @@ describe("ProposalDisplay", () => {
     );
     expect(handleLetterDateChange).toHaveBeenCalledWith("Paris, April 6, 2026");
     expect(handleSalutationChange).toHaveBeenCalledWith("Dear Elena Marlowe,");
+    expect(handleSignOffChange).toHaveBeenCalledWith("With kind regards,");
     expect(handleRecipientDetailsChange).toHaveBeenLastCalledWith(
-      "Elena Marlowe\nHead of Design\nAcme Studio\n12 Rue de la Paix\nelena@acme.studio\nParis",
+      "Elena Marlowe\nHead of Design\nAcme Studio\nelena@acme.studio\n12 Rue de la Paix\nParis",
     );
     expect(handleSubjectChange).toHaveBeenCalledWith("Lead Product Designer");
 

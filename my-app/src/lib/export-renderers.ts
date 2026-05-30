@@ -58,6 +58,7 @@ import { resolveProposalSignatureRender } from "./proposal-signature-settings";
 import {
   parseProposalRecipientDetails,
   resolveProposalLetterheadShortTitle,
+  type ProposalRecipientFields,
 } from "./proposal-header";
 import {
   buildProposalContactLineFromParts,
@@ -852,7 +853,8 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--director.export-page,
     .proposal-cover-letter--volk.export-page,
     .proposal-cover-letter--film-foto.export-page,
-    .proposal-cover-letter--moma-bauhaus.export-page {
+    .proposal-cover-letter--moma-bauhaus.export-page,
+    .proposal-cover-letter--joella.export-page {
       position: relative;
       width: 210mm;
       min-height: 297mm;
@@ -1608,6 +1610,196 @@ function buildStyledProposalAppearanceCss(): string {
 
     .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-footer--right {
       left: 102mm;
+    }
+
+    .proposal-cover-letter--joella.export-page {
+      background: var(--paper, #FAF9F5) !important;
+      background-image: none !important;
+      color: #26231e;
+    }
+
+    .proposal-cover-letter--joella .proposal-cover-letter__joella-frame,
+    .proposal-cover-letter--joella .proposal-cover-letter__joella-divider,
+    .proposal-cover-letter--joella .proposal-cover-letter__joella-wordmark,
+    .proposal-cover-letter--joella .proposal-cover-letter__joella-recipient,
+    .proposal-cover-letter--joella .proposal-cover-letter__joella-meta,
+    .proposal-cover-letter--joella .proposal-cover-letter__joella-footer,
+    .proposal-cover-letter--joella .proposal-cover-letter__body {
+      position: absolute;
+    }
+
+    .proposal-cover-letter--joella .proposal-cover-letter__joella-frame {
+      left: 5.5mm;
+      top: 6.8mm;
+      width: 198.5mm;
+      height: 282.8mm;
+      border: 1.32mm solid #74a0c5;
+    }
+
+    .proposal-cover-letter--joella .proposal-cover-letter__joella-divider {
+      left: 5.5mm;
+      right: 6mm;
+      top: 19.65mm;
+      height: 0;
+      border-top: 1.32mm solid #74a0c5;
+      background: transparent;
+    }
+
+    .proposal-cover-letter--joella .proposal-cover-letter__joella-wordmark,
+    .proposal-cover-letter--joella .proposal-cover-letter__joella-recipient,
+    .proposal-cover-letter--joella .proposal-cover-letter__joella-meta,
+    .proposal-cover-letter--joella .proposal-cover-letter__joella-footer {
+      margin: 0;
+      min-width: 0;
+      font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+    }
+
+    .proposal-cover-letter--joella .proposal-cover-letter__joella-wordmark {
+      left: 9.8mm;
+      top: 6.8mm;
+      height: 12.85mm;
+      max-width: 88mm;
+      box-sizing: border-box;
+      padding-top: 2mm;
+      transform: none;
+      display: flex;
+      align-items: center;
+      font-size: 23pt;
+      line-height: 1;
+      font-weight: 700;
+      letter-spacing: -0.035em;
+      color: #8f332f;
+      text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .proposal-cover-letter--joella .proposal-cover-letter__joella-recipient {
+      left: 35mm;
+      top: 45mm;
+      width: 70mm;
+      display: grid;
+      gap: 0;
+      color: #86accd;
+    }
+
+    .proposal-cover-letter--joella .proposal-cover-letter__joella-meta {
+      right: 34mm;
+      top: 86.7mm;
+      width: 76mm;
+      display: grid;
+      gap: 0;
+      color: #86accd;
+      text-align: right;
+    }
+
+    .proposal-cover-letter--joella .proposal-cover-letter__joella-recipient p,
+    .proposal-cover-letter--joella .proposal-cover-letter__joella-meta p {
+      margin: 0;
+      min-width: 0;
+      font-size: 8pt;
+      line-height: 3.7mm;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      overflow-wrap: anywhere;
+    }
+
+    .proposal-cover-letter--joella .proposal-cover-letter__joella-meta p:first-child {
+      white-space: nowrap;
+      overflow-wrap: normal;
+    }
+
+    .proposal-cover-letter--joella .proposal-cover-letter__body {
+      left: 35mm;
+      top: 35mm;
+      width: min(140mm, 70ch);
+      max-width: min(140mm, 70ch);
+      display: grid;
+      align-content: start;
+      min-width: 0;
+      padding: 0;
+    }
+
+    .proposal-cover-letter--joella .proposal-cover-letter__joella-letter-block {
+      display: grid;
+      gap: 0;
+      margin: 0;
+      margin-bottom: 9.3mm;
+      min-width: 0;
+      font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+      font-size: 8pt;
+      line-height: 3.7mm;
+      font-weight: 400;
+      color: #26231e;
+    }
+
+    .proposal-cover-letter--joella .proposal-cover-letter__joella-letter-block-group {
+      display: grid;
+      gap: 0;
+      min-width: 0;
+    }
+
+    .proposal-cover-letter--joella .proposal-cover-letter__joella-letter-block-group + .proposal-cover-letter__joella-letter-block-group {
+      margin-top: 3.7mm;
+    }
+
+    .proposal-cover-letter--joella .proposal-cover-letter__joella-letter-block p {
+      margin: 0;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .proposal-cover-letter--joella .proposal-cover-letter__body .proposal-block,
+    .proposal-cover-letter--joella .proposal-cover-letter__body .proposal-signoff,
+    .proposal-cover-letter--joella .proposal-cover-letter__body .proposal-signature {
+      margin: 0;
+      font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+      font-size: 10pt;
+      line-height: 4.65mm;
+      font-weight: 400;
+      color: #26231e;
+      white-space: pre-wrap;
+      overflow-wrap: break-word;
+    }
+
+    .proposal-cover-letter--joella .proposal-cover-letter__body .proposal-block--salutation {
+      font-weight: 400;
+      margin-bottom: 4.65mm;
+    }
+
+    .proposal-cover-letter--joella .proposal-cover-letter__body .proposal-block--salutation + .proposal-block {
+      margin-top: 0;
+    }
+
+    .proposal-cover-letter--joella .proposal-cover-letter__body .proposal-block + .proposal-block:not(.proposal-block--closing):not(.proposal-block--salutation) {
+      margin-top: 4.65mm;
+    }
+
+    .proposal-cover-letter--joella .proposal-cover-letter__body .proposal-block--closing {
+      display: grid;
+      gap: 4.65mm;
+      padding-top: 9.3mm;
+    }
+
+    .proposal-cover-letter--joella .proposal-cover-letter__body .proposal-signature {
+      font-family: var(--proposal-signature-font-family, Arial, "Helvetica Neue", Helvetica, sans-serif);
+      font-weight: var(--decor-signature-font-weight, inherit);
+    }
+
+    .proposal-cover-letter--joella .proposal-cover-letter__joella-footer {
+      left: 10.4mm;
+      top: 285.75mm;
+      max-width: 150mm;
+      transform: translateY(-100%);
+      font-size: 6pt;
+      line-height: 1;
+      font-weight: 700;
+      letter-spacing: 0.018em;
+      color: #86accd;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
   `;
 }
@@ -3142,6 +3334,171 @@ function resolveExportBauhausWordmark(args: {
   return firstExportWordmarkToken(fullTitle);
 }
 
+function normalizeExportJoellaDisplayText(
+  value: string | null | undefined,
+): string {
+  return String(value ?? "").replace(/\s+/g, " ").trim().toUpperCase();
+}
+
+function resolveExportJoellaWordmark(args: {
+  candidateCompany: string;
+  candidateName: string;
+}): string {
+  return normalizeExportJoellaDisplayText(
+    args.candidateCompany || args.candidateName,
+  );
+}
+
+function buildExportJoellaFooterLine(args: {
+  location: string;
+  email: string;
+  phone: string;
+}): string {
+  return uniqueExportNonEmptyLines([args.location, args.email, args.phone])
+    .map(normalizeExportJoellaDisplayText)
+    .filter(Boolean)
+    .join("  ");
+}
+
+function buildExportJoellaHeaderContactLine(args: {
+  phone: string;
+  email: string;
+  linkedin: string;
+  website: string;
+  other: string;
+}): string {
+  return uniqueExportNonEmptyLines([
+    args.email,
+    args.phone,
+    args.linkedin,
+    args.website,
+    args.other,
+  ]).join(" · ");
+}
+
+function buildExportJoellaSubjectLine(args: {
+  subject: string;
+  candidateRole: string;
+}): string {
+  const subject = args.subject.trim();
+  if (subject) {
+    return `Subject: ${subject}`;
+  }
+
+  const role = args.candidateRole.trim();
+  return role ? `Subject: Application for ${role}` : "";
+}
+
+const EXPORT_JOELLA_RECIPIENT_KNOWN_LABELS = new Set([
+  "recipient",
+  "name",
+  "contact",
+  "role",
+  "title",
+  "company",
+  "organization",
+  "address",
+  "email",
+  "mail",
+  "city",
+  "location",
+  "country",
+  "phone",
+  "telephone",
+  "website",
+  "portfolio",
+]);
+
+function normalizeExportJoellaRecipientLineKey(value: string): string {
+  return value.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function normalizeExportJoellaRecipientRawLine(line: string): string {
+  const match = line.match(/^([A-Za-z][A-Za-z -]{0,32})\s*:\s*(.+)$/);
+  if (!match) {
+    return line;
+  }
+
+  return EXPORT_JOELLA_RECIPIENT_KNOWN_LABELS.has(match[1].toLowerCase())
+    ? match[2].trim()
+    : line;
+}
+
+function buildExportJoellaRecipientBlockLines(args: {
+  recipientDetails?: string | null;
+  recipientFields: ProposalRecipientFields;
+  showDetails: boolean;
+}): string[] {
+  const primaryLines = [
+    args.recipientFields.name,
+    args.recipientFields.role,
+    args.recipientFields.company,
+  ];
+
+  if (!args.showDetails) {
+    return uniqueExportNonEmptyLines(primaryLines);
+  }
+
+  const fieldValues = [
+    args.recipientFields.name,
+    args.recipientFields.role,
+    args.recipientFields.company,
+    args.recipientFields.address,
+    args.recipientFields.city,
+    args.recipientFields.email,
+  ];
+  const fieldKeys = new Set(
+    fieldValues
+      .map((value) => normalizeExportJoellaRecipientLineKey(value))
+      .filter(Boolean),
+  );
+  const extraLines = String(args.recipientDetails ?? "")
+    .split("\n")
+    .map((line) => normalizeExportJoellaRecipientRawLine(line.trim()))
+    .filter((line) => {
+      if (!line) {
+        return false;
+      }
+      return !fieldKeys.has(normalizeExportJoellaRecipientLineKey(line));
+    });
+
+  return uniqueExportNonEmptyLines([
+    ...primaryLines,
+    args.recipientFields.email,
+    args.recipientFields.address,
+    args.recipientFields.city,
+    ...extraLines,
+  ]);
+}
+
+function renderExportJoellaLetterBlock(
+  viewModel: ReturnType<typeof buildProposalLetterheadExportViewModel>,
+): string {
+  const groups = [
+    viewModel.joellaLetterBlock.senderLines,
+    viewModel.joellaLetterBlock.dateLine
+      ? [viewModel.joellaLetterBlock.dateLine]
+      : [],
+    viewModel.joellaLetterBlock.recipientLines,
+    viewModel.joellaLetterBlock.subjectLine
+      ? [viewModel.joellaLetterBlock.subjectLine]
+      : [],
+  ].filter((group) => group.length > 0);
+
+  if (groups.length === 0) {
+    return "";
+  }
+
+  return `<section class="proposal-cover-letter__joella-letter-block" aria-label="Letter details">${groups
+    .map(
+      (group) =>
+        `<div class="proposal-cover-letter__joella-letter-block-group">${group
+          .map((line) => renderExportParagraph(line, ""))
+          .join("")}</div>`,
+    )
+    .join("")}</section>`;
+}
+
 function buildProposalLetterheadExportViewModel(
   data: ProposalPrintSource,
   locale?: string | null,
@@ -3205,6 +3562,15 @@ function buildProposalLetterheadExportViewModel(
     email: resolvedContactParts.email,
     location: shortLocationLine,
   });
+  const joellaWordmark = resolveExportJoellaWordmark({
+    candidateCompany,
+    candidateName,
+  });
+  const joellaFooterLine = buildExportJoellaFooterLine({
+    location: resolvedContactParts.location,
+    email: resolvedContactParts.email,
+    phone: resolvedContactParts.phone,
+  });
   const subject = data.headerVisibility.showSubject
     ? normalizeLocaleTypography(data.documentTitle, locale).trim()
     : "";
@@ -3233,7 +3599,7 @@ function buildProposalLetterheadExportViewModel(
       ? recipientFields.city?.trim() ?? ""
       : "";
   const recipientContactLines = uniqueExportNonEmptyLines(
-    [recipientAddress, recipientCity, recipientEmail],
+    [recipientEmail, recipientAddress, recipientCity],
     [recipientName, recipientCompany, recipientRole],
   );
   const recipientHeadingLines = data.headerVisibility.showRecipient
@@ -3241,15 +3607,46 @@ function buildProposalLetterheadExportViewModel(
         recipientFields.name,
         recipientFields.role,
         recipientFields.company,
+        recipientFields.email,
         recipientFields.address,
         recipientFields.city,
-        recipientFields.email,
       ])
     : [];
   const date =
     data.headerVisibility.showDate && data.letterDate
       ? normalizeLocaleTypography(data.letterDate, locale).trim()
       : "";
+  const joellaLetterBlock = {
+    senderLines: data.headerVisibility.showSender
+      ? uniqueExportNonEmptyLines([
+          candidateName,
+          candidateRole,
+          candidateCompany,
+          buildExportJoellaHeaderContactLine({
+            phone: resolvedContactParts.phone,
+            email: resolvedContactParts.email,
+            linkedin: resolvedContactParts.linkedin,
+            website: resolvedContactParts.website,
+            other: resolvedContactParts.other,
+          }),
+          resolvedContactParts.location,
+        ])
+      : [],
+    dateLine: date,
+    recipientLines: data.headerVisibility.showRecipient
+      ? buildExportJoellaRecipientBlockLines({
+          recipientDetails: data.recipientDetails,
+          recipientFields,
+          showDetails: true,
+        })
+      : [],
+    subjectLine: data.headerVisibility.showSubject
+      ? buildExportJoellaSubjectLine({
+          subject,
+          candidateRole,
+        })
+      : "",
+  };
   const secondaryTitle = candidateCompany;
   const metaRole = recipientRole;
   const shortRoleTitle = candidateRole || recipientRole;
@@ -3272,6 +3669,9 @@ function buildProposalLetterheadExportViewModel(
     directorContactGroups,
     volkSenderLine,
     filmSenderLine,
+    joellaWordmark,
+    joellaFooterLine,
+    joellaLetterBlock,
     recipientName,
     recipientCompany,
     recipientRole,
@@ -3375,6 +3775,7 @@ function renderProposalLetterheadExportPage(args: {
     | "volk-letterhead"
     | "film-foto-letterhead"
     | "moma-bauhaus-letterhead"
+    | "joella-frame-letterhead"
   >;
 }): string {
   const viewModel = buildProposalLetterheadExportViewModel(
@@ -3393,7 +3794,9 @@ function renderProposalLetterheadExportPage(args: {
         ? "proposal-cover-letter--volk"
         : args.templateId === "film-foto-letterhead"
           ? "proposal-cover-letter--film-foto"
-          : "proposal-cover-letter--moma-bauhaus";
+          : args.templateId === "moma-bauhaus-letterhead"
+            ? "proposal-cover-letter--moma-bauhaus"
+            : "proposal-cover-letter--joella";
   const recipientBlockClass = viewModel.recipientContactLines.length
     ? " proposal-cover-letter--has-recipient-block"
     : "";
@@ -3484,6 +3887,16 @@ function renderProposalLetterheadExportPage(args: {
       ${renderExportParagraph(footerLeft, "proposal-cover-letter__bauhaus-footer proposal-cover-letter__bauhaus-footer--left")}
       ${renderExportParagraph(footerRight, "proposal-cover-letter__bauhaus-footer proposal-cover-letter__bauhaus-footer--right")}
       <section class="proposal-cover-letter__body" data-block="body">${bodyMarkup}</section>
+    </main>`;
+  }
+
+  if (args.templateId === "joella-frame-letterhead") {
+    return `<main class="export-page ${scopeClass}${recipientBlockClass}" data-export-doc="proposal">
+      <span class="proposal-cover-letter__joella-frame" aria-hidden="true"></span>
+      <span class="proposal-cover-letter__joella-divider" aria-hidden="true"></span>
+      ${renderExportParagraph(viewModel.joellaWordmark, "proposal-cover-letter__joella-wordmark")}
+      ${renderExportParagraph(viewModel.joellaFooterLine, "proposal-cover-letter__joella-footer")}
+      <section class="proposal-cover-letter__body" data-block="body">${renderExportJoellaLetterBlock(viewModel)}${bodyMarkup}</section>
     </main>`;
   }
 

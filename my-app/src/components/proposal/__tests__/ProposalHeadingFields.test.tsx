@@ -139,6 +139,151 @@ describe("ProposalHeadingFields", () => {
     );
   });
 
+  it("keeps sender and recipient drawer fields in letter-block order", () => {
+    render(
+      <ProposalHeadingFields
+        variableFields={[
+          {
+            id: "applicant-name",
+            label: "Full name",
+            value: "Joella Martin",
+            onChange: vi.fn(),
+          },
+          {
+            id: "applicant-role",
+            label: "Target role",
+            value: "Design Lead",
+            onChange: vi.fn(),
+          },
+          {
+            id: "applicant-company",
+            label: "Applicant company / studio",
+            value: "Studio Joella",
+            onChange: vi.fn(),
+          },
+          {
+            id: "contact-email",
+            label: "Email",
+            value: "joella@example.com",
+            onChange: vi.fn(),
+          },
+          {
+            id: "contact-phone",
+            label: "Phone",
+            value: "+33 6 00 00 00 00",
+            onChange: vi.fn(),
+          },
+          {
+            id: "contact-linkedin",
+            label: "LinkedIn",
+            value: "linkedin.com/in/joella",
+            onChange: vi.fn(),
+          },
+          {
+            id: "contact-location",
+            label: "City / location",
+            value: "Paris",
+            onChange: vi.fn(),
+          },
+          {
+            id: "recipient-name",
+            label: "Recipient name / team",
+            value: "Walter Gropius",
+            onChange: vi.fn(),
+          },
+          {
+            id: "recipient-role",
+            label: "Recipient role / contact title",
+            value: "Director",
+            onChange: vi.fn(),
+          },
+          {
+            id: "recipient-company",
+            label: "Recipient company",
+            value: "Bauhaus Dessau",
+            onChange: vi.fn(),
+          },
+          {
+            id: "recipient-address",
+            label: "Recipient address",
+            value: "Gropiusallee 38",
+            onChange: vi.fn(),
+          },
+          {
+            id: "recipient-email",
+            label: "Recipient email",
+            value: "office@bauhaus.de",
+            onChange: vi.fn(),
+          },
+          {
+            id: "recipient-city",
+            label: "Recipient city / location",
+            value: "Berlin",
+            onChange: vi.fn(),
+          },
+          {
+            id: "proposal-subject",
+            label: "Subject line",
+            value: "Application for Design Lead",
+            onChange: vi.fn(),
+          },
+          {
+            id: "letter-date",
+            label: "Date",
+            value: "May 30, 2026",
+            onChange: vi.fn(),
+          },
+          {
+            id: "salutation",
+            label: "Salutation",
+            value: "Dear Hiring Manager,",
+            onChange: vi.fn(),
+          },
+          {
+            id: "signature-signoff",
+            label: "Signature / politeness formula",
+            value: "Kind regards,",
+            onChange: vi.fn(),
+          },
+        ]}
+      />,
+    );
+
+    const groupLabels = (groupTitle: string) => {
+      const group = screen
+        .getByText(groupTitle)
+        .closest(".dasti-proposal-skeleton-rail__variable-group");
+      expect(group).toBeTruthy();
+      return Array.from(
+        (group as HTMLElement).querySelectorAll("input, textarea"),
+      ).map((field) => field.getAttribute("aria-label"));
+    };
+
+    expect(groupLabels("Applicant details")).toEqual([
+      "Full name",
+      "Target role",
+      "Applicant company / studio",
+      "Email",
+      "Phone",
+      "LinkedIn",
+      "City / location",
+    ]);
+    expect(groupLabels("Recipient details")).toEqual([
+      "Recipient name / team",
+      "Recipient role / contact title",
+      "Recipient company",
+      "Recipient email",
+      "Recipient address",
+      "Recipient city / location",
+    ]);
+    expect(groupLabels("Letter details")).toEqual([
+      "Subject line",
+      "Date",
+      "Salutation",
+      "Signature / politeness formula",
+    ]);
+  });
+
   it("preserves field callbacks", () => {
     const onChange = vi.fn();
     const onBlur = vi.fn();

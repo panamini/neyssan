@@ -285,8 +285,8 @@ export function buildProposalRecipientDetails(
     normalizeHeaderValue(fields?.name),
     normalizeHeaderValue(fields?.role),
     normalizeHeaderValue(fields?.company),
-    normalizeHeaderValue(fields?.address),
     normalizeHeaderValue(fields?.email),
+    normalizeHeaderValue(fields?.address),
     normalizeHeaderValue(fields?.city),
   ];
 
@@ -474,8 +474,8 @@ export function resolveProposalRecipientLines(
     fields.name && fields.name !== primary ? fields.name : "",
     fields.role && fields.role !== primary ? fields.role : "",
     fields.company && fields.company !== primary ? fields.company : "",
-    fields.address,
     fields.email,
+    fields.address,
     fields.city,
   ].filter(Boolean);
 

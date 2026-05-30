@@ -9,6 +9,30 @@ import {
 import { RESUME_TEMPLATE_IDS } from "../layout/resumeTemplates";
 
 describe("proposal render templates", () => {
+  it("registers the Joella frame template as proposal cover-letter only", () => {
+    expect(PROPOSAL_ACTIVE_TEMPLATE_IDS).toContain("joella-frame-letterhead");
+    expect(isProposalTemplateId("joella-frame-letterhead")).toBe(true);
+    expect(isProposalLetterheadTemplateId("joella-frame-letterhead")).toBe(true);
+    expect(RESUME_TEMPLATE_IDS as readonly string[]).not.toContain(
+      "joella-frame-letterhead",
+    );
+  });
+
+  it("exposes Joella preview and export metadata through the live registry", () => {
+    expect(getProposalTemplateDefinition("joella-frame-letterhead")).toEqual(
+      expect.objectContaining({
+        id: "joella-frame-letterhead",
+        name: "Joella Frame Letterhead",
+        shortLabel: "35 mm blue frame",
+        twinLabel: "Cover letter",
+        exportShell: "onecol",
+        leftMarginMm: 35,
+        bodyStartMm: 96,
+        readingMeasureCh: 70,
+      }),
+    );
+  });
+
   it("registers the MoMA Bauhaus template as proposal cover-letter only", () => {
     expect(PROPOSAL_ACTIVE_TEMPLATE_IDS).toContain("moma-bauhaus-letterhead");
     expect(isProposalTemplateId("moma-bauhaus-letterhead")).toBe(true);

@@ -139,6 +139,10 @@ interface ProposalDisplayProps {
   salutationEditable?: boolean;
   salutationPlaceholder?: string;
   onSalutationChange?: (value: string) => void;
+  signOffEditable?: boolean;
+  signOffValue?: string | null;
+  signOffPlaceholder?: string;
+  onSignOffChange?: (value: string) => void;
   onHeaderVisibilityChange?: (
     value:
       | Partial<ProposalHeaderVisibility>
@@ -630,6 +634,10 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   salutationEditable = false,
   salutationPlaceholder = "Dear Hiring Manager,",
   onSalutationChange,
+  signOffEditable = false,
+  signOffValue = null,
+  signOffPlaceholder = "Kind regards,",
+  onSignOffChange,
   onHeaderVisibilityChange,
   showDocumentCaption = true,
   showPreviewParagraphActions = true,
@@ -842,6 +850,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       letterDateEditable ||
       recipientDetailsEditable ||
       salutationEditable ||
+      signOffEditable ||
       onRailTitleChange ||
       onRailMetaChange,
   );
@@ -2220,40 +2229,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                                   placeholder="Northwind"
                                 />
                               </label>
-                              <label className="dasti-proposal-editor-page__field">
-                                <span className="dasti-proposal-editor-page__field-label">
-                                  City
-                                </span>
-                                <input
-                                  type="text"
-                                  value={recipientFields.city}
-                                  onChange={(event) =>
-                                    handleRecipientFieldChange(
-                                      "city",
-                                      event.target.value,
-                                    )
-                                  }
-                                  className="dasti-proposal-editor-page__field-input"
-                                  placeholder="Paris"
-                                />
-                              </label>
-                              <label className="dasti-proposal-editor-page__field dasti-proposal-editor-page__field--wide">
-                                <span className="dasti-proposal-editor-page__field-label">
-                                  Address
-                                </span>
-                                <input
-                                  type="text"
-                                  value={recipientFields.address}
-                                  onChange={(event) =>
-                                    handleRecipientFieldChange(
-                                      "address",
-                                      event.target.value,
-                                    )
-                                  }
-                                  className="dasti-proposal-editor-page__field-input"
-                                  placeholder="12 Rue de la Paix"
-                                />
-                              </label>
                               <label className="dasti-proposal-editor-page__field dasti-proposal-editor-page__field--wide">
                                 <span className="dasti-proposal-editor-page__field-label">
                                   Employer email
@@ -2273,6 +2248,40 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                               </label>
                               <label className="dasti-proposal-editor-page__field dasti-proposal-editor-page__field--wide">
                                 <span className="dasti-proposal-editor-page__field-label">
+                                  Address
+                                </span>
+                                <input
+                                  type="text"
+                                  value={recipientFields.address}
+                                  onChange={(event) =>
+                                    handleRecipientFieldChange(
+                                      "address",
+                                      event.target.value,
+                                    )
+                                  }
+                                  className="dasti-proposal-editor-page__field-input"
+                                  placeholder="12 Rue de la Paix"
+                                />
+                              </label>
+                              <label className="dasti-proposal-editor-page__field">
+                                <span className="dasti-proposal-editor-page__field-label">
+                                  City
+                                </span>
+                                <input
+                                  type="text"
+                                  value={recipientFields.city}
+                                  onChange={(event) =>
+                                    handleRecipientFieldChange(
+                                      "city",
+                                      event.target.value,
+                                    )
+                                  }
+                                  className="dasti-proposal-editor-page__field-input"
+                                  placeholder="Paris"
+                                />
+                              </label>
+                              <label className="dasti-proposal-editor-page__field dasti-proposal-editor-page__field--wide">
+                                <span className="dasti-proposal-editor-page__field-label">
                                   Recipient block
                                 </span>
                                 <textarea
@@ -2284,7 +2293,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                                   }
                                   className="dasti-proposal-editor-page__field-input dasti-proposal-editor-page__field-textarea"
                                   placeholder={
-                                    "Hiring Manager\nHead of Talent\nNorthwind\n12 Rue de la Paix\nhiring@northwind.com\nParis"
+                                    "Hiring Manager\nHead of Talent\nNorthwind\nhiring@northwind.com\n12 Rue de la Paix\nParis"
                                   }
                                   rows={6}
                                 />
@@ -2342,6 +2351,22 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                                     }
                                     className="dasti-proposal-editor-page__field-input"
                                     placeholder={salutationPlaceholder}
+                                  />
+                                </label>
+                              ) : null}
+                              {signOffEditable ? (
+                                <label className="dasti-proposal-editor-page__field dasti-proposal-editor-page__field--wide">
+                                  <span className="dasti-proposal-editor-page__field-label">
+                                    Signature / politeness formula
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={signOffValue ?? ""}
+                                    onChange={(event) =>
+                                      onSignOffChange?.(event.target.value)
+                                    }
+                                    className="dasti-proposal-editor-page__field-input"
+                                    placeholder={signOffPlaceholder}
                                   />
                                 </label>
                               ) : null}

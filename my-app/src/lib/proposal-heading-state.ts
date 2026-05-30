@@ -23,6 +23,18 @@ export type ProposalHeadingTextKey =
   | "letterDate"
   | "recipientDetails";
 
+export type ProposalHeadingDirtyState = {
+  applicantName: boolean;
+  applicantRole: boolean;
+  applicantCompany: boolean;
+  contactLine: boolean;
+  letterDate: boolean;
+  recipientDetails: boolean;
+  subject: boolean;
+  salutation: boolean;
+  signatureSignOff: boolean;
+};
+
 type ProposalContactFields = {
   email?: string | null;
   phone?: string | null;
@@ -83,6 +95,22 @@ export function buildProposalApplicantHeaderFromMetadata(
     location: null,
     tag: null,
   };
+}
+
+export function hasManualProposalHeadingDraft(
+  dirty: ProposalHeadingDirtyState,
+): boolean {
+  return (
+    dirty.applicantName ||
+    dirty.applicantRole ||
+    dirty.applicantCompany ||
+    dirty.contactLine ||
+    dirty.letterDate ||
+    dirty.recipientDetails ||
+    dirty.subject ||
+    dirty.salutation ||
+    dirty.signatureSignOff
+  );
 }
 
 function normalizeProposalContactLabel(value: string): string {

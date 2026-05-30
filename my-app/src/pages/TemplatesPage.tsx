@@ -35,7 +35,8 @@ export type TemplateFamily =
   | "director-letterhead"
   | "volk-letterhead"
   | "film-foto-letterhead"
-  | "moma-bauhaus-letterhead";
+  | "moma-bauhaus-letterhead"
+  | "joella-frame-letterhead";
 
 type TemplateCard = {
   id: string;
@@ -163,6 +164,11 @@ const TEMPLATE_STYLE_PRESETS: Record<TemplateFamily, VerbatiStylePreset> = {
     typography: "ledger-sans",
     palette: "cobalt",
   }),
+  "joella-frame-letterhead": resolveVerbatiStyle({
+    familyId: "workshop",
+    typography: "expert",
+    palette: "cobalt",
+  }),
 };
 
 const PROPOSAL_PREVIEW_TEMPLATES: Partial<Record<TemplateFamily, ProposalTemplateId>> = {
@@ -173,6 +179,7 @@ const PROPOSAL_PREVIEW_TEMPLATES: Partial<Record<TemplateFamily, ProposalTemplat
   "volk-letterhead": "volk-letterhead",
   "film-foto-letterhead": "film-foto-letterhead",
   "moma-bauhaus-letterhead": "moma-bauhaus-letterhead",
+  "joella-frame-letterhead": "joella-frame-letterhead",
 };
 
 function filterMatches(template: TemplateCard, filter: TemplateFilter): boolean {

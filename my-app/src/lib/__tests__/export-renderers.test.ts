@@ -451,6 +451,11 @@ describe("export-renderers", () => {
       scope: "proposal-cover-letter--moma-bauhaus",
       label: "MoMA Bauhaus Letterhead",
     },
+    {
+      templateId: "joella-frame-letterhead" as const,
+      scope: "proposal-cover-letter--joella",
+      label: "Joella Frame Letterhead",
+    },
   ])(
     "renders $label through styled proposal HTML export with scoped A4 CSS",
     ({ templateId, scope }) => {
@@ -459,6 +464,18 @@ describe("export-renderers", () => {
           data: {
             ...proposalFixture,
             templateId,
+            recipientDetails:
+              templateId === "joella-frame-letterhead"
+                ? [
+                    "recipient: Studio Nord : Paris",
+                    'title: "Équipe produit"',
+                    "company: Collectif Nord",
+                    "address: 10 Rue Bleue",
+                    "city: Paris 75010",
+                    "country: France",
+                    "email: hiring@studio.example",
+                  ].join("\n")
+                : proposalFixture.recipientDetails,
             body: [
               { type: "salutation", text: "Dear Hiring Manager," },
               { type: "paragraph", text: "First export paragraph." },
@@ -502,16 +519,22 @@ describe("export-renderers", () => {
             ? "left: 24mm;"
             : templateId === "film-foto-letterhead"
               ? "left: 20mm;"
-              : "left: 32mm;";
+              : templateId === "moma-bauhaus-letterhead"
+                ? "left: 32mm;"
+                : "left: 35mm;";
       expect(css).toContain(expectedBodyLeft);
       expect(css).toContain(
         templateId === "moma-bauhaus-letterhead"
           ? "width: min(132mm, 70ch);"
+          : templateId === "joella-frame-letterhead"
+            ? "width: min(140mm, 70ch);"
           : "width: min(96mm, 58ch);",
       );
       expect(css).toContain(
         templateId === "moma-bauhaus-letterhead"
           ? "max-width: min(132mm, 70ch);"
+          : templateId === "joella-frame-letterhead"
+            ? "max-width: min(140mm, 70ch);"
           : "max-width: min(96mm, 58ch);",
       );
       expect(css).toContain("overflow-wrap: break-word;");
@@ -542,6 +565,7 @@ describe("export-renderers", () => {
       if (templateId === "moma-bauhaus-letterhead") {
         const momaCss = css.slice(
           css.lastIndexOf(".proposal-cover-letter--moma-bauhaus.export-page"),
+          css.lastIndexOf(".proposal-cover-letter--joella.export-page"),
         );
         const senderText =
           page?.querySelector(".proposal-cover-letter__bauhaus-sender")
@@ -581,6 +605,67 @@ describe("export-renderers", () => {
         expect(footerLeftText).toContain("+33 6 00 00 00 00");
         expect(footerRightText).toContain("portfolio.example.com");
         expect(footerRightText).not.toContain("Paris");
+      }
+      if (templateId === "joella-frame-letterhead") {
+        const joellaCss = css.slice(
+          css.lastIndexOf(".proposal-cover-letter--joella.export-page"),
+        );
+        const wordmarkText =
+          page?.querySelector(".proposal-cover-letter__joella-wordmark")
+            ?.textContent ?? "";
+        const recipientText =
+          page?.querySelector(".proposal-cover-letter__joella-recipient")
+            ?.textContent ?? "";
+        const letterBlockLines = Array.from(
+          page?.querySelectorAll(".proposal-cover-letter__joella-letter-block p") ??
+            [],
+        ).map((node) => node.textContent);
+        const metaText =
+          page?.querySelector(".proposal-cover-letter__joella-meta")?.textContent ??
+          "";
+        const footerText =
+          page?.querySelector(".proposal-cover-letter__joella-footer")
+            ?.textContent ?? "";
+
+        expect(joellaCss).toContain("left: 5.5mm;");
+        expect(joellaCss).toContain("top: 19.65mm;");
+        expect(joellaCss).toContain("border: 1.32mm solid #74a0c5;");
+        expect(joellaCss).toContain("border-top: 1.32mm solid #74a0c5;");
+        expect(joellaCss).toContain("top: 35mm;");
+        expect(joellaCss).toContain("margin-bottom: 9.3mm;");
+        expect(joellaCss).toContain("top: 285.75mm;");
+        expect(page?.querySelector(".proposal-cover-letter__joella-frame")).toBeTruthy();
+        expect(page?.querySelector(".proposal-cover-letter__joella-divider")).toBeTruthy();
+        expect(wordmarkText).toBe("ALEX MERCER");
+        expect(wordmarkText).not.toContain("Candidature");
+        expect(page?.querySelector(".proposal-cover-letter__joella-recipient"))
+          .toBeNull();
+        expect(page?.querySelector(".proposal-cover-letter__joella-meta"))
+          .toBeNull();
+        expect(recipientText).toBe("");
+        expect(metaText).toBe("");
+        expect(letterBlockLines).toEqual([
+          "Alex Mercer",
+          "Designer de systèmes",
+          "alex@example.com · +33 6 00 00 00 00 · portfolio.example.com",
+          "Paris",
+          "15 avril 2026\u00a0!",
+          "Studio Nord : Paris",
+          '"Équipe produit"',
+          "Collectif Nord",
+          "hiring@studio.example",
+          "10 Rue Bleue",
+          "Paris 75010",
+          "France",
+          "Subject: Candidature «\u00a0Produit\u00a0» 1,5\u00a0mm",
+        ]);
+        expect(letterBlockLines.join(" ")).not.toContain("Re:");
+        expect(letterBlockLines.join(" ")).not.toContain("Date:");
+        expect(footerText).toContain("PARIS");
+        expect(footerText).toContain("ALEX@EXAMPLE.COM");
+        expect(footerText).toContain("+33 6 00 00 00 00");
+        expect(footerText).not.toContain("portfolio.example.com");
+        expect(footerText).not.toContain("Candidature");
       }
     },
   );
@@ -635,9 +720,9 @@ describe("export-renderers", () => {
       "Recipient Person",
       "Recipient Role",
       "Recipient Company",
+      "recipient@mail.com",
       "Recipient Address",
       "Company City",
-      "recipient@mail.com",
     ]);
   });
 
@@ -857,7 +942,7 @@ describe("export-renderers", () => {
             ...proposalFixture,
             templateId,
             recipientDetails:
-              "Hiring Manager\nTalent Acquisition\nCompany Name\nStreet address\nrecipient@example.com\nCompany City",
+              "Hiring Manager\nTalent Acquisition\nCompany Name\nrecipient@example.com\nStreet address\nCompany City",
             documentTitle: "Subject line",
             applicantHeader: {
               ...proposalFixture.applicantHeader,
@@ -937,7 +1022,7 @@ describe("export-renderers", () => {
             ...proposalFixture,
             templateId,
             recipientDetails:
-              "Hiring Manager\nTalent Acquisition\nUs Smart Tools\nStreet address\nrecipient@example.com\nParis",
+              "Hiring Manager\nTalent Acquisition\nUs Smart Tools\nrecipient@example.com\nStreet address\nParis",
             applicantHeader: {
               ...proposalFixture.applicantHeader,
               name: "Robert Cooper",

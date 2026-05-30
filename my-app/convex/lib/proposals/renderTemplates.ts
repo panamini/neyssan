@@ -10,6 +10,7 @@ export const PROPOSAL_ACTIVE_TEMPLATE_IDS = [
   "volk-letterhead",
   "film-foto-letterhead",
   "moma-bauhaus-letterhead",
+  "joella-frame-letterhead",
 ] as const;
 
 export const PROPOSAL_LEGACY_TEMPLATE_IDS = [
@@ -315,6 +316,27 @@ export const PROPOSAL_TEMPLATE_DEFINITIONS: readonly ProposalTemplateDefinition[
       gridStepBMm: ROBIAL_PROPOSAL_GRID.stepBMm,
       gridHalfStepMm: ROBIAL_PROPOSAL_GRID.halfStepMm,
     },
+    {
+      id: "joella-frame-letterhead",
+      name: "Joella Frame Letterhead",
+      shortLabel: "35 mm blue frame",
+      description:
+        "A Joella archive cover-letter sheet with a fixed A4 frame, formal letter block, and a first-third 35 mm letter column.",
+      twinLabel: "Cover letter",
+      exportShell: "onecol",
+      leftMarginMm: 35,
+      leftZoneMm: 0,
+      gutterMm: 0,
+      topOffsetMm: 35,
+      bodyStartMm: 96,
+      bottomMarginMm: 18,
+      rightMarginMm: 35,
+      readingMeasureCh: 70,
+      titleScaleMm: 8.1,
+      gridStepAMm: ROBIAL_PROPOSAL_GRID.stepAMm,
+      gridStepBMm: ROBIAL_PROPOSAL_GRID.stepBMm,
+      gridHalfStepMm: ROBIAL_PROPOSAL_GRID.halfStepMm,
+    },
   ] as const;
 
 export function isProposalLetterheadTemplateId(
@@ -325,12 +347,14 @@ export function isProposalLetterheadTemplateId(
   | "volk-letterhead"
   | "film-foto-letterhead"
   | "moma-bauhaus-letterhead"
+  | "joella-frame-letterhead"
 > {
   return (
     value === "director-letterhead" ||
     value === "volk-letterhead" ||
     value === "film-foto-letterhead" ||
-    value === "moma-bauhaus-letterhead"
+    value === "moma-bauhaus-letterhead" ||
+    value === "joella-frame-letterhead"
   );
 }
 

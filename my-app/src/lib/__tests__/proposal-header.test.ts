@@ -49,6 +49,29 @@ describe("proposal recipient heading fields", () => {
     });
   });
 
+  it("serializes the recipient email before the postal address block", () => {
+    const recipientDetails = buildProposalRecipientDetails({
+      name: "Walter Gropius",
+      role: "Director",
+      company: "Bauhaus Dessau",
+      email: "office@bauhaus.de",
+      address: "Gropiusallee 38",
+      city: "06846 Dessau-Roßlau",
+    });
+
+    expect(recipientDetails).toBe(
+      "Walter Gropius\nDirector\nBauhaus Dessau\noffice@bauhaus.de\nGropiusallee 38\n06846 Dessau-Roßlau",
+    );
+    expect(parseProposalRecipientDetails(recipientDetails)).toMatchObject({
+      name: "Walter Gropius",
+      role: "Director",
+      company: "Bauhaus Dessau",
+      email: "office@bauhaus.de",
+      address: "Gropiusallee 38",
+      city: "06846 Dessau-Roßlau",
+    });
+  });
+
   it("does not shift imported company into the recipient name slot", () => {
     const recipientDetails = buildProposalRecipientPrefill({
       company: "Us Smart Tools",
