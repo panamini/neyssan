@@ -845,6 +845,11 @@ describe("export-renderers", () => {
             ) ?? [],
           ).map((node) => node.textContent),
         ).toEqual(["Avery Stone", "Hiring Manager"]);
+        expect(
+          page?.querySelector(
+            ".proposal-cover-letter__joella-letter-block-subject-value",
+          )?.textContent,
+        ).toBe(" Application for Operations Lead");
       }
     },
   );

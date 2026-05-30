@@ -239,6 +239,7 @@ export default mutation({
         ),
         applicantName: v.optional(v.string()),
         applicantRole: v.optional(v.string()),
+        applicantCompany: v.optional(v.string()),
         contactLine: v.optional(v.string()),
         letterDate: v.optional(v.string()),
         recipientDetails: v.optional(v.string()),

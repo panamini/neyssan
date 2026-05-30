@@ -400,6 +400,9 @@ describe("proposal letterhead CSS", () => {
     expect(proposalCss).toMatch(
       /\.proposal-cover-letter--joella[\s\S]*?\.proposal-cover-letter__joella-letter-block-line--strong,[\s\S]*?\.proposal-cover-letter--joella\s+\.proposal-cover-letter__joella-recipient\s+p:first-child\s*\{[\s\S]*font-weight:\s*700;[\s\S]*\}/,
     );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--joella[\s\S]*?\.proposal-cover-letter__joella-letter-block-subject-value\s*\{[\s\S]*text-decoration:\s*underline;[\s\S]*text-decoration-thickness:\s*0\.08em;[\s\S]*text-underline-offset:\s*0\.18em;[\s\S]*\}/,
+    );
     expect(joellaCss).not.toMatch(/font-size:\s*\d+(?:\.\d+)?mm;/);
     expect(exportJoellaCss).not.toMatch(/font-size:\s*\d+(?:\.\d+)?mm;/);
     expect(joellaCss).not.toMatch(/font-size:\s*\d+\.\d+pt;/);

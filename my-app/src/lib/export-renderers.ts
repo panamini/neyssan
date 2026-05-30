@@ -1991,6 +1991,12 @@ function buildStyledProposalAppearanceCss(): string {
       font-weight: 700;
     }
 
+    .proposal-cover-letter--joella .proposal-cover-letter__joella-letter-block-subject-value {
+      text-decoration: underline;
+      text-decoration-thickness: 0.08em;
+      text-underline-offset: 0.18em;
+    }
+
     .proposal-cover-letter--joella .proposal-cover-letter__body .proposal-block,
     .proposal-cover-letter--joella .proposal-cover-letter__body .proposal-signoff,
     .proposal-cover-letter--joella .proposal-cover-letter__body .proposal-signature {
@@ -3588,6 +3594,21 @@ function lowercaseExportEnglishMonthNames(value: string): string {
   );
 }
 
+function splitExportJoellaSubjectLine(value: string): {
+  label: string;
+  subject: string;
+} {
+  const index = value.indexOf(":");
+  if (index === -1) {
+    return { label: "", subject: value };
+  }
+
+  return {
+    label: value.slice(0, index + 1),
+    subject: value.slice(index + 1),
+  };
+}
+
 function resolveExportJoellaWordmark(args: {
   candidateCompany: string;
   candidateName: string;
@@ -3759,15 +3780,29 @@ function renderExportJoellaLetterBlock(
     .map(
       (group) =>
         `<div class="proposal-cover-letter__joella-letter-block-group">${group.lines
-          .map((line, lineIndex) =>
-            renderExportParagraph(
-              line,
-              lineIndex === 0 &&
+          .map((line, lineIndex) => {
+            const className = [
+                lineIndex === 0 &&
                 (group.kind === "sender" || group.kind === "recipient")
-                ? "proposal-cover-letter__joella-letter-block-line--strong"
-                : "",
-            ),
-          )
+                  ? "proposal-cover-letter__joella-letter-block-line--strong"
+                  : "",
+                group.kind === "subject"
+                  ? "proposal-cover-letter__joella-letter-block-line--subject"
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" ");
+            if (group.kind !== "subject") {
+              return renderExportParagraph(line, className);
+            }
+
+            const subjectLine = splitExportJoellaSubjectLine(line);
+            return `<p class="${escapeHtml(className)}">${escapeHtml(
+              subjectLine.label,
+            )}<span class="proposal-cover-letter__joella-letter-block-subject-value">${escapeHtml(
+              subjectLine.subject,
+            )}</span></p>`;
+          })
           .join("")}</div>`,
     )
     .join("")}</section>`;

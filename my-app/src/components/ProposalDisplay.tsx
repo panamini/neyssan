@@ -49,7 +49,7 @@ import {
 import { resolveProposalCharacterLimitSelection } from "../../convex/lib/proposals/generationControls";
 import type { ProposalApplicantHeaderData } from "../lib/proposal-personalization";
 import {
-  buildProposalRecipientDetails,
+  buildProposalRecipientDetailsPreservingExtraLines,
   parseProposalRecipientDetails,
   resolveProposalHeaderVisibility,
   type ProposalHeaderVisibility,
@@ -893,17 +893,26 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   );
   const handleRecipientFieldChange = React.useCallback(
     (
-      field: "name" | "role" | "company" | "address" | "email" | "city",
+      field:
+        | "name"
+        | "role"
+        | "company"
+        | "address"
+        | "email"
+        | "city",
       value: string,
     ) => {
       onRecipientDetailsChange?.(
-        buildProposalRecipientDetails({
-          ...recipientFields,
-          [field]: value,
+        buildProposalRecipientDetailsPreservingExtraLines({
+          currentDetails: recipientDetails,
+          fields: {
+            ...recipientFields,
+            [field]: value,
+          },
         }),
       );
     },
-    [onRecipientDetailsChange, recipientFields],
+    [onRecipientDetailsChange, recipientDetails, recipientFields],
   );
   const applicantDrawerId = React.useId();
   const headerVisibilityTitleId = React.useId();

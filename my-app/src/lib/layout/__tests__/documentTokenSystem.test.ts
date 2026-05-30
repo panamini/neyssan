@@ -178,6 +178,11 @@ describe("document token system", () => {
     expect(exportDescriptorNames).toContain("--robial-step-a");
     expect(exportDescriptorNames).toContain("--robial-step-b");
     expect(exportDescriptorNames).toContain("--proposal-title-size");
+    expect(exportDescriptorNames).toContain("--proposal-document-accent-ink");
+    expect(exportDescriptorNames).toContain("--proposal-joella-mark-color");
+    expect(exportDescriptorNames).toContain(
+      "--proposal-joella-structure-color",
+    );
 
     const summarySizeDescriptor = EXPORT_VAR_DESCRIPTORS.find(
       (descriptor) => descriptor.name === "--flow-summary-size",
@@ -188,6 +193,85 @@ describe("document token system", () => {
     expect(summarySizeDescriptor?.fieldPath).toBe("flow.type.summary.sizePt");
     expect(summaryLineDescriptor?.fieldPath).toBe(
       "flow.type.summary.lineHeight",
+    );
+  });
+
+  it("emits curated Joella color pairs from the resolved proposal palette", () => {
+    const namedJoellaPairs = [
+      {
+        palette: "cobalt",
+        mark: "#DA291C",
+        structure: "#74a0c5",
+      },
+      {
+        palette: "terre",
+        mark: "#bb5522",
+        structure: "#789fa4",
+      },
+      {
+        palette: "sauge",
+        mark: "#3b6e4e",
+        structure: "#b06835",
+      },
+      {
+        palette: "plum",
+        mark: "#0f0c08",
+        structure: "#6d3f78",
+      },
+      {
+        palette: "ochre",
+        mark: "#a7472f",
+        structure: "#2f2d29",
+      },
+    ] as const;
+
+    for (const { palette, mark, structure } of namedJoellaPairs) {
+      const style = resolveVerbatiStyle({
+        layout: "workshop",
+        typography: "expert",
+        palette,
+      });
+      const previewVars = buildVerbatiProposalDocumentVars(style);
+      const exportVars = serializeExportVars(
+        normalizeProposalExportTokens({
+          mode: "styled",
+          proposalTemplateId: "joella-frame-letterhead",
+          stylePreset: style,
+        }).canonical,
+      );
+
+      expect(previewVars["--proposal-joella-mark-color"]).toBe(mark);
+      expect(previewVars["--proposal-joella-structure-color"]).toBe(structure);
+      expect(exportVars["--proposal-joella-mark-color"]).toBe(mark);
+      expect(exportVars["--proposal-joella-structure-color"]).toBe(structure);
+    }
+
+    const customStyle = resolveVerbatiStyle({
+      layout: "workshop",
+      typography: "expert",
+      palette: "custom",
+      accentHex: "#aa7733",
+    });
+    const customVars = buildVerbatiProposalDocumentVars(customStyle);
+    const customExportVars = serializeExportVars(
+      normalizeProposalExportTokens({
+        mode: "styled",
+        proposalTemplateId: "joella-frame-letterhead",
+        stylePreset: customStyle,
+      }).canonical,
+    );
+
+    expect(customVars["--proposal-joella-mark-color"]).toBe(
+      "color-mix(in srgb, var(--proposal-document-accent-ink) 82%, var(--proposal-document-ink) 18%)",
+    );
+    expect(customVars["--proposal-joella-structure-color"]).toBe(
+      "color-mix(in srgb, var(--proposal-document-accent-ink) 62%, var(--proposal-document-paper) 38%)",
+    );
+    expect(customExportVars["--proposal-joella-mark-color"]).toBe(
+      customVars["--proposal-joella-mark-color"],
+    );
+    expect(customExportVars["--proposal-joella-structure-color"]).toBe(
+      customVars["--proposal-joella-structure-color"],
     );
   });
 
@@ -353,12 +437,10 @@ describe("document token system", () => {
     const appearance = resolvePreviewCanonicalAppearance(stylePreset);
     const themeVars = buildVerbatiThemeVars(stylePreset);
     const proposalVars = buildVerbatiProposalDocumentVars(stylePreset);
-    const resumePreviewTokens = normalizeResumePreviewTokens(
-      {
-        resumeTemplateId: "two_column_resume_legacy",
-        stylePreset,
-      },
-    );
+    const resumePreviewTokens = normalizeResumePreviewTokens({
+      resumeTemplateId: "two_column_resume_legacy",
+      stylePreset,
+    });
     const proposalPreviewTokens = normalizeProposalPreviewTokens({
       templateId: "swiss_margin",
       documentTypography: getProposalDocumentTypography(
@@ -501,7 +583,10 @@ describe("document token system", () => {
       });
       const previewTokens = normalizeProposalPreviewTokens({
         templateId,
-        documentTypography: getProposalDocumentTypography("expert", stylePreset),
+        documentTypography: getProposalDocumentTypography(
+          "expert",
+          stylePreset,
+        ),
         stylePreset,
       });
       const exportProfile = normalizeProposalExportTokens({
@@ -534,48 +619,52 @@ describe("document token system", () => {
     },
   );
 });
-  it("resolves workshop preview and export resume tokens from the exact template id", () => {
-    const stylePreset = resolveVerbatiStyle({
-      familyId: "workshop",
-      layout: "workshop",
-      typography: "quiet-editorial",
-      palette: "sauge",
-    });
-    const resumeTemplateId = getResumeTemplateId(stylePreset);
-    const previewTokens = normalizeResumePreviewTokens({
-      resumeTemplateId,
-      stylePreset,
-    });
-    const previewVars = serializeResumePreviewVars(previewTokens);
-    const exportTokens = normalizeResumeExportTokens({
-      mode: "styled",
-      resumeTemplateId,
-      stylePreset,
-    });
-
-    expect(resumeTemplateId).toBe("workshop_resume_onecol_ats");
-    expect(previewTokens.geometry.columns.sidebarMm).toBe(0);
-    expect(previewTokens.flow.measure.summaryWidthMm).toBe(120);
-    expect(previewTokens.flow.component.main?.sectionTitleReductionMm).toBe(0.95);
-    expect(previewTokens.flow.component.experience?.headingSizeAdjustMm).toBe(0.2);
-    expect(previewTokens.flow.component.experience?.headingLineHeight).toBe(1.25);
-    expect(previewTokens.flow.pagination.bottomFitSafetyMm).toBe(0.5);
-    expect(previewVars["--sidebar-width"]).toBe("0mm");
-    expect(previewVars["--margin-left"]).toBe("18mm");
-    expect(previewVars["--header-summary-width"]).toBe("120mm");
-    expect(previewVars["--workshop-section-title-reduction"]).toBe("0.95mm");
-    expect(previewVars["--workshop-experience-heading-size-adjust"]).toBe("0.2mm");
-    expect(previewVars["--workshop-experience-heading-line-height"]).toBe("1.25");
-    expect(previewVars["--flow-list-indent"]).toBe(
-      previewVars["--experience-bullets-padding"],
-    );
-    expect(exportTokens.id).toBe("workshop_resume_onecol_ats");
-    expect(exportTokens.shell).toBe("onecol");
-    expect(exportTokens.canonical.geometry.columns.sidebarMm).toBe(0);
-    expect(exportTokens.canonical.flow.measure.resumeReadingWidthMm).toBe(120);
-    expect(
-      serializeExportVars(exportTokens.canonical)["--flow-list-indent"],
-    ).toBe(
-      serializeExportVars(exportTokens.canonical)["--experience-bullets-padding"],
-    );
+it("resolves workshop preview and export resume tokens from the exact template id", () => {
+  const stylePreset = resolveVerbatiStyle({
+    familyId: "workshop",
+    layout: "workshop",
+    typography: "quiet-editorial",
+    palette: "sauge",
   });
+  const resumeTemplateId = getResumeTemplateId(stylePreset);
+  const previewTokens = normalizeResumePreviewTokens({
+    resumeTemplateId,
+    stylePreset,
+  });
+  const previewVars = serializeResumePreviewVars(previewTokens);
+  const exportTokens = normalizeResumeExportTokens({
+    mode: "styled",
+    resumeTemplateId,
+    stylePreset,
+  });
+
+  expect(resumeTemplateId).toBe("workshop_resume_onecol_ats");
+  expect(previewTokens.geometry.columns.sidebarMm).toBe(0);
+  expect(previewTokens.flow.measure.summaryWidthMm).toBe(120);
+  expect(previewTokens.flow.component.main?.sectionTitleReductionMm).toBe(0.95);
+  expect(previewTokens.flow.component.experience?.headingSizeAdjustMm).toBe(
+    0.2,
+  );
+  expect(previewTokens.flow.component.experience?.headingLineHeight).toBe(1.25);
+  expect(previewTokens.flow.pagination.bottomFitSafetyMm).toBe(0.5);
+  expect(previewVars["--sidebar-width"]).toBe("0mm");
+  expect(previewVars["--margin-left"]).toBe("18mm");
+  expect(previewVars["--header-summary-width"]).toBe("120mm");
+  expect(previewVars["--workshop-section-title-reduction"]).toBe("0.95mm");
+  expect(previewVars["--workshop-experience-heading-size-adjust"]).toBe(
+    "0.2mm",
+  );
+  expect(previewVars["--workshop-experience-heading-line-height"]).toBe("1.25");
+  expect(previewVars["--flow-list-indent"]).toBe(
+    previewVars["--experience-bullets-padding"],
+  );
+  expect(exportTokens.id).toBe("workshop_resume_onecol_ats");
+  expect(exportTokens.shell).toBe("onecol");
+  expect(exportTokens.canonical.geometry.columns.sidebarMm).toBe(0);
+  expect(exportTokens.canonical.flow.measure.resumeReadingWidthMm).toBe(120);
+  expect(
+    serializeExportVars(exportTokens.canonical)["--flow-list-indent"],
+  ).toBe(
+    serializeExportVars(exportTokens.canonical)["--experience-bullets-padding"],
+  );
+});

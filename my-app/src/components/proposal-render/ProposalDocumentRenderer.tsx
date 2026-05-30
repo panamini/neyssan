@@ -312,6 +312,21 @@ function lowercaseEnglishMonthNames(value: string): string {
   );
 }
 
+function splitJoellaSubjectLine(value: string): {
+  label: string;
+  subject: string;
+} {
+  const index = value.indexOf(":");
+  if (index === -1) {
+    return { label: "", subject: value };
+  }
+
+  return {
+    label: value.slice(0, index + 1),
+    subject: value.slice(index + 1),
+  };
+}
+
 function resolveJoellaWordmark(args: {
   candidateCompany: string;
   candidateName: string;
@@ -1148,14 +1163,28 @@ export function ProposalCoverLetterJoellaTemplate({
                 {group.lines.map((line, lineIndex) => (
                   <p
                     key={`joella-letter-block-${groupIndex}-${line}`}
-                    className={
+                    className={[
                       lineIndex === 0 &&
                       (group.kind === "sender" || group.kind === "recipient")
                         ? "proposal-cover-letter__joella-letter-block-line--strong"
-                        : undefined
-                    }
+                        : "",
+                      group.kind === "subject"
+                        ? "proposal-cover-letter__joella-letter-block-line--subject"
+                        : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
                   >
-                    {line}
+                    {group.kind === "subject" ? (
+                      <>
+                        {splitJoellaSubjectLine(line).label}
+                        <span className="proposal-cover-letter__joella-letter-block-subject-value">
+                          {splitJoellaSubjectLine(line).subject}
+                        </span>
+                      </>
+                    ) : (
+                      line
+                    )}
                   </p>
                 ))}
               </div>
