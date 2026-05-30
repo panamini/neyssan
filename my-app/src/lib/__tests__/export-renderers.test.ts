@@ -540,11 +540,41 @@ describe("export-renderers", () => {
       expect(document.body.textContent).not.toContain("Vorbereitungssekretariat");
       expect(document.body.textContent).not.toContain("Institut für Auslandsbeziehungen");
       if (templateId === "moma-bauhaus-letterhead") {
+        const senderText =
+          page?.querySelector(".proposal-cover-letter__bauhaus-sender")
+            ?.textContent ?? "";
+        const recipientText =
+          page?.querySelector(".proposal-cover-letter__bauhaus-recipient")
+            ?.textContent ?? "";
+        const headerText =
+          page?.querySelector(".proposal-cover-letter__bauhaus-header")
+            ?.textContent ?? "";
+        const footerLeftText =
+          page?.querySelector(".proposal-cover-letter__bauhaus-footer--left")
+            ?.textContent ?? "";
+        const footerRightText =
+          page?.querySelector(".proposal-cover-letter__bauhaus-footer--right")
+            ?.textContent ?? "";
+
         expect(page?.querySelector(".proposal-cover-letter__bauhaus-frame")).toBeTruthy();
-        expect(page?.querySelector(".proposal-cover-letter__bauhaus-sender")?.textContent)
-          .toContain("Alex Mercer");
-        expect(page?.querySelector(".proposal-cover-letter__bauhaus-recipient")?.textContent)
-          .toContain("Studio Nord");
+        expect(senderText).toContain("Alex Mercer");
+        expect(senderText).toContain("Designer de systèmes");
+        expect(senderText).toContain("Paris");
+        expect(senderText).not.toContain("alex@example.com");
+        expect(senderText).not.toContain("+33 6 00 00 00 00");
+        expect(senderText).not.toContain("portfolio.example.com");
+        expect(recipientText).toContain("Studio Nord");
+        expect(recipientText).not.toContain("Candidature");
+        expect(headerText).not.toContain("Candidature");
+        expect(headerText).toContain("Designer de systèmes");
+        expect(
+          page?.querySelector(".proposal-cover-letter__bauhaus-meta")
+            ?.textContent,
+        ).toContain("Re: Candidature");
+        expect(footerLeftText).toContain("alex@example.com");
+        expect(footerLeftText).toContain("+33 6 00 00 00 00");
+        expect(footerRightText).toContain("portfolio.example.com");
+        expect(footerRightText).toContain("Paris");
       }
     },
   );

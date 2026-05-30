@@ -1262,12 +1262,15 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     expect(sender?.textContent).toContain("Avery Stone");
     expect(sender?.textContent).toContain("Stone Systems");
     expect(sender?.textContent).toContain("Operations Lead");
-    expect(sender?.textContent).toContain("avery@example.com");
-    expect(sender?.textContent).toContain("+33 6 01 02 03 04");
     expect(sender?.textContent).toContain("Paris");
+    expect(sender?.textContent).not.toContain("avery@example.com");
+    expect(sender?.textContent).not.toContain("+33 6 01 02 03 04");
+    expect(sender?.textContent).not.toContain("linkedin.com/in/avery");
+    expect(sender?.textContent).not.toContain("avery.work");
     expect(recipient?.textContent).toContain("Morgan Lee");
     expect(recipient?.textContent).toContain("Talent Director");
     expect(recipient?.textContent).toContain("Northwind Studio");
+    expect(recipient?.textContent).not.toContain("Application for Operations Lead");
     expect(recipient?.textContent).toContain("10 Gallery Road");
     expect(recipient?.textContent).toContain("Berlin");
     expect(recipient?.textContent).toContain("morgan@northwind.example");
@@ -1278,7 +1281,11 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     expect(
       renderedPage?.querySelector(".proposal-cover-letter__bauhaus-subtitle")
         ?.textContent,
-    ).toBe("Application for Operations Lead");
+    ).toBe("Operations Lead");
+    expect(
+      renderedPage?.querySelector(".proposal-cover-letter__bauhaus-header")
+        ?.textContent,
+    ).not.toContain("Application for Operations Lead");
     expect(renderedPage?.textContent).toContain("May 30, 2026");
     expect(renderedPage?.textContent).toContain(
       "Re: Application for Operations Lead",
@@ -1288,6 +1295,10 @@ describe("ProposalDocumentRenderer volk register layout", () => {
         ?.textContent,
     ).toContain("avery@example.com");
     expect(
+      renderedPage?.querySelector(".proposal-cover-letter__bauhaus-footer--left")
+        ?.textContent,
+    ).toContain("+33 6 01 02 03 04");
+    expect(
       renderedPage?.querySelector(".proposal-cover-letter__bauhaus-footer--right")
         ?.textContent,
     ).toContain("linkedin.com/in/avery");
@@ -1295,6 +1306,10 @@ describe("ProposalDocumentRenderer volk register layout", () => {
       renderedPage?.querySelector(".proposal-cover-letter__bauhaus-footer--right")
         ?.textContent,
     ).toContain("avery.work");
+    expect(
+      renderedPage?.querySelector(".proposal-cover-letter__bauhaus-footer--right")
+        ?.textContent,
+    ).toContain("Paris");
     expect(paragraphs).toEqual([
       "First Bauhaus body paragraph.",
       "Second Bauhaus body paragraph.",

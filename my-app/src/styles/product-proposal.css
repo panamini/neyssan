@@ -4357,11 +4357,12 @@
 
 .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-meta {
   left: 32mm;
-  top: 86.5mm;
-  right: 8mm;
-  display: flex;
-  gap: 7mm;
-  align-items: baseline;
+  top: 106mm;
+  right: 18mm;
+  display: grid;
+  grid-template-columns: 28mm minmax(0, 1fr);
+  column-gap: 10mm;
+  align-items: start;
   min-width: 0;
 }
 
@@ -4379,7 +4380,7 @@
 
 .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__body {
   left: 32mm;
-  top: 116mm;
+  top: 128mm;
   width: min(112mm, 62ch);
   max-width: min(112mm, 62ch);
   display: grid;

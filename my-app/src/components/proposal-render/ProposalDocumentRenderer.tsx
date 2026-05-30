@@ -725,8 +725,6 @@ export function ProposalCoverLetterMomaBauhausTemplate({
     viewModel.candidateCompany,
     viewModel.candidateRole,
     viewModel.candidateLocationLine,
-    viewModel.candidateEmail,
-    viewModel.candidatePhone,
   ]);
   const recipientLines = uniqueNonEmptyLines([
     viewModel.recipientName,
@@ -738,8 +736,7 @@ export function ProposalCoverLetterMomaBauhausTemplate({
     viewModel.candidateCompany ||
     viewModel.candidateName ||
     viewModel.recipientCompany;
-  const subtitle =
-    viewModel.subject || viewModel.candidateRole || viewModel.shortRoleTitle;
+  const subtitle = viewModel.candidateRole || viewModel.shortRoleTitle;
   const footerLeft = joinNonEmpty([
     viewModel.candidateEmail,
     viewModel.candidatePhone,
