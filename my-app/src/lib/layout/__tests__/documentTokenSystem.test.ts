@@ -205,8 +205,8 @@ describe("document token system", () => {
       },
       {
         palette: "terre",
-        mark: "#bb5522",
-        structure: "#789fa4",
+        mark: "#a84e2e",
+        structure: "#878f8d",
       },
       {
         palette: "sauge",
@@ -220,8 +220,8 @@ describe("document token system", () => {
       },
       {
         palette: "ochre",
-        mark: "#a7472f",
-        structure: "#2f2d29",
+        mark: "#b8843a",
+        structure: "#3b6e4e",
       },
     ] as const;
 

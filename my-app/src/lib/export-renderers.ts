@@ -2039,7 +2039,7 @@ function buildStyledProposalAppearanceCss(): string {
       top: 285.75mm;
       max-width: 150mm;
       transform: translateY(-100%);
-      font-size: 6pt;
+      font-size: 7pt;
       line-height: 1;
       font-weight: 700;
       letter-spacing: 0.018em;
@@ -3626,7 +3626,7 @@ function buildExportJoellaFooterLine(args: {
   return uniqueExportNonEmptyLines([args.location, args.email, args.phone])
     .map(normalizeExportJoellaDisplayText)
     .filter(Boolean)
-    .join("  ");
+    .join(" · ");
 }
 
 function buildExportBayerFooterLine(args: {
