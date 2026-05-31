@@ -36,10 +36,8 @@ import {
   readDocumentExportDebugConfig,
   setProposalPreviewDebugCapture,
 } from "../lib/document-export-debug";
-import {
-  A4_PAGE_HEIGHT_PX,
-  A4_PAGE_WIDTH_PX,
-} from "../lib/document-stage";
+import type { DocumentPageSize } from "../lib/document-page-size";
+import { resolveDocumentPageSize } from "../lib/document-page-size";
 import {
   getTextareaSelectionState,
   isInlineAiToolbarActiveElement,
@@ -155,6 +153,7 @@ interface ProposalDisplayProps {
   characterLimitAdvisory?: boolean;
   showPreviewParagraphActions?: boolean;
   showPageCountBadge?: boolean;
+  pageSize?: DocumentPageSize | null;
 }
 
 const PREVIEW_PARAGRAPH_ACTIONS: Array<{
@@ -642,6 +641,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   showDocumentCaption = true,
   showPreviewParagraphActions = true,
   showPageCountBadge = true,
+  pageSize = null,
 }) => {
   const resolvedRenderState = React.useMemo(
     () =>
@@ -653,6 +653,10 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   );
   const resolvedStylePreset = resolvedRenderState.stylePreset;
   const resolvedTemplateId = resolvedRenderState.templateId;
+  const resolvedPageSize = React.useMemo(
+    () => resolveDocumentPageSize({ pageSize }),
+    [pageSize],
+  );
   const fallbackDisclosure = getProposalGenerationFallbackDisclosureMessage(
     fallbackInfo ?? {},
   );
@@ -959,10 +963,10 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     fillAvailableOnZoom:
       usesDocumentRenderer && !isEditable && previewFitMode === "contain",
     includeParentMeasurement: shouldUseParentPreviewMeasurement,
-    pageWidthPx: A4_PAGE_WIDTH_PX,
-    pageHeightPx: A4_PAGE_HEIGHT_PX,
-    initialAvailableWidthPx: A4_PAGE_WIDTH_PX,
-    initialAvailableHeightPx: A4_PAGE_HEIGHT_PX,
+    pageWidthPx: resolvedPageSize.widthPx,
+    pageHeightPx: resolvedPageSize.heightPx,
+    initialAvailableWidthPx: resolvedPageSize.widthPx,
+    initialAvailableHeightPx: resolvedPageSize.heightPx,
   });
   const stageLayoutVars =
     hasDocumentShell
@@ -982,12 +986,12 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     usesDocumentRenderer && !isEditable
       ? Math.max(
           12,
-          Math.round(24 * (stageLayout.pageWidth / A4_PAGE_WIDTH_PX)),
+          Math.round(24 * (stageLayout.pageWidth / resolvedPageSize.widthPx)),
         )
       : 0;
   const previewDocumentScale =
     usesDocumentRenderer && !isEditable && stageLayout.pageWidth > 0
-      ? stageLayout.pageWidth / A4_PAGE_WIDTH_PX
+      ? stageLayout.pageWidth / resolvedPageSize.widthPx
       : 1;
   const unscaledDocumentPageGapPx =
     usesDocumentRenderer && !isEditable && previewDocumentScale > 0
@@ -1002,7 +1006,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         : stageLayout.pageHeight;
   const renderedUnscaledDocumentHeight =
     usesDocumentRenderer && !isEditable
-      ? A4_PAGE_HEIGHT_PX * Math.max(1, documentPageCount) +
+      ? resolvedPageSize.heightPx * Math.max(1, documentPageCount) +
         unscaledDocumentPageGapPx * Math.max(0, documentPageCount - 1)
       : renderedDocumentHeight;
   const isMultiPagePreview =
@@ -2476,7 +2480,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             <div
               className="dasti-proposal-sheet__preview-scale-shell"
               style={{
-                width: `${A4_PAGE_WIDTH_PX}px`,
+                width: `${resolvedPageSize.widthPx}px`,
                 height: `${renderedUnscaledDocumentHeight}px`,
                 transform: `translateX(-50%) scale(${previewDocumentScale})`,
               }}
@@ -2492,7 +2496,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                   .join(" ")}
                 data-document-page="true"
                 style={{
-                  width: `${A4_PAGE_WIDTH_PX}px`,
+                  width: `${resolvedPageSize.widthPx}px`,
                   height: `${renderedUnscaledDocumentHeight}px`,
                   aspectRatio: isMultiPagePreview ? "auto" : undefined,
                 }}
@@ -2525,7 +2529,8 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                       ? "No draft yet. Add a job offer to generate, or start blank."
                       : null
                   }
-                  pageWidth={A4_PAGE_WIDTH_PX}
+                  pageSize={resolvedPageSize}
+                  pageWidth={resolvedPageSize.widthPx}
                   pageGapPx={unscaledDocumentPageGapPx}
                   onPageCountChange={setDocumentPageCount}
                 />

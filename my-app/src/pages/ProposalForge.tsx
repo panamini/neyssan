@@ -230,7 +230,10 @@ import {
   readProposalPreviewDebugCapture,
   setStyledProposalExportContext,
 } from "../lib/document-export-debug";
-import { A4_PAGE_WIDTH_PX } from "../lib/document-stage";
+import {
+  resolveDocumentPageSize,
+  type DocumentPageSizePreference,
+} from "../lib/document-page-size";
 import { exportDocumentFile } from "../lib/exportDocumentFile";
 import {
   ensureProposalSignatureName,
@@ -320,10 +323,6 @@ type ProposalForgeHandoffRecord = {
   createdAt?: number;
 } | null;
 
-// Browser width-map audit confirmed the workspace's visible Proposal paper
-// matches the renderer A4 width at the current design scale (~793.7px), while
-// --forge-page-inline-size includes legacy frame/gutter space.
-const PROPOSAL_PAPER_VISUAL_INLINE_SIZE = `${Math.round(A4_PAGE_WIDTH_PX * 100) / 100}px`;
 // Mirrors --app-nav-panel-width-wide from foundation.css so docked drawer
 // decisions use the remaining page column, not the full window width.
 const FORGE_DOCKED_PANEL_INLINE_SIZE_PX = 320;
@@ -3205,6 +3204,8 @@ export function ProposalForge(): JSX.Element {
   const [proposalExportingFormat, setProposalExportingFormat] = React.useState<
     string | null
   >(null);
+  const [proposalPageSizePreference, setProposalPageSizePreference] =
+    React.useState<DocumentPageSizePreference>("auto");
   const [lastProposalRequest, setLastProposalRequest] =
     React.useState<FormValues | null>(null);
   const [composePreviewValues, setComposePreviewValues] =
@@ -5526,6 +5527,21 @@ export function ProposalForge(): JSX.Element {
           ) ?? null
         : null,
     [selectedProposalId, sortedSavedProposals],
+  );
+  const resolvedProposalPageSize = React.useMemo(
+    () =>
+      resolveDocumentPageSize({
+        preference: proposalPageSizePreference,
+        locale: isSavedView
+          ? openedSavedProposal?.metadata?.resolvedLanguage
+          : storedOutputDraft?.resolvedLanguage,
+      }),
+    [
+      isSavedView,
+      openedSavedProposal?.metadata?.resolvedLanguage,
+      proposalPageSizePreference,
+      storedOutputDraft?.resolvedLanguage,
+    ],
   );
   const querySelectedSavedProposal = React.useMemo(
     () =>
@@ -9979,7 +9995,9 @@ export function ProposalForge(): JSX.Element {
   );
   // Page + rail + grid gap + page padding need room before two-pane mode is safe.
   const proposalTwoPaneMinViewportWidth = 1420;
-  const proposalPaperVisualInlineSize = `min(100%, ${PROPOSAL_PAPER_VISUAL_INLINE_SIZE})`;
+  const proposalPaperVisualInlineSize = `min(100%, ${
+    Math.round(resolvedProposalPageSize.widthPx * 100) / 100
+  }px)`;
   const proposalBaseWorkspaceOutputShellInlineSize =
     "var(--proposal-paper-visual-inline-size)";
   const proposalWorkspaceShellBlockSize =
@@ -10132,6 +10150,7 @@ export function ProposalForge(): JSX.Element {
         signatureSettings: proposalSignatureSettings,
         closing: effectiveProposalClosing,
         locale: storedOutputDraft?.resolvedLanguage,
+        pageSize: resolvedProposalPageSize,
       }),
     [
       composePreviewValues?.jobDescription,
@@ -10150,6 +10169,7 @@ export function ProposalForge(): JSX.Element {
       proposalSignatureSettings,
       proposalType,
       proposalContent,
+      resolvedProposalPageSize,
       storedOutputDraft?.resolvedLanguage,
     ],
   );
@@ -10183,6 +10203,7 @@ export function ProposalForge(): JSX.Element {
         signatureSettings: proposalSignatureSettings,
         closing: effectiveProposalClosing,
         locale: storedOutputDraft?.resolvedLanguage,
+        pageSize: resolvedProposalPageSize,
       }),
     [
       composePreviewValues?.jobDescription,
@@ -10205,6 +10226,7 @@ export function ProposalForge(): JSX.Element {
       proposalType,
       proposalContent,
       proposalVoicePreset,
+      resolvedProposalPageSize,
       storedOutputDraft?.resolvedLanguage,
     ],
   );
@@ -10232,7 +10254,7 @@ export function ProposalForge(): JSX.Element {
       closing: savedMetadata?.closing,
       content: savedProposalContent,
       proposalType: savedProposalType,
-      applicantName: savedApplicantHeader.name,
+      applicantName: savedApplicantHeader?.name ?? null,
       voicePreset: savedProposalVoicePreset,
     });
 
@@ -10259,10 +10281,12 @@ export function ProposalForge(): JSX.Element {
       signatureSettings: proposalSignatureSettings,
       closing: savedClosing,
       locale: savedMetadata?.resolvedLanguage,
+      pageSize: resolvedProposalPageSize,
     });
   }, [
     openedSavedProposal,
     proposalSignatureSettings,
+    resolvedProposalPageSize,
     savedProposalContent,
     savedProposalDocumentMeta,
     savedProposalDocumentTitle,
@@ -10302,7 +10326,7 @@ export function ProposalForge(): JSX.Element {
       closing: savedMetadata?.closing,
       content: savedProposalContent,
       proposalType: savedProposalType,
-      applicantName: savedApplicantHeader.name,
+      applicantName: savedApplicantHeader?.name ?? null,
       voicePreset: savedProposalVoicePreset,
     });
 
@@ -10333,12 +10357,14 @@ export function ProposalForge(): JSX.Element {
       signatureSettings: proposalSignatureSettings,
       closing: savedClosing,
       locale: savedMetadata?.resolvedLanguage,
+      pageSize: resolvedProposalPageSize,
     });
   }, [
     effectiveSavedProposalStylePreset,
     effectiveSavedProposalTemplateId,
     openedSavedProposal,
     proposalSignatureSettings,
+    resolvedProposalPageSize,
     savedProposalContent,
     savedProposalDocumentMeta,
     savedProposalDocumentTitle,
@@ -10974,6 +11000,8 @@ export function ProposalForge(): JSX.Element {
           format: "docx",
         });
       },
+      onPageSizePreferenceChange: setProposalPageSizePreference,
+      pageSizePreference: proposalPageSizePreference,
       onShareSavedProposal: isSavedView
         ? () => {
             void handleShareSavedProposal();
@@ -10996,6 +11024,7 @@ export function ProposalForge(): JSX.Element {
       proposalTopbarDocumentTitle,
       proposalContent,
       proposalExportingFormat,
+      proposalPageSizePreference,
       proposalTopbarDocumentState,
       proposalTopbarLengthLabel,
       savedProposalContent,
@@ -11091,7 +11120,9 @@ export function ProposalForge(): JSX.Element {
     () =>
       PROPOSAL_TEMPLATE_DEFINITIONS.map((template) => {
         const family: TemplateFamily =
-          template.id === "director-letterhead"
+          template.id === "twoweeks-letterhead"
+            ? "twoweeks-letterhead"
+            : template.id === "director-letterhead"
             ? "director-letterhead"
             : template.id === "volk-letterhead"
               ? "volk-letterhead"
@@ -11125,7 +11156,10 @@ export function ProposalForge(): JSX.Element {
         resolvedLanguage,
         "workspace.proposalTemplatesPanel",
       ),
-      subtitle: "A4 · 21 × 29.7 cm",
+      subtitle:
+        resolvedProposalPageSize.id === "letter"
+          ? "US Letter · 21.59 × 27.94 cm"
+          : "A4 · 21 × 29.7 cm",
       activeItemId: effectiveProposalTemplateId,
       items: proposalTemplatePanelItems,
       onSelect: (itemId: string) =>
@@ -11135,6 +11169,7 @@ export function ProposalForge(): JSX.Element {
       effectiveProposalTemplateId,
       handleProposalLayoutSelect,
       proposalTemplatePanelItems,
+      resolvedProposalPageSize.id,
       resolvedLanguage,
     ],
   );
@@ -12704,6 +12739,7 @@ export function ProposalForge(): JSX.Element {
                             size="default"
                             documentHeaderMode="hidden"
                             copyFeedback={copyFeedback}
+                            pageSize={resolvedProposalPageSize}
                             onContentChange={handleProposalContentChange}
                             onContentCommit={() => {
                               void handleProposalDocumentCommit();

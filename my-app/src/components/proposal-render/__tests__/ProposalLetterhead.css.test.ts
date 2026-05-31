@@ -13,8 +13,9 @@ const exportRendererSource = readFileSync(
 );
 
 describe("proposal letterhead CSS", () => {
-  it("keeps the letterhead templates scoped with stable A4 document geometry", () => {
+  it("keeps the letterhead templates scoped with resolved page-size geometry", () => {
     [
+      ".proposal-cover-letter--twoweeks",
       ".proposal-cover-letter--director",
       ".proposal-cover-letter--volk",
       ".proposal-cover-letter--film-foto",
@@ -27,10 +28,12 @@ describe("proposal letterhead CSS", () => {
     });
 
     expect(proposalCss).toMatch(
-      /\.proposal-cover-letter--director\s+\.dasti-proposal-document__page,[\s\S]*?\.proposal-cover-letter--film-foto\s+\.dasti-proposal-document__page\s*\{[\s\S]*width:\s*210mm;[\s\S]*min-height:\s*297mm;[\s\S]*height:\s*297mm;/,
+      /\.proposal-cover-letter--director\s+\.dasti-proposal-document__page,[\s\S]*?\.proposal-cover-letter--film-foto\s+\.dasti-proposal-document__page\s*\{[\s\S]*width:\s*calc\(var\(--proposal-inline-mm\)\s*\*\s*var\(--proposal-page-width-mm\)\);[\s\S]*min-height:\s*calc\(var\(--proposal-block-mm\)\s*\*\s*var\(--proposal-page-height-mm\)\);[\s\S]*height:\s*calc\(var\(--proposal-block-mm\)\s*\*\s*var\(--proposal-page-height-mm\)\);/,
     );
     expect(proposalCss).not.toContain("director-letterhead html");
+    expect(proposalCss).not.toContain("twoweeks-letterhead html");
     expect(proposalCss).not.toContain("body.proposal-cover-letter--director");
+    expect(proposalCss).not.toContain("body.proposal-cover-letter--twoweeks");
     expect(proposalCss).not.toContain(
       "body.proposal-cover-letter--moma-bauhaus",
     );
@@ -41,6 +44,130 @@ describe("proposal letterhead CSS", () => {
     expect(proposalCss).not.toContain("bayer-letterhead html");
     expect(proposalCss).not.toContain("Vorbereitungssekretariat");
     expect(proposalCss).not.toContain("Institut für Auslandsbeziehungen");
+  });
+
+  it("keeps the Twoweeks PDF-clone geometry scoped to its own preview and export CSS", () => {
+    const previewStart = proposalCss.indexOf(
+      ".proposal-cover-letter--twoweeks .dasti-proposal-document__page",
+    );
+    const previewEnd = proposalCss.indexOf(
+      ".proposal-cover-letter--director .dasti-proposal-document__page",
+    );
+    const exportStart = exportRendererSource.indexOf(
+      ".proposal-cover-letter--twoweeks.export-page",
+    );
+    const exportEnd = exportRendererSource.indexOf(
+      ".proposal-cover-letter--director.export-page",
+    );
+    const previewCss = proposalCss.slice(previewStart, previewEnd);
+    const exportCss = exportRendererSource.slice(exportStart, exportEnd);
+
+    expect(previewStart).toBeGreaterThanOrEqual(0);
+    expect(previewEnd).toBeGreaterThan(previewStart);
+    expect(exportStart).toBeGreaterThanOrEqual(0);
+    expect(exportEnd).toBeGreaterThan(exportStart);
+
+    expect(previewCss).toContain(
+      "width: calc(var(--proposal-inline-mm) * var(--proposal-page-width-mm));",
+    );
+    expect(previewCss).toContain(
+      "height: calc(var(--proposal-block-mm) * var(--proposal-page-height-mm));",
+    );
+    expect(exportCss).toContain("width: var(--page-width);");
+    expect(exportCss).toContain("height: var(--page-height);");
+
+    [
+      "left: 17mm;",
+      "top: 22mm;",
+      "left: 87mm;",
+      "top: 31mm;",
+      "top: 66mm;",
+      "top: 83mm;",
+      "width: min(105mm, 64ch);",
+      "display: block;",
+      "margin-bottom: 7mm;",
+      "margin-bottom: 6mm;",
+      "gap: 0;",
+      "font-size: 10pt;",
+      "font-size: 8pt;",
+      "font-size: 11pt;",
+      "line-height: 12pt;",
+      "line-height: 10pt;",
+      "line-height: 11pt;",
+      "line-height: 13pt;",
+      "line-height: 15pt;",
+      "font-weight: 500;",
+      "margin-bottom: 11pt;",
+      "letter-spacing: 0.05em;",
+      "text-transform: uppercase;",
+      "text-transform: capitalize;",
+      "text-transform: none;",
+    ].forEach((declaration) => {
+      expect(previewCss).toContain(declaration);
+      expect(exportCss).toContain(declaration);
+    });
+
+    expect(previewCss).not.toMatch(/\d+\.\d+mm/);
+    expect(exportCss).not.toMatch(/\d+\.\d+mm/);
+    expect(previewCss).toContain("height: 224mm;");
+    expect(exportCss).toContain("height: 224mm;");
+    expect(previewCss).toMatch(
+      /\.proposal-cover-letter--twoweeks\s+\.proposal-cover-letter__twoweeks-rail\s*\{[\s\S]*display:\s*block;[\s\S]*color:\s*var\(--proposal-document-accent-ink,\s*#385f8a\);[\s\S]*\}/,
+    );
+    expect(exportCss).toMatch(
+      /\.proposal-cover-letter--twoweeks\s+\.proposal-cover-letter__twoweeks-rail\s*\{[\s\S]*display:\s*block;[\s\S]*color:\s*var\(--accent,\s*#385f8a\);[\s\S]*\}/,
+    );
+    expect(previewCss).toMatch(
+      /\.proposal-cover-letter--twoweeks\s+\.proposal-cover-letter__twoweeks-name\s+\.proposal-cover-letter__twoweeks-role\s*\{[\s\S]*font-size:\s*8pt;[\s\S]*line-height:\s*10pt;[\s\S]*font-weight:\s*500;[\s\S]*text-transform:\s*capitalize;[\s\S]*\}/,
+    );
+    expect(exportCss).toMatch(
+      /\.proposal-cover-letter--twoweeks\s+\.proposal-cover-letter__twoweeks-name\s+\.proposal-cover-letter__twoweeks-role\s*\{[\s\S]*font-size:\s*8pt;[\s\S]*line-height:\s*10pt;[\s\S]*font-weight:\s*500;[\s\S]*text-transform:\s*capitalize;[\s\S]*\}/,
+    );
+    expect(previewCss).toMatch(
+      /\.proposal-cover-letter--twoweeks\s+\.proposal-cover-letter__twoweeks-contact p\s*\{[\s\S]*letter-spacing:\s*0;[\s\S]*text-transform:\s*none;[\s\S]*\}/,
+    );
+    expect(exportCss).toMatch(
+      /\.proposal-cover-letter--twoweeks\s+\.proposal-cover-letter__twoweeks-contact p\s*\{[\s\S]*letter-spacing:\s*0;[\s\S]*text-transform:\s*none;[\s\S]*\}/,
+    );
+    expect(previewCss).toMatch(
+      /\.proposal-cover-letter--twoweeks\s+\.proposal-cover-letter__twoweeks-subject\s*\{[\s\S]*font-weight:\s*400;[\s\S]*\}/,
+    );
+    expect(previewCss).toMatch(
+      /\.proposal-cover-letter--twoweeks\s+\.proposal-cover-letter__twoweeks-subject-label\s*\{[\s\S]*font-weight:\s*700;[\s\S]*\}/,
+    );
+    expect(previewCss).toMatch(
+      /\.proposal-cover-letter--twoweeks\s+\.proposal-cover-letter__twoweeks-subject-value\s*\{[\s\S]*font-weight:\s*400;[\s\S]*\}/,
+    );
+    expect(exportCss).toMatch(
+      /\.proposal-cover-letter--twoweeks\s+\.proposal-cover-letter__twoweeks-subject\s*\{[\s\S]*font-weight:\s*400;[\s\S]*\}/,
+    );
+    expect(exportCss).toMatch(
+      /\.proposal-cover-letter--twoweeks\s+\.proposal-cover-letter__twoweeks-subject-label\s*\{[\s\S]*font-weight:\s*700;[\s\S]*\}/,
+    );
+    expect(exportCss).toMatch(
+      /\.proposal-cover-letter--twoweeks\s+\.proposal-cover-letter__twoweeks-subject-value\s*\{[\s\S]*font-weight:\s*400;[\s\S]*\}/,
+    );
+    expect(previewCss).toMatch(
+      /\.proposal-cover-letter--twoweeks\s+\.proposal-cover-letter__twoweeks-label,[\s\S]*?\.proposal-cover-letter--twoweeks\s+\.proposal-cover-letter__twoweeks-contact\s*\{[\s\S]*font-family:\s*Arial,\s*Helvetica,\s*sans-serif;[\s\S]*\}/,
+    );
+    expect(exportCss).toMatch(
+      /\.proposal-cover-letter--twoweeks\s+\.proposal-cover-letter__twoweeks-label,[\s\S]*?\.proposal-cover-letter--twoweeks\s+\.proposal-cover-letter__twoweeks-contact\s*\{[\s\S]*font-family:\s*Arial,\s*Helvetica,\s*sans-serif;[\s\S]*\}/,
+    );
+    expect(previewCss).toContain("font-family: Arial, Helvetica, sans-serif;");
+    expect(previewCss).toContain(
+      'font-family: Georgia, "Times New Roman", Times, serif;',
+    );
+    expect(previewCss).toContain("var(--proposal-document-ink");
+    expect(previewCss).toContain("letter-spacing: 1pt;");
+    expect(previewCss).toContain("text-transform: uppercase;");
+    expect(exportCss).toContain("font-family: Arial, Helvetica, sans-serif;");
+    expect(exportCss).toContain(
+      'font-family: Georgia, "Times New Roman", Times, serif;',
+    );
+    expect(exportCss).toContain("var(--ink");
+    expect(exportCss).toContain("var(--paper");
+    expect(exportCss).toContain("letter-spacing: 1pt;");
+    expect(exportCss).toContain("text-transform: uppercase;");
   });
 
   it("keeps letterhead display roles on heading fonts and metadata roles on body fonts", () => {
@@ -84,9 +211,15 @@ describe("proposal letterhead CSS", () => {
       [".proposal-cover-letter--moma-bauhaus", "32mm"],
       [".proposal-cover-letter--joella", "35mm"],
     ].forEach(([scope, left]) => {
+      const widthPattern =
+        scope === ".proposal-cover-letter--moma-bauhaus"
+          ? "min\\(calc\\(var\\(--moma-bauhaus-body-width-mm\\) \\* 1mm\\),\\s*70ch\\)"
+          : scope === ".proposal-cover-letter--joella"
+            ? "min\\(calc\\(var\\(--joella-body-width-mm\\) \\* 1mm\\),\\s*70ch\\)"
+            : "min\\((?:96|132|140)mm,\\s*(?:58|70)ch\\)";
       expect(proposalCss).toMatch(
         new RegExp(
-          `${scope.replace(".", "\\.")}\\s+\\.proposal-cover-letter__body\\s*\\{[\\s\\S]*left:\\s*${left};[\\s\\S]*width:\\s*min\\((?:96|132|140)mm,\\s*(?:58|70)ch\\);`,
+          `${scope.replace(".", "\\.")}\\s+\\.proposal-cover-letter__body\\s*\\{[\\s\\S]*left:\\s*${left};[\\s\\S]*width:\\s*${widthPattern};`,
         ),
       );
     });
@@ -129,7 +262,7 @@ describe("proposal letterhead CSS", () => {
       /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__film-header\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*105mm\)\s*minmax\(0,\s*1fr\);[\s\S]*align-items:\s*end;[\s\S]*\}/,
     );
     expect(proposalCss).toMatch(
-      /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__film-heading\s*\{[\s\S]*font-weight:\s*500;[\s\S]*white-space:\s*nowrap;[\s\S]*\}/,
+      /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__film-heading\s*\{[\s\S]*font-weight:\s*500;[\s\S]*text-transform:\s*uppercase;[\s\S]*white-space:\s*nowrap;[\s\S]*\}/,
     );
     expect(proposalCss).toMatch(
       /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__film-title\s*\{[\s\S]*font-weight:\s*800;[\s\S]*white-space:\s*nowrap;[\s\S]*\}/,
@@ -139,6 +272,30 @@ describe("proposal letterhead CSS", () => {
     );
     expect(proposalCss).toMatch(
       /\.proposal-cover-letter--film-foto[\s\S]*?\.proposal-cover-letter__info-block--phone[\s\S]*?\{[\s\S]*overflow-wrap:\s*normal;[\s\S]*white-space:\s*nowrap;[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__film-rule\s*\{[\s\S]*height:\s*0\.8pt;[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__info-label\s*\{[\s\S]*font-weight:\s*400;[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__meta-item\s*\{[\s\S]*font-weight:\s*400;[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__recipient-block p\s*\{[\s\S]*font-weight:\s*400;[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__subject-label,[\s\S]*?\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__subject-value\s*\{[\s\S]*font-weight:\s*400;[\s\S]*color:\s*var\(--proposal-document-accent-ink\);[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__film-address-footer\s*\{[\s\S]*bottom:\s*18mm;[\s\S]*white-space:\s*nowrap;[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__dot\s*\{[\s\S]*bottom:\s*38\.8mm;[\s\S]*width:\s*2\.2mm;[\s\S]*height:\s*2\.2mm;[\s\S]*\}/,
+    );
+    expect(proposalCss).toContain(
+      "(var(--proposal-block-mm) * var(--proposal-page-height-mm) / 3) +",
     );
     expect(proposalCss).toMatch(
       /\.proposal-cover-letter--director\s+\.proposal-cover-letter__contact-lines p\s*\{[\s\S]*overflow:\s*visible;[\s\S]*text-overflow:\s*clip;[\s\S]*\}/,
@@ -174,20 +331,20 @@ describe("proposal letterhead CSS", () => {
       "top: 18mm;",
       "font-size: 9pt;",
       "line-height: 13pt;",
-      "left: 5mm;",
-      "top: 94mm;",
-      "width: 197mm;",
-      "height: 196mm;",
+      "--moma-bauhaus-frame-left-mm: 5;",
+      "--moma-bauhaus-frame-top-mm: 94;",
+      "--moma-bauhaus-frame-width-mm: calc(var(--proposal-page-width-mm) - 13);",
+      "--moma-bauhaus-frame-height-mm: calc(var(--proposal-page-height-mm) - 101);",
+      "--moma-bauhaus-footer-top-mm: calc(var(--proposal-page-height-mm) - 13);",
       "top: 121mm;",
       "top: 141mm;",
-      "top: 284mm;",
       "left: 102mm;",
     ].forEach((declaration) => {
       expect(momaCss).toContain(declaration);
       expect(exportMomaCss).toContain(declaration);
     });
     expect(proposalCss).toMatch(
-      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-frame\s*\{[\s\S]*left:\s*5mm;[\s\S]*top:\s*94mm;[\s\S]*width:\s*197mm;[\s\S]*height:\s*196mm;[\s\S]*border:\s*1mm solid var\(--proposal-document-accent-ink\);[\s\S]*\}/,
+      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-frame\s*\{[\s\S]*left:\s*calc\(var\(--moma-bauhaus-frame-left-mm\) \* 1mm\);[\s\S]*top:\s*calc\(var\(--moma-bauhaus-frame-top-mm\) \* 1mm\);[\s\S]*width:\s*calc\(var\(--moma-bauhaus-frame-width-mm\) \* 1mm\);[\s\S]*height:\s*calc\(var\(--moma-bauhaus-frame-height-mm\) \* 1mm\);[\s\S]*border:\s*1mm solid var\(--proposal-document-accent-ink\);[\s\S]*\}/,
     );
     expect(proposalCss).toMatch(
       /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-sender\s*\{[\s\S]*left:\s*32mm;[\s\S]*top:\s*11mm;[\s\S]*bottom:\s*auto;[\s\S]*width:\s*58mm;[\s\S]*gap:\s*0;[\s\S]*\}/,
@@ -229,7 +386,7 @@ describe("proposal letterhead CSS", () => {
       /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-meta-item--subject\s*\{[\s\S]*font-weight:\s*800;[\s\S]*\}/,
     );
     expect(proposalCss).toMatch(
-      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__body\s*\{[\s\S]*left:\s*32mm;[\s\S]*top:\s*141mm;[\s\S]*width:\s*min\(132mm,\s*70ch\);[\s\S]*\}/,
+      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__body\s*\{[\s\S]*left:\s*32mm;[\s\S]*top:\s*141mm;[\s\S]*width:\s*min\(calc\(var\(--moma-bauhaus-body-width-mm\) \* 1mm\),\s*70ch\);[\s\S]*\}/,
     );
     expect(proposalCss).toMatch(
       /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__body\s+\.dasti-proposal-document__salutation\s*\{[\s\S]*margin-bottom:\s*6pt;[\s\S]*\}/,
@@ -247,7 +404,7 @@ describe("proposal letterhead CSS", () => {
       /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__body\s+\.proposal-block--closing\s*\{[\s\S]*gap:\s*6pt;[\s\S]*padding-top:\s*10pt;[\s\S]*\}/,
     );
     expect(proposalCss).toMatch(
-      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-footer\s*\{[\s\S]*top:\s*284mm;[\s\S]*\}/,
+      /\.proposal-cover-letter--moma-bauhaus\s+\.proposal-cover-letter__bauhaus-footer\s*\{[\s\S]*top:\s*calc\(var\(--moma-bauhaus-footer-top-mm\) \* 1mm\);[\s\S]*\}/,
     );
   });
 
@@ -335,7 +492,7 @@ describe("proposal letterhead CSS", () => {
     expect(exportBayerCss).toContain("var(--accent");
   });
 
-  it("keeps Joella geometry scoped to the historical A4 frame in preview and export", () => {
+  it("keeps Joella geometry scoped to the historical page-size-aware frame in preview and export", () => {
     const joellaCss = proposalCss.slice(
       proposalCss.indexOf(
         ".proposal-cover-letter--joella .dasti-proposal-document__page",
@@ -350,14 +507,14 @@ describe("proposal letterhead CSS", () => {
     );
 
     [
-      "left: 5.5mm;",
-      "top: 6.8mm;",
-      "width: 198.5mm;",
-      "height: 282.8mm;",
-      "border: 1.32mm solid var(--proposal-joella-structure-color, #74a0c5);",
+      "--joella-frame-left-mm: 5.5;",
+      "--joella-frame-top-mm: 6.8;",
+      "--joella-frame-width-mm: calc(var(--proposal-page-width-mm) - 11.5);",
+      "--joella-frame-height-mm: calc(var(--proposal-page-height-mm) - 14.2);",
+      "--joella-body-width-mm: calc(var(--proposal-page-width-mm) - 70);",
+      "--joella-footer-top-mm: calc(var(--proposal-page-height-mm) - 11.25);",
       "top: 19.65mm;",
       "height: 0;",
-      "border-top: 1.32mm solid var(--proposal-joella-structure-color, #74a0c5);",
       "left: 9.8mm;",
       "height: 12.85mm;",
       "padding-top: 2mm;",
@@ -367,24 +524,40 @@ describe("proposal letterhead CSS", () => {
       "top: 45mm;",
       "right: 34mm;",
       "top: 35mm;",
-      "width: min(140mm, 70ch);",
+      "width: min(calc(var(--joella-body-width-mm) * 1mm), 70ch);",
       "margin-bottom: 9.3mm;",
       "font-size: 10pt;",
       "line-height: 4.65mm;",
       "left: 10.4mm;",
-      "top: 285.75mm;",
       "font-size: 7pt;",
     ].forEach((declaration) => {
       expect(joellaCss).toContain(declaration);
       expect(exportJoellaCss).toContain(declaration);
     });
 
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--joella\s+\.proposal-cover-letter__joella-frame\s*\{[\s\S]*left:\s*calc\(var\(--joella-frame-left-mm\) \* 1mm\);[\s\S]*top:\s*calc\(var\(--joella-frame-top-mm\) \* 1mm\);[\s\S]*width:\s*calc\(var\(--joella-frame-width-mm\) \* 1mm\);[\s\S]*height:\s*calc\(var\(--joella-frame-height-mm\) \* 1mm\);[\s\S]*\}/,
+    );
+    expect(proposalCss).toMatch(
+      /\.proposal-cover-letter--joella\s+\.proposal-cover-letter__joella-footer\s*\{[\s\S]*top:\s*calc\(var\(--joella-footer-top-mm\) \* 1mm\);[\s\S]*\}/,
+    );
+
+    expect(joellaCss).toContain(
+      "border: 1.32mm solid var(--proposal-joella-structure-color, #74a0c5);",
+    );
+    expect(joellaCss).toContain(
+      "border-top: 1.32mm solid var(--proposal-joella-structure-color, #74a0c5);",
+    );
+    expect(exportJoellaCss).toContain(
+      "border: 1.32mm solid var(--proposal-joella-structure-color);",
+    );
+    expect(exportJoellaCss).toContain(
+      "border-top: 1.32mm solid var(--proposal-joella-structure-color);",
+    );
     expect(joellaCss).toContain(
       "background-color: var(--proposal-document-paper, var(--paper, #FAF9F5));",
     );
-    expect(exportJoellaCss).toContain(
-      "background: var(--paper, #FAF9F5) !important;",
-    );
+    expect(exportJoellaCss).toContain("background: var(--paper) !important;");
     expect(proposalCss).toMatch(
       /\.proposal-cover-letter--joella\s+\.proposal-cover-letter__joella-wordmark\s*\{[\s\S]*transform:\s*none;[\s\S]*display:\s*flex;[\s\S]*align-items:\s*center;[\s\S]*color:\s*var\(--proposal-joella-mark-color,\s*#8f332f\);[\s\S]*font-weight:\s*700;[\s\S]*text-transform:\s*uppercase;[\s\S]*\}/,
     );
@@ -415,29 +588,64 @@ describe("proposal letterhead CSS", () => {
     );
   });
 
-  it("places recipient overflow details in scoped blocks and shifts the letter flow only when present", () => {
+  it("places recipient overflow details and subject rows in a shared flow stack", () => {
     [
-      ".proposal-cover-letter--director",
-      ".proposal-cover-letter--volk",
-      ".proposal-cover-letter--film-foto",
-    ].forEach((scope) => {
+      {
+        scope: ".proposal-cover-letter--director",
+        left: "25mm",
+        previewTopPattern: "98.2mm",
+        exportTopPattern: "98.2mm",
+        right: "25mm",
+      },
+      {
+        scope: ".proposal-cover-letter--volk",
+        left: "24mm",
+        previewTopPattern: "101.7mm",
+        exportTopPattern: "101.7mm",
+        right: "24mm",
+      },
+      {
+        scope: ".proposal-cover-letter--film-foto",
+        left: "20mm",
+        previewTopPattern:
+          "calc\\(var\\(--proposal-block-mm\\) \\* var\\(--proposal-page-height-mm\\) / 3\\)",
+        exportTopPattern: "calc\\(var\\(--page-height\\) / 3\\)",
+        right: "22mm",
+      },
+    ].forEach(({ scope, left, previewTopPattern, exportTopPattern, right }) => {
       expect(proposalCss).toContain(
-        `${scope} .proposal-cover-letter__recipient-block`,
+        `${scope} .proposal-cover-letter__recipient-subject-stack`,
+      );
+      expect(exportRendererSource).toContain(
+        `${scope} .proposal-cover-letter__recipient-subject-stack`,
+      );
+      expect(proposalCss).toMatch(
+        new RegExp(
+          `${scope.replaceAll(".", "\\.")}\\s+\\.proposal-cover-letter__recipient-subject-stack\\s*\\{[\\s\\S]*left:\\s*${left};[\\s\\S]*top:\\s*${previewTopPattern};[\\s\\S]*right:\\s*${right};[\\s\\S]*display:\\s*grid;[\\s\\S]*gap:\\s*3mm;`,
+        ),
+      );
+      expect(exportRendererSource).toMatch(
+        new RegExp(
+          `${scope.replaceAll(".", "\\.")}\\s+\\.proposal-cover-letter__recipient-subject-stack\\s*\\{[\\s\\S]*left:\\s*${left};[\\s\\S]*top:\\s*${exportTopPattern};[\\s\\S]*right:\\s*${right};[\\s\\S]*display:\\s*grid;[\\s\\S]*gap:\\s*3mm;`,
+        ),
       );
       expect(proposalCss).toContain(
         `${scope}.proposal-cover-letter--has-recipient-block`,
       );
     });
 
-    expect(proposalCss).toMatch(
-      /\.proposal-cover-letter--director\.proposal-cover-letter--has-recipient-block[\s\S]*?\.proposal-cover-letter__subject-row\s*\{[\s\S]*top:\s*111mm;[\s\S]*\}/,
-    );
-    expect(proposalCss).toMatch(
-      /\.proposal-cover-letter--volk\.proposal-cover-letter--has-recipient-block[\s\S]*?\.proposal-cover-letter__body\s*\{[\s\S]*top:\s*134mm;[\s\S]*\}/,
-    );
-    expect(proposalCss).toMatch(
-      /\.proposal-cover-letter--film-foto\.proposal-cover-letter--has-recipient-block[\s\S]*?\.proposal-cover-letter__body\s*\{[\s\S]*top:\s*132mm;[\s\S]*\}/,
-    );
+    [
+      ".proposal-cover-letter--director",
+      ".proposal-cover-letter--volk",
+      ".proposal-cover-letter--film-foto",
+    ].forEach((scope) => {
+      const oldSubjectShift = new RegExp(
+        `${scope.replaceAll(".", "\\.")}\\.proposal-cover-letter--has-recipient-block\\s+\\.proposal-cover-letter__subject-row\\s*\\{[^}]*top:`,
+      );
+
+      expect(proposalCss).not.toMatch(oldSubjectShift);
+      expect(exportRendererSource).not.toMatch(oldSubjectShift);
+    });
   });
 
   it("uses a grid-aligned Director contact strip for separate telephone and digital contacts", () => {
@@ -467,10 +675,49 @@ describe("proposal letterhead CSS", () => {
 
   it("keeps the Director metadata date in one fixed-width grid cell", () => {
     expect(proposalCss).toMatch(
-      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__meta-row\s*\{[\s\S]*grid-template-columns:\s*43mm 48mm 42mm 24mm;[\s\S]*\}/,
+      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__meta-row\s*\{[\s\S]*grid-template-columns:\s*38mm 42mm 34mm minmax\(30mm,\s*max-content\);[\s\S]*\}/,
     );
     expect(proposalCss).toMatch(
-      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__meta-item:last-child\s*\{[\s\S]*white-space:\s*nowrap;[\s\S]*overflow-wrap:\s*normal;[\s\S]*\}/,
+      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__meta-item:last-child\s*\{[\s\S]*justify-self:\s*end;[\s\S]*text-align:\s*right;[\s\S]*white-space:\s*nowrap;[\s\S]*overflow-wrap:\s*normal;[\s\S]*\}/,
     );
+    expect(exportRendererSource).toMatch(
+      /\.proposal-cover-letter--director\s+\.proposal-cover-letter__meta-item:last-child\s*\{[\s\S]*justify-self:\s*end;[\s\S]*text-align:\s*right;[\s\S]*white-space:\s*nowrap;[\s\S]*overflow-wrap:\s*normal;[\s\S]*\}/,
+    );
+  });
+
+  it("uses rounded point typography and one-line right-aligned dates for Director, Volk, and Film", () => {
+    const previewStart = proposalCss.indexOf(
+      ".proposal-cover-letter--director .dasti-proposal-document__page",
+    );
+    const previewEnd = proposalCss.indexOf(
+      ".proposal-cover-letter--moma-bauhaus .dasti-proposal-document__page",
+    );
+    const exportStart = exportRendererSource.indexOf(
+      ".proposal-cover-letter--director .proposal-cover-letter__masthead",
+    );
+    const exportEnd = exportRendererSource.indexOf(
+      ".proposal-cover-letter--moma-bauhaus.export-page",
+      exportStart,
+    );
+    const previewLetterheadCss = proposalCss.slice(previewStart, previewEnd);
+    const exportLetterheadCss = exportRendererSource.slice(exportStart, exportEnd);
+
+    expect(previewLetterheadCss).not.toMatch(/font-size:\s*\d+(?:\.\d+)?mm;/);
+    expect(exportLetterheadCss).not.toMatch(/font-size:\s*\d+(?:\.\d+)?mm;/);
+    expect(previewLetterheadCss).not.toMatch(/font-size:\s*\d+\.\d+pt;/);
+    expect(exportLetterheadCss).not.toMatch(/font-size:\s*\d+\.\d+pt;/);
+
+    [
+      ".proposal-cover-letter--director",
+      ".proposal-cover-letter--volk",
+      ".proposal-cover-letter--film-foto",
+    ].forEach((scope) => {
+      const dateRule = new RegExp(
+        `${scope.replaceAll(".", "\\.")}\\s+\\.proposal-cover-letter__meta-item:last-child\\s*\\{[\\s\\S]*justify-self:\\s*end;[\\s\\S]*text-align:\\s*right;[\\s\\S]*white-space:\\s*nowrap;[\\s\\S]*overflow-wrap:\\s*normal;`,
+      );
+
+      expect(previewLetterheadCss).toMatch(dateRule);
+      expect(exportLetterheadCss).toMatch(dateRule);
+    });
   });
 });

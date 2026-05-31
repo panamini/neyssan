@@ -466,6 +466,12 @@ describe("ProposalDocumentRenderer volk register layout", () => {
 
   it.each([
     {
+      templateId: "twoweeks-letterhead" as const,
+      scope: ".proposal-cover-letter--twoweeks",
+      recipientSelector: ".proposal-cover-letter__twoweeks-recipient",
+      heading: "Jane Doe",
+    },
+    {
       templateId: "director-letterhead" as const,
       scope: ".proposal-cover-letter--director",
       heading: "Jane Doe",
@@ -746,6 +752,43 @@ describe("ProposalDocumentRenderer volk register layout", () => {
       .toContain("LINKEDIN");
     expect(root?.querySelector(".proposal-cover-letter__info-block--phone")?.textContent)
       .toContain("+38686834400002");
+    expect(
+      root?.querySelector(".proposal-cover-letter__film-address-footer")
+        ?.textContent,
+    ).toBe("CA 90291 United States");
+    const socialBlock = Array.from(
+      root?.querySelectorAll(".proposal-cover-letter__info-blocks > div") ??
+        [],
+    ).find(
+      (node) =>
+        node.querySelector(".proposal-cover-letter__info-label")?.textContent ===
+        "social",
+    );
+    const portfolioBlock = Array.from(
+      root?.querySelectorAll(".proposal-cover-letter__info-blocks > div") ??
+        [],
+    ).find(
+      (node) =>
+        node.querySelector(".proposal-cover-letter__info-label")?.textContent ===
+        "www",
+    );
+    expect(
+      Array.from(socialBlock?.querySelectorAll("p") ?? []).map(
+        (node) => node.textContent,
+      ),
+    ).toEqual(["social", "LINKEDIN"]);
+    expect(
+      root
+        ?.querySelector(".proposal-cover-letter__info-blocks > div")
+        ?.textContent,
+    ).not.toContain("CA 90291");
+    expect(
+      Array.from(portfolioBlock?.querySelectorAll("p") ?? []).map(
+        (node) => node.textContent,
+      ),
+    ).toEqual(["www", "PORTFOLIO.COM"]);
+    expect(socialBlock?.textContent).not.toContain(" · ");
+    expect(portfolioBlock?.textContent).not.toContain(" · ");
   });
 
   it.each([
@@ -1093,6 +1136,9 @@ describe("ProposalDocumentRenderer volk register layout", () => {
       const recipientBlock = renderedPage?.querySelector(
         ".proposal-cover-letter__recipient-block",
       );
+      const subjectLabel = renderedPage?.querySelector(
+        ".proposal-cover-letter__subject-label",
+      );
       const metaItems = Array.from(
         renderedPage?.querySelectorAll(".proposal-cover-letter__meta-item") ??
           [],
@@ -1105,10 +1151,16 @@ describe("ProposalDocumentRenderer volk register layout", () => {
       expect(recipientBlock?.textContent).toContain("Street address");
       expect(recipientBlock?.textContent).toContain("Company City");
       expect(recipientBlock?.textContent).toContain("recipient@example.com");
+      expect(recipientBlock?.textContent).not.toContain("Hiring Manager");
+      expect(recipientBlock?.textContent).not.toContain("Company Name");
+      expect(recipientBlock?.textContent).not.toContain("Talent Acquisition");
+      expect(subjectLabel?.textContent).toBe(
+        templateId === "film-foto-letterhead" ? "subject:" : "Subject:",
+      );
       expect(metaItems).toEqual([
         "Hiring Manager",
-        "Company Name",
         "Talent Acquisition",
+        "Company Name",
         "May 12, 2026",
       ]);
       expect(paragraphs).toEqual([
@@ -1265,35 +1317,250 @@ describe("ProposalDocumentRenderer volk register layout", () => {
       );
 
       const root = container.querySelector(scope);
-      const pageText = root?.textContent ?? "";
-      const recipientText = root?.querySelector(recipientSelector)?.textContent ?? "";
+      const renderedPage = Array.from(
+        root?.querySelectorAll(".dasti-proposal-document__page") ?? [],
+      ).at(-1);
+      const pageText = renderedPage?.textContent ?? "";
+      const recipientBlock = renderedPage?.querySelector(recipientSelector);
+      const recipientText = recipientBlock?.textContent ?? "";
 
-      [
+      const expectedPageValues = [
         "Avery Stone",
         "Operations Lead",
-        "Stone Systems",
         "avery@example.com",
         "+33 6 01 02 03 04",
         "linkedin.com/in/avery",
         "avery.work",
         "Paris / Remote",
-      ].forEach((value) => {
+      ];
+      if (scope !== ".proposal-cover-letter--film-foto") {
+        expectedPageValues.push("Stone Systems");
+      }
+      expectedPageValues.forEach((value) => {
         expect(pageText).toContain(value);
       });
 
-      [
-        "Hiring Manager",
-        "Head of Talent",
-        "Northwind",
-        "hiring@northwind.com",
-        "12 Rue de la Paix",
-        "Paris",
-        "Additional address line",
-      ].forEach((value) => {
-        expect(recipientText).toContain(value);
-      });
+      if (recipientSelector === ".proposal-cover-letter__recipient-block") {
+        const stack = renderedPage?.querySelector(
+          ".proposal-cover-letter__recipient-subject-stack",
+        );
+        const subjectRow = renderedPage?.querySelector(
+          ".proposal-cover-letter__subject-row",
+        );
+        const metaItems = Array.from(
+          renderedPage?.querySelectorAll(".proposal-cover-letter__meta-item") ??
+            [],
+        ).map((node) => node.textContent);
+
+        expect(stack).toBeTruthy();
+        expect(stack?.querySelector(recipientSelector)).toBe(recipientBlock);
+        expect(stack?.querySelector(".proposal-cover-letter__subject-row")).toBe(
+          subjectRow,
+        );
+        expect(metaItems).toEqual([
+          "Hiring Manager",
+          "Head of Talent",
+          "Northwind",
+          "May 30, 2026",
+        ]);
+        ["hiring@northwind.com", "12 Rue de la Paix", "Paris", "Additional address line"].forEach((value) => {
+          expect(recipientText).toContain(value);
+        });
+        ["Hiring Manager", "Head of Talent", "Northwind"].forEach((value) => {
+          expect(recipientText).not.toContain(value);
+        });
+        if (scope === ".proposal-cover-letter--film-foto") {
+          const labels = Array.from(
+            renderedPage?.querySelectorAll(
+              ".proposal-cover-letter__info-blocks .proposal-cover-letter__info-label",
+            ) ?? [],
+          ).map((node) => node.textContent);
+
+          expect(labels).toEqual([
+            "sender",
+            "company",
+            "phone",
+            "social",
+            "www",
+          ]);
+          expect(pageText).not.toContain("Stone Systems");
+        }
+      } else {
+        [
+          "Hiring Manager",
+          "Head of Talent",
+          "Northwind",
+          "hiring@northwind.com",
+          "12 Rue de la Paix",
+          "Paris",
+          "Additional address line",
+        ].forEach((value) => {
+          expect(recipientText).toContain(value);
+        });
+      }
     },
   );
+
+  it("renders the Twoweeks letterhead from drawer headings and design variables", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content={[
+          "Dear Hiring Manager:",
+          "First Twoweeks body paragraph.",
+          "Second Twoweeks body paragraph.",
+          "Kind regards,",
+          "Avery Stone",
+        ].join("\n\n")}
+        proposalType="cover_letter"
+        templateId="twoweeks-letterhead"
+        railTitle="Avery Stone"
+        railMeta="Operations Lead"
+        contactLine="avery@example.com · +33 6 01 02 03 04 · Paris / Remote · linkedin.com/in/avery · avery.work"
+        letterDate="May 30, 2026"
+        recipientDetails={
+          "Hiring Manager\nHead of Talent\nNorthwind\nhiring@northwind.com\n12 Rue de la Paix\nParis"
+        }
+        documentTitle="Application for Operations Lead"
+        headerVisibility={{
+          showSender: true,
+          showDate: true,
+          showSubject: true,
+          showRecipient: true,
+          showRecipientDetails: true,
+        }}
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        documentThemeVars={{
+          "--proposal-document-paper": "#fff7df",
+          "--proposal-document-ink": "#14213d",
+          "--proposal-document-accent-ink": "#385f8a",
+          "--heading-font": '"Drawer Heading", sans-serif',
+          "--body-font": '"Drawer Body", serif',
+        }}
+        applicantHeader={{
+          name: "Avery Stone",
+          role: "Operations Lead",
+          company: "Stone Systems",
+          email: "avery@example.com",
+          phone: "+33 6 01 02 03 04",
+          linkedin: "linkedin.com/in/avery",
+          website: "avery.work",
+          location: "Paris / Remote",
+          tag: null,
+        }}
+      />,
+    );
+
+    const root = container.querySelector(".proposal-cover-letter--twoweeks");
+    const renderedPage = Array.from(
+      root?.querySelectorAll(".dasti-proposal-document__page") ?? [],
+    ).at(-1);
+    const railElement = renderedPage?.querySelector(
+      ".proposal-cover-letter__twoweeks-rail",
+    );
+    const rail = railElement?.textContent ?? "";
+    const senderLines = Array.from(railElement?.querySelectorAll("p") ?? []).map(
+      (node) => node.textContent,
+    );
+    const twoweeksRole = railElement?.querySelector(
+      ".proposal-cover-letter__twoweeks-role",
+    );
+    const contactLines = Array.from(
+      railElement?.querySelectorAll(".proposal-cover-letter__twoweeks-contact p") ??
+        [],
+    ).map((node) => node.textContent);
+    const breakAfterContactLines = Array.from(
+      railElement?.querySelectorAll(
+        ".proposal-cover-letter__twoweeks-contact-line--break-after",
+      ) ?? [],
+    ).map((node) => node.textContent);
+    const recipientLines = Array.from(
+      renderedPage?.querySelectorAll(".proposal-cover-letter__twoweeks-recipient p") ??
+        [],
+    ).map((node) => node.textContent);
+    const paragraphs = Array.from(
+      renderedPage?.querySelectorAll(".dasti-proposal-document__paragraph") ??
+        [],
+    ).map((node) => node.textContent);
+
+    expect(root?.getAttribute("data-proposal-template")).toBe("twoweeks-letterhead");
+    expect(root?.getAttribute("style")).toContain(
+      "--proposal-document-paper: #fff7df",
+    );
+    expect(root?.getAttribute("style")).toContain(
+      "--proposal-document-accent-ink: #385f8a",
+    );
+    expect(rail).toContain("Avery");
+    expect(rail).toContain("Stone");
+    expect(rail).toContain("Operations Lead");
+    expect(rail).toContain("avery@example.com");
+    expect(rail).toContain("+33 6 01 02 03 04");
+    expect(rail).toContain("Paris / Remote");
+    expect(rail).toContain("linkedin.com/in/avery");
+    expect(rail).toContain("avery.work");
+    expect(rail).not.toContain("FROM");
+    expect(rail).not.toContain("TO");
+    expect(rail).not.toContain("Application for Operations Lead");
+    expect(senderLines).toEqual([
+      "Avery Stone",
+      "Operations Lead",
+      "Stone Systems",
+      "+33 6 01 02 03 04",
+      "avery@example.com",
+      "linkedin.com/in/avery",
+      "avery.work",
+      "Paris / Remote",
+    ]);
+    expect(twoweeksRole?.textContent).toBe("Operations Lead");
+    expect(contactLines).toEqual([
+      "+33 6 01 02 03 04",
+      "avery@example.com",
+      "linkedin.com/in/avery",
+      "avery.work",
+      "Paris / Remote",
+    ]);
+    expect(breakAfterContactLines).toEqual([
+      "avery@example.com",
+      "linkedin.com/in/avery",
+      "avery.work",
+    ]);
+    expect(
+      renderedPage?.querySelector(
+        ".proposal-cover-letter__twoweeks-recipient-label",
+      ),
+    ).toBeNull();
+    expect(recipientLines).toEqual([
+      "Hiring Manager",
+      "Head of Talent",
+      "Northwind",
+      "hiring@northwind.com",
+      "12 Rue de la Paix",
+      "Paris",
+    ]);
+    expect(
+      renderedPage?.querySelector(".proposal-cover-letter__twoweeks-date")
+        ?.textContent,
+    ).toBe("May 30, 2026");
+    expect(
+      renderedPage?.querySelector(".proposal-cover-letter__twoweeks-subject")
+        ?.textContent,
+    ).toBe("Subject: Application for Operations Lead");
+    expect(paragraphs).toEqual([
+      "First Twoweeks body paragraph.",
+      "Second Twoweeks body paragraph.",
+    ]);
+    expect(renderedPage?.textContent).toContain("Kind regards,");
+    expect(renderedPage?.textContent).toContain("Avery Stone");
+    expect(renderedPage?.textContent).not.toContain("undefined");
+    expect(renderedPage?.textContent).not.toContain("null");
+    expect(renderedPage?.textContent).not.toContain("[object Object]");
+    expect(renderedPage?.textContent).not.toContain(" ·  · ");
+  });
 
   it("renders the MoMA Bauhaus letterhead with real heading fields, ordered body, and closing", () => {
     const { container } = render(

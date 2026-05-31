@@ -20,6 +20,86 @@ import {
 } from "../document-export-models";
 
 describe("document-export-models", () => {
+  it("defaults active resume and proposal export sources to A4 page geometry", () => {
+    const currentCv = generateCvTemplate("Default A4 CV");
+    const resumeSource = buildStyledResumePrintSource({ currentCv });
+    const proposalSource = buildProposalPreviewPrintSource({
+      content: "Dear team,\n\nProposal body.",
+      proposalType: "cover_letter",
+      voicePreset: "signature",
+      railTitle: "Alex Martin",
+      railMeta: "Operations Lead",
+      contactLine: "alex@example.com",
+      letterDate: "Paris, April 16, 2026",
+      recipientDetails: "Hiring Manager",
+      documentTitle: "Proposal",
+      documentMeta: "alex@example.com",
+      applicantHeader: null,
+    });
+
+    expect(resumeSource?.pageSize).toEqual(
+      expect.objectContaining({
+        id: "a4",
+        widthMm: 210,
+        heightMm: 297,
+      }),
+    );
+    expect(proposalSource.pageSize).toEqual(
+      expect.objectContaining({
+        id: "a4",
+        widthMm: 210,
+        heightMm: 297,
+      }),
+    );
+  });
+
+  it("carries explicit Letter page geometry through preview print payloads", () => {
+    const currentCv = generateCvTemplate("Letter CV");
+    const resumeSource = buildStyledResumePrintSource({
+      currentCv,
+      pageSizePreference: "letter",
+    });
+    if (!resumeSource) {
+      throw new Error("Expected resume preview source.");
+    }
+
+    const resumePayload = buildResumePrintRoutePayload({ data: resumeSource });
+    const proposalSource = buildProposalPreviewPrintSource({
+      content: "Dear team,\n\nProposal body.",
+      proposalType: "cover_letter",
+      voicePreset: "signature",
+      railTitle: "Alex Martin",
+      railMeta: "Operations Lead",
+      contactLine: "alex@example.com",
+      letterDate: "Paris, April 16, 2026",
+      recipientDetails: "Hiring Manager",
+      documentTitle: "Proposal",
+      documentMeta: "alex@example.com",
+      applicantHeader: null,
+      pageSizePreference: "letter",
+    });
+    const proposalPayload = buildProposalPrintRoutePayload({
+      data: proposalSource,
+    });
+
+    expect(resumeSource.pageSize).toEqual(
+      expect.objectContaining({
+        id: "letter",
+        widthMm: 215.9,
+        heightMm: 279.4,
+      }),
+    );
+    expect(resumePayload.pageSize).toEqual(resumeSource.pageSize);
+    expect(proposalSource.pageSize).toEqual(
+      expect.objectContaining({
+        id: "letter",
+        widthMm: 215.9,
+        heightMm: 279.4,
+      }),
+    );
+    expect(proposalPayload.pageSize).toEqual(proposalSource.pageSize);
+  });
+
   it("preserves supported document locales on resume export sources and falls back for unsupported locales", () => {
     const supportedLocales = ["en", "fr", "ar", "ru", "ga"] as const;
 

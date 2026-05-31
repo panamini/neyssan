@@ -27,6 +27,19 @@ describe("ProposalForge export contract", () => {
     expect(proposalForgeSource).toContain("onShareSavedProposal");
   });
 
+  it("propagates the selected page size into proposal preview and exports", () => {
+    expect(proposalForgeSource).toContain("proposalPageSizePreference");
+    expect(proposalForgeSource).toContain(
+      "pageSize: resolvedProposalPageSize",
+    );
+    expect(proposalForgeSource).toContain(
+      "pageSize={resolvedProposalPageSize}",
+    );
+    expect(proposalForgeSource).toContain(
+      "onPageSizePreferenceChange: setProposalPageSizePreference",
+    );
+  });
+
   it("enables document zoom on the preview ProposalDisplay branch", () => {
     expect(proposalForgeSource).toContain("showZoomControls={true}");
   });

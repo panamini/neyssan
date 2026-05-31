@@ -1,7 +1,6 @@
 import React from "react";
 import type { FormValues } from "../ProposalInputForm.schemas";
 import {
-  getProposalTemplateDefinition,
   isProposalLetterheadTemplateId,
   resolveProposalTemplateId,
   type ProposalTemplateId,
@@ -40,6 +39,10 @@ import {
   resolveProposalSignatureRender,
   type ProposalSignatureSettings,
 } from "../../lib/proposal-signature-settings";
+import {
+  resolveDocumentPageSize,
+  type DocumentPageSize,
+} from "../../lib/document-page-size";
 
 type ProposalDocumentRendererProps = {
   content: string;
@@ -58,6 +61,7 @@ type ProposalDocumentRendererProps = {
   /** Explicit page width in px. When provided, syncs mm vars immediately on change
    *  without waiting for the ResizeObserver callback. */
   pageWidth?: number;
+  pageSize?: DocumentPageSize | null;
   pageGapPx?: number;
   stylePreset?: VerbatiStylePreset | null;
   documentThemeVars?: React.CSSProperties | null;
@@ -120,13 +124,20 @@ type ProposalLetterheadViewModel = {
   candidateDirectorContactGroups: Array<{ mark: "T" | "@"; lines: string[] }>;
   candidateVolkSenderLine: string;
   candidateFilmSenderLine: string;
+  candidateFilmAddressLine: string;
   candidateJoellaWordmark: string;
   candidateJoellaFooterLine: string;
   candidateBayerFooterLine: string;
+  candidateTwoweeksNameLines: string[];
+  candidateTwoweeksIdentityLines: string[];
+  candidateTwoweeksFooterLine: string;
+  candidateTwoweeksContactLines: string[];
   candidateLocationLine: string;
   candidatePhone: string;
   candidateEmail: string;
   candidateWebsite: string;
+  candidateSocialLines: string[];
+  candidateWebsiteLines: string[];
   recipientName: string;
   recipientCompany: string;
   recipientRole: string;
@@ -386,6 +397,45 @@ function buildBayerFooterLine(args: {
   ]).join(" · ");
 }
 
+function splitTwoweeksNameLines(value: string): string[] {
+  const line = value.trim();
+  return line ? [line] : [];
+}
+
+function buildTwoweeksDigitalLine(args: {
+  linkedin: string;
+  website: string;
+  other: string;
+}): string {
+  return uniqueNonEmptyLines([
+    args.linkedin,
+    args.website,
+    args.other,
+  ]).join(" · ");
+}
+
+function normalizeTwoweeksDigitalIdentifier(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function buildTwoweeksContactLines(args: {
+  phone: string;
+  email: string;
+  location: string;
+  linkedin: string;
+  website: string;
+  other: string;
+}): string[] {
+  return uniqueNonEmptyLines([
+    args.phone,
+    normalizeTwoweeksDigitalIdentifier(args.email),
+    normalizeTwoweeksDigitalIdentifier(args.linkedin),
+    normalizeTwoweeksDigitalIdentifier(args.website),
+    normalizeTwoweeksDigitalIdentifier(args.other),
+    args.location,
+  ]);
+}
+
 function buildJoellaHeaderContactLine(args: {
   phone: string;
   email: string;
@@ -588,8 +638,8 @@ function buildProposalLetterheadViewModel(args: {
   });
   const candidateFilmSenderLine = buildProposalContactLineFromParts({
     email: resolvedContactParts.email,
-    location: candidateShortLocationLine,
   });
+  const candidateFilmAddressLine = resolvedContactParts.location;
   const explicitJoellaCandidateName =
     args.applicantHeader?.name?.trim() ||
     (args.railTitle?.trim() &&
@@ -608,6 +658,24 @@ function buildProposalLetterheadViewModel(args: {
   });
   const candidateBayerFooterLine = buildBayerFooterLine({
     phone: resolvedContactParts.phone,
+    location: resolvedContactParts.location,
+    linkedin: resolvedContactParts.linkedin,
+    website: resolvedContactParts.website,
+    other: resolvedContactParts.other,
+  });
+  const candidateTwoweeksNameLines = splitTwoweeksNameLines(candidateName);
+  const candidateTwoweeksIdentityLines = uniqueNonEmptyLines([
+    candidateRole,
+    candidateCompany,
+  ]);
+  const candidateTwoweeksFooterLine = buildTwoweeksDigitalLine({
+    linkedin: resolvedContactParts.linkedin,
+    website: resolvedContactParts.website,
+    other: resolvedContactParts.other,
+  });
+  const candidateTwoweeksContactLines = buildTwoweeksContactLines({
+    phone: resolvedContactParts.phone,
+    email: resolvedContactParts.email,
     location: resolvedContactParts.location,
     linkedin: resolvedContactParts.linkedin,
     website: resolvedContactParts.website,
@@ -702,14 +770,26 @@ function buildProposalLetterheadViewModel(args: {
     candidateDirectorContactGroups,
     candidateVolkSenderLine,
     candidateFilmSenderLine,
+    candidateFilmAddressLine,
     candidateJoellaWordmark,
     candidateJoellaFooterLine,
     candidateBayerFooterLine,
+    candidateTwoweeksNameLines,
+    candidateTwoweeksIdentityLines,
+    candidateTwoweeksFooterLine,
+    candidateTwoweeksContactLines,
     candidateLocationLine: resolvedContactParts.location,
     candidatePhone: resolvedContactParts.phone,
     candidateEmail: resolvedContactParts.email,
     candidateWebsite: joinNonEmpty([
       resolvedContactParts.linkedin,
+      resolvedContactParts.website,
+    ]),
+    candidateSocialLines: uniqueNonEmptyLines([
+      resolvedContactParts.linkedin,
+      resolvedContactParts.other,
+    ]),
+    candidateWebsiteLines: uniqueNonEmptyLines([
       resolvedContactParts.website,
     ]),
     recipientName,
@@ -736,10 +816,11 @@ function ProposalCoverLetterMetaRow({
 }: {
   viewModel: ProposalLetterheadViewModel;
 }): JSX.Element {
+  const roleOrCompany = viewModel.metaRole || viewModel.recipientCompany;
   const values = [
     viewModel.recipientName,
-    viewModel.recipientCompany,
-    viewModel.metaRole,
+    roleOrCompany,
+    viewModel.metaRole ? viewModel.recipientCompany : "",
     viewModel.date,
   ];
 
@@ -756,7 +837,7 @@ function ProposalCoverLetterMetaRow({
 
 function ProposalCoverLetterSubjectRow({
   viewModel,
-  prefix = "Re:",
+  prefix = "Subject:",
 }: {
   viewModel: ProposalLetterheadViewModel;
   prefix?: string;
@@ -780,7 +861,7 @@ function ProposalCoverLetterRecipientBlock({
 }: {
   viewModel: ProposalLetterheadViewModel;
 }): JSX.Element | null {
-  if (viewModel.recipientHeadingLines.length === 0) {
+  if (viewModel.recipientContactLines.length === 0) {
     return null;
   }
 
@@ -789,10 +870,32 @@ function ProposalCoverLetterRecipientBlock({
       className="proposal-cover-letter__recipient-block"
       aria-label="Recipient contact details"
     >
-      {viewModel.recipientHeadingLines.map((line) => (
+      {viewModel.recipientContactLines.map((line) => (
         <p key={line}>{line}</p>
       ))}
     </section>
+  );
+}
+
+function ProposalCoverLetterRecipientSubjectStack({
+  prefix,
+  viewModel,
+}: {
+  prefix?: string;
+  viewModel: ProposalLetterheadViewModel;
+}): JSX.Element | null {
+  if (viewModel.recipientContactLines.length === 0 && !viewModel.subject) {
+    return null;
+  }
+
+  return (
+    <div
+      className="proposal-cover-letter__recipient-subject-stack"
+      aria-label="Recipient and subject details"
+    >
+      <ProposalCoverLetterRecipientBlock viewModel={viewModel} />
+      <ProposalCoverLetterSubjectRow viewModel={viewModel} prefix={prefix} />
+    </div>
   );
 }
 
@@ -837,6 +940,120 @@ function ProposalCoverLetterDirectorContactGrid({
         </div>
       ))}
     </section>
+  );
+}
+
+export function ProposalCoverLetterTwoweeksTemplate({
+  bodyRef,
+  bodyContent,
+  isContinuationPage,
+  viewModel,
+}: ProposalCoverLetterTemplateProps): JSX.Element {
+  const showSenderRail =
+    viewModel.showSender &&
+    Boolean(
+      viewModel.candidateTwoweeksNameLines.length ||
+        viewModel.candidateTwoweeksIdentityLines.length ||
+        viewModel.candidateTwoweeksContactLines.length,
+  );
+  const senderContactLines = viewModel.candidateTwoweeksContactLines;
+  const twoweeksRoleLine = viewModel.candidateTwoweeksIdentityLines[0] ?? "";
+  const twoweeksCompanyLines = viewModel.candidateTwoweeksIdentityLines.slice(1);
+  const twoweeksNameLine = viewModel.candidateTwoweeksNameLines.join(" ");
+  const twoweeksContactBreakAfter = new Set(
+    [
+      viewModel.candidateEmail,
+      ...viewModel.candidateSocialLines,
+      ...viewModel.candidateWebsiteLines,
+    ]
+      .map((line) => line.trim().toLowerCase())
+      .filter(Boolean),
+  );
+
+  return (
+    <>
+      {!isContinuationPage ? (
+        <>
+          {showSenderRail ? (
+            <aside
+              className="proposal-cover-letter__twoweeks-rail"
+              aria-label="Sender details"
+            >
+              {twoweeksNameLine || twoweeksRoleLine ? (
+                <div className="proposal-cover-letter__twoweeks-name">
+                  {twoweeksNameLine ? (
+                    <p className="proposal-cover-letter__twoweeks-name-value">
+                      {twoweeksNameLine}
+                    </p>
+                  ) : null}
+                  {twoweeksRoleLine ? (
+                    <p className="proposal-cover-letter__twoweeks-role">
+                      {twoweeksRoleLine}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+              {twoweeksCompanyLines.length > 0 ? (
+                <div className="proposal-cover-letter__twoweeks-identity">
+                  {twoweeksCompanyLines.map((line, index) => (
+                    <React.Fragment key={`twoweeks-identity-${index}-${line}`}>
+                      <p>{line}</p>
+                      {index < twoweeksCompanyLines.length - 1 ? " " : null}
+                    </React.Fragment>
+                  ))}
+                </div>
+              ) : null}
+              {senderContactLines.length > 0 ? (
+                <div className="proposal-cover-letter__twoweeks-contact">
+                  {senderContactLines.map((line, index) => (
+                    <React.Fragment key={`twoweeks-contact-${index}-${line}`}>
+                      <p
+                        className={
+                          twoweeksContactBreakAfter.has(line.toLowerCase())
+                            ? "proposal-cover-letter__twoweeks-contact-line--break-after"
+                            : undefined
+                        }
+                      >
+                        {line}
+                      </p>
+                      {index < senderContactLines.length - 1 ? " " : null}
+                    </React.Fragment>
+                  ))}
+                </div>
+              ) : null}
+            </aside>
+          ) : null}
+          {viewModel.date ? (
+            <p className="proposal-cover-letter__twoweeks-date">
+              {viewModel.date}
+            </p>
+          ) : null}
+          {viewModel.recipientHeadingLines.length > 0 ? (
+            <section
+              className="proposal-cover-letter__twoweeks-recipient"
+              aria-label="Recipient details"
+            >
+              {viewModel.recipientHeadingLines.map((line) => (
+                <p key={`twoweeks-recipient-${line}`}>{line}</p>
+              ))}
+            </section>
+          ) : null}
+          {viewModel.subject ? (
+            <p className="proposal-cover-letter__twoweeks-subject">
+              <span className="proposal-cover-letter__twoweeks-subject-label">
+                Subject:
+              </span>{" "}
+              <span className="proposal-cover-letter__twoweeks-subject-value">
+                {viewModel.subject}
+              </span>
+            </p>
+          ) : null}
+        </>
+      ) : null}
+      <div ref={bodyRef ?? undefined} className="proposal-cover-letter__body">
+        {bodyContent}
+      </div>
+    </>
   );
 }
 
@@ -889,8 +1106,7 @@ export function ProposalCoverLetterDirectorTemplate({
           </section>
           <ProposalCoverLetterDirectorContactGrid viewModel={viewModel} />
           <ProposalCoverLetterMetaRow viewModel={viewModel} />
-          <ProposalCoverLetterRecipientBlock viewModel={viewModel} />
-          <ProposalCoverLetterSubjectRow viewModel={viewModel} />
+          <ProposalCoverLetterRecipientSubjectStack viewModel={viewModel} />
         </>
       ) : null}
       <div ref={bodyRef ?? undefined} className="proposal-cover-letter__body">
@@ -933,8 +1149,9 @@ export function ProposalCoverLetterVolkTemplate({
             ) : null}
           </header>
           <ProposalCoverLetterMetaRow viewModel={viewModel} />
-          <ProposalCoverLetterRecipientBlock viewModel={viewModel} />
-          <ProposalCoverLetterSubjectRow viewModel={viewModel} prefix="re:" />
+          <ProposalCoverLetterRecipientSubjectStack
+            viewModel={viewModel}
+          />
           <span className="proposal-cover-letter__dot" aria-hidden="true" />
         </>
       ) : null}
@@ -976,34 +1193,45 @@ export function ProposalCoverLetterFilmFotoTemplate({
                 <p>{viewModel.candidateFilmSenderLine}</p>
               </div>
             ) : null}
-            {viewModel.candidatePhone ? (
-              <div className="proposal-cover-letter__info-block proposal-cover-letter__info-block--phone">
-                <p className="proposal-cover-letter__info-label">phone</p>
-                <p>{viewModel.candidatePhone}</p>
-              </div>
-            ) : null}
-            {viewModel.candidateCompany ? (
-              <div>
-                <p className="proposal-cover-letter__info-label">studio</p>
-                <p>{viewModel.candidateCompany}</p>
-              </div>
-            ) : null}
-            {viewModel.candidateWebsite ? (
-              <div>
-                <p className="proposal-cover-letter__info-label">portfolio</p>
-                <p>{viewModel.candidateWebsite}</p>
-              </div>
-            ) : null}
             {viewModel.recipientCompany ? (
               <div>
                 <p className="proposal-cover-letter__info-label">company</p>
                 <p>{viewModel.recipientCompany}</p>
               </div>
             ) : null}
+            {viewModel.candidatePhone ? (
+              <div className="proposal-cover-letter__info-block proposal-cover-letter__info-block--phone">
+                <p className="proposal-cover-letter__info-label">phone</p>
+                <p>{viewModel.candidatePhone}</p>
+              </div>
+            ) : null}
+            {viewModel.candidateSocialLines.length > 0 ? (
+              <div>
+                <p className="proposal-cover-letter__info-label">social</p>
+                {viewModel.candidateSocialLines.map((line) => (
+                  <p key={`film-social-${line}`}>{line}</p>
+                ))}
+              </div>
+            ) : null}
+            {viewModel.candidateWebsiteLines.length > 0 ? (
+              <div>
+                <p className="proposal-cover-letter__info-label">www</p>
+                {viewModel.candidateWebsiteLines.map((line) => (
+                  <p key={`film-portfolio-${line}`}>{line}</p>
+                ))}
+              </div>
+            ) : null}
           </section>
           <ProposalCoverLetterMetaRow viewModel={viewModel} />
-          <ProposalCoverLetterRecipientBlock viewModel={viewModel} />
-          <ProposalCoverLetterSubjectRow viewModel={viewModel} />
+          <ProposalCoverLetterRecipientSubjectStack
+            viewModel={viewModel}
+            prefix="subject:"
+          />
+          {viewModel.candidateFilmAddressLine ? (
+            <p className="proposal-cover-letter__film-address-footer">
+              {viewModel.candidateFilmAddressLine}
+            </p>
+          ) : null}
           <span className="proposal-cover-letter__dot" aria-hidden="true" />
         </>
       ) : null}
@@ -1677,6 +1905,7 @@ export function ProposalDocumentRenderer({
   headerVisibility,
   documentTypography,
   pageWidth,
+  pageSize = null,
   pageGapPx = 0,
   stylePreset = null,
   documentThemeVars = null,
@@ -1686,7 +1915,10 @@ export function ProposalDocumentRenderer({
   onPageCountChange,
 }: ProposalDocumentRendererProps): JSX.Element {
   const resolvedTemplateId = resolveProposalTemplateId(templateId);
-  const templateDefinition = getProposalTemplateDefinition(resolvedTemplateId);
+  const resolvedPageSize = React.useMemo(
+    () => resolveDocumentPageSize({ pageSize }),
+    [pageSize],
+  );
   const canonicalPreviewTokens = React.useMemo(
     () =>
       normalizeProposalPreviewTokens({
@@ -1694,8 +1926,15 @@ export function ProposalDocumentRenderer({
         documentTypography,
         stylePreset,
         pageGapPx,
+        pageSize: resolvedPageSize,
       }),
-    [documentTypography, pageGapPx, resolvedTemplateId, stylePreset],
+    [
+      documentTypography,
+      pageGapPx,
+      resolvedPageSize,
+      resolvedTemplateId,
+      stylePreset,
+    ],
   );
   const resolvedRailTitle =
     typeof railTitle === "string"
@@ -1800,12 +2039,8 @@ export function ProposalDocumentRenderer({
     [documentTypography.fontFamily, signatureRender],
   );
 
-  // --proposal-inline-mm / --proposal-block-mm are defined on :root as
-  // calc(100% / 210) / calc(100% / 297). When substituted into font-size,
-  // `100%` resolves to the inherited font-size (~17px), not the container
-  // width, producing a ~0.3px font-size. Override them here as concrete px
-  // values so every CSS property (font-size, grid, padding) gets the right
-  // scale regardless of context.
+  // Override proposal mm units with concrete px values so font-size, grid,
+  // and padding use the resolved physical page size instead of global fallbacks.
   const rootRef = React.useRef<HTMLDivElement>(null);
   const pageRef = React.useRef<HTMLDivElement>(null);
   const bodyRef = React.useRef<HTMLDivElement>(null);
@@ -1822,8 +2057,11 @@ export function ProposalDocumentRenderer({
     const sync = () => {
       const w = el.offsetWidth;
       if (w <= 0) return;
-      const mmPx = w / 210;
-      const runtimeVars = serializeProposalMeasurementRuntimeVars(mmPx);
+      const mmPx = w / resolvedPageSize.widthMm;
+      const runtimeVars = serializeProposalMeasurementRuntimeVars({
+        inlineMmPx: mmPx,
+        blockMmPx: mmPx,
+      });
       Object.entries(runtimeVars).forEach(([name, value]) => {
         el.style.setProperty(name, value);
       });
@@ -1832,7 +2070,7 @@ export function ProposalDocumentRenderer({
     const ro = new ResizeObserver(sync);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [resolvedPageSize.widthMm]);
 
   // When an explicit pageWidth is passed (e.g. from zoom controls), sync mm
   // vars immediately — before the ResizeObserver callback fires — so that
@@ -1840,12 +2078,15 @@ export function ProposalDocumentRenderer({
   React.useLayoutEffect(() => {
     const el = rootRef.current;
     if (!el || !pageWidth || pageWidth <= 0) return;
-    const mmPx = pageWidth / 210;
-    const runtimeVars = serializeProposalMeasurementRuntimeVars(mmPx);
+    const mmPx = pageWidth / resolvedPageSize.widthMm;
+    const runtimeVars = serializeProposalMeasurementRuntimeVars({
+      inlineMmPx: mmPx,
+      blockMmPx: mmPx,
+    });
     Object.entries(runtimeVars).forEach(([name, value]) => {
       el.style.setProperty(name, value);
     });
-  }, [pageWidth]);
+  }, [pageWidth, resolvedPageSize.widthMm]);
 
   React.useLayoutEffect(() => {
     const measurementPage = measurementPageRef.current;
@@ -2470,6 +2711,8 @@ export function ProposalDocumentRenderer({
       };
 
       switch (resolvedTemplateId) {
+        case "twoweeks-letterhead":
+          return <ProposalCoverLetterTwoweeksTemplate {...templateProps} />;
         case "director-letterhead":
           return <ProposalCoverLetterDirectorTemplate {...templateProps} />;
         case "volk-letterhead":
@@ -2495,6 +2738,9 @@ export function ProposalDocumentRenderer({
       className={[
         "dasti-proposal-document",
         `dasti-proposal-document--${resolvedTemplateId.replace(/_/g, "-")}`,
+        resolvedTemplateId === "twoweeks-letterhead"
+          ? "proposal-cover-letter--twoweeks"
+          : "",
         resolvedTemplateId === "director-letterhead"
           ? "proposal-cover-letter--director"
           : "",
@@ -2513,7 +2759,7 @@ export function ProposalDocumentRenderer({
         resolvedTemplateId === "bayer-letterhead"
           ? "proposal-cover-letter--bayer"
           : "",
-        letterheadViewModel.recipientHeadingLines.length > 0
+        letterheadViewModel.recipientContactLines.length > 0
           ? "proposal-cover-letter--has-recipient-block"
           : "",
         `dasti-proposal-document--${parsedDocument.kind}`,

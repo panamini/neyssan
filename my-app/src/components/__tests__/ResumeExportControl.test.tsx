@@ -99,4 +99,33 @@ describe("ResumeExportControl", () => {
       "Styled PDF is unavailable for the current resume layout.",
     );
   });
+
+  it("lets the user choose the CV page size before exporting", async () => {
+    const user = userEvent.setup();
+    const onExport = vi.fn();
+    const onPageSizePreferenceChange = vi.fn();
+
+    render(
+      <ResumeExportControl
+        exportingFormat={null}
+        onExport={onExport}
+        onPageSizePreferenceChange={onPageSizePreferenceChange}
+        pageSizePreference="auto"
+        statusDescription="Trusted Mistral v3"
+        statusLabel="ATS Ready"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "More export formats" }));
+
+    expect(screen.getByText("Page size")).toBeInTheDocument();
+    expect(screen.getByRole("menuitemradio", { name: /Auto/i })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+
+    await user.click(screen.getByRole("menuitemradio", { name: /US Letter/i }));
+
+    expect(onPageSizePreferenceChange).toHaveBeenCalledWith("letter");
+  });
 });

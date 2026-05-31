@@ -18,9 +18,12 @@ import { VOLK_REGISTER_GRID } from "../volkGrid";
 import type { DocumentStageLayout } from "../../../hooks/use-document-stage-layout";
 import {
   A4_PAGE_HEIGHT_PX,
-  A4_PAGE_WIDTH_PX,
   MM_TO_PX,
 } from "../../../lib/document-stage";
+import {
+  resolveDocumentPageSize,
+  type DocumentPageSize,
+} from "../../../lib/document-page-size";
 import { normalizeResumePreviewTokens } from "../../../lib/layout/documentTokenNormalizer";
 import { getResumeTemplateDefinition } from "../../../lib/layout/resumeTemplates";
 import {
@@ -53,6 +56,7 @@ type ResumePageProps = {
   inlineEditing?: ResumeInlineEditing | null;
   userZoom?: number;
   stageLayout?: DocumentStageLayout;
+  pageSize?: DocumentPageSize | null;
   onRemoveSection?:
     | ((section: {
         sectionId: string;
@@ -86,6 +90,9 @@ const PREVIEW_MONO_FAMILY =
 const ResumeUserZoomContext = React.createContext(1);
 const ResumeStageLayoutContext =
   React.createContext<DocumentStageLayout | null>(null);
+const ResumePageSizeContext = React.createContext<DocumentPageSize>(
+  resolveDocumentPageSize(),
+);
 const ResumeStylePresetContext = React.createContext<VerbatiStylePreset | null>(
   null,
 );
@@ -322,6 +329,7 @@ function usePreviewScale(args?: {
   const pageCount = Math.max(1, args?.pageCount ?? 1);
   const pageGapPx = Math.max(0, args?.pageGapPx ?? 0);
   const sharedStageLayout = React.useContext(ResumeStageLayoutContext);
+  const pageSize = React.useContext(ResumePageSizeContext);
   const userZoom = React.useContext(ResumeUserZoomContext);
   const stageRef = React.useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = React.useState(1);
@@ -346,11 +354,9 @@ function usePreviewScale(args?: {
         Number.parseFloat(styles.paddingRight || "0");
       if (!availableWidth) return;
 
-      // Fit = fill the available WIDTH. A4 at fill-width is always taller
-      // than the viewer shell, so including height in Math.min would always
-      // pick the height constraint and leave the page narrower than the
-      // viewport with large dark frames on both sides.
-      const fitScale = Math.min(1, availableWidth / A4_PAGE_WIDTH_PX);
+      // Fit = fill the available width. Tall documents at fill-width can be
+      // taller than the viewer shell, so height is handled by the scroll owner.
+      const fitScale = Math.min(1, availableWidth / pageSize.widthPx);
       const nextScale = fitScale * userZoom;
       setScale(nextScale > 0 ? nextScale : 1);
     };
@@ -364,19 +370,19 @@ function usePreviewScale(args?: {
       resizeObserver.disconnect();
       window.removeEventListener("resize", applyScale);
     };
-  }, [sharedStageLayout, userZoom]);
+  }, [pageSize.widthPx, sharedStageLayout, userZoom]);
 
   const resolvedScale = sharedStageLayout
-    ? sharedStageLayout.pageWidth / A4_PAGE_WIDTH_PX
+    ? sharedStageLayout.pageWidth / pageSize.widthPx
     : scale;
-  const previewPageHeightPx = A4_PAGE_HEIGHT_PX * resolvedScale;
+  const previewPageHeightPx = pageSize.heightPx * resolvedScale;
   const previewStackHeightPx =
-    (A4_PAGE_HEIGHT_PX * pageCount +
+    (pageSize.heightPx * pageCount +
       pageGapPx * Math.max(0, pageCount - 1)) *
     resolvedScale;
   const previewVars = {
     "--preview-scale": resolvedScale,
-    "--preview-stage-width": `${A4_PAGE_WIDTH_PX * resolvedScale}px`,
+    "--preview-stage-width": `${pageSize.widthPx * resolvedScale}px`,
     "--preview-page-height": `${previewPageHeightPx}px`,
     "--preview-stack-height": `${previewStackHeightPx}px`,
     "--preview-page-gap": `${pageGapPx}px`,
@@ -703,6 +709,7 @@ function HeaderMeta({
 function buildPageVars(
   variant: ResumeVariant,
   stylePreset?: VerbatiStylePreset | null,
+  pageSize?: DocumentPageSize | null,
 ): React.CSSProperties {
   const normalizedStyle = resolveVerbatiStyle(stylePreset ?? null);
   const templateDefinition = getResumeTemplateDefinition(
@@ -711,6 +718,7 @@ function buildPageVars(
   const canonical = normalizeResumePreviewTokens({
     resumeTemplateId: templateDefinition.id,
     stylePreset: normalizedStyle,
+    pageSize,
   });
 
   return {
@@ -1214,10 +1222,9 @@ function QuirePage({
   onActivateComparison?: (() => void) | undefined;
   fitToken?: string;
 }) {
-  const pageVars = buildPageVars(
-    variant,
-    React.useContext(ResumeStylePresetContext),
-  );
+  const stylePreset = React.useContext(ResumeStylePresetContext);
+  const pageSize = React.useContext(ResumePageSizeContext);
+  const pageVars = buildPageVars(variant, stylePreset, pageSize);
   const { pageRef, innerRef } = useAutoFitPage(fitToken);
 
   const email = findLabeledValue(data.contact, ["email"]);
@@ -1751,10 +1758,9 @@ function ClassicResumePage({
   activeTarget?: ResumeActiveTarget | null;
   inlineEditing?: ResumeInlineEditing | null;
 }) {
-  const pageVars = buildPageVars(
-    variant,
-    React.useContext(ResumeStylePresetContext),
-  );
+  const stylePreset = React.useContext(ResumeStylePresetContext);
+  const pageSize = React.useContext(ResumePageSizeContext);
+  const pageVars = buildPageVars(variant, stylePreset, pageSize);
   const { pageRef, innerRef } = useAutoFitPage(fitToken);
   const contactItems: ContactItemView[] =
     variant.id === "robial"
@@ -2365,7 +2371,8 @@ function SwissMinimaPage({
 }) {
   const stylePreset = React.useContext(ResumeStylePresetContext);
   const sharedStageLayout = React.useContext(ResumeStageLayoutContext);
-  const pageVars = buildPageVars(variant, stylePreset);
+  const pageSize = React.useContext(ResumePageSizeContext);
+  const pageVars = buildPageVars(variant, stylePreset, pageSize);
   const onRemoveSection = React.useContext(ResumeRemoveSectionContext);
   const { pageRef } = useAutoFitPage(fitToken);
   const topContact = buildSwissHeaderContact(data);
@@ -2872,12 +2879,16 @@ function SwissMinimaPage({
     const canonical = normalizeResumePreviewTokens({
       resumeTemplateId: templateDefinition.id,
       stylePreset: normalizedStyle,
+      pageSize,
     });
     return Math.max(
       1,
-      Math.floor((canonical.geometry.page.liveArea?.heightMm ?? 297) * MM_TO_PX),
+      Math.floor(
+        (canonical.geometry.page.liveArea?.heightMm ?? pageSize.heightMm) *
+          MM_TO_PX,
+      ),
     );
-  }, [stylePreset, variant]);
+  }, [pageSize, stylePreset, variant]);
   const swissMinimaPageStyle = React.useMemo(
     () =>
       ({
@@ -3495,13 +3506,13 @@ function SwissMinimaPage({
 
   const previewScale =
     sharedStageLayout && sharedStageLayout.pageWidth > 0
-      ? sharedStageLayout.pageWidth / A4_PAGE_WIDTH_PX
+      ? sharedStageLayout.pageWidth / pageSize.widthPx
       : 1;
   const fallbackStackHeightPx = React.useMemo(
     () =>
-      A4_PAGE_HEIGHT_PX * Math.max(1, plannedPages.length) +
+      pageSize.heightPx * Math.max(1, plannedPages.length) +
       SWISS_MINIMA_PAGE_GAP_PX * Math.max(0, plannedPages.length - 1),
-    [plannedPages.length],
+    [pageSize.heightPx, plannedPages.length],
   );
 
   React.useLayoutEffect(() => {
@@ -3698,10 +3709,9 @@ function VolkRegisterPage({
   onActivateComparison?: (() => void) | undefined;
   fitToken?: string;
 }) {
-  const pageVars = buildPageVars(
-    variant,
-    React.useContext(ResumeStylePresetContext),
-  );
+  const stylePreset = React.useContext(ResumeStylePresetContext);
+  const pageSize = React.useContext(ResumePageSizeContext);
+  const pageVars = buildPageVars(variant, stylePreset, pageSize);
   const { pageRef, innerRef } = useAutoFitPage(fitToken);
   const mergedMeta = [...data.metadata, ...data.contact];
   const email =
@@ -4048,10 +4058,9 @@ function EditorialMagazinePage({
   onActivateComparison?: (() => void) | undefined;
   fitToken?: string;
 }) {
-  const pageVars = buildPageVars(
-    variant,
-    React.useContext(ResumeStylePresetContext),
-  );
+  const stylePreset = React.useContext(ResumeStylePresetContext);
+  const pageSize = React.useContext(ResumePageSizeContext);
+  const pageVars = buildPageVars(variant, stylePreset, pageSize);
   const { pageRef, innerRef } = useAutoFitPage(fitToken);
   const contactRows = data.contact.slice(0, 4);
   const metadataRows = data.metadata.slice(0, 3);
@@ -4686,10 +4695,9 @@ function SignalGridPage({
   onActivateComparison?: (() => void) | undefined;
   fitToken?: string;
 }) {
-  const pageVars = buildPageVars(
-    variant,
-    React.useContext(ResumeStylePresetContext),
-  );
+  const stylePreset = React.useContext(ResumeStylePresetContext);
+  const pageSize = React.useContext(ResumePageSizeContext);
+  const pageVars = buildPageVars(variant, stylePreset, pageSize);
   const { pageRef, innerRef } = useAutoFitPage(fitToken);
   const sideMeta = uniqueRows(data.contact).slice(0, 3);
   const railSkills = data.skills.slice(0, 6);
@@ -5354,9 +5362,14 @@ export default function ResumePage({
   inlineEditing = null,
   userZoom = 1,
   stageLayout,
+  pageSize = null,
   onRemoveSection,
   onPreviewMetricsChange,
 }: ResumePageProps) {
+  const resolvedPageSize = React.useMemo(
+    () => resolveDocumentPageSize({ pageSize }),
+    [pageSize],
+  );
   const isComparisonMode = mode === "comparison" || mode === "comparisonAll";
   const [expandedComparison, setExpandedComparison] = React.useState(false);
 
@@ -5393,9 +5406,10 @@ export default function ResumePage({
 
   return (
     <ResumeStylePresetContext.Provider value={stylePreset}>
-      <ResumeStageLayoutContext.Provider value={stageLayout ?? null}>
-        <ResumeUserZoomContext.Provider value={userZoom}>
-          <ResumeRemoveSectionContext.Provider value={onRemoveSection ?? null}>
+      <ResumePageSizeContext.Provider value={resolvedPageSize}>
+        <ResumeStageLayoutContext.Provider value={stageLayout ?? null}>
+          <ResumeUserZoomContext.Provider value={userZoom}>
+            <ResumeRemoveSectionContext.Provider value={onRemoveSection ?? null}>
             <div
               className={`resume-preview-shell ${
                 isComparisonMode ? "resume-preview-shell--comparison" : ""
@@ -5450,9 +5464,10 @@ export default function ResumePage({
                 ))}
               </div>
             </div>
-          </ResumeRemoveSectionContext.Provider>
-        </ResumeUserZoomContext.Provider>
-      </ResumeStageLayoutContext.Provider>
+            </ResumeRemoveSectionContext.Provider>
+          </ResumeUserZoomContext.Provider>
+        </ResumeStageLayoutContext.Provider>
+      </ResumePageSizeContext.Provider>
     </ResumeStylePresetContext.Provider>
   );
 }

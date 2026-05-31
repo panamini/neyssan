@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppTopbar } from "../components/AppTopbar";
 import {
   CvForgeTopbarProvider,
+  type CvForgeTopbarRegistration,
   useRegisterCvForgeTopbar,
 } from "../contexts/CvForgeTopbarContext";
 import type { AtsAuditResult } from "../lib/ats-audit/types";
@@ -61,6 +62,8 @@ const excellentAudit: AtsAuditResult = {
   priorityFixes: [],
 };
 
+const EMPTY_CV_TOPBAR_OVERRIDES: Partial<CvForgeTopbarRegistration> = {};
+
 function makeAudit(
   overrides: Partial<AtsAuditResult> = {},
 ): AtsAuditResult {
@@ -70,7 +73,11 @@ function makeAudit(
   };
 }
 
-function RegisterCvTopbar(): null {
+function RegisterCvTopbar({
+  overrides = EMPTY_CV_TOPBAR_OVERRIDES,
+}: {
+  overrides?: Partial<CvForgeTopbarRegistration>;
+} = {}): null {
   const registration = React.useMemo(
     () => ({
       mode: "preview" as const,
@@ -101,8 +108,9 @@ function RegisterCvTopbar(): null {
       onOpenImportReview: vi.fn(),
       onExportPdf: vi.fn(),
       onExportDocx: vi.fn(),
+      ...overrides,
     }),
-    [],
+    [overrides],
   );
   useRegisterCvForgeTopbar(registration);
   return null;
@@ -305,6 +313,42 @@ describe("AppTopbar CV controls", () => {
     expect(
       await screen.findByRole("menuitem", { name: "Safe-send checklist" }),
     ).toBeInTheDocument();
+  });
+
+  it("lets the user choose CV page size from the share menu", async () => {
+    const user = userEvent.setup();
+    const onPageSizePreferenceChange = vi.fn();
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_1"]}>
+        <CvForgeTopbarProvider>
+          <RegisterCvTopbar
+            overrides={{
+              pageSizePreference: "auto",
+              onPageSizePreferenceChange,
+            }}
+          />
+          <AppTopbar
+            commandPaletteOpen={false}
+            onOpenCommandPalette={vi.fn()}
+          />
+        </CvForgeTopbarProvider>
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Share" }));
+    const menu = await screen.findByRole("menu", { name: "Share CV" });
+
+    expect(within(menu).getByText("Page size")).toBeInTheDocument();
+    expect(
+      within(menu).getByRole("menuitemradio", { name: "Auto" }),
+    ).toHaveAttribute("aria-checked", "true");
+
+    await user.click(
+      within(menu).getByRole("menuitemradio", { name: "US Letter" }),
+    );
+
+    expect(onPageSizePreferenceChange).toHaveBeenCalledWith("letter");
   });
 
   it("renders a signed-in account initial inside the same account button", () => {

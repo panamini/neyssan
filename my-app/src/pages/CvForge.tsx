@@ -112,7 +112,10 @@ import {
   readResumePreviewDebugCapture,
   setStyledResumeExportContext,
 } from "../lib/document-export-debug";
-import { A4_PAGE_WIDTH_PX } from "../lib/document-stage";
+import {
+  resolveDocumentPageSize,
+  type DocumentPageSizePreference,
+} from "../lib/document-page-size";
 import { exportDocumentFile } from "../lib/exportDocumentFile";
 import type { CvDocument } from "../types/cvDocument";
 import {
@@ -172,7 +175,6 @@ import {
   responsibilityValueToDisplayLines,
 } from "../lib/resumeResponsibilityAuthority";
 
-const CV_PAPER_VISUAL_INLINE_SIZE = `${Math.round(A4_PAGE_WIDTH_PX * 100) / 100}px`;
 const CV_COMMAND_LAYER_TOOLBAR_MIN_WIDTH = 300;
 const CV_COMMAND_LAYER_TOOLBAR_NATURAL_WIDTH = 520;
 const CV_COMMAND_LAYER_TOOLBAR_HEIGHT = 44;
@@ -3324,6 +3326,16 @@ export function CvForge(): JSX.Element {
   const [exportingFormat, setExportingFormat] = React.useState<string | null>(
     null,
   );
+  const [documentPageSizePreference, setDocumentPageSizePreference] =
+    React.useState<DocumentPageSizePreference>("auto");
+  const resolvedDocumentPageSize = React.useMemo(
+    () =>
+      resolveDocumentPageSize({
+        preference: documentPageSizePreference,
+        locale: currentCv?.metadata?.locale,
+      }),
+    [currentCv?.metadata?.locale, documentPageSizePreference],
+  );
   const { showToast } = useToast();
   const [isCreatingEntryCv, setIsCreatingEntryCv] = React.useState(false);
   const [isImportingEntryCv, setIsImportingEntryCv] = React.useState(false);
@@ -3649,11 +3661,13 @@ export function CvForge(): JSX.Element {
               const source = isStyledPdf
                 ? buildStyledResumePrintSource({
                     currentCv: exportCurrentCv,
+                    pageSize: resolvedDocumentPageSize,
                     stylePreset,
                   })
                 : buildResumeExportSource({
                     currentCv: exportCurrentCv,
                     authoritativeResume,
+                    pageSize: resolvedDocumentPageSize,
                     stylePreset,
                   });
 
@@ -3739,6 +3753,7 @@ export function CvForge(): JSX.Element {
       currentCv,
       filteredPreviewCv,
       hasTrustedExport,
+      resolvedDocumentPageSize,
       showToast,
       stylePreset,
     ],
@@ -4133,6 +4148,8 @@ export function CvForge(): JSX.Element {
       onOpenImportReview: handleOpenImportReview,
       onExportPdf: handleExportStyledPdf,
       onExportDocx: handleExportDocx,
+      onPageSizePreferenceChange: setDocumentPageSizePreference,
+      pageSizePreference: documentPageSizePreference,
     }),
     [
       currentCv,
@@ -4145,6 +4162,7 @@ export function CvForge(): JSX.Element {
       handleExportDocx,
       handleOpenAtsAudit,
       handleExportStyledPdf,
+      documentPageSizePreference,
       handlePickResume,
       handleTopbarImportCv,
       handleTopbarNewCv,
@@ -4168,7 +4186,7 @@ export function CvForge(): JSX.Element {
     width: "100%",
     maxWidth: "100%",
     marginInline: "auto",
-    "--cv-paper-visual-inline-size": `min(100%, ${CV_PAPER_VISUAL_INLINE_SIZE})`,
+    "--cv-paper-visual-inline-size": `min(100%, ${Math.round(resolvedDocumentPageSize.widthPx * 100) / 100}px)`,
     "--cv-workspace-stage-inline-size": "var(--cv-paper-visual-inline-size)",
   } as React.CSSProperties;
   const activeWorkspacePanel = templatePanelOpen
@@ -7952,6 +7970,7 @@ export function CvForge(): JSX.Element {
                     showPageCount={
                       workspaceMode === "preview" && Boolean(currentCv)
                     }
+                    pageSize={resolvedDocumentPageSize}
                     onPageCountChange={handleCvPreviewPageCountChange}
                   />
                   {inlinePaperSelectionState && !cvAiReview ? (

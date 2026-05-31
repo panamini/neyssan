@@ -1,6 +1,8 @@
 import React from "react";
 import { ClipboardText, FilePdf, ShareFat } from "@/lib/icons";
 import { Button, Menu, Pill, Sheet } from "../ui";
+import { buildDocumentPageSizeMenuSection } from "../DocumentPageSizeMenu";
+import type { DocumentPageSizePreference } from "../../lib/document-page-size";
 
 type SafeSendRowState = "clear" | "warn" | "danger";
 
@@ -22,6 +24,8 @@ type CvShareMenuProps = {
   onOpenImportReview: () => void;
   onExportPdf: () => void;
   onExportDocx: () => void;
+  onPageSizePreferenceChange?: (preference: DocumentPageSizePreference) => void;
+  pageSizePreference?: DocumentPageSizePreference;
 };
 
 export function CvShareMenu({
@@ -34,6 +38,8 @@ export function CvShareMenu({
   onOpenImportReview,
   onExportPdf,
   onExportDocx,
+  onPageSizePreferenceChange,
+  pageSizePreference = "auto",
 }: CvShareMenuProps): JSX.Element {
   const [safeSendOpen, setSafeSendOpen] = React.useState(false);
   const safeSendRows: SafeSendRow[] = [
@@ -120,6 +126,15 @@ export function CvShareMenu({
         ariaLabel="Share CV"
         align="end"
         sections={[
+          ...(onPageSizePreferenceChange
+            ? [
+                buildDocumentPageSizeMenuSection({
+                  disabled: exporting,
+                  onChange: onPageSizePreferenceChange,
+                  value: pageSizePreference,
+                }),
+              ]
+            : []),
           {
             items: [
               {

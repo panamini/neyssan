@@ -3,9 +3,9 @@ import React from "react";
 import { ProposalDocumentRenderer } from "../components/proposal-render/ProposalDocumentRenderer";
 import { buildVerbatiProposalDocumentVars } from "../features/verbati/style";
 import {
-  A4_PAGE_HEIGHT_PX,
-  A4_PAGE_WIDTH_PX,
-} from "../lib/document-stage";
+  buildDocumentPageSizePrintCss,
+  resolveDocumentPageSize,
+} from "../lib/document-page-size";
 import type { ProposalPrintRoutePayload } from "../lib/document-export-models";
 import {
   collectProposalFontDebugSnapshot,
@@ -93,6 +93,10 @@ export function ProposalPrintPage(): JSX.Element {
   const payload = React.useMemo(() => readPrintPayload(), []);
   const routeRootRef = React.useRef<HTMLElement | null>(null);
   const [pageCount, setPageCount] = React.useState(1);
+  const pageSize = React.useMemo(
+    () => resolveDocumentPageSize({ pageSize: payload?.pageSize }),
+    [payload?.pageSize],
+  );
   const themeVars = React.useMemo(
     () => (payload ? buildVerbatiProposalDocumentVars(payload.stylePreset) : {}),
     [payload],
@@ -110,12 +114,22 @@ export function ProposalPrintPage(): JSX.Element {
   const stageLayoutVars = React.useMemo(
     () =>
       ({
-        "--document-stage-width": `${A4_PAGE_WIDTH_PX}px`,
-        "--document-stage-height": `${A4_PAGE_HEIGHT_PX * Math.max(1, pageCount)}px`,
-        "--document-page-width": `${A4_PAGE_WIDTH_PX}px`,
-        "--document-page-height": `${A4_PAGE_HEIGHT_PX}px`,
+        "--document-stage-width": `${pageSize.widthPx}px`,
+        "--document-stage-height": `${pageSize.heightPx * Math.max(1, pageCount)}px`,
+        "--document-page-width": `${pageSize.widthPx}px`,
+        "--document-page-height": `${pageSize.heightPx}px`,
       }) as React.CSSProperties,
-    [pageCount],
+    [pageCount, pageSize],
+  );
+  const pageSizeVars = React.useMemo(
+    () =>
+      ({
+        "--proposal-page-width-mm": `${pageSize.widthMm}`,
+        "--proposal-page-height-mm": `${pageSize.heightMm}`,
+        "--proposal-inline-mm": `${pageSize.widthPx / pageSize.widthMm}px`,
+        "--proposal-block-mm": `${pageSize.heightPx / pageSize.heightMm}px`,
+      }) as React.CSSProperties,
+    [pageSize],
   );
 
   React.useEffect(() => {
@@ -190,6 +204,10 @@ export function ProposalPrintPage(): JSX.Element {
   }
 
   return (
+    <>
+      <style data-document-page-size>
+        {buildDocumentPageSizePrintCss(pageSize)}
+      </style>
     <main
       ref={routeRootRef}
       className="dasti-proposal-print-route"
@@ -200,11 +218,12 @@ export function ProposalPrintPage(): JSX.Element {
       style={{
         margin: 0,
         padding: 0,
-        width: `${A4_PAGE_WIDTH_PX}px`,
-        minHeight: `${A4_PAGE_HEIGHT_PX * Math.max(1, pageCount)}px`,
+        width: `${pageSize.widthPx}px`,
+        minHeight: `${pageSize.heightPx * Math.max(1, pageCount)}px`,
         overflow: "hidden",
         background: "#fff",
         ...themeVars,
+        ...pageSizeVars,
       }}
     >
       <div style={stageLayoutVars}>
@@ -225,12 +244,14 @@ export function ProposalPrintPage(): JSX.Element {
           documentTypography={documentTypography}
           signatureSettings={payload.signatureSettings}
           closing={payload.closing}
-          pageWidth={A4_PAGE_WIDTH_PX}
+          pageSize={pageSize}
+          pageWidth={pageSize.widthPx}
           pageGapPx={0}
           onPageCountChange={setPageCount}
         />
       </div>
     </main>
+    </>
   );
 }
 

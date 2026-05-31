@@ -65,6 +65,10 @@ import {
   buildProposalContactLineFromParts,
   parseProposalContactLine,
 } from "./proposal-heading-state";
+import {
+  resolveDocumentPageSize,
+  type DocumentPageSize,
+} from "./document-page-size";
 
 type ExportMode = "ats" | "styled";
 
@@ -111,6 +115,23 @@ function joinClassNames(
   values: Array<string | false | null | undefined>,
 ): string {
   return values.filter(Boolean).join(" ");
+}
+
+function uniqueNonEmptyLines(values: Array<string | null | undefined>): string[] {
+  const seen = new Set<string>();
+  const lines: string[] = [];
+
+  for (const value of values) {
+    const line = value?.trim();
+    if (!line || seen.has(line)) {
+      continue;
+    }
+
+    seen.add(line);
+    lines.push(line);
+  }
+
+  return lines;
 }
 
 function normalizeStylePreset(
@@ -851,6 +872,237 @@ function buildStyledProposalAppearanceCss(): string {
       letter-spacing: var(--decor-signature-letter-spacing, normal);
     }
 
+    .proposal-cover-letter--twoweeks.export-page {
+      position: relative;
+      width: var(--page-width);
+      min-height: var(--page-height);
+      height: var(--page-height);
+      max-height: var(--page-height);
+      padding: 0;
+      overflow: hidden;
+      background-color: var(--paper);
+      background-image: none;
+      color: var(--ink);
+      page-break-after: always;
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-rail,
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-date,
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-recipient-label,
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-recipient,
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-subject,
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__body {
+      position: absolute;
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-label,
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-name,
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-identity,
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-contact {
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-date,
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-recipient-label,
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-recipient p,
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-subject {
+      font-family: Georgia, "Times New Roman", Times, serif;
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-label,
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-name p,
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-identity p,
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-contact p,
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-date,
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-recipient-label,
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-recipient p,
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-subject {
+      margin: 0;
+      min-width: 0;
+      letter-spacing: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-rail {
+      left: 17mm;
+      top: 22mm;
+      width: 52mm;
+      height: 224mm;
+      display: block;
+      color: var(--accent, #385f8a);
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-label {
+      width: 52mm;
+      margin-bottom: 6mm;
+      font-size: 7pt;
+      line-height: 1.25;
+      font-weight: 500;
+      letter-spacing: 1pt;
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-name {
+      width: 52mm;
+      display: grid;
+      gap: 0;
+      margin-bottom: 7mm;
+      color: var(--accent, #385f8a);
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-name p {
+      font-size: 10pt;
+      line-height: 12pt;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-name .proposal-cover-letter__twoweeks-role {
+      font-size: 8pt;
+      line-height: 10pt;
+      font-weight: 500;
+      letter-spacing: 0;
+      text-transform: capitalize;
+      color: color-mix(in srgb, var(--accent, #385f8a) 70%, var(--ink) 30%);
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-identity {
+      width: 52mm;
+      display: grid;
+      gap: 0;
+      margin-bottom: 6mm;
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-identity p,
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-contact p {
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 8pt;
+      line-height: 11pt;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-identity p {
+      text-transform: uppercase;
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-contact p {
+      letter-spacing: 0;
+      font-weight: 400;
+      text-transform: none;
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-contact-line--break-after {
+      margin-bottom: 11pt;
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-contact {
+      width: 52mm;
+      max-height: 120mm;
+      display: grid;
+      gap: 0;
+      overflow: hidden;
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-date {
+      left: 87mm;
+      top: 22mm;
+      width: 105mm;
+      font-size: 10pt;
+      line-height: 13pt;
+      font-weight: 400;
+      color: var(--ink);
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-recipient-label {
+      left: 87mm;
+      top: 27mm;
+      width: 105mm;
+      font-size: 8pt;
+      line-height: 10pt;
+      font-weight: 400;
+      color: var(--ink);
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-recipient {
+      left: 87mm;
+      top: 31mm;
+      width: 105mm;
+      display: grid;
+      gap: 0;
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-recipient p {
+      font-size: 10pt;
+      line-height: 13pt;
+      font-weight: 400;
+      color: var(--ink);
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-recipient p:first-child {
+      font-weight: 700;
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-subject {
+      left: 87mm;
+      top: 66mm;
+      width: 105mm;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      column-gap: 2mm;
+      align-items: baseline;
+      font-size: 10pt;
+      line-height: 13pt;
+      font-weight: 400;
+      color: var(--ink);
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-subject-label {
+      font-weight: 700;
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-subject-value {
+      min-width: 0;
+      font-weight: 400;
+      overflow-wrap: anywhere;
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__body {
+      left: 87mm;
+      top: 83mm;
+      width: min(105mm, 64ch);
+      max-width: min(105mm, 64ch);
+      display: grid;
+      align-content: start;
+      min-width: 0;
+      padding: 0;
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__body .proposal-block,
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__body .proposal-signoff,
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__body .proposal-signature {
+      font-family: Georgia, "Times New Roman", Times, serif;
+      font-size: 11pt;
+      line-height: 15pt;
+      color: var(--ink);
+      overflow-wrap: break-word;
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__body .proposal-signature {
+      font-family: var(--proposal-signature-font-family, var(--body-font));
+      font-weight: var(--decor-signature-font-weight, inherit);
+      text-transform: var(--decor-signature-text-transform, none);
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__body .proposal-block + .proposal-block:not(.proposal-block--closing) {
+      margin-top: 10pt;
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__body .proposal-block--closing {
+      gap: 8pt;
+      padding-top: 14pt;
+    }
+
     .proposal-cover-letter--director.export-page,
     .proposal-cover-letter--volk.export-page,
     .proposal-cover-letter--film-foto.export-page,
@@ -858,9 +1110,9 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--joella.export-page,
     .proposal-cover-letter--bayer.export-page {
       position: relative;
-      width: 210mm;
-      min-height: 297mm;
-      height: 297mm;
+      width: var(--page-width);
+      min-height: var(--page-height);
+      height: var(--page-height);
       padding: 0;
       overflow: hidden;
       background:
@@ -873,21 +1125,19 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--director .proposal-cover-letter__sender-block,
     .proposal-cover-letter--director .proposal-cover-letter__contact-grid,
     .proposal-cover-letter--director .proposal-cover-letter__meta-row,
-    .proposal-cover-letter--director .proposal-cover-letter__recipient-block,
-    .proposal-cover-letter--director .proposal-cover-letter__subject-row,
+    .proposal-cover-letter--director .proposal-cover-letter__recipient-subject-stack,
     .proposal-cover-letter--director .proposal-cover-letter__body,
     .proposal-cover-letter--volk .proposal-cover-letter__volk-header,
     .proposal-cover-letter--volk .proposal-cover-letter__meta-row,
-    .proposal-cover-letter--volk .proposal-cover-letter__recipient-block,
-    .proposal-cover-letter--volk .proposal-cover-letter__subject-row,
+    .proposal-cover-letter--volk .proposal-cover-letter__recipient-subject-stack,
     .proposal-cover-letter--volk .proposal-cover-letter__body,
     .proposal-cover-letter--volk .proposal-cover-letter__dot,
     .proposal-cover-letter--film-foto .proposal-cover-letter__film-header,
     .proposal-cover-letter--film-foto .proposal-cover-letter__info-blocks,
     .proposal-cover-letter--film-foto .proposal-cover-letter__meta-row,
-    .proposal-cover-letter--film-foto .proposal-cover-letter__recipient-block,
-    .proposal-cover-letter--film-foto .proposal-cover-letter__subject-row,
+    .proposal-cover-letter--film-foto .proposal-cover-letter__recipient-subject-stack,
     .proposal-cover-letter--film-foto .proposal-cover-letter__body,
+    .proposal-cover-letter--film-foto .proposal-cover-letter__film-address-footer,
     .proposal-cover-letter--film-foto .proposal-cover-letter__dot {
       position: absolute;
     }
@@ -947,7 +1197,7 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--director .proposal-cover-letter__masthead-primary,
     .proposal-cover-letter--director .proposal-cover-letter__masthead-secondary {
       margin: 0;
-      font-size: 6.15mm;
+      font-size: 17pt;
       line-height: 1;
       font-weight: 800;
       color: var(--accent);
@@ -957,7 +1207,7 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--director .proposal-cover-letter__masthead-role {
       margin: 0;
       justify-self: end;
-      font-size: 6.2mm;
+      font-size: 18pt;
       line-height: 1;
       font-weight: 800;
       color: var(--ink);
@@ -1004,8 +1254,8 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--director .proposal-cover-letter__contact-lines p,
     .proposal-cover-letter--director .proposal-cover-letter__recipient-block p {
       margin: 0;
-      font-size: 2.15mm;
-      line-height: 1.35;
+      font-size: 7pt;
+      line-height: 1.25;
       font-weight: 700;
       overflow-wrap: normal;
       white-space: nowrap;
@@ -1033,7 +1283,7 @@ function buildStyledProposalAppearanceCss(): string {
       margin: 0;
       inline-size: 4mm;
       text-align: center;
-      font-size: 6mm !important;
+      font-size: 17pt !important;
       line-height: 1;
       font-weight: 800 !important;
     }
@@ -1043,19 +1293,27 @@ function buildStyledProposalAppearanceCss(): string {
       right: 14mm;
       top: 87.8mm;
       display: grid;
-      grid-template-columns: 43mm 48mm 42mm 24mm;
+      grid-template-columns: 38mm 42mm 34mm minmax(30mm, max-content);
       column-gap: 8mm;
     }
 
     .proposal-cover-letter--director .proposal-cover-letter__meta-item:last-child {
+      justify-self: end;
+      text-align: right;
       white-space: nowrap;
       overflow-wrap: normal;
     }
 
-    .proposal-cover-letter--director .proposal-cover-letter__subject-row {
-      left: 24mm;
+    .proposal-cover-letter--director .proposal-cover-letter__recipient-subject-stack {
+      left: 25mm;
+      top: 98.2mm;
       right: 25mm;
-      top: 98.4mm;
+      display: grid;
+      gap: 3mm;
+      align-content: start;
+    }
+
+    .proposal-cover-letter--director .proposal-cover-letter__subject-row {
       display: grid;
       grid-template-columns: auto minmax(0, 1fr);
       column-gap: 3mm;
@@ -1063,23 +1321,16 @@ function buildStyledProposalAppearanceCss(): string {
     }
 
     .proposal-cover-letter--director .proposal-cover-letter__recipient-block {
-      left: 25mm;
-      top: 98.2mm;
-      width: 112mm;
+      width: min(112mm, 100%);
       display: grid;
       gap: 0.6mm;
     }
 
     .proposal-cover-letter--director .proposal-cover-letter__recipient-block p {
       color: var(--ink);
-      font-size: 2.25mm;
+      font-size: 7pt;
       line-height: 1.25;
       font-weight: 600;
-    }
-
-    .proposal-cover-letter--director.proposal-cover-letter--has-recipient-block
-      .proposal-cover-letter__subject-row {
-      top: 111mm;
     }
 
     .proposal-cover-letter--director .proposal-cover-letter__body {
@@ -1105,7 +1356,7 @@ function buildStyledProposalAppearanceCss(): string {
 
     .proposal-cover-letter--volk .proposal-cover-letter__volk-title {
       margin: 0;
-      font-size: 5.95mm;
+      font-size: 17pt;
       line-height: 1;
       font-weight: 800;
       color: var(--accent);
@@ -1119,7 +1370,7 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--volk .proposal-cover-letter__volk-subtitle {
       grid-column: 1 / -1;
       margin: 0;
-      font-size: 4.1mm;
+      font-size: 12pt;
       line-height: 1;
       font-weight: 800;
       color: var(--accent);
@@ -1129,7 +1380,7 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--volk .proposal-cover-letter__volk-sender {
       grid-column: 1 / -1;
       margin: 3.2mm 0 0;
-      font-size: 2.55mm;
+      font-size: 7pt;
       line-height: 1.25;
       font-weight: 800;
       color: var(--accent);
@@ -1141,14 +1392,27 @@ function buildStyledProposalAppearanceCss(): string {
       right: 18mm;
       top: 91.7mm;
       display: grid;
-      grid-template-columns: 50mm 46mm 40mm minmax(0, 1fr);
+      grid-template-columns: 38mm 38mm 32mm minmax(36mm, max-content);
       column-gap: 8mm;
     }
 
-    .proposal-cover-letter--volk .proposal-cover-letter__subject-row {
+    .proposal-cover-letter--volk .proposal-cover-letter__meta-item:last-child {
+      justify-self: end;
+      text-align: right;
+      white-space: nowrap;
+      overflow-wrap: normal;
+    }
+
+    .proposal-cover-letter--volk .proposal-cover-letter__recipient-subject-stack {
       left: 24mm;
+      top: 101.7mm;
       right: 24mm;
-      top: 101.9mm;
+      display: grid;
+      gap: 3mm;
+      align-content: start;
+    }
+
+    .proposal-cover-letter--volk .proposal-cover-letter__subject-row {
       display: grid;
       grid-template-columns: auto minmax(0, 1fr);
       column-gap: 3mm;
@@ -1156,26 +1420,19 @@ function buildStyledProposalAppearanceCss(): string {
     }
 
     .proposal-cover-letter--volk .proposal-cover-letter__recipient-block {
-      left: 24mm;
-      top: 101.7mm;
-      width: 112mm;
+      width: min(112mm, 100%);
       display: grid;
       gap: 0.6mm;
     }
 
     .proposal-cover-letter--volk .proposal-cover-letter__recipient-block p {
       margin: 0;
-      font-size: 2.35mm;
+      font-size: 7pt;
       line-height: 1.25;
       font-weight: 700;
       color: var(--accent);
       overflow-wrap: anywhere;
       text-transform: lowercase;
-    }
-
-    .proposal-cover-letter--volk.proposal-cover-letter--has-recipient-block
-      .proposal-cover-letter__subject-row {
-      top: 114mm;
     }
 
     .proposal-cover-letter--volk .proposal-cover-letter__body {
@@ -1211,18 +1468,18 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--film-foto .proposal-cover-letter__film-heading {
       margin: 0;
       min-width: 0;
-      font-size: 3.55mm;
+      font-size: 10pt;
       line-height: 1;
       font-weight: 500;
       color: var(--accent);
-      text-transform: lowercase;
+      text-transform: uppercase;
       overflow-wrap: normal;
       white-space: nowrap;
     }
 
     .proposal-cover-letter--film-foto .proposal-cover-letter__film-title {
       margin: 0;
-      font-size: 7.6mm;
+      font-size: 22pt;
       line-height: 1;
       font-weight: 800;
       color: var(--accent);
@@ -1248,7 +1505,7 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--film-foto .proposal-cover-letter__film-rule {
       grid-column: 1 / -1;
       margin-top: 1.7mm;
-      height: 0.32mm;
+      height: 0.8pt;
       background: var(--accent);
     }
 
@@ -1257,7 +1514,7 @@ function buildStyledProposalAppearanceCss(): string {
       right: 8mm;
       top: 42mm;
       display: grid;
-      grid-template-columns: 76mm 26mm 34mm minmax(0, 1fr);
+      grid-template-columns: 45mm 31mm 26mm 30mm minmax(0, 1fr);
       column-gap: 4mm;
     }
 
@@ -1266,14 +1523,27 @@ function buildStyledProposalAppearanceCss(): string {
       right: 8mm;
       top: 90mm;
       display: grid;
-      grid-template-columns: 47mm 51mm 39mm minmax(0, 1fr);
+      grid-template-columns: 45mm 42mm 34mm minmax(36mm, max-content);
       column-gap: 8mm;
     }
 
-    .proposal-cover-letter--film-foto .proposal-cover-letter__subject-row {
+    .proposal-cover-letter--film-foto .proposal-cover-letter__meta-item:last-child {
+      justify-self: end;
+      text-align: right;
+      white-space: nowrap;
+      overflow-wrap: normal;
+    }
+
+    .proposal-cover-letter--film-foto .proposal-cover-letter__recipient-subject-stack {
       left: 20mm;
+      top: calc(var(--page-height) / 3);
       right: 22mm;
-      top: 102.3mm;
+      display: grid;
+      gap: 3mm;
+      align-content: start;
+    }
+
+    .proposal-cover-letter--film-foto .proposal-cover-letter__subject-row {
       display: grid;
       grid-template-columns: auto minmax(0, 1fr);
       column-gap: 2mm;
@@ -1281,9 +1551,7 @@ function buildStyledProposalAppearanceCss(): string {
     }
 
     .proposal-cover-letter--film-foto .proposal-cover-letter__recipient-block {
-      left: 20mm;
-      top: 102mm;
-      width: 112mm;
+      width: min(112mm, 100%);
       display: grid;
       gap: 0.6mm;
     }
@@ -1291,7 +1559,38 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--film-foto .proposal-cover-letter__recipient-block p {
       margin: 0;
       min-width: 0;
-      font-size: 2.55mm;
+      font-size: 7pt;
+      line-height: 1.25;
+      font-weight: 400;
+      color: var(--accent);
+      overflow-wrap: anywhere;
+      text-transform: lowercase;
+    }
+
+    .proposal-cover-letter--film-foto .proposal-cover-letter__body {
+      left: 20mm;
+      top: calc((var(--page-height) / 3) + 11mm);
+      width: min(96mm, 58ch);
+    }
+
+    .proposal-cover-letter--film-foto.proposal-cover-letter--has-recipient-block
+      .proposal-cover-letter__body {
+      top: calc((var(--page-height) / 3) + 24mm);
+    }
+
+    .proposal-cover-letter--film-foto .proposal-cover-letter__dot {
+      left: 20mm;
+      bottom: 38.8mm;
+      width: 2.2mm;
+      height: 2.2mm;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .proposal-cover-letter--volk .proposal-cover-letter__meta-item {
+      margin: 0;
+      min-width: 0;
+      font-size: 7pt;
       line-height: 1.25;
       font-weight: 600;
       color: var(--accent);
@@ -1299,42 +1598,41 @@ function buildStyledProposalAppearanceCss(): string {
       text-transform: lowercase;
     }
 
-    .proposal-cover-letter--film-foto.proposal-cover-letter--has-recipient-block
-      .proposal-cover-letter__subject-row {
-      top: 114mm;
-    }
-
-    .proposal-cover-letter--film-foto .proposal-cover-letter__body {
-      left: 20mm;
-      top: 120mm;
-      width: min(96mm, 58ch);
-    }
-
-    .proposal-cover-letter--film-foto.proposal-cover-letter--has-recipient-block
-      .proposal-cover-letter__body {
-      top: 132mm;
-    }
-
-    .proposal-cover-letter--film-foto .proposal-cover-letter__dot {
-      left: 20mm;
-      top: 256mm;
-      width: 2.2mm;
-      height: 2.2mm;
-      border-radius: 50%;
-      background: var(--accent);
-    }
-
-    .proposal-cover-letter--volk .proposal-cover-letter__meta-item,
-    .proposal-cover-letter--film-foto .proposal-cover-letter__meta-item,
-    .proposal-cover-letter--film-foto .proposal-cover-letter__info-blocks p {
+    .proposal-cover-letter--film-foto .proposal-cover-letter__meta-item {
       margin: 0;
       min-width: 0;
-      font-size: 2.85mm;
-      line-height: 1.22;
-      font-weight: 600;
+      font-size: 7pt;
+      line-height: 1.25;
+      font-weight: 400;
       color: var(--accent);
       overflow-wrap: anywhere;
       text-transform: lowercase;
+    }
+
+    .proposal-cover-letter--film-foto .proposal-cover-letter__info-blocks p {
+      margin: 0;
+      min-width: 0;
+      font-size: 7pt;
+      line-height: 1.25;
+      font-weight: 400;
+      color: var(--accent);
+      overflow-wrap: anywhere;
+      text-transform: lowercase;
+    }
+
+    .proposal-cover-letter--film-foto .proposal-cover-letter__film-address-footer {
+      left: 20mm;
+      right: 20mm;
+      bottom: 18mm;
+      margin: 0;
+      min-width: 0;
+      font-size: 7pt;
+      line-height: 1.25;
+      font-weight: 400;
+      color: var(--accent);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .proposal-cover-letter--film-foto
@@ -1357,24 +1655,30 @@ function buildStyledProposalAppearanceCss(): string {
     }
 
     .proposal-cover-letter--director .proposal-cover-letter__meta-item {
-      font-size: 2.2mm;
-      line-height: 1.25;
+      font-size: 7pt;
+      line-height: 1.2;
       font-weight: 800;
     }
 
     .proposal-cover-letter--director .proposal-cover-letter__subject-label,
-    .proposal-cover-letter--director .proposal-cover-letter__subject-value,
-    .proposal-cover-letter--film-foto .proposal-cover-letter__subject-label,
-    .proposal-cover-letter--film-foto .proposal-cover-letter__subject-value {
+    .proposal-cover-letter--director .proposal-cover-letter__subject-value {
       color: var(--ink);
-      font-size: 3.35mm;
+      font-size: 9pt;
       line-height: 1.16;
       font-weight: 700;
     }
 
+    .proposal-cover-letter--film-foto .proposal-cover-letter__subject-label,
+    .proposal-cover-letter--film-foto .proposal-cover-letter__subject-value {
+      color: var(--accent);
+      font-size: 9pt;
+      line-height: 1.16;
+      font-weight: 400;
+    }
+
     .proposal-cover-letter--director .proposal-cover-letter__subject-label {
       color: var(--accent);
-      font-size: 2.35mm;
+      font-size: 9pt;
       text-transform: uppercase;
       font-weight: 800;
     }
@@ -1382,8 +1686,8 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--volk .proposal-cover-letter__subject-label,
     .proposal-cover-letter--volk .proposal-cover-letter__subject-value {
       color: var(--accent);
-      font-size: 4.05mm;
-      line-height: 1.05;
+      font-size: 9pt;
+      line-height: 1.16;
       font-weight: 800;
       text-transform: lowercase;
     }
@@ -1409,7 +1713,7 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--film-foto .proposal-cover-letter__body .proposal-signature {
       margin: 0;
       font-family: var(--body-font, var(--font-body-family));
-      font-size: 3.15mm;
+      font-size: 9pt;
       line-height: 1.48;
       color: var(--ink);
       white-space: pre-wrap;
@@ -1423,6 +1727,15 @@ function buildStyledProposalAppearanceCss(): string {
     }
 
     .proposal-cover-letter--moma-bauhaus.export-page {
+      --moma-bauhaus-frame-left-mm: 5;
+      --moma-bauhaus-frame-top-mm: 94;
+      --moma-bauhaus-frame-width-mm: calc(var(--proposal-page-width-mm) - 13);
+      --moma-bauhaus-frame-height-mm: calc(var(--proposal-page-height-mm) - 101);
+      --moma-bauhaus-body-width-mm: min(
+        132,
+        calc(var(--proposal-page-width-mm) - 65)
+      );
+      --moma-bauhaus-footer-top-mm: calc(var(--proposal-page-height-mm) - 13);
       background:
         linear-gradient(
           180deg,
@@ -1553,18 +1866,18 @@ function buildStyledProposalAppearanceCss(): string {
     }
 
     .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-frame {
-      left: 5mm;
-      top: 94mm;
-      width: 197mm;
-      height: 196mm;
+      left: calc(var(--moma-bauhaus-frame-left-mm) * 1mm);
+      top: calc(var(--moma-bauhaus-frame-top-mm) * 1mm);
+      width: calc(var(--moma-bauhaus-frame-width-mm) * 1mm);
+      height: calc(var(--moma-bauhaus-frame-height-mm) * 1mm);
       border: 1mm solid var(--accent);
     }
 
     .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__body {
       left: 32mm;
       top: 141mm;
-      width: min(132mm, 70ch);
-      max-width: min(132mm, 70ch);
+      width: min(calc(var(--moma-bauhaus-body-width-mm) * 1mm), 70ch);
+      max-width: min(calc(var(--moma-bauhaus-body-width-mm) * 1mm), 70ch);
       display: grid;
       align-content: start;
       min-width: 0;
@@ -1599,7 +1912,7 @@ function buildStyledProposalAppearanceCss(): string {
     }
 
     .proposal-cover-letter--moma-bauhaus .proposal-cover-letter__bauhaus-footer {
-      top: 284mm;
+      top: calc(var(--moma-bauhaus-footer-top-mm) * 1mm);
       max-width: 72mm;
       color: var(--accent);
       white-space: nowrap;
@@ -1616,7 +1929,7 @@ function buildStyledProposalAppearanceCss(): string {
     }
 
     .proposal-cover-letter--bayer.export-page {
-      background: var(--paper, #FAF9F5) !important;
+      background: var(--paper) !important;
       background-image: none !important;
       color: var(--ink);
     }
@@ -1735,8 +2048,8 @@ function buildStyledProposalAppearanceCss(): string {
       text-transform: uppercase;
       color: color-mix(
         in srgb,
-        var(--ink, #1F1D1A) 62%,
-        var(--paper, #FAF9F5) 38%
+        var(--ink) 62%,
+        var(--paper) 38%
       );
     }
 
@@ -1835,8 +2148,8 @@ function buildStyledProposalAppearanceCss(): string {
       font-weight: 680;
       color: color-mix(
         in srgb,
-        var(--ink, #1F1D1A) 62%,
-        var(--paper, #FAF9F5) 38%
+        var(--ink) 62%,
+        var(--paper) 38%
       );
       white-space: nowrap;
       overflow: hidden;
@@ -1849,9 +2162,15 @@ function buildStyledProposalAppearanceCss(): string {
     }
 
     .proposal-cover-letter--joella.export-page {
-      background: var(--paper, #FAF9F5) !important;
+      --joella-frame-left-mm: 5.5;
+      --joella-frame-top-mm: 6.8;
+      --joella-frame-width-mm: calc(var(--proposal-page-width-mm) - 11.5);
+      --joella-frame-height-mm: calc(var(--proposal-page-height-mm) - 14.2);
+      --joella-body-width-mm: calc(var(--proposal-page-width-mm) - 70);
+      --joella-footer-top-mm: calc(var(--proposal-page-height-mm) - 11.25);
+      background: var(--paper) !important;
       background-image: none !important;
-      color: #26231e;
+      color: var(--ink);
     }
 
     .proposal-cover-letter--joella .proposal-cover-letter__joella-frame,
@@ -1865,11 +2184,11 @@ function buildStyledProposalAppearanceCss(): string {
     }
 
     .proposal-cover-letter--joella .proposal-cover-letter__joella-frame {
-      left: 5.5mm;
-      top: 6.8mm;
-      width: 198.5mm;
-      height: 282.8mm;
-      border: 1.32mm solid var(--proposal-joella-structure-color, #74a0c5);
+      left: calc(var(--joella-frame-left-mm) * 1mm);
+      top: calc(var(--joella-frame-top-mm) * 1mm);
+      width: calc(var(--joella-frame-width-mm) * 1mm);
+      height: calc(var(--joella-frame-height-mm) * 1mm);
+      border: 1.32mm solid var(--proposal-joella-structure-color);
     }
 
     .proposal-cover-letter--joella .proposal-cover-letter__joella-divider {
@@ -1877,7 +2196,7 @@ function buildStyledProposalAppearanceCss(): string {
       right: 6mm;
       top: 19.65mm;
       height: 0;
-      border-top: 1.32mm solid var(--proposal-joella-structure-color, #74a0c5);
+      border-top: 1.32mm solid var(--proposal-joella-structure-color);
       background: transparent;
     }
 
@@ -1904,7 +2223,7 @@ function buildStyledProposalAppearanceCss(): string {
       line-height: 1;
       font-weight: 700;
       letter-spacing: -0.035em;
-      color: var(--proposal-joella-mark-color, #8f332f);
+      color: var(--proposal-joella-mark-color);
       text-transform: uppercase;
       white-space: nowrap;
       overflow: hidden;
@@ -1917,7 +2236,7 @@ function buildStyledProposalAppearanceCss(): string {
       width: 70mm;
       display: grid;
       gap: 0;
-      color: var(--proposal-joella-structure-color, #74a0c5);
+      color: var(--proposal-joella-structure-color);
     }
 
     .proposal-cover-letter--joella .proposal-cover-letter__joella-meta {
@@ -1926,7 +2245,7 @@ function buildStyledProposalAppearanceCss(): string {
       width: 76mm;
       display: grid;
       gap: 0;
-      color: var(--proposal-joella-structure-color, #74a0c5);
+      color: var(--proposal-joella-structure-color);
       text-align: right;
     }
 
@@ -1949,8 +2268,8 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--joella .proposal-cover-letter__body {
       left: 35mm;
       top: 35mm;
-      width: min(140mm, 70ch);
-      max-width: min(140mm, 70ch);
+      width: min(calc(var(--joella-body-width-mm) * 1mm), 70ch);
+      max-width: min(calc(var(--joella-body-width-mm) * 1mm), 70ch);
       display: grid;
       align-content: start;
       min-width: 0;
@@ -1967,7 +2286,7 @@ function buildStyledProposalAppearanceCss(): string {
       font-size: 10pt;
       line-height: 4.65mm;
       font-weight: 400;
-      color: #26231e;
+      color: var(--ink);
     }
 
     .proposal-cover-letter--joella .proposal-cover-letter__joella-letter-block-group {
@@ -2005,7 +2324,7 @@ function buildStyledProposalAppearanceCss(): string {
       font-size: 10pt;
       line-height: 4.65mm;
       font-weight: 400;
-      color: #26231e;
+      color: var(--ink);
       white-space: pre-wrap;
       overflow-wrap: break-word;
     }
@@ -2036,14 +2355,14 @@ function buildStyledProposalAppearanceCss(): string {
 
     .proposal-cover-letter--joella .proposal-cover-letter__joella-footer {
       left: 10.4mm;
-      top: 285.75mm;
+      top: calc(var(--joella-footer-top-mm) * 1mm);
       max-width: 150mm;
       transform: translateY(-100%);
       font-size: 7pt;
       line-height: 1;
       font-weight: 700;
       letter-spacing: 0.018em;
-      color: var(--proposal-joella-structure-color, #74a0c5);
+      color: var(--proposal-joella-structure-color);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -2142,14 +2461,17 @@ function buildPageCss(args: {
   documentKind: "proposal" | "resume";
   lang?: string | null;
   mode: ExportMode;
+  pageSize?: DocumentPageSize | null;
   proposalTemplateId?: ProposalTemplateId | null;
   resumeTemplateId?: ResumePrintSource["resumeTemplateId"] | null;
   stylePreset?: VerbatiStylePreset | null;
 }): string {
+  const pageSize = resolveDocumentPageSize({ pageSize: args.pageSize });
   const resumeProfile =
     args.documentKind === "resume"
       ? resolveResumeExportProfile({
           mode: args.mode,
+          pageSize,
           resumeTemplateId: args.resumeTemplateId,
           stylePreset: args.stylePreset,
         })
@@ -2158,6 +2480,7 @@ function buildPageCss(args: {
     args.documentKind === "proposal"
       ? resolveProposalExportProfile({
           mode: args.mode,
+          pageSize,
           proposalTemplateId: args.proposalTemplateId,
           stylePreset: args.stylePreset,
         })
@@ -2177,7 +2500,7 @@ ${buildCssVarBlock(buildLocaleTypographyVars(layoutProfileVars, args.lang))}
 ${buildLocaleTypographyCss(args.lang)}
 
     @page {
-      size: A4;
+      size: ${pageSize.cssSize};
       margin: 0;
     }
 
@@ -2676,6 +2999,7 @@ function buildHtmlDocument(args: {
   documentKind: "proposal" | "resume";
   lang?: string | null;
   mode: ExportMode;
+  pageSize?: DocumentPageSize | null;
   proposalTemplateId?: ProposalTemplateId | null;
   resumeTemplateId?: ResumePrintSource["resumeTemplateId"] | null;
   stylePreset?: VerbatiStylePreset | null;
@@ -2691,6 +3015,7 @@ function buildHtmlDocument(args: {
       documentKind: args.documentKind,
       lang: args.lang,
       mode: args.mode,
+      pageSize: args.pageSize,
       proposalTemplateId: args.proposalTemplateId,
       resumeTemplateId: args.resumeTemplateId,
       stylePreset: args.stylePreset,
@@ -3183,6 +3508,7 @@ function renderResumeHtml(args: {
   const locale = args.data.locale;
   const profile = resolveResumeExportProfile({
     mode: args.mode,
+    pageSize: args.data.pageSize,
     resumeTemplateId: args.data.resumeTemplateId,
     stylePreset: args.stylePreset,
   });
@@ -3225,6 +3551,7 @@ function renderResumeHtml(args: {
       documentKind: "resume",
       lang: args.data.locale,
       mode: args.mode,
+      pageSize: args.data.pageSize,
       resumeTemplateId: args.data.resumeTemplateId,
       stylePreset: args.stylePreset,
       title: `${args.data.title} - ${args.mode === "ats" ? "ATS" : "Styled"}`,
@@ -3437,6 +3764,7 @@ function renderResumeHtml(args: {
     documentKind: "resume",
     lang: args.data.locale,
     mode: args.mode,
+    pageSize: args.data.pageSize,
     resumeTemplateId: args.data.resumeTemplateId,
     stylePreset: args.stylePreset,
     title: `${args.data.title} - ${args.mode === "ats" ? "ATS" : "Styled"}`,
@@ -3643,6 +3971,45 @@ function buildExportBayerFooterLine(args: {
     args.website,
     args.other,
   ]).join(" · ");
+}
+
+function splitExportTwoweeksNameLines(value: string): string[] {
+  const line = value.trim();
+  return line ? [line] : [];
+}
+
+function buildExportTwoweeksDigitalLine(args: {
+  linkedin: string;
+  website: string;
+  other: string;
+}): string {
+  return uniqueExportNonEmptyLines([
+    args.linkedin,
+    args.website,
+    args.other,
+  ]).join(" · ");
+}
+
+function normalizeExportTwoweeksDigitalIdentifier(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function buildExportTwoweeksContactLines(args: {
+  phone: string;
+  email: string;
+  location: string;
+  linkedin: string;
+  website: string;
+  other: string;
+}): string[] {
+  return uniqueExportNonEmptyLines([
+    args.phone,
+    normalizeExportTwoweeksDigitalIdentifier(args.email),
+    normalizeExportTwoweeksDigitalIdentifier(args.linkedin),
+    normalizeExportTwoweeksDigitalIdentifier(args.website),
+    normalizeExportTwoweeksDigitalIdentifier(args.other),
+    args.location,
+  ]);
 }
 
 function buildExportJoellaHeaderContactLine(args: {
@@ -3869,8 +4236,8 @@ function buildProposalLetterheadExportViewModel(
   });
   const filmSenderLine = buildProposalContactLineFromParts({
     email: resolvedContactParts.email,
-    location: shortLocationLine,
   });
+  const filmAddressLine = resolvedContactParts.location;
   const joellaWordmark = resolveExportJoellaWordmark({
     candidateCompany,
     candidateName,
@@ -3882,6 +4249,24 @@ function buildProposalLetterheadExportViewModel(
   });
   const bayerFooterLine = buildExportBayerFooterLine({
     phone: resolvedContactParts.phone,
+    location: resolvedContactParts.location,
+    linkedin: resolvedContactParts.linkedin,
+    website: resolvedContactParts.website,
+    other: resolvedContactParts.other,
+  });
+  const twoweeksNameLines = splitExportTwoweeksNameLines(candidateName);
+  const twoweeksIdentityLines = uniqueExportNonEmptyLines([
+    candidateRole,
+    candidateCompany,
+  ]);
+  const twoweeksFooterLine = buildExportTwoweeksDigitalLine({
+    linkedin: resolvedContactParts.linkedin,
+    website: resolvedContactParts.website,
+    other: resolvedContactParts.other,
+  });
+  const twoweeksContactLines = buildExportTwoweeksContactLines({
+    phone: resolvedContactParts.phone,
+    email: resolvedContactParts.email,
     location: resolvedContactParts.location,
     linkedin: resolvedContactParts.linkedin,
     website: resolvedContactParts.website,
@@ -3983,6 +4368,13 @@ function buildProposalLetterheadExportViewModel(
       resolvedContactParts.linkedin,
       resolvedContactParts.website,
     ]),
+    candidateSocialLines: uniqueExportNonEmptyLines([
+      resolvedContactParts.linkedin,
+      resolvedContactParts.other,
+    ]),
+    candidateWebsiteLines: uniqueExportNonEmptyLines([
+      resolvedContactParts.website,
+    ]),
     candidateLocationLine: resolvedContactParts.location,
     contactLine,
     directorContactLine,
@@ -3991,9 +4383,14 @@ function buildProposalLetterheadExportViewModel(
     directorContactGroups,
     volkSenderLine,
     filmSenderLine,
+    filmAddressLine,
     joellaWordmark,
     joellaFooterLine,
     bayerFooterLine,
+    twoweeksNameLines,
+    twoweeksIdentityLines,
+    twoweeksFooterLine,
+    twoweeksContactLines,
     joellaLetterBlock,
     recipientName,
     recipientCompany,
@@ -4014,11 +4411,12 @@ function buildProposalLetterheadExportViewModel(
 }
 
 function renderProposalLetterheadMetaRow(viewModel: ReturnType<typeof buildProposalLetterheadExportViewModel>): string {
+  const roleOrCompany = viewModel.metaRole || viewModel.recipientCompany;
   return `<div class="proposal-cover-letter__meta-row" aria-label="Letter metadata">
     ${[
       viewModel.recipientName,
-      viewModel.recipientCompany,
-      viewModel.metaRole,
+      roleOrCompany,
+      viewModel.metaRole ? viewModel.recipientCompany : "",
       viewModel.date,
     ]
       .map((value) => `<p class="proposal-cover-letter__meta-item">${escapeHtml(value)}</p>`)
@@ -4028,7 +4426,7 @@ function renderProposalLetterheadMetaRow(viewModel: ReturnType<typeof buildPropo
 
 function renderProposalLetterheadSubjectRow(
   viewModel: ReturnType<typeof buildProposalLetterheadExportViewModel>,
-  prefix = "Re:",
+  prefix = "Subject:",
 ): string {
   if (!viewModel.subject) {
     return "";
@@ -4043,15 +4441,29 @@ function renderProposalLetterheadSubjectRow(
 function renderProposalLetterheadRecipientBlock(
   viewModel: ReturnType<typeof buildProposalLetterheadExportViewModel>,
 ): string {
-  if (viewModel.recipientHeadingLines.length === 0) {
+  if (viewModel.recipientContactLines.length === 0) {
     return "";
   }
 
   return `<section class="proposal-cover-letter__recipient-block" aria-label="Recipient contact details">
-    ${viewModel.recipientHeadingLines
+    ${viewModel.recipientContactLines
       .map((line) => renderExportParagraph(line, ""))
       .join("")}
   </section>`;
+}
+
+function renderProposalLetterheadRecipientSubjectStack(
+  viewModel: ReturnType<typeof buildProposalLetterheadExportViewModel>,
+  prefix?: string,
+): string {
+  if (viewModel.recipientContactLines.length === 0 && !viewModel.subject) {
+    return "";
+  }
+
+  return `<div class="proposal-cover-letter__recipient-subject-stack" aria-label="Recipient and subject details">
+    ${renderProposalLetterheadRecipientBlock(viewModel)}
+    ${renderProposalLetterheadSubjectRow(viewModel, prefix)}
+  </div>`;
 }
 
 function renderProposalDirectorContactGrid(
@@ -4096,6 +4508,7 @@ function renderProposalLetterheadExportPage(args: {
   signatureRender?: ReturnType<typeof resolveProposalSignatureRender>;
   templateId: Extract<
     ProposalTemplateId,
+    | "twoweeks-letterhead"
     | "director-letterhead"
     | "volk-letterhead"
     | "film-foto-letterhead"
@@ -4114,7 +4527,9 @@ function renderProposalLetterheadExportPage(args: {
     args.signatureRender,
   );
   const scopeClass =
-    args.templateId === "director-letterhead"
+    args.templateId === "twoweeks-letterhead"
+      ? "proposal-cover-letter--twoweeks"
+      : args.templateId === "director-letterhead"
       ? "proposal-cover-letter--director"
       : args.templateId === "volk-letterhead"
         ? "proposal-cover-letter--volk"
@@ -4125,9 +4540,89 @@ function renderProposalLetterheadExportPage(args: {
             : args.templateId === "joella-frame-letterhead"
               ? "proposal-cover-letter--joella"
               : "proposal-cover-letter--bayer";
-  const recipientBlockClass = viewModel.recipientHeadingLines.length
+  const recipientBlockClass = viewModel.recipientContactLines.length
     ? " proposal-cover-letter--has-recipient-block"
     : "";
+
+  if (args.templateId === "twoweeks-letterhead") {
+    const senderContactLines = viewModel.twoweeksContactLines;
+    const twoweeksContactBreakAfter = new Set(
+      [
+        viewModel.candidateEmail,
+        ...viewModel.candidateSocialLines,
+        ...viewModel.candidateWebsiteLines,
+      ]
+        .map((line) => line.trim().toLowerCase())
+        .filter(Boolean),
+    );
+    const twoweeksRoleLine = viewModel.twoweeksIdentityLines[0] ?? "";
+    const twoweeksCompanyLines = viewModel.twoweeksIdentityLines.slice(1);
+    const twoweeksNameLine = viewModel.twoweeksNameLines.join(" ");
+    const twoweeksNameRoleMarkup =
+      twoweeksNameLine || twoweeksRoleLine
+        ? `${
+            twoweeksNameLine
+              ? `<p class="proposal-cover-letter__twoweeks-name-value">${escapeHtml(twoweeksNameLine)}</p>`
+              : ""
+          }${
+            twoweeksRoleLine
+              ? `<p class="proposal-cover-letter__twoweeks-role">${escapeHtml(twoweeksRoleLine)}</p>`
+              : ""
+          }`
+        : "";
+    const showSenderRail =
+      viewModel.showSender &&
+      Boolean(
+        viewModel.twoweeksNameLines.length ||
+          viewModel.twoweeksIdentityLines.length ||
+          senderContactLines.length,
+      );
+
+    return `<main class="export-page ${scopeClass}${recipientBlockClass}" data-export-doc="proposal">
+      ${
+        showSenderRail
+          ? `<aside class="proposal-cover-letter__twoweeks-rail" aria-label="Sender details">
+              ${
+                twoweeksNameRoleMarkup
+                  ? `<div class="proposal-cover-letter__twoweeks-name">${twoweeksNameRoleMarkup}</div>`
+                  : ""
+              }
+              ${
+                twoweeksCompanyLines.length
+                  ? `<div class="proposal-cover-letter__twoweeks-identity">${twoweeksCompanyLines.map((line) => renderExportParagraph(line, "")).join(" ")}</div>`
+                  : ""
+              }
+              ${
+                senderContactLines.length
+                  ? `<div class="proposal-cover-letter__twoweeks-contact">${senderContactLines
+                      .map((line) =>
+                        renderExportParagraph(
+                          line,
+                          twoweeksContactBreakAfter.has(line.toLowerCase())
+                            ? "proposal-cover-letter__twoweeks-contact-line--break-after"
+                            : "",
+                        ),
+                      )
+                      .join(" ")}</div>`
+                  : ""
+              }
+            </aside>`
+          : ""
+      }
+      ${renderExportParagraph(viewModel.date, "proposal-cover-letter__twoweeks-date")}
+      ${
+        viewModel.recipientHeadingLines.length
+          ? `<section class="proposal-cover-letter__twoweeks-recipient" aria-label="Recipient details">${viewModel.recipientHeadingLines.map((line) => renderExportParagraph(line, "")).join("")}</section>`
+          : ""
+      }
+      ${
+        viewModel.subject
+          ? `<p class="proposal-cover-letter__twoweeks-subject"><span class="proposal-cover-letter__twoweeks-subject-label">Subject:</span> <span class="proposal-cover-letter__twoweeks-subject-value">${escapeHtml(viewModel.subject)}</span></p>`
+          : ""
+      }
+      <section class="proposal-cover-letter__body" data-block="body">${bodyMarkup}</section>
+    </main>`;
+  }
 
   if (args.templateId === "director-letterhead") {
     const mastheadClass = viewModel.secondaryTitle
@@ -4148,8 +4643,7 @@ function renderProposalLetterheadExportPage(args: {
       </section>
       ${renderProposalDirectorContactGrid(viewModel)}
       ${renderProposalLetterheadMetaRow(viewModel)}
-      ${renderProposalLetterheadRecipientBlock(viewModel)}
-      ${renderProposalLetterheadSubjectRow(viewModel)}
+      ${renderProposalLetterheadRecipientSubjectStack(viewModel)}
       <section class="proposal-cover-letter__body" data-block="body">${bodyMarkup}</section>
     </main>`;
   }
@@ -4159,12 +4653,11 @@ function renderProposalLetterheadExportPage(args: {
       <header class="proposal-cover-letter__volk-header">
         ${renderExportParagraph(viewModel.candidateName, "proposal-cover-letter__volk-title")}
         ${renderExportParagraph(viewModel.secondaryTitle, "proposal-cover-letter__volk-title proposal-cover-letter__volk-title--right")}
-        ${renderExportParagraph(viewModel.candidateRole, "proposal-cover-letter__volk-subtitle")}
-        ${renderExportParagraph(viewModel.volkSenderLine ? `sender: ${viewModel.volkSenderLine}` : "", "proposal-cover-letter__volk-sender")}
-      </header>
+      ${renderExportParagraph(viewModel.candidateRole, "proposal-cover-letter__volk-subtitle")}
+      ${renderExportParagraph(viewModel.volkSenderLine ? `sender: ${viewModel.volkSenderLine}` : "", "proposal-cover-letter__volk-sender")}
+    </header>
       ${renderProposalLetterheadMetaRow(viewModel)}
-      ${renderProposalLetterheadRecipientBlock(viewModel)}
-      ${renderProposalLetterheadSubjectRow(viewModel, "re:")}
+      ${renderProposalLetterheadRecipientSubjectStack(viewModel)}
       <span class="proposal-cover-letter__dot" aria-hidden="true"></span>
       <section class="proposal-cover-letter__body" data-block="body">${bodyMarkup}</section>
   </main>`;
@@ -4302,14 +4795,14 @@ function renderProposalLetterheadExportPage(args: {
     </header>
     <section class="proposal-cover-letter__info-blocks">
       ${viewModel.filmSenderLine ? `<div><p class="proposal-cover-letter__info-label">sender</p>${renderExportParagraph(viewModel.filmSenderLine, "")}</div>` : ""}
-      ${viewModel.candidatePhone ? `<div class="proposal-cover-letter__info-block proposal-cover-letter__info-block--phone"><p class="proposal-cover-letter__info-label">phone</p>${renderExportParagraph(viewModel.candidatePhone, "")}</div>` : ""}
-      ${viewModel.candidateCompany ? `<div><p class="proposal-cover-letter__info-label">studio</p>${renderExportParagraph(viewModel.candidateCompany, "")}</div>` : ""}
-      ${viewModel.candidateWebsite ? `<div><p class="proposal-cover-letter__info-label">portfolio</p>${renderExportParagraph(viewModel.candidateWebsite, "")}</div>` : ""}
       ${viewModel.recipientCompany ? `<div><p class="proposal-cover-letter__info-label">company</p>${renderExportParagraph(viewModel.recipientCompany, "")}</div>` : ""}
+      ${viewModel.candidatePhone ? `<div class="proposal-cover-letter__info-block proposal-cover-letter__info-block--phone"><p class="proposal-cover-letter__info-label">phone</p>${renderExportParagraph(viewModel.candidatePhone, "")}</div>` : ""}
+      ${viewModel.candidateSocialLines.length ? `<div><p class="proposal-cover-letter__info-label">social</p>${viewModel.candidateSocialLines.map((line) => renderExportParagraph(line, "")).join("")}</div>` : ""}
+      ${viewModel.candidateWebsiteLines.length ? `<div><p class="proposal-cover-letter__info-label">www</p>${viewModel.candidateWebsiteLines.map((line) => renderExportParagraph(line, "")).join("")}</div>` : ""}
     </section>
     ${renderProposalLetterheadMetaRow(viewModel)}
-    ${renderProposalLetterheadRecipientBlock(viewModel)}
-    ${renderProposalLetterheadSubjectRow(viewModel)}
+    ${renderProposalLetterheadRecipientSubjectStack(viewModel, "subject:")}
+    ${viewModel.filmAddressLine ? renderExportParagraph(viewModel.filmAddressLine, "proposal-cover-letter__film-address-footer") : ""}
     <span class="proposal-cover-letter__dot" aria-hidden="true"></span>
     <section class="proposal-cover-letter__body" data-block="body">${bodyMarkup}</section>
   </main>`;
@@ -4323,6 +4816,7 @@ function renderProposalHtml(args: {
   const locale = args.data.locale;
   const profile = resolveProposalExportProfile({
     mode: args.mode,
+    pageSize: args.data.pageSize,
     proposalTemplateId: args.data.templateId,
     stylePreset: args.stylePreset,
   });
@@ -4353,6 +4847,7 @@ function renderProposalHtml(args: {
       documentKind: "proposal",
       lang: args.data.locale,
       mode: args.mode,
+      pageSize: args.data.pageSize,
       proposalTemplateId: args.data.templateId,
       stylePreset: args.stylePreset,
       title: `${args.data.title} - Styled`,
@@ -4505,6 +5000,7 @@ function renderProposalHtml(args: {
     documentKind: "proposal",
     lang: args.data.locale,
     mode: args.mode,
+    pageSize: args.data.pageSize,
     proposalTemplateId: args.data.templateId,
     stylePreset: args.stylePreset,
     title: `${args.data.title} - ${args.mode === "ats" ? "ATS" : "Styled"}`,

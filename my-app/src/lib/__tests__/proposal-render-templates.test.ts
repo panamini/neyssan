@@ -9,6 +9,30 @@ import {
 import { RESUME_TEMPLATE_IDS } from "../layout/resumeTemplates";
 
 describe("proposal render templates", () => {
+  it("registers the Twoweeks letterhead template as proposal cover-letter only", () => {
+    expect(PROPOSAL_ACTIVE_TEMPLATE_IDS).toContain("twoweeks-letterhead");
+    expect(isProposalTemplateId("twoweeks-letterhead")).toBe(true);
+    expect(isProposalLetterheadTemplateId("twoweeks-letterhead")).toBe(true);
+    expect(RESUME_TEMPLATE_IDS as readonly string[]).not.toContain(
+      "twoweeks-letterhead",
+    );
+  });
+
+  it("exposes Twoweeks letterhead geometry metadata through the live registry", () => {
+    expect(getProposalTemplateDefinition("twoweeks-letterhead")).toEqual(
+      expect.objectContaining({
+        id: "twoweeks-letterhead",
+        name: "Twoweeks Letterhead",
+        shortLabel: "17/18 grid",
+        twinLabel: "Cover letter",
+        exportShell: "onecol",
+        leftMarginMm: 17,
+        bodyStartMm: 83,
+        readingMeasureCh: 64,
+      }),
+    );
+  });
+
   it("registers the Joella frame template as proposal cover-letter only", () => {
     expect(PROPOSAL_ACTIVE_TEMPLATE_IDS).toContain("joella-frame-letterhead");
     expect(isProposalTemplateId("joella-frame-letterhead")).toBe(true);
