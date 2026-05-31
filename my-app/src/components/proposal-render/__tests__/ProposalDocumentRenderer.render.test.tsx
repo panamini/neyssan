@@ -1474,11 +1474,13 @@ describe("ProposalDocumentRenderer volk register layout", () => {
       railElement?.querySelectorAll(".proposal-cover-letter__twoweeks-contact p") ??
         [],
     ).map((node) => node.textContent);
-    const breakAfterContactLines = Array.from(
+    const contactGroups = Array.from(
       railElement?.querySelectorAll(
-        ".proposal-cover-letter__twoweeks-contact-line--break-after",
+        ".proposal-cover-letter__twoweeks-contact-group",
       ) ?? [],
-    ).map((node) => node.textContent);
+    ).map((group) =>
+      Array.from(group.querySelectorAll("p")).map((node) => node.textContent),
+    );
     const recipientLines = Array.from(
       renderedPage?.querySelectorAll(".proposal-cover-letter__twoweeks-recipient p") ??
         [],
@@ -1524,10 +1526,10 @@ describe("ProposalDocumentRenderer volk register layout", () => {
       "avery.work",
       "Paris / Remote",
     ]);
-    expect(breakAfterContactLines).toEqual([
-      "avery@example.com",
-      "linkedin.com/in/avery",
-      "avery.work",
+    expect(contactGroups).toEqual([
+      ["+33 6 01 02 03 04", "avery@example.com", "linkedin.com/in/avery"],
+      ["avery.work"],
+      ["Paris / Remote"],
     ]);
     expect(
       renderedPage?.querySelector(

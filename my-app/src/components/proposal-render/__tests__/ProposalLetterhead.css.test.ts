@@ -97,7 +97,7 @@ describe("proposal letterhead CSS", () => {
       "line-height: 13pt;",
       "line-height: 15pt;",
       "font-weight: 500;",
-      "margin-bottom: 11pt;",
+      "row-gap: 11pt;",
       "letter-spacing: 0.05em;",
       "text-transform: uppercase;",
       "text-transform: capitalize;",

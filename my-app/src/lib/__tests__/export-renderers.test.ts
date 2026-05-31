@@ -602,11 +602,13 @@ describe("export-renderers", () => {
           page?.querySelectorAll(".proposal-cover-letter__twoweeks-rail p") ??
             [],
         ).map((node) => node.textContent);
-        const breakAfterContactLines = Array.from(
+        const contactGroups = Array.from(
           page?.querySelectorAll(
-            ".proposal-cover-letter__twoweeks-contact-line--break-after",
+            ".proposal-cover-letter__twoweeks-contact-group",
           ) ?? [],
-        ).map((node) => node.textContent);
+        ).map((group) =>
+          Array.from(group.querySelectorAll("p")).map((node) => node.textContent),
+        );
         const recipientLines = Array.from(
           page?.querySelectorAll(".proposal-cover-letter__twoweeks-recipient p") ??
             [],
@@ -632,7 +634,7 @@ describe("export-renderers", () => {
         expect(twoweeksCss).toContain("line-height: 11pt;");
         expect(twoweeksCss).toContain("line-height: 13pt;");
         expect(twoweeksCss).toContain("line-height: 15pt;");
-        expect(twoweeksCss).toContain("margin-bottom: 11pt;");
+        expect(twoweeksCss).toContain("row-gap: 11pt;");
         expect(twoweeksCss).toContain("var(--paper");
         expect(twoweeksCss).toContain("var(--ink");
         expect(twoweeksCss).toContain("var(--accent, #385f8a)");
@@ -655,9 +657,10 @@ describe("export-renderers", () => {
           "portfolio.example.com",
           "Paris",
         ]);
-        expect(breakAfterContactLines).toEqual([
-          "alex@example.com",
-          "portfolio.example.com",
+        expect(contactGroups).toEqual([
+          ["+33 6 00 00 00 00", "alex@example.com"],
+          ["portfolio.example.com"],
+          ["Paris"],
         ]);
         expect(
           page?.querySelector(".proposal-cover-letter__twoweeks-recipient-label")

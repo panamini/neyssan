@@ -956,19 +956,20 @@ export function ProposalCoverLetterTwoweeksTemplate({
         viewModel.candidateTwoweeksIdentityLines.length ||
         viewModel.candidateTwoweeksContactLines.length,
   );
-  const senderContactLines = viewModel.candidateTwoweeksContactLines;
   const twoweeksRoleLine = viewModel.candidateTwoweeksIdentityLines[0] ?? "";
   const twoweeksCompanyLines = viewModel.candidateTwoweeksIdentityLines.slice(1);
   const twoweeksNameLine = viewModel.candidateTwoweeksNameLines.join(" ");
-  const twoweeksContactBreakAfter = new Set(
-    [
-      viewModel.candidateEmail,
-      ...viewModel.candidateSocialLines,
-      ...viewModel.candidateWebsiteLines,
-    ]
-      .map((line) => line.trim().toLowerCase())
-      .filter(Boolean),
-  );
+  const twoweeksContactGroups = [
+    uniqueNonEmptyLines([
+      viewModel.candidatePhone,
+      normalizeTwoweeksDigitalIdentifier(viewModel.candidateEmail),
+      ...viewModel.candidateSocialLines.map(normalizeTwoweeksDigitalIdentifier),
+    ]),
+    uniqueNonEmptyLines(
+      viewModel.candidateWebsiteLines.map(normalizeTwoweeksDigitalIdentifier),
+    ),
+    uniqueNonEmptyLines([viewModel.candidateLocationLine]),
+  ].filter((group) => group.length > 0);
 
   return (
     <>
@@ -1003,21 +1004,19 @@ export function ProposalCoverLetterTwoweeksTemplate({
                   ))}
                 </div>
               ) : null}
-              {senderContactLines.length > 0 ? (
+              {twoweeksContactGroups.length > 0 ? (
                 <div className="proposal-cover-letter__twoweeks-contact">
-                  {senderContactLines.map((line, index) => (
-                    <React.Fragment key={`twoweeks-contact-${index}-${line}`}>
-                      <p
-                        className={
-                          twoweeksContactBreakAfter.has(line.toLowerCase())
-                            ? "proposal-cover-letter__twoweeks-contact-line--break-after"
-                            : undefined
-                        }
-                      >
-                        {line}
-                      </p>
-                      {index < senderContactLines.length - 1 ? " " : null}
-                    </React.Fragment>
+                  {twoweeksContactGroups.map((group, groupIndex) => (
+                    <div
+                      className="proposal-cover-letter__twoweeks-contact-group"
+                      key={`twoweeks-contact-group-${groupIndex}`}
+                    >
+                      {group.map((line, index) => (
+                        <p key={`twoweeks-contact-${groupIndex}-${index}-${line}`}>
+                          {line}
+                        </p>
+                      ))}
+                    </div>
                   ))}
                 </div>
               ) : null}

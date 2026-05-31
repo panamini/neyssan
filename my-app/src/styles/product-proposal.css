@@ -3681,16 +3681,17 @@
   text-transform: none;
 }
 
-.proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-contact-line--break-after {
-  margin-bottom: 11pt;
-}
-
 .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-contact {
   width: 52mm;
   max-height: 120mm;
   display: grid;
-  gap: 0;
+  row-gap: 11pt;
   overflow: hidden;
+}
+
+.proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-contact-group {
+  display: grid;
+  gap: 0;
 }
 
 .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-date {

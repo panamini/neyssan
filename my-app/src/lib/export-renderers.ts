@@ -992,16 +992,17 @@ function buildStyledProposalAppearanceCss(): string {
       text-transform: none;
     }
 
-    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-contact-line--break-after {
-      margin-bottom: 11pt;
-    }
-
     .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-contact {
       width: 52mm;
       max-height: 120mm;
       display: grid;
-      gap: 0;
+      row-gap: 11pt;
       overflow: hidden;
+    }
+
+    .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-contact-group {
+      display: grid;
+      gap: 0;
     }
 
     .proposal-cover-letter--twoweeks .proposal-cover-letter__twoweeks-date {
@@ -4545,16 +4546,21 @@ function renderProposalLetterheadExportPage(args: {
     : "";
 
   if (args.templateId === "twoweeks-letterhead") {
-    const senderContactLines = viewModel.twoweeksContactLines;
-    const twoweeksContactBreakAfter = new Set(
-      [
-        viewModel.candidateEmail,
-        ...viewModel.candidateSocialLines,
-        ...viewModel.candidateWebsiteLines,
-      ]
-        .map((line) => line.trim().toLowerCase())
-        .filter(Boolean),
-    );
+    const twoweeksContactGroups = [
+      uniqueExportNonEmptyLines([
+        viewModel.candidatePhone,
+        normalizeExportTwoweeksDigitalIdentifier(viewModel.candidateEmail),
+        ...viewModel.candidateSocialLines.map(
+          normalizeExportTwoweeksDigitalIdentifier,
+        ),
+      ]),
+      uniqueExportNonEmptyLines(
+        viewModel.candidateWebsiteLines.map(
+          normalizeExportTwoweeksDigitalIdentifier,
+        ),
+      ),
+      uniqueExportNonEmptyLines([viewModel.candidateLocationLine]),
+    ].filter((group) => group.length > 0);
     const twoweeksRoleLine = viewModel.twoweeksIdentityLines[0] ?? "";
     const twoweeksCompanyLines = viewModel.twoweeksIdentityLines.slice(1);
     const twoweeksNameLine = viewModel.twoweeksNameLines.join(" ");
@@ -4593,17 +4599,13 @@ function renderProposalLetterheadExportPage(args: {
                   : ""
               }
               ${
-                senderContactLines.length
-                  ? `<div class="proposal-cover-letter__twoweeks-contact">${senderContactLines
-                      .map((line) =>
-                        renderExportParagraph(
-                          line,
-                          twoweeksContactBreakAfter.has(line.toLowerCase())
-                            ? "proposal-cover-letter__twoweeks-contact-line--break-after"
-                            : "",
-                        ),
+                twoweeksContactGroups.length
+                  ? `<div class="proposal-cover-letter__twoweeks-contact">${twoweeksContactGroups
+                      .map(
+                        (group, groupIndex) =>
+                          `<div class="proposal-cover-letter__twoweeks-contact-group" data-contact-group="${groupIndex}">${group.map((line) => renderExportParagraph(line, "")).join("")}</div>`,
                       )
-                      .join(" ")}</div>`
+                      .join("")}</div>`
                   : ""
               }
             </aside>`
