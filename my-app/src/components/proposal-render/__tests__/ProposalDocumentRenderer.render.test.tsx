@@ -1,5 +1,5 @@
 import React from "react";
-import { render } from "@testing-library/react";
+import { fireEvent, render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ProposalDocumentRenderer } from "../ProposalDocumentRenderer";
@@ -1401,6 +1401,392 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     },
   );
 
+  it("renders the Editorial template on the historical Brendon Mayer grid", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content={[
+          "Dear Hiring Manager,",
+          "First editorial body paragraph.",
+          "Second editorial body paragraph.",
+          "Sincerely,",
+          "Avery Stone",
+        ].join("\n\n")}
+        proposalType="cover_letter"
+        templateId="editorial_wide"
+        railTitle="Avery Stone"
+        railMeta="Operations Lead"
+        contactLine="avery@example.com · +33 6 01 02 03 04 · Paris / Remote · linkedin.com/in/avery · avery.work"
+        letterDate="May 30, 2026"
+        recipientDetails={
+          "Hiring Manager\nHead of Talent\nNorthwind\nhiring@northwind.com\n12 Rue de la Paix\nParis"
+        }
+        documentTitle="Application for Operations Lead"
+        headerVisibility={{
+          showSender: true,
+          showDate: true,
+          showSubject: true,
+          showRecipient: true,
+          showRecipientDetails: true,
+        }}
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        applicantHeader={{
+          name: "Avery Stone",
+          role: "Operations Lead",
+          company: "Stone Systems",
+          email: "avery@example.com",
+          phone: "+33 6 01 02 03 04",
+          linkedin: "linkedin.com/in/avery",
+          website: "avery.work",
+          location: "Paris / Remote",
+          tag: null,
+        }}
+      />,
+    );
+
+    const root = container.querySelector(".proposal-cover-letter--editorial");
+    const renderedPage = Array.from(
+      root?.querySelectorAll(".dasti-proposal-document__page") ?? [],
+    ).at(-1);
+    const wordmark = renderedPage?.querySelector(
+      ".proposal-cover-letter__editorial-wordmark",
+    );
+    const subtitle = renderedPage?.querySelector(
+      ".proposal-cover-letter__editorial-subtitle",
+    );
+    const bodyFlow = renderedPage?.querySelector(
+      ".proposal-cover-letter__editorial-body-flow",
+    );
+    const recipientCopy = Array.from(
+      renderedPage?.querySelectorAll(
+        ".proposal-cover-letter__editorial-contact-copy",
+      ) ?? [],
+    )[0];
+    const senderCopy = Array.from(
+      renderedPage?.querySelectorAll(
+        ".proposal-cover-letter__editorial-contact-copy",
+      ) ?? [],
+    )[1];
+
+    expect(root?.getAttribute("data-proposal-template")).toBe("editorial_wide");
+    expect(
+      renderedPage?.querySelector(".proposal-cover-letter__editorial-canvas"),
+    ).toBeNull();
+    const topAccent = renderedPage?.querySelector(
+      ".proposal-cover-letter__editorial-top-ribbon",
+    );
+    const railRule = renderedPage?.querySelector(
+      ".proposal-cover-letter__editorial-rail-rule",
+    );
+    const salutationRule = renderedPage?.querySelector(
+      ".proposal-cover-letter__editorial-body-rule",
+    );
+    expect(topAccent).toBeTruthy();
+    expect(railRule).toBeTruthy();
+    expect(salutationRule).toBeTruthy();
+    expect(
+      renderedPage?.querySelector(".proposal-cover-letter__editorial-header-rule"),
+    ).toBeTruthy();
+    expect(
+      renderedPage?.querySelector(".proposal-cover-letter__editorial-logo-mark"),
+    ).toBeNull();
+    const templateDecoration = renderedPage?.querySelector(
+      ".dasti-proposal-document-decoration",
+    );
+    const templateDecorationImage = templateDecoration?.querySelector("img");
+    expect(templateDecoration).toBeTruthy();
+    expect(templateDecoration).toHaveAttribute("data-decoration-size-mm", "18");
+    expect(templateDecoration?.getAttribute("style")).toContain("157");
+    expect(templateDecoration?.getAttribute("style")).toContain("18");
+    expect(templateDecorationImage?.getAttribute("src")).toContain(
+      "data:image/svg+xml,",
+    );
+    expect(templateDecorationImage).toHaveAttribute(
+      "alt",
+      "Template flower mark",
+    );
+    expect(wordmark?.textContent).toBe("STONE SYSTEMS");
+    expect(subtitle?.textContent).toBe("Operations Lead");
+    expect(
+      renderedPage?.querySelector(".proposal-cover-letter__editorial-date")
+        ?.textContent,
+    ).toBe("May 30, 2026");
+    expect(recipientCopy?.textContent).toContain("Hiring Manager");
+    expect(recipientCopy?.textContent).toContain("Head of Talent");
+    expect(recipientCopy?.textContent).toContain("Northwind");
+    expect(recipientCopy?.textContent).toContain("hiring@northwind.com");
+    expect(recipientCopy?.textContent).toContain("12 Rue de la Paix");
+    expect(recipientCopy?.textContent).not.toContain("Re");
+    expect(recipientCopy?.textContent).not.toContain(
+      "Application for Operations Lead",
+    );
+    const recipientGroups = Array.from(
+      recipientCopy?.querySelectorAll("p") ?? [],
+    );
+    expect(
+      recipientGroups.map((group) => group.querySelector("b")?.textContent),
+    ).toEqual(["Name", "Role", "Company", "Email", "Address", "City"]);
+    expect(recipientGroups[0]?.textContent).toContain("Hiring Manager");
+    expect(recipientGroups[1]?.textContent).toContain("Head of Talent");
+    expect(recipientGroups[2]?.textContent).toContain("Northwind");
+    expect(recipientGroups[3]?.textContent).toContain("hiring@northwind.com");
+    expect(recipientGroups[4]?.textContent).toContain("12 Rue de la Paix");
+    expect(recipientGroups[5]?.textContent).toContain("Paris");
+    expect(senderCopy?.textContent).toContain("Avery Stone");
+    expect(senderCopy?.textContent).toContain("Operations Lead");
+    expect(senderCopy?.textContent).toContain("avery@example.com");
+    expect(senderCopy?.textContent).toContain("+33 6 01 02 03 04");
+    const senderGroups = Array.from(senderCopy?.querySelectorAll("p") ?? []);
+    expect(senderGroups.map((group) => group.querySelector("b")?.textContent)).toEqual([
+      "Avery Stone",
+      "Company",
+      "Location",
+      "Phone",
+      "Email",
+      "Social",
+      "WWW",
+    ]);
+    expect(senderGroups[0]?.textContent).toContain("Operations Lead");
+    expect(senderGroups[5]?.textContent).toContain("linkedin.com/in/avery");
+    expect(senderGroups[6]?.textContent).toContain("avery.work");
+    expect(
+      Array.from(
+        renderedPage?.querySelectorAll(
+          ".proposal-cover-letter__editorial-header-rule, .proposal-cover-letter__editorial-rail-rule, .proposal-cover-letter__editorial-body-rule, .proposal-cover-letter__editorial-date-rule, .proposal-cover-letter__editorial-label-rule",
+        ) ?? [],
+      ).length,
+    ).toBeGreaterThanOrEqual(6);
+    expect(senderCopy?.textContent).not.toContain(
+      "Application for Operations Lead",
+    );
+    expect(
+      renderedPage?.querySelector(".proposal-cover-letter__editorial-subject")
+        ?.textContent,
+    ).toBe("Application for Operations Lead");
+    expect(bodyFlow?.classList.contains(
+      "proposal-cover-letter__editorial-body-flow--subject-heading",
+    )).toBe(true);
+    expect(bodyFlow?.querySelector(".dasti-proposal-document__salutation")?.textContent)
+      .toBe("Dear Hiring Manager,");
+    expect(
+      Array.from(
+        bodyFlow?.querySelectorAll(".dasti-proposal-document__paragraph") ?? [],
+      ).map((node) => node.textContent),
+    ).toEqual([
+      "First editorial body paragraph.",
+      "Second editorial body paragraph.",
+    ]);
+  });
+
+  it("routes Editorial drawer title, meta, and contact line into left-column groups", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content="I can support the team."
+        proposalType="cover_letter"
+        templateId="editorial_wide"
+        railTitle="Robert Cooper"
+        railMeta="Security Guard"
+        contactLine={
+          "email@email.com · +33 6 88 24 40 52 · Boston · linkedin.com/in/robert · www.robert-of-my-company.com"
+        }
+        letterDate="12 May 2026"
+        recipientDetails={
+          "Hiring Manager\nSecurity Lead\nBoston Company\nemail@email.com\n12 Beacon Street\nBoston"
+        }
+        documentTitle="Application for the position of security guard"
+        headerVisibility={{
+          showSender: true,
+          showDate: true,
+          showSubject: true,
+          showRecipient: true,
+          showRecipientDetails: false,
+        }}
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        applicantHeader={{
+          name: "",
+          role: "",
+          company: "",
+          email: "",
+          phone: "",
+          linkedin: "",
+          website: "",
+          location: "",
+          tag: null,
+        }}
+      />,
+    );
+
+    const contactCopies = Array.from(
+      container.querySelectorAll(".proposal-cover-letter__editorial-contact-copy"),
+    );
+    const recipientCopy = contactCopies[0];
+    const senderCopy = contactCopies[1];
+    const recipientGroups = Array.from(recipientCopy?.querySelectorAll("p") ?? []);
+    const senderGroups = Array.from(senderCopy?.querySelectorAll("p") ?? []);
+
+    expect(
+      recipientGroups.map((group) => group.querySelector("b")?.textContent),
+    ).toEqual(["Name", "Role", "Company", "Email", "Address", "City"]);
+    expect(recipientGroups[3]?.textContent).toContain("email@email.com");
+    expect(recipientGroups[4]?.textContent).toContain("12 Beacon Street");
+    expect(recipientGroups[5]?.textContent).toContain("Boston");
+
+    expect(senderGroups.map((group) => group.querySelector("b")?.textContent)).toEqual([
+      "Robert Cooper",
+      "Location",
+      "Phone",
+      "Email",
+      "Social",
+      "WWW",
+    ]);
+    expect(senderGroups[0]?.textContent).toContain("Security Guard");
+    expect(senderGroups[1]?.textContent).toContain("Boston");
+    expect(senderGroups[2]?.textContent).toContain("+33 6 88 24 40 52");
+    expect(senderGroups[3]?.textContent).toContain("email@email.com");
+    expect(senderGroups[4]?.textContent).toContain("linkedin.com/in/robert");
+    expect(senderGroups[5]?.textContent).toContain(
+      "www.robert-of-my-company.com",
+    );
+  });
+
+  it("keeps Editorial left-rail metadata visible when generic heading toggles are off", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content="Dear Hiring Manager,\n\nI can support the team."
+        proposalType="cover_letter"
+        templateId="editorial_wide"
+        railTitle="Robert Cooper"
+        railMeta="Security Guard"
+        contactLine={
+          "email@email.com · +33 6 88 24 40 52 · Boston · linkedin.com/in/robert · www.robert-of-my-company.com"
+        }
+        letterDate="12 May 2026"
+        recipientDetails={
+          "Hiring Manager\nSecurity Lead\nBoston Company\nemail@email.com\n12 Beacon Street\nBoston"
+        }
+        documentTitle="Application for the position of security guard"
+        headerVisibility={{
+          showSender: false,
+          showDate: true,
+          showSubject: true,
+          showRecipient: false,
+          showRecipientDetails: false,
+        }}
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        applicantHeader={{
+          name: "",
+          role: "",
+          company: "",
+          email: "",
+          phone: "",
+          linkedin: "",
+          website: "",
+          location: "",
+          tag: null,
+        }}
+      />,
+    );
+
+    const [recipientCopy, senderCopy] = Array.from(
+      container.querySelectorAll(".proposal-cover-letter__editorial-contact-copy"),
+    );
+    const recipientGroups = Array.from(recipientCopy?.querySelectorAll("p") ?? []);
+    const senderGroups = Array.from(senderCopy?.querySelectorAll("p") ?? []);
+
+    expect(
+      recipientGroups.map((group) => group.querySelector("b")?.textContent),
+    ).toEqual(["Name", "Role", "Company", "Email", "Address", "City"]);
+    expect(recipientGroups[4]?.textContent).toContain("12 Beacon Street");
+    expect(recipientGroups[5]?.textContent).toContain("Boston");
+    expect(senderGroups.map((group) => group.querySelector("b")?.textContent)).toEqual([
+      "Robert Cooper",
+      "Location",
+      "Phone",
+      "Email",
+      "Social",
+      "WWW",
+    ]);
+    expect(senderGroups[4]?.textContent).toContain("linkedin.com/in/robert");
+    expect(senderGroups[5]?.textContent).toContain(
+      "www.robert-of-my-company.com",
+    );
+  });
+
+  it("keeps the Editorial template usable with partial heading fields", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content="I can support the team."
+        proposalType="cover_letter"
+        templateId="editorial_wide"
+        railTitle=""
+        railMeta=""
+        contactLine=""
+        letterDate=""
+        recipientDetails=""
+        documentTitle=""
+        headerVisibility={{
+          showSender: true,
+          showDate: true,
+          showSubject: true,
+          showRecipient: true,
+          showRecipientDetails: true,
+        }}
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        applicantHeader={{
+          name: "",
+          role: "",
+          company: "",
+          email: "",
+          phone: "",
+          linkedin: "",
+          website: "",
+          location: "",
+          tag: null,
+        }}
+      />,
+    );
+
+    const root = container.querySelector(".proposal-cover-letter--editorial");
+    const text = root?.textContent ?? "";
+
+    expect(root?.getAttribute("data-proposal-template")).toBe("editorial_wide");
+    expect(
+      root?.querySelector(".proposal-cover-letter__editorial-canvas"),
+    ).toBeNull();
+    expect(
+      root?.querySelector(".proposal-cover-letter__editorial-body-flow"),
+    ).toBeTruthy();
+    expect(text).toContain("I can support the team.");
+    expect(text).not.toContain("undefined");
+    expect(text).not.toContain("null");
+    expect(
+      root?.querySelector(".proposal-cover-letter__editorial-wordmark"),
+    ).toBeNull();
+  });
+
   it("renders the Twoweeks letterhead from drawer headings and design variables", () => {
     const { container } = render(
       <ProposalDocumentRenderer
@@ -2141,5 +2527,138 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     expect(root?.textContent).not.toContain("undefined");
     expect(root?.textContent).not.toContain("null");
     expect(root?.textContent).not.toContain("[object Object]");
+  });
+
+  it("renders uploaded document decoration without preview-only handles in readonly mode", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content="I can support the team with clear written execution."
+        proposalType="cover_letter"
+        templateId="swiss_margin"
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        documentDecoration={{
+          visible: true,
+          source: "upload",
+          dataUrl: "data:image/png;base64,AAAA",
+          fileName: "mark.png",
+          mimeType: "image/png",
+          alt: "Company mark",
+          sizePreset: 35,
+          fit: "cover",
+          placementMode: "custom",
+          xMm: 17,
+          yMm: 35,
+        }}
+      />,
+    );
+
+    const decoration = container.querySelector(".dasti-proposal-document-decoration");
+    const image = decoration?.querySelector("img");
+
+    expect(decoration).toBeTruthy();
+    expect(decoration).toHaveAttribute("data-design-mode", "false");
+    expect(decoration).toHaveAttribute("data-decoration-size-mm", "35");
+    expect(decoration?.getAttribute("style")).toContain("17");
+    expect(decoration?.getAttribute("style")).toContain("35");
+    expect(decoration?.getAttribute("style")).toContain("cover");
+    expect(image).toHaveAttribute("src", "data:image/png;base64,AAAA");
+    expect(image).toHaveAttribute("alt", "Company mark");
+    expect(
+      container.querySelector(".dasti-proposal-document-decoration__resize-handle"),
+    ).toBeNull();
+  });
+
+  it("shows the preview bounding box handle and stores resized size as custom integer millimeters", () => {
+    const onDocumentDecorationChange = vi.fn();
+    const onDocumentDecorationCommit = vi.fn();
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content="I can support the team with clear written execution."
+        proposalType="cover_letter"
+        templateId="swiss_margin"
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        documentDecoration={{
+          visible: true,
+          source: "upload",
+          dataUrl: "data:image/svg+xml,%3Csvg%20viewBox%3D%220%200%2010%2010%22%3E%3C/svg%3E",
+          fileName: "mark.svg",
+          mimeType: "image/svg+xml",
+          alt: "Company mark",
+          sizePreset: 35,
+          fit: "contain",
+          placementMode: "default",
+        }}
+        documentDecorationMode="design"
+        onDocumentDecorationChange={onDocumentDecorationChange}
+        onDocumentDecorationCommit={onDocumentDecorationCommit}
+      />,
+    );
+    const page = Array.from(
+      container.querySelectorAll(".dasti-proposal-document__page"),
+    ).at(-1) as HTMLElement;
+    vi.spyOn(page, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 2100,
+      bottom: 2970,
+      width: 2100,
+      height: 2970,
+      toJSON: () => ({}),
+    } as DOMRect);
+    const decoration = container.querySelector(
+      ".dasti-proposal-document-decoration",
+    ) as HTMLElement;
+    const resizeHandle = container.querySelector(
+      ".dasti-proposal-document-decoration__resize-handle",
+    ) as HTMLElement;
+
+    expect(decoration).toHaveAttribute("data-design-mode", "true");
+    expect(resizeHandle).toBeTruthy();
+
+    fireEvent(resizeHandle, new MouseEvent("pointerdown", {
+      bubbles: true,
+      cancelable: true,
+      clientX: 170,
+      clientY: 350,
+    }));
+    fireEvent(resizeHandle, new MouseEvent("pointermove", {
+      bubbles: true,
+      cancelable: true,
+      clientX: 309,
+      clientY: 380,
+    }));
+    fireEvent(resizeHandle, new MouseEvent("pointerup", {
+      bubbles: true,
+      cancelable: true,
+      clientX: 309,
+      clientY: 380,
+    }));
+
+    expect(onDocumentDecorationChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sizePreset: "custom",
+        customSizeMm: 49,
+      }),
+    );
+    expect(onDocumentDecorationCommit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sizePreset: "custom",
+        customSizeMm: 49,
+      }),
+    );
   });
 });

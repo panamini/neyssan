@@ -69,6 +69,12 @@ import {
   resolveDocumentPageSize,
   type DocumentPageSize,
 } from "./document-page-size";
+import {
+  getDocumentDecorationPlacementMm,
+  getRenderableDocumentDecoration,
+  resolveTemplateDocumentDecoration,
+  type DocumentDecoration,
+} from "./document-decoration";
 
 type ExportMode = "ats" | "styled";
 
@@ -870,6 +876,295 @@ function buildStyledProposalAppearanceCss(): string {
       text-transform: var(--decor-signature-text-transform, none);
       font-variant-caps: var(--decor-signature-font-variant-caps, normal);
       letter-spacing: var(--decor-signature-letter-spacing, normal);
+    }
+
+    .proposal-cover-letter--editorial.export-page {
+      --proposal-editorial-paper: var(--proposal-document-paper, #eef4fb);
+      --proposal-editorial-ink: var(--proposal-document-ink, #171511);
+      --proposal-editorial-meta-ink: var(--proposal-document-ink, #171511);
+      --proposal-editorial-accent: var(--proposal-document-accent-ink, #d59a18);
+      --proposal-editorial-heading-font: var(
+        --heading-font,
+        var(--font-heading-family, "Helvetica Neue", Helvetica, Arial, sans-serif)
+      );
+      --proposal-editorial-body-font: var(
+        --proposal-document-font-family,
+        var(--body-font, var(--font-body-family, Georgia, "Times New Roman", Times, serif))
+      );
+      --proposal-editorial-meta-font: var(
+        --body-font,
+        var(--font-body-family, Arial, Helvetica, sans-serif)
+      );
+      position: relative;
+      width: var(--page-width);
+      min-height: var(--page-height);
+      height: var(--page-height);
+      max-height: var(--page-height);
+      padding: 0;
+      overflow: hidden;
+      background-color: var(--proposal-editorial-paper);
+      background:
+        linear-gradient(
+          color-mix(in srgb, var(--proposal-editorial-paper, #f7fbff) 62%, white 38%),
+          color-mix(in srgb, var(--proposal-editorial-paper, #f7fbff) 62%, white 38%)
+        ),
+        var(--proposal-editorial-paper) !important;
+      color: var(--proposal-editorial-ink);
+      page-break-after: always;
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-top-ribbon,
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-header-rule,
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-wordmark,
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-subtitle,
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-rail-rule,
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-body-rule,
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-subject,
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-date,
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-date-rule,
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-recipient,
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-sender,
+    .proposal-cover-letter--editorial .proposal-cover-letter__body {
+      position: absolute;
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-top-ribbon {
+      left: -1mm;
+      top: -1mm;
+      width: calc(100% + 2mm);
+      height: 2.85mm;
+      background: var(--proposal-editorial-accent, #d59a18);
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-header-rule {
+      left: 11.7mm;
+      top: 49.85mm;
+      width: 183mm;
+      border-top: 0.18mm solid var(--proposal-editorial-ink, #171511);
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-wordmark,
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-subtitle,
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-subject,
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-date,
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-label {
+      margin: 0;
+      font-family: var(--proposal-editorial-heading-font);
+      color: var(--proposal-editorial-ink);
+      text-rendering: geometricPrecision;
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-wordmark {
+      left: 14mm;
+      top: 17mm;
+      width: 92mm;
+      font-size: 21pt;
+      line-height: 22pt;
+      font-weight: 500;
+      letter-spacing: 3pt;
+      color: var(--proposal-editorial-accent);
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-subtitle {
+      left: 14mm;
+      top: 27mm;
+      font-size: 14pt;
+      line-height: 15pt;
+      font-style: italic;
+      font-weight: 450;
+      letter-spacing: 0;
+      color: var(--proposal-editorial-meta-ink);
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-date,
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-label {
+      font-size: 10pt;
+      line-height: 12.5pt;
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-subject {
+      left: 72.4mm;
+      top: 62.4mm;
+      width: 113.8mm;
+      font-size: 11pt;
+      line-height: 13pt;
+      font-weight: 700;
+      letter-spacing: 0;
+      color: var(--proposal-editorial-ink);
+      overflow-wrap: anywhere;
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-date {
+      left: 17.4mm;
+      top: 62.4mm;
+      width: 38mm;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-label {
+      font-weight: 400;
+      color: var(--proposal-editorial-meta-ink);
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-rail-rule {
+      left: 64.35mm;
+      top: 62.3mm;
+      height: 175.7mm;
+      border-left: 0.125mm solid var(--proposal-editorial-ink, #171511);
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-body-rule {
+      left: 72.4mm;
+      top: 70.25mm;
+      width: 113.8mm;
+      border-top: 0.18mm solid var(--proposal-editorial-ink, #171511);
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-date-rule {
+      left: 17.4mm;
+      top: 70.35mm;
+      width: 22.76mm;
+      border-top: 0.18mm solid var(--proposal-editorial-ink, #171511);
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-recipient {
+      left: 17.4mm;
+      top: 77.7mm;
+      width: 41.4mm;
+      max-height: 78mm;
+      overflow: hidden;
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-sender {
+      left: 17.4mm;
+      top: 160mm;
+      width: 41.4mm;
+      max-height: 78mm;
+      overflow: hidden;
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-recipient .proposal-cover-letter__editorial-label,
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-sender .proposal-cover-letter__editorial-label {
+      position: static;
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-label-rule {
+      display: block;
+      width: 5.69mm;
+      margin-top: 1.1mm;
+      border-top: 0.18mm solid var(--proposal-editorial-ink, #171511);
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-label-rule--sender {
+      width: 7.59mm;
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-contact-copy {
+      margin: 4.8mm 0 0;
+      font-family: var(--proposal-editorial-meta-font);
+      font-size: 10pt;
+      line-height: 12.5pt;
+      color: var(--proposal-editorial-meta-ink);
+      text-rendering: geometricPrecision;
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-contact-copy p {
+      margin: 0;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-contact-copy p + p {
+      margin-top: 7.2pt;
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-contact-copy b {
+      font-weight: 700;
+      letter-spacing: 0;
+      color: var(--proposal-editorial-ink);
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-body-flow {
+      left: 72.4mm;
+      top: 78.6mm;
+      width: 113.8mm;
+      max-height: 128mm;
+      margin: 0;
+      min-width: 0;
+      color: var(--proposal-editorial-ink);
+      text-rendering: geometricPrecision;
+    }
+
+    .proposal-cover-letter--editorial
+      .proposal-cover-letter__editorial-body-flow:not(
+        :has(.proposal-block--salutation)
+      ) {
+      padding-top: 0;
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__editorial-body-flow--subject-heading {
+      padding-top: 0;
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__body .proposal-block,
+    .proposal-cover-letter--editorial .proposal-cover-letter__body .proposal-signoff {
+      margin: 0;
+      font-family: var(--proposal-editorial-body-font);
+      font-size: 11pt;
+      line-height: 15pt;
+      font-weight: 400;
+      letter-spacing: 0;
+      color: var(--proposal-editorial-ink);
+      overflow-wrap: break-word;
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__body .proposal-block--salutation {
+      position: relative;
+      margin: 0 0 11pt;
+      padding-bottom: 0;
+      border-bottom: 0;
+      font-family: var(--proposal-editorial-heading-font);
+      font-weight: 400;
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__body .proposal-block + .proposal-block:not(.proposal-block--closing) {
+      margin-top: 11pt;
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__body .proposal-block--salutation + .proposal-block:not(.proposal-block--closing) {
+      margin-top: 0;
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__body .proposal-block--closing {
+      display: grid;
+      gap: 0;
+      margin-top: 14pt;
+      padding-top: 0;
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__body .proposal-signoff {
+      margin: 0 0 4pt;
+      font-family: var(--proposal-editorial-body-font);
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__body .proposal-signature {
+      margin: 0;
+      font-family: var(--proposal-signature-font-family, var(--proposal-editorial-meta-font)) !important;
+      font-size: 10pt;
+      line-height: 12.5pt;
+      font-weight: 400;
+      letter-spacing: 1pt;
+      text-transform: uppercase;
+      color: var(--proposal-editorial-ink);
+    }
+
+    .proposal-cover-letter--editorial .proposal-cover-letter__body .proposal-signature-image {
+      margin: 0 0 6pt;
+      max-width: 42mm;
+      max-height: 13.75mm;
     }
 
     .proposal-cover-letter--twoweeks.export-page {
@@ -2530,6 +2825,7 @@ ${buildLocaleTypographyCss(args.lang)}
     }
 
     .export-page {
+      position: relative;
       width: var(--page-width);
       min-height: var(--page-height);
       padding:
@@ -2539,6 +2835,21 @@ ${buildLocaleTypographyCss(args.lang)}
         var(--page-margin-left);
       background: var(--paper);
       page-break-after: always;
+    }
+
+    .dasti-proposal-document-decoration {
+      position: absolute;
+      z-index: 30;
+      display: block;
+      box-sizing: border-box;
+      pointer-events: none;
+    }
+
+    .dasti-proposal-document-decoration img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: var(--proposal-decoration-object-fit, contain);
     }
 
     .export-page:last-child {
@@ -2948,8 +3259,8 @@ ${buildLocaleTypographyCss(args.lang)}
 
     .proposal-signature-image {
       display: block;
-      max-width: min(48mm, 64%);
-      max-height: 18mm;
+      max-width: min(42mm, 64%);
+      max-height: 13.75mm;
       width: auto;
       height: auto;
       object-fit: contain;
@@ -3878,6 +4189,39 @@ function renderExportParagraph(value: string, className: string): string {
   return `<p${classAttribute}>${escapeHtml(value)}</p>`;
 }
 
+function renderProposalDocumentDecoration(
+  decoration: DocumentDecoration | null | undefined,
+  pageSize?: DocumentPageSize,
+  templateId?: ProposalTemplateId | null,
+): string {
+  const resolvedDecoration = getRenderableDocumentDecoration(
+    resolveTemplateDocumentDecoration(decoration, templateId),
+  );
+  if (!resolvedDecoration) {
+    return "";
+  }
+  const resolvedPageSize = resolveDocumentPageSize({ pageSize });
+  const { xMm, yMm, sizeMm } = getDocumentDecorationPlacementMm(
+    resolvedDecoration,
+    {
+      pageWidthMm: resolvedPageSize.widthMm,
+      pageHeightMm: resolvedPageSize.heightMm,
+    },
+  );
+
+  return `<div class="dasti-proposal-document-decoration" data-design-mode="false" data-decoration-size-mm="${sizeMm}" style="left: ${xMm}mm; top: ${yMm}mm; width: ${sizeMm}mm; height: ${sizeMm}mm; --proposal-decoration-object-fit: ${resolvedDecoration.fit};"><img src="${escapeHtml(resolvedDecoration.dataUrl ?? "")}" alt="${escapeHtml(resolvedDecoration.alt ?? "")}" /></div>`;
+}
+
+function appendProposalDocumentDecoration(
+  markup: string,
+  decorationMarkup: string,
+): string {
+  if (!decorationMarkup) {
+    return markup;
+  }
+  return markup.replace(/\s*<\/main>\s*$/, `\n      ${decorationMarkup}\n    </main>`);
+}
+
 const BAUHAUS_WORDMARK_MAX_COMPACT_CHARS = 8;
 
 function countExportCompactWordmarkChars(value: string): number {
@@ -4305,6 +4649,16 @@ function buildProposalLetterheadExportViewModel(
     data.headerVisibility.showRecipientDetails
       ? getProposalRecipientExtraLines(data.recipientDetails, recipientFields)
       : [];
+  const recipientEditorialName = recipientFields.name?.trim() ?? "";
+  const recipientEditorialCompany = recipientFields.company?.trim() ?? "";
+  const recipientEditorialRole = recipientFields.role?.trim() ?? "";
+  const recipientEditorialAddress = recipientFields.address?.trim() ?? "";
+  const recipientEditorialEmail = recipientFields.email?.trim() ?? "";
+  const recipientEditorialCity = recipientFields.city?.trim() ?? "";
+  const recipientEditorialExtraLines = getProposalRecipientExtraLines(
+    data.recipientDetails,
+    recipientFields,
+  );
   const recipientContactLines = uniqueExportNonEmptyLines(
     [recipientEmail, recipientAddress, recipientCity, ...recipientExtraLines],
     [recipientName, recipientCompany, recipientRole],
@@ -4400,6 +4754,13 @@ function buildProposalLetterheadExportViewModel(
     recipientEmail,
     recipientCity,
     recipientExtraLines,
+    recipientEditorialName,
+    recipientEditorialCompany,
+    recipientEditorialRole,
+    recipientEditorialAddress,
+    recipientEditorialEmail,
+    recipientEditorialCity,
+    recipientEditorialExtraLines,
     recipientContactLines,
     recipientHeadingLines,
     date,
@@ -4503,12 +4864,106 @@ function renderProposalDirectorContactGrid(
   </section>`;
 }
 
+type ExportEditorialContactGroup = {
+  label: string;
+  lines: string[];
+};
+
+function normalizeExportEditorialWordmark(
+  value: string | null | undefined,
+): string {
+  return String(value ?? "").replace(/\s+/g, " ").trim().toUpperCase();
+}
+
+function buildExportEditorialSenderGroups(
+  viewModel: ReturnType<typeof buildProposalLetterheadExportViewModel>,
+): ExportEditorialContactGroup[] {
+  return [
+    viewModel.candidateName
+      ? {
+          label: viewModel.candidateName,
+          lines: uniqueExportNonEmptyLines([viewModel.candidateRole]),
+        }
+      : null,
+    viewModel.candidateCompany
+      ? { label: "Company", lines: [viewModel.candidateCompany] }
+      : null,
+    viewModel.candidateLocationLine
+      ? { label: "Location", lines: [viewModel.candidateLocationLine] }
+      : null,
+    viewModel.candidatePhone
+      ? { label: "Phone", lines: [viewModel.candidatePhone] }
+      : null,
+    viewModel.candidateEmail
+      ? { label: "Email", lines: [viewModel.candidateEmail] }
+      : null,
+    viewModel.candidateSocialLines.length > 0
+      ? { label: "Social", lines: viewModel.candidateSocialLines }
+      : null,
+    viewModel.candidateWebsiteLines.length > 0
+      ? { label: "WWW", lines: viewModel.candidateWebsiteLines }
+      : null,
+  ].filter(
+    (group): group is ExportEditorialContactGroup =>
+      Boolean(group && (group.label || group.lines.length > 0)),
+  );
+}
+
+function buildExportEditorialRecipientGroups(
+  viewModel: ReturnType<typeof buildProposalLetterheadExportViewModel>,
+): ExportEditorialContactGroup[] {
+  return [
+    viewModel.recipientEditorialName
+      ? { label: "Name", lines: [viewModel.recipientEditorialName] }
+      : null,
+    viewModel.recipientEditorialRole
+      ? { label: "Role", lines: [viewModel.recipientEditorialRole] }
+      : null,
+    viewModel.recipientEditorialCompany
+      ? { label: "Company", lines: [viewModel.recipientEditorialCompany] }
+      : null,
+    viewModel.recipientEditorialEmail
+      ? { label: "Email", lines: [viewModel.recipientEditorialEmail] }
+      : null,
+    viewModel.recipientEditorialAddress
+      ? { label: "Address", lines: [viewModel.recipientEditorialAddress] }
+      : null,
+    viewModel.recipientEditorialCity
+      ? { label: "City", lines: [viewModel.recipientEditorialCity] }
+      : null,
+    viewModel.recipientEditorialExtraLines.length > 0
+      ? { label: "Details", lines: viewModel.recipientEditorialExtraLines }
+      : null,
+  ].filter(
+    (group): group is ExportEditorialContactGroup =>
+      Boolean(group && (group.label || group.lines.length > 0)),
+  );
+}
+
+function renderExportEditorialContactGroups(
+  groups: ExportEditorialContactGroup[],
+): string {
+  if (groups.length === 0) {
+    return "";
+  }
+
+  return `<div class="proposal-cover-letter__editorial-contact-copy">${groups
+    .map(
+      (group) =>
+        `<p>${group.label ? `<b>${escapeHtml(group.label)}</b>` : ""}${group.lines
+          .map((line) => `<br>${escapeHtml(line)}`)
+          .join("")}</p>`,
+    )
+    .join("")}</div>`;
+}
+
 function renderProposalLetterheadExportPage(args: {
   data: ProposalPrintSource;
   locale?: string | null;
   signatureRender?: ReturnType<typeof resolveProposalSignatureRender>;
   templateId: Extract<
     ProposalTemplateId,
+    | "editorial_wide"
     | "twoweeks-letterhead"
     | "director-letterhead"
     | "volk-letterhead"
@@ -4528,7 +4983,9 @@ function renderProposalLetterheadExportPage(args: {
     args.signatureRender,
   );
   const scopeClass =
-    args.templateId === "twoweeks-letterhead"
+    args.templateId === "editorial_wide"
+      ? "proposal-cover-letter--editorial"
+      : args.templateId === "twoweeks-letterhead"
       ? "proposal-cover-letter--twoweeks"
       : args.templateId === "director-letterhead"
       ? "proposal-cover-letter--director"
@@ -4544,6 +5001,53 @@ function renderProposalLetterheadExportPage(args: {
   const recipientBlockClass = viewModel.recipientContactLines.length
     ? " proposal-cover-letter--has-recipient-block"
     : "";
+
+  if (args.templateId === "editorial_wide") {
+    const wordmark = normalizeExportEditorialWordmark(
+      viewModel.candidateCompany || viewModel.candidateName,
+    );
+    const subtitle = viewModel.candidateRole || viewModel.shortRoleTitle;
+    const recipientGroups = buildExportEditorialRecipientGroups(viewModel);
+    const senderGroups = buildExportEditorialSenderGroups(viewModel);
+
+    return `<main class="export-page ${scopeClass}${recipientBlockClass}" data-export-doc="proposal" aria-label="Editorial cover letter">
+      <span class="proposal-cover-letter__editorial-top-ribbon" aria-hidden="true"></span>
+      <span class="proposal-cover-letter__editorial-header-rule" aria-hidden="true"></span>
+      ${
+        wordmark
+          ? `<p class="proposal-cover-letter__editorial-wordmark">${escapeHtml(wordmark)}</p>`
+          : ""
+      }
+      ${
+        subtitle
+          ? `<p class="proposal-cover-letter__editorial-subtitle">${escapeHtml(subtitle)}</p>`
+          : ""
+      }
+      <span class="proposal-cover-letter__editorial-rail-rule" aria-hidden="true"></span>
+      <span class="proposal-cover-letter__editorial-body-rule" aria-hidden="true"></span>
+      ${
+        viewModel.subject
+          ? `<p class="proposal-cover-letter__editorial-subject">${escapeHtml(viewModel.subject)}</p>`
+          : ""
+      }
+      ${
+        viewModel.date
+          ? `<p class="proposal-cover-letter__editorial-date">${escapeHtml(viewModel.date)}</p><span class="proposal-cover-letter__editorial-date-rule" aria-hidden="true"></span>`
+          : ""
+      }
+      ${
+        recipientGroups.length
+          ? `<section class="proposal-cover-letter__editorial-recipient"><p class="proposal-cover-letter__editorial-label">To</p><span class="proposal-cover-letter__editorial-label-rule" aria-hidden="true"></span>${renderExportEditorialContactGroups(recipientGroups)}</section>`
+          : ""
+      }
+      ${
+        senderGroups.length
+          ? `<section class="proposal-cover-letter__editorial-sender"><p class="proposal-cover-letter__editorial-label">From</p><span class="proposal-cover-letter__editorial-label-rule proposal-cover-letter__editorial-label-rule--sender" aria-hidden="true"></span>${renderExportEditorialContactGroups(senderGroups)}</section>`
+          : ""
+      }
+      <section class="proposal-cover-letter__editorial-body-flow proposal-cover-letter__body${viewModel.subject ? " proposal-cover-letter__editorial-body-flow--subject-heading" : ""}" data-block="body">${bodyMarkup}</section>
+    </main>`;
+  }
 
   if (args.templateId === "twoweeks-letterhead") {
     const twoweeksContactGroups = [
@@ -4832,6 +5336,11 @@ function renderProposalHtml(args: {
     args.mode === "styled" && isProposalLetterheadTemplateId(args.data.templateId)
       ? args.data.templateId
       : null;
+  const decorationMarkup = renderProposalDocumentDecoration(
+    args.data.documentDecoration,
+    args.data.pageSize,
+    args.data.templateId,
+  );
   if (letterheadTemplateId) {
     return buildHtmlDocument({
       bodyClassName: joinClassNames([
@@ -4840,12 +5349,15 @@ function renderProposalHtml(args: {
         `proposal-template--${String(profile.id).replaceAll("_", "-")}`,
         `proposal-shell--${profile.shell}`,
       ]),
-      bodyMarkup: renderProposalLetterheadExportPage({
-        data: args.data,
-        locale,
-        signatureRender,
-        templateId: letterheadTemplateId,
-      }),
+      bodyMarkup: appendProposalDocumentDecoration(
+        renderProposalLetterheadExportPage({
+          data: args.data,
+          locale,
+          signatureRender,
+          templateId: letterheadTemplateId,
+        }),
+        decorationMarkup,
+      ),
       documentKind: "proposal",
       lang: args.data.locale,
       mode: args.mode,
@@ -4959,7 +5471,7 @@ function renderProposalHtml(args: {
       `proposal-template--${String(profile.id).replaceAll("_", "-")}`,
       `proposal-shell--${profile.shell}`,
     ]),
-    bodyMarkup:
+    bodyMarkup: appendProposalDocumentDecoration(
       profile.shell === "onecol"
         ? `<main class="export-page" data-export-doc="proposal">
       <header class="export-header" data-block="header">
@@ -4999,6 +5511,8 @@ function renderProposalHtml(args: {
         </section>
       </section>
     </main>`,
+      decorationMarkup,
+    ),
     documentKind: "proposal",
     lang: args.data.locale,
     mode: args.mode,

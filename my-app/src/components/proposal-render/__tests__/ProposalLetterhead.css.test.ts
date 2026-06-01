@@ -15,6 +15,7 @@ const exportRendererSource = readFileSync(
 describe("proposal letterhead CSS", () => {
   it("keeps the letterhead templates scoped with resolved page-size geometry", () => {
     [
+      ".proposal-cover-letter--editorial",
       ".proposal-cover-letter--twoweeks",
       ".proposal-cover-letter--director",
       ".proposal-cover-letter--volk",
@@ -31,7 +32,9 @@ describe("proposal letterhead CSS", () => {
       /\.proposal-cover-letter--director\s+\.dasti-proposal-document__page,[\s\S]*?\.proposal-cover-letter--film-foto\s+\.dasti-proposal-document__page\s*\{[\s\S]*width:\s*calc\(var\(--proposal-inline-mm\)\s*\*\s*var\(--proposal-page-width-mm\)\);[\s\S]*min-height:\s*calc\(var\(--proposal-block-mm\)\s*\*\s*var\(--proposal-page-height-mm\)\);[\s\S]*height:\s*calc\(var\(--proposal-block-mm\)\s*\*\s*var\(--proposal-page-height-mm\)\);/,
     );
     expect(proposalCss).not.toContain("director-letterhead html");
+    expect(proposalCss).not.toContain("editorial_wide html");
     expect(proposalCss).not.toContain("twoweeks-letterhead html");
+    expect(proposalCss).not.toContain("body.proposal-cover-letter--editorial");
     expect(proposalCss).not.toContain("body.proposal-cover-letter--director");
     expect(proposalCss).not.toContain("body.proposal-cover-letter--twoweeks");
     expect(proposalCss).not.toContain(
@@ -168,6 +171,88 @@ describe("proposal letterhead CSS", () => {
     expect(exportCss).toContain("var(--paper");
     expect(exportCss).toContain("letter-spacing: 1pt;");
     expect(exportCss).toContain("text-transform: uppercase;");
+  });
+
+  it("keeps the Editorial historical letterhead typography scoped to preview and export CSS", () => {
+    const previewStart = proposalCss.indexOf(
+      ".proposal-cover-letter--editorial {",
+    );
+    const previewEnd = proposalCss.indexOf(
+      ".proposal-cover-letter--twoweeks .dasti-proposal-document__page",
+    );
+    const exportStart = exportRendererSource.indexOf(
+      ".proposal-cover-letter--editorial.export-page",
+    );
+    const exportEnd = exportRendererSource.indexOf(
+      ".proposal-cover-letter--twoweeks.export-page",
+    );
+    const previewCss = proposalCss.slice(previewStart, previewEnd);
+    const exportCss = exportRendererSource.slice(exportStart, exportEnd);
+
+    expect(previewStart).toBeGreaterThanOrEqual(0);
+    expect(previewEnd).toBeGreaterThan(previewStart);
+    expect(exportStart).toBeGreaterThanOrEqual(0);
+    expect(exportEnd).toBeGreaterThan(exportStart);
+
+    [
+      "--proposal-editorial-paper: var(--proposal-document-paper, #eef4fb);",
+      "--proposal-editorial-ink: var(--proposal-document-ink, #171511);",
+      "--proposal-editorial-meta-ink: var(--proposal-document-ink, #171511);",
+      "--proposal-editorial-accent: var(--proposal-document-accent-ink, #d59a18);",
+      "background-color: var(--proposal-editorial-paper);",
+      "color: var(--proposal-editorial-ink);",
+      "font-size: 21pt;",
+      "font-size: 14pt;",
+      "font-size: 11pt;",
+      "font-size: 10pt;",
+      "letter-spacing: 1pt;",
+      "letter-spacing: 3pt;",
+      "line-height: 12.5pt;",
+      "line-height: 15pt;",
+      "margin-top: 7.2pt;",
+      "margin: 0 0 11pt;",
+      "padding-bottom: 0;",
+      ".proposal-cover-letter__editorial-body-flow--subject-heading",
+      "padding-top: 0;",
+      "margin-top: 11pt;",
+      "margin-top: 14pt;",
+      "text-transform: uppercase;",
+      "font-family: var(--proposal-editorial-heading-font);",
+      "font-family: var(--proposal-editorial-body-font);",
+      "font-family: var(--proposal-editorial-meta-font);",
+      "color: var(--proposal-editorial-accent);",
+      "color: var(--proposal-editorial-ink);",
+      "border-bottom: 0;",
+      "font-weight: 400;",
+      "white-space: nowrap;",
+    ].forEach((declaration) => {
+      expect(previewCss).toContain(declaration);
+      expect(exportCss).toContain(declaration);
+    });
+
+    expect(previewCss).not.toContain("border-bottom: 0.2px solid color-mix(");
+    expect(exportCss).not.toContain("border-bottom: 0.2px solid color-mix(");
+
+    expect(previewCss).toContain(
+      ".proposal-cover-letter__editorial-body-flow:not(",
+    );
+    expect(exportCss).toContain(
+      ".proposal-cover-letter__editorial-body-flow:not(",
+    );
+    expect(previewCss).toMatch(
+      /\.proposal-cover-letter--editorial\s+\.proposal-cover-letter__editorial-rail-rule\s*\{[\s\S]*top:\s*62\.3mm;[\s\S]*height:\s*175\.7mm;[\s\S]*\}/,
+    );
+    expect(exportCss).toMatch(
+      /\.proposal-cover-letter--editorial\s+\.proposal-cover-letter__editorial-rail-rule\s*\{[\s\S]*top:\s*62\.3mm;[\s\S]*height:\s*175\.7mm;[\s\S]*\}/,
+    );
+    expect(previewCss).toMatch(
+      /\.proposal-cover-letter--editorial\s+\.proposal-cover-letter__body\s+\.dasti-proposal-document__signature-image\s*\{[\s\S]*max-width:\s*42mm;[\s\S]*max-height:\s*13\.75mm;[\s\S]*\}/,
+    );
+    expect(exportCss).toMatch(
+      /\.proposal-cover-letter--editorial\s+\.proposal-cover-letter__body\s+\.proposal-signature-image\s*\{[\s\S]*max-width:\s*42mm;[\s\S]*max-height:\s*13\.75mm;[\s\S]*\}/,
+    );
+    expect(previewCss).not.toContain(":root");
+    expect(exportCss).not.toContain(":root");
   });
 
   it("keeps letterhead display roles on heading fonts and metadata roles on body fonts", () => {

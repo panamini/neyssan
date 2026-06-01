@@ -1269,13 +1269,19 @@
 }
 
 .dasti-settings-swatch--custom.dasti-settings-swatch--icon {
-  background: transparent;
-  border: none;
+  background: var(--custom-accent-gradient);
+  border: 0;
   box-shadow: none;
 }
 
 .dasti-settings-swatch--icon::before {
   display: none;
+}
+
+.dasti-settings-swatch--custom.dasti-settings-swatch--icon::before {
+  display: block;
+  inset: -2px;
+  background: var(--custom-accent-gradient);
 }
 
 .dasti-settings-swatch--icon:hover,
@@ -1286,7 +1292,7 @@
 .dasti-settings-swatch__wheel {
   width: 100%;
   height: 100%;
-  display: block;
+  display: none;
   pointer-events: none;
 }
 
@@ -2088,6 +2094,8 @@
   height: 24px;
   display: inline-grid;
   place-items: center;
+  position: relative;
+  overflow: hidden;
   border-radius: var(--r-pill);
   background: var(--settings-ui-accent-swatch);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ti) 16%, transparent);
@@ -2096,15 +2104,18 @@
 .settings-ui-accent--custom:not([data-selected="true"])
   .settings-ui-accent__swatch {
   color: var(--ti);
-  background: conic-gradient(
-    from 0deg,
-    tomato,
-    goldenrod,
-    seagreen,
-    dodgerblue,
-    rebeccapurple,
-    tomato
-  );
+  background: var(--custom-accent-gradient);
+  box-shadow: none;
+}
+
+.settings-ui-accent--custom:not([data-selected="true"])
+  .settings-ui-accent__swatch::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: var(--custom-accent-gradient);
+  pointer-events: none;
 }
 
 .settings-ui-accent__label {
@@ -2549,21 +2560,29 @@ html[data-reduce-motion="true"] *::after {
 }
 
 .style-swatch--custom .style-swatch__chip {
+  position: relative;
+  overflow: hidden;
   color: var(--ti);
-  background: conic-gradient(
-    from 0deg,
-    tomato,
-    goldenrod,
-    seagreen,
-    dodgerblue,
-    rebeccapurple,
-    tomato
-  );
+  background: var(--custom-accent-gradient);
+  box-shadow: none;
+}
+
+.style-swatch--custom .style-swatch__chip::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: var(--custom-accent-gradient);
+  pointer-events: none;
 }
 
 .style-swatch--custom[data-selected="true"] .style-swatch__chip {
   color: var(--color-on-accent);
   background: var(--swatch-color, var(--ac));
+}
+
+.style-swatch--custom[data-selected="true"] .style-swatch__chip::before {
+  display: none;
 }
 
 .style-swatch__label {

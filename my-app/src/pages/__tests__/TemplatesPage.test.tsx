@@ -49,6 +49,13 @@ describe("TemplatesPage", () => {
     expect(document.querySelector(".dasti-template-card__badge")).toBeNull();
     expect(screen.queryByRole("tab", { name: "CVs" })).toBeNull();
     expect(screen.getAllByTestId("template-document-preview")).toHaveLength(9);
+    const editorialCard = screen
+      .getByText("Editorial", { selector: ".dasti-template-card__title" })
+      .closest(".dasti-template-card");
+    expect(editorialCard).toBeTruthy();
+    expect(
+      editorialCard?.querySelector(".proposal-cover-letter--editorial"),
+    ).toBeTruthy();
   });
 
   it("renders template chrome in French without renaming templates", () => {
@@ -169,7 +176,7 @@ describe("TemplatesPage", () => {
     await user.click(screen.getByRole("button", { name: "Create new proposal" }));
 
     expect(navigateMock).toHaveBeenCalledWith(
-      "/proposal?templateId=editorial",
+      "/proposal?templateId=editorial_wide",
       {
         state: expect.objectContaining({
           proposalWorkspaceResetToken: expect.any(String),
@@ -196,7 +203,7 @@ describe("TemplatesPage", () => {
     );
 
     expect(navigateMock).toHaveBeenCalledTimes(1);
-    expect(navigateMock).toHaveBeenCalledWith("/proposal?templateId=editorial");
+    expect(navigateMock).toHaveBeenCalledWith("/proposal?templateId=editorial_wide");
   });
 
   it("keeps template cards compact without an explicit arrow action", () => {
@@ -298,7 +305,7 @@ describe("TemplatesPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("starts cover-letter creation with the selected template intent", async () => {
+  it("starts cover-letter creation with the selected direct template id", async () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={["/templates"]}>
@@ -314,7 +321,7 @@ describe("TemplatesPage", () => {
     await user.click(screen.getByRole("button", { name: "Create new proposal" }));
 
     expect(navigateMock).toHaveBeenCalledWith(
-      "/proposal?templateId=editorial",
+      "/proposal?templateId=editorial_wide",
       {
         state: expect.objectContaining({
           proposalWorkspaceResetToken: expect.any(String),

@@ -152,21 +152,21 @@ export const PROPOSAL_TEMPLATE_DEFINITIONS: readonly ProposalTemplateDefinition[
     },
     {
       id: "editorial_wide",
-      name: "Editorial Wide",
-      shortLabel: "52 mm editorial",
+      name: "Editorial",
+      shortLabel: "Brendon grid",
       description:
-        "A calmer editorial letter twin with a broader rail, a slower title cadence, and the longest measure in the set.",
-      twinLabel: "Editorial Wide",
-      exportShell: "rail",
+        "A Brendon Mayer-inspired editorial letterhead with a fixed A4 SVG coordinate system, left identity rail, and measured main letter field.",
+      twinLabel: "Editorial",
+      exportShell: "onecol",
       leftMarginMm: 17,
-      leftZoneMm: 52,
-      gutterMm: ROBIAL_PROPOSAL_GRID.gutterMm,
-      topOffsetMm: 35,
-      bodyStartMm: 97,
-      bottomMarginMm: 18,
-      rightMarginMm: 18,
+      leftZoneMm: 47,
+      gutterMm: 8,
+      topOffsetMm: 0,
+      bodyStartMm: 88,
+      bottomMarginMm: 17,
+      rightMarginMm: 24,
       readingMeasureCh: 64,
-      titleScaleMm: 7.8,
+      titleScaleMm: 7,
       gridStepAMm: ROBIAL_PROPOSAL_GRID.stepAMm,
       gridStepBMm: ROBIAL_PROPOSAL_GRID.stepBMm,
       gridHalfStepMm: ROBIAL_PROPOSAL_GRID.halfStepMm,
@@ -387,6 +387,7 @@ export function isProposalLetterheadTemplateId(
   value: unknown,
 ): value is Extract<
   ProposalTemplateId,
+  | "editorial_wide"
   | "twoweeks-letterhead"
   | "director-letterhead"
   | "volk-letterhead"
@@ -396,6 +397,7 @@ export function isProposalLetterheadTemplateId(
   | "bayer-letterhead"
 > {
   return (
+    value === "editorial_wide" ||
     value === "twoweeks-letterhead" ||
     value === "director-letterhead" ||
     value === "volk-letterhead" ||

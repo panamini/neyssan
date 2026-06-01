@@ -853,6 +853,117 @@ describe("ProposalRail style tab", () => {
     expect(onToggleHandwrittenSignature).toHaveBeenCalledWith(true);
   });
 
+  it("exposes document decoration upload, visibility, preset, custom, and fit controls", () => {
+    const onDocumentDecorationChange = vi.fn();
+
+    renderDesignFields({
+      documentDecoration: {
+        visible: true,
+        source: "upload",
+        dataUrl: "data:image/png;base64,AAAA",
+        fileName: "mark.png",
+        mimeType: "image/png",
+        alt: "Company mark",
+        sizePreset: "custom",
+        customSizeMm: 49,
+        fit: "contain",
+        placementMode: "custom",
+        xMm: 17,
+        yMm: 35,
+      },
+      onDocumentDecorationChange,
+    });
+
+    expect(screen.getByText("Decorations", { selector: ".forge__rail-label" })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Show image" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    const uploadInput = screen.getByLabelText("Upload decoration image");
+    expect(uploadInput).toHaveAttribute(
+      "accept",
+      ".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml",
+    );
+    expect(screen.getByRole("button", { name: "Small, 18 mm" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(screen.getByRole("button", { name: "Custom, 49 mm" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    fireEvent.click(screen.getByRole("switch", { name: "Show image" }));
+    expect(onDocumentDecorationChange).toHaveBeenCalledWith(
+      expect.objectContaining({ visible: false }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Large, 52 mm" }));
+    const presetCall = onDocumentDecorationChange.mock.calls.at(-1)?.[0];
+    expect(presetCall.sizePreset).toBe(52);
+    expect(presetCall).not.toHaveProperty("customSizeMm");
+
+    fireEvent.click(screen.getByRole("button", { name: "Cover" }));
+    expect(onDocumentDecorationChange).toHaveBeenCalledWith(
+      expect.objectContaining({ fit: "cover" }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset position" }));
+    expect(onDocumentDecorationChange).toHaveBeenCalledWith(
+      expect.objectContaining({ placementMode: "default", xMm: 17, yMm: 35 }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove image" }));
+    expect(onDocumentDecorationChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dataUrl: undefined,
+        fileName: undefined,
+        mimeType: undefined,
+      }),
+    );
+  });
+
+  it("shows the Editorial flower mark only in the Editorial decoration drawer", () => {
+    renderDesignFields({
+      proposalTemplateId: "editorial_wide",
+      documentDecoration: null,
+    });
+
+    expect(screen.getByText("Flower template mark.svg")).toBeInTheDocument();
+    expect(
+      document.querySelector(".dasti-proposal-design-fields__decoration-thumb"),
+    ).toBeTruthy();
+    expect(screen.getByRole("switch", { name: "Show image" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+  });
+
+  it("does not show the Editorial flower mark in the Minimal decoration drawer", () => {
+    renderDesignFields({
+      proposalTemplateId: "swiss_margin",
+      documentDecoration: {
+        visible: true,
+        source: "upload",
+        dataUrl: "data:image/svg+xml,%3Csvg%3E%3C/svg%3E",
+        fileName: "Flower template mark.svg",
+        mimeType: "image/svg+xml",
+        alt: "Template flower mark",
+        sizePreset: 18,
+        fit: "contain",
+        placementMode: "default",
+        xMm: 157,
+        yMm: 18,
+      },
+    });
+
+    expect(screen.getByText("No image")).toBeInTheDocument();
+    expect(screen.queryByText("Flower template mark.svg")).not.toBeInTheDocument();
+    expect(
+      document.querySelector(".dasti-proposal-design-fields__decoration-thumb"),
+    ).toBeNull();
+  });
+
   it("shows the proposal Style tab and calls proposal-scoped style callbacks", () => {
     const onSelectStyleBundle = vi.fn();
     const onSelectStylePalette = vi.fn();
@@ -952,6 +1063,9 @@ describe("ProposalRail style tab", () => {
       /\.dasti-proposal-skeleton-rail__style-pills,[\s\S]*\.dasti-proposal-skeleton-rail__style-swatches\s*\{[\s\S]*display:\s*flex;[\s\S]*flex-wrap:\s*wrap;[\s\S]*gap:\s*var\(--space-2\);/,
     );
     expect(css).toMatch(
+      /\.dasti-proposal-skeleton-rail__style-swatches\s*\{[\s\S]*overflow:\s*visible;[\s\S]*padding:\s*4px;[\s\S]*\}/,
+    );
+    expect(css).toMatch(
       /\.dasti-proposal-skeleton-rail__style-pills button\s*\{[\s\S]*min-height:\s*28px;[\s\S]*border:\s*1px solid var\(--border-soft\);[\s\S]*border-radius:\s*var\(--radius-pill\);/,
     );
     expect(css).toMatch(
@@ -961,10 +1075,58 @@ describe("ProposalRail style tab", () => {
       /\.dasti-proposal-design-style-pills button\s*\{[\s\S]*position:\s*relative;/,
     );
     expect(css).toMatch(
+      /\.dasti-proposal-design-style-pills__label--compact\s*\{[\s\S]*display:\s*none;[\s\S]*\}/,
+    );
+    expect(css).toMatch(
+      /\.dasti-proposal-skeleton-rail__style-pills\.dasti-proposal-design-style-pills\s*\{[\s\S]*display:\s*grid;[\s\S]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);[\s\S]*align-items:\s*stretch;[\s\S]*\}/,
+    );
+    expect(css).toMatch(
+      /\.dasti-proposal-skeleton-rail__style-pills\.dasti-proposal-design-style-pills--with-reset\s*\{[\s\S]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);[\s\S]*\}/,
+    );
+    expect(css).toMatch(
+      /\.dasti-proposal-design-style-pills \.dasti-proposal-design-fields__reset\s*\{[\s\S]*align-self:\s*stretch;[\s\S]*justify-self:\s*stretch;[\s\S]*margin:\s*0;[\s\S]*\}/,
+    );
+    expect(css).toMatch(
+      /@media \(max-width:\s*760px\)\s*\{[\s\S]*\.dasti-proposal-design-style-pills__label--full\s*\{[\s\S]*display:\s*none;[\s\S]*\}/,
+    );
+    expect(css).toMatch(
+      /@media \(max-width:\s*760px\)\s*\{[\s\S]*\.dasti-proposal-design-style-pills__label--compact\s*\{[\s\S]*display:\s*inline;[\s\S]*\}/,
+    );
+    expect(css).toMatch(
+      /@media \(max-width:\s*760px\)\s*\{[\s\S]*\.dasti-proposal-design-style-pills__reset-label\s*\{[\s\S]*display:\s*none;[\s\S]*\}/,
+    );
+    expect(css).toMatch(
+      /@media \(max-width:\s*760px\)\s*\{[\s\S]*\.dasti-proposal-design-style-pills button\s*\{[\s\S]*min-height:\s*28px;[\s\S]*\}/,
+    );
+    expect(css).not.toMatch(
+      /\.dasti-proposal-design-style-pills button\s*\{\s*min-height:\s*42px;/,
+    );
+    expect(css).toMatch(
       /\.dasti-proposal-design-fields__reset\s*\{[\s\S]*min-height:\s*var\(--control-sm\);[\s\S]*padding:\s*0 var\(--space-2\);[\s\S]*border:\s*1px solid var\(--border-soft\);[\s\S]*border-radius:\s*var\(--radius-pill\);[\s\S]*background:\s*var\(--sf1\);/,
     );
     expect(css).toMatch(
-      /\.dasti-proposal-skeleton-rail__signature-toggles\s*\{[\s\S]*display:\s*grid;[\s\S]*gap:\s*var\(--space-1\);[\s\S]*\}/,
+      /\.dasti-proposal-skeleton-rail__style-pills\.dasti-proposal-design-fields__decoration-pills\s*\{[\s\S]*display:\s*grid;[\s\S]*align-items:\s*stretch;[\s\S]*\}/,
+    );
+    expect(css).toMatch(
+      /\.dasti-proposal-design-fields__decoration-pills--size\s*\{[\s\S]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);[\s\S]*\}/,
+    );
+    expect(css).toMatch(
+      /\.dasti-proposal-design-fields__decoration-pills--size[\s\S]*\.dasti-proposal-design-fields__decoration-custom-size\s*\{[\s\S]*grid-column:\s*1 \/ -1;[\s\S]*\}/,
+    );
+    expect(css).toMatch(
+      /\.dasti-proposal-design-fields__decoration-pills--fit\s*\{[\s\S]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);[\s\S]*\}/,
+    );
+    expect(css).toMatch(
+      /\.dasti-proposal-skeleton-rail__style-swatch--custom:not\([\s\S]*\[data-selected="true"\][\s\S]*\)\s*\{[\s\S]*border:\s*0;[\s\S]*background:\s*var\(--custom-accent-gradient\);[\s\S]*box-shadow:\s*none;/,
+    );
+    expect(css).toMatch(
+      /\.dasti-proposal-skeleton-rail__signature-toggles\s*\{[\s\S]*display:\s*grid;[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);[\s\S]*gap:\s*var\(--space-1\);[\s\S]*\}/,
+    );
+    expect(css).toMatch(
+      /@media \(max-width:\s*760px\)\s*\{[\s\S]*\.dasti-proposal-design-fields__decoration-toggle[\s\S]*\.dasti-theme-switch__label\s*\{[\s\S]*display:\s*none;[\s\S]*\}/,
+    );
+    expect(css).toMatch(
+      /@media \(max-width:\s*760px\)\s*\{[\s\S]*\.dasti-proposal-design-fields__decoration-toggle[\s\S]*\.dasti-theme-switch__rail\s*\{[\s\S]*display:\s*none;[\s\S]*\}/,
     );
     expect(css).not.toContain("dasti-proposal-design-preview");
     expect(css).not.toContain("proposal-design-preview-inline-size");
@@ -986,6 +1148,22 @@ describe("ProposalRail style tab", () => {
     expect(onSelectProposalLayout).toHaveBeenCalledWith(
       CANONICAL_PROPOSAL_TEMPLATE_ID,
     );
+  });
+
+  it("selects the editorial proposal layout from the Style tab", () => {
+    const onSelectProposalLayout = vi.fn();
+
+    renderDesignFields({
+      proposalTemplateId: CANONICAL_PROPOSAL_TEMPLATE_ID,
+      onSelectProposalLayout,
+    });
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Editorial layout",
+      }),
+    );
+
+    expect(onSelectProposalLayout).toHaveBeenCalledWith("editorial_wide");
   });
 
   it("keeps Style 3 selected, highlights ink, and exposes reset when the bundle is customized", () => {
@@ -1014,7 +1192,7 @@ describe("ProposalRail style tab", () => {
     const styleGrid = screen.getByLabelText("Proposal style presets");
     const style3 = screen.getByRole("button", { name: "Style 3" });
     const reset = screen.getByRole("button", { name: "Reset Style 3" });
-    expect(reset).toHaveTextContent("Reset style");
+    expect(reset).toHaveTextContent("Reset");
     expect(reset.parentElement).toBe(styleGrid);
     expect(
       style3.compareDocumentPosition(reset) & Node.DOCUMENT_POSITION_FOLLOWING,

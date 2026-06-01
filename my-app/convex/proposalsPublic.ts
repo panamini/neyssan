@@ -86,6 +86,33 @@ const proposalClosingChoice = v.object({
   handwrittenSignatureEnabled: v.optional(v.boolean()),
 });
 
+const proposalDocumentDecorationChoice = v.object({
+  visible: v.boolean(),
+  source: v.literal("upload"),
+  assetId: v.optional(v.string()),
+  dataUrl: v.optional(v.string()),
+  fileName: v.optional(v.string()),
+  mimeType: v.optional(
+    v.union(
+      v.literal("image/png"),
+      v.literal("image/jpeg"),
+      v.literal("image/svg+xml"),
+    ),
+  ),
+  alt: v.optional(v.string()),
+  sizePreset: v.union(
+    v.literal(18),
+    v.literal(35),
+    v.literal(52),
+    v.literal("custom"),
+  ),
+  customSizeMm: v.optional(v.number()),
+  fit: v.union(v.literal("contain"), v.literal("cover")),
+  placementMode: v.union(v.literal("default"), v.literal("custom")),
+  xMm: v.optional(v.number()),
+  yMm: v.optional(v.number()),
+});
+
 const proposalVerbatiStyleChoice = v.object({
   layout: v.string(),
   typography: v.string(),
@@ -221,6 +248,7 @@ export default query({
         ),
         characterLimitValue: v.optional(v.union(v.number(), v.null())),
         closing: v.optional(proposalClosingChoice),
+        documentDecoration: v.optional(proposalDocumentDecorationChoice),
         proposalType: v.optional(
           v.union(
             v.literal("cover_letter"),
@@ -350,6 +378,7 @@ export default query({
         characterLimitMode: proposal.metadata.characterLimitMode ?? undefined,
         characterLimitValue: proposal.metadata.characterLimitValue ?? undefined,
         closing: proposal.metadata.closing ?? undefined,
+        documentDecoration: proposal.metadata.documentDecoration ?? undefined,
         proposalType: proposal.metadata.proposalType ?? undefined,
       },
       metrics: {

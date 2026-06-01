@@ -55,6 +55,7 @@ import {
 import { collectProposalFontDebugSnapshot } from "../lib/proposal-font-debug";
 import type { ProposalSignatureSettings } from "../lib/proposal-signature-settings";
 import type { ProposalClosingRef } from "../lib/proposal-closing";
+import type { DocumentDecoration } from "../lib/document-decoration";
 import {
   createAiUndoSnapshot,
   normalizeEditorAiTextResult,
@@ -89,6 +90,10 @@ interface ProposalDisplayProps {
   stylePreset?: Partial<VerbatiStylePreset> | VerbatiStylePreset | null;
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
+  documentDecoration?: DocumentDecoration | null;
+  documentDecorationDesignMode?: boolean;
+  onDocumentDecorationChange?: (decoration: DocumentDecoration) => void;
+  onDocumentDecorationCommit?: (decoration: DocumentDecoration) => void;
   railTitle?: string | null;
   railMeta?: string | null;
   contactLine?: string | null;
@@ -585,6 +590,10 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   stylePreset = null,
   signatureSettings = null,
   closing = null,
+  documentDecoration = null,
+  documentDecorationDesignMode = false,
+  onDocumentDecorationChange,
+  onDocumentDecorationCommit,
   railTitle = null,
   railMeta = null,
   contactLine = null,
@@ -2524,6 +2533,12 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                   documentTypography={documentTypography}
                   signatureSettings={signatureSettings}
                   closing={closing}
+                  documentDecoration={documentDecoration}
+                  documentDecorationMode={
+                    documentDecorationDesignMode ? "design" : "readonly"
+                  }
+                  onDocumentDecorationChange={onDocumentDecorationChange}
+                  onDocumentDecorationCommit={onDocumentDecorationCommit}
                   emptyBodyPlaceholder={
                     !proposalContent && !isEditable
                       ? "No draft yet. Add a job offer to generate, or start blank."

@@ -29,6 +29,15 @@
   --tm3: var(--tg3);
   --tg4: #A4A39F;
   --border-stronger: #B6B5B1;
+  --custom-accent-gradient: conic-gradient(
+    from -35deg at 50% 50%,
+    #d95843 0deg,
+    #d9a441 56deg,
+    #4f9d68 122deg,
+    #2a78d6 194deg,
+    #7a4fa0 278deg,
+    #d95843 360deg
+  );
 }
 .dark {
   --ac: #A15A42;                   /* deep terracotta on dark */

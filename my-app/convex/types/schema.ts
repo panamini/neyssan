@@ -1,6 +1,22 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { ProposalTemplateId } from "../lib/proposals/renderTemplates";
 
+export type ProposalDocumentDecoration = {
+  visible: boolean;
+  source: "upload";
+  assetId?: string;
+  dataUrl?: string;
+  fileName?: string;
+  mimeType?: "image/png" | "image/jpeg" | "image/svg+xml";
+  alt?: string;
+  sizePreset: 18 | 35 | 52 | "custom";
+  customSizeMm?: number;
+  fit: "contain" | "cover";
+  placementMode: "default" | "custom";
+  xMm?: number;
+  yMm?: number;
+};
+
 export interface UserDoc extends Doc<"users"> {
   clerkId: string;
   email: string;
@@ -112,6 +128,14 @@ export interface ProposalDoc extends Doc<"proposals"> {
       | "custom"
       | null;
     characterLimitValue?: number | null;
+    closing?: {
+      enabled: boolean;
+      signOff: string;
+      signatureName: string;
+      source: "settings" | "document" | "legacy";
+      handwrittenSignatureEnabled?: boolean;
+    };
+    documentDecoration?: ProposalDocumentDecoration;
     proposalType?:
       | "cover_letter"
       | "application_message"

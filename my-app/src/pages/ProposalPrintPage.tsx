@@ -244,6 +244,7 @@ export function ProposalPrintPage(): JSX.Element {
           documentTypography={documentTypography}
           signatureSettings={payload.signatureSettings}
           closing={payload.closing}
+          documentDecoration={payload.documentDecoration}
           pageSize={pageSize}
           pageWidth={pageSize.widthPx}
           pageGapPx={0}

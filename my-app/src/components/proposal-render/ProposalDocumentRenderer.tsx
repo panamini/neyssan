@@ -43,6 +43,14 @@ import {
   resolveDocumentPageSize,
   type DocumentPageSize,
 } from "../../lib/document-page-size";
+import {
+  getDocumentDecorationPlacementMm,
+  getRenderableDocumentDecoration,
+  moveDocumentDecorationByDeltaMm,
+  resolveTemplateDocumentDecoration,
+  resizeDocumentDecorationByDeltaMm,
+  type DocumentDecoration,
+} from "../../lib/document-decoration";
 
 type ProposalDocumentRendererProps = {
   content: string;
@@ -67,6 +75,10 @@ type ProposalDocumentRendererProps = {
   documentThemeVars?: React.CSSProperties | null;
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
+  documentDecoration?: DocumentDecoration | null;
+  documentDecorationMode?: "readonly" | "design";
+  onDocumentDecorationChange?: (decoration: DocumentDecoration) => void;
+  onDocumentDecorationCommit?: (decoration: DocumentDecoration) => void;
   emptyBodyPlaceholder?: string | null;
   onPageCountChange?: (count: number) => void;
 };
@@ -104,6 +116,11 @@ type ProposalDocumentBlock =
 type VolkRegisterMetaEntry = {
   value: string;
   key: string;
+};
+
+type EditorialContactGroup = {
+  label: string;
+  lines: string[];
 };
 
 type StructuredHeaderValues = {
@@ -145,6 +162,13 @@ type ProposalLetterheadViewModel = {
   recipientEmail: string;
   recipientCity: string;
   recipientExtraLines: string[];
+  recipientEditorialName: string;
+  recipientEditorialCompany: string;
+  recipientEditorialRole: string;
+  recipientEditorialAddress: string;
+  recipientEditorialEmail: string;
+  recipientEditorialCity: string;
+  recipientEditorialExtraLines: string[];
   recipientContactLines: string[];
   recipientHeadingLines: string[];
   joellaLetterBlock: {
@@ -368,6 +392,101 @@ function uniqueNonEmptyLines(
   });
 
   return lines;
+}
+
+function normalizeEditorialWordmark(value: string | null | undefined): string {
+  return String(value ?? "").replace(/\s+/g, " ").trim().toUpperCase();
+}
+
+function buildEditorialSenderGroups(
+  viewModel: ProposalLetterheadViewModel,
+): EditorialContactGroup[] {
+  return [
+    viewModel.candidateName
+      ? {
+          label: viewModel.candidateName,
+          lines: uniqueNonEmptyLines([viewModel.candidateRole]),
+        }
+      : null,
+    viewModel.candidateCompany
+      ? { label: "Company", lines: [viewModel.candidateCompany] }
+      : null,
+    viewModel.candidateLocationLine
+      ? { label: "Location", lines: [viewModel.candidateLocationLine] }
+      : null,
+    viewModel.candidatePhone
+      ? { label: "Phone", lines: [viewModel.candidatePhone] }
+      : null,
+    viewModel.candidateEmail
+      ? { label: "Email", lines: [viewModel.candidateEmail] }
+      : null,
+    viewModel.candidateSocialLines.length > 0
+      ? { label: "Social", lines: viewModel.candidateSocialLines }
+      : null,
+    viewModel.candidateWebsiteLines.length > 0
+      ? { label: "WWW", lines: viewModel.candidateWebsiteLines }
+      : null,
+  ].filter(
+    (group): group is EditorialContactGroup =>
+      Boolean(group && (group.label || group.lines.length > 0)),
+  );
+}
+
+function buildEditorialRecipientGroups(
+  viewModel: ProposalLetterheadViewModel,
+): EditorialContactGroup[] {
+  return [
+    viewModel.recipientEditorialName
+      ? { label: "Name", lines: [viewModel.recipientEditorialName] }
+      : null,
+    viewModel.recipientEditorialRole
+      ? { label: "Role", lines: [viewModel.recipientEditorialRole] }
+      : null,
+    viewModel.recipientEditorialCompany
+      ? { label: "Company", lines: [viewModel.recipientEditorialCompany] }
+      : null,
+    viewModel.recipientEditorialEmail
+      ? { label: "Email", lines: [viewModel.recipientEditorialEmail] }
+      : null,
+    viewModel.recipientEditorialAddress
+      ? { label: "Address", lines: [viewModel.recipientEditorialAddress] }
+      : null,
+    viewModel.recipientEditorialCity
+      ? { label: "City", lines: [viewModel.recipientEditorialCity] }
+      : null,
+    viewModel.recipientEditorialExtraLines.length > 0
+      ? { label: "Details", lines: viewModel.recipientEditorialExtraLines }
+      : null,
+  ].filter(
+    (group): group is EditorialContactGroup =>
+      Boolean(group && (group.label || group.lines.length > 0)),
+  );
+}
+
+function ProposalCoverLetterEditorialContactGroups({
+  groups,
+}: {
+  groups: EditorialContactGroup[];
+}): JSX.Element | null {
+  if (groups.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="proposal-cover-letter__editorial-contact-copy">
+      {groups.map((group) => (
+        <p key={`${group.label}-${group.lines.join("|")}`}>
+          {group.label ? <b>{group.label}</b> : null}
+          {group.lines.map((line) => (
+            <React.Fragment key={line}>
+              <br />
+              {line}
+            </React.Fragment>
+          ))}
+        </p>
+      ))}
+    </div>
+  );
 }
 
 function buildJoellaFooterLine(args: {
@@ -706,6 +825,16 @@ function buildProposalLetterheadViewModel(args: {
     visibility.showRecipient && visibility.showRecipientDetails
       ? getProposalRecipientExtraLines(args.recipientDetails, recipientFields)
       : [];
+  const recipientEditorialName = recipientFields.name?.trim() ?? "";
+  const recipientEditorialCompany = recipientFields.company?.trim() ?? "";
+  const recipientEditorialRole = recipientFields.role?.trim() ?? "";
+  const recipientEditorialAddress = recipientFields.address?.trim() ?? "";
+  const recipientEditorialEmail = recipientFields.email?.trim() ?? "";
+  const recipientEditorialCity = recipientFields.city?.trim() ?? "";
+  const recipientEditorialExtraLines = getProposalRecipientExtraLines(
+    args.recipientDetails,
+    recipientFields,
+  );
   const recipientContactLines = uniqueNonEmptyLines(
     [recipientEmail, recipientAddress, recipientCity, ...recipientExtraLines],
     [recipientName, recipientCompany, recipientRole],
@@ -799,6 +928,13 @@ function buildProposalLetterheadViewModel(args: {
     recipientEmail,
     recipientCity,
     recipientExtraLines,
+    recipientEditorialName,
+    recipientEditorialCompany,
+    recipientEditorialRole,
+    recipientEditorialAddress,
+    recipientEditorialEmail,
+    recipientEditorialCity,
+    recipientEditorialExtraLines,
     recipientContactLines,
     recipientHeadingLines,
     joellaLetterBlock,
@@ -940,6 +1076,119 @@ function ProposalCoverLetterDirectorContactGrid({
         </div>
       ))}
     </section>
+  );
+}
+
+export function ProposalCoverLetterEditorialTemplate({
+  bodyRef,
+  bodyContent,
+  isContinuationPage,
+  viewModel,
+}: ProposalCoverLetterTemplateProps): JSX.Element {
+  const wordmark = normalizeEditorialWordmark(
+    viewModel.candidateCompany || viewModel.candidateName,
+  );
+  const subtitle = viewModel.candidateRole || viewModel.shortRoleTitle;
+  const recipientGroups = buildEditorialRecipientGroups(viewModel);
+  const senderGroups = buildEditorialSenderGroups(viewModel);
+
+  return (
+    <>
+      {!isContinuationPage ? (
+        <>
+          <span
+            className="proposal-cover-letter__editorial-top-ribbon"
+            aria-hidden="true"
+          />
+          <span
+            className="proposal-cover-letter__editorial-header-rule"
+            aria-hidden="true"
+          />
+
+          {wordmark ? (
+            <p
+              className="proposal-cover-letter__editorial-wordmark"
+            >
+              {wordmark}
+            </p>
+          ) : null}
+          {subtitle ? (
+            <p className="proposal-cover-letter__editorial-subtitle">
+              {subtitle}
+            </p>
+          ) : null}
+
+          <span
+            className="proposal-cover-letter__editorial-rail-rule"
+            aria-hidden="true"
+          />
+          <span
+            className="proposal-cover-letter__editorial-body-rule"
+            aria-hidden="true"
+          />
+          {viewModel.subject ? (
+            <p className="proposal-cover-letter__editorial-subject">
+              {viewModel.subject}
+            </p>
+          ) : null}
+
+          {viewModel.date ? (
+            <>
+              <p className="proposal-cover-letter__editorial-date">
+                {viewModel.date}
+              </p>
+              <span
+                className="proposal-cover-letter__editorial-date-rule"
+                aria-hidden="true"
+              />
+            </>
+          ) : null}
+
+          {recipientGroups.length > 0 ? (
+            <section className="proposal-cover-letter__editorial-recipient">
+              <p className="proposal-cover-letter__editorial-label">
+                To
+              </p>
+              <span
+                className="proposal-cover-letter__editorial-label-rule"
+                aria-hidden="true"
+              />
+              <ProposalCoverLetterEditorialContactGroups
+                groups={recipientGroups}
+              />
+            </section>
+          ) : null}
+
+          {senderGroups.length > 0 ? (
+            <section className="proposal-cover-letter__editorial-sender">
+              <p className="proposal-cover-letter__editorial-label">
+                From
+              </p>
+              <span
+                className="proposal-cover-letter__editorial-label-rule proposal-cover-letter__editorial-label-rule--sender"
+                aria-hidden="true"
+              />
+              <ProposalCoverLetterEditorialContactGroups groups={senderGroups} />
+            </section>
+          ) : null}
+        </>
+      ) : null}
+
+      <section
+        ref={bodyRef ?? undefined}
+        className={[
+          "proposal-cover-letter__editorial-body-flow",
+          "proposal-cover-letter__body",
+          !isContinuationPage && viewModel.subject
+            ? "proposal-cover-letter__editorial-body-flow--subject-heading"
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        {bodyContent}
+      </section>
+    </>
   );
 }
 
@@ -1873,6 +2122,175 @@ function paginateMeasuredProposalBlocks(args: {
   return pages.length > 0 ? pages : [[]];
 }
 
+type DocumentDecorationInteractionState = {
+  kind: "move" | "resize";
+  pointerId: number | null;
+  startClientX: number;
+  startClientY: number;
+  initialDecoration: DocumentDecoration;
+  latestDecoration: DocumentDecoration;
+  pageRect: DOMRect;
+  pageWidthMm: number;
+  pageHeightMm: number;
+};
+
+function getDecorationPointerClientPosition(
+  event: React.PointerEvent<HTMLElement>,
+): { clientX: number; clientY: number } | null {
+  const nativeEvent = event.nativeEvent as MouseEvent;
+  const clientX =
+    Number.isFinite(event.clientX) ? event.clientX : nativeEvent.clientX;
+  const clientY =
+    Number.isFinite(event.clientY) ? event.clientY : nativeEvent.clientY;
+  if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+    return null;
+  }
+  return { clientX, clientY };
+}
+
+function ProposalDocumentDecorationLayer({
+  decoration,
+  mode,
+  pageSize,
+  onChange,
+  onCommit,
+}: {
+  decoration?: DocumentDecoration | null;
+  mode: "readonly" | "design";
+  pageSize: DocumentPageSize;
+  onChange?: (decoration: DocumentDecoration) => void;
+  onCommit?: (decoration: DocumentDecoration) => void;
+}): JSX.Element | null {
+  const resolvedDecoration = getRenderableDocumentDecoration(decoration);
+  const interactionRef = React.useRef<DocumentDecorationInteractionState | null>(
+    null,
+  );
+
+  if (!resolvedDecoration) {
+    return null;
+  }
+
+  const isDesignMode = mode === "design";
+  const pageSizeMm = {
+    pageWidthMm: pageSize.widthMm,
+    pageHeightMm: pageSize.heightMm,
+  };
+  const { xMm, yMm, sizeMm } = getDocumentDecorationPlacementMm(
+    resolvedDecoration,
+    pageSizeMm,
+  );
+
+  const beginInteraction = (
+    event: React.PointerEvent<HTMLElement>,
+    kind: "move" | "resize",
+  ) => {
+    if (!isDesignMode) return;
+    const page = event.currentTarget.closest(
+      ".dasti-proposal-document__page",
+    ) as HTMLElement | null;
+    if (!page) return;
+    const pageRect = page.getBoundingClientRect();
+    if (pageRect.width <= 0 || pageRect.height <= 0) return;
+    const pointerPosition = getDecorationPointerClientPosition(event);
+    if (!pointerPosition) return;
+    const pointerId = Number.isFinite(event.pointerId) ? event.pointerId : null;
+    event.preventDefault();
+    if (pointerId !== null) {
+      event.currentTarget.setPointerCapture?.(pointerId);
+    }
+    interactionRef.current = {
+      kind,
+      pointerId,
+      startClientX: pointerPosition.clientX,
+      startClientY: pointerPosition.clientY,
+      initialDecoration: resolvedDecoration,
+      latestDecoration: resolvedDecoration,
+      pageRect,
+      pageWidthMm: pageSize.widthMm,
+      pageHeightMm: pageSize.heightMm,
+    };
+  };
+
+  const updateInteraction = (event: React.PointerEvent<HTMLElement>) => {
+    const interaction = interactionRef.current;
+    const pointerId = Number.isFinite(event.pointerId) ? event.pointerId : null;
+    if (!interaction || interaction.pointerId !== pointerId) return;
+    const pointerPosition = getDecorationPointerClientPosition(event);
+    if (!pointerPosition) return;
+    const deltaXMm =
+      (pointerPosition.clientX - interaction.startClientX) *
+      (interaction.pageWidthMm / interaction.pageRect.width);
+    const deltaYMm =
+      (pointerPosition.clientY - interaction.startClientY) *
+      (interaction.pageHeightMm / interaction.pageRect.height);
+    const nextDecoration =
+      interaction.kind === "resize"
+        ? resizeDocumentDecorationByDeltaMm(interaction.initialDecoration, {
+            deltaXMm,
+            deltaYMm,
+            pageWidthMm: interaction.pageWidthMm,
+            pageHeightMm: interaction.pageHeightMm,
+          })
+        : moveDocumentDecorationByDeltaMm(interaction.initialDecoration, {
+            deltaXMm,
+            deltaYMm,
+            pageWidthMm: interaction.pageWidthMm,
+            pageHeightMm: interaction.pageHeightMm,
+          });
+
+    interaction.latestDecoration = nextDecoration;
+    onChange?.(nextDecoration);
+  };
+
+  const endInteraction = (event: React.PointerEvent<HTMLElement>) => {
+    const interaction = interactionRef.current;
+    const pointerId = Number.isFinite(event.pointerId) ? event.pointerId : null;
+    if (!interaction || interaction.pointerId !== pointerId) return;
+    interactionRef.current = null;
+    if (pointerId !== null) {
+      event.currentTarget.releasePointerCapture?.(pointerId);
+    }
+    onCommit?.(interaction.latestDecoration);
+  };
+
+  return (
+    <div
+      className="dasti-proposal-document-decoration"
+      data-design-mode={isDesignMode ? "true" : "false"}
+      data-decoration-size-mm={sizeMm}
+      style={
+        {
+          left: `calc(var(--proposal-inline-mm) * ${xMm})`,
+          top: `calc(var(--proposal-block-mm) * ${yMm})`,
+          width: `calc(var(--proposal-inline-mm) * ${sizeMm})`,
+          height: `calc(var(--proposal-block-mm) * ${sizeMm})`,
+          "--proposal-decoration-object-fit": resolvedDecoration.fit,
+        } as React.CSSProperties
+      }
+      onPointerDown={(event) => beginInteraction(event, "move")}
+      onPointerMove={updateInteraction}
+      onPointerUp={endInteraction}
+      onPointerCancel={endInteraction}
+    >
+      <img
+        src={resolvedDecoration.dataUrl}
+        alt={resolvedDecoration.alt ?? ""}
+        draggable={false}
+      />
+      {isDesignMode ? (
+        <span
+          className="dasti-proposal-document-decoration__resize-handle"
+          aria-hidden="true"
+          onPointerDown={(event) => {
+            event.stopPropagation();
+            beginInteraction(event, "resize");
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 function buildVolkFallbackParagraphs(args: {
   documentTitle: string | null;
   railTitle: string | null;
@@ -1910,10 +2328,18 @@ export function ProposalDocumentRenderer({
   documentThemeVars = null,
   signatureSettings = null,
   closing = null,
+  documentDecoration = null,
+  documentDecorationMode = "readonly",
+  onDocumentDecorationChange,
+  onDocumentDecorationCommit,
   emptyBodyPlaceholder = null,
   onPageCountChange,
 }: ProposalDocumentRendererProps): JSX.Element {
   const resolvedTemplateId = resolveProposalTemplateId(templateId);
+  const resolvedDocumentDecoration = React.useMemo(
+    () => resolveTemplateDocumentDecoration(documentDecoration, resolvedTemplateId),
+    [documentDecoration, resolvedTemplateId],
+  );
   const resolvedPageSize = React.useMemo(
     () => resolveDocumentPageSize({ pageSize }),
     [pageSize],
@@ -2710,6 +3136,8 @@ export function ProposalDocumentRenderer({
       };
 
       switch (resolvedTemplateId) {
+        case "editorial_wide":
+          return <ProposalCoverLetterEditorialTemplate {...templateProps} />;
         case "twoweeks-letterhead":
           return <ProposalCoverLetterTwoweeksTemplate {...templateProps} />;
         case "director-letterhead":
@@ -2737,6 +3165,9 @@ export function ProposalDocumentRenderer({
       className={[
         "dasti-proposal-document",
         `dasti-proposal-document--${resolvedTemplateId.replace(/_/g, "-")}`,
+        resolvedTemplateId === "editorial_wide"
+          ? "proposal-cover-letter--editorial"
+          : "",
         resolvedTemplateId === "twoweeks-letterhead"
           ? "proposal-cover-letter--twoweeks"
           : "",
@@ -2860,6 +3291,15 @@ export function ProposalDocumentRenderer({
                   isContinuationPage,
                   measurement: false,
                 })}
+            {pageIndex === 0 ? (
+              <ProposalDocumentDecorationLayer
+                decoration={resolvedDocumentDecoration}
+                mode={documentDecorationMode}
+                pageSize={resolvedPageSize}
+                onChange={onDocumentDecorationChange}
+                onCommit={onDocumentDecorationCommit}
+              />
+            ) : null}
           </div>
         );
       })}

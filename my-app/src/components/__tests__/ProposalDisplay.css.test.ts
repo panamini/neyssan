@@ -24,6 +24,12 @@ function expectCssInOrder(snippets: string[]) {
 }
 
 describe("ProposalDisplay CSS contracts", () => {
+  it("keeps handwritten proposal signatures inside the document grid", () => {
+    expect(productCss).toMatch(
+      /\.dasti-proposal-document__signature-image\s*\{[\s\S]*max-width:\s*min\(42mm,\s*64%\);[\s\S]*max-height:\s*13\.75mm;/,
+    );
+  });
+
   it("orders the collapsed Proposal Forge stage before the rail panel", () => {
     expectCssInOrder([
       "@media (max-width: 1419px)",

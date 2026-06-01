@@ -55,6 +55,11 @@ import {
   type DocumentPageSize,
   type DocumentPageSizePreference,
 } from "./document-page-size";
+import {
+  normalizeDocumentDecoration,
+  shouldPersistDocumentDecoration,
+  type DocumentDecoration,
+} from "./document-decoration";
 
 export type ExportDocumentKind = "resume" | "proposal";
 export type ExportDocumentFormat = "pdf" | "docx";
@@ -215,6 +220,7 @@ export type ProposalPrintSource = {
   templateId: ProposalTemplateId | null;
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
+  documentDecoration?: DocumentDecoration | null;
   body: ProposalPrintBlock[];
 };
 
@@ -240,6 +246,7 @@ export type ProposalPreviewPrintSource = {
   stylePreset: VerbatiStylePreset;
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
+  documentDecoration?: DocumentDecoration | null;
 };
 
 export type ProposalPrintRoutePayload = {
@@ -263,6 +270,7 @@ export type ProposalPrintRoutePayload = {
   stylePreset: VerbatiStylePreset;
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
+  documentDecoration?: DocumentDecoration | null;
 };
 
 export type ProposalPrintDebugSnapshot = {
@@ -283,6 +291,14 @@ export type ExportDocumentSource =
 
 function cleanString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function sanitizeDocumentDecorationForExport(
+  value: DocumentDecoration | null | undefined,
+): DocumentDecoration | null {
+  if (!value) return null;
+  const decoration = normalizeDocumentDecoration(value);
+  return shouldPersistDocumentDecoration(decoration) ? decoration : null;
 }
 
 function normalizeResumeItems(items: ResumeData["metadata"]): ResumePrintItem[] {
@@ -536,6 +552,7 @@ export function buildProposalPreviewPrintSource(args: {
   stylePreset?: VerbatiStylePreset | null;
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
+  documentDecoration?: DocumentDecoration | null;
   locale?: string | null;
   pageSizePreference?: DocumentPageSizePreference | null;
   pageSize?: DocumentPageSize | null;
@@ -586,6 +603,9 @@ export function buildProposalPreviewPrintSource(args: {
       args.signatureSettings,
     ),
     closing: sanitizeProposalClosingRef(args.closing),
+    documentDecoration: sanitizeDocumentDecorationForExport(
+      args.documentDecoration,
+    ),
   };
 }
 
@@ -615,6 +635,9 @@ export function buildProposalPrintRoutePayload(args: {
       args.data.signatureSettings,
     ),
     closing: sanitizeProposalClosingRef(args.data.closing),
+    documentDecoration: sanitizeDocumentDecorationForExport(
+      args.data.documentDecoration,
+    ),
   };
 }
 
@@ -752,6 +775,7 @@ export function buildProposalExportSource(args: {
   templateId?: ProposalTemplateId | null;
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
+  documentDecoration?: DocumentDecoration | null;
   locale?: string | null;
   pageSizePreference?: DocumentPageSizePreference | null;
   pageSize?: DocumentPageSize | null;
@@ -795,6 +819,9 @@ export function buildProposalExportSource(args: {
       args.signatureSettings,
     ),
     closing: sanitizeProposalClosingRef(args.closing),
+    documentDecoration: sanitizeDocumentDecorationForExport(
+      args.documentDecoration,
+    ),
     body: buildProposalBodyBlocks(
       args.content,
       args.recipientDetails,

@@ -247,6 +247,12 @@ import {
 } from "../lib/proposal-signature-settings";
 import type { EditorAiJobContext } from "../lib/ai/editorAiJobContext";
 import { normalizeEditorAiTextResult } from "../lib/ai/applyAiSuggestion";
+import {
+  createDefaultDocumentDecoration,
+  normalizeDocumentDecoration,
+  shouldPersistDocumentDecoration,
+  type DocumentDecoration,
+} from "../lib/document-decoration";
 
 type CurrentProposalSettings = {
   voicePreset: string;
@@ -810,6 +816,7 @@ type ProposalDocumentMetadata = DocumentStyleMetadata & {
   resolvedLanguage?: string | null;
   languageSource?: DocumentLanguageSource;
   jobDetectedLanguage?: string | null;
+  documentDecoration?: DocumentDecoration;
 };
 
 type ProposalWorkspaceCssVars = React.CSSProperties & {
@@ -3194,6 +3201,12 @@ export function ProposalForge(): JSX.Element {
   const [proposalOutputMode, setProposalOutputMode] = React.useState<
     "preview" | "edit"
   >(storedOutputDraft?.proposalOutputMode ?? "preview");
+  const [documentDecoration, setDocumentDecoration] =
+    React.useState<DocumentDecoration>(() =>
+      normalizeDocumentDecoration(
+        storedOutputDraft?.documentDecoration ?? createDefaultDocumentDecoration(),
+      ),
+    );
   const [proposalLibraryStatus, setProposalLibraryStatus] = React.useState<
     "draft" | "saved"
   >("draft");
@@ -4221,6 +4234,7 @@ export function ProposalForge(): JSX.Element {
     setProposalDocumentTitle("");
     setProposalDocumentTitleManual(false);
     setProposalDocumentMeta("");
+    setDocumentDecoration(createDefaultDocumentDecoration());
     setGeneratedProposalId(null);
     generatedProposalIdRef.current = null;
     latestProposalStyleCommitRef.current = null;
@@ -4887,6 +4901,10 @@ export function ProposalForge(): JSX.Element {
     attachedCvId,
     resolvedProposalRuntimeStyle.source,
   ]);
+  const persistedDocumentDecoration = React.useMemo(() => {
+    const normalized = normalizeDocumentDecoration(documentDecoration);
+    return shouldPersistDocumentDecoration(normalized) ? normalized : null;
+  }, [documentDecoration]);
   const proposalRenderMetadata = React.useMemo<
     ProposalDocumentMetadata | undefined
   >(() => {
@@ -4934,6 +4952,9 @@ export function ProposalForge(): JSX.Element {
       nextMetadata.characterLimitMode = draftCharacterLimitMode;
       nextMetadata.characterLimitValue = draftCharacterLimitValue;
     }
+    if (persistedDocumentDecoration) {
+      nextMetadata.documentDecoration = persistedDocumentDecoration;
+    }
 
     return Object.keys(nextMetadata).length > 0 ? nextMetadata : undefined;
   }, [
@@ -4944,6 +4965,7 @@ export function ProposalForge(): JSX.Element {
     effectiveProposalStylePresetWithPalette,
     effectiveProposalTemplateId,
     fallbackProposalTemplateId,
+    persistedDocumentDecoration,
     proposalSettingsPresets,
     proposalTemplateBundleId,
     proposalStyleChoice,
@@ -5475,6 +5497,19 @@ export function ProposalForge(): JSX.Element {
       selectedProposalId,
       traceProposalStyle,
     ],
+  );
+  const handleDocumentDecorationChange = React.useCallback(
+    (nextDecoration: DocumentDecoration) => {
+      setDocumentDecoration(normalizeDocumentDecoration(nextDecoration));
+    },
+    [],
+  );
+  const handleDocumentDecorationCommit = React.useCallback(
+    (nextDecoration: DocumentDecoration) => {
+      setDocumentDecoration(normalizeDocumentDecoration(nextDecoration));
+      void flushScheduledProposalSave(undefined, { force: true }).catch(() => {});
+    },
+    [flushScheduledProposalSave],
   );
   const performProposalSaveRef = React.useRef(performProposalSave);
   React.useEffect(() => {
@@ -6508,6 +6543,7 @@ export function ProposalForge(): JSX.Element {
       setProposalDocumentTitle("");
       setProposalDocumentTitleManual(false);
       setProposalDocumentMeta("");
+      setDocumentDecoration(createDefaultDocumentDecoration());
       setFallbackInfo(null);
       setGeneratedProposalId(null);
       generatedProposalIdRef.current = null;
@@ -7045,6 +7081,10 @@ export function ProposalForge(): JSX.Element {
         showRecipientDetails:
           openedSavedProposal.metadata?.headerShowRecipientDetails,
       });
+      const nextDocumentDecoration = normalizeDocumentDecoration(
+        openedSavedProposal.metadata?.documentDecoration ??
+          createDefaultDocumentDecoration(),
+      );
       const nextSourceComposeDraft: StoredProposalComposeDraft | null = null;
 
       setProposalContent(nextContent);
@@ -7111,6 +7151,7 @@ export function ProposalForge(): JSX.Element {
       setProposalDocumentTitle(openedSavedProposal.title || "Untitled proposal");
       setProposalDocumentTitleManual(true);
       setProposalDocumentMeta(nextDocumentMeta);
+      setDocumentDecoration(nextDocumentDecoration);
       setGeneratedProposalId(openedSavedProposal._id as Id<"proposals">);
       generatedProposalIdRef.current =
         openedSavedProposal._id as Id<"proposals">;
@@ -7249,6 +7290,10 @@ export function ProposalForge(): JSX.Element {
         }) ??
         "auto",
     );
+    const nextDocumentDecoration = normalizeDocumentDecoration(
+      draftProposal.metadata?.documentDecoration ??
+        createDefaultDocumentDecoration(),
+    );
     const shouldRestoreDraftDetachedStyle = Boolean(
       nextStyleLinkMode === "proposal_local" && nextStylePreset,
     );
@@ -7288,6 +7333,7 @@ export function ProposalForge(): JSX.Element {
     setProposalDocumentTitle(nextTitle);
     setProposalDocumentTitleManual(nextTitleManual);
     setProposalDocumentMeta(nextMeta);
+    setDocumentDecoration(nextDocumentDecoration);
     setGeneratedProposalId(nextGeneratedId);
     generatedProposalIdRef.current = nextGeneratedId;
     setProposalOutputMode("preview");
@@ -7306,6 +7352,11 @@ export function ProposalForge(): JSX.Element {
       proposalVoicePreset: nextVoicePreset,
       proposalTemplateId: nextTemplateId,
       proposalVerbatiStyle: nextStylePreset,
+      documentDecoration: shouldPersistDocumentDecoration(
+        nextDocumentDecoration,
+      )
+        ? nextDocumentDecoration
+        : null,
       verbatiStyleSlotId: draftProposal.metadata?.verbatiStyleSlotId ?? null,
       verbatiStyleSlotSource:
         draftProposal.metadata?.verbatiStyleSlotSource ?? null,
@@ -8156,6 +8207,7 @@ export function ProposalForge(): JSX.Element {
         proposalVerbatiStyle: serializeVerbatiStyle(
           effectiveProposalStylePresetWithPalette,
         ),
+        documentDecoration: persistedDocumentDecoration,
         verbatiStyleSlotId: proposalRenderMetadata?.verbatiStyleSlotId ?? null,
         verbatiStyleSlotSource:
           proposalRenderMetadata?.verbatiStyleSlotSource ?? null,
@@ -8316,6 +8368,7 @@ export function ProposalForge(): JSX.Element {
       fallbackProposalTemplateId,
       buildStoredProposalComposeDraftSnapshot,
       formatProposalTypeLabel,
+      persistedDocumentDecoration,
       proposalApplicantName,
       proposalApplicantRole,
       proposalApplicantCompany,
@@ -8818,6 +8871,7 @@ export function ProposalForge(): JSX.Element {
       proposalVerbatiStyle: effectiveProposalStylePresetWithPalette
         ? serializeVerbatiStyle(effectiveProposalStylePresetWithPalette)
         : null,
+      documentDecoration: persistedDocumentDecoration,
       verbatiStyleSlotId: proposalRenderMetadata?.verbatiStyleSlotId ?? null,
       verbatiStyleSlotSource:
         proposalRenderMetadata?.verbatiStyleSlotSource ?? null,
@@ -8882,6 +8936,7 @@ export function ProposalForge(): JSX.Element {
     proposalDocumentTitle,
     proposalDocumentTitleManual,
     proposalOutputMode,
+    persistedDocumentDecoration,
     proposalStyleChoice,
     effectiveProposalStylePresetWithPalette,
     proposalCustomAccentHex,
@@ -9315,6 +9370,10 @@ export function ProposalForge(): JSX.Element {
         showRecipientDetails:
           openedSavedProposal.metadata?.headerShowRecipientDetails,
       });
+      const restoredDocumentDecoration = normalizeDocumentDecoration(
+        openedSavedProposal.metadata?.documentDecoration ??
+          createDefaultDocumentDecoration(),
+      );
       let duplicatedDraftId: Id<"proposals"> | null = null;
       const restoredDocumentTitle =
         savedProposalDocumentTitle.trim() ||
@@ -9428,6 +9487,7 @@ export function ProposalForge(): JSX.Element {
       setProposalDocumentTitle(nextDraftTitle);
       setProposalDocumentTitleManual(Boolean(nextDraftTitle.trim()));
       setProposalDocumentMeta(savedProposalDocumentMeta);
+      setDocumentDecoration(restoredDocumentDecoration);
       setDuplicateSourceJobId(restoredJobId);
       setGeneratedProposalId(duplicatedDraftId);
       generatedProposalIdRef.current = duplicatedDraftId;
@@ -10149,6 +10209,7 @@ export function ProposalForge(): JSX.Element {
           fallbackProposalTemplateId,
         signatureSettings: proposalSignatureSettings,
         closing: effectiveProposalClosing,
+        documentDecoration: persistedDocumentDecoration,
         locale: storedOutputDraft?.resolvedLanguage,
         pageSize: resolvedProposalPageSize,
       }),
@@ -10169,6 +10230,7 @@ export function ProposalForge(): JSX.Element {
       proposalSignatureSettings,
       proposalType,
       proposalContent,
+      persistedDocumentDecoration,
       resolvedProposalPageSize,
       storedOutputDraft?.resolvedLanguage,
     ],
@@ -10202,6 +10264,7 @@ export function ProposalForge(): JSX.Element {
         stylePreset: effectiveProposalStylePresetWithPalette,
         signatureSettings: proposalSignatureSettings,
         closing: effectiveProposalClosing,
+        documentDecoration: persistedDocumentDecoration,
         locale: storedOutputDraft?.resolvedLanguage,
         pageSize: resolvedProposalPageSize,
       }),
@@ -10226,6 +10289,7 @@ export function ProposalForge(): JSX.Element {
       proposalType,
       proposalContent,
       proposalVoicePreset,
+      persistedDocumentDecoration,
       resolvedProposalPageSize,
       storedOutputDraft?.resolvedLanguage,
     ],
@@ -10280,6 +10344,7 @@ export function ProposalForge(): JSX.Element {
       templateId: savedProposalTemplateId,
       signatureSettings: proposalSignatureSettings,
       closing: savedClosing,
+      documentDecoration: savedMetadata?.documentDecoration ?? null,
       locale: savedMetadata?.resolvedLanguage,
       pageSize: resolvedProposalPageSize,
     });
@@ -10356,6 +10421,7 @@ export function ProposalForge(): JSX.Element {
       stylePreset: effectiveSavedProposalStylePreset,
       signatureSettings: proposalSignatureSettings,
       closing: savedClosing,
+      documentDecoration: savedMetadata?.documentDecoration ?? null,
       locale: savedMetadata?.resolvedLanguage,
       pageSize: resolvedProposalPageSize,
     });
@@ -11120,25 +11186,27 @@ export function ProposalForge(): JSX.Element {
     () =>
       PROPOSAL_TEMPLATE_DEFINITIONS.map((template) => {
         const family: TemplateFamily =
-          template.id === "twoweeks-letterhead"
-            ? "twoweeks-letterhead"
-            : template.id === "director-letterhead"
-            ? "director-letterhead"
-            : template.id === "volk-letterhead"
-              ? "volk-letterhead"
-              : template.id === "film-foto-letterhead"
-                ? "film-foto-letterhead"
-                : template.id === "moma-bauhaus-letterhead"
-                  ? "moma-bauhaus-letterhead"
-                  : template.id === "joella-frame-letterhead"
-                    ? "joella-frame-letterhead"
-                    : template.id === "bayer-letterhead"
-                      ? "bayer-letterhead"
-                    : template.id === "modernist_signal"
-                      ? "bold"
-                      : template.id === "quire_margin"
-                        ? "letterpress"
-                        : "minimal";
+          template.id === "editorial_wide"
+            ? "editorial-letterhead"
+            : template.id === "twoweeks-letterhead"
+              ? "twoweeks-letterhead"
+              : template.id === "director-letterhead"
+                ? "director-letterhead"
+                : template.id === "volk-letterhead"
+                  ? "volk-letterhead"
+                  : template.id === "film-foto-letterhead"
+                    ? "film-foto-letterhead"
+                    : template.id === "moma-bauhaus-letterhead"
+                      ? "moma-bauhaus-letterhead"
+                      : template.id === "joella-frame-letterhead"
+                        ? "joella-frame-letterhead"
+                        : template.id === "bayer-letterhead"
+                          ? "bayer-letterhead"
+                          : template.id === "modernist_signal"
+                            ? "bold"
+                            : template.id === "quire_margin"
+                              ? "letterpress"
+                              : "minimal";
         return {
           id: template.id,
           label: template.name,
@@ -11464,6 +11532,8 @@ export function ProposalForge(): JSX.Element {
           onSelectStylePalette={handleProposalPaletteSelect}
           onSelectStyleCustomAccent={handleProposalCustomAccentSelect}
           onClearStyleCustomAccent={handleProposalCustomAccentClear}
+          documentDecoration={documentDecoration}
+          onDocumentDecorationChange={handleDocumentDecorationChange}
           signaturePresent={Boolean(
             effectiveProposalClosing?.enabled &&
               effectiveProposalClosing.signatureName,
@@ -11490,6 +11560,7 @@ export function ProposalForge(): JSX.Element {
       handleChooseSignature,
       handleProposalCustomAccentClear,
       handleProposalCustomAccentSelect,
+      handleDocumentDecorationChange,
       handleProposalLayoutSelect,
       handleProposalPaletteSelect,
       handleProposalStyleBundleReset,
@@ -11499,6 +11570,7 @@ export function ProposalForge(): JSX.Element {
       handleToggleSignature,
       proposalSignatureSettings.imageDataUrl,
       proposalTemplateBundleId,
+      documentDecoration,
       resolvedLanguage,
     ],
   );
@@ -12641,6 +12713,18 @@ export function ProposalForge(): JSX.Element {
                             }
                             signatureSettings={proposalSignatureSettings}
                             closing={effectiveProposalClosing}
+                            documentDecoration={documentDecoration}
+                            documentDecorationDesignMode={
+                              proposalDesignOpen &&
+                              proposalOutputMode === "preview" &&
+                              !isSavedView
+                            }
+                            onDocumentDecorationChange={
+                              handleDocumentDecorationChange
+                            }
+                            onDocumentDecorationCommit={
+                              handleDocumentDecorationCommit
+                            }
                             railTitle={sanitizeProposalApplicantName(
                               proposalApplicantName,
                             )}
