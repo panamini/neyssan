@@ -2572,6 +2572,9 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     expect(
       container.querySelector(".dasti-proposal-document-decoration__resize-handle"),
     ).toBeNull();
+    expect(
+      container.querySelector(".dasti-proposal-document-decoration__toolbar"),
+    ).toBeNull();
   });
 
   it("shows the preview bounding box handle and stores resized size as custom integer millimeters", () => {
@@ -2628,6 +2631,15 @@ describe("ProposalDocumentRenderer volk register layout", () => {
 
     expect(decoration).toHaveAttribute("data-design-mode", "true");
     expect(resizeHandle).toBeTruthy();
+    expect(
+      container.querySelector(".dasti-proposal-document-decoration__toolbar"),
+    ).toBeTruthy();
+    expect(
+      container.querySelector("[aria-label='Upload decoration image from page']"),
+    ).toHaveAttribute(
+      "accept",
+      ".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml",
+    );
 
     fireEvent(resizeHandle, new MouseEvent("pointerdown", {
       bubbles: true,
@@ -2660,5 +2672,73 @@ describe("ProposalDocumentRenderer volk register layout", () => {
         customSizeMm: 49,
       }),
     );
+  });
+
+  it("commits on-page decoration hide and remove actions in design mode", () => {
+    const onDocumentDecorationChange = vi.fn();
+    const onDocumentDecorationCommit = vi.fn();
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content="I can support the team with clear written execution."
+        proposalType="cover_letter"
+        templateId="swiss_margin"
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        documentDecoration={{
+          visible: true,
+          source: "upload",
+          dataUrl: "data:image/png;base64,AAAA",
+          fileName: "mark.png",
+          mimeType: "image/png",
+          alt: "Company mark",
+          sizePreset: 35,
+          fit: "contain",
+          placementMode: "custom",
+          xMm: 17,
+          yMm: 35,
+        }}
+        documentDecorationMode="design"
+        onDocumentDecorationChange={onDocumentDecorationChange}
+        onDocumentDecorationCommit={onDocumentDecorationCommit}
+      />,
+    );
+
+    const hideButton = container.querySelector(
+      "[aria-label='Hide decoration image']",
+    ) as HTMLButtonElement;
+    const removeButton = container.querySelector(
+      "[aria-label='Remove decoration image']",
+    ) as HTMLButtonElement;
+
+    fireEvent.click(hideButton);
+    expect(onDocumentDecorationChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        visible: false,
+        dataUrl: "data:image/png;base64,AAAA",
+        fileName: "mark.png",
+      }),
+    );
+    expect(onDocumentDecorationCommit).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        visible: false,
+        dataUrl: "data:image/png;base64,AAAA",
+        fileName: "mark.png",
+      }),
+    );
+
+    fireEvent.click(removeButton);
+    const removedChange = onDocumentDecorationChange.mock.calls.at(-1)?.[0];
+    const removedCommit = onDocumentDecorationCommit.mock.calls.at(-1)?.[0];
+    expect(removedChange).toMatchObject({ visible: false });
+    expect(removedChange?.dataUrl).toBeUndefined();
+    expect(removedChange?.fileName).toBeUndefined();
+    expect(removedCommit).toMatchObject({ visible: false });
+    expect(removedCommit?.dataUrl).toBeUndefined();
+    expect(removedCommit?.fileName).toBeUndefined();
   });
 });

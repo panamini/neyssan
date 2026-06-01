@@ -3299,6 +3299,54 @@
   cursor: grabbing;
 }
 
+.dasti-proposal-document-decoration__toolbar {
+  position: absolute;
+  inset-block-start: -28px;
+  inset-inline-end: -2px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px;
+  border: 1px solid color-mix(in srgb, var(--ti) 16%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--proposal-document-paper, var(--paper)) 92%, transparent);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--ti) 14%, transparent);
+  cursor: default;
+  backdrop-filter: blur(8px);
+}
+
+.dasti-proposal-document-decoration__action.dasti-icon-button {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  border-radius: 999px;
+  border-color: transparent;
+  background: transparent;
+  color: color-mix(in srgb, var(--proposal-document-ink, var(--tx)) 72%, transparent);
+  box-shadow: none;
+}
+
+.dasti-proposal-document-decoration__action.dasti-icon-button:hover,
+.dasti-proposal-document-decoration__action.dasti-icon-button:focus-visible {
+  background: color-mix(in srgb, var(--proposal-document-accent-ink, var(--ac)) 12%, transparent);
+  color: var(--proposal-document-accent-ink, var(--ac));
+}
+
+.dasti-proposal-document-decoration__action--danger.dasti-icon-button:hover,
+.dasti-proposal-document-decoration__action--danger.dasti-icon-button:focus-visible {
+  background: var(--color-danger-soft);
+  color: var(--color-danger-ink);
+}
+
+.dasti-proposal-document-decoration__upload-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .dasti-proposal-document-decoration__resize-handle {
   position: absolute;
   inset-inline-end: -6px;
@@ -3318,6 +3366,11 @@
   }
 
   .dasti-proposal-document-decoration__resize-handle {
+    display: none !important;
+  }
+
+  .dasti-proposal-document-decoration__toolbar,
+  .dasti-proposal-document-decoration__upload-input {
     display: none !important;
   }
 }

@@ -44,9 +44,18 @@ import {
   type DocumentPageSize,
 } from "../../lib/document-page-size";
 import {
+  Eye,
+  TrashSimple,
+  Upload,
+} from "../../lib/icons";
+import {
+  DOCUMENT_DECORATION_UPLOAD_ACCEPT,
   getDocumentDecorationPlacementMm,
   getRenderableDocumentDecoration,
   moveDocumentDecorationByDeltaMm,
+  normalizeDocumentDecoration,
+  readDocumentDecorationUpload,
+  removeDocumentDecorationAsset,
   resolveTemplateDocumentDecoration,
   resizeDocumentDecorationByDeltaMm,
   type DocumentDecoration,
@@ -2165,6 +2174,8 @@ function ProposalDocumentDecorationLayer({
   const interactionRef = React.useRef<DocumentDecorationInteractionState | null>(
     null,
   );
+  const uploadInputId = React.useId();
+  const uploadInputRef = React.useRef<HTMLInputElement | null>(null);
 
   if (!resolvedDecoration) {
     return null;
@@ -2179,6 +2190,32 @@ function ProposalDocumentDecorationLayer({
     resolvedDecoration,
     pageSizeMm,
   );
+  const commitDecorationAction = (nextDecoration: DocumentDecoration) => {
+    const normalizedDecoration = normalizeDocumentDecoration(nextDecoration);
+    onChange?.(normalizedDecoration);
+    onCommit?.(normalizedDecoration);
+  };
+  const handleDecorationUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const [file] = Array.from(event.currentTarget.files ?? []);
+    event.currentTarget.value = "";
+    if (!file) return;
+    void readDocumentDecorationUpload(file)
+      .then((uploadedDecoration) => {
+        commitDecorationAction({
+          ...uploadedDecoration,
+          sizePreset: resolvedDecoration.sizePreset,
+          customSizeMm: resolvedDecoration.customSizeMm,
+          fit: resolvedDecoration.fit,
+          placementMode: resolvedDecoration.placementMode,
+          xMm: resolvedDecoration.xMm,
+          yMm: resolvedDecoration.yMm,
+          visible: true,
+        });
+      })
+      .catch(() => {
+        // Drawer upload keeps the user-facing error state; the on-page chip stays silent.
+      });
+  };
 
   const beginInteraction = (
     event: React.PointerEvent<HTMLElement>,
@@ -2278,14 +2315,71 @@ function ProposalDocumentDecorationLayer({
         draggable={false}
       />
       {isDesignMode ? (
-        <span
-          className="dasti-proposal-document-decoration__resize-handle"
-          aria-hidden="true"
-          onPointerDown={(event) => {
-            event.stopPropagation();
-            beginInteraction(event, "resize");
-          }}
-        />
+        <>
+          <div
+            className="dasti-proposal-document-decoration__toolbar"
+            aria-label="Decoration image controls"
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="dasti-icon-button dasti-icon-button--compact dasti-proposal-document-decoration__action"
+              aria-label="Hide decoration image"
+              title="Hide image"
+              disabled={!onChange}
+              onClick={() => {
+                commitDecorationAction({
+                  ...resolvedDecoration,
+                  visible: false,
+                });
+              }}
+            >
+              <Eye size={12} strokeWidth={1.8} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="dasti-icon-button dasti-icon-button--compact dasti-proposal-document-decoration__action"
+              aria-label="Upload decoration image"
+              title="Upload image"
+              disabled={!onChange}
+              onClick={() => uploadInputRef.current?.click()}
+            >
+              <Upload size={12} strokeWidth={1.8} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="dasti-icon-button dasti-icon-button--compact dasti-proposal-document-decoration__action dasti-proposal-document-decoration__action--danger"
+              aria-label="Remove decoration image"
+              title="Remove image"
+              disabled={!onChange}
+              onClick={() => {
+                commitDecorationAction(
+                  removeDocumentDecorationAsset(resolvedDecoration),
+                );
+              }}
+            >
+              <TrashSimple size={12} strokeWidth={1.8} aria-hidden="true" />
+            </button>
+            <input
+              ref={uploadInputRef}
+              id={uploadInputId}
+              className="dasti-proposal-document-decoration__upload-input"
+              type="file"
+              aria-label="Upload decoration image from page"
+              accept={DOCUMENT_DECORATION_UPLOAD_ACCEPT}
+              disabled={!onChange}
+              onChange={handleDecorationUpload}
+            />
+          </div>
+          <span
+            className="dasti-proposal-document-decoration__resize-handle"
+            aria-hidden="true"
+            onPointerDown={(event) => {
+              event.stopPropagation();
+              beginInteraction(event, "resize");
+            }}
+          />
+        </>
       ) : null}
     </div>
   );
