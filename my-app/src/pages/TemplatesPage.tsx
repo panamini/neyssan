@@ -32,6 +32,8 @@ export type TemplateFamily =
   | "minimal"
   | "bold"
   | "letterpress"
+  | "editorial-letterhead"
+  | "twoweeks-letterhead"
   | "director-letterhead"
   | "volk-letterhead"
   | "film-foto-letterhead"
@@ -84,8 +86,15 @@ const TEMPLATES: TemplateCard[] = [
     id: "letterpress-letter",
     name: "Editorial",
     kind: "Cover letter",
-    family: "letterpress",
+    family: "editorial-letterhead",
     descriptionKey: "templates.description.letterpressLetter",
+  },
+  {
+    id: "twoweeks-letterhead",
+    name: "Twoweeks Letterhead",
+    kind: "Cover letter",
+    family: "twoweeks-letterhead",
+    descriptionKey: "templates.description.minimalLetter",
   },
   {
     id: "director-letterhead",
@@ -152,6 +161,16 @@ const TEMPLATE_STYLE_PRESETS: Record<TemplateFamily, VerbatiStylePreset> = {
     typography: "quiet-editorial",
     palette: "terre",
   }),
+  "editorial-letterhead": resolveVerbatiStyle({
+    familyId: "workshop",
+    typography: "quiet-editorial",
+    palette: "sauge",
+  }),
+  "twoweeks-letterhead": resolveVerbatiStyle({
+    familyId: "workshop",
+    typography: "expert",
+    palette: "cobalt",
+  }),
   "director-letterhead": resolveVerbatiStyle({
     familyId: "workshop",
     typography: "expert",
@@ -188,6 +207,8 @@ const PROPOSAL_PREVIEW_TEMPLATES: Partial<Record<TemplateFamily, ProposalTemplat
   minimal: "workshop_proposal_margin",
   bold: "modernist_signal",
   letterpress: "quire_margin",
+  "editorial-letterhead": "editorial_wide",
+  "twoweeks-letterhead": "twoweeks-letterhead",
   "director-letterhead": "director-letterhead",
   "volk-letterhead": "volk-letterhead",
   "film-foto-letterhead": "film-foto-letterhead",

@@ -50,6 +50,16 @@ import {
   sanitizeProposalSignatureSettings,
   type ProposalSignatureSettings,
 } from "./proposal-signature-settings";
+import {
+  resolveDocumentPageSize,
+  type DocumentPageSize,
+  type DocumentPageSizePreference,
+} from "./document-page-size";
+import {
+  normalizeDocumentDecoration,
+  shouldPersistDocumentDecoration,
+  type DocumentDecoration,
+} from "./document-decoration";
 
 export type ExportDocumentKind = "resume" | "proposal";
 export type ExportDocumentFormat = "pdf" | "docx";
@@ -86,6 +96,7 @@ export type ResumePrintProjectItem = {
 export type ResumePrintSource = {
   schemaVersion: 1;
   kind: "resume";
+  pageSize?: DocumentPageSize;
   locale: string | null;
   title: string;
   exportSource: "authoritative" | "standard";
@@ -117,6 +128,7 @@ export type ResumePreviewPrintSource = {
   schemaVersion: 1;
   kind: "resume";
   renderSource: "preview";
+  pageSize?: DocumentPageSize;
   locale: string | null;
   resumeData: ResumeData;
   stylePreset: VerbatiStylePreset;
@@ -128,6 +140,7 @@ export type ResumePreviewPrintSource = {
 export type ResumePrintRoutePayload = {
   schemaVersion: 1;
   kind: "resume_print_route";
+  pageSize?: DocumentPageSize;
   locale: string | null;
   resumeData: ResumeData;
   stylePreset: VerbatiStylePreset;
@@ -193,6 +206,7 @@ type ProposalPrintApplicantHeaderInput = Partial<{
 export type ProposalPrintSource = {
   schemaVersion: 1;
   kind: "proposal";
+  pageSize?: DocumentPageSize;
   locale: string | null;
   title: string;
   proposalType: string | null;
@@ -206,6 +220,7 @@ export type ProposalPrintSource = {
   templateId: ProposalTemplateId | null;
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
+  documentDecoration?: DocumentDecoration | null;
   body: ProposalPrintBlock[];
 };
 
@@ -213,6 +228,7 @@ export type ProposalPreviewPrintSource = {
   schemaVersion: 1;
   kind: "proposal";
   renderSource: "preview";
+  pageSize?: DocumentPageSize;
   locale: string | null;
   content: string;
   proposalType: string | null;
@@ -230,11 +246,13 @@ export type ProposalPreviewPrintSource = {
   stylePreset: VerbatiStylePreset;
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
+  documentDecoration?: DocumentDecoration | null;
 };
 
 export type ProposalPrintRoutePayload = {
   schemaVersion: 1;
   kind: "proposal_print_route";
+  pageSize?: DocumentPageSize;
   locale: string | null;
   content: string;
   proposalType: string | null;
@@ -252,6 +270,7 @@ export type ProposalPrintRoutePayload = {
   stylePreset: VerbatiStylePreset;
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
+  documentDecoration?: DocumentDecoration | null;
 };
 
 export type ProposalPrintDebugSnapshot = {
@@ -274,6 +293,14 @@ function cleanString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function sanitizeDocumentDecorationForExport(
+  value: DocumentDecoration | null | undefined,
+): DocumentDecoration | null {
+  if (!value) return null;
+  const decoration = normalizeDocumentDecoration(value);
+  return shouldPersistDocumentDecoration(decoration) ? decoration : null;
+}
+
 function normalizeResumeItems(items: ResumeData["metadata"]): ResumePrintItem[] {
   return items
     .map((item) => ({
@@ -288,10 +315,12 @@ function normalizeResumeData(
   resumeTemplateId: ResumeTemplateId,
   exportSource: ResumePrintSource["exportSource"] = "standard",
   committedPages?: WorkshopResumeCommittedPage[],
+  pageSize: DocumentPageSize = resolveDocumentPageSize(),
 ): ResumePrintSource {
   return {
     schemaVersion: 1,
     kind: "resume",
+    pageSize,
     locale: null,
     title: data.name || "Resume",
     exportSource,
@@ -377,11 +406,17 @@ export function buildResumeExportSource(args: {
   currentCv: CvDocument | null | undefined;
   authoritativeResume?: AuthoritativeResume | unknown;
   stylePreset?: VerbatiStylePreset | null;
+  pageSizePreference?: DocumentPageSizePreference | null;
+  pageSize?: DocumentPageSize | null;
 }): ResumePrintSource | null {
   if (!args.currentCv) {
     return null;
   }
 
+  const pageSize = resolveDocumentPageSize({
+    pageSize: args.pageSize,
+    preference: args.pageSizePreference,
+  });
   const stylePreset = resolveVerbatiStyle(
     args.stylePreset ?? getVerbatiStyleFromCv(args.currentCv),
   );
@@ -402,6 +437,7 @@ export function buildResumeExportSource(args: {
           resumeTemplateId,
           stylePreset,
         }),
+        pageSize,
       ),
       locale: normalizeExportDocumentLanguage(args.currentCv.metadata.locale),
     };
@@ -418,6 +454,7 @@ export function buildResumeExportSource(args: {
         resumeTemplateId,
         stylePreset,
       }),
+      pageSize,
     ),
     locale: normalizeExportDocumentLanguage(args.currentCv.metadata.locale),
   };
@@ -426,11 +463,17 @@ export function buildResumeExportSource(args: {
 export function buildStyledResumePrintSource(args: {
   currentCv: CvDocument | null | undefined;
   stylePreset?: VerbatiStylePreset | null;
+  pageSizePreference?: DocumentPageSizePreference | null;
+  pageSize?: DocumentPageSize | null;
 }): ResumePreviewPrintSource | null {
   if (!args.currentCv) {
     return null;
   }
 
+  const pageSize = resolveDocumentPageSize({
+    pageSize: args.pageSize,
+    preference: args.pageSizePreference,
+  });
   const stylePreset = resolveVerbatiStyle(
     args.stylePreset ?? getVerbatiStyleFromCv(args.currentCv),
   );
@@ -441,6 +484,7 @@ export function buildStyledResumePrintSource(args: {
     schemaVersion: 1,
     kind: "resume",
     renderSource: "preview",
+    pageSize,
     locale: normalizeExportDocumentLanguage(args.currentCv.metadata.locale),
     resumeData,
     stylePreset,
@@ -460,6 +504,7 @@ export function buildResumePrintRoutePayload(args: {
   return {
     schemaVersion: 1,
     kind: "resume_print_route",
+    pageSize: resolveDocumentPageSize({ pageSize: args.data.pageSize }),
     locale: args.data.locale,
     resumeData: args.data.resumeData,
     stylePreset: args.data.stylePreset,
@@ -507,7 +552,10 @@ export function buildProposalPreviewPrintSource(args: {
   stylePreset?: VerbatiStylePreset | null;
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
+  documentDecoration?: DocumentDecoration | null;
   locale?: string | null;
+  pageSizePreference?: DocumentPageSizePreference | null;
+  pageSize?: DocumentPageSize | null;
 }): ProposalPreviewPrintSource {
   const documentTitle = cleanString(args.documentTitle) || "Proposal";
   const normalizedContent = cleanString(args.content);
@@ -522,6 +570,10 @@ export function buildProposalPreviewPrintSource(args: {
     schemaVersion: 1,
     kind: "proposal",
     renderSource: "preview",
+    pageSize: resolveDocumentPageSize({
+      pageSize: args.pageSize,
+      preference: args.pageSizePreference,
+    }),
     locale,
     content: normalizedContent,
     proposalType: cleanString(args.proposalType) || null,
@@ -551,6 +603,9 @@ export function buildProposalPreviewPrintSource(args: {
       args.signatureSettings,
     ),
     closing: sanitizeProposalClosingRef(args.closing),
+    documentDecoration: sanitizeDocumentDecorationForExport(
+      args.documentDecoration,
+    ),
   };
 }
 
@@ -560,6 +615,7 @@ export function buildProposalPrintRoutePayload(args: {
   return {
     schemaVersion: 1,
     kind: "proposal_print_route",
+    pageSize: resolveDocumentPageSize({ pageSize: args.data.pageSize }),
     locale: args.data.locale,
     content: args.data.content,
     proposalType: args.data.proposalType,
@@ -579,6 +635,9 @@ export function buildProposalPrintRoutePayload(args: {
       args.data.signatureSettings,
     ),
     closing: sanitizeProposalClosingRef(args.data.closing),
+    documentDecoration: sanitizeDocumentDecorationForExport(
+      args.data.documentDecoration,
+    ),
   };
 }
 
@@ -716,7 +775,10 @@ export function buildProposalExportSource(args: {
   templateId?: ProposalTemplateId | null;
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
+  documentDecoration?: DocumentDecoration | null;
   locale?: string | null;
+  pageSizePreference?: DocumentPageSizePreference | null;
+  pageSize?: DocumentPageSize | null;
 }): ProposalPrintSource {
   const documentTitle = cleanString(args.documentTitle) || "Proposal";
   const locale = resolveProposalExportLocale({
@@ -728,6 +790,10 @@ export function buildProposalExportSource(args: {
   return {
     schemaVersion: 1,
     kind: "proposal",
+    pageSize: resolveDocumentPageSize({
+      pageSize: args.pageSize,
+      preference: args.pageSizePreference,
+    }),
     locale,
     title: documentTitle,
     proposalType: cleanString(args.proposalType) || null,
@@ -753,6 +819,9 @@ export function buildProposalExportSource(args: {
       args.signatureSettings,
     ),
     closing: sanitizeProposalClosingRef(args.closing),
+    documentDecoration: sanitizeDocumentDecorationForExport(
+      args.documentDecoration,
+    ),
     body: buildProposalBodyBlocks(
       args.content,
       args.recipientDetails,

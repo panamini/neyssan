@@ -1,6 +1,5 @@
 import React from "react";
 
-import { A4_PAGE_HEIGHT_PX, A4_PAGE_WIDTH_PX } from "../../../lib/document-stage";
 import { normalizeResumePreviewTokens } from "../../../lib/layout/documentTokenNormalizer";
 import {
   WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
@@ -26,6 +25,10 @@ import ResumeOneColAtsPage, {
 import ResumeTwoColAtsPage from "./ResumeTwoColAtsPage";
 import type { ResumeData } from "./resume.types";
 import type { ResumeInlineEditing } from "./InlineEditableText";
+import {
+  resolveDocumentPageSize,
+  type DocumentPageSize,
+} from "../../../lib/document-page-size";
 
 export const WORKSHOP_TEMPLATE_RENDERER_ID = WORKSHOP_RESUME_ONECOL_TEMPLATE_ID;
 export const RESUME_TEMPLATE_PAGE_GAP_PX = 24;
@@ -98,6 +101,7 @@ type ResumeTemplateRendererProps = {
   sectionActions?: ResumeSectionActions | null;
   paperAi?: ResumePaperAiState | null;
   stageLayout?: DocumentStageLayout;
+  pageSize?: DocumentPageSize | null;
   onStablePageCountChange?: ((pageCount: number) => void) | undefined;
 };
 
@@ -117,11 +121,13 @@ function pickCssVars(
 function buildTemplatePreviewVars(
   templateDefinition: ResumeTemplateDefinition,
   stylePreset: VerbatiStylePreset,
+  pageSize: DocumentPageSize,
 ) {
   const previewTokens = normalizeResumePreviewTokens({
     resumeTemplateId: templateDefinition.id,
     template: templateDefinition,
     stylePreset,
+    pageSize,
   });
   const themeVars = pickCssVars(
     buildVerbatiThemeVars(stylePreset) as Record<string, string | undefined>,
@@ -158,8 +164,13 @@ export function ResumeTemplateRenderer({
   sectionActions = null,
   paperAi = null,
   stageLayout,
+  pageSize = null,
   onStablePageCountChange,
 }: ResumeTemplateRendererProps) {
+  const resolvedPageSize = React.useMemo(
+    () => resolveDocumentPageSize({ pageSize }),
+    [pageSize],
+  );
   const templateDefinition = getResumeTemplateDefinition(resumeTemplateId);
   const isWorkshopTemplateRenderer =
     isWorkshopResumeTemplateId(resumeTemplateId) &&
@@ -186,16 +197,20 @@ export function ResumeTemplateRenderer({
   const previewVars = React.useMemo(
     () =>
       isWorkshopTemplateRenderer
-        ? buildTemplatePreviewVars(templateDefinition, stylePreset)
+        ? buildTemplatePreviewVars(
+            templateDefinition,
+            stylePreset,
+            resolvedPageSize,
+          )
         : null,
-    [isWorkshopTemplateRenderer, stylePreset, templateDefinition],
+    [isWorkshopTemplateRenderer, resolvedPageSize, stylePreset, templateDefinition],
   );
   const previewScale =
     stageLayout && stageLayout.pageWidth > 0
-      ? stageLayout.pageWidth / A4_PAGE_WIDTH_PX
+      ? stageLayout.pageWidth / resolvedPageSize.widthPx
       : 1;
-  const shellPageWidthPx = stageLayout?.pageWidth ?? A4_PAGE_WIDTH_PX;
-  const shellPageHeightPx = stageLayout?.pageHeight ?? A4_PAGE_HEIGHT_PX;
+  const shellPageWidthPx = stageLayout?.pageWidth ?? resolvedPageSize.widthPx;
+  const shellPageHeightPx = stageLayout?.pageHeight ?? resolvedPageSize.heightPx;
   const lastCommittedPageCountRef = React.useRef<number | null>(null);
 
   React.useEffect(() => {
@@ -265,9 +280,9 @@ export function ResumeTemplateRenderer({
           <div
             className="resume-template-page-canvas"
             style={{
-              width: `${A4_PAGE_WIDTH_PX}px`,
-              minHeight: `${A4_PAGE_HEIGHT_PX}px`,
-              height: `${A4_PAGE_HEIGHT_PX}px`,
+              width: `${resolvedPageSize.widthPx}px`,
+              minHeight: `${resolvedPageSize.heightPx}px`,
+              height: `${resolvedPageSize.heightPx}px`,
               boxSizing: "border-box",
               background: "var(--paper)",
               boxShadow:

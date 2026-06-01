@@ -63,7 +63,7 @@ export const PROPOSAL_STYLE_PREVIEW_DEFINITIONS: Record<
     headingWeight: 400,
     fontStyle: "normal",
     fontName: "Source Serif 4",
-    templateName: "Editorial Wide",
+    templateName: "Editorial",
   },
 };
 

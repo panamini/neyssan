@@ -592,6 +592,18 @@ export const RESUME_PREVIEW_VAR_DESCRIPTORS: CanonicalVarDescriptor[] = [
 
 export const PROPOSAL_PREVIEW_VAR_DESCRIPTORS: CanonicalVarDescriptor[] = [
   {
+    name: "--proposal-page-width-mm",
+    fieldPath: "geometry.page.widthMm",
+    classification: "canonical",
+    resolve: (tokens) => formatUnitless(tokens.geometry.page.widthMm),
+  },
+  {
+    name: "--proposal-page-height-mm",
+    fieldPath: "geometry.page.heightMm",
+    classification: "canonical",
+    resolve: (tokens) => formatUnitless(tokens.geometry.page.heightMm),
+  },
+  {
     name: "--proposal-grid-step-a-inline",
     fieldPath: "geometry.primitives.robialStep.stepAMm",
     classification: "canonical",
@@ -1757,11 +1769,21 @@ export function serializeProposalRuntimeVars(tokens: CanonicalDocumentTokens) {
 }
 
 export function serializeProposalMeasurementRuntimeVars(
-  millimeterPx: number,
+  measurement:
+    | number
+    | {
+        inlineMmPx: number;
+        blockMmPx: number;
+      },
 ): Record<string, string> {
+  const inlineMmPx =
+    typeof measurement === "number" ? measurement : measurement.inlineMmPx;
+  const blockMmPx =
+    typeof measurement === "number" ? measurement : measurement.blockMmPx;
+
   return {
-    "--proposal-inline-mm": `${millimeterPx}px`,
-    "--proposal-block-mm": `${millimeterPx}px`,
+    "--proposal-inline-mm": `${inlineMmPx}px`,
+    "--proposal-block-mm": `${blockMmPx}px`,
   };
 }
 

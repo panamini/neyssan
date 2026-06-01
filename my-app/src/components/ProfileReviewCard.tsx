@@ -86,6 +86,7 @@ import {
   insertSectionByCanonicalOrder,
   sanitizeHiddenSectionIds,
 } from "../lib/cv-section-organization";
+import type { DocumentPageSizePreference } from "../lib/document-page-size";
 
 /**
  * Props for ProfileReviewCard
@@ -95,6 +96,8 @@ interface Props {
   profile?: unknown;
   exportingFormat?: string | null;
   onRequestExport?: (format: ResumeExportRequest) => void;
+  onPageSizePreferenceChange?: (preference: DocumentPageSizePreference) => void;
+  pageSizePreference?: DocumentPageSizePreference;
   exportStatusDescription?: string;
   exportStatusLabel?: string;
   exportStatusTone?: "standard" | "trusted";
@@ -639,6 +642,8 @@ export function ProfileReviewCard({
   profile,
   exportingFormat = null,
   onRequestExport,
+  onPageSizePreferenceChange,
+  pageSizePreference = "auto",
   exportStatusDescription = "Not ATS-verified",
   exportStatusLabel = "Standard Export",
   exportStatusTone = "standard",
@@ -2935,6 +2940,8 @@ export function ProfileReviewCard({
                   <ResumeExportControl
                     exportingFormat={exportingFormat}
                     onExport={handleExportClick}
+                    onPageSizePreferenceChange={onPageSizePreferenceChange}
+                    pageSizePreference={pageSizePreference}
                     statusDescription={exportStatusDescription}
                     statusLabel={exportStatusLabel}
                     statusTone={exportStatusTone}

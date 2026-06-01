@@ -41,6 +41,7 @@ describe("shared chrome drawer CSS contracts", () => {
     expect(productCss).toContain(
       "--forge-drawer-panel-padding-inline: var(--space-3);",
     );
+    expect(productCss).toContain("--forge-drawer-scrollbar-width: 5px;");
     expect(productCss).toContain(
       "--forge-drawer-template-grid-gutter: var(--space-3);",
     );
@@ -58,6 +59,21 @@ describe("shared chrome drawer CSS contracts", () => {
     );
     expect(productCss).toMatch(
       /\.forge-rail-drawer__grid\s*\{[\s\S]*column-gap:\s*var\(--forge-drawer-grid-gutter\);[\s\S]*row-gap:\s*var\(--forge-drawer-grid-row-gap\);/,
+    );
+    expect(productCss).toMatch(
+      /\.forge-template-panel__grid\s*\{[\s\S]*scrollbar-gutter:\s*stable;[\s\S]*scrollbar-width:\s*thin;[\s\S]*scrollbar-color:\s*var\(--forge-drawer-scrollbar-thumb\) transparent;/,
+    );
+    expect(productCss).toMatch(
+      /\.forge-template-panel__content--proposal-design\s*\{[\s\S]*scrollbar-gutter:\s*stable;[\s\S]*scrollbar-width:\s*thin;[\s\S]*scrollbar-color:\s*var\(--forge-drawer-scrollbar-thumb\) transparent;/,
+    );
+    expect(productCss).toMatch(
+      /\.forge-rail-drawer__list,[\s\S]*\.forge-rail-drawer__grid\s*\{[\s\S]*scrollbar-gutter:\s*stable;[\s\S]*scrollbar-width:\s*thin;[\s\S]*scrollbar-color:\s*var\(--forge-drawer-scrollbar-thumb\) transparent;/,
+    );
+    expect(productCss).toMatch(
+      /\.forge-template-panel__grid::-webkit-scrollbar,[\s\S]*\.forge-rail-drawer__paste-job-input::-webkit-scrollbar\s*\{[\s\S]*width:\s*var\(--forge-drawer-scrollbar-width\);[\s\S]*height:\s*var\(--forge-drawer-scrollbar-width\);/,
+    );
+    expect(productCss).toMatch(
+      /\.forge-template-panel__grid::-webkit-scrollbar-thumb:hover,[\s\S]*\.forge-rail-drawer__paste-job-input::-webkit-scrollbar-thumb:hover\s*\{[\s\S]*background:\s*var\(--forge-drawer-scrollbar-thumb-hover\);[\s\S]*\}/,
     );
   });
 });

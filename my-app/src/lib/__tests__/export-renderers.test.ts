@@ -430,7 +430,56 @@ describe("export-renderers", () => {
     expect(workshopCss).toContain("--robial-step-b: 18mm;");
   });
 
+  it("renders document decorations into styled HTML export without design handles", () => {
+    const document = parseExportHtml(
+      renderProposalStyledExportDocument({
+        data: {
+          ...proposalFixture,
+          documentDecoration: {
+            visible: true,
+            source: "upload",
+            dataUrl: "data:image/png;base64,AAAA",
+            fileName: "mark.png",
+            mimeType: "image/png",
+            alt: "Company mark",
+            sizePreset: "custom",
+            customSizeMm: 49,
+            fit: "cover",
+            placementMode: "custom",
+            xMm: 17,
+            yMm: 35,
+          },
+        },
+        stylePreset: {
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        },
+      }),
+    );
+    const decoration = document.querySelector(".dasti-proposal-document-decoration");
+    const image = decoration?.querySelector("img");
+    const css = getInlineStyles(document);
+
+    expect(decoration).toBeTruthy();
+    expect(decoration?.getAttribute("style")).toContain("left: 17mm");
+    expect(decoration?.getAttribute("style")).toContain("top: 35mm");
+    expect(decoration?.getAttribute("style")).toContain("width: 49mm");
+    expect(decoration?.getAttribute("style")).toContain("height: 49mm");
+    expect(decoration?.getAttribute("style")).toContain("cover");
+    expect(image?.getAttribute("src")).toBe("data:image/png;base64,AAAA");
+    expect(image?.getAttribute("alt")).toBe("Company mark");
+    expect(document.querySelector(".dasti-proposal-document-decoration__resize-handle")).toBeNull();
+    expect(document.querySelector("[data-design-mode='true']")).toBeNull();
+    expect(css).toContain(".dasti-proposal-document-decoration");
+  });
+
   it.each([
+    {
+      templateId: "twoweeks-letterhead" as const,
+      scope: "proposal-cover-letter--twoweeks",
+      label: "Twoweeks Letterhead",
+    },
     {
       templateId: "director-letterhead" as const,
       scope: "proposal-cover-letter--director",
@@ -516,10 +565,12 @@ describe("export-renderers", () => {
         document.querySelector(`.${scope} .proposal-cover-letter__film-kicker`),
       ).toBeNull();
       expect(css).toContain(`.${scope}.export-page`);
-      expect(css).toContain("width: 210mm;");
-      expect(css).toContain("min-height: 297mm;");
+      expect(css).toContain("width: var(--page-width);");
+      expect(css).toContain("min-height: var(--page-height);");
       const expectedBodyLeft =
-        templateId === "director-letterhead"
+        templateId === "twoweeks-letterhead"
+          ? "left: 87mm;"
+          : templateId === "director-letterhead"
           ? "left: 25mm;"
           : templateId === "volk-letterhead"
             ? "left: 24mm;"
@@ -530,30 +581,41 @@ describe("export-renderers", () => {
                 : "left: 35mm;";
       expect(css).toContain(expectedBodyLeft);
       expect(css).toContain(
-        templateId === "moma-bauhaus-letterhead"
-          ? "width: min(132mm, 70ch);"
+        templateId === "twoweeks-letterhead"
+          ? "width: min(105mm, 64ch);"
+          : templateId === "moma-bauhaus-letterhead"
+          ? "width: min(calc(var(--moma-bauhaus-body-width-mm) * 1mm), 70ch);"
           : templateId === "joella-frame-letterhead"
-            ? "width: min(140mm, 70ch);"
+            ? "width: min(calc(var(--joella-body-width-mm) * 1mm), 70ch);"
             : templateId === "bayer-letterhead"
               ? "width: 157mm;"
           : "width: min(96mm, 58ch);",
       );
       expect(css).toContain(
-        templateId === "moma-bauhaus-letterhead"
-          ? "max-width: min(132mm, 70ch);"
+        templateId === "twoweeks-letterhead"
+          ? "max-width: min(105mm, 64ch);"
+          : templateId === "moma-bauhaus-letterhead"
+          ? "max-width: min(calc(var(--moma-bauhaus-body-width-mm) * 1mm), 70ch);"
           : templateId === "joella-frame-letterhead"
-            ? "max-width: min(140mm, 70ch);"
+            ? "max-width: min(calc(var(--joella-body-width-mm) * 1mm), 70ch);"
             : templateId === "bayer-letterhead"
               ? "max-width: 157mm;"
           : "max-width: min(96mm, 58ch);",
       );
       expect(css).toContain("overflow-wrap: break-word;");
-      expect(css).toContain(
-        "font-family: var(--heading-font, var(--font-heading-family));",
-      );
-      expect(css).toContain(
-        "font-family: var(--body-font, var(--font-body-family));",
-      );
+      if (templateId === "twoweeks-letterhead") {
+        expect(css).toContain("font-family: Arial, Helvetica, sans-serif;");
+        expect(css).toContain(
+          'font-family: Georgia, "Times New Roman", Times, serif;',
+        );
+      } else {
+        expect(css).toContain(
+          "font-family: var(--heading-font, var(--font-heading-family));",
+        );
+        expect(css).toContain(
+          "font-family: var(--body-font, var(--font-body-family));",
+        );
+      }
       expect(document.body.textContent).toMatch(/Alex Mercer|alex mercer/);
       expect(document.body.textContent).toContain("Studio Nord");
       expect(blocks.slice(0, 4)).toEqual([
@@ -572,6 +634,116 @@ describe("export-renderers", () => {
       );
       expect(document.body.textContent).not.toContain("Vorbereitungssekretariat");
       expect(document.body.textContent).not.toContain("Institut für Auslandsbeziehungen");
+      if (templateId === "twoweeks-letterhead") {
+        const twoweeksCss = css.slice(
+          css.lastIndexOf(".proposal-cover-letter--twoweeks.export-page"),
+          css.lastIndexOf(".proposal-cover-letter--director.export-page"),
+        );
+        const railText =
+          page?.querySelector(".proposal-cover-letter__twoweeks-rail")
+            ?.textContent ?? "";
+        const senderLines = Array.from(
+          page?.querySelectorAll(".proposal-cover-letter__twoweeks-rail p") ??
+            [],
+        ).map((node) => node.textContent);
+        const contactGroups = Array.from(
+          page?.querySelectorAll(
+            ".proposal-cover-letter__twoweeks-contact-group",
+          ) ?? [],
+        ).map((group) =>
+          Array.from(group.querySelectorAll("p")).map((node) => node.textContent),
+        );
+        const recipientLines = Array.from(
+          page?.querySelectorAll(".proposal-cover-letter__twoweeks-recipient p") ??
+            [],
+        ).map((node) => node.textContent);
+        const subjectText =
+          page?.querySelector(".proposal-cover-letter__twoweeks-subject")
+            ?.textContent ?? "";
+
+        expect(twoweeksCss).not.toMatch(/\d+\.\d+mm/);
+        expect(twoweeksCss).toContain("left: 17mm;");
+        expect(twoweeksCss).toContain("top: 22mm;");
+        expect(twoweeksCss).toContain("left: 87mm;");
+        expect(twoweeksCss).toContain("top: 83mm;");
+        expect(twoweeksCss).toContain("display: block;");
+        expect(twoweeksCss).toContain("margin-bottom: 7mm;");
+        expect(twoweeksCss).toContain("margin-bottom: 6mm;");
+        expect(twoweeksCss).toContain("gap: 0;");
+        expect(twoweeksCss).toContain("font-size: 10pt;");
+        expect(twoweeksCss).toContain("font-size: 8pt;");
+        expect(twoweeksCss).toContain("font-size: 11pt;");
+        expect(twoweeksCss).toContain("line-height: 12pt;");
+        expect(twoweeksCss).toContain("line-height: 10pt;");
+        expect(twoweeksCss).toContain("line-height: 11pt;");
+        expect(twoweeksCss).toContain("line-height: 13pt;");
+        expect(twoweeksCss).toContain("line-height: 15pt;");
+        expect(twoweeksCss).toContain("row-gap: 11pt;");
+        expect(twoweeksCss).toContain("var(--paper");
+        expect(twoweeksCss).toContain("var(--ink");
+        expect(twoweeksCss).toContain("var(--accent, #385f8a)");
+        expect(twoweeksCss).toContain("width: min(105mm, 64ch);");
+        expect(railText).toContain("Alex");
+        expect(railText).toContain("Mercer");
+        expect(railText).toContain("Designer de systèmes");
+        expect(railText).toContain("alex@example.com");
+        expect(railText).toContain("+33 6 00 00 00 00");
+        expect(railText).toContain("Paris");
+        expect(railText).toContain("portfolio.example.com");
+        expect(railText).not.toContain("FROM");
+        expect(railText).not.toContain("TO");
+        expect(railText).not.toContain("Candidature");
+        expect(senderLines).toEqual([
+          "Alex Mercer",
+          "Designer de systèmes",
+          "+33 6 00 00 00 00",
+          "alex@example.com",
+          "portfolio.example.com",
+          "Paris",
+        ]);
+        expect(contactGroups).toEqual([
+          ["+33 6 00 00 00 00", "alex@example.com"],
+          ["portfolio.example.com"],
+          ["Paris"],
+        ]);
+        expect(
+          page?.querySelector(".proposal-cover-letter__twoweeks-recipient-label")
+        ).toBeNull();
+        expect(
+          recipientLines.some((line) => line?.includes("Studio Nord")),
+        ).toBe(true);
+        expect(subjectText).toBe("Subject: Candidature «\u00a0Produit\u00a0» 1,5\u00a0mm");
+      }
+      if (templateId === "film-foto-letterhead") {
+        const filmCss = css.slice(
+          css.lastIndexOf(".proposal-cover-letter--film-foto.export-page"),
+          css.lastIndexOf(".proposal-cover-letter--moma-bauhaus.export-page"),
+        );
+
+        expect(filmCss).toContain("text-transform: uppercase;");
+        expect(filmCss).toContain("height: 0.8pt;");
+        expect(filmCss).toContain("top: calc(var(--page-height) / 3);");
+        expect(filmCss).toMatch(
+          /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__info-blocks p\s*\{[\s\S]*font-weight:\s*400;[\s\S]*\}/,
+        );
+        expect(filmCss).toMatch(
+          /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__meta-item\s*\{[\s\S]*font-weight:\s*400;[\s\S]*\}/,
+        );
+        expect(filmCss).toMatch(
+          /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__recipient-block p\s*\{[\s\S]*font-weight:\s*400;[\s\S]*\}/,
+        );
+        expect(filmCss).toMatch(
+          /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__subject-label,[\s\S]*?\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__subject-value\s*\{[\s\S]*color:\s*var\(--accent\);[\s\S]*font-weight:\s*400;[\s\S]*\}/,
+        );
+        expect(filmCss).toMatch(
+          /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__film-address-footer\s*\{[\s\S]*bottom:\s*18mm;[\s\S]*white-space:\s*nowrap;[\s\S]*\}/,
+        );
+        expect(filmCss).toMatch(
+          /\.proposal-cover-letter--film-foto\s+\.proposal-cover-letter__dot\s*\{[\s\S]*bottom:\s*38\.8mm;[\s\S]*width:\s*2\.2mm;[\s\S]*height:\s*2\.2mm;[\s\S]*\}/,
+        );
+        expect(filmCss).toContain("top: calc((var(--page-height) / 3) + 11mm);");
+        expect(filmCss).toContain("top: calc((var(--page-height) / 3) + 24mm);");
+      }
       if (templateId === "moma-bauhaus-letterhead") {
         const momaCss = css.slice(
           css.lastIndexOf(".proposal-cover-letter--moma-bauhaus.export-page"),
@@ -637,17 +809,25 @@ describe("export-renderers", () => {
           page?.querySelector(".proposal-cover-letter__joella-footer")
             ?.textContent ?? "";
 
-        expect(joellaCss).toContain("left: 5.5mm;");
-        expect(joellaCss).toContain("top: 19.65mm;");
+        expect(joellaCss).toContain("--joella-frame-left-mm: 5.5;");
         expect(joellaCss).toContain(
-          "border: 1.32mm solid var(--proposal-joella-structure-color, #74a0c5);",
+          "--joella-frame-width-mm: calc(var(--proposal-page-width-mm) - 11.5);",
         );
         expect(joellaCss).toContain(
-          "border-top: 1.32mm solid var(--proposal-joella-structure-color, #74a0c5);",
+          "--joella-frame-height-mm: calc(var(--proposal-page-height-mm) - 14.2);",
+        );
+        expect(joellaCss).toContain("top: 19.65mm;");
+        expect(joellaCss).toContain(
+          "border: 1.32mm solid var(--proposal-joella-structure-color);",
+        );
+        expect(joellaCss).toContain(
+          "border-top: 1.32mm solid var(--proposal-joella-structure-color);",
         );
         expect(joellaCss).toContain("top: 35mm;");
         expect(joellaCss).toContain("margin-bottom: 9.3mm;");
-        expect(joellaCss).toContain("top: 285.75mm;");
+        expect(joellaCss).toContain(
+          "top: calc(var(--joella-footer-top-mm) * 1mm);",
+        );
         expect(page?.querySelector(".proposal-cover-letter__joella-frame")).toBeTruthy();
         expect(page?.querySelector(".proposal-cover-letter__joella-divider")).toBeTruthy();
         expect(wordmarkText).toBe("ALEX MERCER");
@@ -742,6 +922,11 @@ describe("export-renderers", () => {
 
   it.each([
     {
+      templateId: "twoweeks-letterhead" as const,
+      scope: "proposal-cover-letter--twoweeks",
+      recipientSelector: ".proposal-cover-letter__twoweeks-recipient",
+    },
+    {
       templateId: "director-letterhead" as const,
       scope: "proposal-cover-letter--director",
       recipientSelector: ".proposal-cover-letter__recipient-block",
@@ -812,30 +997,79 @@ describe("export-renderers", () => {
       const recipientText =
         page?.querySelector(recipientSelector)?.textContent ?? "";
 
-      [
+      const expectedPageValues = [
         "Avery Stone",
         "Operations Lead",
-        "Stone Systems",
         "avery@example.com",
         "+33 6 01 02 03 04",
         "linkedin.com/in/avery",
         "avery.work",
         "Paris / Remote",
-      ].forEach((value) => {
+      ];
+      if (scope !== "proposal-cover-letter--film-foto") {
+        expectedPageValues.push("Stone Systems");
+      }
+      expectedPageValues.forEach((value) => {
         expect(pageText).toContain(value);
       });
 
-      [
-        "Hiring Manager",
-        "Head of Talent",
-        "Northwind",
-        "hiring@northwind.com",
-        "12 Rue de la Paix",
-        "Paris",
-        "Additional address line",
-      ].forEach((value) => {
-        expect(recipientText).toContain(value);
-      });
+      if (recipientSelector === ".proposal-cover-letter__recipient-block") {
+        const metaItems = Array.from(
+          page?.querySelectorAll(".proposal-cover-letter__meta-item") ?? [],
+        ).map((node) => node.textContent);
+        const subjectLabel = page?.querySelector(
+          ".proposal-cover-letter__subject-label",
+        );
+
+        expect(subjectLabel?.textContent).toBe(
+          templateId === "film-foto-letterhead" ? "subject:" : "Subject:",
+        );
+        expect(metaItems).toEqual([
+          "Hiring Manager",
+          "Head of Talent",
+          "Northwind",
+          "May 30, 2026",
+        ]);
+        [
+          "hiring@northwind.com",
+          "12 Rue de la Paix",
+          "Paris",
+          "Additional address line",
+        ].forEach((value) => {
+          expect(recipientText).toContain(value);
+        });
+        ["Hiring Manager", "Head of Talent", "Northwind"].forEach((value) => {
+          expect(recipientText).not.toContain(value);
+        });
+        if (scope === "proposal-cover-letter--film-foto") {
+          const labels = Array.from(
+            page?.querySelectorAll(
+              ".proposal-cover-letter__info-blocks .proposal-cover-letter__info-label",
+            ) ?? [],
+          ).map((node) => node.textContent);
+
+          expect(labels).toEqual([
+            "sender",
+            "company",
+            "phone",
+            "social",
+            "www",
+          ]);
+          expect(pageText).not.toContain("Stone Systems");
+        }
+      } else {
+        [
+          "Hiring Manager",
+          "Head of Talent",
+          "Northwind",
+          "hiring@northwind.com",
+          "12 Rue de la Paix",
+          "Paris",
+          "Additional address line",
+        ].forEach((value) => {
+          expect(recipientText).toContain(value);
+        });
+      }
       if (templateId === "joella-frame-letterhead") {
         expect(pageText).toContain("may 30, 2026");
         expect(pageText).not.toContain("May 30, 2026");
@@ -1055,6 +1289,130 @@ describe("export-renderers", () => {
     },
   );
 
+  it("exports the Editorial template through the historical semantic grid", () => {
+    const document = parseExportHtml(
+      renderProposalStyledExportDocument({
+        data: {
+          ...proposalFixture,
+          templateId: "editorial_wide",
+          locale: "en",
+          letterDate: "May 30, 2026",
+          documentTitle: "Application for Operations Lead",
+          recipientDetails:
+            "Hiring Manager\nHead of Talent\nNorthwind\nhiring@northwind.com\n12 Rue de la Paix\nParis",
+          applicantHeader: {
+            ...proposalFixture.applicantHeader,
+            name: "Avery Stone",
+            role: "Operations Lead",
+            company: "Stone Systems",
+            email: "avery@example.com",
+            phone: "+33 6 01 02 03 04",
+            linkedin: "linkedin.com/in/avery",
+            website: "avery.work",
+            location: "Paris / Remote",
+            tag: "",
+          },
+        },
+        stylePreset: {
+          familyId: "editorial",
+          layout: "editorial",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        },
+      }),
+    );
+    const page = document.querySelector(".proposal-cover-letter--editorial");
+    const bodyFlow = page?.querySelector(
+      ".proposal-cover-letter__editorial-body-flow",
+    );
+    const contactBlocks = Array.from(
+      page?.querySelectorAll(".proposal-cover-letter__editorial-contact-copy") ??
+        [],
+    );
+
+    expect(page?.getAttribute("data-export-doc")).toBe("proposal");
+    expect(
+      page?.querySelector(".proposal-cover-letter__editorial-canvas"),
+    ).toBeNull();
+    expect(
+      page?.querySelector(".proposal-cover-letter__editorial-top-ribbon"),
+    ).toBeTruthy();
+    expect(
+      page?.querySelector(".proposal-cover-letter__editorial-rail-rule"),
+    ).toBeTruthy();
+    expect(
+      page?.querySelector(".proposal-cover-letter__editorial-body-rule"),
+    ).toBeTruthy();
+    expect(
+      page?.querySelector(".proposal-cover-letter__editorial-logo-mark"),
+    ).toBeNull();
+    const templateDecoration = page?.querySelector(
+      ".dasti-proposal-document-decoration",
+    );
+    const templateDecorationImage = templateDecoration?.querySelector("img");
+    expect(templateDecoration).toBeTruthy();
+    expect(templateDecoration?.getAttribute("style")).toContain("left: 157mm");
+    expect(templateDecoration?.getAttribute("style")).toContain("top: 18mm");
+    expect(templateDecoration?.getAttribute("style")).toContain("width: 18mm");
+    expect(templateDecorationImage?.getAttribute("src")).toContain(
+      "data:image/svg+xml,",
+    );
+    expect(templateDecorationImage?.getAttribute("alt")).toBe(
+      "Template flower mark",
+    );
+    expect(
+      page?.querySelector(".proposal-cover-letter__editorial-wordmark")
+        ?.textContent,
+    ).toBe("STONE SYSTEMS");
+    expect(
+      page?.querySelector(".proposal-cover-letter__editorial-subtitle")
+        ?.textContent,
+    ).toBe("Operations Lead");
+    expect(contactBlocks[0]?.textContent).toContain("Hiring Manager");
+    expect(contactBlocks[0]?.textContent).toContain("Northwind");
+    expect(contactBlocks[0]?.textContent).toContain("hiring@northwind.com");
+    expect(contactBlocks[0]?.textContent).not.toContain("Re");
+    expect(contactBlocks[0]?.textContent).not.toContain(
+      "Application for Operations Lead",
+    );
+    expect(
+      page?.querySelector(".proposal-cover-letter__editorial-subject")
+        ?.textContent,
+    ).toBe("Application for Operations Lead");
+    expect(
+      bodyFlow?.classList.contains(
+        "proposal-cover-letter__editorial-body-flow--subject-heading",
+      ),
+    ).toBe(true);
+    expect(contactBlocks[1]?.textContent).toContain("Avery Stone");
+    expect(contactBlocks[1]?.textContent).toContain("avery@example.com");
+    expect(page?.textContent).not.toContain("undefined");
+    expect(page?.textContent).not.toContain("null");
+    const inlineStyles = getInlineStyles(document);
+    expect(inlineStyles).toContain(
+      ".proposal-cover-letter--editorial.export-page",
+    );
+    expect(inlineStyles).toContain("--heading-font:");
+    expect(inlineStyles).toContain("--body-font:");
+    expect(inlineStyles).toContain("--proposal-document-accent-ink:");
+    expect(inlineStyles).toContain(
+      "--proposal-editorial-heading-font: var(",
+    );
+    expect(inlineStyles).toContain(
+      "font-family: var(--proposal-editorial-body-font);",
+    );
+    expect(inlineStyles).toContain("color: var(--proposal-editorial-ink);");
+    expect(inlineStyles).toContain("border-bottom: 0;");
+    expect(inlineStyles).toContain("font-weight: 400;");
+    expect(inlineStyles).toMatch(
+      /\.proposal-cover-letter--editorial\s+\.proposal-cover-letter__body\s+\.proposal-signature-image\s*\{[\s\S]*max-width:\s*42mm;[\s\S]*max-height:\s*13\.75mm;[\s\S]*\}/,
+    );
+    expect(inlineStyles).not.toContain("border-bottom: 0.2px solid color-mix(");
+    expect(inlineStyles).toMatch(
+      /\.proposal-cover-letter--editorial\s+\.proposal-cover-letter__editorial-body-rule\s*\{[\s\S]*left:\s*72\.4mm;[\s\S]*top:\s*70\.25mm;[\s\S]*border-top:\s*0\.18mm solid var\(--proposal-editorial-ink,\s*#171511\);[\s\S]*\}/,
+    );
+  });
+
   it.each([
     {
       templateId: "director-letterhead" as const,
@@ -1161,19 +1519,41 @@ describe("export-renderers", () => {
       const recipientBlock = page?.querySelector(
         ".proposal-cover-letter__recipient-block",
       );
+      const recipientSubjectStack = page?.querySelector(
+        ".proposal-cover-letter__recipient-subject-stack",
+      );
+      const subjectRow = page?.querySelector(".proposal-cover-letter__subject-row");
+      const subjectLabel = page?.querySelector(
+        ".proposal-cover-letter__subject-label",
+      );
       const metaItems = Array.from(
         page?.querySelectorAll(".proposal-cover-letter__meta-item") ?? [],
       ).map((node) => node.textContent);
 
       expect(page?.classList.contains("proposal-cover-letter--has-recipient-block"))
         .toBe(true);
+      expect(recipientSubjectStack).toBeTruthy();
+      expect(
+        recipientSubjectStack?.querySelector(
+          ".proposal-cover-letter__recipient-block",
+        ),
+      ).toBe(recipientBlock);
+      expect(
+        recipientSubjectStack?.querySelector(".proposal-cover-letter__subject-row"),
+      ).toBe(subjectRow);
       expect(recipientBlock?.textContent).toContain("Street address");
       expect(recipientBlock?.textContent).toContain("Company City");
       expect(recipientBlock?.textContent).toContain("recipient@example.com");
+      expect(recipientBlock?.textContent).not.toContain("Hiring Manager");
+      expect(recipientBlock?.textContent).not.toContain("Company Name");
+      expect(recipientBlock?.textContent).not.toContain("Talent Acquisition");
+      expect(subjectLabel?.textContent).toBe(
+        templateId === "film-foto-letterhead" ? "subject:" : "Subject:",
+      );
       expect(metaItems).toEqual([
         "Hiring Manager",
-        "Company Name",
         "Talent Acquisition",
+        "Company Name",
         expect.stringContaining("15 avril 2026"),
       ]);
       expect(page?.textContent).not.toContain("undefined");
@@ -1261,7 +1641,7 @@ describe("export-renderers", () => {
             email: "email@email.com",
             phone: "3868683442",
             linkedin: "linkedin.in",
-            website: "",
+            website: "portfolio.example.com",
             location: "Los Angeles",
             tag: "",
           },
@@ -1293,6 +1673,38 @@ describe("export-renderers", () => {
       "",
       expect.stringContaining("15 avril 2026"),
     ]);
+    expect(
+      page?.querySelector(".proposal-cover-letter__film-address-footer")
+        ?.textContent,
+    ).toBe("Los Angeles");
+    const socialBlock = Array.from(
+      page?.querySelectorAll(".proposal-cover-letter__info-blocks > div") ??
+        [],
+    ).find(
+      (node) =>
+        node.querySelector(".proposal-cover-letter__info-label")?.textContent ===
+        "social",
+    );
+    const portfolioBlock = Array.from(
+      page?.querySelectorAll(".proposal-cover-letter__info-blocks > div") ??
+        [],
+    ).find(
+      (node) =>
+        node.querySelector(".proposal-cover-letter__info-label")?.textContent ===
+        "www",
+    );
+    expect(
+      Array.from(socialBlock?.querySelectorAll("p") ?? []).map(
+        (node) => node.textContent,
+      ),
+    ).toEqual(["social", "linkedin.in"]);
+    expect(
+      Array.from(portfolioBlock?.querySelectorAll("p") ?? []).map(
+        (node) => node.textContent,
+      ),
+    ).toEqual(["www", "portfolio.example.com"]);
+    expect(socialBlock?.textContent).not.toContain(" · ");
+    expect(portfolioBlock?.textContent).not.toContain(" · ");
   });
 
   it.each([
@@ -1678,6 +2090,9 @@ describe("export-renderers", () => {
         .querySelector('[data-block="closing"] .proposal-signature-image')
         ?.getAttribute("src"),
     ).toBe(imageDataUrl);
+    expect(getInlineStyles(stackedImageDocument)).toMatch(
+      /\.proposal-signature-image\s*\{[\s\S]*max-width:\s*min\(42mm,\s*64%\);[\s\S]*max-height:\s*13\.75mm;/,
+    );
     expect(
       stackedImageDocument.querySelector('[data-block="closing"] .proposal-signature')
         ?.textContent,

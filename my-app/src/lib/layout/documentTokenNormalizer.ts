@@ -12,6 +12,10 @@ import {
   DEFAULT_VERBATI_STYLE,
   resolveVerbatiStyle,
 } from "../../features/verbati/style";
+import {
+  resolveDocumentPageSize,
+  type DocumentPageSize,
+} from "../document-page-size";
 import type { ProposalDocumentTypography } from "../proposal-document-typography";
 import {
   resolvePreviewCanonicalAppearance,
@@ -77,6 +81,7 @@ type ProposalPreviewNormalizationArgs = {
   documentTypography: ProposalDocumentTypography;
   stylePreset?: VerbatiStylePreset | null;
   pageGapPx?: number;
+  pageSize?: DocumentPageSize | null;
 };
 
 const EXPORT_BASE_FONT_TOKENS = {
@@ -140,10 +145,14 @@ function deriveLiveArea(args: {
   rightMm: number;
   bottomMm: number;
   leftMm: number;
+  pageWidthMm?: number;
+  pageHeightMm?: number;
 }) {
   return {
-    widthMm: A4_PAGE_WIDTH_MM - args.leftMm - args.rightMm,
-    heightMm: A4_PAGE_HEIGHT_MM - args.topMm - args.bottomMm,
+    widthMm:
+      (args.pageWidthMm ?? A4_PAGE_WIDTH_MM) - args.leftMm - args.rightMm,
+    heightMm:
+      (args.pageHeightMm ?? A4_PAGE_HEIGHT_MM) - args.topMm - args.bottomMm,
   };
 }
 
@@ -193,7 +202,8 @@ function proposalBodySizePtFromTypography(fontSize: string): number {
   return EXPORT_BASE_FONT_TOKENS.bodySizePt;
 }
 
-function proposalVolkGridTokens(): Record<string, number> {
+function proposalVolkGridTokens(pageSize?: DocumentPageSize | null): Record<string, number> {
+  const resolvedPageSize = resolveDocumentPageSize({ pageSize });
   const inlinePercentKeys = [
     "left",
     "headerWidth",
@@ -217,14 +227,14 @@ function proposalVolkGridTokens(): Record<string, number> {
   inlinePercentKeys.forEach((key) => {
     const percent = parsePercent(VOLK_REGISTER_GRID[key]);
     if (percent !== undefined) {
-      tokens[key] = (percent / 100) * A4_PAGE_WIDTH_MM;
+      tokens[key] = (percent / 100) * resolvedPageSize.widthMm;
     }
   });
 
   blockPercentKeys.forEach((key) => {
     const percent = parsePercent(VOLK_REGISTER_GRID[key]);
     if (percent !== undefined) {
-      tokens[key] = (percent / 100) * A4_PAGE_HEIGHT_MM;
+      tokens[key] = (percent / 100) * resolvedPageSize.heightMm;
     }
   });
 
@@ -309,8 +319,10 @@ export function normalizeResumePreviewTokens(args: {
   resumeTemplateId: ResumeTemplateId;
   template?: ResumeTemplateDefinition | null;
   stylePreset?: VerbatiStylePreset | null;
+  pageSize?: DocumentPageSize | null;
 }): CanonicalDocumentTokens {
   const tokens = createEmptyCanonicalTokens();
+  const pageSize = resolveDocumentPageSize({ pageSize: args.pageSize });
   const template = args.template ?? getResumeTemplateDefinition(args.resumeTemplateId);
   const preview = template.preview;
   tokens.appearance = resolvePreviewCanonicalAppearance(
@@ -320,11 +332,18 @@ export function normalizeResumePreviewTokens(args: {
   const rightMm = preview.rightMm;
   const bottomMm = preview.bottomMm;
   const leftMm = preview.leftMm;
-  const liveArea = deriveLiveArea({ topMm, rightMm, bottomMm, leftMm });
+  const liveArea = deriveLiveArea({
+    topMm,
+    rightMm,
+    bottomMm,
+    leftMm,
+    pageWidthMm: pageSize.widthMm,
+    pageHeightMm: pageSize.heightMm,
+  });
 
   tokens.geometry.page = {
-    widthMm: parseMm("210mm") ?? A4_PAGE_WIDTH_MM,
-    heightMm: parseMm("297mm") ?? A4_PAGE_HEIGHT_MM,
+    widthMm: pageSize.widthMm,
+    heightMm: pageSize.heightMm,
     radiusMm: parseMm("1mm") ?? 1,
     margin: {
       topMm,
@@ -478,11 +497,13 @@ export function normalizeResumeExportTokens(args: {
   resumeTemplateId?: ResumeTemplateId | null;
   layout?: VerbatiLayoutPreset | null;
   stylePreset?: VerbatiStylePreset | null;
+  pageSize?: DocumentPageSize | null;
 }): {
   id: ResumeExportProfileDefinition["id"];
   shell: ResumeExportProfileDefinition["shell"];
   canonical: CanonicalDocumentTokens;
 } {
+  const pageSize = resolveDocumentPageSize({ pageSize: args.pageSize });
   const normalizedStylePreset = normalizeStylePreset(args.stylePreset);
   const activeTemplate = args.resumeTemplateId
     ? getResumeTemplateDefinition(args.resumeTemplateId)
@@ -543,11 +564,18 @@ export function normalizeResumeExportTokens(args: {
   const rightMm = definition.margins?.rightMm ?? 35;
   const bottomMm = definition.margins?.bottomMm ?? 35;
   const leftMm = definition.margins?.leftMm ?? 17;
-  const liveArea = deriveLiveArea({ topMm, rightMm, bottomMm, leftMm });
+  const liveArea = deriveLiveArea({
+    topMm,
+    rightMm,
+    bottomMm,
+    leftMm,
+    pageWidthMm: pageSize.widthMm,
+    pageHeightMm: pageSize.heightMm,
+  });
 
   tokens.geometry.page = {
-    widthMm: A4_PAGE_WIDTH_MM,
-    heightMm: A4_PAGE_HEIGHT_MM,
+    widthMm: pageSize.widthMm,
+    heightMm: pageSize.heightMm,
     margin: {
       topMm,
       rightMm,
@@ -604,12 +632,14 @@ export function normalizeProposalExportTokens(args: {
   mode: ExportMode;
   proposalTemplateId?: ProposalTemplateId | null;
   stylePreset?: VerbatiStylePreset | null;
+  pageSize?: DocumentPageSize | null;
 }): {
   id: ProposalExportProfileDefinition["id"];
   shell: ProposalExportProfileDefinition["shell"];
   templateId: ProposalTemplateId | null;
   canonical: CanonicalDocumentTokens;
 } {
+  const pageSize = resolveDocumentPageSize({ pageSize: args.pageSize });
   const resolvedTemplateId =
     args.mode === "ats"
       ? null
@@ -628,14 +658,16 @@ export function normalizeProposalExportTokens(args: {
     rightMm,
     bottomMm,
     leftMm: leftMarginMm,
+    pageWidthMm: pageSize.widthMm,
+    pageHeightMm: pageSize.heightMm,
   });
   const mainMm =
-    A4_PAGE_WIDTH_MM - leftMarginMm - rightMm - leftZoneMm - gutterMm;
+    pageSize.widthMm - leftMarginMm - rightMm - leftZoneMm - gutterMm;
   const tokens = createEmptyCanonicalTokens();
 
   tokens.geometry.page = {
-    widthMm: A4_PAGE_WIDTH_MM,
-    heightMm: A4_PAGE_HEIGHT_MM,
+    widthMm: pageSize.widthMm,
+    heightMm: pageSize.heightMm,
     margin: {
       topMm,
       rightMm,
@@ -662,7 +694,7 @@ export function normalizeProposalExportTokens(args: {
       stepBMm: definition?.gridStepBMm ?? 18,
       halfStepMm: definition?.gridHalfStepMm ?? 8.5,
     },
-    volkGrid: proposalVolkGridTokens(),
+    volkGrid: proposalVolkGridTokens(pageSize),
   };
   tokens.flow = baseExportFlowTokens();
   tokens.flow.type.title = {
@@ -707,6 +739,7 @@ export function normalizeProposalExportTokens(args: {
 export function normalizeProposalPreviewTokens(
   args: ProposalPreviewNormalizationArgs,
 ): CanonicalDocumentTokens {
+  const pageSize = resolveDocumentPageSize({ pageSize: args.pageSize });
   const resolvedTemplateId = resolveProposalTemplateId(args.templateId);
   const definition = getProposalTemplateDefinition(resolvedTemplateId);
   const tokens = createEmptyCanonicalTokens();
@@ -718,8 +751,8 @@ export function normalizeProposalPreviewTokens(
   const bottomMm = definition.bottomMarginMm;
 
   tokens.geometry.page = {
-    widthMm: A4_PAGE_WIDTH_MM,
-    heightMm: A4_PAGE_HEIGHT_MM,
+    widthMm: pageSize.widthMm,
+    heightMm: pageSize.heightMm,
     margin: {
       topMm,
       rightMm,
@@ -731,6 +764,8 @@ export function normalizeProposalPreviewTokens(
       rightMm,
       bottomMm,
       leftMm: leftMarginMm,
+      pageWidthMm: pageSize.widthMm,
+      pageHeightMm: pageSize.heightMm,
     }),
   };
   tokens.geometry.template = {
@@ -744,7 +779,7 @@ export function normalizeProposalPreviewTokens(
     sidebarMm: definition.leftZoneMm,
     gutterMm: definition.gutterMm,
     mainMm:
-      A4_PAGE_WIDTH_MM -
+      pageSize.widthMm -
       leftMarginMm -
       definition.rightMarginMm -
       definition.leftZoneMm -
@@ -756,7 +791,7 @@ export function normalizeProposalPreviewTokens(
       stepBMm: definition.gridStepBMm,
       halfStepMm: definition.gridHalfStepMm,
     },
-    volkGrid: proposalVolkGridTokens(),
+    volkGrid: proposalVolkGridTokens(pageSize),
   };
   tokens.flow.type.title = {
     sizePt: mmToPt(BASE_PROPOSAL_TITLE_SCALE_MM),

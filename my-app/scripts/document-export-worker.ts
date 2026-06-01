@@ -27,6 +27,7 @@ import {
   renderResumeStyledExportDocument,
 } from "../src/lib/export-renderers";
 import type { VerbatiStylePreset } from "../src/features/verbati/types";
+import { resolveDocumentPageSize } from "../src/lib/document-page-size";
 
 type WorkerPayload = {
   kind: "resume" | "proposal";
@@ -141,17 +142,22 @@ async function writeAuditArtifact(
   await fs.writeFile(path.join(auditArtifacts.artifactDir, fileName), content);
 }
 
-async function renderPdfToFile(html: string, outputPath: string): Promise<void> {
+async function renderPdfToFile(args: {
+  html: string;
+  outputPath: string;
+  pageSize: ReturnType<typeof resolveDocumentPageSize>;
+}): Promise<void> {
   const browser = await chromium.launch({
     headless: true,
   });
 
   try {
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "networkidle" });
+    await page.setContent(args.html, { waitUntil: "networkidle" });
     await page.pdf({
-      path: outputPath,
-      format: "A4",
+      path: args.outputPath,
+      width: `${args.pageSize.widthMm}mm`,
+      height: `${args.pageSize.heightMm}mm`,
       printBackground: true,
       preferCSSPageSize: true,
       margin: {
@@ -230,6 +236,9 @@ async function renderStyledResumePdfToFile(args: {
     const auditArtifacts = readResumeTypographyAuditArtifacts(args.metadata);
     const printRoutePayload = buildResumePrintRoutePayload({
       data: args.data,
+    });
+    const pageSize = resolveDocumentPageSize({
+      pageSize: printRoutePayload.pageSize,
     });
     const debugSnapshot = buildResumePrintDebugSnapshot({
       stylePreset: printRoutePayload.stylePreset,
@@ -415,6 +424,8 @@ async function renderStyledResumePdfToFile(args: {
 
     await page.pdf({
       path: args.outputPath,
+      width: `${pageSize.widthMm}mm`,
+      height: `${pageSize.heightMm}mm`,
       preferCSSPageSize: true,
       printBackground: true,
       scale: 1,
@@ -444,6 +455,9 @@ async function renderStyledProposalPdfToFile(args: {
     const auditArtifacts = readResumeTypographyAuditArtifacts(args.metadata);
     const printRoutePayload = buildProposalPrintRoutePayload({
       data: args.data,
+    });
+    const pageSize = resolveDocumentPageSize({
+      pageSize: printRoutePayload.pageSize,
     });
     const debugSnapshot = buildProposalPrintDebugSnapshot({
       stylePreset: printRoutePayload.stylePreset,
@@ -612,6 +626,8 @@ async function renderStyledProposalPdfToFile(args: {
 
     await page.pdf({
       path: args.outputPath,
+      width: `${pageSize.widthMm}mm`,
+      height: `${pageSize.heightMm}mm`,
       preferCSSPageSize: true,
       printBackground: true,
       scale: 1,
@@ -699,7 +715,15 @@ async function main(): Promise<void> {
     throw new Error("Unsupported export payload.");
   }
 
-  await renderPdfToFile(html, outputPath);
+  await renderPdfToFile({
+    html,
+    outputPath,
+    pageSize: resolveDocumentPageSize({
+      pageSize: isResumeSource(payload.data) || isProposalSource(payload.data)
+        ? payload.data.pageSize
+        : null,
+    }),
+  });
 }
 
 void main().catch((error) => {

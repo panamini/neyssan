@@ -1,6 +1,8 @@
 import { DotsThree, FilePdf } from "@/lib/icons";
 import { Menu } from "@/components/ui/menu";
 
+import { buildDocumentPageSizeMenuSection } from "./DocumentPageSizeMenu";
+import type { DocumentPageSizePreference } from "../lib/document-page-size";
 import type { ResumeExportFormat } from "../lib/cv-export";
 
 export type ResumeExportRequest =
@@ -16,6 +18,8 @@ type ResumeExportControlProps = {
   exportingFormat: string | null;
   menuLabel?: string;
   onExport: (request: ResumeExportRequest) => void;
+  onPageSizePreferenceChange?: (preference: DocumentPageSizePreference) => void;
+  pageSizePreference?: DocumentPageSizePreference;
   statusDescription: string;
   statusLabel: string;
   statusTone?: "standard" | "trusted";
@@ -53,6 +57,8 @@ export function ResumeExportControl({
   exportingFormat,
   menuLabel = "More export formats",
   onExport,
+  onPageSizePreferenceChange,
+  pageSizePreference = "auto",
   statusDescription,
   statusLabel,
   statusTone = "standard",
@@ -91,6 +97,15 @@ export function ResumeExportControl({
             ariaLabel="Export resume formats"
             align="end"
             sections={[
+              ...(onPageSizePreferenceChange
+                ? [
+                    buildDocumentPageSizeMenuSection({
+                      disabled: exportingFormat !== null,
+                      onChange: onPageSizePreferenceChange,
+                      value: pageSizePreference,
+                    }),
+                  ]
+                : []),
               {
                 items: EXPORT_MENU_ITEMS.map((item) => ({
                   id: item.key,

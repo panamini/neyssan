@@ -230,7 +230,10 @@ import {
   readProposalPreviewDebugCapture,
   setStyledProposalExportContext,
 } from "../lib/document-export-debug";
-import { A4_PAGE_WIDTH_PX } from "../lib/document-stage";
+import {
+  resolveDocumentPageSize,
+  type DocumentPageSizePreference,
+} from "../lib/document-page-size";
 import { exportDocumentFile } from "../lib/exportDocumentFile";
 import {
   ensureProposalSignatureName,
@@ -244,6 +247,12 @@ import {
 } from "../lib/proposal-signature-settings";
 import type { EditorAiJobContext } from "../lib/ai/editorAiJobContext";
 import { normalizeEditorAiTextResult } from "../lib/ai/applyAiSuggestion";
+import {
+  createDefaultDocumentDecoration,
+  normalizeDocumentDecoration,
+  shouldPersistDocumentDecoration,
+  type DocumentDecoration,
+} from "../lib/document-decoration";
 
 type CurrentProposalSettings = {
   voicePreset: string;
@@ -320,10 +329,6 @@ type ProposalForgeHandoffRecord = {
   createdAt?: number;
 } | null;
 
-// Browser width-map audit confirmed the workspace's visible Proposal paper
-// matches the renderer A4 width at the current design scale (~793.7px), while
-// --forge-page-inline-size includes legacy frame/gutter space.
-const PROPOSAL_PAPER_VISUAL_INLINE_SIZE = `${Math.round(A4_PAGE_WIDTH_PX * 100) / 100}px`;
 // Mirrors --app-nav-panel-width-wide from foundation.css so docked drawer
 // decisions use the remaining page column, not the full window width.
 const FORGE_DOCKED_PANEL_INLINE_SIZE_PX = 320;
@@ -811,6 +816,7 @@ type ProposalDocumentMetadata = DocumentStyleMetadata & {
   resolvedLanguage?: string | null;
   languageSource?: DocumentLanguageSource;
   jobDetectedLanguage?: string | null;
+  documentDecoration?: DocumentDecoration;
 };
 
 type ProposalWorkspaceCssVars = React.CSSProperties & {
@@ -3195,6 +3201,12 @@ export function ProposalForge(): JSX.Element {
   const [proposalOutputMode, setProposalOutputMode] = React.useState<
     "preview" | "edit"
   >(storedOutputDraft?.proposalOutputMode ?? "preview");
+  const [documentDecoration, setDocumentDecoration] =
+    React.useState<DocumentDecoration>(() =>
+      normalizeDocumentDecoration(
+        storedOutputDraft?.documentDecoration ?? createDefaultDocumentDecoration(),
+      ),
+    );
   const [proposalLibraryStatus, setProposalLibraryStatus] = React.useState<
     "draft" | "saved"
   >("draft");
@@ -3205,6 +3217,8 @@ export function ProposalForge(): JSX.Element {
   const [proposalExportingFormat, setProposalExportingFormat] = React.useState<
     string | null
   >(null);
+  const [proposalPageSizePreference, setProposalPageSizePreference] =
+    React.useState<DocumentPageSizePreference>("auto");
   const [lastProposalRequest, setLastProposalRequest] =
     React.useState<FormValues | null>(null);
   const [composePreviewValues, setComposePreviewValues] =
@@ -4220,6 +4234,7 @@ export function ProposalForge(): JSX.Element {
     setProposalDocumentTitle("");
     setProposalDocumentTitleManual(false);
     setProposalDocumentMeta("");
+    setDocumentDecoration(createDefaultDocumentDecoration());
     setGeneratedProposalId(null);
     generatedProposalIdRef.current = null;
     latestProposalStyleCommitRef.current = null;
@@ -4886,6 +4901,10 @@ export function ProposalForge(): JSX.Element {
     attachedCvId,
     resolvedProposalRuntimeStyle.source,
   ]);
+  const persistedDocumentDecoration = React.useMemo(() => {
+    const normalized = normalizeDocumentDecoration(documentDecoration);
+    return shouldPersistDocumentDecoration(normalized) ? normalized : null;
+  }, [documentDecoration]);
   const proposalRenderMetadata = React.useMemo<
     ProposalDocumentMetadata | undefined
   >(() => {
@@ -4933,6 +4952,9 @@ export function ProposalForge(): JSX.Element {
       nextMetadata.characterLimitMode = draftCharacterLimitMode;
       nextMetadata.characterLimitValue = draftCharacterLimitValue;
     }
+    if (persistedDocumentDecoration) {
+      nextMetadata.documentDecoration = persistedDocumentDecoration;
+    }
 
     return Object.keys(nextMetadata).length > 0 ? nextMetadata : undefined;
   }, [
@@ -4943,6 +4965,7 @@ export function ProposalForge(): JSX.Element {
     effectiveProposalStylePresetWithPalette,
     effectiveProposalTemplateId,
     fallbackProposalTemplateId,
+    persistedDocumentDecoration,
     proposalSettingsPresets,
     proposalTemplateBundleId,
     proposalStyleChoice,
@@ -5475,6 +5498,19 @@ export function ProposalForge(): JSX.Element {
       traceProposalStyle,
     ],
   );
+  const handleDocumentDecorationChange = React.useCallback(
+    (nextDecoration: DocumentDecoration) => {
+      setDocumentDecoration(normalizeDocumentDecoration(nextDecoration));
+    },
+    [],
+  );
+  const handleDocumentDecorationCommit = React.useCallback(
+    (nextDecoration: DocumentDecoration) => {
+      setDocumentDecoration(normalizeDocumentDecoration(nextDecoration));
+      void flushScheduledProposalSave(undefined, { force: true }).catch(() => {});
+    },
+    [flushScheduledProposalSave],
+  );
   const performProposalSaveRef = React.useRef(performProposalSave);
   React.useEffect(() => {
     performProposalSaveRef.current = performProposalSave;
@@ -5526,6 +5562,21 @@ export function ProposalForge(): JSX.Element {
           ) ?? null
         : null,
     [selectedProposalId, sortedSavedProposals],
+  );
+  const resolvedProposalPageSize = React.useMemo(
+    () =>
+      resolveDocumentPageSize({
+        preference: proposalPageSizePreference,
+        locale: isSavedView
+          ? openedSavedProposal?.metadata?.resolvedLanguage
+          : storedOutputDraft?.resolvedLanguage,
+      }),
+    [
+      isSavedView,
+      openedSavedProposal?.metadata?.resolvedLanguage,
+      proposalPageSizePreference,
+      storedOutputDraft?.resolvedLanguage,
+    ],
   );
   const querySelectedSavedProposal = React.useMemo(
     () =>
@@ -6492,6 +6543,7 @@ export function ProposalForge(): JSX.Element {
       setProposalDocumentTitle("");
       setProposalDocumentTitleManual(false);
       setProposalDocumentMeta("");
+      setDocumentDecoration(createDefaultDocumentDecoration());
       setFallbackInfo(null);
       setGeneratedProposalId(null);
       generatedProposalIdRef.current = null;
@@ -7029,6 +7081,10 @@ export function ProposalForge(): JSX.Element {
         showRecipientDetails:
           openedSavedProposal.metadata?.headerShowRecipientDetails,
       });
+      const nextDocumentDecoration = normalizeDocumentDecoration(
+        openedSavedProposal.metadata?.documentDecoration ??
+          createDefaultDocumentDecoration(),
+      );
       const nextSourceComposeDraft: StoredProposalComposeDraft | null = null;
 
       setProposalContent(nextContent);
@@ -7095,6 +7151,7 @@ export function ProposalForge(): JSX.Element {
       setProposalDocumentTitle(openedSavedProposal.title || "Untitled proposal");
       setProposalDocumentTitleManual(true);
       setProposalDocumentMeta(nextDocumentMeta);
+      setDocumentDecoration(nextDocumentDecoration);
       setGeneratedProposalId(openedSavedProposal._id as Id<"proposals">);
       generatedProposalIdRef.current =
         openedSavedProposal._id as Id<"proposals">;
@@ -7233,6 +7290,10 @@ export function ProposalForge(): JSX.Element {
         }) ??
         "auto",
     );
+    const nextDocumentDecoration = normalizeDocumentDecoration(
+      draftProposal.metadata?.documentDecoration ??
+        createDefaultDocumentDecoration(),
+    );
     const shouldRestoreDraftDetachedStyle = Boolean(
       nextStyleLinkMode === "proposal_local" && nextStylePreset,
     );
@@ -7272,6 +7333,7 @@ export function ProposalForge(): JSX.Element {
     setProposalDocumentTitle(nextTitle);
     setProposalDocumentTitleManual(nextTitleManual);
     setProposalDocumentMeta(nextMeta);
+    setDocumentDecoration(nextDocumentDecoration);
     setGeneratedProposalId(nextGeneratedId);
     generatedProposalIdRef.current = nextGeneratedId;
     setProposalOutputMode("preview");
@@ -7290,6 +7352,11 @@ export function ProposalForge(): JSX.Element {
       proposalVoicePreset: nextVoicePreset,
       proposalTemplateId: nextTemplateId,
       proposalVerbatiStyle: nextStylePreset,
+      documentDecoration: shouldPersistDocumentDecoration(
+        nextDocumentDecoration,
+      )
+        ? nextDocumentDecoration
+        : null,
       verbatiStyleSlotId: draftProposal.metadata?.verbatiStyleSlotId ?? null,
       verbatiStyleSlotSource:
         draftProposal.metadata?.verbatiStyleSlotSource ?? null,
@@ -8140,6 +8207,7 @@ export function ProposalForge(): JSX.Element {
         proposalVerbatiStyle: serializeVerbatiStyle(
           effectiveProposalStylePresetWithPalette,
         ),
+        documentDecoration: persistedDocumentDecoration,
         verbatiStyleSlotId: proposalRenderMetadata?.verbatiStyleSlotId ?? null,
         verbatiStyleSlotSource:
           proposalRenderMetadata?.verbatiStyleSlotSource ?? null,
@@ -8300,6 +8368,7 @@ export function ProposalForge(): JSX.Element {
       fallbackProposalTemplateId,
       buildStoredProposalComposeDraftSnapshot,
       formatProposalTypeLabel,
+      persistedDocumentDecoration,
       proposalApplicantName,
       proposalApplicantRole,
       proposalApplicantCompany,
@@ -8802,6 +8871,7 @@ export function ProposalForge(): JSX.Element {
       proposalVerbatiStyle: effectiveProposalStylePresetWithPalette
         ? serializeVerbatiStyle(effectiveProposalStylePresetWithPalette)
         : null,
+      documentDecoration: persistedDocumentDecoration,
       verbatiStyleSlotId: proposalRenderMetadata?.verbatiStyleSlotId ?? null,
       verbatiStyleSlotSource:
         proposalRenderMetadata?.verbatiStyleSlotSource ?? null,
@@ -8866,6 +8936,7 @@ export function ProposalForge(): JSX.Element {
     proposalDocumentTitle,
     proposalDocumentTitleManual,
     proposalOutputMode,
+    persistedDocumentDecoration,
     proposalStyleChoice,
     effectiveProposalStylePresetWithPalette,
     proposalCustomAccentHex,
@@ -9299,6 +9370,10 @@ export function ProposalForge(): JSX.Element {
         showRecipientDetails:
           openedSavedProposal.metadata?.headerShowRecipientDetails,
       });
+      const restoredDocumentDecoration = normalizeDocumentDecoration(
+        openedSavedProposal.metadata?.documentDecoration ??
+          createDefaultDocumentDecoration(),
+      );
       let duplicatedDraftId: Id<"proposals"> | null = null;
       const restoredDocumentTitle =
         savedProposalDocumentTitle.trim() ||
@@ -9412,6 +9487,7 @@ export function ProposalForge(): JSX.Element {
       setProposalDocumentTitle(nextDraftTitle);
       setProposalDocumentTitleManual(Boolean(nextDraftTitle.trim()));
       setProposalDocumentMeta(savedProposalDocumentMeta);
+      setDocumentDecoration(restoredDocumentDecoration);
       setDuplicateSourceJobId(restoredJobId);
       setGeneratedProposalId(duplicatedDraftId);
       generatedProposalIdRef.current = duplicatedDraftId;
@@ -9979,7 +10055,9 @@ export function ProposalForge(): JSX.Element {
   );
   // Page + rail + grid gap + page padding need room before two-pane mode is safe.
   const proposalTwoPaneMinViewportWidth = 1420;
-  const proposalPaperVisualInlineSize = `min(100%, ${PROPOSAL_PAPER_VISUAL_INLINE_SIZE})`;
+  const proposalPaperVisualInlineSize = `min(100%, ${
+    Math.round(resolvedProposalPageSize.widthPx * 100) / 100
+  }px)`;
   const proposalBaseWorkspaceOutputShellInlineSize =
     "var(--proposal-paper-visual-inline-size)";
   const proposalWorkspaceShellBlockSize =
@@ -10131,7 +10209,9 @@ export function ProposalForge(): JSX.Element {
           fallbackProposalTemplateId,
         signatureSettings: proposalSignatureSettings,
         closing: effectiveProposalClosing,
+        documentDecoration: persistedDocumentDecoration,
         locale: storedOutputDraft?.resolvedLanguage,
+        pageSize: resolvedProposalPageSize,
       }),
     [
       composePreviewValues?.jobDescription,
@@ -10150,6 +10230,8 @@ export function ProposalForge(): JSX.Element {
       proposalSignatureSettings,
       proposalType,
       proposalContent,
+      persistedDocumentDecoration,
+      resolvedProposalPageSize,
       storedOutputDraft?.resolvedLanguage,
     ],
   );
@@ -10182,7 +10264,9 @@ export function ProposalForge(): JSX.Element {
         stylePreset: effectiveProposalStylePresetWithPalette,
         signatureSettings: proposalSignatureSettings,
         closing: effectiveProposalClosing,
+        documentDecoration: persistedDocumentDecoration,
         locale: storedOutputDraft?.resolvedLanguage,
+        pageSize: resolvedProposalPageSize,
       }),
     [
       composePreviewValues?.jobDescription,
@@ -10205,6 +10289,8 @@ export function ProposalForge(): JSX.Element {
       proposalType,
       proposalContent,
       proposalVoicePreset,
+      persistedDocumentDecoration,
+      resolvedProposalPageSize,
       storedOutputDraft?.resolvedLanguage,
     ],
   );
@@ -10232,7 +10318,7 @@ export function ProposalForge(): JSX.Element {
       closing: savedMetadata?.closing,
       content: savedProposalContent,
       proposalType: savedProposalType,
-      applicantName: savedApplicantHeader.name,
+      applicantName: savedApplicantHeader?.name ?? null,
       voicePreset: savedProposalVoicePreset,
     });
 
@@ -10258,11 +10344,14 @@ export function ProposalForge(): JSX.Element {
       templateId: savedProposalTemplateId,
       signatureSettings: proposalSignatureSettings,
       closing: savedClosing,
+      documentDecoration: savedMetadata?.documentDecoration ?? null,
       locale: savedMetadata?.resolvedLanguage,
+      pageSize: resolvedProposalPageSize,
     });
   }, [
     openedSavedProposal,
     proposalSignatureSettings,
+    resolvedProposalPageSize,
     savedProposalContent,
     savedProposalDocumentMeta,
     savedProposalDocumentTitle,
@@ -10302,7 +10391,7 @@ export function ProposalForge(): JSX.Element {
       closing: savedMetadata?.closing,
       content: savedProposalContent,
       proposalType: savedProposalType,
-      applicantName: savedApplicantHeader.name,
+      applicantName: savedApplicantHeader?.name ?? null,
       voicePreset: savedProposalVoicePreset,
     });
 
@@ -10332,13 +10421,16 @@ export function ProposalForge(): JSX.Element {
       stylePreset: effectiveSavedProposalStylePreset,
       signatureSettings: proposalSignatureSettings,
       closing: savedClosing,
+      documentDecoration: savedMetadata?.documentDecoration ?? null,
       locale: savedMetadata?.resolvedLanguage,
+      pageSize: resolvedProposalPageSize,
     });
   }, [
     effectiveSavedProposalStylePreset,
     effectiveSavedProposalTemplateId,
     openedSavedProposal,
     proposalSignatureSettings,
+    resolvedProposalPageSize,
     savedProposalContent,
     savedProposalDocumentMeta,
     savedProposalDocumentTitle,
@@ -10974,6 +11066,8 @@ export function ProposalForge(): JSX.Element {
           format: "docx",
         });
       },
+      onPageSizePreferenceChange: setProposalPageSizePreference,
+      pageSizePreference: proposalPageSizePreference,
       onShareSavedProposal: isSavedView
         ? () => {
             void handleShareSavedProposal();
@@ -10996,6 +11090,7 @@ export function ProposalForge(): JSX.Element {
       proposalTopbarDocumentTitle,
       proposalContent,
       proposalExportingFormat,
+      proposalPageSizePreference,
       proposalTopbarDocumentState,
       proposalTopbarLengthLabel,
       savedProposalContent,
@@ -11091,23 +11186,27 @@ export function ProposalForge(): JSX.Element {
     () =>
       PROPOSAL_TEMPLATE_DEFINITIONS.map((template) => {
         const family: TemplateFamily =
-          template.id === "director-letterhead"
-            ? "director-letterhead"
-            : template.id === "volk-letterhead"
-              ? "volk-letterhead"
-              : template.id === "film-foto-letterhead"
-                ? "film-foto-letterhead"
-                : template.id === "moma-bauhaus-letterhead"
-                  ? "moma-bauhaus-letterhead"
-                  : template.id === "joella-frame-letterhead"
-                    ? "joella-frame-letterhead"
-                    : template.id === "bayer-letterhead"
-                      ? "bayer-letterhead"
-                    : template.id === "modernist_signal"
-                      ? "bold"
-                      : template.id === "quire_margin"
-                        ? "letterpress"
-                        : "minimal";
+          template.id === "editorial_wide"
+            ? "editorial-letterhead"
+            : template.id === "twoweeks-letterhead"
+              ? "twoweeks-letterhead"
+              : template.id === "director-letterhead"
+                ? "director-letterhead"
+                : template.id === "volk-letterhead"
+                  ? "volk-letterhead"
+                  : template.id === "film-foto-letterhead"
+                    ? "film-foto-letterhead"
+                    : template.id === "moma-bauhaus-letterhead"
+                      ? "moma-bauhaus-letterhead"
+                      : template.id === "joella-frame-letterhead"
+                        ? "joella-frame-letterhead"
+                        : template.id === "bayer-letterhead"
+                          ? "bayer-letterhead"
+                          : template.id === "modernist_signal"
+                            ? "bold"
+                            : template.id === "quire_margin"
+                              ? "letterpress"
+                              : "minimal";
         return {
           id: template.id,
           label: template.name,
@@ -11125,7 +11224,10 @@ export function ProposalForge(): JSX.Element {
         resolvedLanguage,
         "workspace.proposalTemplatesPanel",
       ),
-      subtitle: "A4 · 21 × 29.7 cm",
+      subtitle:
+        resolvedProposalPageSize.id === "letter"
+          ? "US Letter · 21.59 × 27.94 cm"
+          : "A4 · 21 × 29.7 cm",
       activeItemId: effectiveProposalTemplateId,
       items: proposalTemplatePanelItems,
       onSelect: (itemId: string) =>
@@ -11135,6 +11237,7 @@ export function ProposalForge(): JSX.Element {
       effectiveProposalTemplateId,
       handleProposalLayoutSelect,
       proposalTemplatePanelItems,
+      resolvedProposalPageSize.id,
       resolvedLanguage,
     ],
   );
@@ -11429,6 +11532,8 @@ export function ProposalForge(): JSX.Element {
           onSelectStylePalette={handleProposalPaletteSelect}
           onSelectStyleCustomAccent={handleProposalCustomAccentSelect}
           onClearStyleCustomAccent={handleProposalCustomAccentClear}
+          documentDecoration={documentDecoration}
+          onDocumentDecorationChange={handleDocumentDecorationChange}
           signaturePresent={Boolean(
             effectiveProposalClosing?.enabled &&
               effectiveProposalClosing.signatureName,
@@ -11455,6 +11560,7 @@ export function ProposalForge(): JSX.Element {
       handleChooseSignature,
       handleProposalCustomAccentClear,
       handleProposalCustomAccentSelect,
+      handleDocumentDecorationChange,
       handleProposalLayoutSelect,
       handleProposalPaletteSelect,
       handleProposalStyleBundleReset,
@@ -11464,6 +11570,7 @@ export function ProposalForge(): JSX.Element {
       handleToggleSignature,
       proposalSignatureSettings.imageDataUrl,
       proposalTemplateBundleId,
+      documentDecoration,
       resolvedLanguage,
     ],
   );
@@ -12606,6 +12713,18 @@ export function ProposalForge(): JSX.Element {
                             }
                             signatureSettings={proposalSignatureSettings}
                             closing={effectiveProposalClosing}
+                            documentDecoration={documentDecoration}
+                            documentDecorationDesignMode={
+                              proposalDesignOpen &&
+                              proposalOutputMode === "preview" &&
+                              !isSavedView
+                            }
+                            onDocumentDecorationChange={
+                              handleDocumentDecorationChange
+                            }
+                            onDocumentDecorationCommit={
+                              handleDocumentDecorationCommit
+                            }
                             railTitle={sanitizeProposalApplicantName(
                               proposalApplicantName,
                             )}
@@ -12704,6 +12823,7 @@ export function ProposalForge(): JSX.Element {
                             size="default"
                             documentHeaderMode="hidden"
                             copyFeedback={copyFeedback}
+                            pageSize={resolvedProposalPageSize}
                             onContentChange={handleProposalContentChange}
                             onContentCommit={() => {
                               void handleProposalDocumentCommit();

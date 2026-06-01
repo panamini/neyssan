@@ -1,7 +1,6 @@
 import React from "react";
 import type { FormValues } from "../ProposalInputForm.schemas";
 import {
-  getProposalTemplateDefinition,
   isProposalLetterheadTemplateId,
   resolveProposalTemplateId,
   type ProposalTemplateId,
@@ -40,6 +39,27 @@ import {
   resolveProposalSignatureRender,
   type ProposalSignatureSettings,
 } from "../../lib/proposal-signature-settings";
+import {
+  resolveDocumentPageSize,
+  type DocumentPageSize,
+} from "../../lib/document-page-size";
+import {
+  Eye,
+  TrashSimple,
+  Upload,
+} from "../../lib/icons";
+import {
+  DOCUMENT_DECORATION_UPLOAD_ACCEPT,
+  getDocumentDecorationPlacementMm,
+  getRenderableDocumentDecoration,
+  moveDocumentDecorationByDeltaMm,
+  normalizeDocumentDecoration,
+  readDocumentDecorationUpload,
+  removeDocumentDecorationAsset,
+  resolveTemplateDocumentDecoration,
+  resizeDocumentDecorationByDeltaMm,
+  type DocumentDecoration,
+} from "../../lib/document-decoration";
 
 type ProposalDocumentRendererProps = {
   content: string;
@@ -58,11 +78,16 @@ type ProposalDocumentRendererProps = {
   /** Explicit page width in px. When provided, syncs mm vars immediately on change
    *  without waiting for the ResizeObserver callback. */
   pageWidth?: number;
+  pageSize?: DocumentPageSize | null;
   pageGapPx?: number;
   stylePreset?: VerbatiStylePreset | null;
   documentThemeVars?: React.CSSProperties | null;
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
+  documentDecoration?: DocumentDecoration | null;
+  documentDecorationMode?: "readonly" | "design";
+  onDocumentDecorationChange?: (decoration: DocumentDecoration) => void;
+  onDocumentDecorationCommit?: (decoration: DocumentDecoration) => void;
   emptyBodyPlaceholder?: string | null;
   onPageCountChange?: (count: number) => void;
 };
@@ -102,6 +127,11 @@ type VolkRegisterMetaEntry = {
   key: string;
 };
 
+type EditorialContactGroup = {
+  label: string;
+  lines: string[];
+};
+
 type StructuredHeaderValues = {
   date: string;
   subject: string;
@@ -120,13 +150,20 @@ type ProposalLetterheadViewModel = {
   candidateDirectorContactGroups: Array<{ mark: "T" | "@"; lines: string[] }>;
   candidateVolkSenderLine: string;
   candidateFilmSenderLine: string;
+  candidateFilmAddressLine: string;
   candidateJoellaWordmark: string;
   candidateJoellaFooterLine: string;
   candidateBayerFooterLine: string;
+  candidateTwoweeksNameLines: string[];
+  candidateTwoweeksIdentityLines: string[];
+  candidateTwoweeksFooterLine: string;
+  candidateTwoweeksContactLines: string[];
   candidateLocationLine: string;
   candidatePhone: string;
   candidateEmail: string;
   candidateWebsite: string;
+  candidateSocialLines: string[];
+  candidateWebsiteLines: string[];
   recipientName: string;
   recipientCompany: string;
   recipientRole: string;
@@ -134,6 +171,13 @@ type ProposalLetterheadViewModel = {
   recipientEmail: string;
   recipientCity: string;
   recipientExtraLines: string[];
+  recipientEditorialName: string;
+  recipientEditorialCompany: string;
+  recipientEditorialRole: string;
+  recipientEditorialAddress: string;
+  recipientEditorialEmail: string;
+  recipientEditorialCity: string;
+  recipientEditorialExtraLines: string[];
   recipientContactLines: string[];
   recipientHeadingLines: string[];
   joellaLetterBlock: {
@@ -359,6 +403,101 @@ function uniqueNonEmptyLines(
   return lines;
 }
 
+function normalizeEditorialWordmark(value: string | null | undefined): string {
+  return String(value ?? "").replace(/\s+/g, " ").trim().toUpperCase();
+}
+
+function buildEditorialSenderGroups(
+  viewModel: ProposalLetterheadViewModel,
+): EditorialContactGroup[] {
+  return [
+    viewModel.candidateName
+      ? {
+          label: viewModel.candidateName,
+          lines: uniqueNonEmptyLines([viewModel.candidateRole]),
+        }
+      : null,
+    viewModel.candidateCompany
+      ? { label: "Company", lines: [viewModel.candidateCompany] }
+      : null,
+    viewModel.candidateLocationLine
+      ? { label: "Location", lines: [viewModel.candidateLocationLine] }
+      : null,
+    viewModel.candidatePhone
+      ? { label: "Phone", lines: [viewModel.candidatePhone] }
+      : null,
+    viewModel.candidateEmail
+      ? { label: "Email", lines: [viewModel.candidateEmail] }
+      : null,
+    viewModel.candidateSocialLines.length > 0
+      ? { label: "Social", lines: viewModel.candidateSocialLines }
+      : null,
+    viewModel.candidateWebsiteLines.length > 0
+      ? { label: "WWW", lines: viewModel.candidateWebsiteLines }
+      : null,
+  ].filter(
+    (group): group is EditorialContactGroup =>
+      Boolean(group && (group.label || group.lines.length > 0)),
+  );
+}
+
+function buildEditorialRecipientGroups(
+  viewModel: ProposalLetterheadViewModel,
+): EditorialContactGroup[] {
+  return [
+    viewModel.recipientEditorialName
+      ? { label: "Name", lines: [viewModel.recipientEditorialName] }
+      : null,
+    viewModel.recipientEditorialRole
+      ? { label: "Role", lines: [viewModel.recipientEditorialRole] }
+      : null,
+    viewModel.recipientEditorialCompany
+      ? { label: "Company", lines: [viewModel.recipientEditorialCompany] }
+      : null,
+    viewModel.recipientEditorialEmail
+      ? { label: "Email", lines: [viewModel.recipientEditorialEmail] }
+      : null,
+    viewModel.recipientEditorialAddress
+      ? { label: "Address", lines: [viewModel.recipientEditorialAddress] }
+      : null,
+    viewModel.recipientEditorialCity
+      ? { label: "City", lines: [viewModel.recipientEditorialCity] }
+      : null,
+    viewModel.recipientEditorialExtraLines.length > 0
+      ? { label: "Details", lines: viewModel.recipientEditorialExtraLines }
+      : null,
+  ].filter(
+    (group): group is EditorialContactGroup =>
+      Boolean(group && (group.label || group.lines.length > 0)),
+  );
+}
+
+function ProposalCoverLetterEditorialContactGroups({
+  groups,
+}: {
+  groups: EditorialContactGroup[];
+}): JSX.Element | null {
+  if (groups.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="proposal-cover-letter__editorial-contact-copy">
+      {groups.map((group) => (
+        <p key={`${group.label}-${group.lines.join("|")}`}>
+          {group.label ? <b>{group.label}</b> : null}
+          {group.lines.map((line) => (
+            <React.Fragment key={line}>
+              <br />
+              {line}
+            </React.Fragment>
+          ))}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 function buildJoellaFooterLine(args: {
   location: string;
   email: string;
@@ -384,6 +523,45 @@ function buildBayerFooterLine(args: {
     args.website,
     args.other,
   ]).join(" · ");
+}
+
+function splitTwoweeksNameLines(value: string): string[] {
+  const line = value.trim();
+  return line ? [line] : [];
+}
+
+function buildTwoweeksDigitalLine(args: {
+  linkedin: string;
+  website: string;
+  other: string;
+}): string {
+  return uniqueNonEmptyLines([
+    args.linkedin,
+    args.website,
+    args.other,
+  ]).join(" · ");
+}
+
+function normalizeTwoweeksDigitalIdentifier(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function buildTwoweeksContactLines(args: {
+  phone: string;
+  email: string;
+  location: string;
+  linkedin: string;
+  website: string;
+  other: string;
+}): string[] {
+  return uniqueNonEmptyLines([
+    args.phone,
+    normalizeTwoweeksDigitalIdentifier(args.email),
+    normalizeTwoweeksDigitalIdentifier(args.linkedin),
+    normalizeTwoweeksDigitalIdentifier(args.website),
+    normalizeTwoweeksDigitalIdentifier(args.other),
+    args.location,
+  ]);
 }
 
 function buildJoellaHeaderContactLine(args: {
@@ -588,8 +766,8 @@ function buildProposalLetterheadViewModel(args: {
   });
   const candidateFilmSenderLine = buildProposalContactLineFromParts({
     email: resolvedContactParts.email,
-    location: candidateShortLocationLine,
   });
+  const candidateFilmAddressLine = resolvedContactParts.location;
   const explicitJoellaCandidateName =
     args.applicantHeader?.name?.trim() ||
     (args.railTitle?.trim() &&
@@ -608,6 +786,24 @@ function buildProposalLetterheadViewModel(args: {
   });
   const candidateBayerFooterLine = buildBayerFooterLine({
     phone: resolvedContactParts.phone,
+    location: resolvedContactParts.location,
+    linkedin: resolvedContactParts.linkedin,
+    website: resolvedContactParts.website,
+    other: resolvedContactParts.other,
+  });
+  const candidateTwoweeksNameLines = splitTwoweeksNameLines(candidateName);
+  const candidateTwoweeksIdentityLines = uniqueNonEmptyLines([
+    candidateRole,
+    candidateCompany,
+  ]);
+  const candidateTwoweeksFooterLine = buildTwoweeksDigitalLine({
+    linkedin: resolvedContactParts.linkedin,
+    website: resolvedContactParts.website,
+    other: resolvedContactParts.other,
+  });
+  const candidateTwoweeksContactLines = buildTwoweeksContactLines({
+    phone: resolvedContactParts.phone,
+    email: resolvedContactParts.email,
     location: resolvedContactParts.location,
     linkedin: resolvedContactParts.linkedin,
     website: resolvedContactParts.website,
@@ -638,6 +834,16 @@ function buildProposalLetterheadViewModel(args: {
     visibility.showRecipient && visibility.showRecipientDetails
       ? getProposalRecipientExtraLines(args.recipientDetails, recipientFields)
       : [];
+  const recipientEditorialName = recipientFields.name?.trim() ?? "";
+  const recipientEditorialCompany = recipientFields.company?.trim() ?? "";
+  const recipientEditorialRole = recipientFields.role?.trim() ?? "";
+  const recipientEditorialAddress = recipientFields.address?.trim() ?? "";
+  const recipientEditorialEmail = recipientFields.email?.trim() ?? "";
+  const recipientEditorialCity = recipientFields.city?.trim() ?? "";
+  const recipientEditorialExtraLines = getProposalRecipientExtraLines(
+    args.recipientDetails,
+    recipientFields,
+  );
   const recipientContactLines = uniqueNonEmptyLines(
     [recipientEmail, recipientAddress, recipientCity, ...recipientExtraLines],
     [recipientName, recipientCompany, recipientRole],
@@ -702,14 +908,26 @@ function buildProposalLetterheadViewModel(args: {
     candidateDirectorContactGroups,
     candidateVolkSenderLine,
     candidateFilmSenderLine,
+    candidateFilmAddressLine,
     candidateJoellaWordmark,
     candidateJoellaFooterLine,
     candidateBayerFooterLine,
+    candidateTwoweeksNameLines,
+    candidateTwoweeksIdentityLines,
+    candidateTwoweeksFooterLine,
+    candidateTwoweeksContactLines,
     candidateLocationLine: resolvedContactParts.location,
     candidatePhone: resolvedContactParts.phone,
     candidateEmail: resolvedContactParts.email,
     candidateWebsite: joinNonEmpty([
       resolvedContactParts.linkedin,
+      resolvedContactParts.website,
+    ]),
+    candidateSocialLines: uniqueNonEmptyLines([
+      resolvedContactParts.linkedin,
+      resolvedContactParts.other,
+    ]),
+    candidateWebsiteLines: uniqueNonEmptyLines([
       resolvedContactParts.website,
     ]),
     recipientName,
@@ -719,6 +937,13 @@ function buildProposalLetterheadViewModel(args: {
     recipientEmail,
     recipientCity,
     recipientExtraLines,
+    recipientEditorialName,
+    recipientEditorialCompany,
+    recipientEditorialRole,
+    recipientEditorialAddress,
+    recipientEditorialEmail,
+    recipientEditorialCity,
+    recipientEditorialExtraLines,
     recipientContactLines,
     recipientHeadingLines,
     joellaLetterBlock,
@@ -736,10 +961,11 @@ function ProposalCoverLetterMetaRow({
 }: {
   viewModel: ProposalLetterheadViewModel;
 }): JSX.Element {
+  const roleOrCompany = viewModel.metaRole || viewModel.recipientCompany;
   const values = [
     viewModel.recipientName,
-    viewModel.recipientCompany,
-    viewModel.metaRole,
+    roleOrCompany,
+    viewModel.metaRole ? viewModel.recipientCompany : "",
     viewModel.date,
   ];
 
@@ -756,7 +982,7 @@ function ProposalCoverLetterMetaRow({
 
 function ProposalCoverLetterSubjectRow({
   viewModel,
-  prefix = "Re:",
+  prefix = "Subject:",
 }: {
   viewModel: ProposalLetterheadViewModel;
   prefix?: string;
@@ -780,7 +1006,7 @@ function ProposalCoverLetterRecipientBlock({
 }: {
   viewModel: ProposalLetterheadViewModel;
 }): JSX.Element | null {
-  if (viewModel.recipientHeadingLines.length === 0) {
+  if (viewModel.recipientContactLines.length === 0) {
     return null;
   }
 
@@ -789,10 +1015,32 @@ function ProposalCoverLetterRecipientBlock({
       className="proposal-cover-letter__recipient-block"
       aria-label="Recipient contact details"
     >
-      {viewModel.recipientHeadingLines.map((line) => (
+      {viewModel.recipientContactLines.map((line) => (
         <p key={line}>{line}</p>
       ))}
     </section>
+  );
+}
+
+function ProposalCoverLetterRecipientSubjectStack({
+  prefix,
+  viewModel,
+}: {
+  prefix?: string;
+  viewModel: ProposalLetterheadViewModel;
+}): JSX.Element | null {
+  if (viewModel.recipientContactLines.length === 0 && !viewModel.subject) {
+    return null;
+  }
+
+  return (
+    <div
+      className="proposal-cover-letter__recipient-subject-stack"
+      aria-label="Recipient and subject details"
+    >
+      <ProposalCoverLetterRecipientBlock viewModel={viewModel} />
+      <ProposalCoverLetterSubjectRow viewModel={viewModel} prefix={prefix} />
+    </div>
   );
 }
 
@@ -837,6 +1085,232 @@ function ProposalCoverLetterDirectorContactGrid({
         </div>
       ))}
     </section>
+  );
+}
+
+export function ProposalCoverLetterEditorialTemplate({
+  bodyRef,
+  bodyContent,
+  isContinuationPage,
+  viewModel,
+}: ProposalCoverLetterTemplateProps): JSX.Element {
+  const wordmark = normalizeEditorialWordmark(
+    viewModel.candidateCompany || viewModel.candidateName,
+  );
+  const subtitle = viewModel.candidateRole || viewModel.shortRoleTitle;
+  const recipientGroups = buildEditorialRecipientGroups(viewModel);
+  const senderGroups = buildEditorialSenderGroups(viewModel);
+
+  return (
+    <>
+      {!isContinuationPage ? (
+        <>
+          <span
+            className="proposal-cover-letter__editorial-top-ribbon"
+            aria-hidden="true"
+          />
+          <span
+            className="proposal-cover-letter__editorial-header-rule"
+            aria-hidden="true"
+          />
+
+          {wordmark ? (
+            <p
+              className="proposal-cover-letter__editorial-wordmark"
+            >
+              {wordmark}
+            </p>
+          ) : null}
+          {subtitle ? (
+            <p className="proposal-cover-letter__editorial-subtitle">
+              {subtitle}
+            </p>
+          ) : null}
+
+          <span
+            className="proposal-cover-letter__editorial-rail-rule"
+            aria-hidden="true"
+          />
+          <span
+            className="proposal-cover-letter__editorial-body-rule"
+            aria-hidden="true"
+          />
+          {viewModel.subject ? (
+            <p className="proposal-cover-letter__editorial-subject">
+              {viewModel.subject}
+            </p>
+          ) : null}
+
+          {viewModel.date ? (
+            <>
+              <p className="proposal-cover-letter__editorial-date">
+                {viewModel.date}
+              </p>
+              <span
+                className="proposal-cover-letter__editorial-date-rule"
+                aria-hidden="true"
+              />
+            </>
+          ) : null}
+
+          {recipientGroups.length > 0 ? (
+            <section className="proposal-cover-letter__editorial-recipient">
+              <p className="proposal-cover-letter__editorial-label">
+                To
+              </p>
+              <span
+                className="proposal-cover-letter__editorial-label-rule"
+                aria-hidden="true"
+              />
+              <ProposalCoverLetterEditorialContactGroups
+                groups={recipientGroups}
+              />
+            </section>
+          ) : null}
+
+          {senderGroups.length > 0 ? (
+            <section className="proposal-cover-letter__editorial-sender">
+              <p className="proposal-cover-letter__editorial-label">
+                From
+              </p>
+              <span
+                className="proposal-cover-letter__editorial-label-rule proposal-cover-letter__editorial-label-rule--sender"
+                aria-hidden="true"
+              />
+              <ProposalCoverLetterEditorialContactGroups groups={senderGroups} />
+            </section>
+          ) : null}
+        </>
+      ) : null}
+
+      <section
+        ref={bodyRef ?? undefined}
+        className={[
+          "proposal-cover-letter__editorial-body-flow",
+          "proposal-cover-letter__body",
+          !isContinuationPage && viewModel.subject
+            ? "proposal-cover-letter__editorial-body-flow--subject-heading"
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        {bodyContent}
+      </section>
+    </>
+  );
+}
+
+export function ProposalCoverLetterTwoweeksTemplate({
+  bodyRef,
+  bodyContent,
+  isContinuationPage,
+  viewModel,
+}: ProposalCoverLetterTemplateProps): JSX.Element {
+  const showSenderRail =
+    viewModel.showSender &&
+    Boolean(
+      viewModel.candidateTwoweeksNameLines.length ||
+        viewModel.candidateTwoweeksIdentityLines.length ||
+        viewModel.candidateTwoweeksContactLines.length,
+  );
+  const twoweeksRoleLine = viewModel.candidateTwoweeksIdentityLines[0] ?? "";
+  const twoweeksCompanyLines = viewModel.candidateTwoweeksIdentityLines.slice(1);
+  const twoweeksNameLine = viewModel.candidateTwoweeksNameLines.join(" ");
+  const twoweeksContactGroups = [
+    uniqueNonEmptyLines([
+      viewModel.candidatePhone,
+      normalizeTwoweeksDigitalIdentifier(viewModel.candidateEmail),
+      ...viewModel.candidateSocialLines.map(normalizeTwoweeksDigitalIdentifier),
+    ]),
+    uniqueNonEmptyLines(
+      viewModel.candidateWebsiteLines.map(normalizeTwoweeksDigitalIdentifier),
+    ),
+    uniqueNonEmptyLines([viewModel.candidateLocationLine]),
+  ].filter((group) => group.length > 0);
+
+  return (
+    <>
+      {!isContinuationPage ? (
+        <>
+          {showSenderRail ? (
+            <aside
+              className="proposal-cover-letter__twoweeks-rail"
+              aria-label="Sender details"
+            >
+              {twoweeksNameLine || twoweeksRoleLine ? (
+                <div className="proposal-cover-letter__twoweeks-name">
+                  {twoweeksNameLine ? (
+                    <p className="proposal-cover-letter__twoweeks-name-value">
+                      {twoweeksNameLine}
+                    </p>
+                  ) : null}
+                  {twoweeksRoleLine ? (
+                    <p className="proposal-cover-letter__twoweeks-role">
+                      {twoweeksRoleLine}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+              {twoweeksCompanyLines.length > 0 ? (
+                <div className="proposal-cover-letter__twoweeks-identity">
+                  {twoweeksCompanyLines.map((line, index) => (
+                    <React.Fragment key={`twoweeks-identity-${index}-${line}`}>
+                      <p>{line}</p>
+                      {index < twoweeksCompanyLines.length - 1 ? " " : null}
+                    </React.Fragment>
+                  ))}
+                </div>
+              ) : null}
+              {twoweeksContactGroups.length > 0 ? (
+                <div className="proposal-cover-letter__twoweeks-contact">
+                  {twoweeksContactGroups.map((group, groupIndex) => (
+                    <div
+                      className="proposal-cover-letter__twoweeks-contact-group"
+                      key={`twoweeks-contact-group-${groupIndex}`}
+                    >
+                      {group.map((line, index) => (
+                        <p key={`twoweeks-contact-${groupIndex}-${index}-${line}`}>
+                          {line}
+                        </p>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </aside>
+          ) : null}
+          {viewModel.date ? (
+            <p className="proposal-cover-letter__twoweeks-date">
+              {viewModel.date}
+            </p>
+          ) : null}
+          {viewModel.recipientHeadingLines.length > 0 ? (
+            <section
+              className="proposal-cover-letter__twoweeks-recipient"
+              aria-label="Recipient details"
+            >
+              {viewModel.recipientHeadingLines.map((line) => (
+                <p key={`twoweeks-recipient-${line}`}>{line}</p>
+              ))}
+            </section>
+          ) : null}
+          {viewModel.subject ? (
+            <p className="proposal-cover-letter__twoweeks-subject">
+              <span className="proposal-cover-letter__twoweeks-subject-label">
+                Subject:
+              </span>{" "}
+              <span className="proposal-cover-letter__twoweeks-subject-value">
+                {viewModel.subject}
+              </span>
+            </p>
+          ) : null}
+        </>
+      ) : null}
+      <div ref={bodyRef ?? undefined} className="proposal-cover-letter__body">
+        {bodyContent}
+      </div>
+    </>
   );
 }
 
@@ -889,8 +1363,7 @@ export function ProposalCoverLetterDirectorTemplate({
           </section>
           <ProposalCoverLetterDirectorContactGrid viewModel={viewModel} />
           <ProposalCoverLetterMetaRow viewModel={viewModel} />
-          <ProposalCoverLetterRecipientBlock viewModel={viewModel} />
-          <ProposalCoverLetterSubjectRow viewModel={viewModel} />
+          <ProposalCoverLetterRecipientSubjectStack viewModel={viewModel} />
         </>
       ) : null}
       <div ref={bodyRef ?? undefined} className="proposal-cover-letter__body">
@@ -933,8 +1406,9 @@ export function ProposalCoverLetterVolkTemplate({
             ) : null}
           </header>
           <ProposalCoverLetterMetaRow viewModel={viewModel} />
-          <ProposalCoverLetterRecipientBlock viewModel={viewModel} />
-          <ProposalCoverLetterSubjectRow viewModel={viewModel} prefix="re:" />
+          <ProposalCoverLetterRecipientSubjectStack
+            viewModel={viewModel}
+          />
           <span className="proposal-cover-letter__dot" aria-hidden="true" />
         </>
       ) : null}
@@ -976,34 +1450,45 @@ export function ProposalCoverLetterFilmFotoTemplate({
                 <p>{viewModel.candidateFilmSenderLine}</p>
               </div>
             ) : null}
-            {viewModel.candidatePhone ? (
-              <div className="proposal-cover-letter__info-block proposal-cover-letter__info-block--phone">
-                <p className="proposal-cover-letter__info-label">phone</p>
-                <p>{viewModel.candidatePhone}</p>
-              </div>
-            ) : null}
-            {viewModel.candidateCompany ? (
-              <div>
-                <p className="proposal-cover-letter__info-label">studio</p>
-                <p>{viewModel.candidateCompany}</p>
-              </div>
-            ) : null}
-            {viewModel.candidateWebsite ? (
-              <div>
-                <p className="proposal-cover-letter__info-label">portfolio</p>
-                <p>{viewModel.candidateWebsite}</p>
-              </div>
-            ) : null}
             {viewModel.recipientCompany ? (
               <div>
                 <p className="proposal-cover-letter__info-label">company</p>
                 <p>{viewModel.recipientCompany}</p>
               </div>
             ) : null}
+            {viewModel.candidatePhone ? (
+              <div className="proposal-cover-letter__info-block proposal-cover-letter__info-block--phone">
+                <p className="proposal-cover-letter__info-label">phone</p>
+                <p>{viewModel.candidatePhone}</p>
+              </div>
+            ) : null}
+            {viewModel.candidateSocialLines.length > 0 ? (
+              <div>
+                <p className="proposal-cover-letter__info-label">social</p>
+                {viewModel.candidateSocialLines.map((line) => (
+                  <p key={`film-social-${line}`}>{line}</p>
+                ))}
+              </div>
+            ) : null}
+            {viewModel.candidateWebsiteLines.length > 0 ? (
+              <div>
+                <p className="proposal-cover-letter__info-label">www</p>
+                {viewModel.candidateWebsiteLines.map((line) => (
+                  <p key={`film-portfolio-${line}`}>{line}</p>
+                ))}
+              </div>
+            ) : null}
           </section>
           <ProposalCoverLetterMetaRow viewModel={viewModel} />
-          <ProposalCoverLetterRecipientBlock viewModel={viewModel} />
-          <ProposalCoverLetterSubjectRow viewModel={viewModel} />
+          <ProposalCoverLetterRecipientSubjectStack
+            viewModel={viewModel}
+            prefix="subject:"
+          />
+          {viewModel.candidateFilmAddressLine ? (
+            <p className="proposal-cover-letter__film-address-footer">
+              {viewModel.candidateFilmAddressLine}
+            </p>
+          ) : null}
           <span className="proposal-cover-letter__dot" aria-hidden="true" />
         </>
       ) : null}
@@ -1646,6 +2131,260 @@ function paginateMeasuredProposalBlocks(args: {
   return pages.length > 0 ? pages : [[]];
 }
 
+type DocumentDecorationInteractionState = {
+  kind: "move" | "resize";
+  pointerId: number | null;
+  startClientX: number;
+  startClientY: number;
+  initialDecoration: DocumentDecoration;
+  latestDecoration: DocumentDecoration;
+  pageRect: DOMRect;
+  pageWidthMm: number;
+  pageHeightMm: number;
+};
+
+function getDecorationPointerClientPosition(
+  event: React.PointerEvent<HTMLElement>,
+): { clientX: number; clientY: number } | null {
+  const nativeEvent = event.nativeEvent as MouseEvent;
+  const clientX =
+    Number.isFinite(event.clientX) ? event.clientX : nativeEvent.clientX;
+  const clientY =
+    Number.isFinite(event.clientY) ? event.clientY : nativeEvent.clientY;
+  if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+    return null;
+  }
+  return { clientX, clientY };
+}
+
+function ProposalDocumentDecorationLayer({
+  decoration,
+  mode,
+  pageSize,
+  onChange,
+  onCommit,
+}: {
+  decoration?: DocumentDecoration | null;
+  mode: "readonly" | "design";
+  pageSize: DocumentPageSize;
+  onChange?: (decoration: DocumentDecoration) => void;
+  onCommit?: (decoration: DocumentDecoration) => void;
+}): JSX.Element | null {
+  const resolvedDecoration = getRenderableDocumentDecoration(decoration);
+  const interactionRef = React.useRef<DocumentDecorationInteractionState | null>(
+    null,
+  );
+  const uploadInputId = React.useId();
+  const uploadInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  if (!resolvedDecoration) {
+    return null;
+  }
+
+  const isDesignMode = mode === "design";
+  const pageSizeMm = {
+    pageWidthMm: pageSize.widthMm,
+    pageHeightMm: pageSize.heightMm,
+  };
+  const { xMm, yMm, sizeMm } = getDocumentDecorationPlacementMm(
+    resolvedDecoration,
+    pageSizeMm,
+  );
+  const commitDecorationAction = (nextDecoration: DocumentDecoration) => {
+    const normalizedDecoration = normalizeDocumentDecoration(nextDecoration);
+    onChange?.(normalizedDecoration);
+    onCommit?.(normalizedDecoration);
+  };
+  const handleDecorationUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const [file] = Array.from(event.currentTarget.files ?? []);
+    event.currentTarget.value = "";
+    if (!file) return;
+    void readDocumentDecorationUpload(file)
+      .then((uploadedDecoration) => {
+        commitDecorationAction({
+          ...uploadedDecoration,
+          sizePreset: resolvedDecoration.sizePreset,
+          customSizeMm: resolvedDecoration.customSizeMm,
+          fit: resolvedDecoration.fit,
+          placementMode: resolvedDecoration.placementMode,
+          xMm: resolvedDecoration.xMm,
+          yMm: resolvedDecoration.yMm,
+          visible: true,
+        });
+      })
+      .catch(() => {
+        // Drawer upload keeps the user-facing error state; the on-page chip stays silent.
+      });
+  };
+
+  const beginInteraction = (
+    event: React.PointerEvent<HTMLElement>,
+    kind: "move" | "resize",
+  ) => {
+    if (!isDesignMode) return;
+    const page = event.currentTarget.closest(
+      ".dasti-proposal-document__page",
+    ) as HTMLElement | null;
+    if (!page) return;
+    const pageRect = page.getBoundingClientRect();
+    if (pageRect.width <= 0 || pageRect.height <= 0) return;
+    const pointerPosition = getDecorationPointerClientPosition(event);
+    if (!pointerPosition) return;
+    const pointerId = Number.isFinite(event.pointerId) ? event.pointerId : null;
+    event.preventDefault();
+    if (pointerId !== null) {
+      event.currentTarget.setPointerCapture?.(pointerId);
+    }
+    interactionRef.current = {
+      kind,
+      pointerId,
+      startClientX: pointerPosition.clientX,
+      startClientY: pointerPosition.clientY,
+      initialDecoration: resolvedDecoration,
+      latestDecoration: resolvedDecoration,
+      pageRect,
+      pageWidthMm: pageSize.widthMm,
+      pageHeightMm: pageSize.heightMm,
+    };
+  };
+
+  const updateInteraction = (event: React.PointerEvent<HTMLElement>) => {
+    const interaction = interactionRef.current;
+    const pointerId = Number.isFinite(event.pointerId) ? event.pointerId : null;
+    if (!interaction || interaction.pointerId !== pointerId) return;
+    const pointerPosition = getDecorationPointerClientPosition(event);
+    if (!pointerPosition) return;
+    const deltaXMm =
+      (pointerPosition.clientX - interaction.startClientX) *
+      (interaction.pageWidthMm / interaction.pageRect.width);
+    const deltaYMm =
+      (pointerPosition.clientY - interaction.startClientY) *
+      (interaction.pageHeightMm / interaction.pageRect.height);
+    const nextDecoration =
+      interaction.kind === "resize"
+        ? resizeDocumentDecorationByDeltaMm(interaction.initialDecoration, {
+            deltaXMm,
+            deltaYMm,
+            pageWidthMm: interaction.pageWidthMm,
+            pageHeightMm: interaction.pageHeightMm,
+          })
+        : moveDocumentDecorationByDeltaMm(interaction.initialDecoration, {
+            deltaXMm,
+            deltaYMm,
+            pageWidthMm: interaction.pageWidthMm,
+            pageHeightMm: interaction.pageHeightMm,
+          });
+
+    interaction.latestDecoration = nextDecoration;
+    onChange?.(nextDecoration);
+  };
+
+  const endInteraction = (event: React.PointerEvent<HTMLElement>) => {
+    const interaction = interactionRef.current;
+    const pointerId = Number.isFinite(event.pointerId) ? event.pointerId : null;
+    if (!interaction || interaction.pointerId !== pointerId) return;
+    interactionRef.current = null;
+    if (pointerId !== null) {
+      event.currentTarget.releasePointerCapture?.(pointerId);
+    }
+    onCommit?.(interaction.latestDecoration);
+  };
+
+  return (
+    <div
+      className="dasti-proposal-document-decoration"
+      data-design-mode={isDesignMode ? "true" : "false"}
+      data-decoration-size-mm={sizeMm}
+      style={
+        {
+          left: `calc(var(--proposal-inline-mm) * ${xMm})`,
+          top: `calc(var(--proposal-block-mm) * ${yMm})`,
+          width: `calc(var(--proposal-inline-mm) * ${sizeMm})`,
+          height: `calc(var(--proposal-block-mm) * ${sizeMm})`,
+          "--proposal-decoration-object-fit": resolvedDecoration.fit,
+        } as React.CSSProperties
+      }
+      onPointerDown={(event) => beginInteraction(event, "move")}
+      onPointerMove={updateInteraction}
+      onPointerUp={endInteraction}
+      onPointerCancel={endInteraction}
+    >
+      <img
+        src={resolvedDecoration.dataUrl}
+        alt={resolvedDecoration.alt ?? ""}
+        draggable={false}
+      />
+      {isDesignMode ? (
+        <>
+          <div
+            className="dasti-proposal-document-decoration__toolbar"
+            aria-label="Decoration image controls"
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="dasti-icon-button dasti-icon-button--compact dasti-proposal-document-decoration__action"
+              aria-label="Hide decoration image"
+              title="Hide image"
+              disabled={!onChange}
+              onClick={() => {
+                commitDecorationAction({
+                  ...resolvedDecoration,
+                  visible: false,
+                });
+              }}
+            >
+              <Eye size={12} strokeWidth={1.8} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="dasti-icon-button dasti-icon-button--compact dasti-proposal-document-decoration__action"
+              aria-label="Upload decoration image"
+              title="Upload image"
+              disabled={!onChange}
+              onClick={() => uploadInputRef.current?.click()}
+            >
+              <Upload size={12} strokeWidth={1.8} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="dasti-icon-button dasti-icon-button--compact dasti-proposal-document-decoration__action dasti-proposal-document-decoration__action--danger"
+              aria-label="Remove decoration image"
+              title="Remove image"
+              disabled={!onChange}
+              onClick={() => {
+                commitDecorationAction(
+                  removeDocumentDecorationAsset(resolvedDecoration),
+                );
+              }}
+            >
+              <TrashSimple size={12} strokeWidth={1.8} aria-hidden="true" />
+            </button>
+            <input
+              ref={uploadInputRef}
+              id={uploadInputId}
+              className="dasti-proposal-document-decoration__upload-input"
+              type="file"
+              aria-label="Upload decoration image from page"
+              accept={DOCUMENT_DECORATION_UPLOAD_ACCEPT}
+              disabled={!onChange}
+              onChange={handleDecorationUpload}
+            />
+          </div>
+          <span
+            className="dasti-proposal-document-decoration__resize-handle"
+            aria-hidden="true"
+            onPointerDown={(event) => {
+              event.stopPropagation();
+              beginInteraction(event, "resize");
+            }}
+          />
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 function buildVolkFallbackParagraphs(args: {
   documentTitle: string | null;
   railTitle: string | null;
@@ -1677,16 +2416,28 @@ export function ProposalDocumentRenderer({
   headerVisibility,
   documentTypography,
   pageWidth,
+  pageSize = null,
   pageGapPx = 0,
   stylePreset = null,
   documentThemeVars = null,
   signatureSettings = null,
   closing = null,
+  documentDecoration = null,
+  documentDecorationMode = "readonly",
+  onDocumentDecorationChange,
+  onDocumentDecorationCommit,
   emptyBodyPlaceholder = null,
   onPageCountChange,
 }: ProposalDocumentRendererProps): JSX.Element {
   const resolvedTemplateId = resolveProposalTemplateId(templateId);
-  const templateDefinition = getProposalTemplateDefinition(resolvedTemplateId);
+  const resolvedDocumentDecoration = React.useMemo(
+    () => resolveTemplateDocumentDecoration(documentDecoration, resolvedTemplateId),
+    [documentDecoration, resolvedTemplateId],
+  );
+  const resolvedPageSize = React.useMemo(
+    () => resolveDocumentPageSize({ pageSize }),
+    [pageSize],
+  );
   const canonicalPreviewTokens = React.useMemo(
     () =>
       normalizeProposalPreviewTokens({
@@ -1694,8 +2445,15 @@ export function ProposalDocumentRenderer({
         documentTypography,
         stylePreset,
         pageGapPx,
+        pageSize: resolvedPageSize,
       }),
-    [documentTypography, pageGapPx, resolvedTemplateId, stylePreset],
+    [
+      documentTypography,
+      pageGapPx,
+      resolvedPageSize,
+      resolvedTemplateId,
+      stylePreset,
+    ],
   );
   const resolvedRailTitle =
     typeof railTitle === "string"
@@ -1800,12 +2558,8 @@ export function ProposalDocumentRenderer({
     [documentTypography.fontFamily, signatureRender],
   );
 
-  // --proposal-inline-mm / --proposal-block-mm are defined on :root as
-  // calc(100% / 210) / calc(100% / 297). When substituted into font-size,
-  // `100%` resolves to the inherited font-size (~17px), not the container
-  // width, producing a ~0.3px font-size. Override them here as concrete px
-  // values so every CSS property (font-size, grid, padding) gets the right
-  // scale regardless of context.
+  // Override proposal mm units with concrete px values so font-size, grid,
+  // and padding use the resolved physical page size instead of global fallbacks.
   const rootRef = React.useRef<HTMLDivElement>(null);
   const pageRef = React.useRef<HTMLDivElement>(null);
   const bodyRef = React.useRef<HTMLDivElement>(null);
@@ -1822,8 +2576,11 @@ export function ProposalDocumentRenderer({
     const sync = () => {
       const w = el.offsetWidth;
       if (w <= 0) return;
-      const mmPx = w / 210;
-      const runtimeVars = serializeProposalMeasurementRuntimeVars(mmPx);
+      const mmPx = w / resolvedPageSize.widthMm;
+      const runtimeVars = serializeProposalMeasurementRuntimeVars({
+        inlineMmPx: mmPx,
+        blockMmPx: mmPx,
+      });
       Object.entries(runtimeVars).forEach(([name, value]) => {
         el.style.setProperty(name, value);
       });
@@ -1832,7 +2589,7 @@ export function ProposalDocumentRenderer({
     const ro = new ResizeObserver(sync);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [resolvedPageSize.widthMm]);
 
   // When an explicit pageWidth is passed (e.g. from zoom controls), sync mm
   // vars immediately — before the ResizeObserver callback fires — so that
@@ -1840,12 +2597,15 @@ export function ProposalDocumentRenderer({
   React.useLayoutEffect(() => {
     const el = rootRef.current;
     if (!el || !pageWidth || pageWidth <= 0) return;
-    const mmPx = pageWidth / 210;
-    const runtimeVars = serializeProposalMeasurementRuntimeVars(mmPx);
+    const mmPx = pageWidth / resolvedPageSize.widthMm;
+    const runtimeVars = serializeProposalMeasurementRuntimeVars({
+      inlineMmPx: mmPx,
+      blockMmPx: mmPx,
+    });
     Object.entries(runtimeVars).forEach(([name, value]) => {
       el.style.setProperty(name, value);
     });
-  }, [pageWidth]);
+  }, [pageWidth, resolvedPageSize.widthMm]);
 
   React.useLayoutEffect(() => {
     const measurementPage = measurementPageRef.current;
@@ -2470,6 +3230,10 @@ export function ProposalDocumentRenderer({
       };
 
       switch (resolvedTemplateId) {
+        case "editorial_wide":
+          return <ProposalCoverLetterEditorialTemplate {...templateProps} />;
+        case "twoweeks-letterhead":
+          return <ProposalCoverLetterTwoweeksTemplate {...templateProps} />;
         case "director-letterhead":
           return <ProposalCoverLetterDirectorTemplate {...templateProps} />;
         case "volk-letterhead":
@@ -2495,6 +3259,12 @@ export function ProposalDocumentRenderer({
       className={[
         "dasti-proposal-document",
         `dasti-proposal-document--${resolvedTemplateId.replace(/_/g, "-")}`,
+        resolvedTemplateId === "editorial_wide"
+          ? "proposal-cover-letter--editorial"
+          : "",
+        resolvedTemplateId === "twoweeks-letterhead"
+          ? "proposal-cover-letter--twoweeks"
+          : "",
         resolvedTemplateId === "director-letterhead"
           ? "proposal-cover-letter--director"
           : "",
@@ -2513,7 +3283,7 @@ export function ProposalDocumentRenderer({
         resolvedTemplateId === "bayer-letterhead"
           ? "proposal-cover-letter--bayer"
           : "",
-        letterheadViewModel.recipientHeadingLines.length > 0
+        letterheadViewModel.recipientContactLines.length > 0
           ? "proposal-cover-letter--has-recipient-block"
           : "",
         `dasti-proposal-document--${parsedDocument.kind}`,
@@ -2615,6 +3385,15 @@ export function ProposalDocumentRenderer({
                   isContinuationPage,
                   measurement: false,
                 })}
+            {pageIndex === 0 ? (
+              <ProposalDocumentDecorationLayer
+                decoration={resolvedDocumentDecoration}
+                mode={documentDecorationMode}
+                pageSize={resolvedPageSize}
+                onChange={onDocumentDecorationChange}
+                onCommit={onDocumentDecorationCommit}
+              />
+            ) : null}
           </div>
         );
       })}

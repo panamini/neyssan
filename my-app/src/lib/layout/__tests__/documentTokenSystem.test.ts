@@ -7,6 +7,7 @@ import {
 } from "../../../features/verbati/style";
 import { resolveVerbatiStyle } from "../../../features/verbati/style";
 import { getProposalDocumentTypography } from "../../proposal-document-typography";
+import { DOCUMENT_PAGE_SIZES } from "../../document-page-size";
 import { resolvePreviewCanonicalAppearance } from "../documentAppearance";
 import {
   normalizeProposalExportTokens,
@@ -151,6 +152,8 @@ describe("document token system", () => {
         "--proposal-grid-step-b-block",
         "--proposal-grid-step-b-inline",
         "--proposal-inline-mm",
+        "--proposal-page-height-mm",
+        "--proposal-page-width-mm",
         "--proposal-template-body-start-mm",
         "--proposal-template-bottom-margin-mm",
         "--proposal-template-left-zone-mm",
@@ -272,6 +275,37 @@ describe("document token system", () => {
     );
     expect(customExportVars["--proposal-joella-structure-color"]).toBe(
       customVars["--proposal-joella-structure-color"],
+    );
+  });
+
+  it("serializes Letter geometry through resume and proposal token vars", () => {
+    const resumeTokens = normalizeResumePreviewTokens({
+      resumeTemplateId: "workshop_resume_onecol_ats",
+      pageSize: DOCUMENT_PAGE_SIZES.letter,
+    });
+    const proposalTokens = normalizeProposalPreviewTokens({
+      templateId: "two_column_rail",
+      documentTypography: getProposalDocumentTypography("signature", null),
+      pageSize: DOCUMENT_PAGE_SIZES.letter,
+    });
+
+    expect(serializeResumePreviewVars(resumeTokens)).toEqual(
+      expect.objectContaining({
+        "--page-width": "215.9mm",
+        "--page-height": "279.4mm",
+      }),
+    );
+    expect(serializeProposalPreviewVars(proposalTokens)).toEqual(
+      expect.objectContaining({
+        "--proposal-page-width-mm": "215.9",
+        "--proposal-page-height-mm": "279.4",
+      }),
+    );
+    expect(serializeExportVars(proposalTokens)).toEqual(
+      expect.objectContaining({
+        "--page-width": "215.9mm",
+        "--page-height": "279.4mm",
+      }),
     );
   });
 

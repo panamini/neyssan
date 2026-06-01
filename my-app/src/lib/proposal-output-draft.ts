@@ -42,6 +42,11 @@ import type {
   DocumentLanguagePreference,
   DocumentLanguageSource,
 } from "./document-language";
+import {
+  normalizeDocumentDecoration,
+  shouldPersistDocumentDecoration,
+  type DocumentDecoration,
+} from "./document-decoration";
 
 export const PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY =
   "dasti:proposal-output-draft:v1";
@@ -59,6 +64,7 @@ export type StoredProposalOutputDraft = {
   proposalVoicePreset: FormValues["voicePreset"] | null;
   proposalTemplateId: ProposalTemplateId | null;
   proposalVerbatiStyle: VerbatiStylePreset | null;
+  documentDecoration?: DocumentDecoration | null;
   verbatiStyleSlotId?: 1 | 2 | 3 | null;
   verbatiStyleSlotSource?: DocumentStyleSlotSource | null;
   verbatiStyleSlotNameSnapshot?: string | null;
@@ -160,6 +166,14 @@ function normalizeDocumentAppearanceSnapshot(
       ? { accentHex: candidate.accentHex }
       : null),
   };
+}
+
+function sanitizeStoredDocumentDecoration(value: unknown): DocumentDecoration | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const decoration = normalizeDocumentDecoration(value);
+  return shouldPersistDocumentDecoration(decoration) ? decoration : null;
 }
 
 function normalizeStoredProposalComposeDraft(
@@ -295,6 +309,9 @@ export function readStoredProposalOutputDraft(): StoredProposalOutputDraft | nul
               parsed.proposalVerbatiStyle as Partial<VerbatiStylePreset>,
             )
           : null,
+      documentDecoration: sanitizeStoredDocumentDecoration(
+        parsed.documentDecoration,
+      ),
       verbatiStyleSlotId: resolveDocumentStyleSlotId(parsed.verbatiStyleSlotId),
       verbatiStyleSlotSource: isDocumentStyleSlotSource(
         parsed.verbatiStyleSlotSource,
@@ -474,6 +491,7 @@ function buildSanitizedStoredProposalOutputDraft(
             draft.proposalVerbatiStyle as Partial<VerbatiStylePreset>,
           )
         : null,
+    documentDecoration: sanitizeStoredDocumentDecoration(draft.documentDecoration),
     verbatiStyleSlotId: resolveDocumentStyleSlotId(draft.verbatiStyleSlotId),
     verbatiStyleSlotSource: isDocumentStyleSlotSource(
       draft.verbatiStyleSlotSource,
