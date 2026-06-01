@@ -11,6 +11,7 @@ import {
   isSupportedDocumentDecorationMimeType,
   normalizeDocumentDecoration,
   readDocumentDecorationUpload,
+  resetDocumentDecorationPlacement,
   resolveTemplateDocumentDecoration,
   resizeDocumentDecorationByDeltaMm,
   sanitizeSvgDecorationMarkup,
@@ -154,6 +155,47 @@ describe("document-decoration", () => {
     });
     expect(nonEditorialDecoration.dataUrl).toBeUndefined();
     expect(nonEditorialDecoration.fileName).toBeUndefined();
+  });
+
+  it("resets placement to the active template default without changing the image settings", () => {
+    const movedDecoration: DocumentDecoration = {
+      ...uploadedDecoration,
+      fit: "cover",
+      sizePreset: 52,
+      placementMode: "custom",
+      xMm: 41,
+      yMm: 92,
+    };
+
+    const editorialReset = resetDocumentDecorationPlacement(
+      movedDecoration,
+      "editorial_wide",
+    );
+
+    expect(editorialReset).toMatchObject({
+      dataUrl: uploadedDecoration.dataUrl,
+      fileName: uploadedDecoration.fileName,
+      fit: "cover",
+      sizePreset: 52,
+      placementMode: "default",
+      xMm: EDITORIAL_TEMPLATE_FLOWER_DECORATION_PLACEMENT.xMm,
+      yMm: EDITORIAL_TEMPLATE_FLOWER_DECORATION_PLACEMENT.yMm,
+    });
+
+    const defaultReset = resetDocumentDecorationPlacement(
+      movedDecoration,
+      "swiss_margin",
+    );
+
+    expect(defaultReset).toMatchObject({
+      dataUrl: uploadedDecoration.dataUrl,
+      fileName: uploadedDecoration.fileName,
+      fit: "cover",
+      sizePreset: 52,
+      placementMode: "default",
+      xMm: DEFAULT_DOCUMENT_DECORATION_PLACEMENT.xMm,
+      yMm: DEFAULT_DOCUMENT_DECORATION_PLACEMENT.yMm,
+    });
   });
 
   it("moves and resizes within the page using rounded integer millimeters", () => {

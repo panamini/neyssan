@@ -336,15 +336,30 @@ export function applyDocumentDecorationSizePreset(
   );
 }
 
+export function getDefaultDocumentDecorationPlacementForTemplate(
+  templateId: string | null | undefined,
+): typeof DEFAULT_DOCUMENT_DECORATION_PLACEMENT {
+  if (templateId === "editorial_wide") {
+    return EDITORIAL_TEMPLATE_FLOWER_DECORATION_PLACEMENT;
+  }
+  return DEFAULT_DOCUMENT_DECORATION_PLACEMENT;
+}
+
 export function resetDocumentDecorationPlacement(
   decoration: DocumentDecoration,
+  templateId?: string | null,
 ): DocumentDecoration {
-  return {
-    ...decoration,
-    placementMode: "default",
-    xMm: DEFAULT_DOCUMENT_DECORATION_PLACEMENT.xMm,
-    yMm: DEFAULT_DOCUMENT_DECORATION_PLACEMENT.yMm,
-  };
+  const placement = getDefaultDocumentDecorationPlacementForTemplate(templateId);
+  return clampDocumentDecorationPlacement(
+    {
+      ...decoration,
+      placementMode: "default",
+      xMm: placement.xMm,
+      yMm: placement.yMm,
+    },
+    DEFAULT_DOCUMENT_DECORATION_PAGE_SIZE_MM,
+    { preservePlacementMode: true },
+  );
 }
 
 export function removeDocumentDecorationAsset(

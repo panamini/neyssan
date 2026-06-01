@@ -329,6 +329,8 @@ export function ProposalDesignFields({
   const hasDocumentDecorationAsset = Boolean(
     resolvedDocumentDecoration.dataUrl || resolvedDocumentDecoration.assetId,
   );
+  const isDocumentDecorationShown =
+    hasDocumentDecorationAsset && resolvedDocumentDecoration.visible;
   const renderedDocumentDecorationSizeMm = getDocumentDecorationRenderedSizeMm(
     resolvedDocumentDecoration,
   );
@@ -642,103 +644,110 @@ export function ProposalDesignFields({
           )}
           <span>{resolvedDocumentDecoration.fileName ?? "No image"}</span>
         </div>
-        <div className="dasti-proposal-design-fields__decoration-control">
-          <div
-            className="dasti-proposal-skeleton-rail__style-pills dasti-proposal-design-fields__decoration-pills dasti-proposal-design-fields__decoration-pills--size"
-            aria-label="Decoration size"
-          >
-            {DOCUMENT_DECORATION_SIZE_PRESETS.map((sizePreset) => {
-              const isSelected = resolvedDocumentDecoration.sizePreset === sizePreset;
-              const sizeLabel = DOCUMENT_DECORATION_SIZE_LABELS[sizePreset];
-              return (
+        {isDocumentDecorationShown ? (
+          <>
+            <div className="dasti-proposal-design-fields__decoration-control">
+              <div
+                className="dasti-proposal-skeleton-rail__style-pills dasti-proposal-design-fields__decoration-pills dasti-proposal-design-fields__decoration-pills--size"
+                aria-label="Decoration size"
+              >
+                {DOCUMENT_DECORATION_SIZE_PRESETS.map((sizePreset) => {
+                  const isSelected = resolvedDocumentDecoration.sizePreset === sizePreset;
+                  const sizeLabel = DOCUMENT_DECORATION_SIZE_LABELS[sizePreset];
+                  return (
+                    <button
+                      key={sizePreset}
+                      type="button"
+                      aria-label={`${sizeLabel}, ${sizePreset} mm`}
+                      aria-pressed={isSelected}
+                      data-selected={isSelected ? "true" : undefined}
+                      title={`${sizeLabel} (${sizePreset} mm)`}
+                      disabled={!onDocumentDecorationChange}
+                      onClick={() => {
+                        updateDocumentDecoration(
+                          applyDocumentDecorationSizePreset(
+                            resolvedDocumentDecoration,
+                            sizePreset,
+                          ),
+                        );
+                      }}
+                    >
+                      {sizeLabel}
+                    </button>
+                  );
+                })}
                 <button
-                  key={sizePreset}
+                  className="dasti-proposal-design-fields__decoration-custom-size"
                   type="button"
-                  aria-label={`${sizeLabel}, ${sizePreset} mm`}
-                  aria-pressed={isSelected}
-                  data-selected={isSelected ? "true" : undefined}
-                  title={`${sizeLabel} (${sizePreset} mm)`}
-                  disabled={!hasDocumentDecorationAsset || !onDocumentDecorationChange}
+                  aria-label={
+                    resolvedDocumentDecoration.sizePreset === "custom"
+                      ? `Custom, ${renderedDocumentDecorationSizeMm} mm`
+                      : "Custom size"
+                  }
+                  title={`Custom (${renderedDocumentDecorationSizeMm} mm)`}
+                  aria-pressed={resolvedDocumentDecoration.sizePreset === "custom"}
+                  data-selected={
+                    resolvedDocumentDecoration.sizePreset === "custom" ? "true" : undefined
+                  }
+                  disabled={!onDocumentDecorationChange}
                   onClick={() => {
-                    updateDocumentDecoration(
-                      applyDocumentDecorationSizePreset(
-                        resolvedDocumentDecoration,
-                        sizePreset,
-                      ),
-                    );
+                    updateDocumentDecoration({
+                      ...resolvedDocumentDecoration,
+                      sizePreset: "custom",
+                      customSizeMm: renderedDocumentDecorationSizeMm,
+                    });
                   }}
                 >
-                  {sizeLabel}
+                  Custom
                 </button>
-              );
-            })}
-            <button
-              className="dasti-proposal-design-fields__decoration-custom-size"
-              type="button"
-              aria-label={
-                resolvedDocumentDecoration.sizePreset === "custom"
-                  ? `Custom, ${renderedDocumentDecorationSizeMm} mm`
-                  : "Custom size"
-              }
-              title={`Custom (${renderedDocumentDecorationSizeMm} mm)`}
-              aria-pressed={resolvedDocumentDecoration.sizePreset === "custom"}
-              data-selected={
-                resolvedDocumentDecoration.sizePreset === "custom" ? "true" : undefined
-              }
-              disabled={!hasDocumentDecorationAsset || !onDocumentDecorationChange}
-              onClick={() => {
-                updateDocumentDecoration({
-                  ...resolvedDocumentDecoration,
-                  sizePreset: "custom",
-                  customSizeMm: renderedDocumentDecorationSizeMm,
-                });
-              }}
+              </div>
+            </div>
+            <div
+              className="dasti-proposal-skeleton-rail__style-pills dasti-proposal-design-fields__decoration-pills dasti-proposal-design-fields__decoration-pills--fit"
+              aria-label="Decoration fit"
             >
-              Custom
-            </button>
-          </div>
-        </div>
-        <div
-          className="dasti-proposal-skeleton-rail__style-pills dasti-proposal-design-fields__decoration-pills dasti-proposal-design-fields__decoration-pills--fit"
-          aria-label="Decoration fit"
-        >
-          {(["contain", "cover"] as const).map((fit) => {
-            const isSelected = resolvedDocumentDecoration.fit === fit;
-            return (
+              {(["contain", "cover"] as const).map((fit) => {
+                const isSelected = resolvedDocumentDecoration.fit === fit;
+                return (
+                  <button
+                    key={fit}
+                    type="button"
+                    aria-label={fit === "contain" ? "Contain" : "Cover"}
+                    aria-pressed={isSelected}
+                    data-selected={isSelected ? "true" : undefined}
+                    disabled={!onDocumentDecorationChange}
+                    onClick={() => {
+                      updateDocumentDecoration({
+                        ...resolvedDocumentDecoration,
+                        fit,
+                      });
+                    }}
+                  >
+                    {fit === "contain" ? "Contain" : "Cover"}
+                  </button>
+                );
+              })}
               <button
-                key={fit}
                 type="button"
-                aria-label={fit === "contain" ? "Contain" : "Cover"}
-                aria-pressed={isSelected}
-                data-selected={isSelected ? "true" : undefined}
-                disabled={!hasDocumentDecorationAsset || !onDocumentDecorationChange}
+                className="dasti-proposal-design-fields__reset"
+                aria-label="Reset position"
+                title="Reset position"
+                disabled={!onDocumentDecorationChange}
                 onClick={() => {
-                  updateDocumentDecoration({
-                    ...resolvedDocumentDecoration,
-                    fit,
-                  });
+                  updateDocumentDecoration(
+                    resetDocumentDecorationPlacement(
+                      resolvedDocumentDecoration,
+                      resolvedProposalTemplateId,
+                    ),
+                  );
                 }}
               >
-                {fit === "contain" ? "Contain" : "Cover"}
+                <RotateCcw size={13} strokeWidth={1.8} aria-hidden="true" />
+                Reset
               </button>
-            );
-          })}
-          <button
-            type="button"
-            className="dasti-proposal-design-fields__reset"
-            aria-label="Reset position"
-            title="Reset position"
-            disabled={!hasDocumentDecorationAsset || !onDocumentDecorationChange}
-            onClick={() => {
-              updateDocumentDecoration(
-                resetDocumentDecorationPlacement(resolvedDocumentDecoration),
-              );
-            }}
-          >
-            <RotateCcw size={13} strokeWidth={1.8} aria-hidden="true" />
-            Reset
-          </button>
-        </div>
+            </div>
+          </>
+        ) : null}
         {documentDecorationUploadError ? (
           <p
             className="dasti-proposal-design-fields__decoration-error"

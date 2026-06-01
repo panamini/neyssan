@@ -923,6 +923,35 @@ describe("ProposalRail style tab", () => {
     );
   });
 
+  it("hides decoration size and placement controls when the image is hidden", () => {
+    renderDesignFields({
+      documentDecoration: {
+        visible: false,
+        source: "upload",
+        dataUrl: "data:image/png;base64,AAAA",
+        fileName: "mark.png",
+        mimeType: "image/png",
+        alt: "Company mark",
+        sizePreset: 35,
+        fit: "contain",
+        placementMode: "default",
+        xMm: 17,
+        yMm: 35,
+      },
+      onDocumentDecorationChange: vi.fn(),
+    });
+
+    expect(screen.getByRole("switch", { name: "Show image" })).toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
+    expect(screen.getByLabelText("Upload decoration image")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove image" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Medium, 35 mm" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Contain" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reset position" })).toBeNull();
+  });
+
   it("shows the Editorial flower mark only in the Editorial decoration drawer", () => {
     renderDesignFields({
       proposalTemplateId: "editorial_wide",

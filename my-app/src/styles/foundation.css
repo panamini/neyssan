@@ -1007,6 +1007,17 @@
   --forge-drawer-template-thumb-block-size: 220px;
   --forge-drawer-grid-row-gap: var(--space-3);
   --forge-drawer-scroll-inset: var(--space-1);
+  --forge-drawer-scrollbar-width: 5px;
+  --forge-drawer-scrollbar-thumb: color-mix(
+    in srgb,
+    var(--tm2) 52%,
+    transparent
+  );
+  --forge-drawer-scrollbar-thumb-hover: color-mix(
+    in srgb,
+    var(--tm2) 74%,
+    transparent
+  );
 
   /* Font role aliases */
   --font-app: var(--font-body-family);

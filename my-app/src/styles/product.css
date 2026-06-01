@@ -2193,6 +2193,9 @@ body,
 .forge-template-panel__grid {
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--forge-drawer-scrollbar-thumb) transparent;
   display: grid;
   grid-template-columns: repeat(
     2,
@@ -2217,12 +2220,72 @@ body,
 
 .forge-template-panel__content--proposal-design {
   overflow: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--forge-drawer-scrollbar-thumb) transparent;
 }
 
 .forge-template-panel--proposal-heading .forge-template-panel__content {
   overflow: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--forge-drawer-scrollbar-thumb) transparent;
+}
+
+.forge-template-panel__grid::-webkit-scrollbar,
+.forge-template-panel__content--proposal-design::-webkit-scrollbar,
+.forge-template-panel--proposal-heading
+  .forge-template-panel__content::-webkit-scrollbar,
+.forge-rail-drawer__list::-webkit-scrollbar,
+.forge-rail-drawer__grid::-webkit-scrollbar,
+.forge-rail-drawer__draft-body::-webkit-scrollbar,
+.forge-rail-drawer__paste-job-input::-webkit-scrollbar {
+  width: var(--forge-drawer-scrollbar-width);
+  height: var(--forge-drawer-scrollbar-width);
+}
+
+.forge-template-panel__grid::-webkit-scrollbar-track,
+.forge-template-panel__grid::-webkit-scrollbar-corner,
+.forge-template-panel__content--proposal-design::-webkit-scrollbar-track,
+.forge-template-panel__content--proposal-design::-webkit-scrollbar-corner,
+.forge-template-panel--proposal-heading
+  .forge-template-panel__content::-webkit-scrollbar-track,
+.forge-template-panel--proposal-heading
+  .forge-template-panel__content::-webkit-scrollbar-corner,
+.forge-rail-drawer__list::-webkit-scrollbar-track,
+.forge-rail-drawer__list::-webkit-scrollbar-corner,
+.forge-rail-drawer__grid::-webkit-scrollbar-track,
+.forge-rail-drawer__grid::-webkit-scrollbar-corner,
+.forge-rail-drawer__draft-body::-webkit-scrollbar-track,
+.forge-rail-drawer__draft-body::-webkit-scrollbar-corner,
+.forge-rail-drawer__paste-job-input::-webkit-scrollbar-track,
+.forge-rail-drawer__paste-job-input::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.forge-template-panel__grid::-webkit-scrollbar-thumb,
+.forge-template-panel__content--proposal-design::-webkit-scrollbar-thumb,
+.forge-template-panel--proposal-heading
+  .forge-template-panel__content::-webkit-scrollbar-thumb,
+.forge-rail-drawer__list::-webkit-scrollbar-thumb,
+.forge-rail-drawer__grid::-webkit-scrollbar-thumb,
+.forge-rail-drawer__draft-body::-webkit-scrollbar-thumb,
+.forge-rail-drawer__paste-job-input::-webkit-scrollbar-thumb {
+  border-radius: var(--radius-pill);
+  background: var(--forge-drawer-scrollbar-thumb);
+}
+
+.forge-template-panel__grid::-webkit-scrollbar-thumb:hover,
+.forge-template-panel__content--proposal-design::-webkit-scrollbar-thumb:hover,
+.forge-template-panel--proposal-heading
+  .forge-template-panel__content::-webkit-scrollbar-thumb:hover,
+.forge-rail-drawer__list::-webkit-scrollbar-thumb:hover,
+.forge-rail-drawer__grid::-webkit-scrollbar-thumb:hover,
+.forge-rail-drawer__draft-body::-webkit-scrollbar-thumb:hover,
+.forge-rail-drawer__paste-job-input::-webkit-scrollbar-thumb:hover {
+  background: var(--forge-drawer-scrollbar-thumb-hover);
 }
 
 .forge-rail-drawer {
@@ -2329,6 +2392,9 @@ body,
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--forge-drawer-scrollbar-thumb) transparent;
   align-content: start;
   margin: calc(var(--forge-drawer-scroll-inset) * -1);
   padding: var(--forge-drawer-scroll-inset);
@@ -2385,6 +2451,9 @@ body,
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--forge-drawer-scrollbar-thumb) transparent;
   display: grid;
   align-content: start;
   gap: var(--layout-card-gap);
@@ -2562,6 +2631,9 @@ body,
   min-block-size: calc(var(--control-md) * 4);
   max-block-size: min(44dvh, calc(var(--control-md) * 8));
   overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--forge-drawer-scrollbar-thumb) transparent;
   resize: vertical;
 }
 
