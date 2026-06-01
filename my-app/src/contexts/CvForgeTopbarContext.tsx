@@ -1,5 +1,6 @@
 import React from "react";
 import type { AtsAuditResult } from "../lib/ats-audit/types";
+import type { DocumentPageSizePreference } from "../lib/document-page-size";
 
 export type CvForgeTopbarRegistration = {
   mode: "edit" | "preview";
@@ -23,6 +24,8 @@ export type CvForgeTopbarRegistration = {
   onOpenImportReview: () => void;
   onExportPdf: () => void;
   onExportDocx: () => void;
+  onPageSizePreferenceChange?: (preference: DocumentPageSizePreference) => void;
+  pageSizePreference?: DocumentPageSizePreference;
 };
 
 export type CvForgeTopbarResumeOption = {

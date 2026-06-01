@@ -1,5 +1,16 @@
 import React from "react";
-import { Check, ChevronDown } from "../../lib/icons";
+import {
+  ArrowCounterClockwise,
+  Check,
+  ChevronDown,
+  FileImage,
+  ImagesSquare,
+  PenNib,
+  RotateCcw,
+  TrashSimple,
+  Upload,
+  User,
+} from "../../lib/icons";
 import {
   CANONICAL_PROPOSAL_TEMPLATE_ID,
   getProposalTemplateDefinition,
@@ -22,10 +33,24 @@ import {
 import type { VerbatiStylePreset } from "../../features/verbati/types";
 import { ProposalColorPickerPopover } from "../ProposalColorPickerPopover";
 import { Menu } from "../ui/menu";
+import {
+  applyDocumentDecorationSizePreset,
+  createDefaultDocumentDecoration,
+  DOCUMENT_DECORATION_SIZE_PRESETS,
+  DOCUMENT_DECORATION_UPLOAD_ACCEPT,
+  getDocumentDecorationRenderedSizeMm,
+  normalizeDocumentDecoration,
+  readDocumentDecorationUpload,
+  removeDocumentDecorationAsset,
+  resetDocumentDecorationPlacement,
+  resolveTemplateDocumentDecoration,
+  type DocumentDecoration,
+} from "../../lib/document-decoration";
 
 type ProposalRailStyleOption = {
   id: ProposalTemplateBundleId;
   label: string;
+  compactLabel: string;
   description: string;
 };
 
@@ -47,6 +72,7 @@ export const PROPOSAL_STYLE_OPTIONS: ProposalRailStyleOption[] = [
   {
     id: "swiss_serif",
     label: "Style 1",
+    compactLabel: "S1",
     description:
       PROPOSAL_TEMPLATE_BUNDLE_DEFINITIONS.find((definition) => definition.id === "swiss_serif")
         ?.description ?? "Workshopped serif-led proposal style.",
@@ -54,6 +80,7 @@ export const PROPOSAL_STYLE_OPTIONS: ProposalRailStyleOption[] = [
   {
     id: "magazine_editorial",
     label: "Style 2",
+    compactLabel: "S2",
     description:
       PROPOSAL_TEMPLATE_BUNDLE_DEFINITIONS.find((definition) => definition.id === "magazine_editorial")
         ?.description ?? "Workshopped editorial proposal style.",
@@ -61,6 +88,7 @@ export const PROPOSAL_STYLE_OPTIONS: ProposalRailStyleOption[] = [
   {
     id: "grid_mono",
     label: "Style 3",
+    compactLabel: "S3",
     description:
       PROPOSAL_TEMPLATE_BUNDLE_DEFINITIONS.find((definition) => definition.id === "grid_mono")
         ?.description ?? "Workshopped technical proposal style.",
@@ -69,6 +97,8 @@ export const PROPOSAL_STYLE_OPTIONS: ProposalRailStyleOption[] = [
 
 const CANONICAL_PROPOSAL_TEMPLATE_DEFINITION =
   getProposalTemplateDefinition(CANONICAL_PROPOSAL_TEMPLATE_ID);
+const EDITORIAL_PROPOSAL_TEMPLATE_DEFINITION =
+  getProposalTemplateDefinition("editorial_wide");
 
 const PROPOSAL_LAYOUT_OPTIONS: ProposalRailLayoutOption[] = [
   {
@@ -76,6 +106,12 @@ const PROPOSAL_LAYOUT_OPTIONS: ProposalRailLayoutOption[] = [
     eyebrow: CANONICAL_PROPOSAL_TEMPLATE_DEFINITION.shortLabel,
     label: "Minimal",
     description: CANONICAL_PROPOSAL_TEMPLATE_DEFINITION.description,
+  },
+  {
+    id: "editorial_wide",
+    eyebrow: EDITORIAL_PROPOSAL_TEMPLATE_DEFINITION.shortLabel,
+    label: "Editorial",
+    description: EDITORIAL_PROPOSAL_TEMPLATE_DEFINITION.description,
   },
 ];
 
@@ -90,6 +126,11 @@ const PROPOSAL_STYLE_ACCENT_OPTIONS: ProposalRailAccentOption[] = [
 ];
 
 const PROPOSAL_CUSTOM_ACCENT_STARTER_HEX = "#8A8176";
+const DOCUMENT_DECORATION_SIZE_LABELS = {
+  18: "Small",
+  35: "Medium",
+  52: "Large",
+} as const;
 
 const PROPOSAL_STYLE_FONT_PAIR_IDS: VerbatiFontPairId[] = [
   "geist-baskervville",
@@ -201,6 +242,8 @@ export type ProposalDesignFieldsProps = {
   signaturePresent?: boolean;
   handwrittenSignatureAvailable?: boolean;
   handwrittenSignatureEnabled?: boolean;
+  documentDecoration?: DocumentDecoration | null;
+  onDocumentDecorationChange?: (decoration: DocumentDecoration) => void;
   onChooseSignature?: () => void;
   onToggleSignature?: (enabled: boolean) => void;
   onToggleHandwrittenSignature?: (enabled: boolean) => void;
@@ -221,13 +264,18 @@ export function ProposalDesignFields({
   signaturePresent = false,
   handwrittenSignatureAvailable = false,
   handwrittenSignatureEnabled = false,
+  documentDecoration,
+  onDocumentDecorationChange,
   onChooseSignature,
   onToggleSignature,
   onToggleHandwrittenSignature,
 }: ProposalDesignFieldsProps): JSX.Element {
   const [isCustomColorPickerOpen, setIsCustomColorPickerOpen] = React.useState(false);
+  const [documentDecorationUploadError, setDocumentDecorationUploadError] =
+    React.useState<string | null>(null);
   const customColorAnchorRef = React.useRef<HTMLButtonElement | null>(null);
   const customColorSurfaceRef = React.useRef<HTMLDivElement | null>(null);
+  const decorationUploadInputId = React.useId();
 
   const normalizeProposalTemplateBundleId = React.useCallback(
     (bundleId: ProposalTemplateBundleId | null | undefined): ProposalTemplateBundleId => {
@@ -254,6 +302,8 @@ export function ProposalDesignFields({
   const isActiveTemplateBundleCustomized = Boolean(
     !railStylesEqual(stylePreset, activeTemplateBundleBaseStyle),
   );
+  const canResetStyleBundle =
+    isActiveTemplateBundleCustomized && Boolean(onResetStyleBundle);
   const activeTemplateBundleLabel =
     PROPOSAL_STYLE_OPTIONS.find((option) => option.id === activeTemplateBundleId)
       ?.label ?? "Style";
@@ -272,6 +322,54 @@ export function ProposalDesignFields({
     isSeventhCustomToneSelected && customAccentHex
       ? customAccentHex
       : PROPOSAL_CUSTOM_ACCENT_STARTER_HEX;
+  const resolvedDocumentDecoration = resolveTemplateDocumentDecoration(
+    documentDecoration ?? createDefaultDocumentDecoration(),
+    resolvedProposalTemplateId,
+  );
+  const hasDocumentDecorationAsset = Boolean(
+    resolvedDocumentDecoration.dataUrl || resolvedDocumentDecoration.assetId,
+  );
+  const isDocumentDecorationShown =
+    hasDocumentDecorationAsset && resolvedDocumentDecoration.visible;
+  const renderedDocumentDecorationSizeMm = getDocumentDecorationRenderedSizeMm(
+    resolvedDocumentDecoration,
+  );
+  const updateDocumentDecoration = React.useCallback(
+    (nextDecoration: DocumentDecoration) => {
+      setDocumentDecorationUploadError(null);
+      onDocumentDecorationChange?.(normalizeDocumentDecoration(nextDecoration));
+    },
+    [onDocumentDecorationChange],
+  );
+  const handleDocumentDecorationUpload = React.useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const [file] = Array.from(event.currentTarget.files ?? []);
+      event.currentTarget.value = "";
+      if (!file) return;
+      setDocumentDecorationUploadError(null);
+      void readDocumentDecorationUpload(file)
+        .then((uploadedDecoration) => {
+          onDocumentDecorationChange?.(
+            normalizeDocumentDecoration({
+              ...uploadedDecoration,
+              sizePreset: resolvedDocumentDecoration.sizePreset,
+              customSizeMm: resolvedDocumentDecoration.customSizeMm,
+              fit: resolvedDocumentDecoration.fit,
+              placementMode: resolvedDocumentDecoration.placementMode,
+              xMm: resolvedDocumentDecoration.xMm,
+              yMm: resolvedDocumentDecoration.yMm,
+              visible: true,
+            }),
+          );
+        })
+        .catch((error: unknown) => {
+          setDocumentDecorationUploadError(
+            error instanceof Error ? error.message : "Could not upload this image.",
+          );
+        });
+    },
+    [onDocumentDecorationChange, resolvedDocumentDecoration],
+  );
 
   return (
     <section
@@ -280,7 +378,13 @@ export function ProposalDesignFields({
     >
       <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Style</div>
       <div
-        className="dasti-proposal-skeleton-rail__style-pills dasti-proposal-design-style-pills"
+        className={[
+          "dasti-proposal-skeleton-rail__style-pills",
+          "dasti-proposal-design-style-pills",
+          canResetStyleBundle ? "dasti-proposal-design-style-pills--with-reset" : null,
+        ]
+          .filter(Boolean)
+          .join(" ")}
         aria-label="Proposal style presets"
       >
         {PROPOSAL_STYLE_OPTIONS.map((option) => {
@@ -307,11 +411,16 @@ export function ProposalDesignFields({
                   aria-label="Customized"
                 />
               ) : null}
-              {option.label}
+              <span className="dasti-proposal-design-style-pills__label dasti-proposal-design-style-pills__label--full">
+                {option.label}
+              </span>
+              <span className="dasti-proposal-design-style-pills__label dasti-proposal-design-style-pills__label--compact">
+                {option.compactLabel}
+              </span>
             </button>
           );
         })}
-        {isActiveTemplateBundleCustomized && onResetStyleBundle ? (
+        {canResetStyleBundle && onResetStyleBundle ? (
           <button
             type="button"
             className="dasti-proposal-skeleton-rail__style-reset dasti-proposal-design-fields__reset"
@@ -322,7 +431,15 @@ export function ProposalDesignFields({
               onResetStyleBundle(activeTemplateBundleId);
             }}
           >
-            Reset style
+            <ArrowCounterClockwise
+              className="dasti-proposal-design-style-pills__reset-icon"
+              size={14}
+              strokeWidth={1.8}
+              aria-hidden="true"
+            />
+            <span className="dasti-proposal-design-style-pills__reset-label">
+              Reset
+            </span>
           </button>
         ) : null}
       </div>
@@ -435,6 +552,211 @@ export function ProposalDesignFields({
           );
         })}
       </div>
+      <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Decorations</div>
+      <div className="dasti-proposal-design-fields__decorations">
+        <div className="dasti-proposal-design-fields__decoration-actions">
+          <button
+            type="button"
+            role="switch"
+            className={[
+              "dasti-theme-switch",
+              "settings-token-switch",
+              "dasti-proposal-skeleton-rail__signature-toggle",
+              "dasti-proposal-design-fields__decoration-toggle",
+              resolvedDocumentDecoration.visible
+                ? "dasti-theme-switch--dark settings-token-switch--active"
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            disabled={!hasDocumentDecorationAsset || !onDocumentDecorationChange}
+            aria-label="Show image"
+            aria-checked={resolvedDocumentDecoration.visible}
+            title={
+              hasDocumentDecorationAsset
+                ? "Show or hide the uploaded document decoration."
+                : "Upload a decoration image before showing it."
+            }
+            onClick={() => {
+              updateDocumentDecoration({
+                ...resolvedDocumentDecoration,
+                visible: !resolvedDocumentDecoration.visible,
+              });
+            }}
+          >
+            <ImagesSquare size={14} strokeWidth={1.8} aria-hidden="true" />
+            <span className="dasti-theme-switch__rail" aria-hidden="true">
+              <span className="dasti-theme-switch__thumb" />
+            </span>
+            <span className="dasti-theme-switch__label">Show image</span>
+          </button>
+          <label
+            className="dasti-proposal-design-fields__upload"
+            htmlFor={decorationUploadInputId}
+            title="Upload a PNG, JPG, or SVG decoration."
+          >
+            <Upload size={14} strokeWidth={1.8} aria-hidden="true" />
+            <span className="dasti-proposal-design-fields__upload-label dasti-proposal-design-fields__upload-label--full">
+              Upload image
+            </span>
+            <span className="dasti-proposal-design-fields__upload-label dasti-proposal-design-fields__upload-label--compact">
+              Upload
+            </span>
+            <input
+              id={decorationUploadInputId}
+              className="dasti-proposal-design-fields__upload-input"
+              type="file"
+              aria-label="Upload decoration image"
+              accept={DOCUMENT_DECORATION_UPLOAD_ACCEPT}
+              disabled={!onDocumentDecorationChange}
+              onChange={handleDocumentDecorationUpload}
+            />
+          </label>
+          <button
+            type="button"
+            className="dasti-proposal-design-fields__reset dasti-proposal-design-fields__decoration-remove"
+            aria-label="Remove image"
+            title="Remove image"
+            disabled={!hasDocumentDecorationAsset || !onDocumentDecorationChange}
+            onClick={() => {
+              setDocumentDecorationUploadError(null);
+              onDocumentDecorationChange?.(
+                removeDocumentDecorationAsset(resolvedDocumentDecoration),
+              );
+            }}
+          >
+            <TrashSimple size={13} strokeWidth={1.8} aria-hidden="true" />
+            <span className="dasti-proposal-design-fields__decoration-remove-label">
+              Remove
+            </span>
+          </button>
+        </div>
+        <div className="dasti-proposal-design-fields__decoration-meta">
+          {resolvedDocumentDecoration.dataUrl ? (
+            <img
+              className="dasti-proposal-design-fields__decoration-thumb"
+              src={resolvedDocumentDecoration.dataUrl}
+              alt=""
+              aria-hidden="true"
+            />
+          ) : (
+            <FileImage size={14} strokeWidth={1.8} aria-hidden="true" />
+          )}
+          <span>{resolvedDocumentDecoration.fileName ?? "No image"}</span>
+        </div>
+        {isDocumentDecorationShown ? (
+          <>
+            <div className="dasti-proposal-design-fields__decoration-control">
+              <div
+                className="dasti-proposal-skeleton-rail__style-pills dasti-proposal-design-fields__decoration-pills dasti-proposal-design-fields__decoration-pills--size"
+                aria-label="Decoration size"
+              >
+                {DOCUMENT_DECORATION_SIZE_PRESETS.map((sizePreset) => {
+                  const isSelected = resolvedDocumentDecoration.sizePreset === sizePreset;
+                  const sizeLabel = DOCUMENT_DECORATION_SIZE_LABELS[sizePreset];
+                  return (
+                    <button
+                      key={sizePreset}
+                      type="button"
+                      aria-label={`${sizeLabel}, ${sizePreset} mm`}
+                      aria-pressed={isSelected}
+                      data-selected={isSelected ? "true" : undefined}
+                      title={`${sizeLabel} (${sizePreset} mm)`}
+                      disabled={!onDocumentDecorationChange}
+                      onClick={() => {
+                        updateDocumentDecoration(
+                          applyDocumentDecorationSizePreset(
+                            resolvedDocumentDecoration,
+                            sizePreset,
+                          ),
+                        );
+                      }}
+                    >
+                      {sizeLabel}
+                    </button>
+                  );
+                })}
+                <button
+                  className="dasti-proposal-design-fields__decoration-custom-size"
+                  type="button"
+                  aria-label={
+                    resolvedDocumentDecoration.sizePreset === "custom"
+                      ? `Custom, ${renderedDocumentDecorationSizeMm} mm`
+                      : "Custom size"
+                  }
+                  title={`Custom (${renderedDocumentDecorationSizeMm} mm)`}
+                  aria-pressed={resolvedDocumentDecoration.sizePreset === "custom"}
+                  data-selected={
+                    resolvedDocumentDecoration.sizePreset === "custom" ? "true" : undefined
+                  }
+                  disabled={!onDocumentDecorationChange}
+                  onClick={() => {
+                    updateDocumentDecoration({
+                      ...resolvedDocumentDecoration,
+                      sizePreset: "custom",
+                      customSizeMm: renderedDocumentDecorationSizeMm,
+                    });
+                  }}
+                >
+                  Custom
+                </button>
+              </div>
+            </div>
+            <div
+              className="dasti-proposal-skeleton-rail__style-pills dasti-proposal-design-fields__decoration-pills dasti-proposal-design-fields__decoration-pills--fit"
+              aria-label="Decoration fit"
+            >
+              {(["contain", "cover"] as const).map((fit) => {
+                const isSelected = resolvedDocumentDecoration.fit === fit;
+                return (
+                  <button
+                    key={fit}
+                    type="button"
+                    aria-label={fit === "contain" ? "Contain" : "Cover"}
+                    aria-pressed={isSelected}
+                    data-selected={isSelected ? "true" : undefined}
+                    disabled={!onDocumentDecorationChange}
+                    onClick={() => {
+                      updateDocumentDecoration({
+                        ...resolvedDocumentDecoration,
+                        fit,
+                      });
+                    }}
+                  >
+                    {fit === "contain" ? "Contain" : "Cover"}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                className="dasti-proposal-design-fields__reset"
+                aria-label="Reset position"
+                title="Reset position"
+                disabled={!onDocumentDecorationChange}
+                onClick={() => {
+                  updateDocumentDecoration(
+                    resetDocumentDecorationPlacement(
+                      resolvedDocumentDecoration,
+                      resolvedProposalTemplateId,
+                    ),
+                  );
+                }}
+              >
+                <RotateCcw size={13} strokeWidth={1.8} aria-hidden="true" />
+                Reset
+              </button>
+            </div>
+          </>
+        ) : null}
+        {documentDecorationUploadError ? (
+          <p
+            className="dasti-proposal-design-fields__decoration-error"
+            role="alert"
+          >
+            {documentDecorationUploadError}
+          </p>
+        ) : null}
+      </div>
       <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Signature</div>
       <div className="dasti-proposal-skeleton-rail__signature-toggles">
         <button
@@ -467,10 +789,21 @@ export function ProposalDesignFields({
             onChooseSignature?.();
           }}
         >
+          <User
+            className="dasti-proposal-skeleton-rail__signature-icon"
+            size={14}
+            strokeWidth={1.8}
+            aria-hidden="true"
+          />
           <span className="dasti-theme-switch__rail" aria-hidden="true">
             <span className="dasti-theme-switch__thumb" />
           </span>
-          <span className="dasti-theme-switch__label">Printed name</span>
+          <span className="dasti-theme-switch__label dasti-proposal-skeleton-rail__signature-label dasti-proposal-skeleton-rail__signature-label--full">
+            Printed name
+          </span>
+          <span className="dasti-theme-switch__label dasti-proposal-skeleton-rail__signature-label dasti-proposal-skeleton-rail__signature-label--compact">
+            Name
+          </span>
         </button>
         <button
           type="button"
@@ -502,10 +835,21 @@ export function ProposalDesignFields({
             onToggleHandwrittenSignature?.(!handwrittenSignatureEnabled);
           }}
         >
+          <PenNib
+            className="dasti-proposal-skeleton-rail__signature-icon"
+            size={14}
+            strokeWidth={1.8}
+            aria-hidden="true"
+          />
           <span className="dasti-theme-switch__rail" aria-hidden="true">
             <span className="dasti-theme-switch__thumb" />
           </span>
-          <span className="dasti-theme-switch__label">Signature</span>
+          <span className="dasti-theme-switch__label dasti-proposal-skeleton-rail__signature-label dasti-proposal-skeleton-rail__signature-label--full">
+            Signature
+          </span>
+          <span className="dasti-theme-switch__label dasti-proposal-skeleton-rail__signature-label dasti-proposal-skeleton-rail__signature-label--compact">
+            Sign
+          </span>
         </button>
       </div>
     </section>

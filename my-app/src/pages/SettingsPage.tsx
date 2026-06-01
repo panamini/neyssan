@@ -741,6 +741,8 @@ function FontPairGrid({
 
 const SIGNATURE_SAMPLE_NAME = "robert cooper";
 const SIGNATURE_IMAGE_MAX_SIDE = 520;
+const SIGNATURE_DRAW_CROP_PADDING_PX = 12;
+const SIGNATURE_DRAW_ALPHA_THRESHOLD = 8;
 
 function getCanvasContext(
   canvas: HTMLCanvasElement,
@@ -796,6 +798,82 @@ async function readSignatureImageFile(file: File): Promise<string> {
 
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL("image/png");
+}
+
+export function cropSignatureCanvasToInkDataUrl(
+  canvas: HTMLCanvasElement,
+): string | null {
+  const context = getCanvasContext(canvas);
+  if (!context || canvas.width <= 0 || canvas.height <= 0) {
+    return null;
+  }
+
+  let pixels: ImageData;
+  try {
+    pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+  } catch {
+    return null;
+  }
+
+  let minX = canvas.width;
+  let minY = canvas.height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < canvas.height; y += 1) {
+    for (let x = 0; x < canvas.width; x += 1) {
+      const alpha = pixels.data[(y * canvas.width + x) * 4 + 3];
+      if (alpha <= SIGNATURE_DRAW_ALPHA_THRESHOLD) {
+        continue;
+      }
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  }
+
+  if (maxX < minX || maxY < minY) {
+    return null;
+  }
+
+  const backingScale =
+    canvas.clientWidth > 0 ? canvas.width / canvas.clientWidth : 1;
+  const padding = Math.max(
+    2,
+    Math.round(SIGNATURE_DRAW_CROP_PADDING_PX * backingScale),
+  );
+  const sourceX = Math.max(0, minX - padding);
+  const sourceY = Math.max(0, minY - padding);
+  const sourceRight = Math.min(canvas.width, maxX + padding + 1);
+  const sourceBottom = Math.min(canvas.height, maxY + padding + 1);
+  const sourceWidth = Math.max(1, sourceRight - sourceX);
+  const sourceHeight = Math.max(1, sourceBottom - sourceY);
+  const target = document.createElement("canvas");
+  target.width = sourceWidth;
+  target.height = sourceHeight;
+  const targetContext = getCanvasContext(target);
+  if (!targetContext) {
+    return null;
+  }
+
+  targetContext.drawImage(
+    canvas,
+    sourceX,
+    sourceY,
+    sourceWidth,
+    sourceHeight,
+    0,
+    0,
+    sourceWidth,
+    sourceHeight,
+  );
+
+  try {
+    return target.toDataURL("image/png");
+  } catch {
+    return null;
+  }
 }
 
 function SignatureDrawingPad({
@@ -900,7 +978,9 @@ function SignatureDrawingPad({
     if (!canvas) return;
 
     try {
-      onImageReady(canvas.toDataURL("image/png"));
+      onImageReady(
+        cropSignatureCanvasToInkDataUrl(canvas) ?? canvas.toDataURL("image/png"),
+      );
     } catch {
       // Some test environments do not implement canvas serialization.
     }

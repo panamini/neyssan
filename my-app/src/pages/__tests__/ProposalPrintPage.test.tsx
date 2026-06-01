@@ -136,6 +136,7 @@ describe("ProposalPrintPage", () => {
   });
 
   it.each([
+    ["twoweeks-letterhead", "proposal-cover-letter--twoweeks"],
     ["director-letterhead", "proposal-cover-letter--director"],
     ["volk-letterhead", "proposal-cover-letter--volk"],
     ["film-foto-letterhead", "proposal-cover-letter--film-foto"],

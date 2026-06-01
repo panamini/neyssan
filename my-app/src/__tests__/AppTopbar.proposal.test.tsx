@@ -264,6 +264,27 @@ describe("AppTopbar Proposal document identity", () => {
     expect(onExportDocx).toHaveBeenCalledTimes(1);
   });
 
+  it("lets the user choose proposal page size from the share menu", async () => {
+    const onPageSizePreferenceChange = vi.fn();
+    renderProposalTopbar({
+      pageSizePreference: "auto",
+      onPageSizePreferenceChange,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Share proposal" }));
+    const menu = await screen.findByRole("menu", { name: "Share proposal" });
+
+    expect(within(menu).getByText("Page size")).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitemradio", { name: /Auto/i })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+
+    fireEvent.click(within(menu).getByRole("menuitemradio", { name: /US Letter/i }));
+
+    expect(onPageSizePreferenceChange).toHaveBeenCalledWith("letter");
+  });
+
   it("includes saved proposal sharing only when registered", async () => {
     const onShareSavedProposal = vi.fn();
     renderProposalTopbar({

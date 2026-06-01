@@ -1,4 +1,5 @@
 import React from "react";
+import type { DocumentPageSizePreference } from "../lib/document-page-size";
 
 export type ProposalForgeTopbarDocumentState =
   | "draft"
@@ -24,6 +25,8 @@ export type ProposalForgeTopbarRegistration = {
   onCopyText: () => void;
   onExportPdf: (mode: "ats" | "styled") => void;
   onExportDocx: () => void;
+  onPageSizePreferenceChange?: (preference: DocumentPageSizePreference) => void;
+  pageSizePreference?: DocumentPageSizePreference;
   onShareSavedProposal?: () => void;
 };
 

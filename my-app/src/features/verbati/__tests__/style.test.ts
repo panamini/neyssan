@@ -122,6 +122,7 @@ describe("verbati style normalization", () => {
 
   it("registers letterhead templates as proposal templates without CV registry pollution", () => {
     const letterheadIds = [
+      "twoweeks-letterhead",
       "director-letterhead",
       "volk-letterhead",
       "film-foto-letterhead",

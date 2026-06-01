@@ -69,6 +69,7 @@ import {
   resolveProposalClosingRef,
   type ProposalClosingRef,
 } from "../lib/proposal-closing";
+import type { DocumentDecoration } from "../lib/document-decoration";
 
 type SavedProposalLayoutId = Extract<
   VerbatiLayoutPreset,
@@ -111,6 +112,7 @@ type SavedProposalRecord = {
     characterLimitMode?: ProposalCharacterLimitMode;
     characterLimitValue?: number | null;
     closing?: ProposalClosingRef;
+    documentDecoration?: DocumentDecoration;
     applicantName?: string;
     applicantRole?: string;
     contactLine?: string;
@@ -1961,6 +1963,7 @@ export default function ProposalsList({
                       applicantName: selectedApplicantHeader?.name,
                       voicePreset: selected ? getStoredVoicePreset(selected) : null,
                     })}
+                    documentDecoration={selected?.metadata?.documentDecoration ?? null}
                     railTitle={resolveProposalHeadingText(
                       selected?.metadata,
                       "applicantName",
@@ -2046,6 +2049,7 @@ export default function ProposalsList({
                             applicantName: buildSavedApplicantHeader(proposal)?.name,
                             voicePreset: getStoredVoicePreset(proposal),
                           })}
+                          documentDecoration={proposal.metadata?.documentDecoration ?? null}
                           railTitle={resolveProposalHeadingText(
                             proposal.metadata,
                             "applicantName",

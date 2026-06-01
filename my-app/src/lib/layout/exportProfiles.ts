@@ -1,5 +1,6 @@
 import { type ProposalTemplateId } from "../../../convex/lib/proposals/renderTemplates";
 import type { VerbatiStylePreset } from "../../features/verbati/types";
+import type { DocumentPageSize } from "../document-page-size";
 import { type CanonicalDocumentTokens } from "./documentTokens";
 import {
   normalizeProposalExportTokens,
@@ -32,11 +33,13 @@ export function resolveResumeExportProfile(args: {
   mode: "ats" | "styled";
   resumeTemplateId?: ResumeTemplateId | null;
   stylePreset?: VerbatiStylePreset | null;
+  pageSize?: DocumentPageSize | null;
 }): ResumeExportProfile {
   const normalized = normalizeResumeExportTokens({
     mode: args.mode,
     resumeTemplateId: args.resumeTemplateId,
     stylePreset: args.stylePreset,
+    pageSize: args.pageSize,
   });
 
   return {
@@ -51,11 +54,13 @@ export function resolveProposalExportProfile(args: {
   mode: "ats" | "styled";
   proposalTemplateId?: ProposalTemplateId | null;
   stylePreset?: VerbatiStylePreset | null;
+  pageSize?: DocumentPageSize | null;
 }): ProposalExportProfile {
   const normalized = normalizeProposalExportTokens({
     mode: args.mode,
     proposalTemplateId: args.proposalTemplateId,
     stylePreset: args.stylePreset,
+    pageSize: args.pageSize,
   });
 
   return {

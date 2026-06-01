@@ -28,7 +28,11 @@ import {
   type ResumeLinkIntent,
   type ResumePreviewSectionType,
 } from "./resumeLinking";
-import { A4_PAGE_HEIGHT_PX, A4_PAGE_WIDTH_PX } from "../../lib/document-stage";
+import { A4_PAGE_HEIGHT_PX } from "../../lib/document-stage";
+import {
+  resolveDocumentPageSize,
+  type DocumentPageSize,
+} from "../../lib/document-page-size";
 import {
   readDocumentExportDebugConfig,
   setResumePreviewDebugCapture,
@@ -64,6 +68,7 @@ type VerbatiResumePreviewProps = {
   showPageCount?: boolean;
   showStageZoomFooter?: boolean;
   onPageCountChange?: (pageCount: number) => void;
+  pageSize?: DocumentPageSize | null;
   onRemoveSection?:
     | ((section: {
         sectionId: string;
@@ -280,8 +285,13 @@ export function VerbatiResumePreview({
   showPageCount = false,
   showStageZoomFooter = false,
   onPageCountChange,
+  pageSize = null,
   onRemoveSection,
 }: VerbatiResumePreviewProps): JSX.Element {
+  const resolvedPageSize = React.useMemo(
+    () => resolveDocumentPageSize({ pageSize }),
+    [pageSize],
+  );
   const previewRootRef = React.useRef<HTMLDivElement | null>(null);
   const resumeViewportRef = React.useRef<HTMLDivElement | null>(null);
   const [resumeViewportNode, setResumeViewportNode] =
@@ -354,10 +364,14 @@ export function VerbatiResumePreview({
           ? "contain"
           : "width",
     fillAvailableOnZoom: isWorkspaceMode,
+    pageWidthPx: resolvedPageSize.widthPx,
+    pageHeightPx: resolvedPageSize.heightPx,
+    initialAvailableWidthPx: resolvedPageSize.widthPx,
+    initialAvailableHeightPx: resolvedPageSize.heightPx,
   });
   const previewScale = React.useMemo(
-    () => stageLayout.pageWidth / A4_PAGE_WIDTH_PX,
-    [stageLayout.pageWidth],
+    () => stageLayout.pageWidth / resolvedPageSize.widthPx,
+    [resolvedPageSize.widthPx, stageLayout.pageWidth],
   );
   const stackedCanvasHeight = React.useMemo(
     () =>
@@ -371,10 +385,15 @@ export function VerbatiResumePreview({
     () =>
       Math.min(
         1,
-        stageLayout.availableWidth / A4_PAGE_WIDTH_PX,
-        stageLayout.availableHeight / A4_PAGE_HEIGHT_PX,
+        stageLayout.availableWidth / resolvedPageSize.widthPx,
+        stageLayout.availableHeight / resolvedPageSize.heightPx,
       ),
-    [stageLayout.availableHeight, stageLayout.availableWidth],
+    [
+      resolvedPageSize.heightPx,
+      resolvedPageSize.widthPx,
+      stageLayout.availableHeight,
+      stageLayout.availableWidth,
+    ],
   );
   const userZoom = React.useMemo(() => {
     if (!showsStageZoom || workspaceViewMode === "fit-page") {
@@ -981,6 +1000,7 @@ export function VerbatiResumePreview({
               stylePreset={stylePreset}
               resumeTemplateId={resolvedResumeTemplateId}
               stageLayout={stageLayout}
+              pageSize={resolvedPageSize}
               activeTarget={activeTarget}
               inlineEditing={inlineEditing}
               sectionActions={sectionActions}
@@ -995,6 +1015,7 @@ export function VerbatiResumePreview({
               fitToken={fitToken}
               userZoom={userZoom}
               stageLayout={stageLayout}
+              pageSize={resolvedPageSize}
               activeTarget={activeTarget}
               inlineEditing={inlineEditing}
               onRemoveSection={onRemoveSection}

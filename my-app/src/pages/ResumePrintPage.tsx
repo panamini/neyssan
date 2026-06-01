@@ -5,12 +5,13 @@ import ResumePage from "../features/verbati/resume/ResumePage";
 import ResumeTemplateRenderer from "../features/verbati/resume/ResumeTemplateRenderer";
 import type { DocumentStageLayout } from "../hooks/use-document-stage-layout";
 import {
-  A4_PAGE_HEIGHT_PX,
-  A4_PAGE_WIDTH_PX,
-} from "../lib/document-stage";
-import {
   type ResumePrintRoutePayload,
 } from "../lib/document-export-models";
+import {
+  buildDocumentPageSizePrintCss,
+  resolveDocumentPageSize,
+  type DocumentPageSize,
+} from "../lib/document-page-size";
 import { isWorkshopResumeTemplateId } from "../lib/layout/resumeTemplates";
 import {
   collectResumeFontDebugSnapshot,
@@ -40,18 +41,20 @@ declare global {
   }
 }
 
-const PRINT_STAGE_LAYOUT: DocumentStageLayout = {
-  fitScale: 1,
-  availableWidth: A4_PAGE_WIDTH_PX,
-  availableHeight: A4_PAGE_HEIGHT_PX,
-  stageWidth: A4_PAGE_WIDTH_PX,
-  stageHeight: A4_PAGE_HEIGHT_PX,
-  pageWidth: A4_PAGE_WIDTH_PX,
-  pageHeight: A4_PAGE_HEIGHT_PX,
-  overflowX: false,
-  overflowY: false,
-  isFit: true,
-};
+function buildPrintStageLayout(pageSize: DocumentPageSize): DocumentStageLayout {
+  return {
+    fitScale: 1,
+    availableWidth: pageSize.widthPx,
+    availableHeight: pageSize.heightPx,
+    stageWidth: pageSize.widthPx,
+    stageHeight: pageSize.heightPx,
+    pageWidth: pageSize.widthPx,
+    pageHeight: pageSize.heightPx,
+    overflowX: false,
+    overflowY: false,
+    isFit: true,
+  };
+}
 
 function setPrintStatus(
   status: ResumePrintStatus,
@@ -140,9 +143,25 @@ function nextAnimationFrame(): Promise<void> {
 
 export function ResumePrintPage(): JSX.Element {
   const payload = React.useMemo(() => readPrintPayload(), []);
+  const pageSize = React.useMemo(
+    () => resolveDocumentPageSize({ pageSize: payload?.pageSize }),
+    [payload?.pageSize],
+  );
+  const printStageLayout = React.useMemo(
+    () => buildPrintStageLayout(pageSize),
+    [pageSize],
+  );
   const themeVars = React.useMemo(
     () => (payload ? buildVerbatiThemeVars(payload.stylePreset) : {}),
     [payload],
+  );
+  const pageSizeVars = React.useMemo(
+    () =>
+      ({
+        "--page-width": `${pageSize.widthMm}mm`,
+        "--page-height": `${pageSize.heightMm}mm`,
+      }) as React.CSSProperties,
+    [pageSize],
   );
   const routeRootRef = React.useRef<HTMLElement | null>(null);
 
@@ -244,6 +263,10 @@ export function ResumePrintPage(): JSX.Element {
   }
 
   return (
+    <>
+      <style data-document-page-size>
+        {buildDocumentPageSizePrintCss(pageSize)}
+      </style>
     <main
       ref={routeRootRef}
       className="theme-resume-calm theme-resume-calm--single dasti-resume-print-route"
@@ -251,7 +274,7 @@ export function ResumePrintPage(): JSX.Element {
       data-style-layout={payload.stylePreset.layout}
       data-style-typography={payload.stylePreset.typography}
       data-renderer-variant={payload.rendererVariantId}
-      style={themeVars}
+      style={{ ...themeVars, ...pageSizeVars }}
     >
       {isWorkshopResumeTemplateId(payload.resumeTemplateId) ? (
         <ResumeTemplateRenderer
@@ -259,18 +282,21 @@ export function ResumePrintPage(): JSX.Element {
           stylePreset={payload.stylePreset}
           resumeTemplateId={payload.resumeTemplateId}
           committedPages={payload.committedPages}
-          stageLayout={PRINT_STAGE_LAYOUT}
+          pageSize={pageSize}
+          stageLayout={printStageLayout}
         />
       ) : (
         <ResumePage
           data={payload.resumeData}
           mode={payload.rendererVariantId}
           stylePreset={payload.stylePreset}
-          stageLayout={PRINT_STAGE_LAYOUT}
+          pageSize={pageSize}
+          stageLayout={printStageLayout}
           userZoom={1}
         />
       )}
     </main>
+    </>
   );
 }
 

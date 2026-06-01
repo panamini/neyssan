@@ -6,6 +6,7 @@ export const PROPOSAL_ACTIVE_TEMPLATE_IDS = [
   "modernist_signal",
   "quire_margin",
   "workshop_proposal_margin",
+  "twoweeks-letterhead",
   "director-letterhead",
   "volk-letterhead",
   "film-foto-letterhead",
@@ -151,21 +152,21 @@ export const PROPOSAL_TEMPLATE_DEFINITIONS: readonly ProposalTemplateDefinition[
     },
     {
       id: "editorial_wide",
-      name: "Editorial Wide",
-      shortLabel: "52 mm editorial",
+      name: "Editorial",
+      shortLabel: "Brendon grid",
       description:
-        "A calmer editorial letter twin with a broader rail, a slower title cadence, and the longest measure in the set.",
-      twinLabel: "Editorial Wide",
-      exportShell: "rail",
+        "A Brendon Mayer-inspired editorial letterhead with a fixed A4 SVG coordinate system, left identity rail, and measured main letter field.",
+      twinLabel: "Editorial",
+      exportShell: "onecol",
       leftMarginMm: 17,
-      leftZoneMm: 52,
-      gutterMm: ROBIAL_PROPOSAL_GRID.gutterMm,
-      topOffsetMm: 35,
-      bodyStartMm: 97,
-      bottomMarginMm: 18,
-      rightMarginMm: 18,
+      leftZoneMm: 47,
+      gutterMm: 8,
+      topOffsetMm: 0,
+      bodyStartMm: 88,
+      bottomMarginMm: 17,
+      rightMarginMm: 24,
       readingMeasureCh: 64,
-      titleScaleMm: 7.8,
+      titleScaleMm: 7,
       gridStepAMm: ROBIAL_PROPOSAL_GRID.stepAMm,
       gridStepBMm: ROBIAL_PROPOSAL_GRID.stepBMm,
       gridHalfStepMm: ROBIAL_PROPOSAL_GRID.halfStepMm,
@@ -232,6 +233,27 @@ export const PROPOSAL_TEMPLATE_DEFINITIONS: readonly ProposalTemplateDefinition[
       gridStepAMm: CANONICAL_PROPOSAL_LAYOUT.grid.stepAMm,
       gridStepBMm: CANONICAL_PROPOSAL_LAYOUT.grid.stepBMm,
       gridHalfStepMm: CANONICAL_PROPOSAL_LAYOUT.grid.halfStepMm,
+    },
+    {
+      id: "twoweeks-letterhead",
+      name: "Twoweeks Letterhead",
+      shortLabel: "17/18 grid",
+      description:
+        "A PDF-clone cover-letter sheet on the 17/18 grid with a 17 mm sender rail, 87 mm main column, unlabelled date, Re: subject, and subordinate contact footer.",
+      twinLabel: "Cover letter",
+      exportShell: "onecol",
+      leftMarginMm: 17,
+      leftZoneMm: 52,
+      gutterMm: 18,
+      topOffsetMm: 0,
+      bodyStartMm: 83,
+      bottomMarginMm: 18,
+      rightMarginMm: 18,
+      readingMeasureCh: 64,
+      titleScaleMm: 4.4,
+      gridStepAMm: ROBIAL_PROPOSAL_GRID.stepAMm,
+      gridStepBMm: ROBIAL_PROPOSAL_GRID.stepBMm,
+      gridHalfStepMm: ROBIAL_PROPOSAL_GRID.halfStepMm,
     },
     {
       id: "director-letterhead",
@@ -301,7 +323,7 @@ export const PROPOSAL_TEMPLATE_DEFINITIONS: readonly ProposalTemplateDefinition[
       name: "MoMA Bauhaus Letterhead",
       shortLabel: "5 mm blue frame",
       description:
-        "A Bauhaus archive cover-letter sheet with a fixed blue A4 frame, compact sender/recipient register, and measured body field.",
+        "A Bauhaus archive cover-letter sheet with a page-size-aware blue frame, compact sender/recipient register, and measured body field.",
       twinLabel: "Cover letter",
       exportShell: "onecol",
       leftMarginMm: 32,
@@ -322,7 +344,7 @@ export const PROPOSAL_TEMPLATE_DEFINITIONS: readonly ProposalTemplateDefinition[
       name: "Joella Frame Letterhead",
       shortLabel: "35 mm blue frame",
       description:
-        "A Joella archive cover-letter sheet with a fixed A4 frame, formal letter block, and a first-third 35 mm letter column.",
+        "A Joella archive cover-letter sheet with a page-size-aware frame, formal letter block, and a first-third 35 mm letter column.",
       twinLabel: "Cover letter",
       exportShell: "onecol",
       leftMarginMm: 35,
@@ -365,6 +387,8 @@ export function isProposalLetterheadTemplateId(
   value: unknown,
 ): value is Extract<
   ProposalTemplateId,
+  | "editorial_wide"
+  | "twoweeks-letterhead"
   | "director-letterhead"
   | "volk-letterhead"
   | "film-foto-letterhead"
@@ -373,6 +397,8 @@ export function isProposalLetterheadTemplateId(
   | "bayer-letterhead"
 > {
   return (
+    value === "editorial_wide" ||
+    value === "twoweeks-letterhead" ||
     value === "director-letterhead" ||
     value === "volk-letterhead" ||
     value === "film-foto-letterhead" ||

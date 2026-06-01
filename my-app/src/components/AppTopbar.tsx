@@ -7,6 +7,7 @@ import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { useCvForgeTopbarRegistration } from "../contexts/CvForgeTopbarContext";
 import { useProposalForgeTopbarRegistration } from "../contexts/ProposalForgeTopbarContext";
 import { IconButton, Menu } from "./ui";
+import { buildDocumentPageSizeMenuSection } from "./DocumentPageSizeMenu";
 import CvShareMenu from "./cv/CvShareMenu";
 import DocumentTitleEditor from "./DocumentTitleEditor";
 import {
@@ -761,6 +762,10 @@ export function AppTopbar({
               onOpenImportReview={cvTopbarRegistration.onOpenImportReview}
               onExportPdf={cvTopbarRegistration.onExportPdf}
               onExportDocx={cvTopbarRegistration.onExportDocx}
+              onPageSizePreferenceChange={
+                cvTopbarRegistration.onPageSizePreferenceChange
+              }
+              pageSizePreference={cvTopbarRegistration.pageSizePreference}
             />
             <span
               className="dasti-toolbar__divider app-topbar__toolbar-divider app-topbar__toolbar-divider--actions"
@@ -774,6 +779,18 @@ export function AppTopbar({
               ariaLabel="Share proposal"
               align="end"
               sections={[
+                ...(proposalTopbarRegistration.onPageSizePreferenceChange
+                  ? [
+                      buildDocumentPageSizeMenuSection({
+                        disabled: proposalTopbarRegistration.exporting,
+                        onChange:
+                          proposalTopbarRegistration.onPageSizePreferenceChange,
+                        value:
+                          proposalTopbarRegistration.pageSizePreference ??
+                          "auto",
+                      }),
+                    ]
+                  : []),
                 {
                   items: [
                     {

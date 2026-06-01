@@ -1946,6 +1946,8 @@ span.dasti-cv-ats {
   height: 26px;
   display: inline-grid;
   place-items: center;
+  position: relative;
+  overflow: hidden;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-pill);
   background: var(--cv-accent-swatch);
@@ -1978,20 +1980,29 @@ span.dasti-cv-ats {
 
 .dasti-cv-style-swatch--custom {
   color: var(--ti);
-  background: conic-gradient(
-    from 0deg,
-    #d95843,
-    #d9a441,
-    #4f9d68,
-    #2a78d6,
-    #7a4fa0,
-    #d95843
-  );
+  background: var(--custom-accent-gradient);
+}
+
+.dasti-cv-style-swatch--custom:not([data-selected="true"]) {
+  border: 0;
+}
+
+.dasti-cv-style-swatch--custom::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: var(--custom-accent-gradient);
+  pointer-events: none;
 }
 
 .dasti-cv-style-swatch--custom[data-selected="true"] {
   background: var(--cv-accent-swatch);
   color: var(--paper);
+}
+
+.dasti-cv-style-swatch--custom[data-selected="true"]::before {
+  display: none;
 }
 
 .dasti-cv-style-swatch[data-selected="true"] {
