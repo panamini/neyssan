@@ -2625,15 +2625,19 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     const decoration = container.querySelector(
       ".dasti-proposal-document-decoration",
     ) as HTMLElement;
+    const toolbar = container.querySelector(
+      ".dasti-proposal-document-decoration__toolbar",
+    ) as HTMLElement;
     const resizeHandle = container.querySelector(
       ".dasti-proposal-document-decoration__resize-handle",
     ) as HTMLElement;
 
     expect(decoration).toHaveAttribute("data-design-mode", "true");
+    expect(decoration).toHaveAttribute("data-toolbar-placement", "side");
+    expect(decoration).toHaveAttribute("data-toolbar-align", "right");
+    expect(toolbar).toHaveAttribute("data-toolbar-placement", "side");
+    expect(toolbar).toHaveAttribute("data-toolbar-align", "right");
     expect(resizeHandle).toBeTruthy();
-    expect(
-      container.querySelector(".dasti-proposal-document-decoration__toolbar"),
-    ).toBeTruthy();
     expect(
       container.querySelector("[aria-label='Upload decoration image from page']"),
     ).toHaveAttribute(
@@ -2740,5 +2744,50 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     expect(removedCommit).toMatchObject({ visible: false });
     expect(removedCommit?.dataUrl).toBeUndefined();
     expect(removedCommit?.fileName).toBeUndefined();
+  });
+
+  it("flips the on-page decoration toolbar below when the image is near the top-right edge", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content="I can support the team with clear written execution."
+        proposalType="cover_letter"
+        templateId="swiss_margin"
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        documentDecoration={{
+          visible: true,
+          source: "upload",
+          dataUrl: "data:image/png;base64,AAAA",
+          fileName: "mark.png",
+          mimeType: "image/png",
+          alt: "Company mark",
+          sizePreset: 18,
+          fit: "contain",
+          placementMode: "custom",
+          xMm: 188,
+          yMm: 7,
+        }}
+        documentDecorationMode="design"
+        onDocumentDecorationChange={vi.fn()}
+        onDocumentDecorationCommit={vi.fn()}
+      />,
+    );
+
+    const decoration = container.querySelector(
+      ".dasti-proposal-document-decoration",
+    ) as HTMLElement;
+    const toolbar = container.querySelector(
+      ".dasti-proposal-document-decoration__toolbar",
+    ) as HTMLElement;
+
+    expect(decoration).toHaveAttribute("data-toolbar-placement", "below");
+    expect(decoration).toHaveAttribute("data-toolbar-align", "right");
+    expect(toolbar).toHaveAttribute("data-toolbar-placement", "below");
+    expect(toolbar).toHaveAttribute("data-toolbar-align", "right");
   });
 });

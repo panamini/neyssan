@@ -2190,6 +2190,13 @@ function ProposalDocumentDecorationLayer({
     resolvedDecoration,
     pageSizeMm,
   );
+  const hasToolbarRoomInlineEnd = xMm + sizeMm + 20 <= pageSize.widthMm;
+  const toolbarPlacement = hasToolbarRoomInlineEnd
+    ? "side"
+    : yMm < 12
+      ? "below"
+      : "above";
+  const toolbarAlignment = xMm < 10 ? "left" : "right";
   const commitDecorationAction = (nextDecoration: DocumentDecoration) => {
     const normalizedDecoration = normalizeDocumentDecoration(nextDecoration);
     onChange?.(normalizedDecoration);
@@ -2295,6 +2302,8 @@ function ProposalDocumentDecorationLayer({
       className="dasti-proposal-document-decoration"
       data-design-mode={isDesignMode ? "true" : "false"}
       data-decoration-size-mm={sizeMm}
+      data-toolbar-placement={isDesignMode ? toolbarPlacement : undefined}
+      data-toolbar-align={isDesignMode ? toolbarAlignment : undefined}
       style={
         {
           left: `calc(var(--proposal-inline-mm) * ${xMm})`,
@@ -2319,6 +2328,8 @@ function ProposalDocumentDecorationLayer({
           <div
             className="dasti-proposal-document-decoration__toolbar"
             aria-label="Decoration image controls"
+            data-toolbar-placement={toolbarPlacement}
+            data-toolbar-align={toolbarAlignment}
             onPointerDown={(event) => event.stopPropagation()}
           >
             <button

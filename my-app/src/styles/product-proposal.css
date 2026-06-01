@@ -3301,12 +3301,12 @@
 
 .dasti-proposal-document-decoration__toolbar {
   position: absolute;
-  inset-block-start: -28px;
-  inset-inline-end: -2px;
+  inset-block-start: -24px;
+  inset-inline-end: 0;
   z-index: 2;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   padding: 2px;
   border: 1px solid color-mix(in srgb, var(--ti) 16%, transparent);
   border-radius: 999px;
@@ -3316,10 +3316,29 @@
   backdrop-filter: blur(8px);
 }
 
+.dasti-proposal-document-decoration__toolbar[data-toolbar-placement="below"] {
+  inset-block-start: calc(100% + 6px);
+}
+
+.dasti-proposal-document-decoration__toolbar[data-toolbar-placement="side"] {
+  inset-block-start: -2px;
+  inset-inline: auto auto;
+  inset-inline-start: calc(100% + 6px);
+}
+
+.dasti-proposal-document-decoration__toolbar[data-toolbar-align="left"] {
+  inset-inline: 0 auto;
+}
+
+.dasti-proposal-document-decoration__toolbar[data-toolbar-placement="side"][data-toolbar-align] {
+  inset-inline: auto auto;
+  inset-inline-start: calc(100% + 6px);
+}
+
 .dasti-proposal-document-decoration__action.dasti-icon-button {
-  width: 20px;
-  height: 20px;
-  min-width: 20px;
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
   border-radius: 999px;
   border-color: transparent;
   background: transparent;
