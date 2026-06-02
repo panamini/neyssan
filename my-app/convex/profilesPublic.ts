@@ -12,6 +12,9 @@ import {
   resolveCanonicalProfileKeywordsForWrite,
 } from "./lib/userProfiles";
 
+const PROFILE_LIST_DEFAULT_LIMIT = 40;
+const PROFILE_LIST_MAX_LIMIT = 120;
+
 const publicUserProfileValidator = v.object({
   _id: v.id("userProfiles"),
   _creationTime: v.number(),
@@ -98,7 +101,19 @@ type UserProfile = {
   cvDocument?: unknown;
 } | null;
 
-function projectProfileDoc(prof: any): Exclude<UserProfile, null> {
+function normalizeProfileListLimit(limit: unknown) {
+  const numericLimit =
+    typeof limit === "number" ? Math.floor(limit) : PROFILE_LIST_DEFAULT_LIMIT;
+  if (!Number.isFinite(numericLimit)) {
+    return PROFILE_LIST_DEFAULT_LIMIT;
+  }
+  return Math.max(1, Math.min(PROFILE_LIST_MAX_LIMIT, numericLimit));
+}
+
+function projectProfileDoc(
+  prof: any,
+  options: { includeCvDocument?: boolean } = {},
+): Exclude<UserProfile, null> {
   return {
     _id: prof._id,
     _creationTime: prof._creationTime,
@@ -121,7 +136,9 @@ function projectProfileDoc(prof: any): Exclude<UserProfile, null> {
       (canonicalizeUserProfileMetadata(prof.metadata) as
         | Exclude<UserProfile, null>["metadata"]
         | undefined) ?? undefined,
-    cvDocument: prof.cvDocument ?? undefined,
+    ...(options.includeCvDocument === false
+      ? {}
+      : { cvDocument: prof.cvDocument ?? undefined }),
   };
 }
 
@@ -170,25 +187,41 @@ export const getByProfileId = query({
 });
 
 export const listMine = query({
-  args: {},
+  args: {
+    limit: v.optional(v.number()),
+  },
   returns: v.array(publicUserProfileValidator),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       return [];
     }
 
-    const rows = await ctx.db
+    const limit = normalizeProfileListLimit(args.limit);
+    const indexedQuery = ctx.db
       .query("userProfiles")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", identity.subject))
-      .collect();
+      .withIndex("by_clerk_updated_at", (q) =>
+        q.eq("clerkId", identity.subject),
+      );
+    const orderedQuery =
+      typeof indexedQuery.order === "function"
+        ? indexedQuery.order("desc")
+        : indexedQuery;
+    const rows =
+      typeof orderedQuery.take === "function"
+        ? await orderedQuery.take(limit)
+        : (await orderedQuery.collect())
+            .sort(
+              (a: any, b: any) =>
+                (b.updatedAt ?? b._creationTime) -
+                (a.updatedAt ?? a._creationTime),
+            )
+            .slice(0, limit);
 
     return rows
-      .sort(
-        (a, b) =>
-          (b.updatedAt ?? b._creationTime) - (a.updatedAt ?? a._creationTime),
-      )
-      .map(projectProfileDoc);
+      .map((profile: any) =>
+        projectProfileDoc(profile, { includeCvDocument: false }),
+      );
   },
 });
 

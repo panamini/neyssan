@@ -774,12 +774,14 @@ describe("jobsPublic.getById", () => {
     linkedProposalRows = [],
     identity = { subject: "clerk_123" },
     failUnboundedDetailReads = false,
+    failProfileCollection = false,
   }: {
     job: any;
     shadowRows?: any[];
     linkedProposalRows?: any[];
     identity?: { subject: string; email?: string };
     failUnboundedDetailReads?: boolean;
+    failProfileCollection?: boolean;
   }) {
     const linkedProfiles = [
       {
@@ -805,11 +807,56 @@ describe("jobsPublic.getById", () => {
           expect(table).toBe("jobs");
           return id;
         },
-        get: async (id: string) => (id === job._id ? job : null),
+        get: async (id: string) =>
+          linkedProfiles.find((profile) => profile._id === id) ??
+          (id === job._id ? job : null),
         query(table: string) {
           if (table === "userProfiles") {
             return {
               withIndex(_indexName: string, buildIndex: any) {
+                if (_indexName === "by_clerk_updated_at") {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  const clerkId = buildIndex(scope);
+                  return {
+                    order() {
+                      return this;
+                    },
+                    take: async (limit: number) =>
+                      linkedProfiles
+                        .filter((profile) => profile.clerkId === clerkId)
+                        .sort(
+                          (left, right) =>
+                            (right.updatedAt ?? right._creationTime) -
+                            (left.updatedAt ?? left._creationTime),
+                        )
+                        .slice(0, limit),
+                  };
+                }
+
+                if (_indexName === "by_profileId") {
+                  const criteria: Record<string, string> = {};
+                  const scope = {
+                    eq(field: string, value: string) {
+                      criteria[field] = value;
+                      return this;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    collect: async () =>
+                      linkedProfiles.filter((profile) => {
+                        if (criteria.profileId && profile.profileId !== criteria.profileId) {
+                          return false;
+                        }
+                        return true;
+                      }),
+                  };
+                }
+
                 const scope = {
                   eq(_field: string, value: string) {
                     return value;
@@ -817,12 +864,18 @@ describe("jobsPublic.getById", () => {
                 };
                 const clerkId = buildIndex(scope);
                 return {
-                  collect: async () =>
-                    linkedProfiles.filter(
+                  collect: async () => {
+                    if (failProfileCollection) {
+                      throw new Error("unexpected profile collect");
+                    }
+                    return linkedProfiles.filter(
                       (profile) => profile.clerkId === clerkId,
-                    ),
+                    );
+                  },
                 };
               },
+              get: async (id: string) =>
+                linkedProfiles.find((profile) => profile._id === id) ?? null,
             };
           }
 
@@ -980,6 +1033,23 @@ describe("jobsPublic.getById", () => {
       ...overrides,
     };
   }
+
+  it("loads job detail without collecting every linked profile", async () => {
+    const job = buildProjectionJob();
+
+    const result = await getById._handler(
+      buildGetByIdProjectionCtx({
+        job,
+        failProfileCollection: true,
+      }),
+      { jobId: job._id },
+    );
+
+    expect(result).toMatchObject({
+      id: job._id,
+      title: job.title,
+    });
+  });
 
   it("projects eligible visible LLM extraction and structured match-read fields", async () => {
     vi.stubEnv("JOB_LLM_VISIBLE_EXTRACTION", "true");
@@ -1597,7 +1667,9 @@ describe("jobsPublic.getById", () => {
             expect(table).toBe("jobs");
             return id;
           },
-          get: async (id: string) => (id === job._id ? job : null),
+          get: async (id: string) =>
+            linkedProfiles.find((profile) => profile._id === id) ??
+            (id === job._id ? job : null),
           query(table: string) {
             if (table === "userProfiles") {
               return {

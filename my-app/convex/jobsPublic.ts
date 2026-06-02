@@ -11,7 +11,6 @@ import { internal } from "./_generated/api";
 import {
   type CanonicalUserProfile,
   ensureCanonicalProfileForClerk,
-  getPrimaryProfileForClerk,
   listProfilesForClerk,
   resolveCanonicalProfileKeywordsForWrite,
 } from "./lib/userProfiles";
@@ -1647,6 +1646,41 @@ async function requireCanonicalUserProfile(ctx: any) {
   };
 }
 
+async function getMostRecentProfileForClerk(ctx: any, clerkId: string) {
+  const query = ctx.db
+    .query("userProfiles")
+    .withIndex("by_clerk_updated_at", (q: any) => q.eq("clerkId", clerkId))
+  const orderedQuery =
+    typeof query.order === "function" ? query.order("desc") : query;
+  const rows =
+    typeof orderedQuery.take === "function"
+      ? await orderedQuery.take(1)
+      : typeof orderedQuery.collect === "function"
+        ? await orderedQuery.collect()
+        : [];
+  return rows[0] ?? null;
+}
+
+async function resolveProfileForClerkAndResumeId(args: {
+  ctx: any;
+  clerkId: string;
+  resumeId?: string | null;
+}) {
+  const resumeId = String(args.resumeId ?? "").trim();
+  if (!resumeId) {
+    return null;
+  }
+
+  const candidates = await args.ctx.db
+    .query("userProfiles")
+    .withIndex("by_profileId", (q: any) => q.eq("profileId", resumeId))
+    .collect();
+
+  return (
+    candidates.find((profile: any) => profile.clerkId === args.clerkId) ?? null
+  );
+}
+
 type JobsProjectionProfile = {
   _id?: string | CanonicalUserProfile["id"];
   id?: string | CanonicalUserProfile["id"];
@@ -2142,8 +2176,8 @@ export const getById = query({
   ),
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
-    const profiles = await listProfilesForClerk(ctx, identity?.subject ?? "");
-    if (profiles.length === 0) {
+    const clerkId = identity?.subject ?? "";
+    if (!clerkId) {
       return null;
     }
 
@@ -2153,10 +2187,27 @@ export const getById = query({
     }
 
     const job = await ctx.db.get(normalizedJobId);
+    const ownerProfile = job ? await ctx.db.get(job.userId) : null;
     if (
       !job ||
-      !profiles.some((profile) => String(profile._id) === String(job.userId)) ||
+      !ownerProfile ||
+      ownerProfile.clerkId !== clerkId ||
       (job.archivedAt !== null && job.archivedAt !== undefined)
+    ) {
+      return null;
+    }
+
+    const primaryProfile = await getMostRecentProfileForClerk(ctx, clerkId);
+    const explicitProfile = await resolveProfileForClerkAndResumeId({
+      ctx,
+      clerkId,
+      resumeId: job.lastResumeId ?? null,
+    });
+    const profiles = normalizeProjectionProfiles(
+      [primaryProfile, ownerProfile, explicitProfile].filter(Boolean) as any[],
+    );
+    if (
+      profiles.length === 0
     ) {
       return null;
     }
@@ -2192,20 +2243,20 @@ export const getById = query({
       .map(projectLinkedProposal)
       .sort((left, right) => right.updatedAt - left.updatedAt);
 
-    const primaryProfile = profiles[0] ?? null;
+    const primaryProfileForMatch = profiles[0] ?? null;
     const storedResume = resolveStoredResumeSelection({
       job,
-      primaryProfile,
+      primaryProfile: primaryProfileForMatch,
     });
     const matchReadProfile = resolveMatchReadSourceProfile({
       job,
-      primaryProfile,
+      primaryProfile: primaryProfileForMatch,
       profiles,
     });
     const pendingMatchRead = buildStructuredPendingMatchRead({
       jobId: String(job._id),
       profileId: String(
-        (matchReadProfile as any)?.profileId ??
+      (matchReadProfile as any)?.profileId ??
           (matchReadProfile as any)?._id ??
           (matchReadProfile as any)?.id ??
           "",
