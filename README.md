@@ -22,6 +22,18 @@ FastAPI service that parses CVs and returns a normalized JSON payload aligned wi
 - export worker dependencies stay on the image-installed Linux runtime
 - normal Python parser edits do not require Docker rebuild
 
+First-time collaborators need a private root `.env.local` before `local-fast` can
+start local Convex:
+
+```bash
+cp .env.example .env.local
+# Fill CONVEX_TEAM and CONVEX_PROJECT with the shared Convex slugs.
+./run.sh local-fast
+```
+
+`CONVEX_TEAM` and `CONVEX_PROJECT` are project identifiers, not secrets. Keep
+real API keys and personal tokens out of git.
+
 Use `tunnel` when you want stable image-runtime validation against the edge path.
 
 Compatibility and advanced commands:

@@ -80,6 +80,9 @@ my-app/.envproduction-myapp.md
 *.envlocal*
 *.envlocalDEV*
 *.envproduction*
+!.env.example
+!my-app/.env.example
+!my-app/.env.local.example
 
 # --- Données de test et fixtures ---------------------------------
 /fixtures/
