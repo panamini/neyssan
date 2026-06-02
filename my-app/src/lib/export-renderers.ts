@@ -75,6 +75,14 @@ import {
   resolveTemplateDocumentDecoration,
   type DocumentDecoration,
 } from "./document-decoration";
+import {
+  normalizeDocumentIconSettings,
+  parseDocumentIconTextSegments,
+  renderDocumentIconHtml,
+  resolveDefaultListMarkerIconKey,
+  resolveSectionHeadingIconKey,
+  type DocumentIconSettings,
+} from "./document-icons";
 
 type ExportMode = "ats" | "styled";
 
@@ -1012,7 +1020,7 @@ function buildStyledProposalAppearanceCss(): string {
     .proposal-cover-letter--editorial .proposal-cover-letter__editorial-rail-rule {
       left: 64.35mm;
       top: 62.3mm;
-      height: 175.7mm;
+      height: calc(297mm - 62.3mm - 18mm);
       border-left: 0.125mm solid var(--proposal-editorial-ink, #171511);
     }
 
@@ -3004,6 +3012,9 @@ ${buildLocaleTypographyCss(args.lang)}
 
     .section-title {
       margin: 0 0 var(--flow-stack-gap);
+      display: inline-flex;
+      align-items: center;
+      gap: 1.15mm;
       font-family: var(--decor-section-title-font-family, var(--heading-font));
       font-size: var(--flow-label-size);
       line-height: var(--flow-label-line);
@@ -3011,6 +3022,16 @@ ${buildLocaleTypographyCss(args.lang)}
       text-transform: var(--decor-section-title-text-transform, uppercase);
       letter-spacing: var(--decor-section-title-letter-spacing, 0.14em);
       color: var(--accent);
+    }
+
+    .section-title-icon {
+      flex: 0 0 auto;
+    }
+
+    .section-title-icon svg {
+      display: block;
+      width: 100%;
+      height: 100%;
     }
 
     .section--ruled {
@@ -3183,6 +3204,35 @@ ${buildLocaleTypographyCss(args.lang)}
       word-break: break-word;
     }
 
+    .bullet-list--document-icons {
+      padding-left: 0;
+      list-style: none;
+    }
+
+    .compact-list--document-icons {
+      padding-left: 0;
+      list-style: none;
+    }
+
+    .bullet-list--document-icons li,
+    .compact-list--document-icons li {
+      display: grid;
+      grid-template-columns: max-content minmax(0, 1fr);
+      column-gap: 0.72em;
+      align-items: start;
+    }
+
+    .bullet-list-marker {
+      transform: translateY(0.14em);
+      flex: 0 0 auto;
+    }
+
+    .bullet-list-marker svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
     .proposal-topline {
       display: grid;
       grid-template-columns: minmax(0, 1fr) fit-content(var(--flow-proposal-meta-width));
@@ -3211,6 +3261,51 @@ ${buildLocaleTypographyCss(args.lang)}
       gap: var(--flow-proposal-gap);
       max-width: var(--flow-reading-measure);
       min-width: 0;
+    }
+
+    .proposal-list {
+      display: grid;
+      gap: calc(var(--flow-list-gap) * 0.92);
+      margin: 0 0 var(--flow-entry-head-gap);
+      padding: 0;
+      list-style: none;
+      min-width: 0;
+      max-width: 100%;
+      font-size: var(--flow-body-size);
+      line-height: var(--flow-body-line);
+      overflow-wrap: anywhere;
+    }
+
+    .proposal-list li {
+      display: grid;
+      grid-template-columns: max-content minmax(0, 1fr);
+      column-gap: 0.72em;
+      align-items: start;
+      min-width: 0;
+    }
+
+    .proposal-list-marker {
+      transform: translateY(0.14em);
+    }
+
+    .proposal-list-marker svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .proposal-inline-icon {
+      display: inline-flex;
+      width: 1em;
+      height: 1em;
+      margin-inline: 0.16em;
+      vertical-align: -0.14em;
+    }
+
+    .proposal-inline-icon svg {
+      display: block;
+      width: 100%;
+      height: 100%;
     }
 
     .proposal-block--subject {
@@ -3367,17 +3462,61 @@ function renderResumeTagList(values: string[]): string {
     .join("")}</ul>`;
 }
 
+function renderResumeDocumentListMarkerHtml(
+  settings: DocumentIconSettings | null | undefined,
+): string {
+  if (!settings) return "";
+  const documentIconSettings = normalizeDocumentIconSettings(settings);
+  return renderDocumentIconHtml({
+    iconKey: resolveDefaultListMarkerIconKey(documentIconSettings),
+    color: documentIconSettings.color,
+    sizePt: documentIconSettings.sizePt,
+    className: "bullet-list-marker",
+  });
+}
+
+function renderResumeListItem(args: {
+  content: string;
+  id?: string | null;
+  documentIconSettings?: DocumentIconSettings | null;
+}): string {
+  const markerMarkup = renderResumeDocumentListMarkerHtml(
+    args.documentIconSettings,
+  );
+  const idAttr = args.id ? ` data-export-item-id="${escapeHtml(args.id)}"` : "";
+  if (!markerMarkup) {
+    return `<li${idAttr}>${args.content}</li>`;
+  }
+  return `<li${idAttr}>${markerMarkup}<span>${args.content}</span></li>`;
+}
+
+function getDocumentListClassName(args: {
+  baseClassName: "bullet-list" | "compact-list";
+  documentIconSettings?: DocumentIconSettings | null;
+}): string {
+  return args.documentIconSettings
+    ? `${args.baseClassName} ${args.baseClassName}--document-icons`
+    : args.baseClassName;
+}
+
 function renderResumeCompactList(args: {
   items: Array<{ text: string; id?: string }>;
+  documentIconSettings?: DocumentIconSettings | null;
 }): string {
   if (args.items.length === 0) {
     return "";
   }
 
-  return `<ul class="compact-list">${args.items
-    .map(
-      (item) =>
-        `<li${item.id ? ` data-export-item-id="${escapeHtml(item.id)}"` : ""}>${escapeHtml(item.text)}</li>`,
+  return `<ul class="${getDocumentListClassName({
+    baseClassName: "compact-list",
+    documentIconSettings: args.documentIconSettings,
+  })}">${args.items
+    .map((item) =>
+      renderResumeListItem({
+        id: item.id,
+        content: escapeHtml(item.text),
+        documentIconSettings: args.documentIconSettings,
+      }),
     )
     .join("")}</ul>`;
 }
@@ -3389,17 +3528,34 @@ function renderSection(args: {
   ruled?: boolean;
   keep?: boolean;
   titleKey: string;
+  documentIconSettings?: DocumentIconSettings | null;
 }) {
   if (!args.content) {
     return "";
   }
+
+  const title = getLocalizedExportLabel(args.titleKey, args.locale);
+  const documentIconSettings = normalizeDocumentIconSettings(
+    args.documentIconSettings,
+  );
+  const iconKey = resolveSectionHeadingIconKey({
+    settings: documentIconSettings,
+    sectionType: args.block,
+    sectionTitle: title,
+  });
+  const iconMarkup = renderDocumentIconHtml({
+    iconKey,
+    color: documentIconSettings.color,
+    sizePt: documentIconSettings.sizePt,
+    className: "section-title-icon",
+  });
 
   return `<section class="${joinClassNames([
     "section",
     `section--${args.block}`,
     args.ruled ? "section--ruled" : "",
   ])}" data-block="${escapeHtml(args.block)}"${args.keep ? ' data-keep="compact"' : ""}>
-    <h2 class="section-title">${escapeHtml(getLocalizedExportLabel(args.titleKey, args.locale))}</h2>
+    <h2 class="section-title">${iconMarkup}${escapeHtml(title)}</h2>
     ${args.content}
   </section>`;
 }
@@ -3500,6 +3656,7 @@ function workshopResponsibilitiesRichHasPartialContent(
 
 function renderWorkshopExperienceBlocksFallback(
   blocks: WorkshopCommittedExperienceItem["blocks"],
+  documentIconSettings?: DocumentIconSettings | null,
 ): string {
   const blockMarkup: string[] = [];
   let bulletBuffer: string[] = [];
@@ -3510,8 +3667,16 @@ function renderWorkshopExperienceBlocksFallback(
     }
 
     blockMarkup.push(
-      `<ul class="bullet-list">${bulletBuffer
-        .map((bullet) => `<li>${escapeHtml(bullet)}</li>`)
+      `<ul class="${getDocumentListClassName({
+        baseClassName: "bullet-list",
+        documentIconSettings,
+      })}">${bulletBuffer
+        .map((bullet) =>
+          renderResumeListItem({
+            content: escapeHtml(bullet),
+            documentIconSettings,
+          }),
+        )
         .join("")}</ul>`,
     );
     bulletBuffer = [];
@@ -3537,6 +3702,7 @@ function renderWorkshopRichContent(
   rich:
     | WorkshopResponsibilitiesRichContent
     | NonNullable<WorkshopCommittedExperienceItem["responsibilitiesRich"]>,
+  documentIconSettings?: DocumentIconSettings | null,
 ): string {
   return rich.blocks
     .map((block) => {
@@ -3546,12 +3712,18 @@ function renderWorkshopRichContent(
           .join("")}</p>`;
       }
 
-      return `<ul class="bullet-list">${block.items
+      return `<ul class="${getDocumentListClassName({
+        baseClassName: "bullet-list",
+        documentIconSettings,
+      })}">${block.items
         .map(
           (item) =>
-            `<li>${item.runs
-              .map((run) => renderWorkshopResponsibilityRun(run))
-              .join("")}</li>`,
+            renderResumeListItem({
+              content: item.runs
+                .map((run) => renderWorkshopResponsibilityRun(run))
+                .join(""),
+              documentIconSettings,
+            }),
         )
         .join("")}</ul>`;
     })
@@ -3560,6 +3732,7 @@ function renderWorkshopRichContent(
 
 function renderWorkshopExperienceContent(
   item: WorkshopCommittedExperienceItem,
+  documentIconSettings?: DocumentIconSettings | null,
 ): string {
   const rich = item.responsibilitiesRich;
   if (
@@ -3569,17 +3742,21 @@ function renderWorkshopExperienceContent(
     item.blocks.some((block) => block.partial === true) ||
     workshopResponsibilitiesRichHasPartialContent(rich)
   ) {
-    return renderWorkshopExperienceBlocksFallback(item.blocks);
+    return renderWorkshopExperienceBlocksFallback(
+      item.blocks,
+      documentIconSettings,
+    );
   }
 
-  return renderWorkshopRichContent(rich);
+  return renderWorkshopRichContent(rich, documentIconSettings);
 }
 
 function renderWorkshopFragment(args: {
   fragment: NonNullable<ResumePrintSource["committedPages"]>[number]["fragments"][number];
   locale?: string | null;
+  documentIconSettings?: DocumentIconSettings | null;
 }): string {
-  const { fragment, locale } = args;
+  const { fragment, locale, documentIconSettings } = args;
 
   switch (fragment.kind) {
     case "profile":
@@ -3588,10 +3765,11 @@ function renderWorkshopFragment(args: {
       return renderSection({
         block: "summary",
         content: fragment.summaryRich
-          ? renderWorkshopRichContent(fragment.summaryRich)
+          ? renderWorkshopRichContent(fragment.summaryRich, documentIconSettings)
           : `<p class="entry-summary">${escapeHtml(fragment.text)}</p>`,
         locale,
         titleKey: "summary",
+        documentIconSettings,
       });
     case "experience":
       return renderSection({
@@ -3611,13 +3789,14 @@ function renderWorkshopFragment(args: {
                   )}</p>
                 </div>
               </div>
-              ${renderWorkshopExperienceContent(item)}
+              ${renderWorkshopExperienceContent(item, documentIconSettings)}
             </article>`;
             },
           )
           .join(""),
         locale,
         titleKey: "experience",
+        documentIconSettings,
       });
     case "education":
       return renderSection({
@@ -3638,6 +3817,7 @@ function renderWorkshopFragment(args: {
           .join(""),
         locale,
         titleKey: "education",
+        documentIconSettings,
       });
     case "skills":
       return renderSection({
@@ -3651,6 +3831,7 @@ function renderWorkshopFragment(args: {
         locale,
         ruled: true,
         titleKey: "skills",
+        documentIconSettings,
       });
     case "selected_projects":
       return renderSection({
@@ -3664,7 +3845,10 @@ function renderWorkshopFragment(args: {
                   <p class="entry-meta">${escapeHtml(item.meta)}</p>
                 </div>
                 ${item.descriptionRich
-                  ? renderWorkshopRichContent(item.descriptionRich)
+                  ? renderWorkshopRichContent(
+                      item.descriptionRich,
+                      documentIconSettings,
+                    )
                   : `<p class="entry-summary">${escapeHtml(item.description)}</p>`}
               </div>
             </article>`,
@@ -3672,6 +3856,7 @@ function renderWorkshopFragment(args: {
           .join(""),
         locale,
         titleKey: "projects",
+        documentIconSettings,
       });
     case "languages":
       return renderSection({
@@ -3686,11 +3871,13 @@ function renderWorkshopFragment(args: {
               .filter(Boolean)
               .join(" · "),
           })),
+          documentIconSettings,
         }),
         keep: true,
         locale,
         ruled: true,
         titleKey: "languages",
+        documentIconSettings,
       });
     case "certifications":
       return renderSection({
@@ -3711,15 +3898,26 @@ function renderWorkshopFragment(args: {
           .join(""),
         locale,
         titleKey: "certifications",
+        documentIconSettings,
       });
     case "achievements":
       return renderSection({
         block: "achievements",
-        content: `<ul class="bullet-list">${fragment.items
-          .map((item) => `<li data-export-item-id="${escapeHtml(item.id)}">${escapeHtml(item.text)}</li>`)
+        content: `<ul class="${getDocumentListClassName({
+          baseClassName: "bullet-list",
+          documentIconSettings,
+        })}">${fragment.items
+          .map((item) =>
+            renderResumeListItem({
+              id: item.id,
+              content: escapeHtml(item.text),
+              documentIconSettings,
+            }),
+          )
           .join("")}</ul>`,
         locale,
         titleKey: "achievements",
+        documentIconSettings,
       });
     case "affiliations":
       return renderSection({
@@ -3741,6 +3939,7 @@ function renderWorkshopFragment(args: {
           .join(""),
         locale,
         titleKey: "affiliations",
+        documentIconSettings,
       });
     case "hobbies":
       return renderSection({
@@ -3750,11 +3949,13 @@ function renderWorkshopFragment(args: {
             id: item.id,
             text: item.name,
           })),
+          documentIconSettings,
         }),
         keep: true,
         locale,
         ruled: true,
         titleKey: "interests",
+        documentIconSettings,
       });
     case "additional_information":
       return renderSection({
@@ -3775,6 +3976,7 @@ function renderWorkshopFragment(args: {
           .join(""),
         locale,
         titleKey: fragment.title || "additional_information",
+        documentIconSettings,
       });
   }
 }
@@ -3782,13 +3984,18 @@ function renderWorkshopFragment(args: {
 function renderWorkshopTwoColumnPage(args: {
   page: NonNullable<ResumePrintSource["committedPages"]>[number];
   locale?: string | null;
+  documentIconSettings?: DocumentIconSettings | null;
 }): string {
   const header: string[] = [];
   const sidebar: string[] = [];
   const main: string[] = [];
 
   args.page.fragments.forEach((fragment) => {
-    const markup = renderWorkshopFragment({ fragment, locale: args.locale });
+    const markup = renderWorkshopFragment({
+      fragment,
+      locale: args.locale,
+      documentIconSettings: args.documentIconSettings,
+    });
     const lane = resolveWorkshopTwoColumnFragmentLane(fragment);
     if (lane === "header") {
       header.push(markup);
@@ -3834,13 +4041,22 @@ function renderResumeHtml(args: {
         const pageMarkup = isWorkshopTwoColumnResumeTemplateId(
           args.data.resumeTemplateId,
         )
-          ? renderWorkshopTwoColumnPage({ page, locale })
+          ? renderWorkshopTwoColumnPage({
+              page,
+              locale,
+              documentIconSettings:
+                args.mode === "styled" ? args.data.documentIconSettings : null,
+            })
           : `<article class="resume-styled-page" data-export-page-id="${escapeHtml(page.pageId)}">
             ${page.fragments
               .map((fragment) =>
                 renderWorkshopFragment({
                   fragment,
                   locale,
+                  documentIconSettings:
+                    args.mode === "styled"
+                      ? args.data.documentIconSettings
+                      : null,
                 }),
               )
               .join("")}
@@ -4087,9 +4303,55 @@ function renderProposalBlocks(
   blocks: ProposalPrintBlock[],
   locale?: string | null,
   signatureRender?: ReturnType<typeof resolveProposalSignatureRender>,
+  documentIconSettings?: DocumentIconSettings | null,
 ): string {
+  const resolvedDocumentIconSettings = normalizeDocumentIconSettings(
+    documentIconSettings,
+  );
+  const listMarkerIconKey = resolveDefaultListMarkerIconKey(
+    resolvedDocumentIconSettings,
+  );
+  const listMarkerType = resolvedDocumentIconSettings.listMarkerType ?? "dot";
+  const renderInlineIconText = (text: string) =>
+    parseDocumentIconTextSegments(text)
+      .map((segment) => {
+        if (segment.type === "text") return escapeHtml(segment.text);
+        return renderDocumentIconHtml({
+          iconKey: segment.iconKey,
+          color: resolvedDocumentIconSettings.color,
+          sizePt: resolvedDocumentIconSettings.sizePt,
+          className: "proposal-inline-icon",
+        });
+      })
+      .join("");
+
   return blocks
     .map((block) => {
+      if (block.type === "list") {
+        const markerMarkup =
+          listMarkerType === "icon"
+            ? renderDocumentIconHtml({
+                iconKey: listMarkerIconKey,
+                color: resolvedDocumentIconSettings.color,
+                sizePt: resolvedDocumentIconSettings.sizePt,
+                className: "proposal-list-marker",
+              })
+            : `<span class="proposal-list-marker" aria-hidden="true">${
+                listMarkerType === "dash" ? "-" : "•"
+              }</span>`;
+
+        return `<ul class="proposal-block proposal-list proposal-list--${listMarkerType}${
+          listMarkerType === "icon" ? " proposal-list--document-icons" : ""
+        }" data-block="list">
+          ${block.items
+            .map(
+              (item) =>
+                `<li>${markerMarkup}<span>${renderInlineIconText(item)}</span></li>`,
+            )
+            .join("")}
+        </ul>`;
+      }
+
       if (block.type === "closing") {
         const signatureName = block.signatureName
           ? formatProposalSignatureName(block.signatureName)
@@ -4126,7 +4388,7 @@ function renderProposalBlocks(
       return `<p class="${joinClassNames([
         "proposal-block",
         block.type === "salutation" ? "proposal-block--salutation" : "",
-      ])}">${escapeHtml(block.text)}</p>`;
+      ])}">${renderInlineIconText(block.text)}</p>`;
     })
     .join("");
 }
@@ -4981,6 +5243,7 @@ function renderProposalLetterheadExportPage(args: {
     args.data.body,
     args.locale,
     args.signatureRender,
+    args.data.documentIconSettings,
   );
   const scopeClass =
     args.templateId === "editorial_wide"
@@ -5484,7 +5747,12 @@ function renderProposalHtml(args: {
       </section>
       <section class="section" data-block="body">
         <div class="proposal-main-stack">
-          ${renderProposalBlocks(args.data.body, locale, signatureRender)}
+          ${renderProposalBlocks(
+            args.data.body,
+            locale,
+            signatureRender,
+            args.data.documentIconSettings,
+          )}
         </div>
       </section>
     </main>`
@@ -5505,7 +5773,12 @@ function renderProposalHtml(args: {
           ${subjectSection}
           <section class="section" data-block="body">
             <div class="proposal-main-stack">
-              ${renderProposalBlocks(args.data.body, locale, signatureRender)}
+              ${renderProposalBlocks(
+                args.data.body,
+                locale,
+                signatureRender,
+                args.data.documentIconSettings,
+              )}
             </div>
           </section>
         </section>

@@ -60,6 +60,19 @@ import {
   resizeDocumentDecorationByDeltaMm,
   type DocumentDecoration,
 } from "../../lib/document-decoration";
+import {
+  DEFAULT_DOCUMENT_ICON_SETTINGS,
+  getDocumentIcon,
+  getDocumentIconColorCss,
+  normalizeDocumentIconSettings,
+  parseDocumentIconTextSegments,
+  resolveDefaultListMarkerIconKey,
+  type DocumentIconSettings,
+} from "../../lib/document-icons";
+import {
+  parseProposalPlainTextBlocks,
+  type ProposalPlainTextBlock,
+} from "../../lib/proposal-list-blocks";
 
 type ProposalDocumentRendererProps = {
   content: string;
@@ -85,6 +98,7 @@ type ProposalDocumentRendererProps = {
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
   documentDecoration?: DocumentDecoration | null;
+  documentIconSettings?: DocumentIconSettings | null;
   documentDecorationMode?: "readonly" | "design";
   onDocumentDecorationChange?: (decoration: DocumentDecoration) => void;
   onDocumentDecorationCommit?: (decoration: DocumentDecoration) => void;
@@ -96,6 +110,7 @@ type ParsedProposalDocument = {
   kind: "letter" | "message" | "proposal";
   salutation: string | null;
   paragraphs: string[];
+  bodyBlocks: ProposalPlainTextBlock[];
   signOff: string | null;
   signatureName: string | null;
   rawBody: string;
@@ -113,6 +128,11 @@ type ProposalDocumentBlock =
       text: string;
       paragraphId: string;
       continuation: boolean;
+    }
+  | {
+      id: string;
+      type: "list";
+      items: string[];
     }
   | {
       id: string;
@@ -1941,6 +1961,7 @@ function parseProposalDocumentContent(
       kind: proposalType === "freelance_proposal" ? "proposal" : "letter",
       salutation: null,
       paragraphs: [],
+      bodyBlocks: [],
       signOff: null,
       signatureName: null,
       rawBody: "",
@@ -1959,11 +1980,13 @@ function parseProposalDocumentContent(
       .split(/\n\s*\n/)
       .map(compactProposalParagraph)
       .filter(Boolean);
+    const bodyBlocks = parseProposalPlainTextBlocks(normalized);
 
     return {
       kind: "proposal",
       salutation: null,
       paragraphs,
+      bodyBlocks,
       signOff: null,
       signatureName: null,
       rawBody: normalized,
@@ -2015,6 +2038,7 @@ function parseProposalDocumentContent(
     kind: inferredKind,
     salutation,
     paragraphs: paragraphs.map(compactProposalParagraph).filter(Boolean),
+    bodyBlocks: parseProposalPlainTextBlocks(body),
     signOff: closingBlock?.signOff ?? null,
     signatureName: closingBlock?.signatureName ?? null,
     rawBody: body.trim(),
@@ -2035,8 +2059,22 @@ function buildProposalDocumentBlocks(
     });
   }
 
-  parsedDocument.paragraphs.forEach((paragraph, index) => {
-    splitParagraphIntoPaginationFragments(paragraph).forEach(
+  const bodyBlocks =
+    parsedDocument.bodyBlocks.length > 0
+      ? parsedDocument.bodyBlocks
+      : parsedDocument.paragraphs.map((text) => ({ type: "paragraph", text }) as const);
+
+  bodyBlocks.forEach((bodyBlock, index) => {
+    if (bodyBlock.type === "list") {
+      blocks.push({
+        id: `list-${index}`,
+        type: "list",
+        items: bodyBlock.items,
+      });
+      return;
+    }
+
+    splitParagraphIntoPaginationFragments(bodyBlock.text).forEach(
       (fragment, fragmentIndex) => {
         blocks.push({
           id: `paragraph-${index}-${fragmentIndex}`,
@@ -2434,6 +2472,7 @@ export function ProposalDocumentRenderer({
   signatureSettings = null,
   closing = null,
   documentDecoration = null,
+  documentIconSettings = null,
   documentDecorationMode = "readonly",
   onDocumentDecorationChange,
   onDocumentDecorationCommit,
@@ -2444,6 +2483,10 @@ export function ProposalDocumentRenderer({
   const resolvedDocumentDecoration = React.useMemo(
     () => resolveTemplateDocumentDecoration(documentDecoration, resolvedTemplateId),
     [documentDecoration, resolvedTemplateId],
+  );
+  const resolvedDocumentIconSettings = React.useMemo(
+    () => normalizeDocumentIconSettings(documentIconSettings),
+    [documentIconSettings],
   );
   const resolvedPageSize = React.useMemo(
     () => resolveDocumentPageSize({ pageSize }),
@@ -2567,6 +2610,24 @@ export function ProposalDocumentRenderer({
       return typedSignature;
     },
     [documentTypography.fontFamily, signatureRender],
+  );
+  const listMarkerIcon = React.useMemo(() => {
+    const iconKey = resolveDefaultListMarkerIconKey(resolvedDocumentIconSettings);
+    return (
+      getDocumentIcon(iconKey) ??
+      getDocumentIcon(DEFAULT_DOCUMENT_ICON_SETTINGS.defaultListMarkerKey)
+    );
+  }, [resolvedDocumentIconSettings]);
+  const listMarkerType = resolvedDocumentIconSettings.listMarkerType ?? "dot";
+  const listMarkerStyle = React.useMemo(
+    () =>
+      ({
+        "--proposal-document-list-icon-color": getDocumentIconColorCss(
+          resolvedDocumentIconSettings.color,
+        ),
+        "--proposal-document-list-icon-size": `${resolvedDocumentIconSettings.sizePt}pt`,
+      }) as React.CSSProperties,
+    [resolvedDocumentIconSettings.color, resolvedDocumentIconSettings.sizePt],
   );
 
   // Override proposal mm units with concrete px values so font-size, grid,
@@ -2731,6 +2792,21 @@ export function ProposalDocumentRenderer({
 
   const renderDocumentBlock = React.useCallback(
     (block: ProposalDocumentBlock) => {
+      const renderInlineText = (text: string) =>
+        parseDocumentIconTextSegments(text).map((segment, index) => {
+          if (segment.type === "text") return segment.text;
+          const icon = getDocumentIcon(segment.iconKey);
+          if (!icon) return "";
+          return (
+            <span
+              key={`${segment.iconKey}-${index}`}
+              className="dasti-proposal-document__inline-icon"
+              aria-hidden="true"
+              dangerouslySetInnerHTML={{ __html: icon.svg }}
+            />
+          );
+        });
+
       switch (block.type) {
         case "salutation":
           return (
@@ -2739,7 +2815,7 @@ export function ProposalDocumentRenderer({
               className="dasti-proposal-document__salutation"
               data-proposal-block
             >
-              {block.text}
+              {renderInlineText(block.text)}
             </p>
           );
         case "paragraph":
@@ -2756,8 +2832,47 @@ export function ProposalDocumentRenderer({
                 .join(" ")}
               data-proposal-block
             >
-              {block.text}
+              {renderInlineText(block.text)}
             </p>
+          );
+        case "list":
+          return (
+            <ul
+              key={block.id}
+              className={[
+                "dasti-proposal-document__list",
+                `dasti-proposal-document__list--${listMarkerType}`,
+                listMarkerType === "icon"
+                  ? "dasti-proposal-document__list--document-icons"
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              style={listMarkerStyle}
+              data-proposal-block
+            >
+              {block.items.map((item, itemIndex) => (
+                <li key={`${block.id}-${itemIndex}`}>
+                  {listMarkerType === "icon" ? (
+                    <span
+                      className="dasti-proposal-document__list-marker"
+                      aria-hidden="true"
+                      dangerouslySetInnerHTML={{
+                        __html: listMarkerIcon?.svg ?? "",
+                      }}
+                    />
+                  ) : (
+                    <span
+                      className="dasti-proposal-document__list-marker"
+                      aria-hidden="true"
+                    >
+                      {listMarkerType === "dash" ? "-" : "•"}
+                    </span>
+                  )}
+                  <span>{renderInlineText(item)}</span>
+                </li>
+              ))}
+            </ul>
           );
         case "closing":
           return (
@@ -2779,7 +2894,7 @@ export function ProposalDocumentRenderer({
           );
       }
     },
-    [renderSignature],
+    [listMarkerIcon?.svg, listMarkerStyle, listMarkerType, renderSignature],
   );
 
   const renderVisibleDocumentBlocks = React.useCallback(

@@ -47,6 +47,10 @@ import {
   shouldPersistDocumentDecoration,
   type DocumentDecoration,
 } from "./document-decoration";
+import {
+  normalizeDocumentIconSettings,
+  type DocumentIconSettings,
+} from "./document-icons";
 
 export const PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY =
   "dasti:proposal-output-draft:v1";
@@ -65,6 +69,7 @@ export type StoredProposalOutputDraft = {
   proposalTemplateId: ProposalTemplateId | null;
   proposalVerbatiStyle: VerbatiStylePreset | null;
   documentDecoration?: DocumentDecoration | null;
+  documentIconSettings?: DocumentIconSettings | null;
   verbatiStyleSlotId?: 1 | 2 | 3 | null;
   verbatiStyleSlotSource?: DocumentStyleSlotSource | null;
   verbatiStyleSlotNameSnapshot?: string | null;
@@ -312,6 +317,9 @@ export function readStoredProposalOutputDraft(): StoredProposalOutputDraft | nul
       documentDecoration: sanitizeStoredDocumentDecoration(
         parsed.documentDecoration,
       ),
+      documentIconSettings: normalizeDocumentIconSettings(
+        parsed.documentIconSettings,
+      ),
       verbatiStyleSlotId: resolveDocumentStyleSlotId(parsed.verbatiStyleSlotId),
       verbatiStyleSlotSource: isDocumentStyleSlotSource(
         parsed.verbatiStyleSlotSource,
@@ -492,6 +500,9 @@ function buildSanitizedStoredProposalOutputDraft(
           )
         : null,
     documentDecoration: sanitizeStoredDocumentDecoration(draft.documentDecoration),
+    documentIconSettings: normalizeDocumentIconSettings(
+      draft.documentIconSettings,
+    ),
     verbatiStyleSlotId: resolveDocumentStyleSlotId(draft.verbatiStyleSlotId),
     verbatiStyleSlotSource: isDocumentStyleSlotSource(
       draft.verbatiStyleSlotSource,

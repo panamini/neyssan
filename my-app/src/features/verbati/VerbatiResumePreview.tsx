@@ -48,6 +48,7 @@ import type {
   ResumePaperAiState,
   ResumeSectionActions,
 } from "./resume/ResumeOneColAtsPage";
+import type { DocumentIconSettings } from "../../lib/document-icons";
 
 type VerbatiResumePreviewProps = {
   data: ResumeData;
@@ -65,6 +66,7 @@ type VerbatiResumePreviewProps = {
   inlineEditing?: ResumeInlineEditing | null;
   sectionActions?: ResumeSectionActions | null;
   paperAi?: ResumePaperAiState | null;
+  documentIconSettings?: DocumentIconSettings | null;
   showPageCount?: boolean;
   showStageZoomFooter?: boolean;
   onPageCountChange?: (pageCount: number) => void;
@@ -282,6 +284,7 @@ export function VerbatiResumePreview({
   inlineEditing = null,
   sectionActions = null,
   paperAi = null,
+  documentIconSettings = null,
   showPageCount = false,
   showStageZoomFooter = false,
   onPageCountChange,
@@ -1005,6 +1008,7 @@ export function VerbatiResumePreview({
               inlineEditing={inlineEditing}
               sectionActions={sectionActions}
               paperAi={paperAi}
+              documentIconSettings={documentIconSettings}
               onStablePageCountChange={setStableWorkshopPageCount}
             />
           ) : (

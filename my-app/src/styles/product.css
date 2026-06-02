@@ -2218,6 +2218,7 @@ body,
   overflow: visible;
 }
 
+.forge-template-panel__content--cv-design,
 .forge-template-panel__content--proposal-design {
   overflow: auto;
   scrollbar-gutter: stable;
@@ -2235,6 +2236,7 @@ body,
 }
 
 .forge-template-panel__grid::-webkit-scrollbar,
+.forge-template-panel__content--cv-design::-webkit-scrollbar,
 .forge-template-panel__content--proposal-design::-webkit-scrollbar,
 .forge-template-panel--proposal-heading
   .forge-template-panel__content::-webkit-scrollbar,
@@ -2248,6 +2250,8 @@ body,
 
 .forge-template-panel__grid::-webkit-scrollbar-track,
 .forge-template-panel__grid::-webkit-scrollbar-corner,
+.forge-template-panel__content--cv-design::-webkit-scrollbar-track,
+.forge-template-panel__content--cv-design::-webkit-scrollbar-corner,
 .forge-template-panel__content--proposal-design::-webkit-scrollbar-track,
 .forge-template-panel__content--proposal-design::-webkit-scrollbar-corner,
 .forge-template-panel--proposal-heading
@@ -2266,6 +2270,7 @@ body,
 }
 
 .forge-template-panel__grid::-webkit-scrollbar-thumb,
+.forge-template-panel__content--cv-design::-webkit-scrollbar-thumb,
 .forge-template-panel__content--proposal-design::-webkit-scrollbar-thumb,
 .forge-template-panel--proposal-heading
   .forge-template-panel__content::-webkit-scrollbar-thumb,
@@ -2278,6 +2283,7 @@ body,
 }
 
 .forge-template-panel__grid::-webkit-scrollbar-thumb:hover,
+.forge-template-panel__content--cv-design::-webkit-scrollbar-thumb:hover,
 .forge-template-panel__content--proposal-design::-webkit-scrollbar-thumb:hover,
 .forge-template-panel--proposal-heading
   .forge-template-panel__content::-webkit-scrollbar-thumb:hover,
@@ -5925,4 +5931,121 @@ body,
         var(--dasti-composer-drawer-bottom-clearance)
     );
   }
+}
+.document-icon-picker {
+  width: 100%;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.document-icon-picker__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.document-icon-picker__label,
+.document-icon-picker__category-label {
+  color: var(--tm2);
+  font-size: var(--t2);
+  font-weight: 750;
+  letter-spacing: 0;
+}
+
+.document-icon-picker__selected {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--tm2);
+  font-size: var(--t2);
+  font-weight: 650;
+}
+
+.document-icon-picker__selected-preview,
+.document-icon-picker__option-preview {
+  display: inline-grid;
+  place-items: center;
+  color: currentColor;
+}
+
+.document-icon-picker__selected-preview {
+  width: 14px;
+  height: 14px;
+}
+
+.document-icon-picker__selected-preview svg,
+.document-icon-picker__option-preview svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.document-icon-picker__search {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-control);
+  background: var(--sf1);
+  color: var(--ti);
+  font: inherit;
+  font-size: var(--tx);
+}
+
+.document-icon-picker__search:focus-visible {
+  border-color: var(--color-border-selected, var(--ac));
+  outline: none;
+  box-shadow: 0 0 0 2px var(--am-soft);
+}
+
+.document-icon-picker__categories {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.document-icon-picker__category {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.document-icon-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+  gap: var(--space-2);
+}
+
+.document-icon-picker__option {
+  min-width: 0;
+  aspect-ratio: 1;
+  min-height: 36px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--tm2);
+  font: inherit;
+  cursor: pointer;
+}
+
+.document-icon-picker__option:hover,
+.document-icon-picker__option:focus-visible {
+  border-color: var(--border-soft);
+  background: var(--sf1);
+  outline: none;
+}
+
+.document-icon-picker__option[data-selected="true"] {
+  border-color: var(--ac);
+  background: var(--am-soft);
+  color: var(--ac);
+}
+
+.document-icon-picker__option-preview {
+  width: 18px;
+  height: 18px;
 }

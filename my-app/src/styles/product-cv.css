@@ -502,6 +502,12 @@
   color: #9f2f2f;
 }
 
+.dasti-cv-paper-section-heading-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .dasti-cv-paper-experience-item {
   border-radius: 2mm;
   outline: none;
@@ -1832,6 +1838,48 @@ span.dasti-cv-ats {
 
 .dasti-cv-style-pills--slots {
   width: 100%;
+}
+
+.dasti-cv-style-pills--document-icons button {
+  min-width: 28px;
+  inline-size: 28px;
+  min-height: 28px;
+  display: inline-grid;
+  place-items: center;
+  padding-inline: 0;
+}
+
+.dasti-cv-style-pills__document-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  color: currentColor;
+}
+
+.dasti-cv-style-pills__document-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.dasti-cv-section-icon-map {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.dasti-cv-section-icon-map__row {
+  display: grid;
+  gap: var(--space-2);
+  padding-block: var(--space-2);
+  border-block-start: 1px solid var(--border-soft);
+}
+
+.dasti-cv-section-icon-map__label {
+  color: var(--ti);
+  font-size: var(--tx);
+  font-weight: 750;
+  letter-spacing: 0;
 }
 
 .dasti-cv-style-pills__reset {

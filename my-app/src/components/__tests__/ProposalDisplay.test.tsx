@@ -879,6 +879,102 @@ describe("ProposalDisplay", () => {
     expect(screen.getByPlaceholderText("Content appears here")).toBeInTheDocument();
   });
 
+  it("shows list authoring controls only in edit mode", () => {
+    const { rerender } = render(
+      <ProposalDisplay
+        proposalContent="Line one"
+        loading={false}
+        error={null}
+        mode="preview"
+        onContentChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "List" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Icon" })).toBeNull();
+
+    rerender(
+      <ProposalDisplay
+        proposalContent="Line one"
+        loading={false}
+        error={null}
+        mode="edit"
+        onContentChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "List" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Icon" })).toBeInTheDocument();
+  });
+
+  it("updates selected textarea lines when List is clicked", async () => {
+    const textarea = renderEditableProposal("Line one\nLine two");
+    textarea.focus();
+    textarea.setSelectionRange(0, textarea.value.length);
+
+    fireEvent.click(screen.getByRole("button", { name: "List" }));
+
+    await waitFor(() => {
+      expect(textarea).toHaveValue("- Line one\n- Line two");
+    });
+  });
+
+  it("inserts one icon token when an icon is chosen", async () => {
+    const textarea = renderEditableProposal("Line one\nLine two");
+    textarea.focus();
+    textarea.setSelectionRange("Line one".length, "Line one".length);
+
+    fireEvent.click(screen.getByRole("button", { name: "Icon" }));
+    fireEvent.click(screen.getByRole("button", { name: "Use Shield check icon" }));
+
+    await waitFor(() => {
+      expect(textarea).toHaveValue("Line one[[icon:shield-check]]\nLine two");
+    });
+  });
+
+  it("does not change list text when opening the icon picker", async () => {
+    function Harness() {
+      const [content, setContent] = React.useState("Line one\nLine two");
+
+      return (
+        <ProposalDisplay
+          proposalContent={content}
+          loading={false}
+          error={null}
+          mode="edit"
+          onContentChange={setContent}
+        />
+      );
+    }
+
+    render(<Harness />);
+    const textarea = screen.getByPlaceholderText(
+      "Content appears here",
+    ) as HTMLTextAreaElement;
+
+    textarea.focus();
+    textarea.setSelectionRange(0, textarea.value.length);
+    fireEvent.click(screen.getByRole("button", { name: "List" }));
+
+    textarea.setSelectionRange(0, textarea.value.length);
+    fireEvent.click(screen.getByRole("button", { name: "Icon" }));
+    expect(textarea).toHaveValue("- Line one\n- Line two");
+  });
+
+  it("inserts a starter list at the cursor when List is clicked with no selection", async () => {
+    const textarea = renderEditableProposal("Intro\n");
+    textarea.focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+    fireEvent.click(screen.getByRole("button", { name: "List" }));
+
+    await waitFor(() => {
+      expect(textarea).toHaveValue("Intro\n- First item\n- Second item");
+      expect(textarea.selectionStart).toBe("Intro\n- ".length);
+      expect(textarea.selectionEnd).toBe("Intro\n- First item".length);
+    });
+  });
+
   it("renders document previews inside a fixed page stage when zoom controls are enabled", () => {
     render(
       <ProposalDisplay

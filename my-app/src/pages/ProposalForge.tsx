@@ -253,6 +253,10 @@ import {
   shouldPersistDocumentDecoration,
   type DocumentDecoration,
 } from "../lib/document-decoration";
+import {
+  normalizeDocumentIconSettings,
+  type DocumentIconSettings,
+} from "../lib/document-icons";
 
 type CurrentProposalSettings = {
   voicePreset: string;
@@ -817,6 +821,7 @@ type ProposalDocumentMetadata = DocumentStyleMetadata & {
   languageSource?: DocumentLanguageSource;
   jobDetectedLanguage?: string | null;
   documentDecoration?: DocumentDecoration;
+  documentIcons?: DocumentIconSettings;
 };
 
 type ProposalWorkspaceCssVars = React.CSSProperties & {
@@ -3207,6 +3212,10 @@ export function ProposalForge(): JSX.Element {
         storedOutputDraft?.documentDecoration ?? createDefaultDocumentDecoration(),
       ),
     );
+  const [proposalDocumentIconSettings, setProposalDocumentIconSettings] =
+    React.useState<DocumentIconSettings>(() =>
+      normalizeDocumentIconSettings(storedOutputDraft?.documentIconSettings),
+    );
   const [proposalLibraryStatus, setProposalLibraryStatus] = React.useState<
     "draft" | "saved"
   >("draft");
@@ -4905,6 +4914,10 @@ export function ProposalForge(): JSX.Element {
     const normalized = normalizeDocumentDecoration(documentDecoration);
     return shouldPersistDocumentDecoration(normalized) ? normalized : null;
   }, [documentDecoration]);
+  const persistedProposalDocumentIconSettings = React.useMemo(
+    () => normalizeDocumentIconSettings(proposalDocumentIconSettings),
+    [proposalDocumentIconSettings],
+  );
   const proposalRenderMetadata = React.useMemo<
     ProposalDocumentMetadata | undefined
   >(() => {
@@ -4955,6 +4968,7 @@ export function ProposalForge(): JSX.Element {
     if (persistedDocumentDecoration) {
       nextMetadata.documentDecoration = persistedDocumentDecoration;
     }
+    nextMetadata.documentIcons = persistedProposalDocumentIconSettings;
 
     return Object.keys(nextMetadata).length > 0 ? nextMetadata : undefined;
   }, [
@@ -4966,6 +4980,7 @@ export function ProposalForge(): JSX.Element {
     effectiveProposalTemplateId,
     fallbackProposalTemplateId,
     persistedDocumentDecoration,
+    persistedProposalDocumentIconSettings,
     proposalSettingsPresets,
     proposalTemplateBundleId,
     proposalStyleChoice,
@@ -7085,6 +7100,9 @@ export function ProposalForge(): JSX.Element {
         openedSavedProposal.metadata?.documentDecoration ??
           createDefaultDocumentDecoration(),
       );
+      const nextDocumentIconSettings = normalizeDocumentIconSettings(
+        openedSavedProposal.metadata?.documentIcons,
+      );
       const nextSourceComposeDraft: StoredProposalComposeDraft | null = null;
 
       setProposalContent(nextContent);
@@ -7152,6 +7170,7 @@ export function ProposalForge(): JSX.Element {
       setProposalDocumentTitleManual(true);
       setProposalDocumentMeta(nextDocumentMeta);
       setDocumentDecoration(nextDocumentDecoration);
+      setProposalDocumentIconSettings(nextDocumentIconSettings);
       setGeneratedProposalId(openedSavedProposal._id as Id<"proposals">);
       generatedProposalIdRef.current =
         openedSavedProposal._id as Id<"proposals">;
@@ -7294,6 +7313,9 @@ export function ProposalForge(): JSX.Element {
       draftProposal.metadata?.documentDecoration ??
         createDefaultDocumentDecoration(),
     );
+    const nextDocumentIconSettings = normalizeDocumentIconSettings(
+      draftProposal.metadata?.documentIcons,
+    );
     const shouldRestoreDraftDetachedStyle = Boolean(
       nextStyleLinkMode === "proposal_local" && nextStylePreset,
     );
@@ -7334,6 +7356,7 @@ export function ProposalForge(): JSX.Element {
     setProposalDocumentTitleManual(nextTitleManual);
     setProposalDocumentMeta(nextMeta);
     setDocumentDecoration(nextDocumentDecoration);
+    setProposalDocumentIconSettings(nextDocumentIconSettings);
     setGeneratedProposalId(nextGeneratedId);
     generatedProposalIdRef.current = nextGeneratedId;
     setProposalOutputMode("preview");
@@ -7357,6 +7380,9 @@ export function ProposalForge(): JSX.Element {
       )
         ? nextDocumentDecoration
         : null,
+      documentIconSettings: normalizeDocumentIconSettings(
+        draftProposal.metadata?.documentIcons,
+      ),
       verbatiStyleSlotId: draftProposal.metadata?.verbatiStyleSlotId ?? null,
       verbatiStyleSlotSource:
         draftProposal.metadata?.verbatiStyleSlotSource ?? null,
@@ -8208,6 +8234,7 @@ export function ProposalForge(): JSX.Element {
           effectiveProposalStylePresetWithPalette,
         ),
         documentDecoration: persistedDocumentDecoration,
+        documentIconSettings: persistedProposalDocumentIconSettings,
         verbatiStyleSlotId: proposalRenderMetadata?.verbatiStyleSlotId ?? null,
         verbatiStyleSlotSource:
           proposalRenderMetadata?.verbatiStyleSlotSource ?? null,
@@ -8872,6 +8899,7 @@ export function ProposalForge(): JSX.Element {
         ? serializeVerbatiStyle(effectiveProposalStylePresetWithPalette)
         : null,
       documentDecoration: persistedDocumentDecoration,
+      documentIconSettings: persistedProposalDocumentIconSettings,
       verbatiStyleSlotId: proposalRenderMetadata?.verbatiStyleSlotId ?? null,
       verbatiStyleSlotSource:
         proposalRenderMetadata?.verbatiStyleSlotSource ?? null,
@@ -8937,6 +8965,7 @@ export function ProposalForge(): JSX.Element {
     proposalDocumentTitleManual,
     proposalOutputMode,
     persistedDocumentDecoration,
+    persistedProposalDocumentIconSettings,
     proposalStyleChoice,
     effectiveProposalStylePresetWithPalette,
     proposalCustomAccentHex,
@@ -10210,6 +10239,7 @@ export function ProposalForge(): JSX.Element {
         signatureSettings: proposalSignatureSettings,
         closing: effectiveProposalClosing,
         documentDecoration: persistedDocumentDecoration,
+        documentIconSettings: persistedProposalDocumentIconSettings,
         locale: storedOutputDraft?.resolvedLanguage,
         pageSize: resolvedProposalPageSize,
       }),
@@ -10231,6 +10261,7 @@ export function ProposalForge(): JSX.Element {
       proposalType,
       proposalContent,
       persistedDocumentDecoration,
+      persistedProposalDocumentIconSettings,
       resolvedProposalPageSize,
       storedOutputDraft?.resolvedLanguage,
     ],
@@ -10265,6 +10296,7 @@ export function ProposalForge(): JSX.Element {
         signatureSettings: proposalSignatureSettings,
         closing: effectiveProposalClosing,
         documentDecoration: persistedDocumentDecoration,
+        documentIconSettings: persistedProposalDocumentIconSettings,
         locale: storedOutputDraft?.resolvedLanguage,
         pageSize: resolvedProposalPageSize,
       }),
@@ -10290,6 +10322,7 @@ export function ProposalForge(): JSX.Element {
       proposalContent,
       proposalVoicePreset,
       persistedDocumentDecoration,
+      persistedProposalDocumentIconSettings,
       resolvedProposalPageSize,
       storedOutputDraft?.resolvedLanguage,
     ],
@@ -10345,6 +10378,7 @@ export function ProposalForge(): JSX.Element {
       signatureSettings: proposalSignatureSettings,
       closing: savedClosing,
       documentDecoration: savedMetadata?.documentDecoration ?? null,
+      documentIconSettings: savedMetadata?.documentIcons ?? null,
       locale: savedMetadata?.resolvedLanguage,
       pageSize: resolvedProposalPageSize,
     });
@@ -10422,6 +10456,7 @@ export function ProposalForge(): JSX.Element {
       signatureSettings: proposalSignatureSettings,
       closing: savedClosing,
       documentDecoration: savedMetadata?.documentDecoration ?? null,
+      documentIconSettings: savedMetadata?.documentIcons ?? null,
       locale: savedMetadata?.resolvedLanguage,
       pageSize: resolvedProposalPageSize,
     });
@@ -12714,6 +12749,7 @@ export function ProposalForge(): JSX.Element {
                             signatureSettings={proposalSignatureSettings}
                             closing={effectiveProposalClosing}
                             documentDecoration={documentDecoration}
+                            documentIconSettings={proposalDocumentIconSettings}
                             documentDecorationDesignMode={
                               proposalDesignOpen &&
                               proposalOutputMode === "preview" &&

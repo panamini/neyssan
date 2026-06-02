@@ -61,10 +61,15 @@ import {
 import { resolveVerbatiStyle, serializeVerbatiStyle } from "../features/verbati/style";
 import type { VerbatiStylePreset } from "../features/verbati/types";
 import type { DocumentStyleMetadata } from "../lib/document-style-slots";
+import type { DocumentIconSettings } from "../lib/document-icons";
 import {
   isWorkshopResumeTemplateId,
   type ResumeTemplateId,
 } from "../lib/layout/resumeTemplates";
+
+type CvVisualMetadataPatch = DocumentStyleMetadata & {
+  documentIcons?: DocumentIconSettings;
+};
 
 /**
  * Small, safe deep equality check used for dirty detection.
@@ -497,7 +502,7 @@ export interface ICvLibraryContext {
   // Persist visual style metadata without sending the full cvDocument to Convex.
   saveCurrentCvStyleOnly: (
     style: VerbatiStylePreset,
-    styleMetadata?: DocumentStyleMetadata,
+    styleMetadata?: CvVisualMetadataPatch,
   ) => Promise<void>;
   // Atomic actions for block-based editor
   updateSectionTitle: (sectionId: string, newTitle: string) => void;
@@ -3136,7 +3141,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   const saveCurrentCvStyleOnly = useCallback(
     async (
       style: VerbatiStylePreset,
-      styleMetadata: DocumentStyleMetadata = {},
+      styleMetadata: CvVisualMetadataPatch = {},
     ): Promise<void> => {
       const activeDoc = currentCvRef.current;
       if (!activeDoc) return;

@@ -57,6 +57,13 @@ import type { ProposalSignatureSettings } from "../lib/proposal-signature-settin
 import type { ProposalClosingRef } from "../lib/proposal-closing";
 import type { DocumentDecoration } from "../lib/document-decoration";
 import {
+  createDocumentIconToken,
+  getDocumentIcon,
+  type DocumentIconKey,
+  type DocumentIconSettings,
+} from "../lib/document-icons";
+import { DocumentIconPicker } from "./document-icons/DocumentIconPicker";
+import {
   createAiUndoSnapshot,
   normalizeEditorAiTextResult,
   replaceSelectedText,
@@ -73,6 +80,10 @@ import {
   normalizeEditorAiJobContext,
   type EditorAiJobContext,
 } from "../lib/ai/editorAiJobContext";
+import {
+  continueMarkdownListOnEnter,
+  toggleMarkdownListForSelection,
+} from "../lib/proposal-textarea-list";
 
 interface ProposalDisplayProps {
   proposalContent: string | null;
@@ -91,6 +102,7 @@ interface ProposalDisplayProps {
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
   documentDecoration?: DocumentDecoration | null;
+  documentIconSettings?: DocumentIconSettings | null;
   documentDecorationDesignMode?: boolean;
   onDocumentDecorationChange?: (decoration: DocumentDecoration) => void;
   onDocumentDecorationCommit?: (decoration: DocumentDecoration) => void;
@@ -591,6 +603,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   signatureSettings = null,
   closing = null,
   documentDecoration = null,
+  documentIconSettings = null,
   documentDecorationDesignMode = false,
   onDocumentDecorationChange,
   onDocumentDecorationCommit,
@@ -1323,6 +1336,95 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     };
   }, [isEditable, scheduleTextareaSelectionCheck, textareaSelectionState]);
 
+  const restoreTextareaSelection = React.useCallback(
+    (selectionStart: number, selectionEnd: number) => {
+      window.setTimeout(() => {
+        const textarea = editableTextareaRef.current;
+        if (!textarea) return;
+        textarea.focus();
+        textarea.setSelectionRange(selectionStart, selectionEnd);
+        scheduleTextareaSelectionCheck(true);
+        syncEditableTextareaBlockSize();
+      });
+    },
+    [scheduleTextareaSelectionCheck, syncEditableTextareaBlockSize],
+  );
+  const [iconListPickerState, setIconListPickerState] = React.useState<{
+    text: string;
+    selectionStart: number;
+    selectionEnd: number;
+  } | null>(null);
+
+  const insertDocumentIconAtTextareaSelection = React.useCallback((iconKey: DocumentIconKey) => {
+    if (!isEditable || !onContentChange) return;
+    const textarea = editableTextareaRef.current;
+    const currentText = iconListPickerState?.text ?? proposalContent ?? "";
+    const selectionStart =
+      iconListPickerState?.selectionStart ?? textarea?.selectionStart ?? 0;
+    const selectionEnd =
+      iconListPickerState?.selectionEnd ?? textarea?.selectionEnd ?? selectionStart;
+    const token = createDocumentIconToken(iconKey);
+    const nextText = `${currentText.slice(0, selectionStart)}${token}${currentText.slice(selectionEnd)}`;
+    const nextCursor = selectionStart + token.length;
+
+    setAiSuggestion(null);
+    setIconListPickerState(null);
+    onContentChange(nextText);
+    restoreTextareaSelection(nextCursor, nextCursor);
+  }, [
+    iconListPickerState,
+    isEditable,
+    onContentChange,
+    proposalContent,
+    restoreTextareaSelection,
+  ]);
+
+  const applyTextareaListTransform = React.useCallback(() => {
+    if (!isEditable || !onContentChange) return;
+    const textarea = editableTextareaRef.current;
+    const currentText = proposalContent ?? "";
+    const selectionStart = textarea?.selectionStart ?? 0;
+    const selectionEnd = textarea?.selectionEnd ?? selectionStart;
+    const transform = toggleMarkdownListForSelection(
+      currentText,
+      selectionStart,
+      selectionEnd,
+    );
+
+    setAiSuggestion(null);
+    onContentChange(transform.nextText);
+    restoreTextareaSelection(
+      transform.nextSelectionStart,
+      transform.nextSelectionEnd,
+    );
+  }, [
+    isEditable,
+    onContentChange,
+    proposalContent,
+    restoreTextareaSelection,
+  ]);
+
+  const handleEditableTextareaKeyDown = React.useCallback(
+    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (event.key !== "Enter" || !isEditable || !onContentChange) return;
+      const transform = continueMarkdownListOnEnter(
+        proposalContent ?? "",
+        event.currentTarget.selectionStart,
+        event.currentTarget.selectionEnd,
+      );
+      if (!transform) return;
+
+      event.preventDefault();
+      setAiSuggestion(null);
+      onContentChange(transform.nextText);
+      restoreTextareaSelection(
+        transform.nextSelectionStart,
+        transform.nextSelectionEnd,
+      );
+    },
+    [isEditable, onContentChange, proposalContent, restoreTextareaSelection],
+  );
+
   const handleRunInlineAiAction = React.useCallback(
     async (actionId: InlineAiActionId, instruction: string) => {
       if (!textareaSelectionState || !proposalContent) return;
@@ -1919,6 +2021,73 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         ) : null}
       </div>
     ) : null;
+  const iconListToolbarIcon = React.useMemo(() => {
+    return getDocumentIcon("asterisk-simple");
+  }, []);
+  const textareaListToolbar = isEditable ? (
+    <div
+      className="dasti-proposal-editor-page__list-toolbar"
+      aria-label="Proposal list tools"
+      data-no-pan="true"
+    >
+      <button
+        type="button"
+        className="dasti-proposal-editor-page__list-toolbar-button"
+        aria-label="List"
+        disabled={!isEditable}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => applyTextareaListTransform()}
+      >
+        List
+      </button>
+      <button
+        type="button"
+        className="dasti-proposal-editor-page__list-toolbar-button"
+        aria-label="Icon"
+        title="Insert an icon."
+        disabled={!isEditable}
+        onMouseDown={(event) => event.preventDefault()}
+        aria-expanded={Boolean(iconListPickerState)}
+        onClick={() => {
+          const textarea = editableTextareaRef.current;
+          setIconListPickerState({
+            text: proposalContent ?? "",
+            selectionStart: textarea?.selectionStart ?? 0,
+            selectionEnd: textarea?.selectionEnd ?? textarea?.selectionStart ?? 0,
+          });
+        }}
+      >
+        {iconListToolbarIcon ? (
+          <span
+            className="dasti-proposal-editor-page__list-toolbar-icon"
+            aria-hidden="true"
+            dangerouslySetInnerHTML={{ __html: iconListToolbarIcon.svg }}
+          />
+        ) : null}
+        <span>Icon</span>
+      </button>
+      {iconListPickerState ? (
+        <div
+          className="dasti-proposal-editor-page__icon-list-picker"
+          role="dialog"
+          aria-label="Choose icon"
+        >
+          <DocumentIconPicker
+            label="Icon"
+            selectedIconKey="asterisk-simple"
+            onChange={insertDocumentIconAtTextareaSelection}
+          />
+          <button
+            type="button"
+            className="dasti-proposal-editor-page__list-toolbar-button"
+            onClick={() => setIconListPickerState(null)}
+          >
+            Cancel
+          </button>
+        </div>
+      ) : null}
+    </div>
+  ) : null;
 
   const renderDocumentStage = () => (
     <div
@@ -2429,6 +2598,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                 <div className="dasti-proposal-editor-page__inner">
                   {inlineSelectionOverlay}
                   {inlineProofingOverlay}
+                  {textareaListToolbar}
                   <textarea
                     ref={attachEditableTextarea}
                     value={proposalContent ?? ""}
@@ -2444,6 +2614,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                     }}
                     onSelect={() => scheduleTextareaSelectionCheck(true)}
                     onMouseUp={() => scheduleTextareaSelectionCheck(true)}
+                    onKeyDown={handleEditableTextareaKeyDown}
                     onKeyUp={() => scheduleTextareaSelectionCheck(true)}
                     onScroll={() => {
                       if (editableTextareaRef.current?.scrollTop) {
@@ -2534,6 +2705,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                   signatureSettings={signatureSettings}
                   closing={closing}
                   documentDecoration={documentDecoration}
+                  documentIconSettings={documentIconSettings}
                   documentDecorationMode={
                     documentDecorationDesignMode ? "design" : "readonly"
                   }
@@ -2718,6 +2890,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         <div className="dasti-proposal-inline-proofing-field">
           {inlineSelectionOverlay}
           {inlineProofingOverlay}
+          {textareaListToolbar}
           <textarea
             ref={attachEditableTextarea}
             value={proposalContent ?? ""}
@@ -2732,6 +2905,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             }}
             onSelect={() => scheduleTextareaSelectionCheck(true)}
             onMouseUp={() => scheduleTextareaSelectionCheck(true)}
+            onKeyDown={handleEditableTextareaKeyDown}
             onKeyUp={() => scheduleTextareaSelectionCheck(true)}
             onScroll={() => {
               setEditableTextareaScrollTop(

@@ -43,6 +43,11 @@ import {
   type ResumeTemplateId,
 } from "./layout/resumeTemplates";
 import {
+  normalizeDocumentIconSettings,
+  type DocumentIconSettings,
+} from "./document-icons";
+import { parseProposalPlainTextBlocks } from "./proposal-list-blocks";
+import {
   planWorkshopResumePages,
   type WorkshopResumeCommittedPage,
 } from "./resume/resumePagination";
@@ -122,6 +127,7 @@ export type ResumePrintSource = {
   additionalInformation?: string[];
   resumeTemplateId: ResumeTemplateId;
   committedPages?: WorkshopResumeCommittedPage[];
+  documentIconSettings?: DocumentIconSettings;
 };
 
 export type ResumePreviewPrintSource = {
@@ -135,6 +141,7 @@ export type ResumePreviewPrintSource = {
   resumeTemplateId: ResumeTemplateId;
   rendererVariantId: ResumeLayoutVariantId;
   committedPages?: WorkshopResumeCommittedPage[];
+  documentIconSettings?: DocumentIconSettings;
 };
 
 export type ResumePrintRoutePayload = {
@@ -147,6 +154,7 @@ export type ResumePrintRoutePayload = {
   resumeTemplateId: ResumeTemplateId;
   rendererVariantId: ResumeLayoutVariantId;
   committedPages?: WorkshopResumeCommittedPage[];
+  documentIconSettings?: DocumentIconSettings;
 };
 
 export type ResumePrintDebugSnapshot = {
@@ -179,6 +187,10 @@ export type ProposalPrintBlock =
   | {
       type: "salutation" | "paragraph";
       text: string;
+    }
+  | {
+      type: "list";
+      items: string[];
     }
   | {
       type: "closing";
@@ -221,6 +233,7 @@ export type ProposalPrintSource = {
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
   documentDecoration?: DocumentDecoration | null;
+  documentIconSettings?: DocumentIconSettings | null;
   body: ProposalPrintBlock[];
 };
 
@@ -247,6 +260,7 @@ export type ProposalPreviewPrintSource = {
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
   documentDecoration?: DocumentDecoration | null;
+  documentIconSettings?: DocumentIconSettings | null;
 };
 
 export type ProposalPrintRoutePayload = {
@@ -271,6 +285,7 @@ export type ProposalPrintRoutePayload = {
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
   documentDecoration?: DocumentDecoration | null;
+  documentIconSettings?: DocumentIconSettings | null;
 };
 
 export type ProposalPrintDebugSnapshot = {
@@ -421,6 +436,9 @@ export function buildResumeExportSource(args: {
     args.stylePreset ?? getVerbatiStyleFromCv(args.currentCv),
   );
   const resumeTemplateId = getResumeTemplateId(stylePreset);
+  const documentIconSettings = normalizeDocumentIconSettings(
+    args.currentCv.metadata.documentIcons,
+  );
   const authoritativeModel = buildAuthoritativeResumeExportModel(
     args.authoritativeResume,
   );
@@ -440,6 +458,7 @@ export function buildResumeExportSource(args: {
         pageSize,
       ),
       locale: normalizeExportDocumentLanguage(args.currentCv.metadata.locale),
+      documentIconSettings,
     };
   }
 
@@ -457,6 +476,7 @@ export function buildResumeExportSource(args: {
       pageSize,
     ),
     locale: normalizeExportDocumentLanguage(args.currentCv.metadata.locale),
+    documentIconSettings,
   };
 }
 
@@ -479,6 +499,9 @@ export function buildStyledResumePrintSource(args: {
   );
   const resumeData = buildCanonicalResumeRenderModelFromCv(args.currentCv);
   const resumeTemplateId = getResumeTemplateId(stylePreset);
+  const documentIconSettings = normalizeDocumentIconSettings(
+    args.currentCv.metadata.documentIcons,
+  );
 
   return {
     schemaVersion: 1,
@@ -495,6 +518,7 @@ export function buildStyledResumePrintSource(args: {
       resumeTemplateId,
       stylePreset,
     }),
+    documentIconSettings,
   };
 }
 
@@ -511,6 +535,7 @@ export function buildResumePrintRoutePayload(args: {
     resumeTemplateId: args.data.resumeTemplateId,
     rendererVariantId: args.data.rendererVariantId,
     committedPages: args.data.committedPages,
+    documentIconSettings: args.data.documentIconSettings,
   };
 }
 
@@ -553,6 +578,7 @@ export function buildProposalPreviewPrintSource(args: {
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
   documentDecoration?: DocumentDecoration | null;
+  documentIconSettings?: DocumentIconSettings | null;
   locale?: string | null;
   pageSizePreference?: DocumentPageSizePreference | null;
   pageSize?: DocumentPageSize | null;
@@ -606,6 +632,7 @@ export function buildProposalPreviewPrintSource(args: {
     documentDecoration: sanitizeDocumentDecorationForExport(
       args.documentDecoration,
     ),
+    documentIconSettings: normalizeDocumentIconSettings(args.documentIconSettings),
   };
 }
 
@@ -637,6 +664,9 @@ export function buildProposalPrintRoutePayload(args: {
     closing: sanitizeProposalClosingRef(args.data.closing),
     documentDecoration: sanitizeDocumentDecorationForExport(
       args.data.documentDecoration,
+    ),
+    documentIconSettings: normalizeDocumentIconSettings(
+      args.data.documentIconSettings,
     ),
   };
 }
@@ -733,12 +763,15 @@ export function buildProposalBodyBlocks(
     ? extractedClosingBlock.startIndex
     : paragraphs.length;
 
-  for (let index = startIndex; index < endIndex; index += 1) {
-    blocks.push({
-      type: "paragraph",
-      text: paragraphs[index],
-    });
-  }
+  const bodyContent = paragraphs.slice(startIndex, endIndex).join("\n\n");
+  parseProposalPlainTextBlocks(bodyContent).forEach((block) => {
+    if (block.type === "list") {
+      blocks.push({ type: "list", items: block.items });
+      return;
+    }
+
+    blocks.push({ type: "paragraph", text: block.text });
+  });
 
   if (closingBlock) {
     blocks.push(closingBlock);
@@ -776,6 +809,7 @@ export function buildProposalExportSource(args: {
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
   documentDecoration?: DocumentDecoration | null;
+  documentIconSettings?: DocumentIconSettings | null;
   locale?: string | null;
   pageSizePreference?: DocumentPageSizePreference | null;
   pageSize?: DocumentPageSize | null;
@@ -822,6 +856,7 @@ export function buildProposalExportSource(args: {
     documentDecoration: sanitizeDocumentDecorationForExport(
       args.documentDecoration,
     ),
+    documentIconSettings: normalizeDocumentIconSettings(args.documentIconSettings),
     body: buildProposalBodyBlocks(
       args.content,
       args.recipientDetails,

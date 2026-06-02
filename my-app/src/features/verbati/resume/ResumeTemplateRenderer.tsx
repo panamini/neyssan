@@ -29,6 +29,7 @@ import {
   resolveDocumentPageSize,
   type DocumentPageSize,
 } from "../../../lib/document-page-size";
+import type { DocumentIconSettings } from "../../../lib/document-icons";
 
 export const WORKSHOP_TEMPLATE_RENDERER_ID = WORKSHOP_RESUME_ONECOL_TEMPLATE_ID;
 export const RESUME_TEMPLATE_PAGE_GAP_PX = 24;
@@ -100,6 +101,7 @@ type ResumeTemplateRendererProps = {
   inlineEditing?: ResumeInlineEditing | null;
   sectionActions?: ResumeSectionActions | null;
   paperAi?: ResumePaperAiState | null;
+  documentIconSettings?: DocumentIconSettings | null;
   stageLayout?: DocumentStageLayout;
   pageSize?: DocumentPageSize | null;
   onStablePageCountChange?: ((pageCount: number) => void) | undefined;
@@ -163,6 +165,7 @@ export function ResumeTemplateRenderer({
   inlineEditing = null,
   sectionActions = null,
   paperAi = null,
+  documentIconSettings = null,
   stageLayout,
   pageSize = null,
   onStablePageCountChange,
@@ -303,6 +306,7 @@ export function ResumeTemplateRenderer({
                 inlineEditing={inlineEditing}
                 sectionActions={sectionActions}
                 paperAi={paperAi}
+                documentIconSettings={documentIconSettings}
               />
             ) : (
               <ResumeOneColAtsPage
@@ -313,6 +317,7 @@ export function ResumeTemplateRenderer({
                 inlineEditing={inlineEditing}
                 sectionActions={sectionActions}
                 paperAi={paperAi}
+                documentIconSettings={documentIconSettings}
               />
             )}
           </div>

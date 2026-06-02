@@ -32,6 +32,41 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     });
   });
 
+  it("renders plain-text bullet lines as document icon lists", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content={
+          "Dear Hiring Team,\n\n- Audit the current proposal flow\n- Ship inline SVG export markers\n\nKind regards,\nJane Doe"
+        }
+        proposalType="cover_letter"
+        templateId="swiss_margin"
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        documentIconSettings={{
+          defaultListMarkerKey: "asterisk-simple",
+          listMarkerType: "icon",
+          sectionHeadingIconMode: "none",
+          sectionIconMap: {},
+          color: "accent",
+          sizePt: 12,
+        }}
+      />,
+    );
+
+    const list = container.querySelector(".dasti-proposal-document__list");
+
+    expect(list).not.toBeNull();
+    expect(list?.querySelectorAll("li")).toHaveLength(2);
+    expect(list?.querySelector(".dasti-proposal-document__list-marker svg")).not.toBeNull();
+    expect(container.textContent).toContain("Audit the current proposal flow");
+    expect(container.textContent).toContain("Ship inline SVG export markers");
+  });
+
   it("renders applicant header lines with date and recipient details in the meta rail", () => {
     const { container } = render(
       <ProposalDocumentRenderer

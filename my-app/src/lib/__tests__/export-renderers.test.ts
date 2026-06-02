@@ -249,6 +249,41 @@ describe("export-renderers", () => {
     expect(normalizedStyledCss).toContain("--page-gutter: 18mm;");
   });
 
+  it("renders styled workshop resume list markers as inline document icons", () => {
+    const stylePreset = {
+      layout: "workshop" as const,
+      typography: "quiet-editorial" as const,
+      palette: "sauge" as const,
+      resumeTemplateId: "workshop_resume_onecol_ats" as const,
+    };
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const committedPages = planWorkshopResumePages({
+      data: resumeMock,
+      template,
+      stylePreset,
+    }).committedPages;
+    const document = parseExportHtml(
+      renderResumeStyledExportDocument({
+        data: {
+          ...resumeFixture,
+          resumeTemplateId: "workshop_resume_onecol_ats",
+          committedPages,
+          documentIconSettings: {
+            defaultListMarkerKey: "diamond",
+            sectionHeadingIconMode: "none",
+            sectionIconMap: {},
+            color: "accent",
+            sizePt: 10,
+          },
+        },
+        stylePreset,
+      }),
+    );
+
+    expect(document.querySelector(".bullet-list--document-icons")).toBeTruthy();
+    expect(document.querySelector(".bullet-list-marker svg")).toBeTruthy();
+  });
+
   it("normalizes deferred styled layouts onto the protected Robial split export baseline", () => {
     const atsDocument = parseExportHtml(
       renderResumeAtsExportDocument(resumeFixture, {
@@ -472,6 +507,44 @@ describe("export-renderers", () => {
     expect(document.querySelector(".dasti-proposal-document-decoration__resize-handle")).toBeNull();
     expect(document.querySelector("[data-design-mode='true']")).toBeNull();
     expect(css).toContain(".dasti-proposal-document-decoration");
+  });
+
+  it("renders proposal list blocks with inline document icon markers", () => {
+    const document = parseExportHtml(
+      renderProposalStyledExportDocument({
+        data: {
+          ...proposalFixture,
+          documentIconSettings: {
+            defaultListMarkerKey: "asterisk-simple",
+            listMarkerType: "icon",
+            sectionHeadingIconMode: "none",
+            sectionIconMap: {},
+            color: "accent",
+            sizePt: 12,
+          },
+          body: [
+            proposalFixture.body[0],
+            {
+              type: "list",
+              items: ["Audit the current flow", "Ship inline SVG markers"],
+            },
+            proposalFixture.body[2],
+          ],
+        },
+        stylePreset: {
+          layout: "swiss",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        },
+      }),
+    );
+
+    const list = document.querySelector(".proposal-list--document-icons");
+
+    expect(list).toBeTruthy();
+    expect(list?.querySelectorAll("li")).toHaveLength(2);
+    expect(list?.querySelector(".proposal-list-marker svg")).toBeTruthy();
+    expect(document.body.textContent).toContain("Audit the current flow");
   });
 
   it.each([

@@ -58,6 +58,10 @@ import {
   resolveDocumentStyleSlotId,
 } from "../lib/document-style-slots";
 import {
+  normalizeDocumentIconSettings,
+  type DocumentIconSettings,
+} from "../lib/document-icons";
+import {
   ensurePlainTextRemirrorDoc,
   ensureRemirrorDoc,
 } from "../components/remirror-editor/utils/conversion";
@@ -3243,6 +3247,21 @@ export function CvForge(): JSX.Element {
     debounceMs: 700,
     logPrefix: "[CvForge]",
   });
+  const documentIconSettings = React.useMemo(
+    () => normalizeDocumentIconSettings(currentCv?.metadata?.documentIcons),
+    [currentCv?.metadata?.documentIcons],
+  );
+  const documentIconSectionTargets = React.useMemo(
+    () =>
+      currentSections
+        .filter((section) => section.title?.trim())
+        .map((section, index) => ({
+          id: section.id ?? `${section.type}-${index}`,
+          title: section.title,
+          type: section.type,
+        })),
+    [currentSections],
+  );
   const filteredPreviewCv = React.useMemo(
     () => applyHiddenSectionsToCvDocument(optimisticCv, hiddenSectionIds),
     [hiddenSectionIds, optimisticCv],
@@ -6155,6 +6174,18 @@ export function CvForge(): JSX.Element {
     [setStylePreset],
   );
 
+  const handleDocumentIconSettingsChange = React.useCallback(
+    (settings: DocumentIconSettings) => {
+      const nextSettings = normalizeDocumentIconSettings(settings);
+      if (typeof saveCurrentCvStyleOnly === "function") {
+        void saveCurrentCvStyleOnly(stylePreset, {
+          documentIcons: nextSettings,
+        });
+      }
+    },
+    [saveCurrentCvStyleOnly, stylePreset],
+  );
+
   const cvDesignPanelRegistration = React.useMemo(
     () => ({
       surface: "cv-design" as const,
@@ -6171,10 +6202,16 @@ export function CvForge(): JSX.Element {
           onSelectFontPair={handleSelectFontPair}
           onSelectAccent={handleSelectAccent}
           onSelectCustomAccent={handleSelectCustomAccent}
+          documentIconSettings={documentIconSettings}
+          onDocumentIconSettingsChange={handleDocumentIconSettingsChange}
+          sectionIconTargets={documentIconSectionTargets}
         />
       ),
     }),
     [
+      documentIconSettings,
+      documentIconSectionTargets,
+      handleDocumentIconSettingsChange,
       handleResetStyleSlot,
       handleSelectAccent,
       handleSelectCustomAccent,
@@ -7966,6 +8003,7 @@ export function CvForge(): JSX.Element {
                     inlineEditing={resumeInlineEditing}
                     sectionActions={resumeSectionActions}
                     paperAi={resumePaperAiState}
+                    documentIconSettings={documentIconSettings}
                     showStageZoomFooter={Boolean(currentCv)}
                     showPageCount={
                       workspaceMode === "preview" && Boolean(currentCv)

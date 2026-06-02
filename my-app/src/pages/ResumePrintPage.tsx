@@ -284,6 +284,7 @@ export function ResumePrintPage(): JSX.Element {
           committedPages={payload.committedPages}
           pageSize={pageSize}
           stageLayout={printStageLayout}
+          documentIconSettings={payload.documentIconSettings}
         />
       ) : (
         <ResumePage
