@@ -110,6 +110,76 @@ describe("benchmark-cover-letter-writers", () => {
     });
   });
 
+  it("benchmarks a Mistral writer model with a separate Mistral generation key", async () => {
+    const benchmarkCase = coverLetterBenchmarkCases.find(
+      (item) => item.id === "security-securitas-adt-copwatch",
+    )!;
+    const generateLetter = vi.fn().mockResolvedValue({
+      content:
+        "Dear Hiring Manager,\n\nI completed reports by recording observations and surveillance activities.\n\nSincerely,\nRobert Cooper",
+      sections: [],
+      prompt: "prompt",
+      brief: {
+        language: "English",
+        preset: benchmarkCase.preset,
+        contextClass: benchmarkCase.expectedContextClass,
+        targetRole: benchmarkCase.jobTitle,
+        topEvidence: [
+          "Completed reports by recording observations and surveillance activities.",
+        ],
+        supportEvidence: [],
+        requiredMoves: [],
+        forbiddenMoves: [],
+      },
+      contextClass: benchmarkCase.expectedContextClass,
+      bodyParts: {
+        opening: "Opening.",
+        proofBlock: "Proof.",
+        employerValueBlock: "Employer value.",
+        closeLine: "Close.",
+      },
+      mode: "transfer",
+      evidenceUsed: [
+        "Completed reports by recording observations and surveillance activities.",
+      ],
+      omittedWeakEvidence: [],
+    });
+    const evaluateLetter = vi.fn().mockResolvedValue(successfulEvaluation);
+
+    const record = await benchmarkCoverLetterCase({
+      benchmarkCase,
+      writerModel: "mistral-medium-latest",
+      evaluatorModel: "gpt-5-mini",
+      apiKey: "sk-openai",
+      mistralApiKey: "sk-mistral",
+      generateLetter,
+      evaluateLetter,
+    });
+
+    expect(generateLetter).toHaveBeenCalledWith(
+      expect.objectContaining({
+        writerModel: "mistral-medium-latest",
+        apiKey: "sk-openai",
+        mistralApiKey: "sk-mistral",
+      }),
+    );
+    expect(evaluateLetter).toHaveBeenCalledWith({
+      letter:
+        "Dear Hiring Manager,\n\nI completed reports by recording observations and surveillance activities.\n\nSincerely,\nRobert Cooper",
+      apiKey: "sk-openai",
+      model: "gpt-5-mini",
+    });
+    expect(record).toMatchObject({
+      status: "ok",
+      writerModel: "mistral-medium-latest",
+      evaluation: {
+        gating: {
+          premiumReady: true,
+        },
+      },
+    });
+  });
+
   it("aggregates per-writer scores, premium-ready counts, rank pass counts, and hard-fail reasons", () => {
     const records: CoverLetterBenchmarkRecord[] = [
       {
