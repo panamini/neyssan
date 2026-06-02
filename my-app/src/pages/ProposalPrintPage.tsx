@@ -229,6 +229,7 @@ export function ProposalPrintPage(): JSX.Element {
       <div style={stageLayoutVars}>
         <ProposalDocumentRenderer
           content={payload.content}
+          proposalDocument={payload.proposalDocument}
           proposalType={payload.proposalType as FormValues["proposalType"] | null}
           templateId={payload.templateId}
           stylePreset={payload.stylePreset}
@@ -245,6 +246,7 @@ export function ProposalPrintPage(): JSX.Element {
           signatureSettings={payload.signatureSettings}
           closing={payload.closing}
           documentDecoration={payload.documentDecoration}
+          documentIconSettings={payload.documentIconSettings}
           pageSize={pageSize}
           pageWidth={pageSize.widthPx}
           pageGapPx={0}

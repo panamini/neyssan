@@ -1,6 +1,7 @@
 // my-app/src/types/cvDocument.ts
 import type { RemirrorJSON } from "remirror";
 import type { DocumentStyleMetadata } from "../lib/document-style-slots";
+import type { DocumentIconSettings } from "../lib/document-icons";
 
 /**
  * Primitive block types used within a CvSection.
@@ -254,6 +255,7 @@ export interface CvMetadata extends DocumentStyleMetadata {
   locale?: string;
   authorId?: string;
   lastEditedBy?: string;
+  documentIcons?: DocumentIconSettings;
   // Allow passthrough additional keys produced by runtime schema parsing (zod passthrough outputs)
   [k: string]: unknown;
 }

@@ -144,6 +144,33 @@ describe("document-export-models", () => {
     );
   });
 
+  it("carries resume document icon settings through styled print payloads", () => {
+    const currentCv = generateCvTemplate("Icon CV");
+    currentCv.metadata.documentIcons = {
+      defaultListMarkerKey: "dot",
+      sectionHeadingIconMode: "auto",
+      sectionIconMap: {},
+      color: "muted",
+      sizePt: 10,
+    };
+
+    const source = buildStyledResumePrintSource({ currentCv });
+    if (!source) {
+      throw new Error("Expected styled resume print source.");
+    }
+
+    const payload = buildResumePrintRoutePayload({ data: source });
+
+    expect(source.documentIconSettings).toEqual(
+      expect.objectContaining({
+        sectionHeadingIconMode: "auto",
+        color: "muted",
+        sizePt: 10,
+      }),
+    );
+    expect(payload.documentIconSettings).toEqual(source.documentIconSettings);
+  });
+
   it("recovers styled resume print sources from slot-only CV metadata", () => {
     const currentCv = generateCvTemplate("Slot-only styled CV");
     currentCv.metadata.verbatiStyle = undefined;
@@ -438,6 +465,100 @@ describe("document-export-models", () => {
         applicantHeader: null,
       }).locale,
     ).toBe("fr");
+  });
+
+  it("parses proposal bullet-like lines into export list blocks", () => {
+    const source = buildProposalExportSource({
+      content:
+        "Dear Hiring Team,\n\n- Audit the current flow\n- Ship inline SVG markers\n\nKind regards,\nAlex Martin",
+      proposalType: "cover_letter",
+      documentTitle: "Proposal",
+      documentMeta: "",
+      contactLine: "",
+      letterDate: "",
+      recipientDetails: "Hiring Team",
+      applicantHeader: null,
+      documentIconSettings: {
+        defaultListMarkerKey: "asterisk-simple",
+        sectionHeadingIconMode: "none",
+        sectionIconMap: {},
+        color: "accent",
+        sizePt: 12,
+      },
+    });
+
+    expect(source.documentIconSettings?.defaultListMarkerKey).toBe(
+      "asterisk-simple",
+    );
+    expect(source.body).toEqual([
+      { type: "salutation", text: "Dear Hiring Team," },
+      {
+        type: "list",
+        marker: { type: "dash" },
+        items: [
+          { text: "Audit the current flow", marker: { type: "dash" } },
+          { text: "Ship inline SVG markers", marker: { type: "dash" } },
+        ],
+      },
+      {
+        type: "closing",
+        signOff: "Kind regards,",
+        signatureName: "Alex Martin",
+      },
+    ]);
+  });
+
+  it("preserves structured proposal list item icons in export blocks", () => {
+    const source = buildProposalExportSource({
+      content: "Dear Hiring Team,\n\n- First item\n- Second item",
+      proposalDocument: {
+        schemaVersion: 1,
+        kind: "letter",
+        source: "structured",
+        blocks: [
+          {
+            id: "list",
+            type: "list",
+            marker: { type: "dash" },
+            items: [
+              {
+                id: "item-1",
+                text: "First item",
+                iconKey: "star",
+                marker: { type: "dash" },
+              },
+              {
+                id: "item-2",
+                text: "Second item",
+                marker: { type: "dash" },
+              },
+            ],
+          },
+        ],
+      },
+      proposalType: "cover_letter",
+      documentTitle: "Proposal",
+      documentMeta: "",
+      contactLine: "",
+      letterDate: "",
+      recipientDetails: "",
+      applicantHeader: null,
+    });
+
+    expect(source.body).toEqual([
+      {
+        type: "list",
+        marker: { type: "dash" },
+        items: [
+          {
+            text: "First item",
+            iconKey: "star",
+            marker: { type: "dash" },
+          },
+          { text: "Second item", marker: { type: "dash" } },
+        ],
+      },
+    ]);
   });
 
   it("builds a proposal print route payload that preserves preview state", () => {

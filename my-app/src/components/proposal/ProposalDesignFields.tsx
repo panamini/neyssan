@@ -465,7 +465,9 @@ export function ProposalDesignFields({
                   activeAccentHex === normalizeRailAccentHex(swatch.swatch))
               : isSeventhCustomToneSelected;
 
-          return swatch.paletteOverride ? (
+          const paletteOverride = swatch.paletteOverride;
+
+          return paletteOverride ? (
             <button
               key={swatch.id}
               type="button"
@@ -480,7 +482,7 @@ export function ProposalDesignFields({
               data-selected={isSelected ? "true" : undefined}
               onClick={() => {
                 setIsCustomColorPickerOpen(false);
-                onSelectStylePalette(swatch.paletteOverride);
+                onSelectStylePalette(paletteOverride);
               }}
             >
               {isSelected ? <Check size={12} strokeWidth={1.9} /> : null}

@@ -12,6 +12,17 @@ import {
   WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
   WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
 } from "../../lib/layout/resumeTemplates";
+import type {
+  DocumentIconColor,
+  DocumentIconSettings,
+  DocumentIconSizePt,
+  SectionHeadingIconMode,
+} from "../../lib/document-icons";
+import {
+  DEFAULT_DOCUMENT_ICON_SETTINGS,
+  normalizeDocumentIconSettings,
+} from "../../lib/document-icons";
+import { DocumentIconPicker } from "../document-icons/DocumentIconPicker";
 
 export type CvAccentChoice =
   | "terre"
@@ -38,6 +49,9 @@ type CvDesignFieldsProps = {
   onSelectFontPair: (fontPairId: VerbatiFontPairId) => void;
   onSelectAccent: (accent: CvAccentChoice) => void;
   onSelectCustomAccent: (hex: string) => void;
+  documentIconSettings?: DocumentIconSettings;
+  onDocumentIconSettingsChange?: (settings: DocumentIconSettings) => void;
+  sectionIconTargets?: Array<{ id: string; title: string; type?: string | null }>;
 };
 
 const FONT_PAIR_IDS: VerbatiFontPairId[] = [
@@ -62,6 +76,31 @@ const ACCENT_OPTIONS: Array<{
 }));
 
 const CV_CUSTOM_ACCENT_STARTER_HEX = "#8A8176";
+const SECTION_ICON_MODE_OPTIONS: Array<{
+  id: SectionHeadingIconMode;
+  label: string;
+}> = [
+  { id: "none", label: "None" },
+  { id: "auto", label: "Auto" },
+  { id: "custom", label: "Custom" },
+];
+const DOCUMENT_ICON_COLOR_OPTIONS: Array<{
+  id: DocumentIconColor;
+  label: string;
+}> = [
+  { id: "ink", label: "Ink" },
+  { id: "muted", label: "Muted" },
+  { id: "accent", label: "Accent" },
+];
+const DOCUMENT_ICON_SIZE_OPTIONS: Array<{
+  id: "small" | "medium" | "large";
+  label: string;
+  sizePt: DocumentIconSizePt;
+}> = [
+  { id: "small", label: "Small", sizePt: 8 },
+  { id: "medium", label: "Medium", sizePt: 10 },
+  { id: "large", label: "Large", sizePt: 12 },
+];
 
 function normalizeCvAccentHex(value: string | null | undefined): string | null {
   const normalized = value?.trim() ?? "";
@@ -145,6 +184,9 @@ export function CvDesignFields({
   onSelectFontPair,
   onSelectAccent,
   onSelectCustomAccent,
+  documentIconSettings = DEFAULT_DOCUMENT_ICON_SETTINGS,
+  onDocumentIconSettingsChange,
+  sectionIconTargets = [],
 }: CvDesignFieldsProps): JSX.Element {
   const [isCustomColorPickerOpen, setIsCustomColorPickerOpen] =
     React.useState(false);
@@ -173,6 +215,29 @@ export function CvDesignFields({
     isCustomAccentSelected && customAccentHex
       ? customAccentHex
       : CV_CUSTOM_ACCENT_STARTER_HEX;
+  const resolvedDocumentIconSettings = React.useMemo(
+    () => normalizeDocumentIconSettings(documentIconSettings),
+    [documentIconSettings],
+  );
+  const updateDocumentIconSettings = React.useCallback(
+    (patch: Partial<DocumentIconSettings>) => {
+      onDocumentIconSettingsChange?.({
+        ...resolvedDocumentIconSettings,
+        ...patch,
+      });
+    },
+    [onDocumentIconSettingsChange, resolvedDocumentIconSettings],
+  );
+  const visibleSectionIconTargets =
+    sectionIconTargets.length > 0
+      ? sectionIconTargets
+      : [
+          { id: "summary", title: "Summary", type: "summary" },
+          { id: "experience", title: "Experience", type: "experience" },
+          { id: "education", title: "Education", type: "education" },
+          { id: "skills", title: "Skills", type: "skills" },
+          { id: "languages", title: "Languages", type: "languages" },
+        ];
 
   return (
     <section className="dasti-cv-rail-pane" data-rail-pane="style">
@@ -323,6 +388,91 @@ export function CvDesignFields({
         onClose={() => setIsCustomColorPickerOpen(false)}
         onHexChange={onSelectCustomAccent}
       />
+      <div className="dasti-cv-rail-label">List marker</div>
+      <DocumentIconPicker
+        label="List icon"
+        selectedIconKey={resolvedDocumentIconSettings.defaultListMarkerKey}
+        onChange={(iconKey) =>
+          updateDocumentIconSettings({
+            defaultListMarkerKey: iconKey,
+          })
+        }
+      />
+      <div className="dasti-cv-rail-label">Section icons</div>
+      <div className="dasti-cv-style-pills" aria-label="Section heading icons">
+        {SECTION_ICON_MODE_OPTIONS.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            data-selected={
+              resolvedDocumentIconSettings.sectionHeadingIconMode === option.id
+                ? "true"
+                : undefined
+            }
+            aria-pressed={
+              resolvedDocumentIconSettings.sectionHeadingIconMode === option.id
+            }
+            onClick={() => updateDocumentIconSettings({ sectionHeadingIconMode: option.id })}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      {resolvedDocumentIconSettings.sectionHeadingIconMode === "custom" ? (
+        <div className="dasti-cv-section-icon-map" aria-label="Custom section icons">
+          {visibleSectionIconTargets.map((section) => {
+            const mapKey = section.type || section.title.toLowerCase();
+            return (
+              <div key={section.id} className="dasti-cv-section-icon-map__row">
+                <div className="dasti-cv-section-icon-map__label">{section.title}</div>
+                <DocumentIconPicker
+                  label={`${section.title} icon`}
+                  selectedIconKey={resolvedDocumentIconSettings.sectionIconMap?.[mapKey]}
+                  onChange={(iconKey) =>
+                    updateDocumentIconSettings({
+                      sectionHeadingIconMode: "custom",
+                      sectionIconMap: {
+                        ...(resolvedDocumentIconSettings.sectionIconMap ?? {}),
+                        [mapKey]: iconKey,
+                      },
+                    })
+                  }
+                />
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+      <div className="dasti-cv-style-pills" aria-label="Icon color">
+        {DOCUMENT_ICON_COLOR_OPTIONS.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            data-selected={
+              resolvedDocumentIconSettings.color === option.id ? "true" : undefined
+            }
+            aria-pressed={resolvedDocumentIconSettings.color === option.id}
+            onClick={() => updateDocumentIconSettings({ color: option.id })}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      <div className="dasti-cv-style-pills" aria-label="Icon size">
+        {DOCUMENT_ICON_SIZE_OPTIONS.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            data-selected={
+              resolvedDocumentIconSettings.sizePt === option.sizePt ? "true" : undefined
+            }
+            aria-pressed={resolvedDocumentIconSettings.sizePt === option.sizePt}
+            onClick={() => updateDocumentIconSettings({ sizePt: option.sizePt })}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
     </section>
   );
 }

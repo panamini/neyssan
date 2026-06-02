@@ -402,6 +402,38 @@ describe("ResumeTemplateRenderer", () => {
     });
   });
 
+  it("renders controlled document list markers for workshop bullets", () => {
+    const { container } = render(
+      <ResumeTemplateRenderer
+        data={resumeMock}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        resumeTemplateId="workshop_resume_onecol_ats"
+        documentIconSettings={{
+          defaultListMarkerKey: "diamond",
+          sectionHeadingIconMode: "none",
+          sectionIconMap: {},
+          color: "accent",
+          sizePt: 10,
+        }}
+      />,
+    );
+
+    const marker = container.querySelector(
+      ".dasti-cv-paper-list-marker svg",
+    );
+    const markedListItem = marker?.closest("li") as HTMLElement | null;
+
+    expect(marker).toBeTruthy();
+    expect(markedListItem?.style.gridTemplateColumns).toBe(
+      "max-content minmax(0, 1fr)",
+    );
+  });
+
   it("renders the workshop two-column ATS page set with canonical column vars", () => {
     const { container } = render(
       <ResumeTemplateRenderer

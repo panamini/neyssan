@@ -373,6 +373,19 @@ const _CvMetadataBase = z.object({
     .strict()
     .optional(),
   documentStyleVersion: z.literal(1).optional(),
+  documentIcons: z
+    .object({
+      listMarkerType: z.enum(["dot", "dash", "icon"]).optional(),
+      defaultListMarkerKey: z.string().nullable().optional(),
+      sectionHeadingIconMode: z
+        .enum(["none", "auto", "custom"])
+        .optional(),
+      sectionIconMap: z.record(z.string()).optional(),
+      color: z.enum(["ink", "muted", "accent"]).optional(),
+      sizePt: z.union([z.literal(8), z.literal(9), z.literal(10), z.literal(12)]).optional(),
+    })
+    .passthrough()
+    .optional(),
 });
 export const CvMetadataSchema = _CvMetadataBase.passthrough();
 export const CvMetadataSchemaStrict = _CvMetadataBase.strict();

@@ -43,6 +43,18 @@ import {
   type ResumeTemplateId,
 } from "./layout/resumeTemplates";
 import {
+  normalizeDocumentIconSettings,
+  type DocumentIconSettings,
+} from "./document-icons";
+import { parseProposalPlainTextBlocks } from "./proposal-list-blocks";
+import {
+  normalizeProposalDocument,
+  resolveProposalDocument,
+  serializeProposalDocumentToLegacyString,
+  type ProposalDocument,
+  type ProposalDocumentListMarker,
+} from "./proposal-document";
+import {
   planWorkshopResumePages,
   type WorkshopResumeCommittedPage,
 } from "./resume/resumePagination";
@@ -122,6 +134,7 @@ export type ResumePrintSource = {
   additionalInformation?: string[];
   resumeTemplateId: ResumeTemplateId;
   committedPages?: WorkshopResumeCommittedPage[];
+  documentIconSettings?: DocumentIconSettings;
 };
 
 export type ResumePreviewPrintSource = {
@@ -135,6 +148,7 @@ export type ResumePreviewPrintSource = {
   resumeTemplateId: ResumeTemplateId;
   rendererVariantId: ResumeLayoutVariantId;
   committedPages?: WorkshopResumeCommittedPage[];
+  documentIconSettings?: DocumentIconSettings;
 };
 
 export type ResumePrintRoutePayload = {
@@ -147,6 +161,7 @@ export type ResumePrintRoutePayload = {
   resumeTemplateId: ResumeTemplateId;
   rendererVariantId: ResumeLayoutVariantId;
   committedPages?: WorkshopResumeCommittedPage[];
+  documentIconSettings?: DocumentIconSettings;
 };
 
 export type ResumePrintDebugSnapshot = {
@@ -179,6 +194,15 @@ export type ProposalPrintBlock =
   | {
       type: "salutation" | "paragraph";
       text: string;
+    }
+  | {
+      type: "list";
+      items: Array<{
+        text: string;
+        iconKey?: string;
+        marker?: ProposalDocumentListMarker | null;
+      }>;
+      marker?: ProposalDocumentListMarker | null;
     }
   | {
       type: "closing";
@@ -221,7 +245,9 @@ export type ProposalPrintSource = {
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
   documentDecoration?: DocumentDecoration | null;
+  documentIconSettings?: DocumentIconSettings | null;
   body: ProposalPrintBlock[];
+  proposalDocument?: ProposalDocument | null;
 };
 
 export type ProposalPreviewPrintSource = {
@@ -231,6 +257,7 @@ export type ProposalPreviewPrintSource = {
   pageSize?: DocumentPageSize;
   locale: string | null;
   content: string;
+  proposalDocument?: ProposalDocument | null;
   proposalType: string | null;
   voicePreset: string | null;
   railTitle: string | null;
@@ -247,6 +274,7 @@ export type ProposalPreviewPrintSource = {
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
   documentDecoration?: DocumentDecoration | null;
+  documentIconSettings?: DocumentIconSettings | null;
 };
 
 export type ProposalPrintRoutePayload = {
@@ -255,6 +283,7 @@ export type ProposalPrintRoutePayload = {
   pageSize?: DocumentPageSize;
   locale: string | null;
   content: string;
+  proposalDocument?: ProposalDocument | null;
   proposalType: string | null;
   voicePreset: string | null;
   railTitle: string | null;
@@ -271,6 +300,7 @@ export type ProposalPrintRoutePayload = {
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
   documentDecoration?: DocumentDecoration | null;
+  documentIconSettings?: DocumentIconSettings | null;
 };
 
 export type ProposalPrintDebugSnapshot = {
@@ -421,6 +451,9 @@ export function buildResumeExportSource(args: {
     args.stylePreset ?? getVerbatiStyleFromCv(args.currentCv),
   );
   const resumeTemplateId = getResumeTemplateId(stylePreset);
+  const documentIconSettings = normalizeDocumentIconSettings(
+    args.currentCv.metadata.documentIcons,
+  );
   const authoritativeModel = buildAuthoritativeResumeExportModel(
     args.authoritativeResume,
   );
@@ -440,6 +473,7 @@ export function buildResumeExportSource(args: {
         pageSize,
       ),
       locale: normalizeExportDocumentLanguage(args.currentCv.metadata.locale),
+      documentIconSettings,
     };
   }
 
@@ -457,6 +491,7 @@ export function buildResumeExportSource(args: {
       pageSize,
     ),
     locale: normalizeExportDocumentLanguage(args.currentCv.metadata.locale),
+    documentIconSettings,
   };
 }
 
@@ -479,6 +514,9 @@ export function buildStyledResumePrintSource(args: {
   );
   const resumeData = buildCanonicalResumeRenderModelFromCv(args.currentCv);
   const resumeTemplateId = getResumeTemplateId(stylePreset);
+  const documentIconSettings = normalizeDocumentIconSettings(
+    args.currentCv.metadata.documentIcons,
+  );
 
   return {
     schemaVersion: 1,
@@ -495,6 +533,7 @@ export function buildStyledResumePrintSource(args: {
       resumeTemplateId,
       stylePreset,
     }),
+    documentIconSettings,
   };
 }
 
@@ -511,6 +550,7 @@ export function buildResumePrintRoutePayload(args: {
     resumeTemplateId: args.data.resumeTemplateId,
     rendererVariantId: args.data.rendererVariantId,
     committedPages: args.data.committedPages,
+    documentIconSettings: args.data.documentIconSettings,
   };
 }
 
@@ -537,6 +577,7 @@ export function buildResumePrintDebugSnapshot(args: {
 
 export function buildProposalPreviewPrintSource(args: {
   content: string | null | undefined;
+  proposalDocument?: ProposalDocument | null;
   proposalType: string | null | undefined;
   voicePreset: string | null | undefined;
   railTitle: string | null | undefined;
@@ -553,12 +594,23 @@ export function buildProposalPreviewPrintSource(args: {
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
   documentDecoration?: DocumentDecoration | null;
+  documentIconSettings?: DocumentIconSettings | null;
   locale?: string | null;
   pageSizePreference?: DocumentPageSizePreference | null;
   pageSize?: DocumentPageSize | null;
 }): ProposalPreviewPrintSource {
   const documentTitle = cleanString(args.documentTitle) || "Proposal";
-  const normalizedContent = cleanString(args.content);
+  const resolvedProposalDocument = resolveProposalDocument({
+    document: args.proposalDocument,
+    content: args.content,
+    proposalType: args.proposalType,
+    closing: args.closing,
+  });
+  const normalizedProposalDocument =
+    resolvedProposalDocument.blocks.length > 0 ? resolvedProposalDocument : null;
+  const normalizedContent = normalizedProposalDocument
+    ? serializeProposalDocumentToLegacyString(normalizedProposalDocument)
+    : cleanString(args.content);
   const stylePreset = resolveVerbatiStyle(args.stylePreset);
   const locale = resolveProposalExportLocale({
     explicitLocale: args.locale,
@@ -576,6 +628,7 @@ export function buildProposalPreviewPrintSource(args: {
     }),
     locale,
     content: normalizedContent,
+    proposalDocument: normalizedProposalDocument,
     proposalType: cleanString(args.proposalType) || null,
     voicePreset: cleanString(args.voicePreset) || null,
     railTitle: cleanString(args.railTitle) || null,
@@ -606,6 +659,7 @@ export function buildProposalPreviewPrintSource(args: {
     documentDecoration: sanitizeDocumentDecorationForExport(
       args.documentDecoration,
     ),
+    documentIconSettings: normalizeDocumentIconSettings(args.documentIconSettings),
   };
 }
 
@@ -618,6 +672,7 @@ export function buildProposalPrintRoutePayload(args: {
     pageSize: resolveDocumentPageSize({ pageSize: args.data.pageSize }),
     locale: args.data.locale,
     content: args.data.content,
+    proposalDocument: normalizeProposalDocument(args.data.proposalDocument),
     proposalType: args.data.proposalType,
     voicePreset: args.data.voicePreset,
     railTitle: args.data.railTitle,
@@ -637,6 +692,9 @@ export function buildProposalPrintRoutePayload(args: {
     closing: sanitizeProposalClosingRef(args.data.closing),
     documentDecoration: sanitizeDocumentDecorationForExport(
       args.data.documentDecoration,
+    ),
+    documentIconSettings: normalizeDocumentIconSettings(
+      args.data.documentIconSettings,
     ),
   };
 }
@@ -677,7 +735,42 @@ export function buildProposalBodyBlocks(
   content: string | null | undefined,
   recipientDetails?: string | null,
   closing?: ProposalClosingRef | null,
+  proposalDocument?: ProposalDocument | null,
+  proposalType?: string | null,
 ): ProposalPrintBlock[] {
+  const normalizedProposalDocument = resolveProposalDocument({
+    document: proposalDocument,
+    content,
+    proposalType,
+    closing,
+  });
+  if (normalizedProposalDocument.blocks.length > 0) {
+    return normalizedProposalDocument.blocks.map((block): ProposalPrintBlock | null => {
+      if (block.type === "salutation" || block.type === "paragraph") {
+        return { type: block.type, text: block.text };
+      }
+      if (block.type === "list") {
+        return {
+          type: "list",
+          marker: block.marker ?? null,
+          items: block.items.map((item) => ({
+            text: item.text,
+            ...(item.iconKey ? { iconKey: item.iconKey } : null),
+            marker: item.marker ?? block.marker ?? null,
+          })),
+        };
+      }
+      return {
+        type: "closing",
+        signOff: block.signOff,
+        signatureName: block.signatureName,
+        ...(block.handwrittenSignatureEnabled
+          ? { handwrittenSignatureEnabled: true }
+          : null),
+      };
+    }).filter((block): block is ProposalPrintBlock => Boolean(block));
+  }
+
   const normalizedContent = cleanString(content);
   if (!normalizedContent) {
     return [];
@@ -733,12 +826,18 @@ export function buildProposalBodyBlocks(
     ? extractedClosingBlock.startIndex
     : paragraphs.length;
 
-  for (let index = startIndex; index < endIndex; index += 1) {
-    blocks.push({
-      type: "paragraph",
-      text: paragraphs[index],
-    });
-  }
+  const bodyContent = paragraphs.slice(startIndex, endIndex).join("\n\n");
+  parseProposalPlainTextBlocks(bodyContent).forEach((block) => {
+    if (block.type === "list") {
+      blocks.push({
+        type: "list",
+        items: block.items.map((item) => ({ text: item })),
+      });
+      return;
+    }
+
+    blocks.push({ type: "paragraph", text: block.text });
+  });
 
   if (closingBlock) {
     blocks.push(closingBlock);
@@ -764,6 +863,7 @@ function resolveProposalExportLocale(args: {
 
 export function buildProposalExportSource(args: {
   content: string | null | undefined;
+  proposalDocument?: ProposalDocument | null;
   proposalType: string | null | undefined;
   documentTitle: string | null | undefined;
   documentMeta: string | null | undefined;
@@ -776,14 +876,26 @@ export function buildProposalExportSource(args: {
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
   documentDecoration?: DocumentDecoration | null;
+  documentIconSettings?: DocumentIconSettings | null;
   locale?: string | null;
   pageSizePreference?: DocumentPageSizePreference | null;
   pageSize?: DocumentPageSize | null;
 }): ProposalPrintSource {
   const documentTitle = cleanString(args.documentTitle) || "Proposal";
+  const resolvedProposalDocument = resolveProposalDocument({
+    document: args.proposalDocument,
+    content: args.content,
+    proposalType: args.proposalType,
+    closing: args.closing,
+  });
+  const normalizedProposalDocument =
+    resolvedProposalDocument.blocks.length > 0 ? resolvedProposalDocument : null;
+  const normalizedContent = normalizedProposalDocument
+    ? serializeProposalDocumentToLegacyString(normalizedProposalDocument)
+    : cleanString(args.content);
   const locale = resolveProposalExportLocale({
     explicitLocale: args.locale,
-    content: args.content,
+    content: normalizedContent,
     documentTitle,
   });
 
@@ -822,10 +934,14 @@ export function buildProposalExportSource(args: {
     documentDecoration: sanitizeDocumentDecorationForExport(
       args.documentDecoration,
     ),
+    documentIconSettings: normalizeDocumentIconSettings(args.documentIconSettings),
+    proposalDocument: normalizedProposalDocument,
     body: buildProposalBodyBlocks(
-      args.content,
+      normalizedContent,
       args.recipientDetails,
       sanitizeProposalClosingRef(args.closing),
+      normalizedProposalDocument,
+      args.proposalType,
     ),
   };
 }

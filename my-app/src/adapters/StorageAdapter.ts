@@ -262,6 +262,7 @@ export class ConvexStorageAdapter {
         | "verbatiStyleSlotNameSnapshot"
         | "verbatiStyleBaseSnapshot"
         | "documentStyleVersion"
+        | "documentIcons"
       >
     >,
   ): Promise<void> {
@@ -275,6 +276,9 @@ export class ConvexStorageAdapter {
       metadata,
       metadataPatch as CvDocument["metadata"],
     );
+    if (metadataPatch?.documentIcons !== undefined) {
+      metadata.documentIcons = metadataPatch.documentIcons;
+    }
 
     try {
       await this._patchMutation({

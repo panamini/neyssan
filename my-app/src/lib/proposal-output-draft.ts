@@ -47,6 +47,15 @@ import {
   shouldPersistDocumentDecoration,
   type DocumentDecoration,
 } from "./document-decoration";
+import {
+  normalizeDocumentIconSettings,
+  type DocumentIconSettings,
+} from "./document-icons";
+import {
+  normalizeProposalDocument,
+  parseLegacyProposalDocument,
+  type ProposalDocument,
+} from "./proposal-document";
 
 export const PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY =
   "dasti:proposal-output-draft:v1";
@@ -60,11 +69,13 @@ let hasWarnedSessionFallbackForProposalOutputDraft = false;
 
 export type StoredProposalOutputDraft = {
   proposalContent: string | null;
+  proposalDocument?: ProposalDocument | null;
   proposalType: FormValues["proposalType"] | null;
   proposalVoicePreset: FormValues["voicePreset"] | null;
   proposalTemplateId: ProposalTemplateId | null;
   proposalVerbatiStyle: VerbatiStylePreset | null;
   documentDecoration?: DocumentDecoration | null;
+  documentIconSettings?: DocumentIconSettings | null;
   verbatiStyleSlotId?: 1 | 2 | 3 | null;
   verbatiStyleSlotSource?: DocumentStyleSlotSource | null;
   verbatiStyleSlotNameSnapshot?: string | null;
@@ -288,6 +299,7 @@ export function readStoredProposalOutputDraft(): StoredProposalOutputDraft | nul
         typeof parsed.proposalContent === "string"
           ? parsed.proposalContent
           : null,
+      proposalDocument: normalizeProposalDocument(parsed.proposalDocument),
       proposalType:
         parsed.proposalType === "cover_letter" ||
         parsed.proposalType === "application_message" ||
@@ -311,6 +323,9 @@ export function readStoredProposalOutputDraft(): StoredProposalOutputDraft | nul
           : null,
       documentDecoration: sanitizeStoredDocumentDecoration(
         parsed.documentDecoration,
+      ),
+      documentIconSettings: normalizeDocumentIconSettings(
+        parsed.documentIconSettings,
       ),
       verbatiStyleSlotId: resolveDocumentStyleSlotId(parsed.verbatiStyleSlotId),
       verbatiStyleSlotSource: isDocumentStyleSlotSource(
@@ -467,9 +482,21 @@ export function readStoredProposalOutputDraft(): StoredProposalOutputDraft | nul
 function buildSanitizedStoredProposalOutputDraft(
   draft: StoredProposalOutputDraft,
 ): StoredProposalOutputDraft {
+  const proposalContent =
+    typeof draft.proposalContent === "string" ? draft.proposalContent : null;
+  const proposalDocument =
+    normalizeProposalDocument(draft.proposalDocument) ??
+    (proposalContent
+      ? parseLegacyProposalDocument({
+          content: proposalContent,
+          proposalType: draft.proposalType,
+          closing: draft.proposalClosing,
+        })
+      : null);
+
   return {
-    proposalContent:
-      typeof draft.proposalContent === "string" ? draft.proposalContent : null,
+    proposalContent,
+    proposalDocument,
     proposalType:
       draft.proposalType === "cover_letter" ||
       draft.proposalType === "application_message" ||
@@ -492,6 +519,9 @@ function buildSanitizedStoredProposalOutputDraft(
           )
         : null,
     documentDecoration: sanitizeStoredDocumentDecoration(draft.documentDecoration),
+    documentIconSettings: normalizeDocumentIconSettings(
+      draft.documentIconSettings,
+    ),
     verbatiStyleSlotId: resolveDocumentStyleSlotId(draft.verbatiStyleSlotId),
     verbatiStyleSlotSource: isDocumentStyleSlotSource(
       draft.verbatiStyleSlotSource,

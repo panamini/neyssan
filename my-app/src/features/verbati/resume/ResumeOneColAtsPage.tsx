@@ -42,6 +42,14 @@ import {
   type InlineEditableTag,
   type ResumeInlineEditing,
 } from "./InlineEditableText";
+import {
+  getDocumentIcon,
+  getDocumentIconColorCss,
+  normalizeDocumentIconSettings,
+  resolveDefaultListMarkerIconKey,
+  resolveSectionHeadingIconKey,
+  type DocumentIconSettings,
+} from "../../../lib/document-icons";
 
 type InlinePreviewAttrs = Record<string, string | undefined>;
 
@@ -53,6 +61,7 @@ type ResumeOneColAtsPageProps = {
   inlineEditing?: ResumeInlineEditing | null;
   sectionActions?: ResumeSectionActions | null;
   paperAi?: ResumePaperAiState | null;
+  documentIconSettings?: DocumentIconSettings | null;
 };
 
 export type ResumeSectionActions = {
@@ -103,9 +112,55 @@ const workshopLabelTextStyle = {
 };
 
 const workshopVisibleListStyle = {
-  listStyleType: "disc" as const,
+  listStyleType: "none" as const,
   listStylePosition: "outside" as const,
 };
+
+function renderDocumentListMarker(
+  settings: DocumentIconSettings | null | undefined,
+): React.ReactNode {
+  const documentIconSettings = normalizeDocumentIconSettings(settings);
+  const icon = getDocumentIcon(
+    resolveDefaultListMarkerIconKey(documentIconSettings),
+  );
+  if (!icon) return null;
+
+  return (
+    <span
+      className="dasti-cv-paper-list-marker"
+      aria-hidden="true"
+      style={{
+        display: "inline-flex",
+        width: `${documentIconSettings.sizePt}pt`,
+        height: `${documentIconSettings.sizePt}pt`,
+        color: getDocumentIconColorCss(documentIconSettings.color),
+        transform: "translateY(0.14em)",
+      }}
+      dangerouslySetInnerHTML={{ __html: icon.svg }}
+    />
+  );
+}
+
+function buildDocumentListStyle(args: {
+  listGapMm: number;
+}): React.CSSProperties {
+  return {
+    margin: 0,
+    paddingLeft: 0,
+    ...workshopVisibleListStyle,
+    display: "grid",
+    gap: formatMillimeters(args.listGapMm),
+  };
+}
+
+function buildDocumentListItemStyle(): React.CSSProperties {
+  return {
+    display: "grid",
+    gridTemplateColumns: "max-content minmax(0, 1fr)",
+    columnGap: "0.72em",
+    alignItems: "start",
+  };
+}
 
 function renderPaperListSuggestions(args: {
   fragment: WorkshopResumeCommittedFragment;
@@ -274,6 +329,7 @@ function renderSectionHeading(args: {
   sectionId?: string;
   sectionType?: string;
   sectionActions?: ResumeSectionActions | null;
+  documentIconSettings?: DocumentIconSettings | null;
 }) {
   const sectionId = args.sectionId;
   const sectionHidden = Boolean(
@@ -283,6 +339,15 @@ function renderSectionHeading(args: {
     args.sectionType,
   );
   const sectionAiLabel = getPaperSectionAiLabel(args.sectionType, args.title);
+  const documentIconSettings = normalizeDocumentIconSettings(
+    args.documentIconSettings,
+  );
+  const sectionIconKey = resolveSectionHeadingIconKey({
+    settings: documentIconSettings,
+    sectionType: args.sectionType,
+    sectionTitle: args.title,
+  });
+  const sectionIcon = getDocumentIcon(sectionIconKey);
   return (
     <div
       className="dasti-cv-paper-section-heading"
@@ -297,6 +362,9 @@ function renderSectionHeading(args: {
       <h2
         style={{
           margin: 0,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "1.15mm",
           fontFamily: "var(--heading-font, var(--font-heading-family))",
           fontSize: buildAdjustedFontSize({
             baseVar: "--text-title-size",
@@ -311,6 +379,20 @@ function renderSectionHeading(args: {
           color: "var(--color-accent)",
         }}
       >
+        {sectionIcon ? (
+          <span
+            className="dasti-cv-paper-section-heading-icon"
+            aria-hidden="true"
+            style={{
+              display: "inline-flex",
+              width: `${documentIconSettings.sizePt}pt`,
+              height: `${documentIconSettings.sizePt}pt`,
+              color: getDocumentIconColorCss(documentIconSettings.color),
+              flex: "0 0 auto",
+            }}
+            dangerouslySetInnerHTML={{ __html: sectionIcon.svg }}
+          />
+        ) : null}
         {args.title}
       </h2>
       {args.continued ? (
@@ -384,6 +466,7 @@ function renderSectionHeading(args: {
 function renderExperienceBlocks(args: {
   blocks: WorkshopExperienceContentBlock[];
   listGapMm: number;
+  documentIconSettings?: DocumentIconSettings | null;
 }) {
   const nodes: React.ReactNode[] = [];
   let pendingBullets: WorkshopExperienceContentBlock[] = [];
@@ -396,24 +479,20 @@ function renderExperienceBlocks(args: {
     nodes.push(
       <ul
         key={`bullets-${nodes.length}`}
-        style={{
-          margin: 0,
-          paddingLeft: "var(--flow-list-indent)",
-          ...workshopVisibleListStyle,
-          display: "grid",
-          gap: formatMillimeters(args.listGapMm),
-        }}
+        style={buildDocumentListStyle({ listGapMm: args.listGapMm })}
       >
         {pendingBullets.map((block) => (
           <li
             key={`${block.kind}-${block.text}`}
             style={{
+              ...buildDocumentListItemStyle(),
               fontSize: workshopBodyFontSize,
               lineHeight: "var(--text-body-line)",
               ...experienceWrapStyle,
             }}
           >
-            {block.text}
+            {renderDocumentListMarker(args.documentIconSettings)}
+            <span>{block.text}</span>
           </li>
         ))}
       </ul>,
@@ -705,6 +784,7 @@ function renderResponsibilitiesRich(args: {
     | WorkshopResponsibilitiesRichContent
     | WorkshopCommittedResponsibilitiesRichContent;
   listGapMm: number;
+  documentIconSettings?: DocumentIconSettings | null;
 }) {
   return args.rich.blocks.map((block, blockIndex) => {
     if (block.kind === "paragraph") {
@@ -731,29 +811,27 @@ function renderResponsibilitiesRich(args: {
     return (
       <ul
         key={`bullet-list-${blockIndex}`}
-        style={{
-          margin: 0,
-          paddingLeft: "var(--flow-list-indent)",
-          ...workshopVisibleListStyle,
-          display: "grid",
-          gap: formatMillimeters(args.listGapMm),
-        }}
+        style={buildDocumentListStyle({ listGapMm: args.listGapMm })}
       >
         {block.items.map((item, itemIndex) => (
           <li
             key={`bullet-list-${blockIndex}-item-${itemIndex}`}
             style={{
+              ...buildDocumentListItemStyle(),
               fontSize: workshopBodyFontSize,
               lineHeight: "var(--text-body-line)",
               ...experienceWrapStyle,
             }}
           >
-            {item.runs.map((run, runIndex) =>
-              renderResponsibilityRun(
-                run,
-                `bullet-list-${blockIndex}-item-${itemIndex}-run-${runIndex}`,
-              ),
-            )}
+            {renderDocumentListMarker(args.documentIconSettings)}
+            <span>
+              {item.runs.map((run, runIndex) =>
+                renderResponsibilityRun(
+                  run,
+                  `bullet-list-${blockIndex}-item-${itemIndex}-run-${runIndex}`,
+                ),
+              )}
+            </span>
           </li>
         ))}
       </ul>
@@ -789,6 +867,7 @@ function renderExperienceContent(args: {
   itemIndex?: number;
   listGapMm: number;
   inlineEditing?: ResumeInlineEditing | null;
+  documentIconSettings?: DocumentIconSettings | null;
 }) {
   if (args.inlineEditing?.enabled) {
     const rich = args.item.responsibilitiesRich;
@@ -934,54 +1013,60 @@ function renderExperienceContent(args: {
         nodes.push(
           <ul
             key={`editable-bullet-list-${blockIndex}`}
-            style={{
-              margin: 0,
-              paddingLeft: "var(--flow-list-indent)",
-              ...workshopVisibleListStyle,
-              display: "grid",
-              gap: formatMillimeters(args.listGapMm),
-            }}
+            style={buildDocumentListStyle({ listGapMm: args.listGapMm })}
           >
-            <li>
-              <InlineEditableText
-                as="span"
-                value={block.text}
-                editable
-                editTarget={editTarget}
-                onActivate={(target) => args.inlineEditing?.onActivate(target)}
-                onDeactivate={args.inlineEditing?.onDeactivate}
-                ariaLabel="Edit experience bullet"
-                data-placeholder="Type an impact bullet..."
-                onPlainTextChange={(text) =>
-                  args.inlineEditing?.onFieldChange?.(editTarget, text)
-                }
-                onKeyDown={(event) => {
-                  if (
-                    event.key === "Enter" &&
-                    !event.shiftKey &&
-                    !event.metaKey &&
-                    !event.ctrlKey &&
-                    !event.altKey
-                  ) {
-                    event.preventDefault();
-                    args.inlineEditing?.onAddItem?.({
-                      sectionId: args.sectionId ?? "",
-                      sectionType: args.sectionType ?? "experience",
-                      itemKind: "bullet",
-                      parentItemId: args.item.id,
-                    });
+            <li
+              style={{
+                ...buildDocumentListItemStyle(),
+                fontSize: workshopBodyFontSize,
+                lineHeight: "var(--text-body-line)",
+                ...experienceWrapStyle,
+              }}
+            >
+              {renderDocumentListMarker(args.documentIconSettings)}
+              <span>
+                <InlineEditableText
+                  as="span"
+                  value={block.text}
+                  editable
+                  editTarget={editTarget}
+                  onActivate={(target) =>
+                    args.inlineEditing?.onActivate(target)
                   }
-                }}
-                data-preview-section={args.sectionType}
-                data-preview-section-id={args.sectionId}
-                data-preview-section-title={args.sectionTitle}
-                data-preview-item-id={`${args.item.id ?? "experience"}-bullet-${currentBulletIndex}`}
-                style={{
-                  fontSize: workshopBodyFontSize,
-                  lineHeight: "var(--text-body-line)",
-                  ...experienceWrapStyle,
-                }}
-              />
+                  onDeactivate={args.inlineEditing?.onDeactivate}
+                  ariaLabel="Edit experience bullet"
+                  data-placeholder="Type an impact bullet..."
+                  onPlainTextChange={(text) =>
+                    args.inlineEditing?.onFieldChange?.(editTarget, text)
+                  }
+                  onKeyDown={(event) => {
+                    if (
+                      event.key === "Enter" &&
+                      !event.shiftKey &&
+                      !event.metaKey &&
+                      !event.ctrlKey &&
+                      !event.altKey
+                    ) {
+                      event.preventDefault();
+                      args.inlineEditing?.onAddItem?.({
+                        sectionId: args.sectionId ?? "",
+                        sectionType: args.sectionType ?? "experience",
+                        itemKind: "bullet",
+                        parentItemId: args.item.id,
+                      });
+                    }
+                  }}
+                  data-preview-section={args.sectionType}
+                  data-preview-section-id={args.sectionId}
+                  data-preview-section-title={args.sectionTitle}
+                  data-preview-item-id={`${args.item.id ?? "experience"}-bullet-${currentBulletIndex}`}
+                  style={{
+                    fontSize: workshopBodyFontSize,
+                    lineHeight: "var(--text-body-line)",
+                    ...experienceWrapStyle,
+                  }}
+                />
+              </span>
             </li>
           </ul>,
         );
@@ -1024,6 +1109,7 @@ function renderExperienceContent(args: {
     return renderExperienceBlocks({
       blocks: args.item.blocks,
       listGapMm: args.listGapMm,
+      documentIconSettings: args.documentIconSettings,
     });
   }
 
@@ -1034,12 +1120,14 @@ function renderExperienceContent(args: {
     return renderExperienceBlocks({
       blocks: args.item.blocks,
       listGapMm: args.listGapMm,
+      documentIconSettings: args.documentIconSettings,
     });
   }
 
   return renderResponsibilitiesRich({
     rich,
     listGapMm: args.listGapMm,
+    documentIconSettings: args.documentIconSettings,
   });
 }
 
@@ -1446,6 +1534,7 @@ function renderFragmentContent(args: {
   inlineEditing?: ResumeInlineEditing | null;
   sectionActions?: ResumeSectionActions | null;
   paperAi?: ResumePaperAiState | null;
+  documentIconSettings?: DocumentIconSettings | null;
 }) {
   const {
     fragment,
@@ -1454,6 +1543,7 @@ function renderFragmentContent(args: {
     inlineEditing,
     sectionActions,
     paperAi,
+    documentIconSettings,
   } = args;
   const workshopLayout = resolveWorkshopPreviewLayoutContract(args.template);
 
@@ -1712,6 +1802,7 @@ function renderFragmentContent(args: {
                 itemIndex,
                 listGapMm: workshopLayout.listGapMm,
                 inlineEditing,
+                documentIconSettings,
               })}
             </PreviewItemRegion>
           );
@@ -2088,8 +2179,10 @@ function renderFragmentContent(args: {
               isActiveItemEditTarget(inlineEditing, item.id),
           )
           .map((item) => (
-            <li key={item.id}>
-              {renderInlineField({
+            <li key={item.id} style={buildDocumentListItemStyle()}>
+              {renderDocumentListMarker(documentIconSettings)}
+              <span>
+                {renderInlineField({
                 as: "span",
                 value: item.name,
                 editable: Boolean(inlineEditing?.enabled),
@@ -2112,10 +2205,10 @@ function renderFragmentContent(args: {
                 }),
                 preservePreviewItemId: true,
                 style: workshopCompactRowTextStyle,
-              })}
-              {item.level || inlineEditing?.enabled ? " · " : null}
-              {item.level || inlineEditing?.enabled
-                ? renderInlineField({
+                })}
+                {item.level || inlineEditing?.enabled ? " · " : null}
+                {item.level || inlineEditing?.enabled
+                  ? renderInlineField({
                     as: "span",
                     value: item.level,
                     editable: Boolean(inlineEditing?.enabled),
@@ -2137,8 +2230,9 @@ function renderFragmentContent(args: {
                       surface: "item",
                     }),
                     style: workshopCompactRowTextStyle,
-                  })
-                : null}
+                    })
+                  : null}
+              </span>
             </li>
           )),
         renderInlineAddListItem({
@@ -2159,8 +2253,10 @@ function renderFragmentContent(args: {
               isActiveItemEditTarget(inlineEditing, item.id),
           )
           .map((item) => (
-            <li key={item.id}>
-              {renderInlineField({
+            <li key={item.id} style={buildDocumentListItemStyle()}>
+              {renderDocumentListMarker(documentIconSettings)}
+              <span>
+                {renderInlineField({
                 as: "span",
                 value: item.name,
                 editable: Boolean(inlineEditing?.enabled),
@@ -2186,10 +2282,10 @@ function renderFragmentContent(args: {
                   fontSize: workshopBodyFontSize,
                   lineHeight: "var(--text-body-line)",
                 },
-              })}
-              {item.issuer || inlineEditing?.enabled ? " · " : null}
-              {item.issuer || inlineEditing?.enabled
-                ? renderInlineField({
+                })}
+                {item.issuer || inlineEditing?.enabled ? " · " : null}
+                {item.issuer || inlineEditing?.enabled
+                  ? renderInlineField({
                     as: "span",
                     value: item.issuer ?? "",
                     editable: Boolean(inlineEditing?.enabled),
@@ -2214,9 +2310,10 @@ function renderFragmentContent(args: {
                       fontSize: workshopBodyFontSize,
                       lineHeight: "var(--text-body-line)",
                     },
-                  })
-                : null}
-              {item.meta ? ` · ${item.meta}` : null}
+                    })
+                  : null}
+                {item.meta ? ` · ${item.meta}` : null}
+              </span>
             </li>
           )),
         renderInlineAddListItem({
@@ -2246,7 +2343,7 @@ function renderFragmentContent(args: {
                 className="dasti-cv-paper-achievement-item"
                 key={item.id}
                 data-cv-ai-review-target={isAiReviewTarget ? "true" : undefined}
-                style={{ position: "relative" }}
+                style={{ ...buildDocumentListItemStyle(), position: "relative" }}
               >
                 {inlineEditing?.enabled && sectionActions?.onAskItem ? (
                   <button
@@ -2271,33 +2368,36 @@ function renderFragmentContent(args: {
                     <Wand2 size={12} strokeWidth={1.8} aria-hidden="true" />
                   </button>
                 ) : null}
-                {renderInlineField({
-                  as: "span",
-                  value: item.text,
-                  editable: Boolean(inlineEditing?.enabled),
-                  inlineEditing,
-                  editTarget: {
-                    sectionId: fragment.sectionId ?? "",
-                    sectionType: "achievements",
-                    fieldPath: `structuredContent.item:${item.id}.text`,
-                    fieldKind: "paragraph",
-                  },
-                  ariaLabel: "Edit achievement",
-                  placeholder: "Add achievement",
-                  previewAttrs: buildPreviewRegionAttrs({
-                    sectionType: "achievements",
-                    sectionId: fragment.sectionId,
-                    sectionTitle: fragment.title ?? "Achievements",
-                    itemId: item.id,
-                    activeTarget,
-                    surface: "item",
-                  }),
-                  preservePreviewItemId: true,
-                  style: {
-                    fontSize: workshopBodyFontSize,
-                    lineHeight: "var(--text-body-line)",
-                  },
-                })}
+                {renderDocumentListMarker(documentIconSettings)}
+                <span>
+                  {renderInlineField({
+                    as: "span",
+                    value: item.text,
+                    editable: Boolean(inlineEditing?.enabled),
+                    inlineEditing,
+                    editTarget: {
+                      sectionId: fragment.sectionId ?? "",
+                      sectionType: "achievements",
+                      fieldPath: `structuredContent.item:${item.id}.text`,
+                      fieldKind: "paragraph",
+                    },
+                    ariaLabel: "Edit achievement",
+                    placeholder: "Add achievement",
+                    previewAttrs: buildPreviewRegionAttrs({
+                      sectionType: "achievements",
+                      sectionId: fragment.sectionId,
+                      sectionTitle: fragment.title ?? "Achievements",
+                      itemId: item.id,
+                      activeTarget,
+                      surface: "item",
+                    }),
+                    preservePreviewItemId: true,
+                    style: {
+                      fontSize: workshopBodyFontSize,
+                      lineHeight: "var(--text-body-line)",
+                    },
+                  })}
+                </span>
               </li>
             );
           }),
@@ -2323,8 +2423,10 @@ function renderFragmentContent(args: {
               ) || isActiveItemEditTarget(inlineEditing, item.id),
           )
           .map((item) => (
-            <li key={item.id}>
-              {renderInlineField({
+            <li key={item.id} style={buildDocumentListItemStyle()}>
+              {renderDocumentListMarker(documentIconSettings)}
+              <span>
+                {renderInlineField({
                 as: "span",
                 value: item.organizationName,
                 editable: Boolean(inlineEditing?.enabled),
@@ -2350,12 +2452,12 @@ function renderFragmentContent(args: {
                   fontSize: workshopBodyFontSize,
                   lineHeight: "var(--text-body-line)",
                 },
-              })}
-              {item.roleOrMembershipType || inlineEditing?.enabled
-                ? " · "
-                : null}
-              {item.roleOrMembershipType || inlineEditing?.enabled
-                ? renderInlineField({
+                })}
+                {item.roleOrMembershipType || inlineEditing?.enabled
+                  ? " · "
+                  : null}
+                {item.roleOrMembershipType || inlineEditing?.enabled
+                  ? renderInlineField({
                     as: "span",
                     value: item.roleOrMembershipType ?? "",
                     editable: Boolean(inlineEditing?.enabled),
@@ -2380,12 +2482,12 @@ function renderFragmentContent(args: {
                       fontSize: workshopBodyFontSize,
                       lineHeight: "var(--text-body-line)",
                     },
-                  })
-                : null}
-              {item.dateRange ? ` · ${item.dateRange}` : null}
-              {item.notes || inlineEditing?.enabled ? " · " : null}
-              {item.notes || inlineEditing?.enabled
-                ? renderInlineField({
+                    })
+                  : null}
+                {item.dateRange ? ` · ${item.dateRange}` : null}
+                {item.notes || inlineEditing?.enabled ? " · " : null}
+                {item.notes || inlineEditing?.enabled
+                  ? renderInlineField({
                     as: "span",
                     value: item.notes ?? "",
                     editable: Boolean(inlineEditing?.enabled),
@@ -2410,8 +2512,9 @@ function renderFragmentContent(args: {
                       fontSize: workshopBodyFontSize,
                       lineHeight: "var(--text-body-line)",
                     },
-                  })
-                : null}
+                    })
+                  : null}
+              </span>
             </li>
           )),
         renderInlineAddListItem({
@@ -2432,8 +2535,10 @@ function renderFragmentContent(args: {
               isActiveItemEditTarget(inlineEditing, item.id),
           )
           .map((item, itemIndex) => (
-            <li key={item.id}>
-              {renderInlineField({
+            <li key={item.id} style={buildDocumentListItemStyle()}>
+              {renderDocumentListMarker(documentIconSettings)}
+              <span>
+                {renderInlineField({
                 as: "span",
                 value: item.name,
                 editable: Boolean(inlineEditing?.enabled),
@@ -2457,7 +2562,8 @@ function renderFragmentContent(args: {
                 }),
                 preservePreviewItemId: true,
                 style: workshopCompactRowTextStyle,
-              })}
+                })}
+              </span>
             </li>
           )),
         renderInlineAddListItem({
@@ -2552,6 +2658,7 @@ export function renderSectionFragment(args: {
   inlineEditing?: ResumeInlineEditing | null;
   sectionActions?: ResumeSectionActions | null;
   paperAi?: ResumePaperAiState | null;
+  documentIconSettings?: DocumentIconSettings | null;
 }) {
   const {
     fragment,
@@ -2560,6 +2667,7 @@ export function renderSectionFragment(args: {
     inlineEditing,
     sectionActions,
     paperAi,
+    documentIconSettings,
   } = args;
   const workshopLayout = resolveWorkshopPreviewLayoutContract(args.template);
   if (!fragment.title) {
@@ -2591,6 +2699,7 @@ export function renderSectionFragment(args: {
           inlineEditing,
           sectionActions,
           paperAi,
+          documentIconSettings,
         })}
       </div>
     ) : fragment.kind === "languages" ||
@@ -2599,13 +2708,7 @@ export function renderSectionFragment(args: {
       fragment.kind === "affiliations" ||
       fragment.kind === "hobbies" ? (
       <ul
-        style={{
-          margin: 0,
-          paddingLeft: "var(--flow-list-indent)",
-          ...workshopVisibleListStyle,
-          display: "grid",
-          gap: formatMillimeters(workshopLayout.listGapMm),
-        }}
+        style={buildDocumentListStyle({ listGapMm: workshopLayout.listGapMm })}
       >
         {renderFragmentContent({
           fragment,
@@ -2615,6 +2718,7 @@ export function renderSectionFragment(args: {
           inlineEditing,
           sectionActions,
           paperAi,
+          documentIconSettings,
         })}
       </ul>
     ) : (
@@ -2632,6 +2736,7 @@ export function renderSectionFragment(args: {
           inlineEditing,
           sectionActions,
           paperAi,
+          documentIconSettings,
         })}
       </div>
     );
@@ -2656,6 +2761,7 @@ export function renderSectionFragment(args: {
         sectionId: fragment.sectionId,
         sectionType: fragment.sectionType,
         sectionActions: inlineEditing?.enabled ? sectionActions : null,
+        documentIconSettings,
       })}
       {content}
       {renderPaperListSuggestions({ fragment, paperAi })}
@@ -2671,6 +2777,7 @@ export function ResumeOneColAtsPage({
   inlineEditing = null,
   sectionActions = null,
   paperAi = null,
+  documentIconSettings = null,
 }: ResumeOneColAtsPageProps) {
   return (
     <div
@@ -2700,6 +2807,7 @@ export function ResumeOneColAtsPage({
             inlineEditing,
             sectionActions,
             paperAi,
+            documentIconSettings,
           })}
         </React.Fragment>
       ))}

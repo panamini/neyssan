@@ -362,7 +362,14 @@ describe("forge template entry points", () => {
     expect(within(panel).getByRole("button", { name: "Style 2" })).toBeInTheDocument();
     expect(within(panel).getByRole("button", { name: "Style 3" })).toBeInTheDocument();
     expect(within(panel).getByText("Font pair")).toBeInTheDocument();
-    expect(within(panel).getByText("Accent")).toBeInTheDocument();
+    const designLabels = Array.from(
+      panel.querySelectorAll(".dasti-cv-rail-label"),
+    ).map((label) => label.textContent?.trim());
+    expect(designLabels).toContain("Accent");
+    expect(designLabels).toContain("List:");
+    expect(
+      within(panel).getByRole("group", { name: "List marker" }),
+    ).toBeInTheDocument();
   });
 
   it("opens CV sections from the CV stage bar as overlay", () => {

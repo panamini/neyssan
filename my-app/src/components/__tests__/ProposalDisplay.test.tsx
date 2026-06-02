@@ -54,6 +54,98 @@ function renderEditableProposal(
   return screen.getByPlaceholderText("Content appears here") as HTMLTextAreaElement;
 }
 
+function renderPreviewEditableProposal(
+  initialContent = "Dear Hiring Team,\n\nOriginal paragraph.\n\nKind regards,\nAlex",
+  options: {
+    documentDecorationDesignMode?: boolean;
+    documentTitle?: string;
+    railTitle?: string;
+    railMeta?: string;
+    contactLine?: string;
+    letterDate?: string;
+    recipientDetails?: string;
+    templateId?: any;
+    headerVisibility?: any;
+    documentIconSettings?: any;
+  } = {},
+) {
+  const onContentCommit = vi.fn();
+
+  function Harness() {
+    const [content, setContent] = React.useState(initialContent);
+    const [proposalDocument, setProposalDocument] = React.useState<any>(null);
+    const handleContentChange = (nextContent: string) => {
+      setContent(nextContent);
+      setProposalDocument(null);
+    };
+    const [documentTitle, setDocumentTitle] = React.useState(
+      options.documentTitle ?? "Application subject",
+    );
+    const [railTitle, setRailTitle] = React.useState(
+      options.railTitle ?? "Alex Morgan",
+    );
+    const [railMeta, setRailMeta] = React.useState(
+      options.railMeta ?? "Operations Specialist",
+    );
+    const [contactLine, setContactLine] = React.useState(
+      options.contactLine ?? "alex@example.com",
+    );
+    const [letterDate, setLetterDate] = React.useState(
+      options.letterDate ?? "Paris, June 2, 2026",
+    );
+    const [recipientDetails, setRecipientDetails] = React.useState(
+      options.recipientDetails ?? "Hiring Manager\nNorthwind",
+    );
+
+    return (
+      <>
+        <ProposalDisplay
+          proposalContent={content}
+          proposalDocument={proposalDocument}
+          loading={false}
+          error={null}
+          mode="preview"
+          proposalType="cover_letter"
+          templateId={options.templateId}
+          documentIconSettings={options.documentIconSettings}
+          documentDecorationDesignMode={
+            options.documentDecorationDesignMode ?? false
+          }
+          railTitle={railTitle}
+          railMeta={railMeta}
+          contactLine={contactLine}
+          letterDate={letterDate}
+          recipientDetails={recipientDetails}
+          documentTitle={documentTitle}
+          headerVisibility={options.headerVisibility}
+          onRailTitleChange={setRailTitle}
+          onRailMetaChange={setRailMeta}
+          onContactLineChange={setContactLine}
+          onLetterDateChange={setLetterDate}
+          onRecipientDetailsChange={setRecipientDetails}
+          onDocumentTitleChange={setDocumentTitle}
+          onContentChange={handleContentChange}
+          onProposalDocumentChange={setProposalDocument}
+          onContentCommit={onContentCommit}
+        />
+        <output data-testid="proposal-content">{content}</output>
+        <output data-testid="proposal-document">
+          {proposalDocument ? JSON.stringify(proposalDocument) : ""}
+        </output>
+        <output data-testid="proposal-title">{documentTitle}</output>
+        <output data-testid="proposal-sender">{railTitle}</output>
+        <output data-testid="proposal-sender-role">{railMeta}</output>
+        <output data-testid="proposal-contact">{contactLine}</output>
+        <output data-testid="proposal-date">{letterDate}</output>
+        <output data-testid="proposal-recipient">{recipientDetails}</output>
+      </>
+    );
+  }
+
+  render(<Harness />);
+  return { onContentCommit };
+}
+
 async function selectTextareaText(textarea: HTMLTextAreaElement, text: string) {
   const start = textarea.value.indexOf(text);
   expect(start).toBeGreaterThanOrEqual(0);
@@ -145,6 +237,417 @@ describe("ProposalDisplay", () => {
     Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
       configurable: true,
       value: vi.fn(),
+    });
+  });
+
+  it("edits proposal body text directly in preview mode", async () => {
+    const { onContentCommit } = renderPreviewEditableProposal();
+
+    const paragraph = screen.getByRole("textbox", {
+      name: "Edit paragraph",
+    });
+    expect(paragraph).toHaveTextContent("Original paragraph.");
+
+    paragraph.textContent = "Updated paragraph.";
+    fireEvent.blur(paragraph);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-content")).toHaveTextContent(
+        "Updated paragraph.",
+      );
+    });
+    expect(paragraph).toHaveTextContent("Updated paragraph.");
+    expect(onContentCommit).toHaveBeenCalledTimes(1);
+  });
+
+  it("edits proposal list items directly in preview mode", async () => {
+    const { onContentCommit } = renderPreviewEditableProposal(
+      "Dear Hiring Team,\n\n- First item\n- Second item\n\nKind regards,\nAlex",
+    );
+
+    const firstItem = screen.getAllByRole("textbox", {
+      name: "Edit list item",
+    })[0];
+    expect(firstItem).toHaveTextContent("First item");
+
+    firstItem.textContent = "Updated first item";
+    fireEvent.blur(firstItem);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-content")).toHaveTextContent(
+        "- Updated first item",
+      );
+    });
+    expect(firstItem).toHaveTextContent("Updated first item");
+    expect(onContentCommit).toHaveBeenCalledTimes(1);
+  });
+
+  it("selects an icon for only the targeted preview list item", async () => {
+    renderPreviewEditableProposal(
+      "Dear Hiring Team,\n\n- First item\n- Second item\n\nKind regards,\nAlex",
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Choose icon for list item 1" }),
+    );
+    expect(
+      screen.getByRole("dialog", { name: "Icon picker for list item 1" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Use Star icon" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-document")).toHaveTextContent(
+        '"iconKey":"star"',
+      );
+    });
+    expect(screen.getByTestId("proposal-content")).toHaveTextContent(
+      "- First item",
+    );
+    expect(screen.getByTestId("proposal-content")).not.toHaveTextContent(
+      "[[icon:",
+    );
+
+    const listItems = document.querySelectorAll("[data-proposal-list-item]");
+    expect(listItems[0]).toHaveAttribute("data-has-item-icon", "true");
+    expect(listItems[1]).not.toHaveAttribute("data-has-item-icon");
+    const firstItemIconTrigger = screen.getByRole("button", {
+      name: "Choose icon for list item 1",
+    });
+    expect(
+      firstItemIconTrigger
+        .closest("[data-proposal-list-item]")
+        ?.querySelector(
+          ".dasti-proposal-document__list-marker > .dasti-proposal-document__list-icon-trigger",
+        ),
+    ).toBe(firstItemIconTrigger);
+  });
+
+  it("clears a targeted preview list item icon override", async () => {
+    renderPreviewEditableProposal(
+      "Dear Hiring Team,\n\n- First item\n- Second item\n\nKind regards,\nAlex",
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Choose icon for list item 1" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Use Star icon" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-document")).toHaveTextContent(
+        '"iconKey":"star"',
+      );
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Choose icon for list item 1" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-document")).not.toHaveTextContent(
+        '"iconKey"',
+      );
+    });
+  });
+
+  it("preserves a preview list item icon when editing that item text", async () => {
+    renderPreviewEditableProposal(
+      "Dear Hiring Team,\n\n- First item\n- Second item\n\nKind regards,\nAlex",
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Choose icon for list item 1" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Use Star icon" }));
+
+    const firstItem = screen.getAllByRole("textbox", {
+      name: "Edit list item",
+    })[0];
+    firstItem.textContent = "Updated with icon";
+    fireEvent.input(firstItem);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-content")).toHaveTextContent(
+        "- Updated with icon",
+      );
+      expect(screen.getByTestId("proposal-document")).toHaveTextContent(
+        '"iconKey":"star"',
+      );
+    });
+  });
+
+  it("commits paragraph input without requiring blur", async () => {
+    renderPreviewEditableProposal();
+
+    const paragraph = screen.getByRole("textbox", {
+      name: "Edit paragraph",
+    });
+    paragraph.textContent = "Saved before blur.";
+    fireEvent.input(paragraph);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-content")).toHaveTextContent(
+        "Saved before blur.",
+      );
+    });
+  });
+
+  it("sanitizes rich HTML paste into plain proposal text", async () => {
+    renderPreviewEditableProposal();
+
+    const paragraph = screen.getByRole("textbox", {
+      name: "Edit paragraph",
+    });
+    paragraph.textContent = "";
+    fireEvent.paste(paragraph, {
+      clipboardData: {
+        getData: (type: string) =>
+          type === "text/html"
+            ? "<p><strong>Pasted&nbsp;text</strong></p><script>alert('x')</script><div>Next</div>"
+            : "",
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-content")).toHaveTextContent(
+        "Pasted text Next",
+      );
+    });
+    expect(screen.getByTestId("proposal-content")).not.toHaveTextContent(
+      "<strong>",
+    );
+    expect(screen.getByTestId("proposal-content")).not.toHaveTextContent(
+      "script",
+    );
+  });
+
+  it("keeps preview keyboard behavior plain and predictable", async () => {
+    renderPreviewEditableProposal();
+
+    const paragraph = screen.getByRole("textbox", {
+      name: "Edit paragraph",
+    });
+    paragraph.focus();
+    paragraph.textContent = "Keyboard text";
+    fireEvent.input(paragraph);
+
+    expect(fireEvent.keyDown(paragraph, { key: "Enter" })).toBe(false);
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-content")).toHaveTextContent(
+        "Keyboard text",
+      );
+    });
+    expect(paragraph.innerHTML).not.toContain("<div");
+    expect(paragraph.innerHTML).not.toContain("<span");
+
+    paragraph.focus();
+    expect(fireEvent.keyDown(paragraph, { key: "Escape" })).toBe(false);
+  });
+
+  it("keeps an empty list item valid and preserves list marker metadata", async () => {
+    renderPreviewEditableProposal(
+      "Dear Hiring Team,\n\n- First item\n- Second item\n\nKind regards,\nAlex",
+      {
+        documentIconSettings: {
+          listMarkerType: "icon",
+          defaultListMarkerKey: "check",
+          sectionHeadingIconMode: "none",
+          sectionIconMap: {},
+          color: "accent",
+          sizePt: 10,
+        },
+      },
+    );
+
+    const listItems = screen.getAllByRole("textbox", {
+      name: "Edit list item",
+    });
+    const firstItem = listItems[0];
+    firstItem.textContent = "";
+    fireEvent.input(firstItem);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-content")).toHaveTextContent(
+        "- Second item",
+      );
+    });
+    expect(
+      document.querySelector(".dasti-proposal-document__list--document-icons"),
+    ).toBeTruthy();
+  });
+
+  it("edits proposal header details directly in preview mode", async () => {
+    renderPreviewEditableProposal();
+
+    const subject = screen.getByRole("textbox", { name: "Edit subject" });
+    subject.textContent = "Updated subject";
+    fireEvent.blur(subject);
+
+    const sender = screen.getByRole("textbox", { name: "Edit sender name" });
+    sender.textContent = "Jordan Lee";
+    fireEvent.blur(sender);
+
+    const recipient = screen.getByRole("textbox", {
+      name: "Edit recipient details",
+    });
+    recipient.textContent = "Avery Stone\nNorthwind";
+    fireEvent.blur(recipient);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-title")).toHaveTextContent(
+        "Updated subject",
+      );
+      expect(screen.getByTestId("proposal-sender")).toHaveTextContent(
+        "Jordan Lee",
+      );
+      expect(screen.getByTestId("proposal-recipient")).toHaveTextContent(
+        "Avery Stone Northwind",
+      );
+    });
+  });
+
+  it("keeps preview header details editable while decoration design mode is active", async () => {
+    renderPreviewEditableProposal(undefined, {
+      documentDecorationDesignMode: true,
+    });
+
+    const subject = screen.getByRole("textbox", { name: "Edit subject" });
+    subject.textContent = "Design drawer subject";
+    fireEvent.blur(subject);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-title")).toHaveTextContent(
+        "Design drawer subject",
+      );
+    });
+  });
+
+  it("edits letterhead heading details directly in preview mode", async () => {
+    renderPreviewEditableProposal(undefined, {
+      templateId: "twoweeks-letterhead",
+    });
+
+    const subject = screen.getByRole("textbox", { name: "Edit subject" });
+    subject.textContent = "Letterhead subject";
+    fireEvent.blur(subject);
+
+    const recipient = screen.getByRole("textbox", {
+      name: "Edit recipient details",
+    });
+    recipient.textContent = "Letterhead recipient\nCompany";
+    fireEvent.blur(recipient);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-title")).toHaveTextContent(
+        "Letterhead subject",
+      );
+      expect(screen.getByTestId("proposal-recipient")).toHaveTextContent(
+        "Letterhead recipient Company",
+      );
+    });
+  });
+
+  it("keeps Editorial Wide heading labels while editing grouped values", async () => {
+    renderPreviewEditableProposal(undefined, {
+      templateId: "editorial_wide",
+      contactLine:
+        "alex@example.com · +33 6 01 02 03 04 · Paris · linkedin.com/in/alex",
+      recipientDetails:
+        "Hiring Manager\nSecurity Lead\nNorthwind\nhr@northwind.test\n12 Rue de la Paix\nParis",
+    });
+
+    const recipient = Array.from(
+      document.querySelectorAll(".proposal-cover-letter__editorial-recipient"),
+    ).at(-1);
+    const sender = Array.from(
+      document.querySelectorAll(".proposal-cover-letter__editorial-sender"),
+    ).at(-1);
+    const recipientCopy = recipient?.querySelector(
+      ".proposal-cover-letter__editorial-contact-copy",
+    );
+    const senderCopy = sender?.querySelector(
+      ".proposal-cover-letter__editorial-contact-copy",
+    );
+
+    expect(
+      recipient?.querySelector(".proposal-cover-letter__editorial-label")
+        ?.textContent,
+    ).toBe("To");
+    expect(
+      sender?.querySelector(".proposal-cover-letter__editorial-label")
+        ?.textContent,
+    ).toBe("From");
+    expect(recipientCopy).toBeTruthy();
+    expect(senderCopy).toBeTruthy();
+    expect(
+      Array.from(recipientCopy?.querySelectorAll("p") ?? []).map(
+        (group) => group.querySelector("b")?.textContent,
+      ),
+    ).toEqual(["Name", "Role", "Company", "Email", "Address", "City"]);
+
+    const recipientValues = Array.from(
+      recipientCopy?.querySelectorAll<HTMLElement>(
+        "[data-proposal-editable-contact-value='true']",
+      ) ?? [],
+    );
+    expect(recipientValues.length).toBeGreaterThan(0);
+
+    recipientValues[0].textContent = "Editorial recipient";
+    fireEvent.blur(recipientValues[0]);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-recipient")).toHaveTextContent(
+        "Editorial recipient",
+      );
+      expect(screen.getByTestId("proposal-recipient")).not.toHaveTextContent(
+        "Name",
+      );
+    });
+  });
+
+  it.each([
+    {
+      templateId: "director-letterhead",
+      preservedValues: ["Head of Talent", "Northwind", "hr@northwind.test"],
+    },
+    {
+      templateId: "volk-letterhead",
+      preservedValues: ["Head of Talent", "Northwind", "hr@northwind.test"],
+    },
+    {
+      templateId: "film-foto-letterhead",
+      preservedValues: ["Hiring Manager", "Head of Talent", "hr@northwind.test"],
+    },
+  ])("edits the visible recipient line in $templateId preview mode", async ({
+    templateId,
+    preservedValues,
+  }) => {
+    renderPreviewEditableProposal(undefined, {
+      templateId,
+      recipientDetails:
+        "Hiring Manager\nHead of Talent\nNorthwind\nhr@northwind.test\n12 Rue de la Paix\nParis",
+      headerVisibility: {
+        showSender: true,
+        showDate: true,
+        showSubject: true,
+        showRecipient: true,
+        showRecipientDetails: true,
+      },
+    });
+
+    const recipientLine = screen.getAllByRole("textbox", {
+      name: "Edit recipient details",
+    })[0];
+    recipientLine.textContent = "Updated Hiring Manager";
+    fireEvent.blur(recipientLine);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-recipient")).toHaveTextContent(
+        "Updated Hiring Manager",
+      );
+      preservedValues.forEach((value) => {
+        expect(screen.getByTestId("proposal-recipient")).toHaveTextContent(value);
+      });
     });
   });
 
@@ -879,6 +1382,89 @@ describe("ProposalDisplay", () => {
     expect(screen.getByPlaceholderText("Content appears here")).toBeInTheDocument();
   });
 
+  it("shows list authoring controls only in edit mode", () => {
+    const { rerender } = render(
+      <ProposalDisplay
+        proposalContent="Line one"
+        loading={false}
+        error={null}
+        mode="preview"
+        onContentChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "List" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Icon" })).toBeNull();
+
+    rerender(
+      <ProposalDisplay
+        proposalContent="Line one"
+        loading={false}
+        error={null}
+        mode="edit"
+        onContentChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "List" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Icon" })).toBeNull();
+  });
+
+  it("updates selected textarea lines when List is clicked", async () => {
+    const textarea = renderEditableProposal("Line one\nLine two");
+    textarea.focus();
+    textarea.setSelectionRange(0, textarea.value.length);
+
+    fireEvent.click(screen.getByRole("button", { name: "List" }));
+
+    await waitFor(() => {
+      expect(textarea).toHaveValue("- Line one\n- Line two");
+    });
+  });
+
+  it("does not render a source-mode icon insertion tool", async () => {
+    function Harness() {
+      const [content, setContent] = React.useState("Line one\nLine two");
+
+      return (
+        <ProposalDisplay
+          proposalContent={content}
+          loading={false}
+          error={null}
+          mode="edit"
+          onContentChange={setContent}
+        />
+      );
+    }
+
+    render(<Harness />);
+    const textarea = screen.getByPlaceholderText(
+      "Content appears here",
+    ) as HTMLTextAreaElement;
+
+    textarea.focus();
+    textarea.setSelectionRange(0, textarea.value.length);
+    fireEvent.click(screen.getByRole("button", { name: "List" }));
+
+    textarea.setSelectionRange(0, textarea.value.length);
+    expect(screen.queryByRole("button", { name: "Icon" })).toBeNull();
+    expect(textarea).toHaveValue("- Line one\n- Line two");
+  });
+
+  it("inserts a starter list at the cursor when List is clicked with no selection", async () => {
+    const textarea = renderEditableProposal("Intro\n");
+    textarea.focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+    fireEvent.click(screen.getByRole("button", { name: "List" }));
+
+    await waitFor(() => {
+      expect(textarea).toHaveValue("Intro\n- First item\n- Second item");
+      expect(textarea.selectionStart).toBe("Intro\n- ".length);
+      expect(textarea.selectionEnd).toBe("Intro\n- First item".length);
+    });
+  });
+
   it("renders document previews inside a fixed page stage when zoom controls are enabled", () => {
     render(
       <ProposalDisplay
@@ -1123,7 +1709,7 @@ describe("ProposalDisplay", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("uses a single preview or edit toggle button", () => {
+  it("uses a single document or source toggle button", () => {
     const handleModeChange = vi.fn();
 
     render(
@@ -1139,9 +1725,11 @@ describe("ProposalDisplay", () => {
       />,
     );
 
-    const toggle = screen.getByRole("button", { name: "Switch to edit mode" });
+    const toggle = screen.getByRole("button", {
+      name: "Switch to source mode",
+    });
     expect(toggle).toHaveAttribute("aria-pressed", "false");
-    expect(toggle).toHaveAttribute("data-toolbar-tooltip", "Edit");
+    expect(toggle).toHaveAttribute("data-toolbar-tooltip", "Source");
 
     fireEvent.click(toggle);
 

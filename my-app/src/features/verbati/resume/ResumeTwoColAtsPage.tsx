@@ -14,6 +14,7 @@ import {
   type ResumePaperAiState,
   type ResumeSectionActions,
 } from "./ResumeOneColAtsPage";
+import type { DocumentIconSettings } from "../../../lib/document-icons";
 
 type ResumeTwoColAtsPageProps = {
   data: ResumeData;
@@ -23,6 +24,7 @@ type ResumeTwoColAtsPageProps = {
   inlineEditing?: ResumeInlineEditing | null;
   sectionActions?: ResumeSectionActions | null;
   paperAi?: ResumePaperAiState | null;
+  documentIconSettings?: DocumentIconSettings | null;
 };
 
 function partitionTwoColumnFragments(
@@ -60,6 +62,7 @@ export function ResumeTwoColAtsPage({
   inlineEditing = null,
   sectionActions = null,
   paperAi = null,
+  documentIconSettings = null,
 }: ResumeTwoColAtsPageProps) {
   const { header, sidebar, main } = partitionTwoColumnFragments(page.fragments);
   const renderFragment = (fragment: WorkshopResumeCommittedFragment) => (
@@ -72,6 +75,7 @@ export function ResumeTwoColAtsPage({
         inlineEditing,
         sectionActions,
         paperAi,
+        documentIconSettings,
       })}
     </React.Fragment>
   );
