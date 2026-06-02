@@ -137,6 +137,21 @@ const documentAppearanceSnapshotChoice = v.object({
   accentHex: v.optional(v.string()),
 });
 
+const documentIconSettingsChoice = v.object({
+  listMarkerType: v.optional(
+    v.union(v.literal("dot"), v.literal("dash"), v.literal("icon")),
+  ),
+  defaultListMarkerKey: v.optional(v.union(v.string(), v.null())),
+  sectionHeadingIconMode: v.union(
+    v.literal("none"),
+    v.literal("auto"),
+    v.literal("custom"),
+  ),
+  sectionIconMap: v.optional(v.record(v.string(), v.string())),
+  color: v.union(v.literal("ink"), v.literal("muted"), v.literal("accent")),
+  sizePt: v.union(v.literal(8), v.literal(9), v.literal(10), v.literal(12)),
+});
+
 const PROPOSAL_STYLE_TRACE_MARKER = "[proposal-style-trace]";
 
 function snapshotTraceMetadata(
@@ -281,6 +296,7 @@ export default mutation({
         characterLimitValue: v.optional(v.union(v.number(), v.null())),
         closing: v.optional(proposalClosingChoice),
         documentDecoration: v.optional(proposalDocumentDecorationChoice),
+        documentIcons: v.optional(documentIconSettingsChoice),
         proposalType: v.optional(
           v.union(
             v.literal("cover_letter"),

@@ -41,6 +41,7 @@ LOCAL_CONVEX_SITE_PORT="${LOCAL_CONVEX_SITE_PORT:-3211}"
 # indexes and bundling functions, so give local-fast a wider default window.
 LOCAL_CONVEX_STARTUP_TIMEOUT="${LOCAL_CONVEX_STARTUP_TIMEOUT:-180}"
 CONVEX_TMPDIR="${CONVEX_TMPDIR:-${ROOT_DIR}/tmp/convex-tmp}"
+LOCAL_CONVEX_SYNC_SECRETS="${LOCAL_CONVEX_SYNC_SECRETS:-1}"
 CACHE_DIR="${ROOT_DIR}/.buildx-cache"
 DOCKER_STATE_DIR="${ROOT_DIR}/.docker"
 
@@ -638,6 +639,14 @@ sync_local_convex_env() {
         value="${!name:-}"
       fi
       [[ -n "${value}" ]] || continue
+      if [[ "$(to_bool "${LOCAL_CONVEX_SYNC_SECRETS}")" != "true" ]]; then
+        case "${name}" in
+          *API_KEY|*SECRET|*_TOKEN|NER_SERVICE_KEY)
+            echo "[run] skipping secret env sync for ${name}" >&2
+            continue
+            ;;
+        esac
+      fi
       if [[ -n "${convex_env_url}" && -n "${convex_env_admin_key}" ]]; then
         CONVEX_SELF_HOSTED_URL="${convex_env_url}" CONVEX_SELF_HOSTED_ADMIN_KEY="${convex_env_admin_key}" "${convex_bin}" env set "${name}" "${value}" >/dev/null
       elif [[ -n "${convex_env_deployment_name}" ]]; then
@@ -693,8 +702,8 @@ start_parser() {
       disabled) envs+=(-e CV_OCR_ENGINE=disabled -e OCR_ENGINE=disabled -e API_ENABLE_MISTRAL_OCR=) ;;
       auto|*)   envs+=(-e CV_OCR_ENGINE=auto    -e OCR_ENGINE=auto) ;;
     esac
-    # Enable Mistral OCR automatically if key present
-    if [[ -n "${MISTRAL_API_KEY:-}" ]]; then
+    # Enable Mistral OCR automatically if key present, unless secret sync is disabled.
+    if [[ "$(to_bool "${LOCAL_CONVEX_SYNC_SECRETS}")" == "true" && -n "${MISTRAL_API_KEY:-}" ]]; then
       envs+=(-e API_ENABLE_MISTRAL_OCR=1 -e "MISTRAL_API_KEY=${MISTRAL_API_KEY}")
     fi
 

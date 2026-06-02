@@ -1747,11 +1747,25 @@ async function listProjectedJobsForProfiles(
   );
   const jobs = jobGroups.flat();
 
-  const visibleJobs = jobs.filter((job: any) =>
-    options?.includeArchived
-      ? job.archivedAt !== null && job.archivedAt !== undefined
-      : job.archivedAt === null || job.archivedAt === undefined,
-  );
+  const visibleJobs = jobs
+    .filter((job: any) =>
+      options?.includeArchived
+        ? job.archivedAt !== null && job.archivedAt !== undefined
+        : job.archivedAt === null || job.archivedAt === undefined,
+    )
+    .sort((left: any, right: any) => {
+      const leftActivity = Number(
+        Math.max(left.updatedAt ?? 0, left.lastOpenedAt ?? 0),
+      );
+      const rightActivity = Number(
+        Math.max(right.updatedAt ?? 0, right.lastOpenedAt ?? 0),
+      );
+      if (rightActivity !== leftActivity) {
+        return rightActivity - leftActivity;
+      }
+      return String(left.title ?? "").localeCompare(String(right.title ?? ""));
+    })
+    .slice(0, projectionLimit ?? undefined);
   const linkedProposalStats = await loadLinkedProposalStatsForJobs(
     ctx,
     visibleJobs,

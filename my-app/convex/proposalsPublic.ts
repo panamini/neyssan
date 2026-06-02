@@ -139,6 +139,21 @@ const documentAppearanceSnapshotChoice = v.object({
   accentHex: v.optional(v.string()),
 });
 
+const documentIconSettingsChoice = v.object({
+  listMarkerType: v.optional(
+    v.union(v.literal("dot"), v.literal("dash"), v.literal("icon")),
+  ),
+  defaultListMarkerKey: v.optional(v.union(v.string(), v.null())),
+  sectionHeadingIconMode: v.union(
+    v.literal("none"),
+    v.literal("auto"),
+    v.literal("custom"),
+  ),
+  sectionIconMap: v.optional(v.record(v.string(), v.string())),
+  color: v.union(v.literal("ink"), v.literal("muted"), v.literal("accent")),
+  sizePt: v.union(v.literal(8), v.literal(9), v.literal(10), v.literal(12)),
+});
+
 function projectDocumentAppearanceSnapshot(value: unknown) {
   if (!value || typeof value !== "object") {
     return undefined;
@@ -207,6 +222,10 @@ export default query({
         actualModelType: v.optional(v.string()),
         actualModelName: v.optional(v.string()),
         fallbackTriggerCode: v.optional(v.string()),
+        requestedLanguage: v.optional(v.union(v.string(), v.null())),
+        resolvedLanguage: v.optional(v.union(v.string(), v.null())),
+        languageSource: v.optional(v.string()),
+        jobDetectedLanguage: v.optional(v.union(v.string(), v.null())),
         voicePreset: v.optional(proposalVoicePresetChoice),
         requestedVoicePreset: v.optional(
           v.union(proposalVoicePresetChoice, v.null()),
@@ -249,6 +268,7 @@ export default query({
         characterLimitValue: v.optional(v.union(v.number(), v.null())),
         closing: v.optional(proposalClosingChoice),
         documentDecoration: v.optional(proposalDocumentDecorationChoice),
+        documentIcons: v.optional(documentIconSettingsChoice),
         proposalType: v.optional(
           v.union(
             v.literal("cover_letter"),
@@ -377,8 +397,14 @@ export default query({
           proposal.metadata.headerShowRecipientDetails ?? undefined,
         characterLimitMode: proposal.metadata.characterLimitMode ?? undefined,
         characterLimitValue: proposal.metadata.characterLimitValue ?? undefined,
+        requestedLanguage: proposal.metadata.requestedLanguage ?? undefined,
+        resolvedLanguage: proposal.metadata.resolvedLanguage ?? undefined,
+        languageSource: proposal.metadata.languageSource ?? undefined,
+        jobDetectedLanguage:
+          proposal.metadata.jobDetectedLanguage ?? undefined,
         closing: proposal.metadata.closing ?? undefined,
         documentDecoration: proposal.metadata.documentDecoration ?? undefined,
+        documentIcons: proposal.metadata.documentIcons ?? undefined,
         proposalType: proposal.metadata.proposalType ?? undefined,
       },
       metrics: {
