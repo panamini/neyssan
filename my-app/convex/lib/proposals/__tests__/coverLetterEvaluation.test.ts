@@ -100,8 +100,8 @@ describe("cover letter evaluation rubric", () => {
       "grounding",
     ]);
     expect(COVER_LETTER_RUBRIC_GUIDE.evidenceRankingReference).toEqual([
-      "quantified achievements",
-      "high-scope responsibilities",
+      "source-backed quantified achievements when present",
+      "source-backed high-scope responsibilities when present",
       "concrete operational proof",
       "workflow or context evidence relevant to the role",
       "only then secondary tools or qualifications",
@@ -113,7 +113,34 @@ describe("cover letter evaluation rubric", () => {
       "substance = useful concrete material, not raw length",
     );
     expect(COVER_LETTER_EVALUATOR_PROMPT).toContain(
-      "rankMatchesText = true only if the letter clearly prioritizes strongest evidence first",
+      "do not cap persuasion at 3 solely because absent metrics",
+    );
+    expect(COVER_LETTER_EVALUATOR_PROMPT).toContain(
+      "Persuasion can be 4 when the letter builds a credible employer-facing case from source-backed operating discipline",
+    );
+    expect(COVER_LETTER_EVALUATOR_PROMPT).toContain(
+      "assign persuasion=4 when the letter leads with the best concrete proof",
+    );
+    expect(COVER_LETTER_EVALUATOR_PROMPT).toContain(
+      "assign structure=4 when the order is proof -> supporting operational detail -> employer-facing work surface -> close",
+    );
+    expect(COVER_LETTER_EVALUATOR_PROMPT).toContain(
+      "substance can be 4 for specific operational proof",
+    );
+    expect(COVER_LETTER_EVALUATOR_PROMPT).toContain(
+      "rankMatchesText = true only if the letter clearly prioritizes the strongest available evidence first",
+    );
+    expect(COVER_LETTER_EVALUATOR_PROMPT).toContain(
+      "absence of metrics is not a ranking failure by itself",
+    );
+    expect(COVER_LETTER_EVALUATOR_PROMPT).toContain(
+      "Do not set rankMatchesText=false because a stronger metric, anecdote, certification, incident example, or scope detail is missing",
+    );
+    expect(COVER_LETTER_EVALUATOR_PROMPT).toContain(
+      "Set rankMatchesText=false only when the letter visibly leads with weaker present material",
+    );
+    expect(COVER_LETTER_EVALUATOR_PROMPT).toContain(
+      "smallestUsefulRevision must not ask the writer to invent metrics",
     );
     expect(COVER_LETTER_EVALUATOR_PROMPT).toContain(
       "Return JSON only with exactly these top-level fields: score, globalScore, strengths, mainWeakness, smallestUsefulRevision, rankMatchesText.",

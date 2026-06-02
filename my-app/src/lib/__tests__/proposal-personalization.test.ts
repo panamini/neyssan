@@ -160,6 +160,104 @@ describe("buildAppProposalPersonalizationPayload", () => {
     );
   });
 
+  it("keeps multiple concrete operational bullets and credentials in CV-derived proposal context", () => {
+    const context = extractPersonalizationContextFromCvDocument({
+      id: "robert-cooper-security",
+      title: "Robert Cooper Resume",
+      metadata: {
+        createdAt: "2026-06-02T00:00:00.000Z",
+        updatedAt: "2026-06-02T00:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "profile",
+          type: "profile",
+          title: "Profile",
+          blocks: [],
+          structuredContent: [
+            {
+              name: "Robert Cooper",
+              desiredPosition: "Security Guard",
+            },
+          ],
+        },
+        {
+          id: "summary",
+          type: "summary",
+          title: "Summary",
+          blocks: [],
+          structuredContent: [
+            {
+              summary:
+                "Safety conscious, attentive Security Guard with eight years experience protecting VIP individuals in military and defense sectors.",
+            },
+          ],
+        },
+        {
+          id: "experience",
+          type: "experience",
+          title: "Experience",
+          blocks: [],
+          structuredContent: [
+            {
+              company: "ADT Security",
+              position: "Security Guard",
+              responsibilityBullets: [
+                "Responsible for completing reports by recording information, observations, occurrences, and surveillance activities, including interviewing witnesses and acquiring signatures.",
+                "Maintaining environments by monitoring the grounds and equipment controls.",
+                "Logging into security headquarters on the hour during the day and every 2 hours with the night shift, notifying control of all in order statuses.",
+                "Apprehending suspects in the event of security breaches and detaining them until the police arrive on the scene.",
+              ],
+            },
+            {
+              company: "Copwatch",
+              position: "Security Guard",
+              responsibilityBullets: [
+                "Primary purpose is to scan area of grounds for objects or items that seem out of place and notify Center management of unattended bags or packages.",
+                "Inspecting restrooms after closing time for vagrants or unauthorized personnel.",
+                "Monitoring selected areas via CCTV app on smart devices.",
+                "Ensure flawless equipment operation by finishing preventive maintenance necessities, troubleshooting malfunctions, and organizing for repairs if needed.",
+              ],
+            },
+          ],
+        },
+        {
+          id: "certifications",
+          type: "certifications",
+          title: "Certifications",
+          blocks: [],
+          structuredContent: [
+            {
+              certificationName: "Certified Protection Guard Program (CPOP)",
+              issuingOrganization:
+                "International Foundation for Protection Guards",
+            },
+          ],
+        },
+      ],
+    } as any);
+
+    expect(context?.recentExperience?.[0]?.highlights).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("security headquarters"),
+        expect.stringContaining("equipment controls"),
+        expect.stringContaining("detaining them until the police arrive"),
+      ]),
+    );
+    expect(context?.recentExperience?.[1]?.highlights).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("unattended bags or packages"),
+        expect.stringContaining("unauthorized personnel"),
+        expect.stringContaining("CCTV app"),
+        expect.stringContaining("preventive maintenance"),
+      ]),
+    );
+    expect(context?.standoutAchievements).toContain(
+      "Certified Protection Guard Program (CPOP) from International Foundation for Protection Guards.",
+    );
+  });
+
   it("isolates the proposal-attached CV key from the resume active CV key", () => {
     window.localStorage.setItem("cvDocuments", JSON.stringify([CV_ALPHA, CV_BETA]));
     window.localStorage.setItem(`cv:${CV_ALPHA.id}`, JSON.stringify(CV_ALPHA));

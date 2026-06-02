@@ -5,6 +5,7 @@ import { evaluatePremiumCoverLetterEligibility } from "../../../convex/lib/propo
 import {
   aggregateCoverLetterBenchmarkRecords,
   benchmarkCoverLetterCase,
+  resolveDefaultCoverLetterBenchmarkWriterModels,
   type CoverLetterBenchmarkRecord,
 } from "../benchmark-cover-letter-writers";
 import { coverLetterBenchmarkCases } from "../cases/cover-letter/cases";
@@ -33,6 +34,12 @@ const successfulEvaluation: CoverLetterScore = {
 };
 
 describe("benchmark-cover-letter-writers", () => {
+  it("defaults live benchmark runs to the production writer only unless extra writers are requested", () => {
+    expect(resolveDefaultCoverLetterBenchmarkWriterModels()).toEqual([
+      "gpt-5.5",
+    ]);
+  });
+
   it("benchmarks one case with a per-run writer model and returns a typed success record", async () => {
     const benchmarkCase = coverLetterBenchmarkCases[0]!;
     const generateLetter = vi.fn().mockResolvedValue({

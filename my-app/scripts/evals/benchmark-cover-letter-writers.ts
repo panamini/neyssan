@@ -88,8 +88,12 @@ type EvaluateBenchmarkLetter = (args: {
 }) => Promise<CoverLetterScore>;
 
 const DEFAULT_WRITERS = [
-  ...PREMIUM_COVER_LETTER_WRITER_MODELS,
+  "gpt-5.5",
 ] satisfies readonly PremiumCoverLetterWriterModel[];
+
+export function resolveDefaultCoverLetterBenchmarkWriterModels(): PremiumCoverLetterWriterModel[] {
+  return [...DEFAULT_WRITERS];
+}
 
 function printHelp(): void {
   console.log(
@@ -97,12 +101,13 @@ function printHelp(): void {
       "Premium cover-letter writer benchmark",
       "",
       "Usage:",
-      "  npx tsx scripts/evals/benchmark-cover-letter-writers.ts [--cases=id1,id2] [--writers=gpt-5.4,gpt-5-mini] [--evaluator=MODEL]",
+      "  npx tsx scripts/evals/benchmark-cover-letter-writers.ts [--cases=id1,id2] [--writers=gpt-5.5] [--evaluator=MODEL]",
       "",
       "Examples:",
       "  npx tsx scripts/evals/benchmark-cover-letter-writers.ts",
       "  npx tsx scripts/evals/benchmark-cover-letter-writers.ts --cases=security-hyatt,adjacent-warehouse",
-      "  npx tsx scripts/evals/benchmark-cover-letter-writers.ts --writers=gpt-5.4,gpt-5-mini --evaluator=gpt-5-mini",
+      "  npx tsx scripts/evals/benchmark-cover-letter-writers.ts --writers=gpt-5.5 --evaluator=gpt-5-mini",
+      "  npx tsx scripts/evals/benchmark-cover-letter-writers.ts --writers=gpt-5.5,gpt-5.4,gpt-5-mini --evaluator=gpt-5-mini",
       "",
       `Available cases: ${coverLetterBenchmarkCases.map((item) => item.id).join(", ")}`,
     ].join("\n"),

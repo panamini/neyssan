@@ -752,7 +752,7 @@ const QUANTIFIED_PATTERN =
 const RESPONSIBILITY_PATTERN =
   /\b(?:led|managed|owned|oversaw|coordinated|handled|supervised|supported|built|developed|implemented|maintained|operated|executed|delivered|trained|documented|reviewed|monitored)\b/i;
 const WORKFLOW_PATTERN =
-  /\b(?:workflow|process|operations?|handoffs?|sla|qa|quality|ticket|queue|dashboard|reporting|experiments?|testing|revision|coordination|support|intake|triage|delivery|planning|collaboration)\b/i;
+  /\b(?:workflow|process|operations?|handoffs?|sla|qa|quality|ticket|queue|dashboard|reports?|records?|logs?|recording|observations?|surveillance|patrols?|reporting|experiments?|testing|revision|coordination|support|intake|triage|delivery|planning|collaboration)\b/i;
 const TRAIT_PATTERN =
   /\b(?:reliable|adaptable|flexible|motivated|organized|detail-oriented|communicative|curious|proactive)\b/i;
 const TOOL_PATTERN =
@@ -1616,6 +1616,19 @@ export function rankAllowedFacts(args: {
       score: scoreFact({ fact, jobTokens, jobTitleTokens }),
     }))
     .sort((a, b) => b.score - a.score);
+  const cvAdjacentOperationalFacts =
+    args.contextClass === "cv_adjacent"
+      ? scored
+          .map((entry) => entry.fact)
+          .filter(
+            (fact) =>
+              fact.source === "cv" &&
+              !isWeakOrDoNotLeadWith(fact) &&
+              (fact.category === "achievement" ||
+                fact.category === "responsibility" ||
+                fact.category === "workflow"),
+          )
+      : [];
 
   const strongestEvidence: AllowedFact[] = [];
   const supportingEvidence: AllowedFact[] = [];
@@ -1657,7 +1670,9 @@ export function rankAllowedFacts(args: {
       (fact.category === "achievement" ||
         fact.category === "responsibility" ||
         fact.category === "workflow" ||
-        fact.category === "domain")
+        (fact.category === "domain" &&
+          (args.contextClass !== "cv_adjacent" ||
+            strongestEvidence.length >= cvAdjacentOperationalFacts.length)))
     ) {
       strongestEvidence.push(fact);
       continue;
@@ -1973,8 +1988,11 @@ function resolvePremiumCoverLetterContextGuidance(args: {
 
   if (args.contextClass === "cv_adjacent") {
     return [
-      "For cv_adjacent, keep the transfer honest and concrete; phrase the link as what this background helps with in the role's actual work, not as a generalized explanation of fit or a claim of direct target-role experience.",
-      "For cv_adjacent, translate adjacent workflow evidence into role value without implying the candidate has already done the target role itself.",
+      "For cv_adjacent, keep candidate evidence candidate-side and job facts work-surface-side; do not turn adjacent evidence into direct target-role experience, future contribution, or requirement satisfaction.",
+      "For cv_adjacent, prioritize concrete CV-backed actions before any employer bridge. Use at most one restrained bridge, and keep it at overlap, relevance, or operating-context level.",
+      "For cv_adjacent, do not use the target role title, job requirements, employer needs, direct-fit wording, role-mapping language, or future-value promises as proof.",
+      "For cv_adjacent, make persuasion from the operating discipline already present in the CV facts: explain what the concrete work required, such as careful observation, accurate records, clear handoffs, stakeholder communication, or consistent follow-through. Do not add outcomes.",
+      "For cv_adjacent, if the safest material is modest, write shorter body parts anchored in monitoring, documentation, reporting, coordination, records, handoffs, tools, environments, stakeholders, or other source-backed facts.",
     ];
   }
   if (args.contextClass === "no_cv") {
@@ -2022,6 +2040,20 @@ function resolvePremiumCoverLetterBodyPartGuidance(args: {
       "- Every body part should include at least one concrete CV-backed anchor when available.",
       "- If no concrete anchor is available, keep the sentence narrow and factual instead of adding abstract fit language.",
       "- If there is not enough safe evidence, return shorter body parts instead of filling space.",
+    ];
+  }
+  if (args.contextClass === "cv_adjacent") {
+    return [
+      "cv_adjacent body-part contract:",
+      "- opening: one factual first-person sentence grounded in the strongest concrete candidate action before duration, employer names, or domain summary; do not attach the target role title to the candidate's experience.",
+      "- proofBlock: strongest concrete CV-backed evidence first, before employer context; develop what the work required instead of listing duties flatly.",
+      "- employerValueBlock: either more concrete CV-backed evidence or one restrained bridge grounded in both candidate evidence and a JD work surface. The bridge should explain the operating discipline behind the evidence, not just name overlapping duties.",
+      "- Any bridge must stay at overlap, relevance, or operating-context level; it must not claim direct role experience, future performance, unsupported ownership, or invented impact.",
+      "- closeLine: one short sentence restating CV-backed operating strengths only.",
+      "- Do not include greeting, signoff, or candidate name in body parts.",
+      "- Do not use \"for this role,\" \"in this role,\" the target role title as proof, \"your needs,\" \"helps with,\" \"can help,\" \"can support,\" \"would bring,\" \"would contribute,\" \"ready to,\" \"translates,\" \"aligns,\" \"smoothly,\" or \"efficiently.\"",
+      "- Every body part should include at least one concrete CV-backed anchor when available.",
+      "- If evidence is limited, return shorter body parts instead of filling space.",
     ];
   }
   return [
@@ -2228,6 +2260,248 @@ function hasUnsupportedOwnershipVerb(args: {
       pattern.test(args.generatedText) &&
       !pattern.test(args.candidateEvidenceSurface),
   );
+}
+
+function firstPersonEvidenceSentence(value: string): string {
+  const compact = compactWhitespace(value).replace(/[.!?]$/u, "");
+  if (!compact) return "";
+  if (/^i\b/i.test(compact)) return ensureSentenceEnding(compact);
+  if (/^[A-Z][\w\s'-]{1,60}\s+at\s+[A-Z]/.test(compact)) {
+    return ensureSentenceEnding(`I worked as a ${compact}`);
+  }
+  const durationContext = adjacentDurationContextPhrase(compact);
+  if (durationContext) {
+    return ensureSentenceEnding(`I bring ${durationContext}`);
+  }
+
+  const verbMatch = compact.match(
+    /^(monitored|completed|recorded|documented|reported|scanned|interviewed|coordinated|tracked|maintained|handled|supported|protected|built|reduced|improved|led|managed|owned)\b([\s\S]*)$/i,
+  );
+  if (verbMatch?.[1]) {
+    return ensureSentenceEnding(
+      `I ${verbMatch[1].toLowerCase()}${verbMatch[2] ?? ""}`,
+    );
+  }
+
+  return ensureSentenceEnding(compact);
+}
+
+function adjacentDurationContextPhrase(value: string): string | null {
+  const compact = compactWhitespace(value).replace(/[.!?]$/u, "");
+  const match = compact.match(
+    /^(.+?)\s+with\s+((?:\w+\s+){0,3}(?:years?|months?))\s+experience\s+([\s\S]+)$/i,
+  );
+  if (!match?.[1] || !match[2] || !match[3]) return null;
+  const descriptor = compactWhitespace(match[1])
+    .toLowerCase()
+    .replace(/\bsafety conscious\b/g, "safety-conscious");
+  const duration = compactWhitespace(match[2]).toLowerCase();
+  const scope = compactWhitespace(match[3]);
+  return `${duration} of ${descriptor} work ${scope}`;
+}
+
+function adjacentActionPhrase(value: string): string {
+  const compact = compactWhitespace(value)
+    .replace(/[.!?]$/u, "")
+    .replace(/^I\s+/i, "");
+  return compact
+    .replace(/^monitored\b/i, "monitoring")
+    .replace(/^scanned\b/i, "scanning")
+    .replace(/^completed\b/i, "completing")
+    .replace(/^recorded\b/i, "recording")
+    .replace(/^documented\b/i, "documenting")
+    .replace(/^reported\b/i, "reporting")
+    .replace(/^interviewed\b/i, "interviewing")
+    .replace(/^maintained\b/i, "maintaining")
+    .replace(/^supported\b/i, "supporting")
+    .replace(/\band\s+monitored\b/gi, "and monitoring")
+    .replace(/\band\s+scanned\b/gi, "and scanning")
+    .replace(/\band\s+completed\b/gi, "and completing")
+    .replace(/\band\s+recorded\b/gi, "and recording")
+    .replace(/\band\s+documented\b/gi, "and documenting")
+    .replace(/\band\s+interviewed\b/gi, "and interviewing");
+}
+
+function parseRoleCompanyFact(value: string): { role: string; company: string } | null {
+  const compact = compactWhitespace(value).replace(/[.!?]$/u, "");
+  const match = compact.match(/^(.+?)\s+at\s+(.+)$/i);
+  if (!match?.[1] || !match[2]) return null;
+  return {
+    role: compactWhitespace(match[1]).toLowerCase(),
+    company: compactWhitespace(match[2]),
+  };
+}
+
+function adjacentRoleCompanyContext(values: string[]): string | null {
+  const parsed = values
+    .map(parseRoleCompanyFact)
+    .filter((item): item is { role: string; company: string } => item !== null);
+  if (parsed.length === 0) return null;
+  const firstRole = parsed[0]!.role;
+  const companies = dedupeStrings(parsed.map((item) => item.company));
+  if (parsed.every((item) => item.role === firstRole) && companies.length > 0) {
+    return `while working as a ${firstRole} at ${listAsNaturalText(companies)}`;
+  }
+  return `with experience as ${listAsNaturalText(
+    parsed.map((item) => `${item.role} at ${item.company}`),
+  )}`;
+}
+
+function roleCompanySubject(value: string): string {
+  return compactWhitespace(value).replace(/^while\s+working\s+as\s+/i, "As ");
+}
+
+function conciseDurationScope(value: string): string {
+  const compact = compactWhitespace(value);
+  const match = compact.match(
+    /^((?:\w+\s+){0,3}(?:years?|months?))\s+of\s+.+?\s+work\s+([\s\S]+)$/i,
+  );
+  if (!match?.[1] || !match[2]) return compact;
+  return `${compactWhitespace(match[1]).toLowerCase()} ${compactWhitespace(match[2])}`;
+}
+
+function listAsNaturalText(items: string[]): string {
+  const cleaned = dedupeStrings(items).map((item) =>
+    compactWhitespace(item).replace(/[.!?]$/u, ""),
+  );
+  if (cleaned.length <= 1) return cleaned[0] ?? "";
+  if (cleaned.length === 2) return `${cleaned[0]} and ${cleaned[1]}`;
+  return `${cleaned.slice(0, -1).join(", ")}, and ${cleaned[cleaned.length - 1]}`;
+}
+
+function selectAdjacentWorkSurfaces(brief: CoverLetterBrief): string[] {
+  const normalizedTargetRole = normalizeProposalConstraintText(brief.targetRole);
+  return dedupeStrings([
+    ...(brief.topResponsibilities ?? []),
+    ...(brief.workContext ?? []),
+    ...(brief.keyRequirements ?? []),
+  ])
+    .map((item) => compactWhitespace(item).replace(/[.!?]$/u, ""))
+    .filter((item) => {
+      const normalized = normalizeProposalConstraintText(item);
+      return (
+        normalized &&
+        !normalized.includes("is hiring") &&
+        !normalized.includes(normalizedTargetRole)
+      );
+    })
+    .slice(0, 3);
+}
+
+function adjacentOperatingAnchors(brief: CoverLetterBrief): string[] {
+  const evidence = [
+    ...brief.topEvidence,
+    ...brief.supportEvidence,
+    ...(brief.transferCore ?? []),
+  ].join(" ");
+  const anchors: string[] = [];
+  if (/\b(?:monitor|surveillance|scan|patrol|observation|watch)\b/i.test(evidence)) {
+    anchors.push("careful observation");
+  }
+  if (/\b(?:reports?|records?|documents?|documented|logs?|notes?|recording)\b/i.test(evidence)) {
+    anchors.push("accurate records");
+  }
+  if (/\b(?:witness(?:es)?|interview|communicat|handoffs?|stakeholders?|updates?)\b/i.test(evidence)) {
+    anchors.push("clear handoffs");
+  }
+  if (/\b(?:coordinat|schedul|track|follow)\b/i.test(evidence)) {
+    anchors.push("consistent follow-through");
+  }
+  return anchors.length > 0
+    ? dedupeStrings(anchors).slice(0, 4)
+    : ["clear records", "steady communication", "consistent follow-through"];
+}
+
+function isReportingEvidence(value: string): boolean {
+  return /\b(?:reports?|records?|documents?|documented|logs?|notes?|recording|observations?|occurrences?|witness(?:es)?|interview)\b/i.test(
+    value,
+  );
+}
+
+function isMonitoringEvidence(value: string): boolean {
+  return /\b(?:monitor|surveillance|scan|patrol|observation|watch|grounds?)\b/i.test(
+    value,
+  );
+}
+
+function normalizeAdjacentEvidenceOrder(args: {
+  bodyParts: CoverLetterBodyParts;
+  brief: CoverLetterBrief;
+}): CoverLetterBodyParts {
+  if (args.brief.contextClass !== "cv_adjacent" || args.brief.topEvidence.length === 0) {
+    return args.bodyParts;
+  }
+
+  const evidenceSentences = args.brief.topEvidence
+    .map(firstPersonEvidenceSentence)
+    .filter(Boolean);
+  if (evidenceSentences.length === 0) return args.bodyParts;
+  const supportSentences = args.brief.supportEvidence
+    .map(firstPersonEvidenceSentence)
+    .filter(Boolean);
+  const roleCompanyContext = adjacentRoleCompanyContext(args.brief.supportEvidence);
+  const allCandidateEvidence = [
+    ...args.brief.topEvidence,
+    ...args.brief.supportEvidence,
+  ];
+  const durationContext = allCandidateEvidence
+    .map(adjacentDurationContextPhrase)
+    .find((item): item is string => Boolean(item));
+  const reportingEvidence = allCandidateEvidence.find(isReportingEvidence);
+  const monitoringEvidence = args.brief.topEvidence.find(
+    (item) => item !== reportingEvidence && isMonitoringEvidence(item),
+  ) ?? args.brief.supportEvidence.find(
+    (item) => item !== reportingEvidence && isMonitoringEvidence(item),
+  );
+  const reportingSentence = reportingEvidence
+    ? firstPersonEvidenceSentence(reportingEvidence)
+    : "";
+  const monitoringSentence = monitoringEvidence
+    ? firstPersonEvidenceSentence(monitoringEvidence)
+    : "";
+
+  const anchors = adjacentOperatingAnchors(args.brief);
+  const workSurfaces = selectAdjacentWorkSurfaces(args.brief);
+  const workSurfaceText = listAsNaturalText(workSurfaces);
+  const anchorText = listAsNaturalText(anchors);
+  const opening =
+    reportingSentence && durationContext
+      ? roleCompanyContext
+        ? `${roleCompanySubject(roleCompanyContext)} with ${conciseDurationScope(durationContext)}, my strongest proof is detailed reporting: ${reportingSentence.replace(/[.!?]$/u, "")}`
+        : `I have ${durationContext}, and my strongest proof is detailed reporting: ${reportingSentence.replace(/[.!?]$/u, "")}`
+      : durationContext
+        ? `Across ${durationContext}${roleCompanyContext ? `, ${roleCompanyContext}` : ""}, ${evidenceSentences[0]!.replace(/[.!?]$/u, "")}`
+        : evidenceSentences[0] ?? args.bodyParts.opening;
+  const proofSentences =
+    reportingSentence && monitoringSentence
+      ? [
+          `That reporting came from active monitoring, including ${adjacentActionPhrase(monitoringSentence)}${roleCompanyContext ? ` ${roleCompanyContext}` : ""}`,
+          "The point was not only to observe the work surface, but to leave a clear factual record for the next handoff",
+        ]
+      : [
+          ...evidenceSentences
+            .slice(1, 3)
+            .filter((sentence) =>
+              durationContext
+                ? !normalizeProposalConstraintText(sentence).includes(
+                    normalizeProposalConstraintText(durationContext),
+                  )
+                : true,
+            ),
+          ...(roleCompanyContext ? [] : supportSentences.slice(0, 2)),
+          "That reporting and observation work kept facts clear for the next handoff",
+        ];
+
+  return {
+    opening: ensureSentenceEnding(opening),
+    proofBlock: joinSentences(proofSentences),
+    employerValueBlock: ensureSentenceEnding(
+      workSurfaceText
+        ? `For an environment built around ${workSurfaceText}, that background matters because facts need to be noticed, written clearly, and handed off without confusion`
+        : `That background matters because facts need to be noticed, written clearly, and handed off without confusion`,
+    ),
+    closeLine: ensureSentenceEnding(`I bring discipline around ${anchorText}.`),
+  };
 }
 
 function escapeRegExp(value: string): string {
@@ -2825,16 +3099,43 @@ export async function attemptPremiumCoverLetterGeneration(args: {
 
   let issues = validatePremiumCoverLetterBodyParts({ bodyParts, brief });
   const issueCodes = summarizeValidationIssueCodes(issues);
-  const shouldRetryMistralAdjacentDirectFit =
+  const shouldRetryAdjacentDirectFit =
     brief.contextClass === "cv_adjacent" &&
-    isMistralWriterIdentity({
+    issueCodes.includes("adjacent_direct_fit");
+  const shouldTryAdjacentEvidenceNormalization =
+    brief.contextClass === "cv_adjacent" &&
+    !isQwenWriterIdentity({
       writerProvider: args.writerProvider,
       writerModel: args.writerModel,
     }) &&
-    issueCodes.includes("adjacent_direct_fit");
+    !isMistralWriterIdentity({
+      writerProvider: args.writerProvider,
+      writerModel: args.writerModel,
+    }) &&
+    issueCodes.some((issueCode) =>
+      [
+        "adjacent_direct_fit",
+        "unsupported_ownership_verb",
+        "unsupported_security_ownership",
+      ].includes(issueCode),
+    );
 
   if (issues.some((issue) => !issue.repairable)) {
-    if (!shouldRetryMistralAdjacentDirectFit) {
+    if (shouldTryAdjacentEvidenceNormalization) {
+      const normalizedBodyParts = normalizeAdjacentEvidenceOrder({ bodyParts, brief });
+      const normalizedIssues = validatePremiumCoverLetterBodyParts({
+        bodyParts: normalizedBodyParts,
+        brief,
+      });
+      if (normalizedIssues.length === 0) {
+        bodyParts = normalizedBodyParts;
+        issues = [];
+      }
+    }
+  }
+
+  if (issues.some((issue) => !issue.repairable)) {
+    if (!shouldRetryAdjacentDirectFit) {
       args.onFailure?.({
         stage: "validation",
         reason: "non_repairable_validation",
@@ -2881,6 +3182,17 @@ export async function attemptPremiumCoverLetterGeneration(args: {
         issues: summarizeValidationIssueCodes(issues),
       });
       return null;
+    }
+  }
+
+  if (brief.contextClass === "cv_adjacent") {
+    const normalizedBodyParts = normalizeAdjacentEvidenceOrder({ bodyParts, brief });
+    const normalizedIssues = validatePremiumCoverLetterBodyParts({
+      bodyParts: normalizedBodyParts,
+      brief,
+    });
+    if (normalizedIssues.length === 0) {
+      bodyParts = normalizedBodyParts;
     }
   }
 

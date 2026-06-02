@@ -45,12 +45,7 @@ const opsAdminContext: PremiumCoverLetterPersonalizationContext = {
   name: "Leila Haddad",
   summary:
     "Operations and administrative coordinator supporting scheduling, documentation, and cross-team follow-through.",
-  topSkills: [
-    "Scheduling",
-    "Documentation",
-    "Excel",
-    "Office coordination",
-  ],
+  topSkills: ["Scheduling", "Documentation", "Excel", "Office coordination"],
   recentExperience: [
     {
       company: "Nexa Services",
@@ -93,32 +88,33 @@ const adjacentWarehouseContext: PremiumCoverLetterPersonalizationContext = {
   ],
 };
 
-const weakDirectChecklistRiskContext: PremiumCoverLetterPersonalizationContext = {
-  name: "Samir Patel",
-  summary:
-    "Facilities support coordinator handling maintenance intake, scheduling, and service record follow-through.",
-  topSkills: [
-    "Excel",
-    "Word",
-    "Windows",
-    "Scheduling",
-    "Vendor coordination",
-  ],
-  recentExperience: [
-    {
-      company: "Metro Facilities",
-      position: "Facilities Coordinator",
-      highlights: [
-        "Handled maintenance intake, scheduling, and vendor follow-up for office sites.",
-        "Kept service records and completion status current across recurring facilities requests.",
-        "Improved work-order turnaround by 9% after reorganizing request routing and follow-up.",
-      ],
-    },
-  ],
-  standoutAchievements: [
-    "Built a simple tracker that reduced missed vendor callbacks during weekly scheduling reviews.",
-  ],
-};
+const weakDirectChecklistRiskContext: PremiumCoverLetterPersonalizationContext =
+  {
+    name: "Samir Patel",
+    summary:
+      "Facilities support coordinator handling maintenance intake, scheduling, and service record follow-through.",
+    topSkills: [
+      "Excel",
+      "Word",
+      "Windows",
+      "Scheduling",
+      "Vendor coordination",
+    ],
+    recentExperience: [
+      {
+        company: "Metro Facilities",
+        position: "Facilities Coordinator",
+        highlights: [
+          "Handled maintenance intake, scheduling, and vendor follow-up for office sites.",
+          "Kept service records and completion status current across recurring facilities requests.",
+          "Improved work-order turnaround by 9% after reorganizing request routing and follow-up.",
+        ],
+      },
+    ],
+    standoutAchievements: [
+      "Built a simple tracker that reduced missed vendor callbacks during weekly scheduling reviews.",
+    ],
+  };
 
 const strongAdjacentHonestTransferContext: PremiumCoverLetterPersonalizationContext =
   {
@@ -249,6 +245,47 @@ const cleanEngagingDirectContext: PremiumCoverLetterPersonalizationContext = {
   ],
 };
 
+const securitasAdtCopwatchAdjacentContext: PremiumCoverLetterPersonalizationContext =
+  {
+    name: "Robert Cooper",
+    summary:
+      "Safety conscious, attentive Security Guard with eight years experience protecting VIP individuals in military and defense sectors, presently finishing a bachelor's in criminal justice and qualified as a CPO.",
+    topSkills: [
+      "Investigation skills",
+      "Safety compliance",
+      "Criminal justice knowledge",
+      "Restraining devices",
+      "Martial arts/Physical combat training",
+    ],
+    recentExperience: [
+      {
+        company: "ADT Security",
+        position: "Security Guard",
+        highlights: [
+          "Completed reports by recording information, observations, occurrences, surveillance activities, interviewing witnesses, and acquiring signatures.",
+          "Maintained environments by monitoring grounds and equipment controls.",
+          "Logged into security headquarters hourly during the day and every two hours on night shifts to notify control of all-in-order statuses.",
+          "Apprehended suspects during security breaches and detained them until police arrived on scene.",
+        ],
+      },
+      {
+        company: "Copwatch",
+        position: "Security Guard",
+        highlights: [
+          "Scanned grounds for objects or items out of place and notified Center management of unattended bags or packages.",
+          "Inspected restrooms after closing time for vagrants or unauthorized personnel.",
+          "Monitored selected areas via CCTV app on smart devices.",
+          "Supported equipment readiness through preventive maintenance, manufacturer instructions, troubleshooting, and repair coordination.",
+        ],
+      },
+    ],
+    standoutAchievements: [
+      "Certified Protection Guard Program (CPOP) from the International Foundation for Protection Guards.",
+      "Security Guard Certificate Program (SOCP) from ASIS International.",
+      "S.A.F.E. Approach Level II Training from Hawaii Western College.",
+    ],
+  };
+
 export const coverLetterBenchmarkCases: CoverLetterBenchmarkCase[] = [
   {
     id: "security-hyatt",
@@ -258,7 +295,8 @@ export const coverLetterBenchmarkCases: CoverLetterBenchmarkCase[] = [
       "Lead security operations, supervise patrol coverage, manage incident reporting, coordinate access control, and maintain clear escalation workflows across hotel operations.",
     personalizationContext: securityHyattContext,
     expectedContextClass: "cv_direct",
-    notes: "Strong direct hotel-security match with quantified operational proof.",
+    notes:
+      "Strong direct hotel-security match with quantified operational proof.",
     realismTag: "strong_direct",
   },
   {
@@ -269,7 +307,8 @@ export const coverLetterBenchmarkCases: CoverLetterBenchmarkCase[] = [
       "Own scheduling, documentation, service intake, status reporting, and administrative follow-through for a busy operations team. Strong Excel skills and flexibility are appreciated.",
     personalizationContext: opsAdminContext,
     expectedContextClass: "cv_direct",
-    notes: "Medium direct operations case with less quantified proof and more process detail.",
+    notes:
+      "Medium direct operations case with less quantified proof and more process detail.",
     realismTag: "medium_direct",
   },
   {
@@ -355,5 +394,17 @@ export const coverLetterBenchmarkCases: CoverLetterBenchmarkCase[] = [
     notes:
       "Clean strong-direct case with no checklist noise or ranking conflict; tests engaging preset doing its warm-but-grounded job on a straightforward match.",
     realismTag: "clean_engaging_direct",
+  },
+  {
+    id: "security-securitas-adt-copwatch",
+    preset: "engaging",
+    jobTitle: "High Level Security Officer",
+    jobDescription:
+      "Securitas Security is hiring a High Level Security Officer to maintain site safety through structured patrols, access control, incident response, detailed reporting, key checkouts, professional communication, and escalation to the operations center.",
+    personalizationContext: securitasAdtCopwatchAdjacentContext,
+    expectedContextClass: "cv_adjacent",
+    notes:
+      "Real-world adjacent security case from ADT/Copwatch into Securitas; catches premium validation failures and bad legacy fallback quality.",
+    realismTag: "real_world_cv_adjacent_security",
   },
 ];
