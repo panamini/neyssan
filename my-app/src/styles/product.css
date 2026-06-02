@@ -5935,7 +5935,7 @@ body,
 .document-icon-picker {
   width: 100%;
   display: grid;
-  gap: var(--space-2);
+  gap: 7px;
 }
 
 .document-icon-picker__header {
@@ -5985,7 +5985,7 @@ body,
 
 .document-icon-picker__search {
   width: 100%;
-  min-height: 32px;
+  min-height: 30px;
   padding: 0 var(--space-2);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-control);
@@ -6001,9 +6001,62 @@ body,
   box-shadow: 0 0 0 2px var(--am-soft);
 }
 
+.document-icon-picker__category-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.document-icon-picker__category-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.document-icon-picker__category-tab {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tm2);
+  cursor: pointer;
+  opacity: 0.68;
+  transition:
+    color 140ms ease,
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.document-icon-picker__category-tab:hover,
+.document-icon-picker__category-tab:focus-visible {
+  color: var(--ti);
+  opacity: 1;
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.document-icon-picker__category-tab[aria-selected="true"] {
+  color: var(--ti);
+  opacity: 1;
+}
+
+.document-icon-picker__category-tab-icon,
+.document-icon-picker__category-tab-icon svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+}
+
 .document-icon-picker__categories {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 .document-icon-picker__category {
@@ -6013,14 +6066,14 @@ body,
 
 .document-icon-picker__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
-  gap: var(--space-2);
+  grid-template-columns: repeat(auto-fill, minmax(26px, 1fr));
+  gap: 4px;
 }
 
 .document-icon-picker__option {
   min-width: 0;
   aspect-ratio: 1;
-  min-height: 36px;
+  min-height: 26px;
   display: inline-grid;
   place-items: center;
   padding: 0;
@@ -6030,6 +6083,11 @@ body,
   color: var(--tm2);
   font: inherit;
   cursor: pointer;
+}
+
+.document-icon-picker__option-preview {
+  width: 16px;
+  height: 16px;
 }
 
 .document-icon-picker__option:hover,

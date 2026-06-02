@@ -71,8 +71,10 @@ describe("SavedProposalForgeToolbarPreview", () => {
     expect(
       screen.getByRole("menu", { name: "Layout options" }),
     ).toBeInTheDocument();
-    await user.click(screen.getByRole("menuitemradio", { name: "Modernist" }));
-    expect(onLayoutChange).toHaveBeenCalledWith("modernist");
+    await user.click(
+      screen.getByRole("menuitemradio", { name: "Workshop two-column" }),
+    );
+    expect(onLayoutChange).toHaveBeenCalledWith("workshop");
 
     await user.click(screen.getByRole("button", { name: "Open text styles" }));
     expect(

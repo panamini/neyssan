@@ -67,15 +67,24 @@ import {
   normalizeDocumentIconSettings,
   parseDocumentIconTextSegments,
   resolveDefaultListMarkerIconKey,
+  type DocumentIconKey,
   type DocumentIconSettings,
 } from "../../lib/document-icons";
+import { DocumentIconPicker } from "../document-icons/DocumentIconPicker";
 import {
   parseProposalPlainTextBlocks,
   type ProposalPlainTextBlock,
 } from "../../lib/proposal-list-blocks";
+import {
+  normalizeEditableText,
+  resolveProposalDocument,
+  type ProposalDocument,
+  type ProposalDocumentListMarker,
+} from "../../lib/proposal-document";
 
 type ProposalDocumentRendererProps = {
   content: string;
+  proposalDocument?: ProposalDocument | null;
   proposalType?: FormValues["proposalType"] | null;
   templateId?: ProposalTemplateId | null;
   railTitle?: string | null;
@@ -102,6 +111,13 @@ type ProposalDocumentRendererProps = {
   documentDecorationMode?: "readonly" | "design";
   onDocumentDecorationChange?: (decoration: DocumentDecoration) => void;
   onDocumentDecorationCommit?: (decoration: DocumentDecoration) => void;
+  onProposalDocumentChange?: (document: ProposalDocument) => void;
+  onRailTitleChange?: (value: string) => void;
+  onRailMetaChange?: (value: string) => void;
+  onContactLineChange?: (value: string) => void;
+  onLetterDateChange?: (value: string) => void;
+  onRecipientDetailsChange?: (value: string) => void;
+  onDocumentTitleChange?: (value: string) => void;
   emptyBodyPlaceholder?: string | null;
   onPageCountChange?: (count: number) => void;
 };
@@ -132,7 +148,13 @@ type ProposalDocumentBlock =
   | {
       id: string;
       type: "list";
-      items: string[];
+      items: Array<{
+        id: string;
+        text: string;
+        iconKey?: DocumentIconKey;
+        marker?: ProposalDocumentListMarker | null;
+      }>;
+      marker?: ProposalDocumentListMarker | null;
     }
   | {
       id: string;
@@ -214,11 +236,31 @@ type ProposalLetterheadViewModel = {
   showSender: boolean;
 };
 
+type ProposalEditableTextProps = React.HTMLAttributes<HTMLElement> & {
+  contentEditable?: "plaintext-only";
+  suppressContentEditableWarning?: boolean;
+  "data-proposal-editable-text"?: string;
+};
+
+type ProposalCoverLetterEditableFields = {
+  senderName?: ProposalEditableTextProps | null;
+  senderRole?: ProposalEditableTextProps | null;
+  senderContact?: ProposalEditableTextProps | null;
+  date?: ProposalEditableTextProps | null;
+  recipient?: ProposalEditableTextProps | null;
+  subject?: ProposalEditableTextProps | null;
+};
+
 type ProposalCoverLetterTemplateProps = {
   bodyRef?: React.Ref<HTMLDivElement> | null;
   bodyContent: React.ReactNode;
+  editableFields?: ProposalCoverLetterEditableFields | null;
   isContinuationPage: boolean;
   viewModel: ProposalLetterheadViewModel;
+};
+
+type ProposalEditableTextBehavior = {
+  multiline?: boolean;
 };
 
 const BAUHAUS_WORDMARK_MAX_COMPACT_CHARS = 8;
@@ -492,26 +534,222 @@ function buildEditorialRecipientGroups(
   );
 }
 
+function commitEditableTextProps(
+  editableField: ProposalEditableTextProps | null | undefined,
+  value: string,
+): void {
+  editableField?.onBlur?.({
+    currentTarget: {
+      textContent: value,
+    },
+  } as React.FocusEvent<HTMLElement>);
+}
+
+function collectEditableValueLines(
+  root: HTMLElement | null | undefined,
+  selector: string,
+): string[] {
+  return Array.from(root?.querySelectorAll<HTMLElement>(selector) ?? [])
+    .map((node) => node.textContent?.trim() ?? "")
+    .filter(Boolean);
+}
+
+function getClipboardPlainText(
+  event: React.ClipboardEvent<HTMLElement>,
+): string {
+  const plainText = event.clipboardData.getData("text/plain");
+  if (plainText) {
+    return normalizeEditableText(plainText);
+  }
+  return normalizeEditableText(event.clipboardData.getData("text/html"));
+}
+
+function insertPlainTextIntoEditableTarget(
+  target: HTMLElement,
+  text: string,
+): string {
+  const selection = window.getSelection?.();
+  const range =
+    selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+
+  if (range && target.contains(range.commonAncestorContainer)) {
+    range.deleteContents();
+    const textNode = document.createTextNode(text);
+    range.insertNode(textNode);
+    range.setStartAfter(textNode);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  } else {
+    target.textContent = text;
+  }
+
+  return normalizeEditableText(target.textContent ?? "");
+}
+
+function getEditableValueLineProps(
+  editableField: ProposalEditableTextProps | null | undefined,
+  onCommit: () => void,
+): ProposalEditableTextProps | null {
+  if (!editableField) {
+    return null;
+  }
+
+  const {
+    onBlur: _onBlur,
+    onInput: _onInput,
+    onKeyDown: _onKeyDown,
+    onPaste: _onPaste,
+    ...props
+  } = editableField;
+  return {
+    ...props,
+    onInput: onCommit,
+    onBlur: onCommit,
+    onPaste: (event: React.ClipboardEvent<HTMLElement>) => {
+      event.preventDefault();
+      const pastedText = getClipboardPlainText(event);
+      insertPlainTextIntoEditableTarget(event.currentTarget, pastedText);
+      onCommit();
+    },
+    onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.currentTarget.blur();
+        return;
+      }
+      if (event.key === "Tab") {
+        onCommit();
+        return;
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        event.currentTarget.blur();
+      }
+    },
+  };
+}
+
+function getEditableCollectedLineProps(
+  editableField: ProposalEditableTextProps | null | undefined,
+  selector: string,
+  ariaLabel: string,
+  options: {
+    staticPrefixLines?: string[];
+    staticSuffixLines?: string[];
+  } = {},
+): ProposalEditableTextProps | null {
+  if (!editableField) {
+    return null;
+  }
+
+  const {
+    onBlur: _onBlur,
+    onInput: _onInput,
+    onKeyDown: _onKeyDown,
+    onPaste: _onPaste,
+    ...props
+  } = editableField;
+  const commitCollectedLines = (target: HTMLElement) => {
+    const currentText = target.textContent ?? "";
+    if (currentText.includes("\n")) {
+      commitEditableTextProps(editableField, normalizeEditableText(currentText));
+      return;
+    }
+
+    const collectedLines = collectEditableValueLines(
+      target.parentElement,
+      selector,
+    );
+    commitEditableTextProps(
+      editableField,
+      [
+        ...(options.staticPrefixLines ?? []),
+        ...collectedLines,
+        ...(options.staticSuffixLines ?? []),
+      ].join("\n"),
+    );
+  };
+
+  return {
+    ...props,
+    "aria-label": ariaLabel,
+    onInput: (event: React.FormEvent<HTMLElement>) => {
+      commitCollectedLines(event.currentTarget);
+    },
+    onBlur: (event: React.FocusEvent<HTMLElement>) => {
+      commitCollectedLines(event.currentTarget);
+    },
+    onPaste: (event: React.ClipboardEvent<HTMLElement>) => {
+      event.preventDefault();
+      const pastedText = getClipboardPlainText(event);
+      insertPlainTextIntoEditableTarget(event.currentTarget, pastedText);
+      commitCollectedLines(event.currentTarget);
+    },
+    onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.currentTarget.blur();
+        return;
+      }
+      if (event.key === "Tab") {
+        commitCollectedLines(event.currentTarget);
+        return;
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        event.currentTarget.blur();
+      }
+    },
+  };
+}
+
 function ProposalCoverLetterEditorialContactGroups({
+  editableField = null,
+  editableGroupLabels = null,
   groups,
 }: {
+  editableField?: ProposalEditableTextProps | null;
+  editableGroupLabels?: ReadonlySet<string> | null;
   groups: EditorialContactGroup[];
 }): JSX.Element | null {
+  const copyRef = React.useRef<HTMLDivElement>(null);
+
   if (groups.length === 0) {
     return null;
   }
 
   return (
-    <div className="proposal-cover-letter__editorial-contact-copy">
+    <div ref={copyRef} className="proposal-cover-letter__editorial-contact-copy">
       {groups.map((group) => (
         <p key={`${group.label}-${group.lines.join("|")}`}>
           {group.label ? <b>{group.label}</b> : null}
-          {group.lines.map((line) => (
-            <React.Fragment key={line}>
-              <br />
-              {line}
-            </React.Fragment>
-          ))}
+          {group.lines.map((line) => {
+            const valueEditable =
+              editableField &&
+              (!editableGroupLabels || editableGroupLabels.has(group.label));
+            return (
+              <React.Fragment key={line}>
+                <br />
+                {valueEditable ? (
+                  <span
+                    data-proposal-editable-contact-value="true"
+                    {...(getEditableValueLineProps(editableField, () => {
+                      const lines = collectEditableValueLines(
+                        copyRef.current,
+                        "[data-proposal-editable-contact-value='true']",
+                      );
+                      commitEditableTextProps(editableField, lines.join("\n"));
+                    }) ?? {})}
+                  >
+                    {line}
+                  </span>
+                ) : (
+                  line
+                )}
+              </React.Fragment>
+            );
+          })}
         </p>
       ))}
     </div>
@@ -977,8 +1215,10 @@ function buildProposalLetterheadViewModel(args: {
 }
 
 function ProposalCoverLetterMetaRow({
+  editableFields,
   viewModel,
 }: {
+  editableFields?: ProposalCoverLetterEditableFields | null;
   viewModel: ProposalLetterheadViewModel;
 }): JSX.Element {
   const roleOrCompany = viewModel.metaRole || viewModel.recipientCompany;
@@ -988,22 +1228,47 @@ function ProposalCoverLetterMetaRow({
     viewModel.metaRole ? viewModel.recipientCompany : "",
     viewModel.date,
   ];
+  const recipientMetaValueSelector =
+    "[data-proposal-recipient-meta-value='true']";
 
   return (
     <div className="proposal-cover-letter__meta-row" aria-label="Letter metadata">
-      {values.map((value, index) => (
-        <p key={`meta-${index}`} className="proposal-cover-letter__meta-item">
-          {value}
-        </p>
-      ))}
+      {values.map((value, index) => {
+        const isRecipientValue = index < 3 && Boolean(value);
+        return (
+          <p
+            key={`meta-${index}`}
+            className="proposal-cover-letter__meta-item"
+            data-proposal-recipient-meta-value={
+              isRecipientValue ? "true" : undefined
+            }
+            {...(isRecipientValue
+              ? getEditableCollectedLineProps(
+                  editableFields?.recipient,
+                  recipientMetaValueSelector,
+                  index === 0
+                    ? "Edit recipient details"
+                    : "Edit recipient detail line",
+                  { staticSuffixLines: viewModel.recipientContactLines },
+                ) ?? {}
+              : index === 3
+                ? editableFields?.date ?? {}
+                : {})}
+          >
+            {value}
+          </p>
+        );
+      })}
     </div>
   );
 }
 
 function ProposalCoverLetterSubjectRow({
+  editableFields,
   viewModel,
   prefix = "Subject:",
 }: {
+  editableFields?: ProposalCoverLetterEditableFields | null;
   viewModel: ProposalLetterheadViewModel;
   prefix?: string;
 }): JSX.Element | null {
@@ -1014,7 +1279,10 @@ function ProposalCoverLetterSubjectRow({
   return (
     <div className="proposal-cover-letter__subject-row">
       <span className="proposal-cover-letter__subject-label">{prefix}</span>
-      <span className="proposal-cover-letter__subject-value">
+      <span
+        className="proposal-cover-letter__subject-value"
+        {...(editableFields?.subject ?? {})}
+      >
         {viewModel.subject}
       </span>
     </div>
@@ -1022,30 +1290,49 @@ function ProposalCoverLetterSubjectRow({
 }
 
 function ProposalCoverLetterRecipientBlock({
+  editableFields,
   viewModel,
 }: {
+  editableFields?: ProposalCoverLetterEditableFields | null;
   viewModel: ProposalLetterheadViewModel;
 }): JSX.Element | null {
   if (viewModel.recipientContactLines.length === 0) {
     return null;
   }
+  const recipientHeadingOnlyLines = uniqueNonEmptyLines([
+    viewModel.recipientName,
+    viewModel.recipientRole,
+    viewModel.recipientCompany,
+  ]);
 
   return (
     <section
       className="proposal-cover-letter__recipient-block"
       aria-label="Recipient contact details"
     >
-      {viewModel.recipientContactLines.map((line) => (
-        <p key={line}>{line}</p>
+      {viewModel.recipientContactLines.map((line, index) => (
+        <p
+          key={line}
+          {...(getEditableCollectedLineProps(
+            editableFields?.recipient,
+            "p",
+            index === 0 ? "Edit recipient details" : "Edit recipient detail line",
+            { staticPrefixLines: recipientHeadingOnlyLines },
+          ) ?? {})}
+        >
+          {line}
+        </p>
       ))}
     </section>
   );
 }
 
 function ProposalCoverLetterRecipientSubjectStack({
+  editableFields,
   prefix,
   viewModel,
 }: {
+  editableFields?: ProposalCoverLetterEditableFields | null;
   prefix?: string;
   viewModel: ProposalLetterheadViewModel;
 }): JSX.Element | null {
@@ -1058,8 +1345,15 @@ function ProposalCoverLetterRecipientSubjectStack({
       className="proposal-cover-letter__recipient-subject-stack"
       aria-label="Recipient and subject details"
     >
-      <ProposalCoverLetterRecipientBlock viewModel={viewModel} />
-      <ProposalCoverLetterSubjectRow viewModel={viewModel} prefix={prefix} />
+      <ProposalCoverLetterRecipientBlock
+        editableFields={editableFields}
+        viewModel={viewModel}
+      />
+      <ProposalCoverLetterSubjectRow
+        editableFields={editableFields}
+        viewModel={viewModel}
+        prefix={prefix}
+      />
     </div>
   );
 }
@@ -1111,6 +1405,7 @@ function ProposalCoverLetterDirectorContactGrid({
 export function ProposalCoverLetterEditorialTemplate({
   bodyRef,
   bodyContent,
+  editableFields,
   isContinuationPage,
   viewModel,
 }: ProposalCoverLetterTemplateProps): JSX.Element {
@@ -1120,6 +1415,10 @@ export function ProposalCoverLetterEditorialTemplate({
   const subtitle = viewModel.candidateRole || viewModel.shortRoleTitle;
   const recipientGroups = buildEditorialRecipientGroups(viewModel);
   const senderGroups = buildEditorialSenderGroups(viewModel);
+  const editableSenderContactLabels = React.useMemo(
+    () => new Set(["Company", "Location", "Phone", "Email", "Social", "WWW"]),
+    [],
+  );
 
   return (
     <>
@@ -1137,12 +1436,16 @@ export function ProposalCoverLetterEditorialTemplate({
           {wordmark ? (
             <p
               className="proposal-cover-letter__editorial-wordmark"
+              {...(editableFields?.senderName ?? {})}
             >
               {wordmark}
             </p>
           ) : null}
           {subtitle ? (
-            <p className="proposal-cover-letter__editorial-subtitle">
+            <p
+              className="proposal-cover-letter__editorial-subtitle"
+              {...(editableFields?.senderRole ?? {})}
+            >
               {subtitle}
             </p>
           ) : null}
@@ -1156,14 +1459,20 @@ export function ProposalCoverLetterEditorialTemplate({
             aria-hidden="true"
           />
           {viewModel.subject ? (
-            <p className="proposal-cover-letter__editorial-subject">
+            <p
+              className="proposal-cover-letter__editorial-subject"
+              {...(editableFields?.subject ?? {})}
+            >
               {viewModel.subject}
             </p>
           ) : null}
 
           {viewModel.date ? (
             <>
-              <p className="proposal-cover-letter__editorial-date">
+              <p
+                className="proposal-cover-letter__editorial-date"
+                {...(editableFields?.date ?? {})}
+              >
                 {viewModel.date}
               </p>
               <span
@@ -1183,6 +1492,7 @@ export function ProposalCoverLetterEditorialTemplate({
                 aria-hidden="true"
               />
               <ProposalCoverLetterEditorialContactGroups
+                editableField={editableFields?.recipient ?? null}
                 groups={recipientGroups}
               />
             </section>
@@ -1197,7 +1507,11 @@ export function ProposalCoverLetterEditorialTemplate({
                 className="proposal-cover-letter__editorial-label-rule proposal-cover-letter__editorial-label-rule--sender"
                 aria-hidden="true"
               />
-              <ProposalCoverLetterEditorialContactGroups groups={senderGroups} />
+              <ProposalCoverLetterEditorialContactGroups
+                editableField={editableFields?.senderContact ?? null}
+                editableGroupLabels={editableSenderContactLabels}
+                groups={senderGroups}
+              />
             </section>
           ) : null}
         </>
@@ -1224,6 +1538,7 @@ export function ProposalCoverLetterEditorialTemplate({
 export function ProposalCoverLetterTwoweeksTemplate({
   bodyRef,
   bodyContent,
+  editableFields,
   isContinuationPage,
   viewModel,
 }: ProposalCoverLetterTemplateProps): JSX.Element {
@@ -1261,12 +1576,18 @@ export function ProposalCoverLetterTwoweeksTemplate({
               {twoweeksNameLine || twoweeksRoleLine ? (
                 <div className="proposal-cover-letter__twoweeks-name">
                   {twoweeksNameLine ? (
-                    <p className="proposal-cover-letter__twoweeks-name-value">
+                    <p
+                      className="proposal-cover-letter__twoweeks-name-value"
+                      {...(editableFields?.senderName ?? {})}
+                    >
                       {twoweeksNameLine}
                     </p>
                   ) : null}
                   {twoweeksRoleLine ? (
-                    <p className="proposal-cover-letter__twoweeks-role">
+                    <p
+                      className="proposal-cover-letter__twoweeks-role"
+                      {...(editableFields?.senderRole ?? {})}
+                    >
                       {twoweeksRoleLine}
                     </p>
                   ) : null}
@@ -1290,7 +1611,16 @@ export function ProposalCoverLetterTwoweeksTemplate({
                       key={`twoweeks-contact-group-${groupIndex}`}
                     >
                       {group.map((line, index) => (
-                        <p key={`twoweeks-contact-${groupIndex}-${index}-${line}`}>
+                        <p
+                          key={`twoweeks-contact-${groupIndex}-${index}-${line}`}
+                          {...(getEditableCollectedLineProps(
+                            editableFields?.senderContact,
+                            ".proposal-cover-letter__twoweeks-contact-group p",
+                            groupIndex === 0 && index === 0
+                              ? "Edit sender contact details"
+                              : "Edit sender contact detail line",
+                          ) ?? {})}
+                        >
                           {line}
                         </p>
                       ))}
@@ -1301,7 +1631,10 @@ export function ProposalCoverLetterTwoweeksTemplate({
             </aside>
           ) : null}
           {viewModel.date ? (
-            <p className="proposal-cover-letter__twoweeks-date">
+            <p
+              className="proposal-cover-letter__twoweeks-date"
+              {...(editableFields?.date ?? {})}
+            >
               {viewModel.date}
             </p>
           ) : null}
@@ -1310,8 +1643,19 @@ export function ProposalCoverLetterTwoweeksTemplate({
               className="proposal-cover-letter__twoweeks-recipient"
               aria-label="Recipient details"
             >
-              {viewModel.recipientHeadingLines.map((line) => (
-                <p key={`twoweeks-recipient-${line}`}>{line}</p>
+              {viewModel.recipientHeadingLines.map((line, index) => (
+                <p
+                  key={`twoweeks-recipient-${line}`}
+                  {...(getEditableCollectedLineProps(
+                    editableFields?.recipient,
+                    "p",
+                    index === 0
+                      ? "Edit recipient details"
+                      : "Edit recipient detail line",
+                  ) ?? {})}
+                >
+                  {line}
+                </p>
               ))}
             </section>
           ) : null}
@@ -1320,7 +1664,10 @@ export function ProposalCoverLetterTwoweeksTemplate({
               <span className="proposal-cover-letter__twoweeks-subject-label">
                 Subject:
               </span>{" "}
-              <span className="proposal-cover-letter__twoweeks-subject-value">
+              <span
+                className="proposal-cover-letter__twoweeks-subject-value"
+                {...(editableFields?.subject ?? {})}
+              >
                 {viewModel.subject}
               </span>
             </p>
@@ -1337,6 +1684,7 @@ export function ProposalCoverLetterTwoweeksTemplate({
 export function ProposalCoverLetterDirectorTemplate({
   bodyRef,
   bodyContent,
+  editableFields,
   isContinuationPage,
   viewModel,
 }: ProposalCoverLetterTemplateProps): JSX.Element {
@@ -1357,7 +1705,10 @@ export function ProposalCoverLetterDirectorTemplate({
               .join(" ")}
           >
             {viewModel.candidateName ? (
-              <p className="proposal-cover-letter__masthead-primary">
+              <p
+                className="proposal-cover-letter__masthead-primary"
+                {...(editableFields?.senderName ?? {})}
+              >
                 {viewModel.candidateName}
               </p>
             ) : null}
@@ -1367,7 +1718,10 @@ export function ProposalCoverLetterDirectorTemplate({
               </p>
             ) : null}
             {viewModel.candidateRole ? (
-              <p className="proposal-cover-letter__masthead-role">
+              <p
+                className="proposal-cover-letter__masthead-role"
+                {...(editableFields?.senderRole ?? {})}
+              >
                 {viewModel.candidateRole}
               </p>
             ) : null}
@@ -1375,15 +1729,23 @@ export function ProposalCoverLetterDirectorTemplate({
           <section className="proposal-cover-letter__sender-block">
             <p className="proposal-cover-letter__sender-label">Sender</p>
             <div className="proposal-cover-letter__sender-lines">
-              {viewModel.candidateName ? <p>{viewModel.candidateName}</p> : null}
+              {viewModel.candidateName ? (
+                <p>{viewModel.candidateName}</p>
+              ) : null}
               {viewModel.candidateLocationLine ? (
                 <p>{viewModel.candidateLocationLine}</p>
               ) : null}
             </div>
           </section>
           <ProposalCoverLetterDirectorContactGrid viewModel={viewModel} />
-          <ProposalCoverLetterMetaRow viewModel={viewModel} />
-          <ProposalCoverLetterRecipientSubjectStack viewModel={viewModel} />
+          <ProposalCoverLetterMetaRow
+            editableFields={editableFields}
+            viewModel={viewModel}
+          />
+          <ProposalCoverLetterRecipientSubjectStack
+            editableFields={editableFields}
+            viewModel={viewModel}
+          />
         </>
       ) : null}
       <div ref={bodyRef ?? undefined} className="proposal-cover-letter__body">
@@ -1396,6 +1758,7 @@ export function ProposalCoverLetterDirectorTemplate({
 export function ProposalCoverLetterVolkTemplate({
   bodyRef,
   bodyContent,
+  editableFields,
   isContinuationPage,
   viewModel,
 }: ProposalCoverLetterTemplateProps): JSX.Element {
@@ -1405,7 +1768,10 @@ export function ProposalCoverLetterVolkTemplate({
         <>
           <header className="proposal-cover-letter__volk-header">
             {viewModel.candidateName ? (
-              <p className="proposal-cover-letter__volk-title">
+              <p
+                className="proposal-cover-letter__volk-title"
+                {...(editableFields?.senderName ?? {})}
+              >
                 {viewModel.candidateName}
               </p>
             ) : null}
@@ -1415,18 +1781,28 @@ export function ProposalCoverLetterVolkTemplate({
               </p>
             ) : null}
             {viewModel.candidateRole ? (
-              <p className="proposal-cover-letter__volk-subtitle">
+              <p
+                className="proposal-cover-letter__volk-subtitle"
+                {...(editableFields?.senderRole ?? {})}
+              >
                 {viewModel.candidateRole}
               </p>
             ) : null}
             {viewModel.candidateVolkSenderLine ? (
               <p className="proposal-cover-letter__volk-sender">
-                sender: {viewModel.candidateVolkSenderLine}
+                sender:{" "}
+                <span {...(editableFields?.senderContact ?? {})}>
+                  {viewModel.candidateVolkSenderLine}
+                </span>
               </p>
             ) : null}
           </header>
-          <ProposalCoverLetterMetaRow viewModel={viewModel} />
+          <ProposalCoverLetterMetaRow
+            editableFields={editableFields}
+            viewModel={viewModel}
+          />
           <ProposalCoverLetterRecipientSubjectStack
+            editableFields={editableFields}
             viewModel={viewModel}
           />
           <span className="proposal-cover-letter__dot" aria-hidden="true" />
@@ -1442,6 +1818,7 @@ export function ProposalCoverLetterVolkTemplate({
 export function ProposalCoverLetterFilmFotoTemplate({
   bodyRef,
   bodyContent,
+  editableFields,
   isContinuationPage,
   viewModel,
 }: ProposalCoverLetterTemplateProps): JSX.Element {
@@ -1454,12 +1831,20 @@ export function ProposalCoverLetterFilmFotoTemplate({
         <>
           <header className="proposal-cover-letter__film-header">
             {filmKicker ? (
-              <p className="proposal-cover-letter__film-heading">
+              <p
+                className="proposal-cover-letter__film-heading"
+                {...(editableFields?.senderRole ?? {})}
+              >
                 {filmKicker}
               </p>
             ) : null}
             {filmTitle ? (
-              <p className="proposal-cover-letter__film-title">{filmTitle}</p>
+              <p
+                className="proposal-cover-letter__film-title"
+                {...(editableFields?.senderName ?? {})}
+              >
+                {filmTitle}
+              </p>
             ) : null}
             <span className="proposal-cover-letter__film-rule" />
           </header>
@@ -1467,13 +1852,30 @@ export function ProposalCoverLetterFilmFotoTemplate({
             {viewModel.candidateFilmSenderLine ? (
               <div>
                 <p className="proposal-cover-letter__info-label">sender</p>
-                <p>{viewModel.candidateFilmSenderLine}</p>
+                <p {...(editableFields?.senderContact ?? {})}>
+                  {viewModel.candidateFilmSenderLine}
+                </p>
               </div>
             ) : null}
             {viewModel.recipientCompany ? (
               <div>
                 <p className="proposal-cover-letter__info-label">company</p>
-                <p>{viewModel.recipientCompany}</p>
+                <p
+                  {...(getEditableCollectedLineProps(
+                    editableFields?.recipient,
+                    "p:not(.proposal-cover-letter__info-label)",
+                    "Edit recipient details",
+                    {
+                      staticPrefixLines: uniqueNonEmptyLines([
+                        viewModel.recipientName,
+                        viewModel.recipientRole,
+                      ]),
+                      staticSuffixLines: viewModel.recipientContactLines,
+                    },
+                  ) ?? {})}
+                >
+                  {viewModel.recipientCompany}
+                </p>
               </div>
             ) : null}
             {viewModel.candidatePhone ? (
@@ -1499,8 +1901,12 @@ export function ProposalCoverLetterFilmFotoTemplate({
               </div>
             ) : null}
           </section>
-          <ProposalCoverLetterMetaRow viewModel={viewModel} />
+          <ProposalCoverLetterMetaRow
+            editableFields={editableFields}
+            viewModel={viewModel}
+          />
           <ProposalCoverLetterRecipientSubjectStack
+            editableFields={editableFields}
             viewModel={viewModel}
             prefix="subject:"
           />
@@ -1522,6 +1928,7 @@ export function ProposalCoverLetterFilmFotoTemplate({
 export function ProposalCoverLetterMomaBauhausTemplate({
   bodyRef,
   bodyContent,
+  editableFields,
   isContinuationPage,
   viewModel,
 }: ProposalCoverLetterTemplateProps): JSX.Element {
@@ -1553,8 +1960,19 @@ export function ProposalCoverLetterMomaBauhausTemplate({
               className="proposal-cover-letter__bauhaus-sender"
               aria-label="Sender details"
             >
-              {senderLines.map((line) => (
-                <p key={`sender-${line}`}>{line}</p>
+              {senderLines.map((line, index) => (
+                <p
+                  key={`sender-${line}`}
+                  {...(getEditableCollectedLineProps(
+                    editableFields?.senderContact,
+                    "p",
+                    index === 0
+                      ? "Edit sender contact details"
+                      : "Edit sender contact detail line",
+                  ) ?? {})}
+                >
+                  {line}
+                </p>
               ))}
             </section>
           ) : null}
@@ -1563,20 +1981,37 @@ export function ProposalCoverLetterMomaBauhausTemplate({
               className="proposal-cover-letter__bauhaus-recipient"
               aria-label="Recipient details"
             >
-              {recipientLines.map((line) => (
-                <p key={`recipient-${line}`}>{line}</p>
+              {recipientLines.map((line, index) => (
+                <p
+                  key={`recipient-${line}`}
+                  {...(getEditableCollectedLineProps(
+                    editableFields?.recipient,
+                    "p",
+                    index === 0
+                      ? "Edit recipient details"
+                      : "Edit recipient detail line",
+                  ) ?? {})}
+                >
+                  {line}
+                </p>
               ))}
             </section>
           ) : null}
           {displayTitle || subtitle ? (
             <header className="proposal-cover-letter__bauhaus-header">
               {displayTitle ? (
-                <p className="proposal-cover-letter__bauhaus-logo">
+                <p
+                  className="proposal-cover-letter__bauhaus-logo"
+                  {...(editableFields?.senderName ?? {})}
+                >
                   {displayTitle}
                 </p>
               ) : null}
               {subtitle ? (
-                <p className="proposal-cover-letter__bauhaus-subtitle">
+                <p
+                  className="proposal-cover-letter__bauhaus-subtitle"
+                  {...(editableFields?.senderRole ?? {})}
+                >
                   {subtitle}
                 </p>
               ) : null}
@@ -1585,13 +2020,19 @@ export function ProposalCoverLetterMomaBauhausTemplate({
           {(viewModel.date || viewModel.subject) ? (
             <div className="proposal-cover-letter__bauhaus-meta">
               {viewModel.date ? (
-                <p className="proposal-cover-letter__bauhaus-meta-item">
+                <p
+                  className="proposal-cover-letter__bauhaus-meta-item"
+                  {...(editableFields?.date ?? {})}
+                >
                   {viewModel.date}
                 </p>
               ) : null}
               {viewModel.subject ? (
                 <p className="proposal-cover-letter__bauhaus-meta-item proposal-cover-letter__bauhaus-meta-item--subject">
-                  Subject: {viewModel.subject}
+                  Subject:{" "}
+                  <span {...(editableFields?.subject ?? {})}>
+                    {viewModel.subject}
+                  </span>
                 </p>
               ) : null}
             </div>
@@ -1619,6 +2060,7 @@ export function ProposalCoverLetterMomaBauhausTemplate({
 export function ProposalCoverLetterJoellaTemplate({
   bodyRef,
   bodyContent,
+  editableFields,
   isContinuationPage,
   viewModel,
 }: ProposalCoverLetterTemplateProps): JSX.Element {
@@ -1643,12 +2085,18 @@ export function ProposalCoverLetterJoellaTemplate({
           <span className="proposal-cover-letter__joella-frame" aria-hidden="true" />
           <span className="proposal-cover-letter__joella-divider" aria-hidden="true" />
           {viewModel.candidateJoellaWordmark ? (
-            <p className="proposal-cover-letter__joella-wordmark">
+            <p
+              className="proposal-cover-letter__joella-wordmark"
+              {...(editableFields?.senderName ?? {})}
+            >
               {viewModel.candidateJoellaWordmark}
             </p>
           ) : null}
           {viewModel.candidateJoellaFooterLine ? (
-            <p className="proposal-cover-letter__joella-footer">
+            <p
+              className="proposal-cover-letter__joella-footer"
+              {...(editableFields?.senderContact ?? {})}
+            >
               {viewModel.candidateJoellaFooterLine}
             </p>
           ) : null}
@@ -1683,7 +2131,10 @@ export function ProposalCoverLetterJoellaTemplate({
                     {group.kind === "subject" ? (
                       <>
                         {splitJoellaSubjectLine(line).label}
-                        <span className="proposal-cover-letter__joella-letter-block-subject-value">
+                        <span
+                          className="proposal-cover-letter__joella-letter-block-subject-value"
+                          {...(editableFields?.subject ?? {})}
+                        >
                           {splitJoellaSubjectLine(line).subject}
                         </span>
                       </>
@@ -1705,6 +2156,7 @@ export function ProposalCoverLetterJoellaTemplate({
 export function ProposalCoverLetterBayerTemplate({
   bodyRef,
   bodyContent,
+  editableFields,
   isContinuationPage,
   viewModel,
 }: ProposalCoverLetterTemplateProps): JSX.Element {
@@ -1762,7 +2214,10 @@ export function ProposalCoverLetterBayerTemplate({
               aria-label="Sender details"
             >
               {bayerName ? (
-                <p className="proposal-cover-letter__bayer-name">
+                <p
+                  className="proposal-cover-letter__bayer-name"
+                  {...(editableFields?.senderName ?? {})}
+                >
                   {bayerName}
                 </p>
               ) : null}
@@ -1771,7 +2226,10 @@ export function ProposalCoverLetterBayerTemplate({
                 aria-hidden="true"
               />
               {viewModel.candidateRole ? (
-                <p className="proposal-cover-letter__bayer-role">
+                <p
+                  className="proposal-cover-letter__bayer-role"
+                  {...(editableFields?.senderRole ?? {})}
+                >
                   {viewModel.candidateRole}
                 </p>
               ) : null}
@@ -1781,7 +2239,10 @@ export function ProposalCoverLetterBayerTemplate({
                 </p>
               ) : null}
               {viewModel.candidateEmail ? (
-                <p className="proposal-cover-letter__bayer-email">
+                <p
+                  className="proposal-cover-letter__bayer-email"
+                  {...(editableFields?.senderContact ?? {})}
+                >
                   {viewModel.candidateEmail}
                 </p>
               ) : null}
@@ -1793,14 +2254,25 @@ export function ProposalCoverLetterBayerTemplate({
               aria-label="Recipient details"
             >
               <p className="proposal-cover-letter__bayer-label">TO</p>
-              {recipientLines.map((line) => (
-                <p
-                  key={`bayer-recipient-${line.value}`}
-                  className={line.className || undefined}
-                >
-                  {line.value}
-                </p>
-              ))}
+              <div
+                className="proposal-cover-letter__bayer-recipient-values"
+              >
+                {recipientLines.map((line, index) => (
+                  <p
+                    key={`bayer-recipient-${line.value}`}
+                    className={line.className || undefined}
+                    {...(getEditableCollectedLineProps(
+                      editableFields?.recipient,
+                      "p",
+                      index === 0
+                        ? "Edit recipient details"
+                        : "Edit recipient detail line",
+                    ) ?? {})}
+                  >
+                    {line.value}
+                  </p>
+                ))}
+              </div>
             </section>
           ) : null}
           {viewModel.date ? (
@@ -1809,7 +2281,10 @@ export function ProposalCoverLetterBayerTemplate({
               aria-label="Letter date"
             >
               <p className="proposal-cover-letter__bayer-label">DATE</p>
-              <p className="proposal-cover-letter__bayer-date-value">
+              <p
+                className="proposal-cover-letter__bayer-date-value"
+                {...(editableFields?.date ?? {})}
+              >
                 {viewModel.date}
               </p>
             </section>
@@ -1828,7 +2303,10 @@ export function ProposalCoverLetterBayerTemplate({
             aria-label="Letter subject"
           >
             <p className="proposal-cover-letter__bayer-label">SUBJECT</p>
-            <p className="proposal-cover-letter__bayer-subject-value">
+            <p
+              className="proposal-cover-letter__bayer-subject-value"
+              {...(editableFields?.subject ?? {})}
+            >
               {viewModel.subject}
             </p>
           </section>
@@ -2069,7 +2547,10 @@ function buildProposalDocumentBlocks(
       blocks.push({
         id: `list-${index}`,
         type: "list",
-        items: bodyBlock.items,
+        items: bodyBlock.items.map((item, itemIndex) => ({
+          id: `list-${index}-item-${itemIndex}`,
+          text: item,
+        })),
       });
       return;
     }
@@ -2112,6 +2593,95 @@ function buildProposalDocumentBlocks(
 
   return blocks;
 }
+
+function buildProposalDocumentBlocksFromStructuredDocument(
+  proposalDocument: ProposalDocument,
+  closing?: ProposalClosingRef | null,
+): ProposalDocumentBlock[] {
+  const blocks: ProposalDocumentBlock[] = [];
+
+  proposalDocument.blocks.forEach((block, index) => {
+    if (block.type === "salutation") {
+      blocks.push({
+        id: block.id || "salutation",
+        type: "salutation",
+        text: block.text,
+      });
+      return;
+    }
+
+    if (block.type === "list") {
+      const items = block.items
+        .map((item, itemIndex) => ({
+          id: item.id || `${block.id || `list-${index}`}-item-${itemIndex}`,
+          text: item.text,
+          ...(item.iconKey ? { iconKey: item.iconKey } : null),
+          marker: item.marker ?? block.marker ?? null,
+        }))
+        .filter((item) => item.text);
+      if (items.length > 0) {
+        blocks.push({
+          id: block.id || `list-${index}`,
+          type: "list",
+          items,
+          marker: block.marker ?? null,
+        });
+      }
+      return;
+    }
+
+    if (block.type === "closing") {
+      return;
+    }
+
+    splitParagraphIntoPaginationFragments(block.text).forEach(
+      (fragment, fragmentIndex) => {
+        blocks.push({
+          id: `${block.id || `paragraph-${index}`}-${fragmentIndex}`,
+          type: "paragraph",
+          text: fragment,
+          paragraphId: block.id || `paragraph-${index}`,
+          continuation: fragmentIndex > 0,
+        });
+      },
+    );
+  });
+
+  if (closing) {
+    const signOff = closing.signOff || null;
+    const signatureName = closing.enabled ? closing.signatureName || null : null;
+    if (signOff || signatureName) {
+      blocks.push({
+        id: "closing",
+        type: "closing",
+        signOff,
+        signatureName,
+        handwrittenSignatureEnabled: closing.enabled
+          ? closing.handwrittenSignatureEnabled
+          : false,
+      });
+    }
+  } else {
+    const closingBlock = proposalDocument.blocks.find(
+      (block): block is Extract<ProposalDocument["blocks"][number], { type: "closing" }> =>
+        block.type === "closing",
+    );
+    if (closingBlock) {
+      blocks.push({
+        id: closingBlock.id || "closing",
+        type: "closing",
+        signOff: closingBlock.signOff || null,
+        signatureName: closingBlock.signatureName || null,
+        ...(closingBlock.handwrittenSignatureEnabled
+          ? { handwrittenSignatureEnabled: true }
+          : null),
+      });
+    }
+  }
+
+  return blocks;
+}
+
 
 function paginateMeasuredProposalBlocks(args: {
   blocks: Array<{
@@ -2452,6 +3022,7 @@ function buildVolkFallbackParagraphs(args: {
 
 export function ProposalDocumentRenderer({
   content,
+  proposalDocument,
   proposalType,
   templateId,
   railTitle,
@@ -2476,6 +3047,13 @@ export function ProposalDocumentRenderer({
   documentDecorationMode = "readonly",
   onDocumentDecorationChange,
   onDocumentDecorationCommit,
+  onProposalDocumentChange,
+  onRailTitleChange,
+  onRailMetaChange,
+  onContactLineChange,
+  onLetterDateChange,
+  onRecipientDetailsChange,
+  onDocumentTitleChange,
   emptyBodyPlaceholder = null,
   onPageCountChange,
 }: ProposalDocumentRendererProps): JSX.Element {
@@ -2547,9 +3125,23 @@ export function ProposalDocumentRenderer({
       resolvedRailTitle,
     ],
   );
+  const structuredDocument = React.useMemo(
+    () =>
+      resolveProposalDocument({
+        document: proposalDocument,
+        content,
+        proposalType,
+        closing: effectiveClosing,
+      }),
+    [content, effectiveClosing, proposalDocument, proposalType],
+  );
   const documentBlocks = React.useMemo(
-    () => buildProposalDocumentBlocks(parsedDocument, effectiveClosing),
-    [effectiveClosing, parsedDocument],
+    () =>
+      buildProposalDocumentBlocksFromStructuredDocument(
+        structuredDocument,
+        effectiveClosing,
+      ),
+    [effectiveClosing, structuredDocument],
   );
   const signatureRender = React.useMemo(
     () =>
@@ -2629,6 +3221,8 @@ export function ProposalDocumentRenderer({
       }) as React.CSSProperties,
     [resolvedDocumentIconSettings.color, resolvedDocumentIconSettings.sizePt],
   );
+  const [activeListItemIconPicker, setActiveListItemIconPicker] =
+    React.useState<{ blockId: string; itemId: string } | null>(null);
 
   // Override proposal mm units with concrete px values so font-size, grid,
   // and padding use the resolved physical page size instead of global fallbacks.
@@ -2790,8 +3384,186 @@ export function ProposalDocumentRenderer({
     signatureRender,
   ]);
 
+  const commitEditableDocumentText = React.useCallback(
+    (
+      target:
+        | { type: "text-block"; blockId: string }
+        | { type: "list-item"; blockId: string; itemId: string },
+      value: string,
+    ) => {
+      if (!onProposalDocumentChange) return;
+
+      const nextText = normalizeEditableText(value);
+      const nextBlocks = structuredDocument.blocks.map(
+        (block): ProposalDocument["blocks"][number] => {
+          if (
+            target.type === "text-block" &&
+            block.id === target.blockId &&
+            (block.type === "salutation" || block.type === "paragraph")
+          ) {
+            return {
+              ...block,
+              text: nextText,
+            };
+          }
+
+          if (
+            target.type === "list-item" &&
+            block.id === target.blockId &&
+            block.type === "list"
+          ) {
+            return {
+              ...block,
+              items: block.items.map((item) =>
+                item.id === target.itemId
+                  ? {
+                      ...item,
+                      text: nextText,
+                    }
+                  : item,
+              ),
+            };
+          }
+
+          return block;
+        },
+      );
+
+      onProposalDocumentChange({
+        ...structuredDocument,
+        source: "structured",
+        blocks: nextBlocks,
+      });
+    },
+    [onProposalDocumentChange, structuredDocument],
+  );
+  const commitListItemIcon = React.useCallback(
+    (target: { blockId: string; itemId: string }, iconKey: DocumentIconKey | null) => {
+      if (!onProposalDocumentChange) return;
+
+      const nextBlocks = structuredDocument.blocks.map(
+        (block): ProposalDocument["blocks"][number] => {
+          if (block.id !== target.blockId || block.type !== "list") {
+            return block;
+          }
+
+          return {
+            ...block,
+            items: block.items.map((item) => {
+              if (item.id !== target.itemId) return item;
+              const { iconKey: _iconKey, ...rest } = item;
+              return iconKey
+                ? {
+                    ...rest,
+                    iconKey,
+                  }
+                : rest;
+            }),
+          };
+        },
+      );
+
+      onProposalDocumentChange({
+        ...structuredDocument,
+        source: "structured",
+        blocks: nextBlocks,
+      });
+    },
+    [onProposalDocumentChange, structuredDocument],
+  );
+  const getEditableTextProps = React.useCallback(
+    (
+      editable: boolean,
+      label: string,
+      onCommit: (value: string) => void,
+      behavior: ProposalEditableTextBehavior = {},
+    ) =>
+      editable
+        ? {
+            contentEditable: "plaintext-only" as const,
+            suppressContentEditableWarning: true,
+            role: "textbox",
+            tabIndex: 0,
+            spellCheck: true,
+            "aria-label": label,
+            "data-proposal-editable-text": "true",
+            onInput: (event: React.FormEvent<HTMLElement>) => {
+              onCommit(
+                normalizeEditableText(event.currentTarget.textContent ?? ""),
+              );
+            },
+            onBlur: (event: React.FocusEvent<HTMLElement>) => {
+              const normalized = normalizeEditableText(
+                event.currentTarget.textContent ?? "",
+              );
+              if ((event.currentTarget.textContent ?? "") !== normalized) {
+                event.currentTarget.textContent = normalized;
+              }
+              onCommit(normalized);
+            },
+            onPaste: (event: React.ClipboardEvent<HTMLElement>) => {
+              event.preventDefault();
+              const pastedText = getClipboardPlainText(event);
+              const normalized = insertPlainTextIntoEditableTarget(
+                event.currentTarget,
+                pastedText,
+              );
+              event.currentTarget.textContent = normalized;
+              onCommit(normalized);
+            },
+            onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                event.currentTarget.blur();
+                return;
+              }
+
+              if (event.key === "Tab") {
+                onCommit(
+                  normalizeEditableText(event.currentTarget.textContent ?? ""),
+                );
+                return;
+              }
+
+              if (event.key !== "Enter") {
+                return;
+              }
+
+              event.preventDefault();
+              if (behavior.multiline && event.shiftKey) {
+                const normalized = insertPlainTextIntoEditableTarget(
+                  event.currentTarget,
+                  "\n",
+                );
+                onCommit(normalized);
+                return;
+              }
+
+              event.currentTarget.blur();
+            },
+          }
+        : null,
+    [],
+  );
+
   const renderDocumentBlock = React.useCallback(
-    (block: ProposalDocumentBlock) => {
+    (
+      block: ProposalDocumentBlock,
+      options: { editable?: boolean } = {},
+    ) => {
+      const isTextEditable = Boolean(
+        options.editable && onProposalDocumentChange,
+      );
+      const getEditableBlockTextProps = (
+        target:
+          | { type: "text-block"; blockId: string }
+          | { type: "list-item"; blockId: string; itemId: string },
+        label: string,
+        behavior: ProposalEditableTextBehavior = {},
+      ) =>
+        getEditableTextProps(isTextEditable, label, (value) => {
+          commitEditableDocumentText(target, value);
+        }, behavior);
       const renderInlineText = (text: string) =>
         parseDocumentIconTextSegments(text).map((segment, index) => {
           if (segment.type === "text") return segment.text;
@@ -2814,8 +3586,12 @@ export function ProposalDocumentRenderer({
               key={block.id}
               className="dasti-proposal-document__salutation"
               data-proposal-block
+              {...(getEditableBlockTextProps(
+                { type: "text-block", blockId: block.id },
+                "Edit salutation",
+              ) ?? {})}
             >
-              {renderInlineText(block.text)}
+              {isTextEditable ? block.text : renderInlineText(block.text)}
             </p>
           );
         case "paragraph":
@@ -2831,18 +3607,32 @@ export function ProposalDocumentRenderer({
                 .filter(Boolean)
                 .join(" ")}
               data-proposal-block
+              {...(getEditableBlockTextProps(
+                { type: "text-block", blockId: block.paragraphId },
+                "Edit paragraph",
+                { multiline: true },
+              ) ?? {})}
             >
-              {renderInlineText(block.text)}
+              {isTextEditable ? block.text : renderInlineText(block.text)}
             </p>
           );
         case "list":
+          const blockMarkerType =
+            block.marker?.type === "icon" ? "icon" : listMarkerType;
+          const blockMarkerIcon =
+            block.marker?.type === "icon"
+              ? getDocumentIcon(block.marker.iconKey) ?? listMarkerIcon
+              : listMarkerIcon;
+          const hasItemIconOverride = block.items.some((item) =>
+            Boolean(getDocumentIcon(item.iconKey)),
+          );
           return (
             <ul
               key={block.id}
               className={[
                 "dasti-proposal-document__list",
-                `dasti-proposal-document__list--${listMarkerType}`,
-                listMarkerType === "icon"
+                `dasti-proposal-document__list--${blockMarkerType}`,
+                blockMarkerType === "icon" || hasItemIconOverride
                   ? "dasti-proposal-document__list--document-icons"
                   : "",
               ]
@@ -2851,27 +3641,130 @@ export function ProposalDocumentRenderer({
               style={listMarkerStyle}
               data-proposal-block
             >
-              {block.items.map((item, itemIndex) => (
-                <li key={`${block.id}-${itemIndex}`}>
-                  {listMarkerType === "icon" ? (
+              {block.items.map((item, itemIndex) => {
+                const itemIcon = getDocumentIcon(item.iconKey);
+                const itemMarker = item.marker ?? block.marker ?? null;
+                const itemMarkerType =
+                  itemMarker?.type === "icon" || blockMarkerType === "icon"
+                    ? "icon"
+                    : itemMarker?.type ?? blockMarkerType;
+                const markerIcon =
+                  itemIcon ??
+                  (itemMarkerType === "icon"
+                    ? itemMarker?.type === "icon"
+                      ? getDocumentIcon(itemMarker.iconKey) ?? blockMarkerIcon
+                      : blockMarkerIcon
+                    : null);
+                const target = { blockId: block.id, itemId: item.id };
+                const isPickerOpen =
+                  activeListItemIconPicker?.blockId === block.id &&
+                  activeListItemIconPicker.itemId === item.id;
+
+                return (
+                  <li
+                    key={`${block.id}-${item.id || itemIndex}`}
+                    data-proposal-list-item
+                    data-proposal-list-item-editable={
+                      isTextEditable ? "true" : undefined
+                    }
+                    data-has-item-icon={itemIcon ? "true" : undefined}
+                  >
+                    {isTextEditable ? (
+                      <span className="dasti-proposal-document__list-marker dasti-proposal-document__list-marker--editable">
+                        <button
+                          type="button"
+                          className="dasti-proposal-document__list-icon-trigger"
+                          aria-label={`Choose icon for list item ${itemIndex + 1}`}
+                          title="Choose icon"
+                          aria-expanded={isPickerOpen}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() =>
+                            setActiveListItemIconPicker((current) =>
+                              current?.blockId === block.id &&
+                              current.itemId === item.id
+                                ? null
+                                : target,
+                            )
+                          }
+                        >
+                          {markerIcon ? (
+                            <span
+                              aria-hidden="true"
+                              dangerouslySetInnerHTML={{
+                                __html: markerIcon.svg,
+                              }}
+                            />
+                          ) : (
+                            <span aria-hidden="true">
+                              {itemMarkerType === "dash" ? "-" : "•"}
+                            </span>
+                          )}
+                        </button>
+                        {isPickerOpen ? (
+                          <div
+                            className="dasti-proposal-document__list-icon-picker"
+                            role="dialog"
+                            aria-label={`Icon picker for list item ${itemIndex + 1}`}
+                          >
+                            <DocumentIconPicker
+                              label="List item icon"
+                              selectedIconKey={item.iconKey ?? null}
+                              onChange={(iconKey) => {
+                                commitListItemIcon(target, iconKey);
+                                setActiveListItemIconPicker(null);
+                              }}
+                            />
+                            <div className="dasti-proposal-document__list-icon-picker-actions">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  commitListItemIcon(target, null);
+                                  setActiveListItemIconPicker(null);
+                                }}
+                              >
+                                Clear
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setActiveListItemIconPicker(null)}
+                              >
+                                Close
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
+                      </span>
+                    ) : markerIcon ? (
+                      <span
+                        className="dasti-proposal-document__list-marker"
+                        aria-hidden="true"
+                        dangerouslySetInnerHTML={{
+                          __html: markerIcon.svg,
+                        }}
+                      />
+                    ) : (
+                      <span
+                        className="dasti-proposal-document__list-marker"
+                        aria-hidden="true"
+                      >
+                        {itemMarkerType === "dash" ? "-" : "•"}
+                      </span>
+                    )}
                     <span
-                      className="dasti-proposal-document__list-marker"
-                      aria-hidden="true"
-                      dangerouslySetInnerHTML={{
-                        __html: listMarkerIcon?.svg ?? "",
-                      }}
-                    />
-                  ) : (
-                    <span
-                      className="dasti-proposal-document__list-marker"
-                      aria-hidden="true"
+                      {...(getEditableBlockTextProps(
+                        {
+                          type: "list-item",
+                          blockId: block.id,
+                          itemId: item.id,
+                        },
+                        "Edit list item",
+                      ) ?? {})}
                     >
-                      {listMarkerType === "dash" ? "-" : "•"}
+                      {isTextEditable ? item.text : renderInlineText(item.text)}
                     </span>
-                  )}
-                  <span>{renderInlineText(item)}</span>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           );
         case "closing":
@@ -2894,12 +3787,23 @@ export function ProposalDocumentRenderer({
           );
       }
     },
-    [listMarkerIcon?.svg, listMarkerStyle, listMarkerType, renderSignature],
+    [
+      activeListItemIconPicker,
+      commitEditableDocumentText,
+      commitListItemIcon,
+      getEditableTextProps,
+      listMarkerIcon?.svg,
+      listMarkerStyle,
+      listMarkerType,
+      onProposalDocumentChange,
+      renderSignature,
+    ],
   );
 
   const renderVisibleDocumentBlocks = React.useCallback(
     (blocks: ProposalDocumentBlock[]) => {
       const elements: React.ReactNode[] = [];
+      const isTextEditable = Boolean(onProposalDocumentChange);
 
       for (let index = 0; index < blocks.length; index += 1) {
         const block = blocks[index];
@@ -2932,6 +3836,17 @@ export function ProposalDocumentRenderer({
               ]
                 .filter(Boolean)
                 .join(" ")}
+              {...(getEditableTextProps(
+                isTextEditable,
+                "Edit paragraph",
+                (value) => {
+                  commitEditableDocumentText(
+                    { type: "text-block", blockId: block.paragraphId },
+                    value,
+                  );
+                },
+                { multiline: true },
+              ) ?? {})}
             >
               {text}
             </p>,
@@ -2940,12 +3855,12 @@ export function ProposalDocumentRenderer({
           continue;
         }
 
-        elements.push(renderDocumentBlock(block));
+        elements.push(renderDocumentBlock(block, { editable: true }));
       }
 
       return elements;
     },
-    [renderDocumentBlock],
+    [commitEditableDocumentText, onProposalDocumentChange, renderDocumentBlock],
   );
 
   const resolvedPageGroups =
@@ -3075,33 +3990,62 @@ export function ProposalDocumentRenderer({
     [],
   );
   const renderSenderHeader = React.useCallback(
-    () => (
+    (editable: boolean) => (
       <div className="dasti-proposal-document__sender-header">
         {resolvedRailTitle ? (
           <p className="dasti-proposal-document__sender-label">
             <span className="dasti-proposal-document__sender-label-key">
               From:
             </span>{" "}
-            <span className="dasti-proposal-document__sender-label-value">
+            <span
+              className="dasti-proposal-document__sender-label-value"
+              {...(getEditableTextProps(
+                Boolean(editable && onRailTitleChange),
+                "Edit sender name",
+                (value) => onRailTitleChange?.(value),
+              ) ?? {})}
+            >
               {resolvedRailTitle}
             </span>
           </p>
         ) : null}
         {resolvedRailMeta ? (
-          <p className="dasti-proposal-document__sender-role">
+          <p
+            className="dasti-proposal-document__sender-role"
+            {...(getEditableTextProps(
+              Boolean(editable && onRailMetaChange),
+              "Edit sender role",
+              (value) => onRailMetaChange?.(value),
+            ) ?? {})}
+          >
             {resolvedRailMeta}
           </p>
         ) : null}
         {resolvedSenderLine ? (
-          <p className="dasti-proposal-document__sender-contact">
+          <p
+            className="dasti-proposal-document__sender-contact"
+            {...(getEditableTextProps(
+              Boolean(editable && onContactLineChange),
+              "Edit sender contact details",
+              (value) => onContactLineChange?.(value),
+            ) ?? {})}
+          >
             {resolvedSenderLine}
           </p>
         ) : null}
       </div>
     ),
-    [resolvedRailMeta, resolvedRailTitle, resolvedSenderLine],
+    [
+      getEditableTextProps,
+      onContactLineChange,
+      onRailMetaChange,
+      onRailTitleChange,
+      resolvedRailMeta,
+      resolvedRailTitle,
+      resolvedSenderLine,
+    ],
   );
-  const renderStructuredHeader = React.useCallback(() => {
+  const renderStructuredHeader = React.useCallback((editable: boolean) => {
     if (!structuredHeaderValues) {
       return null;
     }
@@ -3113,7 +4057,14 @@ export function ProposalDocumentRenderer({
             <p className="dasti-proposal-document__structured-header-label">
               Date
             </p>
-            <p className="dasti-proposal-document__structured-header-value">
+            <p
+              className="dasti-proposal-document__structured-header-value"
+              {...(getEditableTextProps(
+                Boolean(editable && onLetterDateChange),
+                "Edit date",
+                (value) => onLetterDateChange?.(value),
+              ) ?? {})}
+            >
               {structuredHeaderValues.date}
             </p>
           </div>
@@ -3123,19 +4074,37 @@ export function ProposalDocumentRenderer({
             <p className="dasti-proposal-document__structured-header-label">
               To
             </p>
-            {structuredHeaderValues.toLines.map((line, index) => (
-              <p
-                key={`recipient-line-${index}`}
-                className="dasti-proposal-document__structured-header-value"
+            {editable && onRecipientDetailsChange ? (
+              <div
+                className="dasti-proposal-document__structured-header-value dasti-proposal-document__structured-header-value--multiline"
+                {...(getEditableTextProps(
+                  true,
+                  "Edit recipient details",
+                  (value) => onRecipientDetailsChange?.(value),
+                ) ?? {})}
               >
-                {line}
-              </p>
-            ))}
-            {structuredHeaderValues.recipientDetailLines.length > 0 ? (
-              <p className="dasti-proposal-document__structured-header-value dasti-proposal-document__structured-header-value--multiline dasti-proposal-document__structured-header-value--secondary">
-                {structuredHeaderValues.recipientDetailLines.join("\n")}
-              </p>
-            ) : null}
+                {[
+                  ...structuredHeaderValues.toLines,
+                  ...structuredHeaderValues.recipientDetailLines,
+                ].join("\n")}
+              </div>
+            ) : (
+              <>
+                {structuredHeaderValues.toLines.map((line, index) => (
+                  <p
+                    key={`recipient-line-${index}`}
+                    className="dasti-proposal-document__structured-header-value"
+                  >
+                    {line}
+                  </p>
+                ))}
+                {structuredHeaderValues.recipientDetailLines.length > 0 ? (
+                  <p className="dasti-proposal-document__structured-header-value dasti-proposal-document__structured-header-value--multiline dasti-proposal-document__structured-header-value--secondary">
+                    {structuredHeaderValues.recipientDetailLines.join("\n")}
+                  </p>
+                ) : null}
+              </>
+            )}
           </div>
         ) : null}
         {structuredHeaderValues.subject ? (
@@ -3143,19 +4112,34 @@ export function ProposalDocumentRenderer({
             <p className="dasti-proposal-document__structured-header-label">
               Subject
             </p>
-            <p className="dasti-proposal-document__structured-header-value">
+            <p
+              className="dasti-proposal-document__structured-header-value"
+              {...(getEditableTextProps(
+                Boolean(editable && onDocumentTitleChange),
+                "Edit subject",
+                (value) => onDocumentTitleChange?.(value),
+              ) ?? {})}
+            >
               {structuredHeaderValues.subject}
             </p>
           </div>
         ) : null}
       </div>
     );
-  }, [structuredHeaderValues]);
+  }, [
+    getEditableTextProps,
+    onDocumentTitleChange,
+    onLetterDateChange,
+    onRecipientDetailsChange,
+    structuredHeaderValues,
+  ]);
   const renderClassicHeaderStack = React.useCallback(
-    () => (
+    (editable: boolean) => (
       <div className="dasti-proposal-document__header-stack">
-        {resolvedHeaderVisibility.showSender ? renderSenderHeader() : null}
-        {renderStructuredHeader()}
+        {resolvedHeaderVisibility.showSender
+          ? renderSenderHeader(editable)
+          : null}
+        {renderStructuredHeader(editable)}
       </div>
     ),
     [
@@ -3177,7 +4161,9 @@ export function ProposalDocumentRenderer({
           ref={args.bodyRef ?? undefined}
           className="dasti-proposal-document__body dasti-proposal-document__body--classic-letter"
         >
-          {!args.isContinuationPage ? renderClassicHeaderStack() : null}
+          {!args.isContinuationPage
+            ? renderClassicHeaderStack(!args.measurement)
+            : null}
           {args.pageBlocks.length > 0 ? (
             args.measurement ? (
               args.pageBlocks.map((block) => renderDocumentBlock(block))
@@ -3348,9 +4334,45 @@ export function ProposalDocumentRenderer({
         isContinuationPage: args.isContinuationPage,
         measurement: args.measurement,
       });
+      const editableFields: ProposalCoverLetterEditableFields | null =
+        args.measurement
+          ? null
+          : {
+              senderName: getEditableTextProps(
+                Boolean(onRailTitleChange),
+                "Edit sender name",
+                (value) => onRailTitleChange?.(value),
+              ),
+              senderRole: getEditableTextProps(
+                Boolean(onRailMetaChange),
+                "Edit sender role",
+                (value) => onRailMetaChange?.(value),
+              ),
+              senderContact: getEditableTextProps(
+                Boolean(onContactLineChange),
+                "Edit sender contact details",
+                (value) => onContactLineChange?.(value),
+              ),
+              date: getEditableTextProps(
+                Boolean(onLetterDateChange),
+                "Edit date",
+                (value) => onLetterDateChange?.(value),
+              ),
+              recipient: getEditableTextProps(
+                Boolean(onRecipientDetailsChange),
+                "Edit recipient details",
+                (value) => onRecipientDetailsChange?.(value),
+              ),
+              subject: getEditableTextProps(
+                Boolean(onDocumentTitleChange),
+                "Edit subject",
+                (value) => onDocumentTitleChange?.(value),
+              ),
+            };
       const templateProps: ProposalCoverLetterTemplateProps = {
         bodyRef: args.bodyRef,
         bodyContent,
+        editableFields,
         isContinuationPage: args.isContinuationPage,
         viewModel: letterheadViewModel,
       };
@@ -3376,7 +4398,18 @@ export function ProposalDocumentRenderer({
           return null;
       }
     },
-    [letterheadViewModel, renderLetterheadBodyContent, resolvedTemplateId],
+    [
+      getEditableTextProps,
+      letterheadViewModel,
+      onContactLineChange,
+      onDocumentTitleChange,
+      onLetterDateChange,
+      onRailMetaChange,
+      onRailTitleChange,
+      onRecipientDetailsChange,
+      renderLetterheadBodyContent,
+      resolvedTemplateId,
+    ],
   );
 
   return (

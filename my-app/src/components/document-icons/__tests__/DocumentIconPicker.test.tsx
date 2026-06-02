@@ -8,8 +8,12 @@ describe("DocumentIconPicker", () => {
   it("renders categorized searchable local icons", () => {
     render(<DocumentIconPicker selectedIconKey="shield-check" onChange={vi.fn()} />);
 
-    expect(screen.getByText("Security")).toBeInTheDocument();
-    const shieldButton = screen.getByRole("button", { name: "Use Shield check icon" });
+    expect(screen.getAllByRole("tab")).toHaveLength(8);
+    expect(screen.getByRole("tab", { name: "Protection" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Protection" }));
+    const shieldButton = screen.getByRole("button", {
+      name: "Use Shield check icon",
+    });
     expect(shieldButton).toBeInTheDocument();
     expect(shieldButton).toHaveAttribute("title", "Shield check");
     expect(shieldButton).not.toHaveTextContent("Shield check");
@@ -30,6 +34,7 @@ describe("DocumentIconPicker", () => {
     const onChange = vi.fn();
     render(<DocumentIconPicker selectedIconKey="dot" onChange={onChange} />);
 
+    fireEvent.click(screen.getByRole("tab", { name: "Work and admin" }));
     fireEvent.click(screen.getByRole("button", { name: "Use Briefcase icon" }));
 
     expect(onChange).toHaveBeenCalledWith("briefcase");

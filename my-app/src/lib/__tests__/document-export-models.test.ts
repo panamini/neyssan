@@ -494,12 +494,69 @@ describe("document-export-models", () => {
       { type: "salutation", text: "Dear Hiring Team," },
       {
         type: "list",
-        items: ["Audit the current flow", "Ship inline SVG markers"],
+        marker: { type: "dash" },
+        items: [
+          { text: "Audit the current flow", marker: { type: "dash" } },
+          { text: "Ship inline SVG markers", marker: { type: "dash" } },
+        ],
       },
       {
         type: "closing",
         signOff: "Kind regards,",
         signatureName: "Alex Martin",
+      },
+    ]);
+  });
+
+  it("preserves structured proposal list item icons in export blocks", () => {
+    const source = buildProposalExportSource({
+      content: "Dear Hiring Team,\n\n- First item\n- Second item",
+      proposalDocument: {
+        schemaVersion: 1,
+        kind: "letter",
+        source: "structured",
+        blocks: [
+          {
+            id: "list",
+            type: "list",
+            marker: { type: "dash" },
+            items: [
+              {
+                id: "item-1",
+                text: "First item",
+                iconKey: "star",
+                marker: { type: "dash" },
+              },
+              {
+                id: "item-2",
+                text: "Second item",
+                marker: { type: "dash" },
+              },
+            ],
+          },
+        ],
+      },
+      proposalType: "cover_letter",
+      documentTitle: "Proposal",
+      documentMeta: "",
+      contactLine: "",
+      letterDate: "",
+      recipientDetails: "",
+      applicantHeader: null,
+    });
+
+    expect(source.body).toEqual([
+      {
+        type: "list",
+        marker: { type: "dash" },
+        items: [
+          {
+            text: "First item",
+            iconKey: "star",
+            marker: { type: "dash" },
+          },
+          { text: "Second item", marker: { type: "dash" } },
+        ],
       },
     ]);
   });

@@ -246,6 +246,12 @@ describe("proposal letterhead CSS", () => {
       /\.proposal-cover-letter--editorial\s+\.proposal-cover-letter__editorial-rail-rule\s*\{[\s\S]*top:\s*62\.3mm;[\s\S]*height:\s*calc\(297mm - 62\.3mm - 18mm\);[\s\S]*\}/,
     );
     expect(previewCss).toMatch(
+      /\.proposal-cover-letter--editorial\s+\.proposal-cover-letter__editorial-sender\s*\{[\s\S]*top:\s*160mm;[\s\S]*max-height:\s*calc\(297mm - 160mm - 18mm\);[\s\S]*\}/,
+    );
+    expect(exportCss).toMatch(
+      /\.proposal-cover-letter--editorial\s+\.proposal-cover-letter__editorial-sender\s*\{[\s\S]*top:\s*160mm;[\s\S]*max-height:\s*calc\(297mm - 160mm - 18mm\);[\s\S]*\}/,
+    );
+    expect(previewCss).toMatch(
       /\.proposal-cover-letter--editorial\s+\.proposal-cover-letter__body\s+\.dasti-proposal-document__signature-image\s*\{[\s\S]*max-width:\s*42mm;[\s\S]*max-height:\s*13\.75mm;[\s\S]*\}/,
     );
     expect(exportCss).toMatch(

@@ -56,13 +56,7 @@ import { collectProposalFontDebugSnapshot } from "../lib/proposal-font-debug";
 import type { ProposalSignatureSettings } from "../lib/proposal-signature-settings";
 import type { ProposalClosingRef } from "../lib/proposal-closing";
 import type { DocumentDecoration } from "../lib/document-decoration";
-import {
-  createDocumentIconToken,
-  getDocumentIcon,
-  type DocumentIconKey,
-  type DocumentIconSettings,
-} from "../lib/document-icons";
-import { DocumentIconPicker } from "./document-icons/DocumentIconPicker";
+import type { DocumentIconSettings } from "../lib/document-icons";
 import {
   createAiUndoSnapshot,
   normalizeEditorAiTextResult,
@@ -84,6 +78,10 @@ import {
   continueMarkdownListOnEnter,
   toggleMarkdownListForSelection,
 } from "../lib/proposal-textarea-list";
+import {
+  serializeProposalDocumentToLegacyString,
+  type ProposalDocument,
+} from "../lib/proposal-document";
 
 interface ProposalDisplayProps {
   proposalContent: string | null;
@@ -101,6 +99,7 @@ interface ProposalDisplayProps {
   stylePreset?: Partial<VerbatiStylePreset> | VerbatiStylePreset | null;
   signatureSettings?: ProposalSignatureSettings | null;
   closing?: ProposalClosingRef | null;
+  proposalDocument?: ProposalDocument | null;
   documentDecoration?: DocumentDecoration | null;
   documentIconSettings?: DocumentIconSettings | null;
   documentDecorationDesignMode?: boolean;
@@ -121,6 +120,7 @@ interface ProposalDisplayProps {
   onPreviewInteract?: () => void;
   onContentChange?: (value: string) => void;
   onContentCommit?: () => void;
+  onProposalDocumentChange?: (document: ProposalDocument) => void;
   editorAiJobContext?: EditorAiJobContext | null;
   actions?: React.ReactNode;
   railStartAddon?: React.ReactNode;
@@ -602,6 +602,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   stylePreset = null,
   signatureSettings = null,
   closing = null,
+  proposalDocument = null,
   documentDecoration = null,
   documentIconSettings = null,
   documentDecorationDesignMode = false,
@@ -622,6 +623,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   onPreviewInteract,
   onContentChange,
   onContentCommit,
+  onProposalDocumentChange,
   editorAiJobContext = null,
   actions,
   railStartAddon,
@@ -948,6 +950,40 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   const isLetterLike =
     proposalType === "cover_letter" || proposalType === "application_message";
   const isDocumentEditor = isEditable && usesDocumentRenderer;
+  const canEditPreviewDocumentText = Boolean(
+    !isEditable &&
+      mode === "preview" &&
+      onContentChange &&
+      usesDocumentRenderer &&
+      !loading &&
+      !error &&
+      !documentDecorationDesignMode,
+  );
+  const canEditPreviewHeaderText = Boolean(
+    !isEditable &&
+      mode === "preview" &&
+      usesDocumentRenderer &&
+      !loading &&
+      !error,
+  );
+  const handlePreviewProposalDocumentChange = React.useCallback(
+    (nextDocument: ProposalDocument) => {
+      if (!canEditPreviewDocumentText || !onContentChange) return;
+      const nextContent = serializeProposalDocumentToLegacyString(nextDocument);
+      if (nextContent !== (proposalContent ?? "")) {
+        onContentChange(nextContent);
+      }
+      onProposalDocumentChange?.(nextDocument);
+      onContentCommit?.();
+    },
+    [
+      canEditPreviewDocumentText,
+      onContentChange,
+      onContentCommit,
+      onProposalDocumentChange,
+      proposalContent,
+    ],
+  );
   const effectiveZoomLevel = isEditable ? 1 : zoomLevel;
   const enablesDocumentZoom =
     showZoomControls &&
@@ -1349,36 +1385,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     },
     [scheduleTextareaSelectionCheck, syncEditableTextareaBlockSize],
   );
-  const [iconListPickerState, setIconListPickerState] = React.useState<{
-    text: string;
-    selectionStart: number;
-    selectionEnd: number;
-  } | null>(null);
-
-  const insertDocumentIconAtTextareaSelection = React.useCallback((iconKey: DocumentIconKey) => {
-    if (!isEditable || !onContentChange) return;
-    const textarea = editableTextareaRef.current;
-    const currentText = iconListPickerState?.text ?? proposalContent ?? "";
-    const selectionStart =
-      iconListPickerState?.selectionStart ?? textarea?.selectionStart ?? 0;
-    const selectionEnd =
-      iconListPickerState?.selectionEnd ?? textarea?.selectionEnd ?? selectionStart;
-    const token = createDocumentIconToken(iconKey);
-    const nextText = `${currentText.slice(0, selectionStart)}${token}${currentText.slice(selectionEnd)}`;
-    const nextCursor = selectionStart + token.length;
-
-    setAiSuggestion(null);
-    setIconListPickerState(null);
-    onContentChange(nextText);
-    restoreTextareaSelection(nextCursor, nextCursor);
-  }, [
-    iconListPickerState,
-    isEditable,
-    onContentChange,
-    proposalContent,
-    restoreTextareaSelection,
-  ]);
-
   const applyTextareaListTransform = React.useCallback(() => {
     if (!isEditable || !onContentChange) return;
     const textarea = editableTextareaRef.current;
@@ -1736,9 +1742,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       onClick={() => onModeChange?.(mode === "preview" ? "edit" : "preview")}
       aria-pressed={mode === "edit"}
       aria-label={
-        mode === "preview" ? "Switch to edit mode" : "Switch to preview mode"
+        mode === "preview" ? "Switch to source mode" : "Switch to document mode"
       }
-      data-toolbar-tooltip={mode === "preview" ? "Edit" : "Preview"}
+      data-toolbar-tooltip={mode === "preview" ? "Source" : "Document"}
       data-no-pan="true"
     >
       {mode === "preview" ? (
@@ -2021,9 +2027,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         ) : null}
       </div>
     ) : null;
-  const iconListToolbarIcon = React.useMemo(() => {
-    return getDocumentIcon("asterisk-simple");
-  }, []);
   const textareaListToolbar = isEditable ? (
     <div
       className="dasti-proposal-editor-page__list-toolbar"
@@ -2040,52 +2043,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       >
         List
       </button>
-      <button
-        type="button"
-        className="dasti-proposal-editor-page__list-toolbar-button"
-        aria-label="Icon"
-        title="Insert an icon."
-        disabled={!isEditable}
-        onMouseDown={(event) => event.preventDefault()}
-        aria-expanded={Boolean(iconListPickerState)}
-        onClick={() => {
-          const textarea = editableTextareaRef.current;
-          setIconListPickerState({
-            text: proposalContent ?? "",
-            selectionStart: textarea?.selectionStart ?? 0,
-            selectionEnd: textarea?.selectionEnd ?? textarea?.selectionStart ?? 0,
-          });
-        }}
-      >
-        {iconListToolbarIcon ? (
-          <span
-            className="dasti-proposal-editor-page__list-toolbar-icon"
-            aria-hidden="true"
-            dangerouslySetInnerHTML={{ __html: iconListToolbarIcon.svg }}
-          />
-        ) : null}
-        <span>Icon</span>
-      </button>
-      {iconListPickerState ? (
-        <div
-          className="dasti-proposal-editor-page__icon-list-picker"
-          role="dialog"
-          aria-label="Choose icon"
-        >
-          <DocumentIconPicker
-            label="Icon"
-            selectedIconKey="asterisk-simple"
-            onChange={insertDocumentIconAtTextareaSelection}
-          />
-          <button
-            type="button"
-            className="dasti-proposal-editor-page__list-toolbar-button"
-            onClick={() => setIconListPickerState(null)}
-          >
-            Cancel
-          </button>
-        </div>
-      ) : null}
     </div>
   ) : null;
 
@@ -2689,6 +2646,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
               >
                 <ProposalDocumentRenderer
                   content={proposalContent ?? ""}
+                  proposalDocument={proposalDocument}
                   proposalType={proposalType}
                   templateId={resolvedTemplateId}
                   stylePreset={resolvedStylePreset}
@@ -2711,6 +2669,37 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                   }
                   onDocumentDecorationChange={onDocumentDecorationChange}
                   onDocumentDecorationCommit={onDocumentDecorationCommit}
+                  onProposalDocumentChange={
+                    canEditPreviewDocumentText
+                      ? handlePreviewProposalDocumentChange
+                      : undefined
+                  }
+                  onRailTitleChange={
+                    canEditPreviewHeaderText ? onRailTitleChange : undefined
+                  }
+                  onRailMetaChange={
+                    canEditPreviewHeaderText ? onRailMetaChange : undefined
+                  }
+                  onContactLineChange={
+                    canEditPreviewHeaderText
+                      ? onContactLineChange
+                      : undefined
+                  }
+                  onLetterDateChange={
+                    canEditPreviewHeaderText
+                      ? onLetterDateChange
+                      : undefined
+                  }
+                  onRecipientDetailsChange={
+                    canEditPreviewHeaderText
+                      ? onRecipientDetailsChange
+                      : undefined
+                  }
+                  onDocumentTitleChange={
+                    canEditPreviewHeaderText
+                      ? onDocumentTitleChange
+                      : undefined
+                  }
                   emptyBodyPlaceholder={
                     !proposalContent && !isEditable
                       ? "No draft yet. Add a job offer to generate, or start blank."

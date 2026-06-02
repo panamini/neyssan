@@ -86,6 +86,10 @@ import {
   type StoredProposalOutputDraft,
   writeStoredProposalOutputDraft,
 } from "../lib/proposal-output-draft";
+import {
+  normalizeProposalDocument,
+  type ProposalDocument,
+} from "../lib/proposal-document";
 import type {
   DocumentLanguageGenerationMetadata,
   DocumentLanguageSource,
@@ -3062,6 +3066,10 @@ export function ProposalForge(): JSX.Element {
   const [proposalContent, setProposalContent] = React.useState<string | null>(
     storedOutputDraft?.proposalContent ?? null,
   );
+  const [proposalDocument, setProposalDocument] =
+    React.useState<ProposalDocument | null>(() =>
+      normalizeProposalDocument(storedOutputDraft?.proposalDocument),
+    );
   const [proposalSalutationValue, setProposalSalutationValue] =
     React.useState<string>(() =>
       readProposalSalutation(storedOutputDraft?.proposalContent),
@@ -8511,6 +8519,14 @@ export function ProposalForge(): JSX.Element {
   const handleProposalContentChange = React.useCallback(
     (nextContent: string) => {
       setProposalContent(nextContent);
+      setProposalDocument(null);
+    },
+    [],
+  );
+  const handleProposalDocumentChange = React.useCallback(
+    (nextDocument: ProposalDocument) => {
+      const normalizedDocument = normalizeProposalDocument(nextDocument);
+      setProposalDocument(normalizedDocument);
     },
     [],
   );
@@ -8892,6 +8908,7 @@ export function ProposalForge(): JSX.Element {
 
     writeStoredOutputDraft({
       proposalContent,
+      proposalDocument,
       proposalType,
       proposalVoicePreset,
       proposalTemplateId: effectiveProposalTemplateId,
@@ -8961,6 +8978,7 @@ export function ProposalForge(): JSX.Element {
     proposalLetterDate,
     proposalRecipientDetails,
     proposalDocumentMeta,
+    proposalDocument,
     proposalDocumentTitle,
     proposalDocumentTitleManual,
     proposalOutputMode,
@@ -10217,6 +10235,7 @@ export function ProposalForge(): JSX.Element {
     () =>
       buildProposalExportSource({
         content: proposalContent,
+        proposalDocument,
         proposalType,
         documentTitle:
           proposalDocumentTitle ||
@@ -10251,6 +10270,7 @@ export function ProposalForge(): JSX.Element {
       effectiveProposalClosing,
       proposalContactLine,
       proposalDisplayApplicantHeader,
+      proposalDocument,
       proposalDocumentMeta,
       proposalDocumentTitle,
       proposalHeaderVisibility,
@@ -10270,6 +10290,7 @@ export function ProposalForge(): JSX.Element {
     () =>
       buildProposalPreviewPrintSource({
         content: proposalContent,
+        proposalDocument,
         proposalType,
         voicePreset: proposalVoicePreset,
         railTitle: sanitizeProposalApplicantName(proposalApplicantName),
@@ -10311,6 +10332,7 @@ export function ProposalForge(): JSX.Element {
       proposalApplicantRole,
       proposalContactLine,
       proposalDisplayApplicantHeader,
+      proposalDocument,
       proposalDocumentMeta,
       proposalDocumentTitle,
       proposalHeaderVisibility,
@@ -12732,6 +12754,7 @@ export function ProposalForge(): JSX.Element {
                         >
                           <ProposalDisplay
                             proposalContent={proposalContent}
+                            proposalDocument={proposalDocument}
                             loading={loading}
                             error={error}
                             statusMessage={statusMessage}
@@ -12861,6 +12884,9 @@ export function ProposalForge(): JSX.Element {
                             copyFeedback={copyFeedback}
                             pageSize={resolvedProposalPageSize}
                             onContentChange={handleProposalContentChange}
+                            onProposalDocumentChange={
+                              handleProposalDocumentChange
+                            }
                             onContentCommit={() => {
                               void handleProposalDocumentCommit();
                             }}

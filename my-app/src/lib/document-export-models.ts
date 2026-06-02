@@ -48,6 +48,13 @@ import {
 } from "./document-icons";
 import { parseProposalPlainTextBlocks } from "./proposal-list-blocks";
 import {
+  normalizeProposalDocument,
+  resolveProposalDocument,
+  serializeProposalDocumentToLegacyString,
+  type ProposalDocument,
+  type ProposalDocumentListMarker,
+} from "./proposal-document";
+import {
   planWorkshopResumePages,
   type WorkshopResumeCommittedPage,
 } from "./resume/resumePagination";
@@ -190,7 +197,12 @@ export type ProposalPrintBlock =
     }
   | {
       type: "list";
-      items: string[];
+      items: Array<{
+        text: string;
+        iconKey?: string;
+        marker?: ProposalDocumentListMarker | null;
+      }>;
+      marker?: ProposalDocumentListMarker | null;
     }
   | {
       type: "closing";
@@ -235,6 +247,7 @@ export type ProposalPrintSource = {
   documentDecoration?: DocumentDecoration | null;
   documentIconSettings?: DocumentIconSettings | null;
   body: ProposalPrintBlock[];
+  proposalDocument?: ProposalDocument | null;
 };
 
 export type ProposalPreviewPrintSource = {
@@ -244,6 +257,7 @@ export type ProposalPreviewPrintSource = {
   pageSize?: DocumentPageSize;
   locale: string | null;
   content: string;
+  proposalDocument?: ProposalDocument | null;
   proposalType: string | null;
   voicePreset: string | null;
   railTitle: string | null;
@@ -269,6 +283,7 @@ export type ProposalPrintRoutePayload = {
   pageSize?: DocumentPageSize;
   locale: string | null;
   content: string;
+  proposalDocument?: ProposalDocument | null;
   proposalType: string | null;
   voicePreset: string | null;
   railTitle: string | null;
@@ -562,6 +577,7 @@ export function buildResumePrintDebugSnapshot(args: {
 
 export function buildProposalPreviewPrintSource(args: {
   content: string | null | undefined;
+  proposalDocument?: ProposalDocument | null;
   proposalType: string | null | undefined;
   voicePreset: string | null | undefined;
   railTitle: string | null | undefined;
@@ -584,7 +600,17 @@ export function buildProposalPreviewPrintSource(args: {
   pageSize?: DocumentPageSize | null;
 }): ProposalPreviewPrintSource {
   const documentTitle = cleanString(args.documentTitle) || "Proposal";
-  const normalizedContent = cleanString(args.content);
+  const resolvedProposalDocument = resolveProposalDocument({
+    document: args.proposalDocument,
+    content: args.content,
+    proposalType: args.proposalType,
+    closing: args.closing,
+  });
+  const normalizedProposalDocument =
+    resolvedProposalDocument.blocks.length > 0 ? resolvedProposalDocument : null;
+  const normalizedContent = normalizedProposalDocument
+    ? serializeProposalDocumentToLegacyString(normalizedProposalDocument)
+    : cleanString(args.content);
   const stylePreset = resolveVerbatiStyle(args.stylePreset);
   const locale = resolveProposalExportLocale({
     explicitLocale: args.locale,
@@ -602,6 +628,7 @@ export function buildProposalPreviewPrintSource(args: {
     }),
     locale,
     content: normalizedContent,
+    proposalDocument: normalizedProposalDocument,
     proposalType: cleanString(args.proposalType) || null,
     voicePreset: cleanString(args.voicePreset) || null,
     railTitle: cleanString(args.railTitle) || null,
@@ -645,6 +672,7 @@ export function buildProposalPrintRoutePayload(args: {
     pageSize: resolveDocumentPageSize({ pageSize: args.data.pageSize }),
     locale: args.data.locale,
     content: args.data.content,
+    proposalDocument: normalizeProposalDocument(args.data.proposalDocument),
     proposalType: args.data.proposalType,
     voicePreset: args.data.voicePreset,
     railTitle: args.data.railTitle,
@@ -707,7 +735,42 @@ export function buildProposalBodyBlocks(
   content: string | null | undefined,
   recipientDetails?: string | null,
   closing?: ProposalClosingRef | null,
+  proposalDocument?: ProposalDocument | null,
+  proposalType?: string | null,
 ): ProposalPrintBlock[] {
+  const normalizedProposalDocument = resolveProposalDocument({
+    document: proposalDocument,
+    content,
+    proposalType,
+    closing,
+  });
+  if (normalizedProposalDocument.blocks.length > 0) {
+    return normalizedProposalDocument.blocks.map((block): ProposalPrintBlock | null => {
+      if (block.type === "salutation" || block.type === "paragraph") {
+        return { type: block.type, text: block.text };
+      }
+      if (block.type === "list") {
+        return {
+          type: "list",
+          marker: block.marker ?? null,
+          items: block.items.map((item) => ({
+            text: item.text,
+            ...(item.iconKey ? { iconKey: item.iconKey } : null),
+            marker: item.marker ?? block.marker ?? null,
+          })),
+        };
+      }
+      return {
+        type: "closing",
+        signOff: block.signOff,
+        signatureName: block.signatureName,
+        ...(block.handwrittenSignatureEnabled
+          ? { handwrittenSignatureEnabled: true }
+          : null),
+      };
+    }).filter((block): block is ProposalPrintBlock => Boolean(block));
+  }
+
   const normalizedContent = cleanString(content);
   if (!normalizedContent) {
     return [];
@@ -766,7 +829,10 @@ export function buildProposalBodyBlocks(
   const bodyContent = paragraphs.slice(startIndex, endIndex).join("\n\n");
   parseProposalPlainTextBlocks(bodyContent).forEach((block) => {
     if (block.type === "list") {
-      blocks.push({ type: "list", items: block.items });
+      blocks.push({
+        type: "list",
+        items: block.items.map((item) => ({ text: item })),
+      });
       return;
     }
 
@@ -797,6 +863,7 @@ function resolveProposalExportLocale(args: {
 
 export function buildProposalExportSource(args: {
   content: string | null | undefined;
+  proposalDocument?: ProposalDocument | null;
   proposalType: string | null | undefined;
   documentTitle: string | null | undefined;
   documentMeta: string | null | undefined;
@@ -815,9 +882,20 @@ export function buildProposalExportSource(args: {
   pageSize?: DocumentPageSize | null;
 }): ProposalPrintSource {
   const documentTitle = cleanString(args.documentTitle) || "Proposal";
+  const resolvedProposalDocument = resolveProposalDocument({
+    document: args.proposalDocument,
+    content: args.content,
+    proposalType: args.proposalType,
+    closing: args.closing,
+  });
+  const normalizedProposalDocument =
+    resolvedProposalDocument.blocks.length > 0 ? resolvedProposalDocument : null;
+  const normalizedContent = normalizedProposalDocument
+    ? serializeProposalDocumentToLegacyString(normalizedProposalDocument)
+    : cleanString(args.content);
   const locale = resolveProposalExportLocale({
     explicitLocale: args.locale,
-    content: args.content,
+    content: normalizedContent,
     documentTitle,
   });
 
@@ -857,10 +935,13 @@ export function buildProposalExportSource(args: {
       args.documentDecoration,
     ),
     documentIconSettings: normalizeDocumentIconSettings(args.documentIconSettings),
+    proposalDocument: normalizedProposalDocument,
     body: buildProposalBodyBlocks(
-      args.content,
+      normalizedContent,
       args.recipientDetails,
       sanitizeProposalClosingRef(args.closing),
+      normalizedProposalDocument,
+      args.proposalType,
     ),
   };
 }

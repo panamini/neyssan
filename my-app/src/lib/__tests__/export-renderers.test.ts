@@ -547,6 +547,80 @@ describe("export-renderers", () => {
     expect(document.body.textContent).toContain("Audit the current flow");
   });
 
+  it("renders item-specific proposal list icons without editor controls", () => {
+    const html = renderProposalStyledExportDocument({
+      data: {
+        ...proposalFixture,
+        documentIconSettings: {
+          defaultListMarkerKey: "asterisk-simple",
+          listMarkerType: "dash",
+          sectionHeadingIconMode: "none",
+          sectionIconMap: {},
+          color: "accent",
+          sizePt: 12,
+        },
+        body: [
+          proposalFixture.body[0],
+          {
+            type: "list",
+            marker: { type: "dash" },
+            items: [
+              {
+                text: "First item",
+                iconKey: "star",
+                marker: { type: "dash" },
+              },
+              { text: "Second item", marker: { type: "dash" } },
+            ],
+          },
+          proposalFixture.body[2],
+        ],
+      },
+      stylePreset: {
+        layout: "swiss",
+        typography: "quiet-editorial",
+        palette: "sauge",
+      },
+    });
+    const document = parseExportHtml(html);
+    const listItems = document.querySelectorAll(".proposal-list li");
+
+    expect(listItems).toHaveLength(2);
+    expect(listItems[0]?.querySelector(".proposal-list-marker svg")).toBeTruthy();
+    expect(listItems[1]?.querySelector(".proposal-list-marker svg")).toBeNull();
+    expect(html).not.toContain("document-icon-picker");
+    expect(html).not.toContain("dasti-proposal-document__list-icon-trigger");
+    expect(html).not.toMatch(/(?:src|href|xlink:href)=["']https?:/i);
+  });
+
+  it("renders edited proposal content without preview editing affordances", () => {
+    const html = renderProposalStyledExportDocument({
+      data: {
+        ...proposalFixture,
+        body: [
+          { type: "salutation", text: "Dear Hiring Team," },
+          { type: "paragraph", text: "Updated edited content." },
+          {
+            type: "list",
+            items: ["Updated list item"],
+          },
+        ],
+      },
+      stylePreset: {
+        layout: "swiss",
+        typography: "quiet-editorial",
+        palette: "sauge",
+      },
+    });
+    const document = parseExportHtml(html);
+
+    expect(document.body.textContent).toContain("Updated edited content.");
+    expect(document.body.textContent).toContain("Updated list item");
+    expect(html).not.toContain("data-proposal-editable-text");
+    expect(html).not.toContain("contenteditable");
+    expect(html).not.toContain("role=\"textbox\"");
+  });
+
   it.each([
     {
       templateId: "twoweeks-letterhead" as const,

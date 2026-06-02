@@ -187,11 +187,11 @@ export function SavedProposalForgeToolbarPreview({
           aria-pressed={mode === "edit"}
           aria-label={
             mode === "preview"
-              ? "Switch to edit mode"
-              : "Switch to preview mode"
+              ? "Switch to source mode"
+              : "Switch to document mode"
           }
           data-toolbar-tooltip={
-            mode === "preview" ? "Switch to edit" : "Switch to preview"
+            mode === "preview" ? "Switch to source" : "Switch to document"
           }
           data-no-pan="true"
         >

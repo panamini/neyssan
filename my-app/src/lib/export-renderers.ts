@@ -76,6 +76,7 @@ import {
   type DocumentDecoration,
 } from "./document-decoration";
 import {
+  getDocumentIcon,
   normalizeDocumentIconSettings,
   parseDocumentIconTextSegments,
   renderDocumentIconHtml,
@@ -1050,7 +1051,7 @@ function buildStyledProposalAppearanceCss(): string {
       left: 17.4mm;
       top: 160mm;
       width: 41.4mm;
-      max-height: 78mm;
+      max-height: calc(297mm - 160mm - 18mm);
       overflow: hidden;
     }
 
@@ -4328,26 +4329,67 @@ function renderProposalBlocks(
   return blocks
     .map((block) => {
       if (block.type === "list") {
+        const blockMarkerType =
+          block.marker?.type === "icon" ? "icon" : listMarkerType;
+        const blockMarkerIconKey =
+          block.marker?.type === "icon" ? block.marker.iconKey : listMarkerIconKey;
         const markerMarkup =
-          listMarkerType === "icon"
+          blockMarkerType === "icon"
             ? renderDocumentIconHtml({
-                iconKey: listMarkerIconKey,
+                iconKey: blockMarkerIconKey,
                 color: resolvedDocumentIconSettings.color,
                 sizePt: resolvedDocumentIconSettings.sizePt,
                 className: "proposal-list-marker",
               })
             : `<span class="proposal-list-marker" aria-hidden="true">${
-                listMarkerType === "dash" ? "-" : "•"
+                blockMarkerType === "dash" ? "-" : "•"
               }</span>`;
 
-        return `<ul class="proposal-block proposal-list proposal-list--${listMarkerType}${
-          listMarkerType === "icon" ? " proposal-list--document-icons" : ""
+        const hasItemIconOverride = block.items.some(
+          (item) => typeof item !== "string" && Boolean(getDocumentIcon(item.iconKey)),
+        );
+
+        return `<ul class="proposal-block proposal-list proposal-list--${blockMarkerType}${
+          blockMarkerType === "icon" || hasItemIconOverride
+            ? " proposal-list--document-icons"
+            : ""
         }" data-block="list">
           ${block.items
-            .map(
-              (item) =>
-                `<li>${markerMarkup}<span>${renderInlineIconText(item)}</span></li>`,
-            )
+            .map((item) => {
+              const itemText = typeof item === "string" ? item : item.text;
+              const itemIconKey =
+                typeof item === "string" || !getDocumentIcon(item.iconKey)
+                  ? null
+                  : item.iconKey;
+              const itemMarker =
+                typeof item === "string" ? block.marker ?? null : item.marker ?? block.marker ?? null;
+              const itemMarkerType =
+                itemMarker?.type === "icon" || blockMarkerType === "icon"
+                  ? "icon"
+                  : itemMarker?.type ?? blockMarkerType;
+              const itemMarkerMarkup = itemIconKey
+                ? renderDocumentIconHtml({
+                    iconKey: itemIconKey,
+                    color: resolvedDocumentIconSettings.color,
+                    sizePt: resolvedDocumentIconSettings.sizePt,
+                    className: "proposal-list-marker",
+                  })
+                : itemMarker
+                ? itemMarkerType === "icon"
+                  ? renderDocumentIconHtml({
+                      iconKey: itemMarker.type === "icon"
+                        ? itemMarker.iconKey
+                        : blockMarkerIconKey,
+                      color: resolvedDocumentIconSettings.color,
+                      sizePt: resolvedDocumentIconSettings.sizePt,
+                      className: "proposal-list-marker",
+                    })
+                  : `<span class="proposal-list-marker" aria-hidden="true">${
+                      itemMarkerType === "dash" ? "-" : "•"
+                    }</span>`
+                : markerMarkup;
+              return `<li>${itemMarkerMarkup}<span>${renderInlineIconText(itemText)}</span></li>`;
+            })
             .join("")}
         </ul>`;
       }
@@ -5348,7 +5390,7 @@ function renderProposalLetterheadExportPage(args: {
       Boolean(
         viewModel.twoweeksNameLines.length ||
           viewModel.twoweeksIdentityLines.length ||
-          senderContactLines.length,
+          twoweeksContactGroups.length,
       );
 
     return `<main class="export-page ${scopeClass}${recipientBlockClass}" data-export-doc="proposal">
@@ -6396,6 +6438,36 @@ export async function buildProposalDocxBuffer(args: {
   }
 
   args.data.body.forEach((block) => {
+    if (block.type === "list") {
+      block.items.forEach((item, index) => {
+        bodyParagraphs.push(
+          new Paragraph({
+            bidirectional: docxDefaults.locale.rightToLeft,
+            keepLines: true,
+            spacing: {
+              after:
+                index === block.items.length - 1
+                  ? docxTokens.bodyGapTwip
+                  : docxTokens.bodyGapTwip,
+              line: docxTokens.bodyLineTwip,
+              lineRule: LineRuleType.AUTO,
+            },
+            bullet: { level: 0 },
+            children: [
+              buildDocxTextRun({
+                text: item.text,
+                defaults: docxDefaults,
+                font: bodyFont,
+                size: docxTokens.bodySizeHalfPt,
+                color: docxInk,
+              }),
+            ],
+          }),
+        );
+      });
+      return;
+    }
+
     if (block.type === "closing") {
       if (block.signOff) {
         bodyParagraphs.push(

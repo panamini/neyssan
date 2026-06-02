@@ -3178,24 +3178,6 @@
   opacity: 0.5;
 }
 
-.dasti-proposal-editor-page__icon-list-picker {
-  position: absolute;
-  z-index: 20;
-  inset-block-start: calc(100% + 8px);
-  inset-inline-start: 0;
-  width: min(360px, calc(100vw - 32px));
-  max-height: min(520px, 70vh);
-  overflow: auto;
-  display: grid;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-control);
-  background: var(--sf0);
-  color: var(--ti);
-  box-shadow: var(--shadow-lg);
-}
-
 .dasti-proposal-sheet__body--document-editor
   .dasti-proposal-editor-page__textarea {
   padding-block-end: calc(
@@ -3710,6 +3692,26 @@
   margin-top: calc(1em * var(--proposal-document-computed-line-height));
 }
 
+[data-proposal-editable-text="true"] {
+  border-radius: 3px;
+  cursor: text;
+  outline: 0 solid transparent;
+  outline-offset: 2px;
+  white-space: pre-wrap;
+  transition:
+    background-color 140ms ease,
+    outline-color 140ms ease;
+}
+
+[data-proposal-editable-text="true"]:hover {
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+[data-proposal-editable-text="true"]:focus {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
+}
+
 .dasti-proposal-document__list {
   display: grid;
   gap: calc(0.34em * var(--proposal-document-computed-line-height));
@@ -3723,6 +3725,7 @@
   column-gap: 0.72em;
   align-items: start;
   min-width: 0;
+  position: relative;
 }
 
 .dasti-proposal-document__list-marker {
@@ -3731,12 +3734,104 @@
   height: var(--proposal-document-list-icon-size, 10pt);
   color: var(--proposal-document-list-icon-color, currentColor);
   transform: translateY(0.14em);
+  position: relative;
 }
 
 .dasti-proposal-document__list-marker svg {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+.dasti-proposal-document__list-marker--editable {
+  z-index: 12;
+  overflow: visible;
+}
+
+.dasti-proposal-document__list-icon-trigger {
+  width: 22px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: color-mix(in srgb, var(--proposal-document-ink) 58%, transparent);
+  cursor: pointer;
+  opacity: 0.82;
+  transform: translate(-3px, -4px);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+
+.dasti-proposal-document__list li:hover .dasti-proposal-document__list-icon-trigger,
+.dasti-proposal-document__list li:focus-within .dasti-proposal-document__list-icon-trigger,
+.dasti-proposal-document__list-icon-trigger[aria-expanded="true"] {
+  opacity: 1;
+  transform: translate(-3px, -4px);
+}
+
+.dasti-proposal-document__list-icon-trigger:hover,
+.dasti-proposal-document__list-icon-trigger:focus-visible,
+.dasti-proposal-document__list-icon-trigger[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--proposal-document-ink) 16%, transparent);
+  background: color-mix(in srgb, var(--proposal-document-ink) 6%, transparent);
+  color: var(--proposal-document-ink);
+  outline: none;
+}
+
+.dasti-proposal-document__list-icon-trigger span,
+.dasti-proposal-document__list-icon-trigger svg {
+  display: block;
+  width: 13px;
+  height: 13px;
+}
+
+.dasti-proposal-document__list-icon-picker {
+  position: absolute;
+  inset-block-start: calc(100% + 7px);
+  inset-inline-start: -4px;
+  width: min(260px, calc(100vw - 32px));
+  max-height: min(360px, 62vh);
+  overflow: auto;
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--proposal-document-ink) 14%, transparent);
+  border-radius: var(--radius-control);
+  background: var(--sf0);
+  color: var(--ti);
+  box-shadow: var(--shadow-lg);
+}
+
+.dasti-proposal-document__list-icon-picker-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+.dasti-proposal-document__list-icon-picker-actions button {
+  min-height: 26px;
+  padding: 0 var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--tm1);
+  font: inherit;
+  font-size: var(--t2);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.dasti-proposal-document__list-icon-picker-actions button:hover,
+.dasti-proposal-document__list-icon-picker-actions button:focus-visible {
+  border-color: var(--border-soft);
+  background: var(--sf1);
+  outline: none;
 }
 
 .dasti-proposal-document__inline-icon {
@@ -3959,7 +4054,7 @@
   left: 17.4mm;
   top: 160mm;
   width: 41.4mm;
-  max-height: 78mm;
+  max-height: calc(297mm - 160mm - 18mm);
   overflow: hidden;
 }
 
@@ -4045,7 +4140,6 @@
   margin: 0 0 11pt;
   padding-bottom: 0;
   border-bottom: 0;
-  font-family: var(--proposal-editorial-heading-font);
   font-weight: 400;
 }
 
