@@ -47,6 +47,35 @@ export type AllowedFactsPack = {
   facts: AllowedFact[];
 };
 
+export type AllowedFactWithId = AllowedFact & {
+  id: string;
+  sourcePath: string;
+};
+
+export type FactNodeV1 = {
+  id: string;
+  text: string;
+  source: "cv" | "job_post" | "system_inference";
+  sourcePath: string;
+  confidence: AllowedFact["confidence"];
+  category: AllowedFact["category"];
+  metrics: string[];
+  entities: string[];
+  allowedVerbs: string[];
+  forbiddenUpgrades: string[];
+  ownershipLevel:
+    | "exposure"
+    | "support"
+    | "coordination"
+    | "ownership"
+    | "leadership";
+};
+
+export type FactGraphV1 = {
+  version: "fact_graph_v1";
+  facts: FactNodeV1[];
+};
+
 export type JobOfferPriorityPack = {
   coreResponsibilities: string[];
   keyRequirements: string[];
@@ -56,12 +85,71 @@ export type JobOfferPriorityPack = {
   priorityTokens: string[];
 };
 
+export type JobDemandNodeV1 = {
+  id: string;
+  text: string;
+  bucket:
+    | "core_responsibility"
+    | "key_requirement"
+    | "preferred_qualification"
+    | "low_value_checklist"
+    | "company_fluff";
+  requiredness: "core" | "required" | "preferred" | "low_value" | "fluff";
+  tokens: string[];
+  mustNotBecomeCandidateClaim: boolean;
+};
+
+export type JobDemandGraphV1 = {
+  version: "job_demand_graph_v1";
+  demands: JobDemandNodeV1[];
+  priorityTokens: string[];
+};
+
 export type RankedEvidencePack = {
   strongestEvidence: AllowedFact[];
   supportingEvidence: AllowedFact[];
   secondaryQualifications: AllowedFact[];
   transferCore: AllowedFact[];
   weakOrDoNotLeadWith: AllowedFact[];
+};
+
+export type ClaimPlanSection =
+  | "opening"
+  | "proofBlock"
+  | "employerValueBlock"
+  | "closeLine";
+
+export type ClaimPlanV1 = {
+  version: "claim_plan_v1";
+  contextClass: PremiumCoverLetterContextClass;
+  language: ProposalOutputLanguage;
+  targetRole: string;
+  preset: PremiumCoverLetterPreset;
+  claims: ClaimPlanClaimV1[];
+  globalForbidden: string[];
+};
+
+export type ClaimPlanClaimV1 = {
+  id: string;
+  section: ClaimPlanSection;
+  factIds: string[];
+  demandIds: string[];
+  claimType:
+    | "source_backed"
+    | "adjacent_safe_bridge"
+    | "job_surface_only_no_cv";
+  requiredElements: string[];
+  allowedVerbs: string[];
+  forbiddenVerbs: string[];
+  forbiddenClaims: string[];
+  maxOwnership:
+    | "exposure"
+    | "support"
+    | "coordination"
+    | "ownership"
+    | "leadership";
+  allowEmployerBridge: boolean;
+  editorialGuideline: string;
 };
 
 export type CoverLetterBrief = {
@@ -82,6 +170,12 @@ export type CoverLetterBrief = {
   companyValuesPack?: CompanyValuesPack;
   requiredMoves: string[];
   forbiddenMoves: string[];
+  claimPlan?: ClaimPlanV1;
+  factGraphVersion?: "fact_graph_v1";
+  jobDemandGraphVersion?: "job_demand_graph_v1";
+  claimPlanVersion?: "claim_plan_v1";
+  referencedFacts?: Array<{ id: string; text: string; source: string }>;
+  referencedDemands?: Array<{ id: string; text: string; bucket: string }>;
 };
 
 export type CoverLetterBodyParts = {
@@ -89,6 +183,24 @@ export type CoverLetterBodyParts = {
   proofBlock: string;
   employerValueBlock: string;
   closeLine: string;
+};
+
+export type PremiumWriterBodyPartV1 = {
+  section: ClaimPlanSection;
+  text: string;
+  claimIds: string[];
+  factIds: string[];
+  demandIds: string[];
+};
+
+export type PremiumWriterOutputV1 = {
+  version: "premium_writer_output_v1";
+  bodyParts: {
+    opening: PremiumWriterBodyPartV1;
+    proofBlock: PremiumWriterBodyPartV1;
+    employerValueBlock: PremiumWriterBodyPartV1;
+    closeLine: PremiumWriterBodyPartV1;
+  };
 };
 
 export type PremiumCoverLetterGenerationResult = {
@@ -138,7 +250,7 @@ export type PremiumCoverLetterWriter = (args: {
   prompt: string;
   schema: Record<string, unknown>;
   signal?: AbortSignal;
-}) => Promise<CoverLetterBodyParts>;
+}) => Promise<unknown>;
 
 export const PREMIUM_COVER_LETTER_OPENAI_MODEL: PremiumCoverLetterWriterModel =
   "gpt-5.5";
@@ -609,7 +721,7 @@ export const QWEN_PREMIUM_COVER_LETTER_ADAPTER = [
 ].join("\n");
 
 export const PREMIUM_COVER_LETTER_REQUIRED_MOVES = [
-  "build an internal RoleThesis before writing",
+  "follow the ClaimPlan strategy before writing",
   "extract hard job requirements before role responsibilities",
   "select the strongest truthful CV evidence by relevance, not resume order",
   "identify claim boundaries before writing",
@@ -653,6 +765,109 @@ export const PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA = {
     proofBlock: { type: "string" },
     employerValueBlock: { type: "string" },
     closeLine: { type: "string" },
+  },
+} as const;
+
+const CLAIM_PLAN_SECTION_SCHEMA = z.enum([
+  "opening",
+  "proofBlock",
+  "employerValueBlock",
+  "closeLine",
+]);
+
+const PREMIUM_WRITER_BODY_PART_V1_SCHEMA = z
+  .object({
+    section: CLAIM_PLAN_SECTION_SCHEMA,
+    text: z.string(),
+    claimIds: z.array(z.string()),
+    factIds: z.array(z.string()),
+    demandIds: z.array(z.string()),
+  })
+  .strict();
+
+export const PREMIUM_WRITER_OUTPUT_V1_SCHEMA = z
+  .object({
+    version: z.literal("premium_writer_output_v1"),
+    bodyParts: z
+      .object({
+        opening: PREMIUM_WRITER_BODY_PART_V1_SCHEMA.extend({
+          section: z.literal("opening"),
+        }),
+        proofBlock: PREMIUM_WRITER_BODY_PART_V1_SCHEMA.extend({
+          section: z.literal("proofBlock"),
+        }),
+        employerValueBlock: PREMIUM_WRITER_BODY_PART_V1_SCHEMA.extend({
+          section: z.literal("employerValueBlock"),
+        }),
+        closeLine: PREMIUM_WRITER_BODY_PART_V1_SCHEMA.extend({
+          section: z.literal("closeLine"),
+        }),
+      })
+      .strict(),
+  })
+  .strict();
+
+export const PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["version", "bodyParts"],
+  properties: {
+    version: { const: "premium_writer_output_v1" },
+    bodyParts: {
+      type: "object",
+      additionalProperties: false,
+      required: ["opening", "proofBlock", "employerValueBlock", "closeLine"],
+      properties: {
+        opening: {
+          type: "object",
+          additionalProperties: false,
+          required: ["section", "text", "claimIds", "factIds", "demandIds"],
+          properties: {
+            section: { const: "opening" },
+            text: { type: "string" },
+            claimIds: { type: "array", items: { type: "string" } },
+            factIds: { type: "array", items: { type: "string" } },
+            demandIds: { type: "array", items: { type: "string" } },
+          },
+        },
+        proofBlock: {
+          type: "object",
+          additionalProperties: false,
+          required: ["section", "text", "claimIds", "factIds", "demandIds"],
+          properties: {
+            section: { const: "proofBlock" },
+            text: { type: "string" },
+            claimIds: { type: "array", items: { type: "string" } },
+            factIds: { type: "array", items: { type: "string" } },
+            demandIds: { type: "array", items: { type: "string" } },
+          },
+        },
+        employerValueBlock: {
+          type: "object",
+          additionalProperties: false,
+          required: ["section", "text", "claimIds", "factIds", "demandIds"],
+          properties: {
+            section: { const: "employerValueBlock" },
+            text: { type: "string" },
+            claimIds: { type: "array", items: { type: "string" } },
+            factIds: { type: "array", items: { type: "string" } },
+            demandIds: { type: "array", items: { type: "string" } },
+          },
+        },
+        closeLine: {
+          type: "object",
+          additionalProperties: false,
+          required: ["section", "text", "claimIds", "factIds", "demandIds"],
+          properties: {
+            section: { const: "closeLine" },
+            text: { type: "string" },
+            claimIds: { type: "array", items: { type: "string" } },
+            factIds: { type: "array", items: { type: "string" } },
+            demandIds: { type: "array", items: { type: "string" } },
+          },
+        },
+      },
+    },
   },
 } as const;
 
@@ -1366,6 +1581,282 @@ function buildSystemInferenceFacts(
   return dedupeFacts(facts);
 }
 
+function createFactNode(
+  id: string,
+  sourcePath: string,
+  fact: AllowedFact,
+): FactNodeV1 {
+  return {
+    id,
+    text: fact.text,
+    source: fact.source,
+    sourcePath,
+    confidence: fact.confidence,
+    category: fact.category,
+    metrics: extractNumericClaims(fact.text),
+    entities: extractFactEntities(fact.text),
+    allowedVerbs: extractAllowedVerbs(fact.text),
+    forbiddenUpgrades: inferForbiddenUpgrades(fact.text),
+    ownershipLevel: inferOwnershipLevel(fact.text),
+  };
+}
+
+function formatStableOrdinal(index: number): string {
+  return String(index + 1).padStart(3, "0");
+}
+
+export function buildPremiumFactGraphV1(args: {
+  personalizationContext: PremiumCoverLetterPersonalizationContext | null;
+  jobDescription: string;
+  systemInferenceHints?: string[];
+}): FactGraphV1 {
+  const facts: FactNodeV1[] = [];
+  const context = args.personalizationContext;
+  const pushFact = (id: string, sourcePath: string, fact: AllowedFact) => {
+    facts.push(createFactNode(id, sourcePath, fact));
+  };
+
+  if (context) {
+    splitFactSnippets(context.summary).forEach((summaryFact, index) => {
+      const category = classifyCvFactCategory(summaryFact, "cv");
+      pushFact(`fact_summary_${formatStableOrdinal(index)}`, `summary[${index}]`, {
+        text: ensureSentenceEnding(summaryFact),
+        source: "cv",
+        confidence: inferFactConfidence(summaryFact, "cv", category),
+        category,
+      });
+    });
+
+    dedupeStrings(context.topSkills ?? []).forEach((skill, index) => {
+      const category = classifyCvFactCategory(skill, "cv");
+      pushFact(`fact_skill_${formatStableOrdinal(index)}`, `topSkills[${index}]`, {
+        text: ensureSentenceEnding(skill),
+        source: "cv",
+        confidence: "medium",
+        category,
+      });
+    });
+
+    (context.recentExperience ?? []).forEach((entry, entryIndex) => {
+      const experienceOrdinal = formatStableOrdinal(entryIndex);
+      let highlightCounter = 0;
+      const roleFact = compactWhitespace(
+        [entry.position, entry.company ? `at ${entry.company}` : ""]
+          .filter(Boolean)
+          .join(" "),
+      );
+      if (roleFact) {
+        pushFact(
+          `fact_experience_${experienceOrdinal}_role`,
+          `recentExperience[${entryIndex}].role`,
+          {
+            text: ensureSentenceEnding(roleFact),
+            source: "cv",
+            confidence: "high",
+            category: "domain",
+          },
+        );
+      }
+      (entry.highlights ?? []).forEach((highlight, highlightIndex) => {
+        splitFactSnippets(highlight).forEach((snippet) => {
+          highlightCounter += 1;
+          const category = classifyCvFactCategory(snippet, "cv");
+          pushFact(
+            `fact_experience_${experienceOrdinal}_highlight_${formatStableOrdinal(
+              highlightCounter - 1,
+            )}`,
+            `recentExperience[${entryIndex}].highlights[${highlightIndex}]`,
+            {
+              text: ensureSentenceEnding(snippet),
+              source: "cv",
+              confidence: inferFactConfidence(snippet, "cv", category),
+              category,
+            },
+          );
+        });
+      });
+    });
+
+    let achievementCounter = 0;
+    (context.standoutAchievements ?? []).forEach((achievement, index) => {
+      splitFactSnippets(achievement).forEach((snippet) => {
+        achievementCounter += 1;
+        pushFact(
+          `fact_achievement_${formatStableOrdinal(achievementCounter - 1)}`,
+          `standoutAchievements[${index}]`,
+          {
+            text: ensureSentenceEnding(snippet),
+            source: "cv",
+            confidence: "high",
+            category: classifyCvFactCategory(snippet, "cv"),
+          },
+        );
+      });
+    });
+  }
+
+  buildJobPostFacts(args.jobDescription).forEach((fact, index) => {
+    pushFact(`fact_job_post_${formatStableOrdinal(index)}`, `jobDescription[${index}]`, fact);
+  });
+  buildSystemInferenceFacts(args.systemInferenceHints).forEach((fact, index) => {
+    pushFact(
+      `fact_system_${formatStableOrdinal(index)}`,
+      `systemInferenceHints[${index}]`,
+      fact,
+    );
+  });
+
+  const seen = new Set<string>();
+  return {
+    version: "fact_graph_v1",
+    facts: facts.filter((fact) => {
+      const key = `${fact.source}:${normalizeProposalConstraintText(fact.text)}`;
+      if (!fact.text || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }),
+  };
+}
+
+export function buildAllowedFactsPackFromFactGraph(
+  factGraph: FactGraphV1,
+): { facts: AllowedFactWithId[] } {
+  return {
+    facts: factGraph.facts.map((fact) => ({
+      id: fact.id,
+      sourcePath: fact.sourcePath,
+      text: fact.text,
+      source: fact.source,
+      confidence: fact.confidence,
+      category: fact.category,
+    })),
+  };
+}
+
+function extractFactEntities(text: string): string[] {
+  const matches = compactWhitespace(text).match(/\b[A-Z][A-Za-z0-9&'.-]{2,}\b/g);
+  return dedupeStrings(matches ?? []).slice(0, 6);
+}
+
+function extractAllowedVerbs(text: string): string[] {
+  const verbs = new Set<string>();
+  const normalized = compactWhitespace(text).toLowerCase();
+  const verbPatterns = [
+    "assisted",
+    "built",
+    "coordinated",
+    "delivered",
+    "documented",
+    "drove",
+    "handled",
+    "improved",
+    "led",
+    "managed",
+    "maintained",
+    "monitored",
+    "owned",
+    "reported",
+    "supported",
+    "tracked",
+  ];
+  for (const verb of verbPatterns) {
+    if (new RegExp(`\\b${verb}\\b`, "i").test(normalized)) {
+      verbs.add(verb);
+    }
+  }
+  if (verbs.size === 0) verbs.add("described");
+  return Array.from(verbs);
+}
+
+function inferForbiddenUpgrades(text: string): string[] {
+  const normalized = compactWhitespace(text);
+  const upgrades = new Set<string>();
+  if (!/\bmanag(?:ed|es|ing)\b/i.test(normalized)) upgrades.add("managed");
+  if (!/\b(?:led|lead(?:s|ing)?)\b/i.test(normalized)) upgrades.add("led");
+  if (!/\bown(?:ed|s|ing)?\b/i.test(normalized)) upgrades.add("owned");
+  if (!/\bdirect(?:ed|s|ing)?\b/i.test(normalized)) upgrades.add("directed");
+  if (!/\b(?:oversaw|oversee(?:s|ing)?|overseen)\b/i.test(normalized)) {
+    upgrades.add("oversaw");
+  }
+  if (!/\bresolv(?:ed|es|ing)\b/i.test(normalized)) upgrades.add("resolved");
+  return Array.from(upgrades);
+}
+
+function inferOwnershipLevel(text: string): FactNodeV1["ownershipLevel"] {
+  if (/\b(?:led|lead(?:s|ing)?|direct(?:ed|s|ing)?|oversaw|oversee(?:s|ing)?|spearhead(?:ed|s|ing)?)\b/i.test(text)) {
+    return "leadership";
+  }
+  if (/\b(?:own(?:ed|s|ing)?|manag(?:ed|es|ing)|drove|drive(?:s|n|ing)?)\b/i.test(text)) {
+    return "ownership";
+  }
+  if (/\bcoordinat(?:ed|es|ing|ion)\b/i.test(text)) return "coordination";
+  if (/\b(?:support(?:ed|s|ing)?|assist(?:ed|s|ing)?|help(?:ed|s|ing)?|contribut(?:ed|es|ing))\b/i.test(text)) {
+    return "support";
+  }
+  return "exposure";
+}
+
+export function buildPremiumJobDemandGraphV1(
+  jobDescription: string,
+): JobDemandGraphV1 {
+  const pack = buildJobOfferPriorityPack(jobDescription);
+  const makeDemand = (
+    text: string,
+    index: number,
+    bucket: JobDemandNodeV1["bucket"],
+  ): JobDemandNodeV1 => {
+    const prefix =
+      bucket === "core_responsibility"
+        ? "core"
+        : bucket === "key_requirement"
+          ? "required"
+          : bucket === "preferred_qualification"
+            ? "preferred"
+            : bucket === "low_value_checklist"
+              ? "low_value"
+              : "fluff";
+    const requiredness =
+      bucket === "core_responsibility"
+        ? "core"
+        : bucket === "key_requirement"
+          ? "required"
+          : bucket === "preferred_qualification"
+            ? "preferred"
+            : bucket === "low_value_checklist"
+              ? "low_value"
+              : "fluff";
+    return {
+      id: `demand_${prefix}_${formatStableOrdinal(index)}`,
+      text,
+      bucket,
+      requiredness,
+      tokens: normalizeTokens(text),
+      mustNotBecomeCandidateClaim: true,
+    };
+  };
+  return {
+    version: "job_demand_graph_v1",
+    demands: [
+      ...pack.coreResponsibilities.map((text, index) =>
+        makeDemand(text, index, "core_responsibility"),
+      ),
+      ...pack.keyRequirements.map((text, index) =>
+        makeDemand(text, index, "key_requirement"),
+      ),
+      ...pack.preferredQualifications.map((text, index) =>
+        makeDemand(text, index, "preferred_qualification"),
+      ),
+      ...pack.lowValueChecklist.map((text, index) =>
+        makeDemand(text, index, "low_value_checklist"),
+      ),
+      ...pack.companyFluff.map((text, index) =>
+        makeDemand(text, index, "company_fluff"),
+      ),
+    ],
+    priorityTokens: pack.priorityTokens,
+  };
+}
+
 function dedupeFacts(facts: AllowedFact[]): AllowedFact[] {
   const seen = new Set<string>();
   const result: AllowedFact[] = [];
@@ -1708,6 +2199,368 @@ export function rankAllowedFacts(args: {
   };
 }
 
+const CLAIM_PLAN_SECTIONS: ClaimPlanSection[] = [
+  "opening",
+  "proofBlock",
+  "employerValueBlock",
+  "closeLine",
+];
+
+const CLAIM_ID_BY_SECTION: Record<ClaimPlanSection, string> = {
+  opening: "claim_opening_001",
+  proofBlock: "claim_proof_001",
+  employerValueBlock: "claim_employer_value_001",
+  closeLine: "claim_close_001",
+};
+
+const OWNERSHIP_ORDER: Record<FactNodeV1["ownershipLevel"], number> = {
+  exposure: 0,
+  support: 1,
+  coordination: 2,
+  ownership: 3,
+  leadership: 4,
+};
+
+function findFactNodeForAllowedFact(
+  factGraph: FactGraphV1,
+  fact: AllowedFact | undefined,
+): FactNodeV1 | undefined {
+  if (!fact) return undefined;
+  return factGraph.facts.find(
+    (node) =>
+      node.source === fact.source &&
+      node.category === fact.category &&
+      normalizeProposalConstraintText(node.text) ===
+        normalizeProposalConstraintText(fact.text),
+  );
+}
+
+function highestOwnershipLevel(facts: FactNodeV1[]): FactNodeV1["ownershipLevel"] {
+  return facts.reduce<FactNodeV1["ownershipLevel"]>(
+    (highest, fact) =>
+      OWNERSHIP_ORDER[fact.ownershipLevel] > OWNERSHIP_ORDER[highest]
+        ? fact.ownershipLevel
+        : highest,
+    "support",
+  );
+}
+
+function collectAllowedVerbs(facts: FactNodeV1[]): string[] {
+  return dedupeStrings(facts.flatMap((fact) => fact.allowedVerbs));
+}
+
+function collectForbiddenVerbs(facts: FactNodeV1[]): string[] {
+  const allowed = new Set(collectAllowedVerbs(facts));
+  return dedupeStrings(facts.flatMap((fact) => fact.forbiddenUpgrades)).filter(
+    (verb) => !allowed.has(verb),
+  );
+}
+
+function firstDemandId(
+  jobDemandGraph: JobDemandGraphV1,
+  buckets: JobDemandNodeV1["bucket"][],
+): string[] {
+  const demand = jobDemandGraph.demands.find((item) => buckets.includes(item.bucket));
+  return demand ? [demand.id] : [];
+}
+
+export function buildPremiumClaimPlanV1(args: {
+  factGraph: FactGraphV1;
+  jobDemandGraph: JobDemandGraphV1;
+  rankedEvidencePack: RankedEvidencePack;
+  contextClass: PremiumCoverLetterContextClass;
+  preset: PremiumCoverLetterPreset;
+  outputLanguage: ProposalOutputLanguage;
+  jobTitle: string;
+}): ClaimPlanV1 {
+  const strongest = args.rankedEvidencePack.strongestEvidence
+    .map((fact) => findFactNodeForAllowedFact(args.factGraph, fact))
+    .filter((fact): fact is FactNodeV1 => Boolean(fact));
+  const supporting = args.rankedEvidencePack.supportingEvidence
+    .map((fact) => findFactNodeForAllowedFact(args.factGraph, fact))
+    .filter((fact): fact is FactNodeV1 => Boolean(fact));
+  const transfer = args.rankedEvidencePack.transferCore
+    .map((fact) => findFactNodeForAllowedFact(args.factGraph, fact))
+    .filter((fact): fact is FactNodeV1 => Boolean(fact));
+  const cvFacts = [...strongest, ...supporting, ...transfer].filter(
+    (fact) => fact.source === "cv",
+  );
+  const primaryCvFact = cvFacts[0];
+  const secondaryCvFact = cvFacts[1] ?? primaryCvFact;
+  const closeCvFact = cvFacts[2] ?? secondaryCvFact ?? primaryCvFact;
+  const sectionCvFacts = cvFacts.slice(0, 4);
+  const roleContextDemandIds = firstDemandId(args.jobDemandGraph, [
+    "core_responsibility",
+    "key_requirement",
+  ]);
+  const noCvDemandIds = firstDemandId(args.jobDemandGraph, [
+    "core_responsibility",
+    "key_requirement",
+    "preferred_qualification",
+  ]);
+
+  const makeClaim = (
+    section: ClaimPlanSection,
+    facts: FactNodeV1[],
+    demandIds: string[],
+    claimType: ClaimPlanClaimV1["claimType"],
+    editorialGuideline: string,
+  ): ClaimPlanClaimV1 => {
+    const safeFacts =
+      args.contextClass === "no_cv" ? [] : facts.filter((fact) => fact.source === "cv");
+    const maxOwnership =
+      args.contextClass === "cv_adjacent"
+        ? highestOwnershipLevel(safeFacts) === "leadership" ||
+          highestOwnershipLevel(safeFacts) === "ownership"
+          ? highestOwnershipLevel(safeFacts)
+          : "coordination"
+        : args.contextClass === "no_cv"
+          ? "exposure"
+          : highestOwnershipLevel(safeFacts);
+    return {
+      id: CLAIM_ID_BY_SECTION[section],
+      section,
+      factIds: safeFacts.map((fact) => fact.id),
+      demandIds,
+      claimType,
+      requiredElements:
+        args.contextClass === "no_cv"
+          ? ["job-surface-only neutral wording"]
+          : safeFacts.map((fact) => fact.text),
+      allowedVerbs:
+        args.contextClass === "no_cv"
+          ? ["discuss", "understand", "focus"]
+          : collectAllowedVerbs(safeFacts),
+      forbiddenVerbs:
+        args.contextClass === "no_cv"
+          ? ["led", "managed", "owned", "built", "improved", "certified"]
+          : collectForbiddenVerbs(safeFacts),
+      forbiddenClaims:
+        args.contextClass === "no_cv"
+          ? [
+              "candidate history",
+              "tools as candidate skill",
+              "credentials",
+              "achievements",
+              "metrics",
+              "prior work",
+            ]
+          : args.contextClass === "cv_adjacent"
+            ? [
+                "direct target-role experience",
+                "target role title as proof",
+                "future impact promise",
+              ]
+            : ["unsupported metric", "unsupported credential", "job demand as history"],
+      maxOwnership,
+      allowEmployerBridge:
+        section === "employerValueBlock" && args.contextClass !== "no_cv",
+      editorialGuideline,
+    };
+  };
+
+  const claims =
+    args.contextClass === "no_cv"
+      ? CLAIM_PLAN_SECTIONS.map((section) =>
+          makeClaim(
+            section,
+            [],
+            noCvDemandIds,
+            "job_surface_only_no_cv",
+            "Use job surfaces only; write neutral, discussion-oriented prose without candidate history.",
+          ),
+        )
+      : [
+          makeClaim(
+            "opening",
+            primaryCvFact ? [primaryCvFact] : [],
+            [],
+            "source_backed",
+            args.contextClass === "cv_adjacent"
+              ? "Open with a CV-backed operating strength, not direct target-role fit."
+              : "Open with the strongest CV-backed evidence.",
+          ),
+          makeClaim(
+            "proofBlock",
+            sectionCvFacts.length > 0
+              ? sectionCvFacts
+              : secondaryCvFact
+                ? [secondaryCvFact]
+                : primaryCvFact
+                  ? [primaryCvFact]
+                  : [],
+            [],
+            "source_backed",
+            "Develop one CV-backed proof point without upgrading ownership or metrics.",
+          ),
+          makeClaim(
+            "employerValueBlock",
+            args.contextClass === "cv_adjacent"
+              ? sectionCvFacts
+              : sectionCvFacts.length > 0
+                ? sectionCvFacts
+                : primaryCvFact
+                  ? [primaryCvFact]
+                  : [],
+            roleContextDemandIds,
+            args.contextClass === "cv_adjacent"
+              ? "adjacent_safe_bridge"
+              : "source_backed",
+            args.contextClass === "cv_adjacent"
+              ? "Use the one restrained bridge; job demands are role context only."
+              : "Reference a core responsibility only as role context, never candidate history.",
+          ),
+          makeClaim(
+            "closeLine",
+            sectionCvFacts.length > 0
+              ? sectionCvFacts
+              : closeCvFact
+                ? [closeCvFact]
+                : primaryCvFact
+                  ? [primaryCvFact]
+                  : [],
+            [],
+            "source_backed",
+            args.contextClass === "cv_adjacent"
+              ? "Restate CV-backed operating strengths only."
+              : "Restate grounded strengths only.",
+          ),
+        ];
+
+  return {
+    version: "claim_plan_v1",
+    contextClass: args.contextClass,
+    language: args.outputLanguage,
+    targetRole: compactWhitespace(args.jobTitle),
+    preset: args.preset,
+    claims,
+    globalForbidden: [
+      "writer-chosen strategy",
+      "unsupported claims",
+      "company fluff as motivation",
+      "job demand as candidate history",
+      "unsupported metrics",
+      "unsupported credentials",
+    ],
+  };
+}
+
+export type PremiumClaimPlanValidationIssue = {
+  code:
+    | "missing_fact_id"
+    | "missing_demand_id"
+    | "no_cv_uses_cv_fact"
+    | "missing_required_section"
+    | "low_value_primary_proof"
+    | "company_fluff_as_motivation"
+    | "metric_not_in_fact"
+    | "allowed_verb_conflicts_with_forbidden_upgrade"
+    | "duplicate_primary_section_claim";
+  claimId?: string;
+  message: string;
+};
+
+export function validatePremiumClaimPlanV1(args: {
+  claimPlan: ClaimPlanV1;
+  factGraph: FactGraphV1;
+  jobDemandGraph: JobDemandGraphV1;
+}): PremiumClaimPlanValidationIssue[] {
+  const issues: PremiumClaimPlanValidationIssue[] = [];
+  const factIds = new Set(args.factGraph.facts.map((fact) => fact.id));
+  const demandIds = new Set(args.jobDemandGraph.demands.map((demand) => demand.id));
+  const claimsBySection = new Map<ClaimPlanSection, ClaimPlanClaimV1[]>();
+  for (const section of CLAIM_PLAN_SECTIONS) claimsBySection.set(section, []);
+  for (const claim of args.claimPlan.claims) {
+    claimsBySection.get(claim.section)?.push(claim);
+    for (const factId of claim.factIds) {
+      if (!factIds.has(factId)) {
+        issues.push({
+          code: "missing_fact_id",
+          claimId: claim.id,
+          message: `Claim references unknown fact id ${factId}.`,
+        });
+      }
+    }
+    for (const demandId of claim.demandIds) {
+      if (!demandIds.has(demandId)) {
+        issues.push({
+          code: "missing_demand_id",
+          claimId: claim.id,
+          message: `Claim references unknown demand id ${demandId}.`,
+        });
+      }
+    }
+    if (args.claimPlan.contextClass === "no_cv" && claim.factIds.length > 0) {
+      issues.push({
+        code: "no_cv_uses_cv_fact",
+        claimId: claim.id,
+        message: "no_cv claim plan must not reference candidate facts.",
+      });
+    }
+    const demandNodes = claim.demandIds
+      .map((id) => args.jobDemandGraph.demands.find((demand) => demand.id === id))
+      .filter((demand): demand is JobDemandNodeV1 => Boolean(demand));
+    if (
+      claim.section === "proofBlock" &&
+      demandNodes.some((demand) => demand.bucket === "low_value_checklist")
+    ) {
+      issues.push({
+        code: "low_value_primary_proof",
+        claimId: claim.id,
+        message: "Low-value checklist demand cannot be primary proof.",
+      });
+    }
+    if (
+      claim.section === "employerValueBlock" &&
+      demandNodes.some((demand) => demand.bucket === "company_fluff")
+    ) {
+      issues.push({
+        code: "company_fluff_as_motivation",
+        claimId: claim.id,
+        message: "Company fluff cannot become candidate motivation.",
+      });
+    }
+    const factNodes = claim.factIds
+      .map((id) => args.factGraph.facts.find((fact) => fact.id === id))
+      .filter((fact): fact is FactNodeV1 => Boolean(fact));
+    const factMetrics = new Set(factNodes.flatMap((fact) => fact.metrics));
+    for (const requiredElement of claim.requiredElements) {
+      for (const metric of extractNumericClaims(requiredElement)) {
+        if (!factMetrics.has(metric)) {
+          issues.push({
+            code: "metric_not_in_fact",
+            claimId: claim.id,
+            message: `Required metric ${metric} is not present in referenced facts.`,
+          });
+        }
+      }
+    }
+    if (claim.allowedVerbs.some((verb) => claim.forbiddenVerbs.includes(verb))) {
+      issues.push({
+        code: "allowed_verb_conflicts_with_forbidden_upgrade",
+        claimId: claim.id,
+        message: "Claim allowed verbs conflict with forbidden upgrades.",
+      });
+    }
+  }
+  for (const section of CLAIM_PLAN_SECTIONS) {
+    const sectionClaims = claimsBySection.get(section) ?? [];
+    if (sectionClaims.length === 0) {
+      issues.push({
+        code: "missing_required_section",
+        message: `ClaimPlan is missing ${section}.`,
+      });
+    }
+    if (sectionClaims.length > 1) {
+      issues.push({
+        code: "duplicate_primary_section_claim",
+        message: `ClaimPlan has duplicate primary claims for ${section}.`,
+      });
+    }
+  }
+  return issues;
+}
+
 export function buildPremiumCoverLetterBrief(args: {
   preset: PremiumCoverLetterPreset;
   outputLanguage: ProposalOutputLanguage;
@@ -1717,6 +2570,9 @@ export function buildPremiumCoverLetterBrief(args: {
   allowedFactsPack: AllowedFactsPack;
   rankedEvidencePack: RankedEvidencePack;
   companyValuesPack?: CompanyValuesPack;
+  claimPlan?: ClaimPlanV1;
+  factGraph?: FactGraphV1;
+  jobDemandGraph?: JobDemandGraphV1;
 }): CoverLetterBrief {
   const jobOfferPriorityPack = buildJobOfferPriorityPack(args.jobDescription);
   const jobPostFacts = args.allowedFactsPack.facts
@@ -1790,6 +2646,40 @@ export function buildPremiumCoverLetterBrief(args: {
       : {}),
     requiredMoves: [...PREMIUM_COVER_LETTER_REQUIRED_MOVES],
     forbiddenMoves: [...PREMIUM_COVER_LETTER_FORBIDDEN_MOVES],
+    ...(args.claimPlan
+      ? {
+          claimPlan: args.claimPlan,
+          factGraphVersion: "fact_graph_v1" as const,
+          jobDemandGraphVersion: "job_demand_graph_v1" as const,
+          claimPlanVersion: "claim_plan_v1" as const,
+          referencedFacts: args.factGraph
+            ? args.factGraph.facts
+                .filter((fact) =>
+                  new Set(args.claimPlan?.claims.flatMap((claim) => claim.factIds)).has(
+                    fact.id,
+                  ),
+                )
+                .map((fact) => ({
+                  id: fact.id,
+                  text: fact.text,
+                  source: fact.source,
+                }))
+            : [],
+          referencedDemands: args.jobDemandGraph
+            ? args.jobDemandGraph.demands
+                .filter((demand) =>
+                  new Set(
+                    args.claimPlan?.claims.flatMap((claim) => claim.demandIds),
+                  ).has(demand.id),
+                )
+                .map((demand) => ({
+                  id: demand.id,
+                  text: demand.text,
+                  bucket: demand.bucket,
+                }))
+            : [],
+        }
+      : {}),
   };
 }
 
@@ -1837,8 +2727,16 @@ export function buildPremiumCoverLetterPrompt(args: {
   });
   return [
     "Write premium cover-letter body parts.",
-    `Planner priority order: ${COVER_LETTER_ROLE_THESIS_PRIORITY_ORDER.map((item, index) => `${index + 1}. ${item}`).join(" | ")}.`,
-    "Build a dynamic RoleThesis from JD, CV facts, and detectors; never import fixture wording or one fixed structure.",
+    "The ClaimPlan owns strategy. Do not choose claims. Realize only the claim assigned to each section.",
+    `Planner priority order, already resolved into ClaimPlan: ${COVER_LETTER_ROLE_THESIS_PRIORITY_ORDER.map((item, index) => `${index + 1}. ${item}`).join(" | ")}.`,
+    "Follow the ClaimPlan exactly.",
+    "Do not choose strategic claims.",
+    "Each body part must realize only the claim assigned to that section.",
+    "Each body part must cite the claimIds, factIds, and demandIds it used.",
+    "Do not introduce claims not represented in ClaimPlan.",
+    "Use only facts referenced by the section's claim.",
+    "Job demands are role context only and must not become candidate experience.",
+    "Shorter safe output is better than filled space.",
     "Use brief facts only. Do not invent credentials, ownership, metrics, tools, timelines, or proof.",
     "Prioritize strongest evidence first. If evidence is modest, let the best available concrete proof carry the case.",
     "Do not lead with secondary qualifications or spend body space on admiration, benefits attraction, checklist summaries, generic enthusiasm, tool repetition, keyword lists, or criteria reporting.",
@@ -1856,12 +2754,41 @@ export function buildPremiumCoverLetterPrompt(args: {
     presetGuidance,
     args.generationControlsBlock,
     ...contextGuidance,
+    "Do not include greeting, signoff, signature, candidate name, date, subject, sender block, recipient block, markdown, XML, citations, audit, or explanation.",
+    "Return only PremiumWriterOutputV1 JSON.",
     "Return one JSON object with this schema and no extra text:",
     JSON.stringify({
-      opening: "string",
-      proofBlock: "string",
-      employerValueBlock: "string",
-      closeLine: "string",
+      version: "premium_writer_output_v1",
+      bodyParts: {
+        opening: {
+          section: "opening",
+          text: "string",
+          claimIds: ["claim_opening_001"],
+          factIds: ["fact id strings used by this section"],
+          demandIds: ["demand id strings used by this section"],
+        },
+        proofBlock: {
+          section: "proofBlock",
+          text: "string",
+          claimIds: ["claim_proof_001"],
+          factIds: ["fact id strings used by this section"],
+          demandIds: ["demand id strings used by this section"],
+        },
+        employerValueBlock: {
+          section: "employerValueBlock",
+          text: "string",
+          claimIds: ["claim_employer_value_001"],
+          factIds: ["fact id strings used by this section"],
+          demandIds: ["demand id strings used by this section"],
+        },
+        closeLine: {
+          section: "closeLine",
+          text: "string",
+          claimIds: ["claim_close_001"],
+          factIds: ["fact id strings used by this section"],
+          demandIds: ["demand id strings used by this section"],
+        },
+      },
     }),
     ...bodyPartGuidance,
     providerAdapter,
@@ -2093,13 +3020,372 @@ export type PremiumCoverLetterFailureTrace = {
     | "repair_failed_validation";
   contextClass?: PremiumCoverLetterContextClass;
   eligibilityReason?: PremiumCoverLetterEligibility["reason"];
-  issues?: PremiumBodyPartValidationIssue["code"][];
+  issues?: string[];
 };
 
 function summarizeValidationIssueCodes(
   issues: PremiumBodyPartValidationIssue[],
 ): PremiumBodyPartValidationIssue["code"][] {
   return Array.from(new Set(issues.map((issue) => issue.code)));
+}
+
+export type PremiumWriterOutputValidationIssue = {
+  code:
+    | "unknown_claim_id"
+    | "unknown_fact_id"
+    | "unknown_demand_id"
+    | "section_claim_mismatch"
+    | "section_fact_not_allowed"
+    | "section_demand_not_allowed"
+    | "no_cv_uses_candidate_fact"
+    | "direct_claim_missing_fact"
+    | "unsupported_numeric_claim"
+    | "unsupported_ownership_verb"
+    | "unsupported_credential_claim"
+    | "unsupported_compliance_framework"
+    | "job_demand_as_candidate_experience"
+    | "low_value_checklist_as_proof"
+    | "company_fluff_as_motivation"
+    | "empty_section"
+    | "greeting_leakage"
+    | "signoff_leakage";
+  section?: ClaimPlanSection;
+  claimId?: string;
+  message: string;
+  repairable: boolean;
+};
+
+export function toCoverLetterBodyParts(
+  output: PremiumWriterOutputV1,
+): CoverLetterBodyParts {
+  return {
+    opening: output.bodyParts.opening.text,
+    proofBlock: output.bodyParts.proofBlock.text,
+    employerValueBlock: output.bodyParts.employerValueBlock.text,
+    closeLine: output.bodyParts.closeLine.text,
+  };
+}
+
+function claimForSection(
+  claimPlan: ClaimPlanV1,
+  section: ClaimPlanSection,
+): ClaimPlanClaimV1 | undefined {
+  return claimPlan.claims.find((claim) => claim.section === section);
+}
+
+function wrapLegacyBodyPartsAsPremiumWriterOutputV1(args: {
+  bodyParts: CoverLetterBodyParts;
+  claimPlan: ClaimPlanV1;
+}): PremiumWriterOutputV1 {
+  const partFor = (section: ClaimPlanSection, text: string): PremiumWriterBodyPartV1 => {
+    const claim = claimForSection(args.claimPlan, section);
+    return {
+      section,
+      text,
+      claimIds: claim ? [claim.id] : [],
+      factIds: claim?.factIds ?? [],
+      demandIds: claim?.demandIds ?? [],
+    };
+  };
+  return {
+    version: "premium_writer_output_v1",
+    bodyParts: {
+      opening: partFor("opening", args.bodyParts.opening),
+      proofBlock: partFor("proofBlock", args.bodyParts.proofBlock),
+      employerValueBlock: partFor(
+        "employerValueBlock",
+        args.bodyParts.employerValueBlock,
+      ),
+      closeLine: partFor("closeLine", args.bodyParts.closeLine),
+    },
+  };
+}
+
+function parsePremiumWriterOutputV1(args: {
+  rawOutput: unknown;
+  claimPlan: ClaimPlanV1;
+}): { writerOutput: PremiumWriterOutputV1; legacyWrapped: boolean } {
+  const premiumParse = PREMIUM_WRITER_OUTPUT_V1_SCHEMA.safeParse(args.rawOutput);
+  if (premiumParse.success) {
+    return { writerOutput: premiumParse.data, legacyWrapped: false };
+  }
+  const legacyBodyParts = PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(args.rawOutput);
+  return {
+    writerOutput: wrapLegacyBodyPartsAsPremiumWriterOutputV1({
+      bodyParts: legacyBodyParts,
+      claimPlan: args.claimPlan,
+    }),
+    legacyWrapped: true,
+  };
+}
+
+export function validatePremiumWriterOutputV1(args: {
+  writerOutput: PremiumWriterOutputV1;
+  claimPlan: ClaimPlanV1;
+  factGraph: FactGraphV1;
+  jobDemandGraph: JobDemandGraphV1;
+  brief: CoverLetterBrief;
+}): PremiumWriterOutputValidationIssue[] {
+  const issues: PremiumWriterOutputValidationIssue[] = [];
+  const claimById = new Map(args.claimPlan.claims.map((claim) => [claim.id, claim]));
+  const factById = new Map(args.factGraph.facts.map((fact) => [fact.id, fact]));
+  const demandById = new Map(
+    args.jobDemandGraph.demands.map((demand) => [demand.id, demand]),
+  );
+  for (const section of CLAIM_PLAN_SECTIONS) {
+    const part = args.writerOutput.bodyParts[section];
+    const assignedClaim = claimForSection(args.claimPlan, section);
+    const compact = compactWhitespace(part.text);
+    if (!compact) {
+      issues.push({
+        code: "empty_section",
+        section,
+        claimId: assignedClaim?.id,
+        message: `${section} is empty.`,
+        repairable: true,
+      });
+    }
+    if (GREETING_PATTERN.test(compact)) {
+      issues.push({
+        code: "greeting_leakage",
+        section,
+        claimId: assignedClaim?.id,
+        message: `${section} contains greeting leakage.`,
+        repairable: true,
+      });
+    }
+    if (SIGNOFF_PATTERN.test(compact)) {
+      issues.push({
+        code: "signoff_leakage",
+        section,
+        claimId: assignedClaim?.id,
+        message: `${section} contains signoff leakage.`,
+        repairable: true,
+      });
+    }
+    for (const claimId of part.claimIds) {
+      const claim = claimById.get(claimId);
+      if (!claim) {
+        issues.push({
+          code: "unknown_claim_id",
+          section,
+          claimId,
+          message: `Unknown claim id ${claimId}.`,
+          repairable: false,
+        });
+        continue;
+      }
+      if (claim.section !== section || assignedClaim?.id !== claimId) {
+        issues.push({
+          code: "section_claim_mismatch",
+          section,
+          claimId,
+          message: `${claimId} is not assigned to ${section}.`,
+          repairable: false,
+        });
+      }
+    }
+    if (assignedClaim && !part.claimIds.includes(assignedClaim.id)) {
+      issues.push({
+        code: "section_claim_mismatch",
+        section,
+        claimId: assignedClaim.id,
+        message: `${section} must cite its assigned claim.`,
+        repairable: false,
+      });
+    }
+    for (const factId of part.factIds) {
+      const fact = factById.get(factId);
+      if (!fact) {
+        issues.push({
+          code: "unknown_fact_id",
+          section,
+          claimId: assignedClaim?.id,
+          message: `Unknown fact id ${factId}.`,
+          repairable: false,
+        });
+        continue;
+      }
+      if (!assignedClaim?.factIds.includes(factId)) {
+        issues.push({
+          code: "section_fact_not_allowed",
+          section,
+          claimId: assignedClaim?.id,
+          message: `${factId} is not allowed for ${section}.`,
+          repairable: false,
+        });
+      }
+      if (args.claimPlan.contextClass === "no_cv" && fact.source === "cv") {
+        issues.push({
+          code: "no_cv_uses_candidate_fact",
+          section,
+          claimId: assignedClaim?.id,
+          message: "no_cv output must not cite candidate facts.",
+          repairable: false,
+        });
+      }
+    }
+    for (const demandId of part.demandIds) {
+      const demand = demandById.get(demandId);
+      if (!demand) {
+        issues.push({
+          code: "unknown_demand_id",
+          section,
+          claimId: assignedClaim?.id,
+          message: `Unknown demand id ${demandId}.`,
+          repairable: false,
+        });
+        continue;
+      }
+      if (!assignedClaim?.demandIds.includes(demandId)) {
+        issues.push({
+          code: "section_demand_not_allowed",
+          section,
+          claimId: assignedClaim?.id,
+          message: `${demandId} is not allowed for ${section}.`,
+          repairable: false,
+        });
+      }
+      if (section === "proofBlock" && demand.bucket === "low_value_checklist") {
+        issues.push({
+          code: "low_value_checklist_as_proof",
+          section,
+          claimId: assignedClaim?.id,
+          message: "Low-value checklist demand cannot be proof.",
+          repairable: false,
+        });
+      }
+      if (
+        section === "employerValueBlock" &&
+        demand.bucket === "company_fluff" &&
+        COMPANY_ADMIRATION_PATTERN.test(compact)
+      ) {
+        issues.push({
+          code: "company_fluff_as_motivation",
+          section,
+          claimId: assignedClaim?.id,
+          message: "Company fluff cannot become candidate motivation.",
+          repairable: false,
+        });
+      }
+    }
+    if (
+      assignedClaim?.claimType === "source_backed" &&
+      args.claimPlan.contextClass !== "no_cv" &&
+      part.factIds.length === 0
+    ) {
+      issues.push({
+        code: "direct_claim_missing_fact",
+        section,
+        claimId: assignedClaim.id,
+        message: "Source-backed claim must cite an allowed fact.",
+        repairable: false,
+      });
+    }
+    const referencedFacts = part.factIds
+      .map((id) => factById.get(id))
+      .filter((fact): fact is FactNodeV1 => Boolean(fact));
+    const referencedDemands = part.demandIds
+      .map((id) => demandById.get(id))
+      .filter((demand): demand is JobDemandNodeV1 => Boolean(demand));
+    const referencedFactSurface = referencedFacts.map((fact) => fact.text).join(" ");
+    if (
+      hasUnsupportedNumericClaim({
+        generatedText: compact,
+        sourceSurface: referencedFactSurface,
+      })
+    ) {
+      issues.push({
+        code: "unsupported_numeric_claim",
+        section,
+        claimId: assignedClaim?.id,
+        message: "Generated numeric claim is absent from referenced facts.",
+        repairable: false,
+      });
+    }
+    if (
+      assignedClaim &&
+      HIGH_OWNERSHIP_VERB_PATTERNS.some(({ verb, pattern }) => {
+        if (!pattern.test(compact)) return false;
+        return (
+          assignedClaim.forbiddenVerbs.includes(verb) ||
+          !assignedClaim.allowedVerbs.some((allowedVerb) =>
+            new RegExp(`\\b${escapeRegExp(allowedVerb)}\\b`, "i").test(compact),
+          )
+        );
+      })
+    ) {
+      issues.push({
+        code: "unsupported_ownership_verb",
+        section,
+        claimId: assignedClaim.id,
+        message: "Generated ownership verb is not allowed by section claim.",
+        repairable: false,
+      });
+    }
+    if (
+      UNSUPPORTED_LICENSE_CLAIM_PATTERN.test(compact) ||
+      UNSUPPORTED_EDUCATION_CREDENTIAL_PATTERN.test(compact)
+    ) {
+      const sourceAllowsCredential =
+        UNSUPPORTED_LICENSE_CLAIM_PATTERN.test(referencedFactSurface) ||
+        UNSUPPORTED_EDUCATION_CREDENTIAL_PATTERN.test(referencedFactSurface);
+      if (!sourceAllowsCredential) {
+        issues.push({
+          code: "unsupported_credential_claim",
+          section,
+          claimId: assignedClaim?.id,
+          message: "Generated credential is absent from referenced facts.",
+          repairable: false,
+        });
+      }
+    }
+    if (
+      COMPLIANCE_FRAMEWORK_PATTERNS.some((pattern) => pattern.test(compact)) &&
+      !COMPLIANCE_FRAMEWORK_PATTERNS.some((pattern) =>
+        pattern.test(referencedFactSurface),
+      )
+    ) {
+      issues.push({
+        code: "unsupported_compliance_framework",
+        section,
+        claimId: assignedClaim?.id,
+        message: "Generated compliance framework is absent from referenced facts.",
+        repairable: false,
+      });
+    }
+    if (
+      referencedDemands.some((demand) =>
+        compact.toLowerCase().includes(
+          demand.text.replace(/[.!?]$/u, "").toLowerCase(),
+        ),
+      ) &&
+      /\b(?:i|my)\s+(?:led|managed|owned|built|improved|delivered|maintained|coordinated|handled|tracked|documented)\b/i.test(
+        compact,
+      )
+    ) {
+      issues.push({
+        code: "job_demand_as_candidate_experience",
+        section,
+        claimId: assignedClaim?.id,
+        message: "Job demand appears as candidate experience.",
+        repairable: false,
+      });
+    }
+    if (
+      args.claimPlan.contextClass === "no_cv" &&
+      NO_CV_HISTORY_CLAIM_PATTERN.test(compact)
+    ) {
+      issues.push({
+        code: "no_cv_uses_candidate_fact",
+        section,
+        claimId: assignedClaim?.id,
+        message: "no_cv output contains candidate history.",
+        repairable: false,
+      });
+    }
+  }
+  return issues;
 }
 
 const CLIPPED_SOURCE_FRAGMENT_PATTERN =
@@ -2520,7 +3806,7 @@ export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
   prompt: string;
   writerModel?: PremiumCoverLetterWriterModel;
   signal?: AbortSignal;
-}): Promise<CoverLetterBodyParts> {
+}): Promise<unknown> {
   const resolvedModel = resolvePremiumCoverLetterWriterModel(args.writerModel);
   const requestBody = buildPremiumCoverLetterOpenAIRequest({
     prompt: args.prompt,
@@ -2547,15 +3833,15 @@ export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
           text: {
             verbosity: "medium",
             format: zodTextFormat(
-              PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA,
-              "cover_letter_body_parts",
+              PREMIUM_WRITER_OUTPUT_V1_SCHEMA,
+              "premium_writer_output_v1",
             ),
           },
         } as any,
         args.signal ? ({ signal: args.signal } as any) : undefined,
       );
 
-      return PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(
+      return PREMIUM_WRITER_OUTPUT_V1_SCHEMA.parse(
         response?.output_parsed ?? extractOpenAIJsonPayload(response),
       );
     }
@@ -2564,7 +3850,7 @@ export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
       requestBody as any,
       args.signal ? ({ signal: args.signal } as any) : undefined,
     );
-    return PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(
+    return PREMIUM_WRITER_OUTPUT_V1_SCHEMA.parse(
       extractOpenAIJsonPayload(response),
     );
   }
@@ -2583,7 +3869,7 @@ export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
       `OpenAI premium cover-letter request failed: ${response.status} ${response.statusText} ${await response.text()}`,
     );
   }
-  return PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(
+  return PREMIUM_WRITER_OUTPUT_V1_SCHEMA.parse(
     extractOpenAIJsonPayload(await response.json()),
   );
 }
@@ -2602,12 +3888,12 @@ export function buildPremiumCoverLetterOpenAIRequest(args: {
       verbosity: "medium",
       format: {
         type: "json_schema",
-        name: "cover_letter_body_parts",
-        schema: PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA,
+        name: "premium_writer_output_v1",
+        schema: PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
         strict: true,
         json_schema: {
-          name: "cover_letter_body_parts",
-          schema: PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA,
+          name: "premium_writer_output_v1",
+          schema: PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
           strict: true,
         },
       },
@@ -2667,6 +3953,25 @@ function buildPremiumCoverLetterRepairPrompt(args: {
     "",
     `Validation issues: ${JSON.stringify(args.issues)}`,
     `Previous body parts: ${JSON.stringify(args.previousBodyParts)}`,
+    `Structured brief: ${JSON.stringify(args.brief)}`,
+  ].join("\n");
+}
+
+function buildPremiumWriterOutputRepairPrompt(args: {
+  brief: CoverLetterBrief;
+  previousWriterOutput: PremiumWriterOutputV1;
+  issues: string[];
+}): string {
+  return [
+    "Repair PremiumWriterOutputV1 without changing claim strategy.",
+    "The ClaimPlan owns strategy. Do not choose claims.",
+    "Fix only invalid body parts.",
+    "Allowed repairs: strip greeting/signoff, dedupe repeated sentences, add punctuation, remove duplicate closeLine from employerValueBlock, or fill empty closeLine with deterministic safe wording only if no unsupported claim is involved.",
+    "Not allowed: unknown claim IDs, unknown fact IDs, unknown demand IDs, unsupported metrics, unsupported credentials, unsupported ownership upgrades, no_cv candidate-history claims, job demand as candidate experience, or company fluff as motivation.",
+    "Return only PremiumWriterOutputV1 JSON.",
+    `Validation issue codes: ${JSON.stringify(args.issues)}`,
+    `ClaimPlan: ${JSON.stringify(args.brief.claimPlan)}`,
+    `Previous PremiumWriterOutputV1: ${JSON.stringify(args.previousWriterOutput)}`,
     `Structured brief: ${JSON.stringify(args.brief)}`,
   ].join("\n");
 }
@@ -2777,12 +4082,13 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   const contextClass = eligibility.contextClass;
   const voicePreset = args.voicePreset;
 
-  const allowedFactsPack = buildAllowedFactsPack({
+  const factGraph = buildPremiumFactGraphV1({
     personalizationContext: args.personalizationContext,
-    jobTitle: args.jobTitle,
     jobDescription: args.jobDescription,
     systemInferenceHints: args.systemInferenceHints,
   });
+  const jobDemandGraph = buildPremiumJobDemandGraphV1(args.jobDescription);
+  const allowedFactsPack = buildAllowedFactsPackFromFactGraph(factGraph);
   const rankedEvidencePack = rankAllowedFacts({
     allowedFactsPack,
     jobTitle: args.jobTitle,
@@ -2799,6 +4105,30 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     return null;
   }
 
+  const claimPlan = buildPremiumClaimPlanV1({
+    factGraph,
+    jobDemandGraph,
+    rankedEvidencePack,
+    contextClass,
+    preset: voicePreset,
+    outputLanguage: args.outputLanguage,
+    jobTitle: args.jobTitle,
+  });
+  const claimPlanIssues = validatePremiumClaimPlanV1({
+    claimPlan,
+    factGraph,
+    jobDemandGraph,
+  });
+  if (claimPlanIssues.length > 0) {
+    args.onFailure?.({
+      stage: "validation",
+      reason: "non_repairable_validation",
+      contextClass,
+      issues: claimPlanIssues.map((issue) => issue.code),
+    });
+    return null;
+  }
+
   const brief = buildPremiumCoverLetterBrief({
     preset: voicePreset,
     outputLanguage: args.outputLanguage,
@@ -2808,6 +4138,9 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     allowedFactsPack,
     rankedEvidencePack,
     companyValuesPack: args.companyValuesPack,
+    claimPlan,
+    factGraph,
+    jobDemandGraph,
   });
   const prompt = buildPremiumCoverLetterPrompt({
     brief,
@@ -2815,12 +4148,70 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     writerProvider: args.writerProvider,
     writerModel: args.writerModel,
   });
-  let bodyParts = PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(
-    await args.writer({
+  let parsedWriterOutput = parsePremiumWriterOutputV1({
+    rawOutput: await args.writer({
       prompt,
-      schema: PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA,
+      schema: PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
       signal: args.signal,
     }),
+    claimPlan,
+  });
+  let writerOutput = parsedWriterOutput.writerOutput;
+  let writerOutputIssues = parsedWriterOutput.legacyWrapped
+    ? []
+    : validatePremiumWriterOutputV1({
+        writerOutput,
+        claimPlan,
+        factGraph,
+        jobDemandGraph,
+        brief,
+      });
+  if (writerOutputIssues.some((issue) => !issue.repairable)) {
+    args.onFailure?.({
+      stage: "validation",
+      reason: "non_repairable_validation",
+      contextClass,
+      issues: writerOutputIssues.map((issue) => issue.code),
+    });
+    return null;
+  }
+  if (writerOutputIssues.length > 0) {
+    const repairedParsedWriterOutput = parsePremiumWriterOutputV1({
+      rawOutput: await args.writer({
+        prompt: buildPremiumWriterOutputRepairPrompt({
+          brief,
+          previousWriterOutput: writerOutput,
+          issues: writerOutputIssues.map((issue) => issue.code),
+        }),
+        schema: PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
+        signal: args.signal,
+      }),
+      claimPlan,
+    });
+    const repairedWriterOutput = repairedParsedWriterOutput.writerOutput;
+    writerOutputIssues = repairedParsedWriterOutput.legacyWrapped
+      ? []
+      : validatePremiumWriterOutputV1({
+          writerOutput: repairedWriterOutput,
+          claimPlan,
+          factGraph,
+          jobDemandGraph,
+          brief,
+        });
+    if (writerOutputIssues.length > 0) {
+      args.onFailure?.({
+        stage: "validation",
+        reason: "repair_failed_validation",
+        contextClass,
+        issues: writerOutputIssues.map((issue) => issue.code),
+      });
+      return null;
+    }
+    writerOutput = repairedWriterOutput;
+  }
+
+  let bodyParts = PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(
+    toCoverLetterBodyParts(writerOutput),
   );
 
   let issues = validatePremiumCoverLetterBodyParts({ bodyParts, brief });
