@@ -3506,10 +3506,10 @@ export function ProposalDocumentRenderer({
             spellCheck: true,
             "aria-label": label,
             "data-proposal-editable-text": "true",
-            onInput: (event: React.FormEvent<HTMLElement>) => {
-              onCommit(
-                normalizeEditableText(event.currentTarget.textContent ?? ""),
-              );
+            onInput: () => {
+              // Keep preview editing browser-native while focused.
+              // Committing on every input makes React re-render the
+              // contentEditable text node and causes caret drift/stalls.
             },
             onBlur: (event: React.FocusEvent<HTMLElement>) => {
               const normalized = normalizeEditableText(
@@ -3523,12 +3523,7 @@ export function ProposalDocumentRenderer({
             onPaste: (event: React.ClipboardEvent<HTMLElement>) => {
               event.preventDefault();
               const pastedText = getClipboardPlainText(event);
-              const normalized = insertPlainTextIntoEditableTarget(
-                event.currentTarget,
-                pastedText,
-              );
-              event.currentTarget.textContent = normalized;
-              onCommit(normalized);
+              insertPlainTextIntoEditableTarget(event.currentTarget, pastedText);
             },
             onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
               if (event.key === "Escape") {
@@ -3550,11 +3545,7 @@ export function ProposalDocumentRenderer({
 
               event.preventDefault();
               if (behavior.multiline && event.shiftKey) {
-                const normalized = insertPlainTextIntoEditableTarget(
-                  event.currentTarget,
-                  "\n",
-                );
-                onCommit(normalized);
+                insertPlainTextIntoEditableTarget(event.currentTarget, "\n");
                 return;
               }
 
