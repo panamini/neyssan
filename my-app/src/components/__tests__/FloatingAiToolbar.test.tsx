@@ -8,6 +8,7 @@ import FloatingAiToolbar, {
 } from "../FloatingAiToolbar";
 
 let toolbarMeasurable = true;
+let collapsedDensityMatches = false;
 
 vi.mock("@/components/ui/body-portal", () => ({
   BodyPortal: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -17,6 +18,32 @@ vi.mock("@/components/ui/body-portal", () => ({
 describe("FloatingAiToolbar", () => {
   beforeEach(() => {
     toolbarMeasurable = true;
+    collapsedDensityMatches = false;
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      writable: true,
+      value: 1024,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      writable: true,
+      value: 768,
+    });
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: vi.fn((query: string) => ({
+        matches:
+          query === "(max-width: 420px)" && collapsedDensityMatches,
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
     vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(
       function offsetWidthMock() {
         return (this as HTMLElement).dataset.inlineAiToolbar === "true" &&
@@ -36,6 +63,16 @@ describe("FloatingAiToolbar", () => {
   });
 
   afterEach(() => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      writable: true,
+      value: 1024,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      writable: true,
+      value: 768,
+    });
     vi.restoreAllMocks();
     document.body.innerHTML = "";
   });
@@ -260,6 +297,54 @@ describe("FloatingAiToolbar", () => {
     expect(styles).toMatch(/\.ds-ask-ai__input\s*\{[^}]*box-shadow:\s*none !important/s);
   });
 
+  it("keeps AI action labels visible in short desktop windows", () => {
+    const styles = readFileSync(resolve(process.cwd(), "src/styles/ds-v2.css"), "utf8");
+
+    expect(styles).toContain(".ds-ai-toolbar__ai-label");
+    expect(styles).not.toContain("@media (max-height: 680px)");
+  });
+
+  it("keeps the very collapsed toolbar compact and icon-only for edit", () => {
+    const styles = readFileSync(resolve(process.cwd(), "src/styles/ds-v2.css"), "utf8");
+
+    expect(styles).toMatch(
+      /@media \(max-width: 640px\)[\s\S]*?\.ds-ai-toolbar__btn--edit\s*\{[\s\S]*?width:\s*28px;[\s\S]*?padding:\s*0;/,
+    );
+    expect(styles).toMatch(
+      /@media \(max-width: 640px\)[\s\S]*?\.ds-ai-toolbar\s*\{[\s\S]*?gap:\s*3px;[\s\S]*?padding-inline:\s*var\(--s1\);/,
+    );
+    expect(styles).toMatch(
+      /@media \(max-width: 640px\)[\s\S]*?\.ds-ai-toolbar__btn\s*\{[\s\S]*?padding:\s*0 var\(--s2\);/,
+    );
+    expect(styles).toMatch(
+      /@media \(max-width: 640px\)[\s\S]*?\.ds-ai-toolbar__btn--edit \.ds-ai-toolbar__btn-label\s*\{[\s\S]*?display:\s*none;/,
+    );
+    expect(styles).toMatch(
+      /@media \(max-width: 640px\)[\s\S]*?\.ds-ai-toolbar__actions \.ds-ai-toolbar__divider:not\(\.ds-ai-toolbar__divider--compact-edit\)\s*\{[\s\S]*?display:\s*none;/,
+    );
+    expect(styles).toMatch(
+      /@media \(max-width: 420px\)[\s\S]*?\.ds-ai-toolbar\s*\{[\s\S]*?gap:\s*2px;[\s\S]*?min-height:\s*32px;[\s\S]*?padding:\s*0 2px;/,
+    );
+    expect(styles).toMatch(
+      /@media \(max-width: 420px\)[\s\S]*?\.ds-ai-toolbar__actions \.ds-ai-toolbar__divider\s*\{[\s\S]*?display:\s*none;/,
+    );
+    expect(styles).toMatch(
+      /@media \(max-width: 420px\)[\s\S]*?\.ds-ai-toolbar__divider--compact-edit\s*\{[\s\S]*?display:\s*none !important;/,
+    );
+    expect(styles).not.toContain(
+      '.ds-ai-toolbar__actions .ds-ai-toolbar__btn:not(:last-child):not([aria-label="Ask"])',
+    );
+    expect(styles).toMatch(
+      /@media \(max-width: 420px\)[\s\S]*?\.ds-ai-toolbar__actions \.ds-ai-toolbar__btn--ai-action:not\(\[aria-label="Ask"\]\)\s*\{[\s\S]*?display:\s*none;/,
+    );
+    expect(styles).toMatch(
+      /@media \(max-width: 420px\)[\s\S]*?\.ds-ai-toolbar__btn--ai-action\s*\{[\s\S]*?width:\s*26px;[\s\S]*?padding:\s*0;/,
+    );
+    expect(styles).toMatch(
+      /@media \(max-width: 420px\)[\s\S]*?\.ds-ai-toolbar__btn--edit\s*\{[\s\S]*?display:\s*inline-flex !important;[\s\S]*?width:\s*26px;[\s\S]*?padding:\s*0;/,
+    );
+  });
+
   it("focuses the Ask field when the inline prompt opens", async () => {
     render(
       <FloatingAiToolbar
@@ -456,6 +541,174 @@ describe("FloatingAiToolbar", () => {
     await waitFor(() => {
       expect(toolbar).toHaveAttribute("data-placement", "below");
       expect(toolbar).toHaveStyle({ top: "60px" });
+    });
+  });
+
+  it("uses document bottom center only when collapsed density is active", async () => {
+    collapsedDensityMatches = true;
+    const stage = document.createElement("div");
+    stage.className = "dasti-cv-paper-stage";
+    const paper = document.createElement("div");
+    paper.dataset.documentPage = "true";
+    stage.appendChild(paper);
+    document.body.appendChild(stage);
+
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function getBoundingClientRectMock() {
+        if (this === stage) {
+          return new DOMRect(100, 0, 600, 500);
+        }
+        if (this === paper) {
+          return new DOMRect(140, 0, 520, 500);
+        }
+
+        return new DOMRect(0, 0, 0, 0);
+      },
+    );
+
+    render(
+      <FloatingAiToolbar
+        anchor={{
+          left: 220,
+          top: 200,
+          bottom: 216,
+          leftEdge: 190,
+          rightEdge: 250,
+          containerLeft: 100,
+          containerRight: 700,
+          containerTop: 0,
+          containerBottom: 500,
+        }}
+        open
+        onClose={vi.fn()}
+        onRunAction={vi.fn()}
+      />,
+    );
+
+    const toolbar = screen.getByRole("toolbar", { name: "Selected text actions" });
+    await waitFor(() => {
+      expect(toolbar).toHaveAttribute("data-placement", "center");
+      expect(toolbar).toHaveStyle({ left: "290px" });
+      expect(toolbar).toHaveStyle({ top: "448px" });
+    });
+  });
+
+  it("keeps selection anchoring in narrow windows while collapsed density is inactive", async () => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      writable: true,
+      value: 640,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      writable: true,
+      value: 700,
+    });
+    const stage = document.createElement("div");
+    stage.className = "dasti-cv-paper-stage";
+    const paper = document.createElement("div");
+    paper.dataset.documentPage = "true";
+    stage.appendChild(paper);
+    document.body.appendChild(stage);
+
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function getBoundingClientRectMock() {
+        if (this === stage) {
+          return new DOMRect(100, 0, 600, 500);
+        }
+        if (this === paper) {
+          return new DOMRect(140, 0, 520, 500);
+        }
+
+        return new DOMRect(0, 0, 0, 0);
+      },
+    );
+
+    render(
+      <FloatingAiToolbar
+        anchor={{
+          left: 220,
+          top: 200,
+          bottom: 216,
+          leftEdge: 190,
+          rightEdge: 250,
+          containerLeft: 100,
+          containerRight: 700,
+          containerTop: 0,
+          containerBottom: 500,
+        }}
+        open
+        onClose={vi.fn()}
+        onRunAction={vi.fn()}
+      />,
+    );
+
+    const toolbar = screen.getByRole("toolbar", { name: "Selected text actions" });
+    await waitFor(() => {
+      expect(toolbar).toHaveAttribute("data-cv-ai-surface-mode", "popover");
+      expect(toolbar).toHaveAttribute("data-placement", "above");
+      expect(toolbar).toHaveStyle({ left: "110px" });
+      expect(toolbar).toHaveStyle({ top: "144px" });
+    });
+  });
+
+  it("uses collapsed bottom center in narrow windows only when icon density is active", async () => {
+    collapsedDensityMatches = true;
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      writable: true,
+      value: 390,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      writable: true,
+      value: 700,
+    });
+    const stage = document.createElement("div");
+    stage.className = "dasti-cv-paper-stage";
+    const paper = document.createElement("div");
+    paper.dataset.documentPage = "true";
+    stage.appendChild(paper);
+    document.body.appendChild(stage);
+
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function getBoundingClientRectMock() {
+        if (this === stage) {
+          return new DOMRect(100, 0, 600, 500);
+        }
+        if (this === paper) {
+          return new DOMRect(140, 0, 520, 500);
+        }
+
+        return new DOMRect(0, 0, 0, 0);
+      },
+    );
+
+    render(
+      <FloatingAiToolbar
+        anchor={{
+          left: 220,
+          top: 200,
+          bottom: 216,
+          leftEdge: 190,
+          rightEdge: 250,
+          containerLeft: 100,
+          containerRight: 700,
+          containerTop: 0,
+          containerBottom: 500,
+        }}
+        open
+        onClose={vi.fn()}
+        onRunAction={vi.fn()}
+      />,
+    );
+
+    const toolbar = screen.getByRole("toolbar", { name: "Selected text actions" });
+    await waitFor(() => {
+      expect(toolbar).toHaveAttribute("data-cv-ai-surface-mode", "popover");
+      expect(toolbar).toHaveAttribute("data-placement", "center");
+      expect(toolbar).toHaveStyle({ left: "149px" });
+      expect(toolbar).toHaveStyle({ top: "448px" });
     });
   });
 

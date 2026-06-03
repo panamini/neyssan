@@ -229,7 +229,7 @@ function getEditableNodeText(element: HTMLElement): string {
   clone
     .querySelectorAll("[data-proposal-editor-control='true']")
     .forEach((node) => node.remove());
-  return clone.textContent ?? "";
+  return (clone.textContent ?? "").replaceAll("\u200B", "");
 }
 
 async function selectContentEditableText(element: HTMLElement, text: string) {
@@ -284,15 +284,26 @@ function captureAiTelemetryEvents() {
 }
 
 function getToolbarButton(label: string): HTMLButtonElement {
-  const match = screen
-    .getAllByText(label)
-    .map((node) => node.closest("button"))
-    .find((button): button is HTMLButtonElement =>
-      Boolean(
-        button?.classList.contains("dasti-inline-ai-toolbar__action") ||
-          button?.classList.contains("ds-ai-toolbar__btn"),
-      ),
+  const isToolbarButton = (
+    button: HTMLElement | null,
+  ): button is HTMLButtonElement =>
+    Boolean(
+      button?.classList.contains("dasti-inline-ai-toolbar__action") ||
+        button?.classList.contains("ds-ai-toolbar__btn"),
     );
+  const match =
+    document.querySelector<HTMLButtonElement>(
+      `.ds-ai-toolbar__btn[aria-label="${label}"]`,
+    ) ??
+    screen
+      .queryAllByRole("button", { name: label })
+      .find((button): button is HTMLButtonElement =>
+        isToolbarButton(button),
+      ) ??
+    screen
+      .queryAllByText(label)
+      .map((node) => node.closest("button"))
+      .find(isToolbarButton);
 
   if (!match) {
     throw new Error(`Missing toolbar button: ${label}`);
@@ -592,6 +603,7 @@ describe("ProposalDisplay", () => {
     const firstItem = getEditableProposalListItems()[0];
     setEditableNodeText(firstItem, "Updated with icon");
     fireEvent.input(getProposalBodyEditor());
+    fireEvent.blur(getProposalBodyEditor());
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-content")).toHaveTextContent(
@@ -603,12 +615,19 @@ describe("ProposalDisplay", () => {
     });
   });
 
-  it("commits paragraph input without requiring blur", async () => {
+  it("keeps paragraph input in the live editor until blur", async () => {
     renderPreviewEditableProposal();
 
+    const bodyEditor = getProposalBodyEditor();
     const paragraph = getEditableProposalParagraphs()[0];
     setEditableNodeText(paragraph, "Saved before blur.");
-    fireEvent.input(getProposalBodyEditor());
+    fireEvent.input(bodyEditor);
+
+    expect(screen.getByTestId("proposal-content")).not.toHaveTextContent(
+      "Saved before blur.",
+    );
+
+    fireEvent.blur(bodyEditor);
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-content")).toHaveTextContent(
@@ -674,6 +693,7 @@ describe("ProposalDisplay", () => {
     const newParagraph = paragraphs[1];
     setEditableNodeText(newParagraph, "Typed in new paragraph text after");
     fireEvent.input(getProposalBodyEditor());
+    fireEvent.blur(getProposalBodyEditor());
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-document").textContent).toContain(
@@ -687,6 +707,32 @@ describe("ProposalDisplay", () => {
     getProposalBodyEditor().focus();
     expect(fireEvent.keyDown(getProposalBodyEditor(), { key: "Escape" }))
       .toBe(false);
+  });
+
+  it("keeps repeated Enter creating new visible proposal paragraphs", async () => {
+    renderPreviewEditableProposal();
+
+    const bodyEditor = getProposalBodyEditor();
+    const paragraph = getEditableProposalParagraphs()[0];
+    setEditableNodeText(paragraph, "Keyboard");
+    fireEvent.input(bodyEditor);
+    placeContentEditableCaret(paragraph, "end");
+
+    expect(fireEvent.keyDown(bodyEditor, { key: "Enter" })).toBe(false);
+    await waitFor(() => {
+      expect(getEditableProposalParagraphs()).toHaveLength(2);
+      expect(getContentEditableCaretOffset(getEditableProposalParagraphs()[1]))
+        .toBe(0);
+    });
+
+    expect(fireEvent.keyDown(getProposalBodyEditor(), { key: "Enter" }))
+      .toBe(false);
+    await waitFor(() => {
+      const paragraphs = getEditableProposalParagraphs();
+      expect(paragraphs).toHaveLength(3);
+      expect(document.activeElement).toBe(getProposalBodyEditor());
+      expect(getContentEditableCaretOffset(paragraphs[2])).toBe(0);
+    });
   });
 
   it("keeps Shift+Enter inside the same paragraph and moves the caret after the soft break", async () => {
@@ -718,16 +764,72 @@ describe("ProposalDisplay", () => {
     const bodyEditor = getProposalBodyEditor();
     const paragraph = getEditableProposalParagraphs()[0];
     setEditableNodeText(paragraph, "Keyboard");
-    fireEvent.input(bodyEditor);
     placeContentEditableCaretAfterText(paragraph, "Key");
 
     expect(fireEvent.keyDown(bodyEditor, { key: "Backspace" })).toBe(true);
     setEditableNodeText(paragraph, "Keboard");
     fireEvent.input(bodyEditor);
+    expect(screen.getByTestId("proposal-document").textContent).not.toContain(
+      '"text":"Keboard"',
+    );
+    fireEvent.blur(bodyEditor);
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-document").textContent).toContain(
         '"text":"Keboard"',
+      );
+    });
+  });
+
+  it("lets repeated Backspace delete one character at a time", async () => {
+    renderPreviewEditableProposal();
+
+    let bodyEditor = getProposalBodyEditor();
+    let paragraph = getEditableProposalParagraphs()[0];
+    setEditableNodeText(paragraph, "Keyboard");
+    placeContentEditableCaretAfterText(paragraph, "Key");
+
+    expect(fireEvent.keyDown(bodyEditor, { key: "Backspace" })).toBe(true);
+    setEditableNodeText(paragraph, "Keboard");
+    fireEvent.input(bodyEditor);
+    expect(getEditableNodeText(paragraph)).toBe("Keboard");
+
+    bodyEditor = getProposalBodyEditor();
+    paragraph = getEditableProposalParagraphs()[0];
+    placeContentEditableCaretAfterText(paragraph, "Ke");
+    expect(fireEvent.keyDown(bodyEditor, { key: "Backspace" })).toBe(true);
+    setEditableNodeText(paragraph, "Kboard");
+    fireEvent.input(bodyEditor);
+    expect(getEditableNodeText(paragraph)).toBe("Kboard");
+    fireEvent.blur(bodyEditor);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-document").textContent).toContain(
+        '"text":"Kboard"',
+      );
+      expect(screen.getByTestId("proposal-document").textContent).not.toContain(
+        '"text":""',
+      );
+    });
+  });
+
+  it("lets Backspace delete a soft line break inside a paragraph", async () => {
+    renderPreviewEditableProposal();
+
+    const bodyEditor = getProposalBodyEditor();
+    const paragraph = getEditableProposalParagraphs()[0];
+    setEditableNodeText(paragraph, "Keyboard\ntext");
+    placeContentEditableCaretAfterText(paragraph, "Keyboard\n");
+
+    expect(fireEvent.keyDown(bodyEditor, { key: "Backspace" })).toBe(true);
+    setEditableNodeText(paragraph, "Keyboardtext");
+    fireEvent.input(bodyEditor);
+    expect(getEditableNodeText(paragraph)).toBe("Keyboardtext");
+    fireEvent.blur(bodyEditor);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-document").textContent).toContain(
+        '"text":"Keyboardtext"',
       );
     });
   });
@@ -738,16 +840,117 @@ describe("ProposalDisplay", () => {
     const bodyEditor = getProposalBodyEditor();
     const paragraph = getEditableProposalParagraphs()[0];
     setEditableNodeText(paragraph, "Keyboard");
-    fireEvent.input(bodyEditor);
     placeContentEditableCaretAfterText(paragraph, "Key");
 
     expect(fireEvent.keyDown(bodyEditor, { key: "Delete" })).toBe(true);
     setEditableNodeText(paragraph, "Keyoard");
     fireEvent.input(bodyEditor);
+    expect(getEditableNodeText(paragraph)).toBe("Keyoard");
+    fireEvent.blur(bodyEditor);
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-document").textContent).toContain(
         '"text":"Keyoard"',
+      );
+    });
+  });
+
+  it("merges with the previous paragraph on boundary Backspace", async () => {
+    renderPreviewEditableProposal(
+      "Dear Hiring Team,\n\nFirst paragraph.\n\nSecond paragraph.\n\nKind regards,\nAlex",
+    );
+
+    const secondParagraph = getEditableProposalParagraphs()[1];
+    placeContentEditableCaret(secondParagraph, "start");
+
+    expect(fireEvent.keyDown(getProposalBodyEditor(), { key: "Backspace" }))
+      .toBe(false);
+
+    await waitFor(() => {
+      const paragraphs = getEditableProposalParagraphs();
+      expect(paragraphs).toHaveLength(1);
+      expect(paragraphs[0]).toHaveTextContent(
+        "First paragraph. Second paragraph.",
+      );
+      expect(getContentEditableCaretOffset(paragraphs[0])).toBe(
+        "First paragraph. ".length,
+      );
+    });
+  });
+
+  it("merges with the next paragraph on boundary Delete", async () => {
+    renderPreviewEditableProposal(
+      "Dear Hiring Team,\n\nFirst paragraph.\n\nSecond paragraph.\n\nKind regards,\nAlex",
+    );
+
+    const firstParagraph = getEditableProposalParagraphs()[0];
+    placeContentEditableCaret(firstParagraph, "end");
+
+    expect(fireEvent.keyDown(getProposalBodyEditor(), { key: "Delete" }))
+      .toBe(false);
+
+    await waitFor(() => {
+      const paragraphs = getEditableProposalParagraphs();
+      expect(paragraphs).toHaveLength(1);
+      expect(paragraphs[0]).toHaveTextContent(
+        "First paragraph. Second paragraph.",
+      );
+      expect(getContentEditableCaretOffset(paragraphs[0])).toBe(
+        "First paragraph.".length,
+      );
+    });
+  });
+
+  it("removes an empty paragraph created by Enter with boundary Backspace", async () => {
+    renderPreviewEditableProposal();
+
+    const bodyEditor = getProposalBodyEditor();
+    const paragraph = getEditableProposalParagraphs()[0];
+    setEditableNodeText(paragraph, "Keyboard");
+    placeContentEditableCaret(paragraph, "end");
+    fireEvent.keyDown(bodyEditor, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(getEditableProposalParagraphs()).toHaveLength(2);
+    });
+
+    expect(fireEvent.keyDown(getProposalBodyEditor(), { key: "Backspace" }))
+      .toBe(false);
+
+    await waitFor(() => {
+      const paragraphs = getEditableProposalParagraphs();
+      expect(paragraphs).toHaveLength(1);
+      expect(paragraphs[0]).toHaveTextContent("Keyboard");
+      expect(getContentEditableCaretOffset(paragraphs[0])).toBe(
+        "Keyboard".length,
+      );
+    });
+  });
+
+  it("removes an empty paragraph after the caret with boundary Delete", async () => {
+    renderPreviewEditableProposal();
+
+    const bodyEditor = getProposalBodyEditor();
+    const paragraph = getEditableProposalParagraphs()[0];
+    setEditableNodeText(paragraph, "Keyboard");
+    placeContentEditableCaret(paragraph, "end");
+    fireEvent.keyDown(bodyEditor, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(getEditableProposalParagraphs()).toHaveLength(2);
+    });
+
+    const firstParagraph = getEditableProposalParagraphs()[0];
+    placeContentEditableCaret(firstParagraph, "end");
+    expect(fireEvent.keyDown(getProposalBodyEditor(), { key: "Delete" }))
+      .toBe(false);
+
+    await waitFor(() => {
+      const paragraphs = getEditableProposalParagraphs();
+      expect(paragraphs).toHaveLength(1);
+      expect(paragraphs[0]).toHaveTextContent("Keyboard");
+      expect(getContentEditableCaretOffset(paragraphs[0])).toBe(
+        "Keyboard".length,
       );
     });
   });
@@ -798,6 +1001,7 @@ describe("ProposalDisplay", () => {
     const firstItem = listItems[0];
     setEditableNodeText(firstItem, "");
     fireEvent.input(getProposalBodyEditor());
+    fireEvent.blur(getProposalBodyEditor());
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-content")).toHaveTextContent(

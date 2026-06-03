@@ -1039,6 +1039,14 @@
     padding: 0;
   }
 
+  .ds-ai-toolbar__ai-icon {
+    display: none;
+  }
+
+  .ds-ai-toolbar__ai-label {
+    display: inline;
+  }
+
   .ds-ai-toolbar__btn:hover:not(:disabled) {
     background: var(--sf2);
   }
@@ -1072,6 +1080,18 @@
       height: auto;
       min-height: 36px;
       flex-wrap: nowrap;
+      gap: 3px;
+      padding-inline: var(--s1);
+    }
+
+    .ds-ai-toolbar__actions,
+    .ds-ai-toolbar__format-actions,
+    .ds-ai-toolbar__compact-format-actions {
+      gap: 3px;
+    }
+
+    .ds-ai-toolbar__btn {
+      padding: 0 var(--s2);
     }
 
     .ds-ai-toolbar__format-actions {
@@ -1087,6 +1107,19 @@
       display: inline-flex;
     }
 
+    .ds-ai-toolbar__actions .ds-ai-toolbar__divider:not(.ds-ai-toolbar__divider--compact-edit) {
+      display: none;
+    }
+
+    .ds-ai-toolbar__btn--edit {
+      width: 28px;
+      padding: 0;
+    }
+
+    .ds-ai-toolbar__btn--edit .ds-ai-toolbar__btn-label {
+      display: none;
+    }
+
     .ds-ai-toolbar__compact-format-actions[data-selection-toolbar-mode="format"] {
       display: inline-flex !important;
     }
@@ -1098,19 +1131,55 @@
 
   @media (max-width: 420px) {
     .ds-ai-toolbar {
-      padding: 0 var(--s1);
+      gap: 2px;
+      min-height: 32px;
+      padding: 0 2px;
+    }
+
+    .ds-ai-toolbar__actions,
+    .ds-ai-toolbar__format-actions,
+    .ds-ai-toolbar__compact-format-actions {
+      gap: 2px;
     }
 
     .ds-ai-toolbar__btn {
-      padding: 0 var(--s2);
+      height: 26px;
+      padding: 0 var(--s1);
     }
 
     .ds-ai-toolbar__btn--icon {
-      width: 28px;
+      width: 26px;
       padding: 0;
     }
 
-    .ds-ai-toolbar__actions .ds-ai-toolbar__btn:not(:last-child):not([aria-label="Ask"]) {
+    .ds-ai-toolbar__actions .ds-ai-toolbar__divider {
+      display: none;
+    }
+
+    .ds-ai-toolbar__divider--compact-edit {
+      display: none !important;
+    }
+
+    .ds-ai-toolbar__actions .ds-ai-toolbar__btn--ai-action:not([aria-label="Ask"]) {
+      display: none;
+    }
+
+    .ds-ai-toolbar__btn--ai-action {
+      width: 26px;
+      padding: 0;
+    }
+
+    .ds-ai-toolbar__btn--edit {
+      display: inline-flex !important;
+      width: 26px;
+      padding: 0;
+    }
+
+    .ds-ai-toolbar__ai-icon {
+      display: inline-flex;
+    }
+
+    .ds-ai-toolbar__ai-label {
       display: none;
     }
 

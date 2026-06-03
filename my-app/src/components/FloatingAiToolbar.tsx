@@ -1,7 +1,15 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { BodyPortal } from "@/components/ui/body-portal";
-import { ArrowLeft, Pencil, SendHorizontal } from "@/lib/icons";
+import {
+  ArrowLeft,
+  CornersIn,
+  PenNib,
+  SendHorizontal,
+  Sparkle,
+  TextT,
+  Wrench,
+} from "@/lib/icons";
 import {
   getVisibleToolbarAiActions,
   VISIBLE_TOOLBAR_AI_ACTIONS,
@@ -11,6 +19,7 @@ import {
 import {
   useDocumentAiSurfacePosition,
   type DocumentAiSurfacePosition,
+  type DocumentAiSurfacePlacementStrategy,
 } from "@/lib/document-ai-surface-position";
 import {
   getInlinePaperFormattingActionsForSelection,
@@ -38,6 +47,7 @@ const TOOLBAR_FADE_TRANSITION = {
 const COLLAPSED_SHELL_WIDTH = 36;
 const INITIAL_TOOLBAR_WIDTH = 220;
 const INITIAL_TOOLBAR_HEIGHT = 48;
+const COLLAPSED_DENSITY_MEDIA_QUERY = "(max-width: 420px)";
 
 const ASK_SUGGESTIONS = [
   "Make this more persuasive…",
@@ -51,6 +61,13 @@ const ASK_SUGGESTIONS = [
   "Tighten this without losing meaning…",
   "Make it sound less robotic…",
 ] as const;
+
+const AI_ACTION_ICONS: Partial<Record<InlineAiActionId, React.ReactNode>> = {
+  rewrite: <PenNib size={14} aria-hidden="true" />,
+  shorten: <CornersIn size={14} aria-hidden="true" />,
+  fix_grammar: <Wrench size={14} aria-hidden="true" />,
+  custom: <Sparkle size={14} aria-hidden="true" />,
+};
 
 export type InlineAiActionId = AiActionId;
 
@@ -95,6 +112,7 @@ type FloatingSelectionToolbarShellProps = {
   onSurfacePlacementChange?: (
     position: DocumentAiSurfacePosition | null,
   ) => void;
+  placementStrategy?: DocumentAiSurfacePlacementStrategy;
   children: (args: { isPositionReady: boolean }) => React.ReactNode;
 };
 
@@ -153,6 +171,40 @@ function isSameMetrics(current: ToolbarMetrics, next: ToolbarMetrics): boolean {
   );
 }
 
+function readCollapsedSelectionToolbarDensity(): boolean {
+  if (typeof window === "undefined") return false;
+  if (typeof window.matchMedia === "function") {
+    return window.matchMedia(COLLAPSED_DENSITY_MEDIA_QUERY).matches;
+  }
+  return window.innerWidth <= 420;
+}
+
+function useCollapsedSelectionToolbarDensity(open: boolean): boolean {
+  const [isCollapsedDensity, setIsCollapsedDensity] = React.useState(() =>
+    readCollapsedSelectionToolbarDensity(),
+  );
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const update = () => {
+      setIsCollapsedDensity(readCollapsedSelectionToolbarDensity());
+    };
+    update();
+
+    if (typeof window.matchMedia !== "function") {
+      window.addEventListener("resize", update);
+      return () => window.removeEventListener("resize", update);
+    }
+
+    const mediaQuery = window.matchMedia(COLLAPSED_DENSITY_MEDIA_QUERY);
+    mediaQuery.addEventListener?.("change", update);
+    return () => mediaQuery.removeEventListener?.("change", update);
+  }, [open]);
+
+  return isCollapsedDensity;
+}
+
 export function FloatingSelectionToolbarShell({
   anchor,
   open,
@@ -161,6 +213,7 @@ export function FloatingSelectionToolbarShell({
   contentReady = true,
   onClose,
   onSurfacePlacementChange,
+  placementStrategy = "selectionAnchor",
   children,
 }: FloatingSelectionToolbarShellProps) {
   const [hasMeasuredInitialMetrics, setHasMeasuredInitialMetrics] =
@@ -244,6 +297,7 @@ export function FloatingSelectionToolbarShell({
     desiredSurfaceSize,
     mode: "toolbar",
     enabled: open && anchor !== null,
+    placementStrategy,
   });
   const shouldRenderToolbar = isToolbarMounted && renderAnchor !== null;
   const isPositionReady =
@@ -327,6 +381,7 @@ export function FloatingAiToolbar({
   const [metrics, setMetrics] = React.useState<ToolbarMetrics>(EMPTY_METRICS);
   const [registeredFormattingActions, setRegisteredFormattingActions] =
     React.useState<FloatingSelectionToolbarAction[]>([]);
+  const isCollapsedDensity = useCollapsedSelectionToolbarDensity(open);
 
   const panelRef = React.useRef<HTMLDivElement | null>(null);
   const actionShellRef = React.useRef<HTMLDivElement | null>(null);
@@ -528,6 +583,9 @@ export function FloatingAiToolbar({
       desiredSurfaceSize={desiredSurfaceSize}
       panelRef={panelRef}
       contentReady={hasMeasuredToolbarMetrics}
+      placementStrategy={
+        isCollapsedDensity ? "documentBottomCenter" : "selectionAnchor"
+      }
       onClose={onClose}
       onSurfacePlacementChange={(position) => {
         onSurfacePlacementChange?.(
@@ -594,16 +652,27 @@ export function FloatingAiToolbar({
                   {isAskOpen && isAskAction ? null : (
                     <button
                       type="button"
-                      className="ds-ai-toolbar__btn"
+                      className="ds-ai-toolbar__btn ds-ai-toolbar__btn--ai-action"
                       onClick={() => handlePresetAction(action)}
                       onMouseDown={(event) => {
                         event.preventDefault();
                       }}
                       disabled={isLoading}
                       aria-busy={isActionLoading || undefined}
+                      aria-label={action.label}
                       aria-pressed={isActive}
+                      title={action.label}
                     >
-                      {action.label}
+                      <span
+                        className="ds-ai-toolbar__ai-icon"
+                        aria-hidden="true"
+                      >
+                        {AI_ACTION_ICONS[action.id as InlineAiActionId] ??
+                          action.label}
+                      </span>
+                      <span className="ds-ai-toolbar__ai-label">
+                        {action.label}
+                      </span>
                       {isActionLoading ? (
                         <span className="ds-btn__period" aria-hidden="true">
                           .
@@ -631,7 +700,7 @@ export function FloatingAiToolbar({
                   aria-label={compactFormattingLabel}
                   title={compactFormattingLabel}
                 >
-                  <Pencil size={14} aria-hidden="true" />
+                  <TextT size={14} aria-hidden="true" />
                   <span className="ds-ai-toolbar__btn-label">
                     {compactFormattingLabel}
                   </span>

@@ -12,6 +12,9 @@ export type DocumentAiSurfacePlacement =
 export type DocumentAiSurfaceState = "toolbar" | "loading" | "result" | "applied";
 export type DocumentAiSurfaceMode = "popover" | "sheet";
 export type DocumentAiSurfaceBreakpoint = "desktop" | "narrow";
+export type DocumentAiSurfacePlacementStrategy =
+  | "selectionAnchor"
+  | "documentBottomCenter";
 
 export type DocumentAiSurfaceRect = {
   left: number;
@@ -51,6 +54,7 @@ export type DocumentAiSurfacePositionInput = {
   breakpoint: DocumentAiSurfaceBreakpoint;
   preferredPlacement?: DocumentAiSurfacePlacement | null;
   preferredSurfaceCenterX?: number | null;
+  placementStrategy?: DocumentAiSurfacePlacementStrategy;
   safeMargin?: number;
   gap?: number;
   edgePadding?: number;
@@ -71,7 +75,6 @@ const DEFAULT_EDGE_PADDING = 4;
 const DOCUMENT_OVERFLOW_ALLOWANCE = 160;
 const SHEET_MAX_VIEWPORT_RATIO = 0.78;
 const RESULT_MIN_CONNECTED_HEIGHT = 156;
-const COMPACT_TOOLBAR_VIEWPORT_HEIGHT = 680;
 
 export function documentAiSurfaceRectFromDom(
   rect: DOMRect | ClientRect,
@@ -99,6 +102,32 @@ function finiteOr(value: number | undefined, fallback: number): number {
 function normalizeRect(rect: DocumentAiSurfaceRect | null | undefined) {
   if (!rect || rect.width <= 0 || rect.height <= 0) return null;
   return rect;
+}
+
+function intersectBoundsWithRect(
+  bounds: Bounds,
+  rect: DocumentAiSurfaceRect | null | undefined,
+): Bounds {
+  const normalized = normalizeRect(rect);
+  if (!normalized) return bounds;
+
+  const left = Math.max(bounds.left, normalized.left);
+  const right = Math.min(bounds.right, normalized.right);
+  const top = Math.max(bounds.top, normalized.top);
+  const bottom = Math.min(bounds.bottom, normalized.bottom);
+
+  if (right <= left || bottom <= top) {
+    return bounds;
+  }
+
+  return {
+    left,
+    right,
+    top,
+    bottom,
+    width: right - left,
+    height: bottom - top,
+  };
 }
 
 function buildBounds({
@@ -339,7 +368,7 @@ export function computeDocumentAiSurfacePlacement(
   const desiredWidth = Math.max(1, input.desiredSurfaceSize.width);
   const desiredHeight = Math.max(1, input.desiredSurfaceSize.height);
 
-  if (input.breakpoint === "narrow") {
+  if (input.breakpoint === "narrow" && input.mode !== "toolbar") {
     const maxWidth = Math.max(1, input.viewportRect.width - safeMargin * 2);
     const maxHeight = Math.max(
       1,
@@ -385,6 +414,52 @@ export function computeDocumentAiSurfacePlacement(
     1,
     Math.min(desiredWidth, Math.max(1, bounds.width)),
   );
+
+  if (
+    input.mode === "toolbar" &&
+    input.placementStrategy === "documentBottomCenter"
+  ) {
+    const documentBounds = intersectBoundsWithRect(
+      bounds,
+      input.paperRect ?? input.visibleStageRect,
+    );
+    const strategySurfaceWidth = Math.max(
+      1,
+      Math.min(desiredWidth, Math.max(1, documentBounds.width)),
+    );
+    const maxHeight = Math.max(
+      1,
+      Math.min(desiredHeight, documentBounds.height),
+    );
+    const desiredLeft =
+      documentBounds.left +
+      Math.max(0, documentBounds.width - strategySurfaceWidth) / 2;
+    const desiredTop = documentBounds.bottom - maxHeight;
+    const left = clamp(
+      desiredLeft,
+      documentBounds.left,
+      documentBounds.right - strategySurfaceWidth,
+    );
+    const top = clamp(
+      desiredTop,
+      documentBounds.top,
+      documentBounds.bottom - maxHeight,
+    );
+
+    return {
+      placement: "center",
+      left,
+      top,
+      maxWidth: strategySurfaceWidth,
+      maxHeight,
+      clamped:
+        Math.round(left) !== Math.round(desiredLeft) ||
+        Math.round(top) !== Math.round(desiredTop) ||
+        strategySurfaceWidth < desiredWidth ||
+        maxHeight < desiredHeight,
+      mode: "popover",
+    };
+  }
 
   if (!anchor) {
     const maxHeight = Math.max(1, Math.min(desiredHeight, bounds.height));
@@ -455,33 +530,20 @@ export function computeDocumentAiSurfacePlacement(
       : placement === "below"
         ? Math.max(1, Math.min(desiredHeight, bounds.bottom - anchorGeometry.bottom - gap))
         : sideMaxHeight;
-  const isCompactToolbarCenterFallback =
-    placement === "center" &&
-    input.mode === "toolbar" &&
-    input.viewportRect.height < COMPACT_TOOLBAR_VIEWPORT_HEIGHT;
-  const compactCenterRect =
-    isCompactToolbarCenterFallback && input.paperRect
-      ? normalizeRect(input.paperRect)
-      : null;
   const desiredLeft =
     placement === "right"
       ? targetRight + gap
       : placement === "left"
         ? targetLeft - gap - surfaceWidth
         : placement === "center"
-          ? compactCenterRect
-            ? compactCenterRect.left +
-              Math.max(0, compactCenterRect.width - surfaceWidth) / 2
-            : bounds.left + Math.max(0, bounds.width - surfaceWidth) / 2
+          ? bounds.left + Math.max(0, bounds.width - surfaceWidth) / 2
           : leftForVerticalPlacement;
   const desiredTop =
     placement === "above"
       ? anchorGeometry.top - gap - maxHeight
       : placement === "below"
         ? anchorGeometry.bottom + gap
-        : isCompactToolbarCenterFallback
-          ? bounds.bottom - maxHeight
-          : placement === "center"
+        : placement === "center"
           ? bounds.top + Math.max(0, bounds.height - maxHeight) / 2
           : anchorGeometry.centerY - maxHeight / 2;
   const left = clamp(desiredLeft, bounds.left, bounds.right - surfaceWidth);
@@ -504,6 +566,9 @@ export function computeDocumentAiSurfacePlacement(
 
 const STAGE_SELECTOR = [
   ".dasti-cv-paper-stage",
+  ".dasti-proposal-sheet__preview-stage[data-document-stage='true']",
+  ".dasti-proposal-sheet__body--document-editor",
+  ".dasti-doc-viewport[data-document-stage='true']",
   ".dasti-doc-viewport--resume-panel[data-document-stage='true']",
   ".dasti-document-stage__canvas[data-document-page='true']",
 ].join(",");
@@ -571,6 +636,7 @@ export function useDocumentAiSurfacePosition({
     mode,
     preferredPlacement = null,
     preferredSurfaceCenterX = null,
+    placementStrategy = "selectionAnchor",
     enabled = true,
   safeMargin = DEFAULT_SAFE_MARGIN,
   gap = DEFAULT_GAP,
@@ -581,6 +647,7 @@ export function useDocumentAiSurfacePosition({
   mode: DocumentAiSurfaceState;
   preferredPlacement?: DocumentAiSurfacePlacement | null;
   preferredSurfaceCenterX?: number | null;
+  placementStrategy?: DocumentAiSurfacePlacementStrategy;
   enabled?: boolean;
   safeMargin?: number;
   gap?: number;
@@ -608,6 +675,7 @@ export function useDocumentAiSurfacePosition({
     enabled,
     mode,
     preferredPlacement,
+    placementStrategy,
   ]);
 
   return React.useMemo(() => {
@@ -624,6 +692,7 @@ export function useDocumentAiSurfacePosition({
       breakpoint: window.innerWidth <= 760 ? "narrow" : "desktop",
       preferredPlacement,
       preferredSurfaceCenterX,
+      placementStrategy,
       safeMargin,
       gap,
       edgePadding,
@@ -637,6 +706,7 @@ export function useDocumentAiSurfacePosition({
     mode,
     preferredPlacement,
     preferredSurfaceCenterX,
+    placementStrategy,
     safeMargin,
   ]);
 }

@@ -81,6 +81,7 @@ import {
   ShareFat as PhShareFat,
   SidebarSimple as PhSidebarSimple,
   SpinnerGap as PhSpinnerGap,
+  Sparkle as PhSparkle,
   Stop as PhStop,
   ImagesSquare as PhImagesSquare,
   SquaresFour as PhSquaresFour,
@@ -92,6 +93,7 @@ import {
   Target as PhTarget,
   TextB as PhTextB,
   TextItalic as PhTextItalic,
+  TextT as PhTextT,
   TextUnderline as PhTextUnderline,
   TrashSimple as PhTrashSimple,
   TreeView as PhTreeView,
@@ -100,6 +102,7 @@ import {
   Upload as PhUpload,
   User as PhUser,
   UserCircle as PhUserCircle,
+  Wrench as PhWrench,
   BracketsSquare as PhBracketsSquare,
   Gear as PhGear,
   X as PhX,
@@ -241,6 +244,7 @@ export const ShareFat = withCompat(PhShareFat);
 export const Square = withCompat(PhSquare);
 export const ImagesSquare = withCompat(PhImagesSquare);
 export const SquaresFour = withCompat(PhSquaresFour);
+export const Sparkle = withCompat(PhSparkle);
 export const Star = withCompat(PhStar);
 export const Stop = withCompat(PhStop);
 export const Sun = withCompat(PhSun);
@@ -248,6 +252,7 @@ export const SunMedium = withCompat(PhSun);
 export const Sunglasses = withCompat(PhSunglasses);
 export const Stamp = withCompat(PhStamp);
 export const Target = withCompat(PhTarget);
+export const TextT = withCompat(PhTextT);
 export const TrashSimple = withCompat(PhTrashSimple);
 export const Underline = withCompat(PhTextUnderline);
 export const ToggleLeft = withCompat(PhToggleLeft);
@@ -256,6 +261,7 @@ export const Upload = withCompat(PhUpload);
 export const User = withCompat(PhUser);
 export const UserRound = withCompat(PhUserCircle);
 export const Wand2 = withCompat(PhMagicWand);
+export const Wrench = withCompat(PhWrench);
 export const BracketsSquare = withCompat(PhBracketsSquare);
 export const Gear = withCompat(PhGear);
 export const X = withCompat(PhX);

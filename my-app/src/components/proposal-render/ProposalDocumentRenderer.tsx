@@ -76,6 +76,8 @@ import {
   type ProposalPlainTextBlock,
 } from "../../lib/proposal-list-blocks";
 import {
+  mergeProposalDocumentTargetBackward,
+  mergeProposalDocumentTargetForward,
   normalizeEditableText,
   normalizeProposalDocumentEditText,
   resolveProposalDocument,
@@ -296,6 +298,7 @@ type ProposalBodyEditableBlockDescriptor =
     };
 
 const BAUHAUS_WORDMARK_MAX_COMPACT_CHARS = 8;
+const EMPTY_EDITABLE_TEXT = "\u200B";
 
 function resolveLineHeightPx(styles: CSSStyleDeclaration) {
   const parsedLineHeight = Number.parseFloat(styles.lineHeight || "");
@@ -628,7 +631,71 @@ function getEditableTextWithoutControls(target: HTMLElement): string {
   clone
     .querySelectorAll("[data-proposal-editor-control='true']")
     .forEach((node) => node.remove());
-  return normalizeProposalDocumentEditText(clone.textContent ?? "");
+  return normalizeProposalDocumentEditText(
+    (clone.textContent ?? "").replaceAll(EMPTY_EDITABLE_TEXT, ""),
+  );
+}
+
+function getEditableNodeTextLength(node: Node): number {
+  if (
+    node instanceof HTMLElement &&
+    node.closest("[data-proposal-editor-control='true']")
+  ) {
+    return 0;
+  }
+  if (
+    node.parentElement?.closest("[data-proposal-editor-control='true']")
+  ) {
+    return 0;
+  }
+  if (node.nodeType === Node.TEXT_NODE) {
+    return (node.textContent ?? "").replaceAll(EMPTY_EDITABLE_TEXT, "").length;
+  }
+  return Array.from(node.childNodes).reduce(
+    (total, child) => total + getEditableNodeTextLength(child),
+    0,
+  );
+}
+
+function getEditableBoundaryOffset(
+  target: HTMLElement,
+  container: Node,
+  offset: number,
+): number | null {
+  if (!target.contains(container)) return null;
+
+  let total = 0;
+  let found = false;
+
+  const visit = (node: Node) => {
+    if (found) return;
+
+    if (node === container) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        total += (node.textContent ?? "")
+          .slice(0, offset)
+          .replaceAll(EMPTY_EDITABLE_TEXT, "").length;
+      } else {
+        Array.from(node.childNodes)
+          .slice(0, offset)
+          .forEach((child) => {
+            total += getEditableNodeTextLength(child);
+          });
+      }
+      found = true;
+      return;
+    }
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      total += getEditableNodeTextLength(node);
+      return;
+    }
+
+    Array.from(node.childNodes).forEach(visit);
+  };
+
+  visit(target);
+  return found ? total : null;
 }
 
 function getEditableSelectionOffsets(target: HTMLElement): {
@@ -648,17 +715,23 @@ function getEditableSelectionOffsets(target: HTMLElement): {
     return null;
   }
 
-  const startRange = document.createRange();
-  startRange.selectNodeContents(target);
-  startRange.setEnd(range.startContainer, range.startOffset);
-
-  const endRange = document.createRange();
-  endRange.selectNodeContents(target);
-  endRange.setEnd(range.endContainer, range.endOffset);
+  const start = getEditableBoundaryOffset(
+    target,
+    range.startContainer,
+    range.startOffset,
+  );
+  const end = getEditableBoundaryOffset(
+    target,
+    range.endContainer,
+    range.endOffset,
+  );
+  if (start === null || end === null) {
+    return null;
+  }
 
   return {
-    start: startRange.toString().length,
-    end: endRange.toString().length,
+    start,
+    end,
   };
 }
 
@@ -670,12 +743,132 @@ function getEditableCaretOffset(target: HTMLElement): number {
   return offsets.end;
 }
 
+function getCollapsedEditableCaretOffset(target: HTMLElement): number | null {
+  const offsets = getEditableSelectionOffsets(target);
+  if (!offsets || offsets.start !== offsets.end) {
+    return null;
+  }
+  return offsets.start;
+}
+
+function isCaretAtStartOfEditableBlock(target: HTMLElement): boolean {
+  return getCollapsedEditableCaretOffset(target) === 0;
+}
+
+function isCaretAtEndOfEditableBlock(target: HTMLElement): boolean {
+  const offset = getCollapsedEditableCaretOffset(target);
+  if (offset === null) return false;
+  return offset >= getEditableTextWithoutControls(target).length;
+}
+
+function getEditableTargetText(
+  document: ProposalDocument,
+  target: ProposalDocumentTextTarget,
+): string {
+  for (const block of document.blocks) {
+    if (
+      target.type === "text-block" &&
+      block.id === target.blockId &&
+      (block.type === "paragraph" || block.type === "salutation")
+    ) {
+      return block.text;
+    }
+
+    if (
+      target.type === "list-item" &&
+      block.id === target.blockId &&
+      block.type === "list"
+    ) {
+      return block.items.find((item) => item.id === target.itemId)?.text ?? "";
+    }
+  }
+
+  return "";
+}
+
+function getEditableMergeJoinOffset(left: string, right: string): number {
+  if (!left || !right || left.endsWith("\n")) return left.length;
+  return left.length + 1;
+}
+
+function resolvePreviousEditableFocus(args: {
+  document: ProposalDocument;
+  target: ProposalDocumentTextTarget;
+}): PendingEditableFocus | null {
+  const { document, target } = args;
+  const currentText = getEditableTargetText(document, target);
+  for (let blockIndex = 0; blockIndex < document.blocks.length; blockIndex += 1) {
+    const block = document.blocks[blockIndex];
+
+    if (
+      target.type === "text-block" &&
+      block.id === target.blockId &&
+      (block.type === "paragraph" || block.type === "salutation")
+    ) {
+      const previous = document.blocks[blockIndex - 1];
+      if (!previous) return null;
+      if (previous.type === "paragraph" || previous.type === "salutation") {
+        return {
+          target: { type: "text-block", blockId: previous.id },
+          offset: getEditableMergeJoinOffset(previous.text, currentText),
+        };
+      }
+      if (previous.type === "list" && previous.items.length > 0) {
+        const previousItem = previous.items[previous.items.length - 1];
+        return {
+          target: {
+            type: "list-item",
+            blockId: previous.id,
+            itemId: previousItem.id,
+          },
+          offset: getEditableMergeJoinOffset(previousItem.text, currentText),
+        };
+      }
+    }
+
+    if (
+      target.type === "list-item" &&
+      block.id === target.blockId &&
+      block.type === "list"
+    ) {
+      const itemIndex = block.items.findIndex((item) => item.id === target.itemId);
+      if (itemIndex > 0) {
+        const previousItem = block.items[itemIndex - 1];
+        return {
+          target: {
+            type: "list-item",
+            blockId: block.id,
+            itemId: previousItem.id,
+          },
+          offset: getEditableMergeJoinOffset(previousItem.text, currentText),
+        };
+      }
+      const previous = document.blocks[blockIndex - 1];
+      if (previous?.type === "paragraph" || previous?.type === "salutation") {
+        return {
+          target: { type: "text-block", blockId: previous.id },
+          offset: getEditableMergeJoinOffset(previous.text, currentText),
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
 function setEditableCaretOffset(target: HTMLElement, offset: number): void {
   const focusTarget =
     target.closest<HTMLElement>("[data-proposal-body-editor='true']") ?? target;
   focusTarget.focus();
   const boundedOffset = Math.max(0, offset);
-  const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT);
+  const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) => {
+      const parent = node.parentElement;
+      return parent?.closest("[data-proposal-editor-control='true']")
+        ? NodeFilter.FILTER_REJECT
+        : NodeFilter.FILTER_ACCEPT;
+    },
+  });
   let remaining = boundedOffset;
   let node = walker.nextNode();
 
@@ -729,6 +922,45 @@ function findEditableDomTarget(
   );
 }
 
+function resolveEditableTargetElementFromBoundary(
+  root: HTMLElement,
+  container: Node,
+  offset: number,
+): HTMLElement | null {
+  const directElement =
+    container instanceof Element ? container : container.parentElement;
+  const directTarget = directElement?.closest<HTMLElement>(
+    "[data-proposal-edit-target]",
+  );
+  if (directTarget && root.contains(directTarget)) {
+    return directTarget;
+  }
+
+  if (!(container instanceof HTMLElement)) {
+    return null;
+  }
+
+  const children = Array.from(container.childNodes);
+  const candidates = [
+    children[Math.max(0, offset - 1)],
+    children[offset],
+  ];
+  for (const candidate of candidates) {
+    const element =
+      candidate instanceof Element
+        ? candidate
+        : candidate?.parentElement ?? null;
+    const target = element?.closest<HTMLElement>(
+      "[data-proposal-edit-target]",
+    );
+    if (target && root.contains(target)) {
+      return target;
+    }
+  }
+
+  return null;
+}
+
 function findProposalBodySelectionTarget(
   root: HTMLElement,
 ): { target: ProposalDocumentTextTarget; element: HTMLElement } | null {
@@ -739,19 +971,15 @@ function findProposalBodySelectionTarget(
     return null;
   }
 
-  const startElement =
-    range.startContainer instanceof Element
-      ? range.startContainer
-      : range.startContainer.parentElement;
-  const endElement =
-    range.endContainer instanceof Element
-      ? range.endContainer
-      : range.endContainer.parentElement;
-  const startTarget = startElement?.closest<HTMLElement>(
-    "[data-proposal-edit-target]",
+  const startTarget = resolveEditableTargetElementFromBoundary(
+    root,
+    range.startContainer,
+    range.startOffset,
   );
-  const endTarget = endElement?.closest<HTMLElement>(
-    "[data-proposal-edit-target]",
+  const endTarget = resolveEditableTargetElementFromBoundary(
+    root,
+    range.endContainer,
+    range.endOffset,
   );
   if (!startTarget || startTarget !== endTarget) {
     return null;
@@ -818,6 +1046,63 @@ function resolveSplitFocusTarget(args: {
   return nextBlock?.type === "paragraph"
     ? { type: "text-block", blockId: nextBlock.id }
     : null;
+}
+
+function buildEditableBodyDocument(
+  editor: HTMLElement,
+  document: ProposalDocument,
+): ProposalDocument {
+  const blockTextById = new Map<string, string>();
+  const listItemTextById = new Map<string, Map<string, string>>();
+
+  editor
+    .querySelectorAll<HTMLElement>("[data-proposal-edit-target='text-block']")
+    .forEach((node) => {
+      const blockId = node.dataset.proposalEditBlockId;
+      if (!blockId) return;
+      blockTextById.set(blockId, getEditableTextWithoutControls(node));
+    });
+
+  editor
+    .querySelectorAll<HTMLElement>("[data-proposal-edit-target='list-item']")
+    .forEach((node) => {
+      const blockId = node.dataset.proposalEditBlockId;
+      const itemId = node.dataset.proposalEditItemId;
+      if (!blockId || !itemId) return;
+      const itemMap = listItemTextById.get(blockId) ?? new Map<string, string>();
+      itemMap.set(itemId, getEditableTextWithoutControls(node));
+      listItemTextById.set(blockId, itemMap);
+    });
+
+  return {
+    ...document,
+    source: "structured",
+    blocks: document.blocks.map((block) => {
+      if (
+        (block.type === "salutation" || block.type === "paragraph") &&
+        blockTextById.has(block.id)
+      ) {
+        return {
+          ...block,
+          text: blockTextById.get(block.id) ?? block.text,
+        };
+      }
+
+      if (block.type === "list" && listItemTextById.has(block.id)) {
+        const itemTextById = listItemTextById.get(block.id);
+        return {
+          ...block,
+          items: block.items.map((item) =>
+            itemTextById?.has(item.id)
+              ? { ...item, text: itemTextById.get(item.id) ?? item.text }
+              : item,
+          ),
+        };
+      }
+
+      return block;
+    }),
+  };
 }
 
 function getEditableValueLineProps(
@@ -3671,25 +3956,17 @@ export function ProposalDocumentRenderer({
     (
       target: ProposalDocumentTextTarget,
       offset = 0,
-      currentValue?: string,
+      baseDocument = structuredDocument,
     ) => {
       if (!onProposalDocumentChange) return;
 
-      const baseDocument =
-        typeof currentValue === "string"
-          ? updateProposalDocumentTextTarget({
-              document: structuredDocument,
-              target,
-              value: currentValue,
-            })
-          : structuredDocument;
       const nextDocument = splitProposalDocumentTarget({
         document: baseDocument,
         target,
         offset,
       });
 
-      if (nextDocument !== structuredDocument) {
+      if (nextDocument !== baseDocument) {
         const nextFocusTarget = resolveSplitFocusTarget({
           document: nextDocument,
           target,
@@ -3709,57 +3986,58 @@ export function ProposalDocumentRenderer({
     (editor: HTMLElement) => {
       if (!onProposalDocumentChange) return;
 
-      const blockTextById = new Map<string, string>();
-      const listItemTextById = new Map<string, Map<string, string>>();
+      onProposalDocumentChange(
+        buildEditableBodyDocument(editor, structuredDocument),
+      );
+    },
+    [onProposalDocumentChange, structuredDocument],
+  );
+  const handleEditableBodyBoundaryDelete = React.useCallback(
+    (editor: HTMLElement, key: "Backspace" | "Delete"): boolean => {
+      if (!onProposalDocumentChange) return false;
 
-      editor
-        .querySelectorAll<HTMLElement>("[data-proposal-edit-target='text-block']")
-        .forEach((node) => {
-          const blockId = node.dataset.proposalEditBlockId;
-          if (!blockId) return;
-          blockTextById.set(blockId, getEditableTextWithoutControls(node));
+      const selectedTarget = findProposalBodySelectionTarget(editor);
+      if (!selectedTarget) return false;
+
+      const currentValue = getEditableTextWithoutControls(selectedTarget.element);
+
+      if (key === "Backspace") {
+        if (!isCaretAtStartOfEditableBlock(selectedTarget.element)) {
+          return false;
+        }
+
+        const nextFocus = resolvePreviousEditableFocus({
+          document: structuredDocument,
+          target: selectedTarget.target,
         });
-
-      editor
-        .querySelectorAll<HTMLElement>("[data-proposal-edit-target='list-item']")
-        .forEach((node) => {
-          const blockId = node.dataset.proposalEditBlockId;
-          const itemId = node.dataset.proposalEditItemId;
-          if (!blockId || !itemId) return;
-          const itemMap = listItemTextById.get(blockId) ?? new Map<string, string>();
-          itemMap.set(itemId, getEditableTextWithoutControls(node));
-          listItemTextById.set(blockId, itemMap);
+        const nextDocument = mergeProposalDocumentTargetBackward({
+          document: structuredDocument,
+          target: selectedTarget.target,
         });
+        if (nextDocument !== structuredDocument) {
+          pendingEditableFocusRef.current =
+            nextFocus ?? { target: selectedTarget.target, offset: 0 };
+          onProposalDocumentChange(nextDocument);
+        }
+        return true;
+      }
 
-      onProposalDocumentChange({
-        ...structuredDocument,
-        source: "structured",
-        blocks: structuredDocument.blocks.map((block) => {
-          if (
-            (block.type === "salutation" || block.type === "paragraph") &&
-            blockTextById.has(block.id)
-          ) {
-            return {
-              ...block,
-              text: blockTextById.get(block.id) ?? block.text,
-            };
-          }
+      if (!isCaretAtEndOfEditableBlock(selectedTarget.element)) {
+        return false;
+      }
 
-          if (block.type === "list" && listItemTextById.has(block.id)) {
-            const itemTextById = listItemTextById.get(block.id);
-            return {
-              ...block,
-              items: block.items.map((item) =>
-                itemTextById?.has(item.id)
-                  ? { ...item, text: itemTextById.get(item.id) ?? item.text }
-                  : item,
-              ),
-            };
-          }
-
-          return block;
-        }),
+      const nextDocument = mergeProposalDocumentTargetForward({
+        document: structuredDocument,
+        target: selectedTarget.target,
       });
+      if (nextDocument !== structuredDocument) {
+        pendingEditableFocusRef.current = {
+          target: selectedTarget.target,
+          offset: currentValue.length,
+        };
+        onProposalDocumentChange(nextDocument);
+      }
+      return true;
     },
     [onProposalDocumentChange, structuredDocument],
   );
@@ -3767,7 +4045,14 @@ export function ProposalDocumentRenderer({
     (target: { blockId: string; itemId: string }, iconKey: DocumentIconKey | null) => {
       if (!onProposalDocumentChange) return;
 
-      const nextBlocks = structuredDocument.blocks.map(
+      const bodyEditor = rootRef.current?.querySelector<HTMLElement>(
+        "[data-proposal-body-editor='true']",
+      );
+      const baseDocument = bodyEditor
+        ? buildEditableBodyDocument(bodyEditor, structuredDocument)
+        : structuredDocument;
+
+      const nextBlocks = baseDocument.blocks.map(
         (block): ProposalDocument["blocks"][number] => {
           if (block.id !== target.blockId || block.type !== "list") {
             return block;
@@ -3790,7 +4075,7 @@ export function ProposalDocumentRenderer({
       );
 
       onProposalDocumentChange({
-        ...structuredDocument,
+        ...baseDocument,
         source: "structured",
         blocks: nextBlocks,
       });
@@ -3884,17 +4169,20 @@ export function ProposalDocumentRenderer({
               }
 
               if (behavior.structuredTarget) {
+                const currentValue = normalizeProposalDocumentEditText(
+                  event.currentTarget.textContent ?? "",
+                );
                 onCommit(
-                  normalizeProposalDocumentEditText(
-                    event.currentTarget.textContent ?? "",
-                  ),
+                  currentValue,
                 );
                 splitEditableDocumentTarget(
                   behavior.structuredTarget,
                   getEditableCaretOffset(event.currentTarget),
-                  normalizeProposalDocumentEditText(
-                    event.currentTarget.textContent ?? "",
-                  ),
+                  updateProposalDocumentTextTarget({
+                    document: structuredDocument,
+                    target: behavior.structuredTarget,
+                    value: currentValue,
+                  }),
                 );
                 return;
               }
@@ -3903,7 +4191,7 @@ export function ProposalDocumentRenderer({
             },
           }
         : null,
-    [splitEditableDocumentTarget],
+    [splitEditableDocumentTarget, structuredDocument],
   );
 
   const renderDocumentBlock = React.useCallback(
@@ -4270,9 +4558,6 @@ export function ProposalDocumentRenderer({
           aria-label="Edit proposal body"
           data-proposal-body-editor="true"
           data-proposal-editable-text="true"
-          onInput={(event) => {
-            commitEditableBodyDocument(event.currentTarget);
-          }}
           onBlur={(event) => {
             commitEditableBodyDocument(event.currentTarget);
           }}
@@ -4288,6 +4573,15 @@ export function ProposalDocumentRenderer({
             if (event.key === "Escape") {
               event.preventDefault();
               event.currentTarget.blur();
+              return;
+            }
+
+            if (event.key === "Backspace" || event.key === "Delete") {
+              if (
+                handleEditableBodyBoundaryDelete(event.currentTarget, event.key)
+              ) {
+                event.preventDefault();
+              }
               return;
             }
 
@@ -4315,11 +4609,14 @@ export function ProposalDocumentRenderer({
             );
             if (!selectedTarget) return;
 
-            commitEditableBodyDocument(event.currentTarget);
+            const baseDocument = buildEditableBodyDocument(
+              event.currentTarget,
+              structuredDocument,
+            );
             splitEditableDocumentTarget(
               selectedTarget.target,
               getEditableCaretOffset(selectedTarget.element),
-              getEditableTextWithoutControls(selectedTarget.element),
+              baseDocument,
             );
           }}
         >
@@ -4334,7 +4631,7 @@ export function ProposalDocumentRenderer({
                   data-proposal-edit-block-id={descriptor.blockId}
                   data-proposal-edit-field-kind={descriptor.fieldKind}
                 >
-                  {descriptor.text}
+                  {descriptor.text || EMPTY_EDITABLE_TEXT}
                 </p>
               );
             }
@@ -4471,7 +4768,7 @@ export function ProposalDocumentRenderer({
                           </div>
                         ) : null}
                       </span>
-                      {item.text}
+                      {item.text || EMPTY_EDITABLE_TEXT}
                     </li>
                   );
                 })}
@@ -4485,20 +4782,29 @@ export function ProposalDocumentRenderer({
       activeListItemIconPicker,
       commitEditableBodyDocument,
       commitListItemIcon,
+      handleEditableBodyBoundaryDelete,
       listMarkerIcon,
       listMarkerStyle,
       listMarkerType,
       onProposalDocumentChange,
       renderDocumentBlock,
       splitEditableDocumentTarget,
+      structuredDocument,
     ],
   );
 
+  const allDocumentBlockIndexes = React.useMemo(
+    () => documentBlocks.map((_, index) => index),
+    [documentBlocks],
+  );
+  const pageGroupsCoverDocumentBlocks =
+    pageGroups.flat().filter((index) => index >= 0 && index < documentBlocks.length)
+      .length === documentBlocks.length;
   const resolvedPageGroups =
-    pageGroups.length > 0
+    pageGroups.length > 0 && pageGroupsCoverDocumentBlocks
       ? pageGroups
       : documentBlocks.length > 0
-        ? [documentBlocks.map((_, index) => index)]
+        ? [allDocumentBlockIndexes]
         : [[]];
   const volkMetaEntries = React.useMemo(
     () =>
