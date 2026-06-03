@@ -96,9 +96,11 @@ import {
   buildJobOfferPriorityPack,
   PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA,
   evaluatePremiumCoverLetterEligibility,
+  generatePremiumCoverLetterBodyPartsWithMistral,
   generatePremiumCoverLetterBodyPartsWithOpenAI,
   isCoverLetterPremiumPathV1Enabled,
   resolvePremiumCoverLetterWriterModel,
+  type PremiumCoverLetterFailureTrace,
 } from "./lib/proposals/premiumCoverLetter";
 import {
   analyzeProposalDraft,
@@ -138,11 +140,16 @@ function extractCompatibleChatResponseText(response: any): string {
     if (joined) return joined;
   }
 
-  if (typeof response?.output_text === "string" && response.output_text.trim()) {
+  if (
+    typeof response?.output_text === "string" &&
+    response.output_text.trim()
+  ) {
     return response.output_text.trim();
   }
 
-  throw new Error("Compatible chat premium cover-letter response returned no text");
+  throw new Error(
+    "Compatible chat premium cover-letter response returned no text",
+  );
 }
 
 type QwenPremiumDiagnostics = {
@@ -176,8 +183,12 @@ function isPlainJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function collectValidationIssues(error: unknown): QwenPremiumDiagnostics["validationIssues"] {
-  const issues = (error as { issues?: Array<{ code?: string; path?: unknown[] }> })?.issues;
+function collectValidationIssues(
+  error: unknown,
+): QwenPremiumDiagnostics["validationIssues"] {
+  const issues = (
+    error as { issues?: Array<{ code?: string; path?: unknown[] }> }
+  )?.issues;
   if (!Array.isArray(issues)) return undefined;
   return issues.map((issue) => ({
     code: issue.code,
@@ -219,13 +230,13 @@ function findEmbeddedJsonObjectCandidates(content: string): string[] {
         escaped = false;
       } else if (char === "\\") {
         escaped = true;
-      } else if (char === "\"") {
+      } else if (char === '"') {
         inString = false;
       }
       continue;
     }
 
-    if (char === "\"") {
+    if (char === '"') {
       inString = true;
       continue;
     }
@@ -344,6 +355,22 @@ function parsePremiumCoverLetterBodyPartsContent(content: string) {
 
 function logQwenPremiumDiagnostics(diagnostics: QwenPremiumDiagnostics) {
   console.warn("Qwen premium cover-letter diagnostics", diagnostics);
+}
+
+function logPremiumCoverLetterFailureTrace(args: {
+  provider: "openai" | "mistral" | "qwen";
+  writerModel: string;
+  failure: PremiumCoverLetterFailureTrace;
+}) {
+  console.warn("Premium cover-letter failure trace", {
+    provider: args.provider,
+    writerModel: args.writerModel,
+    stage: args.failure.stage,
+    reason: args.failure.reason,
+    contextClass: args.failure.contextClass,
+    eligibilityReason: args.failure.eligibilityReason,
+    issues: args.failure.issues,
+  });
 }
 
 function buildQwenPremiumOuterDiagnostics(
@@ -699,12 +726,13 @@ function createProposalGenerationCancellationContext(args: {
   };
 }
 
-function buildMistralRequestOptions(signal?: AbortSignal): {
-  fetchOptions?: { signal: AbortSignal };
-} | undefined {
+function buildMistralRequestOptions(signal?: AbortSignal):
+  | {
+      fetchOptions?: { signal: AbortSignal };
+    }
+  | undefined {
   return signal ? { fetchOptions: { signal } } : undefined;
 }
-
 
 const MAX_SUMMARY_LENGTH = 240;
 const MAX_SKILLS = 8;
@@ -862,12 +890,33 @@ type ProposalFallbackTriggerCode =
   | "proposal_generation_provider_busy"
   | "proposal_generation_provider_transport_error";
 
-type ProposalExecutionProvenance = {
+export type ProposalExecutionProvenance = {
   requestedModelType: ProposalModelType;
   actualModelType: ProposalModelType;
   actualModelName: string;
   fallbackTriggerCode: ProposalFallbackTriggerCode | null;
 };
+
+export type ProposalExecutionRoutingSummary = {
+  attemptedPath: ProposalGenerationPathLabel;
+  plannedPath: ProposalRoutingTrace["plannedPath"];
+  executedPath: ProposalRoutingTrace["executedPath"];
+  fallbackReason: ProposalRoutingTrace["fallbackReason"];
+  validatorOutcome: ProposalRoutingTrace["validatorOutcome"];
+  saveOutcome: ProposalRoutingTrace["saveOutcome"];
+  premiumFailureStage: PremiumCoverLetterFailureTrace["stage"] | null;
+  premiumFailureReason: PremiumCoverLetterFailureTrace["reason"] | null;
+  premiumFailureContextClass:
+    | NonNullable<PremiumCoverLetterFailureTrace["contextClass"]>
+    | null;
+};
+
+export type GenerateProposalResult = {
+  proposalId: string;
+  proposalContent: string;
+} & ProposalExecutionProvenance & {
+    routing: ProposalExecutionRoutingSummary;
+  };
 
 type MistralDiagnosticStage = ProposalProviderBusyStage | "agent_generation";
 type MistralDiagnosticStatus =
@@ -971,6 +1020,13 @@ function isMistralModel(modelType: ProposalModelType): boolean {
     modelType === "mistral-medium-latest" ||
     modelType === "mistral-large-latest" ||
     modelType === "mistral-agent"
+  );
+}
+
+function isPremiumMistralCoverLetterModel(modelType: ProposalModelType): boolean {
+  return (
+    modelType === "mistral-medium-latest" ||
+    modelType === "mistral-large-latest"
   );
 }
 
@@ -2990,15 +3046,6 @@ function evaluatePrimaryCoverLetterPathEligibility(args: {
   }
 
   if (args.modelType === "chatgpt") {
-    if (!isCoverLetterPremiumPathV1Enabled()) {
-      return {
-        eligible: false,
-        plannedPath: "legacy",
-        fallbackReason: "flag_disabled",
-        sourceFactBankWarnings: [],
-      };
-    }
-
     const premiumEligibility = evaluatePremiumCoverLetterEligibility({
       personalizationContext: args.personalizationContext,
       voicePreset: args.voicePreset,
@@ -3209,9 +3256,7 @@ function getCounterfactualNextStructuredGate(args: {
   contextMode: ProposalPlannerContextMode;
   sourceFactBank: readonly string[];
   resolvedStructuredRolloutMode: StructuredMistralCoverLetterRolloutMode;
-}):
-  | StructuredCoverLetterRolloutFallbackReason
-  | "eligible" {
+}): StructuredCoverLetterRolloutFallbackReason | "eligible" {
   const counterfactualRolloutValue =
     resolveCounterfactualStructuredRolloutValue(
       args.modelType,
@@ -3826,7 +3871,10 @@ function extractConcreteJobResponsibilities(jobDescription: string): string[] {
     )
     .map((part) =>
       part
-        .replace(/^(?:the\s+role\s+includes?|we\s+are\s+looking\s+for\s+(?:a|an)?|the\s+[^,.]{2,60}\s+will|who\s+can|will)\s+/i, "")
+        .replace(
+          /^(?:the\s+role\s+includes?|we\s+are\s+looking\s+for\s+(?:a|an)?|the\s+[^,.]{2,60}\s+will|who\s+can|will)\s+/i,
+          "",
+        )
         .replace(/^(?:[^,.]{2,80}\s+who\s+can)\s+/i, "")
         .replace(/\.$/, ""),
     )
@@ -3881,7 +3929,9 @@ function buildNoContextConstrainedRepairPrompt(args: {
   jobTitle: string;
   jobDescription: string;
 }): string {
-  const responsibilities = extractConcreteJobResponsibilities(args.jobDescription);
+  const responsibilities = extractConcreteJobResponsibilities(
+    args.jobDescription,
+  );
   return [
     "CRITICAL OVERRIDE — FULL DRAFT SAFETY REPAIR:",
     "Rewrite the whole generated output, not just one sentence.",
@@ -3972,15 +4022,19 @@ function buildLastResortNoContextFallback(args: {
   jobTitle: string;
   jobDescription: string;
 }): string | null {
-  const responsibilities = extractConcreteJobResponsibilities(args.jobDescription).map(
-    (item) =>
-      item
-        .replace(/^(?:support|update|assist with|coordinate|keep|communicate|manage|maintain|handle)\s+/i, "")
-        .replace(/^follow[-\s]?ups?\b/i, "follow-up coordination")
-        .replace(/^records\s+organized\b/i, "organized records")
-        .replace(/^records\s+clear\b/i, "clear records")
-        .replace(/^professionally\s+with\b/i, "professional communication with")
-        .trim(),
+  const responsibilities = extractConcreteJobResponsibilities(
+    args.jobDescription,
+  ).map((item) =>
+    item
+      .replace(
+        /^(?:support|update|assist with|coordinate|keep|communicate|manage|maintain|handle)\s+/i,
+        "",
+      )
+      .replace(/^follow[-\s]?ups?\b/i, "follow-up coordination")
+      .replace(/^records\s+organized\b/i, "organized records")
+      .replace(/^records\s+clear\b/i, "clear records")
+      .replace(/^professionally\s+with\b/i, "professional communication with")
+      .trim(),
   );
   const workSurface =
     responsibilities.length > 0
@@ -4446,7 +4500,8 @@ export async function attemptStructuredCoverLetterGeneration(
     deps.generateParagraph ??
     generateStructuredCoverLetterBodyWithMistral;
   const analyzeDraft = deps.analyzeDraft ?? analyzeProposalDraft;
-  const repairDraft = deps.repairDraft ?? repairProposalDraftWithConstrainedPass;
+  const repairDraft =
+    deps.repairDraft ?? repairProposalDraftWithConstrainedPass;
   const recordFallback = (
     reason: StructuredCoverLetterFallbackReason,
     error: unknown,
@@ -5252,6 +5307,7 @@ const MALFORMED_FRAGMENT_PATTERNS = [
   /\b(?:which|that|who|while|because|although|though|and|but|or)[.…]+$/i,
   /\bwhich\s+(?:cut|reduced|improved|increased|lifted|kept|made|gave)\.$/i,
   /(?:[—-]|,\s*)(?:areas?|qualities?|skills?|strengths?|traits?|capabilities?)\.$/i,
+  /,\s*(?:background|experience|expertise|knowledge|training)\.$/i,
   /\b(?:a|an|the)\s+(?:skill|strength|quality|trait|ability|capability)\.$/i,
   /\b(?:is|are|was|were|am)\.$/i,
   /\b(?:could|would|should|may|might)\.$/i,
@@ -5480,7 +5536,7 @@ function sentenceHasConcreteEvidenceAnchor(sentence: string): boolean {
   ) {
     return true;
   }
-  if (/\bat\s+[A-Z][\w&'.-]+/u.test(sentence)) {
+  if (/\b[Aa]t\s+[A-Z][\w&'.-]+/u.test(sentence)) {
     return true;
   }
   if (EVIDENCE_ACTION_VERB_PATTERN.test(normalized)) {
@@ -6894,6 +6950,93 @@ function hasNarrowCvBackedGroundedRescueContent(body: string): boolean {
   return Boolean(buildNarrowCvBackedGroundedRescueBodyCandidate(body));
 }
 
+function sentenceHasCvBackedCandidateEvidenceAnchor(sentence: string): boolean {
+  const normalized = compactWhitespace(sentence);
+  if (!normalized || sentenceLooksNumericResidue(normalized)) {
+    return false;
+  }
+
+  if (/^[Aa]t\s+[A-Z][\w&'.-]+/u.test(sentence)) {
+    return true;
+  }
+  if (
+    /\b(?:i|my|me)\b[^.!?\n]{0,140}\b(?:at|with)\s+[A-Z][\w&'.-]+/iu.test(
+      sentence,
+    )
+  ) {
+    return true;
+  }
+  if (
+    /^(?:i\s+(?:hold|held|worked|have worked|have experience|have been responsible|supported|handled|managed|supervised|documented|designed|developed|built|maintained|contributed|led)\b|as a\b)/i.test(
+      normalized,
+    )
+  ) {
+    return true;
+  }
+  if (
+    /^(?:my\s+(?:background|experience|skills?|expertise|work)\b|with\s+a\s+background\s+in\b|background\s+in\b|experience\s+in\b)/i.test(
+      normalized,
+    ) &&
+    sentenceLooksSaveableWorkSurfaceSentence(normalized)
+  ) {
+    return true;
+  }
+  if (
+    /^(?:for\s+(?:\d+|[a-z]+)\s+(?:years?|months?)\b|in\s+(?:my\s+)?recent\s+(?:roles?|work)\b|across\s+(?:my\s+)?recent\s+(?:roles?|work)\b)/i.test(
+      normalized,
+    ) &&
+    /\bi(?:'|’)?(?:ve|have)?\s+(?:been\s+)?(?:responsible\s+for\s+)?/i.test(
+      normalized,
+    ) &&
+    EVIDENCE_ACTION_VERB_PATTERN.test(normalized) &&
+    extractSentenceFactTokens(sentence).length >= 4
+  ) {
+    return true;
+  }
+
+  return EVIDENCE_ACTION_VERB_PATTERN.test(normalized)
+    ? extractSentenceFactTokens(sentence).length >= 4 &&
+        /^(?:i|my|as a|in my\b)/i.test(normalized)
+    : false;
+}
+
+function coverLetterBodyHasCvBackedCandidateEvidence(body: string): boolean {
+  return getCoverLetterSaveableSentences(body, false).some(
+    sentenceHasCvBackedCandidateEvidenceAnchor,
+  );
+}
+
+function assertCvBackedCoverLetterHasCandidateEvidence(args: {
+  content: string;
+  format: OutputFormat;
+  outputLanguage: ProposalOutputLanguage;
+  candidateName?: string;
+  requiresCandidateEvidence?: boolean;
+  debugTrace?: ProposalFinalizationDebugTrace;
+}): void {
+  if (args.format !== "cover_letter" || !args.requiresCandidateEvidence) {
+    return;
+  }
+
+  const body = sanitizeGeneratedProposalBody({
+    content: args.content,
+    format: args.format,
+    outputLanguage: args.outputLanguage,
+    candidateName: args.candidateName,
+  });
+  if (coverLetterBodyHasCvBackedCandidateEvidence(body)) {
+    return;
+  }
+
+  markProposalFinalizationFailure(
+    args.debugTrace,
+    "final_saved_output_bridge_cleanup",
+  );
+  throw new ProposalFinalizationError(
+    "CV-backed cover letter has no candidate-backed evidence sentence.",
+  );
+}
+
 function sentenceLooksModestNoContextRoleWorkContextSentence(
   sentence: string,
 ): boolean {
@@ -7587,9 +7730,7 @@ function failOpenCoverLetterBodyIsSaveable(args: {
     /^(?:the\s+work\s+seems\s+to\s+call\s+for\s+consistency,\s+organization,\s+and\s+clear\s+communication\s+from\s+day\s+to\s+day|the\s+day-to-day\s+work\s+itself\s+is\s+the\s+part\s+of\s+the\s+role\s+that\s+stands\s+out\s+to\s+me\s+most|the\s+role\s+appears\s+to\s+depend\s+on\s+steady\s+follow-through,\s+clear\s+communication,\s+and\s+organized\s+day-to-day\s+coordination)\.?$/i.test(
       compactWhitespace(sentence),
     );
-  const sentenceLooksNoContextInterestOnlyLine = (
-    sentence: string,
-  ): boolean =>
+  const sentenceLooksNoContextInterestOnlyLine = (sentence: string): boolean =>
     /^i(?:['’]m| am)\s+interested\s+in\s+learning\s+more\s+about\s+the\s+role\.?$/i.test(
       compactWhitespace(sentence),
     );
@@ -8477,8 +8618,10 @@ function getFinalSavedOutputFallbackSentence(
 ): string | null {
   if (format !== "freelance_proposal") return null;
   const deterministicLanguage = getDeterministicCopyLanguage(outputLanguage);
-  if (deterministicLanguage === "fr") return FRENCH_SAFE_FREELANCE_FINAL_SENTENCE;
-  if (deterministicLanguage === "en") return ENGLISH_SAFE_FREELANCE_FINAL_SENTENCE;
+  if (deterministicLanguage === "fr")
+    return FRENCH_SAFE_FREELANCE_FINAL_SENTENCE;
+  if (deterministicLanguage === "en")
+    return ENGLISH_SAFE_FREELANCE_FINAL_SENTENCE;
   return null;
 }
 
@@ -8489,6 +8632,95 @@ function isBoundaryParagraph(paragraph: string): boolean {
     .filter(Boolean);
   if (lines.length === 0) return false;
   return isSalutationLine(lines[0]) || isClosingLine(lines[0]);
+}
+
+function normalizeParagraphForDuplicateShape(paragraph: string): string {
+  return normalizeProposalConstraintText(paragraph)
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function paragraphLooksSubstantiveCoverLetterBody(paragraph: string): boolean {
+  const normalized = compactWhitespace(paragraph);
+  if (!normalized || isBoundaryParagraph(normalized)) {
+    return false;
+  }
+  return splitSentences(normalized).some(
+    (sentence) =>
+      !sentenceLooksMalformedFragment(sentence) &&
+      !sentenceLooksClosingTailFragment(sentence) &&
+      !sentenceLooksGenericBodyOnly(sentence),
+  );
+}
+
+function assertCoverLetterHasNoRepeatedDocumentShape(args: {
+  content: string;
+  format: OutputFormat;
+  debugTrace?: ProposalFinalizationDebugTrace;
+}): void {
+  if (args.format !== "cover_letter") {
+    return;
+  }
+
+  const paragraphs = splitRawParagraphs(args.content);
+  if (paragraphs.length === 0) {
+    return;
+  }
+
+  const seenSubstantiveParagraphs = new Set<string>();
+  let hasSeenSubstantiveBody = false;
+  let hasSeenClosing = false;
+
+  for (const paragraph of paragraphs) {
+    const lines = paragraph
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const firstLine = lines[0] ?? "";
+    const isSalutation = isSalutationLine(firstLine);
+    const isClosing = isClosingLine(firstLine);
+    const isSubstantiveBody =
+      paragraphLooksSubstantiveCoverLetterBody(paragraph);
+
+    if (isSalutation && hasSeenSubstantiveBody) {
+      markProposalFinalizationFailure(
+        args.debugTrace,
+        "final_saved_output_bridge_cleanup",
+      );
+      throw new ProposalFinalizationError(
+        "Cover letter contains repeated salutation or opening body content.",
+      );
+    }
+
+    if (hasSeenClosing && isSubstantiveBody) {
+      markProposalFinalizationFailure(
+        args.debugTrace,
+        "final_saved_output_bridge_cleanup",
+      );
+      throw new ProposalFinalizationError(
+        "Cover letter contains repeated body content after the sign-off.",
+      );
+    }
+
+    if (isSubstantiveBody) {
+      const normalized = normalizeParagraphForDuplicateShape(paragraph);
+      if (normalized && seenSubstantiveParagraphs.has(normalized)) {
+        markProposalFinalizationFailure(
+          args.debugTrace,
+          "final_saved_output_bridge_cleanup",
+        );
+        throw new ProposalFinalizationError(
+          "Cover letter contains repeated body content.",
+        );
+      }
+      seenSubstantiveParagraphs.add(normalized);
+      hasSeenSubstantiveBody = true;
+    }
+
+    if (isClosing) {
+      hasSeenClosing = true;
+    }
+  }
 }
 
 export function applyFinalSavedOutputBridgeGuard(args: {
@@ -8822,12 +9054,19 @@ export function finalizeProposalForPersistence(args: {
   candidateName?: string;
   voicePreset: ProposalVoicePreset;
   noContextMode: boolean;
+  requiresCandidateEvidence?: boolean;
   acceptanceMode?: ProposalBodyAcceptanceMode;
   debugTrace?: ProposalFinalizationDebugTrace;
 }): string {
   const acceptanceMode =
     args.acceptanceMode ??
     (args.format === "cover_letter" ? "legacy_thin" : "strict");
+
+  assertCoverLetterHasNoRepeatedDocumentShape({
+    content: args.content,
+    format: args.format,
+    debugTrace: args.debugTrace,
+  });
 
   if (args.format === "freelance_proposal") {
     const cleanedFreelanceBody = selectProposalBodyCandidateOrThrow({
@@ -8970,7 +9209,7 @@ export function finalizeProposalForPersistence(args: {
           voicePreset: args.voicePreset,
           noContextMode: args.noContextMode,
           acceptanceMode,
-      });
+        });
       if (failOpenOutput) {
         guarded = failOpenOutput;
       }
@@ -9042,6 +9281,15 @@ export function finalizeProposalForPersistence(args: {
     });
   }
 
+  assertCvBackedCoverLetterHasCandidateEvidence({
+    content: guarded,
+    format: args.format,
+    outputLanguage: args.outputLanguage,
+    candidateName: args.candidateName,
+    requiresCandidateEvidence: args.requiresCandidateEvidence,
+    debugTrace: args.debugTrace,
+  });
+
   if (args.debugTrace) {
     const cleanupDiagnostics = getFinalSavedOutputBridgeCleanupDebugInfo({
       before: finalized,
@@ -9065,6 +9313,42 @@ export function finalizeProposalForPersistence(args: {
   return guarded;
 }
 
+export function finalizePremiumCoverLetterPayloadForPersistence(args: {
+  payload: {
+    content: string;
+    sections: Array<{ type: "text"; content: string }>;
+  };
+  format: OutputFormat;
+  outputLanguage: ProposalOutputLanguage;
+  candidateName?: string;
+  voicePreset: ProposalVoicePreset;
+  hasCandidateContext: boolean;
+  debugTrace?: ProposalFinalizationDebugTrace;
+}): {
+  content: string;
+  sections: Array<{ type: "text"; content: string }>;
+} {
+  const noContextMode =
+    args.format === "cover_letter" && !args.hasCandidateContext;
+  const content = finalizeProposalForPersistence({
+    content: args.payload.content,
+    format: args.format,
+    outputLanguage: args.outputLanguage,
+    candidateName: args.candidateName,
+    voicePreset: args.voicePreset,
+    noContextMode,
+    requiresCandidateEvidence:
+      args.format === "cover_letter" && args.hasCandidateContext,
+    debugTrace: args.debugTrace,
+  });
+
+  return {
+    ...args.payload,
+    content,
+    sections: [{ type: "text", content }],
+  };
+}
+
 export function inspectProposalFinalization(args: {
   content: string;
   format: OutputFormat;
@@ -9072,6 +9356,7 @@ export function inspectProposalFinalization(args: {
   candidateName?: string;
   voicePreset: ProposalVoicePreset;
   noContextMode: boolean;
+  requiresCandidateEvidence?: boolean;
   acceptanceMode?: ProposalBodyAcceptanceMode;
 }): ProposalFinalizationDebugTrace {
   const trace: ProposalFinalizationDebugTrace = {
@@ -9145,6 +9430,7 @@ type ProposalFinalizationTraceCaptureArgs = {
   candidateName?: string;
   voicePreset: ProposalVoicePreset;
   noContextMode: boolean;
+  requiresCandidateEvidence?: boolean;
   acceptanceMode?: ProposalBodyAcceptanceMode;
   attemptedPath: ProposalGenerationPathLabel;
 };
@@ -9159,6 +9445,7 @@ function logProposalFinalizationTrace(
     candidateName: args.candidateName,
     voicePreset: args.voicePreset,
     noContextMode: args.noContextMode,
+    requiresCandidateEvidence: args.requiresCandidateEvidence,
     acceptanceMode: args.acceptanceMode,
   });
   console.error("Proposal finalization fail-closed trace", {
@@ -9542,12 +9829,7 @@ export function buildInlineMistralPrompt(
 export async function handleGenerateProposal(
   ctx: any,
   args: GenerateProposalArgs,
-): Promise<
-  {
-    proposalId: string;
-    proposalContent: string;
-  } & ProposalExecutionProvenance
-> {
+): Promise<GenerateProposalResult> {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) {
     throw new ConvexError("User not authenticated");
@@ -9617,20 +9899,19 @@ export async function handleGenerateProposal(
   let autoToneReason: string | undefined;
   const resolvedVoicePreset =
     normalizeProposalVoicePresetForMode({
-      value:
-        isAutoVoicePresetRequested
-          ? (() => {
-              const autoTone = selectAutoTone({
-                jobTitle: args.jobTitle,
-                jobDescription: args.jobDescription,
-                personalizationContext: resolvedPersonalization,
-                personalizationRichness: args.personalizationRichness,
-              });
-              autoToneReason = autoTone.reason;
-              return autoTone.preset;
-            })()
-          : args.voicePreset ??
-            (userProfile as ProfileFallbackDoc | null)?.proposalVoicePreset,
+      value: isAutoVoicePresetRequested
+        ? (() => {
+            const autoTone = selectAutoTone({
+              jobTitle: args.jobTitle,
+              jobDescription: args.jobDescription,
+              personalizationContext: resolvedPersonalization,
+              personalizationRichness: args.personalizationRichness,
+            });
+            autoToneReason = autoTone.reason;
+            return autoTone.preset;
+          })()
+        : args.voicePreset ??
+          (userProfile as ProfileFallbackDoc | null)?.proposalVoicePreset,
       proposalType: args.proposalType,
       modelType: requestedModelType,
     }) ?? DEFAULT_PROPOSAL_VOICE_PRESET;
@@ -9731,7 +10012,8 @@ export async function handleGenerateProposal(
     llmConfig.proposalModels?.qwenFallbackModel ?? "qwen3.7-max";
   const premiumCoverLetterEligibility =
     (requestedModelType === "chatgpt" ||
-      requestedModelType === "qwen3.7-max") &&
+      requestedModelType === "qwen3.7-max" ||
+      isPremiumMistralCoverLetterModel(requestedModelType)) &&
     outputFormat === "cover_letter"
       ? evaluatePremiumCoverLetterEligibility({
           personalizationContext: effectivePersonalization,
@@ -9826,8 +10108,12 @@ export async function handleGenerateProposal(
               outputFormat === "cover_letter" &&
               premiumCoverLetterFlagEnabled &&
               premiumCoverLetterEligibility?.eligible
-          ? "premium fail-closed to legacy fallback"
-          : "legacy-only path";
+            ? "premium fail-closed to legacy fallback"
+            : isPremiumMistralCoverLetterModel(requestedModelType) &&
+                outputFormat === "cover_letter" &&
+                premiumCoverLetterEligibility?.eligible
+              ? "premium fail-closed to legacy fallback"
+              : "legacy-only path";
   const routingTrace: ProposalRoutingTrace = {
     plannedPath: coverLetterPrimaryPathEligibility.plannedPath,
     executedPath: "legacy",
@@ -9839,6 +10125,8 @@ export async function handleGenerateProposal(
   };
   let routingFailureStage: CoverLetterTelemetryFailureStage | null = null;
   let routingNormalizedFailureCode: string | null = null;
+  let premiumCoverLetterFailureTrace: PremiumCoverLetterFailureTrace | null =
+    null;
   let coverLetterRoutingTelemetryLogged = false;
   const mistralDiagnostics = createMistralDiagnosticsAccumulator();
   const getExecutionProvenance = (): ProposalExecutionProvenance => ({
@@ -9846,6 +10134,24 @@ export async function handleGenerateProposal(
     actualModelType,
     actualModelName,
     fallbackTriggerCode,
+  });
+  const getExecutionRoutingSummary = () => ({
+    attemptedPath: attemptedGenerationPath,
+    plannedPath: routingTrace.plannedPath,
+    executedPath: routingTrace.executedPath,
+    fallbackReason: routingTrace.fallbackReason,
+    validatorOutcome: routingTrace.validatorOutcome,
+    saveOutcome: routingTrace.saveOutcome,
+    premiumFailureStage: premiumCoverLetterFailureTrace?.stage ?? null,
+    premiumFailureReason: premiumCoverLetterFailureTrace?.reason ?? null,
+    premiumFailureContextClass:
+      premiumCoverLetterFailureTrace?.contextClass ?? null,
+  });
+  const getGenerateProposalResult = () => ({
+    proposalId,
+    proposalContent,
+    ...getExecutionProvenance(),
+    routing: getExecutionRoutingSummary(),
   });
   let mistralDiagnosticsLogged = false;
   const emitMistralDiagnosticsSummary = (
@@ -9923,570 +10229,624 @@ export async function handleGenerateProposal(
   > | null = null;
 
   try {
-  // Development stub: when DEV_STUB env var is set, return a placeholder proposal
-  // This allows frontend testing without LLM API keys.
-  if (process.env.DEV_STUB === "true") {
-    proposalContent = `DEV STUB PROPOSAL for "${effectiveJobTitle}"\n\nJob description:\n${args.jobDescription}\n\n---\nThis is a development placeholder proposal generated because DEV_STUB=true. Replace with a real LLM response in production.`;
-    routingTrace.executedPath = "legacy";
-    routingTrace.saveOutcome = "legacy_saved_raw";
-    await ensureGenerationActive();
-    proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
-      userId: userProfile._id,
-      jobId: args.jobId,
-      title: defaultStoredTitle,
-      content: proposalContent,
-      status: "pending",
-      version: 1,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      sections: [{ type: "text", content: proposalContent }],
-      metrics: {},
-      metadata: buildProposalRoutingMetadata({
-        base: proposalMetadataBase,
-        jobId: args.jobId ?? "DEV_STUB",
-        routing: routingTrace,
-        tags: [`model:dev_stub`],
-        provenance: getExecutionProvenance(),
-      }),
-    });
-    emitCoverLetterRoutingTelemetry();
-    emitMistralDiagnosticsSummary("success");
-    generationRunFinalStatus = "finished";
-    return { proposalId, proposalContent, ...getExecutionProvenance() };
-  }
-
-  while (true) {
-    structuredPersistencePayload = null;
-    premiumPersistencePayload = null;
-    residualVerifierWarningTag = null;
-    try {
+    // Development stub: when DEV_STUB env var is set, return a placeholder proposal
+    // This allows frontend testing without LLM API keys.
+    if (process.env.DEV_STUB === "true") {
+      proposalContent = `DEV STUB PROPOSAL for "${effectiveJobTitle}"\n\nJob description:\n${args.jobDescription}\n\n---\nThis is a development placeholder proposal generated because DEV_STUB=true. Replace with a real LLM response in production.`;
+      routingTrace.executedPath = "legacy";
+      routingTrace.saveOutcome = "legacy_saved_raw";
       await ensureGenerationActive();
-      if (actualModelType === "chatgpt" || actualModelType === "qwen3.7-max") {
-        const apiKey = process.env.OPENAI_API_KEY ?? null;
+      proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
+        userId: userProfile._id,
+        jobId: args.jobId,
+        title: defaultStoredTitle,
+        content: proposalContent,
+        status: "pending",
+        version: 1,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        sections: [{ type: "text", content: proposalContent }],
+        metrics: {},
+        metadata: buildProposalRoutingMetadata({
+          base: proposalMetadataBase,
+          jobId: args.jobId ?? "DEV_STUB",
+          routing: routingTrace,
+          tags: [`model:dev_stub`],
+          provenance: getExecutionProvenance(),
+        }),
+      });
+      emitCoverLetterRoutingTelemetry();
+      emitMistralDiagnosticsSummary("success");
+      generationRunFinalStatus = "finished";
+      return getGenerateProposalResult();
+    }
 
-        if (outputFormat === "cover_letter") {
-        console.info("Premium cover letter runtime check", {
-          requestedModelType,
-          actualModelType,
-          premiumFlagEnabled: premiumCoverLetterFlagEnabled,
-          premiumWriterModel:
-            requestedModelType === "qwen3.7-max"
-              ? qwenPremiumCoverLetterWriterModel
-              : premiumCoverLetterWriterModel,
-          premiumEligibilityResult:
-            premiumCoverLetterEligibility ?? "not_evaluated",
-          enteringPremiumAttempt:
-            (requestedModelType === "chatgpt" &&
-              coverLetterPrimaryPathEligibility.eligible) ||
-            (requestedModelType === "qwen3.7-max" &&
-              premiumCoverLetterFlagEnabled &&
-              premiumCoverLetterEligibility?.eligible),
-        });
-        }
-
+    while (true) {
+      structuredPersistencePayload = null;
+      premiumPersistencePayload = null;
+      residualVerifierWarningTag = null;
+      try {
+        await ensureGenerationActive();
+        premiumCoverLetterFailureTrace = null;
         if (
-          requestedModelType === "chatgpt" &&
-          outputFormat === "cover_letter" &&
-          coverLetterPrimaryPathEligibility.eligible &&
-          apiKey
+          actualModelType === "chatgpt" ||
+          actualModelType === "qwen3.7-max"
         ) {
-          try {
-            premiumPersistencePayload =
-              await attemptPremiumCoverLetterGeneration({
-                personalizationContext: effectivePersonalization,
-                voicePreset: resolvedVoicePreset,
-                outputLanguage,
-                jobTitle: effectiveJobTitle,
-                jobDescription: args.jobDescription,
-                candidateName,
-                generationControlsBlock,
-                companyValuesPack,
-                writer: ({ prompt }) =>
-                  generatePremiumCoverLetterBodyPartsWithOpenAI({
-                    apiKey,
-                    prompt,
-                    signal: cancellationContext?.signal,
-                  }),
-              });
-          } catch (premiumError) {
-            console.warn(
-              "Premium cover letter path v1 failed; falling back to legacy cover-letter generation.",
-              premiumError,
-            );
-            premiumPersistencePayload = null;
+          const apiKey = process.env.OPENAI_API_KEY ?? null;
+
+          if (outputFormat === "cover_letter") {
+            console.info("Premium cover letter runtime check", {
+              requestedModelType,
+              actualModelType,
+              premiumFlagEnabled: premiumCoverLetterFlagEnabled,
+              premiumWriterModel:
+                requestedModelType === "qwen3.7-max"
+                  ? qwenPremiumCoverLetterWriterModel
+                  : premiumCoverLetterWriterModel,
+              premiumEligibilityResult:
+                premiumCoverLetterEligibility ?? "not_evaluated",
+              enteringPremiumAttempt:
+                (requestedModelType === "chatgpt" &&
+                  coverLetterPrimaryPathEligibility.eligible) ||
+                (requestedModelType === "qwen3.7-max" &&
+                  premiumCoverLetterFlagEnabled &&
+                  premiumCoverLetterEligibility?.eligible),
+            });
           }
 
-          if (premiumPersistencePayload) {
-            attemptedGenerationPath = "premium success";
-            routingTrace.plannedPath = "structured";
-            routingTrace.executedPath = "structured";
-            routingTrace.fallbackReason = "not_applicable";
-            routingTrace.validatorOutcome = "structured_success";
-          } else {
-            attemptedGenerationPath = "premium fail-closed to legacy fallback";
-            routingTrace.fallbackReason = "premium_generation_failed";
-            if (routingTrace.validatorOutcome === "not_run") {
-              routingTrace.validatorOutcome = "structured_failed";
+          if (
+            requestedModelType === "chatgpt" &&
+            outputFormat === "cover_letter" &&
+            coverLetterPrimaryPathEligibility.eligible &&
+            apiKey
+          ) {
+            try {
+              premiumPersistencePayload =
+                await attemptPremiumCoverLetterGeneration({
+                  personalizationContext: effectivePersonalization,
+                  voicePreset: resolvedVoicePreset,
+                  outputLanguage,
+                  jobTitle: effectiveJobTitle,
+                  jobDescription: args.jobDescription,
+                  candidateName,
+                  generationControlsBlock,
+                  companyValuesPack,
+                  writerProvider: "openai",
+                  writerModel: premiumCoverLetterWriterModel,
+                  onFailure: (failure) => {
+                    premiumCoverLetterFailureTrace = failure;
+                    logPremiumCoverLetterFailureTrace({
+                      provider: "openai",
+                      writerModel: premiumCoverLetterWriterModel,
+                      failure,
+                    });
+                  },
+                  writer: ({ prompt }) =>
+                    generatePremiumCoverLetterBodyPartsWithOpenAI({
+                      apiKey,
+                      prompt,
+                      writerModel: premiumCoverLetterWriterModel,
+                      signal: cancellationContext?.signal,
+                    }),
+                });
+            } catch (premiumError) {
+              console.warn(
+                "Premium cover letter path v1 failed; falling back to legacy cover-letter generation.",
+                premiumError,
+              );
+              premiumPersistencePayload = null;
             }
-          }
-        } else if (
-          requestedModelType === "qwen3.7-max" &&
-          outputFormat === "cover_letter" &&
-          premiumCoverLetterFlagEnabled &&
-          premiumCoverLetterEligibility?.eligible
-        ) {
-          const qwenApiKey = process.env.QWEN_API_KEY ?? null;
-          const qwenChatCompletionsUrl =
-            process.env.QWEN_CHAT_COMPLETIONS_URL ??
-            (process.env.QWEN_BASE_URL
-              ? `${process.env.QWEN_BASE_URL.replace(/\/$/, "")}/chat/completions`
-              : null) ??
-            null;
-          if (!qwenApiKey || !qwenChatCompletionsUrl) {
+
+            if (premiumPersistencePayload) {
+              attemptedGenerationPath = "premium success";
+              routingTrace.plannedPath = "structured";
+              routingTrace.executedPath = "structured";
+              routingTrace.fallbackReason = "not_applicable";
+              routingTrace.validatorOutcome = "structured_success";
+            } else {
+              attemptedGenerationPath =
+                "premium fail-closed to legacy fallback";
+              routingTrace.fallbackReason = "premium_generation_failed";
+              console.warn(
+                "Premium cover-letter returned null; using legacy fallback.",
+                {
+                  provider: "openai",
+                  writerModel: premiumCoverLetterWriterModel,
+                  failureTrace: premiumCoverLetterFailureTrace,
+                },
+              );
+              if (routingTrace.validatorOutcome === "not_run") {
+                routingTrace.validatorOutcome = "structured_failed";
+              }
+            }
+          } else if (
+            requestedModelType === "qwen3.7-max" &&
+            outputFormat === "cover_letter" &&
+            premiumCoverLetterFlagEnabled &&
+            premiumCoverLetterEligibility?.eligible
+          ) {
+            const qwenApiKey = process.env.QWEN_API_KEY ?? null;
+            const qwenChatCompletionsUrl =
+              process.env.QWEN_CHAT_COMPLETIONS_URL ??
+              (process.env.QWEN_BASE_URL
+                ? `${process.env.QWEN_BASE_URL.replace(/\/$/, "")}/chat/completions`
+                : null) ??
+              null;
+            if (!qwenApiKey || !qwenChatCompletionsUrl) {
+              throw new ConvexError(
+                "Qwen API credentials are not configured for qwen3.7-max.",
+              );
+            }
+
+            try {
+              premiumPersistencePayload =
+                await attemptPremiumCoverLetterGeneration({
+                  personalizationContext: effectivePersonalization,
+                  voicePreset: resolvedVoicePreset,
+                  outputLanguage,
+                  jobTitle: effectiveJobTitle,
+                  jobDescription: args.jobDescription,
+                  candidateName,
+                  generationControlsBlock,
+                  companyValuesPack,
+                  writerProvider: "qwen",
+                  writerModel: qwenPremiumCoverLetterWriterModel,
+                  onFailure: (failure) => {
+                    premiumCoverLetterFailureTrace = failure;
+                    logPremiumCoverLetterFailureTrace({
+                      provider: "qwen",
+                      writerModel: qwenPremiumCoverLetterWriterModel,
+                      failure,
+                    });
+                    try {
+                      logQwenPremiumDiagnostics({
+                        provider: "qwen",
+                        stage:
+                          failure.stage === "validation"
+                            ? "validation"
+                            : "unknown",
+                        reason: failure.reason,
+                        contextClass: failure.contextClass,
+                        validationIssues: failure.issues?.map((code) => ({
+                          code,
+                        })),
+                      });
+                    } catch {
+                      // Diagnostics must not change premium fallback behavior.
+                    }
+                  },
+                  writer: ({ prompt }) =>
+                    generatePremiumCoverLetterBodyPartsWithQwen({
+                      apiKey: qwenApiKey,
+                      chatCompletionsUrl: qwenChatCompletionsUrl,
+                      prompt,
+                      writerModel: qwenPremiumCoverLetterWriterModel,
+                      signal: cancellationContext?.signal,
+                    }),
+                });
+              actualModelName = qwenPremiumCoverLetterWriterModel;
+            } catch (premiumError) {
+              const qwenDiagnostics =
+                buildQwenPremiumOuterDiagnostics(premiumError);
+              if (qwenDiagnostics) {
+                logQwenPremiumDiagnostics(qwenDiagnostics);
+              }
+              console.warn(
+                "Premium cover letter path v1 failed; falling back to legacy cover-letter generation.",
+                premiumError,
+              );
+              premiumPersistencePayload = null;
+            }
+
+            if (premiumPersistencePayload) {
+              attemptedGenerationPath = "premium success";
+              routingTrace.plannedPath = "structured";
+              routingTrace.executedPath = "structured";
+              routingTrace.fallbackReason = "not_applicable";
+              routingTrace.validatorOutcome = "structured_success";
+            } else {
+              attemptedGenerationPath =
+                "premium fail-closed to legacy fallback";
+              routingTrace.fallbackReason = "premium_generation_failed";
+              console.warn(
+                "Premium cover-letter returned null; using legacy fallback.",
+                {
+                  provider: "qwen",
+                  writerModel: qwenPremiumCoverLetterWriterModel,
+                  failureTrace: premiumCoverLetterFailureTrace,
+                },
+              );
+              if (routingTrace.validatorOutcome === "not_run") {
+                routingTrace.validatorOutcome = "structured_failed";
+              }
+            }
+          } else if (
+            requestedModelType === "chatgpt" &&
+            outputFormat === "cover_letter" &&
+            coverLetterPrimaryPathEligibility.eligible &&
+            !apiKey
+          ) {
+            console.info(
+              "OpenAI API key unavailable; skipping premium proposal path and using fallbacks.",
+            );
+          } else if (
+            requestedModelType === "qwen3.7-max" &&
+            outputFormat === "cover_letter" &&
+            coverLetterPrimaryPathEligibility.eligible &&
+            !(process.env.QWEN_API_KEY ?? null)
+          ) {
             throw new ConvexError(
               "Qwen API credentials are not configured for qwen3.7-max.",
             );
           }
 
-          try {
-            premiumPersistencePayload =
-              await attemptPremiumCoverLetterGeneration({
-                personalizationContext: effectivePersonalization,
-                voicePreset: resolvedVoicePreset,
-                outputLanguage,
-                jobTitle: effectiveJobTitle,
-                jobDescription: args.jobDescription,
-                candidateName,
-                generationControlsBlock,
-                companyValuesPack,
-                writerProvider: "qwen",
-                writerModel: qwenPremiumCoverLetterWriterModel,
-                onFailure: (failure) => {
-                  try {
-                    logQwenPremiumDiagnostics({
-                      provider: "qwen",
-                      stage:
-                        failure.stage === "validation"
-                          ? "validation"
-                          : "unknown",
-                      reason: failure.reason,
-                      contextClass: failure.contextClass,
-                      validationIssues: failure.issues?.map((code) => ({
-                        code,
-                      })),
-                    });
-                  } catch {
-                    // Diagnostics must not change premium fallback behavior.
-                  }
-                },
-                writer: ({ prompt }) =>
-                  generatePremiumCoverLetterBodyPartsWithQwen({
-                    apiKey: qwenApiKey,
-                    chatCompletionsUrl: qwenChatCompletionsUrl,
-                    prompt,
-                    writerModel: qwenPremiumCoverLetterWriterModel,
-                    signal: cancellationContext?.signal,
-                  }),
-              });
-            actualModelName = qwenPremiumCoverLetterWriterModel;
-          } catch (premiumError) {
-            const qwenDiagnostics =
-              buildQwenPremiumOuterDiagnostics(premiumError);
-            if (qwenDiagnostics) {
-              logQwenPremiumDiagnostics(qwenDiagnostics);
-            }
-            console.warn(
-              "Premium cover letter path v1 failed; falling back to legacy cover-letter generation.",
-              premiumError,
-            );
-            premiumPersistencePayload = null;
-          }
-
           if (premiumPersistencePayload) {
-            attemptedGenerationPath = "premium success";
-            routingTrace.plannedPath = "structured";
-            routingTrace.executedPath = "structured";
-            routingTrace.fallbackReason = "not_applicable";
-            routingTrace.validatorOutcome = "structured_success";
+            proposalContent = premiumPersistencePayload.content;
           } else {
-            attemptedGenerationPath = "premium fail-closed to legacy fallback";
-            routingTrace.fallbackReason = "premium_generation_failed";
-            if (routingTrace.validatorOutcome === "not_run") {
-              routingTrace.validatorOutcome = "structured_failed";
-            }
-          }
-        } else if (
-          requestedModelType === "chatgpt" &&
-          outputFormat === "cover_letter" &&
-          coverLetterPrimaryPathEligibility.eligible &&
-          !apiKey
-        ) {
-          console.info(
-            "OpenAI API key unavailable; skipping premium proposal path and using fallbacks.",
-          );
-        } else if (
-          requestedModelType === "qwen3.7-max" &&
-          outputFormat === "cover_letter" &&
-          coverLetterPrimaryPathEligibility.eligible &&
-          !(process.env.QWEN_API_KEY ?? null)
-        ) {
-          throw new ConvexError(
-            "Qwen API credentials are not configured for qwen3.7-max.",
-          );
-        }
+            const proposalService = (() => {
+              if (actualModelType === "qwen3.7-max") {
+                const qwenApiKey = process.env.QWEN_API_KEY ?? null;
+                const qwenChatCompletionsUrl =
+                  llmConfig.qwenChatCompletionsUrl ??
+                  process.env.QWEN_CHAT_COMPLETIONS_URL ??
+                  null;
+                if (!qwenApiKey || !qwenChatCompletionsUrl) {
+                  throw new ConvexError(
+                    "Qwen API credentials are not configured for qwen3.7-max.",
+                  );
+                }
+                return new ProposalService({
+                  modelAdapters: [
+                    new OpenAICompatibleChatAdapter({
+                      apiKey: qwenApiKey,
+                      url: qwenChatCompletionsUrl,
+                      providerName: "qwen",
+                      modelName:
+                        llmConfig.proposalModels?.qwenFallbackModel ??
+                        "qwen3.7-max",
+                    }),
+                  ],
+                });
+              }
 
-        if (premiumPersistencePayload) {
-          proposalContent = premiumPersistencePayload.content;
-        } else {
-          const proposalService = (() => {
-            if (actualModelType === "qwen3.7-max") {
-              const qwenApiKey = process.env.QWEN_API_KEY ?? null;
-              const qwenChatCompletionsUrl =
-                llmConfig.qwenChatCompletionsUrl ??
-                process.env.QWEN_CHAT_COMPLETIONS_URL ??
-                null;
-              if (!qwenApiKey || !qwenChatCompletionsUrl) {
-                throw new ConvexError(
-                  "Qwen API credentials are not configured for qwen3.7-max.",
+              return new ProposalService({
+                apiKey: apiKey ?? undefined,
+                modelName: "chatgpt",
+              });
+            })();
+
+            if (outputFormat === "freelance_proposal") {
+              const tokenLimit = 3000;
+              let jobDescription = enrichedJobDescription;
+              const estimatedTokens = Math.ceil(jobDescription.length / 4);
+
+              if (estimatedTokens > tokenLimit) {
+                jobDescription = jobDescription.slice(
+                  0,
+                  Math.floor(
+                    (jobDescription.length * tokenLimit) / estimatedTokens,
+                  ),
+                );
+                console.warn(
+                  `Job description truncated due to token limit. Original tokens: ${estimatedTokens}, New length: ${jobDescription.length}`,
                 );
               }
-              return new ProposalService({
-                modelAdapters: [
-                  new OpenAICompatibleChatAdapter({
-                    apiKey: qwenApiKey,
-                    url: qwenChatCompletionsUrl,
-                    providerName: "qwen",
-                    modelName:
-                      llmConfig.proposalModels?.qwenFallbackModel ??
-                      "qwen3.7-max",
-                  }),
-                ],
-              });
-            }
 
-            return new ProposalService({
-              apiKey: apiKey ?? undefined,
-              modelName: "chatgpt",
-            });
-          })();
-
-          if (outputFormat === "freelance_proposal") {
-            const tokenLimit = 3000;
-            let jobDescription = enrichedJobDescription;
-            const estimatedTokens = Math.ceil(jobDescription.length / 4);
-
-            if (estimatedTokens > tokenLimit) {
-              jobDescription = jobDescription.slice(
-                0,
-                Math.floor(
-                  (jobDescription.length * tokenLimit) / estimatedTokens,
-                ),
-              );
-              console.warn(
-                `Job description truncated due to token limit. Original tokens: ${estimatedTokens}, New length: ${jobDescription.length}`,
-              );
-            }
-
-            const proposal = await proposalService.generateTechnicalProposal({
-              jobTitle: effectiveJobTitle,
-              jobDescription: appendOptionalPromptBlock(
-                jobDescription,
-                generationControlsBlock,
-              ),
-              requirements: expertiseFromProfile,
-              expertise: expertiseFromProfile,
-              tone: "technical",
-              formalityLevel: effectiveTone.formalityLevel,
-              creativity: effectiveTone.creativity,
-            });
-            proposalContent = proposal.content;
-            actualModelName = proposal.metadata.modelName;
-          } else if (outputFormat === "application_message") {
-            const proposal = await proposalService.generateTextWithFallbacks(
-              prompt,
-              cancellationContext?.signal
-                ? ({ signal: cancellationContext.signal } as any)
-                : {},
-            );
-            proposalContent = proposal.text;
-            actualModelName = proposal.modelName;
-          } else {
-            const proposal = await proposalService.generateCreativeProposal({
-              jobTitle: effectiveJobTitle,
-              jobDescription: appendOptionalPromptBlock(
-                enrichedJobDescription,
-                generationControlsBlock,
-              ),
-              creativeDirection:
-                effectivePersonalization?.desiredPosition ?? "",
-            });
-            proposalContent = proposal.content;
-            actualModelName = proposal.metadata.modelName;
-          }
-        }
-      } else if (
-        actualModelType === "mistral-large-latest" ||
-        actualModelType === "mistral-medium-latest" ||
-        actualModelType === "mistral-small-latest"
-      ) {
-        const mistralKey = process.env.MISTRAL_API_KEY;
-        if (!mistralKey) {
-          throw new ConvexError("Mistral API key is not configured");
-        }
-        if (
-          !shouldBypassPlannerForNoContextLegacyCoverLetter &&
-          !shouldBypassPlannerForCvBackedLegacyCoverLetter
-        ) {
-          try {
-            plannerResult = normalizeProposalPlannerResult({
-              rawPlan: await buildStructuredProposalPlan({
-                mistralKey,
-                modelType: actualModelType,
-                prompt: plannerPrompt,
-                diagnostics: mistralDiagnostics,
-                signal: cancellationContext?.signal,
-              }),
-              voicePreset: resolvedVoicePreset,
-              contextMode: plannerContextMode,
-              sourceFactBank,
-              outputLanguage: plannerOutputLanguage,
-              jobTitle: effectiveJobTitle,
-              jobDescription: args.jobDescription,
-            });
-            prompt = buildInlineMistralPrompt(
-              {
-                ...args,
+              const proposal = await proposalService.generateTechnicalProposal({
                 jobTitle: effectiveJobTitle,
-              },
-              effectiveTone,
-              voicePresetDefinition.guidance,
-              outputFormat,
-              outputLanguage,
-              personalizationBlock,
-              effectivePromptRichness,
-              noContextPromptBlock,
-              buildProposalWriterPlanBlock(plannerResult, outputFormat),
-              generationControlsBlock,
-            );
-          } catch (plannerError) {
-            if (isProposalProviderBusyError(plannerError)) {
-              markProviderBusyFailure();
-              throw plannerError;
-            }
-            console.warn(
-              "Proposal planner failed; continuing with base prompt:",
-              plannerError,
-            );
-            if (structuredCoverLetterEnabled) {
-              attemptedGenerationPath =
-                "structured fail-closed to legacy fallback";
-              routingTrace.fallbackReason = "structured_plan_parse_fail";
-              routingTrace.validatorOutcome = "structured_failed";
+                jobDescription: appendOptionalPromptBlock(
+                  jobDescription,
+                  generationControlsBlock,
+                ),
+                requirements: expertiseFromProfile,
+                expertise: expertiseFromProfile,
+                tone: "technical",
+                formalityLevel: effectiveTone.formalityLevel,
+                creativity: effectiveTone.creativity,
+              });
+              proposalContent = proposal.content;
+              actualModelName = proposal.metadata.modelName;
+            } else if (outputFormat === "application_message") {
+              const proposal = await proposalService.generateTextWithFallbacks(
+                prompt,
+                cancellationContext?.signal
+                  ? ({ signal: cancellationContext.signal } as any)
+                  : {},
+              );
+              proposalContent = proposal.text;
+              actualModelName = proposal.modelName;
+            } else {
+              const proposal = await proposalService.generateCreativeProposal({
+                jobTitle: effectiveJobTitle,
+                jobDescription: appendOptionalPromptBlock(
+                  enrichedJobDescription,
+                  generationControlsBlock,
+                ),
+                creativeDirection:
+                  effectivePersonalization?.desiredPosition ?? "",
+              });
+              proposalContent = proposal.content;
+              actualModelName = proposal.metadata.modelName;
             }
           }
-        }
-        const model = new ChatMistralAI({
-          apiKey: mistralKey,
-          modelName: actualModelType,
-        });
-        actualModelName = actualModelType;
-        let structuredFallbackReason: StructuredCoverLetterFallbackReason | null =
-          null;
-        if (!shouldBypassPlannerForCvBackedLegacyCoverLetter) {
-          try {
-            structuredPersistencePayload =
-              await attemptStructuredCoverLetterGeneration(
-                {
-                  gateEnabled: structuredCoverLetterEnabled,
-                  mistralKey,
-                  modelType: actualModelType,
-                  signal: cancellationContext?.signal,
-                  plannerResult,
-                  outputFormat,
-                  outputLanguage,
-                  candidateName,
+        } else if (
+          actualModelType === "mistral-large-latest" ||
+          actualModelType === "mistral-medium-latest" ||
+          actualModelType === "mistral-small-latest"
+        ) {
+          const mistralKey = process.env.MISTRAL_API_KEY;
+          if (!mistralKey) {
+            throw new ConvexError("Mistral API key is not configured");
+          }
+          if (
+            isPremiumMistralCoverLetterModel(requestedModelType) &&
+            outputFormat === "cover_letter" &&
+            premiumCoverLetterEligibility?.eligible
+          ) {
+            try {
+              premiumPersistencePayload =
+                await attemptPremiumCoverLetterGeneration({
+                  personalizationContext: effectivePersonalization,
                   voicePreset: resolvedVoicePreset,
+                  outputLanguage,
                   jobTitle: effectiveJobTitle,
                   jobDescription: args.jobDescription,
+                  candidateName,
                   generationControlsBlock,
                   companyValuesPack,
-                  diagnostics: mistralDiagnostics,
-                },
-                {
-                  onFallbackReason: (reason) => {
-                    structuredFallbackReason = reason;
+                  writerProvider: "mistral",
+                  writerModel: actualModelType,
+                  signal: cancellationContext?.signal,
+                  onFailure: (failure) => {
+                    premiumCoverLetterFailureTrace = failure;
+                    logPremiumCoverLetterFailureTrace({
+                      provider: "mistral",
+                      writerModel: actualModelType,
+                      failure,
+                    });
                   },
+                  writer: ({ prompt, signal }) =>
+                    generatePremiumCoverLetterBodyPartsWithMistral({
+                      apiKey: mistralKey,
+                      prompt,
+                      writerModel: actualModelType,
+                      signal,
+                    }),
+                });
+            } catch (premiumError) {
+              console.warn(
+                "Premium Mistral cover letter path failed; falling back to existing Mistral generation.",
+                premiumError,
+              );
+              premiumPersistencePayload = null;
+            }
+
+            if (premiumPersistencePayload) {
+              attemptedGenerationPath = "premium success";
+              routingTrace.plannedPath = "structured";
+              routingTrace.executedPath = "structured";
+              routingTrace.fallbackReason = "not_applicable";
+              routingTrace.validatorOutcome = "structured_success";
+              proposalContent = premiumPersistencePayload.content;
+            } else {
+              attemptedGenerationPath =
+                "premium fail-closed to legacy fallback";
+              routingTrace.fallbackReason = "premium_generation_failed";
+              console.warn(
+                "Premium cover-letter returned null; using existing Mistral fallback.",
+                {
+                  provider: "mistral",
+                  writerModel: actualModelType,
+                  failureTrace: premiumCoverLetterFailureTrace,
                 },
               );
-          } catch (error) {
-            if (isProposalProviderBusyError(error)) {
-              markProviderBusyFailure();
+              if (routingTrace.validatorOutcome === "not_run") {
+                routingTrace.validatorOutcome = "structured_failed";
+              }
             }
-            throw error;
           }
-        }
-
-        if (structuredPersistencePayload) {
-          attemptedGenerationPath =
-            structuredPersistencePayload.generationPath ===
-            "structured_repaired_success"
-              ? "structured repaired success"
-              : "structured success";
-          routingTrace.executedPath = "structured";
-          routingTrace.fallbackReason = "not_applicable";
-          routingTrace.validatorOutcome =
-            structuredPersistencePayload.generationPath ===
-            "structured_repaired_success"
-              ? "structured_repaired_success"
-              : "structured_success";
-          proposalContent = structuredPersistencePayload.content;
-          residualVerifierWarningTag =
-            structuredPersistencePayload.residualVerifierWarningTag;
-        } else {
-          if (shouldBypassPlannerForCvBackedLegacyCoverLetter) {
-            attemptedGenerationPath = "legacy-only path after planner bypass";
-            routingTrace.fallbackReason = "planner_dependency_bypassed";
-          } else if (
-            outputFormat === "cover_letter" &&
-            structuredCoverLetterEnabled
+          if (!premiumPersistencePayload) {
+          if (
+            !shouldBypassPlannerForNoContextLegacyCoverLetter &&
+            !shouldBypassPlannerForCvBackedLegacyCoverLetter
           ) {
-            attemptedGenerationPath =
-              "structured fail-closed to legacy fallback";
-            routingTrace.fallbackReason =
-              structuredFallbackReason ?? routingTrace.fallbackReason;
-            if (routingTrace.validatorOutcome === "not_run") {
-              routingTrace.validatorOutcome = "structured_failed";
+            try {
+              plannerResult = normalizeProposalPlannerResult({
+                rawPlan: await buildStructuredProposalPlan({
+                  mistralKey,
+                  modelType: actualModelType,
+                  prompt: plannerPrompt,
+                  diagnostics: mistralDiagnostics,
+                  signal: cancellationContext?.signal,
+                }),
+                voicePreset: resolvedVoicePreset,
+                contextMode: plannerContextMode,
+                sourceFactBank,
+                outputLanguage: plannerOutputLanguage,
+                jobTitle: effectiveJobTitle,
+                jobDescription: args.jobDescription,
+              });
+              prompt = buildInlineMistralPrompt(
+                {
+                  ...args,
+                  jobTitle: effectiveJobTitle,
+                },
+                effectiveTone,
+                voicePresetDefinition.guidance,
+                outputFormat,
+                outputLanguage,
+                personalizationBlock,
+                effectivePromptRichness,
+                noContextPromptBlock,
+                buildProposalWriterPlanBlock(plannerResult, outputFormat),
+                generationControlsBlock,
+              );
+            } catch (plannerError) {
+              if (isProposalProviderBusyError(plannerError)) {
+                markProviderBusyFailure();
+                throw plannerError;
+              }
+              console.warn(
+                "Proposal planner failed; continuing with base prompt:",
+                plannerError,
+              );
+              if (structuredCoverLetterEnabled) {
+                attemptedGenerationPath =
+                  "structured fail-closed to legacy fallback";
+                routingTrace.fallbackReason = "structured_plan_parse_fail";
+                routingTrace.validatorOutcome = "structured_failed";
+              }
             }
-          } else if (
-            outputFormat === "cover_letter" &&
-            structuredCoverLetterGateEnabled &&
-            routingTrace.fallbackReason === "not_applicable"
-          ) {
-            routingTrace.fallbackReason =
-              structuredRolloutEligibility.fallbackReason;
           }
-          routingTrace.executedPath = "legacy";
-          assertStructuredCoverLetterRoutingConsistency({
-            plannedPath: routingTrace.plannedPath,
-            executedPath: routingTrace.executedPath,
-            attemptedGenerationPath,
-            fallbackReason: routingTrace.fallbackReason,
+          const model = new ChatMistralAI({
+            apiKey: mistralKey,
+            modelName: actualModelType,
           });
-          let response;
-          try {
-            response = await model.invoke([new HumanMessage(prompt)], {
-              signal: cancellationContext?.signal,
-            } as any);
-          } catch (error) {
-            if (isProposalGenerationCanceledError(error)) {
+          actualModelName = actualModelType;
+          let structuredFallbackReason: StructuredCoverLetterFallbackReason | null =
+            null;
+          if (!shouldBypassPlannerForCvBackedLegacyCoverLetter) {
+            try {
+              structuredPersistencePayload =
+                await attemptStructuredCoverLetterGeneration(
+                  {
+                    gateEnabled: structuredCoverLetterEnabled,
+                    mistralKey,
+                    modelType: actualModelType,
+                    signal: cancellationContext?.signal,
+                    plannerResult,
+                    outputFormat,
+                    outputLanguage,
+                    candidateName,
+                    voicePreset: resolvedVoicePreset,
+                    jobTitle: effectiveJobTitle,
+                    jobDescription: args.jobDescription,
+                    generationControlsBlock,
+                    companyValuesPack,
+                    diagnostics: mistralDiagnostics,
+                  },
+                  {
+                    onFallbackReason: (reason) => {
+                      structuredFallbackReason = reason;
+                    },
+                  },
+                );
+            } catch (error) {
+              if (isProposalProviderBusyError(error)) {
+                markProviderBusyFailure();
+              }
               throw error;
             }
-            recordMistralDiagnosticFailure({
+          }
+
+          if (structuredPersistencePayload) {
+            attemptedGenerationPath =
+              structuredPersistencePayload.generationPath ===
+              "structured_repaired_success"
+                ? "structured repaired success"
+                : "structured success";
+            routingTrace.executedPath = "structured";
+            routingTrace.fallbackReason = "not_applicable";
+            routingTrace.validatorOutcome =
+              structuredPersistencePayload.generationPath ===
+              "structured_repaired_success"
+                ? "structured_repaired_success"
+                : "structured_success";
+            proposalContent = structuredPersistencePayload.content;
+            residualVerifierWarningTag =
+              structuredPersistencePayload.residualVerifierWarningTag;
+          } else {
+            if (shouldBypassPlannerForCvBackedLegacyCoverLetter) {
+              attemptedGenerationPath = "legacy-only path after planner bypass";
+              routingTrace.fallbackReason = "planner_dependency_bypassed";
+            } else if (
+              outputFormat === "cover_letter" &&
+              structuredCoverLetterEnabled
+            ) {
+              attemptedGenerationPath =
+                "structured fail-closed to legacy fallback";
+              routingTrace.fallbackReason =
+                structuredFallbackReason ?? routingTrace.fallbackReason;
+              if (routingTrace.validatorOutcome === "not_run") {
+                routingTrace.validatorOutcome = "structured_failed";
+              }
+            } else if (
+              outputFormat === "cover_letter" &&
+              structuredCoverLetterGateEnabled &&
+              routingTrace.fallbackReason === "not_applicable"
+            ) {
+              routingTrace.fallbackReason =
+                structuredRolloutEligibility.fallbackReason;
+            }
+            routingTrace.executedPath = "legacy";
+            assertStructuredCoverLetterRoutingConsistency({
+              plannedPath: routingTrace.plannedPath,
+              executedPath: routingTrace.executedPath,
+              attemptedGenerationPath,
+              fallbackReason: routingTrace.fallbackReason,
+            });
+            let response;
+            try {
+              response = await model.invoke([new HumanMessage(prompt)], {
+                signal: cancellationContext?.signal,
+              } as any);
+            } catch (error) {
+              if (isProposalGenerationCanceledError(error)) {
+                throw error;
+              }
+              recordMistralDiagnosticFailure({
+                diagnostics: mistralDiagnostics,
+                stage: "legacy_generation",
+                modelType: actualModelType,
+                inputText: prompt,
+                error,
+              });
+              const providerBusyError = getMistralProviderBusyError(
+                error,
+                "legacy_generation",
+              );
+              if (providerBusyError) {
+                markProviderBusyFailure();
+                throw providerBusyError;
+              }
+              const providerTransportError = getMistralProviderTransportError(
+                error,
+                "legacy_generation",
+              );
+              if (providerTransportError) {
+                throw providerTransportError;
+              }
+              throw error;
+            }
+            proposalContent =
+              extractTextFromChatMessageContent(response.content) ?? "";
+            recordMistralDiagnosticCall({
               diagnostics: mistralDiagnostics,
               stage: "legacy_generation",
               modelType: actualModelType,
               inputText: prompt,
-              error,
-            });
-            const providerBusyError = getMistralProviderBusyError(
-              error,
-              "legacy_generation",
-            );
-            if (providerBusyError) {
-              markProviderBusyFailure();
-              throw providerBusyError;
-            }
-            const providerTransportError = getMistralProviderTransportError(
-              error,
-              "legacy_generation",
-            );
-            if (providerTransportError) {
-              throw providerTransportError;
-            }
-            throw error;
-          }
-          proposalContent =
-            extractTextFromChatMessageContent(response.content) ?? "";
-          recordMistralDiagnosticCall({
-            diagnostics: mistralDiagnostics,
-            stage: "legacy_generation",
-            modelType: actualModelType,
-            inputText: prompt,
-            outputText: proposalContent,
-            status: "success",
-          });
-
-          if (plannerResult) {
-            lastFinalizationTraceArgs = {
-              content: proposalContent,
-              format: outputFormat,
-              outputLanguage,
-              candidateName,
-              voicePreset: resolvedVoicePreset,
-              noContextMode: plannerResult.context_mode === "none",
-            };
-            let verifiedContent = finalizeProposalForSave({
-              content: proposalContent,
-              format: outputFormat,
-              outputLanguage,
-              candidateName,
-              voicePreset: resolvedVoicePreset,
-              noContextMode: plannerResult.context_mode === "none",
-            });
-            let verificationResult = analyzeProposalDraft({
-              content: verifiedContent,
-              plan: plannerResult,
-              format: outputFormat,
-              outputLanguage,
-              candidateName,
-              jobTitle: effectiveJobTitle,
-              jobDescription: args.jobDescription,
-            });
-            let verificationIssues = verificationResult.issues;
-            const shouldRepairDraft = shouldRunProposalDraftRepair({
-              content: verifiedContent,
-              plan: plannerResult,
-              format: outputFormat,
-              outputLanguage,
-              candidateName,
-              jobTitle: effectiveJobTitle,
-              jobDescription: args.jobDescription,
-              verificationResult,
+              outputText: proposalContent,
+              status: "success",
             });
 
-            if (shouldRepairDraft) {
-              const repairedDraft = await repairProposalDraftWithConstrainedPass({
-                mistralKey,
-                modelType: actualModelType,
-                content: verifiedContent,
-                plan: plannerResult,
-                format: outputFormat,
-                outputLanguage,
-                candidateName,
-                jobTitle: effectiveJobTitle,
-                jobDescription: args.jobDescription,
-                flaggedSentences: verificationResult.flaggedSentences,
-                diagnostics: mistralDiagnostics,
-                signal: cancellationContext?.signal,
-              });
-
+            if (plannerResult) {
               lastFinalizationTraceArgs = {
-                content: repairedDraft,
+                content: proposalContent,
                 format: outputFormat,
                 outputLanguage,
                 candidateName,
                 voicePreset: resolvedVoicePreset,
                 noContextMode: plannerResult.context_mode === "none",
               };
-              verifiedContent = finalizeProposalForSave({
-                content: repairedDraft,
+              let verifiedContent = finalizeProposalForSave({
+                content: proposalContent,
                 format: outputFormat,
                 outputLanguage,
                 candidateName,
                 voicePreset: resolvedVoicePreset,
                 noContextMode: plannerResult.context_mode === "none",
               });
-              verificationResult = analyzeProposalDraft({
+              let verificationResult = analyzeProposalDraft({
                 content: verifiedContent,
                 plan: plannerResult,
                 format: outputFormat,
@@ -10495,246 +10855,162 @@ export async function handleGenerateProposal(
                 jobTitle: effectiveJobTitle,
                 jobDescription: args.jobDescription,
               });
-              verificationIssues = verificationResult.issues;
-            }
+              let verificationIssues = verificationResult.issues;
+              const shouldRepairDraft = shouldRunProposalDraftRepair({
+                content: verifiedContent,
+                plan: plannerResult,
+                format: outputFormat,
+                outputLanguage,
+                candidateName,
+                jobTitle: effectiveJobTitle,
+                jobDescription: args.jobDescription,
+                verificationResult,
+              });
 
-            if (verificationIssues.length > 0) {
-              residualVerifierWarningTag = "warning:verifier_post_repair";
-              routingTrace.validatorOutcome = "legacy_verified_warning";
-              console.warn(
-                "Generated proposal still has verifier findings after repair; saving repaired draft without hard-fail.",
-                {
+              if (shouldRepairDraft) {
+                const repairedDraft =
+                  await repairProposalDraftWithConstrainedPass({
+                    mistralKey,
+                    modelType: actualModelType,
+                    content: verifiedContent,
+                    plan: plannerResult,
+                    format: outputFormat,
+                    outputLanguage,
+                    candidateName,
+                    jobTitle: effectiveJobTitle,
+                    jobDescription: args.jobDescription,
+                    flaggedSentences: verificationResult.flaggedSentences,
+                    diagnostics: mistralDiagnostics,
+                    signal: cancellationContext?.signal,
+                  });
+
+                lastFinalizationTraceArgs = {
+                  content: repairedDraft,
+                  format: outputFormat,
+                  outputLanguage,
+                  candidateName,
+                  voicePreset: resolvedVoicePreset,
+                  noContextMode: plannerResult.context_mode === "none",
+                };
+                verifiedContent = finalizeProposalForSave({
+                  content: repairedDraft,
+                  format: outputFormat,
+                  outputLanguage,
+                  candidateName,
+                  voicePreset: resolvedVoicePreset,
+                  noContextMode: plannerResult.context_mode === "none",
+                });
+                verificationResult = analyzeProposalDraft({
+                  content: verifiedContent,
+                  plan: plannerResult,
+                  format: outputFormat,
+                  outputLanguage,
+                  candidateName,
                   jobTitle: effectiveJobTitle,
-                  modelType: actualModelType,
-                  issueCodes: verificationIssues.map((issue) => issue.code),
-                  issueMessages: verificationIssues.map(
-                    (issue) => issue.message,
-                  ),
-                },
-              );
-            } else {
-              routingTrace.validatorOutcome = "legacy_verified_clean";
-            }
+                  jobDescription: args.jobDescription,
+                });
+                verificationIssues = verificationResult.issues;
+              }
 
-            proposalContent = verifiedContent;
+              if (verificationIssues.length > 0) {
+                residualVerifierWarningTag = "warning:verifier_post_repair";
+                routingTrace.validatorOutcome = "legacy_verified_warning";
+                console.warn(
+                  "Generated proposal still has verifier findings after repair; saving repaired draft without hard-fail.",
+                  {
+                    jobTitle: effectiveJobTitle,
+                    modelType: actualModelType,
+                    issueCodes: verificationIssues.map((issue) => issue.code),
+                    issueMessages: verificationIssues.map(
+                      (issue) => issue.message,
+                    ),
+                  },
+                );
+              } else {
+                routingTrace.validatorOutcome = "legacy_verified_clean";
+              }
+
+              proposalContent = verifiedContent;
+            }
           }
-        }
-      } else if (actualModelType === "mistral-agent") {
-        const mistralKey = process.env.MISTRAL_API_KEY;
-        if (!mistralKey) {
-          throw new ConvexError("Mistral API key is not configured");
-        }
-        const mistralAgentId = process.env.MISTRAL_AGENT_ID;
-        if (!mistralAgentId) {
-          throw new ConvexError("Mistral agent ID is not configured");
-        }
-        const client = new Mistral({ apiKey: mistralKey });
-        const agentPrompt = prompt;
-        let agentResponse;
-        actualModelName = actualModelType;
-        try {
-          agentResponse = await client.agents.complete(
-            {
-              agentId: mistralAgentId,
-              messages: [{ role: "user", content: agentPrompt }],
-            },
-            buildMistralRequestOptions(cancellationContext?.signal),
-          );
-        } catch (error) {
-          if (isProposalGenerationCanceledError(error)) {
+          }
+        } else if (actualModelType === "mistral-agent") {
+          const mistralKey = process.env.MISTRAL_API_KEY;
+          if (!mistralKey) {
+            throw new ConvexError("Mistral API key is not configured");
+          }
+          const mistralAgentId = process.env.MISTRAL_AGENT_ID;
+          if (!mistralAgentId) {
+            throw new ConvexError("Mistral agent ID is not configured");
+          }
+          const client = new Mistral({ apiKey: mistralKey });
+          const agentPrompt = prompt;
+          let agentResponse;
+          actualModelName = actualModelType;
+          try {
+            agentResponse = await client.agents.complete(
+              {
+                agentId: mistralAgentId,
+                messages: [{ role: "user", content: agentPrompt }],
+              },
+              buildMistralRequestOptions(cancellationContext?.signal),
+            );
+          } catch (error) {
+            if (isProposalGenerationCanceledError(error)) {
+              throw error;
+            }
+            recordMistralDiagnosticCall({
+              diagnostics: mistralDiagnostics,
+              stage: "agent_generation",
+              modelType: actualModelType,
+              inputText: agentPrompt,
+              status: "failed_other",
+            });
             throw error;
           }
+          if (
+            !agentResponse.choices ||
+            agentResponse.choices.length === 0 ||
+            typeof agentResponse.choices[0].message.content !== "string"
+          ) {
+            recordMistralDiagnosticCall({
+              diagnostics: mistralDiagnostics,
+              stage: "agent_generation",
+              modelType: actualModelType,
+              inputText: agentPrompt,
+              status: "failed_other",
+            });
+            throw new ConvexError(
+              "Invalid or empty response from Mistral agent",
+            );
+          }
+          proposalContent = agentResponse.choices[0].message.content;
           recordMistralDiagnosticCall({
             diagnostics: mistralDiagnostics,
             stage: "agent_generation",
             modelType: actualModelType,
             inputText: agentPrompt,
-            status: "failed_other",
+            outputText: proposalContent,
+            status: "success",
           });
-          throw error;
-        }
-        if (
-          !agentResponse.choices ||
-          agentResponse.choices.length === 0 ||
-          typeof agentResponse.choices[0].message.content !== "string"
-        ) {
-          recordMistralDiagnosticCall({
-            diagnostics: mistralDiagnostics,
-            stage: "agent_generation",
-            modelType: actualModelType,
-            inputText: agentPrompt,
-            status: "failed_other",
-          });
-          throw new ConvexError("Invalid or empty response from Mistral agent");
-        }
-        proposalContent = agentResponse.choices[0].message.content;
-        recordMistralDiagnosticCall({
-          diagnostics: mistralDiagnostics,
-          stage: "agent_generation",
-          modelType: actualModelType,
-          inputText: agentPrompt,
-          outputText: proposalContent,
-          status: "success",
-        });
-      } else {
-        throw new ConvexError("Invalid model type selected");
-      }
-
-      if (structuredPersistencePayload) {
-        routingTrace.saveOutcome = "structured_saved";
-        await ensureGenerationActive();
-        proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
-          userId: userProfile._id,
-          jobId: args.jobId,
-          title: defaultStoredTitle,
-          content: structuredPersistencePayload.content,
-          status: "pending",
-          version: 1,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          sections: structuredPersistencePayload.sections,
-          metrics: {},
-          metadata: buildProposalRoutingMetadata({
-            base: proposalMetadataBase,
-            jobId: args.jobId ?? "N/A",
-            routing: routingTrace,
-            provenance: getExecutionProvenance(),
-            tags: [
-              `model:${actualModelType}`,
-              "structured_cover_letter",
-              toGenerationPathTag(attemptedGenerationPath),
-              ...(residualVerifierWarningTag
-                ? [residualVerifierWarningTag]
-                : []),
-            ],
-          }),
-        });
-
-        emitCoverLetterRoutingTelemetry();
-        emitMistralDiagnosticsSummary("success");
-        generationRunFinalStatus = "finished";
-        return { proposalId, proposalContent, ...getExecutionProvenance() };
-      }
-
-      if (premiumPersistencePayload) {
-        routingTrace.executedPath = "structured";
-        routingTrace.fallbackReason = "not_applicable";
-        if (routingTrace.validatorOutcome === "not_run") {
-          routingTrace.validatorOutcome = "structured_success";
-        }
-        routingTrace.saveOutcome = "structured_saved";
-        await ensureGenerationActive();
-        proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
-          userId: userProfile._id,
-          jobId: args.jobId,
-          title: defaultStoredTitle,
-          content: premiumPersistencePayload.content,
-          status: "pending",
-          version: 1,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          sections: premiumPersistencePayload.sections,
-          metrics: {},
-          metadata: buildProposalRoutingMetadata({
-            base: proposalMetadataBase,
-            jobId: args.jobId ?? "N/A",
-            routing: routingTrace,
-            provenance: getExecutionProvenance(),
-            tags: [
-              `model:${actualModelType}`,
-              "premium_cover_letter_path_v1",
-              "feature_flag:cover_letter_premium_path_v1",
-              toGenerationPathTag(attemptedGenerationPath),
-            ],
-          }),
-        });
-
-        emitCoverLetterRoutingTelemetry();
-        emitMistralDiagnosticsSummary("success");
-        generationRunFinalStatus = "finished";
-        return { proposalId, proposalContent, ...getExecutionProvenance() };
-      }
-
-      const noContextPersistenceMode =
-        plannerResult?.context_mode === "none" || plannerContextMode === "none";
-      lastFinalizationTraceArgs = {
-        content: proposalContent,
-        format: outputFormat,
-        outputLanguage,
-        candidateName,
-        voicePreset: resolvedVoicePreset,
-        noContextMode: noContextPersistenceMode,
-      };
-      proposalContent = finalizeProposalForPersistence({
-        content: proposalContent,
-        format: outputFormat,
-        outputLanguage,
-        candidateName,
-        voicePreset: resolvedVoicePreset,
-        noContextMode: noContextPersistenceMode,
-      });
-
-      // Attempt a tolerant post-processing step: parse plain-text LLM output
-      // into the structured Proposal schema. Only parse failures should fall
-      // back to raw persistence; storage failures must surface as persistence
-      // failures instead of retrying the same invalid payload unchanged.
-      let parsed: Awaited<ReturnType<typeof parseProposalContent>> | null =
-        null;
-      try {
-        parsed = await parseProposalContent(proposalContent);
-        if (!parsed?.content) {
-          throw new Error("Parsed proposal missing content");
-        }
-      } catch (parseErr) {
-        console.warn("Tolerant parse failed, using raw content:", parseErr);
-      }
-
-      if (parsed?.content) {
-        // Use parsed content and sections when available.
-        proposalContent = parsed.content;
-
-        // Normalize sections to the expected literal union type for Convex.
-        const sectionsForDb: {
-          type: "text" | "code" | "image";
-          content: string;
-        }[] = (parsed.sections ?? []).map((s: any) => ({
-          type: "text" as const,
-          content: String(s.content ?? ""),
-        }));
-
-        // Normalize metrics to the small metrics shape used by the DB.
-        // We map `duration` -> `score` and `success` -> `confidence` (heuristic).
-        const metricsForDb: { score?: number; confidence?: number } = {};
-        if (parsed.metrics) {
-          if (typeof (parsed.metrics as any).duration === "number") {
-            metricsForDb.score = (parsed.metrics as any).duration;
-          }
-          if (typeof (parsed.metrics as any).success === "boolean") {
-            metricsForDb.confidence = (parsed.metrics as any).success ? 1 : 0;
-          }
+        } else {
+          throw new ConvexError("Invalid model type selected");
         }
 
-        routingTrace.saveOutcome = "legacy_saved_parsed";
-        try {
+        if (structuredPersistencePayload) {
+          routingTrace.saveOutcome = "structured_saved";
           await ensureGenerationActive();
           proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
             userId: userProfile._id,
             jobId: args.jobId,
-            title: resolveStoredProposalTitle({
-              jobTitle: effectiveJobTitle,
-              parsedTitle: parsed.title,
-              format: outputFormat,
-            }),
-            content: proposalContent,
+            title: defaultStoredTitle,
+            content: structuredPersistencePayload.content,
             status: "pending",
             version: 1,
             createdAt: Date.now(),
             updatedAt: Date.now(),
-            sections:
-              sectionsForDb.length > 0
-                ? sectionsForDb
-                : [{ type: "text", content: proposalContent }],
-            metrics: metricsForDb,
+            sections: structuredPersistencePayload.sections,
+            metrics: {},
             metadata: buildProposalRoutingMetadata({
               base: proposalMetadataBase,
               jobId: args.jobId ?? "N/A",
@@ -10742,7 +11018,7 @@ export async function handleGenerateProposal(
               provenance: getExecutionProvenance(),
               tags: [
                 `model:${actualModelType}`,
-                "parsed",
+                "structured_cover_letter",
                 toGenerationPathTag(attemptedGenerationPath),
                 ...(residualVerifierWarningTag
                   ? [residualVerifierWarningTag]
@@ -10750,13 +11026,374 @@ export async function handleGenerateProposal(
               ],
             }),
           });
-        } catch (persistenceErr) {
-          console.error("Parsed proposal persistence failed:", persistenceErr);
-          throw persistenceErr;
+
+          emitCoverLetterRoutingTelemetry();
+          emitMistralDiagnosticsSummary("success");
+          generationRunFinalStatus = "finished";
+          return getGenerateProposalResult();
         }
-      } else {
-        routingTrace.saveOutcome = "legacy_saved_raw";
+
+        if (premiumPersistencePayload) {
+          const premiumNoContextPersistenceMode =
+            outputFormat === "cover_letter" && !hasCandidateContext;
+          lastFinalizationTraceArgs = {
+            content: premiumPersistencePayload.content,
+            format: outputFormat,
+            outputLanguage,
+            candidateName,
+            voicePreset: resolvedVoicePreset,
+            noContextMode: premiumNoContextPersistenceMode,
+            requiresCandidateEvidence:
+              outputFormat === "cover_letter" && hasCandidateContext,
+          };
+          premiumPersistencePayload = finalizePremiumCoverLetterPayloadForPersistence({
+            payload: premiumPersistencePayload,
+            format: outputFormat,
+            outputLanguage,
+            candidateName,
+            voicePreset: resolvedVoicePreset,
+            hasCandidateContext,
+          });
+          proposalContent = premiumPersistencePayload.content;
+          routingTrace.executedPath = "structured";
+          routingTrace.fallbackReason = "not_applicable";
+          if (routingTrace.validatorOutcome === "not_run") {
+            routingTrace.validatorOutcome = "structured_success";
+          }
+          routingTrace.saveOutcome = "structured_saved";
+          await ensureGenerationActive();
+          proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
+            userId: userProfile._id,
+            jobId: args.jobId,
+            title: defaultStoredTitle,
+            content: premiumPersistencePayload.content,
+            status: "pending",
+            version: 1,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            sections: premiumPersistencePayload.sections,
+            metrics: {},
+            metadata: buildProposalRoutingMetadata({
+              base: proposalMetadataBase,
+              jobId: args.jobId ?? "N/A",
+              routing: routingTrace,
+              provenance: getExecutionProvenance(),
+              tags: [
+                `model:${actualModelType}`,
+                "premium_cover_letter_path_v1",
+                ...(premiumCoverLetterFlagEnabled
+                  ? ["feature_flag:cover_letter_premium_path_v1"]
+                  : []),
+                toGenerationPathTag(attemptedGenerationPath),
+              ],
+            }),
+          });
+
+          emitCoverLetterRoutingTelemetry();
+          emitMistralDiagnosticsSummary("success");
+          generationRunFinalStatus = "finished";
+          return getGenerateProposalResult();
+        }
+
+        const noContextPersistenceMode =
+          plannerResult?.context_mode === "none" ||
+          plannerContextMode === "none";
+        lastFinalizationTraceArgs = {
+          content: proposalContent,
+          format: outputFormat,
+          outputLanguage,
+          candidateName,
+          voicePreset: resolvedVoicePreset,
+          noContextMode: noContextPersistenceMode,
+          requiresCandidateEvidence:
+            outputFormat === "cover_letter" && hasCandidateContext,
+        };
+        proposalContent = finalizeProposalForPersistence({
+          content: proposalContent,
+          format: outputFormat,
+          outputLanguage,
+          candidateName,
+          voicePreset: resolvedVoicePreset,
+          noContextMode: noContextPersistenceMode,
+          requiresCandidateEvidence:
+            outputFormat === "cover_letter" && hasCandidateContext,
+        });
+
+        // Attempt a tolerant post-processing step: parse plain-text LLM output
+        // into the structured Proposal schema. Only parse failures should fall
+        // back to raw persistence; storage failures must surface as persistence
+        // failures instead of retrying the same invalid payload unchanged.
+        let parsed: Awaited<ReturnType<typeof parseProposalContent>> | null =
+          null;
         try {
+          parsed = await parseProposalContent(proposalContent);
+          if (!parsed?.content) {
+            throw new Error("Parsed proposal missing content");
+          }
+        } catch (parseErr) {
+          console.warn("Tolerant parse failed, using raw content:", parseErr);
+        }
+
+        if (parsed?.content) {
+          // Use parsed content and sections when available.
+          proposalContent = parsed.content;
+
+          // Normalize sections to the expected literal union type for Convex.
+          const sectionsForDb: {
+            type: "text" | "code" | "image";
+            content: string;
+          }[] = (parsed.sections ?? []).map((s: any) => ({
+            type: "text" as const,
+            content: String(s.content ?? ""),
+          }));
+
+          // Normalize metrics to the small metrics shape used by the DB.
+          // We map `duration` -> `score` and `success` -> `confidence` (heuristic).
+          const metricsForDb: { score?: number; confidence?: number } = {};
+          if (parsed.metrics) {
+            if (typeof (parsed.metrics as any).duration === "number") {
+              metricsForDb.score = (parsed.metrics as any).duration;
+            }
+            if (typeof (parsed.metrics as any).success === "boolean") {
+              metricsForDb.confidence = (parsed.metrics as any).success ? 1 : 0;
+            }
+          }
+
+          routingTrace.saveOutcome = "legacy_saved_parsed";
+          try {
+            await ensureGenerationActive();
+            proposalId = await ctx.runMutation(
+              internal.proposals.storeProposal,
+              {
+                userId: userProfile._id,
+                jobId: args.jobId,
+                title: resolveStoredProposalTitle({
+                  jobTitle: effectiveJobTitle,
+                  parsedTitle: parsed.title,
+                  format: outputFormat,
+                }),
+                content: proposalContent,
+                status: "pending",
+                version: 1,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                sections:
+                  sectionsForDb.length > 0
+                    ? sectionsForDb
+                    : [{ type: "text", content: proposalContent }],
+                metrics: metricsForDb,
+                metadata: buildProposalRoutingMetadata({
+                  base: proposalMetadataBase,
+                  jobId: args.jobId ?? "N/A",
+                  routing: routingTrace,
+                  provenance: getExecutionProvenance(),
+                  tags: [
+                    `model:${actualModelType}`,
+                    "parsed",
+                    toGenerationPathTag(attemptedGenerationPath),
+                    ...(residualVerifierWarningTag
+                      ? [residualVerifierWarningTag]
+                      : []),
+                  ],
+                }),
+              },
+            );
+          } catch (persistenceErr) {
+            console.error(
+              "Parsed proposal persistence failed:",
+              persistenceErr,
+            );
+            throw persistenceErr;
+          }
+        } else {
+          routingTrace.saveOutcome = "legacy_saved_raw";
+          try {
+            await ensureGenerationActive();
+            proposalId = await ctx.runMutation(
+              internal.proposals.storeProposal,
+              {
+                userId: userProfile._id,
+                jobId: args.jobId,
+                title: defaultStoredTitle,
+                content: proposalContent,
+                status: "pending",
+                version: 1,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                sections: [{ type: "text", content: proposalContent }],
+                metrics: {},
+                metadata: buildProposalRoutingMetadata({
+                  base: proposalMetadataBase,
+                  jobId: args.jobId ?? "N/A",
+                  routing: routingTrace,
+                  provenance: getExecutionProvenance(),
+                  tags: [
+                    `model:${actualModelType}`,
+                    toGenerationPathTag(attemptedGenerationPath),
+                    ...(residualVerifierWarningTag
+                      ? [residualVerifierWarningTag]
+                      : []),
+                  ],
+                }),
+              },
+            );
+          } catch (persistenceErr) {
+            console.error("Raw proposal persistence failed:", persistenceErr);
+            throw persistenceErr;
+          }
+        }
+
+        emitCoverLetterRoutingTelemetry();
+        emitMistralDiagnosticsSummary("success");
+        generationRunFinalStatus = "finished";
+        return getGenerateProposalResult();
+      } catch (error: any) {
+        if (isProposalGenerationCanceledError(error)) {
+          generationRunFinalStatus = "canceled";
+          emitCoverLetterRoutingTelemetry("not_saved");
+          emitMistralDiagnosticsSummary("failure");
+          throw error;
+        }
+        if (isProposalProviderBusyError(error)) {
+          markProviderBusyFailure();
+          routingFailureStage = error.stage;
+          const triggerCode: ProposalFallbackTriggerCode =
+            CONTROLLED_PROPOSAL_PROVIDER_BUSY_CODE;
+          routingNormalizedFailureCode = triggerCode;
+          if (
+            canAttemptProposalFallback({
+              requestedModelType,
+              outputFormat,
+              normalizedFailureCode: routingNormalizedFailureCode,
+              failureStage: routingFailureStage,
+              hasAttemptedFallback,
+            })
+          ) {
+            fallbackTriggerCode = triggerCode;
+            usedFallback = true;
+            hasAttemptedFallback = true;
+            logProposalFallbackActivation({
+              requestedModelType,
+              fallbackModelType: "chatgpt",
+              triggerCode,
+              triggerStage: routingFailureStage,
+              hasCv: plannerContextMode !== "none",
+              attemptedPath: attemptedGenerationPath,
+            });
+            actualModelType = "chatgpt";
+            actualModelName =
+              llmConfig.proposalModels?.openaiWriterModel ?? "gpt-5.5";
+            routingNormalizedFailureCode = null;
+            continue;
+          }
+          emitCoverLetterRoutingTelemetry("not_saved", routingFailureStage);
+          emitMistralDiagnosticsSummary("failure");
+          throw coerceProposalProviderBusyToConvexError(error);
+        }
+        if (isProposalProviderTransportError(error)) {
+          routingFailureStage = error.stage;
+          const triggerCode: ProposalFallbackTriggerCode =
+            CONTROLLED_PROPOSAL_PROVIDER_TRANSPORT_ERROR_CODE;
+          routingNormalizedFailureCode = triggerCode;
+          if (
+            canAttemptProposalFallback({
+              requestedModelType,
+              outputFormat,
+              normalizedFailureCode: routingNormalizedFailureCode,
+              failureStage: routingFailureStage,
+              hasAttemptedFallback,
+            })
+          ) {
+            fallbackTriggerCode = triggerCode;
+            usedFallback = true;
+            hasAttemptedFallback = true;
+            logProposalFallbackActivation({
+              requestedModelType,
+              fallbackModelType: "chatgpt",
+              triggerCode,
+              triggerStage: routingFailureStage,
+              hasCv: plannerContextMode !== "none",
+              attemptedPath: attemptedGenerationPath,
+            });
+            actualModelType = "chatgpt";
+            actualModelName =
+              llmConfig.proposalModels?.openaiWriterModel ?? "gpt-5.5";
+            routingNormalizedFailureCode = null;
+            continue;
+          }
+          emitCoverLetterRoutingTelemetry("not_saved", routingFailureStage);
+          emitMistralDiagnosticsSummary("failure");
+          throw coerceProposalProviderTransportToConvexError(error);
+        }
+        if (error?.name === "ProposalFinalizationError") {
+          routingTrace.saveOutcome = "fail_closed";
+          routingNormalizedFailureCode =
+            CONTROLLED_PROPOSAL_FINALIZATION_FAILURE_TELEMETRY_CODE;
+          if (lastFinalizationTraceArgs) {
+            const trace = logProposalFinalizationTrace({
+              ...lastFinalizationTraceArgs,
+              attemptedPath: attemptedGenerationPath,
+            });
+            routingFailureStage = trace.failureStage ?? null;
+          }
+          emitCoverLetterRoutingTelemetry("fail_closed");
+          throw coerceProposalFinalizationFailureToConvexError({
+            error,
+            attemptedPath: attemptedGenerationPath,
+          });
+        }
+        if (error.name === "ProposalParsingError" && error.rawContent) {
+          console.warn(
+            "Using raw content due to parsing error:",
+            error.message,
+          );
+          try {
+            lastFinalizationTraceArgs = {
+              content: error.rawContent,
+              format: outputFormat,
+              outputLanguage,
+              candidateName,
+              voicePreset: resolvedVoicePreset,
+              noContextMode:
+                plannerResult?.context_mode === "none" ||
+                plannerContextMode === "none",
+              requiresCandidateEvidence:
+                outputFormat === "cover_letter" && hasCandidateContext,
+            };
+            proposalContent = finalizeProposalForPersistence({
+              content: error.rawContent,
+              format: outputFormat,
+              outputLanguage,
+              candidateName,
+              voicePreset: resolvedVoicePreset,
+              noContextMode:
+                plannerResult?.context_mode === "none" ||
+                plannerContextMode === "none",
+              requiresCandidateEvidence:
+                outputFormat === "cover_letter" && hasCandidateContext,
+            });
+          } catch (finalizationError: any) {
+            if (finalizationError?.name === "ProposalFinalizationError") {
+              routingTrace.saveOutcome = "fail_closed";
+              routingNormalizedFailureCode =
+                CONTROLLED_PROPOSAL_FINALIZATION_FAILURE_TELEMETRY_CODE;
+              if (lastFinalizationTraceArgs) {
+                const trace = logProposalFinalizationTrace({
+                  ...lastFinalizationTraceArgs,
+                  attemptedPath: attemptedGenerationPath,
+                });
+                routingFailureStage = trace.failureStage ?? null;
+              }
+              emitCoverLetterRoutingTelemetry("fail_closed");
+              throw coerceProposalFinalizationFailureToConvexError({
+                error: finalizationError,
+                attemptedPath: attemptedGenerationPath,
+              });
+            }
+            throw finalizationError;
+          }
+
+          routingTrace.saveOutcome = "legacy_saved_after_parse_error";
           await ensureGenerationActive();
           proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
             userId: userProfile._id,
@@ -10776,6 +11413,7 @@ export async function handleGenerateProposal(
               provenance: getExecutionProvenance(),
               tags: [
                 `model:${actualModelType}`,
+                "parsing_error",
                 toGenerationPathTag(attemptedGenerationPath),
                 ...(residualVerifierWarningTag
                   ? [residualVerifierWarningTag]
@@ -10783,194 +11421,17 @@ export async function handleGenerateProposal(
               ],
             }),
           });
-        } catch (persistenceErr) {
-          console.error("Raw proposal persistence failed:", persistenceErr);
-          throw persistenceErr;
-        }
-      }
 
-      emitCoverLetterRoutingTelemetry();
-      emitMistralDiagnosticsSummary("success");
-      generationRunFinalStatus = "finished";
-      return { proposalId, proposalContent, ...getExecutionProvenance() };
-    } catch (error: any) {
-      if (isProposalGenerationCanceledError(error)) {
-        generationRunFinalStatus = "canceled";
+          emitCoverLetterRoutingTelemetry();
+          emitMistralDiagnosticsSummary("success");
+          generationRunFinalStatus = "finished";
+          return getGenerateProposalResult();
+        }
         emitCoverLetterRoutingTelemetry("not_saved");
         emitMistralDiagnosticsSummary("failure");
         throw error;
       }
-      if (isProposalProviderBusyError(error)) {
-        markProviderBusyFailure();
-        routingFailureStage = error.stage;
-        const triggerCode: ProposalFallbackTriggerCode =
-          CONTROLLED_PROPOSAL_PROVIDER_BUSY_CODE;
-        routingNormalizedFailureCode = triggerCode;
-        if (
-          canAttemptProposalFallback({
-            requestedModelType,
-            outputFormat,
-            normalizedFailureCode: routingNormalizedFailureCode,
-            failureStage: routingFailureStage,
-            hasAttemptedFallback,
-          })
-          ) {
-          fallbackTriggerCode = triggerCode;
-          usedFallback = true;
-          hasAttemptedFallback = true;
-          logProposalFallbackActivation({
-            requestedModelType,
-            fallbackModelType: "chatgpt",
-            triggerCode,
-            triggerStage: routingFailureStage,
-            hasCv: plannerContextMode !== "none",
-            attemptedPath: attemptedGenerationPath,
-          });
-          actualModelType = "chatgpt";
-          actualModelName =
-            llmConfig.proposalModels?.openaiWriterModel ?? "gpt-5.5";
-          routingNormalizedFailureCode = null;
-          continue;
-        }
-        emitCoverLetterRoutingTelemetry("not_saved", routingFailureStage);
-        emitMistralDiagnosticsSummary("failure");
-        throw coerceProposalProviderBusyToConvexError(error);
-      }
-      if (isProposalProviderTransportError(error)) {
-        routingFailureStage = error.stage;
-        const triggerCode: ProposalFallbackTriggerCode =
-          CONTROLLED_PROPOSAL_PROVIDER_TRANSPORT_ERROR_CODE;
-        routingNormalizedFailureCode = triggerCode;
-        if (
-          canAttemptProposalFallback({
-            requestedModelType,
-            outputFormat,
-            normalizedFailureCode: routingNormalizedFailureCode,
-            failureStage: routingFailureStage,
-            hasAttemptedFallback,
-          })
-          ) {
-          fallbackTriggerCode = triggerCode;
-          usedFallback = true;
-          hasAttemptedFallback = true;
-          logProposalFallbackActivation({
-            requestedModelType,
-            fallbackModelType: "chatgpt",
-            triggerCode,
-            triggerStage: routingFailureStage,
-            hasCv: plannerContextMode !== "none",
-            attemptedPath: attemptedGenerationPath,
-          });
-          actualModelType = "chatgpt";
-          actualModelName =
-            llmConfig.proposalModels?.openaiWriterModel ?? "gpt-5.5";
-          routingNormalizedFailureCode = null;
-          continue;
-        }
-        emitCoverLetterRoutingTelemetry("not_saved", routingFailureStage);
-        emitMistralDiagnosticsSummary("failure");
-        throw coerceProposalProviderTransportToConvexError(error);
-      }
-      if (error?.name === "ProposalFinalizationError") {
-        routingTrace.saveOutcome = "fail_closed";
-        routingNormalizedFailureCode =
-          CONTROLLED_PROPOSAL_FINALIZATION_FAILURE_TELEMETRY_CODE;
-        if (lastFinalizationTraceArgs) {
-          const trace = logProposalFinalizationTrace({
-            ...lastFinalizationTraceArgs,
-            attemptedPath: attemptedGenerationPath,
-          });
-          routingFailureStage = trace.failureStage ?? null;
-        }
-        emitCoverLetterRoutingTelemetry("fail_closed");
-        throw coerceProposalFinalizationFailureToConvexError({
-          error,
-          attemptedPath: attemptedGenerationPath,
-        });
-      }
-      if (error.name === "ProposalParsingError" && error.rawContent) {
-        console.warn("Using raw content due to parsing error:", error.message);
-        try {
-          lastFinalizationTraceArgs = {
-            content: error.rawContent,
-            format: outputFormat,
-            outputLanguage,
-            candidateName,
-            voicePreset: resolvedVoicePreset,
-            noContextMode:
-              plannerResult?.context_mode === "none" ||
-              plannerContextMode === "none",
-          };
-          proposalContent = finalizeProposalForPersistence({
-            content: error.rawContent,
-            format: outputFormat,
-            outputLanguage,
-            candidateName,
-            voicePreset: resolvedVoicePreset,
-            noContextMode:
-              plannerResult?.context_mode === "none" ||
-              plannerContextMode === "none",
-          });
-        } catch (finalizationError: any) {
-          if (finalizationError?.name === "ProposalFinalizationError") {
-            routingTrace.saveOutcome = "fail_closed";
-            routingNormalizedFailureCode =
-              CONTROLLED_PROPOSAL_FINALIZATION_FAILURE_TELEMETRY_CODE;
-            if (lastFinalizationTraceArgs) {
-              const trace = logProposalFinalizationTrace({
-                ...lastFinalizationTraceArgs,
-                attemptedPath: attemptedGenerationPath,
-              });
-              routingFailureStage = trace.failureStage ?? null;
-            }
-            emitCoverLetterRoutingTelemetry("fail_closed");
-            throw coerceProposalFinalizationFailureToConvexError({
-              error: finalizationError,
-              attemptedPath: attemptedGenerationPath,
-            });
-          }
-          throw finalizationError;
-        }
-
-        routingTrace.saveOutcome = "legacy_saved_after_parse_error";
-        await ensureGenerationActive();
-        proposalId = await ctx.runMutation(internal.proposals.storeProposal, {
-          userId: userProfile._id,
-          jobId: args.jobId,
-          title: defaultStoredTitle,
-          content: proposalContent,
-          status: "pending",
-          version: 1,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          sections: [{ type: "text", content: proposalContent }],
-          metrics: {},
-          metadata: buildProposalRoutingMetadata({
-            base: proposalMetadataBase,
-            jobId: args.jobId ?? "N/A",
-            routing: routingTrace,
-            provenance: getExecutionProvenance(),
-            tags: [
-              `model:${actualModelType}`,
-              "parsing_error",
-              toGenerationPathTag(attemptedGenerationPath),
-              ...(residualVerifierWarningTag
-                ? [residualVerifierWarningTag]
-                : []),
-            ],
-          }),
-        });
-
-        emitCoverLetterRoutingTelemetry();
-        emitMistralDiagnosticsSummary("success");
-        generationRunFinalStatus = "finished";
-        return { proposalId, proposalContent, ...getExecutionProvenance() };
-      }
-      emitCoverLetterRoutingTelemetry("not_saved");
-      emitMistralDiagnosticsSummary("failure");
-      throw error;
     }
-  }
   } catch (error) {
     if (isProposalGenerationCanceledError(error)) {
       generationRunFinalStatus = "canceled";

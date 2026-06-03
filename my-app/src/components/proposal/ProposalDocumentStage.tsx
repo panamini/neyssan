@@ -3,6 +3,7 @@ import { Button } from "../ui";
 import {
   ArrowUDownRight,
   ArrowUUpLeft,
+  Briefcase,
   ChatCircleText,
   ClipboardText,
   Eye,
@@ -77,6 +78,7 @@ export type ProposalDocumentStageLabels = {
   primaryWritingAction: string;
   draftProposal: string;
   draftProposalShort: string;
+  jobAndCv: string;
   ask: string;
 };
 
@@ -103,6 +105,7 @@ const DEFAULT_LABELS: ProposalDocumentStageLabels = {
   primaryWritingAction: "Primary writing action",
   draftProposal: "Draft proposal",
   draftProposalShort: "Draft",
+  jobAndCv: "Job & CV",
   ask: "Ask",
 };
 
@@ -183,6 +186,12 @@ export function ProposalDocumentStage({
   const nextMode = mode === "edit" ? "preview" : "edit";
   const modeToggleLabel =
     mode === "edit" ? uiLabels.switchToPreview : uiLabels.switchToEdit;
+  const sourceContextLabel = hasProposalContent
+    ? uiLabels.jobAndCv
+    : uiLabels.draftProposal;
+  const sourceContextShortLabel = hasProposalContent
+    ? uiLabels.jobAndCv
+    : uiLabels.draftProposalShort;
 
   return (
     <section
@@ -422,24 +431,33 @@ export function ProposalDocumentStage({
               <Button
                 type="button"
                 size="sm"
-                variant="primary"
+                variant={hasProposalContent ? "secondary" : "primary"}
                 className="dasti-proposal-skeleton-stage__primary-action dasti-proposal-skeleton-stage__primary-action--draft"
                 iconLeft={
-                  <PaperPlaneRight size={stageIconSize} strokeWidth={1.8} />
+                  hasProposalContent ? (
+                    <Briefcase size={stageIconSize} strokeWidth={1.8} />
+                  ) : (
+                    <PaperPlaneRight size={stageIconSize} strokeWidth={1.8} />
+                  )
                 }
                 aria-expanded={composerMode === "draft"}
-                aria-label={uiLabels.draftProposal}
+                aria-label={sourceContextLabel}
                 data-testid="proposal-draft-button"
-                data-toolbar-tooltip={uiLabels.draftProposal}
+                data-source-context={hasProposalContent ? "true" : undefined}
+                data-toolbar-tooltip={sourceContextLabel}
                 data-stage-tooltip-mode="compact"
                 onClick={onOpenDraft}
               >
-                <span className="dasti-proposal-skeleton-stage__action-label dasti-proposal-skeleton-stage__action-label--full">
-                  {uiLabels.draftProposal}
-                </span>
-                <span className="dasti-proposal-skeleton-stage__action-label dasti-proposal-skeleton-stage__action-label--short">
-                  {uiLabels.draftProposalShort}
-                </span>
+                {hasProposalContent ? null : (
+                  <>
+                    <span className="dasti-proposal-skeleton-stage__action-label dasti-proposal-skeleton-stage__action-label--full">
+                      {sourceContextLabel}
+                    </span>
+                    <span className="dasti-proposal-skeleton-stage__action-label dasti-proposal-skeleton-stage__action-label--short">
+                      {sourceContextShortLabel}
+                    </span>
+                  </>
+                )}
               </Button>
             </div>
           ) : null}

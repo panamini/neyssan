@@ -41,6 +41,7 @@ LOCAL_CONVEX_SITE_PORT="${LOCAL_CONVEX_SITE_PORT:-3211}"
 # indexes and bundling functions, so give local-fast a wider default window.
 LOCAL_CONVEX_STARTUP_TIMEOUT="${LOCAL_CONVEX_STARTUP_TIMEOUT:-180}"
 CONVEX_TMPDIR="${CONVEX_TMPDIR:-${ROOT_DIR}/tmp/convex-tmp}"
+LOCAL_CONVEX_SYNC_SECRETS="${LOCAL_CONVEX_SYNC_SECRETS:-1}"
 CACHE_DIR="${ROOT_DIR}/.buildx-cache"
 DOCKER_STATE_DIR="${ROOT_DIR}/.docker"
 
@@ -108,6 +109,7 @@ env_reload_hash() {
   local env_files=(
     "${ROOT_DIR}/.env"
     "${ROOT_DIR}/.env.local"
+    "${ROOT_DIR}/my-app/.env.local"
     "${ROOT_DIR}/my-app/.env"
   )
   for file in "${env_files[@]}"; do
@@ -121,13 +123,15 @@ convex_binding_hash() {
   local file=""
   local line=""
   local candidate_files=(
+    "${ROOT_DIR}/.env.local"
+    "${ROOT_DIR}/.env"
     "${ROOT_DIR}/my-app/.env.local"
     "${ROOT_DIR}/my-app/.env"
   )
   for file in "${candidate_files[@]}"; do
     line=""
     if [[ -f "${file}" ]]; then
-      line="$(grep -E '^CONVEX_DEPLOYMENT=.*# team: [^,]+, project: [^[:space:]]+' "${file}" | tail -n1 || true)"
+      line="$(grep -E '^(CONVEX_TEAM|CONVEX_TEAM_SLUG|CONVEX_PROJECT|CONVEX_PROJECT_SLUG|CONVEX_LOCAL_DEPLOYMENT_NAME|CONVEX_LOCAL_DEPLOYMENT|CONVEX_DEPLOYMENT)=' "${file}" | tail -n20 || true)"
     fi
     payload+="${file}:${line}"$'\n'
   done
@@ -408,11 +412,57 @@ ensure_workspace_runtime_surface() {
 
 resolve_convex_project_binding() {
   local candidate_files=(
+    "${ROOT_DIR}/.env.local"
+    "${ROOT_DIR}/.env"
     "${ROOT_DIR}/my-app/.env.local"
     "${ROOT_DIR}/my-app/.env"
   )
   local file=""
   local line=""
+  local env_team="${CONVEX_TEAM:-${CONVEX_TEAM_SLUG:-}}"
+  local env_project="${CONVEX_PROJECT:-${CONVEX_PROJECT_SLUG:-}}"
+  local env_deployment="${CONVEX_LOCAL_DEPLOYMENT_NAME:-${CONVEX_LOCAL_DEPLOYMENT:-${CONVEX_DEPLOYMENT:-}}}"
+  dotenv_value_from_file() {
+    local dotenv_file="${1:-}"
+    local dotenv_key="${2:-}"
+    local dotenv_line=""
+    local dotenv_value=""
+    [[ -n "${dotenv_file}" && -n "${dotenv_key}" && -f "${dotenv_file}" ]] || return 1
+    dotenv_line="$(grep -E "^${dotenv_key}=" "${dotenv_file}" | tail -n1 || true)"
+    [[ -n "${dotenv_line}" ]] || return 1
+    dotenv_value="${dotenv_line#*=}"
+    dotenv_value="${dotenv_value%%#*}"
+    dotenv_value="${dotenv_value//\"/}"
+    dotenv_value="${dotenv_value//\'/}"
+    dotenv_value="$(printf '%s' "${dotenv_value}" | xargs)"
+    [[ -n "${dotenv_value}" ]] || return 1
+    printf '%s' "${dotenv_value}"
+  }
+
+  for file in "${candidate_files[@]}"; do
+    [[ -f "${file}" ]] || continue
+    [[ -n "${env_team}" ]] || env_team="$(dotenv_value_from_file "${file}" CONVEX_TEAM || true)"
+    [[ -n "${env_team}" ]] || env_team="$(dotenv_value_from_file "${file}" CONVEX_TEAM_SLUG || true)"
+    [[ -n "${env_project}" ]] || env_project="$(dotenv_value_from_file "${file}" CONVEX_PROJECT || true)"
+    [[ -n "${env_project}" ]] || env_project="$(dotenv_value_from_file "${file}" CONVEX_PROJECT_SLUG || true)"
+    [[ -n "${env_deployment}" ]] || env_deployment="$(dotenv_value_from_file "${file}" CONVEX_LOCAL_DEPLOYMENT_NAME || true)"
+    [[ -n "${env_deployment}" ]] || env_deployment="$(dotenv_value_from_file "${file}" CONVEX_LOCAL_DEPLOYMENT || true)"
+    [[ -n "${env_deployment}" ]] || env_deployment="$(dotenv_value_from_file "${file}" CONVEX_DEPLOYMENT || true)"
+  done
+
+  if [[ -n "${env_team}" && -n "${env_project}" ]]; then
+    CONVEX_TEAM_RESULT="${env_team}"
+    CONVEX_PROJECT_RESULT="${env_project}"
+    if [[ "${env_deployment}" =~ ^local:(.+)$ ]]; then
+      CONVEX_DEPLOYMENT_NAME_RESULT="${BASH_REMATCH[1]}"
+    elif [[ "${env_deployment}" =~ ^local-.+ ]]; then
+      CONVEX_DEPLOYMENT_NAME_RESULT="${env_deployment}"
+    else
+      CONVEX_DEPLOYMENT_NAME_RESULT=""
+    fi
+    return 0
+  fi
+
   for file in "${candidate_files[@]}"; do
     [[ -f "${file}" ]] || continue
     line="$(grep -E '^CONVEX_DEPLOYMENT=.*# team: [^,]+, project: [^[:space:]]+' "${file}" | tail -n1 || true)"
@@ -638,6 +688,14 @@ sync_local_convex_env() {
         value="${!name:-}"
       fi
       [[ -n "${value}" ]] || continue
+      if [[ "$(to_bool "${LOCAL_CONVEX_SYNC_SECRETS}")" != "true" ]]; then
+        case "${name}" in
+          *API_KEY|*SECRET|*_TOKEN|NER_SERVICE_KEY)
+            echo "[run] skipping secret env sync for ${name}" >&2
+            continue
+            ;;
+        esac
+      fi
       if [[ -n "${convex_env_url}" && -n "${convex_env_admin_key}" ]]; then
         CONVEX_SELF_HOSTED_URL="${convex_env_url}" CONVEX_SELF_HOSTED_ADMIN_KEY="${convex_env_admin_key}" "${convex_bin}" env set "${name}" "${value}" >/dev/null
       elif [[ -n "${convex_env_deployment_name}" ]]; then
@@ -693,8 +751,8 @@ start_parser() {
       disabled) envs+=(-e CV_OCR_ENGINE=disabled -e OCR_ENGINE=disabled -e API_ENABLE_MISTRAL_OCR=) ;;
       auto|*)   envs+=(-e CV_OCR_ENGINE=auto    -e OCR_ENGINE=auto) ;;
     esac
-    # Enable Mistral OCR automatically if key present
-    if [[ -n "${MISTRAL_API_KEY:-}" ]]; then
+    # Enable Mistral OCR automatically if key present, unless secret sync is disabled.
+    if [[ "$(to_bool "${LOCAL_CONVEX_SYNC_SECRETS}")" == "true" && -n "${MISTRAL_API_KEY:-}" ]]; then
       envs+=(-e API_ENABLE_MISTRAL_OCR=1 -e "MISTRAL_API_KEY=${MISTRAL_API_KEY}")
     fi
 
@@ -857,7 +915,13 @@ start_convex() {
   local convex_team=""
   local convex_project=""
   if ! resolve_convex_project_binding; then
-    echo "[run] ERROR: could not determine Convex team/project from my-app/.env.local comment. Expected: CONVEX_DEPLOYMENT=... # team: <team>, project: <project>" >&2
+    echo "[run] ERROR: could not determine Convex team/project for local-fast." >&2
+    echo "[run] Add the non-secret Convex binding to .env.local or my-app/.env.local:" >&2
+    echo "[run]   CONVEX_TEAM=<team_slug>" >&2
+    echo "[run]   CONVEX_PROJECT=<project_slug>" >&2
+    echo "[run] Optional if you already have a named local deployment:" >&2
+    echo "[run]   CONVEX_DEPLOYMENT=local:<deployment_name>" >&2
+    echo "[run] Legacy Convex CLI comments are still accepted: CONVEX_DEPLOYMENT=... # team: <team>, project: <project>" >&2
     exit 1
   fi
   convex_team="${CONVEX_TEAM_RESULT}"

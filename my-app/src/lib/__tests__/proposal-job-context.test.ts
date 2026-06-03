@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   buildProposalSourceDraftFromJob,
+  resolveProposalDraftDrawerCvTitle,
+  resolveProposalDraftDrawerSourceDraft,
   resolveProposalWorkspaceSourceDraft,
 } from "../proposal-job-context";
 
@@ -133,6 +135,123 @@ describe("resolveProposalWorkspaceSourceDraft", () => {
       jobTitle: "Live Operations Lead",
       jobDescription: "Current job from Job Forge.",
     });
+  });
+});
+
+describe("resolveProposalDraftDrawerSourceDraft", () => {
+  it("keeps a generated output source ahead of an empty active compose source for the Job & CV drawer", () => {
+    expect(
+      resolveProposalDraftDrawerSourceDraft({
+        activeWorkspaceSourceDraft: {
+          mode: "pasted-job",
+          jobTitle: "",
+          jobDescription: "",
+          sourceUrl: null,
+          platform: null,
+        },
+        storedOutputSourceDraft: {
+          jobTitle: "Operations Associate",
+          jobDescription:
+            "Support recurring processes and coordinate communication.",
+          sourceUrl: "https://example.com/jobs/operations",
+          platform: "Example Jobs",
+        },
+        metadataSource: null,
+      }),
+    ).toEqual({
+      mode: "saved-historical-origin",
+      jobTitle: "Operations Associate",
+      jobDescription:
+        "Support recurring processes and coordinate communication.",
+      sourceUrl: "https://example.com/jobs/operations",
+      platform: "Example Jobs",
+    });
+  });
+
+  it("keeps a generated output source visible for the Job & CV drawer without hydrating compose", () => {
+    expect(
+      resolveProposalDraftDrawerSourceDraft({
+        activeWorkspaceSourceDraft: null,
+        storedOutputSourceDraft: {
+          jobTitle: "Operations Associate",
+          jobDescription:
+            "Support recurring processes and coordinate communication.",
+          sourceUrl: "https://example.com/jobs/operations",
+          platform: "Example Jobs",
+        },
+        metadataSource: null,
+      }),
+    ).toEqual({
+      mode: "saved-historical-origin",
+      jobTitle: "Operations Associate",
+      jobDescription:
+        "Support recurring processes and coordinate communication.",
+      sourceUrl: "https://example.com/jobs/operations",
+      platform: "Example Jobs",
+    });
+  });
+
+  it("uses a linked job record when saved document metadata only carries a job id", () => {
+    expect(
+      resolveProposalDraftDrawerSourceDraft({
+        activeWorkspaceSourceDraft: null,
+        storedOutputSourceDraft: null,
+        linkedJobSourceDraft: {
+          jobTitle: "Product Operations Lead",
+          jobDescription: "Own product handoffs and operating cadence.",
+          sourceUrl: "https://example.com/jobs/product-ops",
+          platform: "Example Jobs",
+        },
+        metadataSource: {
+          sourceJobTitle: null,
+          sourceJobDescription: null,
+          sourceUrl: null,
+          platform: null,
+        },
+      }),
+    ).toEqual({
+      mode: "explicit-live-job",
+      jobTitle: "Product Operations Lead",
+      jobDescription: "Own product handoffs and operating cadence.",
+      sourceUrl: "https://example.com/jobs/product-ops",
+      platform: "Example Jobs",
+    });
+  });
+});
+
+describe("resolveProposalDraftDrawerCvTitle", () => {
+  it("falls back to Attached CV when the generated source CV id no longer resolves", () => {
+    expect(
+      resolveProposalDraftDrawerCvTitle({
+        sourceCvId: "cv_missing",
+        resolvedSourceCvTitle: null,
+        sourceCvOptions: [
+          {
+            id: "cv_other",
+            title: "Unrelated active CV",
+          },
+        ],
+        savedSourceCvTitle: null,
+        fallbackAttachedCvTitle: "Attached CV",
+      }),
+    ).toBe("Attached CV");
+  });
+
+  it("does not promote an unrelated local CV when the generated document has no source CV id", () => {
+    expect(
+      resolveProposalDraftDrawerCvTitle({
+        sourceCvId: null,
+        resolvedSourceCvTitle: null,
+        sourceCvOptions: [
+          {
+            id: "cv_other",
+            title: "Unrelated active CV",
+          },
+        ],
+        savedSourceCvTitle: null,
+        fallbackAttachedCvTitle: "Attached CV",
+      }),
+    ).toBeNull();
   });
 });
 

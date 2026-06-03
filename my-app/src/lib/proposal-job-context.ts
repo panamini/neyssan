@@ -53,6 +53,34 @@ export type BuildProposalSourceDraftFromJobInput = {
   characterLimitValue?: number | null;
 };
 
+export type ProposalDraftDrawerMetadataSource = {
+  sourceJobTitle?: string | null;
+  sourceJobDescription?: string | null;
+  sourceUrl?: string | null;
+  platform?: string | null;
+};
+
+export type ResolveProposalDraftDrawerSourceDraftInput = {
+  activeWorkspaceSourceDraft?: ResolvedProposalWorkspaceSourceDraft | null;
+  storedOutputSourceDraft?: StoredProposalComposeDraft | null;
+  linkedJobSourceDraft?: StoredProposalComposeDraft | null;
+  metadataSource?: ProposalDraftDrawerMetadataSource | null;
+};
+
+export type ProposalDraftDrawerCvTitleOption = {
+  id: string;
+  title?: string | null;
+};
+
+export type ResolveProposalDraftDrawerCvTitleInput = {
+  attachedCvTitle?: string | null;
+  sourceCvId?: string | null;
+  resolvedSourceCvTitle?: string | null;
+  sourceCvOptions?: ProposalDraftDrawerCvTitleOption[] | null;
+  savedSourceCvTitle?: string | null;
+  fallbackAttachedCvTitle: string;
+};
+
 function normalizeDraftText(value: string | null | undefined): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -158,4 +186,63 @@ export function resolveProposalWorkspaceSourceDraft(
         normalizeCandidate(input.storedComposeDraft, "saved-historical-origin")
       : null)
   );
+}
+
+export function resolveProposalDraftDrawerSourceDraft(
+  input: ResolveProposalDraftDrawerSourceDraftInput,
+): ResolvedProposalWorkspaceSourceDraft | null {
+  const activeWorkspaceCandidate = input.activeWorkspaceSourceDraft
+    ? normalizeCandidate(
+        input.activeWorkspaceSourceDraft,
+        input.activeWorkspaceSourceDraft.mode,
+      )
+    : null;
+  const metadataCandidate: StoredProposalComposeDraft | null = input.metadataSource
+    ? {
+        jobTitle: input.metadataSource.sourceJobTitle ?? undefined,
+        jobDescription: input.metadataSource.sourceJobDescription ?? undefined,
+        sourceUrl: input.metadataSource.sourceUrl ?? null,
+        platform: input.metadataSource.platform ?? null,
+      }
+    : null;
+
+  return (
+    normalizeCandidate(input.storedOutputSourceDraft, "saved-historical-origin") ??
+    normalizeCandidate(metadataCandidate, "saved-historical-origin") ??
+    normalizeCandidate(input.linkedJobSourceDraft, "explicit-live-job") ??
+    activeWorkspaceCandidate
+  );
+}
+
+export function resolveProposalDraftDrawerCvTitle(
+  input: ResolveProposalDraftDrawerCvTitleInput,
+): string | null {
+  const attachedCvTitle = normalizeDraftText(input.attachedCvTitle);
+  if (attachedCvTitle) {
+    return attachedCvTitle;
+  }
+
+  const resolvedSourceCvTitle = normalizeDraftText(input.resolvedSourceCvTitle);
+  if (resolvedSourceCvTitle) {
+    return resolvedSourceCvTitle;
+  }
+
+  const sourceCvId = normalizeDraftText(input.sourceCvId);
+  const sourceCvOptionTitle = sourceCvId
+    ? normalizeDraftText(
+        input.sourceCvOptions?.find(
+          (option) => normalizeDraftText(option.id) === sourceCvId,
+        )?.title,
+      )
+    : "";
+  if (sourceCvOptionTitle) {
+    return sourceCvOptionTitle;
+  }
+
+  const savedSourceCvTitle = normalizeDraftText(input.savedSourceCvTitle);
+  if (savedSourceCvTitle) {
+    return savedSourceCvTitle;
+  }
+
+  return sourceCvId ? input.fallbackAttachedCvTitle : null;
 }

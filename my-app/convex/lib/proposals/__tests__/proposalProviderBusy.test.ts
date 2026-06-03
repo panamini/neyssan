@@ -10,6 +10,7 @@ const {
   mockEstimateTokens,
   mockModelInvoke,
   mockOpenAIResponsesCreate,
+  mockChatMistralAI,
 } = vi.hoisted(() => ({
   mockAgentComplete: vi.fn(),
   mockChatComplete: vi.fn(),
@@ -20,6 +21,7 @@ const {
   mockEstimateTokens: vi.fn((text: string) => text.length / 4),
   mockModelInvoke: vi.fn(),
   mockOpenAIResponsesCreate: vi.fn(),
+  mockChatMistralAI: vi.fn(),
 }));
 
 vi.mock("@mistralai/mistralai", () => ({
@@ -35,7 +37,7 @@ vi.mock("@mistralai/mistralai", () => ({
 }));
 
 vi.mock("@langchain/mistralai", () => ({
-  ChatMistralAI: vi.fn().mockImplementation(() => ({
+  ChatMistralAI: mockChatMistralAI.mockImplementation(() => ({
     invoke: mockModelInvoke,
   })),
 }));
@@ -303,6 +305,11 @@ function expectQwenPremiumRequest(fetchSpy: ReturnType<typeof vi.spyOn>) {
   expect(fetchSpy.mock.calls[0]?.[0]).toBe(
     "https://qwen.test/chat/completions",
   );
+  const headers = fetchSpy.mock.calls[0]?.[1]?.headers as
+    | Record<string, string>
+    | undefined;
+  expect(headers?.Authorization).toBe("Bearer sk-qwen");
+  expect(headers?.["Content-Type"]).toBe("application/json");
 
   const qwenRequest = JSON.parse(
     String(fetchSpy.mock.calls[0]?.[1]?.body ?? "{}"),
@@ -334,10 +341,7 @@ const plannerResultFixture = {
   transfer_mode: "literal",
   output_language: "en",
   allowed_concrete_facts: [],
-  allowed_transfer_themes: [
-    "records accuracy",
-    "cross-team coordination",
-  ],
+  allowed_transfer_themes: ["records accuracy", "cross-team coordination"],
   disallowed_claims: [],
   identity_hard_stops: [],
   proof_strategy: "job_grounded_interest_only",
@@ -355,6 +359,7 @@ describe("proposal provider busy handling", () => {
     mockEstimateTokens.mockClear();
     mockModelInvoke.mockReset();
     mockOpenAIResponsesCreate.mockReset();
+    mockChatMistralAI.mockClear();
     process.env.MISTRAL_API_KEY = "sk-test";
     process.env.OPENAI_API_KEY = "sk-openai";
     delete process.env.QWEN_API_KEY;
@@ -455,6 +460,12 @@ describe("proposal provider busy handling", () => {
           }),
         }),
       );
+      const storedMetadata = ctx.runMutation.mock.calls[0]?.[1]?.metadata as
+        | { tags?: string[] }
+        | undefined;
+      expect(storedMetadata?.tags).not.toContain(
+        "feature_flag:cover_letter_premium_path_v1",
+      );
       expect(getLoggedRoutingTelemetry(infoSpy)).toMatchObject({
         structuredEligible: true,
         structuredEligibilityReason: "eligible",
@@ -470,8 +481,7 @@ describe("proposal provider busy handling", () => {
     }
   });
 
-  it("routes an eligible chatgpt cover letter request through the premium path first and honors the writer model override", async () => {
-    process.env.ENABLE_COVER_LETTER_PREMIUM_PATH_V1 = "1";
+  it("routes an eligible chatgpt cover letter request through the premium path first without the legacy flag gate", async () => {
     process.env.COVER_LETTER_PREMIUM_WRITER_MODEL = "gpt-5-mini";
     mockOpenAIResponsesCreate.mockResolvedValue({
       output: [
@@ -570,7 +580,6 @@ describe("proposal provider busy handling", () => {
             tags: expect.arrayContaining([
               "model:chatgpt",
               "premium_cover_letter_path_v1",
-              "feature_flag:cover_letter_premium_path_v1",
               "generation_path:premium_success",
             ]),
           }),
@@ -593,15 +602,303 @@ describe("proposal provider busy handling", () => {
     }
   });
 
+  it.each([
+    ["mistral-medium-latest" as const],
+    ["mistral-large-latest" as const],
+  ])(
+    "routes an eligible %s cover letter request through the premium Mistral path before structured or legacy",
+    async (mistralModel) => {
+    mockModelInvoke.mockImplementation(async (messages: unknown[]) => {
+      const messageText = JSON.stringify(messages);
+      if (messageText.includes("Return only a valid JSON object")) {
+        return {
+          content: JSON.stringify({
+            opening:
+              "I am applying for the Senior Frontend Engineer role because my recent work has centered on customer-facing React and TypeScript products.",
+            proofBlock:
+              "At Acme, I led a design system migration used across four product squads and improved release consistency across shared interface work.",
+            employerValueBlock:
+              "That background is most relevant in roles where interface quality, collaboration, and iteration all shape the final product experience.",
+            closeLine:
+              "I would welcome the opportunity to discuss the role further.",
+          }),
+        };
+      }
+
+      return {
+        content:
+          "At Acme, I led a design system migration used across four product squads and improved release consistency across shared interface work.\n\nI would welcome the opportunity to discuss the role further.",
+      };
+    });
+
+    const { handleGenerateProposal } = await loadProposalModule();
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+
+    const ctx = {
+      auth: {
+        getUserIdentity: vi.fn().mockResolvedValue({ subject: "user_123" }),
+      },
+      runQuery: vi.fn().mockResolvedValue({
+        _id: "profile_123",
+        proposalVoicePreset: "signature",
+        experience: [],
+        skills: [],
+        achievements: [],
+      }),
+      runMutation: vi.fn().mockResolvedValue("proposal_123"),
+    };
+
+    try {
+      const result = await handleGenerateProposal(ctx, {
+        jobTitle: "Senior Frontend Engineer",
+        jobDescription:
+          "Lead React and TypeScript development across customer-facing product surfaces and collaborate closely with product teams.",
+        proposalType: "cover_letter",
+        modelType: mistralModel,
+        voicePreset: "signature",
+        personalizationMode: "explicit_only",
+        personalizationRichness: "rich",
+        personalizationContext: {
+          name: "Alex Martin",
+          summary: "Frontend engineer focused on design systems.",
+          topSkills: ["React", "TypeScript", "Design systems"],
+          recentExperience: [
+            {
+              company: "Acme",
+              position: "Senior Frontend Engineer",
+              highlights: [
+                "Led a design system migration used across four product squads.",
+                "Improved release consistency across shared interface work.",
+              ],
+            },
+          ],
+          standoutAchievements: [
+            "Improved release consistency across shared interface work.",
+          ],
+        },
+      });
+
+      expect(result).toMatchObject({
+        proposalId: "proposal_123",
+        requestedModelType: mistralModel,
+        actualModelType: mistralModel,
+        actualModelName: mistralModel,
+        fallbackTriggerCode: null,
+        routing: {
+          attemptedPath: "premium success",
+          plannedPath: "structured",
+          executedPath: "structured",
+          fallbackReason: "not_applicable",
+          validatorOutcome: "structured_success",
+          saveOutcome: "structured_saved",
+          premiumFailureStage: null,
+          premiumFailureReason: null,
+          premiumFailureContextClass: null,
+        },
+      });
+      expect(result.proposalContent).toMatch(/^Dear Hiring Manager,/);
+      expect(mockChatMistralAI).toHaveBeenCalledTimes(1);
+      expect(mockChatMistralAI.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({
+          apiKey: "sk-test",
+          modelName: mistralModel,
+        }),
+      );
+      expect(mockModelInvoke).toHaveBeenCalledTimes(1);
+      expect(JSON.stringify(mockModelInvoke.mock.calls[0]?.[0])).toContain(
+        "Return only a valid JSON object",
+      );
+      expect(mockOpenAIResponsesCreate).not.toHaveBeenCalled();
+      expect(mockChatParse).not.toHaveBeenCalled();
+      expect(mockChatComplete).not.toHaveBeenCalled();
+      expect(mockGenerateCreativeProposal).not.toHaveBeenCalled();
+      expect(mockGenerateTechnicalProposal).not.toHaveBeenCalled();
+      expect(ctx.runMutation).toHaveBeenCalledTimes(1);
+      expect(ctx.runMutation).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          content: result.proposalContent,
+          metadata: expect.objectContaining({
+            planned_path: "structured",
+            executed_path: "structured",
+            fallback_reason: "not_applicable",
+            validator_outcome: "structured_success",
+            save_outcome: "structured_saved",
+            tags: expect.arrayContaining([
+              `model:${mistralModel}`,
+              "premium_cover_letter_path_v1",
+              "generation_path:premium_success",
+            ]),
+          }),
+        }),
+      );
+      expect(getLoggedRoutingTelemetry(infoSpy)).toMatchObject({
+        structuredEligible: false,
+        structuredEligibilityReason: "rollout_gate:model_not_in_rollout",
+        attemptedPath: "premium success",
+        finalOutcome: "structured_saved",
+        failureStage: null,
+        requestedModelType: mistralModel,
+        actualModelType: mistralModel,
+        usedFallback: false,
+        normalizedFailureCode: null,
+        runtimeFailureReason: null,
+      });
+    } finally {
+      infoSpy.mockRestore();
+    }
+    },
+  );
+
+  it("logs the chatgpt premium failure trace before falling back to legacy", async () => {
+    process.env.COVER_LETTER_PREMIUM_WRITER_MODEL = "gpt-5-mini";
+    mockOpenAIResponsesCreate.mockResolvedValue({
+      output: [
+        {
+          content: [
+            {
+              json: {
+                opening:
+                  "In recent roles with ADT Security and Copwatch, I monitored sites and documented observations.",
+                proofBlock:
+                  "I maintained HIPAA compliance standards across incident documentation.",
+                employerValueBlock:
+                  "That records and monitoring background keeps the focus on clear documentation and steady observation.",
+                closeLine: "I would be glad to discuss the position further.",
+              },
+            },
+          ],
+        },
+      ],
+    });
+    mockGenerateCreativeProposal.mockResolvedValue({
+      content: [
+        "At ADT Security, I completed reports by recording observations and surveillance activities.",
+        "",
+        "At Copwatch, I monitored selected areas through CCTV apps and scanned grounds for suspicious items.",
+        "",
+        "I would be glad to discuss the position further.",
+      ].join("\n"),
+      metadata: { modelName: "chatgpt" },
+    });
+
+    const { handleGenerateProposal } = await loadProposalModule();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const ctx = {
+      auth: {
+        getUserIdentity: vi.fn().mockResolvedValue({ subject: "user_123" }),
+      },
+      runQuery: vi.fn().mockResolvedValue({
+        _id: "profile_123",
+        proposalVoicePreset: "engaging",
+        experience: [],
+        skills: [],
+        achievements: [],
+      }),
+      runMutation: vi.fn().mockResolvedValue("proposal_123"),
+    };
+
+    try {
+      const result = await handleGenerateProposal(ctx, {
+        jobTitle: "High Level Security Officer",
+        jobDescription:
+          "Maintain site safety through structured patrols, access control, incident response, and clear reporting.",
+        proposalType: "cover_letter",
+        modelType: "chatgpt",
+        voicePreset: "engaging",
+        personalizationMode: "explicit_only",
+        personalizationRichness: "rich",
+        personalizationContext: {
+          name: "Robert Cooper",
+          summary:
+            "Safety conscious Security Guard with eight years experience protecting VIP individuals and defense sites.",
+          topSkills: [
+            "Investigation skills",
+            "Safety compliance",
+            "Criminal justice knowledge",
+          ],
+          recentExperience: [
+            {
+              company: "ADT Security",
+              position: "Security Guard",
+              highlights: [
+                "Completed reports by recording observations, occurrences, surveillance activities, and interviewing witnesses.",
+              ],
+            },
+            {
+              company: "Copwatch",
+              position: "Security Guard",
+              highlights: [
+                "Monitored selected areas via CCTV app on smart devices and scanned grounds for suspicious items.",
+              ],
+            },
+          ],
+        },
+      });
+
+      expect(result).toMatchObject({
+        proposalId: "proposal_123",
+        requestedModelType: "chatgpt",
+        actualModelType: "chatgpt",
+      });
+      expect(mockOpenAIResponsesCreate).toHaveBeenCalledTimes(1);
+      expect(mockGenerateCreativeProposal).toHaveBeenCalledTimes(1);
+      expect(warnSpy).toHaveBeenCalledWith(
+        "Premium cover-letter failure trace",
+        expect.objectContaining({
+          provider: "openai",
+          writerModel: "gpt-5-mini",
+          stage: "validation",
+          reason: "non_repairable_validation",
+          contextClass: "cv_adjacent",
+          issues: expect.arrayContaining(["unsupported_compliance_framework"]),
+        }),
+      );
+      expect(warnSpy).toHaveBeenCalledWith(
+        "Premium cover-letter returned null; using legacy fallback.",
+        expect.objectContaining({
+          provider: "openai",
+          writerModel: "gpt-5-mini",
+          failureTrace: expect.objectContaining({
+            stage: "validation",
+            reason: "non_repairable_validation",
+            contextClass: "cv_adjacent",
+            issues: expect.arrayContaining(["unsupported_compliance_framework"]),
+          }),
+        }),
+      );
+      expect(ctx.runMutation).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            planned_path: "structured",
+            executed_path: "legacy",
+            fallback_reason: "premium_generation_failed",
+            validator_outcome: "structured_failed",
+            tags: expect.arrayContaining([
+              "model:chatgpt",
+              "generation_path:premium_fail_closed_to_legacy_fallback",
+            ]),
+          }),
+        }),
+      );
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
   it("routes an eligible qwen cover letter request through the premium path with qwen provider plumbing", async () => {
     process.env.ENABLE_COVER_LETTER_PREMIUM_PATH_V1 = "1";
     process.env.QWEN_API_KEY = "sk-qwen";
     process.env.QWEN_CHAT_COMPLETIONS_URL =
       "https://qwen.test/chat/completions";
 
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      qwenChatResponse(JSON.stringify(qwenPremiumBodyPartsFixture)),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        qwenChatResponse(JSON.stringify(qwenPremiumBodyPartsFixture)),
+      );
 
     const { handleGenerateProposal } = await loadProposalModule();
     const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
@@ -618,7 +915,15 @@ describe("proposal provider busy handling", () => {
         fallbackTriggerCode: null,
       });
       expect(result.proposalContent).toMatch(/^Dear Hiring Manager,/);
-      expectQwenPremiumRequest(fetchSpy);
+      const qwenRequest = expectQwenPremiumRequest(fetchSpy);
+      const qwenPrompt = qwenRequest.messages?.[0]?.content ?? "";
+      expect(qwenPrompt).toContain("Acme");
+      expect(qwenPrompt).toContain(
+        "Led a design system migration used across four product squads.",
+      );
+      expect(qwenPrompt).toContain(
+        "Improved release consistency across shared interface work.",
+      );
       expect(mockOpenAIResponsesCreate).not.toHaveBeenCalled();
       expect(mockGenerateCreativeProposal).not.toHaveBeenCalled();
       expect(mockGenerateTechnicalProposal).not.toHaveBeenCalled();
@@ -848,7 +1153,7 @@ describe("proposal provider busy handling", () => {
       proofBlock:
         "At Northline Services, I tracked deadlines and documented recurring customer updates.",
       employerValueBlock:
-        "This experience translates into the ability to support general office operations with clear records.",
+        "I hold a current driver's license and can bring licensed office mobility support when needed.",
       closeLine:
         "I bring experience in coordination, documentation, scheduling, vendor correspondence, and stakeholder communication.",
     };
@@ -902,19 +1207,22 @@ describe("proposal provider busy handling", () => {
         warnSpy.mock.calls.some(
           ([message, details]) =>
             message === "Qwen premium cover-letter diagnostics" &&
-            (details as {
-              provider?: string;
-              stage?: string;
-              reason?: string;
-              validationIssues?: Array<{ code?: string }>;
-            })?.provider === "qwen" &&
+            (
+              details as {
+                provider?: string;
+                stage?: string;
+                reason?: string;
+                validationIssues?: Array<{ code?: string }>;
+              }
+            )?.provider === "qwen" &&
             (details as { stage?: string })?.stage === "validation" &&
             (details as { reason?: string })?.reason ===
               "non_repairable_validation" &&
-            (details as { validationIssues?: Array<{ code?: string }> })
-              ?.validationIssues?.some(
-                (issue) => issue.code === "adjacent_direct_fit",
-              ),
+            (
+              details as { validationIssues?: Array<{ code?: string }> }
+            )?.validationIssues?.some(
+              (issue) => issue.code === "unsupported_license_claim",
+            ),
         ),
       ).toBe(true);
     } finally {
@@ -1131,7 +1439,9 @@ describe("proposal provider busy handling", () => {
             planned_path: "structured",
             executed_path: "legacy",
             fallback_reason: "provider_busy",
-            save_outcome: expect.stringMatching(/^legacy_saved_(?:parsed|raw)$/),
+            save_outcome: expect.stringMatching(
+              /^legacy_saved_(?:parsed|raw)$/,
+            ),
             tags: expect.arrayContaining(["model:chatgpt"]),
           }),
         }),
@@ -1166,13 +1476,13 @@ describe("proposal provider busy handling", () => {
 
     try {
       const result = await handleGenerateProposal(ctx, {
-          jobTitle: "Operations Associate",
-          jobDescription:
-            "Support recurring processes, update internal records, and coordinate communication across teams.",
-          proposalType: "cover_letter",
-          modelType: "mistral-small-latest",
-          voicePreset: "signature",
-          personalizationMode: "explicit_only",
+        jobTitle: "Operations Associate",
+        jobDescription:
+          "Support recurring processes, update internal records, and coordinate communication across teams.",
+        proposalType: "cover_letter",
+        modelType: "mistral-small-latest",
+        voicePreset: "signature",
+        personalizationMode: "explicit_only",
       });
 
       expect(result).toMatchObject({
@@ -1331,7 +1641,9 @@ describe("proposal provider busy handling", () => {
             planned_path: "legacy",
             executed_path: "legacy",
             fallback_reason: "provider_busy",
-            save_outcome: expect.stringMatching(/^legacy_saved_(?:parsed|raw)$/),
+            save_outcome: expect.stringMatching(
+              /^legacy_saved_(?:parsed|raw)$/,
+            ),
             tags: expect.arrayContaining(["model:chatgpt"]),
           }),
         }),
@@ -1715,9 +2027,7 @@ describe("proposal provider busy handling", () => {
     expect(candidatePriorityBlock).toContain(
       "secondary_profile_signals_nonleading: none",
     );
-    expect(candidatePriorityBlock).not.toContain(
-      "0-3 years of experience",
-    );
+    expect(candidatePriorityBlock).not.toContain("0-3 years of experience");
     expect(candidatePriorityBlock).not.toContain(
       "1+ years in a retail/apparel environment",
     );
@@ -1765,11 +2075,7 @@ describe("proposal provider busy handling", () => {
       personalizationContext: {
         name: "Robert Cooper",
         desiredPosition: "Security Guard",
-        topSkills: [
-          "Effective Communication",
-          "Teamwork",
-          "Loss Prevention",
-        ],
+        topSkills: ["Effective Communication", "Teamwork", "Loss Prevention"],
       },
     });
 

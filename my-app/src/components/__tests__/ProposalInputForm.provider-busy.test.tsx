@@ -756,8 +756,15 @@ describe("ProposalInputForm provider-busy handling", () => {
           requestedModelType: "chatgpt",
           actualModelType: "chatgpt",
           fallbackTriggerCode: null,
+          routing: null,
         },
         "proposal_123",
+        expect.objectContaining({
+          requestedLanguage: "auto",
+          resolvedLanguage: "en",
+          languageSource: "ui-fallback",
+          jobDetectedLanguage: null,
+        }),
       );
     });
   });
@@ -857,6 +864,17 @@ describe("ProposalInputForm provider-busy handling", () => {
       requestedModelType: "mistral-small-latest",
       actualModelType: "chatgpt",
       fallbackTriggerCode: "proposal_generation_provider_busy",
+      routing: {
+        attemptedPath: "premium success",
+        plannedPath: "structured",
+        executedPath: "structured",
+        fallbackReason: "not_applicable",
+        validatorOutcome: "structured_success",
+        saveOutcome: "structured_saved",
+        premiumFailureStage: null,
+        premiumFailureReason: null,
+        premiumFailureContextClass: null,
+      },
     });
 
     const onSubmit = vi.fn();
@@ -896,8 +914,25 @@ describe("ProposalInputForm provider-busy handling", () => {
           requestedModelType: "mistral-small-latest",
           actualModelType: "chatgpt",
           fallbackTriggerCode: "proposal_generation_provider_busy",
+          routing: {
+            attemptedPath: "premium success",
+            plannedPath: "structured",
+            executedPath: "structured",
+            fallbackReason: "not_applicable",
+            validatorOutcome: "structured_success",
+            saveOutcome: "structured_saved",
+            premiumFailureStage: null,
+            premiumFailureReason: null,
+            premiumFailureContextClass: null,
+          },
         },
         "proposal_123",
+        expect.objectContaining({
+          requestedLanguage: "auto",
+          resolvedLanguage: "en",
+          languageSource: "ui-fallback",
+          jobDetectedLanguage: null,
+        }),
       );
     });
 

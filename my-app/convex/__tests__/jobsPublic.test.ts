@@ -371,6 +371,189 @@ describe("jobsPublic.listForUser", () => {
     ]);
   });
 
+  it("applies the list limit globally after merging linked profiles", async () => {
+    const linkedProfiles = [
+      {
+        _id: "profile_first",
+        _creationTime: 100,
+        clerkId: "clerk_123",
+        updatedAt: 100,
+        createdAt: 100,
+        version: 1,
+        skills: ["react"],
+        keywords: ["react"],
+        email: "first@example.com",
+      },
+      {
+        _id: "profile_second",
+        _creationTime: 200,
+        clerkId: "clerk_123",
+        updatedAt: 200,
+        createdAt: 200,
+        version: 2,
+        skills: ["typescript"],
+        keywords: ["typescript"],
+        email: "second@example.com",
+      },
+    ];
+    const baseJob = {
+      _creationTime: 100,
+      company: "Acme",
+      location: "Remote",
+      isSample: false,
+      sourceUrl: "https://example.com/job",
+      sourceDomain: "example.com",
+      sourceType: "manual",
+      parseStatus: "parsed",
+      reviewState: "ready",
+      status: "active",
+      importedAt: 100,
+      archivedAt: null,
+      mustHaves: ["React"],
+      keywords: ["React"],
+      mustHavesExtraction: [],
+      keywordsExtraction: [],
+    };
+    const jobsByProfileId = new Map([
+      [
+        "profile_first",
+        [
+          {
+            ...baseJob,
+            _id: "job_first",
+            userId: "profile_first",
+            title: "First profile job",
+            updatedAt: 300,
+            lastOpenedAt: 300,
+          },
+        ],
+      ],
+      [
+        "profile_second",
+        [
+          {
+            ...baseJob,
+            _id: "job_second",
+            userId: "profile_second",
+            title: "Second profile job",
+            updatedAt: 500,
+            lastOpenedAt: 500,
+          },
+        ],
+      ],
+    ]);
+    const proposalStatsJobIds: string[] = [];
+    const shadowJobIds: string[] = [];
+
+    const result = await listForUser._handler(
+      {
+        auth: {
+          getUserIdentity: async () => ({ subject: "clerk_123" }),
+        },
+        db: {
+          query(table: string) {
+            if (table === "userProfiles") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  const clerkId = buildIndex(scope);
+                  return {
+                    collect: async () =>
+                      linkedProfiles.filter(
+                        (profile) => profile.clerkId === clerkId,
+                      ),
+                  };
+                },
+              };
+            }
+
+            if (table === "jobs") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    values: [] as string[],
+                    eq(_field: string, value: string) {
+                      this.values.push(value);
+                      return this;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    order() {
+                      return this;
+                    },
+                    take: async (limit: number) =>
+                      (jobsByProfileId.get(scope.values[0]) ?? []).slice(
+                        0,
+                        limit,
+                      ),
+                    collect: async () =>
+                      jobsByProfileId.get(scope.values[0]) ?? [],
+                  };
+                },
+              };
+            }
+
+            if (table === "proposals") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(field: string, value: string) {
+                      if (field === "jobId") {
+                        proposalStatsJobIds.push(value);
+                      }
+                      return this;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    order() {
+                      return this;
+                    },
+                    take: async () => [],
+                    collect: async () => [],
+                  };
+                },
+              };
+            }
+
+            if (table === "job_extraction_shadow") {
+              return {
+                withIndex(_indexName: string, buildIndex: any) {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      shadowJobIds.push(value);
+                      return this;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    order() {
+                      return this;
+                    },
+                    take: async () => [],
+                    collect: async () => [],
+                  };
+                },
+              };
+            }
+
+            throw new Error(`Unexpected table: ${table}`);
+          },
+        },
+      } as any,
+      { limit: 1 },
+    );
+
+    expect(result.map((job) => job.id)).toEqual(["job_second"]);
+    expect(proposalStatsJobIds).toEqual(["job_second"]);
+    expect(shadowJobIds).toEqual(["job_second"]);
+  });
+
   it("prefers a job resume override over the user default resume when computing match tier", async () => {
     const linkedProfiles = [
       {
@@ -591,12 +774,14 @@ describe("jobsPublic.getById", () => {
     linkedProposalRows = [],
     identity = { subject: "clerk_123" },
     failUnboundedDetailReads = false,
+    failProfileCollection = false,
   }: {
     job: any;
     shadowRows?: any[];
     linkedProposalRows?: any[];
     identity?: { subject: string; email?: string };
     failUnboundedDetailReads?: boolean;
+    failProfileCollection?: boolean;
   }) {
     const linkedProfiles = [
       {
@@ -622,11 +807,56 @@ describe("jobsPublic.getById", () => {
           expect(table).toBe("jobs");
           return id;
         },
-        get: async (id: string) => (id === job._id ? job : null),
+        get: async (id: string) =>
+          linkedProfiles.find((profile) => profile._id === id) ??
+          (id === job._id ? job : null),
         query(table: string) {
           if (table === "userProfiles") {
             return {
               withIndex(_indexName: string, buildIndex: any) {
+                if (_indexName === "by_clerk_updated_at") {
+                  const scope = {
+                    eq(_field: string, value: string) {
+                      return value;
+                    },
+                  };
+                  const clerkId = buildIndex(scope);
+                  return {
+                    order() {
+                      return this;
+                    },
+                    take: async (limit: number) =>
+                      linkedProfiles
+                        .filter((profile) => profile.clerkId === clerkId)
+                        .sort(
+                          (left, right) =>
+                            (right.updatedAt ?? right._creationTime) -
+                            (left.updatedAt ?? left._creationTime),
+                        )
+                        .slice(0, limit),
+                  };
+                }
+
+                if (_indexName === "by_profileId") {
+                  const criteria: Record<string, string> = {};
+                  const scope = {
+                    eq(field: string, value: string) {
+                      criteria[field] = value;
+                      return this;
+                    },
+                  };
+                  buildIndex(scope);
+                  return {
+                    collect: async () =>
+                      linkedProfiles.filter((profile) => {
+                        if (criteria.profileId && profile.profileId !== criteria.profileId) {
+                          return false;
+                        }
+                        return true;
+                      }),
+                  };
+                }
+
                 const scope = {
                   eq(_field: string, value: string) {
                     return value;
@@ -634,12 +864,18 @@ describe("jobsPublic.getById", () => {
                 };
                 const clerkId = buildIndex(scope);
                 return {
-                  collect: async () =>
-                    linkedProfiles.filter(
+                  collect: async () => {
+                    if (failProfileCollection) {
+                      throw new Error("unexpected profile collect");
+                    }
+                    return linkedProfiles.filter(
                       (profile) => profile.clerkId === clerkId,
-                    ),
+                    );
+                  },
                 };
               },
+              get: async (id: string) =>
+                linkedProfiles.find((profile) => profile._id === id) ?? null,
             };
           }
 
@@ -797,6 +1033,23 @@ describe("jobsPublic.getById", () => {
       ...overrides,
     };
   }
+
+  it("loads job detail without collecting every linked profile", async () => {
+    const job = buildProjectionJob();
+
+    const result = await getById._handler(
+      buildGetByIdProjectionCtx({
+        job,
+        failProfileCollection: true,
+      }),
+      { jobId: job._id },
+    );
+
+    expect(result).toMatchObject({
+      id: job._id,
+      title: job.title,
+    });
+  });
 
   it("projects eligible visible LLM extraction and structured match-read fields", async () => {
     vi.stubEnv("JOB_LLM_VISIBLE_EXTRACTION", "true");
@@ -1414,7 +1667,9 @@ describe("jobsPublic.getById", () => {
             expect(table).toBe("jobs");
             return id;
           },
-          get: async (id: string) => (id === job._id ? job : null),
+          get: async (id: string) =>
+            linkedProfiles.find((profile) => profile._id === id) ??
+            (id === job._id ? job : null),
           query(table: string) {
             if (table === "userProfiles") {
               return {

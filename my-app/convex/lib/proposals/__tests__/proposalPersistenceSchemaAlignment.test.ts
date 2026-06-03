@@ -204,6 +204,10 @@ function getProposalsPublicReturnMetadataFields(filePath: string): string[] {
   );
 }
 
+function sortedFields(fields: string[]): string[] {
+  return [...fields].sort((a, b) => a.localeCompare(b));
+}
+
 describe("proposal persistence schema alignment", () => {
   const proposalHeadingMetadataFields = [
     "applicantName",
@@ -219,21 +223,46 @@ describe("proposal persistence schema alignment", () => {
     "headerShowRecipientDetails",
   ];
 
-  it("keeps storeProposal metadata fields aligned with the proposals table schema and public query return shape", () => {
+  const proposalRuntimeMetadataFields = [
+    "requestedLanguage",
+    "resolvedLanguage",
+    "languageSource",
+    "jobDetectedLanguage",
+    "documentIcons",
+  ];
+
+  it("keeps proposal metadata validators aligned across store, schema, public query, create, and update", () => {
     const proposalsFile = path.resolve(process.cwd(), "convex/proposals.ts");
     const schemaFile = path.resolve(process.cwd(), "convex/schema.ts");
     const proposalsPublicFile = path.resolve(
       process.cwd(),
       "convex/proposalsPublic.ts",
     );
+    const createProposalPublicFile = path.resolve(
+      process.cwd(),
+      "convex/createProposalPublic.ts",
+    );
+    const updateProposalPublicFile = path.resolve(
+      process.cwd(),
+      "convex/updateProposalPublic.ts",
+    );
     const storeProposalFields = getStoreProposalMetadataFields(proposalsFile);
     const schemaFields = getProposalSchemaMetadataFields(schemaFile);
     const publicReturnFields = getProposalsPublicReturnMetadataFields(
       proposalsPublicFile,
     );
+    const publicCreateFields = getDefaultMutationMetadataFields(
+      createProposalPublicFile,
+    );
+    const publicUpdateFields = getDefaultMutationMetadataFields(
+      updateProposalPublicFile,
+    );
 
-    expect(schemaFields).toEqual(storeProposalFields);
-    expect(publicReturnFields).toEqual(storeProposalFields);
+    const expectedFields = sortedFields(storeProposalFields);
+    expect(sortedFields(schemaFields)).toEqual(expectedFields);
+    expect(sortedFields(publicReturnFields)).toEqual(expectedFields);
+    expect(sortedFields(publicCreateFields)).toEqual(expectedFields);
+    expect(sortedFields(publicUpdateFields)).toEqual(expectedFields);
   });
 
   it("accepts every proposal heading metadata field written by the v1 client", () => {
@@ -261,7 +290,10 @@ describe("proposal persistence schema alignment", () => {
 
     metadataContracts.forEach((fields) => {
       expect(fields).toEqual(
-        expect.arrayContaining(proposalHeadingMetadataFields),
+        expect.arrayContaining([
+          ...proposalHeadingMetadataFields,
+          ...proposalRuntimeMetadataFields,
+        ]),
       );
     });
   });

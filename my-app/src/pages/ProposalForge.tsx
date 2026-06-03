@@ -67,7 +67,9 @@ import {
 } from "../components/library/LibraryDocumentPreview";
 import { api } from "../../convex/_generated/api";
 import {
+  buildActiveCvSnapshotFromCvDocument,
   buildAppProposalPersonalizationPayload,
+  classifyPersonalizationRichness,
   getProposalApplicantHeaderData,
   getProposalApplicantIdentity,
   getLocalPersonalizationSourceByCvId,
@@ -78,6 +80,7 @@ import {
   setProposalAttachedCvId,
   clearProposalAttachedCvId,
   type ProposalApplicantHeaderData,
+  type ProposalPersonalizationSource,
 } from "../lib/proposal-personalization";
 import { type ProposalGenerationFallbackInfo } from "../lib/proposal-generation-ui";
 import {
@@ -148,6 +151,8 @@ import {
 } from "../lib/proposal-source-summary";
 import {
   buildProposalSourceDraftFromJob,
+  resolveProposalDraftDrawerCvTitle,
+  resolveProposalDraftDrawerSourceDraft,
   resolveProposalWorkspaceSourceDraft,
   type ResolvedProposalWorkspaceSourceDraft,
 } from "../lib/proposal-job-context";
@@ -1031,17 +1036,17 @@ export function ProposalDraftDrawer({
   const stagedJobMetaValue = stagedJobMeta || stagedJobSummary || null;
   const stagedCvTitleValue = stagedCvTitle?.trim() || null;
   const hasStagedSource = Boolean(stagedJobTitleValue || stagedCvTitleValue);
-  const shouldShowGenerateFooter =
-    !askReviewReady && (!hasExistingDraft || hasStagedSource);
+  const shouldShowGenerateFooter = !askReviewReady;
   const { resolvedLanguage } = useUiLanguagePreference();
   const footerGenerateLabel =
-    hasExistingDraft && hasStagedSource
+    hasExistingDraft
       ? translateUi(resolvedLanguage, "workspace.regenerate")
       : generateLabel;
   const resolvedJobTitle =
-    jobContextKind === "pasted"
+    jobTitle ||
+    (jobContextKind === "pasted"
       ? translateUi(resolvedLanguage, "jobs.pasteJobOffer")
-      : jobTitle || translateUi(resolvedLanguage, "workspace.jobLoaded");
+      : translateUi(resolvedLanguage, "workspace.jobLoaded"));
   const displayedJobTitle = stagedJobTitleValue || resolvedJobTitle;
   const stagedSourceMeta = translateUi(
     resolvedLanguage,
@@ -2226,6 +2231,17 @@ function resolveSourceCvTitle(
   return getLocalActiveCvSnapshotById(normalizedSourceCvId)?.title ?? null;
 }
 
+function buildPersonalizationSourceFromCvDocument(
+  doc: import("../types/cvDocument").CvDocument,
+): ProposalPersonalizationSource {
+  const snapshot = buildActiveCvSnapshotFromCvDocument(doc);
+  return {
+    title: snapshot.title,
+    personalizationContext: snapshot.personalizationContext,
+    richness: classifyPersonalizationRichness(snapshot.personalizationContext),
+  };
+}
+
 function resolveSafeSendMatchReviewAccepted(
   jobRecord: ProposalForgeCanonicalJob | undefined,
 ): boolean | null {
@@ -2773,9 +2789,33 @@ export function ProposalForge(): JSX.Element {
     api.proposalSettings.getPresets,
     isConvexAuthenticated ? {} : "skip",
   ) as ProposalSettingsPresets | undefined;
+  const resolvePersonalizationSourceByCvId = React.useCallback(
+    (cvId: string | null | undefined): ProposalPersonalizationSource => {
+      const localSource = getLocalPersonalizationSourceByCvId(cvId);
+      if (localSource.personalizationContext) {
+        return localSource;
+      }
+
+      const normalizedCvId = normalizeSourceCvId(cvId);
+      if (!normalizedCvId) {
+        return localSource;
+      }
+
+      const libraryDoc =
+        cvs.find((doc) => String(doc.id) === normalizedCvId) ?? null;
+      if (!libraryDoc) {
+        return localSource;
+      }
+
+      const librarySource =
+        buildPersonalizationSourceFromCvDocument(libraryDoc);
+      return librarySource.personalizationContext ? librarySource : localSource;
+    },
+    [cvs],
+  );
   const activePersonalizationSource = React.useMemo(
-    () => getLocalPersonalizationSourceByCvId(attachedCvId),
-    [attachedCvId],
+    () => resolvePersonalizationSourceByCvId(attachedCvId),
+    [attachedCvId, resolvePersonalizationSourceByCvId],
   );
   const effectivePersonalizationSource = React.useMemo(
     () =>
@@ -2791,10 +2831,14 @@ export function ProposalForge(): JSX.Element {
   const generationPersonalizationSource = React.useMemo(
     () =>
       applyProposalContactOverrides(
-        getLocalPersonalizationSourceByCvId(stagedGenerationCvId),
+        resolvePersonalizationSourceByCvId(stagedGenerationCvId),
         currentProposalSettings,
       ),
-    [currentProposalSettings, stagedGenerationCvId],
+    [
+      currentProposalSettings,
+      resolvePersonalizationSourceByCvId,
+      stagedGenerationCvId,
+    ],
   );
   const initialApplicantIdentity = React.useMemo(
     () => getProposalApplicantIdentity(effectivePersonalizationSource),
@@ -8173,9 +8217,21 @@ export function ProposalForge(): JSX.Element {
       const submittedComposeDraft =
         buildStoredProposalComposeDraftSnapshot(values);
       const stagedCvToCommit = stagedProposalCvSelection;
+      const committedSourceCvId = stagedCvToCommit
+        ? stagedCvToCommit.id
+        : attachedCvId;
+      const submittedHasJobSource = Boolean(
+        submittedComposeDraft.jobTitle?.trim() ||
+          submittedComposeDraft.jobDescription?.trim() ||
+          submittedComposeDraft.sourceUrl?.trim() ||
+          submittedComposeDraft.platform?.trim(),
+      );
       setStagedProposalSourceDraft(null);
       setStagedSourceJobId(null);
       setStagedProposalCvSelection(null);
+      if (submittedHasJobSource) {
+        setJobContextCleared(false);
+      }
       if (stagedCvToCommit) {
         handleAttachedCvChange(stagedCvToCommit.id);
       }
@@ -8324,6 +8380,9 @@ export function ProposalForge(): JSX.Element {
           resolvedLanguage: languageMetadata?.resolvedLanguage ?? null,
           languageSource: languageMetadata?.languageSource,
           jobDetectedLanguage: languageMetadata?.jobDetectedLanguage ?? null,
+          ...(values.jobTitle?.trim()
+            ? { sourceJobTitle: values.jobTitle.trim() }
+            : {}),
           ...(values.jobDescription?.trim()
             ? { sourceJobDescription: values.jobDescription.trim() }
             : {}),
@@ -8333,6 +8392,7 @@ export function ProposalForge(): JSX.Element {
           ...(values.platform?.trim()
             ? { platform: values.platform.trim() }
             : {}),
+          ...(committedSourceCvId ? { sourceCvId: committedSourceCvId } : {}),
           ...buildProposalHeadingMetadataPatch({
             applicantName: nextApplicantName,
             applicantRole: nextApplicantRole,
@@ -8392,6 +8452,7 @@ export function ProposalForge(): JSX.Element {
       setLoading(false);
     },
     [
+      attachedCvId,
       generationPersonalizationSource,
       stagedProposalCvSelection,
       handleAttachedCvChange,
@@ -9007,9 +9068,9 @@ export function ProposalForge(): JSX.Element {
         window.clearTimeout(composeAutosaveTimeoutRef.current);
         composeAutosaveTimeoutRef.current = null;
       }
-      if (composeSaveStatus !== "error") {
-        setComposeSaveStatus("idle");
-      }
+      setComposeSaveStatus((currentStatus) =>
+        currentStatus === "error" ? currentStatus : "idle",
+      );
       return;
     }
 
@@ -9053,7 +9114,6 @@ export function ProposalForge(): JSX.Element {
   }, [
     canPersistProposalState,
     composeAutosaveSnapshot,
-    composeSaveStatus,
     requestedView,
     scheduleProposalSave,
     selectedDraftProposalId,
@@ -10644,12 +10704,81 @@ export function ProposalForge(): JSX.Element {
     canonicalJobRecord?.title?.trim() ||
       resolvedProposalWorkspaceSourceDraft?.jobTitle?.trim() ||
       prefill?.jobTitle?.trim() ||
+      proposalPersistenceMetadata?.sourceJobTitle?.trim() ||
+      "",
+  );
+  const proposalDraftMetadataSource = isSavedView
+    ? savedProposalRenderMetadata
+    : proposalPersistenceMetadata;
+  const proposalDraftDocumentJobId =
+    (isSavedView
+      ? openedSavedProposal?.metadata?.jobId
+      : proposalDraftMetadataSource?.jobId || resolvedProposalJobId
+    )?.trim() || null;
+  const proposalDraftLinkedJobRecord = React.useMemo(() => {
+    if (!proposalDraftDocumentJobId) {
+      return null;
+    }
+
+    return (
+      (proposalRailJobs ?? []).find(
+        (job) => String(job.id) === proposalDraftDocumentJobId,
+      ) ?? null
+    );
+  }, [proposalDraftDocumentJobId, proposalRailJobs]);
+  const proposalDraftLinkedJobSourceDraft = React.useMemo(() => {
+    if (!proposalDraftLinkedJobRecord) {
+      return null;
+    }
+
+    return buildProposalSourceDraftFromJob({
+      job: {
+        title: proposalDraftLinkedJobRecord.title,
+        rawDescription: proposalDraftLinkedJobRecord.rawDescription,
+        sourceUrl: proposalDraftLinkedJobRecord.sourceUrl,
+        sourceDomain: proposalDraftLinkedJobRecord.sourceDomain,
+        sourceType: proposalDraftLinkedJobRecord.sourceType,
+        summary: proposalDraftLinkedJobRecord.summary,
+      },
+    });
+  }, [proposalDraftLinkedJobRecord]);
+  const proposalDraftSourceDraft = React.useMemo(
+    () =>
+      jobContextCleared
+        ? null
+        : resolveProposalDraftDrawerSourceDraft({
+            activeWorkspaceSourceDraft: isSavedView
+              ? null
+              : resolvedProposalWorkspaceSourceDraft,
+            storedOutputSourceDraft: isSavedView
+              ? null
+              : storedOutputDraft?.sourceComposeDraft ?? null,
+            linkedJobSourceDraft: proposalDraftLinkedJobSourceDraft,
+            metadataSource: proposalDraftMetadataSource ?? null,
+          }),
+    [
+      isSavedView,
+      jobContextCleared,
+      proposalDraftLinkedJobSourceDraft,
+      proposalDraftMetadataSource,
+      resolvedProposalWorkspaceSourceDraft,
+      storedOutputDraft?.sourceComposeDraft,
+    ],
+  );
+  const proposalDraftJobTitle = normalizeProposalRailJobTitle(
+    canonicalJobRecord?.title?.trim() ||
+      proposalDraftSourceDraft?.jobTitle?.trim() ||
+      briefJobTitle ||
       "",
   );
   const briefSummaryText = canonicalJobRecord?.summary?.trim() || null;
   const proposalRailJobSummary =
     compactStoredJobSummary(canonicalJobRecord?.summary) ||
     compactStoredJobSummary(canonicalJobRecord?.visibleSummary);
+  const proposalDraftJobSummary =
+    proposalRailJobSummary ||
+    compactStoredJobSummary(proposalDraftSourceDraft?.jobDescription) ||
+    compactStoredJobSummary(proposalDraftMetadataSource?.sourceJobDescription);
   const briefTrustState = canonicalJobRecord?.reviewState ?? null;
   const briefReviewItems = canonicalJobRecord?.reviewItems ?? [];
   const briefLinkedDocumentCount = canonicalJobRecord?.linkedProposalCount ?? 0;
@@ -10662,7 +10791,20 @@ export function ProposalForge(): JSX.Element {
       resolvedProposalWorkspaceSourceDraft?.jobTitle?.trim() ||
       resolvedProposalWorkspaceSourceDraft?.jobDescription?.trim() ||
       resolvedProposalWorkspaceSourceDraft?.sourceUrl?.trim() ||
-      resolvedProposalWorkspaceSourceDraft?.platform?.trim()),
+      resolvedProposalWorkspaceSourceDraft?.platform?.trim() ||
+      proposalDraftMetadataSource?.sourceJobTitle?.trim() ||
+      proposalDraftMetadataSource?.sourceJobDescription?.trim() ||
+      proposalDraftMetadataSource?.sourceUrl?.trim() ||
+      proposalDraftMetadataSource?.platform?.trim()),
+  );
+  const hasProposalDraftJobContext = Boolean(
+    !jobContextCleared &&
+      (canonicalJobRecord?.title?.trim() ||
+        canonicalJobRecord?.rawDescription?.trim() ||
+        proposalDraftSourceDraft?.jobTitle?.trim() ||
+        proposalDraftSourceDraft?.jobDescription?.trim() ||
+        proposalDraftSourceDraft?.sourceUrl?.trim() ||
+        proposalDraftSourceDraft?.platform?.trim()),
   );
   const showBriefCard = hasBriefContent && !isBriefExpanded && showComposePanel;
   const shouldShowDesktopBriefCapsule =
@@ -11949,11 +12091,21 @@ export function ProposalForge(): JSX.Element {
     });
   }, [isWideEnoughForDockedForgePanel, openTemplateSurface]);
   const handleOpenDraftFromStage = React.useCallback(() => {
+    if (templatePanelOpen && activeTemplateSurface === "proposal-draft") {
+      closeForgePanel();
+      return;
+    }
     setProposalComposerMode(null);
     openTemplateSurface("proposal-draft", {
       mode: isWideEnoughForDockedForgePanel ? "docked" : "overlay",
     });
-  }, [isWideEnoughForDockedForgePanel, openTemplateSurface]);
+  }, [
+    activeTemplateSurface,
+    closeForgePanel,
+    isWideEnoughForDockedForgePanel,
+    openTemplateSurface,
+    templatePanelOpen,
+  ]);
   const handleOpenCvsFromDraft = React.useCallback(() => {
     openTemplateSurface("cvs", {
       mode: isWideEnoughForDockedForgePanel ? "docked" : "overlay",
@@ -11996,31 +12148,45 @@ export function ProposalForge(): JSX.Element {
     if (canonicalJobId || canonicalJobRecord?.title?.trim()) {
       return "saved";
     }
-    if (hasActiveProposalJobContext) {
+    if (hasProposalDraftJobContext) {
       return "pasted";
     }
     return "empty";
   }, [
     canonicalJobId,
     canonicalJobRecord?.title,
-    hasActiveProposalJobContext,
+    hasProposalDraftJobContext,
     jobContextCleared,
   ]);
+  const proposalDraftSourceSummary = React.useMemo(
+    () =>
+      proposalDraftSourceDraft
+        ? buildProposalSourceSummary({
+            jobTitle: proposalDraftSourceDraft.jobTitle,
+            jobDescription: proposalDraftSourceDraft.jobDescription,
+          })
+        : null,
+    [proposalDraftSourceDraft],
+  );
   const proposalDraftJobMeta = React.useMemo(
     () =>
       [
         canonicalJobRecord?.company?.trim() ||
-          proposalHeaderSourceSummary.company,
-        briefSourcePlatform,
-        proposalHeaderSourceSummary.location,
+          proposalDraftSourceSummary?.company,
+        proposalDraftSourceDraft?.platform?.trim() ||
+          briefSourcePlatform ||
+          proposalDraftMetadataSource?.platform?.trim(),
+        proposalDraftSourceSummary?.location,
       ]
         .filter(Boolean)
         .join(" · ") || null,
     [
       briefSourcePlatform,
       canonicalJobRecord?.company,
-      proposalHeaderSourceSummary.company,
-      proposalHeaderSourceSummary.location,
+      proposalDraftSourceDraft?.platform,
+      proposalDraftSourceSummary?.company,
+      proposalDraftSourceSummary?.location,
+      proposalDraftMetadataSource?.platform,
     ],
   );
   const stagedProposalSourceSummary = React.useMemo(
@@ -12052,25 +12218,65 @@ export function ProposalForge(): JSX.Element {
   const stagedProposalCvTitle =
     stagedProposalCvSelection?.title?.trim() ||
     (stagedProposalCvSelection ? "No CV" : null);
+  const proposalDraftLinkedJobCvId = normalizeSourceCvId(
+    proposalDraftLinkedJobRecord?.resumeId,
+  );
+  const proposalDraftLinkedJobCvTitle =
+    proposalDraftLinkedJobRecord?.resumeName?.trim() || null;
+  const proposalDraftSourceCvId =
+    (isSavedView
+      ? openedSavedProposalSourceCvId || proposalDraftLinkedJobCvId
+      : attachedCvId ||
+        normalizeSourceCvId(proposalDraftMetadataSource?.sourceCvId) ||
+        openedSavedProposalSourceCvId ||
+        proposalDraftLinkedJobCvId);
+  const proposalDraftSourceCvTitle = resolveProposalDraftDrawerCvTitle({
+    attachedCvTitle: isSavedView ? null : attachedCvDisplayTitle,
+    sourceCvId: proposalDraftSourceCvId,
+    resolvedSourceCvTitle: resolveSourceCvTitle(proposalDraftSourceCvId),
+    sourceCvOptions,
+    savedSourceCvTitle:
+      openedSavedProposalSourceCvLabel || proposalDraftLinkedJobCvTitle,
+    fallbackAttachedCvTitle: translateUi(
+      resolvedLanguage,
+      "workspace.attachedCv",
+    ),
+  });
+  const canRegenerateFromProposalDraftSource = Boolean(
+    hasMeaningfulProposalContent &&
+      railAskAiReview.status !== "ready" &&
+      (proposalDraftSourceDraft?.jobTitle?.trim() ||
+        proposalDraftSourceDraft?.jobDescription?.trim() ||
+        proposalDraftSourceDraft?.sourceUrl?.trim() ||
+        proposalDraftSourceDraft?.platform?.trim()),
+  );
+  const proposalDraftGenerateDisabled =
+    loading ||
+    isLoadingHandoff ||
+    (composeGenerateControl.disabled && !canRegenerateFromProposalDraftSource);
   const proposalDraftPanelRegistration = React.useMemo(
     () => ({
       surface: "proposal-draft" as const,
-      title: translateUi(resolvedLanguage, "workspace.draftProposalShort"),
+      title: hasMeaningfulProposalContent
+        ? translateUi(resolvedLanguage, "workspace.jobAndCv")
+        : translateUi(resolvedLanguage, "workspace.draftProposalShort"),
       ariaLabel: translateUi(
         resolvedLanguage,
-        "workspace.proposalDraftPanel",
+        hasMeaningfulProposalContent
+          ? "workspace.jobAndCvPanel"
+          : "workspace.proposalDraftPanel",
       ),
       renderContent: () => (
         <ProposalDraftDrawer
-          jobTitle={briefJobTitle}
+          jobTitle={proposalDraftJobTitle}
           jobMeta={proposalDraftJobMeta}
-          jobSummary={proposalRailJobSummary}
+          jobSummary={proposalDraftJobSummary}
           jobContextKind={proposalDraftJobContextKind}
           stagedJobTitle={stagedProposalSourceTitle}
           stagedJobMeta={stagedProposalSourceMeta}
           stagedJobSummary={stagedProposalSourcePreview}
           stagedCvTitle={stagedProposalCvTitle}
-          sourceCvTitle={attachedCvDisplayTitle}
+          sourceCvTitle={proposalDraftSourceCvTitle}
           proposalTypeLabel={
             proposalType ? formatProposalTypeLabel(proposalType) : "Letter"
           }
@@ -12086,9 +12292,7 @@ export function ProposalForge(): JSX.Element {
             );
           }}
           generateLabel={composeGenerateControl.label}
-          generateDisabled={
-            composeGenerateControl.disabled || loading || isLoadingHandoff
-          }
+          generateDisabled={proposalDraftGenerateDisabled}
           generateState={composeGenerateControl.state}
           hasExistingDraft={hasMeaningfulProposalContent}
           askReviewReady={railAskAiReview.status === "ready"}
@@ -12105,7 +12309,6 @@ export function ProposalForge(): JSX.Element {
       ),
     }),
     [
-      attachedCvDisplayTitle,
       attachedCvId,
       briefJobTitle,
       composeGenerateControl.disabled,
@@ -12125,9 +12328,12 @@ export function ProposalForge(): JSX.Element {
       hasMeaningfulProposalContent,
       isLoadingHandoff,
       loading,
+      proposalDraftGenerateDisabled,
+      proposalDraftJobTitle,
       proposalDraftJobMeta,
       proposalDraftJobContextKind,
-      proposalRailJobSummary,
+      proposalDraftJobSummary,
+      proposalDraftSourceCvTitle,
       proposalRailToneLabel,
       proposalRailToneOptions,
       proposalType,
@@ -12548,11 +12754,7 @@ export function ProposalForge(): JSX.Element {
                             : undefined
                         }
                         generateLabel={composeGenerateControl.label}
-                        generateDisabled={
-                          composeGenerateControl.disabled ||
-                          loading ||
-                          isLoadingHandoff
-                        }
+                        generateDisabled={proposalDraftGenerateDisabled}
                         generateState={composeGenerateControl.state}
                         onGenerateDraft={handleGenerateFromCollapsedToolbar}
                         hasExistingDraft={hasMeaningfulProposalContent}
@@ -12600,6 +12802,9 @@ export function ProposalForge(): JSX.Element {
                               ? stagedProposalCvSelection.id
                               : attachedCvId
                           }
+                          personalizationSourceOverride={
+                            generationPersonalizationSource
+                          }
                           prefill={prefill}
                           cvPickerOpen={isCvPickerOpen}
                           onCvPickerOpenChange={setIsCvPickerOpen}
@@ -12612,7 +12817,9 @@ export function ProposalForge(): JSX.Element {
                           headerLabel={null}
                           initialComposeDraft={composeDraftInitialSeed}
                           externalComposeDraft={
-                            stagedProposalSourceDraft ?? composePreviewValues
+                            stagedProposalSourceDraft ??
+                            proposalDraftSourceDraft ??
+                            composePreviewValues
                           }
                           sourceUrl={
                             stagedProposalSourceDraft?.sourceUrl ?? briefSourceUrl
@@ -12655,11 +12862,7 @@ export function ProposalForge(): JSX.Element {
                         onOpenDesign={handleOpenProposalDesign}
                         templatesOpen={proposalTemplatesOpen}
                         onOpenTemplates={handleOpenProposalTemplates}
-                        onOpenDraft={
-                          hasMeaningfulProposalContent
-                            ? undefined
-                            : handleOpenDraftFromStage
-                        }
+                        onOpenDraft={handleOpenDraftFromStage}
                         onOpenAsk={
                           hasMeaningfulProposalContent
                             ? () => {

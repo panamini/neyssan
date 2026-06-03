@@ -114,7 +114,8 @@ type ProposalDocumentMetadata = DocumentStyleMetadata & {
 type GenerateProposalResult = {
   proposalId: Id<"proposals">;
   proposalContent: string;
-} & Required<ProposalGenerationFallbackInfo>;
+  routing?: ProposalGenerationFallbackInfo["routing"];
+} & Required<Omit<ProposalGenerationFallbackInfo, "routing">>;
 
 type SavedProposalRecord = {
   _id: Id<"proposals">;
@@ -1621,6 +1622,7 @@ export function ProposalForgeNext(): JSX.Element {
           requestedModelType: result.requestedModelType,
           actualModelType: result.actualModelType,
           fallbackTriggerCode: result.fallbackTriggerCode,
+          routing: result.routing ?? null,
         },
         result.proposalId,
       );

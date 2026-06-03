@@ -229,6 +229,40 @@ describe("forge rail drawers", () => {
     await waitFor(() => expect(typeMenu).toHaveAttribute("data-side", "top"));
   });
 
+  it("shows the real job title for pasted/generated draft sources", () => {
+    render(
+      <ProposalDraftDrawer
+        jobTitle="Operations Associate"
+        jobMeta="Studio North · example.com"
+        jobSummary="Recurring launches and structured handoffs."
+        jobContextKind="pasted"
+        sourceCvTitle="Robert Cooper"
+        proposalTypeLabel="Letter"
+        proposalTypeOptions={proposalTypeOptions}
+        onSelectProposalType={vi.fn()}
+        toneLabel="Formal"
+        toneOptions={toneOptions}
+        onSelectTone={vi.fn()}
+        generateLabel="Generate"
+        generateDisabled={false}
+        generateState="idle"
+        hasExistingDraft
+        onGenerateDraft={vi.fn()}
+        onOpenJobs={vi.fn()}
+        onOpenPasteJob={vi.fn()}
+        onOpenCvs={vi.fn()}
+        onClearCv={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Operations Associate")).toBeInTheDocument();
+    expect(screen.getByText("Studio North · example.com")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Change job: Operations Associate" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Robert Cooper")).toBeInTheDocument();
+  });
+
   it("keeps empty Proposal Draft source actions explicit", () => {
     render(
       <ProposalDraftDrawer
@@ -446,6 +480,41 @@ describe("forge rail drawers", () => {
     expect(screen.getAllByRole("button", { name: /generate/i })).toHaveLength(1);
 
     fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
+    expect(onGenerateDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps Regenerate available for an existing draft even when job and CV are unchanged", () => {
+    const onGenerateDraft = vi.fn();
+
+    render(
+      <ProposalDraftDrawer
+        jobTitle="Current Security Guard"
+        jobMeta="Current Company · LinkedIn"
+        jobSummary="Current letter source"
+        jobContextKind="saved"
+        sourceCvTitle="Robert Cooper"
+        proposalTypeLabel="Letter"
+        proposalTypeOptions={proposalTypeOptions}
+        onSelectProposalType={vi.fn()}
+        toneLabel="Formal"
+        toneOptions={toneOptions}
+        onSelectTone={vi.fn()}
+        generateLabel="Generate"
+        generateDisabled={false}
+        generateState="idle"
+        hasExistingDraft
+        onGenerateDraft={onGenerateDraft}
+        onOpenJobs={vi.fn()}
+        onOpenPasteJob={vi.fn()}
+        onOpenCvs={vi.fn()}
+        onClearCv={vi.fn()}
+      />,
+    );
+
+    const regenerate = screen.getByRole("button", { name: "Regenerate" });
+    expect(regenerate).not.toBeDisabled();
+
+    fireEvent.click(regenerate);
     expect(onGenerateDraft).toHaveBeenCalledTimes(1);
   });
 

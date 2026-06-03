@@ -55,6 +55,17 @@ vi.mock("../../components/ProposalInputForm", () => ({
                 requestedModelType: "mistral-small-latest",
                 actualModelType: "mistral-small-latest",
                 fallbackTriggerCode: null,
+                routing: {
+                  attemptedPath: "premium success",
+                  plannedPath: "structured",
+                  executedPath: "structured",
+                  fallbackReason: "not_applicable",
+                  validatorOutcome: "structured_success",
+                  saveOutcome: "structured_saved",
+                  premiumFailureStage: null,
+                  premiumFailureReason: null,
+                  premiumFailureContextClass: null,
+                },
               },
             );
           }}
@@ -72,6 +83,17 @@ vi.mock("../../components/ProposalInputForm", () => ({
                 requestedModelType: "mistral-small-latest",
                 actualModelType: "chatgpt",
                 fallbackTriggerCode: "proposal_generation_provider_busy",
+                routing: {
+                  attemptedPath: "premium success",
+                  plannedPath: "structured",
+                  executedPath: "structured",
+                  fallbackReason: "not_applicable",
+                  validatorOutcome: "structured_success",
+                  saveOutcome: "structured_saved",
+                  premiumFailureStage: null,
+                  premiumFailureReason: null,
+                  premiumFailureContextClass: null,
+                },
               },
             );
           }}
@@ -131,7 +153,9 @@ describe("ProposalForge controlled failure integration", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Trigger success" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Trigger success", hidden: true }),
+    );
 
     expect(
       screen.getAllByText(
@@ -139,9 +163,11 @@ describe("ProposalForge controlled failure integration", () => {
       ).length,
     ).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole("button", { name: "Expand" }));
     fireEvent.click(
-      screen.getByRole("button", { name: "Trigger provider busy" }),
+      screen.getByRole("button", {
+        name: "Trigger provider busy",
+        hidden: true,
+      }),
     );
 
     const alertText = screen
@@ -170,7 +196,10 @@ describe("ProposalForge controlled failure integration", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Trigger transport error" }),
+      screen.getByRole("button", {
+        name: "Trigger transport error",
+        hidden: true,
+      }),
     );
 
     const alertText = screen
@@ -194,7 +223,10 @@ describe("ProposalForge controlled failure integration", () => {
     );
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Trigger fallback success" }),
+      screen.getByRole("button", {
+        name: "Trigger fallback success",
+        hidden: true,
+      }),
     );
 
     expect(
@@ -202,6 +234,9 @@ describe("ProposalForge controlled failure integration", () => {
         "Generated with ChatGPT because Mistral was temporarily busy.",
       ),
     ).toBeInTheDocument();
+    expect(screen.getByTestId("proposal-routing-disclosure")).toHaveTextContent(
+      "Generation routing: route premium success; planned structured; executed structured; validator structured_success; save structured_saved.",
+    );
     expect(
       screen.getAllByText(
         "I am writing with interest in the Operations Associate role.",

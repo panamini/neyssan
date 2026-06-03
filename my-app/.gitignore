@@ -43,3 +43,5 @@ tmp-audit/
 .envlocal-myapp.md
 .envlocalDEV.md
 .envproduction-myapp.md
+!.env.example
+!.env.local.example

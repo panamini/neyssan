@@ -243,6 +243,60 @@ describe("ProposalInputForm auto tone submit", () => {
     );
   });
 
+  it("uses an explicit personalization source override when the local CV lookup is empty", async () => {
+    render(
+      <ProposalInputForm
+        activeCvId="cv_remote_summary_only"
+        personalizationSourceOverride={{
+          title: "Remote Security CV",
+          personalizationContext: {
+            name: "Robert Cooper",
+            desiredPosition: "Security Officer",
+            topSkills: ["Access control", "Incident reporting"],
+            recentExperience: [
+              {
+                company: "ADT Security",
+                position: "Security Guard",
+                highlights: ["Maintained patrol logs across assigned shifts."],
+              },
+            ],
+          },
+          richness: "rich",
+        }}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText("Job title"), {
+      target: { value: "High Level Security Officer" },
+    });
+    fireEvent.change(
+      screen.getByPlaceholderText("Paste job offer"),
+      {
+        target: {
+          value:
+            "Maintain site safety through structured patrols, access control, incident response, and clear reporting.",
+        },
+      },
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    await waitFor(() => {
+      expect(mockGenerateProposalAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          personalizationMode: "explicit_only",
+          personalizationRichness: "rich",
+          personalizationContext: expect.objectContaining({
+            name: "Robert Cooper",
+            desiredPosition: "Security Officer",
+            topSkills: ["Access control", "Incident reporting"],
+          }),
+        }),
+      );
+    });
+  });
+
   it("generates from externally synced pasted job text without requiring blur", async () => {
     const handleSubmit = vi.fn();
     const pastedJobOffer =

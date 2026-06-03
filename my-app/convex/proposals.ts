@@ -135,6 +135,21 @@ const documentAppearanceSnapshotChoice = v.object({
   accentHex: v.optional(v.string()),
 });
 
+const documentIconSettingsChoice = v.object({
+  listMarkerType: v.optional(
+    v.union(v.literal("dot"), v.literal("dash"), v.literal("icon")),
+  ),
+  defaultListMarkerKey: v.optional(v.union(v.string(), v.null())),
+  sectionHeadingIconMode: v.union(
+    v.literal("none"),
+    v.literal("auto"),
+    v.literal("custom"),
+  ),
+  sectionIconMap: v.optional(v.record(v.string(), v.string())),
+  color: v.union(v.literal("ink"), v.literal("muted"), v.literal("accent")),
+  sizePt: v.union(v.literal(8), v.literal(9), v.literal(10), v.literal(12)),
+});
+
 export const storeProposal = internalMutation({
   args: {
     userId: v.id("userProfiles"),
@@ -212,8 +227,13 @@ export const storeProposal = internalMutation({
         v.union(proposalCharacterLimitModeChoice, v.null()),
       ),
       characterLimitValue: v.optional(v.union(v.number(), v.null())),
+      requestedLanguage: v.optional(v.union(v.string(), v.null())),
+      resolvedLanguage: v.optional(v.union(v.string(), v.null())),
+      languageSource: v.optional(v.union(v.string(), v.null())),
+      jobDetectedLanguage: v.optional(v.union(v.string(), v.null())),
       closing: v.optional(proposalClosingChoice),
       documentDecoration: v.optional(proposalDocumentDecorationChoice),
+      documentIcons: v.optional(documentIconSettingsChoice),
       proposalType: v.optional(
         v.union(
           v.literal("cover_letter"),
@@ -320,8 +340,13 @@ export const updateProposal = internalMutation({
         v.union(proposalCharacterLimitModeChoice, v.null()),
       ),
       characterLimitValue: v.optional(v.union(v.number(), v.null())),
+      requestedLanguage: v.optional(v.union(v.string(), v.null())),
+      resolvedLanguage: v.optional(v.union(v.string(), v.null())),
+      languageSource: v.optional(v.union(v.string(), v.null())),
+      jobDetectedLanguage: v.optional(v.union(v.string(), v.null())),
       closing: v.optional(proposalClosingChoice),
       documentDecoration: v.optional(proposalDocumentDecorationChoice),
+      documentIcons: v.optional(documentIconSettingsChoice),
       proposalType: v.optional(
         v.union(
           v.literal("cover_letter"),

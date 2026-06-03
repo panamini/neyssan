@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   logProposalStyleTrace,
+  PROPOSAL_STYLE_TRACE_STORAGE_KEY,
   readProposalStyleTraceStorageSnapshots,
   resolveOutputDraftWinnerSource,
   snapshotSavedProposalRecord,
@@ -15,6 +16,11 @@ import {
 import { PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY } from "../proposal-workspace-state";
 
 describe("proposal-style-trace", () => {
+  afterEach(() => {
+    window.localStorage.removeItem(PROPOSAL_STYLE_TRACE_STORAGE_KEY);
+    vi.restoreAllMocks();
+  });
+
   it("summarizes saved proposal metadata fields without conflating raw and resolved values", () => {
     expect(
       snapshotSavedProposalRecord({
@@ -225,9 +231,23 @@ describe("proposal-style-trace", () => {
     });
   });
 
-  it("logs the trace marker without throwing", () => {
+  it("keeps trace logging off by default", () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+
+    logProposalStyleTrace({ step: "unit-test" });
+
+    expect(infoSpy).not.toHaveBeenCalled();
+  });
+
+  it("logs the trace marker when explicitly enabled", () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    window.localStorage.setItem(PROPOSAL_STYLE_TRACE_STORAGE_KEY, "true");
+
     expect(() => {
       logProposalStyleTrace({ step: "unit-test" });
     }).not.toThrow();
+    expect(infoSpy).toHaveBeenCalledWith("[proposal-style-trace]", {
+      step: "unit-test",
+    });
   });
 });

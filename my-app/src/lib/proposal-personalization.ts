@@ -29,9 +29,9 @@ const PROPOSAL_ATTACHED_CV_MIGRATION_KEY =
 const MAX_SUMMARY_LENGTH = 240;
 const MAX_SKILLS = 8;
 const MAX_RECENT_EXPERIENCE = 3;
-const MAX_HIGHLIGHTS_PER_EXPERIENCE = 2;
-const MAX_HIGHLIGHT_LENGTH = 110;
-const MAX_ACHIEVEMENTS = 4;
+const MAX_HIGHLIGHTS_PER_EXPERIENCE = 5;
+const MAX_HIGHLIGHT_LENGTH = 180;
+const MAX_ACHIEVEMENTS = 6;
 const MAX_ACHIEVEMENT_LENGTH = 140;
 const SENTENCE_BOUNDARY_ABBREVIATIONS = [
   "Pvt.",
@@ -107,6 +107,17 @@ export type ProposalApplicantHeaderData = {
   website: string | null;
   location: string | null;
   tag: string | null;
+};
+
+export type ProposalPersonalizationSource = {
+  title: string | null;
+  personalizationContext: ProposalPersonalizationContext | null;
+  richness?: ProposalPersonalizationRichness;
+  email?: string | null;
+  phone?: string | null;
+  linkedin?: string | null;
+  website?: string | null;
+  location?: string | null;
 };
 
 type CvDisplayIdentity = {
@@ -369,6 +380,51 @@ function getSectionByType(
     : undefined;
 }
 
+function scoreProposalHighlight(value: string): number {
+  let score = 0;
+  if (
+    /\b(?:report|record|document|log|surveillance|observation|witness|signature|handoff)\b/i.test(
+      value,
+    )
+  ) {
+    score += 5;
+  }
+  if (
+    /\b(?:monitor|inspect|scan|patrol|check|control|cctv|equipment|maintenance|troubleshoot|repair|operation)\b/i.test(
+      value,
+    )
+  ) {
+    score += 4;
+  }
+  if (
+    /\b(?:incident|escalat|respond|breach|detain|apprehend|protect|safety|unauthorized|unattended)\b/i.test(
+      value,
+    )
+  ) {
+    score += 3;
+  }
+  if (/\b(?:breach|detain|apprehend)\b/i.test(value)) score += 3;
+  if (/\b(?:hourly|daily|weekly|monthly|every\s+\d+|shift|status)\b/i.test(value)) {
+    score += 2;
+  }
+  if (/\b\d+(?:%|\+)?\b/.test(value)) score += 1;
+  return score;
+}
+
+function selectProposalHighlights(candidates: string[]): string[] {
+  return dedupe(
+    candidates.map((candidate) => clampText(candidate, MAX_HIGHLIGHT_LENGTH)),
+  )
+    .map((value, index) => ({
+      value,
+      index,
+      score: scoreProposalHighlight(value),
+    }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, MAX_HIGHLIGHTS_PER_EXPERIENCE)
+    .map((entry) => entry.value);
+}
+
 function getTimestamp(doc: CvDocument): number {
   const updatedAt = Date.parse(String(doc.metadata?.updatedAt ?? ""));
   if (Number.isFinite(updatedAt)) return updatedAt;
@@ -576,11 +632,7 @@ function readRecentExperience(
       if (descriptionText)
         highlightCandidates.push(...splitIntoSnippets(descriptionText));
 
-      const highlights = dedupe(
-        highlightCandidates.map((candidate) =>
-          clampText(candidate, MAX_HIGHLIGHT_LENGTH),
-        ),
-      ).slice(0, MAX_HIGHLIGHTS_PER_EXPERIENCE);
+      const highlights = selectProposalHighlights(highlightCandidates);
 
       if (!position && !company && highlights.length === 0) return null;
       return {
@@ -605,7 +657,27 @@ function readStandoutAchievements(doc: CvDocument): string[] | undefined {
         readStringField(record, "text") ?? (typeof item === "string" ? item : ""),
       ).map((snippet) => clampText(snippet, MAX_ACHIEVEMENT_LENGTH));
     },
-  );
+    );
+
+  const credentialHighlights = getStructuredItems(
+    getSectionByType(doc, "certifications"),
+  ).flatMap((item) => {
+    const record = asRecord(item);
+    const name = clampText(
+      readStringField(record, "certificationName") ??
+        readStringField(record, "name") ??
+        readStringField(record, "title"),
+      MAX_ACHIEVEMENT_LENGTH,
+    );
+    if (!name) return [];
+    const issuer = clampText(
+      readStringField(record, "issuingOrganization") ??
+        readStringField(record, "issuer") ??
+        readStringField(record, "organization"),
+      80,
+    );
+    return [issuer ? `${name} from ${issuer}.` : name];
+  });
 
   const experienceFallback = getStructuredItems(
     getSectionByType(doc, "experience"),
@@ -624,6 +696,7 @@ function readStandoutAchievements(doc: CvDocument): string[] | undefined {
 
   const standoutAchievements = dedupe([
     ...explicitAchievements,
+    ...credentialHighlights,
     ...experienceFallback,
   ]).slice(0, MAX_ACHIEVEMENTS);
   return standoutAchievements.length > 0 ? standoutAchievements : undefined;

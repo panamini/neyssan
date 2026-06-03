@@ -18,6 +18,7 @@ import type { ProposalVoicePreset } from "../../convex/lib/proposals/voicePreset
 import { api } from "../../convex/_generated/api";
 import {
   getProposalGenerationFallbackDisclosureMessage,
+  getProposalGenerationRoutingDisclosureMessage,
   type ProposalGenerationFallbackInfo,
 } from "../lib/proposal-generation-ui";
 import FloatingAiToolbar, { type InlineAiActionId } from "./FloatingAiToolbar";
@@ -684,6 +685,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   const fallbackDisclosure = getProposalGenerationFallbackDisclosureMessage(
     fallbackInfo ?? {},
   );
+  const routingDisclosure = isDev
+    ? getProposalGenerationRoutingDisclosureMessage(fallbackInfo ?? {})
+    : null;
   const documentTypography = getProposalDocumentTypography(
     voicePreset,
     resolvedStylePreset,
@@ -3154,6 +3158,16 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           className="mb-4 rounded-md border border-[color:var(--color-border)] [background:var(--as)] px-4 py-3 text-sm text-foreground"
         >
           {fallbackDisclosure}
+        </div>
+      ) : null}
+      {routingDisclosure ? (
+        <div
+          role="status"
+          aria-live="polite"
+          data-testid="proposal-routing-disclosure"
+          className="mb-4 rounded-md border border-[color:var(--color-border)] [background:var(--sf2)] px-4 py-3 text-xs [color:var(--tg2)]"
+        >
+          {routingDisclosure}
         </div>
       ) : null}
       {shouldDetachActionHeader && detachedDocumentCaption ? (

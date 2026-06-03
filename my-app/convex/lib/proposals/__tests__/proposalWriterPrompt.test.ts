@@ -5,6 +5,7 @@ import {
   buildInlineMistralPrompt,
   coerceProposalFinalizationFailureToConvexError,
   evaluateProposalBodySaveability,
+  finalizePremiumCoverLetterPayloadForPersistence,
   finalizeProposalForPersistence,
   finalizeProposalForSave,
   getDeterministicProposalRenderPolicy,
@@ -15,7 +16,10 @@ import {
   resolveStructuredMistralCoverLetterRolloutMode,
   shouldRunProposalDraftRepair,
 } from "../../../generateProposalMutation";
-import { buildProposalWriterPlanBlock, type ProposalPlannerResult } from "../proposalPlanner";
+import {
+  buildProposalWriterPlanBlock,
+  type ProposalPlannerResult,
+} from "../proposalPlanner";
 import { analyzeProposalDraft } from "../proposalEnforcement";
 
 const BASE_ARGS = {
@@ -50,22 +54,25 @@ describe("proposal writer prompt contract", () => {
         "No candidate background is available for this request.",
         "Treat no-context mode as a grounded, non-claiming cover-letter body rather than a capability-based cover letter.",
       ].join(" "),
-      buildProposalWriterPlanBlock({
-        context_mode: "none",
-        domain_gap: "distant",
-        credential_status: "unsupported",
-        transfer_mode: "no_operational_analogy",
-        output_language: "en",
-        allowed_concrete_facts: [],
-        allowed_transfer_themes: [
-          "company-specific motivation",
-          "professional curiosity",
-        ],
-        disallowed_claims: [],
-        identity_hard_stops: [],
-        proof_strategy: "none",
-        opening_strategy: "storyteller_thread",
-      }, "cover_letter"),
+      buildProposalWriterPlanBlock(
+        {
+          context_mode: "none",
+          domain_gap: "distant",
+          credential_status: "unsupported",
+          transfer_mode: "no_operational_analogy",
+          output_language: "en",
+          allowed_concrete_facts: [],
+          allowed_transfer_themes: [
+            "company-specific motivation",
+            "professional curiosity",
+          ],
+          disallowed_claims: [],
+          identity_hard_stops: [],
+          proof_strategy: "none",
+          opening_strategy: "storyteller_thread",
+        },
+        "cover_letter",
+      ),
     );
 
     expect(prompt).toContain(
@@ -75,7 +82,7 @@ describe("proposal writer prompt contract", () => {
       "let at most one sentence rely mainly on personal-interest framing",
     );
     expect(prompt).not.toContain(
-      'If there is little concrete company-specific material to say, use the fallback sentence: \'I would welcome the opportunity to discuss my interest in the role.\'',
+      "If there is little concrete company-specific material to say, use the fallback sentence: 'I would welcome the opportunity to discuss my interest in the role.'",
     );
     expect(prompt).toContain(
       "The preset must not increase claim strength, readiness, contribution implication",
@@ -84,9 +91,7 @@ describe("proposal writer prompt contract", () => {
       prompt.indexOf(
         "CRITICAL OVERRIDE v2 — HIGHEST PRIORITY — VIOLATION = ERROR:",
       ),
-    ).toBeLessThan(
-      prompt.indexOf('Write a tailored employment cover letter'),
-    );
+    ).toBeLessThan(prompt.indexOf("Write a tailored employment cover letter"));
     expect(prompt).toContain("META OUTPUT FORBIDDEN — NEVER output:");
     expect(prompt).toContain("Return only the raw body text.");
     expect(prompt).toContain("Cover-letter composition priority:");
@@ -99,9 +104,9 @@ describe("proposal writer prompt contract", () => {
     expect(prompt).toContain(
       "A role-summary sentence, appreciation sentence, benefit summary, or generic professionalism sentence does not count as one of those substantive movements.",
     );
-    expect(
-      prompt.indexOf("Cover-letter composition priority:"),
-    ).toBeLessThan(prompt.indexOf("Unsupported claims blacklist:"));
+    expect(prompt.indexOf("Cover-letter composition priority:")).toBeLessThan(
+      prompt.indexOf("Unsupported claims blacklist:"),
+    );
     expect(prompt).toContain(
       "All rules below are written in English but apply identically in the target output language.",
     );
@@ -123,8 +128,12 @@ describe("proposal writer prompt contract", () => {
     expect(prompt).toContain(
       "keep the main body substance on the work itself rather than on mission admiration, culture admiration, schedule, flexibility, growth language, or generic role-interest rhetoric",
     );
-    expect(prompt).not.toContain("Keep the salutation, body, and closing all in English.");
-    expect(prompt).toContain("If the prompt forbids greetings, sign-offs, or boundary lines, do not add them.");
+    expect(prompt).not.toContain(
+      "Keep the salutation, body, and closing all in English.",
+    );
+    expect(prompt).toContain(
+      "If the prompt forbids greetings, sign-offs, or boundary lines, do not add them.",
+    );
   });
 
   it("keeps preset guidance claim-safe while allowing body-texture cues for cv-backed prompts", () => {
@@ -175,12 +184,18 @@ describe("proposal writer prompt contract", () => {
     expect(prompt).toContain(
       "When strong supported evidence exists, use both the employer-facing relevance move and one additional supported fact or operating detail before the close rather than stopping after one proof sentence.",
     );
-    expect(
-      prompt.indexOf("Cover-letter composition priority:"),
-    ).toBeLessThan(prompt.indexOf("Unsupported claims blacklist:"));
-    expect(prompt).not.toContain("likely contribution within the opening lines");
-    expect(prompt).not.toContain("open with a grounded human connection to the team");
-    expect(prompt).not.toContain("Keep the salutation, body, and closing all in English.");
+    expect(prompt.indexOf("Cover-letter composition priority:")).toBeLessThan(
+      prompt.indexOf("Unsupported claims blacklist:"),
+    );
+    expect(prompt).not.toContain(
+      "likely contribution within the opening lines",
+    );
+    expect(prompt).not.toContain(
+      "open with a grounded human connection to the team",
+    );
+    expect(prompt).not.toContain(
+      "Keep the salutation, body, and closing all in English.",
+    );
   });
 
   it("pushes cv-backed cover-letter prompts toward concrete evidence before abstract transfer framing", () => {
@@ -265,23 +280,26 @@ describe("proposal writer prompt contract", () => {
       "Candidate background for personalization:\n- Led a design system migration used across four product squads.\n- Improved signup conversion by 11 percent through iterative UI experiments.",
       "rich",
       "",
-      buildProposalWriterPlanBlock({
-        context_mode: "rich",
-        domain_gap: "direct",
-        credential_status: "exact_required",
-        transfer_mode: "literal",
-        output_language: "en",
-        allowed_concrete_facts: [
-          "Led a design system migration used across four product squads.",
-          "Improved signup conversion by 11 percent through iterative UI experiments.",
-          "Partnered with product and design on customer-facing workflow improvements.",
-        ],
-        allowed_transfer_themes: ["cross-functional collaboration"],
-        disallowed_claims: [],
-        identity_hard_stops: [],
-        proof_strategy: "concrete_supported",
-        opening_strategy: "signature_default",
-      }, "cover_letter"),
+      buildProposalWriterPlanBlock(
+        {
+          context_mode: "rich",
+          domain_gap: "direct",
+          credential_status: "exact_required",
+          transfer_mode: "literal",
+          output_language: "en",
+          allowed_concrete_facts: [
+            "Led a design system migration used across four product squads.",
+            "Improved signup conversion by 11 percent through iterative UI experiments.",
+            "Partnered with product and design on customer-facing workflow improvements.",
+          ],
+          allowed_transfer_themes: ["cross-functional collaboration"],
+          disallowed_claims: [],
+          identity_hard_stops: [],
+          proof_strategy: "concrete_supported",
+          opening_strategy: "signature_default",
+        },
+        "cover_letter",
+      ),
     );
 
     expect(prompt).toContain(
@@ -297,9 +315,9 @@ describe("proposal writer prompt contract", () => {
     expect(prompt).toContain(
       "Language proficiency, generic software familiarity, office tools, future certification interest, schedule flexibility, generic company admiration, benefits attraction, employee-experience praise, or excitement about joining are low-priority details when stronger evidence exists.",
     );
-    expect(
-      prompt.indexOf("CV-backed evidence priority:"),
-    ).toBeLessThan(prompt.indexOf("Unsupported claims blacklist:"));
+    expect(prompt.indexOf("CV-backed evidence priority:")).toBeLessThan(
+      prompt.indexOf("Unsupported claims blacklist:"),
+    );
     expect(prompt).toContain(
       "Open with a clear role-relevant positioning move grounded in the strongest supported proof or scope/background fact rather than a generic application formula or a bare fact dump.",
     );
@@ -364,19 +382,22 @@ describe("proposal writer prompt contract", () => {
       "",
       "none",
       "No candidate background is available for this request.",
-      buildProposalWriterPlanBlock({
-        context_mode: "none",
-        domain_gap: "distant",
-        credential_status: "unsupported",
-        transfer_mode: "no_operational_analogy",
-        output_language: "en",
-        allowed_concrete_facts: [],
-        allowed_transfer_themes: ["company-specific motivation"],
-        disallowed_claims: [],
-        identity_hard_stops: [],
-        proof_strategy: "none",
-        opening_strategy: "signature_default",
-      }, "cover_letter"),
+      buildProposalWriterPlanBlock(
+        {
+          context_mode: "none",
+          domain_gap: "distant",
+          credential_status: "unsupported",
+          transfer_mode: "no_operational_analogy",
+          output_language: "en",
+          allowed_concrete_facts: [],
+          allowed_transfer_themes: ["company-specific motivation"],
+          disallowed_claims: [],
+          identity_hard_stops: [],
+          proof_strategy: "none",
+          opening_strategy: "signature_default",
+        },
+        "cover_letter",
+      ),
     );
 
     expect(prompt).toContain(
@@ -400,19 +421,22 @@ describe("proposal writer prompt contract", () => {
       "",
       "none",
       "No candidate background is available for this request.",
-      buildProposalWriterPlanBlock({
-        context_mode: "none",
-        domain_gap: "distant",
-        credential_status: "unsupported",
-        transfer_mode: "no_operational_analogy",
-        output_language: "en",
-        allowed_concrete_facts: [],
-        allowed_transfer_themes: ["role understanding"],
-        disallowed_claims: [],
-        identity_hard_stops: [],
-        proof_strategy: "none",
-        opening_strategy: "signature_default",
-      }, "cover_letter"),
+      buildProposalWriterPlanBlock(
+        {
+          context_mode: "none",
+          domain_gap: "distant",
+          credential_status: "unsupported",
+          transfer_mode: "no_operational_analogy",
+          output_language: "en",
+          allowed_concrete_facts: [],
+          allowed_transfer_themes: ["role understanding"],
+          disallowed_claims: [],
+          identity_hard_stops: [],
+          proof_strategy: "none",
+          opening_strategy: "signature_default",
+        },
+        "cover_letter",
+      ),
     );
 
     expect(prompt).toContain(
@@ -460,22 +484,25 @@ describe("proposal writer prompt contract", () => {
       "Candidate background for personalization:\n- Built experimentation dashboards.\n- Coordinated product and design work.",
       "sparse",
       "",
-      buildProposalWriterPlanBlock({
-        context_mode: "sparse",
-        domain_gap: "adjacent",
-        credential_status: "related_not_equivalent",
-        transfer_mode: "abstract_only",
-        output_language: "en",
-        allowed_concrete_facts: [
-          "Built experimentation dashboards for growth teams.",
-          "Coordinated cross-functional product work with design and product partners.",
-        ],
-        allowed_transfer_themes: ["structured experimentation"],
-        disallowed_claims: [],
-        identity_hard_stops: [],
-        proof_strategy: "concrete_supported",
-        opening_strategy: "expert_structured",
-      }, "cover_letter"),
+      buildProposalWriterPlanBlock(
+        {
+          context_mode: "sparse",
+          domain_gap: "adjacent",
+          credential_status: "related_not_equivalent",
+          transfer_mode: "abstract_only",
+          output_language: "en",
+          allowed_concrete_facts: [
+            "Built experimentation dashboards for growth teams.",
+            "Coordinated cross-functional product work with design and product partners.",
+          ],
+          allowed_transfer_themes: ["structured experimentation"],
+          disallowed_claims: [],
+          identity_hard_stops: [],
+          proof_strategy: "concrete_supported",
+          opening_strategy: "expert_structured",
+        },
+        "cover_letter",
+      ),
     );
 
     expect(prompt).toContain(
@@ -517,22 +544,25 @@ describe("proposal writer prompt contract", () => {
       "Candidate background for personalization:\n- Managed incident documentation for hotel operations.\n- Background in client-facing security work across busy sites.",
       "rich",
       "",
-      buildProposalWriterPlanBlock({
-        context_mode: "rich",
-        domain_gap: "adjacent",
-        credential_status: "related_not_equivalent",
-        transfer_mode: "abstract_only",
-        output_language: "en",
-        allowed_concrete_facts: [
-          "Managed incident documentation for hotel operations.",
-          "Background in client-facing security work across busy sites.",
-        ],
-        allowed_transfer_themes: ["structured environments"],
-        disallowed_claims: [],
-        identity_hard_stops: [],
-        proof_strategy: "concrete_supported",
-        opening_strategy: "signature_default",
-      }, "cover_letter"),
+      buildProposalWriterPlanBlock(
+        {
+          context_mode: "rich",
+          domain_gap: "adjacent",
+          credential_status: "related_not_equivalent",
+          transfer_mode: "abstract_only",
+          output_language: "en",
+          allowed_concrete_facts: [
+            "Managed incident documentation for hotel operations.",
+            "Background in client-facing security work across busy sites.",
+          ],
+          allowed_transfer_themes: ["structured environments"],
+          disallowed_claims: [],
+          identity_hard_stops: [],
+          proof_strategy: "concrete_supported",
+          opening_strategy: "signature_default",
+        },
+        "cover_letter",
+      ),
     );
 
     expect(prompt).toContain(
@@ -553,22 +583,25 @@ describe("proposal writer prompt contract", () => {
       "Candidate background for personalization:\n- Managed incident documentation for hotel operations.\n- Background in client-facing security work across busy sites.",
       "rich",
       "",
-      buildProposalWriterPlanBlock({
-        context_mode: "rich",
-        domain_gap: "adjacent",
-        credential_status: "related_not_equivalent",
-        transfer_mode: "abstract_only",
-        output_language: "en",
-        allowed_concrete_facts: [
-          "Managed incident documentation for hotel operations.",
-          "Background in client-facing security work across busy sites.",
-        ],
-        allowed_transfer_themes: ["structured environments"],
-        disallowed_claims: [],
-        identity_hard_stops: [],
-        proof_strategy: "concrete_supported",
-        opening_strategy: "engaging_people",
-      }, "cover_letter"),
+      buildProposalWriterPlanBlock(
+        {
+          context_mode: "rich",
+          domain_gap: "adjacent",
+          credential_status: "related_not_equivalent",
+          transfer_mode: "abstract_only",
+          output_language: "en",
+          allowed_concrete_facts: [
+            "Managed incident documentation for hotel operations.",
+            "Background in client-facing security work across busy sites.",
+          ],
+          allowed_transfer_themes: ["structured environments"],
+          disallowed_claims: [],
+          identity_hard_stops: [],
+          proof_strategy: "concrete_supported",
+          opening_strategy: "engaging_people",
+        },
+        "cover_letter",
+      ),
     );
 
     const storytellerPrompt = buildInlineMistralPrompt(
@@ -580,22 +613,25 @@ describe("proposal writer prompt contract", () => {
       "Candidate background for personalization:\n- Managed incident documentation for hotel operations.\n- Background in client-facing security work across busy sites.",
       "rich",
       "",
-      buildProposalWriterPlanBlock({
-        context_mode: "rich",
-        domain_gap: "adjacent",
-        credential_status: "related_not_equivalent",
-        transfer_mode: "abstract_only",
-        output_language: "en",
-        allowed_concrete_facts: [
-          "Managed incident documentation for hotel operations.",
-          "Background in client-facing security work across busy sites.",
-        ],
-        allowed_transfer_themes: ["structured environments"],
-        disallowed_claims: [],
-        identity_hard_stops: [],
-        proof_strategy: "concrete_supported",
-        opening_strategy: "storyteller_thread",
-      }, "cover_letter"),
+      buildProposalWriterPlanBlock(
+        {
+          context_mode: "rich",
+          domain_gap: "adjacent",
+          credential_status: "related_not_equivalent",
+          transfer_mode: "abstract_only",
+          output_language: "en",
+          allowed_concrete_facts: [
+            "Managed incident documentation for hotel operations.",
+            "Background in client-facing security work across busy sites.",
+          ],
+          allowed_transfer_themes: ["structured environments"],
+          disallowed_claims: [],
+          identity_hard_stops: [],
+          proof_strategy: "concrete_supported",
+          opening_strategy: "storyteller_thread",
+        },
+        "cover_letter",
+      ),
     );
 
     expect(engagingPrompt).toContain(
@@ -644,9 +680,7 @@ describe("proposal writer prompt contract", () => {
       buildProposalWriterPlanBlock(plan, "application_message"),
     );
 
-    expect(prompt).toContain(
-      "Application-message writer brief:",
-    );
+    expect(prompt).toContain("Application-message writer brief:");
     expect(prompt).toContain(
       "Write a short recruiter-facing note that reads like a real recruiter DM, a short email body, or a teaser note.",
     );
@@ -709,9 +743,7 @@ describe("proposal writer prompt contract", () => {
     expect(prompt).toContain(
       "Examples below teach feel and rhythm only. Do not reuse their wording.",
     );
-    expect(prompt).toContain(
-      "Application-message examples:",
-    );
+    expect(prompt).toContain("Application-message examples:");
     expect(prompt).toContain(
       "Good CV-backed example: 'Reaching out about the Brand Designer role. At Northline, I built launch signage kits for seasonal drops and handed clean print files to production partners on tight timelines. That production-handoff thread is the part of the posting my Northline work maps to most clearly.'",
     );
@@ -759,25 +791,21 @@ describe("proposal writer prompt contract", () => {
     ]) {
       expect(prompt).not.toContain(forbidden);
     }
-    expect(prompt).toContain(
-      "Unsupported claims blacklist:",
-    );
-    expect(prompt).toContain(
-      "Job-description boundary rules:",
-    );
-    expect(prompt).toContain(
-      "Identity and background hard-stop rules:",
-    );
+    expect(prompt).toContain("Unsupported claims blacklist:");
+    expect(prompt).toContain("Job-description boundary rules:");
+    expect(prompt).toContain("Identity and background hard-stop rules:");
     expect(prompt.indexOf("Application-message writer brief:")).toBeLessThan(
       prompt.indexOf("Unsupported claims blacklist:"),
     );
     expect(prompt.indexOf("Application-message writer brief:")).toBeLessThan(
-      prompt.indexOf('Write a short recruiter-facing application message'),
+      prompt.indexOf("Write a short recruiter-facing application message"),
     );
     expect(prompt).not.toContain("Application-message format contract:");
     expect(prompt).not.toContain("Application-message line quality guidance:");
     expect(prompt).not.toContain("Application-message contrastive examples:");
-    expect(prompt).not.toContain("Application-message preset texture guidance:");
+    expect(prompt).not.toContain(
+      "Application-message preset texture guidance:",
+    );
     expect(prompt).not.toContain("Voice preset overlay:");
     expect(prompt).not.toContain("Closing boundary:");
     expect(prompt).not.toContain("Forbidden bridge boundary:");
@@ -807,23 +835,28 @@ describe("proposal writer prompt contract", () => {
       "",
       "none",
       "No candidate background is available for this request.",
-      buildProposalWriterPlanBlock({
-        context_mode: "none",
-        domain_gap: "distant",
-        credential_status: "unsupported",
-        transfer_mode: "no_operational_analogy",
-        output_language: "en",
-        allowed_concrete_facts: [],
-        allowed_transfer_themes: ["role understanding"],
-        disallowed_claims: [],
-        identity_hard_stops: [],
-        proof_strategy: "none",
-        opening_strategy: "signature_default",
-      }, "application_message"),
+      buildProposalWriterPlanBlock(
+        {
+          context_mode: "none",
+          domain_gap: "distant",
+          credential_status: "unsupported",
+          transfer_mode: "no_operational_analogy",
+          output_language: "en",
+          allowed_concrete_facts: [],
+          allowed_transfer_themes: ["role understanding"],
+          disallowed_claims: [],
+          identity_hard_stops: [],
+          proof_strategy: "none",
+          opening_strategy: "signature_default",
+        },
+        "application_message",
+      ),
     );
 
     expect(prompt).toContain("Application-message employer priority snapshot:");
-    expect(prompt).toContain("strongest_work_surfaces: Coordinate maintenance requests.");
+    expect(prompt).toContain(
+      "strongest_work_surfaces: Coordinate maintenance requests.",
+    );
     expect(prompt).toContain("schedule vendors.");
     expect(prompt).toContain("update service records.");
     expect(prompt).toContain("lower_value_checklist_demoted:");
@@ -848,19 +881,22 @@ describe("proposal writer prompt contract", () => {
       "",
       "none",
       "No candidate background is available for this request.",
-      buildProposalWriterPlanBlock({
-        context_mode: "none",
-        domain_gap: "distant",
-        credential_status: "unsupported",
-        transfer_mode: "no_operational_analogy",
-        output_language: "en",
-        allowed_concrete_facts: [],
-        allowed_transfer_themes: ["company-specific motivation"],
-        disallowed_claims: [],
-        identity_hard_stops: [],
-        proof_strategy: "none",
-        opening_strategy: "signature_default",
-      }, "application_message"),
+      buildProposalWriterPlanBlock(
+        {
+          context_mode: "none",
+          domain_gap: "distant",
+          credential_status: "unsupported",
+          transfer_mode: "no_operational_analogy",
+          output_language: "en",
+          allowed_concrete_facts: [],
+          allowed_transfer_themes: ["company-specific motivation"],
+          disallowed_claims: [],
+          identity_hard_stops: [],
+          proof_strategy: "none",
+          opening_strategy: "signature_default",
+        },
+        "application_message",
+      ),
     );
 
     expect(prompt).toContain(
@@ -893,9 +929,7 @@ describe("proposal writer prompt contract", () => {
     expect(prompt).toContain(
       "After the work-surface anchor, the only allowed continuation is one short sentence that stays on that same named surface and makes the note more concrete, such as 'That entrance-coverage thread is the part of the role that stood out most to me.' or 'That records-and-handoff side of the posting is the part of the work that caught me first.' Do not shift into candidate history, past-execution verbs, self-introduction, fit summary, detail offers, profile or portfolio invitations, or recruiter-close filler.",
     );
-    expect(prompt).toContain(
-      "Application-message no-context safety:",
-    );
+    expect(prompt).toContain("Application-message no-context safety:");
     expect(prompt).toContain(
       "Let at most one sentence rely mainly on personal-interest framing; keep any later sentence on concrete work context, workflow, operating context, or team interaction from the job description.",
     );
@@ -944,19 +978,22 @@ describe("proposal writer prompt contract", () => {
       "",
       "none",
       "No candidate background is available for this request.",
-      buildProposalWriterPlanBlock({
-        context_mode: "none",
-        domain_gap: "distant",
-        credential_status: "unsupported",
-        transfer_mode: "no_operational_analogy",
-        output_language: "en",
-        allowed_concrete_facts: [],
-        allowed_transfer_themes: ["project understanding"],
-        disallowed_claims: [],
-        identity_hard_stops: [],
-        proof_strategy: "none",
-        opening_strategy: "signature_default",
-      }, "freelance_proposal"),
+      buildProposalWriterPlanBlock(
+        {
+          context_mode: "none",
+          domain_gap: "distant",
+          credential_status: "unsupported",
+          transfer_mode: "no_operational_analogy",
+          output_language: "en",
+          allowed_concrete_facts: [],
+          allowed_transfer_themes: ["project understanding"],
+          disallowed_claims: [],
+          identity_hard_stops: [],
+          proof_strategy: "none",
+          opening_strategy: "signature_default",
+        },
+        "freelance_proposal",
+      ),
     );
 
     expect(prompt).toContain("Return only the raw proposal body.");
@@ -993,8 +1030,7 @@ describe("proposal writer prompt contract", () => {
     ).toMatchObject({
       salutation: "Madame, Monsieur,",
       signOff: "Bien cordialement,",
-      finalSentence:
-        "Je serais disponible pour discuter davantage du poste.",
+      finalSentence: "Je serais disponible pour discuter davantage du poste.",
       includeCandidateNameLine: true,
     });
   });
@@ -1018,7 +1054,7 @@ describe("proposal writer prompt contract", () => {
         voicePreset: "direct",
         noContextMode: false,
       }),
-    ).toThrow(/substantive body content/i);
+    ).toThrow(/repeated body content|substantive body content/i);
   });
 
   it("rescues cv-backed grounded cover letters by dropping extra non-grounded cleanup residue", () => {
@@ -1046,11 +1082,196 @@ describe("proposal writer prompt contract", () => {
       candidateName: "Robert Cooper",
       voicePreset: "expert",
       noContextMode: false,
+      requiresCandidateEvidence: true,
     });
 
     expect(saved).toContain("I have also conducted regular checks");
-    expect(saved).toContain("I understand the importance of securing doors and windows");
+    expect(saved).toContain(
+      "I understand the importance of securing doors and windows",
+    );
     expect(saved).not.toContain("Thank you for your time and consideration.");
+  });
+
+  it("rejects job-summary-only cover letters when CV-backed candidate context exists", () => {
+    expect(() =>
+      finalizeProposalForPersistence({
+        content: [
+          "Dear Hiring Manager,",
+          "",
+          "The High Level Security Officer role at Securitas Security centers on maintaining site safety through structured patrols, access control, and incident response—work that requires both vigilance and clear communication. The position’s emphasis on detailed reporting and team coordination ensures that security protocols are consistently applied, whether managing key checkouts, documenting observations, or escalating issues to the operations center.",
+          "",
+          "What stands out is the balance between independent judgment during patrols and collaboration with colleagues to meet daily site goals. The requirement to interact professionally with employees and guests while remaining alert to potential hazards reflects a role where both technical precision and interpersonal adaptability matter.",
+          "",
+          "I would welcome the chance to discuss my interest in the role.",
+          "",
+          "Kind regards,",
+        ].join("\n"),
+        format: "cover_letter",
+        outputLanguage: "English",
+        candidateName: "Robert Cooper",
+        voicePreset: "expert",
+        noContextMode: false,
+        requiresCandidateEvidence: true,
+      }),
+    ).toThrow(/candidate-backed evidence/i);
+  });
+
+  it("accepts duration-led first-person CV evidence during premium finalization", () => {
+    const saved = finalizeProposalForPersistence({
+      content: [
+        "Dear Hiring Manager,",
+        "",
+        "For eight years, I’ve maintained security and vigilance in high-stakes environments by documenting conditions, following post orders, and communicating deviations through established reporting routines.",
+        "",
+        "That operational habit is relevant to roles that require routine patrols, accurate logs, and calm communication during each shift.",
+        "",
+        "I would be glad to discuss the position further.",
+        "",
+        "Sincerely,",
+        "Robert Cooper",
+      ].join("\n"),
+      format: "cover_letter",
+      outputLanguage: "English",
+      candidateName: "Robert Cooper",
+      voicePreset: "signature",
+      noContextMode: false,
+      requiresCandidateEvidence: true,
+    });
+
+    expect(saved).toContain("For eight years");
+    expect(saved).toContain("routine patrols");
+  });
+
+  it("applies the same candidate-evidence guard to premium persistence payloads", () => {
+    const badPremiumPayload = {
+      content: [
+        "Dear Hiring Manager,",
+        "",
+        "The High Level Security Officer role at Securitas Security centers on maintaining site safety through structured patrols, access control, and incident response—work that requires both vigilance and clear communication. The position’s emphasis on detailed reporting and team coordination ensures that security protocols are consistently applied, whether managing key checkouts, documenting observations, or escalating issues to the operations center.",
+        "",
+        "What stands out is the balance between independent judgment during patrols and collaboration with colleagues to meet daily site goals. The requirement to interact professionally with employees and guests while remaining alert to potential hazards reflects a role where both technical precision and interpersonal adaptability matter.",
+        "",
+        "I would welcome the chance to discuss my interest in the role.",
+        "",
+        "Kind regards,",
+      ].join("\n"),
+      sections: [] as Array<{ type: "text"; content: string }>,
+    };
+
+    expect(() =>
+      finalizePremiumCoverLetterPayloadForPersistence({
+        payload: badPremiumPayload,
+        format: "cover_letter",
+        outputLanguage: "English",
+        candidateName: "Robert Cooper",
+        voicePreset: "expert",
+        hasCandidateContext: true,
+      }),
+    ).toThrow(/candidate-backed evidence/i);
+  });
+
+  it("fails closed on the ADT/Copwatch legacy fallback fragment with duplicate close", () => {
+    expect(() =>
+      finalizeProposalForPersistence({
+        content: [
+          "In my recent security roles with ADT Security and Copwatch, I have been responsible for maintaining safe environments by monitoring grounds and selected areas through CCTV and smart-device applications.",
+          "",
+          "My experience, combined with investigation skills, safety compliance knowledge, criminal justice knowledge, and physical security training.",
+          "",
+          "I would be glad to discuss the position further.",
+          "",
+          "I would be glad to discuss the position further.",
+        ].join("\n"),
+        format: "cover_letter",
+        outputLanguage: "English",
+        candidateName: "Robert Cooper",
+        voicePreset: "engaging",
+        noContextMode: false,
+        requiresCandidateEvidence: true,
+      }),
+    ).toThrow(/repeated body content|substantive body content/i);
+  });
+
+  it("fails closed when a cover letter repeats the salutation and opening body", () => {
+    expect(() =>
+      finalizeProposalForPersistence({
+        content: [
+          "Dear Hiring Manager,",
+          "",
+          "Eight years of focused security work protecting people in high-stakes environments has sharpened my ability to assess risks before they escalate. At ADT Security, I maintained surveillance protocols and reported updates on a fixed cadence.",
+          "",
+          "Dear Hiring Manager,",
+          "",
+          "Eight years of focused security work protecting people in high-stakes environments has sharpened my ability to assess risks before they escalate. At ADT Security, I maintained surveillance protocols and reported updates on a fixed cadence.",
+          "",
+          "At Copwatch, I scanned grounds for out-of-place items and monitored CCTV feeds.",
+          "",
+          "I would be glad to discuss the position further.",
+          "",
+          "Warm regards,",
+        ].join("\n"),
+        format: "cover_letter",
+        outputLanguage: "English",
+        candidateName: "Robert Cooper",
+        voicePreset: "signature",
+        noContextMode: false,
+        requiresCandidateEvidence: true,
+      }),
+    ).toThrow(/repeated/i);
+  });
+
+  it("fails closed when body content repeats after a cover-letter sign-off", () => {
+    expect(() =>
+      finalizeProposalForPersistence({
+        content: [
+          "Dear Hiring Manager,",
+          "",
+          "Eight years of focused security work protecting people in high-stakes environments has sharpened my ability to assess risks before they escalate. At ADT Security, I maintained surveillance protocols and reported updates on a fixed cadence.",
+          "",
+          "At Copwatch, I scanned grounds for out-of-place items and monitored CCTV feeds.",
+          "",
+          "I would be glad to discuss the position further.",
+          "",
+          "Warm regards,",
+          "",
+          "At Copwatch, I scanned grounds for out-of-place items and monitored CCTV feeds.",
+          "",
+          "I would be glad to discuss the position further.",
+          "",
+          "Warm regards,",
+        ].join("\n"),
+        format: "cover_letter",
+        outputLanguage: "English",
+        candidateName: "Robert Cooper",
+        voicePreset: "signature",
+        noContextMode: false,
+        requiresCandidateEvidence: true,
+      }),
+    ).toThrow(/repeated/i);
+  });
+
+  it("fails closed on malformed trailing noun fragments in cv-backed cover letters", () => {
+    expect(() =>
+      finalizeProposalForPersistence({
+        content: [
+          "Dear Hiring Manager,",
+          "",
+          "Eight years of focused security work protecting people in high-stakes environments has sharpened my ability to assess risks before they escalate.",
+          "",
+          "At Copwatch, I scanned grounds for out-of-place items and monitored CCTV feeds, experience.",
+          "",
+          "I would be glad to discuss the position further.",
+          "",
+          "Warm regards,",
+        ].join("\n"),
+        format: "cover_letter",
+        outputLanguage: "English",
+        candidateName: "Robert Cooper",
+        voicePreset: "signature",
+        noContextMode: false,
+        requiresCandidateEvidence: true,
+      }),
+    ).toThrow(/fragment|substantive body content|candidate-backed evidence/i);
   });
 
   it("fails closed for application-message shells that only survive as one weak sentence plus the local follow-up", () => {
@@ -1332,10 +1553,7 @@ describe("proposal writer prompt contract", () => {
     });
 
     expect(trace.applicationMessageRejectionReasons).toEqual(
-      expect.arrayContaining([
-        "profile_summary_proof",
-        "filler_follow_up",
-      ]),
+      expect.arrayContaining(["profile_summary_proof", "filler_follow_up"]),
     );
     expect(trace.errorMessage).toMatch(/substantive body content/i);
   });
@@ -1537,7 +1755,9 @@ describe("proposal writer prompt contract", () => {
 
     expect(trace.failureStage).toBe("cleaned_body_selection");
     expect(trace.cleanedBodySelection.selectedCandidate).toBeNull();
-    expect(trace.errorMessage).toMatch(/Cleanup removed all substantive body content/);
+    expect(trace.errorMessage).toMatch(
+      /Cleanup removed all substantive body content/,
+    );
   });
 
   it("fails closed when saved-output bridge cleanup would otherwise collapse an application message to filler only", () => {
@@ -1576,7 +1796,9 @@ describe("proposal writer prompt contract", () => {
       "ensure the final design aligns with your vision and objectives.",
     );
     expect(saved).not.toContain("may offer relevant perspective");
-    expect(saved).not.toContain("If this approach aligns with what you're looking for");
+    expect(saved).not.toContain(
+      "If this approach aligns with what you're looking for",
+    );
     expect(saved).toContain("Let me know a time that works for you.");
   });
 
@@ -2148,7 +2370,9 @@ describe("proposal writer prompt contract", () => {
     });
 
     expect(trace.failureStage).toBeUndefined();
-    expect(trace.cleanedBodySelection.aggressive.candidate).not.toContain(fragment);
+    expect(trace.cleanedBodySelection.aggressive.candidate).not.toContain(
+      fragment,
+    );
     expect(trace.cleanedBodySelection.conservative.candidate).not.toContain(
       fragment,
     );
@@ -2156,7 +2380,8 @@ describe("proposal writer prompt contract", () => {
   });
 
   it("drops a structured-approach fragment survivor from no-context candidates when stronger body remains", () => {
-    const fragment = "The structured approach to disaster response and staff training.";
+    const fragment =
+      "The structured approach to disaster response and staff training.";
     const trace = inspectProposalFinalization({
       content: [
         "The emphasis on emergency preparedness, incident management, and proactive campus security aligns with the importance of maintaining a secure environment for staff and visitors.",
@@ -2172,7 +2397,9 @@ describe("proposal writer prompt contract", () => {
     });
 
     expect(trace.failureStage).toBeUndefined();
-    expect(trace.cleanedBodySelection.aggressive.candidate).not.toContain(fragment);
+    expect(trace.cleanedBodySelection.aggressive.candidate).not.toContain(
+      fragment,
+    );
     expect(trace.cleanedBodySelection.conservative.candidate).not.toContain(
       fragment,
     );
@@ -2478,6 +2705,29 @@ describe("proposal writer prompt contract", () => {
     );
     expect(trace.finalOutput).not.toContain(
       "This letter adheres to the strict boundaries provided",
+    );
+  });
+
+  it("keeps sentence-start employer evidence for security cover letters without metrics", () => {
+    const trace = inspectProposalFinalization({
+      content: [
+        "Eight years of experience protecting VIPs in high-stakes military and defense environments has honed my ability to monitor surroundings with precision, detecting both human and non-human threats before they escalate. At ADT Security, this vigilance translated into structured patrol protocols-logging into headquarters hourly during day shifts and every two hours at night to ensure real-time threat assessment and rapid notification of anomalies. That disciplined approach to surveillance and incident documentation aligns with the airport's need for systematic access control, restricted-area monitoring, and clear communication under pressure.",
+        "",
+        "My background in criminal justice and hands-on training in restraining devices and physical combat further grounds my readiness to respond to disturbances calmly, as required for managing crowd flow and traffic control in a dynamic airport setting. Currently completing a Bachelor's degree, I bring both operational experience and a commitment to evolving security standards-qualities that complement the structured, protocol-driven environment described in the role. The opportunity to discuss how this experience applies to your team's specific patrol routes, emergency response procedures, or coordination with government operations would be welcome.",
+      ].join("\n"),
+      format: "cover_letter",
+      outputLanguage: "English",
+      candidateName: "Robert Cooper",
+      voicePreset: "expert",
+      noContextMode: false,
+    });
+
+    expect(trace.failureStage).toBeUndefined();
+    expect(trace.cleanedBodySelection.selectedCandidate).not.toBeNull();
+    expect(trace.finalOutput).toContain("At ADT Security");
+    expect(trace.finalOutput).toContain("structured patrol protocols");
+    expect(trace.finalOutput).not.toContain(
+      "The opportunity to discuss how this experience applies",
     );
   });
 
@@ -3167,7 +3417,9 @@ describe("proposal writer prompt contract", () => {
     expect(saved).toContain(
       "At Robert Cooper Security Guard, I enhanced access control and reduced unauthorized entry by 26%, demonstrating my ability to protect diverse environments.",
     );
-    expect(saved).not.toContain("would be relevant to managing security incidents");
+    expect(saved).not.toContain(
+      "would be relevant to managing security incidents",
+    );
   });
 
   it("drops apply-these-skills opportunity bridges without a factual prefix", () => {
@@ -3294,7 +3546,9 @@ describe("proposal writer prompt contract", () => {
     expect(trace.cleanedBodySelection.selectedCandidate).toBeNull();
     expect(trace.cleanedBodySelection.selectedBody).toBeNull();
     expect(trace.cleanedBodySelection.aggressive.saveableSentences).toEqual([]);
-    expect(trace.cleanedBodySelection.conservative.saveableSentences).toEqual([]);
+    expect(trace.cleanedBodySelection.conservative.saveableSentences).toEqual(
+      [],
+    );
     expect(trace.noContextLeadCleanup).toBeUndefined();
     expect(trace.finalSavedOutputBridgeCleanup).toBeUndefined();
   });
@@ -3662,7 +3916,9 @@ describe("proposal writer prompt contract", () => {
         voicePreset: "signature",
         noContextMode: true,
       }),
-    ).toThrow(/substantive body content|Cleanup removed all substantive body content/i);
+    ).toThrow(
+      /substantive body content|Cleanup removed all substantive body content/i,
+    );
   });
 
   it("still fails closed for no-context workflow-reliance shells without concrete work detail", () => {
@@ -3785,7 +4041,9 @@ describe("proposal writer prompt contract", () => {
     expect(trace.failureStage).toBe("cleaned_body_selection");
     expect(trace.cleanedBodySelection.selectedBody).toBeNull();
     expect(trace.cleanedBodySelection.aggressive.saveableSentences).toEqual([]);
-    expect(trace.cleanedBodySelection.conservative.saveableSentences).toEqual([]);
+    expect(trace.cleanedBodySelection.conservative.saveableSentences).toEqual(
+      [],
+    );
   });
 
   it("drops clipped cv tails and one-line pseudo-sentences during finalization", () => {
@@ -3847,9 +4105,9 @@ describe("proposal writer prompt contract", () => {
     expect(resolveStructuredMistralCoverLetterRolloutMode(undefined)).toBe(
       "small_cover_letters",
     );
-    expect(resolveStructuredMistralCoverLetterRolloutMode("small_cover_letters")).toBe(
-      "small_cover_letters",
-    );
+    expect(
+      resolveStructuredMistralCoverLetterRolloutMode("small_cover_letters"),
+    ).toBe("small_cover_letters");
     expect(resolveStructuredMistralCoverLetterRolloutMode("off")).toBe(
       "disabled",
     );
@@ -3904,7 +4162,8 @@ describe("proposal writer prompt contract", () => {
       proof_strategy: "none",
       opening_strategy: "direct_fast",
     };
-    const unsafe = "I’ve worked in roles where my ability to stay organized helped me coordinate follow-ups.";
+    const unsafe =
+      "I’ve worked in roles where my ability to stay organized helped me coordinate follow-ups.";
     const analysis = analyzeProposalDraft({
       content: unsafe,
       plan,
@@ -3937,7 +4196,9 @@ describe("proposal writer prompt contract", () => {
     expect(repairDraftText).toHaveBeenCalledTimes(1);
     expect(repaired).toContain("Sales Assistant");
     expect(repaired).toContain("coordinating follow-up");
-    expect(repaired).not.toMatch(/\b(?:I’ve worked|my ability|my experience|my background)\b/i);
+    expect(repaired).not.toMatch(
+      /\b(?:I’ve worked|my ability|my experience|my background)\b/i,
+    );
   });
 
   it("uses last-resort fallback when no-context constrained repair remains unsafe", async () => {
@@ -3954,7 +4215,8 @@ describe("proposal writer prompt contract", () => {
       proof_strategy: "none",
       opening_strategy: "direct_fast",
     };
-    const unsafe = "In past experiences, I’ve developed skills that would help me manage records.";
+    const unsafe =
+      "In past experiences, I’ve developed skills that would help me manage records.";
     const analysis = analyzeProposalDraft({
       content: unsafe,
       plan,
@@ -3984,7 +4246,9 @@ describe("proposal writer prompt contract", () => {
       "No candidate background details are available here",
     );
     expect(repaired).toContain("focused on the role itself");
-    expect(repaired).not.toMatch(/\b(?:past experiences|developed skills|my ability|managed)\b/i);
+    expect(repaired).not.toMatch(
+      /\b(?:past experiences|developed skills|my ability|managed)\b/i,
+    );
   });
 
   it("production repair gate does not depend on benchmark-only post-processing", () => {
@@ -4025,9 +4289,15 @@ describe("proposal writer prompt contract", () => {
       credential_status: "unsupported",
       transfer_mode: "abstract_only",
       output_language: "en",
-      allowed_concrete_facts: ["Frontend", "Landing Pages", "Conversion Optimization"],
+      allowed_concrete_facts: [
+        "Frontend",
+        "Landing Pages",
+        "Conversion Optimization",
+      ],
       allowed_transfer_themes: [],
-      disallowed_claims: ["unsupported indexing, schema, or crawl diagnostics experience"],
+      disallowed_claims: [
+        "unsupported indexing, schema, or crawl diagnostics experience",
+      ],
       identity_hard_stops: [],
       proof_strategy: "abstract_only",
       opening_strategy: "direct_fast",
@@ -4069,7 +4339,9 @@ describe("proposal writer prompt contract", () => {
     expect(repairDraftText).toHaveBeenCalledTimes(1);
     expect(repaired).toContain("not technical SEO");
     expect(repaired).toContain("technical SEO specialist");
-    expect(repaired).not.toMatch(/\b(?:implement(?:ing)? schema|internal-linking execution|crawlability optimization)\b/i);
+    expect(repaired).not.toMatch(
+      /\b(?:implement(?:ing)? schema|internal-linking execution|crawlability optimization)\b/i,
+    );
   });
 
   it("does not force strong rich-context frontend drafts into constrained repair", async () => {
@@ -4154,7 +4426,11 @@ describe("proposal writer prompt contract", () => {
         "Lead React and TypeScript development, improve performance, and mentor junior engineers.",
     });
 
-    expect(bad.issues.some((issue) => issue.message.includes("past mentoring"))).toBe(true);
-    expect(good.issues.some((issue) => issue.message.includes("past mentoring"))).toBe(false);
+    expect(
+      bad.issues.some((issue) => issue.message.includes("past mentoring")),
+    ).toBe(true);
+    expect(
+      good.issues.some((issue) => issue.message.includes("past mentoring")),
+    ).toBe(false);
   });
 });

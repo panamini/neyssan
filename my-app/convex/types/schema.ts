@@ -128,6 +128,18 @@ export interface ProposalDoc extends Doc<"proposals"> {
       | "custom"
       | null;
     characterLimitValue?: number | null;
+    requestedLanguage?: string | null;
+    resolvedLanguage?: string | null;
+    languageSource?: string | null;
+    jobDetectedLanguage?: string | null;
+    documentIcons?: {
+      listMarkerType?: "dot" | "dash" | "icon";
+      defaultListMarkerKey?: string | null;
+      sectionHeadingIconMode: "none" | "auto" | "custom";
+      sectionIconMap?: Record<string, string>;
+      color: "ink" | "muted" | "accent";
+      sizePt: 8 | 9 | 10 | 12;
+    };
     closing?: {
       enabled: boolean;
       signOff: string;
