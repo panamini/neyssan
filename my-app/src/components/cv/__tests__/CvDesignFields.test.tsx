@@ -68,6 +68,9 @@ describe("CvDesignFields", () => {
 
     const sectionIconMap = screen.getByLabelText("Custom section icons");
     fireEvent.click(
+      within(sectionIconMap).getByRole("tab", { name: "Work and admin" }),
+    );
+    fireEvent.click(
       within(sectionIconMap).getByRole("button", { name: "Use Briefcase icon" }),
     );
 
@@ -77,5 +80,24 @@ describe("CvDesignFields", () => {
         sectionIconMap: { experience: "briefcase" },
       }),
     );
+  });
+
+  it("offers the editorial sidebar template option", () => {
+    const onSelectTemplate = vi.fn();
+
+    render(
+      <CvDesignFields
+        stylePreset={stylePreset}
+        selectedStyleSlot={1}
+        onSelectStyleSlot={vi.fn()}
+        onSelectTemplate={onSelectTemplate}
+        onSelectFontPair={vi.fn()}
+        onSelectAccent={vi.fn()}
+        onSelectCustomAccent={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Editorial Sidebar" }));
+    expect(onSelectTemplate).toHaveBeenCalledWith("editorial-sidebar");
   });
 });

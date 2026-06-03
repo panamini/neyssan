@@ -3,9 +3,14 @@ import { describe, expect, it } from "vitest";
 import {
   MISTRAL_PREMIUM_COVER_LETTER_ADAPTER,
   PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA,
+  PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
   QWEN_PREMIUM_COVER_LETTER_ADAPTER,
   attemptPremiumCoverLetterGeneration,
   buildAllowedFactsPack,
+  buildAllowedFactsPackFromFactGraph,
+  buildPremiumClaimPlanV1,
+  buildPremiumFactGraphV1,
+  buildPremiumJobDemandGraphV1,
   buildJobOfferPriorityPack,
   buildPremiumCoverLetterOpenAIRequest,
   buildPremiumCoverLetterBrief,
@@ -16,7 +21,10 @@ import {
   isCoverLetterPremiumPathV1Enabled,
   rankAllowedFacts,
   resolvePremiumCoverLetterWriterModel,
+  toCoverLetterBodyParts,
   validatePremiumCoverLetterBodyParts,
+  validatePremiumClaimPlanV1,
+  validatePremiumWriterOutputV1,
 } from "../premiumCoverLetter";
 
 const directContext = {
@@ -103,6 +111,302 @@ const adjacentMonitoringJob = {
   jobDescription:
     "Maintain site safety through structured patrols, access control, incident response, detailed reporting, key checkouts, professional communication, and escalation to an operations center.",
 };
+
+function buildDirectClaimPlanFixture() {
+  const factGraph = buildPremiumFactGraphV1({
+    personalizationContext: directContext,
+    jobDescription: directJob.jobDescription,
+  });
+  const jobDemandGraph = buildPremiumJobDemandGraphV1(directJob.jobDescription);
+  const allowedFactsPack = buildAllowedFactsPackFromFactGraph(factGraph);
+  const rankedEvidencePack = rankAllowedFacts({
+    allowedFactsPack,
+    jobTitle: directJob.jobTitle,
+    jobDescription: directJob.jobDescription,
+    contextClass: "cv_direct",
+  });
+  const claimPlan = buildPremiumClaimPlanV1({
+    factGraph,
+    jobDemandGraph,
+    rankedEvidencePack,
+    contextClass: "cv_direct",
+    preset: "signature",
+    outputLanguage: "English",
+    jobTitle: directJob.jobTitle,
+  });
+  const brief = buildPremiumCoverLetterBrief({
+    preset: "signature",
+    outputLanguage: "English",
+    jobTitle: directJob.jobTitle,
+    jobDescription: directJob.jobDescription,
+    contextClass: "cv_direct",
+    allowedFactsPack,
+    rankedEvidencePack,
+    claimPlan,
+    factGraph,
+    jobDemandGraph,
+  });
+  return { factGraph, jobDemandGraph, rankedEvidencePack, claimPlan, brief };
+}
+
+describe("premium ClaimPlan provenance v1", () => {
+  it("builds stable FactGraphV1 ids with metrics and ownership levels", () => {
+    const factGraph = buildPremiumFactGraphV1({
+      personalizationContext: directContext,
+      jobDescription: directJob.jobDescription,
+      systemInferenceHints: ["Adjacent overlap exists in related workflow."],
+    });
+
+    expect(factGraph.version).toBe("fact_graph_v1");
+    expect(factGraph.facts.map((fact) => fact.id)).toEqual(
+      expect.arrayContaining([
+        "fact_summary_001",
+        "fact_skill_001",
+        "fact_experience_001_role",
+        "fact_experience_001_highlight_001",
+        "fact_achievement_001",
+        "fact_job_post_001",
+        "fact_system_001",
+      ]),
+    );
+    expect(
+      factGraph.facts.find((fact) => fact.id === "fact_experience_001_highlight_001")
+        ?.metrics,
+    ).toContain("11");
+    expect(
+      factGraph.facts.find((fact) => fact.text.includes("Led a design system"))
+        ?.ownershipLevel,
+    ).toBe("leadership");
+  });
+
+  it("wraps job priority buckets into stable JobDemandGraphV1 demand ids", () => {
+    const jobDemandGraph = buildPremiumJobDemandGraphV1(
+      "Coordinate implementation workflows. Must have reporting experience. Excel is a plus. Reliable and organized. Great benefits and mission-led culture.",
+    );
+
+    expect(jobDemandGraph.version).toBe("job_demand_graph_v1");
+    expect(jobDemandGraph.demands.every((demand) => demand.mustNotBecomeCandidateClaim)).toBe(
+      true,
+    );
+    expect(jobDemandGraph.demands.map((demand) => demand.id)).toEqual(
+      expect.arrayContaining([
+        "demand_core_001",
+        "demand_low_value_001",
+        "demand_fluff_001",
+      ]),
+    );
+    expect(
+      jobDemandGraph.demands.find((demand) => demand.id === "demand_low_value_001")
+        ?.requiredness,
+    ).toBe("low_value");
+    expect(
+      jobDemandGraph.demands.find((demand) => demand.id === "demand_fluff_001")
+        ?.bucket,
+    ).toBe("company_fluff");
+  });
+
+  it("builds and validates deterministic cv_direct ClaimPlanV1 sections", () => {
+    const { claimPlan, factGraph, jobDemandGraph } = buildDirectClaimPlanFixture();
+
+    expect(claimPlan.claims.map((claim) => claim.id)).toEqual([
+      "claim_opening_001",
+      "claim_proof_001",
+      "claim_employer_value_001",
+      "claim_close_001",
+    ]);
+    expect(claimPlan.claims.every((claim) => claim.factIds.length > 0)).toBe(true);
+    expect(
+      claimPlan.claims.find((claim) => claim.section === "employerValueBlock")
+        ?.demandIds[0],
+    ).toMatch(/^demand_core_/);
+    expect(validatePremiumClaimPlanV1({ claimPlan, factGraph, jobDemandGraph })).toEqual(
+      [],
+    );
+  });
+
+  it("fails ClaimPlanV1 with unknown facts, low-value proof, and company fluff motivation", () => {
+    const { claimPlan, factGraph, jobDemandGraph } = buildDirectClaimPlanFixture();
+    const lowValueDemand = {
+      id: "demand_low_value_999",
+      text: "Reliable and organized.",
+      bucket: "low_value_checklist" as const,
+      requiredness: "low_value" as const,
+      tokens: ["reliable", "organized"],
+      mustNotBecomeCandidateClaim: true,
+    };
+    const fluffDemand = {
+      id: "demand_fluff_999",
+      text: "Great benefits and mission-led culture.",
+      bucket: "company_fluff" as const,
+      requiredness: "fluff" as const,
+      tokens: ["benefits", "culture"],
+      mustNotBecomeCandidateClaim: true,
+    };
+    const invalidPlan = {
+      ...claimPlan,
+      claims: claimPlan.claims.map((claim) =>
+        claim.section === "opening"
+          ? { ...claim, factIds: ["missing_fact"] }
+          : claim.section === "proofBlock"
+            ? { ...claim, demandIds: [lowValueDemand.id] }
+            : claim.section === "employerValueBlock"
+              ? { ...claim, demandIds: [fluffDemand.id] }
+              : claim,
+      ),
+    };
+
+    const issueCodes = validatePremiumClaimPlanV1({
+      claimPlan: invalidPlan,
+      factGraph,
+      jobDemandGraph: {
+        ...jobDemandGraph,
+        demands: [...jobDemandGraph.demands, lowValueDemand, fluffDemand],
+      },
+    }).map((issue) => issue.code);
+
+    expect(issueCodes).toEqual(
+      expect.arrayContaining([
+        "missing_fact_id",
+        "low_value_primary_proof",
+        "company_fluff_as_motivation",
+      ]),
+    );
+  });
+
+  it("puts ClaimPlan and provenance ids in the prompt and removes RoleThesis ownership", () => {
+    const { brief } = buildDirectClaimPlanFixture();
+    const prompt = buildPremiumCoverLetterPrompt({ brief });
+
+    expect(prompt).toContain("The ClaimPlan owns strategy");
+    expect(prompt).toContain("claim_plan_v1");
+    expect(prompt).toContain("fact_experience_001_highlight_001");
+    expect(prompt).toContain("demand_core_001");
+    expect(prompt).toContain("Return only PremiumWriterOutputV1 JSON");
+    expect(prompt).not.toContain("Build a dynamic RoleThesis");
+    expect(prompt).toContain("Do not include greeting, signoff");
+  });
+
+  it("validates PremiumWriterOutputV1 provenance and adapts back to body parts", () => {
+    const { claimPlan, factGraph, jobDemandGraph, brief } = buildDirectClaimPlanFixture();
+    const openingClaim = claimPlan.claims.find((claim) => claim.section === "opening")!;
+    const proofClaim = claimPlan.claims.find((claim) => claim.section === "proofBlock")!;
+    const employerClaim = claimPlan.claims.find(
+      (claim) => claim.section === "employerValueBlock",
+    )!;
+    const closeClaim = claimPlan.claims.find((claim) => claim.section === "closeLine")!;
+    const writerOutput = {
+      version: "premium_writer_output_v1" as const,
+      bodyParts: {
+        opening: {
+          section: "opening" as const,
+          text: "I improved signup conversion by 11% after iterative UI experiments.",
+          claimIds: [openingClaim.id],
+          factIds: openingClaim.factIds,
+          demandIds: [],
+        },
+        proofBlock: {
+          section: "proofBlock" as const,
+          text: "I led a design system migration used across 4 product squads.",
+          claimIds: [proofClaim.id],
+          factIds: proofClaim.factIds,
+          demandIds: [],
+        },
+        employerValueBlock: {
+          section: "employerValueBlock" as const,
+          text: "That work is relevant to customer-facing React and TypeScript delivery.",
+          claimIds: [employerClaim.id],
+          factIds: employerClaim.factIds,
+          demandIds: employerClaim.demandIds,
+        },
+        closeLine: {
+          section: "closeLine" as const,
+          text: "I bring grounded frontend evidence around experimentation, reusable systems, and product-facing interfaces.",
+          claimIds: [closeClaim.id],
+          factIds: closeClaim.factIds,
+          demandIds: [],
+        },
+      },
+    };
+
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput,
+        claimPlan,
+        factGraph,
+        jobDemandGraph,
+        brief,
+      }),
+    ).toEqual([]);
+    expect(toCoverLetterBodyParts(writerOutput)).toEqual({
+      opening: writerOutput.bodyParts.opening.text,
+      proofBlock: writerOutput.bodyParts.proofBlock.text,
+      employerValueBlock: writerOutput.bodyParts.employerValueBlock.text,
+      closeLine: writerOutput.bodyParts.closeLine.text,
+    });
+  });
+
+  it("fails non-repairable writer provenance and keeps greeting leakage repairable", () => {
+    const { claimPlan, factGraph, jobDemandGraph, brief } = buildDirectClaimPlanFixture();
+    const openingClaim = claimPlan.claims.find((claim) => claim.section === "opening")!;
+    const writerOutput = {
+      version: "premium_writer_output_v1" as const,
+      bodyParts: {
+        opening: {
+          section: "opening" as const,
+          text: "Dear Hiring Manager,",
+          claimIds: ["unknown_claim"],
+          factIds: ["unknown_fact"],
+          demandIds: [],
+        },
+        proofBlock: {
+          section: "proofBlock" as const,
+          text: "I reduced duplicate components by 40%.",
+          claimIds: [openingClaim.id],
+          factIds: openingClaim.factIds,
+          demandIds: [],
+        },
+        employerValueBlock: {
+          section: "employerValueBlock" as const,
+          text: "I admire your mission-led culture.",
+          claimIds: ["claim_employer_value_001"],
+          factIds: [],
+          demandIds: [],
+        },
+        closeLine: {
+          section: "closeLine" as const,
+          text: "Sincerely,",
+          claimIds: ["claim_close_001"],
+          factIds: [],
+          demandIds: [],
+        },
+      },
+    };
+
+    const issues = validatePremiumWriterOutputV1({
+      writerOutput,
+      claimPlan,
+      factGraph,
+      jobDemandGraph,
+      brief,
+    });
+    expect(issues.map((issue) => issue.code)).toEqual(
+      expect.arrayContaining([
+        "unknown_claim_id",
+        "unknown_fact_id",
+        "section_claim_mismatch",
+        "unsupported_numeric_claim",
+        "greeting_leakage",
+        "signoff_leakage",
+      ]),
+    );
+    expect(issues.find((issue) => issue.code === "greeting_leakage")?.repairable).toBe(
+      true,
+    );
+    expect(issues.find((issue) => issue.code === "unknown_fact_id")?.repairable).toBe(
+      false,
+    );
+  });
+});
 
 const weakChecklistContext = {
   name: "Samir Patel",
@@ -944,8 +1248,8 @@ describe("premium cover letter prompt contract", () => {
     expect(prompt).toContain(
       "EmployerValueBlock: move directly to an employer-facing implication",
     );
-    expect(prompt).toContain('"opening":"string"');
-    expect(prompt).toContain('"employerValueBlock":"string"');
+    expect(prompt).toContain('"version":"premium_writer_output_v1"');
+    expect(prompt).toContain('"text":"string"');
     expect(prompt).toContain("topResponsibilities");
     expect(prompt).toContain("keyRequirements");
     expect(
@@ -956,8 +1260,8 @@ describe("premium cover letter prompt contract", () => {
       "employerValueBlock",
       "closeLine",
     ]);
-    expect(prompt.length).toBeLessThan(4200);
-    expect(prompt.split("\n").length).toBeLessThan(28);
+    expect(prompt.length).toBeLessThan(6200);
+    expect(prompt.split("\n").length).toBeLessThan(42);
   });
 
   it("adds distinct preset guidance for signature, expert, and engaging", () => {
@@ -1128,8 +1432,8 @@ describe("premium cover letter prompt contract", () => {
     expect(prompt).toContain(
       "keep employerValueBlock on operational consequence and closeLine on modest first-person ownership",
     );
-    expect(prompt.length).toBeLessThan(4200);
-    expect(prompt.split("\n").length).toBeLessThan(28);
+    expect(prompt.length).toBeLessThan(6200);
+    expect(prompt.split("\n").length).toBeLessThan(42);
   });
 
   it("requests strict JSON-schema body parts from OpenAI for premium generation", () => {
@@ -1148,12 +1452,12 @@ describe("premium cover letter prompt contract", () => {
         verbosity: "medium",
         format: {
           type: "json_schema",
-          name: "cover_letter_body_parts",
-          schema: PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA,
+          name: "premium_writer_output_v1",
+          schema: PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
           strict: true,
           json_schema: {
-            name: "cover_letter_body_parts",
-            schema: PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA,
+            name: "premium_writer_output_v1",
+            schema: PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
             strict: true,
           },
         },
@@ -2186,8 +2490,8 @@ describe("premium cover letter generation and rendering", () => {
     });
 
     expect(result).not.toBeNull();
-    expect(capturedSchema).toEqual(PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA);
-    expect(capturedPrompt).toContain("Planner priority order:");
+    expect(capturedSchema).toEqual(PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA);
+    expect(capturedPrompt).toContain("already resolved into ClaimPlan");
     expect(capturedPrompt).toContain("Structured brief:");
     expect(capturedPrompt).toContain(
       "A JD keyword, tool, certification, compliance framework, domain, or responsibility may appear as candidate experience only when the CV supports that exact capability",
@@ -2750,7 +3054,7 @@ describe("premium cover letter generation and rendering", () => {
       candidateName: "Alex Martin",
       writer: async ({ prompt, schema }) => {
         capturedPrompt = prompt;
-        expect(schema).toEqual(PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA);
+        expect(schema).toEqual(PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA);
         return {
           opening:
             "I am applying for the Senior Frontend Engineer role with a background in customer-facing web applications and reusable UI systems.",
@@ -2925,7 +3229,7 @@ describe("premium cover letter generation and rendering", () => {
       jobDescription: noCvJob.jobDescription,
       writer: async ({ prompt, schema }) => {
         capturedPrompt = prompt;
-        expect(schema).toEqual(PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA);
+        expect(schema).toEqual(PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA);
         return {
           opening:
             "I am applying for the Operations Coordinator role because the work is centered on service requests, follow-through, and accurate day-to-day coordination.",

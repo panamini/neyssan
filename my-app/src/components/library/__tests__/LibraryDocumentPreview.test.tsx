@@ -6,9 +6,25 @@ import { DrawerDocumentTile } from "../LibraryDocumentPreview";
 import type { LibraryItem } from "../../../lib/application-library";
 import type { CvDocument } from "../../../types/cvDocument";
 
+const { buildStyledResumePrintSourceMock } = vi.hoisted(() => ({
+  buildStyledResumePrintSourceMock: vi.fn(() => ({
+    resumeData: { basics: { name: "Porphyre" } },
+    stylePreset: { familyId: "workshop", typography: "geist", palette: "sauge" },
+    resumeTemplateId: "workshop_resume_twocol_ats",
+    rendererVariantId: "swissminima",
+    committedPages: [{ id: "page-1" }, { id: "page-2" }],
+  })),
+}));
+
 vi.mock("../../proposal-render/ProposalDocumentRenderer", () => ({
   ProposalDocumentRenderer: ({ content }: { content: string }) => (
     <div data-testid="proposal-document-renderer">{content}</div>
+  ),
+}));
+
+vi.mock("../../../features/verbati/resume/ResumePage", () => ({
+  default: ({ mode }: { mode: string }) => (
+    <div data-testid="resume-page">{mode}</div>
   ),
 }));
 
@@ -21,12 +37,7 @@ vi.mock("../../../features/verbati/resume/ResumeTemplateRenderer", () => ({
 }));
 
 vi.mock("../../../lib/document-export-models", () => ({
-  buildStyledResumePrintSource: () => ({
-    resumeData: { basics: { name: "Porphyre" } },
-    stylePreset: { familyId: "workshop", typography: "geist", palette: "sauge" },
-    resumeTemplateId: "workshop-two-col",
-    committedPages: [{ id: "page-1" }, { id: "page-2" }],
-  }),
+  buildStyledResumePrintSource: () => buildStyledResumePrintSourceMock(),
 }));
 
 describe("DrawerDocumentTile", () => {
@@ -56,6 +67,17 @@ describe("DrawerDocumentTile", () => {
   });
 
   it("renders a hydrated CV through the live resume renderer with only page one", () => {
+    buildStyledResumePrintSourceMock.mockReturnValueOnce({
+      resumeData: { basics: { name: "Porphyre" } },
+      stylePreset: {
+        familyId: "workshop",
+        typography: "geist",
+        palette: "sauge",
+      },
+      resumeTemplateId: "workshop_resume_twocol_ats",
+      rendererVariantId: "swissminima",
+      committedPages: [{ id: "page-1" }, { id: "page-2" }],
+    });
     const cvDocument = {
       id: "cv-one",
       title: "Porphyre",
@@ -76,6 +98,44 @@ describe("DrawerDocumentTile", () => {
 
     expect(screen.getByTestId("resume-template-renderer")).toHaveTextContent("1");
     expect(screen.getByText("Porphyre")).toBeInTheDocument();
+  });
+
+  it("renders editorial sidebar CV thumbnails through the shared ResumePage path", () => {
+    buildStyledResumePrintSourceMock.mockReturnValueOnce({
+      resumeData: { basics: { name: "Porphyre" } },
+      stylePreset: {
+        familyId: "workshop",
+        typography: "quiet-editorial",
+        palette: "sauge",
+        resumeTemplateId: "editorial-sidebar",
+      },
+      resumeTemplateId: "editorial-sidebar",
+      rendererVariantId: "editorialsidebar",
+      pageSize: { id: "a4", widthMm: 210, heightMm: 297 },
+      committedPages: undefined,
+    });
+    const cvDocument = {
+      id: "cv-one",
+      title: "Porphyre",
+      sections: [],
+      metadata: {},
+    } as unknown as CvDocument;
+    const item: LibraryItem = {
+      id: "cv:cv-one",
+      type: "cv",
+      title: "Porphyre",
+      updatedAt: 1,
+      routeTarget: { kind: "route", to: "/cv?id=cv-one" },
+      source: "cv-library",
+      cvDocument,
+    };
+
+    render(<DrawerDocumentTile item={item} cvDocument={cvDocument} />);
+
+    expect(screen.getByTestId("resume-page")).toHaveTextContent(
+      "editorialsidebar",
+    );
+    expect(screen.queryByTestId("resume-template-renderer")).not.toBeInTheDocument();
   });
 
   it("renders visible state badges through the shared drawer tile badge", () => {

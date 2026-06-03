@@ -1,6 +1,7 @@
 import React from "react";
 
 import { ProposalDocumentRenderer } from "../proposal-render/ProposalDocumentRenderer";
+import ResumePage from "../../features/verbati/resume/ResumePage";
 import ResumeTemplateRenderer from "../../features/verbati/resume/ResumeTemplateRenderer";
 import { resolveVerbatiStyle } from "../../features/verbati/style";
 import { A4_PAGE_HEIGHT_PX, A4_PAGE_WIDTH_PX } from "../../lib/document-stage";
@@ -11,6 +12,7 @@ import {
 } from "../../lib/layout/documentAppearance";
 import { getProposalDocumentTypography } from "../../lib/proposal-document-typography";
 import type { LibraryItem } from "../../lib/application-library";
+import { EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID } from "../../lib/layout/resumeTemplates";
 import type { CvDocument } from "../../types/cvDocument";
 
 const DRAWER_THUMBNAIL_WIDTH_PX = 136;
@@ -177,6 +179,8 @@ export function LibraryCvThumbnailPage({
           data: source.resumeData,
           stylePreset: source.stylePreset,
           resumeTemplateId: source.resumeTemplateId,
+          rendererVariantId: source.rendererVariantId,
+          pageSize: source.pageSize,
           committedPages: source.committedPages?.slice(0, 1),
         }
       : null;
@@ -185,12 +189,21 @@ export function LibraryCvThumbnailPage({
   if (!preview) return null;
 
   return (
-    <ResumeTemplateRenderer
-      data={preview.data}
-      stylePreset={preview.stylePreset}
-      resumeTemplateId={preview.resumeTemplateId}
-      committedPages={preview.committedPages}
-    />
+    preview.resumeTemplateId === EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID ? (
+      <ResumePage
+        data={preview.data}
+        mode={preview.rendererVariantId}
+        stylePreset={preview.stylePreset}
+        pageSize={preview.pageSize}
+      />
+    ) : (
+      <ResumeTemplateRenderer
+        data={preview.data}
+        stylePreset={preview.stylePreset}
+        resumeTemplateId={preview.resumeTemplateId}
+        committedPages={preview.committedPages}
+      />
+    )
   );
 }
 

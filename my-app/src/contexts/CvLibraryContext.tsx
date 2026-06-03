@@ -63,7 +63,7 @@ import type { VerbatiStylePreset } from "../features/verbati/types";
 import type { DocumentStyleMetadata } from "../lib/document-style-slots";
 import type { DocumentIconSettings } from "../lib/document-icons";
 import {
-  isWorkshopResumeTemplateId,
+  isResumeTemplateId,
   type ResumeTemplateId,
 } from "../lib/layout/resumeTemplates";
 
@@ -2886,7 +2886,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         // documents are v1-shaped and avoid legacy UI being shown for new docs.
         const explicitDisableV1 = opts?.forceV1 === false;
         const shouldUseV1 = !explicitDisableV1;
-        const requestedResumeTemplateId = isWorkshopResumeTemplateId(
+        const requestedResumeTemplateId = isResumeTemplateId(
           opts?.resumeTemplateId,
         )
           ? opts.resumeTemplateId

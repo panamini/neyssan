@@ -721,6 +721,156 @@
   background: linear-gradient(90deg, var(--color-accent), transparent 72%);
 }
 
+.resume-page--editorialsidebar {
+  color: var(--color-text);
+}
+
+.resume-page--editorialsidebar .name--editorialsidebar {
+  font-family: var(--font-heading-family);
+}
+
+.resume-page--editorialsidebar .title--editorialsidebar {
+  font-family: var(--font-body-family);
+}
+
+.resume-page--editorialsidebar .sidebar-section,
+.resume-page--editorialsidebar .main-section {
+  margin-bottom: 0;
+}
+
+.resume-page--editorialsidebar .sidebar-section > div:first-child,
+.resume-page--editorialsidebar .main-heading-row {
+  margin-bottom: calc(var(--sidebar-title-margin) + 0.9mm);
+}
+
+.resume-page--editorialsidebar .sidebar-title,
+.resume-page--editorialsidebar .main-heading {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--color-accent);
+  font-size: calc(var(--text-caption-size) + 0.42mm);
+  line-height: 1.12;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.resume-page--editorialsidebar .main-heading-row {
+  align-items: baseline;
+}
+
+.resume-page--editorialsidebar .main-heading-rule {
+  display: none;
+}
+
+.resume-page--editorialsidebar .sidebar-content,
+.resume-page--editorialsidebar .compact-list,
+.resume-page--editorialsidebar .skills-list,
+.resume-page--editorialsidebar .experience-stack,
+.resume-page--editorialsidebar .education-stack {
+  display: grid;
+  gap: calc(var(--sidebar-content-gap) + 0.4mm);
+}
+
+.resume-page--editorialsidebar .compact-list,
+.resume-page--editorialsidebar .skills-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.resume-page--editorialsidebar .compact-list li,
+.resume-page--editorialsidebar .skills-list li {
+  display: grid;
+  gap: 0.8mm;
+}
+
+.resume-page--editorialsidebar .compact-list .label {
+  font-size: calc(var(--text-caption-size) - 0.22mm);
+  line-height: 1.2;
+  color: var(--color-text-subtle);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.resume-page--editorialsidebar .compact-list .value,
+.resume-page--editorialsidebar .skills-list li,
+.resume-page--editorialsidebar .hobby-tag {
+  color: var(--color-text);
+  font-size: calc(var(--text-body-sm-size) + var(--auto-body-sm-size-adjust));
+  line-height: 1.42;
+  letter-spacing: -0.012em;
+}
+
+.resume-page--editorialsidebar .compact-list--editorialsidebar-contact .value {
+  overflow-wrap: anywhere;
+}
+
+.resume-page--editorialsidebar .entry-title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: calc(var(--text-title-size) - 0.65mm + var(--auto-title-size-adjust));
+  line-height: 1.17;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.resume-page--editorialsidebar .entry-title--editorialsidebar {
+  font-weight: 400;
+}
+
+.resume-page--editorialsidebar .entry-company {
+  font-weight: 800;
+}
+
+.resume-page--editorialsidebar .entry-role,
+.resume-page--editorialsidebar .entry-title-separator {
+  font-weight: 400;
+}
+
+.resume-page--editorialsidebar .entry-subtitle,
+.resume-page--editorialsidebar .education-period {
+  margin: calc(var(--experience-bullets-gap) - 0.2mm) 0 0;
+  color: var(--color-text-subtle);
+  font-size: calc(var(--text-body-sm-size) - 0.2mm + var(--auto-body-sm-size-adjust));
+  line-height: 1.28;
+  letter-spacing: -0.004em;
+  text-transform: none;
+}
+
+.resume-page--editorialsidebar .bullet-list {
+  margin: calc(var(--experience-bullets-gap) + 1mm) 0 0;
+}
+
+.resume-page--editorialsidebar .bullet-list li,
+.resume-page--editorialsidebar .project-copy,
+.resume-page--editorialsidebar .summary--editorialsidebar {
+  color: color-mix(in srgb, var(--color-text) 86%, transparent);
+  font-size: calc(var(--text-body-sm-size) + var(--auto-body-sm-size-adjust));
+  line-height: 1.55;
+  letter-spacing: -0.018em;
+}
+
+.resume-page--editorialsidebar .experience-item--editorialsidebar {
+  display: block;
+}
+
+.resume-page--editorialsidebar .experience-item--editorialsidebar + .experience-item--editorialsidebar,
+.resume-page--editorialsidebar .education-item + .education-item {
+  margin-top: calc(var(--experience-item-gap) + 0.4mm);
+}
+
+.resume-page--editorialsidebar .projects-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: calc(var(--project-gap) + 0.4mm);
+}
+
+.resume-page--editorialsidebar .project-card {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
 .resume-page--robial {
   --robial-step-a: 17mm;
   --robial-step-b: 18mm;

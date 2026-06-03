@@ -20,6 +20,7 @@ import {
   stylesEqual,
   VERBATI_LAYOUT_OPTIONS,
 } from "../style";
+import { EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID } from "../../../lib/layout/resumeTemplates";
 
 describe("verbati style normalization", () => {
   it("uses workshop as the default active layout", () => {
@@ -107,9 +108,23 @@ describe("verbati style normalization", () => {
       familyId: "two-column",
       layout: "two-column",
       typography: "soft-serif",
-      palette: "encre",
-      accentHex: undefined,
-    });
+        palette: "encre",
+        accentHex: undefined,
+      });
+
+    expect(
+      sanitizePersistedVerbatiStyle({
+        familyId: "workshop",
+        layout: "workshop",
+        typography: "quiet-editorial",
+        palette: "sauge",
+        resumeTemplateId: EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        resumeTemplateId: EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID,
+      }),
+    );
   });
 
   it("keeps legacy proposal template aliases resolving to active templates", () => {
@@ -200,6 +215,15 @@ describe("verbati style normalization", () => {
     expect(resolveLegacyResumeRendererVariantId(familyResolved)).toBe(
       "robial",
     );
+    expect(
+      resolveLegacyResumeRendererVariantId({
+        familyId: "workshop",
+        layout: "workshop",
+        typography: "quiet-editorial",
+        palette: "sauge",
+        resumeTemplateId: EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID,
+      }),
+    ).toBe("editorialsidebar");
   });
 
   it("recovers CV visual style from base snapshot metadata when verbatiStyle is absent", () => {

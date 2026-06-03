@@ -1800,6 +1800,587 @@ function ClassicResumePage({
   );
   const renderableTitle = getRenderableIdentitySubtitle(data.name, data.title);
 
+  if (variant.id === "editorialsidebar") {
+    return (
+      <PreviewFrame
+        variant={variant}
+        comparisonLabel={comparisonLabel}
+        compactComparison={compactComparison}
+        onActivateComparison={onActivateComparison}
+      >
+        <article
+          ref={pageRef}
+          className={`resume-page resume-page--${variant.id}`}
+          style={{
+            ...pageVars,
+            background: "var(--paper)",
+            fontFamily: "var(--font-body-family)",
+          }}
+          aria-label={variant.label}
+        >
+          <ResumeFontDebugInheritProbe />
+          <div
+            ref={innerRef}
+            className="resume-inner resume-inner--editorialsidebar"
+            style={{
+              display: "grid",
+              gridTemplateRows: "auto 1fr",
+              rowGap: "calc(var(--header-row-gap) + 2mm)",
+              minHeight: "100%",
+            }}
+          >
+            <PreviewSectionRegion
+              as="header"
+              className="resume-header resume-header--editorialsidebar"
+              sectionType="profile"
+              sectionId={data.profileSectionId}
+              sectionTitle="Profile"
+              activeTarget={activeTarget}
+              surface="section"
+              style={{
+                display: "grid",
+                gap: "var(--header-title-margin-top)",
+                alignItems: "start",
+                paddingBottom: 0,
+                borderBottom: 0,
+              }}
+            >
+              <h1
+                className="name name--editorialsidebar"
+                data-font-probe="heading"
+                style={{
+                  margin: 0,
+                  maxWidth: "calc(var(--sidebar-width) + var(--gutter-width) + var(--main-width))",
+                  color: "var(--color-text)",
+                  fontFamily: "var(--font-heading-family)",
+                  fontSize: "calc(var(--text-display-size) + 2.2mm)",
+                  lineHeight: 0.92,
+                  fontWeight: 300,
+                  letterSpacing: "-0.055em",
+                }}
+              >
+                {data.name}
+              </h1>
+              {renderableTitle ? (
+                <p
+                  className="title title--editorialsidebar"
+                  style={{
+                    margin: 0,
+                    maxWidth: "var(--main-width)",
+                    color: "var(--color-accent)",
+                    fontSize: "calc(var(--text-body-size) + 0.05mm)",
+                    lineHeight: 1.25,
+                    fontWeight: 700,
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {renderableTitle}
+                </p>
+              ) : null}
+            </PreviewSectionRegion>
+
+            <div
+              className="resume-grid resume-grid--editorialsidebar"
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "var(--sidebar-width) var(--gutter-width) var(--main-width)",
+                alignItems: "start",
+                minWidth: 0,
+              }}
+            >
+              <aside
+                className="resume-sidebar resume-sidebar--editorialsidebar"
+                style={{
+                  gridColumn: 1,
+                  display: "grid",
+                  gap: "calc(var(--sidebar-section-gap) + 1.1mm)",
+                  alignContent: "start",
+                  minWidth: 0,
+                  paddingRight: 0,
+                }}
+              >
+                <SidebarSection
+                  title="Contact"
+                  variant={variant}
+                  sectionType="contact"
+                  sectionId={data.profileSectionId}
+                  activeTarget={activeTarget}
+                >
+                  <ul className="compact-list compact-list--editorialsidebar-contact">
+                    {contactItems.map((item) => (
+                      <PreviewItemRegion
+                        as="li"
+                        key={`${item.label}-${item.value}`}
+                        className={
+                          item.compact ? "compact-list-item--compact" : ""
+                        }
+                        sectionType="contact"
+                        sectionId={item.sectionId}
+                        sectionTitle="Contact"
+                        itemId={item.itemId}
+                        activeTarget={activeTarget}
+                        surface="item"
+                      >
+                        <span className="value">{item.value}</span>
+                      </PreviewItemRegion>
+                    ))}
+                  </ul>
+                </SidebarSection>
+
+                <SidebarSection
+                  title="Skills"
+                  variant={variant}
+                  sectionType="skills"
+                  sectionId={getPrimarySectionId(data, "skills")}
+                  activeTarget={activeTarget}
+                >
+                  <ul className="skills-list skills-list--editorialsidebar">
+                    {(data.skillItems.length > 0
+                      ? data.skillItems
+                      : data.skills.map((skill, index) => ({
+                          id: `skills-fallback-${index}`,
+                          name: skill,
+                          sectionId: getPrimarySectionId(data, "skills") ?? "",
+                          sectionType: "skills" as const,
+                        }))
+                    ).map((skill) => (
+                      <PreviewItemRegion
+                        as="li"
+                        key={skill.id}
+                        sectionType="skills"
+                        sectionId={skill.sectionId}
+                        sectionTitle="Skills"
+                        itemId={skill.id}
+                        activeTarget={activeTarget}
+                        surface="item"
+                      >
+                        {skill.name}
+                      </PreviewItemRegion>
+                    ))}
+                  </ul>
+                </SidebarSection>
+
+                {data.languages.length > 0 ? (
+                  <SidebarSection
+                    title="Languages"
+                    variant={variant}
+                    sectionType="languages"
+                    sectionId={getPrimarySectionId(data, "languages")}
+                    activeTarget={activeTarget}
+                  >
+                    <ul className="compact-list compact-list--languages">
+                      {data.languages.map((language) => (
+                        <PreviewItemRegion
+                          as="li"
+                          key={language.id}
+                          sectionType="languages"
+                          sectionId={language.sectionId}
+                          sectionTitle="Languages"
+                          itemId={language.id}
+                          activeTarget={activeTarget}
+                          surface="item"
+                        >
+                          <span className="label">{language.name}</span>
+                          <span className="value">{language.level}</span>
+                        </PreviewItemRegion>
+                      ))}
+                    </ul>
+                  </SidebarSection>
+                ) : null}
+
+                {sidebarExtras.map((section) => {
+                  if (section.key === "hobbies") {
+                    return (
+                      <SidebarSection
+                        key={section.key}
+                        title="Hobbies"
+                        variant={variant}
+                        sectionType="hobbies"
+                        sectionId={getPrimarySectionId(data, "hobbies")}
+                        activeTarget={activeTarget}
+                      >
+                        <div className="hobby-tag-list">
+                          {data.hobbyItems.map((item) => (
+                            <PreviewItemRegion
+                              as="span"
+                              key={item.id}
+                              className="hobby-tag"
+                              sectionType="hobbies"
+                              sectionId={item.sectionId}
+                              sectionTitle="Hobbies"
+                              itemId={item.id}
+                              activeTarget={activeTarget}
+                              surface="item"
+                            >
+                              {item.name}
+                            </PreviewItemRegion>
+                          ))}
+                        </div>
+                      </SidebarSection>
+                    );
+                  }
+
+                  if (section.key === "certifications") {
+                    return (
+                      <SidebarSection
+                        key={section.key}
+                        title="Certifications"
+                        variant={variant}
+                        sectionType="certifications"
+                        sectionId={getPrimarySectionId(data, "certifications")}
+                        activeTarget={activeTarget}
+                      >
+                        <ul className="compact-list">
+                          {data.certifications.map((item) => (
+                            <PreviewItemRegion
+                              as="li"
+                              key={item.id}
+                              sectionType="certifications"
+                              sectionId={item.sectionId}
+                              sectionTitle="Certifications"
+                              itemId={item.id}
+                              activeTarget={activeTarget}
+                              surface="item"
+                            >
+                              <span className="label">{item.name}</span>
+                              <span className="value">
+                                {[item.issuer, item.meta].filter(Boolean).join(" · ")}
+                              </span>
+                            </PreviewItemRegion>
+                          ))}
+                        </ul>
+                      </SidebarSection>
+                    );
+                  }
+
+                  return (
+                    <SidebarSection
+                      key={section.key}
+                      title="Affiliations"
+                      variant={variant}
+                      sectionType="affiliations"
+                      sectionId={getPrimarySectionId(data, "affiliations")}
+                      activeTarget={activeTarget}
+                    >
+                      <ul className="compact-list">
+                        {data.affiliations.map((item) => (
+                          <PreviewItemRegion
+                            as="li"
+                            key={item.id}
+                            sectionType="affiliations"
+                            sectionId={item.sectionId}
+                            sectionTitle="Affiliations"
+                            itemId={item.id}
+                            activeTarget={activeTarget}
+                            surface="item"
+                          >
+                            <span className="label">{item.organizationName}</span>
+                            <span className="value">
+                              {[item.roleOrMembershipType, item.dateRange]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </span>
+                          </PreviewItemRegion>
+                        ))}
+                      </ul>
+                    </SidebarSection>
+                  );
+                })}
+              </aside>
+
+              <main
+                className="resume-main resume-main--editorialsidebar"
+                style={{
+                  gridColumn: 3,
+                  display: "grid",
+                  gap: "calc(var(--main-section-gap) + 0.7mm)",
+                  alignContent: "start",
+                  minWidth: 0,
+                }}
+              >
+                {data.summary ? (
+                  <MainSection
+                    title="Profile"
+                    variant={variant}
+                    sectionType="summary"
+                    sectionId={data.summarySectionId ?? "summary"}
+                    activeTarget={activeTarget}
+                  >
+                    {data.summaryRich ? (
+                      <PaperRichInlineEditor
+                        value={data.summary}
+                        rich={data.summaryRich}
+                        editable={Boolean(inlineEditing?.enabled)}
+                        editTarget={{
+                          sectionId: data.summarySectionId ?? "summary",
+                          sectionType: "summary",
+                          fieldPath: "structuredContent.0.summary",
+                          fieldKind: "paragraph",
+                        }}
+                        onActivate={(target) => inlineEditing?.onActivate(target)}
+                        onDeactivate={inlineEditing?.onDeactivate}
+                        onDocChange={inlineEditing?.onFieldDocChange}
+                        ariaLabel="Edit Summary"
+                        style={{
+                          margin: 0,
+                          maxWidth: "var(--header-summary-width)",
+                          fontSize: "var(--text-body-size)",
+                          lineHeight: "var(--text-body-line)",
+                          color: "var(--color-text)",
+                        }}
+                        previewAttrs={buildPreviewRegionAttrs({
+                          sectionType: "summary",
+                          sectionId: data.summarySectionId,
+                          sectionTitle: "Summary",
+                          activeTarget,
+                          surface: "section",
+                        })}
+                      />
+                    ) : (
+                      <InlineEditableText
+                        className="summary summary--editorialsidebar"
+                        data-font-probe="body"
+                        value={data.summary}
+                        editable={Boolean(inlineEditing?.enabled)}
+                        editTarget={{
+                          sectionId: data.summarySectionId ?? "summary",
+                          sectionType: "summary",
+                          fieldPath: "structuredContent.0.summary",
+                          fieldKind: "paragraph",
+                        }}
+                        onActivate={(target) => inlineEditing?.onActivate(target)}
+                        onDeactivate={inlineEditing?.onDeactivate}
+                        ariaLabel="Edit Summary"
+                        onPlainTextChange={(text) =>
+                          inlineEditing?.onSummaryChange(text)
+                        }
+                        {...buildPreviewRegionAttrs({
+                          sectionType: "summary",
+                          sectionId: data.summarySectionId,
+                          sectionTitle: "Summary",
+                          activeTarget,
+                          surface: "section",
+                        })}
+                      />
+                    )}
+                  </MainSection>
+                ) : null}
+
+                <MainSection
+                  title="Work"
+                  variant={variant}
+                  sectionType="experience"
+                  sectionId={getPrimarySectionId(data, "experience")}
+                  activeTarget={activeTarget}
+                >
+                  <div className="experience-stack experience-stack--editorialsidebar">
+                    {data.experience.map((item) => (
+                      <PreviewItemRegion
+                        as="article"
+                        key={item.id}
+                        className="experience-item experience-item--editorialsidebar"
+                        sectionType="experience"
+                        sectionId={item.sectionId}
+                        sectionTitle="Work"
+                        itemId={item.id}
+                        activeTarget={activeTarget}
+                        surface="item"
+                      >
+                        <div>
+                          <h3 className="entry-title entry-title--editorialsidebar">
+                            {item.company ? (
+                              <span className="entry-company">{item.company}</span>
+                            ) : null}
+                            {item.company && item.role ? (
+                              <span className="entry-title-separator">, </span>
+                            ) : null}
+                            {item.role ? (
+                              <span className="entry-role">{item.role}</span>
+                            ) : null}
+                          </h3>
+                          <p className="entry-subtitle">
+                            {[item.period, item.location].filter(Boolean).join(" · ")}
+                          </p>
+                          {item.bullets.filter((bullet) => bullet.trim()).length > 0 ? (
+                            <ul className="bullet-list">
+                              {item.bullets
+                                .filter((bullet) => bullet.trim())
+                                .map((bullet) => (
+                                  <li key={bullet}>{bullet}</li>
+                                ))}
+                            </ul>
+                          ) : null}
+                        </div>
+                      </PreviewItemRegion>
+                    ))}
+                  </div>
+                </MainSection>
+
+                {data.projects.length > 0 ? (
+                  <MainSection
+                    title="Selected projects"
+                    variant={variant}
+                    sectionType="selected_projects"
+                    sectionId={getPrimarySectionId(data, "projects")}
+                    activeTarget={activeTarget}
+                  >
+                    <div className="projects-grid">
+                      {data.projects.map((project) => (
+                        <article
+                          className={`project-card project-card--${variant.id}`}
+                          key={project.id}
+                          data-preview-row-id={project.id}
+                          data-no-pan="true"
+                        >
+                          <PreviewItemRegion
+                            as="h3"
+                            className="entry-title"
+                            sectionType="selected_projects"
+                            sectionId={project.sectionId}
+                            sectionTitle="Selected projects"
+                            itemId={buildProjectPreviewFieldId(project.id, "name")}
+                            activeTarget={activeTarget}
+                            surface="item"
+                          >
+                            {project.name}
+                          </PreviewItemRegion>
+                          <PreviewItemRegion
+                            as="p"
+                            className="entry-subtitle entry-subtitle--project"
+                            sectionType="selected_projects"
+                            sectionId={project.sectionId}
+                            sectionTitle="Selected projects"
+                            itemId={buildProjectPreviewFieldId(project.id, "meta")}
+                            activeTarget={activeTarget}
+                            surface="item"
+                          >
+                            {project.meta}
+                          </PreviewItemRegion>
+                          <PreviewItemRegion
+                            as="p"
+                            className="project-copy"
+                            sectionType="selected_projects"
+                            sectionId={project.sectionId}
+                            sectionTitle="Selected projects"
+                            itemId={buildProjectPreviewFieldId(
+                              project.id,
+                              "description",
+                            )}
+                            activeTarget={activeTarget}
+                            surface="item"
+                          >
+                            {project.description}
+                          </PreviewItemRegion>
+                        </article>
+                      ))}
+                    </div>
+                  </MainSection>
+                ) : null}
+
+                <MainSection
+                  title="Education"
+                  variant={variant}
+                  sectionType="education"
+                  sectionId={getPrimarySectionId(data, "education")}
+                  activeTarget={activeTarget}
+                >
+                  <div className="education-stack">
+                    {data.education.map((item) => (
+                      <PreviewItemRegion
+                        as="article"
+                        key={item.id}
+                        className="education-item"
+                        sectionType="education"
+                        sectionId={item.sectionId}
+                        sectionTitle="Education"
+                        itemId={item.id}
+                        activeTarget={activeTarget}
+                        surface="item"
+                      >
+                        <div>
+                          <h3 className="entry-title">
+                            {[item.school, item.degree].filter(Boolean).join(", ")}
+                          </h3>
+                          <p className="entry-subtitle">{item.period}</p>
+                        </div>
+                      </PreviewItemRegion>
+                    ))}
+                  </div>
+                </MainSection>
+
+                {data.achievementItems.length > 0 ? (
+                  <MainSection
+                    title="Achievements"
+                    variant={variant}
+                    sectionType="achievements"
+                    sectionId={getPrimarySectionId(data, "achievements")}
+                    activeTarget={activeTarget}
+                  >
+                    <ul className="bullet-list">
+                      {data.achievementItems.map((item) => (
+                        <PreviewItemRegion
+                          as="li"
+                          key={item.id}
+                          sectionType="achievements"
+                          sectionId={item.sectionId}
+                          sectionTitle="Achievements"
+                          itemId={item.id}
+                          activeTarget={activeTarget}
+                          surface="item"
+                        >
+                          {item.text}
+                        </PreviewItemRegion>
+                      ))}
+                    </ul>
+                  </MainSection>
+                ) : null}
+
+                {orderedTextSections.map((section) => (
+                  <MainSection
+                    key={section.id}
+                    title={section.sectionTitle}
+                    variant={variant}
+                    sectionType={section.sectionType}
+                    sectionId={section.sectionId}
+                    activeTarget={activeTarget}
+                  >
+                    <InlineEditableText
+                      className="project-copy"
+                      value={section.text}
+                      editable={Boolean(inlineEditing?.enabled)}
+                      editTarget={{
+                        sectionId: section.sectionId,
+                        sectionType: section.sectionType,
+                        fieldPath: "blocks.0.plainText",
+                        fieldKind: "paragraph",
+                      }}
+                      onActivate={(target) => inlineEditing?.onActivate(target)}
+                      onDeactivate={inlineEditing?.onDeactivate}
+                      ariaLabel={`Edit ${section.sectionTitle}`}
+                      onPlainTextChange={(text) =>
+                        inlineEditing?.onTextSectionChange(section.sectionId, text)
+                      }
+                      {...buildPreviewRegionAttrs({
+                        sectionType: section.sectionType,
+                        sectionId: section.sectionId,
+                        sectionTitle: section.sectionTitle,
+                        itemId: section.id,
+                        activeTarget,
+                        surface: "item",
+                      })}
+                    />
+                  </MainSection>
+                ))}
+              </main>
+            </div>
+          </div>
+        </article>
+      </PreviewFrame>
+    );
+  }
+
   return (
     <PreviewFrame
       variant={variant}

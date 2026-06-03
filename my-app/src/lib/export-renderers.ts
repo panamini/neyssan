@@ -15,6 +15,7 @@ import {
 import type { VerbatiStylePreset } from "../features/verbati/types";
 import { buildResumeEducationDisplay } from "../features/verbati/resume/resumeEducation";
 import type {
+  ResumeExperienceItem,
   WorkshopResponsibilitiesRichContent,
   WorkshopResponsibilityTextRun,
 } from "../features/verbati/resume/resume.types";
@@ -45,6 +46,7 @@ import {
   resolveResumeDocxSurfaceTokens,
 } from "./layout/documentTokenSerializers";
 import {
+  EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID,
   isWorkshopResumeTemplateId,
   isWorkshopTwoColumnResumeTemplateId,
 } from "./layout/resumeTemplates";
@@ -132,6 +134,10 @@ function joinClassNames(
   return values.filter(Boolean).join(" ");
 }
 
+function formatTemplateClassName(value?: string | null): string | null {
+  return value ? String(value).replaceAll("_", "-") : null;
+}
+
 function uniqueNonEmptyLines(values: Array<string | null | undefined>): string[] {
   const seen = new Set<string>();
   const lines: string[] = [];
@@ -147,6 +153,10 @@ function uniqueNonEmptyLines(values: Array<string | null | undefined>): string[]
   }
 
   return lines;
+}
+
+function nonEmptyTextValues(values: string[]): string[] {
+  return values.map((value) => value.trim()).filter(Boolean);
 }
 
 function normalizeStylePreset(
@@ -343,6 +353,146 @@ function buildStyledResumeAppearanceCss(): string {
 
     body.resume-export.resume--styled .entry-meta {
       color: var(--decor-entry-meta-color, var(--muted));
+    }
+
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-page--editorial-sidebar {
+      gap: calc(var(--flow-header-gap) + 0.4mm);
+      min-height: calc(
+        var(--page-height) - var(--page-margin-top) - var(--page-margin-bottom)
+      );
+    }
+
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-header--editorial-sidebar {
+      display: grid;
+      grid-template-columns:
+        minmax(0, calc(var(--page-sidebar) + var(--page-gutter)))
+        minmax(0, var(--page-main));
+      column-gap: 0;
+      row-gap: calc(var(--flow-stack-gap) + 0.6mm);
+      align-items: end;
+      padding-bottom: calc(var(--flow-rule-pad-top) + 0.8mm);
+      border-bottom: var(--decor-header-border-width) solid var(--decor-header-border-color, var(--header-rule));
+      background: var(--decor-header-background, transparent);
+      box-shadow: var(--decor-header-shadow, none);
+    }
+
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-header__identity--editorial-sidebar,
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-header__summary--editorial-sidebar {
+      display: grid;
+      gap: calc(var(--flow-list-gap) + 0.45mm);
+      min-width: 0;
+    }
+
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-header__summary--editorial-sidebar {
+      align-self: end;
+    }
+
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-page--editorial-sidebar .doc-name {
+      color: var(--decor-doc-name-color, var(--ink));
+      font-size: calc(var(--flow-display-size) + 3.2mm);
+      line-height: 0.9;
+      letter-spacing: -0.055em;
+      overflow-wrap: normal;
+      word-break: normal;
+      hyphens: none;
+    }
+
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-page--editorial-sidebar .doc-title {
+      color: var(--decor-doc-title-color, var(--accent));
+      font-size: calc(var(--flow-body-size) + 0.2mm);
+      line-height: 1.22;
+      font-style: normal;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-header__summary--editorial-sidebar .doc-summary {
+      max-width: min(var(--flow-summary-measure), var(--page-main));
+      color: var(--decor-doc-summary-color, var(--ink));
+      font-size: calc(var(--flow-body-size) + 0.05mm);
+      line-height: 1.5;
+    }
+
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-columns--editorial-sidebar {
+      display: grid;
+      grid-template-columns:
+        minmax(0, var(--page-sidebar))
+        minmax(0, var(--page-main));
+      column-gap: var(--page-gutter);
+      align-items: start;
+      min-width: 0;
+    }
+
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-support--editorial-sidebar {
+      display: grid;
+      gap: calc(var(--flow-section-gap) - 0.7mm);
+      align-content: start;
+      min-width: 0;
+      padding-top: var(--flow-sidebar-pad-top);
+      padding-right: calc(var(--page-gutter) - 5.8mm);
+      border-right: var(--decor-sidebar-rule-width) solid var(--decor-section-rule-border-color, var(--line));
+      background: var(--decor-sidebar-background, transparent);
+      box-shadow: var(--decor-sidebar-shadow, none);
+    }
+
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-main--editorial-sidebar {
+      display: grid;
+      gap: calc(var(--flow-section-gap) - 0.3mm);
+      align-content: start;
+      min-width: 0;
+    }
+
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-support--editorial-sidebar .resume-sidebar-stack,
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-main--editorial-sidebar .resume-main-stack {
+      gap: calc(var(--flow-section-gap) - 0.45mm);
+    }
+
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-page--editorial-sidebar .section {
+      margin-bottom: 0;
+    }
+
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-page--editorial-sidebar .section-title {
+      color: var(--decor-section-title-color, var(--accent));
+      font-size: calc(var(--flow-label-size) + 0.45mm);
+      letter-spacing: 0.18em;
+    }
+
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-page--editorial-sidebar .entry-title--editorial-sidebar {
+      font-weight: 400;
+    }
+
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-page--editorial-sidebar .entry-company {
+      font-weight: 800;
+    }
+
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-page--editorial-sidebar .entry-role,
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-page--editorial-sidebar .entry-title-separator {
+      font-weight: 400;
+    }
+
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-page--editorial-sidebar .entry-head {
+      grid-template-columns:
+        minmax(0, 1fr)
+        fit-content(var(--flow-entry-meta-width));
+      column-gap: var(--flow-entry-gap);
+      align-items: baseline;
+    }
+
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-page--editorial-sidebar .entry-meta {
+      text-align: right;
+      white-space: pre-wrap;
+    }
+
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-support--editorial-sidebar .entry-head,
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-page--editorial-sidebar .section--education .entry-head {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--flow-entry-head-gap);
+    }
+
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-support--editorial-sidebar .entry-meta,
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-page--editorial-sidebar .section--education .entry-meta {
+      text-align: left;
     }
 
     body.resume-export.resume-layout--editorial.resume--styled .resume-styled-page--editorial {
@@ -4026,6 +4176,10 @@ function renderResumeHtml(args: {
   stylePreset?: VerbatiStylePreset | null;
 }): string {
   const locale = args.data.locale;
+  const normalizedStylePreset = normalizeStylePreset(args.stylePreset);
+  const resumeTemplateClassName = formatTemplateClassName(
+    args.data.resumeTemplateId,
+  );
   const profile = resolveResumeExportProfile({
     mode: args.mode,
     pageSize: args.data.pageSize,
@@ -4073,7 +4227,10 @@ function renderResumeHtml(args: {
       bodyClassName: joinClassNames([
         "resume-export",
         `resume--${args.mode}`,
-        `resume-layout--${normalizeStylePreset(args.stylePreset).layout}`,
+        `resume-layout--${normalizedStylePreset.layout}`,
+        resumeTemplateClassName
+          ? `resume-template--${resumeTemplateClassName}`
+          : null,
         `resume-shell--${profile.shell}`,
       ]),
       bodyMarkup: workshopBodyMarkup,
@@ -4126,14 +4283,34 @@ function renderResumeHtml(args: {
     titleKey: "languages",
   });
 
+  const isEditorialSidebarResume =
+    args.data.resumeTemplateId === EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID;
+  const renderExperienceTitle = (item: ResumeExperienceItem): string => {
+    if (!isEditorialSidebarResume) {
+      return `<h3 class="entry-title">${escapeHtml(
+        [item.role, item.company].filter(Boolean).join(" · "),
+      )}</h3>`;
+    }
+
+    const companyMarkup = item.company
+      ? `<span class="entry-company">${escapeHtml(item.company)}</span>`
+      : "";
+    const separatorMarkup = item.company && item.role
+      ? `<span class="entry-title-separator">, </span>`
+      : "";
+    const roleMarkup = item.role
+      ? `<span class="entry-role">${escapeHtml(item.role)}</span>`
+      : "";
+
+    return `<h3 class="entry-title entry-title--editorial-sidebar">${companyMarkup}${separatorMarkup}${roleMarkup}</h3>`;
+  };
+
   const experienceContent = args.data.experience
     .map(
       (item) => `<article class="entry entry--experience">
         <div class="entry-lead">
           <div class="entry-head">
-            <h3 class="entry-title">${escapeHtml(
-              [item.role, item.company].filter(Boolean).join(" · "),
-            )}</h3>
+            ${renderExperienceTitle(item)}
             <p class="entry-meta">${escapeHtml(
               [item.period, item.location].filter(Boolean).join("\n"),
             )}</p>
@@ -4141,8 +4318,8 @@ function renderResumeHtml(args: {
           ${item.summary ? `<p class="entry-summary">${escapeHtml(item.summary)}</p>` : ""}
         </div>
         ${
-          item.bullets.length > 0
-            ? `<ul class="bullet-list">${item.bullets
+          nonEmptyTextValues(item.bullets).length > 0
+            ? `<ul class="bullet-list">${nonEmptyTextValues(item.bullets)
                 .map((bullet) => `<li>${escapeHtml(bullet)}</li>`)
                 .join("")}</ul>`
             : ""
@@ -4201,8 +4378,8 @@ function renderResumeHtml(args: {
   const achievementsSection = renderSection({
     block: "achievements",
     content:
-      args.data.achievements.length > 0
-        ? `<ul class="bullet-list">${args.data.achievements
+      nonEmptyTextValues(args.data.achievements).length > 0
+        ? `<ul class="bullet-list">${nonEmptyTextValues(args.data.achievements)
             .map((item) => `<li>${escapeHtml(item)}</li>`)
             .join("")}</ul>`
         : "",
@@ -4257,8 +4434,36 @@ function renderResumeHtml(args: {
   ]
     .filter(Boolean)
     .join("");
+  const editorialSidebarBodyMarkup =
+    args.mode === "styled" &&
+    args.data.resumeTemplateId === EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID &&
+    profile.shell === "split"
+      ? `<main class="export-page resume-export-page--editorial-sidebar" data-export-doc="resume" data-resume-template="${escapeHtml(EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID)}">
+      <article class="resume-styled-page resume-styled-page--editorial-sidebar">
+        <header class="resume-styled-header resume-styled-header--editorial-sidebar" data-block="header">
+          <div class="resume-styled-header__identity resume-styled-header__identity--editorial-sidebar">
+            ${identityMarkup}
+          </div>
+          ${
+            summaryMarkup
+              ? `<div class="resume-styled-header__summary resume-styled-header__summary--editorial-sidebar">${summaryMarkup}</div>`
+              : ""
+          }
+        </header>
+        <section class="resume-styled-columns resume-styled-columns--editorial-sidebar">
+          <aside class="resume-styled-support resume-styled-support--editorial-sidebar">
+            <div class="resume-sidebar-stack">${splitSidebarSections}</div>
+          </aside>
+          <section class="resume-styled-main resume-styled-main--editorial-sidebar">
+            <div class="resume-main-stack">${splitMainSections}</div>
+          </section>
+        </section>
+      </article>
+    </main>`
+      : null;
   const baselineBodyMarkup =
-    profile.shell === "onecol"
+    editorialSidebarBodyMarkup ??
+    (profile.shell === "onecol"
       ? `<main class="export-page" data-export-doc="resume">
       <header class="export-header" data-block="header">
         ${headerMarkup}
@@ -4281,12 +4486,15 @@ function renderResumeHtml(args: {
           <div class="resume-main-stack">${splitMainSections}</div>
         </section>
       </section>
-    </main>`;
+    </main>`);
   return buildHtmlDocument({
     bodyClassName: joinClassNames([
       "resume-export",
       `resume--${args.mode}`,
-      `resume-layout--${normalizeStylePreset(args.stylePreset).layout}`,
+      `resume-layout--${normalizedStylePreset.layout}`,
+      resumeTemplateClassName
+        ? `resume-template--${resumeTemplateClassName}`
+        : null,
       `resume-shell--${profile.shell}`,
     ]),
     bodyMarkup: baselineBodyMarkup,

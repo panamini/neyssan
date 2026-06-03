@@ -496,6 +496,83 @@ editorialmag: {
     projectPaddingAdjust: "-0.05mm",
   },
 },
+editorialsidebar: {
+  id: "editorialsidebar",
+  label: "Editorial Sidebar",
+  title: "Asymmetric editorial résumé",
+  subtitle:
+    "A side-rail resume with a lighter title block and a denser reading field",
+  chips: ["Resume", "A4", "Editorial", "Sidebar"],
+  margins: {
+    top: "20mm",
+    right: "15mm",
+    bottom: "18mm",
+    left: "14mm",
+  },
+  columns: {
+    sidebar: "38mm",
+    gutter: "13mm",
+    main: "130mm",
+  },
+  liveArea: {
+    width: "181mm",
+    height: "259mm",
+  },
+  header: {
+    rowGap: "4mm",
+    bottomPadding: "5mm",
+    summaryMaxWidth: "92mm",
+    titleMarginTop: "1.4mm",
+  },
+  body: {
+    rowGap: "7mm",
+    sidebarRightPadding: "0mm",
+    mainLeftPadding: "0mm",
+  },
+  sidebarSection: {
+    marginBottom: "4.8mm",
+    titleMarginBottom: "1.8mm",
+    titlePaddingBottom: "1mm",
+    contentGap: "1.35mm",
+  },
+  mainSection: {
+    marginBottom: "5mm",
+    headingGap: "2.4mm",
+    headingMarginBottom: "2mm",
+  },
+  experience: {
+    dateColumn: "0mm",
+    columnGap: "0mm",
+    itemGap: "4.6mm",
+    orgMarginBottom: "1.15mm",
+    bulletsPaddingLeft: "3.6mm",
+    bulletsGap: "1.1mm",
+  },
+  projects: {
+    cardGap: "3mm",
+    cardPadding: "2.8mm",
+    cardBackground: "surface",
+  },
+  education: {
+    itemGap: "1.8mm",
+  },
+  skills: {
+    gap: "1.6mm",
+    paddingInline: "2mm",
+    paddingBlock: "0.8mm",
+  },
+  density: {
+    displaySizeAdjust: "-0.08mm",
+    titleSizeAdjust: "-0.04mm",
+    bodySizeAdjust: "-0.06mm",
+    bodySmSizeAdjust: "-0.08mm",
+    sectionGapAdjust: "-0.12mm",
+    headingMarginAdjust: "0mm",
+    bulletGapAdjust: "-0.05mm",
+    projectGapAdjust: "-0.06mm",
+    projectPaddingAdjust: "-0.05mm",
+  },
+},
 signalgrid: {
   id: "signalgrid",
   label: "Modernist Grid",
