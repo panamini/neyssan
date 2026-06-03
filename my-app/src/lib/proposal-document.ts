@@ -60,6 +60,10 @@ export type ProposalDocument = {
 
 export type ProposalDocumentInput = ProposalDocument | null | undefined;
 
+export type ProposalDocumentTextTarget =
+  | { type: "text-block"; blockId: string }
+  | { type: "list-item"; blockId: string; itemId: string };
+
 type ProposalTypeLike = "cover_letter" | "application_message" | "freelance_proposal" | string | null | undefined;
 
 const SALUTATION_PATTERN =
@@ -103,6 +107,14 @@ export function normalizeEditableText(input: string): string {
     .trim();
 }
 
+export function normalizeProposalDocumentEditText(input: string): string {
+  const normalized = normalizeEditableText(input);
+  if (normalized && /\n[ \t\f\v]*$/u.test(input.replace(/\r\n?/g, "\n"))) {
+    return `${normalized}\n`;
+  }
+  return normalized;
+}
+
 function compactProposalParagraph(value: string): string {
   return value
     .split("\n")
@@ -125,6 +137,53 @@ function createBlockId(type: ProposalDocumentBlock["type"], index: number): stri
 
 function createListItemId(listIndex: number, itemIndex: number): string {
   return `list-${listIndex + 1}-item-${itemIndex + 1}`;
+}
+
+function createSiblingId(
+  existingIds: Set<string>,
+  baseId: string,
+  suffix: string,
+): string {
+  const cleanBase = cleanString(baseId) || "proposal-block";
+  let candidate = `${cleanBase}-${suffix}`;
+  let index = 2;
+  while (existingIds.has(candidate)) {
+    candidate = `${cleanBase}-${suffix}-${index}`;
+    index += 1;
+  }
+  existingIds.add(candidate);
+  return candidate;
+}
+
+function collectProposalDocumentIds(document: ProposalDocument): Set<string> {
+  const ids = new Set<string>();
+  document.blocks.forEach((block) => {
+    ids.add(block.id);
+    if (block.type === "list") {
+      block.items.forEach((item) => ids.add(item.id));
+    }
+  });
+  return ids;
+}
+
+function joinEditableText(left: string, right: string): string {
+  const cleanLeft = normalizeEditableText(left);
+  const cleanRight = normalizeEditableText(right);
+  if (!cleanLeft) return cleanRight;
+  if (!cleanRight) return cleanLeft;
+  return `${cleanLeft}${cleanLeft.endsWith("\n") ? "" : " "}${cleanRight}`;
+}
+
+function removeListItemAt(
+  block: Extract<ProposalDocumentBlock, { type: "list" }>,
+  itemIndex: number,
+): Extract<ProposalDocumentBlock, { type: "list" }> | null {
+  const items = block.items.filter((_, index) => index !== itemIndex);
+  if (items.length === 0) return null;
+  return {
+    ...block,
+    items,
+  };
 }
 
 function cleanProposalListText(value: string): string {
@@ -264,7 +323,7 @@ export function normalizeProposalDocument(
           return {
             id: cleanString(block.id) || createBlockId(block.type, blockIndex),
             type: block.type,
-            text: normalizeEditableText(block.text),
+            text: normalizeProposalDocumentEditText(block.text),
           };
         }
         if (block.type === "list") {
@@ -273,13 +332,12 @@ export function normalizeProposalDocument(
               id:
                 cleanString(item.id) ||
                 createListItemId(blockIndex, itemIndex),
-              text: normalizeEditableText(item.text),
+              text: normalizeProposalDocumentEditText(item.text),
               ...(cleanString(item.iconKey)
                 ? { iconKey: cleanString(item.iconKey) as DocumentIconKey }
                 : null),
               marker: item.marker ?? block.marker ?? null,
-            }))
-            .filter((item) => item.text);
+            }));
           if (items.length === 0) return null;
           return {
             id: cleanString(block.id) || createBlockId("list", blockIndex),
@@ -434,8 +492,10 @@ export function serializeProposalDocumentToLegacyString(
       if (block.type === "list") {
         return block.items
           .map((item) => {
+            const text = normalizeEditableText(item.text);
+            if (!text) return "";
             const marker = serializeListMarker(item.marker ?? block.marker);
-            return `${marker} ${normalizeEditableText(item.text)}`;
+            return `${marker} ${text}`;
           })
           .filter(Boolean)
           .join("\n");
@@ -453,4 +513,325 @@ export function getProposalDocumentBodyBlocks(
   document: ProposalDocumentInput,
 ): ProposalDocumentBlock[] {
   return normalizeProposalDocument(document)?.blocks ?? [];
+}
+
+export function updateProposalDocumentTextTarget(args: {
+  document: ProposalDocument;
+  target: ProposalDocumentTextTarget;
+  value: string;
+}): ProposalDocument {
+  const nextText = normalizeProposalDocumentEditText(args.value);
+  const target = args.target;
+  return {
+    ...args.document,
+    source: "structured",
+    blocks: args.document.blocks.map((block): ProposalDocumentBlock => {
+      if (
+        target.type === "text-block" &&
+        block.id === target.blockId &&
+        (block.type === "salutation" || block.type === "paragraph")
+      ) {
+        return { ...block, text: nextText };
+      }
+
+      if (
+        target.type === "list-item" &&
+        block.id === target.blockId &&
+        block.type === "list"
+      ) {
+        return {
+          ...block,
+          items: block.items.map((item) =>
+            item.id === target.itemId ? { ...item, text: nextText } : item,
+          ),
+        };
+      }
+
+      return block;
+    }),
+  };
+}
+
+export function splitProposalDocumentTarget(args: {
+  document: ProposalDocument;
+  target: ProposalDocumentTextTarget;
+  offset: number;
+}): ProposalDocument {
+  const ids = collectProposalDocumentIds(args.document);
+  const blocks: ProposalDocumentBlock[] = [];
+  const target = args.target;
+
+  args.document.blocks.forEach((block) => {
+    if (
+      target.type === "text-block" &&
+      block.id === target.blockId &&
+      block.type === "paragraph"
+    ) {
+      const offset = Math.max(0, Math.min(args.offset, block.text.length));
+      const before = normalizeEditableText(block.text.slice(0, offset));
+      const after = normalizeEditableText(block.text.slice(offset));
+      blocks.push({ ...block, text: before });
+      blocks.push({
+        id: createSiblingId(ids, block.id, "paragraph"),
+        type: "paragraph",
+        text: after,
+      });
+      return;
+    }
+
+    if (
+      target.type === "list-item" &&
+      block.id === target.blockId &&
+      block.type === "list"
+    ) {
+      const itemIndex = block.items.findIndex(
+        (item) => item.id === target.itemId,
+      );
+      if (itemIndex === -1) {
+        blocks.push(block);
+        return;
+      }
+
+      const item = block.items[itemIndex];
+      const offset = Math.max(0, Math.min(args.offset, item.text.length));
+      const before = normalizeEditableText(item.text.slice(0, offset));
+      const after = normalizeEditableText(item.text.slice(offset));
+      const isEmptyItem = !normalizeEditableText(item.text);
+
+      if (isEmptyItem) {
+        const beforeItems = block.items.slice(0, itemIndex);
+        const afterItems = block.items.slice(itemIndex + 1);
+        if (beforeItems.length > 0) {
+          blocks.push({ ...block, items: beforeItems });
+        }
+        blocks.push({
+          id: createSiblingId(ids, block.id, "paragraph"),
+          type: "paragraph",
+          text: "",
+        });
+        if (afterItems.length > 0) {
+          blocks.push({
+            ...block,
+            id: createSiblingId(ids, block.id, "continued"),
+            items: afterItems,
+          });
+        }
+        return;
+      }
+
+      blocks.push({
+        ...block,
+        items: block.items.flatMap((current, index) => {
+          if (index !== itemIndex) return [current];
+          return [
+            { ...current, text: before },
+            {
+              id: createSiblingId(ids, current.id, "item"),
+              text: after,
+              marker: current.marker ?? block.marker ?? null,
+            },
+          ];
+        }),
+      });
+      return;
+    }
+
+    blocks.push(block);
+  });
+
+  return { ...args.document, source: "structured", blocks };
+}
+
+export function mergeProposalDocumentTargetBackward(args: {
+  document: ProposalDocument;
+  target: ProposalDocumentTextTarget;
+}): ProposalDocument {
+  const blocks = [...args.document.blocks];
+  const target = args.target;
+
+  for (let blockIndex = 0; blockIndex < blocks.length; blockIndex += 1) {
+    const block = blocks[blockIndex];
+
+    if (
+      target.type === "text-block" &&
+      block.id === target.blockId &&
+      block.type === "paragraph"
+    ) {
+      const previous = blocks[blockIndex - 1];
+      if (!previous) return args.document;
+
+      if (previous.type === "paragraph" || previous.type === "salutation") {
+        blocks[blockIndex - 1] = {
+          ...previous,
+          text: joinEditableText(previous.text, block.text),
+        };
+        blocks.splice(blockIndex, 1);
+        return { ...args.document, source: "structured", blocks };
+      }
+
+      if (previous.type === "list" && previous.items.length > 0) {
+        const lastItemIndex = previous.items.length - 1;
+        blocks[blockIndex - 1] = {
+          ...previous,
+          items: previous.items.map((item, index) =>
+            index === lastItemIndex
+              ? { ...item, text: joinEditableText(item.text, block.text) }
+              : item,
+          ),
+        };
+        blocks.splice(blockIndex, 1);
+        return { ...args.document, source: "structured", blocks };
+      }
+    }
+
+    if (
+      target.type === "list-item" &&
+      block.id === target.blockId &&
+      block.type === "list"
+    ) {
+      const itemIndex = block.items.findIndex(
+        (item) => item.id === target.itemId,
+      );
+      if (itemIndex === -1) return args.document;
+      const item = block.items[itemIndex];
+
+      if (!normalizeEditableText(item.text)) {
+        const updated = removeListItemAt(block, itemIndex);
+        if (updated) {
+          blocks[blockIndex] = updated;
+        } else {
+          blocks.splice(blockIndex, 1, {
+            id: createSiblingId(collectProposalDocumentIds(args.document), block.id, "paragraph"),
+            type: "paragraph",
+            text: "",
+          });
+        }
+        return { ...args.document, source: "structured", blocks };
+      }
+
+      if (itemIndex > 0) {
+        const previousItem = block.items[itemIndex - 1];
+        blocks[blockIndex] = {
+          ...block,
+          items: block.items
+            .map((current, index) =>
+              index === itemIndex - 1
+                ? {
+                    ...current,
+                    text: joinEditableText(previousItem.text, item.text),
+                  }
+                : current,
+            )
+            .filter((_, index) => index !== itemIndex),
+        };
+        return { ...args.document, source: "structured", blocks };
+      }
+
+      const previous = blocks[blockIndex - 1];
+      if (previous?.type === "paragraph" || previous?.type === "salutation") {
+        blocks[blockIndex - 1] = {
+          ...previous,
+          text: joinEditableText(previous.text, item.text),
+        };
+        const updated = removeListItemAt(block, itemIndex);
+        if (updated) {
+          blocks[blockIndex] = updated;
+        } else {
+          blocks.splice(blockIndex, 1);
+        }
+        return { ...args.document, source: "structured", blocks };
+      }
+    }
+  }
+
+  return args.document;
+}
+
+export function mergeProposalDocumentTargetForward(args: {
+  document: ProposalDocument;
+  target: ProposalDocumentTextTarget;
+}): ProposalDocument {
+  const blocks = [...args.document.blocks];
+  const target = args.target;
+
+  for (let blockIndex = 0; blockIndex < blocks.length; blockIndex += 1) {
+    const block = blocks[blockIndex];
+
+    if (
+      target.type === "text-block" &&
+      block.id === target.blockId &&
+      (block.type === "paragraph" || block.type === "salutation")
+    ) {
+      const next = blocks[blockIndex + 1];
+      if (!next) return args.document;
+
+      if (next.type === "paragraph") {
+        blocks[blockIndex] = {
+          ...block,
+          text: joinEditableText(block.text, next.text),
+        };
+        blocks.splice(blockIndex + 1, 1);
+        return { ...args.document, source: "structured", blocks };
+      }
+
+      if (next.type === "list" && next.items.length > 0) {
+        const [firstItem, ...restItems] = next.items;
+        blocks[blockIndex] = {
+          ...block,
+          text: joinEditableText(block.text, firstItem.text),
+        };
+        if (restItems.length > 0) {
+          blocks[blockIndex + 1] = { ...next, items: restItems };
+        } else {
+          blocks.splice(blockIndex + 1, 1);
+        }
+        return { ...args.document, source: "structured", blocks };
+      }
+    }
+
+    if (
+      target.type === "list-item" &&
+      block.id === target.blockId &&
+      block.type === "list"
+    ) {
+      const itemIndex = block.items.findIndex(
+        (item) => item.id === target.itemId,
+      );
+      if (itemIndex === -1) return args.document;
+
+      if (itemIndex < block.items.length - 1) {
+        const nextItem = block.items[itemIndex + 1];
+        blocks[blockIndex] = {
+          ...block,
+          items: block.items
+            .map((current, index) =>
+              index === itemIndex
+                ? {
+                    ...current,
+                    text: joinEditableText(current.text, nextItem.text),
+                  }
+                : current,
+            )
+            .filter((_, index) => index !== itemIndex + 1),
+        };
+        return { ...args.document, source: "structured", blocks };
+      }
+
+      const next = blocks[blockIndex + 1];
+      if (next?.type === "paragraph") {
+        blocks[blockIndex] = {
+          ...block,
+          items: block.items.map((item, index) =>
+            index === itemIndex
+              ? { ...item, text: joinEditableText(item.text, next.text) }
+              : item,
+          ),
+        };
+        blocks.splice(blockIndex + 1, 1);
+        return { ...args.document, source: "structured", blocks };
+      }
+    }
+  }
+
+  return args.document;
 }

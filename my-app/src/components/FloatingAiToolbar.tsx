@@ -1,7 +1,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { BodyPortal } from "@/components/ui/body-portal";
-import { SendHorizontal } from "@/lib/icons";
+import { ArrowLeft, Pencil, SendHorizontal } from "@/lib/icons";
 import {
   getVisibleToolbarAiActions,
   VISIBLE_TOOLBAR_AI_ACTIONS,
@@ -12,16 +12,19 @@ import {
   useDocumentAiSurfacePosition,
   type DocumentAiSurfacePosition,
 } from "@/lib/document-ai-surface-position";
-import type { EditorSelectionAnchor } from "@/lib/editor-ai-selection";
+import {
+  getInlinePaperFormattingActionsForSelection,
+  type EditorSelectionAnchor,
+} from "@/lib/editor-ai-selection";
 
-const DS4_VISIBLE_ACTION_IDS = [
+const SELECTION_VISIBLE_ACTION_IDS = [
   "rewrite",
   "shorten",
   "fix_grammar",
   "custom",
 ] as const satisfies readonly AiActionId[];
 
-export const INLINE_AI_ACTIONS = DS4_VISIBLE_ACTION_IDS.flatMap((actionId) => {
+export const INLINE_AI_ACTIONS = SELECTION_VISIBLE_ACTION_IDS.flatMap((actionId) => {
   const action = VISIBLE_TOOLBAR_AI_ACTIONS.find(({ id }) => id === actionId);
   return action ? [action] : [];
 });
@@ -57,11 +60,42 @@ type FloatingAiToolbarProps = {
   isLoading?: boolean;
   pendingActionId?: InlineAiActionId | null;
   includeJobContextActions?: boolean;
+  formattingActions?: FloatingSelectionToolbarAction[];
+  compactFormattingLabel?: string;
   onClose: () => void;
   onRunAction: (actionId: InlineAiActionId, instruction: string) => void;
   onSurfacePlacementChange?: (
     position: DocumentAiSurfacePosition | null,
   ) => void;
+};
+
+export type FloatingSelectionToolbarAction = {
+  id: string;
+  label: string;
+  title?: string;
+  icon?: React.ReactNode;
+  active?: boolean;
+  disabled?: boolean;
+  onRun: () => void;
+  onMouseDown?: (event: React.MouseEvent<HTMLButtonElement>) => void;
+};
+
+type FloatingSelectionToolbarShellProps = {
+  anchor: EditorSelectionAnchor | null;
+  open: boolean;
+  desiredSurfaceSize: {
+    width: number;
+    height: number;
+    minWidth: number;
+    minHeight: number;
+  };
+  panelRef: React.RefObject<HTMLDivElement | null>;
+  contentReady?: boolean;
+  onClose: () => void;
+  onSurfacePlacementChange?: (
+    position: DocumentAiSurfacePosition | null,
+  ) => void;
+  children: (args: { isPositionReady: boolean }) => React.ReactNode;
 };
 
 type ToolbarMetrics = {
@@ -119,34 +153,185 @@ function isSameMetrics(current: ToolbarMetrics, next: ToolbarMetrics): boolean {
   );
 }
 
+export function FloatingSelectionToolbarShell({
+  anchor,
+  open,
+  desiredSurfaceSize,
+  panelRef,
+  contentReady = true,
+  onClose,
+  onSurfacePlacementChange,
+  children,
+}: FloatingSelectionToolbarShellProps) {
+  const [hasMeasuredInitialMetrics, setHasMeasuredInitialMetrics] =
+    React.useState(false);
+  const [isToolbarMounted, setIsToolbarMounted] = React.useState(() =>
+    Boolean(open && anchor),
+  );
+  const lastAnchorRef = React.useRef<EditorSelectionAnchor | null>(anchor);
+
+  React.useEffect(() => {
+    if (anchor) {
+      lastAnchorRef.current = anchor;
+    }
+  }, [anchor]);
+
+  React.useEffect(() => {
+    if (open && anchor) {
+      setIsToolbarMounted(true);
+      return undefined;
+    }
+
+    if (!isToolbarMounted) {
+      return undefined;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setIsToolbarMounted(false);
+    }, TOOLBAR_FADE_TRANSITION.duration * 1000);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [anchor, isToolbarMounted, open]);
+
+  React.useEffect(() => {
+    if (!open) {
+      setHasMeasuredInitialMetrics(false);
+    }
+  }, [open]);
+
+  React.useLayoutEffect(() => {
+    if (!open || !anchor) {
+      return undefined;
+    }
+
+    setHasMeasuredInitialMetrics(true);
+    const frame = window.requestAnimationFrame(() => {
+      setHasMeasuredInitialMetrics(true);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [anchor, open, desiredSurfaceSize]);
+
+  React.useEffect(() => {
+    if (!open) return undefined;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (panelRef.current?.contains(event.target as Node)) return;
+      onClose();
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose, open, panelRef]);
+
+  const renderAnchor = open && anchor ? anchor : lastAnchorRef.current;
+  const position = useDocumentAiSurfacePosition({
+    anchor,
+    desiredSurfaceSize,
+    mode: "toolbar",
+    enabled: open && anchor !== null,
+  });
+  const shouldRenderToolbar = isToolbarMounted && renderAnchor !== null;
+  const isPositionReady =
+    open &&
+    anchor !== null &&
+    position !== null &&
+    hasMeasuredInitialMetrics &&
+    contentReady;
+
+  React.useEffect(() => {
+    onSurfacePlacementChange?.(isPositionReady ? position : null);
+  }, [isPositionReady, onSurfacePlacementChange, position]);
+
+  return (
+    <BodyPortal>
+      {shouldRenderToolbar && renderAnchor ? (
+        <motion.div
+          ref={panelRef}
+          className="ds-ai-toolbar"
+          data-inline-ai-toolbar="true"
+          data-selection-toolbar="true"
+          data-cv-ai-surface-group="true"
+          data-cv-ai-surface-state="toolbar"
+          data-cv-ai-surface-placement={position?.placement ?? "above"}
+          data-cv-ai-surface-clamped={position?.clamped ? "true" : "false"}
+          data-cv-ai-surface-mode={position?.mode ?? "popover"}
+          data-state={isPositionReady ? "open" : "closing"}
+          data-placement={position?.placement ?? "above"}
+          role="toolbar"
+          aria-label="Selected text actions"
+          style={{
+            position: "absolute",
+            left: isPositionReady && position ? position.left : renderAnchor.left,
+            top: isPositionReady && position ? position.top : renderAnchor.top,
+            zIndex: 11000,
+            visibility: isPositionReady ? "visible" : "hidden",
+            pointerEvents: isPositionReady ? "auto" : "none",
+          }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: isPositionReady ? 1 : 0 }}
+          transition={TOOLBAR_FADE_TRANSITION}
+          onPointerDownCapture={(event) => {
+            const target = event.target as HTMLElement | null;
+            if (
+              target?.closest(
+                "input, textarea, select, [contenteditable='true']",
+              )
+            ) {
+              return;
+            }
+
+            event.preventDefault();
+          }}
+        >
+          {children({ isPositionReady })}
+        </motion.div>
+      ) : null}
+    </BodyPortal>
+  );
+}
+
 export function FloatingAiToolbar({
   anchor,
   open,
   isLoading = false,
   pendingActionId = null,
   includeJobContextActions = false,
+  formattingActions = [],
+  compactFormattingLabel = "Edit",
   onClose,
   onRunAction,
   onSurfacePlacementChange,
 }: FloatingAiToolbarProps) {
   const [activeActionId, setActiveActionId] =
     React.useState<InlineAiActionId>(DEFAULT_ACTION_ID);
+  const [compactMode, setCompactMode] = React.useState<"ai" | "format">("ai");
   const [customInstruction, setCustomInstruction] = React.useState("");
   const [askPlaceholder, setAskPlaceholder] = React.useState<string>(
     ASK_SUGGESTIONS[0],
   );
   const [metrics, setMetrics] = React.useState<ToolbarMetrics>(EMPTY_METRICS);
-  const [hasMeasuredInitialMetrics, setHasMeasuredInitialMetrics] =
-    React.useState(false);
-  const [isToolbarMounted, setIsToolbarMounted] = React.useState(() =>
-    Boolean(open && anchor),
-  );
+  const [registeredFormattingActions, setRegisteredFormattingActions] =
+    React.useState<FloatingSelectionToolbarAction[]>([]);
 
   const panelRef = React.useRef<HTMLDivElement | null>(null);
   const actionShellRef = React.useRef<HTMLDivElement | null>(null);
   const promptShellRef = React.useRef<HTMLDivElement | null>(null);
   const askInputRef = React.useRef<HTMLInputElement | null>(null);
-  const lastAnchorRef = React.useRef<EditorSelectionAnchor | null>(anchor);
 
   const isAskOpen = activeActionId === "custom";
   const isPromptLoading = isLoading && pendingActionId === "custom";
@@ -157,6 +342,22 @@ export function FloatingAiToolbar({
         : INLINE_AI_ACTIONS,
     [includeJobContextActions],
   );
+  const resolvedFormattingActions =
+    formattingActions.length > 0
+      ? formattingActions
+      : registeredFormattingActions;
+  const hasFormattingActions = resolvedFormattingActions.length > 0;
+
+  const refreshRegisteredFormattingActions = React.useCallback(() => {
+    if (formattingActions.length > 0 || typeof window === "undefined") {
+      setRegisteredFormattingActions([]);
+      return;
+    }
+
+    setRegisteredFormattingActions(
+      getInlinePaperFormattingActionsForSelection(),
+    );
+  }, [formattingActions.length]);
 
   const updateMetrics = React.useCallback(() => {
     if (!panelRef.current || typeof window === "undefined") {
@@ -192,38 +393,30 @@ export function FloatingAiToolbar({
   }, [anchor, isAskOpen]);
 
   React.useEffect(() => {
-    if (anchor) {
-      lastAnchorRef.current = anchor;
-    }
-  }, [anchor]);
-
-  React.useEffect(() => {
-    if (open && anchor) {
-      setIsToolbarMounted(true);
-      return undefined;
-    }
-
-    if (!isToolbarMounted) {
-      return undefined;
-    }
-
-    const timeout = window.setTimeout(() => {
-      setIsToolbarMounted(false);
-    }, TOOLBAR_FADE_TRANSITION.duration * 1000);
-
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, [anchor, isToolbarMounted, open]);
-
-  React.useEffect(() => {
     if (!open) {
       setActiveActionId(DEFAULT_ACTION_ID);
+      setCompactMode("ai");
       setCustomInstruction("");
       setMetrics(EMPTY_METRICS);
-      setHasMeasuredInitialMetrics(false);
+      setRegisteredFormattingActions([]);
     }
   }, [open]);
+
+  React.useEffect(() => {
+    if (!open || !anchor) {
+      return undefined;
+    }
+
+    refreshRegisteredFormattingActions();
+    document.addEventListener("selectionchange", refreshRegisteredFormattingActions);
+
+    return () => {
+      document.removeEventListener(
+        "selectionchange",
+        refreshRegisteredFormattingActions,
+      );
+    };
+  }, [anchor, open, refreshRegisteredFormattingActions]);
 
   React.useEffect(() => {
     if (pendingActionId) {
@@ -248,7 +441,6 @@ export function FloatingAiToolbar({
     };
 
     update();
-    setHasMeasuredInitialMetrics(true);
     const frame = window.requestAnimationFrame(update);
 
     const resizeObserver =
@@ -272,30 +464,6 @@ export function FloatingAiToolbar({
     };
   }, [anchor, open, isAskOpen, updateMetrics]);
 
-  React.useEffect(() => {
-    if (!open) return undefined;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      if (panelRef.current?.contains(event.target as Node)) return;
-      onClose();
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-      }
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [onClose, open]);
-
   const handlePresetAction = React.useCallback(
     (action: AiActionDefinition) => {
       if (action.id === "custom") {
@@ -317,13 +485,24 @@ export function FloatingAiToolbar({
     [onRunAction],
   );
 
+  const handleFormattingAction = React.useCallback(
+    (action: FloatingSelectionToolbarAction) => {
+      action.onRun();
+      setCompactMode("ai");
+      window.setTimeout(() => {
+        refreshRegisteredFormattingActions();
+        updateMetrics();
+      }, 0);
+    },
+    [refreshRegisteredFormattingActions, updateMetrics],
+  );
+
   const submitCustomInstruction = React.useCallback(() => {
     const trimmedInstruction = customInstruction.trim();
     if (!trimmedInstruction || isLoading) return;
     onRunAction("custom", trimmedInstruction);
   }, [customInstruction, isLoading, onRunAction]);
 
-  const renderAnchor = open && anchor ? anchor : lastAnchorRef.current;
   const desiredSurfaceSize = React.useMemo(
     () => ({
       width: Math.max(metrics.panelWidth, INITIAL_TOOLBAR_WIDTH),
@@ -333,80 +512,68 @@ export function FloatingAiToolbar({
     }),
     [metrics.panelHeight, metrics.panelWidth],
   );
-  const position = useDocumentAiSurfacePosition({
-    anchor,
-    desiredSurfaceSize,
-    mode: "toolbar",
-    enabled: open && anchor !== null,
-  });
-  const shouldRenderToolbar = isToolbarMounted && renderAnchor !== null;
   const hasMeasuredToolbarMetrics =
     metrics.panelWidth > 0 && metrics.panelHeight > 0;
-  const isPositionReady =
-    open &&
-    anchor !== null &&
-    position !== null &&
-    hasMeasuredInitialMetrics &&
-    hasMeasuredToolbarMetrics;
 
   React.useEffect(() => {
-    onSurfacePlacementChange?.(isPositionReady ? position : null);
-  }, [isPositionReady, onSurfacePlacementChange, position]);
-
-  React.useEffect(() => {
-    if (!isAskOpen || !isPositionReady || isPromptLoading) return;
+    if (!isAskOpen || !open || isPromptLoading || !hasMeasuredToolbarMetrics) return;
 
     askInputRef.current?.focus({ preventScroll: true });
-  }, [isAskOpen, isPositionReady, isPromptLoading]);
+  }, [hasMeasuredToolbarMetrics, isAskOpen, isPromptLoading, open]);
 
   return (
-    <BodyPortal>
-      {shouldRenderToolbar && renderAnchor ? (
-        <motion.div
-          ref={panelRef}
-          className="ds-ai-toolbar"
-          data-inline-ai-toolbar="true"
-          data-cv-ai-surface-group="true"
-          data-cv-ai-surface-state="toolbar"
-          data-cv-ai-surface-placement={position?.placement ?? "above"}
-          data-cv-ai-surface-clamped={position?.clamped ? "true" : "false"}
-          data-cv-ai-surface-mode={position?.mode ?? "popover"}
-          data-state={isPositionReady ? "open" : "closing"}
-          data-placement={position?.placement ?? "above"}
-          role="toolbar"
-          aria-label="Selected text actions"
-          style={{
-            position: "absolute",
-            left: isPositionReady && position ? position.left : renderAnchor.left,
-            top: isPositionReady && position ? position.top : renderAnchor.top,
-            zIndex: 11000,
-            visibility: isPositionReady ? "visible" : "hidden",
-            pointerEvents: isPositionReady ? "auto" : "none",
-          }}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: isPositionReady ? 1 : 0 }}
-          transition={TOOLBAR_FADE_TRANSITION}
-          onPointerDownCapture={(event) => {
-            const target = event.target as HTMLElement | null;
-            if (
-              target?.closest(
-                "input, textarea, select, [contenteditable='true']",
-              )
-            ) {
-              return;
-            }
+    <FloatingSelectionToolbarShell
+      anchor={anchor}
+      open={open}
+      desiredSurfaceSize={desiredSurfaceSize}
+      panelRef={panelRef}
+      contentReady={hasMeasuredToolbarMetrics}
+      onClose={onClose}
+      onSurfacePlacementChange={(position) => {
+        onSurfacePlacementChange?.(
+          position && hasMeasuredToolbarMetrics ? position : null,
+        );
+      }}
+    >
+      {() => (
+        <>
+          {hasFormattingActions ? (
+            <div
+              className="ds-ai-toolbar__format-actions"
+              data-inline-ai-toolbar="true"
+              data-selection-toolbar-format="wide"
+              role="group"
+              aria-label="Text formatting"
+            >
+              {resolvedFormattingActions.map((action) => (
+                <button
+                  key={action.id}
+                  type="button"
+                  className="ds-ai-toolbar__btn ds-ai-toolbar__btn--icon"
+                  onMouseDown={(event) => {
+                    action.onMouseDown?.(event);
+                    event.preventDefault();
+                  }}
+                  onClick={() => handleFormattingAction(action)}
+                  disabled={action.disabled}
+                  aria-label={action.label}
+                  aria-pressed={action.active}
+                  title={action.title ?? action.label}
+                >
+                  {action.icon ?? action.label}
+                </button>
+              ))}
+              <span className="ds-ai-toolbar__divider" aria-hidden="true" />
+            </div>
+          ) : null}
 
-            event.preventDefault();
-          }}
-        >
           <div
             ref={actionShellRef}
             className="ds-ai-toolbar__actions"
             data-inline-ai-toolbar="true"
+            data-selection-toolbar-mode={compactMode}
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "var(--s1)",
+              display: compactMode === "format" ? "none" : "inline-flex",
             }}
           >
             {toolbarActions.map((action) => {
@@ -447,7 +614,75 @@ export function FloatingAiToolbar({
                 </React.Fragment>
               );
             })}
+            {hasFormattingActions ? (
+              <>
+                <span
+                  className="ds-ai-toolbar__divider ds-ai-toolbar__divider--compact-edit"
+                  aria-hidden="true"
+                />
+                <button
+                  type="button"
+                  className="ds-ai-toolbar__btn ds-ai-toolbar__btn--edit"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    setActiveActionId(DEFAULT_ACTION_ID);
+                    setCompactMode("format");
+                  }}
+                  aria-label={compactFormattingLabel}
+                  title={compactFormattingLabel}
+                >
+                  <Pencil size={14} aria-hidden="true" />
+                  <span className="ds-ai-toolbar__btn-label">
+                    {compactFormattingLabel}
+                  </span>
+                </button>
+              </>
+            ) : null}
           </div>
+
+          {hasFormattingActions ? (
+            <div
+              className="ds-ai-toolbar__compact-format-actions"
+              data-inline-ai-toolbar="true"
+              data-selection-toolbar-mode={compactMode}
+              role="group"
+              aria-label="Text formatting"
+              style={{
+                display: compactMode === "format" ? "inline-flex" : "none",
+              }}
+            >
+              <button
+                type="button"
+                className="ds-ai-toolbar__btn ds-ai-toolbar__btn--back"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => setCompactMode("ai")}
+                aria-label="Back to AI"
+                title="Back to AI"
+              >
+                <ArrowLeft size={14} aria-hidden="true" />
+                <span className="ds-ai-toolbar__btn-label">AI</span>
+              </button>
+              <span className="ds-ai-toolbar__divider" aria-hidden="true" />
+              {resolvedFormattingActions.map((action) => (
+                <button
+                  key={action.id}
+                  type="button"
+                  className="ds-ai-toolbar__btn ds-ai-toolbar__btn--icon"
+                  onMouseDown={(event) => {
+                    action.onMouseDown?.(event);
+                    event.preventDefault();
+                  }}
+                  onClick={() => handleFormattingAction(action)}
+                  disabled={action.disabled}
+                  aria-label={action.label}
+                  aria-pressed={action.active}
+                  title={action.title ?? action.label}
+                >
+                  {action.icon ?? action.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           {isAskOpen ? (
             <div
@@ -496,9 +731,9 @@ export function FloatingAiToolbar({
               </button>
             </div>
           ) : null}
-        </motion.div>
-      ) : null}
-    </BodyPortal>
+        </>
+      )}
+    </FloatingSelectionToolbarShell>
   );
 }
 

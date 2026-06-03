@@ -71,6 +71,7 @@ const DEFAULT_EDGE_PADDING = 4;
 const DOCUMENT_OVERFLOW_ALLOWANCE = 160;
 const SHEET_MAX_VIEWPORT_RATIO = 0.78;
 const RESULT_MIN_CONNECTED_HEIGHT = 156;
+const COMPACT_TOOLBAR_VIEWPORT_HEIGHT = 680;
 
 export function documentAiSurfaceRectFromDom(
   rect: DOMRect | ClientRect,
@@ -454,20 +455,33 @@ export function computeDocumentAiSurfacePlacement(
       : placement === "below"
         ? Math.max(1, Math.min(desiredHeight, bounds.bottom - anchorGeometry.bottom - gap))
         : sideMaxHeight;
+  const isCompactToolbarCenterFallback =
+    placement === "center" &&
+    input.mode === "toolbar" &&
+    input.viewportRect.height < COMPACT_TOOLBAR_VIEWPORT_HEIGHT;
+  const compactCenterRect =
+    isCompactToolbarCenterFallback && input.paperRect
+      ? normalizeRect(input.paperRect)
+      : null;
   const desiredLeft =
     placement === "right"
       ? targetRight + gap
       : placement === "left"
         ? targetLeft - gap - surfaceWidth
         : placement === "center"
-          ? bounds.left + Math.max(0, bounds.width - surfaceWidth) / 2
+          ? compactCenterRect
+            ? compactCenterRect.left +
+              Math.max(0, compactCenterRect.width - surfaceWidth) / 2
+            : bounds.left + Math.max(0, bounds.width - surfaceWidth) / 2
           : leftForVerticalPlacement;
   const desiredTop =
     placement === "above"
       ? anchorGeometry.top - gap - maxHeight
       : placement === "below"
         ? anchorGeometry.bottom + gap
-        : placement === "center"
+        : isCompactToolbarCenterFallback
+          ? bounds.bottom - maxHeight
+          : placement === "center"
           ? bounds.top + Math.max(0, bounds.height - maxHeight) / 2
           : anchorGeometry.centerY - maxHeight / 2;
   const left = clamp(desiredLeft, bounds.left, bounds.right - surfaceWidth);
@@ -503,7 +517,10 @@ const TOP_ISLAND_SELECTOR = [
   ".forge__stage-bar",
   ".dasti-proposal-skeleton-stage__bar",
 ].join(",");
-const LEFT_DRAWER_SELECTOR = ".forge-template-panel";
+const LEFT_DRAWER_SELECTOR = [
+  ".forge-template-panel",
+  ".sb[data-rail='permanent']",
+].join(",");
 
 function firstVisibleRect(selector: string): DocumentAiSurfaceRect | null {
   if (typeof document === "undefined" || typeof window === "undefined") {

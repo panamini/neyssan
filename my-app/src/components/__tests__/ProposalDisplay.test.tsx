@@ -160,6 +160,123 @@ async function selectTextareaText(textarea: HTMLTextAreaElement, text: string) {
   });
 }
 
+function placeContentEditableCaret(
+  element: HTMLElement,
+  position: "start" | "end",
+) {
+  element.focus();
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  range.collapse(position === "start");
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+function placeContentEditableCaretAfterText(
+  element: HTMLElement,
+  search: string,
+) {
+  element.focus();
+  const textNode = Array.from(element.childNodes).find(
+    (node) => node.nodeType === Node.TEXT_NODE,
+  );
+  expect(textNode).toBeTruthy();
+  const source = textNode?.textContent ?? "";
+  const offset = source.indexOf(search) + search.length;
+  expect(offset).toBeGreaterThanOrEqual(search.length);
+  const range = document.createRange();
+  range.setStart(textNode as Node, offset);
+  range.collapse(true);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+function getProposalBodyEditor(): HTMLElement {
+  return screen.getByRole("textbox", { name: "Edit proposal body" });
+}
+
+function getEditableProposalParagraphs(): HTMLElement[] {
+  return Array.from(
+    document.querySelectorAll<HTMLElement>(
+      "[data-proposal-body-editor='true'] [data-proposal-edit-target='text-block'][data-proposal-edit-field-kind='paragraph']",
+    ),
+  );
+}
+
+function getEditableProposalListItems(): HTMLElement[] {
+  return Array.from(
+    document.querySelectorAll<HTMLElement>(
+      "[data-proposal-body-editor='true'] [data-proposal-edit-target='list-item']",
+    ),
+  );
+}
+
+function setEditableNodeText(element: HTMLElement, text: string) {
+  const textNode = Array.from(element.childNodes).find(
+    (node) => node.nodeType === Node.TEXT_NODE,
+  );
+  if (textNode) {
+    textNode.textContent = text;
+    return;
+  }
+  element.append(document.createTextNode(text));
+}
+
+function getEditableNodeText(element: HTMLElement): string {
+  const clone = element.cloneNode(true) as HTMLElement;
+  clone
+    .querySelectorAll("[data-proposal-editor-control='true']")
+    .forEach((node) => node.remove());
+  return clone.textContent ?? "";
+}
+
+async function selectContentEditableText(element: HTMLElement, text: string) {
+  element.focus();
+  const textNode = Array.from(element.childNodes).find(
+    (node) =>
+      node.nodeType === Node.TEXT_NODE &&
+      (node.textContent ?? "").includes(text),
+  );
+  expect(textNode).toBeTruthy();
+  const source = textNode?.textContent ?? "";
+  const start = source.indexOf(text);
+  expect(start).toBeGreaterThanOrEqual(0);
+  const range = document.createRange();
+  range.setStart(textNode as Node, start);
+  range.setEnd(textNode as Node, start + text.length);
+  const rect = new DOMRect(40, 48, 120, 18);
+  Object.defineProperty(range, "getBoundingClientRect", {
+    configurable: true,
+    value: () => rect,
+  });
+  Object.defineProperty(range, "getClientRects", {
+    configurable: true,
+    value: () => [rect],
+  });
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  document.dispatchEvent(new Event("selectionchange"));
+  fireEvent.pointerUp(element);
+
+  await waitFor(() => {
+    expect(getSelectionToolbar()).toBeInTheDocument();
+  });
+}
+
+function getContentEditableCaretOffset(element: HTMLElement): number | null {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return null;
+  const range = selection.getRangeAt(0);
+  if (!element.contains(range.endContainer)) return null;
+  const beforeRange = document.createRange();
+  beforeRange.selectNodeContents(element);
+  beforeRange.setEnd(range.endContainer, range.endOffset);
+  return beforeRange.toString().length;
+}
+
 function captureAiTelemetryEvents() {
   const events: AiInteractionTelemetryEvent[] = [];
   setAiInteractionTelemetrySink((event) => events.push(event));
@@ -181,6 +298,39 @@ function getToolbarButton(label: string): HTMLButtonElement {
     throw new Error(`Missing toolbar button: ${label}`);
   }
 
+  return match;
+}
+
+function getSelectionToolbarButtonByLabel(label: string): HTMLButtonElement {
+  const match = document.querySelector<HTMLButtonElement>(
+    `.ds-ai-toolbar__btn[aria-label="${label}"]`,
+  );
+  if (!match) {
+    throw new Error(`Missing selection toolbar button: ${label}`);
+  }
+  return match;
+}
+
+function getSelectionToolbar(): HTMLElement {
+  const toolbar = document.querySelector<HTMLElement>(
+    ".ds-ai-toolbar[role='toolbar']",
+  );
+  if (!toolbar) {
+    throw new Error("Missing selection toolbar");
+  }
+  return toolbar;
+}
+
+function getSelectionToolbarTextButton(label: string): HTMLButtonElement {
+  const toolbar = getSelectionToolbar();
+  const match = Array.from(toolbar.querySelectorAll("button")).find(
+    (button): button is HTMLButtonElement =>
+      button.textContent?.trim() === label ||
+      button.getAttribute("aria-label") === label,
+  );
+  if (!match) {
+    throw new Error(`Missing selection toolbar button: ${label}`);
+  }
   return match;
 }
 
@@ -214,6 +364,7 @@ function getProposalReplaceButton() {
 describe("ProposalDisplay", () => {
   afterEach(() => {
     setAiInteractionTelemetrySink(null);
+    window.getSelection()?.removeAllRanges();
   });
 
   beforeEach(() => {
@@ -243,13 +394,13 @@ describe("ProposalDisplay", () => {
   it("edits proposal body text directly in preview mode", async () => {
     const { onContentCommit } = renderPreviewEditableProposal();
 
-    const paragraph = screen.getByRole("textbox", {
-      name: "Edit paragraph",
-    });
+    const bodyEditor = getProposalBodyEditor();
+    const paragraph = getEditableProposalParagraphs()[0];
+    expect(bodyEditor).toContainElement(paragraph);
     expect(paragraph).toHaveTextContent("Original paragraph.");
 
-    paragraph.textContent = "Updated paragraph.";
-    fireEvent.blur(paragraph);
+    setEditableNodeText(paragraph, "Updated paragraph.");
+    fireEvent.blur(bodyEditor);
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-content")).toHaveTextContent(
@@ -260,18 +411,96 @@ describe("ProposalDisplay", () => {
     expect(onContentCommit).toHaveBeenCalledTimes(1);
   });
 
+  it("uses one continuous editable root for proposal body text", () => {
+    renderPreviewEditableProposal(
+      "Dear Hiring Team,\n\nFirst paragraph.\n\nSecond paragraph.\n\nKind regards,\nAlex",
+    );
+
+    const bodyEditor = getProposalBodyEditor();
+    expect(bodyEditor).toHaveAttribute("contenteditable", "plaintext-only");
+    expect(
+      document.querySelectorAll("[data-proposal-body-editor='true']"),
+    ).toHaveLength(1);
+    expect(
+      document.querySelectorAll(
+        "[data-proposal-body-editor='true'] [contenteditable='plaintext-only']",
+      ),
+    ).toHaveLength(0);
+    expect(getEditableProposalParagraphs()).toHaveLength(2);
+  });
+
+  it("opens the contextual toolbar for cross-paragraph preview selections", async () => {
+    mockTransformEditorSelection.mockResolvedValue({
+      kind: "text",
+      actionId: "rewrite",
+      text: "Combined paragraph.",
+      applyMode: "preview_required",
+      outputMode: "single_text",
+      variants: [],
+    });
+    renderPreviewEditableProposal(
+      "Dear Hiring Team,\n\nFirst paragraph.\n\nSecond paragraph.\n\nKind regards,\nAlex",
+    );
+
+    const [firstParagraph, secondParagraph] = getEditableProposalParagraphs();
+    const firstText = Array.from(firstParagraph.childNodes).find(
+      (node) => node.nodeType === Node.TEXT_NODE,
+    );
+    const secondText = Array.from(secondParagraph.childNodes).find(
+      (node) => node.nodeType === Node.TEXT_NODE,
+    );
+    expect(firstText).toBeTruthy();
+    expect(secondText).toBeTruthy();
+
+    const range = document.createRange();
+    range.setStart(firstText as Node, 0);
+    range.setEnd(secondText as Node, "Second paragraph.".length);
+    const rect = new DOMRect(40, 48, 120, 36);
+    Object.defineProperty(range, "getBoundingClientRect", {
+      configurable: true,
+      value: () => rect,
+    });
+    Object.defineProperty(range, "getClientRects", {
+      configurable: true,
+      value: () => [rect],
+    });
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    document.dispatchEvent(new Event("selectionchange"));
+    fireEvent.pointerUp(getProposalBodyEditor());
+
+    await waitFor(() => {
+      expect(getSelectionToolbarTextButton("Rewrite")).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("button", { name: "List" })).toBeNull();
+
+    fireEvent.click(getSelectionToolbarTextButton("Rewrite"));
+    const reviewDialog = await findProposalAiReviewDialog();
+    expect(reviewDialog).toHaveTextContent("Combined paragraph.");
+    fireEvent.click(getProposalReplaceButton());
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-document")).toHaveTextContent(
+        "Combined paragraph.",
+      );
+      expect(screen.getByTestId("proposal-content")).not.toHaveTextContent(
+        "Second paragraph.",
+      );
+    });
+  });
+
   it("edits proposal list items directly in preview mode", async () => {
     const { onContentCommit } = renderPreviewEditableProposal(
       "Dear Hiring Team,\n\n- First item\n- Second item\n\nKind regards,\nAlex",
     );
 
-    const firstItem = screen.getAllByRole("textbox", {
-      name: "Edit list item",
-    })[0];
+    const bodyEditor = getProposalBodyEditor();
+    const firstItem = getEditableProposalListItems()[0];
     expect(firstItem).toHaveTextContent("First item");
 
-    firstItem.textContent = "Updated first item";
-    fireEvent.blur(firstItem);
+    setEditableNodeText(firstItem, "Updated first item");
+    fireEvent.blur(bodyEditor);
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-content")).toHaveTextContent(
@@ -360,11 +589,9 @@ describe("ProposalDisplay", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Use Star icon" }));
 
-    const firstItem = screen.getAllByRole("textbox", {
-      name: "Edit list item",
-    })[0];
-    firstItem.textContent = "Updated with icon";
-    fireEvent.input(firstItem);
+    const firstItem = getEditableProposalListItems()[0];
+    setEditableNodeText(firstItem, "Updated with icon");
+    fireEvent.input(getProposalBodyEditor());
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-content")).toHaveTextContent(
@@ -379,11 +606,9 @@ describe("ProposalDisplay", () => {
   it("commits paragraph input without requiring blur", async () => {
     renderPreviewEditableProposal();
 
-    const paragraph = screen.getByRole("textbox", {
-      name: "Edit paragraph",
-    });
-    paragraph.textContent = "Saved before blur.";
-    fireEvent.input(paragraph);
+    const paragraph = getEditableProposalParagraphs()[0];
+    setEditableNodeText(paragraph, "Saved before blur.");
+    fireEvent.input(getProposalBodyEditor());
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-content")).toHaveTextContent(
@@ -395,11 +620,11 @@ describe("ProposalDisplay", () => {
   it("sanitizes rich HTML paste into plain proposal text", async () => {
     renderPreviewEditableProposal();
 
-    const paragraph = screen.getByRole("textbox", {
-      name: "Edit paragraph",
-    });
-    paragraph.textContent = "";
-    fireEvent.paste(paragraph, {
+    const bodyEditor = getProposalBodyEditor();
+    const paragraph = getEditableProposalParagraphs()[0];
+    setEditableNodeText(paragraph, "");
+    placeContentEditableCaret(paragraph, "end");
+    fireEvent.paste(bodyEditor, {
       clipboardData: {
         getData: (type: string) =>
           type === "text/html"
@@ -421,27 +646,137 @@ describe("ProposalDisplay", () => {
     );
   });
 
-  it("keeps preview keyboard behavior plain and predictable", async () => {
+  it("splits proposal paragraphs with Enter and moves the caret into the new paragraph", async () => {
     renderPreviewEditableProposal();
 
-    const paragraph = screen.getByRole("textbox", {
-      name: "Edit paragraph",
-    });
-    paragraph.focus();
-    paragraph.textContent = "Keyboard text";
-    fireEvent.input(paragraph);
+    const bodyEditor = getProposalBodyEditor();
+    const paragraph = getEditableProposalParagraphs()[0];
+    setEditableNodeText(paragraph, "Keyboard text after");
+    fireEvent.input(bodyEditor);
+    placeContentEditableCaretAfterText(paragraph, "Keyboard");
 
-    expect(fireEvent.keyDown(paragraph, { key: "Enter" })).toBe(false);
+    expect(fireEvent.keyDown(bodyEditor, { key: "Enter" })).toBe(false);
+    let paragraphs: HTMLElement[] = [];
     await waitFor(() => {
-      expect(screen.getByTestId("proposal-content")).toHaveTextContent(
-        "Keyboard text",
-      );
+      paragraphs = getEditableProposalParagraphs();
+      expect(paragraphs).toHaveLength(2);
+      expect(document.activeElement).toBe(getProposalBodyEditor());
+      expect(getContentEditableCaretOffset(paragraphs[1])).toBe(0);
     });
+    expect(screen.getByTestId("proposal-document")).toHaveTextContent(
+      '"id":"paragraph-2-paragraph"',
+    );
+    expect(paragraphs[0]).toHaveTextContent("Keyboard");
+    expect(paragraphs[1]).toHaveTextContent("text after");
     expect(paragraph.innerHTML).not.toContain("<div");
     expect(paragraph.innerHTML).not.toContain("<span");
 
-    paragraph.focus();
-    expect(fireEvent.keyDown(paragraph, { key: "Escape" })).toBe(false);
+    const newParagraph = paragraphs[1];
+    setEditableNodeText(newParagraph, "Typed in new paragraph text after");
+    fireEvent.input(getProposalBodyEditor());
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-document").textContent).toContain(
+        '"text":"Typed in new paragraph text after"',
+      );
+      expect(screen.getByTestId("proposal-document").textContent).toContain(
+        '"text":"Keyboard"',
+      );
+    });
+
+    getProposalBodyEditor().focus();
+    expect(fireEvent.keyDown(getProposalBodyEditor(), { key: "Escape" }))
+      .toBe(false);
+  });
+
+  it("keeps Shift+Enter inside the same paragraph and moves the caret after the soft break", async () => {
+    renderPreviewEditableProposal();
+
+    const bodyEditor = getProposalBodyEditor();
+    const firstParagraph = getEditableProposalParagraphs()[0];
+    setEditableNodeText(firstParagraph, "Keyboard text more");
+    placeContentEditableCaretAfterText(firstParagraph, "Keyboard");
+    fireEvent.keyDown(bodyEditor, { key: "Enter", shiftKey: true });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-content")).toHaveTextContent(
+        "Keyboard text more",
+      );
+      expect(screen.getByTestId("proposal-document").textContent).toContain(
+        "Keyboard\\ntext more",
+      );
+      expect(document.activeElement).toBe(bodyEditor);
+      expect(getContentEditableCaretOffset(firstParagraph)).toBe(
+        "Keyboard\n".length,
+      );
+    });
+  });
+
+  it("lets Backspace delete a character normally inside a paragraph", async () => {
+    renderPreviewEditableProposal();
+
+    const bodyEditor = getProposalBodyEditor();
+    const paragraph = getEditableProposalParagraphs()[0];
+    setEditableNodeText(paragraph, "Keyboard");
+    fireEvent.input(bodyEditor);
+    placeContentEditableCaretAfterText(paragraph, "Key");
+
+    expect(fireEvent.keyDown(bodyEditor, { key: "Backspace" })).toBe(true);
+    setEditableNodeText(paragraph, "Keboard");
+    fireEvent.input(bodyEditor);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-document").textContent).toContain(
+        '"text":"Keboard"',
+      );
+    });
+  });
+
+  it("lets Delete delete a character normally inside a paragraph", async () => {
+    renderPreviewEditableProposal();
+
+    const bodyEditor = getProposalBodyEditor();
+    const paragraph = getEditableProposalParagraphs()[0];
+    setEditableNodeText(paragraph, "Keyboard");
+    fireEvent.input(bodyEditor);
+    placeContentEditableCaretAfterText(paragraph, "Key");
+
+    expect(fireEvent.keyDown(bodyEditor, { key: "Delete" })).toBe(true);
+    setEditableNodeText(paragraph, "Keyoard");
+    fireEvent.input(bodyEditor);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-document").textContent).toContain(
+        '"text":"Keyoard"',
+      );
+    });
+  });
+
+  it("creates and exits proposal list items with Enter in preview mode", async () => {
+    renderPreviewEditableProposal(
+      "Dear Hiring Team,\n\n- First item\n\nKind regards,\nAlex",
+    );
+
+    const bodyEditor = getProposalBodyEditor();
+    const listItems = getEditableProposalListItems();
+    placeContentEditableCaret(listItems[0], "end");
+    fireEvent.keyDown(bodyEditor, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(getEditableProposalListItems()).toHaveLength(2);
+    });
+    expect(screen.getByTestId("proposal-document")).toHaveTextContent(
+      '"id":"list-2-item-1-item"',
+    );
+
+    const emptyItem = getEditableProposalListItems()[1];
+    expect(getEditableNodeText(emptyItem)).toBe("");
+    fireEvent.keyDown(bodyEditor, { key: "Enter" });
+
+    await waitFor(() => {
+      expect(getEditableProposalParagraphs()).toHaveLength(1);
+      expect(getEditableProposalListItems()).toHaveLength(1);
+    });
   });
 
   it("keeps an empty list item valid and preserves list marker metadata", async () => {
@@ -459,12 +794,10 @@ describe("ProposalDisplay", () => {
       },
     );
 
-    const listItems = screen.getAllByRole("textbox", {
-      name: "Edit list item",
-    });
+    const listItems = getEditableProposalListItems();
     const firstItem = listItems[0];
-    firstItem.textContent = "";
-    fireEvent.input(firstItem);
+    setEditableNodeText(firstItem, "");
+    fireEvent.input(getProposalBodyEditor());
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-content")).toHaveTextContent(
@@ -1382,7 +1715,7 @@ describe("ProposalDisplay", () => {
     expect(screen.getByPlaceholderText("Content appears here")).toBeInTheDocument();
   });
 
-  it("shows list authoring controls only in edit mode", () => {
+  it("shows list authoring controls only in edit mode", async () => {
     const { rerender } = render(
       <ProposalDisplay
         proposalContent="Line one"
@@ -1406,20 +1739,85 @@ describe("ProposalDisplay", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "List" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "List" })).toBeNull();
+    await selectTextareaText(
+      screen.getByPlaceholderText("Content appears here") as HTMLTextAreaElement,
+      "Line one",
+    );
+    expect(getSelectionToolbarButtonByLabel("List")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Icon" })).toBeNull();
   });
 
   it("updates selected textarea lines when List is clicked", async () => {
     const textarea = renderEditableProposal("Line one\nLine two");
-    textarea.focus();
-    textarea.setSelectionRange(0, textarea.value.length);
+    await selectTextareaText(textarea, textarea.value);
 
-    fireEvent.click(screen.getByRole("button", { name: "List" }));
+    fireEvent.click(getSelectionToolbarButtonByLabel("List"));
 
     await waitFor(() => {
       expect(textarea).toHaveValue("- Line one\n- Line two");
     });
+  });
+
+  it("opens the contextual toolbar from preview text and applies AI through the proposal document", async () => {
+    mockTransformEditorSelection.mockResolvedValue({
+      kind: "text",
+      actionId: "rewrite",
+      text: "Polished paragraph.",
+      applyMode: "preview_required",
+      outputMode: "single_text",
+      variants: [],
+    });
+    renderPreviewEditableProposal();
+
+    const paragraph = getEditableProposalParagraphs()[0];
+    await selectContentEditableText(paragraph, "Original paragraph.");
+
+    expect(getSelectionToolbarTextButton("Rewrite")).toBeInTheDocument();
+    expect(getSelectionToolbarTextButton("Shorten")).toBeInTheDocument();
+    expect(getSelectionToolbarTextButton("Ask")).toBeInTheDocument();
+    expect(getSelectionToolbarButtonByLabel("List")).toBeInTheDocument();
+    fireEvent.click(getSelectionToolbarTextButton("Rewrite"));
+
+    const reviewDialog = await findProposalAiReviewDialog();
+    expect(reviewDialog).toHaveTextContent("Polished paragraph.");
+    fireEvent.click(getProposalReplaceButton());
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-content")).toHaveTextContent(
+        "Polished paragraph.",
+      );
+      expect(screen.getByTestId("proposal-document")).toHaveTextContent(
+        '"source":"structured"',
+      );
+      expect(screen.getByTestId("proposal-document")).toHaveTextContent(
+        "Polished paragraph.",
+      );
+    });
+  });
+
+  it("updates the structured proposal document when List is clicked in preview mode", async () => {
+    renderPreviewEditableProposal(
+      "Dear Hiring Team,\n\nTurn this into a list.\n\nKind regards,\nAlex",
+    );
+
+    const paragraph = getEditableProposalParagraphs()[0];
+    await selectContentEditableText(paragraph, "Turn this into a list.");
+
+    expect(getSelectionToolbarButtonByLabel("List")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Icon" })).toBeNull();
+    fireEvent.click(getSelectionToolbarButtonByLabel("List"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-content")).toHaveTextContent(
+        "* Turn this into a list.",
+      );
+      expect(screen.getByTestId("proposal-document")).toHaveTextContent(
+        '"type":"list"',
+      );
+    });
+    expect(screen.getByTestId("proposal-content")).not.toHaveTextContent("**");
+    expect(screen.getByTestId("proposal-content")).not.toHaveTextContent("__");
   });
 
   it("does not render a source-mode icon insertion tool", async () => {
@@ -1443,26 +1841,20 @@ describe("ProposalDisplay", () => {
     ) as HTMLTextAreaElement;
 
     textarea.focus();
-    textarea.setSelectionRange(0, textarea.value.length);
-    fireEvent.click(screen.getByRole("button", { name: "List" }));
+    await selectTextareaText(textarea, textarea.value);
+    fireEvent.click(getSelectionToolbarButtonByLabel("List"));
 
     textarea.setSelectionRange(0, textarea.value.length);
     expect(screen.queryByRole("button", { name: "Icon" })).toBeNull();
     expect(textarea).toHaveValue("- Line one\n- Line two");
   });
 
-  it("inserts a starter list at the cursor when List is clicked with no selection", async () => {
+  it("keeps List contextual and hidden when there is no selection", async () => {
     const textarea = renderEditableProposal("Intro\n");
     textarea.focus();
     textarea.setSelectionRange(textarea.value.length, textarea.value.length);
 
-    fireEvent.click(screen.getByRole("button", { name: "List" }));
-
-    await waitFor(() => {
-      expect(textarea).toHaveValue("Intro\n- First item\n- Second item");
-      expect(textarea.selectionStart).toBe("Intro\n- ".length);
-      expect(textarea.selectionEnd).toBe("Intro\n- First item".length);
-    });
+    expect(screen.queryByRole("button", { name: "List" })).toBeNull();
   });
 
   it("renders document previews inside a fixed page stage when zoom controls are enabled", () => {

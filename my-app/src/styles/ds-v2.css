@@ -989,6 +989,21 @@
       transform var(--motion-duration-fast) var(--motion-ease-enter);
   }
 
+  .ds-ai-toolbar__actions,
+  .ds-ai-toolbar__format-actions,
+  .ds-ai-toolbar__compact-format-actions {
+    align-items: center;
+    gap: var(--s1);
+  }
+
+  .ds-ai-toolbar__format-actions {
+    display: inline-flex;
+  }
+
+  .ds-ai-toolbar__compact-format-actions {
+    display: none;
+  }
+
   .ds-ai-toolbar[data-state="open"] {
     opacity: 1;
     transform: translateY(0);
@@ -1002,6 +1017,10 @@
   }
 
   .ds-ai-toolbar__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--s1);
     height: 28px;
     padding: 0 var(--s3);
     border: 0;
@@ -1013,6 +1032,11 @@
     font-weight: var(--font-label-weight);
     cursor: pointer;
     transition: background-color var(--dur-2) var(--ez);
+  }
+
+  .ds-ai-toolbar__btn--icon {
+    width: 28px;
+    padding: 0;
   }
 
   .ds-ai-toolbar__btn:hover:not(:disabled) {
@@ -1034,6 +1058,66 @@
     height: 20px;
     margin: 0 var(--s1);
     background: var(--border-strong);
+  }
+
+  .ds-ai-toolbar__divider--compact-edit,
+  .ds-ai-toolbar__btn--edit,
+  .ds-ai-toolbar__compact-format-actions {
+    display: none;
+  }
+
+  @media (max-width: 640px) {
+    .ds-ai-toolbar {
+      max-width: calc(100vw - var(--s4));
+      height: auto;
+      min-height: 36px;
+      flex-wrap: nowrap;
+    }
+
+    .ds-ai-toolbar__format-actions {
+      display: none;
+    }
+
+    .ds-ai-toolbar__actions[data-selection-toolbar-mode="ai"] {
+      display: inline-flex !important;
+    }
+
+    .ds-ai-toolbar__divider--compact-edit,
+    .ds-ai-toolbar__btn--edit {
+      display: inline-flex;
+    }
+
+    .ds-ai-toolbar__compact-format-actions[data-selection-toolbar-mode="format"] {
+      display: inline-flex !important;
+    }
+
+    .ds-ai-toolbar__actions[data-selection-toolbar-mode="format"] {
+      display: none !important;
+    }
+  }
+
+  @media (max-width: 420px) {
+    .ds-ai-toolbar {
+      padding: 0 var(--s1);
+    }
+
+    .ds-ai-toolbar__btn {
+      padding: 0 var(--s2);
+    }
+
+    .ds-ai-toolbar__btn--icon {
+      width: 28px;
+      padding: 0;
+    }
+
+    .ds-ai-toolbar__actions .ds-ai-toolbar__btn:not(:last-child):not([aria-label="Ask"]) {
+      display: none;
+    }
+
+    .ds-ai-toolbar__btn--edit .ds-ai-toolbar__btn-label,
+    .ds-ai-toolbar__btn--back .ds-ai-toolbar__btn-label {
+      display: none;
+    }
   }
 
   .ds-menu-preview {

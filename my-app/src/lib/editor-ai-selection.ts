@@ -1,3 +1,5 @@
+import type React from "react";
+
 export type EditorSelectionAnchor = {
   left: number;
   top: number;
@@ -30,6 +32,84 @@ export type EditorSelectionAnchor = {
 export const INLINE_AI_TOOLBAR_SELECTOR = "[data-inline-ai-toolbar='true']";
 export const INLINE_PAPER_EDITABLE_SELECTOR =
   '[data-inline-paper-editable="true"]';
+export const INLINE_PAPER_FORMATTING_KEY_ATTR =
+  "data-inline-paper-formatting-key";
+export const INLINE_PAPER_FORMATTING_SELECTOR = `[${INLINE_PAPER_FORMATTING_KEY_ATTR}]`;
+
+export type InlinePaperFormattingAction = {
+  id: string;
+  label: string;
+  title?: string;
+  icon?: React.ReactNode;
+  active?: boolean;
+  disabled?: boolean;
+  onRun: () => void;
+  onMouseDown?: (event: React.MouseEvent<HTMLButtonElement>) => void;
+};
+
+const inlinePaperFormattingProviders = new Map<
+  string,
+  () => InlinePaperFormattingAction[]
+>();
+
+export function registerInlinePaperFormattingProvider(
+  key: string,
+  provider: () => InlinePaperFormattingAction[],
+): () => void {
+  inlinePaperFormattingProviders.set(key, provider);
+  return () => {
+    if (inlinePaperFormattingProviders.get(key) === provider) {
+      inlinePaperFormattingProviders.delete(key);
+    }
+  };
+}
+
+function closestInlinePaperFormattingElement(
+  node: Node | null | undefined,
+): HTMLElement | null {
+  const element =
+    node instanceof Element
+      ? node
+      : node?.parentElement instanceof HTMLElement
+        ? node.parentElement
+        : null;
+
+  return element?.closest<HTMLElement>(INLINE_PAPER_FORMATTING_SELECTOR) ?? null;
+}
+
+export function getInlinePaperFormattingActionsForSelection(
+  selection: Selection | null | undefined =
+    typeof window !== "undefined" ? window.getSelection() : null,
+): InlinePaperFormattingAction[] {
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    return [];
+  }
+
+  const range = selection.getRangeAt(0);
+  const candidates = [
+    selection.focusNode,
+    selection.anchorNode,
+    range.startContainer,
+    range.endContainer,
+    range.commonAncestorContainer,
+  ]
+    .map(closestInlinePaperFormattingElement)
+    .filter((element): element is HTMLElement => Boolean(element));
+  const uniqueCandidates = Array.from(new Set(candidates));
+
+  if (uniqueCandidates.length !== 1) {
+    return [];
+  }
+
+  const key = uniqueCandidates[0].getAttribute(
+    INLINE_PAPER_FORMATTING_KEY_ATTR,
+  );
+  if (!key) {
+    return [];
+  }
+
+  return inlinePaperFormattingProviders.get(key)?.() ?? [];
+}
 
 let pointerTrackingInitialized = false;
 let primaryPointerPressed = false;

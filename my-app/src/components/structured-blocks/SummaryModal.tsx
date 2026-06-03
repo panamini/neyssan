@@ -17,14 +17,17 @@ import type { RemirrorJSON } from "remirror";
 import type { ISummaryItem } from "../../types/cvDocument";
 import { ensureRemirrorDoc } from "../remirror-editor/utils/conversion";
 import { api } from "../../../convex/_generated/api";
-import { EditorToolbar } from "../remirror-editor/components/EditorToolbar";
+import { useEditorFormattingActions } from "../remirror-editor/components/EditorToolbar";
 import { useCvLibrary } from "../../contexts/CvLibraryContext";
 import { X } from "@/lib/icons";
 import { TextSelection } from "prosemirror-state";
 import { docToPlainText } from "../remirror-editor/utils/text";
 import { Button } from "../ui/button";
 import { CvModalShell } from "./CvModalShell";
-import FloatingAiToolbar, { type InlineAiActionId } from "../FloatingAiToolbar";
+import FloatingAiToolbar, {
+  type FloatingSelectionToolbarAction,
+  type InlineAiActionId,
+} from "../FloatingAiToolbar";
 import AiSuggestionCard from "../ai/AiSuggestionCard";
 import {
   createAiUndoSnapshot,
@@ -66,6 +69,56 @@ type InlineAiSuggestionState = {
   undoSnapshot?: AiUndoSnapshot<RemirrorJSON>;
 };
 
+type RemirrorInlineSelectionState = {
+  text: string;
+  anchor: NonNullable<ReturnType<typeof getDomSelectionState>>["anchor"];
+  from: number;
+  to: number;
+};
+
+function RemirrorFloatingAiToolbar({
+  selection,
+  isLoading,
+  pendingActionId,
+  onClose,
+  onRunAction,
+}: {
+  selection: RemirrorInlineSelectionState | null;
+  isLoading: boolean;
+  pendingActionId: InlineAiActionId | null;
+  onClose: () => void;
+  onRunAction: (actionId: InlineAiActionId, instruction: string) => void;
+}) {
+  const editorFormattingActions = useEditorFormattingActions();
+  const formattingActions = React.useMemo<FloatingSelectionToolbarAction[]>(
+    () =>
+      editorFormattingActions.map((action) => ({
+        id: action.id,
+        label: action.title,
+        title: action.title,
+        icon: action.icon,
+        active: action.active,
+        onRun: action.run,
+        onMouseDown: action.onMouseDown,
+      })),
+    [editorFormattingActions],
+  );
+
+  if (!selection) return null;
+
+  return (
+    <FloatingAiToolbar
+      open
+      anchor={selection.anchor}
+      isLoading={isLoading}
+      pendingActionId={pendingActionId}
+      formattingActions={formattingActions}
+      onClose={onClose}
+      onRunAction={onRunAction}
+    />
+  );
+}
+
 export function SummaryModal({
   open,
   sectionId,
@@ -82,7 +135,7 @@ export function SummaryModal({
   const [isClearConfirming, setIsClearConfirming] = useState(false);
   const [inlineSelectionState, setInlineSelectionState] = useState<{
     text: string;
-    anchor: { left: number; top: number; bottom: number };
+    anchor: NonNullable<ReturnType<typeof getDomSelectionState>>["anchor"];
     from: number;
     to: number;
   } | null>(null);
@@ -580,16 +633,6 @@ export function SummaryModal({
       onClose={onClose}
       onBackdropClick={() => (isSaving ? undefined : onClose())}
     >
-      {inlineSelectionState ? (
-        <FloatingAiToolbar
-          open
-          anchor={inlineSelectionState.anchor}
-          isLoading={isApplyingInlineAi}
-          pendingActionId={pendingInlineAiActionId}
-          onClose={() => setInlineSelectionState(null)}
-          onRunAction={handleRunInlineAiAction}
-        />
-      ) : null}
       <div
         role="dialog"
         aria-modal="true"
@@ -662,12 +705,18 @@ export function SummaryModal({
                 initialContent={state}
                 onChange={handleChange}
               >
+                <RemirrorFloatingAiToolbar
+                  selection={inlineSelectionState}
+                  isLoading={isApplyingInlineAi}
+                  pendingActionId={pendingInlineAiActionId}
+                  onClose={() => setInlineSelectionState(null)}
+                  onRunAction={handleRunInlineAiAction}
+                />
                 <div
                   className="rich-content"
                   onPointerUp={() => scheduleSelectionCheck(true)}
                   onKeyUp={() => scheduleSelectionCheck(true)}
                 >
-                  <EditorToolbar position="top" />
                   <EditorComponent />
                 </div>
               </Remirror>

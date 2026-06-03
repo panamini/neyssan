@@ -27,14 +27,17 @@ import {
 import type { RemirrorJSON } from "remirror";
 import { ensureRemirrorDoc } from "../remirror-editor/utils/conversion";
 import { api } from "../../../convex/_generated/api";
-import { EditorToolbar } from "../remirror-editor/components/EditorToolbar";
+import { useEditorFormattingActions } from "../remirror-editor/components/EditorToolbar";
 import { Loader2, TrashSimple, Wand2, X } from "@/lib/icons";
 import { Button } from "../ui/button";
 import { useToast } from "../ui/toast";
 import { CvModalShell } from "./CvModalShell";
 import { useCvAiCapabilities } from "../../hooks/use-cv-ai-capabilities";
 import { AI_UNAVAILABLE_TOAST } from "../../lib/toast-copy";
-import FloatingAiToolbar, { type InlineAiActionId } from "../FloatingAiToolbar";
+import FloatingAiToolbar, {
+  type FloatingSelectionToolbarAction,
+  type InlineAiActionId,
+} from "../FloatingAiToolbar";
 import AiSuggestionCard from "../ai/AiSuggestionCard";
 import {
   createAiUndoSnapshot,
@@ -57,6 +60,56 @@ import {
   isInlineAiToolbarActiveElement,
   isPrimaryPointerPressed,
 } from "../../lib/editor-ai-selection";
+
+type RemirrorInlineSelectionState = {
+  text: string;
+  anchor: NonNullable<ReturnType<typeof getDomSelectionState>>["anchor"];
+  from: number;
+  to: number;
+};
+
+function RemirrorFloatingAiToolbar({
+  selection,
+  isLoading,
+  pendingActionId,
+  onClose,
+  onRunAction,
+}: {
+  selection: RemirrorInlineSelectionState | null;
+  isLoading: boolean;
+  pendingActionId: InlineAiActionId | null;
+  onClose: () => void;
+  onRunAction: (actionId: InlineAiActionId, instruction: string) => void;
+}) {
+  const editorFormattingActions = useEditorFormattingActions();
+  const formattingActions = React.useMemo<FloatingSelectionToolbarAction[]>(
+    () =>
+      editorFormattingActions.map((action) => ({
+        id: action.id,
+        label: action.title,
+        title: action.title,
+        icon: action.icon,
+        active: action.active,
+        onRun: action.run,
+        onMouseDown: action.onMouseDown,
+      })),
+    [editorFormattingActions],
+  );
+
+  if (!selection) return null;
+
+  return (
+    <FloatingAiToolbar
+      open
+      anchor={selection.anchor}
+      isLoading={isLoading}
+      pendingActionId={pendingActionId}
+      formattingActions={formattingActions}
+      onClose={onClose}
+      onRunAction={onRunAction}
+    />
+  );
+}
 
 type UiPatch = Partial<{
   startYear: string;
@@ -671,12 +724,8 @@ const RichEditor = forwardRef<
     extensions: () => extensions as any,
     content: initialContent as any,
   });
-  const [inlineSelectionState, setInlineSelectionState] = useState<{
-    text: string;
-    anchor: { left: number; top: number; bottom: number };
-    from: number;
-    to: number;
-  } | null>(null);
+  const [inlineSelectionState, setInlineSelectionState] =
+    useState<RemirrorInlineSelectionState | null>(null);
   const [isApplyingInlineAi, setIsApplyingInlineAi] = useState(false);
   const [pendingInlineAiActionId, setPendingInlineAiActionId] =
     useState<InlineAiActionId | null>(null);
@@ -1080,16 +1129,6 @@ const RichEditor = forwardRef<
 
   return (
     <div className="dasti-rich dasti-rich--cv-reading-measure">
-      {inlineSelectionState ? (
-        <FloatingAiToolbar
-          open
-          anchor={inlineSelectionState.anchor}
-          isLoading={isApplyingInlineAi}
-          pendingActionId={pendingInlineAiActionId}
-          onClose={() => setInlineSelectionState(null)}
-          onRunAction={handleRunInlineAiAction}
-        />
-      ) : null}
       {inlineAiSuggestion?.status === "accepted" ? (
         <CompactAppliedAiStatus onUndo={handleUndoInlineAiSuggestion} />
       ) : inlineAiSuggestion ? (
@@ -1109,13 +1148,19 @@ const RichEditor = forwardRef<
         initialContent={state}
         onChange={handleChange}
       >
+        <RemirrorFloatingAiToolbar
+          selection={inlineSelectionState}
+          isLoading={isApplyingInlineAi}
+          pendingActionId={pendingInlineAiActionId}
+          onClose={() => setInlineSelectionState(null)}
+          onRunAction={handleRunInlineAiAction}
+        />
         <div
           className="rich-content"
           onPointerUp={() => scheduleSelectionCheck()}
           onKeyDown={handleEditorKeyDown}
           onKeyUp={() => scheduleSelectionCheck()}
         >
-          <EditorToolbar position="top" />
           <EditorComponent />
         </div>
       </Remirror>

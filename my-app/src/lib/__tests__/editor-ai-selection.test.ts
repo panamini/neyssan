@@ -3,7 +3,10 @@ import {
   findInlinePaperEditableForSelection,
   getDomRangeSelectionState,
   getDomSelectionState,
+  getInlinePaperFormattingActionsForSelection,
   getTextareaSelectionState,
+  INLINE_PAPER_FORMATTING_KEY_ATTR,
+  registerInlinePaperFormattingProvider,
 } from "../editor-ai-selection";
 
 describe("getDomSelectionState", () => {
@@ -163,6 +166,77 @@ describe("findInlinePaperEditableForSelection", () => {
     } as unknown as Selection;
 
     expect(findInlinePaperEditableForSelection(root, selection)).toBeNull();
+  });
+});
+
+describe("getInlinePaperFormattingActionsForSelection", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("returns registered formatting actions for a selection inside one paper editor", () => {
+    const editable = document.createElement("span");
+    editable.setAttribute(INLINE_PAPER_FORMATTING_KEY_ATTR, "paper-editor-1");
+    editable.textContent = "Selected rich text";
+    document.body.appendChild(editable);
+    const action = {
+      id: "bold",
+      label: "Bold",
+      onRun: vi.fn(),
+    };
+    const unregister = registerInlinePaperFormattingProvider(
+      "paper-editor-1",
+      () => [action],
+    );
+    const range = document.createRange();
+    range.setStart(editable.firstChild as Text, 0);
+    range.setEnd(editable.firstChild as Text, "Selected".length);
+    const selection = {
+      rangeCount: 1,
+      isCollapsed: false,
+      focusNode: editable.firstChild,
+      anchorNode: editable.firstChild,
+      getRangeAt: () => range,
+    } as unknown as Selection;
+
+    expect(getInlinePaperFormattingActionsForSelection(selection)).toEqual([
+      action,
+    ]);
+
+    unregister();
+  });
+
+  it("does not return formatting actions for a selection spanning multiple paper editors", () => {
+    const first = document.createElement("span");
+    const second = document.createElement("span");
+    first.setAttribute(INLINE_PAPER_FORMATTING_KEY_ATTR, "paper-editor-1");
+    second.setAttribute(INLINE_PAPER_FORMATTING_KEY_ATTR, "paper-editor-2");
+    first.textContent = "First";
+    second.textContent = "Second";
+    document.body.append(first, second);
+    const unregisterFirst = registerInlinePaperFormattingProvider(
+      "paper-editor-1",
+      () => [{ id: "bold", label: "Bold", onRun: vi.fn() }],
+    );
+    const unregisterSecond = registerInlinePaperFormattingProvider(
+      "paper-editor-2",
+      () => [{ id: "italic", label: "Italic", onRun: vi.fn() }],
+    );
+    const range = document.createRange();
+    range.setStart(first.firstChild as Text, 0);
+    range.setEnd(second.firstChild as Text, "Second".length);
+    const selection = {
+      rangeCount: 1,
+      isCollapsed: false,
+      focusNode: second.firstChild,
+      anchorNode: first.firstChild,
+      getRangeAt: () => range,
+    } as unknown as Selection;
+
+    expect(getInlinePaperFormattingActionsForSelection(selection)).toEqual([]);
+
+    unregisterFirst();
+    unregisterSecond();
   });
 });
 

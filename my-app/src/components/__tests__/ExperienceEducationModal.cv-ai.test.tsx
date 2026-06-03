@@ -226,6 +226,7 @@ vi.mock("remirror/extensions", () => {
 
 vi.mock("../remirror-editor/components/EditorToolbar", () => ({
   EditorToolbar: () => <div data-testid="editor-toolbar" />,
+  useEditorFormattingActions: () => [],
 }));
 
 describe("ExperienceModal CV AI", () => {

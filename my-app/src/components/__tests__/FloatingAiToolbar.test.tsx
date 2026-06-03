@@ -87,8 +87,8 @@ describe("FloatingAiToolbar", () => {
       await screen.findByRole("button", { name: "Rewrite" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Shorten" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Fix" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ask" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Fix" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Clarify" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Strengthen" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Expand" })).toBeNull();
@@ -119,25 +119,67 @@ describe("FloatingAiToolbar", () => {
     expect(onRunAction).not.toHaveBeenCalled();
   });
 
-  it("sends the canonical fix action id", async () => {
-    const onRunAction = vi.fn();
+  it("hosts local formatting actions in the same selection toolbar", async () => {
+    const onFormat = vi.fn();
 
     render(
       <FloatingAiToolbar
         anchor={{ left: 120, top: 80 }}
         open
+        formattingActions={[
+          {
+            id: "bold",
+            label: "Bold",
+            icon: <span aria-hidden="true">B</span>,
+            onRun: onFormat,
+          },
+        ]}
         onClose={vi.fn()}
-        onRunAction={onRunAction}
+        onRunAction={vi.fn()}
       />,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: "Fix" }));
+    expect(
+      await screen.findByRole("button", { name: "Rewrite" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Bold" }));
 
-    expect(onRunAction).toHaveBeenCalledWith(
-      "fix_grammar",
-      INLINE_AI_ACTIONS.find((action) => action.id === "fix_grammar")
-        ?.instruction,
+    expect(onFormat).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByRole("toolbar", { name: "Selected text actions" }))
+      .toHaveLength(1);
+  });
+
+  it("keeps compact mode AI-first and switches Edit into formatting actions", async () => {
+    const onFormat = vi.fn();
+
+    render(
+      <FloatingAiToolbar
+        anchor={{ left: 120, top: 80 }}
+        open
+        formattingActions={[
+          {
+            id: "list",
+            label: "List",
+            onRun: onFormat,
+          },
+        ]}
+        onClose={vi.fn()}
+        onRunAction={vi.fn()}
+      />,
     );
+
+    expect(
+      await screen.findByRole("button", { name: "Rewrite" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Shorten" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ask" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+
+    expect(screen.getByRole("button", { name: "Back to AI" })).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "List" }).at(-1)!);
+
+    expect(onFormat).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Rewrite" })).toBeInTheDocument();
   });
 
   it("submits a custom instruction from the inline prompt", async () => {
@@ -278,13 +320,13 @@ describe("FloatingAiToolbar", () => {
         anchor={{ left: 120, top: 80 }}
         open
         isLoading
-        pendingActionId="fix_grammar"
+        pendingActionId="shorten"
         onClose={vi.fn()}
         onRunAction={vi.fn()}
       />,
     );
 
-    const action = screen.getByRole("button", { name: "Fix" });
+    const action = screen.getByRole("button", { name: "Shorten" });
     expect(action).toBeDisabled();
     expect(action).toHaveAttribute("aria-busy", "true");
     expect(action.querySelector(".ds-btn__period")).not.toBeNull();
@@ -302,7 +344,7 @@ describe("FloatingAiToolbar", () => {
       />,
     );
 
-    await screen.findByRole("button", { name: "Fix" });
+    await screen.findByRole("button", { name: "Rewrite" });
     fireEvent.keyDown(document, { key: "Escape" });
 
     expect(onClose).toHaveBeenCalledTimes(1);

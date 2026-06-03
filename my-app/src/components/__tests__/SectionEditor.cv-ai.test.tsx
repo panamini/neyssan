@@ -224,6 +224,7 @@ vi.mock("../cv-editor/BlockRenderer", () => ({
 
 vi.mock("../remirror-editor/components/EditorToolbar", () => ({
   EditorToolbar: () => <div data-testid="editor-toolbar" />,
+  useEditorFormattingActions: () => [],
 }));
 
 function buildCvDocument(sections: CvSection[]): CvDocument {

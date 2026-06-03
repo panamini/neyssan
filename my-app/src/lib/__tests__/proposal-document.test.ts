@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   normalizeEditableText,
+  mergeProposalDocumentTargetBackward,
+  mergeProposalDocumentTargetForward,
   normalizeProposalDocument,
   parseLegacyProposalDocument,
   resolveProposalDocument,
   serializeProposalDocumentToLegacyString,
+  splitProposalDocumentTarget,
   type ProposalDocument,
 } from "../proposal-document";
 
@@ -95,7 +98,7 @@ describe("proposal-document", () => {
     ]);
   });
 
-  it("normalizes structured documents and drops empty list items", () => {
+  it("normalizes structured documents and preserves transient empty list items", () => {
     const document = normalizeProposalDocument({
       schemaVersion: 1,
       kind: "proposal",
@@ -125,8 +128,148 @@ describe("proposal-document", () => {
             iconKey: "star",
             marker: { type: "icon", iconKey: "briefcase" },
           },
+          {
+            id: "empty",
+            text: "",
+            marker: { type: "icon", iconKey: "briefcase" },
+          },
         ],
       },
+    ]);
+  });
+
+  it("skips transient empty list items during legacy serialization", () => {
+    const document: ProposalDocument = {
+      schemaVersion: 1,
+      kind: "letter",
+      source: "structured",
+      blocks: [
+        {
+          id: "l",
+          type: "list",
+          marker: { type: "dash" },
+          items: [
+            { id: "i1", text: "First", marker: { type: "dash" } },
+            { id: "empty", text: "", marker: { type: "dash" } },
+          ],
+        },
+      ],
+    };
+
+    expect(serializeProposalDocumentToLegacyString(document)).toBe("- First");
+  });
+
+  it("splits paragraphs and keeps existing block ids stable", () => {
+    const document: ProposalDocument = {
+      schemaVersion: 1,
+      kind: "letter",
+      source: "structured",
+      blocks: [
+        { id: "p1", type: "paragraph", text: "Before after" },
+        { id: "p2", type: "paragraph", text: "Unchanged" },
+      ],
+    };
+
+    const next = splitProposalDocumentTarget({
+      document,
+      target: { type: "text-block", blockId: "p1" },
+      offset: "Before".length,
+    });
+
+    expect(next.blocks).toEqual([
+      { id: "p1", type: "paragraph", text: "Before" },
+      { id: "p1-paragraph", type: "paragraph", text: "after" },
+      { id: "p2", type: "paragraph", text: "Unchanged" },
+    ]);
+  });
+
+  it("splits list items and exits an empty item into a paragraph", () => {
+    const document: ProposalDocument = {
+      schemaVersion: 1,
+      kind: "letter",
+      source: "structured",
+      blocks: [
+        {
+          id: "l",
+          type: "list",
+          marker: { type: "dash" },
+          items: [
+            { id: "i1", text: "First item", marker: { type: "dash" } },
+            { id: "i2", text: "", marker: { type: "dash" } },
+          ],
+        },
+      ],
+    };
+
+    const split = splitProposalDocumentTarget({
+      document,
+      target: { type: "list-item", blockId: "l", itemId: "i1" },
+      offset: "First".length,
+    });
+
+    expect(split.blocks[0]).toMatchObject({
+      id: "l",
+      type: "list",
+      items: [
+        { id: "i1", text: "First" },
+        { id: "i1-item", text: "item" },
+        { id: "i2", text: "" },
+      ],
+    });
+
+    const exited = splitProposalDocumentTarget({
+      document,
+      target: { type: "list-item", blockId: "l", itemId: "i2" },
+      offset: 0,
+    });
+
+    expect(exited.blocks).toEqual([
+      {
+        id: "l",
+        type: "list",
+        marker: { type: "dash" },
+        items: [{ id: "i1", text: "First item", marker: { type: "dash" } }],
+      },
+      { id: "l-paragraph", type: "paragraph", text: "" },
+    ]);
+  });
+
+  it("merges paragraph and list-compatible blocks at boundaries", () => {
+    const document: ProposalDocument = {
+      schemaVersion: 1,
+      kind: "letter",
+      source: "structured",
+      blocks: [
+        { id: "p1", type: "paragraph", text: "First" },
+        { id: "p2", type: "paragraph", text: "Second" },
+        {
+          id: "l",
+          type: "list",
+          items: [{ id: "i1", text: "Third" }],
+        },
+      ],
+    };
+
+    const backward = mergeProposalDocumentTargetBackward({
+      document,
+      target: { type: "text-block", blockId: "p2" },
+    });
+    expect(backward.blocks).toEqual([
+      { id: "p1", type: "paragraph", text: "First Second" },
+      {
+        id: "l",
+        type: "list",
+        items: [{ id: "i1", text: "Third" }],
+      },
+    ]);
+
+    const forward = mergeProposalDocumentTargetForward({
+      document,
+      target: { type: "text-block", blockId: "p2" },
+    });
+    expect(forward.blocks).toEqual([
+      { id: "p1", type: "paragraph", text: "First" },
+      { id: "p2", type: "paragraph", text: "Second Third" },
     ]);
   });
 

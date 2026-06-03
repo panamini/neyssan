@@ -62,4 +62,115 @@ describe("document-ai-surface-position compatibility", () => {
       computeDocumentAiSurfacePlacement(input),
     );
   });
+
+  it("uses a page-window bottom center fallback for toolbar placement in short collapsed viewports", () => {
+    const result = computeDocumentAiSurfacePlacement({
+      anchor: {
+        left: 480,
+        top: 90,
+        bottom: 550,
+        leftEdge: 450,
+        rightEdge: 510,
+        containerLeft: 76,
+        containerRight: 964,
+        containerTop: 56,
+        containerBottom: 579,
+      },
+      visibleStageRect: {
+        left: 76,
+        top: 56,
+        right: 964,
+        bottom: 579,
+        width: 888,
+        height: 523,
+      },
+      paperRect: {
+        left: 129,
+        top: 56,
+        right: 873,
+        bottom: 579,
+        width: 744,
+        height: 523,
+      },
+      leftDrawerRect: {
+        left: 0,
+        top: 0,
+        right: 76,
+        bottom: 579,
+        width: 76,
+        height: 579,
+      },
+      viewportRect: {
+        left: 0,
+        top: 0,
+        right: 964,
+        bottom: 579,
+        width: 964,
+        height: 579,
+      },
+      desiredSurfaceSize: { width: 520, height: 48, minWidth: 520, minHeight: 48 },
+      mode: "toolbar",
+      breakpoint: "desktop",
+    });
+
+    expect(result.placement).toBe("center");
+    expect(result.left).toBe(241);
+    expect(result.top).toBe(519);
+    expect(result.left).toBeGreaterThan(76);
+  });
+
+  it("keeps the large-window toolbar fallback centered in the page window", () => {
+    const result = computeDocumentAiSurfacePlacement({
+      anchor: {
+        left: 480,
+        top: 20,
+        bottom: 880,
+        leftEdge: 450,
+        rightEdge: 510,
+        containerLeft: 76,
+        containerRight: 964,
+        containerTop: 0,
+        containerBottom: 900,
+      },
+      visibleStageRect: {
+        left: 76,
+        top: 0,
+        right: 964,
+        bottom: 900,
+        width: 888,
+        height: 900,
+      },
+      paperRect: {
+        left: 129,
+        top: 0,
+        right: 873,
+        bottom: 900,
+        width: 744,
+        height: 900,
+      },
+      leftDrawerRect: {
+        left: 0,
+        top: 0,
+        right: 76,
+        bottom: 900,
+        width: 76,
+        height: 900,
+      },
+      viewportRect: {
+        left: 0,
+        top: 0,
+        right: 964,
+        bottom: 900,
+        width: 964,
+        height: 900,
+      },
+      desiredSurfaceSize: { width: 520, height: 48, minWidth: 520, minHeight: 48 },
+      mode: "toolbar",
+      breakpoint: "desktop",
+    });
+
+    expect(result.placement).toBe("center");
+    expect(result.left).toBe(260);
+    expect(result.top).toBe(426);
+  });
 });

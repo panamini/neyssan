@@ -12,13 +12,23 @@ import {
 } from "remirror/extensions";
 import { Bold, Italic, List, Underline } from "@/lib/icons";
 
-export const EditorToolbar: React.FC<{
-  position?: "top" | "bottom";
+export type EditorFormattingActionId = "bold" | "italic" | "underline" | "list";
+
+export type EditorFormattingAction = {
+  id: EditorFormattingActionId;
+  label: string;
+  title: string;
+  icon: React.ReactNode;
+  active: boolean;
+  run: () => void;
+  onMouseDown: (event: React.MouseEvent<HTMLButtonElement>) => void;
+};
+
+export function useEditorFormattingActions(options?: {
   showLists?: boolean;
-}> = ({
-  position = "top",
-  showLists = true,
-}) => {
+}): EditorFormattingAction[] {
+  const showLists = options?.showLists ?? true;
+
   // Include list fallback command when toggleBulletList is not wired by the manager
   const {
     toggleBold,
@@ -87,6 +97,102 @@ export const EditorToolbar: React.FC<{
     [chain, editorView, focus, restoreEditorSelection],
   );
 
+  const runListCommand = React.useCallback(() => {
+    // Prefer chained commands with focus BEFORE toggling
+    try {
+      if (
+        chain &&
+        typeof chain.focus === "function" &&
+        typeof chain.toggleBulletList === "function"
+      ) {
+        chain.focus().toggleBulletList().run();
+        return;
+      }
+    } catch {
+      /* fall through to fallback */
+    }
+
+    // Fallback to direct commands if chaining is unavailable
+    try {
+      focus?.();
+      if (typeof toggleBulletList === "function") {
+        toggleBulletList();
+        return;
+      }
+      if (typeof toggleList === "function") {
+        // Some remirror versions expose a generic toggleList({ type: 'bullet' })
+        toggleList({ type: "bullet" });
+      }
+    } catch {
+      /* noop */
+    }
+  }, [chain, focus, toggleBulletList, toggleList]);
+
+  return React.useMemo(() => {
+    const actions: EditorFormattingAction[] = [
+      {
+        id: "bold",
+        label: "Toggle bold",
+        title: "Bold",
+        icon: <Bold size={16} />,
+        active: typeof active.bold === "function" && active.bold(),
+        run: () => runMarkCommand("toggleBold", toggleBold),
+        onMouseDown: preventToolbarMouseDown,
+      },
+      {
+        id: "italic",
+        label: "Toggle italic",
+        title: "Italic",
+        icon: <Italic size={16} />,
+        active: typeof active.italic === "function" && active.italic(),
+        run: () => runMarkCommand("toggleItalic", toggleItalic),
+        onMouseDown: preventToolbarMouseDown,
+      },
+      {
+        id: "underline",
+        label: "Toggle underline",
+        title: "Underline",
+        icon: <Underline size={16} />,
+        active: typeof active.underline === "function" && active.underline(),
+        run: () => runMarkCommand("toggleUnderline", toggleUnderline),
+        onMouseDown: preventToolbarMouseDown,
+      },
+    ];
+
+    if (showLists) {
+      actions.push({
+        id: "list",
+        label: "Toggle bullet list",
+        title: "Bullet list",
+        icon: <List size={16} />,
+        active: typeof active.bulletList === "function" && active.bulletList(),
+        run: runListCommand,
+        onMouseDown: preventToolbarMouseDown,
+      });
+    }
+
+    return actions;
+  }, [
+    active,
+    preventToolbarMouseDown,
+    runListCommand,
+    runMarkCommand,
+    showLists,
+    toggleBold,
+    toggleItalic,
+    toggleUnderline,
+  ]);
+}
+
+export const EditorToolbar: React.FC<{
+  position?: "top" | "bottom";
+  showLists?: boolean;
+}> = ({
+  position = "top",
+  showLists = true,
+}) => {
+  const formattingActions = useEditorFormattingActions({ showLists });
+
   const buttonStyle =
     "inline-flex items-center justify-center p-2 rounded-[var(--radius-control)] [color:var(--tm2)] transition-colors hover:[background:var(--sf2)] hover:[color:var(--ti)]";
   const activeButtonStyle = "[background:var(--sf2)] [color:var(--ti)]";
@@ -99,6 +205,8 @@ export const EditorToolbar: React.FC<{
 
   const dividerStyle =
     "w-px self-stretch mx-1 [background:var(--color-border)] opacity-60 shrink-0";
+  const markActions = formattingActions.filter((action) => action.id !== "list");
+  const listAction = formattingActions.find((action) => action.id === "list");
 
   return (
     <div className={containerClass}>
@@ -108,42 +216,23 @@ export const EditorToolbar: React.FC<{
         role="group"
         aria-label="Text formatting"
       >
-        <button
-          onMouseDown={preventToolbarMouseDown}
-          onPointerDown={preventToolbarMouseDown as any}
-          onClick={() => runMarkCommand("toggleBold", toggleBold)}
-          className={`${buttonStyle} ${typeof active.bold === "function" && active.bold() ? activeButtonStyle : ""}`}
-          aria-label="Toggle bold"
-          title="Bold"
-          type="button"
-        >
-          <Bold size={16} />
-        </button>
-        <button
-          onMouseDown={preventToolbarMouseDown}
-          onPointerDown={preventToolbarMouseDown as any}
-          onClick={() => runMarkCommand("toggleItalic", toggleItalic)}
-          className={`${buttonStyle} ${typeof active.italic === "function" && active.italic() ? activeButtonStyle : ""}`}
-          aria-label="Toggle italic"
-          title="Italic"
-          type="button"
-        >
-          <Italic size={16} />
-        </button>
-        <button
-          onMouseDown={preventToolbarMouseDown}
-          onPointerDown={preventToolbarMouseDown as any}
-          onClick={() => runMarkCommand("toggleUnderline", toggleUnderline)}
-          className={`${buttonStyle} ${typeof active.underline === "function" && active.underline() ? activeButtonStyle : ""}`}
-          aria-label="Toggle underline"
-          title="Underline"
-          type="button"
-        >
-          <Underline size={16} />
-        </button>
+        {markActions.map((action) => (
+          <button
+            key={action.id}
+            onMouseDown={action.onMouseDown}
+            onPointerDown={action.onMouseDown as any}
+            onClick={action.run}
+            className={`${buttonStyle} ${action.active ? activeButtonStyle : ""}`}
+            aria-label={action.label}
+            title={action.title}
+            type="button"
+          >
+            {action.icon}
+          </button>
+        ))}
       </div>
 
-      {showLists ? (
+      {listAction ? (
         <>
           {/* Divider */}
           <span className={dividerStyle} aria-hidden="true" />
@@ -151,43 +240,15 @@ export const EditorToolbar: React.FC<{
           {/* Zone 2 — Structure */}
           <div className="flex items-center" role="group" aria-label="Structure">
             <button
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                // Prefer chained commands with focus BEFORE toggling
-                try {
-                  if (
-                    chain &&
-                    typeof chain.focus === "function" &&
-                    typeof chain.toggleBulletList === "function"
-                  ) {
-                    chain.focus().toggleBulletList().run();
-                    return;
-                  }
-                } catch {
-                  /* fall through to fallback */
-                }
-
-                // Fallback to direct commands if chaining is unavailable
-                try {
-                  focus?.();
-                  if (typeof toggleBulletList === "function") {
-                    toggleBulletList();
-                    return;
-                  }
-                  if (typeof toggleList === "function") {
-                    // Some remirror versions expose a generic toggleList({ type: 'bullet' })
-                    toggleList({ type: "bullet" });
-                  }
-                } catch {
-                  /* noop */
-                }
-              }}
-              className={`${buttonStyle} ${typeof active.bulletList === "function" && active.bulletList() ? activeButtonStyle : ""}`}
-              aria-label="Toggle bullet list"
-              title="Bullet list"
+              onMouseDown={listAction.onMouseDown}
+              onPointerDown={listAction.onMouseDown as any}
+              onClick={listAction.run}
+              className={`${buttonStyle} ${listAction.active ? activeButtonStyle : ""}`}
+              aria-label={listAction.label}
+              title={listAction.title}
               type="button"
             >
-              <List size={16} />
+              {listAction.icon}
             </button>
           </div>
         </>

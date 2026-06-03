@@ -77,8 +77,12 @@ import {
 } from "../../lib/proposal-list-blocks";
 import {
   normalizeEditableText,
+  normalizeProposalDocumentEditText,
   resolveProposalDocument,
+  splitProposalDocumentTarget,
+  updateProposalDocumentTextTarget,
   type ProposalDocument,
+  type ProposalDocumentTextTarget,
   type ProposalDocumentListMarker,
 } from "../../lib/proposal-document";
 
@@ -261,7 +265,35 @@ type ProposalCoverLetterTemplateProps = {
 
 type ProposalEditableTextBehavior = {
   multiline?: boolean;
+  structuredTarget?: ProposalDocumentTextTarget;
+  fieldKind?: "paragraph" | "list-item" | "salutation" | "other";
 };
+
+type PendingEditableFocus = {
+  target: ProposalDocumentTextTarget;
+  offset: number;
+};
+
+type ProposalBodyEditableBlockDescriptor =
+  | {
+      type: "text-block";
+      blockId: string;
+      fieldKind: "paragraph" | "salutation";
+      text: string;
+      className: string;
+      key: string;
+    }
+  | {
+      type: "list";
+      blockId: string;
+      block: Extract<ProposalDocumentBlock, { type: "list" }>;
+      key: string;
+    }
+  | {
+      type: "closing";
+      block: Extract<ProposalDocumentBlock, { type: "closing" }>;
+      key: string;
+    };
 
 const BAUHAUS_WORDMARK_MAX_COMPACT_CHARS = 8;
 
@@ -588,7 +620,204 @@ function insertPlainTextIntoEditableTarget(
     target.textContent = text;
   }
 
-  return normalizeEditableText(target.textContent ?? "");
+  return normalizeProposalDocumentEditText(target.textContent ?? "");
+}
+
+function getEditableTextWithoutControls(target: HTMLElement): string {
+  const clone = target.cloneNode(true) as HTMLElement;
+  clone
+    .querySelectorAll("[data-proposal-editor-control='true']")
+    .forEach((node) => node.remove());
+  return normalizeProposalDocumentEditText(clone.textContent ?? "");
+}
+
+function getEditableSelectionOffsets(target: HTMLElement): {
+  start: number;
+  end: number;
+} | null {
+  const selection = window.getSelection?.();
+  if (!selection || selection.rangeCount === 0) {
+    return null;
+  }
+
+  const range = selection.getRangeAt(0);
+  if (
+    !target.contains(range.startContainer) ||
+    !target.contains(range.endContainer)
+  ) {
+    return null;
+  }
+
+  const startRange = document.createRange();
+  startRange.selectNodeContents(target);
+  startRange.setEnd(range.startContainer, range.startOffset);
+
+  const endRange = document.createRange();
+  endRange.selectNodeContents(target);
+  endRange.setEnd(range.endContainer, range.endOffset);
+
+  return {
+    start: startRange.toString().length,
+    end: endRange.toString().length,
+  };
+}
+
+function getEditableCaretOffset(target: HTMLElement): number {
+  const offsets = getEditableSelectionOffsets(target);
+  if (!offsets) {
+    return target.textContent?.length ?? 0;
+  }
+  return offsets.end;
+}
+
+function setEditableCaretOffset(target: HTMLElement, offset: number): void {
+  const focusTarget =
+    target.closest<HTMLElement>("[data-proposal-body-editor='true']") ?? target;
+  focusTarget.focus();
+  const boundedOffset = Math.max(0, offset);
+  const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT);
+  let remaining = boundedOffset;
+  let node = walker.nextNode();
+
+  while (node) {
+    const textLength = node.textContent?.length ?? 0;
+    if (remaining <= textLength) {
+      const range = document.createRange();
+      range.setStart(node, remaining);
+      range.collapse(true);
+      const selection = window.getSelection?.();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      return;
+    }
+    remaining -= textLength;
+    node = walker.nextNode();
+  }
+
+  const range = document.createRange();
+  range.selectNodeContents(target);
+  range.collapse(false);
+  const selection = window.getSelection?.();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+function findEditableDomTarget(
+  root: HTMLElement | null,
+  target: ProposalDocumentTextTarget,
+): HTMLElement | null {
+  if (!root) return null;
+  const candidates = Array.from(
+    root.querySelectorAll<HTMLElement>("[data-proposal-edit-block-id]"),
+  ).filter((node) => !node.closest(".dasti-proposal-document__measurement"));
+
+  return (
+    candidates.find((node) => {
+      if (target.type === "text-block") {
+        return (
+          node.dataset.proposalEditTarget === "text-block" &&
+          node.dataset.proposalEditBlockId === target.blockId
+        );
+      }
+
+      return (
+        node.dataset.proposalEditTarget === "list-item" &&
+        node.dataset.proposalEditBlockId === target.blockId &&
+        node.dataset.proposalEditItemId === target.itemId
+      );
+    }) ?? null
+  );
+}
+
+function findProposalBodySelectionTarget(
+  root: HTMLElement,
+): { target: ProposalDocumentTextTarget; element: HTMLElement } | null {
+  const selection = window.getSelection?.();
+  if (!selection || selection.rangeCount === 0) return null;
+  const range = selection.getRangeAt(0);
+  if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) {
+    return null;
+  }
+
+  const startElement =
+    range.startContainer instanceof Element
+      ? range.startContainer
+      : range.startContainer.parentElement;
+  const endElement =
+    range.endContainer instanceof Element
+      ? range.endContainer
+      : range.endContainer.parentElement;
+  const startTarget = startElement?.closest<HTMLElement>(
+    "[data-proposal-edit-target]",
+  );
+  const endTarget = endElement?.closest<HTMLElement>(
+    "[data-proposal-edit-target]",
+  );
+  if (!startTarget || startTarget !== endTarget) {
+    return null;
+  }
+
+  const targetType = startTarget.dataset.proposalEditTarget;
+  const blockId = startTarget.dataset.proposalEditBlockId;
+  if (targetType === "text-block" && blockId) {
+    return {
+      element: startTarget,
+      target: { type: "text-block", blockId },
+    };
+  }
+
+  if (targetType === "list-item" && blockId && startTarget.dataset.proposalEditItemId) {
+    return {
+      element: startTarget,
+      target: {
+        type: "list-item",
+        blockId,
+        itemId: startTarget.dataset.proposalEditItemId,
+      },
+    };
+  }
+
+  return null;
+}
+
+function resolveSplitFocusTarget(args: {
+  document: ProposalDocument;
+  target: ProposalDocumentTextTarget;
+}): ProposalDocumentTextTarget | null {
+  const { document, target } = args;
+
+  if (target.type === "text-block") {
+    const blockIndex = document.blocks.findIndex(
+      (block) => block.id === target.blockId,
+    );
+    const nextBlock = blockIndex >= 0 ? document.blocks[blockIndex + 1] : null;
+    return nextBlock?.type === "paragraph"
+      ? { type: "text-block", blockId: nextBlock.id }
+      : null;
+  }
+
+  const block = document.blocks.find(
+    (candidate) => candidate.id === target.blockId,
+  );
+  if (block?.type === "list") {
+    const itemIndex = block.items.findIndex((item) => item.id === target.itemId);
+    const nextItem = itemIndex >= 0 ? block.items[itemIndex + 1] : null;
+    if (nextItem) {
+      return {
+        type: "list-item",
+        blockId: block.id,
+        itemId: nextItem.id,
+      };
+    }
+  }
+
+  const blockIndex = document.blocks.findIndex(
+    (candidate) => candidate.id === target.blockId,
+  );
+  const nextBlock = blockIndex >= 0 ? document.blocks[blockIndex + 1] : null;
+  return nextBlock?.type === "paragraph"
+    ? { type: "text-block", blockId: nextBlock.id }
+    : null;
 }
 
 function getEditableValueLineProps(
@@ -2365,7 +2594,12 @@ function buildStructuredHeaderValues(args: {
 }
 
 function splitParagraphIntoPaginationFragments(paragraph: string): string[] {
-  const normalized = paragraph.replace(/\s+/g, " ").trim();
+  const normalized = paragraph
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/[ \t\f\v]+/g, " ").trim())
+    .join("\n")
+    .trim();
   if (!normalized) {
     return [];
   }
@@ -2559,7 +2793,8 @@ function buildProposalDocumentBlocks(
       return;
     }
 
-    splitParagraphIntoPaginationFragments(bodyBlock.text).forEach(
+    const fragments = splitParagraphIntoPaginationFragments(bodyBlock.text);
+    (fragments.length > 0 ? fragments : [""]).forEach(
       (fragment, fragmentIndex) => {
         blocks.push({
           id: `paragraph-${index}-${fragmentIndex}`,
@@ -2621,8 +2856,7 @@ function buildProposalDocumentBlocksFromStructuredDocument(
           text: item.text,
           ...(item.iconKey ? { iconKey: item.iconKey } : null),
           marker: item.marker ?? block.marker ?? null,
-        }))
-        .filter((item) => item.text);
+        }));
       if (items.length > 0) {
         blocks.push({
           id: block.id || `list-${index}`,
@@ -2638,7 +2872,8 @@ function buildProposalDocumentBlocksFromStructuredDocument(
       return;
     }
 
-    splitParagraphIntoPaginationFragments(block.text).forEach(
+    const fragments = splitParagraphIntoPaginationFragments(block.text);
+    (fragments.length > 0 ? fragments : [""]).forEach(
       (fragment, fragmentIndex) => {
         blocks.push({
           id: `${block.id || `paragraph-${index}`}-${fragmentIndex}`,
@@ -3239,6 +3474,7 @@ export function ProposalDocumentRenderer({
   const bodyRef = React.useRef<HTMLDivElement>(null);
   const measurementPageRef = React.useRef<HTMLDivElement>(null);
   const measurementBodyRef = React.useRef<HTMLDivElement>(null);
+  const pendingEditableFocusRef = React.useRef<PendingEditableFocus | null>(null);
   const [pageGroups, setPageGroups] = React.useState<number[][]>(() =>
     documentBlocks.length > 0
       ? [documentBlocks.map((_, index) => index)]
@@ -3266,6 +3502,17 @@ export function ProposalDocumentRenderer({
     ro.observe(el);
     return () => ro.disconnect();
   }, [resolvedPageSize.widthMm]);
+
+  React.useLayoutEffect(() => {
+    const pendingFocus = pendingEditableFocusRef.current;
+    if (!pendingFocus) return;
+
+    const target = findEditableDomTarget(rootRef.current, pendingFocus.target);
+    if (!target) return;
+
+    pendingEditableFocusRef.current = null;
+    setEditableCaretOffset(target, pendingFocus.offset);
+  }, [structuredDocument]);
 
   // When an explicit pageWidth is passed (e.g. from zoom controls), sync mm
   // vars immediately — before the ResizeObserver callback fires — so that
@@ -3405,53 +3652,113 @@ export function ProposalDocumentRenderer({
 
   const commitEditableDocumentText = React.useCallback(
     (
-      target:
-        | { type: "text-block"; blockId: string }
-        | { type: "list-item"; blockId: string; itemId: string },
+      target: ProposalDocumentTextTarget,
       value: string,
     ) => {
       if (!onProposalDocumentChange) return;
 
-      const nextText = normalizeEditableText(value);
-      const nextBlocks = structuredDocument.blocks.map(
-        (block): ProposalDocument["blocks"][number] => {
+      onProposalDocumentChange(
+        updateProposalDocumentTextTarget({
+          document: structuredDocument,
+          target,
+          value,
+        }),
+      );
+    },
+    [onProposalDocumentChange, structuredDocument],
+  );
+  const splitEditableDocumentTarget = React.useCallback(
+    (
+      target: ProposalDocumentTextTarget,
+      offset = 0,
+      currentValue?: string,
+    ) => {
+      if (!onProposalDocumentChange) return;
+
+      const baseDocument =
+        typeof currentValue === "string"
+          ? updateProposalDocumentTextTarget({
+              document: structuredDocument,
+              target,
+              value: currentValue,
+            })
+          : structuredDocument;
+      const nextDocument = splitProposalDocumentTarget({
+        document: baseDocument,
+        target,
+        offset,
+      });
+
+      if (nextDocument !== structuredDocument) {
+        const nextFocusTarget = resolveSplitFocusTarget({
+          document: nextDocument,
+          target,
+        });
+        if (nextFocusTarget) {
+          pendingEditableFocusRef.current = {
+            target: nextFocusTarget,
+            offset: 0,
+          };
+        }
+        onProposalDocumentChange(nextDocument);
+      }
+    },
+    [onProposalDocumentChange, structuredDocument],
+  );
+  const commitEditableBodyDocument = React.useCallback(
+    (editor: HTMLElement) => {
+      if (!onProposalDocumentChange) return;
+
+      const blockTextById = new Map<string, string>();
+      const listItemTextById = new Map<string, Map<string, string>>();
+
+      editor
+        .querySelectorAll<HTMLElement>("[data-proposal-edit-target='text-block']")
+        .forEach((node) => {
+          const blockId = node.dataset.proposalEditBlockId;
+          if (!blockId) return;
+          blockTextById.set(blockId, getEditableTextWithoutControls(node));
+        });
+
+      editor
+        .querySelectorAll<HTMLElement>("[data-proposal-edit-target='list-item']")
+        .forEach((node) => {
+          const blockId = node.dataset.proposalEditBlockId;
+          const itemId = node.dataset.proposalEditItemId;
+          if (!blockId || !itemId) return;
+          const itemMap = listItemTextById.get(blockId) ?? new Map<string, string>();
+          itemMap.set(itemId, getEditableTextWithoutControls(node));
+          listItemTextById.set(blockId, itemMap);
+        });
+
+      onProposalDocumentChange({
+        ...structuredDocument,
+        source: "structured",
+        blocks: structuredDocument.blocks.map((block) => {
           if (
-            target.type === "text-block" &&
-            block.id === target.blockId &&
-            (block.type === "salutation" || block.type === "paragraph")
+            (block.type === "salutation" || block.type === "paragraph") &&
+            blockTextById.has(block.id)
           ) {
             return {
               ...block,
-              text: nextText,
+              text: blockTextById.get(block.id) ?? block.text,
             };
           }
 
-          if (
-            target.type === "list-item" &&
-            block.id === target.blockId &&
-            block.type === "list"
-          ) {
+          if (block.type === "list" && listItemTextById.has(block.id)) {
+            const itemTextById = listItemTextById.get(block.id);
             return {
               ...block,
               items: block.items.map((item) =>
-                item.id === target.itemId
-                  ? {
-                      ...item,
-                      text: nextText,
-                    }
+                itemTextById?.has(item.id)
+                  ? { ...item, text: itemTextById.get(item.id) ?? item.text }
                   : item,
               ),
             };
           }
 
           return block;
-        },
-      );
-
-      onProposalDocumentChange({
-        ...structuredDocument,
-        source: "structured",
-        blocks: nextBlocks,
+        }),
       });
     },
     [onProposalDocumentChange, structuredDocument],
@@ -3506,13 +3813,24 @@ export function ProposalDocumentRenderer({
             spellCheck: true,
             "aria-label": label,
             "data-proposal-editable-text": "true",
-            onInput: () => {
-              // Keep preview editing browser-native while focused.
-              // Committing on every input makes React re-render the
-              // contentEditable text node and causes caret drift/stalls.
+            "data-proposal-edit-target": behavior.structuredTarget?.type,
+            "data-proposal-edit-block-id": behavior.structuredTarget?.blockId,
+            "data-proposal-edit-item-id":
+              behavior.structuredTarget?.type === "list-item"
+                ? behavior.structuredTarget.itemId
+                : undefined,
+            "data-proposal-edit-field-kind": behavior.fieldKind,
+            onInput: (event: React.FormEvent<HTMLElement>) => {
+              if (behavior.structuredTarget) {
+                onCommit(
+                  normalizeProposalDocumentEditText(
+                    event.currentTarget.textContent ?? "",
+                  ),
+                );
+              }
             },
             onBlur: (event: React.FocusEvent<HTMLElement>) => {
-              const normalized = normalizeEditableText(
+              const normalized = normalizeProposalDocumentEditText(
                 event.currentTarget.textContent ?? "",
               );
               if ((event.currentTarget.textContent ?? "") !== normalized) {
@@ -3523,7 +3841,11 @@ export function ProposalDocumentRenderer({
             onPaste: (event: React.ClipboardEvent<HTMLElement>) => {
               event.preventDefault();
               const pastedText = getClipboardPlainText(event);
-              insertPlainTextIntoEditableTarget(event.currentTarget, pastedText);
+              const normalized = insertPlainTextIntoEditableTarget(
+                event.currentTarget,
+                pastedText,
+              );
+              onCommit(normalized);
             },
             onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
               if (event.key === "Escape") {
@@ -3534,7 +3856,9 @@ export function ProposalDocumentRenderer({
 
               if (event.key === "Tab") {
                 onCommit(
-                  normalizeEditableText(event.currentTarget.textContent ?? ""),
+                  normalizeProposalDocumentEditText(
+                    event.currentTarget.textContent ?? "",
+                  ),
                 );
                 return;
               }
@@ -3545,7 +3869,33 @@ export function ProposalDocumentRenderer({
 
               event.preventDefault();
               if (behavior.multiline && event.shiftKey) {
-                insertPlainTextIntoEditableTarget(event.currentTarget, "\n");
+                const normalized = insertPlainTextIntoEditableTarget(
+                  event.currentTarget,
+                  "\n",
+                );
+                onCommit(normalized);
+                if (behavior.structuredTarget) {
+                  pendingEditableFocusRef.current = {
+                    target: behavior.structuredTarget,
+                    offset: getEditableCaretOffset(event.currentTarget),
+                  };
+                }
+                return;
+              }
+
+              if (behavior.structuredTarget) {
+                onCommit(
+                  normalizeProposalDocumentEditText(
+                    event.currentTarget.textContent ?? "",
+                  ),
+                );
+                splitEditableDocumentTarget(
+                  behavior.structuredTarget,
+                  getEditableCaretOffset(event.currentTarget),
+                  normalizeProposalDocumentEditText(
+                    event.currentTarget.textContent ?? "",
+                  ),
+                );
                 return;
               }
 
@@ -3553,7 +3903,7 @@ export function ProposalDocumentRenderer({
             },
           }
         : null,
-    [],
+    [splitEditableDocumentTarget],
   );
 
   const renderDocumentBlock = React.useCallback(
@@ -3573,7 +3923,7 @@ export function ProposalDocumentRenderer({
       ) =>
         getEditableTextProps(isTextEditable, label, (value) => {
           commitEditableDocumentText(target, value);
-        }, behavior);
+        }, { ...behavior, structuredTarget: target });
       const renderInlineText = (text: string) =>
         parseDocumentIconTextSegments(text).map((segment, index) => {
           if (segment.type === "text") return segment.text;
@@ -3599,6 +3949,7 @@ export function ProposalDocumentRenderer({
               {...(getEditableBlockTextProps(
                 { type: "text-block", blockId: block.id },
                 "Edit salutation",
+                { fieldKind: "salutation" },
               ) ?? {})}
             >
               {isTextEditable ? block.text : renderInlineText(block.text)}
@@ -3620,7 +3971,7 @@ export function ProposalDocumentRenderer({
               {...(getEditableBlockTextProps(
                 { type: "text-block", blockId: block.paragraphId },
                 "Edit paragraph",
-                { multiline: true },
+                { multiline: true, fieldKind: "paragraph" },
               ) ?? {})}
             >
               {isTextEditable ? block.text : renderInlineText(block.text)}
@@ -3768,6 +4119,7 @@ export function ProposalDocumentRenderer({
                           itemId: item.id,
                         },
                         "Edit list item",
+                        { multiline: true, fieldKind: "list-item" },
                       ) ?? {})}
                     >
                       {isTextEditable ? item.text : renderInlineText(item.text)}
@@ -3812,8 +4164,14 @@ export function ProposalDocumentRenderer({
 
   const renderVisibleDocumentBlocks = React.useCallback(
     (blocks: ProposalDocumentBlock[]) => {
-      const elements: React.ReactNode[] = [];
       const isTextEditable = Boolean(onProposalDocumentChange);
+      const descriptors: ProposalBodyEditableBlockDescriptor[] = [];
+
+      const pushVisibleDescriptor = (
+        descriptor: ProposalBodyEditableBlockDescriptor,
+      ) => {
+        descriptors.push(descriptor);
+      };
 
       for (let index = 0; index < blocks.length; index += 1) {
         const block = blocks[index];
@@ -3835,42 +4193,305 @@ export function ProposalDocumentRenderer({
             lastIndex += 1;
           }
 
-          elements.push(
-            <p
-              key={`visible-${block.id}`}
-              className={[
+          pushVisibleDescriptor({
+            type: "text-block",
+            blockId: block.paragraphId,
+            fieldKind: "paragraph",
+            text,
+            key: `visible-${block.id}`,
+            className: [
                 "dasti-proposal-document__paragraph",
                 block.continuation
                   ? "dasti-proposal-document__paragraph--continuation"
                   : "",
               ]
                 .filter(Boolean)
-                .join(" ")}
-              {...(getEditableTextProps(
-                isTextEditable,
-                "Edit paragraph",
-                (value) => {
-                  commitEditableDocumentText(
-                    { type: "text-block", blockId: block.paragraphId },
-                    value,
-                  );
-                },
-                { multiline: true },
-              ) ?? {})}
-            >
-              {text}
-            </p>,
-          );
+                .join(" "),
+          });
           index = lastIndex;
           continue;
         }
 
-        elements.push(renderDocumentBlock(block, { editable: true }));
+        if (block.type === "salutation") {
+          pushVisibleDescriptor({
+            type: "text-block",
+            blockId: block.id,
+            fieldKind: "salutation",
+            text: block.text,
+            key: block.id,
+            className: "dasti-proposal-document__salutation",
+          });
+          continue;
+        }
+
+        if (block.type === "list") {
+          pushVisibleDescriptor({
+            type: "list",
+            blockId: block.id,
+            block,
+            key: block.id,
+          });
+          continue;
+        }
+
+        pushVisibleDescriptor({
+          type: "closing",
+          block,
+          key: block.id,
+        });
       }
 
-      return elements;
+      if (!isTextEditable) {
+        return descriptors.map((descriptor) => {
+          if (descriptor.type === "text-block") {
+            return (
+              <p
+                key={descriptor.key}
+                className={descriptor.className}
+                data-proposal-block
+              >
+                {descriptor.text}
+              </p>
+            );
+          }
+          return renderDocumentBlock(descriptor.block);
+        });
+      }
+
+      return (
+        <div
+          key="proposal-body-editor"
+          className="dasti-proposal-document__body-editor"
+          contentEditable="plaintext-only"
+          suppressContentEditableWarning
+          role="textbox"
+          tabIndex={0}
+          spellCheck
+          aria-label="Edit proposal body"
+          data-proposal-body-editor="true"
+          data-proposal-editable-text="true"
+          onInput={(event) => {
+            commitEditableBodyDocument(event.currentTarget);
+          }}
+          onBlur={(event) => {
+            commitEditableBodyDocument(event.currentTarget);
+          }}
+          onPaste={(event) => {
+            event.preventDefault();
+            insertPlainTextIntoEditableTarget(
+              event.currentTarget,
+              getClipboardPlainText(event),
+            );
+            commitEditableBodyDocument(event.currentTarget);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              event.currentTarget.blur();
+              return;
+            }
+
+            if (event.key !== "Enter") {
+              return;
+            }
+
+            event.preventDefault();
+
+            if (event.shiftKey) {
+              insertPlainTextIntoEditableTarget(event.currentTarget, "\n");
+              commitEditableBodyDocument(event.currentTarget);
+              const target = findProposalBodySelectionTarget(event.currentTarget);
+              if (target) {
+                pendingEditableFocusRef.current = {
+                  target: target.target,
+                  offset: getEditableCaretOffset(target.element),
+                };
+              }
+              return;
+            }
+
+            const selectedTarget = findProposalBodySelectionTarget(
+              event.currentTarget,
+            );
+            if (!selectedTarget) return;
+
+            commitEditableBodyDocument(event.currentTarget);
+            splitEditableDocumentTarget(
+              selectedTarget.target,
+              getEditableCaretOffset(selectedTarget.element),
+              getEditableTextWithoutControls(selectedTarget.element),
+            );
+          }}
+        >
+          {descriptors.map((descriptor) => {
+            if (descriptor.type === "text-block") {
+              return (
+                <p
+                  key={descriptor.key}
+                  className={descriptor.className}
+                  data-proposal-block
+                  data-proposal-edit-target="text-block"
+                  data-proposal-edit-block-id={descriptor.blockId}
+                  data-proposal-edit-field-kind={descriptor.fieldKind}
+                >
+                  {descriptor.text}
+                </p>
+              );
+            }
+
+            if (descriptor.type === "closing") {
+              return renderDocumentBlock(descriptor.block);
+            }
+
+            const block = descriptor.block;
+            const blockMarkerType =
+              block.marker?.type === "icon" ? "icon" : listMarkerType;
+            const blockMarkerIcon =
+              block.marker?.type === "icon"
+                ? getDocumentIcon(block.marker.iconKey) ?? listMarkerIcon
+                : listMarkerIcon;
+            const hasItemIconOverride = block.items.some((item) =>
+              Boolean(getDocumentIcon(item.iconKey)),
+            );
+
+            return (
+              <ul
+                key={descriptor.key}
+                className={[
+                  "dasti-proposal-document__list",
+                  `dasti-proposal-document__list--${blockMarkerType}`,
+                  blockMarkerType === "icon" || hasItemIconOverride
+                    ? "dasti-proposal-document__list--document-icons"
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                style={listMarkerStyle}
+                data-proposal-block
+                data-proposal-edit-block-id={block.id}
+                data-proposal-edit-field-kind="list-item"
+              >
+                {block.items.map((item, itemIndex) => {
+                  const itemIcon = getDocumentIcon(item.iconKey);
+                  const itemMarker = item.marker ?? block.marker ?? null;
+                  const itemMarkerType =
+                    itemMarker?.type === "icon" || blockMarkerType === "icon"
+                      ? "icon"
+                      : itemMarker?.type ?? blockMarkerType;
+                  const markerIcon =
+                    itemIcon ??
+                    (itemMarkerType === "icon"
+                      ? itemMarker?.type === "icon"
+                        ? getDocumentIcon(itemMarker.iconKey) ?? blockMarkerIcon
+                        : blockMarkerIcon
+                      : null);
+                  const target = { blockId: block.id, itemId: item.id };
+                  const isPickerOpen =
+                    activeListItemIconPicker?.blockId === block.id &&
+                    activeListItemIconPicker.itemId === item.id;
+
+                  return (
+                    <li
+                      key={`${block.id}-${item.id || itemIndex}`}
+                      data-proposal-list-item
+                      data-proposal-list-item-editable="true"
+                      data-has-item-icon={itemIcon ? "true" : undefined}
+                      data-proposal-edit-target="list-item"
+                      data-proposal-edit-block-id={block.id}
+                      data-proposal-edit-item-id={item.id}
+                      data-proposal-edit-field-kind="list-item"
+                    >
+                      <span
+                        className="dasti-proposal-document__list-marker dasti-proposal-document__list-marker--editable"
+                        contentEditable={false}
+                        data-proposal-editor-control="true"
+                      >
+                        <button
+                          type="button"
+                          className="dasti-proposal-document__list-icon-trigger"
+                          aria-label={`Choose icon for list item ${itemIndex + 1}`}
+                          title="Choose icon"
+                          aria-expanded={isPickerOpen}
+                          onMouseDown={(markerEvent) =>
+                            markerEvent.preventDefault()
+                          }
+                          onClick={() =>
+                            setActiveListItemIconPicker((current) =>
+                              current?.blockId === block.id &&
+                              current.itemId === item.id
+                                ? null
+                                : target,
+                            )
+                          }
+                        >
+                          {markerIcon ? (
+                            <span
+                              aria-hidden="true"
+                              dangerouslySetInnerHTML={{
+                                __html: markerIcon.svg,
+                              }}
+                            />
+                          ) : (
+                            <span aria-hidden="true">
+                              {itemMarkerType === "dash" ? "-" : "•"}
+                            </span>
+                          )}
+                        </button>
+                        {isPickerOpen ? (
+                          <div
+                            className="dasti-proposal-document__list-icon-picker"
+                            role="dialog"
+                            aria-label={`Icon picker for list item ${itemIndex + 1}`}
+                          >
+                            <DocumentIconPicker
+                              label="List item icon"
+                              selectedIconKey={item.iconKey ?? null}
+                              onChange={(iconKey) => {
+                                commitListItemIcon(target, iconKey);
+                                setActiveListItemIconPicker(null);
+                              }}
+                            />
+                            <div className="dasti-proposal-document__list-icon-picker-actions">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  commitListItemIcon(target, null);
+                                  setActiveListItemIconPicker(null);
+                                }}
+                              >
+                                Clear
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setActiveListItemIconPicker(null)}
+                              >
+                                Close
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
+                      </span>
+                      {item.text}
+                    </li>
+                  );
+                })}
+              </ul>
+            );
+          })}
+        </div>
+      );
     },
-    [commitEditableDocumentText, onProposalDocumentChange, renderDocumentBlock],
+    [
+      activeListItemIconPicker,
+      commitEditableBodyDocument,
+      commitListItemIcon,
+      listMarkerIcon,
+      listMarkerStyle,
+      listMarkerType,
+      onProposalDocumentChange,
+      renderDocumentBlock,
+      splitEditableDocumentTarget,
+    ],
   );
 
   const resolvedPageGroups =

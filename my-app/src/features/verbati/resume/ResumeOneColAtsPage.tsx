@@ -50,8 +50,55 @@ import {
   resolveSectionHeadingIconKey,
   type DocumentIconSettings,
 } from "../../../lib/document-icons";
+import { useEditorFormattingActions } from "../../../components/remirror-editor/components/EditorToolbar";
+import {
+  INLINE_PAPER_FORMATTING_KEY_ATTR,
+  registerInlinePaperFormattingProvider,
+  type InlinePaperFormattingAction,
+} from "../../../lib/editor-ai-selection";
 
 type InlinePreviewAttrs = Record<string, string | undefined>;
+
+function InlinePaperFormattingRegistration({
+  enabled,
+  formattingKey,
+}: {
+  enabled: boolean;
+  formattingKey: string;
+}) {
+  const editorFormattingActions = useEditorFormattingActions();
+  const inlineFormattingActions = React.useMemo<InlinePaperFormattingAction[]>(
+    () =>
+      enabled
+        ? editorFormattingActions.map((action) => ({
+            id: action.id,
+            label: action.title,
+            title: action.title,
+            icon: action.icon,
+            active: action.active,
+            onRun: action.run,
+            onMouseDown: action.onMouseDown,
+          }))
+        : [],
+    [editorFormattingActions, enabled],
+  );
+  const inlineFormattingActionsRef = React.useRef(inlineFormattingActions);
+
+  React.useEffect(() => {
+    inlineFormattingActionsRef.current = inlineFormattingActions;
+  }, [inlineFormattingActions]);
+
+  React.useEffect(
+    () =>
+      registerInlinePaperFormattingProvider(
+        formattingKey,
+        () => inlineFormattingActionsRef.current,
+      ),
+    [formattingKey],
+  );
+
+  return null;
+}
 
 type ResumeOneColAtsPageProps = {
   data: ResumeData;
@@ -677,6 +724,7 @@ function PaperRichInlineEditor(args: {
     extensions: () => extensions as any,
     content: initialContent as any,
   });
+  const formattingKey = React.useId();
   const latestDocRef = React.useRef<RemirrorJSON>(initialContent);
   const lastExternalDocJsonRef = React.useRef(JSON.stringify(initialContent));
   const isFocusedRef = React.useRef(false);
@@ -729,6 +777,7 @@ function PaperRichInlineEditor(args: {
       aria-label={args.ariaLabel}
       data-resume-inline-editable="true"
       data-inline-paper-editable="true"
+      {...{ [INLINE_PAPER_FORMATTING_KEY_ATTR]: formattingKey }}
       data-paper-section-id={args.editTarget.sectionId}
       data-paper-section-type={args.editTarget.sectionType}
       data-paper-field-path={args.editTarget.fieldPath}
@@ -773,6 +822,10 @@ function PaperRichInlineEditor(args: {
         onChange={handleChange}
         editable={args.editable}
       >
+        <InlinePaperFormattingRegistration
+          enabled={args.editable}
+          formattingKey={formattingKey}
+        />
         <EditorComponent />
       </Remirror>
     </div>

@@ -245,6 +245,7 @@ vi.mock("../../features/verbati/cvDocumentToResumeData", () => ({
 vi.mock("../../lib/editor-ai-selection", () => ({
   findInlinePaperEditableForSelection: (root: HTMLElement | null) =>
     root?.querySelector('[data-inline-paper-editable="true"]') ?? null,
+  getInlinePaperFormattingActionsForSelection: () => [],
   getDomSelectionState: () => {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) {

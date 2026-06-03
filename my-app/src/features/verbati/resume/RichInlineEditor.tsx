@@ -15,6 +15,12 @@ import {
 import type { ActivePaperEditTarget } from "./InlineEditableText";
 import type { WorkshopResponsibilitiesRichContent } from "../resume.types";
 import type { WorkshopCommittedResponsibilitiesRichContent } from "../../../lib/resume/resumePagination";
+import { useEditorFormattingActions } from "../../../components/remirror-editor/components/EditorToolbar";
+import {
+  INLINE_PAPER_FORMATTING_KEY_ATTR,
+  registerInlinePaperFormattingProvider,
+  type InlinePaperFormattingAction,
+} from "../../../lib/editor-ai-selection";
 
 type InlinePreviewAttrs = Record<string, string | undefined>;
 
@@ -22,6 +28,47 @@ type RichInlineContent =
   | WorkshopResponsibilitiesRichContent
   | WorkshopCommittedResponsibilitiesRichContent
   | undefined;
+
+function InlinePaperFormattingRegistration({
+  enabled,
+  formattingKey,
+}: {
+  enabled: boolean;
+  formattingKey: string;
+}) {
+  const editorFormattingActions = useEditorFormattingActions();
+  const inlineFormattingActions = React.useMemo<InlinePaperFormattingAction[]>(
+    () =>
+      enabled
+        ? editorFormattingActions.map((action) => ({
+            id: action.id,
+            label: action.title,
+            title: action.title,
+            icon: action.icon,
+            active: action.active,
+            onRun: action.run,
+            onMouseDown: action.onMouseDown,
+          }))
+        : [],
+    [editorFormattingActions, enabled],
+  );
+  const inlineFormattingActionsRef = React.useRef(inlineFormattingActions);
+
+  React.useEffect(() => {
+    inlineFormattingActionsRef.current = inlineFormattingActions;
+  }, [inlineFormattingActions]);
+
+  React.useEffect(
+    () =>
+      registerInlinePaperFormattingProvider(
+        formattingKey,
+        () => inlineFormattingActionsRef.current,
+      ),
+    [formattingKey],
+  );
+
+  return null;
+}
 
 function cleanRichInlineText(value: unknown): string {
   return String(value ?? "");
@@ -142,6 +189,7 @@ export function PaperRichInlineEditor(args: {
     extensions: () => extensions as any,
     content: initialContent as any,
   });
+  const formattingKey = React.useId();
   const latestDocRef = React.useRef<RemirrorJSON>(initialContent);
   const lastExternalDocJsonRef = React.useRef(JSON.stringify(initialContent));
   const isFocusedRef = React.useRef(false);
@@ -191,6 +239,7 @@ export function PaperRichInlineEditor(args: {
       aria-label={args.ariaLabel}
       data-resume-inline-editable="true"
       data-inline-paper-editable="true"
+      {...{ [INLINE_PAPER_FORMATTING_KEY_ATTR]: formattingKey }}
       data-paper-section-id={args.editTarget.sectionId}
       data-paper-section-type={args.editTarget.sectionType}
       data-paper-field-path={args.editTarget.fieldPath}
@@ -230,6 +279,10 @@ export function PaperRichInlineEditor(args: {
       }}
     >
       <Remirror manager={manager} state={state} onChange={handleChange}>
+        <InlinePaperFormattingRegistration
+          enabled={args.editable}
+          formattingKey={formattingKey}
+        />
         <EditorComponent autoFocus={false} />
       </Remirror>
     </div>

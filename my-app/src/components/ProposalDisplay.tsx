@@ -7,6 +7,7 @@ import {
   Eye,
   FileUser,
   MagnifyingGlass,
+  List,
   Minus,
   Pencil,
   Plus,
@@ -21,7 +22,10 @@ import {
   getProposalGenerationRoutingDisclosureMessage,
   type ProposalGenerationFallbackInfo,
 } from "../lib/proposal-generation-ui";
-import FloatingAiToolbar, { type InlineAiActionId } from "./FloatingAiToolbar";
+import FloatingAiToolbar, {
+  type FloatingSelectionToolbarAction,
+  type InlineAiActionId,
+} from "./FloatingAiToolbar";
 import { Menu } from "./ui/menu";
 import { getProposalDocumentTypography } from "../lib/proposal-document-typography";
 import { useScrollEdgeFades } from "../hooks/use-scroll-edge-fades";
@@ -40,6 +44,7 @@ import {
 import type { DocumentPageSize } from "../lib/document-page-size";
 import { resolveDocumentPageSize } from "../lib/document-page-size";
 import {
+  getDomRangeSelectionState,
   getTextareaSelectionState,
   isInlineAiToolbarActiveElement,
   isPrimaryPointerPressed,
@@ -83,8 +88,12 @@ import {
   toggleMarkdownListForSelection,
 } from "../lib/proposal-textarea-list";
 import {
+  resolveProposalDocument,
   serializeProposalDocumentToLegacyString,
+  updateProposalDocumentTextTarget,
   type ProposalDocument,
+  type ProposalDocumentBlock,
+  type ProposalDocumentTextTarget,
 } from "../lib/proposal-document";
 
 interface ProposalDisplayProps {
@@ -205,13 +214,41 @@ type ProposalAiSuggestion = {
   interactionId: string;
   applyMode: AiApplyMode;
   outputMode: AiOutputMode;
+  source: "textarea" | "proposal-document";
   beforeText: string;
   afterText: string;
   selection: { start: number; end: number };
   anchor: EditorSelectionAnchor;
+  proposalTarget?: ProposalDocumentTextTarget;
+  proposalTargetText?: string;
+  proposalMultiTargetRange?: ProposalPreviewMultiTargetRange;
+  proposalDocumentUndo?: {
+    beforeDocument: ProposalDocument;
+    afterDocument: ProposalDocument;
+  };
   status: "preview" | "accepted" | "error";
   errorMessage?: string;
   undoSnapshot?: AiUndoSnapshot<string>;
+};
+
+type ProposalPreviewSelectionState = {
+  text: string;
+  anchor: EditorSelectionAnchor;
+  start: number;
+  end: number;
+  target: ProposalDocumentTextTarget | null;
+  targetText: string;
+  fieldKind: "paragraph" | "list-item" | "salutation" | "other";
+  multiTargetRange?: ProposalPreviewMultiTargetRange;
+};
+
+const PROPOSAL_EDITABLE_TEXT_SELECTOR = "[data-proposal-editable-text='true']";
+
+type ProposalPreviewMultiTargetRange = {
+  startTarget: ProposalDocumentTextTarget;
+  startOffset: number;
+  endTarget: ProposalDocumentTextTarget;
+  endOffset: number;
 };
 
 function isInlineAiToolbarTarget(target: EventTarget | null): boolean {
@@ -296,6 +333,481 @@ function doesProposalAiSelectionStillMatch(
   return (
     currentText === suggestion.beforeText ||
     currentText.trim() === suggestion.beforeText
+  );
+}
+
+function getProposalEditableElement(
+  node: Node | null | undefined,
+): HTMLElement | null {
+  const element =
+    node instanceof Element
+      ? node
+      : node?.parentElement instanceof HTMLElement
+        ? node.parentElement
+        : null;
+
+  return element?.closest<HTMLElement>(PROPOSAL_EDITABLE_TEXT_SELECTOR) ?? null;
+}
+
+function getProposalTextTargetFromElement(
+  element: HTMLElement,
+): ProposalDocumentTextTarget | null {
+  const targetType = element.dataset.proposalEditTarget;
+  const blockId = element.dataset.proposalEditBlockId;
+  if (targetType === "text-block" && blockId) {
+    return { type: "text-block", blockId };
+  }
+  if (targetType === "list-item" && blockId && element.dataset.proposalEditItemId) {
+    return {
+      type: "list-item",
+      blockId,
+      itemId: element.dataset.proposalEditItemId,
+    };
+  }
+  return null;
+}
+
+function getProposalFieldKindFromElement(
+  element: HTMLElement,
+): ProposalPreviewSelectionState["fieldKind"] {
+  const value = element.dataset.proposalEditFieldKind;
+  if (value === "paragraph" || value === "list-item" || value === "salutation") {
+    return value;
+  }
+  return "other";
+}
+
+function getProposalSelectionTargetFromRange(
+  range: Range,
+): {
+  element: HTMLElement;
+  target: ProposalDocumentTextTarget;
+  fieldKind: ProposalPreviewSelectionState["fieldKind"];
+} | null {
+  const startElement =
+    range.startContainer instanceof Element
+      ? range.startContainer
+      : range.startContainer.parentElement;
+  const endElement =
+    range.endContainer instanceof Element
+      ? range.endContainer
+      : range.endContainer.parentElement;
+  const startTarget = startElement?.closest<HTMLElement>(
+    "[data-proposal-edit-target]",
+  );
+  const endTarget = endElement?.closest<HTMLElement>(
+    "[data-proposal-edit-target]",
+  );
+  if (!startTarget || startTarget !== endTarget) {
+    return null;
+  }
+
+  const target = getProposalTextTargetFromElement(startTarget);
+  if (!target) return null;
+
+  return {
+    element: startTarget,
+    target,
+    fieldKind: getProposalFieldKindFromElement(startTarget),
+  };
+}
+
+function getProposalSelectionTargetForNode(
+  node: Node,
+): {
+  element: HTMLElement;
+  target: ProposalDocumentTextTarget;
+  fieldKind: ProposalPreviewSelectionState["fieldKind"];
+} | null {
+  const element =
+    node instanceof Element ? node : node.parentElement;
+  const targetElement = element?.closest<HTMLElement>(
+    "[data-proposal-edit-target]",
+  );
+  if (!targetElement) return null;
+  const target = getProposalTextTargetFromElement(targetElement);
+  if (!target) return null;
+  return {
+    element: targetElement,
+    target,
+    fieldKind: getProposalFieldKindFromElement(targetElement),
+  };
+}
+
+function getSelectionOffsetWithinElement(
+  element: HTMLElement,
+  container: Node,
+  offset: number,
+): number | null {
+  if (!element.contains(container)) return null;
+
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  range.setEnd(container, offset);
+  return range.toString().length;
+}
+
+function getProposalMultiTargetRangeFromDomRange(
+  range: Range,
+): ProposalPreviewMultiTargetRange | null {
+  const start = getProposalSelectionTargetForNode(range.startContainer);
+  const end = getProposalSelectionTargetForNode(range.endContainer);
+  if (!start || !end || start.element === end.element) {
+    return null;
+  }
+
+  if (
+    start.target.type !== "text-block" ||
+    end.target.type !== "text-block" ||
+    start.fieldKind !== "paragraph" ||
+    end.fieldKind !== "paragraph"
+  ) {
+    return null;
+  }
+
+  const startOffset = getSelectionOffsetWithinElement(
+    start.element,
+    range.startContainer,
+    range.startOffset,
+  );
+  const endOffset = getSelectionOffsetWithinElement(
+    end.element,
+    range.endContainer,
+    range.endOffset,
+  );
+  if (startOffset === null || endOffset === null) {
+    return null;
+  }
+
+  return {
+    startTarget: start.target,
+    startOffset,
+    endTarget: end.target,
+    endOffset,
+  };
+}
+
+function getSelectionOffsetsWithinElement(
+  element: HTMLElement,
+  range: Range,
+): { start: number; end: number } | null {
+  if (
+    !element.contains(range.startContainer) ||
+    !element.contains(range.endContainer)
+  ) {
+    return null;
+  }
+
+  const startRange = document.createRange();
+  startRange.selectNodeContents(element);
+  startRange.setEnd(range.startContainer, range.startOffset);
+
+  const endRange = document.createRange();
+  endRange.selectNodeContents(element);
+  endRange.setEnd(range.endContainer, range.endOffset);
+
+  return {
+    start: startRange.toString().length,
+    end: endRange.toString().length,
+  };
+}
+
+function getProposalDocumentTargetText(
+  document: ProposalDocument,
+  target: ProposalDocumentTextTarget,
+): string | null {
+  for (const block of document.blocks) {
+    if (
+      target.type === "text-block" &&
+      block.id === target.blockId &&
+      (block.type === "paragraph" || block.type === "salutation")
+    ) {
+      return block.text;
+    }
+    if (
+      target.type === "list-item" &&
+      block.id === target.blockId &&
+      block.type === "list"
+    ) {
+      return block.items.find((item) => item.id === target.itemId)?.text ?? null;
+    }
+  }
+  return null;
+}
+
+function getProposalPreviewSelectionState(
+  root: HTMLElement | null,
+): ProposalPreviewSelectionState | null {
+  if (!root || typeof window === "undefined") return null;
+
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    return null;
+  }
+
+  const text = selection.toString().trim();
+  if (!text) return null;
+
+  const range = selection.getRangeAt(0);
+  const editableCandidates = [
+    selection.focusNode,
+    selection.anchorNode,
+    range.startContainer,
+    range.endContainer,
+    range.commonAncestorContainer,
+  ]
+    .map(getProposalEditableElement)
+    .filter((element): element is HTMLElement => Boolean(element));
+  const uniqueCandidates = Array.from(new Set(editableCandidates));
+  if (uniqueCandidates.length !== 1 || !root.contains(uniqueCandidates[0])) {
+    return null;
+  }
+
+  const editableElement = uniqueCandidates[0];
+  const selectedTarget = getProposalSelectionTargetFromRange(range);
+  const multiTargetRange = selectedTarget
+    ? undefined
+    : getProposalMultiTargetRangeFromDomRange(range) ?? undefined;
+  const offsetElement = selectedTarget?.element ?? editableElement;
+  const target = selectedTarget?.target ?? getProposalTextTargetFromElement(editableElement);
+  const offsets = getSelectionOffsetsWithinElement(offsetElement, range);
+  const anchor = getDomRangeSelectionState(root, range, text)?.anchor;
+  if (!offsets || !anchor) {
+    return null;
+  }
+
+  return {
+    text,
+    anchor,
+    start: Math.min(offsets.start, offsets.end),
+    end: Math.max(offsets.start, offsets.end),
+    target,
+    targetText: offsetElement.textContent ?? "",
+    fieldKind:
+      selectedTarget?.fieldKind ?? getProposalFieldKindFromElement(editableElement),
+    multiTargetRange,
+  };
+}
+
+function getProposalDocumentTargetKey(target: ProposalDocumentTextTarget): string {
+  return target.type === "text-block"
+    ? `text-block:${target.blockId}`
+    : `list-item:${target.blockId}:${target.itemId}`;
+}
+
+function getProposalDocumentTextBlockText(
+  document: ProposalDocument,
+  target: ProposalDocumentTextTarget,
+): string | null {
+  if (target.type !== "text-block") return null;
+  const block = document.blocks.find((candidate) => candidate.id === target.blockId);
+  return block?.type === "paragraph" || block?.type === "salutation"
+    ? block.text
+    : null;
+}
+
+function replaceProposalDocumentMultiTargetSelection(args: {
+  document: ProposalDocument;
+  range: ProposalPreviewMultiTargetRange;
+  replacementText: string;
+}): ProposalDocument | null {
+  if (
+    args.range.startTarget.type !== "text-block" ||
+    args.range.endTarget.type !== "text-block"
+  ) {
+    return null;
+  }
+
+  const startText = getProposalDocumentTextBlockText(
+    args.document,
+    args.range.startTarget,
+  );
+  const endText = getProposalDocumentTextBlockText(
+    args.document,
+    args.range.endTarget,
+  );
+  if (startText === null || endText === null) {
+    return null;
+  }
+
+  const startKey = getProposalDocumentTargetKey(args.range.startTarget);
+  const endKey = getProposalDocumentTargetKey(args.range.endTarget);
+  const nextBlocks: ProposalDocumentBlock[] = [];
+  let hasStarted = false;
+  let hasReplaced = false;
+
+  for (const block of args.document.blocks) {
+    if (block.type !== "paragraph" && block.type !== "salutation") {
+      if (!hasStarted || hasReplaced) {
+        nextBlocks.push(block);
+      }
+      continue;
+    }
+
+    const blockKey = getProposalDocumentTargetKey({
+      type: "text-block",
+      blockId: block.id,
+    });
+
+    if (blockKey === startKey) {
+      hasStarted = true;
+      if (startKey === endKey) {
+        nextBlocks.push({
+          ...block,
+          text: replaceSelectedText({
+            text: block.text,
+            selection: {
+              start: args.range.startOffset,
+              end: args.range.endOffset,
+            },
+            replacementText: args.replacementText,
+          }),
+        });
+        hasReplaced = true;
+        continue;
+      }
+
+      nextBlocks.push({
+        ...block,
+        text:
+          block.text.slice(0, args.range.startOffset) +
+          args.replacementText +
+          endText.slice(args.range.endOffset),
+      });
+      continue;
+    }
+
+    if (hasStarted && !hasReplaced) {
+      if (blockKey === endKey) {
+        hasReplaced = true;
+      }
+      continue;
+    }
+
+    nextBlocks.push(block);
+  }
+
+  return hasStarted && hasReplaced
+    ? { ...args.document, source: "structured", blocks: nextBlocks }
+    : null;
+}
+
+function createProposalListId(existingIds: Set<string>, baseId: string, suffix: string) {
+  let candidate = `${baseId || "proposal-block"}-${suffix}`;
+  let index = 2;
+  while (existingIds.has(candidate)) {
+    candidate = `${baseId || "proposal-block"}-${suffix}-${index}`;
+    index += 1;
+  }
+  existingIds.add(candidate);
+  return candidate;
+}
+
+function collectProposalDocumentIds(document: ProposalDocument): Set<string> {
+  const ids = new Set<string>();
+  for (const block of document.blocks) {
+    ids.add(block.id);
+    if (block.type === "list") {
+      block.items.forEach((item) => ids.add(item.id));
+    }
+  }
+  return ids;
+}
+
+function applyStructuredProposalListAction(
+  document: ProposalDocument,
+  selection: ProposalPreviewSelectionState,
+): ProposalDocument | null {
+  if (!isProposalPreviewListActionSafe(selection)) {
+    return null;
+  }
+  if (!selection.target) {
+    return null;
+  }
+  const selectionTarget = selection.target;
+
+  const targetText = getProposalDocumentTargetText(document, selectionTarget);
+  if (targetText === null) return null;
+
+  const selectedText = targetText.slice(selection.start, selection.end);
+  const listLines = selectedText
+    .split("\n")
+    .map((line) => line.replace(/^[-*•]\s+/u, "").trim())
+    .filter(Boolean);
+  if (listLines.length === 0) return null;
+
+  const existingIds = collectProposalDocumentIds(document);
+  const blocks: ProposalDocumentBlock[] = [];
+
+  for (const block of document.blocks) {
+    if (
+      selectionTarget.type === "text-block" &&
+      block.id === selectionTarget.blockId &&
+      block.type === "paragraph"
+    ) {
+      const beforeText = targetText.slice(0, selection.start).trim();
+      const afterText = targetText.slice(selection.end).trim();
+      if (beforeText) {
+        blocks.push({ ...block, text: beforeText });
+      }
+      const listId = createProposalListId(existingIds, block.id, "list");
+      blocks.push({
+        id: listId,
+        type: "list",
+        items: listLines.map((line, index) => ({
+          id: createProposalListId(existingIds, listId, `item-${index + 1}`),
+          text: line,
+        })),
+      });
+      if (afterText) {
+        blocks.push({
+          id: createProposalListId(existingIds, block.id, "after"),
+          type: "paragraph",
+          text: afterText,
+        });
+      }
+      continue;
+    }
+
+    if (
+      selectionTarget.type === "list-item" &&
+      block.id === selectionTarget.blockId &&
+      block.type === "list"
+    ) {
+      blocks.push({
+        ...block,
+        items: block.items.flatMap((item) => {
+          if (item.id !== selectionTarget.itemId) return [item];
+          return listLines.map((line, index) => ({
+            ...item,
+            id:
+              index === 0
+                ? item.id
+                : createProposalListId(existingIds, item.id, `split-${index + 1}`),
+            text: line,
+          }));
+        }),
+      });
+      continue;
+    }
+
+    blocks.push(block);
+  }
+
+  return {
+    ...document,
+    source: "structured",
+    blocks,
+  };
+}
+
+function isProposalPreviewListActionSafe(
+  selection: ProposalPreviewSelectionState | null,
+): boolean {
+  return (
+    Boolean(selection?.target) &&
+    (selection?.fieldKind === "paragraph" ||
+      selection?.fieldKind === "list-item")
   );
 }
 
@@ -748,6 +1260,8 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     start: number;
     end: number;
   } | null>(null);
+  const [previewSelectionState, setPreviewSelectionState] =
+    React.useState<ProposalPreviewSelectionState | null>(null);
   const [editableTextareaScrollTop, setEditableTextareaScrollTop] =
     React.useState(0);
   const [editableTextareaBlockSize, setEditableTextareaBlockSize] =
@@ -1238,6 +1752,12 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     }
   }, [textareaSelectionState]);
 
+  React.useEffect(() => {
+    if (previewSelectionState) {
+      setQueuedPreviewActionLabel(null);
+    }
+  }, [previewSelectionState]);
+
   const syncEditableTextareaBlockSize = React.useCallback(() => {
     const textarea = editableTextareaRef.current;
     if (!textarea || !isEditable || !usesDocumentRenderer) {
@@ -1322,6 +1842,38 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     setTextareaSelectionState(nextSelection);
   }, []);
 
+  const runPreviewSelectionCheck = React.useCallback(() => {
+    if (isPrimaryPointerPressed()) {
+      return;
+    }
+    const nextSelection = getProposalPreviewSelectionState(
+      viewerSurfaceRef.current,
+    );
+    if (!nextSelection && isInlineAiToolbarActiveElement()) {
+      return;
+    }
+    setPreviewSelectionState(nextSelection);
+  }, []);
+
+  const schedulePreviewSelectionCheck = React.useCallback(
+    (immediate = false) => {
+      if (selectionDebounceRef.current !== null) {
+        window.clearTimeout(selectionDebounceRef.current);
+      }
+
+      if (immediate) {
+        runPreviewSelectionCheck();
+        return;
+      }
+
+      selectionDebounceRef.current = window.setTimeout(() => {
+        selectionDebounceRef.current = null;
+        runPreviewSelectionCheck();
+      }, 90);
+    },
+    [runPreviewSelectionCheck],
+  );
+
   const scheduleTextareaSelectionCheck = React.useCallback(
     (immediate = false) => {
       if (selectionDebounceRef.current !== null) {
@@ -1362,6 +1914,27 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   }, [isEditable, scheduleTextareaSelectionCheck]);
 
   React.useEffect(() => {
+    if (!canEditPreviewDocumentText) {
+      setPreviewSelectionState(null);
+      return undefined;
+    }
+
+    const handleSelectionChange = () => {
+      schedulePreviewSelectionCheck();
+    };
+    const handlePointerUp = () => {
+      schedulePreviewSelectionCheck();
+    };
+
+    document.addEventListener("selectionchange", handleSelectionChange);
+    document.addEventListener("pointerup", handlePointerUp);
+    return () => {
+      document.removeEventListener("selectionchange", handleSelectionChange);
+      document.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [canEditPreviewDocumentText, schedulePreviewSelectionCheck]);
+
+  React.useEffect(() => {
     if (!isEditable || !textareaSelectionState) {
       return undefined;
     }
@@ -1386,6 +1959,36 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       window.removeEventListener("resize", handleReposition);
     };
   }, [isEditable, scheduleTextareaSelectionCheck, textareaSelectionState]);
+
+  React.useEffect(() => {
+    if (!canEditPreviewDocumentText || !previewSelectionState) {
+      return undefined;
+    }
+
+    const root = viewerSurfaceRef.current;
+    const handleReposition = () => {
+      schedulePreviewSelectionCheck(true);
+    };
+    const resizeObserver =
+      root && typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(handleReposition)
+        : null;
+
+    if (root) {
+      resizeObserver?.observe(root);
+    }
+
+    window.addEventListener("resize", handleReposition);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", handleReposition);
+    };
+  }, [
+    canEditPreviewDocumentText,
+    previewSelectionState,
+    schedulePreviewSelectionCheck,
+  ]);
 
   const restoreTextareaSelection = React.useCallback(
     (selectionStart: number, selectionEnd: number) => {
@@ -1424,6 +2027,73 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     proposalContent,
     restoreTextareaSelection,
   ]);
+  const proposalSelectionFormattingActions =
+    React.useMemo<FloatingSelectionToolbarAction[]>(
+      () =>
+        isEditable
+          ? [
+              {
+                id: "list",
+                label: "List",
+                title: "List",
+                icon: <List size={15} aria-hidden="true" />,
+                disabled: !isEditable,
+                onRun: applyTextareaListTransform,
+              },
+            ]
+          : [],
+      [applyTextareaListTransform, isEditable],
+    );
+
+  const applyPreviewListTransform = React.useCallback(() => {
+    if (!canEditPreviewDocumentText || !previewSelectionState) return;
+    const currentDocument = resolveProposalDocument({
+      document: proposalDocument,
+      content: proposalContent,
+      proposalType,
+      closing,
+    });
+    const nextDocument = applyStructuredProposalListAction(
+      currentDocument,
+      previewSelectionState,
+    );
+    if (!nextDocument) return;
+
+    setAiSuggestion(null);
+    setPreviewSelectionState(null);
+    handlePreviewProposalDocumentChange(nextDocument);
+  }, [
+    canEditPreviewDocumentText,
+    closing,
+    handlePreviewProposalDocumentChange,
+    previewSelectionState,
+    proposalContent,
+    proposalDocument,
+    proposalType,
+  ]);
+
+  const previewSelectionFormattingActions =
+    React.useMemo<FloatingSelectionToolbarAction[]>(
+      () =>
+        canEditPreviewDocumentText &&
+        isProposalPreviewListActionSafe(previewSelectionState)
+          ? [
+              {
+                id: "list",
+                label: "List",
+                title: "List",
+                icon: <List size={15} aria-hidden="true" />,
+                disabled: false,
+                onRun: applyPreviewListTransform,
+              },
+            ]
+          : [],
+      [
+        applyPreviewListTransform,
+        canEditPreviewDocumentText,
+        previewSelectionState,
+      ],
+    );
 
   const handleEditableTextareaKeyDown = React.useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1506,6 +2176,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           interactionId,
           applyMode: normalizedResult.applyMode,
           outputMode: normalizedResult.outputMode,
+          source: "textarea" as const,
           beforeText: textareaSelectionState.text,
           afterText: normalizedResult.text,
           selection: {
@@ -1542,8 +2213,226 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     ],
   );
 
+  const handleRunPreviewAiAction = React.useCallback(
+    async (actionId: InlineAiActionId, instruction: string) => {
+      if (!previewSelectionState) return;
+
+      const currentDocument = resolveProposalDocument({
+        document: proposalDocument,
+        content: proposalContent,
+        proposalType,
+        closing,
+      });
+      const targetText =
+        previewSelectionState.target
+          ? getProposalDocumentTargetText(
+              currentDocument,
+              previewSelectionState.target,
+            ) ?? previewSelectionState.targetText
+          : previewSelectionState.targetText;
+      const selectedText = previewSelectionState.target
+        ? targetText.slice(
+            previewSelectionState.start,
+            previewSelectionState.end,
+          )
+        : previewSelectionState.text;
+      if (!selectedText.trim()) return;
+
+      const interactionId = createAiInteractionId();
+      const startedAt = window.performance.now();
+      recordAiInteractionEvent({
+        name: "ai_started",
+        interactionId,
+        surface: "proposal_editor",
+        actionId,
+      });
+
+      try {
+        setPendingInlineAiActionId(actionId);
+        setIsApplyingInlineAi(true);
+        const result = await transformEditorSelectionAction({
+          mode: actionId,
+          instruction,
+          selectedText,
+          ...(actionId === "tailor_to_job" && normalizedEditorAiJobContext
+            ? { jobContext: normalizedEditorAiJobContext }
+            : {}),
+        });
+        const normalizedResult = normalizeEditorAiTextResult(result, actionId);
+        if (!normalizedResult) {
+          recordAiInteractionEvent({
+            name: "ai_failed",
+            interactionId,
+            surface: "proposal_editor",
+            actionId,
+            errorKind: "empty_result",
+          });
+          return;
+        }
+
+        console.info("[ProposalDisplay] preview editor AI model used", {
+          requestedActionId: actionId,
+          actionId: normalizedResult.actionId,
+          actualModelProvider: normalizedResult.actualModelProvider,
+          actualModelName: normalizedResult.actualModelName,
+          fallbackUsed: normalizedResult.fallbackUsed,
+          durationMs: Math.round(window.performance.now() - startedAt),
+        });
+
+        recordAiInteractionEvent({
+          name: "ai_completed",
+          interactionId,
+          surface: "proposal_editor",
+          actionId: normalizedResult.actionId,
+          applyMode: normalizedResult.applyMode,
+          outputMode: normalizedResult.outputMode,
+        });
+
+        setAiSuggestion({
+          actionId: normalizedResult.actionId,
+          actionLabel: normalizedResult.actionLabel,
+          interactionId,
+          applyMode: normalizedResult.applyMode,
+          outputMode: normalizedResult.outputMode,
+          source: "proposal-document",
+          beforeText: selectedText,
+          afterText: normalizedResult.text,
+          selection: {
+            start: previewSelectionState.start,
+            end: previewSelectionState.end,
+          },
+          anchor: previewSelectionState.anchor,
+          proposalTarget: previewSelectionState.target ?? undefined,
+          proposalTargetText: targetText,
+          proposalMultiTargetRange: previewSelectionState.multiTargetRange,
+          status: "preview",
+        });
+      } catch (error) {
+        recordAiInteractionEvent({
+          name: "ai_failed",
+          interactionId,
+          surface: "proposal_editor",
+          actionId,
+          errorKind: "request_failed",
+        });
+        throw error;
+      } finally {
+        setIsApplyingInlineAi(false);
+        setPendingInlineAiActionId(null);
+      }
+    },
+    [
+      closing,
+      normalizedEditorAiJobContext,
+      previewSelectionState,
+      proposalContent,
+      proposalDocument,
+      proposalType,
+      transformEditorSelectionAction,
+    ],
+  );
+
   const handleAcceptAiSuggestion = React.useCallback(() => {
-    if (!aiSuggestion || !proposalContent) return;
+    if (!aiSuggestion) return;
+
+    if (aiSuggestion.source === "proposal-document") {
+      const currentDocument = resolveProposalDocument({
+        document: proposalDocument,
+        content: proposalContent,
+        proposalType,
+        closing,
+      });
+
+      if (!aiSuggestion.proposalTarget && aiSuggestion.proposalMultiTargetRange) {
+        const nextDocument = replaceProposalDocumentMultiTargetSelection({
+          document: currentDocument,
+          range: aiSuggestion.proposalMultiTargetRange,
+          replacementText: aiSuggestion.afterText,
+        });
+        if (!nextDocument) {
+          setAiSuggestion({
+            ...aiSuggestion,
+            status: "error",
+            errorMessage:
+              "Selected text changed. Re-select the text and run AI again.",
+          });
+          return;
+        }
+
+        handlePreviewProposalDocumentChange(nextDocument);
+        setPreviewSelectionState(null);
+        setAiSuggestion({
+          ...aiSuggestion,
+          status: "accepted",
+          proposalDocumentUndo: {
+            beforeDocument: currentDocument,
+            afterDocument: nextDocument,
+          },
+        });
+        recordAiInteractionEvent({
+          name: "ai_accepted",
+          interactionId: aiSuggestion.interactionId,
+          surface: "proposal_editor",
+          actionId: aiSuggestion.actionId,
+          applyMode: aiSuggestion.applyMode,
+          outputMode: aiSuggestion.outputMode,
+        });
+        return;
+      }
+
+      if (!aiSuggestion.proposalTarget) return;
+
+      const currentTargetText = getProposalDocumentTargetText(
+        currentDocument,
+        aiSuggestion.proposalTarget,
+      );
+
+      if (
+        currentTargetText === null ||
+        !doesProposalAiSelectionStillMatch(currentTargetText, aiSuggestion)
+      ) {
+        setAiSuggestion({
+          ...aiSuggestion,
+          status: "error",
+          errorMessage:
+            "Selected text changed. Re-select the text and run AI again.",
+        });
+        return;
+      }
+
+      const nextTargetText = replaceSelectedText({
+        text: currentTargetText,
+        selection: aiSuggestion.selection,
+        replacementText: aiSuggestion.afterText,
+      });
+      const nextDocument = updateProposalDocumentTextTarget({
+        document: currentDocument,
+        target: aiSuggestion.proposalTarget,
+        value: nextTargetText,
+      });
+      handlePreviewProposalDocumentChange(nextDocument);
+      setPreviewSelectionState(null);
+      setAiSuggestion({
+        ...aiSuggestion,
+        status: "accepted",
+        proposalTargetText: currentTargetText,
+        proposalDocumentUndo: {
+          beforeDocument: currentDocument,
+          afterDocument: nextDocument,
+        },
+      });
+      recordAiInteractionEvent({
+        name: "ai_accepted",
+        interactionId: aiSuggestion.interactionId,
+        surface: "proposal_editor",
+        actionId: aiSuggestion.actionId,
+        applyMode: aiSuggestion.applyMode,
+        outputMode: aiSuggestion.outputMode,
+      });
+      return;
+    }
+
+    if (!proposalContent) return;
 
     if (!doesProposalAiSelectionStillMatch(proposalContent, aiSuggestion)) {
       setAiSuggestion({
@@ -1582,10 +2471,36 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       textarea.focus();
       textarea.setSelectionRange(selectionEnd, selectionEnd);
     }, 0);
-  }, [aiSuggestion, onContentChange, proposalContent]);
+  }, [
+    aiSuggestion,
+    closing,
+    handlePreviewProposalDocumentChange,
+    onContentChange,
+    proposalContent,
+    proposalDocument,
+    proposalType,
+  ]);
 
   const handleUndoAiSuggestion = React.useCallback(() => {
-    if (!aiSuggestion?.undoSnapshot) return;
+    if (!aiSuggestion) return;
+
+    if (aiSuggestion.proposalDocumentUndo) {
+      handlePreviewProposalDocumentChange(
+        aiSuggestion.proposalDocumentUndo.beforeDocument,
+      );
+      recordAiInteractionEvent({
+        name: "ai_undone",
+        interactionId: aiSuggestion.interactionId,
+        surface: "proposal_editor",
+        actionId: aiSuggestion.actionId,
+        applyMode: aiSuggestion.applyMode,
+        outputMode: aiSuggestion.outputMode,
+      });
+      setAiSuggestion(null);
+      return;
+    }
+
+    if (!aiSuggestion.undoSnapshot) return;
     onContentChange?.(restoreAiUndoSnapshot(aiSuggestion.undoSnapshot));
     recordAiInteractionEvent({
       name: "ai_undone",
@@ -1596,7 +2511,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       outputMode: aiSuggestion.outputMode,
     });
     setAiSuggestion(null);
-  }, [aiSuggestion, onContentChange]);
+  }, [aiSuggestion, handlePreviewProposalDocumentChange, onContentChange]);
 
   const handleDiscardAiSuggestion = React.useCallback(() => {
     if (!aiSuggestion) return;
@@ -1633,7 +2548,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   );
 
   const proposalAiReviewOverlay =
-    isEditable && aiSuggestion && proposalAiReviewTarget ? (
+    aiSuggestion && proposalAiReviewTarget ? (
       <DocumentAiReviewOverlay
         open
         target={proposalAiReviewTarget}
@@ -1658,7 +2573,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             : handleDiscardAiSuggestion
         }
         onUndo={
-          aiSuggestion.undoSnapshot ? handleUndoAiSuggestion : undefined
+          aiSuggestion.undoSnapshot || aiSuggestion.proposalDocumentUndo
+            ? handleUndoAiSuggestion
+            : undefined
         }
       />
     ) : null;
@@ -2042,25 +2959,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         ) : null}
       </div>
     ) : null;
-  const textareaListToolbar = isEditable ? (
-    <div
-      className="dasti-proposal-editor-page__list-toolbar"
-      aria-label="Proposal list tools"
-      data-no-pan="true"
-    >
-      <button
-        type="button"
-        className="dasti-proposal-editor-page__list-toolbar-button"
-        aria-label="List"
-        disabled={!isEditable}
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={() => applyTextareaListTransform()}
-      >
-        List
-      </button>
-    </div>
-  ) : null;
-
   const renderDocumentStage = () => (
     <div
       className="dasti-document-stage-chassis"
@@ -2615,7 +3513,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                 <div className="dasti-proposal-editor-page__inner">
                   {inlineSelectionOverlay}
                   {inlineProofingOverlay}
-                  {textareaListToolbar}
                   <textarea
                     ref={attachEditableTextarea}
                     value={proposalContent ?? ""}
@@ -2939,7 +3836,6 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         <div className="dasti-proposal-inline-proofing-field">
           {inlineSelectionOverlay}
           {inlineProofingOverlay}
-          {textareaListToolbar}
           <textarea
             ref={attachEditableTextarea}
             value={proposalContent ?? ""}
@@ -3156,8 +4052,21 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           isLoading={isApplyingInlineAi}
           pendingActionId={pendingInlineAiActionId}
           includeJobContextActions={Boolean(normalizedEditorAiJobContext)}
+          formattingActions={proposalSelectionFormattingActions}
           onClose={() => setTextareaSelectionState(null)}
           onRunAction={handleRunInlineAiAction}
+        />
+      ) : null}
+      {canEditPreviewDocumentText && previewSelectionState && !aiSuggestion ? (
+        <FloatingAiToolbar
+          open
+          anchor={previewSelectionState.anchor}
+          isLoading={isApplyingInlineAi}
+          pendingActionId={pendingInlineAiActionId}
+          includeJobContextActions={Boolean(normalizedEditorAiJobContext)}
+          formattingActions={previewSelectionFormattingActions}
+          onClose={() => setPreviewSelectionState(null)}
+          onRunAction={handleRunPreviewAiAction}
         />
       ) : null}
       <div
