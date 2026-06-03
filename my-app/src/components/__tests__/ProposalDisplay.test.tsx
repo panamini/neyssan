@@ -193,6 +193,21 @@ function placeContentEditableCaretAfterText(
   selection?.addRange(range);
 }
 
+function placeContentEditableRootBoundaryBeforeElement(
+  root: HTMLElement,
+  element: HTMLElement,
+) {
+  root.focus();
+  const offset = Array.from(root.childNodes).indexOf(element);
+  expect(offset).toBeGreaterThanOrEqual(0);
+  const range = document.createRange();
+  range.setStart(root, offset);
+  range.collapse(true);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
 function getProposalBodyEditor(): HTMLElement {
   return screen.getByRole("textbox", { name: "Edit proposal body" });
 }
@@ -732,6 +747,29 @@ describe("ProposalDisplay", () => {
       expect(paragraphs).toHaveLength(3);
       expect(document.activeElement).toBe(getProposalBodyEditor());
       expect(getContentEditableCaretOffset(paragraphs[2])).toBe(0);
+    });
+  });
+
+  it("splits at a root-editor boundary without falling back to the paragraph end", async () => {
+    renderPreviewEditableProposal(
+      "Dear Hiring Team,\n\nFirst paragraph.\n\nSecond paragraph.\n\nKind regards,\nAlex",
+    );
+
+    const bodyEditor = getProposalBodyEditor();
+    placeContentEditableRootBoundaryBeforeElement(
+      bodyEditor,
+      getEditableProposalParagraphs()[1],
+    );
+
+    expect(fireEvent.keyDown(bodyEditor, { key: "Enter" })).toBe(false);
+
+    await waitFor(() => {
+      const paragraphs = getEditableProposalParagraphs();
+      expect(paragraphs).toHaveLength(3);
+      expect(getEditableNodeText(paragraphs[0])).toBe("First paragraph.");
+      expect(getEditableNodeText(paragraphs[1])).toBe("");
+      expect(getEditableNodeText(paragraphs[2])).toBe("Second paragraph.");
+      expect(document.activeElement).toBe(bodyEditor);
     });
   });
 

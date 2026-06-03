@@ -698,6 +698,61 @@ function getEditableBoundaryOffset(
   return found ? total : null;
 }
 
+function getEditableTargetStartOffset(
+  root: HTMLElement,
+  target: HTMLElement,
+): number | null {
+  if (!root.contains(target)) return null;
+
+  let total = 0;
+  let found = false;
+
+  const visit = (node: Node) => {
+    if (found) return;
+    if (node === target) {
+      found = true;
+      return;
+    }
+    if (node.nodeType === Node.TEXT_NODE) {
+      total += getEditableNodeTextLength(node);
+      return;
+    }
+    Array.from(node.childNodes).forEach(visit);
+  };
+
+  visit(root);
+  return found ? total : null;
+}
+
+function getEditableBoundaryOffsetForTarget(args: {
+  root: HTMLElement;
+  target: HTMLElement;
+  container: Node;
+  offset: number;
+}): number | null {
+  const directOffset = getEditableBoundaryOffset(
+    args.target,
+    args.container,
+    args.offset,
+  );
+  if (directOffset !== null) {
+    return directOffset;
+  }
+
+  const rootOffset = getEditableBoundaryOffset(
+    args.root,
+    args.container,
+    args.offset,
+  );
+  const targetStartOffset = getEditableTargetStartOffset(args.root, args.target);
+  if (rootOffset === null || targetStartOffset === null) {
+    return null;
+  }
+
+  const targetTextLength = getEditableTextWithoutControls(args.target).length;
+  return Math.max(0, Math.min(targetTextLength, rootOffset - targetStartOffset));
+}
+
 function getEditableSelectionOffsets(target: HTMLElement): {
   start: number;
   end: number;
@@ -963,7 +1018,13 @@ function resolveEditableTargetElementFromBoundary(
 
 function findProposalBodySelectionTarget(
   root: HTMLElement,
-): { target: ProposalDocumentTextTarget; element: HTMLElement } | null {
+): {
+  target: ProposalDocumentTextTarget;
+  element: HTMLElement;
+  offset: number;
+  startOffset: number;
+  endOffset: number;
+} | null {
   const selection = window.getSelection?.();
   if (!selection || selection.rangeCount === 0) return null;
   const range = selection.getRangeAt(0);
@@ -984,12 +1045,30 @@ function findProposalBodySelectionTarget(
   if (!startTarget || startTarget !== endTarget) {
     return null;
   }
+  const startOffset = getEditableBoundaryOffsetForTarget({
+    root,
+    target: startTarget,
+    container: range.startContainer,
+    offset: range.startOffset,
+  });
+  const endOffset = getEditableBoundaryOffsetForTarget({
+    root,
+    target: startTarget,
+    container: range.endContainer,
+    offset: range.endOffset,
+  });
+  if (startOffset === null || endOffset === null) {
+    return null;
+  }
 
   const targetType = startTarget.dataset.proposalEditTarget;
   const blockId = startTarget.dataset.proposalEditBlockId;
   if (targetType === "text-block" && blockId) {
     return {
       element: startTarget,
+      offset: endOffset,
+      startOffset,
+      endOffset,
       target: { type: "text-block", blockId },
     };
   }
@@ -997,6 +1076,9 @@ function findProposalBodySelectionTarget(
   if (targetType === "list-item" && blockId && startTarget.dataset.proposalEditItemId) {
     return {
       element: startTarget,
+      offset: endOffset,
+      startOffset,
+      endOffset,
       target: {
         type: "list-item",
         blockId,
@@ -4598,7 +4680,7 @@ export function ProposalDocumentRenderer({
               if (target) {
                 pendingEditableFocusRef.current = {
                   target: target.target,
-                  offset: getEditableCaretOffset(target.element),
+                  offset: target.offset,
                 };
               }
               return;
@@ -4615,7 +4697,7 @@ export function ProposalDocumentRenderer({
             );
             splitEditableDocumentTarget(
               selectedTarget.target,
-              getEditableCaretOffset(selectedTarget.element),
+              selectedTarget.offset,
               baseDocument,
             );
           }}
