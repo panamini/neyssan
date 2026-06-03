@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { HumanMessage, SystemMessage } from "@langchain/core/messages";
+import { ChatMistralAI } from "@langchain/mistralai";
 
 import { llmConfig } from "../../../config/llmConfig";
 import {
@@ -324,6 +326,14 @@ export const MISTRAL_PREMIUM_COVER_LETTER_ADAPTER = [
   "Writing rule:",
   "Prefer a concise, grounded letter over a comprehensive one.",
   "Use 2-4 short paragraphs.",
+  "Mistral compactness rule:",
+  "- Do not fill all four body parts with multi-sentence material.",
+  "- opening and closeLine must be one sentence each.",
+  "- proofBlock may use at most two sentences.",
+  "- employerValueBlock must be one sentence.",
+  "- Use each candidate evidence anchor once across all body parts; do not restate the same employer, duty, cadence, credential, or environment in multiple body parts.",
+  "- If a fact was used in opening, do not repeat it in proofBlock or employerValueBlock.",
+  "- Prefer one strong evidence paragraph plus one restrained relevance/operating-discipline paragraph over a complete CV recap.",
   "Every sentence must earn its place.",
   "No checklist formatting.",
   "No bullet list unless the required JSON body-part schema already expects one.",
@@ -504,9 +514,11 @@ export const MISTRAL_PREMIUM_COVER_LETTER_ADAPTER = [
   "",
   "Mistral cv_adjacent body-part override:",
   "When contextClass is cv_adjacent:",
-  "- employerValueBlock may be a second factual evidence paragraph or one restrained bridge grounded in both candidate evidence and a JD work surface.",
+  "- employerValueBlock should be one restrained employer-facing bridge grounded in both candidate evidence and a JD work surface when workContext or topResponsibilities exist.",
+  "- Use employerValueBlock as a second factual evidence paragraph only when no safe JD work surface exists.",
   "- The bridge must stay at overlap, relevance, or operating-context level; it must not claim direct role experience, future performance, unsupported ownership, or invented impact.",
   "- closeLine must restate CV-backed operating strengths only.",
+  "- closeLine must be first person. Use \"I bring...\" or \"My work has centered on...\" Do not write detached noun phrases like \"Experience includes...\"",
   "- Do not include greeting, signoff, or candidate name in body parts.",
   "- Do not use target role title, \"this role,\" \"your needs,\" \"helps with,\" \"can help,\" \"can contribute,\" \"translates,\" \"aligns,\" \"smoothly,\" or \"efficiently.\"",
   "- If this cannot be done safely, return shorter body parts instead of filling space.",
@@ -1416,6 +1428,41 @@ function scoreFact(args: {
   if (QUANTIFIED_PATTERN.test(args.fact.text)) score += 80;
   if (RESPONSIBILITY_PATTERN.test(args.fact.text)) score += 15;
   if (WORKFLOW_PATTERN.test(args.fact.text)) score += 12;
+  if (
+    args.fact.source === "cv" &&
+    isReportingEvidence(args.fact.text) &&
+    hasAnyToken(args.jobTokens, [
+      "report",
+      "reporting",
+      "reports",
+      "document",
+      "documentation",
+      "records",
+      "record",
+      "communication",
+      "handoff",
+      "handoffs",
+      "escalation",
+      "escalate",
+    ])
+  ) {
+    score += 55;
+  }
+  if (
+    args.fact.source === "cv" &&
+    /\b(?:maintenance|readiness|troubleshooting|repair coordination|manufacturer instructions)\b/i.test(
+      args.fact.text,
+    ) &&
+    !hasAnyToken(args.jobTokens, [
+      "maintenance",
+      "readiness",
+      "troubleshooting",
+      "repair",
+      "equipment",
+    ])
+  ) {
+    score -= 24;
+  }
   if (args.fact.confidence === "high") score += 8;
   score += overlap * 8;
   score += titleOverlap * 12;
@@ -1423,6 +1470,10 @@ function scoreFact(args: {
   if (WEAK_QUALIFICATION_PATTERN.test(args.fact.text)) score -= 40;
   if (COMPANY_ADMIRATION_PATTERN.test(args.fact.text)) score -= 55;
   return score;
+}
+
+function hasAnyToken(tokens: Set<string>, candidates: string[]): boolean {
+  return candidates.some((candidate) => tokens.has(candidate));
 }
 
 function isWeakOrDoNotLeadWith(fact: AllowedFact): boolean {
@@ -1962,6 +2013,9 @@ function resolvePremiumCoverLetterContextGuidance(args: {
         "- Avoid sycophancy.",
         "- Do not use \"excited,\" \"eager,\" \"thrilled,\" \"aligns well,\" \"directly translates,\" \"leverage,\" \"perfect fit,\" or \"proven track record.\"",
         "- Use concrete candidate evidence: actions, artifacts, tools, metrics, stakeholders, projects, workflows, cadence, or deliverables.",
+        "- Keep opening and closeLine to one sentence each; proofBlock may use at most two sentences; employerValueBlock must be one sentence.",
+        "- Do not reuse the same employer, duty, cadence, credential, or environment across body parts.",
+        "- Do not summarize the whole CV in the opening.",
         "- Do not invent impact. If the CV says page load improved by 28 percent, do not add user retention unless source-backed.",
         "- Do not turn a missing requirement into candidate experience.",
         "- Keep the letter natural and recruiter-readable.",
@@ -1977,10 +2031,16 @@ function resolvePremiumCoverLetterContextGuidance(args: {
         "- Do not state direct target-role experience, unsupported ownership, future contribution, promised impact, or unsupported requirement satisfaction.",
         "- Use job facts only to select which candidate facts to include.",
         "- Write only candidate-backed actions, artifacts, scopes, stakeholders, responsibilities, tools, metrics, cadence, or deliverables.",
+        "- Keep opening and closeLine to one sentence each; proofBlock may use at most two sentences; employerValueBlock must be one sentence.",
+        "- Do not reuse the same employer, duty, cadence, credential, or environment across body parts.",
+        "- Do not summarize the whole CV in the opening.",
         "- Use past or present factual statements.",
         "- Do not use future contribution claims.",
         "- Safe bridge examples: \"That background is relevant to work where clear handoffs, documentation, and reporting matter.\" \"The overlap is strongest around coordination, reporting, and documentation.\"",
         "- Forbidden bridge examples: \"I have direct experience as an Implementation Analyst.\" \"I can own your implementation workflows.\" \"This will improve your delivery speed.\" \"I am passionate about your mission.\"",
+        "- Do not use employerValueBlock as another evidence-only sentence when the brief includes topResponsibilities or workContext; use one restrained employer-facing bridge instead.",
+        "- Do not repeat duration, employers, or the same evidence anchor in closeLine.",
+        "- closeLine must be first person and must restate operating strengths, such as \"I bring discipline around accurate records, steady monitoring, and clear handoffs.\"",
         "- If evidence is limited, return shorter body parts instead of filling space.",
       ];
     }
@@ -2031,8 +2091,12 @@ function resolvePremiumCoverLetterBodyPartGuidance(args: {
       "- opening: one factual first-person sentence grounded in candidate evidence.",
       "- proofBlock: concrete CV-backed evidence only.",
       "- employerValueBlock: concrete CV-backed evidence or one restrained employer-facing bridge grounded in both candidate evidence and a JD work surface.",
+      "- If topResponsibilities or workContext are present, employerValueBlock should be the restrained bridge, not another evidence-only sentence.",
       "- Any bridge must stay at overlap, relevance, or operating-context level; it must not claim direct role experience, future performance, unsupported ownership, or invented impact.",
       "- closeLine: one short sentence restating CV-backed operating strengths only.",
+      "- Sentence budget: opening 1 sentence, proofBlock at most 2 sentences, employerValueBlock 1 sentence, closeLine 1 sentence.",
+      "- Evidence reuse budget: each employer, duty, cadence, credential, environment, artifact, or workflow may appear in only one body part.",
+      "- closeLine must be first person and must not begin with detached noun phrases like \"Experience includes\" or \"Background includes\".",
       "- Do not include greeting, signoff, or candidate name in body parts.",
       "- Do not use the target role title.",
       "- Do not use \"this role,\" \"your needs,\" \"helps with,\" \"can help,\" \"can contribute,\" \"translates,\" \"aligns,\" \"smoothly,\" or \"efficiently.\"",
@@ -2360,6 +2424,18 @@ function conciseDurationScope(value: string): string {
   return `${compactWhitespace(match[1]).toLowerCase()} ${compactWhitespace(match[2])}`;
 }
 
+function conciseDurationEvidenceLead(value: string): string {
+  return compactWhitespace(conciseDurationScope(value))
+    .replace(
+      /,\s*(?:presently|currently|also|and\s+(?:qualified|certified|finishing|completing))\b[\s\S]*$/i,
+      "",
+    )
+    .replace(
+      /\s+and\s+(?:qualified|certified|presently|currently|finishing|completing)\b[\s\S]*$/i,
+      "",
+    );
+}
+
 function listAsNaturalText(items: string[]): string {
   const cleaned = dedupeStrings(items).map((item) =>
     compactWhitespace(item).replace(/[.!?]$/u, ""),
@@ -2466,9 +2542,7 @@ function normalizeAdjacentEvidenceOrder(args: {
   const anchorText = listAsNaturalText(anchors);
   const opening =
     reportingSentence && durationContext
-      ? roleCompanyContext
-        ? `${roleCompanySubject(roleCompanyContext)} with ${conciseDurationScope(durationContext)}, my strongest proof is detailed reporting: ${reportingSentence.replace(/[.!?]$/u, "")}`
-        : `I have ${durationContext}, and my strongest proof is detailed reporting: ${reportingSentence.replace(/[.!?]$/u, "")}`
+      ? `Across ${conciseDurationEvidenceLead(durationContext)}, ${reportingSentence.replace(/[.!?]$/u, "")}`
       : durationContext
         ? `Across ${durationContext}${roleCompanyContext ? `, ${roleCompanyContext}` : ""}, ${evidenceSentences[0]!.replace(/[.!?]$/u, "")}`
         : evidenceSentences[0] ?? args.bodyParts.opening;
@@ -2774,6 +2848,63 @@ export function renderPremiumCoverLetter(args: {
   };
 }
 
+function compactBodyPartSentenceBudget(value: string, maxSentences: number): string {
+  const compact = compactWhitespace(value);
+  const sentences = splitSentences(compact);
+  if (sentences.length === 0) return ensureSentenceEnding(compact);
+  return joinSentences(sentences.slice(0, maxSentences));
+}
+
+function compactMistralPremiumBodyParts(
+  bodyParts: CoverLetterBodyParts,
+): CoverLetterBodyParts {
+  return {
+    opening: compactBodyPartSentenceBudget(bodyParts.opening, 1),
+    proofBlock: compactBodyPartSentenceBudget(bodyParts.proofBlock, 2),
+    employerValueBlock: compactBodyPartSentenceBudget(
+      bodyParts.employerValueBlock,
+      1,
+    ),
+    closeLine: compactBodyPartSentenceBudget(bodyParts.closeLine, 1),
+  };
+}
+
+function hasBridgeWorkSurfaceOverlap(value: string, workSurfaces: string[]): boolean {
+  const normalizedValue = normalizeProposalConstraintText(value);
+  return workSurfaces.some((surface) => {
+    const tokens = normalizeTokens(surface).filter((token) => token.length > 4);
+    return tokens.some((token) => normalizedValue.includes(token));
+  });
+}
+
+function normalizeMistralAdjacentBridgeBodyParts(args: {
+  bodyParts: CoverLetterBodyParts;
+  brief: CoverLetterBrief;
+}): CoverLetterBodyParts {
+  if (args.brief.contextClass !== "cv_adjacent") return args.bodyParts;
+  const workSurfaces = selectAdjacentWorkSurfaces(args.brief);
+  if (workSurfaces.length === 0) return args.bodyParts;
+
+  const anchors = adjacentOperatingAnchors(args.brief);
+  const anchorText = listAsNaturalText(anchors);
+  const workSurfaceText = listAsNaturalText(workSurfaces.slice(0, 3));
+  const employerValueBlock = hasBridgeWorkSurfaceOverlap(
+    args.bodyParts.employerValueBlock,
+    workSurfaces,
+  )
+    ? args.bodyParts.employerValueBlock
+    : `For work centered on ${workSurfaceText}, the overlap is ${anchorText}.`;
+  const closeLine = /^(?:I|My)\b/i.test(compactWhitespace(args.bodyParts.closeLine))
+    ? args.bodyParts.closeLine
+    : `I bring discipline around ${anchorText}.`;
+
+  return {
+    ...args.bodyParts,
+    employerValueBlock: ensureSentenceEnding(employerValueBlock),
+    closeLine: ensureSentenceEnding(closeLine),
+  };
+}
+
 function hasExpectedCandidateSignature(args: {
   content: string;
   outputLanguage: ProposalOutputLanguage;
@@ -2862,6 +2993,111 @@ export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
   );
 }
 
+function extractPremiumMistralText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((entry: any) => (entry?.type === "text" ? entry.text : ""))
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+  }
+  return "";
+}
+
+function findPremiumEmbeddedJsonObjectCandidates(content: string): string[] {
+  const candidates: string[] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = 0; index < content.length; index += 1) {
+    const char = content[index];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === "{") {
+      if (depth === 0) start = index;
+      depth += 1;
+      continue;
+    }
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0 && start >= 0) {
+        candidates.push(content.slice(start, index + 1));
+        start = -1;
+      }
+    }
+  }
+
+  return candidates;
+}
+
+function parsePremiumMistralBodyPartsJson(
+  content: string,
+): CoverLetterBodyParts {
+  const trimmed = content.trim();
+  const tryParse = (value: string) =>
+    PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(JSON.parse(value));
+
+  try {
+    return tryParse(trimmed);
+  } catch {
+    // Continue through fenced and embedded JSON fallbacks.
+  }
+
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(trimmed);
+  if (fenced?.[1]) {
+    return tryParse(fenced[1]);
+  }
+
+  const embedded = findPremiumEmbeddedJsonObjectCandidates(trimmed);
+  if (embedded.length === 1) {
+    return tryParse(embedded[0]!);
+  }
+
+  throw new Error(
+    "Mistral premium cover-letter response did not contain one parseable JSON body-parts object.",
+  );
+}
+
+export async function generatePremiumCoverLetterBodyPartsWithMistral(args: {
+  apiKey: string;
+  prompt: string;
+  writerModel: string;
+  signal?: AbortSignal;
+}): Promise<CoverLetterBodyParts> {
+  const model = new ChatMistralAI({
+    apiKey: args.apiKey,
+    modelName: args.writerModel,
+    temperature: 0.2,
+  });
+  const response = await model.invoke(
+    [
+      new SystemMessage(
+        "Return only a valid JSON object with keys opening, proofBlock, employerValueBlock, and closeLine. Do not include markdown, comments, greeting, signoff, or prose outside JSON.",
+      ),
+      new HumanMessage(args.prompt),
+    ],
+    args.signal ? ({ signal: args.signal } as any) : undefined,
+  );
+  const content = extractPremiumMistralText(response.content);
+  return parsePremiumMistralBodyPartsJson(content);
+}
+
 export function buildPremiumCoverLetterOpenAIRequest(args: {
   prompt: string;
   writerModel?: PremiumCoverLetterWriterModel;
@@ -2897,7 +3133,7 @@ function buildPremiumCoverLetterRepairPrompt(args: {
   return [
     "Rewrite the cover-letter body parts to satisfy validation.",
     "",
-    "The previous output failed because it used adjacent role-mapping, future-impact language, meta-commentary, or unsupported outcome claims.",
+    "The previous output failed because it used adjacent role-mapping, future-impact language, meta-commentary, unsupported ownership verbs, or unsupported outcome claims.",
     "",
     "Remove:",
     "- role title references",
@@ -2917,6 +3153,8 @@ function buildPremiumCoverLetterRepairPrompt(args: {
     "- \"excited\"",
     "- \"eager\"",
     "- business outcome claims not present in candidate evidence",
+    "- high-ownership verbs unless the exact verb and scope are present in candidate evidence",
+    "- managed, oversaw, owned, drove, directed, resolved, transformed, or spearheaded unless source-backed",
     "",
     "Use only:",
     "- factual candidate-backed actions",
@@ -2925,6 +3163,7 @@ function buildPremiumCoverLetterRepairPrompt(args: {
     "- factual candidate-backed artifacts",
     "- factual candidate-backed scope, cadence, tools, metrics, projects, workflows, or deliverables",
     "- short CV-backed closeLine",
+    "- lower-ownership verbs such as built, improved, maintained, documented, tracked, coordinated, partnered, supported, or contributed when source-backed",
     "",
     "Structure:",
     "- opening: factual candidate role/responsibility sentence",
@@ -3102,6 +3341,11 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   const shouldRetryAdjacentDirectFit =
     brief.contextClass === "cv_adjacent" &&
     issueCodes.includes("adjacent_direct_fit");
+  const shouldRetryMistralUnsupportedOwnership =
+    isMistralWriterIdentity({
+      writerProvider: args.writerProvider,
+      writerModel: args.writerModel,
+    }) && issueCodes.includes("unsupported_ownership_verb");
   const shouldTryAdjacentEvidenceNormalization =
     brief.contextClass === "cv_adjacent" &&
     !isQwenWriterIdentity({
@@ -3135,7 +3379,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   }
 
   if (issues.some((issue) => !issue.repairable)) {
-    if (!shouldRetryAdjacentDirectFit) {
+    if (!shouldRetryAdjacentDirectFit && !shouldRetryMistralUnsupportedOwnership) {
       args.onFailure?.({
         stage: "validation",
         reason: "non_repairable_validation",
@@ -3185,14 +3429,22 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     }
   }
 
-  if (brief.contextClass === "cv_adjacent") {
-    const normalizedBodyParts = normalizeAdjacentEvidenceOrder({ bodyParts, brief });
-    const normalizedIssues = validatePremiumCoverLetterBodyParts({
-      bodyParts: normalizedBodyParts,
+  if (
+    isMistralWriterIdentity({
+      writerProvider: args.writerProvider,
+      writerModel: args.writerModel,
+    })
+  ) {
+    const compactBodyParts = normalizeMistralAdjacentBridgeBodyParts({
+      bodyParts: compactMistralPremiumBodyParts(bodyParts),
       brief,
     });
-    if (normalizedIssues.length === 0) {
-      bodyParts = normalizedBodyParts;
+    const compactIssues = validatePremiumCoverLetterBodyParts({
+      bodyParts: compactBodyParts,
+      brief,
+    });
+    if (compactIssues.length === 0) {
+      bodyParts = compactBodyParts;
     }
   }
 

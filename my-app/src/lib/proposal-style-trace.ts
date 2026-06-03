@@ -9,6 +9,8 @@ import {
 } from "./proposal-workspace-state";
 
 export const PROPOSAL_STYLE_TRACE_MARKER = "[proposal-style-trace]";
+export const PROPOSAL_STYLE_TRACE_STORAGE_KEY =
+  "proposal_style_trace_enabled";
 
 export type ProposalStyleTraceWinnerSource =
   | "server_row"
@@ -271,5 +273,12 @@ export function resolveOutputDraftWinnerSource(args: {
 }
 
 export function logProposalStyleTrace(payload: Record<string, unknown>): void {
+  if (
+    typeof window !== "undefined" &&
+    window.localStorage.getItem(PROPOSAL_STYLE_TRACE_STORAGE_KEY) !== "true"
+  ) {
+    return;
+  }
+
   console.info(PROPOSAL_STYLE_TRACE_MARKER, payload);
 }

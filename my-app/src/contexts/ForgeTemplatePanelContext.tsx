@@ -109,6 +109,13 @@ export function ForgeTemplatePanelProvider({
 }): JSX.Element {
   const openIntentTimerRef = React.useRef<number | null>(null);
   const closeIntentTimerRef = React.useRef<number | null>(null);
+  const registrationSerialRef = React.useRef(0);
+  const activeRegistrationTokensRef = React.useRef<
+    Partial<Record<ForgeRailSurface, number>>
+  >({});
+  const pendingRegistrationCleanupTimersRef = React.useRef<
+    Partial<Record<ForgeRailSurface, number>>
+  >({});
   const [open, setOpen] = React.useState(false);
   const [openMode, setOpenMode] =
     React.useState<ForgePanelOpenMode>("closed");
@@ -229,8 +236,55 @@ export function ForgeTemplatePanelProvider({
     () => () => {
       clearOpenIntent();
       clearCloseIntent();
+      Object.values(pendingRegistrationCleanupTimersRef.current).forEach(
+        (timerId) => {
+          if (typeof timerId === "number") {
+            window.clearTimeout(timerId);
+          }
+        },
+      );
+      pendingRegistrationCleanupTimersRef.current = {};
     },
     [clearCloseIntent, clearOpenIntent],
+  );
+
+  const cancelRegistrationCleanup = React.useCallback(
+    (surface: ForgeRailSurface) => {
+      const timerId = pendingRegistrationCleanupTimersRef.current[surface];
+      if (typeof timerId !== "number") {
+        return;
+      }
+      window.clearTimeout(timerId);
+      delete pendingRegistrationCleanupTimersRef.current[surface];
+    },
+    [],
+  );
+
+  const scheduleRegistrationCleanup = React.useCallback(
+    (args: {
+      surface: ForgeRailSurface;
+      token: number;
+      registration: ForgePanelRegistration;
+    }) => {
+      cancelRegistrationCleanup(args.surface);
+      pendingRegistrationCleanupTimersRef.current[args.surface] =
+        window.setTimeout(() => {
+          delete pendingRegistrationCleanupTimersRef.current[args.surface];
+          if (activeRegistrationTokensRef.current[args.surface] !== args.token) {
+            return;
+          }
+          delete activeRegistrationTokensRef.current[args.surface];
+          setRegistrations((current) => {
+            if (current[args.surface] !== args.registration) {
+              return current;
+            }
+            const next = { ...current };
+            delete next[args.surface];
+            return next;
+          });
+        }, 0);
+    },
+    [cancelRegistrationCleanup],
   );
 
   const registerTemplates = React.useCallback(
@@ -239,23 +293,23 @@ export function ForgeTemplatePanelProvider({
         ...registration,
         kind: "templates",
       };
+      const token = ++registrationSerialRef.current;
+      activeRegistrationTokensRef.current[registration.surface] = token;
+      cancelRegistrationCleanup(registration.surface);
       setRegistrations((current) => ({
         ...current,
         [registration.surface]: panelRegistration,
       }));
 
       return () => {
-        setRegistrations((current) => {
-          if (current[registration.surface] !== panelRegistration) {
-            return current;
-          }
-          const next = { ...current };
-          delete next[registration.surface];
-          return next;
+        scheduleRegistrationCleanup({
+          surface: registration.surface,
+          token,
+          registration: panelRegistration,
         });
       };
     },
-    [],
+    [cancelRegistrationCleanup, scheduleRegistrationCleanup],
   );
 
   const registerPanel = React.useCallback(
@@ -264,23 +318,23 @@ export function ForgeTemplatePanelProvider({
         ...registration,
         kind: "custom",
       };
+      const token = ++registrationSerialRef.current;
+      activeRegistrationTokensRef.current[registration.surface] = token;
+      cancelRegistrationCleanup(registration.surface);
       setRegistrations((current) => ({
         ...current,
         [registration.surface]: panelRegistration,
       }));
 
       return () => {
-        setRegistrations((current) => {
-          if (current[registration.surface] !== panelRegistration) {
-            return current;
-          }
-          const next = { ...current };
-          delete next[registration.surface];
-          return next;
+        scheduleRegistrationCleanup({
+          surface: registration.surface,
+          token,
+          registration: panelRegistration,
         });
       };
     },
-    [],
+    [cancelRegistrationCleanup, scheduleRegistrationCleanup],
   );
 
   const activeRegistration = activeSurface

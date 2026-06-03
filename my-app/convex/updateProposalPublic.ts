@@ -153,6 +153,16 @@ const documentIconSettingsChoice = v.object({
 
 const PROPOSAL_STYLE_TRACE_MARKER = "[proposal-style-trace]";
 
+function isProposalStyleTraceEnabled(): boolean {
+  return /^(?:1|true|yes)$/i.test(
+    compactTraceEnvValue(process.env.ENABLE_PROPOSAL_STYLE_TRACE),
+  );
+}
+
+function compactTraceEnvValue(value: string | undefined): string {
+  return (value ?? "").trim();
+}
+
 function snapshotTraceMetadata(
   metadata:
     | {
@@ -211,6 +221,17 @@ function snapshotTraceRow(
     status: proposal.status ?? null,
     metadata: snapshotTraceMetadata(proposal.metadata),
   };
+}
+
+function mergeProposalMetadataTags(
+  existingTags: string[] | undefined,
+  incomingTags: string[] | undefined,
+): string[] | undefined {
+  if (!existingTags && !incomingTags) {
+    return undefined;
+  }
+
+  return Array.from(new Set([...(existingTags ?? []), ...(incomingTags ?? [])]));
 }
 
 /**
@@ -379,37 +400,44 @@ export default mutation({
     }
 
     if (hasMetadataPatch) {
-      console.info(PROPOSAL_STYLE_TRACE_MARKER, {
-        route: "updateProposalPublic",
-        step: "update-proposal-public:before-patch",
-        proposalId: String(args.id),
-        generatedProposalId: String(args.id),
-        selectedProposalId: null,
-        composeToken: null,
-        persistedToken: null,
-        winnerSource: "server_row",
-        winnerReason: "public mutation received metadata patch",
-        rawServerRow: snapshotTraceRow(proposal),
-        rawQueryRow: null,
-        rawLocalOutputDraft: null,
-        rawSessionOutputDraft: null,
-        rawComposeDraft: null,
-        rawCvStyleSource: null,
-        resolvedRenderState: {
+      if (isProposalStyleTraceEnabled()) {
+        console.info(PROPOSAL_STYLE_TRACE_MARKER, {
+          route: "updateProposalPublic",
+          step: "update-proposal-public:before-patch",
           proposalId: String(args.id),
-          metadata: snapshotTraceMetadata(args.metadata),
-        },
-      });
+          generatedProposalId: String(args.id),
+          selectedProposalId: null,
+          composeToken: null,
+          persistedToken: null,
+          winnerSource: "server_row",
+          winnerReason: "public mutation received metadata patch",
+          rawServerRow: snapshotTraceRow(proposal),
+          rawQueryRow: null,
+          rawLocalOutputDraft: null,
+          rawSessionOutputDraft: null,
+          rawComposeDraft: null,
+          rawCvStyleSource: null,
+          resolvedRenderState: {
+            proposalId: String(args.id),
+            metadata: snapshotTraceMetadata(args.metadata),
+          },
+        });
+      }
+      const mergedTags = mergeProposalMetadataTags(
+        proposal.metadata?.tags,
+        args.metadata?.tags,
+      );
       patch.metadata = {
         ...proposal.metadata,
         ...args.metadata,
+        ...(mergedTags ? { tags: mergedTags } : null),
       };
       patch.jobId = args.metadata?.jobId ?? proposal.jobId;
     }
 
     await ctx.db.patch(args.id, patch);
 
-    if (hasMetadataPatch) {
+    if (hasMetadataPatch && isProposalStyleTraceEnabled()) {
       const updatedProposal = await ctx.db.get(args.id);
       console.info(PROPOSAL_STYLE_TRACE_MARKER, {
         route: "updateProposalPublic",

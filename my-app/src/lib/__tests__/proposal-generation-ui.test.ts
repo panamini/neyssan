@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   getProposalGenerationFallbackDisclosureMessage,
+  getProposalGenerationRoutingDisclosureMessage,
   getProposalGenerationUiErrorMessage,
 } from "../proposal-generation-ui";
 
@@ -97,6 +98,30 @@ describe("proposal generation UI error mapping", () => {
       }),
     ).toBe(
       "Generated with ChatGPT because the Mistral request could not be completed.",
+    );
+  });
+
+  it("formats premium routing provenance for local debugging", () => {
+    expect(
+      getProposalGenerationRoutingDisclosureMessage({
+        requestedModelType: "mistral-large-latest",
+        actualModelType: "mistral-large-latest",
+        actualModelName: "mistral-large-latest",
+        fallbackTriggerCode: null,
+        routing: {
+          attemptedPath: "premium success",
+          plannedPath: "structured",
+          executedPath: "structured",
+          fallbackReason: "not_applicable",
+          validatorOutcome: "structured_success",
+          saveOutcome: "structured_saved",
+          premiumFailureStage: null,
+          premiumFailureReason: null,
+          premiumFailureContextClass: null,
+        },
+      }),
+    ).toBe(
+      "Generation routing: route premium success; planned structured; executed structured; validator structured_success; save structured_saved.",
     );
   });
 });

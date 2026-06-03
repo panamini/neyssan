@@ -154,6 +154,12 @@ const documentIconSettingsChoice = v.object({
 
 const PROPOSAL_STYLE_TRACE_MARKER = "[proposal-style-trace]";
 
+function isProposalStyleTraceEnabled(): boolean {
+  return /^(?:1|true|yes)$/i.test(
+    (process.env.ENABLE_PROPOSAL_STYLE_TRACE ?? "").trim(),
+  );
+}
+
 function snapshotTraceMetadata(
   metadata:
     | {
@@ -338,27 +344,29 @@ export default mutation({
     const trimmedTitle = args.title.trim() || "Generated proposal";
     const now = Date.now();
 
-    console.info(PROPOSAL_STYLE_TRACE_MARKER, {
-      route: "createProposalPublic",
-      step: "create-proposal-public:before-insert",
-      proposalId: null,
-      generatedProposalId: null,
-      selectedProposalId: null,
-      composeToken: null,
-      persistedToken: null,
-      winnerSource: "server_row",
-      winnerReason: "public mutation received create payload",
-      rawServerRow: null,
-      rawQueryRow: null,
-      rawLocalOutputDraft: null,
-      rawSessionOutputDraft: null,
-      rawComposeDraft: null,
-      rawCvStyleSource: null,
-      resolvedRenderState: {
+    if (isProposalStyleTraceEnabled()) {
+      console.info(PROPOSAL_STYLE_TRACE_MARKER, {
+        route: "createProposalPublic",
+        step: "create-proposal-public:before-insert",
         proposalId: null,
-        metadata: snapshotTraceMetadata(args.metadata),
-      },
-    });
+        generatedProposalId: null,
+        selectedProposalId: null,
+        composeToken: null,
+        persistedToken: null,
+        winnerSource: "server_row",
+        winnerReason: "public mutation received create payload",
+        rawServerRow: null,
+        rawQueryRow: null,
+        rawLocalOutputDraft: null,
+        rawSessionOutputDraft: null,
+        rawComposeDraft: null,
+        rawCvStyleSource: null,
+        resolvedRenderState: {
+          proposalId: null,
+          metadata: snapshotTraceMetadata(args.metadata),
+        },
+      });
+    }
 
     const proposalId = await ctx.db.insert("proposals", {
       userId: user._id,
@@ -380,25 +388,27 @@ export default mutation({
       metadata: args.metadata ?? {},
     });
 
-    const insertedProposal = await ctx.db.get(proposalId);
-    console.info(PROPOSAL_STYLE_TRACE_MARKER, {
-      route: "createProposalPublic",
-      step: "create-proposal-public:after-insert",
-      proposalId: String(proposalId),
-      generatedProposalId: String(proposalId),
-      selectedProposalId: null,
-      composeToken: null,
-      persistedToken: null,
-      winnerSource: "server_row",
-      winnerReason: "server row after insert",
-      rawServerRow: snapshotTraceRow(insertedProposal),
-      rawQueryRow: null,
-      rawLocalOutputDraft: null,
-      rawSessionOutputDraft: null,
-      rawComposeDraft: null,
-      rawCvStyleSource: null,
-      resolvedRenderState: snapshotTraceRow(insertedProposal),
-    });
+    if (isProposalStyleTraceEnabled()) {
+      const insertedProposal = await ctx.db.get(proposalId);
+      console.info(PROPOSAL_STYLE_TRACE_MARKER, {
+        route: "createProposalPublic",
+        step: "create-proposal-public:after-insert",
+        proposalId: String(proposalId),
+        generatedProposalId: String(proposalId),
+        selectedProposalId: null,
+        composeToken: null,
+        persistedToken: null,
+        winnerSource: "server_row",
+        winnerReason: "server row after insert",
+        rawServerRow: snapshotTraceRow(insertedProposal),
+        rawQueryRow: null,
+        rawLocalOutputDraft: null,
+        rawSessionOutputDraft: null,
+        rawComposeDraft: null,
+        rawCvStyleSource: null,
+        resolvedRenderState: snapshotTraceRow(insertedProposal),
+      });
+    }
 
     return proposalId;
   },

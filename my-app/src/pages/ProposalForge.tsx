@@ -9068,9 +9068,9 @@ export function ProposalForge(): JSX.Element {
         window.clearTimeout(composeAutosaveTimeoutRef.current);
         composeAutosaveTimeoutRef.current = null;
       }
-      if (composeSaveStatus !== "error") {
-        setComposeSaveStatus("idle");
-      }
+      setComposeSaveStatus((currentStatus) =>
+        currentStatus === "error" ? currentStatus : "idle",
+      );
       return;
     }
 
@@ -9114,7 +9114,6 @@ export function ProposalForge(): JSX.Element {
   }, [
     canPersistProposalState,
     composeAutosaveSnapshot,
-    composeSaveStatus,
     requestedView,
     scheduleProposalSave,
     selectedDraftProposalId,
@@ -10722,7 +10721,7 @@ export function ProposalForge(): JSX.Element {
     }
 
     return (
-      proposalRailJobs.find(
+      (proposalRailJobs ?? []).find(
         (job) => String(job.id) === proposalDraftDocumentJobId,
       ) ?? null
     );

@@ -258,9 +258,11 @@ describe("ProposalForge job resume scope", () => {
     expect(screen.getByTestId("proposal-input-job")).toHaveTextContent(
       "job_alpha",
     );
-    expect(screen.getByRole("button", { name: "Pick CV" })).toBeInTheDocument();
+    expect(screen.getByTestId("proposal-input-active-cv")).toHaveTextContent(
+      "none",
+    );
 
-    fireEvent.click(screen.getByRole("button", { name: "Attach CV from form" }));
+    fireEvent.click(screen.getByText("Attach CV from form"));
 
     await waitFor(() => {
       expect(setJobResumeMock).toHaveBeenCalledWith({
@@ -270,11 +272,9 @@ describe("ProposalForge job resume scope", () => {
       });
     });
 
-    expect(
-      screen.getByRole("button", {
-        name: "CV: Operations Associate — Alex Martin",
-      }),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("proposal-input-active-cv")).toHaveTextContent(
+      "cv_alpha",
+    );
 
     view.unmount();
     renderRoute("/proposal?jobId=job_beta");
@@ -284,12 +284,9 @@ describe("ProposalForge job resume scope", () => {
         "job_beta",
       );
     });
-    expect(screen.getByRole("button", { name: "Pick CV" })).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", {
-        name: "CV: Operations Associate — Alex Martin",
-      }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("proposal-input-active-cv")).toHaveTextContent(
+      "none",
+    );
   });
 
   it("hydrates the attached CV directly from the current job record", async () => {
@@ -307,11 +304,9 @@ describe("ProposalForge job resume scope", () => {
         "cv_alpha",
       );
     });
-    expect(
-      screen.getByRole("button", {
-        name: "CV: Operations Associate — Alex Martin",
-      }),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("proposal-input-active-cv")).toHaveTextContent(
+      "cv_alpha",
+    );
   });
 
   it("keeps the canonical jobId when opened from the jobs page reset-navigation path", async () => {
@@ -338,10 +333,8 @@ describe("ProposalForge job resume scope", () => {
     expect(
       screen.getByTestId("proposal-input-active-cv"),
     ).toHaveTextContent("cv_alpha");
-    expect(
-      screen.getByRole("button", {
-        name: "CV: Operations Associate — Alex Martin",
-      }),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("proposal-input-active-cv")).toHaveTextContent(
+      "cv_alpha",
+    );
   });
 });

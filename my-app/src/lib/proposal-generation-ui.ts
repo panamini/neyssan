@@ -11,21 +11,32 @@ const CONTROLLED_PROPOSAL_PROVIDER_TRANSPORT_ERROR_MESSAGE_PREFIX =
 const CONTROLLED_PROPOSAL_FINALIZATION_FAILURE_PREFIX =
   "Proposal generation failed closed during finalization.";
 const FRIENDLY_PROVIDER_BUSY_MESSAGE =
-  "Model provider rate limited. Try again in a moment.";
+  "Proposal generation is temporarily busy because the model provider is rate limited. Please wait a moment and try again.";
 const FRIENDLY_PROVIDER_TRANSPORT_ERROR_MESSAGE =
-  "Model provider unreachable. Try again.";
+  "Proposal generation is temporarily unavailable because the model provider request could not be completed. Please try again.";
 const FALLBACK_TO_CHATGPT_BUSY_MESSAGE =
   "Generated with ChatGPT because Mistral was temporarily busy.";
 const FALLBACK_TO_CHATGPT_TRANSPORT_MESSAGE =
   "Generated with ChatGPT because the Mistral request could not be completed.";
 const JOB_ONLY_TOO_THIN_MESSAGE =
-  "Job description alone is too thin. Attach a resume or add background.";
+  "A grounded cover letter could not be generated from the job description alone. Add a CV or more concrete background details and try again.";
 
 export type ProposalGenerationFallbackInfo = {
   requestedModelType?: string | null;
   actualModelType?: string | null;
   actualModelName?: string | null;
   fallbackTriggerCode?: string | null;
+  routing?: {
+    attemptedPath?: string | null;
+    plannedPath?: string | null;
+    executedPath?: string | null;
+    fallbackReason?: string | null;
+    validatorOutcome?: string | null;
+    saveOutcome?: string | null;
+    premiumFailureStage?: string | null;
+    premiumFailureReason?: string | null;
+    premiumFailureContextClass?: string | null;
+  } | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -54,6 +65,47 @@ export function getProposalGenerationFallbackDisclosureMessage(
   }
 
   return null;
+}
+
+export function getProposalGenerationRoutingDisclosureMessage(
+  args: ProposalGenerationFallbackInfo,
+): string | null {
+  const routing = args.routing;
+  if (!routing) {
+    return null;
+  }
+
+  const parts: string[] = [];
+  if (routing.attemptedPath) {
+    parts.push(`route ${routing.attemptedPath}`);
+  }
+  if (routing.plannedPath) {
+    parts.push(`planned ${routing.plannedPath}`);
+  }
+  if (routing.executedPath) {
+    parts.push(`executed ${routing.executedPath}`);
+  }
+  if (routing.validatorOutcome) {
+    parts.push(`validator ${routing.validatorOutcome}`);
+  }
+  if (routing.saveOutcome) {
+    parts.push(`save ${routing.saveOutcome}`);
+  }
+  if (routing.fallbackReason && routing.fallbackReason !== "not_applicable") {
+    parts.push(`fallback ${routing.fallbackReason}`);
+  }
+  if (routing.premiumFailureStage || routing.premiumFailureReason) {
+    parts.push(
+      `premium failure ${[
+        routing.premiumFailureStage,
+        routing.premiumFailureReason,
+      ]
+        .filter(Boolean)
+        .join(": ")}`,
+    );
+  }
+
+  return parts.length > 0 ? `Generation routing: ${parts.join("; ")}.` : null;
 }
 
 export function getProposalGenerationUiErrorMessage(args: {

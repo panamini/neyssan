@@ -38,4 +38,13 @@ describe("Document command layer CSS", () => {
       );
     }
   });
+
+  it("keeps the generated Job & CV source action icon-only in the proposal toolbar", () => {
+    expect(productProposalCss).toMatch(
+      /\.dasti-proposal-skeleton-stage__primary-action--draft\[data-source-context="true"\]\s*\{[\s\S]*width:\s*var\(--editor-toolbar-icon-control-block-size\);[\s\S]*padding-inline:\s*0;[\s\S]*border-radius:\s*var\(--radius-toolbar-control,\s*var\(--radius-control\)\);/,
+    );
+    expect(productProposalCss).toMatch(
+      /\.dasti-proposal-skeleton-stage__primary-action--draft\[data-source-context="true"\][\s\S]*\.dasti-proposal-skeleton-stage__action-label\s*\{[\s\S]*display:\s*none;/,
+    );
+  });
 });

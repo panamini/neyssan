@@ -5,7 +5,7 @@ import ProposalDocumentStage from "../ProposalDocumentStage";
 
 const baseProps = {
   mode: "preview" as const,
-  hasProposalContent: true,
+  hasProposalContent: false,
   onModeChange: vi.fn(),
 };
 
@@ -218,6 +218,27 @@ describe("ProposalDocumentStage proposal actions", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Ask" }));
     expect(onOpenAsk).toHaveBeenCalledTimes(1);
+    expect(onOpenDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the source drawer directly reachable after generation", () => {
+    const onOpenDraft = vi.fn();
+
+    renderStage({
+      hasProposalContent: true,
+      onOpenDraft,
+    });
+
+    expect(
+      screen.queryByRole("button", { name: "Draft proposal" }),
+    ).not.toBeInTheDocument();
+
+    const sourceContext = screen.getByRole("button", { name: "Job & CV" });
+    expect(sourceContext).toHaveAttribute("data-source-context", "true");
+    expect(sourceContext).toHaveAttribute("data-toolbar-tooltip", "Job & CV");
+    expect(within(sourceContext).queryByText("Job & CV")).not.toBeInTheDocument();
+
+    fireEvent.click(sourceContext);
     expect(onOpenDraft).toHaveBeenCalledTimes(1);
   });
 
@@ -611,6 +632,62 @@ describe("ProposalDocumentStage proposal actions", () => {
 
       const stage = container.querySelector(".dasti-proposal-skeleton-stage");
       expect(stage).toHaveAttribute("data-draft-density", "icon");
+    } finally {
+      Object.defineProperty(window, "innerWidth", {
+        configurable: true,
+        value: originalInnerWidth,
+      });
+      rectSpy.mockRestore();
+      requestAnimationFrameSpy.mockRestore();
+      cancelAnimationFrameSpy.mockRestore();
+    }
+  });
+
+  it("keeps Job & CV on the same icon-only collapse rules as Draft", () => {
+    const originalInnerWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 500,
+    });
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation((callback) => {
+        callback(0);
+        return 1;
+      });
+    const cancelAnimationFrameSpy = vi
+      .spyOn(window, "cancelAnimationFrame")
+      .mockImplementation(() => undefined);
+    const rectSpy = vi
+      .spyOn(Element.prototype, "getBoundingClientRect")
+      .mockImplementation(function getMockRect(this: Element) {
+        if (this.classList.contains("dasti-proposal-skeleton-stage")) {
+          return rect(0, 900);
+        }
+        if (this.classList.contains("dasti-proposal-sheet__preview-page")) {
+          return rect(32, 680);
+        }
+        return rect(0, 900);
+      });
+
+    try {
+      const { container } = render(
+        <ProposalDocumentStage
+          {...baseProps}
+          hasProposalContent
+          onOpenDraft={vi.fn()}
+          onOpenAsk={vi.fn()}
+        >
+          <div className="dasti-proposal-sheet__preview-page">Paper</div>
+        </ProposalDocumentStage>,
+      );
+
+      const stage = container.querySelector(".dasti-proposal-skeleton-stage");
+      expect(stage).toHaveAttribute("data-draft-density", "icon");
+      expect(screen.getByRole("button", { name: "Job & CV" })).toHaveAttribute(
+        "data-source-context",
+        "true",
+      );
     } finally {
       Object.defineProperty(window, "innerWidth", {
         configurable: true,

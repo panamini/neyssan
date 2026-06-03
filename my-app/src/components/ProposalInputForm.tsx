@@ -34,6 +34,7 @@ import {
   listLocalCvPickerOptions,
   setActiveLocalCvId,
   type LocalCvPickerOption,
+  type ProposalPersonalizationSource,
 } from "../lib/proposal-personalization";
 import {
   getProposalGenerationUiErrorMessage,
@@ -122,6 +123,7 @@ interface ProposalInputFormProps {
   externalCharacterLimitValue?: FormValues["characterLimitValue"] | null;
   onActiveCvChange?: (cvId: string | null) => void;
   activeCvId?: string | null;
+  personalizationSourceOverride?: ProposalPersonalizationSource | null;
   headerLabel?: string | null;
   headerAction?: React.ReactNode;
   jobDescriptionPlaceholder?: string;
@@ -146,12 +148,18 @@ type GenerateProposalPayload = ProposalGenerationRequestPayload;
 type GenerateProposalResult = {
   proposalId: Id<"proposals">;
   proposalContent: string;
-} & Required<ProposalGenerationFallbackInfo>;
+  routing?: ProposalGenerationFallbackInfo["routing"];
+} & Required<Omit<ProposalGenerationFallbackInfo, "routing">>;
 
 const DEFAULT_COMPOSE_CHARACTER_LIMIT_MODE =
   DEFAULT_PROPOSAL_CHARACTER_LIMIT_MODE;
 const DEFAULT_COMPOSE_CHARACTER_LIMIT_VALUE =
   DEFAULT_PROPOSAL_CHARACTER_LIMIT_VALUE;
+const EMPTY_PERSONALIZATION_SOURCE: ProposalPersonalizationSource = {
+  title: null,
+  personalizationContext: null,
+  richness: "none",
+};
 
 const VISIBLE_MODEL_OPTIONS = [
   { value: "chatgpt", label: "ChatGPT" },
@@ -394,6 +402,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   externalCharacterLimitValue,
   onActiveCvChange,
   activeCvId,
+  personalizationSourceOverride,
   headerLabel = null,
   headerAction = null,
   jobDescriptionPlaceholder = "Paste job offer",
@@ -435,10 +444,19 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [, setVoicePresetSaveError] = React.useState<string | null>(null);
   const hasControlledActiveCvId = activeCvId !== undefined;
+  const resolveCurrentActiveCvSource = React.useCallback(
+    (): ProposalPersonalizationSource => {
+      if (personalizationSourceOverride !== undefined) {
+        return personalizationSourceOverride ?? EMPTY_PERSONALIZATION_SOURCE;
+      }
+      return hasControlledActiveCvId
+        ? getLocalPersonalizationSourceByCvId(activeCvId)
+        : getActiveLocalPersonalizationSource();
+    },
+    [activeCvId, hasControlledActiveCvId, personalizationSourceOverride],
+  );
   const [activeCvSource, setActiveCvSource] = React.useState(() =>
-    hasControlledActiveCvId
-      ? getLocalPersonalizationSourceByCvId(activeCvId)
-      : getActiveLocalPersonalizationSource(),
+    resolveCurrentActiveCvSource(),
   );
   const [isCvPickerOpen, setIsCvPickerOpen] = React.useState(false);
   const [pendingCvId, setPendingCvId] = React.useState<string | null>(null);
@@ -492,17 +510,13 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   );
 
   const refreshActiveCvState = React.useCallback(() => {
-    setActiveCvSource(
-      hasControlledActiveCvId
-        ? getLocalPersonalizationSourceByCvId(activeCvId)
-        : getActiveLocalPersonalizationSource(),
-    );
+    setActiveCvSource(resolveCurrentActiveCvSource());
     setCvOptions(
       listLocalCvPickerOptions(
         hasControlledActiveCvId ? activeCvId : undefined,
       ),
     );
-  }, [activeCvId, hasControlledActiveCvId]);
+  }, [activeCvId, hasControlledActiveCvId, resolveCurrentActiveCvSource]);
 
   const clearGenerateButtonTimers = React.useCallback(() => {
     for (const timerId of generateButtonTimersRef.current) {
@@ -924,7 +938,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   }, [externalModelType, form, selectedModelType]);
 
   React.useEffect(() => {
-    if (externalModelType === undefined) {
+    if (externalModelType == null) {
       return;
     }
 
@@ -1031,9 +1045,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     activeGenerationClientRunIdRef.current = clientRunId;
     stopRequestedRunIdRef.current = null;
 
-    const currentActiveCvSource = hasControlledActiveCvId
-      ? getLocalPersonalizationSourceByCvId(activeCvId)
-      : getActiveLocalPersonalizationSource();
+    const currentActiveCvSource = resolveCurrentActiveCvSource();
     const hasCandidateContext = Boolean(
       currentActiveCvSource.personalizationContext,
     );
@@ -1108,6 +1120,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
             requestedModelType: result.requestedModelType,
             actualModelType: result.actualModelType,
             fallbackTriggerCode: result.fallbackTriggerCode,
+            routing: result.routing ?? null,
           },
           result.proposalId,
           languageMetadata,
@@ -1175,11 +1188,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     const nextOptions = listLocalCvPickerOptions(
       hasControlledActiveCvId ? activeCvId : undefined,
     );
-    setActiveCvSource(
-      hasControlledActiveCvId
-        ? getLocalPersonalizationSourceByCvId(activeCvId)
-        : getActiveLocalPersonalizationSource(),
-    );
+    setActiveCvSource(resolveCurrentActiveCvSource());
     setCvOptions(nextOptions);
     setPendingCvId(
       activeCvId ?? nextOptions.find((option) => option.isActive)?.id ?? null,

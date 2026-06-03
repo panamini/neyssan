@@ -181,6 +181,8 @@ For most tasks, follow this order:
 6. broaden verification only if needed
 7. report what changed, what was verified, and any remaining uncertainty
 
+Before pushing a branch, opening a PR, or merging after substantial implementation work, run Fallow in read-only review mode on the changed code. Treat Fallow as an advisory report only. Do not apply its fixes unless explicitly requested. Skip this for tiny localized edits unless they touch shared, public, or dependency-facing code.
+
 ## Non-Goals Unless Explicitly Requested
 
 - large architectural rewrites
