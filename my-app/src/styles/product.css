@@ -2063,6 +2063,7 @@ body,
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: var(--space-1);
 }
 
@@ -2198,8 +2199,11 @@ body,
   scrollbar-color: var(--forge-drawer-scrollbar-thumb) transparent;
   display: grid;
   grid-template-columns: repeat(
-    2,
-    minmax(0, var(--forge-drawer-template-thumb-inline-size))
+    auto-fit,
+    minmax(
+      var(--forge-drawer-template-thumb-inline-size),
+      var(--forge-drawer-template-thumb-inline-size)
+    )
   );
   align-content: start;
   justify-content: center;
@@ -2207,6 +2211,17 @@ body,
   row-gap: var(--forge-drawer-grid-row-gap);
   margin: calc(var(--forge-drawer-scroll-inset) * -1);
   padding: var(--forge-drawer-scroll-inset);
+}
+
+@media (max-width: 420px) {
+  .forge-template-panel__head {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .forge-template-panel__head-actions {
+    justify-content: flex-start;
+  }
 }
 
 .forge-template-panel__content {
