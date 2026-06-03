@@ -327,6 +327,34 @@ describe("ResumePage", () => {
     );
   });
 
+  it("renders editorial sidebar experience company bold and role regular", () => {
+    const view = renderVariantPreview(
+      {
+        ...DEFAULT_VERBATI_STYLE,
+        layout: "workshop",
+        typography: "quiet-editorial",
+        resumeTemplateId: "editorial-sidebar",
+      },
+      "editorialsidebar",
+    );
+
+    const page = view.container.querySelector(
+      ".resume-page--editorialsidebar",
+    ) as HTMLElement | null;
+    const title = page?.querySelector(
+      ".experience-item--editorialsidebar .entry-title--editorialsidebar",
+    ) as HTMLElement | null;
+    const company = title?.querySelector(".entry-company") as HTMLElement | null;
+    const role = title?.querySelector(".entry-role") as HTMLElement | null;
+
+    expect(title).toHaveTextContent(resumeMock.experience[0]?.company ?? "");
+    expect(title).toHaveTextContent(resumeMock.experience[0]?.role ?? "");
+    expect(company).toHaveTextContent(resumeMock.experience[0]?.company ?? "");
+    expect(role).toHaveTextContent(resumeMock.experience[0]?.role ?? "");
+    expect(company).toHaveClass("entry-company");
+    expect(role).toHaveClass("entry-role");
+  });
+
   it("keeps the outer preview frame sized to one page while the stacked stage carries total stack height", async () => {
     const longSwissData: ResumeData = {
       ...resumeMock,

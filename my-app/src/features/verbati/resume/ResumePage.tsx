@@ -2189,8 +2189,16 @@ function ClassicResumePage({
                         surface="item"
                       >
                         <div>
-                          <h3 className="entry-title">
-                            {[item.company, item.role].filter(Boolean).join(", ")}
+                          <h3 className="entry-title entry-title--editorialsidebar">
+                            {item.company ? (
+                              <span className="entry-company">{item.company}</span>
+                            ) : null}
+                            {item.company && item.role ? (
+                              <span className="entry-title-separator">, </span>
+                            ) : null}
+                            {item.role ? (
+                              <span className="entry-role">{item.role}</span>
+                            ) : null}
                           </h3>
                           <p className="entry-subtitle">
                             {[item.period, item.location].filter(Boolean).join(" · ")}

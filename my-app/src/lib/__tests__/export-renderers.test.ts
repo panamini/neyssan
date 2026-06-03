@@ -312,8 +312,19 @@ describe("export-renderers", () => {
     expect(styledCss).toContain(
       "body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-columns--editorial-sidebar",
     );
+    expect(styledCss).toContain(".entry-title--editorial-sidebar");
     expect(styledCss).toContain("minmax(0, var(--page-sidebar))");
     expect(styledCss).toContain("minmax(0, var(--page-main))");
+    expect(
+      styledDocument.querySelector(
+        ".entry--experience .entry-title--editorial-sidebar .entry-company",
+      )?.textContent,
+    ).toBe(data.experience[0]?.company);
+    expect(
+      styledDocument.querySelector(
+        ".entry--experience .entry-title--editorial-sidebar .entry-role",
+      )?.textContent,
+    ).toBe(data.experience[0]?.role);
     expect(styledDocument.body.textContent).toContain("Visible export bullet");
     expect(
       Array.from(styledDocument.querySelectorAll(".bullet-list li")).every(

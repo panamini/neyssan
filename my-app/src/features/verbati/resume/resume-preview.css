@@ -749,7 +749,7 @@
   padding: 0;
   border: 0;
   color: var(--color-accent);
-  font-size: calc(var(--text-caption-size) + 0.24mm);
+  font-size: calc(var(--text-caption-size) + 0.42mm);
   line-height: 1.12;
   font-weight: 800;
   letter-spacing: 0.14em;
@@ -813,6 +813,19 @@
   line-height: 1.17;
   font-weight: 800;
   letter-spacing: -0.02em;
+}
+
+.resume-page--editorialsidebar .entry-title--editorialsidebar {
+  font-weight: 400;
+}
+
+.resume-page--editorialsidebar .entry-company {
+  font-weight: 800;
+}
+
+.resume-page--editorialsidebar .entry-role,
+.resume-page--editorialsidebar .entry-title-separator {
+  font-weight: 400;
 }
 
 .resume-page--editorialsidebar .entry-subtitle,

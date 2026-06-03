@@ -15,6 +15,7 @@ import {
 import type { VerbatiStylePreset } from "../features/verbati/types";
 import { buildResumeEducationDisplay } from "../features/verbati/resume/resumeEducation";
 import type {
+  ResumeExperienceItem,
   WorkshopResponsibilitiesRichContent,
   WorkshopResponsibilityTextRun,
 } from "../features/verbati/resume/resume.types";
@@ -453,7 +454,21 @@ function buildStyledResumeAppearanceCss(): string {
 
     body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-page--editorial-sidebar .section-title {
       color: var(--decor-section-title-color, var(--accent));
+      font-size: calc(var(--flow-label-size) + 0.45mm);
       letter-spacing: 0.18em;
+    }
+
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-page--editorial-sidebar .entry-title--editorial-sidebar {
+      font-weight: 400;
+    }
+
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-page--editorial-sidebar .entry-company {
+      font-weight: 800;
+    }
+
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-page--editorial-sidebar .entry-role,
+    body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-page--editorial-sidebar .entry-title-separator {
+      font-weight: 400;
     }
 
     body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-page--editorial-sidebar .entry-head {
@@ -4268,14 +4283,34 @@ function renderResumeHtml(args: {
     titleKey: "languages",
   });
 
+  const isEditorialSidebarResume =
+    args.data.resumeTemplateId === EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID;
+  const renderExperienceTitle = (item: ResumeExperienceItem): string => {
+    if (!isEditorialSidebarResume) {
+      return `<h3 class="entry-title">${escapeHtml(
+        [item.role, item.company].filter(Boolean).join(" · "),
+      )}</h3>`;
+    }
+
+    const companyMarkup = item.company
+      ? `<span class="entry-company">${escapeHtml(item.company)}</span>`
+      : "";
+    const separatorMarkup = item.company && item.role
+      ? `<span class="entry-title-separator">, </span>`
+      : "";
+    const roleMarkup = item.role
+      ? `<span class="entry-role">${escapeHtml(item.role)}</span>`
+      : "";
+
+    return `<h3 class="entry-title entry-title--editorial-sidebar">${companyMarkup}${separatorMarkup}${roleMarkup}</h3>`;
+  };
+
   const experienceContent = args.data.experience
     .map(
       (item) => `<article class="entry entry--experience">
         <div class="entry-lead">
           <div class="entry-head">
-            <h3 class="entry-title">${escapeHtml(
-              [item.role, item.company].filter(Boolean).join(" · "),
-            )}</h3>
+            ${renderExperienceTitle(item)}
             <p class="entry-meta">${escapeHtml(
               [item.period, item.location].filter(Boolean).join("\n"),
             )}</p>
