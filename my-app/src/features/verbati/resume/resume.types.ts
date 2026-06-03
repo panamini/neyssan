@@ -168,5 +168,6 @@ export type ResumeLayoutVariantId =
   | "swissminima"
   | "volkregister"
   | "editorialmag"
+  | "editorialsidebar"
   | "signalgrid"
   | "quire";

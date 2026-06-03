@@ -118,12 +118,13 @@ describe("TemplatesPage", () => {
     await user.click(screen.getByRole("tab", { name: "Resume" }));
     expect(screen.getByText("Minimal", { selector: ".dasti-template-card__title" })).toBeInTheDocument();
     expect(screen.getByText("French", { selector: ".dasti-template-card__title" })).toBeInTheDocument();
+    expect(screen.getByText("Editorial Sidebar", { selector: ".dasti-template-card__title" })).toBeInTheDocument();
     expect(screen.queryByText("Two-column")).toBeNull();
     expect(screen.queryByText("Classic")).toBeNull();
     expect(screen.queryByText("Compact")).toBeNull();
     expect(screen.queryByText("Workshop one-col")).toBeNull();
     expect(screen.queryByText("Workshop two-col")).toBeNull();
-    expect(screen.getAllByTestId("template-document-preview")).toHaveLength(2);
+    expect(screen.getAllByTestId("template-document-preview")).toHaveLength(3);
 
     await user.click(screen.getByRole("button", { name: "Customize style" }));
     expect(navigateMock).toHaveBeenCalledWith("/settings?tab=docstyle");
@@ -277,6 +278,27 @@ describe("TemplatesPage", () => {
     );
   });
 
+  it("creates a new editorial sidebar CV from the selected resume template", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/templates"]}>
+        <TemplatesPage />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Resume" }));
+    const editorialSidebarCard = screen
+      .getByText("Editorial Sidebar", { selector: ".dasti-template-card__title" })
+      .closest(".dasti-template-card");
+    expect(editorialSidebarCard).toBeTruthy();
+    await user.click(editorialSidebarCard as HTMLElement);
+    await user.click(screen.getByRole("button", { name: "Create new CV" }));
+
+    expect(navigateMock).toHaveBeenCalledWith(
+      "/cv?cvForgeAction=createBlank&templateId=editorial-sidebar",
+    );
+  });
+
   it("opens the action surface from keyboard selection", async () => {
     const user = userEvent.setup();
     render(
@@ -380,15 +402,18 @@ describe("TemplatesPage", () => {
     await user.click(screen.getByRole("tab", { name: "Resume" }));
 
     const previews = screen.getAllByTestId("template-document-preview");
-    expect(previews).toHaveLength(2);
+    expect(previews).toHaveLength(3);
     for (const preview of previews) {
-      expect(preview.querySelector(".resume-template-renderer")).toBeTruthy();
-      expect(preview.querySelector(".resume-template-page-canvas")).toBeTruthy();
-      expect(
-        preview.querySelectorAll(
-          ".resume-template-renderer > .resume-template-page-shell",
-        ),
-      ).toHaveLength(1);
+      const workshopRenderer = preview.querySelector(".resume-template-renderer");
+      const legacyResumePage = preview.querySelector(".resume-page");
+
+      expect(workshopRenderer || legacyResumePage).toBeTruthy();
+      if (workshopRenderer) {
+        expect(preview.querySelector(".resume-template-page-canvas")).toBeTruthy();
+        expect(preview.querySelectorAll(".resume-template-renderer > .resume-template-page-shell")).toHaveLength(1);
+      } else {
+        expect(legacyResumePage).toBeTruthy();
+      }
     }
 
     const stylesPath = path.resolve(
@@ -515,5 +540,18 @@ describe("TemplatesPage", () => {
       "data-resume-template-layout",
       "workshop-two-column",
     );
+  });
+
+  it("renders the editorial sidebar resume template through the legacy ResumePage path", () => {
+    render(
+      <TemplateDocumentPreview
+        kind="Resume"
+        family="editorial-sidebar"
+        previewCv={generateCvTemplate("Editorial sidebar preview CV")}
+      />,
+    );
+
+    expect(screen.queryByTestId("resume-template-renderer")).not.toBeInTheDocument();
+    expect(document.querySelector(".resume-page--editorialsidebar")).toBeTruthy();
   });
 });

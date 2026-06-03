@@ -379,6 +379,55 @@ describe("ResumePrintPage", () => {
     );
   });
 
+  it("renders the editorial sidebar resume through the legacy ResumePage path on the print route", async () => {
+    const payload = buildPayload();
+    window.__DASTI_RESUME_PRINT_PAYLOAD__ = {
+      ...payload,
+      resumeData: {
+        ...payload.resumeData,
+        experience: payload.resumeData.experience.map((item, index) =>
+          index === 0
+            ? {
+                ...item,
+                bullets: ["", "Visible editorial bullet", "   "],
+              }
+            : item,
+        ),
+      },
+      stylePreset: {
+        ...payload.stylePreset,
+        resumeTemplateId: "editorial-sidebar" as const,
+      },
+      resumeTemplateId: "editorial-sidebar" as const,
+      rendererVariantId: "editorialsidebar" as const,
+      committedPages: undefined,
+    };
+
+    render(<ResumePrintPage />);
+
+    expect(screen.queryByTestId("resume-template-renderer")).not.toBeInTheDocument();
+    expect(document.querySelector(".resume-page--editorialsidebar")).toBeTruthy();
+    expect(document.querySelector(".resume-inner--editorialsidebar")).toBeTruthy();
+    expect(document.querySelector(".resume-grid--editorialsidebar")).toBeTruthy();
+    expect(document.querySelector(".name--editorialsidebar")).toBeTruthy();
+    expect(document.querySelector(".resume-sidebar--editorialsidebar")).toBeTruthy();
+    expect(document.querySelector(".resume-main--editorialsidebar")).toBeTruthy();
+    expect(screen.queryByText("Résumé")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Work" })).toBeInTheDocument();
+    expect(screen.getByText("Visible editorial bullet")).toBeInTheDocument();
+    expect(
+      Array.from(
+        document.querySelectorAll(
+          ".resume-page--editorialsidebar .bullet-list li",
+        ),
+      ).every((item) => item.textContent?.trim()),
+    ).toBe(true);
+
+    await waitFor(() => {
+      expect(window.__DASTI_RESUME_PRINT_STATUS__?.status).toBe("ready");
+    });
+  });
+
   it("renders the workshop template renderer on the print route for workshop payloads", async () => {
     window.__DASTI_RESUME_PRINT_PAYLOAD__ = buildWorkshopOverflowPayload();
 

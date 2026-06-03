@@ -16,7 +16,10 @@ import {
   renderResumeStyledExportDocument,
 } from "../export-renderers";
 import { planWorkshopResumePages } from "../resume/resumePagination";
-import { getResumeTemplateDefinition } from "../layout/resumeTemplates";
+import {
+  EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID,
+  getResumeTemplateDefinition,
+} from "../layout/resumeTemplates";
 import { resumeMock } from "../../features/verbati/resume/resume.mock";
 
 function parseExportHtml(html: string): Document {
@@ -247,6 +250,77 @@ describe("export-renderers", () => {
     expect(normalizedStyledCss).toContain("--flow-reading-measure: 105mm;");
     expect(normalizedStyledCss).toContain("--page-sidebar: 35mm;");
     expect(normalizedStyledCss).toContain("--page-gutter: 18mm;");
+  });
+
+  it("renders editorial sidebar styled resume exports from the saved print source template id", () => {
+    const stylePreset = {
+      familyId: "workshop" as const,
+      layout: "workshop" as const,
+      typography: "quiet-editorial" as const,
+      palette: "sauge" as const,
+      resumeTemplateId: EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID,
+    };
+    const data = {
+      ...resumeFixture,
+      resumeTemplateId: EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID,
+      experience: resumeFixture.experience.map((item, index) =>
+        index === 0
+          ? {
+              ...item,
+              bullets: ["", "Visible export bullet", "   "],
+            }
+          : item,
+      ),
+    };
+
+    const styledDocument = parseExportHtml(
+      renderResumeStyledExportDocument({
+        data,
+        stylePreset,
+      }),
+    );
+    const styledCss = getInlineStyles(styledDocument);
+    const atsDocument = parseExportHtml(
+      renderResumeAtsExportDocument(data, stylePreset),
+    );
+
+    expect(styledDocument.body.className).toContain(
+      "resume-layout--workshop",
+    );
+    expect(styledDocument.body.className).toContain(
+      "resume-template--editorial-sidebar",
+    );
+    expect(
+      styledDocument.querySelector('[data-resume-template="editorial-sidebar"]'),
+    ).toBeTruthy();
+    expect(
+      styledDocument.querySelector(".resume-styled-page--editorial-sidebar"),
+    ).toBeTruthy();
+    expect(
+      styledDocument.querySelector(".resume-styled-columns--editorial-sidebar"),
+    ).toBeTruthy();
+    expect(
+      styledDocument.querySelector(".resume-styled-support--editorial-sidebar"),
+    ).toBeTruthy();
+    expect(
+      styledDocument.querySelector(".resume-styled-main--editorial-sidebar"),
+    ).toBeTruthy();
+    expect(styledDocument.querySelector(".robial-sidebar")).toBeNull();
+    expect(styledCss).toContain("--page-sidebar: 38mm;");
+    expect(styledCss).toContain("--page-gutter: 13mm;");
+    expect(styledCss).toContain("--page-main: 130mm;");
+    expect(styledCss).toContain(
+      "body.resume-export.resume-template--editorial-sidebar.resume--styled .resume-styled-columns--editorial-sidebar",
+    );
+    expect(styledCss).toContain("minmax(0, var(--page-sidebar))");
+    expect(styledCss).toContain("minmax(0, var(--page-main))");
+    expect(styledDocument.body.textContent).toContain("Visible export bullet");
+    expect(
+      Array.from(styledDocument.querySelectorAll(".bullet-list li")).every(
+        (item) => item.textContent?.trim(),
+      ),
+    ).toBe(true);
+    expect(atsDocument.querySelector(".resume-styled-page--editorial-sidebar")).toBeNull();
   });
 
   it("renders styled workshop resume list markers as inline document icons", () => {

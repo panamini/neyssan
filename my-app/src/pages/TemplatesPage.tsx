@@ -1,6 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../components/ui";
+import ResumePage from "../features/verbati/resume/ResumePage";
 import { ResumeTemplateRenderer } from "../features/verbati/resume/ResumeTemplateRenderer";
 import { resumeMock, resumeMockOnecol } from "../features/verbati/resume/resume.mock";
 import { resolveVerbatiStyle } from "../features/verbati/style";
@@ -22,6 +23,12 @@ import { templatePreviewApplicant, templatePreviewProposal } from "./templatePre
 import type { CvDocument } from "../types/cvDocument";
 import { translateUi, type UiMessageKey } from "../lib/i18n";
 import { useUiLanguagePreference } from "../lib/ui-preferences";
+import {
+  EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID,
+  type ResumeTemplateId,
+} from "../lib/layout/resumeTemplates";
+import { resolveLegacyResumeRendererVariantId } from "../features/verbati/style";
+import type { ResumeLayoutVariantId } from "../features/verbati/resume/resume.types";
 
 const TEMPLATE_FILTERS = ["cover letters", "resume"] as const;
 type TemplateFilter = (typeof TEMPLATE_FILTERS)[number];
@@ -29,6 +36,7 @@ type TemplateFilter = (typeof TEMPLATE_FILTERS)[number];
 export type TemplateFamily =
   | "workshop-onecol"
   | "workshop-twocol"
+  | "editorial-sidebar"
   | "minimal"
   | "bold"
   | "letterpress"
@@ -49,7 +57,7 @@ type TemplateCard = {
   descriptionKey: UiMessageKey;
 };
 
-type ResumeTemplateIntent = "minimal" | "french";
+type ResumeTemplateIntent = "minimal" | "french" | ResumeTemplateId;
 type CoverLetterTemplateIntent = "minimal" | "direct" | "editorial";
 type TemplateRouteIntent = ResumeTemplateIntent | CoverLetterTemplateIntent | ProposalTemplateId;
 
@@ -67,6 +75,13 @@ const TEMPLATES: TemplateCard[] = [
     kind: "Resume",
     family: "workshop-twocol",
     descriptionKey: "templates.description.workshopTwoColumnResume",
+  },
+  {
+    id: "editorial-sidebar-resume",
+    name: "Editorial Sidebar",
+    kind: "Resume",
+    family: "editorial-sidebar",
+    descriptionKey: "templates.description.editorialSidebarResume",
   },
   {
     id: "minimal-letter",
@@ -145,6 +160,12 @@ const TEMPLATE_STYLE_PRESETS: Record<TemplateFamily, VerbatiStylePreset> = {
     typography: "geist-baskervville",
     palette: "sauge",
     resumeTemplateId: "workshop_resume_twocol_ats",
+  }),
+  "editorial-sidebar": resolveVerbatiStyle({
+    familyId: "workshop",
+    typography: "quiet-editorial",
+    palette: "sauge",
+    resumeTemplateId: EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID,
   }),
   minimal: resolveVerbatiStyle({
     familyId: "workshop",
@@ -243,6 +264,9 @@ function getResumeTemplateIntent(
 ): ResumeTemplateIntent | null {
   if (family === "workshop-onecol") return "minimal";
   if (family === "workshop-twocol") return "french";
+  if (family === "editorial-sidebar") {
+    return EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID;
+  }
   return null;
 }
 
@@ -282,7 +306,9 @@ export function TemplateDocumentPreview({
     const resumeTemplateId =
       family === "workshop-onecol"
         ? "workshop_resume_onecol_ats"
-        : "workshop_resume_twocol_ats";
+        : family === "workshop-twocol"
+          ? "workshop_resume_twocol_ats"
+          : EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID;
     const cvPreviewSource = previewCv
       ? buildStyledResumePrintSource({ currentCv: previewCv, stylePreset })
       : null;
@@ -292,6 +318,22 @@ export function TemplateDocumentPreview({
     const resolvedStylePreset = cvPreviewSource?.stylePreset ?? stylePreset;
     const resolvedResumeTemplateId =
       cvPreviewSource?.resumeTemplateId ?? resumeTemplateId;
+    const resolvedRendererVariantId: ResumeLayoutVariantId =
+      cvPreviewSource?.rendererVariantId ??
+      resolveLegacyResumeRendererVariantId(resolvedStylePreset) ??
+      "swissminima";
+
+    if (family === "editorial-sidebar") {
+      return (
+        <ResumePage
+          data={previewData}
+          mode={resolvedRendererVariantId}
+          stylePreset={resolvedStylePreset}
+          pageSize={cvPreviewSource?.pageSize ?? undefined}
+        />
+      );
+    }
+
     const previewPages =
       cvPreviewSource?.committedPages ??
       planWorkshopResumePages({

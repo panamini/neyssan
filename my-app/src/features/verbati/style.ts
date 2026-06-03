@@ -39,6 +39,8 @@ import type {
   VerbatiTypographyPreset,
 } from "./types";
 import {
+  EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID,
+  isResumeTemplateId,
   isWorkshopResumeTemplateId,
   type ResumeTemplateId,
 } from "../../lib/layout/resumeTemplates";
@@ -146,7 +148,7 @@ function sanitizePersistedVerbatiLayout(
 function sanitizePersistedResumeTemplateId(
   value: unknown,
 ): ResumeTemplateId | null {
-  return isWorkshopResumeTemplateId(value as ResumeTemplateId)
+  return isResumeTemplateId(value as ResumeTemplateId)
     ? (value as ResumeTemplateId)
     : null;
 }
@@ -320,6 +322,15 @@ export function getStyleFamilyId(
 export function resolveLegacyResumeRendererVariantId(
   style: VerbatiStylePreset | VerbatiLayoutPreset | null | undefined,
 ): ResumeLayoutVariantId | null {
+  if (typeof style !== "string" && style) {
+    const templateId = sanitizePersistedResumeTemplateId(
+      style.resumeTemplateId,
+    );
+    if (templateId === EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID) {
+      return "editorialsidebar";
+    }
+  }
+
   const familyId =
     typeof style === "string"
       ? sanitizePersistedVerbatiFamilyId(style)
