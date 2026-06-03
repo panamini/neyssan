@@ -247,6 +247,7 @@ import { exportDocumentFile } from "../lib/exportDocumentFile";
 import {
   ensureProposalSignatureName,
   removeProposalSignatureNameFromClosing,
+  resolveProposalClosingOptionGroups,
   resolveProposalClosingRef,
   type ProposalClosingRef,
 } from "../lib/proposal-closing";
@@ -2624,11 +2625,35 @@ export function ProposalForge(): JSX.Element {
     () => JSON.stringify(persistedOutputProposalClosing),
     [persistedOutputProposalClosing],
   );
+  const persistedOutputProposalClosingSnapshot =
+    React.useMemo<ProposalClosingRef | null>(() => {
+      if (!persistedOutputProposalClosingToken) {
+        return null;
+      }
+
+      try {
+        return JSON.parse(persistedOutputProposalClosingToken) as ProposalClosingRef;
+      } catch {
+        return null;
+      }
+    }, [persistedOutputProposalClosingToken]);
   const [proposalClosingDraft, setProposalClosingDraft] =
     React.useState<ProposalClosingRef | null>(persistedOutputProposalClosing);
+  const lastSyncedPersistedClosingTokenRef = React.useRef(
+    persistedOutputProposalClosingToken,
+  );
   React.useEffect(() => {
-    setProposalClosingDraft(persistedOutputProposalClosing);
-  }, [persistedOutputProposalClosingToken]);
+    if (
+      lastSyncedPersistedClosingTokenRef.current ===
+      persistedOutputProposalClosingToken
+    ) {
+      return;
+    }
+
+    lastSyncedPersistedClosingTokenRef.current =
+      persistedOutputProposalClosingToken;
+    setProposalClosingDraft(persistedOutputProposalClosingSnapshot);
+  }, [persistedOutputProposalClosingSnapshot, persistedOutputProposalClosingToken]);
   const storedOutputProposalClosing =
     proposalClosingDraft ?? persistedOutputProposalClosing;
   const storedOutputProposalClosingToken = React.useMemo(
@@ -2665,7 +2690,11 @@ export function ProposalForge(): JSX.Element {
           sessionDraft: storageSnapshots.rawSessionOutputDraft,
         }) ?? "default_fallback";
       writeStoredProposalOutputDraft(nextDraft);
-      setStoredOutputDraft(nextDraft);
+      setStoredOutputDraft((currentDraft) =>
+        JSON.stringify(currentDraft) === JSON.stringify(nextDraft)
+          ? currentDraft
+          : nextDraft,
+      );
       traceProposalStyle({
         step: "write-stored-output-draft",
         proposalId: nextDraft?.generatedProposalId ?? null,
@@ -6566,6 +6595,7 @@ export function ProposalForge(): JSX.Element {
         : getProposalTwinTemplateId(nextStylePreset);
 
       setProposalContent(null);
+      setProposalDocument(null);
       setLoading(false);
       setError(null);
       setErrorDetail(null);
@@ -8226,11 +8256,11 @@ export function ProposalForge(): JSX.Element {
           submittedComposeDraft.sourceUrl?.trim() ||
           submittedComposeDraft.platform?.trim(),
       );
-      setStagedProposalSourceDraft(null);
-      setStagedSourceJobId(null);
-      setStagedProposalCvSelection(null);
+      setStagedProposalSourceDraft((current) => (current ? null : current));
+      setStagedSourceJobId((current) => (current ? null : current));
+      setStagedProposalCvSelection((current) => (current ? null : current));
       if (submittedHasJobSource) {
-        setJobContextCleared(false);
+        setJobContextCleared((current) => (current ? false : current));
       }
       if (stagedCvToCommit) {
         handleAttachedCvChange(stagedCvToCommit.id);
@@ -8367,6 +8397,7 @@ export function ProposalForge(): JSX.Element {
       setProposalDocumentTitleManual(nextDocumentTitleManual);
       setProposalDocumentMeta(nextDocumentMeta);
       setProposalContent(proposalContentWithManualHeading);
+      setProposalDocument(null);
       setGeneratedProposalId(nextProposalId ?? null);
       generatedProposalIdRef.current = nextProposalId ?? null;
       if (nextProposalId && canPersistProposalState) {
@@ -8756,7 +8787,7 @@ export function ProposalForge(): JSX.Element {
         }),
         enabled: true,
         signOff: value,
-        source: "settings",
+        source: "custom",
       };
       setProposalClosingDraft(nextClosing);
 
@@ -9221,7 +9252,7 @@ export function ProposalForge(): JSX.Element {
     const applicantName = sanitizeProposalApplicantName(proposalApplicantName);
     const nextClosing = resolveProposalClosingRef({
       closing: storedOutputProposalClosing
-        ? { ...storedOutputProposalClosing, enabled: true, source: "settings" }
+        ? { ...storedOutputProposalClosing, enabled: true, source: "custom" }
         : null,
       content: proposalContent || storedOutputDraft?.proposalContent || null,
       proposalType,
@@ -9292,7 +9323,7 @@ export function ProposalForge(): JSX.Element {
       const nextClosing = {
         ...currentClosing,
         enabled: false,
-        source: "settings" as const,
+        source: "custom" as const,
         handwrittenSignatureEnabled: false,
       };
       const latestStoredOutputDraft =
@@ -9349,7 +9380,7 @@ export function ProposalForge(): JSX.Element {
           ? {
               ...storedOutputProposalClosing,
               enabled: true,
-              source: "settings",
+              source: "custom",
             }
           : null,
         content: proposalContent,
@@ -9724,6 +9755,7 @@ export function ProposalForge(): JSX.Element {
       cancelPendingComposeDraftSync();
       writeStoredOutputDraft(null);
       setProposalContent(null);
+      setProposalDocument(null);
       setProposalType(null);
       setProposalVoicePreset(null);
       setProposalTemplateId(
@@ -11655,6 +11687,11 @@ export function ProposalForge(): JSX.Element {
         label: "Signature / politeness formula",
         value: effectiveProposalClosing?.signOff ?? "",
         placeholder: "Kind regards,",
+        closingOptionGroups: resolveProposalClosingOptionGroups({
+          content: proposalContent,
+          proposalType,
+          locale: storedOutputDraft?.resolvedLanguage,
+        }),
         onChange: handleProposalSignOffChange,
         onBlur: () => {
           void handleProposalDocumentCommit();
@@ -11681,9 +11718,12 @@ export function ProposalForge(): JSX.Element {
       proposalStructuredContactFields,
       proposalDocumentTitle,
       proposalLetterDate,
+      proposalContent,
       proposalRecipientFields,
       proposalRecipientDetails,
       proposalSalutationValue,
+      proposalType,
+      storedOutputDraft?.resolvedLanguage,
     ],
   );
   const proposalHeadingPanelRegistration = React.useMemo(

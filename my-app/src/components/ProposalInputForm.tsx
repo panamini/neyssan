@@ -1488,13 +1488,19 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
   const generateButtonVisualClass =
     getProposalGenerateButtonVisualClass(generateButtonState);
   const canSubmitGeneration = !isGenerating && generateButtonState === "idle";
+  const effectiveJobDescriptionForGeneration =
+    watchedJobDescription.trim().length > 0
+      ? watchedJobDescription
+      : externalComposeDraft?.jobDescription ?? "";
+  const effectiveJobDescriptionLength =
+    effectiveJobDescriptionForGeneration.trim().length;
   const composeInputTypography = React.useMemo(
     () => getProposalDocumentTypography(null),
     [],
   );
   const { ref: jobDescriptionFieldRef, ...jobDescriptionFieldProps } =
     form.register("jobDescription");
-  const hasJobOfferText = watchedJobDescription.trim().length > 0;
+  const hasJobOfferText = effectiveJobDescriptionLength > 0;
   const canToggleRawJobText = hasJobOfferText;
   const shouldShowRawJobEditor = !canToggleRawJobText || isRawJobTextExpanded;
   const shouldShowImportedSourceCard =
@@ -1580,6 +1586,15 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     requestGenerateButtonReverseSequence,
     syncExternalComposeDraftToForm,
   ]);
+  const handleGenerateControlTriggerRef = React.useRef(
+    handleGenerateControlTrigger,
+  );
+  React.useEffect(() => {
+    handleGenerateControlTriggerRef.current = handleGenerateControlTrigger;
+  }, [handleGenerateControlTrigger]);
+  const stableGenerateControlTrigger = React.useCallback(() => {
+    handleGenerateControlTriggerRef.current();
+  }, []);
 
   React.useEffect(() => {
     if (!onGenerateControlChange) {
@@ -1587,21 +1602,20 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     }
 
     onGenerateControlChange({
-      trigger: handleGenerateControlTrigger,
+      trigger: stableGenerateControlTrigger,
       label: generateButtonLabel,
       disabled:
-        watchedJobDescription.length < 10 ||
-        (isGenerating && !canStopGeneration),
+        effectiveJobDescriptionLength < 10 || (isGenerating && !canStopGeneration),
       state: generateButtonState,
     });
   }, [
     canStopGeneration,
+    effectiveJobDescriptionLength,
     generateButtonLabel,
     generateButtonState,
-    handleGenerateControlTrigger,
     isGenerating,
     onGenerateControlChange,
-    watchedJobDescription.length,
+    stableGenerateControlTrigger,
   ]);
 
   React.useEffect(() => {
@@ -2073,7 +2087,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
                     )}
                     aria-busy={isGenerating}
                     disabled={
-                      watchedJobDescription.length < 10 ||
+                      effectiveJobDescriptionLength < 10 ||
                       (isGenerating && !canStopGeneration)
                     }
                     aria-label={generateButtonLabel}

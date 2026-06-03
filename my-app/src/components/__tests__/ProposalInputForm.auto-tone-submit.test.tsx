@@ -358,6 +358,93 @@ describe("ProposalInputForm auto tone submit", () => {
     );
   });
 
+  it("keeps generate enabled when only the controlled CV changes", async () => {
+    const pastedJobOffer =
+      "Support store operations, help customers, organize merchandise, and communicate clearly with the team during each shift.";
+    let generateControl: {
+      trigger: () => void;
+      disabled: boolean;
+    } | null = null;
+    const onGenerateControlChange = vi.fn((control) => {
+      generateControl = control;
+    });
+
+    const { rerender } = render(
+      <ProposalInputForm
+        onSubmit={vi.fn()}
+        activeCvId="cv_initial"
+        externalComposeDraft={{
+          jobTitle: "Retail Key Holder",
+          jobDescription: pastedJobOffer,
+          proposalType: "cover_letter",
+        }}
+        onGenerateControlChange={onGenerateControlChange}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(generateControl?.disabled).toBe(false);
+    });
+
+    rerender(
+      <ProposalInputForm
+        onSubmit={vi.fn()}
+        activeCvId="cv_job_alpha"
+        externalComposeDraft={{
+          jobTitle: "Retail Key Holder",
+          jobDescription: pastedJobOffer,
+          proposalType: "cover_letter",
+        }}
+        onGenerateControlChange={onGenerateControlChange}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(generateControl?.disabled).toBe(false);
+    });
+  });
+
+  it("keeps the external generate control trigger stable across neutral rerenders", async () => {
+    const handleSubmit = vi.fn();
+    let generateControl: {
+      trigger: () => void;
+      disabled: boolean;
+    } | null = null;
+    const onGenerateControlChange = vi.fn((control) => {
+      generateControl = control;
+    });
+    const props = {
+      onSubmit: handleSubmit,
+      onGenerateControlChange,
+    };
+    const { rerender } = render(<ProposalInputForm {...props} />);
+
+    await waitFor(() => {
+      expect(generateControl).not.toBeNull();
+    });
+    const initialTrigger = generateControl?.trigger;
+
+    fireEvent.change(screen.getByPlaceholderText("Paste job offer"), {
+      target: {
+        value:
+          "Coordinate airport security patrols, customer support, access checks, reporting, and clear communication across a busy public site.",
+      },
+    });
+
+    await waitFor(() => {
+      expect(generateControl?.disabled).toBe(false);
+    });
+    expect(generateControl?.trigger).toBe(initialTrigger);
+
+    const callsAfterEnabled = onGenerateControlChange.mock.calls.length;
+    rerender(<ProposalInputForm {...props} />);
+
+    await waitFor(() => {
+      expect(onGenerateControlChange).toHaveBeenCalledTimes(callsAfterEnabled);
+    });
+    expect(generateControl?.trigger).toBe(initialTrigger);
+  });
+
   it("sends explicit document language independently from UI language and job language", async () => {
     window.localStorage.setItem("twoweeks:ui-language", "en");
     window.localStorage.setItem("twoweeks:document-language", "fr");

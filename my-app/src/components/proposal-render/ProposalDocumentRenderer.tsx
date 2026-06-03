@@ -302,6 +302,10 @@ function arePageGroupsEqual(a: number[][], b: number[][]) {
   });
 }
 
+function serializePageGroups(groups: number[][]): string {
+  return groups.map((group) => group.join(",")).join("|");
+}
+
 const SALUTATION_PATTERN =
   /^(dear\b|hello\b|hi\b|greetings\b|madame\b|monsieur\b|madame,\s*monsieur\b|bonjour\b)/i;
 
@@ -3070,6 +3074,10 @@ export function ProposalDocumentRenderer({
     () => resolveDocumentPageSize({ pageSize }),
     [pageSize],
   );
+  const onPageCountChangeRef = React.useRef(onPageCountChange);
+  React.useLayoutEffect(() => {
+    onPageCountChangeRef.current = onPageCountChange;
+  }, [onPageCountChange]);
   const canonicalPreviewTokens = React.useMemo(
     () =>
       normalizeProposalPreviewTokens({
@@ -3236,6 +3244,7 @@ export function ProposalDocumentRenderer({
       ? [documentBlocks.map((_, index) => index)]
       : [[]],
   );
+  const pageGroupsTokenRef = React.useRef(serializePageGroups(pageGroups));
   const lastReportedPageCountRef = React.useRef<number | null>(null);
   React.useLayoutEffect(() => {
     const el = rootRef.current;
@@ -3288,14 +3297,15 @@ export function ProposalDocumentRenderer({
         return;
       }
       lastReportedPageCountRef.current = count;
-      onPageCountChange?.(count);
+      onPageCountChangeRef.current?.(count);
     };
 
     const measurePages = () => {
       if (documentBlocks.length === 0) {
-        setPageGroups((current) =>
-          arePageGroupsEqual(current, [[]]) ? current : [[]],
-        );
+        if (pageGroupsTokenRef.current !== "") {
+          pageGroupsTokenRef.current = "";
+          setPageGroups([[]]);
+        }
         reportPageCount(1);
         return;
       }
@@ -3346,9 +3356,11 @@ export function ProposalDocumentRenderer({
         pageBreakSafetyReserve,
       });
 
-      setPageGroups((current) =>
-        arePageGroupsEqual(current, nextPageGroups) ? current : nextPageGroups,
-      );
+      const nextPageGroupsToken = serializePageGroups(nextPageGroups);
+      if (pageGroupsTokenRef.current !== nextPageGroupsToken) {
+        pageGroupsTokenRef.current = nextPageGroupsToken;
+        setPageGroups(nextPageGroups);
+      }
       reportPageCount(Math.max(1, nextPageGroups.length));
     };
 
@@ -3386,7 +3398,6 @@ export function ProposalDocumentRenderer({
     };
   }, [
     documentBlocks,
-    onPageCountChange,
     pageWidth,
     resolvedTemplateId,
     signatureRender,
