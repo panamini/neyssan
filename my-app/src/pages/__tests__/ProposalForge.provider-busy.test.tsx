@@ -56,7 +56,7 @@ vi.mock("../../components/ProposalInputForm", () => ({
                 actualModelType: "mistral-small-latest",
                 fallbackTriggerCode: null,
                 routing: {
-                  attemptedPath: "premium success",
+                  attemptedPath: "premium path saved",
                   plannedPath: "structured",
                   executedPath: "structured",
                   fallbackReason: "not_applicable",
@@ -84,7 +84,7 @@ vi.mock("../../components/ProposalInputForm", () => ({
                 actualModelType: "chatgpt",
                 fallbackTriggerCode: "proposal_generation_provider_busy",
                 routing: {
-                  attemptedPath: "premium success",
+                  attemptedPath: "premium path saved",
                   plannedPath: "structured",
                   executedPath: "structured",
                   fallbackReason: "not_applicable",
@@ -235,7 +235,7 @@ describe("ProposalForge controlled failure integration", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByTestId("proposal-routing-disclosure")).toHaveTextContent(
-      "Generation routing: route premium success; planned structured; executed structured; validator structured_success; save structured_saved.",
+      "Generation routing: route premium path saved; planned structured; executed structured; validator structured_success; save structured_saved.",
     );
     expect(
       screen.getAllByText(

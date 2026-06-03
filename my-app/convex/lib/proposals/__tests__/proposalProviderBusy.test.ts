@@ -489,14 +489,37 @@ describe("proposal provider busy handling", () => {
           content: [
             {
               json: {
-                opening:
-                  "I am applying for the Senior Frontend Engineer role because my recent work has centered on shipping customer-facing React and TypeScript products.",
-                proofBlock:
-                  "At Acme, I led a design system migration used across four product squads and improved release consistency across shared interface work.",
-                employerValueBlock:
-                  "That background is most relevant in roles where interface quality, collaboration, and iteration all shape the final product experience.",
-                closeLine:
-                  "I would welcome the opportunity to discuss the role further.",
+                version: "premium_writer_output_v1",
+                bodyParts: {
+                  opening: {
+                    section: "opening",
+                    text: "At Acme, I led a design system migration used across four product squads.",
+                    claimIds: ["claim_opening_001"],
+                    factIds: ["fact_experience_001_highlight_001"],
+                    demandIds: [],
+                  },
+                  proofBlock: {
+                    section: "proofBlock",
+                    text: "That migration gave four product squads a shared design-system foundation.",
+                    claimIds: ["claim_proof_001"],
+                    factIds: ["fact_experience_001_highlight_001"],
+                    demandIds: [],
+                  },
+                  employerValueBlock: {
+                    section: "employerValueBlock",
+                    text: "That design-system work is relevant to customer-facing product surfaces where React, TypeScript, and collaboration shape interface quality.",
+                    claimIds: ["claim_employer_value_001"],
+                    factIds: ["fact_experience_001_highlight_001"],
+                    demandIds: ["demand_core_001"],
+                  },
+                  closeLine: {
+                    section: "closeLine",
+                    text: "I bring discipline around reusable systems, shared interfaces, and product collaboration.",
+                    claimIds: ["claim_close_001"],
+                    factIds: ["fact_experience_001_highlight_001"],
+                    demandIds: [],
+                  },
+                },
               },
             },
           ],
@@ -580,7 +603,7 @@ describe("proposal provider busy handling", () => {
             tags: expect.arrayContaining([
               "model:chatgpt",
               "premium_cover_letter_path_v1",
-              "generation_path:premium_success",
+              "generation_path:premium_path_saved",
             ]),
           }),
         }),
@@ -588,7 +611,11 @@ describe("proposal provider busy handling", () => {
       expect(getLoggedRoutingTelemetry(infoSpy)).toMatchObject({
         structuredEligible: true,
         structuredEligibilityReason: "eligible",
-        attemptedPath: "premium success",
+        attemptedPath: "premium path saved",
+        premium_path_saved: true,
+        premium_validation_passed: true,
+        premium_quality_shadow_passed: true,
+        premium_quality_gate_passed: null,
         finalOutcome: "structured_saved",
         failureStage: null,
         requestedModelType: "chatgpt",
@@ -685,7 +712,7 @@ describe("proposal provider busy handling", () => {
         actualModelName: mistralModel,
         fallbackTriggerCode: null,
         routing: {
-          attemptedPath: "premium success",
+          attemptedPath: "premium path saved",
           plannedPath: "structured",
           executedPath: "structured",
           fallbackReason: "not_applicable",
@@ -727,7 +754,7 @@ describe("proposal provider busy handling", () => {
             tags: expect.arrayContaining([
               `model:${mistralModel}`,
               "premium_cover_letter_path_v1",
-              "generation_path:premium_success",
+              "generation_path:premium_path_saved",
             ]),
           }),
         }),
@@ -735,7 +762,11 @@ describe("proposal provider busy handling", () => {
       expect(getLoggedRoutingTelemetry(infoSpy)).toMatchObject({
         structuredEligible: false,
         structuredEligibilityReason: "rollout_gate:model_not_in_rollout",
-        attemptedPath: "premium success",
+        attemptedPath: "premium path saved",
+        premium_path_saved: true,
+        premium_validation_passed: true,
+        premium_quality_shadow_passed: true,
+        premium_quality_gate_passed: null,
         finalOutcome: "structured_saved",
         failureStage: null,
         requestedModelType: mistralModel,
@@ -758,13 +789,37 @@ describe("proposal provider busy handling", () => {
           content: [
             {
               json: {
-                opening:
-                  "In recent roles with ADT Security and Copwatch, I monitored sites and documented observations.",
-                proofBlock:
-                  "I maintained HIPAA compliance standards across incident documentation.",
-                employerValueBlock:
-                  "That records and monitoring background keeps the focus on clear documentation and steady observation.",
-                closeLine: "I would be glad to discuss the position further.",
+                version: "premium_writer_output_v1",
+                bodyParts: {
+                  opening: {
+                    section: "opening",
+                    text: "In recent roles with ADT Security and Copwatch, I monitored sites and documented observations.",
+                    claimIds: ["claim_opening_001"],
+                    factIds: ["fact_experience_001_highlight_001"],
+                    demandIds: [],
+                  },
+                  proofBlock: {
+                    section: "proofBlock",
+                    text: "I maintained HIPAA compliance standards across incident documentation.",
+                    claimIds: ["claim_proof_001"],
+                    factIds: ["fact_experience_001_highlight_001"],
+                    demandIds: [],
+                  },
+                  employerValueBlock: {
+                    section: "employerValueBlock",
+                    text: "That records and monitoring background keeps the focus on clear documentation and steady observation.",
+                    claimIds: ["claim_employer_value_001"],
+                    factIds: ["fact_experience_001_highlight_001"],
+                    demandIds: ["demand_core_001"],
+                  },
+                  closeLine: {
+                    section: "closeLine",
+                    text: "I would be glad to discuss the position further.",
+                    claimIds: ["claim_close_001"],
+                    factIds: ["fact_experience_001_highlight_001"],
+                    demandIds: [],
+                  },
+                },
               },
             },
           ],
@@ -956,11 +1011,15 @@ describe("proposal provider busy handling", () => {
           "model:qwen3.7-max",
           "premium_cover_letter_path_v1",
           "feature_flag:cover_letter_premium_path_v1",
-          "generation_path:premium_success",
+          "generation_path:premium_path_saved",
         ]),
       );
       expect(getLoggedRoutingTelemetry(infoSpy)).toMatchObject({
-        attemptedPath: "premium success",
+        attemptedPath: "premium path saved",
+        premium_path_saved: true,
+        premium_validation_passed: true,
+        premium_quality_shadow_passed: true,
+        premium_quality_gate_passed: null,
         finalOutcome: "structured_saved",
         failureStage: null,
         requestedModelType: "qwen3.7-max",
@@ -1038,11 +1097,15 @@ describe("proposal provider busy handling", () => {
         expect(qwenMutationPayload.metadata?.tags).toEqual(
           expect.arrayContaining([
             "premium_cover_letter_path_v1",
-            "generation_path:premium_success",
+            "generation_path:premium_path_saved",
           ]),
         );
         expect(getLoggedRoutingTelemetry(infoSpy)).toMatchObject({
-          attemptedPath: "premium success",
+          attemptedPath: "premium path saved",
+          premium_path_saved: true,
+          premium_validation_passed: true,
+          premium_quality_shadow_passed: true,
+          premium_quality_gate_passed: null,
           finalOutcome: "structured_saved",
           requestedModelType: "qwen3.7-max",
           actualModelType: "qwen3.7-max",

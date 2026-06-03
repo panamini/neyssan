@@ -4,6 +4,7 @@ import {
   ENGLISH_APPLICATION_MESSAGE_FINAL_SENTENCE,
   ENGLISH_SAFE_FINAL_SENTENCES,
   FRENCH_APPLICATION_MESSAGE_FINAL_SENTENCE,
+  FRENCH_DEFAULT_SIGNOFF,
   FRENCH_SAFE_FINAL_SENTENCES,
   applyDeterministicProposalBoundaries,
   getDeterministicProposalRenderPolicy,
@@ -193,7 +194,7 @@ describe("proposal renderer", () => {
         "",
         "I would welcome the opportunity to speak further about the position.",
         "",
-        "Best regards,",
+        "Sincerely,",
         "Alex Martin",
       ].join("\n"),
     );
@@ -227,6 +228,24 @@ describe("proposal renderer", () => {
     );
   });
 
+  it("does not duplicate the deterministic final sentence when the body already ends with it", () => {
+    const rendered = applyDeterministicProposalBoundaries({
+      body: [
+        "I am writing to apply for the Airport Traffic Control Officer role. I am accustomed to staying alert, following post orders, and reporting concerns professionally. I would be glad to discuss the position further.",
+      ].join("\n"),
+      format: "cover_letter",
+      outputLanguage: "English",
+      candidateName: "Robert Cooper",
+      voicePreset: "engaging",
+      noContextMode: false,
+    });
+
+    expect(
+      rendered.match(/I would be glad to discuss the position further\./g),
+    ).toHaveLength(1);
+    expect(rendered).toContain("Sincerely,\nRobert Cooper");
+  });
+
   it("reapplies deterministic boundaries after a repaired body", () => {
     const rendered = applyDeterministicProposalBoundaries({
       body: [
@@ -251,7 +270,7 @@ describe("proposal renderer", () => {
         "",
         "Je serais disponible pour discuter davantage du poste.",
         "",
-        "Bien cordialement,",
+        FRENCH_DEFAULT_SIGNOFF,
         "Camille Bernard",
       ].join("\n"),
     );

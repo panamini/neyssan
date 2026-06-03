@@ -865,7 +865,7 @@ describe("ProposalInputForm provider-busy handling", () => {
       actualModelType: "chatgpt",
       fallbackTriggerCode: "proposal_generation_provider_busy",
       routing: {
-        attemptedPath: "premium success",
+        attemptedPath: "premium path saved",
         plannedPath: "structured",
         executedPath: "structured",
         fallbackReason: "not_applicable",
@@ -915,7 +915,7 @@ describe("ProposalInputForm provider-busy handling", () => {
           actualModelType: "chatgpt",
           fallbackTriggerCode: "proposal_generation_provider_busy",
           routing: {
-            attemptedPath: "premium success",
+            attemptedPath: "premium path saved",
             plannedPath: "structured",
             executedPath: "structured",
             fallbackReason: "not_applicable",

@@ -457,6 +457,8 @@ resolve_convex_project_binding() {
       CONVEX_DEPLOYMENT_NAME_RESULT="${BASH_REMATCH[1]}"
     elif [[ "${env_deployment}" =~ ^local-.+ ]]; then
       CONVEX_DEPLOYMENT_NAME_RESULT="${env_deployment}"
+    elif [[ -f "${HOME}/.convex/convex-backend-state/local-${env_team}-${env_project}/config.json" ]]; then
+      CONVEX_DEPLOYMENT_NAME_RESULT="local-${env_team}-${env_project}"
     else
       CONVEX_DEPLOYMENT_NAME_RESULT=""
     fi
@@ -757,7 +759,7 @@ start_parser() {
     fi
 
     # Run container
-    docker rm -f "${PARSER_NAME}" >/dev/null 2>&1 || true
+    remove_parser_container
     if [[ "${RUNTIME_MODE}" == "workspace" ]]; then
       docker run -d --rm \
         --name "${PARSER_NAME}" \
@@ -806,10 +808,24 @@ start_parser() {
   fi
 }
 
+remove_parser_container() {
+  for _ in $(seq 1 10); do
+    if ! docker container inspect "${PARSER_NAME}" >/dev/null 2>&1; then
+      return 0
+    fi
+    docker rm -f "${PARSER_NAME}" >/dev/null 2>&1 || true
+    sleep 0.5
+  done
+  echo "[run] ERROR: could not remove stale parser container ${PARSER_NAME}" >&2
+  docker ps -a --filter "name=${PARSER_NAME}" >&2 || true
+  exit 1
+}
+
 stop_parser() {
   if docker ps --format '{{.Names}}' | grep -qx "${PARSER_NAME}"; then
     echo "[run] stopping parser (${PARSER_NAME})"
     docker stop "${PARSER_NAME}" >/dev/null 2>&1 || true
+    remove_parser_container
   fi
 }
 

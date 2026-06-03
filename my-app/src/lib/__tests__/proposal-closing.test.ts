@@ -7,10 +7,13 @@ import {
   type ProposalPrintBlock,
 } from "../document-export-models";
 import {
+  FRENCH_COVER_LETTER_DEFAULT_SIGNOFF,
   ensureProposalSignatureName,
   extractProposalClosingBlockFromParagraphs,
   formatProposalSignatureName,
   parseProposalClosingBlock,
+  resolveDefaultProposalSignOff,
+  resolveProposalClosingOptionGroups,
   resolveProposalClosingRef,
 } from "../proposal-closing";
 
@@ -51,6 +54,12 @@ describe("proposal closing parser", () => {
     });
     expect(parseProposalClosingBlock("Bien cordialement,\nAlex Mercer")).toEqual({
       signOff: "Bien cordialement,",
+      signatureName: "Alex Mercer",
+    });
+    expect(
+      parseProposalClosingBlock(`${FRENCH_COVER_LETTER_DEFAULT_SIGNOFF}\nAlex Mercer`),
+    ).toEqual({
+      signOff: FRENCH_COVER_LETTER_DEFAULT_SIGNOFF,
       signatureName: "Alex Mercer",
     });
   });
@@ -186,6 +195,160 @@ describe("proposal closing parser", () => {
     ).toMatchObject({
       signatureName: "Jordan Lee",
       source: "document",
+    });
+  });
+
+  it("resolves language and document-type aware default signoffs", () => {
+    expect(
+      resolveDefaultProposalSignOff({
+        locale: "en",
+        proposalType: "cover_letter",
+      }),
+    ).toEqual({ signOff: "Sincerely,", closingNeedsUserChoice: false });
+    expect(
+      resolveDefaultProposalSignOff({
+        locale: "fr",
+        proposalType: "cover_letter",
+      }),
+    ).toEqual({
+      signOff: FRENCH_COVER_LETTER_DEFAULT_SIGNOFF,
+      closingNeedsUserChoice: false,
+    });
+    expect(
+      resolveDefaultProposalSignOff({
+        locale: "es",
+        proposalType: "cover_letter",
+      }),
+    ).toEqual({ signOff: "Atentamente,", closingNeedsUserChoice: false });
+    expect(
+      resolveDefaultProposalSignOff({
+        locale: "fr",
+        proposalType: "application_message",
+      }),
+    ).toEqual({ signOff: "Cordialement,", closingNeedsUserChoice: false });
+    expect(
+      resolveDefaultProposalSignOff({
+        locale: "fr",
+        proposalType: "freelance_proposal",
+      }),
+    ).toEqual({ signOff: "Bien cordialement,", closingNeedsUserChoice: false });
+  });
+
+  it("builds French cover-letter picker groups for the closing drawer", () => {
+    expect(
+      resolveProposalClosingOptionGroups({
+        content: "Madame, Monsieur,\n\nJe construis des exports fiables.",
+        proposalType: "cover_letter",
+      }),
+    ).toEqual([
+      {
+        id: "recommended",
+        label: "Recommended",
+        options: [FRENCH_COVER_LETTER_DEFAULT_SIGNOFF],
+      },
+      {
+        id: "concise",
+        label: "Concise",
+        options: ["Cordialement,", "Bien cordialement,"],
+      },
+      {
+        id: "classic",
+        label: "Classic",
+        options: [
+          "Veuillez agréer, Madame, Monsieur, mes salutations distinguées.",
+          "Je vous prie de recevoir, Madame, Monsieur, mes sincères salutations.",
+        ],
+      },
+      {
+        id: "custom",
+        label: "Custom",
+        options: [],
+      },
+    ]);
+  });
+
+  it("keeps cover-letter signoff independent from tone", () => {
+    expect(
+      resolveProposalClosingRef({
+        content: "Dear Hiring Manager,\n\nI build reliable exports.",
+        proposalType: "cover_letter",
+        applicantName: "Alex Mercer",
+        locale: "en",
+        voicePreset: "engaging",
+      }),
+    ).toMatchObject({
+      signOff: "Sincerely,",
+      signatureName: "Alex Mercer",
+      source: "language_default",
+    });
+  });
+
+  it("lets document and settings closings win over language defaults", () => {
+    expect(
+      resolveProposalClosingRef({
+        closing: {
+          enabled: true,
+          signOff: "Kind regards,",
+          signatureName: "Document Name",
+          source: "document",
+        },
+        content: "Madame, Monsieur,\n\nJe construis des exports fiables.",
+        proposalType: "cover_letter",
+        applicantName: "Alex Mercer",
+        locale: "fr",
+      }),
+    ).toMatchObject({
+      signOff: "Kind regards,",
+      signatureName: "Document Name",
+      source: "document",
+    });
+
+    expect(
+      resolveProposalClosingRef({
+        closing: {
+          enabled: true,
+          signOff: "Best regards,",
+          signatureName: "",
+          source: "settings",
+        },
+        content: "Madame, Monsieur,\n\nJe construis des exports fiables.",
+        proposalType: "cover_letter",
+        applicantName: "Alex Mercer",
+        locale: "fr",
+      }),
+    ).toMatchObject({
+      signOff: "Best regards,",
+      signatureName: "Alex Mercer",
+      source: "settings",
+    });
+  });
+
+  it("does not fallback to English for explicitly unsupported languages", () => {
+    expect(
+      resolveProposalClosingRef({
+        content: "Здравствуйте,\n\nЯ строю надежные документы.",
+        proposalType: "cover_letter",
+        applicantName: "Alex Mercer",
+        locale: "ru",
+      }),
+    ).toMatchObject({
+      enabled: true,
+      signOff: "",
+      signatureName: "Alex Mercer",
+      source: "language_default",
+      closingNeedsUserChoice: true,
+    });
+
+    expect(
+      resolveProposalClosingRef({
+        content: "Dear Hiring Manager,\n\nThis body was pasted manually.",
+        proposalType: "cover_letter",
+        applicantName: "Alex Mercer",
+        locale: "ru",
+      }),
+    ).toMatchObject({
+      signOff: "",
+      closingNeedsUserChoice: true,
     });
   });
 
@@ -364,7 +527,7 @@ describe("proposal closing parser", () => {
 
     expect(getClosingBlock(buildProposalSource(content).body)).toEqual({
       type: "closing",
-      signOff: "Cordialement,",
+      signOff: FRENCH_COVER_LETTER_DEFAULT_SIGNOFF,
       signatureName: "Alex Mercer",
     });
   });

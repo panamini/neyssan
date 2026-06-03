@@ -55,7 +55,10 @@ import {
 } from "../lib/proposal-header";
 import { collectProposalFontDebugSnapshot } from "../lib/proposal-font-debug";
 import type { ProposalSignatureSettings } from "../lib/proposal-signature-settings";
-import type { ProposalClosingRef } from "../lib/proposal-closing";
+import {
+  resolveProposalClosingOptionGroups,
+  type ProposalClosingRef,
+} from "../lib/proposal-closing";
 import type { DocumentDecoration } from "../lib/document-decoration";
 import type { DocumentIconSettings } from "../lib/document-icons";
 import {
@@ -675,6 +678,14 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         preferredTemplateId: templateId,
       }),
     [stylePreset, templateId],
+  );
+  const closingOptionGroups = React.useMemo(
+    () =>
+      resolveProposalClosingOptionGroups({
+        content: proposalContent,
+        proposalType,
+      }),
+    [proposalContent, proposalType],
   );
   const resolvedStylePreset = resolvedRenderState.stylePreset;
   const resolvedTemplateId = resolvedRenderState.templateId;
@@ -2507,20 +2518,65 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                                 </label>
                               ) : null}
                               {signOffEditable ? (
-                                <label className="dasti-proposal-editor-page__field dasti-proposal-editor-page__field--wide">
-                                  <span className="dasti-proposal-editor-page__field-label">
-                                    Signature / politeness formula
-                                  </span>
-                                  <input
-                                    type="text"
-                                    value={signOffValue ?? ""}
-                                    onChange={(event) =>
-                                      onSignOffChange?.(event.target.value)
-                                    }
-                                    className="dasti-proposal-editor-page__field-input"
-                                    placeholder={signOffPlaceholder}
-                                  />
-                                </label>
+                                <div className="dasti-proposal-editor-page__field dasti-proposal-editor-page__field--wide">
+                                  <label className="dasti-proposal-editor-page__field">
+                                    <span className="dasti-proposal-editor-page__field-label">
+                                      Signature / politeness formula
+                                    </span>
+                                    <input
+                                      type="text"
+                                      value={signOffValue ?? ""}
+                                      onChange={(event) =>
+                                        onSignOffChange?.(event.target.value)
+                                      }
+                                      className="dasti-proposal-editor-page__field-input"
+                                      placeholder={signOffPlaceholder}
+                                    />
+                                  </label>
+                                  <div
+                                    className="dasti-proposal-editor-page__closing-picker"
+                                    aria-label="Closing options"
+                                  >
+                                    {closingOptionGroups.map((group) => (
+                                      <div
+                                        key={group.id}
+                                        className="dasti-proposal-editor-page__closing-group"
+                                      >
+                                        <span className="dasti-proposal-editor-page__closing-group-label">
+                                          {group.label}
+                                        </span>
+                                        {group.options.length > 0 ? (
+                                          <div className="dasti-proposal-editor-page__closing-options">
+                                            {group.options.map((option) => (
+                                              <button
+                                                key={option}
+                                                type="button"
+                                                className={[
+                                                  "dasti-proposal-editor-page__closing-option",
+                                                  option === signOffValue
+                                                    ? "dasti-proposal-editor-page__closing-option--active"
+                                                    : "",
+                                                ]
+                                                  .filter(Boolean)
+                                                  .join(" ")}
+                                                aria-pressed={option === signOffValue}
+                                                onClick={() =>
+                                                  onSignOffChange?.(option)
+                                                }
+                                              >
+                                                {option}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <span className="dasti-proposal-editor-page__closing-custom-note">
+                                            Write your own in the field above.
+                                          </span>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
                               ) : null}
                               {documentTitleEditable ? (
                                 <label className="dasti-proposal-editor-page__field dasti-proposal-editor-page__field--wide">

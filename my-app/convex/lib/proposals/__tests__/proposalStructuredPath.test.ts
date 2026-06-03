@@ -181,7 +181,7 @@ describe("structured cover letter path", () => {
     expect(result).not.toBeNull();
     expect(result?.generationPath).toBe("structured_success");
     expect(result?.content).toContain("Dear Hiring Manager,");
-    expect(result?.content).toContain("Best regards,");
+    expect(result?.content).toContain("Sincerely,");
     expect(result?.content).toContain(
       "I would welcome the opportunity to speak further about the position.",
     );
@@ -347,6 +347,31 @@ describe("structured cover letter path", () => {
     expect(finalizationFailureTelemetry.normalizedFailureCode).toBe(
       "proposal_generation_finalization_failed_closed",
     );
+  });
+
+  it("separates premium validation telemetry from final save outcome", () => {
+    const telemetry = buildCoverLetterRoutingTelemetry({
+      preset: "signature",
+      modelType: "chatgpt",
+      outputFormat: "cover_letter",
+      rolloutValue: "all_cover_letters",
+      contextMode: "rich",
+      sourceFactBank: basePlannerResult.allowed_concrete_facts,
+      structuredEligible: true,
+      structuredEligibilityFallbackReason: "not_applicable",
+      fallbackReason: "not_applicable",
+      attemptedPath: "premium path saved",
+      finalOutcome: "fail_closed",
+      failureStage: "cleaned_body_selection",
+      normalizedFailureCode: "proposal_generation_finalization_failed_closed",
+      premiumValidationPassed: true,
+      premiumQualityShadowPassed: false,
+    });
+
+    expect(telemetry.premium_path_saved).toBe(false);
+    expect(telemetry.premium_validation_passed).toBe(true);
+    expect(telemetry.premium_quality_shadow_passed).toBe(false);
+    expect(telemetry.outcomeClass).toBe("other_controlled_failure");
   });
 
   it("keeps missing candidate context visible when an ineligible request also hits provider busy", () => {
@@ -909,7 +934,7 @@ describe("structured cover letter path", () => {
     expect(result?.generationPath).toBe("structured_repaired_success");
     expect(repairDraft).toHaveBeenCalledTimes(1);
     expect(result?.content).toContain("Dear Hiring Manager,");
-    expect(result?.content).toContain("Best regards,");
+    expect(result?.content).toContain("Sincerely,");
     expect(result?.content).toContain(
       "My work involved a design system migration across multiple product squads and close cross-functional collaboration on product-facing web apps.",
     );

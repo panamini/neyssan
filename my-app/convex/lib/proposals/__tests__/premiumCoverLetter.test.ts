@@ -15,11 +15,13 @@ import {
   buildPremiumCoverLetterOpenAIRequest,
   buildPremiumCoverLetterBrief,
   buildPremiumCoverLetterPrompt,
+  evaluatePremiumCoverLetterQualityShadow,
   evaluatePremiumCoverLetterEligibility,
   extractOpenAIJsonPayload,
   inferPremiumCoverLetterContextClass,
   isCoverLetterPremiumPathV1Enabled,
   rankAllowedFacts,
+  repairPremiumCoverLetterBodyParts,
   resolvePremiumCoverLetterWriterModel,
   toCoverLetterBodyParts,
   validatePremiumCoverLetterBodyParts,
@@ -284,6 +286,9 @@ describe("premium ClaimPlan provenance v1", () => {
     expect(prompt).toContain("Return only PremiumWriterOutputV1 JSON");
     expect(prompt).not.toContain("Build a dynamic RoleThesis");
     expect(prompt).toContain("Do not include greeting, signoff");
+    expect(prompt).toContain("Do not use self-scoring or section-label openings");
+    expect(prompt).toContain("my strongest match");
+    expect(prompt).toContain("lowValueChecklist is diagnostic-only");
   });
 
   it("validates PremiumWriterOutputV1 provenance and adapts back to body parts", () => {
@@ -1432,6 +1437,18 @@ describe("premium cover letter prompt contract", () => {
     expect(prompt).toContain(
       "keep employerValueBlock on operational consequence and closeLine on modest first-person ownership",
     );
+    const mistralPrompt = buildPremiumCoverLetterPrompt({
+      brief,
+      writerProvider: "mistral",
+      writerModel: "mistral-medium-latest",
+    });
+    expect(mistralPrompt).toContain("Mistral no_cv contract:");
+    expect(mistralPrompt).toContain(
+      "Do not write a role summary, process memo, detached noun phrases, or fake experience.",
+    );
+    expect(mistralPrompt).toContain(
+      "Do not begin closeLine with \"Experience includes\"",
+    );
     expect(prompt.length).toBeLessThan(6200);
     expect(prompt.split("\n").length).toBeLessThan(42);
   });
@@ -1839,6 +1856,87 @@ describe("premium cover letter generation and rendering", () => {
     ).toContain("unsupported_ownership_verb");
   });
 
+  it("downgrades unsupported ownership verbs for default writers without loosening validation", async () => {
+    const failures: any[] = [];
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: directContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      candidateName: "Alex Martin",
+      onFailure: (trace) => {
+        failures.push(trace);
+      },
+      writer: async () => ({
+        opening:
+          "I improved signup conversion by 11% after iterative UI experiments.",
+        proofBlock:
+          "I managed customer-facing frontend delivery and oversaw design-system quality across product surfaces.",
+        employerValueBlock:
+          "I built experimentation dashboards used by product and growth teams.",
+        closeLine:
+          "The strongest overlap is around React, TypeScript, design systems, and product-facing interface work.",
+      }),
+    });
+
+    expect(failures).toHaveLength(0);
+    expect(result).not.toBeNull();
+    expect(result?.content).toContain(
+      "I handled customer-facing frontend delivery and coordinated design-system quality across product surfaces.",
+    );
+    expect(result?.content).not.toContain("managed customer-facing");
+    expect(result?.content).not.toContain("oversaw design-system");
+    expect(
+      directFrontendIssueCodesFor(
+        "I managed customer-facing frontend delivery and oversaw design-system quality across product surfaces.",
+      ),
+    ).toContain("unsupported_ownership_verb");
+  });
+
+  it("does not downgrade possessive own into a broken ownership repair", () => {
+    const allowedFactsPack = buildAllowedFactsPack({
+      personalizationContext: directContext,
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+    });
+    const rankedEvidencePack = rankAllowedFacts({
+      allowedFactsPack,
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      contextClass: "cv_direct",
+    });
+    const repaired = repairPremiumCoverLetterBodyParts({
+      brief: buildPremiumCoverLetterBrief({
+        preset: "signature",
+        outputLanguage: "English",
+        jobTitle: directJob.jobTitle,
+        jobDescription: directJob.jobDescription,
+        contextClass: "cv_direct",
+        allowedFactsPack,
+        rankedEvidencePack,
+      }),
+      bodyParts: {
+        opening:
+          "I improved signup conversion by 11% after iterative UI experiments.",
+        proofBlock:
+          "I built experimentation dashboards used by product and growth teams.",
+        employerValueBlock:
+          "That matters where team members need to stay focused on their own work.",
+        closeLine:
+          "I bring discipline around product-facing interface work.",
+      },
+    });
+
+    expect(repaired.employerValueBlock).toContain("their own work");
+    expect(repaired.employerValueBlock).not.toContain("their handle work");
+    expect(
+      directFrontendIssueCodesFor(
+        "That matters where team members need to stay focused on their own work.",
+      ),
+    ).not.toContain("unsupported_ownership_verb");
+  });
+
   it("rejects Qwen cv_direct body parts that upgrade source evidence into unsupported ownership", async () => {
     const failures: any[] = [];
     const result = await attemptPremiumCoverLetterGeneration({
@@ -2004,7 +2102,7 @@ describe("premium cover letter generation and rendering", () => {
     );
   });
 
-  it("retries Mistral once on unsupported ownership and accepts repaired cv_direct output", async () => {
+  it("downgrades unsupported Mistral ownership verbs before retrying cv_direct output", async () => {
     const calls: string[] = [];
     const failures: any[] = [];
     const result = await attemptPremiumCoverLetterGeneration({
@@ -2021,41 +2119,24 @@ describe("premium cover letter generation and rendering", () => {
       },
       writer: async ({ prompt }) => {
         calls.push(prompt);
-        if (calls.length === 1) {
-          return {
-            opening:
-              "I improved signup conversion by 11% after iterative UI experiments.",
-            proofBlock:
-              "I managed customer-facing frontend delivery and oversaw design-system quality across product surfaces.",
-            employerValueBlock:
-              "I built experimentation dashboards used by product and growth teams.",
-            closeLine:
-              "The strongest overlap is around React, TypeScript, design systems, and product-facing interface work.",
-          };
-        }
         return {
           opening:
-            "I led a design system migration used across four product squads.",
-          proofBlock:
             "I improved signup conversion by 11% after iterative UI experiments.",
+          proofBlock:
+            "I managed customer-facing frontend delivery and oversaw design-system quality across product surfaces.",
           employerValueBlock:
             "I built experimentation dashboards used by product and growth teams.",
           closeLine:
-            "My strongest overlap is React, TypeScript, design systems, and product-facing interface work.",
+            "The strongest overlap is around React, TypeScript, design systems, and product-facing interface work.",
         };
       },
     });
 
-    expect(calls).toHaveLength(2);
-    expect(calls[1]).toContain("unsupported ownership verbs");
-    expect(calls[1]).toContain("unsupported_ownership_verb");
-    expect(calls[1]).toContain(
-      "managed, oversaw, owned, drove, directed, resolved, transformed, or spearheaded unless source-backed",
-    );
+    expect(calls).toHaveLength(1);
     expect(failures).toHaveLength(0);
     expect(result).not.toBeNull();
     expect(result?.content).toContain(
-      "I led a design system migration used across four product squads.",
+      "I handled customer-facing frontend delivery and coordinated design-system quality across product surfaces.",
     );
     expect(result?.content).not.toContain("managed customer-facing");
     expect(result?.content).not.toContain("oversaw design-system");
@@ -2354,6 +2435,67 @@ describe("premium cover letter generation and rendering", () => {
     );
   });
 
+  it("repairs low-value direct employer-value echo without dropping security evidence", async () => {
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: {
+        name: "Robert Cooper",
+        summary:
+          "Safety conscious, attentive Security Guard with eight years experience protecting VIP individuals in military and defense sectors.",
+        topSkills: [
+          "Investigation skills",
+          "Safety compliance",
+          "Criminal justice knowledge",
+        ],
+        recentExperience: [
+          {
+            company: "ADT Security",
+            position: "Security Guard",
+            highlights: [
+              "Completed reports by recording information, observations, occurrences, and surveillance activity.",
+              "Maintained environments by monitoring grounds and equipment controls.",
+            ],
+          },
+          {
+            company: "Copwatch",
+            position: "Security Guard",
+            highlights: ["Monitored selected areas via CCTV app on smart devices."],
+          },
+        ],
+      },
+      voicePreset: "engaging",
+      outputLanguage: "English",
+      jobTitle: "High Level Security Officer",
+      jobDescription:
+        "Securitas Security is hiring a High Level Security Officer to maintain site safety through structured patrols, access control, incident response, detailed reporting, professional communication, and escalation to the operations center. The company offers Region and Area Management Support Staff to guide growth and advancement.",
+      candidateName: "Robert Cooper",
+      writer: async () => ({
+        opening:
+          "In security work, careful reporting matters because it gives the next person a clear record to act on.",
+        proofBlock:
+          "At ADT Security, I completed reports by recording information, observations, occurrences, and surveillance activity.",
+        employerValueBlock:
+          "For Securitas Security, that means a High Level Security Officer who is used to staying attentive, documenting what happens, and supporting the kind of clear communication that helps Region and Area Management Support Staff guide growth and advancement effectively.",
+        closeLine:
+          "I bring discipline around accurate records, steady monitoring, and clear communication.",
+      }),
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.content).toContain("At ADT Security");
+    expect(result?.bodyParts.employerValueBlock).toMatch(
+      /In .* work, that kind of background supports/i,
+    );
+    expect(result?.bodyParts.employerValueBlock).not.toContain(
+      "Region and Area Management Support Staff",
+    );
+    expect(result?.bodyParts.employerValueBlock).not.toContain(
+      "growth and advancement",
+    );
+    expect(result?.qualityShadow?.issues ?? []).not.toContain(
+      "low_value_job_echo",
+    );
+  });
+
   it("repairs weak Mistral adjacent bridge and detached close without replacing evidence", async () => {
     const result = await attemptPremiumCoverLetterGeneration({
       personalizationContext: adjacentMonitoringContext,
@@ -2377,14 +2519,13 @@ describe("premium cover letter generation and rendering", () => {
     });
 
     expect(result).not.toBeNull();
-    expect(result?.bodyParts.opening).toContain(
-      "For eight years I completed reports",
+    expect(result?.bodyParts.opening).toMatch(
+      /As a security guard at .*for eight years I completed reports/i,
     );
     expect(result?.bodyParts.proofBlock).toContain("Reports included field notes");
     expect(result?.bodyParts.employerValueBlock).toContain(
-      "For work centered on",
+      "Surveillance activities used smart-device CCTV apps",
     );
-    expect(result?.bodyParts.employerValueBlock).toContain("detailed reporting");
     expect(result?.bodyParts.closeLine).toMatch(/^I bring discipline around/i);
   });
 
@@ -2596,6 +2737,605 @@ describe("premium cover letter generation and rendering", () => {
     expect(result?.content).toContain("Dear Hiring Manager,");
     expect(result?.content).toContain("signup conversion by 11 percent");
     expect(result?.content).not.toContain("Warm regards");
+  });
+
+  it("validates wrapped legacy bodyParts with the same provenance guardrails", async () => {
+    let failure: any = null;
+
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: {
+        name: "Alex Martin",
+        summary:
+          "Frontend engineer focused on React, TypeScript, performance tuning, and customer-facing web apps.",
+        desiredPosition: "Senior Frontend Engineer",
+        topSkills: ["React", "TypeScript", "Performance Optimization"],
+        recentExperience: [
+          {
+            company: "BrightLayer",
+            position: "Frontend Engineer",
+            highlights: [
+              "Reduced page load time by 28 percent through bundle and rendering optimizations.",
+              "Partnered directly with design on customer-facing workflow improvements.",
+            ],
+          },
+        ],
+      },
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: "Senior Frontend Engineer",
+      jobDescription:
+        "Built reusable UI systems and improved shared component workflows.",
+      candidateName: "Alex Martin",
+      writerProvider: "mistral",
+      writerModel: "mistral-medium-latest",
+      onFailure: (trace) => {
+        failure = trace;
+      },
+      writer: async () => ({
+        version: "legacy_body_parts_v1",
+        bodyParts: {
+          opening:
+            "I reduced page load time by 28 percent through bundle and rendering optimizations.",
+          proofBlock:
+            "I reduced page load time by 28 percent through bundle and rendering optimizations.",
+          employerValueBlock:
+            "I built reusable UI systems and improved shared component workflows.",
+          closeLine:
+            "I bring discipline around reliable interfaces and clean product collaboration.",
+        },
+      }),
+    });
+
+    expect(result).toBeNull();
+    expect(failure).toMatchObject({
+      stage: "validation",
+      reason: "non_repairable_validation",
+      issues: expect.arrayContaining(["job_demand_as_candidate_experience"]),
+    });
+  });
+
+  it("still fails writer meta prose when repair returns invalid provenance", async () => {
+    let failure: any = null;
+
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: {
+        name: "Alex Martin",
+        summary:
+          "Frontend engineer focused on React, TypeScript, design systems, and product-facing web apps.",
+        desiredPosition: "Senior Frontend Engineer",
+        topSkills: ["React", "TypeScript", "Design Systems"],
+        recentExperience: [
+          {
+            company: "BrightLayer",
+            position: "Frontend Engineer",
+            highlights: [
+              "Led a design system migration used across 4 product squads.",
+              "Reduced page load time by 28 percent through bundle and rendering optimizations.",
+            ],
+          },
+        ],
+      },
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: "Senior Frontend Engineer",
+      jobDescription:
+        "Lead React and TypeScript development for a customer-facing SaaS platform, build reusable UI systems, improve performance, and collaborate with product and design.",
+      candidateName: "Alex Martin",
+      onFailure: (trace) => {
+        failure = trace;
+      },
+      writer: async () => ({
+        version: "premium_writer_output_v1",
+        bodyParts: {
+          opening: {
+            section: "opening",
+            text: "I have described my design-system migration and performance work in relation to the role.",
+            claimIds: ["claim_opening_001"],
+            factIds: ["fact_experience_001_highlight_001"],
+            demandIds: [],
+          },
+          proofBlock: {
+            section: "proofBlock",
+            text: "I reduced page load time by 28 percent through bundle and rendering optimizations.",
+            claimIds: ["claim_proof_001"],
+            factIds: ["fact_experience_001_highlight_002"],
+            demandIds: [],
+          },
+          employerValueBlock: {
+            section: "employerValueBlock",
+            text: "That work is relevant to frontend environments where reusable systems and performance matter.",
+            claimIds: ["claim_employer_value_001"],
+            factIds: ["fact_experience_001_highlight_001"],
+            demandIds: [],
+          },
+          closeLine: {
+            section: "closeLine",
+            text: "I bring discipline around reliable interfaces and clean collaboration.",
+            claimIds: ["claim_close_001"],
+            factIds: ["fact_experience_001_highlight_001"],
+            demandIds: [],
+          },
+        },
+      }),
+    });
+
+    expect(result).toBeNull();
+    expect(failure).toMatchObject({
+      stage: "validation",
+      reason: "non_repairable_validation",
+      issues: expect.arrayContaining(["section_fact_not_allowed"]),
+    });
+  });
+
+  it("normalizes Mistral writer provenance ids to the section claim plan", async () => {
+    let failure: any = null;
+
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: {
+        name: "Alex Martin",
+        summary:
+          "Frontend engineer focused on React, TypeScript, design systems, and product-facing web apps.",
+        desiredPosition: "Senior Frontend Engineer",
+        topSkills: ["React", "TypeScript", "Design Systems"],
+        recentExperience: [
+          {
+            company: "BrightLayer",
+            position: "Frontend Engineer",
+            highlights: [
+              "Led a design system migration used across 4 product squads.",
+              "Reduced page load time by 28 percent through bundle and rendering optimizations.",
+            ],
+          },
+        ],
+      },
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: "Senior Frontend Engineer",
+      jobDescription:
+        "Lead React and TypeScript development for a customer-facing SaaS platform, build reusable UI systems, improve performance, and collaborate with product and design.",
+      candidateName: "Alex Martin",
+      writerProvider: "mistral",
+      writerModel: "mistral-medium-latest",
+      onFailure: (trace) => {
+        failure = trace;
+      },
+      writer: async () => ({
+        version: "premium_writer_output_v1",
+        bodyParts: {
+          opening: {
+            section: "opening",
+            text: "I have led design-system work across product squads in React and TypeScript environments.",
+            claimIds: ["claim_opening_001"],
+            factIds: ["fact_experience_001_highlight_001"],
+            demandIds: [],
+          },
+          proofBlock: {
+            section: "proofBlock",
+            text: "At BrightLayer, I led a design system migration used across 4 product squads and reduced page load time by 28 percent through bundle and rendering optimizations.",
+            claimIds: ["claim_proof_001"],
+            factIds: ["fact_experience_001_highlight_002"],
+            demandIds: [],
+          },
+          employerValueBlock: {
+            section: "employerValueBlock",
+            text: "That background is relevant to teams building reusable UI systems where performance, collaboration, and product-facing quality matter.",
+            claimIds: ["claim_employer_value_001"],
+            factIds: ["fact_experience_001_highlight_001"],
+            demandIds: ["demand_core_001"],
+          },
+          closeLine: {
+            section: "closeLine",
+            text: "I bring discipline around reliable interfaces, reusable systems, and clean product collaboration.",
+            claimIds: ["claim_close_001"],
+            factIds: ["fact_experience_001_highlight_001"],
+            demandIds: [],
+          },
+        },
+      }),
+    });
+
+    expect(failure).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result?.content).toContain("Dear Hiring Manager,");
+    expect(result?.content).toContain("BrightLayer");
+  });
+
+  it("normalizes writer-output jargon before validation while preserving hard meta failures", async () => {
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: adjacentContext,
+      voicePreset: "engaging",
+      outputLanguage: "English",
+      jobTitle: adjacentJob.jobTitle,
+      jobDescription: adjacentJob.jobDescription,
+      candidateName: "Maya Chen",
+      writer: async () => ({
+        opening:
+          "I completed reports that described handoffs, process bottlenecks, and weekly status updates.",
+        proofBlock:
+          "I built weekly dashboards to track backlog, response times, and process bottlenecks.",
+        employerValueBlock:
+          "In reporting and documentation work, clear records help handoffs stay usable.",
+        closeLine:
+          "I bring discipline around reporting, documentation, and clear handoffs.",
+      }),
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.content).toContain("completed reports documenting");
+    expect(result?.content).not.toMatch(/work surfaces?|reports that described/i);
+  });
+
+  it("normalizes passive Mistral reporting without replacing valid evidence-only employer value", async () => {
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: adjacentMonitoringContext,
+      voicePreset: "engaging",
+      outputLanguage: "English",
+      jobTitle: adjacentMonitoringJob.jobTitle,
+      jobDescription: adjacentMonitoringJob.jobDescription,
+      candidateName: "Robert Cooper",
+      writerProvider: "mistral",
+      writerModel: "mistral-medium-latest",
+      writer: async () => ({
+        opening:
+          "Reports were completed by recording observations, occurrences, and surveillance activities, with witness interviews and signatures included.",
+        proofBlock:
+          "Grounds and equipment controls were monitored to maintain secure environments. Selected areas were tracked using CCTV applications on smart devices.",
+        employerValueBlock:
+          "Detailed reports documented incidents, observations, and surveillance logs.",
+        closeLine:
+          "I bring discipline around careful observation, accurate records, and clear handoffs.",
+      }),
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.bodyParts.opening).toContain(
+      "I completed reports documenting",
+    );
+    expect(result?.bodyParts.employerValueBlock).toContain(
+      "Detailed reports documented incidents, observations, and surveillance logs.",
+    );
+    expect(result?.bodyParts.opening).toMatch(/As .* at /i);
+    expect(result?.bodyParts.employerValueBlock).not.toMatch(
+      /That is useful in .* work where the day-to-day depends on/i,
+    );
+  });
+
+  it("uses deterministic Mistral adjacent bridges only for low-value employer value", async () => {
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: adjacentMonitoringContext,
+      voicePreset: "engaging",
+      outputLanguage: "English",
+      jobTitle: adjacentMonitoringJob.jobTitle,
+      jobDescription: adjacentMonitoringJob.jobDescription,
+      candidateName: "Robert Cooper",
+      writerProvider: "mistral",
+      writerModel: "mistral-medium-latest",
+      writer: async () => ({
+        opening:
+          "Reports were completed by recording observations, occurrences, and surveillance activities, with witness interviews and signatures included.",
+        proofBlock:
+          "Grounds and equipment controls were monitored to maintain secure environments. Selected areas were tracked using CCTV applications on smart devices.",
+        employerValueBlock:
+          "This helps Region and Area Management Support Staff guide growth and advancement.",
+        closeLine:
+          "I bring discipline around careful observation, accurate records, and clear handoffs.",
+      }),
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.bodyParts.employerValueBlock).toMatch(
+      /In .* work, that kind of background supports/i,
+    );
+    expect(result?.bodyParts.employerValueBlock).not.toMatch(
+      /Region and Area Management Support Staff|growth and advancement/i,
+    );
+  });
+
+  it("fails no-CV drafts that use detached experience-history closes", async () => {
+    let failure: any = null;
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: null,
+      voicePreset: "engaging",
+      outputLanguage: "English",
+      jobTitle: noCvJob.jobTitle,
+      jobDescription: noCvJob.jobDescription,
+      candidateName: "Sophie Martin",
+      writerProvider: "mistral",
+      writerModel: "mistral-medium-latest",
+      onFailure: (trace) => {
+        failure = trace;
+      },
+      writer: async () => ({
+        opening:
+          "Daily office operations rely on coordination between scheduling, correspondence, and logistical workflows.",
+        proofBlock:
+          "Scheduling and onboarding logistics follow defined steps to ensure deadlines and handoffs remain clear.",
+        employerValueBlock:
+          "Tracking requests and updating records keeps workflows visible to teams that depend on them.",
+        closeLine:
+          "Experience includes maintaining office workflows through scheduling, documentation, and logistical coordination.",
+      }),
+    });
+
+    expect(result).toBeNull();
+    expect(failure).toMatchObject({
+      stage: "validation",
+      reason: "non_repairable_validation",
+      contextClass: "no_cv",
+      issues: expect.arrayContaining(["no_cv_uses_candidate_fact"]),
+    });
+  });
+
+  it("scores premium quality in shadow mode without gating output", () => {
+    const result = evaluatePremiumCoverLetterQualityShadow({
+      bodyParts: {
+        opening:
+          "I have described my design-system migration in relation to the role.",
+        proofBlock:
+          "I led a design system migration used across 4 product squads.",
+        employerValueBlock: "Interface quality.",
+        closeLine:
+          "I bring discipline around reusable systems and shared interfaces.",
+      },
+      content: [
+        "Dear Hiring Manager,",
+        "",
+        "I have described my design-system migration in relation to the role.",
+        "",
+        "I led a design system migration used across 4 product squads.",
+        "",
+        "Interface quality.",
+        "",
+        "I bring discipline around reusable systems and shared interfaces.",
+        "",
+        "Sincerely,",
+        "Alex Martin",
+      ].join("\n"),
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.issues).toEqual(
+      expect.arrayContaining(["meta_prose", "weak_employer_argument"]),
+    );
+    expect(result.score).toBeLessThan(100);
+  });
+
+  it("flags low-value job echo in employer-value prose", () => {
+    const result = evaluatePremiumCoverLetterQualityShadow({
+      bodyParts: {
+        opening:
+          "I bring eight years of safety-conscious Security Guard experience.",
+        proofBlock:
+          "At ADT Security, I completed reports by recording observations and surveillance activity.",
+        employerValueBlock:
+          "For Securitas Security, that means a High Level Security Officer who supports Region and Area Management Support Staff guide growth and advancement effectively.",
+        closeLine:
+          "I bring discipline around accurate records and steady monitoring.",
+      },
+      content: [
+        "Dear Hiring Manager,",
+        "",
+        "I bring eight years of safety-conscious Security Guard experience.",
+        "",
+        "At ADT Security, I completed reports by recording observations and surveillance activity.",
+        "",
+        "For Securitas Security, that means a High Level Security Officer who supports Region and Area Management Support Staff guide growth and advancement effectively.",
+        "",
+        "I bring discipline around accurate records and steady monitoring.",
+        "",
+        "Sincerely,",
+        "Robert Cooper",
+      ].join("\n"),
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.issues).toContain("low_value_job_echo");
+  });
+
+  it("flags robotic bridge and generic interview-request closings in shadow quality", () => {
+    const result = evaluatePremiumCoverLetterQualityShadow({
+      bodyParts: {
+        opening:
+          "I completed reports that record observations and surveillance activity with care.",
+        proofBlock:
+          "I bring eight years of attentive security experience protecting VIP individuals.",
+        employerValueBlock:
+          "That is useful in work where consistent support, clear reporting, and careful observation help maintain a dependable security operation.",
+        closeLine: "I would be glad to discuss the position further.",
+      },
+      content: [
+        "Dear Hiring Manager,",
+        "",
+        "I completed reports that record observations and surveillance activity with care.",
+        "",
+        "I bring eight years of attentive security experience protecting VIP individuals.",
+        "",
+        "That is useful in work where consistent support, clear reporting, and careful observation help maintain a dependable security operation.",
+        "",
+        "I would be glad to discuss the position further.",
+        "",
+        "Sincerely,",
+        "Robert Cooper",
+      ].join("\n"),
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.issues).toContain("generic_tone");
+  });
+
+  it("builds employer-value bridges from universal work surfaces, not security-specific templates", () => {
+    const bridgeCases = [
+      {
+        contextClass: "cv_direct",
+        targetRole: "Revenue Operations Lead",
+        topEvidence: [
+          "Improved forecast accuracy by 19% after redesigning pipeline review and reporting workflows.",
+        ],
+        supportEvidence: [
+          "Led a quarterly operating cadence across sales, finance, and customer success.",
+        ],
+        workContext: [
+          "Lead revenue operations reporting and forecasting workflows.",
+        ],
+        expected: /revenue reporting and forecasting/i,
+      },
+      {
+        contextClass: "cv_direct",
+        targetRole: "Facilities Support Coordinator",
+        topEvidence: [
+          "Handled maintenance intake, scheduling, and vendor follow-up for office sites.",
+        ],
+        supportEvidence: [
+          "Kept service records and completion status current across recurring facilities requests.",
+        ],
+        workContext: [
+          "Coordinate maintenance requests, schedule vendors, and update service records.",
+        ],
+        expected: /facilities and maintenance coordination/i,
+      },
+      {
+        contextClass: "cv_direct",
+        targetRole: "Customer Success Manager",
+        topEvidence: [
+          "Improved 90-day retention by 18% by redesigning onboarding checkpoints and escalation triggers.",
+        ],
+        supportEvidence: [
+          "Built a customer health-score dashboard used by the CS team to prioritize at-risk accounts.",
+        ],
+        workContext: [
+          "Own account health, retention reporting, onboarding, and expansion workflows.",
+        ],
+        expected: /customer success and retention work/i,
+      },
+      {
+        contextClass: "no_cv",
+        targetRole: "Office Coordinator",
+        topEvidence: [],
+        supportEvidence: [],
+        workContext: [
+          "Coordinate team scheduling, service intake, vendor follow-up, and daily office routines.",
+        ],
+        expected: /operations and scheduling/i,
+      },
+    ] as const;
+
+    for (const bridgeCase of bridgeCases) {
+      const repaired = repairPremiumCoverLetterBodyParts({
+        brief: {
+          language: "English",
+          preset: "engaging",
+          candidateEvidenceAvailable: bridgeCase.contextClass !== "no_cv",
+          requiredMoves: [],
+          forbiddenMoves: [],
+          keyRequirements: [],
+          preferredQualifications: [],
+          lowValueChecklist: [],
+          topResponsibilities: bridgeCase.workContext,
+          ...bridgeCase,
+        } as any,
+        bodyParts: {
+          opening: "Opening sentence.",
+          proofBlock: "Proof sentence.",
+          employerValueBlock:
+            "This helps Region and Area Management Support Staff guide growth and advancement.",
+          closeLine: "I bring careful follow-through.",
+        },
+      });
+
+      expect(repaired.employerValueBlock).toMatch(bridgeCase.expected);
+      expect(repaired.employerValueBlock).not.toMatch(/security environments/i);
+      expect(repaired.employerValueBlock).not.toMatch(/Region and Area Management Support Staff|growth and advancement/i);
+      if (bridgeCase.contextClass === "cv_adjacent") {
+        expect(repaired.employerValueBlock).not.toMatch(/\bI can (?:help|support)\b/i);
+      }
+    }
+  });
+
+  it("flags universal planning/meta prose across domains", () => {
+    const metaPhrases = [
+      "The evidence shows that I improved forecast accuracy by 19%.",
+      "My strongest match is customer success retention work.",
+      "That gives the letter a concrete bridge to facilities coordination.",
+      "This section shows my reporting and documentation background.",
+    ];
+
+    for (const phrase of metaPhrases) {
+      const result = evaluatePremiumCoverLetterQualityShadow({
+        bodyParts: {
+          opening: phrase,
+          proofBlock:
+            "I improved signup conversion by 11% after iterative UI experiments.",
+          employerValueBlock:
+            "That matters where customer-facing product work depends on clear evidence.",
+          closeLine:
+            "I bring discipline around concrete proof and clear follow-through.",
+        },
+        content: [
+          "Dear Hiring Manager,",
+          "",
+          phrase,
+          "",
+          "I improved signup conversion by 11% after iterative UI experiments.",
+          "",
+          "That matters where customer-facing product work depends on clear evidence.",
+          "",
+          "I bring discipline around concrete proof and clear follow-through.",
+          "",
+          "Sincerely,",
+          "Alex Martin",
+        ].join("\n"),
+      });
+
+      expect(result.passed).toBe(false);
+      expect(result.issues).toContain("meta_prose");
+    }
+  });
+
+  it("cleans report-description phrasing without security-specific branching", () => {
+    const repaired = repairPremiumCoverLetterBodyParts({
+      brief: {
+        language: "English",
+        preset: "engaging",
+        contextClass: "cv_adjacent",
+        candidateEvidenceAvailable: true,
+        targetRole: "Operations Coordinator",
+        topEvidence: [
+          "Completed reports by recording observations, occurrences, and follow-up notes.",
+        ],
+        supportEvidence: [
+          "Tracked handoffs and maintained records for internal teams.",
+        ],
+        transferCore: [
+          "Completed reports by recording observations, occurrences, and follow-up notes.",
+        ],
+        topResponsibilities: [
+          "Coordinate documentation, reporting, and internal follow-up.",
+        ],
+        keyRequirements: [],
+        preferredQualifications: [],
+        lowValueChecklist: [],
+        workContext: [
+          "Coordinate documentation, reporting, and internal follow-up.",
+        ],
+        requiredMoves: [],
+        forbiddenMoves: [],
+      } as any,
+      bodyParts: {
+        opening:
+          "I completed reports that described observations, occurrences, and follow-up notes.",
+        proofBlock:
+          "I completed reports by recording observations, occurrences, and follow-up notes.",
+        employerValueBlock: "",
+        closeLine: "I bring discipline around accurate records.",
+      },
+    });
+
+    expect(repaired.opening).toContain("completed reports documenting");
+    expect(repaired.proofBlock).toContain("completed reports documenting");
+    expect(repaired.opening).not.toContain("reports that described");
+    expect(repaired.proofBlock).not.toContain("reports by recording");
+    expect(repaired.employerValueBlock).toMatch(/reporting and documentation/i);
+    expect(repaired.employerValueBlock).not.toMatch(/security/i);
   });
 
   it("rejects clipped source fragments and allows source-safe team fallbacks", async () => {
@@ -3175,8 +3915,10 @@ describe("premium cover letter generation and rendering", () => {
     expect(result?.bodyParts.employerValueBlock.split(/\s+/).length).toBeGreaterThan(
       10,
     );
-    expect(result?.content.match(/I would welcome the opportunity to discuss the role further\./g))
-      .toHaveLength(1);
+    expect(result?.content).toContain(
+      "I would welcome the opportunity to discuss the role further.",
+    );
+    expect(result?.qualityShadow?.issues ?? []).toContain("generic_tone");
   });
 
   it("compacts verbose Mistral body parts after validation without affecting premium success", async () => {
@@ -3350,7 +4092,7 @@ describe("premium cover letter generation and rendering", () => {
       stage: "validation",
       reason: "non_repairable_validation",
       contextClass: "no_cv",
-      issues: expect.arrayContaining(["no_cv_history_claim"]),
+      issues: expect.arrayContaining(["no_cv_uses_candidate_fact"]),
     });
   });
 

@@ -47,6 +47,13 @@ function getSmokeRecordMetadataTags(record: SmokeRecord): string[] {
     : [];
 }
 
+function getSmokeRecordMetadata(record: SmokeRecord): Record<string, unknown> {
+  if (record.status !== "ok") return {};
+  return record.savedMetadata && typeof record.savedMetadata === "object"
+    ? (record.savedMetadata as Record<string, unknown>)
+    : {};
+}
+
 const SUPPORTED_MODELS = [
   "chatgpt",
   "mistral-medium-latest",
@@ -96,11 +103,18 @@ export function smokeRecordProvesPremiumSuccess(record: SmokeRecord): boolean {
   if (record.status !== "ok") return false;
 
   const tags = getSmokeRecordMetadataTags(record);
+  const metadata = getSmokeRecordMetadata(record);
   return (
-    record.routing?.attemptedPath === "premium success" &&
+    record.routing?.attemptedPath === "premium path saved" &&
     record.routing?.saveOutcome === "structured_saved" &&
     tags.includes("premium_cover_letter_path_v1") &&
-    tags.includes("generation_path:premium_success")
+    tags.includes("generation_path:premium_path_saved") &&
+    metadata.premium_path_saved === true &&
+    metadata.premium_validation_passed === true &&
+    Object.prototype.hasOwnProperty.call(
+      metadata,
+      "premium_quality_shadow_passed",
+    )
   );
 }
 

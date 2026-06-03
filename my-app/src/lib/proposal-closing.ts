@@ -3,25 +3,104 @@ import {
   FRENCH_SIGNOFFS,
 } from "../../convex/lib/proposals/proposalRenderer";
 
+export type ProposalClosingLanguage = "en" | "fr" | "es";
+export type ProposalClosingDocumentType =
+  | "cover_letter"
+  | "application_message"
+  | "freelance_proposal";
+
 export type ProposalClosingBlock = {
   signOff: string | null;
   signatureName: string | null;
 };
 
-export type ProposalClosingSource = "settings" | "document" | "legacy";
+export type ProposalClosingSource =
+  | "settings"
+  | "document"
+  | "legacy"
+  | "language_default"
+  | "custom";
 
 export type ProposalClosingRef = {
   enabled: boolean;
   signOff: string;
   signatureName: string;
   source: ProposalClosingSource;
+  closingNeedsUserChoice?: boolean;
   handwrittenSignatureEnabled?: boolean;
 };
+
+export type ClosingOptionGroup = {
+  id: "recommended" | "concise" | "formal" | "classic" | "custom";
+  label: string;
+  options: string[];
+};
+
+export const FRENCH_COVER_LETTER_DEFAULT_SIGNOFF =
+  "Veuillez agréer, Madame, Monsieur, l'expression de mes salutations distinguées.";
+
+export const CLOSING_PRESETS = {
+  en: {
+    cover_letter: {
+      recommended: "Sincerely,",
+      options: ["Sincerely,", "Respectfully,", "Kind regards,", "Best regards,"],
+    },
+    application_message: {
+      recommended: "Sincerely,",
+      options: ["Sincerely,", "Best regards,", "Kind regards,"],
+    },
+    freelance_proposal: {
+      recommended: "Best regards,",
+      options: ["Best regards,", "Kind regards,", "Sincerely,"],
+    },
+  },
+  fr: {
+    cover_letter: {
+      recommended: FRENCH_COVER_LETTER_DEFAULT_SIGNOFF,
+      options: [
+        FRENCH_COVER_LETTER_DEFAULT_SIGNOFF,
+        "Veuillez agréer, Madame, Monsieur, mes salutations distinguées.",
+        "Je vous prie de recevoir, Madame, Monsieur, mes sincères salutations.",
+        "Bien cordialement,",
+        "Cordialement,",
+      ],
+    },
+    application_message: {
+      recommended: "Cordialement,",
+      options: ["Cordialement,", "Bien cordialement,", "Sincères salutations,"],
+    },
+    freelance_proposal: {
+      recommended: "Bien cordialement,",
+      options: ["Bien cordialement,", "Cordialement,", "Sincères salutations,"],
+    },
+  },
+  es: {
+    cover_letter: {
+      recommended: "Atentamente,",
+      options: [
+        "Atentamente,",
+        "Le saluda atentamente,",
+        "Saludos cordiales,",
+        "Cordialmente,",
+      ],
+    },
+    application_message: {
+      recommended: "Un cordial saludo,",
+      options: ["Un cordial saludo,", "Saludos cordiales,", "Atentamente,"],
+    },
+    freelance_proposal: {
+      recommended: "Cordialmente,",
+      options: ["Cordialmente,", "Saludos cordiales,", "Atentamente,"],
+    },
+  },
+} as const;
 
 const PROPOSAL_CLOSING_SOURCE_VALUES = new Set<ProposalClosingSource>([
   "settings",
   "document",
   "legacy",
+  "language_default",
+  "custom",
 ]);
 
 export type ExtractedProposalClosingBlock = {
@@ -31,9 +110,24 @@ export type ExtractedProposalClosingBlock = {
 
 const SIGNATURE_NAME_PATTERN = /^[\p{L}][\p{L}\s.'’\-]{1,56}$/u;
 const CANONICAL_SIGNOFFS = new Set(
-  [...Object.values(ENGLISH_SIGNOFFS), ...Object.values(FRENCH_SIGNOFFS)].map(
-    normalizeProposalClosingForMatch,
-  ),
+  [
+    ...Object.values(ENGLISH_SIGNOFFS),
+    ...Object.values(FRENCH_SIGNOFFS),
+    ...Object.values(CLOSING_PRESETS).flatMap((byType) =>
+      Object.values(byType).flatMap((preset) => [
+        preset.recommended,
+        ...preset.options,
+      ]),
+    ),
+    "Kind regards,",
+    "Best regards,",
+    "Warm regards,",
+    "Bien cordialement,",
+    "Avec mes salutations,",
+    "Atentamente,",
+    "Cordialmente,",
+    "Saludos cordiales,",
+  ].map(normalizeProposalClosingForMatch),
 );
 
 export function stripInlineProposalMarkdown(value: string): string {
@@ -171,24 +265,150 @@ function normalizeProposalClosingSource(
     : null;
 }
 
-function isFrenchLocale(value: unknown): boolean {
-  return typeof value === "string" && /^fr(?:-|$)/i.test(value.trim());
+function normalizeProposalClosingLanguage(
+  value: unknown,
+): ProposalClosingLanguage | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.toLowerCase().split("-")[0]?.trim();
+  if (normalized === "en" || normalized === "english") return "en";
+  if (normalized === "fr" || normalized === "french") return "fr";
+  if (normalized === "es" || normalized === "spanish") return "es";
+  return null;
 }
 
-function normalizeVoicePresetForSignOff(value: unknown): keyof typeof ENGLISH_SIGNOFFS {
-  return typeof value === "string" && value in ENGLISH_SIGNOFFS
-    ? (value as keyof typeof ENGLISH_SIGNOFFS)
-    : "signature";
+function inferProposalClosingLanguageFromContent(
+  content: string | null | undefined,
+): ProposalClosingLanguage | null {
+  const normalized = normalizeProposalClosingForMatch(content ?? "");
+  if (!normalized) return null;
+  if (
+    /\b(?:madame,?\s+monsieur|cordialement|bien cordialement|salutations distinguées)\b/i.test(
+      normalized,
+    )
+  ) {
+    return "fr";
+  }
+  if (
+    /\b(?:estimado|estimada|atentamente|cordialmente|saludos cordiales)\b/i.test(
+      normalized,
+    )
+  ) {
+    return "es";
+  }
+  if (/\b(?:dear hiring manager|sincerely|kind regards|best regards)\b/i.test(normalized)) {
+    return "en";
+  }
+  return null;
+}
+
+function normalizeProposalClosingDocumentType(
+  value: string | null | undefined,
+): ProposalClosingDocumentType {
+  if (
+    value === "application_message" ||
+    value === "freelance_proposal" ||
+    value === "cover_letter"
+  ) {
+    return value;
+  }
+  return "cover_letter";
 }
 
 export function resolveDefaultProposalSignOff(args: {
   locale?: string | null;
+  content?: string | null;
+  proposalType?: string | null;
   voicePreset?: string | null;
-}): string {
-  const voicePreset = normalizeVoicePresetForSignOff(args.voicePreset);
-  return isFrenchLocale(args.locale)
-    ? FRENCH_SIGNOFFS[voicePreset]
-    : ENGLISH_SIGNOFFS[voicePreset];
+}): { signOff: string; closingNeedsUserChoice: boolean } {
+  const localeWasProvided =
+    typeof args.locale === "string" && args.locale.trim().length > 0;
+  const language = localeWasProvided
+    ? normalizeProposalClosingLanguage(args.locale)
+    : inferProposalClosingLanguageFromContent(args.content) ?? "en";
+  if (!language) {
+    return { signOff: "", closingNeedsUserChoice: true };
+  }
+  const proposalType = normalizeProposalClosingDocumentType(args.proposalType);
+  return {
+    signOff: CLOSING_PRESETS[language][proposalType].recommended,
+    closingNeedsUserChoice: false,
+  };
+}
+
+export function resolveProposalClosingOptionGroups(args: {
+  locale?: string | null;
+  content?: string | null;
+  proposalType?: string | null;
+}): ClosingOptionGroup[] {
+  const localeWasProvided =
+    typeof args.locale === "string" && args.locale.trim().length > 0;
+  const language = localeWasProvided
+    ? normalizeProposalClosingLanguage(args.locale)
+    : inferProposalClosingLanguageFromContent(args.content) ?? "en";
+  if (!language) {
+    return [
+      {
+        id: "custom",
+        label: "Custom",
+        options: [],
+      },
+    ];
+  }
+
+  const proposalType = normalizeProposalClosingDocumentType(args.proposalType);
+  if (language === "fr" && proposalType === "cover_letter") {
+    return [
+      {
+        id: "recommended",
+        label: "Recommended",
+        options: [CLOSING_PRESETS.fr.cover_letter.recommended],
+      },
+      {
+        id: "concise",
+        label: "Concise",
+        options: ["Cordialement,", "Bien cordialement,"],
+      },
+      {
+        id: "classic",
+        label: "Classic",
+        options: [
+          "Veuillez agréer, Madame, Monsieur, mes salutations distinguées.",
+          "Je vous prie de recevoir, Madame, Monsieur, mes sincères salutations.",
+        ],
+      },
+      {
+        id: "custom",
+        label: "Custom",
+        options: [],
+      },
+    ];
+  }
+
+  const preset = CLOSING_PRESETS[language][proposalType];
+  const secondaryOptions = preset.options.filter(
+    (option) => option !== preset.recommended,
+  );
+  return [
+    {
+      id: "recommended",
+      label: "Recommended",
+      options: [preset.recommended],
+    },
+    ...(secondaryOptions.length > 0
+      ? [
+          {
+            id: proposalType === "cover_letter" ? "formal" : "concise",
+            label: proposalType === "cover_letter" ? "Formal" : "Concise",
+            options: secondaryOptions,
+          } satisfies ClosingOptionGroup,
+        ]
+      : []),
+    {
+      id: "custom",
+      label: "Custom",
+      options: [],
+    },
+  ];
 }
 
 export function sanitizeProposalClosingRef(
@@ -208,6 +428,7 @@ export function sanitizeProposalClosingRef(
     signOff,
     signatureName,
     source,
+    closingNeedsUserChoice: record.closingNeedsUserChoice === true,
     handwrittenSignatureEnabled: record.handwrittenSignatureEnabled === true,
   };
 }
@@ -255,17 +476,22 @@ export function resolveProposalClosingRef(args: {
     typeof args.defaultEnabled === "boolean"
       ? args.defaultEnabled
       : args.proposalType === "cover_letter" || !args.proposalType;
+  const languageDefault = resolveDefaultProposalSignOff({
+    locale: args.locale,
+    content: args.content,
+    proposalType: args.proposalType,
+    voicePreset: args.voicePreset,
+  });
 
   if (sanitized) {
+    const resolvedSignOff =
+      sanitized.signOff || legacy?.signOff || languageDefault.signOff;
     return {
       ...sanitized,
-      signOff:
-        sanitized.signOff ||
-        legacy?.signOff ||
-        resolveDefaultProposalSignOff({
-          locale: args.locale,
-          voicePreset: args.voicePreset,
-        }),
+      signOff: resolvedSignOff,
+      closingNeedsUserChoice:
+        sanitized.closingNeedsUserChoice ||
+        (!resolvedSignOff && languageDefault.closingNeedsUserChoice),
       signatureName:
         sanitized.source === "document"
           ? sanitized.signatureName ||
@@ -280,14 +506,11 @@ export function resolveProposalClosingRef(args: {
   }
 
   if (legacy) {
+    const resolvedSignOff = legacy.signOff || languageDefault.signOff;
     return {
       ...legacy,
-      signOff:
-        legacy.signOff ||
-        resolveDefaultProposalSignOff({
-          locale: args.locale,
-          voicePreset: args.voicePreset,
-        }),
+      signOff: resolvedSignOff,
+      closingNeedsUserChoice: !resolvedSignOff && languageDefault.closingNeedsUserChoice,
       signatureName: legacy.signatureName || applicantSignatureName,
     };
   }
@@ -298,12 +521,10 @@ export function resolveProposalClosingRef(args: {
 
   return {
     enabled: true,
-    signOff: resolveDefaultProposalSignOff({
-      locale: args.locale,
-      voicePreset: args.voicePreset,
-    }),
+    signOff: languageDefault.signOff,
     signatureName: applicantSignatureName,
-    source: "settings",
+    source: "language_default",
+    closingNeedsUserChoice: languageDefault.closingNeedsUserChoice,
     handwrittenSignatureEnabled: false,
   };
 }

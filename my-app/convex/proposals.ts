@@ -78,7 +78,10 @@ const proposalClosingChoice = v.object({
     v.literal("settings"),
     v.literal("document"),
     v.literal("legacy"),
+    v.literal("language_default"),
+    v.literal("custom"),
   ),
+  closingNeedsUserChoice: v.optional(v.boolean()),
   handwrittenSignatureEnabled: v.optional(v.boolean()),
 });
 
@@ -187,6 +190,10 @@ export const storeProposal = internalMutation({
       actualModelType: v.optional(v.string()),
       actualModelName: v.optional(v.string()),
       fallbackTriggerCode: v.optional(v.string()),
+      premium_path_saved: v.optional(v.union(v.boolean(), v.null())),
+      premium_validation_passed: v.optional(v.union(v.boolean(), v.null())),
+      premium_quality_shadow_passed: v.optional(v.union(v.boolean(), v.null())),
+      premium_quality_gate_passed: v.optional(v.union(v.boolean(), v.null())),
       voicePreset: v.optional(proposalVoicePresetChoice),
       requestedVoicePreset: v.optional(
         v.union(proposalVoicePresetChoice, v.null()),
@@ -300,6 +307,10 @@ export const updateProposal = internalMutation({
       actualModelType: v.optional(v.string()),
       actualModelName: v.optional(v.string()),
       fallbackTriggerCode: v.optional(v.string()),
+      premium_path_saved: v.optional(v.union(v.boolean(), v.null())),
+      premium_validation_passed: v.optional(v.union(v.boolean(), v.null())),
+      premium_quality_shadow_passed: v.optional(v.union(v.boolean(), v.null())),
+      premium_quality_gate_passed: v.optional(v.union(v.boolean(), v.null())),
       voicePreset: v.optional(proposalVoicePresetChoice),
       requestedVoicePreset: v.optional(
         v.union(proposalVoicePresetChoice, v.null()),

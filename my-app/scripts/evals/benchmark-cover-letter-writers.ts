@@ -11,10 +11,13 @@ import { resolveProposalOutputLanguage } from "../../convex/lib/proposals/propos
 import {
   PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA,
   PREMIUM_COVER_LETTER_WRITER_MODELS,
+  PREMIUM_WRITER_OUTPUT_V1_SCHEMA,
   attemptPremiumCoverLetterGeneration,
   generatePremiumCoverLetterBodyPartsWithOpenAI,
+  toCoverLetterBodyParts,
   type PremiumCoverLetterAttemptResult,
   type PremiumCoverLetterFailureTrace,
+  type PremiumCoverLetterQualityShadowResult,
   type PremiumCoverLetterWriterModel,
 } from "../../convex/lib/proposals/premiumCoverLetter";
 import {
@@ -45,6 +48,40 @@ type BenchmarkGenerationFailureStatus =
   | "generation_failed"
   | "evaluation_failed";
 
+type ManualReviewVerdict = "unreviewed" | "pass" | "fail";
+
+export type CoverLetterBenchmarkManualReview = {
+  humanTone: ManualReviewVerdict;
+  noMetaProse: ManualReviewVerdict;
+  persuasiveEmployerFacingArgument: ManualReviewVerdict;
+  notFactualInventory: ManualReviewVerdict;
+  specificity: ManualReviewVerdict;
+  grounding: ManualReviewVerdict;
+  economy: ManualReviewVerdict;
+  commerciallyAcceptable: ManualReviewVerdict;
+  reviewerNotes: string;
+};
+
+export type CoverLetterBenchmarkDiagnostics = {
+  provider: "openai" | "mistral";
+  contextClass: PremiumCoverLetterAttemptResult["contextClass"] | null;
+  expectedContextClass: CoverLetterBenchmarkCase["expectedContextClass"];
+  validationResult:
+    | "premium_validation_passed"
+    | "premium_generation_failed"
+    | "premium_evaluation_failed";
+  telemetry: {
+    attemptedPath: "premium path saved" | "premium generation failed";
+    premium_path_saved: boolean;
+    premium_validation_passed: boolean;
+    premium_quality_shadow_passed: boolean | null;
+  };
+  qualityShadow: PremiumCoverLetterQualityShadowResult | null;
+  failureStage: PremiumCoverLetterFailureTrace["stage"] | null;
+  failureReason: PremiumCoverLetterFailureTrace["reason"] | null;
+  failureIssues: string[];
+};
+
 export type CoverLetterBenchmarkSuccessRecord = {
   status: "ok";
   caseId: string;
@@ -54,6 +91,9 @@ export type CoverLetterBenchmarkSuccessRecord = {
   expectedContextClass: CoverLetterBenchmarkCase["expectedContextClass"];
   generation: PremiumCoverLetterAttemptResult;
   evaluation: CoverLetterScore;
+  diagnostics: CoverLetterBenchmarkDiagnostics;
+  manualReview: CoverLetterBenchmarkManualReview;
+  letter: string;
   notes?: string;
   realismTag?: string;
 };
@@ -68,6 +108,9 @@ export type CoverLetterBenchmarkFailureRecord = {
   error: string;
   generation?: PremiumCoverLetterAttemptResult;
   debug?: PremiumCoverLetterFailureTrace;
+  diagnostics: CoverLetterBenchmarkDiagnostics;
+  manualReview: CoverLetterBenchmarkManualReview;
+  letter?: string;
   notes?: string;
   realismTag?: string;
 };
@@ -83,6 +126,7 @@ export type CoverLetterBenchmarkAggregate = {
   averageGlobalScore: number | null;
   premiumReadyCount: number;
   rankMatchesTextPassCount: number;
+  qualityShadowPassCount: number;
   hardFailReasons: Array<{ reason: string; count: number }>;
 };
 
@@ -256,6 +300,64 @@ function isMistralBenchmarkWriterModel(
   );
 }
 
+function resolveBenchmarkWriterProvider(
+  writerModel: CoverLetterBenchmarkWriterModel,
+): CoverLetterBenchmarkDiagnostics["provider"] {
+  return isMistralBenchmarkWriterModel(writerModel) ? "mistral" : "openai";
+}
+
+function createEmptyManualReview(): CoverLetterBenchmarkManualReview {
+  return {
+    humanTone: "unreviewed",
+    noMetaProse: "unreviewed",
+    persuasiveEmployerFacingArgument: "unreviewed",
+    notFactualInventory: "unreviewed",
+    specificity: "unreviewed",
+    grounding: "unreviewed",
+    economy: "unreviewed",
+    commerciallyAcceptable: "unreviewed",
+    reviewerNotes: "",
+  };
+}
+
+function getGenerationQualityShadow(
+  generation: PremiumCoverLetterAttemptResult | null | undefined,
+): PremiumCoverLetterQualityShadowResult | null {
+  return generation?.qualityShadow ?? null;
+}
+
+function buildBenchmarkDiagnostics(args: {
+  writerModel: CoverLetterBenchmarkWriterModel;
+  expectedContextClass: CoverLetterBenchmarkCase["expectedContextClass"];
+  generation?: PremiumCoverLetterAttemptResult | null;
+  failureTrace?: PremiumCoverLetterFailureTrace | null;
+  validationResult: CoverLetterBenchmarkDiagnostics["validationResult"];
+}): CoverLetterBenchmarkDiagnostics {
+  const qualityShadow = getGenerationQualityShadow(args.generation);
+  const premiumSaved =
+    args.validationResult === "premium_validation_passed" ||
+    args.validationResult === "premium_evaluation_failed";
+
+  return {
+    provider: resolveBenchmarkWriterProvider(args.writerModel),
+    contextClass: args.generation?.contextClass ?? null,
+    expectedContextClass: args.expectedContextClass,
+    validationResult: args.validationResult,
+    telemetry: {
+      attemptedPath: premiumSaved
+        ? "premium path saved"
+        : "premium generation failed",
+      premium_path_saved: premiumSaved,
+      premium_validation_passed: premiumSaved,
+      premium_quality_shadow_passed: qualityShadow?.passed ?? null,
+    },
+    qualityShadow,
+    failureStage: args.failureTrace?.stage ?? null,
+    failureReason: args.failureTrace?.reason ?? null,
+    failureIssues: args.failureTrace?.issues ?? [],
+  };
+}
+
 function extractChatMessageText(content: unknown): string {
   if (typeof content === "string") return content;
   if (Array.isArray(content)) {
@@ -314,10 +416,23 @@ function findEmbeddedJsonObjectCandidates(content: string): string[] {
   return candidates;
 }
 
-function parsePremiumBodyPartsJson(content: string) {
+export function parsePremiumBodyPartsJson(content: string) {
   const trimmed = content.trim();
-  const tryParse = (value: string) =>
-    PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(JSON.parse(value));
+  const tryParse = (value: string) => {
+    const raw = JSON.parse(value);
+    const premiumOutput = PREMIUM_WRITER_OUTPUT_V1_SCHEMA.safeParse(raw);
+    if (premiumOutput.success) {
+      return toCoverLetterBodyParts(premiumOutput.data);
+    }
+
+    const rawRecord =
+      raw && typeof raw === "object" && !Array.isArray(raw)
+        ? (raw as Record<string, unknown>)
+        : null;
+    return PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(
+      rawRecord?.bodyParts ?? raw,
+    );
+  };
 
   try {
     return tryParse(trimmed);
@@ -350,11 +465,16 @@ async function generatePremiumCoverLetterBodyPartsWithMistral(args: {
   });
   const response = await model.invoke([
     new SystemMessage(
-      "Return only a valid JSON object with keys opening, proofBlock, employerValueBlock, and closeLine. Do not include markdown, comments, greeting, signoff, or prose outside JSON.",
+      "Return only a valid JSON object with keys opening, proofBlock, employerValueBlock, and closeLine. Do not include markdown, comments, greeting, signoff, or prose outside JSON. Never write meta-prose such as 'I have described', 'I described', 'as described', 'the evidence shows', 'this section shows', 'work surface', or 'concrete bridge'. Write the actual candidate action directly.",
     ),
     new HumanMessage(args.prompt),
   ]);
   const content = extractChatMessageText(response.content);
+  if (process.env.COVER_LETTER_BENCHMARK_DEBUG_WRITER_OUTPUT === "1") {
+    console.error(
+      `[cover-letter-benchmark] raw writer output model=${args.writerModel}\n${content}`,
+    );
+  }
   return parsePremiumBodyPartsJson(content);
 }
 
@@ -448,6 +568,14 @@ export async function benchmarkCoverLetterCase(args: {
         expectedContextClass: args.benchmarkCase.expectedContextClass,
         error: formatPremiumCoverLetterFailure(failureTrace),
         ...(failureTrace ? { debug: failureTrace } : {}),
+        diagnostics: buildBenchmarkDiagnostics({
+          writerModel: args.writerModel,
+          expectedContextClass: args.benchmarkCase.expectedContextClass,
+          generation: null,
+          failureTrace,
+          validationResult: "premium_generation_failed",
+        }),
+        manualReview: createEmptyManualReview(),
         notes: args.benchmarkCase.notes,
         realismTag: args.benchmarkCase.realismTag,
       };
@@ -468,6 +596,14 @@ export async function benchmarkCoverLetterCase(args: {
         expectedContextClass: args.benchmarkCase.expectedContextClass,
         generation,
         evaluation,
+        diagnostics: buildBenchmarkDiagnostics({
+          writerModel: args.writerModel,
+          expectedContextClass: args.benchmarkCase.expectedContextClass,
+          generation,
+          validationResult: "premium_validation_passed",
+        }),
+        manualReview: createEmptyManualReview(),
+        letter: generation.content,
         notes: args.benchmarkCase.notes,
         realismTag: args.benchmarkCase.realismTag,
       };
@@ -481,6 +617,14 @@ export async function benchmarkCoverLetterCase(args: {
         expectedContextClass: args.benchmarkCase.expectedContextClass,
         generation,
         error: error instanceof Error ? error.message : String(error),
+        diagnostics: buildBenchmarkDiagnostics({
+          writerModel: args.writerModel,
+          expectedContextClass: args.benchmarkCase.expectedContextClass,
+          generation,
+          validationResult: "premium_evaluation_failed",
+        }),
+        manualReview: createEmptyManualReview(),
+        letter: generation.content,
         notes: args.benchmarkCase.notes,
         realismTag: args.benchmarkCase.realismTag,
       };
@@ -495,6 +639,14 @@ export async function benchmarkCoverLetterCase(args: {
       expectedContextClass: args.benchmarkCase.expectedContextClass,
       error: error instanceof Error ? error.message : String(error),
       ...(failureTrace ? { debug: failureTrace } : {}),
+      diagnostics: buildBenchmarkDiagnostics({
+        writerModel: args.writerModel,
+        expectedContextClass: args.benchmarkCase.expectedContextClass,
+        generation: null,
+        failureTrace,
+        validationResult: "premium_generation_failed",
+      }),
+      manualReview: createEmptyManualReview(),
       notes: args.benchmarkCase.notes,
       realismTag: args.benchmarkCase.realismTag,
     };
@@ -546,6 +698,10 @@ export function aggregateCoverLetterBenchmarkRecords(
       rankMatchesTextPassCount: completed.filter(
         (record) => record.evaluation.rankMatchesText,
       ).length,
+      qualityShadowPassCount: completed.filter(
+        (record) =>
+          record.diagnostics.telemetry.premium_quality_shadow_passed === true,
+      ).length,
       hardFailReasons: Array.from(hardFailReasonCounts.entries())
         .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
         .map(([reason, count]) => ({ reason, count })),
@@ -573,6 +729,11 @@ function printRecord(record: CoverLetterBenchmarkRecord): void {
       `preset=${record.preset}`,
       `expectedContextClass=${record.expectedContextClass}`,
       `outputLanguage=${record.outputLanguage}`,
+      `provider=${record.diagnostics.provider}`,
+      `validationResult=${record.diagnostics.validationResult}`,
+      `premium_path_saved=${record.diagnostics.telemetry.premium_path_saved}`,
+      `premium_validation_passed=${record.diagnostics.telemetry.premium_validation_passed}`,
+      `premium_quality_shadow_passed=${record.diagnostics.telemetry.premium_quality_shadow_passed ?? "n/a"}`,
       ...(record.notes ? [`notes=${record.notes}`] : []),
       ...(record.realismTag ? [`realismTag=${record.realismTag}`] : []),
     ].join(" | "),
@@ -580,13 +741,16 @@ function printRecord(record: CoverLetterBenchmarkRecord): void {
 
   if (record.status !== "ok") {
     console.log(`error=${record.error}`);
+    console.log(`diagnostics=${JSON.stringify(record.diagnostics)}`);
     if (record.debug) {
       console.log(`debug=${JSON.stringify(record.debug)}`);
     }
-    if (record.generation) {
+    if (record.letter) {
       console.log("generatedLetter:");
-      console.log(record.generation.content);
+      console.log(record.letter);
     }
+    console.log("manualReview:");
+    console.log(JSON.stringify(record.manualReview, null, 2));
     return;
   }
 
@@ -607,10 +771,14 @@ function printRecord(record: CoverLetterBenchmarkRecord): void {
         : "none"
     }`,
   );
+  console.log("diagnostics:");
+  console.log(JSON.stringify(record.diagnostics, null, 2));
   console.log("evaluation:");
   console.log(JSON.stringify(record.evaluation, null, 2));
+  console.log("manualReview:");
+  console.log(JSON.stringify(record.manualReview, null, 2));
   console.log("generatedLetter:");
-  console.log(record.generation.content);
+  console.log(record.letter);
 }
 
 function printBenchmarkReport(args: {
@@ -658,6 +826,7 @@ function printBenchmarkReport(args: {
         `averageGlobalScore=${aggregate.averageGlobalScore ?? "n/a"}`,
         `premiumReady=${aggregate.premiumReadyCount}`,
         `rankMatchesText=${aggregate.rankMatchesTextPassCount}`,
+        `qualityShadowPass=${aggregate.qualityShadowPassCount}`,
         `hardFailReasons=${
           aggregate.hardFailReasons.length > 0
             ? aggregate.hardFailReasons

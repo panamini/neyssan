@@ -98,6 +98,60 @@ describe("ProposalHeadingFields", () => {
     expect(screen.getByLabelText("Recipient city / location")).toHaveValue("Paris");
   });
 
+  it("opens closing phrase options from a compact Heading drawer", () => {
+    const onChange = vi.fn();
+
+    render(
+      <ProposalHeadingFields
+        variableFields={[
+          {
+            id: "signature-signoff",
+            label: "Signature / politeness formula",
+            value: "Kind regards,",
+            placeholder: "Kind regards,",
+            onChange,
+            closingOptionGroups: [
+              {
+                id: "recommended",
+                label: "Recommended",
+                options: ["Sincerely,"],
+              },
+              {
+                id: "classic",
+                label: "Classic",
+                options: [
+                  "Veuillez agréer, Madame, Monsieur, l'expression de mes salutations distinguées.",
+                ],
+              },
+              {
+                id: "custom",
+                label: "Custom",
+                options: [],
+              },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Letter details")).toBeInTheDocument();
+    expect(screen.getByLabelText("Signature / politeness formula")).toHaveValue(
+      "Kind regards,",
+    );
+    expect(screen.queryByText("Choose formula")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Closing formula options")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Choose closing formula" }));
+    expect(screen.getByLabelText("Closing formula options")).toBeInTheDocument();
+    expect(screen.queryByText("Classic")).not.toBeInTheDocument();
+    expect(screen.queryByText("Custom")).not.toBeInTheDocument();
+    expect(screen.queryByText("Write your own in the field above.")).not.toBeInTheDocument();
+    expect(screen.getByText("Recommended")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Sincerely," }));
+    expect(onChange).toHaveBeenCalledWith("Sincerely,");
+    expect(screen.queryByLabelText("Closing formula options")).not.toBeInTheDocument();
+  });
+
   it("supports structured applicant contact fields in the applicant group", () => {
     render(
       <ProposalHeadingFields

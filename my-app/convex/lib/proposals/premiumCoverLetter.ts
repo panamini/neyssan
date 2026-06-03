@@ -11,7 +11,12 @@ import {
   COVER_LETTER_ROLE_THESIS_PRIORITY_ORDER,
   normalizeProposalConstraintText,
 } from "./proposalPlanner";
-import { ENGLISH_SALUTATION, FRENCH_SALUTATION } from "./proposalRenderer";
+import {
+  ENGLISH_DEFAULT_SIGNOFF,
+  ENGLISH_SALUTATION,
+  FRENCH_DEFAULT_SIGNOFF,
+  FRENCH_SALUTATION,
+} from "./proposalRenderer";
 import type { ProposalVoicePreset } from "./voicePresets";
 import type { CompanyValuesPack } from "./companyValues";
 
@@ -207,6 +212,7 @@ export type PremiumWriterOutputV1 = {
 
 export type PremiumCoverLetterGenerationResult = {
   bodyParts: CoverLetterBodyParts;
+  qualityShadow?: PremiumCoverLetterQualityShadowResult;
   mode: "direct" | "transfer" | "no_cv";
   evidenceUsed: string[];
   omittedWeakEvidence: string[];
@@ -303,6 +309,7 @@ export const MISTRAL_PREMIUM_COVER_LETTER_ADAPTER = [
   "Omit unsupported claims.",
   "",
   "Do not output the classification, audit, chain-of-thought, citations, XML, markdown, or explanations.",
+  "Never write meta-writing or provenance language such as 'I have described', 'I described', 'as described', 'the evidence shows', 'this section shows', 'work surface', or 'concrete bridge'. Write the real candidate action directly.",
   "",
   "Verb accuracy rule:",
   "Use the candidate's actual CV verb when possible.",
@@ -998,6 +1005,26 @@ const SECONDARY_QUALIFICATION_PATTERN =
   /\b(?:enough|basic|comfortable with|working knowledge|familiarity with|certification mindset)\b/i;
 const LOW_VALUE_CHECKLIST_PATTERN =
   /\b(?:organized|reliable|adaptable|flexible|motivated|detail-oriented|willing to learn|ready to help|administrative support|microsoft word|microsoft excel|microsoft office)\b/i;
+const LOW_VALUE_JOB_ECHO_PATTERN =
+  /\b(?:region and area management support staff|area management support staff|management support staff|growth and advancement|career growth|growth opportunities|advancement opportunities|guide growth|support staff)\b/i;
+const REPORTING_BODY_PART_CLEANUP_REPLACEMENTS = [
+  {
+    pattern: /\breports?\s+were\s+completed\s+by\s+recording\b/gi,
+    replacement: "I completed reports documenting",
+  },
+  {
+    pattern: /\b(completed\s+reports?)\s+that\s+described\b/gi,
+    replacement: "$1 documenting",
+  },
+  {
+    pattern: /\b(completed\s+reports?)\s+by\s+recording\b/gi,
+    replacement: "$1 documenting",
+  },
+  {
+    pattern: /\b(reports?)\s+that\s+described\b/gi,
+    replacement: "$1 documenting",
+  },
+] as const;
 const JOB_OFFER_ACTION_VERB_PATTERN =
   /\b(?:lead|own|coordinate|track|manage|maintain|support|build|improve|drive|handle|answer|update|prepare|document|design|analy[sz]e|mentor|supervise|monitor|report|deliver|keep|develop|create|review|operate|collaborate|implement|schedule)\b/i;
 const JOB_OFFER_ACTION_LED_PATTERN =
@@ -1061,7 +1088,7 @@ const ADJACENT_UNSUPPORTED_OUTCOME_PHRASES = [
   "support smooth office operations",
 ] as const;
 const NO_CV_HISTORY_CLAIM_PATTERN =
-  /\b(?:in previous roles?|at my previous|during my|my experience|my background|my experience includes|my background includes|i have worked with|i have managed|i worked(?: as| at)?|i served as|i led|i managed|i coordinated|i developed|i built|i improved|i delivered|i implemented|i maintained|i operated|i supervised|i trained|i documented|i reviewed|i monitored|i hold\b|i earned\b|i completed\b|i studied\b)\b/i;
+  /\b(?:in previous roles?|at my previous|during my|my experience|my background|experience includes|background includes|my experience includes|my background includes|i have worked with|i have managed|i worked(?: as| at)?|i served as|i led|i managed|i coordinated|i developed|i built|i improved|i delivered|i implemented|i maintained|i operated|i supervised|i trained|i documented|i reviewed|i monitored|i hold\b|i earned\b|i completed\b|i studied\b)\b/i;
 
 function compactWhitespace(value: string | null | undefined): string {
   if (typeof value !== "string") return "";
@@ -1995,8 +2022,31 @@ function resolveCloseFallback(language: string): string {
   const deterministicLanguage = getDeterministicCopyLanguage(language);
   if (!deterministicLanguage) return "";
   return deterministicLanguage === "fr"
-    ? "Je serais disponible pour échanger davantage au sujet du poste."
-    : "I would welcome the opportunity to discuss the role further.";
+    ? "J'aborderais ce travail avec attention, communication claire et suivi régulier."
+    : "I would approach the work with care, clear communication, and steady follow-through.";
+}
+
+function isGenericPremiumClosingLine(value: string): boolean {
+  const normalized = compactWhitespace(value);
+  if (!normalized) return false;
+  return /\b(?:i\s+would\s+(?:welcome|be\s+glad|be\s+happy)\s+(?:the\s+)?(?:opportunity|chance)?\s*(?:to\s+)?(?:discuss|speak|talk)\s+(?:the\s+)?(?:position|role|opportunity)\s+further|i\s+would\s+(?:welcome|be\s+glad|be\s+happy)\s+(?:the\s+)?(?:opportunity|chance)?\s*(?:to\s+)?(?:discuss|speak|talk)\s+my\s+interest\s+in\s+(?:the\s+)?(?:position|role|opportunity)|would\s+welcome\s+the\s+(?:opportunity|chance)\s+to\s+(?:discuss|speak)\s+(?:the\s+)?(?:position|role|opportunity)|discuss\s+(?:the\s+)?(?:position|role|opportunity)\s+further|speak\s+further\s+about\s+(?:the\s+)?(?:position|role|opportunity))\b/i.test(
+    normalized,
+  );
+}
+
+function buildEvidenceGroundedCloseLine(brief: CoverLetterBrief): string {
+  const deterministicLanguage = getDeterministicCopyLanguage(brief.language);
+  if (!deterministicLanguage) return "";
+  if (brief.contextClass === "no_cv") {
+    return resolveCloseFallback(brief.language);
+  }
+
+  const anchors = adjacentOperatingAnchors(brief).slice(0, 3);
+  const anchorText = listAsNaturalText(anchors);
+  if (deterministicLanguage === "fr") {
+    return ensureSentenceEnding(`J'apporte de la rigueur autour de ${anchorText}`);
+  }
+  return ensureSentenceEnding(`I bring discipline around ${anchorText}`);
 }
 
 export function isPremiumCoverLetterPreset(
@@ -2807,7 +2857,7 @@ export function buildPremiumCoverLetterPrompt(args: {
     "Prioritize strongest evidence first. If evidence is modest, let the best available concrete proof carry the case.",
     "Do not lead with secondary qualifications or spend body space on admiration, benefits attraction, checklist summaries, generic enthusiasm, tool repetition, keyword lists, or criteria reporting.",
     "topResponsibilities lead; keyRequirements sharpen; the rest stay secondary.",
-    "Dynamic opening only: job-thesis, proof-first, company/problem, direct-match, or human-short when grounded. Never reuse 'Your frontend role sits where...' outside that fixture.",
+    "lowValueChecklist is diagnostic-only. Do not quote it, paraphrase it, or use it as employer-value language in the letter.",
     "A JD keyword, tool, certification, compliance framework, domain, or responsibility may appear as candidate experience only when the CV supports that exact capability. Bind ATS terms to a concrete action or result; never list them. Bind ATS and JD terms to a concrete CV-backed action, artifact, responsibility, or result. Never use a JD keyword as a floating adjective or implied experience.",
     ...(companyValuesPack
       ? [
@@ -2817,6 +2867,10 @@ export function buildPremiumCoverLetterPrompt(args: {
     "Preset affects rhetorical texture only. It must not change truthfulness, claim strength, or evidence priority. Do not change ownership, metrics, tools, responsibilities, or boundaries.",
     "Across cv_direct and cv_adjacent modes, sound like a person making a case, not a memo.",
     "Avoid clunky inanimate-object phrasing and evaluator/meta phrases like 'the evidence I would bring'.",
+    "Do not narrate the writing plan or provenance. Never write 'I have described', 'I described', 'as described', 'the evidence shows', 'this section shows', 'this letter shows', 'the claim is', 'work surface', or 'concrete bridge'.",
+    "Do not use self-scoring or section-label openings such as 'my strongest match', 'my best match', 'the strongest evidence', 'my fit for this role', or 'the main reason I am a fit'.",
+    "Use one cautious employer-facing implication. Avoid formula bridges ('That is useful...', 'That matters...', 'day-to-day depends...', 'those habits matter'); write the concrete team consequence plainly.",
+    "closeLine: concise evidence-grounded contribution, not generic interview-request wording.",
     presetGuidance,
     args.generationControlsBlock,
     ...contextGuidance,
@@ -2963,12 +3017,26 @@ function resolvePremiumCoverLetterContextGuidance(args: {
         "- Do not summarize the whole CV in the opening.",
         "- Use past or present factual statements.",
         "- Do not use future contribution claims.",
+        "- Never use meta-writing language such as \"I have described\", \"I described\", \"as described\", \"the evidence shows\", \"this section shows\", \"work surface\", or \"concrete bridge\".",
         "- Safe bridge examples: \"That background is relevant to work where clear handoffs, documentation, and reporting matter.\" \"The overlap is strongest around coordination, reporting, and documentation.\"",
         "- Forbidden bridge examples: \"I have direct experience as an Implementation Analyst.\" \"I can own your implementation workflows.\" \"This will improve your delivery speed.\" \"I am passionate about your mission.\"",
         "- Do not use employerValueBlock as another evidence-only sentence when the brief includes topResponsibilities or workContext; use one restrained employer-facing bridge instead.",
         "- Do not repeat duration, employers, or the same evidence anchor in closeLine.",
         "- closeLine must be first person and must restate operating strengths, such as \"I bring discipline around accurate records, steady monitoring, and clear handoffs.\"",
         "- If evidence is limited, return shorter body parts instead of filling space.",
+      ];
+    }
+    if (args.contextClass === "no_cv") {
+      return [
+        "Mistral no_cv contract:",
+        "- There is no candidate history. Do not write a role summary, process memo, detached noun phrases, or fake experience.",
+        "- Keep a modest first-person candidate voice without claiming prior work.",
+        "- opening: one sentence beginning with I, focused on the role's work surface.",
+        "- proofBlock: one sentence about what the role requires operationally, not what the candidate has done.",
+        "- employerValueBlock: one sentence about the practical consequence for the team.",
+        "- closeLine: one modest first-person sentence such as \"I would be glad to discuss how I can approach this work with care and follow-through.\"",
+        "- Do not begin closeLine with \"Experience includes\", \"Background includes\", or a detached task noun.",
+        "- Do not claim achievements, tools used, managed workflows, maintained systems, or completed tasks.",
       ];
     }
   }
@@ -3026,7 +3094,9 @@ function resolvePremiumCoverLetterBodyPartGuidance(args: {
       "- closeLine must be first person and must not begin with detached noun phrases like \"Experience includes\" or \"Background includes\".",
       "- Do not include greeting, signoff, or candidate name in body parts.",
       "- Do not use the target role title.",
+      "- Never use meta-writing language such as \"I have described\", \"I described\", \"as described\", \"the evidence shows\", \"this section shows\", \"work surface\", or \"concrete bridge\".",
       "- Do not use \"this role,\" \"your needs,\" \"helps with,\" \"can help,\" \"can contribute,\" \"translates,\" \"aligns,\" \"smoothly,\" or \"efficiently.\"",
+      "- Do not use \"I can help\" or \"I can support\" in adjacent cases; use a cautious work-context bridge instead.",
       "- Do not explain generic fit; any relevance bridge must be restrained and grounded in both candidate evidence and a JD work surface.",
       "- Every body part should include at least one concrete CV-backed anchor when available.",
       "- If no concrete anchor is available, keep the sentence narrow and factual instead of adding abstract fit language.",
@@ -3043,13 +3113,14 @@ function resolvePremiumCoverLetterBodyPartGuidance(args: {
       "- closeLine: one short sentence restating CV-backed operating strengths only.",
       "- Do not include greeting, signoff, or candidate name in body parts.",
       "- Do not use \"for this role,\" \"in this role,\" the target role title as proof, \"your needs,\" \"helps with,\" \"can help,\" \"can support,\" \"would bring,\" \"would contribute,\" \"ready to,\" \"translates,\" \"aligns,\" \"smoothly,\" or \"efficiently.\"",
+      "- Do not use \"I can help\" or \"I can support\" in adjacent cases; use a cautious work-context bridge instead.",
       "- Every body part should include at least one concrete CV-backed anchor when available.",
       "- If evidence is limited, return shorter body parts instead of filling space.",
     ];
   }
   return [
     "Body-part rules: complete natural sentences only; no greeting, signoff, markdown, bullets, generic excitement, mission praise, defensive gaps, keyword lists, clipped fragments like 'St.' or guessed facility/team names.",
-    "Opening: position through the strongest relevant evidence, not generic fit language. ProofBlock: develop top evidence first. EmployerValueBlock: move directly to an employer-facing implication. Use topResponsibilities before requirements. Never echo preferredQualifications or checklist noise. CloseLine: one short role-specific sentence.",
+    "Opening: position through the strongest relevant evidence, not generic fit language. ProofBlock: develop top evidence first. EmployerValueBlock: move directly to an employer-facing implication from the candidate evidence; do not name company hierarchy, career-growth language, support-staff boilerplate, or the target role title as proof. Use topResponsibilities before requirements. Never echo preferredQualifications or checklist noise. CloseLine: one short role-specific sentence.",
   ];
 }
 
@@ -3142,6 +3213,7 @@ export type PremiumWriterOutputValidationIssue = {
     | "job_demand_as_candidate_experience"
     | "low_value_checklist_as_proof"
     | "company_fluff_as_motivation"
+    | "meta_prose"
     | "empty_section"
     | "greeting_leakage"
     | "signoff_leakage";
@@ -3149,6 +3221,21 @@ export type PremiumWriterOutputValidationIssue = {
   claimId?: string;
   message: string;
   repairable: boolean;
+};
+
+export type PremiumCoverLetterQualityShadowIssueCode =
+  | "meta_prose"
+  | "generic_tone"
+  | "factual_inventory"
+  | "weak_employer_argument"
+  | "low_value_job_echo"
+  | "low_specificity"
+  | "too_verbose";
+
+export type PremiumCoverLetterQualityShadowResult = {
+  passed: boolean;
+  score: number;
+  issues: PremiumCoverLetterQualityShadowIssueCode[];
 };
 
 export function toCoverLetterBodyParts(
@@ -3222,6 +3309,16 @@ function parsePremiumWriterOutputV1(args: {
   };
 }
 
+function parseCoverLetterBodyPartsWriterPayload(rawOutput: unknown): CoverLetterBodyParts {
+  const rawRecord =
+    rawOutput && typeof rawOutput === "object" && !Array.isArray(rawOutput)
+      ? (rawOutput as Record<string, unknown>)
+      : null;
+  return PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(
+    rawRecord?.bodyParts ?? rawOutput,
+  );
+}
+
 export function validatePremiumWriterOutputV1(args: {
   writerOutput: PremiumWriterOutputV1;
   claimPlan: ClaimPlanV1;
@@ -3263,6 +3360,15 @@ export function validatePremiumWriterOutputV1(args: {
         section,
         claimId: assignedClaim?.id,
         message: `${section} contains signoff leakage.`,
+        repairable: true,
+      });
+    }
+    if (WRITER_META_PROSE_PATTERN.test(compact)) {
+      issues.push({
+        code: "meta_prose",
+        section,
+        claimId: assignedClaim?.id,
+        message: `${section} contains writer meta prose.`,
         repairable: true,
       });
     }
@@ -3491,6 +3597,19 @@ export function validatePremiumWriterOutputV1(args: {
   return issues;
 }
 
+function isBlockingPremiumWriterOutputIssue(
+  issue: PremiumWriterOutputValidationIssue,
+): boolean {
+  if (issue.repairable) return false;
+  return ![
+    // These have provider-specific normalization or body-level validation paths below.
+    "unsupported_numeric_claim",
+    "unsupported_ownership_verb",
+    "unsupported_credential_claim",
+    "unsupported_compliance_framework",
+  ].includes(issue.code);
+}
+
 const CLIPPED_SOURCE_FRAGMENT_PATTERN =
   /\b(?:your|the|this|our)\s+(?:St\.?|Ste\.?|Suite|Dept\.?)\s+(?:campus|team|department|facility|security|operations)\b/i;
 const CLIPPED_CAPITAL_SOURCE_FRAGMENT_PATTERN =
@@ -3522,6 +3641,8 @@ const UNSUPPORTED_EDUCATION_CREDENTIAL_PATTERN =
   /\b(?:have|hold|earned|completed|with|bring|meet(?:s|ing)?|a|my)\s+(?:a\s+)?(?:high school diploma|GED|diploma equivalency)\b|\b(?:high school diploma|GED|diploma equivalency)\s+(?:further\s+)?(?:meets?|is|are|supports?)\b/i;
 const FABRICATED_MISSION_CLAIM_PATTERN =
   /\b(?:mission of|mission to|mission is|mission of safeguarding|reimagining healthcare security|contribute to reimagining healthcare|passionate about (?:your|the) mission|drawn to (?:your|the) mission|inspired by (?:your|the) mission|culture fit)\b/i;
+const WRITER_META_PROSE_PATTERN =
+  /\b(?:i have described|i described|as described|as mentioned|as noted|the evidence (?:shows|demonstrates|suggests)|this (?:letter|paragraph|section) (?:shows|demonstrates|describes)|the claim (?:is|shows|demonstrates)|my strongest match|my best match|the strongest evidence|my fit for this role|the main reason i am a fit|work surface|concrete bridge)\b/i;
 const CANDIDATE_LIKE_FULL_NAME_LINE_PATTERN =
   /^[A-Z][A-Za-z'’-]+(?:\s+[A-Z][A-Za-z'’-]+){1,3}$/;
 const PERCENTAGE_NUMERIC_CLAIM_PATTERN =
@@ -3530,7 +3651,7 @@ const DIGIT_NUMERIC_CLAIM_PATTERN = /\b\d+(?:\.\d+)?\b/g;
 const WORD_NUMBER_DURATION_CLAIM_PATTERN =
   /\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:day|days|week|weeks|month|months|year|years)\b/gi;
 const HIGH_OWNERSHIP_VERB_PATTERNS = [
-  { verb: "owned", pattern: /\bown(?:ed|s|ing)?\b/i },
+  { verb: "owned", pattern: /\bown(?:ed|s|ing)\b/i },
   { verb: "managed", pattern: /\bmanag(?:ed|es|ing)\b/i },
   { verb: "led", pattern: /\b(?:led|lead(?:s|ing)?)\b/i },
   { verb: "directed", pattern: /\bdirect(?:ed|s|ing)?\b/i },
@@ -3539,6 +3660,89 @@ const HIGH_OWNERSHIP_VERB_PATTERNS = [
   { verb: "spearheaded", pattern: /\bspearhead(?:ed|s|ing)?\b/i },
   { verb: "transformed", pattern: /\btransform(?:ed|s|ing)?\b/i },
   { verb: "resolved", pattern: /\bresolv(?:ed|es|ing)\b/i },
+] as const;
+const OWNERSHIP_VERB_DOWNGRADES = [
+  {
+    pattern: HIGH_OWNERSHIP_VERB_PATTERNS[0].pattern,
+    replacements: {
+      owned: "handled",
+      owns: "handles",
+      owning: "handling",
+    },
+  },
+  {
+    pattern: HIGH_OWNERSHIP_VERB_PATTERNS[1].pattern,
+    replacements: {
+      managed: "handled",
+      manages: "handles",
+      managing: "handling",
+    },
+  },
+  {
+    pattern: HIGH_OWNERSHIP_VERB_PATTERNS[2].pattern,
+    replacements: {
+      lead: "coordinate",
+      led: "coordinated",
+      leads: "coordinates",
+      leading: "coordinating",
+    },
+  },
+  {
+    pattern: HIGH_OWNERSHIP_VERB_PATTERNS[3].pattern,
+    replacements: {
+      direct: "coordinate",
+      directed: "coordinated",
+      directs: "coordinates",
+      directing: "coordinating",
+    },
+  },
+  {
+    pattern: HIGH_OWNERSHIP_VERB_PATTERNS[4].pattern,
+    replacements: {
+      oversaw: "coordinated",
+      oversee: "coordinate",
+      overseen: "coordinated",
+      oversees: "coordinates",
+      overseeing: "coordinating",
+    },
+  },
+  {
+    pattern: HIGH_OWNERSHIP_VERB_PATTERNS[5].pattern,
+    replacements: {
+      drove: "supported",
+      drive: "support",
+      driven: "supported",
+      drives: "supports",
+      driving: "supporting",
+    },
+  },
+  {
+    pattern: HIGH_OWNERSHIP_VERB_PATTERNS[6].pattern,
+    replacements: {
+      spearhead: "support",
+      spearheaded: "supported",
+      spearheads: "supports",
+      spearheading: "supporting",
+    },
+  },
+  {
+    pattern: HIGH_OWNERSHIP_VERB_PATTERNS[7].pattern,
+    replacements: {
+      transform: "work on",
+      transformed: "worked on",
+      transforms: "works on",
+      transforming: "working on",
+    },
+  },
+  {
+    pattern: HIGH_OWNERSHIP_VERB_PATTERNS[8].pattern,
+    replacements: {
+      resolve: "address",
+      resolved: "addressed",
+      resolves: "addresses",
+      resolving: "addressing",
+    },
+  },
 ] as const;
 
 function buildValidationSourceSurface(args: { brief: CoverLetterBrief }): string {
@@ -3617,6 +3821,40 @@ function hasUnsupportedOwnershipVerb(args: {
       pattern.test(args.generatedText) &&
       !pattern.test(args.candidateEvidenceSurface),
   );
+}
+
+function preserveReplacementCasing(source: string, replacement: string): string {
+  if (/^[A-Z]/.test(source)) {
+    return replacement.charAt(0).toUpperCase() + replacement.slice(1);
+  }
+  return replacement;
+}
+
+function downgradeUnsupportedOwnershipVerbs(args: {
+  value: string;
+  brief: CoverLetterBrief;
+}): string {
+  const candidateEvidenceSurface = buildCandidateEvidenceSurface({
+    brief: args.brief,
+  });
+  let value = args.value;
+  for (const downgrade of OWNERSHIP_VERB_DOWNGRADES) {
+    if (!downgrade.pattern.test(value) || downgrade.pattern.test(candidateEvidenceSurface)) {
+      continue;
+    }
+    const globalPattern = new RegExp(
+      downgrade.pattern.source,
+      downgrade.pattern.flags.includes("i") ? "gi" : "g",
+    );
+    value = value.replace(globalPattern, (match) => {
+      const replacement =
+        downgrade.replacements[
+          match.toLowerCase() as keyof typeof downgrade.replacements
+        ];
+      return replacement ? preserveReplacementCasing(match, replacement) : match;
+    });
+  }
+  return value;
 }
 
 function firstPersonEvidenceSentence(value: string): string {
@@ -3781,6 +4019,380 @@ function adjacentOperatingAnchors(brief: CoverLetterBrief): string[] {
     : ["clear records", "steady communication", "consistent follow-through"];
 }
 
+type PremiumWorkSurfaceId =
+  | "reporting_documentation"
+  | "customer_success_retention"
+  | "operations_scheduling"
+  | "revenue_forecasting"
+  | "facilities_maintenance"
+  | "security_observation";
+
+type PremiumWorkSurfaceDefinition = {
+  id: PremiumWorkSurfaceId;
+  evidencePattern: RegExp;
+  jobPattern: RegExp;
+  contextPhrase: string;
+  anchorPhrase: string;
+};
+
+const PREMIUM_WORK_SURFACE_DEFINITIONS = [
+  {
+    id: "customer_success_retention",
+    evidencePattern:
+      /\b(?:customer success|account health|retention|onboarding|qbrs?|quarterly business reviews?|at-risk accounts?|escalation triggers?|customer health)\b/i,
+    jobPattern:
+      /\b(?:customer success|account health|retention|onboarding|qbrs?|quarterly business reviews?|expansion|churn|customer reporting)\b/i,
+    contextPhrase: "customer success and retention work",
+    anchorPhrase: "clear account signals and consistent follow-through",
+  },
+  {
+    id: "revenue_forecasting",
+    evidencePattern:
+      /\b(?:revenue operations?|forecast(?:s|ing)?|pipeline|salesforce|crm|dashboard|operating cadence|sales|finance)\b/i,
+    jobPattern:
+      /\b(?:revenue operations?|forecast(?:s|ing)?|pipeline|salesforce|crm|dashboard|operating cadence|sales|finance)\b/i,
+    contextPhrase: "revenue reporting and forecasting",
+    anchorPhrase: "clear reporting cadence and reliable operating visibility",
+  },
+  {
+    id: "facilities_maintenance",
+    evidencePattern:
+      /\b(?:facilities|maintenance|work-?order|service records?|repairs?|equipment|request routing)\b/i,
+    jobPattern:
+      /\b(?:facilities|maintenance|work-?order|service records?|repairs?|equipment)\b/i,
+    contextPhrase: "facilities and maintenance coordination",
+    anchorPhrase: "current service records and timely follow-up",
+  },
+  {
+    id: "security_observation",
+    evidencePattern:
+      /\b(?:security|guard|patrols?|surveillance|cctv|observation|observe|monitor(?:ed|ing)?|witness(?:es)?|access control|grounds?)\b/i,
+    jobPattern:
+      /\b(?:security|guard|patrols?|surveillance|cctv|observation|observe|monitor(?:ed|ing)?|witness(?:es)?|access control|site safety|incident response)\b/i,
+    contextPhrase: "security observation and patrol work",
+    anchorPhrase: "careful observation and clear records",
+  },
+  {
+    id: "reporting_documentation",
+    evidencePattern:
+      /\b(?:reports?|reporting|records?|documentation|documents?|documented|logs?|notes?|observations?|occurrences?|surveillance activit(?:y|ies))\b/i,
+    jobPattern:
+      /\b(?:reports?|reporting|records?|documentation|documents?|documented|logs?|notes?|observations?|incidents?|status)\b/i,
+    contextPhrase: "reporting and documentation",
+    anchorPhrase: "accurate records and clear handoffs",
+  },
+  {
+    id: "operations_scheduling",
+    evidencePattern:
+      /\b(?:operations?|scheduling|schedule|coordination|coordinate|handoffs?|follow-up|track(?:ed|ing)?|intake|workflow|process)\b/i,
+    jobPattern:
+      /\b(?:operations?|scheduling|schedule|coordination|coordinate|handoffs?|follow-up|track(?:ed|ing)?|intake|workflow|process)\b/i,
+    contextPhrase: "operations and scheduling",
+    anchorPhrase: "organized coordination and steady follow-through",
+  },
+] as const satisfies readonly PremiumWorkSurfaceDefinition[];
+
+function collectCandidateSurfaceText(brief: CoverLetterBrief): string {
+  return [
+    ...brief.topEvidence,
+    ...brief.supportEvidence,
+    ...(brief.transferCore ?? []),
+  ].join(" ");
+}
+
+function collectJobSurfaceText(brief: CoverLetterBrief): string {
+  return [
+    brief.targetRole,
+    ...(brief.topResponsibilities ?? []),
+    ...(brief.keyRequirements ?? []),
+    ...(brief.workContext ?? []),
+  ].join(" ");
+}
+
+function resolvePremiumWorkSurfaces(
+  brief: CoverLetterBrief,
+): PremiumWorkSurfaceDefinition[] {
+  const candidateSurfaceText = collectCandidateSurfaceText(brief);
+  const jobSurfaceText = collectJobSurfaceText(brief);
+  const candidateMatches = PREMIUM_WORK_SURFACE_DEFINITIONS.filter((surface) =>
+    surface.evidencePattern.test(candidateSurfaceText),
+  );
+  const jobMatches = PREMIUM_WORK_SURFACE_DEFINITIONS.filter((surface) =>
+    surface.jobPattern.test(jobSurfaceText),
+  );
+  const jobIds = new Set(jobMatches.map((surface) => surface.id));
+  const overlapping = candidateMatches.filter((surface) => jobIds.has(surface.id));
+
+  if (overlapping.length > 0) return overlapping;
+  if (brief.contextClass === "no_cv" && jobMatches.length > 0) return jobMatches;
+  if (candidateMatches.length > 0) return candidateMatches;
+  return jobMatches;
+}
+
+function buildWorkSurfaceEmployerValueBridge(brief: CoverLetterBrief): string {
+  const surfaces = resolvePremiumWorkSurfaces(brief);
+  const primarySurface = surfaces[0];
+  const anchors = primarySurface
+    ? [primarySurface.anchorPhrase]
+    : adjacentOperatingAnchors(brief).slice(0, 3);
+  const anchorText = listAsNaturalText(anchors);
+  const contextText = (primarySurface?.contextPhrase ?? "the work").replace(
+    /\s+work$/i,
+    "",
+  );
+  const riskPhrase = primarySurface
+    ? `small misses in ${contextText} can become unclear handoffs or unresolved site issues`
+    : "small misses can become unclear handoffs or unresolved site issues";
+
+  if (brief.contextClass === "no_cv") {
+    return `The role points to ${contextText} work that calls for ${anchorText}.`;
+  }
+
+  if (brief.contextClass === "cv_adjacent") {
+    return `In ${contextText} work, that kind of background supports ${anchorText} without turning small issues into unclear handoffs.`;
+  }
+
+  return `In ${contextText} work, that background supports ${anchorText}.`;
+}
+
+function shouldReplaceLowValueEmployerValueBlock(value: string): boolean {
+  const normalized = compactWhitespace(value);
+  return Boolean(normalized) && LOW_VALUE_JOB_ECHO_PATTERN.test(normalized);
+}
+
+function cleanPremiumBodyPartProse(value: string): string {
+  const withoutSignatureLines = value
+    .split(/\n+/)
+    .map((line) => compactWhitespace(line))
+    .filter(
+      (line) =>
+        line &&
+        !SIGNOFF_PATTERN.test(line) &&
+        !CANDIDATE_LIKE_FULL_NAME_LINE_PATTERN.test(line),
+    )
+    .join(" ");
+  let cleaned = compactWhitespace(withoutSignatureLines)
+    .replace(/\bwork\s+surfaces?\b/gi, "work")
+    .replace(
+      /\bthat\s+gives\s+the\s+letter\s+a\s+concrete\s+bridge\s+to\b/gi,
+      "that connects to",
+    )
+    .replace(
+      /\bthe\s+letter\s+has\s+a\s+concrete\s+bridge\s+to\b/gi,
+      "that connects to",
+    );
+
+  for (const replacement of REPORTING_BODY_PART_CLEANUP_REPLACEMENTS) {
+    cleaned = cleaned.replace(replacement.pattern, replacement.replacement);
+  }
+
+  return cleaned;
+}
+
+function cleanPremiumWriterOutputText(
+  writerOutput: PremiumWriterOutputV1,
+): PremiumWriterOutputV1 {
+  return {
+    ...writerOutput,
+    bodyParts: {
+      opening: {
+        ...writerOutput.bodyParts.opening,
+        text: cleanPremiumBodyPartProse(writerOutput.bodyParts.opening.text),
+      },
+      proofBlock: {
+        ...writerOutput.bodyParts.proofBlock,
+        text: cleanPremiumBodyPartProse(writerOutput.bodyParts.proofBlock.text),
+      },
+      employerValueBlock: {
+        ...writerOutput.bodyParts.employerValueBlock,
+        text: cleanPremiumBodyPartProse(
+          writerOutput.bodyParts.employerValueBlock.text,
+        ),
+      },
+      closeLine: {
+        ...writerOutput.bodyParts.closeLine,
+        text: cleanPremiumBodyPartProse(writerOutput.bodyParts.closeLine.text),
+      },
+    },
+  };
+}
+
+function normalizeProviderWriterOutputProvenance(args: {
+  writerOutput: PremiumWriterOutputV1;
+  claimPlan: ClaimPlanV1;
+  factGraph: FactGraphV1;
+  jobDemandGraph: JobDemandGraphV1;
+  writerProvider?: PremiumCoverLetterWriterProvider;
+  writerModel?: string;
+}): PremiumWriterOutputV1 {
+  if (
+    !isMistralWriterIdentity(args) &&
+    !isQwenWriterIdentity(args)
+  ) {
+    return args.writerOutput;
+  }
+
+  const factIds = new Set(args.factGraph.facts.map((fact) => fact.id));
+  const demandIds = new Set(args.jobDemandGraph.demands.map((demand) => demand.id));
+  const normalizedParts = { ...args.writerOutput.bodyParts };
+
+  for (const section of CLAIM_PLAN_SECTIONS) {
+    const part = args.writerOutput.bodyParts[section];
+    const assignedClaim = claimForSection(args.claimPlan, section);
+    if (!assignedClaim) continue;
+
+    const claimIdsNeedNormalization =
+      part.claimIds.length === 0 ||
+      part.claimIds.some((claimId) => claimId !== assignedClaim.id);
+    const factIdsNeedNormalization = part.factIds.some(
+      (factId) =>
+        !factIds.has(factId) || !assignedClaim.factIds.includes(factId),
+    );
+    const demandIdsNeedNormalization = part.demandIds.some(
+      (demandId) =>
+        !demandIds.has(demandId) || !assignedClaim.demandIds.includes(demandId),
+    );
+
+    normalizedParts[section] = {
+      ...part,
+      claimIds: claimIdsNeedNormalization ? [assignedClaim.id] : part.claimIds,
+      factIds: factIdsNeedNormalization ? assignedClaim.factIds : part.factIds,
+      demandIds: demandIdsNeedNormalization
+        ? assignedClaim.demandIds
+        : part.demandIds,
+    };
+  }
+
+  return {
+    ...args.writerOutput,
+    bodyParts: normalizedParts,
+  };
+}
+
+function lowerUnsupportedOwnershipVerbs(args: {
+  value: string;
+  brief: CoverLetterBrief;
+}): string {
+  const candidateEvidenceSurface = buildCandidateEvidenceSurface({
+    brief: args.brief,
+  });
+  let value = args.value;
+  const sourceSupports = (pattern: RegExp) => pattern.test(candidateEvidenceSurface);
+
+  if (!sourceSupports(/\bown(?:ed|s|ing)?\b/i)) {
+    value = value
+      .replace(/\bowned\b/gi, "handled")
+      .replace(/\bowning\b/gi, "handling")
+      .replace(/\bowns\b/gi, "handles");
+  }
+  if (!sourceSupports(/\bmanag(?:ed|es|ing)\b/i)) {
+    value = value
+      .replace(/\bmanaged\b/gi, "handled")
+      .replace(/\bmanaging\b/gi, "handling")
+      .replace(/\bmanages\b/gi, "handles");
+  }
+  if (!sourceSupports(/\b(?:led|lead(?:s|ing)?)\b/i)) {
+    value = value
+      .replace(/\bled\b/gi, "coordinated")
+      .replace(/\bleading\b/gi, "coordinating")
+      .replace(/\bleads\b/gi, "coordinates")
+      .replace(/\blead\b/gi, "coordinate");
+  }
+  if (!sourceSupports(/\bdirect(?:ed|s|ing)?\b/i)) {
+    value = value
+      .replace(/\bdirected\b/gi, "coordinated")
+      .replace(/\bdirecting\b/gi, "coordinating")
+      .replace(/\bdirects\b/gi, "coordinates")
+      .replace(/\bdirect\b/gi, "coordinate");
+  }
+  if (!sourceSupports(/\b(?:oversaw|oversee(?:s|ing)?|overseen)\b/i)) {
+    value = value
+      .replace(/\boversaw\b/gi, "coordinated")
+      .replace(/\boverseeing\b/gi, "coordinating")
+      .replace(/\boversees\b/gi, "coordinates")
+      .replace(/\boverseen\b/gi, "coordinated")
+      .replace(/\boversee\b/gi, "coordinate");
+  }
+  if (!sourceSupports(/\b(?:drove|drive(?:s|n|ing)?)\b/i)) {
+    value = value
+      .replace(/\bdrove\b/gi, "supported")
+      .replace(/\bdriven\b/gi, "supported")
+      .replace(/\bdriving\b/gi, "supporting")
+      .replace(/\bdrives\b/gi, "supports")
+      .replace(/\bdrive\b/gi, "support");
+  }
+  if (!sourceSupports(/\bspearhead(?:ed|s|ing)?\b/i)) {
+    value = value
+      .replace(/\bspearheaded\b/gi, "supported")
+      .replace(/\bspearheading\b/gi, "supporting")
+      .replace(/\bspearheads\b/gi, "supports")
+      .replace(/\bspearhead\b/gi, "support");
+  }
+  if (!sourceSupports(/\btransform(?:ed|s|ing)\b/i)) {
+    value = value
+      .replace(/\btransformed\b/gi, "worked on")
+      .replace(/\btransforming\b/gi, "working on")
+      .replace(/\btransforms\b/gi, "works on");
+  }
+  if (!sourceSupports(/\bresolv(?:ed|es|ing)\b/i)) {
+    value = value
+      .replace(/\bresolved\b/gi, "addressed")
+      .replace(/\bresolving\b/gi, "addressing")
+      .replace(/\bresolves\b/gi, "addresses");
+  }
+
+  return value;
+}
+
+function normalizeBodyPartRepetitionKey(value: string): string {
+  return normalizeProposalConstraintText(value)
+    .split(/\s+/)
+    .filter((token) => token.length > 3 && !STOPWORDS.has(token))
+    .join(" ");
+}
+
+function isRepeatedBodyPartSentence(
+  sentence: string,
+  previousSentences: string[],
+): boolean {
+  const normalized = normalizeBodyPartRepetitionKey(sentence);
+  if (!normalized) return false;
+  const tokenCount = normalized.split(/\s+/).filter(Boolean).length;
+  if (tokenCount < 6) return false;
+  return previousSentences.some((previous) => {
+    const previousNormalized = normalizeBodyPartRepetitionKey(previous);
+    if (!previousNormalized) return false;
+    return (
+      previousNormalized === normalized ||
+      previousNormalized.includes(normalized) ||
+      normalized.includes(previousNormalized)
+    );
+  });
+}
+
+function removeRepeatedBodyPartSentences(
+  bodyParts: CoverLetterBodyParts,
+): CoverLetterBodyParts {
+  const previousSentences: string[] = [];
+  const cleanPart = (value: string): string => {
+    const kept = splitSentences(value).filter((sentence) => {
+      if (isRepeatedBodyPartSentence(sentence, previousSentences)) {
+        return false;
+      }
+      return true;
+    });
+    previousSentences.push(...kept);
+    return kept.length > 0 ? joinSentences(kept) : value;
+  };
+
+  return {
+    opening: cleanPart(bodyParts.opening),
+    proofBlock: cleanPart(bodyParts.proofBlock),
+    employerValueBlock: cleanPart(bodyParts.employerValueBlock),
+    closeLine: cleanPart(bodyParts.closeLine),
+  };
+}
+
 function isReportingEvidence(value: string): boolean {
   return /\b(?:reports?|records?|documents?|documented|logs?|notes?|recording|observations?|occurrences?|witness(?:es)?|interview)\b/i.test(
     value,
@@ -3830,8 +4442,6 @@ function normalizeAdjacentEvidenceOrder(args: {
     : "";
 
   const anchors = adjacentOperatingAnchors(args.brief);
-  const workSurfaces = selectAdjacentWorkSurfaces(args.brief);
-  const workSurfaceText = listAsNaturalText(workSurfaces);
   const anchorText = listAsNaturalText(anchors);
   const opening =
     reportingSentence && durationContext
@@ -3843,7 +4453,7 @@ function normalizeAdjacentEvidenceOrder(args: {
     reportingSentence && monitoringSentence
       ? [
           `That reporting came from active monitoring, including ${adjacentActionPhrase(monitoringSentence)}${roleCompanyContext ? ` ${roleCompanyContext}` : ""}`,
-          "The point was not only to observe the work surface, but to leave a clear factual record for the next handoff",
+          "I kept the observation work tied to a clear factual record for the next handoff",
         ]
       : [
           ...evidenceSentences
@@ -3863,9 +4473,7 @@ function normalizeAdjacentEvidenceOrder(args: {
     opening: ensureSentenceEnding(opening),
     proofBlock: joinSentences(proofSentences),
     employerValueBlock: ensureSentenceEnding(
-      workSurfaceText
-        ? `For an environment built around ${workSurfaceText}, that background matters because facts need to be noticed, written clearly, and handed off without confusion`
-        : `That background matters because facts need to be noticed, written clearly, and handed off without confusion`,
+      buildWorkSurfaceEmployerValueBridge(args.brief),
     ),
     closeLine: ensureSentenceEnding(`I bring discipline around ${anchorText}.`),
   };
@@ -4009,6 +4617,9 @@ export function validatePremiumCoverLetterBodyParts(args: {
     if (FABRICATED_MISSION_CLAIM_PATTERN.test(compact)) {
       issues.push({ code: "fabricated_mission_claim", repairable: false });
     }
+    if (WRITER_META_PROSE_PATTERN.test(compact)) {
+      issues.push({ code: "meta_prose", repairable: false });
+    }
     if (hasUnsupportedNumericClaim({ generatedText: compact, sourceSurface })) {
       issues.push({ code: "unsupported_numeric_claim", repairable: false });
     }
@@ -4038,44 +4649,111 @@ export function validatePremiumCoverLetterBodyParts(args: {
   return issues;
 }
 
+export function evaluatePremiumCoverLetterQualityShadow(args: {
+  bodyParts: CoverLetterBodyParts;
+  content: string;
+}): PremiumCoverLetterQualityShadowResult {
+  const issues: PremiumCoverLetterQualityShadowIssueCode[] = [];
+  const bodyParts = PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(args.bodyParts);
+  const content = compactWhitespace(args.content);
+  const bodyText = compactWhitespace(Object.values(bodyParts).join(" "));
+  const sentenceCount = splitSentences(bodyText).length;
+  const employerValue = compactWhitespace(bodyParts.employerValueBlock);
+  const opening = compactWhitespace(bodyParts.opening);
+  const proof = compactWhitespace(bodyParts.proofBlock);
+
+  if (WRITER_META_PROSE_PATTERN.test(bodyText)) {
+    issues.push("meta_prose");
+  }
+  if (
+    /\b(?:excited|thrilled|passionate|perfect fit|strong fit|dream role)\b/i.test(
+      bodyText,
+    )
+  ) {
+    issues.push("generic_tone");
+  }
+  if (
+    /\b(?:that is useful in\b|that matters where|day-to-day depends on|those habits matter|would welcome the chance to (?:discuss|speak)|discuss the position further|discuss the role further)\b/i.test(
+      bodyText,
+    )
+  ) {
+    issues.push("generic_tone");
+  }
+  if (isGenericPremiumClosingLine(bodyParts.closeLine)) {
+    issues.push("generic_tone");
+  }
+  if (
+    /^(?:i|at)\b/i.test(opening) &&
+    /^(?:i|at)\b/i.test(proof) &&
+    !/\b(?:that|this|for|where|because|matters|relevant|role|team|environment|work)\b/i.test(
+      employerValue,
+    )
+  ) {
+    issues.push("factual_inventory");
+  }
+  if (
+    !/\b(?:that|this|for|where|because|matters|relevant|role|team|environment|work|needs?|requires?)\b/i.test(
+      employerValue,
+    )
+  ) {
+    issues.push("weak_employer_argument");
+  }
+  if (LOW_VALUE_JOB_ECHO_PATTERN.test(employerValue)) {
+    issues.push("low_value_job_echo");
+  }
+  if (!/\d|\bAt\s+[A-Z][\w&'.-]+/u.test(content)) {
+    issues.push("low_specificity");
+  }
+  if (content.length > 1900 || sentenceCount > 8) {
+    issues.push("too_verbose");
+  }
+
+  const uniqueIssues = dedupeStrings(
+    issues,
+  ) as PremiumCoverLetterQualityShadowIssueCode[];
+  return {
+    passed: uniqueIssues.length === 0,
+    score: Math.max(0, 100 - uniqueIssues.length * 18),
+    issues: uniqueIssues,
+  };
+}
+
 export function repairPremiumCoverLetterBodyParts(args: {
   bodyParts: CoverLetterBodyParts;
   brief: CoverLetterBrief;
 }): CoverLetterBodyParts {
+  const cleanBodyPart = (value: string) =>
+    dedupeSentenceSequence(
+      downgradeUnsupportedOwnershipVerbs({
+        value: cleanPremiumBodyPartProse(stripGreetingAndSignoffLeakage(value)),
+        brief: args.brief,
+      }),
+    );
   const cleaned: CoverLetterBodyParts = {
-    opening: dedupeSentenceSequence(
-      stripGreetingAndSignoffLeakage(args.bodyParts.opening),
-    ),
-    proofBlock: dedupeSentenceSequence(
-      stripGreetingAndSignoffLeakage(args.bodyParts.proofBlock),
-    ),
-    employerValueBlock: dedupeSentenceSequence(
-      stripGreetingAndSignoffLeakage(args.bodyParts.employerValueBlock),
-    ),
-    closeLine: dedupeSentenceSequence(
-      stripGreetingAndSignoffLeakage(args.bodyParts.closeLine),
-    ),
+    opening: cleanBodyPart(args.bodyParts.opening),
+    proofBlock: cleanBodyPart(args.bodyParts.proofBlock),
+    employerValueBlock: cleanBodyPart(args.bodyParts.employerValueBlock),
+    closeLine: cleanBodyPart(args.bodyParts.closeLine),
   };
 
   if (!compactWhitespace(cleaned.employerValueBlock)) {
-    const workContext = args.brief.workContext?.[0];
     if (getDeterministicCopyLanguage(args.brief.language)) {
       cleaned.employerValueBlock = ensureSentenceEnding(
-        workContext
-          ? args.brief.contextClass === "cv_adjacent"
-            ? `The role's focus on ${workContext.replace(/[.!?]$/u, "")} is where this background is most relevant`
-            : args.brief.contextClass === "no_cv"
-              ? `The role's focus on ${workContext.replace(/[.!?]$/u, "")} is the clearest signal of where careful, consistent work matters most`
-            : `The role's focus on ${workContext.replace(/[.!?]$/u, "")} matches the work reflected in this background`
-          : args.brief.contextClass === "no_cv"
-            ? "The work described in the role is the clearest signal of where careful, consistent work matters most"
-            : "The work described in the role is where this background is most relevant",
+        buildWorkSurfaceEmployerValueBridge(args.brief),
       );
     }
   }
+  if (
+    getDeterministicCopyLanguage(args.brief.language) === "en" &&
+    shouldReplaceLowValueEmployerValueBlock(cleaned.employerValueBlock)
+  ) {
+    cleaned.employerValueBlock = buildWorkSurfaceEmployerValueBridge(args.brief);
+  }
 
   if (!compactWhitespace(cleaned.closeLine)) {
-    cleaned.closeLine = resolveCloseFallback(args.brief.language);
+    cleaned.closeLine =
+      buildEvidenceGroundedCloseLine(args.brief) ||
+      resolveCloseFallback(args.brief.language);
   }
 
   const closeSentences = splitSentences(cleaned.closeLine).map((sentence) =>
@@ -4089,11 +4767,13 @@ export function repairPremiumCoverLetterBodyParts(args: {
     ),
   );
 
+  const deRepeated = removeRepeatedBodyPartSentences(cleaned);
+
   return {
-    opening: ensureSentenceEnding(cleaned.opening),
-    proofBlock: ensureSentenceEnding(cleaned.proofBlock),
-    employerValueBlock: ensureSentenceEnding(cleaned.employerValueBlock),
-    closeLine: ensureSentenceEnding(cleaned.closeLine),
+    opening: ensureSentenceEnding(deRepeated.opening),
+    proofBlock: ensureSentenceEnding(deRepeated.proofBlock),
+    employerValueBlock: ensureSentenceEnding(deRepeated.employerValueBlock),
+    closeLine: ensureSentenceEnding(deRepeated.closeLine),
   };
 }
 
@@ -4107,9 +4787,9 @@ export function renderPremiumCoverLetter(args: {
   );
   const signoff =
     deterministicLanguage === "fr"
-      ? "Cordialement,"
+      ? FRENCH_DEFAULT_SIGNOFF
       : deterministicLanguage === "en"
-        ? "Sincerely,"
+        ? ENGLISH_DEFAULT_SIGNOFF
         : "";
   const salutation =
     deterministicLanguage === "fr"
@@ -4170,6 +4850,54 @@ function hasBridgeWorkSurfaceOverlap(value: string, workSurfaces: string[]): boo
   });
 }
 
+function hasRestrainedEmployerBridgeLanguage(value: string): boolean {
+  return /\b(?:that|this|those|background|experience|operating habits?|discipline)\b[\s\S]{0,90}\b(?:relevant|useful|matters?|fit|fits|depends?|where|environments?)\b/i.test(
+    compactWhitespace(value),
+  );
+}
+
+function startsLowercase(value: string): string {
+  const compact = compactWhitespace(value);
+  if (!compact) return "";
+  return compact.charAt(0).toLowerCase() + compact.slice(1);
+}
+
+function addAdjacentRoleCompanyContextToOpening(args: {
+  opening: string;
+  brief: CoverLetterBrief;
+}): string {
+  const roleCompanyContext = adjacentRoleCompanyContext([
+    ...args.brief.topEvidence,
+    ...args.brief.supportEvidence,
+  ]);
+  if (!roleCompanyContext) return args.opening;
+
+  const existingText = compactWhitespace(
+    [
+      args.opening,
+      args.brief.supportEvidence.join(" "),
+      args.brief.topEvidence.join(" "),
+    ].join(" "),
+  );
+  const parsedContext = roleCompanyContext.match(/\bat\s+(.+)$/i)?.[1] ?? "";
+  const companies = parsedContext
+    .split(/\s+(?:and|,)\s+/)
+    .map((item) => compactWhitespace(item))
+    .filter(Boolean);
+  const openingAlreadyHasCompany = companies.some((company) =>
+    compactWhitespace(args.opening).includes(company),
+  );
+  if (openingAlreadyHasCompany || !existingText) return args.opening;
+
+  const subject = roleCompanySubject(roleCompanyContext).replace(/[.!?]$/u, "");
+  const opening = compactWhitespace(args.opening);
+  if (!opening) return ensureSentenceEnding(subject);
+  if (/^I\b/.test(opening)) {
+    return ensureSentenceEnding(`${subject}, ${opening}`);
+  }
+  return ensureSentenceEnding(`${subject}, ${startsLowercase(opening)}`);
+}
+
 function normalizeMistralAdjacentBridgeBodyParts(args: {
   bodyParts: CoverLetterBodyParts;
   brief: CoverLetterBrief;
@@ -4180,20 +4908,52 @@ function normalizeMistralAdjacentBridgeBodyParts(args: {
 
   const anchors = adjacentOperatingAnchors(args.brief);
   const anchorText = listAsNaturalText(anchors);
-  const workSurfaceText = listAsNaturalText(workSurfaces.slice(0, 3));
-  const employerValueBlock = hasBridgeWorkSurfaceOverlap(
-    args.bodyParts.employerValueBlock,
-    workSurfaces,
-  )
-    ? args.bodyParts.employerValueBlock
-    : `For work centered on ${workSurfaceText}, the overlap is ${anchorText}.`;
+  const existingEmployerValue = compactWhitespace(args.bodyParts.employerValueBlock);
+  const shouldUseDeterministicBridgeFallback =
+    !existingEmployerValue ||
+    shouldReplaceLowValueEmployerValueBlock(existingEmployerValue);
+  const employerValueBlock = shouldUseDeterministicBridgeFallback
+    ? buildWorkSurfaceEmployerValueBridge(args.brief)
+    : args.bodyParts.employerValueBlock;
   const closeLine = /^(?:I|My)\b/i.test(compactWhitespace(args.bodyParts.closeLine))
     ? args.bodyParts.closeLine
     : `I bring discipline around ${anchorText}.`;
 
   return {
     ...args.bodyParts,
+    opening: ensureSentenceEnding(
+      addAdjacentRoleCompanyContextToOpening({
+        opening: args.bodyParts.opening,
+        brief: args.brief,
+      }),
+    ),
     employerValueBlock: ensureSentenceEnding(employerValueBlock),
+    closeLine: ensureSentenceEnding(closeLine),
+  };
+}
+
+function strengthenAdjacentEmployerArgumentBodyParts(args: {
+  bodyParts: CoverLetterBodyParts;
+  brief: CoverLetterBrief;
+}): CoverLetterBodyParts {
+  if (args.brief.contextClass !== "cv_adjacent") return args.bodyParts;
+
+  const anchors = adjacentOperatingAnchors(args.brief);
+  const anchorText = listAsNaturalText(anchors);
+  const opening = addAdjacentRoleCompanyContextToOpening({
+    opening: args.bodyParts.opening,
+    brief: args.brief,
+  });
+  const closeLine = /^(?:I|My)\b/i.test(compactWhitespace(args.bodyParts.closeLine))
+    ? args.bodyParts.closeLine
+    : `I bring discipline around ${anchorText}.`;
+
+  return {
+    ...args.bodyParts,
+    opening: ensureSentenceEnding(opening),
+    employerValueBlock: ensureSentenceEnding(
+      buildWorkSurfaceEmployerValueBridge(args.brief),
+    ),
     closeLine: ensureSentenceEnding(closeLine),
   };
 }
@@ -4339,12 +5099,9 @@ function findPremiumEmbeddedJsonObjectCandidates(content: string): string[] {
   return candidates;
 }
 
-function parsePremiumMistralBodyPartsJson(
-  content: string,
-): CoverLetterBodyParts {
+function parsePremiumMistralWriterJson(content: string): unknown {
   const trimmed = content.trim();
-  const tryParse = (value: string) =>
-    PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(JSON.parse(value));
+  const tryParse = (value: string) => JSON.parse(value) as unknown;
 
   try {
     return tryParse(trimmed);
@@ -4363,7 +5120,7 @@ function parsePremiumMistralBodyPartsJson(
   }
 
   throw new Error(
-    "Mistral premium cover-letter response did not contain one parseable JSON body-parts object.",
+    "Mistral premium cover-letter response did not contain one parseable JSON object.",
   );
 }
 
@@ -4372,7 +5129,7 @@ export async function generatePremiumCoverLetterBodyPartsWithMistral(args: {
   prompt: string;
   writerModel: string;
   signal?: AbortSignal;
-}): Promise<CoverLetterBodyParts> {
+}): Promise<unknown> {
   const model = new ChatMistralAI({
     apiKey: args.apiKey,
     modelName: args.writerModel,
@@ -4381,14 +5138,14 @@ export async function generatePremiumCoverLetterBodyPartsWithMistral(args: {
   const response = await model.invoke(
     [
       new SystemMessage(
-        "Return only a valid JSON object with keys opening, proofBlock, employerValueBlock, and closeLine. Do not include markdown, comments, greeting, signoff, or prose outside JSON.",
+        "Return only a valid JSON object matching the requested schema. Do not include markdown, comments, greeting, signoff, or prose outside JSON. Never write meta-prose such as 'I have described', 'I described', 'as described', 'the evidence shows', 'this section shows', 'work surface', or 'concrete bridge'. Write the actual candidate action directly.",
       ),
       new HumanMessage(args.prompt),
     ],
     args.signal ? ({ signal: args.signal } as any) : undefined,
   );
   const content = extractPremiumMistralText(response.content);
-  return parsePremiumMistralBodyPartsJson(content);
+  return parsePremiumMistralWriterJson(content);
 }
 
 export function buildPremiumCoverLetterOpenAIRequest(args: {
@@ -4445,6 +5202,8 @@ function buildPremiumCoverLetterRepairPrompt(args: {
     "- \"I'd welcome\"",
     "- \"excited\"",
     "- \"eager\"",
+    "- meta-writing such as \"I have described\", \"I described\", \"as described\", \"the evidence shows\", \"this section shows\", \"work surface\", or \"concrete bridge\"",
+    "- unsupported numbers, percentages, durations, team counts, deadlines, or metrics that are not present in the candidate evidence",
     "- business outcome claims not present in candidate evidence",
     "- high-ownership verbs unless the exact verb and scope are present in candidate evidence",
     "- managed, oversaw, owned, drove, directed, resolved, transformed, or spearheaded unless source-backed",
@@ -4487,6 +5246,7 @@ function buildPremiumWriterOutputRepairPrompt(args: {
     "The ClaimPlan owns strategy. Do not choose claims.",
     "Fix only invalid body parts.",
     "Allowed repairs: strip greeting/signoff, dedupe repeated sentences, add punctuation, remove duplicate closeLine from employerValueBlock, or fill empty closeLine with deterministic safe wording only if no unsupported claim is involved.",
+    "Also allowed: remove meta-writing such as 'I have described', 'I described', 'as described', 'the evidence shows', 'this section shows', 'work surface', or 'concrete bridge'; lower unsupported ownership verbs to source-backed lower-ownership verbs.",
     "Not allowed: unknown claim IDs, unknown fact IDs, unknown demand IDs, unsupported metrics, unsupported credentials, unsupported ownership upgrades, no_cv candidate-history claims, job demand as candidate experience, or company fluff as motivation.",
     "Return only PremiumWriterOutputV1 JSON.",
     `Validation issue codes: ${JSON.stringify(args.issues)}`,
@@ -4676,58 +5436,92 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     }),
     claimPlan,
   });
-  let writerOutput = parsedWriterOutput.writerOutput;
-  let writerOutputIssues = parsedWriterOutput.legacyWrapped
-    ? []
-    : validatePremiumWriterOutputV1({
-        writerOutput,
-        claimPlan,
-        factGraph,
-        jobDemandGraph,
-        brief,
-      });
-  if (writerOutputIssues.some((issue) => !issue.repairable)) {
+  let writerOutput = cleanPremiumWriterOutputText(
+    parsedWriterOutput.writerOutput,
+  );
+  writerOutput = normalizeProviderWriterOutputProvenance({
+    writerOutput,
+    claimPlan,
+    factGraph,
+    jobDemandGraph,
+    writerProvider: args.writerProvider,
+    writerModel: args.writerModel,
+  });
+  let writerOutputIssues = validatePremiumWriterOutputV1({
+    writerOutput,
+    claimPlan,
+    factGraph,
+    jobDemandGraph,
+    brief,
+  });
+  const blockingWriterOutputIssues = writerOutputIssues.filter(
+    isBlockingPremiumWriterOutputIssue,
+  );
+  if (blockingWriterOutputIssues.length > 0) {
     args.onFailure?.({
       stage: "validation",
       reason: "non_repairable_validation",
       contextClass,
-      issues: writerOutputIssues.map((issue) => issue.code),
+      issues: blockingWriterOutputIssues.map((issue) => issue.code),
     });
     return null;
   }
-  if (writerOutputIssues.length > 0) {
+  let repairableWriterOutputIssues = parsedWriterOutput.legacyWrapped
+    ? []
+    : writerOutputIssues.filter((issue) => issue.repairable);
+  if (repairableWriterOutputIssues.length > 0) {
     const repairedParsedWriterOutput = parsePremiumWriterOutputV1({
       rawOutput: await args.writer({
         prompt: buildPremiumWriterOutputRepairPrompt({
           brief,
           previousWriterOutput: writerOutput,
-          issues: writerOutputIssues.map((issue) => issue.code),
+          issues: repairableWriterOutputIssues.map((issue) => issue.code),
         }),
         schema: PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
         signal: args.signal,
       }),
       claimPlan,
     });
-    const repairedWriterOutput = repairedParsedWriterOutput.writerOutput;
-    writerOutputIssues = repairedParsedWriterOutput.legacyWrapped
+    const repairedWriterOutput = cleanPremiumWriterOutputText(
+      repairedParsedWriterOutput.writerOutput,
+    );
+    const normalizedRepairedWriterOutput = normalizeProviderWriterOutputProvenance({
+      writerOutput: repairedWriterOutput,
+      claimPlan,
+      factGraph,
+      jobDemandGraph,
+      writerProvider: args.writerProvider,
+      writerModel: args.writerModel,
+    });
+    writerOutputIssues = validatePremiumWriterOutputV1({
+      writerOutput: normalizedRepairedWriterOutput,
+      claimPlan,
+      factGraph,
+      jobDemandGraph,
+      brief,
+    });
+    const repairedBlockingWriterOutputIssues = writerOutputIssues.filter(
+      isBlockingPremiumWriterOutputIssue,
+    );
+    repairableWriterOutputIssues = repairedParsedWriterOutput.legacyWrapped
       ? []
-      : validatePremiumWriterOutputV1({
-          writerOutput: repairedWriterOutput,
-          claimPlan,
-          factGraph,
-          jobDemandGraph,
-          brief,
-        });
-    if (writerOutputIssues.length > 0) {
+      : writerOutputIssues.filter((issue) => issue.repairable);
+    if (
+      repairedBlockingWriterOutputIssues.length > 0 ||
+      repairableWriterOutputIssues.length > 0
+    ) {
       args.onFailure?.({
         stage: "validation",
         reason: "repair_failed_validation",
         contextClass,
-        issues: writerOutputIssues.map((issue) => issue.code),
+        issues: [
+          ...repairedBlockingWriterOutputIssues,
+          ...repairableWriterOutputIssues,
+        ].map((issue) => issue.code),
       });
       return null;
     }
-    writerOutput = repairedWriterOutput;
+    writerOutput = normalizedRepairedWriterOutput;
   }
 
   let bodyParts = PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(
@@ -4736,14 +5530,6 @@ export async function attemptPremiumCoverLetterGeneration(args: {
 
   let issues = validatePremiumCoverLetterBodyParts({ bodyParts, brief });
   const issueCodes = summarizeValidationIssueCodes(issues);
-  const shouldRetryAdjacentDirectFit =
-    brief.contextClass === "cv_adjacent" &&
-    issueCodes.includes("adjacent_direct_fit");
-  const shouldRetryMistralUnsupportedOwnership =
-    isMistralWriterIdentity({
-      writerProvider: args.writerProvider,
-      writerModel: args.writerModel,
-    }) && issueCodes.includes("unsupported_ownership_verb");
   const shouldTryAdjacentEvidenceNormalization =
     brief.contextClass === "cv_adjacent" &&
     !isQwenWriterIdentity({
@@ -4777,22 +5563,61 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   }
 
   if (issues.some((issue) => !issue.repairable)) {
-    if (!shouldRetryAdjacentDirectFit && !shouldRetryMistralUnsupportedOwnership) {
+    const remainingIssueCodes = summarizeValidationIssueCodes(issues);
+    if (
+      remainingIssueCodes.includes("unsupported_ownership_verb") &&
+      !isQwenWriterIdentity({
+        writerProvider: args.writerProvider,
+        writerModel: args.writerModel,
+      })
+    ) {
+      const ownershipRepairedBodyParts = repairPremiumCoverLetterBodyParts({
+        bodyParts,
+        brief,
+      });
+      const ownershipRepairedIssues = validatePremiumCoverLetterBodyParts({
+        bodyParts: ownershipRepairedBodyParts,
+        brief,
+      });
+      if (ownershipRepairedIssues.length === 0) {
+        bodyParts = ownershipRepairedBodyParts;
+        issues = [];
+      }
+    }
+  }
+
+  if (issues.some((issue) => !issue.repairable)) {
+    const remainingIssueCodes = summarizeValidationIssueCodes(issues);
+    const shouldRetryRemainingAdjacentDirectFit =
+      brief.contextClass === "cv_adjacent" &&
+      remainingIssueCodes.includes("adjacent_direct_fit");
+    const shouldRetryRemainingMistralUnsupportedOwnership =
+      isMistralWriterIdentity({
+        writerProvider: args.writerProvider,
+        writerModel: args.writerModel,
+      }) && remainingIssueCodes.includes("unsupported_ownership_verb");
+    const shouldRetryRemainingMetaProse =
+      remainingIssueCodes.includes("meta_prose");
+    if (
+      !shouldRetryRemainingAdjacentDirectFit &&
+      !shouldRetryRemainingMistralUnsupportedOwnership &&
+      !shouldRetryRemainingMetaProse
+    ) {
       args.onFailure?.({
         stage: "validation",
         reason: "non_repairable_validation",
         contextClass,
-        issues: issueCodes,
+        issues: remainingIssueCodes,
       });
       return null;
     }
 
-    const repairedBodyParts = PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(
+    const repairedBodyParts = parseCoverLetterBodyPartsWriterPayload(
       await args.writer({
         prompt: buildPremiumCoverLetterRepairPrompt({
           brief,
           previousBodyParts: bodyParts,
-          issues: issueCodes,
+          issues: remainingIssueCodes,
         }),
         schema: PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA,
         signal: args.signal,
@@ -4811,7 +5636,6 @@ export async function attemptPremiumCoverLetterGeneration(args: {
       });
       return null;
     }
-
     bodyParts = repairedBodyParts;
   } else if (issues.length > 0) {
     bodyParts = repairPremiumCoverLetterBodyParts({ bodyParts, brief });
@@ -4825,6 +5649,18 @@ export async function attemptPremiumCoverLetterGeneration(args: {
       });
       return null;
     }
+  }
+
+  const qualityCleanedBodyParts = repairPremiumCoverLetterBodyParts({
+    bodyParts,
+    brief,
+  });
+  const qualityCleanedIssues = validatePremiumCoverLetterBodyParts({
+    bodyParts: qualityCleanedBodyParts,
+    brief,
+  });
+  if (qualityCleanedIssues.length === 0) {
+    bodyParts = qualityCleanedBodyParts;
   }
 
   if (
@@ -4851,6 +5687,10 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     outputLanguage: args.outputLanguage,
     candidateName: args.candidateName,
   });
+  const qualityShadow = evaluatePremiumCoverLetterQualityShadow({
+    bodyParts,
+    content: rendered.content,
+  });
   if (
     !hasExpectedCandidateSignature({
       content: rendered.content,
@@ -4874,6 +5714,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     brief,
     contextClass,
     bodyParts,
+    qualityShadow,
     mode:
       contextClass === "cv_direct"
         ? "direct"

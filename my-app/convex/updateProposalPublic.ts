@@ -79,7 +79,10 @@ const proposalClosingChoice = v.object({
     v.literal("settings"),
     v.literal("document"),
     v.literal("legacy"),
+    v.literal("language_default"),
+    v.literal("custom"),
   ),
+  closingNeedsUserChoice: v.optional(v.boolean()),
   handwrittenSignatureEnabled: v.optional(v.boolean()),
 });
 
@@ -277,6 +280,12 @@ export default mutation({
         actualModelType: v.optional(v.string()),
         actualModelName: v.optional(v.string()),
         fallbackTriggerCode: v.optional(v.string()),
+        premium_path_saved: v.optional(v.union(v.boolean(), v.null())),
+        premium_validation_passed: v.optional(v.union(v.boolean(), v.null())),
+        premium_quality_shadow_passed: v.optional(
+          v.union(v.boolean(), v.null()),
+        ),
+        premium_quality_gate_passed: v.optional(v.union(v.boolean(), v.null())),
         requestedLanguage: v.optional(v.union(v.string(), v.null())),
         resolvedLanguage: v.optional(v.union(v.string(), v.null())),
         languageSource: v.optional(v.string()),

@@ -1,7 +1,7 @@
 import React from "react";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
@@ -10,6 +10,7 @@ import {
   ProposalForgeTopbarProvider,
   type ProposalForgeTopbarDocumentState,
   type ProposalForgeTopbarRegistration,
+  useProposalForgeTopbarRegistration,
   useRegisterProposalForgeTopbar,
 } from "../contexts/ProposalForgeTopbarContext";
 
@@ -46,6 +47,20 @@ function RegisterProposalTopbar({
   return null;
 }
 
+function ProposalTopbarRegistrationProbe({
+  onRegistration,
+}: {
+  onRegistration: (registration: ProposalForgeTopbarRegistration | null) => void;
+}): null {
+  const registration = useProposalForgeTopbarRegistration();
+
+  React.useEffect(() => {
+    onRegistration(registration);
+  }, [onRegistration, registration]);
+
+  return null;
+}
+
 function renderProposalTopbar(
   registration: Partial<ProposalForgeTopbarRegistration> = {},
 ) {
@@ -77,6 +92,27 @@ function renderProposalTopbar(
       </ProposalForgeTopbarProvider>
     </MemoryRouter>,
   );
+}
+
+function buildProposalTopbarRegistration(
+  registration: Partial<ProposalForgeTopbarRegistration> = {},
+): ProposalForgeTopbarRegistration {
+  return {
+    documentTitle: "Porphyre cover letter",
+    titlePlaceholder: "Untitled proposal",
+    onTitleCommit: vi.fn(),
+    documentState: "draft",
+    lengthLabel: null,
+    hasProposalContent: true,
+    exporting: false,
+    onNewProposal: vi.fn(),
+    onDuplicateProposal: vi.fn(),
+    onDeleteProposal: vi.fn(),
+    onCopyText: vi.fn(),
+    onExportPdf: vi.fn(),
+    onExportDocx: vi.fn(),
+    ...registration,
+  };
 }
 
 describe("AppTopbar Proposal document identity", () => {
@@ -137,6 +173,50 @@ describe("AppTopbar Proposal document identity", () => {
     fireEvent.keyDown(input, { key: "Enter" });
 
     expect(onTitleCommit).toHaveBeenCalledWith("Renamed proposal");
+  });
+
+  it("does not clear the Proposal topbar registration during registration updates", async () => {
+    const observed: Array<string | null> = [];
+    const onRegistration = vi.fn(
+      (registration: ProposalForgeTopbarRegistration | null) => {
+        observed.push(registration?.documentTitle ?? null);
+      },
+    );
+    const { rerender } = render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForgeTopbarProvider>
+          <RegisterProposalTopbar
+            registration={buildProposalTopbarRegistration({
+              documentTitle: "Initial proposal",
+            })}
+          />
+          <ProposalTopbarRegistrationProbe onRegistration={onRegistration} />
+        </ProposalForgeTopbarProvider>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(observed).toContain("Initial proposal");
+    });
+    observed.length = 0;
+
+    rerender(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForgeTopbarProvider>
+          <RegisterProposalTopbar
+            registration={buildProposalTopbarRegistration({
+              documentTitle: "Updated proposal",
+            })}
+          />
+          <ProposalTopbarRegistrationProbe onRegistration={onRegistration} />
+        </ProposalForgeTopbarProvider>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(observed).toContain("Updated proposal");
+    });
+    expect(observed).not.toContain(null);
   });
 
   it.each([

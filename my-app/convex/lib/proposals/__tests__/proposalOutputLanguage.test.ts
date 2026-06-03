@@ -60,7 +60,8 @@ describe("proposal output language", () => {
       }),
     ).toMatchObject({
       salutation: "Madame, Monsieur,",
-      signOff: "Cordialement,",
+      signOff:
+        "Veuillez agréer, Madame, Monsieur, l'expression de mes salutations distinguées.",
       finalSentence:
         "Je serais disponible pour échanger davantage au sujet du poste.",
       includeCandidateNameLine: true,

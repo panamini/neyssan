@@ -72,6 +72,10 @@ export function useRegisterProposalForgeTopbar(
   React.useEffect(() => {
     if (!setRegistration) return;
     setRegistration(registration);
-    return () => setRegistration(null);
   }, [registration, setRegistration]);
+
+  React.useEffect(() => {
+    if (!setRegistration) return;
+    return () => setRegistration(null);
+  }, [setRegistration]);
 }

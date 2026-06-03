@@ -83,7 +83,7 @@ describe("smoke-live-premium-routing", () => {
     ]);
   });
 
-  it("only treats premium success routing with saved premium tags as proof", () => {
+  it("only treats saved premium routing with current premium metadata as proof", () => {
     const premiumRecord = {
       status: "ok",
       model: "mistral-large-latest",
@@ -93,7 +93,7 @@ describe("smoke-live-premium-routing", () => {
       actualModelName: "mistral-large-latest",
       fallbackTriggerCode: null,
       routing: {
-        attemptedPath: "premium success",
+        attemptedPath: "premium path saved",
         plannedPath: "structured",
         executedPath: "structured",
         fallbackReason: "not_applicable",
@@ -104,10 +104,13 @@ describe("smoke-live-premium-routing", () => {
         premiumFailureContextClass: null,
       },
       savedMetadata: {
+        premium_path_saved: true,
+        premium_validation_passed: true,
+        premium_quality_shadow_passed: false,
         tags: [
           "model:mistral-large-latest",
           "premium_cover_letter_path_v1",
-          "generation_path:premium_success",
+          "generation_path:premium_path_saved",
         ],
       },
       contentPreview: "Dear Hiring Manager",
@@ -122,6 +125,9 @@ describe("smoke-live-premium-routing", () => {
         premiumFailureReason: "repair_failed_validation",
       },
       savedMetadata: {
+        premium_path_saved: false,
+        premium_validation_passed: false,
+        premium_quality_shadow_passed: null,
         tags: [
           "model:mistral-large-latest",
           "generation_path:premium_fail_closed_to_legacy_fallback",
@@ -131,6 +137,25 @@ describe("smoke-live-premium-routing", () => {
 
     expect(smokeRecordProvesPremiumSuccess(premiumRecord)).toBe(true);
     expect(smokeRecordProvesPremiumSuccess(fallbackRecord)).toBe(false);
+    expect(
+      smokeRecordProvesPremiumSuccess({
+        ...premiumRecord,
+        savedMetadata: {
+          ...premiumRecord.savedMetadata,
+          premium_validation_passed: false,
+        },
+      }),
+    ).toBe(false);
+    expect(
+      smokeRecordProvesPremiumSuccess({
+        ...premiumRecord,
+        savedMetadata: {
+          premium_path_saved: true,
+          premium_validation_passed: true,
+          tags: premiumRecord.savedMetadata.tags,
+        },
+      }),
+    ).toBe(false);
     expect(
       smokeRecordProvesPremiumSuccess({
         status: "skipped",

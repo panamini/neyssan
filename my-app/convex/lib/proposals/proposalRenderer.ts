@@ -8,21 +8,24 @@ import type { ProposalVoicePreset } from "./voicePresets";
 
 export const ENGLISH_SALUTATION = "Dear Hiring Manager,";
 export const FRENCH_SALUTATION = "Madame, Monsieur,";
+export const ENGLISH_DEFAULT_SIGNOFF = "Sincerely,";
+export const FRENCH_DEFAULT_SIGNOFF =
+  "Veuillez agréer, Madame, Monsieur, l'expression de mes salutations distinguées.";
 
 export const ENGLISH_SIGNOFFS: Record<ProposalVoicePreset, string> = {
-  signature: "Sincerely,",
-  expert: "Kind regards,",
-  direct: "Best regards,",
-  engaging: "Warm regards,",
-  storyteller: "Warm regards,",
+  signature: ENGLISH_DEFAULT_SIGNOFF,
+  expert: ENGLISH_DEFAULT_SIGNOFF,
+  direct: ENGLISH_DEFAULT_SIGNOFF,
+  engaging: ENGLISH_DEFAULT_SIGNOFF,
+  storyteller: ENGLISH_DEFAULT_SIGNOFF,
 };
 
 export const FRENCH_SIGNOFFS: Record<ProposalVoicePreset, string> = {
-  signature: "Cordialement,",
-  expert: "Bien cordialement,",
-  direct: "Cordialement,",
-  engaging: "Bien cordialement,",
-  storyteller: "Avec mes salutations,",
+  signature: FRENCH_DEFAULT_SIGNOFF,
+  expert: FRENCH_DEFAULT_SIGNOFF,
+  direct: FRENCH_DEFAULT_SIGNOFF,
+  engaging: FRENCH_DEFAULT_SIGNOFF,
+  storyteller: FRENCH_DEFAULT_SIGNOFF,
 };
 
 export const ENGLISH_SAFE_FINAL_SENTENCES = {
@@ -109,6 +112,21 @@ function splitParagraphs(text: string): string[] {
     .filter(Boolean);
 }
 
+function paragraphAlreadyEndsWithFinalSentence(args: {
+  paragraph: string | undefined;
+  normalizedFinalSentence: string;
+}): boolean {
+  if (!args.paragraph || !args.normalizedFinalSentence) {
+    return false;
+  }
+
+  const normalizedParagraph = normalizeProposalConstraintText(args.paragraph);
+  return (
+    normalizedParagraph === args.normalizedFinalSentence ||
+    normalizedParagraph.endsWith(` ${args.normalizedFinalSentence}`)
+  );
+}
+
 const VOICE_PRESET_RENDER_ORDER: ProposalVoicePreset[] = [
   "signature",
   "expert",
@@ -176,8 +194,8 @@ export function getDeterministicProposalRenderPolicy(args: {
     salutation:
       deterministicLanguage === "fr" ? FRENCH_SALUTATION : ENGLISH_SALUTATION,
     signOff: deterministicLanguage === "fr"
-      ? FRENCH_SIGNOFFS[args.voicePreset]
-      : ENGLISH_SIGNOFFS[args.voicePreset],
+      ? FRENCH_DEFAULT_SIGNOFF
+      : ENGLISH_DEFAULT_SIGNOFF,
     ...(finalSentence ? { finalSentence } : {}),
     includeCandidateNameLine: true,
   };
@@ -210,8 +228,10 @@ export function applyDeterministicProposalBoundaries(args: {
   if (
     policy.finalSentence &&
     (paragraphs.length === 0 ||
-      normalizeProposalConstraintText(paragraphs[paragraphs.length - 1]) !==
-        normalizedFinalSentence)
+      !paragraphAlreadyEndsWithFinalSentence({
+        paragraph: paragraphs[paragraphs.length - 1],
+        normalizedFinalSentence,
+      }))
   ) {
     paragraphs.push(policy.finalSentence);
   }

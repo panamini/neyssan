@@ -5,6 +5,7 @@ import { evaluatePremiumCoverLetterEligibility } from "../../../convex/lib/propo
 import {
   aggregateCoverLetterBenchmarkRecords,
   benchmarkCoverLetterCase,
+  parsePremiumBodyPartsJson,
   resolveDefaultCoverLetterBenchmarkWriterModels,
   type CoverLetterBenchmarkRecord,
 } from "../benchmark-cover-letter-writers";
@@ -32,6 +33,18 @@ const successfulEvaluation: CoverLetterScore = {
     hardFailReasons: [],
   },
 };
+
+const emptyManualReview = {
+  humanTone: "unreviewed",
+  noMetaProse: "unreviewed",
+  persuasiveEmployerFacingArgument: "unreviewed",
+  notFactualInventory: "unreviewed",
+  specificity: "unreviewed",
+  grounding: "unreviewed",
+  economy: "unreviewed",
+  commerciallyAcceptable: "unreviewed",
+  reviewerNotes: "",
+} as const;
 
 describe("benchmark-cover-letter-writers", () => {
   it("defaults live benchmark runs to the production writer only unless extra writers are requested", () => {
@@ -71,6 +84,11 @@ describe("benchmark-cover-letter-writers", () => {
         "Reduced overnight response times by 22% by tightening shift handoffs and escalation workflows.",
       ],
       omittedWeakEvidence: [],
+      qualityShadow: {
+        passed: false,
+        score: 4,
+        issues: ["weak_employer_argument"],
+      },
     });
     const evaluateLetter = vi.fn().mockResolvedValue(successfulEvaluation);
 
@@ -107,6 +125,24 @@ describe("benchmark-cover-letter-writers", () => {
           premiumReady: true,
         },
       },
+      diagnostics: {
+        provider: "openai",
+        validationResult: "premium_validation_passed",
+        telemetry: {
+          attemptedPath: "premium path saved",
+          premium_path_saved: true,
+          premium_validation_passed: true,
+          premium_quality_shadow_passed: false,
+        },
+        qualityShadow: {
+          passed: false,
+          score: 4,
+          issues: ["weak_employer_argument"],
+        },
+      },
+      manualReview: emptyManualReview,
+      letter:
+        "Dear Hiring Manager,\n\nI reduced overnight response times by 22% by tightening shift handoffs and escalation workflows.\n\nSincerely,\nDaniel Ruiz",
     });
   });
 
@@ -143,6 +179,11 @@ describe("benchmark-cover-letter-writers", () => {
         "Completed reports by recording observations and surveillance activities.",
       ],
       omittedWeakEvidence: [],
+      qualityShadow: {
+        passed: true,
+        score: 6,
+        issues: [],
+      },
     });
     const evaluateLetter = vi.fn().mockResolvedValue(successfulEvaluation);
 
@@ -172,11 +213,85 @@ describe("benchmark-cover-letter-writers", () => {
     expect(record).toMatchObject({
       status: "ok",
       writerModel: "mistral-medium-latest",
+      diagnostics: {
+        provider: "mistral",
+        telemetry: {
+          premium_path_saved: true,
+          premium_validation_passed: true,
+          premium_quality_shadow_passed: true,
+        },
+      },
       evaluation: {
         gating: {
           premiumReady: true,
         },
       },
+    });
+  });
+
+  it("accepts Mistral body-parts output when it is wrapped in premium writer JSON", () => {
+    expect(
+      parsePremiumBodyPartsJson(
+        JSON.stringify({
+          version: "premium_writer_output_v1",
+          bodyParts: {
+            opening: "Opening.",
+            proofBlock: "Proof.",
+            employerValueBlock: "Employer value.",
+            closeLine: "Close.",
+          },
+        }),
+      ),
+    ).toEqual({
+      opening: "Opening.",
+      proofBlock: "Proof.",
+      employerValueBlock: "Employer value.",
+      closeLine: "Close.",
+    });
+  });
+
+  it("accepts Mistral premium writer output with rich body-part provenance", () => {
+    expect(
+      parsePremiumBodyPartsJson(
+        JSON.stringify({
+          version: "premium_writer_output_v1",
+          bodyParts: {
+            opening: {
+              section: "opening",
+              text: "Opening.",
+              claimIds: ["claim_1"],
+              factIds: ["fact_1"],
+              demandIds: [],
+            },
+            proofBlock: {
+              section: "proofBlock",
+              text: "Proof.",
+              claimIds: ["claim_2"],
+              factIds: ["fact_2"],
+              demandIds: [],
+            },
+            employerValueBlock: {
+              section: "employerValueBlock",
+              text: "Employer value.",
+              claimIds: ["claim_3"],
+              factIds: ["fact_3"],
+              demandIds: ["demand_1"],
+            },
+            closeLine: {
+              section: "closeLine",
+              text: "Close.",
+              claimIds: ["claim_4"],
+              factIds: [],
+              demandIds: [],
+            },
+          },
+        }),
+      ),
+    ).toEqual({
+      opening: "Opening.",
+      proofBlock: "Proof.",
+      employerValueBlock: "Employer value.",
+      closeLine: "Close.",
     });
   });
 
@@ -191,6 +306,24 @@ describe("benchmark-cover-letter-writers", () => {
         expectedContextClass: "cv_direct",
         generation: {} as any,
         evaluation: successfulEvaluation,
+        diagnostics: {
+          provider: "openai",
+          contextClass: "cv_direct",
+          expectedContextClass: "cv_direct",
+          validationResult: "premium_validation_passed",
+          telemetry: {
+            attemptedPath: "premium path saved",
+            premium_path_saved: true,
+            premium_validation_passed: true,
+            premium_quality_shadow_passed: true,
+          },
+          qualityShadow: { passed: true, score: 6, issues: [] },
+          failureStage: null,
+          failureReason: null,
+          failureIssues: [],
+        },
+        manualReview: emptyManualReview,
+        letter: "letter 1",
       },
       {
         status: "ok",
@@ -210,6 +343,28 @@ describe("benchmark-cover-letter-writers", () => {
             hardFailReasons: ["rankMatchesText=false"],
           },
         },
+        diagnostics: {
+          provider: "openai",
+          contextClass: "cv_adjacent",
+          expectedContextClass: "cv_adjacent",
+          validationResult: "premium_validation_passed",
+          telemetry: {
+            attemptedPath: "premium path saved",
+            premium_path_saved: true,
+            premium_validation_passed: true,
+            premium_quality_shadow_passed: false,
+          },
+          qualityShadow: {
+            passed: false,
+            score: 3,
+            issues: ["factual_inventory"],
+          },
+          failureStage: null,
+          failureReason: null,
+          failureIssues: [],
+        },
+        manualReview: emptyManualReview,
+        letter: "letter 2",
       },
       {
         status: "generation_failed",
@@ -219,6 +374,23 @@ describe("benchmark-cover-letter-writers", () => {
         outputLanguage: "English",
         expectedContextClass: "cv_direct",
         error: "Premium generation returned null.",
+        diagnostics: {
+          provider: "openai",
+          contextClass: null,
+          expectedContextClass: "cv_direct",
+          validationResult: "premium_generation_failed",
+          telemetry: {
+            attemptedPath: "premium generation failed",
+            premium_path_saved: false,
+            premium_validation_passed: false,
+            premium_quality_shadow_passed: null,
+          },
+          qualityShadow: null,
+          failureStage: null,
+          failureReason: null,
+          failureIssues: [],
+        },
+        manualReview: emptyManualReview,
       },
     ];
 
@@ -235,6 +407,7 @@ describe("benchmark-cover-letter-writers", () => {
         averageGlobalScore: 3.5,
         premiumReadyCount: 1,
         rankMatchesTextPassCount: 1,
+        qualityShadowPassCount: 1,
         hardFailReasons: [{ reason: "rankMatchesText=false", count: 1 }],
       },
       {
@@ -244,6 +417,7 @@ describe("benchmark-cover-letter-writers", () => {
         averageGlobalScore: null,
         premiumReadyCount: 0,
         rankMatchesTextPassCount: 0,
+        qualityShadowPassCount: 0,
         hardFailReasons: [],
       },
     ]);
@@ -298,6 +472,20 @@ describe("benchmark-cover-letter-writers", () => {
         contextClass: "cv_adjacent",
         issues: ["adjacent_direct_fit"],
       },
+      diagnostics: {
+        provider: "openai",
+        validationResult: "premium_generation_failed",
+        telemetry: {
+          attemptedPath: "premium generation failed",
+          premium_path_saved: false,
+          premium_validation_passed: false,
+          premium_quality_shadow_passed: null,
+        },
+        failureStage: "validation",
+        failureReason: "non_repairable_validation",
+        failureIssues: ["adjacent_direct_fit"],
+      },
+      manualReview: emptyManualReview,
     });
   });
 });

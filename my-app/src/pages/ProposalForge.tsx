@@ -2625,37 +2625,32 @@ export function ProposalForge(): JSX.Element {
     () => JSON.stringify(persistedOutputProposalClosing),
     [persistedOutputProposalClosing],
   );
-  const persistedOutputProposalClosingSnapshot =
-    React.useMemo<ProposalClosingRef | null>(() => {
-      if (!persistedOutputProposalClosingToken) {
-        return null;
-      }
-
-      try {
-        return JSON.parse(persistedOutputProposalClosingToken) as ProposalClosingRef;
-      } catch {
-        return null;
-      }
-    }, [persistedOutputProposalClosingToken]);
-  const [proposalClosingDraft, setProposalClosingDraft] =
-    React.useState<ProposalClosingRef | null>(persistedOutputProposalClosing);
-  const lastSyncedPersistedClosingTokenRef = React.useRef(
-    persistedOutputProposalClosingToken,
+  const persistedOutputDraftClosingBaseToken = React.useMemo(
+    () =>
+      JSON.stringify({
+        generatedProposalId: storedOutputDraft?.generatedProposalId ?? null,
+        proposalContent: storedOutputDraft?.proposalContent ?? null,
+        proposalType: storedOutputDraft?.proposalType ?? null,
+        proposalOutputMode: storedOutputDraft?.proposalOutputMode ?? null,
+        proposalClosing: persistedOutputProposalClosing,
+      }),
+    [
+      persistedOutputProposalClosingToken,
+      storedOutputDraft?.generatedProposalId,
+      storedOutputDraft?.proposalContent,
+      storedOutputDraft?.proposalOutputMode,
+      storedOutputDraft?.proposalType,
+    ],
   );
-  React.useEffect(() => {
-    if (
-      lastSyncedPersistedClosingTokenRef.current ===
-      persistedOutputProposalClosingToken
-    ) {
-      return;
-    }
-
-    lastSyncedPersistedClosingTokenRef.current =
-      persistedOutputProposalClosingToken;
-    setProposalClosingDraft(persistedOutputProposalClosingSnapshot);
-  }, [persistedOutputProposalClosingSnapshot, persistedOutputProposalClosingToken]);
+  const [proposalClosingOverride, setProposalClosingOverride] =
+    React.useState<{
+      baseToken: string;
+      closing: ProposalClosingRef;
+    } | null>(null);
   const storedOutputProposalClosing =
-    proposalClosingDraft ?? persistedOutputProposalClosing;
+    proposalClosingOverride?.baseToken === persistedOutputDraftClosingBaseToken
+      ? proposalClosingOverride.closing
+      : persistedOutputProposalClosing;
   const storedOutputProposalClosingToken = React.useMemo(
     () => JSON.stringify(storedOutputProposalClosing),
     [storedOutputProposalClosing],
@@ -8789,7 +8784,10 @@ export function ProposalForge(): JSX.Element {
         signOff: value,
         source: "custom",
       };
-      setProposalClosingDraft(nextClosing);
+      setProposalClosingOverride({
+        baseToken: persistedOutputDraftClosingBaseToken,
+        closing: nextClosing,
+      });
 
       const latestStoredOutputDraft =
         readStoredProposalOutputDraft() ?? storedOutputDraft;
@@ -8810,6 +8808,7 @@ export function ProposalForge(): JSX.Element {
       proposalOutputMode,
       proposalType,
       proposalVoicePreset,
+      persistedOutputDraftClosingBaseToken,
       storedOutputDraft,
       storedOutputProposalClosing,
       writeStoredOutputDraft,

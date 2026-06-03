@@ -1983,6 +1983,9 @@ describe("ProposalDisplay", () => {
     expect(screen.getByLabelText("Signature / politeness formula")).toHaveValue(
       "Kind regards,",
     );
+    expect(screen.getByLabelText("Closing options")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Sincerely," }));
+    expect(handleSignOffChange).toHaveBeenCalledWith("Sincerely,");
     expect(screen.getByLabelText("Subject")).toHaveValue(
       "Human Resources Administrator",
     );

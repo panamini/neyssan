@@ -109,7 +109,7 @@ describe("proposal generation UI error mapping", () => {
         actualModelName: "mistral-large-latest",
         fallbackTriggerCode: null,
         routing: {
-          attemptedPath: "premium success",
+          attemptedPath: "premium path saved",
           plannedPath: "structured",
           executedPath: "structured",
           fallbackReason: "not_applicable",
@@ -121,7 +121,7 @@ describe("proposal generation UI error mapping", () => {
         },
       }),
     ).toBe(
-      "Generation routing: route premium success; planned structured; executed structured; validator structured_success; save structured_saved.",
+      "Generation routing: route premium path saved; planned structured; executed structured; validator structured_success; save structured_saved.",
     );
   });
 });
