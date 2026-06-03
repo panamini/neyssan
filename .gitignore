@@ -175,3 +175,9 @@ twoweeks/
 twoweeks/.obsidian/workspace.json
 skills/
 .fallow/
+
+# Local Codex/runtime artifacts
+.codex/hooks.json
+codex-mcp-config.json
+data/sdl-mcp-graph.lbug
+data/sdl-mcp-graph.lbug.wal
