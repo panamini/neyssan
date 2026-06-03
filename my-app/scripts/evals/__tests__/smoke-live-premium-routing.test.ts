@@ -107,6 +107,8 @@ describe("smoke-live-premium-routing", () => {
         premium_path_saved: true,
         premium_validation_passed: true,
         premium_quality_shadow_passed: false,
+        executed_path: "structured",
+        save_outcome: "structured_saved",
         tags: [
           "model:mistral-large-latest",
           "premium_cover_letter_path_v1",
@@ -128,15 +130,44 @@ describe("smoke-live-premium-routing", () => {
         premium_path_saved: false,
         premium_validation_passed: false,
         premium_quality_shadow_passed: null,
+        executed_path: "legacy",
+        save_outcome: "legacy_saved_parsed",
         tags: [
           "model:mistral-large-latest",
           "generation_path:premium_fail_closed_to_legacy_fallback",
         ],
       },
     } as const;
+    const controlledGptFallbackRecord = {
+      ...premiumRecord,
+      actualModelType: "chatgpt",
+      actualModelName: "gpt-5.5",
+      fallbackTriggerCode: "premium_mistral_validation_failed",
+      routing: {
+        ...premiumRecord.routing,
+        attemptedPath: "premium Mistral failed to GPT fallback",
+        fallbackReason: "premium_mistral_validation_failed",
+        saveOutcome: "structured_saved",
+      },
+      savedMetadata: {
+        premium_path_saved: false,
+        premium_validation_passed: true,
+        premium_quality_shadow_passed: true,
+        executed_path: "structured",
+        save_outcome: "structured_saved",
+        tags: [
+          "model:chatgpt",
+          "premium_cover_letter_path_v1",
+          "generation_path:premium_mistral_failed_to_gpt_fallback",
+        ],
+      },
+    } as const;
 
     expect(smokeRecordProvesPremiumSuccess(premiumRecord)).toBe(true);
     expect(smokeRecordProvesPremiumSuccess(fallbackRecord)).toBe(false);
+    expect(smokeRecordProvesPremiumSuccess(controlledGptFallbackRecord)).toBe(
+      false,
+    );
     expect(
       smokeRecordProvesPremiumSuccess({
         ...premiumRecord,

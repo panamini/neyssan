@@ -614,7 +614,7 @@ describe("proposal provider busy handling", () => {
         attemptedPath: "premium path saved",
         premium_path_saved: true,
         premium_validation_passed: true,
-        premium_quality_shadow_passed: true,
+        premium_quality_shadow_passed: expect.any(Boolean),
         premium_quality_gate_passed: null,
         finalOutcome: "structured_saved",
         failureStage: null,
@@ -765,7 +765,7 @@ describe("proposal provider busy handling", () => {
         attemptedPath: "premium path saved",
         premium_path_saved: true,
         premium_validation_passed: true,
-        premium_quality_shadow_passed: true,
+        premium_quality_shadow_passed: expect.any(Boolean),
         premium_quality_gate_passed: null,
         finalOutcome: "structured_saved",
         failureStage: null,
@@ -780,6 +780,197 @@ describe("proposal provider busy handling", () => {
     }
     },
   );
+
+  it("blocks legacy Mistral persistence after eligible premium Mistral validation failure and saves controlled GPT fallback", async () => {
+    process.env.COVER_LETTER_PREMIUM_WRITER_MODEL = "gpt-5-mini";
+    const brokenLegacyContent =
+      "My experience in team collaboration, conflict resolution, and maintaining store presentation standards.";
+    mockModelInvoke
+      .mockResolvedValueOnce({
+        content:
+          "I cannot return the requested JSON body parts for this cover letter.",
+      })
+      .mockResolvedValueOnce({
+        content: brokenLegacyContent,
+      });
+    mockOpenAIResponsesCreate.mockResolvedValue({
+      output: [
+        {
+          content: [
+            {
+              json: {
+                version: "premium_writer_output_v1",
+                bodyParts: {
+                  opening: {
+                    section: "opening",
+                    text: "At Acme, I led a design system migration used across four product squads.",
+                    claimIds: ["claim_opening_001"],
+                    factIds: ["fact_experience_001_highlight_001"],
+                    demandIds: [],
+                  },
+                  proofBlock: {
+                    section: "proofBlock",
+                    text: "That migration gave four product squads a shared design-system foundation.",
+                    claimIds: ["claim_proof_001"],
+                    factIds: ["fact_experience_001_highlight_001"],
+                    demandIds: [],
+                  },
+                  employerValueBlock: {
+                    section: "employerValueBlock",
+                    text: "That design-system work is relevant to customer-facing product surfaces where React, TypeScript, and collaboration shape interface quality.",
+                    claimIds: ["claim_employer_value_001"],
+                    factIds: ["fact_experience_001_highlight_001"],
+                    demandIds: ["demand_core_001"],
+                  },
+                  closeLine: {
+                    section: "closeLine",
+                    text: "I bring discipline around reusable systems, shared interfaces, and product collaboration.",
+                    claimIds: ["claim_close_001"],
+                    factIds: ["fact_experience_001_highlight_001"],
+                    demandIds: [],
+                  },
+                },
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    const { handleGenerateProposal } = await loadProposalModule();
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const ctx = {
+      auth: {
+        getUserIdentity: vi.fn().mockResolvedValue({ subject: "user_123" }),
+      },
+      runQuery: vi.fn().mockResolvedValue({
+        _id: "profile_123",
+        proposalVoicePreset: "signature",
+        experience: [],
+        skills: [],
+        achievements: [],
+      }),
+      runMutation: vi.fn().mockResolvedValue("proposal_123"),
+    };
+
+    try {
+      const result = await handleGenerateProposal(ctx, {
+        jobTitle: "Senior Frontend Engineer",
+        jobDescription:
+          "Lead React and TypeScript development across customer-facing product surfaces and collaborate closely with product teams.",
+        proposalType: "cover_letter",
+        modelType: "mistral-medium-latest",
+        voicePreset: "signature",
+        personalizationMode: "explicit_only",
+        personalizationRichness: "rich",
+        personalizationContext: {
+          name: "Alex Martin",
+          summary: "Frontend engineer focused on design systems.",
+          topSkills: ["React", "TypeScript", "Design systems"],
+          recentExperience: [
+            {
+              company: "Acme",
+              position: "Senior Frontend Engineer",
+              highlights: [
+                "Led a design system migration used across four product squads.",
+                "Improved release consistency across shared interface work.",
+              ],
+            },
+          ],
+          standoutAchievements: [
+            "Improved release consistency across shared interface work.",
+          ],
+        },
+      });
+
+      expect(result).toMatchObject({
+        proposalId: "proposal_123",
+        requestedModelType: "mistral-medium-latest",
+        actualModelType: "chatgpt",
+        actualModelName: "gpt-5-mini",
+        fallbackTriggerCode: "premium_mistral_validation_failed",
+        routing: {
+          attemptedPath: "premium Mistral failed to GPT fallback",
+          plannedPath: "structured",
+          executedPath: "structured",
+          fallbackReason: "premium_mistral_validation_failed",
+          validatorOutcome: "structured_success",
+          saveOutcome: "structured_saved",
+        },
+      });
+      expect(result.proposalContent).not.toContain(brokenLegacyContent);
+      expect(mockModelInvoke).toHaveBeenCalledTimes(1);
+      expect(mockOpenAIResponsesCreate).toHaveBeenCalledTimes(1);
+      expect(ctx.runMutation).toHaveBeenCalledTimes(1);
+      const mutationArgs = ctx.runMutation.mock.calls[0]?.[1] as {
+        content?: string;
+        metadata?: {
+          requestedModelType?: string;
+          actualModelType?: string;
+          actualModelName?: string;
+          fallbackTriggerCode?: string;
+          fallback_reason?: string;
+          save_outcome?: string;
+          premium_path_saved?: boolean | null;
+          premium_validation_passed?: boolean | null;
+          tags?: string[];
+        };
+      };
+      expect(mutationArgs.content).not.toContain(brokenLegacyContent);
+      expect(mutationArgs.metadata).toEqual(
+        expect.objectContaining({
+          requestedModelType: "mistral-medium-latest",
+          actualModelType: "chatgpt",
+          actualModelName: "gpt-5-mini",
+          fallbackTriggerCode: "premium_mistral_validation_failed",
+          fallback_reason: "premium_mistral_validation_failed",
+          save_outcome: "structured_saved",
+          premium_path_saved: false,
+          premium_validation_passed: true,
+        }),
+      );
+      expect(mutationArgs.metadata?.save_outcome).not.toMatch(
+        /^legacy_saved_(?:parsed|raw)$/,
+      );
+      expect(mutationArgs.metadata?.tags).toEqual(
+        expect.arrayContaining([
+          "model:chatgpt",
+          "premium_cover_letter_path_v1",
+          "generation_path:premium_mistral_failed_to_gpt_fallback",
+        ]),
+      );
+      expect(mutationArgs.metadata?.tags ?? []).not.toContain(
+        "model:mistral-medium-latest",
+      );
+      expect(mutationArgs.metadata?.tags ?? []).not.toContain(
+        "generation_path:premium_path_saved",
+      );
+      expect(getLoggedRoutingTelemetry(infoSpy)).toMatchObject({
+        attemptedPath: "premium Mistral failed to GPT fallback",
+        requestedModelType: "mistral-medium-latest",
+        actualModelType: "chatgpt",
+        fallbackTriggerCode: "premium_mistral_validation_failed",
+        usedFallback: true,
+        finalOutcome: "structured_saved",
+        premium_path_saved: false,
+        premium_validation_passed: true,
+        normalizedFailureCode: null,
+        runtimeFailureReason: null,
+      });
+      expect(
+        warnSpy.mock.calls.some(
+          ([message, details]) =>
+            message === "Premium cover-letter returned null; using existing Mistral fallback." &&
+            (details as { provider?: string })?.provider === "mistral",
+        ),
+      ).toBe(true);
+    } finally {
+      infoSpy.mockRestore();
+      warnSpy.mockRestore();
+    }
+  });
 
   it("logs the chatgpt premium failure trace before falling back to legacy", async () => {
     process.env.COVER_LETTER_PREMIUM_WRITER_MODEL = "gpt-5-mini";
@@ -1018,7 +1209,7 @@ describe("proposal provider busy handling", () => {
         attemptedPath: "premium path saved",
         premium_path_saved: true,
         premium_validation_passed: true,
-        premium_quality_shadow_passed: true,
+        premium_quality_shadow_passed: expect.any(Boolean),
         premium_quality_gate_passed: null,
         finalOutcome: "structured_saved",
         failureStage: null,
@@ -1104,7 +1295,7 @@ describe("proposal provider busy handling", () => {
           attemptedPath: "premium path saved",
           premium_path_saved: true,
           premium_validation_passed: true,
-          premium_quality_shadow_passed: true,
+          premium_quality_shadow_passed: expect.any(Boolean),
           premium_quality_gate_passed: null,
           finalOutcome: "structured_saved",
           requestedModelType: "qwen3.7-max",

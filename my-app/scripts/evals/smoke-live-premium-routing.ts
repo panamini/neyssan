@@ -106,7 +106,10 @@ export function smokeRecordProvesPremiumSuccess(record: SmokeRecord): boolean {
   const metadata = getSmokeRecordMetadata(record);
   return (
     record.routing?.attemptedPath === "premium path saved" &&
+    record.routing?.executedPath === "structured" &&
     record.routing?.saveOutcome === "structured_saved" &&
+    metadata.executed_path === "structured" &&
+    metadata.save_outcome === "structured_saved" &&
     tags.includes("premium_cover_letter_path_v1") &&
     tags.includes("generation_path:premium_path_saved") &&
     metadata.premium_path_saved === true &&

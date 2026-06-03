@@ -806,7 +806,8 @@ type StructuredCoverLetterFallbackReason =
   | "structured_verify_fail"
   | "structured_repair_fail"
   | "structured_repair_validation_fail"
-  | "premium_generation_failed";
+  | "premium_generation_failed"
+  | "premium_mistral_validation_failed";
 
 type StructuredCoverLetterAttemptResult = {
   content: string;
@@ -821,6 +822,7 @@ type StructuredCoverLetterAttemptResult = {
 type ProposalGenerationPathLabel =
   | "premium path saved"
   | "premium fail-closed to legacy fallback"
+  | "premium Mistral failed to GPT fallback"
   | "structured success"
   | "structured repaired success"
   | "structured fail-closed to legacy fallback"
@@ -891,7 +893,8 @@ type MistralProposalModelType = Extract<
 >;
 type ProposalFallbackTriggerCode =
   | "proposal_generation_provider_busy"
-  | "proposal_generation_provider_transport_error";
+  | "proposal_generation_provider_transport_error"
+  | "premium_mistral_validation_failed";
 
 export type ProposalExecutionProvenance = {
   requestedModelType: ProposalModelType;
@@ -1020,6 +1023,8 @@ const CONTROLLED_PROPOSAL_PROVIDER_TRANSPORT_ERROR_MESSAGE_PREFIX =
   "Proposal generation provider transport error.";
 const CONTROLLED_PROPOSAL_FINALIZATION_FAILURE_TELEMETRY_CODE =
   "proposal_generation_finalization_failed_closed";
+const CONTROLLED_PREMIUM_MISTRAL_VALIDATION_FAILED_CODE =
+  "premium_mistral_validation_failed";
 
 function isMistralModel(modelType: ProposalModelType): boolean {
   return (
@@ -1710,6 +1715,8 @@ function toGenerationPathTag(path: ProposalGenerationPathLabel): string {
       return "generation_path:premium_path_saved";
     case "premium fail-closed to legacy fallback":
       return "generation_path:premium_fail_closed_to_legacy_fallback";
+    case "premium Mistral failed to GPT fallback":
+      return "generation_path:premium_mistral_failed_to_gpt_fallback";
     case "structured success":
       return "generation_path:structured_success";
     case "structured repaired success":
@@ -3127,7 +3134,8 @@ function buildProposalRoutingMetadata(args: {
     args.routing.saveOutcome === "structured_saved";
   const premiumPathAttempted =
     args.attemptedPath === "premium path saved" ||
-    args.attemptedPath === "premium fail-closed to legacy fallback";
+    args.attemptedPath === "premium fail-closed to legacy fallback" ||
+    args.attemptedPath === "premium Mistral failed to GPT fallback";
   return {
     ...args.base,
     jobId: args.jobId,
@@ -3335,7 +3343,8 @@ export function buildCoverLetterRoutingTelemetry(args: {
   const usedFallback = args.usedFallback ?? fallbackTriggerCode !== null;
   const premiumPathAttempted =
     args.attemptedPath === "premium path saved" ||
-    args.attemptedPath === "premium fail-closed to legacy fallback";
+    args.attemptedPath === "premium fail-closed to legacy fallback" ||
+    args.attemptedPath === "premium Mistral failed to GPT fallback";
   const premiumPathSaved =
     args.attemptedPath === "premium path saved" &&
     args.finalOutcome === "structured_saved";
@@ -10724,6 +10733,7 @@ export async function handleGenerateProposal(
   let routingNormalizedFailureCode: string | null = null;
   let premiumCoverLetterFailureTrace: PremiumCoverLetterFailureTrace | null =
     null;
+  let premiumMistralCoverLetterAttempted = false;
   let premiumValidationPassed: boolean | null = null;
   let premiumQualityShadowPassed: boolean | null = null;
   let coverLetterRoutingTelemetryLogged = false;
@@ -10872,6 +10882,14 @@ export async function handleGenerateProposal(
       try {
         await ensureGenerationActive();
         premiumCoverLetterFailureTrace = null;
+        const isControlledPremiumMistralGptFallback =
+          fallbackTriggerCode ===
+            CONTROLLED_PREMIUM_MISTRAL_VALIDATION_FAILED_CODE &&
+          actualModelType === "chatgpt" &&
+          isPremiumMistralCoverLetterModel(requestedModelType) &&
+          outputFormat === "cover_letter" &&
+          premiumCoverLetterEligibility?.eligible === true &&
+          hasCandidateContext;
         if (
           actualModelType === "chatgpt" ||
           actualModelType === "qwen3.7-max"
@@ -10892,6 +10910,7 @@ export async function handleGenerateProposal(
               enteringPremiumAttempt:
                 (requestedModelType === "chatgpt" &&
                   coverLetterPrimaryPathEligibility.eligible) ||
+                isControlledPremiumMistralGptFallback ||
                 (requestedModelType === "qwen3.7-max" &&
                   premiumCoverLetterFlagEnabled &&
                   premiumCoverLetterEligibility?.eligible),
@@ -10899,10 +10918,11 @@ export async function handleGenerateProposal(
           }
 
           if (
-            requestedModelType === "chatgpt" &&
-            outputFormat === "cover_letter" &&
-            coverLetterPrimaryPathEligibility.eligible &&
-            apiKey
+            (requestedModelType === "chatgpt" &&
+              outputFormat === "cover_letter" &&
+              coverLetterPrimaryPathEligibility.eligible &&
+              apiKey) ||
+            (isControlledPremiumMistralGptFallback && apiKey)
           ) {
             try {
               premiumPersistencePayload =
@@ -10934,9 +10954,12 @@ export async function handleGenerateProposal(
                     }),
                 });
               premiumValidationPassed = premiumPersistencePayload !== null;
+              actualModelName = premiumCoverLetterWriterModel;
             } catch (premiumError) {
               console.warn(
-                "Premium cover letter path v1 failed; falling back to legacy cover-letter generation.",
+                isControlledPremiumMistralGptFallback
+                  ? "Controlled GPT premium fallback failed after Mistral premium validation failure."
+                  : "Premium cover letter path v1 failed; falling back to legacy cover-letter generation.",
                 premiumError,
               );
               premiumPersistencePayload = null;
@@ -10944,25 +10967,47 @@ export async function handleGenerateProposal(
             }
 
             if (premiumPersistencePayload) {
-              attemptedGenerationPath = "premium path saved";
+              attemptedGenerationPath = isControlledPremiumMistralGptFallback
+                ? "premium Mistral failed to GPT fallback"
+                : "premium path saved";
               routingTrace.plannedPath = "structured";
               routingTrace.executedPath = "structured";
-              routingTrace.fallbackReason = "not_applicable";
+              routingTrace.fallbackReason = isControlledPremiumMistralGptFallback
+                ? CONTROLLED_PREMIUM_MISTRAL_VALIDATION_FAILED_CODE
+                : "not_applicable";
               routingTrace.validatorOutcome = "structured_success";
             } else {
               attemptedGenerationPath =
-                "premium fail-closed to legacy fallback";
-              routingTrace.fallbackReason = "premium_generation_failed";
+                isControlledPremiumMistralGptFallback
+                  ? "premium Mistral failed to GPT fallback"
+                  : "premium fail-closed to legacy fallback";
+              routingTrace.fallbackReason = isControlledPremiumMistralGptFallback
+                ? CONTROLLED_PREMIUM_MISTRAL_VALIDATION_FAILED_CODE
+                : "premium_generation_failed";
               console.warn(
-                "Premium cover-letter returned null; using legacy fallback.",
+                isControlledPremiumMistralGptFallback
+                  ? "Controlled GPT premium fallback returned null after Mistral premium validation failure; failing closed."
+                  : "Premium cover-letter returned null; using legacy fallback.",
                 {
-                  provider: "openai",
+                  provider: isControlledPremiumMistralGptFallback
+                    ? "openai_fallback"
+                    : "openai",
                   writerModel: premiumCoverLetterWriterModel,
                   failureTrace: premiumCoverLetterFailureTrace,
                 },
               );
               if (routingTrace.validatorOutcome === "not_run") {
                 routingTrace.validatorOutcome = "structured_failed";
+              }
+              if (isControlledPremiumMistralGptFallback) {
+                routingTrace.saveOutcome = "not_saved";
+                routingNormalizedFailureCode =
+                  CONTROLLED_PREMIUM_MISTRAL_VALIDATION_FAILED_CODE;
+                emitCoverLetterRoutingTelemetry("not_saved", "repair");
+                emitMistralDiagnosticsSummary("failure");
+                throw new ConvexError(
+                  "Premium Mistral cover-letter validation failed and controlled GPT fallback did not produce a saveable structured result.",
+                );
               }
             }
           } else if (
@@ -11090,6 +11135,15 @@ export async function handleGenerateProposal(
 
           if (premiumPersistencePayload) {
             proposalContent = premiumPersistencePayload.content;
+          } else if (isControlledPremiumMistralGptFallback) {
+            routingTrace.saveOutcome = "not_saved";
+            routingNormalizedFailureCode =
+              CONTROLLED_PREMIUM_MISTRAL_VALIDATION_FAILED_CODE;
+            emitCoverLetterRoutingTelemetry("not_saved", "repair");
+            emitMistralDiagnosticsSummary("failure");
+            throw new ConvexError(
+              "Premium Mistral cover-letter validation failed and controlled GPT fallback is unavailable.",
+            );
           } else {
             const proposalService = (() => {
               if (actualModelType === "qwen3.7-max") {
@@ -11191,6 +11245,7 @@ export async function handleGenerateProposal(
             outputFormat === "cover_letter" &&
             premiumCoverLetterEligibility?.eligible
           ) {
+            premiumMistralCoverLetterAttempted = true;
             try {
               premiumPersistencePayload =
                 await attemptPremiumCoverLetterGeneration({
@@ -11252,6 +11307,37 @@ export async function handleGenerateProposal(
               );
               if (routingTrace.validatorOutcome === "not_run") {
                 routingTrace.validatorOutcome = "structured_failed";
+              }
+              if (
+                outputFormat === "cover_letter" &&
+                isPremiumMistralCoverLetterModel(requestedModelType) &&
+                premiumCoverLetterEligibility?.eligible === true &&
+                hasCandidateContext &&
+                premiumMistralCoverLetterAttempted &&
+                !premiumPersistencePayload
+              ) {
+                const triggerCode: ProposalFallbackTriggerCode =
+                  CONTROLLED_PREMIUM_MISTRAL_VALIDATION_FAILED_CODE;
+                fallbackTriggerCode = triggerCode;
+                usedFallback = true;
+                hasAttemptedFallback = true;
+                actualModelType = "chatgpt";
+                actualModelName =
+                  llmConfig.proposalModels?.openaiWriterModel ?? "gpt-5.5";
+                attemptedGenerationPath =
+                  "premium Mistral failed to GPT fallback";
+                routingTrace.fallbackReason = triggerCode;
+                routingTrace.executedPath = "structured";
+                routingNormalizedFailureCode = null;
+                console.info("Proposal generation fallback activation", {
+                  requestedModelType,
+                  fallbackModelType: "chatgpt",
+                  triggerCode,
+                  triggerStage: "repair",
+                  hasCv: true,
+                  attemptedPath: attemptedGenerationPath,
+                });
+                continue;
               }
             }
           }
@@ -11669,7 +11755,11 @@ export async function handleGenerateProposal(
             premiumPersistencePayload.qualityShadow?.passed ?? null;
           proposalContent = premiumPersistencePayload.content;
           routingTrace.executedPath = "structured";
-          routingTrace.fallbackReason = "not_applicable";
+          routingTrace.fallbackReason =
+            fallbackTriggerCode ===
+            CONTROLLED_PREMIUM_MISTRAL_VALIDATION_FAILED_CODE
+              ? CONTROLLED_PREMIUM_MISTRAL_VALIDATION_FAILED_CODE
+              : "not_applicable";
           if (routingTrace.validatorOutcome === "not_run") {
             routingTrace.validatorOutcome = "structured_success";
           }
