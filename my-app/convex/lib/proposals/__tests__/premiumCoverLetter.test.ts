@@ -2531,6 +2531,73 @@ describe("premium cover letter generation and rendering", () => {
     );
   });
 
+  it("wraps nested legacy bodyParts returned by Mistral-compatible writers", async () => {
+    const bodyParts = {
+      opening:
+        "At BrightLayer, I led a design-system migration used across four product squads and reduced page-load time by 28 percent through bundle and rendering improvements.",
+      proofBlock:
+        "At Northline Labs, I built experimentation dashboards for product and growth teams and partnered directly with design on customer-facing workflow improvements; targeted UI experiments improved signup conversion by 11 percent.",
+      employerValueBlock:
+        "That experience maps cleanly to frontend work where reusable systems, performance, and product iteration matter together, with React and TypeScript as the base.",
+      closeLine:
+        "I would bring that same discipline to shipped interface work, reliable performance, and clean partnership with product and design.",
+    };
+
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: {
+        name: "Alex Martin",
+        summary:
+          "Frontend engineer focused on React, TypeScript, design systems, and product-facing web apps.",
+        desiredPosition: "Senior Frontend Engineer",
+        topSkills: [
+          "React",
+          "TypeScript",
+          "Design Systems",
+          "Performance Optimization",
+          "A/B Testing",
+        ],
+        recentExperience: [
+          {
+            company: "BrightLayer",
+            position: "Frontend Engineer",
+            highlights: [
+              "Led a design system migration used across 4 product squads.",
+              "Reduced page load time by 28 percent through bundle and rendering optimizations.",
+            ],
+          },
+          {
+            company: "Northline Labs",
+            position: "Product Engineer",
+            highlights: [
+              "Built experimentation dashboards used by product and growth teams.",
+              "Partnered directly with design on customer-facing workflow improvements.",
+            ],
+          },
+        ],
+        standoutAchievements: [
+          "Improved signup conversion by 11 percent after iterative UI experiments.",
+        ],
+      },
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: "Senior Frontend Engineer",
+      jobDescription:
+        "Lead React and TypeScript development for a customer-facing SaaS platform, build reusable UI systems, improve performance, collaborate with product and design, and use experimentation carefully.",
+      candidateName: "Alex Martin",
+      writerProvider: "mistral",
+      writerModel: "mistral-medium-latest",
+      writer: async () => ({
+        version: "legacy_body_parts_v1",
+        bodyParts,
+      }),
+    });
+
+    expect(result?.bodyParts).toEqual(bodyParts);
+    expect(result?.content).toContain("Dear Hiring Manager,");
+    expect(result?.content).toContain("signup conversion by 11 percent");
+    expect(result?.content).not.toContain("Warm regards");
+  });
+
   it("rejects clipped source fragments and allows source-safe team fallbacks", async () => {
     const baseArgs = {
       personalizationContext: {

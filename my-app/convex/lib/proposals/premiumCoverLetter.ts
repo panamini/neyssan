@@ -3205,7 +3205,14 @@ function parsePremiumWriterOutputV1(args: {
   if (premiumParse.success) {
     return { writerOutput: premiumParse.data, legacyWrapped: false };
   }
-  const legacyBodyParts = PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(args.rawOutput);
+
+  const rawRecord =
+    args.rawOutput && typeof args.rawOutput === "object" && !Array.isArray(args.rawOutput)
+      ? (args.rawOutput as Record<string, unknown>)
+      : null;
+  const legacyBodyParts = PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(
+    rawRecord?.bodyParts ?? args.rawOutput,
+  );
   return {
     writerOutput: wrapLegacyBodyPartsAsPremiumWriterOutputV1({
       bodyParts: legacyBodyParts,

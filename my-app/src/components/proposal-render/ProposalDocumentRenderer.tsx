@@ -3236,6 +3236,7 @@ export function ProposalDocumentRenderer({
       ? [documentBlocks.map((_, index) => index)]
       : [[]],
   );
+  const lastReportedPageCountRef = React.useRef<number | null>(null);
   React.useLayoutEffect(() => {
     const el = rootRef.current;
     if (!el) return;
@@ -3282,13 +3283,20 @@ export function ProposalDocumentRenderer({
     }
 
     let frame: number | null = null;
+    const reportPageCount = (count: number) => {
+      if (lastReportedPageCountRef.current === count) {
+        return;
+      }
+      lastReportedPageCountRef.current = count;
+      onPageCountChange?.(count);
+    };
 
     const measurePages = () => {
       if (documentBlocks.length === 0) {
         setPageGroups((current) =>
           arePageGroupsEqual(current, [[]]) ? current : [[]],
         );
-        onPageCountChange?.(1);
+        reportPageCount(1);
         return;
       }
 
@@ -3341,7 +3349,7 @@ export function ProposalDocumentRenderer({
       setPageGroups((current) =>
         arePageGroupsEqual(current, nextPageGroups) ? current : nextPageGroups,
       );
-      onPageCountChange?.(Math.max(1, nextPageGroups.length));
+      reportPageCount(Math.max(1, nextPageGroups.length));
     };
 
     const scheduleMeasure = () => {

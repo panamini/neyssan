@@ -12091,20 +12091,14 @@ export function ProposalForge(): JSX.Element {
     });
   }, [isWideEnoughForDockedForgePanel, openTemplateSurface]);
   const handleOpenDraftFromStage = React.useCallback(() => {
-    if (templatePanelOpen && activeTemplateSurface === "proposal-draft") {
-      closeForgePanel();
-      return;
-    }
     setProposalComposerMode(null);
     openTemplateSurface("proposal-draft", {
       mode: isWideEnoughForDockedForgePanel ? "docked" : "overlay",
     });
   }, [
     activeTemplateSurface,
-    closeForgePanel,
     isWideEnoughForDockedForgePanel,
     openTemplateSurface,
-    templatePanelOpen,
   ]);
   const handleOpenCvsFromDraft = React.useCallback(() => {
     openTemplateSurface("cvs", {
