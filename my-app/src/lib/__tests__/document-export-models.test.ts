@@ -144,6 +144,29 @@ describe("document-export-models", () => {
     );
   });
 
+  it("preserves the editorial sidebar template id in styled resume print sources", () => {
+    const source = buildStyledResumePrintSource({
+      currentCv: generateCvTemplate("Editorial sidebar CV"),
+      stylePreset: {
+        ...DEFAULT_VERBATI_STYLE,
+        layout: "workshop",
+        familyId: "workshop",
+        typography: "quiet-editorial",
+        resumeTemplateId: "editorial-sidebar",
+      },
+    });
+
+    expect(source).toEqual(
+      expect.objectContaining({
+        stylePreset: expect.objectContaining({
+          resumeTemplateId: "editorial-sidebar",
+        }),
+        rendererVariantId: "editorialsidebar",
+        resumeTemplateId: "editorial-sidebar",
+      }),
+    );
+  });
+
   it("carries resume document icon settings through styled print payloads", () => {
     const currentCv = generateCvTemplate("Icon CV");
     currentCv.metadata.documentIcons = {

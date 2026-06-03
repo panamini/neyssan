@@ -47,8 +47,10 @@ import { resolveVerbatiStyle, stylesEqual } from "../features/verbati/style";
 import type { VerbatiFontPairId } from "../features/verbati/fontCatalog";
 import type { VerbatiStylePreset } from "../features/verbati/types";
 import {
+  EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID,
   WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
   WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
+  isResumeTemplateId,
   type ResumeTemplateId,
 } from "../lib/layout/resumeTemplates";
 import {
@@ -270,6 +272,12 @@ function resolveCvTemplateIntent(
 ): ResumeTemplateId | null {
   if (value === "minimal") return WORKSHOP_RESUME_ONECOL_TEMPLATE_ID;
   if (value === "french") return WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID;
+  if (value === "editorial-sidebar") {
+    return EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID;
+  }
+  if (isResumeTemplateId(value as ResumeTemplateId)) {
+    return value as ResumeTemplateId;
+  }
   return null;
 }
 
@@ -5927,6 +5935,7 @@ export function CvForge(): JSX.Element {
       template:
         | "workshop-onecol"
         | "workshop-twocol"
+        | "editorial-sidebar"
         | "editorial"
         | "minimal"
         | "classic",
@@ -5934,11 +5943,13 @@ export function CvForge(): JSX.Element {
       const layout =
         template === "minimal" || template === "classic" ? "swiss" : "workshop";
       const resumeTemplateId =
-        template === "workshop-twocol"
-          ? WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
-          : layout === "workshop"
-            ? WORKSHOP_RESUME_ONECOL_TEMPLATE_ID
-            : undefined;
+        template === "editorial-sidebar"
+          ? EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID
+          : template === "workshop-twocol"
+            ? WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
+            : layout === "workshop"
+              ? WORKSHOP_RESUME_ONECOL_TEMPLATE_ID
+              : undefined;
       setStylePreset((current) =>
         resolveVerbatiStyle({
           ...current,
@@ -5968,12 +5979,22 @@ export function CvForge(): JSX.Element {
           family: "workshop-twocol" as const,
         },
       },
+      {
+        id: "editorial-sidebar",
+        label: "Editorial Sidebar",
+        preview: {
+          kind: "Resume" as const,
+          family: "editorial-sidebar" as const,
+        },
+      },
     ],
     [],
   );
   const activeCvTemplatePanelItemId =
-    stylePreset.layout === "workshop" &&
-    stylePreset.resumeTemplateId === WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
+    stylePreset.resumeTemplateId === EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID
+      ? "editorial-sidebar"
+      : stylePreset.layout === "workshop" &&
+          stylePreset.resumeTemplateId === WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
       ? "workshop-twocol"
       : "workshop-onecol";
   const cvTemplatePanelRegistration = React.useMemo(
@@ -5984,7 +6005,11 @@ export function CvForge(): JSX.Element {
       activeItemId: activeCvTemplatePanelItemId,
       items: cvTemplatePanelItems,
       onSelect: (itemId: string) => {
-        if (itemId === "workshop-onecol" || itemId === "workshop-twocol") {
+        if (
+          itemId === "workshop-onecol" ||
+          itemId === "workshop-twocol" ||
+          itemId === "editorial-sidebar"
+        ) {
           handleSelectTemplate(itemId);
         }
       },

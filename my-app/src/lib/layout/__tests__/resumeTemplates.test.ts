@@ -36,11 +36,36 @@ describe("resumeTemplates", () => {
         "volk_register_resume_legacy",
         "two_column_resume_legacy",
         "editorial_resume_legacy",
+        "editorial-sidebar",
         "modernist_resume_legacy",
         "quire_resume_legacy",
         "workshop_resume_onecol_ats",
         "workshop_resume_twocol_ats",
       ]),
+    );
+  });
+
+  it("defines the editorial sidebar resume template with asymmetric A4 geometry", () => {
+    const template = getResumeTemplateDefinition("editorial-sidebar");
+
+    expect(template).toEqual(
+      expect.objectContaining({
+        id: "editorial-sidebar",
+        familyId: "workshop",
+        supportsPlanner: false,
+        exportShell: "split",
+      }),
+    );
+    expect(template.preview).toEqual(
+      expect.objectContaining({
+        topMm: 20,
+        rightMm: 15,
+        bottomMm: 18,
+        leftMm: 14,
+        sidebarMm: 38,
+        gutterMm: 13,
+        mainMm: 130,
+      }),
     );
   });
 

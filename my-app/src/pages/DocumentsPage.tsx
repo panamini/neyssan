@@ -15,6 +15,7 @@ import {
 } from "../components/library/DocumentSpecimenCard";
 import { ProposalDocumentRenderer } from "../components/proposal-render/ProposalDocumentRenderer";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
+import ResumePage from "../features/verbati/resume/ResumePage";
 import ResumeTemplateRenderer from "../features/verbati/resume/ResumeTemplateRenderer";
 import { resolveVerbatiStyle } from "../features/verbati/style";
 import { A4_PAGE_WIDTH_PX } from "../lib/document-stage";
@@ -41,6 +42,7 @@ import {
   downloadLibraryItems,
   isLibraryItemDownloadable,
 } from "../lib/library-download";
+import { EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID } from "../lib/layout/resumeTemplates";
 import {
   clearActiveLocalCvId,
   getLocalCvDocumentById,
@@ -1075,6 +1077,8 @@ function LibraryCvDocumentPreview({ item }: { item: LibraryItem }) {
           data: source.resumeData,
           stylePreset: source.stylePreset,
           resumeTemplateId: source.resumeTemplateId,
+          rendererVariantId: source.rendererVariantId,
+          pageSize: source.pageSize,
           committedPages: source.committedPages?.slice(0, 1),
         }
       : null;
@@ -1097,12 +1101,21 @@ function LibraryCvDocumentPreview({ item }: { item: LibraryItem }) {
       aria-hidden="true"
     >
       <div className="library-doc-preview__resume-scale">
-        <ResumeTemplateRenderer
-          data={preview.data}
-          stylePreset={preview.stylePreset}
-          resumeTemplateId={preview.resumeTemplateId}
-          committedPages={preview.committedPages}
-        />
+        {preview.resumeTemplateId === EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID ? (
+          <ResumePage
+            data={preview.data}
+            mode={preview.rendererVariantId}
+            stylePreset={preview.stylePreset}
+            pageSize={preview.pageSize}
+          />
+        ) : (
+          <ResumeTemplateRenderer
+            data={preview.data}
+            stylePreset={preview.stylePreset}
+            resumeTemplateId={preview.resumeTemplateId}
+            committedPages={preview.committedPages}
+          />
+        )}
       </div>
     </div>
   );

@@ -434,6 +434,8 @@ export const EN_UI_MESSAGES = {
   "templates.description.workshopOneColumnResume": "Clean, readable, safe.",
   "templates.description.workshopTwoColumnResume":
     "Structured European layout.",
+  "templates.description.editorialSidebarResume":
+    "Asymmetric side rail with a denser reading column.",
   "templates.description.minimalLetter": "Quiet spacing, clear hierarchy.",
   "templates.description.boldLetter": "Sharper opening, direct tone.",
   "templates.description.letterpressLetter": "Warmer, more personal.",
@@ -956,6 +958,8 @@ const FR_UI_MESSAGES = {
   "templates.description.workshopOneColumnResume": "Clair, lisible, fiable.",
   "templates.description.workshopTwoColumnResume":
     "Mise en page européenne structurée.",
+  "templates.description.editorialSidebarResume":
+    "Rail asymétrique avec une colonne de lecture plus dense.",
   "templates.description.minimalLetter":
     "Espacement calme, hiérarchie nette.",
   "templates.description.boldLetter": "Ouverture directe, ton net.",
@@ -1476,6 +1480,8 @@ const ES_UI_MESSAGES = {
   "templates.customizeStyle": "Personalizar estilo",
   "templates.description.workshopOneColumnResume": "Claro, legible, seguro.",
   "templates.description.workshopTwoColumnResume": "Diseño europeo estructurado.",
+  "templates.description.editorialSidebarResume":
+    "Barra lateral asimétrica con una columna de lectura más densa.",
   "templates.description.minimalLetter":
     "Espaciado sobrio, jerarquía clara.",
   "templates.description.boldLetter": "Apertura directa, tono claro.",

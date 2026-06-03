@@ -330,6 +330,27 @@ describe("VerbatiResumePreview", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("keeps the editorial sidebar template on the legacy ResumePage path", () => {
+    render(
+      <VerbatiResumePreview
+        data={resumeMock}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+          resumeTemplateId: "editorial-sidebar",
+        }}
+        hostMode="workspace"
+      />,
+    );
+
+    expect(screen.getByTestId("resume-page")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("resume-template-renderer"),
+    ).not.toBeInTheDocument();
+  });
+
   it("keeps workshop compare-layout mode on the legacy comparison path without mixed rendering", () => {
     render(
       <VerbatiResumePreview

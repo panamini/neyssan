@@ -8,6 +8,7 @@ export const RESUME_TEMPLATE_IDS = [
   "editorial_resume_legacy",
   "modernist_resume_legacy",
   "quire_resume_legacy",
+  "editorial-sidebar",
   "workshop_resume_onecol_ats",
   "workshop_resume_twocol_ats",
 ] as const;
@@ -16,6 +17,7 @@ export type ResumeTemplateId = (typeof RESUME_TEMPLATE_IDS)[number];
 
 export const WORKSHOP_RESUME_ONECOL_TEMPLATE_ID = "workshop_resume_onecol_ats";
 export const WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID = "workshop_resume_twocol_ats";
+export const EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID = "editorial-sidebar";
 export const WORKSHOP_RESUME_TEMPLATE_IDS = [
   WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
   WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
@@ -30,6 +32,12 @@ export function isWorkshopResumeTemplateId(
   return WORKSHOP_RESUME_TEMPLATE_IDS.includes(
     templateId as WorkshopResumeTemplateId,
   );
+}
+
+export function isResumeTemplateId(
+  templateId: ResumeTemplateId | null | undefined,
+): templateId is ResumeTemplateId {
+  return RESUME_TEMPLATE_IDS.includes(templateId as ResumeTemplateId);
 }
 
 export function isWorkshopTwoColumnResumeTemplateId(
@@ -394,6 +402,81 @@ export const RESUME_TEMPLATE_DEFINITIONS: readonly ResumeTemplateDefinition[] = 
       sectionGapAdjustMm: -0.1, headingMarginAdjustMm: 0, bulletGapAdjustMm: -0.05, projectGapAdjustMm: -0.05, projectPaddingAdjustMm: -0.05,
     },
     export: SPLIT_EXPORT,
+    paginationPolicy: { mode: "legacy-placeholder" },
+  }),
+  defineTemplate({
+    id: "editorial-sidebar",
+    familyId: "workshop",
+    label: "Editorial Sidebar",
+    shell: "legacy-preview",
+    supportsPlanner: false,
+    supportsLegacyComparison: true,
+    legacyPreviewVariantId: "editorialsidebar",
+    decorVariantId: "editorialsidebar",
+    exportShell: "split",
+    preview: {
+      topMm: 20,
+      rightMm: 15,
+      bottomMm: 18,
+      leftMm: 14,
+      liveWidthMm: 181,
+      liveHeightMm: 259,
+      sidebarMm: 38,
+      gutterMm: 13,
+      mainMm: 130,
+      headerGapMm: 4,
+      headerBottomPaddingMm: 5,
+      headerSummaryWidthMm: 92,
+      headerTitleMarginTopMm: 1.4,
+      bodySectionGapMm: 7,
+      sidebarRightPaddingMm: 0,
+      mainLeftPaddingMm: 0,
+      sidebarSectionGapMm: 4.8,
+      sidebarTitleMarginBottomMm: 1.8,
+      sidebarTitlePaddingBottomMm: 1,
+      sidebarContentGapMm: 1.35,
+      mainSectionGapMm: 5,
+      mainHeadingGapMm: 2.4,
+      mainHeadingMarginBottomMm: 2,
+      experienceDateColumnMm: 0,
+      experienceColumnGapMm: 0,
+      experienceItemGapMm: 4.6,
+      experienceOrgMarginBottomMm: 1.15,
+      experienceBulletsPaddingLeftMm: 3.6,
+      experienceBulletsGapMm: 1.1,
+      projectGapMm: 3,
+      projectPaddingMm: 2.8,
+      educationItemGapMm: 1.8,
+      skillGapMm: 1.6,
+      skillPaddingInlineMm: 2,
+      skillPaddingBlockMm: 0.8,
+      displaySizeAdjustMm: -0.1,
+      titleSizeAdjustMm: 0,
+      bodySizeAdjustMm: -0.05,
+      bodySmSizeAdjustMm: -0.05,
+      sectionGapAdjustMm: -0.1,
+      headingMarginAdjustMm: 0,
+      bulletGapAdjustMm: -0.05,
+      projectGapAdjustMm: -0.05,
+      projectPaddingAdjustMm: -0.05,
+    },
+    export: {
+      topMm: 20,
+      rightMm: 15,
+      bottomMm: 18,
+      leftMm: 14,
+      sidebarMm: 38,
+      gutterMm: 13,
+      mainMm: 130,
+      summaryWidthMm: 92,
+      readingWidthMm: 99,
+      entryMetaWidthMm: 31,
+      titleSizePt: 20.5,
+      titleLineHeight: 1.12,
+      headerGapMm: 10,
+      sectionGapMm: 6.6,
+      entryGapMm: 4.8,
+    },
     paginationPolicy: { mode: "legacy-placeholder" },
   }),
   defineTemplate({

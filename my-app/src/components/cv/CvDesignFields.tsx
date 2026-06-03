@@ -9,6 +9,7 @@ import type { VerbatiStylePreset } from "../../features/verbati/types";
 import { PROPOSAL_PALETTE_OPTIONS } from "../../lib/proposal-style-display";
 import { ProposalColorPickerPopover } from "../ProposalColorPickerPopover";
 import {
+  EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID,
   WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
   WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
 } from "../../lib/layout/resumeTemplates";
@@ -42,6 +43,7 @@ type CvDesignFieldsProps = {
     template:
       | "workshop-onecol"
       | "workshop-twocol"
+      | "editorial-sidebar"
       | "editorial"
       | "minimal"
       | "classic",
@@ -314,6 +316,24 @@ export function CvDesignFields({
           onClick={() => onSelectTemplate("workshop-twocol")}
         >
           French
+        </button>
+        <button
+          type="button"
+          data-selected={
+            stylePreset.layout === "workshop" &&
+            stylePreset.resumeTemplateId ===
+              EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID
+              ? "true"
+              : undefined
+          }
+          aria-pressed={
+            stylePreset.layout === "workshop" &&
+            stylePreset.resumeTemplateId ===
+              EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID
+          }
+          onClick={() => onSelectTemplate("editorial-sidebar")}
+        >
+          Editorial Sidebar
         </button>
       </div>
       <div className="dasti-cv-rail-label">Font pair</div>

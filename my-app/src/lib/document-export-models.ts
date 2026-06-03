@@ -13,7 +13,7 @@ import {
   getVerbatiStyleFromCv,
   getVerbatiTypographyFamilies,
   resolveVerbatiStyle,
-  VERBATI_LAYOUT_TO_RENDERER,
+  resolveLegacyResumeRendererVariantId,
 } from "../features/verbati/style";
 import type { ProposalHeaderVisibility } from "./proposal-header";
 import {
@@ -527,7 +527,8 @@ export function buildStyledResumePrintSource(args: {
     resumeData,
     stylePreset,
     resumeTemplateId,
-    rendererVariantId: VERBATI_LAYOUT_TO_RENDERER[stylePreset.layout],
+    rendererVariantId:
+      resolveLegacyResumeRendererVariantId(stylePreset) ?? "swissminima",
     committedPages: buildCommittedWorkshopPages({
       data: resumeData,
       resumeTemplateId,

@@ -1670,6 +1670,26 @@ describe("CvForge workspace mode", () => {
     });
   });
 
+  it("consumes create-new intent for the editorial sidebar resume template", async () => {
+    const createNewCv = vi.fn(async () => undefined);
+    useCvLibraryMock.mockReturnValue(buildCvLibraryState({ createNewCv }));
+
+    render(
+      <MemoryRouter
+        initialEntries={["/cv?cvForgeAction=createBlank&templateId=editorial-sidebar"]}
+      >
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(createNewCv).toHaveBeenCalledWith(undefined, {
+        forceV1: true,
+        resumeTemplateId: "editorial-sidebar",
+      });
+    });
+  });
+
   it("appends one draft bullet to canonical rich responsibilities while preserving paragraph text", async () => {
     const user = userEvent.setup();
     const { state, importCv } = buildStateWithExperienceItem({
