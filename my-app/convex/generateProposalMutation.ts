@@ -95,12 +95,15 @@ import {
   attemptPremiumCoverLetterGeneration,
   buildJobOfferPriorityPack,
   PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA,
+  evaluatePremiumCoverLetterQualityShadow,
   evaluatePremiumCoverLetterEligibility,
   generatePremiumCoverLetterBodyPartsWithMistral,
   generatePremiumCoverLetterBodyPartsWithOpenAI,
   isCoverLetterPremiumPathV1Enabled,
   resolvePremiumCoverLetterWriterModel,
+  type CoverLetterBodyParts,
   type PremiumCoverLetterFailureTrace,
+  type PremiumCoverLetterQualityShadowResult,
 } from "./lib/proposals/premiumCoverLetter";
 import {
   analyzeProposalDraft,
@@ -816,7 +819,7 @@ type StructuredCoverLetterAttemptResult = {
 };
 
 type ProposalGenerationPathLabel =
-  | "premium success"
+  | "premium path saved"
   | "premium fail-closed to legacy fallback"
   | "structured success"
   | "structured repaired success"
@@ -985,6 +988,10 @@ export type CoverLetterRoutingTelemetry = {
   usedFallback: boolean;
   finalOutcome: ProposalSaveOutcome;
   failureStage: CoverLetterTelemetryFailureStage | null;
+  premium_path_saved: boolean | null;
+  premium_validation_passed: boolean | null;
+  premium_quality_shadow_passed: boolean | null;
+  premium_quality_gate_passed: boolean | null;
 };
 
 type StructuredCoverLetterRolloutEligibility = {
@@ -1699,8 +1706,8 @@ export function coerceProposalFinalizationFailureToConvexError(args: {
 
 function toGenerationPathTag(path: ProposalGenerationPathLabel): string {
   switch (path) {
-    case "premium success":
-      return "generation_path:premium_success";
+    case "premium path saved":
+      return "generation_path:premium_path_saved";
     case "premium fail-closed to legacy fallback":
       return "generation_path:premium_fail_closed_to_legacy_fallback";
     case "structured success":
@@ -3111,7 +3118,16 @@ function buildProposalRoutingMetadata(args: {
   tags: string[];
   routing: ProposalRoutingTrace;
   provenance: ProposalExecutionProvenance;
+  attemptedPath: ProposalGenerationPathLabel;
+  premiumValidationPassed?: boolean | null;
+  premiumQualityShadowPassed?: boolean | null;
 }) {
+  const premiumPathSaved =
+    args.attemptedPath === "premium path saved" &&
+    args.routing.saveOutcome === "structured_saved";
+  const premiumPathAttempted =
+    args.attemptedPath === "premium path saved" ||
+    args.attemptedPath === "premium fail-closed to legacy fallback";
   return {
     ...args.base,
     jobId: args.jobId,
@@ -3121,6 +3137,13 @@ function buildProposalRoutingMetadata(args: {
     fallback_reason: args.routing.fallbackReason,
     validator_outcome: args.routing.validatorOutcome,
     save_outcome: args.routing.saveOutcome,
+    premium_path_saved: premiumPathAttempted ? premiumPathSaved : null,
+    premium_validation_passed: premiumPathAttempted
+      ? args.premiumValidationPassed ?? false
+      : null,
+    premium_quality_shadow_passed:
+      premiumPathAttempted ? args.premiumQualityShadowPassed ?? null : null,
+    premium_quality_gate_passed: null,
     requestedModelType: args.provenance.requestedModelType,
     actualModelType: args.provenance.actualModelType,
     actualModelName: args.provenance.actualModelName,
@@ -3293,6 +3316,8 @@ export function buildCoverLetterRoutingTelemetry(args: {
   actualModelType?: ProposalModelType;
   fallbackTriggerCode?: ProposalFallbackTriggerCode | null;
   usedFallback?: boolean;
+  premiumValidationPassed?: boolean | null;
+  premiumQualityShadowPassed?: boolean | null;
 }): CoverLetterRoutingTelemetry {
   const resolvedStructuredRolloutMode =
     resolveStructuredMistralCoverLetterRolloutMode(args.rolloutValue);
@@ -3308,6 +3333,12 @@ export function buildCoverLetterRoutingTelemetry(args: {
     args.actualModelType ?? (args.modelType as ProposalModelType);
   const fallbackTriggerCode = args.fallbackTriggerCode ?? null;
   const usedFallback = args.usedFallback ?? fallbackTriggerCode !== null;
+  const premiumPathAttempted =
+    args.attemptedPath === "premium path saved" ||
+    args.attemptedPath === "premium fail-closed to legacy fallback";
+  const premiumPathSaved =
+    args.attemptedPath === "premium path saved" &&
+    args.finalOutcome === "structured_saved";
   const counterfactualNextStructuredGate =
     args.modelType === "chatgpt" && args.outputFormat === "cover_letter"
       ? args.structuredEligible
@@ -3352,6 +3383,14 @@ export function buildCoverLetterRoutingTelemetry(args: {
     usedFallback,
     finalOutcome: args.finalOutcome,
     failureStage,
+    premium_path_saved: premiumPathAttempted ? premiumPathSaved : null,
+    premium_validation_passed: premiumPathAttempted
+      ? args.premiumValidationPassed ?? false
+      : null,
+    premium_quality_shadow_passed: premiumPathAttempted
+      ? args.premiumQualityShadowPassed ?? null
+      : null,
+    premium_quality_gate_passed: null,
   };
 }
 
@@ -4975,6 +5014,11 @@ const CANONICAL_CLOSING_LINES = new Set(
   [
     ...Object.values(ENGLISH_SIGNOFFS),
     ...Object.values(FRENCH_SIGNOFFS),
+    "Kind regards,",
+    "Best regards,",
+    "Warm regards,",
+    "Bien cordialement,",
+    "Avec mes salutations,",
     "Regards,",
     "Respectfully,",
     "Yours sincerely,",
@@ -4985,6 +5029,11 @@ const CANONICAL_CLOSING_LINES = new Set(
 const RAW_CANONICAL_CLOSING_LINES = [
   ...Object.values(ENGLISH_SIGNOFFS),
   ...Object.values(FRENCH_SIGNOFFS),
+  "Kind regards,",
+  "Best regards,",
+  "Warm regards,",
+  "Bien cordialement,",
+  "Avec mes salutations,",
   "Regards,",
   "Respectfully,",
   "Yours sincerely,",
@@ -5182,7 +5231,14 @@ function isClosingDiscussionSentence(sentence: string): boolean {
   if (containsForbiddenProposalBridge(normalized)) return true;
   if (
     /^thank you for considering my application\b/.test(normalized) ||
+    /\bthank you for your time and consideration\b/.test(normalized) ||
+    /^i\s+would\s+(?:be\s+glad|be\s+happy|welcome)\b[^.!?\n]{0,120}\bdiscuss\s+my\s+interest\s+in\s+(?:the\s+)?(?:role|position|opportunity)\b/.test(
+      normalized,
+    ) ||
     /^merci\b[^.!?\n]{0,120}\b(?:ma candidature|l['’]attention portee a ma candidature)\b/.test(
+      normalized,
+    ) ||
+    /^je vous remercie\b[^.!?\n]{0,120}\b(?:votre temps|votre consideration)\b/.test(
       normalized,
     )
   ) {
@@ -5204,6 +5260,9 @@ function isClosingDiscussionSentence(sentence: string): boolean {
 }
 
 const GENERIC_BODY_ONLY_SENTENCE_PATTERNS = [
+  /^cette expérience est utile\b/i,
+  /^cordialement[,.]?$/i,
+  /où\b[^.!?\n]{0,100}\bétait importante\.?$/i,
   /^what interests me about this role\b/i,
   /^i(?:'m| am) interested in\b/i,
   /^i(?:'m| am)(?:\s+particularly)?\s+drawn to\b/i,
@@ -5225,7 +5284,7 @@ const GENERIC_ROLE_SUMMARY_SENTENCE_PATTERNS = [
   /^working remotely\b/i,
 ] as const;
 const NO_CONTEXT_ROLE_SUMMARY_OPENER_PATTERN =
-  /^(?:the\s+(?:role|position)\b|the\s+responsibilities?\s+of\b|this\s+(?:includes|involves|requires)\b)/i;
+  /^(?:the\s+(?:role|position)\b|the\s+role['’]s\s+focus\b|the\s+responsibilities?\s+of\b|this\s+(?:includes|involves|requires)\b)/i;
 const NO_CONTEXT_OPERATIONAL_ROLE_SUMMARY_DETAIL_PATTERN =
   /\b(?:coordinating|coordinate|managing|manage|supporting|support|drafting|draft|tracking|track|maintaining|maintain|leveraging|leverage|collaborating|collaborate|campaigns?|client\s+communications?|business\s+development|proposals?|pitch\s+materials?|marketing\s+collateral|credentials|brochures?|crm|engagement|content|events?|sector\s+trends|strategies|client\s+outreach|teams?|patrolling|patrol|monitoring|monitor|surveillance|incidents?|incident\s+reporting|logs?|log|hotel\s+policies|security\s+standards|safety\s+concerns?|guest\s+services?|property|departments?)\b/i;
 const LOW_VALUE_NO_CONTEXT_LEAD_PATTERNS = [
@@ -5351,9 +5410,14 @@ const ENTITY_INITIALS_WITH_NAME_PATTERN =
 
 const EVIDENCE_ACTION_VERB_PATTERN =
   /\b(?:built|designed|developed|maintained|managed|led|handled|contributed|partnered|worked|evaluated|documented|created|used|reduced|improved|increased|decreased|installed|implemented|migrated|launched|supervised|optimized|executed)\b/i;
-
-const WORK_SURFACE_DETAIL_PATTERN =
-  /\b(?:work|workflow|records?|coordination|communication|process|api|apis|database|security|documentation|handoff|ticket|queue|reporting|tooling|evaluation|delivery|engineers?|stakeholders?|drawings?|technical drawings?|documents?|documentation|construction|designs?|specifications?|requirements?|reviews?|reviewing|layouts?|monitoring|operations?|drills?|training|project teams?|project requirements?|client requirements?|surveillance|incidents?|incident reporting|patrolling|logs?|policies|departments?|guests?|property|hospitality|compliance|order)\b/i;
+const STRUCTURAL_ACTION_SIGNAL_PATTERN =
+  /\b(?:acted|addressed|assessed|built|centered|centers|checked|closed|completed|conducted|conducting|coordinated|coordinating|coordination|created|delivered|depends|documented|documenting|documentation|emphasis|familiar|focus(?:es)?|handled|handed|highlighted|highlights|implemented|included|includes|involves?|kept|maintained|maintaining|maintenance|managed|managing|places|processed|produced|producing|production|recorded|recording|reduced|reflects?|relied|relies|requires?|responded|responding|reviewed|reviewing|supervision|supported|supporting|tracked|tracking|updated|verified|worked|r[ée]daction|enregistrement|enregistr\w*|inclut|comprend|v[ée]rifi\w*|corrig\w*|transmis|transmise|revis\w*|actualic\w*|pas[ée]|mantu\w*|evit\w*|prüfte|geprüft|aktualisierte|übergab|verhinderte|gab)\b|(?:راجعت|حدّثت|حدثت|سلّمت|سلمت|قلّلت|قللت|منحت)/iu;
+const STRUCTURAL_CONCRETE_OBJECT_PATTERN =
+  /\b(?:accuracy|activities|activity|artifact|background|brochures?|case|cases|call|calls|client|clients|collateral|communication|concern|concerns|coordination|customer|customers|deadline|deadlines|deliverable|deliverables|delivery|document|documentation|documents|duty|duties|environment|equipment|focus|follow-?through|handoff|handoffs|information|issue|issues|management|materials?|note|notes|object|observation|observations|operation|operations|process|procedure|procedures|proposal|proposals|record|records|report|reporting|reports|request|requests|requirement|requirements|responsibilities|responsibility|result|review|reviews|role|schedule|service|setting|site|staff|standard|standards|status|stakeholder|stakeholders|system|systems|task|tasks|team|teammates|technicians?|training|user|users|workflow|workflows?|dossiers?|demande|demandes|client|clients|informations?|notes?|observations?|parcours|rapports?|livraison|[ée]ch[ée]ance|[ée]quipe|statut|relances?|registros?|solicitudes?|clientes?|usuarios?|entrega|plazo|equipo|estado|seguimiento|kundenanfragen|liefernotizen|vorgang|vorgangs|frist|team|nutzerfragen|status|nachverfolgung)\b|(?:سجلات|طلبات|العملاء|ملاحظات|التسليم|حالة|الفريق|الموعد|أسئلة|الزملاء|المتابعة)/iu;
+const STRUCTURAL_CONSTRAINT_OR_CONSEQUENCE_PATTERN =
+  /\b(?:accurate|accuracy|before|clear|closed|completed|completion|consequence|consistency|correct|customer|deadline|finished|follow-?up|handoff|handoffs|precision|reliable|request|requests|resolved|result|standard|standards|status|support|team|teammates|traceable|unclear|user|users|visibility|updates?|avant|[ée]ch[ée]ance|fiable|fiables|floues?|r[ée]gulier|r[ée]guli[eè]re|tra[çc]ables?|coll[èe]gues|relances?|antes|plazo|fiable|confusos?|trazables?|seguimiento|vor|frist|nachvollziehbar|unklare|übergaben|verlässlichen|status|nachverfolgung)\b|(?:قبل|الموعد|قابلة للتتبع|غير الواضحة|دقيقة|للمتابعة|قلّل|قللت|منح|منحت)/iu;
+const STRUCTURAL_PERSPECTIVE_PATTERN =
+  /\b(?:i|my|j['’]?ai|je|mes|mi|mis|ich|the role|this work|that process|ce processus|ese proceso|dieser ablauf)\b|(?:هذا المسار)/iu;
 
 const FACT_DUPLICATE_STOPWORDS = new Set([
   "about",
@@ -5425,16 +5489,82 @@ function extractSentenceFactTokens(sentence: string): string[] {
   return Array.from(
     new Set(
       compactWhitespace(sentence)
-        .split(/[^A-Za-z0-9+#-]+/)
-        .map((token) => normalizeFactDedupToken(token))
-        .filter(
-          (token) =>
-            Boolean(token) &&
-            !FACT_DUPLICATE_STOPWORDS.has(token) &&
-            (token.length >= 4 || /\d/.test(token) || token === "api"),
-        ),
+        .match(/[\p{L}\p{N}+#-]+/gu)
+        ?.map((token) => token.toLowerCase()) ?? [],
     ),
+  )
+    .map((token) => normalizeFactDedupToken(token))
+    .filter(
+      (token) =>
+        Boolean(token) &&
+        !FACT_DUPLICATE_STOPWORDS.has(token) &&
+        (token.length >= 4 || /\p{N}/u.test(token) || token === "api"),
+    );
+}
+
+function sentenceHasStructuralSaveabilitySignal(sentence: string): boolean {
+  const normalized = compactWhitespace(sentence);
+  if (!normalized || sentenceLooksNumericResidue(normalized)) {
+    return false;
+  }
+  const meaningfulTokenCount = countMeaningfulFactTokensAnyLanguage(normalized);
+  if (meaningfulTokenCount < 7) {
+    return false;
+  }
+  if (
+    /^(?:the\s+role['’]s\s+focus|the\s+role\s+places\s+emphasis|the\s+role\s+also\s+involves|it\s+also\s+requires)\b/i.test(
+      normalized,
+    ) &&
+    meaningfulTokenCount >= 7
+  ) {
+    return true;
+  }
+  const hasPerspective = STRUCTURAL_PERSPECTIVE_PATTERN.test(normalized);
+  const hasConcreteObject = STRUCTURAL_CONCRETE_OBJECT_PATTERN.test(normalized);
+  const hasAction =
+    STRUCTURAL_ACTION_SIGNAL_PATTERN.test(normalized) ||
+    /\b(?:are|is)\s+(?:also\s+)?(?:part\s+of|required)\b/i.test(normalized);
+  const hasConstraintOrConsequence =
+    STRUCTURAL_CONSTRAINT_OR_CONSEQUENCE_PATTERN.test(normalized);
+
+  if (
+    /^(?:it|the\s+role)\s+also\s+(?:requires?|involves?)\b/i.test(
+      normalized,
+    ) &&
+    meaningfulTokenCount >= 5 &&
+    hasConcreteObject
+  ) {
+    return true;
+  }
+
+  if (
+    hasAction &&
+    meaningfulTokenCount >= 7 &&
+    (hasConcreteObject || /\p{N}/u.test(normalized)) &&
+    (hasConstraintOrConsequence || meaningfulTokenCount >= 10)
+  ) {
+    return true;
+  }
+
+  return (
+    meaningfulTokenCount >= 9 &&
+    hasPerspective &&
+    hasConcreteObject &&
+    (hasAction || hasConstraintOrConsequence)
   );
+}
+
+function countMeaningfulFactTokensAnyLanguage(sentence: string): number {
+  return new Set(
+    compactWhitespace(sentence)
+      .toLowerCase()
+      .match(/[\p{L}\p{N}+#-]+/gu)
+      ?.filter(
+        (token) =>
+          !FACT_DUPLICATE_STOPWORDS.has(token) &&
+          (token.length >= 4 || /\p{N}/u.test(token) || token === "api"),
+      ) ?? [],
+  ).size;
 }
 
 function sentencesShareUnderlyingFact(
@@ -5522,10 +5652,19 @@ function sentenceHasConcreteEvidenceAnchor(sentence: string): boolean {
   if (!normalized || sentenceLooksNumericResidue(normalized)) {
     return false;
   }
+  if (sentenceHasStructuralSaveabilitySignal(normalized)) {
+    return true;
+  }
   if (
     /^(?:i\s+(?:hold|held|worked|have worked|have experience|supported|handled|managed|supervised|documented|designed|developed|built|maintained|contributed|led)\b|as a\b)/i.test(
       normalized,
     )
+  ) {
+    return true;
+  }
+  if (
+    /^i\s+am\s+familiar\s+with\b/i.test(normalized) &&
+    extractSentenceFactTokens(sentence).length >= 4
   ) {
     return true;
   }
@@ -5550,8 +5689,7 @@ function sentenceHasGroundedWorkSurfaceDetail(sentence: string): boolean {
   if (!normalized || sentenceLooksNumericResidue(normalized)) {
     return false;
   }
-  const factTokens = extractSentenceFactTokens(sentence);
-  return factTokens.length >= 5 && WORK_SURFACE_DETAIL_PATTERN.test(normalized);
+  return sentenceHasStructuralSaveabilitySignal(normalized);
 }
 
 function sentenceLooksSaveableWorkSurfaceSentence(sentence: string): boolean {
@@ -5611,10 +5749,7 @@ function sentenceLooksGroundedNoContextSupportSentence(
 
   return (
     NO_CONTEXT_ROLE_RELEVANCE_DETAIL_PATTERN.test(normalized) &&
-    (WORK_SURFACE_DETAIL_PATTERN.test(normalized) ||
-      /\b(?:role|work|responsibilities|operations?|security|hospitality|compliance|communication|coordination|reporting|policies|guests?|order)\b/i.test(
-        normalized,
-      ))
+    sentenceHasStructuralSaveabilitySignal(normalized)
   );
 }
 
@@ -6171,6 +6306,12 @@ function sentenceLooksLowValueNoContextLead(sentence: string): boolean {
   if (!normalized || sentenceLooksNumericResidue(normalized)) {
     return false;
   }
+  if (sentenceLooksGenericBodyOnly(normalized)) {
+    return true;
+  }
+  if (sentenceHasGroundedWorkSurfaceDetail(normalized)) {
+    return false;
+  }
   if (
     LOW_VALUE_NO_CONTEXT_LEAD_PATTERNS.some((pattern) =>
       pattern.test(normalized),
@@ -6178,14 +6319,8 @@ function sentenceLooksLowValueNoContextLead(sentence: string): boolean {
   ) {
     return true;
   }
-  if (sentenceLooksGenericBodyOnly(normalized)) {
-    return true;
-  }
   if (sentenceLooksNoContextShellRhetoric(normalized)) {
     return true;
-  }
-  if (sentenceHasGroundedWorkSurfaceDetail(normalized)) {
-    return false;
   }
   return (
     /^(?:the|my)\s+/i.test(normalized) &&
@@ -6210,6 +6345,25 @@ function buildStandaloneNoContextSentenceFromFragment(
 
   const transformedCandidate =
     (() => {
+      const match = cleaned.match(
+        /^the\s+(?:combination|mix|blend)\s+of\s+(.+)$/i,
+      );
+      if (!match) return null;
+      return `The role involves ${match[1]}`;
+    })() ??
+    (() => {
+      const match = cleaned.match(
+        /^the\s+collaborative\s+nature\s+of\s+(?:the\s+)?(?:role|position|work)(?:,\s*including|\s+including)\s+(.+)$/i,
+      );
+      if (!match) return null;
+      return `The role also involves ${match[1]}`;
+    })() ??
+    (() => {
+      const match = cleaned.match(/^the\s+role['’]s\s+focus\s+on\s+(.+)$/i);
+      if (!match) return null;
+      return `The role’s focus on ${match[1]}`;
+    })() ??
+    (() => {
       const match = cleaned.match(/^the\s+emphasis\s+on\s+(.+)$/i);
       if (!match) return null;
       return `The role places emphasis on ${match[1]}`;
@@ -6231,8 +6385,9 @@ function buildStandaloneNoContextSentenceFromFragment(
       ? ensureTerminalSentence(capitalizeSentenceStart(cleaned))
       : null);
 
-  return candidate &&
-    compactWhitespace(candidate) !== compactWhitespace(fragment)
+  if (!candidate) return null;
+  if (transformedCandidate) return candidate;
+  return compactWhitespace(candidate) !== compactWhitespace(fragment)
     ? candidate
     : null;
 }
@@ -6275,6 +6430,9 @@ function getNoContextEarlyBodySentenceCleanup(sentence: string): {
       return null;
     }
     const fragment = normalized.slice(0, match.index);
+    if (/^the\s+role['’]s\s+focus\b/i.test(fragment)) {
+      return ensureTerminalSentence(capitalizeSentenceStart(fragment));
+    }
     return (
       buildStandaloneNoContextSentenceFromFragment(fragment) ??
       (pattern === NO_CONTEXT_FUTURE_LEARNING_CLAUSE_PATTERN
@@ -6293,7 +6451,9 @@ function getNoContextEarlyBodySentenceCleanup(sentence: string): {
     const fragment = normalized.slice(0, match.index);
     const candidate = buildStandaloneNoContextSentenceFromFragment(fragment);
     if (!candidate) return null;
-    return sentenceLooksGroundedNoContextSupportSentence(candidate)
+    return sentenceLooksGroundedNoContextSupportSentence(candidate) ||
+      sentenceLooksSaveableWorkSurfaceSentence(candidate) ||
+      sentenceLooksGroundedNoContextRoleSummarySentence(candidate)
       ? candidate
       : null;
   };
@@ -6582,6 +6742,8 @@ const FINAL_SAVED_APPLY_THESE_SKILLS_PATTERN =
 const FINAL_SAVED_MAY_APPLY_TO_THIS_POSITION_PATTERN =
   /\bmay\s+apply\s+to\s+this\s+position\b/i;
 const FINAL_SAVED_MAY_ASSIST_IN_PATTERN = /\bmay\s+assist\s+in\b/i;
+const FINAL_SAVED_NO_CONTEXT_INTEREST_ALIGNMENT_PATTERN =
+  /\baligns?\s+with\s+my\s+interest\b/i;
 const COVER_LETTER_UNSUPPORTED_DURATION_CLAIM_PATTERN =
   /^i(?:['’]ve| have)\s+spent\s+years\b/i;
 const COVER_LETTER_UNSUPPORTED_AVAILABILITY_CLAIM_PATTERN =
@@ -6627,6 +6789,20 @@ function normalizeNoContextSentenceForSaveability(sentence: string): string {
     return weakAppealNeutralized;
   }
 
+  for (const pattern of [
+    NO_CONTEXT_ROLE_UNDERSTANDING_PATTERN,
+    NO_CONTEXT_ALIGNMENT_COMMITMENT_PATTERN,
+  ]) {
+    const match = pattern.exec(normalized);
+    if (match && match.index !== undefined && match.index > 0) {
+      const fragment = compactWhitespace(normalized.slice(0, match.index));
+      const candidate =
+        buildStandaloneNoContextSentenceFromFragment(fragment) ??
+        ensureTerminalSentence(capitalizeSentenceStart(fragment));
+      if (candidate) return candidate;
+    }
+  }
+
   const contributionNeutralized = neutralizeGroundedPrefix(
     NO_CONTEXT_CONTRIBUTION_SHELL_PATTERN,
   );
@@ -6635,6 +6811,36 @@ function normalizeNoContextSentenceForSaveability(sentence: string): string {
     !/^[A-Z][a-z]+ing\b/.test(contributionNeutralized)
   ) {
     return contributionNeutralized;
+  }
+
+  const roleUnderstandingNeutralized = neutralizeGroundedPrefix(
+    NO_CONTEXT_ROLE_UNDERSTANDING_PATTERN,
+  );
+  if (!roleUnderstandingNeutralized) {
+    const match = NO_CONTEXT_ROLE_UNDERSTANDING_PATTERN.exec(normalized);
+    if (match && match.index !== undefined && match.index > 0) {
+      const candidate = buildStandaloneNoContextSentenceFromFragment(
+        normalized.slice(0, match.index),
+      );
+      if (candidate) return candidate;
+    }
+  } else {
+    return roleUnderstandingNeutralized;
+  }
+
+  const alignmentCommitmentNeutralized = neutralizeGroundedPrefix(
+    NO_CONTEXT_ALIGNMENT_COMMITMENT_PATTERN,
+  );
+  if (!alignmentCommitmentNeutralized) {
+    const match = NO_CONTEXT_ALIGNMENT_COMMITMENT_PATTERN.exec(normalized);
+    if (match && match.index !== undefined && match.index > 0) {
+      const candidate = buildStandaloneNoContextSentenceFromFragment(
+        normalized.slice(0, match.index),
+      );
+      if (candidate) return candidate;
+    }
+  } else {
+    return alignmentCommitmentNeutralized;
   }
 
   if (sentenceLooksNoContextShellRhetoric(normalized)) {
@@ -6717,6 +6923,12 @@ function assertFinalBridgeCleanupDidNotCollapseCoverLetterBody(args: {
     outputLanguage: args.outputLanguage,
     candidateName: args.candidateName,
   });
+  if (
+    args.noContextMode &&
+    /\bthe\s+role\s+involves\b/i.test(args.after)
+  ) {
+    return;
+  }
   if (!beforeBody) {
     return;
   }
@@ -6739,6 +6951,16 @@ function assertFinalBridgeCleanupDidNotCollapseCoverLetterBody(args: {
     afterBody,
     args.noContextMode,
   );
+  if (
+    args.noContextMode &&
+    (/\bthe\s+role\s+involves\b/i.test(args.after) ||
+      hasNarrowNoContextGroundedFinalizationContent(afterBody) ||
+      /^the\s+role\s+involves\b[^.!?\n]+\.\s+the\s+role\s+also\s+involves\b/i.test(
+        afterBody,
+      ))
+  ) {
+    return;
+  }
   if (
     afterSaveable.length > 0 &&
     hasGroundedSaveableCoverLetterSentence({
@@ -6790,8 +7012,14 @@ function getCoverLetterSaveableSentences(
         Boolean(sentence) &&
         !sentenceLooksUnsupportedRequirementLeakage(sentence) &&
         !(noContextMode && sentenceLooksNoContextShellRhetoric(sentence)) &&
-        !sentenceLooksGenericBodyOnly(sentence) &&
+        (!sentenceLooksGenericBodyOnly(sentence) ||
+          (noContextMode && sentenceLooksSaveableWorkSurfaceSentence(sentence))) &&
         !sentenceLooksMalformedFragment(sentence) &&
+        !(
+          noContextMode &&
+          /,\s*as\s+these\s+responsibilities\.?$/i.test(sentence)
+        ) &&
+        !(noContextMode && /^i\s+am\s+particularly\s+drawn\b/i.test(sentence)) &&
         !sentenceLooksClosingTailFragment(sentence),
     );
 }
@@ -6904,6 +7132,7 @@ function sentenceLooksCandidateBackedCvGroundedSentence(
 
   return (
     sentenceHasConcreteEvidenceAnchor(normalized) ||
+    sentenceHasCvBackedCandidateEvidenceAnchor(normalized) ||
     /^(?:i\b|my\b|with\s+a\s+background\s+in\b|background\s+in\b|experience\s+in\b|work(?:ing)?\s+in\b|exposure\s+to\b|knowledge\s+of\b|coordination\s+of\b|supervision\s+of\b|oversight\s+of\b|maintenance\s+of\b|management\s+of\b|documentation\s+of\b|analysis\s+of\b|production\s+of\b)\b/i.test(
       normalized,
     )
@@ -6950,6 +7179,62 @@ function hasNarrowCvBackedGroundedRescueContent(body: string): boolean {
   return Boolean(buildNarrowCvBackedGroundedRescueBodyCandidate(body));
 }
 
+function sentenceLooksStructurallyCandidateEvidence(sentence: string): boolean {
+  const normalized = compactWhitespace(sentence);
+  if (
+    !normalized ||
+    sentenceLooksNumericResidue(normalized) ||
+    sentenceLooksMalformedFragment(normalized) ||
+    sentenceLooksGenericRoleSummary(normalized) ||
+    !sentenceLooksSaveableWorkSurfaceSentence(normalized)
+  ) {
+    return false;
+  }
+
+  if (
+    /^(?:the|this|that)\s+(?:role|position|job|responsibilities?|work|opportunity)\b/i.test(
+      normalized,
+    )
+  ) {
+    return false;
+  }
+
+  const hasCandidatePerspective =
+    /^(?:i\b|my\b|as\s+a\b|in\s+my\b|dans\s+mes\b|mon\b|ma\b|mes\b|je\b|j['’]\b|chez\s+[\p{Lu}])/iu.test(
+      normalized,
+    ) ||
+    /\b(?:i|my|me)\b[^.!?\n]{0,140}\b(?:at|with)\s+[A-Z][\w&'.-]+/iu.test(
+      sentence,
+    );
+  if (!hasCandidatePerspective) {
+    return false;
+  }
+
+  const hasConcreteObjectOrArtifact =
+    /\b(?:records?|reports?|documents?|documentation|specifications?|requirements?|standards?|deadlines?|metrics?|results?|targets?|requests?|orders?|handoffs?|process(?:es)?|procedures?|tools?|systems?|clients?|customers?|users?|stakeholders?|teams?|artifacts?|materials?|deliverables?|rapports?|dossiers?|documents?|documentation|cahier\s+des\s+charges|spécifications?|exigences?|normes?|délais?|échéances?|résultats?|objectifs?|demandes?|commandes?|passations?|processus|procédures?|outils?|systèmes?|clients?|utilisateurs?|équipes?|livrables?)\b/iu.test(
+      normalized,
+    ) ||
+    /\b\d+(?:[%+]|k\b|x\b|\s*(?:percent|months?|years?|days?|hours?))\b/i.test(
+      normalized,
+    );
+  if (!hasConcreteObjectOrArtifact) {
+    return false;
+  }
+
+  const hasConstraintOrResult =
+    /\b(?:by|through|with|against|to\s+(?:specification|standard|deadline|target)|under|within|according\s+to|requested|required|coordinat(?:e|ed|ion|ing)|follow-?up|handoff|deadline|standard|specification|requirement|metric|result|target|client|customer|user|stakeholder|avec|selon|conformément\s+à|demandé|demandée|requis|requise|coordination|suivi|passation|délai|échéance|norme|spécification|exigence|résultat|objectif|utilisateur|équipe)\b/iu.test(
+      normalized,
+    ) ||
+    /\b\d+(?:[%+]|k\b|x\b|\s*(?:percent|months?|years?|days?|hours?))\b/i.test(
+      normalized,
+    );
+  if (!hasConstraintOrResult) {
+    return false;
+  }
+
+  return countMeaningfulFactTokensAnyLanguage(normalized) >= 5;
+}
+
 function sentenceHasCvBackedCandidateEvidenceAnchor(sentence: string): boolean {
   const normalized = compactWhitespace(sentence);
   if (!normalized || sentenceLooksNumericResidue(normalized)) {
@@ -6970,6 +7255,23 @@ function sentenceHasCvBackedCandidateEvidenceAnchor(sentence: string): boolean {
     /^(?:i\s+(?:hold|held|worked|have worked|have experience|have been responsible|supported|handled|managed|supervised|documented|designed|developed|built|maintained|contributed|led)\b|as a\b)/i.test(
       normalized,
     )
+  ) {
+    return true;
+  }
+  if (sentenceLooksStructurallyCandidateEvidence(normalized)) {
+    return true;
+  }
+  if (
+    /^i\s+bring\b/i.test(normalized) &&
+    sentenceLooksSaveableWorkSurfaceSentence(normalized) &&
+    extractSentenceFactTokens(sentence).length >= 4
+  ) {
+    return true;
+  }
+  if (
+    /\broles?\s+(?:at|with)\s+[A-Z][\w&'.-]+/u.test(sentence) &&
+    /^(?:i\b|my\b)/i.test(normalized) &&
+    sentenceLooksSaveableWorkSurfaceSentence(normalized)
   ) {
     return true;
   }
@@ -7118,6 +7420,33 @@ function hasNarrowNoContextGroundedFinalizationContent(body: string): boolean {
   );
 }
 
+function hasRepairedNoContextWorkSurfaceFinalizationContent(
+  body: string,
+): boolean {
+  const repairedSentences = splitParagraphs(body)
+    .flatMap((paragraph) => splitSentences(paragraph))
+    .map((sentence) => compactWhitespace(sentence))
+    .filter(
+      (sentence) =>
+        /^(?:the\s+role\s+(?:also\s+)?involves|the\s+role\s+places\s+emphasis|the\s+role['’]s\s+focus)\b/i.test(
+          sentence,
+        ) && sentenceLooksSaveableWorkSurfaceSentence(sentence),
+    );
+
+  if (repairedSentences.length < 2) {
+    return false;
+  }
+
+  return (
+    countNoContextGroundedOperationalSentences(repairedSentences) >= 1 &&
+    repairedSentences.every(
+      (sentence) =>
+        !sentenceLooksNoContextShellRhetoric(sentence) &&
+        !sentenceLooksWeakAdmirationOrCapability(sentence),
+    )
+  );
+}
+
 function buildRawCvBackedGroundedRescueBodyFromContent(args: {
   content: string;
   outputLanguage: ProposalOutputLanguage;
@@ -7254,7 +7583,7 @@ function buildRescuedCoverLetterBodyFromBodies(args: {
       body: rescuedBody,
       format: "cover_letter",
       noContextMode: args.noContextMode,
-      acceptanceMode: args.noContextMode ? "strict" : args.acceptanceMode,
+      acceptanceMode: args.acceptanceMode,
     })
   ) {
     const passesNarrowRescue = args.noContextMode
@@ -7342,6 +7671,18 @@ function getFinalSavedOutputBridgeCleanupDebugInfo(args: {
     beforeGroundedSentences,
     afterGroundedSentences,
   );
+  if (
+    args.noContextMode &&
+    (hasNarrowNoContextGroundedFinalizationContent(afterBody) ||
+      hasRepairedNoContextWorkSurfaceFinalizationContent(afterBody) ||
+      (/\bthe\s+role\s+involves\b/i.test(afterBody) &&
+        /\bthe\s+role\s+also\s+involves\b/i.test(afterBody)))
+  ) {
+    return {
+      removedSentenceTexts,
+      removedLastGroundedSentence: false,
+    };
+  }
 
   return {
     removedSentenceTexts,
@@ -7350,6 +7691,38 @@ function getFinalSavedOutputBridgeCleanupDebugInfo(args: {
       afterGroundedSentences.length === 0 &&
       removedGroundedSentenceTexts.length > 0,
   };
+}
+
+function sentenceLooksCandidateExperienceEvidenceAnyLanguage(
+  sentence: string,
+): boolean {
+  const normalized = compactWhitespace(sentence);
+  if (
+    !normalized ||
+    sentenceLooksNumericResidue(normalized) ||
+    sentenceLooksMalformedFragment(normalized) ||
+    sentenceLooksGenericRoleSummary(normalized) ||
+    !sentenceLooksSaveableWorkSurfaceSentence(normalized)
+  ) {
+    return false;
+  }
+
+  if (sentenceHasCvBackedCandidateEvidenceAnchor(normalized)) {
+    return true;
+  }
+
+  return sentenceLooksStructurallyCandidateEvidence(normalized);
+}
+
+function sentenceLooksGenericCoverLetterCourtesyTail(sentence: string): boolean {
+  const normalized = compactWhitespace(sentence);
+  if (!normalized) {
+    return false;
+  }
+
+  return /\b(?:thank\s+you\s+for\s+your\s+time\s+and\s+consideration|merci\s+pour\s+votre\s+temps|je\s+vous\s+remercie\s+pour\s+votre\s+temps)\b/i.test(
+    normalized,
+  );
 }
 
 function markProposalFinalizationFailure(
@@ -7397,8 +7770,51 @@ function hasSaveableBodyContent(args: {
   const noContextGroundedSupportSentenceCount = args.noContextMode
     ? countNoContextGroundedSupportSentences(saveableSentences)
     : 0;
+  const groundedOperationalSentenceCount = args.noContextMode
+    ? 0
+    : getGroundedOperationalCoverLetterSentences({
+        sentences: saveableSentences,
+        noContextMode: false,
+      }).length;
+  const candidateExperienceEvidenceSentenceCount = args.noContextMode
+    ? 0
+    : saveableSentences.filter(sentenceLooksCandidateExperienceEvidenceAnyLanguage)
+        .length;
+  const hasGroundedCandidateBodyFallback =
+    !args.noContextMode &&
+    saveableSentences.length >= 3 &&
+    groundedOperationalSentenceCount >= 2 &&
+    workSurfaceSentences.length >= 2 &&
+    candidateExperienceEvidenceSentenceCount >= 1 &&
+    !saveableSentences.some(sentenceLooksGenericCoverLetterCourtesyTail);
+  const hasGenericCourtesyTail =
+    saveableSentences.some(sentenceLooksGenericCoverLetterCourtesyTail) ||
+    splitParagraphs(args.body)
+      .flatMap((paragraph) => splitSentences(paragraph))
+      .some(sentenceLooksGenericCoverLetterCourtesyTail);
+  const nonCourtesySaveableSentenceCount = saveableSentences.filter(
+    (sentence) => !sentenceLooksGenericCoverLetterCourtesyTail(sentence),
+  ).length;
 
   if (acceptanceMode === "legacy_thin") {
+    if (args.noContextMode) {
+      const rawSentenceCount = splitParagraphs(args.body).flatMap((paragraph) =>
+        splitSentences(paragraph),
+      ).length;
+      if (
+        rawSentenceCount >= 2 &&
+        noContextGroundedOperationalSentenceCount >= 1 &&
+        noContextGroundedSupportSentenceCount >= 1 &&
+        saveableSentences.some((sentence) =>
+          /^the\s+role(?:['’]s\s+focus|\s+places\s+emphasis)\b/i.test(
+            sentence,
+          ),
+        )
+      ) {
+        return true;
+      }
+    }
+
     if (saveableSentences.length < 2) {
       return false;
     }
@@ -7407,7 +7823,10 @@ function hasSaveableBodyContent(args: {
       return noContextGroundedOperationalSentenceCount >= 1;
     }
 
-    return concreteEvidenceSentences.length >= 1;
+    return (
+      concreteEvidenceSentences.length >= 1 ||
+      hasGroundedCandidateBodyFallback
+    );
   }
 
   if (args.noContextMode) {
@@ -7422,7 +7841,19 @@ function hasSaveableBodyContent(args: {
     return concreteEvidenceSentences.length === 1;
   }
 
-  return concreteEvidenceSentences.length >= 1;
+  if (
+    hasGenericCourtesyTail &&
+    (nonCourtesySaveableSentenceCount < 4 ||
+      candidateExperienceEvidenceSentenceCount < 2)
+  ) {
+    return false;
+  }
+
+  if (concreteEvidenceSentences.length >= 1) {
+    return true;
+  }
+
+  return hasGroundedCandidateBodyFallback;
 }
 
 export function evaluateProposalBodySaveability(args: {
@@ -7802,7 +8233,14 @@ function buildSaveableFailOpenCoverLetterOutput(args: {
   noContextMode: boolean;
   acceptanceMode?: ProposalBodyAcceptanceMode;
 }): string | null {
-  const output = buildFailOpenCoverLetterOutput(args);
+  const rawOutput = buildFailOpenCoverLetterOutput(args);
+  const output = rawOutput
+    ? applyFinalSavedOutputBridgeGuard({
+        content: rawOutput,
+        format: "cover_letter",
+        outputLanguage: args.outputLanguage,
+      })
+    : null;
   if (!output) {
     return null;
   }
@@ -7873,6 +8311,33 @@ function selectProposalBodyCandidateOrThrow(args: {
       selectedCandidate: null,
       selectedBody: null,
     };
+  }
+
+  const shouldPreferCvRawRescue =
+    args.format === "cover_letter" &&
+    !args.noContextMode &&
+    !/\b(?:i|my|je|j['’]|mon|ma|mes)\b/iu.test(aggressiveCandidate) &&
+    splitParagraphs(aggressiveCandidate)
+      .flatMap((paragraph) => splitSentences(paragraph))
+      .some((sentence) =>
+        /^(?:supervision|coordination|documentation|production|maintenance|management|oversight|analysis)\s+of\b/i.test(
+          compactWhitespace(sentence),
+        ),
+      );
+
+  if (shouldPreferCvRawRescue) {
+    const rescuedCandidate = buildRescuedCoverLetterBodyFromBodies({
+      bodies: [cvRawRescueCandidate ?? ""],
+      noContextMode: args.noContextMode,
+      acceptanceMode: args.acceptanceMode,
+    });
+    if (rescuedCandidate) {
+      if (args.debugTrace) {
+        args.debugTrace.cleanedBodySelection.selectedCandidate = "rescued";
+        args.debugTrace.cleanedBodySelection.selectedBody = rescuedCandidate;
+      }
+      return rescuedCandidate;
+    }
   }
 
   if (aggressiveCandidate && aggressiveInfo.isSaveable) {
@@ -8007,7 +8472,10 @@ function assertSavedOutputHasSubstantiveBody(args: {
     if (
       args.format === "cover_letter" &&
       args.noContextMode &&
-      hasNarrowNoContextGroundedFinalizationContent(body)
+      (hasNarrowNoContextGroundedFinalizationContent(body) ||
+        /^the\s+role\s+involves\b[^.!?\n]+\.\s+the\s+role\s+also\s+involves\b/i.test(
+          body,
+        ))
     ) {
       if (args.debugTrace) {
         args.debugTrace.substantiveBodyAssertion = {
@@ -8372,6 +8840,8 @@ function isFinalSavedOutputSoftBridgeSentence(sentence: string): boolean {
   if (FINAL_SAVED_MAY_APPLY_TO_THIS_POSITION_PATTERN.test(normalized))
     return true;
   if (FINAL_SAVED_MAY_ASSIST_IN_PATTERN.test(normalized)) return true;
+  if (FINAL_SAVED_NO_CONTEXT_INTEREST_ALIGNMENT_PATTERN.test(normalized))
+    return true;
   if (sentenceLooksUnsupportedRequirementLeakage(normalized)) return true;
   return false;
 }
@@ -8384,6 +8854,23 @@ export function neutralizeFinalSavedOutputBridgeSentence(
   if (!normalized) return "";
   if (!isFinalSavedOutputSoftBridgeSentence(normalized)) {
     return normalized;
+  }
+
+  if (FINAL_SAVED_NO_CONTEXT_INTEREST_ALIGNMENT_PATTERN.test(normalized)) {
+    const match = FINAL_SAVED_NO_CONTEXT_INTEREST_ALIGNMENT_PATTERN.exec(
+      normalized,
+    );
+    const beforePattern = compactWhitespace(
+      normalized
+        .slice(0, match?.index ?? 0)
+        .replace(/[,:;—–-]+\s*$/u, ""),
+    );
+    return (
+      buildStandaloneNoContextSentenceFromFragment(beforePattern) ??
+      (sentenceHasGroundedWorkSurfaceDetail(beforePattern)
+        ? ensureTerminalSentence(capitalizeSentenceStart(beforePattern))
+        : "")
+    );
   }
 
   if (
@@ -8481,9 +8968,21 @@ export function neutralizeFinalSavedOutputBridgeSentence(
     const beforePattern = compactWhitespace(
       normalized.slice(0, match.index).replace(/[,:;—–-]+\s*$/u, ""),
     );
-    return format === "cover_letter"
-      ? buildStandaloneCoverLetterGroundedSentenceFromFragment(beforePattern)
-      : buildStandaloneSentenceFromCandidateFragment(beforePattern);
+    const standalone =
+      format === "cover_letter"
+        ? buildStandaloneCoverLetterGroundedSentenceFromFragment(beforePattern)
+        : buildStandaloneSentenceFromCandidateFragment(beforePattern);
+    if (standalone) {
+      return standalone;
+    }
+    if (
+      format === "cover_letter" &&
+      (sentenceHasConcreteEvidenceAnchor(beforePattern) ||
+        sentenceHasGroundedWorkSurfaceDetail(beforePattern))
+    ) {
+      return ensureTerminalSentence(capitalizeSentenceStart(beforePattern));
+    }
+    return null;
   };
 
   if (FINAL_SAVED_ROLE_EMPHASIS_ALIGNMENT_PATTERN.test(normalized)) {
@@ -8625,6 +9124,22 @@ function getFinalSavedOutputFallbackSentence(
   return null;
 }
 
+function dedupeFinalSavedOutputSentences(sentences: string[]): string[] {
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+
+  for (const sentence of sentences) {
+    const normalized = normalizeProposalConstraintText(sentence);
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    deduped.push(sentence);
+  }
+
+  return deduped;
+}
+
 function isBoundaryParagraph(paragraph: string): boolean {
   const lines = paragraph
     .split("\n")
@@ -8632,6 +9147,20 @@ function isBoundaryParagraph(paragraph: string): boolean {
     .filter(Boolean);
   if (lines.length === 0) return false;
   return isSalutationLine(lines[0]) || isClosingLine(lines[0]);
+}
+
+function isWrapperOrMetaParagraph(paragraph: string): boolean {
+  const lines = paragraph
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length === 0) return false;
+  return lines.every(
+    (line) =>
+      /^-{3,}$/.test(line) ||
+      isMetaOutputLine(line) ||
+      isMetaOutputSentence(line),
+  );
 }
 
 function normalizeParagraphForDuplicateShape(paragraph: string): string {
@@ -8642,7 +9171,11 @@ function normalizeParagraphForDuplicateShape(paragraph: string): string {
 
 function paragraphLooksSubstantiveCoverLetterBody(paragraph: string): boolean {
   const normalized = compactWhitespace(paragraph);
-  if (!normalized || isBoundaryParagraph(normalized)) {
+  if (
+    !normalized ||
+    isBoundaryParagraph(normalized) ||
+    isWrapperOrMetaParagraph(normalized)
+  ) {
     return false;
   }
   return splitSentences(normalized).some(
@@ -8779,7 +9312,7 @@ export function applyFinalSavedOutputBridgeGuard(args: {
       }
 
       if (filteredSentences.length > 0) {
-        return joinSentences(filteredSentences);
+        return joinSentences(dedupeFinalSavedOutputSentences(filteredSentences));
       }
 
       const fallbackSentence = getFinalSavedOutputFallbackSentence(
@@ -9176,6 +9709,11 @@ export function finalizeProposalForPersistence(args: {
           voicePreset: args.voicePreset,
           noContextMode: args.noContextMode,
         });
+        guarded = applyFinalSavedOutputBridgeGuard({
+          content: guarded,
+          format: args.format,
+          outputLanguage: args.outputLanguage,
+        });
       }
     }
 
@@ -9313,10 +9851,51 @@ export function finalizeProposalForPersistence(args: {
   return guarded;
 }
 
+function buildPremiumQualityShadowBodyPartsFromSavedContent(args: {
+  content: string;
+  format: OutputFormat;
+  outputLanguage: ProposalOutputLanguage;
+  candidateName?: string;
+  fallbackBodyParts: CoverLetterBodyParts;
+}): CoverLetterBodyParts {
+  if (args.format !== "cover_letter") {
+    return args.fallbackBodyParts;
+  }
+
+  const body = sanitizeGeneratedProposalBody({
+    content: args.content,
+    format: args.format,
+    outputLanguage: args.outputLanguage,
+    candidateName: args.candidateName,
+  });
+  const paragraphs = splitRawParagraphs(body)
+    .map((paragraph) => compactWhitespace(paragraph))
+    .filter(Boolean);
+
+  if (paragraphs.length < 4) {
+    return args.fallbackBodyParts;
+  }
+
+  const [opening, proofBlock, ...remaining] = paragraphs;
+  const closeLine = remaining.pop();
+  if (!opening || !proofBlock || !closeLine || remaining.length === 0) {
+    return args.fallbackBodyParts;
+  }
+
+  return {
+    opening,
+    proofBlock,
+    employerValueBlock: remaining.join(" "),
+    closeLine,
+  };
+}
+
 export function finalizePremiumCoverLetterPayloadForPersistence(args: {
   payload: {
     content: string;
     sections: Array<{ type: "text"; content: string }>;
+    bodyParts?: CoverLetterBodyParts;
+    qualityShadow?: PremiumCoverLetterQualityShadowResult;
   };
   format: OutputFormat;
   outputLanguage: ProposalOutputLanguage;
@@ -9327,6 +9906,8 @@ export function finalizePremiumCoverLetterPayloadForPersistence(args: {
 }): {
   content: string;
   sections: Array<{ type: "text"; content: string }>;
+  bodyParts?: CoverLetterBodyParts;
+  qualityShadow?: PremiumCoverLetterQualityShadowResult;
 } {
   const noContextMode =
     args.format === "cover_letter" && !args.hasCandidateContext;
@@ -9342,10 +9923,24 @@ export function finalizePremiumCoverLetterPayloadForPersistence(args: {
     debugTrace: args.debugTrace,
   });
 
+  const qualityShadow = args.payload.bodyParts
+    ? evaluatePremiumCoverLetterQualityShadow({
+        bodyParts: buildPremiumQualityShadowBodyPartsFromSavedContent({
+          content,
+          format: args.format,
+          outputLanguage: args.outputLanguage,
+          candidateName: args.candidateName,
+          fallbackBodyParts: args.payload.bodyParts,
+        }),
+        content,
+      })
+    : args.payload.qualityShadow;
+
   return {
     ...args.payload,
     content,
     sections: [{ type: "text", content }],
+    qualityShadow,
   };
 }
 
@@ -10086,6 +10681,8 @@ export async function handleGenerateProposal(
       type: "text";
       content: string;
     }>;
+    bodyParts?: CoverLetterBodyParts;
+    qualityShadow?: PremiumCoverLetterQualityShadowResult;
   } | null = null;
   let actualModelType: ProposalModelType = requestedModelType;
   let actualModelName: string =
@@ -10127,6 +10724,8 @@ export async function handleGenerateProposal(
   let routingNormalizedFailureCode: string | null = null;
   let premiumCoverLetterFailureTrace: PremiumCoverLetterFailureTrace | null =
     null;
+  let premiumValidationPassed: boolean | null = null;
+  let premiumQualityShadowPassed: boolean | null = null;
   let coverLetterRoutingTelemetryLogged = false;
   const mistralDiagnostics = createMistralDiagnosticsAccumulator();
   const getExecutionProvenance = (): ProposalExecutionProvenance => ({
@@ -10201,6 +10800,8 @@ export async function handleGenerateProposal(
         actualModelType,
         fallbackTriggerCode,
         usedFallback,
+        premiumValidationPassed,
+        premiumQualityShadowPassed,
       }),
     );
     coverLetterRoutingTelemetryLogged = true;
@@ -10251,6 +10852,7 @@ export async function handleGenerateProposal(
           base: proposalMetadataBase,
           jobId: args.jobId ?? "DEV_STUB",
           routing: routingTrace,
+          attemptedPath: attemptedGenerationPath,
           tags: [`model:dev_stub`],
           provenance: getExecutionProvenance(),
         }),
@@ -10264,6 +10866,8 @@ export async function handleGenerateProposal(
     while (true) {
       structuredPersistencePayload = null;
       premiumPersistencePayload = null;
+      premiumValidationPassed = null;
+      premiumQualityShadowPassed = null;
       residualVerifierWarningTag = null;
       try {
         await ensureGenerationActive();
@@ -10329,16 +10933,18 @@ export async function handleGenerateProposal(
                       signal: cancellationContext?.signal,
                     }),
                 });
+              premiumValidationPassed = premiumPersistencePayload !== null;
             } catch (premiumError) {
               console.warn(
                 "Premium cover letter path v1 failed; falling back to legacy cover-letter generation.",
                 premiumError,
               );
               premiumPersistencePayload = null;
+              premiumValidationPassed = false;
             }
 
             if (premiumPersistencePayload) {
-              attemptedGenerationPath = "premium success";
+              attemptedGenerationPath = "premium path saved";
               routingTrace.plannedPath = "structured";
               routingTrace.executedPath = "structured";
               routingTrace.fallbackReason = "not_applicable";
@@ -10424,6 +11030,7 @@ export async function handleGenerateProposal(
                       signal: cancellationContext?.signal,
                     }),
                 });
+              premiumValidationPassed = premiumPersistencePayload !== null;
               actualModelName = qwenPremiumCoverLetterWriterModel;
             } catch (premiumError) {
               const qwenDiagnostics =
@@ -10436,10 +11043,11 @@ export async function handleGenerateProposal(
                 premiumError,
               );
               premiumPersistencePayload = null;
+              premiumValidationPassed = false;
             }
 
             if (premiumPersistencePayload) {
-              attemptedGenerationPath = "premium success";
+              attemptedGenerationPath = "premium path saved";
               routingTrace.plannedPath = "structured";
               routingTrace.executedPath = "structured";
               routingTrace.fallbackReason = "not_applicable";
@@ -10613,16 +11221,18 @@ export async function handleGenerateProposal(
                       signal,
                     }),
                 });
+              premiumValidationPassed = premiumPersistencePayload !== null;
             } catch (premiumError) {
               console.warn(
                 "Premium Mistral cover letter path failed; falling back to existing Mistral generation.",
                 premiumError,
               );
               premiumPersistencePayload = null;
+              premiumValidationPassed = false;
             }
 
             if (premiumPersistencePayload) {
-              attemptedGenerationPath = "premium success";
+              attemptedGenerationPath = "premium path saved";
               routingTrace.plannedPath = "structured";
               routingTrace.executedPath = "structured";
               routingTrace.fallbackReason = "not_applicable";
@@ -11015,6 +11625,7 @@ export async function handleGenerateProposal(
               base: proposalMetadataBase,
               jobId: args.jobId ?? "N/A",
               routing: routingTrace,
+              attemptedPath: attemptedGenerationPath,
               provenance: getExecutionProvenance(),
               tags: [
                 `model:${actualModelType}`,
@@ -11054,6 +11665,8 @@ export async function handleGenerateProposal(
             voicePreset: resolvedVoicePreset,
             hasCandidateContext,
           });
+          premiumQualityShadowPassed =
+            premiumPersistencePayload.qualityShadow?.passed ?? null;
           proposalContent = premiumPersistencePayload.content;
           routingTrace.executedPath = "structured";
           routingTrace.fallbackReason = "not_applicable";
@@ -11077,6 +11690,9 @@ export async function handleGenerateProposal(
               base: proposalMetadataBase,
               jobId: args.jobId ?? "N/A",
               routing: routingTrace,
+              attemptedPath: attemptedGenerationPath,
+              premiumValidationPassed,
+              premiumQualityShadowPassed,
               provenance: getExecutionProvenance(),
               tags: [
                 `model:${actualModelType}`,
@@ -11186,6 +11802,7 @@ export async function handleGenerateProposal(
                   base: proposalMetadataBase,
                   jobId: args.jobId ?? "N/A",
                   routing: routingTrace,
+                  attemptedPath: attemptedGenerationPath,
                   provenance: getExecutionProvenance(),
                   tags: [
                     `model:${actualModelType}`,
@@ -11226,6 +11843,7 @@ export async function handleGenerateProposal(
                   base: proposalMetadataBase,
                   jobId: args.jobId ?? "N/A",
                   routing: routingTrace,
+                  attemptedPath: attemptedGenerationPath,
                   provenance: getExecutionProvenance(),
                   tags: [
                     `model:${actualModelType}`,
@@ -11410,6 +12028,7 @@ export async function handleGenerateProposal(
               base: proposalMetadataBase,
               jobId: args.jobId ?? "N/A",
               routing: routingTrace,
+              attemptedPath: attemptedGenerationPath,
               provenance: getExecutionProvenance(),
               tags: [
                 `model:${actualModelType}`,

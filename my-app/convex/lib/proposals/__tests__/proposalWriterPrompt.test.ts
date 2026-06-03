@@ -21,6 +21,10 @@ import {
   type ProposalPlannerResult,
 } from "../proposalPlanner";
 import { analyzeProposalDraft } from "../proposalEnforcement";
+import {
+  validatePremiumCoverLetterBodyParts,
+  validatePremiumWriterOutputV1,
+} from "../premiumCoverLetter";
 
 const BASE_ARGS = {
   jobTitle: "Example Role",
@@ -855,7 +859,7 @@ describe("proposal writer prompt contract", () => {
 
     expect(prompt).toContain("Application-message employer priority snapshot:");
     expect(prompt).toContain(
-      "strongest_work_surfaces: Coordinate maintenance requests.",
+      "strongest_work_surfaces: update service records.",
     );
     expect(prompt).toContain("schedule vendors.");
     expect(prompt).toContain("update service records.");
@@ -1029,7 +1033,8 @@ describe("proposal writer prompt contract", () => {
       }),
     ).toMatchObject({
       salutation: "Madame, Monsieur,",
-      signOff: "Bien cordialement,",
+      signOff:
+        "Veuillez agréer, Madame, Monsieur, l'expression de mes salutations distinguées.",
       finalSentence: "Je serais disponible pour discuter davantage du poste.",
       includeCandidateNameLine: true,
     });
@@ -1140,6 +1145,141 @@ describe("proposal writer prompt contract", () => {
 
     expect(saved).toContain("For eight years");
     expect(saved).toContain("routine patrols");
+  });
+
+  it("accepts Janice Walton premium body evidence through structural finalization", () => {
+    const trace = inspectProposalFinalization({
+      content: [
+        "Dear Hiring Manager,",
+        "",
+        "I bring luxury client service experience from work where greeting and assessing clients was tied to careful attention to requested alterations.",
+        "",
+        "My garment alteration work included sewing and altering items to specifications, with finish quality checked against what each client requested.",
+        "",
+        "I also met a 99% deadline standard by coordinating requested alterations and keeping follow-through clear before the final handoff.",
+        "",
+        "I would be glad to discuss the position further.",
+        "",
+        "Sincerely,",
+        "Janice Walton",
+      ].join("\n"),
+      format: "cover_letter",
+      outputLanguage: "English",
+      candidateName: "Janice Walton",
+      voicePreset: "signature",
+      noContextMode: false,
+      requiresCandidateEvidence: true,
+    });
+
+    expect(trace.failureStage).toBeUndefined();
+    expect(trace.finalOutput).toContain("garment alteration work");
+    expect(trace.finalOutput).toContain("99% deadline standard");
+    expect(trace.cleanedBodySelection.selectedBody).not.toBeNull();
+  });
+
+  it("accepts compact ADT/Copwatch security evidence during premium finalization", () => {
+    const saved = finalizePremiumCoverLetterPayloadForPersistence({
+      payload: {
+        content: [
+          "Dear Hiring Manager,",
+          "",
+          "I bring eight years of safety-conscious, attentive security experience protecting and guarding VIP individuals in military and defense settings, with Security Guard roles at ADT Security and Copwatch.",
+          "",
+          "My security background is grounded in careful reporting: completing reports by recording information, observations, occurrences, and surveillance activity.",
+          "",
+          "For an airport post where presence, routine patrols, customer service, and clear communication support a secure environment, my security background would help provide steady attention and reliable reporting for the people who depend on that post being handled carefully.",
+          "",
+          "I would be glad to discuss the position further.",
+          "",
+          "Sincerely,",
+        ].join("\n"),
+        sections: [] as Array<{ type: "text"; content: string }>,
+      },
+      format: "cover_letter",
+      outputLanguage: "English",
+      candidateName: "Robert Cooper",
+      voicePreset: "signature",
+      hasCandidateContext: true,
+    }).content;
+
+    expect(saved).toContain("I bring eight years");
+    expect(saved).toContain("ADT Security and Copwatch");
+    expect(saved).toContain("completing reports by recording information");
+  });
+
+  it("accepts responsibility-led CV evidence during premium finalization", () => {
+    const saved = finalizePremiumCoverLetterPayloadForPersistence({
+      payload: {
+        content: [
+          "Dear Hiring Manager,",
+          "",
+          "My strongest match for the High Level Security Officer role is hands-on security reporting: at ADT Security, my responsibilities included completing reports by recording information, observations, occurrences, and surveillance activity.",
+          "",
+          "I bring eight years of security guard experience protecting and guarding VIP individuals in military and defense settings, with Security Guard roles at ADT Security and Copwatch.",
+          "",
+          "In a Securitas environment with Region and Area Management Support Staff, that combination of field security experience and careful reporting would help keep communication clear for the people supporting the site and the officers on duty.",
+          "",
+          "I would be glad to discuss the position further.",
+          "",
+          "Sincerely,",
+        ].join("\n"),
+        sections: [] as Array<{ type: "text"; content: string }>,
+      },
+      format: "cover_letter",
+      outputLanguage: "English",
+      candidateName: "Robert Cooper",
+      voicePreset: "signature",
+      hasCandidateContext: true,
+    }).content;
+
+    expect(saved).toContain("responsibilities included completing reports");
+    expect(saved).toContain("eight years of security guard experience");
+  });
+
+  it("reports premium quality shadow against the finalized saved cover letter", () => {
+    const saved = finalizePremiumCoverLetterPayloadForPersistence({
+      payload: {
+        content: [
+          "Dear Hiring Manager,",
+          "",
+          "I delivered luxury client service by warmly greeting and engaging clients, with attention to individual needs and brand standards.",
+          "",
+          "In garment work, I sewed and altered pieces to required specifications while meeting 99% of deadlines, and kept requested alterations moving within specified timelines and high quality standards.",
+          "",
+          "That mix of client service, organizational care, and deadline discipline is relevant to a store setting where sales goals depend on effective execution of daily operational tasks.",
+          "",
+          "I would be glad to discuss the position further.",
+          "",
+          "Sincerely,",
+        ].join("\n"),
+        sections: [] as Array<{ type: "text"; content: string }>,
+        bodyParts: {
+          opening:
+            "I delivered luxury client service by warmly greeting and engaging clients, with attention to individual needs and brand standards.",
+          proofBlock:
+            "In garment work, I sewed and altered pieces to required specifications while meeting 99% of deadlines, and kept requested alterations moving within specified timelines and high quality standards.",
+          employerValueBlock:
+            "That mix of client service, organizational care, and deadline discipline is relevant to a store setting where sales goals depend on effective execution of daily operational tasks.",
+          closeLine: "I can bring that same discipline to the store team.",
+        },
+        qualityShadow: {
+          passed: true,
+          score: 100,
+          issues: [],
+        },
+      },
+      format: "cover_letter",
+      outputLanguage: "English",
+      candidateName: "Janice Walton",
+      voicePreset: "signature",
+      hasCandidateContext: true,
+    });
+
+    expect(saved.content).toContain(
+      "I would be glad to discuss the position further.",
+    );
+    expect(saved.qualityShadow?.passed).toBe(false);
+    expect(saved.qualityShadow?.issues).toContain("generic_tone");
   });
 
   it("applies the same candidate-evidence guard to premium persistence payloads", () => {
@@ -1686,9 +1826,9 @@ describe("proposal writer prompt contract", () => {
       noContextMode: false,
     });
 
-    expect(rendered).toContain("Best regards,\nSadath Basha.a.m");
+    expect(rendered).toContain("Sincerely,\nSadath Basha.a.m");
     expect(rendered).not.toContain("Best regards,Kind regards,");
-    expect(rendered.match(/Best regards,/g)?.length ?? 0).toBe(1);
+    expect(rendered).not.toContain("Best regards,");
     expect(rendered).not.toContain("Kind regards,");
   });
 
@@ -2053,6 +2193,371 @@ describe("proposal writer prompt contract", () => {
     expect(saved).toContain(
       "That kind of structured project environment is the part of the role I would want to understand more closely.",
     );
+  });
+
+  it("keeps French CV-backed cover letters saveable when the evidence is grounded but not English-anchored", () => {
+    const body = [
+      "Dans mes fonctions de sécurité, la rédaction de rapports fait partie de mon travail, avec l’enregistrement d’informations, d’observations, d’incidents et d’activités de surveillance de façon claire et suivie.",
+      "",
+      "Je suis agent de sécurité attentif et conscient des enjeux de sûreté, avec huit ans d’expérience dans la protection et la garde de personnes VIP dans les secteurs militaire et de la défense.",
+      "Mon parcours inclut des postes d’agent de sécurité chez ADT Security et chez Copwatch, où la vigilance quotidienne et le reporting précis étaient essentiels.",
+      "",
+      "Cette combinaison de vigilance, d’expérience en environnement sensible et de rapports structurés est utile dans un cadre où les équipes doivent pouvoir s’appuyer sur des informations fiables et un suivi régulier.",
+      "Cela aide les responsables et collègues à comprendre rapidement ce qui s’est passé, ce qui a été observé et ce qui mérite attention.",
+      "",
+      "Je peux apporter une présence attentive, disciplinée et habituée aux exigences concrètes de la sécurité de haut niveau.",
+    ].join("\n");
+
+    expect(
+      evaluateProposalBodySaveability({
+        body,
+        format: "cover_letter",
+        noContextMode: false,
+        acceptanceMode: "strict",
+      }),
+    ).toBe(true);
+
+    const saved = finalizeProposalForPersistence({
+      content: body,
+      format: "cover_letter",
+      outputLanguage: "French",
+      voicePreset: "direct",
+      noContextMode: false,
+    });
+
+    expect(saved).toContain("huit ans d’expérience");
+    expect(saved).toContain("ADT Security");
+  });
+
+  it("does not treat generic French job-summary prose as CV-backed evidence", () => {
+    const body = [
+      "Le poste demande une vigilance constante, des rondes régulières et une communication claire avec les équipes sur site.",
+      "Les rapports doivent rester précis, structurés et utiles pour comprendre les incidents et les observations importantes.",
+      "La surveillance quotidienne exige aussi une présence fiable et une attention continue aux situations sensibles.",
+    ].join("\n");
+
+    expect(
+      evaluateProposalBodySaveability({
+        body,
+        format: "cover_letter",
+        noContextMode: false,
+        acceptanceMode: "strict",
+      }),
+    ).toBe(false);
+  });
+
+  it("does not let a French courtesy tail make otherwise thin CV-backed prose saveable", () => {
+    const body = [
+      "Dans mes fonctions de sécurité, la rédaction de rapports fait partie de mon travail, avec l’enregistrement d’observations et d’activités de surveillance.",
+      "Mon parcours inclut des postes d’agent de sécurité chez ADT Security et chez Copwatch, où la vigilance quotidienne était importante.",
+      "Cette expérience est utile dans un cadre où les équipes doivent pouvoir s’appuyer sur des informations fiables.",
+      "Je vous remercie pour votre temps et votre considération.",
+    ].join("\n");
+
+    expect(
+      evaluateProposalBodySaveability({
+        body,
+        format: "cover_letter",
+        noContextMode: false,
+        acceptanceMode: "strict",
+      }),
+    ).toBe(false);
+  });
+
+  it("accepts truthful structural cover-letter evidence across languages without domain keyword gates", () => {
+    const cases = [
+      {
+        label: "English",
+        body: [
+          "I reviewed client request records, updated delivery notes, and handed each resolved case to the support team before the daily deadline.",
+          "That process kept customer questions traceable, reduced unclear handoffs, and gave teammates the correct status before follow-up calls.",
+        ].join("\n"),
+      },
+      {
+        label: "French",
+        body: [
+          "J’ai vérifié les dossiers de demande client, corrigé les notes de livraison et transmis chaque cas terminé à l’équipe avant l’échéance quotidienne.",
+          "Ce processus gardait les questions clients traçables, limitait les transmissions floues et donnait aux collègues un statut fiable avant les relances.",
+        ].join("\n"),
+      },
+      {
+        label: "Spanish",
+        body: [
+          "Revisé registros de solicitudes de clientes, actualicé notas de entrega y pasé cada caso cerrado al equipo antes del plazo diario.",
+          "Ese proceso mantenía las preguntas de usuarios trazables, evitaba traspasos confusos y daba al equipo un estado fiable para el seguimiento.",
+        ].join("\n"),
+      },
+      {
+        label: "German",
+        body: [
+          "Ich prüfte Kundenanfragen, aktualisierte Liefernotizen und übergab jeden abgeschlossenen Vorgang vor der täglichen Frist an das Team.",
+          "Dieser Ablauf hielt Nutzerfragen nachvollziehbar, verhinderte unklare Übergaben und gab Kolleginnen einen verlässlichen Status für die Nachverfolgung.",
+        ].join("\n"),
+      },
+      {
+        label: "Arabic",
+        body: [
+          "راجعت سجلات طلبات العملاء، وحدّثت ملاحظات التسليم، وسلّمت كل حالة مكتملة إلى الفريق قبل الموعد اليومي.",
+          "هذا المسار جعل أسئلة العملاء قابلة للتتبع، وقلّل التسليمات غير الواضحة، ومنح الزملاء حالة دقيقة للمتابعة.",
+        ].join("\n"),
+      },
+    ];
+
+    for (const { label, body } of cases) {
+      expect(
+        evaluateProposalBodySaveability({
+          body,
+          format: "cover_letter",
+          noContextMode: false,
+          acceptanceMode: "strict",
+        }),
+        label,
+      ).toBe(true);
+    }
+  });
+
+  it("accepts the retail luxury garment case through structural saveability only", () => {
+    const body = [
+      "I delivered luxury client service by warmly greeting and engaging clients, then taking care to assess what they needed with attention and professionalism.",
+      "In garment alteration work, I kept quality and follow-through close together: sewing and altering garments to required specifications, meeting 99% of deadlines, and coordinating requested alterations through completion within specified timelines.",
+      "That work required careful listening, accurate handoffs, and steady attention to both the client experience and the finished product.",
+      "The same habits behind luxury service and alteration coordination—clear communication, organized follow-through, and consistent standards—sit close to store and operational task execution, where customers and teammates depend on details being handled without confusion.",
+    ].join("\n");
+
+    expect(
+      evaluateProposalBodySaveability({
+        body,
+        format: "cover_letter",
+        noContextMode: false,
+        acceptanceMode: "strict",
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps generic CTA-only cover letters below the saveability floor", () => {
+    expect(
+      evaluateProposalBodySaveability({
+        body: "I would be glad to discuss the position further.",
+        format: "cover_letter",
+        noContextMode: false,
+        acceptanceMode: "strict",
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps premium hard safety blockers unchanged", () => {
+    const brief = {
+      language: "English",
+      preset: "signature",
+      contextClass: "cv_adjacent",
+      candidateEvidenceAvailable: true,
+      targetRole: "Operations Coordinator",
+      topEvidence: [
+        "I documented client requests and handed completed records to the support team.",
+      ],
+      supportEvidence: [
+        "I kept notes current so teammates had reliable follow-up status.",
+      ],
+      topResponsibilities: [
+        "Coordinate daily customer requests and maintain accurate records.",
+      ],
+      requiredMoves: [],
+      forbiddenMoves: [],
+    } as const;
+
+    const baseParts = {
+      opening:
+        "I documented client requests and handed completed records to the support team.",
+      proofBlock:
+        "I kept notes current so teammates had reliable follow-up status.",
+      employerValueBlock:
+        "That record discipline matters where customer requests need clear ownership and accurate handoffs.",
+      closeLine:
+        "I bring discipline around records, handoffs, and customer follow-through.",
+    };
+
+    expect(
+      validatePremiumCoverLetterBodyParts({
+        bodyParts: {
+          ...baseParts,
+          proofBlock:
+            "I documented 99% of client requests and handed completed records to the support team.",
+        },
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("unsupported_numeric_claim");
+
+    expect(
+      validatePremiumCoverLetterBodyParts({
+        bodyParts: {
+          ...baseParts,
+          proofBlock:
+            "I hold a valid driver's license and documented client request records for the support team.",
+        },
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("unsupported_license_claim");
+
+    expect(
+      validatePremiumCoverLetterBodyParts({
+        bodyParts: {
+          ...baseParts,
+          proofBlock:
+            "I managed the full operations program and documented client request records for the support team.",
+        },
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("unsupported_ownership_verb");
+
+    expect(
+      validatePremiumCoverLetterBodyParts({
+        bodyParts: baseParts,
+        brief: {
+          ...brief,
+          contextClass: "no_cv",
+          candidateEvidenceAvailable: false,
+          topEvidence: [],
+          supportEvidence: [],
+        },
+      }).map((issue) => issue.code),
+    ).toContain("no_cv_history_claim");
+
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: {
+          version: "premium_writer_output_v1",
+          bodyParts: {
+            opening: {
+              section: "opening",
+              text: baseParts.opening,
+              claimIds: ["claim_opening"],
+              factIds: ["fact_1"],
+              demandIds: [],
+            },
+            proofBlock: {
+              section: "proofBlock",
+              text: "I coordinated daily customer requests and maintain accurate records.",
+              claimIds: ["claim_proof"],
+              factIds: ["fact_1"],
+              demandIds: ["demand_1"],
+            },
+            employerValueBlock: {
+              section: "employerValueBlock",
+              text: baseParts.employerValueBlock,
+              claimIds: ["claim_employer"],
+              factIds: ["fact_1"],
+              demandIds: [],
+            },
+            closeLine: {
+              section: "closeLine",
+              text: baseParts.closeLine,
+              claimIds: ["claim_close"],
+              factIds: ["fact_1"],
+              demandIds: [],
+            },
+          },
+        },
+        claimPlan: {
+          version: "claim_plan_v1",
+          contextClass: "cv_adjacent",
+          language: "English",
+          targetRole: "Operations Coordinator",
+          preset: "signature",
+          claims: [
+            {
+              id: "claim_opening",
+              section: "opening",
+              factIds: ["fact_1"],
+              demandIds: [],
+              claimType: "source_backed",
+              requiredElements: ["I documented client requests."],
+              allowedVerbs: ["documented"],
+              forbiddenVerbs: ["managed", "led", "owned"],
+              forbiddenClaims: [],
+              maxOwnership: "support",
+              allowEmployerBridge: false,
+              editorialGuideline: "Use source-backed evidence.",
+            },
+            {
+              id: "claim_proof",
+              section: "proofBlock",
+              factIds: ["fact_1"],
+              demandIds: ["demand_1"],
+              claimType: "source_backed",
+              requiredElements: ["I documented client requests."],
+              allowedVerbs: ["documented"],
+              forbiddenVerbs: ["managed", "led", "owned"],
+              forbiddenClaims: [],
+              maxOwnership: "support",
+              allowEmployerBridge: false,
+              editorialGuideline: "Do not rewrite job demand as history.",
+            },
+            {
+              id: "claim_employer",
+              section: "employerValueBlock",
+              factIds: ["fact_1"],
+              demandIds: [],
+              claimType: "adjacent_safe_bridge",
+              requiredElements: ["I documented client requests."],
+              allowedVerbs: ["documented"],
+              forbiddenVerbs: ["managed", "led", "owned"],
+              forbiddenClaims: [],
+              maxOwnership: "support",
+              allowEmployerBridge: true,
+              editorialGuideline: "Use a restrained bridge.",
+            },
+            {
+              id: "claim_close",
+              section: "closeLine",
+              factIds: ["fact_1"],
+              demandIds: [],
+              claimType: "source_backed",
+              requiredElements: ["I documented client requests."],
+              allowedVerbs: ["documented"],
+              forbiddenVerbs: ["managed", "led", "owned"],
+              forbiddenClaims: [],
+              maxOwnership: "support",
+              allowEmployerBridge: false,
+              editorialGuideline: "Restate grounded strengths.",
+            },
+          ],
+          globalForbidden: [],
+        },
+        factGraph: {
+          version: "fact_graph_v1",
+          facts: [
+            {
+              id: "fact_1",
+              text: "I documented client requests.",
+              source: "cv",
+              sourcePath: "recentExperience[0].highlights[0]",
+              confidence: "high",
+              category: "responsibility",
+              metrics: [],
+              entities: [],
+              allowedVerbs: ["documented"],
+              forbiddenUpgrades: ["managed", "led", "owned"],
+              ownershipLevel: "support",
+            },
+          ],
+        },
+        jobDemandGraph: {
+          version: "job_demand_graph_v1",
+          demands: [
+            {
+              id: "demand_1",
+              text: "Coordinated daily customer requests and maintain accurate records.",
+              bucket: "core_responsibility",
+              requiredness: "core",
+              tokens: ["coordinate", "customer", "requests", "records"],
+              mustNotBecomeCandidateClaim: true,
+            },
+          ],
+          priorityTokens: ["coordinate", "customer", "requests", "records"],
+        },
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("job_demand_as_candidate_experience");
   });
 
   it("removes a no-context role-title opener when stronger grounded body sentences remain", () => {
