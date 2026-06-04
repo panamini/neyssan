@@ -30,7 +30,7 @@ describe("CvDesignFields", () => {
           sectionHeadingIconMode: "none",
           sectionIconMap: {},
           color: "accent",
-          sizePt: 10,
+          sizePt: 8,
         }}
         onDocumentIconSettingsChange={onDocumentIconSettingsChange}
       />,
@@ -49,7 +49,7 @@ describe("CvDesignFields", () => {
         listMarkerType: "dot",
         defaultListMarkerKey: "dot",
         color: "ink",
-        sizePt: 10,
+        sizePt: 8,
       }),
     );
   });
@@ -170,7 +170,7 @@ describe("CvDesignFields", () => {
 
     expect(screen.getByText("Image")).toBeInTheDocument();
     expect(screen.getByText("Add image")).toBeInTheDocument();
-    expect(screen.getByText("PNG or JPEG")).toBeInTheDocument();
+    expect(screen.getByText("PNG, JPEG or SVG")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Inspect" })).toBeNull();
 
     const input = screen.getByLabelText("Upload CV image");

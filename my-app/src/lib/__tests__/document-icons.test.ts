@@ -52,6 +52,7 @@ describe("document-icons", () => {
     const settings = normalizeDocumentIconSettings(null);
 
     expect(settings.sectionHeadingIconMode).toBe("none");
+    expect(settings.sizePt).toBe(8);
     expect(
       resolveSectionHeadingIconKey({
         settings,

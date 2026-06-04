@@ -62,14 +62,14 @@ const BULLET_PRESETS: BulletPreset[] = [
     title: "Editorial Plus",
     marker: BULLET_MARKER_OPTIONS[4],
     color: "accent",
-    sizePt: 10,
+    sizePt: 8,
   },
   {
     id: "classic-dot",
     title: "Classic Dot",
     marker: BULLET_MARKER_OPTIONS[0],
     color: "ink",
-    sizePt: 10,
+    sizePt: 8,
   },
   {
     id: "minimal-dash",
@@ -92,8 +92,8 @@ const SCALE_OPTIONS: Array<{
   sizePt: DocumentIconSizePt;
 }> = [
   { id: "small", label: "Small", sizePt: 8 },
-  { id: "medium", label: "Medium", sizePt: 10 },
-  { id: "large", label: "Large", sizePt: 12 },
+  { id: "medium", label: "Medium", sizePt: 9 },
+  { id: "large", label: "Large", sizePt: 10 },
 ];
 
 function markerMatches(settings: DocumentIconSettings, marker: BulletMarkerOption): boolean {

@@ -1108,6 +1108,26 @@ describe("ProposalDisplay", () => {
     });
   });
 
+  it("keeps preview body text editable while decoration design mode is active", async () => {
+    renderPreviewEditableProposal(undefined, {
+      documentDecorationDesignMode: true,
+    });
+
+    const bodyEditor = getProposalBodyEditor();
+    expect(bodyEditor).toHaveAttribute("contenteditable", "true");
+
+    const paragraph = getEditableProposalParagraphs()[0];
+    setEditableNodeText(paragraph, "Drawer-open paragraph.");
+    fireEvent.input(paragraph);
+    fireEvent.blur(paragraph);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-content")).toHaveTextContent(
+        "Drawer-open paragraph.",
+      );
+    });
+  });
+
   it("edits letterhead heading details directly in preview mode", async () => {
     renderPreviewEditableProposal(undefined, {
       templateId: "twoweeks-letterhead",

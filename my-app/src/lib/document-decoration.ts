@@ -33,7 +33,7 @@ export const DOCUMENT_DECORATION_MIN_CUSTOM_SIZE_MM = 12;
 export const DOCUMENT_DECORATION_MAX_CUSTOM_SIZE_MM = 105;
 export const DOCUMENT_DECORATION_UPLOAD_ACCEPT =
   ".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml";
-export const DOCUMENT_DECORATION_MAX_FILE_BYTES = 2 * 1024 * 1024;
+export const DOCUMENT_DECORATION_MAX_FILE_BYTES = 10 * 1024 * 1024;
 export const DOCUMENT_DECORATION_MAX_DATA_URL_BYTES = 700 * 1024;
 export const DEFAULT_DOCUMENT_DECORATION_PLACEMENT = {
   xMm: 17,
@@ -434,8 +434,22 @@ export function resizeDocumentDecorationByDeltaMm(
   );
 }
 
+function stripSvgDecorationPreamble(markup: string): string {
+  let normalized = markup.trim();
+  let previous = "";
+  while (previous !== normalized) {
+    previous = normalized;
+    normalized = normalized
+      .replace(/^<\?xml[\s\S]*?\?>\s*/i, "")
+      .replace(/^<!--[\s\S]*?-->\s*/g, "")
+      .replace(/^<!DOCTYPE[^>]*>\s*/i, "")
+      .trim();
+  }
+  return normalized;
+}
+
 export function sanitizeSvgDecorationMarkup(markup: string): string | null {
-  const normalized = markup.trim();
+  const normalized = stripSvgDecorationPreamble(markup);
   if (!/^<svg[\s>]/i.test(normalized)) return null;
   if (/<\/?(script|foreignObject|iframe|object|embed)\b/i.test(normalized)) return null;
   if (/<\/?(animate|animateMotion|animateTransform|set)\b/i.test(normalized)) return null;
@@ -444,14 +458,32 @@ export function sanitizeSvgDecorationMarkup(markup: string): string | null {
   if (/\b(?:href|xlink:href)\s*=\s*(['"])(?!#)[^'"]+\1/i.test(normalized)) {
     return null;
   }
-  if (/\bhttps?:\/\//i.test(normalized)) return null;
+  if (/\bhttps?:\/\//i.test(stripAllowedSvgNamespaceUrls(normalized))) return null;
   return normalized;
+}
+
+function minifySvgDecorationMarkup(markup: string): string {
+  return markup
+    .replace(/<\?xml[\s\S]*?\?>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/>\s+</g, "><")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function stripAllowedSvgNamespaceUrls(markup: string): string {
+  return markup.replace(
+    /\sxmlns(?::[a-zA-Z_][\w.-]*)?\s*=\s*(['"])https?:\/\/www\.w3\.org\/[^'"]+\1/gi,
+    "",
+  );
 }
 
 export function buildSvgDecorationDataUrl(markup: string): string | null {
   const sanitized = sanitizeSvgDecorationMarkup(markup);
   if (!sanitized) return null;
-  return `data:image/svg+xml,${encodeURIComponent(sanitized)}`;
+  return `data:image/svg+xml,${encodeURIComponent(
+    minifySvgDecorationMarkup(sanitized),
+  )}`;
 }
 
 function readFileAsDataUrl(file: File): Promise<string> {
@@ -518,7 +550,7 @@ async function compressRasterDecorationDataUrl(
   const context = canvas.getContext("2d");
   if (!context) {
     assertPersistableDecorationDataUrl(dataUrl);
-    return dataUrl;
+    return { dataUrl, mimeType };
   }
 
   for (const maxDimension of [1200, 900, 700, 520, 380]) {
@@ -573,7 +605,7 @@ function readFileAsText(file: File): Promise<string> {
 
 export async function readDocumentDecorationUpload(file: File): Promise<DocumentDecoration> {
   if (file.size > DOCUMENT_DECORATION_MAX_FILE_BYTES) {
-    throw new Error("Decoration image must be 2 MB or smaller.");
+    throw new Error("Decoration image must be 10 MB or smaller.");
   }
   const mimeType = resolveDocumentDecorationMimeType(file);
   if (!mimeType) {
@@ -583,7 +615,7 @@ export async function readDocumentDecorationUpload(file: File): Promise<Document
   if (mimeType === "image/svg+xml") {
     const dataUrl = buildSvgDecorationDataUrl(await readFileAsText(file));
     if (!dataUrl) {
-      throw new Error("SVG decorations cannot include scripts or external assets.");
+      throw new Error("Use a self-contained SVG without scripts, animations, foreignObject, or external assets.");
     }
     assertPersistableDecorationDataUrl(dataUrl);
     return {

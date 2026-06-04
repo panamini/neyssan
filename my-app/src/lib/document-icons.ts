@@ -50,7 +50,7 @@ export const DEFAULT_DOCUMENT_ICON_SETTINGS: DocumentIconSettings = {
   sectionHeadingIconMode: "none",
   sectionIconMap: {},
   color: "accent",
-  sizePt: 10,
+  sizePt: 8,
 };
 
 export const DOCUMENT_ICON_CATEGORIES: DocumentIconCategoryDefinition[] = [

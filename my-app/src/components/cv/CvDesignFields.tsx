@@ -194,7 +194,7 @@ function CvDesignImageControl({
           </span>
           <span className="dasti-cv-design-image__copy">
             <strong>Add image</strong>
-            <span>PNG or JPEG</span>
+            <span>PNG, JPEG or SVG</span>
           </span>
         </label>
       ) : (

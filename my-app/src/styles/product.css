@@ -5949,10 +5949,35 @@ body,
 }
 
 .bullet-style-control {
+  --bullet-control-surface: var(--sf1);
+  --bullet-control-surface-raised: var(--sfr);
+  --bullet-control-track: color-mix(in srgb, var(--ti) 7%, transparent);
+  --bullet-control-border: var(--border-soft);
+  --bullet-control-border-active: var(--ac);
+  --bullet-control-selected-surface: color-mix(
+    in srgb,
+    var(--ac) 7%,
+    var(--bullet-control-surface)
+  );
   position: relative;
   min-width: 0;
   display: grid;
   gap: 10px;
+}
+
+.dark .bullet-style-control,
+.theme-dark .bullet-style-control,
+[data-theme="dark"] .bullet-style-control {
+  --bullet-control-surface: var(--sf1);
+  --bullet-control-surface-raised: var(--sf2);
+  --bullet-control-track: var(--sf2);
+  --bullet-control-border: var(--border-soft);
+  --bullet-control-border-active: var(--ac);
+  --bullet-control-selected-surface: color-mix(
+    in srgb,
+    var(--ac) 8%,
+    var(--bullet-control-surface)
+  );
 }
 
 .bullet-style-control__label {
@@ -5973,9 +5998,9 @@ body,
   justify-content: space-between;
   gap: var(--space-3);
   padding: 12px;
-  border: 1px solid var(--border-soft);
+  border: 1px solid var(--bullet-control-border);
   border-radius: 18px;
-  background: var(--sf1);
+  background: var(--bullet-control-surface);
   box-shadow: none;
   color: var(--ti);
   font: inherit;
@@ -5985,8 +6010,8 @@ body,
 
 .bullet-style-control__summary:hover,
 .bullet-style-control__summary:focus-visible {
-  border-color: color-mix(in srgb, var(--ac) 74%, var(--border-soft));
-  background: var(--sf1);
+  border-color: var(--bullet-control-border-active);
+  background: var(--bullet-control-surface);
   outline: none;
 }
 
@@ -6010,9 +6035,9 @@ body,
   flex: 0 0 38px;
   display: inline-grid;
   place-items: center;
-  border: 1px solid var(--border-soft);
+  border: 1px solid var(--bullet-control-border);
   border-radius: 12px;
-  background: var(--sf1);
+  background: var(--bullet-control-surface-raised);
   color: var(--ac);
   box-shadow: none;
 }
@@ -6102,9 +6127,9 @@ body,
   display: grid;
   gap: 14px;
   padding: 16px;
-  border: 1px solid color-mix(in srgb, var(--ti) 12%, transparent);
+  border: 1px solid var(--bullet-control-border);
   border-radius: 20px;
-  background: var(--sf1);
+  background: var(--bullet-control-surface-raised);
   box-shadow: var(--shadow-popover);
   backdrop-filter: blur(16px) saturate(1.15);
 }
@@ -6114,7 +6139,7 @@ body,
   gap: 3px;
   padding: 3px;
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--ti) 7%, transparent);
+  background: var(--bullet-control-track);
 }
 
 .bullet-style-control__tabs button,
@@ -6137,7 +6162,7 @@ body,
 
 .bullet-style-control__tabs button[aria-selected="true"],
 .bullet-style-control__segments button[data-selected="true"] {
-  background: var(--sf1);
+  background: var(--bullet-control-surface);
   color: var(--ti);
   box-shadow: var(--shadow-sm);
 }
@@ -6150,9 +6175,9 @@ body,
 .bullet-style-control__preset {
   width: 100%;
   padding: 10px;
-  border: 1px solid color-mix(in srgb, var(--ti) 8%, transparent);
+  border: 1px solid var(--bullet-control-border);
   border-radius: 12px;
-  background: var(--sf1);
+  background: var(--bullet-control-surface);
   color: var(--ti);
   font: inherit;
   text-align: start;
@@ -6162,8 +6187,8 @@ body,
 .bullet-style-control__preset:hover,
 .bullet-style-control__preset:focus-visible,
 .bullet-style-control__preset[data-selected="true"] {
-  border-color: var(--ac);
-  background: color-mix(in srgb, var(--ac) 7%, var(--sf1));
+  border-color: var(--bullet-control-border-active);
+  background: var(--bullet-control-selected-surface);
   outline: none;
 }
 
@@ -6197,23 +6222,23 @@ body,
   min-width: 0;
   display: inline-grid;
   place-items: center;
-  border: 1px solid color-mix(in srgb, var(--ti) 9%, transparent);
+  border: 1px solid var(--bullet-control-border);
   border-radius: 8px;
-  background: var(--sf1);
+  background: var(--bullet-control-surface);
   color: var(--ti);
   cursor: pointer;
 }
 
 .bullet-style-control__marker-grid button:hover,
 .bullet-style-control__marker-grid button:focus-visible {
-  border-color: var(--ac);
+  border-color: var(--bullet-control-border-active);
   outline: none;
 }
 
 .bullet-style-control__marker-grid button[data-selected="true"] {
-  border-color: var(--ac);
+  border-color: var(--bullet-control-border-active);
   background: var(--ac);
-  color: var(--color-on-accent, var(--sf1));
+  color: var(--color-on-accent, var(--bullet-control-surface));
 }
 
 .bullet-style-control__segments {
@@ -6221,7 +6246,7 @@ body,
   gap: 3px;
   padding: 3px;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--ti) 7%, transparent);
+  background: var(--bullet-control-track);
 }
 
 .bullet-style-control__segments button {
@@ -6230,9 +6255,27 @@ body,
 }
 
 .document-icon-picker {
+  --document-icon-picker-surface: var(--color-surface-raised);
+  --document-icon-picker-surface-raised: var(--color-surface);
+  --document-icon-picker-track: var(--color-surface-muted);
+  --document-icon-picker-border: var(--color-border);
+  --document-icon-picker-selected-surface: var(--color-accent);
+  --document-icon-picker-selected-fg: var(--color-on-accent, var(--color-canvas));
+  --document-icon-picker-text: var(--color-text);
+  --document-icon-picker-muted: var(--color-text-muted);
   width: 100%;
   display: grid;
   gap: 7px;
+}
+
+.dark .document-icon-picker,
+.theme-dark .document-icon-picker,
+[data-theme="dark"] .document-icon-picker {
+  --document-icon-picker-surface: var(--color-surface-raised);
+  --document-icon-picker-surface-raised: var(--color-surface);
+  --document-icon-picker-track: var(--color-surface-muted);
+  --document-icon-picker-selected-surface: var(--color-accent);
+  --document-icon-picker-selected-fg: var(--color-on-accent, var(--color-canvas));
 }
 
 .document-icon-picker__header {
@@ -6245,7 +6288,7 @@ body,
 
 .document-icon-picker__label,
 .document-icon-picker__category-label {
-  color: var(--tm2);
+  color: var(--document-icon-picker-muted);
   font-size: var(--t2);
   font-weight: 750;
   letter-spacing: 0;
@@ -6256,7 +6299,7 @@ body,
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--tm2);
+  color: var(--document-icon-picker-muted);
   font-size: var(--t2);
   font-weight: 650;
 }
@@ -6284,12 +6327,13 @@ body,
   width: 100%;
   min-height: 30px;
   padding: 0 var(--space-2);
-  border: 1px solid var(--border-soft);
+  border: 1px solid var(--document-icon-picker-border);
   border-radius: var(--radius-control);
-  background: var(--sf1);
-  color: var(--ti);
-  font: inherit;
+  background: var(--document-icon-picker-surface-raised);
+  color: var(--document-icon-picker-text);
+  font-family: var(--font-body-family);
   font-size: var(--tx);
+  line-height: var(--lx);
 }
 
 .document-icon-picker__search:focus-visible {
@@ -6322,7 +6366,7 @@ body,
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
-  color: var(--tm2);
+  color: var(--document-icon-picker-muted);
   cursor: pointer;
   opacity: 0.68;
   transition:
@@ -6333,14 +6377,17 @@ body,
 
 .document-icon-picker__category-tab:hover,
 .document-icon-picker__category-tab:focus-visible {
-  color: var(--ti);
+  color: var(--document-icon-picker-text);
+  background: var(--document-icon-picker-track);
   opacity: 1;
   transform: translateY(-1px);
   outline: none;
 }
 
 .document-icon-picker__category-tab[aria-selected="true"] {
-  color: var(--ti);
+  color: var(--document-icon-picker-selected-fg);
+  background: var(--document-icon-picker-selected-surface);
+  border-color: var(--document-icon-picker-selected-surface);
   opacity: 1;
 }
 
@@ -6377,7 +6424,7 @@ body,
   border: 1px solid transparent;
   border-radius: var(--radius-control);
   background: transparent;
-  color: var(--tm2);
+  color: var(--document-icon-picker-muted);
   font: inherit;
   cursor: pointer;
 }
@@ -6389,15 +6436,15 @@ body,
 
 .document-icon-picker__option:hover,
 .document-icon-picker__option:focus-visible {
-  border-color: var(--border-soft);
-  background: var(--sf1);
+  border-color: var(--document-icon-picker-border);
+  background: var(--document-icon-picker-track);
   outline: none;
 }
 
 .document-icon-picker__option[data-selected="true"] {
-  border-color: var(--ac);
-  background: var(--am-soft);
-  color: var(--ac);
+  border-color: var(--document-icon-picker-selected-surface);
+  background: var(--document-icon-picker-selected-surface);
+  color: var(--document-icon-picker-selected-fg);
 }
 
 .document-icon-picker__option-preview {

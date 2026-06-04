@@ -252,6 +252,11 @@ describe("document-decoration", () => {
     expect(sanitizeSvgDecorationMarkup("<svg viewBox=\"0 0 10 10\"><path d=\"M0 0h10v10\" /></svg>")).toContain(
       "<svg",
     );
+    expect(
+      sanitizeSvgDecorationMarkup(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- exported graph -->\n<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" viewBox=\"0 0 10 10\"><path d=\"M0 0h10v10\" /></svg>",
+      ),
+    ).toContain("<svg");
     expect(sanitizeSvgDecorationMarkup("<svg><script>alert(1)</script></svg>")).toBeNull();
     expect(sanitizeSvgDecorationMarkup("<svg><foreignObject /></svg>")).toBeNull();
     expect(sanitizeSvgDecorationMarkup("<svg><image href=\"https://example.com/a.png\" /></svg>")).toBeNull();
@@ -284,7 +289,7 @@ describe("document-decoration", () => {
     expect(jpegDecoration.dataUrl).toMatch(/^data:image\/jpeg;base64,/);
 
     const svgDecoration = await readDocumentDecorationUpload(
-      new File(["<svg viewBox=\"0 0 10 10\"><circle cx=\"5\" cy=\"5\" r=\"4\" /></svg>"], "seal.svg", {
+      new File(["<?xml version=\"1.0\"?><!DOCTYPE svg><svg viewBox=\"0 0 10 10\"><circle cx=\"5\" cy=\"5\" r=\"4\" /></svg>"], "seal.svg", {
         type: "image/svg+xml",
       }),
     );
@@ -307,5 +312,26 @@ describe("document-decoration", () => {
         new File([oversizedSvg], "large.svg", { type: "image/svg+xml" }),
       ),
     ).rejects.toThrow("Decoration image is too large");
+  });
+
+  it("accepts SVG files above the old 2 MB source-file limit before applying the persisted payload budget", async () => {
+    const oversizedButSafeSvg = `<svg viewBox="0 0 10 10"><text>${"x".repeat(
+      2 * 1024 * 1024 + 1,
+    )}</text></svg>`;
+
+    await expect(
+      readDocumentDecorationUpload(
+        new File([oversizedButSafeSvg], "large-source.svg", {
+          type: "image/svg+xml",
+        }),
+      ),
+    ).rejects.toThrow("Decoration image is too large");
+    await expect(
+      readDocumentDecorationUpload(
+        new File([oversizedButSafeSvg], "large-source.svg", {
+          type: "image/svg+xml",
+        }),
+      ),
+    ).rejects.not.toThrow("2 MB");
   });
 });

@@ -1499,8 +1499,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       onContentChange &&
       usesDocumentRenderer &&
       !loading &&
-      !error &&
-      !documentDecorationDesignMode,
+      !error,
   );
   const canEditPreviewHeaderText = Boolean(
     !isEditable &&

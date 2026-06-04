@@ -29,7 +29,7 @@ describe("ProposalDesignFields", () => {
           sectionHeadingIconMode: "none",
           sectionIconMap: {},
           color: "accent",
-          sizePt: 10,
+          sizePt: 8,
         }}
         onDocumentIconSettingsChange={onDocumentIconSettingsChange}
       />,
@@ -58,7 +58,7 @@ describe("ProposalDesignFields", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Large scale" }));
     expect(onDocumentIconSettingsChange).toHaveBeenCalledWith(
-      expect.objectContaining({ sizePt: 12 }),
+      expect.objectContaining({ sizePt: 10 }),
     );
   });
 });

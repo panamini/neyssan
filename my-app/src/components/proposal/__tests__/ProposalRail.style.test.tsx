@@ -932,7 +932,7 @@ describe("ProposalRail style tab", () => {
 
     expect(screen.getByText("Image", { selector: ".forge__rail-label" })).toBeInTheDocument();
     expect(screen.getByText("Add image")).toBeInTheDocument();
-    expect(screen.getByText("PNG or JPEG")).toBeInTheDocument();
+    expect(screen.getByText("PNG, JPEG or SVG")).toBeInTheDocument();
     expect(screen.getByLabelText("Upload decoration image")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Inspect" })).toBeNull();
   });

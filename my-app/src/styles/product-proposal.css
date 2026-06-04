@@ -3783,8 +3783,14 @@
 }
 
 .dasti-proposal-document__list-marker--editable {
-  z-index: 12;
+  z-index: 80;
   overflow: visible;
+}
+
+.dasti-proposal-document__list-marker--editable:has(
+    .dasti-proposal-document__list-icon-trigger[aria-expanded="true"]
+  ) {
+  z-index: 4000;
 }
 
 .dasti-proposal-document__list-icon-trigger {
@@ -3833,7 +3839,35 @@
 }
 
 .dasti-proposal-document__list-icon-picker {
+  --document-icon-picker-popover-surface: var(--paper);
+  --document-icon-picker-popover-field: color-mix(
+    in srgb,
+    var(--document-icon-picker-popover-surface) 92%,
+    var(--ti) 8%
+  );
+  --document-icon-picker-popover-track: color-mix(
+    in srgb,
+    var(--document-icon-picker-popover-surface) 84%,
+    var(--ti) 16%
+  );
+  --document-icon-picker-surface: var(--document-icon-picker-popover-surface);
+  --document-icon-picker-surface-raised: var(--document-icon-picker-popover-field);
+  --document-icon-picker-track: var(--document-icon-picker-popover-track);
+  --document-icon-picker-border: color-mix(
+    in srgb,
+    var(--ti) 14%,
+    var(--document-icon-picker-popover-surface)
+  );
+  --document-icon-picker-selected-surface: var(--color-accent);
+  --document-icon-picker-selected-fg: var(--color-on-accent, var(--paper));
+  --document-icon-picker-text: var(--ti);
+  --document-icon-picker-muted: color-mix(
+    in srgb,
+    var(--ti) 56%,
+    var(--document-icon-picker-popover-surface) 44%
+  );
   position: absolute;
+  z-index: 4001;
   inset-block-start: calc(100% + 7px);
   inset-inline-start: -4px;
   width: min(260px, calc(100vw - 32px));
@@ -3842,11 +3876,14 @@
   display: grid;
   gap: var(--space-2);
   padding: var(--space-2);
-  border: 1px solid color-mix(in srgb, var(--proposal-document-ink) 14%, transparent);
+  border: 1px solid var(--document-icon-picker-border);
   border-radius: var(--radius-control);
-  background: var(--sf0);
-  color: var(--ti);
+  background: var(--document-icon-picker-surface);
+  color: var(--document-icon-picker-text);
   box-shadow: var(--shadow-lg);
+  font-family: var(--font-body-family);
+  font-size: var(--text-body-sm-size);
+  line-height: var(--text-body-sm-line);
 }
 
 .dasti-proposal-document__list-icon-picker-actions {
@@ -3856,23 +3893,36 @@
 }
 
 .dasti-proposal-document__list-icon-picker-actions button {
-  min-height: 26px;
-  padding: 0 var(--space-2);
+  min-height: var(--control-sm);
+  padding: 0 var(--app-topbar-command-padding-inline);
   border: 1px solid transparent;
   border-radius: var(--radius-control);
-  background: transparent;
-  color: var(--tm1);
-  font: inherit;
-  font-size: var(--t2);
-  font-weight: 650;
+  background: var(--document-icon-picker-surface-raised);
+  color: var(--document-icon-picker-text);
+  font-family: var(--font-body-family);
+  font-size: var(--text-body-sm-size);
+  line-height: var(--text-body-sm-line);
+  font-weight: var(--font-label-weight);
   cursor: pointer;
 }
 
 .dasti-proposal-document__list-icon-picker-actions button:hover,
 .dasti-proposal-document__list-icon-picker-actions button:focus-visible {
-  border-color: var(--border-soft);
-  background: var(--sf1);
+  border-color: var(--document-icon-picker-border);
+  background: var(--document-icon-picker-track);
   outline: none;
+}
+
+.dasti-proposal-document__list-icon-picker-actions
+  button[data-document-icon-picker-action="close"] {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .dasti-proposal-document__list-icon-picker-actions
+    button[data-document-icon-picker-action="close"] {
+    display: inline-flex;
+  }
 }
 
 .dasti-proposal-document__inline-icon {
