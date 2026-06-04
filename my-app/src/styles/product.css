@@ -5947,6 +5947,288 @@ body,
     );
   }
 }
+
+.bullet-style-control {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.bullet-style-control__label {
+  color: var(--tm2);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.16em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.bullet-style-control__summary {
+  width: 100%;
+  min-width: 0;
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 18px;
+  background: var(--sf1);
+  box-shadow: none;
+  color: var(--ti);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.bullet-style-control__summary:hover,
+.bullet-style-control__summary:focus-visible {
+  border-color: color-mix(in srgb, var(--ac) 74%, var(--border-soft));
+  background: var(--sf1);
+  outline: none;
+}
+
+.bullet-style-control__summary:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.bullet-style-control__summary-left,
+.bullet-style-control__preset {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bullet-style-control__badge,
+.bullet-style-control__preset-badge {
+  inline-size: 38px;
+  block-size: 38px;
+  flex: 0 0 38px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: var(--sf1);
+  color: var(--ac);
+  box-shadow: none;
+}
+
+.bullet-style-control__preset-badge {
+  inline-size: 32px;
+  block-size: 32px;
+  flex-basis: 32px;
+  border-radius: 10px;
+}
+
+.bullet-style-control__badge--ink {
+  color: var(--ti);
+}
+
+.bullet-style-control__badge--muted {
+  color: var(--tm2);
+}
+
+.bullet-style-control__badge--accent {
+  color: var(--ac);
+}
+
+.bullet-style-control__marker-icon,
+.bullet-style-control__marker-glyph {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 15px;
+  block-size: 15px;
+  color: currentColor;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.bullet-style-control__marker-icon svg {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+.bullet-style-control__summary-text,
+.bullet-style-control__preset-text {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.bullet-style-control__summary-text strong,
+.bullet-style-control__preset-text strong {
+  overflow: hidden;
+  color: var(--ti);
+  font-size: var(--tx);
+  font-weight: 760;
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bullet-style-control__summary-text span,
+.bullet-style-control__preset-text span {
+  overflow: hidden;
+  color: var(--tm2);
+  font-size: var(--t2);
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bullet-style-control__change {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--ac) 18%, transparent);
+  color: color-mix(in srgb, var(--ac) 72%, var(--ti));
+  font-size: var(--t2);
+  font-weight: 780;
+  line-height: 1;
+}
+
+.bullet-style-control__popover {
+  position: absolute;
+  z-index: 1000;
+  inset-block-start: calc(100% + 8px);
+  inset-inline: 0;
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--ti) 12%, transparent);
+  border-radius: 20px;
+  background: var(--sf1);
+  box-shadow: var(--shadow-popover);
+  backdrop-filter: blur(16px) saturate(1.15);
+}
+
+.bullet-style-control__tabs {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--ti) 7%, transparent);
+}
+
+.bullet-style-control__tabs button,
+.bullet-style-control__segments button {
+  flex: 1 1 0;
+  min-width: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--tm2);
+  font: inherit;
+  font-size: var(--t2);
+  font-weight: 680;
+  cursor: pointer;
+}
+
+.bullet-style-control__tabs button {
+  padding: 7px 8px;
+}
+
+.bullet-style-control__tabs button[aria-selected="true"],
+.bullet-style-control__segments button[data-selected="true"] {
+  background: var(--sf1);
+  color: var(--ti);
+  box-shadow: var(--shadow-sm);
+}
+
+.bullet-style-control__presets {
+  display: grid;
+  gap: 8px;
+}
+
+.bullet-style-control__preset {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--ti) 8%, transparent);
+  border-radius: 12px;
+  background: var(--sf1);
+  color: var(--ti);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.bullet-style-control__preset:hover,
+.bullet-style-control__preset:focus-visible,
+.bullet-style-control__preset[data-selected="true"] {
+  border-color: var(--ac);
+  background: color-mix(in srgb, var(--ac) 7%, var(--sf1));
+  outline: none;
+}
+
+.bullet-style-control__advanced {
+  display: grid;
+  gap: 14px;
+}
+
+.bullet-style-control__block {
+  display: grid;
+  gap: 6px;
+}
+
+.bullet-style-control__block-title {
+  color: var(--tm2);
+  font-size: 9px;
+  font-weight: 760;
+  letter-spacing: 0.12em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.bullet-style-control__marker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.bullet-style-control__marker-grid button {
+  aspect-ratio: 1;
+  min-width: 0;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--ti) 9%, transparent);
+  border-radius: 8px;
+  background: var(--sf1);
+  color: var(--ti);
+  cursor: pointer;
+}
+
+.bullet-style-control__marker-grid button:hover,
+.bullet-style-control__marker-grid button:focus-visible {
+  border-color: var(--ac);
+  outline: none;
+}
+
+.bullet-style-control__marker-grid button[data-selected="true"] {
+  border-color: var(--ac);
+  background: var(--ac);
+  color: var(--color-on-accent, var(--sf1));
+}
+
+.bullet-style-control__segments {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ti) 7%, transparent);
+}
+
+.bullet-style-control__segments button {
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+
 .document-icon-picker {
   width: 100%;
   display: grid;

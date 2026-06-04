@@ -387,6 +387,7 @@ export function FloatingAiToolbar({
   const actionShellRef = React.useRef<HTMLDivElement | null>(null);
   const promptShellRef = React.useRef<HTMLDivElement | null>(null);
   const askInputRef = React.useRef<HTMLInputElement | null>(null);
+  const lastFormattingActionsRef = React.useRef<FloatingSelectionToolbarAction[]>([]);
 
   const isAskOpen = activeActionId === "custom";
   const isPromptLoading = isLoading && pendingActionId === "custom";
@@ -397,11 +398,21 @@ export function FloatingAiToolbar({
         : INLINE_AI_ACTIONS,
     [includeJobContextActions],
   );
-  const resolvedFormattingActions =
+  const liveFormattingActions =
     formattingActions.length > 0
       ? formattingActions
       : registeredFormattingActions;
+  const resolvedFormattingActions =
+    liveFormattingActions.length > 0 || open
+      ? liveFormattingActions
+      : lastFormattingActionsRef.current;
   const hasFormattingActions = resolvedFormattingActions.length > 0;
+
+  React.useEffect(() => {
+    if (open && liveFormattingActions.length > 0) {
+      lastFormattingActionsRef.current = liveFormattingActions;
+    }
+  }, [liveFormattingActions, open]);
 
   const refreshRegisteredFormattingActions = React.useCallback(() => {
     if (formattingActions.length > 0 || typeof window === "undefined") {
@@ -448,13 +459,20 @@ export function FloatingAiToolbar({
   }, [anchor, isAskOpen]);
 
   React.useEffect(() => {
-    if (!open) {
+    if (open) {
+      return undefined;
+    }
+
+    const timeout = window.setTimeout(() => {
       setActiveActionId(DEFAULT_ACTION_ID);
       setCompactMode("ai");
       setCustomInstruction("");
       setMetrics(EMPTY_METRICS);
       setRegisteredFormattingActions([]);
-    }
+      lastFormattingActionsRef.current = [];
+    }, TOOLBAR_FADE_TRANSITION.duration * 1000);
+
+    return () => window.clearTimeout(timeout);
   }, [open]);
 
   React.useEffect(() => {

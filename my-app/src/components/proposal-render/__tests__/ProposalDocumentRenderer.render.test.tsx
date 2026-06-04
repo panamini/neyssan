@@ -3,6 +3,7 @@ import { fireEvent, render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ProposalDocumentRenderer } from "../ProposalDocumentRenderer";
+import { getDocumentIcon } from "../../../lib/document-icons";
 
 function countTextOccurrences(value: string, search: string): number {
   return value.split(search).length - 1;
@@ -65,6 +66,39 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     expect(list?.querySelector(".dasti-proposal-document__list-marker svg")).not.toBeNull();
     expect(container.textContent).toContain("Audit the current proposal flow");
     expect(container.textContent).toContain("Ship inline SVG export markers");
+  });
+
+  it("renders global dash markers as scalable shapes", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content={"- Shape scales with settings"}
+        proposalType="cover_letter"
+        templateId="swiss_margin"
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        documentIconSettings={{
+          defaultListMarkerKey: "minus",
+          listMarkerType: "dash",
+          sectionHeadingIconMode: "none",
+          sectionIconMap: {},
+          color: "muted",
+          sizePt: 12,
+        }}
+      />,
+    );
+
+    const marker = container.querySelector(".dasti-proposal-document__list-marker");
+    const stroke = marker?.querySelector("span");
+
+    expect(marker?.querySelector("svg")).toBeNull();
+    expect(marker?.textContent).toBe("");
+    expect(stroke).toHaveStyle({ width: "12pt" });
+    expect(stroke?.getAttribute("style")).toContain("border-top: 1.92pt");
   });
 
   it("renders structured rich runs as semantic inline elements", () => {
@@ -145,6 +179,58 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     const list = container.querySelector(".dasti-proposal-document__list");
     expect(list?.querySelector(".dasti-proposal-document__list-marker svg")).not.toBeNull();
     expect(list?.querySelector("strong")?.textContent).toBe("Rich");
+  });
+
+  it("lets proposal item marker overrides win over global document bullet style", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content=""
+        proposalType="cover_letter"
+        templateId="swiss_margin"
+        proposalDocument={{
+          schemaVersion: 1,
+          kind: "letter",
+          source: "structured",
+          blocks: [
+            {
+              id: "l",
+              type: "list",
+              items: [
+                {
+                  id: "i",
+                  text: "Override wins",
+                  marker: { type: "icon", iconKey: "briefcase" },
+                },
+              ],
+            },
+          ],
+        }}
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        documentIconSettings={{
+          listMarkerType: "icon",
+          defaultListMarkerKey: "star",
+          sectionHeadingIconMode: "none",
+          sectionIconMap: {},
+          color: "accent",
+          sizePt: 10,
+        }}
+      />,
+    );
+
+    const marker = container.querySelector(".dasti-proposal-document__list-marker");
+    const overrideIcon = getDocumentIcon("briefcase");
+    const globalIcon = getDocumentIcon("star");
+
+    expect(overrideIcon).not.toBeNull();
+    expect(globalIcon).not.toBeNull();
+    expect(marker?.innerHTML).toContain(overrideIcon!.svg);
+    expect(marker?.innerHTML).not.toContain(globalIcon!.svg);
   });
 
   it("does not duplicate full rich text onto the first pagination fragment", () => {

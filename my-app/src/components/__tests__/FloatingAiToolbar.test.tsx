@@ -195,6 +195,21 @@ describe("FloatingAiToolbar", () => {
         open
         formattingActions={[
           {
+            id: "bold",
+            label: "Bold",
+            onRun: onFormat,
+          },
+          {
+            id: "italic",
+            label: "Italic",
+            onRun: onFormat,
+          },
+          {
+            id: "underline",
+            label: "Underline",
+            onRun: onFormat,
+          },
+          {
             id: "list",
             label: "List",
             onRun: onFormat,
@@ -213,6 +228,10 @@ describe("FloatingAiToolbar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
 
     expect(screen.getByRole("button", { name: "Back to AI" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Bold" }).at(-1)).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Italic" }).at(-1)).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Underline" }).at(-1)).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "List" }).at(-1)).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: "List" }).at(-1)!);
 
     expect(onFormat).toHaveBeenCalledTimes(1);
@@ -454,6 +473,41 @@ describe("FloatingAiToolbar", () => {
     fireEvent.pointerDown(screen.getByRole("button", { name: "Outside target" }));
 
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the current toolbar contents stable during the close animation", async () => {
+    const props = {
+      anchor: { left: 120, top: 80, bottom: 96 },
+      open: true,
+      formattingActions: [
+        {
+          id: "list",
+          label: "List",
+          onRun: vi.fn(),
+        },
+      ],
+      onClose: vi.fn(),
+      onRunAction: vi.fn(),
+    };
+    const { rerender } = render(<FloatingAiToolbar {...props} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    expect(screen.getByRole("button", { name: "Back to AI" })).toBeInTheDocument();
+
+    rerender(<FloatingAiToolbar {...props} open={false} formattingActions={[]} />);
+
+    expect(screen.getByRole("toolbar", { hidden: true })).toHaveAttribute(
+      "data-state",
+      "closing",
+    );
+    expect(
+      document.querySelector(
+        ".ds-ai-toolbar__compact-format-actions[data-selection-toolbar-mode='format']",
+      ),
+    ).toBeTruthy();
+    expect(
+      document.querySelector("button[aria-label='Back to AI']"),
+    ).toBeTruthy();
   });
 
   it("stays hidden on the first selection until initial DOM metrics are non-zero", async () => {

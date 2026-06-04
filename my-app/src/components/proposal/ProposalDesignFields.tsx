@@ -4,9 +4,7 @@ import {
   Check,
   ChevronDown,
   FileImage,
-  ImagesSquare,
   PenNib,
-  RotateCcw,
   TrashSimple,
   Upload,
   User,
@@ -38,14 +36,17 @@ import {
   createDefaultDocumentDecoration,
   DOCUMENT_DECORATION_SIZE_PRESETS,
   DOCUMENT_DECORATION_UPLOAD_ACCEPT,
-  getDocumentDecorationRenderedSizeMm,
   normalizeDocumentDecoration,
   readDocumentDecorationUpload,
   removeDocumentDecorationAsset,
-  resetDocumentDecorationPlacement,
   resolveTemplateDocumentDecoration,
   type DocumentDecoration,
 } from "../../lib/document-decoration";
+import {
+  normalizeDocumentIconSettings,
+  type DocumentIconSettings,
+} from "../../lib/document-icons";
+import { BulletStyleControl } from "../document-icons/BulletStyleControl";
 
 type ProposalRailStyleOption = {
   id: ProposalTemplateBundleId;
@@ -130,6 +131,10 @@ const DOCUMENT_DECORATION_SIZE_LABELS = {
   18: "Small",
   35: "Medium",
   52: "Large",
+} as const;
+const DOCUMENT_DECORATION_FIT_LABELS = {
+  contain: "Contain",
+  cover: "Cover",
 } as const;
 
 const PROPOSAL_STYLE_FONT_PAIR_IDS: VerbatiFontPairId[] = [
@@ -244,6 +249,8 @@ export type ProposalDesignFieldsProps = {
   handwrittenSignatureEnabled?: boolean;
   documentDecoration?: DocumentDecoration | null;
   onDocumentDecorationChange?: (decoration: DocumentDecoration) => void;
+  documentIconSettings?: DocumentIconSettings | null;
+  onDocumentIconSettingsChange?: (settings: DocumentIconSettings) => void;
   onChooseSignature?: () => void;
   onToggleSignature?: (enabled: boolean) => void;
   onToggleHandwrittenSignature?: (enabled: boolean) => void;
@@ -266,16 +273,25 @@ export function ProposalDesignFields({
   handwrittenSignatureEnabled = false,
   documentDecoration,
   onDocumentDecorationChange,
+  documentIconSettings,
+  onDocumentIconSettingsChange,
   onChooseSignature,
   onToggleSignature,
   onToggleHandwrittenSignature,
 }: ProposalDesignFieldsProps): JSX.Element {
   const [isCustomColorPickerOpen, setIsCustomColorPickerOpen] = React.useState(false);
+  const [isDocumentImagePopoverOpen, setIsDocumentImagePopoverOpen] =
+    React.useState(false);
   const [documentDecorationUploadError, setDocumentDecorationUploadError] =
     React.useState<string | null>(null);
   const customColorAnchorRef = React.useRef<HTMLButtonElement | null>(null);
   const customColorSurfaceRef = React.useRef<HTMLDivElement | null>(null);
+  const documentImageControlRef = React.useRef<HTMLDivElement | null>(null);
   const decorationUploadInputId = React.useId();
+  const resolvedDocumentIconSettings = React.useMemo(
+    () => normalizeDocumentIconSettings(documentIconSettings),
+    [documentIconSettings],
+  );
 
   const normalizeProposalTemplateBundleId = React.useCallback(
     (bundleId: ProposalTemplateBundleId | null | undefined): ProposalTemplateBundleId => {
@@ -329,11 +345,15 @@ export function ProposalDesignFields({
   const hasDocumentDecorationAsset = Boolean(
     resolvedDocumentDecoration.dataUrl || resolvedDocumentDecoration.assetId,
   );
-  const isDocumentDecorationShown =
-    hasDocumentDecorationAsset && resolvedDocumentDecoration.visible;
-  const renderedDocumentDecorationSizeMm = getDocumentDecorationRenderedSizeMm(
-    resolvedDocumentDecoration,
-  );
+  const documentDecorationSizePreset =
+    resolvedDocumentDecoration.sizePreset === "custom" ? 35 : resolvedDocumentDecoration.sizePreset;
+  const documentDecorationSizeLabel =
+    DOCUMENT_DECORATION_SIZE_LABELS[documentDecorationSizePreset];
+  const documentDecorationFitLabel =
+    DOCUMENT_DECORATION_FIT_LABELS[resolvedDocumentDecoration.fit];
+  const documentDecorationTitle =
+    resolvedDocumentDecoration.fileName?.trim() || "Document image";
+  const documentDecorationMeta = `${documentDecorationFitLabel} • ${documentDecorationSizeLabel}`;
   const updateDocumentDecoration = React.useCallback(
     (nextDecoration: DocumentDecoration) => {
       setDocumentDecorationUploadError(null);
@@ -370,6 +390,38 @@ export function ProposalDesignFields({
     },
     [onDocumentDecorationChange, resolvedDocumentDecoration],
   );
+  React.useEffect(() => {
+    if (!isDocumentImagePopoverOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        documentImageControlRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setIsDocumentImagePopoverOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsDocumentImagePopoverOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isDocumentImagePopoverOpen]);
+
+  React.useEffect(() => {
+    if (!hasDocumentDecorationAsset) {
+      setIsDocumentImagePopoverOpen(false);
+    }
+  }, [hasDocumentDecorationAsset]);
 
   return (
     <section
@@ -554,201 +606,147 @@ export function ProposalDesignFields({
           );
         })}
       </div>
-      <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Decorations</div>
-      <div className="dasti-proposal-design-fields__decorations">
-        <div className="dasti-proposal-design-fields__decoration-actions">
-          <button
-            type="button"
-            role="switch"
-            className={[
-              "dasti-theme-switch",
-              "settings-token-switch",
-              "dasti-proposal-skeleton-rail__signature-toggle",
-              "dasti-proposal-design-fields__decoration-toggle",
-              resolvedDocumentDecoration.visible
-                ? "dasti-theme-switch--dark settings-token-switch--active"
-                : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-            disabled={!hasDocumentDecorationAsset || !onDocumentDecorationChange}
-            aria-label="Show image"
-            aria-checked={resolvedDocumentDecoration.visible}
-            title={
-              hasDocumentDecorationAsset
-                ? "Show or hide the uploaded document decoration."
-                : "Upload a decoration image before showing it."
-            }
-            onClick={() => {
-              updateDocumentDecoration({
-                ...resolvedDocumentDecoration,
-                visible: !resolvedDocumentDecoration.visible,
-              });
-            }}
-          >
-            <ImagesSquare size={14} strokeWidth={1.8} aria-hidden="true" />
-            <span className="dasti-theme-switch__rail" aria-hidden="true">
-              <span className="dasti-theme-switch__thumb" />
-            </span>
-            <span className="dasti-theme-switch__label">Show image</span>
-          </button>
+      <BulletStyleControl
+        settings={resolvedDocumentIconSettings}
+        onChange={(settings) => onDocumentIconSettingsChange?.(settings)}
+        disabled={!onDocumentIconSettingsChange}
+      />
+      <div ref={documentImageControlRef} className="dasti-proposal-design-image">
+        <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Image</div>
+        <input
+          id={decorationUploadInputId}
+          className="dasti-proposal-design-image__input"
+          type="file"
+          aria-label="Upload decoration image"
+          accept={DOCUMENT_DECORATION_UPLOAD_ACCEPT}
+          disabled={!onDocumentDecorationChange}
+          onChange={handleDocumentDecorationUpload}
+        />
+        {!hasDocumentDecorationAsset ? (
           <label
-            className="dasti-proposal-design-fields__upload"
+            className="dasti-proposal-design-image__dropzone"
             htmlFor={decorationUploadInputId}
-            title="Upload a PNG, JPG, or SVG decoration."
+            aria-label="Add image"
           >
-            <Upload size={14} strokeWidth={1.8} aria-hidden="true" />
-            <span className="dasti-proposal-design-fields__upload-label dasti-proposal-design-fields__upload-label--full">
-              Upload image
+            <span className="dasti-proposal-design-image__icon" aria-hidden="true">
+              <FileImage size={17} strokeWidth={1.8} />
             </span>
-            <span className="dasti-proposal-design-fields__upload-label dasti-proposal-design-fields__upload-label--compact">
-              Upload
+            <span className="dasti-proposal-design-image__copy">
+              <strong>Add image</strong>
+              <span>PNG or JPEG</span>
             </span>
-            <input
-              id={decorationUploadInputId}
-              className="dasti-proposal-design-fields__upload-input"
-              type="file"
-              aria-label="Upload decoration image"
-              accept={DOCUMENT_DECORATION_UPLOAD_ACCEPT}
-              disabled={!onDocumentDecorationChange}
-              onChange={handleDocumentDecorationUpload}
-            />
           </label>
-          <button
-            type="button"
-            className="dasti-proposal-design-fields__reset dasti-proposal-design-fields__decoration-remove"
-            aria-label="Remove image"
-            title="Remove image"
-            disabled={!hasDocumentDecorationAsset || !onDocumentDecorationChange}
-            onClick={() => {
-              setDocumentDecorationUploadError(null);
-              onDocumentDecorationChange?.(
-                removeDocumentDecorationAsset(resolvedDocumentDecoration),
-              );
-            }}
+        ) : (
+          <div className="dasti-proposal-design-image__panel">
+            <label
+              className="dasti-proposal-design-image__thumb"
+              htmlFor={decorationUploadInputId}
+              title="Replace image"
+            >
+              {resolvedDocumentDecoration.dataUrl ? (
+                <img src={resolvedDocumentDecoration.dataUrl} alt="" />
+              ) : (
+                <FileImage size={18} strokeWidth={1.8} aria-hidden="true" />
+              )}
+            </label>
+            <div className="dasti-proposal-design-image__summary">
+              <strong title={documentDecorationTitle}>{documentDecorationTitle}</strong>
+              <span>{documentDecorationMeta}</span>
+            </div>
+            <button
+              type="button"
+              className="dasti-proposal-design-image__inspect"
+              aria-expanded={isDocumentImagePopoverOpen}
+              onClick={() => setIsDocumentImagePopoverOpen((current) => !current)}
+            >
+              {isDocumentImagePopoverOpen ? "Close" : "Inspect"}
+            </button>
+          </div>
+        )}
+        {hasDocumentDecorationAsset && isDocumentImagePopoverOpen ? (
+          <div
+            className="dasti-proposal-design-image__popover"
+            role="dialog"
+            aria-label="Image controls"
           >
-            <TrashSimple size={13} strokeWidth={1.8} aria-hidden="true" />
-            <span className="dasti-proposal-design-fields__decoration-remove-label">
-              Remove
-            </span>
-          </button>
-        </div>
-        <div className="dasti-proposal-design-fields__decoration-meta">
-          {resolvedDocumentDecoration.dataUrl ? (
-            <img
-              className="dasti-proposal-design-fields__decoration-thumb"
-              src={resolvedDocumentDecoration.dataUrl}
-              alt=""
-              aria-hidden="true"
-            />
-          ) : (
-            <FileImage size={14} strokeWidth={1.8} aria-hidden="true" />
-          )}
-          <span>{resolvedDocumentDecoration.fileName ?? "No image"}</span>
-        </div>
-        {isDocumentDecorationShown ? (
-          <>
-            <div className="dasti-proposal-design-fields__decoration-control">
-              <div
-                className="dasti-proposal-skeleton-rail__style-pills dasti-proposal-design-fields__decoration-pills dasti-proposal-design-fields__decoration-pills--size"
-                aria-label="Decoration size"
-              >
+            <div className="dasti-proposal-design-image__control">
+              <div className="dasti-proposal-design-image__control-label">Size</div>
+              <div className="dasti-proposal-design-image__segments" aria-label="Image size">
                 {DOCUMENT_DECORATION_SIZE_PRESETS.map((sizePreset) => {
-                  const isSelected = resolvedDocumentDecoration.sizePreset === sizePreset;
-                  const sizeLabel = DOCUMENT_DECORATION_SIZE_LABELS[sizePreset];
+                  const isSelected = documentDecorationSizePreset === sizePreset;
                   return (
                     <button
                       key={sizePreset}
                       type="button"
-                      aria-label={`${sizeLabel}, ${sizePreset} mm`}
                       aria-pressed={isSelected}
                       data-selected={isSelected ? "true" : undefined}
-                      title={`${sizeLabel} (${sizePreset} mm)`}
                       disabled={!onDocumentDecorationChange}
                       onClick={() => {
                         updateDocumentDecoration(
                           applyDocumentDecorationSizePreset(
-                            resolvedDocumentDecoration,
+                            {
+                              ...resolvedDocumentDecoration,
+                              visible: true,
+                            },
                             sizePreset,
                           ),
                         );
                       }}
                     >
-                      {sizeLabel}
+                      {DOCUMENT_DECORATION_SIZE_LABELS[sizePreset]}
                     </button>
                   );
                 })}
-                <button
-                  className="dasti-proposal-design-fields__decoration-custom-size"
-                  type="button"
-                  aria-label={
-                    resolvedDocumentDecoration.sizePreset === "custom"
-                      ? `Custom, ${renderedDocumentDecorationSizeMm} mm`
-                      : "Custom size"
-                  }
-                  title={`Custom (${renderedDocumentDecorationSizeMm} mm)`}
-                  aria-pressed={resolvedDocumentDecoration.sizePreset === "custom"}
-                  data-selected={
-                    resolvedDocumentDecoration.sizePreset === "custom" ? "true" : undefined
-                  }
-                  disabled={!onDocumentDecorationChange}
-                  onClick={() => {
-                    updateDocumentDecoration({
-                      ...resolvedDocumentDecoration,
-                      sizePreset: "custom",
-                      customSizeMm: renderedDocumentDecorationSizeMm,
-                    });
-                  }}
-                >
-                  Custom
-                </button>
               </div>
             </div>
-            <div
-              className="dasti-proposal-skeleton-rail__style-pills dasti-proposal-design-fields__decoration-pills dasti-proposal-design-fields__decoration-pills--fit"
-              aria-label="Decoration fit"
-            >
-              {(["contain", "cover"] as const).map((fit) => {
-                const isSelected = resolvedDocumentDecoration.fit === fit;
-                return (
-                  <button
-                    key={fit}
-                    type="button"
-                    aria-label={fit === "contain" ? "Contain" : "Cover"}
-                    aria-pressed={isSelected}
-                    data-selected={isSelected ? "true" : undefined}
-                    disabled={!onDocumentDecorationChange}
-                    onClick={() => {
-                      updateDocumentDecoration({
-                        ...resolvedDocumentDecoration,
-                        fit,
-                      });
-                    }}
-                  >
-                    {fit === "contain" ? "Contain" : "Cover"}
-                  </button>
-                );
-              })}
-              <button
-                type="button"
-                className="dasti-proposal-design-fields__reset"
-                aria-label="Reset position"
-                title="Reset position"
-                disabled={!onDocumentDecorationChange}
-                onClick={() => {
-                  updateDocumentDecoration(
-                    resetDocumentDecorationPlacement(
-                      resolvedDocumentDecoration,
-                      resolvedProposalTemplateId,
-                    ),
+            <div className="dasti-proposal-design-image__control">
+              <div className="dasti-proposal-design-image__control-label">Fit</div>
+              <div className="dasti-proposal-design-image__segments" aria-label="Image fit">
+                {(["contain", "cover"] as const).map((fit) => {
+                  const isSelected = resolvedDocumentDecoration.fit === fit;
+                  return (
+                    <button
+                      key={fit}
+                      type="button"
+                      aria-pressed={isSelected}
+                      data-selected={isSelected ? "true" : undefined}
+                      disabled={!onDocumentDecorationChange}
+                      onClick={() => {
+                        updateDocumentDecoration({
+                          ...resolvedDocumentDecoration,
+                          visible: true,
+                          fit,
+                        });
+                      }}
+                    >
+                      {DOCUMENT_DECORATION_FIT_LABELS[fit]}
+                    </button>
                   );
-                }}
-              >
-                <RotateCcw size={13} strokeWidth={1.8} aria-hidden="true" />
-                Reset
-              </button>
+                })}
+              </div>
             </div>
-          </>
+            <label
+              className="dasti-proposal-design-image__replace"
+              htmlFor={decorationUploadInputId}
+            >
+              <Upload size={13} strokeWidth={1.8} aria-hidden="true" />
+              Replace
+            </label>
+            <button
+              type="button"
+              className="dasti-proposal-design-image__remove"
+              disabled={!onDocumentDecorationChange}
+              onClick={() => {
+                setDocumentDecorationUploadError(null);
+                onDocumentDecorationChange?.(
+                  removeDocumentDecorationAsset(resolvedDocumentDecoration),
+                );
+              }}
+            >
+              <TrashSimple size={13} strokeWidth={1.8} aria-hidden="true" />
+              Remove image
+            </button>
+          </div>
         ) : null}
         {documentDecorationUploadError ? (
           <p

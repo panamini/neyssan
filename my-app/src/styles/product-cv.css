@@ -1904,6 +1904,207 @@ span.dasti-cv-ats {
   background: var(--am-soft);
 }
 
+.dasti-cv-design-image {
+  position: relative;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.dasti-cv-design-image__input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dasti-cv-design-image__dropzone,
+.dasti-cv-design-image__panel {
+  width: 100%;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
+  background: var(--sf1);
+  color: var(--ti);
+}
+
+.dasti-cv-design-image__dropzone {
+  min-height: 74px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  cursor: pointer;
+}
+
+.dasti-cv-design-image__dropzone:hover,
+.dasti-cv-design-image__dropzone:focus-within,
+.dasti-cv-design-image__panel:hover {
+  border-color: var(--ac);
+}
+
+.dasti-cv-design-image__icon {
+  flex: 0 0 auto;
+  inline-size: 38px;
+  block-size: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-control);
+  background: var(--paper);
+  color: var(--ac);
+  border: 1px solid var(--border-soft);
+}
+
+.dasti-cv-design-image__copy,
+.dasti-cv-design-image__summary {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.dasti-cv-design-image__copy strong,
+.dasti-cv-design-image__summary strong {
+  overflow: hidden;
+  color: var(--ti);
+  font-size: var(--tx);
+  font-weight: 750;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dasti-cv-design-image__copy span,
+.dasti-cv-design-image__summary span {
+  color: var(--tm2);
+  font-size: var(--tx);
+  line-height: 1.2;
+}
+
+.dasti-cv-design-image__panel {
+  min-height: 70px;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+}
+
+.dasti-cv-design-image__thumb {
+  inline-size: 48px;
+  block-size: 48px;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-control);
+  background: var(--paper);
+  cursor: pointer;
+}
+
+.dasti-cv-design-image__thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.dasti-cv-design-image__inspect,
+.dasti-cv-design-image__replace,
+.dasti-cv-design-image__remove,
+.dasti-cv-design-image__segments button {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: var(--tx);
+  font-weight: 750;
+}
+
+.dasti-cv-design-image__inspect {
+  min-height: 28px;
+  padding-inline: var(--space-3);
+  background: var(--paper);
+  color: var(--ti);
+}
+
+.dasti-cv-design-image__popover {
+  position: absolute;
+  z-index: 80;
+  inset-block-start: calc(100% + var(--space-2));
+  inset-inline-end: 0;
+  width: min(320px, calc(100vw - 32px));
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--sfr) 94%, transparent);
+  box-shadow: var(--shadow-float, 0 18px 44px rgb(0 0 0 / 22%));
+  backdrop-filter: blur(18px) saturate(1.25);
+}
+
+@media (min-width: 760px) {
+  .dasti-cv-design-image__popover {
+    inset-inline-end: 0;
+    inset-block-start: calc(100% + var(--space-2));
+  }
+}
+
+.dasti-cv-design-image__control {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.dasti-cv-design-image__control-label {
+  color: var(--tm2);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: var(--tracking-wide);
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.dasti-cv-design-image__segments {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-pill);
+  background: var(--paper);
+}
+
+.dasti-cv-design-image__segments button {
+  min-height: 30px;
+  padding-inline: var(--space-2);
+  background: transparent;
+  color: var(--tm2);
+}
+
+.dasti-cv-design-image__segments button[data-selected="true"] {
+  background: var(--sf1);
+  color: var(--ti);
+  border-color: var(--border-soft);
+}
+
+.dasti-cv-design-image__replace,
+.dasti-cv-design-image__remove {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  padding-inline: var(--space-3);
+  cursor: pointer;
+}
+
+.dasti-cv-design-image__replace {
+  background: var(--paper);
+  color: var(--ti);
+}
+
+.dasti-cv-design-image__remove {
+  background: color-mix(in srgb, var(--er) 10%, transparent);
+  color: var(--er);
+}
+
 .dasti-cv-rail-secondary-action {
   min-height: 30px;
   display: inline-flex;

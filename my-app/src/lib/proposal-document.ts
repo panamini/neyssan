@@ -836,6 +836,68 @@ export function applyProposalDocumentInlineMark(args: {
   return args.document;
 }
 
+export function applyProposalDocumentInlineMarkToTextBlockRange(args: {
+  document: ProposalDocument;
+  startTarget: ProposalDocumentTextTarget;
+  startOffset: number;
+  endTarget: ProposalDocumentTextTarget;
+  endOffset: number;
+  mark: ProposalInlineMark;
+}): ProposalDocument | null {
+  if (
+    args.startTarget.type !== "text-block" ||
+    args.endTarget.type !== "text-block"
+  ) {
+    return null;
+  }
+
+  const startKey = args.startTarget.blockId;
+  const endKey = args.endTarget.blockId;
+  let nextDocument = args.document;
+  let hasStarted = false;
+  let hasEnded = false;
+  let didApply = false;
+
+  for (const block of args.document.blocks) {
+    if (block.type !== "paragraph" && block.type !== "salutation") {
+      continue;
+    }
+
+    if (block.id === startKey) {
+      hasStarted = true;
+    }
+
+    if (!hasStarted || hasEnded) {
+      continue;
+    }
+
+    const isStart = block.id === startKey;
+    const isEnd = block.id === endKey;
+    const start = isStart ? args.startOffset : 0;
+    const end = isEnd ? args.endOffset : block.text.length;
+    const boundedStart = Math.max(0, Math.min(start, block.text.length));
+    const boundedEnd = Math.max(boundedStart, Math.min(end, block.text.length));
+
+    if (boundedEnd > boundedStart) {
+      const updatedDocument = applyProposalDocumentInlineMark({
+        document: nextDocument,
+        target: { type: "text-block", blockId: block.id },
+        mark: args.mark,
+        start: boundedStart,
+        end: boundedEnd,
+      });
+      didApply = didApply || updatedDocument !== nextDocument;
+      nextDocument = updatedDocument;
+    }
+
+    if (isEnd) {
+      hasEnded = true;
+    }
+  }
+
+  return hasStarted && hasEnded && didApply ? nextDocument : null;
+}
+
 export function splitProposalDocumentTarget(args: {
   document: ProposalDocument;
   target: ProposalDocumentTextTarget;

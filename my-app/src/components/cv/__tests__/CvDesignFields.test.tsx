@@ -12,6 +12,48 @@ const stylePreset: VerbatiStylePreset = {
 };
 
 describe("CvDesignFields", () => {
+  it("uses the shared bullet style control instead of the direct list icon picker", () => {
+    const onDocumentIconSettingsChange = vi.fn();
+
+    render(
+      <CvDesignFields
+        stylePreset={stylePreset}
+        selectedStyleSlot={1}
+        onSelectStyleSlot={vi.fn()}
+        onSelectTemplate={vi.fn()}
+        onSelectFontPair={vi.fn()}
+        onSelectAccent={vi.fn()}
+        onSelectCustomAccent={vi.fn()}
+        documentIconSettings={{
+          listMarkerType: "icon",
+          defaultListMarkerKey: "plus",
+          sectionHeadingIconMode: "none",
+          sectionIconMap: {},
+          color: "accent",
+          sizePt: 10,
+        }}
+        onDocumentIconSettingsChange={onDocumentIconSettingsChange}
+      />,
+    );
+
+    expect(screen.getByText("Bullets")).toBeInTheDocument();
+    expect(screen.getByText("Editorial Plus")).toBeInTheDocument();
+    expect(screen.queryByText("List marker")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("document-icon-picker")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /Bullets: Editorial Plus/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Classic Dot" }));
+
+    expect(onDocumentIconSettingsChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        listMarkerType: "dot",
+        defaultListMarkerKey: "dot",
+        color: "ink",
+        sizePt: 10,
+      }),
+    );
+  });
+
   it("lets the user choose custom section heading icons from the shared picker", () => {
     const onDocumentIconSettingsChange = vi.fn();
 
@@ -99,5 +141,88 @@ describe("CvDesignFields", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Editorial Sidebar" }));
     expect(onSelectTemplate).toHaveBeenCalledWith("editorial-sidebar");
+  });
+
+  it("renders the calm no-image cell and uploads from the drawer", () => {
+    const onImageUpload = vi.fn();
+
+    render(
+      <CvDesignFields
+        stylePreset={stylePreset}
+        selectedStyleSlot={1}
+        onSelectStyleSlot={vi.fn()}
+        onSelectTemplate={vi.fn()}
+        onSelectFontPair={vi.fn()}
+        onSelectAccent={vi.fn()}
+        onSelectCustomAccent={vi.fn()}
+        image={{ src: null, size: "medium", fit: "cover" }}
+        onImageUpload={onImageUpload}
+      />,
+    );
+
+    expect(screen.getByText("Image")).toBeInTheDocument();
+    expect(screen.getByText("Add image")).toBeInTheDocument();
+    expect(screen.getByText("PNG or JPEG")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Inspect" })).toBeNull();
+
+    const input = screen.getByLabelText("Upload CV image");
+    const file = new File(["image"], "portrait.png", { type: "image/png" });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    expect(onImageUpload).toHaveBeenCalledWith(file);
+  });
+
+  it("opens image controls in a floating inspect popover", () => {
+    const onImageSettingsChange = vi.fn();
+    const onImageRemove = vi.fn();
+
+    render(
+      <CvDesignFields
+        stylePreset={stylePreset}
+        selectedStyleSlot={1}
+        onSelectStyleSlot={vi.fn()}
+        onSelectTemplate={vi.fn()}
+        onSelectFontPair={vi.fn()}
+        onSelectAccent={vi.fn()}
+        onSelectCustomAccent={vi.fn()}
+        image={{
+          src: "data:image/png;base64,AAAA",
+          fileName: "portrait.png",
+          size: "medium",
+          fit: "contain",
+        }}
+        onImageRemove={onImageRemove}
+        onImageSettingsChange={onImageSettingsChange}
+      />,
+    );
+
+    expect(screen.getByText("portrait.png")).toBeInTheDocument();
+    expect(screen.getByText("Contain • Medium")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Image controls" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Inspect" }));
+    expect(screen.getByRole("button", { name: "Close" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    const popover = screen.getByRole("dialog", { name: "Image controls" });
+
+    fireEvent.click(within(popover).getByRole("button", { name: "Large" }));
+    expect(onImageSettingsChange).toHaveBeenCalledWith({
+      size: "large",
+      fit: "contain",
+    });
+
+    fireEvent.click(within(popover).getByRole("button", { name: "Cover" }));
+    expect(onImageSettingsChange).toHaveBeenCalledWith({
+      size: "medium",
+      fit: "cover",
+    });
+
+    fireEvent.click(within(popover).getByRole("button", { name: "Remove image" }));
+    expect(onImageRemove).toHaveBeenCalledTimes(1);
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Image controls" })).toBeNull();
   });
 });

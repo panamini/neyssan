@@ -2,6 +2,54 @@ import { describe, it, expect } from "vitest";
 import { normalizeAndValidateCvDocument } from "../lib/normalize-cv";
 
 describe("v1 normalization - representative blocks and pruning", () => {
+  it("preserves uploaded profile image data URLs through normalization", () => {
+    const dataUrl = "data:image/png;base64,AAAA";
+    const input = {
+      id: "cv-uploaded-image",
+      title: "Uploaded image CV",
+      metadata: {
+        createdAt: "2026-03-25T00:00:00.000Z",
+        updatedAt: "2026-03-25T00:00:00.000Z",
+        version: 1,
+        profileImage: {
+          src: dataUrl,
+          size: "medium",
+          fit: "cover",
+          fileName: "portrait.png",
+        },
+      },
+      sections: [
+        {
+          id: "profile",
+          title: "Profile",
+          type: "profile",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "profile-1",
+              name: "Elena Marlowe",
+              desiredPosition: "Senior Product Designer",
+              photoUrl: dataUrl,
+            },
+          ],
+        },
+      ],
+    };
+
+    const res = normalizeAndValidateCvDocument(input, "Uploaded image CV");
+
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+
+    const profile = res.document.sections.find((section) => section.type === "profile");
+    const firstProfileItem = Array.isArray(profile?.structuredContent)
+      ? profile.structuredContent[0]
+      : null;
+
+    expect((res.document.metadata.profileImage as { src?: string }).src).toBe(dataUrl);
+    expect((firstProfileItem as { photoUrl?: string } | null)?.photoUrl).toBe(dataUrl);
+  });
+
   it("creates or repurposes exactly one representative block per Experience item and prunes invalid linked blocks", () => {
     const input = {
       title: "Exp blocks",

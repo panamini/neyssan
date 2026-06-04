@@ -44,6 +44,26 @@ type ResumeDataMappingOptions = {
   includeDrafts?: boolean;
 };
 
+function readProfileImageMetadata(doc: CvDocument): {
+  photoSize?: ResumeData["photoSize"];
+  photoFit?: ResumeData["photoFit"];
+} {
+  const source =
+    doc.metadata &&
+    typeof doc.metadata.profileImage === "object" &&
+    doc.metadata.profileImage
+      ? (doc.metadata.profileImage as Record<string, unknown>)
+      : {};
+  return {
+    photoSize:
+      source.size === "small" || source.size === "medium" || source.size === "large"
+        ? source.size
+        : undefined,
+    photoFit:
+      source.fit === "contain" || source.fit === "cover" ? source.fit : undefined,
+  };
+}
+
 const DRAFT_EMPTY_RESPONSIBILITY_BULLET = "__draft_empty_responsibility_bullet__";
 const DRAFT_EMPTY_EXPERIENCE_DESCRIPTION =
   "__draft_empty_experience_description__";
@@ -1199,13 +1219,26 @@ export function mapCvDocumentToResumeData(
   ].filter((item): item is ResumeMetaItem => item !== null);
 
   const profileName = String(profile?.name ?? "").trim();
+  const profileImageMetadata = readProfileImageMetadata(doc);
+  const profileImageSource =
+    doc.metadata &&
+    typeof doc.metadata.profileImage === "object" &&
+    doc.metadata.profileImage
+      ? (doc.metadata.profileImage as Record<string, unknown>)
+      : {};
+  const metadataPhotoUrl =
+    typeof profileImageSource.src === "string"
+      ? profileImageSource.src.trim()
+      : "";
+  const profilePhotoUrl = String(profile?.photoUrl ?? "").trim();
 
   return {
     name: profileName || (!profileContext ? doc.title || "Candidate name" : ""),
     title: String(profile?.desiredPosition ?? "").trim(),
     summary,
     ...(summaryRich ? { summaryRich } : {}),
-    photoUrl: String(profile?.photoUrl ?? "").trim() || undefined,
+    photoUrl: profilePhotoUrl || metadataPhotoUrl || undefined,
+    ...profileImageMetadata,
     metadata,
     contact,
     skills,

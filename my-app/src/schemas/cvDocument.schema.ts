@@ -386,6 +386,15 @@ const _CvMetadataBase = z.object({
     })
     .passthrough()
     .optional(),
+  profileImage: z
+    .object({
+      src: z.string().optional(),
+      fileName: z.string().optional(),
+      size: z.enum(["small", "medium", "large"]).optional(),
+      fit: z.enum(["contain", "cover"]).optional(),
+    })
+    .strict()
+    .optional(),
 });
 export const CvMetadataSchema = _CvMetadataBase.passthrough();
 export const CvMetadataSchemaStrict = _CvMetadataBase.strict();

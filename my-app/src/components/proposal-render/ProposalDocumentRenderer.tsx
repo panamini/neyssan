@@ -4058,6 +4058,28 @@ export function ProposalDocumentRenderer({
     );
   }, [resolvedDocumentIconSettings]);
   const listMarkerType = resolvedDocumentIconSettings.listMarkerType ?? "dot";
+  const renderListMarkerGlyph = React.useCallback(
+    (markerType: "dot" | "dash") => {
+      const sizePt = resolvedDocumentIconSettings.sizePt;
+      const dotSizePt = sizePt * 0.58;
+      const dashThicknessPt = sizePt * 0.16;
+      const glyphStyle =
+        markerType === "dash"
+          ? ({
+              width: `${sizePt}pt`,
+              borderTop: `${dashThicknessPt}pt solid currentColor`,
+            } as React.CSSProperties)
+          : ({
+              width: `${dotSizePt}pt`,
+              height: `${dotSizePt}pt`,
+              borderRadius: "999px",
+              backgroundColor: "currentColor",
+            } as React.CSSProperties);
+
+      return <span aria-hidden="true" style={glyphStyle} />;
+    },
+    [resolvedDocumentIconSettings.sizePt],
+  );
   const listMarkerStyle = React.useMemo(
     () =>
       ({
@@ -4653,9 +4675,9 @@ export function ProposalDocumentRenderer({
                               }}
                             />
                           ) : (
-                            <span aria-hidden="true">
-                              {itemMarkerType === "dash" ? "-" : "•"}
-                            </span>
+                            renderListMarkerGlyph(
+                              itemMarkerType === "dash" ? "dash" : "dot",
+                            )
                           )}
                         </button>
                         {isPickerOpen ? (
@@ -4705,7 +4727,9 @@ export function ProposalDocumentRenderer({
                         className="dasti-proposal-document__list-marker"
                         aria-hidden="true"
                       >
-                        {itemMarkerType === "dash" ? "-" : "•"}
+                        {renderListMarkerGlyph(
+                          itemMarkerType === "dash" ? "dash" : "dot",
+                        )}
                       </span>
                     )}
                     <span
@@ -5046,9 +5070,9 @@ export function ProposalDocumentRenderer({
                               }}
                             />
                           ) : (
-                            <span aria-hidden="true">
-                              {itemMarkerType === "dash" ? "-" : "•"}
-                            </span>
+                            renderListMarkerGlyph(
+                              itemMarkerType === "dash" ? "dash" : "dot",
+                            )
                           )}
                         </button>
                         {isPickerOpen ? (

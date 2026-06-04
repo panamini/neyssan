@@ -853,7 +853,7 @@ describe("ProposalRail style tab", () => {
     expect(onToggleHandwrittenSignature).toHaveBeenCalledWith(true);
   });
 
-  it("exposes document decoration upload, visibility, preset, custom, and fit controls", () => {
+  it("renders document image details only inside the Inspect popover", () => {
     const onDocumentDecorationChange = vi.fn();
 
     renderDesignFields({
@@ -874,46 +874,37 @@ describe("ProposalRail style tab", () => {
       onDocumentDecorationChange,
     });
 
-    expect(screen.getByText("Decorations", { selector: ".forge__rail-label" })).toBeInTheDocument();
-    expect(screen.getByRole("switch", { name: "Show image" })).toHaveAttribute(
-      "aria-checked",
-      "true",
-    );
+    expect(screen.getByText("Image", { selector: ".forge__rail-label" })).toBeInTheDocument();
+    expect(screen.getByText("mark.png")).toBeInTheDocument();
+    expect(screen.getByText("Contain • Medium")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remove image" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Large" })).toBeNull();
+
     const uploadInput = screen.getByLabelText("Upload decoration image");
     expect(uploadInput).toHaveAttribute(
       "accept",
       ".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml",
     );
-    expect(screen.getByRole("button", { name: "Small, 18 mm" })).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
-    expect(screen.getByRole("button", { name: "Custom, 49 mm" })).toHaveAttribute(
-      "aria-pressed",
+
+    fireEvent.click(screen.getByRole("button", { name: "Inspect" }));
+    expect(screen.getByRole("button", { name: "Close" })).toHaveAttribute(
+      "aria-expanded",
       "true",
     );
+    const popover = screen.getByRole("dialog", { name: "Image controls" });
 
-    fireEvent.click(screen.getByRole("switch", { name: "Show image" }));
-    expect(onDocumentDecorationChange).toHaveBeenCalledWith(
-      expect.objectContaining({ visible: false }),
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Large, 52 mm" }));
+    fireEvent.click(within(popover).getByRole("button", { name: "Large" }));
     const presetCall = onDocumentDecorationChange.mock.calls.at(-1)?.[0];
     expect(presetCall.sizePreset).toBe(52);
+    expect(presetCall.visible).toBe(true);
     expect(presetCall).not.toHaveProperty("customSizeMm");
 
-    fireEvent.click(screen.getByRole("button", { name: "Cover" }));
+    fireEvent.click(within(popover).getByRole("button", { name: "Cover" }));
     expect(onDocumentDecorationChange).toHaveBeenCalledWith(
-      expect.objectContaining({ fit: "cover" }),
+      expect.objectContaining({ fit: "cover", visible: true }),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Reset position" }));
-    expect(onDocumentDecorationChange).toHaveBeenCalledWith(
-      expect.objectContaining({ placementMode: "default", xMm: 17, yMm: 35 }),
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Remove image" }));
+    fireEvent.click(within(popover).getByRole("button", { name: "Remove image" }));
     expect(onDocumentDecorationChange).toHaveBeenCalledWith(
       expect.objectContaining({
         dataUrl: undefined,
@@ -923,33 +914,27 @@ describe("ProposalRail style tab", () => {
     );
   });
 
-  it("hides decoration size and placement controls when the image is hidden", () => {
+  it("renders the add image cell when no proposal image exists", () => {
+    const onDocumentDecorationChange = vi.fn();
+
     renderDesignFields({
       documentDecoration: {
         visible: false,
         source: "upload",
-        dataUrl: "data:image/png;base64,AAAA",
-        fileName: "mark.png",
-        mimeType: "image/png",
-        alt: "Company mark",
         sizePreset: 35,
         fit: "contain",
         placementMode: "default",
         xMm: 17,
         yMm: 35,
       },
-      onDocumentDecorationChange: vi.fn(),
+      onDocumentDecorationChange,
     });
 
-    expect(screen.getByRole("switch", { name: "Show image" })).toHaveAttribute(
-      "aria-checked",
-      "false",
-    );
+    expect(screen.getByText("Image", { selector: ".forge__rail-label" })).toBeInTheDocument();
+    expect(screen.getByText("Add image")).toBeInTheDocument();
+    expect(screen.getByText("PNG or JPEG")).toBeInTheDocument();
     expect(screen.getByLabelText("Upload decoration image")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Remove image" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Medium, 35 mm" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Contain" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Reset position" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Inspect" })).toBeNull();
   });
 
   it("shows the Editorial flower mark only in the Editorial decoration drawer", () => {
@@ -960,12 +945,9 @@ describe("ProposalRail style tab", () => {
 
     expect(screen.getByText("Flower template mark.svg")).toBeInTheDocument();
     expect(
-      document.querySelector(".dasti-proposal-design-fields__decoration-thumb"),
+      document.querySelector(".dasti-proposal-design-image__thumb img"),
     ).toBeTruthy();
-    expect(screen.getByRole("switch", { name: "Show image" })).toHaveAttribute(
-      "aria-checked",
-      "true",
-    );
+    expect(screen.getByRole("button", { name: "Inspect" })).toBeInTheDocument();
   });
 
   it("does not show the Editorial flower mark in the Minimal decoration drawer", () => {
@@ -986,7 +968,7 @@ describe("ProposalRail style tab", () => {
       },
     });
 
-    expect(screen.getByText("No image")).toBeInTheDocument();
+    expect(screen.getByText("Add image")).toBeInTheDocument();
     expect(screen.queryByText("Flower template mark.svg")).not.toBeInTheDocument();
     expect(
       document.querySelector(".dasti-proposal-design-fields__decoration-thumb"),
@@ -1114,6 +1096,12 @@ describe("ProposalRail style tab", () => {
     );
     expect(css).toMatch(
       /\.dasti-proposal-design-style-pills \.dasti-proposal-design-fields__reset\s*\{[\s\S]*align-self:\s*stretch;[\s\S]*justify-self:\s*stretch;[\s\S]*margin:\s*0;[\s\S]*\}/,
+    );
+    expect(css).toMatch(
+      /@media \(min-width:\s*760px\)\s*\{[\s\S]*\.dasti-proposal-design-image__popover\s*\{[\s\S]*inset-inline-end:\s*0;[\s\S]*inset-block-start:\s*calc\(100% \+ var\(--space-2\)\);[\s\S]*\}/,
+    );
+    expect(css).not.toContain(
+      ".dasti-proposal-design-image__popover {\n    inset-inline-end: calc(100% + var(--space-3));",
     );
     expect(css).toMatch(
       /@media \(max-width:\s*760px\)\s*\{[\s\S]*\.dasti-proposal-design-style-pills__label--full\s*\{[\s\S]*display:\s*none;[\s\S]*\}/,

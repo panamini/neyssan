@@ -137,6 +137,7 @@ import {
 import CvStageBar from "../components/cv/CvStageBar";
 import CvDesignFields, {
   type CvAccentChoice,
+  type CvDesignImageSettings,
 } from "../components/cv/CvDesignFields";
 import CvReviewBanner from "../components/cv/CvReviewBanner";
 import ImportRecoveryPanel from "../components/ImportRecoveryPanel";
@@ -213,6 +214,10 @@ type CvImportRecoveryDraft = {
   items: ImportRecoveryItem[];
   overflowCount: number;
   reviewLimit: number;
+};
+type CvProfileImageMetadata = CvDesignImageSettings & {
+  fileName?: string;
+  src?: string;
 };
 
 function withCvInlinePaperAiTimeout<T>(request: Promise<T>): Promise<T> {
@@ -330,6 +335,47 @@ function getStructuredItems(
   return Array.isArray(section.structuredContent)
     ? (section.structuredContent as Array<Record<string, unknown>>)
     : [];
+}
+
+function getCvProfileImageMetadata(
+  metadata: CvDocument["metadata"] | null | undefined,
+): CvProfileImageMetadata {
+  const source =
+    metadata && typeof metadata.profileImage === "object" && metadata.profileImage
+      ? (metadata.profileImage as Record<string, unknown>)
+      : {};
+  return {
+    size:
+      source.size === "small" || source.size === "large"
+        ? source.size
+        : "medium",
+    fit: source.fit === "contain" ? "contain" : "cover",
+    ...(typeof source.fileName === "string" && source.fileName.trim()
+      ? { fileName: source.fileName.trim().slice(0, 160) }
+      : {}),
+    ...(typeof source.src === "string" && source.src.trim()
+      ? { src: source.src.trim() }
+      : {}),
+  };
+}
+
+function readCvProfileImageFile(file: File): Promise<string> {
+  if (!/^image\/(?:png|jpe?g)$/i.test(file.type)) {
+    return Promise.reject(new Error("Use a PNG or JPEG image."));
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read the image."));
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+        return;
+      }
+      reject(new Error("Could not read the image."));
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 function normalizeListName(value: string): string {
@@ -6211,6 +6257,118 @@ export function CvForge(): JSX.Element {
     [saveCurrentCvStyleOnly, stylePreset],
   );
 
+  const profileSection = React.useMemo(
+    () =>
+      currentSections.find(
+        (section) => getCanonicalSectionType(section) === "profile",
+      ) ?? null,
+    [currentSections],
+  );
+  const profileImageMetadata = React.useMemo(
+    () => getCvProfileImageMetadata(currentCv?.metadata),
+    [currentCv?.metadata],
+  );
+  const profileImageSource = React.useMemo(() => {
+    const firstProfileItem = profileSection
+      ? getStructuredItems(profileSection)[0]
+      : null;
+    const src =
+      typeof firstProfileItem?.photoUrl === "string"
+        ? firstProfileItem.photoUrl.trim()
+        : "";
+    return src || profileImageMetadata.src || null;
+  }, [profileImageMetadata.src, profileSection]);
+  const updateCvProfileImage = React.useCallback(
+    (photoUrl: string | null, metadataPatch?: Partial<CvProfileImageMetadata>) => {
+      if (!currentCv) {
+        showToast("Load a CV before adding an image.", { variant: "error" });
+        return;
+      }
+
+      const now = new Date().toISOString();
+      const nextProfileImage = {
+        ...profileImageMetadata,
+        ...metadataPatch,
+        ...(photoUrl ? { src: photoUrl } : {}),
+      };
+      const nextMetadata = buildUpdatedCvMetadata(currentCv, now);
+      if (photoUrl) {
+        (nextMetadata as { profileImage?: CvProfileImageMetadata }).profileImage =
+          nextProfileImage;
+      } else {
+        delete (nextMetadata as { profileImage?: unknown }).profileImage;
+      }
+
+      void importCv({
+        ...currentCv,
+        metadata: nextMetadata,
+        sections: profileSection
+          ? currentSections.map((section) => {
+              if (section !== profileSection) return section;
+              const profileItems = getStructuredItems(profileSection);
+              const firstProfileItem = profileItems[0] ?? {};
+              const nextProfileItem = {
+                ...firstProfileItem,
+                ...(photoUrl ? { photoUrl } : { photoUrl: undefined }),
+              };
+              return {
+                ...profileSection,
+                structuredContent:
+                  profileItems.length > 0
+                    ? [nextProfileItem, ...profileItems.slice(1)]
+                    : [nextProfileItem],
+              };
+            })
+          : currentSections,
+      });
+    },
+    [
+      currentCv,
+      currentSections,
+      importCv,
+      profileImageMetadata,
+      profileSection,
+      showToast,
+    ],
+  );
+
+  const handleCvDesignImageUpload = React.useCallback(
+    (file: File) => {
+      void readCvProfileImageFile(file)
+        .then((photoUrl) => {
+          updateCvProfileImage(photoUrl, {
+            fileName: file.name || "Document image",
+          });
+        })
+        .catch((error: unknown) => {
+          showToast(
+            error instanceof Error ? error.message : "Could not read the image.",
+            { variant: "error" },
+          );
+        });
+    },
+    [showToast, updateCvProfileImage],
+  );
+
+  const handleCvDesignImageSettingsChange = React.useCallback(
+    (settings: CvDesignImageSettings) => {
+      if (!currentCv || !profileImageSource) return;
+      const now = new Date().toISOString();
+      void importCv({
+        ...currentCv,
+        metadata: {
+          ...buildUpdatedCvMetadata(currentCv, now),
+          profileImage: {
+            ...profileImageMetadata,
+            src: profileImageSource,
+            ...settings,
+          },
+        },
+      });
+    },
+    [currentCv, importCv, profileImageMetadata, profileImageSource],
+  );
+
   const cvDesignPanelRegistration = React.useMemo(
     () => ({
       surface: "cv-design" as const,
@@ -6230,12 +6388,23 @@ export function CvForge(): JSX.Element {
           documentIconSettings={documentIconSettings}
           onDocumentIconSettingsChange={handleDocumentIconSettingsChange}
           sectionIconTargets={documentIconSectionTargets}
+          image={{
+            src: profileImageSource,
+            fileName: profileImageMetadata.fileName,
+            size: profileImageMetadata.size,
+            fit: profileImageMetadata.fit,
+          }}
+          onImageUpload={handleCvDesignImageUpload}
+          onImageRemove={() => updateCvProfileImage(null)}
+          onImageSettingsChange={handleCvDesignImageSettingsChange}
         />
       ),
     }),
     [
       documentIconSettings,
       documentIconSectionTargets,
+      handleCvDesignImageSettingsChange,
+      handleCvDesignImageUpload,
       handleDocumentIconSettingsChange,
       handleResetStyleSlot,
       handleSelectAccent,
@@ -6246,7 +6415,10 @@ export function CvForge(): JSX.Element {
       resolvedLanguage,
       selectedStyleSlot,
       selectedStyleSlotIsCustom,
+      profileImageMetadata,
+      profileImageSource,
       stylePreset,
+      updateCvProfileImage,
     ],
   );
   useRegisterForgePanel(cvDesignPanelRegistration);

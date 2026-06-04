@@ -318,6 +318,45 @@ describe("mapCvDocumentToResumeData", () => {
     expect(hasRenderableResumeData(mapped)).toBe(true);
   });
 
+  it("uses the metadata profile image source when the profile item has no photoUrl", () => {
+    const doc: CvDocument = {
+      id: "cv-profile-image-metadata",
+      title: "Senior Product Designer",
+      metadata: {
+        createdAt: "2026-03-25T00:00:00.000Z",
+        updatedAt: "2026-03-25T00:00:00.000Z",
+        version: 1,
+        profileImage: {
+          src: "data:image/png;base64,AAAA",
+          size: "large",
+          fit: "contain",
+          fileName: "portrait.png",
+        },
+      },
+      sections: [
+        {
+          id: "profile",
+          title: "Profile",
+          type: "profile",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "profile-1",
+              name: "Elena Marlowe",
+              desiredPosition: "Senior Product Designer",
+            },
+          ],
+        },
+      ],
+    };
+
+    const mapped = mapCvDocumentToResumeData(doc);
+
+    expect(mapped.photoUrl).toBe("data:image/png;base64,AAAA");
+    expect(mapped.photoSize).toBe("large");
+    expect(mapped.photoFit).toBe("contain");
+  });
+
   it("keeps prose-only experience entries as description without synthesizing bullets", () => {
     const doc: CvDocument = {
       id: "cv-2",

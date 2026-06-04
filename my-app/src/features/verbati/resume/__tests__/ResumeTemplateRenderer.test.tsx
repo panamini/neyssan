@@ -434,6 +434,38 @@ describe("ResumeTemplateRenderer", () => {
     );
   });
 
+  it("applies explicit CV global dash bullet style", () => {
+    const { container } = render(
+      <ResumeTemplateRenderer
+        data={resumeMock}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        resumeTemplateId="workshop_resume_onecol_ats"
+        documentIconSettings={{
+          listMarkerType: "dash",
+          defaultListMarkerKey: "minus",
+          sectionHeadingIconMode: "none",
+          sectionIconMap: {},
+          color: "ink",
+          sizePt: 8,
+        }}
+      />,
+    );
+
+    const marker = container.querySelector(".dasti-cv-paper-list-marker");
+    const stroke = marker?.querySelector("span");
+
+    expect(marker?.querySelector("svg")).toBeNull();
+    expect(marker).toHaveAttribute("data-marker", "–");
+    expect(marker?.textContent).toBe("");
+    expect(stroke).toHaveStyle({ width: "8pt" });
+    expect(stroke?.getAttribute("style")).toContain("border-top: 1.28pt");
+  });
+
   it("renders the workshop two-column ATS page set with canonical column vars", () => {
     const { container } = render(
       <ResumeTemplateRenderer

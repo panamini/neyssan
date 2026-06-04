@@ -5595,6 +5595,12 @@ export function ProposalForge(): JSX.Element {
     },
     [],
   );
+  const handleDocumentIconSettingsChange = React.useCallback(
+    (nextSettings: DocumentIconSettings) => {
+      setProposalDocumentIconSettings(normalizeDocumentIconSettings(nextSettings));
+    },
+    [],
+  );
   const handleDocumentDecorationCommit = React.useCallback(
     (nextDecoration: DocumentDecoration) => {
       setDocumentDecoration(normalizeDocumentDecoration(nextDecoration));
@@ -11776,6 +11782,8 @@ export function ProposalForge(): JSX.Element {
           onClearStyleCustomAccent={handleProposalCustomAccentClear}
           documentDecoration={documentDecoration}
           onDocumentDecorationChange={handleDocumentDecorationChange}
+          documentIconSettings={proposalDocumentIconSettings}
+          onDocumentIconSettingsChange={handleDocumentIconSettingsChange}
           signaturePresent={Boolean(
             effectiveProposalClosing?.enabled &&
               effectiveProposalClosing.signatureName,
@@ -11803,6 +11811,7 @@ export function ProposalForge(): JSX.Element {
       handleProposalCustomAccentClear,
       handleProposalCustomAccentSelect,
       handleDocumentDecorationChange,
+      handleDocumentIconSettingsChange,
       handleProposalLayoutSelect,
       handleProposalPaletteSelect,
       handleProposalStyleBundleReset,
@@ -11812,6 +11821,7 @@ export function ProposalForge(): JSX.Element {
       handleToggleSignature,
       proposalSignatureSettings.imageDataUrl,
       proposalTemplateBundleId,
+      proposalDocumentIconSettings,
       documentDecoration,
       resolvedLanguage,
     ],

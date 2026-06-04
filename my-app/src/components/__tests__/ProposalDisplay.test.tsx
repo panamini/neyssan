@@ -503,7 +503,14 @@ describe("ProposalDisplay", () => {
     await waitFor(() => {
       expect(getSelectionToolbarTextButton("Rewrite")).toBeInTheDocument();
     });
-    expect(screen.queryByRole("button", { name: "List" })).toBeNull();
+    expect(getSelectionToolbarButtonByLabel("Bold")).not.toBeDisabled();
+    expect(getSelectionToolbarButtonByLabel("Italic")).not.toBeDisabled();
+    expect(getSelectionToolbarButtonByLabel("Underline")).not.toBeDisabled();
+    expect(getSelectionToolbarButtonByLabel("List")).toBeDisabled();
+    expect(getSelectionToolbarButtonByLabel("List")).toHaveAttribute(
+      "title",
+      "List is available for a single paragraph or list item selection.",
+    );
 
     fireEvent.click(getSelectionToolbarTextButton("Rewrite"));
     const reviewDialog = await findProposalAiReviewDialog();
@@ -2110,6 +2117,7 @@ describe("ProposalDisplay", () => {
     await selectContentEditableText(paragraph, "Turn this into a list.");
 
     expect(getSelectionToolbarButtonByLabel("List")).toBeInTheDocument();
+    expect(getSelectionToolbarButtonByLabel("List")).not.toBeDisabled();
     expect(screen.queryByRole("button", { name: "Icon" })).toBeNull();
     fireEvent.click(getSelectionToolbarButtonByLabel("List"));
 

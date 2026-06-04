@@ -717,11 +717,6 @@ export function normalizeDocumentIconSettings(
   const sizePt = ICON_SIZES.has(record.sizePt as DocumentIconSizePt)
     ? (record.sizePt as DocumentIconSizePt)
     : DEFAULT_DOCUMENT_ICON_SETTINGS.sizePt;
-  const listMarkerType = LIST_MARKER_TYPES.has(
-    record.listMarkerType as DocumentListMarkerType,
-  )
-    ? (record.listMarkerType as DocumentListMarkerType)
-    : DEFAULT_DOCUMENT_ICON_SETTINGS.listMarkerType;
   const sectionHeadingIconMode = SECTION_ICON_MODES.has(
     record.sectionHeadingIconMode as SectionHeadingIconMode,
   )
@@ -732,6 +727,14 @@ export function normalizeDocumentIconSettings(
     getDocumentIcon(record.defaultListMarkerKey)
       ? record.defaultListMarkerKey
       : DEFAULT_DOCUMENT_ICON_SETTINGS.defaultListMarkerKey;
+  const listMarkerType = LIST_MARKER_TYPES.has(
+    record.listMarkerType as DocumentListMarkerType,
+  )
+    ? (record.listMarkerType as DocumentListMarkerType)
+    : defaultListMarkerKey &&
+        defaultListMarkerKey !== DEFAULT_DOCUMENT_ICON_SETTINGS.defaultListMarkerKey
+      ? "icon"
+      : DEFAULT_DOCUMENT_ICON_SETTINGS.listMarkerType;
   const sectionIconMap =
     record.sectionIconMap &&
     typeof record.sectionIconMap === "object" &&

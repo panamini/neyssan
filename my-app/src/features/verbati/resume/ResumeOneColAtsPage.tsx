@@ -167,24 +167,52 @@ function renderDocumentListMarker(
   settings: DocumentIconSettings | null | undefined,
 ): React.ReactNode {
   const documentIconSettings = normalizeDocumentIconSettings(settings);
-  const icon = getDocumentIcon(
-    resolveDefaultListMarkerIconKey(documentIconSettings),
-  );
-  if (!icon) return null;
+  const markerType = documentIconSettings.listMarkerType ?? "dot";
+  const icon =
+    markerType === "icon"
+      ? getDocumentIcon(resolveDefaultListMarkerIconKey(documentIconSettings))
+      : null;
+  const markerGlyph = markerType === "dash" ? "–" : "•";
+  const dotSizePt = documentIconSettings.sizePt * 0.58;
+  const dashThicknessPt = documentIconSettings.sizePt * 0.16;
+  const glyphStyle = !icon
+    ? markerType === "dash"
+      ? ({
+          width: `${documentIconSettings.sizePt}pt`,
+          borderTop: `${dashThicknessPt}pt solid currentColor`,
+        } as React.CSSProperties)
+      : ({
+          width: `${dotSizePt}pt`,
+          height: `${dotSizePt}pt`,
+          borderRadius: "999px",
+          backgroundColor: "currentColor",
+        } as React.CSSProperties)
+    : null;
 
   return (
     <span
-      className="dasti-cv-paper-list-marker"
+      className={[
+        "dasti-cv-paper-list-marker",
+        icon ? "dasti-cv-paper-list-marker--icon" : "dasti-cv-paper-list-marker--glyph",
+      ].join(" ")}
+      data-marker={icon ? undefined : markerGlyph}
       aria-hidden="true"
       style={{
         display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
         width: `${documentIconSettings.sizePt}pt`,
         height: `${documentIconSettings.sizePt}pt`,
         color: getDocumentIconColorCss(documentIconSettings.color),
-        transform: "translateY(0.14em)",
+        fontSize: `${documentIconSettings.sizePt}pt`,
+        fontWeight: 700,
+        lineHeight: 1,
+        transform: icon ? "translateY(0.14em)" : "translateY(0.2em)",
       }}
-      dangerouslySetInnerHTML={{ __html: icon.svg }}
-    />
+      {...(icon ? { dangerouslySetInnerHTML: { __html: icon.svg } } : {})}
+    >
+      {glyphStyle ? <span aria-hidden="true" style={glyphStyle} /> : null}
+    </span>
   );
 }
 
@@ -1311,6 +1339,9 @@ function renderProfileFragment(args: {
   const { data, activeTarget, inlineEditing } = args;
   const profileSectionId = data.profileSectionId ?? "profile";
   const editable = Boolean(inlineEditing?.enabled);
+  const photoSizeMm =
+    data.photoSize === "small" ? 18 : data.photoSize === "large" ? 32 : 24;
+  const photoFit = data.photoFit ?? "cover";
   const populatedProfileFieldKeys = new Set([
     ...data.contact.map((item) =>
       String(item.itemId ?? item.label.toLowerCase()),
@@ -1340,68 +1371,95 @@ function renderProfileFragment(args: {
         paddingBottom: "var(--header-bottom-padding)",
       }}
     >
-      <div style={{ display: "grid", gap: "1.5mm" }}>
-        {renderInlineField({
-          as: "h1",
-          value: data.name,
-          editable,
-          inlineEditing,
-          editTarget: {
-            sectionId: profileSectionId,
-            sectionType: "profile",
-            fieldPath: "structuredContent.0.name",
-            fieldKind: "heading",
-          },
-          ariaLabel: "Edit name",
-          placeholder: "Name",
-          previewAttrs: buildPreviewRegionAttrs({
-            sectionType: "profile",
-            sectionId: profileSectionId,
-            sectionTitle: "Profile",
-            activeTarget,
-            surface: "item",
-          }),
-          style: {
-            margin: 0,
-            fontFamily: "var(--heading-font, var(--font-heading-family))",
-            fontSize: workshopDisplayFontSize,
-            lineHeight: "var(--text-display-line)",
-            fontWeight: 700,
-            letterSpacing: "-0.02em",
-          },
-        })}
-        {data.title || editable
-          ? renderInlineField({
-              value: data.title,
-              editable,
-              inlineEditing,
-              editTarget: {
-                sectionId: profileSectionId,
-                sectionType: "profile",
-                fieldPath: "structuredContent.0.desiredPosition",
-                fieldKind: "meta",
-              },
-              ariaLabel: "Edit title",
-              placeholder: "Target title",
-              previewAttrs: buildPreviewRegionAttrs({
-                sectionType: "profile",
-                sectionId: profileSectionId,
-                sectionTitle: "Profile",
-                activeTarget,
-                surface: "item",
-              }),
-              style: {
-                margin: 0,
-                fontSize: buildAdjustedFontSize({
-                  baseVar: "--text-body-size",
-                  adjustVar: "--body-size-adjust",
-                  offsetMm: 0.1,
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: data.photoUrl
+            ? `${photoSizeMm}mm minmax(0, 1fr)`
+            : "minmax(0, 1fr)",
+          alignItems: "center",
+          gap: data.photoUrl ? "5mm" : "1.5mm",
+        }}
+      >
+        {data.photoUrl ? (
+          <img
+            src={data.photoUrl}
+            alt=""
+            data-cv-profile-image="true"
+            style={{
+              width: `${photoSizeMm}mm`,
+              height: `${photoSizeMm}mm`,
+              objectFit: photoFit,
+              display: "block",
+              border: "1px solid color-mix(in srgb, var(--color-text) 14%, transparent)",
+              borderRadius: "999px",
+              background: "var(--paper)",
+            }}
+          />
+        ) : null}
+        <div style={{ display: "grid", gap: "1.5mm" }}>
+          {renderInlineField({
+            as: "h1",
+            value: data.name,
+            editable,
+            inlineEditing,
+            editTarget: {
+              sectionId: profileSectionId,
+              sectionType: "profile",
+              fieldPath: "structuredContent.0.name",
+              fieldKind: "heading",
+            },
+            ariaLabel: "Edit name",
+            placeholder: "Name",
+            previewAttrs: buildPreviewRegionAttrs({
+              sectionType: "profile",
+              sectionId: profileSectionId,
+              sectionTitle: "Profile",
+              activeTarget,
+              surface: "item",
+            }),
+            style: {
+              margin: 0,
+              fontFamily: "var(--heading-font, var(--font-heading-family))",
+              fontSize: workshopDisplayFontSize,
+              lineHeight: "var(--text-display-line)",
+              fontWeight: 700,
+              letterSpacing: "-0.02em",
+            },
+          })}
+          {data.title || editable
+            ? renderInlineField({
+                value: data.title,
+                editable,
+                inlineEditing,
+                editTarget: {
+                  sectionId: profileSectionId,
+                  sectionType: "profile",
+                  fieldPath: "structuredContent.0.desiredPosition",
+                  fieldKind: "meta",
+                },
+                ariaLabel: "Edit title",
+                placeholder: "Target title",
+                previewAttrs: buildPreviewRegionAttrs({
+                  sectionType: "profile",
+                  sectionId: profileSectionId,
+                  sectionTitle: "Profile",
+                  activeTarget,
+                  surface: "item",
                 }),
-                lineHeight: "var(--text-body-line)",
-                color: "var(--color-text-muted)",
-              },
-            })
-          : null}
+                style: {
+                  margin: 0,
+                  fontSize: buildAdjustedFontSize({
+                    baseVar: "--text-body-size",
+                    adjustVar: "--body-size-adjust",
+                    offsetMm: 0.1,
+                  }),
+                  lineHeight: "var(--text-body-line)",
+                  color: "var(--color-text-muted)",
+                },
+              })
+            : null}
+        </div>
       </div>
       {data.contact.length > 0 ? (
         <dl

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   normalizeEditableText,
   applyProposalDocumentInlineMark,
+  applyProposalDocumentInlineMarkToTextBlockRange,
   getProposalRichTextPlainText,
   mergeProposalDocumentTargetBackward,
   mergeProposalDocumentTargetForward,
@@ -172,8 +173,53 @@ describe("proposal-document", () => {
     expect(
       block.type === "paragraph"
         ? getProposalRichTextPlainText(block.richText)
-        : "",
+      : "",
     ).toBe("Make this bold.");
+  });
+
+  it("applies inline marks across selected paragraph ranges", () => {
+    const document: ProposalDocument = {
+      schemaVersion: 1,
+      kind: "letter",
+      source: "structured",
+      blocks: [
+        { id: "p1", type: "paragraph", text: "First paragraph text." },
+        { id: "p2", type: "paragraph", text: "Middle paragraph text." },
+        { id: "p3", type: "paragraph", text: "Final paragraph text." },
+      ],
+    };
+
+    const next = applyProposalDocumentInlineMarkToTextBlockRange({
+      document,
+      mark: "underline",
+      startTarget: { type: "text-block", blockId: "p1" },
+      startOffset: 6,
+      endTarget: { type: "text-block", blockId: "p3" },
+      endOffset: 5,
+    });
+
+    expect(next).not.toBeNull();
+    expect(next?.blocks[0]).toMatchObject({
+      richText: {
+        runs: [
+          { text: "First " },
+          { text: "paragraph text.", underline: true },
+        ],
+      },
+    });
+    expect(next?.blocks[1]).toMatchObject({
+      richText: {
+        runs: [{ text: "Middle paragraph text.", underline: true }],
+      },
+    });
+    expect(next?.blocks[2]).toMatchObject({
+      richText: {
+        runs: [
+          { text: "Final", underline: true },
+          { text: " paragraph text." },
+        ],
+      },
+    });
   });
 
   it("falls back to legacy content when structured data is invalid", () => {

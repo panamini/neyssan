@@ -92,6 +92,7 @@ import {
 } from "../lib/proposal-textarea-list";
 import {
   applyProposalDocumentInlineMark,
+  applyProposalDocumentInlineMarkToTextBlockRange,
   resolveProposalDocument,
   serializeProposalDocumentToLegacyString,
   updateProposalDocumentTextTarget,
@@ -814,6 +815,14 @@ function isProposalPreviewListActionSafe(
     (selection?.fieldKind === "paragraph" ||
       selection?.fieldKind === "list-item")
   );
+}
+
+function getProposalPreviewListActionTitle(
+  selection: ProposalPreviewSelectionState | null,
+): string {
+  return isProposalPreviewListActionSafe(selection)
+    ? "List"
+    : "List is available for a single paragraph or list item selection.";
 }
 
 function ProposalInlineProofingOverlay({
@@ -2079,11 +2088,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
 
   const applyPreviewInlineMark = React.useCallback(
     (mark: ProposalInlineMark) => {
-      if (
-        !canEditPreviewDocumentText ||
-        !previewSelectionState?.target ||
-        previewSelectionState.multiTargetRange
-      ) {
+      if (!canEditPreviewDocumentText || !previewSelectionState) {
         return;
       }
 
@@ -2093,13 +2098,25 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         proposalType,
         closing,
       });
-      const nextDocument = applyProposalDocumentInlineMark({
-        document: currentDocument,
-        target: previewSelectionState.target,
-        mark,
-        start: previewSelectionState.start,
-        end: previewSelectionState.end,
-      });
+      const nextDocument = previewSelectionState.multiTargetRange
+        ? applyProposalDocumentInlineMarkToTextBlockRange({
+            document: currentDocument,
+            mark,
+            startTarget: previewSelectionState.multiTargetRange.startTarget,
+            startOffset: previewSelectionState.multiTargetRange.startOffset,
+            endTarget: previewSelectionState.multiTargetRange.endTarget,
+            endOffset: previewSelectionState.multiTargetRange.endOffset,
+          })
+        : previewSelectionState.target
+          ? applyProposalDocumentInlineMark({
+              document: currentDocument,
+              target: previewSelectionState.target,
+              mark,
+              start: previewSelectionState.start,
+              end: previewSelectionState.end,
+            })
+          : null;
+      if (!nextDocument) return;
       if (nextDocument === currentDocument) return;
 
       setAiSuggestion(null);
@@ -2122,8 +2139,9 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       () => {
         if (!canEditPreviewDocumentText || !previewSelectionState) return [];
 
-        const singleTargetTextSelection = Boolean(
-          previewSelectionState.target && !previewSelectionState.multiTargetRange,
+        const canApplyInlineMark = Boolean(
+          previewSelectionState.multiTargetRange ||
+            (previewSelectionState.target && !previewSelectionState.multiTargetRange),
         );
         const actions: FloatingSelectionToolbarAction[] = [
           {
@@ -2131,7 +2149,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             label: "Bold",
             title: "Bold",
             icon: <Bold size={15} aria-hidden="true" />,
-            disabled: !singleTargetTextSelection,
+            disabled: !canApplyInlineMark,
             onRun: () => applyPreviewInlineMark("bold"),
           },
           {
@@ -2139,7 +2157,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             label: "Italic",
             title: "Italic",
             icon: <Italic size={15} aria-hidden="true" />,
-            disabled: !singleTargetTextSelection,
+            disabled: !canApplyInlineMark,
             onRun: () => applyPreviewInlineMark("italic"),
           },
           {
@@ -2147,24 +2165,23 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
             label: "Underline",
             title: "Underline",
             icon: <Underline size={15} aria-hidden="true" />,
-            disabled: !singleTargetTextSelection,
+            disabled: !canApplyInlineMark,
             onRun: () => applyPreviewInlineMark("underline"),
           },
         ];
 
-        if (isProposalPreviewListActionSafe(previewSelectionState)) {
-          actions.push({
-            id: "list",
-            label: "List",
-            title: "List",
-            icon: <List size={15} aria-hidden="true" />,
-            disabled: false,
-            onRun: applyPreviewListTransform,
-          });
-        }
+        const canApplyList = isProposalPreviewListActionSafe(previewSelectionState);
+        actions.push({
+          id: "list",
+          label: "List",
+          title: getProposalPreviewListActionTitle(previewSelectionState),
+          icon: <List size={15} aria-hidden="true" />,
+          // Keep List visible in the formatting group; the current structured
+          // transform only supports one paragraph or list item at a time.
+          disabled: !canApplyList,
+          onRun: applyPreviewListTransform,
+        });
 
-        // Multi-block B/I/U needs range-aware rich run splitting across targets;
-        // keep it disabled until that can be made atomic with the existing AI range path.
         return actions;
       },
       [

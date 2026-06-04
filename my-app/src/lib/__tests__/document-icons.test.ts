@@ -118,4 +118,21 @@ describe("document-icons", () => {
       }),
     ).toBe("briefcase");
   });
+
+  it("infers icon list marker mode for legacy icon-only settings", () => {
+    expect(
+      normalizeDocumentIconSettings({
+        defaultListMarkerKey: "diamond",
+        sectionHeadingIconMode: "none",
+        sectionIconMap: {},
+        color: "accent",
+        sizePt: 10,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        listMarkerType: "icon",
+        defaultListMarkerKey: "diamond",
+      }),
+    );
+  });
 });

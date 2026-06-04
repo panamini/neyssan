@@ -159,6 +159,35 @@ describe("ResumeOneColAtsPage", () => {
     expect(container.querySelector("[data-paper-inline-add]")).toBeNull();
   });
 
+  it("renders the profile image in the workshop header when photoUrl is present", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...buildRendererData(),
+      photoUrl: "data:image/png;base64,AAAA",
+      photoSize: "large" as const,
+      photoFit: "contain" as const,
+      experience: [],
+      projects: [],
+      skillItems: [],
+      skills: [],
+      languages: [],
+    };
+    const plan = planWorkshopResumePages({ data, template });
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={plan.committedPages[0]!}
+        template={template}
+      />,
+    );
+
+    const image = container.querySelector('[data-cv-profile-image="true"]');
+    expect(image).toHaveAttribute("src", "data:image/png;base64,AAAA");
+    expect(image?.getAttribute("style")).toContain("width: 32mm");
+    expect(image?.getAttribute("style")).toContain("object-fit: contain");
+  });
+
   it("uses shared preview spacing tokens for the workshop page shell and header rhythm", () => {
     const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
     const plan = planWorkshopResumePages({

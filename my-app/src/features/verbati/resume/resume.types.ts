@@ -140,6 +140,8 @@ export type ResumeData = {
   summary: string;
   summaryRich?: WorkshopResponsibilitiesRichContent;
   photoUrl?: string;
+  photoSize?: "small" | "medium" | "large";
+  photoFit?: "contain" | "cover";
   metadata: ResumeMetaItem[];
   contact: ResumeMetaItem[];
   skills: string[];
