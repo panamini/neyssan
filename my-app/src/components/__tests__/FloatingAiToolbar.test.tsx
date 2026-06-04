@@ -238,6 +238,47 @@ describe("FloatingAiToolbar", () => {
     expect(screen.getByRole("button", { name: "Rewrite" })).toBeInTheDocument();
   });
 
+  it("renders formatting SVG icons in compact mode after Edit opens", async () => {
+    const onFormat = vi.fn();
+    const RealLikeIcon = () => (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 16 16"
+        width="16"
+        height="16"
+      >
+        <path d="M4 3h5a3 3 0 0 1 0 6H4z" />
+      </svg>
+    );
+
+    render(
+      <FloatingAiToolbar
+        anchor={{ left: 120, top: 80 }}
+        open
+        formattingActions={[
+          {
+            id: "bold",
+            label: "Bold",
+            title: "Bold",
+            icon: <RealLikeIcon />,
+            onRun: onFormat,
+          },
+        ]}
+        onClose={vi.fn()}
+        onRunAction={vi.fn()}
+      />,
+    );
+
+    const wideBoldButton = await screen.findByRole("button", { name: "Bold" });
+    expect(wideBoldButton.querySelector("svg")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+
+    const compactBoldButton = screen.getAllByRole("button", { name: "Bold" }).at(-1);
+    expect(compactBoldButton).toBeInTheDocument();
+    expect(compactBoldButton?.querySelector("svg")).toBeInTheDocument();
+  });
+
   it("submits a custom instruction from the inline prompt", async () => {
     const onRunAction = vi.fn();
 
