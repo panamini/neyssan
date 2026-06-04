@@ -4,6 +4,56 @@ import type { CvDocument } from "../../../types/cvDocument";
 import { mapCvDocumentToResumeData, hasRenderableResumeData } from "../cvDocumentToResumeData";
 
 describe("mapCvDocumentToResumeData", () => {
+  it("maps skill category labels and order from section metadata", () => {
+    const data = mapCvDocumentToResumeData({
+      id: "cv-skills",
+      title: "CV",
+      metadata: {
+        createdAt: "2026-06-04T00:00:00.000Z",
+        updatedAt: "2026-06-04T00:00:00.000Z",
+        version: 1,
+      },
+      sections: [
+        {
+          id: "skills",
+          title: "Skills",
+          type: "skills",
+          blocks: [],
+          skillCategories: [
+            { id: "cat-design", label: "Design", source: "user" },
+            { id: "cat-data", label: "Data", source: "import" },
+          ],
+          structuredContent: [
+            {
+              id: "skill-design",
+              name: "Design systems",
+              level: "Advanced",
+              categoryId: "cat-design",
+            },
+            {
+              id: "skill-sql",
+              name: "SQL",
+              level: "Intermediate",
+              categoryId: "missing",
+            },
+          ],
+        },
+      ],
+    } as CvDocument);
+
+    expect(data.skillCategories).toEqual([
+      { id: "cat-design", label: "Design", order: 0, source: "user" },
+      { id: "cat-data", label: "Data", order: 1, source: "import" },
+    ]);
+    expect(data.skillItems[0]).toMatchObject({
+      categoryId: "cat-design",
+      categoryLabel: "Design",
+      categoryOrder: 0,
+    });
+    expect(data.skillItems[1]?.categoryId).toBeUndefined();
+    expect(data.skills).toEqual(["Design systems", "SQL"]);
+  });
+
   it("maps canonical structured CV sections into the verbati resume contract", () => {
     const doc: CvDocument = {
       id: "cv-1",
@@ -90,8 +140,15 @@ describe("mapCvDocumentToResumeData", () => {
           title: "Skills",
           type: "skills",
           blocks: [],
+          skillCategories: [{ id: "cat-design", label: "Design" }],
           structuredContent: [
-            { id: "skill-1", name: "Design systems", level: "Advanced" },
+            {
+              id: "skill-1",
+              name: "Design systems",
+              level: "Advanced",
+              bucket: "core",
+              categoryId: "cat-design",
+            },
             { id: "skill-2", name: "Editorial UI", level: "Advanced" },
           ],
         },
@@ -245,6 +302,10 @@ describe("mapCvDocumentToResumeData", () => {
         id: "skill-1",
         name: "Design systems",
         level: "Advanced",
+        bucket: "core",
+        categoryId: "cat-design",
+        categoryLabel: "Design",
+        categoryOrder: 0,
         sectionId: "skills",
         sectionType: "skills",
         sectionTitle: "Skills",

@@ -3,6 +3,7 @@ import React from "react";
 import { normalizeResumePreviewTokens } from "../../../lib/layout/documentTokenNormalizer";
 import {
   WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
+  isSanatResumeTemplateId,
   isWorkshopResumeTemplateId,
   isWorkshopTwoColumnResumeTemplateId,
   getResumeTemplateDefinition,
@@ -23,6 +24,7 @@ import ResumeOneColAtsPage, {
   type ResumeSectionActions,
 } from "./ResumeOneColAtsPage";
 import ResumeTwoColAtsPage from "./ResumeTwoColAtsPage";
+import ResumeSanatAsymmetricPage from "./ResumeSanatAsymmetricPage";
 import type { ResumeData } from "./resume.types";
 import type { ResumeInlineEditing } from "./InlineEditableText";
 import {
@@ -30,6 +32,10 @@ import {
   type DocumentPageSize,
 } from "../../../lib/document-page-size";
 import type { DocumentIconSettings } from "../../../lib/document-icons";
+import type {
+  DocumentIconOverrides,
+  DocumentListItemIconOverrideTarget,
+} from "../../../lib/document-icon-overrides";
 
 export const WORKSHOP_TEMPLATE_RENDERER_ID = WORKSHOP_RESUME_ONECOL_TEMPLATE_ID;
 export const RESUME_TEMPLATE_PAGE_GAP_PX = 24;
@@ -102,6 +108,11 @@ type ResumeTemplateRendererProps = {
   sectionActions?: ResumeSectionActions | null;
   paperAi?: ResumePaperAiState | null;
   documentIconSettings?: DocumentIconSettings | null;
+  documentIconOverrides?: DocumentIconOverrides | null;
+  onDocumentListItemIconChange?: (
+    target: DocumentListItemIconOverrideTarget,
+    iconKey: string | null,
+  ) => void;
   stageLayout?: DocumentStageLayout;
   pageSize?: DocumentPageSize | null;
   onStablePageCountChange?: ((pageCount: number) => void) | undefined;
@@ -166,6 +177,8 @@ export function ResumeTemplateRenderer({
   sectionActions = null,
   paperAi = null,
   documentIconSettings = null,
+  documentIconOverrides = null,
+  onDocumentListItemIconChange,
   stageLayout,
   pageSize = null,
   onStablePageCountChange,
@@ -297,7 +310,20 @@ export function ResumeTemplateRenderer({
               left: 0,
             }}
           >
-            {isWorkshopTwoColumnResumeTemplateId(templateDefinition.id) ? (
+            {isSanatResumeTemplateId(templateDefinition.id) ? (
+              <ResumeSanatAsymmetricPage
+                data={data}
+                page={page}
+                template={templateDefinition}
+                activeTarget={activeTarget}
+                inlineEditing={inlineEditing}
+                sectionActions={sectionActions}
+                paperAi={paperAi}
+                documentIconSettings={documentIconSettings}
+                documentIconOverrides={documentIconOverrides}
+                onDocumentListItemIconChange={onDocumentListItemIconChange}
+              />
+            ) : isWorkshopTwoColumnResumeTemplateId(templateDefinition.id) ? (
               <ResumeTwoColAtsPage
                 data={data}
                 page={page}
@@ -307,6 +333,8 @@ export function ResumeTemplateRenderer({
                 sectionActions={sectionActions}
                 paperAi={paperAi}
                 documentIconSettings={documentIconSettings}
+                documentIconOverrides={documentIconOverrides}
+                onDocumentListItemIconChange={onDocumentListItemIconChange}
               />
             ) : (
               <ResumeOneColAtsPage
@@ -318,6 +346,8 @@ export function ResumeTemplateRenderer({
                 sectionActions={sectionActions}
                 paperAi={paperAi}
                 documentIconSettings={documentIconSettings}
+                documentIconOverrides={documentIconOverrides}
+                onDocumentListItemIconChange={onDocumentListItemIconChange}
               />
             )}
           </div>

@@ -21,6 +21,7 @@ import type {
   WorkshopResponsibilityTextRun,
 } from "./resume.types";
 import {
+  WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
   resolveWorkshopPreviewLayoutContract,
   type ResumeTemplateDefinition,
 } from "../../../lib/layout/resumeTemplates";
@@ -48,8 +49,15 @@ import {
   normalizeDocumentIconSettings,
   resolveDefaultListMarkerIconKey,
   resolveSectionHeadingIconKey,
+  type DocumentIconKey,
   type DocumentIconSettings,
 } from "../../../lib/document-icons";
+import {
+  resolveDocumentListItemIconOverride,
+  type DocumentIconOverrides,
+  type DocumentListItemIconOverrideTarget,
+} from "../../../lib/document-icon-overrides";
+import { DocumentIconPicker } from "../../../components/document-icons/DocumentIconPicker";
 import { useEditorFormattingActions } from "../../../components/remirror-editor/components/EditorToolbar";
 import {
   INLINE_PAPER_FORMATTING_KEY_ATTR,
@@ -58,6 +66,11 @@ import {
 } from "../../../lib/editor-ai-selection";
 
 type InlinePreviewAttrs = Record<string, string | undefined>;
+type WorkshopSkillsFragment = Extract<
+  WorkshopResumeCommittedFragment,
+  { kind: "skills" }
+>;
+type WorkshopSkillItem = WorkshopSkillsFragment["items"][number];
 
 function InlinePaperFormattingRegistration({
   enabled,
@@ -109,6 +122,11 @@ type ResumeOneColAtsPageProps = {
   sectionActions?: ResumeSectionActions | null;
   paperAi?: ResumePaperAiState | null;
   documentIconSettings?: DocumentIconSettings | null;
+  documentIconOverrides?: DocumentIconOverrides | null;
+  onDocumentListItemIconChange?: (
+    target: DocumentListItemIconOverrideTarget,
+    iconKey: DocumentIconKey | null,
+  ) => void;
 };
 
 export type ResumeSectionActions = {
@@ -163,14 +181,50 @@ const workshopVisibleListStyle = {
   listStylePosition: "outside" as const,
 };
 
+type ResumeListMarkerControls = {
+  overrides?: DocumentIconOverrides | null;
+  activeTarget?: DocumentListItemIconOverrideTarget | null;
+  onOpenTarget?: (target: DocumentListItemIconOverrideTarget) => void;
+  onClose?: () => void;
+  onChange?: (
+    target: DocumentListItemIconOverrideTarget,
+    iconKey: DocumentIconKey | null,
+  ) => void;
+};
+
+function getResumeListMarkerTargetKey(
+  target: DocumentListItemIconOverrideTarget | null | undefined,
+): string {
+  if (!target) return "";
+  return [
+    target.sectionId ?? "",
+    target.sectionType ?? "",
+    target.itemId ?? "",
+    target.field ?? "",
+    target.blockIndex ?? "",
+    target.itemIndex ?? "",
+  ].join("|");
+}
+
 function renderDocumentListMarker(
   settings: DocumentIconSettings | null | undefined,
+  target?: DocumentListItemIconOverrideTarget | null,
+  controls?: ResumeListMarkerControls | null,
 ): React.ReactNode {
   const documentIconSettings = normalizeDocumentIconSettings(settings);
-  const markerType = documentIconSettings.listMarkerType ?? "dot";
+  const overrideIconKey = resolveDocumentListItemIconOverride(
+    controls?.overrides,
+    target,
+  );
+  const markerType = overrideIconKey
+    ? "icon"
+    : documentIconSettings.listMarkerType ?? "dot";
   const icon =
     markerType === "icon"
-      ? getDocumentIcon(resolveDefaultListMarkerIconKey(documentIconSettings))
+      ? getDocumentIcon(
+          overrideIconKey ??
+            resolveDefaultListMarkerIconKey(documentIconSettings),
+        )
       : null;
   const markerGlyph = markerType === "dash" ? "–" : "•";
   const dotSizePt = documentIconSettings.sizePt * 0.58;
@@ -189,29 +243,114 @@ function renderDocumentListMarker(
         } as React.CSSProperties)
     : null;
 
+  const targetKey = getResumeListMarkerTargetKey(target);
+  const activeTargetKey = getResumeListMarkerTargetKey(controls?.activeTarget);
+  const pickerOpen = Boolean(targetKey && targetKey === activeTargetKey);
+  const canEdit = Boolean(
+    target && controls?.onChange && controls?.onOpenTarget,
+  );
+  const markerContent = icon ? (
+    <span
+      className="dasti-cv-paper-list-marker-content"
+      aria-hidden="true"
+      dangerouslySetInnerHTML={{ __html: icon.svg }}
+    />
+  ) : (
+    <span className="dasti-cv-paper-list-marker-content" aria-hidden="true">
+      {glyphStyle ? <span aria-hidden="true" style={glyphStyle} /> : null}
+    </span>
+  );
+
   return (
     <span
       className={[
         "dasti-cv-paper-list-marker",
-        icon ? "dasti-cv-paper-list-marker--icon" : "dasti-cv-paper-list-marker--glyph",
-      ].join(" ")}
+        icon
+          ? "dasti-cv-paper-list-marker--icon"
+          : "dasti-cv-paper-list-marker--glyph",
+        canEdit ? "dasti-cv-paper-list-marker--editable" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       data-marker={icon ? undefined : markerGlyph}
-      aria-hidden="true"
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        width: `${documentIconSettings.sizePt}pt`,
-        height: `${documentIconSettings.sizePt}pt`,
-        color: getDocumentIconColorCss(documentIconSettings.color),
-        fontSize: `${documentIconSettings.sizePt}pt`,
-        fontWeight: 700,
-        lineHeight: 1,
-        transform: icon ? "translateY(0.14em)" : "translateY(0.2em)",
-      }}
-      {...(icon ? { dangerouslySetInnerHTML: { __html: icon.svg } } : {})}
+      aria-hidden={canEdit ? undefined : "true"}
+      style={
+        {
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: `calc(${documentIconSettings.sizePt}pt + 3px)`,
+          height: `calc(${documentIconSettings.sizePt}pt + 3px)`,
+          "--cv-list-marker-visual-size": `${documentIconSettings.sizePt}pt`,
+          color: getDocumentIconColorCss(documentIconSettings.color),
+          fontSize: `${documentIconSettings.sizePt}pt`,
+          fontWeight: 700,
+          lineHeight: 1,
+          transform: icon ? "translateY(0.14em)" : "translateY(0.2em)",
+        } as React.CSSProperties
+      }
     >
-      {glyphStyle ? <span aria-hidden="true" style={glyphStyle} /> : null}
+      {canEdit && target ? (
+        <button
+          type="button"
+          className="dasti-cv-paper-list-marker-trigger"
+          aria-label="Choose bullet icon"
+          aria-haspopup="dialog"
+          aria-expanded={pickerOpen}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            controls?.onOpenTarget?.(target);
+          }}
+          onMouseDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          {markerContent}
+        </button>
+      ) : (
+        markerContent
+      )}
+      {pickerOpen && target ? (
+        <div
+          className="dasti-cv-paper-list-icon-picker"
+          role="dialog"
+          aria-label="Choose bullet icon"
+          onClick={(event) => event.stopPropagation()}
+          onMouseDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <DocumentIconPicker
+            selectedIconKey={
+              overrideIconKey ??
+              resolveDefaultListMarkerIconKey(documentIconSettings)
+            }
+            label="Bullet"
+            onChange={(nextIconKey) => {
+              controls?.onChange?.(target, nextIconKey);
+              controls?.onClose?.();
+            }}
+          />
+          <div className="dasti-cv-paper-list-icon-picker-actions">
+            <button
+              type="button"
+              data-document-icon-picker-action="clear"
+              onClick={() => {
+                controls?.onChange?.(target, null);
+                controls?.onClose?.();
+              }}
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              data-document-icon-picker-action="close"
+              onClick={() => controls?.onClose?.()}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      ) : null}
     </span>
   );
 }
@@ -248,7 +387,10 @@ function renderPaperListSuggestions(args: {
 
   if (suggestion.state === "loading") {
     return (
-      <div className="dasti-cv-paper-list-suggestions" data-cv-paper-list-suggestions="loading">
+      <div
+        className="dasti-cv-paper-list-suggestions"
+        data-cv-paper-list-suggestions="loading"
+      >
         <span className="dasti-cv-paper-list-suggestions__status">
           Finding suggestions...
         </span>
@@ -258,7 +400,10 @@ function renderPaperListSuggestions(args: {
 
   if (suggestion.state === "error") {
     return (
-      <div className="dasti-cv-paper-list-suggestions" data-cv-paper-list-suggestions="error">
+      <div
+        className="dasti-cv-paper-list-suggestions"
+        data-cv-paper-list-suggestions="error"
+      >
         <span className="dasti-cv-paper-list-suggestions__status">
           {suggestion.errorMessage || "Suggestions are unavailable."}
         </span>
@@ -278,7 +423,10 @@ function renderPaperListSuggestions(args: {
         : "Suggested skills";
 
   return (
-    <div className="dasti-cv-paper-list-suggestions" data-cv-paper-list-suggestions="ready">
+    <div
+      className="dasti-cv-paper-list-suggestions"
+      data-cv-paper-list-suggestions="ready"
+    >
       <span className="dasti-cv-paper-list-suggestions__label">{label}</span>
       {suggestion.items.map((item) => (
         <span className="dasti-cv-paper-list-suggestions__item" key={item}>
@@ -398,7 +546,7 @@ export function shouldRenderPaperSectionAiControl(
   }
 }
 
-function renderSectionHeading(args: {
+export function renderSectionHeading(args: {
   title: string;
   continued: boolean;
   sectionId?: string;
@@ -474,6 +622,7 @@ function renderSectionHeading(args: {
         <span style={workshopLabelTextStyle}>Continued</span>
       ) : null}
       <div
+        className="dasti-cv-paper-section-heading-rule"
         style={{
           flex: 1,
           height: "0.35mm",
@@ -542,6 +691,8 @@ function renderExperienceBlocks(args: {
   blocks: WorkshopExperienceContentBlock[];
   listGapMm: number;
   documentIconSettings?: DocumentIconSettings | null;
+  markerControls?: ResumeListMarkerControls | null;
+  markerTargetBase?: DocumentListItemIconOverrideTarget | null;
 }) {
   const nodes: React.ReactNode[] = [];
   let pendingBullets: WorkshopExperienceContentBlock[] = [];
@@ -556,7 +707,7 @@ function renderExperienceBlocks(args: {
         key={`bullets-${nodes.length}`}
         style={buildDocumentListStyle({ listGapMm: args.listGapMm })}
       >
-        {pendingBullets.map((block) => (
+        {pendingBullets.map((block, bulletIndex) => (
           <li
             key={`${block.kind}-${block.text}`}
             style={{
@@ -566,7 +717,15 @@ function renderExperienceBlocks(args: {
               ...experienceWrapStyle,
             }}
           >
-            {renderDocumentListMarker(args.documentIconSettings)}
+            {renderDocumentListMarker(
+              args.documentIconSettings,
+              {
+                ...args.markerTargetBase,
+                field: args.markerTargetBase?.field ?? "responsibilities",
+                itemIndex: bulletIndex,
+              },
+              args.markerControls,
+            )}
             <span>{block.text}</span>
           </li>
         ))}
@@ -656,6 +815,16 @@ function remirrorInlineFromRuns(runs: WorkshopResponsibilityTextRun[]) {
       return nodes;
     });
   });
+}
+
+function remirrorStructureSignature(doc: RemirrorJSON): string {
+  const visit = (node: RemirrorJSON): unknown => ({
+    type: node.type,
+    attrs: node.attrs ?? null,
+    content: Array.isArray(node.content) ? node.content.map(visit) : [],
+  });
+
+  return JSON.stringify(visit(doc));
 }
 
 function remirrorDocFromRichContent(
@@ -755,6 +924,11 @@ function PaperRichInlineEditor(args: {
   const formattingKey = React.useId();
   const latestDocRef = React.useRef<RemirrorJSON>(initialContent);
   const lastExternalDocJsonRef = React.useRef(JSON.stringify(initialContent));
+  const lastCommittedDocJsonRef = React.useRef(JSON.stringify(initialContent));
+  const lastCommittedDocStructureRef = React.useRef(
+    remirrorStructureSignature(initialContent),
+  );
+  const autoCommitTimerRef = React.useRef<number | null>(null);
   const isFocusedRef = React.useRef(false);
   const externalDoc = React.useMemo(
     () => remirrorDocFromRichContent(args.rich, args.value),
@@ -780,8 +954,37 @@ function PaperRichInlineEditor(args: {
         state: nextState,
       });
       latestDocRef.current = externalDoc;
+      lastCommittedDocJsonRef.current = nextJson;
+      lastCommittedDocStructureRef.current =
+        remirrorStructureSignature(externalDoc);
     }
   }, [externalDoc, manager, onChange]);
+
+  const commit = React.useCallback(
+    (options?: { force?: boolean }) => {
+      const nextJson = JSON.stringify(latestDocRef.current);
+      if (!options?.force && nextJson === lastCommittedDocJsonRef.current) {
+        return;
+      }
+      lastCommittedDocJsonRef.current = nextJson;
+      lastCommittedDocStructureRef.current = remirrorStructureSignature(
+        latestDocRef.current,
+      );
+      args.onDocChange?.(args.editTarget, latestDocRef.current);
+    },
+    [args.editTarget, args.onDocChange],
+  );
+
+  const scheduleAutoCommit = React.useCallback(() => {
+    if (!args.editable) return;
+    if (autoCommitTimerRef.current !== null) {
+      window.clearTimeout(autoCommitTimerRef.current);
+    }
+    autoCommitTimerRef.current = window.setTimeout(() => {
+      autoCommitTimerRef.current = null;
+      commit();
+    }, 450);
+  }, [args.editable, commit]);
 
   const handleChange = React.useCallback(
     (param: any) => {
@@ -789,13 +992,46 @@ function PaperRichInlineEditor(args: {
       latestDocRef.current =
         (param?.state?.doc?.toJSON?.() as RemirrorJSON | undefined) ??
         latestDocRef.current;
+      const nextStructureSignature = remirrorStructureSignature(
+        latestDocRef.current,
+      );
+      if (nextStructureSignature !== lastCommittedDocStructureRef.current) {
+        if (autoCommitTimerRef.current !== null) {
+          window.clearTimeout(autoCommitTimerRef.current);
+          autoCommitTimerRef.current = null;
+        }
+        commit({ force: true });
+        return;
+      }
+      commit();
     },
-    [onChange],
+    [commit, onChange],
   );
 
-  const commit = React.useCallback(() => {
-    args.onDocChange?.(args.editTarget, latestDocRef.current);
-  }, [args]);
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const flushAutoCommit = () => {
+      if (autoCommitTimerRef.current !== null) {
+        window.clearTimeout(autoCommitTimerRef.current);
+        autoCommitTimerRef.current = null;
+      }
+      commit();
+    };
+
+    window.addEventListener("pagehide", flushAutoCommit);
+    window.addEventListener("beforeunload", flushAutoCommit);
+
+    return () => {
+      window.removeEventListener("pagehide", flushAutoCommit);
+      window.removeEventListener("beforeunload", flushAutoCommit);
+      if (autoCommitTimerRef.current !== null) {
+        window.clearTimeout(autoCommitTimerRef.current);
+        autoCommitTimerRef.current = null;
+      }
+      commit();
+    };
+  }, [commit]);
 
   return (
     <div
@@ -825,7 +1061,11 @@ function PaperRichInlineEditor(args: {
           return;
         }
         isFocusedRef.current = false;
-        commit();
+        if (autoCommitTimerRef.current !== null) {
+          window.clearTimeout(autoCommitTimerRef.current);
+          autoCommitTimerRef.current = null;
+        }
+        commit({ force: true });
         args.onDeactivate?.(args.editTarget);
       }}
       onClick={(event) => {
@@ -866,6 +1106,8 @@ function renderResponsibilitiesRich(args: {
     | WorkshopCommittedResponsibilitiesRichContent;
   listGapMm: number;
   documentIconSettings?: DocumentIconSettings | null;
+  markerControls?: ResumeListMarkerControls | null;
+  markerTargetBase?: DocumentListItemIconOverrideTarget | null;
 }) {
   return args.rich.blocks.map((block, blockIndex) => {
     if (block.kind === "paragraph") {
@@ -904,7 +1146,17 @@ function renderResponsibilitiesRich(args: {
               ...experienceWrapStyle,
             }}
           >
-            {renderDocumentListMarker(args.documentIconSettings)}
+            {renderDocumentListMarker(
+              args.documentIconSettings,
+              {
+                ...args.markerTargetBase,
+                field: args.markerTargetBase?.field ?? "responsibilities",
+                blockIndex,
+                itemIndex:
+                  "sourceItemIndex" in item ? item.sourceItemIndex : itemIndex,
+              },
+              args.markerControls,
+            )}
             <span>
               {item.runs.map((run, runIndex) =>
                 renderResponsibilityRun(
@@ -949,6 +1201,7 @@ function renderExperienceContent(args: {
   listGapMm: number;
   inlineEditing?: ResumeInlineEditing | null;
   documentIconSettings?: DocumentIconSettings | null;
+  markerControls?: ResumeListMarkerControls | null;
 }) {
   if (args.inlineEditing?.enabled) {
     const rich = args.item.responsibilitiesRich;
@@ -1104,7 +1357,17 @@ function renderExperienceContent(args: {
                 ...experienceWrapStyle,
               }}
             >
-              {renderDocumentListMarker(args.documentIconSettings)}
+              {renderDocumentListMarker(
+                args.documentIconSettings,
+                {
+                  sectionId: args.sectionId,
+                  sectionType: args.sectionType ?? "experience",
+                  itemId: args.item.id,
+                  field: "responsibilities",
+                  itemIndex: currentBulletIndex,
+                },
+                args.markerControls,
+              )}
               <span>
                 <InlineEditableText
                   as="span"
@@ -1191,6 +1454,13 @@ function renderExperienceContent(args: {
       blocks: args.item.blocks,
       listGapMm: args.listGapMm,
       documentIconSettings: args.documentIconSettings,
+      markerControls: args.markerControls,
+      markerTargetBase: {
+        sectionId: args.sectionId,
+        sectionType: args.sectionType ?? "experience",
+        itemId: args.item.id,
+        field: "responsibilities",
+      },
     });
   }
 
@@ -1202,6 +1472,13 @@ function renderExperienceContent(args: {
       blocks: args.item.blocks,
       listGapMm: args.listGapMm,
       documentIconSettings: args.documentIconSettings,
+      markerControls: args.markerControls,
+      markerTargetBase: {
+        sectionId: args.sectionId,
+        sectionType: args.sectionType ?? "experience",
+        itemId: args.item.id,
+        field: "responsibilities",
+      },
     });
   }
 
@@ -1209,6 +1486,13 @@ function renderExperienceContent(args: {
     rich,
     listGapMm: args.listGapMm,
     documentIconSettings: args.documentIconSettings,
+    markerControls: args.markerControls,
+    markerTargetBase: {
+      sectionId: args.sectionId,
+      sectionType: args.sectionType ?? "experience",
+      itemId: args.item.id,
+      field: "responsibilities",
+    },
   });
 }
 
@@ -1257,6 +1541,141 @@ function renderInlineField(args: {
       className={args.className}
       style={args.style}
     />
+  );
+}
+
+function WorkshopSkillInlineItems(args: {
+  items: WorkshopSkillItem[];
+  fragment: WorkshopSkillsFragment;
+  renderSeparators: boolean;
+  activeTarget?: ResumeActiveTarget | null;
+  inlineEditing?: ResumeInlineEditing | null;
+}) {
+  const itemRefs = React.useRef(new Map<string, HTMLSpanElement>());
+  const [sameLineSeparatorIds, setSameLineSeparatorIds] = React.useState<
+    Set<string>
+  >(() => new Set(args.items.slice(1).map((item) => item.id)));
+
+  const measureRows = React.useCallback(() => {
+    if (!args.renderSeparators) {
+      setSameLineSeparatorIds(new Set());
+      return;
+    }
+
+    const next = new Set<string>();
+    args.items.forEach((item, itemIndex) => {
+      if (itemIndex === 0) return;
+
+      const currentNode = itemRefs.current.get(item.id);
+      const previousNode = itemRefs.current.get(args.items[itemIndex - 1]!.id);
+      if (!currentNode || !previousNode) return;
+
+      const currentTop = currentNode.getBoundingClientRect().top;
+      const previousTop = previousNode.getBoundingClientRect().top;
+      if (Math.abs(currentTop - previousTop) < 1) {
+        next.add(item.id);
+      }
+    });
+
+    setSameLineSeparatorIds((previous) => {
+      const previousKey = Array.from(previous).sort().join("|");
+      const nextKey = Array.from(next).sort().join("|");
+      return previousKey === nextKey ? previous : next;
+    });
+  }, [args.items, args.renderSeparators]);
+
+  React.useLayoutEffect(() => {
+    measureRows();
+  }, [measureRows]);
+
+  React.useEffect(() => {
+    if (!args.renderSeparators || typeof window === "undefined") {
+      return undefined;
+    }
+
+    const firstNode = args.items[0]
+      ? itemRefs.current.get(args.items[0].id)
+      : null;
+    const parentNode = firstNode?.parentElement ?? null;
+    const resizeObserver =
+      typeof ResizeObserver === "undefined" || !parentNode
+        ? null
+        : new ResizeObserver(() => measureRows());
+
+    resizeObserver?.observe(parentNode);
+    window.addEventListener("resize", measureRows);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", measureRows);
+    };
+  }, [args.items, args.renderSeparators, measureRows]);
+
+  return (
+    <>
+      {args.items.map((item, itemIndex) => (
+        <span
+          key={item.id}
+          ref={(node) => {
+            if (node) {
+              itemRefs.current.set(item.id, node);
+            } else {
+              itemRefs.current.delete(item.id);
+            }
+          }}
+          data-workshop-skill-item-wrap="true"
+          style={{
+            display: "inline-flex",
+            alignItems: "baseline",
+            gap: "0.45em",
+          }}
+        >
+          {args.renderSeparators &&
+          itemIndex > 0 &&
+          sameLineSeparatorIds.has(item.id) ? (
+            <span
+              aria-hidden="true"
+              data-workshop-skill-separator="true"
+              style={{
+                color: "var(--color-text-subtle)",
+                fontSize: workshopBodySmFontSize,
+                lineHeight: "var(--text-body-sm-line)",
+              }}
+            >
+              •
+            </span>
+          ) : null}
+          {renderInlineField({
+            as: "span",
+            value: item.name,
+            editable: Boolean(args.inlineEditing?.enabled),
+            inlineEditing: args.inlineEditing,
+            editTarget: {
+              sectionId: args.fragment.sectionId ?? "",
+              sectionType: "skills",
+              fieldPath: `structuredContent.item:${item.id}.name`,
+              fieldKind: "chip",
+              chipIndex: itemIndex,
+            },
+            ariaLabel: "Edit skill",
+            placeholder: "Add skill",
+            previewAttrs: buildPreviewRegionAttrs({
+              sectionType: "skills",
+              sectionId: args.fragment.sectionId,
+              sectionTitle: args.fragment.title ?? "Skills",
+              itemId: item.id,
+              activeTarget: args.activeTarget,
+              surface: "item",
+            }),
+            preservePreviewItemId: true,
+            style: {
+              fontSize: workshopBodySmFontSize,
+              lineHeight: "var(--text-body-sm-line)",
+            },
+          })}
+        </span>
+      ))}
+    </>
   );
 }
 
@@ -1391,7 +1810,8 @@ function renderProfileFragment(args: {
               height: `${photoSizeMm}mm`,
               objectFit: photoFit,
               display: "block",
-              border: "1px solid color-mix(in srgb, var(--color-text) 14%, transparent)",
+              border:
+                "1px solid color-mix(in srgb, var(--color-text) 14%, transparent)",
               borderRadius: "999px",
               background: "var(--paper)",
             }}
@@ -1646,6 +2066,7 @@ function renderFragmentContent(args: {
   sectionActions?: ResumeSectionActions | null;
   paperAi?: ResumePaperAiState | null;
   documentIconSettings?: DocumentIconSettings | null;
+  markerControls?: ResumeListMarkerControls | null;
 }) {
   const {
     fragment,
@@ -1655,6 +2076,7 @@ function renderFragmentContent(args: {
     sectionActions,
     paperAi,
     documentIconSettings,
+    markerControls,
   } = args;
   const workshopLayout = resolveWorkshopPreviewLayoutContract(args.template);
 
@@ -1914,6 +2336,7 @@ function renderFragmentContent(args: {
                 listGapMm: workshopLayout.listGapMm,
                 inlineEditing,
                 documentIconSettings,
+                markerControls,
               })}
             </PreviewItemRegion>
           );
@@ -2064,50 +2487,23 @@ function renderFragmentContent(args: {
         </div>,
       ];
     case "skills": {
+      const visibleSkillItems = fragment.items.filter(
+        (item) =>
+          hasVisibleText(item.name) ||
+          isActiveItemEditTarget(inlineEditing, item.id),
+      );
+      const renderSeparators =
+        args.template.id === WORKSHOP_RESUME_ONECOL_TEMPLATE_ID;
+
       return [
-        ...fragment.items
-          .filter(
-            (item) =>
-              hasVisibleText(item.name) ||
-              isActiveItemEditTarget(inlineEditing, item.id),
-          )
-          .map((item, itemIndex) => (
-            <React.Fragment key={item.id}>
-              {renderInlineField({
-                as: "span",
-                value: item.name,
-                editable: Boolean(inlineEditing?.enabled),
-                inlineEditing,
-                editTarget: {
-                  sectionId: fragment.sectionId ?? "",
-                  sectionType: "skills",
-                  fieldPath: `structuredContent.item:${item.id}.name`,
-                  fieldKind: "chip",
-                  chipIndex: itemIndex,
-                },
-                ariaLabel: "Edit skill",
-                placeholder: "Add skill",
-                previewAttrs: buildPreviewRegionAttrs({
-                  sectionType: "skills",
-                  sectionId: fragment.sectionId,
-                  sectionTitle: fragment.title ?? "Skills",
-                  itemId: item.id,
-                  activeTarget,
-                  surface: "item",
-                }),
-                preservePreviewItemId: true,
-                style: {
-                  display: "inline-flex",
-                  alignItems: "center",
-                  padding: "var(--skill-pad-block) var(--skill-pad-inline)",
-                  borderRadius: "999px",
-                  background: "var(--color-accent-soft)",
-                  fontSize: workshopBodySmFontSize,
-                  lineHeight: "var(--text-body-sm-line)",
-                },
-              })}
-            </React.Fragment>
-          )),
+        <WorkshopSkillInlineItems
+          key={`${fragment.fragmentId}:skills`}
+          items={visibleSkillItems}
+          fragment={fragment}
+          renderSeparators={renderSeparators}
+          activeTarget={activeTarget}
+          inlineEditing={inlineEditing}
+        />,
         <React.Fragment key={`${fragment.fragmentId}:add-skill`}>
           {renderInlineAddButton({
             inlineEditing,
@@ -2291,56 +2687,65 @@ function renderFragmentContent(args: {
           )
           .map((item) => (
             <li key={item.id} style={buildDocumentListItemStyle()}>
-              {renderDocumentListMarker(documentIconSettings)}
+              {renderDocumentListMarker(
+                documentIconSettings,
+                {
+                  sectionId: fragment.sectionId,
+                  sectionType: "languages",
+                  itemId: item.id,
+                  field: "item",
+                },
+                markerControls,
+              )}
               <span>
                 {renderInlineField({
-                as: "span",
-                value: item.name,
-                editable: Boolean(inlineEditing?.enabled),
-                inlineEditing,
-                editTarget: {
-                  sectionId: fragment.sectionId ?? "",
-                  sectionType: "languages",
-                  fieldPath: `structuredContent.item:${item.id}.name`,
-                  fieldKind: "chip",
-                },
-                ariaLabel: "Edit language",
-                placeholder: "Add language",
-                previewAttrs: buildPreviewRegionAttrs({
-                  sectionType: "languages",
-                  sectionId: fragment.sectionId,
-                  sectionTitle: fragment.title ?? "Languages",
-                  itemId: item.id,
-                  activeTarget,
-                  surface: "item",
-                }),
-                preservePreviewItemId: true,
-                style: workshopCompactRowTextStyle,
+                  as: "span",
+                  value: item.name,
+                  editable: Boolean(inlineEditing?.enabled),
+                  inlineEditing,
+                  editTarget: {
+                    sectionId: fragment.sectionId ?? "",
+                    sectionType: "languages",
+                    fieldPath: `structuredContent.item:${item.id}.name`,
+                    fieldKind: "chip",
+                  },
+                  ariaLabel: "Edit language",
+                  placeholder: "Add language",
+                  previewAttrs: buildPreviewRegionAttrs({
+                    sectionType: "languages",
+                    sectionId: fragment.sectionId,
+                    sectionTitle: fragment.title ?? "Languages",
+                    itemId: item.id,
+                    activeTarget,
+                    surface: "item",
+                  }),
+                  preservePreviewItemId: true,
+                  style: workshopCompactRowTextStyle,
                 })}
                 {item.level || inlineEditing?.enabled ? " · " : null}
                 {item.level || inlineEditing?.enabled
                   ? renderInlineField({
-                    as: "span",
-                    value: item.level,
-                    editable: Boolean(inlineEditing?.enabled),
-                    inlineEditing,
-                    editTarget: {
-                      sectionId: fragment.sectionId ?? "",
-                      sectionType: "languages",
-                      fieldPath: `structuredContent.item:${item.id}.level`,
-                      fieldKind: "meta",
-                    },
-                    ariaLabel: "Edit language level",
-                    placeholder: "Level",
-                    previewAttrs: buildPreviewRegionAttrs({
-                      sectionType: "languages",
-                      sectionId: fragment.sectionId,
-                      sectionTitle: fragment.title ?? "Languages",
-                      itemId: item.id,
-                      activeTarget,
-                      surface: "item",
-                    }),
-                    style: workshopCompactRowTextStyle,
+                      as: "span",
+                      value: item.level,
+                      editable: Boolean(inlineEditing?.enabled),
+                      inlineEditing,
+                      editTarget: {
+                        sectionId: fragment.sectionId ?? "",
+                        sectionType: "languages",
+                        fieldPath: `structuredContent.item:${item.id}.level`,
+                        fieldKind: "meta",
+                      },
+                      ariaLabel: "Edit language level",
+                      placeholder: "Level",
+                      previewAttrs: buildPreviewRegionAttrs({
+                        sectionType: "languages",
+                        sectionId: fragment.sectionId,
+                        sectionTitle: fragment.title ?? "Languages",
+                        itemId: item.id,
+                        activeTarget,
+                        surface: "item",
+                      }),
+                      style: workshopCompactRowTextStyle,
                     })
                   : null}
               </span>
@@ -2365,62 +2770,71 @@ function renderFragmentContent(args: {
           )
           .map((item) => (
             <li key={item.id} style={buildDocumentListItemStyle()}>
-              {renderDocumentListMarker(documentIconSettings)}
+              {renderDocumentListMarker(
+                documentIconSettings,
+                {
+                  sectionId: fragment.sectionId,
+                  sectionType: "certifications",
+                  itemId: item.id,
+                  field: "item",
+                },
+                markerControls,
+              )}
               <span>
                 {renderInlineField({
-                as: "span",
-                value: item.name,
-                editable: Boolean(inlineEditing?.enabled),
-                inlineEditing,
-                editTarget: {
-                  sectionId: fragment.sectionId ?? "",
-                  sectionType: "certifications",
-                  fieldPath: `structuredContent.item:${item.id}.certificationName`,
-                  fieldKind: "paragraph",
-                },
-                ariaLabel: "Edit certification",
-                placeholder: "Certification",
-                previewAttrs: buildPreviewRegionAttrs({
-                  sectionType: "certifications",
-                  sectionId: fragment.sectionId,
-                  sectionTitle: fragment.title ?? "Certifications",
-                  itemId: item.id,
-                  activeTarget,
-                  surface: "item",
-                }),
-                preservePreviewItemId: true,
-                style: {
-                  fontSize: workshopBodyFontSize,
-                  lineHeight: "var(--text-body-line)",
-                },
+                  as: "span",
+                  value: item.name,
+                  editable: Boolean(inlineEditing?.enabled),
+                  inlineEditing,
+                  editTarget: {
+                    sectionId: fragment.sectionId ?? "",
+                    sectionType: "certifications",
+                    fieldPath: `structuredContent.item:${item.id}.certificationName`,
+                    fieldKind: "paragraph",
+                  },
+                  ariaLabel: "Edit certification",
+                  placeholder: "Certification",
+                  previewAttrs: buildPreviewRegionAttrs({
+                    sectionType: "certifications",
+                    sectionId: fragment.sectionId,
+                    sectionTitle: fragment.title ?? "Certifications",
+                    itemId: item.id,
+                    activeTarget,
+                    surface: "item",
+                  }),
+                  preservePreviewItemId: true,
+                  style: {
+                    fontSize: workshopBodyFontSize,
+                    lineHeight: "var(--text-body-line)",
+                  },
                 })}
                 {item.issuer || inlineEditing?.enabled ? " · " : null}
                 {item.issuer || inlineEditing?.enabled
                   ? renderInlineField({
-                    as: "span",
-                    value: item.issuer ?? "",
-                    editable: Boolean(inlineEditing?.enabled),
-                    inlineEditing,
-                    editTarget: {
-                      sectionId: fragment.sectionId ?? "",
-                      sectionType: "certifications",
-                      fieldPath: `structuredContent.item:${item.id}.issuingOrganization`,
-                      fieldKind: "meta",
-                    },
-                    ariaLabel: "Edit certification issuer",
-                    placeholder: "Issuer",
-                    previewAttrs: buildPreviewRegionAttrs({
-                      sectionType: "certifications",
-                      sectionId: fragment.sectionId,
-                      sectionTitle: fragment.title ?? "Certifications",
-                      itemId: item.id,
-                      activeTarget,
-                      surface: "item",
-                    }),
-                    style: {
-                      fontSize: workshopBodyFontSize,
-                      lineHeight: "var(--text-body-line)",
-                    },
+                      as: "span",
+                      value: item.issuer ?? "",
+                      editable: Boolean(inlineEditing?.enabled),
+                      inlineEditing,
+                      editTarget: {
+                        sectionId: fragment.sectionId ?? "",
+                        sectionType: "certifications",
+                        fieldPath: `structuredContent.item:${item.id}.issuingOrganization`,
+                        fieldKind: "meta",
+                      },
+                      ariaLabel: "Edit certification issuer",
+                      placeholder: "Issuer",
+                      previewAttrs: buildPreviewRegionAttrs({
+                        sectionType: "certifications",
+                        sectionId: fragment.sectionId,
+                        sectionTitle: fragment.title ?? "Certifications",
+                        itemId: item.id,
+                        activeTarget,
+                        surface: "item",
+                      }),
+                      style: {
+                        fontSize: workshopBodyFontSize,
+                        lineHeight: "var(--text-body-line)",
+                      },
                     })
                   : null}
                 {item.meta ? ` · ${item.meta}` : null}
@@ -2454,7 +2868,10 @@ function renderFragmentContent(args: {
                 className="dasti-cv-paper-achievement-item"
                 key={item.id}
                 data-cv-ai-review-target={isAiReviewTarget ? "true" : undefined}
-                style={{ ...buildDocumentListItemStyle(), position: "relative" }}
+                style={{
+                  ...buildDocumentListItemStyle(),
+                  position: "relative",
+                }}
               >
                 {inlineEditing?.enabled && sectionActions?.onAskItem ? (
                   <button
@@ -2479,7 +2896,16 @@ function renderFragmentContent(args: {
                     <Wand2 size={12} strokeWidth={1.8} aria-hidden="true" />
                   </button>
                 ) : null}
-                {renderDocumentListMarker(documentIconSettings)}
+                {renderDocumentListMarker(
+                  documentIconSettings,
+                  {
+                    sectionId: fragment.sectionId,
+                    sectionType: "achievements",
+                    itemId: item.id,
+                    field: "item",
+                  },
+                  markerControls,
+                )}
                 <span>
                   {renderInlineField({
                     as: "span",
@@ -2535,94 +2961,103 @@ function renderFragmentContent(args: {
           )
           .map((item) => (
             <li key={item.id} style={buildDocumentListItemStyle()}>
-              {renderDocumentListMarker(documentIconSettings)}
+              {renderDocumentListMarker(
+                documentIconSettings,
+                {
+                  sectionId: fragment.sectionId,
+                  sectionType: "affiliations",
+                  itemId: item.id,
+                  field: "item",
+                },
+                markerControls,
+              )}
               <span>
                 {renderInlineField({
-                as: "span",
-                value: item.organizationName,
-                editable: Boolean(inlineEditing?.enabled),
-                inlineEditing,
-                editTarget: {
-                  sectionId: fragment.sectionId ?? "",
-                  sectionType: "affiliations",
-                  fieldPath: `structuredContent.item:${item.id}.organizationName`,
-                  fieldKind: "paragraph",
-                },
-                ariaLabel: "Edit affiliation organization",
-                placeholder: "Organization",
-                previewAttrs: buildPreviewRegionAttrs({
-                  sectionType: "affiliations",
-                  sectionId: fragment.sectionId,
-                  sectionTitle: fragment.title ?? "Affiliations",
-                  itemId: item.id,
-                  activeTarget,
-                  surface: "item",
-                }),
-                preservePreviewItemId: true,
-                style: {
-                  fontSize: workshopBodyFontSize,
-                  lineHeight: "var(--text-body-line)",
-                },
+                  as: "span",
+                  value: item.organizationName,
+                  editable: Boolean(inlineEditing?.enabled),
+                  inlineEditing,
+                  editTarget: {
+                    sectionId: fragment.sectionId ?? "",
+                    sectionType: "affiliations",
+                    fieldPath: `structuredContent.item:${item.id}.organizationName`,
+                    fieldKind: "paragraph",
+                  },
+                  ariaLabel: "Edit affiliation organization",
+                  placeholder: "Organization",
+                  previewAttrs: buildPreviewRegionAttrs({
+                    sectionType: "affiliations",
+                    sectionId: fragment.sectionId,
+                    sectionTitle: fragment.title ?? "Affiliations",
+                    itemId: item.id,
+                    activeTarget,
+                    surface: "item",
+                  }),
+                  preservePreviewItemId: true,
+                  style: {
+                    fontSize: workshopBodyFontSize,
+                    lineHeight: "var(--text-body-line)",
+                  },
                 })}
                 {item.roleOrMembershipType || inlineEditing?.enabled
                   ? " · "
                   : null}
                 {item.roleOrMembershipType || inlineEditing?.enabled
                   ? renderInlineField({
-                    as: "span",
-                    value: item.roleOrMembershipType ?? "",
-                    editable: Boolean(inlineEditing?.enabled),
-                    inlineEditing,
-                    editTarget: {
-                      sectionId: fragment.sectionId ?? "",
-                      sectionType: "affiliations",
-                      fieldPath: `structuredContent.item:${item.id}.roleOrMembershipType`,
-                      fieldKind: "meta",
-                    },
-                    ariaLabel: "Edit affiliation role",
-                    placeholder: "Role",
-                    previewAttrs: buildPreviewRegionAttrs({
-                      sectionType: "affiliations",
-                      sectionId: fragment.sectionId,
-                      sectionTitle: fragment.title ?? "Affiliations",
-                      itemId: item.id,
-                      activeTarget,
-                      surface: "item",
-                    }),
-                    style: {
-                      fontSize: workshopBodyFontSize,
-                      lineHeight: "var(--text-body-line)",
-                    },
+                      as: "span",
+                      value: item.roleOrMembershipType ?? "",
+                      editable: Boolean(inlineEditing?.enabled),
+                      inlineEditing,
+                      editTarget: {
+                        sectionId: fragment.sectionId ?? "",
+                        sectionType: "affiliations",
+                        fieldPath: `structuredContent.item:${item.id}.roleOrMembershipType`,
+                        fieldKind: "meta",
+                      },
+                      ariaLabel: "Edit affiliation role",
+                      placeholder: "Role",
+                      previewAttrs: buildPreviewRegionAttrs({
+                        sectionType: "affiliations",
+                        sectionId: fragment.sectionId,
+                        sectionTitle: fragment.title ?? "Affiliations",
+                        itemId: item.id,
+                        activeTarget,
+                        surface: "item",
+                      }),
+                      style: {
+                        fontSize: workshopBodyFontSize,
+                        lineHeight: "var(--text-body-line)",
+                      },
                     })
                   : null}
                 {item.dateRange ? ` · ${item.dateRange}` : null}
                 {item.notes || inlineEditing?.enabled ? " · " : null}
                 {item.notes || inlineEditing?.enabled
                   ? renderInlineField({
-                    as: "span",
-                    value: item.notes ?? "",
-                    editable: Boolean(inlineEditing?.enabled),
-                    inlineEditing,
-                    editTarget: {
-                      sectionId: fragment.sectionId ?? "",
-                      sectionType: "affiliations",
-                      fieldPath: `structuredContent.item:${item.id}.notes`,
-                      fieldKind: "paragraph",
-                    },
-                    ariaLabel: "Edit affiliation notes",
-                    placeholder: "Notes",
-                    previewAttrs: buildPreviewRegionAttrs({
-                      sectionType: "affiliations",
-                      sectionId: fragment.sectionId,
-                      sectionTitle: fragment.title ?? "Affiliations",
-                      itemId: item.id,
-                      activeTarget,
-                      surface: "item",
-                    }),
-                    style: {
-                      fontSize: workshopBodyFontSize,
-                      lineHeight: "var(--text-body-line)",
-                    },
+                      as: "span",
+                      value: item.notes ?? "",
+                      editable: Boolean(inlineEditing?.enabled),
+                      inlineEditing,
+                      editTarget: {
+                        sectionId: fragment.sectionId ?? "",
+                        sectionType: "affiliations",
+                        fieldPath: `structuredContent.item:${item.id}.notes`,
+                        fieldKind: "paragraph",
+                      },
+                      ariaLabel: "Edit affiliation notes",
+                      placeholder: "Notes",
+                      previewAttrs: buildPreviewRegionAttrs({
+                        sectionType: "affiliations",
+                        sectionId: fragment.sectionId,
+                        sectionTitle: fragment.title ?? "Affiliations",
+                        itemId: item.id,
+                        activeTarget,
+                        surface: "item",
+                      }),
+                      style: {
+                        fontSize: workshopBodyFontSize,
+                        lineHeight: "var(--text-body-line)",
+                      },
                     })
                   : null}
               </span>
@@ -2647,32 +3082,41 @@ function renderFragmentContent(args: {
           )
           .map((item, itemIndex) => (
             <li key={item.id} style={buildDocumentListItemStyle()}>
-              {renderDocumentListMarker(documentIconSettings)}
+              {renderDocumentListMarker(
+                documentIconSettings,
+                {
+                  sectionId: fragment.sectionId,
+                  sectionType: "hobbies",
+                  itemId: item.id,
+                  field: "item",
+                },
+                markerControls,
+              )}
               <span>
                 {renderInlineField({
-                as: "span",
-                value: item.name,
-                editable: Boolean(inlineEditing?.enabled),
-                inlineEditing,
-                editTarget: {
-                  sectionId: fragment.sectionId ?? "",
-                  sectionType: "hobbies",
-                  fieldPath: `structuredContent.item:${item.id}.name`,
-                  fieldKind: "chip",
-                  chipIndex: itemIndex,
-                },
-                ariaLabel: "Edit hobby",
-                placeholder: "Add hobby",
-                previewAttrs: buildPreviewRegionAttrs({
-                  sectionType: "hobbies",
-                  sectionId: fragment.sectionId,
-                  sectionTitle: fragment.title ?? "Hobbies",
-                  itemId: item.id,
-                  activeTarget,
-                  surface: "item",
-                }),
-                preservePreviewItemId: true,
-                style: workshopCompactRowTextStyle,
+                  as: "span",
+                  value: item.name,
+                  editable: Boolean(inlineEditing?.enabled),
+                  inlineEditing,
+                  editTarget: {
+                    sectionId: fragment.sectionId ?? "",
+                    sectionType: "hobbies",
+                    fieldPath: `structuredContent.item:${item.id}.name`,
+                    fieldKind: "chip",
+                    chipIndex: itemIndex,
+                  },
+                  ariaLabel: "Edit hobby",
+                  placeholder: "Add hobby",
+                  previewAttrs: buildPreviewRegionAttrs({
+                    sectionType: "hobbies",
+                    sectionId: fragment.sectionId,
+                    sectionTitle: fragment.title ?? "Hobbies",
+                    itemId: item.id,
+                    activeTarget,
+                    surface: "item",
+                  }),
+                  preservePreviewItemId: true,
+                  style: workshopCompactRowTextStyle,
                 })}
               </span>
             </li>
@@ -2770,6 +3214,7 @@ export function renderSectionFragment(args: {
   sectionActions?: ResumeSectionActions | null;
   paperAi?: ResumePaperAiState | null;
   documentIconSettings?: DocumentIconSettings | null;
+  markerControls?: ResumeListMarkerControls | null;
 }) {
   const {
     fragment,
@@ -2779,6 +3224,7 @@ export function renderSectionFragment(args: {
     sectionActions,
     paperAi,
     documentIconSettings,
+    markerControls,
   } = args;
   const workshopLayout = resolveWorkshopPreviewLayoutContract(args.template);
   if (!fragment.title) {
@@ -2790,6 +3236,7 @@ export function renderSectionFragment(args: {
       inlineEditing,
       sectionActions,
       paperAi,
+      markerControls,
     });
   }
 
@@ -2811,6 +3258,7 @@ export function renderSectionFragment(args: {
           sectionActions,
           paperAi,
           documentIconSettings,
+          markerControls,
         })}
       </div>
     ) : fragment.kind === "languages" ||
@@ -2830,6 +3278,7 @@ export function renderSectionFragment(args: {
           sectionActions,
           paperAi,
           documentIconSettings,
+          markerControls,
         })}
       </ul>
     ) : (
@@ -2848,6 +3297,7 @@ export function renderSectionFragment(args: {
           sectionActions,
           paperAi,
           documentIconSettings,
+          markerControls,
         })}
       </div>
     );
@@ -2889,7 +3339,49 @@ export function ResumeOneColAtsPage({
   sectionActions = null,
   paperAi = null,
   documentIconSettings = null,
+  documentIconOverrides = null,
+  onDocumentListItemIconChange,
 }: ResumeOneColAtsPageProps) {
+  const [activeListIconTarget, setActiveListIconTarget] =
+    React.useState<DocumentListItemIconOverrideTarget | null>(null);
+  React.useEffect(() => {
+    if (!activeListIconTarget) return;
+
+    const closeIfOutsidePicker = (event: PointerEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (
+        target?.closest(
+          ".dasti-cv-paper-list-icon-picker, .dasti-cv-paper-list-marker-trigger",
+        )
+      ) {
+        return;
+      }
+      setActiveListIconTarget(null);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setActiveListIconTarget(null);
+      }
+    };
+
+    document.addEventListener("pointerdown", closeIfOutsidePicker);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeIfOutsidePicker);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [activeListIconTarget]);
+  const markerControls = React.useMemo<ResumeListMarkerControls>(
+    () => ({
+      overrides: documentIconOverrides,
+      activeTarget: activeListIconTarget,
+      onOpenTarget: setActiveListIconTarget,
+      onClose: () => setActiveListIconTarget(null),
+      onChange: onDocumentListItemIconChange,
+    }),
+    [activeListIconTarget, documentIconOverrides, onDocumentListItemIconChange],
+  );
+
   return (
     <div
       data-testid="resume-template-page"
@@ -2919,6 +3411,7 @@ export function ResumeOneColAtsPage({
             sectionActions,
             paperAi,
             documentIconSettings,
+            markerControls,
           })}
         </React.Fragment>
       ))}

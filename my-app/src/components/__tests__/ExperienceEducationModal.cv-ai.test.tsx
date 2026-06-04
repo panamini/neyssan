@@ -869,6 +869,23 @@ describe("ExperienceModal CV AI", () => {
     expect((result.doc?.content?.[1] as any)?.content).toHaveLength(2);
   });
 
+  it("stores bullet-looking AI responsibility output as a durable Remirror list", () => {
+    const result = normalizeResponsibilityAiResultForSource({
+      source: ensureRemirrorDoc("Led operations for the team."),
+      rawText:
+        "• Coordinated shift handoffs across three teams\n• Reduced reporting delays with a shared incident log",
+      requestedActionId: "rewrite",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected normalized result");
+    expect(result.doc?.content?.[0]?.type).toBe("bulletList");
+    expect(result.responsibilityBullets).toEqual([
+      "Coordinated shift handoffs across three teams",
+      "Reduced reporting delays with a shared incident log",
+    ]);
+  });
+
   it("does not auto-apply truncated responsibility output", () => {
     const result = normalizeResponsibilityAiResultForSource({
       source: ensureRemirrorDoc("Led targeted support for executives."),

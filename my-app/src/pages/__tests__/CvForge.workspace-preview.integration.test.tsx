@@ -148,6 +148,21 @@ vi.mock("../../contexts/CvLibraryContext", () => ({
           blocks: [],
           structuredContent: [{ id: "summary-item-1", summary: "Builder." }],
         },
+        {
+          id: "skills-1",
+          type: "skills",
+          title: "Skills",
+          blocks: [],
+          skillCategories: [{ id: "cat-product", label: "Product" }],
+          structuredContent: [
+            {
+              id: "skill-1",
+              name: "TypeScript",
+              level: "Advanced",
+              categoryId: "cat-product",
+            },
+          ],
+        },
       ],
     },
     currentCvId: "cv_123",
@@ -284,11 +299,14 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
     activeTarget,
     data,
     inlineEditing,
+    sectionActions,
   }: {
     hostMode?: "panel" | "workspace";
     inlineEditing?: {
       enabled: boolean;
       onActivate?: (target: any) => void;
+      onDeactivate?: (target?: any) => void;
+      onFieldChange?: (target: any, text: string) => void;
     } | null;
     onLinkIntent?: (intent: {
       requestId: string;
@@ -301,6 +319,9 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
     }) => void;
     activeTarget?: { sectionType: string; itemId?: string } | null;
     data?: { summary?: string } | null;
+    sectionActions?: {
+      onAsk?: (sectionId: string) => void;
+    } | null;
   }) => (
     <div className="dasti-doc-viewer-shell dasti-doc-viewer-shell--resume-panel">
       <div
@@ -317,16 +338,35 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
               data-inline-paper-editable="true"
               data-paper-section-id="summary-1"
               data-paper-section-type="summary"
-              data-paper-field-path="structuredContent.0.summary"
-              data-paper-field-kind="paragraph"
-              onFocus={() =>
-                inlineEditing.onActivate?.({
+        data-paper-field-path="structuredContent.0.summary"
+        data-paper-field-kind="paragraph"
+        onFocus={() =>
+          inlineEditing.onActivate?.({
                   sectionId: "summary-1",
                   sectionType: "summary",
                   fieldPath: "structuredContent.0.summary",
-                  fieldKind: "paragraph",
-                })
-              }
+              fieldKind: "paragraph",
+            })
+          }
+          onInput={(event) =>
+            inlineEditing.onFieldChange?.(
+              {
+                sectionId: "summary-1",
+                sectionType: "summary",
+                fieldPath: "structuredContent.0.summary",
+                fieldKind: "paragraph",
+              },
+              event.currentTarget.textContent ?? "",
+            )
+          }
+          onBlur={() =>
+            inlineEditing.onDeactivate?.({
+              sectionId: "summary-1",
+              sectionType: "summary",
+              fieldPath: "structuredContent.0.summary",
+              fieldKind: "paragraph",
+            })
+          }
             >
               {data?.summary ?? "Builder."}
             </div>
@@ -361,6 +401,24 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
             }
           >
             Trigger inline preview link
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              onLinkIntent?.({
+                requestId: `${hostMode}-intent-skills`,
+                sectionType: "skills",
+                source: "preview-panel",
+                shouldOpenModal: true,
+                sectionId: "skills-1",
+                sectionTitle: "Skills",
+              } as any)
+            }
+          >
+            Trigger skills preview link
+          </button>
+          <button type="button" onClick={() => sectionActions?.onAsk?.("skills-1")}>
+            Trigger skills ask
           </button>
           <div data-testid={`verbati-preview-active-${hostMode}`}>
             {activeTarget
@@ -616,6 +674,53 @@ describe("CvForge workspace preview integration", () => {
     }
   });
 
+  it("persists a focused inline paragraph edit before deactivate or refresh", async () => {
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    const editableSummary = screen.getByTestId("mock-rich-summary");
+    await act(async () => {
+      editableSummary.focus();
+      editableSummary.textContent = "Focused edit survives refresh.";
+      fireEvent.input(editableSummary);
+    });
+
+    await waitFor(() => {
+      expect(
+        importCvMock.mock.calls.some(
+          (call) => getImportedSummary(call) === "Focused edit survives refresh.",
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it("persists an inline paragraph edit on deactivate", async () => {
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    const editableSummary = screen.getByTestId("mock-rich-summary");
+    await act(async () => {
+      editableSummary.focus();
+      editableSummary.textContent = "Blurred edit survives refresh.";
+      fireEvent.input(editableSummary);
+      fireEvent.blur(editableSummary);
+    });
+
+    await waitFor(() => {
+      expect(
+        importCvMock.mock.calls.some(
+          (call) => getImportedSummary(call) === "Blurred edit survives refresh.",
+        ),
+      ).toBe(true);
+    });
+  });
+
   it("unblocks a stalled Shorten generation with a readable overlay error", async () => {
     const offsetWidthSpy = vi
       .spyOn(HTMLElement.prototype, "offsetWidth", "get")
@@ -830,5 +935,50 @@ describe("CvForge workspace preview integration", () => {
     expect(
       screen.queryByText("Mock profile editor cv_123"),
     ).not.toBeInTheDocument();
+  });
+
+  it("opens the unified Skills drawer from a preview Skills section click", async () => {
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Trigger skills preview link" }));
+
+    expect(
+      await screen.findByRole("dialog", {
+        name: "Manage skills & categories",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Rename Product" })).toBeInTheDocument();
+    expect(screen.getByText("TypeScript")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Skills" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("opens the unified Skills drawer and AI suggestions area from the Skills Ask control", async () => {
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Trigger skills ask" }));
+
+    expect(
+      await screen.findByRole("dialog", {
+        name: "Manage skills & categories",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: "AI skill suggestions" }),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(transformSelectionMock).toHaveBeenCalledWith(
+        expect.objectContaining({ action: "generate_skills_suggestions" }),
+      );
+    });
   });
 });

@@ -387,17 +387,6 @@ describe("SectionEditorSheet", () => {
       "Name 1",
     ],
     [
-      "skills",
-      {
-        id: "skills",
-        type: "skills",
-        title: "Skills",
-        blocks: [],
-        structuredContent: [{ id: "skill-1", name: "TypeScript" }],
-      } as CvSection,
-      "Skill",
-    ],
-    [
       "languages",
       {
         id: "languages",
@@ -480,6 +469,34 @@ describe("SectionEditorSheet", () => {
     expect(screen.getByLabelText(label)).toBeInTheDocument();
   });
 
+  it("renders Skills through the unified skills and categories drawer", () => {
+    render(
+      <SectionEditorSheet
+        open
+        section={{
+          id: "skills",
+          type: "skills",
+          title: "Skills",
+          blocks: [],
+          skillCategories: [{ id: "cat-product", label: "Product" }],
+          structuredContent: [
+            { id: "skill-1", name: "TypeScript", categoryId: "cat-product" },
+          ],
+        } as CvSection}
+        onOpenChange={vi.fn()}
+        onSave={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole("dialog", { name: "Manage skills & categories" }),
+    ).toBeInTheDocument();
+    expect(document.body.querySelector(".ds-island-panel")).toBeInTheDocument();
+    expect(document.body.querySelector(".ds-sheet__footer")).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Rename Product" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Other Skills" })).toBeInTheDocument();
+  });
+
   it("renders education AI fixing as a quiet entry helper", () => {
     render(
       <SectionEditorSheet
@@ -539,20 +556,20 @@ describe("SectionEditorSheet", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Refresh skills" })).toHaveClass(
-      "dasti-cv-ai-helper-action",
-    );
-    expect(screen.queryByRole("button", { name: /Dismiss suggested item/i }))
-      .not.toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Manage skills & categories" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Refresh suggestions" })).toBeInTheDocument();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Add suggested item SIOP training" }),
+      screen.getAllByRole("button", { name: "Add to Other Skills" })[0]!,
     );
-    expect(onAcceptListAiSuggestion).toHaveBeenCalledWith("SIOP training");
-    expect(screen.getByLabelText("Skills item 2")).toHaveValue("SIOP training");
+    expect(onAcceptListAiSuggestion).toHaveBeenCalledWith("SIOP training", {
+      persist: false,
+    });
 
-    fireEvent.click(screen.getByRole("button", { name: "Clear suggestions" }));
-    expect(onClearListAiSuggestions).toHaveBeenCalledTimes(1);
-    expect(onDismissListAiSuggestion).not.toHaveBeenCalled();
+    fireEvent.click(screen.getAllByRole("button", { name: "Dismiss" })[0]!);
+    expect(onDismissListAiSuggestion).toHaveBeenCalledWith("SIOP training");
+    expect(onClearListAiSuggestions).not.toHaveBeenCalled();
   });
 });

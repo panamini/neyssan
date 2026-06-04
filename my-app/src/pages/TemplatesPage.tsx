@@ -25,6 +25,7 @@ import { translateUi, type UiMessageKey } from "../lib/i18n";
 import { useUiLanguagePreference } from "../lib/ui-preferences";
 import {
   EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID,
+  SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID,
   type ResumeTemplateId,
 } from "../lib/layout/resumeTemplates";
 import { resolveLegacyResumeRendererVariantId } from "../features/verbati/style";
@@ -36,6 +37,7 @@ type TemplateFilter = (typeof TEMPLATE_FILTERS)[number];
 export type TemplateFamily =
   | "workshop-onecol"
   | "workshop-twocol"
+  | "sanat-asymmetric"
   | "editorial-sidebar"
   | "minimal"
   | "bold"
@@ -161,6 +163,12 @@ const TEMPLATE_STYLE_PRESETS: Record<TemplateFamily, VerbatiStylePreset> = {
     palette: "sauge",
     resumeTemplateId: "workshop_resume_twocol_ats",
   }),
+  "sanat-asymmetric": resolveVerbatiStyle({
+    familyId: "workshop",
+    typography: "quiet-editorial",
+    palette: "sauge",
+    resumeTemplateId: SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID,
+  }),
   "editorial-sidebar": resolveVerbatiStyle({
     familyId: "workshop",
     typography: "quiet-editorial",
@@ -264,6 +272,7 @@ function getResumeTemplateIntent(
 ): ResumeTemplateIntent | null {
   if (family === "workshop-onecol") return "minimal";
   if (family === "workshop-twocol") return "french";
+  if (family === "sanat-asymmetric") return SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID;
   if (family === "editorial-sidebar") {
     return EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID;
   }
@@ -308,6 +317,8 @@ export function TemplateDocumentPreview({
         ? "workshop_resume_onecol_ats"
         : family === "workshop-twocol"
           ? "workshop_resume_twocol_ats"
+        : family === "sanat-asymmetric"
+          ? SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID
           : EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID;
     const cvPreviewSource = previewCv
       ? buildStyledResumePrintSource({ currentCv: previewCv, stylePreset })

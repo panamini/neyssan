@@ -7,7 +7,12 @@ import {
   getResumeTemplateId,
   resolveVerbatiStyle,
 } from "../style";
-import type { ResumeData, ResumeLayoutVariantId } from "./resume.types";
+import type {
+  ResumeData,
+  ResumeLayoutVariantId,
+  ResumeSkillItem,
+} from "./resume.types";
+import { groupResumeSkillsByCategory } from "./skillCategories";
 import {
   resolvePreviewSectionType,
   type ResumeActiveTarget,
@@ -612,6 +617,120 @@ function SidebarSection({
         {children}
       </div>
     </PreviewSectionRegion>
+  );
+}
+
+function getRenderableSkillItems(data: ResumeData): ResumeSkillItem[] {
+  const primarySkillsSectionId = getPrimarySectionId(data, "skills") ?? "";
+  return data.skillItems.length > 0
+    ? data.skillItems
+    : data.skills.map((skill, index) => ({
+        id: `skills-fallback-${index}`,
+        name: skill,
+        sectionId: primarySkillsSectionId,
+        sectionType: "skills" as const,
+      }));
+}
+
+function renderSkillListItem({
+  item,
+  activeTarget,
+  as = "li",
+  style,
+}: {
+  item: ResumeSkillItem;
+  activeTarget?: ResumeActiveTarget | null;
+  as?: "li" | "span";
+  style?: React.CSSProperties;
+}) {
+  return (
+    <PreviewItemRegion
+      as={as}
+      key={item.id}
+      sectionType="skills"
+      sectionId={item.sectionId}
+      sectionTitle="Skills"
+      itemId={item.id}
+      activeTarget={activeTarget}
+      surface="item"
+      style={style}
+    >
+      {item.name}
+    </PreviewItemRegion>
+  );
+}
+
+function ResumeSkillsList({
+  data,
+  activeTarget,
+  className,
+  itemAs = "li",
+  itemStyle,
+}: {
+  data: ResumeData;
+  activeTarget?: ResumeActiveTarget | null;
+  className?: string;
+  itemAs?: "li" | "span";
+  itemStyle?: React.CSSProperties;
+}) {
+  const skillItems = getRenderableSkillItems(data);
+  const groups = groupResumeSkillsByCategory(skillItems, data.skillCategories);
+  const hasExplicitGroups = groups.some((group) => !group.uncategorized);
+
+  if (!hasExplicitGroups) {
+    const Tag = itemAs === "li" ? "ul" : "div";
+    return (
+      <Tag className={className}>
+        {skillItems.map((item) =>
+          renderSkillListItem({ item, activeTarget, as: itemAs, style: itemStyle }),
+        )}
+      </Tag>
+    );
+  }
+
+  return (
+    <div className={className} data-resume-skill-groups="true">
+      {groups.map((group) => (
+        <div
+          key={group.id}
+          className="skills-list__group"
+          style={{
+            display: "grid",
+            gap: "1mm",
+          }}
+        >
+          {group.uncategorized ? null : (
+            <h4
+              className="skills-list__category"
+              style={{
+                margin: 0,
+                fontSize: "calc(var(--text-body-sm-size) - 0.25mm)",
+                fontWeight: 700,
+                color: "color-mix(in srgb, var(--color-text) 78%, transparent)",
+              }}
+            >
+              {group.label}
+            </h4>
+          )}
+          <div
+            className="skills-list__items"
+            style={{
+              display: "grid",
+              gap: "calc(var(--experience-bullets-gap) - 0.1mm)",
+            }}
+          >
+            {group.items.map((item) =>
+              renderSkillListItem({
+                item,
+                activeTarget,
+                as: itemAs === "li" ? "span" : itemAs,
+                style: itemStyle,
+              }),
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -1936,30 +2055,11 @@ function ClassicResumePage({
                   sectionId={getPrimarySectionId(data, "skills")}
                   activeTarget={activeTarget}
                 >
-                  <ul className="skills-list skills-list--editorialsidebar">
-                    {(data.skillItems.length > 0
-                      ? data.skillItems
-                      : data.skills.map((skill, index) => ({
-                          id: `skills-fallback-${index}`,
-                          name: skill,
-                          sectionId: getPrimarySectionId(data, "skills") ?? "",
-                          sectionType: "skills" as const,
-                        }))
-                    ).map((skill) => (
-                      <PreviewItemRegion
-                        as="li"
-                        key={skill.id}
-                        sectionType="skills"
-                        sectionId={skill.sectionId}
-                        sectionTitle="Skills"
-                        itemId={skill.id}
-                        activeTarget={activeTarget}
-                        surface="item"
-                      >
-                        {skill.name}
-                      </PreviewItemRegion>
-                    ))}
-                  </ul>
+                  <ResumeSkillsList
+                    data={data}
+                    activeTarget={activeTarget}
+                    className="skills-list skills-list--editorialsidebar"
+                  />
                 </SidebarSection>
 
                 {data.languages.length > 0 ? (
@@ -2526,30 +2626,11 @@ function ClassicResumePage({
                 sectionId={getPrimarySectionId(data, "skills")}
                 activeTarget={activeTarget}
               >
-                <ul className="skills-list">
-                  {(data.skillItems.length > 0
-                    ? data.skillItems
-                    : data.skills.map((skill, index) => ({
-                        id: `skills-fallback-${index}`,
-                        name: skill,
-                        sectionId: getPrimarySectionId(data, "skills") ?? "",
-                        sectionType: "skills" as const,
-                      }))
-                  ).map((skill) => (
-                    <PreviewItemRegion
-                      as="li"
-                      key={skill.id}
-                      sectionType="skills"
-                      sectionId={skill.sectionId}
-                      sectionTitle="Skills"
-                      itemId={skill.id}
-                      activeTarget={activeTarget}
-                      surface="item"
-                    >
-                      {skill.name}
-                    </PreviewItemRegion>
-                  ))}
-                </ul>
+                <ResumeSkillsList
+                  data={data}
+                  activeTarget={activeTarget}
+                  className="skills-list"
+                />
               </SidebarSection>
 
               <SidebarSection
@@ -3124,40 +3205,18 @@ function SwissMinimaPage({
               sectionId: getPrimarySectionId(data, "skills"),
               sectionOrder: getSectionOrder(data.skillItems[0]),
               content: (
-                <div
-                  style={{
-                    display: "grid",
-                    gap: "calc(var(--experience-bullets-gap) - 0.1mm)",
+                <ResumeSkillsList
+                  data={data}
+                  activeTarget={activeTarget}
+                  itemAs="span"
+                  itemStyle={{
+                    color:
+                      "color-mix(in srgb, var(--color-text) 72%, transparent)",
+                    fontSize: "calc(var(--text-body-sm-size) - 0.35mm)",
+                    lineHeight: 1.38,
                   }}
-                >
-                  {(data.skillItems.length > 0
-                    ? data.skillItems
-                    : data.skills.map((skill, index) => ({
-                        id: `skills-fallback-${index}`,
-                        name: skill,
-                        sectionId: getPrimarySectionId(data, "skills") ?? "",
-                      }))
-                  ).map((item) => (
-                    <PreviewItemRegion
-                      as="span"
-                      key={item.id}
-                      sectionType="skills"
-                      sectionId={item.sectionId}
-                      sectionTitle="Skills"
-                      itemId={item.id}
-                      activeTarget={activeTarget}
-                      surface="item"
-                      style={{
-                        color:
-                          "color-mix(in srgb, var(--color-text) 72%, transparent)",
-                        fontSize: "calc(var(--text-body-sm-size) - 0.35mm)",
-                        lineHeight: 1.38,
-                      }}
-                    >
-                      {item.name}
-                    </PreviewItemRegion>
-                  ))}
-                </div>
+                  className="skills-list"
+                />
               ),
             }
           : null,

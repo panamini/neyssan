@@ -44,6 +44,12 @@ const TOOLBAR_FADE_TRANSITION = {
   duration: 0.18,
   ease: MOTION_EASE,
 } as const;
+const TOOLBAR_LAYOUT_TRANSITION = {
+  type: "spring",
+  stiffness: 200,
+  damping: 24,
+  mass: 0.8,
+} as const;
 const COLLAPSED_SHELL_WIDTH = 36;
 const INITIAL_TOOLBAR_WIDTH = 220;
 const INITIAL_TOOLBAR_HEIGHT = 48;
@@ -119,6 +125,10 @@ type FloatingSelectionToolbarShellProps = {
 type ToolbarMetrics = {
   actionWidth: number;
   actionHeight: number;
+  compactFormatWidth: number;
+  compactFormatHeight: number;
+  wideFormatWidth: number;
+  wideFormatHeight: number;
   promptWidth: number;
   promptHeight: number;
   panelWidth: number;
@@ -128,6 +138,10 @@ type ToolbarMetrics = {
 const EMPTY_METRICS: ToolbarMetrics = {
   actionWidth: 0,
   actionHeight: 0,
+  compactFormatWidth: 0,
+  compactFormatHeight: 0,
+  wideFormatWidth: 0,
+  wideFormatHeight: 0,
   promptWidth: 0,
   promptHeight: 0,
   panelWidth: 0,
@@ -135,10 +149,14 @@ const EMPTY_METRICS: ToolbarMetrics = {
 };
 
 function resolveCssLength(
-  element: HTMLElement,
+  element: HTMLElement | null,
   cssVariable: string,
   fallback: number,
 ): number {
+  if (!element || typeof window === "undefined") {
+    return fallback;
+  }
+
   const value = window
     .getComputedStyle(element)
     .getPropertyValue(cssVariable)
@@ -162,12 +180,56 @@ function getMeasuredSize(element: HTMLElement | null): {
   };
 }
 
+function getBoxChromeSize(element: HTMLElement | null): {
+  horizontal: number;
+  vertical: number;
+} {
+  if (!element || typeof window === "undefined") {
+    return { horizontal: 0, vertical: 0 };
+  }
+
+  const style = window.getComputedStyle(element);
+  const read = (value: string): number => {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  return {
+    horizontal:
+      read(style.paddingLeft) +
+      read(style.paddingRight) +
+      read(style.borderLeftWidth) +
+      read(style.borderRightWidth),
+    vertical:
+      read(style.paddingTop) +
+      read(style.paddingBottom) +
+      read(style.borderTopWidth) +
+      read(style.borderBottomWidth),
+  };
+}
+
+function getInlineGap(element: HTMLElement | null, fallback: number): number {
+  if (!element || typeof window === "undefined") {
+    return fallback;
+  }
+
+  const style = window.getComputedStyle(element);
+  const parsed = Number.parseFloat(style.columnGap || style.gap);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 function isSameMetrics(current: ToolbarMetrics, next: ToolbarMetrics): boolean {
   return (
     current.actionWidth === next.actionWidth &&
     current.actionHeight === next.actionHeight &&
+    current.compactFormatWidth === next.compactFormatWidth &&
+    current.compactFormatHeight === next.compactFormatHeight &&
+    current.wideFormatWidth === next.wideFormatWidth &&
+    current.wideFormatHeight === next.wideFormatHeight &&
     current.promptWidth === next.promptWidth &&
-    current.promptHeight === next.promptHeight
+    current.promptHeight === next.promptHeight &&
+    current.panelWidth === next.panelWidth &&
+    current.panelHeight === next.panelHeight
   );
 }
 
@@ -332,13 +394,25 @@ export function FloatingSelectionToolbarShell({
             position: "absolute",
             left: isPositionReady && position ? position.left : renderAnchor.left,
             top: isPositionReady && position ? position.top : renderAnchor.top,
+            width: isPositionReady
+              ? desiredSurfaceSize.width
+              : desiredSurfaceSize.minWidth,
             zIndex: 11000,
             visibility: isPositionReady ? "visible" : "hidden",
             pointerEvents: isPositionReady ? "auto" : "none",
+            overflow: "hidden",
           }}
           initial={{ opacity: 0 }}
-          animate={{ opacity: isPositionReady ? 1 : 0 }}
-          transition={TOOLBAR_FADE_TRANSITION}
+          animate={{
+            opacity: isPositionReady ? 1 : 0,
+            width: isPositionReady
+              ? desiredSurfaceSize.width
+              : desiredSurfaceSize.minWidth,
+          }}
+          transition={{
+            opacity: TOOLBAR_FADE_TRANSITION,
+            width: TOOLBAR_LAYOUT_TRANSITION,
+          }}
           onPointerDownCapture={(event) => {
             const target = event.target as HTMLElement | null;
             if (
@@ -385,6 +459,8 @@ export function FloatingAiToolbar({
 
   const panelRef = React.useRef<HTMLDivElement | null>(null);
   const actionShellRef = React.useRef<HTMLDivElement | null>(null);
+  const compactFormatShellRef = React.useRef<HTMLDivElement | null>(null);
+  const wideFormatShellRef = React.useRef<HTMLDivElement | null>(null);
   const promptShellRef = React.useRef<HTMLDivElement | null>(null);
   const askInputRef = React.useRef<HTMLInputElement | null>(null);
   const lastFormattingActionsRef = React.useRef<FloatingSelectionToolbarAction[]>([]);
@@ -432,31 +508,56 @@ export function FloatingAiToolbar({
 
     const panel = panelRef.current;
     const compactGap = resolveCssLength(panel, "--s1", 4);
-    const controlSize = resolveCssLength(panel, "--control-md", 36);
+    const toolbarGap = getInlineGap(panel, compactGap);
+    const chromeSize = getBoxChromeSize(panel);
     const actionSize = getMeasuredSize(actionShellRef.current);
+    const compactFormatSize = hasFormattingActions
+      ? getMeasuredSize(compactFormatShellRef.current)
+      : { width: 0, height: 0 };
+    const wideFormatSize = hasFormattingActions
+      ? getMeasuredSize(wideFormatShellRef.current)
+      : { width: 0, height: 0 };
     const promptSize = isAskOpen
       ? getMeasuredSize(promptShellRef.current)
       : { width: 0, height: 0 };
-    const panelSize = getMeasuredSize(panel);
-    const askInlineGap = isAskOpen && promptSize.width > 0 ? compactGap : 0;
-    const contentWidth = actionSize.width + askInlineGap + promptSize.width;
+    const visibleCompactSize =
+      compactMode === "format" && hasFormattingActions
+        ? compactFormatSize
+        : actionSize;
+    const visibleGroupCount =
+      (wideFormatSize.width > 0 ? 1 : 0) +
+      (visibleCompactSize.width > 0 ? 1 : 0) +
+      (promptSize.width > 0 ? 1 : 0);
+    const contentWidth =
+      chromeSize.horizontal +
+      wideFormatSize.width +
+      visibleCompactSize.width +
+      promptSize.width +
+      Math.max(0, visibleGroupCount - 1) * toolbarGap;
+    const contentHeight =
+      chromeSize.vertical +
+      Math.max(
+        wideFormatSize.height,
+        visibleCompactSize.height,
+        promptSize.height,
+      );
     const nextMetrics: ToolbarMetrics = {
       actionWidth: actionSize.width,
       actionHeight: actionSize.height,
+      compactFormatWidth: compactFormatSize.width,
+      compactFormatHeight: compactFormatSize.height,
+      wideFormatWidth: wideFormatSize.width,
+      wideFormatHeight: wideFormatSize.height,
       promptWidth: promptSize.width,
       promptHeight: promptSize.height,
-      panelWidth: Math.max(panelSize.width, contentWidth),
-      panelHeight: Math.max(
-        panelSize.height,
-        actionSize.height,
-        promptSize.height,
-      ),
+      panelWidth: contentWidth,
+      panelHeight: contentHeight,
     };
 
     setMetrics((current) =>
       isSameMetrics(current, nextMetrics) ? current : nextMetrics,
     );
-  }, [anchor, isAskOpen]);
+  }, [anchor, compactMode, hasFormattingActions, isAskOpen]);
 
   React.useEffect(() => {
     if (open) {
@@ -522,6 +623,12 @@ export function FloatingAiToolbar({
     if (actionShellRef.current) {
       resizeObserver?.observe(actionShellRef.current);
     }
+    if (compactFormatShellRef.current) {
+      resizeObserver?.observe(compactFormatShellRef.current);
+    }
+    if (wideFormatShellRef.current) {
+      resizeObserver?.observe(wideFormatShellRef.current);
+    }
     if (promptShellRef.current) {
       resizeObserver?.observe(promptShellRef.current);
     }
@@ -535,7 +642,7 @@ export function FloatingAiToolbar({
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
     };
-  }, [anchor, open, isAskOpen, updateMetrics]);
+  }, [anchor, open, compactMode, hasFormattingActions, isAskOpen, updateMetrics]);
 
   const handlePresetAction = React.useCallback(
     (action: AiActionDefinition) => {
@@ -587,6 +694,14 @@ export function FloatingAiToolbar({
   );
   const hasMeasuredToolbarMetrics =
     metrics.panelWidth > 0 && metrics.panelHeight > 0;
+  const compactViewportWidth =
+    compactMode === "format" && hasFormattingActions
+      ? metrics.compactFormatWidth
+      : metrics.actionWidth;
+  const compactTrackX =
+    compactMode === "format" && hasFormattingActions
+      ? -(metrics.actionWidth + resolveCssLength(panelRef.current!, "--s1", 4))
+      : 0;
 
   React.useEffect(() => {
     if (!isAskOpen || !open || isPromptLoading || !hasMeasuredToolbarMetrics) return;
@@ -615,6 +730,7 @@ export function FloatingAiToolbar({
         <>
           {hasFormattingActions ? (
             <div
+              ref={wideFormatShellRef}
               className="ds-ai-toolbar__format-actions"
               data-inline-ai-toolbar="true"
               data-selection-toolbar-format="wide"
@@ -643,133 +759,167 @@ export function FloatingAiToolbar({
             </div>
           ) : null}
 
-          <div
-            ref={actionShellRef}
-            className="ds-ai-toolbar__actions"
+          <motion.div
             data-inline-ai-toolbar="true"
             data-selection-toolbar-mode={compactMode}
             style={{
-              display: compactMode === "format" ? "none" : "inline-flex",
+              display: "inline-flex",
+              overflow: "hidden",
+              flex: "0 0 auto",
+              width: compactViewportWidth || "auto",
             }}
+            animate={{
+              width: compactViewportWidth || "auto",
+            }}
+            transition={TOOLBAR_LAYOUT_TRANSITION}
           >
-            {toolbarActions.map((action) => {
-              const isAskAction = action.id === "custom";
-              const isActionLoading =
-                isLoading && pendingActionId === action.id;
-              const isActive = activeActionId === action.id;
+            <motion.div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "var(--s1)",
+                flex: "0 0 auto",
+              }}
+              animate={{ x: compactTrackX }}
+              transition={TOOLBAR_LAYOUT_TRANSITION}
+            >
+              <div
+                ref={actionShellRef}
+                className="ds-ai-toolbar__actions"
+                data-inline-ai-toolbar="true"
+                aria-hidden={compactMode === "format" ? "true" : undefined}
+                style={{
+                  display: "inline-flex",
+                  flex: "0 0 auto",
+                }}
+              >
+                {toolbarActions.map((action) => {
+                  const isAskAction = action.id === "custom";
+                  const isActionLoading =
+                    isLoading && pendingActionId === action.id;
+                  const isActive = activeActionId === action.id;
 
-              return (
-                <React.Fragment key={action.id}>
-                  {isAskAction ? (
+                  return (
+                    <React.Fragment key={action.id}>
+                      {isAskAction ? (
+                        <span
+                          className="ds-ai-toolbar__divider"
+                          aria-hidden="true"
+                        />
+                      ) : null}
+
+                      {isAskOpen && isAskAction ? null : (
+                        <button
+                          type="button"
+                          className="ds-ai-toolbar__btn ds-ai-toolbar__btn--ai-action"
+                          onClick={() => handlePresetAction(action)}
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                          }}
+                          disabled={isLoading}
+                          tabIndex={compactMode === "format" ? -1 : undefined}
+                          aria-busy={isActionLoading || undefined}
+                          aria-label={action.label}
+                          aria-pressed={isActive}
+                          title={action.label}
+                        >
+                          <span
+                            className="ds-ai-toolbar__ai-icon"
+                            aria-hidden="true"
+                          >
+                            {AI_ACTION_ICONS[action.id as InlineAiActionId] ??
+                              action.label}
+                          </span>
+                          <span className="ds-ai-toolbar__ai-label">
+                            {action.label}
+                          </span>
+                          {isActionLoading ? (
+                            <span className="ds-btn__period" aria-hidden="true">
+                              .
+                            </span>
+                          ) : null}
+                        </button>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+                {hasFormattingActions ? (
+                  <>
                     <span
-                      className="ds-ai-toolbar__divider"
+                      className="ds-ai-toolbar__divider ds-ai-toolbar__divider--compact-edit"
                       aria-hidden="true"
                     />
-                  ) : null}
-
-                  {isAskOpen && isAskAction ? null : (
                     <button
                       type="button"
-                      className="ds-ai-toolbar__btn ds-ai-toolbar__btn--ai-action"
-                      onClick={() => handlePresetAction(action)}
+                      className="ds-ai-toolbar__btn ds-ai-toolbar__btn--edit"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        setActiveActionId(DEFAULT_ACTION_ID);
+                        setCompactMode("format");
+                      }}
+                      tabIndex={compactMode === "format" ? -1 : undefined}
+                      aria-label={compactFormattingLabel}
+                      title={compactFormattingLabel}
+                    >
+                      <TextT size={14} aria-hidden="true" />
+                      <span className="ds-ai-toolbar__btn-label">
+                        {compactFormattingLabel}
+                      </span>
+                    </button>
+                  </>
+                ) : null}
+              </div>
+
+              {hasFormattingActions ? (
+                <div
+                  ref={compactFormatShellRef}
+                  className="ds-ai-toolbar__compact-format-actions"
+                  data-inline-ai-toolbar="true"
+                  data-selection-toolbar-mode={compactMode}
+                  role="group"
+                  aria-label="Text formatting"
+                  aria-hidden={compactMode === "format" ? undefined : "true"}
+                  style={{
+                    display: "inline-flex",
+                    flex: "0 0 auto",
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="ds-ai-toolbar__btn ds-ai-toolbar__btn--back"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => setCompactMode("ai")}
+                    tabIndex={compactMode === "format" ? undefined : -1}
+                    aria-label="Back to AI"
+                    title="Back to AI"
+                  >
+                    <ArrowLeft size={14} aria-hidden="true" />
+                    <span className="ds-ai-toolbar__btn-label">AI</span>
+                  </button>
+                  <span className="ds-ai-toolbar__divider" aria-hidden="true" />
+                  {resolvedFormattingActions.map((action) => (
+                    <button
+                      key={action.id}
+                      type="button"
+                      className="ds-ai-toolbar__btn ds-ai-toolbar__btn--icon"
                       onMouseDown={(event) => {
+                        action.onMouseDown?.(event);
                         event.preventDefault();
                       }}
-                      disabled={isLoading}
-                      aria-busy={isActionLoading || undefined}
+                      onClick={() => handleFormattingAction(action)}
+                      disabled={action.disabled}
+                      tabIndex={compactMode === "format" ? undefined : -1}
                       aria-label={action.label}
-                      aria-pressed={isActive}
-                      title={action.label}
+                      aria-pressed={action.active}
+                      title={action.title ?? action.label}
                     >
-                      <span
-                        className="ds-ai-toolbar__ai-icon"
-                        aria-hidden="true"
-                      >
-                        {AI_ACTION_ICONS[action.id as InlineAiActionId] ??
-                          action.label}
-                      </span>
-                      <span className="ds-ai-toolbar__ai-label">
-                        {action.label}
-                      </span>
-                      {isActionLoading ? (
-                        <span className="ds-btn__period" aria-hidden="true">
-                          .
-                        </span>
-                      ) : null}
+                      {action.icon ?? action.label}
                     </button>
-                  )}
-                </React.Fragment>
-              );
-            })}
-            {hasFormattingActions ? (
-              <>
-                <span
-                  className="ds-ai-toolbar__divider ds-ai-toolbar__divider--compact-edit"
-                  aria-hidden="true"
-                />
-                <button
-                  type="button"
-                  className="ds-ai-toolbar__btn ds-ai-toolbar__btn--edit"
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => {
-                    setActiveActionId(DEFAULT_ACTION_ID);
-                    setCompactMode("format");
-                  }}
-                  aria-label={compactFormattingLabel}
-                  title={compactFormattingLabel}
-                >
-                  <TextT size={14} aria-hidden="true" />
-                  <span className="ds-ai-toolbar__btn-label">
-                    {compactFormattingLabel}
-                  </span>
-                </button>
-              </>
-            ) : null}
-          </div>
-
-          {hasFormattingActions ? (
-            <div
-              className="ds-ai-toolbar__compact-format-actions"
-              data-inline-ai-toolbar="true"
-              data-selection-toolbar-mode={compactMode}
-              role="group"
-              aria-label="Text formatting"
-              style={{
-                display: compactMode === "format" ? "inline-flex" : "none",
-              }}
-            >
-              <button
-                type="button"
-                className="ds-ai-toolbar__btn ds-ai-toolbar__btn--back"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => setCompactMode("ai")}
-                aria-label="Back to AI"
-                title="Back to AI"
-              >
-                <ArrowLeft size={14} aria-hidden="true" />
-                <span className="ds-ai-toolbar__btn-label">AI</span>
-              </button>
-              <span className="ds-ai-toolbar__divider" aria-hidden="true" />
-              {resolvedFormattingActions.map((action) => (
-                <button
-                  key={action.id}
-                  type="button"
-                  className="ds-ai-toolbar__btn ds-ai-toolbar__btn--icon"
-                  onMouseDown={(event) => {
-                    action.onMouseDown?.(event);
-                    event.preventDefault();
-                  }}
-                  onClick={() => handleFormattingAction(action)}
-                  disabled={action.disabled}
-                  aria-label={action.label}
-                  aria-pressed={action.active}
-                  title={action.title ?? action.label}
-                >
-                  {action.icon ?? action.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
+                  ))}
+                </div>
+              ) : null}
+            </motion.div>
+          </motion.div>
 
           {isAskOpen ? (
             <div

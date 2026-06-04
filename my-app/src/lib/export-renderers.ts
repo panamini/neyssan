@@ -86,6 +86,11 @@ import {
   resolveSectionHeadingIconKey,
   type DocumentIconSettings,
 } from "./document-icons";
+import {
+  resolveDocumentListItemIconOverride,
+  type DocumentIconOverrides,
+  type DocumentListItemIconOverrideTarget,
+} from "./document-icon-overrides";
 
 type ExportMode = "ats" | "styled";
 
@@ -3615,11 +3620,14 @@ function renderResumeTagList(values: string[]): string {
 
 function renderResumeDocumentListMarkerHtml(
   settings: DocumentIconSettings | null | undefined,
+  overrides?: DocumentIconOverrides | null,
+  target?: DocumentListItemIconOverrideTarget | null,
 ): string {
   if (!settings) return "";
   const documentIconSettings = normalizeDocumentIconSettings(settings);
+  const overrideIconKey = resolveDocumentListItemIconOverride(overrides, target);
   return renderDocumentIconHtml({
-    iconKey: resolveDefaultListMarkerIconKey(documentIconSettings),
+    iconKey: overrideIconKey ?? resolveDefaultListMarkerIconKey(documentIconSettings),
     color: documentIconSettings.color,
     sizePt: documentIconSettings.sizePt,
     className: "bullet-list-marker",
@@ -3630,9 +3638,13 @@ function renderResumeListItem(args: {
   content: string;
   id?: string | null;
   documentIconSettings?: DocumentIconSettings | null;
+  documentIconOverrides?: DocumentIconOverrides | null;
+  markerTarget?: DocumentListItemIconOverrideTarget | null;
 }): string {
   const markerMarkup = renderResumeDocumentListMarkerHtml(
     args.documentIconSettings,
+    args.documentIconOverrides,
+    args.markerTarget,
   );
   const idAttr = args.id ? ` data-export-item-id="${escapeHtml(args.id)}"` : "";
   if (!markerMarkup) {
@@ -3652,7 +3664,10 @@ function getDocumentListClassName(args: {
 
 function renderResumeCompactList(args: {
   items: Array<{ text: string; id?: string }>;
+  sectionId?: string | null;
+  sectionType?: string | null;
   documentIconSettings?: DocumentIconSettings | null;
+  documentIconOverrides?: DocumentIconOverrides | null;
 }): string {
   if (args.items.length === 0) {
     return "";
@@ -3667,6 +3682,13 @@ function renderResumeCompactList(args: {
         id: item.id,
         content: escapeHtml(item.text),
         documentIconSettings: args.documentIconSettings,
+        documentIconOverrides: args.documentIconOverrides,
+        markerTarget: {
+          sectionId: args.sectionId,
+          sectionType: args.sectionType,
+          itemId: item.id,
+          field: "item",
+        },
       }),
     )
     .join("")}</ul>`;
@@ -3808,6 +3830,8 @@ function workshopResponsibilitiesRichHasPartialContent(
 function renderWorkshopExperienceBlocksFallback(
   blocks: WorkshopCommittedExperienceItem["blocks"],
   documentIconSettings?: DocumentIconSettings | null,
+  documentIconOverrides?: DocumentIconOverrides | null,
+  markerTargetBase?: DocumentListItemIconOverrideTarget | null,
 ): string {
   const blockMarkup: string[] = [];
   let bulletBuffer: string[] = [];
@@ -3822,10 +3846,16 @@ function renderWorkshopExperienceBlocksFallback(
         baseClassName: "bullet-list",
         documentIconSettings,
       })}">${bulletBuffer
-        .map((bullet) =>
+        .map((bullet, bulletIndex) =>
           renderResumeListItem({
             content: escapeHtml(bullet),
             documentIconSettings,
+            documentIconOverrides,
+            markerTarget: {
+              ...markerTargetBase,
+              field: markerTargetBase?.field ?? "responsibilities",
+              itemIndex: bulletIndex,
+            },
           }),
         )
         .join("")}</ul>`,
@@ -3854,9 +3884,11 @@ function renderWorkshopRichContent(
     | WorkshopResponsibilitiesRichContent
     | NonNullable<WorkshopCommittedExperienceItem["responsibilitiesRich"]>,
   documentIconSettings?: DocumentIconSettings | null,
+  documentIconOverrides?: DocumentIconOverrides | null,
+  markerTargetBase?: DocumentListItemIconOverrideTarget | null,
 ): string {
   return rich.blocks
-    .map((block) => {
+    .map((block, blockIndex) => {
       if (block.kind === "paragraph") {
         return `<p class="entry-summary">${block.runs
           .map((run) => renderWorkshopResponsibilityRun(run))
@@ -3874,6 +3906,14 @@ function renderWorkshopRichContent(
                 .map((run) => renderWorkshopResponsibilityRun(run))
                 .join(""),
               documentIconSettings,
+              documentIconOverrides,
+              markerTarget: {
+                ...markerTargetBase,
+                field: markerTargetBase?.field ?? "responsibilities",
+                blockIndex,
+                itemIndex:
+                  "sourceItemIndex" in item ? item.sourceItemIndex : undefined,
+              },
             }),
         )
         .join("")}</ul>`;
@@ -3883,8 +3923,17 @@ function renderWorkshopRichContent(
 
 function renderWorkshopExperienceContent(
   item: WorkshopCommittedExperienceItem,
+  sectionId?: string | null,
+  sectionType?: string | null,
   documentIconSettings?: DocumentIconSettings | null,
+  documentIconOverrides?: DocumentIconOverrides | null,
 ): string {
+  const markerTargetBase: DocumentListItemIconOverrideTarget = {
+    sectionId,
+    sectionType: sectionType ?? "experience",
+    itemId: item.id,
+    field: "responsibilities",
+  };
   const rich = item.responsibilitiesRich;
   if (
     !rich ||
@@ -3896,18 +3945,26 @@ function renderWorkshopExperienceContent(
     return renderWorkshopExperienceBlocksFallback(
       item.blocks,
       documentIconSettings,
+      documentIconOverrides,
+      markerTargetBase,
     );
   }
 
-  return renderWorkshopRichContent(rich, documentIconSettings);
+  return renderWorkshopRichContent(
+    rich,
+    documentIconSettings,
+    documentIconOverrides,
+    markerTargetBase,
+  );
 }
 
 function renderWorkshopFragment(args: {
   fragment: NonNullable<ResumePrintSource["committedPages"]>[number]["fragments"][number];
   locale?: string | null;
   documentIconSettings?: DocumentIconSettings | null;
+  documentIconOverrides?: DocumentIconOverrides | null;
 }): string {
-  const { fragment, locale, documentIconSettings } = args;
+  const { fragment, locale, documentIconSettings, documentIconOverrides } = args;
 
   switch (fragment.kind) {
     case "profile":
@@ -3916,7 +3973,17 @@ function renderWorkshopFragment(args: {
       return renderSection({
         block: "summary",
         content: fragment.summaryRich
-          ? renderWorkshopRichContent(fragment.summaryRich, documentIconSettings)
+          ? renderWorkshopRichContent(
+              fragment.summaryRich,
+              documentIconSettings,
+              documentIconOverrides,
+              {
+                sectionId: fragment.sectionId,
+                sectionType: fragment.sectionType,
+                itemId: fragment.sectionId ?? "summary",
+                field: "summary",
+              },
+            )
           : `<p class="entry-summary">${escapeHtml(fragment.text)}</p>`,
         locale,
         titleKey: "summary",
@@ -3940,7 +4007,13 @@ function renderWorkshopFragment(args: {
                   )}</p>
                 </div>
               </div>
-              ${renderWorkshopExperienceContent(item, documentIconSettings)}
+              ${renderWorkshopExperienceContent(
+                item,
+                fragment.sectionId,
+                fragment.sectionType,
+                documentIconSettings,
+                documentIconOverrides,
+              )}
             </article>`;
             },
           )
@@ -3999,6 +4072,13 @@ function renderWorkshopFragment(args: {
                   ? renderWorkshopRichContent(
                       item.descriptionRich,
                       documentIconSettings,
+                      documentIconOverrides,
+                      {
+                        sectionId: fragment.sectionId,
+                        sectionType: fragment.sectionType,
+                        itemId: item.id,
+                        field: "description",
+                      },
                     )
                   : `<p class="entry-summary">${escapeHtml(item.description)}</p>`}
               </div>
@@ -4022,7 +4102,10 @@ function renderWorkshopFragment(args: {
               .filter(Boolean)
               .join(" · "),
           })),
+          sectionId: fragment.sectionId,
+          sectionType: "languages",
           documentIconSettings,
+          documentIconOverrides,
         }),
         keep: true,
         locale,
@@ -4063,6 +4146,13 @@ function renderWorkshopFragment(args: {
               id: item.id,
               content: escapeHtml(item.text),
               documentIconSettings,
+              documentIconOverrides,
+              markerTarget: {
+                sectionId: fragment.sectionId,
+                sectionType: "achievements",
+                itemId: item.id,
+                field: "item",
+              },
             }),
           )
           .join("")}</ul>`,
@@ -4100,7 +4190,10 @@ function renderWorkshopFragment(args: {
             id: item.id,
             text: item.name,
           })),
+          sectionId: fragment.sectionId,
+          sectionType: "hobbies",
           documentIconSettings,
+          documentIconOverrides,
         }),
         keep: true,
         locale,
@@ -4136,6 +4229,7 @@ function renderWorkshopTwoColumnPage(args: {
   page: NonNullable<ResumePrintSource["committedPages"]>[number];
   locale?: string | null;
   documentIconSettings?: DocumentIconSettings | null;
+  documentIconOverrides?: DocumentIconOverrides | null;
 }): string {
   const header: string[] = [];
   const sidebar: string[] = [];
@@ -4146,6 +4240,7 @@ function renderWorkshopTwoColumnPage(args: {
       fragment,
       locale: args.locale,
       documentIconSettings: args.documentIconSettings,
+      documentIconOverrides: args.documentIconOverrides,
     });
     const lane = resolveWorkshopTwoColumnFragmentLane(fragment);
     if (lane === "header") {
@@ -4201,6 +4296,8 @@ function renderResumeHtml(args: {
               locale,
               documentIconSettings:
                 args.mode === "styled" ? args.data.documentIconSettings : null,
+              documentIconOverrides:
+                args.mode === "styled" ? args.data.documentIconOverrides : null,
             })
           : `<article class="resume-styled-page" data-export-page-id="${escapeHtml(page.pageId)}">
             ${page.fragments
@@ -4211,6 +4308,10 @@ function renderResumeHtml(args: {
                   documentIconSettings:
                     args.mode === "styled"
                       ? args.data.documentIconSettings
+                      : null,
+                  documentIconOverrides:
+                    args.mode === "styled"
+                      ? args.data.documentIconOverrides
                       : null,
                 }),
               )

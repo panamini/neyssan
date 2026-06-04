@@ -46,6 +46,10 @@ import {
   normalizeDocumentIconSettings,
   type DocumentIconSettings,
 } from "./document-icons";
+import {
+  normalizeDocumentIconOverrides,
+  type DocumentIconOverrides,
+} from "./document-icon-overrides";
 import { parseProposalPlainTextBlocks } from "./proposal-list-blocks";
 import {
   normalizeProposalDocument,
@@ -135,6 +139,7 @@ export type ResumePrintSource = {
   resumeTemplateId: ResumeTemplateId;
   committedPages?: WorkshopResumeCommittedPage[];
   documentIconSettings?: DocumentIconSettings;
+  documentIconOverrides?: DocumentIconOverrides;
 };
 
 export type ResumePreviewPrintSource = {
@@ -149,6 +154,7 @@ export type ResumePreviewPrintSource = {
   rendererVariantId: ResumeLayoutVariantId;
   committedPages?: WorkshopResumeCommittedPage[];
   documentIconSettings?: DocumentIconSettings;
+  documentIconOverrides?: DocumentIconOverrides;
 };
 
 export type ResumePrintRoutePayload = {
@@ -162,6 +168,7 @@ export type ResumePrintRoutePayload = {
   rendererVariantId: ResumeLayoutVariantId;
   committedPages?: WorkshopResumeCommittedPage[];
   documentIconSettings?: DocumentIconSettings;
+  documentIconOverrides?: DocumentIconOverrides;
 };
 
 export type ResumePrintDebugSnapshot = {
@@ -454,6 +461,9 @@ export function buildResumeExportSource(args: {
   const documentIconSettings = normalizeDocumentIconSettings(
     args.currentCv.metadata.documentIcons,
   );
+  const documentIconOverrides = normalizeDocumentIconOverrides(
+    args.currentCv.metadata.documentIconOverrides,
+  );
   const authoritativeModel = buildAuthoritativeResumeExportModel(
     args.authoritativeResume,
   );
@@ -474,6 +484,7 @@ export function buildResumeExportSource(args: {
       ),
       locale: normalizeExportDocumentLanguage(args.currentCv.metadata.locale),
       documentIconSettings,
+      documentIconOverrides,
     };
   }
 
@@ -492,6 +503,7 @@ export function buildResumeExportSource(args: {
     ),
     locale: normalizeExportDocumentLanguage(args.currentCv.metadata.locale),
     documentIconSettings,
+    documentIconOverrides,
   };
 }
 
@@ -517,6 +529,9 @@ export function buildStyledResumePrintSource(args: {
   const documentIconSettings = normalizeDocumentIconSettings(
     args.currentCv.metadata.documentIcons,
   );
+  const documentIconOverrides = normalizeDocumentIconOverrides(
+    args.currentCv.metadata.documentIconOverrides,
+  );
 
   return {
     schemaVersion: 1,
@@ -535,6 +550,7 @@ export function buildStyledResumePrintSource(args: {
       stylePreset,
     }),
     documentIconSettings,
+    documentIconOverrides,
   };
 }
 

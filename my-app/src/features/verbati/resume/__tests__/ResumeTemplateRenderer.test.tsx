@@ -1,5 +1,11 @@
 import React from "react";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import ResumeTemplateRenderer from "../ResumeTemplateRenderer";
@@ -9,6 +15,8 @@ import { normalizeResumePreviewTokens } from "../../../../lib/layout/documentTok
 import { serializeResumePreviewVars } from "../../../../lib/layout/documentTokenSerializers";
 import { planWorkshopResumePages } from "../../../../lib/resume/resumePagination";
 import { getResumeTemplateDefinition } from "../../../../lib/layout/resumeTemplates";
+import { buildDocumentListItemIconOverrideKey } from "../../../../lib/document-icon-overrides";
+import { getDocumentIcon } from "../../../../lib/document-icons";
 
 const WORKSHOP_ACTIVE_PREVIEW_THEME_VAR_NAMES = [
   "--font-heading-family",
@@ -106,7 +114,10 @@ function isSelectedProjectItemId(value: string | null): value is string {
 }
 
 function repeatWords(label: string, count: number) {
-  return Array.from({ length: count }, (_, index) => `${label}-${index + 1}`).join(" ");
+  return Array.from(
+    { length: count },
+    (_, index) => `${label}-${index + 1}`,
+  ).join(" ");
 }
 
 function makeTextBlock(label: string, usefulLines: number) {
@@ -132,7 +143,10 @@ function buildWorkshopScreenshotFixture() {
     textSections: [],
     achievements: [],
     achievementItems: [],
-    summary: Array.from({ length: 30 }, (_, index) => `summary-${index + 1}`).join(" "),
+    summary: Array.from(
+      { length: 30 },
+      (_, index) => `summary-${index + 1}`,
+    ).join(" "),
     experience: [
       {
         ...resumeMock.experience[0]!,
@@ -395,11 +409,167 @@ describe("ResumeTemplateRenderer", () => {
       />,
     );
 
-    expect(screen.getAllByTestId("resume-template-page").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByTestId("resume-template-page").length,
+    ).toBeGreaterThan(0);
 
     await waitFor(() => {
       expect(onStablePageCountChange).toHaveBeenCalledWith(expect.any(Number));
     });
+  });
+
+  it("renders the Sanat asymmetric template with category-led skill groups", () => {
+    const skillItems = [
+      {
+        ...resumeMock.skillItems[0]!,
+        id: "skill-design",
+        name: "Design systems",
+        categoryId: "cat-design",
+        categoryLabel: "Design",
+        categoryOrder: 0,
+      },
+      {
+        ...resumeMock.skillItems[1]!,
+        id: "skill-prototype",
+        name: "Framer prototypes",
+        categoryId: "cat-prototyping",
+        categoryLabel: "Prototyping",
+        categoryOrder: 1,
+      },
+      {
+        ...resumeMock.skillItems[2]!,
+        id: "skill-research",
+        name: "User interviews",
+        bucket: "secondary" as const,
+      },
+    ];
+
+    render(
+      <ResumeTemplateRenderer
+        data={{
+          ...resumeMock,
+          skillItems,
+          skills: skillItems.map((item) => item.name),
+        }}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        resumeTemplateId="sanat_asymmetric_resume"
+      />,
+    );
+
+    const page = screen.getAllByTestId("resume-template-page")[0]!;
+    expect(page).toHaveAttribute(
+      "data-resume-template-layout",
+      "sanat-asymmetric",
+    );
+    expect(page).toHaveStyle({
+      gridTemplateRows: "auto auto minmax(0, 1fr)",
+      alignItems: "start",
+    });
+
+    const summary = page.querySelector('[data-preview-section="summary"]');
+    expect(summary).toBeInTheDocument();
+    expect(summary?.closest(".sanat-header-extra")).toBeInTheDocument();
+
+    const skills = page.querySelector('[data-preview-section="skills"]');
+    expect(skills).toBeInTheDocument();
+    expect(
+      skills?.querySelector(".dasti-cv-paper-section-heading"),
+    ).toBeInTheDocument();
+    expect(skills?.querySelector(".sanat-section-title")).toBeNull();
+    expect(
+      skills?.querySelector(".dasti-cv-paper-section-heading h2"),
+    ).toHaveStyle({
+      textTransform: "uppercase",
+      color: "var(--color-accent)",
+    });
+    expect(
+      within(page).getByText("Design:", { exact: false }),
+    ).toBeInTheDocument();
+    expect(
+      within(page).getByText("Prototyping:", { exact: false }),
+    ).toBeInTheDocument();
+    expect(within(page).getByText("User interviews")).toBeInTheDocument();
+    expect(within(page).queryByText("Secondary:", { exact: false })).toBeNull();
+    expect(
+      page.querySelectorAll('[data-sanat-skill-item-wrap="true"]'),
+    ).toHaveLength(3);
+  });
+
+  it("hides Sanat skill separators when the next skill starts a wrapped line", async () => {
+    const skillItems = [
+      {
+        ...resumeMock.skillItems[0]!,
+        id: "skill-design",
+        name: "Design systems",
+      },
+      {
+        ...resumeMock.skillItems[1]!,
+        id: "skill-prototype",
+        name: "Framer prototypes",
+      },
+      {
+        ...resumeMock.skillItems[2]!,
+        id: "skill-research",
+        name: "User interviews",
+      },
+    ];
+    const getBoundingClientRectSpy = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(function getMockRect() {
+        const isSkillWrap =
+          this instanceof HTMLElement &&
+          this.matches('[data-sanat-skill-item-wrap="true"]');
+        const text = this instanceof HTMLElement ? this.textContent ?? "" : "";
+        const top = isSkillWrap && text.includes("User interviews") ? 24 : 0;
+
+        return {
+          x: 0,
+          y: top,
+          top,
+          left: 0,
+          right: 100,
+          bottom: top + 16,
+          width: 100,
+          height: 16,
+          toJSON: () => ({}),
+        } as DOMRect;
+      });
+
+    try {
+      render(
+        <ResumeTemplateRenderer
+          data={{
+            ...resumeMock,
+            skillItems,
+            skills: skillItems.map((item) => item.name),
+          }}
+          stylePreset={{
+            familyId: "workshop",
+            layout: "workshop",
+            typography: "quiet-editorial",
+            palette: "sauge",
+          }}
+          resumeTemplateId="sanat_asymmetric_resume"
+        />,
+      );
+
+      await waitFor(() => {
+        const separators = document.querySelectorAll(
+          '[data-sanat-skill-separator="true"]',
+        );
+        expect(separators).toHaveLength(1);
+      });
+
+      const wrappedSkill = screen.getByText("User interviews");
+      expect(wrappedSkill.previousElementSibling).toBeNull();
+    } finally {
+      getBoundingClientRectSpy.mockRestore();
+    }
   });
 
   it("renders controlled document list markers for workshop bullets", () => {
@@ -423,9 +593,7 @@ describe("ResumeTemplateRenderer", () => {
       />,
     );
 
-    const marker = container.querySelector(
-      ".dasti-cv-paper-list-marker svg",
-    );
+    const marker = container.querySelector(".dasti-cv-paper-list-marker svg");
     const markedListItem = marker?.closest("li") as HTMLElement | null;
 
     expect(marker).toBeTruthy();
@@ -457,13 +625,160 @@ describe("ResumeTemplateRenderer", () => {
     );
 
     const marker = container.querySelector(".dasti-cv-paper-list-marker");
-    const stroke = marker?.querySelector("span");
+    const stroke = marker?.querySelector(
+      ".dasti-cv-paper-list-marker-content > span",
+    );
 
     expect(marker?.querySelector("svg")).toBeNull();
     expect(marker).toHaveAttribute("data-marker", "–");
     expect(marker?.textContent).toBe("");
     expect(stroke).toHaveStyle({ width: "8pt" });
     expect(stroke?.getAttribute("style")).toContain("border-top: 1.28pt");
+  });
+
+  it("lets a CV list item icon override win over the global marker", () => {
+    const overrideKey = buildDocumentListItemIconOverrideKey({
+      sectionId: "achievements-1",
+      sectionType: "achievements",
+      itemId: "achievement-1",
+      field: "item",
+    });
+    expect(overrideKey).toBeTruthy();
+
+    render(
+      <ResumeTemplateRenderer
+        data={resumeMock}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        resumeTemplateId="workshop_resume_onecol_ats"
+        documentIconSettings={{
+          listMarkerType: "icon",
+          defaultListMarkerKey: "diamond",
+          sectionHeadingIconMode: "none",
+          sectionIconMap: {},
+          color: "accent",
+          sizePt: 10,
+        }}
+        documentIconOverrides={{
+          listItems: {
+            [overrideKey ?? ""]: "star",
+          },
+        }}
+      />,
+    );
+
+    const item = screen
+      .getByText(
+        "Reduced production time for new screens through a reusable design system.",
+      )
+      .closest("li");
+    const marker = item?.querySelector(".dasti-cv-paper-list-marker");
+
+    expect(marker?.innerHTML).toContain(
+      getDocumentIcon("star")?.svg.match(/<path d="([^"]+)/)?.[1],
+    );
+    expect(marker?.innerHTML).not.toContain(
+      getDocumentIcon("diamond")?.svg.match(/<path d="([^"]+)/)?.[1],
+    );
+  });
+
+  it("clears a CV list item icon override from the inline picker", () => {
+    const onChange = vi.fn();
+    render(
+      <ResumeTemplateRenderer
+        data={resumeMock}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        resumeTemplateId="workshop_resume_onecol_ats"
+        documentIconSettings={{
+          listMarkerType: "icon",
+          defaultListMarkerKey: "diamond",
+          sectionHeadingIconMode: "none",
+          sectionIconMap: {},
+          color: "accent",
+          sizePt: 10,
+        }}
+        onDocumentListItemIconChange={onChange}
+      />,
+    );
+
+    const item = screen
+      .getByText(
+        "Reduced production time for new screens through a reusable design system.",
+      )
+      .closest("li");
+    expect(item).toBeTruthy();
+
+    fireEvent.click(
+      within(item as HTMLElement).getByRole("button", {
+        name: "Choose bullet icon",
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+
+    expect(onChange).toHaveBeenCalledWith(
+      {
+        sectionId: "achievements-1",
+        sectionType: "achievements",
+        itemId: "achievement-1",
+        field: "item",
+      },
+      null,
+    );
+  });
+
+  it("closes the CV document icon picker when clicking outside it", () => {
+    render(
+      <ResumeTemplateRenderer
+        data={resumeMock}
+        stylePreset={{
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "sauge",
+        }}
+        resumeTemplateId="workshop_resume_onecol_ats"
+        documentIconSettings={{
+          listMarkerType: "icon",
+          defaultListMarkerKey: "diamond",
+          sectionHeadingIconMode: "none",
+          sectionIconMap: {},
+          color: "accent",
+          sizePt: 10,
+        }}
+        onDocumentListItemIconChange={vi.fn()}
+      />,
+    );
+
+    const item = screen
+      .getByText(
+        "Reduced production time for new screens through a reusable design system.",
+      )
+      .closest("li");
+    expect(item).toBeTruthy();
+
+    fireEvent.click(
+      within(item as HTMLElement).getByRole("button", {
+        name: "Choose bullet icon",
+      }),
+    );
+    expect(
+      screen.getByRole("dialog", { name: "Choose bullet icon" }),
+    ).toBeInTheDocument();
+
+    fireEvent.pointerDown(document.body);
+
+    expect(
+      screen.queryByRole("dialog", { name: "Choose bullet icon" }),
+    ).toBeNull();
   });
 
   it("renders the workshop two-column ATS page set with canonical column vars", () => {
@@ -484,13 +799,23 @@ describe("ResumeTemplateRenderer", () => {
     const renderer = container.querySelector(
       '[data-testid="resume-template-renderer"]',
     ) as HTMLElement | null;
-    expect(screen.getAllByTestId("resume-template-page").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByTestId("resume-template-page").length,
+    ).toBeGreaterThan(0);
     expect(renderer?.style.getPropertyValue("--sidebar-width")).toBe("45mm");
     expect(renderer?.style.getPropertyValue("--gutter-width")).toBe("12mm");
     expect(renderer?.style.getPropertyValue("--main-width")).toBe("100mm");
-    expect(container.querySelector('[data-resume-template-layout="workshop-two-column"]')).toBeTruthy();
-    expect(container.querySelector('[data-resume-template-column="sidebar"]')).toBeTruthy();
-    expect(container.querySelector('[data-resume-template-column="main"]')).toBeTruthy();
+    expect(
+      container.querySelector(
+        '[data-resume-template-layout="workshop-two-column"]',
+      ),
+    ).toBeTruthy();
+    expect(
+      container.querySelector('[data-resume-template-column="sidebar"]'),
+    ).toBeTruthy();
+    expect(
+      container.querySelector('[data-resume-template-column="main"]'),
+    ).toBeTruthy();
   });
 
   it("places two-column committed fragments by lane in the React preview", () => {
@@ -557,12 +882,24 @@ describe("ResumeTemplateRenderer", () => {
       />,
     );
 
-    const sidebar = container.querySelector('[data-resume-template-column="sidebar"]');
-    const main = container.querySelector('[data-resume-template-column="main"]');
+    const sidebar = container.querySelector(
+      '[data-resume-template-column="sidebar"]',
+    );
+    const main = container.querySelector(
+      '[data-resume-template-column="main"]',
+    );
     expect(sidebar).toBeTruthy();
     expect(main).toBeTruthy();
-    expect(within(main as HTMLElement).getByText("Detailed Architecture Certification")).toBeTruthy();
-    expect(within(sidebar as HTMLElement).queryByText("Detailed Architecture Certification")).toBeNull();
+    expect(
+      within(main as HTMLElement).getByText(
+        "Detailed Architecture Certification",
+      ),
+    ).toBeTruthy();
+    expect(
+      within(sidebar as HTMLElement).queryByText(
+        "Detailed Architecture Certification",
+      ),
+    ).toBeNull();
     expect(within(sidebar as HTMLElement).getByText("React")).toBeTruthy();
   });
 
@@ -656,7 +993,9 @@ describe("ResumeTemplateRenderer", () => {
       '[data-preview-section="experience"][data-preview-item-id="exp-template-rich"]',
     ) as HTMLElement | null;
 
-    expect(experienceItem?.textContent).toContain("Led platform migration planning.");
+    expect(experienceItem?.textContent).toContain(
+      "Led platform migration planning.",
+    );
     expect(experienceItem?.querySelector("strong")?.textContent).toBe(
       "platform migration",
     );
@@ -768,19 +1107,21 @@ describe("ResumeTemplateRenderer", () => {
                 (item) =>
                   item.id === "exp-template-continued-rich" &&
                   item.continued &&
-                  item.responsibilitiesRich?.blocks.some((block) => block.kind === "paragraph"),
+                  item.responsibilitiesRich?.blocks.some(
+                    (block) => block.kind === "paragraph",
+                  ),
               ),
           ),
         )?.renderedPage ?? null;
     const experienceItem = continuedPage?.querySelector(
       '[data-preview-section="experience"][data-preview-item-id="exp-template-continued-rich"]',
     ) as HTMLElement | null;
-    const directParagraphs = Array.from(experienceItem?.querySelectorAll(":scope > p") ?? []).map(
-      (node) => node.textContent,
-    );
-    const listItems = Array.from(experienceItem?.querySelectorAll(":scope > ul > li") ?? []).map(
-      (node) => node.textContent,
-    );
+    const directParagraphs = Array.from(
+      experienceItem?.querySelectorAll(":scope > p") ?? [],
+    ).map((node) => node.textContent);
+    const listItems = Array.from(
+      experienceItem?.querySelectorAll(":scope > ul > li") ?? [],
+    ).map((node) => node.textContent);
 
     expect(continuedPage?.textContent).not.toContain(firstParagraph);
     expect(continuedPage?.textContent).not.toContain(continuedBullets[0]!);
@@ -788,8 +1129,12 @@ describe("ResumeTemplateRenderer", () => {
     expect(continuedPage?.textContent).not.toContain(continuedBullets[2]!);
     expect(listItems).toEqual([continuedBullets[3]]);
     expect(directParagraphs).toEqual([trailingParagraph]);
-    expect(experienceItem?.querySelector("em")?.textContent).toBe(continuedBullets[3]);
-    expect(experienceItem?.querySelector("u")?.textContent).toBe(trailingParagraph);
+    expect(experienceItem?.querySelector("em")?.textContent).toBe(
+      continuedBullets[3],
+    );
+    expect(experienceItem?.querySelector("u")?.textContent).toBe(
+      trailingParagraph,
+    );
     expect(experienceItem?.innerHTML.indexOf("</ul><p")).toBeGreaterThan(-1);
     expect(experienceItem?.textContent).not.toContain(
       "Fallback description that should not render.",
@@ -851,21 +1196,34 @@ describe("ResumeTemplateRenderer", () => {
     const scaledPageShell = container.querySelector(
       '[data-testid="resume-template-renderer"] > div',
     );
-    const scaledPageInner = scaledPageShell?.firstElementChild as HTMLElement | null;
+    const scaledPageInner =
+      scaledPageShell?.firstElementChild as HTMLElement | null;
 
-    expect(scaledPageShell?.getAttribute("style")).toContain("width: 396.85px;");
-    expect(scaledPageShell?.getAttribute("style")).toContain("min-height: 561.25px;");
-    expect(scaledPageShell?.getAttribute("style")).toContain("height: 561.25px;");
-    expect(scaledPageShell?.getAttribute("style")).toContain("position: relative;");
+    expect(scaledPageShell?.getAttribute("style")).toContain(
+      "width: 396.85px;",
+    );
+    expect(scaledPageShell?.getAttribute("style")).toContain(
+      "min-height: 561.25px;",
+    );
+    expect(scaledPageShell?.getAttribute("style")).toContain(
+      "height: 561.25px;",
+    );
+    expect(scaledPageShell?.getAttribute("style")).toContain(
+      "position: relative;",
+    );
     expect(scaledPageInner?.getAttribute("style")).toContain("width: 793.700");
     expect(scaledPageInner?.getAttribute("style")).toContain(
       "min-height: 1122.519",
     );
-    expect(scaledPageInner?.getAttribute("style")).toContain("transform: scale(0.499");
+    expect(scaledPageInner?.getAttribute("style")).toContain(
+      "transform: scale(0.499",
+    );
     expect(scaledPageInner?.getAttribute("style")).toContain(
       "transform-origin: top left;",
     );
-    expect(scaledPageInner?.getAttribute("style")).toContain("position: absolute;");
+    expect(scaledPageInner?.getAttribute("style")).toContain(
+      "position: absolute;",
+    );
     expect(scaledPageInner?.getAttribute("style")).toContain("top: 0px;");
     expect(scaledPageInner?.getAttribute("style")).toContain("left: 0px;");
   });
@@ -904,7 +1262,9 @@ describe("ResumeTemplateRenderer", () => {
     ) as HTMLElement | null;
 
     expect(renderer).not.toBeNull();
-    expect(getRenderedCssVarNames(renderer!)).toEqual(WORKSHOP_ACTIVE_PREVIEW_VAR_NAMES);
+    expect(getRenderedCssVarNames(renderer!)).toEqual(
+      WORKSHOP_ACTIVE_PREVIEW_VAR_NAMES,
+    );
 
     Object.entries({
       ...expectedThemeVars,
@@ -915,14 +1275,18 @@ describe("ResumeTemplateRenderer", () => {
     expect(renderer?.style.getPropertyValue("--flow-list-indent")).toBe(
       renderer?.style.getPropertyValue("--experience-bullets-padding"),
     );
-    expect(renderer?.style.getPropertyValue("--workshop-section-title-reduction")).toBe(
-      "0.95mm",
-    );
     expect(
-      renderer?.style.getPropertyValue("--workshop-experience-heading-size-adjust"),
+      renderer?.style.getPropertyValue("--workshop-section-title-reduction"),
+    ).toBe("0.95mm");
+    expect(
+      renderer?.style.getPropertyValue(
+        "--workshop-experience-heading-size-adjust",
+      ),
     ).toBe("0.2mm");
     expect(
-      renderer?.style.getPropertyValue("--workshop-experience-heading-line-height"),
+      renderer?.style.getPropertyValue(
+        "--workshop-experience-heading-line-height",
+      ),
     ).toBe("1.25");
 
     WORKSHOP_LEGACY_PREVIEW_DECOR_VAR_NAMES.forEach((name) => {
@@ -944,16 +1308,20 @@ describe("ResumeTemplateRenderer", () => {
       stylePreset,
     });
     const firstPageHead =
-      plan.committedPages[0]?.fragments.find((fragment) => fragment.kind === "experience")
-        ?.kind === "experience"
-        ? plan.committedPages[0]?.fragments.find((fragment) => fragment.kind === "experience")
-            ?.items[0]?.blocks[0]?.text ?? ""
+      plan.committedPages[0]?.fragments.find(
+        (fragment) => fragment.kind === "experience",
+      )?.kind === "experience"
+        ? plan.committedPages[0]?.fragments.find(
+            (fragment) => fragment.kind === "experience",
+          )?.items[0]?.blocks[0]?.text ?? ""
         : "";
     const secondPageTail =
-      plan.committedPages[1]?.fragments.find((fragment) => fragment.kind === "experience")
-        ?.kind === "experience"
-        ? plan.committedPages[1]?.fragments.find((fragment) => fragment.kind === "experience")
-            ?.items[0]?.blocks[0]?.text ?? ""
+      plan.committedPages[1]?.fragments.find(
+        (fragment) => fragment.kind === "experience",
+      )?.kind === "experience"
+        ? plan.committedPages[1]?.fragments.find(
+            (fragment) => fragment.kind === "experience",
+          )?.items[0]?.blocks[0]?.text ?? ""
         : "";
 
     render(
@@ -966,10 +1334,14 @@ describe("ResumeTemplateRenderer", () => {
 
     const pages = screen.getAllByTestId("resume-template-page");
     const firstPageExp1Article =
-      pages[0]?.querySelector('[data-preview-row-id="exp-screenshot-1"]') ?? null;
-    const firstPageExp2Article = pages[0]?.querySelector('[data-preview-row-id="exp-screenshot-2"]');
+      pages[0]?.querySelector('[data-preview-row-id="exp-screenshot-1"]') ??
+      null;
+    const firstPageExp2Article = pages[0]?.querySelector(
+      '[data-preview-row-id="exp-screenshot-2"]',
+    );
     const secondPageExp2Article =
-      pages[1]?.querySelector('[data-preview-row-id="exp-screenshot-2"]') ?? null;
+      pages[1]?.querySelector('[data-preview-row-id="exp-screenshot-2"]') ??
+      null;
     const firstPageExp1Body =
       firstPageExp1Article?.querySelector(":scope > p:last-of-type") ?? null;
     const secondPageExp2Body =
@@ -977,10 +1349,16 @@ describe("ResumeTemplateRenderer", () => {
     const secondPageText = pages[1]?.textContent ?? "";
 
     expect(pages).toHaveLength(2);
-    expect((firstPageExp1Body?.textContent ?? "").length).toBe(firstPageHead.length);
+    expect((firstPageExp1Body?.textContent ?? "").length).toBe(
+      firstPageHead.length,
+    );
     expect(firstPageExp2Article).toBeNull();
-    expect((secondPageExp2Body?.textContent ?? "").length).toBe(secondPageTail.length);
-    expect(pages[1]?.querySelector('[data-preview-row-id="exp-screenshot-1"]')).toBeNull();
+    expect((secondPageExp2Body?.textContent ?? "").length).toBe(
+      secondPageTail.length,
+    );
+    expect(
+      pages[1]?.querySelector('[data-preview-row-id="exp-screenshot-1"]'),
+    ).toBeNull();
     expect(secondPageText).not.toContain("Company 1");
     expect(secondPageText).toContain("Company 2");
     expect(secondPageText).toContain("Degree");
@@ -1029,7 +1407,9 @@ describe("ResumeTemplateRenderer", () => {
       );
       const renderedIds = pages.flatMap((page) =>
         Array.from(
-          page.querySelectorAll(`[data-preview-section="${kind}"][data-preview-item-id]`),
+          page.querySelectorAll(
+            `[data-preview-section="${kind}"][data-preview-item-id]`,
+          ),
           (node) => node.getAttribute("data-preview-item-id"),
         ).filter((value): value is string => Boolean(value)),
       );
@@ -1061,10 +1441,11 @@ describe("ResumeTemplateRenderer", () => {
     );
 
     const pages = screen.getAllByTestId("resume-template-page");
-    const plannedProjectPageIndices = plan.committedPages.flatMap((page, pageIndex) =>
-      page.fragments.some((fragment) => fragment.kind === "selected_projects")
-        ? [pageIndex]
-        : [],
+    const plannedProjectPageIndices = plan.committedPages.flatMap(
+      (page, pageIndex) =>
+        page.fragments.some((fragment) => fragment.kind === "selected_projects")
+          ? [pageIndex]
+          : [],
     );
     const renderedHeadPageProjectIds = Array.from(
       pages[plannedProjectPageIndices[0]]?.querySelectorAll(
@@ -1080,7 +1461,10 @@ describe("ResumeTemplateRenderer", () => {
         (node) => node.getAttribute("data-preview-item-id"),
       ).filter(isSelectedProjectItemId),
     ).toEqual(["project-tail-3", "project-tail-4"]);
-    expect(renderedHeadPageProjectIds).toEqual(["project-tail-1", "project-tail-2"]);
+    expect(renderedHeadPageProjectIds).toEqual([
+      "project-tail-1",
+      "project-tail-2",
+    ]);
     expect(
       pages[plannedProjectPageIndices[0]]?.querySelector(
         '[data-preview-section="achievements"][data-preview-item-id]',
@@ -1209,7 +1593,9 @@ describe("ResumeTemplateRenderer", () => {
         (fragment) =>
           fragment.kind === "hobbies" &&
           fragment.kind === "hobbies" &&
-          fragment.items.some((item) => item.id === "hobby-render-achievement-tail-1"),
+          fragment.items.some(
+            (item) => item.id === "hobby-render-achievement-tail-1",
+          ),
       ),
     );
     const continuedHobbyPageIndex = plan.committedPages.findIndex((page) =>
@@ -1217,7 +1603,9 @@ describe("ResumeTemplateRenderer", () => {
         (fragment) =>
           fragment.kind === "hobbies" &&
           fragment.kind === "hobbies" &&
-          fragment.items.some((item) => item.id === "hobby-render-achievement-tail-2"),
+          fragment.items.some(
+            (item) => item.id === "hobby-render-achievement-tail-2",
+          ),
       ),
     );
 
@@ -1272,9 +1660,13 @@ describe("ResumeTemplateRenderer", () => {
       />,
     );
 
-    const lastPage = screen.getAllByTestId("resume-template-page")[plan.committedPages.length - 1]!;
+    const lastPage = screen.getAllByTestId("resume-template-page")[
+      plan.committedPages.length - 1
+    ]!;
     const headings = Array.from(
-      lastPage.querySelectorAll('[data-preview-section="additional_information"] h2, [data-preview-section="additional_information"] h3'),
+      lastPage.querySelectorAll(
+        '[data-preview-section="additional_information"] h2, [data-preview-section="additional_information"] h3',
+      ),
       (node) => node.textContent?.trim(),
     ).filter((value): value is string => Boolean(value));
 
@@ -1307,22 +1699,32 @@ describe("ResumeTemplateRenderer", () => {
     const lastPageIndex = plan.committedPages.length - 1;
     const lastPage = pages[lastPageIndex]!;
 
-    expect(plan.committedPages[lastPageIndex]?.fragments.map((fragment) => fragment.kind)).toEqual([
-      "additional_information",
-    ]);
-    expect(plan.committedPages[lastPageIndex - 1]?.fragments.at(-1)?.kind).toBe("hobbies");
+    expect(
+      plan.committedPages[lastPageIndex]?.fragments.map(
+        (fragment) => fragment.kind,
+      ),
+    ).toEqual(["additional_information"]);
+    expect(plan.committedPages[lastPageIndex - 1]?.fragments.at(-1)?.kind).toBe(
+      "hobbies",
+    );
     expect(
       Array.from(
-        lastPage.querySelectorAll('[data-preview-section="hobbies"][data-preview-item-id]'),
+        lastPage.querySelectorAll(
+          '[data-preview-section="hobbies"][data-preview-item-id]',
+        ),
       ).length,
     ).toBe(0);
     expect(
-      lastPage.querySelector('[data-preview-section="additional_information"][data-preview-item-id="custom-tail-1"]'),
+      lastPage.querySelector(
+        '[data-preview-section="additional_information"][data-preview-item-id="custom-tail-1"]',
+      ),
     ).toBeTruthy();
     expect(lastPage.textContent).toContain("Custom Section");
     expect(
       Array.from(
-        lastPage.querySelectorAll('[data-preview-section="additional_information"] h2, [data-preview-section="additional_information"] h3'),
+        lastPage.querySelectorAll(
+          '[data-preview-section="additional_information"] h2, [data-preview-section="additional_information"] h3',
+        ),
         (node) => node.textContent?.trim(),
       ).filter((value): value is string => Boolean(value)),
     ).toEqual(["Custom Section"]);

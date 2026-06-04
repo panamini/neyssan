@@ -333,6 +333,163 @@ describe('CvLibraryContext', () => {
     expect(ctx.currentCv.title).toBe('Restored CV');
   });
 
+  it('restores the fresh full CV cache template ahead of a stale library index after refresh', async () => {
+    authState.isLoaded = true;
+    authState.isSignedIn = false;
+
+    const now = '2026-04-18T12:00:00.000Z';
+    const staleIndexCv = {
+      id: 'cv-template-refresh',
+      title: 'Template Refresh CV',
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+        verbatiStyle: {
+          familyId: 'workshop',
+          layout: 'workshop',
+          typography: 'geist-baskervville',
+          palette: 'sauge',
+          resumeTemplateId: 'workshop_resume_onecol_ats',
+        },
+      },
+      sections: [],
+    };
+    const freshCachedCv = {
+      ...staleIndexCv,
+      metadata: {
+        ...staleIndexCv.metadata,
+        verbatiStyle: {
+          ...staleIndexCv.metadata.verbatiStyle,
+          resumeTemplateId: 'sanat_asymmetric_resume',
+        },
+      },
+    };
+
+    mockLocalStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([staleIndexCv]));
+    mockLocalStorage.setItem(
+      `cv:${freshCachedCv.id}`,
+      JSON.stringify(freshCachedCv),
+    );
+    mockLocalStorage.setItem(ACTIVE_CV_STORAGE_KEY, freshCachedCv.id);
+    window.history.pushState({}, '', `/cv?id=${freshCachedCv.id}`);
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx.currentCvId).toBe(freshCachedCv.id));
+    expect(ctx.currentCv.metadata.verbatiStyle.resumeTemplateId).toBe(
+      'sanat_asymmetric_resume',
+    );
+  });
+
+  it('preserves the local selected template when background refresh returns newer content without visual metadata', async () => {
+    authState.isLoaded = true;
+    authState.isSignedIn = false;
+
+    const localUpdatedAt = '2026-04-18T12:00:00.000Z';
+    const remoteUpdatedAt = '2026-04-18T12:01:00.000Z';
+    const localCv = {
+      id: 'cv-template-background-refresh',
+      title: 'Template Refresh CV',
+      metadata: {
+        createdAt: localUpdatedAt,
+        updatedAt: localUpdatedAt,
+        version: 1,
+        resumeTemplateId: 'sanat_asymmetric_resume',
+        verbatiStyle: {
+          familyId: 'workshop',
+          layout: 'workshop',
+          typography: 'geist-baskervville',
+          palette: 'sauge',
+          resumeTemplateId: 'sanat_asymmetric_resume',
+        },
+      },
+      sections: [
+        {
+          id: 'profile-1',
+          type: 'profile',
+          title: 'Profile',
+          blocks: [],
+          structuredContent: [
+            {
+              id: 'profile-item-1',
+              name: 'Template Candidate',
+            },
+          ],
+        },
+      ],
+    };
+    const remoteCv = {
+      ...localCv,
+      title: 'Template Refresh CV Remote',
+      metadata: {
+        createdAt: localUpdatedAt,
+        updatedAt: remoteUpdatedAt,
+        version: 1,
+        verbatiStyle: {
+          familyId: 'workshop',
+          layout: 'workshop',
+          typography: 'geist-baskervville',
+          palette: 'sauge',
+        },
+      },
+    };
+    const activeCv = {
+      id: 'cv-active-before-template-refresh',
+      title: 'Active Before Template Refresh',
+      metadata: {
+        createdAt: localUpdatedAt,
+        updatedAt: localUpdatedAt,
+        version: 1,
+      },
+      sections: [],
+    };
+
+    vi.mocked(convexClient.query).mockImplementation(async (_query: unknown, args: unknown) => {
+      if (
+        (args as { profileId?: string } | undefined)?.profileId ===
+        'cv-template-background-refresh'
+      ) {
+        return {
+          profileId: 'cv-template-background-refresh',
+          cvDocument: remoteCv,
+        };
+      }
+      return null;
+    });
+
+    mockLocalStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([activeCv]));
+    mockLocalStorage.setItem(`cv:${activeCv.id}`, JSON.stringify(activeCv));
+    mockLocalStorage.setItem(`cv:${localCv.id}`, JSON.stringify(localCv));
+    mockLocalStorage.setItem(ACTIVE_CV_STORAGE_KEY, activeCv.id);
+    window.history.pushState({}, '', `/cv?id=${activeCv.id}`);
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx.currentCvId).toBe(activeCv.id));
+    act(() => {
+      ctx.loadCv(localCv.id);
+    });
+    await waitFor(() => expect(ctx.currentCvId).toBe(localCv.id));
+    await waitFor(() => expect(ctx.currentCv.title).toBe(remoteCv.title));
+    expect(ctx.currentCv.metadata.resumeTemplateId).toBe(
+      'sanat_asymmetric_resume',
+    );
+    expect(ctx.currentCv.metadata.verbatiStyle.resumeTemplateId).toBe(
+      'sanat_asymmetric_resume',
+    );
+  });
+
   it('createNewCv adds a CV, sets it current and persists to localStorage', async () => {
     let ctx: any;
     render(
@@ -497,6 +654,176 @@ describe('CvLibraryContext', () => {
     );
     expect(ctx.currentCv.metadata?.librarySummaryOnly).not.toBe(true);
     expect(ctx.currentCv.sections[1].structuredContent[0].summary).toBe('Full content');
+  });
+
+  it('mirrors imported CV content and style into the full cv cache immediately', async () => {
+    const now = new Date().toISOString();
+    const edited = {
+      id: 'cv_edit_cache',
+      title: 'Edited CV',
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+        verbatiStyle: {
+          familyId: 'workshop',
+          layout: 'workshop',
+          typography: 'geist-baskervville',
+          palette: 'sauge',
+          resumeTemplateId: 'workshop_resume_twocol_ats',
+        },
+      },
+      sections: [
+        {
+          id: 'profile-1',
+          type: 'profile',
+          title: 'Profile',
+          blocks: [],
+          structuredContent: [{ id: 'profile-item-1', name: 'Ada Edited' }],
+        },
+        {
+          id: 'summary-1',
+          type: 'summary',
+          title: 'Summary',
+          blocks: [],
+          structuredContent: [
+            {
+              id: 'summary-item-1',
+              summary: 'Focused inline edit survives refresh.',
+            },
+          ],
+        },
+      ],
+    };
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+    await waitFor(() => expect(ctx).toBeDefined());
+
+    act(() => {
+      void ctx.importCv(edited);
+    });
+
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_edit_cache'));
+    const cachedFull = JSON.parse(
+      mockLocalStorage.getItem('cv:cv_edit_cache') as string,
+    );
+    expect(cachedFull.sections[0].structuredContent[0].name).toBe('Ada Edited');
+    expect(
+      JSON.stringify(cachedFull.sections[1].structuredContent[0].summary),
+    ).toContain('Focused inline edit survives refresh.');
+    expect(cachedFull.metadata.verbatiStyle.resumeTemplateId).toBe(
+      'workshop_resume_twocol_ats',
+    );
+
+    const compactIndex = JSON.parse(
+      mockLocalStorage.getItem(LOCAL_STORAGE_KEY) as string,
+    );
+    expect(compactIndex).toHaveLength(1);
+    expect(compactIndex[0].id).toBe('cv_edit_cache');
+    expect(compactIndex[0].metadata.librarySummaryOnly).toBe(true);
+    expect(compactIndex[0].sections).toBeUndefined();
+  });
+
+  it('restores edited full cache over compact cvDocuments instead of expanding a blank V1 template', async () => {
+    const now = new Date().toISOString();
+    const compact = {
+      id: 'cv_restore_edited',
+      title: 'Edited CV',
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+        librarySummaryOnly: true,
+      },
+      profilePreview: {
+        name: 'Ada Edited',
+        desiredPosition: 'Engineer',
+      },
+    };
+    const editedFull = {
+      id: 'cv_restore_edited',
+      title: 'Edited CV',
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+        verbatiStyle: {
+          familyId: 'workshop',
+          layout: 'workshop',
+          typography: 'geist-baskervville',
+          palette: 'sauge',
+          resumeTemplateId: 'workshop_resume_twocol_ats',
+        },
+      },
+      sections: [
+        {
+          id: 'profile-1',
+          type: 'profile',
+          title: 'Profile',
+          blocks: [],
+          structuredContent: [{ id: 'profile-item-1', name: 'Ada Edited' }],
+        },
+        {
+          id: 'summary-1',
+          type: 'summary',
+          title: 'Summary',
+          blocks: [],
+          structuredContent: [
+            {
+              id: 'summary-item-1',
+              summary: 'Edited summary from focused inline field.',
+            },
+          ],
+        },
+        {
+          id: 'experience-1',
+          type: 'experience',
+          title: 'Experience',
+          blocks: [],
+          structuredContent: [
+            {
+              id: 'exp-item-1',
+              company: 'Analytical Engine',
+              responsibilities: 'Edited experience paragraph.',
+            },
+          ],
+        },
+      ],
+    };
+
+    mockLocalStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([compact]));
+    mockLocalStorage.setItem(ACTIVE_CV_STORAGE_KEY, 'cv_restore_edited');
+    mockLocalStorage.setItem('cv:cv_restore_edited', JSON.stringify(editedFull));
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx).toBeDefined());
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_restore_edited'));
+    expect(ctx.currentCv.metadata?.librarySummaryOnly).not.toBe(true);
+    expect(ctx.currentCv.sections.map((section: any) => section.type)).toEqual([
+      'profile',
+      'summary',
+      'experience',
+    ]);
+    expect(ctx.currentCv.sections[1].structuredContent[0].summary).toBe(
+      'Edited summary from focused inline field.',
+    );
+    expect(ctx.currentCv.sections[2].structuredContent[0].responsibilities).toBe(
+      'Edited experience paragraph.',
+    );
+    expect(ctx.currentCv.metadata.verbatiStyle.resumeTemplateId).toBe(
+      'workshop_resume_twocol_ats',
+    );
   });
 
   it('repairs a summary-only cached active cv back into the canonical five-section blank draft', async () => {

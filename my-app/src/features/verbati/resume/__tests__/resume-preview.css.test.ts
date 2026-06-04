@@ -165,4 +165,14 @@ describe("resume preview workspace anchoring", () => {
       '--font-body-family: "Source Sans 3"',
     );
   });
+
+  it("keeps the Sanat header summary lane top-aligned", () => {
+    const sanatHeaderExtraRule = resumePreviewCss.match(
+      /\.sanat-header-extra\s*\{[^}]*\}/,
+    )?.[0];
+
+    expect(sanatHeaderExtraRule).toContain("display: grid;");
+    expect(sanatHeaderExtraRule).toContain("align-content: start;");
+    expect(sanatHeaderExtraRule).toContain("align-items: start;");
+  });
 });

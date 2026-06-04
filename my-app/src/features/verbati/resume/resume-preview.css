@@ -244,6 +244,159 @@
   overflow: visible;
 }
 
+.sanat-header {
+  display: grid;
+  grid-template-columns: minmax(0, var(--main-width)) var(--gutter-width) minmax(
+      0,
+      var(--sidebar-width)
+    );
+  align-items: start;
+  min-width: 0;
+}
+
+.sanat-identity {
+  grid-column: 1;
+  min-width: 0;
+}
+
+.sanat-identity h1 {
+  margin: 0;
+  color: var(--color-text);
+  font-family: var(--font-heading-family);
+  font-size: calc(var(--text-display-size) * 0.98);
+  line-height: 0.98;
+  font-weight: 780;
+  letter-spacing: 0;
+}
+
+.sanat-identity p {
+  margin: 1.4mm 0 0;
+  color: var(--color-accent);
+  font-family: var(--font-heading-family);
+  font-size: calc(var(--text-title-size) * 1.55);
+  line-height: 1.02;
+  font-weight: 760;
+  letter-spacing: 0;
+}
+
+.sanat-contact {
+  grid-column: 3;
+  display: grid;
+  gap: 0.4mm;
+  margin: 1mm 0 0;
+  color: var(--color-text);
+  font-size: var(--text-body-sm-size);
+  line-height: var(--text-body-sm-line);
+  font-style: normal;
+  font-weight: 700;
+}
+
+.sanat-header-extra {
+  display: grid;
+  max-width: var(--main-width);
+  gap: 2.6mm;
+  align-content: start;
+  align-items: start;
+}
+
+.sanat-content {
+  display: grid;
+  grid-template-columns: minmax(0, var(--main-width)) minmax(
+      0,
+      var(--sidebar-width)
+    );
+  column-gap: var(--gutter-width);
+  align-items: start;
+  min-width: 0;
+}
+
+.sanat-main,
+.sanat-sidebar {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+}
+
+.sanat-main {
+  gap: calc(var(--body-row-gap) * 1.18);
+}
+
+.sanat-sidebar {
+  gap: calc(var(--body-row-gap) * 1.25);
+}
+
+.sanat-content [data-preview-section],
+.sanat-section {
+  min-width: 0;
+}
+
+.sanat-header-extra .dasti-cv-paper-section-heading,
+.sanat-content .dasti-cv-paper-section-heading {
+  margin-bottom: 2.8mm !important;
+}
+
+.sanat-header-extra .dasti-cv-paper-section-heading-rule,
+.sanat-content .dasti-cv-paper-section-heading-rule {
+  display: none !important;
+}
+
+.sanat-header-extra h2,
+.sanat-content h2,
+.sanat-section-title {
+  margin: 0 0 2.8mm;
+  color: var(--color-text-subtle);
+  font-family: var(--font-heading-family);
+  font-size: var(--text-title-size);
+  line-height: var(--text-title-line);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.sanat-content h3 {
+  color: var(--color-text);
+  font-size: calc(var(--text-body-size) * 1.08);
+  line-height: 1.24;
+  font-weight: 780;
+}
+
+.sanat-content p,
+.sanat-content li {
+  color: var(--color-text-muted);
+  font-size: var(--text-body-sm-size);
+  line-height: 1.42;
+}
+
+.sanat-content [data-preview-section="experience"] p,
+.sanat-main p,
+.sanat-main li {
+  font-size: var(--text-body-sm-size);
+  line-height: 1.42;
+}
+
+.sanat-skill-groups {
+  display: grid;
+  gap: var(--skill-gap);
+}
+
+.sanat-skill-group {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-body-sm-size);
+  line-height: 1.42;
+}
+
+.sanat-skill-prose {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-body-sm-size);
+  line-height: 1.42;
+}
+
+.sanat-skill-group strong {
+  color: var(--color-text);
+  font-weight: 800;
+}
+
 .resume-page-measure-shell {
   position: absolute;
   left: -200vw;
@@ -1111,10 +1264,9 @@
 }
 
 .skills-list li {
-  padding: var(--skill-padding-block) var(--skill-padding-inline);
-  border-radius: var(--radius-pill);
-  border: 0.3mm solid color-mix(in srgb, var(--color-border) 92%, transparent);
-  background: var(--color-accent-soft);
+  padding: 0;
+  border: 0;
+  background: transparent;
   font-size: var(--text-caption-size);
   line-height: 1;
   color: var(--color-text);
@@ -1130,11 +1282,9 @@
 .hobby-tag {
   display: inline-flex;
   align-items: center;
-  padding: calc(var(--skill-padding-block) - 0.1mm)
-    calc(var(--skill-padding-inline) - 0.15mm);
-  border-radius: var(--radius-pill);
-  border: 0.3mm solid color-mix(in srgb, var(--color-border) 92%, transparent);
-  background: color-mix(in srgb, var(--color-surface-muted) 72%, white 28%);
+  padding: 0;
+  border: 0;
+  background: transparent;
   font-size: var(--text-caption-size);
   line-height: 1;
   color: var(--color-text);
@@ -1146,7 +1296,7 @@
 }
 
 .hobby-tag--editorial {
-  background: color-mix(in srgb, var(--color-surface) 82%, transparent);
+  background: transparent;
 }
 
 .experience-stack {

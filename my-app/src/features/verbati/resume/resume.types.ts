@@ -49,6 +49,18 @@ export type WorkshopResponsibilitiesRichContent = {
 export type ResumeSkillItem = ResumeLinkedItemBase & {
   name: string;
   level?: string;
+  bucket?: "core" | "secondary" | "familiar";
+  categoryId?: string;
+  categoryLabel?: string;
+  categoryOrder?: number;
+};
+
+export type ResumeSkillCategory = {
+  id: string;
+  label: string;
+  order: number;
+  source?: "ai" | "user" | "import";
+  locked?: boolean;
 };
 
 export type ResumeLanguage = {
@@ -145,6 +157,7 @@ export type ResumeData = {
   metadata: ResumeMetaItem[];
   contact: ResumeMetaItem[];
   skills: string[];
+  skillCategories?: ResumeSkillCategory[];
   skillItems: ResumeSkillItem[];
   languages: ResumeLanguage[];
   experience: ResumeExperienceItem[];

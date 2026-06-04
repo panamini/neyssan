@@ -102,6 +102,120 @@ describe("experience responsibility bullet preservation", () => {
       "Assess and troubleshoot computer problems brought by students, faculty and staff",
       "Maintain upkeep of computers, classroom equipment, and 200 printers across campus",
     ]);
+    expect(normalizedItem?.responsibilities?.content?.[0]?.type).toBe("bulletList");
+  });
+
+  it("converts AI-style bullet glyph responsibility text into durable Remirror list structure", () => {
+    const result = normalizeAndValidateCvDocument({
+      id: "cv_test_ai_bullet_text",
+      title: "Imported CV",
+      metadata: {
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        version: 1,
+      },
+      sections: [
+        {
+          id: "sec-experience-ai",
+          title: "Experience",
+          type: "experience",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "exp-ai-rewrite",
+              company: "Northline",
+              position: "Operations Lead",
+              startDate: "2024-01-01",
+              endDate: null,
+              isCurrent: true,
+              responsibilities:
+                "• Coordinated shift handoffs across three teams\n• Reduced reporting delays with a shared incident log",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    const normalizedExperienceSection = result.document.sections.find((section) => section.type === "experience");
+    const normalizedItem = (normalizedExperienceSection?.structuredContent as any[])?.[0];
+    expect(normalizedItem?.responsibilityBullets).toEqual([
+      "Coordinated shift handoffs across three teams",
+      "Reduced reporting delays with a shared incident log",
+    ]);
+    expect(normalizedItem?.responsibilities?.content?.[0]?.type).toBe("bulletList");
+  });
+
+  it("preserves manually authored Remirror bulletList responsibilities through document normalization", () => {
+    const result = normalizeAndValidateCvDocument({
+      id: "cv_test_manual_bullet_doc",
+      title: "Imported CV",
+      metadata: {
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        version: 1,
+      },
+      sections: [
+        {
+          id: "sec-experience-manual",
+          title: "Experience",
+          type: "experience",
+          blocks: [],
+          structuredContent: [
+            {
+              id: "exp-manual-list",
+              company: "Northline",
+              position: "Operations Lead",
+              startDate: "2024-01-01",
+              endDate: null,
+              isCurrent: true,
+              responsibilities: {
+                type: "doc",
+                content: [
+                  {
+                    type: "bulletList",
+                    content: [
+                      {
+                        type: "listItem",
+                        content: [
+                          {
+                            type: "paragraph",
+                            content: [{ type: "text", text: "Coordinated shift handoffs." }],
+                          },
+                        ],
+                      },
+                      {
+                        type: "listItem",
+                        content: [
+                          {
+                            type: "paragraph",
+                            content: [{ type: "text", text: "Reduced reporting delays." }],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+              responsibilityBullets: ["STALE cached bullet"],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    const normalizedExperienceSection = result.document.sections.find((section) => section.type === "experience");
+    const normalizedItem = (normalizedExperienceSection?.structuredContent as any[])?.[0];
+    expect(normalizedItem?.responsibilities?.content?.[0]?.type).toBe("bulletList");
+    expect(normalizedItem?.responsibilityBullets).toEqual([
+      "Coordinated shift handoffs.",
+      "Reduced reporting delays.",
+    ]);
   });
 
   it("does not invent responsibility bullets from a single collapsed string at normalization time", () => {

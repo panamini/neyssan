@@ -26,6 +26,10 @@ import {
 } from "../schemas/cvDocument.schema";
 import { mapProfileToCvDocument } from "./profile-mapper";
 import {
+  resolveVerbatiStyle,
+  serializeVerbatiStyle,
+} from "../features/verbati/style";
+import {
   decodeCvDocumentFromConvex,
   encodeCvDocumentForConvex,
 } from "./cvDocumentPersistence";
@@ -119,6 +123,7 @@ function sanitizeBackendVerbatiStyle(value: unknown):
       typography?: string;
       palette?: string;
       accentHex?: string;
+      resumeTemplateId?: string;
     }
   | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -136,6 +141,10 @@ function sanitizeBackendVerbatiStyle(value: unknown):
       typeof candidate.palette === "string" ? candidate.palette : undefined,
     accentHex:
       typeof candidate.accentHex === "string" ? candidate.accentHex : undefined,
+    resumeTemplateId:
+      typeof candidate.resumeTemplateId === "string"
+        ? candidate.resumeTemplateId
+        : undefined,
   };
 
   return Object.values(sanitized).some((entry) => typeof entry === "string")
@@ -173,6 +182,9 @@ function sanitizeBackendDocumentAppearanceSnapshot(
     ...(typeof candidate.accentHex === "string"
       ? { accentHex: candidate.accentHex }
       : null),
+    ...(typeof candidate.resumeTemplateId === "string"
+      ? { resumeTemplateId: candidate.resumeTemplateId }
+      : null),
   };
 }
 
@@ -180,6 +192,29 @@ function assignDocumentStyleMetadataPatch(
   metadata: Record<string, unknown>,
   metadataPatch: CvDocument["metadata"],
 ): void {
+  const resumeTemplateId =
+    typeof metadataPatch.resumeTemplateId === "string"
+      ? metadataPatch.resumeTemplateId
+      : metadataPatch.verbatiStyle &&
+          typeof metadataPatch.verbatiStyle === "object" &&
+          typeof metadataPatch.verbatiStyle.resumeTemplateId === "string"
+        ? metadataPatch.verbatiStyle.resumeTemplateId
+        : metadataPatch.verbatiStyleBaseSnapshot &&
+            typeof metadataPatch.verbatiStyleBaseSnapshot === "object" &&
+            typeof metadataPatch.verbatiStyleBaseSnapshot.resumeTemplateId ===
+              "string"
+          ? metadataPatch.verbatiStyleBaseSnapshot.resumeTemplateId
+          : undefined;
+
+  if (resumeTemplateId) {
+    metadata.resumeTemplateId = resumeTemplateId;
+    if (metadata.verbatiStyle && typeof metadata.verbatiStyle === "object") {
+      metadata.verbatiStyle = {
+        ...(metadata.verbatiStyle as Record<string, unknown>),
+        resumeTemplateId,
+      };
+    }
+  }
   if (
     metadataPatch.verbatiStyleSlotId === 1 ||
     metadataPatch.verbatiStyleSlotId === 2 ||
@@ -208,6 +243,38 @@ function assignDocumentStyleMetadataPatch(
   }
 }
 
+function overlayProfileMetadataPatch(
+  doc: CvDocument,
+  rawProfile: Record<string, unknown>,
+): CvDocument {
+  const rawMetadata =
+    rawProfile.metadata && typeof rawProfile.metadata === "object"
+      ? (rawProfile.metadata as CvDocument["metadata"])
+      : null;
+  if (!rawMetadata) {
+    return doc;
+  }
+
+  const metadata: Record<string, unknown> = { ...(doc.metadata ?? {}) };
+
+  if (rawMetadata.verbatiStyle !== undefined) {
+    metadata.verbatiStyle = serializeVerbatiStyle(
+      resolveVerbatiStyle(rawMetadata.verbatiStyle as Record<string, unknown>),
+    );
+  }
+
+  assignDocumentStyleMetadataPatch(metadata, rawMetadata);
+
+  if (rawMetadata.documentIcons !== undefined) {
+    metadata.documentIcons = rawMetadata.documentIcons;
+  }
+
+  return {
+    ...doc,
+    metadata: metadata as CvDocument["metadata"],
+  };
+}
+
 export function mapPersistedProfileToCvDocument(
   rawProfile: Record<string, unknown> | null | undefined,
   profileId: string,
@@ -222,7 +289,7 @@ export function mapPersistedProfileToCvDocument(
       decodeCvDocumentFromConvex(embeddedDocument);
     const embeddedResult = safeParseCvDocument(decodedEmbeddedDocument);
     if (embeddedResult.ok) {
-      return embeddedResult.value;
+      return overlayProfileMetadataPatch(embeddedResult.value, rawProfile);
     }
   }
 
@@ -257,6 +324,7 @@ export class ConvexStorageAdapter {
       Pick<
         CvDocument["metadata"],
         | "verbatiStyle"
+        | "resumeTemplateId"
         | "verbatiStyleSlotId"
         | "verbatiStyleSlotSource"
         | "verbatiStyleSlotNameSnapshot"
@@ -268,9 +336,16 @@ export class ConvexStorageAdapter {
   ): Promise<void> {
     const metadata: Record<string, unknown> = {};
     if (metadataPatch?.verbatiStyle !== undefined) {
-      metadata.verbatiStyle = sanitizeBackendVerbatiStyle(
+      const verbatiStyle = sanitizeBackendVerbatiStyle(
         metadataPatch.verbatiStyle,
       );
+      metadata.verbatiStyle = verbatiStyle;
+      if (
+        typeof metadataPatch.resumeTemplateId !== "string" &&
+        typeof verbatiStyle?.resumeTemplateId === "string"
+      ) {
+        metadata.resumeTemplateId = verbatiStyle.resumeTemplateId;
+      }
     }
     assignDocumentStyleMetadataPatch(
       metadata,
@@ -320,6 +395,12 @@ export class ConvexStorageAdapter {
       delete md.authoritativeResume;
       if ("verbatiStyle" in md) {
         md.verbatiStyle = sanitizeBackendVerbatiStyle(md.verbatiStyle);
+        if (
+          typeof md.resumeTemplateId !== "string" &&
+          typeof md.verbatiStyle?.resumeTemplateId === "string"
+        ) {
+          md.resumeTemplateId = md.verbatiStyle.resumeTemplateId;
+        }
       }
       if ("verbatiStyleBaseSnapshot" in md) {
         md.verbatiStyleBaseSnapshot = sanitizeBackendDocumentAppearanceSnapshot(

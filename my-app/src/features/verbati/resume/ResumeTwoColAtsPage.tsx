@@ -15,6 +15,10 @@ import {
   type ResumeSectionActions,
 } from "./ResumeOneColAtsPage";
 import type { DocumentIconSettings } from "../../../lib/document-icons";
+import type {
+  DocumentIconOverrides,
+  DocumentListItemIconOverrideTarget,
+} from "../../../lib/document-icon-overrides";
 
 type ResumeTwoColAtsPageProps = {
   data: ResumeData;
@@ -25,6 +29,11 @@ type ResumeTwoColAtsPageProps = {
   sectionActions?: ResumeSectionActions | null;
   paperAi?: ResumePaperAiState | null;
   documentIconSettings?: DocumentIconSettings | null;
+  documentIconOverrides?: DocumentIconOverrides | null;
+  onDocumentListItemIconChange?: (
+    target: DocumentListItemIconOverrideTarget,
+    iconKey: string | null,
+  ) => void;
 };
 
 function partitionTwoColumnFragments(
@@ -63,8 +72,22 @@ export function ResumeTwoColAtsPage({
   sectionActions = null,
   paperAi = null,
   documentIconSettings = null,
+  documentIconOverrides = null,
+  onDocumentListItemIconChange,
 }: ResumeTwoColAtsPageProps) {
   const { header, sidebar, main } = partitionTwoColumnFragments(page.fragments);
+  const [activeListIconTarget, setActiveListIconTarget] =
+    React.useState<DocumentListItemIconOverrideTarget | null>(null);
+  const markerControls = React.useMemo(
+    () => ({
+      overrides: documentIconOverrides,
+      activeTarget: activeListIconTarget,
+      onOpenTarget: setActiveListIconTarget,
+      onClose: () => setActiveListIconTarget(null),
+      onChange: onDocumentListItemIconChange,
+    }),
+    [activeListIconTarget, documentIconOverrides, onDocumentListItemIconChange],
+  );
   const renderFragment = (fragment: WorkshopResumeCommittedFragment) => (
     <React.Fragment key={`${page.index}:${fragment.fragmentId}`}>
       {renderSectionFragment({
@@ -76,6 +99,7 @@ export function ResumeTwoColAtsPage({
         sectionActions,
         paperAi,
         documentIconSettings,
+        markerControls,
       })}
     </React.Fragment>
   );

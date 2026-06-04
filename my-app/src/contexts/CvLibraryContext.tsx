@@ -68,6 +68,7 @@ import {
 } from "../lib/layout/resumeTemplates";
 
 type CvVisualMetadataPatch = DocumentStyleMetadata & {
+  resumeTemplateId?: ResumeTemplateId;
   documentIcons?: DocumentIconSettings;
 };
 
@@ -1263,6 +1264,74 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     // Do not strip legacy cvState because dirty detection should reflect cvState changes.
     const { metadata: _meta, ...rest } = doc as any;
     return rest;
+  }
+
+  function readExplicitResumeTemplateId(
+    doc: CvDocument | null | undefined,
+  ): ResumeTemplateId | undefined {
+    const value = doc?.metadata?.resumeTemplateId;
+    return isResumeTemplateId(value) ? value : undefined;
+  }
+
+  function readAnyResumeTemplateId(
+    doc: CvDocument | null | undefined,
+  ): ResumeTemplateId | undefined {
+    const metadata = doc?.metadata;
+    const explicit = readExplicitResumeTemplateId(doc);
+    if (explicit) return explicit;
+
+    const verbatiTemplate =
+      metadata?.verbatiStyle &&
+      typeof metadata.verbatiStyle === "object" &&
+      "resumeTemplateId" in metadata.verbatiStyle
+        ? metadata.verbatiStyle.resumeTemplateId
+        : undefined;
+    if (isResumeTemplateId(verbatiTemplate)) return verbatiTemplate;
+
+    const baseSnapshotTemplate =
+      metadata?.verbatiStyleBaseSnapshot?.resumeTemplateId;
+    return isResumeTemplateId(baseSnapshotTemplate)
+      ? baseSnapshotTemplate
+      : undefined;
+  }
+
+  function preserveLocalResumeTemplateWhenRemoteIsImplicit(
+    remoteDoc: CvDocument,
+    localDoc: CvDocument | null | undefined,
+  ): CvDocument {
+    if (readExplicitResumeTemplateId(remoteDoc)) {
+      return remoteDoc;
+    }
+
+    const localResumeTemplateId = readAnyResumeTemplateId(localDoc);
+    if (!localResumeTemplateId) {
+      return remoteDoc;
+    }
+
+    const remoteMetadata = remoteDoc.metadata ?? ({} as CvDocument["metadata"]);
+    return {
+      ...remoteDoc,
+      metadata: {
+        ...remoteMetadata,
+        resumeTemplateId: localResumeTemplateId,
+        verbatiStyle:
+          remoteMetadata.verbatiStyle &&
+          typeof remoteMetadata.verbatiStyle === "object"
+            ? {
+                ...remoteMetadata.verbatiStyle,
+                resumeTemplateId: localResumeTemplateId,
+              }
+            : remoteMetadata.verbatiStyle,
+        verbatiStyleBaseSnapshot: remoteMetadata.verbatiStyleBaseSnapshot
+          ? {
+              ...remoteMetadata.verbatiStyleBaseSnapshot,
+              resumeTemplateId:
+                remoteMetadata.verbatiStyleBaseSnapshot.resumeTemplateId ??
+                localResumeTemplateId,
+            }
+          : remoteMetadata.verbatiStyleBaseSnapshot,
+      },
+    };
   }
 
   const FLUSH_THROTTLE_MS = 150;
@@ -2501,17 +2570,26 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
                 if (activeLoadTargetRef.current !== targetId) {
                   return;
                 }
-                safeSetCurrentCv(remoteNorm);
+                const remoteWithLocalVisualTemplate =
+                  preserveLocalResumeTemplateWhenRemoteIsImplicit(
+                    remoteNorm,
+                    currentCvRef.current ?? docNorm,
+                  );
+                safeSetCurrentCv(remoteWithLocalVisualTemplate);
                 setCvs((prev) => {
-                  const exists = prev.some((c) => c.id === remoteNorm.id);
+                  const exists = prev.some(
+                    (c) => c.id === remoteWithLocalVisualTemplate.id,
+                  );
                   if (exists)
                     return prev.map((c) =>
-                      c.id === remoteNorm.id ? remoteNorm : c,
+                      c.id === remoteWithLocalVisualTemplate.id
+                        ? remoteWithLocalVisualTemplate
+                        : c,
                     );
-                  return [...prev, remoteNorm];
+                  return [...prev, remoteWithLocalVisualTemplate];
                 });
-                cacheDocumentLocally(remoteNorm);
-                lastSavedRef.current = remoteNorm;
+                cacheDocumentLocally(remoteWithLocalVisualTemplate);
+                lastSavedRef.current = remoteWithLocalVisualTemplate;
               } catch (err) {
                 // eslint-disable-next-line no-console
                 console.warn(
@@ -2738,7 +2816,9 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         return;
       }
 
-      const existing = cvs.find((doc) => String(doc.id) === restoreId);
+      const existing =
+        readCachedFullCvDocument(restoreId) ??
+        cvs.find((doc) => String(doc.id) === restoreId);
       if (existing && !isLibrarySummaryOnlyCv(existing)) {
         let restored = existing;
         try {
@@ -2776,7 +2856,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       pendingActiveRestoreIdRef.current = null;
       hasHydratedActiveCvRef.current = true;
     }
-  }, [cvs, currentCv, loadCv]);
+  }, [cvs, currentCv, loadCv, readCachedFullCvDocument]);
 
   useEffect(() => {
     const pendingId = pendingActiveRestoreIdRef.current;
@@ -3147,10 +3227,22 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       if (!activeDoc) return;
 
       const verbatiStyle = serializeVerbatiStyle(style);
+      const resumeTemplateId = isResumeTemplateId(
+        verbatiStyle.resumeTemplateId,
+      )
+        ? verbatiStyle.resumeTemplateId
+        : isResumeTemplateId(styleMetadata.resumeTemplateId)
+          ? styleMetadata.resumeTemplateId
+          : isResumeTemplateId(
+                styleMetadata.verbatiStyleBaseSnapshot?.resumeTemplateId,
+              )
+            ? styleMetadata.verbatiStyleBaseSnapshot.resumeTemplateId
+            : undefined;
       const nextMetadata = {
         ...(activeDoc.metadata ?? {}),
         updatedAt: new Date().toISOString(),
         verbatiStyle,
+        ...(resumeTemplateId ? { resumeTemplateId } : null),
         ...styleMetadata,
       };
       const nextDoc: CvDocument = {
@@ -3168,6 +3260,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
 
       await adapter.saveMetadataPatch(nextDoc.id, {
         verbatiStyle,
+        ...(resumeTemplateId ? { resumeTemplateId } : null),
         ...styleMetadata,
       } as any);
     },

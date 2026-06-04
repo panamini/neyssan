@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_RESUME_TEMPLATE_ID,
+  SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID,
   getResumeTemplateDefinition,
+  isSanatResumeTemplateId,
   isWorkshopResumeTemplateId,
   isWorkshopTwoColumnResumeTemplateId,
   RESUME_TEMPLATE_DEFINITIONS,
@@ -41,6 +43,7 @@ describe("resumeTemplates", () => {
         "quire_resume_legacy",
         "workshop_resume_onecol_ats",
         "workshop_resume_twocol_ats",
+        "sanat_asymmetric_resume",
       ]),
     );
   });
@@ -92,5 +95,32 @@ describe("resumeTemplates", () => {
     );
     expect(isWorkshopResumeTemplateId(template.id)).toBe(true);
     expect(isWorkshopTwoColumnResumeTemplateId(template.id)).toBe(true);
+  });
+
+  it("defines the Sanat asymmetric resume template as a planner-backed workshop template", () => {
+    const template = getResumeTemplateDefinition(SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID);
+
+    expect(template).toEqual(
+      expect.objectContaining({
+        id: SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID,
+        familyId: "workshop",
+        label: "Sanat asymmetric",
+        supportsPlanner: true,
+      }),
+    );
+    expect(template.preview).toEqual(
+      expect.objectContaining({
+        topMm: 18,
+        leftMm: 17,
+        rightMm: 20,
+        bottomMm: 18,
+        gutterMm: 13,
+        sidebarMm: 63,
+        mainMm: 97,
+      }),
+    );
+    expect(isWorkshopResumeTemplateId(template.id)).toBe(true);
+    expect(isSanatResumeTemplateId(template.id)).toBe(true);
+    expect(isWorkshopTwoColumnResumeTemplateId(template.id)).toBe(false);
   });
 });

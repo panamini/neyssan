@@ -78,6 +78,8 @@ export type Level = z.infer<typeof LevelSchema>;
 
 export const SkillBucketSchema = z.enum(["core", "secondary", "familiar"]);
 export type SkillBucket = z.infer<typeof SkillBucketSchema>;
+export const SkillCategorySourceSchema = z.enum(["ai", "user", "import"]);
+export type SkillCategorySource = z.infer<typeof SkillCategorySourceSchema>;
 
 /* -------------------------------------------------------------------------- */
 /* CvBlock (lenient & strict)                                                 */
@@ -190,9 +192,20 @@ export const SkillItemSchema = z
     name: z.string(),
     level: LevelSchema,
     bucket: SkillBucketSchema.optional(),
+    categoryId: z.string().optional(),
   })
   .passthrough();
 export const SkillItemSchemaStrict = SkillItemSchema.strict();
+
+export const SkillCategorySchema = z
+  .object({
+    id: z.string(),
+    label: z.string(),
+    source: SkillCategorySourceSchema.optional(),
+    locked: z.boolean().optional(),
+  })
+  .passthrough();
+export const SkillCategorySchemaStrict = SkillCategorySchema.strict();
 
 export const HobbyItemSchema = z
   .object({
@@ -296,6 +309,7 @@ const _CvSectionBase = z.object({
   type: SectionTypeSchema,
   blocks: z.array(CvBlockSchema),
   structuredContent: StructuredContentSchema.optional().nullable(),
+  skillCategories: z.array(SkillCategorySchema).optional(),
   collapsed: z.boolean().optional(),
   order: z.number().int().optional(),
 });
@@ -306,6 +320,7 @@ const _CvSectionBaseStrict = z.object({
   type: SectionTypeSchema,
   blocks: z.array(CvBlockSchemaStrict),
   structuredContent: StructuredContentSchemaStrict.optional().nullable(),
+  skillCategories: z.array(SkillCategorySchemaStrict).optional(),
   collapsed: z.boolean().optional(),
   order: z.number().int().optional(),
 });
@@ -354,6 +369,7 @@ const _CvMetadataBase = z.object({
     })
     .strict()
     .optional(),
+  resumeTemplateId: z.string().optional(),
   verbatiStyleSlotId: z
     .union([z.literal(1), z.literal(2), z.literal(3)])
     .optional(),
@@ -383,6 +399,12 @@ const _CvMetadataBase = z.object({
       sectionIconMap: z.record(z.string()).optional(),
       color: z.enum(["ink", "muted", "accent"]).optional(),
       sizePt: z.union([z.literal(8), z.literal(9), z.literal(10), z.literal(12)]).optional(),
+    })
+    .passthrough()
+    .optional(),
+  documentIconOverrides: z
+    .object({
+      listItems: z.record(z.string()).optional(),
     })
     .passthrough()
     .optional(),

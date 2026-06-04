@@ -6914,3 +6914,270 @@ span.dasti-cv-ats {
 .dark .dasti-photo-upload-trigger__tooltip strong {
   font-weight: 640;
 }
+
+.dasti-cv-paper-stage
+  [data-inline-paper-editable="true"][data-paper-field-kind="chip"] {
+  border-color: transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dasti-cv-paper-stage
+  [data-inline-paper-editable="true"][data-paper-field-kind="chip"]:hover,
+.dasti-cv-paper-stage
+  [data-inline-paper-editable="true"][data-paper-field-kind="chip"]:focus,
+.dasti-cv-paper-stage
+  [data-inline-paper-editable="true"][data-paper-field-kind="chip"][data-inline-edit-state="focus"] {
+  border-color: transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dasti-skills-drawer .select-level {
+  display: none;
+}
+
+.dasti-skills-drawer {
+  --dasti-skills-insert-gap: var(--space-3);
+  --dasti-skills-insert-line: 2px;
+}
+
+.dasti-skills-drawer.show-levels .select-level,
+.show-levels .dasti-skills-drawer .select-level {
+  display: inline-flex;
+}
+
+.dasti-skills-drawer__skill-row,
+.dasti-skills-drawer [data-skill-category-id],
+.dasti-skills-drawer [data-skill-drop-group-id] {
+  position: relative;
+}
+
+.dasti-skills-drawer__skill-row[data-dragging="true"] {
+  z-index: 0;
+  opacity: 1;
+}
+
+.dasti-skills-drawer [data-skill-category-id][data-dragging="true"] {
+  z-index: 0;
+  opacity: 1;
+}
+
+.dasti-skills-drawer__drag-overlay {
+  position: relative;
+  z-index: calc(var(--z-modal) + 4);
+  min-inline-size: min(calc(var(--s8) + var(--s8)), calc(100vw - var(--space-4)));
+  border: 1px solid color-mix(in srgb, var(--ac) 46%, var(--color-border));
+  border-radius: var(--radius-card, 6px);
+  background: var(--sf2);
+  color: var(--ti);
+  box-shadow: var(--shadow-popover, 0 18px 48px rgb(0 0 0 / 0.22));
+  opacity: 1;
+  pointer-events: none;
+}
+
+.dasti-skills-drawer__drag-overlay--category {
+  min-inline-size: min(calc(var(--s8) + var(--s8) + var(--s7)), calc(100vw - var(--space-4)));
+}
+
+.dasti-skills-drawer [data-skill-category-id][data-over="true"],
+.dasti-skills-drawer [data-skill-drop-group-id][data-over="true"] {
+  border-color: color-mix(in srgb, var(--ac) 54%, var(--color-border));
+}
+
+.dasti-skills-drawer__skill-row::before,
+.dasti-skills-drawer__skill-row::after,
+.dasti-skills-drawer [data-skill-category-id]::before,
+.dasti-skills-drawer [data-skill-category-id]::after {
+  content: "";
+  position: absolute;
+  inset-inline: var(--space-2);
+  z-index: 2;
+  block-size: var(--dasti-skills-insert-line);
+  border-radius: var(--radius-pill);
+  background: var(--ac);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ac) 16%, transparent);
+  opacity: 0;
+  transform: scaleX(0.96);
+  transform-origin: center;
+  pointer-events: none;
+  transition:
+    opacity var(--motion-duration-fast) var(--motion-ease-standard),
+    transform var(--motion-duration-fast) var(--motion-ease-standard);
+}
+
+.dasti-skills-drawer__skill-row::before,
+.dasti-skills-drawer [data-skill-category-id]::before {
+  inset-block-start: calc(-0.5 * var(--space-1) - 1px);
+}
+
+.dasti-skills-drawer__skill-row::after,
+.dasti-skills-drawer [data-skill-category-id]::after {
+  inset-block-end: calc(-0.5 * var(--space-1) - 1px);
+}
+
+.dasti-skills-drawer__skill-row[data-drop-indicator="before"],
+.dasti-skills-drawer [data-skill-category-id][data-drop-indicator="before"] {
+  margin-block-start: var(--dasti-skills-insert-gap);
+}
+
+.dasti-skills-drawer__skill-row[data-drop-indicator="after"],
+.dasti-skills-drawer [data-skill-category-id][data-drop-indicator="after"] {
+  margin-block-end: var(--dasti-skills-insert-gap);
+}
+
+.dasti-skills-drawer__skill-row[data-drop-indicator="before"]::before,
+.dasti-skills-drawer__skill-row[data-drop-indicator="after"]::after,
+.dasti-skills-drawer
+  [data-skill-category-id][data-drop-indicator="before"]::before,
+.dasti-skills-drawer
+  [data-skill-category-id][data-drop-indicator="after"]::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.dasti-skills-drawer [data-skill-drop-group-id][data-drop-slot="true"] {
+  padding-block-start: var(--dasti-skills-insert-gap);
+}
+
+.dasti-skills-drawer [data-skill-drop-group-id][data-drop-slot="true"]::before {
+  content: "";
+  display: block;
+  block-size: calc(var(--s4) + var(--s1));
+  margin: calc(-1 * var(--dasti-skills-insert-gap)) var(--space-2)
+    var(--space-2);
+  border: 1px dashed color-mix(in srgb, var(--ac) 62%, var(--color-border));
+  border-radius: var(--radius-card, 6px);
+  background: color-mix(in srgb, var(--ac) 8%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ac) 12%, transparent);
+}
+
+.dasti-skills-drawer__skill-row[data-just-dropped="true"],
+.dasti-skills-drawer [data-skill-category-id][data-just-dropped="true"] {
+  animation: dasti-skills-drop-confirm 820ms var(--motion-ease-emphasized);
+}
+
+@keyframes dasti-skills-drop-confirm {
+  0% {
+    border-color: color-mix(in srgb, var(--ac) 70%, var(--color-border));
+    background: color-mix(in srgb, var(--ac) 16%, transparent);
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--ac) 34%, transparent),
+      0 12px 28px -22px color-mix(in srgb, var(--ac) 82%, transparent);
+  }
+  62% {
+    border-color: color-mix(in srgb, var(--ac) 46%, var(--color-border));
+    background: color-mix(in srgb, var(--ac) 8%, transparent);
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--ac) 18%, transparent),
+      0 10px 22px -24px color-mix(in srgb, var(--ac) 62%, transparent);
+  }
+  100% {
+    border-color: var(--color-border);
+    background: transparent;
+    box-shadow: none;
+  }
+}
+
+.dasti-skills-drawer__actions-right {
+  --dasti-skills-action-size: calc(var(--s4) + var(--s2));
+  display: grid;
+  flex-shrink: 0;
+  grid-template-columns: repeat(3, var(--dasti-skills-action-size));
+  align-items: center;
+  justify-content: flex-end;
+  inline-size: calc(var(--dasti-skills-action-size) * 3);
+}
+
+.dasti-skills-drawer__action-cell,
+.dasti-skills-drawer__action-spacer {
+  inline-size: var(--dasti-skills-action-size);
+  block-size: var(--dasti-skills-action-size);
+}
+
+.dasti-skills-drawer__category-move-pair {
+  display: inline-grid;
+  grid-column: span 2;
+  grid-template-columns: repeat(2, var(--dasti-skills-action-size));
+  align-items: center;
+  overflow: hidden;
+  inline-size: calc(var(--dasti-skills-action-size) * 2);
+  block-size: var(--dasti-skills-action-size);
+  border-radius: var(--rs);
+}
+
+.dasti-skills-drawer__action-cell {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--rs);
+  background: transparent;
+  color: var(--tm2);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.dasti-skills-drawer__category-move-pair .dasti-skills-drawer__action-cell {
+  border-radius: 0;
+}
+
+.dasti-skills-drawer__category-move-pair
+  .dasti-skills-drawer__action-cell:first-child {
+  border-start-start-radius: var(--rs);
+  border-end-start-radius: var(--rs);
+}
+
+.dasti-skills-drawer__category-move-pair
+  .dasti-skills-drawer__action-cell:last-child {
+  border-start-end-radius: var(--rs);
+  border-end-end-radius: var(--rs);
+  box-shadow: inset 1px 0 0 var(--color-border);
+}
+
+.dasti-skills-drawer__action-cell:hover,
+.dasti-skills-drawer__action-cell:focus-visible {
+  background: var(--sf1);
+  color: var(--ti);
+}
+
+.dasti-skills-drawer__action-cell:focus-visible {
+  outline: 1px solid var(--color-border);
+  outline-offset: 0;
+}
+
+.dasti-skills-drawer__action-cell:disabled {
+  color: var(--tm3);
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.dasti-skills-drawer__action-cell:disabled:hover,
+.dasti-skills-drawer__action-cell:disabled:focus-visible {
+  background: transparent;
+  color: var(--tm3);
+}
+
+.dasti-skills-drawer__move-menu {
+  z-index: calc(var(--z-modal) + 2);
+  min-width: calc(var(--s8) + var(--s7));
+  max-width: min(
+    calc(var(--s8) + var(--s8)),
+    calc(100vw - var(--space-2) - var(--space-2))
+  );
+  padding: var(--space-1);
+  gap: 0;
+}
+
+.dasti-skills-drawer__move-menu .ds-menu__item {
+  min-height: var(--control-sm);
+  padding: 0 var(--space-2);
+  gap: var(--space-2);
+  border-radius: calc(var(--radius-control) - var(--space-1));
+  font-size: var(--tx);
+}

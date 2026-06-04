@@ -19,6 +19,7 @@ import type { VerbatiStylePreset } from "../../features/verbati/types";
 import { normalizeResumePreviewTokens } from "../layout/documentTokenNormalizer";
 import { ptToMm } from "../layout/documentTokens";
 import {
+  isSanatResumeTemplateId,
   isWorkshopTwoColumnResumeTemplateId,
   resolveWorkshopPreviewLayoutContract,
   type ResumeTemplateDefinition,
@@ -264,6 +265,10 @@ type WorkshopCommittedSkillItem = {
   id: string;
   name: string;
   level?: string;
+  bucket?: ResumeSkillItem["bucket"];
+  categoryId?: string;
+  categoryLabel?: string;
+  categoryOrder?: number;
 };
 
 type WorkshopCommittedProjectItem = {
@@ -1987,6 +1992,12 @@ function buildPlannerSections(
         kind: "skills",
         estimatedHeight:
           metrics.skillPadBlockMm * 2 +
+          (item.categoryLabel &&
+          data.skillItems.findIndex(
+            (candidate) => candidate.categoryId === item.categoryId,
+          ) === data.skillItems.indexOf(item)
+            ? metrics.sectionHeaderHeightMm * 0.65
+            : 0) +
           estimateTextHeight(
             item.name,
             Math.max(14, Math.floor(metrics.compactCharsPerLine / 2)),
@@ -2214,6 +2225,30 @@ function resolveWorkshopTwoColumnSectionLane(
 
   if (section.kind === "certifications") {
     return isCompactCertificationSection(section, metrics) ? "sidebar" : "main";
+  }
+
+  return "main";
+}
+
+function resolveSanatSectionLane(
+  section: PlannerSectionDefinition,
+  metrics: WorkshopPlannerMetrics,
+): WorkshopTwoColumnLane {
+  if (section.kind === "profile" || section.kind === "summary") {
+    return "header";
+  }
+
+  if (
+    section.kind === "education" ||
+    section.kind === "skills" ||
+    section.kind === "languages" ||
+    section.kind === "certifications" ||
+    section.kind === "affiliations" ||
+    section.kind === "hobbies"
+  ) {
+    return section.kind === "certifications" && !isCompactCertificationSection(section, metrics)
+      ? "main"
+      : "sidebar";
   }
 
   return "main";
@@ -2716,6 +2751,12 @@ function buildCommittedFragment(args: {
             id: entry.item.id,
             name: entry.item.name,
             level: entry.item.level,
+            ...(entry.item.bucket ? { bucket: entry.item.bucket } : {}),
+            ...(entry.item.categoryId ? { categoryId: entry.item.categoryId } : {}),
+            ...(entry.item.categoryLabel ? { categoryLabel: entry.item.categoryLabel } : {}),
+            ...(typeof entry.item.categoryOrder === "number"
+              ? { categoryOrder: entry.item.categoryOrder }
+              : {}),
           })),
       };
     case "selected_projects":
@@ -2823,10 +2864,15 @@ function buildTwoColumnWorkshopPlan(args: {
   data: ResumeData;
   metrics: WorkshopPlannerMetrics;
   pageHeightBudget: number;
+  laneResolver?: (
+    section: PlannerSectionDefinition,
+    metrics: WorkshopPlannerMetrics,
+  ) => WorkshopTwoColumnLane;
 }): WorkshopResumePlan {
+  const resolveLane = args.laneResolver ?? resolveWorkshopTwoColumnSectionLane;
   const allSections = buildPlannerSections(args.data, args.metrics).map((section) => ({
     ...section,
-    lane: resolveWorkshopTwoColumnSectionLane(section, args.metrics),
+    lane: resolveLane(section, args.metrics),
   }));
   const headerSections = allSections.filter((section) => section.lane === "header");
   const mainSections = allSections.filter((section) => section.lane === "main");
@@ -3013,6 +3059,14 @@ export function planWorkshopResumePages(args: {
       data: args.data,
       metrics,
       pageHeightBudget,
+    });
+  }
+  if (isSanatResumeTemplateId(args.template.id)) {
+    return buildTwoColumnWorkshopPlan({
+      data: args.data,
+      metrics,
+      pageHeightBudget,
+      laneResolver: resolveSanatSectionLane,
     });
   }
   const pages: WorkshopResumePagePlan[] = [];

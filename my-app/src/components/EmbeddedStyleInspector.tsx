@@ -17,6 +17,7 @@ import {
   VERBATI_STYLE_BUNDLE_DEFINITIONS,
 } from "../features/verbati/styleBundles";
 import {
+  SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID,
   WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
   WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
   type ResumeTemplateId,
@@ -67,6 +68,9 @@ type DrawerId =
 function getTemplateDisplayName(
   option: (typeof VERBATI_LAYOUT_OPTIONS)[number],
 ): string {
+  if (option.resumeTemplateId === SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID) {
+    return "Sanat";
+  }
   return (option.resumeTemplateId ?? WORKSHOP_RESUME_ONECOL_TEMPLATE_ID) ===
     WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
     ? "French"
@@ -76,6 +80,9 @@ function getTemplateDisplayName(
 function getTemplateDisplayDescription(
   option: (typeof VERBATI_LAYOUT_OPTIONS)[number],
 ): string {
+  if (option.resumeTemplateId === SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID) {
+    return "An asymmetric editorial CV with category-led skills.";
+  }
   return (option.resumeTemplateId ?? WORKSHOP_RESUME_ONECOL_TEMPLATE_ID) ===
     WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
     ? "A structured two-column CV with clear sections and hierarchy."

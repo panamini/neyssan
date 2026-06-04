@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import type { ISkillItem, Level } from "../../types/cvDocument";
+import type { ISkillItem, Level, SkillCategory } from "../../types/cvDocument";
 import { X, Plus } from "@/lib/icons";
 import { LEVELS } from "../ui/levelLabels";
 import { Button } from "../ui/button";
@@ -8,6 +8,7 @@ import { CvModalShell } from "./CvModalShell";
 interface SkillsModalProps {
   open: boolean;
   items: ISkillItem[];
+  categories?: SkillCategory[];
   initialItemId?: string;
   recoveryNotes?: string[];
   onDismissRecoveryNotes?: () => void;
@@ -15,7 +16,7 @@ interface SkillsModalProps {
   onAcceptSuggestion?: (name: string) => void;
   onDismissSuggestion?: (name: string) => void;
   onClose: () => void;
-  onSave: (next: ISkillItem[]) => void;
+  onSave: (next: ISkillItem[], categories: SkillCategory[]) => void;
   title?: string;
   description?: string;
   emptyLabel?: string;
@@ -33,6 +34,7 @@ function newSkill(): ISkillItem {
 export function SkillsModal({
   open,
   items,
+  categories = [],
   initialItemId,
   recoveryNotes = [],
   onDismissRecoveryNotes,
@@ -49,6 +51,8 @@ export function SkillsModal({
   saveLabel = "Save skills",
 }: SkillsModalProps) {
   const [rows, setRows] = useState<ISkillItem[]>([]);
+  const [categoryRows, setCategoryRows] = useState<SkillCategory[]>([]);
+  const [newCategoryLabel, setNewCategoryLabel] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const inputRefs = React.useRef<Record<string, HTMLInputElement | null>>({});
   const handledInitialFocusRef = useRef<string | null>(null);
@@ -63,11 +67,12 @@ export function SkillsModal({
       if (lastSeedRef.current === nextStr) return;
       lastSeedRef.current = nextStr;
       setRows(JSON.parse(nextStr) as ISkillItem[]);
+      setCategoryRows(JSON.parse(JSON.stringify(categories ?? [])) as SkillCategory[]);
     } catch {
       // Fallback to safe clone on failure
       setRows(JSON.parse(JSON.stringify(items ?? [])) as ISkillItem[]);
     }
-  }, [open, items]);
+  }, [open, items, categories]);
 
   useEffect(() => {
     if (!open) {
@@ -116,6 +121,27 @@ export function SkillsModal({
     setRows((prev) => prev.filter((_, i) => i !== idx));
   }
 
+  function handleCreateCategory() {
+    const label = newCategoryLabel.replace(/\s+/g, " ").trim();
+    if (!label) return;
+    const exists = categoryRows.some(
+      (category) => category.label.trim().toLocaleLowerCase() === label.toLocaleLowerCase(),
+    );
+    if (exists) {
+      setNewCategoryLabel("");
+      return;
+    }
+    setCategoryRows((prev) => [
+      ...prev,
+      {
+        id: `skill-cat-${Math.random().toString(36).slice(2, 10)}`,
+        label,
+        source: "user",
+      },
+    ]);
+    setNewCategoryLabel("");
+  }
+
   function handleAcceptSuggestion(name: string) {
     const cleanName = String(name ?? "").trim();
     if (!cleanName) return;
@@ -141,7 +167,15 @@ export function SkillsModal({
       const next = rows
         .map((r) => ({ ...r, name: String(r.name ?? "").trim() }))
         .filter((r) => r.name.length > 0);
-      onSave(next);
+      const validCategoryIds = new Set(categoryRows.map((category) => category.id));
+      onSave(
+        next.map((row) =>
+          row.categoryId && !validCategoryIds.has(row.categoryId)
+            ? { ...row, categoryId: undefined }
+            : row,
+        ),
+        categoryRows,
+      );
     } finally {
       setIsSaving(false);
       onClose();
@@ -215,6 +249,31 @@ export function SkillsModal({
           </div>
 
           <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <input
+                className="flex-1 min-w-0 px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow"
+                placeholder="New category"
+                value={newCategoryLabel}
+                onChange={(event) => setNewCategoryLabel(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    handleCreateCategory();
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                onClick={handleCreateCategory}
+                variant="ghost"
+                size="sm"
+                ariaLabel="Create skill category"
+                className="gap-1"
+              >
+                <Plus className="w-4 h-4" />
+                Category
+              </Button>
+            </div>
             {suggestedItems.length > 0 ? (
               <div className="space-y-2">
                 <div className="text-xs [color:var(--tg2)]">
@@ -336,6 +395,23 @@ export function SkillsModal({
                     value={row.name ?? ""}
                     onChange={(e) => updateRow(idx, { name: e.target.value })}
                   />
+                  <select
+                    aria-label={`Category for ${row.name || "skill"}`}
+                    className="w-36 px-2 py-1 text-sm [background:var(--sfr)] border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] outline-none"
+                    value={row.categoryId ?? ""}
+                    onChange={(event) =>
+                      updateRow(idx, {
+                        categoryId: event.target.value || undefined,
+                      })
+                    }
+                  >
+                    <option value="">No category</option>
+                    {categoryRows.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.label}
+                      </option>
+                    ))}
+                  </select>
                   {/* Delete — RIGHT */}
                   <button
                     type="button"

@@ -407,6 +407,7 @@ describe("StorageAdapter persistence", () => {
       palette: "bordeaux",
       typography: "soft-serif",
       accentHex: "#9a2d45",
+      resumeTemplateId: undefined,
     });
 
     const cachedDocument = JSON.parse(
@@ -443,6 +444,7 @@ describe("StorageAdapter persistence", () => {
           layout: "workshop",
           palette: "cobalt",
           typography: "civic-correspondence",
+          resumeTemplateId: "workshop_resume_twocol_ats",
         },
         documentStyleVersion: 1,
       } as any),
@@ -456,8 +458,10 @@ describe("StorageAdapter persistence", () => {
       palette: "bordeaux",
       typography: "soft-serif",
       accentHex: "#9a2d45",
+      resumeTemplateId: "workshop_resume_onecol_ats",
     });
     expect(payload.metadata).toMatchObject({
+      resumeTemplateId: "workshop_resume_onecol_ats",
       verbatiStyleSlotId: 2,
       verbatiStyleSlotSource: "settings",
       verbatiStyleSlotNameSnapshot: "Style 2",
@@ -466,9 +470,84 @@ describe("StorageAdapter persistence", () => {
         layout: "workshop",
         palette: "cobalt",
         typography: "civic-correspondence",
+        resumeTemplateId: "workshop_resume_twocol_ats",
       },
       documentStyleVersion: 1,
     });
+  });
+
+  it("preserves the selected resume template through metadata-only save and backend reload hydration", async () => {
+    const patchMutation = vi.fn().mockResolvedValue(undefined);
+    const adapter = new ConvexStorageAdapter(patchMutation);
+
+    await adapter.saveMetadataPatch("styled-cv", {
+      verbatiStyle: {
+        familyId: "workshop",
+        layout: "workshop",
+        palette: "sauge",
+        typography: "geist-baskervville",
+        resumeTemplateId: "sanat_asymmetric_resume",
+      },
+    } as any);
+
+    const backendMetadata = patchMutation.mock.calls[0][0].patch.metadata;
+    const hydrated = mapPersistedProfileToCvDocument(
+      {
+        profileId: "styled-cv",
+        name: "Styled Candidate",
+        summary: "Summary",
+        metadata: backendMetadata,
+      },
+      "styled-cv",
+    );
+
+    expect(backendMetadata.verbatiStyle.resumeTemplateId).toBe(
+      "sanat_asymmetric_resume",
+    );
+    expect(backendMetadata.resumeTemplateId).toBe("sanat_asymmetric_resume");
+    expect(hydrated?.metadata?.verbatiStyle?.resumeTemplateId).toBe(
+      "sanat_asymmetric_resume",
+    );
+    expect(hydrated?.metadata?.resumeTemplateId).toBe(
+      "sanat_asymmetric_resume",
+    );
+  });
+
+  it("hydrates the latest metadata-only template selection ahead of a stale embedded cvDocument", async () => {
+    const embeddedCv = generateCvTemplateV1("Stale Embedded CV");
+    embeddedCv.id = "styled-cv";
+    embeddedCv.metadata.verbatiStyle = {
+      familyId: "workshop",
+      layout: "workshop",
+      palette: "sauge",
+      typography: "geist-baskervville",
+      resumeTemplateId: "workshop_resume_onecol_ats",
+    };
+
+    const hydrated = mapPersistedProfileToCvDocument(
+      {
+        profileId: "styled-cv",
+        name: "Styled Candidate",
+        summary: "Summary",
+        metadata: {
+          resumeTemplateId: "sanat_asymmetric_resume",
+          verbatiStyle: {
+            layout: "workshop",
+            palette: "sauge",
+            typography: "geist-baskervville",
+          },
+        },
+        cvDocument: embeddedCv,
+      },
+      "styled-cv",
+    );
+
+    expect(hydrated?.metadata?.verbatiStyle?.resumeTemplateId).toBe(
+      "sanat_asymmetric_resume",
+    );
+    expect(hydrated?.metadata?.resumeTemplateId).toBe(
+      "sanat_asymmetric_resume",
+    );
   });
 
   it("sends metadata.verbatiStyle through patch metadata and keeps it in cvDocument", async () => {
@@ -493,6 +572,7 @@ describe("StorageAdapter persistence", () => {
       palette: "bordeaux",
       typography: "soft-serif",
       accentHex: "#9a2d45",
+      resumeTemplateId: "workshop_resume_onecol_ats",
     });
     expect(payload.cvDocument.metadata.verbatiStyle).toEqual({
       familyId: "workshop",

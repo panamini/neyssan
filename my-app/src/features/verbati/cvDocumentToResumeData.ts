@@ -19,6 +19,7 @@ import type {
   IProfileItem,
   IProjectItem,
   ISkillItem,
+  SkillCategory,
   ISummaryItem,
 } from "../../types/cvDocument";
 import {
@@ -720,15 +721,30 @@ function mapSkills(
   options: ResumeDataMappingOptions = {},
 ): {
   skills: string[];
+  skillCategories: NonNullable<ResumeData["skillCategories"]>;
   skillItems: ResumeSkillItem[];
 } {
   if (!skillsContext) {
-    return { skills: [], skillItems: [] };
+    return { skills: [], skillCategories: [], skillItems: [] };
   }
+
+  const skillCategories = Array.isArray(skillsContext.section.skillCategories)
+    ? (skillsContext.section.skillCategories as SkillCategory[])
+        .map((category, order) => ({
+          id: String(category.id ?? "").trim(),
+          label: String(category.label ?? "").trim(),
+          order,
+          ...(category.source ? { source: category.source } : {}),
+          ...(typeof category.locked === "boolean" ? { locked: category.locked } : {}),
+        }))
+        .filter((category) => category.id && category.label)
+    : [];
+  const categoryById = new Map(skillCategories.map((category) => [category.id, category]));
 
   const structuredSkills = readStructured<ISkillItem>(skillsContext.section)
     .map((item, index): ResumeSkillItem | null => {
       const name = String(item.name ?? "").trim();
+      const category = item.categoryId ? categoryById.get(item.categoryId) : undefined;
       if (!options.includeDrafts && !name) {
         return null;
       }
@@ -745,6 +761,14 @@ function mapSkills(
         ),
         name,
         level: String(item.level ?? "").trim() || undefined,
+        ...(item.bucket ? { bucket: item.bucket } : {}),
+        ...(category
+          ? {
+              categoryId: category.id,
+              categoryLabel: category.label,
+              categoryOrder: category.order,
+            }
+          : {}),
       };
     })
     .filter((item): item is ResumeSkillItem => item !== null);
@@ -752,6 +776,7 @@ function mapSkills(
   if (structuredSkills.length > 0) {
     return {
       skills: structuredSkills.map((item) => item.name),
+      skillCategories,
       skillItems: structuredSkills,
     };
   }
@@ -775,6 +800,7 @@ function mapSkills(
 
   return {
     skills: fallbackSkills.map((item) => item.name),
+    skillCategories,
     skillItems: fallbackSkills,
   };
 }
@@ -1152,7 +1178,7 @@ export function mapCvDocumentToResumeData(
   const summarySource = readSummarySource(summaryContext, doc);
   const summary = mapSummary(summaryContext, doc);
   const summaryRich = mapRichTextContent(summarySource);
-  const { skills, skillItems } = mapSkills(skillsContext, options);
+  const { skills, skillCategories, skillItems } = mapSkills(skillsContext, options);
   const languages = mapLanguages(languagesContext, options);
   const experience = mapExperience(experienceContext, options);
   const projects = mapProjects(projectsContext, options);
@@ -1232,6 +1258,7 @@ export function mapCvDocumentToResumeData(
     metadata,
     contact,
     skills,
+    skillCategories,
     skillItems,
     languages,
     experience,

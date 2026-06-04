@@ -28,6 +28,19 @@ vi.mock("prosemirror-state", () => ({
   TextSelection: { atEnd: () => ({}) },
 }));
 
+vi.mock("convex/react", () => {
+  const convex = {
+    query: vi.fn().mockResolvedValue({
+      version: "test",
+      supportedActions: [],
+    }),
+  };
+  return {
+    useAction: () => vi.fn().mockResolvedValue(null),
+    useConvex: () => convex,
+  };
+});
+
 // Avoid runtime dependency on icons
 vi.mock("lucide-react", () => {
   const Stub = () => null;

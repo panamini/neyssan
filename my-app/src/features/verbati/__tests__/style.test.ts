@@ -6,7 +6,10 @@ import {
   isProposalLetterheadTemplateId,
   resolveProposalTemplateId,
 } from "../../../../convex/lib/proposals/renderTemplates";
-import { RESUME_TEMPLATE_IDS } from "../../../lib/layout/resumeTemplates";
+import {
+  RESUME_TEMPLATE_IDS,
+  SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID,
+} from "../../../lib/layout/resumeTemplates";
 import {
   DEFAULT_VERBATI_STYLE,
   getProposalTwinTemplateId,
@@ -308,14 +311,38 @@ describe("verbati style normalization", () => {
     ).toBe(false);
   });
 
-  it("exposes workshop one-column and two-column as active layout options", () => {
+  it("prefers explicit CV resume template metadata over visual style fallback", () => {
+    expect(
+      getVerbatiStyleFromCv({
+        id: "cv-explicit-template",
+        title: "Explicit template CV",
+        metadata: {
+          createdAt: "2026-04-18T12:00:00.000Z",
+          updatedAt: "2026-04-18T12:00:00.000Z",
+          version: 1,
+          resumeTemplateId: SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID,
+          verbatiStyle: {
+            familyId: "workshop",
+            layout: "workshop",
+            typography: "quiet-editorial",
+            palette: "sauge",
+          },
+        },
+        sections: [],
+      }).resumeTemplateId,
+    ).toBe(SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID);
+  });
+
+  it("exposes workshop one-column, two-column, and Sanat as active layout options", () => {
     expect(VERBATI_LAYOUT_OPTIONS.map((option) => option.id)).toEqual([
+      "workshop",
       "workshop",
       "workshop",
     ]);
     expect(VERBATI_LAYOUT_OPTIONS.map((option) => option.resumeTemplateId)).toEqual([
       "workshop_resume_onecol_ats",
       "workshop_resume_twocol_ats",
+      SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID,
     ]);
   });
 });

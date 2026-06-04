@@ -317,7 +317,13 @@ export function SectionDisplay({ section }: SectionDisplayProps): JSX.Element {
       {isSkills ? (
         <div className="space-y-4">
           {skillItems.length > 0 ? (
-            <SkillsDisplay items={skillItems} showHeadings={true} compact={false} className="mt-1" />
+            <SkillsDisplay
+              items={skillItems}
+              categories={section.skillCategories}
+              showHeadings={true}
+              compact={false}
+              className="mt-1"
+            />
           ) : (
             <p className="text-sm [color:var(--tg2)]">No skills yet.</p>
           )}

@@ -1,17 +1,83 @@
 import React from "react";
-import type { ISkillItem, Level } from "../../types/cvDocument";
-import { Sheet } from "@/components/ui/sheet";
+import { createPortal } from "react-dom";
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  useDroppable,
+  type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  GripHorizontal,
+  Plus,
+  TrashSimple,
+  Wand2,
+} from "@/lib/icons";
+import type { ISkillItem, Level, SkillCategory } from "../../types/cvDocument";
+import { IslandPanel, Menu, type MenuSection } from "@/components/ui";
+
+type SkillsDrawerApplyPayload = {
+  items: ISkillItem[];
+  categories: SkillCategory[];
+};
 
 interface SkillsDrawerProps {
   open: boolean;
+  sectionId?: string;
   items: ISkillItem[];
+  categories?: SkillCategory[];
+  aiSuggestions?: string[];
+  aiSuggestionsLoading?: boolean;
+  aiSuggestionsRequested?: boolean;
+  canSuggestSkills?: boolean;
+  onRequestAiSuggestions?: () => void;
+  onAcceptAiSuggestion?: (
+    name: string,
+    targetCategoryId?: string | null,
+  ) => void;
+  onDismissAiSuggestion?: (name: string) => void;
   onClose: () => void;
-  onApply?: (next: ISkillItem[]) => void;
+  onApply?: (
+    next: SkillsDrawerApplyPayload | ISkillItem[],
+    categories?: SkillCategory[],
+  ) => void;
 }
 
-type TabKey = "manage" | "ai";
-type Bucket = "core" | "secondary" | "familiar";
+type SkillGroup = {
+  id: string;
+  label: string;
+  categoryId?: string;
+  persisted: boolean;
+  items: ISkillItem[];
+};
 
+type DropIndicator = "before" | "after" | null;
+type JustDroppedTarget =
+  | { kind: "skill"; id: string }
+  | { kind: "category"; id: string }
+  | null;
+
+const OTHER_SKILLS_ID = "__other_skills__";
+const SKILL_DND_PREFIX = "skill:";
+const CATEGORY_DND_PREFIX = "category:";
+const GROUP_DND_PREFIX = "group:";
 const LEVELS: Level[] = [
   "Beginner",
   "Elementary",
@@ -20,491 +86,1090 @@ const LEVELS: Level[] = [
   "Fluent",
 ];
 
-function toBucket(raw: ISkillItem["bucket"] | undefined): Bucket {
-  return raw === "core" || raw === "familiar" ? raw : "secondary";
+function createStableId(prefix: string): string {
+  const cryptoId =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2, 10);
+  return `${prefix}-${cryptoId}`;
 }
 
-function groupByBucket(items: ISkillItem[]) {
-  const out: Record<Bucket, ISkillItem[]> = {
-    core: [],
-    secondary: [],
-    familiar: [],
+function createCategory(): SkillCategory {
+  return {
+    id: createStableId("skill-cat"),
+    label: "New category",
+    source: "user",
   };
-  for (const it of items) {
-    out[toBucket(it.bucket)].push(it);
-  }
-  return out;
 }
 
-function idOf(it: ISkillItem): string {
-  return String(it.id ?? it.name);
+function createSkill(name: string, categoryId?: string | null): ISkillItem {
+  return {
+    id: createStableId("sk"),
+    name,
+    level: "Intermediate",
+    ...(categoryId ? { categoryId } : {}),
+  };
 }
 
-function BucketBadge({ bucket }: { bucket: Bucket }) {
-  const label =
-    bucket === "core"
-      ? "Core"
-      : bucket === "familiar"
-        ? "Familiar"
-        : "Secondary";
-  const color =
-    bucket === "core"
-      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
-      : bucket === "familiar"
-        ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300"
-        : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300";
+function idOf(item: ISkillItem): string {
+  return String(item.id ?? item.name);
+}
+
+function cleanLabel(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function normalizeItems(
+  items: ISkillItem[],
+  categories: SkillCategory[],
+): ISkillItem[] {
+  const validCategoryIds = new Set(categories.map((category) => category.id));
+  return items.map((item) => {
+    if (!item.categoryId || validCategoryIds.has(item.categoryId)) {
+      return item;
+    }
+    const next = { ...item };
+    delete next.categoryId;
+    return next;
+  });
+}
+
+function buildGroups(
+  items: ISkillItem[],
+  categories: SkillCategory[],
+): SkillGroup[] {
+  const normalizedItems = normalizeItems(items, categories);
+  return [
+    ...categories.map((category) => ({
+      id: category.id,
+      label: category.label,
+      categoryId: category.id,
+      persisted: true,
+      items: normalizedItems.filter((item) => item.categoryId === category.id),
+    })),
+    {
+      id: OTHER_SKILLS_ID,
+      label: "Other Skills",
+      persisted: false,
+      items: normalizedItems.filter((item) => !item.categoryId),
+    },
+  ];
+}
+
+function orderItemsByGroups(groups: SkillGroup[]): ISkillItem[] {
+  return groups.flatMap((group) =>
+    group.items.map((item) => {
+      if (group.categoryId) {
+        return { ...item, categoryId: group.categoryId };
+      }
+      const next = { ...item };
+      delete next.categoryId;
+      return next;
+    }),
+  );
+}
+
+function categoryDndId(categoryId: string): string {
+  return `${CATEGORY_DND_PREFIX}${categoryId}`;
+}
+
+function groupDndId(groupId: string): string {
+  return `${GROUP_DND_PREFIX}${groupId}`;
+}
+
+function skillDndId(skillId: string): string {
+  return `${SKILL_DND_PREFIX}${skillId}`;
+}
+
+function stripDndId(id: string, prefix: string): string {
+  return id.startsWith(prefix) ? id.slice(prefix.length) : id;
+}
+
+function findGroupForSkill(
+  groups: SkillGroup[],
+  skillId: string,
+): SkillGroup | null {
   return (
-    <span
-      className={`inline-flex items-center px-2 py-0.5 text-xs rounded-full ${color}`}
+    groups.find((group) =>
+      group.items.some((item) => idOf(item) === skillId),
+    ) ?? null
+  );
+}
+
+function findSkillByDndId(
+  groups: SkillGroup[],
+  activeId: string,
+): ISkillItem | null {
+  if (!activeId.startsWith(SKILL_DND_PREFIX)) return null;
+  const skillId = stripDndId(activeId, SKILL_DND_PREFIX);
+  const group = findGroupForSkill(groups, skillId);
+  return group?.items.find((item) => idOf(item) === skillId) ?? null;
+}
+
+function findCategoryByDndId(
+  categories: SkillCategory[],
+  activeId: string,
+): SkillCategory | null {
+  if (!activeId.startsWith(CATEGORY_DND_PREFIX)) return null;
+  const categoryId = stripDndId(activeId, CATEGORY_DND_PREFIX);
+  return categories.find((category) => category.id === categoryId) ?? null;
+}
+
+function findGroupForDrop(
+  groups: SkillGroup[],
+  overId: string,
+): SkillGroup | null {
+  const strippedSkillId = stripDndId(overId, SKILL_DND_PREFIX);
+  const skillGroup = findGroupForSkill(groups, strippedSkillId);
+  if (skillGroup) return skillGroup;
+  const explicitGroupId = stripDndId(overId, GROUP_DND_PREFIX);
+  const explicitGroup = groups.find((group) => group.id === explicitGroupId);
+  if (explicitGroup) return explicitGroup;
+  const groupId = stripDndId(overId, CATEGORY_DND_PREFIX);
+  return groups.find((group) => group.id === groupId) ?? null;
+}
+
+function findCategoryIdForDrop(groups: SkillGroup[], overId: string): string | null {
+  if (overId.startsWith(CATEGORY_DND_PREFIX)) {
+    const categoryId = stripDndId(overId, CATEGORY_DND_PREFIX);
+    return categoryId === OTHER_SKILLS_ID ? null : categoryId;
+  }
+  const group = findGroupForDrop(groups, overId);
+  return group?.categoryId ?? null;
+}
+
+function moveSkill(
+  groups: SkillGroup[],
+  activeId: string,
+  overId: string,
+): SkillGroup[] {
+  const skillId = stripDndId(activeId, SKILL_DND_PREFIX);
+  const activeGroup = findGroupForSkill(groups, skillId);
+  const overGroup = findGroupForDrop(groups, overId);
+  if (!activeGroup || !overGroup) return groups;
+  const activeItem = activeGroup.items.find((item) => idOf(item) === skillId);
+  if (!activeItem) return groups;
+
+  const nextGroups = groups.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => idOf(item) !== skillId),
+  }));
+  const targetIndex = nextGroups.findIndex(
+    (group) => group.id === overGroup.id,
+  );
+  if (targetIndex < 0) return groups;
+  const overSkillId = stripDndId(overId, SKILL_DND_PREFIX);
+  const overSkillIndex = nextGroups[targetIndex]!.items.findIndex(
+    (item) => idOf(item) === overSkillId,
+  );
+  const flatSkillIds = groups.flatMap((group) => group.items.map(idOf));
+  const activeFlatIndex = flatSkillIds.indexOf(skillId);
+  const overFlatIndex = flatSkillIds.indexOf(overSkillId);
+  const insertIndex =
+    overSkillIndex >= 0
+      ? activeFlatIndex !== -1 &&
+        overFlatIndex !== -1 &&
+        activeFlatIndex < overFlatIndex
+        ? overSkillIndex + 1
+        : overSkillIndex
+      : nextGroups[targetIndex]!.items.length;
+  nextGroups[targetIndex]!.items.splice(insertIndex, 0, {
+    ...activeItem,
+    ...(overGroup.categoryId ? { categoryId: overGroup.categoryId } : {}),
+  });
+  if (!overGroup.categoryId) {
+    delete nextGroups[targetIndex]!.items[insertIndex]!.categoryId;
+  }
+  return nextGroups;
+}
+
+function DragPreview({
+  activeId,
+  groups,
+  categories,
+}: {
+  activeId: string | null;
+  groups: SkillGroup[];
+  categories: SkillCategory[];
+}) {
+  if (!activeId) return null;
+
+  const skill = findSkillByDndId(groups, activeId);
+  if (skill) {
+    const name = skill.name || "Untitled";
+    return (
+      <div className="dasti-skills-drawer__drag-overlay dasti-skills-drawer__skill-row flex items-center justify-between gap-2 px-3 py-2 text-sm">
+        <span className="shrink-0 px-1 text-muted" aria-hidden="true">
+          <GripHorizontal size={14} strokeWidth={1.8} />
+        </span>
+        <span className="dasti-skills-drawer__skill-name min-w-0 w-auto flex-grow overflow-hidden text-ellipsis whitespace-nowrap text-left text-sm">
+          {name}
+        </span>
+        <div className="dasti-skills-drawer__actions-right" aria-hidden="true">
+          <span className="dasti-skills-drawer__action-spacer" />
+          <span className="dasti-skills-drawer__action-cell">
+            <ChevronDown size={13} strokeWidth={1.8} />
+          </span>
+          <span className="dasti-skills-drawer__action-cell">
+            <TrashSimple size={14} strokeWidth={1.8} />
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  const category = findCategoryByDndId(categories, activeId);
+  if (!category) return null;
+
+  return (
+    <div className="dasti-skills-drawer__drag-overlay dasti-skills-drawer__drag-overlay--category flex items-center gap-2 px-3 py-2 text-sm font-medium">
+      <span className="shrink-0 px-1 text-muted" aria-hidden="true">
+        <GripHorizontal size={14} strokeWidth={1.8} />
+      </span>
+      <span className="min-w-0 flex-1 truncate text-left">
+        {category.label}
+      </span>
+      <div className="dasti-skills-drawer__actions-right" aria-hidden="true">
+        <span className="dasti-skills-drawer__category-move-pair">
+          <span className="dasti-skills-drawer__action-cell">
+            <ArrowUp size={14} strokeWidth={1.8} />
+          </span>
+          <span className="dasti-skills-drawer__action-cell">
+            <ArrowDown size={14} strokeWidth={1.8} />
+          </span>
+        </span>
+        <span className="dasti-skills-drawer__action-cell">
+          <TrashSimple size={14} strokeWidth={1.8} />
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function SortableSkillRow({
+  item,
+  categories,
+  currentCategoryId,
+  suppressSortableTransform,
+  dropIndicator,
+  justDropped,
+  onLevelChange,
+  onCategoryChange,
+  onDelete,
+}: {
+  item: ISkillItem;
+  categories: SkillCategory[];
+  currentCategoryId?: string;
+  suppressSortableTransform: boolean;
+  dropIndicator: DropIndicator;
+  justDropped: boolean;
+  onLevelChange: (skillId: string, level: Level) => void;
+  onCategoryChange: (skillId: string, categoryId?: string) => void;
+  onDelete: (skillId: string) => void;
+}) {
+  const skillId = idOf(item);
+  const sortable = useSortable({
+    id: skillDndId(skillId),
+    transition: {
+      duration: 320,
+      easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+    },
+  });
+  const name = item.name || "Untitled";
+  const rowTransform =
+    suppressSortableTransform || sortable.isDragging
+      ? null
+      : sortable.transform;
+  const rowTransition = sortable.transition
+    ? `${sortable.transition}, opacity var(--motion-duration-fast) var(--motion-ease-standard), margin-block-start var(--motion-duration-fast) var(--motion-ease-standard), margin-block-end var(--motion-duration-fast) var(--motion-ease-standard)`
+    : "transform var(--motion-duration-medium) var(--motion-ease-emphasized), opacity var(--motion-duration-fast) var(--motion-ease-standard), margin-block-start var(--motion-duration-fast) var(--motion-ease-standard), margin-block-end var(--motion-duration-fast) var(--motion-ease-standard)";
+  const moveMenuSections: MenuSection[] = [
+    {
+      items: [
+        {
+          id: "other-skills",
+          label: "Other Skills",
+          role: "menuitemradio",
+          selected: !currentCategoryId,
+          onSelect: () => onCategoryChange(skillId, undefined),
+        },
+        ...categories.map((category) => ({
+          id: category.id,
+          label: category.label,
+          role: "menuitemradio" as const,
+          selected: currentCategoryId === category.id,
+          onSelect: () => onCategoryChange(skillId, category.id),
+        })),
+      ],
+    },
+  ];
+
+  return (
+    <div
+      ref={sortable.setNodeRef}
+      className={[
+        "dasti-skills-drawer__skill-row group flex items-center justify-between gap-2 px-3 py-2",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      data-dragging={sortable.isDragging ? "true" : undefined}
+      data-drop-indicator={dropIndicator ?? undefined}
+      data-just-dropped={justDropped ? "true" : undefined}
+      style={{
+        transform: CSS.Transform.toString(rowTransform),
+        transition: rowTransition,
+      }}
     >
-      {label}
-    </span>
+      <button
+        type="button"
+        aria-label={`Drag ${name}`}
+        className="shrink-0 px-1 text-muted"
+        {...sortable.attributes}
+        {...sortable.listeners}
+      >
+        <GripHorizontal size={14} strokeWidth={1.8} aria-hidden="true" />
+      </button>
+      <span
+        className="dasti-skills-drawer__skill-name min-w-0 w-auto flex-grow overflow-hidden text-ellipsis whitespace-nowrap text-left text-sm"
+        title={name}
+      >
+        {name}
+      </span>
+      <span className="select-level relative shrink-0">
+        <select
+          aria-label={`Level for ${name}`}
+          className="[inline-size:calc(var(--s8)+var(--s6)+var(--s3))] appearance-none rounded border bg-background py-1 pl-2 pr-6 text-left text-xs [border-color:var(--color-border)]"
+          value={item.level ?? "Intermediate"}
+          onChange={(event) =>
+            onLevelChange(skillId, event.target.value as Level)
+          }
+        >
+          {LEVELS.map((level) => (
+            <option key={level} value={level}>
+              {level}
+            </option>
+          ))}
+        </select>
+        <ChevronDown
+          size={13}
+          strokeWidth={1.8}
+          aria-hidden="true"
+          className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted"
+        />
+      </span>
+      <div className="dasti-skills-drawer__actions-right">
+        <span
+          className="dasti-skills-drawer__action-spacer"
+          aria-hidden="true"
+        />
+        <Menu
+          ariaLabel={`Move ${name}`}
+          align="end"
+          side="bottom"
+          menuClassName="dasti-skills-drawer__move-menu"
+          sections={moveMenuSections}
+          trigger={
+            <button
+              type="button"
+              aria-label={`Move ${name}`}
+              title={`Move ${name}`}
+              className="dasti-skills-drawer__action-cell"
+            >
+              <ChevronDown size={13} strokeWidth={1.8} aria-hidden="true" />
+            </button>
+          }
+        />
+        <button
+          type="button"
+          aria-label={`Delete ${name}`}
+          className="dasti-skills-drawer__action-cell"
+          onClick={() => onDelete(skillId)}
+        >
+          <TrashSimple size={14} strokeWidth={1.8} aria-hidden="true" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+type DroppableSkillGroupProps = {
+  group: SkillGroup;
+  index: number;
+  totalCategories: number;
+  isNewCategory: boolean;
+  isOver: boolean;
+  dropIndicator: DropIndicator;
+  justDropped: boolean;
+  suppressSortableTransform: boolean;
+  onRename: (categoryId: string, label: string) => void;
+  onMove: (categoryId: string, direction: -1 | 1) => void;
+  onDelete: (categoryId: string) => void;
+  children: React.ReactNode;
+};
+
+const DroppableSkillGroup = React.forwardRef<
+  HTMLInputElement,
+  DroppableSkillGroupProps
+>(function DroppableSkillGroup(
+  {
+    group,
+    index,
+    totalCategories,
+    isNewCategory,
+    isOver,
+    dropIndicator,
+    justDropped,
+    suppressSortableTransform,
+    onRename,
+    onMove,
+    onDelete,
+    children,
+  },
+  ref,
+) {
+  const sortable = useSortable({
+    id: categoryDndId(group.id),
+    disabled: !group.categoryId,
+    transition: {
+      duration: 320,
+      easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+    },
+  });
+  const sectionTransform =
+    suppressSortableTransform || sortable.isDragging
+      ? null
+      : sortable.transform;
+  const sectionTransition = sortable.transition
+    ? `${sortable.transition}, opacity var(--motion-duration-fast) var(--motion-ease-standard), border-color var(--motion-duration-fast) var(--motion-ease-standard), margin-block-start var(--motion-duration-fast) var(--motion-ease-standard), margin-block-end var(--motion-duration-fast) var(--motion-ease-standard)`
+    : "transform var(--motion-duration-medium) var(--motion-ease-emphasized), opacity var(--motion-duration-fast) var(--motion-ease-standard), border-color var(--motion-duration-fast) var(--motion-ease-standard), margin-block-start var(--motion-duration-fast) var(--motion-ease-standard), margin-block-end var(--motion-duration-fast) var(--motion-ease-standard)";
+
+  return (
+    <section
+      ref={group.categoryId ? sortable.setNodeRef : undefined}
+      id={group.id}
+      className="rounded border [border-color:var(--color-border)]"
+      data-skill-category-id={group.categoryId ?? OTHER_SKILLS_ID}
+      data-dragging={sortable.isDragging ? "true" : undefined}
+      data-over={isOver ? "true" : undefined}
+      data-drop-indicator={dropIndicator ?? undefined}
+      data-just-dropped={justDropped ? "true" : undefined}
+      style={{
+        transform: CSS.Transform.toString(sectionTransform),
+        transition: sectionTransition,
+      }}
+    >
+      <div className="flex items-center gap-2 border-b px-3 py-2 [border-color:var(--color-border)]">
+        {group.categoryId ? (
+          <button
+            type="button"
+            aria-label={`Drag ${group.label}`}
+            title="Drag to reorder category"
+            className="shrink-0 px-1 text-muted"
+            {...sortable.attributes}
+            {...sortable.listeners}
+          >
+            <GripHorizontal size={14} strokeWidth={1.8} aria-hidden="true" />
+          </button>
+        ) : null}
+        {group.categoryId ? (
+          <input
+            ref={isNewCategory ? ref : undefined}
+            aria-label={`Rename ${group.label}`}
+            className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-1 text-sm font-medium hover:[border-color:var(--color-border)] focus:[border-color:var(--color-border)] focus:bg-background focus:outline-none"
+            defaultValue={group.label}
+            onBlur={(event) => onRename(group.categoryId!, event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") event.currentTarget.blur();
+            }}
+          />
+        ) : (
+          <h4 className="min-w-0 flex-1 truncate text-sm font-medium">
+            {group.label}
+          </h4>
+        )}
+        <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs text-muted [border-color:var(--color-border)]">
+          {group.items.length} skill{group.items.length === 1 ? "" : "s"}
+        </span>
+        {group.categoryId ? (
+          <div className="dasti-skills-drawer__actions-right">
+            <span className="dasti-skills-drawer__category-move-pair">
+              <button
+                type="button"
+                aria-label="Up"
+                title="Move category up"
+                disabled={index === 0}
+                onClick={() => onMove(group.categoryId!, -1)}
+                className="dasti-skills-drawer__action-cell"
+              >
+                <ArrowUp size={14} strokeWidth={1.8} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                aria-label="Down"
+                title="Move category down"
+                disabled={index === totalCategories - 1}
+                onClick={() => onMove(group.categoryId!, 1)}
+                className="dasti-skills-drawer__action-cell"
+              >
+                <ArrowDown size={14} strokeWidth={1.8} aria-hidden="true" />
+              </button>
+            </span>
+            <button
+              type="button"
+              aria-label="Delete"
+              title="Delete category"
+              onClick={() => onDelete(group.categoryId!)}
+              className="dasti-skills-drawer__action-cell"
+            >
+              <TrashSimple size={14} strokeWidth={1.8} aria-hidden="true" />
+            </button>
+          </div>
+        ) : null}
+      </div>
+      {children}
+    </section>
+  );
+});
+
+function SkillGroupDropZone({
+  group,
+  isOver,
+  showDropSlot,
+  children,
+}: {
+  group: SkillGroup;
+  isOver: boolean;
+  showDropSlot: boolean;
+  children: React.ReactNode;
+}) {
+  const droppable = useDroppable({
+    id: groupDndId(group.id),
+  });
+
+  return (
+    <div
+      ref={droppable.setNodeRef}
+      className="min-h-10 divide-y divide-[color:var(--color-border)]"
+      data-skill-drop-group-id={group.id}
+      data-over={isOver || droppable.isOver ? "true" : undefined}
+      data-drop-slot={showDropSlot ? "true" : undefined}
+    >
+      {children}
+    </div>
   );
 }
 
 export function SkillsDrawer({
   open,
   items,
+  categories = [],
+  aiSuggestions = [],
+  aiSuggestionsLoading = false,
+  aiSuggestionsRequested = false,
+  canSuggestSkills = true,
+  onRequestAiSuggestions,
+  onAcceptAiSuggestion,
+  onDismissAiSuggestion,
   onClose,
   onApply,
 }: SkillsDrawerProps): JSX.Element | null {
-  const [tab, setTab] = React.useState<TabKey>("manage");
-  const [selected, setSelected] = React.useState<Set<string>>(() => new Set());
-  const [levelChoice, setLevelChoice] = React.useState<Level>("Intermediate");
-  const [isDeleteConfirming, setIsDeleteConfirming] = React.useState(false);
-
-  // Anchor for shift-click range selection
-  const anchorRef = React.useRef<{ bucket: Bucket; index: number } | null>(
-    null,
+  const [draftItems, setDraftItems] = React.useState<ISkillItem[]>(items);
+  const [draftCategories, setDraftCategories] =
+    React.useState<SkillCategory[]>(categories);
+  const [activeDragId, setActiveDragId] = React.useState<string | null>(null);
+  const [overDragId, setOverDragId] = React.useState<string | null>(null);
+  const [justDroppedTarget, setJustDroppedTarget] =
+    React.useState<JustDroppedTarget>(null);
+  const newCategoryInputRef = React.useRef<HTMLInputElement | null>(null);
+  const lastAddedCategoryIdRef = React.useRef<string | null>(null);
+  const justDroppedTimeoutRef = React.useRef<number | null>(null);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
   );
 
   React.useEffect(() => {
     if (!open) return;
-    // Drop selections that no longer exist in the latest items array
-    const ids = new Set(items.map(idOf));
-    setSelected((prev) => {
-      const next = new Set<string>();
-      for (const id of prev) if (ids.has(id)) next.add(id);
-      return next;
-    });
-  }, [open, items]);
+    setDraftItems(normalizeItems(items, categories));
+    setDraftCategories(categories);
+  }, [categories, items, open]);
+
+  React.useEffect(() => {
+    const newCategoryId = lastAddedCategoryIdRef.current;
+    if (!newCategoryId) return;
+    const input = newCategoryInputRef.current;
+    if (!input) return;
+    input.focus({ preventScroll: true });
+    input.select();
+    lastAddedCategoryIdRef.current = null;
+  }, [draftCategories]);
+
+  React.useEffect(() => {
+    return () => {
+      if (justDroppedTimeoutRef.current !== null) {
+        window.clearTimeout(justDroppedTimeoutRef.current);
+      }
+    };
+  }, []);
 
   if (!open) return null;
 
-  const groups = groupByBucket(items);
-  const order: Bucket[] = ["core", "secondary", "familiar"];
-  const totalSelected = selected.size;
-  const bulkDisabled = !onApply || totalSelected === 0;
+  const groups = buildGroups(draftItems, draftCategories);
+  const sortableCategoryIds = draftCategories.map((category) =>
+    categoryDndId(category.id),
+  );
+  const sortableSkillIds = groups.flatMap((group) =>
+    group.items.map((item) => skillDndId(idOf(item))),
+  );
+  const dragOverlay = (
+    <DragOverlay dropAnimation={null}>
+      <DragPreview
+        activeId={activeDragId}
+        groups={groups}
+        categories={draftCategories}
+      />
+    </DragOverlay>
+  );
 
-  function toggleOne(id: string, checked: boolean) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(id);
-      else next.delete(id);
-      return next;
+  function publish(nextItems: ISkillItem[], nextCategories: SkillCategory[]) {
+    const normalizedNextItems = normalizeItems(nextItems, nextCategories);
+    setDraftItems(normalizedNextItems);
+    setDraftCategories(nextCategories);
+    onApply?.(
+      { items: normalizedNextItems, categories: nextCategories },
+      nextCategories,
+    );
+  }
+
+  function markJustDropped(target: NonNullable<JustDroppedTarget>) {
+    if (justDroppedTimeoutRef.current !== null) {
+      window.clearTimeout(justDroppedTimeoutRef.current);
+    }
+    setJustDroppedTarget(target);
+    justDroppedTimeoutRef.current = window.setTimeout(() => {
+      setJustDroppedTarget(null);
+      justDroppedTimeoutRef.current = null;
+    }, 820);
+  }
+
+  function updateSkill(skillId: string, patch: Partial<ISkillItem>) {
+    publish(
+      draftItems.map((item) =>
+        idOf(item) === skillId ? { ...item, ...patch } : item,
+      ),
+      draftCategories,
+    );
+  }
+
+  function handleCategoryChange(skillId: string, categoryId?: string) {
+    publish(
+      draftItems.map((item) => {
+        if (idOf(item) !== skillId) return item;
+        if (categoryId) return { ...item, categoryId };
+        const next = { ...item };
+        delete next.categoryId;
+        return next;
+      }),
+      draftCategories,
+    );
+  }
+
+  function handleAddCategory() {
+    const category = createCategory();
+    const newCategoryId = category.id;
+    lastAddedCategoryIdRef.current = newCategoryId;
+    publish(draftItems, [...draftCategories, category]);
+    window.requestAnimationFrame(() => {
+      document.getElementById(newCategoryId)?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
     });
   }
 
-  function isBucketAllSelected(bucket: Bucket): boolean {
-    const list = groups[bucket];
-    if (list.length === 0) return false;
-    return list.every((it) => selected.has(idOf(it)));
-  }
-
-  function isBucketSomeSelected(bucket: Bucket): boolean {
-    const list = groups[bucket];
-    return list.some((it) => selected.has(idOf(it)));
-  }
-
-  function toggleBucket(bucket: Bucket, checked: boolean) {
-    const list = groups[bucket];
-    setSelected((prev) => {
-      const next = new Set(prev);
-      for (const it of list) {
-        const id = idOf(it);
-        if (checked) next.add(id);
-        else next.delete(id);
-      }
-      return next;
-    });
-  }
-
-  function mutate(mutator: (list: ISkillItem[]) => ISkillItem[]) {
-    if (!onApply) return;
-    const cloned = items.map((it) => ({ ...it }));
-    const next = mutator(cloned);
-    onApply(next);
-  }
-
-  function handleMoveSelected(target: Bucket) {
-    mutate((list) =>
-      list.map((it) =>
-        selected.has(idOf(it)) ? { ...it, bucket: target } : it,
+  function handleRenameCategory(categoryId: string, label: string) {
+    const nextLabel = cleanLabel(label);
+    const existing = draftCategories.find(
+      (category) => category.id === categoryId,
+    );
+    if (!existing || !nextLabel) return;
+    publish(
+      draftItems,
+      draftCategories.map((category) =>
+        category.id === categoryId
+          ? { ...category, label: nextLabel }
+          : category,
       ),
     );
   }
 
-  function handleSetLevelSelected(level: Level) {
-    mutate((list) =>
-      list.map((it) => (selected.has(idOf(it)) ? { ...it, level } : it)),
+  function handleMoveCategory(categoryId: string, direction: -1 | 1) {
+    const index = draftCategories.findIndex(
+      (category) => category.id === categoryId,
+    );
+    const nextIndex = index + direction;
+    if (index < 0 || nextIndex < 0 || nextIndex >= draftCategories.length)
+      return;
+    publish(draftItems, arrayMove(draftCategories, index, nextIndex));
+  }
+
+  function handleDeleteCategory(categoryId: string) {
+    const affectedCount = draftItems.filter(
+      (item) => item.categoryId === categoryId,
+    ).length;
+    if (
+      affectedCount > 0 &&
+      typeof window !== "undefined" &&
+      !window.confirm(`Move ${affectedCount} skills to Other Skills?`)
+    ) {
+      return;
+    }
+    publish(
+      draftItems.map((item) => {
+        if (item.categoryId !== categoryId) return item;
+        const next = { ...item };
+        delete next.categoryId;
+        return next;
+      }),
+      draftCategories.filter((category) => category.id !== categoryId),
     );
   }
 
-  function handleDeleteSelected() {
-    if (!onApply || selected.size === 0) return;
-    mutate((list) => list.filter((it) => !selected.has(idOf(it))));
-    setSelected(new Set());
-    setIsDeleteConfirming(false);
+  function handleDeleteSkill(skillId: string) {
+    publish(
+      draftItems.filter((item) => idOf(item) !== skillId),
+      draftCategories,
+    );
   }
 
-  // Shift-click range selection logic
-  function toggleRange(
-    bucket: Bucket,
-    list: ISkillItem[],
-    index: number,
-    nextChecked: boolean,
+  function handleAcceptSuggestion(
+    name: string,
+    targetCategoryId?: string | null,
   ) {
-    const anchor = anchorRef.current;
-    if (!anchor || anchor.bucket !== bucket) {
-      // No valid anchor in this bucket; set current as anchor and toggle single
-      anchorRef.current = { bucket, index };
-      const id = idOf(list[index]);
-      toggleOne(id, nextChecked);
+    const cleanName = name.trim();
+    if (!cleanName) return;
+    const alreadyExists = draftItems.some(
+      (item) =>
+        item.name.trim().toLocaleLowerCase() === cleanName.toLocaleLowerCase(),
+    );
+    if (!alreadyExists) {
+      publish(
+        [...draftItems, createSkill(cleanName, targetCategoryId)],
+        draftCategories,
+      );
+    }
+    onAcceptAiSuggestion?.(cleanName, targetCategoryId ?? null);
+  }
+
+  function handleDragStart(event: DragStartEvent) {
+    const activeId = String(event.active.id);
+    setActiveDragId(activeId);
+    setOverDragId(activeId);
+  }
+
+  function handleDragOver(event: DragOverEvent) {
+    setOverDragId(event.over?.id ? String(event.over.id) : null);
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    setActiveDragId(null);
+    setOverDragId(null);
+    const activeId = String(event.active.id);
+    const overId = event.over?.id ? String(event.over.id) : null;
+    if (!overId || activeId === overId) return;
+
+    if (activeId.startsWith(CATEGORY_DND_PREFIX)) {
+      const activeCategoryId = stripDndId(activeId, CATEGORY_DND_PREFIX);
+      const overCategoryId = findCategoryIdForDrop(groups, overId);
+      if (!overCategoryId || activeCategoryId === overCategoryId) return;
+      const activeIndex = draftCategories.findIndex(
+        (category) => category.id === activeCategoryId,
+      );
+      const overIndex = draftCategories.findIndex(
+        (category) => category.id === overCategoryId,
+      );
+      if (activeIndex >= 0 && overIndex >= 0) {
+        publish(draftItems, arrayMove(draftCategories, activeIndex, overIndex));
+        markJustDropped({ kind: "category", id: activeCategoryId });
+      }
       return;
     }
-    const start = Math.min(anchor.index, index);
-    const end = Math.max(anchor.index, index);
-    setSelected((prev) => {
-      const next = new Set(prev);
-      for (let i = start; i <= end; i++) {
-        const id = idOf(list[i]);
-        if (nextChecked) next.add(id);
-        else next.delete(id);
-      }
-      return next;
-    });
+
+    if (activeId.startsWith(SKILL_DND_PREFIX)) {
+      const activeSkillId = stripDndId(activeId, SKILL_DND_PREFIX);
+      const nextGroups = moveSkill(groups, activeId, overId);
+      publish(orderItemsByGroups(nextGroups), draftCategories);
+      markJustDropped({ kind: "skill", id: activeSkillId });
+    }
   }
 
   return (
-    <Sheet
+    <IslandPanel
       open={open}
       onOpenChange={(nextOpen) => {
         if (!nextOpen) onClose();
       }}
-      side="right"
-      title="Manage skills"
-      ariaLabel="Manage skills"
-      footer={
-        <>
-          <div className="text-xs text-muted">
-            {totalSelected > 0 ? `${totalSelected} selected` : "\u00A0"}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3 py-2 rounded [background:var(--sf2)] hover:brightness-95 focus:outline-none focus:[box-shadow:0_0_0_3px_var(--fr)]"
-            >
-              Close
-            </button>
-            <button
-              type="button"
-              disabled
-              className="px-3 py-2 rounded cursor-not-allowed bg-primary text-foreground opacity-60"
-              aria-disabled="true"
-              title="All changes apply immediately"
-            >
-              Apply
-            </button>
-          </div>
-        </>
-      }
-      footerClassName="justify-between"
+      title="Manage skills & categories"
+      ariaLabel="Manage skills & categories"
+      className="dasti-cv-section-sheet-panel dasti-skills-drawer"
+      bodyClassName="dasti-skills-drawer__body"
+      showCloseButton={false}
+      saveAction={{
+        label: "Done",
+        onClick: onClose,
+      }}
     >
-            {/* tabs */}
-            <div>
-              <div
-                role="tablist"
-                aria-label="Skills views"
-                className="inline-flex gap-2 p-1 border rounded-md [border-color:var(--color-border)]"
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={handleAddCategory}
+            className="inline-flex items-center gap-2 px-2 py-1 text-sm border rounded [border-color:var(--color-border)]"
+          >
+            <Plus size={14} strokeWidth={1.8} aria-hidden="true" />
+            Add category
+          </button>
+          {canSuggestSkills ? (
+            <button
+              type="button"
+              onClick={onRequestAiSuggestions}
+              disabled={aiSuggestionsLoading || !onRequestAiSuggestions}
+              className="inline-flex items-center gap-2 px-3 py-2 text-sm border rounded [border-color:var(--color-border)] disabled:opacity-50"
+            >
+              <Wand2 size={14} strokeWidth={1.8} aria-hidden="true" />
+              {aiSuggestionsRequested
+                ? "Refresh suggestions"
+                : "Suggest skills"}
+            </button>
+          ) : null}
+        </div>
+
+        <section
+          role="region"
+          aria-label="AI skill suggestions"
+          className="rounded border p-3 [border-color:var(--color-border)]"
+          data-state={
+            aiSuggestionsLoading
+              ? "loading"
+              : aiSuggestionsRequested
+                ? "ready"
+                : "idle"
+          }
+        >
+          <div className="mb-2 text-sm font-medium">AI suggestions</div>
+          {aiSuggestionsLoading ? (
+            <p className="text-sm text-muted">Generating suggestions.</p>
+          ) : aiSuggestions.length > 0 ? (
+            <div className="space-y-2">
+              {aiSuggestions.map((suggestion) => (
+                <div
+                  key={suggestion}
+                  className="flex items-center gap-2 rounded border px-2 py-2 [border-color:var(--color-border)]"
+                >
+                  <span
+                    className="min-w-0 flex-1 truncate text-sm"
+                    title={suggestion}
+                  >
+                    {suggestion}
+                  </span>
+                  <span className="relative shrink-0 [max-inline-size:calc(var(--s8)+var(--s7)+var(--s6))]">
+                    <select
+                      aria-label={`Add ${suggestion} to category`}
+                      className="w-full appearance-none rounded border bg-background py-1 pl-2 pr-6 text-left text-xs [border-color:var(--color-border)]"
+                      defaultValue=""
+                      onChange={(event) => {
+                        const targetCategoryId =
+                          event.target.value === OTHER_SKILLS_ID
+                            ? null
+                            : event.target.value;
+                        handleAcceptSuggestion(suggestion, targetCategoryId);
+                        event.currentTarget.value = "";
+                      }}
+                    >
+                      <option value="" disabled>
+                        Add to...
+                      </option>
+                      <option value={OTHER_SKILLS_ID}>Other Skills</option>
+                      {draftCategories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.label}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown
+                      size={13}
+                      strokeWidth={1.8}
+                      aria-hidden="true"
+                      className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted"
+                    />
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={`Dismiss ${suggestion}`}
+                    className="shrink-0 px-2 py-1 text-xs border rounded [border-color:var(--color-border)]"
+                    onClick={() => onDismissAiSuggestion?.(suggestion)}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted">
+              {aiSuggestionsRequested
+                ? "No new suggestions for this section."
+                : "Use Suggest skills to generate additions for this CV."}
+            </p>
+          )}
+        </section>
+
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
+          onDragCancel={() => {
+            setActiveDragId(null);
+            setOverDragId(null);
+          }}
+        >
+          <div className="space-y-4">
+            <SortableContext
+              items={sortableCategoryIds}
+              strategy={verticalListSortingStrategy}
+            >
+              <SortableContext
+                items={sortableSkillIds}
+                strategy={verticalListSortingStrategy}
               >
-                <button
-                  role="tab"
-                  aria-selected={tab === "manage"}
-                  tabIndex={tab === "manage" ? 0 : -1}
-                  onClick={() => setTab("manage")}
-                  className={[
-                    "px-3 py-1.5 text-sm rounded-md focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]",
-                    tab === "manage"
-                      ? "[background:var(--ac)] [color:var(--color-on-accent)]"
-                      : "[color:var(--tm2)] hover:[background:var(--sf2)]",
-                  ].join(" ")}
-                >
-                  Manage
-                </button>
-                <button
-                  role="tab"
-                  aria-selected={tab === "ai"}
-                  tabIndex={tab === "ai" ? 0 : -1}
-                  onClick={() => setTab("ai")}
-                  className={[
-                    "px-3 py-1.5 text-sm rounded-md focus:outline-none focus-visible:[box-shadow:0_0_0_3px_var(--fr)]",
-                    tab === "ai"
-                      ? "[background:var(--ac)] [color:var(--color-on-accent)]"
-                      : "[color:var(--tm2)] hover:[background:var(--sf2)]",
-                  ].join(" ")}
-                >
-                  AI Suggestions
-                </button>
-              </div>
-            </div>
-
-            {/* content */}
-            <div>
-              {tab === "manage" ? (
-                <div className="space-y-6">
-                  {/* Bulk actions bar */}
-                  <div className="flex items-center justify-between px-3 py-2 border rounded [border-color:var(--color-border)] bg-background">
-                    <div className="text-sm">
-                      {totalSelected > 0 ? (
-                        <span>{totalSelected} selected</span>
-                      ) : (
-                        <span className="text-muted">
-                          Select items to enable bulk actions
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <select
-                        aria-label="Choose level"
-                        className="px-2 py-1 text-sm border rounded [border-color:var(--color-border)] bg-background"
-                        value={levelChoice}
-                        onChange={(e) =>
-                          setLevelChoice(e.target.value as Level)
-                        }
-                      >
-                        {LEVELS.map((lvl) => (
-                          <option key={lvl} value={lvl}>
-                            {lvl}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => handleSetLevelSelected(levelChoice)}
-                        disabled={bulkDisabled}
-                        className="px-2 py-1 text-sm border rounded [border-color:var(--color-border)] disabled:opacity-50 hover:opacity-90"
-                        title="Set level for selected"
-                      >
-                        Set level
-                      </button>
-                      <div className="w-px h-5 bg-accent/60" aria-hidden />
-                      <button
-                        type="button"
-                        onClick={() => handleMoveSelected("core")}
-                        disabled={bulkDisabled}
-                        className="px-2 py-1 text-sm border rounded [border-color:var(--color-border)] disabled:opacity-50 hover:opacity-90"
-                        title="Move to Core"
-                      >
-                        To Core
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleMoveSelected("secondary")}
-                        disabled={bulkDisabled}
-                        className="px-2 py-1 text-sm border rounded [border-color:var(--color-border)] disabled:opacity-50 hover:opacity-90"
-                        title="Move to Secondary"
-                      >
-                        To Secondary
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleMoveSelected("familiar")}
-                        disabled={bulkDisabled}
-                        className="px-2 py-1 text-sm border rounded [border-color:var(--color-border)] disabled:opacity-50 hover:opacity-90"
-                        title="Move to Familiar"
-                      >
-                        To Familiar
-                      </button>
-                      <div className="w-px h-5 bg-accent/60" aria-hidden />
-                      {isDeleteConfirming ? (
-                        <span
-                          className="sb-doc-confirm"
-                          style={{ gap: "var(--s2)" }}
-                        >
-                          <span
-                            className="sb-doc-confirm__label"
-                            style={{ fontSize: "var(--tx)" }}
-                          >
-                            Delete {selected.size}?
-                          </span>
-                          <button
-                            type="button"
-                            className="sb-doc-confirm__yes"
-                            onClick={handleDeleteSelected}
-                          >
-                            Delete
-                          </button>
-                          <button
-                            type="button"
-                            className="sb-doc-confirm__no"
-                            onClick={() => setIsDeleteConfirming(false)}
-                          >
-                            Cancel
-                          </button>
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setIsDeleteConfirming(true)}
-                          disabled={bulkDisabled}
-                          className="px-2 py-1 text-sm border rounded [border-color:var(--color-border)] disabled:opacity-50 hover:opacity-90"
-                          title="Delete selected"
-                        >
-                          Delete
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {order.map((bkt) => {
-                    const list = groups[bkt];
-                    if (!list || list.length === 0) return null;
-                    const all = isBucketAllSelected(bkt);
-                    const some = isBucketSomeSelected(bkt);
-                    return (
-                      <div key={bkt}>
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              aria-label={`Select all in ${bkt}`}
-                              className="w-4 h-4 accent-[var(--primary)]"
-                              checked={all}
-                              ref={(el) => {
-                                if (el) el.indeterminate = !all && some;
-                              }}
-                              onChange={(e) =>
-                                toggleBucket(bkt, e.target.checked)
-                              }
-                            />
-                            <BucketBadge bucket={bkt} />
-                            <span className="text-sm opacity-70">
-                              {list.length} item{list.length !== 1 ? "s" : ""}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => toggleBucket(bkt, true)}
-                              className="px-2 py-1 text-xs border rounded [border-color:var(--color-border)] hover:opacity-90"
-                              title="Select all in bucket"
-                            >
-                              Select all
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => toggleBucket(bkt, false)}
-                              className="px-2 py-1 text-xs border rounded [border-color:var(--color-border)] hover:opacity-90"
-                              title="Clear bucket selection"
-                            >
-                              Clear
-                            </button>
-                          </div>
-                        </div>
-                        <div className="border divide-y rounded divide-[color:var(--color-border)] [border-color:var(--color-border)]">
-                          {list.map((it, idx) => {
-                            const id = idOf(it);
-                            const bucket = toBucket(it.bucket);
-                            const checked = selected.has(id);
-                            return (
-                              <label
-                                key={id}
-                                className="flex items-center justify-between gap-3 px-3 py-2"
-                              >
-                                <div className="flex items-center min-w-0 gap-3">
-                                  <input
-                                    type="checkbox"
-                                    className="w-4 h-4 accent-[var(--primary)]"
-                                    aria-label={`Select ${it.name}`}
-                                    checked={checked}
-                                    onChange={(e) => {
-                                      // Default toggle when not using shift; anchor is set on change
-                                      anchorRef.current = {
-                                        bucket,
-                                        index: idx,
-                                      };
-                                      toggleOne(id, e.target.checked);
-                                    }}
-                                    onClick={(e) => {
-                                      // Support shift-click range selection
-                                      const ev =
-                                        e as React.MouseEvent<HTMLInputElement>;
-                                      if (!ev.shiftKey) return;
-                                      ev.preventDefault();
-                                      // Determine intended next checked state based on current selection
-                                      const nextChecked = !checked;
-                                      toggleRange(
-                                        bucket,
-                                        list,
-                                        idx,
-                                        nextChecked,
-                                      );
-                                    }}
-                                    onKeyDown={(e) => {
-                                      // Keyboard: Shift + Space/Enter for range toggle
-                                      if (
-                                        (e.key === " " || e.key === "Enter") &&
-                                        e.shiftKey
-                                      ) {
-                                        e.preventDefault();
-                                        const nextChecked = !checked;
-                                        toggleRange(
-                                          bucket,
-                                          list,
-                                          idx,
-                                          nextChecked,
-                                        );
-                                      }
-                                    }}
-                                  />
-                                  <div className="min-w-0">
-                                    <div className="text-sm font-medium truncate">
-                                      {it.name || "Untitled"}
-                                    </div>
-                                    <div className="text-xs text-muted">
-                                      Level: {it.level}
-                                    </div>
-                                  </div>
-                                </div>
-                                <BucketBadge bucket={bucket} />
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </div>
+                {groups.map((group) => {
+                  const groupCategoryIndex = group.categoryId
+                    ? draftCategories.findIndex(
+                        (category) => category.id === group.categoryId,
+                      )
+                    : -1;
+                  const activeCategoryIndex =
+                    activeDragId?.startsWith(CATEGORY_DND_PREFIX)
+                      ? sortableCategoryIds.indexOf(activeDragId)
+                      : -1;
+                  const overCategoryId = categoryDndId(group.id);
+                  const resolvedOverCategoryId =
+                    activeDragId?.startsWith(CATEGORY_DND_PREFIX) && overDragId
+                      ? findCategoryIdForDrop(groups, overDragId)
+                      : null;
+                  const categoryDropIndicator: DropIndicator =
+                    Boolean(group.categoryId) &&
+                    activeCategoryIndex !== -1 &&
+                    (overDragId === overCategoryId ||
+                      resolvedOverCategoryId === group.categoryId) &&
+                    activeDragId !== overCategoryId
+                      ? activeCategoryIndex < groupCategoryIndex
+                        ? "after"
+                        : "before"
+                      : null;
+                  const groupIsOver =
+                    overDragId === categoryDndId(group.id) ||
+                    overDragId === groupDndId(group.id) ||
+                    group.items.some(
+                      (item) => overDragId === skillDndId(idOf(item)),
                     );
-                  })}
-                  {items.length === 0 ? (
-                    <div className="px-3 py-2 text-sm border rounded [border-color:var(--color-border)] text-muted">
-                      No skills yet. Add skills from the section or import
-                      suggestions.
-                    </div>
-                  ) : null}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <div className="px-3 py-2 text-sm border rounded [border-color:var(--color-border)] text-muted">
-                    AI suggestions will appear here. Connect to your profile and
-                    job history to get recommended skills with levels.
-                  </div>
-                  <div className="px-3 py-2 text-xs text-muted">
-                    Placeholder only — no data is fetched yet.
-                  </div>
-                </div>
-              )}
-            </div>
-    </Sheet>
+                  const showGroupDropSlot =
+                    Boolean(activeDragId?.startsWith(SKILL_DND_PREFIX)) &&
+                    (overDragId === groupDndId(group.id) ||
+                      (group.items.length === 0 && groupIsOver));
+                  return (
+                    <DroppableSkillGroup
+                      key={group.id}
+                      group={group}
+                      index={Math.max(0, groupCategoryIndex)}
+                      totalCategories={draftCategories.length}
+                      isNewCategory={
+                        lastAddedCategoryIdRef.current === group.categoryId
+                      }
+                      isOver={groupIsOver}
+                      dropIndicator={categoryDropIndicator}
+                      justDropped={
+                        justDroppedTarget?.kind === "category" &&
+                        justDroppedTarget.id === group.id
+                      }
+                      suppressSortableTransform={activeDragId !== null}
+                      onRename={handleRenameCategory}
+                      onMove={handleMoveCategory}
+                      onDelete={handleDeleteCategory}
+                      ref={
+                        lastAddedCategoryIdRef.current === group.categoryId
+                          ? newCategoryInputRef
+                        : undefined
+                      }
+                    >
+                      <SkillGroupDropZone
+                        group={group}
+                        isOver={groupIsOver}
+                        showDropSlot={showGroupDropSlot}
+                      >
+                        {group.items.length === 0 ? (
+                          <p className="px-3 py-3 text-sm text-muted">
+                            No skills in this group.
+                          </p>
+                        ) : (
+                          group.items.map((item) => (
+                            <SortableSkillRow
+                              key={idOf(item)}
+                              item={item}
+                              categories={draftCategories}
+                              currentCategoryId={group.categoryId}
+                              suppressSortableTransform={activeDragId !== null}
+                              justDropped={
+                                justDroppedTarget?.kind === "skill" &&
+                                justDroppedTarget.id === idOf(item)
+                              }
+                              dropIndicator={((): DropIndicator => {
+                                const skillOverId = skillDndId(idOf(item));
+                                if (
+                                  !activeDragId?.startsWith(SKILL_DND_PREFIX) ||
+                                  overDragId !== skillOverId ||
+                                  activeDragId === skillOverId
+                                ) {
+                                  return null;
+                                }
+                                const activeSkillIndex =
+                                  sortableSkillIds.indexOf(activeDragId);
+                                const overSkillIndex =
+                                  sortableSkillIds.indexOf(skillOverId);
+                                if (
+                                  activeSkillIndex === -1 ||
+                                  overSkillIndex === -1
+                                ) {
+                                  return "before";
+                                }
+                                return activeSkillIndex < overSkillIndex
+                                  ? "after"
+                                  : "before";
+                              })()}
+                              onLevelChange={(skillId, level) =>
+                                updateSkill(skillId, { level })
+                              }
+                              onCategoryChange={handleCategoryChange}
+                              onDelete={handleDeleteSkill}
+                            />
+                          ))
+                        )}
+                      </SkillGroupDropZone>
+                    </DroppableSkillGroup>
+                  );
+                })}
+              </SortableContext>
+            </SortableContext>
+          </div>
+          {typeof document !== "undefined"
+            ? createPortal(dragOverlay, document.body)
+            : dragOverlay}
+        </DndContext>
+      </div>
+    </IslandPanel>
   );
 }
 

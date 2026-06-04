@@ -104,6 +104,16 @@ function remirrorInlineFromRuns(
   });
 }
 
+function remirrorStructureSignature(doc: RemirrorJSON): string {
+  const visit = (node: RemirrorJSON): unknown => ({
+    type: node.type,
+    attrs: node.attrs ?? null,
+    content: Array.isArray(node.content) ? node.content.map(visit) : [],
+  });
+
+  return JSON.stringify(visit(doc));
+}
+
 function remirrorDocFromRichContent(rich: RichInlineContent, fallbackText: string): RemirrorJSON {
   if (!rich || rich.blocks.length === 0) {
     return {
@@ -192,6 +202,11 @@ export function PaperRichInlineEditor(args: {
   const formattingKey = React.useId();
   const latestDocRef = React.useRef<RemirrorJSON>(initialContent);
   const lastExternalDocJsonRef = React.useRef(JSON.stringify(initialContent));
+  const lastCommittedDocJsonRef = React.useRef(JSON.stringify(initialContent));
+  const lastCommittedDocStructureRef = React.useRef(
+    remirrorStructureSignature(initialContent),
+  );
+  const autoCommitTimerRef = React.useRef<number | null>(null);
   const isFocusedRef = React.useRef(false);
   const externalDoc = React.useMemo(
     () => remirrorDocFromRichContent(args.rich, args.value),
@@ -214,8 +229,37 @@ export function PaperRichInlineEditor(args: {
         state: nextState,
       });
       latestDocRef.current = externalDoc;
+      lastCommittedDocJsonRef.current = nextJson;
+      lastCommittedDocStructureRef.current =
+        remirrorStructureSignature(externalDoc);
     }
   }, [externalDoc, manager, onChange]);
+
+  const commit = React.useCallback(
+    (options?: { force?: boolean }) => {
+      const nextJson = JSON.stringify(latestDocRef.current);
+      if (!options?.force && nextJson === lastCommittedDocJsonRef.current) {
+        return;
+      }
+      lastCommittedDocJsonRef.current = nextJson;
+      lastCommittedDocStructureRef.current = remirrorStructureSignature(
+        latestDocRef.current,
+      );
+      args.onDocChange?.(args.editTarget, latestDocRef.current);
+    },
+    [args.editTarget, args.onDocChange],
+  );
+
+  const scheduleAutoCommit = React.useCallback(() => {
+    if (!args.editable) return;
+    if (autoCommitTimerRef.current !== null) {
+      window.clearTimeout(autoCommitTimerRef.current);
+    }
+    autoCommitTimerRef.current = window.setTimeout(() => {
+      autoCommitTimerRef.current = null;
+      commit();
+    }, 450);
+  }, [args.editable, commit]);
 
   const handleChange = React.useCallback(
     (param: any) => {
@@ -223,13 +267,46 @@ export function PaperRichInlineEditor(args: {
       latestDocRef.current =
         (param?.state?.doc?.toJSON?.() as RemirrorJSON | undefined) ??
         latestDocRef.current;
+      const nextStructureSignature = remirrorStructureSignature(
+        latestDocRef.current,
+      );
+      if (nextStructureSignature !== lastCommittedDocStructureRef.current) {
+        if (autoCommitTimerRef.current !== null) {
+          window.clearTimeout(autoCommitTimerRef.current);
+          autoCommitTimerRef.current = null;
+        }
+        commit({ force: true });
+        return;
+      }
+      commit();
     },
-    [onChange],
+    [commit, onChange],
   );
 
-  const commit = React.useCallback(() => {
-    args.onDocChange?.(args.editTarget, latestDocRef.current);
-  }, [args]);
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const flushAutoCommit = () => {
+      if (autoCommitTimerRef.current !== null) {
+        window.clearTimeout(autoCommitTimerRef.current);
+        autoCommitTimerRef.current = null;
+      }
+      commit();
+    };
+
+    window.addEventListener("pagehide", flushAutoCommit);
+    window.addEventListener("beforeunload", flushAutoCommit);
+
+    return () => {
+      window.removeEventListener("pagehide", flushAutoCommit);
+      window.removeEventListener("beforeunload", flushAutoCommit);
+      if (autoCommitTimerRef.current !== null) {
+        window.clearTimeout(autoCommitTimerRef.current);
+        autoCommitTimerRef.current = null;
+      }
+      commit();
+    };
+  }, [commit]);
 
   return (
     <div
@@ -259,7 +336,11 @@ export function PaperRichInlineEditor(args: {
           return;
         }
         isFocusedRef.current = false;
-        commit();
+        if (autoCommitTimerRef.current !== null) {
+          window.clearTimeout(autoCommitTimerRef.current);
+          autoCommitTimerRef.current = null;
+        }
+        commit({ force: true });
         args.onDeactivate?.(args.editTarget);
       }}
       onClick={(event) => {
