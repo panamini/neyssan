@@ -284,7 +284,23 @@ export function getRenderableDocumentDecoration(
   if (!input) return null;
   const decoration = normalizeDocumentDecoration(input);
   const renderUrl = decoration.dataUrl ?? decoration.resolvedUrl;
-  if (!decoration.visible || !renderUrl) return null;
+  if (!decoration.visible || !renderUrl) {
+    if (
+      import.meta.env.DEV &&
+      decoration.visible &&
+      decoration.assetId &&
+      !decoration.dataUrl &&
+      !decoration.resolvedUrl
+    ) {
+      console.info("[cv-decoration-render:missing-url]", {
+        hasAssetId: true,
+        hasDataUrl: false,
+        hasResolvedUrl: false,
+        assetId: decoration.assetId,
+      });
+    }
+    return null;
+  }
   if (
     decoration.dataUrl &&
     !inferMimeTypeFromDataUrl(decoration.dataUrl) &&

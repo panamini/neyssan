@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   applyDocumentDecorationSizePreset,
@@ -80,6 +80,56 @@ describe("document-decoration", () => {
       resolvedUrl: "https://files.example.test/storage_decoration_1",
       mimeType: "image/jpeg",
     });
+  });
+
+  it("renders a temporary blob URL from resolvedUrl without treating it as dataUrl", () => {
+    const resolved = getRenderableDocumentDecoration({
+      visible: true,
+      source: "upload",
+      assetId: "storage_decoration_1",
+      resolvedUrl: "blob:http://localhost/preview-1",
+      fileName: "mark.jpg",
+      mimeType: "image/jpeg",
+      alt: "Company mark",
+      sizePreset: 35,
+      fit: "contain",
+      placementMode: "custom",
+      xMm: 17,
+      yMm: 35,
+    } as any);
+
+    expect(resolved).toMatchObject({
+      assetId: "storage_decoration_1",
+      resolvedUrl: "blob:http://localhost/preview-1",
+      mimeType: "image/jpeg",
+    });
+    expect(resolved?.dataUrl).toBeUndefined();
+  });
+
+  it("does not render an assetId-only decoration and emits a dev diagnostic", () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => undefined);
+
+    const resolved = getRenderableDocumentDecoration({
+      visible: true,
+      source: "upload",
+      assetId: "storage_decoration_without_url",
+      fileName: "mark.jpg",
+      mimeType: "image/jpeg",
+      sizePreset: 35,
+      fit: "contain",
+      placementMode: "default",
+    } as any);
+
+    expect(resolved).toBeNull();
+    expect(infoSpy).toHaveBeenCalledWith(
+      "[cv-decoration-render:missing-url]",
+      expect.objectContaining({
+        hasAssetId: true,
+        hasDataUrl: false,
+        hasResolvedUrl: false,
+        assetId: "storage_decoration_without_url",
+      }),
+    );
   });
 
   it("preserves runtime missing asset state during normalization", () => {

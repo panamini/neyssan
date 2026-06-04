@@ -2812,7 +2812,8 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
                   }),
                 );
                 if (
-                  deepEqual(stripMetadata(docNorm), stripMetadata(remoteNorm))
+                  deepEqual(stripMetadata(docNorm), stripMetadata(remoteNorm)) &&
+                  deepEqual(docNorm.metadata ?? null, remoteNorm.metadata ?? null)
                 ) {
                   return;
                 }
@@ -3202,10 +3203,12 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       return;
     }
     const requestedRouteCvId = readRequestedCvIdFromWindowLocation();
-    if (!requestedRouteCvId || String(currentCv.id) !== requestedRouteCvId) {
+    const activeCvId = String(currentCv.id);
+    const targetCvId = requestedRouteCvId || activeCvId;
+    if (requestedRouteCvId && activeCvId !== requestedRouteCvId) {
       return;
     }
-    const refreshKey = `${requestedRouteCvId}:${currentCv.metadata?.updatedAt ?? ""}`;
+    const refreshKey = `${targetCvId}:${currentCv.metadata?.updatedAt ?? ""}`;
     if (routeRemoteRefreshKeyRef.current === refreshKey) {
       return;
     }
@@ -3214,7 +3217,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     const localBaseline = currentCv;
     void (async () => {
       try {
-        const remoteState = await adapter.loadRemoteState(requestedRouteCvId);
+        const remoteState = await adapter.loadRemoteState(targetCvId);
         if (remoteState.status !== "ok") return;
         const remoteLoaded = remoteState.document;
         let migratedRemote: CvDocument;
@@ -3228,16 +3231,17 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         );
         if (
           !shouldApplyBackgroundRefresh(
-            requestedRouteCvId,
+            targetCvId,
             localBaseline,
             remoteNorm,
           )
         ) {
           return;
         }
+        const latestRouteCvId = readRequestedCvIdFromWindowLocation();
         if (
-          readRequestedCvIdFromWindowLocation() !== requestedRouteCvId ||
-          String(currentCvRef.current?.id ?? "") !== requestedRouteCvId
+          (latestRouteCvId && latestRouteCvId !== targetCvId) ||
+          String(currentCvRef.current?.id ?? "") !== targetCvId
         ) {
           return;
         }

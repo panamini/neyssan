@@ -501,6 +501,72 @@ describe('CvLibraryContext', () => {
     );
   });
 
+  it('refreshes runtime document decoration URLs for the restored active cv without a route id', async () => {
+    authState.isLoaded = true;
+    authState.isSignedIn = true;
+    authState.isConvexAuthenticated = true;
+    authState.isConvexAuthLoading = false;
+
+    const localCv = generateCvTemplateV1('Cached Active Decoration CV');
+    localCv.id = 'cv_active_decoration_cache';
+    localCv.metadata = {
+      ...localCv.metadata,
+      updatedAt: '2026-04-18T12:00:00.000Z',
+      documentDecoration: {
+        visible: true,
+        source: 'upload',
+        assetId: 'storage_decoration_active',
+        fileName: 'mark.png',
+        mimeType: 'image/png',
+        sizePreset: 35,
+        fit: 'contain',
+        placementMode: 'default',
+      } as any,
+    };
+
+    const remoteCv = {
+      ...localCv,
+      metadata: {
+        ...localCv.metadata,
+        documentDecoration: {
+          ...(localCv.metadata.documentDecoration as any),
+          resolvedUrl: 'https://files.example.test/storage_decoration_active',
+        },
+      },
+    };
+
+    vi.mocked(convexClient.query).mockImplementation(async (_query: unknown, args: unknown) => {
+      if ((args as { profileId?: string } | undefined)?.profileId === localCv.id) {
+        return {
+          profileId: localCv.id,
+          cvDocument: remoteCv,
+          metadata: remoteCv.metadata,
+        };
+      }
+      return [];
+    });
+
+    mockLocalStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([localCv]));
+    mockLocalStorage.setItem(`cv:${localCv.id}`, JSON.stringify(localCv));
+    mockLocalStorage.setItem(ACTIVE_CV_STORAGE_KEY, localCv.id);
+    window.history.pushState({}, '', '/cv');
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>,
+    );
+
+    await waitFor(() => expect(ctx.currentCvId).toBe(localCv.id));
+    await waitFor(() =>
+      expect(ctx.currentCv.metadata.documentDecoration).toMatchObject({
+        assetId: 'storage_decoration_active',
+        resolvedUrl: 'https://files.example.test/storage_decoration_active',
+      }),
+    );
+  });
+
   it('preserves the local selected template when background refresh returns newer content without visual metadata', async () => {
     authState.isLoaded = true;
     authState.isSignedIn = true;

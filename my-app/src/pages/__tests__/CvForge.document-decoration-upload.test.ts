@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { uploadDocumentDecorationAsset } from "../CvForge";
+import {
+  resolveActiveCvDocumentDecoration,
+  uploadDocumentDecorationAsset,
+} from "../CvForge";
 
 describe("CvForge document decoration upload", () => {
   afterEach(() => {
@@ -63,5 +66,65 @@ describe("CvForge document decoration upload", () => {
         file: new File(["image-bytes"], "mark.jpg", { type: "image/jpeg" }),
       }),
     ).rejects.toThrow(/did not return a storage id/i);
+  });
+
+  it("prefers a renderable blob draft while upload metadata is resolving", () => {
+    const active = resolveActiveCvDocumentDecoration({
+      draft: {
+        visible: true,
+        source: "upload",
+        assetId: "storage_decoration_1",
+        resolvedUrl: "blob:http://localhost/preview-1",
+        fileName: "mark.jpg",
+        mimeType: "image/jpeg",
+        sizePreset: 35,
+        fit: "contain",
+        placementMode: "default",
+      } as any,
+      persisted: {
+        visible: true,
+        source: "upload",
+        assetId: "storage_decoration_1",
+        fileName: "mark.jpg",
+        mimeType: "image/jpeg",
+        sizePreset: 35,
+        fit: "contain",
+        placementMode: "default",
+      } as any,
+    });
+
+    expect(active?.resolvedUrl).toBe("blob:http://localhost/preview-1");
+  });
+
+  it("does not let an assetId-only draft hide a renderable persisted decoration", () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+
+    const active = resolveActiveCvDocumentDecoration({
+      draft: {
+        visible: true,
+        source: "upload",
+        assetId: "storage_decoration_1",
+        fileName: "mark.jpg",
+        mimeType: "image/jpeg",
+        sizePreset: 35,
+        fit: "contain",
+        placementMode: "default",
+      } as any,
+      persisted: {
+        visible: true,
+        source: "upload",
+        assetId: "storage_decoration_1",
+        resolvedUrl: "https://files.example.test/storage_decoration_1",
+        fileName: "mark.jpg",
+        mimeType: "image/jpeg",
+        sizePreset: 35,
+        fit: "contain",
+        placementMode: "default",
+      } as any,
+    });
+
+    expect(active?.resolvedUrl).toBe(
+      "https://files.example.test/storage_decoration_1",
+    );
   });
 });

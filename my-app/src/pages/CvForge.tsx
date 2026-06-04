@@ -149,6 +149,7 @@ import CvDesignFields, {
 import {
   DOCUMENT_DECORATION_MAX_FILE_BYTES,
   createDefaultDocumentDecoration,
+  getRenderableDocumentDecoration,
   normalizeDocumentDecoration,
   resolveDocumentDecorationMimeType,
   shouldPersistDocumentDecoration,
@@ -453,6 +454,19 @@ function getCvDocumentDecoration(
   return normalizeDocumentDecoration(
     durableSource ?? createDefaultDocumentDecoration(),
   );
+}
+
+export function resolveActiveCvDocumentDecoration({
+  draft,
+  persisted,
+}: {
+  draft: DocumentDecoration | null | undefined;
+  persisted: DocumentDecoration | null | undefined;
+}): DocumentDecoration {
+  if (draft && getRenderableDocumentDecoration(draft)) {
+    return normalizeDocumentDecoration(draft);
+  }
+  return normalizeDocumentDecoration(persisted ?? createDefaultDocumentDecoration());
 }
 
 function normalizeListName(value: string): string {
@@ -6524,8 +6538,30 @@ export function CvForge(): JSX.Element {
     setDraftCvDocumentDecoration(null);
   }, [currentCv?.id, revokeCvDecorationPreviewUrl]);
   React.useEffect(() => revokeCvDecorationPreviewUrl, [revokeCvDecorationPreviewUrl]);
-  const cvDocumentDecoration =
-    draftCvDocumentDecoration ?? persistedCvDocumentDecoration;
+  React.useEffect(() => {
+    const draft = draftCvDocumentDecoration;
+    if (!draft?.assetId || !draft.resolvedUrl?.startsWith("blob:")) {
+      return;
+    }
+    if (persistedCvDocumentDecoration.assetId !== draft.assetId) {
+      return;
+    }
+    if (
+      persistedCvDocumentDecoration.resolvedUrl ||
+      persistedCvDocumentDecoration.assetMissing
+    ) {
+      setDraftCvDocumentDecoration(null);
+      revokeCvDecorationPreviewUrl();
+    }
+  }, [
+    draftCvDocumentDecoration,
+    persistedCvDocumentDecoration,
+    revokeCvDecorationPreviewUrl,
+  ]);
+  const cvDocumentDecoration = resolveActiveCvDocumentDecoration({
+    draft: draftCvDocumentDecoration,
+    persisted: persistedCvDocumentDecoration,
+  });
   const updateCvDocumentDecoration = React.useCallback(
     async (nextDecoration: DocumentDecoration): Promise<void> => {
       if (!currentCv) {
@@ -6635,10 +6671,16 @@ export function CvForge(): JSX.Element {
           xMm: pendingDecoration.xMm,
           yMm: pendingDecoration.yMm,
         });
+        setDraftCvDocumentDecoration(
+          normalizeDocumentDecoration({
+            ...persistedDecoration,
+            resolvedUrl: pendingDecoration.resolvedUrl,
+          }),
+        );
         await updateCvDocumentDecoration(persistedDecoration);
+      })().catch((error: unknown) => {
         setDraftCvDocumentDecoration(null);
         revokeCvDecorationPreviewUrl();
-      })().catch((error: unknown) => {
         showToast(
           error instanceof Error ? error.message : "Could not upload this image.",
           { variant: "error" },
