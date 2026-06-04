@@ -7183,6 +7183,7 @@ export function ProposalForge(): JSX.Element {
       const nextSourceComposeDraft: StoredProposalComposeDraft | null = null;
 
       setProposalContent(nextContent);
+      setProposalDocument(null);
       setProposalType(nextProposalType);
       setProposalLibraryStatus("saved");
       setProposalVoicePreset(nextVoicePreset);
@@ -7403,6 +7404,7 @@ export function ProposalForge(): JSX.Element {
     cancelPendingComposeDraftSync();
     setDuplicateSourceJobId(draftProposal.metadata?.jobId ?? null);
     setProposalContent(nextContent);
+    setProposalDocument(null);
     setProposalType(nextType);
     setProposalLibraryStatus("draft");
     setProposalVoicePreset(nextVoicePreset);
@@ -7448,6 +7450,7 @@ export function ProposalForge(): JSX.Element {
     setComposeSaveStatus("idle");
     writeStoredOutputDraft({
       proposalContent: nextContent,
+      proposalDocument: null,
       proposalType: nextType,
       proposalVoicePreset: nextVoicePreset,
       proposalTemplateId: nextTemplateId,
@@ -9586,6 +9589,7 @@ export function ProposalForge(): JSX.Element {
       }
 
       setProposalContent(savedProposalContent);
+      setProposalDocument(null);
       setProposalType(savedProposalType);
       setComposeToolbarModelType(restoredModelType);
       setProposalVoicePreset(savedProposalVoicePreset);

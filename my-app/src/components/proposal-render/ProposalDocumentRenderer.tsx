@@ -80,12 +80,15 @@ import {
   mergeProposalDocumentTargetForward,
   normalizeEditableText,
   normalizeProposalDocumentEditText,
+  normalizeProposalRichText,
   resolveProposalDocument,
   splitProposalDocumentTarget,
   updateProposalDocumentTextTarget,
   type ProposalDocument,
   type ProposalDocumentTextTarget,
   type ProposalDocumentListMarker,
+  type ProposalInlineRun,
+  type ProposalRichText,
 } from "../../lib/proposal-document";
 
 type ProposalDocumentRendererProps = {
@@ -143,11 +146,13 @@ type ProposalDocumentBlock =
       id: string;
       type: "salutation";
       text: string;
+      richText?: ProposalRichText;
     }
   | {
       id: string;
       type: "paragraph";
       text: string;
+      richText?: ProposalRichText;
       paragraphId: string;
       continuation: boolean;
     }
@@ -157,6 +162,7 @@ type ProposalDocumentBlock =
       items: Array<{
         id: string;
         text: string;
+        richText?: ProposalRichText;
         iconKey?: DocumentIconKey;
         marker?: ProposalDocumentListMarker | null;
       }>;
@@ -243,7 +249,7 @@ type ProposalLetterheadViewModel = {
 };
 
 type ProposalEditableTextProps = React.HTMLAttributes<HTMLElement> & {
-  contentEditable?: "plaintext-only";
+  contentEditable?: true | "plaintext-only";
   suppressContentEditableWarning?: boolean;
   "data-proposal-editable-text"?: string;
 };
@@ -282,6 +288,7 @@ type ProposalBodyEditableBlockDescriptor =
       blockId: string;
       fieldKind: "paragraph" | "salutation";
       text: string;
+      richText?: ProposalRichText;
       className: string;
       key: string;
     }
@@ -626,6 +633,138 @@ function insertPlainTextIntoEditableTarget(
   return normalizeProposalDocumentEditText(target.textContent ?? "");
 }
 
+function appendProposalRichTextRun(
+  runs: ProposalInlineRun[],
+  text: string,
+  marks: Omit<ProposalInlineRun, "text">,
+): void {
+  const cleanText = text.replaceAll(EMPTY_EDITABLE_TEXT, "");
+  if (!cleanText) return;
+  const previous = runs[runs.length - 1];
+  if (
+    previous &&
+    Boolean(previous.bold) === Boolean(marks.bold) &&
+    Boolean(previous.italic) === Boolean(marks.italic) &&
+    Boolean(previous.underline) === Boolean(marks.underline)
+  ) {
+    previous.text += cleanText;
+    return;
+  }
+  runs.push({
+    text: cleanText,
+    ...(marks.bold ? { bold: true } : null),
+    ...(marks.italic ? { italic: true } : null),
+    ...(marks.underline ? { underline: true } : null),
+  });
+}
+
+function serializeEditableRichTextWithoutControls(
+  target: HTMLElement,
+): ProposalRichText | undefined {
+  const clone = target.cloneNode(true) as HTMLElement;
+  clone
+    .querySelectorAll("[data-proposal-editor-control='true']")
+    .forEach((node) => node.remove());
+
+  const runs: ProposalInlineRun[] = [];
+  const walk = (node: Node, marks: Omit<ProposalInlineRun, "text">) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      appendProposalRichTextRun(runs, node.textContent ?? "", marks);
+      return;
+    }
+    if (!(node instanceof HTMLElement)) return;
+    const tagName = node.tagName.toLowerCase();
+    if (tagName === "br") {
+      appendProposalRichTextRun(runs, "\n", marks);
+      return;
+    }
+    if (tagName === "script" || tagName === "style") return;
+
+    const nextMarks = {
+      bold: marks.bold || tagName === "strong" || tagName === "b",
+      italic: marks.italic || tagName === "em" || tagName === "i",
+      underline: marks.underline || tagName === "u",
+    };
+    node.childNodes.forEach((child) => walk(child, nextMarks));
+    if (["p", "div", "li", "section", "article", "blockquote"].includes(tagName)) {
+      appendProposalRichTextRun(runs, "\n", marks);
+    }
+  };
+
+  clone.childNodes.forEach((child) => walk(child, {}));
+  return normalizeProposalRichText({ runs });
+}
+
+function createFormattedTextNode(run: ProposalInlineRun): Node {
+  let node: Node = document.createTextNode(run.text);
+  if (run.underline) {
+    const element = document.createElement("u");
+    element.appendChild(node);
+    node = element;
+  }
+  if (run.italic) {
+    const element = document.createElement("em");
+    element.appendChild(node);
+    node = element;
+  }
+  if (run.bold) {
+    const element = document.createElement("strong");
+    element.appendChild(node);
+    node = element;
+  }
+  return node;
+}
+
+function getClipboardRichText(
+  event: React.ClipboardEvent<HTMLElement>,
+): ProposalRichText | undefined {
+  const html = event.clipboardData.getData("text/html");
+  if (html) {
+    const parser = new DOMParser();
+    const parsed = parser.parseFromString(html, "text/html");
+    return serializeEditableRichTextWithoutControls(parsed.body);
+  }
+
+  return normalizeProposalRichText({
+    runs: [{ text: getClipboardPlainText(event) }],
+  });
+}
+
+function insertRichTextIntoEditableTarget(
+  target: HTMLElement,
+  richText: ProposalRichText | undefined,
+): ProposalRichText | undefined {
+  const selection = window.getSelection?.();
+  const range =
+    selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+
+  if (!richText) {
+    return serializeEditableRichTextWithoutControls(target);
+  }
+
+  if (range && target.contains(range.commonAncestorContainer)) {
+    range.deleteContents();
+    const fragment = document.createDocumentFragment();
+    richText.runs.forEach((run) => {
+      fragment.appendChild(createFormattedTextNode(run));
+    });
+    const lastNode = fragment.lastChild;
+    range.insertNode(fragment);
+    if (lastNode) {
+      range.setStartAfter(lastNode);
+      range.collapse(true);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    }
+  } else {
+    target.replaceChildren(
+      ...richText.runs.map((run) => createFormattedTextNode(run)),
+    );
+  }
+
+  return serializeEditableRichTextWithoutControls(target);
+}
+
 function getEditableTextWithoutControls(target: HTMLElement): string {
   const clone = target.cloneNode(true) as HTMLElement;
   clone
@@ -634,6 +773,73 @@ function getEditableTextWithoutControls(target: HTMLElement): string {
   return normalizeProposalDocumentEditText(
     (clone.textContent ?? "").replaceAll(EMPTY_EDITABLE_TEXT, ""),
   );
+}
+
+function renderProposalPlainTextWithInlineIcons(text: string): React.ReactNode[] {
+  return parseDocumentIconTextSegments(text).map((segment, index) => {
+    if (segment.type === "text") return segment.text;
+    const icon = getDocumentIcon(segment.iconKey);
+    if (!icon) return "";
+    return (
+      <span
+        key={`${segment.iconKey}-${index}`}
+        className="dasti-proposal-document__inline-icon"
+        aria-hidden="true"
+        dangerouslySetInnerHTML={{ __html: icon.svg }}
+      />
+    );
+  });
+}
+
+function renderProposalInlineRuns(
+  richText: ProposalRichText | undefined,
+  fallbackText: string,
+): React.ReactNode {
+  const runs = richText?.runs?.length
+    ? richText.runs
+    : [{ text: fallbackText } satisfies ProposalInlineRun];
+
+  return runs.map((run, index) => {
+    const content = renderProposalPlainTextWithInlineIcons(run.text);
+    let node: React.ReactNode = content;
+    if (run.underline) {
+      node = <u>{node}</u>;
+    }
+    if (run.italic) {
+      node = <em>{node}</em>;
+    }
+    if (run.bold) {
+      node = <strong>{node}</strong>;
+    }
+    return <React.Fragment key={`${index}-${run.text}`}>{node}</React.Fragment>;
+  });
+}
+
+function escapeProposalEditableHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function richTextToEditableHtml(
+  richText: ProposalRichText | undefined,
+  fallbackText: string,
+): string {
+  const runs = richText?.runs?.length
+    ? richText.runs
+    : [{ text: fallbackText || EMPTY_EDITABLE_TEXT } satisfies ProposalInlineRun];
+
+  return runs
+    .map((run) => {
+      let html = escapeProposalEditableHtml(run.text || EMPTY_EDITABLE_TEXT);
+      if (run.underline) html = `<u>${html}</u>`;
+      if (run.italic) html = `<em>${html}</em>`;
+      if (run.bold) html = `<strong>${html}</strong>`;
+      return html;
+    })
+    .join("");
 }
 
 function getEditableNodeTextLength(node: Node): number {
@@ -1134,15 +1340,21 @@ function buildEditableBodyDocument(
   editor: HTMLElement,
   document: ProposalDocument,
 ): ProposalDocument {
-  const blockTextById = new Map<string, string>();
-  const listItemTextById = new Map<string, Map<string, string>>();
+  const blockRichTextById = new Map<string, ProposalRichText | undefined>();
+  const listItemRichTextById = new Map<
+    string,
+    Map<string, ProposalRichText | undefined>
+  >();
 
   editor
     .querySelectorAll<HTMLElement>("[data-proposal-edit-target='text-block']")
     .forEach((node) => {
       const blockId = node.dataset.proposalEditBlockId;
       if (!blockId) return;
-      blockTextById.set(blockId, getEditableTextWithoutControls(node));
+      blockRichTextById.set(
+        blockId,
+        serializeEditableRichTextWithoutControls(node),
+      );
     });
 
   editor
@@ -1151,9 +1363,11 @@ function buildEditableBodyDocument(
       const blockId = node.dataset.proposalEditBlockId;
       const itemId = node.dataset.proposalEditItemId;
       if (!blockId || !itemId) return;
-      const itemMap = listItemTextById.get(blockId) ?? new Map<string, string>();
-      itemMap.set(itemId, getEditableTextWithoutControls(node));
-      listItemTextById.set(blockId, itemMap);
+      const itemMap =
+        listItemRichTextById.get(blockId) ??
+        new Map<string, ProposalRichText | undefined>();
+      itemMap.set(itemId, serializeEditableRichTextWithoutControls(node));
+      listItemRichTextById.set(blockId, itemMap);
     });
 
   return {
@@ -1162,23 +1376,39 @@ function buildEditableBodyDocument(
     blocks: document.blocks.map((block) => {
       if (
         (block.type === "salutation" || block.type === "paragraph") &&
-        blockTextById.has(block.id)
+        blockRichTextById.has(block.id)
       ) {
+        const richText = blockRichTextById.get(block.id);
+        const { richText: _richText, ...rest } = block;
         return {
-          ...block,
-          text: blockTextById.get(block.id) ?? block.text,
+          ...rest,
+          text: richText
+            ? normalizeProposalDocumentEditText(
+                richText.runs.map((run) => run.text).join(""),
+              )
+            : "",
+          ...(richText ? { richText } : null),
         };
       }
 
-      if (block.type === "list" && listItemTextById.has(block.id)) {
-        const itemTextById = listItemTextById.get(block.id);
+      if (block.type === "list" && listItemRichTextById.has(block.id)) {
+        const itemRichTextById = listItemRichTextById.get(block.id);
         return {
           ...block,
-          items: block.items.map((item) =>
-            itemTextById?.has(item.id)
-              ? { ...item, text: itemTextById.get(item.id) ?? item.text }
-              : item,
-          ),
+          items: block.items.map((item) => {
+            if (!itemRichTextById?.has(item.id)) return item;
+            const richText = itemRichTextById.get(item.id);
+            const { richText: _richText, ...rest } = item;
+            return {
+              ...rest,
+              text: richText
+                ? normalizeProposalDocumentEditText(
+                    richText.runs.map((run) => run.text).join(""),
+                  )
+                : "",
+              ...(richText ? { richText } : null),
+            };
+          }),
         };
       }
 
@@ -3212,6 +3442,7 @@ function buildProposalDocumentBlocksFromStructuredDocument(
         id: block.id || "salutation",
         type: "salutation",
         text: block.text,
+        ...(block.richText ? { richText: block.richText } : null),
       });
       return;
     }
@@ -3221,6 +3452,7 @@ function buildProposalDocumentBlocksFromStructuredDocument(
         .map((item, itemIndex) => ({
           id: item.id || `${block.id || `list-${index}`}-item-${itemIndex}`,
           text: item.text,
+          ...(item.richText ? { richText: item.richText } : null),
           ...(item.iconKey ? { iconKey: item.iconKey } : null),
           marker: item.marker ?? block.marker ?? null,
         }));
@@ -3242,10 +3474,15 @@ function buildProposalDocumentBlocksFromStructuredDocument(
     const fragments = splitParagraphIntoPaginationFragments(block.text);
     (fragments.length > 0 ? fragments : [""]).forEach(
       (fragment, fragmentIndex) => {
+        const canPreserveRichText =
+          fragments.length === 1 && fragmentIndex === 0 && block.richText;
         blocks.push({
           id: `${block.id || `paragraph-${index}`}-${fragmentIndex}`,
           type: "paragraph",
           text: fragment,
+          ...(canPreserveRichText
+            ? { richText: block.richText }
+            : null),
           paragraphId: block.id || `paragraph-${index}`,
           continuation: fragmentIndex > 0,
         });
@@ -4294,20 +4531,6 @@ export function ProposalDocumentRenderer({
         getEditableTextProps(isTextEditable, label, (value) => {
           commitEditableDocumentText(target, value);
         }, { ...behavior, structuredTarget: target });
-      const renderInlineText = (text: string) =>
-        parseDocumentIconTextSegments(text).map((segment, index) => {
-          if (segment.type === "text") return segment.text;
-          const icon = getDocumentIcon(segment.iconKey);
-          if (!icon) return "";
-          return (
-            <span
-              key={`${segment.iconKey}-${index}`}
-              className="dasti-proposal-document__inline-icon"
-              aria-hidden="true"
-              dangerouslySetInnerHTML={{ __html: icon.svg }}
-            />
-          );
-        });
 
       switch (block.type) {
         case "salutation":
@@ -4322,7 +4545,9 @@ export function ProposalDocumentRenderer({
                 { fieldKind: "salutation" },
               ) ?? {})}
             >
-              {isTextEditable ? block.text : renderInlineText(block.text)}
+              {isTextEditable
+                ? block.text
+                : renderProposalInlineRuns(block.richText, block.text)}
             </p>
           );
         case "paragraph":
@@ -4344,7 +4569,9 @@ export function ProposalDocumentRenderer({
                 { multiline: true, fieldKind: "paragraph" },
               ) ?? {})}
             >
-              {isTextEditable ? block.text : renderInlineText(block.text)}
+              {isTextEditable
+                ? block.text
+                : renderProposalInlineRuns(block.richText, block.text)}
             </p>
           );
         case "list":
@@ -4492,7 +4719,9 @@ export function ProposalDocumentRenderer({
                         { multiline: true, fieldKind: "list-item" },
                       ) ?? {})}
                     >
-                      {isTextEditable ? item.text : renderInlineText(item.text)}
+                      {isTextEditable
+                        ? item.text
+                        : renderProposalInlineRuns(item.richText, item.text)}
                     </span>
                   </li>
                 );
@@ -4548,6 +4777,7 @@ export function ProposalDocumentRenderer({
 
         if (block.type === "paragraph") {
           let text = block.text;
+          let richText = block.richText;
           let lastIndex = index;
 
           while (lastIndex + 1 < blocks.length) {
@@ -4560,6 +4790,7 @@ export function ProposalDocumentRenderer({
             }
 
             text = `${text} ${next.text}`;
+            richText = undefined;
             lastIndex += 1;
           }
 
@@ -4568,6 +4799,7 @@ export function ProposalDocumentRenderer({
             blockId: block.paragraphId,
             fieldKind: "paragraph",
             text,
+            richText,
             key: `visible-${block.id}`,
             className: [
                 "dasti-proposal-document__paragraph",
@@ -4588,6 +4820,7 @@ export function ProposalDocumentRenderer({
             blockId: block.id,
             fieldKind: "salutation",
             text: block.text,
+            richText: block.richText,
             key: block.id,
             className: "dasti-proposal-document__salutation",
           });
@@ -4620,7 +4853,7 @@ export function ProposalDocumentRenderer({
                 className={descriptor.className}
                 data-proposal-block
               >
-                {descriptor.text}
+                {renderProposalInlineRuns(descriptor.richText, descriptor.text)}
               </p>
             );
           }
@@ -4632,7 +4865,7 @@ export function ProposalDocumentRenderer({
         <div
           key="proposal-body-editor"
           className="dasti-proposal-document__body-editor"
-          contentEditable="plaintext-only"
+          contentEditable
           suppressContentEditableWarning
           role="textbox"
           tabIndex={0}
@@ -4645,9 +4878,9 @@ export function ProposalDocumentRenderer({
           }}
           onPaste={(event) => {
             event.preventDefault();
-            insertPlainTextIntoEditableTarget(
+            insertRichTextIntoEditableTarget(
               event.currentTarget,
-              getClipboardPlainText(event),
+              getClipboardRichText(event),
             );
             commitEditableBodyDocument(event.currentTarget);
           }}
@@ -4712,9 +4945,13 @@ export function ProposalDocumentRenderer({
                   data-proposal-edit-target="text-block"
                   data-proposal-edit-block-id={descriptor.blockId}
                   data-proposal-edit-field-kind={descriptor.fieldKind}
-                >
-                  {descriptor.text || EMPTY_EDITABLE_TEXT}
-                </p>
+                  dangerouslySetInnerHTML={{
+                    __html: richTextToEditableHtml(
+                      descriptor.richText,
+                      descriptor.text,
+                    ),
+                  }}
+                />
               );
             }
 
@@ -4775,9 +5012,7 @@ export function ProposalDocumentRenderer({
                       data-proposal-list-item
                       data-proposal-list-item-editable="true"
                       data-has-item-icon={itemIcon ? "true" : undefined}
-                      data-proposal-edit-target="list-item"
                       data-proposal-edit-block-id={block.id}
-                      data-proposal-edit-item-id={item.id}
                       data-proposal-edit-field-kind="list-item"
                     >
                       <span
@@ -4850,7 +5085,18 @@ export function ProposalDocumentRenderer({
                           </div>
                         ) : null}
                       </span>
-                      {item.text || EMPTY_EDITABLE_TEXT}
+                      <span
+                        data-proposal-edit-target="list-item"
+                        data-proposal-edit-block-id={block.id}
+                        data-proposal-edit-item-id={item.id}
+                        data-proposal-edit-field-kind="list-item"
+                        dangerouslySetInnerHTML={{
+                          __html: richTextToEditableHtml(
+                            item.richText,
+                            item.text,
+                          ),
+                        }}
+                      />
                     </li>
                   );
                 })}

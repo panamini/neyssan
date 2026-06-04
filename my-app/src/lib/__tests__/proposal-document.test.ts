@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   normalizeEditableText,
+  applyProposalDocumentInlineMark,
+  getProposalRichTextPlainText,
   mergeProposalDocumentTargetBackward,
   mergeProposalDocumentTargetForward,
   normalizeProposalDocument,
@@ -82,6 +84,96 @@ describe("proposal-document", () => {
     expect(serializeProposalDocumentToLegacyString(document)).toBe(
       "Dear Team,\n\nI can help.\n\n- First\n- Second\n\nBest,\nAlex",
     );
+  });
+
+  it("keeps plain documents valid without rich text", () => {
+    const document: ProposalDocument = {
+      schemaVersion: 1,
+      kind: "letter",
+      source: "structured",
+      blocks: [{ id: "p", type: "paragraph", text: "Plain paragraph." }],
+    };
+
+    expect(normalizeProposalDocument(document)).toEqual(document);
+  });
+
+  it("normalizes rich paragraph and list item fallbacks", () => {
+    const document = normalizeProposalDocument({
+      schemaVersion: 1,
+      kind: "letter",
+      source: "structured",
+      blocks: [
+        {
+          id: "p",
+          type: "paragraph",
+          text: "stale fallback",
+          richText: {
+            runs: [
+              { text: "Bold", bold: true },
+              { text: " and clean\u200B text" },
+            ],
+          },
+        },
+        {
+          id: "l",
+          type: "list",
+          items: [
+            {
+              id: "i",
+              text: "stale item",
+              richText: { runs: [{ text: "Underlined", underline: true }] },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(document?.blocks[0]).toMatchObject({
+      text: "Bold and clean text",
+      richText: { runs: [{ text: "Bold", bold: true }, { text: " and clean text" }] },
+    });
+    expect(document?.blocks[1]).toMatchObject({
+      items: [
+        {
+          text: "Underlined",
+          richText: { runs: [{ text: "Underlined", underline: true }] },
+        },
+      ],
+    });
+  });
+
+  it("applies inline marks while keeping plain fallback clean", () => {
+    const document: ProposalDocument = {
+      schemaVersion: 1,
+      kind: "letter",
+      source: "structured",
+      blocks: [{ id: "p", type: "paragraph", text: "Make this bold." }],
+    };
+
+    const next = applyProposalDocumentInlineMark({
+      document,
+      target: { type: "text-block", blockId: "p" },
+      mark: "bold",
+      start: 5,
+      end: 9,
+    });
+    const block = next.blocks[0];
+
+    expect(block).toMatchObject({
+      text: "Make this bold.",
+      richText: {
+        runs: [
+          { text: "Make " },
+          { text: "this", bold: true },
+          { text: " bold." },
+        ],
+      },
+    });
+    expect(
+      block.type === "paragraph"
+        ? getProposalRichTextPlainText(block.richText)
+        : "",
+    ).toBe("Make this bold.");
   });
 
   it("falls back to legacy content when structured data is invalid", () => {

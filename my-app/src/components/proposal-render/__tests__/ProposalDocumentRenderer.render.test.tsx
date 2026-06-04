@@ -67,6 +67,134 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     expect(container.textContent).toContain("Ship inline SVG export markers");
   });
 
+  it("renders structured rich runs as semantic inline elements", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content=""
+        proposalType="cover_letter"
+        templateId="swiss_margin"
+        proposalDocument={{
+          schemaVersion: 1,
+          kind: "letter",
+          source: "structured",
+          blocks: [
+            {
+              id: "p",
+              type: "paragraph",
+              text: "Bold italic underline",
+              richText: {
+                runs: [
+                  { text: "Bold", bold: true },
+                  { text: " italic", italic: true },
+                  { text: " underline", underline: true },
+                ],
+              },
+            },
+          ],
+        }}
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+      />,
+    );
+
+    expect(container.querySelector("strong")?.textContent).toBe("Bold");
+    expect(container.querySelector("em")?.textContent).toBe(" italic");
+    expect(container.querySelector("u")?.textContent).toBe(" underline");
+  });
+
+  it("renders rich list item text without breaking document icon markers", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content=""
+        proposalType="cover_letter"
+        templateId="swiss_margin"
+        proposalDocument={{
+          schemaVersion: 1,
+          kind: "letter",
+          source: "structured",
+          blocks: [
+            {
+              id: "l",
+              type: "list",
+              marker: { type: "icon", iconKey: "briefcase" },
+              items: [
+                {
+                  id: "i",
+                  text: "Rich item",
+                  richText: { runs: [{ text: "Rich", bold: true }, { text: " item" }] },
+                },
+              ],
+            },
+          ],
+        }}
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+      />,
+    );
+
+    const list = container.querySelector(".dasti-proposal-document__list");
+    expect(list?.querySelector(".dasti-proposal-document__list-marker svg")).not.toBeNull();
+    expect(list?.querySelector("strong")?.textContent).toBe("Rich");
+  });
+
+  it("does not duplicate full rich text onto the first pagination fragment", () => {
+    const longParagraph = [
+      "First sentence with enough words to start a long paragraph.",
+      "Second sentence keeps the paragraph above the split threshold.",
+      "Third sentence continues the same paragraph for pagination.",
+      "Fourth sentence should not be duplicated by stale rich runs.",
+      "Fifth sentence remains only once in the rendered body.",
+    ].join(" ");
+
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content=""
+        proposalType="cover_letter"
+        templateId="swiss_margin"
+        proposalDocument={{
+          schemaVersion: 1,
+          kind: "letter",
+          source: "structured",
+          blocks: [
+            {
+              id: "p",
+              type: "paragraph",
+              text: longParagraph,
+              richText: {
+                runs: [{ text: longParagraph, bold: true }],
+              },
+            },
+          ],
+        }}
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+      />,
+    );
+
+    const visibleClone = container.cloneNode(true) as HTMLElement;
+    visibleClone
+      .querySelectorAll(".dasti-proposal-document__measurement")
+      .forEach((node) => node.remove());
+
+    expect(countTextOccurrences(visibleClone.textContent ?? "", "First sentence")).toBe(1);
+    expect(countTextOccurrences(visibleClone.textContent ?? "", "Fifth sentence")).toBe(1);
+  });
+
   it("renders applicant header lines with date and recipient details in the meta rail", () => {
     const { container } = render(
       <ProposalDocumentRenderer

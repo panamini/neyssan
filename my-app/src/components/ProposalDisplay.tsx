@@ -1,16 +1,19 @@
 import React from "react";
 import { useAction } from "convex/react";
 import {
+  Bold,
   Check,
   Copy,
   CornersIn,
   Eye,
   FileUser,
   MagnifyingGlass,
+  Italic,
   List,
   Minus,
   Pencil,
   Plus,
+  Underline,
   X,
 } from "@/lib/icons";
 import DocumentAiReviewOverlay from "@/components/document-ai/DocumentAiReviewOverlay";
@@ -88,11 +91,13 @@ import {
   toggleMarkdownListForSelection,
 } from "../lib/proposal-textarea-list";
 import {
+  applyProposalDocumentInlineMark,
   resolveProposalDocument,
   serializeProposalDocumentToLegacyString,
   updateProposalDocumentTextTarget,
   type ProposalDocument,
   type ProposalDocumentBlock,
+  type ProposalInlineMark,
   type ProposalDocumentTextTarget,
 } from "../lib/proposal-document";
 
@@ -2072,23 +2077,98 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     proposalType,
   ]);
 
+  const applyPreviewInlineMark = React.useCallback(
+    (mark: ProposalInlineMark) => {
+      if (
+        !canEditPreviewDocumentText ||
+        !previewSelectionState?.target ||
+        previewSelectionState.multiTargetRange
+      ) {
+        return;
+      }
+
+      const currentDocument = resolveProposalDocument({
+        document: proposalDocument,
+        content: proposalContent,
+        proposalType,
+        closing,
+      });
+      const nextDocument = applyProposalDocumentInlineMark({
+        document: currentDocument,
+        target: previewSelectionState.target,
+        mark,
+        start: previewSelectionState.start,
+        end: previewSelectionState.end,
+      });
+      if (nextDocument === currentDocument) return;
+
+      setAiSuggestion(null);
+      setPreviewSelectionState(null);
+      handlePreviewProposalDocumentChange(nextDocument);
+    },
+    [
+      canEditPreviewDocumentText,
+      closing,
+      handlePreviewProposalDocumentChange,
+      previewSelectionState,
+      proposalContent,
+      proposalDocument,
+      proposalType,
+    ],
+  );
+
   const previewSelectionFormattingActions =
     React.useMemo<FloatingSelectionToolbarAction[]>(
-      () =>
-        canEditPreviewDocumentText &&
-        isProposalPreviewListActionSafe(previewSelectionState)
-          ? [
-              {
-                id: "list",
-                label: "List",
-                title: "List",
-                icon: <List size={15} aria-hidden="true" />,
-                disabled: false,
-                onRun: applyPreviewListTransform,
-              },
-            ]
-          : [],
+      () => {
+        if (!canEditPreviewDocumentText || !previewSelectionState) return [];
+
+        const singleTargetTextSelection = Boolean(
+          previewSelectionState.target && !previewSelectionState.multiTargetRange,
+        );
+        const actions: FloatingSelectionToolbarAction[] = [
+          {
+            id: "bold",
+            label: "Bold",
+            title: "Bold",
+            icon: <Bold size={15} aria-hidden="true" />,
+            disabled: !singleTargetTextSelection,
+            onRun: () => applyPreviewInlineMark("bold"),
+          },
+          {
+            id: "italic",
+            label: "Italic",
+            title: "Italic",
+            icon: <Italic size={15} aria-hidden="true" />,
+            disabled: !singleTargetTextSelection,
+            onRun: () => applyPreviewInlineMark("italic"),
+          },
+          {
+            id: "underline",
+            label: "Underline",
+            title: "Underline",
+            icon: <Underline size={15} aria-hidden="true" />,
+            disabled: !singleTargetTextSelection,
+            onRun: () => applyPreviewInlineMark("underline"),
+          },
+        ];
+
+        if (isProposalPreviewListActionSafe(previewSelectionState)) {
+          actions.push({
+            id: "list",
+            label: "List",
+            title: "List",
+            icon: <List size={15} aria-hidden="true" />,
+            disabled: false,
+            onRun: applyPreviewListTransform,
+          });
+        }
+
+        // Multi-block B/I/U needs range-aware rich run splitting across targets;
+        // keep it disabled until that can be made atomic with the existing AI range path.
+        return actions;
+      },
       [
+        applyPreviewInlineMark,
         applyPreviewListTransform,
         canEditPreviewDocumentText,
         previewSelectionState,

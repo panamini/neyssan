@@ -126,6 +126,23 @@ const SAVED_PROPOSALS = [
         "Coordinate operations, keep processes clean, and support team communication.",
     },
   },
+  {
+    _id: "proposal_draft_restore",
+    _creationTime: 1710000003000,
+    title: "Draft restore title",
+    content: "Dear team,\n\nRestored draft proposal content.\n\nBest,",
+    status: "draft",
+    updatedAt: 1710000003000,
+    createdAt: 1710000003000,
+    sections: [{ type: "text", content: "Restored draft proposal content." }],
+    metadata: {
+      proposalType: "cover_letter",
+      voicePreset: "signature",
+      requestedVoicePreset: "signature",
+      templateId: "swiss_margin",
+      styleLinkMode: "proposal_local",
+    },
+  },
 ] as const;
 
 vi.mock("convex/react", () => ({
@@ -292,11 +309,13 @@ vi.mock("../../components/ProposalInputForm", () => ({
 vi.mock("../../components/ProposalDisplay", () => ({
   default: ({
     proposalContent,
+    proposalDocument,
     documentTitle,
     mode,
     stylePreset,
   }: {
     proposalContent: string | null;
+    proposalDocument?: { blocks?: Array<{ text?: string }> } | null;
     documentTitle?: string | null;
     mode?: "preview" | "edit";
     stylePreset?: {
@@ -307,7 +326,8 @@ vi.mock("../../components/ProposalDisplay", () => ({
     <div data-testid="proposal-display-state">
       {documentTitle ?? "untitled"}|{proposalContent ?? "empty"}|
       {mode ?? "preview"}|{stylePreset?.layout ?? "none"}|
-      {stylePreset?.palette ?? "none"}
+      {stylePreset?.palette ?? "none"}|
+      {proposalDocument?.blocks?.map((block) => block.text).join(" ") ?? "no-document"}
     </div>
   ),
   fallbackCopyText: () => "",
@@ -401,6 +421,58 @@ describe("ProposalForge saved view", () => {
     expect(readStoredProposalOutputDraft()).toMatchObject({
       proposalContent: "Existing draft output.",
       generatedProposalId: "proposal_current_draft",
+    });
+  });
+
+  it("clears stale structured output when restoring a draftId proposal", async () => {
+    writeStoredProposalOutputDraft({
+      proposalContent: "Stale global output content.",
+      proposalDocument: {
+        schemaVersion: 1,
+        kind: "letter",
+        source: "structured",
+        blocks: [
+          {
+            id: "stale",
+            type: "paragraph",
+            text: "Stale structured document from another letter.",
+          },
+        ],
+      },
+      proposalType: "cover_letter",
+      proposalVoicePreset: "signature",
+      proposalTemplateId: null,
+      proposalVerbatiStyle: null,
+      proposalStyleLinkMode: "inherit_cv",
+      proposalStyleChoice: "auto",
+      proposalApplicantName: "Alex Martin",
+      proposalApplicantRole: "Operations Associate",
+      proposalDocumentTitle: "Stale global title",
+      proposalDocumentMeta: "Compose output",
+      generatedProposalId: "stale_global_id",
+      proposalOutputMode: "preview",
+      paletteOverride: null,
+      customAccentHex: null,
+      templateBundleId: null,
+      typographyOverride: null,
+      layoutOverride: null,
+      proposalDocumentTitleManual: false,
+      characterLimitMode: null,
+      characterLimitValue: null,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/proposal?draftId=proposal_draft_restore"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      const state = screen.getByTestId("proposal-display-state");
+      expect(state).toHaveTextContent("Draft restore title");
+      expect(state).toHaveTextContent("Restored draft proposal content.");
+      expect(state).toHaveTextContent("no-document");
+      expect(state).not.toHaveTextContent("Stale structured document");
     });
   });
 

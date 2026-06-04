@@ -249,11 +249,15 @@ function getEditableNodeText(element: HTMLElement): string {
 
 async function selectContentEditableText(element: HTMLElement, text: string) {
   element.focus();
-  const textNode = Array.from(element.childNodes).find(
-    (node) =>
-      node.nodeType === Node.TEXT_NODE &&
-      (node.textContent ?? "").includes(text),
-  );
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  let textNode: Node | null = null;
+  while (!textNode) {
+    const candidate = walker.nextNode();
+    if (!candidate) break;
+    if ((candidate.textContent ?? "").includes(text)) {
+      textNode = candidate;
+    }
+  }
   expect(textNode).toBeTruthy();
   const source = textNode?.textContent ?? "";
   const start = source.indexOf(text);
@@ -443,13 +447,13 @@ describe("ProposalDisplay", () => {
     );
 
     const bodyEditor = getProposalBodyEditor();
-    expect(bodyEditor).toHaveAttribute("contenteditable", "plaintext-only");
+    expect(bodyEditor).toHaveAttribute("contenteditable", "true");
     expect(
       document.querySelectorAll("[data-proposal-body-editor='true']"),
     ).toHaveLength(1);
     expect(
       document.querySelectorAll(
-        "[data-proposal-body-editor='true'] [contenteditable='plaintext-only']",
+        "[data-proposal-body-editor='true'] [contenteditable='true']",
       ),
     ).toHaveLength(0);
     expect(getEditableProposalParagraphs()).toHaveLength(2);
@@ -1987,6 +1991,9 @@ describe("ProposalDisplay", () => {
       "Line one",
     );
     expect(getSelectionToolbarButtonByLabel("List")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Bold" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Italic" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Underline" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Icon" })).toBeNull();
   });
 
@@ -2035,6 +2042,62 @@ describe("ProposalDisplay", () => {
       expect(screen.getByTestId("proposal-document")).toHaveTextContent(
         "Polished paragraph.",
       );
+    });
+  });
+
+  it("applies preview B/I/U formatting to the structured proposal document", async () => {
+    renderPreviewEditableProposal();
+
+    const paragraph = getEditableProposalParagraphs()[0];
+    await selectContentEditableText(paragraph, "Original");
+
+    expect(getSelectionToolbarButtonByLabel("Bold")).toBeInTheDocument();
+    expect(getSelectionToolbarButtonByLabel("Italic")).toBeInTheDocument();
+    expect(getSelectionToolbarButtonByLabel("Underline")).toBeInTheDocument();
+
+    fireEvent.click(getSelectionToolbarButtonByLabel("Bold"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-document")).toHaveTextContent(
+        '"richText"',
+      );
+      expect(screen.getByTestId("proposal-document")).toHaveTextContent(
+        '"bold":true',
+      );
+      expect(screen.getByTestId("proposal-document")).toHaveTextContent(
+        '"text":"Original paragraph."',
+      );
+      expect(
+        document.querySelector(
+          "[data-proposal-body-editor='true'] strong",
+        )?.textContent,
+      ).toBe("Original");
+    });
+
+    await selectContentEditableText(getEditableProposalParagraphs()[0], "paragraph");
+    fireEvent.click(getSelectionToolbarButtonByLabel("Italic"));
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-document")).toHaveTextContent(
+        '"italic":true',
+      );
+      expect(
+        document.querySelector(
+          "[data-proposal-body-editor='true'] em",
+        )?.textContent,
+      ).toBe("paragraph");
+    });
+
+    await selectContentEditableText(getEditableProposalParagraphs()[0], "Original");
+    fireEvent.click(getSelectionToolbarButtonByLabel("Underline"));
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-document")).toHaveTextContent(
+        '"underline":true',
+      );
+      expect(
+        document.querySelector(
+          "[data-proposal-body-editor='true'] u",
+        )?.textContent,
+      ).toContain("Original");
     });
   });
 
