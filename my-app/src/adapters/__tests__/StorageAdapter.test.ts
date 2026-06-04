@@ -550,14 +550,16 @@ describe("StorageAdapter persistence", () => {
     );
   });
 
-  it("keeps a local snapshot when remote save is unauthorized", async () => {
+  it("keeps a local snapshot and reports failure when remote save is unauthorized", async () => {
     const patchMutation = vi
       .fn()
       .mockRejectedValue(new Error("Not authorized to access this profile"));
     const adapter = new ConvexStorageAdapter(patchMutation);
     const cv = generateCvTemplateV1("Unauthorized Remote CV");
 
-    await expect(adapter.save(cv)).resolves.toBeUndefined();
+    await expect(adapter.save(cv)).rejects.toThrow(
+      /Not authorized to access this profile/i,
+    );
 
     expect(window.localStorage.getItem(`cv:${cv.id}`)).toContain(
       "Unauthorized Remote CV",
@@ -883,6 +885,36 @@ describe("StorageAdapter persistence", () => {
     expect(payload.metadata.documentDecoration.dataUrl).toBeUndefined();
     expect(payload.metadata.documentDecoration.resolvedUrl).toBeUndefined();
     expect(JSON.stringify(payload)).not.toContain("data:image");
+  });
+
+  it("reports unauthorized metadata-only decoration saves as remote failures", async () => {
+    const patchMutation = vi
+      .fn()
+      .mockRejectedValue(new Error("Not authorized to access this profile"));
+    const adapter = new ConvexStorageAdapter(patchMutation);
+
+    await expect(
+      adapter.saveMetadataPatch("decorated-cv", {
+        documentDecoration: {
+          visible: true,
+          source: "upload",
+          assetId: "storage_decoration_3",
+          fileName: "mark.jpg",
+          mimeType: "image/jpeg",
+        } as any,
+      } as any),
+    ).rejects.toThrow(/Not authorized to access this profile/i);
+
+    expect(patchMutation).toHaveBeenCalledWith({
+      profileId: "decorated-cv",
+      patch: {
+        metadata: {
+          documentDecoration: expect.objectContaining({
+            assetId: "storage_decoration_3",
+          }),
+        },
+      },
+    });
   });
 
   it("preserves the selected resume template through metadata-only save and backend reload hydration", async () => {

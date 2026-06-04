@@ -216,15 +216,41 @@ const CV_COMMAND_LAYER_CANVAS_SELECTOR = ".dasti-cv-skeleton-forge";
 const CV_WORKSPACE_DOCKED_PANEL_MIN_VIEWPORT_WIDTH = 1180;
 const CV_INLINE_PAPER_AI_TIMEOUT_MS = 30_000;
 
-async function uploadDocumentDecorationAsset({
+function isCvEditorDebugEnabled(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    (window as unknown as { __CV_EDITOR_DEBUG__?: unknown })
+      .__CV_EDITOR_DEBUG__ === true
+  );
+}
+
+function cvEditorDebugInfo(label: string, payload: Record<string, unknown>): void {
+  if (!isCvEditorDebugEnabled()) {
+    return;
+  }
+
+  console.info(label, payload);
+}
+
+export async function uploadDocumentDecorationAsset({
   generateUploadUrl,
   file,
   mimeType,
+  debugContext,
 }: {
   generateUploadUrl: () => Promise<string>;
   file: File;
   mimeType?: string;
+  debugContext?: {
+    routeProfileId?: string | null;
+    currentCvId?: string | null;
+  };
 }): Promise<string> {
+  cvEditorDebugInfo("[cv-image-upload] generateUploadUrl", {
+    called: true,
+    routeProfileId: debugContext?.routeProfileId ?? null,
+    currentCvId: debugContext?.currentCvId ?? null,
+  });
   const uploadUrl = await generateUploadUrl();
   const response = await fetch(uploadUrl, {
     method: "POST",
@@ -234,11 +260,27 @@ async function uploadDocumentDecorationAsset({
     body: file,
   });
 
+  cvEditorDebugInfo("[cv-image-upload] upload-post", {
+    attempted: true,
+    status: response.status,
+    ok: response.ok,
+    routeProfileId: debugContext?.routeProfileId ?? null,
+    currentCvId: debugContext?.currentCvId ?? null,
+  });
+
   if (!response.ok) {
     throw new Error(`Image upload failed (${response.status})`);
   }
 
   const payload = (await response.json()) as { storageId?: unknown };
+  cvEditorDebugInfo("[cv-image-upload] upload-result", {
+    responseKeys:
+      payload && typeof payload === "object" ? Object.keys(payload) : [],
+    hasStorageId: typeof payload.storageId === "string",
+    routeProfileId: debugContext?.routeProfileId ?? null,
+    currentCvId: debugContext?.currentCvId ?? null,
+  });
+
   if (typeof payload.storageId !== "string" || !payload.storageId) {
     throw new Error("Image upload did not return a storage id.");
   }
@@ -4503,13 +4545,23 @@ export function CvForge(): JSX.Element {
     (nextSections: CvSection[]) => {
       if (!currentCv) return;
       const now = new Date().toISOString();
+      cvEditorDebugInfo("[cv-context-debug] persistSections", {
+        routeProfileId: requestedCvId ?? null,
+        currentCvId: currentCv.id,
+        sectionCount: nextSections.length,
+        hasStructuredContent: nextSections.some(
+          (section) =>
+            Array.isArray(section.structuredContent) &&
+            section.structuredContent.length > 0,
+        ),
+      });
       void importCv({
         ...currentCv,
         metadata: buildUpdatedCvMetadata(currentCv, now),
         sections: nextSections,
       });
     },
-    [currentCv, importCv],
+    [currentCv, importCv, requestedCvId],
   );
 
   const handleInlineSummaryChange = React.useCallback(
@@ -4526,6 +4578,16 @@ export function CvForge(): JSX.Element {
       if (currentText === nextText) return;
 
       const nextSection = updateSummaryStructuredText(summarySection, nextText);
+      cvEditorDebugInfo("[cv-editor-debug] onChange/commit", {
+        sectionType: "summary",
+        sectionId: getCvSectionId(
+          summarySection,
+          currentSections.indexOf(summarySection),
+        ),
+        fieldPath: "structuredContent.0.summary",
+        routeProfileId: requestedCvId ?? null,
+        currentCvId: currentCv?.id ?? null,
+      });
       setPendingActiveSection(nextSection);
       setResumeActiveTarget(getSectionTarget(nextSection));
       persistSections(
@@ -4534,7 +4596,7 @@ export function CvForge(): JSX.Element {
         ),
       );
     },
-    [currentSections, persistSections],
+    [currentCv?.id, currentSections, persistSections, requestedCvId],
   );
 
   const handleInlineTextSectionChange = React.useCallback(
@@ -4559,6 +4621,13 @@ export function CvForge(): JSX.Element {
       if (currentText === nextText) return;
 
       const nextSection = updateFirstTextBlock(textSection, nextText);
+      cvEditorDebugInfo("[cv-editor-debug] onChange/commit", {
+        sectionType: canonicalType,
+        sectionId,
+        fieldPath: "blocks.0.plainText",
+        routeProfileId: requestedCvId ?? null,
+        currentCvId: currentCv?.id ?? null,
+      });
       setPendingActiveSection(nextSection);
       setResumeActiveTarget(getSectionTarget(nextSection));
       persistSections(
@@ -4567,7 +4636,7 @@ export function CvForge(): JSX.Element {
         ),
       );
     },
-    [currentSections, persistSections],
+    [currentCv?.id, currentSections, persistSections, requestedCvId],
   );
 
   const applyInlineFieldChange = React.useCallback(
@@ -4590,6 +4659,14 @@ export function CvForge(): JSX.Element {
       if (readInlineFieldCanonicalText(section, target) === nextText) {
         return;
       }
+
+      cvEditorDebugInfo("[cv-editor-debug] onChange/commit", {
+        sectionType: target.sectionType,
+        sectionId: target.sectionId,
+        fieldPath: target.fieldPath,
+        routeProfileId: requestedCvId ?? null,
+        currentCvId: currentCv?.id ?? null,
+      });
 
       let nextSection: CvSection | null = null;
       if (target.fieldPath === "structuredContent.0.summary") {
@@ -4648,7 +4725,7 @@ export function CvForge(): JSX.Element {
         });
       }
     },
-    [currentSections, persistSections],
+    [currentCv?.id, currentSections, persistSections, requestedCvId],
   );
 
   const flushPendingInlineFieldChange = React.useCallback(() => {
@@ -4734,6 +4811,13 @@ export function CvForge(): JSX.Element {
       if (JSON.stringify(nextSection) === JSON.stringify(section)) {
         return;
       }
+      cvEditorDebugInfo("[cv-editor-debug] onChange/commit", {
+        sectionType: target.sectionType,
+        sectionId: target.sectionId,
+        fieldPath: target.fieldPath,
+        routeProfileId: requestedCvId ?? null,
+        currentCvId: currentCv?.id ?? null,
+      });
       setPendingActiveSection(nextSection);
       setResumeActiveTarget(getSectionTarget(nextSection));
       const nextSections = baseSections.map((currentSection, index) =>
@@ -4744,7 +4828,7 @@ export function CvForge(): JSX.Element {
       latestInlineSectionsRef.current = nextSections;
       persistSections(nextSections);
     },
-    [currentSections, persistSections],
+    [currentCv?.id, currentSections, persistSections, requestedCvId],
   );
 
   React.useEffect(
@@ -6456,6 +6540,12 @@ export function CvForge(): JSX.Element {
         ? normalizedDecoration
         : createDefaultDocumentDecoration();
 
+      cvEditorDebugInfo("[cv-image-upload] persist-decoration", {
+        hasAssetId: Boolean(persistedDecoration.assetId),
+        routeProfileId: requestedCvId ?? null,
+        currentCvId: currentCv.id,
+      });
+
       await saveCurrentCvStyleOnly(stylePreset, {
         documentDecoration: {
           ...persistedDecoration,
@@ -6464,7 +6554,7 @@ export function CvForge(): JSX.Element {
         documentStyleVersion: DOCUMENT_STYLE_VERSION,
       });
     },
-    [currentCv, saveCurrentCvStyleOnly, showToast, stylePreset],
+    [currentCv, requestedCvId, saveCurrentCvStyleOnly, showToast, stylePreset],
   );
   const handleCvDocumentDecorationPreviewChange = React.useCallback(
     (nextDecoration: DocumentDecoration) => {
@@ -6517,7 +6607,6 @@ export function CvForge(): JSX.Element {
           placementMode: baseDecoration.placementMode,
           xMm: baseDecoration.xMm,
           yMm: baseDecoration.yMm,
-          visible: true,
         });
         setDraftCvDocumentDecoration(pendingDecoration);
 
@@ -6525,6 +6614,10 @@ export function CvForge(): JSX.Element {
           generateUploadUrl: generateDocumentAssetUploadUrl,
           file,
           mimeType: pendingDecoration.mimeType,
+          debugContext: {
+            routeProfileId: requestedCvId ?? null,
+            currentCvId: currentCv.id,
+          },
         });
 
         const persistedDecoration = normalizeDocumentDecoration({
@@ -6556,6 +6649,7 @@ export function CvForge(): JSX.Element {
       currentCv,
       cvDocumentDecoration,
       generateDocumentAssetUploadUrl,
+      requestedCvId,
       revokeCvDecorationPreviewUrl,
       showToast,
       updateCvDocumentDecoration,

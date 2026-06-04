@@ -351,6 +351,8 @@ export const patch = mutation({
   handler: async (ctx, args) => {
     const now = Date.now();
     const identity = await ctx.auth.getUserIdentity();
+    const patchPayloadForLog: any =
+      args.patch && typeof args.patch === "object" ? args.patch : null;
 
     // Resolve existing document. Prefer profileId (autosave flows), otherwise use authenticated clerk user.
     let existing: any = null;
@@ -365,8 +367,28 @@ export const patch = mutation({
       existing = await getPrimaryProfileForClerk(ctx, identity.subject);
     }
 
+    console.log("[profiles.patch] called", {
+      profileId: args.profileId ?? null,
+      hasIdentity: Boolean(identity),
+      patchKeys: patchPayloadForLog ? Object.keys(patchPayloadForLog) : [],
+      hasCvDocument: Boolean(patchPayloadForLog?.cvDocument),
+      sectionCount: Array.isArray(patchPayloadForLog?.cvDocument?.sections)
+        ? patchPayloadForLog.cvDocument.sections.length
+        : 0,
+      hasDecorationAssetId: Boolean(
+        patchPayloadForLog?.metadata?.documentDecoration?.assetId,
+      ),
+      existingFound: Boolean(existing),
+      existingProfileId: existing?.profileId ?? null,
+    });
+
     if (existing?.clerkId) {
       if (!identity || existing.clerkId !== identity.subject) {
+        console.log("[profiles.patch] blocked", {
+          profileId: args.profileId ?? existing.profileId ?? null,
+          written: false,
+          reason: "unauthorized",
+        });
         throw new Error("Not authorized to access this profile");
       }
     }
@@ -384,6 +406,11 @@ export const patch = mutation({
         incomingKeys.length === 0;
 
       if (isMetadataOnlyPatch) {
+        console.log("[profiles.patch] skipped", {
+          profileId: args.profileId,
+          written: false,
+          reason: "not_found_metadata_only",
+        });
         return {
           profileId: args.profileId,
           updatedAt: now,
@@ -475,10 +502,23 @@ export const patch = mutation({
       }
 
       const convexId = await ctx.db.insert("userProfiles", doc as any);
+      console.log("[profiles.patch] written", {
+        profileId: args.profileId,
+        convexId,
+        updatedAt: doc.updatedAt,
+        written: true,
+      });
       return { profileId: args.profileId, convexId, updatedAt: doc.updatedAt, written: true };
     }
 
-    if (!existing) throw new Error("User profile not found");
+    if (!existing) {
+      console.log("[profiles.patch] blocked", {
+        profileId: args.profileId ?? null,
+        written: false,
+        reason: "user_profile_not_found",
+      });
+      throw new Error("User profile not found");
+    }
 
     const existingPatchPayload: any =
       args.patch && typeof args.patch === "object" ? args.patch : null;
@@ -504,6 +544,12 @@ export const patch = mutation({
         version: (existing.version || 1) + 1,
       });
 
+      console.log("[profiles.patch] written", {
+        profileId: existing.profileId ?? args.profileId ?? null,
+        convexId: existing._id,
+        updatedAt: now,
+        written: true,
+      });
       return {
         profileId: existing.profileId ?? args.profileId ?? undefined,
         convexId: existing._id,
@@ -552,7 +598,19 @@ export const patch = mutation({
         rawText: updates.raw_text ?? existing.raw_text,
       });
 
-      return ctx.db.patch(existing._id, updates);
+      await ctx.db.patch(existing._id, updates);
+      console.log("[profiles.patch] written", {
+        profileId: existing.profileId ?? args.profileId ?? null,
+        convexId: existing._id,
+        updatedAt: now,
+        written: true,
+      });
+      return {
+        profileId: existing.profileId ?? args.profileId ?? undefined,
+        convexId: existing._id,
+        updatedAt: now,
+        written: true,
+      };
     }
 
     // If caller provided a `patch` payload (autosave), sanitize and apply only allowed fields.
@@ -640,6 +698,13 @@ export const patch = mutation({
       const keys = Object.keys(updates).filter((k) => k !== "updatedAt" && k !== "version");
       if (keys.length === 0) {
         // Nothing meaningful to persist
+        console.log("[profiles.patch] skipped", {
+          profileId: existing.profileId ?? args.profileId ?? null,
+          convexId: existing._id,
+          updatedAt: updates.updatedAt,
+          written: false,
+          reason: "empty_patch",
+        });
         return { profileId: existing.profileId ?? undefined, convexId: existing._id, updatedAt: updates.updatedAt, written: false };
       }
 
@@ -664,7 +729,19 @@ export const patch = mutation({
         rawText: updates.raw_text ?? existing.raw_text,
       });
 
-      return ctx.db.patch(existing._id, updates);
+      await ctx.db.patch(existing._id, updates);
+      console.log("[profiles.patch] written", {
+        profileId: existing.profileId ?? args.profileId ?? null,
+        convexId: existing._id,
+        updatedAt: now,
+        written: true,
+      });
+      return {
+        profileId: existing.profileId ?? args.profileId ?? undefined,
+        convexId: existing._id,
+        updatedAt: now,
+        written: true,
+      };
     }
 
     // No recognized payload provided

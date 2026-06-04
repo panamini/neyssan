@@ -708,6 +708,22 @@ function readRequestedCvIdFromWindowLocation(): string | null {
   }
 }
 
+function isCvEditorDebugEnabled(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    (window as unknown as { __CV_EDITOR_DEBUG__?: unknown })
+      .__CV_EDITOR_DEBUG__ === true
+  );
+}
+
+function cvEditorDebugInfo(label: string, payload: Record<string, unknown>): void {
+  if (!isCvEditorDebugEnabled()) {
+    return;
+  }
+
+  console.info(label, payload);
+}
+
 function classifyRemoteSaveError(error: unknown): {
   message: string;
   reason: string;
@@ -2206,6 +2222,12 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       preserveVisibleUpdatedAtValue?: string;
     },
   ): Promise<void> {
+    cvEditorDebugInfo("[cv-save-debug] performSave", {
+      docId: documentToSave.id,
+      routeProfileId: readRequestedCvIdFromWindowLocation(),
+      dirty: isDirtyRef.current,
+    });
+
     try {
       // Ensure metadata exists and bump updatedAt/version conservatively
       // Strip legacy cvState before persisting to satisfy schema validation.
@@ -2491,6 +2513,12 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
    * Returns a promise that resolves when the save attempt finishes (success or handled error).
    */
   function scheduleSave(documentToSave: CvDocument): Promise<void> {
+    cvEditorDebugInfo("[cv-save-debug] scheduleSave", {
+      docId: documentToSave.id,
+      routeProfileId: readRequestedCvIdFromWindowLocation(),
+      sectionCount: documentToSave.sections?.length,
+    });
+
     // clear previous timeout
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
@@ -4269,6 +4297,13 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   function updateCurrentCv(newState: Partial<CvDocument>): void {
     if (!currentCv) return;
     const id = String(currentCv.id);
+    cvEditorDebugInfo("[cv-context-debug] updateCurrentCv", {
+      patchKeys: Object.keys(newState ?? {}),
+      routeProfileId: readRequestedCvIdFromWindowLocation(),
+      currentCvId: id,
+      hasSections: Array.isArray((newState as any)?.sections),
+    });
+
     const hasLegacyCvStateShape =
       "source" in (newState as Record<string, unknown>) ||
       "history" in (newState as Record<string, unknown>);

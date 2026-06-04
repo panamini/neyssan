@@ -950,7 +950,7 @@ describe('CvLibraryContext', () => {
           structuredContent: [
             {
               id: 'summary-edited',
-              summary: 'Typed summary survives the hard refresh.',
+              summary: 'PERSIST_PROBE_TEST summary survives the hard refresh.',
             },
           ],
         };
@@ -965,7 +965,8 @@ describe('CvLibraryContext', () => {
               position: 'Pipeline Lead',
               startDate: '2025-01-01',
               endDate: null,
-              responsibilities: 'Typed experience survives the hard refresh.',
+              responsibilities:
+                'PERSIST_PROBE_TEST experience survives the hard refresh.',
             },
           ],
         };
@@ -979,25 +980,25 @@ describe('CvLibraryContext', () => {
 
     await waitFor(() =>
       expect(JSON.stringify(ctx.currentCv)).toContain(
-        'Typed summary survives the hard refresh.',
+        'PERSIST_PROBE_TEST summary survives the hard refresh.',
       ),
     );
     expect(JSON.stringify(ctx.currentCv)).toContain(
-      'Typed experience survives the hard refresh.',
+      'PERSIST_PROBE_TEST experience survives the hard refresh.',
     );
     await new Promise((resolve) => setTimeout(resolve, 1100));
     await waitFor(() => expect(convexMutationMock).toHaveBeenCalled());
     const savePayload = convexMutationMock.mock.calls.at(-1)?.[0]?.patch;
     expect(savePayload?.cvDocument?.sections).toEqual(expect.any(Array));
     expect(JSON.stringify(savePayload?.cvDocument?.sections)).toContain(
-      'Typed summary survives the hard refresh.',
+      'PERSIST_PROBE_TEST summary survives the hard refresh.',
     );
     expect(JSON.stringify(savePayload?.cvDocument?.sections)).toContain(
-      'Typed experience survives the hard refresh.',
+      'PERSIST_PROBE_TEST experience survives the hard refresh.',
     );
     await waitFor(() =>
       expect(mockLocalStorage.getItem(`cv:${currentId}`)).toContain(
-        'Typed summary survives the hard refresh.',
+        'PERSIST_PROBE_TEST summary survives the hard refresh.',
       ),
     );
 
@@ -1013,10 +1014,10 @@ describe('CvLibraryContext', () => {
 
     await waitFor(() => expect(reloadedCtx.currentCvId).toBe(currentId));
     expect(JSON.stringify(reloadedCtx.currentCv)).toContain(
-      'Typed summary survives the hard refresh.',
+      'PERSIST_PROBE_TEST summary survives the hard refresh.',
     );
     expect(JSON.stringify(reloadedCtx.currentCv)).toContain(
-      'Typed experience survives the hard refresh.',
+      'PERSIST_PROBE_TEST experience survives the hard refresh.',
     );
   });
 
@@ -2190,6 +2191,57 @@ describe('CvLibraryContext', () => {
     expect(ctx.isDirty).toBe(true);
     expect(mockLocalStorage.getItem('cv:cv_alpha')).toContain(
       'Alpha Oversized Dirty',
+    );
+  });
+
+  it('keeps local dirty state and exposes remote failure when Convex rejects profile authorization', async () => {
+    convexMutationMock.mockRejectedValue(
+      new Error('Not authorized to access this profile'),
+    );
+
+    const alpha = {
+      id: 'cv_alpha',
+      title: 'Alpha CV',
+      metadata: {
+        createdAt: '2026-04-28T00:00:00.000Z',
+        updatedAt: '2026-04-28T00:00:00.000Z',
+        version: 1,
+      },
+      sections: [],
+    };
+
+    mockLocalStorage.setItem('cvDocuments', JSON.stringify([alpha]));
+    mockLocalStorage.setItem('cv:cv_alpha', JSON.stringify(alpha));
+    window.history.pushState({}, '', '/cv?id=cv_alpha');
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_alpha'));
+
+    act(() => {
+      ctx.renameCv('cv_alpha', 'Alpha Unauthorized Dirty');
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+    });
+
+    await waitFor(() => expect(convexMutationMock).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(ctx.remoteSaveStatus).toMatchObject({
+        status: 'failed',
+        documentId: 'cv_alpha',
+        reason: 'unauthorized',
+      }),
+    );
+    expect(ctx.isDirty).toBe(true);
+    expect(mockLocalStorage.getItem('cv:cv_alpha')).toContain(
+      'Alpha Unauthorized Dirty',
     );
   });
 

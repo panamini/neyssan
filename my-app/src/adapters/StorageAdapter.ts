@@ -107,6 +107,34 @@ function isConvexValueTooLargeError(error: unknown): boolean {
   return /Value is too large/i.test(message);
 }
 
+function isCvEditorDebugEnabled(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    (window as unknown as { __CV_EDITOR_DEBUG__?: unknown })
+      .__CV_EDITOR_DEBUG__ === true
+  );
+}
+
+function readDebugRouteProfileId(): string | null {
+  if (typeof window === "undefined" || !window.location) {
+    return null;
+  }
+
+  try {
+    return new URLSearchParams(window.location.search).get("id");
+  } catch {
+    return null;
+  }
+}
+
+function cvEditorDebugInfo(label: string, payload: Record<string, unknown>): void {
+  if (!isCvEditorDebugEnabled()) {
+    return;
+  }
+
+  console.info(label, payload);
+}
+
 function sanitizeRemoteDocumentDecoration(value: unknown): unknown {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return value;
@@ -580,18 +608,19 @@ export class ConvexStorageAdapter {
         patch: { metadata },
       });
     } catch (error) {
-      if (!isUnauthorizedProfileAccessError(error)) {
-        throw error;
-      }
-
       try {
-        dbg("[ConvexStorageAdapter] unauthorized metadata patch skipped", {
+        dbg("[ConvexStorageAdapter] metadata patch failed", {
           docId: cvId,
+          reason: isUnauthorizedProfileAccessError(error)
+            ? "unauthorized"
+            : isConvexValueTooLargeError(error)
+              ? "convex_value_too_large"
+              : "remote_error",
         });
       } catch {
         /* noop */
       }
-      return undefined;
+      throw error;
     }
   }
 
@@ -627,6 +656,33 @@ export class ConvexStorageAdapter {
     backendPayload.cvDocument = encodeCvDocumentForConvex(
       sanitizeRemoteCvDocument(cv),
     );
+
+    cvEditorDebugInfo("[cv-save-debug] StorageAdapter.save", {
+      docId: cv.id,
+      routeProfileId: readDebugRouteProfileId(),
+      patchKeys: Object.keys(backendPayload),
+      hasCvDocument: Boolean(backendPayload.cvDocument),
+      sectionCount: Array.isArray(backendPayload.cvDocument?.sections)
+        ? backendPayload.cvDocument.sections.length
+        : 0,
+      hasStructuredContent: Boolean(
+        backendPayload.cvDocument?.sections?.some(
+          (section: Record<string, unknown>) =>
+            Array.isArray(section?.structuredContent) &&
+            section.structuredContent.length > 0,
+        ),
+      ),
+      metadataKeys:
+        backendPayload.metadata && typeof backendPayload.metadata === "object"
+          ? Object.keys(backendPayload.metadata)
+          : [],
+      hasDecorationAssetId: Boolean(
+        backendPayload.metadata?.documentDecoration?.assetId,
+      ),
+      approxPayloadBytes: new TextEncoder().encode(
+        JSON.stringify(backendPayload),
+      ).length,
+    });
 
     // Instrument: record metadata keys and short stack to in-app debug stream before mutation
     try {
@@ -680,8 +736,7 @@ export class ConvexStorageAdapter {
     }
 
     if (
-      remoteSaveError &&
-      !isUnauthorizedProfileAccessError(remoteSaveError)
+      remoteSaveError
     ) {
       throw remoteSaveError;
     }
