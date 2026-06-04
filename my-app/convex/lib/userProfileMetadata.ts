@@ -87,6 +87,29 @@ export type UserProfileDocumentAppearanceSnapshot = {
   accentHex?: string;
 };
 
+export type UserProfileLegacyProfileImage = {
+  src?: string;
+  fileName?: string;
+  size?: "small" | "medium" | "large";
+  fit?: "contain" | "cover";
+};
+
+export type UserProfileDocumentDecoration = {
+  visible: boolean;
+  source: "upload";
+  assetId?: string;
+  dataUrl?: string;
+  fileName?: string;
+  mimeType?: "image/png" | "image/jpeg" | "image/svg+xml";
+  alt?: string;
+  sizePreset: 18 | 35 | 52 | "custom";
+  customSizeMm?: number;
+  fit: "contain" | "cover";
+  placementMode: "default" | "custom";
+  xMm?: number;
+  yMm?: number;
+};
+
 export type UserProfileMetadata = {
   source?: string;
   importedAt?: number;
@@ -99,6 +122,8 @@ export type UserProfileMetadata = {
   verbatiStyleSlotNameSnapshot?: string;
   verbatiStyleBaseSnapshot?: UserProfileDocumentAppearanceSnapshot;
   documentStyleVersion?: 1;
+  profileImage?: UserProfileLegacyProfileImage;
+  documentDecoration?: UserProfileDocumentDecoration;
 };
 
 const LEGACY_LAYOUT_TO_CANONICAL: Record<
@@ -160,6 +185,42 @@ export const userProfileDocumentAppearanceSnapshotValidator = v.object({
   accentHex: v.optional(v.string()),
 });
 
+export const userProfileLegacyProfileImageValidator = v.object({
+  src: v.optional(v.string()),
+  fileName: v.optional(v.string()),
+  size: v.optional(
+    v.union(v.literal("small"), v.literal("medium"), v.literal("large")),
+  ),
+  fit: v.optional(v.union(v.literal("contain"), v.literal("cover"))),
+});
+
+export const userProfileDocumentDecorationValidator = v.object({
+  visible: v.boolean(),
+  source: v.literal("upload"),
+  assetId: v.optional(v.string()),
+  dataUrl: v.optional(v.string()),
+  fileName: v.optional(v.string()),
+  mimeType: v.optional(
+    v.union(
+      v.literal("image/png"),
+      v.literal("image/jpeg"),
+      v.literal("image/svg+xml"),
+    ),
+  ),
+  alt: v.optional(v.string()),
+  sizePreset: v.union(
+    v.literal(18),
+    v.literal(35),
+    v.literal(52),
+    v.literal("custom"),
+  ),
+  customSizeMm: v.optional(v.number()),
+  fit: v.union(v.literal("contain"), v.literal("cover")),
+  placementMode: v.union(v.literal("default"), v.literal("custom")),
+  xMm: v.optional(v.number()),
+  yMm: v.optional(v.number()),
+});
+
 export const documentStyleSlotIdValidator = v.union(
   v.literal(1),
   v.literal(2),
@@ -185,6 +246,8 @@ export const userProfileMetadataValidator = v.object({
     userProfileDocumentAppearanceSnapshotValidator,
   ),
   documentStyleVersion: v.optional(v.literal(1)),
+  profileImage: v.optional(userProfileLegacyProfileImageValidator),
+  documentDecoration: v.optional(userProfileDocumentDecorationValidator),
 });
 
 function canonicalizeLayout(value: unknown): unknown {

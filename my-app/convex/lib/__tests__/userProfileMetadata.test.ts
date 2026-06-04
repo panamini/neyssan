@@ -127,6 +127,37 @@ describe("userProfileMetadata", () => {
     ).toBe(false);
   });
 
+  it("accepts CV document decoration image metadata", () => {
+    expect(
+      matchesValidator(userProfileMetadataValidator.json, {
+        documentDecoration: {
+          visible: true,
+          source: "upload",
+          dataUrl: "data:image/png;base64,AAAA",
+          fileName: "portrait.png",
+          mimeType: "image/png",
+          sizePreset: "custom",
+          customSizeMm: 41,
+          fit: "cover",
+          placementMode: "custom",
+          xMm: 42,
+          yMm: 56,
+        },
+      }),
+    ).toBe(true);
+
+    expect(
+      matchesValidator(userProfileMetadataValidator.json, {
+        profileImage: {
+          src: "data:image/png;base64,AAAA",
+          fileName: "legacy-portrait.png",
+          size: "medium",
+          fit: "contain",
+        },
+      }),
+    ).toBe(true);
+  });
+
   it("keeps existing allowed metadata fields valid without verbatiStyle", () => {
     expect(
       matchesValidator(userProfileMetadataValidator.json, {

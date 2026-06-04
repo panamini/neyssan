@@ -34,6 +34,7 @@ export const DOCUMENT_DECORATION_MAX_CUSTOM_SIZE_MM = 105;
 export const DOCUMENT_DECORATION_UPLOAD_ACCEPT =
   ".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml";
 export const DOCUMENT_DECORATION_MAX_FILE_BYTES = 2 * 1024 * 1024;
+export const DOCUMENT_DECORATION_MAX_DATA_URL_BYTES = 700 * 1024;
 export const DEFAULT_DOCUMENT_DECORATION_PLACEMENT = {
   xMm: 17,
   yMm: 35,
@@ -468,6 +469,93 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
+function getStringByteSize(value: string): number {
+  if (typeof Blob !== "undefined") {
+    return new Blob([value]).size;
+  }
+  return value.length;
+}
+
+function assertPersistableDecorationDataUrl(dataUrl: string): void {
+  if (getStringByteSize(dataUrl) <= DOCUMENT_DECORATION_MAX_DATA_URL_BYTES) {
+    return;
+  }
+  throw new Error("Decoration image is too large. Use an image under 700 KB.");
+}
+
+function loadImageFromDataUrl(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    if (typeof Image === "undefined") {
+      reject(new Error("This browser cannot optimize large images."));
+      return;
+    }
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Could not optimize image file."));
+    image.src = dataUrl;
+  });
+}
+
+async function compressRasterDecorationDataUrl(
+  dataUrl: string,
+  mimeType: Exclude<DocumentDecorationMimeType, "image/svg+xml">,
+): Promise<{
+  dataUrl: string;
+  mimeType: Exclude<DocumentDecorationMimeType, "image/svg+xml">;
+}> {
+  if (getStringByteSize(dataUrl) <= DOCUMENT_DECORATION_MAX_DATA_URL_BYTES) {
+    return { dataUrl, mimeType };
+  }
+  if (typeof document === "undefined") {
+    assertPersistableDecorationDataUrl(dataUrl);
+    return { dataUrl, mimeType };
+  }
+
+  const image = await loadImageFromDataUrl(dataUrl);
+  const sourceWidth = Math.max(1, image.naturalWidth || image.width);
+  const sourceHeight = Math.max(1, image.naturalHeight || image.height);
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+  if (!context) {
+    assertPersistableDecorationDataUrl(dataUrl);
+    return dataUrl;
+  }
+
+  for (const maxDimension of [1200, 900, 700, 520, 380]) {
+    const scale = Math.min(1, maxDimension / Math.max(sourceWidth, sourceHeight));
+    canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+    canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+    if (mimeType === "image/png") {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const compressedPng = canvas.toDataURL("image/png");
+      if (
+        getStringByteSize(compressedPng) <=
+        DOCUMENT_DECORATION_MAX_DATA_URL_BYTES
+      ) {
+        return { dataUrl: compressedPng, mimeType: "image/png" };
+      }
+      continue;
+    }
+
+    for (const quality of [0.82, 0.72, 0.62, 0.52]) {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const compressedJpeg = canvas.toDataURL("image/jpeg", quality);
+      if (
+        getStringByteSize(compressedJpeg) <=
+        DOCUMENT_DECORATION_MAX_DATA_URL_BYTES
+      ) {
+        return { dataUrl: compressedJpeg, mimeType: "image/jpeg" };
+      }
+    }
+  }
+
+  throw new Error("Decoration image is too large. Use a smaller image.");
+}
+
 function readFileAsText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -497,6 +585,7 @@ export async function readDocumentDecorationUpload(file: File): Promise<Document
     if (!dataUrl) {
       throw new Error("SVG decorations cannot include scripts or external assets.");
     }
+    assertPersistableDecorationDataUrl(dataUrl);
     return {
       ...createDefaultDocumentDecoration(),
       visible: true,
@@ -507,16 +596,21 @@ export async function readDocumentDecorationUpload(file: File): Promise<Document
     };
   }
 
-  const dataUrl = await readFileAsDataUrl(file);
-  if (inferMimeTypeFromDataUrl(dataUrl) !== mimeType) {
+  const originalDataUrl = await readFileAsDataUrl(file);
+  if (inferMimeTypeFromDataUrl(originalDataUrl) !== mimeType) {
     throw new Error("The uploaded image type does not match the selected file.");
   }
+  const compressed = await compressRasterDecorationDataUrl(
+    originalDataUrl,
+    mimeType,
+  );
+  assertPersistableDecorationDataUrl(compressed.dataUrl);
   return {
     ...createDefaultDocumentDecoration(),
     visible: true,
-    dataUrl,
+    dataUrl: compressed.dataUrl,
     fileName,
-    mimeType,
+    mimeType: compressed.mimeType,
     alt: fileName.replace(/\.[^.]+$/, "") || "Document decoration",
   };
 }

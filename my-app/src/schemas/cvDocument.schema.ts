@@ -395,6 +395,31 @@ const _CvMetadataBase = z.object({
     })
     .strict()
     .optional(),
+  documentDecoration: z
+    .object({
+      visible: z.boolean(),
+      source: z.literal("upload"),
+      assetId: z.string().optional(),
+      dataUrl: z.string().optional(),
+      fileName: z.string().optional(),
+      mimeType: z
+        .enum(["image/png", "image/jpeg", "image/svg+xml"])
+        .optional(),
+      alt: z.string().optional(),
+      sizePreset: z.union([
+        z.literal(18),
+        z.literal(35),
+        z.literal(52),
+        z.literal("custom"),
+      ]),
+      customSizeMm: z.number().optional(),
+      fit: z.enum(["contain", "cover"]),
+      placementMode: z.enum(["default", "custom"]),
+      xMm: z.number().optional(),
+      yMm: z.number().optional(),
+    })
+    .strict()
+    .optional(),
 });
 export const CvMetadataSchema = _CvMetadataBase.passthrough();
 export const CvMetadataSchemaStrict = _CvMetadataBase.strict();

@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, ChevronDown, FileImage, TrashSimple, Upload } from "@/lib/icons";
+import { Check, ChevronDown, Eye, FileImage, TrashSimple, Upload } from "@/lib/icons";
 import { Menu } from "../ui";
 import {
   getVerbatiFontPairOption,
@@ -23,6 +23,14 @@ import {
 } from "../../lib/document-icons";
 import { BulletStyleControl } from "../document-icons/BulletStyleControl";
 import { DocumentIconPicker } from "../document-icons/DocumentIconPicker";
+import {
+  applyDocumentDecorationSizePreset,
+  createDefaultDocumentDecoration,
+  DOCUMENT_DECORATION_UPLOAD_ACCEPT,
+  normalizeDocumentDecoration,
+  removeDocumentDecorationAsset,
+  type DocumentDecoration,
+} from "../../lib/document-decoration";
 
 export type CvAccentChoice =
   | "terre"
@@ -53,23 +61,9 @@ type CvDesignFieldsProps = {
   documentIconSettings?: DocumentIconSettings;
   onDocumentIconSettingsChange?: (settings: DocumentIconSettings) => void;
   sectionIconTargets?: Array<{ id: string; title: string; type?: string | null }>;
-  image?: CvDesignImageState | null;
+  image?: DocumentDecoration | null;
   onImageUpload?: (file: File) => void;
-  onImageRemove?: () => void;
-  onImageSettingsChange?: (settings: CvDesignImageSettings) => void;
-};
-
-export type CvDesignImageSize = "small" | "medium" | "large";
-export type CvDesignImageFit = "contain" | "cover";
-
-export type CvDesignImageSettings = {
-  size: CvDesignImageSize;
-  fit: CvDesignImageFit;
-};
-
-export type CvDesignImageState = CvDesignImageSettings & {
-  src?: string | null;
-  fileName?: string | null;
+  onImageChange?: (decoration: DocumentDecoration) => void;
 };
 
 const FONT_PAIR_IDS: VerbatiFontPairId[] = [
@@ -102,12 +96,12 @@ const SECTION_ICON_MODE_OPTIONS: Array<{
   { id: "auto", label: "Auto" },
   { id: "custom", label: "Custom" },
 ];
-const CV_DESIGN_IMAGE_SIZE_LABELS: Record<CvDesignImageSize, string> = {
-  small: "Small",
-  medium: "Medium",
-  large: "Large",
+const CV_DESIGN_IMAGE_SIZE_LABELS: Record<18 | 35 | 52, string> = {
+  18: "Small",
+  35: "Medium",
+  52: "Large",
 };
-const CV_DESIGN_IMAGE_FIT_LABELS: Record<CvDesignImageFit, string> = {
+const CV_DESIGN_IMAGE_FIT_LABELS: Record<"contain" | "cover", string> = {
   contain: "Contain",
   cover: "Cover",
 };
@@ -122,22 +116,21 @@ function normalizeCvAccentHex(value: string | null | undefined): string | null {
 function CvDesignImageControl({
   image,
   onUpload,
-  onRemove,
-  onSettingsChange,
+  onChange,
 }: {
-  image?: CvDesignImageState | null;
+  image?: DocumentDecoration | null;
   onUpload?: (file: File) => void;
-  onRemove?: () => void;
-  onSettingsChange?: (settings: CvDesignImageSettings) => void;
+  onChange?: (decoration: DocumentDecoration) => void;
 }): JSX.Element {
   const inputId = React.useId();
   const [isInspectOpen, setIsInspectOpen] = React.useState(false);
   const rootRef = React.useRef<HTMLDivElement | null>(null);
-  const hasImage = Boolean(image?.src);
-  const size = image?.size ?? "medium";
-  const fit = image?.fit ?? "cover";
-  const title = image?.fileName?.trim() || "Document image";
-  const meta = `${CV_DESIGN_IMAGE_FIT_LABELS[fit]} • ${CV_DESIGN_IMAGE_SIZE_LABELS[size]}`;
+  const decoration = normalizeDocumentDecoration(image ?? createDefaultDocumentDecoration());
+  const hasImage = Boolean(decoration.dataUrl || decoration.assetId);
+  const sizePreset = decoration.sizePreset === "custom" ? 35 : decoration.sizePreset;
+  const title = decoration.fileName?.trim() || "Document image";
+  const visibilityLabel = decoration.visible ? "Visible" : "Hidden";
+  const meta = `${CV_DESIGN_IMAGE_FIT_LABELS[decoration.fit]} • ${CV_DESIGN_IMAGE_SIZE_LABELS[sizePreset]} • ${visibilityLabel}`;
 
   React.useEffect(() => {
     if (!isInspectOpen) return;
@@ -174,12 +167,8 @@ function CvDesignImageControl({
     onUpload?.(file);
   };
 
-  const updateSettings = (patch: Partial<CvDesignImageSettings>) => {
-    onSettingsChange?.({
-      size,
-      fit,
-      ...patch,
-    });
+  const updateDecoration = (nextDecoration: DocumentDecoration) => {
+    onChange?.(normalizeDocumentDecoration(nextDecoration));
   };
 
   return (
@@ -189,7 +178,7 @@ function CvDesignImageControl({
         id={inputId}
         className="dasti-cv-design-image__input"
         type="file"
-        accept="image/png,image/jpeg,.png,.jpg,.jpeg"
+        accept={DOCUMENT_DECORATION_UPLOAD_ACCEPT}
         aria-label="Upload CV image"
         disabled={!onUpload}
         onChange={handleFileChange}
@@ -211,7 +200,11 @@ function CvDesignImageControl({
       ) : (
         <div className="dasti-cv-design-image__panel">
           <label className="dasti-cv-design-image__thumb" htmlFor={inputId}>
-            <img src={image?.src ?? ""} alt="" />
+            {decoration.dataUrl ? (
+              <img src={decoration.dataUrl} alt="" />
+            ) : (
+              <FileImage size={18} strokeWidth={1.8} aria-hidden="true" />
+            )}
           </label>
           <div className="dasti-cv-design-image__summary">
             <strong title={title}>{title}</strong>
@@ -232,13 +225,17 @@ function CvDesignImageControl({
           <div className="dasti-cv-design-image__control">
             <div className="dasti-cv-design-image__control-label">Size</div>
             <div className="dasti-cv-design-image__segments" aria-label="Image size">
-              {(["small", "medium", "large"] as const).map((option) => (
+              {([18, 35, 52] as const).map((option) => (
                 <button
                   key={option}
                   type="button"
-                  aria-pressed={size === option}
-                  data-selected={size === option ? "true" : undefined}
-                  onClick={() => updateSettings({ size: option })}
+                  aria-pressed={sizePreset === option}
+                  data-selected={sizePreset === option ? "true" : undefined}
+                  onClick={() =>
+                    updateDecoration(
+                      applyDocumentDecorationSizePreset(decoration, option),
+                    )
+                  }
                 >
                   {CV_DESIGN_IMAGE_SIZE_LABELS[option]}
                 </button>
@@ -252,15 +249,34 @@ function CvDesignImageControl({
                 <button
                   key={option}
                   type="button"
-                  aria-pressed={fit === option}
-                  data-selected={fit === option ? "true" : undefined}
-                  onClick={() => updateSettings({ fit: option })}
+                  aria-pressed={decoration.fit === option}
+                  data-selected={decoration.fit === option ? "true" : undefined}
+                  onClick={() =>
+                    updateDecoration({
+                      ...decoration,
+                      fit: option,
+                      visible: true,
+                    })
+                  }
                 >
                   {CV_DESIGN_IMAGE_FIT_LABELS[option]}
                 </button>
               ))}
             </div>
           </div>
+          <button
+            type="button"
+            className="dasti-cv-design-image__replace"
+            onClick={() =>
+              updateDecoration({
+                ...decoration,
+                visible: !decoration.visible,
+              })
+            }
+          >
+            <Eye size={13} strokeWidth={1.8} aria-hidden="true" />
+            {decoration.visible ? "Hide image" : "Show image"}
+          </button>
           <label className="dasti-cv-design-image__replace" htmlFor={inputId}>
             <Upload size={13} strokeWidth={1.8} aria-hidden="true" />
             Replace
@@ -268,7 +284,7 @@ function CvDesignImageControl({
           <button
             type="button"
             className="dasti-cv-design-image__remove"
-            onClick={onRemove}
+            onClick={() => updateDecoration(removeDocumentDecorationAsset(decoration))}
           >
             <TrashSimple size={13} strokeWidth={1.8} aria-hidden="true" />
             Remove image
@@ -359,8 +375,7 @@ export function CvDesignFields({
   sectionIconTargets = [],
   image = null,
   onImageUpload,
-  onImageRemove,
-  onImageSettingsChange,
+  onImageChange,
 }: CvDesignFieldsProps): JSX.Element {
   const [isCustomColorPickerOpen, setIsCustomColorPickerOpen] =
     React.useState(false);
@@ -588,8 +603,7 @@ export function CvDesignFields({
       <CvDesignImageControl
         image={image}
         onUpload={onImageUpload}
-        onRemove={onImageRemove}
-        onSettingsChange={onImageSettingsChange}
+        onChange={onImageChange}
       />
       <div className="dasti-cv-rail-label">Section icons</div>
       <div className="dasti-cv-style-pills" aria-label="Section heading icons">

@@ -326,6 +326,8 @@ describe("user profile metadata schema alignment", () => {
       "verbatiStyleSlotNameSnapshot",
       "verbatiStyleBaseSnapshot",
       "documentStyleVersion",
+      "profileImage",
+      "documentDecoration",
     ]);
     expect(Object.keys(userProfileMetadataValidator.fields)).toEqual([
       "source",
@@ -339,6 +341,8 @@ describe("user profile metadata schema alignment", () => {
       "verbatiStyleSlotNameSnapshot",
       "verbatiStyleBaseSnapshot",
       "documentStyleVersion",
+      "profileImage",
+      "documentDecoration",
     ]);
   });
 

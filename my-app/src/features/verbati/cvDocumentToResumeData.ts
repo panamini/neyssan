@@ -1220,16 +1220,6 @@ export function mapCvDocumentToResumeData(
 
   const profileName = String(profile?.name ?? "").trim();
   const profileImageMetadata = readProfileImageMetadata(doc);
-  const profileImageSource =
-    doc.metadata &&
-    typeof doc.metadata.profileImage === "object" &&
-    doc.metadata.profileImage
-      ? (doc.metadata.profileImage as Record<string, unknown>)
-      : {};
-  const metadataPhotoUrl =
-    typeof profileImageSource.src === "string"
-      ? profileImageSource.src.trim()
-      : "";
   const profilePhotoUrl = String(profile?.photoUrl ?? "").trim();
 
   return {
@@ -1237,7 +1227,7 @@ export function mapCvDocumentToResumeData(
     title: String(profile?.desiredPosition ?? "").trim(),
     summary,
     ...(summaryRich ? { summaryRich } : {}),
-    photoUrl: profilePhotoUrl || metadataPhotoUrl || undefined,
+    photoUrl: profilePhotoUrl || undefined,
     ...profileImageMetadata,
     metadata,
     contact,

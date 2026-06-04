@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { normalizeAndValidateCvDocument } from "../lib/normalize-cv";
 
 describe("v1 normalization - representative blocks and pruning", () => {
-  it("preserves uploaded profile image data URLs through normalization", () => {
+  it("preserves uploaded document decoration data URLs through normalization", () => {
     const dataUrl = "data:image/png;base64,AAAA";
     const input = {
       id: "cv-uploaded-image",
@@ -11,11 +11,17 @@ describe("v1 normalization - representative blocks and pruning", () => {
         createdAt: "2026-03-25T00:00:00.000Z",
         updatedAt: "2026-03-25T00:00:00.000Z",
         version: 1,
-        profileImage: {
-          src: dataUrl,
-          size: "medium",
-          fit: "cover",
+        documentDecoration: {
+          visible: true,
+          source: "upload",
+          dataUrl,
           fileName: "portrait.png",
+          mimeType: "image/png",
+          sizePreset: 35,
+          fit: "cover",
+          placementMode: "custom",
+          xMm: 42,
+          yMm: 56,
         },
       },
       sections: [
@@ -29,7 +35,6 @@ describe("v1 normalization - representative blocks and pruning", () => {
               id: "profile-1",
               name: "Elena Marlowe",
               desiredPosition: "Senior Product Designer",
-              photoUrl: dataUrl,
             },
           ],
         },
@@ -41,13 +46,8 @@ describe("v1 normalization - representative blocks and pruning", () => {
     expect(res.success).toBe(true);
     if (!res.success) return;
 
-    const profile = res.document.sections.find((section) => section.type === "profile");
-    const firstProfileItem = Array.isArray(profile?.structuredContent)
-      ? profile.structuredContent[0]
-      : null;
-
-    expect((res.document.metadata.profileImage as { src?: string }).src).toBe(dataUrl);
-    expect((firstProfileItem as { photoUrl?: string } | null)?.photoUrl).toBe(dataUrl);
+    expect((res.document.metadata.documentDecoration as { dataUrl?: string }).dataUrl).toBe(dataUrl);
+    expect((res.document.metadata.documentDecoration as { xMm?: number }).xMm).toBe(42);
   });
 
   it("creates or repurposes exactly one representative block per Experience item and prunes invalid linked blocks", () => {

@@ -5,6 +5,7 @@ import {
   clampDocumentDecorationPlacement,
   clampDocumentDecorationSizeMm,
   DEFAULT_DOCUMENT_DECORATION_PLACEMENT,
+  DOCUMENT_DECORATION_MAX_DATA_URL_BYTES,
   EDITORIAL_TEMPLATE_FLOWER_DECORATION_PLACEMENT,
   EDITORIAL_TEMPLATE_FLOWER_FILE_NAME,
   getDocumentDecorationRenderedSizeMm,
@@ -294,5 +295,17 @@ describe("document-decoration", () => {
     await expect(
       readDocumentDecorationUpload(new File(["gif"], "mark.gif", { type: "image/gif" })),
     ).rejects.toThrow("Use a PNG, JPG, or SVG image.");
+  });
+
+  it("rejects self-contained SVG uploads that would exceed the persisted data URL budget", async () => {
+    const oversizedSvg = `<svg viewBox="0 0 10 10"><text>${"x".repeat(
+      DOCUMENT_DECORATION_MAX_DATA_URL_BYTES,
+    )}</text></svg>`;
+
+    await expect(
+      readDocumentDecorationUpload(
+        new File([oversizedSvg], "large.svg", { type: "image/svg+xml" }),
+      ),
+    ).rejects.toThrow("Decoration image is too large");
   });
 });

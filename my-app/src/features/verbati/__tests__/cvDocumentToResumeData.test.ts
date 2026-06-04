@@ -318,7 +318,7 @@ describe("mapCvDocumentToResumeData", () => {
     expect(hasRenderableResumeData(mapped)).toBe(true);
   });
 
-  it("uses the metadata profile image source when the profile item has no photoUrl", () => {
+  it("does not use the document image metadata as the profile photoUrl", () => {
     const doc: CvDocument = {
       id: "cv-profile-image-metadata",
       title: "Senior Product Designer",
@@ -352,7 +352,7 @@ describe("mapCvDocumentToResumeData", () => {
 
     const mapped = mapCvDocumentToResumeData(doc);
 
-    expect(mapped.photoUrl).toBe("data:image/png;base64,AAAA");
+    expect(mapped.photoUrl).toBeUndefined();
     expect(mapped.photoSize).toBe("large");
     expect(mapped.photoFit).toBe("contain");
   });

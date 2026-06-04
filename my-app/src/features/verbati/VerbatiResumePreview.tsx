@@ -1,4 +1,5 @@
 import React from "react";
+import { Eye, TrashSimple, Upload } from "../../lib/icons";
 import { Menu } from "../../components/ui";
 import { useDocumentPan } from "../../hooks/use-document-pan";
 import { useDocumentStageLayout } from "../../hooks/use-document-stage-layout";
@@ -49,6 +50,17 @@ import type {
   ResumeSectionActions,
 } from "./resume/ResumeOneColAtsPage";
 import type { DocumentIconSettings } from "../../lib/document-icons";
+import {
+  DOCUMENT_DECORATION_UPLOAD_ACCEPT,
+  getDocumentDecorationPlacementMm,
+  getRenderableDocumentDecoration,
+  moveDocumentDecorationByDeltaMm,
+  normalizeDocumentDecoration,
+  readDocumentDecorationUpload,
+  removeDocumentDecorationAsset,
+  resizeDocumentDecorationByDeltaMm,
+  type DocumentDecoration,
+} from "../../lib/document-decoration";
 
 type VerbatiResumePreviewProps = {
   data: ResumeData;
@@ -67,6 +79,10 @@ type VerbatiResumePreviewProps = {
   sectionActions?: ResumeSectionActions | null;
   paperAi?: ResumePaperAiState | null;
   documentIconSettings?: DocumentIconSettings | null;
+  documentDecoration?: DocumentDecoration | null;
+  documentDecorationDesignMode?: boolean;
+  onDocumentDecorationChange?: (decoration: DocumentDecoration) => void;
+  onDocumentDecorationCommit?: (decoration: DocumentDecoration) => void;
   showPageCount?: boolean;
   showStageZoomFooter?: boolean;
   onPageCountChange?: (pageCount: number) => void;
@@ -260,6 +276,282 @@ function buildResumeDataSignature(data: ResumeData) {
   ].join("::");
 }
 
+type CvDocumentDecorationInteractionState = {
+  kind: "move" | "resize";
+  pointerId: number | null;
+  startClientX: number;
+  startClientY: number;
+  initialDecoration: DocumentDecoration;
+  latestDecoration: DocumentDecoration;
+  pageRect: DOMRect;
+  pageWidthMm: number;
+  pageHeightMm: number;
+};
+
+function getDecorationPointerClientPosition(
+  event: React.PointerEvent<HTMLElement>,
+): { clientX: number; clientY: number } | null {
+  const nativeEvent = event.nativeEvent as MouseEvent;
+  const clientX =
+    Number.isFinite(event.clientX) ? event.clientX : nativeEvent.clientX;
+  const clientY =
+    Number.isFinite(event.clientY) ? event.clientY : nativeEvent.clientY;
+  if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+    return null;
+  }
+  return { clientX, clientY };
+}
+
+function CvDocumentDecorationLayer({
+  decoration,
+  isDesignMode,
+  pageSize,
+  pageWidthPx,
+  pageHeightPx,
+  onChange,
+  onCommit,
+}: {
+  decoration?: DocumentDecoration | null;
+  isDesignMode: boolean;
+  pageSize: DocumentPageSize;
+  pageWidthPx: number;
+  pageHeightPx: number;
+  onChange?: (decoration: DocumentDecoration) => void;
+  onCommit?: (decoration: DocumentDecoration) => void;
+}): JSX.Element | null {
+  const resolvedDecoration = getRenderableDocumentDecoration(decoration);
+  const interactionRef =
+    React.useRef<CvDocumentDecorationInteractionState | null>(null);
+  const uploadInputId = React.useId();
+  const uploadInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  if (!resolvedDecoration) {
+    return null;
+  }
+
+  const pageSizeMm = {
+    pageWidthMm: pageSize.widthMm,
+    pageHeightMm: pageSize.heightMm,
+  };
+  const { xMm, yMm, sizeMm } = getDocumentDecorationPlacementMm(
+    resolvedDecoration,
+    pageSizeMm,
+  );
+  const leftPx = (xMm / pageSize.widthMm) * pageWidthPx;
+  const topPx = (yMm / pageSize.heightMm) * pageHeightPx;
+  const sizePx = (sizeMm / pageSize.widthMm) * pageWidthPx;
+  const hasToolbarRoomInlineEnd = xMm + sizeMm + 20 <= pageSize.widthMm;
+  const toolbarPlacement = hasToolbarRoomInlineEnd
+    ? "side"
+    : yMm < 12
+      ? "below"
+      : "above";
+  const toolbarAlignment = xMm < 10 ? "left" : "right";
+
+  const commitDecorationAction = (nextDecoration: DocumentDecoration) => {
+    const normalizedDecoration = normalizeDocumentDecoration(nextDecoration);
+    onChange?.(normalizedDecoration);
+    onCommit?.(normalizedDecoration);
+  };
+
+  const handleDecorationUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const [file] = Array.from(event.currentTarget.files ?? []);
+    event.currentTarget.value = "";
+    if (!file) return;
+    void readDocumentDecorationUpload(file)
+      .then((uploadedDecoration) => {
+        commitDecorationAction({
+          ...uploadedDecoration,
+          sizePreset: resolvedDecoration.sizePreset,
+          customSizeMm: resolvedDecoration.customSizeMm,
+          fit: resolvedDecoration.fit,
+          placementMode: resolvedDecoration.placementMode,
+          xMm: resolvedDecoration.xMm,
+          yMm: resolvedDecoration.yMm,
+          visible: true,
+        });
+      })
+      .catch(() => {
+        // Drawer upload owns user-facing errors; the on-page toolbar stays silent.
+      });
+  };
+
+  const beginInteraction = (
+    event: React.PointerEvent<HTMLElement>,
+    kind: "move" | "resize",
+  ) => {
+    if (!isDesignMode || pageWidthPx <= 0 || pageHeightPx <= 0) return;
+    const page = event.currentTarget.closest(
+      '[data-document-page="true"]',
+    ) as HTMLElement | null;
+    if (!page) return;
+    const pageRect = page.getBoundingClientRect();
+    if (pageRect.width <= 0 || pageRect.height <= 0) return;
+    const pointerPosition = getDecorationPointerClientPosition(event);
+    if (!pointerPosition) return;
+    const pointerId = Number.isFinite(event.pointerId) ? event.pointerId : null;
+    event.preventDefault();
+    event.stopPropagation();
+    if (pointerId !== null) {
+      event.currentTarget.setPointerCapture?.(pointerId);
+    }
+    interactionRef.current = {
+      kind,
+      pointerId,
+      startClientX: pointerPosition.clientX,
+      startClientY: pointerPosition.clientY,
+      initialDecoration: resolvedDecoration,
+      latestDecoration: resolvedDecoration,
+      pageRect,
+      pageWidthMm: pageSize.widthMm,
+      pageHeightMm: pageSize.heightMm,
+    };
+  };
+
+  const updateInteraction = (event: React.PointerEvent<HTMLElement>) => {
+    const interaction = interactionRef.current;
+    const pointerId = Number.isFinite(event.pointerId) ? event.pointerId : null;
+    if (!interaction || interaction.pointerId !== pointerId) return;
+    const pointerPosition = getDecorationPointerClientPosition(event);
+    if (!pointerPosition) return;
+    event.stopPropagation();
+    const deltaXMm =
+      (pointerPosition.clientX - interaction.startClientX) *
+      (interaction.pageWidthMm / interaction.pageRect.width);
+    const deltaYMm =
+      (pointerPosition.clientY - interaction.startClientY) *
+      (interaction.pageHeightMm / interaction.pageRect.height);
+    const nextDecoration =
+      interaction.kind === "resize"
+        ? resizeDocumentDecorationByDeltaMm(interaction.initialDecoration, {
+            deltaXMm,
+            deltaYMm,
+            pageWidthMm: interaction.pageWidthMm,
+            pageHeightMm: interaction.pageHeightMm,
+          })
+        : moveDocumentDecorationByDeltaMm(interaction.initialDecoration, {
+            deltaXMm,
+            deltaYMm,
+            pageWidthMm: interaction.pageWidthMm,
+            pageHeightMm: interaction.pageHeightMm,
+          });
+
+    interaction.latestDecoration = nextDecoration;
+    onChange?.(nextDecoration);
+  };
+
+  const endInteraction = (event: React.PointerEvent<HTMLElement>) => {
+    const interaction = interactionRef.current;
+    const pointerId = Number.isFinite(event.pointerId) ? event.pointerId : null;
+    if (!interaction || interaction.pointerId !== pointerId) return;
+    event.stopPropagation();
+    interactionRef.current = null;
+    if (pointerId !== null) {
+      event.currentTarget.releasePointerCapture?.(pointerId);
+    }
+    onCommit?.(interaction.latestDecoration);
+  };
+
+  return (
+    <div
+      className="dasti-cv-document-decoration"
+      data-design-mode={isDesignMode ? "true" : "false"}
+      data-decoration-size-mm={sizeMm}
+      data-toolbar-placement={isDesignMode ? toolbarPlacement : undefined}
+      data-toolbar-align={isDesignMode ? toolbarAlignment : undefined}
+      style={
+        {
+          left: `${leftPx}px`,
+          top: `${topPx}px`,
+          width: `${sizePx}px`,
+          height: `${sizePx}px`,
+          "--cv-decoration-object-fit": resolvedDecoration.fit,
+        } as React.CSSProperties
+      }
+      onClick={(event) => event.stopPropagation()}
+      onPointerDown={(event) => beginInteraction(event, "move")}
+      onPointerMove={updateInteraction}
+      onPointerUp={endInteraction}
+      onPointerCancel={endInteraction}
+    >
+      <img
+        src={resolvedDecoration.dataUrl}
+        alt={resolvedDecoration.alt ?? ""}
+        draggable={false}
+      />
+      {isDesignMode ? (
+        <>
+          <div
+            className="dasti-cv-document-decoration__toolbar"
+            aria-label="CV image controls"
+            data-toolbar-placement={toolbarPlacement}
+            data-toolbar-align={toolbarAlignment}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="dasti-icon-button dasti-icon-button--compact dasti-cv-document-decoration__action"
+              aria-label="Hide CV image"
+              title="Hide image"
+              disabled={!onChange}
+              onClick={() => {
+                commitDecorationAction({
+                  ...resolvedDecoration,
+                  visible: false,
+                });
+              }}
+            >
+              <Eye size={12} strokeWidth={1.8} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="dasti-icon-button dasti-icon-button--compact dasti-cv-document-decoration__action"
+              aria-label="Upload CV image"
+              title="Upload image"
+              disabled={!onChange}
+              onClick={() => uploadInputRef.current?.click()}
+            >
+              <Upload size={12} strokeWidth={1.8} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="dasti-icon-button dasti-icon-button--compact dasti-cv-document-decoration__action dasti-cv-document-decoration__action--danger"
+              aria-label="Remove CV image"
+              title="Remove image"
+              disabled={!onChange}
+              onClick={() => {
+                commitDecorationAction(
+                  removeDocumentDecorationAsset(resolvedDecoration),
+                );
+              }}
+            >
+              <TrashSimple size={12} strokeWidth={1.8} aria-hidden="true" />
+            </button>
+            <input
+              ref={uploadInputRef}
+              id={uploadInputId}
+              className="dasti-cv-document-decoration__upload-input"
+              type="file"
+              aria-label="Upload CV image from page"
+              accept={DOCUMENT_DECORATION_UPLOAD_ACCEPT}
+              disabled={!onChange}
+              onChange={handleDecorationUpload}
+            />
+          </div>
+          <span
+            className="dasti-cv-document-decoration__resize-handle"
+            aria-hidden="true"
+            onPointerDown={(event) => {
+              event.stopPropagation();
+              beginInteraction(event, "resize");
+            }}
+          />
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 function getLayoutPresetForRenderer(
   variantId: ResumeLayoutVariantId,
 ): VerbatiLayoutPreset | null {
@@ -285,6 +577,10 @@ export function VerbatiResumePreview({
   sectionActions = null,
   paperAi = null,
   documentIconSettings = null,
+  documentDecoration = null,
+  documentDecorationDesignMode = false,
+  onDocumentDecorationChange,
+  onDocumentDecorationCommit,
   showPageCount = false,
   showStageZoomFooter = false,
   onPageCountChange,
@@ -1026,6 +1322,15 @@ export function VerbatiResumePreview({
               onPreviewMetricsChange={handlePreviewMetricsChange}
             />
           )}
+          <CvDocumentDecorationLayer
+            decoration={documentDecoration}
+            isDesignMode={documentDecorationDesignMode}
+            pageSize={resolvedPageSize}
+            pageWidthPx={stageLayout.pageWidth}
+            pageHeightPx={stageLayout.pageHeight}
+            onChange={onDocumentDecorationChange}
+            onCommit={onDocumentDecorationCommit}
+          />
         </div>
       </div>
     </div>

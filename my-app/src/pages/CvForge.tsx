@@ -137,8 +137,14 @@ import {
 import CvStageBar from "../components/cv/CvStageBar";
 import CvDesignFields, {
   type CvAccentChoice,
-  type CvDesignImageSettings,
 } from "../components/cv/CvDesignFields";
+import {
+  createDefaultDocumentDecoration,
+  normalizeDocumentDecoration,
+  readDocumentDecorationUpload,
+  shouldPersistDocumentDecoration,
+  type DocumentDecoration,
+} from "../lib/document-decoration";
 import CvReviewBanner from "../components/cv/CvReviewBanner";
 import ImportRecoveryPanel from "../components/ImportRecoveryPanel";
 import ComposerDrawer from "../components/ComposerDrawer";
@@ -214,10 +220,6 @@ type CvImportRecoveryDraft = {
   items: ImportRecoveryItem[];
   overflowCount: number;
   reviewLimit: number;
-};
-type CvProfileImageMetadata = CvDesignImageSettings & {
-  fileName?: string;
-  src?: string;
 };
 
 function withCvInlinePaperAiTimeout<T>(request: Promise<T>): Promise<T> {
@@ -337,45 +339,41 @@ function getStructuredItems(
     : [];
 }
 
-function getCvProfileImageMetadata(
+function readLegacyCvProfileImageDecoration(
   metadata: CvDocument["metadata"] | null | undefined,
-): CvProfileImageMetadata {
+): DocumentDecoration | null {
   const source =
     metadata && typeof metadata.profileImage === "object" && metadata.profileImage
       ? (metadata.profileImage as Record<string, unknown>)
       : {};
-  return {
-    size:
-      source.size === "small" || source.size === "large"
-        ? source.size
-        : "medium",
-    fit: source.fit === "contain" ? "contain" : "cover",
-    ...(typeof source.fileName === "string" && source.fileName.trim()
-      ? { fileName: source.fileName.trim().slice(0, 160) }
-      : {}),
-    ...(typeof source.src === "string" && source.src.trim()
-      ? { src: source.src.trim() }
-      : {}),
-  };
+  const dataUrl = typeof source.src === "string" ? source.src.trim() : "";
+  if (!dataUrl) {
+    return null;
+  }
+  return normalizeDocumentDecoration({
+    ...createDefaultDocumentDecoration(),
+    visible: true,
+    dataUrl,
+    fileName:
+      typeof source.fileName === "string" && source.fileName.trim()
+        ? source.fileName.trim()
+        : "Document image",
+    fit: source.fit === "cover" ? "cover" : "contain",
+    sizePreset:
+      source.size === "small" ? 18 : source.size === "large" ? 52 : 35,
+  });
 }
 
-function readCvProfileImageFile(file: File): Promise<string> {
-  if (!/^image\/(?:png|jpe?g)$/i.test(file.type)) {
-    return Promise.reject(new Error("Use a PNG or JPEG image."));
-  }
-
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Could not read the image."));
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        resolve(reader.result);
-        return;
-      }
-      reject(new Error("Could not read the image."));
-    };
-    reader.readAsDataURL(file);
-  });
+function getCvDocumentDecoration(
+  metadata: CvDocument["metadata"] | null | undefined,
+): DocumentDecoration {
+  const source =
+    metadata &&
+    typeof metadata.documentDecoration === "object" &&
+    metadata.documentDecoration
+      ? metadata.documentDecoration
+      : readLegacyCvProfileImageDecoration(metadata);
+  return normalizeDocumentDecoration(source ?? createDefaultDocumentDecoration());
 }
 
 function normalizeListName(value: string): string {
@@ -6257,116 +6255,81 @@ export function CvForge(): JSX.Element {
     [saveCurrentCvStyleOnly, stylePreset],
   );
 
-  const profileSection = React.useMemo(
-    () =>
-      currentSections.find(
-        (section) => getCanonicalSectionType(section) === "profile",
-      ) ?? null,
-    [currentSections],
-  );
-  const profileImageMetadata = React.useMemo(
-    () => getCvProfileImageMetadata(currentCv?.metadata),
+  const persistedCvDocumentDecoration = React.useMemo(
+    () => getCvDocumentDecoration(currentCv?.metadata),
     [currentCv?.metadata],
   );
-  const profileImageSource = React.useMemo(() => {
-    const firstProfileItem = profileSection
-      ? getStructuredItems(profileSection)[0]
-      : null;
-    const src =
-      typeof firstProfileItem?.photoUrl === "string"
-        ? firstProfileItem.photoUrl.trim()
-        : "";
-    return src || profileImageMetadata.src || null;
-  }, [profileImageMetadata.src, profileSection]);
-  const updateCvProfileImage = React.useCallback(
-    (photoUrl: string | null, metadataPatch?: Partial<CvProfileImageMetadata>) => {
+  const [draftCvDocumentDecoration, setDraftCvDocumentDecoration] =
+    React.useState<DocumentDecoration | null>(null);
+  React.useEffect(() => {
+    setDraftCvDocumentDecoration(null);
+  }, [currentCv?.id]);
+  const cvDocumentDecoration =
+    draftCvDocumentDecoration ?? persistedCvDocumentDecoration;
+  const updateCvDocumentDecoration = React.useCallback(
+    (nextDecoration: DocumentDecoration) => {
       if (!currentCv) {
         showToast("Load a CV before adding an image.", { variant: "error" });
         return;
       }
 
       const now = new Date().toISOString();
-      const nextProfileImage = {
-        ...profileImageMetadata,
-        ...metadataPatch,
-        ...(photoUrl ? { src: photoUrl } : {}),
-      };
+      const normalizedDecoration = normalizeDocumentDecoration(nextDecoration);
       const nextMetadata = buildUpdatedCvMetadata(currentCv, now);
-      if (photoUrl) {
-        (nextMetadata as { profileImage?: CvProfileImageMetadata }).profileImage =
-          nextProfileImage;
+      delete (nextMetadata as { profileImage?: unknown }).profileImage;
+      if (shouldPersistDocumentDecoration(normalizedDecoration)) {
+        (nextMetadata as { documentDecoration?: DocumentDecoration }).documentDecoration =
+          normalizedDecoration;
       } else {
-        delete (nextMetadata as { profileImage?: unknown }).profileImage;
+        delete (nextMetadata as { documentDecoration?: unknown }).documentDecoration;
       }
 
       void importCv({
         ...currentCv,
         metadata: nextMetadata,
-        sections: profileSection
-          ? currentSections.map((section) => {
-              if (section !== profileSection) return section;
-              const profileItems = getStructuredItems(profileSection);
-              const firstProfileItem = profileItems[0] ?? {};
-              const nextProfileItem = {
-                ...firstProfileItem,
-                ...(photoUrl ? { photoUrl } : { photoUrl: undefined }),
-              };
-              return {
-                ...profileSection,
-                structuredContent:
-                  profileItems.length > 0
-                    ? [nextProfileItem, ...profileItems.slice(1)]
-                    : [nextProfileItem],
-              };
-            })
-          : currentSections,
+        sections: currentSections,
       });
     },
-    [
-      currentCv,
-      currentSections,
-      importCv,
-      profileImageMetadata,
-      profileSection,
-      showToast,
-    ],
+    [currentCv, currentSections, importCv, showToast],
+  );
+  const handleCvDocumentDecorationPreviewChange = React.useCallback(
+    (nextDecoration: DocumentDecoration) => {
+      setDraftCvDocumentDecoration(normalizeDocumentDecoration(nextDecoration));
+    },
+    [],
+  );
+  const handleCvDocumentDecorationPreviewCommit = React.useCallback(
+    (nextDecoration: DocumentDecoration) => {
+      const normalizedDecoration = normalizeDocumentDecoration(nextDecoration);
+      setDraftCvDocumentDecoration(null);
+      updateCvDocumentDecoration(normalizedDecoration);
+    },
+    [updateCvDocumentDecoration],
   );
 
   const handleCvDesignImageUpload = React.useCallback(
     (file: File) => {
-      void readCvProfileImageFile(file)
-        .then((photoUrl) => {
-          updateCvProfileImage(photoUrl, {
-            fileName: file.name || "Document image",
+      void readDocumentDecorationUpload(file)
+        .then((uploadedDecoration) => {
+          updateCvDocumentDecoration({
+            ...uploadedDecoration,
+            sizePreset: cvDocumentDecoration.sizePreset,
+            customSizeMm: cvDocumentDecoration.customSizeMm,
+            fit: cvDocumentDecoration.fit,
+            placementMode: cvDocumentDecoration.placementMode,
+            xMm: cvDocumentDecoration.xMm,
+            yMm: cvDocumentDecoration.yMm,
+            visible: true,
           });
         })
         .catch((error: unknown) => {
           showToast(
-            error instanceof Error ? error.message : "Could not read the image.",
+            error instanceof Error ? error.message : "Could not upload this image.",
             { variant: "error" },
           );
         });
     },
-    [showToast, updateCvProfileImage],
-  );
-
-  const handleCvDesignImageSettingsChange = React.useCallback(
-    (settings: CvDesignImageSettings) => {
-      if (!currentCv || !profileImageSource) return;
-      const now = new Date().toISOString();
-      void importCv({
-        ...currentCv,
-        metadata: {
-          ...buildUpdatedCvMetadata(currentCv, now),
-          profileImage: {
-            ...profileImageMetadata,
-            src: profileImageSource,
-            ...settings,
-          },
-        },
-      });
-    },
-    [currentCv, importCv, profileImageMetadata, profileImageSource],
+    [cvDocumentDecoration, showToast, updateCvDocumentDecoration],
   );
 
   const cvDesignPanelRegistration = React.useMemo(
@@ -6388,22 +6351,16 @@ export function CvForge(): JSX.Element {
           documentIconSettings={documentIconSettings}
           onDocumentIconSettingsChange={handleDocumentIconSettingsChange}
           sectionIconTargets={documentIconSectionTargets}
-          image={{
-            src: profileImageSource,
-            fileName: profileImageMetadata.fileName,
-            size: profileImageMetadata.size,
-            fit: profileImageMetadata.fit,
-          }}
+          image={cvDocumentDecoration}
           onImageUpload={handleCvDesignImageUpload}
-          onImageRemove={() => updateCvProfileImage(null)}
-          onImageSettingsChange={handleCvDesignImageSettingsChange}
+          onImageChange={updateCvDocumentDecoration}
         />
       ),
     }),
     [
+      cvDocumentDecoration,
       documentIconSettings,
       documentIconSectionTargets,
-      handleCvDesignImageSettingsChange,
       handleCvDesignImageUpload,
       handleDocumentIconSettingsChange,
       handleResetStyleSlot,
@@ -6415,10 +6372,8 @@ export function CvForge(): JSX.Element {
       resolvedLanguage,
       selectedStyleSlot,
       selectedStyleSlotIsCustom,
-      profileImageMetadata,
-      profileImageSource,
       stylePreset,
-      updateCvProfileImage,
+      updateCvDocumentDecoration,
     ],
   );
   useRegisterForgePanel(cvDesignPanelRegistration);
@@ -8201,6 +8156,10 @@ export function CvForge(): JSX.Element {
                     sectionActions={resumeSectionActions}
                     paperAi={resumePaperAiState}
                     documentIconSettings={documentIconSettings}
+                    documentDecoration={cvDocumentDecoration}
+                    documentDecorationDesignMode={cvDesignOpen}
+                    onDocumentDecorationChange={handleCvDocumentDecorationPreviewChange}
+                    onDocumentDecorationCommit={handleCvDocumentDecorationPreviewCommit}
                     showStageZoomFooter={Boolean(currentCv)}
                     showPageCount={
                       workspaceMode === "preview" && Boolean(currentCv)

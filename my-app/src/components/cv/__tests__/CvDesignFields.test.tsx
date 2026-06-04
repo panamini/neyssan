@@ -155,7 +155,15 @@ describe("CvDesignFields", () => {
         onSelectFontPair={vi.fn()}
         onSelectAccent={vi.fn()}
         onSelectCustomAccent={vi.fn()}
-        image={{ src: null, size: "medium", fit: "cover" }}
+        image={{
+          visible: false,
+          source: "upload",
+          sizePreset: 35,
+          fit: "cover",
+          placementMode: "default",
+          xMm: 17,
+          yMm: 35,
+        }}
         onImageUpload={onImageUpload}
       />,
     );
@@ -173,8 +181,7 @@ describe("CvDesignFields", () => {
   });
 
   it("opens image controls in a floating inspect popover", () => {
-    const onImageSettingsChange = vi.fn();
-    const onImageRemove = vi.fn();
+    const onImageChange = vi.fn();
 
     render(
       <CvDesignFields
@@ -186,18 +193,23 @@ describe("CvDesignFields", () => {
         onSelectAccent={vi.fn()}
         onSelectCustomAccent={vi.fn()}
         image={{
-          src: "data:image/png;base64,AAAA",
+          visible: true,
+          source: "upload",
+          dataUrl: "data:image/png;base64,AAAA",
           fileName: "portrait.png",
-          size: "medium",
+          mimeType: "image/png",
+          sizePreset: 35,
           fit: "contain",
+          placementMode: "custom",
+          xMm: 17,
+          yMm: 35,
         }}
-        onImageRemove={onImageRemove}
-        onImageSettingsChange={onImageSettingsChange}
+        onImageChange={onImageChange}
       />,
     );
 
     expect(screen.getByText("portrait.png")).toBeInTheDocument();
-    expect(screen.getByText("Contain • Medium")).toBeInTheDocument();
+    expect(screen.getByText("Contain • Medium • Visible")).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Image controls" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Inspect" }));
@@ -208,19 +220,39 @@ describe("CvDesignFields", () => {
     const popover = screen.getByRole("dialog", { name: "Image controls" });
 
     fireEvent.click(within(popover).getByRole("button", { name: "Large" }));
-    expect(onImageSettingsChange).toHaveBeenCalledWith({
-      size: "large",
-      fit: "contain",
-    });
+    expect(onImageChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sizePreset: 52,
+        fit: "contain",
+        visible: true,
+      }),
+    );
 
     fireEvent.click(within(popover).getByRole("button", { name: "Cover" }));
-    expect(onImageSettingsChange).toHaveBeenCalledWith({
-      size: "medium",
-      fit: "cover",
-    });
+    expect(onImageChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sizePreset: 35,
+        fit: "cover",
+        visible: true,
+      }),
+    );
+
+    fireEvent.click(within(popover).getByRole("button", { name: "Hide image" }));
+    expect(onImageChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        visible: false,
+      }),
+    );
 
     fireEvent.click(within(popover).getByRole("button", { name: "Remove image" }));
-    expect(onImageRemove).toHaveBeenCalledTimes(1);
+    const removedDecoration = onImageChange.mock.calls.at(-1)?.[0];
+    expect(removedDecoration).toEqual(
+      expect.objectContaining({
+        visible: false,
+      }),
+    );
+    expect(removedDecoration).not.toHaveProperty("dataUrl");
+    expect(removedDecoration).not.toHaveProperty("fileName");
 
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog", { name: "Image controls" })).toBeNull();
