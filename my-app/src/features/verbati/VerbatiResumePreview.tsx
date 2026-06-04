@@ -50,6 +50,10 @@ import type {
   ResumeSectionActions,
 } from "./resume/ResumeOneColAtsPage";
 import type { DocumentIconSettings } from "../../lib/document-icons";
+import type {
+  DocumentIconOverrides,
+  DocumentListItemIconOverrideTarget,
+} from "../../lib/document-icon-overrides";
 import {
   DOCUMENT_DECORATION_UPLOAD_ACCEPT,
   getDocumentDecorationPlacementMm,
@@ -79,6 +83,11 @@ type VerbatiResumePreviewProps = {
   sectionActions?: ResumeSectionActions | null;
   paperAi?: ResumePaperAiState | null;
   documentIconSettings?: DocumentIconSettings | null;
+  documentIconOverrides?: DocumentIconOverrides | null;
+  onDocumentListItemIconChange?: (
+    target: DocumentListItemIconOverrideTarget,
+    iconKey: string | null,
+  ) => void;
   documentDecoration?: DocumentDecoration | null;
   documentDecorationDesignMode?: boolean;
   onDocumentDecorationChange?: (decoration: DocumentDecoration) => void;
@@ -577,6 +586,8 @@ export function VerbatiResumePreview({
   sectionActions = null,
   paperAi = null,
   documentIconSettings = null,
+  documentIconOverrides = null,
+  onDocumentListItemIconChange,
   documentDecoration = null,
   documentDecorationDesignMode = false,
   onDocumentDecorationChange,
@@ -1305,6 +1316,8 @@ export function VerbatiResumePreview({
               sectionActions={sectionActions}
               paperAi={paperAi}
               documentIconSettings={documentIconSettings}
+              documentIconOverrides={documentIconOverrides}
+              onDocumentListItemIconChange={onDocumentListItemIconChange}
               onStablePageCountChange={setStableWorkshopPageCount}
             />
           ) : (

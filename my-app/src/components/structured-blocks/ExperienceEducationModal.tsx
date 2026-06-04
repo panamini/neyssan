@@ -445,6 +445,22 @@ export function normalizeResponsibilityAiResultForSource(args: {
   }
 
   if (shape === "paragraph" || shape === "empty") {
+    const bulletDoc = textToMixedDoc(cleanText);
+    if (getResponsibilitySourceShape(bulletDoc) === "list") {
+      const responsibilityBullets = deriveResponsibilityBullets({
+        responsibilities: bulletDoc,
+        hasResponsibilitiesField: true,
+      });
+      return {
+        ok: true,
+        displayText: responsibilityBullets.map((item) => `• ${item}`).join("\n"),
+        doc: bulletDoc,
+        shape: "list",
+        autoApply: false,
+        responsibilityBullets,
+      };
+    }
+
     const paragraphText = (normalized.items ?? [cleanText])
       .join(" ")
       .replace(/\s+/g, " ")

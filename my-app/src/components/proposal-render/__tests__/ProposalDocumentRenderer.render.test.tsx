@@ -352,6 +352,56 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     expect(markers[1]?.innerHTML).not.toContain(globalIcon!.svg);
   });
 
+  it("closes the proposal document icon picker when clicking outside it", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content=""
+        proposalType="cover_letter"
+        templateId="swiss_margin"
+        proposalDocument={{
+          schemaVersion: 1,
+          kind: "letter",
+          source: "structured",
+          blocks: [
+            {
+              id: "l",
+              type: "list",
+              items: [{ id: "i1", text: "Editable icon target" }],
+            },
+          ],
+        }}
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        documentIconSettings={{
+          listMarkerType: "icon",
+          defaultListMarkerKey: "star",
+          sectionHeadingIconMode: "none",
+          sectionIconMap: {},
+          color: "accent",
+          sizePt: 10,
+        }}
+        onProposalDocumentChange={vi.fn()}
+      />,
+    );
+
+    const trigger = container.querySelector(
+      ".dasti-proposal-document__list-icon-trigger",
+    ) as HTMLButtonElement | null;
+    expect(trigger).toBeTruthy();
+
+    fireEvent.click(trigger as HTMLButtonElement);
+    expect(container.querySelector(".dasti-proposal-document__list-icon-picker")).toBeTruthy();
+
+    fireEvent.pointerDown(document.body);
+
+    expect(container.querySelector(".dasti-proposal-document__list-icon-picker")).toBeNull();
+  });
+
   it("does not duplicate full rich text onto the first pagination fragment", () => {
     const longParagraph = [
       "First sentence with enough words to start a long paragraph.",

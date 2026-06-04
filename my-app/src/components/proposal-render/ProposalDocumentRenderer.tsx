@@ -4115,6 +4115,34 @@ export function ProposalDocumentRenderer({
   );
   const [activeListItemIconPicker, setActiveListItemIconPicker] =
     React.useState<{ blockId: string; itemId: string } | null>(null);
+  React.useEffect(() => {
+    if (!activeListItemIconPicker) return;
+
+    const closeIfOutsidePicker = (event: PointerEvent) => {
+      const target =
+        event.target instanceof Element ? event.target : null;
+      if (
+        target?.closest(
+          ".dasti-proposal-document__list-icon-picker, .dasti-proposal-document__list-icon-trigger",
+        )
+      ) {
+        return;
+      }
+      setActiveListItemIconPicker(null);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setActiveListItemIconPicker(null);
+      }
+    };
+
+    document.addEventListener("pointerdown", closeIfOutsidePicker);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeIfOutsidePicker);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [activeListItemIconPicker]);
 
   // Override proposal mm units with concrete px values so font-size, grid,
   // and padding use the resolved physical page size instead of global fallbacks.
@@ -4722,6 +4750,7 @@ export function ProposalDocumentRenderer({
                             <div className="dasti-proposal-document__list-icon-picker-actions">
                               <button
                                 type="button"
+                                data-document-icon-picker-action="clear"
                                 onClick={() => {
                                   commitListItemIcon(target, null);
                                   setActiveListItemIconPicker(null);
@@ -4731,6 +4760,7 @@ export function ProposalDocumentRenderer({
                               </button>
                               <button
                                 type="button"
+                                data-document-icon-picker-action="close"
                                 onClick={() => setActiveListItemIconPicker(null)}
                               >
                                 Close
@@ -5089,6 +5119,7 @@ export function ProposalDocumentRenderer({
                             <div className="dasti-proposal-document__list-icon-picker-actions">
                               <button
                                 type="button"
+                                data-document-icon-picker-action="clear"
                                 onClick={() => {
                                   commitListItemIcon(target, null);
                                   setActiveListItemIconPicker(null);
@@ -5098,6 +5129,7 @@ export function ProposalDocumentRenderer({
                               </button>
                               <button
                                 type="button"
+                                data-document-icon-picker-action="close"
                                 onClick={() => setActiveListItemIconPicker(null)}
                               >
                                 Close

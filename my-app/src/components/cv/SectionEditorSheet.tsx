@@ -17,7 +17,7 @@ import type { RemirrorJSON } from "remirror";
 import { api } from "../../../convex/_generated/api";
 import { Button, IslandPanel } from "../ui";
 import AiSuggestionCard from "../ai/AiSuggestionCard";
-import type { CvSection } from "../../types/cvDocument";
+import type { CvSection, ISkillItem, SkillCategory } from "../../types/cvDocument";
 import { formatSectionDisplayTitle } from "../../lib/cv-section-organization";
 import { projectResponsibilitiesForWorkshop } from "../../lib/resumeResponsibilityAuthority";
 import { remirrorJsonToString } from "../../lib/utils";
@@ -25,6 +25,7 @@ import { ensureRemirrorDoc } from "../remirror-editor/utils/conversion";
 import { EditorToolbar } from "../remirror-editor/components/EditorToolbar";
 import { useToast } from "../ui/toast";
 import type { CvRailAiSuggestion } from "./CvRail";
+import { SkillsDrawer } from "../structured-blocks/SkillsDrawer";
 
 function getSectionItemCount(section: CvSection | null): number {
   if (!section) return 0;
@@ -62,7 +63,10 @@ type SectionEditorSheetProps = {
     languages: Array<{ name?: string; level?: string }>;
   };
   onRunListAiSuggestion?: (sectionId: string) => void;
-  onAcceptListAiSuggestion?: (value: string) => void;
+  onAcceptListAiSuggestion?: (
+    value: string,
+    options?: { persist?: boolean },
+  ) => void;
   onDismissListAiSuggestion?: (value: string) => void;
   onClearListAiSuggestions?: () => void;
   stageAligned?: boolean;
@@ -1616,6 +1620,91 @@ export function SectionEditorSheet({
     );
   }
 
+  function renderSkillsDrawerEditor() {
+    if (!editableSection) return null;
+    const sectionId = editableSection.id ? String(editableSection.id) : "";
+    const scopedListSuggestion =
+      sectionId &&
+      aiSuggestion?.kind === "list" &&
+      aiSuggestion.sectionId === sectionId
+        ? aiSuggestion
+        : null;
+    const skillItems = structuredItems.filter((item) =>
+      Boolean(getPillItemName(item)),
+    ) as ISkillItem[];
+    const categories = Array.isArray(editableSection.skillCategories)
+      ? (editableSection.skillCategories as SkillCategory[])
+      : [];
+
+    function applySkillsDrawer(next: {
+      items: ISkillItem[];
+      categories: SkillCategory[];
+    }) {
+      if (!editableSection) return;
+      const nextSection: CvSection = {
+        ...editableSection,
+        structuredContent: next.items as CvSection["structuredContent"],
+        skillCategories: next.categories,
+      };
+      commitSection(nextSection);
+      onSave?.(sanitizeSectionForSave(nextSection));
+    }
+
+    function acceptSkillSuggestion(
+      value: string,
+      targetCategoryId?: string | null,
+    ) {
+      const cleanValue = value.trim();
+      if (!cleanValue || !editableSection) return;
+      const alreadyExists = skillItems.some(
+        (item) =>
+          String(item.name ?? "").trim().toLocaleLowerCase() ===
+          cleanValue.toLocaleLowerCase(),
+      );
+      if (!alreadyExists) {
+        applySkillsDrawer({
+          items: [
+            ...skillItems,
+            {
+              id: `sk-${Date.now()}`,
+              name: cleanValue,
+              level: "Intermediate",
+              ...(targetCategoryId ? { categoryId: targetCategoryId } : {}),
+            },
+          ],
+          categories,
+        });
+      }
+      onAcceptListAiSuggestion?.(cleanValue, { persist: false });
+    }
+
+    return (
+      <SkillsDrawer
+        open={open}
+        sectionId={sectionId}
+        items={skillItems}
+        categories={categories}
+        aiSuggestions={scopedListSuggestion?.items ?? []}
+        aiSuggestionsLoading={scopedListSuggestion?.state === "loading"}
+        aiSuggestionsRequested={Boolean(scopedListSuggestion)}
+        canSuggestSkills={Boolean(sectionId && onRunListAiSuggestion)}
+        onRequestAiSuggestions={() => {
+          if (sectionId) onRunListAiSuggestion?.(sectionId);
+        }}
+        onAcceptAiSuggestion={acceptSkillSuggestion}
+        onDismissAiSuggestion={onDismissListAiSuggestion}
+        onClose={saveAndClose}
+        onApply={(next) => {
+          if (Array.isArray(next)) {
+            applySkillsDrawer({ items: next as ISkillItem[], categories });
+            return;
+          }
+          applySkillsDrawer(next);
+        }}
+      />
+    );
+  }
+
   function renderChipEditor(keyName: "name" | "text" | "certificationName") {
     if (!editableSection) return null;
     return (
@@ -1815,6 +1904,10 @@ export function SectionEditorSheet({
       default:
         return renderTextEditor();
     }
+  }
+
+  if (editableSection?.type === "skills") {
+    return renderSkillsDrawerEditor() ?? <></>;
   }
 
   return (

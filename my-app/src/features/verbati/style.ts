@@ -40,8 +40,8 @@ import type {
 } from "./types";
 import {
   EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID,
+  SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID,
   isResumeTemplateId,
-  isWorkshopResumeTemplateId,
   type ResumeTemplateId,
 } from "../../lib/layout/resumeTemplates";
 
@@ -80,6 +80,12 @@ export const VERBATI_LAYOUT_OPTIONS: LayoutOption[] = [
     name: "Workshop two-column",
     description: "Workshop ATS layout with a 17/18-inspired two-column grid.",
     resumeTemplateId: "workshop_resume_twocol_ats",
+  },
+  {
+    id: "workshop",
+    name: "Sanat asymmetric",
+    description: "Asymmetric editorial resume with a strong right rail.",
+    resumeTemplateId: SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID,
   },
 ];
 
@@ -177,17 +183,27 @@ export function getVerbatiStyleFromCv(
   const candidate = metadata?.verbatiStyle as
     | Partial<VerbatiStylePreset>
     | undefined;
-  const sanitizedCandidate = sanitizePersistedVerbatiStyle(candidate);
-  if (sanitizedCandidate) return sanitizedCandidate;
-
   const baseSnapshot = metadata?.verbatiStyleBaseSnapshot as
     | Partial<VerbatiStylePreset>
     | undefined;
+  const explicitResumeTemplateId = sanitizePersistedResumeTemplateId(
+    metadata?.resumeTemplateId,
+  );
+  const sanitizedCandidate = sanitizePersistedVerbatiStyle({
+    ...candidate,
+    resumeTemplateId:
+      explicitResumeTemplateId ??
+      candidate?.resumeTemplateId ??
+      baseSnapshot?.resumeTemplateId,
+  });
+  if (sanitizedCandidate) return sanitizedCandidate;
+
   const sanitizedBaseSnapshot = sanitizePersistedVerbatiStyle({
     ...baseSnapshot,
-    ...(candidate?.resumeTemplateId
-      ? { resumeTemplateId: candidate.resumeTemplateId }
-      : null),
+    resumeTemplateId:
+      explicitResumeTemplateId ??
+      baseSnapshot?.resumeTemplateId ??
+      candidate?.resumeTemplateId,
   });
   if (sanitizedBaseSnapshot) return sanitizedBaseSnapshot;
 
@@ -196,11 +212,20 @@ export function getVerbatiStyleFromCv(
     const factorySlot = getFactoryDocumentStyleSlot(slotId);
     return resolveVerbatiStyle({
       ...factorySlot.appearance,
-      resumeTemplateId: candidate?.resumeTemplateId ?? factorySlot.defaultCvTemplateId,
+      resumeTemplateId:
+        explicitResumeTemplateId ??
+        candidate?.resumeTemplateId ??
+        baseSnapshot?.resumeTemplateId ??
+        factorySlot.defaultCvTemplateId,
     });
   }
 
-  return resolveVerbatiStyle(candidate);
+  return resolveVerbatiStyle({
+    ...candidate,
+    ...(explicitResumeTemplateId
+      ? { resumeTemplateId: explicitResumeTemplateId }
+      : null),
+  });
 }
 
 export function sanitizePersistedVerbatiStyle(

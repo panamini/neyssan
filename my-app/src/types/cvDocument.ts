@@ -2,6 +2,8 @@
 import type { RemirrorJSON } from "remirror";
 import type { DocumentStyleMetadata } from "../lib/document-style-slots";
 import type { DocumentIconSettings } from "../lib/document-icons";
+import type { DocumentIconOverrides } from "../lib/document-icon-overrides";
+import type { ResumeTemplateId } from "../lib/layout/resumeTemplates";
 
 /**
  * Primitive block types used within a CvSection.
@@ -50,6 +52,14 @@ export type Level =
   | "Advanced"
   | "Fluent";
 export type SkillBucket = "core" | "secondary" | "familiar";
+export type SkillCategorySource = "ai" | "user" | "import";
+
+export type SkillCategory = {
+  id: string;
+  label: string;
+  source?: SkillCategorySource;
+  locked?: boolean;
+};
 
 /**
  * Represents a single, primitive block of content.
@@ -142,6 +152,7 @@ export interface ISkillItem {
   name: string;
   level: Level;
   bucket?: SkillBucket;
+  categoryId?: string;
 }
 
 export interface IHobbyItem {
@@ -239,6 +250,7 @@ export interface CvSection {
     | ISummaryItem[]
     | string[]
     | null;
+  skillCategories?: SkillCategory[];
   /** UI state: collapsed in the editor */
   collapsed?: boolean;
   /** order of section in document */
@@ -255,7 +267,9 @@ export interface CvMetadata extends DocumentStyleMetadata {
   locale?: string;
   authorId?: string;
   lastEditedBy?: string;
+  resumeTemplateId?: ResumeTemplateId;
   documentIcons?: DocumentIconSettings;
+  documentIconOverrides?: DocumentIconOverrides;
   // Allow passthrough additional keys produced by runtime schema parsing (zod passthrough outputs)
   [k: string]: unknown;
 }

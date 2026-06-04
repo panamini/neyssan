@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ResumeOneColAtsPage } from "../ResumeOneColAtsPage";
@@ -718,7 +718,9 @@ describe("ResumeOneColAtsPage", () => {
       hobbies: [],
       textSections: [],
       achievementItems: resumeMock.achievementItems.slice(0, 2),
-      achievements: resumeMock.achievementItems.slice(0, 2).map((item) => item.text),
+      achievements: resumeMock.achievementItems
+        .slice(0, 2)
+        .map((item) => item.text),
     };
     const plan = planWorkshopResumePages({ data, template });
     const onAsk = vi.fn();
@@ -938,9 +940,9 @@ describe("ResumeOneColAtsPage", () => {
       />,
     );
 
-    const suggestions = screen.getByText("Accessibility").closest(
-      "[data-cv-paper-list-suggestions]",
-    );
+    const suggestions = screen
+      .getByText("Accessibility")
+      .closest("[data-cv-paper-list-suggestions]");
     expect(suggestions).toHaveAttribute(
       "data-cv-paper-list-suggestions",
       "ready",
@@ -1159,7 +1161,7 @@ describe("ResumeOneColAtsPage", () => {
     );
   });
 
-  it("uses caption, meta, and skill component vars for the workshop typography contract", () => {
+  it("uses caption, meta, and plain skill typography vars for the workshop typography contract", () => {
     const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
     const plan = planWorkshopResumePages({
       data: {
@@ -1194,7 +1196,10 @@ describe("ResumeOneColAtsPage", () => {
     const skillItem = container.querySelector(
       '[data-preview-section="skills"][data-preview-item-id]',
     );
-    const skillContainer = skillItem?.parentElement;
+    const skillContainer = skillItem?.parentElement?.parentElement;
+    const skillSeparators = container.querySelectorAll(
+      '[data-workshop-skill-separator="true"]',
+    );
 
     expect(metadataLabel?.getAttribute("style")).toContain(
       "font-size: var(--text-caption-size);",
@@ -1208,12 +1213,85 @@ describe("ResumeOneColAtsPage", () => {
     expect(experienceMeta?.getAttribute("style")).toContain(
       "line-height: var(--text-meta-line);",
     );
-    expect(skillItem?.getAttribute("style")).toContain(
-      "padding: var(--skill-pad-block) var(--skill-pad-inline);",
+    const skillItemStyle = skillItem?.getAttribute("style") ?? "";
+    expect(skillItemStyle).toContain(
+      "font-size: calc(var(--text-body-sm-size) + var(--body-sm-size-adjust));",
     );
+    expect(skillItemStyle).toContain("line-height: var(--text-body-sm-line);");
+    expect(skillItemStyle).not.toContain("padding:");
+    expect(skillItemStyle).not.toContain("border-radius:");
+    expect(skillItemStyle).not.toContain("background:");
+    expect(skillSeparators).toHaveLength(1);
+    expect(skillSeparators[0]).toHaveTextContent("•");
     expect(skillContainer?.getAttribute("style")).toContain(
       "gap: var(--skill-gap);",
     );
+  });
+
+  it("hides one-column skill separators when the next skill starts a wrapped line", async () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const skillItems = resumeMock.skillItems.slice(0, 3);
+    const getBoundingClientRectSpy = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(function getMockRect() {
+        const isSkillWrap =
+          this instanceof HTMLElement &&
+          this.matches('[data-workshop-skill-item-wrap="true"]');
+        const text = this instanceof HTMLElement ? this.textContent ?? "" : "";
+        const top = isSkillWrap && text.includes(skillItems[2]!.name) ? 24 : 0;
+
+        return {
+          x: 0,
+          y: top,
+          top,
+          left: 0,
+          right: 100,
+          bottom: top + 16,
+          width: 100,
+          height: 16,
+          toJSON: () => ({}),
+        } as DOMRect;
+      });
+
+    try {
+      const plan = planWorkshopResumePages({
+        data: {
+          ...resumeMock,
+          metadata: resumeMock.metadata.slice(0, 1),
+          contact: resumeMock.contact.slice(0, 2),
+          skillItems,
+          experience: [],
+          projects: [],
+          education: [],
+          certifications: [],
+          affiliations: [],
+          hobbyItems: [],
+          hobbies: [],
+          textSections: [],
+        },
+        template,
+      });
+
+      const { container } = render(
+        <ResumeOneColAtsPage
+          data={resumeMock}
+          page={plan.committedPages[0]!}
+          template={template}
+        />,
+      );
+
+      await waitFor(() => {
+        const separators = container.querySelectorAll(
+          '[data-workshop-skill-separator="true"]',
+        );
+        expect(separators).toHaveLength(1);
+      });
+
+      const wrappedSkill = screen.getByText(skillItems[2]!.name);
+      expect(wrappedSkill.previousElementSibling).toBeNull();
+    } finally {
+      getBoundingClientRectSpy.mockRestore();
+    }
   });
 
   it("applies workshop density size adjustment vars to display, title, body, and body-sm roles", () => {
@@ -1385,8 +1463,9 @@ describe("ResumeOneColAtsPage", () => {
       "line-height: var(--workshop-experience-heading-line-height);",
     );
     expect(experienceBulletList?.getAttribute("style")).toContain(
-      "padding-left: var(--flow-list-indent);",
+      "padding-left: 0px;",
     );
+    expect(experienceBulletList?.style.listStyleType).toBe("none");
     expect(educationSection?.getAttribute("style")).toContain(
       `gap: ${layout.sectionShellGapMm}mm;`,
     );
@@ -1406,14 +1485,14 @@ describe("ResumeOneColAtsPage", () => {
       "gap: var(--project-gap);",
     );
     expect(languagesList?.getAttribute("style")).toContain(
-      "padding-left: var(--flow-list-indent);",
+      "padding-left: 0px;",
     );
+    expect(languagesList?.style.listStyleType).toBe("none");
     expect(languagesList?.getAttribute("style")).toContain(
       `gap: ${layout.listGapMm}mm;`,
     );
-    expect(hobbiesList?.getAttribute("style")).toContain(
-      "padding-left: var(--flow-list-indent);",
-    );
+    expect(hobbiesList?.getAttribute("style")).toContain("padding-left: 0px;");
+    expect(hobbiesList?.style.listStyleType).toBe("none");
     expect(hobbiesList?.getAttribute("style")).toContain(
       `gap: ${layout.listGapMm}mm;`,
     );
@@ -1982,10 +2061,11 @@ describe("ResumeOneColAtsPage", () => {
     ]);
     expect(experienceItem?.innerHTML.indexOf("</p><ul")).toBeGreaterThan(-1);
     expect(experienceItem?.innerHTML.indexOf("</ul><p")).toBeGreaterThan(-1);
-    expect(richList?.style.listStyleType).toBe("disc");
+    expect(richList?.style.listStyleType).toBe("none");
     expect(richList?.style.listStylePosition).toBe("outside");
-    expect(richList?.style.paddingLeft).toBe("var(--flow-list-indent)");
+    expect(richList?.style.paddingLeft).toBe("0px");
     expect(richList?.style.gap).toBe("1.2mm");
+    expect(richList?.querySelector(".dasti-cv-paper-list-marker")).toBeTruthy();
   });
 
   it("keeps non-fragmented experience rendering unchanged on committed workshop pages", () => {
@@ -2024,7 +2104,7 @@ describe("ResumeOneColAtsPage", () => {
     expect(container.textContent).not.toContain("Continued");
   });
 
-  it("restores explicit list marker styling for workshop experience bullet groups", () => {
+  it("renders custom document list markers for workshop experience bullet groups", () => {
     const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
     const bullet = makeTextBlock("styled-experience-bullet", 2);
     const plan = planWorkshopResumePages({
@@ -2059,13 +2139,16 @@ describe("ResumeOneColAtsPage", () => {
     ) as HTMLUListElement | null;
 
     expect(experienceList).toBeTruthy();
-    expect(experienceList?.style.listStyleType).toBe("disc");
+    expect(experienceList?.style.listStyleType).toBe("none");
     expect(experienceList?.style.listStylePosition).toBe("outside");
-    expect(experienceList?.style.paddingLeft).toBe("var(--flow-list-indent)");
+    expect(experienceList?.style.paddingLeft).toBe("0px");
     expect(experienceList?.style.gap).toBe("1.2mm");
+    expect(
+      experienceList?.querySelector(".dasti-cv-paper-list-marker"),
+    ).toBeTruthy();
   });
 
-  it("restores explicit list marker styling for workshop achievements lists", () => {
+  it("renders custom document list markers for workshop achievements lists", () => {
     const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
     const achievementItems = [
       {
@@ -2106,10 +2189,13 @@ describe("ResumeOneColAtsPage", () => {
     ) as HTMLUListElement | null;
 
     expect(achievementsList).toBeTruthy();
-    expect(achievementsList?.style.listStyleType).toBe("disc");
+    expect(achievementsList?.style.listStyleType).toBe("none");
     expect(achievementsList?.style.listStylePosition).toBe("outside");
-    expect(achievementsList?.style.paddingLeft).toBe("var(--flow-list-indent)");
+    expect(achievementsList?.style.paddingLeft).toBe("0px");
     expect(achievementsList?.style.gap).toBe("1.2mm");
+    expect(
+      achievementsList?.querySelector(".dasti-cv-paper-list-marker"),
+    ).toBeTruthy();
   });
 
   it("renders the dense workshop screenshot second page with the intact second entry before education", () => {

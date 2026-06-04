@@ -554,4 +554,23 @@ describe("TemplatesPage", () => {
     expect(screen.queryByTestId("resume-template-renderer")).not.toBeInTheDocument();
     expect(document.querySelector(".resume-page--editorialsidebar")).toBeTruthy();
   });
+
+  it("renders the Sanat resume thumbnail with the Sanat template renderer", () => {
+    render(
+      <TemplateDocumentPreview
+        kind="Resume"
+        family="sanat-asymmetric"
+        previewCv={generateCvTemplate("Sanat preview CV")}
+      />,
+    );
+
+    expect(screen.getByTestId("resume-template-renderer")).toHaveAttribute(
+      "data-resume-template-id",
+      "sanat_asymmetric_resume",
+    );
+    expect(screen.getByTestId("resume-template-page")).toHaveAttribute(
+      "data-resume-template-layout",
+      "sanat-asymmetric",
+    );
+  });
 });

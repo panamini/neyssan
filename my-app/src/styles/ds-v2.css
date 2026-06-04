@@ -1035,8 +1035,22 @@
   }
 
   .ds-ai-toolbar__btn--icon {
+    inline-size: 28px;
+    block-size: 28px;
+    flex: 0 0 28px;
     width: 28px;
     padding: 0;
+  }
+
+  .ds-ai-toolbar__btn--icon svg,
+  .ds-ai-toolbar__btn--edit > svg,
+  .ds-ai-toolbar__btn--back > svg,
+  .ds-ai-toolbar__ai-icon svg {
+    display: block;
+    color: currentColor;
+    fill: currentColor;
+    stroke: currentColor;
+    flex-shrink: 0;
   }
 
   .ds-ai-toolbar__ai-icon {
@@ -1148,6 +1162,9 @@
     }
 
     .ds-ai-toolbar__btn--icon {
+      inline-size: 26px;
+      block-size: 26px;
+      flex-basis: 26px;
       width: 26px;
       padding: 0;
     }

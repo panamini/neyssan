@@ -32,6 +32,7 @@ import {
 } from "./cvDocumentToResumeData";
 import { buildCanonicalResumeRenderModelFromCv } from "../../lib/buildCanonicalResumeRenderModel";
 import {
+  SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID,
   WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
   WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
 } from "../../lib/layout/resumeTemplates";
@@ -505,14 +506,18 @@ export function VerbatiStyleWorkspace(): JSX.Element {
 
         <div style={{ display: "grid", gap: "var(--s3)" }}>
           {VERBATI_LAYOUT_OPTIONS.map((option) => {
+            const optionTemplateId =
+              option.resumeTemplateId ?? WORKSHOP_RESUME_ONECOL_TEMPLATE_ID;
             const displayName =
-              (option.resumeTemplateId ?? WORKSHOP_RESUME_ONECOL_TEMPLATE_ID) ===
-              WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
+              optionTemplateId === SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID
+                ? "Sanat"
+                : optionTemplateId === WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
                 ? "French"
                 : "Minimal";
             const displayDescription =
-              (option.resumeTemplateId ?? WORKSHOP_RESUME_ONECOL_TEMPLATE_ID) ===
-              WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
+              optionTemplateId === SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID
+                ? "An asymmetric editorial CV with category-ready skills."
+                : optionTemplateId === WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
                 ? "A structured two-column CV with clear sections and hierarchy."
                 : "A clean one-column CV that works well with recruiters and application systems.";
             const active = option.resumeTemplateId

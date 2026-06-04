@@ -183,6 +183,55 @@ describe("ResumePage", () => {
     expect(screen.getAllByText("Education").length).toBeGreaterThan(0);
   });
 
+  it("renders skill category labels in the Skills section when categories exist", () => {
+    render(
+      <ResumePage
+        data={{
+          ...resumeMock,
+          skills: ["TypeScript", "Research ops", "Mentoring"],
+          skillCategories: [
+            { id: "cat-product", label: "Product", order: 0, source: "user" },
+            { id: "cat-data", label: "Data", order: 1, source: "user" },
+          ],
+          skillItems: [
+            {
+              id: "skill-1",
+              name: "TypeScript",
+              sectionId: "skills-1",
+              sectionType: "skills",
+              categoryId: "cat-product",
+            },
+            {
+              id: "skill-2",
+              name: "Research ops",
+              sectionId: "skills-1",
+              sectionType: "skills",
+              categoryId: "cat-data",
+            },
+            {
+              id: "skill-3",
+              name: "Mentoring",
+              sectionId: "skills-1",
+              sectionType: "skills",
+            },
+          ],
+        }}
+        mode="swissminima"
+        stylePreset={{
+          ...DEFAULT_VERBATI_STYLE,
+          layout: "swiss",
+        }}
+        stageLayout={FIXED_STAGE_LAYOUT}
+      />,
+    );
+
+    expect(screen.getAllByText("Product").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Data").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("TypeScript").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Research ops").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Mentoring").length).toBeGreaterThan(0);
+  });
+
   it("renders full Swiss summary text in preview mode without line clamping", () => {
     const longSummary = Array.from(
       { length: 48 },

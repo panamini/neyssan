@@ -54,6 +54,19 @@ export const USER_PROFILE_VERBATI_TYPOGRAPHY_LEGACY_ALIASES = [
   "expert",
 ] as const;
 
+export const USER_PROFILE_RESUME_TEMPLATE_IDS = [
+  "swiss_resume_legacy",
+  "volk_register_resume_legacy",
+  "two_column_resume_legacy",
+  "editorial_resume_legacy",
+  "modernist_resume_legacy",
+  "quire_resume_legacy",
+  "editorial-sidebar",
+  "workshop_resume_onecol_ats",
+  "workshop_resume_twocol_ats",
+  "sanat_asymmetric_resume",
+] as const;
+
 export type UserProfileVerbatiLayoutId =
   (typeof USER_PROFILE_VERBATI_LAYOUT_IDS)[number];
 export type UserProfileVerbatiLayoutLegacyAlias =
@@ -64,6 +77,8 @@ export type UserProfileVerbatiTypographyId =
   (typeof USER_PROFILE_VERBATI_TYPOGRAPHY_IDS)[number];
 export type UserProfileVerbatiTypographyLegacyAlias =
   (typeof USER_PROFILE_VERBATI_TYPOGRAPHY_LEGACY_ALIASES)[number];
+export type UserProfileResumeTemplateId =
+  (typeof USER_PROFILE_RESUME_TEMPLATE_IDS)[number];
 
 export type UserProfileStoredVerbatiLayout =
   | UserProfileVerbatiLayoutId
@@ -77,6 +92,7 @@ export type UserProfileVerbatiStyle = {
   typography: UserProfileStoredVerbatiTypography;
   palette: UserProfileVerbatiPaletteId;
   accentHex?: string;
+  resumeTemplateId?: UserProfileResumeTemplateId;
 };
 
 export type UserProfileDocumentAppearanceSnapshot = {
@@ -85,6 +101,7 @@ export type UserProfileDocumentAppearanceSnapshot = {
   typography: UserProfileStoredVerbatiTypography;
   palette: UserProfileVerbatiPaletteId;
   accentHex?: string;
+  resumeTemplateId?: UserProfileResumeTemplateId;
 };
 
 export type UserProfileLegacyProfileImage = {
@@ -116,6 +133,7 @@ export type UserProfileMetadata = {
   confidence?: number;
   filename?: string;
   titleLocked?: boolean;
+  resumeTemplateId?: UserProfileResumeTemplateId;
   verbatiStyle?: UserProfileVerbatiStyle;
   verbatiStyleSlotId?: 1 | 2 | 3;
   verbatiStyleSlotSource?: "factory" | "settings";
@@ -170,11 +188,18 @@ const persistedTypographyChoice = v.union(
   ].map((pairId) => v.literal(pairId)),
 );
 
+const resumeTemplateChoice = v.union(
+  ...USER_PROFILE_RESUME_TEMPLATE_IDS.map((templateId) =>
+    v.literal(templateId),
+  ),
+);
+
 export const userProfileVerbatiStyleValidator = v.object({
   layout: persistedLayoutChoice,
   typography: persistedTypographyChoice,
   palette: paletteChoice,
   accentHex: v.optional(v.string()),
+  resumeTemplateId: v.optional(resumeTemplateChoice),
 });
 
 export const userProfileDocumentAppearanceSnapshotValidator = v.object({
@@ -183,6 +208,7 @@ export const userProfileDocumentAppearanceSnapshotValidator = v.object({
   typography: persistedTypographyChoice,
   palette: paletteChoice,
   accentHex: v.optional(v.string()),
+  resumeTemplateId: v.optional(resumeTemplateChoice),
 });
 
 export const userProfileLegacyProfileImageValidator = v.object({
@@ -238,6 +264,7 @@ export const userProfileMetadataValidator = v.object({
   confidence: v.optional(v.number()),
   filename: v.optional(v.string()),
   titleLocked: v.optional(v.boolean()),
+  resumeTemplateId: v.optional(resumeTemplateChoice),
   verbatiStyle: v.optional(userProfileVerbatiStyleValidator),
   verbatiStyleSlotId: v.optional(documentStyleSlotIdValidator),
   verbatiStyleSlotSource: v.optional(documentStyleSlotSourceValidator),

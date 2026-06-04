@@ -17,6 +17,7 @@ import type {
   IExperienceItem,
   IEducationItem,
   ISkillItem,
+  SkillCategory,
   ICertificationItem,
   IAffiliationItem,
   ILanguageItem,
@@ -24,6 +25,7 @@ import type {
 } from "../types/cvDocument";
 import type { RemirrorJSON } from "remirror";
 import { ensureRemirrorDoc } from "../components/remirror-editor/utils/conversion";
+import { projectResponsibilitiesForWorkshop } from "./resumeResponsibilityAuthority";
 import { v4 as uuidv4 } from "uuid";
 import { generateCvTemplate } from "./cv-template";
 import dbg from "./cv-debug";
@@ -232,6 +234,88 @@ function normalizeRichField(value: unknown): RemirrorJSON | string | undefined {
   return undefined;
 }
 
+function remirrorParagraphFromText(text: string): RemirrorJSON {
+  const content = text
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .flatMap((line, index) => [
+      ...(index > 0 ? [{ type: "hardBreak" }] : []),
+      ...(line ? [{ type: "text", text: line }] : []),
+    ]);
+
+  return {
+    type: "paragraph",
+    ...(content.length > 0 ? { content } : {}),
+  } as RemirrorJSON;
+}
+
+function remirrorBulletListFromTextItems(items: string[]): RemirrorJSON {
+  return {
+    type: "doc",
+    content: [
+      {
+        type: "bulletList",
+        content: items.map((item) => ({
+          type: "listItem",
+          content: [remirrorParagraphFromText(item)],
+        })),
+      },
+    ],
+  } as RemirrorJSON;
+}
+
+function normalizeResponsibilityTextItems(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value
+        .map((entry) =>
+          typeof entry === "string" ? normalizeWhitespace(entry) : "",
+        )
+        .filter((entry) => entry.length > 0)
+    : [];
+}
+
+function parseBulletMarkedResponsibilityText(value: string): string[] {
+  const lines = value
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) {
+    return [];
+  }
+
+  const bullets = lines.map((line) => {
+    const match = line.match(/^[•·●◦◆\-\u2013\u2014*+]\s+(.+)$/);
+    return match ? normalizeWhitespace(match[1]) : "";
+  });
+
+  return bullets.every((line) => line.length > 0) ? bullets : [];
+}
+
+function normalizeResponsibilitiesField(
+  value: unknown,
+): RemirrorJSON | string | undefined {
+  const arrayItems = normalizeResponsibilityTextItems(value);
+  if (arrayItems.length > 0) {
+    return remirrorBulletListFromTextItems(arrayItems);
+  }
+
+  if (typeof value === "string") {
+    const normalized = normalizeWhitespace(value);
+    if (!normalized) {
+      return undefined;
+    }
+
+    const bulletItems = parseBulletMarkedResponsibilityText(value);
+    return bulletItems.length > 0
+      ? remirrorBulletListFromTextItems(bulletItems)
+      : ensureRemirrorDoc(normalized);
+  }
+
+  return normalizeRichField(value);
+}
+
 /** Normalize structured content for experience section */
 function normalizeExperienceItem(entry: any, idx: number): IExperienceItem {
   // Use epoch sentinel to satisfy strict schema while rendering blank in UI.
@@ -268,20 +352,21 @@ function normalizeExperienceItem(entry: any, idx: number): IExperienceItem {
     ? undefined
     : providedEndPrecision ?? (endIsEmptyString ? startDatePrecision : endParsed.precision);
 
-  const responsibilities = normalizeRichField(entry?.responsibilities);
+  const responsibilities = normalizeResponsibilitiesField(entry?.responsibilities);
+  const derivedResponsibilityBullets = responsibilities
+    ? projectResponsibilitiesForWorkshop(responsibilities).bullets
+    : [];
   const explicitlyClearedResponsibilities =
     typeof entry?.responsibilities === "string" &&
     normalizeWhitespace(entry.responsibilities).length === 0;
   const responsibilityBullets = explicitlyClearedResponsibilities
     ? undefined
+    : derivedResponsibilityBullets.length > 0
+      ? derivedResponsibilityBullets
     : Array.isArray(entry?.responsibilityBullets)
       ? entry.responsibilityBullets
           .map((value: unknown) => (typeof value === "string" ? normalizeWhitespace(value) : ""))
           .filter((value: string) => value.length > 0)
-      : Array.isArray(entry?.responsibilities)
-        ? entry.responsibilities
-            .map((value: unknown) => (typeof value === "string" ? normalizeWhitespace(value) : ""))
-            .filter((value: string) => value.length > 0)
       : undefined;
 
   const base = {
@@ -352,7 +437,7 @@ function normalizeEducationItem(entry: any, idx: number): IEducationItem {
 }
  
 /** Normalize skill item; ensure id and default bucket */
-function normalizeSkillItem(entry: any, idx: number): ISkillItem {
+function normalizeSkillItem(entry: any, idx: number, validCategoryIds?: ReadonlySet<string>): ISkillItem {
   const id =
     typeof entry?.id === "string" && entry.id.trim().length > 0
       ? String(entry.id)
@@ -364,7 +449,51 @@ function normalizeSkillItem(entry: any, idx: number): ISkillItem {
   const bucketRaw = (entry as any)?.bucket;
   const allowedBuckets = new Set(["core","secondary","familiar"]);
   const bucket = allowedBuckets.has(String(bucketRaw)) ? (bucketRaw as "core" | "secondary" | "familiar") : "secondary";
-  return { id, name, level, bucket };
+  const rawCategoryId =
+    typeof entry?.categoryId === "string" && entry.categoryId.trim().length > 0
+      ? entry.categoryId.trim()
+      : undefined;
+  const categoryId =
+    rawCategoryId && validCategoryIds?.has(rawCategoryId)
+      ? rawCategoryId
+      : undefined;
+  return { id, name, level, bucket, ...(categoryId ? { categoryId } : {}) };
+}
+
+function normalizeSkillCategoryLabel(value: unknown): string {
+  return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+}
+
+function normalizeSkillCategories(raw: unknown): SkillCategory[] {
+  if (!Array.isArray(raw)) return [];
+  const seenLabels = new Set<string>();
+  const seenIds = new Set<string>();
+  const categories: SkillCategory[] = [];
+
+  raw.forEach((entry, index) => {
+    const record = entry && typeof entry === "object" ? (entry as Record<string, unknown>) : {};
+    const label = normalizeSkillCategoryLabel(record.label);
+    if (!label) return;
+    const labelKey = label.toLocaleLowerCase();
+    if (seenLabels.has(labelKey)) return;
+    seenLabels.add(labelKey);
+
+    const rawId = typeof record.id === "string" ? record.id.trim() : "";
+    const id = rawId && !seenIds.has(rawId) ? rawId : `skill-cat-${uuidv4()}-${index}`;
+    seenIds.add(id);
+    const source =
+      record.source === "ai" || record.source === "user" || record.source === "import"
+        ? record.source
+        : undefined;
+    categories.push({
+      id,
+      label,
+      ...(source ? { source } : {}),
+      ...(typeof record.locked === "boolean" ? { locked: record.locked } : {}),
+    });
+  });
+
+  return categories;
 }
 
 function normalizeCertificationItem(entry: any, idx: number): ICertificationItem {
@@ -935,6 +1064,8 @@ export function normalizeAndValidateCvDocument(
 
       // Normalize structuredContent
       let structuredContent = s?.structuredContent ?? undefined;
+      const skillCategories =
+        secType === "skills" ? normalizeSkillCategories(s?.skillCategories) : undefined;
 
       // Always normalize Experience/Education items to preserve date precision and Present semantics
       if (secType === "experience" || secType === "education") {
@@ -982,14 +1113,15 @@ export function normalizeAndValidateCvDocument(
       } else if (secType === "skills") {
         // Normalize skills; support legacy string[] by coercing to { id, name, level, bucket }
         const raw = s?.structuredContent as unknown;
+        const validCategoryIds = new Set((skillCategories ?? []).map((category) => category.id));
         if (Array.isArray(raw)) {
-          structuredContent = raw.map((it, idx) => normalizeSkillItem(it, idx));
+          structuredContent = raw.map((it, idx) => normalizeSkillItem(it, idx, validCategoryIds));
         } else if (raw && typeof raw === "object") {
-          structuredContent = [normalizeSkillItem(raw, 0)];
+          structuredContent = [normalizeSkillItem(raw, 0, validCategoryIds)];
         } else {
           const tmpl = templateByType.get(secType);
           if (Array.isArray(tmpl?.structuredContent)) {
-            structuredContent = (tmpl!.structuredContent as any[]).map((it, idx) => normalizeSkillItem(it, idx));
+            structuredContent = (tmpl!.structuredContent as any[]).map((it, idx) => normalizeSkillItem(it, idx, validCategoryIds));
           } else {
             structuredContent = [];
           }
@@ -1085,6 +1217,9 @@ export function normalizeAndValidateCvDocument(
         type: secType,
         blocks,
         structuredContent,
+        ...(secType === "skills" && skillCategories && skillCategories.length > 0
+          ? { skillCategories }
+          : {}),
         collapsed: typeof s?.collapsed === "boolean" ? s.collapsed : false,
         order: typeof s?.order === "number" ? s.order : si,
       });

@@ -3582,6 +3582,7 @@ export default function SectionEditor({
         <SkillsModal
           open={isSkillsModalOpen}
           items={items}
+          categories={section.skillCategories}
           initialItemId={modalInitialItemIds.skills}
           suggestedItems={skillsAiSuggestions}
           title="Edit skills"
@@ -3614,11 +3615,12 @@ export default function SectionEditor({
             setSkillsModalOpen(false);
             clearActiveTarget();
           }}
-          onSave={(next) => {
+          onSave={(next, categories) => {
             try {
               const updatedSection = {
                 ...section,
                 structuredContent: next as any,
+                skillCategories: categories,
               };
               onChange(index, updatedSection as any);
             } catch {
@@ -3629,12 +3631,17 @@ export default function SectionEditor({
         <SkillsDrawer
           open={isSkillsDrawerOpen}
           items={items}
+          categories={section.skillCategories}
           onClose={() => setSkillsDrawerOpen(false)}
-          onApply={(next) => {
+          onApply={(next, categories) => {
             try {
+              const payload = Array.isArray(next)
+                ? { items: next, categories: categories ?? [] }
+                : next;
               const updatedSection = {
                 ...section,
-                structuredContent: next as any,
+                structuredContent: payload.items as any,
+                skillCategories: payload.categories,
               };
               onChange(index, updatedSection as any);
             } catch {

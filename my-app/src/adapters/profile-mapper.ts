@@ -6,6 +6,7 @@ import {
   resolveVerbatiStyle,
   serializeVerbatiStyle,
 } from "../features/verbati/style";
+import { isResumeTemplateId } from "../lib/layout/resumeTemplates";
 import type { INormalizedProfile } from "../types/profile";
  
 /**
@@ -135,6 +136,11 @@ export function mapProfileToCvDocument(profile: any, forcedId?: string): CvDocum
     profile.metadata && typeof profile.metadata === "object"
       ? (profile.metadata as Record<string, unknown>)
       : null;
+  const persistedResumeTemplateId = isResumeTemplateId(
+    persistedMetadata?.resumeTemplateId,
+  )
+    ? persistedMetadata?.resumeTemplateId
+    : undefined;
 
   const metadata = {
     createdAt: nowIso,
@@ -159,17 +165,23 @@ export function mapProfileToCvDocument(profile: any, forcedId?: string): CvDocum
       typeof persistedMetadata?.filename === "string"
         ? persistedMetadata.filename
         : undefined,
+    resumeTemplateId: persistedResumeTemplateId,
     verbatiStyle:
       persistedMetadata?.verbatiStyle &&
       typeof persistedMetadata.verbatiStyle === "object"
         ? serializeVerbatiStyle(
             resolveVerbatiStyle(
-              persistedMetadata.verbatiStyle as {
+              {
+                ...(persistedMetadata.verbatiStyle as {
                 layout?: string;
                 typography?: string;
                 palette?: string;
                 accentHex?: string;
                 resumeTemplateId?: string;
+                }),
+                ...(persistedResumeTemplateId
+                  ? { resumeTemplateId: persistedResumeTemplateId }
+                  : null),
               },
             ),
           )
