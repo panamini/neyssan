@@ -92,6 +92,10 @@ type VerbatiResumePreviewProps = {
   documentDecorationDesignMode?: boolean;
   onDocumentDecorationChange?: (decoration: DocumentDecoration) => void;
   onDocumentDecorationCommit?: (decoration: DocumentDecoration) => void;
+  onDocumentDecorationFileUpload?: (
+    file: File,
+    baseDecoration: DocumentDecoration,
+  ) => void;
   showPageCount?: boolean;
   showStageZoomFooter?: boolean;
   onPageCountChange?: (pageCount: number) => void;
@@ -319,6 +323,7 @@ function CvDocumentDecorationLayer({
   pageHeightPx,
   onChange,
   onCommit,
+  onFileUpload,
 }: {
   decoration?: DocumentDecoration | null;
   isDesignMode: boolean;
@@ -327,6 +332,7 @@ function CvDocumentDecorationLayer({
   pageHeightPx: number;
   onChange?: (decoration: DocumentDecoration) => void;
   onCommit?: (decoration: DocumentDecoration) => void;
+  onFileUpload?: (file: File, baseDecoration: DocumentDecoration) => void;
 }): JSX.Element | null {
   const resolvedDecoration = getRenderableDocumentDecoration(decoration);
   const interactionRef =
@@ -367,6 +373,10 @@ function CvDocumentDecorationLayer({
     const [file] = Array.from(event.currentTarget.files ?? []);
     event.currentTarget.value = "";
     if (!file) return;
+    if (onFileUpload) {
+      onFileUpload(file, resolvedDecoration);
+      return;
+    }
     void readDocumentDecorationUpload(file)
       .then((uploadedDecoration) => {
         commitDecorationAction({
@@ -484,7 +494,7 @@ function CvDocumentDecorationLayer({
       onPointerCancel={endInteraction}
     >
       <img
-        src={resolvedDecoration.dataUrl}
+        src={resolvedDecoration.dataUrl ?? resolvedDecoration.resolvedUrl}
         alt={resolvedDecoration.alt ?? ""}
         draggable={false}
       />
@@ -592,6 +602,7 @@ export function VerbatiResumePreview({
   documentDecorationDesignMode = false,
   onDocumentDecorationChange,
   onDocumentDecorationCommit,
+  onDocumentDecorationFileUpload,
   showPageCount = false,
   showStageZoomFooter = false,
   onPageCountChange,
@@ -1343,6 +1354,7 @@ export function VerbatiResumePreview({
             pageHeightPx={stageLayout.pageHeight}
             onChange={onDocumentDecorationChange}
             onCommit={onDocumentDecorationCommit}
+            onFileUpload={onDocumentDecorationFileUpload}
           />
         </div>
       </div>

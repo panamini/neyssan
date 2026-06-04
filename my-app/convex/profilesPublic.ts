@@ -11,6 +11,7 @@ import {
   getPrimaryProfileForClerk,
   resolveCanonicalProfileKeywordsForWrite,
 } from "./lib/userProfiles";
+import { sanitizeRemoteMetadataImages } from "./lib/documentAssets";
 
 const PROFILE_LIST_DEFAULT_LIMIT = 40;
 const PROFILE_LIST_MAX_LIMIT = 120;
@@ -110,10 +111,98 @@ function normalizeProfileListLimit(limit: unknown) {
   return Math.max(1, Math.min(PROFILE_LIST_MAX_LIMIT, numericLimit));
 }
 
-function projectProfileDoc(
+async function resolveRuntimeDocumentDecoration(
+  ctx: any,
+  decoration: unknown,
+  resolvedUrlCache: Map<string, string | null>,
+): Promise<unknown> {
+  const sanitized = sanitizeRemoteMetadataImages({
+    documentDecoration: decoration,
+  }) as { documentDecoration?: unknown };
+  const next = sanitized.documentDecoration;
+  if (!next || typeof next !== "object" || Array.isArray(next)) {
+    return next;
+  }
+
+  const record = { ...(next as Record<string, unknown>) };
+  if (typeof record.assetId === "string" && record.assetId) {
+    try {
+      let resolvedUrl = resolvedUrlCache.get(record.assetId);
+      if (resolvedUrl === undefined) {
+        const storageUrl = await ctx.storage.getUrl(record.assetId as any);
+        resolvedUrl =
+          typeof storageUrl === "string" && storageUrl ? storageUrl : null;
+        resolvedUrlCache.set(record.assetId, resolvedUrl);
+      }
+      if (typeof resolvedUrl === "string" && resolvedUrl) {
+        record.resolvedUrl = resolvedUrl;
+        delete record.assetMissing;
+      } else {
+        delete record.resolvedUrl;
+        record.assetMissing = true;
+      }
+    } catch {
+      delete record.resolvedUrl;
+      record.assetMissing = true;
+    }
+  }
+  return record;
+}
+
+async function resolveRuntimeMetadata(
+  ctx: any,
+  metadata: unknown,
+  resolvedUrlCache: Map<string, string | null>,
+): Promise<unknown> {
+  const sanitized = sanitizeRemoteMetadataImages(
+    canonicalizeUserProfileMetadata(metadata),
+  );
+  if (!sanitized || typeof sanitized !== "object" || Array.isArray(sanitized)) {
+    return sanitized;
+  }
+
+  const next = { ...(sanitized as Record<string, unknown>) };
+  if ("documentDecoration" in next) {
+    next.documentDecoration = await resolveRuntimeDocumentDecoration(
+      ctx,
+      next.documentDecoration,
+      resolvedUrlCache,
+    );
+  }
+  return next;
+}
+
+async function resolveRuntimeCvDocument(
+  ctx: any,
+  cvDocument: unknown,
+  resolvedUrlCache: Map<string, string | null>,
+): Promise<unknown> {
+  if (!cvDocument || typeof cvDocument !== "object" || Array.isArray(cvDocument)) {
+    return cvDocument;
+  }
+
+  const next = { ...(cvDocument as Record<string, unknown>) };
+  if ("metadata" in next) {
+    next.metadata = await resolveRuntimeMetadata(
+      ctx,
+      next.metadata,
+      resolvedUrlCache,
+    );
+  }
+  return next;
+}
+
+async function projectProfileDoc(
+  ctx: any,
   prof: any,
   options: { includeCvDocument?: boolean } = {},
-): Exclude<UserProfile, null> {
+): Promise<Exclude<UserProfile, null>> {
+  const resolvedUrlCache = new Map<string, string | null>();
+  const metadata =
+    (await resolveRuntimeMetadata(ctx, prof.metadata, resolvedUrlCache)) as
+      | Exclude<UserProfile, null>["metadata"]
+      | undefined;
+  const includeCvDocument = options.includeCvDocument !== false;
   return {
     _id: prof._id,
     _creationTime: prof._creationTime,
@@ -132,13 +221,16 @@ function projectProfileDoc(
     education: prof.education ?? undefined,
     linkedIn: prof.linkedIn ?? undefined,
     raw_text: prof.raw_text ?? undefined,
-    metadata:
-      (canonicalizeUserProfileMetadata(prof.metadata) as
-        | Exclude<UserProfile, null>["metadata"]
-        | undefined) ?? undefined,
-    ...(options.includeCvDocument === false
-      ? {}
-      : { cvDocument: prof.cvDocument ?? undefined }),
+    metadata: metadata ?? undefined,
+    ...(includeCvDocument
+      ? {
+          cvDocument: await resolveRuntimeCvDocument(
+            ctx,
+            prof.cvDocument,
+            resolvedUrlCache,
+          ),
+        }
+      : {}),
   };
 }
 
@@ -152,7 +244,7 @@ export const get = query({
     }
     const prof = await ctx.runQuery(internal.profiles.get);
     if (!prof) return null;
-    return projectProfileDoc(prof);
+    return await projectProfileDoc(ctx, prof);
   },
 });
 
@@ -174,7 +266,7 @@ export const getByProfileId = query({
 
     const owned = rows.find((row) => row.clerkId === identity.subject);
     if (owned) {
-      return projectProfileDoc(owned);
+      return await projectProfileDoc(ctx, owned);
     }
 
     if (rows.some((row) => row.clerkId && row.clerkId !== identity.subject)) {
@@ -182,7 +274,7 @@ export const getByProfileId = query({
     }
 
     const unclaimed = rows.find((row) => !row.clerkId);
-    return unclaimed ? projectProfileDoc(unclaimed) : null;
+    return unclaimed ? await projectProfileDoc(ctx, unclaimed) : null;
   },
 });
 
@@ -218,10 +310,11 @@ export const listMine = query({
             )
             .slice(0, limit);
 
-    return rows
-      .map((profile: any) =>
-        projectProfileDoc(profile, { includeCvDocument: false }),
-      );
+    return await Promise.all(
+      rows.map((profile: any) =>
+        projectProfileDoc(ctx, profile, { includeCvDocument: false }),
+      ),
+    );
   },
 });
 
@@ -306,7 +399,9 @@ export default mutation({
     if (args.profile.education !== undefined)
       updates.education = args.profile.education;
     if (args.profile.metadata !== undefined) {
-      updates.metadata = canonicalizeUserProfileMetadata(args.profile.metadata);
+      updates.metadata = sanitizeRemoteMetadataImages(
+        canonicalizeUserProfileMetadata(args.profile.metadata),
+      );
     }
 
     updates.keywords = resolveCanonicalProfileKeywordsForWrite({

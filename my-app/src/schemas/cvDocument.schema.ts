@@ -423,6 +423,8 @@ const _CvMetadataBase = z.object({
       source: z.literal("upload"),
       assetId: z.string().optional(),
       dataUrl: z.string().optional(),
+      resolvedUrl: z.string().optional(),
+      assetMissing: z.boolean().optional(),
       fileName: z.string().optional(),
       mimeType: z
         .enum(["image/png", "image/jpeg", "image/svg+xml"])

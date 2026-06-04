@@ -9,7 +9,11 @@ export const getUploadUrl: RegisteredAction<
   Record<string, never>,
   Promise<{ url: string }>
 > = action({
-  handler: async ({ storage }: ActionCtx): Promise<{ url: string }> => {
+  handler: async ({ auth, storage }: ActionCtx): Promise<{ url: string }> => {
+    const identity = await auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
     const url = await storage.generateUploadUrl();
     return { url };
   },

@@ -3,6 +3,7 @@ import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";
 import { getPrimaryProfileForClerk } from "./lib/userProfiles";
+import { sanitizeRemoteMetadataImages } from "./lib/documentAssets";
 
 const proposalVoicePresetChoice = v.union(
   v.literal("signature"),
@@ -92,6 +93,7 @@ const proposalDocumentDecorationChoice = v.object({
   source: v.literal("upload"),
   assetId: v.optional(v.string()),
   dataUrl: v.optional(v.string()),
+  resolvedUrl: v.optional(v.string()),
   fileName: v.optional(v.string()),
   mimeType: v.optional(
     v.union(
@@ -377,6 +379,10 @@ export default mutation({
       });
     }
 
+    const sanitizedMetadata = sanitizeRemoteMetadataImages(
+      args.metadata ?? {},
+    ) as NonNullable<typeof args.metadata>;
+
     const proposalId = await ctx.db.insert("proposals", {
       userId: user._id,
       jobId: args.metadata?.jobId,
@@ -394,7 +400,7 @@ export default mutation({
         score: 0,
         confidence: 0,
       },
-      metadata: args.metadata ?? {},
+      metadata: sanitizedMetadata,
     });
 
     if (isProposalStyleTraceEnabled()) {

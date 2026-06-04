@@ -62,6 +62,7 @@ import { resolveVerbatiStyle, serializeVerbatiStyle } from "../features/verbati/
 import type { VerbatiStylePreset } from "../features/verbati/types";
 import type { DocumentStyleMetadata } from "../lib/document-style-slots";
 import type { DocumentIconSettings } from "../lib/document-icons";
+import type { DocumentDecoration } from "../lib/document-decoration";
 import {
   isResumeTemplateId,
   type ResumeTemplateId,
@@ -70,7 +71,14 @@ import {
 type CvVisualMetadataPatch = DocumentStyleMetadata & {
   resumeTemplateId?: ResumeTemplateId;
   documentIcons?: DocumentIconSettings;
+  documentDecoration?: DocumentDecoration;
 };
+
+type RemoteSaveStatus =
+  | { status: "idle"; documentId?: undefined; error?: undefined; reason?: undefined }
+  | { status: "saving"; documentId: string; error?: undefined; reason?: undefined }
+  | { status: "synced"; documentId: string; error?: undefined; reason?: undefined }
+  | { status: "failed"; documentId: string; error: string; reason: string };
 
 /**
  * Small, safe deep equality check used for dirty detection.
@@ -82,6 +90,114 @@ function deepEqual(a: unknown, b: unknown): boolean {
   } catch {
     return false;
   }
+}
+
+function isImageDataUrl(value: unknown): value is string {
+  return typeof value === "string" && value.trim().startsWith("data:image/");
+}
+
+const DURABLE_RUNTIME_IMAGE_KEYS = new Set([
+  "dataUrl",
+  "resolvedUrl",
+  "imageDataUrl",
+  "assetMissing",
+]);
+
+const DURABLE_IMAGE_REFERENCE_KEYS = new Set([
+  "src",
+  "photoUrl",
+  "url",
+  "href",
+]);
+
+const RUNTIME_STATE_IMAGE_KEYS = new Set(["dataUrl", "imageDataUrl"]);
+
+function sanitizeDurableImageRuntimeFields<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeDurableImageRuntimeFields(item)) as T;
+  }
+
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const next: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (DURABLE_RUNTIME_IMAGE_KEYS.has(key)) {
+      continue;
+    }
+    if (DURABLE_IMAGE_REFERENCE_KEYS.has(key) && isImageDataUrl(entry)) {
+      continue;
+    }
+    if (
+      key === "json" &&
+      typeof entry === "string" &&
+      entry.includes("data:image")
+    ) {
+      try {
+        next[key] = JSON.stringify(
+          sanitizeDurableImageRuntimeFields(JSON.parse(entry)),
+        );
+      } catch {
+        next[key] = entry;
+      }
+      continue;
+    }
+    next[key] = sanitizeDurableImageRuntimeFields(entry);
+  }
+
+  return next as T;
+}
+
+function sanitizeRuntimeImageStateFields<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeRuntimeImageStateFields(item)) as T;
+  }
+
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const next: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (RUNTIME_STATE_IMAGE_KEYS.has(key)) {
+      continue;
+    }
+    if (DURABLE_IMAGE_REFERENCE_KEYS.has(key) && isImageDataUrl(entry)) {
+      continue;
+    }
+    if (
+      key === "json" &&
+      typeof entry === "string" &&
+      entry.includes("data:image")
+    ) {
+      try {
+        next[key] = JSON.stringify(
+          sanitizeRuntimeImageStateFields(JSON.parse(entry)),
+        );
+      } catch {
+        next[key] = entry;
+      }
+      continue;
+    }
+    next[key] = sanitizeRuntimeImageStateFields(entry);
+  }
+
+  return next as T;
+}
+
+function sanitizeDurableCvDocument(doc: CvDocument): CvDocument {
+  return sanitizeDurableImageRuntimeFields(doc);
+}
+
+function sanitizeRuntimeCvDocument(doc: CvDocument): CvDocument {
+  return sanitizeRuntimeImageStateFields(doc);
+}
+
+function sanitizeDurableVisualMetadataPatch(
+  patch: CvVisualMetadataPatch,
+): CvVisualMetadataPatch {
+  return sanitizeDurableImageRuntimeFields(patch);
 }
 
 function applyAutoTitleIfPlaceholder(doc: CvDocument): CvDocument {
@@ -480,6 +596,7 @@ export interface ICvLibraryContext {
   // making onboarding or empty-state decisions.
   lastLibraryFetchFailed: boolean;
   isDirty: boolean;
+  remoteSaveStatus: RemoteSaveStatus;
   // New: runtime detector for v1-shaped documents
   isV1Active: boolean;
   // True when currentCv carries user-provided content beyond the blank template.
@@ -589,6 +706,20 @@ function readRequestedCvIdFromWindowLocation(): string | null {
   } catch {
     return null;
   }
+}
+
+function classifyRemoteSaveError(error: unknown): {
+  message: string;
+  reason: string;
+} {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (/Value is too large/i.test(message)) {
+    return { message, reason: "convex_value_too_large" };
+  }
+  if (/not authorized to access this profile/i.test(message)) {
+    return { message, reason: "unauthorized" };
+  }
+  return { message, reason: "remote_save_failed" };
 }
 
 function readStoredActiveCvId(): string {
@@ -803,6 +934,9 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   // fetch errored on its last attempt. A transient failure must NOT be treated
   // as "new user empty library" by consumers making onboarding decisions.
   const [lastLibraryFetchFailed, setLastLibraryFetchFailed] = useState(false);
+  const [remoteSaveStatus, setRemoteSaveStatus] = useState<RemoteSaveStatus>({
+    status: "idle",
+  });
   const pendingActiveRestoreIdRef = useRef<string | null>(null);
   const failedActiveRestoreIdsRef = useRef<Set<string>>(new Set());
   const cvsRef = useRef<CvDocument[]>(cvs);
@@ -1713,6 +1847,13 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     isDirtyRef.current = isDirty;
   }, [isDirty]);
 
+  useEffect(() => {
+    if (!currentCv || !isDirty) {
+      return;
+    }
+    cacheDocumentLocally(currentCv);
+  }, [currentCv, isDirty]);
+
   // --- New: active editor tracking (single-writer) ---
   const [activeEditorBlockId, setActiveEditorBlockId] = useState<string | null>(
     null,
@@ -1728,13 +1869,14 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     try {
       if (typeof window !== "undefined" && window.localStorage) {
         const now = new Date().toISOString();
+        const durableDoc = sanitizeDurableCvDocument(doc);
         const snapshot: CvDocument = {
-          ...doc,
+          ...durableDoc,
           metadata: {
-            ...(doc.metadata ?? { createdAt: now, version: 1 }),
-            createdAt: doc.metadata?.createdAt ?? now,
+            ...(durableDoc.metadata ?? { createdAt: now, version: 1 }),
+            createdAt: durableDoc.metadata?.createdAt ?? now,
             updatedAt: now,
-            version: doc.metadata?.version ?? 1,
+            version: durableDoc.metadata?.version ?? 1,
           } as any,
         };
         window.localStorage.setItem(
@@ -1776,7 +1918,11 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
               ? (parsed as CvDocument)
               : null;
           if (doc && !isLibrarySummaryOnlyCv(doc)) {
-            return doc;
+            const durableDoc = sanitizeDurableCvDocument(doc);
+            if (!deepEqual(durableDoc, doc)) {
+              cacheDocumentLocally(durableDoc);
+            }
+            return durableDoc;
           }
         } catch {
           /* ignore malformed cached documents */
@@ -1796,7 +1942,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       /* noop */
     }
     const docV1 = normalizeToV1Document(migrated);
-    return ensureRepresentativeBlocks(docV1);
+    return sanitizeRuntimeCvDocument(ensureRepresentativeBlocks(docV1));
   }, []);
 
   const hydrateCvDocument = useCallback(
@@ -1950,6 +2096,21 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     localBaseline: CvDocument | null,
     remoteDoc: CvDocument | null,
   ): boolean {
+    const requestedRouteCvId = readRequestedCvIdFromWindowLocation();
+    if (
+      requestedRouteCvId &&
+      String(requestedRouteCvId) !== String(targetId)
+    ) {
+      dbg(
+        "[CvLibraryContext] background refresh skipped: route target changed",
+        {
+          targetId,
+          requestedRouteCvId,
+        },
+      );
+      return false;
+    }
+
     if (!remoteDoc) return false;
 
     if (String(remoteDoc.id) !== String(targetId)) {
@@ -2094,6 +2255,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       }
 
       isSavingRef.current = true;
+      setRemoteSaveStatus({ status: "saving", documentId: String(docCopy.id) });
       try {
         await adapter.save(docCopy as any);
         try {
@@ -2113,6 +2275,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
             cvState: (currentCvRef.current as any)?.cvState,
           } as any;
         }
+        setRemoteSaveStatus({ status: "synced", documentId: String(docCopy.id) });
       } finally {
         isSavingRef.current = false;
       }
@@ -2167,6 +2330,13 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       cacheDocumentLocally(docCopy);
     } catch (err) {
       console.error("[CvLibraryContext] save failed", err);
+      const classified = classifyRemoteSaveError(err);
+      setRemoteSaveStatus({
+        status: "failed",
+        documentId: String(documentToSave.id),
+        error: classified.message,
+        reason: classified.reason,
+      });
       cacheDocumentLocally(documentToSave);
     }
   }
@@ -2341,6 +2511,16 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     (id: string): boolean => {
       const targetId = String(id);
       activeLoadTargetRef.current = targetId;
+      const isLoadTargetStillCurrent = (): boolean => {
+        const requestedRouteCvId = readRequestedCvIdFromWindowLocation();
+        if (
+          requestedRouteCvId &&
+          String(requestedRouteCvId) !== String(targetId)
+        ) {
+          return false;
+        }
+        return activeLoadTargetRef.current === targetId;
+      };
       const visibleTargetDoc = cvsRef.current.find(
         (candidate) => String(candidate.id) === targetId,
       );
@@ -2567,7 +2747,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
                 ) {
                   return;
                 }
-                if (activeLoadTargetRef.current !== targetId) {
+                if (!isLoadTargetStillCurrent()) {
                   return;
                 }
                 const remoteWithLocalVisualTemplate =
@@ -2686,7 +2866,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
               ) {
                 return;
               }
-              if (activeLoadTargetRef.current !== targetId) {
+              if (!isLoadTargetStillCurrent()) {
                 return;
               }
 
@@ -2865,6 +3045,17 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       failedActiveRestoreIdsRef.current.clear();
       pendingActiveRestoreIdRef.current = null;
       hasHydratedActiveCvRef.current = true;
+      return;
+    }
+    const requestedRouteCvId = readRequestedCvIdFromWindowLocation();
+    if (
+      requestedRouteCvId &&
+      String(requestedRouteCvId) === String(pendingId)
+    ) {
+      if (!isLoading) {
+        pendingActiveRestoreIdRef.current = null;
+        hasHydratedActiveCvRef.current = true;
+      }
       return;
     }
     if (!isLoading) {
@@ -3225,25 +3416,27 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     ): Promise<void> => {
       const activeDoc = currentCvRef.current;
       if (!activeDoc) return;
+      const durableStyleMetadata =
+        sanitizeDurableVisualMetadataPatch(styleMetadata);
 
       const verbatiStyle = serializeVerbatiStyle(style);
       const resumeTemplateId = isResumeTemplateId(
         verbatiStyle.resumeTemplateId,
       )
         ? verbatiStyle.resumeTemplateId
-        : isResumeTemplateId(styleMetadata.resumeTemplateId)
-          ? styleMetadata.resumeTemplateId
+        : isResumeTemplateId(durableStyleMetadata.resumeTemplateId)
+          ? durableStyleMetadata.resumeTemplateId
           : isResumeTemplateId(
-                styleMetadata.verbatiStyleBaseSnapshot?.resumeTemplateId,
+                durableStyleMetadata.verbatiStyleBaseSnapshot?.resumeTemplateId,
               )
-            ? styleMetadata.verbatiStyleBaseSnapshot.resumeTemplateId
+            ? durableStyleMetadata.verbatiStyleBaseSnapshot.resumeTemplateId
             : undefined;
       const nextMetadata = {
         ...(activeDoc.metadata ?? {}),
         updatedAt: new Date().toISOString(),
         verbatiStyle,
         ...(resumeTemplateId ? { resumeTemplateId } : null),
-        ...styleMetadata,
+        ...durableStyleMetadata,
       };
       const nextDoc: CvDocument = {
         ...activeDoc,
@@ -3258,11 +3451,41 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       );
       cacheDocumentLocally(nextDoc);
 
-      await adapter.saveMetadataPatch(nextDoc.id, {
-        verbatiStyle,
-        ...(resumeTemplateId ? { resumeTemplateId } : null),
-        ...styleMetadata,
-      } as any);
+      setRemoteSaveStatus({
+        status: "saving",
+        documentId: String(nextDoc.id),
+      });
+      try {
+        const metadataSaveResult = await adapter.saveMetadataPatch(nextDoc.id, {
+          verbatiStyle,
+          ...(resumeTemplateId ? { resumeTemplateId } : null),
+          ...durableStyleMetadata,
+        } as any);
+        if (
+          metadataSaveResult &&
+          typeof metadataSaveResult === "object" &&
+          (metadataSaveResult as { written?: unknown }).written === false &&
+          (metadataSaveResult as { reason?: unknown }).reason ===
+            "not_found_metadata_only"
+        ) {
+          const { cvState: _legacyCvState, ...persistableDoc } =
+            nextDoc as any;
+          await adapter.save(persistableDoc as CvDocument);
+        }
+        setRemoteSaveStatus({
+          status: "synced",
+          documentId: String(nextDoc.id),
+        });
+      } catch (error) {
+        const classified = classifyRemoteSaveError(error);
+        setRemoteSaveStatus({
+          status: "failed",
+          documentId: String(nextDoc.id),
+          error: classified.message,
+          reason: classified.reason,
+        });
+        throw error;
+      }
     },
     [adapter],
   );
@@ -3994,6 +4217,59 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   function updateCurrentCv(newState: Partial<CvDocument>): void {
     if (!currentCv) return;
     const id = String(currentCv.id);
+    const hasLegacyCvStateShape =
+      "source" in (newState as Record<string, unknown>) ||
+      "history" in (newState as Record<string, unknown>);
+    const looksLikeCvDocumentPatch =
+      Array.isArray((newState as any).sections) &&
+      !hasLegacyCvStateShape &&
+      (((newState as any).sections as unknown[]).length === 0 ||
+        ((newState as any).sections as unknown[]).some(
+          (section) =>
+            section &&
+            typeof section === "object" &&
+            (typeof (section as any).type === "string" ||
+              Array.isArray((section as any).blocks) ||
+              Array.isArray((section as any).structuredContent)),
+        )
+      );
+
+    if (looksLikeCvDocumentPatch) {
+      const now = new Date().toISOString();
+      const nextDoc = applyAutoTitleIfPlaceholder(
+        ensureRepresentativeBlocks(
+          normalizeToV1Document({
+            ...currentCv,
+            ...newState,
+            id,
+            metadata: {
+              ...(currentCv.metadata ?? {
+                createdAt: now,
+                version: 1,
+              }),
+              ...((newState as CvDocument).metadata ?? {}),
+              createdAt:
+                (newState as CvDocument).metadata?.createdAt ??
+                currentCv.metadata?.createdAt ??
+                now,
+              updatedAt: now,
+              version:
+                (newState as CvDocument).metadata?.version ??
+                currentCv.metadata?.version ??
+                1,
+            } as CvDocument["metadata"],
+          } as CvDocument),
+        ),
+      );
+
+      safeSetCurrentCv(nextDoc);
+      setCvs((prev) =>
+        prev.map((doc) => (String(doc.id) === id ? nextDoc : doc)),
+      );
+      syncEditedDocumentLocally(nextDoc);
+      return;
+    }
+
     // Push previous cvState to undo stack
     const undoStack = undoStackRef.current.get(id) ?? [];
     const prevState = (currentCv as any).cvState;
@@ -4125,6 +4401,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       isLibraryHydrated,
       lastLibraryFetchFailed,
       isDirty,
+      remoteSaveStatus,
       // runtime v1 detector exposed to consumers
       isV1Active,
       hasMeaningfulContent: hasMeaningfulCvContent(currentCv),
@@ -4182,6 +4459,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       isLibraryHydrated,
       lastLibraryFetchFailed,
       isDirty,
+      remoteSaveStatus,
       loadCv,
       hydrateCvDocument,
       saveCurrentCv,

@@ -2,6 +2,7 @@ import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";
 import { listProfilesForClerk } from "./lib/userProfiles";
+import { sanitizeRemoteMetadataImages } from "./lib/documentAssets";
 
 const proposalVoicePresetChoice = v.union(
   v.literal("signature"),
@@ -91,6 +92,7 @@ const proposalDocumentDecorationChoice = v.object({
   source: v.literal("upload"),
   assetId: v.optional(v.string()),
   dataUrl: v.optional(v.string()),
+  resolvedUrl: v.optional(v.string()),
   fileName: v.optional(v.string()),
   mimeType: v.optional(
     v.union(
@@ -436,11 +438,11 @@ export default mutation({
         proposal.metadata?.tags,
         args.metadata?.tags,
       );
-      patch.metadata = {
+      patch.metadata = sanitizeRemoteMetadataImages({
         ...proposal.metadata,
         ...args.metadata,
         ...(mergedTags ? { tags: mergedTags } : null),
-      };
+      }) as typeof proposal.metadata;
       patch.jobId = args.metadata?.jobId ?? proposal.jobId;
     }
 

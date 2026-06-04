@@ -161,6 +161,9 @@ describe("CvForge toolbar CSS contracts", () => {
     expect(productCss).toMatch(
       /\.dasti-cv-paper-stage\s+\.dasti-document-stage__canvas\[data-document-page="true"\]\s*\{[\s\S]*box-shadow:\s*[\s\S]*var\(--document-viewer-frame-shadow\),[\s\S]*0\s+12px\s+28px\s+-24px\s+color-mix\(in\s+srgb,\s*var\(--shadow-color\)\s+92%,\s*transparent\);/,
     );
+    expect(productCss).toMatch(
+      /\.dasti-doc-viewer-shell:not\(\.dasti-doc-viewer-shell--resume-workspace\)\s+\.dasti-doc-viewport--resume\s+\.resume-preview-shell--single\s*\{[\s\S]*display:\s*grid;[\s\S]*justify-items:\s*center;[\s\S]*padding:\s*0;/,
+    );
   });
 
   it("uses proposal-like plain actions for the CV stage bar chrome", () => {
@@ -339,7 +342,6 @@ describe("CvForge toolbar CSS contracts", () => {
     expect(activeSectionRowBlock).not.toContain(
       "--proposal-chrome-control-active-bg",
     );
-    expect(cvForgeSource).toContain("CV_PAPER_VISUAL_INLINE_SIZE");
     expect(cvForgeSource).toContain('"--cv-paper-visual-inline-size"');
   });
 

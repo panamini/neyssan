@@ -17,6 +17,9 @@ type UseBoundVerbatiCvStyleResult = {
   setStylePreset: React.Dispatch<React.SetStateAction<VerbatiStylePreset>>;
 };
 
+const useIsomorphicLayoutEffect =
+  typeof window === "undefined" ? React.useEffect : React.useLayoutEffect;
+
 export function useBoundVerbatiCvStyle({
   currentCv,
   persistStyle,
@@ -43,7 +46,7 @@ export function useBoundVerbatiCvStyle({
   }, [currentCv, fallbackStylePreset]);
   const [stylePreset, setStylePreset] = React.useState(persistedStylePreset);
 
-  React.useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     setStylePreset(persistedStylePreset);
   }, [
     currentCv?.id,

@@ -8,6 +8,10 @@ import {
   getPrimaryProfileForClerk,
   resolveCanonicalProfileKeywordsForWrite,
 } from "./lib/userProfiles";
+import {
+  sanitizeRemoteCvDocument,
+  sanitizeRemoteMetadataImages,
+} from "./lib/documentAssets";
 
 export function resolvePatchProfileRow<T extends { clerkId?: string | undefined }>(
   rows: T[],
@@ -30,6 +34,21 @@ export function resolvePatchProfileRow<T extends { clerkId?: string | undefined 
 
 function compactScoringText(value: unknown): string {
   return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function sanitizeProfileMetadataForWrite(value: unknown): unknown {
+  const metadata = sanitizeRemoteMetadataImages(
+    canonicalizeUserProfileMetadata(value),
+  );
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return metadata;
+  }
+
+  const next = { ...(metadata as Record<string, unknown>) };
+  delete next.updatedAt;
+  delete next.version;
+  delete next.authoritativeResume;
+  return next;
 }
 
 function dedupeScoringStrings(values: unknown[]): string[] {
@@ -72,6 +91,17 @@ function extractTextFromRichValue(value: unknown): string {
   }
 
   const record = value as Record<string, unknown>;
+  if (
+    record.kind === "remirror_json" &&
+    record.version === 1 &&
+    typeof record.json === "string"
+  ) {
+    try {
+      return extractTextFromRichValue(JSON.parse(record.json));
+    } catch {
+      return "";
+    }
+  }
   const direct = [
     record.text,
     record.plainText,
@@ -427,7 +457,7 @@ export const patch = mutation({
         version: args.version ?? 1,
       };
 
-      const initialMetadata = canonicalizeUserProfileMetadata(
+      const initialMetadata = sanitizeProfileMetadataForWrite(
         patchPayload.metadata ?? incoming.metadata,
       );
       if (initialMetadata !== undefined) {
@@ -435,9 +465,9 @@ export const patch = mutation({
       }
 
       if (patchPayload.cvDocument !== undefined) {
-        doc.cvDocument = patchPayload.cvDocument;
+        doc.cvDocument = sanitizeRemoteCvDocument(patchPayload.cvDocument);
       } else if (incoming.cvDocument !== undefined) {
-        doc.cvDocument = incoming.cvDocument;
+        doc.cvDocument = sanitizeRemoteCvDocument(incoming.cvDocument);
       }
 
       if (rawText) {
@@ -461,15 +491,12 @@ export const patch = mutation({
       existingPatchKeys.every((key) => key === "metadata");
 
     if (isExistingMetadataOnlyPatch) {
-      const md = {
+      const md = sanitizeProfileMetadataForWrite({
         ...((existing.metadata ?? {}) as Record<string, unknown>),
-        ...(canonicalizeUserProfileMetadata(
+        ...(sanitizeProfileMetadataForWrite(
           existingPatchPayload.metadata,
         ) as Record<string, unknown>),
-      };
-      delete md.updatedAt;
-      delete md.version;
-      delete md.authoritativeResume;
+      }) as Record<string, unknown>;
 
       await ctx.db.patch(existing._id, {
         metadata: md,
@@ -509,13 +536,11 @@ export const patch = mutation({
       if (args.profile.linkedIn !== undefined) updates.linkedIn = args.profile.linkedIn;
       if (args.profile.metadata !== undefined) {
         const md = {
-          ...(canonicalizeUserProfileMetadata(args.profile.metadata) as Record<
+          ...(sanitizeProfileMetadataForWrite(args.profile.metadata) as Record<
             string,
             unknown
           >),
         };
-        delete md.updatedAt;
-        delete md.version;
         updates.metadata = md;
       }
 
@@ -561,7 +586,12 @@ export const patch = mutation({
         if (allowed.has(key)) {
           // Map rawText -> raw_text for schema compatibility
           if (key === "rawText") updates.raw_text = args.patch[key];
-          else updates[key] = args.patch[key];
+          else {
+            updates[key] =
+              key === "cvDocument"
+                ? sanitizeRemoteCvDocument(args.patch[key])
+                : args.patch[key];
+          }
         }
       }
 
@@ -616,14 +646,11 @@ export const patch = mutation({
       // Defensive: remove updatedAt and version from metadata if present in patch
       if (updates.metadata) {
         const md = {
-          ...(canonicalizeUserProfileMetadata(updates.metadata) as Record<
+          ...(sanitizeProfileMetadataForWrite(updates.metadata) as Record<
             string,
             unknown
           >),
         };
-        delete md.updatedAt;
-        delete md.version;
-        delete md.authoritativeResume;
         updates.metadata = md;
       }
 

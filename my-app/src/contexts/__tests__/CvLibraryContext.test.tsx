@@ -3,12 +3,14 @@ import { render, waitFor, cleanup, act } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { CvLibraryProvider, useCvLibrary } from '../CvLibraryContext';
 import { convexClient } from '../../lib/convex-client';
+import { generateCvTemplateV1 } from '../../lib/cv-template';
 
-const { authState } = vi.hoisted(() => ({
+const { authState, convexMutationMock } = vi.hoisted(() => ({
   authState: {
     isLoaded: false,
     isSignedIn: false,
   },
+  convexMutationMock: vi.fn(async () => ({})),
 }));
 
 vi.mock('@clerk/clerk-react', () => ({
@@ -27,6 +29,17 @@ vi.mock('../../lib/convex-client', () => ({
     clearAuth: vi.fn(async () => undefined),
   },
 }));
+
+vi.mock('convex/react', async (importOriginal) => {
+  const actual: any = await importOriginal();
+  return {
+    ...(actual ?? {}),
+    useMutation: () => convexMutationMock,
+    useQuery: () => undefined,
+    useAction: () => undefined,
+    useConvexAuth: () => ({ isAuthenticated: false, isLoading: false }),
+  };
+});
 
 vi.mock('uuid', () => {
   return {
@@ -86,6 +99,8 @@ describe('CvLibraryContext', () => {
     (globalThis as any).__mock_uuid_count = 0;
     vi.mocked(convexClient.query).mockReset();
     vi.mocked(convexClient.query).mockResolvedValue(null);
+    convexMutationMock.mockReset();
+    convexMutationMock.mockResolvedValue({});
   });
 
   afterEach(() => {
@@ -478,6 +493,7 @@ describe('CvLibraryContext', () => {
 
     await waitFor(() => expect(ctx.currentCvId).toBe(activeCv.id));
     act(() => {
+      window.history.pushState({}, '', `/cv?id=${localCv.id}`);
       ctx.loadCv(localCv.id);
     });
     await waitFor(() => expect(ctx.currentCvId).toBe(localCv.id));
@@ -517,6 +533,80 @@ describe('CvLibraryContext', () => {
     expect(stored[0].id).toBe(ctx.currentCvId);
     expect(Array.isArray(stored[0].sections)).toBe(false);
     expect(stored[0].metadata?.librarySummaryOnly).toBe(true);
+  });
+
+  it('falls back to a full save when style-only decoration save has no remote row', async () => {
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx).toBeDefined());
+    await act(async () => {
+      await ctx.createNewCv();
+    });
+    await waitFor(() => expect(ctx.currentCvId).toBeTruthy());
+
+    convexMutationMock.mockReset();
+    convexMutationMock
+      .mockResolvedValueOnce({
+        written: false,
+        reason: 'not_found_metadata_only',
+      })
+      .mockResolvedValueOnce({ written: true });
+
+    await act(async () => {
+      await ctx.saveCurrentCvStyleOnly(
+        {
+          layout: 'workshop',
+          typography: 'geist-baskervville',
+          palette: 'sauge',
+        },
+        {
+          documentDecoration: {
+            visible: true,
+            source: 'upload',
+            assetId: 'storage_decoration_1',
+            dataUrl: 'data:image/jpeg;base64,AAAA',
+            fileName: 'mark.jpg',
+            mimeType: 'image/jpeg',
+            alt: 'Mark',
+            sizePreset: 35,
+            fit: 'contain',
+            placementMode: 'custom',
+            xMm: 17,
+            yMm: 35,
+          },
+          documentStyleVersion: 1,
+        },
+      );
+    });
+
+    expect(convexMutationMock).toHaveBeenCalledTimes(2);
+    expect(convexMutationMock.mock.calls[0][0].patch.cvDocument).toBeUndefined();
+    expect(convexMutationMock.mock.calls[1][0].patch.cvDocument).toBeDefined();
+    expect(
+      convexMutationMock.mock.calls[1][0].patch.metadata.documentDecoration
+        .assetId,
+    ).toBe('storage_decoration_1');
+    expect(
+      convexMutationMock.mock.calls[1][0].patch.metadata.documentDecoration
+        .dataUrl,
+    ).toBeUndefined();
+    expect(ctx.currentCv.metadata.documentDecoration.assetId).toBe(
+      'storage_decoration_1',
+    );
+    expect(ctx.currentCv.metadata.documentDecoration.dataUrl).toBeUndefined();
+    const localSnapshot = mockLocalStorage.getItem(`cv:${ctx.currentCvId}`);
+    expect(localSnapshot).not.toContain('data:image');
+    expect(JSON.parse(localSnapshot as string).metadata.documentDecoration).toMatchObject({
+      assetId: 'storage_decoration_1',
+      fileName: 'mark.jpg',
+      mimeType: 'image/jpeg',
+      visible: true,
+    });
   });
 
   it('hydrates a compact cvDocuments index but still loads the full cached cv document', async () => {
@@ -824,6 +914,243 @@ describe('CvLibraryContext', () => {
     expect(ctx.currentCv.metadata.verbatiStyle.resumeTemplateId).toBe(
       'workshop_resume_twocol_ats',
     );
+  });
+
+  it('persists typed summary and experience sections through updateCurrentCv and refresh hydration', async () => {
+    let ctx: any;
+    const view = render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx).toBeDefined());
+    await act(async () => {
+      await ctx.createNewCv('Edited Route CV');
+    });
+    await waitFor(() => expect(ctx.currentCvId).toBeTruthy());
+
+    const currentId = ctx.currentCvId;
+    const editedSections = ctx.currentCv.sections.map((section: any) => {
+      if (section.type === 'summary') {
+        return {
+          ...section,
+          structuredContent: [
+            {
+              id: 'summary-edited',
+              summary: 'Typed summary survives the hard refresh.',
+            },
+          ],
+        };
+      }
+      if (section.type === 'experience') {
+        return {
+          ...section,
+          structuredContent: [
+            {
+              id: 'experience-edited',
+              company: 'Persistence Labs',
+              position: 'Pipeline Lead',
+              startDate: '2025-01-01',
+              endDate: null,
+              responsibilities: 'Typed experience survives the hard refresh.',
+            },
+          ],
+        };
+      }
+      return section;
+    });
+
+    act(() => {
+      ctx.updateCurrentCv({ sections: editedSections });
+    });
+
+    await waitFor(() =>
+      expect(JSON.stringify(ctx.currentCv)).toContain(
+        'Typed summary survives the hard refresh.',
+      ),
+    );
+    expect(JSON.stringify(ctx.currentCv)).toContain(
+      'Typed experience survives the hard refresh.',
+    );
+    await waitFor(() =>
+      expect(mockLocalStorage.getItem(`cv:${currentId}`)).toContain(
+        'Typed summary survives the hard refresh.',
+      ),
+    );
+
+    view.unmount();
+    window.history.pushState({}, '', `/cv?id=${currentId}`);
+
+    let reloadedCtx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (reloadedCtx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(reloadedCtx.currentCvId).toBe(currentId));
+    expect(JSON.stringify(reloadedCtx.currentCv)).toContain(
+      'Typed summary survives the hard refresh.',
+    );
+    expect(JSON.stringify(reloadedCtx.currentCv)).toContain(
+      'Typed experience survives the hard refresh.',
+    );
+  });
+
+  it('does not let a newer blank remote cvDocument overwrite a locally edited route cv', async () => {
+    authState.isLoaded = true;
+    authState.isSignedIn = true;
+
+    const alpha = {
+      id: 'cv_alpha',
+      title: 'Alpha CV',
+      metadata: {
+        createdAt: '2026-06-04T08:00:00.000Z',
+        updatedAt: '2026-06-04T08:00:00.000Z',
+        version: 1,
+      },
+      sections: [],
+    };
+    const localEdited = generateCvTemplateV1('Edited Remote Race CV');
+    localEdited.id = 'cv_remote_race';
+    localEdited.metadata = {
+      ...localEdited.metadata,
+      createdAt: '2026-06-04T09:00:00.000Z',
+      updatedAt: '2026-06-04T09:00:00.000Z',
+      version: 1,
+    };
+    const localSummary = localEdited.sections.find(
+      (section: any) => section.type === 'summary',
+    ) as any;
+    const localExperience = localEdited.sections.find(
+      (section: any) => section.type === 'experience',
+    ) as any;
+    localSummary.structuredContent = [
+      { id: 'summary-short', summary: 'A' },
+    ];
+    localExperience.structuredContent = [
+      {
+        id: 'experience-short',
+        company: 'B',
+        position: '',
+        startDate: '2025-01-01',
+        endDate: null,
+        responsibilities: 'C',
+      },
+    ];
+
+    const remoteBlank = generateCvTemplateV1('Edited Remote Race CV');
+    remoteBlank.id = localEdited.id;
+    remoteBlank.metadata = {
+      ...remoteBlank.metadata,
+      createdAt: '2026-06-04T09:00:00.000Z',
+      updatedAt: '2026-06-04T09:05:00.000Z',
+      version: 2,
+    };
+
+    let resolveRemote: ((value: unknown) => void) | null = null;
+    vi.mocked(convexClient.query).mockImplementation(
+      async (_reference: unknown, args?: Record<string, unknown>) => {
+        if (args?.profileId === 'cv_remote_race') {
+          return new Promise((resolve) => {
+            resolveRemote = resolve;
+          }) as Promise<any>;
+        }
+        return [];
+      },
+    );
+
+    mockLocalStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([alpha]));
+    mockLocalStorage.setItem(`cv:${alpha.id}`, JSON.stringify(alpha));
+    mockLocalStorage.setItem(`cv:${localEdited.id}`, JSON.stringify(localEdited));
+    mockLocalStorage.setItem(ACTIVE_CV_STORAGE_KEY, alpha.id);
+    window.history.pushState({}, '', '/cv?id=cv_alpha');
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx.currentCvId).toBe(alpha.id));
+
+    act(() => {
+      window.history.pushState({}, '', `/cv?id=${localEdited.id}`);
+      ctx.loadCv(localEdited.id);
+    });
+
+    await waitFor(() => expect(ctx.currentCvId).toBe(localEdited.id));
+    expect(JSON.stringify(ctx.currentCv)).toContain('"summary":"A"');
+    expect(JSON.stringify(ctx.currentCv)).toContain('"responsibilities":"C"');
+    await waitFor(() => expect(resolveRemote).toBeTypeOf('function'));
+
+    await act(async () => {
+      resolveRemote?.({
+        profileId: localEdited.id,
+        cvDocument: remoteBlank,
+      });
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(ctx.currentCvId).toBe(localEdited.id);
+    expect(JSON.stringify(ctx.currentCv)).toContain('"summary":"A"');
+    expect(JSON.stringify(ctx.currentCv)).toContain('"responsibilities":"C"');
+    expect(mockLocalStorage.getItem(`cv:${localEdited.id}`)).toContain(
+      '"summary":"A"',
+    );
+  });
+
+  it('restores an existing local cv on the Clerk factor-one route without saving a blank template', async () => {
+    authState.isLoaded = false;
+    authState.isSignedIn = false;
+
+    const localCv = generateCvTemplateV1('Factor One Local CV');
+    localCv.id = 'cv_factor_one_local';
+    const summarySection = localCv.sections.find(
+      (section: any) => section.type === 'summary',
+    ) as any;
+    summarySection.structuredContent = [
+      {
+        id: 'summary-factor-one',
+        summary: 'Local text should survive auth factor-one hydration.',
+      },
+    ];
+
+    mockLocalStorage.setItem(
+      LOCAL_STORAGE_KEY,
+      JSON.stringify([
+        {
+          id: localCv.id,
+          title: localCv.title,
+          metadata: {
+            ...localCv.metadata,
+            librarySummaryOnly: true,
+          },
+          profilePreview: null,
+        },
+      ]),
+    );
+    mockLocalStorage.setItem(`cv:${localCv.id}`, JSON.stringify(localCv));
+    mockLocalStorage.setItem(ACTIVE_CV_STORAGE_KEY, localCv.id);
+    window.history.pushState({}, '', '/sign-in/factor-one');
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx.currentCvId).toBe(localCv.id));
+    expect(JSON.stringify(ctx.currentCv)).toContain(
+      'Local text should survive auth factor-one hydration.',
+    );
+    expect(mockLocalStorage.getItem(`cv:${localCv.id}`)).toContain(
+      'Local text should survive auth factor-one hydration.',
+    );
+    expect(convexMutationMock).not.toHaveBeenCalled();
   });
 
   it('repairs a summary-only cached active cv back into the canonical five-section blank draft', async () => {
@@ -1209,6 +1536,219 @@ describe('CvLibraryContext', () => {
     expect(ctx.currentCv?.title).toBe('Beta CV');
   });
 
+  it('does not fall back to another local cv while the requested /cv route id is still loading remotely', async () => {
+    authState.isLoaded = true;
+    authState.isSignedIn = true;
+
+    const beta = {
+      id: 'cv_beta',
+      title: 'Wrong Local CV',
+      metadata: {
+        createdAt: '2026-04-29T00:00:00.000Z',
+        updatedAt: '2026-04-30T00:00:00.000Z',
+        version: 1,
+      },
+      sections: [],
+    };
+    const routeCv = {
+      id: 'cv_route',
+      title: 'Requested Route CV',
+      metadata: {
+        createdAt: '2026-04-28T00:00:00.000Z',
+        updatedAt: '2026-04-28T00:00:00.000Z',
+        version: 1,
+      },
+      sections: [],
+    };
+
+    mockLocalStorage.setItem('cvDocuments', JSON.stringify([beta]));
+    mockLocalStorage.setItem('cv:cv_beta', JSON.stringify(beta));
+    mockLocalStorage.setItem('cvActiveId', 'cv_beta');
+    window.history.pushState({}, '', '/cv?id=cv_route');
+
+    let resolveRouteProfile: ((value: unknown) => void) | null = null;
+    vi.mocked(convexClient.query).mockImplementation(
+      async (_reference: unknown, args?: Record<string, unknown>) => {
+        if (args?.profileId === 'cv_route') {
+          return new Promise((resolve) => {
+            resolveRouteProfile = resolve;
+          }) as Promise<any>;
+        }
+        if (!args) {
+          return [];
+        }
+        return null;
+      },
+    );
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx).toBeDefined());
+    await waitFor(() => expect(resolveRouteProfile).toBeTypeOf('function'));
+    expect(ctx.currentCvId).not.toBe('cv_beta');
+
+    await act(async () => {
+      resolveRouteProfile?.({ profileId: 'cv_route', cvDocument: routeCv });
+    });
+
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_route'));
+    expect(ctx.currentCv?.title).toBe('Requested Route CV');
+    expect(mockLocalStorage.getItem('cvActiveId')).toBe('cv_route');
+  });
+
+  it('ignores a stale async route load when the user has switched to another cv', async () => {
+    authState.isLoaded = true;
+    authState.isSignedIn = true;
+
+    const alpha = {
+      id: 'cv_alpha',
+      title: 'Alpha CV',
+      metadata: {
+        createdAt: '2026-04-28T00:00:00.000Z',
+        updatedAt: '2026-04-28T00:00:00.000Z',
+        version: 1,
+      },
+      sections: [],
+    };
+    const beta = {
+      id: 'cv_beta',
+      title: 'Beta CV',
+      metadata: {
+        createdAt: '2026-04-29T00:00:00.000Z',
+        updatedAt: '2026-04-29T00:00:00.000Z',
+        version: 1,
+      },
+      sections: [],
+    };
+
+    mockLocalStorage.setItem('cvDocuments', JSON.stringify([beta]));
+    mockLocalStorage.setItem('cv:cv_beta', JSON.stringify(beta));
+    window.history.pushState({}, '', '/cv?id=cv_alpha');
+
+    let resolveAlpha: ((value: unknown) => void) | null = null;
+    vi.mocked(convexClient.query).mockImplementation(
+      async (_reference: unknown, args?: Record<string, unknown>) => {
+        if (args?.profileId === 'cv_alpha') {
+          return new Promise((resolve) => {
+            resolveAlpha = resolve;
+          }) as Promise<any>;
+        }
+        return null;
+      },
+    );
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(resolveAlpha).toBeTypeOf('function'));
+
+    act(() => {
+      window.history.pushState({}, '', '/cv?id=cv_beta');
+      ctx.loadCv('cv_beta');
+    });
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_beta'));
+
+    await act(async () => {
+      resolveAlpha?.({ profileId: 'cv_alpha', cvDocument: alpha });
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(ctx.currentCvId).toBe('cv_beta');
+    expect(ctx.currentCv?.title).toBe('Beta CV');
+    expect(mockLocalStorage.getItem('cvActiveId')).toBe('cv_beta');
+  });
+
+  it('does not let a background refresh for one cv replace the active route cv', async () => {
+    authState.isLoaded = true;
+    authState.isSignedIn = true;
+
+    const alpha = {
+      id: 'cv_alpha',
+      title: 'Alpha Local',
+      metadata: {
+        createdAt: '2026-04-28T00:00:00.000Z',
+        updatedAt: '2026-04-28T00:00:00.000Z',
+        version: 1,
+      },
+      sections: [],
+    };
+    const beta = {
+      id: 'cv_beta',
+      title: 'Beta Local',
+      metadata: {
+        createdAt: '2026-04-29T00:00:00.000Z',
+        updatedAt: '2026-04-29T00:00:00.000Z',
+        version: 1,
+      },
+      sections: [],
+    };
+    const refreshedBeta = {
+      ...beta,
+      title: 'Beta Remote Refresh',
+      metadata: { ...beta.metadata, updatedAt: '2026-04-30T00:00:00.000Z' },
+    };
+
+    mockLocalStorage.setItem('cvDocuments', JSON.stringify([alpha]));
+    mockLocalStorage.setItem('cv:cv_alpha', JSON.stringify(alpha));
+    mockLocalStorage.setItem('cv:cv_beta', JSON.stringify(beta));
+    mockLocalStorage.setItem('cvActiveId', 'cv_alpha');
+    window.history.pushState({}, '', '/cv');
+
+    let resolveBetaRefresh: ((value: unknown) => void) | null = null;
+    vi.mocked(convexClient.query).mockImplementation(
+      async (_reference: unknown, args?: Record<string, unknown>) => {
+        if (args?.profileId === 'cv_beta') {
+          return new Promise((resolve) => {
+            resolveBetaRefresh = resolve;
+          }) as Promise<any>;
+        }
+        return null;
+      },
+    );
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_alpha'));
+
+    act(() => {
+      window.history.pushState({}, '', '/cv?id=cv_beta');
+      ctx.loadCv('cv_beta');
+    });
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_beta'));
+    await waitFor(() => expect(resolveBetaRefresh).toBeTypeOf('function'));
+
+    act(() => {
+      window.history.pushState({}, '', '/cv?id=cv_alpha');
+      ctx.loadCv('cv_alpha');
+    });
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_alpha'));
+
+    await act(async () => {
+      resolveBetaRefresh?.({
+        profileId: 'cv_beta',
+        cvDocument: refreshedBeta,
+      });
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(ctx.currentCvId).toBe('cv_alpha');
+    expect(ctx.currentCv?.title).toBe('Alpha Local');
+  });
+
   it('restores the most recently updated local cv when the active cv id is missing', async () => {
     const alpha = {
       id: 'cv_alpha',
@@ -1398,6 +1938,173 @@ describe('CvLibraryContext', () => {
     });
     await waitFor(() => expect(ctx.currentCvId).toBe(secondId));
     await waitFor(() => expect(ctx.isDirty).toBe(false));
+  });
+
+  it('autosaves the outgoing cv under its own id when the route changes before debounce', async () => {
+    const alpha = {
+      id: 'cv_alpha',
+      title: 'Alpha CV',
+      metadata: {
+        createdAt: '2026-04-28T00:00:00.000Z',
+        updatedAt: '2026-04-28T00:00:00.000Z',
+        version: 1,
+      },
+      sections: [],
+    };
+    const beta = {
+      id: 'cv_beta',
+      title: 'Beta CV',
+      metadata: {
+        createdAt: '2026-04-29T00:00:00.000Z',
+        updatedAt: '2026-04-29T00:00:00.000Z',
+        version: 1,
+      },
+      sections: [],
+    };
+
+    mockLocalStorage.setItem('cvDocuments', JSON.stringify([alpha, beta]));
+    mockLocalStorage.setItem('cv:cv_alpha', JSON.stringify(alpha));
+    mockLocalStorage.setItem('cv:cv_beta', JSON.stringify(beta));
+    window.history.pushState({}, '', '/cv?id=cv_alpha');
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_alpha'));
+
+    act(() => {
+      ctx.updateCurrentCv({
+        sections: [{ id: 'legacy-section', text: 'alpha dirty edit' }],
+        source: 'manual',
+        history: [],
+      });
+      window.history.pushState({}, '', '/cv?id=cv_beta');
+      ctx.loadCv('cv_beta');
+    });
+
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_beta'));
+    await waitFor(() => expect(convexMutationMock).toHaveBeenCalled());
+
+    const savedProfileIds = convexMutationMock.mock.calls.map(
+      ([args]) => args?.profileId,
+    );
+    expect(savedProfileIds).toContain('cv_alpha');
+    expect(savedProfileIds).not.toContain('cv_beta');
+    expect(JSON.parse(mockLocalStorage.getItem('cv:cv_alpha') as string).id).toBe(
+      'cv_alpha',
+    );
+    expect(JSON.parse(mockLocalStorage.getItem('cv:cv_beta') as string).title).toBe(
+      'Beta CV',
+    );
+  });
+
+  it('mirrors dirty edits to the full local cache before remote debounce completes', async () => {
+    const alpha = {
+      id: 'cv_alpha',
+      title: 'Alpha CV',
+      metadata: {
+        createdAt: '2026-04-28T00:00:00.000Z',
+        updatedAt: '2026-04-28T00:00:00.000Z',
+        version: 1,
+      },
+      sections: [],
+    };
+
+    mockLocalStorage.setItem('cvDocuments', JSON.stringify([alpha]));
+    mockLocalStorage.setItem('cv:cv_alpha', JSON.stringify(alpha));
+    window.history.pushState({}, '', '/cv?id=cv_alpha');
+
+    let ctx: any;
+    const view = render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_alpha'));
+
+    act(() => {
+      ctx.updateCurrentCv({
+        sections: [{ id: 'legacy-section', text: 'dirty before debounce' }],
+        source: 'manual',
+        history: [],
+      });
+    });
+
+    await waitFor(() =>
+      expect(mockLocalStorage.getItem('cv:cv_alpha')).toContain(
+        'dirty before debounce',
+      ),
+    );
+
+    view.unmount();
+    let reloadedCtx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (reloadedCtx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(reloadedCtx.currentCvId).toBe('cv_alpha'));
+    expect(JSON.stringify(reloadedCtx.currentCv)).toContain(
+      'dirty before debounce',
+    );
+    expect(convexMutationMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps local dirty state and exposes remote failure when Convex rejects an oversized save', async () => {
+    convexMutationMock.mockRejectedValue(
+      new Error('Value is too large (1.04 MiB > maximum size 1 MiB)'),
+    );
+
+    const alpha = {
+      id: 'cv_alpha',
+      title: 'Alpha CV',
+      metadata: {
+        createdAt: '2026-04-28T00:00:00.000Z',
+        updatedAt: '2026-04-28T00:00:00.000Z',
+        version: 1,
+      },
+      sections: [],
+    };
+
+    mockLocalStorage.setItem('cvDocuments', JSON.stringify([alpha]));
+    mockLocalStorage.setItem('cv:cv_alpha', JSON.stringify(alpha));
+    window.history.pushState({}, '', '/cv?id=cv_alpha');
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_alpha'));
+
+    act(() => {
+      ctx.renameCv('cv_alpha', 'Alpha Oversized Dirty');
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+    });
+
+    await waitFor(() => expect(convexMutationMock).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(ctx.remoteSaveStatus).toMatchObject({
+        status: 'failed',
+        documentId: 'cv_alpha',
+        reason: 'convex_value_too_large',
+      }),
+    );
+    expect(ctx.isDirty).toBe(true);
+    expect(mockLocalStorage.getItem('cv:cv_alpha')).toContain(
+      'Alpha Oversized Dirty',
+    );
   });
 
   it('deleteCv removes a CV and resets current if deleting active CV', async () => {

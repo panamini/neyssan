@@ -147,9 +147,10 @@ import CvDesignFields, {
   type CvAccentChoice,
 } from "../components/cv/CvDesignFields";
 import {
+  DOCUMENT_DECORATION_MAX_FILE_BYTES,
   createDefaultDocumentDecoration,
   normalizeDocumentDecoration,
-  readDocumentDecorationUpload,
+  resolveDocumentDecorationMimeType,
   shouldPersistDocumentDecoration,
   type DocumentDecoration,
 } from "../lib/document-decoration";
@@ -214,6 +215,36 @@ const CV_PAPER_ANCHOR_SELECTOR = [
 const CV_COMMAND_LAYER_CANVAS_SELECTOR = ".dasti-cv-skeleton-forge";
 const CV_WORKSPACE_DOCKED_PANEL_MIN_VIEWPORT_WIDTH = 1180;
 const CV_INLINE_PAPER_AI_TIMEOUT_MS = 30_000;
+
+async function uploadDocumentDecorationAsset({
+  generateUploadUrl,
+  file,
+  mimeType,
+}: {
+  generateUploadUrl: () => Promise<string>;
+  file: File;
+  mimeType?: string;
+}): Promise<string> {
+  const uploadUrl = await generateUploadUrl();
+  const response = await fetch(uploadUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": mimeType || file.type || "application/octet-stream",
+    },
+    body: file,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Image upload failed (${response.status})`);
+  }
+
+  const payload = (await response.json()) as { storageId?: unknown };
+  if (typeof payload.storageId !== "string" || !payload.storageId) {
+    throw new Error("Image upload did not return a storage id.");
+  }
+
+  return payload.storageId;
+}
 
 type CvForgeWorkspaceMode = "edit" | "preview";
 type CvWorkspacePanel = "sections" | "design" | "templates";
@@ -355,21 +386,10 @@ function readLegacyCvProfileImageDecoration(
       ? (metadata.profileImage as Record<string, unknown>)
       : {};
   const dataUrl = typeof source.src === "string" ? source.src.trim() : "";
-  if (!dataUrl) {
+  if (!dataUrl || dataUrl.startsWith("data:image/")) {
     return null;
   }
-  return normalizeDocumentDecoration({
-    ...createDefaultDocumentDecoration(),
-    visible: true,
-    dataUrl,
-    fileName:
-      typeof source.fileName === "string" && source.fileName.trim()
-        ? source.fileName.trim()
-        : "Document image",
-    fit: source.fit === "cover" ? "cover" : "contain",
-    sizePreset:
-      source.size === "small" ? 18 : source.size === "large" ? 52 : 35,
-  });
+  return null;
 }
 
 function getCvDocumentDecoration(
@@ -381,7 +401,16 @@ function getCvDocumentDecoration(
     metadata.documentDecoration
       ? metadata.documentDecoration
       : readLegacyCvProfileImageDecoration(metadata);
-  return normalizeDocumentDecoration(source ?? createDefaultDocumentDecoration());
+  const durableSource =
+    source && typeof source === "object"
+      ? {
+          ...(source as Record<string, unknown>),
+          dataUrl: undefined,
+        }
+      : source;
+  return normalizeDocumentDecoration(
+    durableSource ?? createDefaultDocumentDecoration(),
+  );
 }
 
 function normalizeListName(value: string): string {
@@ -2986,6 +3015,10 @@ export function CvForge(): JSX.Element {
     ((api as any).jobsPublic?.setResumeForJob ??
       "jobsPublic.setResumeForJob") as any,
   );
+  const generateDocumentAssetUploadUrl = useMutation(
+    ((api as any).documentAssets?.generateUploadUrl ??
+      "documentAssets.generateUploadUrl") as any,
+  ) as () => Promise<string>;
   const {
     currentCv,
     currentCvId,
@@ -2998,6 +3031,7 @@ export function CvForge(): JSX.Element {
     isLoading: isCvLibraryLoading,
     isLibraryHydrated,
     lastLibraryFetchFailed,
+    remoteSaveStatus,
     loadCv,
     hydrateCvDocument,
   } = useCvLibrary();
@@ -3420,6 +3454,7 @@ export function CvForge(): JSX.Element {
     [currentCv?.metadata?.locale, documentPageSizePreference],
   );
   const { showToast } = useToast();
+  const lastRemoteSaveFailureToastRef = React.useRef<string | null>(null);
   const [isCreatingEntryCv, setIsCreatingEntryCv] = React.useState(false);
   const [isImportingEntryCv, setIsImportingEntryCv] = React.useState(false);
   const [entryPickerTransitionCvId, setEntryPickerTransitionCvId] =
@@ -3439,6 +3474,24 @@ export function CvForge(): JSX.Element {
     : null;
   React.useEffect(() => {
     if (
+      remoteSaveStatus.status !== "failed" ||
+      !currentCvId ||
+      remoteSaveStatus.documentId !== String(currentCvId)
+    ) {
+      return;
+    }
+    const toastKey = `${remoteSaveStatus.documentId}:${remoteSaveStatus.reason}:${remoteSaveStatus.error}`;
+    if (lastRemoteSaveFailureToastRef.current === toastKey) {
+      return;
+    }
+    lastRemoteSaveFailureToastRef.current = toastKey;
+    showToast("Remote save failed. Local changes are still pending.", {
+      variant: "error",
+    });
+  }, [currentCvId, remoteSaveStatus, showToast]);
+
+  React.useEffect(() => {
+    if (
       !entryPickerTransitionCvId ||
       entryPickerTransitionCvId === ENTRY_PICKER_PENDING_ROUTE_ID
     ) {
@@ -3449,6 +3502,13 @@ export function CvForge(): JSX.Element {
       setEntryPickerTransitionCvId(null);
     }
   }, [entryPickerTransitionCvId, requestedCvId]);
+
+  React.useEffect(() => {
+    if (!requestedCvId || requestedCvId === String(currentCvId ?? "")) {
+      return;
+    }
+    loadCv(requestedCvId);
+  }, [currentCvId, loadCv, requestedCvId]);
 
   React.useEffect(() => {
     setCvRailAiSuggestion(null);
@@ -3511,8 +3571,8 @@ export function CvForge(): JSX.Element {
 
   const handlePickResume = React.useCallback(
     (cvId: string) => {
-      loadCv(cvId);
       navigateToSelectedCv(cvId);
+      loadCv(cvId);
     },
     [loadCv, navigateToSelectedCv],
   );
@@ -6137,10 +6197,11 @@ export function CvForge(): JSX.Element {
   );
   const handleSelectCvFromLibraryDrawer = React.useCallback(
     (cvId: string) => {
-      loadCv(cvId);
       closeForgePanel();
+      void navigate(`/cv?id=${encodeURIComponent(cvId)}`);
+      loadCv(cvId);
     },
-    [closeForgePanel, loadCv],
+    [closeForgePanel, loadCv, navigate],
   );
   const handleOpenCvFromLibraryDrawer = React.useCallback(
     (cvId: string) => {
@@ -6366,36 +6427,44 @@ export function CvForge(): JSX.Element {
   );
   const [draftCvDocumentDecoration, setDraftCvDocumentDecoration] =
     React.useState<DocumentDecoration | null>(null);
+  const cvDecorationPreviewUrlRef = React.useRef<string | null>(null);
+  const revokeCvDecorationPreviewUrl = React.useCallback(() => {
+    const previewUrl = cvDecorationPreviewUrlRef.current;
+    if (previewUrl && typeof URL !== "undefined") {
+      URL.revokeObjectURL(previewUrl);
+    }
+    cvDecorationPreviewUrlRef.current = null;
+  }, []);
   React.useEffect(() => {
+    revokeCvDecorationPreviewUrl();
     setDraftCvDocumentDecoration(null);
-  }, [currentCv?.id]);
+  }, [currentCv?.id, revokeCvDecorationPreviewUrl]);
+  React.useEffect(() => revokeCvDecorationPreviewUrl, [revokeCvDecorationPreviewUrl]);
   const cvDocumentDecoration =
     draftCvDocumentDecoration ?? persistedCvDocumentDecoration;
   const updateCvDocumentDecoration = React.useCallback(
-    (nextDecoration: DocumentDecoration) => {
+    async (nextDecoration: DocumentDecoration): Promise<void> => {
       if (!currentCv) {
         showToast("Load a CV before adding an image.", { variant: "error" });
         return;
       }
 
-      const now = new Date().toISOString();
       const normalizedDecoration = normalizeDocumentDecoration(nextDecoration);
-      const nextMetadata = buildUpdatedCvMetadata(currentCv, now);
-      delete (nextMetadata as { profileImage?: unknown }).profileImage;
-      if (shouldPersistDocumentDecoration(normalizedDecoration)) {
-        (nextMetadata as { documentDecoration?: DocumentDecoration }).documentDecoration =
-          normalizedDecoration;
-      } else {
-        delete (nextMetadata as { documentDecoration?: unknown }).documentDecoration;
-      }
+      const persistedDecoration = shouldPersistDocumentDecoration(
+        normalizedDecoration,
+      )
+        ? normalizedDecoration
+        : createDefaultDocumentDecoration();
 
-      void importCv({
-        ...currentCv,
-        metadata: nextMetadata,
-        sections: currentSections,
+      await saveCurrentCvStyleOnly(stylePreset, {
+        documentDecoration: {
+          ...persistedDecoration,
+          visible: persistedDecoration.visible,
+        },
+        documentStyleVersion: DOCUMENT_STYLE_VERSION,
       });
     },
-    [currentCv, currentSections, importCv, showToast],
+    [currentCv, saveCurrentCvStyleOnly, showToast, stylePreset],
   );
   const handleCvDocumentDecorationPreviewChange = React.useCallback(
     (nextDecoration: DocumentDecoration) => {
@@ -6407,34 +6476,90 @@ export function CvForge(): JSX.Element {
     (nextDecoration: DocumentDecoration) => {
       const normalizedDecoration = normalizeDocumentDecoration(nextDecoration);
       setDraftCvDocumentDecoration(null);
-      updateCvDocumentDecoration(normalizedDecoration);
+      void updateCvDocumentDecoration(normalizedDecoration);
     },
     [updateCvDocumentDecoration],
   );
 
   const handleCvDesignImageUpload = React.useCallback(
-    (file: File) => {
-      void readDocumentDecorationUpload(file)
-        .then((uploadedDecoration) => {
-          updateCvDocumentDecoration({
-            ...uploadedDecoration,
-            sizePreset: cvDocumentDecoration.sizePreset,
-            customSizeMm: cvDocumentDecoration.customSizeMm,
-            fit: cvDocumentDecoration.fit,
-            placementMode: cvDocumentDecoration.placementMode,
-            xMm: cvDocumentDecoration.xMm,
-            yMm: cvDocumentDecoration.yMm,
-            visible: true,
-          });
-        })
-        .catch((error: unknown) => {
-          showToast(
-            error instanceof Error ? error.message : "Could not upload this image.",
-            { variant: "error" },
-          );
+    (file: File, baseDecoration: DocumentDecoration = cvDocumentDecoration) => {
+      if (!currentCv) {
+        showToast("Load a CV before adding an image.", { variant: "error" });
+        return;
+      }
+
+      void (async () => {
+        if (file.size > DOCUMENT_DECORATION_MAX_FILE_BYTES) {
+          throw new Error("Decoration image must be 10 MB or smaller.");
+        }
+        const mimeType = resolveDocumentDecorationMimeType(file);
+        if (!mimeType) {
+          throw new Error("Use a PNG, JPG, or SVG image.");
+        }
+        const fileName = file.name.slice(0, 160);
+        const previewUrl =
+          typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
+            ? URL.createObjectURL(file)
+            : "";
+        revokeCvDecorationPreviewUrl();
+        cvDecorationPreviewUrlRef.current = previewUrl || null;
+        const pendingDecoration = normalizeDocumentDecoration({
+          ...createDefaultDocumentDecoration(),
+          visible: true,
+          source: "upload",
+          resolvedUrl: previewUrl || undefined,
+          fileName,
+          mimeType,
+          alt: fileName.replace(/\.[^.]+$/, "") || "Document decoration",
+          sizePreset: baseDecoration.sizePreset,
+          customSizeMm: baseDecoration.customSizeMm,
+          fit: baseDecoration.fit,
+          placementMode: baseDecoration.placementMode,
+          xMm: baseDecoration.xMm,
+          yMm: baseDecoration.yMm,
+          visible: true,
         });
+        setDraftCvDocumentDecoration(pendingDecoration);
+
+        const storageId = await uploadDocumentDecorationAsset({
+          generateUploadUrl: generateDocumentAssetUploadUrl,
+          file,
+          mimeType: pendingDecoration.mimeType,
+        });
+
+        const persistedDecoration = normalizeDocumentDecoration({
+          ...createDefaultDocumentDecoration(),
+          visible: true,
+          source: "upload",
+          assetId: storageId,
+          fileName,
+          mimeType: pendingDecoration.mimeType,
+          alt: pendingDecoration.alt,
+          sizePreset: pendingDecoration.sizePreset,
+          customSizeMm: pendingDecoration.customSizeMm,
+          fit: pendingDecoration.fit,
+          placementMode: pendingDecoration.placementMode,
+          xMm: pendingDecoration.xMm,
+          yMm: pendingDecoration.yMm,
+        });
+        await updateCvDocumentDecoration(persistedDecoration);
+        setDraftCvDocumentDecoration(null);
+        revokeCvDecorationPreviewUrl();
+      })().catch((error: unknown) => {
+        showToast(
+          error instanceof Error ? error.message : "Could not upload this image.",
+          { variant: "error" },
+        );
+      });
     },
-    [cvDocumentDecoration, showToast, updateCvDocumentDecoration],
+    [
+      currentCv,
+      cvDocumentDecoration,
+      generateDocumentAssetUploadUrl,
+      revokeCvDecorationPreviewUrl,
+      showToast,
+      updateCvDocumentDecoration,
+    ],
   );
 
   const cvDesignPanelRegistration = React.useMemo(
@@ -8280,6 +8405,7 @@ export function CvForge(): JSX.Element {
                     documentDecorationDesignMode={cvDesignOpen}
                     onDocumentDecorationChange={handleCvDocumentDecorationPreviewChange}
                     onDocumentDecorationCommit={handleCvDocumentDecorationPreviewCommit}
+                    onDocumentDecorationFileUpload={handleCvDesignImageUpload}
                     showStageZoomFooter={Boolean(currentCv)}
                     showPageCount={
                       workspaceMode === "preview" && Boolean(currentCv)

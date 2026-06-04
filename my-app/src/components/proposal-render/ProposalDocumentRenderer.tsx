@@ -3770,7 +3770,7 @@ function ProposalDocumentDecorationLayer({
       onPointerCancel={endInteraction}
     >
       <img
-        src={resolvedDecoration.dataUrl}
+        src={resolvedDecoration.dataUrl ?? resolvedDecoration.resolvedUrl}
         alt={resolvedDecoration.alt ?? ""}
         draggable={false}
       />

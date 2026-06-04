@@ -9,6 +9,7 @@ import {
   EDITORIAL_TEMPLATE_FLOWER_DECORATION_PLACEMENT,
   EDITORIAL_TEMPLATE_FLOWER_FILE_NAME,
   getDocumentDecorationRenderedSizeMm,
+  getRenderableDocumentDecoration,
   isSupportedDocumentDecorationMimeType,
   normalizeDocumentDecoration,
   readDocumentDecorationUpload,
@@ -55,6 +56,51 @@ describe("document-decoration", () => {
     expect(normalized.xMm).toBe(DEFAULT_DOCUMENT_DECORATION_PLACEMENT.xMm);
     expect(normalized.yMm).toBe(DEFAULT_DOCUMENT_DECORATION_PLACEMENT.yMm);
     expect(getDocumentDecorationRenderedSizeMm(normalized)).toBe(35);
+  });
+
+  it("renders with a resolved runtime URL when persisted storage has no data URL", () => {
+    const resolved = getRenderableDocumentDecoration({
+      visible: true,
+      source: "upload",
+      assetId: "storage_decoration_1",
+      resolvedUrl: "https://files.example.test/storage_decoration_1",
+      fileName: "mark.jpg",
+      mimeType: "image/jpeg",
+      alt: "Company mark",
+      sizePreset: 35,
+      fit: "contain",
+      placementMode: "custom",
+      xMm: 17,
+      yMm: 35,
+    } as any);
+
+    expect(resolved).toMatchObject({
+      visible: true,
+      assetId: "storage_decoration_1",
+      resolvedUrl: "https://files.example.test/storage_decoration_1",
+      mimeType: "image/jpeg",
+    });
+  });
+
+  it("preserves runtime missing asset state during normalization", () => {
+    const normalized = normalizeDocumentDecoration({
+      visible: true,
+      source: "upload",
+      assetId: "storage_missing",
+      assetMissing: true,
+      fileName: "missing.jpg",
+      mimeType: "image/jpeg",
+      sizePreset: 35,
+      fit: "contain",
+      placementMode: "default",
+    });
+
+    expect(normalized).toMatchObject({
+      assetId: "storage_missing",
+      assetMissing: true,
+      fileName: "missing.jpg",
+    });
+    expect(getRenderableDocumentDecoration(normalized)).toBeNull();
   });
 
   it("rounds and clamps custom sizes in millimeters", () => {

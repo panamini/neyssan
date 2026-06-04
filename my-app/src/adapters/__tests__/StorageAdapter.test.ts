@@ -11,6 +11,12 @@ import {
 } from "../cvDocumentPersistence";
 import { mapCvDocumentToResumeData } from "../../features/verbati/cvDocumentToResumeData";
 
+function byteSize(value: unknown): number {
+  return new TextEncoder().encode(
+    typeof value === "string" ? value : JSON.stringify(value),
+  ).length;
+}
+
 const richResponsibilitiesDoc = {
   type: "doc",
   content: [
@@ -162,6 +168,9 @@ describe("StorageAdapter persistence", () => {
     expect(isPersistedRemirrorJson(summary)).toBe(true);
     expect(isPersistedRemirrorJson(responsibilities)).toBe(true);
     expect(isPersistedRemirrorJson(projectDescription)).toBe(true);
+    expect(summary.plainText).toBeUndefined();
+    expect(responsibilities.plainText).toBeUndefined();
+    expect(projectDescription.plainText).toBeUndefined();
     expect(responsibilities.json).toContain("bullet_list");
     expect(responsibilities.json).toContain("bold");
     expect(JSON.stringify(payload.cvDocument)).not.toContain('"type":"doc"');
@@ -219,6 +228,253 @@ describe("StorageAdapter persistence", () => {
     expect(payload.sections).toBeUndefined();
     expect(payload.title).toBeUndefined();
     expect(payload.id).toBeUndefined();
+  });
+
+  it("does not duplicate large decoration data URLs between profile metadata and embedded cvDocument", async () => {
+    const patchMutation = vi.fn().mockResolvedValue(undefined);
+    const adapter = new ConvexStorageAdapter(patchMutation);
+    const cv = generateCvTemplateV1("Decorated Payload CV");
+    const dataUrl = `data:image/jpeg;base64,${"A".repeat(680 * 1024)}`;
+    cv.metadata.documentDecoration = {
+      visible: true,
+      source: "upload",
+      assetId: "storage_decoration_1",
+      dataUrl,
+      fileName: "large-mark.jpg",
+      mimeType: "image/jpeg",
+      alt: "Large mark",
+      sizePreset: "custom",
+      customSizeMm: 44,
+      fit: "contain",
+      placementMode: "custom",
+      xMm: 17,
+      yMm: 35,
+    };
+
+    await adapter.save(cv);
+
+    const payload = patchMutation.mock.calls[0][0].patch;
+    const topLevelDecoration = payload.metadata?.documentDecoration;
+    const embeddedDecoration = payload.cvDocument?.metadata?.documentDecoration;
+    expect(topLevelDecoration).toMatchObject({
+      visible: true,
+      source: "upload",
+      assetId: "storage_decoration_1",
+      fileName: "large-mark.jpg",
+      mimeType: "image/jpeg",
+      alt: "Large mark",
+      sizePreset: "custom",
+      customSizeMm: 44,
+      fit: "contain",
+      placementMode: "custom",
+      xMm: 17,
+      yMm: 35,
+    });
+    expect(topLevelDecoration?.dataUrl).toBeUndefined();
+    expect((topLevelDecoration as any)?.resolvedUrl).toBeUndefined();
+    expect(embeddedDecoration?.dataUrl).toBeUndefined();
+    expect((embeddedDecoration as any)?.resolvedUrl).toBeUndefined();
+    expect(JSON.stringify(payload)).not.toContain("data:image");
+    expect(byteSize(payload)).toBeLessThan(250 * 1024);
+  });
+
+  it("strips legacy profileImage data URLs from backend payloads and local durable cache", async () => {
+    const patchMutation = vi.fn().mockResolvedValue(undefined);
+    const adapter = new ConvexStorageAdapter(patchMutation);
+    const cv = generateCvTemplateV1("Legacy Profile Image CV");
+    const dataUrl = `data:image/jpeg;base64,${"A".repeat(680 * 1024)}`;
+    cv.metadata.profileImage = {
+      src: dataUrl,
+      fileName: "legacy-headshot.jpg",
+      size: "large",
+      fit: "cover",
+    };
+
+    await adapter.save(cv);
+
+    const payload = patchMutation.mock.calls[0][0].patch;
+    expect(payload.metadata?.profileImage).toEqual({
+      fileName: "legacy-headshot.jpg",
+      size: "large",
+      fit: "cover",
+    });
+    expect(payload.cvDocument?.metadata?.profileImage).toEqual({
+      fileName: "legacy-headshot.jpg",
+      size: "large",
+      fit: "cover",
+    });
+    expect(JSON.stringify(payload)).not.toContain("data:image");
+    expect(byteSize(payload)).toBeLessThan(250 * 1024);
+
+    const cachedDocument = JSON.parse(
+      window.localStorage.getItem(`cv:${cv.id}`) as string,
+    );
+    expect(JSON.stringify(cachedDocument)).not.toContain("data:image");
+    expect(cachedDocument.metadata.profileImage).toEqual({
+      fileName: "legacy-headshot.jpg",
+      size: "large",
+      fit: "cover",
+    });
+  });
+
+  it("strips nested cvDocument image data URLs from backend payloads and local durable cache", async () => {
+    const patchMutation = vi.fn().mockResolvedValue(undefined);
+    const adapter = new ConvexStorageAdapter(patchMutation);
+    const cv = generateCvTemplateV1("Nested Runtime Image CV");
+    const dataUrl = `data:image/png;base64,${"A".repeat(680 * 1024)}`;
+    cv.sections = [
+      {
+        id: "profile-photo",
+        type: "profile",
+        title: "Profile",
+        blocks: [
+          {
+            id: "profile-image-block",
+            type: "image",
+            content: {
+              type: "doc",
+              content: [
+                {
+                  type: "image",
+                  attrs: {
+                    src: dataUrl,
+                    alt: "Inline import image",
+                  },
+                },
+              ],
+            },
+          },
+        ],
+        structuredContent: [
+          {
+            id: "profile-photo-item",
+            name: "Nested Runtime",
+          },
+        ],
+      } as any,
+    ];
+
+    await adapter.save(cv);
+
+    const payload = patchMutation.mock.calls[0][0].patch;
+    expect(JSON.stringify(payload)).not.toContain("data:image");
+    expect(payload.cvDocument.sections[0].blocks).toEqual([]);
+    expect(byteSize(payload)).toBeLessThan(250 * 1024);
+
+    const cachedDocument = JSON.parse(
+      window.localStorage.getItem(`cv:${cv.id}`) as string,
+    );
+    expect(JSON.stringify(cachedDocument)).not.toContain("data:image");
+    expect(
+      cachedDocument.sections[0].blocks[0].content.content[0].attrs.src,
+    ).toBeUndefined();
+  });
+
+  it("strips only image data while preserving structured editor content in durable snapshots", async () => {
+    const patchMutation = vi.fn().mockResolvedValue(undefined);
+    const adapter = new ConvexStorageAdapter(patchMutation);
+    const cv = buildRichCv();
+    cv.metadata.documentDecoration = {
+      visible: true,
+      source: "upload",
+      assetId: "storage_editor_guard",
+      dataUrl: "data:image/png;base64,AAAA",
+      fileName: "mark.png",
+      mimeType: "image/png",
+      alt: "Mark",
+      sizePreset: "custom",
+      customSizeMm: 30,
+      fit: "contain",
+      placementMode: "custom",
+      xMm: 10,
+      yMm: 12,
+    } as any;
+    cv.sections[1].blocks = [
+      {
+        id: "experience-editor-block",
+        type: "text",
+        title: "Lead at Acme",
+        content: richResponsibilitiesDoc,
+        plainText: "Led delivery",
+        attributes: { linkedStructuredId: "exp-rich" },
+      } as any,
+    ];
+
+    await adapter.save(cv);
+
+    const payload = patchMutation.mock.calls[0][0].patch;
+    expect(JSON.stringify(payload)).not.toContain("data:image");
+    expect(payload.cvDocument.sections[0].structuredContent[0].summary.json).toContain(
+      "Bold summary",
+    );
+    expect(
+      payload.cvDocument.sections[1].structuredContent[0].responsibilities.json,
+    ).toContain("Shipped resilient workflows");
+
+    const cachedDocument = JSON.parse(
+      window.localStorage.getItem(`cv:${cv.id}`) as string,
+    );
+    expect(JSON.stringify(cachedDocument)).not.toContain("data:image");
+    expect(cachedDocument.sections[1].blocks).toHaveLength(1);
+    expect(
+      cachedDocument.sections[0].structuredContent[0].summary.content[0]
+        .content[0].text,
+    ).toBe("Bold summary");
+    expect(
+      cachedDocument.sections[1].structuredContent[0].responsibilities.content[1]
+        .content[0].content[0].content[0].text,
+    ).toBe("Shipped resilient workflows");
+  });
+
+  it("strips representative blocks from structured sections in backend payloads while keeping the local snapshot", async () => {
+    const patchMutation = vi.fn().mockResolvedValue(undefined);
+    const adapter = new ConvexStorageAdapter(patchMutation);
+    const cv = generateCvTemplateV1("Structured Block Duplicate CV");
+    const duplicateText = "Delivered operational improvements. ".repeat(6000);
+    cv.sections = [
+      {
+        id: "experience-structured",
+        type: "experience",
+        title: "Experience",
+        blocks: [
+          {
+            id: "duplicate-block",
+            type: "text",
+            content: {
+              type: "doc",
+              content: [
+                {
+                  type: "paragraph",
+                  content: [{ type: "text", text: duplicateText }],
+                },
+              ],
+            },
+          },
+        ],
+        structuredContent: [
+          {
+            id: "exp-structured",
+            company: "Acme",
+            position: "Lead",
+            startDate: "2024-01-01",
+            endDate: null,
+            responsibilities: duplicateText,
+          },
+        ],
+      } as any,
+    ];
+
+    await adapter.save(cv);
+
+    const payload = patchMutation.mock.calls[0][0].patch;
+    expect(payload.cvDocument.sections[0].structuredContent).toHaveLength(1);
+    expect(payload.cvDocument.sections[0].blocks).toEqual([]);
+    expect(byteSize(payload)).toBeLessThan(250 * 1024);
+
+    const cachedDocument = JSON.parse(
+      window.localStorage.getItem(`cv:${cv.id}`) as string,
+    );
+    expect(cachedDocument.sections[0].blocks).toHaveLength(1);
   });
 
   it("strips import recovery session from backend payloads while keeping the local runtime snapshot", async () => {
@@ -308,6 +564,21 @@ describe("StorageAdapter persistence", () => {
     );
   });
 
+  it("keeps a local snapshot and reports failure when Convex rejects an oversized remote value", async () => {
+    const patchMutation = vi.fn().mockRejectedValue(
+      new Error("Value is too large (1.04 MiB > maximum size 1 MiB)"),
+    );
+    const adapter = new ConvexStorageAdapter(patchMutation);
+    const cv = generateCvTemplateV1("Oversized Remote CV");
+
+    await expect(adapter.save(cv)).rejects.toThrow(/Value is too large/i);
+
+    expect(patchMutation).toHaveBeenCalledTimes(1);
+    expect(window.localStorage.getItem(`cv:${cv.id}`)).toContain(
+      "Oversized Remote CV",
+    );
+  });
+
   it("prefers the embedded cvDocument snapshot on remote restore", () => {
     const cv = generateCvTemplateV1("Embedded Remote CV");
 
@@ -324,6 +595,104 @@ describe("StorageAdapter persistence", () => {
     expect(restored?.id).toBe(cv.id);
     expect(restored?.title).toBe("Embedded Remote CV");
     expect(restored?.sections).toHaveLength(cv.sections.length);
+  });
+
+  it("overlays document decoration metadata without restoring runtime data URLs", () => {
+    const cv = generateCvTemplateV1("Embedded Decorated CV");
+
+    const restored = mapPersistedProfileToCvDocument(
+      {
+        profileId: cv.id,
+        cvDocument: cv,
+        metadata: {
+          documentDecoration: {
+            visible: true,
+            source: "upload",
+            dataUrl: "data:image/jpeg;base64,AAAA",
+            fileName: "mark.jpg",
+            mimeType: "image/jpeg",
+            alt: "Mark",
+            sizePreset: 35,
+            fit: "contain",
+            placementMode: "default",
+            xMm: 17,
+            yMm: 35,
+          },
+        },
+      },
+      cv.id,
+    );
+
+    expect(restored?.metadata.documentDecoration).toMatchObject({
+      visible: true,
+      fileName: "mark.jpg",
+      mimeType: "image/jpeg",
+    });
+    expect(restored?.metadata.documentDecoration?.dataUrl).toBeUndefined();
+    expect(JSON.stringify(restored)).not.toContain("data:image");
+  });
+
+  it("preserves resolved document decoration URLs in runtime state", async () => {
+    const cv = generateCvTemplateV1("Remote Resolved Image CV");
+    const adapter = new ConvexStorageAdapter(vi.fn(), async () =>
+      mapPersistedProfileToCvDocument(
+        {
+          profileId: cv.id,
+          cvDocument: cv,
+          metadata: {
+            documentDecoration: {
+              visible: true,
+              source: "upload",
+              assetId: "storage_decoration_1",
+              resolvedUrl: "https://files.example.test/storage_decoration_1",
+              fileName: "mark.jpg",
+              mimeType: "image/jpeg",
+              sizePreset: 35,
+              fit: "contain",
+              placementMode: "default",
+            },
+          },
+        },
+        cv.id,
+      ),
+    );
+
+    const loaded = await adapter.load(cv.id);
+
+    expect(loaded?.metadata.documentDecoration).toMatchObject({
+      assetId: "storage_decoration_1",
+      resolvedUrl: "https://files.example.test/storage_decoration_1",
+    });
+    expect(JSON.stringify(loaded)).not.toContain("data:image");
+  });
+
+  it("returns a runtime sanitized document when loading a remote profile with legacy image data", async () => {
+    const cv = generateCvTemplateV1("Remote Legacy Image CV");
+    cv.metadata.profileImage = {
+      src: `data:image/jpeg;base64,${"A".repeat(680 * 1024)}`,
+      fileName: "legacy-headshot.jpg",
+      size: "large",
+      fit: "cover",
+    };
+    const adapter = new ConvexStorageAdapter(vi.fn(), async () =>
+      mapPersistedProfileToCvDocument(
+        {
+          profileId: cv.id,
+          cvDocument: cv,
+        },
+        cv.id,
+      ),
+    );
+
+    const loaded = await adapter.load(cv.id);
+
+    expect(loaded).not.toBeNull();
+    expect(JSON.stringify(loaded)).not.toContain("data:image");
+    expect(loaded?.metadata.profileImage).toEqual({
+      fileName: "legacy-headshot.jpg",
+      size: "large",
+      fit: "cover",
+    });
   });
 
   it("falls back to profile-field reconstruction for older remote rows", () => {
@@ -474,6 +843,46 @@ describe("StorageAdapter persistence", () => {
       },
       documentStyleVersion: 1,
     });
+  });
+
+  it("saves document decoration metadata without sending cvDocument", async () => {
+    const patchMutation = vi.fn().mockResolvedValue(undefined);
+    const adapter = new ConvexStorageAdapter(patchMutation);
+
+    await adapter.saveMetadataPatch("decorated-cv", {
+      documentDecoration: {
+        visible: true,
+        source: "upload",
+        assetId: "storage_decoration_2",
+        dataUrl: `data:image/jpeg;base64,${"A".repeat(680 * 1024)}`,
+        resolvedUrl: "https://files.example.test/mark.jpg",
+        fileName: "mark.jpg",
+        mimeType: "image/jpeg",
+        alt: "Mark",
+        sizePreset: "custom",
+        customSizeMm: 48,
+        fit: "contain",
+        placementMode: "custom",
+        xMm: 17,
+        yMm: 35,
+      } as any,
+    } as any);
+
+    expect(patchMutation).toHaveBeenCalledTimes(1);
+    const payload = patchMutation.mock.calls[0][0].patch;
+    expect(payload.cvDocument).toBeUndefined();
+    expect(payload.metadata.documentDecoration).toMatchObject({
+      visible: true,
+      assetId: "storage_decoration_2",
+      fileName: "mark.jpg",
+      mimeType: "image/jpeg",
+      sizePreset: "custom",
+      customSizeMm: 48,
+      placementMode: "custom",
+    });
+    expect(payload.metadata.documentDecoration.dataUrl).toBeUndefined();
+    expect(payload.metadata.documentDecoration.resolvedUrl).toBeUndefined();
+    expect(JSON.stringify(payload)).not.toContain("data:image");
   });
 
   it("preserves the selected resume template through metadata-only save and backend reload hydration", async () => {

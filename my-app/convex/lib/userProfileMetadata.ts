@@ -116,6 +116,8 @@ export type UserProfileDocumentDecoration = {
   source: "upload";
   assetId?: string;
   dataUrl?: string;
+  resolvedUrl?: string;
+  assetMissing?: boolean;
   fileName?: string;
   mimeType?: "image/png" | "image/jpeg" | "image/svg+xml";
   alt?: string;
@@ -225,6 +227,8 @@ export const userProfileDocumentDecorationValidator = v.object({
   source: v.literal("upload"),
   assetId: v.optional(v.string()),
   dataUrl: v.optional(v.string()),
+  resolvedUrl: v.optional(v.string()),
+  assetMissing: v.optional(v.boolean()),
   fileName: v.optional(v.string()),
   mimeType: v.optional(
     v.union(

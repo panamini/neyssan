@@ -30,12 +30,10 @@ export function isPersistedRemirrorJson(value: unknown): value is PersistedRemir
 
 export function encodeCvDocumentForConvex<T>(value: T): T {
   if (isRawRemirrorDoc(value)) {
-    const plainText = remirrorJsonToString(value as any).replace(/\s+/g, " ").trim();
     return {
       kind: "remirror_json",
       version: 1,
       json: JSON.stringify(value),
-      ...(plainText ? { plainText } : {}),
     } as T;
   }
 

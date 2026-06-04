@@ -1,6 +1,7 @@
 import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";
+import { sanitizeRemoteMetadataImages } from "./lib/documentAssets";
 
 const proposalVoicePresetChoice = v.union(
   v.literal("signature"),
@@ -90,6 +91,7 @@ const proposalDocumentDecorationChoice = v.object({
   source: v.literal("upload"),
   assetId: v.optional(v.string()),
   dataUrl: v.optional(v.string()),
+  resolvedUrl: v.optional(v.string()),
   fileName: v.optional(v.string()),
   mimeType: v.optional(
     v.union(
@@ -251,7 +253,10 @@ export const storeProposal = internalMutation({
     }),
   },
   handler: async (ctx, args) => {
-    return ctx.db.insert("proposals", args);
+    return ctx.db.insert("proposals", {
+      ...args,
+      metadata: sanitizeRemoteMetadataImages(args.metadata) as typeof args.metadata,
+    });
   },
 });
 
@@ -372,6 +377,9 @@ export const updateProposal = internalMutation({
     const { id, ...updates } = args;
     return ctx.db.patch(id, {
       ...updates,
+      metadata: sanitizeRemoteMetadataImages(
+        updates.metadata,
+      ) as typeof updates.metadata,
       updatedAt: Date.now(),
     });
   },

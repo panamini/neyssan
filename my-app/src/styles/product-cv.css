@@ -5461,6 +5461,7 @@ span.dasti-cv-ats {
   .resume-preview-shell--single {
   display: grid;
   justify-items: center;
+  padding: 0;
 }
 
 .dasti-doc-viewer-shell:not(.dasti-doc-viewer-shell--resume-workspace)

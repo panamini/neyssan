@@ -4822,7 +4822,7 @@ function renderProposalDocumentDecoration(
     },
   );
 
-  return `<div class="dasti-proposal-document-decoration" data-design-mode="false" data-decoration-size-mm="${sizeMm}" style="left: ${xMm}mm; top: ${yMm}mm; width: ${sizeMm}mm; height: ${sizeMm}mm; --proposal-decoration-object-fit: ${resolvedDecoration.fit};"><img src="${escapeHtml(resolvedDecoration.dataUrl ?? "")}" alt="${escapeHtml(resolvedDecoration.alt ?? "")}" /></div>`;
+  return `<div class="dasti-proposal-document-decoration" data-design-mode="false" data-decoration-size-mm="${sizeMm}" style="left: ${xMm}mm; top: ${yMm}mm; width: ${sizeMm}mm; height: ${sizeMm}mm; --proposal-decoration-object-fit: ${resolvedDecoration.fit};"><img src="${escapeHtml(resolvedDecoration.dataUrl ?? resolvedDecoration.resolvedUrl ?? "")}" alt="${escapeHtml(resolvedDecoration.alt ?? "")}" /></div>`;
 }
 
 function appendProposalDocumentDecoration(

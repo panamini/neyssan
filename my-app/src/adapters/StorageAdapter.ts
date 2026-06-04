@@ -102,19 +102,223 @@ function isUnauthorizedProfileAccessError(error: unknown): boolean {
   return /not authorized to access this profile/i.test(message);
 }
 
+function isConvexValueTooLargeError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /Value is too large/i.test(message);
+}
+
+function sanitizeRemoteDocumentDecoration(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+
+  const {
+    dataUrl: _dataUrl,
+    resolvedUrl: _resolvedUrl,
+    assetMissing: _assetMissing,
+    ...decoration
+  } = value as Record<string, unknown>;
+  return decoration;
+}
+
+function sanitizeRuntimeDocumentDecoration(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+
+  const {
+    dataUrl: _dataUrl,
+    ...decoration
+  } = value as Record<string, unknown>;
+  return decoration;
+}
+
+function isImageDataUrl(value: unknown): value is string {
+  return typeof value === "string" && value.trim().startsWith("data:image/");
+}
+
+const REMOTE_RUNTIME_IMAGE_KEYS = new Set([
+  "dataUrl",
+  "resolvedUrl",
+  "imageDataUrl",
+  "assetMissing",
+]);
+
+const REMOTE_IMAGE_REFERENCE_KEYS = new Set([
+  "src",
+  "photoUrl",
+  "url",
+  "href",
+]);
+
+const STATE_RUNTIME_IMAGE_KEYS = new Set(["dataUrl", "imageDataUrl"]);
+
+function sanitizeRemoteRuntimeImages(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sanitizeRemoteRuntimeImages);
+  }
+
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const next: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (REMOTE_RUNTIME_IMAGE_KEYS.has(key)) {
+      continue;
+    }
+    if (REMOTE_IMAGE_REFERENCE_KEYS.has(key) && isImageDataUrl(entry)) {
+      continue;
+    }
+    if (
+      key === "json" &&
+      typeof entry === "string" &&
+      entry.includes("data:image")
+    ) {
+      try {
+        next[key] = JSON.stringify(sanitizeRemoteRuntimeImages(JSON.parse(entry)));
+      } catch {
+        next[key] = entry;
+      }
+      continue;
+    }
+    next[key] = sanitizeRemoteRuntimeImages(entry);
+  }
+  return next;
+}
+
+function sanitizeRuntimeStateImages(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sanitizeRuntimeStateImages);
+  }
+
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const next: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (STATE_RUNTIME_IMAGE_KEYS.has(key)) {
+      continue;
+    }
+    if (REMOTE_IMAGE_REFERENCE_KEYS.has(key) && isImageDataUrl(entry)) {
+      continue;
+    }
+    if (
+      key === "json" &&
+      typeof entry === "string" &&
+      entry.includes("data:image")
+    ) {
+      try {
+        next[key] = JSON.stringify(sanitizeRuntimeStateImages(JSON.parse(entry)));
+      } catch {
+        next[key] = entry;
+      }
+      continue;
+    }
+    next[key] = sanitizeRuntimeStateImages(entry);
+  }
+  return next;
+}
+
+function sanitizeRemoteMetadata(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+
+  const metadata = { ...(value as Record<string, unknown>) };
+  delete metadata.createdAt;
+  delete metadata.updatedAt;
+  delete metadata.version;
+  delete metadata.importRecoverySession;
+  delete metadata.authoritativeResume;
+
+  if (
+    metadata.profileImage &&
+    typeof metadata.profileImage === "object" &&
+    !Array.isArray(metadata.profileImage)
+  ) {
+    const profileImage = {
+      ...(metadata.profileImage as Record<string, unknown>),
+    };
+    if (
+      typeof profileImage.src === "string" &&
+      profileImage.src.trim().startsWith("data:")
+    ) {
+      delete profileImage.src;
+    }
+    metadata.profileImage = sanitizeRemoteRuntimeImages(profileImage);
+  }
+
+  if (metadata.documentDecoration !== undefined) {
+    metadata.documentDecoration = sanitizeRemoteDocumentDecoration(
+      metadata.documentDecoration,
+    );
+  }
+
+  return metadata;
+}
+
 function stripLargeBackendOnlyMetadata<T extends CvDocument>(cv: T): T {
   if (!cv.metadata || typeof cv.metadata !== "object") {
     return cv;
   }
 
-  const metadata = { ...(cv.metadata as Record<string, unknown>) };
-  delete metadata.importRecoverySession;
-  delete metadata.authoritativeResume;
+  const metadata = sanitizeRemoteMetadata(cv.metadata) as Record<
+    string,
+    unknown
+  >;
 
   return {
     ...cv,
     metadata,
   };
+}
+
+function stripStructuredSectionBlocksForRemote(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+
+  const cv = value as Record<string, unknown>;
+  if (!Array.isArray(cv.sections)) {
+    return cv;
+  }
+
+  return {
+    ...cv,
+    sections: cv.sections.map((section) => {
+      if (!section || typeof section !== "object" || Array.isArray(section)) {
+        return section;
+      }
+
+      const record = section as Record<string, unknown>;
+      const hasStructuredContent =
+        Array.isArray(record.structuredContent) &&
+        record.structuredContent.length > 0;
+      if (!hasStructuredContent || record.type === "text") {
+        return record;
+      }
+
+      return {
+        ...record,
+        blocks: [],
+      };
+    }),
+  };
+}
+
+function sanitizeRemoteCvDocument(cv: CvDocument): CvDocument {
+  const sanitized = sanitizeRemoteRuntimeImages(stripLargeBackendOnlyMetadata(cv));
+  return stripStructuredSectionBlocksForRemote(sanitized) as CvDocument;
+}
+
+function sanitizeLocalDurableCvDocument(cv: CvDocument): CvDocument {
+  return sanitizeRemoteRuntimeImages(cv) as CvDocument;
+}
+
+function sanitizeRuntimeCvDocumentForState(cv: CvDocument): CvDocument {
+  return sanitizeRuntimeStateImages(cv) as CvDocument;
 }
 
 function sanitizeBackendVerbatiStyle(value: unknown):
@@ -269,6 +473,12 @@ function overlayProfileMetadataPatch(
     metadata.documentIcons = rawMetadata.documentIcons;
   }
 
+  if (rawMetadata.documentDecoration !== undefined) {
+    metadata.documentDecoration = sanitizeRuntimeDocumentDecoration(
+      rawMetadata.documentDecoration,
+    );
+  }
+
   return {
     ...doc,
     metadata: metadata as CvDocument["metadata"],
@@ -289,11 +499,14 @@ export function mapPersistedProfileToCvDocument(
       decodeCvDocumentFromConvex(embeddedDocument);
     const embeddedResult = safeParseCvDocument(decodedEmbeddedDocument);
     if (embeddedResult.ok) {
-      return overlayProfileMetadataPatch(embeddedResult.value, rawProfile);
+      return sanitizeRuntimeCvDocumentForState(
+        overlayProfileMetadataPatch(embeddedResult.value, rawProfile),
+      );
     }
   }
 
-  return mapProfileToCvDocument(rawProfile, profileId);
+  const mapped = mapProfileToCvDocument(rawProfile, profileId);
+  return mapped ? sanitizeRuntimeCvDocumentForState(mapped) : null;
 }
 
 /* -------------------- ConvexStorageAdapter -------------------- */
@@ -331,9 +544,10 @@ export class ConvexStorageAdapter {
         | "verbatiStyleBaseSnapshot"
         | "documentStyleVersion"
         | "documentIcons"
+        | "documentDecoration"
       >
     >,
-  ): Promise<void> {
+  ): Promise<any> {
     const metadata: Record<string, unknown> = {};
     if (metadataPatch?.verbatiStyle !== undefined) {
       const verbatiStyle = sanitizeBackendVerbatiStyle(
@@ -354,9 +568,14 @@ export class ConvexStorageAdapter {
     if (metadataPatch?.documentIcons !== undefined) {
       metadata.documentIcons = metadataPatch.documentIcons;
     }
+    if (metadataPatch?.documentDecoration !== undefined) {
+      metadata.documentDecoration = sanitizeRemoteDocumentDecoration(
+        metadataPatch.documentDecoration,
+      );
+    }
 
     try {
-      await this._patchMutation({
+      return await this._patchMutation({
         profileId: cvId,
         patch: { metadata },
       });
@@ -372,6 +591,7 @@ export class ConvexStorageAdapter {
       } catch {
         /* noop */
       }
+      return undefined;
     }
   }
 
@@ -386,13 +606,7 @@ export class ConvexStorageAdapter {
     // does not accept (e.g., metadata.createdAt). Keep a copy for local caching.
     const backendPayload: any = {};
     if (cv.metadata && typeof cv.metadata === "object") {
-      // shallow clone metadata and remove fields that the backend validator does not accept
-      const md = { ...cv.metadata } as Record<string, any>;
-      delete md.createdAt;
-      delete md.updatedAt;
-      delete md.version;
-      delete md.importRecoverySession;
-      delete md.authoritativeResume;
+      const md = sanitizeRemoteMetadata(cv.metadata) as Record<string, any>;
       if ("verbatiStyle" in md) {
         md.verbatiStyle = sanitizeBackendVerbatiStyle(md.verbatiStyle);
         if (
@@ -411,7 +625,7 @@ export class ConvexStorageAdapter {
       backendPayload.metadata = md;
     }
     backendPayload.cvDocument = encodeCvDocumentForConvex(
-      stripLargeBackendOnlyMetadata(cv),
+      sanitizeRemoteCvDocument(cv),
     );
 
     // Instrument: record metadata keys and short stack to in-app debug stream before mutation
@@ -433,6 +647,8 @@ export class ConvexStorageAdapter {
       /* noop */
     }
 
+    let remoteSaveError: unknown = null;
+
     // Convex mutation with backend-shaped payload
     try {
       await this._patchMutation({
@@ -440,26 +656,34 @@ export class ConvexStorageAdapter {
         patch: backendPayload,
       });
     } catch (error) {
-      if (!isUnauthorizedProfileAccessError(error)) {
-        throw error;
-      }
+      remoteSaveError = error;
 
       try {
-        dbg("[ConvexStorageAdapter] unauthorized remote save skipped", {
+        dbg("[ConvexStorageAdapter] remote save skipped", {
           docId: cv.id,
+          reason: isConvexValueTooLargeError(error)
+            ? "convex_value_too_large"
+            : "unauthorized",
         });
       } catch {
         /* noop */
       }
     }
 
-    // SSR-safe localStorage - cache the original cv (not the backend-mapped payload)
+    // SSR-safe localStorage - cache durable state only, never runtime image previews.
     try {
       if (hasLocalStorage()) {
-        writeLocalCvCache(cv.id, serialize(cv));
+        writeLocalCvCache(cv.id, serialize(sanitizeLocalDurableCvDocument(cv)));
       }
     } catch {
       // ignore
+    }
+
+    if (
+      remoteSaveError &&
+      !isUnauthorizedProfileAccessError(remoteSaveError)
+    ) {
+      throw remoteSaveError;
     }
   }
 
@@ -471,7 +695,7 @@ export class ConvexStorageAdapter {
     if (this._loadFn) {
       try {
         const doc = await this._loadFn(id);
-        if (doc) return doc;
+        if (doc) return sanitizeRuntimeCvDocumentForState(doc);
       } catch {
         // fallback
       }
@@ -491,7 +715,10 @@ export class ConvexStorageAdapter {
           try {
             parseCvDocumentStrict(mapped);
             if (hasLocalStorage())
-              writeLocalCvCache(mapped.id, serialize(mapped));
+              writeLocalCvCache(
+                mapped.id,
+                serialize(sanitizeLocalDurableCvDocument(mapped)),
+              );
             return mapped;
           } catch {
             // invalid mapping, ignore
@@ -510,14 +737,21 @@ export class ConvexStorageAdapter {
         const parsed = deserialize(raw);
         if (!parsed) return null;
         parseCvDocumentStrict(parsed as any);
-        return parsed;
+        const durableParsed = sanitizeLocalDurableCvDocument(parsed);
+        if (serialize(durableParsed) !== serialize(parsed)) {
+          writeLocalCvCache(id, serialize(durableParsed));
+        }
+        return durableParsed;
       }
     } catch {
       // ignore
     }
 
     // Fallback in-memory
-    return deserialize(inMemoryStore[getLocalCvDocumentStorageKey(id)] ?? null);
+    const memoryDocument = deserialize(
+      inMemoryStore[getLocalCvDocumentStorageKey(id)] ?? null,
+    );
+    return memoryDocument ? sanitizeLocalDurableCvDocument(memoryDocument) : null;
   }
 
   /**

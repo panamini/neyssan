@@ -238,6 +238,219 @@ describe("profiles.patch resume scoring sync", () => {
     expect(ctx.db.patch.mock.calls[0][1].cvDocument).toBeUndefined();
   });
 
+  it("strips legacy profileImage metadata from server-side patch writes", async () => {
+    const existing = {
+      _id: "profile_doc_id",
+      _creationTime: 100,
+      profileId: "cv_content",
+      clerkId: "clerk_123",
+      email: "candidate@example.com",
+      version: 1,
+      createdAt: 100,
+      updatedAt: 100,
+      skills: [],
+      keywords: [],
+      experience: [],
+      raw_text: "",
+      summary: "",
+      metadata: {
+        source: "legacy-import",
+        profileImage: {
+          src: "data:image/jpeg;base64,OLD",
+          fileName: "old.jpg",
+        },
+      },
+    };
+    const ctx = makePatchCtx([existing]);
+
+    await patchProfile._handler(
+      ctx as any,
+      {
+        profileId: "cv_content",
+        patch: {
+          metadata: {
+            profileImage: {
+              src: `data:image/jpeg;base64,${"A".repeat(680 * 1024)}`,
+              fileName: "new.jpg",
+            },
+            verbatiStyle: {
+              layout: "workshop",
+              typography: "geist-baskervville",
+              palette: "sauge",
+            },
+          },
+        },
+      },
+    );
+
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "profile_doc_id",
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          source: "legacy-import",
+          verbatiStyle: {
+            layout: "workshop",
+            typography: "geist-baskervville",
+            palette: "sauge",
+          },
+        }),
+      }),
+    );
+    expect(ctx.db.patch.mock.calls[0][1].metadata.profileImage).toEqual({
+      fileName: "new.jpg",
+    });
+    expect(
+      JSON.stringify(ctx.db.patch.mock.calls[0][1].metadata),
+    ).not.toContain("data:image");
+  });
+
+  it("strips decoration runtime image URLs from server-side patch writes while keeping asset metadata", async () => {
+    const existing = {
+      _id: "profile_doc_id",
+      _creationTime: 100,
+      profileId: "cv_content",
+      clerkId: "clerk_123",
+      email: "candidate@example.com",
+      version: 1,
+      createdAt: 100,
+      updatedAt: 100,
+      skills: [],
+      keywords: [],
+      experience: [],
+      raw_text: "",
+      summary: "",
+      metadata: {
+        source: "legacy-import",
+        documentDecoration: {
+          visible: true,
+          source: "upload",
+          assetId: "storage_old",
+          dataUrl: "data:image/jpeg;base64,OLD",
+          resolvedUrl: "https://files.example.test/old",
+          fileName: "old.jpg",
+          mimeType: "image/jpeg",
+          alt: "Old",
+          sizePreset: 35,
+          fit: "contain",
+          placementMode: "custom",
+          xMm: 17,
+          yMm: 35,
+        },
+      },
+    };
+    const ctx = makePatchCtx([existing]);
+
+    await patchProfile._handler(
+      ctx as any,
+      {
+        profileId: "cv_content",
+        patch: {
+          metadata: {
+            documentDecoration: {
+              visible: true,
+              source: "upload",
+              assetId: "storage_new",
+              dataUrl: `data:image/jpeg;base64,${"A".repeat(680 * 1024)}`,
+              resolvedUrl: "https://files.example.test/new",
+              fileName: "new.jpg",
+              mimeType: "image/jpeg",
+              alt: "New",
+              sizePreset: "custom",
+              customSizeMm: 44,
+              fit: "cover",
+              placementMode: "custom",
+              xMm: 21,
+              yMm: 39,
+            },
+          },
+        },
+      },
+    );
+
+    const writtenDecoration =
+      ctx.db.patch.mock.calls[0][1].metadata.documentDecoration;
+    expect(writtenDecoration).toMatchObject({
+      visible: true,
+      assetId: "storage_new",
+      fileName: "new.jpg",
+      mimeType: "image/jpeg",
+      alt: "New",
+      sizePreset: "custom",
+      customSizeMm: 44,
+      fit: "cover",
+      placementMode: "custom",
+      xMm: 21,
+      yMm: 39,
+    });
+    expect(writtenDecoration.dataUrl).toBeUndefined();
+    expect(writtenDecoration.resolvedUrl).toBeUndefined();
+  });
+
+  it("strips nested encoded cvDocument image data URLs from server-side patch writes", async () => {
+    const existing = {
+      _id: "profile_doc_id",
+      _creationTime: 100,
+      profileId: "cv_content",
+      clerkId: "clerk_123",
+      email: "candidate@example.com",
+      version: 1,
+      createdAt: 100,
+      updatedAt: 100,
+      skills: [],
+      keywords: [],
+      experience: [],
+      raw_text: "",
+      summary: "",
+    };
+    const ctx = makePatchCtx([existing]);
+    const dataUrl = `data:image/png;base64,${"A".repeat(680 * 1024)}`;
+
+    await patchProfile._handler(
+      ctx as any,
+      {
+        profileId: "cv_content",
+        patch: {
+          cvDocument: {
+            id: "cv_content",
+            title: "Nested image",
+            metadata: {},
+            sections: [
+              {
+                id: "image-section",
+                type: "profile",
+                title: "Profile",
+                blocks: [
+                  {
+                    id: "image-block",
+                    type: "image",
+                    content: {
+                      kind: "remirror_json",
+                      version: 1,
+                      json: JSON.stringify({
+                        type: "doc",
+                        content: [
+                          {
+                            type: "image",
+                            attrs: { src: dataUrl, alt: "Nested" },
+                          },
+                        ],
+                      }),
+                    },
+                  },
+                ],
+                structuredContent: [{ id: "profile", name: "Nested" }],
+              },
+            ],
+          },
+        },
+      },
+    );
+
+    const cvDocument = ctx.db.patch.mock.calls[0][1].cvDocument;
+    expect(JSON.stringify(cvDocument)).not.toContain("data:image");
+    expect(cvDocument.sections[0].blocks).toEqual([]);
+  });
+
   it("populates server scoring fields when creating a profile from patch-only CV save", async () => {
     const ctx = makePatchCtx([]);
 
