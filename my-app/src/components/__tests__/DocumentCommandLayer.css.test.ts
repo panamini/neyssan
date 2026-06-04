@@ -18,6 +18,16 @@ function getCssRuleBlock(source: string, selector: string): string {
   return end === -1 ? "" : source.slice(start, end + 1);
 }
 
+function getCssSlice(source: string, startSelector: string, endSelector: string): string {
+  const start = source.indexOf(`\n${startSelector} {`);
+  const end = source.indexOf(`\n${endSelector} {`, start);
+
+  expect(start).toBeGreaterThanOrEqual(0);
+  expect(end).toBeGreaterThan(start);
+
+  return source.slice(start, end);
+}
+
 describe("Document command layer CSS", () => {
   it("reserves the same top gutter above the first page in Proposal and CV", () => {
     const proposalStage = getCssRuleBlock(
@@ -46,5 +56,39 @@ describe("Document command layer CSS", () => {
     expect(productProposalCss).toMatch(
       /\.dasti-proposal-skeleton-stage__primary-action--draft\[data-source-context="true"\][\s\S]*\.dasti-proposal-skeleton-stage__action-label\s*\{[\s\S]*display:\s*none;/,
     );
+  });
+
+  it("keeps CV and Proposal image-control chrome off document paper surfaces", () => {
+    const cvImageControls = getCssSlice(
+      productCvCss,
+      ".dasti-cv-design-image",
+      ".dasti-cv-rail-secondary-action",
+    );
+    const proposalImageControls = getCssSlice(
+      productProposalCss,
+      ".dasti-proposal-design-image",
+      ".dasti-proposal-design-fields__decorations",
+    );
+
+    expect(cvImageControls).toMatch(
+      /--cv-design-image-control-surface:\s*var\(--sf2\);/,
+    );
+    expect(cvImageControls).toMatch(
+      /--cv-design-image-control-track:\s*var\(--sf2\);/,
+    );
+    expect(cvImageControls).toMatch(
+      /--cv-design-image-control-selected:\s*var\(--sf1\);/,
+    );
+    expect(proposalImageControls).toMatch(
+      /--proposal-design-image-control-surface:\s*var\(--sf2\);/,
+    );
+    expect(proposalImageControls).toMatch(
+      /--proposal-design-image-control-track:\s*var\(--sf2\);/,
+    );
+    expect(proposalImageControls).toMatch(
+      /--proposal-design-image-control-selected:\s*var\(--sf1\);/,
+    );
+    expect(cvImageControls).not.toMatch(/background:\s*var\(--paper\)/);
+    expect(proposalImageControls).not.toMatch(/background:\s*var\(--paper\)/);
   });
 });

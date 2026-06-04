@@ -1905,6 +1905,9 @@ span.dasti-cv-ats {
 }
 
 .dasti-cv-design-image {
+  --cv-design-image-control-surface: var(--sf2);
+  --cv-design-image-control-track: var(--sf2);
+  --cv-design-image-control-selected: var(--sf1);
   position: relative;
   display: grid;
   gap: var(--space-2);
@@ -1949,7 +1952,7 @@ span.dasti-cv-ats {
   display: grid;
   place-items: center;
   border-radius: var(--radius-control);
-  background: var(--paper);
+  background: var(--cv-design-image-control-surface);
   color: var(--ac);
   border: 1px solid var(--border-soft);
 }
@@ -1994,7 +1997,7 @@ span.dasti-cv-ats {
   overflow: hidden;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-control);
-  background: var(--paper);
+  background: var(--cv-design-image-control-surface);
   cursor: pointer;
 }
 
@@ -2019,7 +2022,7 @@ span.dasti-cv-ats {
 .dasti-cv-design-image__inspect {
   min-height: 28px;
   padding-inline: var(--space-3);
-  background: var(--paper);
+  background: var(--cv-design-image-control-surface);
   color: var(--ti);
 }
 
@@ -2068,7 +2071,7 @@ span.dasti-cv-ats {
   padding: 3px;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-pill);
-  background: var(--paper);
+  background: var(--cv-design-image-control-track);
 }
 
 .dasti-cv-design-image__segments button {
@@ -2079,9 +2082,9 @@ span.dasti-cv-ats {
 }
 
 .dasti-cv-design-image__segments button[data-selected="true"] {
-  background: var(--sf1);
+  background: var(--cv-design-image-control-selected);
   color: var(--ti);
-  border-color: var(--border-soft);
+  border-color: var(--border-strong);
 }
 
 .dasti-cv-design-image__replace,
@@ -2096,7 +2099,7 @@ span.dasti-cv-ats {
 }
 
 .dasti-cv-design-image__replace {
-  background: var(--paper);
+  background: var(--cv-design-image-control-surface);
   color: var(--ti);
 }
 
