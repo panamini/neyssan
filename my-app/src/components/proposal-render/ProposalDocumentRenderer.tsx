@@ -4090,6 +4090,29 @@ export function ProposalDocumentRenderer({
       }) as React.CSSProperties,
     [resolvedDocumentIconSettings.color, resolvedDocumentIconSettings.sizePt],
   );
+  const renderListMarkerContent = React.useCallback(
+    (
+      markerIcon: ReturnType<typeof getDocumentIcon>,
+      itemMarkerType: "dot" | "dash" | "icon",
+    ) =>
+      markerIcon ? (
+        <span
+          className="dasti-proposal-document__list-marker-content"
+          aria-hidden="true"
+          dangerouslySetInnerHTML={{
+            __html: markerIcon.svg,
+          }}
+        />
+      ) : (
+        <span
+          className="dasti-proposal-document__list-marker-content"
+          aria-hidden="true"
+        >
+          {renderListMarkerGlyph(itemMarkerType === "dash" ? "dash" : "dot")}
+        </span>
+      ),
+    [renderListMarkerGlyph],
+  );
   const [activeListItemIconPicker, setActiveListItemIconPicker] =
     React.useState<{ blockId: string; itemId: string } | null>(null);
 
@@ -4649,8 +4672,18 @@ export function ProposalDocumentRenderer({
                     }
                     data-has-item-icon={itemIcon ? "true" : undefined}
                   >
-                    {isTextEditable ? (
-                      <span className="dasti-proposal-document__list-marker dasti-proposal-document__list-marker--editable">
+                    <span
+                      className={[
+                        "dasti-proposal-document__list-marker",
+                        isTextEditable
+                          ? "dasti-proposal-document__list-marker--editable"
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      aria-hidden={isTextEditable ? undefined : "true"}
+                    >
+                      {isTextEditable ? (
                         <button
                           type="button"
                           className="dasti-proposal-document__list-icon-trigger"
@@ -4667,19 +4700,11 @@ export function ProposalDocumentRenderer({
                             )
                           }
                         >
-                          {markerIcon ? (
-                            <span
-                              aria-hidden="true"
-                              dangerouslySetInnerHTML={{
-                                __html: markerIcon.svg,
-                              }}
-                            />
-                          ) : (
-                            renderListMarkerGlyph(
-                              itemMarkerType === "dash" ? "dash" : "dot",
-                            )
-                          )}
+                          {renderListMarkerContent(markerIcon, itemMarkerType)}
                         </button>
+                      ) : (
+                        renderListMarkerContent(markerIcon, itemMarkerType)
+                      )}
                         {isPickerOpen ? (
                           <div
                             className="dasti-proposal-document__list-icon-picker"
@@ -4713,25 +4738,7 @@ export function ProposalDocumentRenderer({
                             </div>
                           </div>
                         ) : null}
-                      </span>
-                    ) : markerIcon ? (
-                      <span
-                        className="dasti-proposal-document__list-marker"
-                        aria-hidden="true"
-                        dangerouslySetInnerHTML={{
-                          __html: markerIcon.svg,
-                        }}
-                      />
-                    ) : (
-                      <span
-                        className="dasti-proposal-document__list-marker"
-                        aria-hidden="true"
-                      >
-                        {renderListMarkerGlyph(
-                          itemMarkerType === "dash" ? "dash" : "dot",
-                        )}
-                      </span>
-                    )}
+                    </span>
                     <span
                       {...(getEditableBlockTextProps(
                         {
@@ -4781,6 +4788,7 @@ export function ProposalDocumentRenderer({
       listMarkerStyle,
       listMarkerType,
       onProposalDocumentChange,
+      renderListMarkerContent,
       renderSignature,
     ],
   );
@@ -5062,18 +5070,7 @@ export function ProposalDocumentRenderer({
                             )
                           }
                         >
-                          {markerIcon ? (
-                            <span
-                              aria-hidden="true"
-                              dangerouslySetInnerHTML={{
-                                __html: markerIcon.svg,
-                              }}
-                            />
-                          ) : (
-                            renderListMarkerGlyph(
-                              itemMarkerType === "dash" ? "dash" : "dot",
-                            )
-                          )}
+                          {renderListMarkerContent(markerIcon, itemMarkerType)}
                         </button>
                         {isPickerOpen ? (
                           <div
@@ -5139,6 +5136,7 @@ export function ProposalDocumentRenderer({
       listMarkerStyle,
       listMarkerType,
       onProposalDocumentChange,
+      renderListMarkerContent,
       renderDocumentBlock,
       splitEditableDocumentTarget,
       structuredDocument,

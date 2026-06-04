@@ -93,7 +93,9 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     );
 
     const marker = container.querySelector(".dasti-proposal-document__list-marker");
-    const stroke = marker?.querySelector("span");
+    const stroke = marker?.querySelector(
+      ".dasti-proposal-document__list-marker-content > span",
+    );
 
     expect(marker?.querySelector("svg")).toBeNull();
     expect(marker?.textContent).toBe("");
@@ -231,6 +233,123 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     expect(globalIcon).not.toBeNull();
     expect(marker?.innerHTML).toContain(overrideIcon!.svg);
     expect(marker?.innerHTML).not.toContain(globalIcon!.svg);
+  });
+
+  it("uses the same list marker frame in readonly and editable preview modes", () => {
+    const sharedProps = {
+      content: "- Same marker frame",
+      proposalType: "cover_letter" as const,
+      templateId: "swiss_margin" as const,
+      documentTypography: {
+        fontFamily: "Georgia, serif",
+        fontSize: "14px",
+        lineHeight: 1.5,
+        fontWeight: 400,
+        letterSpacing: "0em",
+      },
+      documentIconSettings: {
+        listMarkerType: "icon" as const,
+        defaultListMarkerKey: "star",
+        sectionHeadingIconMode: "none" as const,
+        sectionIconMap: {},
+        color: "accent" as const,
+        sizePt: 12 as const,
+      },
+    };
+    const readonly = render(<ProposalDocumentRenderer {...sharedProps} />);
+    const editable = render(
+      <ProposalDocumentRenderer
+        {...sharedProps}
+        onProposalDocumentChange={vi.fn()}
+      />,
+    );
+
+    const readonlyMarker = readonly.container.querySelector(
+      ".dasti-proposal-document__list-marker",
+    );
+    const editableMarker = editable.container.querySelector(
+      ".dasti-proposal-document__list-marker",
+    );
+    const editableTrigger = editable.container.querySelector(
+      ".dasti-proposal-document__list-icon-trigger",
+    );
+    const editableTriggerFrame = editableTrigger?.closest(
+      ".dasti-proposal-document__list-marker",
+    );
+
+    expect(readonlyMarker).toBeTruthy();
+    expect(editableMarker).toBeTruthy();
+    expect(readonlyMarker?.classList.contains(
+      "dasti-proposal-document__list-marker",
+    )).toBe(true);
+    expect(editableMarker?.classList.contains(
+      "dasti-proposal-document__list-marker",
+    )).toBe(true);
+    expect(readonlyMarker?.querySelector(
+      ".dasti-proposal-document__list-marker-content",
+    )).toBeTruthy();
+    expect(editableMarker?.querySelector(
+      ".dasti-proposal-document__list-marker-content",
+    )).toBeTruthy();
+    expect(editableTriggerFrame?.querySelector(
+      ".dasti-proposal-document__list-marker-content",
+    )).toBeTruthy();
+    expect(readonlyMarker?.querySelector("button")).toBeNull();
+  });
+
+  it("uses the global list marker only when no item override exists", () => {
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content=""
+        proposalType="cover_letter"
+        templateId="swiss_margin"
+        proposalDocument={{
+          schemaVersion: 1,
+          kind: "letter",
+          source: "structured",
+          blocks: [
+            {
+              id: "l",
+              type: "list",
+              items: [
+                { id: "i1", text: "Global default" },
+                {
+                  id: "i2",
+                  text: "Item override",
+                  marker: { type: "icon", iconKey: "briefcase" },
+                },
+              ],
+            },
+          ],
+        }}
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        documentIconSettings={{
+          listMarkerType: "icon",
+          defaultListMarkerKey: "star",
+          sectionHeadingIconMode: "none",
+          sectionIconMap: {},
+          color: "accent",
+          sizePt: 10,
+        }}
+      />,
+    );
+
+    const markers = container.querySelectorAll(".dasti-proposal-document__list-marker");
+    const globalIcon = getDocumentIcon("star");
+    const overrideIcon = getDocumentIcon("briefcase");
+
+    expect(globalIcon).not.toBeNull();
+    expect(overrideIcon).not.toBeNull();
+    expect(markers[0]?.innerHTML).toContain(globalIcon!.svg);
+    expect(markers[0]?.innerHTML).not.toContain(overrideIcon!.svg);
+    expect(markers[1]?.innerHTML).toContain(overrideIcon!.svg);
+    expect(markers[1]?.innerHTML).not.toContain(globalIcon!.svg);
   });
 
   it("does not duplicate full rich text onto the first pagination fragment", () => {
