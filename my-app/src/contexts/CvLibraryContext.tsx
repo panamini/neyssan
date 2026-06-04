@@ -929,7 +929,16 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     isAuthenticated: isConvexAuthenticated,
     isLoading: isConvexAuthLoading,
   } = useConvexAuth();
-  const adapter = useConvexStorageAdapter();
+  const canUseRemoteCv =
+    Boolean(isAuthLoaded) &&
+    Boolean(isSignedIn) &&
+    Boolean(isConvexAuthenticated) &&
+    !isConvexAuthLoading;
+  const canUseRemoteCvRef = useRef(canUseRemoteCv);
+  useEffect(() => {
+    canUseRemoteCvRef.current = canUseRemoteCv;
+  }, [canUseRemoteCv]);
+  const adapter = useConvexStorageAdapter(() => canUseRemoteCvRef.current);
   const setActiveCvSnapshot = useMutation(api.activeCvSnapshots.setCurrent);
 
   const [cvs, setCvs] = useState<CvDocument[]>(() => {
@@ -959,6 +968,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   });
   const pendingActiveRestoreIdRef = useRef<string | null>(null);
   const failedActiveRestoreIdsRef = useRef<Set<string>>(new Set());
+  const routeRemoteRefreshKeyRef = useRef<string | null>(null);
   const cvsRef = useRef<CvDocument[]>(cvs);
   const currentCvRef = useRef<CvDocument | null>(null);
   const pendingSwitchTargetRef = useRef<string | null>(null);
@@ -1411,6 +1421,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   // Track last saved snapshot for dirty detection.
   const lastSavedRef = useRef<CvDocument | null>(null);
   const isDirtyRef = useRef<boolean>(false);
+  const pendingRemoteSaveRef = useRef<CvDocument | null>(null);
 
   // Debounce machinery for saves
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2264,6 +2275,26 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
           version: (normalizedCore.metadata?.version ?? 0) + 1,
         },
       };
+
+      if (!canUseRemoteCvRef.current) {
+        pendingRemoteSaveRef.current = docCopy;
+        try {
+          setCvs((prev) =>
+            prev.map((doc) =>
+              String(doc.id) === String(docCopy.id) ? docCopy : doc,
+            ),
+          );
+        } catch {
+          /* noop */
+        }
+        cacheDocumentLocally(docCopy);
+        setRemoteSaveStatus({ status: "idle" });
+        dbg("[CvLibraryContext] performSave: remote save deferred until Convex auth is ready", {
+          docId: docCopy.id,
+        });
+        return;
+      }
+
       dbg(
         "[CvLibraryContext] performSave authoritative snapshot",
         buildAuthoritativeResumeDebugSnapshot({
@@ -3166,6 +3197,89 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     loadCv,
   ]);
 
+  useEffect(() => {
+    if (!canUseRemoteCv || !currentCv) {
+      return;
+    }
+    const requestedRouteCvId = readRequestedCvIdFromWindowLocation();
+    if (!requestedRouteCvId || String(currentCv.id) !== requestedRouteCvId) {
+      return;
+    }
+    const refreshKey = `${requestedRouteCvId}:${currentCv.metadata?.updatedAt ?? ""}`;
+    if (routeRemoteRefreshKeyRef.current === refreshKey) {
+      return;
+    }
+    routeRemoteRefreshKeyRef.current = refreshKey;
+
+    const localBaseline = currentCv;
+    void (async () => {
+      try {
+        const remoteState = await adapter.loadRemoteState(requestedRouteCvId);
+        if (remoteState.status !== "ok") return;
+        const remoteLoaded = remoteState.document;
+        let migratedRemote: CvDocument;
+        try {
+          migratedRemote = migrateLegacyIds(remoteLoaded as CvDocument);
+        } catch {
+          migratedRemote = remoteLoaded as CvDocument;
+        }
+        const remoteNorm = ensureRepresentativeBlocks(
+          normalizeToV1Document(migratedRemote as CvDocument),
+        );
+        if (
+          !shouldApplyBackgroundRefresh(
+            requestedRouteCvId,
+            localBaseline,
+            remoteNorm,
+          )
+        ) {
+          return;
+        }
+        if (
+          readRequestedCvIdFromWindowLocation() !== requestedRouteCvId ||
+          String(currentCvRef.current?.id ?? "") !== requestedRouteCvId
+        ) {
+          return;
+        }
+        const remoteWithLocalVisualTemplate =
+          preserveLocalResumeTemplateWhenRemoteIsImplicit(
+            remoteNorm,
+            currentCvRef.current ?? localBaseline,
+          );
+        if (
+          deepEqual(
+            stripMetadata(currentCvRef.current ?? localBaseline),
+            stripMetadata(remoteWithLocalVisualTemplate),
+          ) &&
+          deepEqual(
+            (currentCvRef.current ?? localBaseline).metadata ?? null,
+            remoteWithLocalVisualTemplate.metadata ?? null,
+          )
+        ) {
+          return;
+        }
+        safeSetCurrentCv(remoteWithLocalVisualTemplate);
+        setCvs((prev) => {
+          const exists = prev.some(
+            (doc) => String(doc.id) === String(remoteWithLocalVisualTemplate.id),
+          );
+          if (exists) {
+            return prev.map((doc) =>
+              String(doc.id) === String(remoteWithLocalVisualTemplate.id)
+                ? remoteWithLocalVisualTemplate
+                : doc,
+            );
+          }
+          return [...prev, remoteWithLocalVisualTemplate];
+        });
+        cacheDocumentLocally(remoteWithLocalVisualTemplate);
+        lastSavedRef.current = remoteWithLocalVisualTemplate;
+      } catch (error) {
+        console.warn("[CvLibraryContext] route remote refresh failed", error);
+      }
+    })();
+  }, [adapter, canUseRemoteCv, currentCv]);
+
   /**
    * Create a CvDocument from an ICvState snapshot and set it as the current CV.
    * This is used to restore backups or import exported CV state.
@@ -3531,6 +3645,16 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       );
       cacheDocumentLocally(nextDoc);
 
+      if (!canUseRemoteCvRef.current) {
+        pendingRemoteSaveRef.current = nextDoc;
+        setRemoteSaveStatus({ status: "idle" });
+        dbg(
+          "[CvLibraryContext] saveCurrentCvStyleOnly: remote metadata save deferred until Convex auth is ready",
+          { docId: nextDoc.id },
+        );
+        return;
+      }
+
       setRemoteSaveStatus({
         status: "saving",
         documentId: String(nextDoc.id),
@@ -3587,6 +3711,22 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDirty]);
+
+  useEffect(() => {
+    if (!canUseRemoteCv || isSavingRef.current) {
+      return;
+    }
+    const pendingDoc =
+      pendingRemoteSaveRef.current ??
+      (isDirtyRef.current ? currentCvRef.current ?? currentCv : null);
+    if (!pendingDoc) {
+      return;
+    }
+    pendingRemoteSaveRef.current = null;
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    void scheduleSave(pendingDoc);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canUseRemoteCv]);
 
   // Atomic actions implementations -------------------------------------------------
   function updateSectionTitle(sectionId: string, newTitle: string) {
@@ -4251,7 +4391,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   }, [currentCvId, isLoading]);
 
   useEffect(() => {
-    if (!isAuthLoaded || !isSignedIn) {
+    if (!canUseRemoteCv) {
       return;
     }
     if (!hasHydratedActiveCvRef.current || pendingActiveRestoreIdRef.current) {
@@ -4291,7 +4431,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         activeCvSnapshotSyncTimeoutRef.current = null;
       }
     };
-  }, [currentCv, isAuthLoaded, isLoading, isSignedIn, setActiveCvSnapshot]);
+  }, [canUseRemoteCv, currentCv, isLoading, setActiveCvSnapshot]);
 
   // ------- Back-compat API shims used by legacy tests -------
   function updateCurrentCv(newState: Partial<CvDocument>): void {

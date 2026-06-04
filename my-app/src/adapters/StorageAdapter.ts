@@ -539,19 +539,31 @@ export function mapPersistedProfileToCvDocument(
 
 /* -------------------- ConvexStorageAdapter -------------------- */
 
+export type RemoteLoadState =
+  | { status: "auth_not_ready" }
+  | { status: "ok"; document: CvDocument }
+  | { status: "not_found" };
+
+type ConvexStorageAdapterOptions = {
+  canUseRemote?: () => boolean;
+};
+
 export class ConvexStorageAdapter {
   private readonly _patchMutation: (args: {
     profileId: string;
     patch: any;
   }) => Promise<any>;
   private readonly _loadFn?: (profileId: string) => Promise<CvDocument | null>;
+  private readonly _canUseRemote: () => boolean;
 
   constructor(
     patchMutation: (args: { profileId: string; patch: any }) => Promise<any>,
     loadFn?: (profileId: string) => Promise<CvDocument | null>,
+    options: ConvexStorageAdapterOptions = {},
   ) {
     this._patchMutation = patchMutation;
     this._loadFn = loadFn;
+    this._canUseRemote = options.canUseRemote ?? (() => true);
   }
 
   /**
@@ -600,6 +612,10 @@ export class ConvexStorageAdapter {
       metadata.documentDecoration = sanitizeRemoteDocumentDecoration(
         metadataPatch.documentDecoration,
       );
+    }
+
+    if (!this._canUseRemote()) {
+      return { written: false, reason: "auth_not_ready" };
     }
 
     try {
@@ -706,20 +722,31 @@ export class ConvexStorageAdapter {
     let remoteSaveError: unknown = null;
 
     // Convex mutation with backend-shaped payload
-    try {
-      await this._patchMutation({
-        profileId: cv.id,
-        patch: backendPayload,
-      });
-    } catch (error) {
-      remoteSaveError = error;
-
+    if (this._canUseRemote()) {
       try {
-        dbg("[ConvexStorageAdapter] remote save skipped", {
+        await this._patchMutation({
+          profileId: cv.id,
+          patch: backendPayload,
+        });
+      } catch (error) {
+        remoteSaveError = error;
+
+        try {
+          dbg("[ConvexStorageAdapter] remote save skipped", {
+            docId: cv.id,
+            reason: isConvexValueTooLargeError(error)
+              ? "convex_value_too_large"
+              : "unauthorized",
+          });
+        } catch {
+          /* noop */
+        }
+      }
+    } else {
+      try {
+        dbg("[ConvexStorageAdapter] remote save deferred", {
           docId: cv.id,
-          reason: isConvexValueTooLargeError(error)
-            ? "convex_value_too_large"
-            : "unauthorized",
+          reason: "auth_not_ready",
         });
       } catch {
         /* noop */
@@ -746,43 +773,8 @@ export class ConvexStorageAdapter {
    * Load a CvDocument from Convex or fallback
    */
   public async load(id: string): Promise<CvDocument | null> {
-    // Try Convex loader first
-    if (this._loadFn) {
-      try {
-        const doc = await this._loadFn(id);
-        if (doc) return sanitizeRuntimeCvDocumentForState(doc);
-      } catch {
-        // fallback
-      }
-    }
-
-    // Fallback: public Convex query
-    try {
-      const prof = await convexClient.query(api.profilesPublic.getByProfileId, {
-        profileId: id,
-      });
-      if (prof) {
-        const mapped = mapPersistedProfileToCvDocument(
-          prof as Record<string, unknown>,
-          id,
-        );
-        if (mapped) {
-          try {
-            parseCvDocumentStrict(mapped);
-            if (hasLocalStorage())
-              writeLocalCvCache(
-                mapped.id,
-                serialize(sanitizeLocalDurableCvDocument(mapped)),
-              );
-            return mapped;
-          } catch {
-            // invalid mapping, ignore
-          }
-        }
-      }
-    } catch {
-      // ignore
-    }
+    const remoteState = await this.loadRemoteState(id);
+    if (remoteState.status === "ok") return remoteState.document;
 
     // Final fallback: localStorage
     try {
@@ -807,6 +799,63 @@ export class ConvexStorageAdapter {
       inMemoryStore[getLocalCvDocumentStorageKey(id)] ?? null,
     );
     return memoryDocument ? sanitizeLocalDurableCvDocument(memoryDocument) : null;
+  }
+
+  /**
+   * Load only from Convex and keep auth-pending distinct from not_found.
+   */
+  public async loadRemoteState(id: string): Promise<RemoteLoadState> {
+    if (!this._canUseRemote()) {
+      return { status: "auth_not_ready" };
+    }
+
+    // Try Convex loader first
+    if (this._loadFn) {
+      try {
+        const doc = await this._loadFn(id);
+        if (doc) {
+          return {
+            status: "ok",
+            document: sanitizeRuntimeCvDocumentForState(doc),
+          };
+        }
+      } catch {
+        // fallback
+      }
+    }
+
+    // Fallback: public Convex query
+    try {
+      const prof = await convexClient.query(api.profilesPublic.getByProfileId, {
+        profileId: id,
+      });
+      if (prof) {
+        const mapped = mapPersistedProfileToCvDocument(
+          prof as Record<string, unknown>,
+          id,
+        );
+        if (mapped) {
+          try {
+            parseCvDocumentStrict(mapped);
+            if (hasLocalStorage())
+              writeLocalCvCache(
+                mapped.id,
+                serialize(sanitizeLocalDurableCvDocument(mapped)),
+              );
+            return {
+              status: "ok",
+              document: sanitizeRuntimeCvDocumentForState(mapped),
+            };
+          } catch {
+            // invalid mapping, ignore
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    return { status: "not_found" };
   }
 
   /**
@@ -843,7 +892,9 @@ export class ConvexStorageAdapter {
 
 /* -------------------- React Hook -------------------- */
 
-export function useConvexStorageAdapter(): ConvexStorageAdapter {
+export function useConvexStorageAdapter(
+  canUseRemote?: () => boolean,
+): ConvexStorageAdapter {
   const patchMutation = useMutation(api.profiles.patch) as unknown as (args: {
     profileId: string;
     patch: any;
@@ -884,6 +935,9 @@ export function useConvexStorageAdapter(): ConvexStorageAdapter {
     adapterRef.current = new ConvexStorageAdapter(
       (args) => patchMutationRef.current(args),
       (profileId) => loadFnRef.current(profileId),
+      {
+        canUseRemote: () => canUseRemote?.() ?? true,
+      },
     );
   }
 

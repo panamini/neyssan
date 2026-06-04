@@ -128,6 +128,19 @@ describe("resolvePatchProfileRow", () => {
     expect(resolvePatchProfileRow([foreign], "clerk_123")).toBeNull();
   });
 
+  it("refuses to select an unclaimed duplicate for an unauthenticated owned profile write", () => {
+    const owned = { clerkId: "clerk_123", marker: "owned" };
+    const unclaimed = { clerkId: undefined, marker: "unclaimed" };
+
+    expect(resolvePatchProfileRow([unclaimed, owned], undefined)).toBeNull();
+  });
+
+  it("still allows an unauthenticated write to an entirely unclaimed profile", () => {
+    const unclaimed = { clerkId: undefined, marker: "unclaimed" };
+
+    expect(resolvePatchProfileRow([unclaimed], undefined)).toEqual(unclaimed);
+  });
+
   it("returns null for an empty candidate set", () => {
     expect(resolvePatchProfileRow([], "clerk_123")).toBeNull();
   });

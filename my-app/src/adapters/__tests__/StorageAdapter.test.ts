@@ -4,12 +4,19 @@ import {
   ConvexStorageAdapter,
   mapPersistedProfileToCvDocument,
 } from "../StorageAdapter";
+import { convexClient } from "../../lib/convex-client";
 import {
   encodeCvDocumentForConvex,
   getMaxNestingDepth,
   isPersistedRemirrorJson,
 } from "../cvDocumentPersistence";
 import { mapCvDocumentToResumeData } from "../../features/verbati/cvDocumentToResumeData";
+
+vi.mock("../../lib/convex-client", () => ({
+  convexClient: {
+    query: vi.fn(async () => null),
+  },
+}));
 
 function byteSize(value: unknown): number {
   return new TextEncoder().encode(
@@ -128,6 +135,7 @@ function buildRichCv() {
 describe("StorageAdapter persistence", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    vi.mocked(convexClient.query).mockClear();
   });
 
   it("persists a full cvDocument snapshot when saving", async () => {
@@ -579,6 +587,39 @@ describe("StorageAdapter persistence", () => {
     expect(window.localStorage.getItem(`cv:${cv.id}`)).toContain(
       "Oversized Remote CV",
     );
+  });
+
+  it("reports auth_not_ready for remote loads without treating it as not_found", async () => {
+    const patchMutation = vi.fn().mockResolvedValue(undefined);
+    const loadFn = vi.fn().mockResolvedValue(null);
+    const adapter = new ConvexStorageAdapter(patchMutation, loadFn, {
+      canUseRemote: () => false,
+    });
+
+    await expect(adapter.loadRemoteState("cv_auth_pending")).resolves.toEqual({
+      status: "auth_not_ready",
+    });
+
+    expect(loadFn).not.toHaveBeenCalled();
+    expect(convexClient.query).not.toHaveBeenCalled();
+  });
+
+  it("keeps auth_not_ready remote loads separate from local fallback loads", async () => {
+    const patchMutation = vi.fn().mockResolvedValue(undefined);
+    const loadFn = vi.fn().mockResolvedValue(null);
+    const adapter = new ConvexStorageAdapter(patchMutation, loadFn, {
+      canUseRemote: () => false,
+    });
+    const cv = generateCvTemplateV1("Auth Pending Local CV");
+    window.localStorage.setItem(`cv:${cv.id}`, JSON.stringify(cv));
+
+    await expect(adapter.load(cv.id)).resolves.toMatchObject({
+      id: cv.id,
+      title: "Auth Pending Local CV",
+    });
+
+    expect(loadFn).not.toHaveBeenCalled();
+    expect(convexClient.query).not.toHaveBeenCalled();
   });
 
   it("prefers the embedded cvDocument snapshot on remote restore", () => {

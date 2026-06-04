@@ -26,6 +26,13 @@ export function resolvePatchProfileRow<T extends { clerkId?: string | undefined 
     if (owned) {
       return owned;
     }
+
+    const unclaimed = rows.find((row) => !row.clerkId);
+    return unclaimed ?? null;
+  }
+
+  if (rows.some((row) => Boolean(row.clerkId))) {
+    return null;
   }
 
   const unclaimed = rows.find((row) => !row.clerkId);
@@ -356,12 +363,13 @@ export const patch = mutation({
 
     // Resolve existing document. Prefer profileId (autosave flows), otherwise use authenticated clerk user.
     let existing: any = null;
+    let profileIdRows: any[] = [];
     if (args.profileId) {
-      const rows = await ctx.db
+      profileIdRows = await ctx.db
         .query("userProfiles")
         .withIndex("by_profileId", (q) => q.eq("profileId", args.profileId))
         .collect();
-      existing = resolvePatchProfileRow(rows, identity?.subject);
+      existing = resolvePatchProfileRow(profileIdRows, identity?.subject);
     } else {
       if (!identity) throw new Error("Not authenticated");
       existing = await getPrimaryProfileForClerk(ctx, identity.subject);
@@ -380,7 +388,22 @@ export const patch = mutation({
       ),
       existingFound: Boolean(existing),
       existingProfileId: existing?.profileId ?? null,
+      rowCount: profileIdRows.length,
+      ownedRowCount: profileIdRows.filter((row) => Boolean(row.clerkId)).length,
     });
+
+    if (
+      args.profileId &&
+      !identity &&
+      profileIdRows.some((row) => Boolean(row.clerkId))
+    ) {
+      console.log("[profiles.patch] blocked", {
+        profileId: args.profileId,
+        written: false,
+        reason: "auth_required_for_owned_profile",
+      });
+      throw new Error("Not authenticated to write owned profile");
+    }
 
     if (existing?.clerkId) {
       if (!identity || existing.clerkId !== identity.subject) {
@@ -538,11 +561,22 @@ export const patch = mutation({
         ) as Record<string, unknown>),
       }) as Record<string, unknown>;
 
-      await ctx.db.patch(existing._id, {
+      const metadataOnlyUpdates: any = {
         metadata: md,
         updatedAt: now,
         version: (existing.version || 1) + 1,
-      });
+      };
+      if (identity && !existing.clerkId) {
+        metadataOnlyUpdates.clerkId = identity.subject;
+        if (!existing.email && identity.email) {
+          metadataOnlyUpdates.email = identity.email;
+        }
+        if (!existing.name && identity.name) {
+          metadataOnlyUpdates.name = identity.name;
+        }
+      }
+
+      await ctx.db.patch(existing._id, metadataOnlyUpdates);
 
       console.log("[profiles.patch] written", {
         profileId: existing.profileId ?? args.profileId ?? null,

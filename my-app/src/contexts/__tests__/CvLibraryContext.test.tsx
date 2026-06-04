@@ -96,9 +96,9 @@ describe('CvLibraryContext', () => {
   beforeEach(() => {
     // Reset in-memory storage and install mock
     storage = {};
-    authState.isLoaded = false;
-    authState.isSignedIn = false;
-    authState.isConvexAuthenticated = false;
+    authState.isLoaded = true;
+    authState.isSignedIn = true;
+    authState.isConvexAuthenticated = true;
     authState.isConvexAuthLoading = false;
     Object.defineProperty(window, 'localStorage', {
       value: mockLocalStorage,
@@ -413,9 +413,99 @@ describe('CvLibraryContext', () => {
     );
   });
 
+  it('replaces a stale full route cache with the authenticated canonical remote profile after refresh', async () => {
+    authState.isLoaded = true;
+    authState.isSignedIn = true;
+    authState.isConvexAuthenticated = true;
+    authState.isConvexAuthLoading = false;
+
+    const localCv = generateCvTemplateV1('Stale Local Route CV');
+    localCv.id = 'cv_route_canonical_remote';
+    localCv.metadata = {
+      ...localCv.metadata,
+      updatedAt: '2026-04-18T12:00:00.000Z',
+      verbatiStyle: {
+        layout: 'classic',
+        typography: 'inter',
+        palette: 'graphite',
+      } as any,
+    };
+
+    const remoteCv = generateCvTemplateV1('Canonical Remote Route CV');
+    remoteCv.id = localCv.id;
+    remoteCv.metadata = {
+      ...remoteCv.metadata,
+      updatedAt: '2026-04-18T12:02:00.000Z',
+      verbatiStyle: {
+        layout: 'workshop',
+        typography: 'geist-baskervville',
+        palette: 'sauge',
+      } as any,
+      documentDecoration: {
+        visible: true,
+        source: 'upload',
+        assetId: 'storage_decoration_route',
+        resolvedUrl: 'https://files.example.test/storage_decoration_route',
+        fileName: 'mark.png',
+        mimeType: 'image/png',
+        sizePreset: 35,
+        fit: 'contain',
+        placementMode: 'default',
+      } as any,
+    };
+    const summarySection = remoteCv.sections.find(
+      (section: any) => section.type === 'summary',
+    ) as any;
+    summarySection.structuredContent = [
+      {
+        id: 'summary-route-remote',
+        summary: 'Canonical remote text survives hard refresh.',
+      },
+    ];
+
+    vi.mocked(convexClient.query).mockImplementation(async (_query: unknown, args: unknown) => {
+      if ((args as { profileId?: string } | undefined)?.profileId === localCv.id) {
+        return {
+          profileId: localCv.id,
+          cvDocument: remoteCv,
+          metadata: remoteCv.metadata,
+        };
+      }
+      return [];
+    });
+
+    mockLocalStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([localCv]));
+    mockLocalStorage.setItem(`cv:${localCv.id}`, JSON.stringify(localCv));
+    mockLocalStorage.setItem(ACTIVE_CV_STORAGE_KEY, localCv.id);
+    window.history.pushState({}, '', `/cv?id=${localCv.id}`);
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>,
+    );
+
+    await waitFor(() => expect(ctx.currentCvId).toBe(localCv.id));
+    await waitFor(() => expect(ctx.currentCv.title).toBe(remoteCv.title));
+    expect(JSON.stringify(ctx.currentCv)).toContain(
+      'Canonical remote text survives hard refresh.',
+    );
+    expect(ctx.currentCv.metadata.verbatiStyle.layout).toBe('workshop');
+    expect(ctx.currentCv.metadata.documentDecoration).toMatchObject({
+      assetId: 'storage_decoration_route',
+      resolvedUrl: 'https://files.example.test/storage_decoration_route',
+    });
+    expect(mockLocalStorage.getItem(`cv:${localCv.id}`)).toContain(
+      'storage_decoration_route',
+    );
+  });
+
   it('preserves the local selected template when background refresh returns newer content without visual metadata', async () => {
     authState.isLoaded = true;
-    authState.isSignedIn = false;
+    authState.isSignedIn = true;
+    authState.isConvexAuthenticated = true;
+    authState.isConvexAuthLoading = false;
 
     const localUpdatedAt = '2026-04-18T12:00:00.000Z';
     const remoteUpdatedAt = '2026-04-18T12:01:00.000Z';
@@ -987,8 +1077,16 @@ describe('CvLibraryContext', () => {
       'PERSIST_PROBE_TEST experience survives the hard refresh.',
     );
     await new Promise((resolve) => setTimeout(resolve, 1100));
-    await waitFor(() => expect(convexMutationMock).toHaveBeenCalled());
-    const savePayload = convexMutationMock.mock.calls.at(-1)?.[0]?.patch;
+    await waitFor(() =>
+      expect(
+        convexMutationMock.mock.calls.some(([args]) =>
+          Boolean((args as any)?.profileId),
+        ),
+      ).toBe(true),
+    );
+    const savePayload = convexMutationMock.mock.calls
+      .filter(([args]) => Boolean((args as any)?.patch?.cvDocument))
+      .at(-1)?.[0]?.patch;
     expect(savePayload?.cvDocument?.sections).toEqual(expect.any(Array));
     expect(JSON.stringify(savePayload?.cvDocument?.sections)).toContain(
       'PERSIST_PROBE_TEST summary survives the hard refresh.',
@@ -1237,7 +1335,10 @@ describe('CvLibraryContext', () => {
     expect(mockLocalStorage.getItem(`cv:${localCv.id}`)).toContain(
       'Local text should survive auth factor-one hydration.',
     );
-    expect(convexMutationMock).not.toHaveBeenCalled();
+    const profilePatchCallsWhileAuthPending = convexMutationMock.mock.calls.filter(
+      ([args]) => Boolean((args as any)?.profileId),
+    );
+    expect(profilePatchCallsWhileAuthPending).toHaveLength(0);
   });
 
   it('repairs a summary-only cached active cv back into the canonical five-section blank draft', async () => {
@@ -2140,7 +2241,10 @@ describe('CvLibraryContext', () => {
     expect(JSON.stringify(reloadedCtx.currentCv)).toContain(
       'dirty before debounce',
     );
-    expect(convexMutationMock).not.toHaveBeenCalled();
+    const profilePatchCallsWhileAuthPending = convexMutationMock.mock.calls.filter(
+      ([args]) => Boolean((args as any)?.profileId),
+    );
+    expect(profilePatchCallsWhileAuthPending).toHaveLength(0);
   });
 
   it('keeps local dirty state and exposes remote failure when Convex rejects an oversized save', async () => {
@@ -2192,6 +2296,87 @@ describe('CvLibraryContext', () => {
     expect(mockLocalStorage.getItem('cv:cv_alpha')).toContain(
       'Alpha Oversized Dirty',
     );
+  });
+
+  it('defers remote autosave while Convex auth is loading and flushes the latest local edit once ready', async () => {
+    authState.isLoaded = true;
+    authState.isSignedIn = true;
+    authState.isConvexAuthLoading = true;
+    authState.isConvexAuthenticated = false;
+
+    const alpha = {
+      id: 'cv_alpha',
+      title: 'Alpha CV',
+      metadata: {
+        createdAt: '2026-04-28T00:00:00.000Z',
+        updatedAt: '2026-04-28T00:00:00.000Z',
+        version: 1,
+      },
+      sections: [],
+    };
+
+    mockLocalStorage.setItem('cvDocuments', JSON.stringify([alpha]));
+    mockLocalStorage.setItem('cv:cv_alpha', JSON.stringify(alpha));
+    mockLocalStorage.setItem('cvActiveId', 'cv_alpha');
+    window.history.pushState({}, '', '/cv?id=cv_alpha');
+
+    let ctx: any;
+    const view = render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>,
+    );
+
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_alpha'));
+
+    act(() => {
+      ctx.renameCv('cv_alpha', 'Alpha Auth Pending First');
+      ctx.renameCv('cv_alpha', 'Alpha Auth Pending Latest');
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+    });
+
+    const profilePatchCallsWhileAuthPending = convexMutationMock.mock.calls.filter(
+      ([args]) => Boolean((args as any)?.profileId),
+    );
+    expect(profilePatchCallsWhileAuthPending).toHaveLength(0);
+    expect(mockLocalStorage.getItem('cv:cv_alpha')).toContain(
+      'Alpha Auth Pending Latest',
+    );
+    expect(ctx.isDirty).toBe(true);
+
+    authState.isConvexAuthLoading = false;
+    authState.isConvexAuthenticated = true;
+
+    view.rerender(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>,
+    );
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+    });
+
+    await waitFor(() => {
+      const profilePatchCalls = convexMutationMock.mock.calls.filter(([args]) =>
+        Boolean((args as any)?.profileId),
+      );
+      expect(profilePatchCalls).toHaveLength(1);
+    });
+    const profilePatchCalls = convexMutationMock.mock.calls.filter(([args]) =>
+      Boolean((args as any)?.profileId),
+    );
+    expect(profilePatchCalls[0][0]).toMatchObject({
+      profileId: 'cv_alpha',
+      patch: {
+        cvDocument: expect.objectContaining({
+          title: 'Alpha Auth Pending Latest',
+        }),
+      },
+    });
   });
 
   it('keeps local dirty state and exposes remote failure when Convex rejects profile authorization', async () => {
