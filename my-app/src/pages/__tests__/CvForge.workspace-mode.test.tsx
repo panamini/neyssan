@@ -508,6 +508,7 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
       layout?: string | null;
       typography?: string | null;
       palette?: string | null;
+      resumeTemplateId?: string | null;
     };
   }) => {
     const summaryEditTarget = {
@@ -1160,7 +1161,8 @@ vi.mock("../../features/verbati/VerbatiResumePreview", () => ({
         <div>
           Preview style: {stylePreset?.layout ?? "none"}|
           {stylePreset?.typography ?? "none"}|{stylePreset?.palette ?? "none"}|
-          {stylePreset?.accentHex ?? "none"}
+          {stylePreset?.accentHex ?? "none"}|
+          {stylePreset?.resumeTemplateId ?? "none"}
         </div>
       </div>
     );
@@ -5032,7 +5034,7 @@ describe("CvForge workspace mode", () => {
     );
 
     expect(
-      screen.getByText("Preview style: swiss|quiet-editorial|sauge|none"),
+      screen.getByText(/Preview style: swiss\|quiet-editorial\|sauge\|none\|none/),
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Design" }));
@@ -5061,6 +5063,36 @@ describe("CvForge workspace mode", () => {
 
     await waitFor(() =>
       expect(screen.getByText(/Preview style: .*cobalt/i)).toBeInTheDocument(),
+    );
+  });
+
+  it("persists CV accent changes immediately so refresh cannot lose visible design edits", async () => {
+    const user = userEvent.setup();
+    const saveCurrentCvStyleOnly = vi.fn(async () => undefined);
+
+    useCvLibraryMock.mockReturnValue(
+      buildCvLibraryState({ saveCurrentCvStyleOnly }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Design" }));
+    await user.click(screen.getByRole("button", { name: "Use Cobalt accent" }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/Preview style: .*cobalt/i)).toBeInTheDocument(),
+    );
+    expect(saveCurrentCvStyleOnly).toHaveBeenCalledWith(
+      expect.objectContaining({
+        palette: "cobalt",
+      }),
+      expect.objectContaining({
+        documentStyleVersion: 1,
+      }),
     );
   });
 
@@ -5226,7 +5258,7 @@ describe("CvForge workspace mode", () => {
     );
 
     expect(
-      screen.getByText("Preview style: swiss|quiet-editorial|sauge|none"),
+      screen.getByText(/Preview style: swiss\|quiet-editorial\|sauge\|none\|none/),
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Design" }));
@@ -5253,6 +5285,91 @@ describe("CvForge workspace mode", () => {
       "aria-pressed",
       "true",
     );
+  });
+
+  it("persists the selected CV template immediately", async () => {
+    const user = userEvent.setup();
+    const saveCurrentCvStyleOnly = vi.fn(async () => undefined);
+
+    useCvLibraryMock.mockReturnValue(
+      buildCvLibraryState({ saveCurrentCvStyleOnly }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Templates" }));
+    await user.click(screen.getByRole("listitem", { name: "Sanat" }));
+
+    await waitFor(() =>
+      expect(saveCurrentCvStyleOnly).toHaveBeenCalledWith(
+        expect.objectContaining({
+          familyId: "workshop",
+          layout: "workshop",
+          resumeTemplateId: "sanat_asymmetric_resume",
+        }),
+        expect.objectContaining({
+          verbatiStyleBaseSnapshot: expect.objectContaining({
+            familyId: "workshop",
+            layout: "workshop",
+            resumeTemplateId: "sanat_asymmetric_resume",
+          }),
+          documentStyleVersion: 1,
+        }),
+      ),
+    );
+  });
+
+  it("keeps the selected CV template after reload when the current CV carries the template in its base snapshot", async () => {
+    const baseState = buildCvLibraryState();
+    const currentCv = {
+      ...baseState.currentCv,
+      metadata: {
+        ...baseState.currentCv.metadata,
+        verbatiStyle: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "ink",
+        },
+        verbatiStyleSlotId: 2,
+        verbatiStyleSlotSource: "factory",
+        verbatiStyleSlotNameSnapshot: "Style 2",
+        verbatiStyleBaseSnapshot: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "ink",
+          resumeTemplateId: "sanat_asymmetric_resume",
+        },
+        documentStyleVersion: 1,
+      },
+    };
+
+    useCvLibraryMock.mockReturnValue(
+      buildCvLibraryState({ currentCv, cvs: [currentCv] }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Templates" }));
+
+    expect(screen.getByRole("listitem", { name: "Sanat" })).toHaveAttribute(
+      "data-selected",
+      "true",
+    );
+    expect(
+      screen.getByText(
+        /Preview style: workshop\|quiet-editorial\|ink\|none\|sanat_asymmetric_resume/,
+      ),
+    ).toBeInTheDocument();
   });
 
   it("shows a compact job-context chip instead of an embedded brief card and can clear it", async () => {

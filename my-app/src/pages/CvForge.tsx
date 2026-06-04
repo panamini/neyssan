@@ -48,6 +48,7 @@ import type { VerbatiFontPairId } from "../features/verbati/fontCatalog";
 import type { VerbatiStylePreset } from "../features/verbati/types";
 import {
   EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID,
+  SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID,
   WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
   WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
   isResumeTemplateId,
@@ -61,8 +62,15 @@ import {
 } from "../lib/document-style-slots";
 import {
   normalizeDocumentIconSettings,
+  type DocumentIconKey,
   type DocumentIconSettings,
 } from "../lib/document-icons";
+import {
+  buildDocumentListItemIconOverrideKey,
+  normalizeDocumentIconOverrides,
+  type DocumentIconOverrides,
+  type DocumentListItemIconOverrideTarget,
+} from "../lib/document-icon-overrides";
 import {
   ensurePlainTextRemirrorDoc,
   ensureRemirrorDoc,
@@ -3303,6 +3311,10 @@ export function CvForge(): JSX.Element {
     () => normalizeDocumentIconSettings(currentCv?.metadata?.documentIcons),
     [currentCv?.metadata?.documentIcons],
   );
+  const documentIconOverrides = React.useMemo(
+    () => normalizeDocumentIconOverrides(currentCv?.metadata?.documentIconOverrides),
+    [currentCv?.metadata?.documentIconOverrides],
+  );
   const documentIconSectionTargets = React.useMemo(
     () =>
       currentSections
@@ -4347,6 +4359,12 @@ export function CvForge(): JSX.Element {
       setActiveSectionId(sectionId);
       setResumeActiveTarget(getSectionTarget(section));
       focusPreviewSection(sectionId);
+      if (getCanonicalSectionType(section) === "skills") {
+        setSectionEditorOpen(true);
+        setCvComposerOpen(false);
+        setCvRailTab("ai");
+        return;
+      }
       setCvRailTab("ai");
       setCvComposerOpen(true);
     },
@@ -4594,6 +4612,7 @@ export function CvForge(): JSX.Element {
       }
       if (target.fieldKind === "paragraph") {
         pendingInlineFieldChangeRef.current = { target, text };
+        applyInlineFieldChange(target, text);
         return;
       }
       pendingInlineFieldChangeRef.current = null;
@@ -4676,6 +4695,27 @@ export function CvForge(): JSX.Element {
     },
     [],
   );
+
+  React.useEffect(() => {
+    const flushBeforePageExit = () => {
+      flushPendingInlineFieldChange();
+    };
+    const flushWhenHidden = () => {
+      if (document.visibilityState === "hidden") {
+        flushBeforePageExit();
+      }
+    };
+
+    window.addEventListener("beforeunload", flushBeforePageExit);
+    window.addEventListener("pagehide", flushBeforePageExit);
+    document.addEventListener("visibilitychange", flushWhenHidden);
+
+    return () => {
+      window.removeEventListener("beforeunload", flushBeforePageExit);
+      window.removeEventListener("pagehide", flushBeforePageExit);
+      document.removeEventListener("visibilitychange", flushWhenHidden);
+    };
+  }, [flushPendingInlineFieldChange]);
 
   const handleInlineAddItem = React.useCallback(
     (request: Parameters<NonNullable<ResumeInlineEditing["onAddItem"]>>[0]) => {
@@ -5979,6 +6019,7 @@ export function CvForge(): JSX.Element {
       template:
         | "workshop-onecol"
         | "workshop-twocol"
+        | "sanat-asymmetric"
         | "editorial-sidebar"
         | "editorial"
         | "minimal"
@@ -5989,21 +6030,29 @@ export function CvForge(): JSX.Element {
       const resumeTemplateId =
         template === "editorial-sidebar"
           ? EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID
+          : template === "sanat-asymmetric"
+            ? SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID
           : template === "workshop-twocol"
             ? WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
             : layout === "workshop"
               ? WORKSHOP_RESUME_ONECOL_TEMPLATE_ID
               : undefined;
-      setStylePreset((current) =>
-        resolveVerbatiStyle({
-          ...current,
-          familyId: layout,
-          layout,
-          resumeTemplateId,
-        }),
-      );
+      const nextStylePreset = resolveVerbatiStyle({
+        ...stylePreset,
+        familyId: layout,
+        layout,
+        resumeTemplateId,
+      });
+      setStylePreset(nextStylePreset);
+      if (typeof saveCurrentCvStyleOnly === "function") {
+        void saveCurrentCvStyleOnly(nextStylePreset, {
+          verbatiStyleBaseSnapshot:
+            buildDocumentAppearanceSnapshot(nextStylePreset),
+          documentStyleVersion: DOCUMENT_STYLE_VERSION,
+        });
+      }
     },
-    [setStylePreset],
+    [saveCurrentCvStyleOnly, setStylePreset, stylePreset],
   );
   const cvTemplatePanelItems = React.useMemo(
     () => [
@@ -6024,6 +6073,14 @@ export function CvForge(): JSX.Element {
         },
       },
       {
+        id: "sanat-asymmetric",
+        label: "Sanat",
+        preview: {
+          kind: "Resume" as const,
+          family: "sanat-asymmetric" as const,
+        },
+      },
+      {
         id: "editorial-sidebar",
         label: "Editorial Sidebar",
         preview: {
@@ -6037,6 +6094,8 @@ export function CvForge(): JSX.Element {
   const activeCvTemplatePanelItemId =
     stylePreset.resumeTemplateId === EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID
       ? "editorial-sidebar"
+      : stylePreset.resumeTemplateId === SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID
+        ? "sanat-asymmetric"
       : stylePreset.layout === "workshop" &&
           stylePreset.resumeTemplateId === WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
       ? "workshop-twocol"
@@ -6052,6 +6111,7 @@ export function CvForge(): JSX.Element {
         if (
           itemId === "workshop-onecol" ||
           itemId === "workshop-twocol" ||
+          itemId === "sanat-asymmetric" ||
           itemId === "editorial-sidebar"
         ) {
           handleSelectTemplate(itemId);
@@ -6208,39 +6268,57 @@ export function CvForge(): JSX.Element {
 
   const handleSelectFontPair = React.useCallback(
     (fontPairId: VerbatiFontPairId) => {
-      setStylePreset((current) =>
-        resolveVerbatiStyle({
-          ...current,
-          typography: fontPairId,
-        }),
-      );
+      const nextStylePreset = resolveVerbatiStyle({
+        ...stylePreset,
+        typography: fontPairId,
+      });
+      setStylePreset(nextStylePreset);
+      if (typeof saveCurrentCvStyleOnly === "function") {
+        void saveCurrentCvStyleOnly(nextStylePreset, {
+          verbatiStyleBaseSnapshot:
+            buildDocumentAppearanceSnapshot(nextStylePreset),
+          documentStyleVersion: DOCUMENT_STYLE_VERSION,
+        });
+      }
     },
-    [setStylePreset],
+    [saveCurrentCvStyleOnly, setStylePreset, stylePreset],
   );
 
   const handleSelectAccent = React.useCallback(
     (accent: CvAccentChoice) => {
-      setStylePreset((current) =>
-        resolveVerbatiStyle({
-          ...current,
-          ...resolveAccentStyle(accent),
-        }),
-      );
+      const nextStylePreset = resolveVerbatiStyle({
+        ...stylePreset,
+        ...resolveAccentStyle(accent),
+      });
+      setStylePreset(nextStylePreset);
+      if (typeof saveCurrentCvStyleOnly === "function") {
+        void saveCurrentCvStyleOnly(nextStylePreset, {
+          verbatiStyleBaseSnapshot:
+            buildDocumentAppearanceSnapshot(nextStylePreset),
+          documentStyleVersion: DOCUMENT_STYLE_VERSION,
+        });
+      }
     },
-    [setStylePreset],
+    [saveCurrentCvStyleOnly, setStylePreset, stylePreset],
   );
 
   const handleSelectCustomAccent = React.useCallback(
     (hex: string) => {
-      setStylePreset((current) =>
-        resolveVerbatiStyle({
-          ...current,
-          palette: "custom",
-          accentHex: hex,
-        }),
-      );
+      const nextStylePreset = resolveVerbatiStyle({
+        ...stylePreset,
+        palette: "custom",
+        accentHex: hex,
+      });
+      setStylePreset(nextStylePreset);
+      if (typeof saveCurrentCvStyleOnly === "function") {
+        void saveCurrentCvStyleOnly(nextStylePreset, {
+          verbatiStyleBaseSnapshot:
+            buildDocumentAppearanceSnapshot(nextStylePreset),
+          documentStyleVersion: DOCUMENT_STYLE_VERSION,
+        });
+      }
     },
-    [setStylePreset],
+    [saveCurrentCvStyleOnly, setStylePreset, stylePreset],
   );
 
   const handleDocumentIconSettingsChange = React.useCallback(
@@ -6253,6 +6331,33 @@ export function CvForge(): JSX.Element {
       }
     },
     [saveCurrentCvStyleOnly, stylePreset],
+  );
+  const handleDocumentListItemIconChange = React.useCallback(
+    (
+      target: DocumentListItemIconOverrideTarget,
+      iconKey: DocumentIconKey | null,
+    ) => {
+      const key = buildDocumentListItemIconOverrideKey(target);
+      if (!key || typeof saveCurrentCvStyleOnly !== "function") {
+        return;
+      }
+
+      const currentListItems = documentIconOverrides.listItems ?? {};
+      const nextListItems = { ...currentListItems };
+      if (iconKey) {
+        nextListItems[key] = iconKey;
+      } else {
+        delete nextListItems[key];
+      }
+
+      const nextOverrides: DocumentIconOverrides =
+        Object.keys(nextListItems).length > 0 ? { listItems: nextListItems } : {};
+
+      void saveCurrentCvStyleOnly(stylePreset, {
+        documentIconOverrides: nextOverrides,
+      });
+    },
+    [documentIconOverrides, saveCurrentCvStyleOnly, stylePreset],
   );
 
   const persistedCvDocumentDecoration = React.useMemo(
@@ -6360,9 +6465,11 @@ export function CvForge(): JSX.Element {
     [
       cvDocumentDecoration,
       documentIconSettings,
+      documentIconOverrides,
       documentIconSectionTargets,
       handleCvDesignImageUpload,
       handleDocumentIconSettingsChange,
+      handleDocumentListItemIconChange,
       handleResetStyleSlot,
       handleSelectAccent,
       handleSelectCustomAccent,
@@ -6934,6 +7041,15 @@ export function CvForge(): JSX.Element {
       if (railAiMode === "none") return;
 
       if (sectionUsesStructuredSuggestions(section)) {
+        setInlineEditTarget(null);
+        setCvAskSelectionContext(null);
+        setActiveSectionId(sectionId);
+        setResumeActiveTarget(getSectionTarget(section));
+        focusPreviewSection(sectionId);
+        if (getCanonicalSectionType(section) === "skills") {
+          setSectionEditorOpen(true);
+          setCvComposerOpen(false);
+        }
         void handleRunAskAiForSection({ sectionId, prompt: "", tone: cvTone });
         return;
       }
@@ -7665,20 +7781,22 @@ export function CvForge(): JSX.Element {
   }, [cvRailAiSuggestion]);
 
   const handleAcceptListAiSuggestion = React.useCallback(
-    (value: string) => {
+    (value: string, options?: { persist?: boolean }) => {
       if (!cvRailAiSuggestion || cvRailAiSuggestion.kind !== "list") return;
-      let acceptedSection: CvSection | null = null;
-      const nextSections = currentSections.map((section, index) =>
-        getCvSectionId(section, index) === cvRailAiSuggestion.sectionId
-          ? (acceptedSection = appendListSuggestionToSection(section, value))
-          : section,
-      );
-      if (acceptedSection) {
-        setPendingActiveSection(acceptedSection);
-        setActiveSectionId(cvRailAiSuggestion.sectionId);
-        setResumeActiveTarget(getSectionTarget(acceptedSection));
+      if (options?.persist !== false) {
+        let acceptedSection: CvSection | null = null;
+        const nextSections = currentSections.map((section, index) =>
+          getCvSectionId(section, index) === cvRailAiSuggestion.sectionId
+            ? (acceptedSection = appendListSuggestionToSection(section, value))
+            : section,
+        );
+        if (acceptedSection) {
+          setPendingActiveSection(acceptedSection);
+          setActiveSectionId(cvRailAiSuggestion.sectionId);
+          setResumeActiveTarget(getSectionTarget(acceptedSection));
+        }
+        persistSections(nextSections);
       }
-      persistSections(nextSections);
       setCvRailAiSuggestion((current) => {
         if (!current || current.kind !== "list") return current;
         const remainingItems = current.items.filter(
@@ -8156,6 +8274,8 @@ export function CvForge(): JSX.Element {
                     sectionActions={resumeSectionActions}
                     paperAi={resumePaperAiState}
                     documentIconSettings={documentIconSettings}
+                    documentIconOverrides={documentIconOverrides}
+                    onDocumentListItemIconChange={handleDocumentListItemIconChange}
                     documentDecoration={cvDocumentDecoration}
                     documentDecorationDesignMode={cvDesignOpen}
                     onDocumentDecorationChange={handleCvDocumentDecorationPreviewChange}
