@@ -942,6 +942,7 @@ describe('CvLibraryContext', () => {
     await waitFor(() => expect(ctx.currentCvId).toBeTruthy());
 
     const currentId = ctx.currentCvId;
+    convexMutationMock.mockClear();
     const editedSections = ctx.currentCv.sections.map((section: any) => {
       if (section.type === 'summary') {
         return {
@@ -982,6 +983,16 @@ describe('CvLibraryContext', () => {
       ),
     );
     expect(JSON.stringify(ctx.currentCv)).toContain(
+      'Typed experience survives the hard refresh.',
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    await waitFor(() => expect(convexMutationMock).toHaveBeenCalled());
+    const savePayload = convexMutationMock.mock.calls.at(-1)?.[0]?.patch;
+    expect(savePayload?.cvDocument?.sections).toEqual(expect.any(Array));
+    expect(JSON.stringify(savePayload?.cvDocument?.sections)).toContain(
+      'Typed summary survives the hard refresh.',
+    );
+    expect(JSON.stringify(savePayload?.cvDocument?.sections)).toContain(
       'Typed experience survives the hard refresh.',
     );
     await waitFor(() =>

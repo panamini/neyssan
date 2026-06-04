@@ -4319,6 +4319,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         prev.map((doc) => (String(doc.id) === id ? nextDoc : doc)),
       );
       syncEditedDocumentLocally(nextDoc);
+      void scheduleSave(nextDoc);
       return;
     }
 
