@@ -9,6 +9,8 @@ const { authState, convexMutationMock } = vi.hoisted(() => ({
   authState: {
     isLoaded: false,
     isSignedIn: false,
+    isConvexAuthenticated: false,
+    isConvexAuthLoading: true,
   },
   convexMutationMock: vi.fn(async () => ({})),
 }));
@@ -37,7 +39,14 @@ vi.mock('convex/react', async (importOriginal) => {
     useMutation: () => convexMutationMock,
     useQuery: () => undefined,
     useAction: () => undefined,
-    useConvexAuth: () => ({ isAuthenticated: false, isLoading: false }),
+    useConvexAuth: () => ({
+      isAuthenticated:
+        authState.isConvexAuthenticated ||
+        (authState.isLoaded &&
+          authState.isSignedIn &&
+          !authState.isConvexAuthLoading),
+      isLoading: authState.isConvexAuthLoading,
+    }),
   };
 });
 
@@ -89,6 +98,8 @@ describe('CvLibraryContext', () => {
     storage = {};
     authState.isLoaded = false;
     authState.isSignedIn = false;
+    authState.isConvexAuthenticated = false;
+    authState.isConvexAuthLoading = false;
     Object.defineProperty(window, 'localStorage', {
       value: mockLocalStorage,
       configurable: true,
@@ -1099,6 +1110,70 @@ describe('CvLibraryContext', () => {
     expect(JSON.stringify(ctx.currentCv)).toContain('"responsibilities":"C"');
     expect(mockLocalStorage.getItem(`cv:${localEdited.id}`)).toContain(
       '"summary":"A"',
+    );
+  });
+
+  it('does not treat a pre-Convex-auth null route profile as an empty current cv', async () => {
+    authState.isLoaded = true;
+    authState.isSignedIn = true;
+    authState.isConvexAuthLoading = true;
+    authState.isConvexAuthenticated = false;
+
+    const remoteCv = generateCvTemplateV1('Delayed Auth CV');
+    remoteCv.id = 'cv_auth_delay';
+    const summarySection = remoteCv.sections.find(
+      (section: any) => section.type === 'summary',
+    ) as any;
+    summarySection.structuredContent = [
+      {
+        id: 'summary-auth-delay',
+        summary: 'Remote text should load after Convex auth settles.',
+      },
+    ];
+
+    vi.mocked(convexClient.query).mockImplementation(
+      async (_reference: unknown, args?: Record<string, unknown>) => {
+        if (args?.profileId === remoteCv.id) {
+          return authState.isConvexAuthLoading
+            ? null
+            : {
+                profileId: remoteCv.id,
+                cvDocument: remoteCv,
+              };
+        }
+        return [];
+      },
+    );
+
+    window.history.pushState({}, '', `/cv?id=${remoteCv.id}`);
+
+    let ctx: any;
+    const view = render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>,
+    );
+
+    await waitFor(() => expect(ctx).toBeDefined());
+    await waitFor(() => expect(ctx.isLoading).toBe(false));
+    expect(ctx.currentCvId).toBeNull();
+    expect(mockLocalStorage.getItem(`cv:${remoteCv.id}`)).toBeNull();
+
+    authState.isConvexAuthLoading = false;
+    authState.isConvexAuthenticated = true;
+
+    view.rerender(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>,
+    );
+
+    await waitFor(() => expect(ctx.currentCvId).toBe(remoteCv.id));
+    expect(JSON.stringify(ctx.currentCv)).toContain(
+      'Remote text should load after Convex auth settles.',
+    );
+    expect(mockLocalStorage.getItem(`cv:${remoteCv.id}`)).toContain(
+      'Remote text should load after Convex auth settles.',
     );
   });
 

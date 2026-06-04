@@ -10,7 +10,7 @@ import React, {
 } from "react";
 import { useAuth } from "@clerk/clerk-react";
 import { v4 as uuidv4 } from "uuid";
-import { useMutation } from "convex/react";
+import { useConvexAuth, useMutation } from "convex/react";
 import { convexClient } from "../lib/convex-client";
 import { useConvexStorageAdapter } from "../adapters/StorageAdapter";
 import { mapProfileToCvDocument } from "../adapters/profile-mapper";
@@ -909,6 +909,10 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
   const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
+  const {
+    isAuthenticated: isConvexAuthenticated,
+    isLoading: isConvexAuthLoading,
+  } = useConvexAuth();
   const adapter = useConvexStorageAdapter();
   const setActiveCvSnapshot = useMutation(api.activeCvSnapshots.setCurrent);
 
@@ -1000,7 +1004,13 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   }, [isAuthLoaded, isSignedIn]);
 
   useEffect(() => {
-    if (!isAuthLoaded || !isSignedIn || hasHydratedRemoteLibraryRef.current) {
+    if (
+      !isAuthLoaded ||
+      !isSignedIn ||
+      isConvexAuthLoading ||
+      !isConvexAuthenticated ||
+      hasHydratedRemoteLibraryRef.current
+    ) {
       return;
     }
 
@@ -1065,7 +1075,12 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     return () => {
       cancelled = true;
     };
-  }, [isAuthLoaded, isSignedIn]);
+  }, [
+    isAuthLoaded,
+    isSignedIn,
+    isConvexAuthenticated,
+    isConvexAuthLoading,
+  ]);
 
   useEffect(() => {
     try {
@@ -2918,6 +2933,14 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
                 cacheDocumentLocally(repairedNorm);
                 lastSavedRef.current = repairedNorm;
               } else {
+                const requestedRouteCvId = readRequestedCvIdFromWindowLocation();
+                const shouldDeferRouteNullHydration =
+                  requestedRouteCvId === targetId &&
+                  (isConvexAuthLoading ||
+                    (Boolean(isSignedIn) && !isConvexAuthenticated));
+                if (shouldDeferRouteNullHydration) {
+                  return;
+                }
                 safeSetCurrentCv(null);
               }
             } catch (err) {
@@ -2960,7 +2983,13 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
 
       return performLoad();
     },
-    [adapter, flushPendingEdits],
+    [
+      adapter,
+      flushPendingEdits,
+      isConvexAuthenticated,
+      isConvexAuthLoading,
+      isSignedIn,
+    ],
   );
 
   useEffect(() => {
@@ -3053,6 +3082,21 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       String(requestedRouteCvId) === String(pendingId)
     ) {
       if (!isLoading) {
+        if (
+          isConvexAuthLoading ||
+          (Boolean(isSignedIn) && !isConvexAuthenticated)
+        ) {
+          return;
+        }
+        if (
+          Boolean(isSignedIn) &&
+          isConvexAuthenticated &&
+          !failedActiveRestoreIdsRef.current.has(String(pendingId))
+        ) {
+          failedActiveRestoreIdsRef.current.add(String(pendingId));
+          loadCv(pendingId);
+          return;
+        }
         pendingActiveRestoreIdRef.current = null;
         hasHydratedActiveCvRef.current = true;
       }
@@ -3084,7 +3128,15 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       pendingActiveRestoreIdRef.current = null;
       hasHydratedActiveCvRef.current = true;
     }
-  }, [currentCv, cvs, isLoading, loadCv]);
+  }, [
+    currentCv,
+    cvs,
+    isConvexAuthenticated,
+    isConvexAuthLoading,
+    isLoading,
+    isSignedIn,
+    loadCv,
+  ]);
 
   /**
    * Create a CvDocument from an ICvState snapshot and set it as the current CV.
