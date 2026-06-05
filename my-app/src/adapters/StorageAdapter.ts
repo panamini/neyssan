@@ -135,6 +135,17 @@ function cvEditorDebugInfo(label: string, payload: Record<string, unknown>): voi
   console.info(label, payload);
 }
 
+function cvDecorationBoundaryInfo(
+  label: string,
+  payload: Record<string, unknown>,
+): void {
+  if (!import.meta.env.DEV && !isCvEditorDebugEnabled()) {
+    return;
+  }
+
+  console.info(label, payload);
+}
+
 function readDocumentDecorationDebug(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {
@@ -860,9 +871,17 @@ export class ConvexStorageAdapter {
       try {
         const doc = await this._loadFn(id);
         if (doc) {
+          const runtimeDoc = sanitizeRuntimeCvDocumentForState(doc);
+          cvDecorationBoundaryInfo("[cv-decoration-load-remote-state]", {
+            docId: id,
+            source: "loadFn",
+            document: readDocumentDecorationDebug(
+              runtimeDoc.metadata?.documentDecoration,
+            ),
+          });
           return {
             status: "ok",
-            document: sanitizeRuntimeCvDocumentForState(doc),
+            document: runtimeDoc,
           };
         }
       } catch {
@@ -881,7 +900,7 @@ export class ConvexStorageAdapter {
           rawProfile,
           id,
         );
-        cvEditorDebugInfo("[cv-decoration-load-remote-profile]", {
+        cvDecorationBoundaryInfo("[cv-decoration-load-remote-profile]", {
           docId: id,
           profile: readProfileDecorationDebug(rawProfile),
           mapped: readDocumentDecorationDebug(
@@ -891,14 +910,22 @@ export class ConvexStorageAdapter {
         if (mapped) {
           try {
             parseCvDocumentStrict(mapped);
+            const runtimeMapped = sanitizeRuntimeCvDocumentForState(mapped);
             if (hasLocalStorage())
               writeLocalCvCache(
                 mapped.id,
                 serialize(sanitizeLocalDurableCvDocument(mapped)),
               );
+            cvDecorationBoundaryInfo("[cv-decoration-load-remote-state]", {
+              docId: id,
+              source: "fallbackQuery",
+              document: readDocumentDecorationDebug(
+                runtimeMapped.metadata?.documentDecoration,
+              ),
+            });
             return {
               status: "ok",
-              document: sanitizeRuntimeCvDocumentForState(mapped),
+              document: runtimeMapped,
             };
           } catch {
             // invalid mapping, ignore

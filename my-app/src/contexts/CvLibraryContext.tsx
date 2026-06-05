@@ -92,6 +92,17 @@ function deepEqual(a: unknown, b: unknown): boolean {
   }
 }
 
+function cvDecorationBoundaryInfo(
+  label: string,
+  payload: Record<string, unknown>,
+): void {
+  if (!import.meta.env.DEV && !isCvEditorDebugEnabled()) {
+    return;
+  }
+
+  console.info(label, payload);
+}
+
 function isImageDataUrl(value: unknown): value is string {
   return typeof value === "string" && value.trim().startsWith("data:image/");
 }
@@ -3277,7 +3288,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
             remoteNorm,
             currentCvRef.current ?? localBaseline,
           );
-        cvEditorDebugInfo("[cv-decoration-context-refresh]", {
+        cvDecorationBoundaryInfo("[cv-decoration-context-refresh]", {
           targetCvId,
           routeCvId: latestRouteCvId,
           current: readDecorationRuntimeDebug(
@@ -3296,7 +3307,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
             remoteWithLocalVisualTemplate.metadata ?? null,
           )
         ) {
-          cvEditorDebugInfo("[cv-decoration-context-refresh-skipped]", {
+          cvDecorationBoundaryInfo("[cv-decoration-context-refresh-skipped]", {
             targetCvId,
             reason: "deep_equal",
             current: readDecorationRuntimeDebug(
