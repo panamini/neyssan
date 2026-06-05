@@ -644,6 +644,90 @@ describe('CvLibraryContext', () => {
     expect(localSnapshot.metadata.documentDecoration.resolvedUrl).toBeUndefined();
   });
 
+  it('preserves remote visual metadata when weaker remote content is skipped', async () => {
+    authState.isLoaded = true;
+    authState.isSignedIn = true;
+    authState.isConvexAuthenticated = true;
+    authState.isConvexAuthLoading = false;
+
+    const localCv = generateCvTemplateV1('Local Cached Workshop CV');
+    localCv.id = 'cv_remote_weaker_visual_metadata';
+    localCv.metadata = {
+      ...localCv.metadata,
+      updatedAt: '2026-06-05T12:00:00.000Z',
+      verbatiStyle: {
+        familyId: 'workshop',
+        layout: 'workshop',
+        typography: 'geist-baskervville',
+        palette: 'sauge',
+      } as any,
+    };
+
+    const remoteCv = {
+      ...localCv,
+      title: 'Remote Weaker Sanat CV',
+      metadata: {
+        ...localCv.metadata,
+        updatedAt: '2026-06-05T11:59:00.000Z',
+        resumeTemplateId: 'sanat_asymmetric_resume',
+        verbatiStyle: {
+          familyId: 'workshop',
+          layout: 'workshop',
+          typography: 'geist-baskervville',
+          palette: 'sauge',
+          resumeTemplateId: 'sanat_asymmetric_resume',
+        },
+        verbatiStyleBaseSnapshot: {
+          familyId: 'workshop',
+          layout: 'workshop',
+          typography: 'geist-baskervville',
+          palette: 'sauge',
+          resumeTemplateId: 'sanat_asymmetric_resume',
+        },
+        documentStyleVersion: 3,
+      },
+      sections: localCv.sections.slice(0, 1),
+    };
+
+    vi.mocked(convexClient.query).mockImplementation(async (_query: unknown, args: unknown) => {
+      if ((args as { profileId?: string } | undefined)?.profileId === localCv.id) {
+        return {
+          profileId: localCv.id,
+          cvDocument: remoteCv,
+          metadata: remoteCv.metadata,
+        };
+      }
+      return [];
+    });
+
+    mockLocalStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([localCv]));
+    mockLocalStorage.setItem(`cv:${localCv.id}`, JSON.stringify(localCv));
+    mockLocalStorage.setItem(ACTIVE_CV_STORAGE_KEY, localCv.id);
+    window.history.pushState({}, '', '/cv');
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>,
+    );
+
+    await waitFor(() => expect(ctx.currentCvId).toBe(localCv.id));
+    await waitFor(() =>
+      expect(ctx.currentCv.metadata.resumeTemplateId).toBe(
+        'sanat_asymmetric_resume',
+      ),
+    );
+    expect(ctx.currentCv.title).toBe('Local Cached Workshop CV');
+    expect(ctx.currentCv.sections).toEqual(localCv.sections);
+    expect(ctx.currentCv.metadata.verbatiStyle.resumeTemplateId).toBe(
+      'sanat_asymmetric_resume',
+    );
+    expect(ctx.currentCv.metadata.verbatiStyleBaseSnapshot.resumeTemplateId).toBe(
+      'sanat_asymmetric_resume',
+    );
+  });
+
   it('preserves the local selected template when background refresh returns newer content without visual metadata', async () => {
     authState.isLoaded = true;
     authState.isSignedIn = true;

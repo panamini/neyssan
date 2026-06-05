@@ -1586,6 +1586,77 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     };
   }
 
+  function mergeRemoteVisualMetadataWhenLocalTemplateIsImplicit(
+    localDoc: CvDocument,
+    remoteDoc: CvDocument | null | undefined,
+  ): CvDocument {
+    const remoteResumeTemplateId = readAnyResumeTemplateId(remoteDoc);
+    if (!remoteResumeTemplateId) {
+      return localDoc;
+    }
+    if (readAnyResumeTemplateId(localDoc)) {
+      return localDoc;
+    }
+
+    const localMetadata = localDoc.metadata ?? ({} as CvDocument["metadata"]);
+    const remoteMetadata = remoteDoc?.metadata ?? ({} as CvDocument["metadata"]);
+    const nextMetadata: CvDocument["metadata"] = {
+      ...localMetadata,
+      resumeTemplateId: remoteResumeTemplateId,
+    };
+
+    if (
+      remoteMetadata.verbatiStyle &&
+      typeof remoteMetadata.verbatiStyle === "object"
+    ) {
+      nextMetadata.verbatiStyle = {
+        ...remoteMetadata.verbatiStyle,
+        resumeTemplateId: remoteResumeTemplateId,
+      };
+    } else if (
+      localMetadata.verbatiStyle &&
+      typeof localMetadata.verbatiStyle === "object"
+    ) {
+      nextMetadata.verbatiStyle = {
+        ...localMetadata.verbatiStyle,
+        resumeTemplateId: remoteResumeTemplateId,
+      };
+    }
+
+    if (remoteMetadata.verbatiStyleBaseSnapshot) {
+      nextMetadata.verbatiStyleBaseSnapshot = {
+        ...remoteMetadata.verbatiStyleBaseSnapshot,
+        resumeTemplateId:
+          remoteMetadata.verbatiStyleBaseSnapshot.resumeTemplateId ??
+          remoteResumeTemplateId,
+      };
+    } else if (localMetadata.verbatiStyleBaseSnapshot) {
+      nextMetadata.verbatiStyleBaseSnapshot = {
+        ...localMetadata.verbatiStyleBaseSnapshot,
+        resumeTemplateId:
+          localMetadata.verbatiStyleBaseSnapshot.resumeTemplateId ??
+          remoteResumeTemplateId,
+      };
+    }
+
+    for (const key of [
+      "verbatiStyleSlotId",
+      "verbatiStyleSlotSource",
+      "verbatiStyleSlotNameSnapshot",
+      "documentStyleVersion",
+      "documentIcons",
+    ] as const) {
+      if (remoteMetadata[key] !== undefined) {
+        (nextMetadata as Record<string, unknown>)[key] = remoteMetadata[key];
+      }
+    }
+
+    return {
+      ...localDoc,
+      metadata: nextMetadata,
+    };
+  }
+
   const FLUSH_THROTTLE_MS = 150;
 
   /**
@@ -2303,16 +2374,35 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     return true;
   }
 
-  function applyRuntimeDocumentDecorationOverlay(
+  function applySkippedBackgroundRefreshVisualOverlay(
     targetCvId: string,
     localDoc: CvDocument | null | undefined,
     remoteDoc: CvDocument | null | undefined,
   ): boolean {
-    if (!canOverlayRuntimeDocumentDecoration(localDoc, remoteDoc)) {
+    if (!localDoc || !remoteDoc) {
+      return false;
+    }
+    if (
+      String(localDoc.id) !== String(remoteDoc.id) ||
+      String(localDoc.id) !== String(targetCvId)
+    ) {
       return false;
     }
 
-    const overlaid = overlayRuntimeDocumentDecoration(localDoc!, remoteDoc!);
+    const runtimeOverlaid = canOverlayRuntimeDocumentDecoration(
+      localDoc,
+      remoteDoc,
+    )
+      ? overlayRuntimeDocumentDecoration(localDoc, remoteDoc)
+      : localDoc;
+    const overlaid = mergeRemoteVisualMetadataWhenLocalTemplateIsImplicit(
+      runtimeOverlaid,
+      remoteDoc,
+    );
+    if (deepEqual(localDoc, overlaid)) {
+      return false;
+    }
+
     safeSetCurrentCv(overlaid);
     setCvs((prev) => {
       const exists = prev.some(
@@ -2927,7 +3017,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
                   if (!isLoadTargetStillCurrent()) {
                     return;
                   }
-                  applyRuntimeDocumentDecorationOverlay(
+                  applySkippedBackgroundRefreshVisualOverlay(
                     targetId,
                     currentCvRef.current ?? docNorm,
                     remoteNorm,
@@ -3348,7 +3438,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
             remoteNorm,
           )
         ) {
-          applyRuntimeDocumentDecorationOverlay(
+          applySkippedBackgroundRefreshVisualOverlay(
             targetCvId,
             currentCvRef.current ?? localBaseline,
             remoteNorm,
