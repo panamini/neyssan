@@ -145,6 +145,8 @@ vi.mock("../../components/ProposalDisplay", () => ({
     documentTitle,
     stylePreset,
     onContentChange,
+    onContentCommit,
+    onProposalDocumentChange,
     onDocumentTitleChange,
     railStartAddon,
     railEndAddon,
@@ -158,6 +160,11 @@ vi.mock("../../components/ProposalDisplay", () => ({
       palette?: string | null;
     } | null;
     onContentChange?: (value: string) => void;
+    onContentCommit?: (snapshot?: {
+      proposalContent?: string | null;
+      proposalDocument?: any | null;
+    }) => void;
+    onProposalDocumentChange?: (document: any) => void;
     onDocumentTitleChange?: (value: string) => void;
     railStartAddon?: React.ReactNode;
     railEndAddon?: React.ReactNode;
@@ -182,6 +189,41 @@ vi.mock("../../components/ProposalDisplay", () => ({
         onClick={() => onContentChange?.("Second autosave draft.")}
       >
         Edit content twice
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          const proposalDocument = {
+            schemaVersion: 1,
+            kind: "letter",
+            source: "structured",
+            blocks: [
+              {
+                id: "salutation-1",
+                type: "salutation",
+                text: "Dear team,",
+              },
+              {
+                id: "paragraph-1",
+                type: "paragraph",
+                text: "Preview committed draft body.",
+              },
+              {
+                id: "closing-1",
+                type: "closing",
+                signOff: "Sincerely,",
+                signatureName: "Alex Martin",
+              },
+            ],
+          };
+          const proposalContent =
+            "Dear team,\n\nPreview committed draft body.\n\nSincerely,\nAlex Martin";
+          onContentChange?.(proposalContent);
+          onProposalDocumentChange?.(proposalDocument);
+          onContentCommit?.({ proposalContent, proposalDocument });
+        }}
+      >
+        Edit preview document
       </button>
       <button
         type="button"
@@ -313,6 +355,82 @@ describe("ProposalForge autosave", () => {
         }),
       );
     });
+  });
+
+  it("saves preview document edits with the edited snapshot before refresh can restore stale server content", async () => {
+    window.localStorage.setItem(
+      PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        proposalContent:
+          "Dear team,\n\nOriginal server draft body.\n\nSincerely,\nAlex Martin",
+        proposalDocument: {
+          schemaVersion: 1,
+          kind: "letter",
+          source: "structured",
+          blocks: [
+            {
+              id: "salutation-1",
+              type: "salutation",
+              text: "Dear team,",
+            },
+            {
+              id: "paragraph-1",
+              type: "paragraph",
+              text: "Original server draft body.",
+            },
+            {
+              id: "closing-1",
+              type: "closing",
+              signOff: "Sincerely,",
+              signatureName: "Alex Martin",
+            },
+          ],
+        },
+        proposalType: "cover_letter",
+        proposalVoicePreset: "signature",
+        proposalTemplateId: null,
+        proposalVerbatiStyle: null,
+        proposalStyleLinkMode: "proposal_local",
+        proposalStyleChoice: "balanced",
+        proposalApplicantName: "Alex Martin",
+        proposalApplicantRole: "Operations Associate",
+        proposalDocumentTitle: "Preview autosave title",
+        proposalDocumentMeta: "Compose output",
+        generatedProposalId: "proposal_preview_existing",
+        proposalOutputMode: "preview",
+        paletteOverride: null,
+        customAccentHex: null,
+        templateBundleId: null,
+        typographyOverride: null,
+        layoutOverride: null,
+        proposalDocumentTitleManual: false,
+        characterLimitMode: null,
+        characterLimitValue: null,
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+    mockUpdateProposal.mockClear();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Edit preview document" }),
+    );
+
+    await waitFor(() => {
+      expect(mockUpdateProposal).toHaveBeenCalled();
+    });
+    expect(mockUpdateProposal.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        id: "proposal_preview_existing",
+        title: "Preview autosave title",
+        content: expect.stringContaining("Preview committed draft body."),
+        status: "draft",
+      }),
+    );
   });
 
   it("strips familyId from workshop settings styles when creating proposal drafts", async () => {

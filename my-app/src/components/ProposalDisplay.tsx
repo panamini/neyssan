@@ -138,7 +138,10 @@ interface ProposalDisplayProps {
   onModeChange?: (mode: "preview" | "edit") => void;
   onPreviewInteract?: () => void;
   onContentChange?: (value: string) => void;
-  onContentCommit?: () => void;
+  onContentCommit?: (snapshot?: {
+    proposalContent?: string | null;
+    proposalDocument?: ProposalDocument | null;
+  }) => void;
   onProposalDocumentChange?: (document: ProposalDocument) => void;
   editorAiJobContext?: EditorAiJobContext | null;
   actions?: React.ReactNode;
@@ -1516,7 +1519,10 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         onContentChange(nextContent);
       }
       onProposalDocumentChange?.(nextDocument);
-      onContentCommit?.();
+      onContentCommit?.({
+        proposalContent: nextContent,
+        proposalDocument: nextDocument,
+      });
     },
     [
       canEditPreviewDocumentText,
