@@ -615,6 +615,115 @@ function getProposalDocumentTextBlockText(
     : null;
 }
 
+function getProposalEditorTextBoundary(
+  root: HTMLElement,
+  offset: number,
+): { node: Text; offset: number } | null {
+  const boundedOffset = Math.max(0, offset);
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) => {
+      const parent = node.parentElement;
+      return parent?.closest("[data-proposal-editor-control='true']")
+        ? NodeFilter.FILTER_REJECT
+        : NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  let remaining = boundedOffset;
+  let node = walker.nextNode();
+
+  while (node) {
+    const text = node.textContent ?? "";
+    if (remaining <= text.length) {
+      return { node: node as Text, offset: remaining };
+    }
+    remaining -= text.length;
+    node = walker.nextNode();
+  }
+
+  return null;
+}
+
+function wrapProposalPreviewRangeWithInlineMark(
+  range: Range,
+  mark: ProposalInlineMark,
+): boolean {
+  if (range.collapsed) return false;
+
+  const selectedText = range.toString();
+  if (!selectedText.trim()) return false;
+
+  const tagName =
+    mark === "bold" ? "strong" : mark === "italic" ? "em" : "u";
+  const wrapper = document.createElement(tagName);
+  wrapper.appendChild(range.extractContents());
+  range.insertNode(wrapper);
+
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  const nextRange = document.createRange();
+  nextRange.selectNodeContents(wrapper);
+  selection?.addRange(nextRange);
+  return true;
+}
+
+function applyProposalPreviewInlineMarkToCurrentDomSelection(
+  mark: ProposalInlineMark,
+): boolean {
+  const bodyEditor = document.querySelector<HTMLElement>(
+    "[data-proposal-body-editor='true']",
+  );
+  const selection = window.getSelection();
+  if (!bodyEditor || !selection || selection.rangeCount === 0) return false;
+
+  const range = selection.getRangeAt(0);
+  if (
+    !bodyEditor.contains(range.startContainer) ||
+    !bodyEditor.contains(range.endContainer)
+  ) {
+    return false;
+  }
+
+  const selectedTarget = getProposalSelectionTargetFromRange(range);
+  if (!selectedTarget) return false;
+
+  return wrapProposalPreviewRangeWithInlineMark(range, mark);
+}
+
+function applyProposalPreviewInlineMarkToDom(
+  selectionState: ProposalPreviewSelectionState,
+  mark: ProposalInlineMark,
+): boolean {
+  if (!selectionState.target || selectionState.multiTargetRange) {
+    return false;
+  }
+
+  const bodyEditor = document.querySelector<HTMLElement>(
+    "[data-proposal-body-editor='true']",
+  );
+  if (!bodyEditor) return false;
+
+  const selector =
+    selectionState.target.type === "text-block"
+      ? `[data-proposal-edit-target='text-block'][data-proposal-edit-block-id="${CSS.escape(selectionState.target.blockId)}"]`
+      : `[data-proposal-edit-target='list-item'][data-proposal-edit-block-id="${CSS.escape(selectionState.target.blockId)}"][data-proposal-edit-item-id="${CSS.escape(selectionState.target.itemId)}"]`;
+  const target = bodyEditor.querySelector<HTMLElement>(selector);
+  if (!target) return false;
+
+  const start = Math.max(0, Math.min(selectionState.start, selectionState.end));
+  const end = Math.max(start, Math.max(selectionState.start, selectionState.end));
+  if (start === end) return false;
+
+  const startBoundary = getProposalEditorTextBoundary(target, start);
+  const endBoundary = getProposalEditorTextBoundary(target, end);
+  if (!startBoundary || !endBoundary) return false;
+
+  const range = document.createRange();
+  range.setStart(startBoundary.node, startBoundary.offset);
+  range.setEnd(endBoundary.node, endBoundary.offset);
+
+  return wrapProposalPreviewRangeWithInlineMark(range, mark);
+}
+
 function replaceProposalDocumentMultiTargetSelection(args: {
   document: ProposalDocument;
   range: ProposalPreviewMultiTargetRange;
@@ -2097,6 +2206,15 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         return;
       }
 
+      if (
+        !previewSelectionState.multiTargetRange &&
+        applyProposalPreviewInlineMarkToCurrentDomSelection(mark)
+      ) {
+        setAiSuggestion(null);
+        setPreviewSelectionState(null);
+        return;
+      }
+
       const currentDocument = resolveProposalDocument({
         document: proposalDocument,
         content: proposalContent,
@@ -2121,8 +2239,13 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
               end: previewSelectionState.end,
             })
           : null;
-      if (!nextDocument) return;
-      if (nextDocument === currentDocument) return;
+      if (!nextDocument || nextDocument === currentDocument) {
+        if (applyProposalPreviewInlineMarkToDom(previewSelectionState, mark)) {
+          setAiSuggestion(null);
+          setPreviewSelectionState(null);
+        }
+        return;
+      }
 
       setAiSuggestion(null);
       setPreviewSelectionState(null);
