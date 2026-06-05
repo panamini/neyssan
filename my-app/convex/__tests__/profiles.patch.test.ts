@@ -182,6 +182,19 @@ describe("profiles.patch resume scoring sync", () => {
               typography: "geist-baskervville",
               palette: "sauge",
             },
+            documentIcons: {
+              listMarkerType: "dot",
+              defaultListMarkerKey: "dot",
+              sectionHeadingIconMode: "custom",
+              sectionIconMap: {},
+              color: "accent",
+              sizePt: 8,
+            },
+            documentIconOverrides: {
+              listItems: {
+                "skills|skills|skill-1|item||0": "check",
+              },
+            },
           },
         },
       },
@@ -226,6 +239,19 @@ describe("profiles.patch resume scoring sync", () => {
               typography: "geist-baskervville",
               palette: "sauge",
             },
+            documentIcons: {
+              listMarkerType: "dot",
+              defaultListMarkerKey: "dot",
+              sectionHeadingIconMode: "custom",
+              sectionIconMap: {},
+              color: "accent",
+              sizePt: 8,
+            },
+            documentIconOverrides: {
+              listItems: {
+                "skills|skills|skill-1|item||0": "check",
+              },
+            },
           },
         },
       },
@@ -244,6 +270,19 @@ describe("profiles.patch resume scoring sync", () => {
             layout: "workshop",
             typography: "geist-baskervville",
             palette: "sauge",
+          },
+          documentIcons: {
+            listMarkerType: "dot",
+            defaultListMarkerKey: "dot",
+            sectionHeadingIconMode: "custom",
+            sectionIconMap: {},
+            color: "accent",
+            sizePt: 8,
+          },
+          documentIconOverrides: {
+            listItems: {
+              "skills|skills|skill-1|item||0": "check",
+            },
           },
         }),
       }),

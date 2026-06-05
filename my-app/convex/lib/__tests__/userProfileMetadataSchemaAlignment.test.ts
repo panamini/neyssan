@@ -320,6 +320,7 @@ describe("user profile metadata schema alignment", () => {
       "confidence",
       "filename",
       "titleLocked",
+      "resumeTemplateId",
       "verbatiStyle",
       "verbatiStyleSlotId",
       "verbatiStyleSlotSource",
@@ -328,6 +329,8 @@ describe("user profile metadata schema alignment", () => {
       "documentStyleVersion",
       "profileImage",
       "documentDecoration",
+      "documentIcons",
+      "documentIconOverrides",
     ]);
     expect(Object.keys(userProfileMetadataValidator.fields)).toEqual([
       "source",
@@ -335,6 +338,7 @@ describe("user profile metadata schema alignment", () => {
       "confidence",
       "filename",
       "titleLocked",
+      "resumeTemplateId",
       "verbatiStyle",
       "verbatiStyleSlotId",
       "verbatiStyleSlotSource",
@@ -343,6 +347,8 @@ describe("user profile metadata schema alignment", () => {
       "documentStyleVersion",
       "profileImage",
       "documentDecoration",
+      "documentIcons",
+      "documentIconOverrides",
     ]);
   });
 

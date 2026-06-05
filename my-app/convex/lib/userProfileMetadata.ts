@@ -129,6 +129,19 @@ export type UserProfileDocumentDecoration = {
   yMm?: number;
 };
 
+export type UserProfileDocumentIconSettings = {
+  listMarkerType?: "dot" | "dash" | "icon";
+  defaultListMarkerKey?: string | null;
+  sectionHeadingIconMode?: "none" | "auto" | "custom";
+  sectionIconMap?: Record<string, string>;
+  color?: "ink" | "muted" | "accent";
+  sizePt?: 8 | 9 | 10 | 12;
+};
+
+export type UserProfileDocumentIconOverrides = {
+  listItems?: Record<string, string>;
+};
+
 export type UserProfileMetadata = {
   source?: string;
   importedAt?: number;
@@ -144,6 +157,8 @@ export type UserProfileMetadata = {
   documentStyleVersion?: 1;
   profileImage?: UserProfileLegacyProfileImage;
   documentDecoration?: UserProfileDocumentDecoration;
+  documentIcons?: UserProfileDocumentIconSettings;
+  documentIconOverrides?: UserProfileDocumentIconOverrides;
 };
 
 const LEGACY_LAYOUT_TO_CANONICAL: Record<
@@ -251,6 +266,27 @@ export const userProfileDocumentDecorationValidator = v.object({
   yMm: v.optional(v.number()),
 });
 
+export const userProfileDocumentIconSettingsValidator = v.object({
+  listMarkerType: v.optional(
+    v.union(v.literal("dot"), v.literal("dash"), v.literal("icon")),
+  ),
+  defaultListMarkerKey: v.optional(v.union(v.string(), v.null())),
+  sectionHeadingIconMode: v.optional(
+    v.union(v.literal("none"), v.literal("auto"), v.literal("custom")),
+  ),
+  sectionIconMap: v.optional(v.record(v.string(), v.string())),
+  color: v.optional(
+    v.union(v.literal("ink"), v.literal("muted"), v.literal("accent")),
+  ),
+  sizePt: v.optional(
+    v.union(v.literal(8), v.literal(9), v.literal(10), v.literal(12)),
+  ),
+});
+
+export const userProfileDocumentIconOverridesValidator = v.object({
+  listItems: v.optional(v.record(v.string(), v.string())),
+});
+
 export const documentStyleSlotIdValidator = v.union(
   v.literal(1),
   v.literal(2),
@@ -279,6 +315,8 @@ export const userProfileMetadataValidator = v.object({
   documentStyleVersion: v.optional(v.literal(1)),
   profileImage: v.optional(userProfileLegacyProfileImageValidator),
   documentDecoration: v.optional(userProfileDocumentDecorationValidator),
+  documentIcons: v.optional(userProfileDocumentIconSettingsValidator),
+  documentIconOverrides: v.optional(userProfileDocumentIconOverridesValidator),
 });
 
 function canonicalizeLayout(value: unknown): unknown {

@@ -41,6 +41,16 @@ function matchesValidator(validator: ValidatorJSON, value: unknown): boolean {
         return matchesValidator(field.fieldType, value[key]);
       });
     }
+    case "record": {
+      if (!isPlainObject(value)) {
+        return false;
+      }
+      return Object.entries(value).every(
+        ([key, entry]) =>
+          matchesValidator(validator.keys, key) &&
+          matchesValidator(validator.values.fieldType, entry),
+      );
+    }
     default:
       throw new Error(
         `Unsupported validator kind in test helper: ${validator.type}`,
@@ -154,6 +164,56 @@ describe("userProfileMetadata", () => {
           size: "medium",
           fit: "contain",
         },
+      }),
+    ).toBe(true);
+  });
+
+  it("accepts CV document icon metadata saved by style controls", () => {
+    expect(
+      matchesValidator(userProfileMetadataValidator.json, {
+        documentDecoration: {
+          visible: true,
+          source: "upload",
+          assetId: "kg2d4jp1zben95th6293bqftb98832ed",
+          fileName: "8f2ac4f0-624b-4bb4-a296-a350ceca02d7.png",
+          fit: "contain",
+          mimeType: "image/png",
+          placementMode: "default",
+          sizePreset: 35,
+          xMm: 17,
+          yMm: 35,
+        },
+        documentIcons: {
+          color: "accent",
+          defaultListMarkerKey: "dot",
+          listMarkerType: "dot",
+          sectionHeadingIconMode: "custom",
+          sectionIconMap: {},
+          sizePt: 8,
+        },
+        documentIconOverrides: {
+          listItems: {
+            "skills|skills|skill-1|item||0": "check",
+          },
+        },
+        documentStyleVersion: 1,
+        resumeTemplateId: "workshop_resume_onecol_ats",
+        verbatiStyle: {
+          layout: "workshop",
+          palette: "ink",
+          resumeTemplateId: "workshop_resume_onecol_ats",
+          typography: "geist-baskervville",
+        },
+        verbatiStyleBaseSnapshot: {
+          familyId: "workshop",
+          layout: "workshop",
+          palette: "ink",
+          resumeTemplateId: "workshop_resume_onecol_ats",
+          typography: "geist-baskervville",
+        },
+        verbatiStyleSlotId: 1,
+        verbatiStyleSlotNameSnapshot: "Style 1",
+        verbatiStyleSlotSource: "settings",
       }),
     ).toBe(true);
   });
