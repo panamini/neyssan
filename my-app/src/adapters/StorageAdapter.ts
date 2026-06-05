@@ -135,63 +135,6 @@ function cvEditorDebugInfo(label: string, payload: Record<string, unknown>): voi
   console.info(label, payload);
 }
 
-function cvDecorationBoundaryInfo(
-  label: string,
-  payload: Record<string, unknown>,
-): void {
-  if (!import.meta.env.DEV && !isCvEditorDebugEnabled()) {
-    return;
-  }
-
-  console.info(label, payload);
-}
-
-function readDocumentDecorationDebug(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {
-      hasDecoration: false,
-      hasAssetId: false,
-      hasResolvedUrl: false,
-    };
-  }
-
-  const decoration = value as Record<string, unknown>;
-  return {
-    hasDecoration: true,
-    assetId:
-      typeof decoration.assetId === "string" ? decoration.assetId : null,
-    hasAssetId: typeof decoration.assetId === "string" && decoration.assetId.length > 0,
-    hasResolvedUrl:
-      typeof decoration.resolvedUrl === "string" &&
-      decoration.resolvedUrl.length > 0,
-    resolvedUrl:
-      typeof decoration.resolvedUrl === "string"
-        ? decoration.resolvedUrl.slice(0, 120)
-        : null,
-    assetMissing: decoration.assetMissing === true,
-  };
-}
-
-function readProfileDecorationDebug(rawProfile: Record<string, unknown>) {
-  const metadata =
-    rawProfile.metadata && typeof rawProfile.metadata === "object"
-      ? (rawProfile.metadata as Record<string, unknown>)
-      : null;
-  const cvDocument =
-    rawProfile.cvDocument && typeof rawProfile.cvDocument === "object"
-      ? (rawProfile.cvDocument as Record<string, unknown>)
-      : null;
-  const embeddedMetadata =
-    cvDocument?.metadata && typeof cvDocument.metadata === "object"
-      ? (cvDocument.metadata as Record<string, unknown>)
-      : null;
-
-  return {
-    topLevel: readDocumentDecorationDebug(metadata?.documentDecoration),
-    embedded: readDocumentDecorationDebug(embeddedMetadata?.documentDecoration),
-  };
-}
-
 function sanitizeRemoteDocumentDecoration(value: unknown): unknown {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return value;
@@ -591,7 +534,11 @@ export function mapPersistedProfileToCvDocument(
   }
 
   const mapped = mapProfileToCvDocument(rawProfile, profileId);
-  return mapped ? sanitizeRuntimeCvDocumentForState(mapped) : null;
+  return mapped
+    ? sanitizeRuntimeCvDocumentForState(
+        overlayProfileMetadataPatch(mapped, rawProfile),
+      )
+    : null;
 }
 
 /* -------------------- ConvexStorageAdapter -------------------- */
@@ -872,13 +819,6 @@ export class ConvexStorageAdapter {
         const doc = await this._loadFn(id);
         if (doc) {
           const runtimeDoc = sanitizeRuntimeCvDocumentForState(doc);
-          cvDecorationBoundaryInfo("[cv-decoration-load-remote-state]", {
-            docId: id,
-            source: "loadFn",
-            document: readDocumentDecorationDebug(
-              runtimeDoc.metadata?.documentDecoration,
-            ),
-          });
           return {
             status: "ok",
             document: runtimeDoc,
@@ -900,13 +840,6 @@ export class ConvexStorageAdapter {
           rawProfile,
           id,
         );
-        cvDecorationBoundaryInfo("[cv-decoration-load-remote-profile]", {
-          docId: id,
-          profile: readProfileDecorationDebug(rawProfile),
-          mapped: readDocumentDecorationDebug(
-            mapped?.metadata?.documentDecoration,
-          ),
-        });
         if (mapped) {
           try {
             parseCvDocumentStrict(mapped);
@@ -916,13 +849,6 @@ export class ConvexStorageAdapter {
                 mapped.id,
                 serialize(sanitizeLocalDurableCvDocument(mapped)),
               );
-            cvDecorationBoundaryInfo("[cv-decoration-load-remote-state]", {
-              docId: id,
-              source: "fallbackQuery",
-              document: readDocumentDecorationDebug(
-                runtimeMapped.metadata?.documentDecoration,
-              ),
-            });
             return {
               status: "ok",
               document: runtimeMapped,

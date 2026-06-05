@@ -224,11 +224,49 @@ function readDecorationRuntimeDebug(doc: CvDocument | null | undefined) {
     hasResolvedUrl:
       typeof decoration.resolvedUrl === "string" &&
       decoration.resolvedUrl.length > 0,
-    resolvedUrl:
+    resolvedUrlPreview:
       typeof decoration.resolvedUrl === "string"
         ? decoration.resolvedUrl.slice(0, 120)
         : null,
     assetMissing: decoration.assetMissing === true,
+  };
+}
+
+function canOverlayRuntimeDocumentDecoration(
+  localDoc: CvDocument | null | undefined,
+  remoteDoc: CvDocument | null | undefined,
+): boolean {
+  if (!localDoc || !remoteDoc) return false;
+  if (String(localDoc.id) !== String(remoteDoc.id)) return false;
+
+  const localDecoration = localDoc.metadata?.documentDecoration;
+  const remoteDecoration = remoteDoc.metadata?.documentDecoration;
+  if (!localDecoration || !remoteDecoration) return false;
+  if (localDecoration.visible !== true) return false;
+  if (!localDecoration.assetId) return false;
+  if (localDecoration.dataUrl || localDecoration.resolvedUrl) return false;
+  if (remoteDecoration.assetId !== localDecoration.assetId) return false;
+  return Boolean(remoteDecoration.resolvedUrl || remoteDecoration.assetMissing);
+}
+
+function overlayRuntimeDocumentDecoration(
+  localDoc: CvDocument,
+  remoteDoc: CvDocument,
+): CvDocument {
+  const localDecoration = localDoc.metadata?.documentDecoration ?? {};
+  const remoteDecoration = remoteDoc.metadata?.documentDecoration ?? {};
+  return {
+    ...localDoc,
+    metadata: {
+      ...(localDoc.metadata ?? {}),
+      documentDecoration: {
+        ...localDecoration,
+        resolvedUrl: remoteDecoration.resolvedUrl,
+        assetMissing: remoteDecoration.assetMissing,
+        mimeType: localDecoration.mimeType ?? remoteDecoration.mimeType,
+        fileName: localDecoration.fileName ?? remoteDecoration.fileName,
+      },
+    },
   };
 }
 
@@ -1955,7 +1993,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
           metadata: {
             ...(durableDoc.metadata ?? { createdAt: now, version: 1 }),
             createdAt: durableDoc.metadata?.createdAt ?? now,
-            updatedAt: now,
+            updatedAt: durableDoc.metadata?.updatedAt ?? now,
             version: durableDoc.metadata?.version ?? 1,
           } as any,
         };
@@ -2261,6 +2299,33 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       return false;
     }
 
+    return true;
+  }
+
+  function applyRuntimeDocumentDecorationOverlay(
+    targetCvId: string,
+    localDoc: CvDocument | null | undefined,
+    remoteDoc: CvDocument | null | undefined,
+  ): boolean {
+    if (!canOverlayRuntimeDocumentDecoration(localDoc, remoteDoc)) {
+      return false;
+    }
+
+    const overlaid = overlayRuntimeDocumentDecoration(localDoc!, remoteDoc!);
+    safeSetCurrentCv(overlaid);
+    setCvs((prev) => {
+      const exists = prev.some(
+        (doc) => String(doc.id) === String(overlaid.id),
+      );
+      if (exists) {
+        return prev.map((doc) =>
+          String(doc.id) === String(overlaid.id) ? overlaid : doc,
+        );
+      }
+      return [...prev, overlaid];
+    });
+    cacheDocumentLocally(overlaid);
+    lastSavedRef.current = overlaid;
     return true;
   }
 
@@ -2858,6 +2923,14 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
                 if (
                   !shouldApplyBackgroundRefresh(targetId, docNorm, remoteNorm)
                 ) {
+                  if (!isLoadTargetStillCurrent()) {
+                    return;
+                  }
+                  applyRuntimeDocumentDecorationOverlay(
+                    targetId,
+                    currentCvRef.current ?? docNorm,
+                    remoteNorm,
+                  );
                   return;
                 }
                 if (!isLoadTargetStillCurrent()) {
@@ -3274,6 +3347,11 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
             remoteNorm,
           )
         ) {
+          applyRuntimeDocumentDecorationOverlay(
+            targetCvId,
+            currentCvRef.current ?? localBaseline,
+            remoteNorm,
+          );
           return;
         }
         const latestRouteCvId = readRequestedCvIdFromWindowLocation();

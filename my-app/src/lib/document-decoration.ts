@@ -296,6 +296,7 @@ export function getRenderableDocumentDecoration(
         hasAssetId: true,
         hasDataUrl: false,
         hasResolvedUrl: false,
+        assetMissing: decoration.assetMissing === true,
         assetId: decoration.assetId,
       });
     }

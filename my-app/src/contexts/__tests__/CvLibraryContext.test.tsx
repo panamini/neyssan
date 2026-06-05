@@ -567,6 +567,83 @@ describe('CvLibraryContext', () => {
     );
   });
 
+  it('overlays runtime decoration URLs when full background refresh is skipped by a newer local cache', async () => {
+    authState.isLoaded = true;
+    authState.isSignedIn = true;
+    authState.isConvexAuthenticated = true;
+    authState.isConvexAuthLoading = false;
+
+    const localCv = generateCvTemplateV1('Local Newer Decoration CV');
+    localCv.id = 'cv_active_decoration_newer_cache';
+    localCv.metadata = {
+      ...localCv.metadata,
+      updatedAt: '2026-06-05T12:00:00.000Z',
+      documentDecoration: {
+        visible: true,
+        source: 'upload',
+        assetId: 'storage_decoration_runtime_overlay',
+        fileName: 'mark.png',
+        mimeType: 'image/png',
+        sizePreset: 35,
+        fit: 'contain',
+        placementMode: 'default',
+      } as any,
+    };
+    const localSectionsSnapshot = JSON.parse(JSON.stringify(localCv.sections));
+
+    const remoteCv = {
+      ...localCv,
+      title: 'Remote Older Decoration CV',
+      metadata: {
+        ...localCv.metadata,
+        updatedAt: '2026-06-05T11:00:00.000Z',
+        documentDecoration: {
+          ...(localCv.metadata.documentDecoration as any),
+          resolvedUrl: 'https://files.example.test/storage_decoration_runtime_overlay',
+        },
+      },
+    };
+
+    vi.mocked(convexClient.query).mockImplementation(async (_query: unknown, args: unknown) => {
+      if ((args as { profileId?: string } | undefined)?.profileId === localCv.id) {
+        return {
+          profileId: localCv.id,
+          cvDocument: remoteCv,
+          metadata: remoteCv.metadata,
+        };
+      }
+      return [];
+    });
+
+    mockLocalStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([localCv]));
+    mockLocalStorage.setItem(`cv:${localCv.id}`, JSON.stringify(localCv));
+    mockLocalStorage.setItem(ACTIVE_CV_STORAGE_KEY, localCv.id);
+    window.history.pushState({}, '', '/cv');
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>,
+    );
+
+    await waitFor(() => expect(ctx.currentCvId).toBe(localCv.id));
+    await waitFor(() =>
+      expect(ctx.currentCv.metadata.documentDecoration).toMatchObject({
+        assetId: 'storage_decoration_runtime_overlay',
+        resolvedUrl: 'https://files.example.test/storage_decoration_runtime_overlay',
+      }),
+    );
+    expect(ctx.currentCv.title).toBe('Local Newer Decoration CV');
+    expect(ctx.currentCv.sections).toEqual(localSectionsSnapshot);
+
+    const localSnapshot = JSON.parse(
+      mockLocalStorage.getItem(`cv:${localCv.id}`) as string,
+    );
+    expect(localSnapshot.metadata.updatedAt).toBe('2026-06-05T12:00:00.000Z');
+    expect(localSnapshot.metadata.documentDecoration.resolvedUrl).toBeUndefined();
+  });
+
   it('preserves the local selected template when background refresh returns newer content without visual metadata', async () => {
     authState.isLoaded = true;
     authState.isSignedIn = true;

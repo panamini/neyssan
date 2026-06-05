@@ -750,6 +750,50 @@ describe("StorageAdapter persistence", () => {
     });
   });
 
+  it("preserves top-level resolved document decoration when embedded cvDocument mapping falls back", () => {
+    const cv = generateCvTemplateV1("Remote Decoration Fallback CV");
+
+    const restored = mapPersistedProfileToCvDocument(
+      {
+        profileId: cv.id,
+        name: "Fallback Profile Name",
+        email: "fallback@example.test",
+        summary: "Fallback summary",
+        version: 1,
+        cvDocument: {
+          id: cv.id,
+          title: "Invalid Embedded CV",
+          metadata: cv.metadata,
+          sections: "invalid-sections",
+        },
+        metadata: {
+          documentDecoration: {
+            visible: true,
+            source: "upload",
+            assetId: "fresh_top_level_fallback_asset",
+            resolvedUrl:
+              "https://files.example.test/fresh_top_level_fallback_asset",
+            fileName: "fallback-mark.jpg",
+            mimeType: "image/jpeg",
+            sizePreset: 35,
+            fit: "contain",
+            placementMode: "default",
+          },
+        },
+      },
+      cv.id,
+    );
+
+    expect(restored).not.toBeNull();
+    expect(restored?.title).toBe("Fallback Profile Name");
+    expect(restored?.metadata.documentDecoration).toMatchObject({
+      assetId: "fresh_top_level_fallback_asset",
+      resolvedUrl:
+        "https://files.example.test/fresh_top_level_fallback_asset",
+      fileName: "fallback-mark.jpg",
+    });
+  });
+
   it("returns a runtime sanitized document when loading a remote profile with legacy image data", async () => {
     const cv = generateCvTemplateV1("Remote Legacy Image CV");
     cv.metadata.profileImage = {
