@@ -709,6 +709,47 @@ describe("StorageAdapter persistence", () => {
     expect(JSON.stringify(loaded)).not.toContain("data:image");
   });
 
+  it("prefers top-level resolved document decoration over stale embedded cvDocument metadata", () => {
+    const cv = generateCvTemplateV1("Remote Decoration Mismatch CV");
+    cv.metadata.documentDecoration = {
+      visible: true,
+      source: "upload",
+      assetId: "stale_embedded_asset",
+      fileName: "old-mark.jpg",
+      mimeType: "image/jpeg",
+      sizePreset: 35,
+      fit: "contain",
+      placementMode: "default",
+    } as any;
+
+    const restored = mapPersistedProfileToCvDocument(
+      {
+        profileId: cv.id,
+        cvDocument: cv,
+        metadata: {
+          documentDecoration: {
+            visible: true,
+            source: "upload",
+            assetId: "fresh_top_level_asset",
+            resolvedUrl: "https://files.example.test/fresh_top_level_asset",
+            fileName: "fresh-mark.jpg",
+            mimeType: "image/jpeg",
+            sizePreset: 35,
+            fit: "contain",
+            placementMode: "default",
+          },
+        },
+      },
+      cv.id,
+    );
+
+    expect(restored?.metadata.documentDecoration).toMatchObject({
+      assetId: "fresh_top_level_asset",
+      resolvedUrl: "https://files.example.test/fresh_top_level_asset",
+      fileName: "fresh-mark.jpg",
+    });
+  });
+
   it("returns a runtime sanitized document when loading a remote profile with legacy image data", async () => {
     const cv = generateCvTemplateV1("Remote Legacy Image CV");
     cv.metadata.profileImage = {

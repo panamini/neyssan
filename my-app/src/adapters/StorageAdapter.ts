@@ -135,6 +135,52 @@ function cvEditorDebugInfo(label: string, payload: Record<string, unknown>): voi
   console.info(label, payload);
 }
 
+function readDocumentDecorationDebug(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {
+      hasDecoration: false,
+      hasAssetId: false,
+      hasResolvedUrl: false,
+    };
+  }
+
+  const decoration = value as Record<string, unknown>;
+  return {
+    hasDecoration: true,
+    assetId:
+      typeof decoration.assetId === "string" ? decoration.assetId : null,
+    hasAssetId: typeof decoration.assetId === "string" && decoration.assetId.length > 0,
+    hasResolvedUrl:
+      typeof decoration.resolvedUrl === "string" &&
+      decoration.resolvedUrl.length > 0,
+    resolvedUrl:
+      typeof decoration.resolvedUrl === "string"
+        ? decoration.resolvedUrl.slice(0, 120)
+        : null,
+    assetMissing: decoration.assetMissing === true,
+  };
+}
+
+function readProfileDecorationDebug(rawProfile: Record<string, unknown>) {
+  const metadata =
+    rawProfile.metadata && typeof rawProfile.metadata === "object"
+      ? (rawProfile.metadata as Record<string, unknown>)
+      : null;
+  const cvDocument =
+    rawProfile.cvDocument && typeof rawProfile.cvDocument === "object"
+      ? (rawProfile.cvDocument as Record<string, unknown>)
+      : null;
+  const embeddedMetadata =
+    cvDocument?.metadata && typeof cvDocument.metadata === "object"
+      ? (cvDocument.metadata as Record<string, unknown>)
+      : null;
+
+  return {
+    topLevel: readDocumentDecorationDebug(metadata?.documentDecoration),
+    embedded: readDocumentDecorationDebug(embeddedMetadata?.documentDecoration),
+  };
+}
+
 function sanitizeRemoteDocumentDecoration(value: unknown): unknown {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return value;
@@ -830,10 +876,18 @@ export class ConvexStorageAdapter {
         profileId: id,
       });
       if (prof) {
+        const rawProfile = prof as Record<string, unknown>;
         const mapped = mapPersistedProfileToCvDocument(
-          prof as Record<string, unknown>,
+          rawProfile,
           id,
         );
+        cvEditorDebugInfo("[cv-decoration-load-remote-profile]", {
+          docId: id,
+          profile: readProfileDecorationDebug(rawProfile),
+          mapped: readDocumentDecorationDebug(
+            mapped?.metadata?.documentDecoration,
+          ),
+        });
         if (mapped) {
           try {
             parseCvDocumentStrict(mapped);

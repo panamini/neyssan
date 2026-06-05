@@ -194,6 +194,33 @@ function sanitizeRuntimeCvDocument(doc: CvDocument): CvDocument {
   return sanitizeRuntimeImageStateFields(doc);
 }
 
+function readDecorationRuntimeDebug(doc: CvDocument | null | undefined) {
+  const decoration = doc?.metadata?.documentDecoration;
+  if (!decoration || typeof decoration !== "object") {
+    return {
+      hasDecoration: false,
+      hasAssetId: false,
+      hasResolvedUrl: false,
+    };
+  }
+
+  return {
+    hasDecoration: true,
+    assetId:
+      typeof decoration.assetId === "string" ? decoration.assetId : null,
+    hasAssetId:
+      typeof decoration.assetId === "string" && decoration.assetId.length > 0,
+    hasResolvedUrl:
+      typeof decoration.resolvedUrl === "string" &&
+      decoration.resolvedUrl.length > 0,
+    resolvedUrl:
+      typeof decoration.resolvedUrl === "string"
+        ? decoration.resolvedUrl.slice(0, 120)
+        : null,
+    assetMissing: decoration.assetMissing === true,
+  };
+}
+
 function sanitizeDurableVisualMetadataPatch(
   patch: CvVisualMetadataPatch,
 ): CvVisualMetadataPatch {
@@ -3250,6 +3277,15 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
             remoteNorm,
             currentCvRef.current ?? localBaseline,
           );
+        cvEditorDebugInfo("[cv-decoration-context-refresh]", {
+          targetCvId,
+          routeCvId: latestRouteCvId,
+          current: readDecorationRuntimeDebug(
+            currentCvRef.current ?? localBaseline,
+          ),
+          remote: readDecorationRuntimeDebug(remoteNorm),
+          candidate: readDecorationRuntimeDebug(remoteWithLocalVisualTemplate),
+        });
         if (
           deepEqual(
             stripMetadata(currentCvRef.current ?? localBaseline),
@@ -3260,6 +3296,14 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
             remoteWithLocalVisualTemplate.metadata ?? null,
           )
         ) {
+          cvEditorDebugInfo("[cv-decoration-context-refresh-skipped]", {
+            targetCvId,
+            reason: "deep_equal",
+            current: readDecorationRuntimeDebug(
+              currentCvRef.current ?? localBaseline,
+            ),
+            candidate: readDecorationRuntimeDebug(remoteWithLocalVisualTemplate),
+          });
           return;
         }
         safeSetCurrentCv(remoteWithLocalVisualTemplate);
