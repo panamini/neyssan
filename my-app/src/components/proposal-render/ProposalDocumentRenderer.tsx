@@ -633,6 +633,172 @@ function insertPlainTextIntoEditableTarget(
   return normalizeProposalDocumentEditText(target.textContent ?? "");
 }
 
+function createEditableDomSplitBlockId(
+  editor: HTMLElement,
+  baseBlockId: string,
+): string {
+  let index = 1;
+  let nextId = `${baseBlockId}-dom-break-${index}`;
+  while (
+    editor.querySelector(
+      `[data-proposal-edit-block-id="${CSS.escape(nextId)}"]`,
+    )
+  ) {
+    index += 1;
+    nextId = `${baseBlockId}-dom-break-${index}`;
+  }
+  return nextId;
+}
+
+function trimEditableBoundaryWhitespace(
+  target: HTMLElement,
+  side: "start" | "end",
+): void {
+  const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) => {
+      const parent = node.parentElement;
+      return parent?.closest("[data-proposal-editor-control='true']")
+        ? NodeFilter.FILTER_REJECT
+        : NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  const textNodes: Text[] = [];
+  let node = walker.nextNode();
+  while (node) {
+    textNodes.push(node as Text);
+    node = walker.nextNode();
+  }
+
+  const textNode =
+    side === "start" ? textNodes[0] : textNodes[textNodes.length - 1];
+  if (!textNode) return;
+
+  textNode.textContent =
+    side === "start"
+      ? (textNode.textContent ?? "").replace(/^[ \t]+/u, "")
+      : (textNode.textContent ?? "").replace(/[ \t]+$/u, "");
+  if (!textNode.textContent) {
+    textNode.remove();
+  }
+}
+
+function splitEditableParagraphDomAtSelection(editor: HTMLElement): boolean {
+  const selection = window.getSelection?.();
+  if (!selection || selection.rangeCount === 0) return false;
+  const range = selection.getRangeAt(0);
+  if (range.startContainer === editor || range.endContainer === editor) {
+    return false;
+  }
+
+  const selectedTarget = findProposalBodySelectionTarget(editor);
+  if (!selectedTarget) return false;
+  if (selectedTarget.element.dataset.proposalEditFieldKind !== "paragraph") {
+    return false;
+  }
+
+  const blockId = selectedTarget.element.dataset.proposalEditBlockId;
+  if (!blockId) return false;
+  if (
+    !selectedTarget.element.contains(range.startContainer) ||
+    !selectedTarget.element.contains(range.endContainer)
+  ) {
+    return false;
+  }
+
+  if (!range.collapsed) {
+    range.deleteContents();
+    range.collapse(true);
+  }
+
+  const splitRange = document.createRange();
+  splitRange.selectNodeContents(selectedTarget.element);
+  splitRange.setStart(range.startContainer, range.startOffset);
+  const afterFragment = splitRange.extractContents();
+
+  trimEditableBoundaryWhitespace(selectedTarget.element, "end");
+  if (!getEditableTextWithoutControls(selectedTarget.element)) {
+    selectedTarget.element.textContent = EMPTY_EDITABLE_TEXT;
+  }
+
+  const nextElement = selectedTarget.element.cloneNode(false) as HTMLElement;
+  nextElement.dataset.proposalEditBlockId = createEditableDomSplitBlockId(
+    editor,
+    blockId,
+  );
+  nextElement.dataset.proposalEditFieldKind = "paragraph";
+  nextElement.dataset.proposalEditTarget = "text-block";
+  nextElement.appendChild(afterFragment);
+  trimEditableBoundaryWhitespace(nextElement, "start");
+  if (!getEditableTextWithoutControls(nextElement)) {
+    nextElement.textContent = EMPTY_EDITABLE_TEXT;
+  }
+  selectedTarget.element.after(nextElement);
+  setEditableCaretOffset(nextElement, 0);
+  return true;
+}
+
+function isEditableTextBlockKnown(
+  document: ProposalDocument,
+  target: ProposalDocumentTextTarget,
+): boolean {
+  if (target.type !== "text-block") return true;
+  return document.blocks.some(
+    (block) =>
+      block.id === target.blockId &&
+      (block.type === "paragraph" || block.type === "salutation"),
+  );
+}
+
+function mergeDomTextBlocksBackward(element: HTMLElement): boolean {
+  const previous = element.previousElementSibling;
+  if (!(previous instanceof HTMLElement)) return false;
+  if (previous.dataset.proposalEditTarget !== "text-block") return false;
+
+  const previousText = getEditableTextWithoutControls(previous);
+  const currentText = getEditableTextWithoutControls(element);
+  const joiner = previousText && currentText ? " " : "";
+  if (previous.textContent === EMPTY_EDITABLE_TEXT) {
+    previous.textContent = "";
+  }
+  if (joiner) {
+    previous.appendChild(document.createTextNode(joiner));
+  }
+  while (element.firstChild) {
+    previous.appendChild(element.firstChild);
+  }
+  if (!getEditableTextWithoutControls(previous)) {
+    previous.textContent = EMPTY_EDITABLE_TEXT;
+  }
+  element.remove();
+  setEditableCaretOffset(previous, previousText.length + joiner.length);
+  return true;
+}
+
+function mergeDomTextBlocksForward(element: HTMLElement): boolean {
+  const next = element.nextElementSibling;
+  if (!(next instanceof HTMLElement)) return false;
+  if (next.dataset.proposalEditTarget !== "text-block") return false;
+
+  const currentText = getEditableTextWithoutControls(element);
+  const nextText = getEditableTextWithoutControls(next);
+  const joiner = currentText && nextText ? " " : "";
+  if (element.textContent === EMPTY_EDITABLE_TEXT) {
+    element.textContent = "";
+  }
+  if (joiner) {
+    element.appendChild(document.createTextNode(joiner));
+  }
+  while (next.firstChild) {
+    element.appendChild(next.firstChild);
+  }
+  if (!getEditableTextWithoutControls(element)) {
+    element.textContent = EMPTY_EDITABLE_TEXT;
+  }
+  next.remove();
+  setEditableCaretOffset(element, currentText.length);
+  return true;
+}
+
 function appendProposalRichTextRun(
   runs: ProposalInlineRun[],
   text: string,
@@ -1341,6 +1507,16 @@ function buildEditableBodyDocument(
   document: ProposalDocument,
 ): ProposalDocument {
   const blockRichTextById = new Map<string, ProposalRichText | undefined>();
+  const knownTextBlockIds = new Set(
+    document.blocks
+      .filter((block) => block.type === "salutation" || block.type === "paragraph")
+      .map((block) => block.id),
+  );
+  const extraParagraphsAfterBlockId = new Map<
+    string,
+    Array<{ id: string; richText?: ProposalRichText }>
+  >();
+  let lastKnownTextBlockId: string | null = null;
   const listItemRichTextById = new Map<
     string,
     Map<string, ProposalRichText | undefined>
@@ -1351,10 +1527,22 @@ function buildEditableBodyDocument(
     .forEach((node) => {
       const blockId = node.dataset.proposalEditBlockId;
       if (!blockId) return;
-      blockRichTextById.set(
-        blockId,
-        serializeEditableRichTextWithoutControls(node),
-      );
+      const richText = serializeEditableRichTextWithoutControls(node);
+      if (knownTextBlockIds.has(blockId)) {
+        blockRichTextById.set(blockId, richText);
+        lastKnownTextBlockId = blockId;
+        return;
+      }
+
+      if (
+        lastKnownTextBlockId &&
+        node.dataset.proposalEditFieldKind === "paragraph"
+      ) {
+        const extras =
+          extraParagraphsAfterBlockId.get(lastKnownTextBlockId) ?? [];
+        extras.push({ id: blockId, richText });
+        extraParagraphsAfterBlockId.set(lastKnownTextBlockId, extras);
+      }
     });
 
   editor
@@ -1370,50 +1558,66 @@ function buildEditableBodyDocument(
       listItemRichTextById.set(blockId, itemMap);
     });
 
+  const nextBlocks: ProposalDocument["blocks"] = [];
+  document.blocks.forEach((block) => {
+    let nextBlock = block;
+    if (
+      (block.type === "salutation" || block.type === "paragraph") &&
+      blockRichTextById.has(block.id)
+    ) {
+      const richText = blockRichTextById.get(block.id);
+      const { richText: _richText, ...rest } = block;
+      nextBlock = {
+        ...rest,
+        text: richText
+          ? normalizeProposalDocumentEditText(
+              richText.runs.map((run) => run.text).join(""),
+            )
+          : "",
+        ...(richText ? { richText } : null),
+      };
+    } else if (block.type === "list" && listItemRichTextById.has(block.id)) {
+      const itemRichTextById = listItemRichTextById.get(block.id);
+      nextBlock = {
+        ...block,
+        items: block.items.map((item) => {
+          if (!itemRichTextById?.has(item.id)) return item;
+          const richText = itemRichTextById.get(item.id);
+          const { richText: _richText, ...rest } = item;
+          return {
+            ...rest,
+            text: richText
+              ? normalizeProposalDocumentEditText(
+                  richText.runs.map((run) => run.text).join(""),
+                )
+              : "",
+            ...(richText ? { richText } : null),
+          };
+        }),
+      };
+    }
+
+    nextBlocks.push(nextBlock);
+
+    const extraParagraphs = extraParagraphsAfterBlockId.get(block.id) ?? [];
+    extraParagraphs.forEach((extra) => {
+      nextBlocks.push({
+        id: extra.id,
+        type: "paragraph",
+        text: extra.richText
+          ? normalizeProposalDocumentEditText(
+              extra.richText.runs.map((run) => run.text).join(""),
+            )
+          : "",
+        ...(extra.richText ? { richText: extra.richText } : null),
+      });
+    });
+  });
+
   return {
     ...document,
     source: "structured",
-    blocks: document.blocks.map((block) => {
-      if (
-        (block.type === "salutation" || block.type === "paragraph") &&
-        blockRichTextById.has(block.id)
-      ) {
-        const richText = blockRichTextById.get(block.id);
-        const { richText: _richText, ...rest } = block;
-        return {
-          ...rest,
-          text: richText
-            ? normalizeProposalDocumentEditText(
-                richText.runs.map((run) => run.text).join(""),
-              )
-            : "",
-          ...(richText ? { richText } : null),
-        };
-      }
-
-      if (block.type === "list" && listItemRichTextById.has(block.id)) {
-        const itemRichTextById = listItemRichTextById.get(block.id);
-        return {
-          ...block,
-          items: block.items.map((item) => {
-            if (!itemRichTextById?.has(item.id)) return item;
-            const richText = itemRichTextById.get(item.id);
-            const { richText: _richText, ...rest } = item;
-            return {
-              ...rest,
-              text: richText
-                ? normalizeProposalDocumentEditText(
-                    richText.runs.map((run) => run.text).join(""),
-                  )
-                : "",
-              ...(richText ? { richText } : null),
-            };
-          }),
-        };
-      }
-
-      return block;
-    }),
+    blocks: nextBlocks,
   };
 }
 
@@ -4149,6 +4353,7 @@ export function ProposalDocumentRenderer({
   const rootRef = React.useRef<HTMLDivElement>(null);
   const pageRef = React.useRef<HTMLDivElement>(null);
   const bodyRef = React.useRef<HTMLDivElement>(null);
+  const bodyEditorRef = React.useRef<HTMLDivElement | null>(null);
   const measurementPageRef = React.useRef<HTMLDivElement>(null);
   const measurementBodyRef = React.useRef<HTMLDivElement>(null);
   const pendingEditableFocusRef = React.useRef<PendingEditableFocus | null>(null);
@@ -4384,6 +4589,35 @@ export function ProposalDocumentRenderer({
     },
     [onProposalDocumentChange, structuredDocument],
   );
+  React.useEffect(() => {
+    const commitFocusedEditableBody = () => {
+      const editor = bodyEditorRef.current;
+      if (!editor || document.activeElement !== editor) return;
+      commitEditableBodyDocument(editor);
+    };
+
+    window.addEventListener("pagehide", commitFocusedEditableBody);
+    window.addEventListener("beforeunload", commitFocusedEditableBody);
+    return () => {
+      window.removeEventListener("pagehide", commitFocusedEditableBody);
+      window.removeEventListener("beforeunload", commitFocusedEditableBody);
+    };
+  }, [commitEditableBodyDocument]);
+  const commitEditableBodyLineBreak = React.useCallback(
+    (editor: HTMLElement) => {
+      insertPlainTextIntoEditableTarget(editor, "\n");
+      const target = findProposalBodySelectionTarget(editor);
+      if (target) {
+        pendingEditableFocusRef.current = {
+          target: target.target,
+          offset: target.offset,
+        };
+      }
+      commitEditableBodyDocument(editor);
+      return true;
+    },
+    [commitEditableBodyDocument],
+  );
   const handleEditableBodyBoundaryDelete = React.useCallback(
     (editor: HTMLElement, key: "Backspace" | "Delete"): boolean => {
       if (!onProposalDocumentChange) return false;
@@ -4396,6 +4630,10 @@ export function ProposalDocumentRenderer({
       if (key === "Backspace") {
         if (!isCaretAtStartOfEditableBlock(selectedTarget.element)) {
           return false;
+        }
+
+        if (!isEditableTextBlockKnown(structuredDocument, selectedTarget.target)) {
+          return mergeDomTextBlocksBackward(selectedTarget.element);
         }
 
         const nextFocus = resolvePreviousEditableFocus({
@@ -4416,6 +4654,19 @@ export function ProposalDocumentRenderer({
 
       if (!isCaretAtEndOfEditableBlock(selectedTarget.element)) {
         return false;
+      }
+
+      const nextElement = selectedTarget.element.nextElementSibling;
+      if (
+        nextElement instanceof HTMLElement &&
+        nextElement.dataset.proposalEditTarget === "text-block" &&
+        !structuredDocument.blocks.some(
+          (block) =>
+            block.id === nextElement.dataset.proposalEditBlockId &&
+            (block.type === "paragraph" || block.type === "salutation"),
+        )
+      ) {
+        return mergeDomTextBlocksForward(selectedTarget.element);
       }
 
       const nextDocument = mergeProposalDocumentTargetForward({
@@ -4926,6 +5177,7 @@ export function ProposalDocumentRenderer({
       return (
         <div
           key="proposal-body-editor"
+          ref={bodyEditorRef}
           className="dasti-proposal-document__body-editor"
           contentEditable
           suppressContentEditableWarning
@@ -4966,35 +5218,36 @@ export function ProposalDocumentRenderer({
               return;
             }
 
-            event.preventDefault();
-
             if (event.shiftKey) {
-              insertPlainTextIntoEditableTarget(event.currentTarget, "\n");
-              commitEditableBodyDocument(event.currentTarget);
-              const target = findProposalBodySelectionTarget(event.currentTarget);
-              if (target) {
-                pendingEditableFocusRef.current = {
-                  target: target.target,
-                  offset: target.offset,
-                };
+              if (commitEditableBodyLineBreak(event.currentTarget)) {
+                event.preventDefault();
               }
+              return;
+            }
+
+            if (splitEditableParagraphDomAtSelection(event.currentTarget)) {
+              event.preventDefault();
               return;
             }
 
             const selectedTarget = findProposalBodySelectionTarget(
               event.currentTarget,
             );
-            if (!selectedTarget) return;
-
-            const baseDocument = buildEditableBodyDocument(
-              event.currentTarget,
-              structuredDocument,
-            );
-            splitEditableDocumentTarget(
-              selectedTarget.target,
-              selectedTarget.offset,
-              baseDocument,
-            );
+            if (
+              selectedTarget?.element.dataset.proposalEditFieldKind ===
+              "list-item"
+            ) {
+              const baseDocument = buildEditableBodyDocument(
+                event.currentTarget,
+                structuredDocument,
+              );
+              splitEditableDocumentTarget(
+                selectedTarget.target,
+                selectedTarget.offset,
+                baseDocument,
+              );
+              event.preventDefault();
+            }
           }}
         >
           {descriptors.map((descriptor) => {
@@ -5162,6 +5415,7 @@ export function ProposalDocumentRenderer({
     [
       activeListItemIconPicker,
       commitEditableBodyDocument,
+      commitEditableBodyLineBreak,
       commitListItemIcon,
       handleEditableBodyBoundaryDelete,
       listMarkerIcon,

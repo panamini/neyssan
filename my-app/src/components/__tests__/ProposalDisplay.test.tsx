@@ -70,6 +70,7 @@ function renderPreviewEditableProposal(
   } = {},
 ) {
   const onContentCommit = vi.fn();
+  const onProposalDocumentChange = vi.fn();
 
   function Harness() {
     const [content, setContent] = React.useState(initialContent);
@@ -125,7 +126,10 @@ function renderPreviewEditableProposal(
           onRecipientDetailsChange={setRecipientDetails}
           onDocumentTitleChange={setDocumentTitle}
           onContentChange={handleContentChange}
-          onProposalDocumentChange={setProposalDocument}
+          onProposalDocumentChange={(nextDocument) => {
+            onProposalDocumentChange(nextDocument);
+            setProposalDocument(nextDocument);
+          }}
           onContentCommit={onContentCommit}
         />
         <output data-testid="proposal-content">{content}</output>
@@ -143,7 +147,7 @@ function renderPreviewEditableProposal(
   }
 
   render(<Harness />);
-  return { onContentCommit };
+  return { onContentCommit, onProposalDocumentChange };
 }
 
 async function selectTextareaText(textarea: HTMLTextAreaElement, text: string) {
@@ -641,25 +645,73 @@ describe("ProposalDisplay", () => {
     });
   });
 
-  it("keeps paragraph input in the live editor until blur", async () => {
-    renderPreviewEditableProposal();
+  it("keeps repeated-space typing uncontrolled before blur without firing the save commit path", async () => {
+    const { onContentCommit, onProposalDocumentChange } =
+      renderPreviewEditableProposal();
 
     const bodyEditor = getProposalBodyEditor();
     const paragraph = getEditableProposalParagraphs()[0];
-    setEditableNodeText(paragraph, "Saved before blur.");
+    bodyEditor.focus();
+    setEditableNodeText(paragraph, "Typed   with   spaces.");
+    placeContentEditableCaretAfterText(paragraph, "Typed   with   spaces.");
     fireEvent.input(bodyEditor);
 
-    expect(screen.getByTestId("proposal-content")).not.toHaveTextContent(
-      "Saved before blur.",
+    expect(getEditableNodeText(paragraph)).toBe("Typed   with   spaces.");
+    expect(screen.getByTestId("proposal-content").textContent).not.toContain(
+      "Typed   with   spaces.",
+    );
+    expect(onProposalDocumentChange).not.toHaveBeenCalled();
+    expect(onContentCommit).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(bodyEditor);
+    expect(getContentEditableCaretOffset(paragraph)).toBe(
+      "Typed   with   spaces.".length,
     );
 
     fireEvent.blur(bodyEditor);
 
     await waitFor(() => {
-      expect(screen.getByTestId("proposal-content")).toHaveTextContent(
-        "Saved before blur.",
+      expect(screen.getByTestId("proposal-content").textContent).toContain(
+        "Typed with spaces.",
       );
     });
+    expect(onProposalDocumentChange).toHaveBeenCalledTimes(1);
+    expect(onContentCommit).toHaveBeenCalledTimes(1);
+  });
+
+  it("serializes focused preview body edits on pagehide for hard-refresh persistence", async () => {
+    const { onContentCommit, onProposalDocumentChange } =
+      renderPreviewEditableProposal();
+
+    const bodyEditor = getProposalBodyEditor();
+    const paragraph = getEditableProposalParagraphs()[0];
+    bodyEditor.focus();
+    setEditableNodeText(paragraph, "Refresh snapshot body.");
+    placeContentEditableCaretAfterText(paragraph, "Refresh snapshot body.");
+    fireEvent.input(bodyEditor);
+
+    expect(onProposalDocumentChange).not.toHaveBeenCalled();
+    expect(onContentCommit).not.toHaveBeenCalled();
+
+    fireEvent(window, new Event("pagehide"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-content").textContent).toContain(
+        "Refresh snapshot body.",
+      );
+    });
+    expect(onProposalDocumentChange).toHaveBeenCalledTimes(1);
+    expect(onContentCommit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        proposalContent: expect.stringContaining("Refresh snapshot body."),
+        proposalDocument: expect.objectContaining({
+          blocks: expect.arrayContaining([
+            expect.objectContaining({
+              text: "Refresh snapshot body.",
+            }),
+          ]),
+        }),
+      }),
+    );
   });
 
   it("sanitizes rich HTML paste into plain proposal text", async () => {
@@ -708,9 +760,6 @@ describe("ProposalDisplay", () => {
       expect(document.activeElement).toBe(getProposalBodyEditor());
       expect(getContentEditableCaretOffset(paragraphs[1])).toBe(0);
     });
-    expect(screen.getByTestId("proposal-document")).toHaveTextContent(
-      '"id":"paragraph-2-paragraph"',
-    );
     expect(paragraphs[0]).toHaveTextContent("Keyboard");
     expect(paragraphs[1]).toHaveTextContent("text after");
     expect(paragraph.innerHTML).not.toContain("<div");
@@ -772,16 +821,72 @@ describe("ProposalDisplay", () => {
       getEditableProposalParagraphs()[1],
     );
 
+    expect(fireEvent.keyDown(bodyEditor, { key: "Enter" })).toBe(true);
+
+    expect(getEditableProposalParagraphs()).toHaveLength(2);
+    expect(document.activeElement).toBe(bodyEditor);
+  });
+
+  it("lets the browser handle Enter when no structured split target exists", () => {
+    renderPreviewEditableProposal();
+
+    const bodyEditor = getProposalBodyEditor();
+    bodyEditor.focus();
+    const range = document.createRange();
+    range.setStart(bodyEditor, bodyEditor.childNodes.length);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+
+    expect(fireEvent.keyDown(bodyEditor, { key: "Enter" })).toBe(true);
+  });
+
+  it("splits the live DOM on Enter without firing the save commit path", () => {
+    const { onContentCommit, onProposalDocumentChange } =
+      renderPreviewEditableProposal();
+
+    const bodyEditor = getProposalBodyEditor();
+    const paragraph = getEditableProposalParagraphs()[0];
+    setEditableNodeText(paragraph, "Keyboard text after");
+    placeContentEditableCaretAfterText(paragraph, "Keyboard");
+
     expect(fireEvent.keyDown(bodyEditor, { key: "Enter" })).toBe(false);
 
+    const paragraphs = getEditableProposalParagraphs();
+    expect(paragraphs).toHaveLength(2);
+    expect(getEditableNodeText(paragraphs[0])).toBe("Keyboard");
+    expect(getEditableNodeText(paragraphs[1])).toBe("text after");
+    expect(getContentEditableCaretOffset(paragraphs[1])).toBe(0);
+    expect(onProposalDocumentChange).not.toHaveBeenCalled();
+    expect(onContentCommit).not.toHaveBeenCalled();
+  });
+
+  it("applies preview formatting to a locally split paragraph through the structured document", async () => {
+    const { onContentCommit, onProposalDocumentChange } =
+      renderPreviewEditableProposal();
+
+    const bodyEditor = getProposalBodyEditor();
+    const paragraph = getEditableProposalParagraphs()[0];
+    setEditableNodeText(paragraph, "Keyboard text after");
+    placeContentEditableCaretAfterText(paragraph, "Keyboard");
+    fireEvent.keyDown(bodyEditor, { key: "Enter" });
+
+    const splitParagraph = getEditableProposalParagraphs()[1];
+    await selectContentEditableText(splitParagraph, "text");
+    fireEvent.click(getSelectionToolbarButtonByLabel("Bold"));
+
+    expect(splitParagraph.querySelector("strong")?.textContent).toBe("text");
     await waitFor(() => {
-      const paragraphs = getEditableProposalParagraphs();
-      expect(paragraphs).toHaveLength(3);
-      expect(getEditableNodeText(paragraphs[0])).toBe("First paragraph.");
-      expect(getEditableNodeText(paragraphs[1])).toBe("");
-      expect(getEditableNodeText(paragraphs[2])).toBe("Second paragraph.");
-      expect(document.activeElement).toBe(bodyEditor);
+      expect(screen.getByTestId("proposal-document")).toHaveTextContent(
+        '"bold":true',
+      );
+      expect(screen.getByTestId("proposal-content")).toHaveTextContent(
+        "Keyboard",
+      );
     });
+    expect(onProposalDocumentChange).toHaveBeenCalled();
+    expect(onContentCommit).toHaveBeenCalled();
   });
 
   it("keeps Shift+Enter inside the same paragraph and moves the caret after the soft break", async () => {
@@ -818,9 +923,7 @@ describe("ProposalDisplay", () => {
     expect(fireEvent.keyDown(bodyEditor, { key: "Backspace" })).toBe(true);
     setEditableNodeText(paragraph, "Keboard");
     fireEvent.input(bodyEditor);
-    expect(screen.getByTestId("proposal-document").textContent).not.toContain(
-      '"text":"Keboard"',
-    );
+    expect(getEditableNodeText(paragraph)).toBe("Keboard");
     fireEvent.blur(bodyEditor);
 
     await waitFor(() => {
@@ -2072,8 +2175,9 @@ describe("ProposalDisplay", () => {
     });
   });
 
-  it("applies preview B/I/U formatting to the structured proposal document", async () => {
-    renderPreviewEditableProposal();
+  it("applies preview B/I/U formatting through structured transactions and toggles existing marks", async () => {
+    const { onContentCommit, onProposalDocumentChange } =
+      renderPreviewEditableProposal();
 
     const paragraph = getEditableProposalParagraphs()[0];
     await selectContentEditableText(paragraph, "Original");
@@ -2086,20 +2190,11 @@ describe("ProposalDisplay", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-document")).toHaveTextContent(
-        '"richText"',
-      );
-      expect(screen.getByTestId("proposal-document")).toHaveTextContent(
         '"bold":true',
       );
-      expect(screen.getByTestId("proposal-document")).toHaveTextContent(
-        '"text":"Original paragraph."',
-      );
-      expect(
-        document.querySelector(
-          "[data-proposal-body-editor='true'] strong",
-        )?.textContent,
-      ).toBe("Original");
     });
+    expect(onProposalDocumentChange).toHaveBeenCalled();
+    expect(onContentCommit).toHaveBeenCalled();
 
     await selectContentEditableText(getEditableProposalParagraphs()[0], "paragraph");
     fireEvent.click(getSelectionToolbarButtonByLabel("Italic"));
@@ -2107,11 +2202,6 @@ describe("ProposalDisplay", () => {
       expect(screen.getByTestId("proposal-document")).toHaveTextContent(
         '"italic":true',
       );
-      expect(
-        document.querySelector(
-          "[data-proposal-body-editor='true'] em",
-        )?.textContent,
-      ).toBe("paragraph");
     });
 
     await selectContentEditableText(getEditableProposalParagraphs()[0], "Original");
@@ -2120,11 +2210,18 @@ describe("ProposalDisplay", () => {
       expect(screen.getByTestId("proposal-document")).toHaveTextContent(
         '"underline":true',
       );
-      expect(
-        document.querySelector(
-          "[data-proposal-body-editor='true'] u",
-        )?.textContent,
-      ).toContain("Original");
+      expect(screen.getByTestId("proposal-document")).toHaveTextContent(
+        '"text":"Original paragraph."',
+      );
+    });
+
+    await selectContentEditableText(getEditableProposalParagraphs()[0], "Original");
+    fireEvent.click(getSelectionToolbarButtonByLabel("Bold"));
+
+    await waitFor(() => {
+      const documentSnapshot = screen.getByTestId("proposal-document").textContent ?? "";
+      expect(documentSnapshot).toContain('"underline":true');
+      expect(documentSnapshot).not.toContain('"bold":true');
     });
   });
 

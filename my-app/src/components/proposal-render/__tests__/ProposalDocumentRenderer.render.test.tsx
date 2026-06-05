@@ -297,6 +297,147 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     expect(readonlyMarker?.querySelector("button")).toBeNull();
   });
 
+  it("keeps editable body input uncontrolled until blur", () => {
+    const onProposalDocumentChange = vi.fn();
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content=""
+        proposalType="cover_letter"
+        templateId="swiss_margin"
+        proposalDocument={{
+          schemaVersion: 1,
+          kind: "letter",
+          source: "structured",
+          blocks: [
+            {
+              id: "salutation-1",
+              type: "salutation",
+              text: "Dear team,",
+            },
+            {
+              id: "paragraph-1",
+              type: "paragraph",
+              text: "Original preview body.",
+            },
+            {
+              id: "closing-1",
+              type: "closing",
+              signOff: "Sincerely,",
+              signatureName: "Alex Martin",
+            },
+          ],
+        }}
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        onProposalDocumentChange={onProposalDocumentChange}
+      />,
+    );
+
+    const bodyEditor = container.querySelector<HTMLElement>(
+      "[data-proposal-body-editor='true']",
+    );
+    const paragraph = container.querySelector<HTMLElement>(
+      "[data-proposal-edit-target='text-block'][data-proposal-edit-block-id='paragraph-1']",
+    );
+
+    expect(bodyEditor).toBeTruthy();
+    expect(paragraph).toBeTruthy();
+
+    paragraph!.textContent = "Edited preview body.";
+    fireEvent.input(bodyEditor!);
+
+    expect(paragraph).toHaveTextContent("Edited preview body.");
+    expect(onProposalDocumentChange).not.toHaveBeenCalled();
+
+    fireEvent.blur(bodyEditor!);
+
+    expect(onProposalDocumentChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        blocks: expect.arrayContaining([
+          expect.objectContaining({
+            id: "paragraph-1",
+            text: "Edited preview body.",
+          }),
+        ]),
+      }),
+    );
+  });
+
+  it("serializes focused editable body text on pagehide", () => {
+    const onProposalDocumentChange = vi.fn();
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content=""
+        proposalType="cover_letter"
+        templateId="swiss_margin"
+        proposalDocument={{
+          schemaVersion: 1,
+          kind: "letter",
+          source: "structured",
+          blocks: [
+            {
+              id: "salutation-1",
+              type: "salutation",
+              text: "Dear team,",
+            },
+            {
+              id: "paragraph-1",
+              type: "paragraph",
+              text: "Original preview body.",
+            },
+            {
+              id: "closing-1",
+              type: "closing",
+              signOff: "Sincerely,",
+              signatureName: "Alex Martin",
+            },
+          ],
+        }}
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        onProposalDocumentChange={onProposalDocumentChange}
+      />,
+    );
+
+    const bodyEditor = container.querySelector<HTMLElement>(
+      "[data-proposal-body-editor='true']",
+    );
+    const paragraph = container.querySelector<HTMLElement>(
+      "[data-proposal-edit-target='text-block'][data-proposal-edit-block-id='paragraph-1']",
+    );
+
+    expect(bodyEditor).toBeTruthy();
+    expect(paragraph).toBeTruthy();
+
+    bodyEditor!.focus();
+    paragraph!.textContent = "Edited before refresh.";
+    fireEvent.input(bodyEditor!);
+    expect(onProposalDocumentChange).not.toHaveBeenCalled();
+
+    fireEvent(window, new Event("pagehide"));
+
+    expect(onProposalDocumentChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        blocks: expect.arrayContaining([
+          expect.objectContaining({
+            id: "paragraph-1",
+            text: "Edited before refresh.",
+          }),
+        ]),
+      }),
+    );
+  });
+
   it("uses the global list marker only when no item override exists", () => {
     const { container } = render(
       <ProposalDocumentRenderer

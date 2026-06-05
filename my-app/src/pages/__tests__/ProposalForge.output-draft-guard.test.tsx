@@ -71,12 +71,44 @@ vi.mock("../../components/ProposalDisplay", () => ({
   default: ({
     proposalContent,
     documentTitle,
+    onProposalDocumentChange,
   }: {
     proposalContent: string | null;
     documentTitle?: string | null;
+    onProposalDocumentChange?: (document: any) => void;
   }) => (
     <div data-testid="proposal-display-state">
       {documentTitle ?? "untitled"}|{proposalContent ?? "empty"}
+      <button
+        type="button"
+        onClick={() =>
+          onProposalDocumentChange?.({
+            schemaVersion: 1,
+            kind: "letter",
+            source: "structured",
+            blocks: [
+              {
+                id: "salutation-1",
+                type: "salutation",
+                text: "Dear team,",
+              },
+              {
+                id: "paragraph-1",
+                type: "paragraph",
+                text: "Preview-edited proposal body.",
+              },
+              {
+                id: "closing-1",
+                type: "closing",
+                signOff: "Kind regards,",
+                signatureName: "Alex Martin",
+              },
+            ],
+          })
+        }
+      >
+        Edit preview document
+      </button>
     </div>
   ),
   fallbackCopyText: () => "",
@@ -136,6 +168,51 @@ describe("ProposalForge output draft guard", () => {
       proposalContent: expect.stringContaining("Freshly generated proposal body."),
       generatedProposalId: "proposal_live",
       proposalDocumentTitle: "Operations Associate",
+    });
+  });
+
+  it("persists preview document edits as canonical output draft content", async () => {
+    writeStoredProposalOutputDraft({
+      proposalContent: "Dear team,\n\nOriginal proposal body.\n\nKind regards,\nAlex Martin",
+      proposalType: "cover_letter",
+      proposalVoicePreset: "signature",
+      proposalTemplateId: "swiss_margin",
+      proposalVerbatiStyle: {
+        layout: "swiss",
+        typography: "signature",
+        palette: "pierre",
+      },
+      proposalStyleLinkMode: "proposal_local",
+      proposalStyleChoice: "auto",
+      proposalApplicantName: "Alex Martin",
+      proposalApplicantRole: "Operations Associate",
+      proposalDocumentTitle: "Operations Associate",
+      proposalDocumentMeta: "Letter · Signature",
+      generatedProposalId: "proposal_live",
+      proposalOutputMode: "preview",
+      paletteOverride: null,
+      customAccentHex: null,
+      templateBundleId: null,
+      typographyOverride: null,
+      layoutOverride: null,
+      proposalDocumentTitleManual: false,
+      characterLimitMode: null,
+      characterLimitValue: null,
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Edit preview document" }),
+    );
+
+    expect(readStoredProposalOutputDraft()).toMatchObject({
+      proposalContent: expect.stringContaining("Preview-edited proposal body."),
+      generatedProposalId: "proposal_live",
     });
   });
 });

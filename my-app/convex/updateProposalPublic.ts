@@ -335,6 +335,9 @@ export default mutation({
         closing: v.optional(proposalClosingChoice),
         documentDecoration: v.optional(proposalDocumentDecorationChoice),
         documentIcons: v.optional(documentIconSettingsChoice),
+        proposalDocument: v.optional(v.any()),
+        proposalDocumentRevision: v.optional(v.number()),
+        proposalDocumentUpdatedAt: v.optional(v.number()),
         proposalType: v.optional(
           v.union(
             v.literal("cover_letter"),
