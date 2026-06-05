@@ -20,6 +20,21 @@ type UseBoundVerbatiCvStyleResult = {
 const useIsomorphicLayoutEffect =
   typeof window === "undefined" ? React.useEffect : React.useLayoutEffect;
 
+function buildBoundStyleKey(
+  currentCv: CvDocument | null | undefined,
+  stylePreset: VerbatiStylePreset,
+): string {
+  return [
+    currentCv?.id ?? "no-cv",
+    stylePreset.accentHex ?? "",
+    stylePreset.familyId,
+    stylePreset.layout,
+    stylePreset.palette,
+    stylePreset.resumeTemplateId ?? "",
+    stylePreset.typography,
+  ].join(":");
+}
+
 export function useBoundVerbatiCvStyle({
   currentCv,
   persistStyle,
@@ -44,18 +59,65 @@ export function useBoundVerbatiCvStyle({
 
     return canonicalizeVisualStyle(getVerbatiStyleFromCv(currentCv));
   }, [currentCv, fallbackStylePreset]);
-  const [stylePreset, setStylePreset] = React.useState(persistedStylePreset);
+  const persistedStyleKey = React.useMemo(
+    () => buildBoundStyleKey(currentCv, persistedStylePreset),
+    [
+      currentCv?.id,
+      persistedStylePreset.accentHex,
+      persistedStylePreset.familyId,
+      persistedStylePreset.layout,
+      persistedStylePreset.palette,
+      persistedStylePreset.resumeTemplateId,
+      persistedStylePreset.typography,
+    ],
+  );
+  const [localStyleState, setLocalStyleState] = React.useState(() => ({
+    key: persistedStyleKey,
+    stylePreset: persistedStylePreset,
+  }));
+  const stylePreset =
+    localStyleState.key === persistedStyleKey
+      ? localStyleState.stylePreset
+      : persistedStylePreset;
 
   useIsomorphicLayoutEffect(() => {
-    setStylePreset(persistedStylePreset);
-  }, [
-    currentCv?.id,
-    persistedStylePreset.accentHex,
-    persistedStylePreset.layout,
-    persistedStylePreset.palette,
-    persistedStylePreset.resumeTemplateId,
-    persistedStylePreset.typography,
-  ]);
+    setLocalStyleState((current) => {
+      if (
+        current.key === persistedStyleKey &&
+        stylesEqual(current.stylePreset, persistedStylePreset)
+      ) {
+        return current;
+      }
+
+      return {
+        key: persistedStyleKey,
+        stylePreset: persistedStylePreset,
+      };
+    });
+  }, [persistedStyleKey]);
+
+  const setStylePreset = React.useCallback<
+    React.Dispatch<React.SetStateAction<VerbatiStylePreset>>
+  >(
+    (nextStylePreset) => {
+      setLocalStyleState((current) => {
+        const currentStylePreset =
+          current.key === persistedStyleKey
+            ? current.stylePreset
+            : persistedStylePreset;
+        const resolvedStylePreset =
+          typeof nextStylePreset === "function"
+            ? nextStylePreset(currentStylePreset)
+            : nextStylePreset;
+
+        return {
+          key: persistedStyleKey,
+          stylePreset: canonicalizeVisualStyle(resolvedStylePreset),
+        };
+      });
+    },
+    [persistedStyleKey, persistedStylePreset],
+  );
 
   React.useEffect(() => {
     const canonicalStylePreset = canonicalizeVisualStyle(stylePreset);

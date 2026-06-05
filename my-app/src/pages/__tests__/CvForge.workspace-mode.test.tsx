@@ -1336,7 +1336,9 @@ function buildCvLibraryState(overrides: Record<string, unknown> = {}) {
     importCv: vi.fn(async () => undefined),
     cvs: [currentCv],
     isLibraryHydrated: true,
+    isVisualRestorePending: false,
     lastLibraryFetchFailed: false,
+    remoteSaveStatus: { status: "idle" },
     loadCv: vi.fn(() => true),
     ...overrides,
   };
@@ -5370,6 +5372,65 @@ describe("CvForge workspace mode", () => {
         /Preview style: workshop\|quiet-editorial\|ink\|none\|sanat_asymmetric_resume/,
       ),
     ).toBeInTheDocument();
+  });
+
+  it("holds preview while visual template restore is pending for a template-less CV", () => {
+    const baseState = buildCvLibraryState();
+    const currentCv = {
+      ...baseState.currentCv,
+      metadata: {
+        ...baseState.currentCv.metadata,
+        verbatiStyle: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "ink",
+        },
+        verbatiStyleBaseSnapshot: undefined,
+        resumeTemplateId: undefined,
+      },
+    };
+
+    useCvLibraryMock.mockReturnValue(
+      buildCvLibraryState({
+        currentCv,
+        cvs: [currentCv],
+        isVisualRestorePending: true,
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Loading CV.")).toBeInTheDocument();
+    expect(screen.queryByText(/Preview style:/)).not.toBeInTheDocument();
+  });
+
+  it("does not mount preview from a held compact-library fallback while restore is pending", () => {
+    const baseState = buildCvLibraryState();
+
+    useCvLibraryMock.mockReturnValue(
+      buildCvLibraryState({
+        currentCv: null,
+        currentCvId: null,
+        cvs: [baseState.currentCv],
+        isLoading: false,
+        isLibraryHydrated: false,
+        isVisualRestorePending: true,
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("Loading CV.")).toBeInTheDocument();
+    expect(screen.queryByText(/Preview style:/)).not.toBeInTheDocument();
   });
 
   it("shows a compact job-context chip instead of an embedded brief card and can clear it", async () => {

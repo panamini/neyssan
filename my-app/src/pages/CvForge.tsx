@@ -3087,6 +3087,7 @@ export function CvForge(): JSX.Element {
     isLoading: isCvLibraryLoading,
     isLibraryHydrated,
     lastLibraryFetchFailed,
+    isVisualRestorePending = false,
     remoteSaveStatus,
     loadCv,
     hydrateCvDocument,
@@ -3439,10 +3440,14 @@ export function CvForge(): JSX.Element {
     isLibraryHydrated &&
     !isCvLibraryLoading &&
     !lastLibraryFetchFailed;
+  const shouldHoldVisualRestorePreview = Boolean(
+    currentCv && isVisualRestorePending,
+  );
   const shouldShowCvRestorePending =
-    !currentCv &&
-    !hasResumePaper &&
-    (isCvLibraryLoading || !isLibraryHydrated || lastLibraryFetchFailed);
+    shouldHoldVisualRestorePreview ||
+    (!currentCv &&
+      !hasResumePaper &&
+      (isCvLibraryLoading || !isLibraryHydrated || lastLibraryFetchFailed));
   const sanitizedHiddenSectionIds = React.useMemo(
     () => sanitizeHiddenSectionIds(currentCv?.sections ?? [], hiddenSectionIds),
     [currentCv?.sections, hiddenSectionIds],

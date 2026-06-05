@@ -671,6 +671,9 @@ export interface ICvLibraryContext {
   // failure must NOT be treated as "new user / empty library" by consumers
   // making onboarding or empty-state decisions.
   lastLibraryFetchFailed: boolean;
+  // True when the visible CV came from a source without explicit visual template
+  // metadata while a stronger remote restore can still replace it.
+  isVisualRestorePending: boolean;
   isDirty: boolean;
   remoteSaveStatus: RemoteSaveStatus;
   // New: runtime detector for v1-shaped documents
@@ -1039,6 +1042,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   // fetch errored on its last attempt. A transient failure must NOT be treated
   // as "new user empty library" by consumers making onboarding decisions.
   const [lastLibraryFetchFailed, setLastLibraryFetchFailed] = useState(false);
+  const [isVisualRestorePending, setIsVisualRestorePending] = useState(false);
   const [remoteSaveStatus, setRemoteSaveStatus] = useState<RemoteSaveStatus>({
     status: "idle",
   });
@@ -1375,6 +1379,9 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     if (next?.id) {
       writeStoredActiveCvId(String(next.id));
     }
+    if (!next || readAnyResumeTemplateId(next)) {
+      setIsVisualRestorePending(false);
+    }
     currentCvRef.current = next;
     setCurrentCv((prev) => {
       if (deepEqual(prev, next)) {
@@ -1521,8 +1528,16 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   function readExplicitResumeTemplateId(
     doc: CvDocument | null | undefined,
   ): ResumeTemplateId | undefined {
-    const value = doc?.metadata?.resumeTemplateId;
-    return isResumeTemplateId(value) ? value : undefined;
+    return sanitizeResumeTemplateId(doc?.metadata?.resumeTemplateId);
+  }
+
+  function sanitizeResumeTemplateId(value: unknown): ResumeTemplateId | undefined {
+    if (typeof value !== "string") {
+      return undefined;
+    }
+    return isResumeTemplateId(value as ResumeTemplateId)
+      ? (value as ResumeTemplateId)
+      : undefined;
   }
 
   function readAnyResumeTemplateId(
@@ -1538,13 +1553,37 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       "resumeTemplateId" in metadata.verbatiStyle
         ? metadata.verbatiStyle.resumeTemplateId
         : undefined;
-    if (isResumeTemplateId(verbatiTemplate)) return verbatiTemplate;
+    const sanitizedVerbatiTemplate = sanitizeResumeTemplateId(verbatiTemplate);
+    if (sanitizedVerbatiTemplate) return sanitizedVerbatiTemplate;
 
     const baseSnapshotTemplate =
       metadata?.verbatiStyleBaseSnapshot?.resumeTemplateId;
-    return isResumeTemplateId(baseSnapshotTemplate)
-      ? baseSnapshotTemplate
-      : undefined;
+    return sanitizeResumeTemplateId(baseSnapshotTemplate);
+  }
+
+  function shouldHoldTemplateLessRestoreForRemote(
+    doc: CvDocument | null | undefined,
+    targetId?: string | null,
+  ): boolean {
+    if (!doc || readAnyResumeTemplateId(doc)) {
+      return false;
+    }
+
+    const requestedRouteCvId = readRequestedCvIdFromWindowLocation();
+    if (
+      targetId &&
+      requestedRouteCvId &&
+      String(requestedRouteCvId) !== String(targetId)
+    ) {
+      return false;
+    }
+
+    return (
+      !isAuthLoaded ||
+      isConvexAuthLoading ||
+      (Boolean(isSignedIn) && !isConvexAuthenticated) ||
+      canUseRemoteCvRef.current
+    );
   }
 
   function preserveLocalResumeTemplateWhenRemoteIsImplicit(
@@ -2879,6 +2918,11 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
 
             const docV1 = normalizeToV1Document(doc as CvDocument);
             const docNorm = ensureRepresentativeBlocks(docV1 as CvDocument);
+            const shouldHoldTemplateLessRestore =
+              shouldHoldTemplateLessRestoreForRemote(docNorm, targetId);
+            if (shouldHoldTemplateLessRestore) {
+              setIsVisualRestorePending(true);
+            }
             dbg(
               "[CvLibraryContext] loadCv in-memory authoritative snapshot",
               buildAuthoritativeResumeDebugSnapshot({
@@ -2958,6 +3002,11 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
 
             const docV1 = normalizeToV1Document(doc as CvDocument);
             const docNorm = ensureRepresentativeBlocks(docV1 as CvDocument);
+            const shouldHoldTemplateLessRestore =
+              shouldHoldTemplateLessRestoreForRemote(docNorm, targetId);
+            if (shouldHoldTemplateLessRestore) {
+              setIsVisualRestorePending(true);
+            }
             dbg(
               "[CvLibraryContext] loadCv cached authoritative snapshot",
               buildAuthoritativeResumeDebugSnapshot({
@@ -3054,6 +3103,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
                   err,
                 );
               } finally {
+                setIsVisualRestorePending(false);
                 setIsLoading(false);
               }
             })();
@@ -3064,6 +3114,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
 
           // 2) No local cache -> try adapter.load asynchronously (do not block caller)
           (async () => {
+            let preserveVisualRestorePending = false;
             try {
               let remoteDoc: CvDocument | null = null;
               try {
@@ -3150,6 +3201,11 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
               if (remoteDoc) {
                 const docV1 = normalizeToV1Document(remoteDoc as CvDocument);
                 const docNorm = ensureRepresentativeBlocks(docV1 as CvDocument);
+                const shouldHoldTemplateLessRestore =
+                  shouldHoldTemplateLessRestoreForRemote(docNorm, targetId);
+                if (shouldHoldTemplateLessRestore) {
+                  setIsVisualRestorePending(true);
+                }
                 dbg(
                   "[CvLibraryContext] loadCv async authoritative snapshot",
                   buildAuthoritativeResumeDebugSnapshot({
@@ -3183,6 +3239,23 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
                 const repairedNorm = ensureRepresentativeBlocks(
                   repairedV1 as CvDocument,
                 );
+                const requestedRouteCvId = readRequestedCvIdFromWindowLocation();
+                const shouldDeferTemplateLessSummaryFallback =
+                  requestedRouteCvId === targetId &&
+                  !readAnyResumeTemplateId(repairedNorm) &&
+                  (!isAuthLoaded ||
+                    isConvexAuthLoading ||
+                    (Boolean(isSignedIn) && !isConvexAuthenticated));
+
+                if (shouldDeferTemplateLessSummaryFallback) {
+                  // Keep the visual restore gate open so the generated fallback
+                  // does not flash as the active preview while auth/remote is
+                  // still capable of replacing it with the saved template.
+                  preserveVisualRestorePending = true;
+                  setIsVisualRestorePending(true);
+                  return;
+                }
+
                 safeSetCurrentCv(repairedNorm);
                 setCvs((prev) => {
                   const exists = prev.some((c) => c.id === repairedNorm.id);
@@ -3212,6 +3285,9 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
                 err,
               );
             } finally {
+              if (!preserveVisualRestorePending) {
+                setIsVisualRestorePending(false);
+              }
               setIsLoading(false);
             }
           })();
@@ -3250,6 +3326,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       flushPendingEdits,
       isConvexAuthenticated,
       isConvexAuthLoading,
+      isAuthLoaded,
       isSignedIn,
     ],
   );
@@ -3287,9 +3364,9 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         return;
       }
 
+      const cachedExisting = readCachedFullCvDocument(restoreId);
       const existing =
-        readCachedFullCvDocument(restoreId) ??
-        cvs.find((doc) => String(doc.id) === restoreId);
+        cachedExisting ?? cvs.find((doc) => String(doc.id) === restoreId);
       if (existing && !isLibrarySummaryOnlyCv(existing)) {
         let restored = existing;
         try {
@@ -3301,6 +3378,11 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         const restoredNorm = ensureRepresentativeBlocks(
           restoredV1 as CvDocument,
         );
+        const shouldHoldTemplateLessRestore =
+          shouldHoldTemplateLessRestoreForRemote(restoredNorm, restoreId);
+        if (shouldHoldTemplateLessRestore) {
+          setIsVisualRestorePending(true);
+        }
         safeSetCurrentCv(restoredNorm);
         setCvs((prev) => {
           const idx = prev.findIndex(
@@ -3504,6 +3586,8 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         lastSavedRef.current = remoteWithLocalVisualTemplate;
       } catch (error) {
         console.warn("[CvLibraryContext] route remote refresh failed", error);
+      } finally {
+        setIsVisualRestorePending(false);
       }
     })();
   }, [adapter, canUseRemoteCv, currentCv]);
@@ -4856,6 +4940,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       isLoading,
       isLibraryHydrated,
       lastLibraryFetchFailed,
+      isVisualRestorePending,
       isDirty,
       remoteSaveStatus,
       // runtime v1 detector exposed to consumers
@@ -4914,6 +4999,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       isLoading,
       isLibraryHydrated,
       lastLibraryFetchFailed,
+      isVisualRestorePending,
       isDirty,
       remoteSaveStatus,
       loadCv,
