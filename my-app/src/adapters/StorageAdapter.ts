@@ -475,6 +475,23 @@ function assignDocumentStyleMetadataPatch(
   }
 }
 
+function readProfileTimestampIso(
+  rawProfile: Record<string, unknown>,
+  key: "createdAt" | "updatedAt",
+): string | undefined {
+  const value = rawProfile[key];
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return new Date(value).toISOString();
+  }
+  if (typeof value === "string") {
+    const timestamp = Date.parse(value);
+    if (Number.isFinite(timestamp)) {
+      return new Date(timestamp).toISOString();
+    }
+  }
+  return undefined;
+}
+
 function overlayProfileMetadataPatch(
   doc: CvDocument,
   rawProfile: Record<string, unknown>,
@@ -505,6 +522,15 @@ function overlayProfileMetadataPatch(
     metadata.documentDecoration = sanitizeRuntimeDocumentDecoration(
       rawMetadata.documentDecoration,
     );
+  }
+
+  const profileCreatedAt = readProfileTimestampIso(rawProfile, "createdAt");
+  const profileUpdatedAt = readProfileTimestampIso(rawProfile, "updatedAt");
+  if (profileCreatedAt) {
+    metadata.createdAt = profileCreatedAt;
+  }
+  if (profileUpdatedAt) {
+    metadata.updatedAt = profileUpdatedAt;
   }
 
   return {

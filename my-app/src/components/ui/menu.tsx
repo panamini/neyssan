@@ -228,17 +228,21 @@ export function Menu({
         setMenuState("open");
         requestAnimationFrame(updatePosition);
       });
-      const selectedIndex = enabledIndexes.findIndex(({ sectionIndex, itemIndex }) => {
-        return sections[sectionIndex]?.items[itemIndex]?.selected;
-      });
-      setHighlightedIndex(selectedIndex >= 0 ? selectedIndex : 0);
     } else if (visible) {
       setMenuState("closed");
       closeTimerRef.current = setTimeout(() => {
         setVisible(false);
       }, MENU_EXIT_DURATION);
     }
-  }, [closeMenu, enabledIndexes, open, sections, updatePosition, visible]);
+  }, [closeMenu, open, updatePosition, visible]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const selectedIndex = enabledIndexes.findIndex(({ sectionIndex, itemIndex }) => {
+      return sections[sectionIndex]?.items[itemIndex]?.selected;
+    });
+    setHighlightedIndex(selectedIndex >= 0 ? selectedIndex : 0);
+  }, [enabledIndexes, open, sections]);
 
   React.useEffect(() => {
     if (!visible || typeof document === "undefined") return;

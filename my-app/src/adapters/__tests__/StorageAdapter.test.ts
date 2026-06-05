@@ -1117,6 +1117,60 @@ describe("StorageAdapter persistence", () => {
     );
   });
 
+  it("maps profile row timestamps into hydrated cv metadata for refresh freshness checks", async () => {
+    const embeddedCv = generateCvTemplateV1("Stale Embedded CV");
+    embeddedCv.id = "styled-cv";
+    embeddedCv.metadata.updatedAt = "2026-06-05T10:00:00.000Z";
+    embeddedCv.metadata.verbatiStyle = {
+      familyId: "workshop",
+      layout: "workshop",
+      palette: "sauge",
+      typography: "geist-baskervville",
+      resumeTemplateId: "workshop_resume_onecol_ats",
+    };
+
+    const hydrated = mapPersistedProfileToCvDocument(
+      {
+        profileId: "styled-cv",
+        name: "Styled Candidate",
+        summary: "Summary",
+        createdAt: Date.parse("2026-06-05T09:00:00.000Z"),
+        updatedAt: Date.parse("2026-06-05T12:00:00.000Z"),
+        metadata: {
+          resumeTemplateId: "workshop_resume_twocol_ats",
+          verbatiStyle: {
+            layout: "workshop",
+            palette: "ochre",
+            typography: "fd-garamond-geist",
+            resumeTemplateId: "workshop_resume_twocol_ats",
+          },
+          verbatiStyleBaseSnapshot: {
+            familyId: "workshop",
+            layout: "workshop",
+            palette: "ochre",
+            typography: "fd-garamond-geist",
+            resumeTemplateId: "workshop_resume_twocol_ats",
+          },
+        },
+        cvDocument: embeddedCv,
+      },
+      "styled-cv",
+    );
+
+    expect(hydrated?.metadata?.createdAt).toBe(
+      "2026-06-05T09:00:00.000Z",
+    );
+    expect(hydrated?.metadata?.updatedAt).toBe(
+      "2026-06-05T12:00:00.000Z",
+    );
+    expect(hydrated?.metadata?.resumeTemplateId).toBe(
+      "workshop_resume_twocol_ats",
+    );
+    expect(hydrated?.metadata?.verbatiStyle?.resumeTemplateId).toBe(
+      "workshop_resume_twocol_ats",
+    );
+  });
+
   it("sends metadata.verbatiStyle through patch metadata and keeps it in cvDocument", async () => {
     const patchMutation = vi.fn().mockResolvedValue(undefined);
     const adapter = new ConvexStorageAdapter(patchMutation);
