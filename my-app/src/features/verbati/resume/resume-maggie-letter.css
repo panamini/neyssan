@@ -1,0 +1,156 @@
+.maggie-resume-page {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 100%;
+  padding: var(--margin-top) var(--margin-right) var(--margin-bottom) var(--margin-left);
+  background: var(--paper);
+  color: var(--color-text);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  row-gap: calc(var(--body-row-gap) * 1.6);
+  align-content: start;
+  font-family: "Courier Prime", "Courier New", Courier, ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.maggie-resume-header {
+  display: grid;
+  grid-template-columns: minmax(0, var(--sidebar-width)) minmax(0, var(--main-width));
+  column-gap: var(--gutter-width);
+  align-items: end;
+  min-width: 0;
+}
+
+.maggie-resume-identity,
+.maggie-resume-contact,
+.maggie-resume-main,
+.maggie-resume-sidebar,
+.maggie-resume-header-extra {
+  min-width: 0;
+}
+
+.maggie-resume-identity h1 {
+  margin: 0;
+  color: #111818;
+  font-family: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+  font-size: calc(var(--text-display-size) * 0.56);
+  line-height: 1.08;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+
+.maggie-resume-identity p {
+  margin: 1.3mm 0 0;
+  color: var(--color-text-muted);
+  font-family: "Courier Prime", "Courier New", Courier, ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: calc(var(--text-body-size) * 0.92);
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.maggie-resume-contact {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 1.1mm 4.8mm;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-family: "Courier Prime", "Courier New", Courier, ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: calc(var(--text-body-size) * 0.92);
+  line-height: 1.1;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.maggie-resume-header-extra {
+  display: grid;
+  max-width: var(--main-width);
+  margin-left: calc(var(--sidebar-width) + var(--gutter-width));
+  gap: 2.4mm;
+}
+
+.maggie-resume-body {
+  display: grid;
+  grid-template-columns: minmax(0, var(--sidebar-width)) minmax(0, var(--main-width));
+  column-gap: var(--gutter-width);
+  align-items: start;
+  min-width: 0;
+}
+
+.maggie-resume-sidebar,
+.maggie-resume-main {
+  display: grid;
+  align-content: start;
+}
+
+.maggie-resume-sidebar {
+  gap: calc(var(--body-row-gap) * 1.04);
+}
+
+.maggie-resume-main {
+  gap: calc(var(--body-row-gap) * 1.08);
+}
+
+.maggie-resume-page [data-preview-section],
+.maggie-resume-page [data-preview-item-id] {
+  min-width: 0;
+}
+
+.maggie-resume-page .dasti-cv-paper-section-heading {
+  margin-bottom: 8.8mm !important;
+}
+
+.maggie-resume-page .dasti-cv-paper-section-heading-rule {
+  display: none !important;
+}
+
+.maggie-resume-page h2,
+.maggie-resume-section-title {
+  margin: 0 0 8.8mm;
+  color: var(--color-text);
+  font-family: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+  font-size: calc(var(--text-title-size) * 1.03);
+  line-height: 1.08;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+
+.maggie-resume-page h3 {
+  color: #424c4d;
+  font-family: "Courier Prime", "Courier New", Courier, ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: calc(var(--text-body-size) * 1.02);
+  line-height: 1.12;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+.maggie-resume-page p,
+.maggie-resume-page li,
+.maggie-resume-page dd,
+.maggie-resume-page dt,
+.maggie-resume-page span {
+  font-family: "Courier Prime", "Courier New", Courier, ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.maggie-resume-page p,
+.maggie-resume-page li {
+  color: var(--color-text-muted);
+  font-size: calc(var(--text-body-sm-size) * 0.95);
+  line-height: 1.42;
+  letter-spacing: -0.025em;
+}
+
+.maggie-resume-page strong {
+  color: #424c4d;
+  font-weight: 700;
+}
+
+.maggie-resume-sidebar [data-preview-section="skills"] [data-workshop-skill-item-wrap="true"],
+.maggie-resume-sidebar [data-preview-section="skills"] [data-sanat-skill-item-wrap="true"] {
+  margin-right: 0.5em;
+}
+
+.maggie-resume-page .dasti-cv-paper-inline-add {
+  font-family: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+}
