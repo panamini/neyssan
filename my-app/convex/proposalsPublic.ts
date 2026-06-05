@@ -92,8 +92,11 @@ const proposalClosingChoice = v.object({
 const proposalDocumentDecorationChoice = v.object({
   visible: v.boolean(),
   source: v.literal("upload"),
+  suppressed: v.optional(v.boolean()),
   assetId: v.optional(v.string()),
   dataUrl: v.optional(v.string()),
+  resolvedUrl: v.optional(v.string()),
+  assetMissing: v.optional(v.boolean()),
   fileName: v.optional(v.string()),
   mimeType: v.optional(
     v.union(
@@ -180,6 +183,44 @@ function projectDocumentAppearanceSnapshot(value: unknown) {
     accentHex:
       typeof snapshot.accentHex === "string" ? snapshot.accentHex : undefined,
   };
+}
+
+async function resolveRuntimeDocumentDecoration(
+  ctx: any,
+  decoration: unknown,
+  resolvedUrlCache: Map<string, string | null>,
+) {
+  if (!decoration || typeof decoration !== "object" || Array.isArray(decoration)) {
+    return decoration;
+  }
+
+  const next = { ...(decoration as Record<string, unknown>) };
+  delete next.dataUrl;
+  delete next.resolvedUrl;
+  delete next.assetMissing;
+
+  if (typeof next.assetId !== "string" || !next.assetId) {
+    return next;
+  }
+
+  let resolvedUrl = resolvedUrlCache.get(next.assetId);
+  if (resolvedUrl === undefined) {
+    try {
+      const storageUrl = await ctx.storage.getUrl(next.assetId as any);
+      resolvedUrl = typeof storageUrl === "string" && storageUrl ? storageUrl : null;
+    } catch {
+      resolvedUrl = null;
+    }
+    resolvedUrlCache.set(next.assetId, resolvedUrl);
+  }
+
+  if (resolvedUrl) {
+    next.resolvedUrl = resolvedUrl;
+  } else {
+    next.assetMissing = true;
+  }
+
+  return next;
 }
 
 /**
@@ -330,7 +371,9 @@ export default query({
 
     // Project proposals to the exact public return shape so added storage fields
     // do not trigger ReturnsValidationError in client-facing queries.
-    return libraryProposals.map((proposal) => ({
+    const resolvedUrlCache = new Map<string, string | null>();
+
+    return Promise.all(libraryProposals.map(async (proposal) => ({
       _id: proposal._id,
       _creationTime: proposal._creationTime,
       userId: proposal.userId,
@@ -415,7 +458,14 @@ export default query({
         jobDetectedLanguage:
           proposal.metadata.jobDetectedLanguage ?? undefined,
         closing: proposal.metadata.closing ?? undefined,
-        documentDecoration: proposal.metadata.documentDecoration ?? undefined,
+        documentDecoration:
+          proposal.metadata.documentDecoration !== undefined
+            ? await resolveRuntimeDocumentDecoration(
+                ctx,
+                proposal.metadata.documentDecoration,
+                resolvedUrlCache,
+              )
+            : undefined,
         documentIcons: proposal.metadata.documentIcons ?? undefined,
         proposalDocument: proposal.metadata.proposalDocument ?? undefined,
         proposalDocumentRevision:
@@ -429,6 +479,6 @@ export default query({
         confidence: proposal.metrics.confidence ?? undefined,
       },
       version: proposal.version ?? undefined,
-    }));
+    })));
   },
 });

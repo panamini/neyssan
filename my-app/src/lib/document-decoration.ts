@@ -8,6 +8,7 @@ export type DocumentDecorationMimeType =
 export type DocumentDecoration = {
   visible: boolean;
   source: "upload";
+  suppressed?: boolean;
   assetId?: string;
   dataUrl?: string;
   resolvedUrl?: string;
@@ -191,6 +192,9 @@ export function resolveTemplateDocumentDecoration(
   templateId: string | null | undefined,
 ): DocumentDecoration {
   const normalized = normalizeDocumentDecoration(input);
+  if (normalized.suppressed) {
+    return normalized;
+  }
   const hasAsset = Boolean(normalized.dataUrl || normalized.assetId);
   const isEditorialTemplate = templateId === "editorial_wide";
 
@@ -239,6 +243,9 @@ export function normalizeDocumentDecoration(input: unknown): DocumentDecoration 
         : DEFAULT_DOCUMENT_DECORATION_PLACEMENT.yMm,
   };
 
+  if (source.suppressed === true) {
+    normalized.suppressed = true;
+  }
   if (typeof source.assetId === "string" && source.assetId.trim()) {
     normalized.assetId = source.assetId.trim();
   }
@@ -275,7 +282,7 @@ export function shouldPersistDocumentDecoration(
   decoration: DocumentDecoration | null | undefined,
 ): boolean {
   if (!decoration) return false;
-  return Boolean(decoration.dataUrl || decoration.assetId);
+  return Boolean(decoration.dataUrl || decoration.assetId || decoration.suppressed);
 }
 
 export function getRenderableDocumentDecoration(
@@ -420,10 +427,12 @@ export function removeDocumentDecorationAsset(
     ...rest,
     assetId: undefined,
     dataUrl: undefined,
+    resolvedUrl: undefined,
     fileName: undefined,
     mimeType: undefined,
     alt: undefined,
     visible: false,
+    suppressed: true,
   };
 }
 

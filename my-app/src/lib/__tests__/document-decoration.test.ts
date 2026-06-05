@@ -254,6 +254,30 @@ describe("document-decoration", () => {
     expect(nonEditorialDecoration.fileName).toBeUndefined();
   });
 
+  it("does not restore the Editorial template flower after explicit removal", () => {
+    const suppressedDecoration = resolveTemplateDocumentDecoration(
+      {
+        visible: false,
+        source: "upload",
+        suppressed: true,
+        sizePreset: 35,
+        fit: "contain",
+        placementMode: "default",
+      },
+      "editorial_wide",
+    );
+
+    expect(suppressedDecoration).toMatchObject({
+      visible: false,
+      suppressed: true,
+      sizePreset: 35,
+      fit: "contain",
+      placementMode: "default",
+    });
+    expect(suppressedDecoration.dataUrl).toBeUndefined();
+    expect(suppressedDecoration.fileName).toBeUndefined();
+  });
+
   it("resets placement to the active template default without changing the image settings", () => {
     const movedDecoration: DocumentDecoration = {
       ...uploadedDecoration,

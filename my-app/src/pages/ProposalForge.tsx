@@ -259,11 +259,14 @@ import {
 import type { EditorAiJobContext } from "../lib/ai/editorAiJobContext";
 import { normalizeEditorAiTextResult } from "../lib/ai/applyAiSuggestion";
 import {
+  DOCUMENT_DECORATION_MAX_FILE_BYTES,
   createDefaultDocumentDecoration,
   normalizeDocumentDecoration,
+  resolveDocumentDecorationMimeType,
   shouldPersistDocumentDecoration,
   type DocumentDecoration,
 } from "../lib/document-decoration";
+import { uploadDocumentDecorationAsset } from "../lib/document-decoration-assets";
 import {
   normalizeDocumentIconSettings,
   type DocumentIconSettings,
@@ -3022,6 +3025,10 @@ export function ProposalForge(): JSX.Element {
     (api as any).createProposalPublic?.default ??
       "createProposalPublic.default",
   );
+  const generateDocumentAssetUploadUrl = useMutation(
+    ((api as any).documentAssets?.generateUploadUrl ??
+      "documentAssets.generateUploadUrl") as any,
+  );
   const handleAttachedCvChange = React.useCallback(
     (nextId: string | null) => {
       if (nextId !== null) {
@@ -3292,6 +3299,18 @@ export function ProposalForge(): JSX.Element {
         storedOutputDraft?.documentDecoration ?? createDefaultDocumentDecoration(),
       ),
     );
+  const proposalDecorationPreviewUrlRef = React.useRef<string | null>(null);
+  const revokeProposalDecorationPreviewUrl = React.useCallback(() => {
+    const previewUrl = proposalDecorationPreviewUrlRef.current;
+    if (
+      previewUrl &&
+      typeof URL !== "undefined" &&
+      typeof URL.revokeObjectURL === "function"
+    ) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    proposalDecorationPreviewUrlRef.current = null;
+  }, []);
   const [proposalDocumentIconSettings, setProposalDocumentIconSettings] =
     React.useState<DocumentIconSettings>(() =>
       normalizeDocumentIconSettings(storedOutputDraft?.documentIconSettings),
@@ -5183,6 +5202,9 @@ export function ProposalForge(): JSX.Element {
         proposalContent?: string | null;
         proposalDocument?: ProposalDocument | null;
       },
+      metadataSnapshot?: {
+        documentDecoration?: DocumentDecoration | null;
+      },
     ) => {
       const snapshotContent =
         contentSnapshot?.proposalDocument !== undefined
@@ -5214,7 +5236,7 @@ export function ProposalForge(): JSX.Element {
         contentSnapshot?.proposalDocument !== undefined
           ? contentSnapshot.proposalDocument
           : proposalDocument;
-      const renderedMetadata = snapshotDocument
+      const renderedMetadataBase = snapshotDocument
         ? (() => {
             const documentUpdatedAt = Date.now();
             return {
@@ -5225,6 +5247,27 @@ export function ProposalForge(): JSX.Element {
             };
           })()
         : proposalPersistenceMetadata;
+      const renderedMetadata =
+        metadataSnapshot &&
+        Object.prototype.hasOwnProperty.call(
+          metadataSnapshot,
+          "documentDecoration",
+        )
+          ? (() => {
+              const nextMetadata: ProposalDocumentMetadata = {
+                ...(renderedMetadataBase ?? {}),
+              };
+              if (metadataSnapshot.documentDecoration) {
+                nextMetadata.documentDecoration =
+                  metadataSnapshot.documentDecoration;
+              } else {
+                delete nextMetadata.documentDecoration;
+              }
+              return Object.keys(nextMetadata).length > 0
+                ? nextMetadata
+                : undefined;
+            })()
+          : renderedMetadataBase;
       const latestStyleCommit = latestProposalStyleCommitRef.current;
       const currentProposalId = generatedProposalIdRef.current
         ? String(generatedProposalIdRef.current)
@@ -5655,10 +5698,119 @@ export function ProposalForge(): JSX.Element {
   );
   const handleDocumentDecorationCommit = React.useCallback(
     (nextDecoration: DocumentDecoration) => {
-      setDocumentDecoration(normalizeDocumentDecoration(nextDecoration));
-      void flushScheduledProposalSave(undefined, { force: true }).catch(() => {});
+      const normalizedDecoration = normalizeDocumentDecoration(nextDecoration);
+      setDocumentDecoration(normalizedDecoration);
+      const persistedDecoration = shouldPersistDocumentDecoration(
+        normalizedDecoration,
+      )
+        ? normalizedDecoration
+        : null;
+      const snapshot = buildComposeSaveSnapshot(undefined, "draft", undefined, {
+        documentDecoration: persistedDecoration,
+      });
+      void flushScheduledProposalSave(undefined, {
+        force: true,
+        snapshot: snapshot ?? undefined,
+      }).catch(() => {});
     },
-    [flushScheduledProposalSave],
+    [buildComposeSaveSnapshot, flushScheduledProposalSave],
+  );
+  const handleDocumentDecorationUpload = React.useCallback(
+    (file: File, baseDecoration: DocumentDecoration = documentDecoration) => {
+      void (async () => {
+        if (file.size > DOCUMENT_DECORATION_MAX_FILE_BYTES) {
+          throw new Error("Decoration image must be 10 MB or smaller.");
+        }
+        const mimeType = resolveDocumentDecorationMimeType(file);
+        if (!mimeType) {
+          throw new Error("Use a PNG, JPG, or SVG image.");
+        }
+        const fileName = file.name.slice(0, 160);
+        const previewUrl =
+          typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
+            ? URL.createObjectURL(file)
+            : "";
+        revokeProposalDecorationPreviewUrl();
+        proposalDecorationPreviewUrlRef.current = previewUrl || null;
+        const pendingDecoration = normalizeDocumentDecoration({
+          ...createDefaultDocumentDecoration(),
+          visible: true,
+          source: "upload",
+          resolvedUrl: previewUrl || undefined,
+          fileName,
+          mimeType,
+          alt: fileName.replace(/\.[^.]+$/, "") || "Document decoration",
+          sizePreset: baseDecoration.sizePreset,
+          customSizeMm: baseDecoration.customSizeMm,
+          fit: baseDecoration.fit,
+          placementMode: baseDecoration.placementMode,
+          xMm: baseDecoration.xMm,
+          yMm: baseDecoration.yMm,
+        });
+        setDocumentDecoration(pendingDecoration);
+
+        const storageId = await uploadDocumentDecorationAsset({
+          generateUploadUrl: generateDocumentAssetUploadUrl,
+          file,
+          mimeType: pendingDecoration.mimeType,
+          debugContext: {
+            proposalId: generatedProposalIdRef.current
+              ? String(generatedProposalIdRef.current)
+              : null,
+          },
+        });
+
+        const persistedDecoration = normalizeDocumentDecoration({
+          ...createDefaultDocumentDecoration(),
+          visible: true,
+          source: "upload",
+          assetId: storageId,
+          fileName,
+          mimeType: pendingDecoration.mimeType,
+          alt: pendingDecoration.alt,
+          sizePreset: pendingDecoration.sizePreset,
+          customSizeMm: pendingDecoration.customSizeMm,
+          fit: pendingDecoration.fit,
+          placementMode: pendingDecoration.placementMode,
+          xMm: pendingDecoration.xMm,
+          yMm: pendingDecoration.yMm,
+        });
+        setDocumentDecoration(
+          normalizeDocumentDecoration({
+            ...persistedDecoration,
+            resolvedUrl: pendingDecoration.resolvedUrl,
+          }),
+        );
+        const snapshot = buildComposeSaveSnapshot(undefined, "draft", undefined, {
+          documentDecoration: persistedDecoration,
+        });
+        void flushScheduledProposalSave(undefined, {
+          force: true,
+          snapshot: snapshot ?? undefined,
+        }).catch(() => {});
+      })().catch((error: unknown) => {
+        revokeProposalDecorationPreviewUrl();
+        setDocumentDecoration(normalizeDocumentDecoration(baseDecoration));
+        showToast(
+          error instanceof Error ? error.message : "Could not upload this image.",
+          { variant: "error" },
+        );
+      });
+    },
+    [
+      buildComposeSaveSnapshot,
+      documentDecoration,
+      flushScheduledProposalSave,
+      generateDocumentAssetUploadUrl,
+      revokeProposalDecorationPreviewUrl,
+      showToast,
+    ],
+  );
+  React.useEffect(
+    () => () => {
+      revokeProposalDecorationPreviewUrl();
+    },
+    [revokeProposalDecorationPreviewUrl],
   );
   const performProposalSaveRef = React.useRef(performProposalSave);
   React.useEffect(() => {
@@ -11862,7 +12014,8 @@ export function ProposalForge(): JSX.Element {
           onSelectStyleCustomAccent={handleProposalCustomAccentSelect}
           onClearStyleCustomAccent={handleProposalCustomAccentClear}
           documentDecoration={documentDecoration}
-          onDocumentDecorationChange={handleDocumentDecorationChange}
+          onDocumentDecorationChange={handleDocumentDecorationCommit}
+          onDocumentDecorationUpload={handleDocumentDecorationUpload}
           documentIconSettings={proposalDocumentIconSettings}
           onDocumentIconSettingsChange={handleDocumentIconSettingsChange}
           signaturePresent={Boolean(
@@ -11891,7 +12044,8 @@ export function ProposalForge(): JSX.Element {
       handleChooseSignature,
       handleProposalCustomAccentClear,
       handleProposalCustomAccentSelect,
-      handleDocumentDecorationChange,
+      handleDocumentDecorationCommit,
+      handleDocumentDecorationUpload,
       handleDocumentIconSettingsChange,
       handleProposalLayoutSelect,
       handleProposalPaletteSelect,
@@ -13114,6 +13268,9 @@ export function ProposalForge(): JSX.Element {
                             }
                             onDocumentDecorationCommit={
                               handleDocumentDecorationCommit
+                            }
+                            onDocumentDecorationFileUpload={
+                              handleDocumentDecorationUpload
                             }
                             railTitle={sanitizeProposalApplicantName(
                               proposalApplicantName,

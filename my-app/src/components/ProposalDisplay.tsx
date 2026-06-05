@@ -124,6 +124,10 @@ interface ProposalDisplayProps {
   documentDecorationDesignMode?: boolean;
   onDocumentDecorationChange?: (decoration: DocumentDecoration) => void;
   onDocumentDecorationCommit?: (decoration: DocumentDecoration) => void;
+  onDocumentDecorationFileUpload?: (
+    file: File,
+    baseDecoration: DocumentDecoration,
+  ) => void;
   railTitle?: string | null;
   railMeta?: string | null;
   contactLine?: string | null;
@@ -1276,6 +1280,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
   documentDecorationDesignMode = false,
   onDocumentDecorationChange,
   onDocumentDecorationCommit,
+  onDocumentDecorationFileUpload,
   railTitle = null,
   railMeta = null,
   contactLine = null,
@@ -3888,6 +3893,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
                   }
                   onDocumentDecorationChange={onDocumentDecorationChange}
                   onDocumentDecorationCommit={onDocumentDecorationCommit}
+                  onDocumentDecorationFileUpload={onDocumentDecorationFileUpload}
                   onProposalDocumentChange={
                     canEditPreviewDocumentText
                       ? handlePreviewProposalDocumentChange

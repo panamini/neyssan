@@ -37,7 +37,6 @@ import {
   DOCUMENT_DECORATION_SIZE_PRESETS,
   DOCUMENT_DECORATION_UPLOAD_ACCEPT,
   normalizeDocumentDecoration,
-  readDocumentDecorationUpload,
   removeDocumentDecorationAsset,
   resolveTemplateDocumentDecoration,
   type DocumentDecoration,
@@ -249,6 +248,10 @@ export type ProposalDesignFieldsProps = {
   handwrittenSignatureEnabled?: boolean;
   documentDecoration?: DocumentDecoration | null;
   onDocumentDecorationChange?: (decoration: DocumentDecoration) => void;
+  onDocumentDecorationUpload?: (
+    file: File,
+    baseDecoration: DocumentDecoration,
+  ) => void;
   documentIconSettings?: DocumentIconSettings | null;
   onDocumentIconSettingsChange?: (settings: DocumentIconSettings) => void;
   onChooseSignature?: () => void;
@@ -273,6 +276,7 @@ export function ProposalDesignFields({
   handwrittenSignatureEnabled = false,
   documentDecoration,
   onDocumentDecorationChange,
+  onDocumentDecorationUpload,
   documentIconSettings,
   onDocumentIconSettingsChange,
   onChooseSignature,
@@ -367,28 +371,13 @@ export function ProposalDesignFields({
       event.currentTarget.value = "";
       if (!file) return;
       setDocumentDecorationUploadError(null);
-      void readDocumentDecorationUpload(file)
-        .then((uploadedDecoration) => {
-          onDocumentDecorationChange?.(
-            normalizeDocumentDecoration({
-              ...uploadedDecoration,
-              sizePreset: resolvedDocumentDecoration.sizePreset,
-              customSizeMm: resolvedDocumentDecoration.customSizeMm,
-              fit: resolvedDocumentDecoration.fit,
-              placementMode: resolvedDocumentDecoration.placementMode,
-              xMm: resolvedDocumentDecoration.xMm,
-              yMm: resolvedDocumentDecoration.yMm,
-              visible: true,
-            }),
-          );
-        })
-        .catch((error: unknown) => {
-          setDocumentDecorationUploadError(
-            error instanceof Error ? error.message : "Could not upload this image.",
-          );
-        });
+      if (!onDocumentDecorationUpload) {
+        setDocumentDecorationUploadError("Image upload is unavailable.");
+        return;
+      }
+      onDocumentDecorationUpload(file, resolvedDocumentDecoration);
     },
-    [onDocumentDecorationChange, resolvedDocumentDecoration],
+    [onDocumentDecorationUpload, resolvedDocumentDecoration],
   );
   React.useEffect(() => {
     if (!isDocumentImagePopoverOpen) return;
@@ -619,7 +608,7 @@ export function ProposalDesignFields({
           type="file"
           aria-label="Upload decoration image"
           accept={DOCUMENT_DECORATION_UPLOAD_ACCEPT}
-          disabled={!onDocumentDecorationChange}
+          disabled={!onDocumentDecorationUpload}
           onChange={handleDocumentDecorationUpload}
         />
         {!hasDocumentDecorationAsset ? (
@@ -643,8 +632,15 @@ export function ProposalDesignFields({
               htmlFor={decorationUploadInputId}
               title="Replace image"
             >
-              {resolvedDocumentDecoration.dataUrl ? (
-                <img src={resolvedDocumentDecoration.dataUrl} alt="" />
+              {resolvedDocumentDecoration.dataUrl ||
+              resolvedDocumentDecoration.resolvedUrl ? (
+                <img
+                  src={
+                    resolvedDocumentDecoration.dataUrl ??
+                    resolvedDocumentDecoration.resolvedUrl
+                  }
+                  alt=""
+                />
               ) : (
                 <FileImage size={18} strokeWidth={1.8} aria-hidden="true" />
               )}

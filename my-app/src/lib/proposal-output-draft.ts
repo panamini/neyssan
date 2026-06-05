@@ -184,7 +184,15 @@ function sanitizeStoredDocumentDecoration(value: unknown): DocumentDecoration | 
     return null;
   }
   const decoration = normalizeDocumentDecoration(value);
-  return shouldPersistDocumentDecoration(decoration) ? decoration : null;
+  if (!shouldPersistDocumentDecoration(decoration)) return null;
+  if (!decoration.assetId) return decoration;
+  const {
+    dataUrl: _dataUrl,
+    resolvedUrl: _resolvedUrl,
+    assetMissing: _assetMissing,
+    ...durableDecoration
+  } = decoration;
+  return durableDecoration;
 }
 
 function normalizeStoredProposalComposeDraft(
@@ -675,7 +683,7 @@ export function writeStoredProposalOutputDraft(
 
   try {
     if (draft) {
-      nextRaw = JSON.stringify(draft);
+      JSON.stringify(draft);
     }
   } catch (error) {
     console.warn(
@@ -689,9 +697,7 @@ export function writeStoredProposalOutputDraft(
       fallbackRaw = JSON.stringify(
         buildSanitizedStoredProposalOutputDraft(draft),
       );
-      if (nextRaw === null) {
-        nextRaw = fallbackRaw;
-      }
+      nextRaw = fallbackRaw;
     }
   } catch (error) {
     console.warn(

@@ -262,6 +262,100 @@ describe("readStoredProposalOutputDraft", () => {
     );
   });
 
+  it("does not persist large runtime data URLs when an uploaded asset id is available", () => {
+    writeStoredProposalOutputDraft({
+      proposalContent: "Generated proposal body.",
+      proposalType: "cover_letter",
+      proposalVoicePreset: "signature",
+      proposalTemplateId: "editorial_wide",
+      proposalVerbatiStyle: null,
+      documentDecoration: {
+        visible: true,
+        source: "upload",
+        assetId: "storage_proposal_1",
+        dataUrl: `data:image/png;base64,${"A".repeat(680 * 1024)}`,
+        resolvedUrl: "blob:http://localhost/preview-1",
+        fileName: "proposal-mark.png",
+        mimeType: "image/png",
+        alt: "Proposal mark",
+        sizePreset: 35,
+        fit: "contain",
+        placementMode: "custom",
+        xMm: 17,
+        yMm: 35,
+      },
+      proposalStyleLinkMode: "proposal_local",
+      proposalStyleChoice: "formal",
+      proposalApplicantName: "Alex Martin",
+      proposalApplicantRole: "Operations Associate",
+      proposalDocumentTitle: "Operations Associate Proposal",
+      proposalDocumentMeta: "Cover letter · Signature",
+      generatedProposalId: "proposal_live",
+      proposalOutputMode: "preview",
+      paletteOverride: null,
+      customAccentHex: null,
+      templateBundleId: null,
+      typographyOverride: null,
+      layoutOverride: null,
+      proposalDocumentTitleManual: false,
+      characterLimitMode: null,
+      characterLimitValue: null,
+    });
+
+    const raw = window.localStorage.getItem(PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY);
+    expect(raw).toBeTruthy();
+    expect(raw).not.toContain("data:image/png;base64");
+    expect(raw).not.toContain("blob:http://localhost/preview-1");
+    expect(readStoredProposalOutputDraft()?.documentDecoration).toMatchObject({
+      assetId: "storage_proposal_1",
+      fileName: "proposal-mark.png",
+    });
+    expect(readStoredProposalOutputDraft()?.documentDecoration?.dataUrl).toBeUndefined();
+    expect(
+      readStoredProposalOutputDraft()?.documentDecoration?.resolvedUrl,
+    ).toBeUndefined();
+  });
+
+  it("round-trips explicit decoration removal so template defaults stay suppressed", () => {
+    writeStoredProposalOutputDraft({
+      proposalContent: "Generated proposal body.",
+      proposalType: "cover_letter",
+      proposalVoicePreset: "signature",
+      proposalTemplateId: "editorial_wide",
+      proposalVerbatiStyle: null,
+      documentDecoration: {
+        visible: false,
+        source: "upload",
+        suppressed: true,
+        sizePreset: 35,
+        fit: "contain",
+        placementMode: "default",
+      },
+      proposalStyleLinkMode: "proposal_local",
+      proposalStyleChoice: "formal",
+      proposalApplicantName: "Alex Martin",
+      proposalApplicantRole: "Operations Associate",
+      proposalDocumentTitle: "Operations Associate Proposal",
+      proposalDocumentMeta: "Cover letter · Signature",
+      generatedProposalId: "proposal_live",
+      proposalOutputMode: "preview",
+      paletteOverride: null,
+      customAccentHex: null,
+      templateBundleId: null,
+      typographyOverride: null,
+      layoutOverride: null,
+      proposalDocumentTitleManual: false,
+      characterLimitMode: null,
+      characterLimitValue: null,
+    });
+
+    expect(readStoredProposalOutputDraft()?.documentDecoration).toMatchObject({
+      visible: false,
+      suppressed: true,
+      sizePreset: 35,
+    });
+  });
+
   it("drops invalid custom accent values safely", () => {
     window.localStorage.setItem(
       PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,

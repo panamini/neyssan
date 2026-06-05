@@ -120,6 +120,10 @@ type ProposalDocumentRendererProps = {
   documentDecorationMode?: "readonly" | "design";
   onDocumentDecorationChange?: (decoration: DocumentDecoration) => void;
   onDocumentDecorationCommit?: (decoration: DocumentDecoration) => void;
+  onDocumentDecorationFileUpload?: (
+    file: File,
+    baseDecoration: DocumentDecoration,
+  ) => void;
   onProposalDocumentChange?: (document: ProposalDocument) => void;
   onRailTitleChange?: (value: string) => void;
   onRailMetaChange?: (value: string) => void;
@@ -3818,12 +3822,14 @@ function ProposalDocumentDecorationLayer({
   pageSize,
   onChange,
   onCommit,
+  onFileUpload,
 }: {
   decoration?: DocumentDecoration | null;
   mode: "readonly" | "design";
   pageSize: DocumentPageSize;
   onChange?: (decoration: DocumentDecoration) => void;
   onCommit?: (decoration: DocumentDecoration) => void;
+  onFileUpload?: (file: File, baseDecoration: DocumentDecoration) => void;
 }): JSX.Element | null {
   const resolvedDecoration = getRenderableDocumentDecoration(decoration);
   const interactionRef = React.useRef<DocumentDecorationInteractionState | null>(
@@ -3861,6 +3867,10 @@ function ProposalDocumentDecorationLayer({
     const [file] = Array.from(event.currentTarget.files ?? []);
     event.currentTarget.value = "";
     if (!file) return;
+    if (onFileUpload) {
+      onFileUpload(file, resolvedDecoration);
+      return;
+    }
     void readDocumentDecorationUpload(file)
       .then((uploadedDecoration) => {
         commitDecorationAction({
@@ -4094,6 +4104,7 @@ export function ProposalDocumentRenderer({
   documentDecorationMode = "readonly",
   onDocumentDecorationChange,
   onDocumentDecorationCommit,
+  onDocumentDecorationFileUpload,
   onProposalDocumentChange,
   onRailTitleChange,
   onRailMetaChange,
@@ -6124,6 +6135,7 @@ export function ProposalDocumentRenderer({
                 pageSize={resolvedPageSize}
                 onChange={onDocumentDecorationChange}
                 onCommit={onDocumentDecorationCommit}
+                onFileUpload={onDocumentDecorationFileUpload}
               />
             ) : null}
           </div>

@@ -155,6 +155,7 @@ import {
   shouldPersistDocumentDecoration,
   type DocumentDecoration,
 } from "../lib/document-decoration";
+import { uploadDocumentDecorationAsset } from "../lib/document-decoration-assets";
 import CvReviewBanner from "../components/cv/CvReviewBanner";
 import ImportRecoveryPanel from "../components/ImportRecoveryPanel";
 import ComposerDrawer from "../components/ComposerDrawer";
@@ -231,62 +232,6 @@ function cvEditorDebugInfo(label: string, payload: Record<string, unknown>): voi
   }
 
   console.info(label, payload);
-}
-
-export async function uploadDocumentDecorationAsset({
-  generateUploadUrl,
-  file,
-  mimeType,
-  debugContext,
-}: {
-  generateUploadUrl: () => Promise<string>;
-  file: File;
-  mimeType?: string;
-  debugContext?: {
-    routeProfileId?: string | null;
-    currentCvId?: string | null;
-  };
-}): Promise<string> {
-  cvEditorDebugInfo("[cv-image-upload] generateUploadUrl", {
-    called: true,
-    routeProfileId: debugContext?.routeProfileId ?? null,
-    currentCvId: debugContext?.currentCvId ?? null,
-  });
-  const uploadUrl = await generateUploadUrl();
-  const response = await fetch(uploadUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": mimeType || file.type || "application/octet-stream",
-    },
-    body: file,
-  });
-
-  cvEditorDebugInfo("[cv-image-upload] upload-post", {
-    attempted: true,
-    status: response.status,
-    ok: response.ok,
-    routeProfileId: debugContext?.routeProfileId ?? null,
-    currentCvId: debugContext?.currentCvId ?? null,
-  });
-
-  if (!response.ok) {
-    throw new Error(`Image upload failed (${response.status})`);
-  }
-
-  const payload = (await response.json()) as { storageId?: unknown };
-  cvEditorDebugInfo("[cv-image-upload] upload-result", {
-    responseKeys:
-      payload && typeof payload === "object" ? Object.keys(payload) : [],
-    hasStorageId: typeof payload.storageId === "string",
-    routeProfileId: debugContext?.routeProfileId ?? null,
-    currentCvId: debugContext?.currentCvId ?? null,
-  });
-
-  if (typeof payload.storageId !== "string" || !payload.storageId) {
-    throw new Error("Image upload did not return a storage id.");
-  }
-
-  return payload.storageId;
 }
 
 type CvForgeWorkspaceMode = "edit" | "preview";
@@ -6659,6 +6604,11 @@ export function CvForge(): JSX.Element {
             routeProfileId: requestedCvId ?? null,
             currentCvId: currentCv.id,
           },
+          onDebug: (label, payload) =>
+            cvEditorDebugInfo(
+              label.replace("[document-image-upload]", "[cv-image-upload]"),
+              payload,
+            ),
         });
 
         const persistedDecoration = normalizeDocumentDecoration({

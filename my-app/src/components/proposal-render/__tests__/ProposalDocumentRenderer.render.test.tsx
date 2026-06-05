@@ -3298,11 +3298,75 @@ describe("ProposalDocumentRenderer volk register layout", () => {
     const removedChange = onDocumentDecorationChange.mock.calls.at(-1)?.[0];
     const removedCommit = onDocumentDecorationCommit.mock.calls.at(-1)?.[0];
     expect(removedChange).toMatchObject({ visible: false });
+    expect(removedChange?.suppressed).toBe(true);
     expect(removedChange?.dataUrl).toBeUndefined();
     expect(removedChange?.fileName).toBeUndefined();
     expect(removedCommit).toMatchObject({ visible: false });
+    expect(removedCommit?.suppressed).toBe(true);
     expect(removedCommit?.dataUrl).toBeUndefined();
     expect(removedCommit?.fileName).toBeUndefined();
+  });
+
+  it("delegates on-page decoration uploads to the shared asset upload handler", async () => {
+    const onDocumentDecorationChange = vi.fn();
+    const onDocumentDecorationCommit = vi.fn();
+    const onDocumentDecorationFileUpload = vi.fn();
+    const { container } = render(
+      <ProposalDocumentRenderer
+        content="I can support the team with clear written execution."
+        proposalType="cover_letter"
+        templateId="swiss_margin"
+        documentTypography={{
+          fontFamily: "Georgia, serif",
+          fontSize: "14px",
+          lineHeight: 1.5,
+          fontWeight: 400,
+          letterSpacing: "0em",
+        }}
+        documentDecoration={{
+          visible: true,
+          source: "upload",
+          dataUrl: "data:image/png;base64,AAAA",
+          fileName: "mark.png",
+          mimeType: "image/png",
+          alt: "Company mark",
+          sizePreset: 52,
+          fit: "cover",
+          placementMode: "custom",
+          xMm: 17,
+          yMm: 35,
+        }}
+        documentDecorationMode="design"
+        onDocumentDecorationChange={onDocumentDecorationChange}
+        onDocumentDecorationCommit={onDocumentDecorationCommit}
+        onDocumentDecorationFileUpload={onDocumentDecorationFileUpload}
+      />,
+    );
+
+    fireEvent.change(
+      container.querySelector(
+        "[aria-label='Upload decoration image from page']",
+      ) as HTMLInputElement,
+      {
+        target: {
+          files: [
+            new File(["image"], "replacement.png", { type: "image/png" }),
+          ],
+        },
+      },
+    );
+
+    expect(onDocumentDecorationFileUpload).toHaveBeenCalledWith(
+      expect.any(File),
+      expect.objectContaining({
+        sizePreset: 52,
+        fit: "cover",
+        placementMode: "custom",
+        xMm: 17,
+        yMm: 35,
+      }),
+    );
+    expect(onDocumentDecorationCommit).not.toHaveBeenCalled();
   });
 
   it("flips the on-page decoration toolbar below when the image is near the top-right edge", () => {

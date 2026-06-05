@@ -61,4 +61,92 @@ describe("ProposalDesignFields", () => {
       expect.objectContaining({ sizePt: 10 }),
     );
   });
+
+  it("delegates decoration image files to the forge upload boundary", () => {
+    const onDocumentDecorationUpload = vi.fn();
+    const currentDecoration = {
+      visible: false,
+      source: "upload" as const,
+      sizePreset: 52 as const,
+      fit: "cover" as const,
+      placementMode: "custom" as const,
+      xMm: 21,
+      yMm: 39,
+    };
+
+    render(
+      <ProposalDesignFields
+        stylePreset={stylePreset}
+        styleTemplateBundleId="swiss_serif"
+        onSelectStyleBundle={vi.fn()}
+        onSelectStyleTypography={vi.fn()}
+        onSelectStylePalette={vi.fn()}
+        onSelectStyleCustomAccent={vi.fn()}
+        documentDecoration={currentDecoration}
+        onDocumentDecorationChange={vi.fn()}
+        onDocumentDecorationUpload={onDocumentDecorationUpload}
+      />,
+    );
+
+    const file = new File(["image"], "proposal-mark.png", {
+      type: "image/png",
+    });
+    fireEvent.change(screen.getByLabelText("Upload decoration image"), {
+      target: { files: [file] },
+    });
+
+    expect(onDocumentDecorationUpload).toHaveBeenCalledWith(
+      file,
+      expect.objectContaining({
+        sizePreset: 52,
+        fit: "cover",
+        placementMode: "custom",
+        xMm: 21,
+        yMm: 39,
+      }),
+    );
+  });
+
+  it("marks drawer image removal as an explicit user suppression", () => {
+    const onDocumentDecorationChange = vi.fn();
+
+    render(
+      <ProposalDesignFields
+        proposalTemplateId="editorial_wide"
+        stylePreset={stylePreset}
+        styleTemplateBundleId="magazine_editorial"
+        onSelectStyleBundle={vi.fn()}
+        onSelectStyleTypography={vi.fn()}
+        onSelectStylePalette={vi.fn()}
+        onSelectStyleCustomAccent={vi.fn()}
+        documentDecoration={{
+          visible: true,
+          source: "upload",
+          dataUrl: "data:image/png;base64,AAAA",
+          fileName: "mark.png",
+          mimeType: "image/png",
+          alt: "Company mark",
+          sizePreset: 35,
+          fit: "contain",
+          placementMode: "custom",
+          xMm: 17,
+          yMm: 35,
+        }}
+        onDocumentDecorationChange={onDocumentDecorationChange}
+        onDocumentDecorationUpload={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Inspect" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove image" }));
+
+    expect(onDocumentDecorationChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        visible: false,
+        suppressed: true,
+        dataUrl: undefined,
+        fileName: undefined,
+      }),
+    );
+  });
 });

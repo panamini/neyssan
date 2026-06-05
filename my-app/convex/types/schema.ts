@@ -4,6 +4,7 @@ import type { ProposalTemplateId } from "../lib/proposals/renderTemplates";
 export type ProposalDocumentDecoration = {
   visible: boolean;
   source: "upload";
+  suppressed?: boolean;
   assetId?: string;
   dataUrl?: string;
   fileName?: string;

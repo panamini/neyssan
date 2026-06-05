@@ -89,6 +89,7 @@ const proposalClosingChoice = v.object({
 const proposalDocumentDecorationChoice = v.object({
   visible: v.boolean(),
   source: v.literal("upload"),
+  suppressed: v.optional(v.boolean()),
   assetId: v.optional(v.string()),
   dataUrl: v.optional(v.string()),
   fileName: v.optional(v.string()),

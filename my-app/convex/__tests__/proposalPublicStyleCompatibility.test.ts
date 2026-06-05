@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import createProposalPublic from "../createProposalPublic";
+import proposalsPublic from "../proposalsPublic";
 import updateProposalPublic from "../updateProposalPublic";
 
 const STYLE_METADATA = {
@@ -256,6 +257,75 @@ describe("proposal public document style compatibility metadata", () => {
     });
     expect(metadata.documentDecoration.dataUrl).toBeUndefined();
     expect(metadata.documentDecoration.resolvedUrl).toBeUndefined();
+  });
+
+  it("resolves proposal decoration asset ids to runtime URLs on list", async () => {
+    const profile = {
+      _id: "user_1",
+      _creationTime: 10,
+      clerkId: "clerk_1",
+      updatedAt: 10,
+    };
+    const proposal = {
+      _id: "proposal_1",
+      _creationTime: 20,
+      userId: "user_1",
+      title: "Generated proposal",
+      content: "Proposal body",
+      status: "draft",
+      updatedAt: 20,
+      createdAt: 20,
+      sections: [],
+      metadata: {
+        documentDecoration: {
+          visible: true,
+          source: "upload",
+          assetId: "storage_proposal_1",
+          dataUrl: "data:image/png;base64,STALE",
+          resolvedUrl: "https://stale.example.test/proposal.png",
+          fileName: "proposal-mark.png",
+          mimeType: "image/png",
+          alt: "Proposal mark",
+          sizePreset: 35,
+          fit: "contain",
+          placementMode: "custom",
+          xMm: 17,
+          yMm: 35,
+        },
+      },
+      metrics: {},
+      version: 1,
+    };
+    const ctx = {
+      auth: {
+        getUserIdentity: async () => ({ subject: "clerk_1" }),
+      },
+      db: {
+        query: (table: string) => ({
+          withIndex: () => ({
+            collect: async () => {
+              if (table === "userProfiles") return [profile];
+              if (table === "proposals") return [proposal];
+              throw new Error(`Unexpected query table: ${table}`);
+            },
+          }),
+        }),
+      },
+      storage: {
+        getUrl: vi.fn().mockResolvedValue("https://files.example.test/proposal.png"),
+      },
+    } as any;
+
+    const result = await proposalsPublic._handler(ctx, {});
+    const decoration = result[0]?.metadata.documentDecoration as any;
+
+    expect(ctx.storage.getUrl).toHaveBeenCalledWith("storage_proposal_1");
+    expect(decoration).toMatchObject({
+      assetId: "storage_proposal_1",
+      resolvedUrl: "https://files.example.test/proposal.png",
+      fileName: "proposal-mark.png",
+    });
+    expect(decoration.dataUrl).toBeUndefined();
   });
 
   it("does not emit proposal style trace logs by default on update", async () => {
