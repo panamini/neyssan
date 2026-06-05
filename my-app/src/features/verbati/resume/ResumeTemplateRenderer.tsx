@@ -3,6 +3,7 @@ import React from "react";
 import { normalizeResumePreviewTokens } from "../../../lib/layout/documentTokenNormalizer";
 import {
   WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
+  isMaggieResumeTemplateId,
   isSanatResumeTemplateId,
   isWorkshopResumeTemplateId,
   isWorkshopTwoColumnResumeTemplateId,
@@ -25,6 +26,7 @@ import ResumeOneColAtsPage, {
 } from "./ResumeOneColAtsPage";
 import ResumeTwoColAtsPage from "./ResumeTwoColAtsPage";
 import ResumeSanatAsymmetricPage from "./ResumeSanatAsymmetricPage";
+import ResumeMaggieLetterPage from "./ResumeMaggieLetterPage";
 import type { ResumeData } from "./resume.types";
 import type { ResumeInlineEditing } from "./InlineEditableText";
 import {
@@ -310,7 +312,20 @@ export function ResumeTemplateRenderer({
               left: 0,
             }}
           >
-            {isSanatResumeTemplateId(templateDefinition.id) ? (
+            {isMaggieResumeTemplateId(templateDefinition.id) ? (
+              <ResumeMaggieLetterPage
+                data={data}
+                page={page}
+                template={templateDefinition}
+                activeTarget={activeTarget}
+                inlineEditing={inlineEditing}
+                sectionActions={sectionActions}
+                paperAi={paperAi}
+                documentIconSettings={documentIconSettings}
+                documentIconOverrides={documentIconOverrides}
+                onDocumentListItemIconChange={onDocumentListItemIconChange}
+              />
+            ) : isSanatResumeTemplateId(templateDefinition.id) ? (
               <ResumeSanatAsymmetricPage
                 data={data}
                 page={page}
