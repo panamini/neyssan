@@ -2259,8 +2259,6 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       localBaseline;
 
     if (!freshestLocal) return true;
-    if (deepEqual(stripMetadata(freshestLocal), stripMetadata(remoteDoc)))
-      return true;
 
     const localUpdatedAtMs = readUpdatedAtMs(freshestLocal);
     const remoteUpdatedAtMs = readUpdatedAtMs(remoteDoc);
@@ -2279,6 +2277,9 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       );
       return false;
     }
+
+    if (deepEqual(stripMetadata(freshestLocal), stripMetadata(remoteDoc)))
+      return true;
 
     const localMetrics = getDocumentCompletenessMetrics(freshestLocal);
     const remoteMetrics = getDocumentCompletenessMetrics(remoteDoc);

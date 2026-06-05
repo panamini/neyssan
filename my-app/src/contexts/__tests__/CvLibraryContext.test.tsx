@@ -750,6 +750,92 @@ describe('CvLibraryContext', () => {
     );
   });
 
+  it('does not let equal-content background refresh overwrite newer local style metadata', async () => {
+    authState.isLoaded = true;
+    authState.isSignedIn = true;
+    authState.isConvexAuthenticated = true;
+    authState.isConvexAuthLoading = false;
+
+    const localCv = generateCvTemplateV1('Newer Local Style CV');
+    localCv.id = 'cv-newer-local-style';
+    localCv.metadata = {
+      ...localCv.metadata,
+      updatedAt: '2026-06-05T12:00:00.000Z',
+      resumeTemplateId: 'workshop_resume_twocol_ats',
+      verbatiStyle: {
+        familyId: 'workshop',
+        layout: 'workshop',
+        typography: 'ledger-sans',
+        palette: 'ink',
+        resumeTemplateId: 'workshop_resume_twocol_ats',
+      } as any,
+      verbatiStyleBaseSnapshot: {
+        familyId: 'workshop',
+        layout: 'workshop',
+        typography: 'ledger-sans',
+        palette: 'ink',
+        resumeTemplateId: 'workshop_resume_twocol_ats',
+      } as any,
+      documentStyleVersion: 1,
+    };
+
+    const remoteCv = {
+      ...localCv,
+      metadata: {
+        ...localCv.metadata,
+        updatedAt: '2026-06-05T11:59:00.000Z',
+        resumeTemplateId: 'workshop_resume_onecol_ats',
+        verbatiStyle: {
+          familyId: 'workshop',
+          layout: 'workshop',
+          typography: 'geist-baskervville',
+          palette: 'sauge',
+          resumeTemplateId: 'workshop_resume_onecol_ats',
+        },
+        verbatiStyleBaseSnapshot: {
+          familyId: 'workshop',
+          layout: 'workshop',
+          typography: 'geist-baskervville',
+          palette: 'sauge',
+          resumeTemplateId: 'workshop_resume_onecol_ats',
+        },
+        documentStyleVersion: 1,
+      },
+    };
+
+    vi.mocked(convexClient.query).mockImplementation(async (_query: unknown, args: unknown) => {
+      if ((args as { profileId?: string } | undefined)?.profileId === localCv.id) {
+        return {
+          profileId: localCv.id,
+          cvDocument: remoteCv,
+          metadata: remoteCv.metadata,
+        };
+      }
+      return [];
+    });
+
+    mockLocalStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([localCv]));
+    mockLocalStorage.setItem(`cv:${localCv.id}`, JSON.stringify(localCv));
+    mockLocalStorage.setItem(ACTIVE_CV_STORAGE_KEY, localCv.id);
+    window.history.pushState({}, '', '/cv');
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>,
+    );
+
+    await waitFor(() => expect(ctx.currentCvId).toBe(localCv.id));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(ctx.currentCv.metadata.resumeTemplateId).toBe(
+      'workshop_resume_twocol_ats',
+    );
+    expect(ctx.currentCv.metadata.verbatiStyle.typography).toBe('ledger-sans');
+    expect(ctx.currentCv.metadata.verbatiStyle.palette).toBe('ink');
+  });
+
   it('createNewCv adds a CV, sets it current and persists to localStorage', async () => {
     let ctx: any;
     render(
