@@ -15,6 +15,7 @@ const mockUpdateProposal = vi.fn().mockResolvedValue(undefined);
 const mockCreateProposal = vi.fn().mockResolvedValue("proposal_created");
 let mockAttachedCvId: string | null = null;
 let mockCurrentProposalSettings: Record<string, unknown> | null = null;
+let mockSavedProposals: any[] | null = null;
 
 const mockSourceCv = {
   id: "cv_alpha",
@@ -36,6 +37,9 @@ vi.mock("convex/react", () => ({
   useQuery: (reference: string) => {
     if (reference === "proposalSettings.getCurrent") {
       return mockCurrentProposalSettings;
+    }
+    if (reference === "proposalsPublic.default") {
+      return mockSavedProposals;
     }
     return null;
   },
@@ -280,6 +284,7 @@ describe("ProposalForge autosave", () => {
     mockUpdateProposal.mockClear();
     mockAttachedCvId = null;
     mockCurrentProposalSettings = null;
+    mockSavedProposals = null;
   });
 
   afterEach(() => {
@@ -428,8 +433,107 @@ describe("ProposalForge autosave", () => {
         id: "proposal_preview_existing",
         title: "Preview autosave title",
         content: expect.stringContaining("Preview committed draft body."),
+        metadata: expect.objectContaining({
+          proposalDocument: expect.objectContaining({
+            blocks: expect.arrayContaining([
+              expect.objectContaining({
+                text: "Preview committed draft body.",
+              }),
+            ]),
+          }),
+          proposalDocumentRevision: expect.any(Number),
+          proposalDocumentUpdatedAt: expect.any(Number),
+        }),
         status: "draft",
       }),
+    );
+  });
+
+  it("keeps a same-draft local structured snapshot when the saved draft query is stale after refresh", async () => {
+    mockSavedProposals = [
+      {
+        _id: "proposal_preview_existing",
+        title: "Preview autosave title",
+        content: "Dear team,\n\nOld server draft body.\n\nSincerely,\nAlex Martin",
+        sections: [{ type: "text", content: "Old server draft body." }],
+        status: "draft",
+        metadata: {
+          proposalType: "cover_letter",
+          voicePreset: "signature",
+          resolvedVoicePreset: "signature",
+        },
+      },
+    ];
+    window.localStorage.setItem(
+      PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        proposalContent:
+          "Dear team,\n\nNew underlined client draft body.\n\nSincerely,\nAlex Martin",
+        proposalDocument: {
+          schemaVersion: 1,
+          kind: "letter",
+          source: "structured",
+          blocks: [
+            {
+              id: "salutation-1",
+              type: "salutation",
+              text: "Dear team,",
+            },
+            {
+              id: "paragraph-1",
+              type: "paragraph",
+              text: "New underlined client draft body.",
+              richText: {
+                runs: [
+                  { text: "New underlined", underline: true },
+                  { text: " client draft body." },
+                ],
+              },
+            },
+            {
+              id: "closing-1",
+              type: "closing",
+              signOff: "Sincerely,",
+              signatureName: "Alex Martin",
+            },
+          ],
+        },
+        proposalType: "cover_letter",
+        proposalVoicePreset: "signature",
+        proposalTemplateId: null,
+        proposalVerbatiStyle: null,
+        proposalStyleLinkMode: "proposal_local",
+        proposalStyleChoice: "balanced",
+        proposalApplicantName: "Alex Martin",
+        proposalApplicantRole: "Operations Associate",
+        proposalDocumentTitle: "Preview autosave title",
+        proposalDocumentMeta: "Compose output",
+        generatedProposalId: "proposal_preview_existing",
+        proposalOutputMode: "preview",
+        paletteOverride: null,
+        customAccentHex: null,
+        templateBundleId: null,
+        typographyOverride: null,
+        layoutOverride: null,
+        proposalDocumentTitleManual: false,
+        characterLimitMode: null,
+        characterLimitValue: null,
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/proposal?draftId=proposal_preview_existing"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-autosave-state")).toHaveTextContent(
+        "New underlined client draft body.",
+      );
+    });
+    expect(screen.getByTestId("proposal-autosave-state")).not.toHaveTextContent(
+      "Old server draft body.",
     );
   });
 

@@ -278,6 +278,9 @@ export default query({
         closing: v.optional(proposalClosingChoice),
         documentDecoration: v.optional(proposalDocumentDecorationChoice),
         documentIcons: v.optional(documentIconSettingsChoice),
+        proposalDocument: v.optional(v.any()),
+        proposalDocumentRevision: v.optional(v.number()),
+        proposalDocumentUpdatedAt: v.optional(v.number()),
         proposalType: v.optional(
           v.union(
             v.literal("cover_letter"),
@@ -414,6 +417,11 @@ export default query({
         closing: proposal.metadata.closing ?? undefined,
         documentDecoration: proposal.metadata.documentDecoration ?? undefined,
         documentIcons: proposal.metadata.documentIcons ?? undefined,
+        proposalDocument: proposal.metadata.proposalDocument ?? undefined,
+        proposalDocumentRevision:
+          proposal.metadata.proposalDocumentRevision ?? undefined,
+        proposalDocumentUpdatedAt:
+          proposal.metadata.proposalDocumentUpdatedAt ?? undefined,
         proposalType: proposal.metadata.proposalType ?? undefined,
       },
       metrics: {

@@ -170,7 +170,36 @@ export function createProposalRichTextFromPlainText(
 }
 
 export function normalizeProposalDocumentEditText(input: string): string {
-  const normalized = normalizeEditableText(input);
+  const withoutDangerousBlocks = input
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "");
+  const withLineBreaks = withoutDangerousBlocks
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li|h[1-6]|section|article|blockquote)>/gi, "\n")
+    .replace(/<[^>]+>/g, "");
+  const decoded =
+    typeof document !== "undefined"
+      ? (() => {
+          const textarea = document.createElement("textarea");
+          textarea.innerHTML = withLineBreaks;
+          return textarea.value;
+        })()
+      : withLineBreaks
+          .replace(/&nbsp;/gi, " ")
+          .replace(/&amp;/gi, "&")
+          .replace(/&lt;/gi, "<")
+          .replace(/&gt;/gi, ">")
+          .replace(/&quot;/gi, "\"")
+          .replace(/&#39;/g, "'");
+  const normalized = stripZeroWidthPlaceholders(decoded)
+    .replace(/\r\n?/g, "\n")
+    .replace(/\u00a0/g, " ")
+    .split("\n")
+    .map((line) => line.trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
   if (normalized && /\n[ \t\f\v]*$/u.test(input.replace(/\r\n?/g, "\n"))) {
     return `${normalized}\n`;
   }
@@ -266,6 +295,75 @@ function normalizeAdjacentRuns(runs: ProposalInlineRun[]): ProposalInlineRun[] {
     });
   });
   return normalized;
+}
+
+function sliceProposalRichText(
+  richText: ProposalRichText | undefined,
+  start: number,
+  end: number,
+): ProposalRichText | undefined {
+  const normalized = normalizeProposalRichText(richText);
+  if (!normalized) return undefined;
+
+  let cursor = 0;
+  const runs: ProposalInlineRun[] = [];
+  normalized.runs.forEach((run) => {
+    const runStart = cursor;
+    const runEnd = runStart + run.text.length;
+    cursor = runEnd;
+    if (runEnd <= start || runStart >= end) return;
+
+    const localStart = Math.max(0, start - runStart);
+    const localEnd = Math.min(run.text.length, end - runStart);
+    const text = run.text.slice(localStart, localEnd);
+    if (!text) return;
+    runs.push({ ...run, text });
+  });
+
+  const text = normalizeProposalDocumentEditText(
+    runs.map((run) => run.text).join(""),
+  );
+  if (!text) return undefined;
+
+  const rawText = runs.map((run) => run.text).join("");
+  let remainingTrimStart = rawText.length - rawText.trimStart().length;
+  const trimmedLength = rawText.trim().length;
+  const trimmedRuns = runs
+    .map((run) => {
+      let nextText = run.text;
+      if (remainingTrimStart > 0) {
+        const trimCount = Math.min(remainingTrimStart, nextText.length);
+        nextText = nextText.slice(trimCount);
+        remainingTrimStart -= trimCount;
+      }
+      return { ...run, text: nextText };
+    })
+    .filter((run) => run.text);
+
+  let seen = 0;
+  const boundedRuns = trimmedRuns
+    .map((run) => {
+      if (seen >= trimmedLength) return { ...run, text: "" };
+      const available = trimmedLength - seen;
+      const nextText = run.text.slice(0, available);
+      seen += nextText.length;
+      return { ...run, text: nextText };
+    })
+    .filter((run) => run.text);
+
+  const nextRuns = normalizeAdjacentRuns(boundedRuns);
+  return nextRuns.length > 0 ? { runs: nextRuns } : undefined;
+}
+
+function joinProposalRichText(
+  left: ProposalRichText | undefined,
+  right: ProposalRichText | undefined,
+): ProposalRichText | undefined {
+  const leftRuns = normalizeProposalRichText(left)?.runs ?? [];
+  const rightRuns = normalizeProposalRichText(right)?.runs ?? [];
+  const separator = leftRuns.length > 0 && rightRuns.length > 0 ? [{ text: " " }] : [];
+  const runs = normalizeAdjacentRuns([...leftRuns, ...separator, ...rightRuns]);
+  return runs.length > 0 ? { runs } : undefined;
 }
 
 function applyInlineMarkToRichText(args: {
@@ -914,14 +1012,29 @@ export function splitProposalDocumentTarget(args: {
       block.type === "paragraph"
     ) {
       const offset = Math.max(0, Math.min(args.offset, block.text.length));
-      const before = normalizeEditableText(block.text.slice(0, offset));
-      const after = normalizeEditableText(block.text.slice(offset));
+      const beforeRichText = sliceProposalRichText(block.richText, 0, offset);
+      const afterRichText = sliceProposalRichText(
+        block.richText,
+        offset,
+        block.text.length,
+      );
+      const before = beforeRichText
+        ? getProposalRichTextPlainText(beforeRichText)
+        : normalizeProposalDocumentEditText(block.text.slice(0, offset));
+      const after = afterRichText
+        ? getProposalRichTextPlainText(afterRichText)
+        : normalizeProposalDocumentEditText(block.text.slice(offset));
       const { richText: _richText, ...plainBlock } = block;
-      blocks.push({ ...plainBlock, text: before });
+      blocks.push({
+        ...plainBlock,
+        text: before,
+        ...(beforeRichText ? { richText: beforeRichText } : null),
+      });
       blocks.push({
         id: createSiblingId(ids, block.id, "paragraph"),
         type: "paragraph",
         text: after,
+        ...(afterRichText ? { richText: afterRichText } : null),
       });
       return;
     }
@@ -941,9 +1054,19 @@ export function splitProposalDocumentTarget(args: {
 
       const item = block.items[itemIndex];
       const offset = Math.max(0, Math.min(args.offset, item.text.length));
-      const before = normalizeEditableText(item.text.slice(0, offset));
-      const after = normalizeEditableText(item.text.slice(offset));
-      const isEmptyItem = !normalizeEditableText(item.text);
+      const beforeRichText = sliceProposalRichText(item.richText, 0, offset);
+      const afterRichText = sliceProposalRichText(
+        item.richText,
+        offset,
+        item.text.length,
+      );
+      const before = beforeRichText
+        ? getProposalRichTextPlainText(beforeRichText)
+        : normalizeProposalDocumentEditText(item.text.slice(0, offset));
+      const after = afterRichText
+        ? getProposalRichTextPlainText(afterRichText)
+        : normalizeProposalDocumentEditText(item.text.slice(offset));
+      const isEmptyItem = !normalizeProposalDocumentEditText(item.text);
 
       if (isEmptyItem) {
         const beforeItems = block.items.slice(0, itemIndex);
@@ -972,11 +1095,16 @@ export function splitProposalDocumentTarget(args: {
           if (index !== itemIndex) return [current];
           const { richText: _richText, ...plainItem } = current;
           return [
-            { ...plainItem, text: before },
+            {
+              ...plainItem,
+              text: before,
+              ...(beforeRichText ? { richText: beforeRichText } : null),
+            },
             {
               id: createSiblingId(ids, current.id, "item"),
               text: after,
               marker: current.marker ?? block.marker ?? null,
+              ...(afterRichText ? { richText: afterRichText } : null),
             },
           ];
         }),
@@ -1010,9 +1138,14 @@ export function mergeProposalDocumentTargetBackward(args: {
 
       if (previous.type === "paragraph" || previous.type === "salutation") {
         const { richText: _richText, ...plainPrevious } = previous;
+        const richText = joinProposalRichText(previous.richText, block.richText);
+        const text = richText
+          ? getProposalRichTextPlainText(richText)
+          : joinEditableText(previous.text, block.text);
         blocks[blockIndex - 1] = {
           ...plainPrevious,
-          text: joinEditableText(previous.text, block.text),
+          text,
+          ...(richText ? { richText } : null),
         };
         blocks.splice(blockIndex, 1);
         return { ...args.document, source: "structured", blocks };
@@ -1025,7 +1158,15 @@ export function mergeProposalDocumentTargetBackward(args: {
           items: previous.items.map((item, index) => {
             if (index !== lastItemIndex) return item;
             const { richText: _richText, ...plainItem } = item;
-            return { ...plainItem, text: joinEditableText(item.text, block.text) };
+            const richText = joinProposalRichText(item.richText, block.richText);
+            const text = richText
+              ? getProposalRichTextPlainText(richText)
+              : joinEditableText(item.text, block.text);
+            return {
+              ...plainItem,
+              text,
+              ...(richText ? { richText } : null),
+            };
           }),
         };
         blocks.splice(blockIndex, 1);
@@ -1044,7 +1185,7 @@ export function mergeProposalDocumentTargetBackward(args: {
       if (itemIndex === -1) return args.document;
       const item = block.items[itemIndex];
 
-      if (!normalizeEditableText(item.text)) {
+      if (!normalizeProposalDocumentEditText(item.text)) {
         const updated = removeListItemAt(block, itemIndex);
         if (updated) {
           blocks[blockIndex] = updated;
@@ -1066,9 +1207,17 @@ export function mergeProposalDocumentTargetBackward(args: {
             .map((current, index) => {
               if (index !== itemIndex - 1) return current;
               const { richText: _richText, ...plainCurrent } = current;
+              const richText = joinProposalRichText(
+                previousItem.richText,
+                item.richText,
+              );
+              const text = richText
+                ? getProposalRichTextPlainText(richText)
+                : joinEditableText(previousItem.text, item.text);
               return {
                 ...plainCurrent,
-                text: joinEditableText(previousItem.text, item.text),
+                text,
+                ...(richText ? { richText } : null),
               };
             })
             .filter((_, index) => index !== itemIndex),
@@ -1079,9 +1228,14 @@ export function mergeProposalDocumentTargetBackward(args: {
       const previous = blocks[blockIndex - 1];
       if (previous?.type === "paragraph" || previous?.type === "salutation") {
         const { richText: _richText, ...plainPrevious } = previous;
+        const richText = joinProposalRichText(previous.richText, item.richText);
+        const text = richText
+          ? getProposalRichTextPlainText(richText)
+          : joinEditableText(previous.text, item.text);
         blocks[blockIndex - 1] = {
           ...plainPrevious,
-          text: joinEditableText(previous.text, item.text),
+          text,
+          ...(richText ? { richText } : null),
         };
         const updated = removeListItemAt(block, itemIndex);
         if (updated) {
@@ -1117,9 +1271,14 @@ export function mergeProposalDocumentTargetForward(args: {
 
       if (next.type === "paragraph") {
         const { richText: _richText, ...plainBlock } = block;
+        const richText = joinProposalRichText(block.richText, next.richText);
+        const text = richText
+          ? getProposalRichTextPlainText(richText)
+          : joinEditableText(block.text, next.text);
         blocks[blockIndex] = {
           ...plainBlock,
-          text: joinEditableText(block.text, next.text),
+          text,
+          ...(richText ? { richText } : null),
         };
         blocks.splice(blockIndex + 1, 1);
         return { ...args.document, source: "structured", blocks };
@@ -1128,9 +1287,14 @@ export function mergeProposalDocumentTargetForward(args: {
       if (next.type === "list" && next.items.length > 0) {
         const [firstItem, ...restItems] = next.items;
         const { richText: _richText, ...plainBlock } = block;
+        const richText = joinProposalRichText(block.richText, firstItem.richText);
+        const text = richText
+          ? getProposalRichTextPlainText(richText)
+          : joinEditableText(block.text, firstItem.text);
         blocks[blockIndex] = {
           ...plainBlock,
-          text: joinEditableText(block.text, firstItem.text),
+          text,
+          ...(richText ? { richText } : null),
         };
         if (restItems.length > 0) {
           blocks[blockIndex + 1] = { ...next, items: restItems };
@@ -1159,9 +1323,17 @@ export function mergeProposalDocumentTargetForward(args: {
             .map((current, index) => {
               if (index !== itemIndex) return current;
               const { richText: _richText, ...plainCurrent } = current;
+              const richText = joinProposalRichText(
+                current.richText,
+                nextItem.richText,
+              );
+              const text = richText
+                ? getProposalRichTextPlainText(richText)
+                : joinEditableText(current.text, nextItem.text);
               return {
                 ...plainCurrent,
-                text: joinEditableText(current.text, nextItem.text),
+                text,
+                ...(richText ? { richText } : null),
               };
             })
             .filter((_, index) => index !== itemIndex + 1),
@@ -1176,7 +1348,15 @@ export function mergeProposalDocumentTargetForward(args: {
           items: block.items.map((item, index) => {
             if (index !== itemIndex) return item;
             const { richText: _richText, ...plainItem } = item;
-            return { ...plainItem, text: joinEditableText(item.text, next.text) };
+            const richText = joinProposalRichText(item.richText, next.richText);
+            const text = richText
+              ? getProposalRichTextPlainText(richText)
+              : joinEditableText(item.text, next.text);
+            return {
+              ...plainItem,
+              text,
+              ...(richText ? { richText } : null),
+            };
           }),
         };
         blocks.splice(blockIndex + 1, 1);

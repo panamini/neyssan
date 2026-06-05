@@ -654,6 +654,24 @@ function wrapProposalPreviewRangeWithInlineMark(
 
   const tagName =
     mark === "bold" ? "strong" : mark === "italic" ? "em" : "u";
+  const selectedElement =
+    range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
+      ? (range.commonAncestorContainer as Element)
+      : range.commonAncestorContainer.parentElement;
+  const existingWrapper = selectedElement?.closest(tagName);
+  if (
+    existingWrapper &&
+    existingWrapper.textContent === selectedText &&
+    existingWrapper.parentNode
+  ) {
+    const parent = existingWrapper.parentNode;
+    while (existingWrapper.firstChild) {
+      parent.insertBefore(existingWrapper.firstChild, existingWrapper);
+    }
+    parent.removeChild(existingWrapper);
+    return true;
+  }
+
   const wrapper = document.createElement(tagName);
   wrapper.appendChild(range.extractContents());
   range.insertNode(wrapper);
@@ -687,6 +705,14 @@ function applyProposalPreviewInlineMarkToCurrentDomSelection(
   if (!selectedTarget) return false;
 
   return wrapProposalPreviewRangeWithInlineMark(range, mark);
+}
+
+function checkpointProposalPreviewBodyEditorDom(): void {
+  const bodyEditor = document.querySelector<HTMLElement>(
+    "[data-proposal-body-editor='true']",
+  );
+  if (!bodyEditor) return;
+  bodyEditor.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
 }
 
 function applyProposalPreviewInlineMarkToDom(
@@ -2210,6 +2236,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
         !previewSelectionState.multiTargetRange &&
         applyProposalPreviewInlineMarkToCurrentDomSelection(mark)
       ) {
+        checkpointProposalPreviewBodyEditorDom();
         setAiSuggestion(null);
         setPreviewSelectionState(null);
         return;
@@ -2241,6 +2268,16 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           : null;
       if (!nextDocument || nextDocument === currentDocument) {
         if (applyProposalPreviewInlineMarkToDom(previewSelectionState, mark)) {
+          checkpointProposalPreviewBodyEditorDom();
+          setAiSuggestion(null);
+          setPreviewSelectionState(null);
+          return;
+        }
+        if (
+          !previewSelectionState.multiTargetRange &&
+          applyProposalPreviewInlineMarkToCurrentDomSelection(mark)
+        ) {
+          checkpointProposalPreviewBodyEditorDom();
           setAiSuggestion(null);
           setPreviewSelectionState(null);
         }

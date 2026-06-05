@@ -862,7 +862,7 @@ describe("ProposalDisplay", () => {
     expect(onContentCommit).not.toHaveBeenCalled();
   });
 
-  it("applies preview formatting to a locally split paragraph before blur", async () => {
+  it("applies preview formatting to a locally split paragraph through the structured document", async () => {
     const { onContentCommit, onProposalDocumentChange } =
       renderPreviewEditableProposal();
 
@@ -877,11 +877,6 @@ describe("ProposalDisplay", () => {
     fireEvent.click(getSelectionToolbarButtonByLabel("Bold"));
 
     expect(splitParagraph.querySelector("strong")?.textContent).toBe("text");
-    expect(onProposalDocumentChange).not.toHaveBeenCalled();
-    expect(onContentCommit).not.toHaveBeenCalled();
-
-    fireEvent.blur(bodyEditor);
-
     await waitFor(() => {
       expect(screen.getByTestId("proposal-document")).toHaveTextContent(
         '"bold":true',
@@ -890,6 +885,8 @@ describe("ProposalDisplay", () => {
         "Keyboard",
       );
     });
+    expect(onProposalDocumentChange).toHaveBeenCalled();
+    expect(onContentCommit).toHaveBeenCalled();
   });
 
   it("keeps Shift+Enter inside the same paragraph and moves the caret after the soft break", async () => {
@@ -2178,7 +2175,7 @@ describe("ProposalDisplay", () => {
     });
   });
 
-  it("applies preview B/I/U formatting to live preview text and serializes on blur", async () => {
+  it("applies preview B/I/U formatting through structured transactions and toggles existing marks", async () => {
     const { onContentCommit, onProposalDocumentChange } =
       renderPreviewEditableProposal();
 
@@ -2192,55 +2189,39 @@ describe("ProposalDisplay", () => {
     fireEvent.click(getSelectionToolbarButtonByLabel("Bold"));
 
     await waitFor(() => {
-      expect(
-        document.querySelector(
-          "[data-proposal-body-editor='true'] strong",
-        )?.textContent,
-      ).toBe("Original");
+      expect(screen.getByTestId("proposal-document")).toHaveTextContent(
+        '"bold":true',
+      );
     });
-    expect(onProposalDocumentChange).not.toHaveBeenCalled();
-    expect(onContentCommit).not.toHaveBeenCalled();
+    expect(onProposalDocumentChange).toHaveBeenCalled();
+    expect(onContentCommit).toHaveBeenCalled();
 
     await selectContentEditableText(getEditableProposalParagraphs()[0], "paragraph");
     fireEvent.click(getSelectionToolbarButtonByLabel("Italic"));
     await waitFor(() => {
-      expect(
-        document.querySelector(
-          "[data-proposal-body-editor='true'] em",
-        )?.textContent,
-      ).toBe("paragraph");
+      expect(screen.getByTestId("proposal-document")).toHaveTextContent(
+        '"italic":true',
+      );
     });
 
     await selectContentEditableText(getEditableProposalParagraphs()[0], "Original");
     fireEvent.click(getSelectionToolbarButtonByLabel("Underline"));
     await waitFor(() => {
-      expect(
-        document.querySelector(
-          "[data-proposal-body-editor='true'] u",
-        )?.textContent,
-      ).toContain("Original");
-    });
-    expect(onProposalDocumentChange).not.toHaveBeenCalled();
-    expect(onContentCommit).not.toHaveBeenCalled();
-
-    fireEvent.blur(getProposalBodyEditor());
-
-    await waitFor(() => {
-      expect(screen.getByTestId("proposal-document")).toHaveTextContent(
-        '"richText"',
-      );
-      expect(screen.getByTestId("proposal-document")).toHaveTextContent(
-        '"bold":true',
-      );
-      expect(screen.getByTestId("proposal-document")).toHaveTextContent(
-        '"italic":true',
-      );
       expect(screen.getByTestId("proposal-document")).toHaveTextContent(
         '"underline":true',
       );
       expect(screen.getByTestId("proposal-document")).toHaveTextContent(
         '"text":"Original paragraph."',
       );
+    });
+
+    await selectContentEditableText(getEditableProposalParagraphs()[0], "Original");
+    fireEvent.click(getSelectionToolbarButtonByLabel("Bold"));
+
+    await waitFor(() => {
+      const documentSnapshot = screen.getByTestId("proposal-document").textContent ?? "";
+      expect(documentSnapshot).toContain('"underline":true');
+      expect(documentSnapshot).not.toContain('"bold":true');
     });
   });
 

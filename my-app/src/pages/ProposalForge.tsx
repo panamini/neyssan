@@ -833,6 +833,9 @@ type ProposalDocumentMetadata = DocumentStyleMetadata & {
   jobDetectedLanguage?: string | null;
   documentDecoration?: DocumentDecoration;
   documentIcons?: DocumentIconSettings;
+  proposalDocument?: ProposalDocument | null;
+  proposalDocumentRevision?: number;
+  proposalDocumentUpdatedAt?: number;
 };
 
 type ProposalWorkspaceCssVars = React.CSSProperties & {
@@ -5141,6 +5144,12 @@ export function ProposalForge(): JSX.Element {
     if (closing) {
       nextMetadata.closing = closing;
     }
+    if (proposalDocument) {
+      const documentUpdatedAt = Date.now();
+      nextMetadata.proposalDocument = proposalDocument;
+      nextMetadata.proposalDocumentRevision = documentUpdatedAt;
+      nextMetadata.proposalDocumentUpdatedAt = documentUpdatedAt;
+    }
 
     return Object.keys(nextMetadata).length > 0 ? nextMetadata : undefined;
   }, [
@@ -5161,6 +5170,7 @@ export function ProposalForge(): JSX.Element {
     proposalHeaderVisibility,
     proposalLetterDate,
     proposalRecipientDetails,
+    proposalDocument,
     proposalType,
     proposalVoicePreset,
     storedOutputProposalClosingToken,
@@ -5200,7 +5210,21 @@ export function ProposalForge(): JSX.Element {
               : "Proposal"
           : "Generated proposal");
 
-      const renderedMetadata = proposalPersistenceMetadata;
+      const snapshotDocument =
+        contentSnapshot?.proposalDocument !== undefined
+          ? contentSnapshot.proposalDocument
+          : proposalDocument;
+      const renderedMetadata = snapshotDocument
+        ? (() => {
+            const documentUpdatedAt = Date.now();
+            return {
+              ...(proposalPersistenceMetadata ?? {}),
+              proposalDocument: snapshotDocument,
+              proposalDocumentRevision: documentUpdatedAt,
+              proposalDocumentUpdatedAt: documentUpdatedAt,
+            };
+          })()
+        : proposalPersistenceMetadata;
       const latestStyleCommit = latestProposalStyleCommitRef.current;
       const currentProposalId = generatedProposalIdRef.current
         ? String(generatedProposalIdRef.current)
@@ -5250,6 +5274,7 @@ export function ProposalForge(): JSX.Element {
     [
       generatedProposalId,
       proposalContentForPersistence,
+      proposalDocument,
       proposalDocumentTitle,
       proposalLibraryStatus,
       proposalPersistenceMetadata,
@@ -7332,10 +7357,24 @@ export function ProposalForge(): JSX.Element {
       return;
     }
 
-    const nextContent = resolveProposalStoredText({
+    const storedDraftForSelectedProposal =
+      storedOutputDraft?.generatedProposalId &&
+      String(storedOutputDraft.generatedProposalId) === selectedDraftProposalId
+        ? storedOutputDraft
+        : null;
+    const storedDraftDocument = normalizeProposalDocument(
+      storedDraftForSelectedProposal?.proposalDocument,
+    );
+    const serverContent = resolveProposalStoredText({
       content: draftProposal.content,
       sections: draftProposal.sections,
     });
+    const nextContent =
+      storedDraftForSelectedProposal?.proposalContent?.trim() || serverContent;
+    const nextProposalDocument =
+      storedDraftDocument ??
+      normalizeProposalDocument(draftProposal.metadata?.proposalDocument) ??
+      null;
     const nextType = draftProposal.metadata?.proposalType ?? null;
     const nextVoicePreset =
       draftProposal.metadata?.resolvedVoicePreset ??
@@ -7437,7 +7476,7 @@ export function ProposalForge(): JSX.Element {
     cancelPendingComposeDraftSync();
     setDuplicateSourceJobId(draftProposal.metadata?.jobId ?? null);
     setProposalContent(nextContent);
-    setProposalDocument(null);
+    setProposalDocument(nextProposalDocument);
     setProposalType(nextType);
     setProposalLibraryStatus("draft");
     setProposalVoicePreset(nextVoicePreset);
@@ -7483,7 +7522,7 @@ export function ProposalForge(): JSX.Element {
     setComposeSaveStatus("idle");
     writeStoredOutputDraft({
       proposalContent: nextContent,
-      proposalDocument: null,
+      proposalDocument: nextProposalDocument,
       proposalType: nextType,
       proposalVoicePreset: nextVoicePreset,
       proposalTemplateId: nextTemplateId,
@@ -7553,6 +7592,7 @@ export function ProposalForge(): JSX.Element {
     requestedView,
     savedProposals,
     selectedDraftProposalId,
+    storedOutputDraft,
     writeStoredOutputDraft,
   ]);
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   normalizeEditableText,
+  normalizeProposalDocumentEditText,
   applyProposalDocumentInlineMark,
   applyProposalDocumentInlineMarkToTextBlockRange,
   getProposalRichTextPlainText,
@@ -22,6 +23,12 @@ describe("proposal-document", () => {
         "<p><strong>Hello&nbsp;team</strong></p><script>alert('x')</script><div>Next</div>",
       ),
     ).toBe("Hello team\nNext");
+  });
+
+  it("preserves repeated spaces for editor document text", () => {
+    expect(normalizeProposalDocumentEditText("hello   world")).toBe(
+      "hello   world",
+    );
   });
 
   it("parses legacy cover-letter text into structured blocks", () => {
@@ -318,6 +325,48 @@ describe("proposal-document", () => {
       { id: "p1", type: "paragraph", text: "Before" },
       { id: "p1-paragraph", type: "paragraph", text: "after" },
       { id: "p2", type: "paragraph", text: "Unchanged" },
+    ]);
+  });
+
+  it("splits rich paragraphs without dropping inline marks", () => {
+    const document: ProposalDocument = {
+      schemaVersion: 1,
+      kind: "letter",
+      source: "structured",
+      blocks: [
+        {
+          id: "p1",
+          type: "paragraph",
+          text: "Bold after",
+          richText: {
+            runs: [
+              { text: "Bold", bold: true },
+              { text: " after" },
+            ],
+          },
+        },
+      ],
+    };
+
+    const next = splitProposalDocumentTarget({
+      document,
+      target: { type: "text-block", blockId: "p1" },
+      offset: "Bold".length,
+    });
+
+    expect(next.blocks).toEqual([
+      {
+        id: "p1",
+        type: "paragraph",
+        text: "Bold",
+        richText: { runs: [{ text: "Bold", bold: true }] },
+      },
+      {
+        id: "p1-paragraph",
+        type: "paragraph",
+        text: "after",
+        richText: { runs: [{ text: "after" }] },
+      },
     ]);
   });
 
