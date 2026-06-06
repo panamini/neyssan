@@ -14,7 +14,9 @@ import {
 import { serializeResumePreviewVars } from "../../../lib/layout/documentTokenSerializers";
 import {
   planWorkshopResumePages,
+  type WorkshopResumeCommittedFragment,
   type WorkshopResumeCommittedPage,
+  type WorkshopTwoColumnLane,
 } from "../../../lib/resume/resumePagination";
 import type { DocumentStageLayout } from "../../../hooks/use-document-stage-layout";
 import type { ResumeActiveTarget } from "../resumeLinking";
@@ -34,7 +36,10 @@ import {
   resolveDocumentPageSize,
   type DocumentPageSize,
 } from "../../../lib/document-page-size";
-import type { DocumentIconSettings } from "../../../lib/document-icons";
+import type {
+  DocumentIconKey,
+  DocumentIconSettings,
+} from "../../../lib/document-icons";
 import type {
   DocumentIconOverrides,
   DocumentListItemIconOverrideTarget,
@@ -114,7 +119,7 @@ type ResumeTemplateRendererProps = {
   documentIconOverrides?: DocumentIconOverrides | null;
   onDocumentListItemIconChange?: (
     target: DocumentListItemIconOverrideTarget,
-    iconKey: string | null,
+    iconKey: DocumentIconKey | null,
   ) => void;
   stageLayout?: DocumentStageLayout;
   pageSize?: DocumentPageSize | null;
@@ -158,6 +163,40 @@ function buildTemplatePreviewVars(
     ...themeVars,
     ...layoutVars,
   };
+}
+
+function resolveMaggieCommittedFragmentLane(
+  fragment: WorkshopResumeCommittedFragment,
+): WorkshopTwoColumnLane {
+  if (fragment.kind === "profile" || fragment.kind === "summary") {
+    return "header";
+  }
+
+  if (
+    fragment.kind === "education" ||
+    fragment.kind === "skills" ||
+    fragment.kind === "languages" ||
+    fragment.kind === "certifications" ||
+    fragment.kind === "achievements" ||
+    fragment.kind === "hobbies"
+  ) {
+    return "sidebar";
+  }
+
+  return "main";
+}
+
+function applyMaggieCommittedPageLanes(
+  pages: WorkshopResumeCommittedPage[] | null,
+): WorkshopResumeCommittedPage[] | null {
+  if (!pages) return null;
+  return pages.map((page) => ({
+    ...page,
+    fragments: page.fragments.map((fragment) => ({
+      ...fragment,
+      lane: resolveMaggieCommittedFragmentLane(fragment),
+    })),
+  }));
 }
 
 export function getResumeTemplateCanvasHeight(args: {
@@ -212,12 +251,19 @@ export function ResumeTemplateRenderer({
         : null,
     [committedPages, data, isWorkshopTemplateRenderer, stylePreset, templateDefinition],
   );
-  const resolvedCommittedPages = React.useMemo(
+  const rawCommittedPages = React.useMemo(
     () =>
       committedPages && committedPages.length > 0
         ? committedPages
         : plannedPages?.committedPages ?? null,
     [committedPages, plannedPages],
+  );
+  const resolvedCommittedPages = React.useMemo(
+    () =>
+      isMaggieResumeTemplateId(templateDefinition.id)
+        ? applyMaggieCommittedPageLanes(rawCommittedPages)
+        : rawCommittedPages,
+    [rawCommittedPages, templateDefinition.id],
   );
   const resolvedPageCount = resolvedCommittedPages?.length ?? 0;
   const previewVars = React.useMemo(
