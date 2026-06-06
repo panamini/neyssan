@@ -327,12 +327,10 @@ export function TemplateDocumentPreview({
   kind,
   family,
   previewCv,
-  previewPageLimit = 1,
 }: {
   kind: TemplateCard["kind"];
   family: TemplateFamily;
   previewCv?: CvDocument | null;
-  previewPageLimit?: number;
 }): JSX.Element {
   const stylePreset = TEMPLATE_STYLE_PRESETS[family];
 
@@ -379,19 +377,14 @@ export function TemplateDocumentPreview({
         template: getResumeTemplateDefinition(resolvedResumeTemplateId),
         stylePreset: resolvedStylePreset,
       }).committedPages;
-    const previewPageCount = Math.max(1, Math.floor(previewPageLimit));
-    const committedPreviewPages = previewPages?.slice(0, previewPageCount);
+    const firstPreviewPage = previewPages?.[0];
 
     return (
       <ResumeTemplateRenderer
         data={previewData}
         stylePreset={resolvedStylePreset}
         resumeTemplateId={resolvedResumeTemplateId}
-        committedPages={
-          committedPreviewPages && committedPreviewPages.length > 0
-            ? committedPreviewPages
-            : undefined
-        }
+        committedPages={firstPreviewPage ? [firstPreviewPage] : undefined}
       />
     );
   }
