@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_RESUME_TEMPLATE_ID,
+  MAGGIE_LETTER_RESUME_TEMPLATE_ID,
   SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID,
   getResumeTemplateDefinition,
+  isMaggieResumeTemplateId,
   isSanatResumeTemplateId,
   isWorkshopResumeTemplateId,
   isWorkshopTwoColumnResumeTemplateId,
@@ -44,6 +46,7 @@ describe("resumeTemplates", () => {
         "workshop_resume_onecol_ats",
         "workshop_resume_twocol_ats",
         "sanat_asymmetric_resume",
+        MAGGIE_LETTER_RESUME_TEMPLATE_ID,
       ]),
     );
   });
@@ -122,5 +125,43 @@ describe("resumeTemplates", () => {
     expect(isWorkshopResumeTemplateId(template.id)).toBe(true);
     expect(isSanatResumeTemplateId(template.id)).toBe(true);
     expect(isWorkshopTwoColumnResumeTemplateId(template.id)).toBe(false);
+  });
+
+  it("defines Maggie Letter as a planner-backed native Letter-ratio workshop template", () => {
+    const template = getResumeTemplateDefinition(MAGGIE_LETTER_RESUME_TEMPLATE_ID);
+
+    expect(template).toEqual(
+      expect.objectContaining({
+        id: MAGGIE_LETTER_RESUME_TEMPLATE_ID,
+        familyId: "workshop",
+        label: "Maggie Letter",
+        supportsPlanner: true,
+        supportsLegacyComparison: false,
+        exportShell: "onecol",
+      }),
+    );
+    expect(template.preview).toEqual(
+      expect.objectContaining({
+        topMm: 25.5,
+        leftMm: 24.5,
+        rightMm: 23.5,
+        bottomMm: 18,
+        gutterMm: 15.5,
+        sidebarMm: 73,
+        mainMm: 79.5,
+      }),
+    );
+    expect(template.export).toEqual(
+      expect.objectContaining({
+        topMm: 25.5,
+        leftMm: 24.5,
+        rightMm: 23.5,
+        gutterMm: 15.5,
+        sidebarMm: 73,
+        mainMm: 79.5,
+      }),
+    );
+    expect(isWorkshopResumeTemplateId(template.id)).toBe(true);
+    expect(isMaggieResumeTemplateId(template.id)).toBe(true);
   });
 });
