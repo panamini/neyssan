@@ -290,6 +290,75 @@ describe("profiles.patch resume scoring sync", () => {
     expect(ctx.db.patch.mock.calls[0][1].cvDocument).toBeUndefined();
   });
 
+  it("refreshes library summary fields when an existing CV document is autosaved", async () => {
+    const existing = {
+      _id: "profile_doc_id",
+      _creationTime: 100,
+      profileId: "cv_content",
+      clerkId: "clerk_123",
+      email: "candidate@example.com",
+      version: 1,
+      createdAt: 100,
+      updatedAt: 100,
+      skills: ["Old library skill"],
+      keywords: ["old"],
+      experience: [
+        {
+          company: "Old Company",
+          title: "Old Title",
+          description: "Old library description",
+        },
+      ],
+      raw_text: "Old library raw text",
+      summary: "Old library summary",
+      metadata: {
+        source: "legacy-import",
+      },
+      cvDocument: {
+        ...makeMatchableCvDocument(),
+        sections: [],
+      },
+    };
+    const ctx = makePatchCtx([existing]);
+
+    await patchProfile._handler(
+      ctx as any,
+      {
+        profileId: "cv_content",
+        patch: {
+          metadata: {
+            verbatiStyle: {
+              layout: "workshop",
+              typography: "geist-baskervville",
+              palette: "sauge",
+            },
+          },
+          cvDocument: makeMatchableCvDocument(),
+        },
+      },
+    );
+
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "profile_doc_id",
+      expect.objectContaining({
+        summary: "Retail design specialist for Miami Design District stores.",
+        skills: ["Retail design", "Clienteling"],
+        raw_text: expect.stringContaining("Miami Design District"),
+        experience: [
+          expect.objectContaining({
+            company: "Studio Store",
+            title: "Store Designer",
+            description:
+              "Built part-time luxury retail displays and compensation dashboards.",
+          }),
+        ],
+        cvDocument: expect.objectContaining({
+          id: "cv_content",
+        }),
+      }),
+    );
+  });
+
   it("strips legacy profileImage metadata from server-side patch writes", async () => {
     const existing = {
       _id: "profile_doc_id",

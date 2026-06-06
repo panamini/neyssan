@@ -690,31 +690,32 @@ export const patch = mutation({
       const cvScoringFields = buildScoringProfileFieldsFromCvDocument(
         args.patch.cvDocument,
       );
+      const hasFullCvDocumentPatch = args.patch.cvDocument !== undefined;
       if (
         updates.summary === undefined &&
-        !compactScoringText(existing.summary ?? "") &&
-        cvScoringFields.summary
+        cvScoringFields.summary &&
+        (hasFullCvDocumentPatch || !compactScoringText(existing.summary ?? ""))
       ) {
         updates.summary = cvScoringFields.summary;
       }
       if (
         updates.skills === undefined &&
-        (existing.skills?.length ?? 0) === 0 &&
-        cvScoringFields.skills.length > 0
+        cvScoringFields.skills.length > 0 &&
+        (hasFullCvDocumentPatch || (existing.skills?.length ?? 0) === 0)
       ) {
         updates.skills = cvScoringFields.skills;
       }
       if (
         updates.experience === undefined &&
-        (existing.experience?.length ?? 0) === 0 &&
-        cvScoringFields.experience.length > 0
+        cvScoringFields.experience.length > 0 &&
+        (hasFullCvDocumentPatch || (existing.experience?.length ?? 0) === 0)
       ) {
         updates.experience = cvScoringFields.experience;
       }
       if (
         updates.raw_text === undefined &&
-        !compactScoringText(existing.raw_text ?? "") &&
-        cvScoringFields.raw_text
+        cvScoringFields.raw_text &&
+        (hasFullCvDocumentPatch || !compactScoringText(existing.raw_text ?? ""))
       ) {
         updates.raw_text = cvScoringFields.raw_text;
       }
