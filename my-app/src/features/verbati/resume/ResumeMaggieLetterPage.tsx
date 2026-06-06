@@ -13,7 +13,10 @@ import {
 } from "./ResumeOneColAtsPage";
 import type { ResumeActiveTarget } from "../resumeLinking";
 import type { ResumeInlineEditing } from "./InlineEditableText";
-import type { DocumentIconSettings } from "../../../lib/document-icons";
+import type {
+  DocumentIconKey,
+  DocumentIconSettings,
+} from "../../../lib/document-icons";
 import type {
   DocumentIconOverrides,
   DocumentListItemIconOverrideTarget,
@@ -32,7 +35,7 @@ type ResumeMaggieLetterPageProps = {
   documentIconOverrides?: DocumentIconOverrides | null;
   onDocumentListItemIconChange?: (
     target: DocumentListItemIconOverrideTarget,
-    iconKey: string | null,
+    iconKey: DocumentIconKey | null,
   ) => void;
 };
 
