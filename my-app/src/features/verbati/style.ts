@@ -40,6 +40,7 @@ import type {
 } from "./types";
 import {
   EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID,
+  MAGGIE_LETTER_RESUME_TEMPLATE_ID,
   SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID,
   isResumeTemplateId,
   type ResumeTemplateId,
@@ -86,6 +87,12 @@ export const VERBATI_LAYOUT_OPTIONS: LayoutOption[] = [
     name: "Sanat asymmetric",
     description: "Asymmetric editorial resume with a strong right rail.",
     resumeTemplateId: SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID,
+  },
+  {
+    id: "workshop",
+    name: "Maggie Letter",
+    description: "Minimal two-column letter-ratio resume with mono editorial register.",
+    resumeTemplateId: MAGGIE_LETTER_RESUME_TEMPLATE_ID,
   },
 ];
 
