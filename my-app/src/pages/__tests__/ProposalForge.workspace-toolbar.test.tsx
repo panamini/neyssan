@@ -465,7 +465,7 @@ describe.skip("ProposalForge workbench layout", () => {
 
     expect(workbenchFrame?.style.maxWidth).toBe("100%");
     expect(skeletonGrid?.style.getPropertyValue("--grid-columns")).toBe(
-      "minmax(0, 1fr) 360px",
+      "minmax(0, 1fr) 400px",
     );
     expect(skeletonGrid?.style.getPropertyValue("--grid-gap")).toBe(
       "var(--layout-card-grid)",

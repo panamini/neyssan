@@ -2068,6 +2068,79 @@ describe("ResumeOneColAtsPage", () => {
     expect(richList?.querySelector(".dasti-cv-paper-list-marker")).toBeTruthy();
   });
 
+  it("keeps rich preview bullets when the partial block mirror is empty", () => {
+    const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
+    const data = {
+      ...buildRendererData(),
+      summary: "Compact summary.",
+      skillItems: [],
+      languages: [],
+      experience: [
+        {
+          ...resumeMock.experience[0]!,
+          id: "exp-rich-empty-partial",
+          description: "",
+          bullets: ["Worked with customers.", "Resolved urgent tickets."],
+          responsibilitiesRich: {
+            blocks: [
+              {
+                kind: "bullet_list" as const,
+                items: [
+                  { runs: [{ text: "Worked with customers." }] },
+                  { runs: [{ text: "Resolved urgent tickets." }] },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+      projects: [],
+    };
+    const plan = planWorkshopResumePages({
+      data,
+      template,
+    });
+    const page = plan.committedPages[0]!;
+    const pageWithEmptyPartialMirror = {
+      ...page,
+      fragments: page.fragments.map((fragment) =>
+        fragment.kind === "experience"
+          ? {
+              ...fragment,
+              items: fragment.items.map((item) =>
+                item.id === "exp-rich-empty-partial"
+                  ? {
+                      ...item,
+                      blocks: [{ kind: "bullet" as const, text: "", partial: true }],
+                    }
+                  : item,
+              ),
+            }
+          : fragment,
+      ),
+    };
+
+    const { container } = render(
+      <ResumeOneColAtsPage
+        data={data}
+        page={pageWithEmptyPartialMirror}
+        template={template}
+      />,
+    );
+
+    const experienceItem = container.querySelector(
+      '[data-preview-section="experience"][data-preview-item-id="exp-rich-empty-partial"]',
+    ) as HTMLElement | null;
+    const bulletTexts = Array.from(
+      experienceItem?.querySelectorAll("li") ?? [],
+    ).map((node) => node.textContent);
+
+    expect(bulletTexts).toEqual([
+      "Worked with customers.",
+      "Resolved urgent tickets.",
+    ]);
+  });
+
   it("keeps non-fragmented experience rendering unchanged on committed workshop pages", () => {
     const template = getResumeTemplateDefinition("workshop_resume_onecol_ats");
     const description = makeTextBlock("unchanged-experience-description", 3);

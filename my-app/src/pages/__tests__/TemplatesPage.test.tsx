@@ -118,6 +118,7 @@ describe("TemplatesPage", () => {
     await user.click(screen.getByRole("tab", { name: "Resume" }));
     expect(screen.getByText("Minimal", { selector: ".dasti-template-card__title" })).toBeInTheDocument();
     expect(screen.getByText("French", { selector: ".dasti-template-card__title" })).toBeInTheDocument();
+    expect(screen.getByText("Sanat", { selector: ".dasti-template-card__title" })).toBeInTheDocument();
     expect(screen.getByText("Maggie", { selector: ".dasti-template-card__title" })).toBeInTheDocument();
     expect(screen.getByText("Editorial Sidebar", { selector: ".dasti-template-card__title" })).toBeInTheDocument();
     expect(screen.queryByText("Two-column")).toBeNull();
@@ -125,7 +126,7 @@ describe("TemplatesPage", () => {
     expect(screen.queryByText("Compact")).toBeNull();
     expect(screen.queryByText("Workshop one-col")).toBeNull();
     expect(screen.queryByText("Workshop two-col")).toBeNull();
-    expect(screen.getAllByTestId("template-document-preview")).toHaveLength(4);
+    expect(screen.getAllByTestId("template-document-preview")).toHaveLength(5);
 
     await user.click(screen.getByRole("button", { name: "Customize style" }));
     expect(navigateMock).toHaveBeenCalledWith("/settings?tab=docstyle");
@@ -424,7 +425,7 @@ describe("TemplatesPage", () => {
     await user.click(screen.getByRole("tab", { name: "Resume" }));
 
     const previews = screen.getAllByTestId("template-document-preview");
-    expect(previews).toHaveLength(4);
+    expect(previews).toHaveLength(5);
     for (const preview of previews) {
       const workshopRenderer = preview.querySelector(".resume-template-renderer");
       const legacyResumePage = preview.querySelector(".resume-page");

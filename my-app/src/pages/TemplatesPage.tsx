@@ -81,6 +81,13 @@ const TEMPLATES: TemplateCard[] = [
     descriptionKey: "templates.description.workshopTwoColumnResume",
   },
   {
+    id: "sanat-asymmetric-resume",
+    name: "Sanat",
+    kind: "Resume",
+    family: "sanat-asymmetric",
+    descriptionKey: "templates.description.workshopTwoColumnResume",
+  },
+  {
     id: "maggie-letter-resume",
     name: "Maggie",
     kind: "Resume",
