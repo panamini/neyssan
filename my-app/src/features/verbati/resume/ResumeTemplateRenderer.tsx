@@ -30,6 +30,7 @@ import ResumeMaggieLetterPage from "./ResumeMaggieLetterPage";
 import type { ResumeData } from "./resume.types";
 import type { ResumeInlineEditing } from "./InlineEditableText";
 import {
+  DOCUMENT_PAGE_SIZES,
   resolveDocumentPageSize,
   type DocumentPageSize,
 } from "../../../lib/document-page-size";
@@ -186,8 +187,15 @@ export function ResumeTemplateRenderer({
   onStablePageCountChange,
 }: ResumeTemplateRendererProps) {
   const resolvedPageSize = React.useMemo(
-    () => resolveDocumentPageSize({ pageSize }),
-    [pageSize],
+    () =>
+      resolveDocumentPageSize({
+        pageSize:
+          pageSize ??
+          (isMaggieResumeTemplateId(resumeTemplateId)
+            ? DOCUMENT_PAGE_SIZES.letter
+            : undefined),
+      }),
+    [pageSize, resumeTemplateId],
   );
   const templateDefinition = getResumeTemplateDefinition(resumeTemplateId);
   const isWorkshopTemplateRenderer =
