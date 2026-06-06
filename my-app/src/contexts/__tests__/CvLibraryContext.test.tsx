@@ -949,6 +949,101 @@ describe('CvLibraryContext', () => {
     expect(stored[0].metadata?.librarySummaryOnly).toBe(true);
   });
 
+  it('hydrates the remote CV library from saved cvDocument payloads for drawer visibility', async () => {
+    const now = new Date().toISOString();
+    const savedCv = {
+      id: 'cv_remote_library_saved',
+      title: 'Saved Imported CV',
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+      },
+      sections: [
+        {
+          id: 'profile-1',
+          type: 'profile',
+          title: 'Profile',
+          blocks: [],
+          structuredContent: [
+            {
+              id: 'profile-item-1',
+              name: 'Library Candidate',
+              desiredPosition: 'Product Engineer',
+            },
+          ],
+        },
+        {
+          id: 'summary-1',
+          type: 'summary',
+          title: 'Summary',
+          blocks: [],
+          structuredContent: [
+            {
+              id: 'summary-item-1',
+              summary: 'Parsed import content should feed the drawer.',
+            },
+          ],
+        },
+      ],
+    };
+
+    vi.mocked(convexClient.query).mockImplementation(async (_ref: any, args?: any) => {
+      if (args?.includeCvDocument === true) {
+        return [
+          {
+            _id: 'profile_remote_library_saved',
+            _creationTime: 100,
+            profileId: 'cv_remote_library_saved',
+            clerkId: 'clerk_123',
+            email: 'fallback@example.com',
+            name: 'Fallback Profile Name',
+            version: 1,
+            createdAt: 100,
+            updatedAt: 200,
+            preferences: {
+              writingStyle: 'professional',
+              tonePreference: 'formal',
+              autoSend: false,
+            },
+            summary: 'Fallback profile summary',
+            skills: [],
+            experience: [],
+            education: [],
+            cvDocument: savedCv,
+          },
+        ];
+      }
+      return null;
+    });
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx).toBeDefined());
+    await waitFor(() =>
+      expect(ctx.cvs.some((cv: any) => cv.id === 'cv_remote_library_saved')).toBe(
+        true,
+      ),
+    );
+
+    const hydrated = ctx.cvs.find(
+      (cv: any) => cv.id === 'cv_remote_library_saved',
+    );
+    expect(vi.mocked(convexClient.query).mock.calls[0][1]).toEqual({
+      includeCvDocument: true,
+    });
+    expect(hydrated.title).toBe('Saved Imported CV');
+    expect(hydrated.sections.map((section: any) => section.type)).toEqual([
+      'profile',
+      'summary',
+    ]);
+  });
+
   it('falls back to a full save when style-only decoration save has no remote row', async () => {
     let ctx: any;
     render(

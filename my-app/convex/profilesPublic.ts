@@ -281,6 +281,7 @@ export const getByProfileId = query({
 export const listMine = query({
   args: {
     limit: v.optional(v.number()),
+    includeCvDocument: v.optional(v.boolean()),
   },
   returns: v.array(publicUserProfileValidator),
   handler: async (ctx, args) => {
@@ -312,7 +313,9 @@ export const listMine = query({
 
     return await Promise.all(
       rows.map((profile: any) =>
-        projectProfileDoc(ctx, profile, { includeCvDocument: false }),
+        projectProfileDoc(ctx, profile, {
+          includeCvDocument: args.includeCvDocument === true,
+        }),
       ),
     );
   },

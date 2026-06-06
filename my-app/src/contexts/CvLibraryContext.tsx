@@ -1127,6 +1127,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       try {
         const remoteProfiles = await convexClient.query(
           api.profilesPublic.listMine,
+          { includeCvDocument: true },
         );
         if (
           cancelled ||
