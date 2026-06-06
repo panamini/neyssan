@@ -301,6 +301,7 @@ interface Message {
     | "setActiveCvFromProfile";
   jobData?: JobData;
   proposalText?: string;
+  proposalId?: string;
   useCurrentCvContext?: boolean;
   profileId?: string;
   // profile payload for ingestProfile action

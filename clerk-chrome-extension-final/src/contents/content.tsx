@@ -1270,15 +1270,8 @@ function extractProfileFromPage(): ProfilePayload {
   };
 }
 
-function shouldRenderLegacyProposalPreview() {
-  return (
-    process.env.PLASMO_PUBLIC_ENABLE_LEGACY_PROPOSAL_PREVIEW === "1" ||
-    window.localStorage.getItem("tw:jobforge:legacy-preview") === "1"
-  );
-}
-
 function ContentRoot() {
-  return shouldRenderLegacyProposalPreview() ? <ProposalPreview /> : <JobForgeCapsuleRoot />;
+  return <JobForgeCapsuleRoot />;
 }
 
 export default ContentRoot;
