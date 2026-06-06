@@ -2,12 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ActiveCvOption, ActiveCvSnapshot, ContextMode, DockStatus, GeneratedProposalState, SaveVisualState, SavedJobState, ToastState } from "./types";
 import { checkSession, generateProposal, getActiveCvSnapshot, getJobSaveState, listActiveCvOptions, openProposalForge, saveJob, setActiveCvFromProfile } from "./runtime";
 import { persistSavedJobState, readSavedJobState, reconcileSavedJobState } from "./saved-job-state";
+import { hasSaveableJobData } from "../_shared/job-scraper";
 import { useScrapedJob } from "./useScrapedJob";
 
 const USE_CURRENT_CV_CONTEXT_STORAGE_KEY = "useCurrentCvContext";
 
 function canSaveJob(jobData: { title?: string; description?: string }) {
-  return Boolean(jobData.title?.trim() && jobData.description?.trim());
+  return hasSaveableJobData(jobData);
 }
 
 function summarizeGenerationError(error: unknown): string {

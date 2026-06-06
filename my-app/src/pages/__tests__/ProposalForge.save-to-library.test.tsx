@@ -1,16 +1,12 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { ProposalForge } from "../ProposalForge";
 import {
   PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
-  readStoredProposalComposeDraft,
 } from "../../lib/proposal-workspace-state";
-import {
-  PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
-  readStoredProposalOutputDraft,
-} from "../../lib/proposal-output-draft";
+import { PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY } from "../../lib/proposal-output-draft";
 
 const mockUpdateProposal = vi.fn().mockResolvedValue(undefined);
 const mockCreateProposal = vi.fn().mockResolvedValue("proposal_saved_new");
@@ -176,7 +172,7 @@ vi.mock("../../components/ProposalsList", () => ({
   default: () => <div>Saved proposals</div>,
 }));
 
-describe("ProposalForge save to library", () => {
+describe("ProposalForge generated proposal toolbar", () => {
   beforeEach(() => {
     window.localStorage.clear();
     mockCreateProposal.mockClear();
@@ -185,7 +181,7 @@ describe("ProposalForge save to library", () => {
     mockAttachedCvId = null;
   });
 
-  it("confirms the title, saves the generated proposal to the library, and keeps the saved draft open", async () => {
+  it("keeps generated output open without manual library actions in the document toolbar", async () => {
     mockAttachedCvId = "cv_alpha";
 
     window.localStorage.setItem(
@@ -233,227 +229,24 @@ describe("ProposalForge save to library", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Save proposal to library" }),
-    );
-    fireEvent.change(screen.getByPlaceholderText("Proposal title"), {
-      target: { value: "Operations Associate saved" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Save to Library" }));
-
-    await waitFor(() => {
-      expect(mockUpdateProposal).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: "proposal_generated",
-          title: "Operations Associate saved",
-          content: expect.stringContaining("Freshly generated proposal body."),
-          status: "saved",
-          metadata: expect.objectContaining({
-            sourceCvId: "cv_alpha",
-            templateId: expect.any(String),
-            styleLinkMode: "inherit_cv",
-            verbatiStyle: expect.objectContaining({
-              palette: "encre",
-            }),
-          }),
-        }),
-      );
-    });
-
-    await waitFor(() => {
-      expect(screen.queryByText("Saved proposals")).not.toBeInTheDocument();
-      expect(
-        screen.getByLabelText("Proposal document stage"),
-      ).toBeInTheDocument();
-    });
-
-    expect(readStoredProposalComposeDraft()).toEqual(
+    expect(
+      await screen.findByLabelText("Proposal document stage"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Save proposal to library" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Delete draft" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Enregistrer en bibliothèque" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Supprimer le brouillon" }),
+    ).not.toBeInTheDocument();
+    expect(mockUpdateProposal).not.toHaveBeenCalledWith(
       expect.objectContaining({
-        jobTitle: "Operations Associate",
-        proposalType: "cover_letter",
-        voicePreset: "signature",
-      }),
-    );
-    expect(readStoredProposalOutputDraft()).toEqual(
-      expect.objectContaining({
-        generatedProposalId: "proposal_generated",
-        proposalContent: expect.stringContaining(
-          "Freshly generated proposal body.",
-        ),
-        proposalDocumentTitle: "Operations Associate saved",
-      }),
-    );
-    expect(mockShowToast).toHaveBeenCalledWith(
-      "Saved to library.",
-      expect.objectContaining({
-        variant: "success",
-        description: "This proposal stays open and will keep autosaving.",
-      }),
-    );
-  });
-
-  it("persists a custom detached style while keeping the saved proposal source cv association", async () => {
-    mockAttachedCvId = "cv_alpha";
-    window.localStorage.setItem(
-      PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
-      JSON.stringify({
-        proposalContent: "Detached styled proposal.",
-        proposalType: "cover_letter",
-        proposalVoicePreset: "signature",
-        proposalTemplateId: null,
-        proposalVerbatiStyle: {
-          layout: "swiss",
-          typography: "signature",
-          palette: "bordeaux",
-        },
-        proposalStyleLinkMode: "proposal_local",
-        proposalStyleChoice: "balanced",
-        proposalApplicantName: "Alex Martin",
-        proposalApplicantRole: "Operations Associate",
-        proposalDocumentTitle: "Detached proposal",
-        proposalDocumentMeta: "Compose output",
-        generatedProposalId: null,
-        proposalOutputMode: "preview",
-        paletteOverride: null,
-        customAccentHex: null,
-        templateBundleId: "magazine_editorial",
-        typographyOverride: null,
-        layoutOverride: null,
-        proposalDocumentTitleManual: false,
-        characterLimitMode: null,
-        characterLimitValue: null,
-      }),
-    );
-
-    render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Save proposal to library" }),
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Save to Library" }));
-
-    await waitFor(() => {
-      expect(mockCreateProposal).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: "Detached proposal",
-          content: expect.stringContaining("Detached styled proposal."),
-          metadata: expect.objectContaining({
-            sourceCvId: "cv_alpha",
-            templateId: expect.any(String),
-            styleLinkMode: "proposal_local",
-            verbatiStyle: expect.objectContaining({
-              palette: "bordeaux",
-            }),
-            templateBundleId: "magazine_editorial",
-            verbatiStyleSlotId: 2,
-            verbatiStyleSlotSource: "factory",
-            verbatiStyleSlotNameSnapshot: "Style 2",
-            verbatiStyleBaseSnapshot: expect.any(Object),
-            documentStyleVersion: 1,
-          }),
-        }),
-      );
-    });
-  });
-
-  it("creates a new saved proposal when the live draft has no server id", async () => {
-    window.localStorage.setItem(
-      PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
-      JSON.stringify({
-        jobTitle: "Operations Associate",
-        jobDescription:
-          "Support recurring processes and coordinate communication.",
-        sourceUrl: "https://www.linkedin.com/jobs/view/123456",
-        platform: "linkedin",
-        proposalType: "cover_letter",
-        voicePreset: "signature",
-      }),
-    );
-    window.localStorage.setItem(
-      PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
-      JSON.stringify({
-        proposalContent: "Edited detached draft.",
-        proposalType: "cover_letter",
-        proposalVoicePreset: "signature",
-        proposalTemplateId: null,
-        proposalVerbatiStyle: null,
-        proposalStyleLinkMode: "inherit_cv",
-        proposalStyleChoice: "auto",
-        proposalApplicantName: "",
-        proposalApplicantRole: "",
-        proposalDocumentTitle: "Detached proposal",
-        proposalDocumentMeta: "Compose output",
-        generatedProposalId: null,
-        proposalOutputMode: "edit",
-        paletteOverride: null,
-        customAccentHex: null,
-        templateBundleId: null,
-        typographyOverride: null,
-        layoutOverride: null,
-        proposalDocumentTitleManual: false,
-        characterLimitMode: null,
-        characterLimitValue: null,
-        sourceComposeDraft: {
-          jobTitle: "Operations Associate",
-          jobDescription:
-            "Support recurring processes and coordinate communication.",
-          sourceUrl: "https://www.linkedin.com/jobs/view/123456",
-          platform: "linkedin",
-          proposalType: "cover_letter",
-          voicePreset: "signature",
-        },
-      }),
-    );
-
-    render(
-      <MemoryRouter initialEntries={["/proposal"]}>
-        <ProposalForge />
-      </MemoryRouter>,
-    );
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Save proposal to library" }),
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Save to Library" }));
-
-    await waitFor(() => {
-      expect(mockCreateProposal).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: "Detached proposal",
-          content: expect.stringContaining("Edited detached draft."),
-          status: "saved",
-          metadata: expect.objectContaining({
-            proposalType: "cover_letter",
-            styleLinkMode: expect.any(String),
-          }),
-        }),
-      );
-    });
-
-    await waitFor(() => {
-      expect(screen.queryByText("Saved proposals")).not.toBeInTheDocument();
-      expect(
-        screen.getByLabelText("Proposal document stage"),
-      ).toBeInTheDocument();
-    });
-    expect(readStoredProposalComposeDraft()).toEqual(
-      expect.objectContaining({
-        jobTitle: "Operations Associate",
-        proposalType: "cover_letter",
-        voicePreset: "signature",
-        sourceUrl: "https://www.linkedin.com/jobs/view/123456",
-        platform: "linkedin",
-      }),
-    );
-    expect(readStoredProposalOutputDraft()).toEqual(
-      expect.objectContaining({
-        generatedProposalId: "proposal_saved_new",
-        proposalContent: expect.stringContaining("Edited detached draft."),
-        proposalDocumentTitle: "Detached proposal",
+        status: "saved",
       }),
     );
   });
