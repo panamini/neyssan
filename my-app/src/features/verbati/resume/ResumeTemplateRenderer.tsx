@@ -21,7 +21,7 @@ import {
 import type { DocumentStageLayout } from "../../../hooks/use-document-stage-layout";
 import type { ResumeActiveTarget } from "../resumeLinking";
 import type { VerbatiStylePreset } from "../types";
-import { buildVerbatiThemeVars } from "../style";
+import { buildVerbatiThemeVars, resolveVerbatiStyle } from "../style";
 import ResumeOneColAtsPage, {
   type ResumePaperAiState,
   type ResumeSectionActions,
@@ -225,6 +225,10 @@ export function ResumeTemplateRenderer({
   pageSize = null,
   onStablePageCountChange,
 }: ResumeTemplateRendererProps) {
+  const resolvedStylePreset = React.useMemo(
+    () => resolveVerbatiStyle(stylePreset),
+    [stylePreset],
+  );
   const resolvedPageSize = React.useMemo(
     () =>
       resolveDocumentPageSize({
@@ -246,10 +250,16 @@ export function ResumeTemplateRenderer({
         ? planWorkshopResumePages({
             data,
             template: templateDefinition,
-            stylePreset,
+            stylePreset: resolvedStylePreset,
           })
         : null,
-    [committedPages, data, isWorkshopTemplateRenderer, stylePreset, templateDefinition],
+    [
+      committedPages,
+      data,
+      isWorkshopTemplateRenderer,
+      resolvedStylePreset,
+      templateDefinition,
+    ],
   );
   const rawCommittedPages = React.useMemo(
     () =>
@@ -271,11 +281,16 @@ export function ResumeTemplateRenderer({
       isWorkshopTemplateRenderer
         ? buildTemplatePreviewVars(
             templateDefinition,
-            stylePreset,
+            resolvedStylePreset,
             resolvedPageSize,
           )
         : null,
-    [isWorkshopTemplateRenderer, resolvedPageSize, stylePreset, templateDefinition],
+    [
+      isWorkshopTemplateRenderer,
+      resolvedPageSize,
+      resolvedStylePreset,
+      templateDefinition,
+    ],
   );
   const previewScale =
     stageLayout && stageLayout.pageWidth > 0

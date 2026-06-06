@@ -19,6 +19,7 @@ import type { VerbatiStylePreset } from "../../features/verbati/types";
 import { normalizeResumePreviewTokens } from "../layout/documentTokenNormalizer";
 import { ptToMm } from "../layout/documentTokens";
 import {
+  isMaggieResumeTemplateId,
   isSanatResumeTemplateId,
   isWorkshopTwoColumnResumeTemplateId,
   resolveWorkshopPreviewLayoutContract,
@@ -2254,6 +2255,28 @@ function resolveSanatSectionLane(
   return "main";
 }
 
+function resolveMaggieSectionLane(
+  section: PlannerSectionDefinition,
+  _metrics: WorkshopPlannerMetrics,
+): WorkshopTwoColumnLane {
+  if (section.kind === "profile" || section.kind === "summary") {
+    return "header";
+  }
+
+  if (
+    section.kind === "education" ||
+    section.kind === "skills" ||
+    section.kind === "languages" ||
+    section.kind === "certifications" ||
+    section.kind === "achievements" ||
+    section.kind === "hobbies"
+  ) {
+    return "sidebar";
+  }
+
+  return "main";
+}
+
 export function resolveWorkshopTwoColumnFragmentLane(
   fragment: WorkshopResumeCommittedFragment,
 ): WorkshopTwoColumnLane {
@@ -3053,6 +3076,14 @@ export function planWorkshopResumePages(args: {
   const pageHeightBudget = metrics.pageHeightBudgetMm;
   if (args.debugTrace) {
     args.debugTrace.pageHeightBudgetMm = pageHeightBudget;
+  }
+  if (isMaggieResumeTemplateId(args.template.id)) {
+    return buildTwoColumnWorkshopPlan({
+      data: args.data,
+      metrics,
+      pageHeightBudget,
+      laneResolver: resolveMaggieSectionLane,
+    });
   }
   if (isWorkshopTwoColumnResumeTemplateId(args.template.id)) {
     return buildTwoColumnWorkshopPlan({

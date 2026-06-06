@@ -118,16 +118,38 @@ describe("TemplatesPage", () => {
     await user.click(screen.getByRole("tab", { name: "Resume" }));
     expect(screen.getByText("Minimal", { selector: ".dasti-template-card__title" })).toBeInTheDocument();
     expect(screen.getByText("French", { selector: ".dasti-template-card__title" })).toBeInTheDocument();
+    expect(screen.getByText("Maggie", { selector: ".dasti-template-card__title" })).toBeInTheDocument();
     expect(screen.getByText("Editorial Sidebar", { selector: ".dasti-template-card__title" })).toBeInTheDocument();
     expect(screen.queryByText("Two-column")).toBeNull();
     expect(screen.queryByText("Classic")).toBeNull();
     expect(screen.queryByText("Compact")).toBeNull();
     expect(screen.queryByText("Workshop one-col")).toBeNull();
     expect(screen.queryByText("Workshop two-col")).toBeNull();
-    expect(screen.getAllByTestId("template-document-preview")).toHaveLength(3);
+    expect(screen.getAllByTestId("template-document-preview")).toHaveLength(4);
 
     await user.click(screen.getByRole("button", { name: "Customize style" }));
     expect(navigateMock).toHaveBeenCalledWith("/settings?tab=docstyle");
+  });
+
+  it("starts blank CV creation with the Maggie Letter resume template id", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/templates"]}>
+        <TemplatesPage />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("tab", { name: "Resume" }));
+    const maggieCard = screen
+      .getByText("Maggie", { selector: ".dasti-template-card__title" })
+      .closest(".dasti-template-card");
+    expect(maggieCard).toBeTruthy();
+    await user.click(maggieCard as HTMLElement);
+    await user.click(screen.getByRole("button", { name: "Create new CV" }));
+
+    expect(navigateMock).toHaveBeenCalledWith(
+      "/cv?cvForgeAction=createBlank&templateId=maggie_letter_resume",
+    );
   });
 
   it("opens a cover-letter template action surface without navigating", async () => {
@@ -402,7 +424,7 @@ describe("TemplatesPage", () => {
     await user.click(screen.getByRole("tab", { name: "Resume" }));
 
     const previews = screen.getAllByTestId("template-document-preview");
-    expect(previews).toHaveLength(3);
+    expect(previews).toHaveLength(4);
     for (const preview of previews) {
       const workshopRenderer = preview.querySelector(".resume-template-renderer");
       const legacyResumePage = preview.querySelector(".resume-page");
@@ -539,6 +561,23 @@ describe("TemplatesPage", () => {
     expect(screen.getByTestId("resume-template-page")).toHaveAttribute(
       "data-resume-template-layout",
       "workshop-two-column",
+    );
+
+    rerender(
+      <TemplateDocumentPreview
+        kind="Resume"
+        family="maggie-letter"
+        previewCv={previewCv}
+      />,
+    );
+
+    expect(screen.getByTestId("resume-template-renderer")).toHaveAttribute(
+      "data-resume-template-id",
+      "maggie_letter_resume",
+    );
+    expect(screen.getByTestId("resume-template-page")).toHaveAttribute(
+      "data-resume-template-layout",
+      "maggie-letter",
     );
   });
 

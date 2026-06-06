@@ -39,6 +39,7 @@ import {
 } from "./buildCanonicalResumeRenderModel";
 import {
   getResumeTemplateDefinition,
+  isMaggieResumeTemplateId,
   isWorkshopResumeTemplateId,
   type ResumeTemplateId,
 } from "./layout/resumeTemplates";
@@ -67,6 +68,7 @@ import {
   type ProposalSignatureSettings,
 } from "./proposal-signature-settings";
 import {
+  DOCUMENT_PAGE_SIZES,
   resolveDocumentPageSize,
   type DocumentPageSize,
   type DocumentPageSizePreference,
@@ -439,6 +441,21 @@ function buildCommittedWorkshopPages(args: {
   }).committedPages;
 }
 
+function resolveResumeExportPageSize(args: {
+  resumeTemplateId: ResumeTemplateId;
+  pageSize?: DocumentPageSize | null;
+  pageSizePreference?: DocumentPageSizePreference | null;
+}): DocumentPageSize {
+  return resolveDocumentPageSize({
+    pageSize:
+      args.pageSize ??
+      (isMaggieResumeTemplateId(args.resumeTemplateId)
+        ? DOCUMENT_PAGE_SIZES.letter
+        : undefined),
+    preference: args.pageSizePreference,
+  });
+}
+
 export function buildResumeExportSource(args: {
   currentCv: CvDocument | null | undefined;
   authoritativeResume?: AuthoritativeResume | unknown;
@@ -450,14 +467,15 @@ export function buildResumeExportSource(args: {
     return null;
   }
 
-  const pageSize = resolveDocumentPageSize({
-    pageSize: args.pageSize,
-    preference: args.pageSizePreference,
-  });
   const stylePreset = resolveVerbatiStyle(
     args.stylePreset ?? getVerbatiStyleFromCv(args.currentCv),
   );
   const resumeTemplateId = getResumeTemplateId(stylePreset);
+  const pageSize = resolveResumeExportPageSize({
+    resumeTemplateId,
+    pageSize: args.pageSize,
+    pageSizePreference: args.pageSizePreference,
+  });
   const documentIconSettings = normalizeDocumentIconSettings(
     args.currentCv.metadata.documentIcons,
   );
@@ -517,15 +535,16 @@ export function buildStyledResumePrintSource(args: {
     return null;
   }
 
-  const pageSize = resolveDocumentPageSize({
-    pageSize: args.pageSize,
-    preference: args.pageSizePreference,
-  });
   const stylePreset = resolveVerbatiStyle(
     args.stylePreset ?? getVerbatiStyleFromCv(args.currentCv),
   );
   const resumeData = buildCanonicalResumeRenderModelFromCv(args.currentCv);
   const resumeTemplateId = getResumeTemplateId(stylePreset);
+  const pageSize = resolveResumeExportPageSize({
+    resumeTemplateId,
+    pageSize: args.pageSize,
+    pageSizePreference: args.pageSizePreference,
+  });
   const documentIconSettings = normalizeDocumentIconSettings(
     args.currentCv.metadata.documentIcons,
   );

@@ -124,7 +124,7 @@ describe("CvDesignFields", () => {
     );
   });
 
-  it("offers the editorial sidebar template option", () => {
+  it("offers all active resume template options", () => {
     const onSelectTemplate = vi.fn();
 
     render(
@@ -139,7 +139,11 @@ describe("CvDesignFields", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Sanat" }));
+    fireEvent.click(screen.getByRole("button", { name: "Maggie" }));
     fireEvent.click(screen.getByRole("button", { name: "Editorial Sidebar" }));
+    expect(onSelectTemplate).toHaveBeenCalledWith("sanat-asymmetric");
+    expect(onSelectTemplate).toHaveBeenCalledWith("maggie-letter");
     expect(onSelectTemplate).toHaveBeenCalledWith("editorial-sidebar");
   });
 

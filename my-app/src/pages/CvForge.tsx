@@ -48,6 +48,7 @@ import type { VerbatiFontPairId } from "../features/verbati/fontCatalog";
 import type { VerbatiStylePreset } from "../features/verbati/types";
 import {
   EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID,
+  MAGGIE_LETTER_RESUME_TEMPLATE_ID,
   SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID,
   WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
   WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
@@ -6242,6 +6243,7 @@ export function CvForge(): JSX.Element {
         | "workshop-onecol"
         | "workshop-twocol"
         | "sanat-asymmetric"
+        | "maggie-letter"
         | "editorial-sidebar"
         | "editorial"
         | "minimal"
@@ -6254,6 +6256,8 @@ export function CvForge(): JSX.Element {
           ? EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID
           : template === "sanat-asymmetric"
             ? SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID
+          : template === "maggie-letter"
+            ? MAGGIE_LETTER_RESUME_TEMPLATE_ID
           : template === "workshop-twocol"
             ? WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
             : layout === "workshop"
@@ -6303,6 +6307,14 @@ export function CvForge(): JSX.Element {
         },
       },
       {
+        id: "maggie-letter",
+        label: "Maggie",
+        preview: {
+          kind: "Resume" as const,
+          family: "maggie-letter" as const,
+        },
+      },
+      {
         id: "editorial-sidebar",
         label: "Editorial Sidebar",
         preview: {
@@ -6318,6 +6330,8 @@ export function CvForge(): JSX.Element {
       ? "editorial-sidebar"
       : stylePreset.resumeTemplateId === SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID
         ? "sanat-asymmetric"
+      : stylePreset.resumeTemplateId === MAGGIE_LETTER_RESUME_TEMPLATE_ID
+        ? "maggie-letter"
       : stylePreset.layout === "workshop" &&
           stylePreset.resumeTemplateId === WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
       ? "workshop-twocol"
@@ -6334,6 +6348,7 @@ export function CvForge(): JSX.Element {
           itemId === "workshop-onecol" ||
           itemId === "workshop-twocol" ||
           itemId === "sanat-asymmetric" ||
+          itemId === "maggie-letter" ||
           itemId === "editorial-sidebar"
         ) {
           handleSelectTemplate(itemId);

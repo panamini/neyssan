@@ -273,6 +273,41 @@ describe("document-export-models", () => {
     );
   });
 
+  it("defaults Maggie Letter styled resume print and export sources to Letter with committed pages", () => {
+    const currentCv = generateCvTemplate("Maggie Letter CV");
+    currentCv.metadata.verbatiStyle = {
+      familyId: "workshop",
+      layout: "workshop",
+      typography: "ledger-sans",
+      palette: "sauge",
+      resumeTemplateId: "maggie_letter_resume",
+    };
+
+    const previewSource = buildStyledResumePrintSource({
+      currentCv,
+      stylePreset: currentCv.metadata.verbatiStyle,
+    });
+    const exportSource = buildResumeExportSource({
+      currentCv,
+      stylePreset: currentCv.metadata.verbatiStyle,
+    });
+
+    expect(previewSource).toEqual(
+      expect.objectContaining({
+        resumeTemplateId: "maggie_letter_resume",
+        committedPages: expect.any(Array),
+        pageSize: expect.objectContaining({ id: "letter" }),
+      }),
+    );
+    expect(exportSource).toEqual(
+      expect.objectContaining({
+        resumeTemplateId: "maggie_letter_resume",
+        committedPages: expect.any(Array),
+        pageSize: expect.objectContaining({ id: "letter" }),
+      }),
+    );
+  });
+
   it("serializes committed workshop planner pages into the export source", () => {
     const currentCv = generateCvTemplate("Workshop export parity");
     currentCv.metadata.verbatiStyle = {

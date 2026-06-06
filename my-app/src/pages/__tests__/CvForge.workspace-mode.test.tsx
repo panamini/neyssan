@@ -5326,20 +5326,21 @@ describe("CvForge workspace mode", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Templates" }));
-    await user.click(screen.getByRole("listitem", { name: "Sanat" }));
+    expect(screen.getByRole("listitem", { name: "Maggie" })).toBeInTheDocument();
+    await user.click(screen.getByRole("listitem", { name: "Maggie" }));
 
     await waitFor(() =>
       expect(saveCurrentCvStyleOnly).toHaveBeenCalledWith(
         expect.objectContaining({
           familyId: "workshop",
           layout: "workshop",
-          resumeTemplateId: "sanat_asymmetric_resume",
+          resumeTemplateId: "maggie_letter_resume",
         }),
         expect.objectContaining({
           verbatiStyleBaseSnapshot: expect.objectContaining({
             familyId: "workshop",
             layout: "workshop",
-            resumeTemplateId: "sanat_asymmetric_resume",
+            resumeTemplateId: "maggie_letter_resume",
           }),
           documentStyleVersion: 1,
         }),
