@@ -1,5 +1,11 @@
 import React from "react";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
@@ -114,6 +120,9 @@ describe("ProposalComposeToolbar", () => {
         ".dasti-compose-toolbar__bar.dasti-toolbar--surface-tooltips",
       ),
     ).toBeTruthy();
+    expect(container.querySelector(".dasti-compose-toolbar__bar")).toHaveClass(
+      "dasti-fluid-resize-shell",
+    );
 
     expect(screen.queryByRole("button", { name: "Formal" })).toBeNull();
     expect(
@@ -177,6 +186,81 @@ describe("ProposalComposeToolbar", () => {
         ".dasti-compose-toolbar__collapsed-shell.dasti-toolbar--surface-tooltips",
       ),
     ).toBeTruthy();
+    expect(
+      container.querySelector(".dasti-compose-toolbar__collapsed-shell"),
+    ).toHaveClass("dasti-fluid-resize-shell");
+  });
+
+  it("animates the outer compose toolbar shell when collapsing", () => {
+    vi.useFakeTimers();
+    const rectSpy = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockImplementation(function getBoundingClientRectMock(this: HTMLElement) {
+        const isCollapsedShell = this.classList.contains(
+          "dasti-compose-toolbar__collapsed-shell",
+        );
+        const width = isCollapsedShell ? 132 : 360;
+        const height = isCollapsedShell ? 40 : 48;
+        return {
+          x: 0,
+          y: 0,
+          top: 0,
+          left: 0,
+          right: width,
+          bottom: height,
+          width,
+          height,
+          toJSON: () => ({}),
+        } as DOMRect;
+      });
+
+    try {
+      const { container, rerender } = render(
+        <ProposalComposeToolbar
+          value="signature"
+          onChange={vi.fn()}
+          onToggleCvPicker={vi.fn()}
+          cvTitle="Mohamed Ismail J."
+          isCvPickerOpen={false}
+          onCollapseCompose={vi.fn()}
+        />,
+      );
+
+      rerender(
+        <ProposalComposeToolbar
+          value="signature"
+          onChange={vi.fn()}
+          onToggleCvPicker={vi.fn()}
+          cvTitle="Mohamed Ismail J."
+          isCvPickerOpen={false}
+          collapsed
+          onRestoreCompose={vi.fn()}
+        />,
+      );
+
+      const shell = container.querySelector(
+        ".dasti-compose-toolbar__collapsed-shell",
+      ) as HTMLElement | null;
+      expect(shell).toHaveClass("dasti-fluid-resize-shell");
+      expect(shell).toHaveAttribute("data-fluid-resize-state", "animating");
+      expect(shell?.style.inlineSize).toBe("360px");
+      expect(shell?.style.blockSize).toBe("48px");
+
+      act(() => {
+        vi.advanceTimersByTime(16);
+      });
+
+      expect(shell?.style.inlineSize).toBe("132px");
+      expect(shell?.style.blockSize).toBe("40px");
+      expect(
+        (container.querySelector(
+          ".dasti-compose-toolbar__icon-button svg",
+        ) as SVGElement | null)?.style.transform,
+      ).toBe("");
+    } finally {
+      rectSpy.mockRestore();
+      vi.useRealTimers();
+    }
   });
 
   it("renders the collapsed brief generate action as an icon-only toolbar control", async () => {

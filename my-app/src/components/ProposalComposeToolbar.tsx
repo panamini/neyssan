@@ -17,6 +17,7 @@ import {
   type ProposalGenerateButtonVisualState,
 } from "./ProposalGenerateGlyph";
 import { SaveIndicator, type SaveStatus } from "./ui/SaveIndicator";
+import { FluidResizeShell } from "./ui/FluidResizeShell";
 import { Menu, type MenuSection } from "./ui/menu";
 import { ToneBadge, type ToneBadgeTone } from "./ui/tone-badge";
 import type { ProposalVoicePreset } from "../../convex/lib/proposals/voicePresets";
@@ -149,7 +150,8 @@ export function ProposalComposeToolbar({
   const toneMenuSections: MenuSection[] = [
     {
       items: TONE_OPTIONS.map((option) => {
-        const active = option.id === null ? value === null : option.id === value;
+        const active =
+          option.id === null ? value === null : option.id === value;
         return {
           id: option.id ?? "auto",
           role: "menuitemradio",
@@ -184,6 +186,16 @@ export function ProposalComposeToolbar({
     : cvTitle
       ? `Switch CV: ${cvTitle}`
       : "Attach CV";
+  const toolbarResizeKey = [
+    collapsed,
+    hasCollapseControl,
+    hasSaveIndicator,
+    Boolean(jobHref),
+    Boolean(onGenerateFromBrief),
+    Boolean(cvTitle),
+    isCvPickerOpen,
+    activeOption.id ?? "auto",
+  ].join(":");
 
   return (
     <section
@@ -206,237 +218,241 @@ export function ProposalComposeToolbar({
         .join(" ")}
       aria-label="Proposal tone and CV toolbar"
     >
-      {collapsed ? (
-        <div className="dasti-compose-toolbar__collapsed-shell dasti-toolbar--surface-tooltips">
-          <button
-            type="button"
-            className="dasti-compose-toolbar__icon-button dasti-compose-toolbar__icon-button--leading"
-            onClick={onRestoreCompose}
-            aria-label="Show compose panel"
-            data-toolbar-tooltip="Show"
-          >
-            <PanelLeftDashed size={15} strokeWidth={1.8} aria-hidden="true" />
-          </button>
-          <div className="dasti-compose-toolbar__collapsed-actions">
-            {jobHref ? (
-              <Link
-                to={jobHref}
-                className="dasti-compose-toolbar__icon-button dasti-compose-toolbar__icon-button--link dasti-compose-toolbar__job-link"
-                aria-label="Back to job"
-                data-toolbar-tooltip="Back to job"
-              >
-                <ArrowSquareOut
-                  size={15}
-                  strokeWidth={1.8}
-                  aria-hidden="true"
-                />
-                <span className="dasti-compose-toolbar__job-link-label">
-                  Back to job
-                </span>
-              </Link>
-            ) : null}
-            <span className="dasti-compose-toolbar__tone-anchor">
-              <Menu
-                ariaLabel="Tone of voice"
-                align="end"
-                sections={toneMenuSections}
-                trigger={
-                  <button
-                    type="button"
-                    className={[
-                      "dasti-compose-toolbar__tone-option",
-                      "dasti-compose-toolbar__tone-option--collapsed",
-                      "dasti-compose-toolbar__tone-option--active",
-                    ].join(" ")}
-                    aria-label={`Tone of voice ${activeOption.label}`}
-                    data-toolbar-tooltip={activeOption.label}
-                    disabled={disabled}
-                  >
-                    <activeOption.Icon
-                      size={15}
-                      strokeWidth={1.7}
-                      aria-hidden="true"
-                    />
-                  </button>
-                }
-              />
-            </span>
-            {onGenerateFromBrief ? (
-              <button
-                type="button"
-                className={[
-                  "dasti-icon-button",
-                  "dasti-compose-toolbar__icon-button",
-                  "dasti-proposal-submit",
-                  "dasti-compose-toolbar__generate-button",
-                  collapsedGenerateClass,
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                onClick={onGenerateFromBrief}
-                aria-label={generateLabel}
-                data-toolbar-tooltip={generateLabel}
-                disabled={generateDisabled}
-              >
-                <ProposalGenerateButtonGlyph state={generateState} />
-              </button>
-            ) : null}
-          </div>
-        </div>
-      ) : (
-        <div className="dasti-compose-toolbar__bar dasti-toolbar--surface-tooltips">
-          {hasCollapseControl ? (
-            <>
-              <div
-                className="dasti-compose-toolbar__group dasti-compose-toolbar__group--collapse"
-                role="group"
-                aria-label="Compose panel"
-              >
-                <button
-                  type="button"
-                  className="dasti-compose-toolbar__icon-button dasti-compose-toolbar__icon-button--leading"
-                  onClick={onCollapseCompose}
-                  aria-label="Hide compose panel"
-                  data-toolbar-tooltip="Hide"
+      <FluidResizeShell animationKey={toolbarResizeKey}>
+        {collapsed ? (
+          <div className="dasti-compose-toolbar__collapsed-shell dasti-toolbar--surface-tooltips">
+            <button
+              type="button"
+              className="dasti-compose-toolbar__icon-button dasti-compose-toolbar__icon-button--leading"
+              onClick={onRestoreCompose}
+              aria-label="Show compose panel"
+              data-toolbar-tooltip="Show"
+            >
+              <PanelLeftDashed size={15} strokeWidth={1.8} aria-hidden="true" />
+            </button>
+            <div className="dasti-compose-toolbar__collapsed-actions">
+              {jobHref ? (
+                <Link
+                  to={jobHref}
+                  className="dasti-compose-toolbar__icon-button dasti-compose-toolbar__icon-button--link dasti-compose-toolbar__job-link"
+                  aria-label="Back to job"
+                  data-toolbar-tooltip="Back to job"
                 >
-                  <PanelLeftDashed
+                  <ArrowSquareOut
                     size={15}
                     strokeWidth={1.8}
                     aria-hidden="true"
                   />
+                  <span className="dasti-compose-toolbar__job-link-label">
+                    Back to job
+                  </span>
+                </Link>
+              ) : null}
+              <span className="dasti-compose-toolbar__tone-anchor">
+                <Menu
+                  ariaLabel="Tone of voice"
+                  align="end"
+                  sections={toneMenuSections}
+                  trigger={
+                    <button
+                      type="button"
+                      className={[
+                        "dasti-compose-toolbar__tone-option",
+                        "dasti-compose-toolbar__tone-option--collapsed",
+                        "dasti-compose-toolbar__tone-option--active",
+                      ].join(" ")}
+                      aria-label={`Tone of voice ${activeOption.label}`}
+                      data-toolbar-tooltip={activeOption.label}
+                      disabled={disabled}
+                    >
+                      <activeOption.Icon
+                        size={15}
+                        strokeWidth={1.7}
+                        aria-hidden="true"
+                      />
+                    </button>
+                  }
+                />
+              </span>
+              {onGenerateFromBrief ? (
+                <button
+                  type="button"
+                  className={[
+                    "dasti-icon-button",
+                    "dasti-compose-toolbar__icon-button",
+                    "dasti-proposal-submit",
+                    "dasti-compose-toolbar__generate-button",
+                    collapsedGenerateClass,
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  onClick={onGenerateFromBrief}
+                  aria-label={generateLabel}
+                  data-toolbar-tooltip={generateLabel}
+                  disabled={generateDisabled}
+                >
+                  <ProposalGenerateButtonGlyph state={generateState} />
                 </button>
-              </div>
-              <span
-                className="dasti-compose-toolbar__group-divider"
-                aria-hidden="true"
-              />
-            </>
-          ) : null}
-
-          <div
-            className="dasti-compose-toolbar__group dasti-compose-toolbar__group--cv"
-            role="group"
-            aria-label="CV"
-          >
-            <div
-              className={[
-                "dasti-compose-toolbar__cv-shell",
-                cvTitle ? "dasti-compose-toolbar__cv-shell--active" : "",
-                isCvPickerOpen ? "dasti-compose-toolbar__cv-shell--open" : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-            >
-              {cvTitle && onClearCv ? (
-                <>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <div className="dasti-compose-toolbar__bar dasti-toolbar--surface-tooltips">
+            {hasCollapseControl ? (
+              <>
+                <div
+                  className="dasti-compose-toolbar__group dasti-compose-toolbar__group--collapse"
+                  role="group"
+                  aria-label="Compose panel"
+                >
                   <button
                     type="button"
-                    className="dasti-compose-toolbar__cv-remove"
-                    onClick={handleClearCv}
-                    aria-label="Remove CV"
-                    data-toolbar-tooltip="Remove CV"
-                    disabled={disabled}
+                    className="dasti-compose-toolbar__icon-button dasti-compose-toolbar__icon-button--leading"
+                    onClick={onCollapseCompose}
+                    aria-label="Hide compose panel"
+                    data-toolbar-tooltip="Hide"
                   >
-                    <X size={14} strokeWidth={2} aria-hidden="true" />
+                    <PanelLeftDashed
+                      size={15}
+                      strokeWidth={1.8}
+                      aria-hidden="true"
+                    />
                   </button>
-                  <span
-                    className="dasti-compose-toolbar__cv-divider"
-                    aria-hidden="true"
-                  />
-                </>
-              ) : null}
+                </div>
+                <span
+                  className="dasti-compose-toolbar__group-divider"
+                  aria-hidden="true"
+                />
+              </>
+            ) : null}
 
-              <button
-                type="button"
+            <div
+              className="dasti-compose-toolbar__group dasti-compose-toolbar__group--cv"
+              role="group"
+              aria-label="CV"
+            >
+              <div
                 className={[
-                  "dasti-compose-toolbar__cv-chip",
-                  cvTitle ? "dasti-compose-toolbar__cv-chip--active" : "",
-                  isCvPickerOpen ? "dasti-compose-toolbar__cv-chip--open" : "",
+                  "dasti-compose-toolbar__cv-shell",
+                  cvTitle ? "dasti-compose-toolbar__cv-shell--active" : "",
+                  isCvPickerOpen ? "dasti-compose-toolbar__cv-shell--open" : "",
                 ]
                   .filter(Boolean)
                   .join(" ")}
-                onClick={onToggleCvPicker}
-                aria-expanded={isCvPickerOpen}
-                aria-haspopup="dialog"
-                aria-label={cvControlLabel}
-                data-toolbar-tooltip={
-                  isCvPickerOpen
-                    ? "Close CV picker"
-                    : cvTitle
-                      ? "Switch CV"
-                      : "Attach CV"
-                }
-                disabled={disabled}
               >
-                <span
-                  className="dasti-compose-toolbar__cv-icon"
-                  aria-hidden="true"
+                {cvTitle && onClearCv ? (
+                  <>
+                    <button
+                      type="button"
+                      className="dasti-compose-toolbar__cv-remove"
+                      onClick={handleClearCv}
+                      aria-label="Remove CV"
+                      data-toolbar-tooltip="Remove CV"
+                      disabled={disabled}
+                    >
+                      <X size={14} strokeWidth={2} aria-hidden="true" />
+                    </button>
+                    <span
+                      className="dasti-compose-toolbar__cv-divider"
+                      aria-hidden="true"
+                    />
+                  </>
+                ) : null}
+
+                <button
+                  type="button"
+                  className={[
+                    "dasti-compose-toolbar__cv-chip",
+                    cvTitle ? "dasti-compose-toolbar__cv-chip--active" : "",
+                    isCvPickerOpen
+                      ? "dasti-compose-toolbar__cv-chip--open"
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  onClick={onToggleCvPicker}
+                  aria-expanded={isCvPickerOpen}
+                  aria-haspopup="dialog"
+                  aria-label={cvControlLabel}
+                  data-toolbar-tooltip={
+                    isCvPickerOpen
+                      ? "Close CV picker"
+                      : cvTitle
+                        ? "Switch CV"
+                        : "Attach CV"
+                  }
+                  disabled={disabled}
                 >
-                  {cvTitle ? (
-                    <FileUser size={15} strokeWidth={1.7} />
-                  ) : (
-                    <Paperclip size={15} strokeWidth={1.7} />
-                  )}
-                </span>
-                <span className="dasti-compose-toolbar__cv-copy">
-                  <span className="dasti-compose-toolbar__cv-title">
-                    {cvTitle ?? "Attach CV"}
+                  <span
+                    className="dasti-compose-toolbar__cv-icon"
+                    aria-hidden="true"
+                  >
+                    {cvTitle ? (
+                      <FileUser size={15} strokeWidth={1.7} />
+                    ) : (
+                      <Paperclip size={15} strokeWidth={1.7} />
+                    )}
+                  </span>
+                  <span className="dasti-compose-toolbar__cv-copy">
+                    <span className="dasti-compose-toolbar__cv-title">
+                      {cvTitle ?? "Attach CV"}
+                    </span>
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div
+              className="dasti-compose-toolbar__group dasti-compose-toolbar__group--tone"
+              role="group"
+              aria-label="Selected tone"
+            >
+              <div className="dasti-compose-toolbar__tone-block dasti-compose-toolbar__tone-block--status">
+                <span
+                  className="dasti-compose-toolbar__tone-chip dasti-compose-toolbar__tone-chip--described dasti-compose-toolbar__tone-chip--status"
+                  data-toolbar-tooltip={activeOption.label}
+                  aria-label={`Selected tone ${activeOption.label}`}
+                >
+                  <span
+                    className="dasti-compose-toolbar__tone-chip-icon"
+                    aria-hidden="true"
+                  >
+                    <activeOption.Icon size={15} strokeWidth={1.7} />
+                  </span>
+                  <span className="dasti-compose-toolbar__tone-chip-label">
+                    {activeOption.label}
                   </span>
                 </span>
-              </button>
-            </div>
-          </div>
-
-          <div
-            className="dasti-compose-toolbar__group dasti-compose-toolbar__group--tone"
-            role="group"
-            aria-label="Selected tone"
-          >
-            <div className="dasti-compose-toolbar__tone-block dasti-compose-toolbar__tone-block--status">
-              <span
-                className="dasti-compose-toolbar__tone-chip dasti-compose-toolbar__tone-chip--described dasti-compose-toolbar__tone-chip--status"
-                data-toolbar-tooltip={activeOption.label}
-                aria-label={`Selected tone ${activeOption.label}`}
-              >
-                <span
-                  className="dasti-compose-toolbar__tone-chip-icon"
-                  aria-hidden="true"
-                >
-                  <activeOption.Icon size={15} strokeWidth={1.7} />
-                </span>
-                <span className="dasti-compose-toolbar__tone-chip-label">
-                  {activeOption.label}
-                </span>
-              </span>
-            </div>
-          </div>
-
-          {rightActions || hasSaveIndicator ? (
-            <>
-              <span
-                className="dasti-compose-toolbar__group-divider dasti-compose-toolbar__group-divider--trailing"
-                aria-hidden="true"
-              />
-              <div
-                className="dasti-compose-toolbar__group dasti-compose-toolbar__group--actions"
-                role="group"
-                aria-label="Proposal actions"
-              >
-                {rightActions}
-                {hasSaveIndicator ? (
-                  <div className="dasti-compose-toolbar__context-slot dasti-compose-toolbar__context-slot--save">
-                    <SaveIndicator
-                      status={saveStatus}
-                      label={styleStatusLabel}
-                      tone="neutral"
-                    />
-                  </div>
-                ) : null}
               </div>
-            </>
-          ) : null}
-        </div>
-      )}
+            </div>
+
+            {rightActions || hasSaveIndicator ? (
+              <>
+                <span
+                  className="dasti-compose-toolbar__group-divider dasti-compose-toolbar__group-divider--trailing"
+                  aria-hidden="true"
+                />
+                <div
+                  className="dasti-compose-toolbar__group dasti-compose-toolbar__group--actions"
+                  role="group"
+                  aria-label="Proposal actions"
+                >
+                  {rightActions}
+                  {hasSaveIndicator ? (
+                    <div className="dasti-compose-toolbar__context-slot dasti-compose-toolbar__context-slot--save">
+                      <SaveIndicator
+                        status={saveStatus}
+                        label={styleStatusLabel}
+                        tone="neutral"
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            ) : null}
+          </div>
+        )}
+      </FluidResizeShell>
     </section>
   );
 }

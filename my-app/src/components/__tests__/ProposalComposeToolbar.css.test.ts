@@ -14,6 +14,13 @@ const productCss = productCssPaths
   .map((stylePath) => readFileSync(resolve(process.cwd(), stylePath), "utf8"))
   .join("\n");
 
+function getCssRuleBlock(selector: string): string {
+  const start = productCss.indexOf(selector);
+  if (start === -1) return "";
+  const end = productCss.indexOf("}", start);
+  return end === -1 ? "" : productCss.slice(start, end + 1);
+}
+
 describe("ProposalComposeToolbar CSS contracts", () => {
   it("keeps the tone group right-anchored even when the collapse control is absent", () => {
     expect(productCss).toContain(
@@ -32,12 +39,14 @@ describe("ProposalComposeToolbar CSS contracts", () => {
   });
 
   it("keeps selected tone icons in a neutral pressed state across proposal toolbars", () => {
+    const activeToneRule = getCssRuleBlock(
+      ".dasti-compose-toolbar__tone-option--active",
+    );
+
     expect(productCss).toMatch(
       /\.dasti-compose-toolbar__tone-option--active,\s*[\s\S]*\.dasti-saved-proposal-forge-toolbar-preview\s+\.dasti-compose-toolbar__tone-option--active\s*\{[\s\S]*background:\s*var\(--proposal-chrome-control-hover-bg\);[\s\S]*box-shadow:\s*inset 0 1px 2px/,
     );
-    expect(productCss).not.toMatch(
-      /\.dasti-compose-toolbar__tone-option--active\s*\{[\s\S]*background:\s*var\(--ac\)/,
-    );
+    expect(activeToneRule).not.toContain("background: var(--ac)");
   });
 
   it("constrains the toolbar slot and bar to the compose shell width", () => {
@@ -45,7 +54,9 @@ describe("ProposalComposeToolbar CSS contracts", () => {
     expect(productCss).toContain("width: 100%;");
     expect(productCss).toContain("justify-content: flex-start;");
     expect(productCss).toContain(".dasti-compose-toolbar__bar");
-    expect(productCss).toContain(".dasti-forge-compose-toolbar-slot .dasti-compose-toolbar");
+    expect(productCss).toContain(
+      ".dasti-forge-compose-toolbar-slot .dasti-compose-toolbar",
+    );
     expect(productCss).toContain("max-inline-size: 100%;");
     expect(productCss).toContain("max-width: 100%;");
   });

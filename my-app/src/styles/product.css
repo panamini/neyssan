@@ -5,6 +5,27 @@ body,
   font-family: var(--font-app);
 }
 
+.dasti-fluid-resize-shell[data-fluid-resize-state="animating"] {
+  overflow: clip;
+  transition:
+    inline-size var(--motion-duration-normal, 200ms) var(--ease-standard),
+    block-size var(--motion-duration-normal, 200ms) var(--ease-standard),
+    max-inline-size var(--motion-duration-normal, 200ms) var(--ease-standard);
+  will-change: inline-size, block-size;
+}
+
+@supports not (overflow: clip) {
+  .dasti-fluid-resize-shell[data-fluid-resize-state="animating"] {
+    overflow: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dasti-fluid-resize-shell[data-fluid-resize-state="animating"] {
+    transition: none;
+  }
+}
+
 /* ============================================================
    APP SIDEBAR SHELL
    ============================================================ */

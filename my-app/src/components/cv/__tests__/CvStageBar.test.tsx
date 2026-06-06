@@ -20,6 +20,9 @@ describe("CvStageBar command layer", () => {
     );
 
     const toolbar = screen.getByTestId("cv-toolbar");
+    expect(toolbar.querySelector(".dasti-cv-stage-bar")).toHaveClass(
+      "dasti-fluid-resize-shell",
+    );
 
     expect(
       within(toolbar).getByRole("button", { name: "Edit" }),
@@ -120,9 +123,15 @@ describe("CvStageBar command layer", () => {
       );
 
       const toolbar = screen.getByTestId("cv-toolbar");
-      expect(within(toolbar).getByRole("button", { name: sections })).toBeInTheDocument();
-      expect(within(toolbar).getByRole("button", { name: design })).toBeInTheDocument();
-      expect(within(toolbar).getByRole("button", { name: templates })).toBeInTheDocument();
+      expect(
+        within(toolbar).getByRole("button", { name: sections }),
+      ).toBeInTheDocument();
+      expect(
+        within(toolbar).getByRole("button", { name: design }),
+      ).toBeInTheDocument();
+      expect(
+        within(toolbar).getByRole("button", { name: templates }),
+      ).toBeInTheDocument();
       expect(screen.getByTestId("cv-ask-handle")).toHaveAttribute(
         "aria-label",
         ask,
