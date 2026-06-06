@@ -21,7 +21,7 @@ export function resolveExtensionGenerateModelType(args: {
   }
 
   const proposalType = args.proposalType || "cover_letter";
-  if (proposalType === "cover_letter" && !args.useCurrentCvContext) {
+  if (proposalType === "cover_letter") {
     return "chatgpt";
   }
 

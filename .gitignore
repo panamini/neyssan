@@ -130,6 +130,7 @@ audit_report.json
 *.jpeg
 *.gif
 *.webp
+!clerk-chrome-extension-final/assets/icon.png
 *.mp4
 *.zip
 *.tar.gz

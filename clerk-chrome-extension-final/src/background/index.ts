@@ -296,10 +296,13 @@ interface Message {
     | "ingestProfile"
     | "openProposalForge"
     | "checkSession"
-    | "getActiveCvSnapshot";
+    | "getActiveCvSnapshot"
+    | "listActiveCvOptions"
+    | "setActiveCvFromProfile";
   jobData?: JobData;
   proposalText?: string;
   useCurrentCvContext?: boolean;
+  profileId?: string;
   // profile payload for ingestProfile action
   profile?: {
     summary?: string;
@@ -348,6 +351,12 @@ interface Message {
     case "getActiveCvSnapshot":
       void getActiveCvSnapshotHandler(sendResponse);
       return true;
+    case "listActiveCvOptions":
+      void listActiveCvOptionsHandler(sendResponse);
+      return true;
+    case "setActiveCvFromProfile":
+      void setActiveCvFromProfileHandler(message, sendResponse);
+      return true;
     default:
       console.warn("Unknown action:", message.action);
       return false;
@@ -369,7 +378,15 @@ async function fetchCurrentActiveCvSnapshot(): Promise<ActiveCvSnapshot | null> 
 
 async function generateProposalHandler(
   message: Message,
-  sendResponse: (response: { success: boolean; proposal?: string; error?: string }) => void
+  sendResponse: (response: {
+    success: boolean;
+    proposal?: string;
+    proposalId?: string;
+    actualModelType?: string;
+    actualModelName?: string;
+    routing?: unknown;
+    error?: string;
+  }) => void
 ) {
   try {
     currentToken = await requireCurrentSessionToken();
@@ -415,7 +432,14 @@ async function generateProposalHandler(
 
     const result = await convex.action(api.functions.generateProposal, generateArgs);
     console.log("Action result:", result);
-    sendResponse({ success: true, proposal: result.proposalContent });
+    sendResponse({
+      success: true,
+      proposal: result.proposalContent,
+      proposalId: result.proposalId,
+      actualModelType: result.actualModelType,
+      actualModelName: result.actualModelName,
+      routing: result.routing,
+    });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     console.error("Generate proposal error:", errorMessage, error);
@@ -432,6 +456,42 @@ async function getActiveCvSnapshotHandler(
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     console.error("Get active CV snapshot error:", errorMessage, error);
+    sendResponse({ success: false, error: errorMessage });
+  }
+}
+
+async function listActiveCvOptionsHandler(
+  sendResponse: (response: { success: boolean; options?: unknown[]; error?: string }) => void
+) {
+  try {
+    currentToken = await requireCurrentSessionToken();
+    convex.setAuth(currentToken ?? "");
+    const options = await convex.query((api as any).activeCvSnapshots.listOptions, {});
+    sendResponse({ success: true, options });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("List active CV options error:", errorMessage, error);
+    sendResponse({ success: false, error: errorMessage });
+  }
+}
+
+async function setActiveCvFromProfileHandler(
+  message: Message,
+  sendResponse: (response: { success: boolean; snapshot?: ActiveCvSnapshot | null; error?: string }) => void
+) {
+  try {
+    if (!message.profileId) {
+      throw new Error("Missing profileId for CV selection");
+    }
+    currentToken = await requireCurrentSessionToken();
+    convex.setAuth(currentToken ?? "");
+    const snapshot = await convex.mutation((api as any).activeCvSnapshots.setCurrentFromProfile, {
+      profileId: message.profileId,
+    });
+    sendResponse({ success: true, snapshot });
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("Set active CV from profile error:", errorMessage, error);
     sendResponse({ success: false, error: errorMessage });
   }
 }

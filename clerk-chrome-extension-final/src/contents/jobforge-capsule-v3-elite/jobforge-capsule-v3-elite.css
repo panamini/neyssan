@@ -1,0 +1,444 @@
+#tw-jobforge-capsule-root {
+  position: fixed;
+  z-index: 2147483647;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  color: var(--tw-text-main);
+  font-family: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
+  letter-spacing: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#tw-jobforge-capsule-root,
+#tw-jobforge-capsule-root * {
+  box-sizing: border-box;
+}
+
+#tw-jobforge-capsule-root button,
+#tw-jobforge-capsule-root input {
+  font: inherit;
+}
+
+#tw-jobforge-capsule-root .tw-segmented {
+  display: flex;
+  align-items: center;
+  background: var(--tw-bg-base);
+  border: 1px solid var(--tw-border-subtle);
+  border-radius: 6px;
+  padding: var(--tw-grid-025);
+  box-shadow: 0 8px 32px var(--tw-shadow-color);
+}
+
+#tw-jobforge-capsule-root .tw-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  min-width: 0;
+  padding-block: var(--tw-grid-050);
+  padding-inline: 10px;
+  color: var(--tw-text-main);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  white-space: nowrap;
+  transition-property: background-color, color, opacity;
+  transition-duration: 120ms;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#tw-jobforge-capsule-root .tw-btn:hover,
+#tw-jobforge-capsule-root .tw-btn:focus-visible {
+  background: var(--tw-bg-soft);
+  color: var(--tw-text-pure);
+  outline: none;
+}
+
+#tw-jobforge-capsule-root .tw-btn:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+#tw-jobforge-capsule-root .tw-btn-2w {
+  color: var(--tw-text-muted);
+  font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  padding-right: var(--tw-grid-100);
+}
+
+#tw-jobforge-capsule-root .tw-btn-2w::after {
+  position: absolute;
+  top: var(--tw-grid-075);
+  right: 0;
+  width: 1px;
+  height: 12px;
+  background: var(--tw-border-subtle);
+  content: "";
+}
+
+#tw-jobforge-capsule-root .tw-draft,
+#tw-jobforge-capsule-root .tw-open {
+  max-width: 0;
+  padding-right: 0;
+  padding-left: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition-property: max-width, opacity, padding-left, padding-right;
+  transition-duration: 260ms, 120ms, 260ms, 260ms;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#tw-jobforge-capsule-root .tw-segmented:hover .tw-draft,
+#tw-jobforge-capsule-root .tw-segmented:hover .tw-open,
+#tw-jobforge-capsule-root .tw-segmented:focus-within .tw-draft,
+#tw-jobforge-capsule-root .tw-segmented:focus-within .tw-open,
+#tw-jobforge-capsule-root .tw-segmented[data-expanded="true"] .tw-draft,
+#tw-jobforge-capsule-root .tw-segmented[data-expanded="true"] .tw-open {
+  max-width: 85px;
+  padding-right: 10px;
+  padding-left: 10px;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#tw-jobforge-capsule-root .tw-save-btn[data-state="saving"] {
+  color: var(--tw-text-muted);
+}
+
+#tw-jobforge-capsule-root .tw-save-btn[data-state="saved"] {
+  color: var(--tw-text-pure);
+  font-weight: 600;
+}
+
+#tw-jobforge-capsule-root .tw-save-btn[data-state="error"] {
+  color: var(--tw-accent);
+}
+
+#tw-jobforge-capsule-root .tw-progress-line {
+  position: absolute;
+  right: 6px;
+  bottom: -1px;
+  left: 6px;
+  height: 1px;
+  background: var(--tw-text-pure);
+  opacity: 0;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 700ms linear, opacity 120ms ease;
+}
+
+#tw-jobforge-capsule-root .tw-save-btn[data-state="saving"] .tw-progress-line {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+#tw-jobforge-capsule-root .tw-dock {
+  display: none;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  padding: var(--tw-grid-200);
+  background: var(--tw-bg-base);
+  border: 1px solid var(--tw-border-subtle);
+  border-radius: var(--tw-grid-100);
+  box-shadow: 0 24px 48px var(--tw-shadow-color);
+  transform-origin: top right;
+}
+
+#tw-jobforge-capsule-root .tw-dock[data-visible="true"] {
+  display: block;
+  animation: twGeistDockIn var(--tw-velocity-slow) var(--tw-ease-geist) forwards;
+}
+
+@keyframes twGeistDockIn {
+  from {
+    opacity: 0;
+    transform: translateY(-3px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+#tw-jobforge-capsule-root .tw-dock-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--tw-grid-250);
+}
+
+#tw-jobforge-capsule-root .tw-dock-title {
+  color: var(--tw-text-muted);
+  font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: lowercase;
+}
+
+#tw-jobforge-capsule-root .tw-status-dot {
+  display: flex;
+  align-items: center;
+  gap: var(--tw-grid-075);
+  color: var(--tw-text-main);
+  font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+}
+
+#tw-jobforge-capsule-root .tw-status-dot::before {
+  width: 5px;
+  height: 5px;
+  background: var(--tw-text-pure);
+  border-radius: 50%;
+  content: "";
+}
+
+#tw-jobforge-capsule-root .tw-context-group {
+  margin-bottom: var(--tw-grid-250);
+}
+
+#tw-jobforge-capsule-root .tw-cv-picker-row {
+  padding-block: 0 var(--tw-grid-100);
+}
+
+#tw-jobforge-capsule-root .tw-cv-select {
+  width: 100%;
+  height: 30px;
+  min-width: 0;
+  color: var(--tw-text-main);
+  background: var(--tw-bg-elevated);
+  border: 1px solid var(--tw-border-subtle);
+  border-radius: var(--tw-grid-050);
+  padding-block: 0;
+  padding-inline: var(--tw-grid-100);
+  font-size: 12px;
+  letter-spacing: 0;
+  outline: none;
+}
+
+#tw-jobforge-capsule-root .tw-cv-select:focus {
+  color: var(--tw-text-pure);
+  border-color: var(--tw-text-muted);
+}
+
+#tw-jobforge-capsule-root .tw-context-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--tw-grid-150);
+  padding-block: var(--tw-grid-100);
+  padding-inline: 0;
+  color: var(--tw-text-main);
+  cursor: pointer;
+  font-size: 13px;
+  letter-spacing: 0;
+  transition: color 120ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#tw-jobforge-capsule-root .tw-context-item:hover,
+#tw-jobforge-capsule-root .tw-context-item:focus-within {
+  color: var(--tw-text-pure);
+}
+
+#tw-jobforge-capsule-root .tw-context-item[data-disabled="true"] {
+  color: var(--tw-text-muted);
+  cursor: default;
+}
+
+#tw-jobforge-capsule-root .tw-context-item input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  clip: rect(0 0 0 0);
+  overflow: hidden;
+}
+
+#tw-jobforge-capsule-root .tw-radio-marker {
+  min-width: 24px;
+  color: var(--tw-text-muted);
+  font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  text-align: right;
+}
+
+#tw-jobforge-capsule-root .tw-context-item input:checked + .tw-radio-marker {
+  color: var(--tw-text-pure);
+}
+
+#tw-jobforge-capsule-root .tw-context-item input:checked + .tw-radio-marker::before {
+  content: "[x]";
+}
+
+#tw-jobforge-capsule-root .tw-context-item input:not(:checked) + .tw-radio-marker::before {
+  content: "[ ]";
+}
+
+#tw-jobforge-capsule-root .tw-action-btn {
+  width: 100%;
+  padding: var(--tw-grid-075);
+  color: var(--tw-bg-base);
+  background: var(--tw-text-pure);
+  border: 1px solid var(--tw-text-pure);
+  border-radius: var(--tw-grid-050);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  transition-property: background-color, color, opacity;
+  transition-duration: 120ms;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#tw-jobforge-capsule-root .tw-action-btn:hover,
+#tw-jobforge-capsule-root .tw-action-btn:focus-visible {
+  color: var(--tw-text-pure);
+  background: transparent;
+  outline: none;
+}
+
+#tw-jobforge-capsule-root .tw-action-btn:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+#tw-jobforge-capsule-root .tw-result-stream {
+  max-height: 150px;
+  margin-top: var(--tw-grid-150);
+  padding-top: var(--tw-grid-200);
+  overflow-y: auto;
+  color: var(--tw-text-pure);
+  border-top: 1px solid var(--tw-border-subtle);
+  font-size: 13px;
+  line-height: 1.5;
+  letter-spacing: 0;
+  white-space: pre-wrap;
+}
+
+#tw-jobforge-capsule-root .tw-result-wrapper {
+  margin-top: var(--tw-grid-200);
+}
+
+#tw-jobforge-capsule-root .tw-generated-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--tw-grid-100);
+  color: var(--tw-text-muted);
+  font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0;
+}
+
+#tw-jobforge-capsule-root .tw-generated-meta span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#tw-jobforge-capsule-root .tw-export-bar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--tw-grid-100);
+  margin-top: var(--tw-grid-150);
+}
+
+#tw-jobforge-capsule-root .tw-export-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 30px;
+  gap: var(--tw-grid-075);
+  padding-block: 0;
+  padding-inline: var(--tw-grid-100);
+  color: var(--tw-text-main);
+  background: transparent;
+  border: 1px solid var(--tw-border-subtle);
+  border-radius: var(--tw-grid-050);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  white-space: nowrap;
+  transition-property: background-color, border-color, color;
+  transition-duration: 120ms;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#tw-jobforge-capsule-root .tw-export-btn:hover,
+#tw-jobforge-capsule-root .tw-export-btn:focus-visible {
+  color: var(--tw-text-pure);
+  background: var(--tw-bg-soft);
+  border-color: var(--tw-text-muted);
+  outline: none;
+}
+
+#tw-jobforge-capsule-root .tw-export-icon,
+#tw-jobforge-capsule-root .tw-export-icon svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+}
+
+#tw-jobforge-capsule-root .tw-export-icon svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+#tw-jobforge-capsule-root .tw-toast {
+  max-width: 290px;
+  padding-block: var(--tw-grid-050);
+  padding-inline: 10px;
+  color: var(--tw-text-pure);
+  background: var(--tw-bg-elevated);
+  border: 1px solid var(--tw-border-subtle);
+  border-radius: var(--tw-grid-050);
+  font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(2px);
+  transition-property: opacity, transform;
+  transition-duration: 120ms;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#tw-jobforge-capsule-root .tw-toast[data-visible="true"] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (max-width: 520px) {
+  #tw-jobforge-capsule-root {
+    right: 16px !important;
+    left: 16px;
+    align-items: flex-end;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #tw-jobforge-capsule-root *,
+  #tw-jobforge-capsule-root *::before,
+  #tw-jobforge-capsule-root *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

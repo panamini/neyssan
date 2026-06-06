@@ -1,0 +1,33 @@
+#tw-jobforge-capsule-root {
+  --tw-bg-base: #16130f;
+  --tw-bg-elevated: #1c1814;
+  --tw-bg-soft: #2a2620;
+  --tw-border-subtle: rgba(255, 240, 220, 0.14);
+  --tw-accent: #d47554;
+  --tw-text-pure: #d8d0c2;
+  --tw-text-main: #b8ad9e;
+  --tw-text-muted: #918677;
+  --tw-shadow-color: rgba(0, 0, 0, 0.7);
+  --tw-ease-geist: cubic-bezier(0.16, 1, 0.3, 1);
+  --tw-velocity-fast: 120ms;
+  --tw-velocity-slow: 260ms;
+  --tw-grid-025: 2px;
+  --tw-grid-050: 4px;
+  --tw-grid-075: 6px;
+  --tw-grid-100: 8px;
+  --tw-grid-150: 12px;
+  --tw-grid-200: 16px;
+  --tw-grid-250: 20px;
+}
+
+#tw-jobforge-capsule-root[data-theme="light"] {
+  --tw-bg-base: #faf9f5;
+  --tw-bg-elevated: #ffffff;
+  --tw-bg-soft: #f1eee8;
+  --tw-border-subtle: rgba(22, 19, 15, 0.14);
+  --tw-accent: #a15a42;
+  --tw-text-pure: #16130f;
+  --tw-text-main: #4f473d;
+  --tw-text-muted: #7a7064;
+  --tw-shadow-color: rgba(22, 19, 15, 0.2);
+}
