@@ -59,6 +59,7 @@ import {
   buildDocumentAppearanceSnapshot,
   getFactoryDocumentStyleSlot,
   resolveDocumentStyleSlotId,
+  type DocumentStyleSlotSource,
 } from "../lib/document-style-slots";
 import {
   normalizeDocumentIconSettings,
@@ -312,6 +313,38 @@ function resolveCvTemplateIntent(
   if (isResumeTemplateId(value as ResumeTemplateId)) {
     return value as ResumeTemplateId;
   }
+  return null;
+}
+
+function readCvResumeTemplateId(
+  cv: CvDocument | null | undefined,
+): ResumeTemplateId | null {
+  const metadata = cv?.metadata;
+  const candidates = [
+    metadata?.resumeTemplateId,
+    metadata?.verbatiStyle &&
+    typeof metadata.verbatiStyle === "object" &&
+    "resumeTemplateId" in metadata.verbatiStyle
+      ? (metadata.verbatiStyle as { resumeTemplateId?: unknown })
+          .resumeTemplateId
+      : undefined,
+    metadata?.verbatiStyleBaseSnapshot &&
+    typeof metadata.verbatiStyleBaseSnapshot === "object" &&
+    "resumeTemplateId" in metadata.verbatiStyleBaseSnapshot
+      ? (metadata.verbatiStyleBaseSnapshot as { resumeTemplateId?: unknown })
+          .resumeTemplateId
+      : undefined,
+  ];
+
+  for (const candidate of candidates) {
+    if (
+      typeof candidate === "string" &&
+      isResumeTemplateId(candidate as ResumeTemplateId)
+    ) {
+      return candidate as ResumeTemplateId;
+    }
+  }
+
   return null;
 }
 
@@ -3343,6 +3376,85 @@ export function CvForge(): JSX.Element {
     debounceMs: 700,
     logPrefix: "[CvForge]",
   });
+  const cvImportStyleMetadata = React.useMemo<
+    Partial<CvDocument["metadata"]>
+  >(() => {
+    const activeSlot = resolveDocumentStyleSlotId(
+      documentStylePresets?.activeSlot,
+    );
+    if (activeSlot) {
+      const factorySlot = getFactoryDocumentStyleSlot(activeSlot);
+      const source = documentStylePresets?.[`preset${activeSlot}`];
+      const sourceStyle =
+        (source?.verbatiStyle as
+          | Partial<VerbatiStylePreset>
+          | null
+          | undefined) ?? null;
+      const typography =
+        (source?.fontPairId as VerbatiFontPairId | undefined) ??
+        (sourceStyle?.typography as VerbatiFontPairId | undefined) ??
+        factorySlot.appearance.typography;
+      const palette =
+        (source?.paletteOverride as
+          | VerbatiStylePreset["palette"]
+          | undefined) ??
+        (sourceStyle?.palette as VerbatiStylePreset["palette"] | undefined) ??
+        factorySlot.appearance.palette;
+      const accentHex =
+        (typeof source?.accentHex === "string" ? source.accentHex : undefined) ??
+        (sourceStyle?.accentHex as string | undefined);
+      const resumeTemplateId =
+        activeSettingsCvStylePreset?.resumeTemplateId ??
+        sourceStyle?.resumeTemplateId ??
+        factorySlot.defaultCvTemplateId;
+      const importStyle = resolveVerbatiStyle({
+        ...factorySlot.appearance,
+        ...sourceStyle,
+        typography,
+        palette,
+        resumeTemplateId,
+        ...(accentHex ? { accentHex } : {}),
+      });
+      const slotName =
+        typeof source?.name === "string" && source.name.trim().length > 0
+          ? source.name.trim()
+          : factorySlot.label;
+      const slotSource: DocumentStyleSlotSource = source
+        ? "settings"
+        : "factory";
+
+      return {
+        resumeTemplateId,
+        verbatiStyle: importStyle,
+        verbatiStyleSlotId: activeSlot,
+        verbatiStyleSlotSource: slotSource,
+        verbatiStyleSlotNameSnapshot: slotName,
+        verbatiStyleBaseSnapshot: buildDocumentAppearanceSnapshot(importStyle),
+        documentStyleVersion: DOCUMENT_STYLE_VERSION,
+      };
+    }
+
+    const fallbackSlot = getFactoryDocumentStyleSlot(1);
+    const resumeTemplateId =
+      stylePreset.resumeTemplateId ?? fallbackSlot.defaultCvTemplateId;
+    const importStyle = resolveVerbatiStyle({
+      ...stylePreset,
+      resumeTemplateId,
+    });
+    return {
+      resumeTemplateId,
+      verbatiStyle: importStyle,
+      verbatiStyleBaseSnapshot: buildDocumentAppearanceSnapshot(importStyle),
+      documentStyleVersion: DOCUMENT_STYLE_VERSION,
+    };
+  }, [
+    activeSettingsCvStylePreset,
+    documentStylePresets?.activeSlot,
+    documentStylePresets?.preset1,
+    documentStylePresets?.preset2,
+    documentStylePresets?.preset3,
+    stylePreset,
+  ]);
   const documentIconSettings = React.useMemo(
     () => normalizeDocumentIconSettings(currentCv?.metadata?.documentIcons),
     [currentCv?.metadata?.documentIcons],
@@ -3386,7 +3498,9 @@ export function CvForge(): JSX.Element {
     !isCvLibraryLoading &&
     !lastLibraryFetchFailed;
   const shouldHoldVisualRestorePreview = Boolean(
-    currentCv && isVisualRestorePending,
+    currentCv &&
+      isVisualRestorePending &&
+      !readCvResumeTemplateId(currentCv),
   );
   const shouldShowCvRestorePending =
     shouldHoldVisualRestorePreview ||
@@ -8154,6 +8268,7 @@ export function CvForge(): JSX.Element {
             createdAt: now,
             updatedAt: now,
             version: 1,
+            ...cvImportStyleMetadata,
             ...(outcome.authoritativeResume
               ? { authoritativeResume: outcome.authoritativeResume }
               : {}),
@@ -8195,6 +8310,7 @@ export function CvForge(): JSX.Element {
       requestedJobId,
       setJobResume,
       showToast,
+      cvImportStyleMetadata,
     ],
   );
 

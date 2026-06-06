@@ -5004,7 +5004,29 @@ describe("CvForge workspace mode", () => {
     expect(
       screen.queryByRole("button", { name: /Structuring sections/i }),
     ).toBeNull();
-    expect(importCv).toHaveBeenCalled();
+    expect(importCv).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          resumeTemplateId: "workshop_resume_onecol_ats",
+          verbatiStyle: expect.objectContaining({
+            layout: "workshop",
+            typography: "quiet-editorial",
+            palette: "pierre",
+            resumeTemplateId: "workshop_resume_onecol_ats",
+          }),
+          verbatiStyleSlotId: 1,
+          verbatiStyleSlotSource: "settings",
+          verbatiStyleSlotNameSnapshot: "Stone Swiss",
+          verbatiStyleBaseSnapshot: expect.objectContaining({
+            layout: "workshop",
+            typography: "quiet-editorial",
+            palette: "pierre",
+            resumeTemplateId: "workshop_resume_onecol_ats",
+          }),
+          documentStyleVersion: 1,
+        }),
+      }),
+    );
   });
 
   it("keeps the workspace preview on the same canvas path on narrow viewports", async () => {
@@ -5407,6 +5429,49 @@ describe("CvForge workspace mode", () => {
 
     expect(screen.getByText("Loading CV.")).toBeInTheDocument();
     expect(screen.queryByText(/Preview style:/)).not.toBeInTheDocument();
+  });
+
+  it("renders a templated CV when visual restore pending state is stale", () => {
+    const baseState = buildCvLibraryState();
+    const currentCv = {
+      ...baseState.currentCv,
+      metadata: {
+        ...baseState.currentCv.metadata,
+        resumeTemplateId: "workshop_resume_onecol_ats",
+        verbatiStyle: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "ink",
+          resumeTemplateId: "workshop_resume_onecol_ats",
+        },
+        verbatiStyleBaseSnapshot: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "ink",
+          resumeTemplateId: "workshop_resume_onecol_ats",
+        },
+        documentStyleVersion: 1,
+      },
+    };
+
+    useCvLibraryMock.mockReturnValue(
+      buildCvLibraryState({
+        currentCv,
+        cvs: [currentCv],
+        isVisualRestorePending: true,
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByText("Loading CV.")).not.toBeInTheDocument();
+    expect(screen.getByText(/Preview style:/)).toBeInTheDocument();
   });
 
   it("does not mount preview from a held compact-library fallback while restore is pending", () => {
