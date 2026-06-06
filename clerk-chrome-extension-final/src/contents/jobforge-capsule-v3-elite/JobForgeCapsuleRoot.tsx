@@ -67,6 +67,7 @@ export function JobForgeCapsuleRoot() {
         onSelectActiveCv={capsule.handleSelectActiveCv}
         onShareGenerated={capsule.handleShareGenerated}
         onSetContext={capsule.setContext}
+        selectedActiveCvProfileId={capsule.selectedActiveCvProfileId}
       />
     </div>
   );

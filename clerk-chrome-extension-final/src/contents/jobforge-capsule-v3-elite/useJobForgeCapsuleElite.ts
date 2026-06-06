@@ -66,6 +66,7 @@ export function useJobForgeCapsuleElite() {
   const [dockStatus, setDockStatus] = useState<DockStatus>("ready");
   const [activeCvSnapshot, setActiveCvSnapshot] = useState<ActiveCvSnapshot | null>(null);
   const [activeCvOptions, setActiveCvOptions] = useState<ActiveCvOption[]>([]);
+  const [selectedActiveCvProfileId, setSelectedActiveCvProfileId] = useState<string | null>(null);
   const [contextMode, setContextMode] = useState<ContextMode>("raw-job");
   const [generatedProposal, setGeneratedProposal] = useState<GeneratedProposalState | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -154,6 +155,14 @@ export function useJobForgeCapsuleElite() {
     }
   }, [activeCvSnapshot, contextMode]);
 
+  useEffect(() => {
+    if (!activeCvSnapshot) return;
+    const matched = activeCvOptions.find((option) => option.title === activeCvSnapshot.title);
+    if (matched) {
+      setSelectedActiveCvProfileId((current) => current ?? matched.profileId);
+    }
+  }, [activeCvOptions, activeCvSnapshot]);
+
   const setContext = useCallback((mode: ContextMode) => {
     setContextMode(mode);
     chrome.storage.local.set({ [USE_CURRENT_CV_CONTEXT_STORAGE_KEY]: mode === "active-cv" });
@@ -167,6 +176,7 @@ export function useJobForgeCapsuleElite() {
         throw new Error(response.error || "cv::selection-failed");
       }
       setActiveCvSnapshot(response.snapshot);
+      setSelectedActiveCvProfileId(profileId);
       setContext("active-cv");
       showToast("cv::active-context-selected");
     } catch (error) {
@@ -228,31 +238,20 @@ export function useJobForgeCapsuleElite() {
     if (saveState === "saving") return;
     try {
       await ensureSavedJob("visible");
-      showToast("job::committed-true");
     } catch (error) {
       setSaveState("error");
       showToast(error instanceof Error ? error.message : "save::failed");
     }
   }, [ensureSavedJob, saveState, showToast]);
 
-  const handleDraft = useCallback(async () => {
+  const handleDraft = useCallback(() => {
     if (dockVisible) {
       setDockVisible(false);
       return;
     }
     setDockVisible(true);
-    setDockStatus("ready");
-    try {
-      if (!savedJobState?.jobId && !jobData.jobId) {
-        setDockStatus("saving");
-        await ensureSavedJob("silent");
-      }
-      setDockStatus(generatedProposal ? "generated" : "ready");
-    } catch {
-      setDockStatus("error");
-      showToast("save::required-before-draft");
-    }
-  }, [dockVisible, ensureSavedJob, generatedProposal, jobData.jobId, savedJobState?.jobId, showToast]);
+    setDockStatus(generatedProposal ? "generated" : "ready");
+  }, [dockVisible, generatedProposal]);
 
   const handleGenerate = useCallback(async () => {
     const runId = ++generateRunIdRef.current;
@@ -376,6 +375,7 @@ export function useJobForgeCapsuleElite() {
     jobData,
     saveState,
     savedJobState,
+    selectedActiveCvProfileId,
     toast,
     handleDraft,
     handleCopyGenerated,
