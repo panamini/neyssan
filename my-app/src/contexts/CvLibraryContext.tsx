@@ -55,6 +55,7 @@ import {
   getLocalCvDocumentStorageKey,
   LEGACY_ACTIVE_CV_STORAGE_KEY,
   LEGACY_LOCAL_CV_DOC_STORAGE_KEY_PREFIX,
+  LOCAL_CV_DOC_STORAGE_KEY_PREFIX,
   LEGACY_LOCAL_CV_LIBRARY_STORAGE_KEY,
   LOCAL_CV_LIBRARY_STORAGE_KEY,
 } from "../lib/cv-local-storage";
@@ -692,7 +693,7 @@ export interface ICvLibraryContext {
   createNewCv: (
     title?: string,
     opts?: { forceV1?: boolean; resumeTemplateId?: ResumeTemplateId },
-  ) => Promise<void>;
+  ) => Promise<CvDocument | null>;
   // Import a fully-normalized CvDocument (used by file import workflows).
   // This replaces the current CV with the provided document and schedules persistence.
   importCv: (doc: CvDocument) => Promise<void>;
@@ -801,6 +802,18 @@ function cvEditorDebugInfo(label: string, payload: Record<string, unknown>): voi
   }
 
   console.info(label, payload);
+}
+
+function isLocalStorageQuotaError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { name?: unknown; code?: unknown; message?: unknown };
+  return (
+    candidate.name === "QuotaExceededError" ||
+    candidate.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+    candidate.code === 22 ||
+    candidate.code === 1014 ||
+    /quota/i.test(String(candidate.message ?? ""))
+  );
 }
 
 function classifyRemoteSaveError(error: unknown): {
@@ -1127,6 +1140,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       try {
         const remoteProfiles = await convexClient.query(
           api.profilesPublic.listMine,
+          { includeCvDocument: true },
         );
         if (
           cancelled ||
@@ -2042,11 +2056,13 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     try {
       if (typeof window !== "undefined" && window.localStorage) {
         const payload = JSON.stringify(cvs.map(buildCvLibraryIndexEntry));
-        try {
-          window.localStorage.setItem(LOCAL_CV_LIBRARY_STORAGE_KEY, payload);
-        } catch {
-          /* best-effort */
-        }
+        const protectedId =
+          currentCvRef.current?.id ?? readStoredActiveCvId() ?? cvs[0]?.id ?? "";
+        writeLocalStorageItemWithCvCachePruning(
+          LOCAL_CV_LIBRARY_STORAGE_KEY,
+          payload,
+          String(protectedId),
+        );
         try {
           window.localStorage.removeItem(LEGACY_LOCAL_CV_LIBRARY_STORAGE_KEY);
         } catch {
@@ -2093,6 +2109,87 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   /**
    * Persist a document to localStorage cache (best-effort).
    */
+  function writeLocalStorageItemWithCvCachePruning(
+    key: string,
+    payload: string,
+    protectedCvId: string,
+  ): boolean {
+    if (typeof window === "undefined" || !window.localStorage) return false;
+
+    try {
+      window.localStorage.setItem(key, payload);
+      return true;
+    } catch (error) {
+      if (!isLocalStorageQuotaError(error)) {
+        return false;
+      }
+    }
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      if (!pruneFullCvDocumentCachesForRetry(protectedCvId)) {
+        return false;
+      }
+
+      try {
+        window.localStorage.setItem(key, payload);
+        return true;
+      } catch (error) {
+        if (!isLocalStorageQuotaError(error)) {
+          return false;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  function pruneFullCvDocumentCachesForRetry(activeId: string) {
+    if (typeof window === "undefined" || !window.localStorage) return false;
+
+    const protectedKeys = new Set([
+      getLocalCvDocumentStorageKey(activeId),
+      getLegacyLocalCvDocumentStorageKey(activeId),
+    ]);
+    const candidates: Array<{ key: string; updatedAtMs: number; index: number }> =
+      [];
+
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index);
+      if (!key || protectedKeys.has(key)) continue;
+      const isFullCvCache =
+        key.startsWith(LOCAL_CV_DOC_STORAGE_KEY_PREFIX) ||
+        key.startsWith(LEGACY_LOCAL_CV_DOC_STORAGE_KEY_PREFIX);
+      if (!isFullCvCache) continue;
+
+      let updatedAtMs = 0;
+      try {
+        const raw = window.localStorage.getItem(key);
+        const parsed = raw ? JSON.parse(raw) : null;
+        const parsedUpdatedAt =
+          typeof parsed?.metadata?.updatedAt === "string"
+            ? Date.parse(parsed.metadata.updatedAt)
+            : NaN;
+        updatedAtMs = Number.isFinite(parsedUpdatedAt) ? parsedUpdatedAt : 0;
+      } catch {
+        updatedAtMs = 0;
+      }
+      candidates.push({ key, updatedAtMs, index });
+    }
+
+    candidates
+      .sort((a, b) => a.updatedAtMs - b.updatedAtMs || a.index - b.index)
+      .slice(0, Math.max(1, Math.ceil(candidates.length / 5)))
+      .forEach((candidate) => {
+        try {
+          window.localStorage.removeItem(candidate.key);
+        } catch {
+          /* best-effort */
+        }
+      });
+
+    return candidates.length > 0;
+  }
+
   function cacheDocumentLocally(doc: CvDocument) {
     try {
       if (typeof window !== "undefined" && window.localStorage) {
@@ -2107,10 +2204,9 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
             version: durableDoc.metadata?.version ?? 1,
           } as any,
         };
-        window.localStorage.setItem(
-          getLocalCvDocumentStorageKey(doc.id),
-          JSON.stringify(snapshot),
-        );
+        const key = getLocalCvDocumentStorageKey(doc.id);
+        const payload = JSON.stringify(snapshot);
+        writeLocalStorageItemWithCvCachePruning(key, payload, String(doc.id));
         window.localStorage.removeItem(
           getLegacyLocalCvDocumentStorageKey(doc.id),
         );
@@ -2561,20 +2657,27 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         await adapter.save(docCopy as any);
         try {
           const activeDoc = currentCvRef.current;
-          const withLegacy = {
-            ...(docCopy as any),
-            cvState: legacyCvState ?? (activeDoc as any)?.cvState,
-          };
-          lastSavedRef.current = stripMetadata(withLegacy) as CvDocument | null;
-          dbg(
-            "[CvLibraryContext] performSave: lastSavedRef updated (metadata stripped, cvState preserved for dirty detection)",
-            { docId: docCopy.id },
-          );
+          if (activeDoc && String(activeDoc.id) === String(docCopy.id)) {
+            const withLegacy = {
+              ...(docCopy as any),
+              cvState: legacyCvState ?? (activeDoc as any)?.cvState,
+            };
+            lastSavedRef.current = stripMetadata(withLegacy) as CvDocument | null;
+            dbg(
+              "[CvLibraryContext] performSave: lastSavedRef updated (metadata stripped, cvState preserved for dirty detection)",
+              { docId: docCopy.id },
+            );
+          }
         } catch {
-          lastSavedRef.current = {
-            ...(docCopy as any),
-            cvState: (currentCvRef.current as any)?.cvState,
-          } as any;
+          if (
+            currentCvRef.current &&
+            String(currentCvRef.current.id) === String(docCopy.id)
+          ) {
+            lastSavedRef.current = {
+              ...(docCopy as any),
+              cvState: (currentCvRef.current as any)?.cvState,
+            } as any;
+          }
         }
         setRemoteSaveStatus({ status: "synced", documentId: String(docCopy.id) });
       } finally {
@@ -2885,9 +2988,14 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
           return;
         }
 
-        await saveImmediately(latestOutgoing, {
+        void saveImmediately(latestOutgoing, {
           preserveVisibleUpdatedAt: true,
           preserveVisibleUpdatedAtValue: visibleLibraryUpdatedAt,
+        }).catch((error) => {
+          console.warn(
+            "[CvLibraryContext] outgoing cv save continued after switch failed",
+            error,
+          );
         });
       };
 
@@ -3781,9 +3889,11 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         // Trigger a debounced save but do not await here.
         // eslint-disable-next-line @typescript-eslint/no-floating-promises
         void scheduleSave(cv);
+        return cv;
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error("[CvLibraryContext] createNewCv failed", err);
+        return null;
       }
     },
     [prepareCurrentCvForReplacement],

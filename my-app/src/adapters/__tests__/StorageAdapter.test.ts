@@ -640,6 +640,43 @@ describe("StorageAdapter persistence", () => {
     expect(restored?.sections).toHaveLength(cv.sections.length);
   });
 
+  it("normalizes a recoverable embedded cvDocument before falling back to profile summary fields", () => {
+    const cv = generateCvTemplateV1("Recoverable Embedded Remote CV");
+    const recoverableEmbeddedCv = {
+      ...cv,
+      sections: cv.sections.map((section, index) =>
+        index === 0
+          ? {
+              ...section,
+              type: "custom-import-section",
+            }
+          : section,
+      ),
+    };
+
+    const restored = mapPersistedProfileToCvDocument(
+      {
+        profileId: cv.id,
+        cvDocument: recoverableEmbeddedCv,
+        name: "Wrong Fallback Name",
+        summary: "Fallback summary",
+        skills: ["Fallback skill"],
+        experience: [
+          {
+            company: "Fallback company",
+            title: "Fallback role",
+          },
+        ],
+      },
+      cv.id,
+    );
+
+    expect(restored).not.toBeNull();
+    expect(restored?.id).toBe(cv.id);
+    expect(restored?.title).toBe("Recoverable Embedded Remote CV");
+    expect(restored?.sections.length).toBeGreaterThan(3);
+  });
+
   it("overlays document decoration metadata without restoring runtime data URLs", () => {
     const cv = generateCvTemplateV1("Embedded Decorated CV");
 

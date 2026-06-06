@@ -103,17 +103,13 @@ describe("CvsLibrary", () => {
   });
 
   it("creates a normal new CV from the main create action", async () => {
-    createNewCvMock.mockImplementation(() => {
-      mockCvLibraryState.currentCvId = "cv_new";
-      return Promise.resolve();
-    });
+    createNewCvMock.mockResolvedValue({ id: "cv_new" });
 
-    const { rerender } = render(<CvsLibrary />);
+    render(<CvsLibrary />);
 
     fireEvent.click(screen.getByRole("button", { name: "Create new resume" }));
 
     expect(createNewCvMock).toHaveBeenCalledTimes(1);
-    rerender(<CvsLibrary />);
 
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith("/cv?id=cv_new");
@@ -141,17 +137,13 @@ describe("CvsLibrary", () => {
 
   it("navigates with /cv?id=<cvId> after create from the empty library state", async () => {
     mockCvLibraryState.cvs = [];
-    createNewCvMock.mockImplementation(() => {
-      mockCvLibraryState.currentCvId = "cv_empty_new";
-      return Promise.resolve();
-    });
+    createNewCvMock.mockResolvedValue({ id: "cv_empty_new" });
 
-    const { rerender } = render(<CvsLibrary />);
+    render(<CvsLibrary />);
 
     fireEvent.click(screen.getByRole("button", { name: "Create your first resume" }));
 
     expect(createNewCvMock).toHaveBeenCalledTimes(1);
-    rerender(<CvsLibrary />);
 
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith("/cv?id=cv_empty_new");

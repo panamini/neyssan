@@ -5,6 +5,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
   waitFor,
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -785,6 +786,47 @@ describe("forge rail drawers", () => {
     );
   });
 
+  it("keeps the current CV visible in the library drawer recent section", () => {
+    render(
+      <CvForgeLibraryDrawer
+        items={[
+          cvItem("cv-one", "CV one"),
+          cvItem("cv-current", "Current CV"),
+          cvItem("cv-two", "CV two"),
+        ]}
+        currentCvId="cv-current"
+        hydrateCvDocument={hydrateCvDocument}
+        onSelectCv={vi.fn()}
+        onOpenItem={vi.fn()}
+        onOpenLibraryType={vi.fn()}
+      />,
+    );
+
+    const currentTiles = screen.getAllByTestId("drawer-tile-cv:cv-current");
+    expect(currentTiles.length).toBeGreaterThan(1);
+    expect(within(currentTiles[0]).getByText("Current")).toBeInTheDocument();
+  });
+
+  it("keeps the current CV visible in the CV drawer recent section", () => {
+    render(
+      <CvForgeCvDrawer
+        items={[
+          cvItem("cv-one", "CV one"),
+          cvItem("cv-current", "Current CV"),
+          cvItem("cv-two", "CV two"),
+        ]}
+        currentCvId="cv-current"
+        hydrateCvDocument={hydrateCvDocument}
+        onSelectCv={vi.fn()}
+        onOpenCv={vi.fn()}
+      />,
+    );
+
+    const currentTiles = screen.getAllByTestId("drawer-tile-cv:cv-current");
+    expect(currentTiles.length).toBeGreaterThan(1);
+    expect(within(currentTiles[0]).getByText("Current")).toBeInTheDocument();
+  });
+
   it("applies library selection ring only to the preview object", () => {
     const css = fs.readFileSync(
       path.join(process.cwd(), "src/styles/product.css"),
@@ -1181,20 +1223,20 @@ describe("forge rail drawers", () => {
     expect(screen.getAllByText("CV one").length).toBeGreaterThan(0);
     expect(screen.getAllByText("CV three").length).toBeGreaterThan(0);
     expect(screen.queryByText("Proposal one")).not.toBeInTheDocument();
-    expect(screen.getAllByText("Current").length).toBeGreaterThan(0);
-    expect(screen.getByText("Current")).toHaveClass(
+    const currentBadges = screen.getAllByText("Current");
+    expect(currentBadges.length).toBeGreaterThan(0);
+    expect(currentBadges[0]).toHaveClass(
       "forge-rail-document-tile__badge",
     );
-    expect(screen.getAllByText("CV one")).toHaveLength(1);
+    expect(screen.getAllByText("CV one").length).toBeGreaterThan(0);
+    const openCvOneButtons = screen.getAllByRole("button", {
+      name: "Open CV: CV one",
+    });
     expect(
-      screen
-        .getByRole("button", { name: "Open CV: CV one" })
-        .closest("article"),
+      openCvOneButtons[0].closest("article"),
     ).toHaveAttribute("data-state", "current");
     expect(
-      screen
-        .getByRole("button", { name: "Open CV: CV one" })
-        .closest("article"),
+      openCvOneButtons[0].closest("article"),
     ).not.toHaveAttribute("data-selected");
     expect(
       Array.from(
@@ -1205,7 +1247,7 @@ describe("forge rail drawers", () => {
       screen.queryByRole("button", { name: "More actions for CV one" }),
     ).not.toBeInTheDocument();
     fireEvent.click(
-      screen.getByRole("button", { name: "Open CV library: CV one" }),
+      screen.getAllByRole("button", { name: "Open CV library: CV one" })[0],
     );
     expect(onOpenLibraryType).toHaveBeenCalledWith("cvs");
     expect(screen.getByText("All results")).toBeInTheDocument();

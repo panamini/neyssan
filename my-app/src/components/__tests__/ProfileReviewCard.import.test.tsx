@@ -10,6 +10,7 @@ const importCvMock = vi.fn();
 const reorderSectionsMock = vi.fn();
 const renameCvMock = vi.fn();
 const exportCvMock = vi.fn();
+const navigateMock = vi.hoisted(() => vi.fn());
 const cvLibraryState = {
   currentCv: null as Record<string, unknown> | null,
   isLibraryHydrated: true,
@@ -44,7 +45,7 @@ vi.mock("convex/react", () => ({
 }));
 
 vi.mock("react-router-dom", () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => navigateMock,
 }));
 
 vi.mock("../../contexts/CvLibraryContext", () => ({
@@ -77,6 +78,7 @@ describe("ProfileReviewCard import", () => {
     reorderSectionsMock.mockReset();
     renameCvMock.mockReset();
     exportCvMock.mockReset();
+    navigateMock.mockReset();
     cvLibraryState.currentCv = null;
     cvLibraryState.isLibraryHydrated = true;
     Object.defineProperty(window, "__CV_EDITOR_DEBUG__", {
@@ -140,6 +142,7 @@ describe("ProfileReviewCard import", () => {
     fireEvent.change(input as HTMLInputElement, { target: { files: [file] } });
 
     await waitFor(() => expect(importCvMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledTimes(1));
     expect(importCvMock.mock.calls[0][0]).toMatchObject({
       title: "Jane Doe — Product Manager",
       metadata: expect.objectContaining({
@@ -155,6 +158,10 @@ describe("ProfileReviewCard import", () => {
         expect.objectContaining({ type: "profile" }),
         expect.objectContaining({ type: "summary" }),
       ]),
+    );
+    expect(navigateMock).toHaveBeenCalledWith(
+      `/cv?id=${encodeURIComponent(importCvMock.mock.calls[0][0].id)}`,
+      { replace: true },
     );
   });
 

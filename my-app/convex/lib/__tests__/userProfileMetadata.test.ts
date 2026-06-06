@@ -218,6 +218,27 @@ describe("userProfileMetadata", () => {
     ).toBe(true);
   });
 
+  it("accepts the Maggie resume template metadata emitted by the CV template picker", () => {
+    expect(
+      matchesValidator(userProfileMetadataValidator.json, {
+        resumeTemplateId: "maggie_letter_resume",
+        verbatiStyle: {
+          layout: "workshop",
+          palette: "sauge",
+          resumeTemplateId: "maggie_letter_resume",
+          typography: "geist-baskervville",
+        },
+        verbatiStyleBaseSnapshot: {
+          familyId: "workshop",
+          layout: "workshop",
+          palette: "sauge",
+          resumeTemplateId: "maggie_letter_resume",
+          typography: "geist-baskervville",
+        },
+      }),
+    ).toBe(true);
+  });
+
   it("keeps existing allowed metadata fields valid without verbatiStyle", () => {
     expect(
       matchesValidator(userProfileMetadataValidator.json, {

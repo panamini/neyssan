@@ -65,6 +65,7 @@ export const USER_PROFILE_RESUME_TEMPLATE_IDS = [
   "workshop_resume_onecol_ats",
   "workshop_resume_twocol_ats",
   "sanat_asymmetric_resume",
+  "maggie_letter_resume",
 ] as const;
 
 export type UserProfileVerbatiLayoutId =

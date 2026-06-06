@@ -24,6 +24,7 @@ import {
   parseCvDocumentStrict,
   safeParseCvDocument,
 } from "../schemas/cvDocument.schema";
+import { normalizeAndValidateCvDocument } from "../lib/normalize-cv";
 import { mapProfileToCvDocument } from "./profile-mapper";
 import {
   resolveVerbatiStyle,
@@ -556,6 +557,25 @@ export function mapPersistedProfileToCvDocument(
       return sanitizeRuntimeCvDocumentForState(
         overlayProfileMetadataPatch(embeddedResult.value, rawProfile),
       );
+    }
+
+    if (
+      Array.isArray(
+        (decodedEmbeddedDocument as { sections?: unknown }).sections,
+      )
+    ) {
+      const normalizedEmbeddedResult = normalizeAndValidateCvDocument(
+        decodedEmbeddedDocument,
+        typeof rawProfile.name === "string" ? rawProfile.name : profileId,
+      );
+      if (normalizedEmbeddedResult.success) {
+        return sanitizeRuntimeCvDocumentForState(
+          overlayProfileMetadataPatch(
+            normalizedEmbeddedResult.document,
+            rawProfile,
+          ),
+        );
+      }
     }
   }
 

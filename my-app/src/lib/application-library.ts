@@ -73,6 +73,7 @@ export type BuildWorkLibraryInput = {
   proposals?: LibraryProposalRecord[] | null;
   cvs?: CvDocument[] | null;
   currentCvId?: string | null;
+  currentCv?: CvDocument | null;
   outputDraft?: StoredProposalOutputDraft | null;
   composeDraft?: StoredProposalComposeDraft | null;
   localOutputDraft?: StoredProposalOutputDraft | null;
@@ -342,7 +343,17 @@ export function buildWorkLibraryModel(
 ): WorkLibraryModel {
   const now = input.now ?? Date.now();
   const outputDraft = input.outputDraft ?? input.localOutputDraft ?? null;
-  const linkedCvTitles = cvTitleById(input.cvs ?? []);
+  const cvs = [...(input.cvs ?? [])];
+  if (input.currentCv) {
+    const currentId = String(input.currentCv.id);
+    const existingIndex = cvs.findIndex((cv) => String(cv.id) === currentId);
+    if (existingIndex >= 0) {
+      cvs[existingIndex] = input.currentCv;
+    } else {
+      cvs.push(input.currentCv);
+    }
+  }
+  const linkedCvTitles = cvTitleById(cvs);
 
   const proposalItems = [
     makeLocalProposalItem(outputDraft, now),
@@ -350,7 +361,7 @@ export function buildWorkLibraryModel(
       makeProposalItem(proposal, linkedCvTitles),
     ),
   ].filter((item): item is LibraryItem => Boolean(item));
-  const cvItems = (input.cvs ?? []).map(makeCvItem);
+  const cvItems = cvs.map(makeCvItem);
   const items = [...proposalItems, ...cvItems].sort(
     (left, right) => right.updatedAt - left.updatedAt,
   );

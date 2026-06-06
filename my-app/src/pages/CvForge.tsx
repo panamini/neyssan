@@ -2747,13 +2747,12 @@ export function CvForgeCvDrawer({
       : true;
   });
   const recentItems = React.useMemo(() => {
-    const alternatives = filteredItems.filter(
-      (item) => currentCvId !== cvForgeDrawerSourceId(item),
+    if (!currentCvId) return filteredItems.slice(0, 2);
+    const currentItem = filteredItems.find(
+      (item) => cvForgeDrawerSourceId(item) === currentCvId,
     );
-    return (alternatives.length >= 2 ? alternatives : filteredItems).slice(
-      0,
-      2,
-    );
+    const rest = filteredItems.filter((item) => item !== currentItem);
+    return (currentItem ? [currentItem, ...rest] : filteredItems).slice(0, 2);
   }, [currentCvId, filteredItems]);
   const handleShowAll = () => {
     setQuery("");
@@ -2885,15 +2884,13 @@ export function CvForgeLibraryDrawer({
       : true;
   });
   const recentItems = React.useMemo(() => {
-    const alternatives = filteredItems.filter((item) => {
-      if (item.type !== "cv") return true;
-      const sourceId = item.id.slice(item.id.indexOf(":") + 1);
-      return currentCvId !== sourceId;
-    });
-    return (alternatives.length >= 2 ? alternatives : filteredItems).slice(
-      0,
-      2,
+    if (!currentCvId) return filteredItems.slice(0, 2);
+    const currentItem = filteredItems.find(
+      (item) =>
+        item.type === "cv" && cvForgeDrawerSourceId(item) === currentCvId,
     );
+    const rest = filteredItems.filter((item) => item !== currentItem);
+    return (currentItem ? [currentItem, ...rest] : filteredItems).slice(0, 2);
   }, [currentCvId, filteredItems]);
   const renderItem = (item: LibraryItem, keyPrefix = "") => {
     const sourceId = cvForgeDrawerSourceId(item);
@@ -3580,6 +3577,7 @@ export function CvForge(): JSX.Element {
   const [isImportingEntryCv, setIsImportingEntryCv] = React.useState(false);
   const [entryPickerTransitionCvId, setEntryPickerTransitionCvId] =
     React.useState<string | null>(null);
+  const pendingCvRouteTransitionIdRef = React.useRef<string | null>(null);
   const [pendingFreshEntryBaseCvId, setPendingFreshEntryBaseCvId] =
     React.useState<string | null>(null);
   const requestedCvId = React.useMemo(
@@ -3620,6 +3618,7 @@ export function CvForge(): JSX.Element {
     }
 
     if (requestedCvId === entryPickerTransitionCvId) {
+      pendingCvRouteTransitionIdRef.current = null;
       setEntryPickerTransitionCvId(null);
     }
   }, [entryPickerTransitionCvId, requestedCvId]);
@@ -3628,8 +3627,19 @@ export function CvForge(): JSX.Element {
     if (!requestedCvId || requestedCvId === String(currentCvId ?? "")) {
       return;
     }
+    const pendingTransitionId =
+      pendingCvRouteTransitionIdRef.current ?? entryPickerTransitionCvId;
+    if (pendingTransitionId === ENTRY_PICKER_PENDING_ROUTE_ID) {
+      return;
+    }
+    if (
+      pendingTransitionId &&
+      requestedCvId !== pendingTransitionId
+    ) {
+      return;
+    }
     loadCv(requestedCvId);
-  }, [currentCvId, loadCv, requestedCvId]);
+  }, [currentCvId, entryPickerTransitionCvId, loadCv, requestedCvId]);
 
   React.useEffect(() => {
     setCvRailAiSuggestion(null);
@@ -3649,23 +3659,73 @@ export function CvForge(): JSX.Element {
   }, [activeSectionId]);
 
   const navigateToSelectedCv = React.useCallback(
-    (cvId: string) => {
+    async (cvId: string) => {
       const nextParams = new URLSearchParams(search);
       nextParams.set("id", cvId);
       const nextSearch = nextParams.toString();
-      void navigate(
+      await Promise.resolve(
+        navigate(
+          {
+            pathname: location.pathname,
+            search: nextSearch ? `?${nextSearch}` : "",
+          },
+          {
+            replace: true,
+            state: location.state,
+          },
+        ),
+      );
+    },
+    [location.pathname, location.state, navigate, search],
+  );
+
+  const selectCvById = React.useCallback(
+    async (cvId: string, options?: { pendingRouteTransition?: boolean }) => {
+      if (options?.pendingRouteTransition) {
+        pendingCvRouteTransitionIdRef.current = cvId;
+        setEntryPickerTransitionCvId(cvId);
+      }
+
+      await navigateToSelectedCv(cvId);
+      loadCv(cvId);
+    },
+    [loadCv, navigateToSelectedCv],
+  );
+
+  React.useEffect(() => {
+    const pendingTransitionId =
+      pendingCvRouteTransitionIdRef.current ?? entryPickerTransitionCvId;
+    if (
+      !pendingTransitionId ||
+      pendingTransitionId === ENTRY_PICKER_PENDING_ROUTE_ID ||
+      String(currentCvId ?? "") !== pendingTransitionId ||
+      requestedCvId === pendingTransitionId
+    ) {
+      return;
+    }
+
+    void navigateToSelectedCv(pendingTransitionId);
+  }, [
+    currentCvId,
+    entryPickerTransitionCvId,
+    navigateToSelectedCv,
+    requestedCvId,
+  ]);
+
+  const clearSelectedCvRoute = React.useCallback(async () => {
+    await Promise.resolve(
+      navigate(
         {
-          pathname: location.pathname,
-          search: nextSearch ? `?${nextSearch}` : "",
+          pathname: "/cv",
+          search: "",
         },
         {
           replace: true,
           state: location.state,
         },
-      );
-    },
-    [location.pathname, location.state, navigate, search],
-  );
+      ),
+    );
+  }, [location.state, navigate]);
 
   const resumeOptions = React.useMemo(
     () =>
@@ -3692,10 +3752,9 @@ export function CvForge(): JSX.Element {
 
   const handlePickResume = React.useCallback(
     (cvId: string) => {
-      navigateToSelectedCv(cvId);
-      loadCv(cvId);
+      void selectCvById(cvId);
     },
-    [loadCv, navigateToSelectedCv],
+    [selectCvById],
   );
 
   React.useEffect(() => {
@@ -3729,9 +3788,9 @@ export function CvForge(): JSX.Element {
         }
 
         setEntryPickerTransitionCvId(currentCvId);
-        loadCv(currentCvId);
-        navigateToSelectedCv(currentCvId);
+        await selectCvById(currentCvId);
       } catch (error) {
+        pendingCvRouteTransitionIdRef.current = null;
         setEntryPickerTransitionCvId(null);
         showToast("Attach failed.", { variant: "error" });
       }
@@ -3742,9 +3801,9 @@ export function CvForge(): JSX.Element {
     jobDetailRoute,
     loadCv,
     navigate,
-    navigateToSelectedCv,
     pendingFreshEntryBaseCvId,
     requestedJobId,
+    selectCvById,
     setJobResume,
     showToast,
   ]);
@@ -4357,15 +4416,14 @@ export function CvForge(): JSX.Element {
         titleLocked: true,
       },
     })
-      .then(() => {
-        loadCv(nextCvId);
-        navigateToSelectedCv(nextCvId);
+      .then(async () => {
+        await selectCvById(nextCvId, { pendingRouteTransition: true });
         showToast("Duplicated.", { variant: "success" });
       })
       .catch(() => {
         showToast("Duplicate failed.", { variant: "error" });
       });
-  }, [currentCv, importCv, loadCv, navigateToSelectedCv, showToast]);
+  }, [currentCv, importCv, selectCvById, showToast]);
   const handleDeleteTopbarCv = React.useCallback(() => {
     if (!currentCvId) return;
     const confirmed = window.confirm("Delete CV?");
@@ -4375,12 +4433,11 @@ export function CvForge(): JSX.Element {
     deleteCv(currentCvId);
     if (nextCv?.id) {
       const nextCvId = String(nextCv.id);
-      loadCv(nextCvId);
-      navigateToSelectedCv(nextCvId);
+      void selectCvById(nextCvId, { pendingRouteTransition: true });
       return;
     }
-    void navigate("/cv", { replace: true });
-  }, [currentCvId, cvs, deleteCv, loadCv, navigate, navigateToSelectedCv]);
+    void clearSelectedCvRoute();
+  }, [clearSelectedCvRoute, currentCvId, cvs, deleteCv, selectCvById]);
   const topbarNewCvRef = React.useRef<() => void>(() => {});
   const topbarImportCvRef = React.useRef<() => void>(() => {});
   const handleTopbarNewCv = React.useCallback(() => {
@@ -6367,18 +6424,18 @@ export function CvForge(): JSX.Element {
     () =>
       buildWorkLibraryModel({
         cvs,
+        currentCv,
         currentCvId,
         proposals: cvForgeLibraryProposals,
       }).items,
-    [currentCvId, cvForgeLibraryProposals, cvs],
+    [currentCv, currentCvId, cvForgeLibraryProposals, cvs],
   );
   const handleSelectCvFromLibraryDrawer = React.useCallback(
     (cvId: string) => {
       closeForgePanel();
-      void navigate(`/cv?id=${encodeURIComponent(cvId)}`);
-      loadCv(cvId);
+      void selectCvById(cvId);
     },
-    [closeForgePanel, loadCv, navigate],
+    [closeForgePanel, selectCvById],
   );
   const handleOpenCvFromLibraryDrawer = React.useCallback(
     (cvId: string) => {
@@ -8276,6 +8333,8 @@ export function CvForge(): JSX.Element {
           "Imported CV",
         );
         setIsImportingEntryCv(false);
+        pendingCvRouteTransitionIdRef.current = nextCvId;
+        setEntryPickerTransitionCvId(nextCvId);
         await importCv({
           id: nextCvId,
           title: nextCvTitle,
@@ -8296,15 +8355,16 @@ export function CvForge(): JSX.Element {
             resumeId: nextCvId,
             resumeName: nextCvTitle,
           });
+          pendingCvRouteTransitionIdRef.current = null;
+          setEntryPickerTransitionCvId(null);
           loadCv(nextCvId);
           void navigate(jobDetailRoute);
           return;
         }
 
-        setEntryPickerTransitionCvId(nextCvId);
-        loadCv(nextCvId);
-        navigateToSelectedCv(nextCvId);
+        await selectCvById(nextCvId, { pendingRouteTransition: true });
       } catch (error) {
+        pendingCvRouteTransitionIdRef.current = null;
         setEntryPickerTransitionCvId(null);
         showToast("Import failed.", { variant: "error" });
       } finally {
@@ -8321,8 +8381,8 @@ export function CvForge(): JSX.Element {
       jobDetailRoute,
       loadCv,
       navigate,
-      navigateToSelectedCv,
       requestedJobId,
+      selectCvById,
       setJobResume,
       showToast,
       cvImportStyleMetadata,
@@ -8337,13 +8397,24 @@ export function CvForge(): JSX.Element {
 
       setIsCreatingEntryCv(true);
       setEntryPickerTransitionCvId(ENTRY_PICKER_PENDING_ROUTE_ID);
+      pendingCvRouteTransitionIdRef.current = ENTRY_PICKER_PENDING_ROUTE_ID;
       setPendingFreshEntryBaseCvId(currentCvId ?? "__none__");
       try {
-        await createNewCv(undefined, {
+        const createdCv = await createNewCv(undefined, {
           forceV1: true,
           resumeTemplateId: resumeTemplateId ?? undefined,
         });
+        const createdCvId = createdCv?.id ? String(createdCv.id) : null;
+        if (createdCvId) {
+          setPendingFreshEntryBaseCvId(null);
+          await selectCvById(createdCvId, { pendingRouteTransition: true });
+        } else {
+          pendingCvRouteTransitionIdRef.current = null;
+          setEntryPickerTransitionCvId(null);
+          setPendingFreshEntryBaseCvId(null);
+        }
       } catch (error) {
+        pendingCvRouteTransitionIdRef.current = null;
         setEntryPickerTransitionCvId(null);
         setPendingFreshEntryBaseCvId(null);
         showToast("Create failed.", { variant: "error" });
@@ -8351,7 +8422,7 @@ export function CvForge(): JSX.Element {
         setIsCreatingEntryCv(false);
       }
     },
-    [createNewCv, currentCvId, isEntryPickerBusy, showToast],
+    [createNewCv, currentCvId, isEntryPickerBusy, selectCvById, showToast],
   );
 
   React.useEffect(() => {
