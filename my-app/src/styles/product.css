@@ -3332,6 +3332,14 @@ body,
   pointer-events: none;
 }
 
+.forge-template-card__page[data-preview-page-limit="2"] .resume-template-renderer {
+  inline-size: auto !important;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  grid-template-columns: repeat(2, max-content);
+  align-items: start;
+}
+
 
 .app-topbar {
   min-height: var(--hdr);

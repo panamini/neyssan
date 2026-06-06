@@ -36,7 +36,16 @@ function RegisterTemplates({
         surface,
         title: surface === "cv" ? "CV templates" : "Proposal templates",
         activeItemId: "schematic",
-        items: [{ id: "schematic", label: "Schematic" }],
+        items: [
+          {
+            id: "schematic",
+            label: "Schematic",
+            preview:
+              surface === "cv"
+                ? { kind: "Resume" as const, family: "workshop-onecol" as const }
+                : { kind: "Cover letter" as const, family: "minimal" as const },
+          },
+        ],
         onSelect,
       }),
       [onSelect, surface],
@@ -339,8 +348,16 @@ describe("forge template entry points", () => {
     expect(templates).toHaveAttribute("aria-expanded", "true");
     const panel = screen.getByRole("complementary", { name: "CV templates" });
     expect(panel).toHaveAttribute("data-mode", "overlay");
+    expect(
+      panel.querySelector(".forge-template-card__page"),
+    ).toHaveAttribute("data-preview-page-limit", "1");
     expect(within(panel).getByRole("button", { name: "Pin drawer" })).toBeInTheDocument();
     expect(within(panel).getByRole("button", { name: "Collapse drawer" })).toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole("button", { name: "Pin drawer" }));
+    expect(panel).toHaveAttribute("data-mode", "docked");
+    expect(
+      panel.querySelector(".forge-template-card__page"),
+    ).toHaveAttribute("data-preview-page-limit", "2");
     fireEvent.click(screen.getByRole("listitem", { name: "Schematic" }));
     expect(onSelect).toHaveBeenCalledWith("schematic");
   });

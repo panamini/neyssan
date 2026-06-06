@@ -8,6 +8,7 @@ import { translateUi } from "../lib/i18n";
 import { useUiLanguagePreference } from "../lib/ui-preferences";
 
 const TEMPLATE_THUMBNAIL_WIDTH_PX = 156;
+const TEMPLATE_THUMBNAIL_SPREAD_GAP_PX = 24;
 const TEMPLATE_THUMBNAIL_SCALE =
   TEMPLATE_THUMBNAIL_WIDTH_PX / A4_PAGE_WIDTH_PX;
 
@@ -201,6 +202,15 @@ export function ForgeTemplatePanel(): JSX.Element | null {
       <div className="forge-template-panel__grid" role="list">
         {activeRegistration.items.map((item) => {
           const selected = item.id === activeRegistration.activeItemId;
+          const previewPageLimit =
+            docked && item.preview?.kind === "Resume" ? 2 : 1;
+          const previewInlineSize =
+            A4_PAGE_WIDTH_PX * previewPageLimit +
+            TEMPLATE_THUMBNAIL_SPREAD_GAP_PX * (previewPageLimit - 1);
+          const previewScale =
+            previewPageLimit > 1
+              ? TEMPLATE_THUMBNAIL_WIDTH_PX / previewInlineSize
+              : TEMPLATE_THUMBNAIL_SCALE;
           return (
             <button
               key={item.id}
@@ -215,11 +225,12 @@ export function ForgeTemplatePanel(): JSX.Element | null {
               <span className="forge-template-card__preview" aria-hidden="true">
                 <span
                   className="forge-template-card__page"
+                  data-preview-page-limit={previewPageLimit}
                   style={
                     {
-                      width: A4_PAGE_WIDTH_PX,
+                      width: previewInlineSize,
                       height: A4_PAGE_HEIGHT_PX,
-                      transform: `scale(${TEMPLATE_THUMBNAIL_SCALE})`,
+                      transform: `scale(${previewScale})`,
                     } as React.CSSProperties
                   }
                 >
@@ -227,6 +238,7 @@ export function ForgeTemplatePanel(): JSX.Element | null {
                     <TemplateDocumentPreview
                       kind={item.preview.kind}
                       family={item.preview.family}
+                      previewPageLimit={previewPageLimit}
                     />
                   ) : null}
                 </span>
