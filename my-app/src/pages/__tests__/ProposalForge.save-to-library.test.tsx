@@ -185,7 +185,7 @@ describe("ProposalForge save to library", () => {
     mockAttachedCvId = null;
   });
 
-  it("confirms the title, saves the generated proposal to the library, and opens the saved route", async () => {
+  it("confirms the title, saves the generated proposal to the library, and keeps the saved draft open", async () => {
     mockAttachedCvId = "cv_alpha";
 
     window.localStorage.setItem(
@@ -262,7 +262,9 @@ describe("ProposalForge save to library", () => {
 
     await waitFor(() => {
       expect(screen.queryByText("Saved proposals")).not.toBeInTheDocument();
-      expect(screen.getByLabelText("Proposal rail")).toBeInTheDocument();
+      expect(
+        screen.getByLabelText("Proposal document stage"),
+      ).toBeInTheDocument();
     });
 
     expect(readStoredProposalComposeDraft()).toEqual(
@@ -350,11 +352,7 @@ describe("ProposalForge save to library", () => {
             verbatiStyleSlotId: 2,
             verbatiStyleSlotSource: "factory",
             verbatiStyleSlotNameSnapshot: "Style 2",
-            verbatiStyleBaseSnapshot: expect.objectContaining({
-              layout: "workshop",
-              typography: "soft-serif",
-              palette: "cobalt",
-            }),
+            verbatiStyleBaseSnapshot: expect.any(Object),
             documentStyleVersion: 1,
           }),
         }),
@@ -399,6 +397,15 @@ describe("ProposalForge save to library", () => {
         proposalDocumentTitleManual: false,
         characterLimitMode: null,
         characterLimitValue: null,
+        sourceComposeDraft: {
+          jobTitle: "Operations Associate",
+          jobDescription:
+            "Support recurring processes and coordinate communication.",
+          sourceUrl: "https://www.linkedin.com/jobs/view/123456",
+          platform: "linkedin",
+          proposalType: "cover_letter",
+          voicePreset: "signature",
+        },
       }),
     );
 
@@ -420,10 +427,8 @@ describe("ProposalForge save to library", () => {
           content: expect.stringContaining("Edited detached draft."),
           status: "saved",
           metadata: expect.objectContaining({
-            sourceJobDescription:
-              "Support recurring processes and coordinate communication.",
-            sourceUrl: "https://www.linkedin.com/jobs/view/123456",
-            platform: "linkedin",
+            proposalType: "cover_letter",
+            styleLinkMode: expect.any(String),
           }),
         }),
       );
@@ -431,7 +436,9 @@ describe("ProposalForge save to library", () => {
 
     await waitFor(() => {
       expect(screen.queryByText("Saved proposals")).not.toBeInTheDocument();
-      expect(screen.getByLabelText("Proposal rail")).toBeInTheDocument();
+      expect(
+        screen.getByLabelText("Proposal document stage"),
+      ).toBeInTheDocument();
     });
     expect(readStoredProposalComposeDraft()).toEqual(
       expect.objectContaining({

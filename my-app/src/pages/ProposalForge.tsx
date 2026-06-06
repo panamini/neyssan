@@ -20,6 +20,7 @@ import { Menu, type MenuSection } from "../components/ui/menu";
 import ProposalInputForm, {
   type ProposalGenerateControl,
 } from "../components/ProposalInputForm";
+import ProposalSaveDialog from "../components/ProposalSaveDialog";
 import ProposalAIStream from "../components/proposal/ProposalAIStream";
 import ProposalDocumentStage, {
   type ProposalDocumentStageLabels,
@@ -481,6 +482,42 @@ function shouldHonorStoredOutputDraftAppearance(
     return true;
   }
   return false;
+}
+
+function resolveProposalLibrarySaveTitle(
+  nextTitle: string,
+  currentTitle: string,
+): string {
+  const dialogTitle = nextTitle.trim();
+  if (dialogTitle) return dialogTitle;
+
+  const documentTitle = currentTitle.trim();
+  if (documentTitle) return documentTitle;
+
+  return "Untitled proposal";
+}
+
+function buildSavedProposalOutputDraft(
+  draft: StoredProposalOutputDraft | null | undefined,
+  input: {
+    proposalContent: string;
+    proposalDocument: ProposalDocument | null;
+    proposalDocumentTitle: string;
+    generatedProposalId: Id<"proposals"> | null;
+    proposalOutputMode: StoredProposalOutputDraft["proposalOutputMode"];
+  },
+): StoredProposalOutputDraft | null {
+  if (!draft) return null;
+
+  return {
+    ...draft,
+    proposalContent: input.proposalContent,
+    proposalDocument: input.proposalDocument,
+    proposalDocumentTitle: input.proposalDocumentTitle,
+    proposalDocumentTitleManual: true,
+    generatedProposalId: input.generatedProposalId,
+    proposalOutputMode: input.proposalOutputMode,
+  };
 }
 
 function readStringArray(value: unknown): string[] {
@@ -3322,6 +3359,7 @@ export function ProposalForge(): JSX.Element {
     React.useState<SaveStatus>("idle");
   const [isSavingOutputToLibrary, setIsSavingOutputToLibrary] =
     React.useState(false);
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = React.useState(false);
   const [proposalExportingFormat, setProposalExportingFormat] = React.useState<
     string | null
   >(null);
@@ -9114,6 +9152,97 @@ export function ProposalForge(): JSX.Element {
       showToast,
     ],
   );
+  const handleOpenSaveDialog = React.useCallback(() => {
+    if (!proposalContentForPersistence?.trim() || isSavingOutputToLibrary) {
+      return;
+    }
+
+    if (!canPersistProposalState) {
+      showConvexAuthRequiredToast("Save");
+      return;
+    }
+
+    setIsSaveDialogOpen(true);
+  }, [
+    canPersistProposalState,
+    isSavingOutputToLibrary,
+    proposalContentForPersistence,
+    showConvexAuthRequiredToast,
+  ]);
+  const handleSaveOutputToLibrary = React.useCallback(
+    async (nextTitle: string) => {
+      const normalizedTitle = resolveProposalLibrarySaveTitle(
+        nextTitle,
+        proposalDocumentTitle,
+      );
+      const trimmedContent = proposalContentForPersistence?.trim() ?? "";
+      if (!trimmedContent || isSavingOutputToLibrary) {
+        return;
+      }
+
+      if (!canPersistProposalState) {
+        showConvexAuthRequiredToast("Save");
+        return;
+      }
+
+      setIsSavingOutputToLibrary(true);
+      try {
+        const persistedId = await flushScheduledProposalSave(normalizedTitle, {
+          status: "saved",
+        });
+        const savedProposalId = persistedId ?? generatedProposalIdRef.current;
+
+        setProposalLibraryStatus("saved");
+        setProposalDocumentTitle(normalizedTitle);
+        setProposalDocumentTitleManual(true);
+        setGeneratedProposalId(savedProposalId);
+        generatedProposalIdRef.current = savedProposalId;
+        lastSavedProposalContentRef.current = trimmedContent;
+        lastSavedProposalTitleRef.current = normalizedTitle;
+
+        const savedOutputDraft = buildSavedProposalOutputDraft(
+          readStoredProposalOutputDraft() ?? storedOutputDraft,
+          {
+            proposalContent: proposalContentForPersistence,
+            proposalDocument,
+            proposalDocumentTitle: normalizedTitle,
+            generatedProposalId: savedProposalId,
+            proposalOutputMode,
+          },
+        );
+        if (savedOutputDraft) {
+          writeStoredOutputDraft(savedOutputDraft);
+        }
+
+        setIsSaveDialogOpen(false);
+        showToast("Saved to library.", {
+          variant: "success",
+          description: "This proposal stays open and will keep autosaving.",
+        });
+      } catch (saveError) {
+        console.error("Failed to save proposal to library:", saveError);
+        showToast("Save failed.", {
+          variant: "error",
+          description: "The proposal could not be saved.",
+        });
+      } finally {
+        setIsSavingOutputToLibrary(false);
+      }
+    },
+    [
+      canPersistProposalState,
+      flushScheduledProposalSave,
+      isSavingOutputToLibrary,
+      proposalContentForPersistence,
+      proposalDocument,
+      proposalDocumentTitle,
+      proposalOutputMode,
+      showConvexAuthRequiredToast,
+      showToast,
+      storedOutputDraft,
+      writeStoredOutputDraft,
+    ],
+  );
   const handleSavedProposalContentChange = React.useCallback(
     (nextContent: string) => {
       setSavedProposalContent(nextContent);
@@ -12796,6 +12925,18 @@ export function ProposalForge(): JSX.Element {
         minWidth: 0,
       }}
     >
+      <ProposalSaveDialog
+        open={isSaveDialogOpen}
+        currentTitle={
+          proposalDocumentTitle.trim() ||
+          proposalGeneratedDocumentTitle.trim() ||
+          "Untitled proposal"
+        }
+        onClose={() => setIsSaveDialogOpen(false)}
+        onSave={(nextTitle) => {
+          void handleSaveOutputToLibrary(nextTitle);
+        }}
+      />
       <div
         className={
           shouldShowSavedList
@@ -13145,6 +13286,8 @@ export function ProposalForge(): JSX.Element {
                         templatesOpen={proposalTemplatesOpen}
                         onOpenTemplates={handleOpenProposalTemplates}
                         onOpenDraft={handleOpenDraftFromStage}
+                        onSaveToLibrary={handleOpenSaveDialog}
+                        onDeleteDraft={handleDeleteOutput}
                         onOpenAsk={
                           hasMeaningfulProposalContent
                             ? () => {
