@@ -1799,6 +1799,16 @@ export function hasUsefulDescription(platform: string, description?: string): bo
   return score >= minScore;
 }
 
+export function hasSaveableJobData(jobData: {
+  platform?: string;
+  title?: string;
+  description?: string;
+}): boolean {
+  const title = normalizeScrapedText(jobData.title);
+  const platform = jobData.platform || "manual";
+  return Boolean(title && hasUsefulDescription(platform, jobData.description));
+}
+
 export function shouldScheduleDeferredScrapes(platform: string, description?: string): boolean {
   if (platform === "linkedin") {
     return true;

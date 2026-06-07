@@ -89,6 +89,65 @@ describe("profilesPublic.listMine", () => {
     });
     expect(result[0].cvDocument).toBeUndefined();
   });
+
+  it("can include embedded cvDocument payloads for CV library hydration", async () => {
+    const rows = [
+      buildProfile({
+        _id: "profile_saved_cv",
+        profileId: "cv_saved",
+        updatedAt: 200,
+        cvDocument: {
+          id: "cv_saved",
+          title: "Saved CV Document",
+          metadata: { createdAt: "now", updatedAt: "now", version: 1 },
+          sections: [
+            {
+              id: "summary-1",
+              type: "summary",
+              title: "Summary",
+              blocks: [],
+              structuredContent: [{ id: "summary-item-1", summary: "Saved" }],
+            },
+          ],
+        },
+      }),
+    ];
+
+    const result = await listMine._handler(
+      {
+        auth: {
+          getUserIdentity: async () => ({ subject: "clerk_123" }),
+        },
+        storage: { getUrl: vi.fn(async () => null) },
+        db: {
+          query(table: string) {
+            expect(table).toBe("userProfiles");
+            return {
+              withIndex(_indexName: string, buildIndex: any) {
+                buildIndex({
+                  eq(field: string, value: string) {
+                    expect(field).toBe("clerkId");
+                    expect(value).toBe("clerk_123");
+                    return this;
+                  },
+                });
+                return {
+                  order() {
+                    return this;
+                  },
+                  take: async () => rows,
+                };
+              },
+            };
+          },
+        },
+      } as any,
+      { includeCvDocument: true },
+    );
+
+    expect((result[0].cvDocument as any)?.title).toBe("Saved CV Document");
+    expect((result[0].cvDocument as any)?.sections).toHaveLength(1);
+  });
 });
 
 describe("profilesPublic.getByProfileId", () => {

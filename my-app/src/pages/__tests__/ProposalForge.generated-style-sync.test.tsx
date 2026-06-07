@@ -248,7 +248,10 @@ describe("ProposalForge generated proposal style sync", () => {
 
     await act(async () => {
       fireEvent.click(
-        screen.getByRole("button", { name: "Generate proposal" }),
+        screen.getByRole("button", {
+          name: "Generate proposal",
+          hidden: true,
+        }),
       );
       await Promise.resolve();
     });
@@ -267,7 +270,7 @@ describe("ProposalForge generated proposal style sync", () => {
         id: "proposal_generated",
         title: displayedState.title,
         content: displayedState.content,
-        status: "saved",
+        status: "draft",
         metadata: expect.objectContaining({
           sourceCvId: "cv_alpha",
           styleLinkMode: "inherit_cv",
@@ -282,7 +285,7 @@ describe("ProposalForge generated proposal style sync", () => {
     );
   });
 
-  it("updates the same generated server row when save-to-library is triggered with an unchanged title and a preselected custom style", async () => {
+  it("keeps manual save-to-library out of the generated toolbar with a preselected custom style", async () => {
     window.localStorage.setItem(
       PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
       JSON.stringify({
@@ -322,7 +325,10 @@ describe("ProposalForge generated proposal style sync", () => {
 
     await act(async () => {
       fireEvent.click(
-        screen.getByRole("button", { name: "Generate proposal" }),
+        screen.getByRole("button", {
+          name: "Generate proposal",
+          hidden: true,
+        }),
       );
       await Promise.resolve();
     });
@@ -334,44 +340,15 @@ describe("ProposalForge generated proposal style sync", () => {
       await Promise.resolve();
     });
 
-    expect(
-      screen.getByRole("button", { name: "Choose signature" }),
-    ).toBeInTheDocument();
-
     const displayedState = readDisplayedProposalState();
     expect(displayedState.layout).toBe("swiss");
     expect(displayedState.palette).toBe("bordeaux");
 
-    await act(async () => {
-      fireEvent.click(
-        screen.getByRole("button", { name: "Save proposal to library" }),
-      );
-      await Promise.resolve();
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Save to Library" }));
-      await Promise.resolve();
-    });
-
-    expect(mockUpdateProposal).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: "proposal_generated",
-        title: displayedState.title,
-        content: displayedState.content,
-        status: "saved",
-        metadata: expect.objectContaining({
-          sourceCvId: "cv_alpha",
-          styleLinkMode: "proposal_local",
-          templateId: displayedState.templateId,
-          verbatiStyle: expect.objectContaining({
-            layout: displayedState.layout,
-            typography: displayedState.typography,
-            palette: displayedState.palette,
-          }),
-        }),
-      }),
-    );
-
-    expect(mockCreateProposal).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("button", { name: "Save proposal to library" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Delete draft" }),
+    ).not.toBeInTheDocument();
   });
 });

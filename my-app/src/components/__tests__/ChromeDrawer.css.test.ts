@@ -49,6 +49,9 @@ describe("shared chrome drawer CSS contracts", () => {
       "--forge-drawer-template-thumb-inline-size: 156px;",
     );
     expect(productCss).toContain(
+      "--app-nav-panel-width-wide: calc(\n    max(var(--app-nav-panel-width), 400px)\n  );",
+    );
+    expect(productCss).toContain(
       "--forge-drawer-grid-row-gap: var(--space-3);",
     );
     expect(productCss).toMatch(

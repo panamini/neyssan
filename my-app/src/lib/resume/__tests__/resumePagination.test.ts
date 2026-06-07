@@ -18,6 +18,9 @@ const workshopTemplate = getResumeTemplateDefinition(
 const workshopTwoColumnTemplate = getResumeTemplateDefinition(
   "workshop_resume_twocol_ats",
 );
+const maggieLetterTemplate = getResumeTemplateDefinition(
+  "maggie_letter_resume",
+);
 
 function buildWorkshopTemplateOverride(
   overrides: Partial<typeof workshopTemplate.preview>,
@@ -2100,6 +2103,63 @@ describe("resumePagination", () => {
     expect(fragments.find((fragment) => fragment.kind === "achievements")).toEqual(
       expect.objectContaining({ lane: "main" }),
     );
+  });
+
+  it("assigns Maggie Letter committed sections to its native lanes", () => {
+    const result = planWorkshopResumePages({
+      data: {
+        ...buildPlannerData(),
+        summary: "Maggie summary.",
+        education: [resumeMock.education[0]!],
+        skillItems: [resumeMock.skillItems[0]!],
+        skills: [resumeMock.skillItems[0]!.name],
+        languages: [resumeMock.languages[0]!],
+        certifications: [resumeMock.certifications[0]!],
+        achievementItems: [resumeMock.achievementItems[0]!],
+        achievements: [resumeMock.achievementItems[0]!.text],
+        hobbyItems: [resumeMock.hobbyItems[0]!],
+        hobbies: [resumeMock.hobbyItems[0]!.name],
+        experience: [resumeMock.experience[0]!],
+        projects: [resumeMock.projects[0]!],
+        affiliations: [resumeMock.affiliations[0]!],
+        textSections: [
+          {
+            id: "additional-info-1",
+            type: "additional_information",
+            title: "Additional Information",
+            text: "Available for US Letter export checks.",
+          },
+        ],
+      },
+      template: maggieLetterTemplate,
+    });
+    const lanesByKind = new Map(
+      result.committedPages
+        .flatMap((page) => page.fragments)
+        .map((fragment) => [fragment.kind, fragment.lane]),
+    );
+
+    expect(result.committedPages.length).toBeGreaterThan(0);
+    expect(lanesByKind.get("profile")).toBe("header");
+    expect(lanesByKind.get("summary")).toBe("header");
+    for (const kind of [
+      "education",
+      "skills",
+      "achievements",
+      "languages",
+      "certifications",
+      "hobbies",
+    ] as const) {
+      expect(lanesByKind.get(kind)).toBe("sidebar");
+    }
+    for (const kind of [
+      "experience",
+      "selected_projects",
+      "affiliations",
+      "additional_information",
+    ] as const) {
+      expect(lanesByKind.get(kind)).toBe("main");
+    }
   });
 
   it("keeps compact certifications in sidebar and promotes detailed certifications to main", () => {

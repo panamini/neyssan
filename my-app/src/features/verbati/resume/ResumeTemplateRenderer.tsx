@@ -3,6 +3,7 @@ import React from "react";
 import { normalizeResumePreviewTokens } from "../../../lib/layout/documentTokenNormalizer";
 import {
   WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
+  isMaggieResumeTemplateId,
   isSanatResumeTemplateId,
   isWorkshopResumeTemplateId,
   isWorkshopTwoColumnResumeTemplateId,
@@ -13,25 +14,32 @@ import {
 import { serializeResumePreviewVars } from "../../../lib/layout/documentTokenSerializers";
 import {
   planWorkshopResumePages,
+  type WorkshopResumeCommittedFragment,
   type WorkshopResumeCommittedPage,
+  type WorkshopTwoColumnLane,
 } from "../../../lib/resume/resumePagination";
 import type { DocumentStageLayout } from "../../../hooks/use-document-stage-layout";
 import type { ResumeActiveTarget } from "../resumeLinking";
 import type { VerbatiStylePreset } from "../types";
-import { buildVerbatiThemeVars } from "../style";
+import { buildVerbatiThemeVars, resolveVerbatiStyle } from "../style";
 import ResumeOneColAtsPage, {
   type ResumePaperAiState,
   type ResumeSectionActions,
 } from "./ResumeOneColAtsPage";
 import ResumeTwoColAtsPage from "./ResumeTwoColAtsPage";
 import ResumeSanatAsymmetricPage from "./ResumeSanatAsymmetricPage";
+import ResumeMaggieLetterPage from "./ResumeMaggieLetterPage";
 import type { ResumeData } from "./resume.types";
 import type { ResumeInlineEditing } from "./InlineEditableText";
 import {
+  DOCUMENT_PAGE_SIZES,
   resolveDocumentPageSize,
   type DocumentPageSize,
 } from "../../../lib/document-page-size";
-import type { DocumentIconSettings } from "../../../lib/document-icons";
+import type {
+  DocumentIconKey,
+  DocumentIconSettings,
+} from "../../../lib/document-icons";
 import type {
   DocumentIconOverrides,
   DocumentListItemIconOverrideTarget,
@@ -111,7 +119,7 @@ type ResumeTemplateRendererProps = {
   documentIconOverrides?: DocumentIconOverrides | null;
   onDocumentListItemIconChange?: (
     target: DocumentListItemIconOverrideTarget,
-    iconKey: string | null,
+    iconKey: DocumentIconKey | null,
   ) => void;
   stageLayout?: DocumentStageLayout;
   pageSize?: DocumentPageSize | null;
@@ -157,6 +165,40 @@ function buildTemplatePreviewVars(
   };
 }
 
+function resolveMaggieCommittedFragmentLane(
+  fragment: WorkshopResumeCommittedFragment,
+): WorkshopTwoColumnLane {
+  if (fragment.kind === "profile" || fragment.kind === "summary") {
+    return "header";
+  }
+
+  if (
+    fragment.kind === "education" ||
+    fragment.kind === "skills" ||
+    fragment.kind === "languages" ||
+    fragment.kind === "certifications" ||
+    fragment.kind === "achievements" ||
+    fragment.kind === "hobbies"
+  ) {
+    return "sidebar";
+  }
+
+  return "main";
+}
+
+function applyMaggieCommittedPageLanes(
+  pages: WorkshopResumeCommittedPage[] | null,
+): WorkshopResumeCommittedPage[] | null {
+  if (!pages) return null;
+  return pages.map((page) => ({
+    ...page,
+    fragments: page.fragments.map((fragment) => ({
+      ...fragment,
+      lane: resolveMaggieCommittedFragmentLane(fragment),
+    })),
+  }));
+}
+
 export function getResumeTemplateCanvasHeight(args: {
   pageCount: number;
   pageHeightPx: number;
@@ -183,9 +225,20 @@ export function ResumeTemplateRenderer({
   pageSize = null,
   onStablePageCountChange,
 }: ResumeTemplateRendererProps) {
+  const resolvedStylePreset = React.useMemo(
+    () => resolveVerbatiStyle(stylePreset),
+    [stylePreset],
+  );
   const resolvedPageSize = React.useMemo(
-    () => resolveDocumentPageSize({ pageSize }),
-    [pageSize],
+    () =>
+      resolveDocumentPageSize({
+        pageSize:
+          pageSize ??
+          (isMaggieResumeTemplateId(resumeTemplateId)
+            ? DOCUMENT_PAGE_SIZES.letter
+            : undefined),
+      }),
+    [pageSize, resumeTemplateId],
   );
   const templateDefinition = getResumeTemplateDefinition(resumeTemplateId);
   const isWorkshopTemplateRenderer =
@@ -197,17 +250,30 @@ export function ResumeTemplateRenderer({
         ? planWorkshopResumePages({
             data,
             template: templateDefinition,
-            stylePreset,
+            stylePreset: resolvedStylePreset,
           })
         : null,
-    [committedPages, data, isWorkshopTemplateRenderer, stylePreset, templateDefinition],
+    [
+      committedPages,
+      data,
+      isWorkshopTemplateRenderer,
+      resolvedStylePreset,
+      templateDefinition,
+    ],
   );
-  const resolvedCommittedPages = React.useMemo(
+  const rawCommittedPages = React.useMemo(
     () =>
       committedPages && committedPages.length > 0
         ? committedPages
         : plannedPages?.committedPages ?? null,
     [committedPages, plannedPages],
+  );
+  const resolvedCommittedPages = React.useMemo(
+    () =>
+      isMaggieResumeTemplateId(templateDefinition.id)
+        ? applyMaggieCommittedPageLanes(rawCommittedPages)
+        : rawCommittedPages,
+    [rawCommittedPages, templateDefinition.id],
   );
   const resolvedPageCount = resolvedCommittedPages?.length ?? 0;
   const previewVars = React.useMemo(
@@ -215,11 +281,16 @@ export function ResumeTemplateRenderer({
       isWorkshopTemplateRenderer
         ? buildTemplatePreviewVars(
             templateDefinition,
-            stylePreset,
+            resolvedStylePreset,
             resolvedPageSize,
           )
         : null,
-    [isWorkshopTemplateRenderer, resolvedPageSize, stylePreset, templateDefinition],
+    [
+      isWorkshopTemplateRenderer,
+      resolvedPageSize,
+      resolvedStylePreset,
+      templateDefinition,
+    ],
   );
   const previewScale =
     stageLayout && stageLayout.pageWidth > 0
@@ -310,7 +381,20 @@ export function ResumeTemplateRenderer({
               left: 0,
             }}
           >
-            {isSanatResumeTemplateId(templateDefinition.id) ? (
+            {isMaggieResumeTemplateId(templateDefinition.id) ? (
+              <ResumeMaggieLetterPage
+                data={data}
+                page={page}
+                template={templateDefinition}
+                activeTarget={activeTarget}
+                inlineEditing={inlineEditing}
+                sectionActions={sectionActions}
+                paperAi={paperAi}
+                documentIconSettings={documentIconSettings}
+                documentIconOverrides={documentIconOverrides}
+                onDocumentListItemIconChange={onDocumentListItemIconChange}
+              />
+            ) : isSanatResumeTemplateId(templateDefinition.id) ? (
               <ResumeSanatAsymmetricPage
                 data={data}
                 page={page}

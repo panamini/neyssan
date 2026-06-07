@@ -1339,6 +1339,13 @@ export function ProfileReviewCard({
     setTimeout(() => setToasts((s) => s.filter((t) => t.id !== id)), 3500);
   }
 
+  async function selectFreshImportedCv(cvId: string) {
+    await Promise.resolve(
+      navigate(`/cv?id=${encodeURIComponent(cvId)}`, { replace: true }),
+    );
+    loadCv(cvId);
+  }
+
   function clearRecoveryDraftStorage(storageKey?: string | null) {
     if (!storageKey || typeof window === "undefined") return;
     try {
@@ -1568,6 +1575,7 @@ export function ProfileReviewCard({
         }),
       );
       await importCv(importedDoc);
+      await selectFreshImportedCv(String(importedDoc.id));
       const importedSignals = inspectCvImportSignals(importedDoc);
       if (shouldPromptForImportedTitleRename(importedDoc, importedSignals)) {
         openImportedTitleRenameDialog(importedDoc);
@@ -1664,6 +1672,9 @@ export function ProfileReviewCard({
         }),
       );
       await importCv(nextDoc);
+      if (target === "fresh") {
+        await selectFreshImportedCv(String(nextDoc.id));
+      }
       try {
         window.sessionStorage.removeItem(importRecoveryDraftSessionKey);
       } catch {

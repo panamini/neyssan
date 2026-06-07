@@ -5,6 +5,7 @@ import capsuleCssText from 'data-text:./jobforge-capsule-v3-elite/jobforge-capsu
 import capsuleTokensCssText from 'data-text:./jobforge-capsule-v3-elite/jobforge-capsule-v3-elite.tokens.css';
 import {
   detectPlatform,
+  hasSaveableJobData,
   hasUsefulDescription,
   mergeJobData,
   scrapeJobData,
@@ -563,6 +564,12 @@ export function ProposalPreview() {
   };
 
   const handleGenerate = () => {
+    if (!hasSaveableJobData(jobData)) {
+      showToast("Wait for a fuller job description or paste one first.");
+      showInlineStatus("error", "Generate failed: add a fuller job description first.");
+      return;
+    }
+
     const runId = ++nextGenerateRunIdRef.current;
     activeGenerateRunIdRef.current = runId;
     setIsLoading(true);
@@ -631,9 +638,9 @@ export function ProposalPreview() {
   };
 
   const handleSaveJob = () => {
-    if (!jobData.title.trim() || !(jobData.description || "").trim()) {
-      showToast("Add a job title and description first.");
-      showInlineStatus("error", "Save job failed: add a title and description first.");
+    if (!hasSaveableJobData(jobData)) {
+      showToast("Wait for a fuller job description or paste one first.");
+      showInlineStatus("error", "Save job failed: add a fuller job description first.");
       return;
     }
 
@@ -696,6 +703,12 @@ export function ProposalPreview() {
   };
 
   const handleOpenInProposalForge = () => {
+    if (!hasSaveableJobData(jobData)) {
+      showToast("Wait for a fuller job description or paste one first.");
+      showInlineStatus("error", "Open in Proposal Forge failed: add a fuller job description first.");
+      return;
+    }
+
     setIsOpeningInApp(true);
     setInlineStatus(null);
     chrome.runtime.sendMessage({ action: "openProposalForge", jobData }, (response) => {
@@ -1270,15 +1283,8 @@ function extractProfileFromPage(): ProfilePayload {
   };
 }
 
-function shouldRenderLegacyProposalPreview() {
-  return (
-    process.env.PLASMO_PUBLIC_ENABLE_LEGACY_PROPOSAL_PREVIEW === "1" ||
-    window.localStorage.getItem("tw:jobforge:legacy-preview") === "1"
-  );
-}
-
 function ContentRoot() {
-  return shouldRenderLegacyProposalPreview() ? <ProposalPreview /> : <JobForgeCapsuleRoot />;
+  return <JobForgeCapsuleRoot />;
 }
 
 export default ContentRoot;

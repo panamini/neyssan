@@ -929,13 +929,16 @@ describe('CvLibraryContext', () => {
     );
 
     await waitFor(() => expect(ctx).toBeDefined());
-    // create
+    let createdCv: any = null;
     act(() => {
-      ctx.createNewCv();
+      void ctx.createNewCv().then((result: any) => {
+        createdCv = result;
+      });
     });
 
     // Wait for provider to process state updates
     await waitFor(() => expect(ctx.cvs.length).toBe(1));
+    await waitFor(() => expect(createdCv?.id).toBe(ctx.currentCvId));
     expect(ctx.currentCvId).toBeTruthy();
     expect(ctx.currentCv).not.toBeNull();
     expect(ctx.currentCv.title).toMatch(/^Untitled CV/);
@@ -947,6 +950,103 @@ describe('CvLibraryContext', () => {
     expect(stored[0].id).toBe(ctx.currentCvId);
     expect(Array.isArray(stored[0].sections)).toBe(false);
     expect(stored[0].metadata?.librarySummaryOnly).toBe(true);
+  });
+
+  it('hydrates the remote CV library from saved cvDocument payloads for drawer visibility', async () => {
+    const now = new Date().toISOString();
+    const savedCv = {
+      id: 'cv_remote_library_saved',
+      title: 'Saved Imported CV',
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+      },
+      sections: [
+        {
+          id: 'profile-1',
+          type: 'profile',
+          title: 'Profile',
+          blocks: [],
+          structuredContent: [
+            {
+              id: 'profile-item-1',
+              name: 'Library Candidate',
+              desiredPosition: 'Product Engineer',
+            },
+          ],
+        },
+        {
+          id: 'summary-1',
+          type: 'summary',
+          title: 'Summary',
+          blocks: [],
+          structuredContent: [
+            {
+              id: 'summary-item-1',
+              summary: 'Parsed import content should feed the drawer.',
+            },
+          ],
+        },
+      ],
+    };
+
+    vi.mocked(convexClient.query).mockImplementation(
+      async (_ref: any, args?: any) => {
+        if (args?.includeCvDocument === true) {
+          return [
+            {
+              _id: 'profile_remote_library_saved',
+              _creationTime: 100,
+              profileId: 'cv_remote_library_saved',
+              clerkId: 'clerk_123',
+              email: 'fallback@example.com',
+              name: 'Fallback Profile Name',
+              version: 1,
+              createdAt: 100,
+              updatedAt: 200,
+              preferences: {
+                writingStyle: 'professional',
+                tonePreference: 'formal',
+                autoSend: false,
+              },
+              summary: 'Fallback profile summary',
+              skills: [],
+              experience: [],
+              education: [],
+              cvDocument: savedCv,
+            },
+          ];
+        }
+        return null;
+      },
+    );
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx).toBeDefined());
+    await waitFor(() =>
+      expect(ctx.cvs.some((cv: any) => cv.id === 'cv_remote_library_saved')).toBe(
+        true,
+      ),
+    );
+
+    const hydrated = ctx.cvs.find(
+      (cv: any) => cv.id === 'cv_remote_library_saved',
+    );
+    expect(vi.mocked(convexClient.query).mock.calls[0][1]).toEqual({
+      includeCvDocument: true,
+    });
+    expect(hydrated.title).toBe('Saved Imported CV');
+    expect(hydrated.sections.map((section: any) => section.type)).toEqual([
+      'profile',
+      'summary',
+    ]);
   });
 
   it('falls back to a full save when style-only decoration save has no remote row', async () => {
@@ -2441,6 +2541,85 @@ describe('CvLibraryContext', () => {
     await waitFor(() => expect(ctx.isDirty).toBe(false));
   });
 
+  it('switches to a locally available cv without waiting for an outgoing remote save', async () => {
+    const beta = {
+      id: 'cv_beta',
+      title: 'Beta CV',
+      metadata: {
+        createdAt: '2026-04-28T00:00:00.000Z',
+        updatedAt: '2026-04-28T00:00:00.000Z',
+        version: 1,
+      },
+      sections: [
+        {
+          id: 'beta-summary',
+          type: 'summary',
+          title: 'Summary',
+          blocks: [],
+          structuredContent: [{ id: 'beta-summary-item', summary: 'Beta saved locally.' }],
+        },
+      ],
+    };
+    const imported = {
+      id: 'cv_imported_pending',
+      title: 'Imported Pending CV',
+      metadata: {
+        createdAt: '2026-04-29T00:00:00.000Z',
+        updatedAt: '2026-04-29T00:00:00.000Z',
+        version: 1,
+      },
+      sections: [
+        {
+          id: 'imported-summary',
+          type: 'summary',
+          title: 'Summary',
+          blocks: [],
+          structuredContent: [{ id: 'imported-summary-item', summary: 'Imported save is pending.' }],
+        },
+      ],
+    };
+
+    mockLocalStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([beta]));
+    mockLocalStorage.setItem('cv:cv_beta', JSON.stringify(beta));
+    let resolveRemoteSave: () => void = () => undefined;
+    convexMutationMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRemoteSave = () => resolve({});
+        }),
+    );
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+    await waitFor(() => expect(ctx).toBeDefined());
+
+    act(() => {
+      void ctx.importCv(imported);
+    });
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_imported_pending'));
+
+    await new Promise((resolve) =>
+      setTimeout(
+        resolve,
+        parseInt(process.env.TEST_DEBOUNCE_MS || '1000', 10) + 50,
+      ),
+    );
+    await waitFor(() => expect(convexMutationMock).toHaveBeenCalled());
+
+    act(() => {
+      ctx.loadCv('cv_beta');
+    });
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_beta'));
+
+    act(() => {
+      resolveRemoteSave();
+    });
+  });
+
   it('autosaves the outgoing cv under its own id when the route changes before debounce', async () => {
     const alpha = {
       id: 'cv_alpha',
@@ -2690,6 +2869,151 @@ describe('CvLibraryContext', () => {
         }),
       },
     });
+  });
+
+  it('prunes stale full cv caches when localStorage is full before dropping the active edit', async () => {
+    const originalSetItem = mockLocalStorage.setItem;
+    const alpha = {
+      id: 'cv_alpha',
+      title: 'Alpha CV',
+      metadata: {
+        createdAt: '2026-04-28T00:00:00.000Z',
+        updatedAt: '2026-04-28T00:00:00.000Z',
+        version: 1,
+      },
+      sections: [
+        {
+          id: 'profile-alpha',
+          type: 'profile',
+          title: 'Profile',
+          blocks: [],
+          structuredContent: [
+            {
+              id: 'profile-item-alpha',
+              name: 'Alpha Before',
+            },
+          ],
+        },
+      ],
+    };
+    const stale = {
+      id: 'cv_stale_cache',
+      title: 'Stale Cache CV',
+      metadata: {
+        createdAt: '2026-04-01T00:00:00.000Z',
+        updatedAt: '2026-04-01T00:00:00.000Z',
+        version: 1,
+      },
+      sections: [],
+    };
+
+    mockLocalStorage.setItem('cvDocuments', JSON.stringify([alpha, stale]));
+    mockLocalStorage.setItem('cv:cv_alpha', JSON.stringify(alpha));
+    mockLocalStorage.setItem('cv:cv_stale_cache', JSON.stringify(stale));
+    window.history.pushState({}, '', '/cv?id=cv_alpha');
+
+    mockLocalStorage.setItem = (key: string, value: string) => {
+      if (key === 'cv:cv_alpha' && storage['cv:cv_stale_cache']) {
+        throw new DOMException('Quota exceeded', 'QuotaExceededError');
+      }
+      originalSetItem(key, value);
+    };
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_alpha'));
+
+    const profileSection = ctx.currentCv.sections.find(
+      (section: any) => section.type === 'profile',
+    );
+    act(() => {
+      ctx.updateStructuredItem(profileSection.id, 'profile-item-alpha', {
+        name: 'Alpha After Local Quota',
+      });
+    });
+
+    await waitFor(() =>
+      expect(mockLocalStorage.getItem('cv:cv_alpha')).toContain(
+        'Alpha After Local Quota',
+      ),
+    );
+    expect(mockLocalStorage.getItem('cv:cv_stale_cache')).toBeNull();
+  });
+
+  it('prunes stale full cv caches and retries when the compact library index is full', async () => {
+    const originalSetItem = mockLocalStorage.setItem;
+    const alpha = {
+      id: 'cv_alpha',
+      title: 'Alpha CV',
+      metadata: {
+        createdAt: '2026-04-28T00:00:00.000Z',
+        updatedAt: '2026-04-28T00:00:00.000Z',
+        version: 1,
+      },
+      sections: [
+        {
+          id: 'profile-alpha',
+          type: 'profile',
+          title: 'Profile',
+          blocks: [],
+          structuredContent: [
+            {
+              id: 'profile-item-alpha',
+              name: 'Alpha Candidate',
+            },
+          ],
+        },
+      ],
+    };
+    const stale = {
+      id: 'cv_stale_cache',
+      title: 'Stale Cache CV',
+      metadata: {
+        createdAt: '2026-04-01T00:00:00.000Z',
+        updatedAt: '2026-04-01T00:00:00.000Z',
+        version: 1,
+      },
+      sections: [],
+    };
+
+    mockLocalStorage.setItem('cvDocuments', JSON.stringify([alpha, stale]));
+    mockLocalStorage.setItem('cv:cv_alpha', JSON.stringify(alpha));
+    mockLocalStorage.setItem('cv:cv_stale_cache', JSON.stringify(stale));
+    mockLocalStorage.setItem(ACTIVE_CV_STORAGE_KEY, 'cv_alpha');
+    window.history.pushState({}, '', '/cv?id=cv_alpha');
+
+    mockLocalStorage.setItem = (key: string, value: string) => {
+      if (key === 'cvDocuments' && storage['cv:cv_stale_cache']) {
+        throw new DOMException('Quota exceeded', 'QuotaExceededError');
+      }
+      originalSetItem(key, value);
+    };
+
+    let ctx: any;
+    render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx.currentCvId).toBe('cv_alpha'));
+
+    act(() => {
+      ctx.renameCv('cv_alpha', 'Alpha Library Index Retry');
+    });
+
+    await waitFor(() =>
+      expect(mockLocalStorage.getItem('cvDocuments')).toContain(
+        'Alpha Library Index Retry',
+      ),
+    );
+    expect(mockLocalStorage.getItem('cv:cv_alpha')).not.toBeNull();
+    expect(mockLocalStorage.getItem('cv:cv_stale_cache')).toBeNull();
   });
 
   it('keeps local dirty state and exposes remote failure when Convex rejects profile authorization', async () => {

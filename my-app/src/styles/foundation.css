@@ -458,7 +458,7 @@
     var(--app-nav-rail-width)
   );
   --app-nav-panel-width-wide: calc(
-    var(--app-nav-panel-width)
+    max(var(--app-nav-panel-width), 400px)
   );
   --app-topbar-edge-inline: 12px;
   --app-topbar-gap: 8px;

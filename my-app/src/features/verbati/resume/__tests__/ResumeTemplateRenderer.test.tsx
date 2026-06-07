@@ -1768,4 +1768,21 @@ describe("ResumeTemplateRenderer", () => {
     expect(pageTexts[2]).toContain("Custom Section");
     expect(pageTexts[2]).not.toContain("achievement-1-1");
   });
+
+  it("renders Maggie Letter with the native layout and default Letter page size", () => {
+    render(
+      <ResumeTemplateRenderer
+        data={resumeMock}
+        resumeTemplateId="maggie_letter_resume"
+      />,
+    );
+
+    const renderer = screen.getByTestId("resume-template-renderer");
+    const page = screen.getAllByTestId("resume-template-page")[0]!;
+
+    expect(page).toHaveAttribute("data-resume-template-layout", "maggie-letter");
+    expect(page).toHaveClass("maggie-resume-page");
+    expect(renderer.style.getPropertyValue("--page-width")).toBe("215.9mm");
+    expect(renderer.style.getPropertyValue("--page-height")).toBe("279.4mm");
+  });
 });

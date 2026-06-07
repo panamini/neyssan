@@ -349,7 +349,7 @@ type ProposalForgeHandoffRecord = {
 
 // Mirrors --app-nav-panel-width-wide from foundation.css so docked drawer
 // decisions use the remaining page column, not the full window width.
-const FORGE_DOCKED_PANEL_INLINE_SIZE_PX = 320;
+const FORGE_DOCKED_PANEL_INLINE_SIZE_PX = 400;
 const FORGE_DOCKED_PANEL_MIN_VIEWPORT_WIDTH = 1180;
 
 type ProposalForgeReviewItem = {

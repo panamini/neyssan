@@ -25,6 +25,7 @@ import { translateUi, type UiMessageKey } from "../lib/i18n";
 import { useUiLanguagePreference } from "../lib/ui-preferences";
 import {
   EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID,
+  MAGGIE_LETTER_RESUME_TEMPLATE_ID,
   SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID,
   type ResumeTemplateId,
 } from "../lib/layout/resumeTemplates";
@@ -38,6 +39,7 @@ export type TemplateFamily =
   | "workshop-onecol"
   | "workshop-twocol"
   | "sanat-asymmetric"
+  | "maggie-letter"
   | "editorial-sidebar"
   | "minimal"
   | "bold"
@@ -76,6 +78,20 @@ const TEMPLATES: TemplateCard[] = [
     name: "French",
     kind: "Resume",
     family: "workshop-twocol",
+    descriptionKey: "templates.description.workshopTwoColumnResume",
+  },
+  {
+    id: "sanat-asymmetric-resume",
+    name: "Sanat",
+    kind: "Resume",
+    family: "sanat-asymmetric",
+    descriptionKey: "templates.description.workshopTwoColumnResume",
+  },
+  {
+    id: "maggie-letter-resume",
+    name: "Maggie",
+    kind: "Resume",
+    family: "maggie-letter",
     descriptionKey: "templates.description.workshopTwoColumnResume",
   },
   {
@@ -168,6 +184,12 @@ const TEMPLATE_STYLE_PRESETS: Record<TemplateFamily, VerbatiStylePreset> = {
     typography: "quiet-editorial",
     palette: "sauge",
     resumeTemplateId: SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID,
+  }),
+  "maggie-letter": resolveVerbatiStyle({
+    familyId: "workshop",
+    typography: "ledger-sans",
+    palette: "sauge",
+    resumeTemplateId: MAGGIE_LETTER_RESUME_TEMPLATE_ID,
   }),
   "editorial-sidebar": resolveVerbatiStyle({
     familyId: "workshop",
@@ -273,6 +295,7 @@ function getResumeTemplateIntent(
   if (family === "workshop-onecol") return "minimal";
   if (family === "workshop-twocol") return "french";
   if (family === "sanat-asymmetric") return SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID;
+  if (family === "maggie-letter") return MAGGIE_LETTER_RESUME_TEMPLATE_ID;
   if (family === "editorial-sidebar") {
     return EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID;
   }
@@ -319,6 +342,8 @@ export function TemplateDocumentPreview({
           ? "workshop_resume_twocol_ats"
         : family === "sanat-asymmetric"
           ? SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID
+        : family === "maggie-letter"
+          ? MAGGIE_LETTER_RESUME_TEMPLATE_ID
           : EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID;
     const cvPreviewSource = previewCv
       ? buildStyledResumePrintSource({ currentCv: previewCv, stylePreset })
@@ -455,8 +480,6 @@ export function TemplatesPage(): JSX.Element {
   const handleApplyTemplate = React.useCallback(
     (template: TemplateCard) => {
       if (template.kind === "Resume") {
-        // TODO: Add a CvForge route/state action that applies a template to the
-        // current CV without creating a blank document before enabling this.
         return;
       }
 

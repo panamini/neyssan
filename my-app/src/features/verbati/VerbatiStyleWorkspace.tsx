@@ -32,6 +32,7 @@ import {
 } from "./cvDocumentToResumeData";
 import { buildCanonicalResumeRenderModelFromCv } from "../../lib/buildCanonicalResumeRenderModel";
 import {
+  MAGGIE_LETTER_RESUME_TEMPLATE_ID,
   SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID,
   WORKSHOP_RESUME_ONECOL_TEMPLATE_ID,
   WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
@@ -511,12 +512,16 @@ export function VerbatiStyleWorkspace(): JSX.Element {
             const displayName =
               optionTemplateId === SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID
                 ? "Sanat"
+                : optionTemplateId === MAGGIE_LETTER_RESUME_TEMPLATE_ID
+                ? "Maggie"
                 : optionTemplateId === WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
                 ? "French"
                 : "Minimal";
             const displayDescription =
               optionTemplateId === SANAT_ASYMMETRIC_RESUME_TEMPLATE_ID
                 ? "An asymmetric editorial CV with category-ready skills."
+                : optionTemplateId === MAGGIE_LETTER_RESUME_TEMPLATE_ID
+                ? "A native US Letter resume with compact editorial lanes."
                 : optionTemplateId === WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID
                 ? "A structured two-column CV with clear sections and hierarchy."
                 : "A clean one-column CV that works well with recruiters and application systems.";

@@ -1188,6 +1188,12 @@ function responsibilitiesRichHasPartialContent(
   });
 }
 
+function experienceBlocksHaveBodyContent(blocks: WorkshopExperienceContentBlock[]) {
+  return blocks.some(
+    (block) => cleanDraftExperienceText(block.text).trim().length > 0,
+  );
+}
+
 function renderExperienceContent(args: {
   item: {
     id?: string;
@@ -1465,7 +1471,8 @@ function renderExperienceContent(args: {
   }
 
   if (
-    args.item.blocks.some((block) => block.partial === true) ||
+    (args.item.blocks.some((block) => block.partial === true) &&
+      experienceBlocksHaveBodyContent(args.item.blocks)) ||
     responsibilitiesRichHasPartialContent(rich)
   ) {
     return renderExperienceBlocks({

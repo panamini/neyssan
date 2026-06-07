@@ -106,7 +106,6 @@ export function CvsLibrary(): JSX.Element {
   const [visibleCvCount, setVisibleCvCount] =
     React.useState(CV_LIBRARY_PAGE_SIZE);
   const loadMoreSentinelRef = React.useRef<HTMLDivElement | null>(null);
-  const pendingCreateNavigationRef = React.useRef(false);
   const pendingOpenNavigationRef = React.useRef<string | null>(null);
 
   const sorted = React.useMemo(
@@ -198,15 +197,6 @@ export function CvsLibrary(): JSX.Element {
   }, [hasMoreCvs, sorted.length]);
 
   React.useEffect(() => {
-    if (!pendingCreateNavigationRef.current || !currentCvId) {
-      return;
-    }
-
-    pendingCreateNavigationRef.current = false;
-    void navigate(`/cv?id=${encodeURIComponent(currentCvId)}`);
-  }, [currentCvId, navigate]);
-
-  React.useEffect(() => {
     const pendingCvId = pendingOpenNavigationRef.current;
     if (!pendingCvId || currentCvId !== pendingCvId) {
       return;
@@ -230,6 +220,14 @@ export function CvsLibrary(): JSX.Element {
     setConfirmingId(null);
   }
 
+  async function handleCreateNewCv() {
+    const createdCv = await createNewCv();
+    const createdCvId = createdCv?.id ? String(createdCv.id) : null;
+    if (createdCvId) {
+      void navigate(`/cv?id=${encodeURIComponent(createdCvId)}`);
+    }
+  }
+
   return (
     <div className="dasti-page-scroll">
       <div
@@ -250,8 +248,7 @@ export function CvsLibrary(): JSX.Element {
           <div className="dasti-page-actions">
             <button
               onClick={() => {
-                pendingCreateNavigationRef.current = true;
-                void createNewCv();
+                void handleCreateNewCv();
               }}
               className="dasti-icon-button dasti-library-create-button"
               aria-label="Create new resume"
@@ -478,8 +475,7 @@ export function CvsLibrary(): JSX.Element {
             >
               <button
                 onClick={() => {
-                  pendingCreateNavigationRef.current = true;
-                  void createNewCv();
+                  void handleCreateNewCv();
                 }}
                 className="dasti-button dasti-button--primary dasti-button--pill"
               >

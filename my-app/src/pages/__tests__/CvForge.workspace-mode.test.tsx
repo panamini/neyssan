@@ -11,7 +11,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { beforeEach } from "vitest";
 import { describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { ForgeTemplatePanel } from "../../components/ForgeTemplatePanel";
 import { ForgeTemplatePanelProvider } from "../../contexts/ForgeTemplatePanelContext";
 import { CvForge as CvForgePage } from "../CvForge";
@@ -34,6 +34,16 @@ function CvForge(): JSX.Element {
       <CvForgePage />
       <ForgeTemplatePanel />
     </ForgeTemplatePanelProvider>
+  );
+}
+
+function LocationProbe(): JSX.Element {
+  const location = useLocation();
+  return (
+    <div data-testid="location-probe">
+      {location.pathname}
+      {location.search}
+    </div>
   );
 }
 
@@ -5029,6 +5039,89 @@ describe("CvForge workspace mode", () => {
     );
   });
 
+  it("moves the route to an imported CV before the save promise resolves", async () => {
+    const importCv = vi.fn(() => new Promise(() => undefined));
+    useCvLibraryMock.mockReturnValue(buildCvLibraryState({ importCv }));
+    importFileMock.mockResolvedValue({
+      status: "accepted",
+      sections: buildCvLibraryState().currentCv.sections,
+      authoritativeResume: null,
+    });
+
+    const { container } = render(
+      <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+        <LocationProbe />
+        <CvForge />
+      </MemoryRouter>,
+    );
+
+    const input =
+      container.querySelector<HTMLInputElement>('input[type="file"]');
+    fireEvent.change(input!, {
+      target: {
+        files: [new File(["%PDF"], "resume.pdf", { type: "application/pdf" })],
+      },
+    });
+
+    await waitFor(() => expect(importCv).toHaveBeenCalled());
+    const importedCvId = String(importCv.mock.calls[0]?.[0]?.id ?? "");
+    expect(importedCvId).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.getByTestId("location-probe")).toHaveTextContent(
+        `/cv?id=${importedCvId}`,
+      ),
+    );
+  });
+
+  it("keeps the route aligned when an imported CV becomes active while save is pending", async () => {
+    const baseState = buildCvLibraryState();
+    importFileMock.mockResolvedValue({
+      status: "accepted",
+      sections: baseState.currentCv.sections,
+      authoritativeResume: null,
+    });
+
+    function ImportPendingHarness() {
+      const [libraryState, setLibraryState] = React.useState(baseState);
+      const importCv = React.useCallback(async (doc: any) => {
+        setLibraryState((current) => ({
+          ...current,
+          currentCv: doc,
+          currentCvId: String(doc.id),
+          cvs: [...current.cvs, doc],
+        }));
+        await new Promise(() => undefined);
+      }, []);
+      useCvLibraryMock.mockReturnValue({
+        ...libraryState,
+        importCv,
+      });
+
+      return (
+        <MemoryRouter initialEntries={["/cv?id=cv_123"]}>
+          <LocationProbe />
+          <CvForge />
+        </MemoryRouter>
+      );
+    }
+
+    const { container } = render(<ImportPendingHarness />);
+
+    const input =
+      container.querySelector<HTMLInputElement>('input[type="file"]');
+    fireEvent.change(input!, {
+      target: {
+        files: [new File(["%PDF"], "resume.pdf", { type: "application/pdf" })],
+      },
+    });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("location-probe")).not.toHaveTextContent(
+        "/cv?id=cv_123",
+      ),
+    );
+  });
+
   it("keeps the workspace preview on the same canvas path on narrow viewports", async () => {
     const user = userEvent.setup();
     Object.defineProperty(window, "innerWidth", {
@@ -5326,20 +5419,21 @@ describe("CvForge workspace mode", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Templates" }));
-    await user.click(screen.getByRole("listitem", { name: "Sanat" }));
+    expect(screen.getByRole("listitem", { name: "Maggie" })).toBeInTheDocument();
+    await user.click(screen.getByRole("listitem", { name: "Maggie" }));
 
     await waitFor(() =>
       expect(saveCurrentCvStyleOnly).toHaveBeenCalledWith(
         expect.objectContaining({
           familyId: "workshop",
           layout: "workshop",
-          resumeTemplateId: "sanat_asymmetric_resume",
+          resumeTemplateId: "maggie_letter_resume",
         }),
         expect.objectContaining({
           verbatiStyleBaseSnapshot: expect.objectContaining({
             familyId: "workshop",
             layout: "workshop",
-            resumeTemplateId: "sanat_asymmetric_resume",
+            resumeTemplateId: "maggie_letter_resume",
           }),
           documentStyleVersion: 1,
         }),

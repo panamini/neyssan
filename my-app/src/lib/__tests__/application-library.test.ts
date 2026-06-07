@@ -41,6 +41,42 @@ describe("buildWorkLibraryModel", () => {
     );
   });
 
+  it("includes the active current CV when the library list is stale", () => {
+    const activeImportedCv = {
+      id: "cv-imported",
+      title: "Imported CV",
+      metadata: { updatedAt: "2026-05-10T12:00:00.000Z" },
+      sections: [
+        {
+          id: "summary-imported",
+          title: "Summary",
+          type: "summary",
+          blocks: [],
+          structuredContent: [{ summary: "Imported parser output." }],
+        },
+      ],
+    };
+
+    const model = buildWorkLibraryModel({
+      cvs: [cv as any],
+      currentCv: activeImportedCv as any,
+      currentCvId: "cv-imported",
+      now,
+    });
+
+    expect(model.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "cv:cv-imported",
+          type: "cv",
+          title: "Imported CV",
+          cvDocument: expect.objectContaining({ id: "cv-imported" }),
+          previewLines: expect.arrayContaining(["Imported parser output."]),
+        }),
+      ]),
+    );
+  });
+
   it("maps draft Convex proposals to proposal items", () => {
     const model = buildWorkLibraryModel({
       proposals: [

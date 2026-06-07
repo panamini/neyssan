@@ -126,6 +126,7 @@ audit_report.json
 # --- Fichiers lourds / binaires ----------------------------------
 *.pdf
 *.png
+!clerk-chrome-extension-final/assets/icon.png
 *.jpg
 *.jpeg
 *.gif
