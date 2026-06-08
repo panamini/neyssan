@@ -55,6 +55,24 @@ export type SourceRefV1 = Readonly<{
   sourceHash?: string;
 }>;
 
+export type ApplicationContextCandidateV1 =
+  | Readonly<{
+      sourceKind: "cv";
+      cvId: string;
+      candidateEvidenceProfileId?: never;
+      candidateHash: string;
+      selectedLanguage?: string;
+      market?: string;
+    }>
+  | Readonly<{
+      sourceKind: "candidate_evidence_profile";
+      candidateEvidenceProfileId: string;
+      cvId?: never;
+      candidateHash: string;
+      selectedLanguage?: string;
+      market?: string;
+    }>;
+
 export type ApplicationContextV1 = Readonly<{
   id: string;
   userId: string;
@@ -63,16 +81,10 @@ export type ApplicationContextV1 = Readonly<{
     sourceUrl?: string;
     title?: string;
     company?: string;
+    /** Populate with buildRawJobTextHash(rawDescription). */
     rawTextHash: string;
   }>;
-  candidate: Readonly<{
-    sourceKind: ApplicationCandidateSourceKindV1;
-    cvId?: string;
-    candidateEvidenceProfileId?: string;
-    candidateHash: string;
-    selectedLanguage?: string;
-    market?: string;
-  }>;
+  candidate: ApplicationContextCandidateV1;
   settingsHash: string;
   contextHash: string;
   reviewState: ApplicationReviewStateV1;
