@@ -225,6 +225,34 @@ export const listRunsForUser = internalQuery({
   },
 });
 
+export const startRun = internalMutation({
+  args: {
+    userId: v.string(),
+    id: v.string(),
+    updatedAt: v.number(),
+  },
+  returns: v.id("applicationRuns"),
+  handler: async (ctx, args) => {
+    const run = await ctx.db
+      .query("applicationRuns")
+      .withIndex("by_user_id", (q) => q.eq("userId", args.userId).eq("id", args.id))
+      .unique();
+
+    if (!run) {
+      throw new Error("ApplicationRun not found");
+    }
+
+    assertRunStatusForPatch(run, ["queued"], "start");
+
+    await ctx.db.patch(run._id, {
+      status: "running",
+      updatedAt: args.updatedAt,
+    });
+
+    return run._id;
+  },
+});
+
 export const completeRun = internalMutation({
   args: {
     userId: v.string(),
