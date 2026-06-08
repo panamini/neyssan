@@ -39,6 +39,22 @@ function assertContextCandidateAnchor(candidate: {
   }
 }
 
+async function getRunDocumentForPatch(
+  ctx: { db: Parameters<Parameters<typeof internalMutation>[0]["handler"]>[0]["db"] },
+  args: { userId: string; id: string },
+) {
+  const run = await ctx.db
+    .query("applicationRuns")
+    .withIndex("by_user_id", (q) => q.eq("userId", args.userId).eq("id", args.id))
+    .unique();
+
+  if (!run) {
+    throw new Error("ApplicationRun not found");
+  }
+
+  return run;
+}
+
 export const createContext = internalMutation({
   args: {
     context: applicationHarnessContextValidator,
@@ -208,6 +224,73 @@ export const listRunsForUser = internalQuery({
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .order("desc")
       .take(resolveListLimit(args.limit));
+  },
+});
+
+export const completeRun = internalMutation({
+  args: {
+    userId: v.string(),
+    id: v.string(),
+    resultIds: v.optional(v.array(v.string())),
+    updatedAt: v.number(),
+  },
+  returns: v.id("applicationRuns"),
+  handler: async (ctx, args) => {
+    const run = await getRunDocumentForPatch(ctx, args);
+
+    await ctx.db.patch(run._id, {
+      status: "succeeded",
+      ...(args.resultIds ? { resultIds: args.resultIds } : {}),
+      blockedReason: undefined,
+      error: undefined,
+      updatedAt: args.updatedAt,
+    });
+
+    return run._id;
+  },
+});
+
+export const failRun = internalMutation({
+  args: {
+    userId: v.string(),
+    id: v.string(),
+    error: v.string(),
+    updatedAt: v.number(),
+  },
+  returns: v.id("applicationRuns"),
+  handler: async (ctx, args) => {
+    const run = await getRunDocumentForPatch(ctx, args);
+
+    await ctx.db.patch(run._id, {
+      status: "failed",
+      blockedReason: undefined,
+      error: args.error,
+      updatedAt: args.updatedAt,
+    });
+
+    return run._id;
+  },
+});
+
+export const blockRun = internalMutation({
+  args: {
+    userId: v.string(),
+    id: v.string(),
+    blockedReason: v.string(),
+    updatedAt: v.number(),
+  },
+  returns: v.id("applicationRuns"),
+  handler: async (ctx, args) => {
+    const run = await getRunDocumentForPatch(ctx, args);
+
+    await ctx.db.patch(run._id, {
+      status: "blocked",
+      blockedReason: args.blockedReason,
+      error: undefined,
+      updatedAt: args.updatedAt,
+    });
+
+    return run._id;
   },
 });
 
