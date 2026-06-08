@@ -16,7 +16,7 @@ export default defineSchema({
   ...baseSchemaDefinition.tables,
 
   applicationContexts: defineTable(applicationHarnessContextFields)
-    .index("by_id", ["id"])
+    .index("by_context_id", ["id"])
     .index("by_user", ["userId"])
     .index("by_user_id", ["userId", "id"])
     .index("by_context_hash", ["contextHash"])
@@ -26,7 +26,7 @@ export default defineSchema({
     .index("by_updated", ["updatedAt"]),
 
   applicationRuns: defineTable(applicationHarnessRunFields)
-    .index("by_id", ["id"])
+    .index("by_run_id", ["id"])
     .index("by_user", ["userId"])
     .index("by_user_id", ["userId", "id"])
     .index("by_context", ["contextId"])
@@ -39,7 +39,7 @@ export default defineSchema({
     .index("by_updated", ["updatedAt"]),
 
   applicationArtifacts: defineTable(applicationHarnessArtifactFields)
-    .index("by_id", ["id"])
+    .index("by_artifact_id", ["id"])
     .index("by_user", ["userId"])
     .index("by_user_id", ["userId", "id"])
     .index("by_context", ["contextId"])
