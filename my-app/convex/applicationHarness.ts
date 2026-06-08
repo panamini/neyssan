@@ -39,22 +39,6 @@ function assertContextCandidateAnchor(candidate: {
   }
 }
 
-async function getRunDocumentForPatch(
-  ctx: { db: Parameters<Parameters<typeof internalMutation>[0]["handler"]>[0]["db"] },
-  args: { userId: string; id: string },
-) {
-  const run = await ctx.db
-    .query("applicationRuns")
-    .withIndex("by_user_id", (q) => q.eq("userId", args.userId).eq("id", args.id))
-    .unique();
-
-  if (!run) {
-    throw new Error("ApplicationRun not found");
-  }
-
-  return run;
-}
-
 export const createContext = internalMutation({
   args: {
     context: applicationHarnessContextValidator,
@@ -236,7 +220,14 @@ export const completeRun = internalMutation({
   },
   returns: v.id("applicationRuns"),
   handler: async (ctx, args) => {
-    const run = await getRunDocumentForPatch(ctx, args);
+    const run = await ctx.db
+      .query("applicationRuns")
+      .withIndex("by_user_id", (q) => q.eq("userId", args.userId).eq("id", args.id))
+      .unique();
+
+    if (!run) {
+      throw new Error("ApplicationRun not found");
+    }
 
     await ctx.db.patch(run._id, {
       status: "succeeded",
@@ -259,7 +250,14 @@ export const failRun = internalMutation({
   },
   returns: v.id("applicationRuns"),
   handler: async (ctx, args) => {
-    const run = await getRunDocumentForPatch(ctx, args);
+    const run = await ctx.db
+      .query("applicationRuns")
+      .withIndex("by_user_id", (q) => q.eq("userId", args.userId).eq("id", args.id))
+      .unique();
+
+    if (!run) {
+      throw new Error("ApplicationRun not found");
+    }
 
     await ctx.db.patch(run._id, {
       status: "failed",
@@ -281,7 +279,14 @@ export const blockRun = internalMutation({
   },
   returns: v.id("applicationRuns"),
   handler: async (ctx, args) => {
-    const run = await getRunDocumentForPatch(ctx, args);
+    const run = await ctx.db
+      .query("applicationRuns")
+      .withIndex("by_user_id", (q) => q.eq("userId", args.userId).eq("id", args.id))
+      .unique();
+
+    if (!run) {
+      throw new Error("ApplicationRun not found");
+    }
 
     await ctx.db.patch(run._id, {
       status: "blocked",
