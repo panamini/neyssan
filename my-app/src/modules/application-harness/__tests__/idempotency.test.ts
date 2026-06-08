@@ -3,8 +3,10 @@ import { buildStableHash, stableSerialize } from "../fingerprints";
 import { buildApplicationRunIdempotencyKey } from "../idempotency";
 import type { ApplicationRunV1 } from "../schema";
 
+const CREATED_AT_MS = Date.UTC(2026, 5, 8, 0, 0, 0, 0);
+
 describe("application-harness idempotency", () => {
-  it("produces the same idempotency key for the same operation input", () => {
+  it("produces the same idempotency key for the same operation input", async () => {
     const input = {
       userId: "user_123",
       operation: "draft_cover_letter" as const,
@@ -12,32 +14,32 @@ describe("application-harness idempotency", () => {
       inputHash: "input_hash",
     };
 
-    expect(buildApplicationRunIdempotencyKey(input)).toBe(
-      buildApplicationRunIdempotencyKey({ ...input }),
+    await expect(buildApplicationRunIdempotencyKey(input)).resolves.toBe(
+      await buildApplicationRunIdempotencyKey({ ...input }),
     );
   });
 
-  it("changes the idempotency key when the operation changes", () => {
+  it("changes the idempotency key when the operation changes", async () => {
     const baseInput = {
       userId: "user_123",
       contextHash: "context_hash",
       inputHash: "input_hash",
     };
 
-    expect(
+    await expect(
       buildApplicationRunIdempotencyKey({
         ...baseInput,
         operation: "draft_cover_letter",
       }),
-    ).not.toBe(
-      buildApplicationRunIdempotencyKey({
+    ).resolves.not.toBe(
+      await buildApplicationRunIdempotencyKey({
         ...baseInput,
         operation: "create_artifact",
       }),
     );
   });
 
-  it("does not mutate idempotency inputs", () => {
+  it("does not mutate idempotency inputs", async () => {
     const input = {
       userId: "user_123",
       operation: "build_context" as const,
@@ -46,19 +48,19 @@ describe("application-harness idempotency", () => {
     };
     const before = stableSerialize(input);
 
-    buildApplicationRunIdempotencyKey(input);
+    await buildApplicationRunIdempotencyKey(input);
 
     expect(stableSerialize(input)).toBe(before);
   });
 
-  it("application run shell fixture compiles and hashes predictably", () => {
+  it("application run shell fixture compiles and hashes predictably", async () => {
     const run: ApplicationRunV1 = {
       id: "run_123",
       userId: "user_123",
       contextId: "context_123",
       operation: "build_context",
       inputHash: "input_hash",
-      idempotencyKey: buildApplicationRunIdempotencyKey({
+      idempotencyKey: await buildApplicationRunIdempotencyKey({
         userId: "user_123",
         operation: "build_context",
         contextHash: "context_hash",
@@ -67,15 +69,17 @@ describe("application-harness idempotency", () => {
       status: "queued",
       attemptCount: 0,
       resultIds: ["context_123"],
-      createdAt: "2026-06-08T00:00:00.000Z",
-      updatedAt: "2026-06-08T00:00:00.000Z",
+      error: "",
+      createdAt: CREATED_AT_MS,
+      updatedAt: CREATED_AT_MS,
       version: 1,
     };
 
     const equivalentRun = {
       version: 1,
-      updatedAt: "2026-06-08T00:00:00.000Z",
-      createdAt: "2026-06-08T00:00:00.000Z",
+      updatedAt: CREATED_AT_MS,
+      createdAt: CREATED_AT_MS,
+      error: "",
       resultIds: ["context_123"],
       attemptCount: 0,
       status: "queued",
@@ -87,7 +91,9 @@ describe("application-harness idempotency", () => {
       id: "run_123",
     } satisfies ApplicationRunV1;
 
-    expect(buildStableHash(run)).toBe(buildStableHash(equivalentRun));
-    expect(buildStableHash({ ...run, status: "running" })).not.toBe(buildStableHash(run));
+    expect(await buildStableHash(run)).toBe(await buildStableHash(equivalentRun));
+    await expect(buildStableHash({ ...run, status: "running" })).resolves.not.toBe(
+      await buildStableHash(run),
+    );
   });
 });
