@@ -39,6 +39,20 @@ function assertContextCandidateAnchor(candidate: {
   }
 }
 
+function assertRunStatusForPatch(
+  run: { status: string },
+  allowedStatuses: readonly string[],
+  action: string,
+): void {
+  if (!allowedStatuses.includes(run.status)) {
+    throw new Error(
+      `Cannot ${action} ApplicationRun from status "${run.status}"; expected ${allowedStatuses
+        .map((status) => `"${status}"`)
+        .join(" or ")}`,
+    );
+  }
+}
+
 export const createContext = internalMutation({
   args: {
     context: applicationHarnessContextValidator,
@@ -229,6 +243,8 @@ export const completeRun = internalMutation({
       throw new Error("ApplicationRun not found");
     }
 
+    assertRunStatusForPatch(run, ["running"], "complete");
+
     await ctx.db.patch(run._id, {
       status: "succeeded",
       ...(args.resultIds ? { resultIds: args.resultIds } : {}),
@@ -259,6 +275,8 @@ export const failRun = internalMutation({
       throw new Error("ApplicationRun not found");
     }
 
+    assertRunStatusForPatch(run, ["running"], "fail");
+
     await ctx.db.patch(run._id, {
       status: "failed",
       blockedReason: undefined,
@@ -287,6 +305,8 @@ export const blockRun = internalMutation({
     if (!run) {
       throw new Error("ApplicationRun not found");
     }
+
+    assertRunStatusForPatch(run, ["queued", "running"], "block");
 
     await ctx.db.patch(run._id, {
       status: "blocked",
