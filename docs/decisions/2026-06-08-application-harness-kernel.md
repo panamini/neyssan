@@ -15,10 +15,11 @@ This module includes:
 - `ApplicationRunV1`
 - `ApplicationArtifactV1` shell
 - `ApplicationEventV1` shell
-- stable serialization
-- stable hash helpers
+- stable serialization for JSON-like/plain-object inputs, with Date support
+- SHA-256 stable hash helpers
 - source-reference hashing
 - application-run idempotency keys
+- numeric millisecond timestamps
 
 ## Why this is pure and additive
 
@@ -45,6 +46,12 @@ It is a type only in this PR. It is not a table and it does not imply source-doc
 ## Why ApplicationEventV1 is type-only
 
 `ApplicationEventV1` reserves a minimal event shell for future audit and review flows without creating an event table before there is a concrete audit use case.
+
+## Why SHA-256 and numeric timestamps
+
+Durable hashes use SHA-256 hex digests to align with the existing job-text hash pattern in `convex/lib/jobs/llmExtractJob.ts`.
+
+Harness timestamps use numeric millisecond values so future persistence and comparison logic can avoid string-date parsing ambiguity.
 
 ## How this prepares idempotent application workflows
 
