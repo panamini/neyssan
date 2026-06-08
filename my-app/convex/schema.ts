@@ -1,19 +1,15 @@
 import { defineSchema, defineTable } from "convex/server";
-import baseSchema from "./_applicationHarnessBaseSchema";
+import baseSchema from "./baseSchema";
 import {
   applicationHarnessArtifactFields,
   applicationHarnessContextFields,
   applicationHarnessRunFields,
 } from "./lib/applicationHarness";
 
-type BaseSchemaDefinition = Readonly<{
-  tables: Record<string, ReturnType<typeof defineTable>>;
-}>;
-
-const baseSchemaDefinition = baseSchema as unknown as BaseSchemaDefinition;
+const { tables: baseTables } = baseSchema;
 
 export default defineSchema({
-  ...baseSchemaDefinition.tables,
+  ...baseTables,
 
   applicationContexts: defineTable(applicationHarnessContextFields)
     .index("by_context_id", ["id"])
