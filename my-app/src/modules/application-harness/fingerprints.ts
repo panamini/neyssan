@@ -1,10 +1,6 @@
 import type { SourceRefV1 } from "./schema";
 
-const HASH_PREFIX = "ah1";
 const HASH_NAMESPACE = "application-harness";
-const FNV64_OFFSET_BASIS = 0xcbf29ce484222325n;
-const FNV64_PRIME = 0x100000001b3n;
-const FNV64_MASK = 0xffffffffffffffffn;
 const textEncoder = new TextEncoder();
 
 export type BuildJobHashInput = Readonly<{
@@ -32,19 +28,17 @@ export function stableSerialize(value: unknown): string {
   return serializeStableValue(value, new WeakSet<object>());
 }
 
-export function buildStableHash(value: unknown): string {
+export async function buildStableHash(value: unknown): Promise<string> {
   const serialized = stableSerialize(value);
-  let hash = FNV64_OFFSET_BASIS;
+  const bytes = textEncoder.encode(serialized);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
 
-  for (const byte of textEncoder.encode(serialized)) {
-    hash ^= BigInt(byte);
-    hash = (hash * FNV64_PRIME) & FNV64_MASK;
-  }
-
-  return `${HASH_PREFIX}:${hash.toString(16).padStart(16, "0")}`;
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 }
 
-export function buildJobHash(input: BuildJobHashInput): string {
+export function buildJobHash(input: BuildJobHashInput): Promise<string> {
   return buildStableHash({
     namespace: HASH_NAMESPACE,
     type: "job",
@@ -53,7 +47,7 @@ export function buildJobHash(input: BuildJobHashInput): string {
   });
 }
 
-export function buildCandidateHash(input: BuildCandidateHashInput): string {
+export function buildCandidateHash(input: BuildCandidateHashInput): Promise<string> {
   return buildStableHash({
     namespace: HASH_NAMESPACE,
     type: "candidate",
@@ -62,7 +56,7 @@ export function buildCandidateHash(input: BuildCandidateHashInput): string {
   });
 }
 
-export function buildSettingsHash(settings: unknown): string {
+export function buildSettingsHash(settings: unknown): Promise<string> {
   return buildStableHash({
     namespace: HASH_NAMESPACE,
     type: "settings",
@@ -71,7 +65,7 @@ export function buildSettingsHash(settings: unknown): string {
   });
 }
 
-export function buildContextHash(input: BuildContextHashInput): string {
+export function buildContextHash(input: BuildContextHashInput): Promise<string> {
   return buildStableHash({
     namespace: HASH_NAMESPACE,
     type: "context",
@@ -80,7 +74,7 @@ export function buildContextHash(input: BuildContextHashInput): string {
   });
 }
 
-export function buildSourceRefHash(sourceRef: SourceRefV1): string {
+export function buildSourceRefHash(sourceRef: SourceRefV1): Promise<string> {
   return buildStableHash({
     namespace: HASH_NAMESPACE,
     type: "source-ref",
@@ -91,7 +85,7 @@ export function buildSourceRefHash(sourceRef: SourceRefV1): string {
 
 function serializeStableValue(value: unknown, seen: WeakSet<object>): string {
   if (value === undefined) {
-    return "undefined";
+    throw new TypeError("stableSerialize does not support undefined values outside object fields");
   }
 
   if (value === null) {
@@ -111,11 +105,11 @@ function serializeStableValue(value: unknown, seen: WeakSet<object>): string {
   }
 
   if (typeof value === "bigint") {
-    return `bigint:${value.toString()}`;
+    throw new TypeError("stableSerialize does not support bigint values");
   }
 
   if (typeof value === "symbol") {
-    return `symbol:${JSON.stringify(value.description ?? "")}`;
+    throw new TypeError("stableSerialize does not support symbols");
   }
 
   if (typeof value === "function") {
@@ -123,34 +117,42 @@ function serializeStableValue(value: unknown, seen: WeakSet<object>): string {
   }
 
   if (value instanceof Date) {
-    return `date:${Number.isNaN(value.getTime()) ? "Invalid" : value.toISOString()}`;
+    return serializeDate(value);
   }
 
   if (Array.isArray(value)) {
     return serializeArray(value, seen);
   }
 
-  return serializeObject(value as Record<string, unknown>, seen);
+  if (typeof value !== "object") {
+    throw new TypeError(`stableSerialize does not support ${typeof value} values`);
+  }
+
+  return serializeObject(value, seen);
 }
 
 function serializeNumber(value: number): string {
   if (Number.isNaN(value)) {
-    return "number:NaN";
+    throw new TypeError("stableSerialize does not support NaN");
+  }
+
+  if (!Number.isFinite(value)) {
+    throw new TypeError("stableSerialize does not support infinite numbers");
   }
 
   if (Object.is(value, -0)) {
     return "number:-0";
   }
 
-  if (value === Infinity) {
-    return "number:Infinity";
-  }
-
-  if (value === -Infinity) {
-    return "number:-Infinity";
-  }
-
   return `number:${value}`;
+}
+
+function serializeDate(value: Date): string {
+  if (Number.isNaN(value.getTime())) {
+    throw new TypeError("stableSerialize does not support invalid Date values");
+  }
+
+  return `date:${JSON.stringify(value.toISOString())}`;
 }
 
 function serializeArray(value: readonly unknown[], seen: WeakSet<object>): string {
@@ -164,11 +166,11 @@ function serializeArray(value: readonly unknown[], seen: WeakSet<object>): strin
     const items: string[] = [];
 
     for (let index = 0; index < value.length; index += 1) {
-      items.push(
-        Object.prototype.hasOwnProperty.call(value, index)
-          ? serializeStableValue(value[index], seen)
-          : "array-hole",
-      );
+      if (!Object.prototype.hasOwnProperty.call(value, index)) {
+        throw new TypeError("stableSerialize does not support sparse arrays");
+      }
+
+      items.push(serializeStableValue(value[index], seen));
     }
 
     return `array:${value.length}:[${items.join(",")}]`;
@@ -177,7 +179,31 @@ function serializeArray(value: readonly unknown[], seen: WeakSet<object>): strin
   }
 }
 
-function serializeObject(value: Record<string, unknown>, seen: WeakSet<object>): string {
+function serializeObject(value: object, seen: WeakSet<object>): string {
+  if (value instanceof Map) {
+    throw new TypeError("stableSerialize does not support Map");
+  }
+
+  if (value instanceof Set) {
+    throw new TypeError("stableSerialize does not support Set");
+  }
+
+  if (value instanceof RegExp) {
+    throw new TypeError("stableSerialize does not support RegExp");
+  }
+
+  if (isPromiseLike(value)) {
+    throw new TypeError("stableSerialize does not support Promise");
+  }
+
+  if (!isPlainObject(value)) {
+    throw new TypeError("stableSerialize only supports plain objects");
+  }
+
+  if (Object.getOwnPropertySymbols(value).length > 0) {
+    throw new TypeError("stableSerialize does not support symbol object keys");
+  }
+
   if (seen.has(value)) {
     throw new TypeError("stableSerialize does not support circular objects");
   }
@@ -185,13 +211,23 @@ function serializeObject(value: Record<string, unknown>, seen: WeakSet<object>):
   seen.add(value);
 
   try {
-    const entries = Object.keys(value)
-      .filter((key) => value[key] !== undefined)
+    const record = value as Record<string, unknown>;
+    const entries = Object.keys(record)
+      .filter((key) => record[key] !== undefined)
       .sort()
-      .map((key) => `${JSON.stringify(key)}:${serializeStableValue(value[key], seen)}`);
+      .map((key) => `${JSON.stringify(key)}:${serializeStableValue(record[key], seen)}`);
 
     return `object:{${entries.join(",")}}`;
   } finally {
     seen.delete(value);
   }
+}
+
+function isPlainObject(value: object): boolean {
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function isPromiseLike(value: object): boolean {
+  return typeof (value as { then?: unknown }).then === "function";
 }
