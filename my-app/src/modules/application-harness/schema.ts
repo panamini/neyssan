@@ -46,7 +46,7 @@ export type ApplicationArtifactStatusV1 =
   | "superseded"
   | "blocked";
 
-export type ApplicationHarnessTimestampV1 = string;
+export type ApplicationHarnessTimestampV1 = number;
 
 export type SourceRefV1 = Readonly<{
   sourceType: SourceRefV1SourceType;
@@ -93,7 +93,7 @@ export type ApplicationRunV1 = Readonly<{
   attemptCount: number;
   resultIds?: readonly string[];
   blockedReason?: string;
-  error?: unknown;
+  error?: string;
   createdAt: ApplicationHarnessTimestampV1;
   updatedAt: ApplicationHarnessTimestampV1;
   version: 1;
