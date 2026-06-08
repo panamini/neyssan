@@ -64,27 +64,29 @@ describe("applicationHarness run lifecycle helpers", () => {
     expect(patch).not.toHaveBeenCalled();
   });
 
-  it("failRun accepts running runs", async () => {
-    const { ctx, patch } = makeCtx("running");
+  it("failRun accepts running and blocked runs", async () => {
+    for (const status of ["running", "blocked"] satisfies RunStatus[]) {
+      const { ctx, patch } = makeCtx(status);
 
-    await expect(
-      failRun._handler(ctx as any, {
-        userId: "user_123",
-        id: "run_123",
+      await expect(
+        failRun._handler(ctx as any, {
+          userId: "user_123",
+          id: "run_123",
+          error: "run failed",
+          updatedAt: 2000,
+        }),
+      ).resolves.toBe("run_doc_123");
+
+      expect(patch).toHaveBeenCalledWith("run_doc_123", {
+        status: "failed",
+        blockedReason: undefined,
         error: "run failed",
         updatedAt: 2000,
-      }),
-    ).resolves.toBe("run_doc_123");
-
-    expect(patch).toHaveBeenCalledWith("run_doc_123", {
-      status: "failed",
-      blockedReason: undefined,
-      error: "run failed",
-      updatedAt: 2000,
-    });
+      });
+    }
   });
 
-  it("failRun rejects non-running runs", async () => {
+  it("failRun rejects completed runs", async () => {
     const { ctx, patch } = makeCtx("succeeded");
 
     await expect(
