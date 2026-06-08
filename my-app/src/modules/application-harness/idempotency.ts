@@ -1,5 +1,5 @@
 import type { ApplicationOperationV1 } from "./schema";
-import { buildStableHash } from "./fingerprints";
+import { APPLICATION_HARNESS_HASH_NAMESPACE, buildStableHash } from "./fingerprints";
 
 export type BuildApplicationRunIdempotencyKeyInput = Readonly<{
   userId: string;
@@ -12,7 +12,7 @@ export function buildApplicationRunIdempotencyKey(
   input: BuildApplicationRunIdempotencyKeyInput,
 ): Promise<string> {
   return buildStableHash({
-    namespace: "application-harness",
+    namespace: APPLICATION_HARNESS_HASH_NAMESPACE,
     type: "application-run-idempotency",
     version: 1,
     input,
