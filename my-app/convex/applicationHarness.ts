@@ -29,22 +29,12 @@ function assertContextCandidateAnchor(candidate: {
     if (!candidate.cvId) {
       throw new Error('ApplicationContext candidate requires cvId for sourceKind "cv"');
     }
-    if (Object.prototype.hasOwnProperty.call(candidate, "candidateEvidenceProfileId")) {
-      throw new Error(
-        'ApplicationContext candidate must not include candidateEvidenceProfileId for sourceKind "cv"',
-      );
-    }
     return;
   }
 
   if (!candidate.candidateEvidenceProfileId) {
     throw new Error(
       'ApplicationContext candidate requires candidateEvidenceProfileId for sourceKind "candidate_evidence_profile"',
-    );
-  }
-  if (Object.prototype.hasOwnProperty.call(candidate, "cvId")) {
-    throw new Error(
-      'ApplicationContext candidate must not include cvId for sourceKind "candidate_evidence_profile"',
     );
   }
 }
@@ -82,6 +72,10 @@ export const createContext = internalMutation({
       .unique();
 
     if (existingByHash) {
+      if (existingByHash.id !== args.context.id) {
+        throw new Error("ApplicationContext contextHash collision with different stable id");
+      }
+
       return existingByHash._id;
     }
 
