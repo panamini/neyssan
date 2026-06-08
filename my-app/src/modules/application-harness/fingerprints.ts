@@ -1,6 +1,6 @@
 import type { SourceRefV1 } from "./schema";
 
-const HASH_NAMESPACE = "application-harness";
+export const APPLICATION_HARNESS_HASH_NAMESPACE = "application-harness";
 const textEncoder = new TextEncoder();
 
 export type BuildJobHashInput = Readonly<{
@@ -11,12 +11,24 @@ export type BuildJobHashInput = Readonly<{
   company?: string;
 }>;
 
-export type BuildCandidateHashInput = Readonly<{
-  cvId?: string;
-  candidateEvidenceProfileId?: string;
+type BuildCandidateHashSupportingInput = Readonly<{
   structuredSectionsHash?: string;
   cvSnapshotHash?: string;
 }>;
+
+export type BuildCandidateHashInput =
+  | (BuildCandidateHashSupportingInput &
+      Readonly<{
+        sourceKind: "cv";
+        cvId: string;
+        candidateEvidenceProfileId?: never;
+      }>)
+  | (BuildCandidateHashSupportingInput &
+      Readonly<{
+        sourceKind: "candidate_evidence_profile";
+        candidateEvidenceProfileId: string;
+        cvId?: never;
+      }>);
 
 export type BuildContextHashInput = Readonly<{
   jobHash: string;
@@ -38,9 +50,22 @@ export async function buildStableHash(value: unknown): Promise<string> {
     .join("");
 }
 
+export function buildRawJobTextHash(rawDescription: string): Promise<string> {
+  if (typeof rawDescription !== "string") {
+    throw new TypeError("buildRawJobTextHash requires rawDescription to be a string");
+  }
+
+  return buildStableHash({
+    namespace: APPLICATION_HARNESS_HASH_NAMESPACE,
+    type: "raw-job-text",
+    version: 1,
+    rawDescription,
+  });
+}
+
 export function buildJobHash(input: BuildJobHashInput): Promise<string> {
   return buildStableHash({
-    namespace: HASH_NAMESPACE,
+    namespace: APPLICATION_HARNESS_HASH_NAMESPACE,
     type: "job",
     version: 1,
     input,
@@ -48,8 +73,10 @@ export function buildJobHash(input: BuildJobHashInput): Promise<string> {
 }
 
 export function buildCandidateHash(input: BuildCandidateHashInput): Promise<string> {
+  assertCandidateHashInput(input);
+
   return buildStableHash({
-    namespace: HASH_NAMESPACE,
+    namespace: APPLICATION_HARNESS_HASH_NAMESPACE,
     type: "candidate",
     version: 1,
     input,
@@ -58,7 +85,7 @@ export function buildCandidateHash(input: BuildCandidateHashInput): Promise<stri
 
 export function buildSettingsHash(settings: unknown): Promise<string> {
   return buildStableHash({
-    namespace: HASH_NAMESPACE,
+    namespace: APPLICATION_HARNESS_HASH_NAMESPACE,
     type: "settings",
     version: 1,
     settings,
@@ -67,7 +94,7 @@ export function buildSettingsHash(settings: unknown): Promise<string> {
 
 export function buildContextHash(input: BuildContextHashInput): Promise<string> {
   return buildStableHash({
-    namespace: HASH_NAMESPACE,
+    namespace: APPLICATION_HARNESS_HASH_NAMESPACE,
     type: "context",
     version: 1,
     input,
@@ -76,11 +103,37 @@ export function buildContextHash(input: BuildContextHashInput): Promise<string> 
 
 export function buildSourceRefHash(sourceRef: SourceRefV1): Promise<string> {
   return buildStableHash({
-    namespace: HASH_NAMESPACE,
+    namespace: APPLICATION_HARNESS_HASH_NAMESPACE,
     type: "source-ref",
     version: 1,
     sourceRef,
   });
+}
+
+function assertCandidateHashInput(input: BuildCandidateHashInput): void {
+  if (!input || typeof input !== "object") {
+    throw new TypeError("buildCandidateHash requires a candidate identity input");
+  }
+
+  if (input.sourceKind === "cv") {
+    if (!input.cvId) {
+      throw new TypeError('buildCandidateHash requires cvId when sourceKind is "cv"');
+    }
+    return;
+  }
+
+  if (input.sourceKind === "candidate_evidence_profile") {
+    if (!input.candidateEvidenceProfileId) {
+      throw new TypeError(
+        'buildCandidateHash requires candidateEvidenceProfileId when sourceKind is "candidate_evidence_profile"',
+      );
+    }
+    return;
+  }
+
+  throw new TypeError(
+    'buildCandidateHash requires sourceKind "cv" or "candidate_evidence_profile"',
+  );
 }
 
 function serializeStableValue(value: unknown, seen: WeakSet<object>): string {
