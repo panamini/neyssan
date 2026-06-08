@@ -6,7 +6,7 @@ type BuildCandidateHashInput =
       sourceKind: "cv";
       cvId: string;
       structuredSectionsHash?: string;
-      cvSnapshotHash?: string;
+      cvSnapshotHash: string;
     }>
   | Readonly<{
       sourceKind: "candidate_evidence_profile";
@@ -98,6 +98,9 @@ function assertCandidateHashInput(input: BuildCandidateHashInput): void {
   if (input.sourceKind === "cv") {
     if (!input.cvId) {
       throw new TypeError('buildCandidateHash requires cvId when sourceKind is "cv"');
+    }
+    if (!input.cvSnapshotHash) {
+      throw new TypeError('buildCandidateHash requires cvSnapshotHash when sourceKind is "cv"');
     }
     return;
   }

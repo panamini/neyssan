@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildApplicationContextV1FromExistingData } from "../applicationContextBuilder";
+import { buildCandidateHash } from "../applicationHarnessHashes";
 
 const NOW = 1_725_000_000_000;
 
@@ -125,6 +126,40 @@ describe("application context shadow builder", () => {
 
     expect(changed.candidateHash).not.toBe(base.candidateHash);
     expect(changed.contextHash).not.toBe(base.contextHash);
+  });
+
+  it("changes candidateHash when candidate contact identity changes", async () => {
+    const base = await buildApplicationContextV1FromExistingData({
+      userId: "cv_123",
+      job: buildJob(),
+      candidateProfile: buildCandidateProfile(),
+      now: NOW,
+    });
+    const changed = await buildApplicationContextV1FromExistingData({
+      userId: "cv_123",
+      job: buildJob(),
+      candidateProfile: buildCandidateProfile({
+        email: "candidate@example.com",
+        contact: {
+          phone: "+1 555 0100",
+          address: "Remote",
+          email: "candidate@example.com",
+        },
+      }),
+      now: NOW,
+    });
+
+    expect(changed.candidateHash).not.toBe(base.candidateHash);
+    expect(changed.contextHash).not.toBe(base.contextHash);
+  });
+
+  it("requires cvSnapshotHash for cv candidate hashes", () => {
+    expect(() =>
+      buildCandidateHash({
+        sourceKind: "cv",
+        cvId: "cv_123",
+      } as never),
+    ).toThrow(/cvSnapshotHash/);
   });
 
   it("handles missing sourceUrl, company, and title", async () => {
