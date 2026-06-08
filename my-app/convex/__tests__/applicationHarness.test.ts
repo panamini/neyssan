@@ -14,10 +14,12 @@ function makeCtx(status: RunStatus) {
   const patch = vi.fn().mockResolvedValue(undefined);
   const eq = vi.fn().mockReturnThis();
   const unique = vi.fn().mockResolvedValue(run);
-  const withIndex = vi.fn((_, buildQuery) => {
-    buildQuery({ eq });
-    return { unique };
-  });
+  const withIndex = vi.fn(
+    (_indexName: string, buildQuery: (query: { eq: typeof eq }) => unknown) => {
+      buildQuery({ eq });
+      return { unique };
+    },
+  );
   const query = vi.fn(() => ({ withIndex }));
 
   return {
