@@ -10,7 +10,7 @@ export type BuildApplicationRunIdempotencyKeyInput = Readonly<{
 
 export function buildApplicationRunIdempotencyKey(
   input: BuildApplicationRunIdempotencyKeyInput,
-): string {
+): Promise<string> {
   return buildStableHash({
     namespace: "application-harness",
     type: "application-run-idempotency",
