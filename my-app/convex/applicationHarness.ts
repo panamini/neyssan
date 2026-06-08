@@ -275,7 +275,7 @@ export const failRun = internalMutation({
       throw new Error("ApplicationRun not found");
     }
 
-    assertRunStatusForPatch(run, ["running"], "fail");
+    assertRunStatusForPatch(run, ["running", "blocked"], "fail");
 
     await ctx.db.patch(run._id, {
       status: "failed",
