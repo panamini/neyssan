@@ -3,6 +3,7 @@ import {
   buildCandidateHash,
   buildContextHash,
   buildJobHash,
+  buildRawJobTextHash,
   buildSettingsHash,
   buildSourceRefHash,
   buildStableHash,
@@ -68,6 +69,15 @@ describe("application-harness fingerprints", () => {
     expect(() => stableSerialize(circularObject)).toThrow(/circular objects/);
   });
 
+  it("changes rawTextHash when the raw job text changes", async () => {
+    const baseHash = await buildRawJobTextHash("Build reliable product workflows.");
+    const changedHash = await buildRawJobTextHash(
+      "Build reliable product workflows and data pipelines.",
+    );
+
+    expect(changedHash).not.toBe(baseHash);
+  });
+
   it("changes jobHash when the job text changes", async () => {
     const baseHash = await buildJobHash({
       jobId: "job_123",
@@ -90,18 +100,43 @@ describe("application-harness fingerprints", () => {
 
   it("changes candidateHash when candidate inputs change", async () => {
     const baseHash = await buildCandidateHash({
+      sourceKind: "cv",
       cvId: "cv_123",
       structuredSectionsHash: "sections_a",
       cvSnapshotHash: "snapshot_a",
     });
 
     const changedHash = await buildCandidateHash({
+      sourceKind: "cv",
       cvId: "cv_123",
       structuredSectionsHash: "sections_b",
       cvSnapshotHash: "snapshot_a",
     });
 
     expect(changedHash).not.toBe(baseHash);
+  });
+
+  it("requires candidate identity anchors before hashing", () => {
+    expect(() => buildCandidateHash({} as never)).toThrow(/sourceKind/);
+    expect(() => buildCandidateHash({ sourceKind: "cv" } as never)).toThrow(/cvId/);
+    expect(() =>
+      buildCandidateHash({ sourceKind: "candidate_evidence_profile" } as never),
+    ).toThrow(/candidateEvidenceProfileId/);
+  });
+
+  it("changes candidateHash when sourceKind changes", async () => {
+    const cvHash = await buildCandidateHash({
+      sourceKind: "cv",
+      cvId: "candidate_123",
+      cvSnapshotHash: "snapshot_hash",
+    });
+    const evidenceProfileHash = await buildCandidateHash({
+      sourceKind: "candidate_evidence_profile",
+      candidateEvidenceProfileId: "candidate_123",
+      cvSnapshotHash: "snapshot_hash",
+    });
+
+    expect(evidenceProfileHash).not.toBe(cvHash);
   });
 
   it("changes settingsHash when settings change", async () => {
@@ -245,7 +280,11 @@ describe("application-harness fingerprints", () => {
 
   it("contextHash combines job, candidate, and settings hashes", async () => {
     const jobHash = await buildJobHash({ jobId: "job_123", rawDescription: "Job text" });
-    const candidateHash = await buildCandidateHash({ cvId: "cv_123", cvSnapshotHash: "snapshot_hash" });
+    const candidateHash = await buildCandidateHash({
+      sourceKind: "cv",
+      cvId: "cv_123",
+      cvSnapshotHash: "snapshot_hash",
+    });
     const settingsHash = await buildSettingsHash({ language: "en" });
 
     expect(await buildContextHash({ jobHash, candidateHash, settingsHash })).toBe(
