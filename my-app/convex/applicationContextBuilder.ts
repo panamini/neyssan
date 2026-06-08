@@ -52,22 +52,23 @@ export const buildAndPersistFromJobAndProfile = internalMutation({
       settings: args.settings,
       now: Date.now(),
     });
+    const contextForWrite = projectApplicationContext(result.context);
 
     const existingById = await ctx.db
       .query("applicationContexts")
       .withIndex("by_user_id", (q) =>
-        q.eq("userId", result.context.userId).eq("id", result.context.id),
+        q.eq("userId", contextForWrite.userId).eq("id", contextForWrite.id),
       )
       .unique();
 
     if (existingById) {
-      if (existingById.contextHash !== result.context.contextHash) {
+      if (existingById.contextHash !== contextForWrite.contextHash) {
         throw new Error("ApplicationContext builder stable id collision");
       }
 
       return {
         contextStorageId: existingById._id,
-        context: projectStoredContext(existingById),
+        context: projectApplicationContext(existingById),
         reused: true,
         hashes: projectHashes(result),
       };
@@ -76,35 +77,37 @@ export const buildAndPersistFromJobAndProfile = internalMutation({
     const existingByHash = await ctx.db
       .query("applicationContexts")
       .withIndex("by_user_context_hash", (q) =>
-        q.eq("userId", result.context.userId).eq("contextHash", result.context.contextHash),
+        q
+          .eq("userId", contextForWrite.userId)
+          .eq("contextHash", contextForWrite.contextHash),
       )
       .unique();
 
     if (existingByHash) {
-      if (existingByHash.id !== result.context.id) {
+      if (existingByHash.id !== contextForWrite.id) {
         throw new Error("ApplicationContext builder contextHash collision with different stable id");
       }
 
       return {
         contextStorageId: existingByHash._id,
-        context: projectStoredContext(existingByHash),
+        context: projectApplicationContext(existingByHash),
         reused: true,
         hashes: projectHashes(result),
       };
     }
 
-    const contextStorageId = await ctx.db.insert("applicationContexts", result.context);
+    const contextStorageId = await ctx.db.insert("applicationContexts", contextForWrite);
 
     return {
       contextStorageId,
-      context: result.context,
+      context: contextForWrite,
       reused: false,
       hashes: projectHashes(result),
     };
   },
 });
 
-function projectStoredContext(context: any) {
+function projectApplicationContext(context: any) {
   return {
     id: context.id,
     userId: context.userId,
