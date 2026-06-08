@@ -53,6 +53,16 @@ Durable hashes use SHA-256 hex digests to align with the existing job-text hash 
 
 Harness timestamps use numeric millisecond values so future persistence and comparison logic can avoid string-date parsing ambiguity.
 
+## Persistence preflight hardening
+
+Before Convex persistence, the harness identity contract requires three additional guardrails:
+
+- Candidate hashes require an explicit candidate identity anchor: either `sourceKind: "cv"` with `cvId`, or `sourceKind: "candidate_evidence_profile"` with `candidateEvidenceProfileId`.
+- Hash namespace ownership is centralized in `fingerprints.ts` so idempotency keys and fingerprint helpers cannot drift onto different namespace strings.
+- `ApplicationContextV1.job.rawTextHash` should be populated with `buildRawJobTextHash(rawDescription)` instead of an ad hoc caller-defined hash.
+
+These guardrails keep PR2 shadow persistence from storing ambiguous candidate hashes, namespace-drifted idempotency keys, or inconsistent raw job text hashes.
+
 ## How this prepares idempotent application workflows
 
 Stable hashes and idempotency keys let future steps identify when the same user, operation, context hash, and input hash have already been processed.
