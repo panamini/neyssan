@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildStableHash, stableSerialize } from "../fingerprints";
+import { APPLICATION_HARNESS_HASH_NAMESPACE, buildStableHash, stableSerialize } from "../fingerprints";
 import { buildApplicationRunIdempotencyKey } from "../idempotency";
 import type { ApplicationRunV1 } from "../schema";
 
@@ -16,6 +16,24 @@ describe("application-harness idempotency", () => {
 
     await expect(buildApplicationRunIdempotencyKey(input)).resolves.toBe(
       await buildApplicationRunIdempotencyKey({ ...input }),
+    );
+  });
+
+  it("uses the shared application-harness hash namespace", async () => {
+    const input = {
+      userId: "user_123",
+      operation: "build_context" as const,
+      contextHash: "context_hash",
+      inputHash: "input_hash",
+    };
+
+    await expect(buildApplicationRunIdempotencyKey(input)).resolves.toBe(
+      await buildStableHash({
+        namespace: APPLICATION_HARNESS_HASH_NAMESPACE,
+        type: "application-run-idempotency",
+        version: 1,
+        input,
+      }),
     );
   });
 
