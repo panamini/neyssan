@@ -10,17 +10,27 @@ import {
 } from "../fingerprints";
 import type { ApplicationArtifactV1, ApplicationEventV1, SourceRefV1 } from "../schema";
 
+const CREATED_AT_MS = Date.UTC(2026, 5, 8, 0, 0, 0, 0);
+
+class UnsupportedClassValue {
+  constructor(readonly value: string) {}
+}
+
 describe("application-harness fingerprints", () => {
-  it("hashes the same object with different key order the same", () => {
-    const left = buildStableHash({ b: 2, a: { d: 4, c: 3 } });
-    const right = buildStableHash({ a: { c: 3, d: 4 }, b: 2 });
+  it("builds SHA-256-length stable hashes", async () => {
+    await expect(buildStableHash({ value: "application-harness" })).resolves.toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("hashes the same object with different key order the same", async () => {
+    const left = await buildStableHash({ b: 2, a: { d: 4, c: 3 } });
+    const right = await buildStableHash({ a: { c: 3, d: 4 }, b: 2 });
 
     expect(left).toBe(right);
   });
 
-  it("preserves array order in hash behavior", () => {
-    const first = buildStableHash({ values: ["job", "cv", "settings"] });
-    const second = buildStableHash({ values: ["cv", "job", "settings"] });
+  it("preserves array order in hash behavior", async () => {
+    const first = await buildStableHash({ values: ["job", "cv", "settings"] });
+    const second = await buildStableHash({ values: ["cv", "job", "settings"] });
 
     expect(first).not.toBe(second);
   });
@@ -31,8 +41,35 @@ describe("application-harness fingerprints", () => {
     );
   });
 
-  it("changes jobHash when the job text changes", () => {
-    const baseHash = buildJobHash({
+  it("serializes supported Date values deterministically", () => {
+    expect(stableSerialize(new Date("2026-06-08T00:00:00.000Z"))).toBe(
+      stableSerialize(new Date(CREATED_AT_MS)),
+    );
+  });
+
+  it("throws on unsupported serializer inputs", () => {
+    expect(() => stableSerialize(() => undefined)).toThrow(/functions/);
+    expect(() => stableSerialize(Symbol("source"))).toThrow(/symbols/);
+    expect(() => stableSerialize(new Map([["key", "value"]]))).toThrow(/Map/);
+    expect(() => stableSerialize(new Set(["value"]))).toThrow(/Set/);
+    expect(() => stableSerialize(/application-harness/)).toThrow(/RegExp/);
+    expect(() => stableSerialize(Promise.resolve("value"))).toThrow(/Promise/);
+    expect(() => stableSerialize(new UnsupportedClassValue("value"))).toThrow(/plain objects/);
+  });
+
+  it("throws on circular arrays and objects", () => {
+    const circularArray: unknown[] = [];
+    circularArray.push(circularArray);
+
+    const circularObject: Record<string, unknown> = {};
+    circularObject.self = circularObject;
+
+    expect(() => stableSerialize(circularArray)).toThrow(/circular arrays/);
+    expect(() => stableSerialize(circularObject)).toThrow(/circular objects/);
+  });
+
+  it("changes jobHash when the job text changes", async () => {
+    const baseHash = await buildJobHash({
       jobId: "job_123",
       rawDescription: "Build reliable product workflows.",
       sourceUrl: "https://example.com/jobs/123",
@@ -40,7 +77,7 @@ describe("application-harness fingerprints", () => {
       company: "Acme",
     });
 
-    const changedHash = buildJobHash({
+    const changedHash = await buildJobHash({
       jobId: "job_123",
       rawDescription: "Build reliable product workflows and data pipelines.",
       sourceUrl: "https://example.com/jobs/123",
@@ -51,14 +88,14 @@ describe("application-harness fingerprints", () => {
     expect(changedHash).not.toBe(baseHash);
   });
 
-  it("changes candidateHash when candidate inputs change", () => {
-    const baseHash = buildCandidateHash({
+  it("changes candidateHash when candidate inputs change", async () => {
+    const baseHash = await buildCandidateHash({
       cvId: "cv_123",
       structuredSectionsHash: "sections_a",
       cvSnapshotHash: "snapshot_a",
     });
 
-    const changedHash = buildCandidateHash({
+    const changedHash = await buildCandidateHash({
       cvId: "cv_123",
       structuredSectionsHash: "sections_b",
       cvSnapshotHash: "snapshot_a",
@@ -67,30 +104,31 @@ describe("application-harness fingerprints", () => {
     expect(changedHash).not.toBe(baseHash);
   });
 
-  it("changes settingsHash when settings change", () => {
-    const baseHash = buildSettingsHash({ language: "en", market: "US", tone: "direct" });
-    const changedHash = buildSettingsHash({ language: "en", market: "US", tone: "warm" });
+  it("changes settingsHash when settings change", async () => {
+    const baseHash = await buildSettingsHash({ language: "en", market: "US", tone: "direct" });
+    const changedHash = await buildSettingsHash({ language: "en", market: "US", tone: "warm" });
 
     expect(changedHash).not.toBe(baseHash);
   });
 
-  it("changes SourceRefV1 hash when sourcePath or sourceHash changes", () => {
+  it("changes SourceRefV1 hash when sourcePath or sourceHash changes", async () => {
     const baseRef: SourceRefV1 = {
       sourceType: "job",
       sourceId: "job_123",
       sourcePath: "rawDescription",
       sourceHash: "hash_a",
     };
+    const baseHash = await buildSourceRefHash(baseRef);
 
-    expect(buildSourceRefHash({ ...baseRef, sourcePath: "title" })).not.toBe(
-      buildSourceRefHash(baseRef),
+    await expect(buildSourceRefHash({ ...baseRef, sourcePath: "title" })).resolves.not.toBe(
+      baseHash,
     );
-    expect(buildSourceRefHash({ ...baseRef, sourceHash: "hash_b" })).not.toBe(
-      buildSourceRefHash(baseRef),
+    await expect(buildSourceRefHash({ ...baseRef, sourceHash: "hash_b" })).resolves.not.toBe(
+      baseHash,
     );
   });
 
-  it("helper functions do not mutate input objects", () => {
+  it("helper functions do not mutate input objects", async () => {
     const settings = {
       language: "en",
       markets: ["US", "CA"],
@@ -105,15 +143,15 @@ describe("application-harness fingerprints", () => {
     const beforeSettings = stableSerialize(settings);
     const beforeSourceRef = stableSerialize(sourceRef);
 
-    buildSettingsHash(settings);
-    buildSourceRefHash(sourceRef);
+    await buildSettingsHash(settings);
+    await buildSourceRefHash(sourceRef);
 
     expect(stableSerialize(settings)).toBe(beforeSettings);
     expect(stableSerialize(sourceRef)).toBe(beforeSourceRef);
     expect(settings.markets).toEqual(["US", "CA"]);
   });
 
-  it("artifact shell fixture compiles and hashes predictably", () => {
+  it("artifact shell fixture compiles and hashes predictably", async () => {
     const sourceRef: SourceRefV1 = {
       sourceType: "artifact",
       sourceId: "artifact_123",
@@ -140,15 +178,15 @@ describe("application-harness fingerprints", () => {
         sourceFactIds: ["fact_1", "fact_2"],
       },
       sourceRefs: [sourceRef],
-      createdAt: "2026-06-08T00:00:00.000Z",
-      updatedAt: "2026-06-08T00:00:00.000Z",
+      createdAt: CREATED_AT_MS,
+      updatedAt: CREATED_AT_MS,
       version: 1,
     };
 
     const equivalentArtifact = {
       version: 1,
-      updatedAt: "2026-06-08T00:00:00.000Z",
-      createdAt: "2026-06-08T00:00:00.000Z",
+      updatedAt: CREATED_AT_MS,
+      createdAt: CREATED_AT_MS,
       sourceRefs: [sourceRef],
       provenance: {
         sourceFactIds: ["fact_1", "fact_2"],
@@ -170,13 +208,13 @@ describe("application-harness fingerprints", () => {
       id: "artifact_123",
     } satisfies ApplicationArtifactV1;
 
-    expect(buildStableHash(artifact)).toBe(buildStableHash(equivalentArtifact));
-    expect(buildStableHash({ ...artifact, title: "Approved cover letter" })).not.toBe(
-      buildStableHash(artifact),
+    expect(await buildStableHash(artifact)).toBe(await buildStableHash(equivalentArtifact));
+    await expect(buildStableHash({ ...artifact, title: "Approved cover letter" })).resolves.not.toBe(
+      await buildStableHash(artifact),
     );
   });
 
-  it("event shell fixture compiles and hashes predictably", () => {
+  it("event shell fixture compiles and hashes predictably", async () => {
     const event: ApplicationEventV1 = {
       id: "event_123",
       userId: "user_123",
@@ -184,13 +222,13 @@ describe("application-harness fingerprints", () => {
       runId: "run_123",
       eventType: "application.context.created",
       payload: { contextHash: "context_hash", sourceRefs: ["job_123", "cv_123"] },
-      createdAt: "2026-06-08T00:00:00.000Z",
+      createdAt: CREATED_AT_MS,
       version: 1,
     };
 
     const equivalentEvent = {
       version: 1,
-      createdAt: "2026-06-08T00:00:00.000Z",
+      createdAt: CREATED_AT_MS,
       payload: { sourceRefs: ["job_123", "cv_123"], contextHash: "context_hash" },
       eventType: "application.context.created",
       runId: "run_123",
@@ -199,22 +237,22 @@ describe("application-harness fingerprints", () => {
       id: "event_123",
     } satisfies ApplicationEventV1;
 
-    expect(buildStableHash(event)).toBe(buildStableHash(equivalentEvent));
-    expect(buildStableHash({ ...event, eventType: "application.context.superseded" })).not.toBe(
-      buildStableHash(event),
+    expect(await buildStableHash(event)).toBe(await buildStableHash(equivalentEvent));
+    await expect(buildStableHash({ ...event, eventType: "application.context.superseded" })).resolves.not.toBe(
+      await buildStableHash(event),
     );
   });
 
-  it("contextHash combines job, candidate, and settings hashes", () => {
-    const jobHash = buildJobHash({ jobId: "job_123", rawDescription: "Job text" });
-    const candidateHash = buildCandidateHash({ cvId: "cv_123", cvSnapshotHash: "snapshot_hash" });
-    const settingsHash = buildSettingsHash({ language: "en" });
+  it("contextHash combines job, candidate, and settings hashes", async () => {
+    const jobHash = await buildJobHash({ jobId: "job_123", rawDescription: "Job text" });
+    const candidateHash = await buildCandidateHash({ cvId: "cv_123", cvSnapshotHash: "snapshot_hash" });
+    const settingsHash = await buildSettingsHash({ language: "en" });
 
-    expect(buildContextHash({ jobHash, candidateHash, settingsHash })).toBe(
-      buildContextHash({ settingsHash, candidateHash, jobHash }),
+    expect(await buildContextHash({ jobHash, candidateHash, settingsHash })).toBe(
+      await buildContextHash({ settingsHash, candidateHash, jobHash }),
     );
-    expect(buildContextHash({ jobHash: "different", candidateHash, settingsHash })).not.toBe(
-      buildContextHash({ jobHash, candidateHash, settingsHash }),
+    await expect(buildContextHash({ jobHash: "different", candidateHash, settingsHash })).resolves.not.toBe(
+      await buildContextHash({ jobHash, candidateHash, settingsHash }),
     );
   });
 });
