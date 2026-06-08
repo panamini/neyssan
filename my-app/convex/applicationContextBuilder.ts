@@ -23,6 +23,15 @@ const buildAndPersistResultValidator = v.object({
   }),
 });
 
+type BuiltApplicationContext = Awaited<
+  ReturnType<typeof buildApplicationContextV1FromExistingData>
+>["context"];
+
+type StoredApplicationContext = BuiltApplicationContext & {
+  _id: unknown;
+  _creationTime: number;
+};
+
 export const buildAndPersistFromJobAndProfile = internalMutation({
   args: {
     jobId: v.id("jobs"),
@@ -107,7 +116,9 @@ export const buildAndPersistFromJobAndProfile = internalMutation({
   },
 });
 
-function projectApplicationContext(context: any) {
+function projectApplicationContext(
+  context: BuiltApplicationContext | StoredApplicationContext,
+): BuiltApplicationContext {
   return {
     id: context.id,
     userId: context.userId,
@@ -116,7 +127,7 @@ function projectApplicationContext(context: any) {
     settingsHash: context.settingsHash,
     contextHash: context.contextHash,
     reviewState: context.reviewState,
-    sourceRefs: context.sourceRefs,
+    sourceRefs: [...context.sourceRefs],
     createdAt: context.createdAt,
     updatedAt: context.updatedAt,
     version: context.version,

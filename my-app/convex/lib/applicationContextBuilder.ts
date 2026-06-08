@@ -70,6 +70,12 @@ export type ApplicationContextBuilderCandidateProfile = LooseRecord & {
   profileId?: unknown;
   defaultResumeId?: unknown;
   defaultResumeName?: unknown;
+  name?: unknown;
+  email?: unknown;
+  phone?: unknown;
+  linkedin?: unknown;
+  website?: unknown;
+  location?: unknown;
   summary?: unknown;
   skills?: unknown;
   keywords?: unknown;
@@ -250,6 +256,12 @@ async function buildCandidateProfileSnapshot(
     ...(readString(profile.profileId) ? { profileId: readString(profile.profileId) } : {}),
     ...(readString(profile.defaultResumeId) ? { defaultResumeId: readString(profile.defaultResumeId) } : {}),
     ...(readString(profile.defaultResumeName) ? { defaultResumeName: readString(profile.defaultResumeName) } : {}),
+    ...(readString(profile.name) ? { name: readString(profile.name) } : {}),
+    ...(readString(profile.email) ? { email: readString(profile.email) } : {}),
+    ...(readString(profile.phone) ? { phone: readString(profile.phone) } : {}),
+    ...(readString(profile.linkedin) ? { linkedin: readString(profile.linkedin) } : {}),
+    ...(readString(profile.website) ? { website: readString(profile.website) } : {}),
+    ...(readString(profile.location) ? { location: readString(profile.location) } : {}),
     ...(readString(profile.summary) ? { summary: readString(profile.summary) } : {}),
     skills: compactStringArray(profile.skills),
     keywords: compactStringArray(profile.keywords),
@@ -306,7 +318,12 @@ function normalizeContact(value: unknown) {
   const record = asRecord(value);
   if (!record) return undefined;
   return compactObject({
+    name: readString(record.name),
+    email: readString(record.email),
     phone: readString(record.phone),
+    linkedin: readString(record.linkedin),
+    website: readString(record.website),
+    location: readString(record.location),
     address: readString(record.address),
   });
 }
