@@ -1,3 +1,8 @@
+import type {
+  CandidateFactTypeV1,
+  CandidateSourceDocumentTypeV1,
+} from "../candidate-evidence/schema";
+
 export type CareerKnowledgeRuleIdV1 = string;
 
 export type CareerKnowledgeMarketV1 =
@@ -30,8 +35,8 @@ export type CareerKnowledgeSeverityV1 = "info" | "warning" | "blocker";
 
 export type CareerKnowledgeRuleAppliesToV1 = Readonly<{
   documentKinds: readonly CareerKnowledgeDocumentKindV1[];
-  sourceTypes?: readonly string[];
-  candidateFactTypes?: readonly string[];
+  sourceTypes?: readonly CandidateSourceDocumentTypeV1[];
+  candidateFactTypes?: readonly CandidateFactTypeV1[];
   artifactTypes?: readonly string[];
   languages?: readonly string[];
   targetRoles?: readonly string[];
