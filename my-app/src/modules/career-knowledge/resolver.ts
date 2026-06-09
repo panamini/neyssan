@@ -143,7 +143,7 @@ function matchesOptionalString(values: readonly string[] | undefined, value: str
   }
 
   if (!value) {
-    return false;
+    return true;
   }
 
   return values.includes(value);
