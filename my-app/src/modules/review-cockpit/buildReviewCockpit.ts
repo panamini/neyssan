@@ -5,7 +5,11 @@ import type {
   EvidenceMatchV1,
   MissingEvidenceV1,
 } from "../evidence-graph/schema";
-import { isForbiddenResumeOrCoverLetterText, normalizePlanIdSegment } from "../resume-variant-plan/planRules";
+import {
+  isForbiddenResumeOrCoverLetterText,
+  normalizePlanIdSegment,
+  sortUniqueStrings,
+} from "../resume-variant-plan/planRules";
 import type {
   ResumeVariantPlanItemV1,
   ResumeVariantPlanV1,
@@ -167,7 +171,7 @@ function buildWarningItem(
   const riskFlagIds = warning.riskFlagId ? [warning.riskFlagId] : [];
   const matchingPlanItem = findPlanItemForWarning(warning, plan);
   const evidenceMatchId = warning.candidateFactId
-    ? graph.matches.find((match) => match.candidateFactId === warning.candidateFactId)?.id
+    ? firstEvidenceMatchIdForFact(warning.candidateFactId, graph)
     : undefined;
 
   return {
@@ -244,8 +248,8 @@ function buildPlanReviewItem(planItem: ResumeVariantPlanItemV1): ReviewCockpitIt
     description: "Plan item needs review before resume variant generation.",
     severity,
     planItemId: planItem.id,
-    demandId: planItem.demandIds[0],
-    evidenceMatchId: planItem.evidenceMatchIds[0],
+    demandId: sortUniqueStrings(planItem.demandIds)[0],
+    evidenceMatchId: sortUniqueStrings(planItem.evidenceMatchIds)[0],
     sourceFactIds: sortUniqueStrings(planItem.candidateFactIds),
     allowedClaimIds: sortUniqueStrings(planItem.allowedClaimIds),
     riskFlagIds: sortUniqueStrings(planItem.riskFlagIds),
@@ -360,6 +364,12 @@ function acceptedMatchesForClaim(claim: AllowedClaimV1, graph: EvidenceGraphV1):
   );
 }
 
+function firstEvidenceMatchIdForFact(candidateFactId: string, graph: EvidenceGraphV1): string | undefined {
+  return sortEvidenceMatches(
+    graph.matches.filter((match) => match.candidateFactId === candidateFactId),
+  )[0]?.id;
+}
+
 function riskFlagIdsForFact(candidateFactId: string, graph: EvidenceGraphV1): readonly string[] {
   return sortUniqueStrings(
     graph.riskFlags
@@ -421,10 +431,6 @@ function sortAllowedClaims(allowedClaims: readonly AllowedClaimV1[]): readonly A
 
 function sortEvidenceMatches(matches: readonly EvidenceMatchV1[]): readonly EvidenceMatchV1[] {
   return [...matches].sort((a, b) => a.id.localeCompare(b.id));
-}
-
-function sortUniqueStrings(values: readonly string[]): readonly string[] {
-  return [...new Set(values)].sort((a, b) => a.localeCompare(b));
 }
 
 function isBuildReviewCockpitInput(
