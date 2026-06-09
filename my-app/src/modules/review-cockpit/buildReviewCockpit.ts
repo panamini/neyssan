@@ -454,6 +454,14 @@ function assertReviewCockpitHashInput(input: BuildReviewCockpitInputV1): void {
 function assertReviewCockpitInput(input: BuildReviewCockpitInputV1): void {
   assertReviewCockpitHashInput(input);
 
+  if (input.userId !== input.evidenceGraph.userId) {
+    throw new TypeError("ReviewCockpit input userId must match EvidenceGraph");
+  }
+
+  if (input.userId !== input.resumeVariantPlan.userId) {
+    throw new TypeError("ReviewCockpit input userId must match ResumeVariantPlan");
+  }
+
   if (input.evidenceGraph.id !== input.resumeVariantPlan.evidenceGraphId) {
     throw new TypeError("ReviewCockpit input requires plan and EvidenceGraph IDs to match");
   }
