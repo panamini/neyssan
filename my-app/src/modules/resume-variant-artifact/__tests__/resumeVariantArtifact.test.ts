@@ -8,6 +8,7 @@ import {
   assertResumeVariantArtifactEvidenceBacked,
   buildResumeVariantArtifact,
   buildResumeVariantArtifactContent,
+  buildResumeVariantArtifactContentHash,
   buildResumeVariantArtifactHash,
   collectResumeVariantArtifactAllowedClaimIds,
   collectResumeVariantArtifactDemandIds,
@@ -123,26 +124,23 @@ describe("resume variant artifact", () => {
     expect(reviewDerivedItem?.candidateFactId).toBe("candidate-fact:typescript-skill");
   });
 
-  it("same source chain with different timestamps produces the same artifact hash", async () => {
+  it("source-chain identity hash is timestamp-independent and used for artifact ID", async () => {
     const source = input();
     const rebuiltLater = input({ createdAt: T + 10_000, updatedAt: T + 20_000 });
-    await expect(buildResumeVariantArtifactHash(rebuiltLater)).resolves.toBe(await buildResumeVariantArtifactHash(source));
+    const hash = await buildResumeVariantArtifactHash(source);
+    await expect(buildResumeVariantArtifactHash(rebuiltLater)).resolves.toBe(hash);
+    await expect(buildResumeVariantArtifact(rebuiltLater)).resolves.toMatchObject({ id: `resume-variant-artifact:${hash}`, createdAt: T + 10_000, updatedAt: T + 20_000 });
   });
 
-  it("same source chain with different timestamps produces the same artifact ID", async () => {
-    const source = input();
-    const rebuiltLater = input({ createdAt: T + 10_000, updatedAt: T + 20_000 });
-    await expect(buildResumeVariantArtifact(rebuiltLater)).resolves.toMatchObject({ id: (await buildResumeVariantArtifact(source)).id, createdAt: T + 10_000, updatedAt: T + 20_000 });
-  });
-
-  it("artifact-path hash is deterministic and ignores artifact metadata", async () => {
+  it("content hash is deterministic, ignores metadata, and changes when content changes", async () => {
     const artifact = await buildResumeVariantArtifact(input());
-    const first = await buildResumeVariantArtifactHash(artifact);
-    await expect(buildResumeVariantArtifactHash(artifact)).resolves.toBe(first);
-    await expect(buildResumeVariantArtifactHash({ ...artifact, id: "resume-variant-artifact:changed-metadata", createdAt: T + 30_000, updatedAt: T + 40_000 })).resolves.toBe(first);
+    const first = await buildResumeVariantArtifactContentHash(artifact);
+    await expect(buildResumeVariantArtifactContentHash(artifact)).resolves.toBe(first);
+    await expect(buildResumeVariantArtifactContentHash({ ...artifact, id: "resume-variant-artifact:changed", createdAt: T + 30_000, updatedAt: T + 40_000 })).resolves.toBe(first);
+    await expect(buildResumeVariantArtifactContentHash({ ...artifact, warnings: [...artifact.warnings, "content changed"] })).resolves.not.toBe(first);
   });
 
-  it("changes hash when EvidenceGraph, ResumeVariantPlan, or ReviewCockpit changes", async () => {
+  it("changes source-chain hash when EvidenceGraph, ResumeVariantPlan, or ReviewCockpit changes", async () => {
     const base = await buildResumeVariantArtifactHash(input());
     await expect(buildResumeVariantArtifactHash(linkedInput({ evidenceGraph: { id: "evidence-graph:changed" } }))).resolves.not.toBe(base);
     await expect(buildResumeVariantArtifactHash(linkedInput({ resumeVariantPlan: { id: "resume-variant-plan:changed" } }))).resolves.not.toBe(base);
