@@ -360,7 +360,7 @@ async function sanitizeCandidateFact(fact: CandidateFactV1): Promise<CandidateFa
     factType: fact.factType,
     value,
     ...(fact.normalizedText ? { normalizedText: fact.normalizedText } : {}),
-    ...(typeof fact.confidence === "number" ? { confidence: fact.confidence } : {}),
+    ...projectCandidateFactConfidence(fact.confidence),
     reviewState: fact.reviewState,
     visibility: fact.visibility,
     createdAt: fact.createdAt,
@@ -387,9 +387,13 @@ async function sanitizeCandidateImportBatch(
   importBatch: CandidateImportBatchV1,
 ): Promise<CandidateImportBatchV1> {
   const sourceDocumentIds = [...importBatch.sourceDocumentIds];
+  if (sourceDocumentIds.length === 0) {
+    throw new TypeError("CandidateImportBatch sourceDocumentIds must not be empty");
+  }
+
   for (const sourceDocumentId of sourceDocumentIds) {
     if (typeof sourceDocumentId !== "string" || !sourceDocumentId) {
-      throw new TypeError("CandidateImportBatch requires non-empty sourceDocumentIds");
+      throw new TypeError("CandidateImportBatch requires non-empty string sourceDocumentIds");
     }
   }
 
@@ -456,6 +460,20 @@ function assertSameImportBatchIdentity(
   if (stableSerialize(existing.sourceDocumentIds) !== stableSerialize(incoming.sourceDocumentIds)) {
     throw new Error("CandidateImportBatch stable id collision with conflicting source documents");
   }
+}
+
+function projectCandidateFactConfidence(
+  confidence: CandidateFactV1["confidence"],
+): { confidence?: number } {
+  if (confidence === undefined) {
+    return {};
+  }
+
+  if (typeof confidence !== "number" || !Number.isFinite(confidence)) {
+    throw new TypeError("CandidateFact confidence must be a finite number");
+  }
+
+  return { confidence };
 }
 
 function hasRawSourceText(value: object): boolean {
