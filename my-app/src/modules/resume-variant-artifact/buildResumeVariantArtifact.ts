@@ -381,6 +381,7 @@ function buildArtifactItemFromReviewItem(
     section,
     planItemId: reviewItem.planItemId,
     allowedClaimId: reviewItem.allowedClaimId,
+    candidateFactId: reviewItem.candidateFactId,
     evidenceMatchId: reviewItem.evidenceMatchId,
     demandId: reviewItem.demandId,
     riskFlagId: reviewItem.riskFlagId ?? reviewItem.riskFlagIds[0],
