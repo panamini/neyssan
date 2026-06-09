@@ -30,8 +30,8 @@ import type {
   ResumeVariantArtifactV1,
 } from "./schema";
 
-const RESUME_VARIANT_ARTIFACT_HASH_NAMESPACE = "resume-variant-artifact";
-const RESUME_VARIANT_ARTIFACT_ID_PREFIX = "resume-variant-artifact:";
+const HASH_NAMESPACE = "resume-variant-artifact";
+const ARTIFACT_ID_PREFIX = "resume-variant-artifact:";
 const EVIDENCE_GRAPH_ID_PREFIX = "evidence-graph:";
 const RESUME_VARIANT_PLAN_ID_PREFIX = "resume-variant-plan:";
 const BLOCKED_CLAIM_ID_PREFIX = "blocked-claim:";
@@ -66,7 +66,10 @@ type StableResumeVariantArtifactHashInput = Readonly<{
   reviewCockpit: BuildResumeVariantArtifactInputV1["reviewCockpit"];
 }>;
 
-type StableResumeVariantArtifactForHash = Omit<ResumeVariantArtifactV1, "id" | "createdAt" | "updatedAt">;
+type StableResumeVariantArtifactForHash = Omit<
+  ResumeVariantArtifactV1,
+  "id" | "createdAt" | "updatedAt"
+>;
 
 export async function buildResumeVariantArtifact(
   input: BuildResumeVariantArtifactInputV1,
@@ -77,7 +80,7 @@ export async function buildResumeVariantArtifact(
   const status = deriveResumeVariantArtifactStatus(input, sections);
 
   const artifact: ResumeVariantArtifactV1 = {
-    id: `${RESUME_VARIANT_ARTIFACT_ID_PREFIX}${await buildResumeVariantArtifactHash(input)}`,
+    id: `${ARTIFACT_ID_PREFIX}${await buildResumeVariantArtifactHash(input)}`,
     userId: input.userId,
     applicationContextId: input.applicationContextId,
     targetDocumentKind: input.targetDocumentKind,
@@ -114,24 +117,26 @@ export async function buildResumeVariantArtifact(
 }
 
 export function buildResumeVariantArtifactHash(
-  inputOrArtifact: BuildResumeVariantArtifactInputV1 | ResumeVariantArtifactV1,
+  input: BuildResumeVariantArtifactInputV1,
 ): Promise<string> {
-  if (isBuildResumeVariantArtifactInput(inputOrArtifact)) {
-    assertResumeVariantArtifactInput(inputOrArtifact);
-
-    return buildStableHash({
-      namespace: RESUME_VARIANT_ARTIFACT_HASH_NAMESPACE,
-      type: "resume-variant-artifact-input",
-      version: 1,
-      input: buildStableArtifactHashInput(inputOrArtifact),
-    });
-  }
+  assertResumeVariantArtifactInput(input);
 
   return buildStableHash({
-    namespace: RESUME_VARIANT_ARTIFACT_HASH_NAMESPACE,
-    type: "resume-variant-artifact",
+    namespace: HASH_NAMESPACE,
+    type: "resume-variant-artifact-input",
     version: 1,
-    artifact: buildStableArtifactForHash(inputOrArtifact),
+    input: buildStableArtifactHashInput(input),
+  });
+}
+
+export function buildResumeVariantArtifactContentHash(
+  artifact: ResumeVariantArtifactV1,
+): Promise<string> {
+  return buildStableHash({
+    namespace: HASH_NAMESPACE,
+    type: "resume-variant-artifact-content",
+    version: 1,
+    artifact: buildStableArtifactForHash(artifact),
   });
 }
 
@@ -150,10 +155,8 @@ export function buildResumeVariantArtifactSections(
   const itemsBySection = new Map<ResumeVariantArtifactSectionKindV1, ResumeVariantArtifactItemV1[]>();
 
   const artifactItems = [
-    ...input.resumeVariantPlan.items.map((planItem) => buildArtifactItemFromPlanItem(planItem, input)),
-    ...input.reviewCockpit.items.map((reviewItem) =>
-      buildArtifactItemFromReviewItem(reviewItem, input, planItemsById),
-    ),
+    ...input.resumeVariantPlan.items.map((item) => buildArtifactItemFromPlanItem(item, input)),
+    ...input.reviewCockpit.items.map((item) => buildArtifactItemFromReviewItem(item, input, planItemsById)),
   ].map(normalizeArtifactItemIds);
 
   for (const item of artifactItems) {
@@ -162,19 +165,13 @@ export function buildResumeVariantArtifactSections(
 
   return RESUME_VARIANT_ARTIFACT_SECTION_ORDER
     .filter((section) => itemsBySection.has(section))
-    .map((section) =>
-      buildArtifactSection(section, itemsBySection.get(section) ?? [], planItemMetaById),
-    );
+    .map((section) => buildArtifactSection(section, itemsBySection.get(section) ?? [], planItemMetaById));
 }
 
 export function buildResumeVariantArtifactContent(
   artifact: ResumeVariantArtifactV1,
 ): ResumeVariantArtifactContentV1 {
-  return {
-    kind: "resume_variant_artifact",
-    artifact,
-    version: 1,
-  };
+  return { kind: "resume_variant_artifact", artifact, version: 1 };
 }
 
 export function assertResumeVariantArtifactInput(input: BuildResumeVariantArtifactInputV1): void {
@@ -183,39 +180,31 @@ export function assertResumeVariantArtifactInput(input: BuildResumeVariantArtifa
   if (input.userId !== input.evidenceGraph.userId) {
     throw new TypeError("ResumeVariantArtifact input userId must match EvidenceGraph");
   }
-
   if (input.userId !== input.resumeVariantPlan.userId) {
     throw new TypeError("ResumeVariantArtifact input userId must match ResumeVariantPlan");
   }
-
   if (input.userId !== input.reviewCockpit.userId) {
     throw new TypeError("ResumeVariantArtifact input userId must match ReviewCockpit");
   }
-
   if (input.applicationContextId !== input.evidenceGraph.applicationContextId) {
     throw new TypeError("ResumeVariantArtifact input applicationContextId must match EvidenceGraph");
   }
-
   if (input.applicationContextId !== input.resumeVariantPlan.applicationContextId) {
     throw new TypeError("ResumeVariantArtifact input applicationContextId must match ResumeVariantPlan");
   }
-
   if (input.applicationContextId !== input.reviewCockpit.applicationContextId) {
     throw new TypeError("ResumeVariantArtifact input applicationContextId must match ReviewCockpit");
   }
-
   if (input.resumeVariantPlan.evidenceGraphId !== input.evidenceGraph.id) {
     throw new TypeError(
       "ResumeVariantArtifact input requires ResumeVariantPlan evidenceGraphId to match EvidenceGraph",
     );
   }
-
   if (input.reviewCockpit.evidenceGraphId !== input.evidenceGraph.id) {
     throw new TypeError(
       "ResumeVariantArtifact input requires ReviewCockpit evidenceGraphId to match EvidenceGraph",
     );
   }
-
   if (input.reviewCockpit.resumeVariantPlanId !== input.resumeVariantPlan.id) {
     throw new TypeError(
       "ResumeVariantArtifact input requires ReviewCockpit resumeVariantPlanId to match ResumeVariantPlan",
@@ -248,19 +237,15 @@ export function assertResumeVariantArtifactEvidenceBacked(
     if (item.candidateFactId && !knownSourceFactIds.has(item.candidateFactId)) {
       throw new TypeError(`unknown candidate fact ${item.candidateFactId}`);
     }
-
     if (item.allowedClaimId && !allowedClaimsById.has(item.allowedClaimId)) {
       throw new TypeError(`unknown allowed claim ${item.allowedClaimId}`);
     }
-
     if (item.evidenceMatchId && !evidenceMatchIds.has(item.evidenceMatchId)) {
       throw new TypeError(`unknown evidence match ${item.evidenceMatchId}`);
     }
-
     if (item.demandId && !demandIds.has(item.demandId)) {
       throw new TypeError(`unknown demand ${item.demandId}`);
     }
-
     if (item.riskFlagId && !riskFlagIds.has(item.riskFlagId)) {
       throw new TypeError(`unknown risk flag ${item.riskFlagId}`);
     }
@@ -404,15 +389,12 @@ function deriveArtifactItemKindFromPlanItem(
   if (isSafeSourceBackedPlanItem(planItem, input)) {
     return "source_backed_claim";
   }
-
   if (planItem.riskFlagIds.length > 0) {
     return "risk_notice";
   }
-
   if (planItem.action === "block") {
     return "blocked_claim_notice";
   }
-
   if (
     planItem.action === "needs_review" ||
     planItem.reviewState === "needs_review" ||
@@ -420,7 +402,6 @@ function deriveArtifactItemKindFromPlanItem(
   ) {
     return "review_notice";
   }
-
   return "plan_instruction";
 }
 
@@ -430,15 +411,12 @@ function deriveArtifactItemKindFromReviewItem(
   if (reviewItem.bucket === "missing_evidence") {
     return "missing_evidence_notice";
   }
-
   if (reviewItem.bucket === "blocked_claims") {
     return "blocked_claim_notice";
   }
-
   if (reviewItem.riskFlagId || reviewItem.riskFlagIds.length > 0) {
     return "risk_notice";
   }
-
   return "review_notice";
 }
 
@@ -453,23 +431,24 @@ function isSafeSourceBackedPlanItem(
   ) {
     return false;
   }
-
-  if (planItem.reviewState === "blocked" || planItem.reviewState === "needs_review" || planItem.reviewState === "rejected") {
+  if (
+    planItem.reviewState === "blocked" ||
+    planItem.reviewState === "needs_review" ||
+    planItem.reviewState === "rejected"
+  ) {
     return false;
   }
-
   if (
-    planItem.candidateFactIds.some((candidateFactId) =>
-      input.evidenceGraph.blockedClaimIds.includes(`${BLOCKED_CLAIM_ID_PREFIX}${candidateFactId}`),
+    planItem.candidateFactIds.some((factId) =>
+      input.evidenceGraph.blockedClaimIds.includes(`${BLOCKED_CLAIM_ID_PREFIX}${factId}`),
     )
   ) {
     return false;
   }
-
-  return !planItem.candidateFactIds.some((candidateFactId) =>
+  return !planItem.candidateFactIds.some((factId) =>
     input.evidenceGraph.riskFlags.some(
       (riskFlag) =>
-        riskFlag.candidateFactId === candidateFactId &&
+        riskFlag.candidateFactId === factId &&
         SOURCE_BACKED_EXCLUDED_RISK_CATEGORIES.has(riskFlag.category),
     ),
   );
@@ -483,22 +462,12 @@ function findMatchingPlanItemForReviewItem(
   if (reviewItem.planItemId) {
     return planItemsById.get(reviewItem.planItemId);
   }
-
   return input.resumeVariantPlan.items.find((planItem) => {
-    if (reviewItem.allowedClaimId && planItem.allowedClaimIds.includes(reviewItem.allowedClaimId)) {
-      return true;
-    }
-
-    if (reviewItem.demandId && planItem.demandIds.includes(reviewItem.demandId)) {
-      return true;
-    }
-
-    if (reviewItem.evidenceMatchId && planItem.evidenceMatchIds.includes(reviewItem.evidenceMatchId)) {
-      return true;
-    }
-
-    return reviewItem.sourceFactIds.some((sourceFactId) =>
-      planItem.candidateFactIds.includes(sourceFactId),
+    return Boolean(
+      (reviewItem.allowedClaimId && planItem.allowedClaimIds.includes(reviewItem.allowedClaimId)) ||
+        (reviewItem.demandId && planItem.demandIds.includes(reviewItem.demandId)) ||
+        (reviewItem.evidenceMatchId && planItem.evidenceMatchIds.includes(reviewItem.evidenceMatchId)) ||
+        reviewItem.sourceFactIds.some((factId) => planItem.candidateFactIds.includes(factId)),
     );
   });
 }
@@ -511,7 +480,6 @@ function buildArtifactSection(
   const sortedItems = [...items].sort((a, b) =>
     compareResumeVariantArtifactItems(a, b, planItemMetaById),
   );
-
   return {
     id: ["resume-variant-artifact-section", kind].map(normalizePlanIdSegment).join(":"),
     kind,
@@ -546,16 +514,12 @@ function deriveResumeVariantArtifactStatus(
   if (input.resumeVariantPlan.blocked || input.reviewCockpit.summary.status === "blocked") {
     return "blocked";
   }
-
   if (input.reviewCockpit.summary.status === "needs_review") {
     return "needs_review";
   }
-
-  const hasSourceBackedItem = sections.some((section) =>
-    section.items.some((item) => item.kind === "source_backed_claim"),
-  );
-
-  return hasSourceBackedItem ? "ready_for_generation" : "draft";
+  return sections.some((section) => section.items.some((item) => item.kind === "source_backed_claim"))
+    ? "ready_for_generation"
+    : "draft";
 }
 
 function buildResumeVariantArtifactWarnings(
@@ -563,12 +527,8 @@ function buildResumeVariantArtifactWarnings(
   status: ResumeVariantArtifactStatusV1,
 ): readonly string[] {
   return sortStrings([
-    status === "blocked"
-      ? "Resume variant artifact is blocked until review resolves blockers."
-      : undefined,
-    status === "needs_review"
-      ? "Resume variant artifact needs review before generation."
-      : undefined,
+    status === "blocked" ? "Resume variant artifact is blocked until review resolves blockers." : undefined,
+    status === "needs_review" ? "Resume variant artifact needs review before generation." : undefined,
     ...input.resumeVariantPlan.warnings.map((warning) => `Plan warning preserved for review: ${warning.id}`),
     ...input.reviewCockpit.items
       .filter((item) => item.severity !== "info")
@@ -583,7 +543,6 @@ function buildResumeVariantArtifactBlockedReason(
   if (status !== "blocked") {
     return undefined;
   }
-
   return input.resumeVariantPlan.blocked ? "Blocked by ResumeVariantPlan." : "Blocked by ReviewCockpit.";
 }
 
@@ -620,40 +579,23 @@ function assertArtifactItemReferencesKnownIds(
     knownSourceFactIds: ReadonlySet<string>;
   }>,
 ): void {
-  for (const allowedClaimId of item.allowedClaimIds) {
-    if (!context.allowedClaimsById.has(allowedClaimId)) {
-      throw new TypeError(`unknown allowed claim ${allowedClaimId}`);
-    }
+  for (const id of item.allowedClaimIds) {
+    if (!context.allowedClaimsById.has(id)) throw new TypeError(`unknown allowed claim ${id}`);
   }
-
-  for (const sourceFactId of item.sourceFactIds) {
-    if (!context.knownSourceFactIds.has(sourceFactId)) {
-      throw new TypeError(`unknown source fact ${sourceFactId}`);
-    }
+  for (const id of item.sourceFactIds) {
+    if (!context.knownSourceFactIds.has(id)) throw new TypeError(`unknown source fact ${id}`);
   }
-
-  for (const evidenceMatchId of item.evidenceMatchIds) {
-    if (!context.evidenceMatchIds.has(evidenceMatchId)) {
-      throw new TypeError(`unknown evidence match ${evidenceMatchId}`);
-    }
+  for (const id of item.evidenceMatchIds) {
+    if (!context.evidenceMatchIds.has(id)) throw new TypeError(`unknown evidence match ${id}`);
   }
-
-  for (const demandId of item.demandIds) {
-    if (!context.demandIds.has(demandId)) {
-      throw new TypeError(`unknown demand ${demandId}`);
-    }
+  for (const id of item.demandIds) {
+    if (!context.demandIds.has(id)) throw new TypeError(`unknown demand ${id}`);
   }
-
-  for (const riskFlagId of item.riskFlagIds) {
-    if (!context.riskFlagIds.has(riskFlagId)) {
-      throw new TypeError(`unknown risk flag ${riskFlagId}`);
-    }
+  for (const id of item.riskFlagIds) {
+    if (!context.riskFlagIds.has(id)) throw new TypeError(`unknown risk flag ${id}`);
   }
-
-  for (const reviewItemId of item.reviewItemIds) {
-    if (!context.reviewItemIds.has(reviewItemId)) {
-      throw new TypeError(`unknown review item ${reviewItemId}`);
-    }
+  for (const id of item.reviewItemIds) {
+    if (!context.reviewItemIds.has(id)) throw new TypeError(`unknown review item ${id}`);
   }
 }
 
@@ -666,24 +608,16 @@ function assertSourceBackedArtifactItem(
   if (item.allowedClaimIds.length === 0) {
     throw new TypeError("source_backed_claim lacks allowedClaimIds");
   }
-
   if (item.sourceFactIds.length === 0) {
     throw new TypeError("source_backed_claim lacks sourceFactIds");
   }
-
   for (const sourceFactId of item.sourceFactIds) {
     if (blockedSourceFactIds.has(sourceFactId)) {
       throw new TypeError(`blocked source fact ${sourceFactId}`);
     }
-
-    if (
-      !item.allowedClaimIds.some((allowedClaimId) =>
-        allowedClaimsById.get(allowedClaimId)?.candidateFactIds.includes(sourceFactId),
-      )
-    ) {
+    if (!item.allowedClaimIds.some((claimId) => allowedClaimsById.get(claimId)?.candidateFactIds.includes(sourceFactId))) {
       throw new TypeError(`source fact does not map to allowed claims ${sourceFactId}`);
     }
-
     if (
       input.evidenceGraph.riskFlags.some(
         (riskFlag) =>
@@ -697,46 +631,35 @@ function assertSourceBackedArtifactItem(
 }
 
 function collectKnownSourceFactIds(input: BuildResumeVariantArtifactInputV1): ReadonlySet<string> {
-  return new Set([
-    ...input.resumeVariantPlan.sourceFactIds,
-    ...input.resumeVariantPlan.items.flatMap((item) => item.candidateFactIds),
-    ...input.reviewCockpit.items.flatMap((item) => item.sourceFactIds),
-    ...input.evidenceGraph.allowedClaims.flatMap((claim) => claim.candidateFactIds),
-  ]);
+  return new Set(
+    sortStrings([
+      ...input.resumeVariantPlan.sourceFactIds,
+      ...input.resumeVariantPlan.items.flatMap((item) => item.candidateFactIds),
+      ...input.reviewCockpit.items.flatMap((item) => item.sourceFactIds),
+      ...input.reviewCockpit.items.map((item) => item.candidateFactId),
+      ...input.evidenceGraph.allowedClaims.flatMap((claim) => claim.candidateFactIds),
+    ]),
+  );
 }
 
 function collectBlockedSourceFactIds(input: BuildResumeVariantArtifactInputV1): ReadonlySet<string> {
   return new Set(
     input.evidenceGraph.blockedClaimIds
-      .filter((blockedClaimId) => blockedClaimId.startsWith(BLOCKED_CLAIM_ID_PREFIX))
-      .map((blockedClaimId) => blockedClaimId.slice(BLOCKED_CLAIM_ID_PREFIX.length)),
+      .filter((id) => id.startsWith(BLOCKED_CLAIM_ID_PREFIX))
+      .map((id) => id.slice(BLOCKED_CLAIM_ID_PREFIX.length)),
   );
 }
 
 function assertBasicResumeVariantArtifactInput(input: BuildResumeVariantArtifactInputV1): void {
-  if (
-    !input?.userId ||
-    !input.applicationContextId ||
-    !input.evidenceGraph?.id ||
-    !input.resumeVariantPlan?.id ||
-    !input.reviewCockpit?.id
-  ) {
+  if (!input?.userId || !input.applicationContextId || !input.evidenceGraph?.id || !input.resumeVariantPlan?.id || !input.reviewCockpit?.id) {
     throw new TypeError("invalid ResumeVariantArtifact input");
   }
-
   if (input.targetDocumentKind !== "resume" && input.targetDocumentKind !== "cv") {
     throw new TypeError("ResumeVariantArtifact targetDocumentKind must be resume or cv");
   }
-
   if (!Number.isFinite(input.createdAt) || !Number.isFinite(input.updatedAt)) {
     throw new TypeError("ResumeVariantArtifact input requires numeric timestamps");
   }
-}
-
-function isBuildResumeVariantArtifactInput(
-  value: BuildResumeVariantArtifactInputV1 | ResumeVariantArtifactV1,
-): value is BuildResumeVariantArtifactInputV1 {
-  return "evidenceGraph" in value;
 }
 
 function sortStrings(values: readonly (string | undefined)[]): readonly string[] {
