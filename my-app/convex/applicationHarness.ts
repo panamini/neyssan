@@ -39,6 +39,20 @@ function assertContextCandidateAnchor(candidate: {
   }
 }
 
+function assertRunStatusForPatch(
+  run: { status: string },
+  allowedStatuses: readonly string[],
+  action: string,
+): void {
+  if (!allowedStatuses.includes(run.status)) {
+    throw new Error(
+      `Cannot ${action} ApplicationRun from status "${run.status}"; expected ${allowedStatuses
+        .map((status) => `"${status}"`)
+        .join(" or ")}`,
+    );
+  }
+}
+
 export const createContext = internalMutation({
   args: {
     context: applicationHarnessContextValidator,
@@ -208,6 +222,128 @@ export const listRunsForUser = internalQuery({
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .order("desc")
       .take(resolveListLimit(args.limit));
+  },
+});
+
+export const startRun = internalMutation({
+  args: {
+    userId: v.string(),
+    id: v.string(),
+    updatedAt: v.number(),
+  },
+  returns: v.id("applicationRuns"),
+  handler: async (ctx, args) => {
+    const run = await ctx.db
+      .query("applicationRuns")
+      .withIndex("by_user_id", (q) => q.eq("userId", args.userId).eq("id", args.id))
+      .unique();
+
+    if (!run) {
+      throw new Error("ApplicationRun not found");
+    }
+
+    assertRunStatusForPatch(run, ["queued"], "start");
+
+    await ctx.db.patch(run._id, {
+      status: "running",
+      updatedAt: args.updatedAt,
+    });
+
+    return run._id;
+  },
+});
+
+export const completeRun = internalMutation({
+  args: {
+    userId: v.string(),
+    id: v.string(),
+    resultIds: v.optional(v.array(v.string())),
+    updatedAt: v.number(),
+  },
+  returns: v.id("applicationRuns"),
+  handler: async (ctx, args) => {
+    const run = await ctx.db
+      .query("applicationRuns")
+      .withIndex("by_user_id", (q) => q.eq("userId", args.userId).eq("id", args.id))
+      .unique();
+
+    if (!run) {
+      throw new Error("ApplicationRun not found");
+    }
+
+    assertRunStatusForPatch(run, ["running"], "complete");
+
+    await ctx.db.patch(run._id, {
+      status: "succeeded",
+      ...(args.resultIds ? { resultIds: args.resultIds } : {}),
+      blockedReason: undefined,
+      error: undefined,
+      updatedAt: args.updatedAt,
+    });
+
+    return run._id;
+  },
+});
+
+export const failRun = internalMutation({
+  args: {
+    userId: v.string(),
+    id: v.string(),
+    error: v.string(),
+    updatedAt: v.number(),
+  },
+  returns: v.id("applicationRuns"),
+  handler: async (ctx, args) => {
+    const run = await ctx.db
+      .query("applicationRuns")
+      .withIndex("by_user_id", (q) => q.eq("userId", args.userId).eq("id", args.id))
+      .unique();
+
+    if (!run) {
+      throw new Error("ApplicationRun not found");
+    }
+
+    assertRunStatusForPatch(run, ["running", "blocked"], "fail");
+
+    await ctx.db.patch(run._id, {
+      status: "failed",
+      blockedReason: undefined,
+      error: args.error,
+      updatedAt: args.updatedAt,
+    });
+
+    return run._id;
+  },
+});
+
+export const blockRun = internalMutation({
+  args: {
+    userId: v.string(),
+    id: v.string(),
+    blockedReason: v.string(),
+    updatedAt: v.number(),
+  },
+  returns: v.id("applicationRuns"),
+  handler: async (ctx, args) => {
+    const run = await ctx.db
+      .query("applicationRuns")
+      .withIndex("by_user_id", (q) => q.eq("userId", args.userId).eq("id", args.id))
+      .unique();
+
+    if (!run) {
+      throw new Error("ApplicationRun not found");
+    }
+
+    assertRunStatusForPatch(run, ["queued", "running"], "block");
+
+    await ctx.db.patch(run._id, {
+      status: "blocked",
+      blockedReason: args.blockedReason,
+      error: undefined,
+      updatedAt: args.updatedAt,
+    });
+
+    return run._id;
   },
 });
 
