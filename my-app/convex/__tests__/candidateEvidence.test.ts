@@ -240,7 +240,31 @@ function readField(document: Record<string, unknown>, field: string): unknown {
 }
 
 describe("candidate evidence Convex shadow persistence", () => {
-  it("createOrReuseCandidateSourceDocument inserts once and reuses by sourceHash", async () => {
+  it("createOrReuseCandidateSourceDocument accepts canonical source document id", async () => {
+    const { ctx, tables } = makeCtx();
+    const sourceDocument = buildSourceDocumentFixture();
+
+    const storageId = await createOrReuseCandidateSourceDocument._handler(ctx as any, {
+      sourceDocument,
+    });
+
+    expect(storageId).toBe("candidateSourceDocuments_1");
+    expect(tables.candidateSourceDocuments[0].id).toBe(
+      "candidate-source-document:source_hash_a",
+    );
+  });
+
+  it("createOrReuseCandidateSourceDocument rejects a bare sourceHash id", async () => {
+    const { ctx } = makeCtx();
+
+    await expect(
+      createOrReuseCandidateSourceDocument._handler(ctx as any, {
+        sourceDocument: buildSourceDocumentFixture({ id: "source_hash_a" }),
+      }),
+    ).rejects.toThrow(/candidate-source-document id must be the canonical PR4 deterministic id/);
+  });
+
+  it("same canonical source document id/sourceHash still reuses", async () => {
     const { ctx, tables } = makeCtx();
     const sourceDocument = buildSourceDocumentFixture();
 
@@ -291,7 +315,10 @@ describe("candidate evidence Convex shadow persistence", () => {
     await expect(
       createOrReuseCandidateSourceDocument._handler(ctx as any, {
         sourceDocument: {
-          ...buildSourceDocumentFixture({ sourceHash: "source_hash_raw" }),
+          ...buildSourceDocumentFixture({
+            id: "candidate-source-document:source_hash_raw",
+            sourceHash: "source_hash_raw",
+          }),
           text: "raw source text must not be stored",
         } as any,
       }),
@@ -308,7 +335,7 @@ describe("candidate evidence Convex shadow persistence", () => {
     ).rejects.toThrow(/CandidateSourceDocument createdAt must be a finite number/);
   });
 
-  it("conflicting source document id/sourceHash throws", async () => {
+  it("conflicting canonical source document id/sourceHash behavior still throws", async () => {
     const { ctx } = makeCtx();
     await createOrReuseCandidateSourceDocument._handler(ctx as any, {
       sourceDocument: buildSourceDocumentFixture(),
@@ -320,7 +347,7 @@ describe("candidate evidence Convex shadow persistence", () => {
           id: "candidate-source-document:different_id",
         }),
       }),
-    ).rejects.toThrow(/sourceHash collision/);
+    ).rejects.toThrow(/canonical PR4 deterministic id/);
   });
 
   it("createOrReuseCandidateFact inserts once and reuses by id", async () => {
