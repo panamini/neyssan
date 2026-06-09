@@ -3,7 +3,6 @@ import type {
   AllowedClaimV1,
   EvidenceGraphV1,
   EvidenceMatchV1,
-  EvidenceRiskFlagV1,
   MissingEvidenceV1,
 } from "../evidence-graph/schema";
 import { isForbiddenResumeOrCoverLetterText, normalizePlanIdSegment } from "../resume-variant-plan/planRules";
@@ -16,13 +15,13 @@ import type {
   BuildReviewCockpitInputV1,
   ReviewCockpitItemV1,
   ReviewCockpitModelV1,
-  ReviewCockpitSeverityV1,
   ReviewCockpitStatusV1,
   ReviewCockpitSummaryV1,
 } from "./schema";
 
 const REVIEW_COCKPIT_HASH_NAMESPACE = "review-cockpit";
 const REVIEW_COCKPIT_ID_PREFIX = "review-cockpit:";
+const BLOCKED_CLAIM_PREFIX = "blocked-claim:";
 
 const ATTENTION_REVIEW_STATES = new Set(["blocked", "needs_review"]);
 
@@ -58,7 +57,7 @@ export function buildReviewCockpitHash(
   inputOrModel: BuildReviewCockpitInputV1 | ReviewCockpitModelV1,
 ): Promise<string> {
   if (isBuildReviewCockpitInput(inputOrModel)) {
-    assertReviewCockpitInput(inputOrModel);
+    assertReviewCockpitHashInput(inputOrModel);
 
     return buildStableHash({
       namespace: REVIEW_COCKPIT_HASH_NAMESPACE,
@@ -86,27 +85,27 @@ export function buildReviewCockpitSummary(input: BuildReviewCockpitInputV1): Rev
   assertReviewCockpitInput(input);
 
   const items = buildReviewCockpitItems(input);
-  const allowedClaimCount = input.resumeVariantPlan.allowedClaimIds.length;
-  const planItemCount = input.resumeVariantPlan.items.length;
-  const warningCount = countWarnings(input.resumeVariantPlan.warnings, items);
   const blockerCount = items.filter((item) => item.severity === "blocker").length;
-  const missingEvidenceCount = input.evidenceGraph.missing.length;
-  const blockedClaimCount = input.resumeVariantPlan.blockedClaimIds.length;
-  const sourceFactCount = input.resumeVariantPlan.sourceFactIds.length;
-  const riskFlagCount = input.resumeVariantPlan.riskFlagIds.length;
-  const status = buildReviewCockpitStatus(input.resumeVariantPlan, items, warningCount, blockerCount);
+  const warningCount = items.filter((item) => item.severity === "warning").length;
+  const status = buildReviewCockpitStatus(input.resumeVariantPlan, warningCount, blockerCount);
 
   return {
     status,
-    allowedClaimCount,
-    planItemCount,
+    allowedClaimCount: input.resumeVariantPlan.allowedClaimIds.length,
+    planItemCount: input.resumeVariantPlan.items.length,
     warningCount,
     blockerCount,
-    missingEvidenceCount,
-    blockedClaimCount,
-    sourceFactCount,
-    riskFlagCount,
-    reason: buildSummaryReason(status, warningCount, blockerCount, missingEvidenceCount, blockedClaimCount),
+    missingEvidenceCount: input.evidenceGraph.missing.length,
+    blockedClaimCount: input.resumeVariantPlan.blockedClaimIds.length,
+    sourceFactCount: input.resumeVariantPlan.sourceFactIds.length,
+    riskFlagCount: input.resumeVariantPlan.riskFlagIds.length,
+    reason: buildSummaryReason(
+      status,
+      warningCount,
+      blockerCount,
+      input.evidenceGraph.missing.length,
+      input.resumeVariantPlan.blockedClaimIds.length,
+    ),
     version: 1,
   };
 }
@@ -209,15 +208,12 @@ function buildMissingEvidenceItem(missing: MissingEvidenceV1): ReviewCockpitItem
 }
 
 function buildBlockedClaimItem(blockedClaimId: string, graph: EvidenceGraphV1): ReviewCockpitItemV1 {
-  const candidateFactId = blockedClaimId.startsWith("blocked-claim:")
-    ? blockedClaimId.slice("blocked-claim:".length)
+  const candidateFactId = blockedClaimId.startsWith(BLOCKED_CLAIM_PREFIX)
+    ? blockedClaimId.slice(BLOCKED_CLAIM_PREFIX.length)
     : undefined;
   const riskFlagIds = candidateFactId ? riskFlagIdsForFact(candidateFactId, graph) : [];
-  const demandId = candidateFactId
-    ? graph.matches.find((match) => match.candidateFactId === candidateFactId)?.demandId
-    : undefined;
-  const evidenceMatchId = candidateFactId
-    ? graph.matches.find((match) => match.candidateFactId === candidateFactId)?.id
+  const matchedEvidence = candidateFactId
+    ? sortEvidenceMatches(graph.matches.filter((match) => match.candidateFactId === candidateFactId))[0]
     : undefined;
 
   return {
@@ -227,8 +223,8 @@ function buildBlockedClaimItem(blockedClaimId: string, graph: EvidenceGraphV1): 
     description: "Blocked claim requires source-truth review before resume planning.",
     severity: "blocker",
     candidateFactId,
-    demandId,
-    evidenceMatchId,
+    demandId: matchedEvidence?.demandId,
+    evidenceMatchId: matchedEvidence?.id,
     sourceFactIds: candidateFactId ? [candidateFactId] : [],
     allowedClaimIds: [],
     riskFlagIds,
@@ -299,7 +295,6 @@ function buildSourceSupportItem(claim: AllowedClaimV1, graph: EvidenceGraphV1): 
 
 function buildReviewCockpitStatus(
   plan: ResumeVariantPlanV1,
-  items: readonly ReviewCockpitItemV1[],
   warningCount: number,
   blockerCount: number,
 ): ReviewCockpitStatusV1 {
@@ -307,7 +302,7 @@ function buildReviewCockpitStatus(
     return "blocked";
   }
 
-  if (warningCount > 0 || items.some((item) => item.severity === "warning")) {
+  if (warningCount > 0) {
     return "needs_review";
   }
 
@@ -330,18 +325,6 @@ function buildSummaryReason(
   }
 
   return `Review cockpit is ready with ${missingEvidenceCount} missing evidence item(s) and ${blockedClaimCount} blocked claim item(s).`;
-}
-
-function countWarnings(
-  warnings: readonly ResumeVariantPlanWarningV1[],
-  items: readonly ReviewCockpitItemV1[],
-): number {
-  const warningIds = new Set(warnings.map((warning) => warning.id));
-  const warningItemCount = items.filter(
-    (item) => item.severity === "warning" && !item.id.includes("source-support") && !item.id.includes("allowed-claims"),
-  ).length;
-
-  return Math.max(warnings.filter((warning) => warning.severity !== "info").length, warningItemCount, warningIds.size ? 0 : 0);
 }
 
 function isPlanItemNeedingReview(item: ResumeVariantPlanItemV1): boolean {
@@ -450,18 +433,26 @@ function isBuildReviewCockpitInput(
   return "evidenceGraph" in value;
 }
 
-function assertReviewCockpitInput(input: BuildReviewCockpitInputV1): void {
+function assertReviewCockpitHashInput(input: BuildReviewCockpitInputV1): void {
   if (!input || typeof input !== "object") {
-    throw new TypeError("invalid ReviewCockpit input");
+    throw new TypeError("invalid ReviewCockpit hash input");
   }
 
   if (!input.userId || !input.applicationContextId) {
-    throw new TypeError("ReviewCockpit input requires userId and applicationContextId");
+    throw new TypeError("ReviewCockpit hash input requires userId and applicationContextId");
   }
 
   if (!input.evidenceGraph?.id || !input.resumeVariantPlan?.id) {
-    throw new TypeError("ReviewCockpit input requires EvidenceGraph and ResumeVariantPlan");
+    throw new TypeError("ReviewCockpit hash input requires EvidenceGraph and ResumeVariantPlan");
   }
+
+  if (!Number.isFinite(input.createdAt)) {
+    throw new TypeError("ReviewCockpit hash input requires a numeric createdAt timestamp");
+  }
+}
+
+function assertReviewCockpitInput(input: BuildReviewCockpitInputV1): void {
+  assertReviewCockpitHashInput(input);
 
   if (input.evidenceGraph.id !== input.resumeVariantPlan.evidenceGraphId) {
     throw new TypeError("ReviewCockpit input requires plan and EvidenceGraph IDs to match");
@@ -473,9 +464,5 @@ function assertReviewCockpitInput(input: BuildReviewCockpitInputV1): void {
 
   if (input.applicationContextId !== input.resumeVariantPlan.applicationContextId) {
     throw new TypeError("ReviewCockpit input applicationContextId must match ResumeVariantPlan");
-  }
-
-  if (!Number.isFinite(input.createdAt)) {
-    throw new TypeError("ReviewCockpit input requires a numeric createdAt timestamp");
   }
 }
