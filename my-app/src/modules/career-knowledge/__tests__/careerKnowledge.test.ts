@@ -23,6 +23,12 @@ describe("career-knowledge rules", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
+  it("keeps each rule primary document kind in its appliesTo document kinds", () => {
+    for (const rule of listCareerKnowledgeRules()) {
+      expect(rule.appliesTo.documentKinds).toContain(rule.documentKind);
+    }
+  });
+
   it("resolver returns global rules for default input", () => {
     const result = resolveCareerKnowledgeRules({ documentKind: "resume" });
 
