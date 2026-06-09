@@ -334,6 +334,17 @@ describe("candidate evidence Convex shadow persistence", () => {
     expect(tables.candidateFacts).toHaveLength(1);
   });
 
+  it("candidate fact rejects bare hash ids to preserve create-or-reuse idempotency", async () => {
+    const { ctx } = makeCtx();
+    const fact = await buildFactFixture();
+
+    await expect(
+      createOrReuseCandidateFact._handler(ctx as any, {
+        fact: { ...fact, id: fact.id.replace("candidate-fact:", "") },
+      }),
+    ).rejects.toThrow(/canonical PR4 deterministic id/);
+  });
+
   it("conflicting fact id semantics throws", async () => {
     const { ctx } = makeCtx();
     const fact = await buildFactFixture();
@@ -346,7 +357,7 @@ describe("candidate evidence Convex shadow persistence", () => {
           value: { company: "Different", responsibility: "Different source value." },
         },
       }),
-    ).rejects.toThrow(/derived from the PR4 deterministic hash helper|collision/);
+    ).rejects.toThrow(/canonical PR4 deterministic id|collision/);
   });
 
   it("candidate fact preserves sourcePath and sourceQuote", async () => {
@@ -542,6 +553,20 @@ describe("candidate evidence Convex shadow persistence", () => {
 
     expect(firstId).toBe(secondId);
     expect(tables.candidateImportBatches).toHaveLength(1);
+  });
+
+  it("createOrReuseCandidateImportBatch rejects bare hash ids to preserve create-or-reuse idempotency", async () => {
+    const { ctx } = makeCtx();
+    const importBatch = await buildImportBatchFixture();
+
+    await expect(
+      createOrReuseCandidateImportBatch._handler(ctx as any, {
+        importBatch: {
+          ...importBatch,
+          id: importBatch.id.replace("candidate-import-batch:", ""),
+        },
+      }),
+    ).rejects.toThrow(/canonical PR4 deterministic id/);
   });
 
   it("createOrReuseCandidateImportBatch rejects empty sourceDocumentIds", async () => {
