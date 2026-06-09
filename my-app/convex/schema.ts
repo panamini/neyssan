@@ -7,6 +7,11 @@ import {
 import { v } from "convex/values";
 import { userProfileMetadataValidator } from "./lib/userProfileMetadata";
 import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";
+import {
+  candidateFactFields,
+  candidateImportBatchFields,
+  candidateSourceDocumentFields,
+} from "./lib/candidateEvidence";
 
 const proposalVoicePresetChoice = v.union(
   v.literal("signature"),
@@ -807,6 +812,33 @@ export default defineSchema({
     .index("by_placeholder", ["placeholderId"])
     .index("by_job", ["jobId"])
     .index("by_created", ["createdAt"]),
+
+
+  candidateSourceDocuments: defineTable(candidateSourceDocumentFields)
+    .index("by_user_id", ["userId"])
+    .index("by_user_id_id", ["userId", "id"])
+    .index("by_user_id_source_hash", ["userId", "sourceHash"])
+    .index("by_user_id_text_hash", ["userId", "textHash"])
+    .index("by_user_id_review_state", ["userId", "reviewState"])
+    .index("by_user_id_visibility", ["userId", "visibility"]),
+
+  candidateFacts: defineTable(candidateFactFields)
+    .index("by_user_id", ["userId"])
+    .index("by_user_id_id", ["userId", "id"])
+    .index("by_user_id_source_document_id", ["userId", "sourceDocumentId"])
+    .index("by_user_id_source_document_id_source_path", [
+      "userId",
+      "sourceDocumentId",
+      "sourcePath",
+    ])
+    .index("by_user_id_fact_type", ["userId", "factType"])
+    .index("by_user_id_review_state", ["userId", "reviewState"])
+    .index("by_user_id_visibility", ["userId", "visibility"]),
+
+  candidateImportBatches: defineTable(candidateImportBatchFields)
+    .index("by_user_id", ["userId"])
+    .index("by_user_id_id", ["userId", "id"])
+    .index("by_user_id_status", ["userId", "status"]),
 
   applicationContexts: defineTable(applicationHarnessContextFields)
     .index("by_context_id", ["id"])
