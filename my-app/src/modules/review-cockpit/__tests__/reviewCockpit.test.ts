@@ -115,6 +115,35 @@ describe("review-cockpit model", () => {
     expect(first.id).toMatch(/^review-cockpit:[a-f0-9]{64}$/u);
   });
 
+  it("mismatched EvidenceGraph userId throws", async () => {
+    const input = await cockpitInput();
+    const mismatched = {
+      ...input,
+      evidenceGraph: { ...input.evidenceGraph, userId: "other_user" },
+    };
+
+    await expect(buildReviewCockpit(mismatched)).rejects.toThrow(TypeError);
+    await expect(buildReviewCockpit(mismatched)).rejects.toThrow(/userId must match EvidenceGraph/u);
+  });
+
+  it("mismatched ResumeVariantPlan userId throws", async () => {
+    const input = await cockpitInput();
+    const mismatched = {
+      ...input,
+      resumeVariantPlan: { ...input.resumeVariantPlan, userId: "other_user" },
+    };
+
+    await expect(buildReviewCockpit(mismatched)).rejects.toThrow(TypeError);
+    await expect(buildReviewCockpit(mismatched)).rejects.toThrow(/userId must match ResumeVariantPlan/u);
+  });
+
+  it("model overload builds a stable ReviewCockpit hash", async () => {
+    const model = await buildReviewCockpit(await cockpitInput());
+
+    await expect(buildReviewCockpitHash(model)).resolves.toMatch(/^[a-f0-9]{64}$/u);
+    await expect(buildReviewCockpitHash(model)).resolves.toBe(await buildReviewCockpitHash(model));
+  });
+
   it("changed EvidenceGraph id, hash, or content changes cockpit hash", async () => {
     const input = await cockpitInput();
     const base = await buildReviewCockpitHash(input);
