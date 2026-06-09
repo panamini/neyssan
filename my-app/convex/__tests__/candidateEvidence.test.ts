@@ -103,6 +103,28 @@ async function buildFactFixture(
   };
 }
 
+function buildUnsafeFactFixture(
+  overrides: Partial<CandidateFactV1> = {},
+): CandidateFactV1 {
+  return {
+    id: "candidate-fact:unsafe-invalid-source-material",
+    userId: "user_123",
+    sourceDocumentId: "candidate-source-document:source_hash_a",
+    sourcePath: "document.experience[1].responsibilityBullets[0]",
+    sourceQuote: "Built reliable application workflows.",
+    factType: "experience",
+    value: { company: "Acme", responsibility: "Built reliable application workflows." },
+    normalizedText: "Built reliable application workflows at Acme.",
+    confidence: 0.91,
+    reviewState: "pending",
+    visibility: "private",
+    createdAt: NOW,
+    updatedAt: NOW,
+    version: 1,
+    ...overrides,
+  };
+}
+
 async function buildImportBatchFixture(
   overrides: Partial<CandidateImportBatchV1> = {},
 ): Promise<CandidateImportBatchV1> {
@@ -335,9 +357,10 @@ describe("candidate evidence Convex shadow persistence", () => {
 
   it("invalid/generated sourcePath is rejected", async () => {
     const { ctx } = makeCtx();
-    const fact = await buildFactFixture({
+    const fact = buildUnsafeFactFixture({
       sourcePath: "document.generatedResume.body",
       value: { summary: "Generated text" },
+      normalizedText: "Generated text",
     });
 
     await expect(createOrReuseCandidateFact._handler(ctx as any, { fact })).rejects.toThrow(
@@ -347,7 +370,7 @@ describe("candidate evidence Convex shadow persistence", () => {
 
   it("generated artifact-like fact values are rejected", async () => {
     const { ctx } = makeCtx();
-    const fact = await buildFactFixture({
+    const fact = buildUnsafeFactFixture({
       value: { polishedText: "World-class leader who transforms everything." },
     });
 
