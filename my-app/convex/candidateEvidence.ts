@@ -431,8 +431,9 @@ async function sanitizeCandidateImportBatch(
 }
 
 function assertAcceptedDeterministicId(id: string, hash: string, prefix: string): void {
-  if (id !== hash && id !== `${prefix}:${hash}`) {
-    throw new Error(`${prefix} id must be derived from the PR4 deterministic hash helper`);
+  const expectedId = `${prefix}:${hash}`;
+  if (id !== expectedId) {
+    throw new Error(`${prefix} id must be the canonical PR4 deterministic id (${prefix}:hash)`);
   }
 }
 
