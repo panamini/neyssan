@@ -259,6 +259,7 @@ function buildPlanReviewItem(planItem: ResumeVariantPlanItemV1): ReviewCockpitIt
 
 function buildAllowedClaimItem(claim: AllowedClaimV1, graph: EvidenceGraphV1): ReviewCockpitItemV1 {
   const matches = acceptedMatchesForClaim(claim, graph);
+  const sourceFactIds = sortUniqueStrings(claim.candidateFactIds);
 
   return {
     id: ["review-cockpit-item", "allowed-claims", claim.id].map(normalizePlanIdSegment).join(":"),
@@ -267,18 +268,19 @@ function buildAllowedClaimItem(claim: AllowedClaimV1, graph: EvidenceGraphV1): R
     description: "Allowed claim has source-backed support for review.",
     severity: "info",
     allowedClaimId: claim.id,
-    candidateFactId: claim.candidateFactIds[0],
+    candidateFactId: sourceFactIds[0],
     demandId: matches[0]?.demandId,
     evidenceMatchId: matches[0]?.id,
-    sourceFactIds: sortUniqueStrings(claim.candidateFactIds),
+    sourceFactIds,
     allowedClaimIds: [claim.id],
-    riskFlagIds: sortUniqueStrings(claim.candidateFactIds.flatMap((candidateFactId) => riskFlagIdsForFact(candidateFactId, graph))),
+    riskFlagIds: sortUniqueStrings(sourceFactIds.flatMap((candidateFactId) => riskFlagIdsForFact(candidateFactId, graph))),
     version: 1,
   };
 }
 
 function buildSourceSupportItem(claim: AllowedClaimV1, graph: EvidenceGraphV1): ReviewCockpitItemV1 {
   const matches = acceptedMatchesForClaim(claim, graph);
+  const sourceFactIds = sortUniqueStrings(claim.candidateFactIds);
 
   return {
     id: ["review-cockpit-item", "source-support", claim.id].map(normalizePlanIdSegment).join(":"),
@@ -287,12 +289,12 @@ function buildSourceSupportItem(claim: AllowedClaimV1, graph: EvidenceGraphV1): 
     description: "Allowed claim has source-backed support.",
     severity: "info",
     allowedClaimId: claim.id,
-    candidateFactId: claim.candidateFactIds[0],
+    candidateFactId: sourceFactIds[0],
     demandId: matches[0]?.demandId,
     evidenceMatchId: matches[0]?.id,
-    sourceFactIds: sortUniqueStrings(claim.candidateFactIds),
+    sourceFactIds,
     allowedClaimIds: [claim.id],
-    riskFlagIds: sortUniqueStrings(claim.candidateFactIds.flatMap((candidateFactId) => riskFlagIdsForFact(candidateFactId, graph))),
+    riskFlagIds: sortUniqueStrings(sourceFactIds.flatMap((candidateFactId) => riskFlagIdsForFact(candidateFactId, graph))),
     version: 1,
   };
 }
