@@ -325,6 +325,43 @@ describe("review-cockpit model", () => {
     expect(first.items.map((item) => item.id)).toEqual(second.items.map((item) => item.id));
   });
 
+  it("warning evidenceMatchId is deterministic regardless of match ordering", async () => {
+    const input = await cockpitInput();
+    const baseMatch = input.evidenceGraph.matches[0]!;
+    const earlierMatch = { ...baseMatch, id: "evidence-match:aaa" };
+    const laterMatch = { ...baseMatch, id: "evidence-match:zzz" };
+    const warning = {
+      id: "resume-variant-plan-warning:multi-match",
+      category: "other" as const,
+      severity: "warning" as const,
+      candidateFactId: baseMatch.candidateFactId,
+      reason: "Multiple matching evidence IDs require deterministic selection.",
+      version: 1 as const,
+    };
+    const withoutBaseFactMatches = input.evidenceGraph.matches.filter(
+      (match) => match.candidateFactId !== baseMatch.candidateFactId,
+    );
+    const withMatches = (matches: typeof input.evidenceGraph.matches): BuildReviewCockpitInputV1 => ({
+      ...input,
+      evidenceGraph: { ...input.evidenceGraph, matches: [...withoutBaseFactMatches, ...matches] },
+      resumeVariantPlan: {
+        ...input.resumeVariantPlan,
+        warnings: [...input.resumeVariantPlan.warnings, warning],
+      },
+    });
+
+    const firstWarning = buildReviewCockpitItems(withMatches([laterMatch, earlierMatch])).find(
+      (item) => item.id === "review-cockpit-item:warnings:warning:resume-variant-plan-warning:multi-match",
+    );
+    const secondWarning = buildReviewCockpitItems(withMatches([earlierMatch, laterMatch])).find(
+      (item) => item.id === "review-cockpit-item:warnings:warning:resume-variant-plan-warning:multi-match",
+    );
+
+    expect(firstWarning?.evidenceMatchId).toBe("evidence-match:aaa");
+    expect(secondWarning?.evidenceMatchId).toBe("evidence-match:aaa");
+    expect(firstWarning).toEqual(secondWarning);
+  });
+
   it("sourceFactIds, allowedClaimIds, and riskFlagIds are preserved", async () => {
     const sourceSupported = await buildReviewCockpit(await cockpitInput());
     const sourceItem = sourceSupported.items.find((item) => item.bucket === "source_support")!;
