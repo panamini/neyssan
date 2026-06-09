@@ -379,6 +379,15 @@ describe("candidate evidence Convex shadow persistence", () => {
     );
   });
 
+  it("non-finite candidate fact confidence is rejected before storage", async () => {
+    const { ctx } = makeCtx();
+    const fact = await buildFactFixture({ confidence: Number.POSITIVE_INFINITY });
+
+    await expect(createOrReuseCandidateFact._handler(ctx as any, { fact })).rejects.toThrow(
+      /confidence must be a finite number/,
+    );
+  });
+
   it("candidate fact persists reviewState and visibility including private and never_use", async () => {
     const { ctx, tables } = makeCtx();
     const privateFact = await buildFactFixture({ reviewState: "needs_review", visibility: "private" });
@@ -484,6 +493,15 @@ describe("candidate evidence Convex shadow persistence", () => {
 
     expect(firstId).toBe(secondId);
     expect(tables.candidateImportBatches).toHaveLength(1);
+  });
+
+  it("createOrReuseCandidateImportBatch rejects empty sourceDocumentIds", async () => {
+    const { ctx } = makeCtx();
+    const importBatch = await buildImportBatchFixture({ sourceDocumentIds: [] });
+
+    await expect(
+      createOrReuseCandidateImportBatch._handler(ctx as any, { importBatch }),
+    ).rejects.toThrow(/sourceDocumentIds must not be empty/);
   });
 
   it("patchCandidateImportBatchStatus patches status and updatedAt only", async () => {
