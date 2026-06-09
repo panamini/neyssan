@@ -315,7 +315,10 @@ describe("candidate evidence Convex shadow persistence", () => {
     await expect(
       createOrReuseCandidateSourceDocument._handler(ctx as any, {
         sourceDocument: {
-          ...buildSourceDocumentFixture({ sourceHash: "source_hash_raw" }),
+          ...buildSourceDocumentFixture({
+            id: "candidate-source-document:source_hash_raw",
+            sourceHash: "source_hash_raw",
+          }),
           text: "raw source text must not be stored",
         } as any,
       }),
