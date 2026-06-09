@@ -1,0 +1,86 @@
+name: PR6 Schema Patch
+
+on:
+  push:
+    branches:
+      - codex/pr6-candidate-evidence-persistence
+
+permissions:
+  contents: write
+
+jobs:
+  patch-schema:
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.event.head_commit.message, 'feat(pr6): add candidate evidence schema tables') }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/pr6-candidate-evidence-persistence
+      - name: Patch schema exactly
+        run: |
+          node <<'NODE'
+          const fs = require("fs");
+
+          const path = "my-app/convex/schema.ts";
+          let text = fs.readFileSync(path, "utf8");
+
+          const importBlock = `import {
+            candidateFactFields,
+            candidateImportBatchFields,
+            candidateSourceDocumentFields,
+          } from "./lib/candidateEvidence";
+          `.replace(/^ {10}/gm, "");
+
+          if (!text.includes(`from "./lib/candidateEvidence"`)) {
+            text = text.replace(
+              `import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";\n`,
+              `import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";\n${importBlock}`,
+            );
+          }
+
+          const tableBlock = `
+            candidateSourceDocuments: defineTable(candidateSourceDocumentFields)
+              .index("by_user_id", ["userId"])
+              .index("by_user_id_id", ["userId", "id"])
+              .index("by_user_id_source_hash", ["userId", "sourceHash"])
+              .index("by_user_id_text_hash", ["userId", "textHash"])
+              .index("by_user_id_review_state", ["userId", "reviewState"])
+              .index("by_user_id_visibility", ["userId", "visibility"]),
+
+            candidateFacts: defineTable(candidateFactFields)
+              .index("by_user_id", ["userId"])
+              .index("by_user_id_id", ["userId", "id"])
+              .index("by_user_id_source_document_id", ["userId", "sourceDocumentId"])
+              .index("by_user_id_source_document_id_source_path", [
+                "userId",
+                "sourceDocumentId",
+                "sourcePath",
+              ])
+              .index("by_user_id_fact_type", ["userId", "factType"])
+              .index("by_user_id_review_state", ["userId", "reviewState"])
+              .index("by_user_id_visibility", ["userId", "visibility"]),
+
+            candidateImportBatches: defineTable(candidateImportBatchFields)
+              .index("by_user_id", ["userId"])
+              .index("by_user_id_id", ["userId", "id"])
+              .index("by_user_id_status", ["userId", "status"]),
+          `.replace(/^ {10}/gm, "");
+
+          if (!text.includes("candidateSourceDocuments: defineTable")) {
+            text = text.replace(
+              `  applicationContexts: defineTable(applicationHarnessContextFields)`,
+              `${tableBlock}\n  applicationContexts: defineTable(applicationHarnessContextFields)`,
+            );
+          }
+
+          fs.writeFileSync(path, text);
+          NODE
+      - name: Remove temporary workflow and commit schema patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/workflows/pr6-schema-patch.yml
+          git add my-app/convex/schema.ts .github/workflows/pr6-schema-patch.yml
+          git diff --cached --check
+          git commit -m "feat(pr6): add candidate evidence schema tables"
+          git push origin HEAD:codex/pr6-candidate-evidence-persistence
