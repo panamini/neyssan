@@ -298,6 +298,16 @@ describe("candidate evidence Convex shadow persistence", () => {
     ).rejects.toThrow(/raw source text/);
   });
 
+  it("source document rejects non-finite timestamps before storage", async () => {
+    const { ctx } = makeCtx();
+
+    await expect(
+      createOrReuseCandidateSourceDocument._handler(ctx as any, {
+        sourceDocument: buildSourceDocumentFixture({ createdAt: Number.NaN }),
+      }),
+    ).rejects.toThrow(/CandidateSourceDocument createdAt must be a finite number/);
+  });
+
   it("conflicting source document id/sourceHash throws", async () => {
     const { ctx } = makeCtx();
     await createOrReuseCandidateSourceDocument._handler(ctx as any, {
@@ -388,6 +398,15 @@ describe("candidate evidence Convex shadow persistence", () => {
     );
   });
 
+  it("candidate fact rejects non-finite timestamps before storage", async () => {
+    const { ctx } = makeCtx();
+    const fact = await buildFactFixture({ updatedAt: Number.NEGATIVE_INFINITY });
+
+    await expect(createOrReuseCandidateFact._handler(ctx as any, { fact })).rejects.toThrow(
+      /CandidateFact updatedAt must be a finite number/,
+    );
+  });
+
   it("candidate fact persists reviewState and visibility including private and never_use", async () => {
     const { ctx, tables } = makeCtx();
     const privateFact = await buildFactFixture({ reviewState: "needs_review", visibility: "private" });
@@ -458,6 +477,36 @@ describe("candidate evidence Convex shadow persistence", () => {
     ]);
   });
 
+  it("patchCandidateFactReviewState rejects non-finite updatedAt", async () => {
+    const { ctx } = makeCtx();
+    const fact = await buildFactFixture();
+    await createOrReuseCandidateFact._handler(ctx as any, { fact });
+
+    await expect(
+      patchCandidateFactReviewState._handler(ctx as any, {
+        userId: fact.userId,
+        id: fact.id,
+        reviewState: "approved",
+        updatedAt: Number.NaN,
+      }),
+    ).rejects.toThrow(/CandidateFact updatedAt must be a finite number/);
+  });
+
+  it("patchCandidateFactVisibility rejects non-finite updatedAt", async () => {
+    const { ctx } = makeCtx();
+    const fact = await buildFactFixture();
+    await createOrReuseCandidateFact._handler(ctx as any, { fact });
+
+    await expect(
+      patchCandidateFactVisibility._handler(ctx as any, {
+        userId: fact.userId,
+        id: fact.id,
+        visibility: "use_in_applications",
+        updatedAt: Number.POSITIVE_INFINITY,
+      }),
+    ).rejects.toThrow(/CandidateFact updatedAt must be a finite number/);
+  });
+
   it("listCandidateFactsForSourceDocument returns only matching sourceDocumentId facts", async () => {
     const { ctx } = makeCtx();
     const matching = await buildFactFixture();
@@ -504,6 +553,15 @@ describe("candidate evidence Convex shadow persistence", () => {
     ).rejects.toThrow(/sourceDocumentIds must not be empty/);
   });
 
+  it("createOrReuseCandidateImportBatch rejects non-finite timestamps", async () => {
+    const { ctx } = makeCtx();
+    const importBatch = await buildImportBatchFixture({ createdAt: Number.POSITIVE_INFINITY });
+
+    await expect(
+      createOrReuseCandidateImportBatch._handler(ctx as any, { importBatch }),
+    ).rejects.toThrow(/CandidateImportBatch createdAt must be a finite number/);
+  });
+
   it("patchCandidateImportBatchStatus patches status and updatedAt only", async () => {
     const { ctx, patches } = makeCtx();
     const importBatch = await buildImportBatchFixture();
@@ -524,6 +582,21 @@ describe("candidate evidence Convex shadow persistence", () => {
         patch: { status: "processed", updatedAt: LATER },
       },
     ]);
+  });
+
+  it("patchCandidateImportBatchStatus rejects non-finite updatedAt", async () => {
+    const { ctx } = makeCtx();
+    const importBatch = await buildImportBatchFixture();
+    await createOrReuseCandidateImportBatch._handler(ctx as any, { importBatch });
+
+    await expect(
+      patchCandidateImportBatchStatus._handler(ctx as any, {
+        userId: importBatch.userId,
+        id: importBatch.id,
+        status: "processed",
+        updatedAt: Number.NEGATIVE_INFINITY,
+      }),
+    ).rejects.toThrow(/CandidateImportBatch updatedAt must be a finite number/);
   });
 
   it("helpers do not mutate input fixtures", async () => {
