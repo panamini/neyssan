@@ -326,6 +326,12 @@ function sanitizeCandidateSourceDocument(
     throw new Error("CandidateSourceDocument persistence must not store raw source text");
   }
 
+  assertAcceptedDeterministicId(
+    sourceDocument.id,
+    sourceDocument.sourceHash,
+    "candidate-source-document",
+  );
+
   return {
     id: sourceDocument.id,
     userId: sourceDocument.userId,
