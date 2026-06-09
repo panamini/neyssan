@@ -202,7 +202,16 @@ export const patchCandidateFactReviewState = internalMutation({
   },
   returns: v.id("candidateFacts"),
   handler: async (ctx, args) => {
-    const fact = await getRequiredCandidateFact(ctx, args.userId, args.id);
+    const fact = await ctx.db
+      .query("candidateFacts")
+      .withIndex("by_user_id_id", (q) =>
+        q.eq("userId", args.userId).eq("id", args.id),
+      )
+      .unique();
+
+    if (!fact) {
+      throw new Error("CandidateFact not found");
+    }
 
     await ctx.db.patch(fact._id, {
       reviewState: args.reviewState,
@@ -222,7 +231,16 @@ export const patchCandidateFactVisibility = internalMutation({
   },
   returns: v.id("candidateFacts"),
   handler: async (ctx, args) => {
-    const fact = await getRequiredCandidateFact(ctx, args.userId, args.id);
+    const fact = await ctx.db
+      .query("candidateFacts")
+      .withIndex("by_user_id_id", (q) =>
+        q.eq("userId", args.userId).eq("id", args.id),
+      )
+      .unique();
+
+    if (!fact) {
+      throw new Error("CandidateFact not found");
+    }
 
     await ctx.db.patch(fact._id, {
       visibility: args.visibility,
@@ -438,19 +456,6 @@ function assertSameImportBatchIdentity(
   if (stableSerialize(existing.sourceDocumentIds) !== stableSerialize(incoming.sourceDocumentIds)) {
     throw new Error("CandidateImportBatch stable id collision with conflicting source documents");
   }
-}
-
-async function getRequiredCandidateFact(ctx: any, userId: string, id: string) {
-  const fact = await ctx.db
-    .query("candidateFacts")
-    .withIndex("by_user_id_id", (q: any) => q.eq("userId", userId).eq("id", id))
-    .unique();
-
-  if (!fact) {
-    throw new Error("CandidateFact not found");
-  }
-
-  return fact;
 }
 
 function hasRawSourceText(value: object): boolean {
