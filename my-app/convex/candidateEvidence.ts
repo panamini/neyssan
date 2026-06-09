@@ -202,6 +202,7 @@ export const patchCandidateFactReviewState = internalMutation({
   },
   returns: v.id("candidateFacts"),
   handler: async (ctx, args) => {
+    const updatedAt = assertFiniteTimestamp(args.updatedAt, "CandidateFact updatedAt");
     const fact = await ctx.db
       .query("candidateFacts")
       .withIndex("by_user_id_id", (q) =>
@@ -215,7 +216,7 @@ export const patchCandidateFactReviewState = internalMutation({
 
     await ctx.db.patch(fact._id, {
       reviewState: args.reviewState,
-      updatedAt: args.updatedAt,
+      updatedAt,
     });
 
     return fact._id;
@@ -231,6 +232,7 @@ export const patchCandidateFactVisibility = internalMutation({
   },
   returns: v.id("candidateFacts"),
   handler: async (ctx, args) => {
+    const updatedAt = assertFiniteTimestamp(args.updatedAt, "CandidateFact updatedAt");
     const fact = await ctx.db
       .query("candidateFacts")
       .withIndex("by_user_id_id", (q) =>
@@ -244,7 +246,7 @@ export const patchCandidateFactVisibility = internalMutation({
 
     await ctx.db.patch(fact._id, {
       visibility: args.visibility,
-      updatedAt: args.updatedAt,
+      updatedAt,
     });
 
     return fact._id;
@@ -298,6 +300,7 @@ export const patchCandidateImportBatchStatus = internalMutation({
   },
   returns: v.id("candidateImportBatches"),
   handler: async (ctx, args) => {
+    const updatedAt = assertFiniteTimestamp(args.updatedAt, "CandidateImportBatch updatedAt");
     const importBatch = await ctx.db
       .query("candidateImportBatches")
       .withIndex("by_user_id_id", (q) => q.eq("userId", args.userId).eq("id", args.id))
@@ -309,7 +312,7 @@ export const patchCandidateImportBatchStatus = internalMutation({
 
     await ctx.db.patch(importBatch._id, {
       status: args.status,
-      updatedAt: args.updatedAt,
+      updatedAt,
     });
 
     return importBatch._id;
@@ -336,8 +339,14 @@ function sanitizeCandidateSourceDocument(
     sourceHash: sourceDocument.sourceHash,
     reviewState: sourceDocument.reviewState,
     visibility: sourceDocument.visibility,
-    createdAt: sourceDocument.createdAt,
-    updatedAt: sourceDocument.updatedAt,
+    createdAt: assertFiniteTimestamp(
+      sourceDocument.createdAt,
+      "CandidateSourceDocument createdAt",
+    ),
+    updatedAt: assertFiniteTimestamp(
+      sourceDocument.updatedAt,
+      "CandidateSourceDocument updatedAt",
+    ),
     version: 1,
   };
 }
@@ -363,8 +372,8 @@ async function sanitizeCandidateFact(fact: CandidateFactV1): Promise<CandidateFa
     ...projectCandidateFactConfidence(fact.confidence),
     reviewState: fact.reviewState,
     visibility: fact.visibility,
-    createdAt: fact.createdAt,
-    updatedAt: fact.updatedAt,
+    createdAt: assertFiniteTimestamp(fact.createdAt, "CandidateFact createdAt"),
+    updatedAt: assertFiniteTimestamp(fact.updatedAt, "CandidateFact updatedAt"),
     version: 1,
   };
 
@@ -402,8 +411,8 @@ async function sanitizeCandidateImportBatch(
     userId: importBatch.userId,
     sourceDocumentIds,
     status: importBatch.status,
-    createdAt: importBatch.createdAt,
-    updatedAt: importBatch.updatedAt,
+    createdAt: assertFiniteTimestamp(importBatch.createdAt, "CandidateImportBatch createdAt"),
+    updatedAt: assertFiniteTimestamp(importBatch.updatedAt, "CandidateImportBatch updatedAt"),
     version: 1,
   };
 
@@ -474,6 +483,14 @@ function projectCandidateFactConfidence(
   }
 
   return { confidence };
+}
+
+function assertFiniteTimestamp(value: number, label: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new TypeError(`${label} must be a finite number`);
+  }
+
+  return value;
 }
 
 function hasRawSourceText(value: object): boolean {
