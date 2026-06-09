@@ -220,6 +220,27 @@ describe("review-cockpit model", () => {
     expect(cockpit.summary.status).toBe("blocked");
   });
 
+  it("top-level blocked plan reason does not report zero blocker items", async () => {
+    const input = await cockpitInput();
+    const summary = buildReviewCockpitSummary({
+      ...input,
+      resumeVariantPlan: {
+        ...input.resumeVariantPlan,
+        items: [],
+        warnings: [],
+        blockedClaimIds: [],
+        riskFlagIds: [],
+        blocked: true,
+        blockedReason: "manual override",
+      },
+    });
+
+    expect(summary.status).toBe("blocked");
+    expect(summary.blockerCount).toBe(0);
+    expect(summary.reason).toBe("Review cockpit is blocked by ResumeVariantPlan: manual override");
+    expect(summary.reason).not.toContain("0 blocker");
+  });
+
   it("warning-only plan creates needs_review status", async () => {
     const cockpit = await buildReviewCockpit(
       await cockpitInput({}, { demands: [demand({ required: "preferred" })], candidateFacts: [] }),
