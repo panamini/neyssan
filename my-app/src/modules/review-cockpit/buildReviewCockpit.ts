@@ -109,6 +109,8 @@ export function buildReviewCockpitSummary(input: BuildReviewCockpitInputV1): Rev
       blockerCount,
       input.evidenceGraph.missing.length,
       input.resumeVariantPlan.blockedClaimIds.length,
+      input.resumeVariantPlan.blocked,
+      input.resumeVariantPlan.blockedReason,
     ),
     version: 1,
   };
@@ -321,9 +323,21 @@ function buildSummaryReason(
   blockerCount: number,
   missingEvidenceCount: number,
   blockedClaimCount: number,
+  planBlocked: boolean,
+  planBlockedReason?: string,
 ): string {
   if (status === "blocked") {
-    return `Review cockpit is blocked by ${blockerCount} blocker item(s).`;
+    if (blockerCount > 0) {
+      return `Review cockpit is blocked by ${blockerCount} blocker item(s).`;
+    }
+
+    if (planBlocked) {
+      return planBlockedReason
+        ? `Review cockpit is blocked by ResumeVariantPlan: ${planBlockedReason}`
+        : "Review cockpit is blocked by ResumeVariantPlan.";
+    }
+
+    return "Review cockpit is blocked.";
   }
 
   if (status === "needs_review") {
