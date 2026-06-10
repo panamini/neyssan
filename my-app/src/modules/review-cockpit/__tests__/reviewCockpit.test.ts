@@ -371,11 +371,12 @@ describe("review-cockpit model", () => {
       },
     });
 
+    const warningItemId = "review-cockpit-item:warnings:warning:resume-variant-plan-warning-multi-match";
     const firstWarning = buildReviewCockpitItems(withMatches([laterMatch, earlierMatch])).find(
-      (item) => item.id === "review-cockpit-item:warnings:warning:resume-variant-plan-warning:multi-match",
+      (item) => item.id === warningItemId,
     );
     const secondWarning = buildReviewCockpitItems(withMatches([earlierMatch, laterMatch])).find(
-      (item) => item.id === "review-cockpit-item:warnings:warning:resume-variant-plan-warning:multi-match",
+      (item) => item.id === warningItemId,
     );
 
     expect(firstWarning?.evidenceMatchId).toBe("evidence-match:aaa");
