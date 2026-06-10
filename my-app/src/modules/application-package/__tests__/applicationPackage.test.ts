@@ -212,6 +212,19 @@ describe("application package", () => {
     }))).resolves.not.toBe(hash);
   });
 
+  it("scopes package item IDs to package identity", async () => {
+    const first = await buildApplicationPackage(input());
+    const changedResumeId = await buildApplicationPackage(input({
+      resumeVariantArtifact: resumeVariantArtifact({ id: "resume-variant-artifact:changed" }),
+    }));
+    const changedResumeStatus = await buildApplicationPackage(input({
+      resumeVariantArtifact: resumeVariantArtifact({ status: "needs_review" }),
+    }));
+    expect(first.items[0]?.id).not.toBe(changedResumeId.items[0]?.id);
+    expect(first.items[0]?.id).not.toBe(changedResumeStatus.items[0]?.id);
+    expect(first.items.every((item) => item.id.includes(first.id.replace("application-package:", "")))).toBe(true);
+  });
+
   it("builds deterministic content hash that ignores id and timestamps", async () => {
     const applicationPackage = await buildApplicationPackage(input());
     const hash = await buildApplicationPackageContentHash(applicationPackage);

@@ -114,6 +114,7 @@ export async function buildApplicationPackageItems(
   );
   const warnings = buildApplicationPackageWarnings(input, status);
   const provenance = buildApplicationPackageProvenance(input);
+  const packageItemScope = await buildApplicationPackageItemScope(input);
   const resumeVariantArtifactContentHash = await buildResumeVariantArtifactContentHash(
     input.resumeVariantArtifact,
   );
@@ -121,7 +122,7 @@ export async function buildApplicationPackageItems(
 
   const items: ApplicationPackageItemV1[] = [
     {
-      id: "application-package-item:resume-variant-artifact",
+      id: `application-package-item:${packageItemScope}:resume-variant-artifact`,
       kind: "resume_variant",
       artifactId: input.resumeVariantArtifact.id,
       artifactContentHash: resumeVariantArtifactContentHash,
@@ -137,7 +138,7 @@ export async function buildApplicationPackageItems(
       version: 1,
     },
     {
-      id: "application-package-item:cover-letter-artifact",
+      id: `application-package-item:${packageItemScope}:cover-letter-artifact`,
       kind: "cover_letter",
       artifactId: input.coverLetterArtifact.id,
       artifactContentHash: coverLetterArtifactContentHash,
@@ -156,7 +157,7 @@ export async function buildApplicationPackageItems(
 
   if (hasAnyProvenance(provenance)) {
     items.push({
-      id: "application-package-item:supporting-provenance",
+      id: `application-package-item:${packageItemScope}:supporting-provenance`,
       kind: "supporting_provenance",
       status: "notice",
       label: "Package includes source-backed provenance.",
@@ -173,7 +174,7 @@ export async function buildApplicationPackageItems(
 
   for (const warning of warnings) {
     items.push({
-      id: `application-package-item:warning:${warning}`,
+      id: `application-package-item:${packageItemScope}:warning:${warning}`,
       kind: "warning",
       status: "notice",
       label: labelForApplicationPackageWarning(warning),
@@ -194,7 +195,7 @@ export async function buildApplicationPackageItems(
       input.coverLetterArtifact.status,
     );
     items.push({
-      id: `application-package-item:blocker:${blockedReason ?? "unknown"}`,
+      id: `application-package-item:${packageItemScope}:blocker:${blockedReason ?? "unknown"}`,
       kind: "blocker",
       status: "blocked",
       label: labelForApplicationPackageWarning(blockedReason ?? "application_package_blocked"),
@@ -466,6 +467,10 @@ function assertApplicationPackageArtifactProvenanceInput(input: BuildApplication
   }
 }
 
+async function buildApplicationPackageItemScope(input: BuildApplicationPackageInputV1): Promise<string> {
+  return buildApplicationPackageHash(input);
+}
+
 function isForbiddenResumeOrCoverLetterText(value: string): boolean {
   const normalized = value.normalize("NFKC").toLowerCase();
   return (
@@ -478,7 +483,7 @@ function isForbiddenResumeOrCoverLetterText(value: string): boolean {
 }
 
 function sortUniqueStrings(values: readonly string[]): readonly string[] {
-  return [...new Set(values)].sort((a, b) => a.localeCompare(b));
+  return [...new Set(values)].sort();
 }
 
 function isNonEmptyString(value: unknown): value is string {

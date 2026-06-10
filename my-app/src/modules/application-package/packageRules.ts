@@ -107,6 +107,11 @@ export function sortApplicationPackageWarnings(values: readonly string[]): reado
   return [...new Set(values)].sort((a, b) => {
     const aOrder = order.get(a) ?? Number.MAX_SAFE_INTEGER;
     const bOrder = order.get(b) ?? Number.MAX_SAFE_INTEGER;
-    return aOrder === bOrder ? a.localeCompare(b) : aOrder - bOrder;
+    return aOrder === bOrder ? compareAscii(a, b) : aOrder - bOrder;
   });
+}
+
+function compareAscii(a: string, b: string): number {
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
 }
