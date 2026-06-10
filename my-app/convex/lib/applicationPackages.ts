@@ -54,7 +54,77 @@ export const applicationPackageStatusValidator = v.union(
   v.literal("ready_for_review"),
 );
 
-export const applicationPackagePayloadValidator = v.any();
+const applicationPackageArtifactKindValidator = v.union(
+  v.literal("resume_variant_artifact"),
+  v.literal("cover_letter_artifact"),
+);
+
+const applicationPackageItemKindValidator = v.union(
+  v.literal("resume_variant"),
+  v.literal("cover_letter"),
+  v.literal("supporting_provenance"),
+  v.literal("warning"),
+  v.literal("blocker"),
+);
+
+const applicationPackageItemStatusValidator = v.union(
+  applicationPackageStatusValidator,
+  v.literal("included"),
+  v.literal("notice"),
+);
+
+const applicationPackageArtifactRefValidator = v.object({
+  id: v.string(),
+  kind: applicationPackageArtifactKindValidator,
+  contentHash: v.optional(v.string()),
+  status: v.string(),
+  version: v.literal(1),
+});
+
+const applicationPackageItemValidator = v.object({
+  id: v.string(),
+  kind: applicationPackageItemKindValidator,
+  artifactId: v.optional(v.string()),
+  artifactContentHash: v.optional(v.string()),
+  status: applicationPackageItemStatusValidator,
+  label: v.string(),
+  note: v.string(),
+  sourceFactIds: v.array(v.string()),
+  allowedClaimIds: v.array(v.string()),
+  evidenceMatchIds: v.array(v.string()),
+  demandIds: v.array(v.string()),
+  riskFlagIds: v.array(v.string()),
+  reviewItemIds: v.array(v.string()),
+  version: v.literal(1),
+});
+
+const applicationPackageProvenanceValidator = v.object({
+  applicationContextId: v.string(),
+  resumeVariantArtifactId: v.string(),
+  coverLetterArtifactId: v.string(),
+  sourceFactIds: v.array(v.string()),
+  allowedClaimIds: v.array(v.string()),
+  evidenceMatchIds: v.array(v.string()),
+  demandIds: v.array(v.string()),
+  riskFlagIds: v.array(v.string()),
+  reviewItemIds: v.array(v.string()),
+  version: v.literal(1),
+});
+
+export const applicationPackagePayloadValidator = v.object({
+  id: v.string(),
+  userId: v.string(),
+  applicationContextId: v.string(),
+  status: applicationPackageStatusValidator,
+  artifacts: v.array(applicationPackageArtifactRefValidator),
+  items: v.array(applicationPackageItemValidator),
+  warnings: v.array(v.string()),
+  blockedReason: v.optional(v.string()),
+  provenance: applicationPackageProvenanceValidator,
+  createdAt: v.number(),
+  updatedAt: v.number(),
+  version: v.literal(1),
+});
 
 export const applicationPackageFields = {
   applicationPackageId: v.string(),

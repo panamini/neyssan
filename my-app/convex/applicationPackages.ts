@@ -78,14 +78,13 @@ export const internalListApplicationPackagesByApplicationContext = internalQuery
   },
   returns: v.array(applicationPackageStoredValidator),
   handler: async (ctx, args) => {
-    const records = await ctx.db
+    return await ctx.db
       .query("applicationPackages")
       .withIndex("by_application_context_id", (q) =>
         q.eq("applicationContextId", args.applicationContextId),
       )
+      .order("desc")
       .take(resolveListLimit(args.limit));
-
-    return sortLatestApplicationPackages(records);
   },
 });
 
@@ -133,9 +132,10 @@ export const internalListLatestApplicationPackagesByApplicationContext = interna
   handler: async (ctx, args) => {
     const records = await ctx.db
       .query("applicationPackages")
-      .withIndex("by_application_context_id", (q) =>
+      .withIndex("by_application_context_created_at", (q) =>
         q.eq("applicationContextId", args.applicationContextId),
       )
+      .order("desc")
       .take(resolveListLimit(args.limit));
 
     return sortLatestApplicationPackages(records);

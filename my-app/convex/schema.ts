@@ -884,9 +884,9 @@ export default defineSchema({
     .index("by_application_package_id", ["applicationPackageId"])
     .index("by_user_id", ["userId"])
     .index("by_application_context_id", ["applicationContextId"])
+    .index("by_application_context_created_at", ["applicationContextId", "createdAt"])
     .index("by_user_and_application_context", ["userId", "applicationContextId"])
     .index("by_status", ["status"])
     .index("by_resume_variant_artifact_id", ["resumeVariantArtifactId"])
-    .index("by_cover_letter_artifact_id", ["coverLetterArtifactId"])
-    .index("by_created_at", ["createdAt"]),
+    .index("by_cover_letter_artifact_id", ["coverLetterArtifactId"]),
 });
