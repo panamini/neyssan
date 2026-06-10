@@ -3,6 +3,8 @@ import type { ResumeVariantArtifactV1 } from "../resume-variant-artifact/schema"
 
 export type ApplicationPackageStatusV1 = "draft" | "needs_review" | "blocked" | "ready_for_review";
 
+export type ApplicationPackageWarningsV1 = readonly string[];
+
 export type ApplicationPackageItemKindV1 =
   | "resume_variant"
   | "cover_letter"
@@ -57,7 +59,7 @@ export type ApplicationPackageV1 = Readonly<{
   status: ApplicationPackageStatusV1;
   artifacts: readonly ApplicationPackageArtifactRefV1[];
   items: readonly ApplicationPackageItemV1[];
-  warnings: readonly string[];
+  warnings: ApplicationPackageWarningsV1;
   blockedReason?: string;
   provenance: ApplicationPackageProvenanceV1;
   createdAt: number;
