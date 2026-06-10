@@ -504,11 +504,9 @@ function compareLeads(left: ControlledAtsJobLeadV1, right: ControlledAtsJobLeadV
 }
 
 function compareRejectedRecords(left: ControlledAtsRejectedRecordV1, right: ControlledAtsRejectedRecordV1): number {
-  return (
-    compareControlledAtsText(left.reason, right.reason) ||
-    compareControlledAtsText(left.vendor ?? "", right.vendor ?? "") ||
-    compareControlledAtsText(left.sourceUrl ?? "", right.sourceUrl ?? "") ||
-    compareControlledAtsText(left.rawPayloadHash ?? "", right.rawPayloadHash ?? "")
+  return compareTextFields(
+    [left.reason, left.vendor, left.sourceUrl, left.rawPayloadHash],
+    [right.reason, right.vendor, right.sourceUrl, right.rawPayloadHash],
   );
 }
 
@@ -562,6 +560,14 @@ function cleanOptionalString(value: string | undefined): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function compareTextFields(left: readonly (string | undefined)[], right: readonly (string | undefined)[]): number {
+  for (let index = 0; index < left.length; index += 1) {
+    const result = compareControlledAtsText(left[index] ?? "", right[index] ?? "");
+    if (result !== 0) return result;
+  }
+  return 0;
 }
 
 function cloneRegistry(registry: ControlledAtsAdapterRegistryV1): ControlledAtsAdapterRegistryV1 {

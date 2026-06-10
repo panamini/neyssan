@@ -281,24 +281,11 @@ function assertControlledAtsAdapter(adapter: ControlledAtsAdapterV1): void {
 
 function assertControlledAtsCompensation(compensation: ControlledAtsCompensationV1): void {
   const record = asPlainRecord(compensation, "ControlledAtsCompensation must be an object");
-  if (record.currency !== undefined && !isNonEmptyString(record.currency)) {
-    throw new TypeError("ControlledAtsCompensation currency must be non-empty when present");
-  }
-  if (record.minAmount !== undefined && !isFiniteNumber(record.minAmount)) {
-    throw new TypeError("ControlledAtsCompensation minAmount must be finite when present");
-  }
-  if (record.maxAmount !== undefined && !isFiniteNumber(record.maxAmount)) {
-    throw new TypeError("ControlledAtsCompensation maxAmount must be finite when present");
-  }
-  if (
-    record.interval !== undefined &&
-    !includesString(CONTROLLED_ATS_COMPENSATION_INTERVALS, record.interval)
-  ) {
-    throw new TypeError("ControlledAtsCompensation interval must be supported when present");
-  }
-  if (record.rawText !== undefined && typeof record.rawText !== "string") {
-    throw new TypeError("ControlledAtsCompensation rawText must be a string when present");
-  }
+  assertOptionalNonEmptyString(record.currency, "ControlledAtsCompensation currency must be non-empty when present");
+  assertOptionalFiniteNumber(record.minAmount, "ControlledAtsCompensation minAmount must be finite when present");
+  assertOptionalFiniteNumber(record.maxAmount, "ControlledAtsCompensation maxAmount must be finite when present");
+  assertOptionalCompensationInterval(record.interval);
+  assertOptionalString(record.rawText, "ControlledAtsCompensation rawText must be a string when present");
   if (record.version !== 1) throw new TypeError("ControlledAtsCompensation version must be 1");
 }
 
@@ -353,6 +340,24 @@ function compareAscii(a: string, b: string): number {
 
 function includesString<T extends string>(values: readonly T[], value: unknown): value is T {
   return typeof value === "string" && (values as readonly string[]).includes(value);
+}
+
+function assertOptionalNonEmptyString(value: unknown, message: string): void {
+  if (value !== undefined && !isNonEmptyString(value)) throw new TypeError(message);
+}
+
+function assertOptionalString(value: unknown, message: string): void {
+  if (value !== undefined && typeof value !== "string") throw new TypeError(message);
+}
+
+function assertOptionalFiniteNumber(value: unknown, message: string): void {
+  if (value !== undefined && !isFiniteNumber(value)) throw new TypeError(message);
+}
+
+function assertOptionalCompensationInterval(value: unknown): void {
+  if (value !== undefined && !includesString(CONTROLLED_ATS_COMPENSATION_INTERVALS, value)) {
+    throw new TypeError("ControlledAtsCompensation interval must be supported when present");
+  }
 }
 
 function isNonEmptyString(value: unknown): value is string {
