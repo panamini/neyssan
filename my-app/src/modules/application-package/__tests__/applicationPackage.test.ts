@@ -202,6 +202,16 @@ describe("application package", () => {
     }))).resolves.not.toBe(hash);
   });
 
+  it("changes identity hash when resume or cover-letter artifact statuses change", async () => {
+    const hash = await buildApplicationPackageHash(input());
+    await expect(buildApplicationPackageHash(input({
+      resumeVariantArtifact: resumeVariantArtifact({ status: "needs_review" }),
+    }))).resolves.not.toBe(hash);
+    await expect(buildApplicationPackageHash(input({
+      coverLetterArtifact: coverLetterArtifact({ status: "needs_review" }),
+    }))).resolves.not.toBe(hash);
+  });
+
   it("builds deterministic content hash that ignores id and timestamps", async () => {
     const applicationPackage = await buildApplicationPackage(input());
     const hash = await buildApplicationPackageContentHash(applicationPackage);
