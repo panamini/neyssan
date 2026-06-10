@@ -14,7 +14,6 @@ import type {
   CoverLetterArtifactContentV1,
   CoverLetterArtifactProvenanceV1,
   CoverLetterArtifactSourceMetadataV1,
-  CoverLetterArtifactStatusV1,
   CoverLetterArtifactTextV1,
   CoverLetterArtifactV1,
 } from "./schema";
@@ -50,7 +49,7 @@ export async function buildCoverLetterArtifact(input: BuildCoverLetterArtifactIn
     status,
     text: await buildCoverLetterArtifactText(input),
     sourceMetadata: buildCoverLetterArtifactSourceMetadata(input.sourceMetadata),
-    warnings: buildCoverLetterArtifactWarnings(input, status),
+    warnings: buildCoverLetterArtifactWarnings(input),
     blockedReason: status === "blocked" ? "resume_variant_artifact_blocked" : undefined,
     provenance: await buildCoverLetterArtifactProvenance(input),
     createdAt: input.createdAt,
@@ -100,10 +99,7 @@ export async function buildCoverLetterArtifactText(input: BuildCoverLetterArtifa
   };
 }
 
-export function buildCoverLetterArtifactWarnings(
-  input: BuildCoverLetterArtifactInputV1,
-  status: CoverLetterArtifactStatusV1,
-): readonly string[] {
+export function buildCoverLetterArtifactWarnings(input: BuildCoverLetterArtifactInputV1): readonly string[] {
   assertCoverLetterArtifactInput(input);
   return sortUniqueStrings([
     input.sourceText.trim().length === 0 ? "cover_letter_text_empty" : undefined,
@@ -111,7 +107,6 @@ export function buildCoverLetterArtifactWarnings(
     input.resumeVariantArtifact.status === "blocked" ? "resume_variant_artifact_blocked" : undefined,
     input.resumeVariantArtifact.status === "needs_review" ? "resume_variant_artifact_needs_review" : undefined,
     input.resumeVariantArtifact.status === "draft" ? "resume_variant_artifact_draft" : undefined,
-    status === "blocked" ? "resume_variant_artifact_blocked" : undefined,
   ].filter((value): value is string => Boolean(value)));
 }
 
