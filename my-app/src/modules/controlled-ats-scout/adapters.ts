@@ -64,6 +64,10 @@ type PreparedUrlResult = Readonly<{
   rejected?: ControlledAtsRejectedRecordV1;
 }>;
 
+type NormalizedRecordResult =
+  | Readonly<{ kind: "lead"; input: BuildControlledAtsJobLeadInputV1 }>
+  | Readonly<{ kind: "rejected"; rejected: ControlledAtsRejectedRecordV1 }>;
+
 export function buildControlledAtsAdapterRegistry(): ControlledAtsAdapterRegistryV1 {
   const adapters = CONTROLLED_ATS_ADAPTERS.map(cloneAdapter).sort((left, right) =>
     compareControlledAtsText(left.vendor, right.vendor),
@@ -246,7 +250,7 @@ async function normalizeRecords(
     envelope: ControlledAtsPayloadEnvelopeV1,
     record: Record<string, unknown>,
     rawPayloadHash: string,
-  ) => Promise<BuildControlledAtsJobLeadInputV1 | ControlledAtsRejectedRecordV1>,
+  ) => Promise<NormalizedRecordResult>,
 ): Promise<ControlledAtsNormalizationResultV1> {
   const leads: ControlledAtsJobLeadV1[] = [];
   const rejected: ControlledAtsRejectedRecordV1[] = [];
@@ -259,11 +263,11 @@ async function normalizeRecords(
     }
 
     const normalized = await normalizeRecord(envelope, record, rawPayloadHash);
-    if (isRejectedRecord(normalized)) {
-      rejected.push(normalized);
+    if (normalized.kind === "rejected") {
+      rejected.push(normalized.rejected);
       continue;
     }
-    leads.push(await buildControlledAtsJobLead(normalized));
+    leads.push(await buildControlledAtsJobLead(normalized.input));
   }
 
   return {
@@ -280,28 +284,31 @@ async function normalizeGreenhouseRecord(
   envelope: ControlledAtsPayloadEnvelopeV1,
   record: Record<string, unknown>,
   rawPayloadHash: string,
-): Promise<BuildControlledAtsJobLeadInputV1 | ControlledAtsRejectedRecordV1> {
+): Promise<NormalizedRecordResult> {
   const title = stringField(record.title);
-  if (!title) return rejectedRecord("missing_title", envelope, rawPayloadHash);
+  if (!title) return rejectedResult("missing_title", envelope, rawPayloadHash);
 
   const url = prepareCanonicalUrl(envelope, stringField(record.absolute_url));
-  if (url.rejected) return url.rejected;
+  if (url.rejected) return { kind: "rejected", rejected: url.rejected };
 
   return {
-    vendor: "greenhouse",
-    sourceKind: envelope.sourceKind,
-    sourceUrl: envelope.sourceUrl,
-    canonicalUrl: url.value,
-    externalJobId: idField(record.id),
-    title,
-    department: firstDepartmentName(record.departments),
-    location: locationName(record.location),
-    workplaceType: inferWorkplaceType([locationName(record.location)]),
-    status: "unknown",
-    descriptionText: optionalRawString(record.content),
-    rawPayloadHash,
-    createdAt: envelope.createdAt,
-    updatedAt: envelope.updatedAt,
+    kind: "lead",
+    input: {
+      vendor: "greenhouse",
+      sourceKind: envelope.sourceKind,
+      sourceUrl: envelope.sourceUrl,
+      canonicalUrl: url.value,
+      externalJobId: idField(record.id),
+      title,
+      department: firstDepartmentName(record.departments),
+      location: locationName(record.location),
+      workplaceType: inferWorkplaceType([locationName(record.location)]),
+      status: "unknown",
+      descriptionText: optionalRawString(record.content),
+      rawPayloadHash,
+      createdAt: envelope.createdAt,
+      updatedAt: envelope.updatedAt,
+    },
   };
 }
 
@@ -309,15 +316,15 @@ async function normalizeLeverRecord(
   envelope: ControlledAtsPayloadEnvelopeV1,
   record: Record<string, unknown>,
   rawPayloadHash: string,
-): Promise<BuildControlledAtsJobLeadInputV1 | ControlledAtsRejectedRecordV1> {
+): Promise<NormalizedRecordResult> {
   const title = stringField(record.text);
-  if (!title) return rejectedRecord("missing_title", envelope, rawPayloadHash);
+  if (!title) return rejectedResult("missing_title", envelope, rawPayloadHash);
 
   const url = prepareCanonicalUrl(envelope, stringField(record.hostedUrl));
-  if (url.rejected) return url.rejected;
+  if (url.rejected) return { kind: "rejected", rejected: url.rejected };
 
   const preparedApplyUrl = prepareOptionalUrl(envelope.vendor, stringField(record.applyUrl), envelope, rawPayloadHash);
-  if (preparedApplyUrl.rejected) return preparedApplyUrl.rejected;
+  if (preparedApplyUrl.rejected) return { kind: "rejected", rejected: preparedApplyUrl.rejected };
 
   const categories = isPlainRecord(record.categories) ? record.categories : {};
   const location = stringField(categories.location);
@@ -325,23 +332,26 @@ async function normalizeLeverRecord(
   const department = stringField(categories.department);
 
   return {
-    vendor: "lever",
-    sourceKind: envelope.sourceKind,
-    sourceUrl: envelope.sourceUrl,
-    canonicalUrl: url.value,
-    externalJobId: idField(record.id),
-    title,
-    department,
-    team,
-    location,
-    workplaceType: inferWorkplaceType([location, team, department, stringField(categories.commitment)]),
-    status: "unknown",
-    descriptionText: optionalRawString(record.descriptionPlain),
-    applyUrl: preparedApplyUrl.value,
-    postedAt: timestampToIso(record.createdAt),
-    rawPayloadHash,
-    createdAt: envelope.createdAt,
-    updatedAt: envelope.updatedAt,
+    kind: "lead",
+    input: {
+      vendor: "lever",
+      sourceKind: envelope.sourceKind,
+      sourceUrl: envelope.sourceUrl,
+      canonicalUrl: url.value,
+      externalJobId: idField(record.id),
+      title,
+      department,
+      team,
+      location,
+      workplaceType: inferWorkplaceType([location, team, department, stringField(categories.commitment)]),
+      status: "unknown",
+      descriptionText: optionalRawString(record.descriptionPlain),
+      applyUrl: preparedApplyUrl.value,
+      postedAt: timestampToIso(record.createdAt),
+      rawPayloadHash,
+      createdAt: envelope.createdAt,
+      updatedAt: envelope.updatedAt,
+    },
   };
 }
 
@@ -349,38 +359,41 @@ async function normalizeAshbyRecord(
   envelope: ControlledAtsPayloadEnvelopeV1,
   record: Record<string, unknown>,
   rawPayloadHash: string,
-): Promise<BuildControlledAtsJobLeadInputV1 | ControlledAtsRejectedRecordV1> {
+): Promise<NormalizedRecordResult> {
   const title = stringField(record.title);
-  if (!title) return rejectedRecord("missing_title", envelope, rawPayloadHash);
+  if (!title) return rejectedResult("missing_title", envelope, rawPayloadHash);
 
   const url = prepareCanonicalUrl(envelope, stringField(record.jobUrl));
-  if (url.rejected) return url.rejected;
+  if (url.rejected) return { kind: "rejected", rejected: url.rejected };
 
   const preparedApplyUrl = prepareOptionalUrl(envelope.vendor, stringField(record.applyUrl), envelope, rawPayloadHash);
-  if (preparedApplyUrl.rejected) return preparedApplyUrl.rejected;
+  if (preparedApplyUrl.rejected) return { kind: "rejected", rejected: preparedApplyUrl.rejected };
 
   const location = stringField(record.location);
   const department = stringField(record.department);
   const team = stringField(record.team);
 
   return {
-    vendor: "ashby",
-    sourceKind: envelope.sourceKind,
-    sourceUrl: envelope.sourceUrl,
-    canonicalUrl: url.value,
-    externalJobId: idField(record.id),
-    title,
-    department,
-    team,
-    location,
-    workplaceType: inferWorkplaceType([location, department, team, stringField(record.employmentType)]),
-    status: "unknown",
-    descriptionText: optionalRawString(record.descriptionPlain),
-    applyUrl: preparedApplyUrl.value,
-    postedAt: stringField(record.publishedAt),
-    rawPayloadHash,
-    createdAt: envelope.createdAt,
-    updatedAt: envelope.updatedAt,
+    kind: "lead",
+    input: {
+      vendor: "ashby",
+      sourceKind: envelope.sourceKind,
+      sourceUrl: envelope.sourceUrl,
+      canonicalUrl: url.value,
+      externalJobId: idField(record.id),
+      title,
+      department,
+      team,
+      location,
+      workplaceType: inferWorkplaceType([location, department, team, stringField(record.employmentType)]),
+      status: "unknown",
+      descriptionText: optionalRawString(record.descriptionPlain),
+      applyUrl: preparedApplyUrl.value,
+      postedAt: stringField(record.publishedAt),
+      rawPayloadHash,
+      createdAt: envelope.createdAt,
+      updatedAt: envelope.updatedAt,
+    },
   };
 }
 
@@ -409,9 +422,7 @@ function prepareCanonicalUrl(
   envelope: ControlledAtsPayloadEnvelopeV1,
   recordUrl?: string,
 ): PreparedUrlResult {
-  const sourceUrl = recordUrl ?? envelope.sourceUrl;
-  if (!sourceUrl) return {};
-  return prepareOptionalUrl(envelope.vendor, sourceUrl, envelope);
+  return prepareOptionalUrl(envelope.vendor, recordUrl, envelope);
 }
 
 function prepareOptionalUrl(
@@ -474,8 +485,12 @@ function rejectedRecord(
   };
 }
 
-function isRejectedRecord(value: BuildControlledAtsJobLeadInputV1 | ControlledAtsRejectedRecordV1): value is ControlledAtsRejectedRecordV1 {
-  return "reason" in value;
+function rejectedResult(
+  reason: string,
+  envelope: ControlledAtsPayloadEnvelopeV1,
+  rawPayloadHash?: string,
+): NormalizedRecordResult {
+  return { kind: "rejected", rejected: rejectedRecord(reason, envelope, rawPayloadHash) };
 }
 
 function buildControlledAtsDescriptionHash(descriptionText: string): Promise<string> {

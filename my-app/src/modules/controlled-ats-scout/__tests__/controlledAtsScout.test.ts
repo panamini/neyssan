@@ -362,6 +362,21 @@ describe("controlled ATS scout adapters", () => {
     expect(dedupeControlledAtsJobLeads([second, first])).toHaveLength(2);
   });
 
+  it("does not use board sourceUrl as canonicalUrl for records without record URL", async () => {
+    const result = await normalizeGreenhousePayload(envelope({
+      sourceUrl: "https://boards.greenhouse.io/acme",
+      payload: {
+        jobs: [
+          { title: "Engineer B", content: "Build platform services." },
+          { title: "Engineer A", content: "Build product services." },
+        ],
+      },
+    }));
+
+    expect(result.leads.map((lead) => lead.title)).toEqual(["Engineer A", "Engineer B"]);
+    expect(result.leads.map((lead) => lead.canonicalUrl)).toEqual([undefined, undefined]);
+  });
+
   it("output order is deterministic", async () => {
     const result = await normalizeGreenhousePayload(envelope({
       payload: {
