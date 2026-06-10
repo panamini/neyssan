@@ -16,6 +16,8 @@ export const CONTROLLED_ATS_VENDORS: readonly ControlledAtsVendorV1[] = [
   "ashby",
   "greenhouse",
   "lever",
+  "recruitee",
+  "smartrecruiters",
 ] as const;
 
 export const CONTROLLED_ATS_FORBIDDEN_VENDORS: readonly ControlledAtsForbiddenVendorV1[] = [
@@ -56,8 +58,15 @@ export const CONTROLLED_ATS_COMPENSATION_INTERVALS: readonly ControlledAtsCompen
 
 const VENDOR_HOST_PATTERNS: Readonly<Record<ControlledAtsVendorV1, readonly string[]>> = {
   ashby: ["ashbyhq.com", "jobs.ashbyhq.com"],
-  greenhouse: ["greenhouse.io", "boards.greenhouse.io", "job-boards.greenhouse.io"],
-  lever: ["lever.co", "jobs.lever.co"],
+  greenhouse: ["greenhouse.io", "boards.greenhouse.io", "job-boards.greenhouse.io", "boards-api.greenhouse.io"],
+  lever: ["lever.co", "jobs.lever.co", "api.lever.co", "jobs.eu.lever.co", "api.eu.lever.co"],
+  recruitee: ["recruitee.com"],
+  smartrecruiters: [
+    "smartrecruiters.com",
+    "www.smartrecruiters.com",
+    "careers.smartrecruiters.com",
+    "api.smartrecruiters.com",
+  ],
 } as const;
 
 const FORBIDDEN_URL_HOST_PATTERNS: readonly string[] = [
@@ -302,8 +311,8 @@ function hostMatchesAny(host: string, patterns: readonly string[]): boolean {
 function parseUrl(value: string): URL {
   try {
     const parsed = new URL(value.trim());
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-      throw new TypeError("Controlled ATS URL must be HTTP(S)");
+    if (parsed.protocol !== "https:") {
+      throw new TypeError("Controlled ATS URL must use HTTPS");
     }
     return parsed;
   } catch (error) {

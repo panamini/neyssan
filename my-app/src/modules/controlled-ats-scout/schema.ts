@@ -1,4 +1,9 @@
-export type ControlledAtsVendorV1 = "greenhouse" | "lever" | "ashby";
+export type ControlledAtsVendorV1 =
+  | "greenhouse"
+  | "lever"
+  | "ashby"
+  | "smartrecruiters"
+  | "recruitee";
 
 export type ControlledAtsForbiddenVendorV1 =
   | "linkedin"
@@ -89,6 +94,59 @@ export type ControlledAtsPayloadEnvelopeV1 = Readonly<{
   payload: unknown;
   createdAt: number;
   updatedAt: number;
+  version: 1;
+}>;
+
+export type ControlledAtsEndpointAuthKindV1 = "none";
+
+export type ControlledAtsEndpointMethodV1 = "GET";
+
+export type ControlledAtsResolvedEndpointV1 = Readonly<{
+  vendor: ControlledAtsVendorV1;
+  sourceKind: ControlledAtsSourceKindV1;
+  inputUrl: string;
+  sourceUrl: string;
+  endpointUrl: string;
+  method: ControlledAtsEndpointMethodV1;
+  headers: readonly Readonly<{ name: string; value: string }>[];
+  authKind: ControlledAtsEndpointAuthKindV1;
+  rateLimitKey: string;
+  maxResponseBytes: number;
+  timeoutMs: number;
+  pagination?: Readonly<{
+    kind: "none" | "lever_skip_limit" | "smartrecruiters_offset_limit";
+    limit: number;
+    maxPages: number;
+  }>;
+  version: 1;
+}>;
+
+export type ControlledAtsPublicFetchResultV1 = Readonly<{
+  endpoint: ControlledAtsResolvedEndpointV1;
+  payload: unknown;
+  status: number;
+  contentType?: string;
+  rawResponseHash: string;
+  fetchedAt: number;
+  version: 1;
+}>;
+
+export type ControlledAtsPublicFetchRejectedV1 = Readonly<{
+  reason:
+    | "unsupported_source_url"
+    | "forbidden_vendor_url"
+    | "unsupported_endpoint_host"
+    | "endpoint_requires_auth"
+    | "endpoint_http_status"
+    | "endpoint_non_json_response"
+    | "endpoint_response_too_large"
+    | "endpoint_invalid_json"
+    | "endpoint_redirect_rejected";
+  inputUrl?: string;
+  endpointUrl?: string;
+  vendor?: string;
+  status?: number;
+  contentType?: string;
   version: 1;
 }>;
 
