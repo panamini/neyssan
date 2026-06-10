@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { stableSerialize } from "../../application-harness/fingerprints";
 import {
@@ -281,13 +282,13 @@ describe("internal tool contracts", () => {
 
   it("no imports/calls from forbidden surfaces", () => {
     const sourceFiles = [
-      new URL("../schema.ts", import.meta.url),
-      new URL("../contracts.ts", import.meta.url),
-      new URL("../contractRules.ts", import.meta.url),
+      "src/modules/internal-tool-contracts/schema.ts",
+      "src/modules/internal-tool-contracts/contracts.ts",
+      "src/modules/internal-tool-contracts/contractRules.ts",
     ];
 
     for (const sourceFile of sourceFiles) {
-      const source = readFileSync(sourceFile, "utf8");
+      const source = readFileSync(resolve(process.cwd(), sourceFile), "utf8");
       expect(source).not.toMatch(
         /from\s+["'][^"']*(convex|premiumCoverLetter|proposal|cv-forge|mcp|scout|pdf|docx|generation|prompt|mistral|openai)[^"']*["']/iu,
       );
