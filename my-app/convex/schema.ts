@@ -12,6 +12,7 @@ import {
   candidateImportBatchFields,
   candidateSourceDocumentFields,
 } from "./lib/candidateEvidence";
+import { applicationPackageFields } from "./lib/applicationPackages";
 
 const proposalVoicePresetChoice = v.union(
   v.literal("signature"),
@@ -877,4 +878,15 @@ export default defineSchema({
     .index("by_user_type", ["userId", "type"])
     .index("by_context_status", ["contextId", "status"])
     .index("by_updated", ["updatedAt"]),
+
+  // PR14: internal shadow persistence for already-built ApplicationPackageV1 records.
+  applicationPackages: defineTable(applicationPackageFields)
+    .index("by_application_package_id", ["applicationPackageId"])
+    .index("by_user_id", ["userId"])
+    .index("by_application_context_id", ["applicationContextId"])
+    .index("by_application_context_created_at", ["applicationContextId", "createdAt"])
+    .index("by_user_and_application_context", ["userId", "applicationContextId"])
+    .index("by_status", ["status"])
+    .index("by_resume_variant_artifact_id", ["resumeVariantArtifactId"])
+    .index("by_cover_letter_artifact_id", ["coverLetterArtifactId"]),
 });
