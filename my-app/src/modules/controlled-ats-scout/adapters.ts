@@ -726,11 +726,23 @@ function recruiteeLocation(record: Record<string, unknown>): string | undefined 
 
 function smartRecruitersDescription(value: unknown): string | undefined {
   if (!isPlainRecord(value) || !isPlainRecord(value.sections)) return undefined;
-  const texts = Object.entries(value.sections)
-    .sort(([left], [right]) => compareControlledAtsText(left, right))
+  const texts = orderedSmartRecruitersSectionEntries(value.sections)
     .flatMap(([, section]) => (isPlainRecord(section) ? [optionalRawString(section.text)] : []))
     .filter((text): text is string => typeof text === "string" && text.length > 0);
   return texts.length > 0 ? texts.join("\n\n") : undefined;
+}
+
+function orderedSmartRecruitersSectionEntries(
+  sections: Record<string, unknown>,
+): readonly [string, unknown][] {
+  const knownOrder = ["description", "qualifications", "additionalInformation"] as const;
+  const knownEntries = knownOrder.flatMap((key) => (
+    Object.prototype.hasOwnProperty.call(sections, key) ? [[key, sections[key]] as [string, unknown]] : []
+  ));
+  const unknownEntries = Object.entries(sections)
+    .filter(([key]) => !(knownOrder as readonly string[]).includes(key))
+    .sort(([left], [right]) => compareControlledAtsText(left, right));
+  return [...knownEntries, ...unknownEntries];
 }
 
 function smartRecruitersStatus(value: unknown): "open" | "closed" | "unknown" {

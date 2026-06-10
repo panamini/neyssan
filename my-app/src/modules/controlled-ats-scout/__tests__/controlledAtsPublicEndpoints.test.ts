@@ -29,6 +29,22 @@ function jsonResponse(
   };
 }
 
+function textResponse(
+  body: string,
+  overrides: Partial<{
+    status: number;
+    contentType: string | null;
+  }> = {},
+) {
+  return {
+    status: overrides.status ?? 200,
+    headers: {
+      get: (name: string) => (name.toLowerCase() === "content-type" ? overrides.contentType ?? "application/json" : null),
+    },
+    text: async () => body,
+  };
+}
+
 describe("controlled ATS public endpoint resolver", () => {
   it("resolves Greenhouse board URL to boards-api endpoint with content=true", () => {
     const endpoint = resolveControlledAtsPublicEndpointFromUrl("https://boards.greenhouse.io/acme/jobs/123");
@@ -64,6 +80,15 @@ describe("controlled ATS public endpoint resolver", () => {
 
     expect(endpoint.endpointUrl).toBe("https://api.eu.lever.co/v0/postings/acme?mode=json&limit=100&skip=0");
     expect(endpoint.rateLimitKey).toBe("lever:eu:acme");
+  });
+
+  it("resolves Lever API URLs to matching global and EU endpoints", () => {
+    expect(resolveControlledAtsPublicEndpointFromUrl("https://api.lever.co/v0/postings/acme").endpointUrl).toBe(
+      "https://api.lever.co/v0/postings/acme?mode=json&limit=100&skip=0",
+    );
+    expect(resolveControlledAtsPublicEndpointFromUrl("https://api.eu.lever.co/v0/postings/acme").endpointUrl).toBe(
+      "https://api.eu.lever.co/v0/postings/acme?mode=json&limit=100&skip=0",
+    );
   });
 
   it("resolves SmartRecruiters career URL to public postings endpoint", () => {
@@ -123,17 +148,21 @@ describe("controlled ATS public endpoint resolver", () => {
 });
 
 describe("controlled ATS public endpoint fetcher", () => {
-  it("calls injected fetchImpl with GET, accept application/json, and manual redirects", async () => {
+  it("calls injected fetchImpl with GET, accept application/json, manual redirects, and timeout signal", async () => {
     const endpoint = resolveControlledAtsPublicEndpointFromUrl("https://boards.greenhouse.io/acme");
+    const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout");
     const fetchImpl = vi.fn<ControlledAtsFetchImpl>(async () => jsonResponse({ jobs: [] }));
 
     await fetchControlledAtsPublicEndpoint(endpoint, { fetchImpl, now: () => T });
 
-    expect(fetchImpl).toHaveBeenCalledWith(endpoint.endpointUrl, {
+    expect(fetchImpl).toHaveBeenCalledWith(endpoint.endpointUrl, expect.objectContaining({
       method: "GET",
       headers: { accept: "application/json" },
       redirect: "manual",
-    });
+      signal: expect.any(AbortSignal),
+    }));
+    expect(clearTimeoutSpy).toHaveBeenCalledTimes(1);
+    clearTimeoutSpy.mockRestore();
   });
 
   it("rejects Authorization header if accidentally added", async () => {
@@ -162,6 +191,11 @@ describe("controlled ATS public endpoint fetcher", () => {
     });
     await expect(
       fetchControlledAtsPublicEndpoint(endpoint, { fetchImpl: async () => jsonResponse({}, { contentType: "text/html" }) }),
+    ).rejects.toMatchObject({ reason: "endpoint_non_json_response" });
+    await expect(
+      fetchControlledAtsPublicEndpoint(endpoint, {
+        fetchImpl: async () => textResponse("<html>bad</html>", { contentType: "text/html" }),
+      }),
     ).rejects.toMatchObject({ reason: "endpoint_non_json_response" });
     await expect(
       fetchControlledAtsPublicEndpoint(endpoint, {
@@ -194,6 +228,48 @@ describe("controlled ATS public endpoint fetcher", () => {
     });
     expect(first.rawResponseHash).toMatch(/^[a-f0-9]{64}$/u);
     expect(first.rawResponseHash).toBe(second.rawResponseHash);
+  });
+
+  it("fetches Lever skip pages and merges array payload", async () => {
+    const endpoint = resolveControlledAtsPublicEndpointFromUrl("https://jobs.lever.co/acme");
+    const firstPage = Array.from({ length: 100 }, (_, index) => ({ id: `job-${index}` }));
+    const secondPage = [{ id: "job-100" }];
+    const fetchImpl = vi.fn<ControlledAtsFetchImpl>(async (url) => (
+      url.endsWith("skip=0") ? jsonResponse(firstPage) : jsonResponse(secondPage)
+    ));
+
+    const result = await fetchControlledAtsPublicEndpoint(endpoint, { fetchImpl, now: () => T });
+
+    expect(fetchImpl.mock.calls.map(([url]) => url)).toEqual([
+      "https://api.lever.co/v0/postings/acme?mode=json&limit=100&skip=0",
+      "https://api.lever.co/v0/postings/acme?mode=json&limit=100&skip=100",
+    ]);
+    expect(result.payload).toEqual([...firstPage, ...secondPage]);
+  });
+
+  it("fetches SmartRecruiters offset pages and merges content payload", async () => {
+    const endpoint = resolveControlledAtsPublicEndpointFromUrl("https://careers.smartrecruiters.com/acme");
+    const firstContent = Array.from({ length: 100 }, (_, index) => ({ id: `job-${index}` }));
+    const secondContent = [{ id: "job-100" }];
+    const fetchImpl = vi.fn<ControlledAtsFetchImpl>(async (url) => (
+      url.endsWith("offset=0")
+        ? jsonResponse({ limit: 100, offset: 0, totalFound: 101, content: firstContent, company: "Acme" })
+        : jsonResponse({ limit: 100, offset: 100, totalFound: 101, content: secondContent, company: "Ignored" })
+    ));
+
+    const result = await fetchControlledAtsPublicEndpoint(endpoint, { fetchImpl, now: () => T });
+
+    expect(fetchImpl.mock.calls.map(([url]) => url)).toEqual([
+      "https://api.smartrecruiters.com/v1/companies/acme/postings?limit=100&offset=0",
+      "https://api.smartrecruiters.com/v1/companies/acme/postings?limit=100&offset=100",
+    ]);
+    expect(result.payload).toEqual({
+      limit: 100,
+      offset: 0,
+      totalFound: 101,
+      content: [...firstContent, ...secondContent],
+      company: "Acme",
+    });
   });
 
   it("returns ControlledAtsPayloadEnvelopeV1 with injected timestamp", async () => {

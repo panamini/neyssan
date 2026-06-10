@@ -354,6 +354,33 @@ describe("controlled ATS scout adapters", () => {
     expect(result.leads[0].descriptionText).toBe("Own delivery systems.\n\nLead platform teams.");
   });
 
+  it("SmartRecruiters sections preserve known order before unknown sorted keys", async () => {
+    const result = await normalizeSmartRecruitersPayload({
+      ...envelope({
+        vendor: "smartrecruiters",
+        sourceKind: "public_job_detail_payload",
+        sourceUrl: "https://careers.smartrecruiters.com/acme",
+        payload: {
+          id: "sr-detail-ordered",
+          name: "Senior Platform Engineer",
+          jobAd: {
+            sections: {
+              additionalInformation: { text: "More info." },
+              qualifications: { text: "Need TypeScript." },
+              description: { text: "Build systems." },
+              zCustom: { text: "Z custom." },
+              aCustom: { text: "A custom." },
+            },
+          },
+        },
+      }),
+    });
+
+    expect(result.leads[0].descriptionText).toBe(
+      "Build systems.\n\nNeed TypeScript.\n\nMore info.\n\nA custom.\n\nZ custom.",
+    );
+  });
+
   it("Recruitee fixture normalizes defensively to job lead", async () => {
     const result = await normalizeRecruiteePayload({
       ...envelope({

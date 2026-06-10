@@ -110,8 +110,9 @@ function greenhouseEndpoint(inputUrl: string, parsed: URL): ControlledAtsResolve
 }
 
 function leverEndpoint(inputUrl: string, parsed: URL): ControlledAtsResolvedEndpointV1 {
-  const eu = parsed.hostname.toLowerCase().includes(".eu.") || parsed.hostname.toLowerCase() === "api.eu.lever.co";
-  const site = parsed.hostname.toLowerCase().startsWith("api.")
+  const host = parsed.hostname.toLowerCase();
+  const eu = host === "jobs.eu.lever.co" || host === "api.eu.lever.co";
+  const site = host.startsWith("api.")
     ? pathSegment(parsed, 2, ["v0", "postings"])
     : firstPathSegment(parsed);
   assertSafeToken(site, "Lever site");
