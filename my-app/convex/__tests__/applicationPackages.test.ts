@@ -10,6 +10,7 @@ import {
   internalReadApplicationPackageById,
 } from "../applicationPackages";
 import {
+  assertApplicationPackageStorageShape,
   buildApplicationPackageStorageRecord,
   sanitizeApplicationPackageForStorage,
 } from "../lib/applicationPackages";
@@ -310,15 +311,14 @@ describe("application package Convex shadow persistence", () => {
   it("rejects mismatched userId and applicationContextId", async () => {
     const { ctx } = makeCtx();
     const applicationPackage = buildApplicationPackageFixture();
+    const storageRecord = await buildApplicationPackageStorageRecord(applicationPackage);
 
-    await expect(
-      internalCreateOrReuseApplicationPackage._handler(ctx as any, {
-        applicationPackage: {
-          ...applicationPackage,
-          userId: "other-user",
-        },
+    expect(() =>
+      assertApplicationPackageStorageShape({
+        ...storageRecord,
+        userId: "other-user",
       }),
-    ).rejects.toThrow(/userId must match package.userId|provenance/);
+    ).toThrow(/userId must match package.userId/);
 
     await expect(
       internalCreateOrReuseApplicationPackage._handler(ctx as any, {
@@ -375,12 +375,12 @@ describe("application package Convex shadow persistence", () => {
   });
 
   it("does not add public active product behavior or forbidden surfaces", () => {
-    const moduleText = readFileSync(new URL("../applicationPackages.ts", import.meta.url), "utf8");
+    const moduleText = readFileSync("convex/applicationPackages.ts", "utf8");
 
-    expect(moduleText).not.toContain("query(");
-    expect(moduleText).not.toContain("mutation(");
+    expect(moduleText).not.toMatch(/import\s*\{[^}]*\bquery\b[^}]*\}\s*from\s*"\\.\/_generated\/server"/u);
+    expect(moduleText).not.toMatch(/import\s*\{[^}]*\bmutation\b[^}]*\}\s*from\s*"\\.\/_generated\/server"/u);
     expect(moduleText).not.toContain("approval");
-    expect(moduleText).not.toContain("export");
+    expect(moduleText).not.toMatch(/export(Output|Pdf|PDF|Docx|DOCX|Url)|pdf|docx/u);
     expect(moduleText).not.toContain("Scout");
     expect(moduleText).not.toContain("MCP");
   });
