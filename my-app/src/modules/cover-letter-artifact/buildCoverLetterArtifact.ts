@@ -1,7 +1,6 @@
 import { buildStableHash } from "../application-harness/fingerprints";
 import { buildResumeVariantArtifactContentHash } from "../resume-variant-artifact/buildResumeVariantArtifact";
 import type { ResumeVariantArtifactStatusV1 } from "../resume-variant-artifact/schema";
-import { isForbiddenResumeOrCoverLetterText, sortUniqueStrings } from "../resume-variant-plan/planRules";
 import {
   countCoverLetterParagraphs,
   deriveCoverLetterArtifactStatus,
@@ -273,6 +272,22 @@ function assertResumeVariantArtifactProvenanceInput(input: BuildCoverLetterArtif
   for (const key of ["sourceFactIds", "allowedClaimIds", "evidenceMatchIds", "demandIds", "riskFlagIds", "reviewItemIds"] as const) {
     if (!isStringArray(provenance[key])) throw new TypeError(`CoverLetterArtifact input provenance requires ${key}`);
   }
+}
+
+function isForbiddenResumeOrCoverLetterText(value: string): boolean {
+  const normalized = value.normalize("NFKC").toLowerCase();
+  return (
+    /\bi am excited to apply\b/u.test(normalized) ||
+    /\bdear hiring manager\b/u.test(normalized) ||
+    /\bsincerely\b/u.test(normalized) ||
+    /\bworld-class\b/u.test(normalized) ||
+    /\bproven track record\b/u.test(normalized) ||
+    /\b(increased|reduced|improved|boosted|grew|scaled)\b[^.]{0,120}\b\d+\s*%/u.test(normalized)
+  );
+}
+
+function sortUniqueStrings(values: readonly string[]): readonly string[] {
+  return [...new Set(values)].sort((a, b) => a.localeCompare(b));
 }
 
 function isNonEmptyString(value: unknown): value is string {
