@@ -240,7 +240,7 @@ export function dedupeControlledAtsJobLeads(
     deduped.push(lead);
   }
 
-  return deduped.sort(compareLeads);
+  return deduped;
 }
 
 async function normalizeRecords(
