@@ -302,8 +302,9 @@ function asPlainRecord(value: unknown, message: string): Record<string, unknown>
   return value;
 }
 
+// Garde locale volontairement dupliquée pour protéger ce module sans dépendre d'un helper partagé.
+// fallow-ignore-next-line code-duplication
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  // Garde locale volontairement dupliquée pour protéger ce module sans dépendre d'un helper partagé.
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
