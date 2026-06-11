@@ -197,9 +197,7 @@ describe("local MCP approval UX copy style validation", () => {
     expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Raw payload blocked."))).toThrow(
       TypeError,
     );
-    expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("The raw value is hidden."))).toThrow(
-      TypeError,
-    );
+    expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Raw value."))).toThrow(TypeError);
     expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Send now."))).toThrow(TypeError);
     expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Resend blocked."))).not.toThrow();
     expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Unsend blocked."))).not.toThrow();
