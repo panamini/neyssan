@@ -105,7 +105,7 @@ const LOCAL_TOOL_ID_TO_PROJECTED = Object.fromEntries(
   Object.entries(PROJECTED_TO_LOCAL_TOOL_ID).map(([toolName, localToolId]) => [localToolId, toolName]),
 ) as Readonly<Record<LocalMcpToolIdV1, LocalMcpProjectedToolNameV1>>;
 
-const INPUT_KIND_TO_FIELD: Readonly<Record<InternalToolInputKindV1, string>> = {
+const INPUT_KIND_TO_FIELD: Readonly<Partial<Record<InternalToolInputKindV1, string>>> = {
   application_package_ref: "applicationPackageRef",
   evidence_graph_ref: "evidenceGraphRef",
   resume_variant_plan_ref: "resumeVariantPlanRef",

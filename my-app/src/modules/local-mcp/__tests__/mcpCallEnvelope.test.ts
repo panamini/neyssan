@@ -1,6 +1,5 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import envelopeSource from "../mcpCallEnvelope.ts?raw";
 import {
   buildLocalMcpCallError,
   buildLocalMcpCallRefusalEnvelope,
@@ -345,10 +344,7 @@ describe("local MCP call errors", () => {
 
 describe("local MCP call envelope scope guards", () => {
   it("keeps PR19 out of protocol, transport, server, and product boundaries", () => {
-    const source = readFileSync(
-      resolve(process.cwd(), "src/modules/local-mcp/mcpCallEnvelope.ts"),
-      "utf8",
-    );
+    const source = envelopeSource;
 
     expect(source).not.toMatch(/from\s+["'].*convex/i);
     expect(source).not.toMatch(/from\s+["'].*(?:app|pages|components)\//i);
