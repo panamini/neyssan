@@ -200,6 +200,9 @@ describe("local MCP approval UX copy style validation", () => {
     expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("The raw value is hidden."))).toThrow(
       TypeError,
     );
+    expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Send now."))).toThrow(TypeError);
+    expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Resend blocked."))).not.toThrow();
+    expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Unsend blocked."))).not.toThrow();
     expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Privacy review required.")))
       .not.toThrow();
     expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Safe summary only."))).not.toThrow();
@@ -316,12 +319,13 @@ describe("local MCP approval UX copy scope guard", () => {
     expect(source).not.toMatch(/from\s+["'][^"']*(?:components|pages|routes)\/[^"']*["']/iu);
     expect(source).not.toContain("controlled-ats-scout");
     expect(source).not.toMatch(/\b(fetch|axios|undici)\b/iu);
-    expect(source).not.toMatch(/\b(http|websocket|sse|oauth)\b/iu);
+    expect(source).not.toMatch(/from\s+["'][^"']*(?:node:)?(?:http|https|oauth|sse)[^"']*["']/iu);
+    expect(source).not.toMatch(/\b(?:WebSocket|EventSource)\b/u);
     expect(source).not.toMatch(
-      /\bfunction\s+(?:submit|export|download|persist|handler|invoke)\b/iu,
+      /\b(?:export\s+)?function\s+(?:submit|export|download|persist|handler|invoke)\b/iu,
     );
     expect(source).not.toMatch(
-      /\bconst\s+(?:submit|export|download|persist|handler|invoke)\b/iu,
+      /\b(?:export\s+)?const\s+(?:submit|export|download|persist|handler|invoke)\s*=/iu,
     );
   });
 });

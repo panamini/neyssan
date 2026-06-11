@@ -261,6 +261,9 @@ const FORBIDDEN_COPY_PHRASES = [
   "ready to apply",
   "ready to submit",
   "ready to export",
+] as const;
+
+const FORBIDDEN_COPY_ACTION_WORDS = [
   "send",
   "submit",
   "apply",
@@ -310,6 +313,7 @@ export function buildLocalMcpApprovalUxCopyFixtureOutput(
     tone: copy.tone,
     version: 1,
   };
+  // Re-check the narrowed output so future fixture changes cannot bypass PR24.
   assertLocalMcpPrivacySafeOutput(output, fixtureSet);
   return output;
 }
@@ -383,6 +387,11 @@ function assertNoForbiddenCopyTerms(text: string): void {
   }
   for (const phrase of FORBIDDEN_COPY_PHRASES) {
     if (normalized.includes(phrase)) {
+      throw new TypeError("Local MCP copy contains forbidden action or payload language");
+    }
+  }
+  for (const word of FORBIDDEN_COPY_ACTION_WORDS) {
+    if (new RegExp(`\\b${word}\\b`, "u").test(normalized)) {
       throw new TypeError("Local MCP copy contains forbidden action or payload language");
     }
   }
