@@ -18,7 +18,16 @@ Probable:
 À vérifier:
 - Legal/data review before any remote app submission.
 
-## 2. Non-goals
+## 2. Acceptance criteria
+
+Certain:
+- This PR adds documentation only.
+- It does not approve ChatGPT App submission.
+- It defines consent, approval, privacy, redaction, refusal, review and rollback requirements.
+- One unchecked review gate blocks submission.
+- Future implementation starts with privacy/redaction fixtures before runtime exposure.
+
+## 3. Non-goals
 
 Certain:
 - no ChatGPT App code
@@ -40,7 +49,7 @@ Certain:
 Rule:
 - Spec first. Runtime later.
 
-## 3. Current foundation
+## 4. Current foundation
 
 Certain:
 - PR18 defines projected descriptors. Tools can be described. They do not run.
@@ -53,7 +62,7 @@ What this means:
 - We have shape.
 - We do not have permission to expose.
 
-## 4. User consent model
+## 5. User consent model
 
 Before any future tool is visible outside Twoweeks, the user must see:
 - tool name
@@ -85,7 +94,7 @@ No buried consent.
 No silent enable.
 No magic.
 
-## 5. Tool visibility model
+## 6. Tool visibility model
 
 Tool visibility states:
 
@@ -115,7 +124,7 @@ Copy:
 - `Approval required.`
 - `Blocked. Review privacy.`
 
-## 6. Approval UX
+## 7. Approval UX
 
 Approval is required before:
 - any real handler
@@ -158,7 +167,7 @@ Never say:
 
 Approval is a gate. Not a vibe.
 
-## 7. Privacy rules
+## 8. Privacy rules
 
 Certain:
 - Private facts never leave Twoweeks.
@@ -186,7 +195,7 @@ Data classes:
 | complete generated resume | forbidden by default | explicit approval only |
 | complete cover letter | forbidden by default | explicit approval only |
 
-## 8. Output redaction rules
+## 9. Output redaction rules
 
 Allowed outputs:
 - tool status
@@ -227,7 +236,7 @@ If unsure:
 - explain briefly
 - ask for review
 
-## 9. Failure and refusal UX
+## 10. Failure and refusal UX
 
 Error copy must be short.
 Fact. Action.
@@ -260,7 +269,7 @@ Good copy:
 - `Review privacy.`
 - `Nothing sent.`
 
-## 10. Review gates before ChatGPT App submission
+## 11. Review gates before ChatGPT App submission
 
 Required before any submission:
 
@@ -285,7 +294,7 @@ Required before any submission:
 Gate rule:
 - One unchecked box blocks submission.
 
-## 11. Rollback and kill switch UX
+## 12. Rollback and kill switch UX
 
 Rollback actions:
 - disable all tools
@@ -317,7 +326,7 @@ Remote transport stopped.
 Rollback must be fast.
 Design for panic.
 
-## 12. User-facing copy inventory
+## 13. User-facing copy inventory
 
 | Situation | Copy | Notes |
 |---|---|---|
@@ -347,7 +356,7 @@ Buttons:
 
 No button longer than 3 words.
 
-## 13. Edge cases
+## 14. Edge cases
 
 - User revokes approval during call.
   - Stop. Mark approval invalid. Show `Access revoked.`
@@ -372,7 +381,7 @@ No button longer than 3 words.
 - User asks why a tool is blocked.
   - Explain one reason. No raw payload.
 
-## 14. Risks
+## 15. Risks
 
 ### P0
 
@@ -423,7 +432,7 @@ Required response:
 Fix when convenient.
 Do not block safety work.
 
-## 15. Verification checklist
+## 16. Verification checklist
 
 Docs-only commands:
 
@@ -445,7 +454,7 @@ Docs-only PR.
 If CI runs anyway:
 - it should pass without code changes.
 
-## 16. Future PRs
+## 17. Future PRs
 
 Recommended sequence:
 
@@ -460,7 +469,7 @@ Not promised:
 - real handlers
 - send/apply/submit/export
 
-## 17. Rollback
+## 18. Rollback
 
 Delete:
 
