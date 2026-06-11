@@ -268,6 +268,23 @@ describe("local MCP remote transport preflight", () => {
     );
   });
 
+  it("blocks negative request and response sizes as invalid sizes", () => {
+    expectBlockedFor(
+      {
+        ...validPreflightInput(),
+        requestSizeBytes: -1,
+      },
+      "invalid_request_size",
+    );
+    expectBlockedFor(
+      {
+        ...validPreflightInput(),
+        expectedResponseSizeBytes: -1,
+      },
+      "invalid_response_size",
+    );
+  });
+
   it("blocks invalid timeout and rate-limit policies", () => {
     expectBlockedFor(validPreflightInput(nonProductionConfig({ timeoutMs: 0 })), "invalid_timeout");
     expectBlockedFor(

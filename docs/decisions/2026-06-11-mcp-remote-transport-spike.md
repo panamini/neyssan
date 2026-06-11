@@ -71,13 +71,13 @@ Certain:
 - `timeoutMs` doit etre un entier positif;
 - `maxRequestBytes` et `maxResponseBytes` doivent etre des entiers positifs;
 - les limites rate-limit par user, session et global doivent etre positives;
-- le preflight bloque les tailles au-dessus des limites configurees.
+- le preflight bloque les tailles negatives, invalides ou au-dessus des limites configurees.
 
 ## Preflight Model
 
 Certain: le preflight ne fait aucun appel tool, aucun reseau, aucune lecture produit et aucune persistence.
 
-Certain: il bloque si le transport est disabled, si origin/host/user/session manquent, si les allowlists refusent, si les tailles depassent les limites, ou si approval/audit/handler ne sont pas obligatoires.
+Certain: il bloque si le transport est disabled, si origin/host/user/session manquent, si les allowlists refusent, si les tailles sont invalides ou depassent les limites, ou si approval/audit/handler ne sont pas obligatoires.
 
 Certain: les summaries restent courts et ne contiennent pas les payloads bruts.
 

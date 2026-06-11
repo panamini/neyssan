@@ -61,7 +61,9 @@ export type LocalMcpRemoteTransportBlockReasonV1 =
   | "auth_required_before_remote"
   | "missing_user"
   | "missing_session"
+  | "invalid_request_size"
   | "request_too_large"
+  | "invalid_response_size"
   | "response_too_large"
   | "invalid_timeout"
   | "invalid_rate_limit"
@@ -230,14 +232,24 @@ export function validateLocalMcpRemoteTransportPreflight(
   }
   if (!isNonEmptyString(input.userId)) addReason(blockedReasons, "missing_user");
   if (!isNonEmptyString(input.sessionId)) addReason(blockedReasons, "missing_session");
-  if (!isValidSize(input.requestSizeBytes, config.maxRequestBytes)) {
+  if (!Number.isInteger(input.requestSizeBytes) || input.requestSizeBytes < 0) {
+    addReason(blockedReasons, "invalid_request_size");
+  } else if (!isValidSize(input.requestSizeBytes, config.maxRequestBytes)) {
     addReason(blockedReasons, "request_too_large");
   }
   if (
     !Number.isInteger(config.maxResponseBytes) ||
-    config.maxResponseBytes <= 0 ||
-    (input.expectedResponseSizeBytes !== undefined &&
-      !isValidSize(input.expectedResponseSizeBytes, config.maxResponseBytes))
+    config.maxResponseBytes <= 0
+  ) {
+    addReason(blockedReasons, "response_too_large");
+  } else if (
+    input.expectedResponseSizeBytes !== undefined &&
+    (!Number.isInteger(input.expectedResponseSizeBytes) || input.expectedResponseSizeBytes < 0)
+  ) {
+    addReason(blockedReasons, "invalid_response_size");
+  } else if (
+    input.expectedResponseSizeBytes !== undefined &&
+    !isValidSize(input.expectedResponseSizeBytes, config.maxResponseBytes)
   ) {
     addReason(blockedReasons, "response_too_large");
   }
