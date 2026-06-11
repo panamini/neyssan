@@ -541,6 +541,25 @@ describe("local MCP privacy review gate copy integration", () => {
     expect(result.userFacingCopy).toBe(getLocalMcpApprovalUxCopy("handler_unavailable").text);
   });
 
+  it("uses safe PR26 fallback copy for invalid copy catalogs", async () => {
+    const result = evaluateLocalMcpPrivacyReviewGate(
+      await completeSafeInput({
+        copyCatalog: [
+          {
+            ...getLocalMcpApprovalUxCopy("review_first"),
+            text: "",
+          },
+        ],
+      }),
+    );
+    expect(result.status).toBe("blocked");
+    expect(result.reasons).toContain("copy_invalid");
+    expect(result.copyKey).toBe("stopped_safely");
+    expect(result.copyKey).not.toBe("review_first");
+    expect(result.userFacingCopy).toBe(getLocalMcpApprovalUxCopy("stopped_safely").text);
+    expectSafeGateResult(result);
+  });
+
   it("all gate outputs pass PR24 privacy checks", async () => {
     const outputs = [
       evaluateLocalMcpPrivacyReviewGate(

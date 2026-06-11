@@ -233,6 +233,7 @@ const COPY_KEY_RULES: readonly Readonly<{
     reasons: ["transport_missing", "transport_blocked", "remote_not_allowed"],
     copyKey: "remote_blocked",
   },
+  { reasons: ["copy_missing", "copy_invalid"], copyKey: "stopped_safely" },
   { reasons: ["tool_not_visible", "tool_visibility_blocked"], copyKey: "tool_disabled" },
   { reasons: ["safe_summary_only"], copyKey: "safe_summary_only" },
 ] as const;
