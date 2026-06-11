@@ -354,7 +354,7 @@ function normalizeHost(value: string): string | undefined {
   try {
     const parsed = new URL(`https://${trimmed}`);
     if (!parsed.hostname || parsed.pathname !== "/" || parsed.search || parsed.hash) return undefined;
-    return trimmed.toLowerCase();
+    return parsed.host;
   } catch {
     return undefined;
   }

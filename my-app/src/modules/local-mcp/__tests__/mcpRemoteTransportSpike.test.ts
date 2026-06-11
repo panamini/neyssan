@@ -214,6 +214,18 @@ describe("local MCP remote origin and host policy", () => {
     expect(isAllowedLocalMcpHost("localhost:5173", ["mcp.twoweeks.test"])).toBe(false);
     expect(isAllowedLocalMcpHost("localhost:5173", ["localhost:5173"])).toBe(true);
   });
+
+  it("normalizes hosts through URL parsing for IDNA and default ports", () => {
+    const config = buildNonProductionLocalMcpRemoteTransportSpikeConfig({
+      allowedOrigins: ["https://mcp.twoweeks.test"],
+      allowedHosts: ["☃.example", "mcp.twoweeks.test:443"],
+    });
+
+    expect(config.allowedHosts).toEqual(["mcp.twoweeks.test", "xn--n3h.example"]);
+    expect(isAllowedLocalMcpHost("xn--n3h.example", config.allowedHosts)).toBe(true);
+    expect(isAllowedLocalMcpHost("☃.example", config.allowedHosts)).toBe(true);
+    expect(isAllowedLocalMcpHost("mcp.twoweeks.test", config.allowedHosts)).toBe(true);
+  });
 });
 
 describe("local MCP remote transport preflight", () => {
