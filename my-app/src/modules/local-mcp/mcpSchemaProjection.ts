@@ -49,8 +49,10 @@ export type LocalMcpProjectedToolsListV1 = Readonly<{
 }>;
 
 const FORBIDDEN_DESCRIPTOR_TERMS: readonly string[] = [
+  "update",
   "send",
   "submit",
+  "publish",
   "apply",
   "export",
   "download",
@@ -258,7 +260,15 @@ function cloneJsonSchema(schema: LocalMcpJsonSchemaV1): LocalMcpJsonSchemaV1 {
 
 function assertObjectJsonSchema(value: unknown, label: string): void {
   const schema = asPlainRecord(value, `${label} must be an object`);
+  assertJsonSchemaRecord(schema, label);
   if (schema.type !== "object") throw new TypeError(`${label} must be an object schema`);
+}
+
+function assertJsonSchemaRecord(schema: Record<string, unknown>, label: string): void {
+  if (!isLocalMcpJsonSchemaType(schema.type)) {
+    throw new TypeError(`${label} requires a valid JSON Schema type`);
+  }
+  if (schema.type !== "object") return;
   if (schema.additionalProperties !== false) {
     throw new TypeError(`${label} must reject additional properties`);
   }
@@ -268,6 +278,24 @@ function assertObjectJsonSchema(value: unknown, label: string): void {
   if (!Array.isArray(schema.required)) {
     throw new TypeError(`${label} requires required fields`);
   }
+  if (!schema.required.every((field) => typeof field === "string")) {
+    throw new TypeError(`${label} required fields must be strings`);
+  }
+
+  for (const [propertyName, propertySchema] of Object.entries(schema.properties)) {
+    const nested = asPlainRecord(propertySchema, `${label}.${propertyName} must be an object`);
+    assertJsonSchemaRecord(nested, `${label}.${propertyName}`);
+  }
+}
+
+function isLocalMcpJsonSchemaType(value: unknown): value is LocalMcpJsonSchemaV1["type"] {
+  return (
+    value === "object" ||
+    value === "string" ||
+    value === "number" ||
+    value === "boolean" ||
+    value === "integer"
+  );
 }
 
 function assertSafeAnnotations(value: unknown): void {

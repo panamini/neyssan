@@ -121,6 +121,14 @@ describe("local MCP schema projection", () => {
     }
   });
 
+  it("accepts every valid projected descriptor", () => {
+    const projected = projectLocalMcpRegistryToMcpToolsList();
+
+    for (const descriptor of projected.tools) {
+      expect(() => assertLocalMcpProjectedToolDescriptor(descriptor)).not.toThrow();
+    }
+  });
+
   it("contains no forbidden action or external host terms in descriptor metadata", () => {
     const forbiddenTerms = [
       "send",
@@ -130,6 +138,8 @@ describe("local MCP schema projection", () => {
       "download",
       "network",
       "oauth",
+      "update",
+      "publish",
       "browser",
       "scrape",
       "openai",
@@ -196,6 +206,46 @@ describe("local MCP schema projection", () => {
       assertLocalMcpProjectedToolDescriptor({
         ...descriptor,
         annotations: { ...descriptor.annotations, destructiveHint: true },
+      }),
+    ).toThrow(TypeError);
+    expect(() =>
+      assertLocalMcpProjectedToolDescriptor({
+        ...descriptor,
+        description: "Use this when you need to update local dry-run metadata.",
+      }),
+    ).toThrow(TypeError);
+    expect(() =>
+      assertLocalMcpProjectedToolDescriptor({
+        ...descriptor,
+        description: "Use this when you need to publish local dry-run metadata.",
+      }),
+    ).toThrow(TypeError);
+    expect(() =>
+      assertLocalMcpProjectedToolDescriptor({
+        ...descriptor,
+        inputSchema: {
+          ...descriptor.inputSchema,
+          properties: {
+            applicationPackageRef: {
+              ...descriptor.inputSchema.properties?.applicationPackageRef,
+              additionalProperties: true,
+            },
+          },
+        } as unknown as LocalMcpJsonSchemaV1,
+      }),
+    ).toThrow(TypeError);
+    expect(() =>
+      assertLocalMcpProjectedToolDescriptor({
+        ...descriptor,
+        inputSchema: {
+          ...descriptor.inputSchema,
+          properties: {
+            applicationPackageRef: {
+              ...descriptor.inputSchema.properties?.applicationPackageRef,
+              required: undefined,
+            },
+          },
+        } as unknown as LocalMcpJsonSchemaV1,
       }),
     ).toThrow(TypeError);
   });
