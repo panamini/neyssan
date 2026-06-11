@@ -10,6 +10,11 @@ import type {
 } from "./schema";
 import { buildLocalMcpToolRegistry } from "./toolRegistry";
 
+// PR18: projection locale uniquement.
+// Lire aussi `schema.ts`, `toolRegistry.ts` et `mcpSchemaProjection.test.ts` si le registre change.
+// Modifier seulement ce module et ses tests si le contrat bouge; ne pas ajouter de transport, handler runtime ou schéma plus large ici.
+// Risques à surveiller: casser le mapping `local_mcp.* -> twoweeks.*` ou ouvrir le JSON Schema.
+// Vérifier avec `vitest --run src/modules/local-mcp/__tests__/*.test.ts` puis `tsc --noEmit`.
 export type LocalMcpJsonSchemaV1 = Readonly<{
   type: "object" | "string" | "number" | "boolean" | "integer";
   description?: string;
@@ -117,6 +122,8 @@ export function buildLocalMcpInputJsonSchema(
 export function buildLocalMcpOutputJsonSchema(
   tool: LocalMcpToolDefinitionV1,
 ): LocalMcpJsonSchemaV1 {
+  // La sortie doit rester le dry-run actuel, pas un résumé métier futur.
+  // Si le format évolue, mettre à jour ce schéma et le test PR18 en même temps.
   return {
     type: "object",
     additionalProperties: false,
@@ -296,6 +303,7 @@ function asPlainRecord(value: unknown, message: string): Record<string, unknown>
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  // Garde locale volontairement dupliquée pour protéger ce module sans dépendre d'un helper partagé.
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;

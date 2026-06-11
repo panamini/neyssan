@@ -13,6 +13,8 @@ import type { LocalMcpJsonSchemaV1 } from "../mcpSchemaProjection";
 import type { LocalMcpToolRegistryV1 } from "../schema";
 import { buildLocalMcpToolRegistry } from "../toolRegistry";
 
+// Ces tests protègent le contrat de projection local.
+// Si `schema.ts` ou `toolRegistry.ts` changent, mettez à jour ce fichier avant de toucher au runtime.
 const EXPECTED_PROJECTED_TOOL_NAMES = [
   "twoweeks.application_package.summarize",
   "twoweeks.evidence_graph.summarize",
