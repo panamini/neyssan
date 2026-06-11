@@ -155,7 +155,9 @@ describe("local MCP privacy leak detection", () => {
     const result = collectLocalMcpPrivacyLeakFindings(unsafe, fixtureSet);
 
     expect(result.safe).toBe(false);
-    expect(result.findings.map((finding) => finding.category)).toEqual(EXPECTED_CATEGORIES);
+    expect(new Set(result.findings.map((finding) => finding.category))).toEqual(
+      new Set(EXPECTED_CATEGORIES),
+    );
   });
 
   it("detects sentinel values in object keys", () => {

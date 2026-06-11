@@ -182,7 +182,6 @@ export function collectLocalMcpPrivacyLeakFindings(
   let checkedPathCount = 0;
 
   function checkString(text: string, path: string): void {
-    checkedPathCount += 1;
     for (const sentinel of sentinels) {
       if (text.includes(sentinel.val)) {
         findings.push({
@@ -229,6 +228,7 @@ export function collectLocalMcpPrivacyLeakFindings(
       .sort(compareStrings)
       .forEach((key, index) => {
         const childPath = appendPathKey(path, key, index, sentinels);
+        checkedPathCount += 1;
         checkString(key, `${childPath}<key>`);
         visit(current[key], childPath, seen);
       });
