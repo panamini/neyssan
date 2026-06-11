@@ -323,6 +323,7 @@ describe("controlled ATS scout adapters", () => {
       workplaceType: "remote",
       postedAt: "2026-06-01T12:00:00.000Z",
     });
+    expect(result.leads[0].canonicalUrl).toBeUndefined();
   });
 
   it("SmartRecruiters detail fixture preserves sections and apply URL", async () => {
@@ -416,6 +417,25 @@ describe("controlled ATS scout adapters", () => {
       status: "open",
       descriptionText: "Build product systems.",
     });
+  });
+
+  it("Recruitee description fallback skips empty strings", async () => {
+    const result = await normalizeRecruiteePayload({
+      ...envelope({
+        vendor: "recruitee",
+        sourceUrl: "https://acme.recruitee.com",
+        payload: {
+          id: "empty-description",
+          title: "Product Engineer",
+          careers_url: "https://acme.recruitee.com/o/product-engineer",
+          location: "Paris",
+          description: "",
+          description_text: "Fallback description.",
+        },
+      }),
+    });
+
+    expect(result.leads[0].descriptionText).toBe("Fallback description.");
   });
 
   it("missing title record is rejected without rejecting valid records", async () => {

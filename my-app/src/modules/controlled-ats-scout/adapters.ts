@@ -441,10 +441,7 @@ async function normalizeSmartRecruitersRecord(
   const title = stringField(record.name);
   if (!title) return rejectedResult("missing_title", envelope, rawPayloadHash);
 
-  const canonicalCandidate = firstString([
-    stringField(record.applyUrl),
-    stringField(record.ref),
-  ]);
+  const canonicalCandidate = firstString([stringField(record.applyUrl)]);
   const url = prepareCanonicalUrl(envelope, canonicalCandidate);
   if (url.rejected) return { kind: "rejected", rejected: url.rejected };
 
@@ -510,6 +507,8 @@ async function normalizeRecruiteeRecord(
   const applyUrl = prepareOptionalUrl(envelope.vendor, applyCandidate, envelope, rawPayloadHash);
   if (applyUrl.rejected) return { kind: "rejected", rejected: applyUrl.rejected };
 
+  const location = recruiteeLocation(record);
+
   return {
     kind: "lead",
     input: {
@@ -520,8 +519,8 @@ async function normalizeRecruiteeRecord(
       externalJobId: firstString([idField(record.id), idField(record.guid), idField(record.slug)]),
       title,
       department: recruiteeDepartment(record.department),
-      location: recruiteeLocation(record),
-      workplaceType: inferWorkplaceType([recruiteeLocation(record)]),
+      location,
+      workplaceType: inferWorkplaceType([location]),
       status: recruiteeStatus(record.status),
       descriptionText: firstRawString([record.description, record.description_text, record.descriptionText]),
       applyUrl: applyUrl.value,
@@ -763,7 +762,7 @@ function firstString(values: readonly (string | undefined)[]): string | undefine
 }
 
 function firstRawString(values: readonly unknown[]): string | undefined {
-  return values.find((value): value is string => typeof value === "string");
+  return values.find((value): value is string => typeof value === "string" && value.length > 0);
 }
 
 function joinNonEmpty(values: readonly (string | undefined)[], separator: string): string | undefined {
