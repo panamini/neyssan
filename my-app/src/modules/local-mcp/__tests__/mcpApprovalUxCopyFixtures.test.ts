@@ -199,6 +199,23 @@ describe("local MCP approval UX copy style validation", () => {
     );
     expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Raw value."))).toThrow(TypeError);
     expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Send now."))).toThrow(TypeError);
+    expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Prod blocked."))).toThrow(
+      TypeError,
+    );
+    expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Secret blocked."))).toThrow(
+      TypeError,
+    );
+    expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Token blocked."))).toThrow(
+      TypeError,
+    );
+    expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Product blocked."))).not.toThrow();
+    expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Secretariat blocked.")))
+      .not.toThrow();
+    expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Tokenized blocked.")))
+      .not.toThrow();
+    expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Prods blocked."))).not.toThrow();
+    expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Secrets blocked."))).not.toThrow();
+    expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Tokens blocked."))).not.toThrow();
     expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Resend blocked."))).not.toThrow();
     expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Unsend blocked."))).not.toThrow();
     expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Privacy review required.")))

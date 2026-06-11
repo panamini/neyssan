@@ -253,9 +253,6 @@ const FORBIDDEN_COPY_PHRASES = [
   "stack trace",
   "private fact",
   "never use",
-  "secret",
-  "token",
-  "prod",
   "production",
   "ready to send",
   "ready to apply",
@@ -269,6 +266,9 @@ const FORBIDDEN_COPY_ACTION_WORDS = [
   "apply",
   "export",
   "download",
+  "prod",
+  "secret",
+  "token",
 ] as const;
 
 export function getLocalMcpApprovalUxCopy(
