@@ -560,6 +560,32 @@ describe("local MCP privacy review gate copy integration", () => {
     expectSafeGateResult(result);
   });
 
+  it("validates copyCatalog without using it as the returned copy source", async () => {
+    const result = evaluateLocalMcpPrivacyReviewGate(
+      await completeSafeInput({
+        approvalDecision: undefined,
+        copyCatalog: copyCatalog().map((entry) =>
+          entry.key === "approval_required"
+            ? { ...entry, text: "Custom approved.", maxWords: 2 }
+            : entry,
+        ),
+      }),
+    );
+
+    expect(result.status).toBe("review_required");
+    expect(result.reasons).toContain("approval_missing");
+    expect(result.copyKey).toBe("approval_required");
+    expect(result.userFacingCopy).toBe(getLocalMcpApprovalUxCopy("approval_required").text);
+    expect(result.userFacingCopy).not.toBe("Custom approved.");
+    expectSafeGateResult(result);
+  });
+
+  it("does not keep unreachable safe_summary_only copy-key rules", () => {
+    expect(privacyReviewGateSource).not.toMatch(
+      /reasons:\s*\[\s*"safe_summary_only"\s*\],\s*copyKey:\s*"safe_summary_only"/u,
+    );
+  });
+
   it("all gate outputs pass PR24 privacy checks", async () => {
     const outputs = [
       evaluateLocalMcpPrivacyReviewGate(

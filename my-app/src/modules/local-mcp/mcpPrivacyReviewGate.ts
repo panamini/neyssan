@@ -235,7 +235,6 @@ const COPY_KEY_RULES: readonly Readonly<{
   },
   { reasons: ["copy_missing", "copy_invalid"], copyKey: "stopped_safely" },
   { reasons: ["tool_not_visible", "tool_visibility_blocked"], copyKey: "tool_disabled" },
-  { reasons: ["safe_summary_only"], copyKey: "safe_summary_only" },
 ] as const;
 
 const SAFE_SUMMARY_RULES: readonly Readonly<{
@@ -315,20 +314,24 @@ export function evaluateLocalMcpPrivacyReviewGate(
   const sortedReasons = sortLocalMcpPrivacyReviewGateReasons([...reasons]);
   const status = determineGateStatus(sortedReasons);
   const copyKey = determineCopyKey(status, sortedReasons);
-  const copy = getLocalMcpApprovalUxCopy(copyKey);
   const result: LocalMcpPrivacyReviewGateResultV1 = {
     kind: "local_mcp_privacy_review_gate_result",
     localToolId: normalized.localToolId,
     status,
     reasons: sortedReasons,
     copyKey,
-    userFacingCopy: copy.text,
+    userFacingCopy: resolveGateCopyText(copyKey),
     safeSummary: buildSafeSummary(status, sortedReasons),
     version: 1,
   };
 
   assertLocalMcpPrivacyReviewGateResult(result);
   return cloneGateResult(result);
+}
+
+function resolveGateCopyText(copyKey: LocalMcpApprovalUxCopyKeyV1): string {
+  // copyCatalog is an input contract check only; returned copy stays pinned to PR26 fixtures.
+  return getLocalMcpApprovalUxCopy(copyKey).text;
 }
 
 export function listLocalMcpPrivacyReviewGateResults(
