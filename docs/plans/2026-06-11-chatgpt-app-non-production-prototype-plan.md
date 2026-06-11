@@ -66,7 +66,7 @@ The future prototype is:
 | Prototype area | PR28 decision | Why |
 | --- | --- | --- |
 | Tool list | derived from PR25 | visibility must fail closed |
-| Gate result | derived from PR27 | privacy review controls exposure |
+| Gate result | derived from PR27 and PR27.1 | privacy review controls exposure |
 | Copy | derived from PR26 | no improvised UX copy |
 | Output data | derived from PR24 | no raw or private leaks |
 | Handler | blocked by PR21 | no real execution |
@@ -91,6 +91,7 @@ PR28 allows documentation for these future mock/demo surfaces only:
 - PR25 visibility policy decisions
 - PR26 approval UX copy fixtures
 - PR27 privacy review gate decisions
+- PR27.1 privacy review gate hardening decisions
 
 No surface created by PR28 can execute, persist, deploy, authenticate, transport, export, send, submit, or apply.
 
@@ -141,6 +142,7 @@ Allowed:
 - PR24 sentinel tests
 - PR26 fixed copy strings
 - PR27 gate statuses
+- PR27.1 safe summaries
 
 Forbidden:
 
@@ -159,39 +161,107 @@ Forbidden:
 - raw arguments
 - real contact details
 - real employer/user/job source payloads
+- origin or host payloads
 
 ## 7. Prototype constraints
 
 - All tools default hidden unless explicitly allowed by a future prototype review.
 - Any tool visibility must come from PR25.
-- Any external-style exposure must pass PR27.
+- Any external-style exposure must pass PR27 and PR27.1.
 - Approval is required for any future action.
 - Audit shell presence is required before a tool can be shown as reviewable.
 - PR22 transport may be referenced only as disabled preflight evidence.
 - No runtime transport is enabled by this plan.
 - Safe summary only.
 - Copy must follow PR23 and PR26: short, direct, no hype, no filler.
-- All prototype outputs must be derivable from PR20-PR27 fixtures or decisions.
+- All prototype outputs must be derivable from PR20-PR27.1 fixtures or decisions.
 - `ready_for_internal_review` is not execution readiness.
 - `ready_for_internal_review` is not production readiness.
 - `ready_for_internal_review` is not ChatGPT App readiness.
+- `ready_for_internal_review` is not remote approval.
+- `ready_for_internal_review` is not handler approval.
 
-## 8. Allowed demo scenarios
+## 8. PR27.1 gate hardening
+
+PR27.1 is mandatory context for any future prototype review.
+
+The gate remains fail-closed:
+
+- missing visibility blocks
+- hidden, disabled, admin-disabled, or privacy-blocked visibility blocks
+- missing privacy review blocks
+- missing privacy check blocks
+- unsafe PR24 privacy check blocks
+- denied approval blocks
+- missing audit blocks when audit is required
+- missing handler boundary blocks when handler boundary is required
+- invalid handler boundary blocks
+- missing remote transport preflight blocks when remote preflight is required
+- blocked remote transport preflight blocks
+- invalid copy blocks
+
+Review-only states stay review-only:
+
+- missing approval may return `review_required`, not runnable
+- missing copy may return `review_required`, not runnable
+- `manual_review_required` is not approval to expose
+- `all_design_gates_present` is not approval to execute
+- `isLocalMcpPrivacyReviewGatePassedForInternalReview` is review evidence only
+
+Gate output must stay bounded:
+
+- use PR26 copy only
+- use approved safe summaries only
+- return reason categories only
+- never return raw arguments
+- never return raw source text
+- never return private facts
+- never return `never_use` facts
+- never return source quote dumps
+- never return stack traces
+- never return user or session IDs
+- never return secrets or tokens
+- never return origin or host payloads
+
+Allowed PR27.1 safe summaries:
+
+```txt
+Blocked. Review privacy.
+Approval required.
+Denied. Nothing ran.
+Audit unavailable. Tool blocked.
+No handler yet.
+Remote tools disabled.
+Ready for internal review. No handler executed.
+```
+
+Forbidden PR27.1 interpretation:
+
+```txt
+ready_for_production
+ready_to_execute
+ready_for_chatgpt
+approved_for_remote
+safe_to_run
+```
+
+## 9. Allowed demo scenarios
 
 | Scenario | Source boundary | Allowed output | Forbidden output |
 | --- | --- | --- | --- |
 | Show what tools would exist | PR18, PR25 | safe descriptor name and visibility state | raw args, real user data, callable endpoint |
 | Show why a tool is hidden | PR25 | `hidden` / reason summary | stack trace, policy internals with raw payload |
 | Show dry-run-only state | PR25, PR26 | `Dry run only.` | generated resume or handler result |
-| Show approval-required state | PR20, PR26 | `Approval required.` | action execution, approval bypass |
-| Show denied state | PR20, PR26 | `Denied. Nothing ran.` | mutation, send, submit, apply |
-| Show privacy-blocked state | PR24, PR27 | `Blocked. Review privacy.` | sentinel value, raw finding payload |
-| Show no-handler state | PR21, PR26 | `No handler yet.` | fake handler execution |
-| Show remote-disabled state | PR22, PR26 | `Remote tools disabled.` | active remote call or tunnel |
-| Show ready-for-internal-review state | PR27 | `Review first. Nothing runs.` | production-ready or executable wording |
+| Show approval-required state | PR20, PR26, PR27.1 | `Approval required.` | action execution, approval bypass |
+| Show denied state | PR20, PR26, PR27.1 | `Denied. Nothing ran.` | mutation, send, submit, apply |
+| Show audit-missing state | PR20, PR27.1 | `Audit unavailable. Tool blocked.` | review-ready wording, execution path |
+| Show privacy-blocked state | PR24, PR27, PR27.1 | `Blocked. Review privacy.` | sentinel value, raw finding payload |
+| Show no-handler state | PR21, PR26, PR27.1 | `No handler yet.` | fake handler execution |
+| Show remote-disabled state | PR22, PR26, PR27.1 | `Remote tools disabled.` | active remote call or tunnel |
+| Show ready-for-internal-review state | PR27, PR27.1 | `Ready for internal review. No handler executed.` | production-ready or executable wording |
 | Show redacted safe summary | PR24, PR26 | `Output redacted.` | raw CV, source quote, token, secret |
 
-## 9. Forbidden scenarios
+## 10. Forbidden scenarios
 
 The prototype must not support:
 
@@ -211,8 +281,11 @@ The prototype must not support:
 - deploy a server
 - pass raw CV, resume, cover letter, job text, or source document text into a ChatGPT App surface
 - show complete generated artifacts inside ChatGPT
+- treat PR27.1 gate pass as runtime permission
+- treat PR27.1 gate pass as production readiness
+- treat PR27.1 gate pass as ChatGPT App readiness
 
-## 10. Future PR gates
+## 11. Future PR gates
 
 ### PR29 - Local-only App Manifest Draft
 
@@ -234,6 +307,12 @@ Forbidden:
 - define OAuth credentials
 - define real handler URLs
 
+Gate:
+
+- must cite PR27.1 fail-closed behavior
+- must keep all tools non-runnable
+- must keep all endpoints placeholder-only
+
 ### PR30 - End-to-end Safety Audit
 
 Allowed:
@@ -250,6 +329,11 @@ Forbidden:
 - adding UI
 - adding remote transport
 
+Gate:
+
+- must prove PR27.1 cannot be treated as runtime permission
+- must verify no raw privacy material can enter a ChatGPT App surface
+
 ### PR31 - Non-production Prototype Scaffold
 
 Allowed only after explicit approval.
@@ -262,28 +346,31 @@ Minimum constraints:
 - no OAuth
 - no export/send/submit/apply
 - only fixture-backed surfaces
-- must use PR27 gate result before any exposed state
+- must use PR27.1 gate result before any exposed state
 
-## 11. Manual review checklist
+## 12. Manual review checklist
 
 Before any prototype implementation:
 
 1. Every tool respects visibility rules from PR25.
 2. Every tool passes PR24 privacy/redaction checks.
 3. All approval, denial, blocked, and review copy matches PR26 fixtures.
-4. No tool can be exposed externally unless PR27 returns `ready_for_internal_review`.
-5. Remote transport is not enabled by the prototype.
-6. UX messages follow PR23 and Twoweeks voice.
-7. Mock/demo surfaces cannot download, send, submit, apply, auto-apply, export, or mutate production data.
-8. Rollback instructions exist for each mock/demo surface.
-9. The prototype cannot authenticate a real user.
-10. The prototype cannot persist user data.
-11. The prototype cannot call a real endpoint.
-12. The prototype cannot show raw source text.
-13. The prototype cannot claim production readiness.
-14. The prototype cannot claim ChatGPT App readiness.
+4. No tool can be exposed externally unless PR27.1 returns `ready_for_internal_review`.
+5. `ready_for_internal_review` is treated as review-only.
+6. Remote transport is not enabled by the prototype.
+7. UX messages follow PR23 and Twoweeks voice.
+8. Mock/demo surfaces cannot download, send, submit, apply, auto-apply, export, or mutate production data.
+9. Rollback instructions exist for each mock/demo surface.
+10. The prototype cannot authenticate a real user.
+11. The prototype cannot persist user data.
+12. The prototype cannot call a real endpoint.
+13. The prototype cannot show raw source text.
+14. The prototype cannot claim production readiness.
+15. The prototype cannot claim ChatGPT App readiness.
+16. The prototype cannot claim handler readiness.
+17. The prototype cannot claim remote readiness.
 
-## 12. Rollback / kill switch
+## 13. Rollback / kill switch
 
 Rollback for PR28 is deletion-only:
 
@@ -295,22 +382,23 @@ Future prototype rollback requirements:
 - all fixture exposure disabled
 - all sessions invalidated if any accidental enablement occurs
 - all PR25 visibility checks rerun
-- all PR27 privacy gate checks rerun
+- all PR27.1 privacy gate checks rerun
 - all unsafe outputs blocked before review resumes
 
-## 13. Risks
+## 14. Risks
 
 | Risk | Impact | Mitigation |
 | --- | --- | --- |
 | Prototype plan is mistaken for implementation approval | unsafe code may start too early | PR28 states Plan-only, Build/Deploy forbidden |
 | `ready_for_internal_review` is mistaken for execution readiness | accidental exposure | PR28 repeats non-executable meaning |
-| Mock/demo output grows into real user-data output | privacy leak | PR24 and PR27 required before exposure |
+| PR27.1 gate pass becomes runtime permission | handler or transport may run too early | PR28 states gate pass is review evidence only |
+| Mock/demo output grows into real user-data output | privacy leak | PR24 and PR27.1 required before exposure |
 | Copy drifts from Twoweeks voice | confusing UX | PR26 copy fixtures required |
 | Transport gets enabled early | remote exposure | PR22 stays disabled/reference-only |
 | Handler boundary becomes a real handler too early | execution path appears | PR21 remains design-only until later approval |
 | Future Apps SDK docs change | stale assumptions | re-check official docs before PR29/PR31 |
 
-## 14. Acceptance criteria for PR28
+## 15. Acceptance criteria for PR28
 
 PR28 passes only if:
 
@@ -320,8 +408,10 @@ PR28 passes only if:
 - no lockfiles changed
 - document says Plan-only
 - document clearly forbids Build and Deploy
-- document references PR24, PR25, PR26, and PR27 as mandatory gates
+- document references PR24, PR25, PR26, PR27, and PR27.1 as mandatory gates
+- document reflects PR27.1 fail-closed gate hardening
 - document states `ready_for_internal_review` is not execution readiness
+- document states `ready_for_internal_review` is review evidence only
 - document states no real user data
 - document states no ChatGPT App submission
 - document states no Apps SDK code
@@ -330,7 +420,7 @@ PR28 passes only if:
 - document states no OAuth
 - document states no export/send/submit/apply
 
-## 15. Verification
+## 16. Verification
 
 Documentation/manual inspection only. No runtime execution.
 
@@ -354,13 +444,35 @@ Manual checks:
 
 - Review all mock surfaces against PR24 privacy/redaction fixtures.
 - Inspect PR23 UX/privacy spec for consent, privacy, and refusal consistency.
-- Confirm PR27 privacy gate rules are documented and required.
+- Confirm PR27.1 privacy gate rules are documented and required.
 - Cross-check PR25 visibility policy against allowed mock/demo tools.
 - Confirm PR21 remains design-only.
 - Confirm PR22 remains disabled/non-production reference only.
 - Confirm no code, route, server, transport, OAuth, Convex, handler, UI, deployment, export, send, submit, apply, or real user-data surface is added.
 
-## 16. References
+## 17. PR body draft
+
+Summary:
+
+- Adds a docs-only PR28 plan for a future non-production ChatGPT App prototype.
+- Locks PR28 to Plan-only work. Build and Deploy remain forbidden.
+- Threads PR18-PR27.1 boundaries into explicit prototype, review, data, rollback, and future PR gates.
+
+Verification:
+
+```txt
+rtk git diff --check
+rtk git diff --name-only application-os-foundation...HEAD
+rtk npx fallow audit --changed-since application-os-foundation --format compact
+```
+
+Expected changed files:
+
+```txt
+docs/plans/2026-06-11-chatgpt-app-non-production-prototype-plan.md
+```
+
+## 18. References
 
 - PR18: `docs/decisions/2026-06-11-mcp-schema-projection.md`
 - PR19: `docs/decisions/2026-06-11-mcp-call-envelope-error-contract.md`
@@ -373,10 +485,11 @@ Manual checks:
 - PR26: `docs/decisions/2026-06-11-mcp-approval-ux-copy-fixtures.md`
 - PR27: `docs/decisions/2026-06-11-mcp-privacy-review-gate.md`
 - PR27.1: `my-app/src/modules/local-mcp/mcpPrivacyReviewGate.ts`
+- PR27.1 tests: `my-app/src/modules/local-mcp/__tests__/mcpPrivacyReviewGate.test.ts`
 - OpenAI Apps SDK docs, checked 2026-06-11: Plan / Build / Deploy, Security & Privacy, submission guidelines.
 - Twoweeks brand voice: `twoweeks-wiki/wiki/design/brand-voice.md`
 
-## 17. Next steps
+## 19. Next steps
 
 After PR28 approval:
 
