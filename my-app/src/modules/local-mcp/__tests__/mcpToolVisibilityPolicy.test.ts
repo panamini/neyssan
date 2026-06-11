@@ -438,6 +438,17 @@ describe("local MCP tool visibility approval states", () => {
     expectSafeDecision(decision);
   });
 
+  it("does not list requires approval when privacy review is missing", async () => {
+    const context = await richContext({
+      approvalDecision: undefined,
+      privacyReviewComplete: false,
+      privacyCheck: undefined,
+    });
+    const decision = evaluate("local_mcp.application_package.summarize", context);
+
+    expect(decision.state).toBe("blocked_by_privacy");
+  });
+
   it("lists disabled when approval is denied", async () => {
     const context = await richContext({ approvalDecision: deniedDecision() });
     const decision = evaluate("local_mcp.application_package.summarize", context);

@@ -527,6 +527,8 @@ function isReadyForReview(input: LocalMcpVisibilityStateInput): boolean {
 function isApprovalListingReady(input: LocalMcpVisibilityStateInput): boolean {
   return (
     input.toolRequiresApproval &&
+    input.privacySafe &&
+    input.context.privacyReviewComplete &&
     isValidCallValidationForTool(input.context.callValidation, input.localToolId) &&
     input.context.approvalDecision === undefined &&
     input.auditReady &&
