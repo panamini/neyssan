@@ -14,6 +14,8 @@ import {
   normalizeControlledAtsPayload,
   normalizeGreenhousePayload,
   normalizeLeverPayload,
+  normalizeRecruiteePayload,
+  normalizeSmartRecruitersPayload,
 } from "../adapters";
 import {
   assertControlledAtsAdapterRegistry,
@@ -106,11 +108,17 @@ describe("controlled ATS scout adapters", () => {
     expect(content.version).toBe(1);
   });
 
-  it("registry includes only greenhouse, lever, ashby", () => {
+  it("registry includes controlled ATS payload normalizers", () => {
     const registry = buildControlledAtsAdapterRegistry();
 
-    expect(registry.vendors).toEqual(["ashby", "greenhouse", "lever"]);
-    expect(registry.adapters.map((adapter) => adapter.vendor)).toEqual(["ashby", "greenhouse", "lever"]);
+    expect(registry.vendors).toEqual(["ashby", "greenhouse", "lever", "recruitee", "smartrecruiters"]);
+    expect(registry.adapters.map((adapter) => adapter.vendor)).toEqual([
+      "ashby",
+      "greenhouse",
+      "lever",
+      "recruitee",
+      "smartrecruiters",
+    ]);
   });
 
   it("registry rejects duplicate vendors", () => {
@@ -167,6 +175,14 @@ describe("controlled ATS scout adapters", () => {
 
   it("supported Ashby URL infers ashby", () => {
     expect(inferControlledAtsVendorFromUrl("https://jobs.ashbyhq.com/acme/123")).toBe("ashby");
+  });
+
+  it("supported SmartRecruiters URL infers smartrecruiters", () => {
+    expect(inferControlledAtsVendorFromUrl("https://careers.smartrecruiters.com/acme/123")).toBe("smartrecruiters");
+  });
+
+  it("supported Recruitee URL infers recruitee", () => {
+    expect(inferControlledAtsVendorFromUrl("https://acme.recruitee.com/o/senior-product-engineer")).toBe("recruitee");
   });
 
   it("unknown URL returns deterministic unsupported result", () => {
@@ -261,6 +277,165 @@ describe("controlled ATS scout adapters", () => {
       workplaceType: "onsite",
       postedAt: "2026-06-05T08:00:00.000Z",
     });
+  });
+
+  it("SmartRecruiters list fixture normalizes to job lead", async () => {
+    const result = await normalizeSmartRecruitersPayload({
+      ...envelope({
+        vendor: "smartrecruiters",
+        sourceUrl: "https://careers.smartrecruiters.com/acme",
+        payload: {
+          limit: 10,
+          offset: 0,
+          totalFound: 1,
+          content: [
+            {
+              id: "74983486",
+              uuid: "34225731-e7cf-4584-b0b7-78098fe1a66b",
+              name: "Senior Platform Engineer",
+              company: { identifier: "acme", name: "Acme Inc" },
+              releasedDate: "2026-06-01T12:00:00.000Z",
+              location: {
+                city: "Paris",
+                region: "Ile-de-France",
+                country: "FR",
+                remote: true,
+              },
+              department: { label: "Engineering" },
+              function: { label: "Platform" },
+              typeOfEmployment: { label: "Full-time" },
+              ref: "https://api.smartrecruiters.com/api-v1/companies/acme/postings/74983486",
+            },
+          ],
+        },
+      }),
+    });
+
+    expect(result.leads).toHaveLength(1);
+    expect(result.leads[0]).toMatchObject({
+      vendor: "smartrecruiters",
+      externalJobId: "74983486",
+      title: "Senior Platform Engineer",
+      companyName: "Acme Inc",
+      department: "Engineering",
+      team: "Platform",
+      location: "Paris, Ile-de-France, FR",
+      workplaceType: "remote",
+      postedAt: "2026-06-01T12:00:00.000Z",
+    });
+    expect(result.leads[0].canonicalUrl).toBeUndefined();
+  });
+
+  it("SmartRecruiters detail fixture preserves sections and apply URL", async () => {
+    const result = await normalizeSmartRecruitersPayload({
+      ...envelope({
+        vendor: "smartrecruiters",
+        sourceKind: "public_job_detail_payload",
+        sourceUrl: "https://careers.smartrecruiters.com/acme",
+        payload: {
+          id: "sr-detail-1",
+          name: "Engineering Manager",
+          applyUrl: "https://www.smartrecruiters.com/acme/engineering-manager",
+          active: true,
+          jobAd: {
+            sections: {
+              qualifications: { text: "Lead platform teams." },
+              description: { text: "Own delivery systems." },
+            },
+          },
+        },
+      }),
+    });
+
+    expect(result.leads[0]).toMatchObject({
+      vendor: "smartrecruiters",
+      canonicalUrl: "https://www.smartrecruiters.com/acme/engineering-manager",
+      status: "open",
+    });
+    expect(result.leads[0].descriptionText).toBe("Own delivery systems.\n\nLead platform teams.");
+  });
+
+  it("SmartRecruiters sections preserve known order before unknown sorted keys", async () => {
+    const result = await normalizeSmartRecruitersPayload({
+      ...envelope({
+        vendor: "smartrecruiters",
+        sourceKind: "public_job_detail_payload",
+        sourceUrl: "https://careers.smartrecruiters.com/acme",
+        payload: {
+          id: "sr-detail-ordered",
+          name: "Senior Platform Engineer",
+          jobAd: {
+            sections: {
+              additionalInformation: { text: "More info." },
+              qualifications: { text: "Need TypeScript." },
+              description: { text: "Build systems." },
+              zCustom: { text: "Z custom." },
+              aCustom: { text: "A custom." },
+            },
+          },
+        },
+      }),
+    });
+
+    expect(result.leads[0].descriptionText).toBe(
+      "Build systems.\n\nNeed TypeScript.\n\nMore info.\n\nA custom.\n\nZ custom.",
+    );
+  });
+
+  it("Recruitee fixture normalizes defensively to job lead", async () => {
+    const result = await normalizeRecruiteePayload({
+      ...envelope({
+        vendor: "recruitee",
+        sourceUrl: "https://acme.recruitee.com",
+        payload: {
+          offers: [
+            {
+              id: 123,
+              slug: "senior-product-engineer",
+              title: "Senior Product Engineer",
+              careers_url: "https://acme.recruitee.com/o/senior-product-engineer",
+              department: { name: "Product Engineering" },
+              locations: [{ name: "Remote" }],
+              description: "Build product systems.",
+              created_at: "2026-06-01T12:00:00.000Z",
+              status: "published",
+            },
+          ],
+        },
+      }),
+    });
+
+    expect(result.leads).toHaveLength(1);
+    expect(result.leads[0]).toMatchObject({
+      vendor: "recruitee",
+      externalJobId: "123",
+      title: "Senior Product Engineer",
+      canonicalUrl: "https://acme.recruitee.com/o/senior-product-engineer",
+      department: "Product Engineering",
+      location: "Remote",
+      workplaceType: "remote",
+      status: "open",
+      descriptionText: "Build product systems.",
+    });
+  });
+
+  it("Recruitee description fallback skips empty strings", async () => {
+    const result = await normalizeRecruiteePayload({
+      ...envelope({
+        vendor: "recruitee",
+        sourceUrl: "https://acme.recruitee.com",
+        payload: {
+          id: "empty-description",
+          title: "Product Engineer",
+          careers_url: "https://acme.recruitee.com/o/product-engineer",
+          location: "Paris",
+          description: "",
+          description_text: "Fallback description.",
+        },
+      }),
+    });
+
+    expect(result.leads[0].descriptionText).toBe("Fallback description.");
   });
 
   it("missing title record is rejected without rejecting valid records", async () => {
@@ -410,24 +585,32 @@ describe("controlled ATS scout adapters", () => {
       "src/modules/controlled-ats-scout/schema.ts",
       "src/modules/controlled-ats-scout/adapters.ts",
       "src/modules/controlled-ats-scout/scoutRules.ts",
+      "src/modules/controlled-ats-scout/sourceResolver.ts",
+      "src/modules/controlled-ats-scout/publicEndpointFetcher.ts",
     ];
     const source = sourceFiles.map((sourceFile) => readFileSync(resolve(process.cwd(), sourceFile), "utf8")).join("\n");
 
     expect(source).not.toMatch(
-      /from\s+["'][^"']*(convex|ui|route|premiumCoverLetter|proposal|cv-forge|pdf|docx|mcp|runtime|network|generation|prompt|mistral|openai)[^"']*["']/iu,
+      /from\s+["'][^"']*(convex|ui|route|premiumCoverLetter|proposal|cv-forge|pdf|docx|mcp|runtime|network|generation|prompt|mistral|openai|puppeteer|playwright|cheerio|jsdom)[^"']*["']/iu,
     );
     expect(source).not.toMatch(
-      /\b(fetch|axios|nodeFetch|undici|runInternalTool|executeInternalTool|callInternalTool|dispatchInternalTool|invokeTool|registerToolHandler|performToolAction)\s*\(/u,
+      /\b(axios|nodeFetch|undici|runInternalTool|executeInternalTool|callInternalTool|dispatchInternalTool|invokeTool|registerToolHandler|performToolAction)\s*\(/u,
     );
+    const nonFetcherSource = sourceFiles
+      .filter((sourceFile) => !sourceFile.endsWith("publicEndpointFetcher.ts"))
+      .map((sourceFile) => readFileSync(resolve(process.cwd(), sourceFile), "utf8"))
+      .join("\n");
+    expect(nonFetcherSource).not.toMatch(/\bfetch\s*\(/u);
+    expect(source).not.toMatch(/\b(scrape|scraping|crawler|browser automation|DOMParser|document\.querySelector)\b/iu);
   });
 
-  it("has no helper names that imply runtime, fetch, crawl, scrape, apply, or submit", async () => {
+  it("has no helper names that imply runtime, crawl, scrape, apply, or submit", async () => {
     const adapters = await import("../adapters");
     const rules = await import("../scoutRules");
     const helperNames = [...Object.keys(adapters), ...Object.keys(rules)];
 
     expect(helperNames).not.toEqual(
-      expect.arrayContaining([expect.stringMatching(/fetch|crawl|scrape|run|execute|apply|submit/iu)]),
+      expect.arrayContaining([expect.stringMatching(/crawl|scrape|run|execute|apply|submit/iu)]),
     );
   });
 

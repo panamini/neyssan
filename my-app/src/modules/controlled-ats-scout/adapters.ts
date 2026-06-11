@@ -52,6 +52,20 @@ const CONTROLLED_ATS_ADAPTERS: readonly ControlledAtsAdapterV1[] = [
     supportedSourceKinds: SUPPORTED_SOURCE_KINDS,
     version: 1,
   },
+  {
+    vendor: "recruitee",
+    title: "Recruitee payload normalizer",
+    description: "Normalizes caller-supplied Recruitee job payload fixtures into deterministic lead records.",
+    supportedSourceKinds: SUPPORTED_SOURCE_KINDS,
+    version: 1,
+  },
+  {
+    vendor: "smartrecruiters",
+    title: "SmartRecruiters payload normalizer",
+    description: "Normalizes caller-supplied SmartRecruiters job payload fixtures into deterministic lead records.",
+    supportedSourceKinds: SUPPORTED_SOURCE_KINDS,
+    version: 1,
+  },
 ] as const;
 
 type RawRecordResult = Readonly<{
@@ -112,6 +126,8 @@ export async function normalizeControlledAtsPayload(
 
   if (envelope.vendor === "greenhouse") return normalizeGreenhousePayload(envelope);
   if (envelope.vendor === "lever") return normalizeLeverPayload(envelope);
+  if (envelope.vendor === "recruitee") return normalizeRecruiteePayload(envelope);
+  if (envelope.vendor === "smartrecruiters") return normalizeSmartRecruitersPayload(envelope);
   return normalizeAshbyPayload(envelope);
 }
 
@@ -143,6 +159,26 @@ export async function normalizeAshbyPayload(
   if (recordsResult.rejected) return emptyResult(envelope, [recordsResult.rejected]);
 
   return normalizeRecords(envelope, recordsResult.records ?? [], normalizeAshbyRecord);
+}
+
+export async function normalizeSmartRecruitersPayload(
+  envelope: ControlledAtsPayloadEnvelopeV1,
+): Promise<ControlledAtsNormalizationResultV1> {
+  assertVendorEnvelope(envelope, "smartrecruiters");
+  const recordsResult = smartRecruitersRecords(envelope.payload);
+  if (recordsResult.rejected) return emptyResult(envelope, [recordsResult.rejected]);
+
+  return normalizeRecords(envelope, recordsResult.records ?? [], normalizeSmartRecruitersRecord);
+}
+
+export async function normalizeRecruiteePayload(
+  envelope: ControlledAtsPayloadEnvelopeV1,
+): Promise<ControlledAtsNormalizationResultV1> {
+  assertVendorEnvelope(envelope, "recruitee");
+  const recordsResult = recruiteeRecords(envelope.payload);
+  if (recordsResult.rejected) return emptyResult(envelope, [recordsResult.rejected]);
+
+  return normalizeRecords(envelope, recordsResult.records ?? [], normalizeRecruiteeRecord);
 }
 
 export function buildControlledAtsRawPayloadHash(payload: unknown): Promise<string> {
@@ -397,6 +433,110 @@ async function normalizeAshbyRecord(
   };
 }
 
+async function normalizeSmartRecruitersRecord(
+  envelope: ControlledAtsPayloadEnvelopeV1,
+  record: Record<string, unknown>,
+  rawPayloadHash: string,
+): Promise<NormalizedRecordResult> {
+  const title = stringField(record.name);
+  if (!title) return rejectedResult("missing_title", envelope, rawPayloadHash);
+
+  const canonicalCandidate = firstString([stringField(record.applyUrl)]);
+  const url = prepareCanonicalUrl(envelope, canonicalCandidate);
+  if (url.rejected) return { kind: "rejected", rejected: url.rejected };
+
+  const company = isPlainRecord(record.company) ? record.company : {};
+  const location = isPlainRecord(record.location) ? record.location : {};
+  const department = isPlainRecord(record.department) ? record.department : {};
+  const team = isPlainRecord(record.function) ? record.function : {};
+  const employment = isPlainRecord(record.typeOfEmployment) ? record.typeOfEmployment : {};
+  const locationText = joinNonEmpty([
+    stringField(location.city),
+    stringField(location.region),
+    stringField(location.country),
+  ], ", ");
+
+  return {
+    kind: "lead",
+    input: {
+      vendor: "smartrecruiters",
+      sourceKind: envelope.sourceKind,
+      sourceUrl: envelope.sourceUrl,
+      canonicalUrl: url.value,
+      externalJobId: firstString([idField(record.id), idField(record.uuid)]),
+      companyName: stringField(company.name),
+      title,
+      department: stringField(department.label),
+      team: stringField(team.label),
+      location: locationText,
+      workplaceType: location.remote === true ? "remote" : inferWorkplaceType([locationText, stringField(employment.label)]),
+      status: smartRecruitersStatus(record.active),
+      descriptionText: smartRecruitersDescription(record.jobAd),
+      postedAt: stringField(record.releasedDate),
+      rawPayloadHash,
+      createdAt: envelope.createdAt,
+      updatedAt: envelope.updatedAt,
+    },
+  };
+}
+
+async function normalizeRecruiteeRecord(
+  envelope: ControlledAtsPayloadEnvelopeV1,
+  record: Record<string, unknown>,
+  rawPayloadHash: string,
+): Promise<NormalizedRecordResult> {
+  const title = firstString([stringField(record.title), stringField(record.name)]);
+  if (!title) return rejectedResult("missing_title", envelope, rawPayloadHash);
+
+  const canonicalCandidate = firstString([
+    stringField(record.careers_url),
+    stringField(record.careersUrl),
+    stringField(record.url),
+    stringField(record.offer_url),
+    stringField(record.offerUrl),
+  ]);
+  const canonicalUrl = prepareCanonicalUrl(envelope, canonicalCandidate);
+  if (canonicalUrl.rejected) return { kind: "rejected", rejected: canonicalUrl.rejected };
+
+  const applyCandidate = firstString([
+    stringField(record.apply_url),
+    stringField(record.applyUrl),
+    stringField(record.careers_url),
+    stringField(record.careersUrl),
+  ]);
+  const applyUrl = prepareOptionalUrl(envelope.vendor, applyCandidate, envelope, rawPayloadHash);
+  if (applyUrl.rejected) return { kind: "rejected", rejected: applyUrl.rejected };
+
+  const location = recruiteeLocation(record);
+
+  return {
+    kind: "lead",
+    input: {
+      vendor: "recruitee",
+      sourceKind: envelope.sourceKind,
+      sourceUrl: envelope.sourceUrl,
+      canonicalUrl: canonicalUrl.value,
+      externalJobId: firstString([idField(record.id), idField(record.guid), idField(record.slug)]),
+      title,
+      department: recruiteeDepartment(record.department),
+      location,
+      workplaceType: inferWorkplaceType([location]),
+      status: recruiteeStatus(record.status),
+      descriptionText: firstRawString([record.description, record.description_text, record.descriptionText]),
+      applyUrl: applyUrl.value,
+      postedAt: firstString([
+        stringField(record.created_at),
+        stringField(record.createdAt),
+        stringField(record.published_at),
+        stringField(record.publishedAt),
+      ]),
+      rawPayloadHash,
+      createdAt: envelope.createdAt,
+      updatedAt: envelope.updatedAt,
+    },
+  };
+}
+
 function greenhouseRecords(payload: unknown): RawRecordResult {
   if (!isPlainRecord(payload)) return { rejected: rejectedPayloadShape(payload) };
   if (Array.isArray(payload.jobs)) return { records: payload.jobs };
@@ -415,6 +555,21 @@ function ashbyRecords(payload: unknown): RawRecordResult {
   if (!isPlainRecord(payload)) return { rejected: rejectedPayloadShape(payload) };
   if (Array.isArray(payload.jobs)) return { records: payload.jobs };
   if ("title" in payload || "id" in payload || "jobUrl" in payload) return { records: [payload] };
+  return { rejected: rejectedPayloadShape(payload) };
+}
+
+function smartRecruitersRecords(payload: unknown): RawRecordResult {
+  if (!isPlainRecord(payload)) return { rejected: rejectedPayloadShape(payload) };
+  if (Array.isArray(payload.content)) return { records: payload.content };
+  if ("name" in payload || "id" in payload || "uuid" in payload || "jobAd" in payload) return { records: [payload] };
+  return { rejected: rejectedPayloadShape(payload) };
+}
+
+function recruiteeRecords(payload: unknown): RawRecordResult {
+  if (Array.isArray(payload)) return { records: payload };
+  if (!isPlainRecord(payload)) return { rejected: rejectedPayloadShape(payload) };
+  if (Array.isArray(payload.offers)) return { records: payload.offers };
+  if ("title" in payload || "name" in payload || "id" in payload || "slug" in payload) return { records: [payload] };
   return { rejected: rejectedPayloadShape(payload) };
 }
 
@@ -547,6 +702,72 @@ function locationName(value: unknown): string | undefined {
   if (typeof value === "string") return stringField(value);
   if (isPlainRecord(value)) return stringField(value.name);
   return undefined;
+}
+
+function recruiteeDepartment(value: unknown): string | undefined {
+  if (typeof value === "string") return stringField(value);
+  if (isPlainRecord(value)) return stringField(value.name);
+  return undefined;
+}
+
+function recruiteeLocation(record: Record<string, unknown>): string | undefined {
+  if (Array.isArray(record.locations)) {
+    const firstLocation = record.locations.find(isPlainRecord);
+    if (firstLocation) {
+      const location = stringField(firstLocation.name);
+      if (location) return location;
+    }
+  }
+  if (typeof record.location === "string") return stringField(record.location);
+  if (isPlainRecord(record.location)) return stringField(record.location.name);
+  return undefined;
+}
+
+function smartRecruitersDescription(value: unknown): string | undefined {
+  if (!isPlainRecord(value) || !isPlainRecord(value.sections)) return undefined;
+  const texts = orderedSmartRecruitersSectionEntries(value.sections)
+    .flatMap(([, section]) => (isPlainRecord(section) ? [optionalRawString(section.text)] : []))
+    .filter((text): text is string => typeof text === "string" && text.length > 0);
+  return texts.length > 0 ? texts.join("\n\n") : undefined;
+}
+
+function orderedSmartRecruitersSectionEntries(
+  sections: Record<string, unknown>,
+): readonly [string, unknown][] {
+  const knownOrder = ["description", "qualifications", "additionalInformation"] as const;
+  const knownEntries = knownOrder.flatMap((key) => (
+    Object.prototype.hasOwnProperty.call(sections, key) ? [[key, sections[key]] as [string, unknown]] : []
+  ));
+  const unknownEntries = Object.entries(sections)
+    .filter(([key]) => !(knownOrder as readonly string[]).includes(key))
+    .sort(([left], [right]) => compareControlledAtsText(left, right));
+  return [...knownEntries, ...unknownEntries];
+}
+
+function smartRecruitersStatus(value: unknown): "open" | "closed" | "unknown" {
+  if (value === true) return "open";
+  if (value === false) return "closed";
+  return "unknown";
+}
+
+function recruiteeStatus(value: unknown): "open" | "closed" | "unknown" {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (normalized === "open" || normalized === "published") return "open";
+  if (normalized === "closed" || normalized === "archived") return "closed";
+  return "unknown";
+}
+
+function firstString(values: readonly (string | undefined)[]): string | undefined {
+  return values.find((value): value is string => typeof value === "string" && value.length > 0);
+}
+
+function firstRawString(values: readonly unknown[]): string | undefined {
+  return values.find((value): value is string => typeof value === "string" && value.length > 0);
+}
+
+function joinNonEmpty(values: readonly (string | undefined)[], separator: string): string | undefined {
+  const joined = values.filter((value): value is string => typeof value === "string" && value.length > 0).join(separator);
+  return joined.length > 0 ? joined : undefined;
 }
 
 function timestampToIso(value: unknown): string | undefined {
