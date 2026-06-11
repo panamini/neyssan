@@ -8,6 +8,28 @@ Scope: pure TypeScript fixture and assertion helpers for Local MCP privacy redac
 
 Add reusable test fixtures that prove Local MCP safe outputs do not expose forbidden privacy material.
 
+## Product Privacy Boundary Clarification
+
+PR24 must not be interpreted as a global product ban on generating, storing, previewing, or returning a complete resume/CV or cover letter.
+
+The privacy checker added in this PR applies only to Local MCP safe outputs and other output-like objects that may be exposed outside Twoweeks as summaries, errors, audit-safe messages, dry-run results, schema previews, diagnostic output, or fixture output.
+
+Allowed future product behavior, out of scope for PR24:
+
+- the user may request a job search;
+- Twoweeks may use the user's approved career context and the selected job context;
+- Twoweeks may generate a complete tailored resume/CV and cover letter;
+- the user may view, edit, copy, export, or send those generated artifacts in a future dedicated PR;
+- ChatGPT, Claude, MCP, or another assistant may receive bounded tool results or artifact references according to the approved integration design.
+
+Privacy rule:
+
+- raw source documents, raw resume/CV text, raw arguments, private facts, `never_use` facts, secrets, session details, stack traces, sourceQuote dumps, and complete generated resume/cover letter text must not appear in generic safe outputs, logs, errors, summaries, audit-safe messages, schema projections, or dry-run summaries;
+- complete generated resume/cover letter text may only appear in an explicitly user-authorized generation/artifact surface designed for that purpose;
+- future PRs must define that dedicated artifact boundary separately.
+
+PR24 does not implement the artifact boundary. The fixture wording and tests are scoped to Local MCP safe outputs and must not be read as banning the core Twoweeks job-application workflow.
+
 ## Delivered
 
 - Closed privacy sentinel categories.
