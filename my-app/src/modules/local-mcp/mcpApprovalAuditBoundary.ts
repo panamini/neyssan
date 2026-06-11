@@ -7,6 +7,7 @@ import type {
 import type {
   LocalMcpApprovalV1,
   LocalMcpToolIdV1,
+  LocalMcpToolRegistryV1,
 } from "./schema";
 import { buildLocalMcpToolRegistry } from "./toolRegistry";
 
@@ -96,7 +97,6 @@ const EXPECTED_REF_FIELDS = [
 ] as const;
 
 const SAFE_SUMMARY_FORBIDDEN_TERMS = [
-  "arguments",
   "cv text",
   "generated full",
   "job text",
@@ -105,9 +105,10 @@ const SAFE_SUMMARY_FORBIDDEN_TERMS = [
   "private facts",
   "privatefacts",
   "raw",
+  "raw arguments",
   "source document",
   "stack",
-  "trace",
+  "stack trace",
 ] as const;
 
 const AUDIT_EVENT_HASH_NAMESPACE = "local-mcp-approval-audit";
@@ -146,7 +147,7 @@ export function buildLocalMcpSafeArgumentSummary(
 export function buildLocalMcpApprovalRequest(
   envelope: LocalMcpCallEnvelopeV1,
   validation: LocalMcpCallValidationResultV1,
-  options: Readonly<{ requestedAt?: string }> = {},
+  options: Readonly<{ requestedAt?: string; registry?: LocalMcpToolRegistryV1 }> = {},
 ): LocalMcpApprovalRequestV1 {
   if (!validation.valid) {
     throw new TypeError("LocalMcpApprovalRequest requires validation with a valid localToolId");
@@ -161,7 +162,8 @@ export function buildLocalMcpApprovalRequest(
     throw new TypeError("LocalMcpApprovalRequest requires userId");
   }
 
-  const tool = buildLocalMcpToolRegistry().tools.find(
+  const registry = options.registry ?? buildLocalMcpToolRegistry();
+  const tool = registry.tools.find(
     (candidate) => candidate.id === validation.localToolId,
   );
   if (!tool || (tool.riskLevel !== "low" && tool.riskLevel !== "medium")) {
@@ -227,6 +229,8 @@ export function approvalDecisionToLocalMcpApproval(
   decision: LocalMcpApprovalDecisionV1,
 ): LocalMcpApprovalV1 {
   assertLocalMcpApprovalDecision(decision);
+  // PR19 approval metadata has no deniedBy/deniedAt fields; when approved is false,
+  // these compatibility fields identify who made the denial and when.
   return {
     approved: decision.decision === "approved",
     approvedBy: decision.decidedBy,

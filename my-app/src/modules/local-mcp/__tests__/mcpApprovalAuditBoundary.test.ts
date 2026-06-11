@@ -15,6 +15,7 @@ import type {
   LocalMcpCallEnvelopeV1,
   LocalMcpCallValidationResultV1,
 } from "../mcpCallEnvelope";
+import { buildLocalMcpToolRegistry } from "../toolRegistry";
 
 function envelope(
   overrides: Partial<LocalMcpCallEnvelopeV1> = {},
@@ -209,6 +210,29 @@ describe("local MCP approval request boundary", () => {
     expect(request.requestId).toBe("request_1");
     expect(request.localToolId).toBe("local_mcp.application_package.summarize");
   });
+
+  it("uses the same injected registry as envelope validation", () => {
+    const registry = buildLocalMcpToolRegistry();
+    const customRegistry = {
+      ...registry,
+      tools: registry.tools.map((tool) =>
+        tool.id === "local_mcp.application_package.summarize"
+          ? { ...tool, riskLevel: "low" as const, requiresApproval: false }
+          : tool,
+      ),
+      version: 1 as const,
+    };
+    const current = envelope({ approval: undefined });
+    const validation = validateLocalMcpCallEnvelope(current, customRegistry);
+    expect(validation.valid).toBe(true);
+
+    const request = buildLocalMcpApprovalRequest(current, validation, {
+      requestedAt: "2026-06-11T12:00:00.000Z",
+      registry: customRegistry,
+    });
+
+    expect(request.riskLevel).toBe("low");
+  });
 });
 
 describe("local MCP approval decision boundary", () => {
@@ -401,6 +425,26 @@ describe("local MCP audit event boundary", () => {
     });
 
     expect(event.safeSummary).toBeUndefined();
+  });
+
+  it("keeps specific safeSummary diagnostics without raw payload markers", async () => {
+    const event = await buildLocalMcpAuditEvent({
+      eventType: "call_validated",
+      requestId: "request_1",
+      occurredAt: "2026-06-11T12:00:00.000Z",
+      outcome: "allowed",
+      safeSummary: "approval trace id abc with 2 arguments approved",
+    });
+    const unsafe = await buildLocalMcpAuditEvent({
+      eventType: "call_error_result_built",
+      requestId: "request_2",
+      occurredAt: "2026-06-11T12:01:00.000Z",
+      outcome: "error",
+      safeSummary: "raw arguments included in stack trace",
+    });
+
+    expect(event.safeSummary).toBe("approval trace id abc with 2 arguments approved");
+    expect(unsafe.safeSummary).toBeUndefined();
   });
 
   it("requires explicit occurredAt", async () => {
