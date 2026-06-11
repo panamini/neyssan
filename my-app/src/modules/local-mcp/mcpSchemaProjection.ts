@@ -232,10 +232,14 @@ function cloneProjectedToolDescriptor(
 function cloneJsonSchema(schema: LocalMcpJsonSchemaV1): LocalMcpJsonSchemaV1 {
   const cloned: LocalMcpJsonSchemaV1 = {
     ...schema,
-    additionalProperties:
-      typeof schema.additionalProperties === "object"
-        ? cloneJsonSchema(schema.additionalProperties)
-        : schema.additionalProperties,
+    ...(schema.additionalProperties !== undefined
+      ? {
+          additionalProperties:
+            typeof schema.additionalProperties === "object"
+              ? cloneJsonSchema(schema.additionalProperties)
+              : schema.additionalProperties,
+        }
+      : {}),
   };
 
   return {

@@ -1,7 +1,6 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { stableSerialize } from "../../application-harness/fingerprints";
+import projectionSource from "../mcpSchemaProjection.ts?raw";
 import {
   assertLocalMcpProjectedToolDescriptor,
   buildLocalMcpInputJsonSchema,
@@ -28,8 +27,6 @@ const EXPECTED_REF_FIELDS = [
   "resumeVariantPlanRef",
   "reviewCockpitRef",
 ] as const;
-
-const LOCAL_MCP_PROJECTION_SOURCE_FILE = "src/modules/local-mcp/mcpSchemaProjection.ts";
 
 describe("local MCP schema projection", () => {
   it("projects exactly four descriptors in deterministic name order", () => {
@@ -151,13 +148,11 @@ describe("local MCP schema projection", () => {
   });
 
   it("does not import product runtimes, UI routes, transport, or external SDKs", () => {
-    const src = readFileSync(resolve(process.cwd(), LOCAL_MCP_PROJECTION_SOURCE_FILE), "utf8");
-
-    expect(src).not.toMatch(
+    expect(projectionSource).not.toMatch(
       /from\s+["'][^"']*(convex|components|pages|routes|controlled-ats-scout)[^"']*["']/iu,
     );
-    expect(src).not.toMatch(/\b(fetch|axios|undici)\b/u);
-    expect(src).not.toMatch(/from\s+["'][^"']*(mcp|openai|oauth)[^"']*["']/iu);
+    expect(projectionSource).not.toMatch(/\b(fetch|axios|undici)\b/u);
+    expect(projectionSource).not.toMatch(/from\s+["'][^"']*(mcp|openai|oauth)[^"']*["']/iu);
   });
 
   it("does not mutate the input registry and returns stable clones", () => {
@@ -172,6 +167,11 @@ describe("local MCP schema projection", () => {
     expect(first.tools[0]).not.toBe(second.tools[0]);
     expect(first.tools[0].inputSchema).not.toBe(second.tools[0].inputSchema);
     expect(first.tools[0].outputSchema).not.toBe(second.tools[0].outputSchema);
+    expect(
+      Object.keys(
+        first.tools[0].inputSchema.properties?.applicationPackageRef.properties?.id ?? {},
+      ),
+    ).toEqual(["type", "minLength"]);
   });
 
   it("validator rejects malformed projected descriptors", () => {
