@@ -9,6 +9,7 @@ import {
 import privacyRedactionSource from "../privacyRedactionFixtures.ts?raw";
 import {
   LOCAL_MCP_PRIVACY_FIXTURE_CATEGORIES_V1,
+  LOCAL_MCP_PRIVACY_FIXTURE_SCOPE_V1,
   assertLocalMcpPrivacySafeOutput,
   buildLocalMcpPrivacyFixtureSet,
   buildLocalMcpSafeTextFixtureOutput,
@@ -95,6 +96,34 @@ describe("local MCP privacy fixture set", () => {
     (first.sentinels[0] as { val: string } | undefined)!.val = "mutated";
 
     expect(buildLocalMcpPrivacyFixtureSet()).toEqual(second);
+  });
+
+  it("clarifies the product privacy boundary without banning artifact generation", () => {
+    expect(LOCAL_MCP_PRIVACY_FIXTURE_SCOPE_V1).toEqual({
+      kind: "local_mcp_privacy_fixture_scope",
+      appliesOnlyTo: [
+        "local_mcp_safe_outputs",
+        "outside_twoweeks_output_like_summaries",
+        "safe_errors",
+        "audit_safe_messages",
+        "dry_run_results",
+        "schema_previews",
+        "diagnostic_output",
+        "fixture_output",
+      ],
+      notGlobalProductBan: true,
+      allowedFutureProductArtifactFlow: [
+        "user_requested_job_search",
+        "approved_career_context_and_selected_job_context",
+        "complete_tailored_resume_cv_generation",
+        "complete_cover_letter_generation",
+        "user_view_edit_copy_export_or_send_in_dedicated_future_pr",
+        "bounded_tool_results_or_artifact_refs_for_approved_integrations",
+      ],
+      genericSafeOutputForbiddenMaterial: EXPECTED_CATEGORIES,
+      artifactBoundaryRequirement: "future_dedicated_artifact_boundary_required",
+      version: 1,
+    });
   });
 });
 
