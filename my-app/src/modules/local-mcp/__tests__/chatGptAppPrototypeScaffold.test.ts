@@ -103,6 +103,31 @@ describe("chatGptAppPrototypeScaffold", () => {
     assertLocalMcpPrivacySafeOutput(tool);
   });
 
+  it("maps review-required gates to non-runnable review-required state", () => {
+    const scaffold = buildLocalOnlyChatGptAppPrototypeScaffold([
+      reviewRequiredGate("local_mcp.resume_variant_plan.summarize"),
+    ]);
+    const tool = scaffold.tools[2];
+
+    expect(tool).toMatchObject({
+      localToolId: "local_mcp.resume_variant_plan.summarize",
+      exposureState: "review_required",
+      gateStatus: "review_required",
+      gatePassedForInternalReview: false,
+      userFacingCopy: "Approval required.",
+      safeSummary: "Approval required.",
+      callable: false,
+      runnable: false,
+      reviewOnly: true,
+    });
+    expect(tool.fixtureOutput).toMatchObject({
+      status: "review_required",
+      summary: "Approval required.",
+      refIds: ["fixture:local_mcp.resume_variant_plan.summarize"],
+    });
+    assertLocalMcpPrivacySafeOutput(tool);
+  });
+
   it("rejects duplicated gate results", () => {
     const gate = readyGate("local_mcp.review_cockpit.summarize");
 
@@ -127,6 +152,26 @@ describe("chatGptAppPrototypeScaffold", () => {
 
     expect(() => assertLocalOnlyChatGptAppPrototypeScaffold(unsafe as never)).toThrow(
       /privacy fixture/u,
+    );
+  });
+
+  it("rejects inconsistent exposure and gate states", () => {
+    const scaffold = buildLocalOnlyChatGptAppPrototypeScaffold();
+    const inconsistent = {
+      ...scaffold,
+      tools: scaffold.tools.map((tool, index) =>
+        index === 0
+          ? {
+              ...tool,
+              exposureState: "ready_for_internal_review",
+              gateStatus: "missing",
+            }
+          : tool,
+      ),
+    };
+
+    expect(() => assertLocalOnlyChatGptAppPrototypeScaffold(inconsistent as never)).toThrow(
+      /exposureState is inconsistent/u,
     );
   });
 
@@ -159,6 +204,19 @@ function blockedGate(localToolId: LocalMcpToolIdV1): LocalMcpPrivacyReviewGateRe
     copyKey: "blocked_privacy",
     userFacingCopy: "Blocked. Review privacy.",
     safeSummary: "Blocked. Review privacy.",
+    version: 1,
+  };
+}
+
+function reviewRequiredGate(localToolId: LocalMcpToolIdV1): LocalMcpPrivacyReviewGateResultV1 {
+  return {
+    kind: "local_mcp_privacy_review_gate_result",
+    localToolId,
+    status: "review_required",
+    reasons: ["approval_missing", "safe_summary_only"],
+    copyKey: "approval_required",
+    userFacingCopy: "Approval required.",
+    safeSummary: "Approval required.",
     version: 1,
   };
 }

@@ -248,6 +248,10 @@ function exposureStateForGate(
       return "review_required";
     case "ready_for_internal_review":
       return "ready_for_internal_review";
+    default:
+      throw new TypeError(
+        `Local-only ChatGPT App prototype scaffold received unknown gate status: ${String(status)}`,
+      );
   }
 }
 
@@ -286,6 +290,13 @@ function assertPrototypeToolCardGate(record: Record<string, unknown>): void {
   }
   if (record.gatePassedForInternalReview !== (record.gateStatus === "ready_for_internal_review")) {
     throw new TypeError("Local-only ChatGPT App prototype tool card gate pass flag is inconsistent");
+  }
+  const expectedExposureState =
+    record.gateStatus === "missing" ? "hidden" : record.gateStatus;
+  if (record.exposureState !== expectedExposureState) {
+    throw new TypeError(
+      "Local-only ChatGPT App prototype tool card exposureState is inconsistent with gateStatus",
+    );
   }
 }
 
