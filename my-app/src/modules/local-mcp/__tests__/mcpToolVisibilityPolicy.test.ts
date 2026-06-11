@@ -319,10 +319,13 @@ describe("local MCP tool visibility admin disabled", () => {
     });
     const list = listLocalMcpToolVisibilityDecisions(context);
 
-    expect(list.decisions.find((decision) => decision.localToolId === "local_mcp.evidence_graph.summarize")?.state)
-      .toBe("disabled_by_admin");
-    expect(list.decisions.find((decision) => decision.localToolId === "local_mcp.application_package.summarize")?.state)
-      .toBe("listed_ready_for_review");
+    expect(Object.fromEntries(list.decisions.map((decision) => [decision.localToolId, decision.state])))
+      .toEqual({
+        "local_mcp.application_package.summarize": "listed_ready_for_review",
+        "local_mcp.evidence_graph.summarize": "disabled_by_admin",
+        "local_mcp.resume_variant_plan.summarize": "listed_dry_run",
+        "local_mcp.review_cockpit.summarize": "listed_dry_run",
+      });
   });
 });
 
@@ -351,6 +354,19 @@ describe("local MCP tool visibility privacy gates", () => {
       "privacy_fixture_failed",
     ]));
     expectSafeDecision(decision);
+  });
+
+  it("does not list when privacy review is complete but PR24 check is missing", () => {
+    const context = buildDefaultLocalMcpToolVisibilityPolicyContext({
+      allowDryRunListing: true,
+      privacyReviewComplete: true,
+      privacyCheck: undefined,
+    });
+    const decision = evaluate("local_mcp.application_package.summarize", context);
+
+    expect(decision.state).toBe("blocked_by_privacy");
+    expect(decision.reasons).toContain("privacy_review_missing");
+    expect(decision.reasons).not.toContain("dry_run_only");
   });
 
   it("privacy block overrides dry-run listing", () => {
@@ -498,6 +514,19 @@ describe("local MCP tool visibility ready-for-review", () => {
     expect(decision.state).toBe("listed_ready_for_review");
     expect(decision.reasons).toContain("safe_for_internal_review");
     expectSafeDecision(decision);
+  });
+
+  it("does not leak ready-for-review across tools from a shared call validation", async () => {
+    const context = await richContext();
+    const list = listLocalMcpToolVisibilityDecisions(context);
+
+    expect(Object.fromEntries(list.decisions.map((decision) => [decision.localToolId, decision.state])))
+      .toEqual({
+        "local_mcp.application_package.summarize": "listed_ready_for_review",
+        "local_mcp.evidence_graph.summarize": "hidden",
+        "local_mcp.resume_variant_plan.summarize": "hidden",
+        "local_mcp.review_cockpit.summarize": "hidden",
+      });
   });
 
   it("safe summary says no handler executed", async () => {

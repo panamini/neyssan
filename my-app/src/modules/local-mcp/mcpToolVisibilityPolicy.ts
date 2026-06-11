@@ -206,7 +206,10 @@ const VISIBILITY_STATE_RULES: readonly LocalMcpVisibilityStateRule[] = [
   },
   {
     matches: isPrivacyBlockedInput,
-    state: () => "blocked_by_privacy",
+    state: (input) => {
+      addPrivacyBlockedReasons(input.context, input.reasons);
+      return "blocked_by_privacy";
+    },
   },
   {
     matches: (input) => input.context.approvalDecision?.decision === "denied",
@@ -380,11 +383,14 @@ function collectPrivacyReasons(
   if (!context.privacyReviewComplete) {
     reasons.add("privacy_review_missing");
   }
+  if (context.privacyCheck === undefined) {
+    reasons.add("privacy_review_missing");
+  }
   if (context.privacyCheck?.safe === false) {
     reasons.add("privacy_check_failed");
     reasons.add("privacy_fixture_failed");
   }
-  return context.privacyCheck?.safe !== false;
+  return context.privacyReviewComplete && context.privacyCheck?.safe === true;
 }
 
 function collectCallReasons(
@@ -483,7 +489,25 @@ function isAdminDisabledInput(input: LocalMcpVisibilityStateInput): boolean {
 }
 
 function isPrivacyBlockedInput(input: LocalMcpVisibilityStateInput): boolean {
-  return !input.privacySafe || (input.context.allowRemoteListing && !input.context.privacyReviewComplete);
+  if (input.context.privacyCheck?.safe === false) return true;
+  return isListingRequested(input.context) && !input.privacySafe;
+}
+
+function addPrivacyBlockedReasons(
+  context: LocalMcpToolVisibilityPolicyContextV1,
+  reasons: Set<LocalMcpToolVisibilityReasonV1>,
+): void {
+  if (!context.privacyReviewComplete || context.privacyCheck === undefined) {
+    reasons.add("privacy_review_missing");
+  }
+  if (context.privacyCheck?.safe === false) {
+    reasons.add("privacy_check_failed");
+    reasons.add("privacy_fixture_failed");
+  }
+}
+
+function isListingRequested(context: LocalMcpToolVisibilityPolicyContextV1): boolean {
+  return context.allowDryRunListing || context.allowDisabledListing || context.allowRemoteListing;
 }
 
 function isReadyForReview(input: LocalMcpVisibilityStateInput): boolean {
@@ -496,7 +520,7 @@ function isReadyForReview(input: LocalMcpVisibilityStateInput): boolean {
     input.remoteReady &&
     input.context.privacyReviewComplete &&
     input.context.callEnvelope !== undefined &&
-    isValidCallValidation(input.context.callValidation)
+    isValidCallValidationForTool(input.context.callValidation, input.localToolId)
   );
 }
 
@@ -543,12 +567,6 @@ function isValidCallValidationForTool(
   localToolId: LocalMcpToolIdV1,
 ): boolean {
   return validation?.valid === true && validation.localToolId === localToolId;
-}
-
-function isValidCallValidation(
-  validation: LocalMcpCallValidationResultV1 | undefined,
-): boolean {
-  return validation?.valid === true;
 }
 
 function buildDecision(
