@@ -94,17 +94,22 @@ describe("evidence-graph proof boundaries", () => {
     );
   });
 
-  it("does not turn a pending matching fact into missing evidence", async () => {
+  it("keeps a pending matching fact out of allowed claims and reports missing evidence", async () => {
     const graph = await buildEvidenceGraph(
       input({
-        candidateFacts: [fact({ reviewState: "pending" })],
+        candidateFacts: [
+          fact({
+            id: "candidate-fact:typescript-pending",
+            reviewState: "pending",
+          }),
+        ],
       }),
     );
 
     expect(graph.allowedClaims).toHaveLength(0);
     expect(graph.matches).toEqual([
       expect.objectContaining({
-        candidateFactId: "candidate-fact:typescript-approved",
+        candidateFactId: "candidate-fact:typescript-pending",
         reviewState: "pending",
       }),
     ]);
@@ -114,7 +119,7 @@ describe("evidence-graph proof boundaries", () => {
         severity: "blocker",
       }),
     ]);
-    expect(graph.blockedClaimIds).toEqual(["blocked-claim:candidate-fact:typescript-approved"]);
+    expect(graph.blockedClaimIds).toEqual(["blocked-claim:candidate-fact:typescript-pending"]);
   });
 
   it("blocks generated artifact-like facts even when they match a demand", async () => {
