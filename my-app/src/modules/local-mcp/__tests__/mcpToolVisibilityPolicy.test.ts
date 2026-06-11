@@ -449,6 +449,24 @@ describe("local MCP tool visibility approval states", () => {
     expect(decision.state).toBe("blocked_by_privacy");
   });
 
+  it("blocks approval-required listing even when no listing flags are set", async () => {
+    const context = buildDefaultLocalMcpToolVisibilityPolicyContext({
+      callEnvelope: envelopeForTool(),
+      callValidation: validValidation(),
+      approvalDecision: undefined,
+      auditEvents: await auditEvents(),
+      handlerBoundary: await handlerBoundary(),
+      privacyReviewComplete: false,
+      privacyCheck: undefined,
+      allowDryRunListing: false,
+      allowDisabledListing: false,
+      allowRemoteListing: false,
+    });
+    const decision = evaluate("local_mcp.application_package.summarize", context);
+
+    expect(decision.state).toBe("blocked_by_privacy");
+  });
+
   it("lists disabled when approval is denied", async () => {
     const context = await richContext({ approvalDecision: deniedDecision() });
     const decision = evaluate("local_mcp.application_package.summarize", context);

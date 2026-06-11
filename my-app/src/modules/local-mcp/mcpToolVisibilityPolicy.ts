@@ -489,7 +489,31 @@ function isAdminDisabledInput(input: LocalMcpVisibilityStateInput): boolean {
 }
 
 function isPrivacyBlockedInput(input: LocalMcpVisibilityStateInput): boolean {
-  if (input.context.privacyCheck?.safe === false) return true;
+  return (
+    isPrivacyCheckFailed(input) ||
+    isApprovalPrivacyBlockedInput(input) ||
+    isListingPrivacyBlockedInput(input)
+  );
+}
+
+function isPrivacyCheckFailed(input: LocalMcpVisibilityStateInput): boolean {
+  return input.context.privacyCheck?.safe === false;
+}
+
+function isApprovalPrivacyBlockedInput(input: LocalMcpVisibilityStateInput): boolean {
+  return (
+    input.toolRequiresApproval &&
+    !input.privacySafe &&
+    input.context.approvalDecision === undefined &&
+    input.approvalReady === false &&
+    input.auditReady &&
+    input.handlerReady &&
+    isValidCallValidationForTool(input.context.callValidation, input.localToolId) &&
+    !input.context.allowRemoteListing
+  );
+}
+
+function isListingPrivacyBlockedInput(input: LocalMcpVisibilityStateInput): boolean {
   return isListingRequested(input.context) && !input.privacySafe;
 }
 
