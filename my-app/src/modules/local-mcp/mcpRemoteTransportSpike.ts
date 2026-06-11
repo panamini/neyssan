@@ -234,7 +234,7 @@ export function validateLocalMcpRemoteTransportPreflight(
   if (!isNonEmptyString(input.sessionId)) addReason(blockedReasons, "missing_session");
   if (!Number.isInteger(input.requestSizeBytes) || input.requestSizeBytes < 0) {
     addReason(blockedReasons, "invalid_request_size");
-  } else if (!isValidSize(input.requestSizeBytes, config.maxRequestBytes)) {
+  } else if (!isWithinSizeLimit(input.requestSizeBytes, config.maxRequestBytes)) {
     addReason(blockedReasons, "request_too_large");
   }
   if (
@@ -249,7 +249,7 @@ export function validateLocalMcpRemoteTransportPreflight(
     addReason(blockedReasons, "invalid_response_size");
   } else if (
     input.expectedResponseSizeBytes !== undefined &&
-    !isValidSize(input.expectedResponseSizeBytes, config.maxResponseBytes)
+    !isWithinSizeLimit(input.expectedResponseSizeBytes, config.maxResponseBytes)
   ) {
     addReason(blockedReasons, "response_too_large");
   }
@@ -405,8 +405,8 @@ function isValidRateLimit(value: unknown): value is LocalMcpRemoteTransportConfi
   );
 }
 
-function isValidSize(value: number, max: number): boolean {
-  return Number.isInteger(value) && value >= 0 && Number.isInteger(max) && max > 0 && value <= max;
+function isWithinSizeLimit(value: number, max: number): boolean {
+  return Number.isInteger(value) && Number.isInteger(max) && max > 0 && value <= max;
 }
 
 function isRemoteTransportMode(value: unknown): value is LocalMcpRemoteTransportModeV1 {
