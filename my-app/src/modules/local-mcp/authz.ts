@@ -4,7 +4,6 @@ import {
 } from "./schema";
 import type {
   LocalMcpAuthorizationResultV1,
-  LocalMcpRequestV1,
   LocalMcpToolRegistryV1,
 } from "./schema";
 import {
@@ -39,5 +38,3 @@ function deny(
     version: 1,
   };
 }
-
-export type { LocalMcpRequestV1 };

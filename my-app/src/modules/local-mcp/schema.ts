@@ -84,7 +84,7 @@ export type ExecuteLocalMcpRequestOptionsV1 = Readonly<{
   now?: () => string;
 }>;
 
-export const LOCAL_MCP_ALLOWED_INTERNAL_TOOL_IDS: readonly InternalToolIdV1[] = [
+const LOCAL_MCP_ALLOWED_INTERNAL_TOOL_IDS: readonly InternalToolIdV1[] = [
   "application_package.summarize",
   "evidence_graph.summarize",
   "resume_variant_plan.summarize",
@@ -109,7 +109,7 @@ const FORBIDDEN_LOCAL_TOOL_TEXT_TERMS: readonly string[] = [
   ...SPLIT_EXTERNAL_AGENT_TERMS.map(([first, second]) => `${first}${second}`),
 ] as const;
 
-export function isLocalMcpToolId(value: unknown): value is LocalMcpToolIdV1 {
+function isLocalMcpToolId(value: unknown): value is LocalMcpToolIdV1 {
   return (
     value === "local_mcp.application_package.summarize" ||
     value === "local_mcp.evidence_graph.summarize" ||
