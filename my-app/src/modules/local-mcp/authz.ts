@@ -4,6 +4,7 @@ import {
 } from "./schema";
 import type {
   LocalMcpAuthorizationResultV1,
+  LocalMcpRequestV1,
   LocalMcpToolRegistryV1,
 } from "./schema";
 import {
@@ -16,8 +17,14 @@ export function authorizeLocalMcpRequest(
   registry: LocalMcpToolRegistryV1 = buildLocalMcpToolRegistry(),
 ): LocalMcpAuthorizationResultV1 {
   const parsed = parseLocalMcpRequest(req);
-  if (!parsed) return deny("invalid_request");
+  return authorizeParsedLocalMcpRequest(parsed, registry);
+}
 
+export function authorizeParsedLocalMcpRequest(
+  parsed: LocalMcpRequestV1 | undefined,
+  registry: LocalMcpToolRegistryV1 = buildLocalMcpToolRegistry(),
+): LocalMcpAuthorizationResultV1 {
+  if (!parsed) return deny("invalid_request");
   const tool = getLocalMcpTool(parsed.toolId, registry);
   if (!tool) return deny("unknown_tool");
   if (parsed.userId.trim().length === 0) return deny("missing_user");

@@ -13,6 +13,7 @@ import type {
 } from "../../internal-tool-contracts/schema";
 import { authorizeLocalMcpRequest } from "../authz";
 import { executeLocalMcpRequest } from "../localMcpAdapter";
+import { parseLocalMcpRequest } from "../schema";
 import type {
   LocalMcpRequestV1,
   LocalMcpToolDefinitionV1,
@@ -248,6 +249,7 @@ describe("local MCP adapter", () => {
       success: true,
       toolId: "local_mcp.application_package.summarize",
       authorized: true,
+      executedAt: "2026-06-11T00:00:00.000Z",
       result: {
         kind: "local_mcp_dry_run",
         internalToolId: "application_package.summarize",
@@ -267,6 +269,7 @@ describe("local MCP adapter", () => {
       success: false,
       toolId: "local_mcp.application_package.summarize",
       authorized: false,
+      executedAt: "1970-01-01T00:00:00.000Z",
       err: {
         reason: "approval_required",
         version: 1,
@@ -299,6 +302,19 @@ describe("local MCP adapter", () => {
 
     expect(response.result?.input).toEqual({
       applicationPackageRef: { id: "pkg_1", tags: ["alpha"] },
+    });
+  });
+
+  it("does not retain the original approval object reference", () => {
+    const request = approvedRequest();
+    const parsedRequest = parseLocalMcpRequest(request);
+
+    (request.approval as { approved: boolean }).approved = false;
+
+    expect(parsedRequest?.approval?.approved).toBe(true);
+    expect(authorizeLocalMcpRequest(parsedRequest)).toEqual({
+      allowed: true,
+      version: 1,
     });
   });
 });

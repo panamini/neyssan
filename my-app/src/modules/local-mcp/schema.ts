@@ -76,6 +76,7 @@ export type LocalMcpResponseV1 = Readonly<{
   result?: LocalMcpDryRunResultV1;
   err?: LocalMcpErrorV1;
   authorized: boolean;
+  executedAt: string;
   version: 1;
 }>;
 
@@ -172,7 +173,7 @@ export function parseLocalMcpRequest(value: unknown): LocalMcpRequestV1 | undefi
     toolId: value.toolId,
     userId: value.userId,
     arguments: clonePlainRecord(value.arguments),
-    approval: value.approval,
+    approval: value.approval !== undefined ? { ...value.approval } : undefined,
     version: 1,
   };
 }

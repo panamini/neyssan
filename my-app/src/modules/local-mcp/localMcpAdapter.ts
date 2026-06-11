@@ -1,5 +1,5 @@
 import {
-  authorizeLocalMcpRequest,
+  authorizeParsedLocalMcpRequest,
 } from "./authz";
 import {
   cloneLocalMcpArguments,
@@ -19,9 +19,10 @@ export function executeLocalMcpRequest(
   req: unknown,
   options: ExecuteLocalMcpRequestOptionsV1 = {},
 ): LocalMcpResponseV1 {
+  const executedAt = options.now?.() ?? new Date(0).toISOString();
   const registry = options.registry ?? buildLocalMcpToolRegistry();
-  const authorization = authorizeLocalMcpRequest(req, registry);
   const parsed = parseLocalMcpRequest(req);
+  const authorization = authorizeParsedLocalMcpRequest(parsed, registry);
   const toolId = parsed?.toolId ?? getRequestToolId(req);
 
   if (!authorization.allowed) {
@@ -29,6 +30,7 @@ export function executeLocalMcpRequest(
       success: false,
       toolId,
       authorized: false,
+      executedAt,
       err: {
         reason: authorization.reason ?? "invalid_request",
         version: 1,
@@ -42,6 +44,7 @@ export function executeLocalMcpRequest(
       success: false,
       toolId,
       authorized: false,
+      executedAt,
       err: {
         reason: "invalid_request",
         version: 1,
@@ -56,6 +59,7 @@ export function executeLocalMcpRequest(
       success: false,
       toolId,
       authorized: false,
+      executedAt,
       err: {
         reason: "unknown_tool",
         version: 1,
@@ -68,6 +72,7 @@ export function executeLocalMcpRequest(
     success: true,
     toolId: tool.id,
     authorized: true,
+    executedAt,
     result: {
       kind: "local_mcp_dry_run",
       internalToolId: tool.internalToolId,
