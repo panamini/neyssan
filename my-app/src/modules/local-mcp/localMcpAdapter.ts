@@ -22,22 +22,7 @@ export function executeLocalMcpRequest(
   const executedAt = options.now?.() ?? new Date(0).toISOString();
   const registry = options.registry ?? buildLocalMcpToolRegistry();
   const parsed = parseLocalMcpRequest(req);
-  const authorization = authorizeParsedLocalMcpRequest(parsed, registry);
   const toolId = parsed?.toolId ?? getRequestToolId(req);
-
-  if (!authorization.allowed) {
-    return {
-      success: false,
-      toolId,
-      authorized: false,
-      executedAt,
-      err: {
-        reason: authorization.reason ?? "invalid_request",
-        version: 1,
-      },
-      version: 1,
-    };
-  }
 
   if (!parsed) {
     return {
@@ -62,6 +47,21 @@ export function executeLocalMcpRequest(
       executedAt,
       err: {
         reason: "unknown_tool",
+        version: 1,
+      },
+      version: 1,
+    };
+  }
+
+  const authorization = authorizeParsedLocalMcpRequest(parsed, registry);
+  if (!authorization.allowed) {
+    return {
+      success: false,
+      toolId,
+      authorized: false,
+      executedAt,
+      err: {
+        reason: authorization.reason ?? "invalid_request",
         version: 1,
       },
       version: 1,
