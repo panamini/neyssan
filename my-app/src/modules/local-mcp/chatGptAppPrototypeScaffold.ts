@@ -68,6 +68,14 @@ export type LocalOnlyChatGptAppPrototypeScaffoldV1 = Readonly<{
   version: 1;
 }>;
 
+type LocalOnlyChatGptAppPrototypeGateViewV1 = Readonly<{
+  exposureState: LocalOnlyChatGptAppPrototypeExposureStateV1;
+  gateStatus: LocalOnlyChatGptAppPrototypeGateStatusV1;
+  gatePassedForInternalReview: boolean;
+  userFacingCopy: string;
+  safeSummary: string;
+}>;
+
 export const LOCAL_ONLY_CHATGPT_APP_PROTOTYPE_TOOL_IDS_V1: readonly LocalMcpToolIdV1[] = [
   "local_mcp.application_package.summarize",
   "local_mcp.evidence_graph.summarize",
@@ -163,17 +171,10 @@ function buildPrototypeToolCard(
   localToolId: LocalMcpToolIdV1,
   gateResult?: LocalMcpPrivacyReviewGateResultV1,
 ): LocalOnlyChatGptAppPrototypeToolCardV1 {
-  if (gateResult) assertLocalMcpPrivacyReviewGateResult(gateResult);
-
-  const exposureState = gateResult ? exposureStateForGate(gateResult.status) : "hidden";
-  const gatePassedForInternalReview = gateResult
-    ? isLocalMcpPrivacyReviewGatePassedForInternalReview(gateResult)
-    : false;
-  const safeSummary = gateResult?.safeSummary ?? MISSING_GATE_SUMMARY;
-  const userFacingCopy = gateResult?.userFacingCopy ?? MISSING_GATE_COPY;
+  const gateView = buildPrototypeGateView(gateResult);
   const fixtureOutput = buildLocalMcpSafeTextFixtureOutput({
-    status: exposureState,
-    summary: safeSummary,
+    status: gateView.exposureState,
+    summary: gateView.safeSummary,
     refIds: [`fixture:${localToolId}`],
   });
 
@@ -181,11 +182,11 @@ function buildPrototypeToolCard(
     kind: "local_only_chatgpt_app_prototype_tool_card",
     localToolId,
     projectedToolName: localToolIdToProjectedToolName(localToolId),
-    exposureState,
-    gateStatus: gateResult?.status ?? "missing",
-    gatePassedForInternalReview,
-    userFacingCopy,
-    safeSummary,
+    exposureState: gateView.exposureState,
+    gateStatus: gateView.gateStatus,
+    gatePassedForInternalReview: gateView.gatePassedForInternalReview,
+    userFacingCopy: gateView.userFacingCopy,
+    safeSummary: gateView.safeSummary,
     fixtureOutput,
     constraints: cloneConstraints(PROTOTYPE_CONSTRAINTS),
     callable: false,
@@ -196,6 +197,28 @@ function buildPrototypeToolCard(
 
   assertPrototypeToolCard(card);
   return cloneToolCard(card);
+}
+
+function buildPrototypeGateView(
+  gateResult?: LocalMcpPrivacyReviewGateResultV1,
+): LocalOnlyChatGptAppPrototypeGateViewV1 {
+  if (!gateResult) {
+    return {
+      exposureState: "hidden",
+      gateStatus: "missing",
+      gatePassedForInternalReview: false,
+      userFacingCopy: MISSING_GATE_COPY,
+      safeSummary: MISSING_GATE_SUMMARY,
+    };
+  }
+  assertLocalMcpPrivacyReviewGateResult(gateResult);
+  return {
+    exposureState: exposureStateForGate(gateResult.status),
+    gateStatus: gateResult.status,
+    gatePassedForInternalReview: isLocalMcpPrivacyReviewGatePassedForInternalReview(gateResult),
+    userFacingCopy: gateResult.userFacingCopy,
+    safeSummary: gateResult.safeSummary,
+  };
 }
 
 function indexGateResults(
@@ -230,6 +253,15 @@ function exposureStateForGate(
 
 function assertPrototypeToolCard(tool: LocalOnlyChatGptAppPrototypeToolCardV1): void {
   const record = asPlainRecord(tool, "Local-only ChatGPT App prototype tool card must be an object");
+  assertPrototypeToolCardIdentity(record);
+  assertPrototypeToolCardGate(record);
+  assertPrototypeToolCardOutput(record);
+  assertPrototypeToolCardConstraints(record);
+  assertNoRuntimePhrases(tool);
+  assertLocalMcpPrivacySafeOutput(tool);
+}
+
+function assertPrototypeToolCardIdentity(record: Record<string, unknown>): void {
   if (record.kind !== "local_only_chatgpt_app_prototype_tool_card") {
     throw new TypeError("Local-only ChatGPT App prototype tool card kind is invalid");
   }
@@ -240,6 +272,9 @@ function assertPrototypeToolCard(tool: LocalOnlyChatGptAppPrototypeToolCardV1): 
   if (record.projectedToolName !== localToolIdToProjectedToolName(localToolId)) {
     throw new TypeError("Local-only ChatGPT App prototype tool card projectedToolName is invalid");
   }
+}
+
+function assertPrototypeToolCardGate(record: Record<string, unknown>): void {
   if (!isExposureState(record.exposureState)) {
     throw new TypeError("Local-only ChatGPT App prototype tool card exposureState is invalid");
   }
@@ -252,12 +287,18 @@ function assertPrototypeToolCard(tool: LocalOnlyChatGptAppPrototypeToolCardV1): 
   if (record.gatePassedForInternalReview !== (record.gateStatus === "ready_for_internal_review")) {
     throw new TypeError("Local-only ChatGPT App prototype tool card gate pass flag is inconsistent");
   }
+}
+
+function assertPrototypeToolCardOutput(record: Record<string, unknown>): void {
   if (!isNonEmptyString(record.userFacingCopy) || !isNonEmptyString(record.safeSummary)) {
     throw new TypeError("Local-only ChatGPT App prototype tool card copy is invalid");
   }
   if (!isPlainRecord(record.fixtureOutput)) {
     throw new TypeError("Local-only ChatGPT App prototype tool card fixture output is invalid");
   }
+}
+
+function assertPrototypeToolCardConstraints(record: Record<string, unknown>): void {
   assertPrototypeConstraints(record.constraints);
   if (record.callable !== false || record.runnable !== false || record.reviewOnly !== true) {
     throw new TypeError("Local-only ChatGPT App prototype tool card must stay non-runnable");
@@ -265,8 +306,6 @@ function assertPrototypeToolCard(tool: LocalOnlyChatGptAppPrototypeToolCardV1): 
   if (record.version !== 1) {
     throw new TypeError("Local-only ChatGPT App prototype tool card version must be 1");
   }
-  assertNoRuntimePhrases(tool);
-  assertLocalMcpPrivacySafeOutput(tool);
 }
 
 function assertPrototypeConstraints(
@@ -404,7 +443,8 @@ function asPlainRecord(value: unknown, message: string): Record<string, unknown>
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
+  if (value === null || typeof value !== "object") return false;
+  if (Array.isArray(value)) return false;
+  const prototype = Reflect.getPrototypeOf(value);
+  return prototype === null || prototype === Object.prototype;
 }

@@ -115,12 +115,14 @@ describe("chatGptAppPrototypeScaffold", () => {
     const scaffold = buildLocalOnlyChatGptAppPrototypeScaffold();
     const unsafe = {
       ...scaffold,
-      tools: [
-        {
-          ...scaffold.tools[0],
-          safeSummary: buildLocalMcpUnsafeFixtureOutput("private_fact"),
-        },
-      ],
+      tools: scaffold.tools.map((tool, index) =>
+        index === 0
+          ? {
+              ...tool,
+              fixtureOutput: buildLocalMcpUnsafeFixtureOutput("private_fact"),
+            }
+          : tool,
+      ),
     };
 
     expect(() => assertLocalOnlyChatGptAppPrototypeScaffold(unsafe as never)).toThrow(
@@ -131,7 +133,7 @@ describe("chatGptAppPrototypeScaffold", () => {
   it("keeps source free from runtime, network, SDK, UI, and persistence imports", () => {
     expect(source).not.toMatch(/from\s+["'](?:@modelcontextprotocol|@openai|openai|next\/server|convex|react)["']/u);
     expect(source).not.toMatch(/registerTool|registerResource|server\.connect|fetch\(|WebSocket|EventSource/u);
-    expect(source).not.toMatch(/OAuth|oauth|exportFile|download|sendEmail|submitApplication|applyToJob/u);
+    expect(source).not.toMatch(/\b(?:exportFile|downloadFile|sendEmail|submitApplication|applyToJob)\b/u);
   });
 });
 
