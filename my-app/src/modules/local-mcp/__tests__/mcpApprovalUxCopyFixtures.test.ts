@@ -213,6 +213,9 @@ describe("local MCP approval UX copy style validation", () => {
       .not.toThrow();
     expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Tokenized blocked.")))
       .not.toThrow();
+    expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Prods blocked."))).not.toThrow();
+    expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Secrets blocked."))).not.toThrow();
+    expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Tokens blocked."))).not.toThrow();
     expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Resend blocked."))).not.toThrow();
     expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Unsend blocked."))).not.toThrow();
     expect(() => assertLocalMcpApprovalUxCopyEntry(unsafeCopy("Privacy review required.")))
