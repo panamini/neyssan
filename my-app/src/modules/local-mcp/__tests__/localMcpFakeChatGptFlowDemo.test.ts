@@ -56,6 +56,7 @@ describe("local MCP fake ChatGPT flow demo", () => {
     expect(Object.isFrozen(demo.steps)).toBe(true);
     for (const step of demo.steps) {
       expect(Object.isFrozen(step)).toBe(true);
+      expect(Object.isFrozen(step.response)).toBe(true);
       expect(step).toMatchObject({
         kind: "local_mcp_fake_chatgpt_flow_demo_step",
         fixtureOnly: true,

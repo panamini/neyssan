@@ -280,11 +280,17 @@ function buildStep(
     noNetwork: true,
     status: input.status,
     summary: input.summary,
-    response: input.response,
+    response: freezeResponse(input.response),
     version: 1,
   };
   assertLocalMcpFakeChatGptFlowDemoStep(step);
   return Object.freeze(step);
+}
+
+function freezeResponse(
+  response: LocalMcpDevEndpointResponseV1 | LocalMcpToolsCallFixtureResponseV1,
+): LocalMcpDevEndpointResponseV1 | LocalMcpToolsCallFixtureResponseV1 {
+  return Object.freeze(response);
 }
 
 function assertLocalMcpFakeChatGptFlowDemoStep(step: unknown): void {
