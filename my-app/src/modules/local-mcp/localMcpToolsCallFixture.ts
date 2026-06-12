@@ -25,7 +25,8 @@ export type LocalMcpToolsCallFixtureErrorCodeV1 =
   | "unknown_tool"
   | "approval_required"
   | "negative_prompt_refusal"
-  | "write_action_refusal";
+  | "write_action_refusal"
+  | "auth_required_surface_refusal";
 
 export type LocalMcpToolsCallFixtureErrorV1 = Readonly<{
   code: LocalMcpToolsCallFixtureErrorCodeV1;
@@ -92,6 +93,17 @@ const WRITE_ACTION_PHRASES = [
   "auto-apply",
   "send to recruiter",
   "apply now",
+] as const;
+
+const AUTH_REQUIRED_SURFACE_PHRASES = [
+  "oauth token",
+  "link my account",
+  "connect my account",
+  "production connector",
+  "real user data",
+  "real cv",
+  "clerk user",
+  "convex user",
 ] as const;
 
 const APPROVAL_KEYS = ["approved", "approvedBy", "approvedAt", "reason", "version"] as const;
@@ -208,11 +220,17 @@ function parseOptionalApproval(value: unknown): LocalMcpApprovalV1 | false | und
 
 function refusalFromPrompt(
   prompt: string | undefined,
-): Readonly<{ code: "negative_prompt_refusal" | "write_action_refusal"; message: string }> | undefined {
+): Readonly<{
+  code: "negative_prompt_refusal" | "write_action_refusal" | "auth_required_surface_refusal";
+  message: string;
+}> | undefined {
   if (!prompt) return undefined;
   const normalized = prompt.normalize("NFKC").toLowerCase();
   if (WRITE_ACTION_PHRASES.some((phrase) => normalized.includes(phrase))) {
     return { code: "write_action_refusal", message: "Refused. Write action blocked." };
+  }
+  if (AUTH_REQUIRED_SURFACE_PHRASES.some((phrase) => normalized.includes(phrase))) {
+    return { code: "auth_required_surface_refusal", message: "Refused. Auth/OAuth surface blocked." };
   }
   if (NEGATIVE_PROMPT_PHRASES.some((phrase) => normalized.includes(phrase))) {
     return { code: "negative_prompt_refusal", message: "Refused. Negative prompt blocked." };
