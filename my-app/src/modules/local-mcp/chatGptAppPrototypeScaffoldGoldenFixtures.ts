@@ -349,7 +349,10 @@ function assertToolStateMatchesCard(
     throw new TypeError("Local-only ChatGPT App prototype golden fixture output refId drifted");
   }
   assertRefIdsEqual(tool.fixtureOutput.refIds, expected.refId);
-  if (expected.callable !== false || expected.runnable !== false || expected.reviewOnly !== true) {
+  assertEqual(expected.callable, tool.callable, "callable");
+  assertEqual(expected.runnable, tool.runnable, "runnable");
+  assertEqual(expected.reviewOnly, tool.reviewOnly, "reviewOnly");
+  if (tool.callable !== false || tool.runnable !== false || tool.reviewOnly !== true) {
     throw new TypeError("Local-only ChatGPT App prototype golden fixture must stay non-runnable");
   }
   if (expected.version !== 1) {

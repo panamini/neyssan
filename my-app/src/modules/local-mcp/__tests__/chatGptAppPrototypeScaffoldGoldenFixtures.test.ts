@@ -185,6 +185,26 @@ describe("chatGptAppPrototypeScaffoldGoldenFixtures", () => {
   });
 
   describe("invalid fixture rejection", () => {
+    it("rejects non-object fixtures", () => {
+      expect(() => assertLocalOnlyChatGptAppPrototypeGoldenFixture(null as never)).toThrow(
+        /golden fixture must be an object/u,
+      );
+      expect(() => assertLocalOnlyChatGptAppPrototypeGoldenFixture([] as never)).toThrow(
+        /golden fixture must be an object/u,
+      );
+    });
+
+    it("rejects invalid fixture identity", () => {
+      expect(() =>
+        assertLocalOnlyChatGptAppPrototypeGoldenFixture(
+          fixtureWithPatch({ kind: "local_only_chatgpt_app_prototype_scaffold" }) as never,
+        ),
+      ).toThrow(/kind is invalid/u);
+      expect(() =>
+        assertLocalOnlyChatGptAppPrototypeGoldenFixture(fixtureWithPatch({ version: 2 }) as never),
+      ).toThrow(/version must be 1/u);
+    });
+
     it("rejects unknown scenarios", () => {
       expect(() =>
         buildLocalOnlyChatGptAppPrototypeGoldenFixture("unknown" as never),
@@ -204,7 +224,36 @@ describe("chatGptAppPrototypeScaffoldGoldenFixtures", () => {
       );
     });
 
-    it("rejects fixture output drift", () => {
+    it.each([
+      {
+        name: "gateStatus",
+        patch: { gateStatus: "blocked" },
+        expectedError: /gateStatus drifted/u,
+      },
+      {
+        name: "safeSummary",
+        patch: { safeSummary: "Blocked. Review privacy." },
+        expectedError: /safe summary drifted/u,
+      },
+      {
+        name: "fixture status",
+        patch: { fixtureStatus: "blocked" },
+        expectedError: /output status drifted/u,
+      },
+      {
+        name: "refId",
+        patch: { refId: "fixture:local_mcp.evidence_graph.summarize" },
+        expectedError: /output refId drifted/u,
+      },
+    ])("rejects expected tool state drift: $name", ({ patch, expectedError }) => {
+      const invalid = fixtureWithExpectedToolStatePatch(0, patch);
+
+      expect(() => assertLocalOnlyChatGptAppPrototypeGoldenFixture(invalid as never)).toThrow(
+        expectedError,
+      );
+    });
+
+    it("rejects fixture output summary drift", () => {
       const invalid = fixtureWithFirstToolPatch({
         fixtureOutput: {
           ...buildLocalOnlyChatGptAppPrototypeGoldenFixture("default_hidden").scaffold.tools[0]
@@ -215,6 +264,34 @@ describe("chatGptAppPrototypeScaffoldGoldenFixtures", () => {
 
       expect(() => assertLocalOnlyChatGptAppPrototypeGoldenFixture(invalid as never)).toThrow(
         /fixture output summary is inconsistent|output summary drifted/u,
+      );
+    });
+
+    it("rejects fixture output status drift", () => {
+      const invalid = fixtureWithFirstToolPatch({
+        fixtureOutput: {
+          ...buildLocalOnlyChatGptAppPrototypeGoldenFixture("default_hidden").scaffold.tools[0]
+            .fixtureOutput,
+          status: "blocked",
+        },
+      });
+
+      expect(() => assertLocalOnlyChatGptAppPrototypeGoldenFixture(invalid as never)).toThrow(
+        /fixture output status is inconsistent|output status drifted/u,
+      );
+    });
+
+    it("rejects fixture output refIds drift", () => {
+      const invalid = fixtureWithFirstToolPatch({
+        fixtureOutput: {
+          ...buildLocalOnlyChatGptAppPrototypeGoldenFixture("default_hidden").scaffold.tools[0]
+            .fixtureOutput,
+          refIds: ["fixture:local_mcp.evidence_graph.summarize"],
+        },
+      });
+
+      expect(() => assertLocalOnlyChatGptAppPrototypeGoldenFixture(invalid as never)).toThrow(
+        /fixture output refIds are inconsistent|output refId drifted/u,
       );
     });
 
@@ -245,6 +322,33 @@ describe("chatGptAppPrototypeScaffoldGoldenFixtures", () => {
       expect(() => assertLocalOnlyChatGptAppPrototypeGoldenFixture(invalid as never)).toThrow(
         /tool order is invalid/u,
       );
+    });
+
+    it("rejects tool order drift", () => {
+      const fixture = buildLocalOnlyChatGptAppPrototypeGoldenFixture("default_hidden");
+      const invalid = {
+        ...fixture,
+        expectedToolStates: [
+          fixture.expectedToolStates[1],
+          fixture.expectedToolStates[0],
+          fixture.expectedToolStates[2],
+          fixture.expectedToolStates[3],
+        ],
+      };
+
+      expect(() => assertLocalOnlyChatGptAppPrototypeGoldenFixture(invalid as never)).toThrow(
+        /tool order is invalid/u,
+      );
+    });
+
+    it.each([
+      { name: "callable", patch: { callable: true }, expectedError: /callable drifted|must stay non-runnable/u },
+      { name: "runnable", patch: { runnable: true }, expectedError: /runnable drifted|must stay non-runnable/u },
+      { name: "reviewOnly", patch: { reviewOnly: false }, expectedError: /reviewOnly drifted|must stay non-runnable/u },
+    ])("rejects scaffold non-runnable drift: $name", ({ patch, expectedError }) => {
+      const invalid = fixtureWithFirstToolPatch(patch);
+
+      expect(() => assertLocalOnlyChatGptAppPrototypeGoldenFixture(invalid as never)).toThrow(expectedError);
     });
   });
 
