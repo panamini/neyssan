@@ -91,11 +91,11 @@ Official and high-trust sources reviewed on 2026-06-12:
 - Model Context Protocol transport specification, version 2025-11-25 latest - confirms stdio and Streamable HTTP, single MCP endpoint path for Streamable HTTP, SSE behavior, origin/auth warnings, session IDs, and protocol-version headers: https://modelcontextprotocol.io/specification/2025-11-25/basic/transports
 - Model Context Protocol authorization specification, version 2025-11-25 latest - confirms HTTP auth expectations and OAuth 2.1 requirements when auth is supported: https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization
 
-## 4. cur Twoweeks baseline after PR34
+## 4. Current Twoweeks baseline after PR34
 
 After PR34, Twoweeks is conditionally ready for planning-only Apps SDK exploration.
 
-The current baseline is:
+Current Twoweeks status:
 
 - local-only
 - fixture-only
@@ -162,12 +162,13 @@ Implementation-only requirements that remain forbidden in PR35:
 
 | Requirement | Official requirement summary | cur Twoweeks status | Covered by PR18-PR34? | Gap | Allowed in PR35 impl? | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
+| MCP server | The MCP server is the boundary that exposes descriptors, tool calls, and optional UI/resources to ChatGPT. | No approved server boundary exists. | Partially, as local-only shape and transport blockers. | No server, no endpoint, no connector, no runtime. | No | This is the center of PR35 architecture planning. |
 | Tool listing | MCP servers expose tools through `tools/list` with schemas and metadata. | PR18 projects local descriptor shapes only. | Partially, as static projection. | No runtime MCP server or `tools/list`. | No | PR18 is not protocol runtime. |
 | Tool calling | MCP clients invoke tools through `tools/call` / call_tool semantics. | PR19 has a non-executable local envelope. | Partially, as local call shape. | No handler execution, JSON-RPC, or protocol call path. | No | PR19 intentionally omits `method` and `params`. |
 | Structured content | Tool results can return `structuredContent` and may declare `outputSchema`. | PR18/PR31 use bounded fixture output and safe summaries. | Partially, for shape planning. | No approved real output schema or runtime result validation. | No | Full generated artifacts remain blocked in generic tool output. |
 | Tool metadata | Tool names, descriptions, inputs, outputs, and annotations guide model discovery and review. | PR18/PR29 define candidate names and metadata policy. | Partially. | Need official Apps SDK descriptor mapping and review copy. | No | Avoid executable wording. |
 | Component/resource metadata | Apps can return UI/resource metadata so ChatGPT renders components. | PR29 discusses placeholders only. | No runtime coverage. | No `ui://` resource, template, iframe, bridge, or resource registration. | No | Component intent must stay planning-only. |
-| opt UI component | UI is optional; if used, it renders in ChatGPT iframe and uses MCP Apps bridge. | Current scaffold sets `noUiComponent: true`. | Covered as forbidden. | No UI model, component state contract, or accessibility review. | No | Future may choose no UI. |
+| Optional UI component | UI is optional; if used, it renders in ChatGPT iframe and uses MCP Apps bridge. | Current scaffold sets `noUiComponent: true`. | Covered as forbidden. | No UI model, component state contract, or accessibility review. | No | Future may choose no UI. |
 | Transport | MCP supports stdio and Streamable HTTP; Apps deployment needs HTTP reachability. | PR22 models disabled/non-production preflight only. | Partially, as disabled reference. | No approved transport, listener, Streamable HTTP, SSE, session, origin/auth enforcement. | No | PR22 is not a server. |
 | Public accessibility for ChatGPT | Connector needs reachable HTTPS MCP endpoint, commonly `/mcp`. | None. | No. | No public endpoint, TLS, tunnel, deployment, logs, or metrics. | No | Official docs make this a deploy/connect blocker. |
 | Connector setup in ChatGPT | Developer Mode connector requires metadata and public `/mcp` endpoint. | None. | No. | No Developer Mode setup or connector metadata flow. | No | Explicitly forbidden in PR35. |
@@ -310,7 +311,7 @@ This is safer than installing the SDK or building `/mcp` because the current gap
 
 PR35 should not recommend installing the SDK, building an endpoint, creating a tunnel, using Developer Mode, connecting to ChatGPT, implementing OAuth, adding UI, persisting state, deploying, or submitting an app.
 
-## 12. min gates before any impl PR
+## 12. Minimum gates before any implementation PR
 
 Any implementation PR requires all of:
 
