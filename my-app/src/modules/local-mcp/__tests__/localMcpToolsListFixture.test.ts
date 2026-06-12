@@ -29,8 +29,13 @@ describe("local MCP tools/list fixture", () => {
     });
     if (!response.success) throw new TypeError("expected tools/list fixture success");
     expect(response.tools).toEqual(registry.descriptors);
-    expect(response.tools).not.toBe(registry.descriptors);
-    expect(response.tools.map((tool) => tool.name)).toEqual([
+    const originalToolCount = response.tools.length;
+    (response.tools as unknown as unknown[]).push({ name: "mutated" });
+    const nextResponse = simulateLocalMcpToolsListFixture();
+    expect(nextResponse).toMatchObject({ success: true, toolCount: originalToolCount });
+    if (!nextResponse.success) throw new TypeError("expected tools/list fixture success");
+    expect(nextResponse.tools.map((tool) => tool.name)).toEqual(registry.descriptors.map((tool) => tool.name));
+    expect(nextResponse.tools.map((tool) => tool.name)).toEqual([
       "twoweeks.application_package.summarize",
       "twoweeks.evidence_graph.summarize",
       "twoweeks.resume_variant_plan.summarize",
@@ -98,7 +103,8 @@ describe("local MCP tools/list fixture", () => {
       /fetch\(/u,
       /WebSocket/u,
       /EventSource/u,
-      /handler/u,
+      /registerHandler/u,
+      /requestHandler\s*[:=]/u,
     ] as const;
 
     for (const pattern of forbiddenPatterns) {

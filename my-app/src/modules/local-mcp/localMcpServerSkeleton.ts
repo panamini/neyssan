@@ -145,14 +145,14 @@ function assertDisabledConstraints(value: unknown): void {
 }
 
 function cloneSkeleton(skeleton: LocalMcpServerSkeletonV1): LocalMcpServerSkeletonV1 {
-  return {
+  return Object.freeze({
     ...skeleton,
-    routePaths: [],
-    exposedToolNames: [],
-    callableToolNames: [],
-    resourceUris: [],
-    constraints: { ...skeleton.constraints },
-  };
+    routePaths: Object.freeze([]),
+    exposedToolNames: Object.freeze([]),
+    callableToolNames: Object.freeze([]),
+    resourceUris: Object.freeze([]),
+    constraints: Object.freeze({ ...skeleton.constraints }),
+  });
 }
 
 function assertEmptyArray(value: unknown, label: string): void {
