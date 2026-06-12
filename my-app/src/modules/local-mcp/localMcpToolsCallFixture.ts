@@ -1,5 +1,7 @@
 import { validateLocalMcpCallEnvelope } from "./mcpCallEnvelope";
 import type { LocalMcpCallErrorCodeV1 } from "./mcpCallEnvelope";
+import { validateLocalMcpConsentGate } from "./mcpConsentGate";
+import type { LocalMcpConsentSurfaceV1 } from "./mcpConsentGate";
 import { buildLocalMcpSafeTextFixtureOutput } from "./privacyRedactionFixtures";
 import type { LocalMcpSafeTextFixtureOutputV1 } from "./privacyRedactionFixtures";
 import type { LocalMcpApprovalV1, LocalMcpToolIdV1, LocalMcpToolRegistryV1 } from "./schema";
@@ -15,6 +17,8 @@ type LocalMcpToolsCallFixtureRequestV1 = Readonly<{
     sessionId?: string;
   }>;
   approval?: LocalMcpApprovalV1;
+  consent?: unknown;
+  requestedSurface?: LocalMcpConsentSurfaceV1;
   prompt?: string;
   requestId?: string;
   version: 1;
@@ -24,6 +28,7 @@ export type LocalMcpToolsCallFixtureErrorCodeV1 =
   | "malformed_input"
   | "unknown_tool"
   | "approval_required"
+  | "consent_required"
   | "negative_prompt_refusal"
   | "write_action_refusal"
   | "auth_required_surface_refusal";
@@ -68,6 +73,8 @@ const REQUEST_KEYS = [
   "arguments",
   "user",
   "approval",
+  "consent",
+  "requestedSurface",
   "prompt",
   "requestId",
   "version",
@@ -111,10 +118,31 @@ const APPROVAL_KEYS = ["approved", "approvedBy", "approvedAt", "reason", "versio
 export function simulateLocalMcpToolsCallFixture(
   request: unknown,
   registry: LocalMcpToolRegistryV1 = buildLocalMcpToolRegistry(),
+  now: Date = new Date(),
 ): LocalMcpToolsCallFixtureResponseV1 {
   const parsed = parseToolsCallFixtureRequest(request);
   if (!parsed) {
     return buildFailure("unknown", "The tools/call fixture request is malformed.", "malformed_input");
+  }
+
+  const requestedSurface = parsed.requestedSurface ?? "fixture_only";
+  const consentGate = validateLocalMcpConsentGate(
+    {
+      kind: "local_mcp_consent_gate_input",
+      requestedSurface,
+      ...(parsed.consent !== undefined ? { consent: parsed.consent } : {}),
+      version: 1,
+    },
+    now,
+  );
+  if (!consentGate.allowed) {
+    return buildFailure(parsed.toolName, consentGate.safeRefusal.message, consentGate.safeRefusal.code);
+  }
+  if (requestedSurface === "future_write_action") {
+    return buildFailure(parsed.toolName, "Refused. Write action blocked.", "write_action_refusal");
+  }
+  if (requestedSurface === "future_real_data_read") {
+    return buildFailure(parsed.toolName, "Refused. Auth/OAuth surface blocked.", "auth_required_surface_refusal");
   }
 
   const promptRefusal = refusalFromPrompt(parsed.prompt);
@@ -164,21 +192,44 @@ function parseToolsCallFixtureRequest(value: unknown): LocalMcpToolsCallFixtureR
   if (!isPlainRecord(value) || !hasValidRequestShape(value)) return undefined;
 
   const user = parseUser(value.user);
-  if (!user) return undefined;
   const approval = parseOptionalApproval(value.approval);
-  if (approval === false) return undefined;
+  if (!user || approval === false) return undefined;
 
+  return buildParsedToolsCallFixtureRequest(value, user, approval);
+}
+
+function buildParsedToolsCallFixtureRequest(
+  value: Record<string, unknown> & {
+    toolName: string;
+    arguments: Readonly<Record<string, unknown>>;
+  },
+  user: LocalMcpToolsCallFixtureRequestV1["user"],
+  approval: LocalMcpApprovalV1 | undefined,
+): LocalMcpToolsCallFixtureRequestV1 {
   return {
     kind: "local_mcp_tools_call_fixture_request",
     method: "tools/call",
     toolName: value.toolName,
     arguments: { ...value.arguments },
     user,
-    ...(approval ? { approval } : {}),
-    ...(typeof value.prompt === "string" ? { prompt: value.prompt } : {}),
-    ...(typeof value.requestId === "string" ? { requestId: value.requestId } : {}),
+    ...parseOptionalRequestFields(value, approval),
     version: 1,
   };
+}
+
+function parseOptionalRequestFields(
+  value: Record<string, unknown>,
+  approval: LocalMcpApprovalV1 | undefined,
+): Partial<Pick<LocalMcpToolsCallFixtureRequestV1, "approval" | "consent" | "requestedSurface" | "prompt" | "requestId">> {
+  const fields: Partial<Pick<LocalMcpToolsCallFixtureRequestV1, "approval" | "consent" | "requestedSurface" | "prompt" | "requestId">> = {};
+  if (approval) fields.approval = approval;
+  if (value.consent !== undefined) fields.consent = value.consent;
+  if (value.requestedSurface !== undefined && optionalRequestedSurfaceIsValid(value.requestedSurface)) {
+    fields.requestedSurface = value.requestedSurface;
+  }
+  if (typeof value.prompt === "string") fields.prompt = value.prompt;
+  if (typeof value.requestId === "string") fields.requestId = value.requestId;
+  return fields;
 }
 
 function hasValidRequestShape(record: Record<string, unknown>): record is Record<string, unknown> & {
@@ -192,6 +243,7 @@ function hasValidRequestShape(record: Record<string, unknown>): record is Record
     record.version === 1 &&
     isNonEmptyString(record.toolName) &&
     isPlainRecord(record.arguments) &&
+    optionalRequestedSurfaceIsValid(record.requestedSurface) &&
     optionalStringFieldIsValid(record.prompt) &&
     optionalStringFieldIsValid(record.requestId)
   );
@@ -204,6 +256,15 @@ function parseUser(value: unknown): LocalMcpToolsCallFixtureRequestV1["user"] | 
     userId: value.userId,
     ...(typeof value.sessionId === "string" ? { sessionId: value.sessionId } : {}),
   };
+}
+
+function optionalRequestedSurfaceIsValid(value: unknown): value is LocalMcpConsentSurfaceV1 | undefined {
+  return (
+    value === undefined ||
+    value === "fixture_only" ||
+    value === "future_real_data_read" ||
+    value === "future_write_action"
+  );
 }
 
 function parseOptionalApproval(value: unknown): LocalMcpApprovalV1 | false | undefined {
@@ -304,6 +365,7 @@ function optionalStringFieldIsValid(value: unknown): boolean {
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
+
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
