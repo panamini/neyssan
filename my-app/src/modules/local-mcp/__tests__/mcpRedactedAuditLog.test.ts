@@ -145,6 +145,22 @@ describe("local MCP redacted audit log boundary", () => {
     expect(JSON.stringify(entry)).not.toContain("PRIVATE_FACT_DO_NOT_ECHO");
   });
 
+  it("does not treat ordinary words containing sid as session markers", () => {
+    const safeSummary = "Consider inside and beside cases only.";
+    const entry = buildLocalMcpRedactedAuditEntry({
+      eventType: "tool_call_refused",
+      occurredAt: "2026-06-12T19:32:30.000Z",
+      outcome: "refused",
+      toolName: "twoweeks.aside_tool.summarize",
+      safeSummary,
+      rawPayload: { note: "ordinary inside beside consider aside text" },
+    });
+
+    expect(entry.safeSummary).toBe(safeSummary);
+    expect(entry.redactions).toEqual([{ category: "unknown_payload", occurrences: 1, version: 1 }]);
+    expect(validateLocalMcpRedactedAuditEntry(entry)).toMatchObject({ valid: true });
+  });
+
   it("fails closed when validating malformed or unsafe audit entries", () => {
     expect(validateLocalMcpRedactedAuditEntry(null)).toEqual({
       valid: false,

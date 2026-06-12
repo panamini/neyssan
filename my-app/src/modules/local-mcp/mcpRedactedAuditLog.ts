@@ -132,7 +132,7 @@ const SENSITIVE_VALUE_PATTERNS: readonly Readonly<{
   pattern: RegExp;
 }>[] = [
   { category: "credential", pattern: /bearer\s+\S+|access[_-]?token|refresh[_-]?token|client[_-]?secret|secret[_-]?token|oauth/uim },
-  { category: "session_marker", pattern: /session[_-]?(secret|token|id)|sid[_-]?/uim },
+  { category: "session_marker", pattern: /session[_-]?(secret|token|id)|\bsid(?:[_-]|\b)/uim },
   { category: "source_text", pattern: /raw[_-]?(cv|resume|job)|cv\s+text|resume\s+text|job\s+(description|text)/uim },
   { category: "restricted_fact", pattern: /private[_-]?fact|never[_-]?use/uim },
   { category: "artifact_text", pattern: /generated[_-]?(full|artifact)|full\s+generated/uim },
