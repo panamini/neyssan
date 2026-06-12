@@ -144,7 +144,7 @@ const SENSITIVE_KEY_PATTERNS: readonly Readonly<{
   pattern: RegExp;
 }>[] = [
   { category: "credential", pattern: /token|secret|authorization|credential/uim },
-  { category: "session_marker", pattern: /session|sid/uim },
+  { category: "session_marker", pattern: /(?:^|[_-])session(?:[_-]?(secret|token|id))?(?:[_-]|$)|(?:^|[_-])sid(?:[_-]|$)/uim },
   { category: "source_text", pattern: /raw|cv|resume|job|source/uim },
   { category: "restricted_fact", pattern: /private|never[_-]?use|policy/uim },
   { category: "artifact_text", pattern: /generated|artifact|cover[_-]?letter/uim },

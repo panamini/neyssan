@@ -161,6 +161,25 @@ describe("local MCP redacted audit log boundary", () => {
     expect(validateLocalMcpRedactedAuditEntry(entry)).toMatchObject({ valid: true });
   });
 
+  it("does not treat ordinary raw payload keys containing sid as session markers", () => {
+    expect(
+      collectLocalMcpRedactedAuditRedactions({
+        insideNote: "metadata",
+        besideCase: "metadata",
+        consideration: "metadata",
+      }),
+    ).toEqual([{ category: "unknown_payload", occurrences: 1, version: 1 }]);
+
+    expect(
+      collectLocalMcpRedactedAuditRedactions({
+        sid: "opaque",
+        sid_token: "opaque",
+        sessionId: "opaque",
+        sessionSecret: "opaque",
+      }).some((redaction) => redaction.category === "session_marker"),
+    ).toBe(true);
+  });
+
   it("fails closed when validating malformed or unsafe audit entries", () => {
     expect(validateLocalMcpRedactedAuditEntry(null)).toEqual({
       valid: false,
