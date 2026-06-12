@@ -183,6 +183,14 @@ describe("chatGptAppPrototypeScaffold", () => {
     );
   });
 
+  it("rejects non-string fixture output status", () => {
+    const invalid = scaffoldWithFirstToolFixtureOutputPatch({ status: false });
+
+    expect(() => assertLocalOnlyChatGptAppPrototypeScaffold(invalid as never)).toThrow(
+      /fixture output status is invalid/u,
+    );
+  });
+
   it("rejects fixture output summary inconsistent with safeSummary", () => {
     const inconsistent = scaffoldWithFirstToolFixtureOutputPatch({
       summary: "Blocked. Review privacy.",
@@ -190,6 +198,14 @@ describe("chatGptAppPrototypeScaffold", () => {
 
     expect(() => assertLocalOnlyChatGptAppPrototypeScaffold(inconsistent as never)).toThrow(
       /fixture output summary is inconsistent/u,
+    );
+  });
+
+  it("rejects non-string fixture output summary", () => {
+    const invalid = scaffoldWithFirstToolFixtureOutputPatch({ summary: false });
+
+    expect(() => assertLocalOnlyChatGptAppPrototypeScaffold(invalid as never)).toThrow(
+      /fixture output summary is invalid/u,
     );
   });
 

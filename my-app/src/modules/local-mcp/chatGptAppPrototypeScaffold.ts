@@ -328,9 +328,19 @@ function assertPrototypeFixtureOutputMatchesCard(
   fixtureOutput: Record<string, unknown>,
   record: Record<string, unknown>,
 ): void {
+  if (typeof fixtureOutput.status !== "string") {
+    throw new TypeError(
+      "Local-only ChatGPT App prototype tool card fixture output status is invalid",
+    );
+  }
   if (fixtureOutput.status !== record.exposureState) {
     throw new TypeError(
       "Local-only ChatGPT App prototype tool card fixture output status is inconsistent",
+    );
+  }
+  if (typeof fixtureOutput.summary !== "string") {
+    throw new TypeError(
+      "Local-only ChatGPT App prototype tool card fixture output summary is invalid",
     );
   }
   if (fixtureOutput.summary !== record.safeSummary) {
