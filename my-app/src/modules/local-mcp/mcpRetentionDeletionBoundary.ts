@@ -1,10 +1,10 @@
-export type LocalMcpRetentionDeletionRecordTypeV1 =
+type LocalMcpRetentionDeletionRecordTypeV1 =
   | "fixture_summary"
   | "future_audit"
   | "future_component_state"
   | "future_generated_artifact";
 
-export type LocalMcpRetentionDeletionPolicyStateV1 =
+type LocalMcpRetentionDeletionPolicyStateV1 =
   | "fixture_ephemeral"
   | "retain_until"
   | "stale"
@@ -12,7 +12,7 @@ export type LocalMcpRetentionDeletionPolicyStateV1 =
   | "deletion_requested"
   | "deletion_completed";
 
-export type LocalMcpRetentionDeletionRecordV1 = Readonly<{
+type LocalMcpRetentionDeletionRecordV1 = Readonly<{
   kind: "local_mcp_retention_deletion_record";
   recordRef: string;
   recordType: LocalMcpRetentionDeletionRecordTypeV1;
@@ -120,7 +120,7 @@ export function validateLocalMcpRetentionDeletionBoundary(
   };
 }
 
-export function parseLocalMcpRetentionDeletionRecord(
+function parseLocalMcpRetentionDeletionRecord(
   value: unknown,
 ): LocalMcpRetentionDeletionRecordV1 | undefined {
   if (!isPlainRecord(value) || !hasOnlyAllowedKeys(value, RECORD_KEYS)) return undefined;
