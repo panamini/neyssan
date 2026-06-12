@@ -185,7 +185,7 @@ function assertRateLimit(value: unknown): void {
   const rateLimit = asPlainRecord(value, "Local MCP dev transport adapter rate limit must be an object");
   assertExactKeys(rateLimit, RATE_LIMIT_KEYS, "Local MCP dev transport adapter rate limit");
   for (const key of RATE_LIMIT_KEYS) {
-    if (typeof rateLimit[key] !== "number" || !Number.isFinite(rateLimit[key]) || rateLimit[key] <= 0) {
+    if (typeof rateLimit[key] !== "number" || !Number.isInteger(rateLimit[key]) || rateLimit[key] <= 0) {
       throw new TypeError(`Local MCP dev transport adapter rate limit ${key} must stay positive`);
     }
   }

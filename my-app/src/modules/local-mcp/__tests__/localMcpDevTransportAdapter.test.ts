@@ -183,6 +183,19 @@ describe("local MCP dev transport adapter", () => {
         },
       } as unknown as LocalMcpDevTransportAdapterV1),
     ).toThrow(TypeError);
+
+    expect(() =>
+      assertLocalMcpDevTransportAdapterDisabled({
+        ...adapter,
+        remoteTransportConfig: {
+          ...adapter.remoteTransportConfig,
+          rateLimit: {
+            ...adapter.remoteTransportConfig.rateLimit,
+            globalPerMinute: 1.5,
+          },
+        },
+      } as LocalMcpDevTransportAdapterV1),
+    ).toThrow(TypeError);
   });
 
   it("keeps the implementation source free of SDK imports, endpoints, handlers, and product actions", () => {
