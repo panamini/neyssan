@@ -111,7 +111,6 @@ function visitPrivacyValue(
     value.forEach((item, index) => {
       visitPrivacyValue(item, `${path}[${index}]`, fixture, findings, seen);
     });
-    seen.delete(value);
     return;
   }
 
@@ -124,7 +123,6 @@ function visitPrivacyValue(
     collectKeyFindings(key, `${path}.${key}`, findings);
     visitPrivacyValue(item, `${path}.${key}`, fixture, findings, seen);
   }
-  seen.delete(value);
 }
 
 function collectStringFindings(
@@ -205,7 +203,8 @@ function containsLongSourceOverlap(text: string, sourceText: string): boolean {
   const sourceTokens = tokenize(sourceText);
   if (longestContiguousRun(textTokens, sourceTokens) >= 6) return true;
   if (sourceTokens.length < 12) return false;
-  const overlap = sourceTokens.filter((token) => textTokens.includes(token)).length;
+  const textTokenSet = new Set(textTokens);
+  const overlap = sourceTokens.filter((token) => textTokenSet.has(token)).length;
   return overlap >= 10;
 }
 
@@ -304,17 +303,24 @@ describe("semantic privacy harness", () => {
   });
 
   it("rejects component _meta shaped output containing sensitive fields", () => {
-    expectPrivacyRejected(
-      {
-        content: [{ type: "text", text: "Safe visible copy." }],
-        _meta: {
-          rawCvText: FIXTURE.rawSourceTexts[0],
-          neverUse: "NEVER_USE_CRYPTO_OUTAGE",
-          sessionId: "session_real_123",
-          fullGeneratedCoverLetter: FIXTURE.generatedArtifacts[0],
-        },
+    const findings = evaluateSemanticPrivacy({
+      content: [{ type: "text", text: "Safe visible copy." }],
+      _meta: {
+        rawCvText: FIXTURE.rawSourceTexts[0],
+        neverUse: "Never use the 2021 crypto exchange outage.",
+        sessionId: "session_real_123",
+        fullGeneratedCoverLetter: FIXTURE.generatedArtifacts[0],
       },
-      "component_meta",
+    });
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ category: "component_meta" }),
+        expect.objectContaining({ category: "source_text" }),
+        expect.objectContaining({ category: "never_use" }),
+        expect.objectContaining({ category: "audit_log" }),
+        expect.objectContaining({ category: "generated_artifact" }),
+      ]),
     );
   });
 
@@ -376,6 +382,7 @@ describe("semantic privacy harness", () => {
       safeSummary: "Fixture-only preview remains fake-data-only. Consent does not approve execution.",
     });
     expect(audit.capabilities).toMatchObject({
+      consent: "not_evaluated",
       authProtocol: "not_evaluated",
       handlerExecution: "blocked",
       dataAccess: "blocked",
