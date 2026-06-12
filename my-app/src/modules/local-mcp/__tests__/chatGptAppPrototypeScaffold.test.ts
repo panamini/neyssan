@@ -175,12 +175,92 @@ describe("chatGptAppPrototypeScaffold", () => {
     );
   });
 
+  it("rejects fixture output status inconsistent with exposureState", () => {
+    const inconsistent = scaffoldWithFirstToolFixtureOutputPatch({ status: "blocked" });
+
+    expect(() => assertLocalOnlyChatGptAppPrototypeScaffold(inconsistent as never)).toThrow(
+      /fixture output status is inconsistent/u,
+    );
+  });
+
+  it("rejects fixture output summary inconsistent with safeSummary", () => {
+    const inconsistent = scaffoldWithFirstToolFixtureOutputPatch({
+      summary: "Blocked. Review privacy.",
+    });
+
+    expect(() => assertLocalOnlyChatGptAppPrototypeScaffold(inconsistent as never)).toThrow(
+      /fixture output summary is inconsistent/u,
+    );
+  });
+
+  it("rejects invalid fixture output kind", () => {
+    const invalid = scaffoldWithFirstToolFixtureOutputPatch({
+      kind: "local_mcp_unsafe_text_fixture_output",
+    });
+
+    expect(() => assertLocalOnlyChatGptAppPrototypeScaffold(invalid as never)).toThrow(
+      /fixture output kind is invalid/u,
+    );
+  });
+
+  it("rejects invalid fixture output version", () => {
+    const invalid = scaffoldWithFirstToolFixtureOutputPatch({ version: 2 });
+
+    expect(() => assertLocalOnlyChatGptAppPrototypeScaffold(invalid as never)).toThrow(
+      /fixture output version must be 1/u,
+    );
+  });
+
+  it.each([
+    {
+      name: "non-array",
+      refIds: "fixture:local_mcp.application_package.summarize",
+      expectedError: /fixture output refIds are invalid/u,
+    },
+    {
+      name: "empty string",
+      refIds: [""],
+      expectedError: /fixture output refIds must be non-empty strings/u,
+    },
+    {
+      name: "wrong fixture ref",
+      refIds: ["fixture:local_mcp.evidence_graph.summarize"],
+      expectedError: /fixture output refIds are inconsistent/u,
+    },
+  ])("rejects invalid or inconsistent fixture output refIds: $name", ({ refIds, expectedError }) => {
+    const invalid = scaffoldWithFirstToolFixtureOutputPatch({ refIds });
+
+    expect(() => assertLocalOnlyChatGptAppPrototypeScaffold(invalid as never)).toThrow(
+      expectedError,
+    );
+  });
+
   it("keeps source free from runtime, network, SDK, UI, and persistence imports", () => {
     expect(source).not.toMatch(/from\s+["'](?:@modelcontextprotocol|@openai|openai|next\/server|convex|react)["']/u);
     expect(source).not.toMatch(/registerTool|registerResource|server\.connect|fetch\(|WebSocket|EventSource/u);
     expect(source).not.toMatch(/\b(?:exportFile|downloadFile|sendEmail|submitApplication|applyToJob)\b/u);
   });
 });
+
+function scaffoldWithFirstToolFixtureOutputPatch(
+  fixtureOutputPatch: Readonly<Record<string, unknown>>,
+): unknown {
+  const scaffold = buildLocalOnlyChatGptAppPrototypeScaffold();
+  return {
+    ...scaffold,
+    tools: scaffold.tools.map((tool, index) =>
+      index === 0
+        ? {
+            ...tool,
+            fixtureOutput: {
+              ...tool.fixtureOutput,
+              ...fixtureOutputPatch,
+            },
+          }
+        : tool,
+    ),
+  };
+}
 
 function readyGate(localToolId: LocalMcpToolIdV1): LocalMcpPrivacyReviewGateResultV1 {
   return {
