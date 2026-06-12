@@ -2,9 +2,8 @@ import { validateLocalMcpCallEnvelope } from "./mcpCallEnvelope";
 import type { LocalMcpCallErrorCodeV1 } from "./mcpCallEnvelope";
 import { buildLocalMcpSafeTextFixtureOutput } from "./privacyRedactionFixtures";
 import type { LocalMcpSafeTextFixtureOutputV1 } from "./privacyRedactionFixtures";
-import type { LocalMcpApprovalV1, LocalMcpToolIdV1 } from "./schema";
+import type { LocalMcpApprovalV1, LocalMcpToolIdV1, LocalMcpToolRegistryV1 } from "./schema";
 import { buildLocalMcpToolRegistry } from "./toolRegistry";
-import type { LocalMcpToolRegistryV1 } from "./schema";
 
 type LocalMcpToolsCallFixtureRequestV1 = Readonly<{
   kind: "local_mcp_tools_call_fixture_request";
@@ -94,6 +93,8 @@ const WRITE_ACTION_PHRASES = [
   "send to recruiter",
   "apply now",
 ] as const;
+
+const APPROVAL_KEYS = ["approved", "approvedBy", "approvedAt", "reason", "version"] as const;
 
 export function simulateLocalMcpToolsCallFixture(
   request: unknown,
@@ -195,7 +196,14 @@ function parseUser(value: unknown): LocalMcpToolsCallFixtureRequestV1["user"] | 
 
 function parseOptionalApproval(value: unknown): LocalMcpApprovalV1 | false | undefined {
   if (value === undefined) return undefined;
-  return isApproval(value) ? { ...value } : false;
+  if (!isApproval(value)) return false;
+  return {
+    approved: value.approved,
+    ...(value.approvedBy !== undefined ? { approvedBy: value.approvedBy } : {}),
+    ...(value.approvedAt !== undefined ? { approvedAt: value.approvedAt } : {}),
+    ...(value.reason !== undefined ? { reason: value.reason } : {}),
+    version: 1,
+  };
 }
 
 function refusalFromPrompt(
@@ -262,7 +270,7 @@ function hasOnlyAllowedKeys(value: Record<string, unknown>, allowedKeys: readonl
 }
 
 function isApproval(value: unknown): value is LocalMcpApprovalV1 {
-  if (!isPlainRecord(value)) return false;
+  if (!isPlainRecord(value) || !hasOnlyAllowedKeys(value, APPROVAL_KEYS)) return false;
   const optionalFields = [value.approvedBy, value.approvedAt, value.reason];
   return (
     typeof value.approved === "boolean" &&
