@@ -1,7 +1,7 @@
 # PR36 - MCP Server Architecture Boundary ADR
 Date: 2026-06-12
 Status: architecture decision record
-Scope: docs-only, no runtime impl
+Scope: docs-only, no runtime implementation
 
 ## 1. Objective
 
@@ -93,7 +93,7 @@ Official documentation reviewed on 2026-06-12:
 - `https://modelcontextprotocol.io/specification/2025-11-25/basic/transports` - confirms stdio and Streamable HTTP, optional SSE streams, origin validation, auth expectations, and session ID handling.
 - `https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization` - confirms MCP auth expectations around OAuth 2.1, protected resource metadata, discovery, token audience validation, secure token storage, HTTPS, and PKCE.
 
-## 5. cur baseline after PR35
+## 5. Current baseline after PR35
 
 The current baseline after PR35 is:
 
@@ -256,7 +256,7 @@ If future UI is approved, component intent, state, auth context, accessibility, 
 
 UI must not become a hidden data exfiltration path.
 
-## 15. Future dep boundary
+## 15. Future dependency boundary
 
 No dependency changes exist in PR36.
 
@@ -268,7 +268,19 @@ No package install may be hidden inside a docs PR.
 
 No SDK import may appear before dependency approval.
 
-## 16. Explicit non-decisions
+## 16. Vocabulary
+
+- MCP server: future protocol-facing adapter that may eventually expose allowlisted tool descriptors and receive tool-call requests, if approved later.
+- Tool listing: future `tools/list` capability that would advertise allowed tools and metadata. Listing is exposure only, not execution approval.
+- Tool calling: future `tools/call` or `call_tool` capability that would request execution. Calling remains forbidden until explicit implementation approval.
+- Transport: future network layer used by an MCP client to reach the server. No transport is approved by PR36.
+- Handler: product-side implementation that performs real work. No handler is approved by PR36.
+- Approval gate: future enforceable check that confirms user or maintainer approval before sensitive or write behavior.
+- Privacy gate: future enforceable check that prevents raw or sensitive data leakage.
+- Audit gate: future enforceable check that records privacy-safe evidence of allowed actions.
+- Fail closed: when any required gate is missing, unknown, stale, unavailable, or failing, the system must refuse exposure or execution instead of continuing.
+
+## 17. Explicit non-decisions
 
 PR36 intentionally does not decide:
 
@@ -285,7 +297,7 @@ PR36 intentionally does not decide:
 - first live tool list
 - first callable handler
 
-## 17. Runtime blockers
+## 18. Runtime blockers
 
 Runtime remains blocked by:
 
@@ -302,7 +314,7 @@ Runtime remains blocked by:
 - deployment boundary not approved
 - ChatGPT connector not approved
 
-## 18. Architecture risks
+## 19. Architecture risks
 
 - Static descriptors may be mistaken for live tools.
 - `ready_for_internal_review` may be mistaken for execution approval.
@@ -316,7 +328,7 @@ Runtime remains blocked by:
 - Docs-only decisions may be mistaken for implementation approval.
 - Future write actions around CV, cover letter, job search, export, submit, send, or apply flows may create legal, privacy, or user-trust risk.
 
-## 19. min gates before impl
+## 20. Minimum gates before implementation
 
 All of these are required before implementation:
 
@@ -335,7 +347,28 @@ All of these are required before implementation:
 - Explicit maintainer approval to expose `/mcp`
 - Explicit maintainer approval to connect to ChatGPT
 
-## 20. Recommended next PR
+## 21. Future verification checklist
+
+Before any implementation PR, reviewers must be able to verify:
+
+- exactly which tools may be listed;
+- exactly which tools remain hidden;
+- why each listed tool is safe to expose;
+- whether each tool is read-only, destructive, or open-world;
+- what data is model-visible, component-visible, server-only, and audit-only;
+- what user consent is required;
+- what auth or OAuth model applies;
+- what approval gate is enforced;
+- what audit event is written;
+- what privacy redaction is applied;
+- what happens when a gate fails;
+- what happens when a gate is unknown;
+- what logs are retained;
+- what deletion and retention policy applies;
+- what prompts test tool selection and prompt injection;
+- what prevents export/download/send/submit/apply from executing without explicit approval.
+
+## 22. Recommended next PR
 
 PR37: Real-data, privacy, consent, retention, and audit policy - docs only.
 
@@ -347,7 +380,7 @@ Privacy and audit rules must exist before any runtime or descriptor mapping can 
 
 PR36 does not create PR37.
 
-## 21. PR36 verdict
+## 23. PR36 verdict
 
 PR36 defines the future MCP server architecture boundary.
 
@@ -373,7 +406,7 @@ PR36 does not approve runtime integration.
 
 PR36 does not approve production.
 
-## 22. Rollback
+## 24. Rollback
 
 Rollback is deletion-only:
 
