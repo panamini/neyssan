@@ -34,6 +34,7 @@
     "@langchain/mistralai": "^0.2.0",
     "@langchain/openai": "^0.4.4",
     "@mistralai/mistralai": "^1.9.18",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@phosphor-icons/react": "^2.1.10",
     "@radix-ui/react-form": "^0.1.2",
     "@radix-ui/themes": "^3.2.0",
