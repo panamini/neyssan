@@ -190,7 +190,11 @@ function isLocalRequest(request: LocalMcpDevEndpointRequestV1): boolean {
 }
 
 function normalizeHost(value: string | undefined): string {
-  return (value ?? "").trim().toLowerCase().replace(/^\[/u, "").replace(/\](?::\d+)?$/u, "").replace(/:\d+$/u, "");
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (normalized.startsWith("[")) {
+    return normalized.replace(/^\[/u, "").replace(/\](?::\d+)?$/u, "");
+  }
+  return normalized.replace(/:\d+$/u, "");
 }
 
 function isLocalHost(host: string): boolean {

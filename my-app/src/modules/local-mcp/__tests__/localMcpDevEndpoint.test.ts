@@ -50,7 +50,12 @@ describe("local MCP dev endpoint", () => {
 
   it("handles enabled loopback POST JSON initialize requests with fixture-only capabilities", () => {
     const response = handleLocalMcpDevEndpointRequest(request(), ENABLED_CONFIG);
+    const ipv6Response = handleLocalMcpDevEndpointRequest(
+      request({ headers: { host: "[::1]:5173", "content-type": "application/json" }, remoteAddress: "::1" }),
+      ENABLED_CONFIG,
+    );
 
+    expect(ipv6Response).toMatchObject({ handled: true, status: 200, json: { id: "request_1" } });
     expect(response).toEqual({
       handled: true,
       status: 200,
