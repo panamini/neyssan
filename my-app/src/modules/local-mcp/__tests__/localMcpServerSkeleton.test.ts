@@ -69,9 +69,18 @@ describe("local MCP server skeleton", () => {
     });
   });
 
-  it("returns clones so callers cannot mutate the static disabled shape", () => {
+  it("returns frozen clones so callers cannot mutate the static disabled shape", () => {
     const first = buildDisabledLocalMcpServerSkeleton();
-    (first.constraints as { noEndpoint: boolean }).noEndpoint = false;
+
+    expect(Object.isFrozen(first)).toBe(true);
+    expect(Object.isFrozen(first.constraints)).toBe(true);
+    expect(Object.isFrozen(first.routePaths)).toBe(true);
+    expect(Object.isFrozen(first.exposedToolNames)).toBe(true);
+    expect(Object.isFrozen(first.callableToolNames)).toBe(true);
+    expect(Object.isFrozen(first.resourceUris)).toBe(true);
+    expect(() => {
+      (first.constraints as { noEndpoint: boolean }).noEndpoint = false;
+    }).toThrow(TypeError);
 
     const second = buildDisabledLocalMcpServerSkeleton();
     expect(second.constraints.noEndpoint).toBe(true);

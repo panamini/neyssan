@@ -113,6 +113,24 @@ describe("local MCP tools/call fixture", () => {
     });
   });
 
+  it("rejects approval objects with unexpected fields", () => {
+    expect(
+      simulateLocalMcpToolsCallFixture({
+        ...VALID_CALL_REQUEST,
+        approval: {
+          ...VALID_CALL_REQUEST.approval,
+          rawPayload: "must_not_pass_through",
+        },
+      }),
+    ).toMatchObject({
+      success: false,
+      error: {
+        code: "malformed_input",
+        message: "The tools/call fixture request is malformed.",
+      },
+    });
+  });
+
   it("refuses negative prompts without running product code", () => {
     expect(
       simulateLocalMcpToolsCallFixture({
