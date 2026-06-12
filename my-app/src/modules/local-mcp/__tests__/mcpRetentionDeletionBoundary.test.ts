@@ -59,6 +59,7 @@ describe("local MCP retention and deletion boundary", () => {
   it("fails closed for malformed, stale, expired, and deletion-requested future records", () => {
     const cases = [
       [{ ...ACTIVE_RECORD, recordRef: "user_real_123" }, "record_malformed"],
+      [{ ...ACTIVE_RECORD, policyState: "stale" }, "record_stale"],
       [{ ...ACTIVE_RECORD, retainUntil: "2026-06-12T11:59:59.000Z" }, "retention_expired"],
       [{ ...ACTIVE_RECORD, policyState: "expired" }, "retention_expired"],
       [{ ...ACTIVE_RECORD, policyState: "deletion_requested", deletionRequestedAt: "2026-06-12T11:00:00.000Z" }, "deletion_requested"],
