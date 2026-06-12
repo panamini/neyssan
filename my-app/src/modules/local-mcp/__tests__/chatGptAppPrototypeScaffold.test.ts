@@ -212,6 +212,17 @@ describe("chatGptAppPrototypeScaffold", () => {
   });
 
   it.each([
+    { name: "missing", fixtureOutput: undefined },
+    { name: "non-object", fixtureOutput: ["local_mcp_safe_text_fixture_output"] },
+  ])("rejects $name fixture output", ({ fixtureOutput }) => {
+    const invalid = scaffoldWithFirstToolPatch({ fixtureOutput });
+
+    expect(() => assertLocalOnlyChatGptAppPrototypeScaffold(invalid as never)).toThrow(
+      /fixture output is invalid/u,
+    );
+  });
+
+  it.each([
     {
       name: "non-array",
       refIds: "fixture:local_mcp.application_package.summarize",
@@ -225,6 +236,14 @@ describe("chatGptAppPrototypeScaffold", () => {
     {
       name: "wrong fixture ref",
       refIds: ["fixture:local_mcp.evidence_graph.summarize"],
+      expectedError: /fixture output refIds are inconsistent/u,
+    },
+    {
+      name: "multiple fixture refs",
+      refIds: [
+        "fixture:local_mcp.application_package.summarize",
+        "fixture:local_mcp.evidence_graph.summarize",
+      ],
       expectedError: /fixture output refIds are inconsistent/u,
     },
   ])("rejects invalid or inconsistent fixture output refIds: $name", ({ refIds, expectedError }) => {
@@ -246,16 +265,23 @@ function scaffoldWithFirstToolFixtureOutputPatch(
   fixtureOutputPatch: Readonly<Record<string, unknown>>,
 ): unknown {
   const scaffold = buildLocalOnlyChatGptAppPrototypeScaffold();
+  return scaffoldWithFirstToolPatch({
+    fixtureOutput: {
+      ...scaffold.tools[0].fixtureOutput,
+      ...fixtureOutputPatch,
+    },
+  });
+}
+
+function scaffoldWithFirstToolPatch(toolPatch: Readonly<Record<string, unknown>>): unknown {
+  const scaffold = buildLocalOnlyChatGptAppPrototypeScaffold();
   return {
     ...scaffold,
     tools: scaffold.tools.map((tool, index) =>
       index === 0
         ? {
             ...tool,
-            fixtureOutput: {
-              ...tool.fixtureOutput,
-              ...fixtureOutputPatch,
-            },
+            ...toolPatch,
           }
         : tool,
     ),
