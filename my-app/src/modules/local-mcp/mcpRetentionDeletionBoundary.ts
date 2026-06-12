@@ -137,15 +137,23 @@ function parseLocalMcpRetentionDeletionRecord(
   ].every(Boolean);
   if (!validShape) return undefined;
 
+  const recordRef = value.recordRef as string;
+  const recordType = value.recordType as LocalMcpRetentionDeletionRecordTypeV1;
+  const policyState = value.policyState as LocalMcpRetentionDeletionPolicyStateV1;
+  const createdAt = value.createdAt as string;
+  const retainUntil = value.retainUntil as string;
+  const deletionRequestedAt = value.deletionRequestedAt as string | undefined;
+  const deletionCompletedAt = value.deletionCompletedAt as string | undefined;
+
   return {
     kind: "local_mcp_retention_deletion_record",
-    recordRef: value.recordRef,
-    recordType: value.recordType as LocalMcpRetentionDeletionRecordTypeV1,
-    policyState: value.policyState as LocalMcpRetentionDeletionPolicyStateV1,
-    createdAt: value.createdAt,
-    retainUntil: value.retainUntil,
-    ...(value.deletionRequestedAt !== undefined ? { deletionRequestedAt: value.deletionRequestedAt } : {}),
-    ...(value.deletionCompletedAt !== undefined ? { deletionCompletedAt: value.deletionCompletedAt } : {}),
+    recordRef,
+    recordType,
+    policyState,
+    createdAt,
+    retainUntil,
+    ...(deletionRequestedAt !== undefined ? { deletionRequestedAt } : {}),
+    ...(deletionCompletedAt !== undefined ? { deletionCompletedAt } : {}),
     version: 1,
   };
 }

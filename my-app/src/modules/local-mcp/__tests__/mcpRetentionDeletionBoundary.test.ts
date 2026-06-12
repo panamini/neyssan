@@ -56,6 +56,34 @@ describe("local MCP retention and deletion boundary", () => {
     });
   });
 
+  it("allows ephemeral fixture records without implying persistence deletion", () => {
+    const result = validateLocalMcpRetentionDeletionBoundary(
+      {
+        kind: "local_mcp_retention_deletion_input",
+        record: {
+          ...ACTIVE_RECORD,
+          policyState: "fixture_ephemeral",
+        },
+        version: 1,
+      },
+      NOW,
+    );
+
+    expect(result).toMatchObject({
+      allowed: true,
+      reason: "fixture_ephemeral",
+      capabilities: {
+        persistenceDeletion: "blocked",
+        convexWrites: "blocked",
+        handlerExecution: "blocked",
+        dataAccess: "blocked",
+        writeAction: "blocked",
+        realUserData: "blocked",
+      },
+      fixtureOnly: true,
+    });
+  });
+
   it("fails closed for malformed, stale, expired, and deletion-requested future records", () => {
     const cases = [
       [{ ...ACTIVE_RECORD, recordRef: "user_real_123" }, "record_malformed"],
