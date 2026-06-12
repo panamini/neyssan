@@ -124,20 +124,24 @@ export function parseLocalMcpRetentionDeletionRecord(
   value: unknown,
 ): LocalMcpRetentionDeletionRecordV1 | undefined {
   if (!isPlainRecord(value) || !hasOnlyAllowedKeys(value, RECORD_KEYS)) return undefined;
-  if (value.kind !== "local_mcp_retention_deletion_record") return undefined;
-  if (!isSafeRecordRef(value.recordRef)) return undefined;
-  if (!isRecordType(value.recordType)) return undefined;
-  if (!isPolicyState(value.policyState)) return undefined;
-  if (!isStrictIsoUtcTimestamp(value.createdAt) || !isStrictIsoUtcTimestamp(value.retainUntil)) return undefined;
-  if (value.deletionRequestedAt !== undefined && !isStrictIsoUtcTimestamp(value.deletionRequestedAt)) return undefined;
-  if (value.deletionCompletedAt !== undefined && !isStrictIsoUtcTimestamp(value.deletionCompletedAt)) return undefined;
-  if (value.version !== 1) return undefined;
+  const validShape = [
+    value.kind === "local_mcp_retention_deletion_record",
+    isSafeRecordRef(value.recordRef),
+    isRecordType(value.recordType),
+    isPolicyState(value.policyState),
+    isStrictIsoUtcTimestamp(value.createdAt),
+    isStrictIsoUtcTimestamp(value.retainUntil),
+    isOptionalStrictIsoUtcTimestamp(value.deletionRequestedAt),
+    isOptionalStrictIsoUtcTimestamp(value.deletionCompletedAt),
+    value.version === 1,
+  ].every(Boolean);
+  if (!validShape) return undefined;
 
   return {
     kind: "local_mcp_retention_deletion_record",
     recordRef: value.recordRef,
-    recordType: value.recordType,
-    policyState: value.policyState,
+    recordType: value.recordType as LocalMcpRetentionDeletionRecordTypeV1,
+    policyState: value.policyState as LocalMcpRetentionDeletionPolicyStateV1,
     createdAt: value.createdAt,
     retainUntil: value.retainUntil,
     ...(value.deletionRequestedAt !== undefined ? { deletionRequestedAt: value.deletionRequestedAt } : {}),
@@ -212,6 +216,10 @@ function isStrictIsoUtcTimestamp(value: unknown): value is string {
     /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/u.test(value) &&
     Number.isFinite(Date.parse(value))
   );
+}
+
+function isOptionalStrictIsoUtcTimestamp(value: unknown): value is string | undefined {
+  return value === undefined || isStrictIsoUtcTimestamp(value);
 }
 
 function hasOnlyAllowedKeys(value: Record<string, unknown>, allowedKeys: readonly string[]): boolean {

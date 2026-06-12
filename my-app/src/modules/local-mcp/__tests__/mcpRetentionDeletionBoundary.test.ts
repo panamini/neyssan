@@ -134,32 +134,26 @@ describe("local MCP retention and deletion boundary", () => {
 
   it("keeps retention and deletion source disconnected from runtime, persistence, network, auth, and product actions", () => {
     const implementation = source();
-    const forbiddenPatterns = [
-      /@modelcontextprotocol/u,
-      /@openai/u,
-      /from\s+["'][^"']*(convex|components|pages|routes|openai|oauth|next\/server|react)[^"']*["']/iu,
-      /createServer/u,
-      /\.listen\(/u,
-      /server\.connect/u,
-      /["'`]\/mcp/u,
-      /fetch\(/u,
-      /axios/u,
-      /undici/u,
-      /WebSocket/u,
-      /EventSource/u,
-      /ctx\.db/u,
-      /\.insert\(/u,
-      /\.patch\(/u,
-      /\.replace\(/u,
-      /\.delete\(/u,
-      /mutation/u,
-      /executeLocalMcpRequest/u,
-      /exportFile|downloadFile|sendEmail|submitApplication|applyToJob/u,
-      /access_token|refresh_token|client_secret|accountLinking/u,
+    const forbiddenSurfaceChecks = [
+      { surface: "MCP SDK import", pattern: /@modelcontextprotocol/u },
+      { surface: "OpenAI import", pattern: /@openai/u },
+      { surface: "runtime framework import", pattern: /from\s+["'][^"']*(convex|components|pages|routes|openai|oauth|next\/server|react)[^"']*["']/iu },
+      { surface: "server creation", pattern: /createServer/u },
+      { surface: "listener", pattern: /\.listen\(/u },
+      { surface: "transport connection", pattern: /server\.connect/u },
+      { surface: "MCP route", pattern: /["'`]\/mcp/u },
+      { surface: "HTTP client", pattern: /fetch\(|axios|undici/u },
+      { surface: "streaming client", pattern: /WebSocket|EventSource/u },
+      { surface: "Convex database", pattern: /ctx\.db/u },
+      { surface: "persistence write", pattern: /\.(insert|patch|replace|delete)\(/u },
+      { surface: "Convex mutation", pattern: /mutation/u },
+      { surface: "tool execution", pattern: /executeLocalMcpRequest/u },
+      { surface: "product write action", pattern: /exportFile|downloadFile|sendEmail|submitApplication|applyToJob/u },
+      { surface: "OAuth secret", pattern: /access_token|refresh_token|client_secret|accountLinking/u },
     ] as const;
 
-    for (const pattern of forbiddenPatterns) {
-      expect(implementation).not.toMatch(pattern);
+    for (const { pattern, surface } of forbiddenSurfaceChecks) {
+      expect(implementation, `${surface} must stay out of PR57`).not.toMatch(pattern);
     }
   });
 });
