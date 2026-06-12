@@ -259,10 +259,10 @@ function assertPrototypeToolCard(tool: LocalOnlyChatGptAppPrototypeToolCardV1): 
   const record = asPlainRecord(tool, "Local-only ChatGPT App prototype tool card must be an object");
   assertPrototypeToolCardIdentity(record);
   assertPrototypeToolCardGate(record);
+  assertLocalMcpPrivacySafeOutput(tool);
   assertPrototypeToolCardOutput(record);
   assertPrototypeToolCardConstraints(record);
   assertNoRuntimePhrases(tool);
-  assertLocalMcpPrivacySafeOutput(tool);
 }
 
 function assertPrototypeToolCardIdentity(record: Record<string, unknown>): void {
@@ -304,8 +304,65 @@ function assertPrototypeToolCardOutput(record: Record<string, unknown>): void {
   if (!isNonEmptyString(record.userFacingCopy) || !isNonEmptyString(record.safeSummary)) {
     throw new TypeError("Local-only ChatGPT App prototype tool card copy is invalid");
   }
-  if (!isPlainRecord(record.fixtureOutput)) {
-    throw new TypeError("Local-only ChatGPT App prototype tool card fixture output is invalid");
+  const fixtureOutput = asPlainRecord(
+    record.fixtureOutput,
+    "Local-only ChatGPT App prototype tool card fixture output is invalid",
+  );
+  assertPrototypeFixtureOutputIdentity(fixtureOutput);
+  assertPrototypeFixtureOutputMatchesCard(fixtureOutput, record);
+  assertPrototypeFixtureOutputRefIds(fixtureOutput.refIds, `fixture:${String(record.localToolId)}`);
+}
+
+function assertPrototypeFixtureOutputIdentity(fixtureOutput: Record<string, unknown>): void {
+  if (fixtureOutput.kind !== "local_mcp_safe_text_fixture_output") {
+    throw new TypeError("Local-only ChatGPT App prototype tool card fixture output kind is invalid");
+  }
+  if (fixtureOutput.version !== 1) {
+    throw new TypeError(
+      "Local-only ChatGPT App prototype tool card fixture output version must be 1",
+    );
+  }
+}
+
+function assertPrototypeFixtureOutputMatchesCard(
+  fixtureOutput: Record<string, unknown>,
+  record: Record<string, unknown>,
+): void {
+  if (typeof fixtureOutput.status !== "string") {
+    throw new TypeError(
+      "Local-only ChatGPT App prototype tool card fixture output status is invalid",
+    );
+  }
+  if (fixtureOutput.status !== record.exposureState) {
+    throw new TypeError(
+      "Local-only ChatGPT App prototype tool card fixture output status is inconsistent",
+    );
+  }
+  if (typeof fixtureOutput.summary !== "string") {
+    throw new TypeError(
+      "Local-only ChatGPT App prototype tool card fixture output summary is invalid",
+    );
+  }
+  if (fixtureOutput.summary !== record.safeSummary) {
+    throw new TypeError(
+      "Local-only ChatGPT App prototype tool card fixture output summary is inconsistent",
+    );
+  }
+}
+
+function assertPrototypeFixtureOutputRefIds(refIds: unknown, expectedRefId: string): void {
+  if (!Array.isArray(refIds)) {
+    throw new TypeError("Local-only ChatGPT App prototype tool card fixture output refIds are invalid");
+  }
+  if (!refIds.every(isNonEmptyString)) {
+    throw new TypeError(
+      "Local-only ChatGPT App prototype tool card fixture output refIds must be non-empty strings",
+    );
+  }
+  if (refIds.length !== 1 || refIds[0] !== expectedRefId) {
+    throw new TypeError(
+      "Local-only ChatGPT App prototype tool card fixture output refIds are inconsistent",
+    );
   }
 }
 
