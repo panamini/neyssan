@@ -1,230 +1,119 @@
-# PR41 - Agent Implementation Unlock and Verify-Debug-Control Contract
+---
 
-Date: 2026-06-12
-Status: proposed implementation contract
-Scope: docs-only roadmap/control contract for PR41+ agents after PR40
+aliases:
 
-## 1. Objective
+* Roadmap Twoweeks ChatGPT/App SDK — PR41 à PR89
 
-PR41 turns the post-PR40 roadmap into an agent-executable contract.
+---
 
-The purpose is to help agents move Twoweeks forward, not to freeze the project.
+# Roadmap Twoweeks ChatGPT/App SDK — PR41 à PR89
 
-Agents must build the smallest safe Twoweeks App SDK/MCP path in order, while preserving the safety boundaries from PR18-PR40.
+## Règle globale pour tous les PR
 
-PR41 adds one mandatory rule to the roadmap:
+Chaque PR doit rester :
 
 ```txt
-After every PR, stop and verify. Debug before moving forward. Never build the next PR on top of a broken, uncertain, or scope-drifting PR.
+petit, inspectable, réversible, testé, boring by default, aligné produit.
 ```
 
-This document is not runtime code.
-
-It does not approve dependency installation.
-It does not approve package or lockfile changes.
-It does not approve a server skeleton.
-It does not approve `/mcp`.
-It does not approve `tools/list` or `tools/call` runtime.
-It does not approve OAuth, UI, real handlers, real user data, outbound HTTP, LLM calls, export, download, send, submit, apply, or production behavior.
-
-## 2. Product goal
-
-Every roadmap step must serve this Twoweeks product purpose:
+But produit permanent :
 
 ```txt
-Safe, reviewable, user-approved job application workflows.
+safe, reviewable, user-approved job application workflows
 ```
 
-Agents must not turn this into generic MCP/App SDK experimentation.
+Les agents doivent avancer dans l’ordre. Ils ne doivent pas inventer de PR hors roadmap. Ils ne doivent pas passer au PR suivant tant que le PR courant n’est pas vérifié, vert, relu, et aligné avec PR18–PR40.
 
-The target path is:
-
-1. local fixture-backed App SDK/MCP skeleton;
-2. descriptor correctness from PR38;
-3. simulated fixture-only tool behavior;
-4. verification and negative tests;
-5. only later, with explicit approval, real read-only data, UI, auth, and write actions.
-
-## 3. Controlling sources
-
-Agents must treat these prior PRs as controlling constraints:
-
-- PR18-PR33: local MCP fixtures, schema, gates, scaffold, and golden fixtures;
-- PR34-PR35: non-production Apps SDK exploration/readiness planning;
-- PR36: MCP server architecture boundary;
-- PR37: real-data privacy, consent, retention, and audit policy;
-- PR38: tool contract mapping from local fixtures to future MCP descriptors;
-- PR39: Apps SDK runtime threat model;
-- PR40: dependency/package/server skeleton approval checkpoint.
-
-Required repo references before implementing any PR:
+Chaque PR doit produire un rapport avec :
 
 ```txt
-AGENTS.md
-docs/plans/2026-06-12-chatgpt-apps-sdk-non-production-exploration-plan.md
-docs/decisions/2026-06-12-chatgpt-app-mcp-server-architecture-boundary.md
-docs/decisions/2026-06-12-real-data-privacy-consent-retention-audit-policy.md
-docs/decisions/2026-06-12-tool-contract-mapping-local-fixtures-to-mcp-descriptors.md
-docs/audits/2026-06-12-apps-sdk-runtime-threat-model.md
-docs/decisions/2026-06-12-dependency-package-server-skeleton-approval-checkpoint.md
-my-app/src/modules/local-mcp/
+- PR number and title
+- base branch
+- head branch
+- commit SHA
+- files changed
+- why each file is in scope
+- tests run
+- typecheck run
+- lint/audit run
+- CI status
+- failures found
+- debugging performed
+- unresolved uncertainties
+- PR18–PR40 gates verified
+- forbidden surfaces untouched
+- product-purpose alignment check
+- rollback plan
+- exact next PR recommendation
 ```
 
-## 4. Current strict limit after PR40
+Si CI est rouge ou inconnu, si les tests/typecheck/audit échouent, si le scope dérape, ou si un fichier interdit est touché, l’agent doit **arrêter** et produire un fix-forward prompt.
 
-PR40 remains the strict limit before runtime, dependency, or skeleton work.
+---
 
-Until a later PR explicitly satisfies its prerequisites, the following remain blocked:
+## Narrowing merged after PR53
 
-- dependency installation;
-- package.json changes;
-- lockfile changes;
-- package manager config changes;
-- SDK imports;
-- server skeleton;
-- `/mcp` endpoint;
-- `tools/list` runtime;
-- `tools/call` runtime;
-- transport runtime;
-- public tunnel;
-- ChatGPT connector setup;
-- Developer Mode setup;
-- OAuth;
-- UI/components/widgets/resources;
-- Convex changes for this path;
-- real handlers;
-- real user data;
-- outbound HTTP;
-- LLM calls;
-- export/download/send/submit/apply;
-- production behavior.
+These merged decisions override any broader wording in the original roadmap below:
 
-Agents must not reinterpret PR40 as permission to implement any blocked surface.
+- PR53 decided OAuth implementation remains blocked.
+- PR54 is Auth/OAuth blocked boundary guards, not real OAuth runtime.
+- PR55 is consent boundary only.
+- PR56 is redacted audit boundary only.
+- PR56 follow-up #170 fixed audit sid key detection.
+- PR57 is retention/deletion boundary only.
+- PR58 is semantic privacy harness only.
+- PR59 must start with preflight because real read-only data may require OAuth or explicit boundary-only narrowing.
 
-## 5. Allowed roadmap scope
+Until a later PR explicitly unlocks them, OAuth runtime, real data, production connector behavior, handlers, Convex real-data reads/writes, write actions, outbound HTTP, LLM calls, package/lockfile changes, and export/download/send/submit/apply remain forbidden.
 
-Agents must not invent extra PRs outside this roadmap segment.
+---
 
-The currently authorized PR segment is:
+# Phase 1 — Agent contract et déverrouillage contrôlé
 
-| PR | Title | Type | May touch packages? | May touch runtime? | Main output |
-| --- | --- | --- | --- | --- | --- |
-| PR41 | Agent implementation unlock and verify-debug-control contract | docs-only | no | no | This contract |
-| PR42 | Approved package-only install | package-only | yes, only after PR41 approval and exact package approval | no | Minimal approved dependencies installed and audited |
-| PR43 | Disabled local-only server skeleton | code/tests | no new packages unless already approved | no exposed runtime | Disabled-by-default skeleton with no endpoint/listener |
-| PR44 | Descriptor adapter tests from PR38 mapping | code/tests | no | no exposed runtime | Static descriptor mapping tests |
-| PR45 | Simulated `tools/list` and `tools/call`, fixture-only | code/tests | no | local simulated only | Fixture-only list/call harness, no real handlers |
+## PR41 — Agent Implementation Roadmap and Verify-Debug-Control Contract
 
-After PR45, agents must stop and produce a roadmap extension/fix-forward prompt. They must not invent PR46+ unless a later approved roadmap document defines it.
+**Type :** docs-only.
 
-## 6. Per-PR dependency rule
+**But :** créer le contrat agent complet qui explique comment avancer de PR42 à PR89 sans te redemander la suite.
 
-Agents may only start a roadmap PR if all prior required PRs are merged or explicitly approved to build on.
-
-Required order:
+**Fichier attendu :**
 
 ```txt
-PR41 -> PR42 -> PR43 -> PR44 -> PR45
+docs/plans/2026-06-12-chatgpt-app-implementation-roadmap-agent-contract.md
 ```
 
-Additional conditions:
+**Contenu obligatoire :**
 
-- PR42 cannot start unless PR41 is merged or explicitly approved and exact package names are approved by maintainers.
-- PR43 cannot start unless PR42 is merged or explicitly approved, package checks are green, and skeleton work is explicitly approved.
-- PR44 cannot start unless PR43 is merged or explicitly approved and skeleton constraints are verified.
-- PR45 cannot start unless PR44 is merged or explicitly approved and descriptor adapter tests are green.
+```txt
+- roadmap complète PR41–PR89
+- verify-debug-control loop obligatoire après chaque PR
+- règle anti-monster
+- règle de continuation
+- règle de scope par PR
+- rapport final obligatoire
+- PR18–PR40 comme contraintes de référence
+- interdiction de continuer si CI/test/audit/scope est incertain
+```
 
-If any prior PR is red, uncertain, unreviewed, or scope-drifting, the next output must be a fix-forward prompt, not the next roadmap PR.
+**Interdit :**
 
-## 7. Agent execution protocol
+```txt
+- code
+- package.json
+- lockfile
+- /mcp
+- tools/list
+- tools/call
+- OAuth
+- UI
+- handlers
+- real data
+- outbound HTTP
+- LLM calls
+- export/send/apply
+```
 
-For each PR, the agent must:
-
-1. identify the lowest-numbered unmerged roadmap PR;
-2. read the controlling PR18-PR40 docs and local MCP fixture files relevant to that PR;
-3. decompose the PR into atomic sub-tasks;
-4. execute independent checks in parallel where possible;
-5. implement only the selected PR;
-6. run the verify-debug-control loop;
-7. produce the mandatory final PR verification report;
-8. stop before starting the next PR unless the continuation rule passes.
-
-Agents must not ask the user what to do next unless:
-
-- credentials are missing;
-- repo access is missing;
-- exact package approval is missing;
-- a business decision is required;
-- continuing would violate PR18-PR40.
-
-## 8. Atomic sub-task model
-
-Every PR must be split into atomic sub-tasks.
-
-Common sub-task categories:
-
-- scope inspection;
-- changed-file planning;
-- code skeleton creation, only for PRs that authorize code;
-- descriptor mapping verification against PR38;
-- negative prompt enforcement;
-- SSRF/outbound request checks;
-- LLM token/budget/DoS checks;
-- fixture-only/local-only verification;
-- regression test execution;
-- final report synthesis.
-
-Sub-tasks are independent only when they touch separate concerns and can be checked without hiding risk.
-
-The main agent remains responsible for final synthesis.
-
-## 9. Mandatory verify-debug-control loop
-
-After every PR, the agent must stop and produce a PR verification report before starting the next PR.
-
-The agent is not allowed to continue to the next roadmap PR if any of these are true:
-
-- tests fail;
-- typecheck fails;
-- lint fails in a relevant way;
-- audit/fallow fails in a relevant way;
-- CI is red;
-- CI is unknown;
-- changed files exceed the PR scope;
-- runtime behavior changed unexpectedly;
-- forbidden PR40 surfaces were touched;
-- implementation drifts from PR18-PR40 constraints;
-- broad abstractions, framework creep, or speculative code were introduced;
-- debugging is still incomplete;
-- final report cannot explain exactly what was verified.
-
-If any condition above is true, the agent must debug or stop with a fix-forward prompt.
-
-## 10. Diff review requirements
-
-Each PR verification report must list every changed file.
-
-For each changed file, the agent must explain:
-
-- why the file was allowed;
-- which roadmap PR authorized it;
-- which PR18-PR40 constraint it maps to;
-- why no forbidden surface was touched;
-- why the change is not opportunistic cleanup;
-- why the change is not an unrelated refactor.
-
-The agent must confirm:
-
-- no forbidden files or surfaces were touched;
-- no hidden runtime path was introduced;
-- no package or lockfile changed unless the PR explicitly allows it;
-- implementation matches only the current PR goal.
-
-## 11. Test execution requirements
-
-After each PR, the agent must run the narrowest relevant checks first.
-
-Required where feasible:
+**Vérification attendue :**
 
 ```bash
 rtk git diff --check
@@ -232,340 +121,1190 @@ rtk git diff --name-only application-os-foundation...HEAD
 rtk npx fallow audit --changed-since application-os-foundation --format compact
 ```
 
-Also required when relevant:
+**Résultat :** les agents ont une carte complète et une boucle de contrôle stricte.
 
-- narrow unit tests for changed modules;
-- related local-mcp regression tests;
-- descriptor/golden fixture tests;
-- typecheck;
-- lint;
-- package audit for package-only PRs;
-- CI status inspection and failure log inspection.
+---
 
-Skipped, unavailable, or missing tests must not be reported as success.
+# Phase 2 — Dépendances, sans runtime
 
-They must be reported as uncertainty.
+## PR42 — Package-Only Install for Approved MCP/App SDK Dependencies
 
-If CI status cannot be inspected, CI is unknown and continuation is blocked unless a maintainer explicitly overrides the CI requirement for that PR.
+**Type :** package-only.
 
-## 12. Runtime and behavior control requirements
+**Précondition :** PR41 merged + approbation explicite des packages exacts.
 
-The agent must confirm after every PR:
+**But :** installer uniquement les dépendances minimales nécessaires au travail MCP/App SDK non-production.
 
-- no active product behavior changed unless explicitly intended;
-- no real data path was introduced;
-- no OAuth was introduced;
-- no UI/component/widget/resource was introduced;
-- no handler was introduced;
-- no outbound HTTP was introduced;
-- no LLM call was introduced;
-- no export/download/send/submit/apply behavior was introduced;
-- no production behavior was introduced;
-- fixture-only/local-only/disabled-by-default constraints remain true where required.
-
-If the PR intentionally changes behavior, the final report must state exactly which behavior changed and why that PR allowed it.
-
-## 13. Debugging rule
-
-If any test, typecheck, lint, CI, audit, scope, runtime, or gate check fails, the agent must debug before moving on.
-
-The agent must:
-
-- identify root cause;
-- avoid symptom-only patches;
-- keep fixes inside the same PR scope if possible;
-- rerun the failed checks;
-- update the final report with failures and fixes.
-
-If fixing requires broader scope, the agent must stop and produce a fix-forward PR prompt instead of continuing the roadmap.
-
-Never start the next feature PR on top of a broken or uncertain PR.
-
-## 14. Regression guard
-
-Before marking a PR done, compare the result against:
-
-- PR18-PR40 constraints;
-- PR38 descriptor mapping;
-- PR39 runtime threat model;
-- PR40 dependency/package/server skeleton checkpoint;
-- existing local-mcp fixture tests;
-- existing local-mcp golden fixture tests.
-
-The final report must explicitly answer:
+**Fichiers autorisés :**
 
 ```txt
-Does this PR still serve safe, reviewable, user-approved job application workflows?
+package.json
+lockfile
 ```
 
-If the answer is not clearly yes, the PR is not done.
-
-## 15. Anti-monster rule
-
-Agents must avoid creating a large hidden framework.
-
-Each PR must be:
-
-- small;
-- inspectable;
-- reversible;
-- tested;
-- tied to one roadmap goal;
-- boring by default.
-
-Agents must not create:
-
-- large platform layers;
-- generic frameworks;
-- future-proof abstractions;
-- agent runtimes;
-- speculative registries;
-- broad config systems;
-- multi-purpose integration layers;
-- unrelated cleanup or refactors.
-
-The goal is not to build a monster.
-
-The goal is the smallest safe Twoweeks App SDK/MCP path aligned with the product.
-
-## 16. PR41 scope and acceptance criteria
-
-PR41 is docs-only.
-
-Allowed changed file:
+**Packages candidats uniquement si confirmés par docs officielles le jour du PR :**
 
 ```txt
-docs/plans/2026-06-12-chatgpt-app-implementation-roadmap-agent-contract.md
+@modelcontextprotocol/sdk
+@modelcontextprotocol/ext-apps, seulement si encore requis
+zod, seulement si requis par le SDK path
 ```
 
-PR41 passes only if:
+**À différer sauf décision explicite :**
 
-- changed file count is exactly 1;
-- no `my-app/**` files changed;
-- no package or lockfile changed;
-- no runtime config changed;
-- no dependency installed;
-- no server skeleton added;
-- no `/mcp` added;
-- no `tools/list` or `tools/call` added;
-- no OAuth/UI/handler/real-data/outbound/LLM/write behavior added;
-- the document includes the mandatory verify-debug-control loop;
-- the document includes the final report template;
-- the document keeps PR42-PR45 in scope and does not invent PR46+.
+```txt
+openai
+```
 
-## 17. PR42 scope summary
+Raison : pas de LLM/model call avant budget/token policy.
 
-PR42 is package-only and may start only after PR41 approval plus exact maintainer package approval.
+**Interdit :**
 
-Allowed changed files are limited to package and lockfile files approved by maintainers.
+```txt
+- app code
+- imports SDK dans le code
+- /mcp
+- server skeleton
+- tools/list
+- tools/call
+- OAuth
+- UI
+- handlers
+- outbound HTTP
+- LLM calls
+```
 
-PR42 must not add:
+**Tests/vérifs :**
 
-- app code;
-- SDK imports in application modules;
+```bash
+rtk git diff --check
+rtk git diff --name-only application-os-foundation...HEAD
+rtk npx fallow audit --changed-since application-os-foundation --format compact
+```
+
+**Résultat :** packages installés, rien ne s’exécute.
+
+---
+
+## PR43 — Dependency Import Boundary and No-Runtime Guard Tests
+
+**Type :** code/tests.
+
+**But :** prouver que les dépendances installées ne créent aucun runtime implicite.
+
+**Fichiers probables :**
+
+```txt
+my-app/src/modules/chatgpt-app-mcp/
+my-app/src/modules/chatgpt-app-mcp/__tests__/
+```
+
+**À créer :**
+
+```txt
+- petit module boundary
+- tests source-level contre runtime creep
+```
+
+**Tests doivent rejeter :**
+
+```txt
+/mcp
+tools/list runtime
+tools/call runtime
+server listener
+OAuth
+OpenAI/model call
+outbound HTTP
+real handler
+real data
+export/send/apply
+```
+
+**Résultat :** dépendances présentes, mais aucune surface runtime.
+
+---
+
+# Phase 3 — Descriptors avant serveur
+
+## PR44 — PR38 Descriptor Adapter Tests
+
+**Type :** code/tests.
+
+**But :** transformer la mapping PR38 en tests et fixtures de descriptors, sans runtime.
+
+**Tools concernées :**
+
+```txt
+twoweeks.application_package.summarize
+twoweeks.evidence_graph.summarize
+twoweeks.resume_variant_plan.summarize
+twoweeks.review_cockpit.summarize
+```
+
+**À vérifier :**
+
+```txt
+- names
+- descriptions
+- closed input schemas
+- safe-summary-only output policy
+- annotations readOnlyHint/destructiveHint/openWorldHint
+- _meta policy
+- forbidden names/actions
+```
+
+**Interdit :**
+
+```txt
+- tools/list runtime
+- tools/call runtime
+- handler execution
+- network
+```
+
+**Résultat :** les descriptors futurs sont testés contre PR38.
+
+---
+
+## PR45 — Static Descriptor Registry, Fixture-Only
+
+**Type :** code/tests.
+
+**But :** créer un registre statique interne des descriptors validés.
+
+**Autorisé :**
+
+```txt
+- descriptor constants
+- schema objects
+- policy metadata
+- fixture-only registry
+```
+
+**Interdit :**
+
+```txt
+- endpoint
+- listener
+- tools/list exposé
+- tools/call
+- handlers
+```
+
+**Résultat :** l’app possède un registre statique sûr, non exposé.
+
+---
+
+# Phase 4 — Skeleton local désactivé
+
+## PR46 — Local MCP Server Skeleton, Disabled by Default
+
+**Type :** code/tests.
+
+**But :** créer le premier skeleton serveur local, mais impossible à joindre.
+
+**Règles :**
+
+```txt
+- disabled by default
+- no route
+- no listener
+- no transport
+- no public tunnel
+- no ChatGPT connection
+- no real handlers
+- no real data
+```
+
+**Fichiers probables :**
+
+```txt
+my-app/src/modules/chatgpt-app-mcp/serverSkeleton.ts
+my-app/src/modules/chatgpt-app-mcp/__tests__/serverSkeleton.test.ts
+```
+
+**Résultat :** skeleton existant mais non reachable.
+
+---
+
+## PR47 — Internal Simulated `tools/list`, Fixture-Only
+
+**Type :** code/tests.
+
+**But :** créer une fonction interne simulée qui retourne les descriptors.
+
+**Important :** ce n’est pas un endpoint.
+
+**Autorisé :**
+
+```txt
+listToolsFixtureOnly()
+descriptor registry
+fixture-only tests
+```
+
+**Interdit :**
+
+```txt
+/mcp
+network
+runtime transport
+real ChatGPT connector
+real data
+```
+
+**Résultat :** on peut tester `tools/list` localement sans serveur réel.
+
+---
+
+## PR48 — Internal Simulated `tools/call`, No-Op Fixture-Only
+
+**Type :** code/tests.
+
+**But :** créer une fonction interne simulée qui refuse ou retourne un safe summary fixture.
+
+**Autorisé :**
+
+```txt
+callToolFixtureOnly()
+input validation
+unknown tool rejection
+blocked output
+safe-summary fixture output
+```
+
+**Interdit :**
+
+```txt
+real handlers
+Convex
+real data
+export/download/send/submit/apply
+outbound HTTP
+LLM call
+```
+
+**Résultat :** `tools/call` existe seulement en simulation no-op.
+
+---
+
+## PR49 — Golden Safety Tests for Simulated MCP Behavior
+
+**Type :** tests.
+
+**But :** figer les garanties de PR44–PR48.
+
+**Tests obligatoires :**
+
+```txt
+- descriptors match PR38
+- outputs safe-summary-only
+- no raw CV/job/private facts
+- no never_use
+- no write actions
+- no real handler path
+- no network
+- no OAuth
+- no ChatGPT connector
+- negative prompt refusal
+```
+
+**Résultat :** les comportements simulés sont verrouillés.
+
+---
+
+# Phase 5 — Transport local dev et première démo fake
+
+## PR50 — Local Dev Transport Adapter, Disabled by Default
+
+**Type :** code/tests.
+
+**But :** ajouter un adaptateur de transport local/dev, sans exposition publique.
+
+**Autorisé :**
+
+```txt
+local-only adapter
+disabled by default
+test harness
+```
+
+**Interdit :**
+
+```txt
+public endpoint
+public tunnel
+real user data
+real handlers
+OAuth
+production behavior
+```
+
+**Résultat :** le skeleton peut être exercé localement en tests.
+
+---
+
+## PR51 — Dev-Only `/mcp` Endpoint Behind Explicit Flag
+
+**Type :** code/tests.
+
+**But :** créer le premier endpoint `/mcp`, uniquement derrière flag explicite local.
+
+**Protections obligatoires :**
+
+```txt
+disabled by default
+fails closed without env flag
+fake data only
+request size limits
+method allowlist
+malformed payload tests
+no production deploy
+```
+
+**Interdit :**
+
+```txt
+real data
+Convex
+OAuth
+public tunnel
+real handler
+write action
+```
+
+**Résultat :** `/mcp` existe seulement en local/dev explicite.
+
+---
+
+## PR52 — Local Developer Mode Fake-Data Demo
+
+**Type :** code/docs/tests.
+
+**But :** connecter localement ChatGPT Developer Mode au endpoint fake.
+
+**Flow attendu :**
+
+```txt
+ChatGPT Developer Mode
+→ local /mcp
+→ simulated tools/list
+→ simulated tools/call
+→ safe fixture output
+```
+
+**Résultat :** première démo réelle visible, sans vraie donnée.
+
+---
+
+# Phase 6 — Auth, consent, audit, privacy foundation
+
+## PR53 — Auth/OAuth Implementation Decision
+
+**Type :** decision doc.
+
+**But :** décider comment une session ChatGPT mappe vers un user Twoweeks.
+
+**Questions :**
+
+```txt
+OAuth ou auth existante ?
+account linking ?
+token storage ?
+revocation ?
+session binding ?
+local dev vs prod ?
+```
+
+**Résultat merged :** OAuth implementation remains blocked. Fake-data local developer flows may remain no-auth. Real-data, production connector, or write-capable flows require a future OAuth implementation PR with explicit gates.
+
+---
+
+## PR54 — Auth/OAuth Blocked Boundary Guards, No OAuth Runtime
+
+**Type :** code/tests.
+
+**But :** implémenter uniquement des gardes de frontière qui prouvent que l'auth/OAuth runtime reste bloqué.
+
+**Autorisé :**
+
+```txt
+blocked auth/OAuth capability envelope
+fail-closed auth state validation
+token/session redaction assertions
+negative tests
+```
+
+**Interdit :**
+
+```txt
+OAuth runtime
+callback route
+token storage
+account linking
+real data access
+real tool execution
+write actions
+```
+
+**Résultat merged :** Auth/OAuth blocked boundary guards only. No real OAuth runtime exists.
+
+---
+
+## PR55 — Consent Gate Implementation
+
+**Type :** code/tests.
+
+**But :** aucun accès data sans consentement utilisateur explicite.
+
+**À implémenter :**
+
+```txt
+consent state
+deny/revoke
+stale consent rejection
+safe copy
+tests
+```
+
+**Résultat merged :** consent boundary only. Consent success is not auth success, privacy approval, handler execution, real data access, write-action approval, persistence, or production connector permission.
+
+---
+
+## PR56 — Redacted Audit Log Implementation
+
+**Type :** code/tests.
+
+**But :** tout call futur produit un audit safe.
+
+**Interdit dans logs :**
+
+```txt
+raw CV
+raw job text
+private facts
+never_use
+tokens
+full generated artifacts
+raw args
+```
+
+**Résultat merged :** redacted audit boundary only. No persistence or real audit store. Follow-up #170 tightened audit sid key detection before PR57.
+
+---
+
+## PR57 — Retention and Deletion Implementation
+
+**Type :** code/tests.
+
+**But :** gérer suppression/revocation des traces.
+
+**Couvre :**
+
+```txt
+audit records
+cached results
+connector sessions
+generated artifacts
+logs
+```
+
+**Résultat merged :** retention/deletion boundary only. No real persistence deletion, Convex writes, real user data, OAuth runtime, handlers, outbound HTTP, LLM calls, export/send/apply, or package/lockfile changes.
+
+---
+
+## PR58 — Semantic Privacy Test Harness
+
+**Type :** tests.
+
+**But :** dépasser les simples sentinelles.
+
+**Doit détecter :**
+
+```txt
+private fact paraphrase
+never_use reintroduction
+raw quote leakage
+generated artifact leakage
+hidden data in _meta
+raw args in logs
+```
+
+**Résultat merged :** deterministic fixture-only semantic privacy harness. No runtime, real data, network, LLM, Convex, UI, package, or lockfile changes.
+
+---
+
+# Phase 7 — Read-only real data
+
+## PR59 — Read-Only Twoweeks Data Adapter
+
+**Type :** preflight first; code/tests only after maintainer approval.
+
+**But :** exposer des refs internes sûres vers vraies données Twoweeks only if the preflight confirms OAuth is already satisfied or maintainers explicitly narrow PR59 to boundary-only opaque refs with no real data access.
+
+**Précondition obligatoire :**
+
+```txt
+PR59 preflight reviewed or explicitly approved
+OAuth requirement decided before any real data adapter code
+exact data classes approved
+exact files to touch approved
+```
+
+**Autorisé :**
+
+```txt
+bounded read-only selectors
+safe refs
+no writes
+no raw output
+```
+
+**Interdit sans approbation explicite :**
+
+```txt
+OAuth runtime
+OAuth callback
+token storage
+account linking
+real user data
+Convex real-data reads/writes
+handlers
+production connector
+tool execution
+outbound HTTP
+LLM calls
+export/download/send/submit/apply
+```
+
+**Résultat attendu :** PR59 is blocked pending preflight decision. If narrowed to boundary-only, it may produce opaque refs and tests only, with no real data access.
+
+---
+
+## PR60 — Real Application Package Summary
+
+**Type :** code/tests.
+
+**Tool :**
+
+```txt
+twoweeks.application_package.summarize
+```
+
+**But :** résumé safe d’un package application réel.
+
+**Résultat :** vraie utilité read-only.
+
+---
+
+## PR61 — Real Evidence Graph Summary
+
+**Type :** code/tests.
+
+**Tool :**
+
+```txt
+twoweeks.evidence_graph.summarize
+```
+
+**But :** résumé safe de la qualité/provenance evidence.
+
+---
+
+## PR62 — Real Resume Variant Plan Summary
+
+**Type :** code/tests.
+
+**Tool :**
+
+```txt
+twoweeks.resume_variant_plan.summarize
+```
+
+**But :** résumé safe d’un plan CV, sans full resume text.
+
+---
+
+## PR63 — Real Review Cockpit Summary
+
+**Type :** code/tests.
+
+**Tool :**
+
+```txt
+twoweeks.review_cockpit.summarize
+```
+
+**But :** résumé safe des gates, blockers, next actions.
+
+---
+
+## PR64 — Real Read-Only ChatGPT E2E
+
+**Type :** tests/demo.
+
+**Flow :**
+
+```txt
+ChatGPT
+→ MCP
+→ auth
+→ consent
+→ read-only adapter
+→ safe summary
+→ redacted audit
+```
+
+**Résultat :** première intégration ChatGPT utile sur vraies données, read-only.
+
+---
+
+# Phase 8 — UI/component ChatGPT
+
+## PR65 — ChatGPT Component/UI Data Policy
+
+**Type :** code/tests/doc.
+
+**But :** classifier ce qui peut aller au composant UI.
+
+**Règle :**
+
+```txt
+_meta is not a privacy boundary.
+```
+
+**Résultat :** policy UI claire.
+
+---
+
+## PR66 — Read-Only Review Component
+
+**Type :** code/tests.
+
+**But :** montrer un cockpit review safe dans ChatGPT.
+
+**Autorisé :**
+
+```txt
+safe summaries
+gate states
+ref IDs
+next actions
+```
+
+**Interdit :**
+
+```txt
+raw CV
+raw job text
+full artifacts
+tokens
+write actions
+```
+
+---
+
+## PR67 — Component Error, Loading, and Refusal UX
+
+**Type :** code/tests.
+
+**But :** UX professionnelle pour erreurs/blocages.
+
+**Cas :**
+
+```txt
+missing consent
+expired auth
+privacy blocked
+budget exceeded
+unsafe action refused
+unavailable data
+```
+
+---
+
+# Phase 9 — Génération d’artefacts, preview only
+
+## PR68 — Generated Artifact Boundary
+
+**Type :** code/tests.
+
+**But :** séparer safe summary et full generated artifact.
+
+**Artifacts :**
+
+```txt
+resume variant
+cover letter
+application package
+review notes
+```
+
+**Résultat :** règles de stockage/visibilité/retention.
+
+---
+
+## PR69 — Resume Variant Generation Preview
+
+**Type :** code/tests.
+
+**But :** générer brouillons CV.
+
+**Autorisé :**
+
+```txt
+preview only
+human review required
+```
+
+**Interdit :**
+
+```txt
+export
+send
+apply
+submit
+```
+
+---
+
+## PR70 — Cover Letter / Application Message Preview
+
+**Type :** code/tests.
+
+**But :** générer lettre/message de candidature en preview.
+
+**Interdit :**
+
+```txt
+send
+submit
+apply
+```
+
+---
+
+## PR71 — Human Approval Workflow for Generated Artifacts
+
+**Type :** code/tests.
+
+**But :** validation explicite utilisateur avant sortie.
+
+**Inclut :**
+
+```txt
+approval state
+diff/review
+reject/edit path
+audit event
+```
+
+---
+
+## PR72 — Artifact Revision Loop
+
+**Type :** code/tests.
+
+**But :** itérations contrôlées.
+
+**Exemples :**
+
+```txt
+shorter
+more formal
+focus on X
+preserve never_use
+audit revisions
+```
+
+---
+
+# Phase 10 — Export/download
+
+## PR73 — Export/Download Policy Implementation
+
+**Type :** code/tests.
+
+**But :** autoriser export/download uniquement après action explicite.
+
+**Inclut :**
+
+```txt
+preview
+confirmation
+audit
+file naming
+retention
+delete/rollback
+```
+
+---
+
+## PR74 — Resume Export
+
+**Type :** code/tests.
+
+**But :** exporter un CV approuvé.
+
+**Résultat :** download resume file.
+
+---
+
+## PR75 — Cover Letter / Application Package Export
+
+**Type :** code/tests.
+
+**But :** exporter lettre/package approuvé.
+
+**Résultat :** matériel pro téléchargeable.
+
+---
+
+# Phase 11 — Write actions
+
+## PR76 — Write Action Framework
+
+**Type :** code/tests.
+
+**But :** base commune pour actions dangereuses.
+
+**Obligatoire :**
+
+```txt
+explicit confirmation
+final preview
+idempotency key
+audit event
+rollback/recovery
+no hidden model execution
+no stale approval
+no never_use leakage
+```
+
+---
+
+## PR77 — Outbound Egress Allowlist and SSRF Protection
+
+**Type :** code/tests.
+
+**But :** permettre egress de façon sûre.
+
+**Inclut :**
+
+```txt
+deny-by-default egress
+allowed host list
+no arbitrary URL fetch
+no private IP
+redirect limits
+timeouts
+response size limits
+redacted logs
+SSRF tests
+```
+
+---
+
+## PR78 — Send Application Email/Message, Manual Confirmation Only
+
+**Type :** code/tests.
+
+**But :** envoyer un message approuvé via un canal contrôlé.
+
+**Résultat :** première vraie action outbound.
+
+---
+
+## PR79 — Job Platform Submit/Apply Dry Run
+
+**Type :** code/tests.
+
+**But :** simuler submit/apply sans soumettre.
+
+**Résultat :** mapping validé sans risque live.
+
+---
+
+## PR80 — Live Submit/Apply for One Integration
+
+**Type :** code/tests.
+
+**But :** activer apply/send live pour une intégration, derrière flags stricts.
+
+**Obligatoire :**
+
+```txt
+manual confirmation
+final preview
+audit
+idempotency
+rollback/recovery
+no model-only approval
+no bulk apply
+```
+
+---
+
+# Phase 12 — Production/business readiness
+
+## PR81 — Rate Limits, Budget Limits, and Abuse Protection
+
+**Type :** code/tests.
+
+**But :** protéger coût et disponibilité.
+
+**Inclut :**
+
+```txt
+per-user limits
+per-session limits
+per-tool limits
+model token limits
+concurrency
+retry limits
+budget exhaustion UX
+```
+
+---
+
+## PR82 — Secrets, Token Storage, and Revocation Hardening
+
+**Type :** code/tests.
+
+**But :** sécurité credentials.
+
+**Inclut :**
+
+```txt
+encrypted storage
+token rotation
+disconnect/revoke
+no token logs
+no token output
+```
+
+---
+
+## PR83 — Observability and Incident Response
+
+**Type :** code/tests/docs.
+
+**But :** opérer sérieusement.
+
+**Inclut :**
+
+```txt
+redacted metrics
+error categories
+audit dashboards
+incident runbook
+kill switch
+```
+
+---
+
+## PR84 — Workspace / Business Tenant Boundaries
+
+**Type :** code/tests.
+
+**But :** rendre le produit safe pour entreprises.
+
+**Inclut :**
+
+```txt
+workspace boundaries
+roles
+admin/member permissions
+cross-tenant tests
+audit per workspace
+```
+
+---
+
+## PR85 — Billing / Plan Limits / Entitlements
+
+**Type :** code/tests.
+
+**But :** modèle business.
+
+**Inclut :**
+
+```txt
+plan limits
+feature flags
+tool access per plan
+usage caps
+```
+
+---
+
+## PR86 — Security Review and Pre-Launch Audit
+
+**Type :** audit/tests.
+
+**But :** audit final avant prod.
+
+**Doit vérifier :**
+
+```txt
+no raw data leakage
+no unsafe writes
+auth works
+consent works
+audit works
+retention works
+rate limits work
+SSRF protections work
+dependency risks reviewed
+rollback works
+```
+
+---
+
+## PR87 — Production Deployment Gate
+
+**Type :** config/code/docs.
+
+**But :** autoriser prod uniquement après PR86.
+
+**Inclut :**
+
+```txt
+production env config
+feature flags
+kill switch
+monitoring
+rollback plan
+```
+
+---
+
+## PR88 — Private Beta Launch
+
+**Type :** launch/config.
+
+**But :** activer pour utilisateurs/business limités.
+
+**Inclut :**
+
+```txt
+allowlist
+support path
+feedback capture
+incident monitoring
+```
+
+---
+
+## PR89 — Public Business Launch
+
+**Type :** launch.
+
+**But :** disponibilité générale.
+
+**Résultat :**
+
+```txt
+Twoweeks ChatGPT/App SDK integration ready for business customers.
+```
+
+---
+
+# Ordre court à viser
+
+La roadmap complète va jusqu’à PR89, mais le premier objectif concret est :
+
+```txt
+PR41–PR52 = working local non-production ChatGPT demo
+```
+
+Puis :
+
+```txt
+PR53–PR64 = useful real read-only ChatGPT integration
+PR65–PR75 = professional artifact generation and export
+PR76–PR80 = real send/apply actions
+PR81–PR89 = production/business launch
+```
+
+# Prompt agent complet à coller dans PR41
+
+```txt
+You are a senior LLM agent acting on the Twoweeks repository.
+
+Your job is to execute the post-PR40 roadmap from PR41 to PR89, one PR at a time, without inventing extra PRs and without drifting from the product goal.
+
+Product goal:
+safe, reviewable, user-approved job application workflows.
+
+Start from the lowest-numbered unmerged PR in the roadmap.
+
+For every PR:
+1. Read PR18–PR40 controlling docs.
+2. Inspect current repo state.
+3. Confirm the PR scope.
+4. Decompose the work into atomic sub-tasks.
+5. Implement only that PR.
+6. Run the narrowest relevant tests.
+7. Run related regression tests.
+8. Run typecheck if feasible.
+9. Run lint/audit/fallow expected by the repo.
+10. Inspect CI if available.
+11. Debug failures before continuing.
+12. Produce the required verification report.
+13. Continue only if the PR is merged or explicitly approved to build on.
+
+Never continue to the next PR if:
+- tests fail;
+- typecheck fails;
+- lint/audit fails in a relevant way;
+- CI is red or unknown without maintainer override;
+- changed files exceed scope;
+- forbidden PR40 surfaces were touched;
+- runtime changed unexpectedly;
+- implementation drifts from PR18–PR40;
+- debugging is incomplete;
+- the final report cannot explain exactly what was verified.
+
+Forbidden unless the specific PR explicitly approves it:
+- dependency install;
+- package.json or lockfile changes;
 - server skeleton;
-- endpoints;
-- transport;
+- /mcp endpoint;
+- tools/list runtime;
+- tools/call runtime;
 - OAuth;
-- UI;
-- handlers;
-- real data;
+- UI/components;
+- real handlers;
+- real user data;
 - outbound HTTP;
-- LLM calls;
-- write actions.
+- LLM/model calls;
+- export/download/send/submit/apply;
+- production behavior.
 
-PR42 must verify package identity, registry, provenance where available, lifecycle scripts, transitive dependencies, audit output, rollback, and PR40 supply-chain gates.
+Anti-monster rule:
+Each PR must be small, inspectable, reversible, tested, and tied to one roadmap goal.
+Do not create a large hidden framework.
+Do not create generic platform layers.
+Do not future-proof beyond the PR.
 
-## 18. PR43 scope summary
-
-PR43 is a disabled local-only server skeleton PR.
-
-It may start only after PR42 is merged or explicitly approved to build on.
-
-Allowed behavior:
-
-- local-only skeleton module;
-- disabled by default;
-- no listener;
-- no route;
-- no `/mcp`;
-- no `tools/list` exposure;
-- no `tools/call` exposure;
-- no real handlers;
-- no real data.
-
-PR43 must include tests or source guards proving disabled-by-default behavior.
-
-## 19. PR44 scope summary
-
-PR44 adds descriptor adapter tests from PR38 mapping.
-
-Allowed behavior:
-
-- static descriptor mapping checks;
-- schema/annotation/metadata assertions;
-- comparison against local MCP fixture IDs;
-- no network or runtime exposure.
-
-PR44 must prove descriptors remain safe-summary-only, review-only, non-runnable, and non-callable unless a later PR explicitly approves otherwise.
-
-## 20. PR45 scope summary
-
-PR45 adds simulated `tools/list` and `tools/call`, fixture-only.
-
-Allowed behavior:
-
-- local simulated list/call harness;
-- fixture-only outputs;
-- no real handlers;
-- no real data;
-- no Convex;
-- no outbound HTTP;
-- no LLM calls;
-- no export/download/send/submit/apply;
-- negative prompt refusals;
-- unknown tool rejection;
-- malformed input rejection.
-
-PR45 must not create production runtime or public endpoint behavior.
-
-## 21. Mandatory final report template
-
-Every PR final report must use this shape:
-
-```md
-# PR Verification Report
-
-## PR
-- PR number:
-- Title:
-- Base branch:
-- Head branch:
-- Commit SHA:
-
-## Files changed
-| File | In scope? | Why allowed | Controlling PR/gate |
-| --- | --- | --- | --- |
-
-## Scope review
-- Changed files match PR goal:
-- No opportunistic cleanup:
-- No unrelated refactor:
-- No broad framework creep:
-- No speculative code:
-
-## Tests run
-| Command | Result | Notes |
-| --- | --- | --- |
-
-## Typecheck
-- Command:
-- Result:
-- Notes:
-
-## Lint/audit/fallow
-- Command:
-- Result:
-- Notes:
-
-## CI
-- Status:
-- Source checked:
-- Failure logs reviewed:
-- Unknowns:
-
-## Failures found
-- Failure:
-- Root cause:
-- Fix:
-- Re-run result:
-
-## Debugging performed
-- What was debugged:
-- Root cause confirmed:
-- Symptom-only patch avoided:
-
-## PR18-PR40 gates verified
-- PR38 descriptor mapping:
-- PR39 threat model:
-- PR40 dependency/package/server skeleton checkpoint:
-- Local MCP fixtures/golden tests:
-
-## Forbidden surfaces confirmed untouched
-- package install:
-- package.json/lockfile:
-- server skeleton:
-- `/mcp`:
-- `tools/list` runtime:
-- `tools/call` runtime:
-- OAuth:
-- UI/component/widget/resource:
-- real handlers:
-- real user data:
-- outbound HTTP:
-- LLM calls:
-- export/download/send/submit/apply:
-- production behavior:
-
-## Product-purpose alignment
-Does this PR still serve safe, reviewable, user-approved job application workflows?
-
-Answer:
-
-## Unresolved uncertainties
-- Uncertainty:
-- Impact:
-- Blocking? yes/no:
-
-## Rollback plan
-- Files to delete/revert:
-- Commands or steps:
-
-## Continuation decision
-- Can the next roadmap PR start? yes/no:
-- Reason:
-- Exact next PR recommendation:
-```
-
-## 22. Continuation rule
-
-The roadmap agent may only continue to the next PR if the previous PR is:
-
-- merged or explicitly approved to build on;
-- green in relevant checks;
-- verified against scope;
-- free of unresolved P0/P1 issues;
-- not drifting from the product goal;
-- not hiding broad abstractions or framework creep;
-- not touching forbidden PR40 surfaces;
-- supported by a final report that explains exactly what was verified.
-
-If not, the next output must be a fix-forward prompt, not the next roadmap PR.
-
-## 23. Fix-forward prompt template
-
-When continuation is blocked, the agent must produce this instead of starting the next feature PR:
-
-```txt
-Fix-forward required before continuing the Twoweeks App SDK/MCP roadmap.
-
-Blocked PR:
-Blocking reason:
-Failed/unknown checks:
-Scope or gate violated:
-Root cause:
-Smallest safe fix:
-Files likely in scope:
-Files forbidden:
-Commands to run:
-Rollback if fix fails:
-Next PR may resume only after:
-```
-
-## 24. Final rule
-
-```txt
-Build forward, but verify after every step.
-Debug before moving on.
-Keep every PR small, boring, reversible, and tied to Twoweeks' real product purpose.
+Required final report after every PR:
+- PR number and title
+- base branch and head branch
+- commit SHA
+- files changed
+- why each file was in scope
+- tests run
+- typecheck run
+- lint/audit run
+- CI status
+- failures found
+- debugging performed
+- unresolved uncertainties
+- PR18–PR40 gates verified
+- forbidden surfaces confirmed untouched
+- product-purpose alignment check
+- rollback plan
+- exact next PR recommendation
 ```
