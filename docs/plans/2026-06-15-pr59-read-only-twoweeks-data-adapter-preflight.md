@@ -196,10 +196,14 @@ Exact blockers:
 
 Do not implement PR59 yet.
 
-Recommended next maintainer decision:
+Maintainer decision: approve a separate narrow prep PR before PR59.
+
+Exact next PR:
 
 ```txt
-Approve a narrow prep PR for MCP-safe selector projection boundary code, or explicitly approve PR59 to include that boundary work.
+PR59-prep-6 - MCP-safe selector projection boundary
 ```
 
-Until then, PR59 remains blocked.
+PR59 must not include this boundary work.
+
+PR59 real data remains blocked until PR59-prep-6 is merged and a fresh PR59 preflight returns `READY_TO_IMPLEMENT_NARROW_PR59`.
