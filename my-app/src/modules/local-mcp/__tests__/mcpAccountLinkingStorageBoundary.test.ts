@@ -60,6 +60,14 @@ function buildRecord(
   };
 }
 
+function buildRawRecord(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    ...FIXTURE_RECORD,
+    grantedReadScopes: [...FIXTURE_RECORD.grantedReadScopes],
+    ...overrides,
+  };
+}
+
 describe("local MCP account-linking storage boundary", () => {
   it("accepts a valid fixture account-link record only as server-internal state", () => {
     const result = validateLocalMcpAccountLinkingStorageBoundary(buildInput());
@@ -254,7 +262,7 @@ describe("local MCP account-linking storage boundary", () => {
       validateLocalMcpAccountLinkingStorageBoundary(
         buildInput({
           accountLinks: [
-            buildRecord({
+            buildRawRecord({
               provider: "clerk",
             }),
           ],
@@ -398,7 +406,7 @@ describe("local MCP account-linking storage boundary", () => {
       validateLocalMcpAccountLinkingStorageBoundary(
         buildInput({
           accountLinks: [
-            buildRecord({
+            buildRawRecord({
               grantedReadScopes: ["openid", "profile", "email"],
             }),
           ],
@@ -408,6 +416,79 @@ describe("local MCP account-linking storage boundary", () => {
       kind: "local_mcp_account_linking_storage_result",
       allowed: false,
       reason: "insufficient_scope_metadata",
+      safeRefusal: buildLocalMcpAccountLinkingStorageSafeRefusal(),
+      capabilities: {
+        accountLinkingStorage: "blocked",
+        dataReads: "blocked",
+        dataWrites: "blocked",
+        handlerExecution: "blocked",
+        productionConnector: "blocked",
+        networkAccess: "blocked",
+        modelCalls: "blocked",
+        writeActions: "blocked",
+        credentialStorage: "none",
+        consent: "not_evaluated",
+        audit: "not_evaluated",
+        retentionDeletion: "not_evaluated",
+        version: 1,
+      },
+      modelVisible: false,
+      fixtureOnly: true,
+      version: 1,
+    });
+  });
+
+  it("denies account-link records with inherited prototype fields", () => {
+    const prototypeBackedRecord = Object.create(FIXTURE_RECORD) as Record<string, unknown>;
+
+    expect(
+      validateLocalMcpAccountLinkingStorageBoundary(
+        buildInput({
+          accountLinks: [prototypeBackedRecord],
+        }),
+      ),
+    ).toEqual({
+      kind: "local_mcp_account_linking_storage_result",
+      allowed: false,
+      reason: "invalid_input",
+      safeRefusal: buildLocalMcpAccountLinkingStorageSafeRefusal(),
+      capabilities: {
+        accountLinkingStorage: "blocked",
+        dataReads: "blocked",
+        dataWrites: "blocked",
+        handlerExecution: "blocked",
+        productionConnector: "blocked",
+        networkAccess: "blocked",
+        modelCalls: "blocked",
+        writeActions: "blocked",
+        credentialStorage: "none",
+        consent: "not_evaluated",
+        audit: "not_evaluated",
+        retentionDeletion: "not_evaluated",
+        version: 1,
+      },
+      modelVisible: false,
+      fixtureOnly: true,
+      version: 1,
+    });
+  });
+
+  it("denies the whole fixture set when any account-link record is malformed", () => {
+    expect(
+      validateLocalMcpAccountLinkingStorageBoundary(
+        buildInput({
+          accountLinks: [
+            buildRecord(),
+            buildRawRecord({
+              kind: "wrong_kind",
+            }),
+          ],
+        }),
+      ),
+    ).toEqual({
+      kind: "local_mcp_account_linking_storage_result",
+      allowed: false,
+      reason: "invalid_input",
       safeRefusal: buildLocalMcpAccountLinkingStorageSafeRefusal(),
       capabilities: {
         accountLinkingStorage: "blocked",

@@ -5,19 +5,21 @@ export type LocalMcpAccountLinkingStorageReadScopeV1 =
   | "twoweeks.resume_variant_plan.read"
   | "twoweeks.review_cockpit.read";
 
+type LocalMcpAccountLinkingStorageRecordStateV1 = "active" | "revoked" | "stale";
+
 export type LocalMcpAccountLinkingStorageRecordShapeV1 = Readonly<{
   kind: "local_mcp_account_link_record";
-  provider: string;
+  provider: "stytch";
   providerSubject: string;
   twoweeksClerkId: string;
   clientIdentity: string;
-  grantedReadScopes: readonly string[];
+  grantedReadScopes: readonly LocalMcpAccountLinkingStorageReadScopeV1[];
   grantRef?: string;
   consentRef?: string;
   createdAt: string;
   updatedAt: string;
   revokedAt?: string;
-  state: string;
+  state: LocalMcpAccountLinkingStorageRecordStateV1;
   version: 1;
 }>;
 
@@ -127,6 +129,19 @@ const RECORD_KEYS = [
   "version",
 ] as const;
 
+const RECORD_REQUIRED_KEYS = [
+  "kind",
+  "provider",
+  "providerSubject",
+  "twoweeksClerkId",
+  "clientIdentity",
+  "grantedReadScopes",
+  "createdAt",
+  "updatedAt",
+  "state",
+  "version",
+] as const;
+
 type ParsedLocalMcpAccountLinkingStorageRecordV1 = Readonly<{
   kind: "local_mcp_account_link_record";
   provider: string;
@@ -152,11 +167,10 @@ export function validateLocalMcpAccountLinkingStorageBoundary(
 
   if (parsedInput.accountLinks.length === 0) return deny("missing_account_link");
 
-  const records = parsedInput.accountLinks
-    .map(parseAccountLinkRecord)
-    .filter((record): record is ParsedLocalMcpAccountLinkingStorageRecordV1 => record !== undefined);
+  const parsedRecords = parsedInput.accountLinks.map(parseAccountLinkRecord);
+  if (parsedRecords.some((record) => record === undefined)) return deny("invalid_input");
 
-  if (records.length === 0) return deny("missing_account_link");
+  const records = parsedRecords as readonly ParsedLocalMcpAccountLinkingStorageRecordV1[];
 
   const providerMatches = records.filter((record) => record.provider === "stytch");
   if (providerMatches.length === 0) return deny("provider_mismatch");
@@ -242,6 +256,7 @@ function parseBoundaryInput(input: unknown): LocalMcpAccountLinkingStorageBounda
 function parseAccountLinkRecord(value: unknown): ParsedLocalMcpAccountLinkingStorageRecordV1 | undefined {
   const record = isRecordWithAllowedKeys(value, RECORD_KEYS);
   if (!record || record.kind !== "local_mcp_account_link_record" || record.version !== 1) return undefined;
+  if (!hasOwnRequiredKeys(record, RECORD_REQUIRED_KEYS)) return undefined;
 
   const identity = parseAccountLinkIdentity(record);
   if (!identity) return undefined;
@@ -362,7 +377,7 @@ function parseAccountLinkTiming(
   createdAt: string;
   updatedAt: string;
   revokedAt?: string;
-  state: "active" | "revoked" | "stale";
+  state: LocalMcpAccountLinkingStorageRecordStateV1;
 }> | undefined {
   const createdAt = readIsoUtcText(value.createdAt);
   const updatedAt = readIsoUtcText(value.updatedAt);
@@ -396,8 +411,8 @@ function hasValidScopeMetadata(
 }
 
 function isExactRecord(value: unknown, allowedKeys: readonly string[]): Record<string, unknown> | undefined {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
-  const record = value as Record<string, unknown>;
+  const record = readPlainObjectRecord(value);
+  if (!record) return undefined;
   const seen = new Set(Object.keys(record));
   if (seen.size !== allowedKeys.length) return undefined;
   for (const key of allowedKeys) {
@@ -407,12 +422,23 @@ function isExactRecord(value: unknown, allowedKeys: readonly string[]): Record<s
 }
 
 function isRecordWithAllowedKeys(value: unknown, allowedKeys: readonly string[]): Record<string, unknown> | undefined {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
-  const record = value as Record<string, unknown>;
+  const record = readPlainObjectRecord(value);
+  if (!record) return undefined;
   for (const key of Object.keys(record)) {
     if (!allowedKeys.includes(key)) return undefined;
   }
   return record;
+}
+
+function readPlainObjectRecord(value: unknown): Record<string, unknown> | undefined {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return undefined;
+  return value as Record<string, unknown>;
+}
+
+function hasOwnRequiredKeys(record: Record<string, unknown>, requiredKeys: readonly string[]): boolean {
+  return requiredKeys.every((key) => Object.prototype.hasOwnProperty.call(record, key));
 }
 
 function readTextList(value: unknown): readonly string[] | undefined {
@@ -437,7 +463,7 @@ function readIsoUtcText(value: unknown): string | undefined {
   return Number.isFinite(Date.parse(trimmed)) ? trimmed : undefined;
 }
 
-function readRecordStateValue(value: unknown): "active" | "revoked" | "stale" | undefined {
+function readRecordStateValue(value: unknown): LocalMcpAccountLinkingStorageRecordStateV1 | undefined {
   switch (value) {
     case "active":
     case "revoked":
