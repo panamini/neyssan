@@ -35,6 +35,14 @@ verified OAuth subject -> Twoweeks user lookup deferred until real-data PR
 
 Therefore PR59 real data remains blocked.
 
+## 2.1. Precedence
+
+This decision is the authoritative storage/mapping decision for the current PR59 path.
+
+It narrows the earlier OAuth/account-linking provider discussion by fixing the account-linking storage model to the Stytch-selected path.
+
+The earlier Clerk-oriented decision remains the historical record of the blocked provider-selection discussion. It does not override this storage decision for MCP account-linking.
+
 ## 3. Decision
 
 Stytch `sub` must not be treated as Convex `clerkId`.
