@@ -21,30 +21,30 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR175 — PR59-prep-2 — OAuth account-linking verifier boundary
-GitHub PR: https://github.com/panamini/neyssan/pull/175
-Merge commit: df3231d4277fa6fe4c8c0a6e5740a0ab105c1011
-Merged at: 2026-06-14T00:58:47Z
+PR176 — PR59-prep-3 — Account-linking storage and ledger alignment decision
+GitHub PR: https://github.com/panamini/neyssan/pull/176
+Merge commit: 7fe37402c7ad511122dd6ee6cae15e9d87844aa9
+Merged at: 2026-06-14T02:19:48Z
 ```
 
 Current open PR:
 
 ```txt
-PR59-prep-3 — Account-linking storage and ledger alignment decision
-Head branch: codex/pr59-prep-account-linking-decision
-Docs-only decision PR before account-linking storage code. PR59 implementation remains blocked.
+PR59-prep-4 — Account-linking storage boundary
+Head branch: codex/pr59-prep-account-linking-storage-boundary
+Boundary-only code PR that validates the server-only account-link record shape. PR59 implementation remains blocked.
 ```
 
 Next PR:
 
 ```txt
-PR59-prep-4 — Account-linking storage boundary, then PR59 preflight rerun before any Read-Only Twoweeks Data Adapter implementation
+PR59-prep-5 — Safe Convex selector projection decision or boundary, then PR59 preflight rerun before any Read-Only Twoweeks Data Adapter implementation
 ```
 
 Next PR gate:
 
 ```txt
-BLOCKED_NEEDS_ACCOUNT_LINKING_STORAGE — PR175 verifies bearer tokens fail closed, but does not map Stytch subject to Twoweeks/Convex ownership. PR59 remains blocked until account-linking storage and safe Convex selectors are approved.
+BLOCKED_NEEDS_SAFE_CONVEX_SELECTORS — PR176 defines the Stytch storage bridge, but PR59 remains blocked until safe selector projections are approved and the PR59 preflight is rerun.
 ```
 
 ---
@@ -73,7 +73,8 @@ BLOCKED_NEEDS_ACCOUNT_LINKING_STORAGE — PR175 verifies bearer tokens fail clos
 | 58 | Semantic Privacy Test Harness | merged | #172 | 31faf4abc9cda0a33ed45925d67f856af01aa7fb | Deterministic fixture-only privacy harness; Greptile P2 comments addressed |
 | 59-prep | OAuth/account-linking unlock decision for read-only MCP data | merged | #174 | 5db280565e07bbe0ecf4156314664761eb8e0900 | Docs-only decision PR. PR59 real data remained blocked pending verifier/account-linking path |
 | 59-prep-2 | OAuth account-linking verifier boundary | merged | #175 | df3231d4277fa6fe4c8c0a6e5740a0ab105c1011 | Fail-closed Stytch-shaped verifier boundary only; no production OAuth runtime, callback, token storage, account-linking storage, real data, handlers, or connector behavior |
-| 59-prep-3 | Account-linking storage and ledger alignment decision | in progress | pending | codex/pr59-prep-account-linking-decision | Docs-only decision. Records PR175 merge and decides explicit server-only Stytch subject to Twoweeks/Convex ownership mapping |
+| 59-prep-3 | Account-linking storage and ledger alignment decision | merged | #176 | 7fe37402c7ad511122dd6ee6cae15e9d87844aa9 | Docs-only decision. Records PR175 merge and decides explicit server-only Stytch subject to Twoweeks/Convex ownership mapping |
+| 59-prep-4 | Account-linking storage boundary | in progress | pending | codex/pr59-prep-account-linking-storage-boundary | Boundary-only code PR. Validates server-only account-link record shape and fail-closed lookup contract |
 | 59 | Read-Only Twoweeks Data Adapter | blocked | none | preflight blocked | PR59 must be rerun after account-linking storage boundary and safe Convex selectors are approved |
 
 ---
@@ -104,6 +105,8 @@ PR175 implemented only a fail-closed Stytch-shaped OAuth verifier boundary with 
 PR59-prep-3 is now the authoritative account-linking storage decision for the Stytch-selected MCP path. It narrows the earlier blocked provider-selection discussion by making the storage bridge explicit and server-only.
 
 PR59-prep-3 decides that Stytch `sub` must not be treated as Convex `clerkId`. A future server-only account-linking storage boundary must explicitly map verified Stytch subject to existing Twoweeks/Convex `clerkId` before any real Convex/Twoweeks data can be read.
+
+PR59-prep-4 implements the smallest safe server-only storage boundary for that mapping. It still does not expose real data, real handlers, OAuth runtime, token storage, or any write/export/send/apply behavior.
 
 Existing Convex selectors are not safe for direct MCP use because they expose raw/sensitive fields such as `raw_text`, `rawDescription`, `sourceText`, full proposal `content`, `sourceJobDescription`, `clerkId`, `userId`, and `email`. PR59 requires safe selector projection before implementation.
 
