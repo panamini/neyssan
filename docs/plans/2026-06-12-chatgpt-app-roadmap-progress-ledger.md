@@ -21,30 +21,30 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR176 — PR59-prep-3 — Account-linking storage and ledger alignment decision
-GitHub PR: https://github.com/panamini/neyssan/pull/176
-Merge commit: 7fe37402c7ad511122dd6ee6cae15e9d87844aa9
-Merged at: 2026-06-14T02:19:48Z
+PR177 — PR59-prep-4 — Account-linking storage boundary
+GitHub PR: https://github.com/panamini/neyssan/pull/177
+Merge commit: 25481ca92ad5063cbe5a8ed2a4b3e34d81e2c9c8
+Merged at: 2026-06-14T03:05:11Z
 ```
 
 Current open PR:
 
 ```txt
-PR59-prep-4 — Account-linking storage boundary
-Head branch: codex/pr59-prep-account-linking-storage-boundary
-Boundary-only code PR that validates the server-only account-link record shape. PR59 implementation remains blocked.
+PR59-prep-5 — Safe Convex selector projection decision
+Head branch: codex/pr59-prep-safe-convex-selector-projection-decision
+Docs-only decision PR that defines MCP-safe Convex selector projection rules before PR59 preflight rerun.
 ```
 
 Next PR:
 
 ```txt
-PR59-prep-5 — Safe Convex selector projection decision or boundary, then PR59 preflight rerun before any Read-Only Twoweeks Data Adapter implementation
+PR59 preflight rerun before any Read-Only Twoweeks Data Adapter implementation
 ```
 
 Next PR gate:
 
 ```txt
-BLOCKED_NEEDS_SAFE_CONVEX_SELECTORS — PR176 defines the Stytch storage bridge, but PR59 remains blocked until safe selector projections are approved and the PR59 preflight is rerun.
+BLOCKED_PENDING_PR59_PREFLIGHT_RERUN — PR177 merged the account-linking storage boundary. PR59 remains blocked until safe selector projections are approved and the PR59 preflight is rerun.
 ```
 
 ---
@@ -74,7 +74,8 @@ BLOCKED_NEEDS_SAFE_CONVEX_SELECTORS — PR176 defines the Stytch storage bridge,
 | 59-prep | OAuth/account-linking unlock decision for read-only MCP data | merged | #174 | 5db280565e07bbe0ecf4156314664761eb8e0900 | Docs-only decision PR. PR59 real data remained blocked pending verifier/account-linking path |
 | 59-prep-2 | OAuth account-linking verifier boundary | merged | #175 | df3231d4277fa6fe4c8c0a6e5740a0ab105c1011 | Fail-closed Stytch-shaped verifier boundary only; no production OAuth runtime, callback, token storage, account-linking storage, real data, handlers, or connector behavior |
 | 59-prep-3 | Account-linking storage and ledger alignment decision | merged | #176 | 7fe37402c7ad511122dd6ee6cae15e9d87844aa9 | Docs-only decision. Records PR175 merge and decides explicit server-only Stytch subject to Twoweeks/Convex ownership mapping |
-| 59-prep-4 | Account-linking storage boundary | in progress | pending | codex/pr59-prep-account-linking-storage-boundary | Boundary-only code PR. Validates server-only account-link record shape and fail-closed lookup contract |
+| 59-prep-4 | Account-linking storage boundary | merged | #177 | 25481ca92ad5063cbe5a8ed2a4b3e34d81e2c9c8 | Boundary-only code PR. Validates server-only account-link record shape and fail-closed lookup contract. Qodo issues resolved; CI green before merge |
+| 59-prep-5 | Safe Convex selector projection decision | in progress | pending | codex/pr59-prep-safe-convex-selector-projection-decision | Docs-only decision defining safe projection rules before PR59 preflight rerun |
 | 59 | Read-Only Twoweeks Data Adapter | blocked | none | preflight blocked | PR59 must be rerun after account-linking storage boundary and safe Convex selectors are approved |
 
 ---
@@ -108,7 +109,11 @@ PR59-prep-3 decides that Stytch `sub` must not be treated as Convex `clerkId`. A
 
 PR59-prep-4 implements the smallest safe server-only storage boundary for that mapping. It still does not expose real data, real handlers, OAuth runtime, token storage, or any write/export/send/apply behavior.
 
+PR177 merged PR59-prep-4. Qodo reported prototype parsing, malformed-link fail-open, missing state type, and loose record type issues; the PR fixed them before merge. CodeRabbit skipped review on the non-default base branch; CI was green; merge state was clean.
+
 Existing Convex selectors are not safe for direct MCP use because they expose raw/sensitive fields such as `raw_text`, `rawDescription`, `sourceText`, full proposal `content`, `sourceJobDescription`, `clerkId`, `userId`, and `email`. PR59 requires safe selector projection before implementation.
+
+PR59-prep-5 is the safe selector projection decision step. It must remain docs-only unless maintainer explicitly approves a code boundary. It defines exactly which projection classes and fields may be considered by PR59 preflight.
 
 PR59 is blocked pending account-linking storage and safe Convex selectors. Boundary-only PR59 must not be implemented.
 OAuth/real-data/write-action constraints remain active: no OAuth runtime, callback, token storage, account linking, real user data, Convex real-data reads/writes, handlers, production connector, tool execution, outbound HTTP, LLM calls, export/download/send/submit/apply, or package/lockfile changes without an explicit unlocking PR.
