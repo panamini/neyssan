@@ -204,7 +204,9 @@ function firstAllowedClientId(payload: JWTPayload, allowedClientIds: readonly st
   const clientCandidates = [readNonEmptyString(payload.client_id), readNonEmptyString(payload.azp)].filter(
     (value): value is string => value !== undefined,
   );
-  return clientCandidates.find((clientId) => allowed.has(clientId));
+  if (clientCandidates.length === 0) return undefined;
+  if (!clientCandidates.every((clientId) => allowed.has(clientId))) return undefined;
+  return clientCandidates[0];
 }
 
 function isValidConfig(config: McpOAuthAccountLinkingBoundaryConfigV1): boolean {

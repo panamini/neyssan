@@ -177,6 +177,11 @@ describe("MCP OAuth account-linking verifier boundary", () => {
     await expectDenied(`Bearer ${token}`, "unauthorized_client");
   });
 
+  it("denies tokens when only azp matches the allowed client", async () => {
+    const token = await signFixtureToken({ clientId: "blocked-client", azp: FIXTURE_CLIENT_ID });
+    await expectDenied(`Bearer ${token}`, "unauthorized_client");
+  });
+
   it("denies empty algorithm allowlist as invalid configuration", async () => {
     const token = await signFixtureToken();
     await expectDenied(`Bearer ${token}`, "invalid_configuration", buildFixtureConfig({ allowedAlgorithms: [] }));
