@@ -21,30 +21,30 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR58 — Semantic Privacy Test Harness
-GitHub PR: https://github.com/panamini/neyssan/pull/172
-Merge commit: 31faf4abc9cda0a33ed45925d67f856af01aa7fb
-Merged at: 2026-06-13T00:07:40Z
+PR175 — PR59-prep-2 — OAuth account-linking verifier boundary
+GitHub PR: https://github.com/panamini/neyssan/pull/175
+Merge commit: df3231d4277fa6fe4c8c0a6e5740a0ab105c1011
+Merged at: 2026-06-14T00:58:47Z
 ```
 
 Current open PR:
 
 ```txt
-PR59-prep — OAuth/account-linking unlock decision for read-only MCP data
-Head branch: codex/pr59-oauth-account-linking-decision
-Docs-only decision PR before PR59. PR59 implementation remains blocked.
+PR59-prep-3 — Account-linking storage and ledger alignment decision
+Head branch: codex/pr59-prep-account-linking-decision
+Docs-only decision PR before account-linking storage code. PR59 implementation remains blocked.
 ```
 
 Next PR:
 
 ```txt
-PR59-prep decision PR, then PR59 — Read-Only Twoweeks Data Adapter only after OAuth/account-linking is unblocked
+PR59-prep-4 — Account-linking storage boundary, then PR59 preflight rerun before any Read-Only Twoweeks Data Adapter implementation
 ```
 
 Next PR gate:
 
 ```txt
-BLOCKED_PENDING_OAUTH_ACCOUNT_LINKING_DECISION — maintainer rejected boundary-only PR59. Real read-only data requires OAuth/account-linking before any PR59 code.
+BLOCKED_NEEDS_ACCOUNT_LINKING_STORAGE — PR175 verifies bearer tokens fail closed, but does not map Stytch subject to Twoweeks/Convex ownership. PR59 remains blocked until account-linking storage and safe Convex selectors are approved.
 ```
 
 ---
@@ -71,8 +71,10 @@ BLOCKED_PENDING_OAUTH_ACCOUNT_LINKING_DECISION — maintainer rejected boundary-
 | 56 | Redacted Audit Log | merged | #169, #170 follow-up | 457d579dfc25c638b063754c887b027042060500; follow-up f630d15192428efc03012a2da800617e3ed6b82f | Boundary-only redacted audit; CI/typecheck/Fallow passed; stale Greptile `sid` value finding fixed in #169; raw-payload key classifier tightened in #170 before PR57 |
 | 57 | Retention and Deletion | merged | #171 | 8b092bc7264f97ff95966d03929c6470e6690117 | Retention/deletion boundary only |
 | 58 | Semantic Privacy Test Harness | merged | #172 | 31faf4abc9cda0a33ed45925d67f856af01aa7fb | Deterministic fixture-only privacy harness; Greptile P2 comments addressed |
-| 59-prep | OAuth/account-linking unlock decision for read-only MCP data | in progress | pending | codex/pr59-oauth-account-linking-decision | Docs-only decision PR. Records whether OAuth/account-linking is READY_TO_IMPLEMENT or BLOCKED before PR59 real data |
-| 59 | Read-Only Twoweeks Data Adapter | blocked | none | preflight pending | Must start with preflight because real read-only data may require OAuth or explicit boundary-only narrowing |
+| 59-prep | OAuth/account-linking unlock decision for read-only MCP data | merged | #174 | 5db280565e07bbe0ecf4156314664761eb8e0900 | Docs-only decision PR. PR59 real data remained blocked pending verifier/account-linking path |
+| 59-prep-2 | OAuth account-linking verifier boundary | merged | #175 | df3231d4277fa6fe4c8c0a6e5740a0ab105c1011 | Fail-closed Stytch-shaped verifier boundary only; no production OAuth runtime, callback, token storage, account-linking storage, real data, handlers, or connector behavior |
+| 59-prep-3 | Account-linking storage and ledger alignment decision | in progress | pending | codex/pr59-prep-account-linking-decision | Docs-only decision. Records PR175 merge and decides explicit server-only Stytch subject to Twoweeks/Convex ownership mapping |
+| 59 | Read-Only Twoweeks Data Adapter | blocked | none | preflight blocked | PR59 must be rerun after account-linking storage boundary and safe Convex selectors are approved |
 
 ---
 
@@ -95,9 +97,17 @@ PR57 is retention/deletion boundary only unless explicitly narrowed or approved:
 PR58 is semantic privacy test harness only: deterministic fixture-only tests, no runtime, no real data, no network, no LLM, no Convex, no UI, no package or lockfile changes.
 Maintainer decision after PR59 preflight: do not implement boundary-only PR59. Boundary-only is safe but not useful enough after PR53-PR58. PR59 real-data implementation remains blocked.
 
-Before PR59, create a docs-only OAuth/account-linking unlock decision PR. The decision must choose or block the IdP, OAuth flow, token transport, server verification, account mapping, registration mode, redirect URI, scopes, token storage, and next implementation path.
+PR174 selected the OAuth/account-linking decision path before PR59. It did not implement OAuth runtime, callback, token storage, account-linking code, real data, Convex reads/writes, handlers, production connector, or tool execution.
 
-PR59 is blocked pending OAuth/account-linking: real read-only data requires OAuth/account-linking first. Boundary-only PR59 must not be implemented.
+PR175 implemented only a fail-closed Stytch-shaped OAuth verifier boundary with fixture JWTs and injected JWKS keys. PR175 does not map Stytch `sub` to Twoweeks/Convex ownership and does not unlock PR59 real data.
+
+PR59-prep-3 is now the authoritative account-linking storage decision for the Stytch-selected MCP path. It narrows the earlier blocked provider-selection discussion by making the storage bridge explicit and server-only.
+
+PR59-prep-3 decides that Stytch `sub` must not be treated as Convex `clerkId`. A future server-only account-linking storage boundary must explicitly map verified Stytch subject to existing Twoweeks/Convex `clerkId` before any real Convex/Twoweeks data can be read.
+
+Existing Convex selectors are not safe for direct MCP use because they expose raw/sensitive fields such as `raw_text`, `rawDescription`, `sourceText`, full proposal `content`, `sourceJobDescription`, `clerkId`, `userId`, and `email`. PR59 requires safe selector projection before implementation.
+
+PR59 is blocked pending account-linking storage and safe Convex selectors. Boundary-only PR59 must not be implemented.
 OAuth/real-data/write-action constraints remain active: no OAuth runtime, callback, token storage, account linking, real user data, Convex real-data reads/writes, handlers, production connector, tool execution, outbound HTTP, LLM calls, export/download/send/submit/apply, or package/lockfile changes without an explicit unlocking PR.
 
 ---
