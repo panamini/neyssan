@@ -93,6 +93,10 @@ describe("MCP OAuth account-linking verifier boundary", () => {
     await expectDenied("Bearer not.a.jwt", "invalid_token");
   });
 
+  it("denies malformed authorization header", async () => {
+    await expectDenied("Bearer a.b.c=", "malformed_authorization_header");
+  });
+
   it("denies Basic token", async () => {
     await expectDenied("Basic username-password", "unsupported_authorization_scheme");
   });
@@ -105,6 +109,18 @@ describe("MCP OAuth account-linking verifier boundary", () => {
   it("denies expired token", async () => {
     const token = await signFixtureToken({ exp: FIXTURE_NOW_SECONDS - 60 });
     await expectDenied(`Bearer ${token}`, "invalid_token");
+  });
+
+  it("accepts a just-expired token within configured clock tolerance", async () => {
+    const token = await signFixtureToken({ exp: FIXTURE_NOW_SECONDS - 10 });
+
+    const result = await verifyMcpOAuthAccountLinkingBoundary({
+      authorizationHeader: `Bearer ${token}`,
+      config: buildFixtureConfig({ clockToleranceSeconds: 30 }),
+      now: FIXTURE_NOW,
+    });
+
+    expect(result.allowed).toBe(true);
   });
 
   it("denies nbf token", async () => {
@@ -132,9 +148,38 @@ describe("MCP OAuth account-linking verifier boundary", () => {
     await expectDenied(`Bearer ${token}`, "missing_required_scope");
   });
 
+  it("filters unsafe granted scope strings from accepted server-only output", async () => {
+    const token = await signFixtureToken({
+      scope: "twoweeks.mcp.read convex.internal.admin javascript:alert(1)",
+    });
+
+    const result = await verifyMcpOAuthAccountLinkingBoundary({
+      authorizationHeader: `Bearer ${token}`,
+      config: buildFixtureConfig(),
+      now: FIXTURE_NOW,
+    });
+
+    expect(result).toMatchObject({
+      allowed: true,
+      serverOnly: {
+        grantedScopes: ["twoweeks.mcp.read"],
+      },
+    });
+  });
+
   it("denies wrong client_id/azp", async () => {
     const token = await signFixtureToken({ clientId: "claude-fixture-client", azp: "claude-fixture-client" });
     await expectDenied(`Bearer ${token}`, "unauthorized_client");
+  });
+
+  it("denies empty algorithm allowlist as invalid configuration", async () => {
+    const token = await signFixtureToken();
+    await expectDenied(`Bearer ${token}`, "invalid_configuration", buildFixtureConfig({ allowedAlgorithms: [] }));
+  });
+
+  it("denies empty JWKS as invalid configuration", async () => {
+    const token = await signFixtureToken();
+    await expectDenied(`Bearer ${token}`, "invalid_configuration", buildFixtureConfig({ jwks: { keys: [] } }));
   });
 
   it("never echoes token material in output or console logs", async () => {
@@ -182,10 +227,11 @@ describe("MCP OAuth account-linking verifier boundary", () => {
 async function expectDenied(
   authorizationHeader: string | undefined,
   reason: McpOAuthAccountLinkingBoundaryDenialReasonV1,
+  config: McpOAuthAccountLinkingBoundaryConfigV1 = buildFixtureConfig(),
 ): Promise<void> {
   const result = await verifyMcpOAuthAccountLinkingBoundary({
     authorizationHeader,
-    config: buildFixtureConfig(),
+    config,
     now: FIXTURE_NOW,
   });
 
@@ -214,7 +260,9 @@ async function expectDenied(
   });
 }
 
-function buildFixtureConfig(): McpOAuthAccountLinkingBoundaryConfigV1 {
+function buildFixtureConfig(
+  overrides: Partial<McpOAuthAccountLinkingBoundaryConfigV1> = {},
+): McpOAuthAccountLinkingBoundaryConfigV1 {
   return {
     provider: "stytch_connected_apps",
     issuer: FIXTURE_ISSUER,
@@ -224,6 +272,7 @@ function buildFixtureConfig(): McpOAuthAccountLinkingBoundaryConfigV1 {
     jwks: fixtureKeys.jwks,
     allowedAlgorithms: ["RS256"],
     clockToleranceSeconds: 0,
+    ...overrides,
   };
 }
 

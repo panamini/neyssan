@@ -164,17 +164,15 @@ async function verifyJwt(
       ...(now ? { currentDate: now } : {}),
     });
 
-    if (!isUsableExpiration(payload.exp, now)) return { ok: false };
+    if (!hasIntegerExpiration(payload.exp)) return { ok: false };
     return { ok: true, payload };
   } catch {
     return { ok: false };
   }
 }
 
-function isUsableExpiration(exp: unknown, now: Date | undefined): exp is number {
-  if (!Number.isInteger(exp)) return false;
-  const nowSeconds = Math.floor((now ?? new Date()).getTime() / 1000);
-  return exp > nowSeconds;
+function hasIntegerExpiration(exp: unknown): exp is number {
+  return Number.isInteger(exp);
 }
 
 function collectScopes(payload: JWTPayload): readonly string[] {
@@ -189,7 +187,7 @@ function collectScopes(payload: JWTPayload): readonly string[] {
   collectStringArrayClaim(payload.scp).forEach((scope) => scopes.add(scope));
   collectStringArrayClaim(payload.scopes).forEach((scope) => scopes.add(scope));
 
-  return [...scopes].sort();
+  return [...scopes].filter(isSafeScope).sort();
 }
 
 function collectStringArrayClaim(value: unknown): readonly string[] {
@@ -223,7 +221,9 @@ function isValidConfig(config: McpOAuthAccountLinkingBoundaryConfigV1): boolean 
 }
 
 function isLocalJsonWebKeySet(value: unknown): value is JSONWebKeySet {
-  return typeof value === "object" && value !== null && Array.isArray((value as { keys?: unknown }).keys);
+  if (typeof value !== "object" || value === null) return false;
+  const keys = (value as { keys?: unknown }).keys;
+  return Array.isArray(keys) && keys.length > 0 && keys.every(isRecordLike);
 }
 
 function hasSafeRequiredScopes(value: readonly string[]): boolean {
@@ -235,7 +235,7 @@ function hasAllowedClientIds(value: readonly string[]): boolean {
 }
 
 function hasAllowedAlgorithms(value: readonly string[] | undefined): boolean {
-  return value === undefined || value.every(isNonEmptyString);
+  return value === undefined || (value.length > 0 && value.every(isNonEmptyString));
 }
 
 function hasClockTolerance(value: number | undefined): boolean {
@@ -252,6 +252,10 @@ function isNonEmptyString(value: unknown): value is string {
 
 function readNonEmptyString(value: unknown): string | undefined {
   return isNonEmptyString(value) ? value : undefined;
+}
+
+function isRecordLike(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function deny(reason: McpOAuthAccountLinkingBoundaryDenialReasonV1): McpOAuthAccountLinkingBoundaryResultV1 {
