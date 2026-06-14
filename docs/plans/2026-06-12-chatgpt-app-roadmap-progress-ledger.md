@@ -21,30 +21,30 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR177 — PR59-prep-4 — Account-linking storage boundary
-GitHub PR: https://github.com/panamini/neyssan/pull/177
-Merge commit: 25481ca92ad5063cbe5a8ed2a4b3e34d81e2c9c8
-Merged at: 2026-06-14T03:05:11Z
+PR178 — PR59-prep-5 — Safe Convex selector projection decision
+GitHub PR: https://github.com/panamini/neyssan/pull/178
+Merge commit: b51a95b39351a7b995ae147229690a5dc71b3212
+Merged at: 2026-06-14T22:59:15Z
 ```
 
 Current open PR:
 
 ```txt
-PR59-prep-5 — Safe Convex selector projection decision
-Head branch: codex/pr59-prep-safe-convex-selector-projection-decision
-Docs-only decision PR that defines MCP-safe Convex selector projection rules before PR59 preflight rerun.
+PR59 preflight rerun
+Head branch: codex/pr59-preflight-rerun
+Docs-only preflight report. PR59 remains blocked unless the preflight returns READY_TO_IMPLEMENT_NARROW_PR59.
 ```
 
 Next PR:
 
 ```txt
-PR59 preflight rerun before any Read-Only Twoweeks Data Adapter implementation
+PR59-prep-6 — MCP-safe selector projection boundary
 ```
 
 Next PR gate:
 
 ```txt
-BLOCKED_PENDING_PR59_PREFLIGHT_RERUN — PR177 merged the account-linking storage boundary. PR59 remains blocked until safe selector projections are approved and the PR59 preflight is rerun.
+BLOCKED_NEEDS_PR59_PREP_6 — PR59 remains blocked until PR59-prep-6 is merged and a fresh PR59 preflight returns READY_TO_IMPLEMENT_NARROW_PR59.
 ```
 
 ---
@@ -75,8 +75,10 @@ BLOCKED_PENDING_PR59_PREFLIGHT_RERUN — PR177 merged the account-linking storag
 | 59-prep-2 | OAuth account-linking verifier boundary | merged | #175 | df3231d4277fa6fe4c8c0a6e5740a0ab105c1011 | Fail-closed Stytch-shaped verifier boundary only; no production OAuth runtime, callback, token storage, account-linking storage, real data, handlers, or connector behavior |
 | 59-prep-3 | Account-linking storage and ledger alignment decision | merged | #176 | 7fe37402c7ad511122dd6ee6cae15e9d87844aa9 | Docs-only decision. Records PR175 merge and decides explicit server-only Stytch subject to Twoweeks/Convex ownership mapping |
 | 59-prep-4 | Account-linking storage boundary | merged | #177 | 25481ca92ad5063cbe5a8ed2a4b3e34d81e2c9c8 | Boundary-only code PR. Validates server-only account-link record shape and fail-closed lookup contract. Qodo issues resolved; CI green before merge |
-| 59-prep-5 | Safe Convex selector projection decision | in progress | pending | codex/pr59-prep-safe-convex-selector-projection-decision | Docs-only decision defining safe projection rules before PR59 preflight rerun |
-| 59 | Read-Only Twoweeks Data Adapter | blocked | none | preflight blocked | PR59 must be rerun after account-linking storage boundary and safe Convex selectors are approved |
+| 59-prep-5 | Safe Convex selector projection decision | merged | #178 | b51a95b39351a7b995ae147229690a5dc71b3212 | Docs-only decision defining safe projection rules before PR59 preflight rerun. CI green; review bots non-blocking/unavailable |
+| 59-preflight | PR59 preflight rerun | in progress | pending | codex/pr59-preflight-rerun | Docs-only preflight after PR178; returns BLOCKED and recommends PR59-prep-6 |
+| 59-prep-6 | MCP-safe selector projection boundary | blocked | none | pending PR59 preflight merge | Separate narrow prep PR required before PR59 |
+| 59 | Read-Only Twoweeks Data Adapter | blocked | none | preflight blocked | PR59 must not start unless the preflight returns READY_TO_IMPLEMENT_NARROW_PR59 |
 
 ---
 
@@ -115,7 +117,11 @@ Existing Convex selectors are not safe for direct MCP use because they expose ra
 
 PR59-prep-5 is the safe selector projection decision step. It must remain docs-only unless maintainer explicitly approves a code boundary. It defines exactly which projection classes and fields may be considered by PR59 preflight.
 
-PR59 is blocked pending account-linking storage and safe Convex selectors. Boundary-only PR59 must not be implemented.
+PR178 merged PR59-prep-5. Qodo was paused, Greptile was quota-limited, and CodeRabbit skipped review because the base branch was non-default. CI was green and merge state was clean before merge.
+
+PR59 preflight rerun is now the current step. It must not implement PR59. It decides PR59 is still BLOCKED and recommends a separate PR59-prep-6 for the MCP-safe selector projection boundary.
+
+PR59 is blocked until PR59-prep-6 is merged and a fresh PR59 preflight returns READY_TO_IMPLEMENT_NARROW_PR59. Boundary-only PR59 must not be implemented.
 OAuth/real-data/write-action constraints remain active: no OAuth runtime, callback, token storage, account linking, real user data, Convex real-data reads/writes, handlers, production connector, tool execution, outbound HTTP, LLM calls, export/download/send/submit/apply, or package/lockfile changes without an explicit unlocking PR.
 
 ---
