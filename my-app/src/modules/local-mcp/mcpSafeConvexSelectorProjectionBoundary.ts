@@ -207,23 +207,23 @@ export function buildLocalMcpSafeConvexSelectorProjectionSafeRefusal(): LocalMcp
 function parseProjectionCandidate(
   record: Record<string, unknown>,
 ): LocalMcpSafeConvexSelectorProjectionCandidateV1 | undefined {
-  if (!hasOnlyAllowedKeys(record, CANDIDATE_KEYS)) return undefined;
-  if (!hasOwnRequiredKeys(record, CANDIDATE_REQUIRED_KEYS)) return undefined;
-  if (record.kind !== "local_mcp_safe_convex_selector_projection_candidate") return undefined;
-  if (!isRefClass(record.refClass)) return undefined;
-  if (!isSafeOpaqueRefId(record.refClass, record.refId)) return undefined;
-  if (!isSafeLabel(record.label)) return undefined;
-  if (!isProjectionStatus(record.status)) return undefined;
-  if (record.updatedAt !== undefined && !isStrictIsoUtcTimestamp(record.updatedAt)) return undefined;
-  if (record.version !== 1) return undefined;
+  if (!hasProjectionCandidateEnvelope(record)) return undefined;
+
+  const refClass = readRefClass(record.refClass);
+  const refId = readSafeOpaqueRefId(refClass, record.refId);
+  const label = readSafeLabel(record.label);
+  const status = readProjectionStatus(record.status);
+  const updatedAt = readOptionalStrictIsoUtcTimestamp(record.updatedAt);
+
+  if (!refClass || !refId || !label || !status || updatedAt === false) return undefined;
 
   return {
     kind: "local_mcp_safe_convex_selector_projection_candidate",
-    refClass: record.refClass,
-    refId: record.refId,
-    label: record.label,
-    status: record.status,
-    ...(record.updatedAt !== undefined ? { updatedAt: record.updatedAt } : {}),
+    refClass,
+    refId,
+    label,
+    status,
+    ...(updatedAt !== undefined ? { updatedAt } : {}),
     version: 1,
   };
 }
@@ -267,19 +267,22 @@ function containsUnsafeSelectorPayload(value: unknown): boolean {
 
 function visitForUnsafeSelectorPayload(value: unknown, seen: WeakSet<object>): boolean {
   if (typeof value === "string") return containsForbiddenText(value);
-  if (value === null || value === undefined) return false;
-  if (typeof value !== "object") return false;
+  if (!isObjectPayload(value)) return false;
+  return visitObjectForUnsafeSelectorPayload(value, seen);
+}
+
+function visitObjectForUnsafeSelectorPayload(value: object, seen: WeakSet<object>): boolean {
   if (seen.has(value)) return true;
   if (Array.isArray(value)) return true;
-  if (!readPlainObjectRecord(value)) return true;
+  const record = readPlainObjectRecord(value);
+  if (!record) return true;
 
   seen.add(value);
-  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-    if (isForbiddenPayloadKey(key)) return true;
-    if (visitForUnsafeSelectorPayload(item, seen)) return true;
-  }
+  const unsafe = Object.entries(record).some(
+    ([key, item]) => isForbiddenPayloadKey(key) || visitForUnsafeSelectorPayload(item, seen),
+  );
   seen.delete(value);
-  return false;
+  return unsafe;
 }
 
 function isForbiddenPayloadKey(key: string): boolean {
@@ -295,6 +298,10 @@ function isSafeLabel(value: unknown): value is string {
   return typeof value === "string" && /\S/u.test(value) && value.length <= 80 && !containsForbiddenText(value);
 }
 
+function readSafeLabel(value: unknown): string | undefined {
+  return isSafeLabel(value) ? value : undefined;
+}
+
 function isSafeOpaqueRefId(
   refClass: LocalMcpSafeConvexSelectorProjectionRefClassV1,
   value: unknown,
@@ -306,6 +313,13 @@ function isSafeOpaqueRefId(
   return /^[a-z0-9][a-z0-9._:-]{0,64}$/u.test(suffix) && !containsForbiddenText(value);
 }
 
+function readSafeOpaqueRefId(
+  refClass: LocalMcpSafeConvexSelectorProjectionRefClassV1 | undefined,
+  value: unknown,
+): string | undefined {
+  return refClass && isSafeOpaqueRefId(refClass, value) ? value : undefined;
+}
+
 function isRefClass(value: unknown): value is LocalMcpSafeConvexSelectorProjectionRefClassV1 {
   return (
     value === "applicationPackageRef" ||
@@ -313,6 +327,10 @@ function isRefClass(value: unknown): value is LocalMcpSafeConvexSelectorProjecti
     value === "resumeVariantPlanRef" ||
     value === "reviewCockpitRef"
   );
+}
+
+function readRefClass(value: unknown): LocalMcpSafeConvexSelectorProjectionRefClassV1 | undefined {
+  return isRefClass(value) ? value : undefined;
 }
 
 function isProjectionStatus(value: unknown): value is LocalMcpSafeConvexSelectorProjectionStatusV1 {
@@ -324,11 +342,29 @@ function isProjectionStatus(value: unknown): value is LocalMcpSafeConvexSelector
   );
 }
 
+function readProjectionStatus(value: unknown): LocalMcpSafeConvexSelectorProjectionStatusV1 | undefined {
+  return isProjectionStatus(value) ? value : undefined;
+}
+
 function isStrictIsoUtcTimestamp(value: unknown): value is string {
   return (
     typeof value === "string" &&
     /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/u.test(value) &&
     Number.isFinite(Date.parse(value))
+  );
+}
+
+function readOptionalStrictIsoUtcTimestamp(value: unknown): string | undefined | false {
+  if (value === undefined) return undefined;
+  return isStrictIsoUtcTimestamp(value) ? value : false;
+}
+
+function hasProjectionCandidateEnvelope(record: Record<string, unknown>): boolean {
+  return (
+    hasOnlyAllowedKeys(record, CANDIDATE_KEYS) &&
+    hasOwnRequiredKeys(record, CANDIDATE_REQUIRED_KEYS) &&
+    record.kind === "local_mcp_safe_convex_selector_projection_candidate" &&
+    record.version === 1
   );
 }
 
@@ -345,6 +381,10 @@ function readPlainObjectRecord(value: unknown): Record<string, unknown> | undefi
   const prototype = Object.getPrototypeOf(value);
   if (prototype !== Object.prototype && prototype !== null) return undefined;
   return value as Record<string, unknown>;
+}
+
+function isObjectPayload(value: unknown): value is object {
+  return value !== null && value !== undefined && typeof value === "object";
 }
 
 function normalizeKeyToken(key: string): string {
