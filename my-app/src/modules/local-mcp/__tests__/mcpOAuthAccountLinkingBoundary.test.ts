@@ -148,6 +148,11 @@ describe("MCP OAuth account-linking verifier boundary", () => {
     await expectDenied(`Bearer ${token}`, "missing_required_scope");
   });
 
+  it("denies scope substring attacks", async () => {
+    const token = await signFixtureToken({ scope: "openid twoweeks.mcp.readonly twoweeks.mcp.read_extra" });
+    await expectDenied(`Bearer ${token}`, "missing_required_scope");
+  });
+
   it("filters unsafe granted scope strings from accepted server-only output", async () => {
     const token = await signFixtureToken({
       scope: "twoweeks.mcp.read convex.internal.admin javascript:alert(1)",
@@ -200,6 +205,35 @@ describe("MCP OAuth account-linking verifier boundary", () => {
       spies.forEach((spy) => expect(spy).not.toHaveBeenCalled());
     } finally {
       spies.forEach((spy) => spy.mockRestore());
+    }
+  });
+
+  it("never echoes token claims or user identifiers in denial output", async () => {
+    const token = await signFixtureToken({
+      scope: "openid profile email",
+      clientId: "blocked-client-id",
+      azp: "blocked-client-id",
+    });
+
+    const result = await verifyMcpOAuthAccountLinkingBoundary({
+      authorizationHeader: `Bearer ${token}`,
+      config: buildFixtureConfig(),
+      now: FIXTURE_NOW,
+    });
+    const serialized = JSON.stringify(result);
+
+    expect(result.allowed).toBe(false);
+    for (const forbidden of [
+      token,
+      FIXTURE_SUBJECT,
+      "blocked-client-id",
+      FIXTURE_ISSUER,
+      FIXTURE_AUDIENCE,
+      "openid",
+      "profile",
+      "email",
+    ] as const) {
+      expect(serialized).not.toContain(forbidden);
     }
   });
 
