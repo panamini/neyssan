@@ -103,6 +103,7 @@ const FORBIDDEN_KEY_TOKENS = new Set([
   "cvtext",
   "debug",
   "debugpayload",
+  "convexdocumentid",
   "documentid",
   "email",
   "extractionspans",
@@ -164,6 +165,8 @@ const FORBIDDEN_TEXT_PATTERNS: readonly RegExp[] = [
   /\bfull[_ -]?(?:generated|proposal|artifact)\b/iu,
   /\bcover[_ -]?letter\b/iu,
 ];
+
+const FORBIDDEN_REF_ID_TOKENS = ["convexdocumentid", "documentid"] as const;
 
 export function projectLocalMcpSafeConvexSelectorRef(
   candidate: unknown,
@@ -310,7 +313,11 @@ function isSafeOpaqueRefId(
   const prefix = REF_PREFIX_BY_CLASS[refClass];
   if (!value.startsWith(prefix)) return false;
   const suffix = value.slice(prefix.length);
-  return /^[a-z0-9][a-z0-9._:-]{0,64}$/u.test(suffix) && !containsForbiddenText(value);
+  return (
+    /^[a-z0-9][a-z0-9._:-]{0,64}$/u.test(suffix) &&
+    !containsForbiddenRefIdMaterial(suffix) &&
+    !containsForbiddenText(value)
+  );
 }
 
 function readSafeOpaqueRefId(
@@ -378,13 +385,50 @@ function hasOwnRequiredKeys(record: Record<string, unknown>, requiredKeys: reado
 
 function readPlainObjectRecord(value: unknown): Record<string, unknown> | undefined {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
-  const prototype = Object.getPrototypeOf(value);
+  const prototype = readObjectPrototype(value);
   if (prototype !== Object.prototype && prototype !== null) return undefined;
-  return value as Record<string, unknown>;
+  return readEnumerableDataRecord(value);
 }
 
 function isObjectPayload(value: unknown): value is object {
   return value !== null && value !== undefined && typeof value === "object";
+}
+
+function readObjectPrototype(value: object): object | null | undefined {
+  try {
+    return Object.getPrototypeOf(value) as object | null;
+  } catch {
+    return undefined;
+  }
+}
+
+function readEnumerableDataRecord(value: object): Record<string, unknown> | undefined {
+  try {
+    const descriptors = Object.getOwnPropertyDescriptors(value) as Record<PropertyKey, PropertyDescriptor>;
+    const record: Record<string, unknown> = Object.create(null);
+
+    for (const key of Reflect.ownKeys(value)) {
+      if (typeof key !== "string") return undefined;
+      const descriptor = descriptors[key];
+      if (!isEnumerableDataDescriptor(descriptor)) return undefined;
+      record[key] = descriptor.value;
+    }
+
+    return record;
+  } catch {
+    return undefined;
+  }
+}
+
+function isEnumerableDataDescriptor(
+  descriptor: PropertyDescriptor | undefined,
+): descriptor is PropertyDescriptor & { value: unknown } {
+  return descriptor !== undefined && descriptor.enumerable === true && "value" in descriptor;
+}
+
+function containsForbiddenRefIdMaterial(value: string): boolean {
+  const normalized = normalizeKeyToken(value);
+  return FORBIDDEN_REF_ID_TOKENS.some((token) => normalized.includes(token));
 }
 
 function normalizeKeyToken(key: string): string {
