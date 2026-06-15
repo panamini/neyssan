@@ -21,30 +21,30 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR181 - PR59 preflight rerun after MCP-safe selector projection boundary
-GitHub PR: https://github.com/panamini/neyssan/pull/181
-Merge commit: df9afa6b1a13c9d79e17122634c5c79a82c18ac6
-Merged at: 2026-06-15T05:04:12Z
+PR182 - PR59-prep-7 - Production Stytch OAuth/config and account-link persistence decision
+GitHub PR: https://github.com/panamini/neyssan/pull/182
+Merge commit: d4b9d06053bcb6501073e54350953c650300fe87
+Merged at: 2026-06-15T05:26:36Z
 ```
 
 Current open PR:
 
 ```txt
-PR59-prep-7 - Production Stytch OAuth/config and account-link persistence decision
-Head branch: codex/pr59-prep-7-production-stytch-oauth-account-link-decision
-Docs-only decision. Does not implement PR59, OAuth runtime, callbacks, token storage, account-link persistence, Convex calls, real data reads, handlers, tools runtime, outbound HTTP, LLM/model calls, package changes, write actions, or export/download/send/submit/apply behavior.
+PR59-prep-8 - Production Stytch verifier/config and server-only account-link persistence boundary
+Head branch: codex/pr59-prep-8-production-stytch-account-link-boundary
+Boundary-only code/tests. Must not implement PR59, add PR59 adapter code, read real data, modify app-facing selectors, add OAuth callback/token exchange/refresh/revocation/storage, add MCP endpoint/transport handlers, modify tools runtime, add production connector behavior, outbound HTTP, LLM/model calls, package changes, or export/download/send/submit/apply behavior.
 ```
 
-Next PR:
+Exact next step after PR59-prep-8:
 
 ```txt
-PR59-prep-8 - Production Stytch verifier/config and server-only account-link persistence boundary
+Fresh PR59 preflight rerun.
 ```
 
 Next PR gate:
 
 ```txt
-BLOCKED_NEEDS_PR59_PREP_8 - PR59 remains blocked until PR59-prep-8 is merged and a later preflight returns READY_TO_IMPLEMENT_NARROW_PR59.
+BLOCKED_NEEDS_FRESH_PR59_PREFLIGHT - PR59 remains blocked until PR59-prep-8 is merged and a later preflight returns READY_TO_IMPLEMENT_NARROW_PR59.
 ```
 
 ---
@@ -79,7 +79,8 @@ BLOCKED_NEEDS_PR59_PREP_8 - PR59 remains blocked until PR59-prep-8 is merged and
 | 59-preflight | PR59 preflight rerun | merged | #179 | 439f01db84f2a5c23834f6ab8c2621e6dd3e6eae | Docs-only preflight after PR178; returned BLOCKED and recommended PR59-prep-6 |
 | 59-prep-6 | MCP-safe selector projection boundary | merged | #180 | 038fe02522dd7e81a3a0278c1781317d0ac61459 | Fixture selector-like inputs only; no real data, Convex calls/imports, handlers, OAuth runtime, token storage, production connector behavior, outbound HTTP, model calls, package changes, or write/export/send/apply behavior |
 | 59-preflight-after-prep-6 | PR59 preflight rerun after MCP-safe selector projection boundary | merged | #181 | df9afa6b1a13c9d79e17122634c5c79a82c18ac6 | Docs-only preflight returned BLOCKED and recommended PR59-prep-7 |
-| 59-prep-7 | Production Stytch OAuth/config and account-link persistence decision | in progress | none | codex/pr59-prep-7-production-stytch-oauth-account-link-decision | Docs-only decision. Approves narrow PR59-prep-8; PR59 remains blocked |
+| 59-prep-7 | Production Stytch OAuth/config and account-link persistence decision | merged | #182 | d4b9d06053bcb6501073e54350953c650300fe87 | Docs-only decision. Approved narrow PR59-prep-8; PR59 remains blocked |
+| 59-prep-8 | Production Stytch verifier/config and server-only account-link persistence boundary | in progress | none | codex/pr59-prep-8-production-stytch-account-link-boundary | Boundary-only implementation. Must not unlock PR59; exact next step is a fresh PR59 preflight rerun |
 | 59 | Read-Only Twoweeks Data Adapter | blocked | none | preflight blocked | PR59 must not start; PR59-prep-8 must merge and a fresh preflight must return READY_TO_IMPLEMENT_NARROW_PR59 |
 
 ---
@@ -127,7 +128,10 @@ PR180 merged PR59-prep-6. It added a pure fixture-only MCP-safe selector project
 
 PR181 merged the fresh PR59 preflight rerun after PR59-prep-6. It returned BLOCKED and recommended PR59-prep-7 for the production Stytch OAuth/config and account-link persistence decision. Boundary-only PR59 must not be implemented.
 
-PR59-prep-7 is the current docs-only decision step. It approves exactly PR59-prep-8 for production Stytch verifier/config and server-only account-link persistence boundary implementation. PR59 remains blocked until PR59-prep-8 is merged and a fresh PR59 preflight returns READY_TO_IMPLEMENT_NARROW_PR59.
+PR59-prep-7 merged in PR182. It approves exactly PR59-prep-8 for production Stytch verifier/config and server-only account-link persistence boundary implementation. PR59 remains blocked until PR59-prep-8 is merged and a fresh PR59 preflight returns READY_TO_IMPLEMENT_NARROW_PR59.
+
+PR59-prep-8 is the current boundary-only implementation step. It may add production-shaped Stytch verifier/config validation, server-only account-link persistence, tests, and ledger alignment only. PR59 must not start from PR59-prep-8.
+
 OAuth/real-data/write-action constraints remain active: no OAuth runtime, callback, token storage, real user data, Convex real-data reads/writes, handlers, production connector, tool execution, outbound HTTP, LLM calls, export/download/send/submit/apply, or package/lockfile changes without an explicit unlocking PR.
 
 ---
