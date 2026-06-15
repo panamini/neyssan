@@ -38,7 +38,7 @@ Docs-only preflight. PR59 remains blocked unless this fresh preflight returns RE
 Next PR:
 
 ```txt
-Depends on this preflight result.
+PR59-prep-7 - Production Stytch OAuth/config and account-link persistence decision
 ```
 
 Next PR gate:
