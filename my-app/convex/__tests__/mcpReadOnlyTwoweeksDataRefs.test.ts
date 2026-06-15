@@ -263,7 +263,7 @@ describe("PR59 read-only Twoweeks Convex data refs", () => {
         status: "available",
         category: "application_package",
         count: 1,
-        updatedAt: "2026-06-15T12:00:00.000Z",
+        updatedAt: "2026-06-15T11:59:59.750Z",
         version: 1,
       },
       {
