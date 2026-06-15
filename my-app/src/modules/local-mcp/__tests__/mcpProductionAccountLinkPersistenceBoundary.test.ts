@@ -83,6 +83,68 @@ describe("MCP production account-link persistence boundary", () => {
     });
   });
 
+  it("rejects input objects with own symbol keys without throwing", () => {
+    expectDenied(withSymbolProperty(buildInput()) as McpProductionAccountLinkPersistenceBoundaryInputV1, "invalid_input");
+  });
+
+  it("rejects input objects with non-enumerable own keys", () => {
+    expectDenied(
+      withNonEnumerableProperty(buildInput(), "hiddenPayload", "secret") as McpProductionAccountLinkPersistenceBoundaryInputV1,
+      "invalid_input",
+    );
+  });
+
+  it("rejects input objects with throwing getters without invoking them", () => {
+    const hazard = withThrowingGetter(buildInput(), "accountLinks");
+
+    expectDenied(hazard.value as McpProductionAccountLinkPersistenceBoundaryInputV1, "invalid_input");
+    expect(hazard.wasInvoked()).toBe(false);
+  });
+
+  it("rejects account-link records with own symbol keys", () => {
+    expectDenied(
+      buildInput({
+        accountLinks: [withSymbolProperty(buildRecord())],
+      }),
+      "malformed_record",
+    );
+  });
+
+  it("rejects account-link records with non-enumerable hidden sensitive fields", () => {
+    expectDenied(
+      buildInput({
+        accountLinks: [withNonEnumerableProperty(buildRecord(), "rawClaims", { sub: FIXTURE_PROVIDER_SUBJECT })],
+      }),
+      "malformed_record",
+    );
+  });
+
+  it("rejects account-link records with throwing getters without invoking them", () => {
+    for (const field of ["providerSubject", "twoweeksClerkId", "clientId", "grantedReadScopes", "state"] as const) {
+      const hazard = withThrowingGetter(buildRecord(), field);
+
+      expectDenied(
+        buildInput({
+          accountLinks: [hazard.value],
+        }),
+        "malformed_record",
+      );
+      expect(hazard.wasInvoked()).toBe(false);
+    }
+  });
+
+  it("rejects nested accountLinks entries with accessor hazards", () => {
+    const hazard = withThrowingGetter(buildRecord(), "providerSubject");
+
+    expectDenied(
+      buildInput({
+        accountLinks: [hazard.value],
+      }),
+      "malformed_record",
+    );
+    expect(hazard.wasInvoked()).toBe(false);
+  });
+
   it("rejects missing link", () => {
     expectDenied(buildInput({ accountLinks: [] }), "missing_account_link");
   });
@@ -300,6 +362,9 @@ describe("MCP production account-link persistence boundary", () => {
       expect(source).not.toMatch(/oauth\/callback|tokenEndpoint|refreshToken|revocationEndpoint/u);
       expect(source).not.toMatch(/\b(?:download|send|submit|apply)\s*\(/u);
     }
+    expect(boundarySource).not.toMatch(/\bObject\.(?:keys|entries)\s*\(/u);
+    expect(boundarySource).toMatch(/\bObject\.getOwnPropertyDescriptors\s*\(/u);
+    expect(boundarySource).toMatch(/\bReflect\.ownKeys\s*\(/u);
   });
 });
 
@@ -367,4 +432,42 @@ function buildRawRecord(overrides: Record<string, unknown> = {}): Record<string,
     grantedReadScopes: [...FIXTURE_RECORD.grantedReadScopes],
     ...overrides,
   };
+}
+
+function withSymbolProperty<T extends object>(value: T): T {
+  const clone = { ...value };
+  Object.defineProperty(clone, Symbol("hiddenPayload"), {
+    value: "secret",
+    enumerable: true,
+  });
+  return clone;
+}
+
+function withNonEnumerableProperty<T extends object>(
+  value: T,
+  key: string,
+  hiddenValue: unknown,
+): T {
+  const clone = { ...value };
+  Object.defineProperty(clone, key, {
+    value: hiddenValue,
+    enumerable: false,
+  });
+  return clone;
+}
+
+function withThrowingGetter<T extends object>(
+  value: T,
+  key: string,
+): { value: Record<string, unknown>; wasInvoked: () => boolean } {
+  let invoked = false;
+  const clone = { ...value } as Record<string, unknown>;
+  Object.defineProperty(clone, key, {
+    enumerable: true,
+    get() {
+      invoked = true;
+      throw new Error("getter should not be invoked");
+    },
+  });
+  return { value: clone, wasInvoked: () => invoked };
 }

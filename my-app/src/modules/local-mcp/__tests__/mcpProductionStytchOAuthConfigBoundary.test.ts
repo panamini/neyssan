@@ -97,6 +97,75 @@ describe("MCP production Stytch OAuth config boundary", () => {
     });
   });
 
+  it("rejects input objects with own symbol keys without throwing", async () => {
+    const token = signFixtureToken();
+
+    await expectInputDenied(withSymbolProperty(buildInput(token)), "invalid_input");
+  });
+
+  it("rejects input objects with non-enumerable own keys", async () => {
+    const token = signFixtureToken();
+
+    await expectInputDenied(
+      withNonEnumerableProperty(buildInput(token), "hiddenPayload", "secret"),
+      "invalid_input",
+    );
+  });
+
+  it("rejects input objects with throwing getters without invoking them", async () => {
+    const token = signFixtureToken();
+    const hazard = withThrowingGetter(buildInput(token), "config");
+
+    await expectInputDenied(hazard.value, "invalid_input");
+    expect(hazard.wasInvoked()).toBe(false);
+  });
+
+  it("rejects config objects with own symbol keys", async () => {
+    await expectInputDenied(
+      buildInput(signFixtureToken(), withSymbolProperty(buildConfig()) as McpProductionStytchOAuthConfigV1),
+      "invalid_configuration",
+    );
+  });
+
+  it("rejects config objects with non-enumerable hidden issuer or jwks", async () => {
+    const token = signFixtureToken();
+
+    for (const config of [
+      withNonEnumerableProperty(buildConfig(), "issuer", FIXTURE_ISSUER),
+      withNonEnumerableProperty(buildConfig(), "jwks", fixtureKeys.jwks),
+    ] as const) {
+      await expectInputDenied(buildInput(token, config as McpProductionStytchOAuthConfigV1), "invalid_configuration");
+    }
+  });
+
+  it("rejects config objects with throwing getters without invoking them", async () => {
+    const token = signFixtureToken();
+
+    for (const field of ["issuer", "audience", "approvedClientIds", "jwks"] as const) {
+      const hazard = withThrowingGetter(buildConfig(), field);
+
+      await expectInputDenied(buildInput(token, hazard.value as McpProductionStytchOAuthConfigV1), "invalid_configuration");
+      expect(hazard.wasInvoked()).toBe(false);
+    }
+  });
+
+  it("rejects JWKS objects with descriptor hazards", async () => {
+    const token = signFixtureToken();
+    const jwksWithAccessor = withThrowingGetter(fixtureKeys.jwks, "keys");
+
+    for (const jwks of [
+      withSymbolProperty(fixtureKeys.jwks),
+      withNonEnumerableProperty(fixtureKeys.jwks, "hiddenPayload", "secret"),
+      jwksWithAccessor.value,
+    ] as const) {
+      await expectDenied(token, "malformed_jwks", {
+        ...buildConfig(),
+        jwks: jwks as JSONWebKeySet,
+      });
+    }
+    expect(jwksWithAccessor.wasInvoked()).toBe(false);
+  });
+
   it("rejects wrong issuer", async () => {
     await expectDenied(signFixtureToken({ issuer: "https://wrong-issuer.example.test" }), "wrong_issuer");
   });
@@ -283,6 +352,9 @@ describe("MCP production Stytch OAuth config boundary", () => {
     expect(source).not.toMatch(/activeCvSnapshots|profilesPublic|jobsPublic|proposalsPublic/u);
     expect(source).not.toMatch(/tools\/list|tools\/call/u);
     expect(source).not.toMatch(/@stytch|stytchClient|tokenEndpoint|refreshToken\s*\(|revocationEndpoint/u);
+    expect(source).not.toMatch(/\bObject\.(?:keys|entries)\s*\(/u);
+    expect(source).toMatch(/\bObject\.getOwnPropertyDescriptors\s*\(/u);
+    expect(source).toMatch(/\bReflect\.ownKeys\s*\(/u);
   });
 
   it("does not require package or lockfile edits", () => {
@@ -292,6 +364,17 @@ describe("MCP production Stytch OAuth config boundary", () => {
     expect(manifest).toContain("\"jsonwebtoken\"");
   });
 });
+
+async function expectInputDenied(
+  input: unknown,
+  reason: McpProductionStytchOAuthDenialReasonV1,
+): Promise<void> {
+  const result = await verifyMcpProductionStytchOAuthConfigBoundary(input);
+
+  expect(result.allowed).toBe(false);
+  expect(result.reason).toBe(reason);
+  expect(result.modelVisible).toBe(false);
+}
 
 async function expectDenied(
   token: string,
@@ -358,6 +441,44 @@ function buildConfig(
     version: 1,
     ...overrides,
   };
+}
+
+function withSymbolProperty<T extends object>(value: T): T {
+  const clone = { ...value };
+  Object.defineProperty(clone, Symbol("hiddenPayload"), {
+    value: "secret",
+    enumerable: true,
+  });
+  return clone;
+}
+
+function withNonEnumerableProperty<T extends object>(
+  value: T,
+  key: string,
+  hiddenValue: unknown,
+): T {
+  const clone = { ...value };
+  Object.defineProperty(clone, key, {
+    value: hiddenValue,
+    enumerable: false,
+  });
+  return clone;
+}
+
+function withThrowingGetter<T extends object>(
+  value: T,
+  key: string,
+): { value: Record<string, unknown>; wasInvoked: () => boolean } {
+  let invoked = false;
+  const clone = { ...value } as Record<string, unknown>;
+  Object.defineProperty(clone, key, {
+    enumerable: true,
+    get() {
+      invoked = true;
+      throw new Error("getter should not be invoked");
+    },
+  });
+  return { value: clone, wasInvoked: () => invoked };
 }
 
 function signFixtureToken(options: SignFixtureTokenOptions = {}): string {
