@@ -379,12 +379,12 @@ async function queryByFields(
     }
     return nextQuery;
   });
-  if (typeof indexedQuery.take === "function") {
-    return await indexedQuery.take(QUERY_READ_LIMIT);
-  }
   const orderedQuery = indexedQuery.order?.("desc");
   if (typeof orderedQuery?.take === "function") {
     return await orderedQuery.take(QUERY_READ_LIMIT);
+  }
+  if (typeof indexedQuery.take === "function") {
+    return await indexedQuery.take(QUERY_READ_LIMIT);
   }
   return [];
 }

@@ -73,6 +73,9 @@ function makeCtx(seed: Partial<Record<TableName, StoredDocument[]>> = {}) {
         };
         buildQuery(query);
         const matching = applyConstraints(tables[tableName], constraints);
+        const orderedMatching = [...matching].sort(
+          (left, right) => right._creationTime - left._creationTime,
+        );
         queryCalls.tableNames.push(tableName);
         return {
           collect: async () => {
@@ -86,7 +89,7 @@ function makeCtx(seed: Partial<Record<TableName, StoredDocument[]>> = {}) {
             },
             take: async (limit: number) => {
               queryCalls.takeLimits.push(limit);
-              return matching.slice(0, limit);
+              return orderedMatching.slice(0, limit);
             },
           }),
           take: async (limit: number) => {
@@ -407,10 +410,7 @@ describe("PR62 Convex resume variant plan summary", () => {
       ctx as any,
       {
         twoweeksClerkId: "clerk_DO_NOT_ECHO",
-        resumeVariantPlanRef: resumeVariantPlanRef({
-          status: "no_data_available",
-          count: 0,
-        }),
+        resumeVariantPlanRef: resumeVariantPlanRef(),
       },
     );
 
@@ -433,6 +433,7 @@ describe("PR62 Convex resume variant plan summary", () => {
       artifact({
         _id: `artifact_${index}_DO_NOT_ECHO`,
         id: `application-artifact:${index}_DO_NOT_ECHO`,
+        _creationTime: NOW - index,
         updatedAt: NOW - index,
       }),
     );
@@ -462,6 +463,73 @@ describe("PR62 Convex resume variant plan summary", () => {
       },
       safeCounts: {
         plans: 100,
+      },
+    });
+    assertSafeResult(result);
+  });
+
+  it("orders before bounded take so the latest artifact remains in scope", async () => {
+    const staleArtifacts = Array.from({ length: 120 }, (_, index) =>
+      artifact({
+        _id: `stale_artifact_${index}_DO_NOT_ECHO`,
+        id: `application-artifact:stale-${index}_DO_NOT_ECHO`,
+        _creationTime: NOW - 10_000 - index,
+        updatedAt: NOW - 10_000 - index,
+      }),
+    );
+    const latestArtifact = artifact({
+      _id: "latest_artifact_DO_NOT_ECHO",
+      id: "application-artifact:latest_DO_NOT_ECHO",
+      _creationTime: NOW,
+      updatedAt: NOW,
+      status: "approved",
+      content: planContent({
+        items: [
+          {
+            id: "resume-variant-plan-item:skills:accepted_DO_NOT_ECHO",
+            section: "skills",
+            action: "add_from_allowed_claim",
+            priority: "required",
+            reviewState: "accepted",
+            allowedClaimIds: ["allowed-claim:accepted_DO_NOT_ECHO"],
+            candidateFactIds: ["candidate-fact:accepted_DO_NOT_ECHO"],
+            evidenceMatchIds: ["evidence-match:accepted_DO_NOT_ECHO"],
+            demandIds: ["demand:accepted_DO_NOT_ECHO"],
+            riskFlagIds: [],
+            reason: "source quote",
+            version: 1,
+          },
+        ],
+        warnings: [],
+        riskFlagIds: [],
+        blocked: false,
+        blockedReason: undefined,
+      }),
+    });
+    const { ctx, queryCalls } = makeCtx({
+      userProfiles: [profile()],
+      applicationArtifacts: [...staleArtifacts, latestArtifact],
+    });
+
+    const result = await internalSummarizeMcpResumeVariantPlan._handler(
+      ctx as any,
+      {
+        twoweeksClerkId: "clerk_DO_NOT_ECHO",
+        resumeVariantPlanRef: resumeVariantPlanRef({ count: 100 }),
+      },
+    );
+
+    expect(queryCalls.collectCalls).toBe(0);
+    expect(
+      queryCalls.takeLimits.every((limit) => limit === TEST_QUERY_READ_LIMIT),
+    ).toBe(true);
+    expect(result).toMatchObject({
+      allowed: true,
+      status: "available",
+      updatedAt: "2026-06-15T12:00:00.000Z",
+      safeCategories: {
+        planStatus: "ready_for_review",
+        nextReviewHint: "ready_for_review",
       },
     });
     assertSafeResult(result);
