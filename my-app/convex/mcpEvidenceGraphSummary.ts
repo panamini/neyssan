@@ -37,6 +37,7 @@ type McpEvidenceGraphSummaryResultV1 = Readonly<{
     pendingFacts: number;
     rejectedFacts: number;
     restrictedEvidence: number;
+    archivedEvidence: number;
     provenanceLinks: number;
     evidenceMatches: number;
     allowedClaims: number;
@@ -93,10 +94,8 @@ type DbReader = Readonly<{
       indexName: string,
       buildQuery: (query: IndexQueryBuilder) => unknown,
     ) => {
-      collect?: () => Promise<readonly Record<string, unknown>[]>;
       take?: (limit: number) => Promise<readonly Record<string, unknown>[]>;
       order?: (direction: "asc" | "desc") => {
-        collect?: () => Promise<readonly Record<string, unknown>[]>;
         take?: (limit: number) => Promise<readonly Record<string, unknown>[]>;
       };
     };
@@ -104,6 +103,7 @@ type DbReader = Readonly<{
 }>;
 
 const MAX_SAFE_COUNT = 100;
+const QUERY_READ_LIMIT = MAX_SAFE_COUNT + 1;
 
 const mcpEvidenceGraphSummaryStatusValidator = v.union(
   v.literal("available"),
@@ -138,6 +138,7 @@ const mcpEvidenceGraphSummaryResultValidator = v.object({
     pendingFacts: v.number(),
     rejectedFacts: v.number(),
     restrictedEvidence: v.number(),
+    archivedEvidence: v.number(),
     provenanceLinks: v.number(),
     evidenceMatches: v.number(),
     allowedClaims: v.number(),
@@ -259,7 +260,13 @@ async function summarizeMcpEvidenceGraph(
     applicationPackages,
     evidenceRuns,
   });
-  if (safeCounts.sourceDocuments + safeCounts.candidateFacts + safeCounts.provenanceLinks === 0) {
+  if (
+    safeCounts.sourceDocuments +
+      safeCounts.candidateFacts +
+      safeCounts.archivedEvidence +
+      safeCounts.provenanceLinks ===
+    0
+  ) {
     return buildUnavailableSummary(
       { ...evidenceGraphRef, status: "no_data_available", count: 0 },
       "evidence_graph_not_available",
@@ -281,7 +288,9 @@ async function summarizeMcpEvidenceGraph(
     evidenceGraphRef: {
       ...evidenceGraphRef,
       status: "available",
-      count: clampSafeCount(safeCounts.sourceDocuments + safeCounts.candidateFacts),
+      count: clampSafeCount(
+        safeCounts.sourceDocuments + safeCounts.candidateFacts + safeCounts.archivedEvidence,
+      ),
       ...(latestUpdatedAt ? { updatedAt: latestUpdatedAt } : {}),
     },
     availability: {
@@ -322,12 +331,20 @@ async function queryByFields(
     }
     return nextQuery;
   });
-  if (typeof indexedQuery.collect === "function") return await indexedQuery.collect();
-  if (typeof indexedQuery.take === "function") return await indexedQuery.take(MAX_SAFE_COUNT);
+  if (typeof indexedQuery.take === "function") {
+    return trimBoundedRows(await indexedQuery.take(QUERY_READ_LIMIT));
+  }
   const orderedQuery = indexedQuery.order?.("desc");
-  if (typeof orderedQuery?.collect === "function") return await orderedQuery.collect();
-  if (typeof orderedQuery?.take === "function") return await orderedQuery.take(MAX_SAFE_COUNT);
+  if (typeof orderedQuery?.take === "function") {
+    return trimBoundedRows(await orderedQuery.take(QUERY_READ_LIMIT));
+  }
   return [];
+}
+
+function trimBoundedRows(
+  rows: readonly Record<string, unknown>[],
+): readonly Record<string, unknown>[] {
+  return rows.slice(0, MAX_SAFE_COUNT);
 }
 
 function buildUnavailableSummary(
@@ -371,6 +388,7 @@ function buildSafeCounts(input: Readonly<{
   const pendingFacts = candidateFacts.filter(isPendingFact);
   const rejectedFacts = candidateFacts.filter(isRejectedEvidenceRow);
   const restrictedEvidence = [...sourceDocuments, ...candidateFacts].filter(isRestrictedEvidenceRow);
+  const archivedEvidence = [...sourceDocuments, ...candidateFacts].filter(isArchivedEvidenceRow);
   const provenance = summarizeProvenance(applicationPackages);
   const staleSources = latestPackageTimestamp > 0
     ? [...safeSourceDocuments, ...safeCandidateFacts].filter((row) => {
@@ -381,7 +399,9 @@ function buildSafeCounts(input: Readonly<{
   const blockedRuns = evidenceRuns.filter((row) => row.status === "blocked").length;
   const blockedPackages = applicationPackages.filter((row) => row.status === "blocked").length;
   const blockers = clampSafeCount(blockedRuns + blockedPackages + (provenance.missingEvidence > 0 ? 1 : 0));
-  const warnings = clampSafeCount(pendingFacts.length + staleSources + provenance.riskFlags);
+  const warnings = clampSafeCount(
+    pendingFacts.length + archivedEvidence.length + staleSources + provenance.riskFlags,
+  );
 
   return {
     sourceDocuments: clampSafeCount(safeSourceDocuments.length),
@@ -390,6 +410,7 @@ function buildSafeCounts(input: Readonly<{
     pendingFacts: clampSafeCount(pendingFacts.length),
     rejectedFacts: clampSafeCount(rejectedFacts.length),
     restrictedEvidence: clampSafeCount(restrictedEvidence.length),
+    archivedEvidence: clampSafeCount(archivedEvidence.length),
     provenanceLinks: provenance.provenanceLinks,
     evidenceMatches: provenance.evidenceMatches,
     allowedClaims: provenance.allowedClaims,
@@ -513,6 +534,7 @@ function zeroCounts(): McpEvidenceGraphSummaryResultV1["safeCounts"] {
     pendingFacts: 0,
     rejectedFacts: 0,
     restrictedEvidence: 0,
+    archivedEvidence: 0,
     provenanceLinks: 0,
     evidenceMatches: 0,
     allowedClaims: 0,
@@ -540,7 +562,11 @@ function normalizeEvidenceGraphRef(
 }
 
 function isUsableEvidenceRow(row: Record<string, unknown>): boolean {
-  return row.visibility === "use_in_applications" && !isRejectedEvidenceRow(row);
+  return (
+    row.visibility === "use_in_applications" &&
+    !isRejectedEvidenceRow(row) &&
+    !isArchivedEvidenceRow(row)
+  );
 }
 
 function isApprovedFact(row: Record<string, unknown>): boolean {
@@ -555,7 +581,11 @@ function isPendingFact(row: Record<string, unknown>): boolean {
 }
 
 function isRejectedEvidenceRow(row: Record<string, unknown>): boolean {
-  return row.reviewState === "rejected" || row.reviewState === "archived";
+  return row.reviewState === "rejected";
+}
+
+function isArchivedEvidenceRow(row: Record<string, unknown>): boolean {
+  return row.visibility === "use_in_applications" && row.reviewState === "archived";
 }
 
 function isRestrictedEvidenceRow(row: Record<string, unknown>): boolean {

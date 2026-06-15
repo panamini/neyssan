@@ -129,6 +129,7 @@ function evidenceGraphSummary(overrides: Record<string, unknown> = {}) {
       pendingFacts: 1,
       rejectedFacts: 0,
       restrictedEvidence: 0,
+      archivedEvidence: 0,
       provenanceLinks: 4,
       evidenceMatches: 1,
       allowedClaims: 1,
@@ -362,6 +363,7 @@ describe("PR61 real evidence graph summary boundary", () => {
         pendingFacts: 1,
         rejectedFacts: 0,
         restrictedEvidence: 0,
+        archivedEvidence: 0,
         provenanceLinks: 4,
         evidenceMatches: 1,
         allowedClaims: 1,
@@ -399,6 +401,32 @@ describe("PR61 real evidence graph summary boundary", () => {
       modelVisible: true,
       version: 1,
     });
+    assertNoSensitiveOutput(result);
+  });
+
+  it("canonicalizes evidenceGraphRef labels before model-visible output", () => {
+    const result = projectMcpRealEvidenceGraphSummary(
+      summaryInput({
+        adapterResult: adapterResult({
+          refs: {
+            evidenceGraphRef: evidenceGraphRef({ label: "Injected safe label" }),
+          },
+        }),
+        evidenceGraphSummary: evidenceGraphSummary({
+          evidenceGraphRef: evidenceGraphRef({ label: "Another safe label" }),
+        }),
+      }),
+    );
+
+    expect(result).toMatchObject({
+      allowed: true,
+      evidenceGraphRef: {
+        id: "mcp-safe-ref:evidence-graph:profile",
+        label: "Candidate evidence availability",
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain("Injected safe label");
+    expect(JSON.stringify(result)).not.toContain("Another safe label");
     assertNoSensitiveOutput(result);
   });
 

@@ -8,6 +8,7 @@ import { internalSummarizeMcpEvidenceGraph } from "../mcpEvidenceGraphSummary";
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const SUMMARY_SOURCE_FILE = resolve(TEST_DIR, "../mcpEvidenceGraphSummary.ts");
 const NOW = Date.UTC(2026, 5, 15, 12, 0, 0, 0);
+const TEST_QUERY_READ_LIMIT = 101;
 
 type TableName =
   | "userProfiles"
@@ -19,6 +20,11 @@ type Constraint = Readonly<{ field: string; value: unknown }>;
 type StoredDocument = Record<string, unknown> & {
   _id: string;
   _creationTime: number;
+};
+type QueryCallLog = {
+  collectCalls: number;
+  takeLimits: number[];
+  tableNames: string[];
 };
 
 function evidenceGraphRef(overrides: Record<string, unknown> = {}) {
@@ -43,6 +49,11 @@ function makeCtx(seed: Partial<Record<TableName, StoredDocument[]>> = {}) {
     applicationRuns: [],
     ...seed,
   };
+  const queryCalls: QueryCallLog = {
+    collectCalls: 0,
+    takeLimits: [],
+    tableNames: [],
+  };
 
   function applyConstraints(documents: StoredDocument[], constraints: Constraint[]) {
     return documents.filter((doc) =>
@@ -62,19 +73,32 @@ function makeCtx(seed: Partial<Record<TableName, StoredDocument[]>> = {}) {
         };
         buildQuery(query);
         const matching = applyConstraints(tables[tableName], constraints);
+        queryCalls.tableNames.push(tableName);
         return {
-          collect: async () => matching,
+          collect: async () => {
+            queryCalls.collectCalls += 1;
+            return matching;
+          },
           order: () => ({
-            collect: async () => matching,
-            take: async (limit: number) => matching.slice(0, limit),
+            collect: async () => {
+              queryCalls.collectCalls += 1;
+              return matching;
+            },
+            take: async (limit: number) => {
+              queryCalls.takeLimits.push(limit);
+              return matching.slice(0, limit);
+            },
           }),
-          take: async (limit: number) => matching.slice(0, limit),
+          take: async (limit: number) => {
+            queryCalls.takeLimits.push(limit);
+            return matching.slice(0, limit);
+          },
         };
       },
     }),
   };
 
-  return { ctx: { db }, tables };
+  return { ctx: { db }, queryCalls, tables };
 }
 
 function readField(doc: Record<string, unknown>, field: string): unknown {
@@ -344,6 +368,7 @@ describe("PR61 Convex evidence graph summary", () => {
         pendingFacts: 1,
         rejectedFacts: 1,
         restrictedEvidence: 2,
+        archivedEvidence: 0,
         provenanceLinks: 6,
         evidenceMatches: 1,
         allowedClaims: 1,
@@ -381,6 +406,46 @@ describe("PR61 Convex evidence graph summary", () => {
     assertSafeResult(result);
   });
 
+  it("tracks archived evidence separately without inflating active supporting counts", async () => {
+    const { ctx } = makeCtx({
+      userProfiles: [profile()],
+      candidateSourceDocuments: [
+        sourceDocument({
+          _id: "source_document_archived_DO_NOT_ECHO",
+          id: "candidate-source-document:archived_DO_NOT_ECHO",
+          reviewState: "archived",
+        }),
+      ],
+    });
+
+    const result = await internalSummarizeMcpEvidenceGraph._handler(ctx as any, {
+      twoweeksClerkId: "clerk_DO_NOT_ECHO",
+      evidenceGraphRef: evidenceGraphRef({ count: 1 }),
+    });
+
+    expect(result).toMatchObject({
+      allowed: true,
+      status: "available",
+      evidenceGraphRef: {
+        id: "mcp-safe-ref:evidence-graph:profile",
+        count: 1,
+      },
+      safeCounts: {
+        sourceDocuments: 0,
+        candidateFacts: 0,
+        archivedEvidence: 1,
+        warnings: 1,
+      },
+      safeCategories: {
+        evidenceCoverage: "missing",
+        provenanceCoverage: "missing",
+        qualityStatus: "needs_review",
+        nextReviewHint: "add_candidate_evidence",
+      },
+    });
+    assertSafeResult(result);
+  });
+
   it("returns safe no-data state when no evidence graph inputs exist", async () => {
     const { ctx } = makeCtx({
       userProfiles: [profile()],
@@ -398,9 +463,55 @@ describe("PR61 Convex evidence graph summary", () => {
       safeCounts: {
         sourceDocuments: 0,
         candidateFacts: 0,
+        archivedEvidence: 0,
         provenanceLinks: 0,
         warnings: 0,
         blockers: 0,
+      },
+    });
+    assertSafeResult(result);
+  });
+
+  it("uses bounded reads and clamps over-limit aggregate counts", async () => {
+    const sourceDocuments = Array.from({ length: 120 }, (_, index) =>
+      sourceDocument({
+        _id: `source_document_${index}_DO_NOT_ECHO`,
+        id: `candidate-source-document:${index}_DO_NOT_ECHO`,
+        updatedAt: NOW - index,
+      }),
+    );
+    const candidateFacts = Array.from({ length: 120 }, (_, index) =>
+      candidateFact({
+        _id: `candidate_fact_${index}_DO_NOT_ECHO`,
+        id: `candidate-fact:${index}_DO_NOT_ECHO`,
+        updatedAt: NOW - index,
+      }),
+    );
+    const { ctx, queryCalls } = makeCtx({
+      userProfiles: [profile()],
+      candidateSourceDocuments: sourceDocuments,
+      candidateFacts,
+    });
+
+    const result = await internalSummarizeMcpEvidenceGraph._handler(ctx as any, {
+      twoweeksClerkId: "clerk_DO_NOT_ECHO",
+      evidenceGraphRef: evidenceGraphRef({ count: 100 }),
+    });
+
+    expect(queryCalls.collectCalls).toBe(0);
+    expect(queryCalls.takeLimits.length).toBeGreaterThanOrEqual(5);
+    expect(queryCalls.takeLimits.every((limit) => limit === TEST_QUERY_READ_LIMIT)).toBe(true);
+    expect(result).toMatchObject({
+      allowed: true,
+      status: "available",
+      evidenceGraphRef: {
+        count: 100,
+      },
+      safeCounts: {
+        sourceDocuments: 100,
+        candidateFacts: 100,
+        approvedFacts: 100,
+        archivedEvidence: 0,
       },
     });
     assertSafeResult(result);
@@ -444,6 +555,8 @@ describe("PR61 Convex evidence graph summary", () => {
     }
 
     expect(source).toContain("internalQuery");
+    expect(source).toContain("take(QUERY_READ_LIMIT)");
+    expect(executableSource).not.toMatch(/\bcollect\s*\(/u);
     expect(source).not.toMatch(/\b(?:mutation|internalMutation|action|internalAction)\b/u);
     for (const pattern of [
       /\bfetch\s*\(/u,

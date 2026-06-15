@@ -26,6 +26,7 @@ export type McpRealEvidenceGraphSummaryCountsV1 = Readonly<{
   pendingFacts: number;
   rejectedFacts: number;
   restrictedEvidence: number;
+  archivedEvidence: number;
   provenanceLinks: number;
   evidenceMatches: number;
   allowedClaims: number;
@@ -217,6 +218,7 @@ const SUMMARY_COUNTS_KEYS = [
   "pendingFacts",
   "rejectedFacts",
   "restrictedEvidence",
+  "archivedEvidence",
   "provenanceLinks",
   "evidenceMatches",
   "allowedClaims",
@@ -396,7 +398,7 @@ function parseEvidenceGraphRef(value: unknown): McpRealEvidenceGraphSummaryRefV1
 
   return {
     id: record.id,
-    label: record.label,
+    label: "Candidate evidence availability",
     status: record.status,
     category: "evidence_graph",
     count: record.count,
@@ -519,6 +521,7 @@ function parseSafeCounts(value: unknown): McpRealEvidenceGraphSummaryCountsV1 | 
     pendingFacts: record.pendingFacts as number,
     rejectedFacts: record.rejectedFacts as number,
     restrictedEvidence: record.restrictedEvidence as number,
+    archivedEvidence: record.archivedEvidence as number,
     provenanceLinks: record.provenanceLinks as number,
     evidenceMatches: record.evidenceMatches as number,
     allowedClaims: record.allowedClaims as number,
@@ -617,6 +620,7 @@ function zeroCounts(): McpRealEvidenceGraphSummaryCountsV1 {
     pendingFacts: 0,
     rejectedFacts: 0,
     restrictedEvidence: 0,
+    archivedEvidence: 0,
     provenanceLinks: 0,
     evidenceMatches: 0,
     allowedClaims: 0,
