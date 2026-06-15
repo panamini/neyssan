@@ -235,6 +235,28 @@ const ACCOUNT_LINK_RESOLUTION_KEYS = [
   "version",
 ] as const;
 
+const ADAPTER_INPUT_KEYS = [
+  "kind",
+  "authBoundary",
+  "accountLinkBoundary",
+  "accountLinkResolution",
+  "consent",
+  "retentionRecord",
+  "readOnlyDataRefs",
+  "now",
+  "version",
+] as const;
+
+const ADAPTER_INPUT_REQUIRED_KEYS = [
+  "kind",
+  "authBoundary",
+  "accountLinkBoundary",
+  "accountLinkResolution",
+  "retentionRecord",
+  "readOnlyDataRefs",
+  "version",
+] as const;
+
 const MAX_SAFE_COUNT = 100;
 
 const CLASS_SCOPE: Record<
@@ -248,15 +270,18 @@ const CLASS_SCOPE: Record<
 };
 
 export function projectMcpReadOnlyTwoweeksDataAdapter(
-  input: McpReadOnlyTwoweeksDataAdapterInputV1,
+  input: unknown,
 ): McpReadOnlyTwoweeksDataAdapterResultV1 {
-  const gateState = evaluateAdapterGates(input);
+  const parsedInput = parseAdapterInput(input);
+  if (!parsedInput) return deny("invalid_input");
+
+  const gateState = evaluateAdapterGates(parsedInput);
   if (!gateState.ok) return gateState.result;
 
-  const dataRefs = parseDataRefsResult(input.readOnlyDataRefs);
+  const dataRefs = parseDataRefsResult(parsedInput.readOnlyDataRefs);
   if (!dataRefs) {
     return deny(
-      containsUnsafeProjectionMaterial(input.readOnlyDataRefs)
+      containsUnsafeProjectionMaterial(parsedInput.readOnlyDataRefs)
         ? "unsafe_projection_blocked"
         : "data_refs_blocked",
     );
@@ -324,10 +349,27 @@ function isAccountLinkAllowed(
   return result.allowed === true && result.serverOnly.linkState === "active";
 }
 
+function parseAdapterInput(value: unknown): McpReadOnlyTwoweeksDataAdapterInputV1 | undefined {
+  const record = readExactRecord(value, ADAPTER_INPUT_KEYS, ADAPTER_INPUT_REQUIRED_KEYS);
+  if (!record || !isAdapterInputEnvelope(record)) return undefined;
+
+  return {
+    kind: "mcp_read_only_twoweeks_data_adapter_input",
+    authBoundary: record.authBoundary as McpProductionStytchOAuthConfigBoundaryResultV1,
+    accountLinkBoundary:
+      record.accountLinkBoundary as McpProductionAccountLinkPersistenceResultV1,
+    accountLinkResolution: record.accountLinkResolution,
+    ...(record.consent !== undefined ? { consent: record.consent } : {}),
+    retentionRecord: record.retentionRecord,
+    readOnlyDataRefs: record.readOnlyDataRefs,
+    ...(record.now !== undefined ? { now: record.now } : {}),
+    version: 1,
+  };
+}
+
 function evaluateAdapterGates(
   input: McpReadOnlyTwoweeksDataAdapterInputV1,
 ): { ok: true } & AdapterGateState | { ok: false; result: McpReadOnlyTwoweeksDataAdapterResultV1 } {
-  if (!isAdapterInputEnvelope(input)) return { ok: false, result: deny("invalid_input") };
   if (!isAuthorized(input.authBoundary)) return { ok: false, result: deny("auth_required") };
   if (!isAccountLinkAllowed(input.accountLinkBoundary)) {
     return { ok: false, result: deny("account_link_required") };
@@ -357,9 +399,13 @@ function evaluateAdapterGates(
   };
 }
 
-function isAdapterInputEnvelope(input: McpReadOnlyTwoweeksDataAdapterInputV1): boolean {
+function isAdapterInputEnvelope(
+  record: Record<string, unknown>,
+): record is Record<string, unknown> & { now?: Date } {
   return Boolean(
-    input && input.kind === "mcp_read_only_twoweeks_data_adapter_input" && input.version === 1,
+    record.kind === "mcp_read_only_twoweeks_data_adapter_input" &&
+      record.version === 1 &&
+      (record.now === undefined || record.now instanceof Date),
   );
 }
 
@@ -719,9 +765,13 @@ function readPlainObjectDescriptors(
   value: unknown,
 ): Record<PropertyKey, PropertyDescriptor | undefined> | undefined {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
-  const prototype = Object.getPrototypeOf(value);
-  if (prototype !== Object.prototype && prototype !== null) return undefined;
-  return Object.getOwnPropertyDescriptors(value);
+  try {
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) return undefined;
+    return Object.getOwnPropertyDescriptors(value);
+  } catch {
+    return undefined;
+  }
 }
 
 function readDescriptorRecord(

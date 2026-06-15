@@ -291,6 +291,27 @@ function expectBlockedWithoutTouchingData(
   });
 }
 
+function expectInvalidAdapterInput(value: unknown): void {
+  expect(() => projectMcpReadOnlyTwoweeksDataAdapter(value)).not.toThrow();
+  expect(projectMcpReadOnlyTwoweeksDataAdapter(value)).toEqual({
+    kind: "mcp_read_only_twoweeks_data_adapter_result",
+    allowed: false,
+    reason: "invalid_input",
+    safeRefusal: buildMcpReadOnlyTwoweeksDataAdapterSafeRefusal(),
+    capabilities: expect.objectContaining({
+      dataReads: "blocked",
+      dataWrites: "blocked",
+      handlerExecution: "blocked",
+      productionConnector: "blocked",
+      networkAccess: "blocked",
+      modelCalls: "blocked",
+      writeActions: "blocked",
+    }),
+    modelVisible: true,
+    version: 1,
+  });
+}
+
 function assertNoSensitiveOutput(value: unknown): void {
   const serialized = JSON.stringify(value);
   for (const fragment of [
@@ -337,6 +358,84 @@ function stripStringAndPatternLiterals(source: string): string {
 }
 
 describe("PR59 read-only Twoweeks data adapter", () => {
+  it("fails closed for malformed top-level adapter input", () => {
+    for (const value of [undefined, null, [], {}, { kind: "wrong", version: 1 }] as const) {
+      expectInvalidAdapterInput(value);
+    }
+  });
+
+  it("fails closed for non-plain or prototype-backed top-level adapter input", () => {
+    expectInvalidAdapterInput(Object.create(adapterInput()));
+
+    class PrototypeBackedAdapterInput {
+      kind = "mcp_read_only_twoweeks_data_adapter_input";
+      authBoundary = AUTH_ALLOWED;
+      accountLinkBoundary = ACCOUNT_LINK_ALLOWED;
+      accountLinkResolution = ACCOUNT_LINK_RESOLUTION;
+      consent = CONSENT;
+      retentionRecord = RETENTION_RECORD;
+      readOnlyDataRefs = dataRefs();
+      now = NOW;
+      version = 1;
+    }
+
+    expectInvalidAdapterInput(new PrototypeBackedAdapterInput());
+  });
+
+  it("fails closed for a top-level symbol key", () => {
+    const input = adapterInput() as Record<PropertyKey, unknown>;
+    input[Symbol("unexpected")] = "blocked";
+
+    expectInvalidAdapterInput(input);
+  });
+
+  it("fails closed for a top-level non-enumerable key", () => {
+    const input = adapterInput() as Record<PropertyKey, unknown>;
+    Object.defineProperty(input, "hidden", {
+      enumerable: false,
+      value: "blocked",
+    });
+
+    expectInvalidAdapterInput(input);
+  });
+
+  it("fails closed for a top-level throwing getter without invoking it", () => {
+    let getterInvoked = false;
+    const input = adapterInput() as Record<PropertyKey, unknown>;
+    Object.defineProperty(input, "kind", {
+      enumerable: true,
+      get() {
+        getterInvoked = true;
+        throw new Error("adapter getter must not be invoked");
+      },
+    });
+
+    expectInvalidAdapterInput(input);
+    expect(getterInvoked).toBe(false);
+  });
+
+  it("fails closed for top-level boundary accessors without invoking them", () => {
+    for (const propertyName of [
+      "authBoundary",
+      "accountLinkBoundary",
+      "readOnlyDataRefs",
+      "retentionRecord",
+    ] as const) {
+      let getterInvoked = false;
+      const input = adapterInput() as Record<PropertyKey, unknown>;
+      Object.defineProperty(input, propertyName, {
+        enumerable: true,
+        get() {
+          getterInvoked = true;
+          throw new Error(`${propertyName} getter must not be invoked`);
+        },
+      });
+
+      expectInvalidAdapterInput(input);
+      expect(getterInvoked).toBe(false);
+    }
+  });
+
   it("requires production Stytch authorization before touching data refs", () => {
     expectBlockedWithoutTouchingData({ authBoundary: AUTH_DENIED }, "auth_required");
   });
@@ -435,6 +534,33 @@ describe("PR59 read-only Twoweeks data adapter", () => {
         credentialStorage: "none",
         tokenStorage: "none",
         version: 1,
+      },
+      modelVisible: true,
+      version: 1,
+    });
+    assertNoSensitiveOutput(result);
+  });
+
+  it("preserves valid adapter input behavior after descriptor-safe parsing", () => {
+    const result = projectMcpReadOnlyTwoweeksDataAdapter(adapterInput());
+
+    expect(result).toMatchObject({
+      allowed: true,
+      reason: "read_only_refs_projected",
+      refs: {
+        applicationPackageRef: {
+          id: "mcp-safe-ref:application-package:latest",
+          status: "available",
+        },
+      },
+      capabilities: {
+        dataReads: "convex_read_only_refs",
+        dataWrites: "blocked",
+        handlerExecution: "blocked",
+        productionConnector: "blocked",
+        networkAccess: "blocked",
+        modelCalls: "blocked",
+        writeActions: "blocked",
       },
       modelVisible: true,
       version: 1,
@@ -588,5 +714,22 @@ describe("PR59 read-only Twoweeks data adapter", () => {
         expect(executableSource).not.toMatch(pattern);
       }
     }
+  });
+
+  it("keeps top-level adapter parsing descriptor-safe before input reads", () => {
+    const implementation = readFileSync(ADAPTER_SOURCE_FILE, "utf8");
+    const executableSource = stripStringAndPatternLiterals(implementation);
+    const functionStart = executableSource.indexOf("export function projectMcpReadOnlyTwoweeksDataAdapter");
+    const parseCall = executableSource.indexOf("parseAdapterInput(input)", functionStart);
+    const preParseSource = executableSource.slice(functionStart, parseCall);
+
+    expect(functionStart).toBeGreaterThanOrEqual(0);
+    expect(parseCall).toBeGreaterThan(functionStart);
+    expect(executableSource).toContain("function parseAdapterInput(value: unknown)");
+    expect(executableSource).toContain("Object.getOwnPropertyDescriptors");
+    expect(executableSource).toContain("Reflect.ownKeys");
+    expect(preParseSource).not.toMatch(
+      /\binput\.(?:kind|version|authBoundary|accountLinkBoundary|accountLinkResolution|consent|retentionRecord|readOnlyDataRefs|now)\b/u,
+    );
   });
 });
