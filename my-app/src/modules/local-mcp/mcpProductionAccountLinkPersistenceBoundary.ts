@@ -323,7 +323,7 @@ export function buildMcpProductionAccountLinkRedactedAuditEvent(
 function parseInput(
   value: unknown,
 ): McpProductionAccountLinkPersistenceBoundaryInputV1 | undefined {
-  const record = readRecordWithKeys(value, INPUT_ALLOWED_KEYS, INPUT_REQUIRED_KEYS);
+  const record = readDescriptorSafeRecordWithKeys(value, INPUT_ALLOWED_KEYS, INPUT_REQUIRED_KEYS);
   if (!record) return undefined;
   if (
     record.kind !== "mcp_production_account_link_persistence_boundary_input" ||
@@ -376,7 +376,7 @@ function parseInputOptions(
 }
 
 function parseAccountLinkRecord(value: unknown): ParsedAccountLinkRecord | undefined {
-  const record = readRecordWithKeys(value, RECORD_ALLOWED_KEYS, RECORD_REQUIRED_KEYS);
+  const record = readDescriptorSafeRecordWithKeys(value, RECORD_ALLOWED_KEYS, RECORD_REQUIRED_KEYS);
   if (!record) return undefined;
   if (record.kind !== "local_mcp_account_link_record" || record.version !== 1) return undefined;
 
@@ -549,27 +549,64 @@ function readRecordState(value: unknown): McpProductionAccountLinkRecordStateV1 
   return value === "active" || value === "revoked" || value === "stale" ? value : undefined;
 }
 
-function readRecordWithKeys(
+function readDescriptorSafeRecordWithKeys(
   value: unknown,
   allowedKeys: readonly string[],
   requiredKeys: readonly string[],
 ): Record<string, unknown> | undefined {
-  const record = readPlainObjectRecord(value);
+  const record = readDescriptorSafePlainObjectRecord(value);
   if (!record) return undefined;
-  const actualKeys = Object.keys(record);
-  if (!actualKeys.every((key) => allowedKeys.includes(key))) return undefined;
+  const actualKeys = Reflect.ownKeys(record);
+  if (!actualKeys.every((key) => typeof key === "string" && allowedKeys.includes(key))) {
+    return undefined;
+  }
   if (!requiredKeys.every((key) => Object.prototype.hasOwnProperty.call(record, key))) {
     return undefined;
   }
   return record;
 }
 
-function readPlainObjectRecord(value: unknown): Record<string, unknown> | undefined {
+function readDescriptorSafePlainObjectRecord(value: unknown): Record<string, unknown> | undefined {
+  const descriptors = readDescriptorSafePlainObjectDescriptors(value);
+  return descriptors ? readDescriptorValues(descriptors) : undefined;
+}
+
+function readDescriptorSafePlainObjectDescriptors(
+  value: unknown,
+): Record<PropertyKey, PropertyDescriptor | undefined> | undefined {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null
-    ? (value as Record<string, unknown>)
-    : undefined;
+  try {
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) return undefined;
+
+    return Object.getOwnPropertyDescriptors(value) as Record<
+      PropertyKey,
+      PropertyDescriptor | undefined
+    >;
+  } catch {
+    return undefined;
+  }
+}
+
+function readDescriptorValues(
+  descriptors: Record<PropertyKey, PropertyDescriptor | undefined>,
+): Record<string, unknown> | undefined {
+  const record: Record<string, unknown> = {};
+  for (const key of Reflect.ownKeys(descriptors)) {
+    const entry = readDescriptorValue(key, descriptors[key]);
+    if (!entry) return undefined;
+    record[entry.key] = entry.value;
+  }
+  return record;
+}
+
+function readDescriptorValue(
+  key: PropertyKey,
+  descriptor: PropertyDescriptor | undefined,
+): { key: string; value: unknown } | undefined {
+  if (typeof key !== "string") return undefined;
+  if (!descriptor || descriptor.enumerable !== true || !("value" in descriptor)) return undefined;
+  return { key, value: descriptor.value };
 }
 
 function readStringList(value: unknown): readonly string[] | undefined {

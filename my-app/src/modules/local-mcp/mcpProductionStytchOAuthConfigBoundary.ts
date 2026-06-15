@@ -222,7 +222,7 @@ export function buildMcpProductionStytchOAuthSafeRefusal(): McpProductionStytchO
 function parseInput(
   value: unknown,
 ): McpProductionStytchOAuthConfigBoundaryInputV1 | undefined {
-  const record = readExactRecord(value, INPUT_KEYS);
+  const record = readDescriptorSafeExactRecord(value, INPUT_KEYS);
   if (!record) return undefined;
   if (!hasValidInputEnvelope(record)) return undefined;
   const authorizationHeader = readOptionalAuthorizationHeader(record.authorizationHeader);
@@ -240,7 +240,7 @@ function parseInput(
 }
 
 function parseConfig(value: unknown): McpProductionStytchOAuthConfigV1 | undefined {
-  const record = readExactRecord(value, CONFIG_KEYS);
+  const record = readDescriptorSafeExactRecord(value, CONFIG_KEYS);
   if (!record) return undefined;
   if (!hasValidConfigEnvelope(record)) return undefined;
   const fields = parseConfigFields(record);
@@ -468,7 +468,7 @@ async function verifyLocalJwt(
 }
 
 function isWellFormedJwks(value: unknown): value is JSONWebKeySet {
-  const record = readPlainObjectRecord(value);
+  const record = readDescriptorSafePlainObjectRecord(value);
   if (!record) return false;
   const keys = record.keys;
   if (!Array.isArray(keys) || keys.length === 0) return false;
@@ -476,7 +476,7 @@ function isWellFormedJwks(value: unknown): value is JSONWebKeySet {
 }
 
 function isWellFormedRsaJwk(value: unknown): value is JWK {
-  const record = readPlainObjectRecord(value);
+  const record = readDescriptorSafePlainObjectRecord(value);
   if (!record) return false;
   const alg = record.alg;
   const use = record.use;
@@ -593,25 +593,60 @@ function buildCapabilities(
   };
 }
 
-function readExactRecord(
+function readDescriptorSafeExactRecord(
   value: unknown,
   allowedKeys: readonly string[],
 ): Record<string, unknown> | undefined {
-  const record = readPlainObjectRecord(value);
+  const record = readDescriptorSafePlainObjectRecord(value);
   if (!record) return undefined;
-  const actualKeys = Object.keys(record);
+  const actualKeys = Reflect.ownKeys(record);
   if (actualKeys.length !== allowedKeys.length) return undefined;
   return allowedKeys.every((key) => Object.prototype.hasOwnProperty.call(record, key))
     ? record
     : undefined;
 }
 
-function readPlainObjectRecord(value: unknown): Record<string, unknown> | undefined {
+function readDescriptorSafePlainObjectRecord(value: unknown): Record<string, unknown> | undefined {
+  const descriptors = readDescriptorSafePlainObjectDescriptors(value);
+  return descriptors ? readDescriptorValues(descriptors) : undefined;
+}
+
+function readDescriptorSafePlainObjectDescriptors(
+  value: unknown,
+): Record<PropertyKey, PropertyDescriptor | undefined> | undefined {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null
-    ? (value as Record<string, unknown>)
-    : undefined;
+  try {
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) return undefined;
+
+    return Object.getOwnPropertyDescriptors(value) as Record<
+      PropertyKey,
+      PropertyDescriptor | undefined
+    >;
+  } catch {
+    return undefined;
+  }
+}
+
+function readDescriptorValues(
+  descriptors: Record<PropertyKey, PropertyDescriptor | undefined>,
+): Record<string, unknown> | undefined {
+  const record: Record<string, unknown> = {};
+  for (const key of Reflect.ownKeys(descriptors)) {
+    const entry = readDescriptorValue(key, descriptors[key]);
+    if (!entry) return undefined;
+    record[entry.key] = entry.value;
+  }
+  return record;
+}
+
+function readDescriptorValue(
+  key: PropertyKey,
+  descriptor: PropertyDescriptor | undefined,
+): { key: string; value: unknown } | undefined {
+  if (typeof key !== "string") return undefined;
+  if (!descriptor || descriptor.enumerable !== true || !("value" in descriptor)) return undefined;
+  return { key, value: descriptor.value };
 }
 
 function readNonEmptyString(value: unknown): string | undefined {
