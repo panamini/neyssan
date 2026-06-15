@@ -768,6 +768,41 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_user", ["userId"]),
 
+  mcpAccountLinks: defineTable({
+    kind: v.literal("local_mcp_account_link_record"),
+    version: v.literal(1),
+    provider: v.literal("stytch"),
+    providerSubject: v.string(),
+    twoweeksClerkId: v.string(),
+    clientId: v.string(),
+    grantedReadScopes: v.array(
+      v.union(
+        v.literal("twoweeks.mcp.read"),
+        v.literal("twoweeks.application_package.read"),
+        v.literal("twoweeks.evidence_graph.read"),
+        v.literal("twoweeks.resume_variant_plan.read"),
+        v.literal("twoweeks.review_cockpit.read"),
+      ),
+    ),
+    grantRef: v.string(),
+    consentRef: v.string(),
+    state: v.union(v.literal("active"), v.literal("revoked"), v.literal("stale")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    lastVerifiedAt: v.number(),
+    revokedAt: v.optional(v.number()),
+    staleAt: v.optional(v.number()),
+    auditReasonCode: v.string(),
+  })
+    .index("by_provider_subject_client", ["provider", "providerSubject", "clientId"])
+    .index("by_provider_subject_client_state", [
+      "provider",
+      "providerSubject",
+      "clientId",
+      "state",
+    ])
+    .index("by_twoweeks_clerk_id", ["twoweeksClerkId"]),
+
   // New: LLM jobs queue table
   llmJobs: defineTable({
     profileId: v.id("userProfiles"),
