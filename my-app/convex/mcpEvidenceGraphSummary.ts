@@ -288,9 +288,7 @@ async function summarizeMcpEvidenceGraph(
     evidenceGraphRef: {
       ...evidenceGraphRef,
       status: "available",
-      count: clampSafeCount(
-        safeCounts.sourceDocuments + safeCounts.candidateFacts + safeCounts.archivedEvidence,
-      ),
+      count: clampSafeCount(safeCounts.sourceDocuments + safeCounts.candidateFacts),
       ...(latestUpdatedAt ? { updatedAt: latestUpdatedAt } : {}),
     },
     availability: {
@@ -332,19 +330,13 @@ async function queryByFields(
     return nextQuery;
   });
   if (typeof indexedQuery.take === "function") {
-    return trimBoundedRows(await indexedQuery.take(QUERY_READ_LIMIT));
+    return await indexedQuery.take(QUERY_READ_LIMIT);
   }
   const orderedQuery = indexedQuery.order?.("desc");
   if (typeof orderedQuery?.take === "function") {
-    return trimBoundedRows(await orderedQuery.take(QUERY_READ_LIMIT));
+    return await orderedQuery.take(QUERY_READ_LIMIT);
   }
   return [];
-}
-
-function trimBoundedRows(
-  rows: readonly Record<string, unknown>[],
-): readonly Record<string, unknown>[] {
-  return rows.slice(0, MAX_SAFE_COUNT);
 }
 
 function buildUnavailableSummary(

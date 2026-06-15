@@ -428,7 +428,7 @@ describe("PR61 Convex evidence graph summary", () => {
       status: "available",
       evidenceGraphRef: {
         id: "mcp-safe-ref:evidence-graph:profile",
-        count: 1,
+        count: 0,
       },
       safeCounts: {
         sourceDocuments: 0,
@@ -517,6 +517,48 @@ describe("PR61 Convex evidence graph summary", () => {
     assertSafeResult(result);
   });
 
+  it("keeps the sentinel row available for safe filtering before clamping", async () => {
+    const sourceDocuments = [
+      ...Array.from({ length: 100 }, (_, index) =>
+        sourceDocument({
+          _id: `source_document_private_${index}_DO_NOT_ECHO`,
+          id: `candidate-source-document:private-${index}_DO_NOT_ECHO`,
+          visibility: "private",
+        }),
+      ),
+      sourceDocument({
+        _id: "source_document_sentinel_DO_NOT_ECHO",
+        id: "candidate-source-document:sentinel_DO_NOT_ECHO",
+      }),
+    ];
+    const { ctx, queryCalls } = makeCtx({
+      userProfiles: [profile()],
+      candidateSourceDocuments: sourceDocuments,
+    });
+
+    const result = await internalSummarizeMcpEvidenceGraph._handler(ctx as any, {
+      twoweeksClerkId: "clerk_DO_NOT_ECHO",
+      evidenceGraphRef: evidenceGraphRef({ count: 1 }),
+    });
+
+    expect(queryCalls.collectCalls).toBe(0);
+    expect(queryCalls.takeLimits).toContain(TEST_QUERY_READ_LIMIT);
+    expect(result).toMatchObject({
+      allowed: true,
+      status: "available",
+      evidenceGraphRef: {
+        count: 1,
+      },
+      safeCounts: {
+        sourceDocuments: 1,
+        candidateFacts: 0,
+        restrictedEvidence: 100,
+        archivedEvidence: 0,
+      },
+    });
+    assertSafeResult(result);
+  });
+
   it("omits raw evidence text, generated artifacts, identities, and database ids", async () => {
     const { ctx } = makeCtx({
       userProfiles: [profile()],
@@ -556,6 +598,7 @@ describe("PR61 Convex evidence graph summary", () => {
 
     expect(source).toContain("internalQuery");
     expect(source).toContain("take(QUERY_READ_LIMIT)");
+    expect(source).not.toContain("trimBoundedRows");
     expect(executableSource).not.toMatch(/\bcollect\s*\(/u);
     expect(source).not.toMatch(/\b(?:mutation|internalMutation|action|internalAction)\b/u);
     for (const pattern of [
