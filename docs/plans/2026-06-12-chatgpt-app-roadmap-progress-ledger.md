@@ -32,7 +32,7 @@ Current open PR:
 ```txt
 Fresh PR59 preflight rerun after PR59-prep-6
 Head branch: codex/pr59-preflight-rerun-after-prep-6
-Docs-only preflight. PR59 remains blocked unless this fresh preflight returns READY_TO_IMPLEMENT_NARROW_PR59.
+Docs-only preflight returned BLOCKED. PR59 remains blocked; next PR is PR59-prep-7.
 ```
 
 Next PR:
@@ -44,7 +44,7 @@ PR59-prep-7 - Production Stytch OAuth/config and account-link persistence decisi
 Next PR gate:
 
 ```txt
-BLOCKED_PENDING_THIS_PREFLIGHT — PR59 remains blocked unless this fresh post-PR59-prep-6 preflight returns READY_TO_IMPLEMENT_NARROW_PR59.
+BLOCKED_NEEDS_PR59_PREP_7 - PR59 remains blocked until production Stytch OAuth/config and account-link persistence decisions are resolved and a later preflight returns READY_TO_IMPLEMENT_NARROW_PR59.
 ```
 
 ---
@@ -78,8 +78,8 @@ BLOCKED_PENDING_THIS_PREFLIGHT — PR59 remains blocked unless this fresh post-P
 | 59-prep-5 | Safe Convex selector projection decision | merged | #178 | b51a95b39351a7b995ae147229690a5dc71b3212 | Docs-only decision defining safe projection rules before PR59 preflight rerun. CI green; review bots non-blocking/unavailable |
 | 59-preflight | PR59 preflight rerun | merged | #179 | 439f01db84f2a5c23834f6ab8c2621e6dd3e6eae | Docs-only preflight after PR178; returned BLOCKED and recommended PR59-prep-6 |
 | 59-prep-6 | MCP-safe selector projection boundary | merged | #180 | 038fe02522dd7e81a3a0278c1781317d0ac61459 | Fixture selector-like inputs only; no real data, Convex calls/imports, handlers, OAuth runtime, token storage, production connector behavior, outbound HTTP, model calls, package changes, or write/export/send/apply behavior |
-| 59-preflight-after-prep-6 | PR59 preflight rerun after MCP-safe selector projection boundary | in progress | none | codex/pr59-preflight-rerun-after-prep-6 | Docs-only preflight to determine whether PR59 is READY_TO_IMPLEMENT_NARROW_PR59 or still BLOCKED |
-| 59 | Read-Only Twoweeks Data Adapter | blocked | none | preflight blocked | PR59 must not start unless this fresh post-PR59-prep-6 preflight returns READY_TO_IMPLEMENT_NARROW_PR59 |
+| 59-preflight-after-prep-6 | PR59 preflight rerun after MCP-safe selector projection boundary | in progress | none | codex/pr59-preflight-rerun-after-prep-6 | Docs-only preflight returned BLOCKED and recommends PR59-prep-7 |
+| 59 | Read-Only Twoweeks Data Adapter | blocked | none | preflight blocked | PR59 must not start; the post-PR59-prep-6 preflight returned BLOCKED and recommends PR59-prep-7 |
 
 ---
 
@@ -124,7 +124,7 @@ PR179 merged the PR59 preflight rerun. It remained docs-only, returned BLOCKED, 
 
 PR180 merged PR59-prep-6. It added a pure fixture-only MCP-safe selector projection boundary and tests. It does not implement PR59, does not call Convex, does not expose real data, and does not authorize MCP real-data reads.
 
-The current step is a fresh PR59 preflight rerun after PR59-prep-6. PR59 remains blocked unless this fresh preflight returns READY_TO_IMPLEMENT_NARROW_PR59. Boundary-only PR59 must not be implemented.
+The current step is a fresh PR59 preflight rerun after PR59-prep-6. It returned BLOCKED and recommends PR59-prep-7 for the production Stytch OAuth/config and account-link persistence decision. Boundary-only PR59 must not be implemented.
 OAuth/real-data/write-action constraints remain active: no OAuth runtime, callback, token storage, account linking, real user data, Convex real-data reads/writes, handlers, production connector, tool execution, outbound HTTP, LLM calls, export/download/send/submit/apply, or package/lockfile changes without an explicit unlocking PR.
 
 ---
