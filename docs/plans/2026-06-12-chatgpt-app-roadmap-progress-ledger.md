@@ -31,6 +31,7 @@ Current open PR:
 
 ```txt
 PR59 - Read-Only Twoweeks Data Adapter
+GitHub PR: https://github.com/panamini/neyssan/pull/185
 Head branch: codex/pr59-read-only-twoweeks-data-adapter
 Narrow implementation branch after PR184 preflight merge. Scope is limited to the read-only Convex data-ref adapter, safe opaque refs, tests, and this ledger. Must not modify app-facing selectors, add OAuth callback/token exchange/refresh/revocation/storage, add MCP endpoint/transport handlers, modify tools runtime, add production connector behavior, outbound HTTP, LLM/model calls, package changes, writes, or export/download/send/submit/apply behavior.
 ```
@@ -82,7 +83,7 @@ IN_PROGRESS_NARROW_PR59 - implementing only the narrow read-only adapter scope a
 | 59-prep-7 | Production Stytch OAuth/config and account-link persistence decision | merged | #182 | d4b9d06053bcb6501073e54350953c650300fe87 | Docs-only decision. Approved narrow PR59-prep-8; PR59 remains blocked |
 | 59-prep-8 | Production Stytch verifier/config and server-only account-link persistence boundary | merged | #183 | ea4697683a3da92314c12453846a18102b329fba | Boundary-only production-shaped Stytch verifier/config and server-only account-link persistence boundary. No PR59 adapter, real data reads, tools runtime, OAuth callback/token exchange/refresh/revocation/storage, production connector behavior, outbound HTTP, LLM/model calls, package changes, or write/export/send/submit/apply behavior |
 | 59-preflight-after-prep-8 | Fresh PR59 preflight rerun after PR59-prep-8 | merged | #184 | f82d81279cf51ea6db78b3eed48f78e70e118767 | Docs-only preflight returned READY_TO_IMPLEMENT_NARROW_PR59 and defined the exact narrow PR59 scope |
-| 59 | Read-Only Twoweeks Data Adapter | in progress | none | codex/pr59-read-only-twoweeks-data-adapter | Boundary-backed read-only adapter and Convex data-ref query only; approved opaque refs only; no app-facing selector reuse, no tools runtime, no production connector, no token storage, no outbound HTTP, no LLM/model calls, no writes, no export/download/send/submit/apply |
+| 59 | Read-Only Twoweeks Data Adapter | in progress | #185 | codex/pr59-read-only-twoweeks-data-adapter | Boundary-backed read-only adapter and Convex data-ref query only; approved opaque refs only; no app-facing selector reuse, no tools runtime, no production connector, no token storage, no outbound HTTP, no LLM/model calls, no writes, no export/download/send/submit/apply |
 
 ---
 
