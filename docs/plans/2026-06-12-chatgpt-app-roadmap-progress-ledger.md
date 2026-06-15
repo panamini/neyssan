@@ -21,30 +21,30 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR182 - PR59-prep-7 - Production Stytch OAuth/config and account-link persistence decision
-GitHub PR: https://github.com/panamini/neyssan/pull/182
-Merge commit: d4b9d06053bcb6501073e54350953c650300fe87
-Merged at: 2026-06-15T05:26:36Z
+PR183 - PR59-prep-8 - Production Stytch verifier/config and server-only account-link persistence boundary
+GitHub PR: https://github.com/panamini/neyssan/pull/183
+Merge commit: ea4697683a3da92314c12453846a18102b329fba
+Merged at: 2026-06-15T15:33:44Z
 ```
 
 Current open PR:
 
 ```txt
-PR59-prep-8 - Production Stytch verifier/config and server-only account-link persistence boundary
-Head branch: codex/pr59-prep-8-production-stytch-account-link-boundary
-Boundary-only code/tests. Must not implement PR59, add PR59 adapter code, read real data, modify app-facing selectors, add OAuth callback/token exchange/refresh/revocation/storage, add MCP endpoint/transport handlers, modify tools runtime, add production connector behavior, outbound HTTP, LLM/model calls, package changes, or export/download/send/submit/apply behavior.
+Fresh PR59 preflight rerun after PR59-prep-8
+Head branch: codex/pr59-preflight-rerun-after-prep-8
+Docs-only preflight. Must not implement PR59, add PR59 adapter code, read real data, modify app-facing selectors, add OAuth callback/token exchange/refresh/revocation/storage, add MCP endpoint/transport handlers, modify tools runtime, add production connector behavior, outbound HTTP, LLM/model calls, package changes, or export/download/send/submit/apply behavior.
 ```
 
-Exact next step after PR59-prep-8:
+Exact next PR:
 
 ```txt
-Fresh PR59 preflight rerun.
+PR59 - Read-Only Twoweeks Data Adapter
 ```
 
-Next PR gate:
+PR59 status:
 
 ```txt
-BLOCKED_NEEDS_FRESH_PR59_PREFLIGHT - PR59 remains blocked until PR59-prep-8 is merged and a later preflight returns READY_TO_IMPLEMENT_NARROW_PR59.
+READY_TO_IMPLEMENT_NARROW_PR59 - ready only for the narrow implementation described in docs/plans/2026-06-15-pr59-read-only-twoweeks-data-adapter-preflight-after-prep-8.md.
 ```
 
 ---
@@ -80,8 +80,9 @@ BLOCKED_NEEDS_FRESH_PR59_PREFLIGHT - PR59 remains blocked until PR59-prep-8 is m
 | 59-prep-6 | MCP-safe selector projection boundary | merged | #180 | 038fe02522dd7e81a3a0278c1781317d0ac61459 | Fixture selector-like inputs only; no real data, Convex calls/imports, handlers, OAuth runtime, token storage, production connector behavior, outbound HTTP, model calls, package changes, or write/export/send/apply behavior |
 | 59-preflight-after-prep-6 | PR59 preflight rerun after MCP-safe selector projection boundary | merged | #181 | df9afa6b1a13c9d79e17122634c5c79a82c18ac6 | Docs-only preflight returned BLOCKED and recommended PR59-prep-7 |
 | 59-prep-7 | Production Stytch OAuth/config and account-link persistence decision | merged | #182 | d4b9d06053bcb6501073e54350953c650300fe87 | Docs-only decision. Approved narrow PR59-prep-8; PR59 remains blocked |
-| 59-prep-8 | Production Stytch verifier/config and server-only account-link persistence boundary | in progress | none | codex/pr59-prep-8-production-stytch-account-link-boundary | Boundary-only implementation. Must not unlock PR59; exact next step is a fresh PR59 preflight rerun |
-| 59 | Read-Only Twoweeks Data Adapter | blocked | none | preflight blocked | PR59 must not start; PR59-prep-8 must merge and a fresh preflight must return READY_TO_IMPLEMENT_NARROW_PR59 |
+| 59-prep-8 | Production Stytch verifier/config and server-only account-link persistence boundary | merged | #183 | ea4697683a3da92314c12453846a18102b329fba | Boundary-only production-shaped Stytch verifier/config and server-only account-link persistence boundary. No PR59 adapter, real data reads, tools runtime, OAuth callback/token exchange/refresh/revocation/storage, production connector behavior, outbound HTTP, LLM/model calls, package changes, or write/export/send/submit/apply behavior |
+| 59-preflight-after-prep-8 | Fresh PR59 preflight rerun after PR59-prep-8 | in progress | none | codex/pr59-preflight-rerun-after-prep-8 | Docs-only preflight returns READY_TO_IMPLEMENT_NARROW_PR59 and defines the exact narrow PR59 scope |
+| 59 | Read-Only Twoweeks Data Adapter | ready for narrow implementation after preflight merge | none | codex/pr59-read-only-twoweeks-data-adapter | Must follow the narrow scope in the PR59-preflight-after-prep-8 report: boundary-backed read-only adapter, approved opaque refs only, no app-facing selector reuse, no tools runtime, no production connector, no token storage, no outbound HTTP, no LLM/model calls, no writes, no export/download/send/submit/apply |
 
 ---
 
@@ -130,7 +131,9 @@ PR181 merged the fresh PR59 preflight rerun after PR59-prep-6. It returned BLOCK
 
 PR59-prep-7 merged in PR182. It approves exactly PR59-prep-8 for production Stytch verifier/config and server-only account-link persistence boundary implementation. PR59 remains blocked until PR59-prep-8 is merged and a fresh PR59 preflight returns READY_TO_IMPLEMENT_NARROW_PR59.
 
-PR59-prep-8 is the current boundary-only implementation step. It may add production-shaped Stytch verifier/config validation, server-only account-link persistence, tests, and ledger alignment only. PR59 must not start from PR59-prep-8.
+PR59-prep-8 merged in PR183. It added production-shaped Stytch verifier/config validation, server-only account-link persistence, tests, and ledger alignment only. It did not implement PR59, real data reads, tools runtime, OAuth callback/token exchange/refresh/revocation/storage, production connector behavior, outbound HTTP, LLM/model calls, package changes, or write/export/send/submit/apply behavior.
+
+The fresh PR59 preflight after PR59-prep-8 returns `READY_TO_IMPLEMENT_NARROW_PR59`. PR59 may start only after this preflight merges and only within the exact narrow scope described by `docs/plans/2026-06-15-pr59-read-only-twoweeks-data-adapter-preflight-after-prep-8.md`.
 
 OAuth/real-data/write-action constraints remain active: no OAuth runtime, callback, token storage, real user data, Convex real-data reads/writes, handlers, production connector, tool execution, outbound HTTP, LLM calls, export/download/send/submit/apply, or package/lockfile changes without an explicit unlocking PR.
 
