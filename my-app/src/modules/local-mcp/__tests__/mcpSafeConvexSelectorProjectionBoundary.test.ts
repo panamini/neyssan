@@ -65,6 +65,10 @@ function expectBlocked(candidate: unknown): void {
   });
 }
 
+function expectBlockedWithoutThrowing(candidate: unknown): void {
+  expect(() => expectBlocked(candidate)).not.toThrow();
+}
+
 function expectSafeResult(result: LocalMcpSafeConvexSelectorProjectionResultV1): void {
   expect(result.allowed).toBe(true);
   if (!result.allowed) throw new TypeError("Expected projection to be allowed");
@@ -217,6 +221,16 @@ describe("local MCP safe Convex selector projection boundary", () => {
   it("rejects Convex document IDs before they can become model-visible refs", () => {
     expectBlocked(buildCandidate("applicationPackageRef", { refId: "j97convexdocumentid123456789" }));
     expectBlocked({ ...buildCandidate("applicationPackageRef"), _id: "j97convexdocumentid123456789" });
+    expectBlocked(
+      buildCandidate("applicationPackageRef", {
+        refId: "mcp-safe-ref:application-package:j97convexdocumentid123456789",
+      }),
+    );
+    expectBlocked(
+      buildCandidate("evidenceGraphRef", {
+        refId: "mcp-safe-ref:evidence-graph:j97_document-id_123456789",
+      }),
+    );
   });
 
   it("rejects malformed arrays and malformed ref candidates", () => {
@@ -227,6 +241,52 @@ describe("local MCP safe Convex selector projection boundary", () => {
     expectBlocked({ ...buildCandidate(), label: "" });
     expectBlocked({ ...buildCandidate(), status: "ready_to_apply" });
     expectBlocked({ ...buildCandidate(), updatedAt: "not-a-date" });
+  });
+
+  it("rejects hidden own properties, symbol keys, and accessors without invoking getters", () => {
+    const nonEnumerableRaw = { ...buildCandidate() };
+    Object.defineProperty(nonEnumerableRaw, "raw_text", {
+      value: "RAW_CV_TEXT: hidden resume body",
+      enumerable: false,
+    });
+
+    const symbolRaw = { ...buildCandidate() } as Record<string | symbol, unknown>;
+    symbolRaw[Symbol("raw_text")] = "RAW_CV_TEXT: symbol resume body";
+
+    const throwingGetter = { ...buildCandidate() };
+    Object.defineProperty(throwingGetter, "label", {
+      enumerable: true,
+      get() {
+        throw new Error("getter should not run");
+      },
+    });
+
+    expectBlockedWithoutThrowing(nonEnumerableRaw);
+    expectBlockedWithoutThrowing(symbolRaw);
+    expectBlockedWithoutThrowing(throwingGetter);
+  });
+
+  it("rejects nested descriptor hazards without invoking nested accessors", () => {
+    const nestedAccessor = { safe: true };
+    Object.defineProperty(nestedAccessor, "raw_text", {
+      enumerable: true,
+      get() {
+        throw new Error("nested getter should not run");
+      },
+    });
+
+    const nestedNonEnumerable = { safe: true };
+    Object.defineProperty(nestedNonEnumerable, "raw_text", {
+      value: "RAW_CV_TEXT: hidden nested resume body",
+      enumerable: false,
+    });
+
+    const nestedSymbol = { safe: true } as Record<string | symbol, unknown>;
+    nestedSymbol[Symbol("raw_text")] = "RAW_CV_TEXT: symbol nested resume body";
+
+    expectBlockedWithoutThrowing({ ...buildCandidate(), fixtureOnlyNested: nestedAccessor });
+    expectBlockedWithoutThrowing({ ...buildCandidate(), fixtureOnlyNested: nestedNonEnumerable });
+    expectBlockedWithoutThrowing({ ...buildCandidate(), fixtureOnlyNested: nestedSymbol });
   });
 
   it("rejects inherited or prototype-backed records", () => {
