@@ -31,7 +31,7 @@ Current open PR:
 
 ```txt
 PR60 - Real Application Package Summary
-GitHub PR: pending branch publication
+GitHub PR: https://github.com/panamini/neyssan/pull/186
 Head branch: codex/pr60-real-application-package-summary
 ```
 
@@ -83,7 +83,7 @@ MERGED_NARROW_PR59 - PR185 merged the narrow read-only adapter scope approved by
 | 59-prep-8 | Production Stytch verifier/config and server-only account-link persistence boundary | merged | #183 | ea4697683a3da92314c12453846a18102b329fba | Boundary-only production-shaped Stytch verifier/config and server-only account-link persistence boundary. No PR59 adapter, real data reads, tools runtime, OAuth callback/token exchange/refresh/revocation/storage, production connector behavior, outbound HTTP, LLM/model calls, package changes, or write/export/send/submit/apply behavior |
 | 59-preflight-after-prep-8 | Fresh PR59 preflight rerun after PR59-prep-8 | merged | #184 | f82d81279cf51ea6db78b3eed48f78e70e118767 | Docs-only preflight returned READY_TO_IMPLEMENT_NARROW_PR59 and defined the exact narrow PR59 scope |
 | 59 | Read-Only Twoweeks Data Adapter | merged | #185 | a7062ab1ce6005c44c4e80f001e4600db4d76591 | Boundary-backed read-only adapter and Convex data-ref query only; approved opaque refs only; no app-facing selector reuse, no tools runtime, no production connector, no token storage, no outbound HTTP, no LLM/model calls, no writes, no export/download/send/submit/apply; merged_at 2026-06-15T17:19:41Z |
-| 60 | Real Application Package Summary | in progress | pending branch publication | codex/pr60-real-application-package-summary | Read-only real application package summary boundary built on PR59 refs only; safe aggregate counts/categories/status only; no runtime wiring, tools runtime, production connector, OAuth/token changes, outbound HTTP, LLM/model calls, package changes, writes, export/download/send/submit/apply, or PR61 evidence graph scope |
+| 60 | Real Application Package Summary | in progress | #186 | codex/pr60-real-application-package-summary | Read-only real application package summary boundary built on PR59 refs only; safe aggregate counts/categories/status only; no runtime wiring, tools runtime, production connector, OAuth/token changes, outbound HTTP, LLM/model calls, package changes, writes, export/download/send/submit/apply, or PR61 evidence graph scope |
 
 ---
 
