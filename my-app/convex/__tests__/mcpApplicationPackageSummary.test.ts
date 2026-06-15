@@ -1,8 +1,12 @@
 import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { internalSummarizeMcpApplicationPackage } from "../mcpApplicationPackageSummary";
 
+const TEST_DIR = dirname(fileURLToPath(import.meta.url));
+const SUMMARY_SOURCE_FILE = resolve(TEST_DIR, "../mcpApplicationPackageSummary.ts");
 const NOW = Date.UTC(2026, 5, 15, 12, 0, 0, 0);
 
 type TableName = "userProfiles" | "applicationPackages";
@@ -307,7 +311,7 @@ describe("PR60 Convex application package summary", () => {
   });
 
   it("keeps the Convex summary query read-only and disconnected from forbidden surfaces", () => {
-    const source = readFileSync("convex/mcpApplicationPackageSummary.ts", "utf8");
+    const source = readFileSync(SUMMARY_SOURCE_FILE, "utf8");
     const executableSource = stripStringAndPatternLiterals(source);
 
     for (const forbiddenImport of [

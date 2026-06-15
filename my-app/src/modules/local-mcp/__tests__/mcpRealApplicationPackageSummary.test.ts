@@ -306,7 +306,7 @@ describe("PR60 real application package summary boundary", () => {
           refs: {
             applicationPackageRef: applicationPackageRef({
               status: "onboarding_required",
-              count: 0,
+              count: 7,
               updatedAt: undefined,
             }),
           },
@@ -330,6 +330,41 @@ describe("PR60 real application package summary boundary", () => {
         id: "mcp-safe-ref:application-package:latest",
         status: "onboarding_required",
         category: "application_package",
+        count: 0,
+      },
+    });
+    assertNoSensitiveOutput(result);
+  });
+
+  it("normalizes unavailable applicationPackageRef counts to zero", () => {
+    const result = projectMcpRealApplicationPackageSummary(
+      summaryInput({
+        adapterResult: adapterResult({
+          reason: "read_only_refs_unavailable",
+          refs: {
+            applicationPackageRef: applicationPackageRef({
+              status: "no_data_available",
+              count: 4,
+              updatedAt: undefined,
+            }),
+          },
+          availabilitySummary: {
+            available: 0,
+            noData: 1,
+            onboarding: 0,
+            blocked: 0,
+            version: 1,
+          },
+        }),
+        applicationPackageSummary: undefined,
+      }),
+    );
+
+    expect(result).toMatchObject({
+      allowed: true,
+      status: "no_data_available",
+      packageRef: {
+        status: "no_data_available",
         count: 0,
       },
     });
@@ -384,6 +419,18 @@ describe("PR60 real application package summary boundary", () => {
       version: 1,
     });
     assertNoSensitiveOutput(result);
+  });
+
+  it("fails closed when summary status and packageRef status conflict", () => {
+    expectBlocked(
+      summaryInput({
+        applicationPackageSummary: applicationPackageSummary({
+          status: "available",
+          packageRef: applicationPackageRef({ status: "no_data_available", count: 0 }),
+        }),
+      }),
+      "summary_required",
+    );
   });
 
   it("rejects raw package content and generated artifact content", () => {

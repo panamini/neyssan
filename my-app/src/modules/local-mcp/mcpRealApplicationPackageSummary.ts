@@ -286,6 +286,7 @@ export function projectMcpRealApplicationPackageSummary(
   if (!summary) return deny("summary_required");
   if (summary.packageRef.id !== adapterPackageRef.id) return deny("summary_required");
   if (summary.status !== "available") return deny("summary_required");
+  if (summary.packageRef.status !== "available") return deny("summary_required");
 
   return {
     kind: "mcp_real_application_package_summary_result",
@@ -546,11 +547,12 @@ function allowUnavailable(
   source: McpRealApplicationPackageSummaryAvailabilityV1["source"],
   packageRef: McpRealApplicationPackageSummaryRefV1 = unavailablePackageRef(status),
 ): McpRealApplicationPackageSummaryResultV1 {
+  const unavailableRef = { ...packageRef, count: 0 };
   return {
     kind: "mcp_real_application_package_summary_result",
     allowed: true,
     status,
-    packageRef,
+    packageRef: unavailableRef,
     availability: {
       source,
       ownerState: status === "onboarding_required" ? "onboarding_required" : "resolved",
