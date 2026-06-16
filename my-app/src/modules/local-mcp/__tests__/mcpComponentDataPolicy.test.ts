@@ -516,6 +516,20 @@ describe("PR65 component UI data policy", () => {
     );
   });
 
+  it("fails closed for revoked proxy payloads", () => {
+    const { proxy, revoke } = Proxy.revocable(
+      {},
+      {
+        getPrototypeOf() {
+          throw new TypeError("revoked");
+        },
+      },
+    );
+    revoke();
+
+    expectBlocked(policyInput("component_visible_structured_content", proxy));
+  });
+
   it.each([
     ["raw CV text", { text: "CV text: RAW_CV_TEXT_SENTINEL_DO_NOT_EXPOSE" }],
     ["raw resume sections", { resumeSections: ["Experience: built billing"] }],
@@ -542,6 +556,7 @@ describe("PR65 component UI data policy", () => {
     ["private fact", { text: "private fact detail" }],
     ["never use fact", { text: "never_use fact detail" }],
     ["token", { text: "Bearer abc.def.ghi" }],
+    ["mixed-case sentinel", { text: "Do_NoT_ExPoSe" }],
     ["raw claims", { rawClaims: { sub: "stytch_subject_DO_NOT_EXPOSE" } }],
     ["identity field", { clerkId: "clerk_DO_NOT_EXPOSE" }],
     ["Convex document id", { id: "j97convexdocumentid" }],

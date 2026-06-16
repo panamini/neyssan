@@ -4,6 +4,13 @@ import {
   type LocalMcpComponentDataSurfaceV1,
 } from "./mcpComponentDataPolicy";
 import type {
+  McpRealReviewCockpitSummaryAvailabilityV1,
+  McpRealReviewCockpitSummaryCapabilitiesV1,
+  McpRealReviewCockpitSummaryCategoriesV1,
+  McpRealReviewCockpitSummaryCountsV1,
+  McpRealReviewCockpitSummaryFlagsV1,
+  McpRealReviewCockpitSummaryMissingDataReasonV1,
+  McpRealReviewCockpitSummaryRefV1,
   McpRealReviewCockpitSummaryResultV1,
   McpRealReviewCockpitSummaryStatusV1,
 } from "./mcpRealReviewCockpitSummary";
@@ -83,7 +90,7 @@ export type McpReadOnlyReviewComponentResultV1 = Readonly<
       allowed: true;
       reason: "safe_review_component_projected";
       component: McpReadOnlyReviewComponentSurfacePayloadsV1;
-      policy: Readonly<Record<LocalMcpComponentDataSurfaceV1, "allowed">>;
+      policy: McpReadOnlyReviewComponentPolicyStatusV1;
       capabilities: McpReadOnlyReviewComponentCapabilitiesV1;
       componentVisible: true;
       version: 1;
@@ -105,8 +112,23 @@ type SafeReviewSummary = Extract<
   { allowed: true }
 >;
 
+type McpReadOnlyReviewComponentPolicySurfaceV1 = Extract<
+  LocalMcpComponentDataSurfaceV1,
+  | "model_visible_structured_content"
+  | "component_visible_structured_content"
+  | "component_visible_content"
+  | "component_visible_meta"
+  | "component_visible_props"
+  | "component_visible_state_snapshot"
+  | "component_visible_action_label"
+>;
+
+type McpReadOnlyReviewComponentPolicyStatusV1 = Readonly<
+  Record<McpReadOnlyReviewComponentPolicySurfaceV1, "allowed">
+>;
+
 type SurfacePayload = Readonly<{
-  surface: LocalMcpComponentDataSurfaceV1;
+  surface: McpReadOnlyReviewComponentPolicySurfaceV1;
   payload: unknown;
 }>;
 
@@ -240,17 +262,108 @@ const INPUT_KEYS = new Set([
   "version",
 ]);
 
+const SAFE_REVIEW_READINESS_VALUES = new Set<
+  NonNullable<McpRealReviewCockpitSummaryCategoriesV1["reviewReadiness"]>
+>(["ready_for_review", "needs_user_review", "blocked", "unknown"]);
+
+const SAFE_REVIEW_GATE_STATUS_VALUES = new Set<
+  NonNullable<McpRealReviewCockpitSummaryCategoriesV1["reviewGateStatus"]>
+>(["ready", "needs_review", "blocked", "unknown"]);
+
+const SAFE_BLOCKER_CATEGORY_VALUES = new Set<
+  NonNullable<McpRealReviewCockpitSummaryCategoriesV1["blockerCategory"]>
+>(["blocked_package", "blocked_artifact", "blocked_run", "failed_run", "none"]);
+
+const SAFE_MISSING_REVIEW_CATEGORY_VALUES = new Set<
+  NonNullable<McpRealReviewCockpitSummaryCategoriesV1["missingReviewCategory"]>
+>([
+  "missing_review_context",
+  "missing_review_artifact",
+  "missing_application_package",
+  "pending_review_items",
+  "none",
+]);
+
+const SAFE_NEXT_REVIEW_HINT_VALUES = new Set<
+  NonNullable<McpRealReviewCockpitSummaryCategoriesV1["nextReviewHint"]>
+>([
+  "review_blockers",
+  "review_pending_items",
+  "review_missing_inputs",
+  "refresh_stale_inputs",
+  "ready_for_review",
+  "add_application_context",
+]);
+
+const SAFE_NEXT_USER_ACTION_VALUES = new Set<
+  NonNullable<McpRealReviewCockpitSummaryCategoriesV1["nextUserAction"]>
+>([
+  "review_blockers",
+  "review_pending_items",
+  "review_missing_inputs",
+  "refresh_inputs",
+  "approve_review_gate",
+  "none",
+]);
+
+const SAFE_MISSING_DATA_REASON_VALUES =
+  new Set<McpRealReviewCockpitSummaryMissingDataReasonV1>([
+    "review_cockpit_ref_missing",
+    "review_cockpit_not_available",
+    "owner_onboarding_required",
+    "summary_unavailable",
+  ]);
+
+const SAFE_REVIEW_COUNT_KEYS = [
+  "reviewContexts",
+  "reviewRuns",
+  "reviewArtifacts",
+  "applicationPackages",
+  "pendingReviews",
+  "approvedReviews",
+  "blockedReviews",
+  "failedRuns",
+  "blockedRuns",
+  "blockedArtifacts",
+  "blockedPackages",
+  "missingReviewItems",
+  "approvalNeeded",
+  "staleInputs",
+  "overLimitCollections",
+] as const;
+
+const SAFE_REVIEW_FIXED_CAPABILITIES = {
+  dataWrites: "blocked",
+  handlerExecution: "blocked",
+  productionConnector: "blocked",
+  networkAccess: "blocked",
+  modelCalls: "blocked",
+  writeActions: "blocked",
+  exportActions: "blocked",
+  rawDataProjection: "blocked",
+  credentialStorage: "none",
+  tokenStorage: "none",
+} as const;
+
+const SAFE_REVIEW_CATEGORY_SPECS = [
+  ["reviewReadiness", SAFE_REVIEW_READINESS_VALUES],
+  ["reviewGateStatus", SAFE_REVIEW_GATE_STATUS_VALUES],
+  ["blockerCategory", SAFE_BLOCKER_CATEGORY_VALUES],
+  ["missingReviewCategory", SAFE_MISSING_REVIEW_CATEGORY_VALUES],
+  ["nextReviewHint", SAFE_NEXT_REVIEW_HINT_VALUES],
+  ["nextUserAction", SAFE_NEXT_USER_ACTION_VALUES],
+] as const;
+
 function readSafeReviewSummary(value: unknown): SafeReviewSummary | undefined {
-  const policyResult = validateSurface(
-    "component_visible_structured_content",
-    value,
+  const envelope = readSafeReviewSummaryEnvelope(value);
+  if (!envelope) return undefined;
+  const summaryParts = readSafeReviewSummaryParts(
+    envelope.record,
+    envelope.status,
   );
-  if (!policyResult.allowed) return undefined;
-  const record = readPlainObjectRecord(value);
-  if (!record) return undefined;
-  if (!isSafeReviewSummaryEnvelope(record)) return undefined;
-  if (!hasSafeReviewSummaryStatus(record.status)) return undefined;
-  return value as SafeReviewSummary;
+  return summaryParts
+    ? buildSafeReviewSummary(envelope.record, envelope.status, summaryParts)
+    : undefined;
 }
 
 function buildUnavailableSummary(
@@ -374,9 +487,7 @@ function validateComponentPayloads(
 ):
   | Readonly<{
       ok: true;
-      surfaceStatus: Readonly<
-        Record<LocalMcpComponentDataSurfaceV1, "allowed">
-      >;
+      surfaceStatus: McpReadOnlyReviewComponentPolicyStatusV1;
     }>
   | Readonly<{ ok: false; result: LocalMcpComponentDataPolicyResultV1 }> {
   const surfacePayloads: readonly SurfacePayload[] = [
@@ -400,7 +511,10 @@ function validateComponentPayloads(
       payload: component.actionLabel,
     },
   ];
-  const surfaceStatus = {} as Record<LocalMcpComponentDataSurfaceV1, "allowed">;
+  const surfaceStatus = {} as Record<
+    McpReadOnlyReviewComponentPolicySurfaceV1,
+    "allowed"
+  >;
   for (const item of surfacePayloads) {
     const result = validateSurface(item.surface, item.payload);
     if (!result.allowed) return { ok: false, result };
@@ -567,33 +681,413 @@ function isSafeReviewSummaryEnvelope(record: Record<string, unknown>): boolean {
   );
 }
 
-function hasSafeReviewSummaryStatus(value: unknown): boolean {
-  return (
-    value === "available" ||
+function readSafeReviewSummaryStatus(
+  value: unknown,
+): McpRealReviewCockpitSummaryStatusV1 | undefined {
+  return value === "available" ||
     value === "no_data_available" ||
     value === "onboarding_required"
+    ? value
+    : undefined;
+}
+
+function readSafeReviewCockpitRef(
+  value: unknown,
+  status: McpRealReviewCockpitSummaryStatusV1,
+): McpRealReviewCockpitSummaryRefV1 | undefined {
+  const record = readVersionedRecord(value);
+  const refFields = record && readSafeReviewCockpitRefFields(record, status);
+  if (!record || !refFields) return undefined;
+  return {
+    id: refFields.id,
+    label: refFields.label,
+    status,
+    category: "review_cockpit",
+    count: refFields.count,
+    ...(refFields.updatedAt ? { updatedAt: refFields.updatedAt } : {}),
+    version: 1,
+  };
+}
+
+function readSafeReviewAvailability(
+  value: unknown,
+): McpRealReviewCockpitSummaryAvailabilityV1 | undefined {
+  const record = readVersionedRecord(value);
+  const source =
+    record &&
+    readRequiredEnum(
+      record.source,
+      new Set(["pr59_read_only_adapter", "convex_review_cockpit_summary"]),
+    );
+  const ownerState =
+    record &&
+    readRequiredEnum(
+      record.ownerState,
+      new Set(["resolved", "onboarding_required"]),
+    );
+  if (!record || !source || !ownerState) {
+    return undefined;
+  }
+  return {
+    source,
+    ownerState,
+    version: 1,
+  };
+}
+
+function readSafeReviewCounts(
+  value: unknown,
+): McpRealReviewCockpitSummaryCountsV1 | undefined {
+  const record = readVersionedRecord(value);
+  const counts = record && readCountFields(record, SAFE_REVIEW_COUNT_KEYS);
+  return record && counts ? { ...counts, version: 1 } : undefined;
+}
+
+function readSafeReviewCategories(
+  value: unknown,
+): McpRealReviewCockpitSummaryCategoriesV1 | undefined {
+  const record = readVersionedRecord(value);
+  const fields =
+    record && readOptionalEnumFields(record, SAFE_REVIEW_CATEGORY_SPECS);
+  return record && fields ? { ...fields, version: 1 } : undefined;
+}
+
+function readSafeReviewFlags(
+  value: unknown,
+): McpRealReviewCockpitSummaryFlagsV1 | undefined {
+  const record = readPlainObjectRecord(value);
+  if (
+    !record ||
+    typeof record.approvalNeeded !== "boolean" ||
+    typeof record.staleData !== "boolean" ||
+    typeof record.overLimit !== "boolean" ||
+    record.version !== 1
+  ) {
+    return undefined;
+  }
+  return {
+    approvalNeeded: record.approvalNeeded,
+    staleData: record.staleData,
+    overLimit: record.overLimit,
+    version: 1,
+  };
+}
+
+function readSafeReviewCapabilities(
+  value: unknown,
+): McpRealReviewCockpitSummaryCapabilitiesV1 | undefined {
+  const record = readVersionedRecord(value);
+  const adapter =
+    record &&
+    readRequiredEnum(
+      record.adapter,
+      new Set(["blocked", "pr59_read_only_adapter_verified"]),
+    );
+  const dataReads =
+    record &&
+    readRequiredEnum(
+      record.dataReads,
+      new Set(["blocked", "convex_review_cockpit_summary"]),
+    );
+  if (
+    !record ||
+    !adapter ||
+    !dataReads ||
+    !hasExactFieldValues(record, SAFE_REVIEW_FIXED_CAPABILITIES)
+  ) {
+    return undefined;
+  }
+  return {
+    adapter,
+    dataReads,
+    dataWrites: "blocked",
+    handlerExecution: "blocked",
+    productionConnector: "blocked",
+    networkAccess: "blocked",
+    modelCalls: "blocked",
+    writeActions: "blocked",
+    exportActions: "blocked",
+    rawDataProjection: "blocked",
+    credentialStorage: "none",
+    tokenStorage: "none",
+    version: 1,
+  };
+}
+
+function readSafeReviewSummaryParts(
+  record: Record<string, unknown>,
+  status: McpRealReviewCockpitSummaryStatusV1,
+):
+  | Readonly<{
+      reviewCockpitRef: McpRealReviewCockpitSummaryRefV1;
+      availability: McpRealReviewCockpitSummaryAvailabilityV1;
+      safeCounts: McpRealReviewCockpitSummaryCountsV1;
+      safeCategories: McpRealReviewCockpitSummaryCategoriesV1;
+      safeFlags: McpRealReviewCockpitSummaryFlagsV1;
+      capabilities: McpRealReviewCockpitSummaryCapabilitiesV1;
+    }>
+  | undefined {
+  const reviewCockpitRef = readSafeReviewCockpitRef(
+    record.reviewCockpitRef,
+    status,
+  );
+  const availability = readSafeReviewAvailability(record.availability);
+  const safeCounts = readSafeReviewCounts(record.safeCounts);
+  const safeCategories = readSafeReviewCategories(record.safeCategories);
+  const safeFlags = readSafeReviewFlags(record.safeFlags);
+  const capabilities = readSafeReviewCapabilities(record.capabilities);
+  return reviewCockpitRef &&
+    availability &&
+    safeCounts &&
+    safeCategories &&
+    safeFlags &&
+    capabilities
+    ? {
+        reviewCockpitRef,
+        availability,
+        safeCounts,
+        safeCategories,
+        safeFlags,
+        capabilities,
+      }
+    : undefined;
+}
+
+function readSafeReviewSummaryEnvelope(value: unknown):
+  | Readonly<{
+      record: Record<string, unknown>;
+      status: McpRealReviewCockpitSummaryStatusV1;
+    }>
+  | undefined {
+  if (!validateSurface("component_visible_structured_content", value).allowed) {
+    return undefined;
+  }
+  const record = readPlainObjectRecord(value);
+  if (!record || !isSafeReviewSummaryEnvelope(record)) return undefined;
+  const status = readSafeReviewSummaryStatus(record.status);
+  return status ? { record, status } : undefined;
+}
+
+function buildSafeReviewSummary(
+  record: Record<string, unknown>,
+  status: McpRealReviewCockpitSummaryStatusV1,
+  summaryParts: Readonly<{
+    reviewCockpitRef: McpRealReviewCockpitSummaryRefV1;
+    availability: McpRealReviewCockpitSummaryAvailabilityV1;
+    safeCounts: McpRealReviewCockpitSummaryCountsV1;
+    safeCategories: McpRealReviewCockpitSummaryCategoriesV1;
+    safeFlags: McpRealReviewCockpitSummaryFlagsV1;
+    capabilities: McpRealReviewCockpitSummaryCapabilitiesV1;
+  }>,
+): SafeReviewSummary | undefined {
+  const updatedAt = readOptionalIsoUtcTimestamp(record.updatedAt);
+  const missingDataReason = readOptionalMissingDataReason(
+    record.missingDataReason,
+  );
+  if (updatedAt === false || missingDataReason === false) return undefined;
+  return {
+    kind: "mcp_real_review_cockpit_summary_result",
+    allowed: true,
+    status,
+    reviewCockpitRef: summaryParts.reviewCockpitRef,
+    availability: summaryParts.availability,
+    safeCounts: summaryParts.safeCounts,
+    safeCategories: summaryParts.safeCategories,
+    safeFlags: summaryParts.safeFlags,
+    ...(updatedAt ? { updatedAt } : {}),
+    ...(missingDataReason ? { missingDataReason } : {}),
+    capabilities: summaryParts.capabilities,
+    modelVisible: true,
+    version: 1,
+  };
+}
+
+function readOptionalIsoUtcTimestamp(
+  value: unknown,
+): string | undefined | false {
+  if (value === undefined) return undefined;
+  return isStrictIsoUtcTimestamp(value) ? value : false;
+}
+
+function readOptionalMissingDataReason(
+  value: unknown,
+): McpRealReviewCockpitSummaryMissingDataReasonV1 | undefined | false {
+  if (value === undefined) return undefined;
+  return typeof value === "string" && SAFE_MISSING_DATA_REASON_VALUES.has(value)
+    ? value
+    : false;
+}
+
+function readVersionedRecord(
+  value: unknown,
+): Record<string, unknown> | undefined {
+  const record = readPlainObjectRecord(value);
+  return record?.version === 1 ? record : undefined;
+}
+
+function readStringFields<T extends readonly string[]>(
+  record: Record<string, unknown>,
+  keys: T,
+): { [K in T[number]]: string } | undefined {
+  const values = {} as { [K in T[number]]: string };
+  for (const key of keys) {
+    if (typeof record[key] !== "string") return undefined;
+    values[key] = record[key];
+  }
+  return values;
+}
+
+function readSafeReviewCockpitRefFields(
+  record: Record<string, unknown>,
+  status: McpRealReviewCockpitSummaryStatusV1,
+):
+  | Readonly<{
+      id: string;
+      label: string;
+      count: number;
+      updatedAt?: string;
+    }>
+  | undefined {
+  const stringFields = readStringFields(record, ["id", "label"]);
+  const count = readCountField(record, "count");
+  const updatedAt = readOptionalIsoUtcTimestamp(record.updatedAt);
+  if (
+    !stringFields ||
+    count === undefined ||
+    updatedAt === false ||
+    record.status !== status ||
+    record.category !== "review_cockpit"
+  ) {
+    return undefined;
+  }
+  return {
+    id: stringFields.id,
+    label: stringFields.label,
+    count,
+    ...(updatedAt ? { updatedAt } : {}),
+  };
+}
+
+function readCountField(
+  record: Record<string, unknown>,
+  key: string,
+): number | undefined {
+  return isSafeCount(record[key]) ? record[key] : undefined;
+}
+
+function readCountFields<T extends readonly string[]>(
+  record: Record<string, unknown>,
+  keys: T,
+): { [K in T[number]]: number } | undefined {
+  const values = {} as { [K in T[number]]: number };
+  for (const key of keys) {
+    const count = readCountField(record, key);
+    if (count === undefined) return undefined;
+    values[key] = count;
+  }
+  return values;
+}
+
+function hasExactFieldValues<T extends Record<string, string>>(
+  record: Record<string, unknown>,
+  expected: T,
+): boolean {
+  return Object.entries(expected).every(
+    ([key, value]) => record[key] === value,
+  );
+}
+
+function readRequiredEnum<T extends string>(
+  value: unknown,
+  allowed: ReadonlySet<T>,
+): T | undefined {
+  return typeof value === "string" && allowed.has(value as T)
+    ? (value as T)
+    : undefined;
+}
+
+function readOptionalEnumFields<
+  T extends readonly [string, ReadonlySet<string>][],
+>(
+  record: Record<string, unknown>,
+  specs: T,
+): Record<string, string> | undefined {
+  const values: Record<string, string> = {};
+  for (const [key, allowed] of specs) {
+    const value = readOptionalEnum(record[key], allowed);
+    if (value === false) return undefined;
+    if (value !== undefined) values[key] = value;
+  }
+  return values;
+}
+
+function readOptionalEnum<T extends string>(
+  value: unknown,
+  allowed: ReadonlySet<T>,
+): T | undefined | false {
+  if (value === undefined) return undefined;
+  return typeof value === "string" && allowed.has(value as T)
+    ? (value as T)
+    : false;
+}
+
+function isSafeCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
+function isStrictIsoUtcTimestamp(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/u.test(value) &&
+    Number.isFinite(Date.parse(value))
   );
 }
 
 function isPlainObjectCandidate(
   value: unknown,
 ): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  return (
+    Boolean(value) &&
+    typeof value === "object" &&
+    !isArrayValue(value as object)
+  );
+}
+
+function isArrayValue(value: object): boolean {
+  try {
+    return Array.isArray(value);
+  } catch {
+    return true;
+  }
 }
 
 function hasPlainObjectPrototype(value: Record<string, unknown>): boolean {
-  return Object.getPrototypeOf(value) === Object.prototype;
+  try {
+    return Object.getPrototypeOf(value) === Object.prototype;
+  } catch {
+    return false;
+  }
 }
 
 function hasOnlyEnumerableDataProperties(
   value: Record<string, unknown>,
 ): boolean {
-  return Object.values(Object.getOwnPropertyDescriptors(value)).every(
-    (descriptor) =>
-      descriptor.enumerable && !("get" in descriptor) && !("set" in descriptor),
-  );
+  try {
+    return Object.values(Object.getOwnPropertyDescriptors(value)).every(
+      (descriptor) =>
+        descriptor.enumerable &&
+        !("get" in descriptor) &&
+        !("set" in descriptor),
+    );
+  } catch {
+    return false;
+  }
 }
 
 function hasSymbolKeys(value: Record<string, unknown>): boolean {
-  return Object.getOwnPropertySymbols(value).length > 0;
+  try {
+    return Object.getOwnPropertySymbols(value).length > 0;
+  } catch {
+    return true;
+  }
 }

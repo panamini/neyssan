@@ -352,6 +352,22 @@ describe("PR66 read-only review component boundary", () => {
     },
   );
 
+  it("fails closed for envelope-valid summaries missing required nested fields", () => {
+    const result = expectBlocked(
+      componentInput({
+        reviewSummary: {
+          kind: "mcp_real_review_cockpit_summary_result",
+          allowed: true,
+          status: "available",
+          modelVisible: true,
+          version: 1,
+        },
+      }),
+    );
+
+    expect(result.reason).toBe("invalid_input");
+  });
+
   it("fails closed when PR65 rejects unsafe review data", () => {
     const result = expectBlocked(
       componentInput({
@@ -363,6 +379,26 @@ describe("PR66 read-only review component boundary", () => {
 
     expect(result.reason).toBe("invalid_input");
     assertSafeOutput(result);
+  });
+
+  it("fails closed for revoked proxy inputs", () => {
+    const { proxy, revoke } = Proxy.revocable(
+      {},
+      {
+        getPrototypeOf() {
+          throw new TypeError("revoked");
+        },
+      },
+    );
+    revoke();
+
+    const result = expectBlocked(
+      componentInput({
+        reviewSummary: proxy,
+      }),
+    );
+
+    expect(result.reason).toBe("invalid_input");
   });
 
   it("treats _meta as component-visible and blocks unsafe metadata", () => {
