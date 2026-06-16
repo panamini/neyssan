@@ -47,7 +47,10 @@ export type McpRealReadOnlyE2EChatGptHarnessCapabilitiesV1 = Readonly<{
   consent: "blocked" | "future_real_data_read";
   audit: "not_evaluated" | "redacted_boundary_checked";
   retention: "blocked" | "boundary_checked";
-  dataReads: "blocked" | "convex_read_only_refs" | "convex_read_only_refs_and_safe_summaries";
+  dataReads:
+    | "blocked"
+    | "convex_read_only_refs"
+    | "convex_read_only_refs_and_safe_summaries";
   dataWrites: "blocked";
   handlerExecution: "blocked";
   productionConnector: "blocked";
@@ -84,8 +87,14 @@ export type McpRealReadOnlyE2EChatGptHarnessResultV1 = Readonly<
       allowed: true;
       reason: "safe_summary_projected";
       toolName: McpRealReadOnlyE2EChatGptToolNameV1;
-      summary: Extract<McpRealReadOnlyE2EChatGptSafeSummaryResultV1, { allowed: true }>;
-      adapterAudit: Extract<McpReadOnlyTwoweeksDataAdapterResultV1, { allowed: true }>["audit"];
+      summary: Extract<
+        McpRealReadOnlyE2EChatGptSafeSummaryResultV1,
+        { allowed: true }
+      >;
+      adapterAudit: Extract<
+        McpReadOnlyTwoweeksDataAdapterResultV1,
+        { allowed: true }
+      >["audit"];
       auditLog: readonly LocalMcpRedactedAuditEntryV1[];
       capabilities: McpRealReadOnlyE2EChatGptHarnessCapabilitiesV1;
       modelVisible: true;
@@ -128,10 +137,19 @@ type ToolRefKey =
 
 type RequestValidation =
   | Readonly<{ ok: true }>
-  | Readonly<{ ok: false; reason: "unsafe_request_arguments" | "write_action_refused" }>;
+  | Readonly<{
+      ok: false;
+      reason: "unsafe_request_arguments" | "write_action_refused";
+    }>;
 
 type SummaryProjection =
-  | Readonly<{ ok: true; summary: Extract<McpRealReadOnlyE2EChatGptSafeSummaryResultV1, { allowed: true }> }>
+  | Readonly<{
+      ok: true;
+      summary: Extract<
+        McpRealReadOnlyE2EChatGptSafeSummaryResultV1,
+        { allowed: true }
+      >;
+    }>
   | Readonly<{ ok: false; rawSummary: unknown }>;
 
 const INPUT_KEYS = [
@@ -204,13 +222,13 @@ const TOOL_CONFIGS: Record<
 } as const;
 
 const WRITE_ACTION_TEXT_PATTERN =
-  /\b(?:apply|delete|download|edit|export|mutate|publish|remove|send|submit|update|upload|write)\b/uim;
+  /\b(?:apply|delete|download|edit|export|mutate|publish|remove|send|submit|update|upload|write)\b/imu;
 
 const UNSAFE_REQUEST_KEY_PATTERN =
-  /(?:authorization|credential|debug|email|private|raw|secret|session|shadow|sourceText|sourceQuote|token|userId|_id)/uim;
+  /(?:authorization|credential|debug|email|private|raw|secret|session|shadow|sourceText|sourceQuote|token|userId|_id)/imu;
 
 const UNSAFE_REQUEST_VALUE_PATTERN =
-  /(?:bearer\s+\S+|private[_ -]?fact|raw[_ -]?arguments|secret[_ -]?token|source[_ -]?quote|source[_ -]?text)/uim;
+  /(?:bearer\s+\S+|private[_ -]?fact|raw[_ -]?arguments|secret[_ -]?token|source[_ -]?quote|source[_ -]?text)/imu;
 
 export function runMcpRealReadOnlyE2EChatGptHarness(
   input: unknown,
@@ -234,7 +252,10 @@ export function runMcpRealReadOnlyE2EChatGptHarness(
         requestValidation.reason === "write_action_refused"
           ? "write_action_refused"
           : "tool_call_refused",
-      outcome: requestValidation.reason === "write_action_refused" ? "refused" : "blocked",
+      outcome:
+        requestValidation.reason === "write_action_refused"
+          ? "refused"
+          : "blocked",
       occurredAt: parsedInput.now.toISOString(),
       request: parsedInput.request,
       rawPayload: parsedInput.request.arguments,
@@ -246,7 +267,9 @@ export function runMcpRealReadOnlyE2EChatGptHarness(
     authBoundary: parsedInput.authBoundary,
     accountLinkBoundary: parsedInput.accountLinkBoundary,
     accountLinkResolution: parsedInput.accountLinkResolution,
-    ...(parsedInput.consent !== undefined ? { consent: parsedInput.consent } : {}),
+    ...(parsedInput.consent !== undefined
+      ? { consent: parsedInput.consent }
+      : {}),
     retentionRecord: parsedInput.retentionRecord,
     readOnlyDataRefs: parsedInput.readOnlyDataRefs,
     now: parsedInput.now,
@@ -256,7 +279,10 @@ export function runMcpRealReadOnlyE2EChatGptHarness(
   if (!adapterResult.allowed) {
     return deny({
       reason: adapterResult.reason,
-      eventType: adapterResult.reason === "auth_required" ? "auth_boundary_refused" : "tool_call_refused",
+      eventType:
+        adapterResult.reason === "auth_required"
+          ? "auth_boundary_refused"
+          : "tool_call_refused",
       outcome: "refused",
       occurredAt: parsedInput.now.toISOString(),
       request: parsedInput.request,
@@ -277,6 +303,7 @@ export function runMcpRealReadOnlyE2EChatGptHarness(
       occurredAt: parsedInput.now.toISOString(),
       request: parsedInput.request,
       rawPayload: summaryProjection.rawSummary,
+      consentBoundarySatisfied: true,
       capabilities: buildHarnessCapabilities("refs_only"),
     });
   }
@@ -320,7 +347,10 @@ export function buildMcpRealReadOnlyE2EChatGptSafeRefusal(): McpRealReadOnlyE2EC
 function parseHarnessInput(value: unknown): ParsedHarnessInput | undefined {
   const record = readRecord(value, INPUT_KEYS, INPUT_REQUIRED_KEYS);
   if (!record) return undefined;
-  if (record.kind !== "mcp_real_read_only_e2e_chatgpt_harness_input" || record.version !== 1) {
+  if (
+    record.kind !== "mcp_real_read_only_e2e_chatgpt_harness_input" ||
+    record.version !== 1
+  ) {
     return undefined;
   }
   const request = parseRequest(record.request);
@@ -344,7 +374,10 @@ function parseHarnessInput(value: unknown): ParsedHarnessInput | undefined {
 function parseRequest(value: unknown): ParsedRequest | undefined {
   const record = readRecord(value, REQUEST_KEYS, REQUEST_KEYS);
   if (!record) return undefined;
-  if (record.kind !== "mcp_real_read_only_e2e_chatgpt_request" || record.version !== 1) {
+  if (
+    record.kind !== "mcp_real_read_only_e2e_chatgpt_request" ||
+    record.version !== 1
+  ) {
     return undefined;
   }
   if (!isToolName(record.toolName)) return undefined;
@@ -357,7 +390,10 @@ function parseRequest(value: unknown): ParsedRequest | undefined {
 }
 
 function validateRequest(request: ParsedRequest): RequestValidation {
-  if (containsWriteActionIntent(request.toolName) || containsWriteActionIntent(request.arguments)) {
+  if (
+    containsWriteActionIntent(request.toolName) ||
+    containsWriteActionIntent(request.arguments)
+  ) {
     return { ok: false, reason: "write_action_refused" };
   }
   if (containsUnsafeRequestMaterial(request.arguments)) {
@@ -375,7 +411,10 @@ function validateRequest(request: ParsedRequest): RequestValidation {
 
 function projectRequestedSummary(
   toolName: McpRealReadOnlyE2EChatGptToolNameV1,
-  adapterResult: Extract<McpReadOnlyTwoweeksDataAdapterResultV1, { allowed: true }>,
+  adapterResult: Extract<
+    McpReadOnlyTwoweeksDataAdapterResultV1,
+    { allowed: true }
+  >,
   summaries: Record<string, unknown>,
 ): SummaryProjection {
   switch (toolName) {
@@ -386,7 +425,9 @@ function projectRequestedSummary(
         applicationPackageSummary: summaries.applicationPackageSummary,
         version: 1,
       });
-      return summary.allowed ? { ok: true, summary } : { ok: false, rawSummary: summaries.applicationPackageSummary };
+      return summary.allowed
+        ? { ok: true, summary }
+        : { ok: false, rawSummary: summaries.applicationPackageSummary };
     }
     case "twoweeks.evidence_graph.summarize": {
       const summary = projectMcpRealEvidenceGraphSummary({
@@ -395,7 +436,9 @@ function projectRequestedSummary(
         evidenceGraphSummary: summaries.evidenceGraphSummary,
         version: 1,
       });
-      return summary.allowed ? { ok: true, summary } : { ok: false, rawSummary: summaries.evidenceGraphSummary };
+      return summary.allowed
+        ? { ok: true, summary }
+        : { ok: false, rawSummary: summaries.evidenceGraphSummary };
     }
     case "twoweeks.resume_variant_plan.summarize": {
       const summary = projectMcpRealResumeVariantPlanSummary({
@@ -404,7 +447,9 @@ function projectRequestedSummary(
         resumeVariantPlanSummary: summaries.resumeVariantPlanSummary,
         version: 1,
       });
-      return summary.allowed ? { ok: true, summary } : { ok: false, rawSummary: summaries.resumeVariantPlanSummary };
+      return summary.allowed
+        ? { ok: true, summary }
+        : { ok: false, rawSummary: summaries.resumeVariantPlanSummary };
     }
     case "twoweeks.review_cockpit.summarize": {
       const summary = projectMcpRealReviewCockpitSummary({
@@ -413,14 +458,19 @@ function projectRequestedSummary(
         reviewCockpitSummary: summaries.reviewCockpitSummary,
         version: 1,
       });
-      return summary.allowed ? { ok: true, summary } : { ok: false, rawSummary: summaries.reviewCockpitSummary };
+      return summary.allowed
+        ? { ok: true, summary }
+        : { ok: false, rawSummary: summaries.reviewCockpitSummary };
     }
   }
 }
 
 function buildToolScopedAdapterResult(
   toolName: McpRealReadOnlyE2EChatGptToolNameV1,
-  adapterResult: Extract<McpReadOnlyTwoweeksDataAdapterResultV1, { allowed: true }>,
+  adapterResult: Extract<
+    McpReadOnlyTwoweeksDataAdapterResultV1,
+    { allowed: true }
+  >,
 ): Extract<McpReadOnlyTwoweeksDataAdapterResultV1, { allowed: true }> {
   const refKey = TOOL_CONFIGS[toolName].refKey;
   const ref = adapterResult.refs[refKey];
@@ -448,6 +498,7 @@ function deny(input: {
   occurredAt: string;
   request?: ParsedRequest;
   rawPayload?: unknown;
+  consentBoundarySatisfied?: boolean;
   capabilities?: McpRealReadOnlyE2EChatGptHarnessCapabilitiesV1;
 }): McpRealReadOnlyE2EChatGptHarnessResultV1 {
   return {
@@ -462,6 +513,7 @@ function deny(input: {
         occurredAt: input.occurredAt,
         request: input.request,
         rawPayload: input.rawPayload,
+        consentBoundarySatisfied: input.consentBoundarySatisfied,
       }),
     ],
     capabilities: input.capabilities ?? buildHarnessCapabilities("blocked"),
@@ -484,8 +536,11 @@ function buildHarnessAuditEntry(input: {
     occurredAt: input.occurredAt,
     outcome: input.outcome,
     ...(input.request ? { toolName: input.request.toolName } : {}),
-    ...(input.request ? { localToolId: TOOL_CONFIGS[input.request.toolName].localToolId } : {}),
-    safeSummary: "Read-only local MCP boundary event recorded. No product action executed.",
+    ...(input.request
+      ? { localToolId: TOOL_CONFIGS[input.request.toolName].localToolId }
+      : {}),
+    safeSummary:
+      "Read-only local MCP boundary event recorded. No product action executed.",
     consentBoundarySatisfied: input.consentBoundarySatisfied === true,
     rawPayload: input.rawPayload,
   });
@@ -521,7 +576,9 @@ function buildHarnessCapabilities(
   };
 }
 
-function isToolName(value: unknown): value is McpRealReadOnlyE2EChatGptToolNameV1 {
+function isToolName(
+  value: unknown,
+): value is McpRealReadOnlyE2EChatGptToolNameV1 {
   return (
     value === "twoweeks.application_package.summarize" ||
     value === "twoweeks.evidence_graph.summarize" ||
@@ -531,14 +588,17 @@ function isToolName(value: unknown): value is McpRealReadOnlyE2EChatGptToolNameV
 }
 
 function containsWriteActionIntent(value: unknown): boolean {
-  return visitRequestMaterial(value, (text) => WRITE_ACTION_TEXT_PATTERN.test(text));
+  return visitRequestMaterial(value, (text) =>
+    WRITE_ACTION_TEXT_PATTERN.test(text),
+  );
 }
 
 function containsUnsafeRequestMaterial(value: unknown): boolean {
   return visitRequestMaterial(
     value,
     (text, isKey) =>
-      (isKey && UNSAFE_REQUEST_KEY_PATTERN.test(text)) || UNSAFE_REQUEST_VALUE_PATTERN.test(text),
+      (isKey && UNSAFE_REQUEST_KEY_PATTERN.test(text)) ||
+      UNSAFE_REQUEST_VALUE_PATTERN.test(text),
   );
 }
 
@@ -560,12 +620,16 @@ function visitRequestMaterialInner(
   seen.add(value);
 
   if (Array.isArray(value)) {
-    return value.some((item) => visitRequestMaterialInner(item, predicate, seen));
+    return value.some((item) =>
+      visitRequestMaterialInner(item, predicate, seen),
+    );
   }
   const record = readPlainObjectRecord(value);
   if (!record) return true;
   return Object.keys(record).some(
-    (key) => predicate(key, true) || visitRequestMaterialInner(record[key], predicate, seen),
+    (key) =>
+      predicate(key, true) ||
+      visitRequestMaterialInner(record[key], predicate, seen),
   );
 }
 
@@ -577,22 +641,35 @@ function readRecord(
   const record = readPlainObjectRecord(value);
   if (!record) return undefined;
   const actualKeys = Reflect.ownKeys(record);
-  if (!actualKeys.every((key) => typeof key === "string" && allowedKeys.includes(key))) {
+  if (
+    !actualKeys.every(
+      (key) => typeof key === "string" && allowedKeys.includes(key),
+    )
+  ) {
     return undefined;
   }
-  return requiredKeys.every((key) => Object.prototype.hasOwnProperty.call(record, key))
+  return requiredKeys.every((key) =>
+    Object.prototype.hasOwnProperty.call(record, key),
+  )
     ? record
     : undefined;
 }
 
-function readPlainObjectRecord(value: unknown): Record<string, unknown> | undefined {
+function readPlainObjectRecord(
+  value: unknown,
+): Record<string, unknown> | undefined {
   const descriptors = readPlainObjectDescriptors(value);
   if (!descriptors) return undefined;
   const record: Record<string, unknown> = {};
   for (const key of Reflect.ownKeys(descriptors)) {
     if (typeof key !== "string") return undefined;
     const descriptor = descriptors[key];
-    if (!descriptor || descriptor.enumerable !== true || !("value" in descriptor)) return undefined;
+    if (
+      !descriptor ||
+      descriptor.enumerable !== true ||
+      !("value" in descriptor)
+    )
+      return undefined;
     record[key] = descriptor.value;
   }
   return record;
@@ -601,7 +678,8 @@ function readPlainObjectRecord(value: unknown): Record<string, unknown> | undefi
 function readPlainObjectDescriptors(
   value: unknown,
 ): Record<PropertyKey, PropertyDescriptor | undefined> | undefined {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
+  if (value === null || typeof value !== "object" || Array.isArray(value))
+    return undefined;
   try {
     const prototype = Object.getPrototypeOf(value);
     if (prototype !== Object.prototype && prototype !== null) return undefined;
@@ -615,5 +693,11 @@ function readPlainObjectDescriptors(
 }
 
 function readDate(value: unknown): Date | undefined {
-  return value instanceof Date ? value : undefined;
+  if (!(value instanceof Date)) return undefined;
+  try {
+    const timestamp = Date.prototype.getTime.call(value);
+    return Number.isFinite(timestamp) ? new Date(timestamp) : undefined;
+  } catch {
+    return undefined;
+  }
 }

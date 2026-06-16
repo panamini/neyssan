@@ -11,7 +11,10 @@ import {
 import { assertLocalMcpPrivacySafeOutput } from "../privacyRedactionFixtures";
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
-const HARNESS_SOURCE_FILE = resolve(TEST_DIR, "../mcpRealReadOnlyE2EChatGptHarness.ts");
+const HARNESS_SOURCE_FILE = resolve(
+  TEST_DIR,
+  "../mcpRealReadOnlyE2EChatGptHarness.ts",
+);
 const NOW = new Date("2026-06-15T12:00:00.000Z");
 
 const ALL_SCOPES = [
@@ -524,9 +527,9 @@ function assertSafeHarnessOutput(value: unknown): void {
 
 function stripStringAndPatternLiterals(source: string): string {
   return source
-    .replace(/`(?:\\.|[^`\\])*`/gmu, "\"\"")
-    .replace(/"(?:\\.|[^"\\])*"/gmu, "\"\"")
-    .replace(/'(?:\\.|[^'\\])*'/gmu, "\"\"")
+    .replace(/`(?:\\.|[^`\\])*`/gmu, '""')
+    .replace(/"(?:\\.|[^"\\])*"/gmu, '""')
+    .replace(/'(?:\\.|[^'\\])*'/gmu, '""')
     .replace(/\/(?:\\.|[^/\\\n])+\/[a-z]*/gimu, "/_/u");
 }
 
@@ -541,7 +544,8 @@ describe("PR64 real read-only E2E ChatGPT harness", () => {
       );
 
       expect(result.allowed).toBe(true);
-      if (!result.allowed) throw new Error("expected allowed PR64 harness result");
+      if (!result.allowed)
+        throw new Error("expected allowed PR64 harness result");
       expect(result.reason).toBe("safe_summary_projected");
       expect(result.toolName).toBe(toolName);
       expect(result.summary).toEqual(
@@ -616,7 +620,9 @@ describe("PR64 real read-only E2E ChatGPT harness", () => {
     );
     if (result.allowed) throw new Error("expected blocked PR64 harness result");
     expect(result.summary).toBeUndefined();
-    expect(result.safeRefusal).toEqual(buildMcpRealReadOnlyE2EChatGptSafeRefusal());
+    expect(result.safeRefusal).toEqual(
+      buildMcpRealReadOnlyE2EChatGptSafeRefusal(),
+    );
     expect(result.safeRefusal).toEqual(
       expect.objectContaining({
         code: "real_read_only_e2e_chatgpt_harness_blocked",
@@ -636,6 +642,148 @@ describe("PR64 real read-only E2E ChatGPT harness", () => {
     assertSafeHarnessOutput(result);
   });
 
+  it.each([
+    [
+      "inactive account link",
+      {
+        accountLinkBoundary: {
+          ...ACCOUNT_LINK_ALLOWED,
+          allowed: false,
+          reason: "missing_account_link",
+        },
+      },
+    ],
+    [
+      "missing account-link owner resolution",
+      {
+        accountLinkResolution: {
+          kind: "mcp_account_link_server_only_owner_resolution_malformed",
+          version: 1,
+        },
+      },
+    ],
+  ])(
+    "blocks %s before returning a model-visible summary",
+    (_caseName, overrides) => {
+      const result = runMcpRealReadOnlyE2EChatGptHarness(
+        harnessInput(overrides),
+      );
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          allowed: false,
+          reason: "account_link_required",
+          modelVisible: true,
+        }),
+      );
+      if (result.allowed)
+        throw new Error("expected account-link failure to be blocked");
+      expect(result.summary).toBeUndefined();
+      assertSafeHarnessOutput(result);
+    },
+  );
+
+  it.each([
+    ["missing consent", { consent: undefined }],
+    [
+      "denied consent",
+      {
+        consent: {
+          ...CONSENT,
+          granted: false,
+          reason: "denied by fixture",
+        },
+      },
+    ],
+    [
+      "stale consent",
+      {
+        consent: {
+          ...CONSENT,
+          expiresAt: "2026-06-15T11:30:00.000Z",
+        },
+      },
+    ],
+  ])(
+    "blocks %s before returning a model-visible summary",
+    (_caseName, overrides) => {
+      const result = runMcpRealReadOnlyE2EChatGptHarness(
+        harnessInput(overrides),
+      );
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          allowed: false,
+          reason: "consent_required",
+          modelVisible: true,
+        }),
+      );
+      if (result.allowed)
+        throw new Error("expected consent failure to be blocked");
+      expect(result.summary).toBeUndefined();
+      assertSafeHarnessOutput(result);
+    },
+  );
+
+  it("rejects unknown tools before adapter or summary projection", () => {
+    const result = runMcpRealReadOnlyE2EChatGptHarness(
+      harnessInput({
+        request: {
+          kind: "mcp_real_read_only_e2e_chatgpt_request",
+          toolName: "twoweeks.unknown.summarize",
+          arguments: {
+            unknownRef: "mcp-safe-ref:unknown",
+          },
+          version: 1,
+        },
+      }),
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        allowed: false,
+        reason: "invalid_input",
+        modelVisible: true,
+      }),
+    );
+    if (result.allowed) throw new Error("expected unknown tool to be blocked");
+    expect(result.capabilities).toEqual(
+      expect.objectContaining({
+        dataReads: "blocked",
+        dataWrites: "blocked",
+        handlerExecution: "blocked",
+        productionConnector: "blocked",
+      }),
+    );
+    assertSafeHarnessOutput(result);
+  });
+
+  it("rejects non-finite Date inputs without throwing", () => {
+    const result = runMcpRealReadOnlyE2EChatGptHarness(
+      harnessInput({
+        now: new Date(Number.NaN),
+      }),
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        allowed: false,
+        reason: "invalid_input",
+        modelVisible: true,
+      }),
+    );
+    if (result.allowed)
+      throw new Error("expected malformed Date input to be blocked");
+    expect(result.auditLog[0]).toEqual(
+      expect.objectContaining({
+        eventType: "tool_call_refused",
+        outcome: "invalid",
+        persisted: false,
+      }),
+    );
+    assertSafeHarnessOutput(result);
+  });
+
   it("blocks malformed ChatGPT-style arguments and keeps raw request material out of audit output", () => {
     const result = runMcpRealReadOnlyE2EChatGptHarness(
       harnessInput({
@@ -650,7 +798,8 @@ describe("PR64 real read-only E2E ChatGPT harness", () => {
     );
 
     expect(result.allowed).toBe(false);
-    if (result.allowed) throw new Error("expected unsafe request to be blocked");
+    if (result.allowed)
+      throw new Error("expected unsafe request to be blocked");
     expect(result.reason).toBe("unsafe_request_arguments");
     expect(result.auditLog[0]).toEqual(
       expect.objectContaining({
@@ -659,42 +808,48 @@ describe("PR64 real read-only E2E ChatGPT harness", () => {
         persisted: false,
       }),
     );
-    expect(result.auditLog[0].redactions.map((redaction) => redaction.category)).toEqual(
+    expect(
+      result.auditLog[0].redactions.map((redaction) => redaction.category),
+    ).toEqual(
       expect.arrayContaining(["credential", "restricted_fact", "source_text"]),
     );
     assertSafeHarnessOutput(result);
   });
 
-  it("refuses write-like requests before adapter or summary projection", () => {
-    const result = runMcpRealReadOnlyE2EChatGptHarness(
-      harnessInput({
-        request: request("twoweeks.application_package.summarize", {
-          applicationPackageRef: "mcp-safe-ref:application-package:latest",
-          action: "download",
+  it.each(["apply", "download", "export", "send", "submit", "write"] as const)(
+    "refuses %s-like requests before adapter or summary projection",
+    (writeAction) => {
+      const result = runMcpRealReadOnlyE2EChatGptHarness(
+        harnessInput({
+          request: request("twoweeks.application_package.summarize", {
+            applicationPackageRef: "mcp-safe-ref:application-package:latest",
+            action: writeAction,
+          }),
         }),
-      }),
-    );
+      );
 
-    expect(result.allowed).toBe(false);
-    if (result.allowed) throw new Error("expected write-like request to be blocked");
-    expect(result.reason).toBe("write_action_refused");
-    expect(result.capabilities).toEqual(
-      expect.objectContaining({
-        dataReads: "blocked",
-        dataWrites: "blocked",
-        writeActions: "blocked",
-        handlerExecution: "blocked",
-        productionConnector: "blocked",
-      }),
-    );
-    expect(result.auditLog[0]).toEqual(
-      expect.objectContaining({
-        eventType: "write_action_refused",
-        outcome: "refused",
-      }),
-    );
-    assertSafeHarnessOutput(result);
-  });
+      expect(result.allowed).toBe(false);
+      if (result.allowed)
+        throw new Error("expected write-like request to be blocked");
+      expect(result.reason).toBe("write_action_refused");
+      expect(result.capabilities).toEqual(
+        expect.objectContaining({
+          dataReads: "blocked",
+          dataWrites: "blocked",
+          writeActions: "blocked",
+          handlerExecution: "blocked",
+          productionConnector: "blocked",
+        }),
+      );
+      expect(result.auditLog[0]).toEqual(
+        expect.objectContaining({
+          eventType: "write_action_refused",
+          outcome: "refused",
+        }),
+      );
+      assertSafeHarnessOutput(result);
+    },
+  );
 
   it("blocks unsafe real summary payloads instead of exposing raw source material", () => {
     const result = runMcpRealReadOnlyE2EChatGptHarness(
@@ -711,7 +866,8 @@ describe("PR64 real read-only E2E ChatGPT harness", () => {
     );
 
     expect(result.allowed).toBe(false);
-    if (result.allowed) throw new Error("expected unsafe summary to be blocked");
+    if (result.allowed)
+      throw new Error("expected unsafe summary to be blocked");
     expect(result.reason).toBe("summary_blocked");
     expect(result.auditLog[0]).toEqual(
       expect.objectContaining({
@@ -720,19 +876,39 @@ describe("PR64 real read-only E2E ChatGPT harness", () => {
         persisted: false,
       }),
     );
-    expect(result.auditLog[0].redactions.map((redaction) => redaction.category)).toContain(
-      "source_text",
+    expect(result.auditLog[0].capabilities).toEqual(
+      expect.objectContaining({
+        consent: "boundary_only",
+        handlerExecution: "blocked",
+        dataAccess: "blocked",
+        writeAction: "blocked",
+        persistence: "none",
+        productionConnector: "blocked",
+      }),
     );
+    expect(
+      result.auditLog[0].redactions.map((redaction) => redaction.category),
+    ).toContain("source_text");
     assertSafeHarnessOutput(result);
   });
 
   it("keeps the PR64 harness disconnected from runtime, network, UI, and write surfaces", () => {
-    const source = stripStringAndPatternLiterals(readFileSync(HARNESS_SOURCE_FILE, "utf8"));
+    const source = stripStringAndPatternLiterals(
+      readFileSync(HARNESS_SOURCE_FILE, "utf8"),
+    );
 
-    expect(source).not.toMatch(/@modelcontextprotocol|express|hono|fastify|react|iframe|widget/u);
-    expect(source).not.toMatch(/\b(fetch|XMLHttpRequest|WebSocket|EventSource)\s*\(/u);
-    expect(source).not.toMatch(/\b(mutation|action|internalMutation|internalAction)\s*\(/u);
+    expect(source).not.toMatch(
+      /@modelcontextprotocol|express|hono|fastify|react|iframe|widget/u,
+    );
+    expect(source).not.toMatch(
+      /\b(fetch|XMLHttpRequest|WebSocket|EventSource)\s*\(/u,
+    );
+    expect(source).not.toMatch(
+      /\b(mutation|action|internalMutation|internalAction)\s*\(/u,
+    );
     expect(source).not.toMatch(/\b(localStorage|sessionStorage|indexedDB)\b/u);
-    expect(source).not.toMatch(/\b(writeFile|appendFile|createWriteStream|rm|unlink)\s*\(/u);
+    expect(source).not.toMatch(
+      /\b(writeFile|appendFile|createWriteStream|rm|unlink)\s*\(/u,
+    );
   });
 });
