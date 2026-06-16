@@ -29,7 +29,8 @@ function policyInput(
 
 function expectAllowed(result: LocalMcpComponentDataPolicyResultV1): void {
   expect(result.allowed).toBe(true);
-  if (!result.allowed) throw new TypeError("expected component data policy to allow payload");
+  if (!result.allowed)
+    throw new TypeError("expected component data policy to allow payload");
   expect(result.capabilities).toEqual({
     componentData: "policy_checked",
     componentRendering: "blocked",
@@ -51,8 +52,11 @@ function expectAllowed(result: LocalMcpComponentDataPolicyResultV1): void {
 function expectBlocked(input: unknown): LocalMcpComponentDataPolicyResultV1 {
   const result = validateLocalMcpComponentDataPolicy(input);
   expect(result.allowed).toBe(false);
-  if (result.allowed) throw new TypeError("expected component data policy to block payload");
-  expect(result.safeRefusal).toEqual(buildLocalMcpComponentDataPolicySafeRefusal());
+  if (result.allowed)
+    throw new TypeError("expected component data policy to block payload");
+  expect(result.safeRefusal).toEqual(
+    buildLocalMcpComponentDataPolicySafeRefusal(),
+  );
   expect(result).not.toHaveProperty("safePayload");
   assertPolicyResultSafe(result);
   return result;
@@ -303,22 +307,28 @@ function reviewCockpitSummary() {
 
 function stripStringAndPatternLiterals(source: string): string {
   return source
-    .replace(/`(?:\\.|[^`\\])*`/gmu, "\"\"")
-    .replace(/"(?:\\.|[^"\\])*"/gmu, "\"\"")
-    .replace(/'(?:\\.|[^'\\])*'/gmu, "\"\"")
+    .replace(/`(?:\\.|[^`\\])*`/gmu, '""')
+    .replace(/"(?:\\.|[^"\\])*"/gmu, '""')
+    .replace(/'(?:\\.|[^'\\])*'/gmu, '""')
     .replace(/\/(?:\\.|[^/\\\n])+\/[a-z]*/gimu, "/_/u");
 }
 
 function sourceFiles(): readonly string[] {
-  return [POLICY_SOURCE_FILE, TEST_SOURCE_FILE].map((file) => readFileSync(file, "utf8"));
+  return [POLICY_SOURCE_FILE, TEST_SOURCE_FILE].map((file) =>
+    readFileSync(file, "utf8"),
+  );
 }
 
 function implementationSource(): string {
-  return stripStringAndPatternLiterals(readFileSync(POLICY_SOURCE_FILE, "utf8"));
+  return stripStringAndPatternLiterals(
+    readFileSync(POLICY_SOURCE_FILE, "utf8"),
+  );
 }
 
 function importSpecifiers(source: string): readonly string[] {
-  return [...source.matchAll(/^\s*import(?:\s+type)?[\s\S]*?\sfrom\s+"([^"]+)";/gmu)].map((match) => match[1]);
+  return [
+    ...source.matchAll(/^\s*import(?:\s+type)?[\s\S]*?\sfrom\s+"([^"]+)";/gmu),
+  ].map((match) => match[1]);
 }
 
 describe("PR65 component UI data policy", () => {
@@ -359,14 +369,47 @@ describe("PR65 component UI data policy", () => {
     ["evidence graph", evidenceGraphSummary()],
     ["resume variant plan", resumeVariantPlanSummary()],
     ["review cockpit", reviewCockpitSummary()],
-  ] as const)("allows safe PR60-PR64 %s summary-shaped payloads", (_label, payload) => {
-    const result = validateLocalMcpComponentDataPolicy(
-      policyInput("component_visible_structured_content", payload),
-    );
-    expectAllowed(result);
-    if (!result.allowed) throw new TypeError("expected summary payload to be allowed");
-    expect(result.safePayload).toEqual(payload);
-  });
+  ] as const)(
+    "allows safe PR60-PR64 %s summary-shaped payloads",
+    (_label, payload) => {
+      const result = validateLocalMcpComponentDataPolicy(
+        policyInput("component_visible_structured_content", payload),
+      );
+      expectAllowed(result);
+      if (!result.allowed)
+        throw new TypeError("expected summary payload to be allowed");
+      expect(result.safePayload).toEqual(payload);
+    },
+  );
+
+  it.each([
+    [
+      "component structured text",
+      "component_visible_structured_content",
+      "short safe-looking text",
+    ],
+    ["model structured count", "model_visible_structured_content", 123],
+    [
+      "component structured boolean",
+      "component_visible_structured_content",
+      true,
+    ],
+    ["meta scalar", "component_visible_meta", "safe-looking metadata"],
+    ["props scalar", "component_visible_props", 1],
+    ["bridge payload scalar", "component_visible_bridge_payload", false],
+    ["state snapshot scalar", "component_visible_state_snapshot", "state"],
+    [
+      "model-context update scalar",
+      "component_visible_model_context_update",
+      "update",
+    ],
+    ["error scalar", "component_visible_error", "blocked"],
+  ] as const)(
+    "rejects top-level scalar payloads for %s",
+    (_label, surface, payload) => {
+      expectBlocked(policyInput(surface, payload));
+    },
+  );
 
   it("treats _meta as component-visible and rejects raw or sensitive data there", () => {
     expectBlocked(
@@ -400,7 +443,10 @@ describe("PR65 component UI data policy", () => {
 
     expectBlocked(
       policyInput("component_visible_content", [
-        { type: "text", text: "WORK EXPERIENCE:\nSenior engineer at ACME from 2020 to 2024." },
+        {
+          type: "text",
+          text: "WORK EXPERIENCE:\nSenior engineer at ACME from 2020 to 2024.",
+        },
       ]),
     );
   });
@@ -468,28 +514,46 @@ describe("PR65 component UI data policy", () => {
   it.each([
     ["raw CV text", { text: "CV text: RAW_CV_TEXT_SENTINEL_DO_NOT_EXPOSE" }],
     ["raw resume sections", { resumeSections: ["Experience: built billing"] }],
-    ["generated artifact content", { text: "generated resume variant content" }],
-    ["raw job content", { text: "raw job description text for a private role" }],
-    ["raw proposal content", { text: "raw proposal content for the application" }],
-    ["cover letter content", { text: "Dear Hiring Manager, I am excited to apply..." }],
-    ["source quote", { text: "source quote: SOURCE_QUOTE_DUMP_SENTINEL_DO_NOT_EXPOSE" }],
+    [
+      "generated artifact content",
+      { text: "generated resume variant content" },
+    ],
+    [
+      "raw job content",
+      { text: "raw job description text for a private role" },
+    ],
+    [
+      "raw proposal content",
+      { text: "raw proposal content for the application" },
+    ],
+    [
+      "cover letter content",
+      { text: "Dear Hiring Manager, I am excited to apply..." },
+    ],
+    [
+      "source quote",
+      { text: "source quote: SOURCE_QUOTE_DUMP_SENTINEL_DO_NOT_EXPOSE" },
+    ],
     ["private fact", { text: "private fact detail" }],
     ["never use fact", { text: "never_use fact detail" }],
     ["token", { text: "Bearer abc.def.ghi" }],
     ["raw claims", { rawClaims: { sub: "stytch_subject_DO_NOT_EXPOSE" } }],
     ["identity field", { clerkId: "clerk_DO_NOT_EXPOSE" }],
     ["Convex document id", { id: "j97convexdocumentid" }],
-  ] as const)("rejects forbidden component-visible material: %s", (_label, payload) => {
-    expectBlocked(
-      policyInput("component_visible_error", {
-        kind: "local_mcp_component_data_policy_safe_error",
-        code: "component_data_policy_blocked",
-        message: "Refused. Component data policy blocked.",
-        ...payload,
-        version: 1,
-      }),
-    );
-  });
+  ] as const)(
+    "rejects forbidden component-visible material: %s",
+    (_label, payload) => {
+      expectBlocked(
+        policyInput("component_visible_error", {
+          kind: "local_mcp_component_data_policy_safe_error",
+          code: "component_data_policy_blocked",
+          message: "Refused. Component data policy blocked.",
+          ...payload,
+          version: 1,
+        }),
+      );
+    },
+  );
 
   it("allows safe next-action labels and rejects write/export/download/send/submit/apply labels", () => {
     expectAllowed(
@@ -498,8 +562,17 @@ describe("PR65 component UI data policy", () => {
       ),
     );
 
-    for (const unsafeAction of ["write", "export", "download", "send", "submit", "apply"] as const) {
-      expectBlocked(policyInput("component_visible_action_label", unsafeAction));
+    for (const unsafeAction of [
+      "write",
+      "export",
+      "download",
+      "send",
+      "submit",
+      "apply",
+    ] as const) {
+      expectBlocked(
+        policyInput("component_visible_action_label", unsafeAction),
+      );
     }
   });
 
@@ -508,10 +581,18 @@ describe("PR65 component UI data policy", () => {
     expect(implementation).not.toMatch(
       /ReadOnlyReviewComponent|window\.openai|postMessage|React|tsx|jsx|iframe|render/u,
     );
-    expect(implementation).not.toMatch(/@modelcontextprotocol|express|hono|fastify/u);
-    expect(implementation).not.toMatch(/\b(fetch|XMLHttpRequest|WebSocket|EventSource)\s*\(/u);
-    expect(implementation).not.toMatch(/\b(registerTool|registerResource|tools\/call|ui\/message)\b/u);
-    expect(implementation).not.toMatch(/\b(mutation|action|internalMutation|internalAction)\s*\(/u);
+    expect(implementation).not.toMatch(
+      /@modelcontextprotocol|express|hono|fastify/u,
+    );
+    expect(implementation).not.toMatch(
+      /\b(fetch|XMLHttpRequest|WebSocket|EventSource)\s*\(/u,
+    );
+    expect(implementation).not.toMatch(
+      /\b(registerTool|registerResource|tools\/call|ui\/message)\b/u,
+    );
+    expect(implementation).not.toMatch(
+      /\b(mutation|action|internalMutation|internalAction)\s*\(/u,
+    );
 
     const imports = importSpecifiers(readFileSync(POLICY_SOURCE_FILE, "utf8"));
     expect(imports).toEqual([]);
@@ -519,9 +600,15 @@ describe("PR65 component UI data policy", () => {
 
   it("keeps test fixtures and implementation scoped to policy-only component data", () => {
     for (const source of sourceFiles().map(stripStringAndPatternLiterals)) {
-      expect(source).not.toMatch(/from\s+["'].*(?:components|pages|routes|convex)/iu);
-      expect(source).not.toMatch(/\bwindow\.openai\b|\bReact\b|\biframe\b|\btsx\b|\bjsx\b/u);
-      expect(source).not.toMatch(/\b(fetch|axios|XMLHttpRequest|OpenAI|chat\.completions|responses\.create)\b/u);
+      expect(source).not.toMatch(
+        /from\s+["'].*(?:components|pages|routes|convex)/iu,
+      );
+      expect(source).not.toMatch(
+        /\bwindow\.openai\b|\bReact\b|\biframe\b|\btsx\b|\bjsx\b/u,
+      );
+      expect(source).not.toMatch(
+        /\b(fetch|axios|XMLHttpRequest|OpenAI|chat\.completions|responses\.create)\b/u,
+      );
       expect(source).not.toMatch(/\b(download|send|submit|apply)\s*\(/u);
     }
   });

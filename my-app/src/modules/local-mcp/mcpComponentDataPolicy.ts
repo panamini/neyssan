@@ -89,7 +89,9 @@ export type LocalMcpComponentDataPolicyResultV1 = Readonly<
     }
 >;
 
-type ValidationResult = Readonly<{ ok: true }> | Readonly<{ ok: false; reason: LocalMcpComponentDataPolicyBlockedReasonV1 }>;
+type ValidationResult =
+  | Readonly<{ ok: true }>
+  | Readonly<{ ok: false; reason: LocalMcpComponentDataPolicyBlockedReasonV1 }>;
 
 const INPUT_KEYS = ["kind", "surface", "payload", "version"] as const;
 const INPUT_REQUIRED_KEYS = ["kind", "surface", "payload", "version"] as const;
@@ -101,19 +103,20 @@ const MAX_SAFE_ARRAY_LENGTH = 25;
 const MAX_SAFE_COUNT = 1000;
 const MAX_COMPONENT_DATA_DEPTH = 7;
 
-export const LOCAL_MCP_COMPONENT_DATA_POLICY_SURFACES_V1: readonly LocalMcpComponentDataSurfaceV1[] = [
-  "model_visible_structured_content",
-  "model_visible_content",
-  "component_visible_structured_content",
-  "component_visible_content",
-  "component_visible_meta",
-  "component_visible_props",
-  "component_visible_bridge_payload",
-  "component_visible_state_snapshot",
-  "component_visible_model_context_update",
-  "component_visible_error",
-  "component_visible_action_label",
-] as const;
+const LOCAL_MCP_COMPONENT_DATA_POLICY_SURFACES_V1: readonly LocalMcpComponentDataSurfaceV1[] =
+  [
+    "model_visible_structured_content",
+    "model_visible_content",
+    "component_visible_structured_content",
+    "component_visible_content",
+    "component_visible_meta",
+    "component_visible_props",
+    "component_visible_bridge_payload",
+    "component_visible_state_snapshot",
+    "component_visible_model_context_update",
+    "component_visible_error",
+    "component_visible_action_label",
+  ];
 
 const COMPONENT_VISIBLE_SURFACES = new Set<LocalMcpComponentDataSurfaceV1>([
   "component_visible_structured_content",
@@ -134,7 +137,10 @@ const MODEL_VISIBLE_SURFACES = new Set<LocalMcpComponentDataSurfaceV1>([
 ]);
 
 const CLASSIFICATION_BY_SURFACE: Readonly<
-  Record<LocalMcpComponentDataSurfaceV1, LocalMcpComponentDataPolicyClassificationV1>
+  Record<
+    LocalMcpComponentDataSurfaceV1,
+    LocalMcpComponentDataPolicyClassificationV1
+  >
 > = {
   model_visible_structured_content: "safe_structured_content",
   model_visible_content: "safe_content",
@@ -340,6 +346,22 @@ const TEXT_KEYS = new Set(["label", "message", "safeSummary", "text", "title"]);
 
 const REF_ARRAY_KEYS = new Set(["refIds", "safeRefs"]);
 
+const CAPABILITY_KEYS = new Set([
+  "adapter",
+  "credentialStorage",
+  "dataReads",
+  "dataWrites",
+  "exportActions",
+  "handlerExecution",
+  "modelCalls",
+  "networkAccess",
+  "ownerResolution",
+  "productionConnector",
+  "rawDataProjection",
+  "tokenStorage",
+  "writeActions",
+]);
+
 const SAFE_ACTION_LABELS = new Set([
   "add_application_context",
   "approve_review_gate",
@@ -526,12 +548,21 @@ const FORBIDDEN_TEXT_PATTERNS: readonly RegExp[] = [
   /\bDO_NOT_EXPOSE\b/u,
 ];
 
-export function validateLocalMcpComponentDataPolicy(input: unknown): LocalMcpComponentDataPolicyResultV1 {
+export function validateLocalMcpComponentDataPolicy(
+  input: unknown,
+): LocalMcpComponentDataPolicyResultV1 {
   const record = readPlainObjectRecord(input);
-  if (!record || !hasOnlyAllowedKeys(record, INPUT_KEYS) || !hasOwnRequiredKeys(record, INPUT_REQUIRED_KEYS)) {
+  if (
+    !record ||
+    !hasOnlyAllowedKeys(record, INPUT_KEYS) ||
+    !hasOwnRequiredKeys(record, INPUT_REQUIRED_KEYS)
+  ) {
     return deny("invalid_input");
   }
-  if (record.kind !== "local_mcp_component_data_policy_input" || record.version !== 1) {
+  if (
+    record.kind !== "local_mcp_component_data_policy_input" ||
+    record.version !== 1
+  ) {
     return deny("invalid_input");
   }
   if (!isLocalMcpComponentDataSurface(record.surface)) {
@@ -566,25 +597,43 @@ export function buildLocalMcpComponentDataPolicySafeRefusal(): LocalMcpComponent
   };
 }
 
-export function isLocalMcpComponentDataSurface(value: unknown): value is LocalMcpComponentDataSurfaceV1 {
+function isLocalMcpComponentDataSurface(
+  value: unknown,
+): value is LocalMcpComponentDataSurfaceV1 {
   return (
     typeof value === "string" &&
-    (LOCAL_MCP_COMPONENT_DATA_POLICY_SURFACES_V1 as readonly string[]).includes(value)
+    (LOCAL_MCP_COMPONENT_DATA_POLICY_SURFACES_V1 as readonly string[]).includes(
+      value,
+    )
   );
 }
 
-function validatePayloadForSurface(surface: LocalMcpComponentDataSurfaceV1, payload: unknown): ValidationResult {
+function validatePayloadForSurface(
+  surface: LocalMcpComponentDataSurfaceV1,
+  payload: unknown,
+): ValidationResult {
   if (surface === "component_visible_action_label") {
     return typeof payload === "string" && SAFE_ACTION_LABELS.has(payload)
       ? { ok: true }
       : { ok: false, reason: "unsafe_component_action" };
   }
 
-  if (surface === "model_visible_content" || surface === "component_visible_content") {
+  if (
+    surface === "model_visible_content" ||
+    surface === "component_visible_content"
+  ) {
     return validateContentBlocks(payload);
   }
 
-  return validateSafeComponentValue(payload, undefined, 0, new WeakSet<object>());
+  if (!readPlainObjectRecord(payload)) {
+    return { ok: false, reason: "unsafe_component_payload" };
+  }
+  return validateSafeComponentValue(
+    payload,
+    undefined,
+    0,
+    new WeakSet<object>(),
+  );
 }
 
 function validateContentBlocks(payload: unknown): ValidationResult {
@@ -593,20 +642,28 @@ function validateContentBlocks(payload: unknown): ValidationResult {
   }
 
   for (const item of payload) {
-    const record = readPlainObjectRecord(item);
-    if (!record) return { ok: false, reason: "uninspectable_component_payload" };
-    if (!hasOnlyAllowedKeys(record, CONTENT_BLOCK_KEYS) || !hasOwnRequiredKeys(record, CONTENT_BLOCK_KEYS)) {
-      return { ok: false, reason: "unknown_component_field" };
-    }
-    if (record.type !== "text" || typeof record.text !== "string") {
-      return { ok: false, reason: "unsafe_component_payload" };
-    }
-    if (!isSafeText(record.text, MAX_SAFE_CONTENT_TEXT_LENGTH)) {
-      return { ok: false, reason: "unsafe_component_text" };
-    }
+    const validation = validateContentBlock(item);
+    if (!validation.ok) return validation;
   }
 
   return { ok: true };
+}
+
+function validateContentBlock(item: unknown): ValidationResult {
+  const record = readPlainObjectRecord(item);
+  if (!record) return { ok: false, reason: "uninspectable_component_payload" };
+  if (
+    !hasOnlyAllowedKeys(record, CONTENT_BLOCK_KEYS) ||
+    !hasOwnRequiredKeys(record, CONTENT_BLOCK_KEYS)
+  ) {
+    return { ok: false, reason: "unknown_component_field" };
+  }
+  if (record.type !== "text" || typeof record.text !== "string") {
+    return { ok: false, reason: "unsafe_component_payload" };
+  }
+  return isSafeText(record.text, MAX_SAFE_CONTENT_TEXT_LENGTH)
+    ? { ok: true }
+    : { ok: false, reason: "unsafe_component_text" };
 }
 
 function validateSafeComponentValue(
@@ -615,14 +672,18 @@ function validateSafeComponentValue(
   depth: number,
   seen: WeakSet<object>,
 ): ValidationResult {
-  if (depth > MAX_COMPONENT_DATA_DEPTH) return { ok: false, reason: "component_payload_too_deep" };
+  if (depth > MAX_COMPONENT_DATA_DEPTH)
+    return { ok: false, reason: "component_payload_too_deep" };
 
   if (typeof value === "string") return validateSafeComponentString(key, value);
-  if (typeof value === "number") return isSafeCount(value) ? { ok: true } : { ok: false, reason: "unsafe_component_payload" };
-  if (typeof value === "boolean") return { ok: true };
-  if (value === null || value === undefined) return { ok: false, reason: "unsafe_component_payload" };
-  if (typeof value !== "object") return { ok: false, reason: "unsafe_component_payload" };
-  if (Array.isArray(value)) return validateSafeComponentArray(value, key, depth, seen);
+  if (typeof value === "number" || typeof value === "boolean")
+    return { ok: false, reason: "unsafe_component_payload" };
+  if (value === null || value === undefined)
+    return { ok: false, reason: "unsafe_component_payload" };
+  if (typeof value !== "object")
+    return { ok: false, reason: "unsafe_component_payload" };
+  if (Array.isArray(value))
+    return validateSafeComponentArray(value, key, depth, seen);
 
   return validateSafeComponentRecord(value, depth, seen);
 }
@@ -633,18 +694,27 @@ function validateSafeComponentArray(
   depth: number,
   seen: WeakSet<object>,
 ): ValidationResult {
-  if (!key || !REF_ARRAY_KEYS.has(key) || value.length > MAX_SAFE_ARRAY_LENGTH) {
+  if (
+    !key ||
+    !REF_ARRAY_KEYS.has(key) ||
+    value.length > MAX_SAFE_ARRAY_LENGTH
+  ) {
     return { ok: false, reason: "unsafe_component_payload" };
   }
   for (const item of value) {
-    if (typeof item !== "string" || !isSafeOpaqueRefId(item)) return { ok: false, reason: "unsafe_component_ref" };
+    if (typeof item !== "string" || !isSafeOpaqueRefId(item))
+      return { ok: false, reason: "unsafe_component_ref" };
     const nested = validateSafeComponentValue(item, key, depth + 1, seen);
     if (!nested.ok) return nested;
   }
   return { ok: true };
 }
 
-function validateSafeComponentRecord(value: object, depth: number, seen: WeakSet<object>): ValidationResult {
+function validateSafeComponentRecord(
+  value: object,
+  depth: number,
+  seen: WeakSet<object>,
+): ValidationResult {
   if (seen.has(value)) return { ok: false, reason: "unsafe_component_payload" };
   const record = readPlainObjectRecord(value);
   if (!record) return { ok: false, reason: "uninspectable_component_payload" };
@@ -672,16 +742,42 @@ function validateComponentFieldValue(
   depth: number,
   seen: WeakSet<object>,
 ): ValidationResult {
-  if (key === "version") return value === 1 ? { ok: true } : { ok: false, reason: "unsafe_component_payload" };
-  if (NUMERIC_KEYS.has(key) || BOOLEAN_KEYS.has(key)) {
-    const validNumber = NUMERIC_KEYS.has(key) && typeof value === "number" && isSafeCount(value);
-    const validBoolean = BOOLEAN_KEYS.has(key) && typeof value === "boolean";
-    return validNumber || validBoolean ? { ok: true } : { ok: false, reason: "unsafe_component_payload" };
-  }
+  if (key === "version") return validateVersionField(value);
+  if (NUMERIC_KEYS.has(key) && BOOLEAN_KEYS.has(key))
+    return validateNumericOrBooleanField(value);
+  if (NUMERIC_KEYS.has(key)) return validateNumericField(value);
+  if (BOOLEAN_KEYS.has(key)) return validateBooleanField(value);
   return validateSafeComponentValue(value, key, depth + 1, seen);
 }
 
-function validateSafeComponentString(key: string | undefined, value: string): ValidationResult {
+function validateVersionField(value: unknown): ValidationResult {
+  return value === 1
+    ? { ok: true }
+    : { ok: false, reason: "unsafe_component_payload" };
+}
+
+function validateNumericField(value: unknown): ValidationResult {
+  return typeof value === "number" && isSafeCount(value)
+    ? { ok: true }
+    : { ok: false, reason: "unsafe_component_payload" };
+}
+
+function validateBooleanField(value: unknown): ValidationResult {
+  return typeof value === "boolean"
+    ? { ok: true }
+    : { ok: false, reason: "unsafe_component_payload" };
+}
+
+function validateNumericOrBooleanField(value: unknown): ValidationResult {
+  return validateNumericField(value).ok || validateBooleanField(value).ok
+    ? { ok: true }
+    : { ok: false, reason: "unsafe_component_payload" };
+}
+
+function validateSafeComponentString(
+  key: string | undefined,
+  value: string,
+): ValidationResult {
   if (!key) return validateSafeFreeText(value);
 
   const knownStringValidator = componentStringValidatorForKey(key);
@@ -694,7 +790,9 @@ function validateSafeComponentString(key: string | undefined, value: string): Va
 
 type ComponentStringValidator = (value: string) => ValidationResult;
 
-function componentStringValidatorForKey(key: string): ComponentStringValidator | undefined {
+function componentStringValidatorForKey(
+  key: string,
+): ComponentStringValidator | undefined {
   if (key === "kind") return validateKindString;
   if (key === "id") return validateSafeRefString;
   if (key === "updatedAt") return validateUpdatedAtString;
@@ -703,62 +801,76 @@ function componentStringValidatorForKey(key: string): ComponentStringValidator |
 }
 
 function validateSafeFreeText(value: string): ValidationResult {
-  return isSafeText(value, MAX_SAFE_TEXT_LENGTH) ? { ok: true } : { ok: false, reason: "unsafe_component_text" };
+  return isSafeText(value, MAX_SAFE_TEXT_LENGTH)
+    ? { ok: true }
+    : { ok: false, reason: "unsafe_component_text" };
 }
 
 function validateKindString(value: string): ValidationResult {
-  return ALLOWED_KIND_VALUES.has(value) ? { ok: true } : { ok: false, reason: "unsafe_component_payload" };
+  return ALLOWED_KIND_VALUES.has(value)
+    ? { ok: true }
+    : { ok: false, reason: "unsafe_component_payload" };
 }
 
 function validateSafeRefString(value: string): ValidationResult {
-  return isSafeOpaqueRefId(value) ? { ok: true } : { ok: false, reason: "unsafe_component_ref" };
+  return isSafeOpaqueRefId(value)
+    ? { ok: true }
+    : { ok: false, reason: "unsafe_component_ref" };
 }
 
 function validateUpdatedAtString(value: string): ValidationResult {
-  return isStrictIsoUtcTimestamp(value) ? { ok: true } : { ok: false, reason: "unsafe_component_payload" };
+  return isStrictIsoUtcTimestamp(value)
+    ? { ok: true }
+    : { ok: false, reason: "unsafe_component_payload" };
 }
 
 function validateTextBlockTypeString(value: string): ValidationResult {
-  return value === "text" ? { ok: true } : { ok: false, reason: "unsafe_component_payload" };
+  return value === "text"
+    ? { ok: true }
+    : { ok: false, reason: "unsafe_component_payload" };
 }
 
-function validateSafeTextFieldString(key: string, value: string): ValidationResult {
-  const maxLength = key === "label" || key === "title" ? MAX_SAFE_LABEL_LENGTH : MAX_SAFE_TEXT_LENGTH;
-  return isSafeText(value, maxLength) ? { ok: true } : { ok: false, reason: "unsafe_component_text" };
+function validateSafeTextFieldString(
+  key: string,
+  value: string,
+): ValidationResult {
+  const maxLength =
+    key === "label" || key === "title"
+      ? MAX_SAFE_LABEL_LENGTH
+      : MAX_SAFE_TEXT_LENGTH;
+  return isSafeText(value, maxLength)
+    ? { ok: true }
+    : { ok: false, reason: "unsafe_component_text" };
 }
 
 function validateCapabilityString(value: string): ValidationResult {
-  return ALLOWED_CAPABILITY_VALUES.has(value) ? { ok: true } : { ok: false, reason: "unsafe_component_payload" };
+  return ALLOWED_CAPABILITY_VALUES.has(value)
+    ? { ok: true }
+    : { ok: false, reason: "unsafe_component_payload" };
 }
 
 function validateAllowedSafeStringValue(value: string): ValidationResult {
-  const isAllowed = ALLOWED_SAFE_STRING_VALUES.has(value) && !containsForbiddenText(value);
-  return isAllowed ? { ok: true } : { ok: false, reason: "unsafe_component_text" };
+  const isAllowed =
+    ALLOWED_SAFE_STRING_VALUES.has(value) && !containsForbiddenText(value);
+  return isAllowed
+    ? { ok: true }
+    : { ok: false, reason: "unsafe_component_text" };
 }
 
 function isAllowedComponentDataKey(key: string): boolean {
-  return ALLOWED_COMPONENT_DATA_KEYS.has(key) && !FORBIDDEN_KEY_TOKENS.has(normalizeKeyToken(key));
-}
-
-function isCapabilityKey(key: string): boolean {
   return (
-    key === "adapter" ||
-    key === "credentialStorage" ||
-    key === "dataReads" ||
-    key === "dataWrites" ||
-    key === "exportActions" ||
-    key === "handlerExecution" ||
-    key === "modelCalls" ||
-    key === "networkAccess" ||
-    key === "ownerResolution" ||
-    key === "productionConnector" ||
-    key === "rawDataProjection" ||
-    key === "tokenStorage" ||
-    key === "writeActions"
+    ALLOWED_COMPONENT_DATA_KEYS.has(key) &&
+    !FORBIDDEN_KEY_TOKENS.has(normalizeKeyToken(key))
   );
 }
 
-function deny(reason: LocalMcpComponentDataPolicyBlockedReasonV1): LocalMcpComponentDataPolicyResultV1 {
+function isCapabilityKey(key: string): boolean {
+  return CAPABILITY_KEYS.has(key);
+}
+
+function deny(
+  reason: LocalMcpComponentDataPolicyBlockedReasonV1,
+): LocalMcpComponentDataPolicyResultV1 {
   return {
     kind: "local_mcp_component_data_policy_result",
     allowed: false,
@@ -796,7 +908,12 @@ function cloneSafeComponentPayload(value: unknown): unknown {
   if (!value || typeof value !== "object") return value;
   const record = readPlainObjectRecord(value);
   if (!record) return undefined;
-  return Object.fromEntries(Object.entries(record).map(([key, item]) => [key, cloneSafeComponentPayload(item)]));
+  return Object.fromEntries(
+    Object.entries(record).map(([key, item]) => [
+      key,
+      cloneSafeComponentPayload(item),
+    ]),
+  );
 }
 
 function isSafeCount(value: number): boolean {
@@ -812,7 +929,12 @@ function isSafeOpaqueRefId(value: string): boolean {
 }
 
 function isSafeText(value: string, maxLength: number): boolean {
-  return typeof value === "string" && /\S/u.test(value) && value.length <= maxLength && !containsForbiddenText(value);
+  return (
+    typeof value === "string" &&
+    /\S/u.test(value) &&
+    value.length <= maxLength &&
+    !containsForbiddenText(value)
+  );
 }
 
 function containsForbiddenText(value: string): boolean {
@@ -829,16 +951,27 @@ function isStrictIsoUtcTimestamp(value: unknown): value is string {
   );
 }
 
-function hasOnlyAllowedKeys(record: Record<string, unknown>, allowedKeys: readonly string[]): boolean {
+function hasOnlyAllowedKeys(
+  record: Record<string, unknown>,
+  allowedKeys: readonly string[],
+): boolean {
   return Object.keys(record).every((key) => allowedKeys.includes(key));
 }
 
-function hasOwnRequiredKeys(record: Record<string, unknown>, requiredKeys: readonly string[]): boolean {
-  return requiredKeys.every((key) => Object.prototype.hasOwnProperty.call(record, key));
+function hasOwnRequiredKeys(
+  record: Record<string, unknown>,
+  requiredKeys: readonly string[],
+): boolean {
+  return requiredKeys.every((key) =>
+    Object.prototype.hasOwnProperty.call(record, key),
+  );
 }
 
-function readPlainObjectRecord(value: unknown): Record<string, unknown> | undefined {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
+function readPlainObjectRecord(
+  value: unknown,
+): Record<string, unknown> | undefined {
+  if (value === null || typeof value !== "object" || Array.isArray(value))
+    return undefined;
   const prototype = readObjectPrototype(value);
   if (prototype !== Object.prototype && prototype !== null) return undefined;
   return readEnumerableDataRecord(value);
@@ -852,9 +985,14 @@ function readObjectPrototype(value: object): object | null | undefined {
   }
 }
 
-function readEnumerableDataRecord(value: object): Record<string, unknown> | undefined {
+function readEnumerableDataRecord(
+  value: object,
+): Record<string, unknown> | undefined {
   try {
-    const descriptors = Object.getOwnPropertyDescriptors(value) as Record<PropertyKey, PropertyDescriptor>;
+    const descriptors = Object.getOwnPropertyDescriptors(value) as Record<
+      PropertyKey,
+      PropertyDescriptor
+    >;
     const record: Record<string, unknown> = Object.create(null);
 
     for (const key of Reflect.ownKeys(value)) {
@@ -873,9 +1011,16 @@ function readEnumerableDataRecord(value: object): Record<string, unknown> | unde
 function isEnumerableDataDescriptor(
   descriptor: PropertyDescriptor | undefined,
 ): descriptor is PropertyDescriptor & { value: unknown } {
-  return descriptor !== undefined && descriptor.enumerable === true && "value" in descriptor;
+  return (
+    descriptor !== undefined &&
+    descriptor.enumerable === true &&
+    "value" in descriptor
+  );
 }
 
 function normalizeKeyToken(key: string): string {
-  return key.normalize("NFKC").replace(/[\s_/-]/gu, "").toLowerCase();
+  return key
+    .normalize("NFKC")
+    .replace(/[\s_/-]/gu, "")
+    .toLowerCase();
 }
