@@ -21,24 +21,24 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR191 - PR65: Component/UI Data Policy Implementation
-GitHub PR: https://github.com/panamini/neyssan/pull/191
-Merge commit: 63cdb9c70235dfd7c87549b17be5bdd54a58ca09
-Merged at: 2026-06-16T09:16:34Z
+PR192 - PR66: Read-Only Review Component
+GitHub PR: https://github.com/panamini/neyssan/pull/192
+Merge commit: ba04812c3e94aea2770fef58f6a00cda8fb3c1e0
+Merged at: 2026-06-16T17:11:06Z
 ```
 
 Current open PR:
 
 ```txt
-PR66 - Read-Only Review Component
-GitHub PR: https://github.com/panamini/neyssan/pull/192
-Head branch: codex/pr66-read-only-review-component
+PR67 - Component Error, Loading, and Refusal UX
+GitHub PR: pending
+Head branch: codex/pr67-component-error-loading-refusal-ux
 ```
 
 Exact next PR:
 
 ```txt
-PR67 - Component Error, Loading, and Refusal UX
+PR68 - Generated Artifact Boundary
 ```
 
 PR59 status:
@@ -89,7 +89,8 @@ MERGED_NARROW_PR59 - PR185 merged the narrow read-only adapter scope approved by
 |                        63 | Real Review Cockpit Summary                                                         | merged      | #189                 | deb867f2aae5c661dcba297c952ffc2465268f65                                                     | Read-only real review cockpit summary boundary built on PR59 refs and server-only Convex aggregate metadata only; safe review gate status, blocker/missing-review categories, approval/stale flags, counts, and next-action hints only; no runtime wiring, tools runtime, production connector, OAuth/token changes, outbound HTTP, LLM/model calls, package changes, writes, export/download/send/submit/apply, or PR64 E2E scope; merged_at 2026-06-16T05:12:27Z                                                                                                                                                                      |
 |                        64 | Real Read-Only E2E ChatGPT Test                                                     | merged      | #190                 | 6552e325b439d4a630a985ad39f60921a7c989b9                                                     | Local in-process read-only E2E harness and tests only; validates auth/account-link/consent/retention, PR59 safe refs, real safe-summary projection, and redacted audit output. No runtime wiring, tools runtime, production connector, OAuth/token changes, outbound HTTP, LLM/model calls, package changes, writes, export/download/send/submit/apply, or PR65 UI scope; merged_at 2026-06-16T06:32:42Z.                                                                                                                                                                                                                               |
 |                        65 | Component/UI Data Policy Implementation                                             | merged      | #191                 | 63cdb9c70235dfd7c87549b17be5bdd54a58ca09                                                     | Component/UI data policy boundary only. Classifies component-visible surfaces including structured content, content, metadata, props, bridge payloads, state snapshots, model-context updates, safe errors/refusals, and safe action labels. `_meta` is not a privacy boundary. Qodo scalar escape bug was fixed before merge. No PR66 component rendering, iframe/widget bundle, `window.openai` runtime, UI bridge runtime, tools runtime, production connector, OAuth/token change, schema change, outbound HTTP, LLM/model call, package change, write, export/download/send/submit/apply behavior. Merged at 2026-06-16T09:16:34Z. |
-|                        66 | Read-Only Review Component                                                          | in progress | #192                 | codex/pr66-read-only-review-component                                                        | Read-only review component view-model/render-contract boundary only. Uses PR65-approved component data surfaces and PR63 safe review cockpit summaries to expose safe review state, gate status, blocker/readiness categories, safe counts, redacted refs, and review-only next-action labels. No PR67 error/loading/refusal UX, iframe/widget bundle, `window.openai` runtime, UI bridge runtime, tools runtime, production connector, OAuth/token runtime, schema change, outbound HTTP, LLM/model call, package change, write/export/download/send/submit/apply behavior.                                                            |
+|                        66 | Read-Only Review Component                                                          | merged      | #192                 | ba04812c3e94aea2770fef58f6a00cda8fb3c1e0                                                     | Read-only review component view-model/render-contract boundary only. Uses PR65-approved component data surfaces and PR63 safe review cockpit summaries to expose safe review state, gate status, blocker/readiness categories, safe counts, redacted refs, and review-only next-action labels. No PR67 error/loading/refusal UX, iframe/widget bundle, `window.openai` runtime, UI bridge runtime, tools runtime, production connector, OAuth/token runtime, schema change, outbound HTTP, LLM/model call, package change, write/export/download/send/submit/apply behavior. Merged at 2026-06-16T17:11:06Z. |
+|                        67 | Component Error, Loading, and Refusal UX                                            | in progress | pending              | codex/pr67-component-error-loading-refusal-ux                                                 | Local MCP/component UX state boundary only. Adds deterministic, policy-checked loading, unavailable, error, and refusal state payloads using PR65 policy surfaces. No PR68 generated artifact boundary, runtime/UI/React/bridge/server/tool wiring, OAuth/token/account-link runtime, budget accounting, rate limits, schema change, package change, outbound HTTP, LLM/model call, write/export/download/send/submit/apply behavior.                                                                                                                                                |
 
 ---
 
@@ -158,7 +159,9 @@ PR190 merged PR64 into `application-os-foundation` with merge commit `6552e325b4
 
 PR191 merged PR65 into `application-os-foundation` with merge commit `63cdb9c70235dfd7c87549b17be5bdd54a58ca09` at `2026-06-16T09:16:34Z`. It added the Component/UI data policy boundary and tests, fixed the Qodo scalar escape bug before merge, and kept PR66 component rendering/runtime behavior out of scope.
 
-PR66 is the active implementation PR. It is limited to a read-only review component view-model/render-contract boundary built from PR63 safe review cockpit summaries and validated through PR65 component data policy surfaces. It must not add PR67 error/loading/refusal UX, iframe/widget bundle code, `window.openai` runtime, UI bridge runtime, `tools/list` or `tools/call` runtime behavior, production connector behavior, OAuth/token changes, outbound HTTP, LLM/model calls, write/export/download/send/submit/apply behavior, package changes, schema changes, or PR67 behavior.
+PR192 merged PR66 into `application-os-foundation` with merge commit `ba04812c3e94aea2770fef58f6a00cda8fb3c1e0` at `2026-06-16T17:11:06Z`. It added the read-only review component view-model/render-contract boundary using PR65 component data policy surfaces and PR63 safe review cockpit summaries. It did not add PR67 error/loading/refusal UX, runtime wiring, OAuth/token changes, outbound HTTP, LLM/model calls, package changes, schema changes, or write/export/download/send/submit/apply behavior.
+
+PR67 is the active implementation PR. It is limited to deterministic, policy-checked component-visible loading, unavailable, error, and refusal UX state payloads. It must not start PR68, add generated artifact boundary behavior, add artifact generation/storage, add UI/React/runtime/bridge/server/tool wiring, add OAuth/token/account-link runtime, add budget accounting/rate limits, or add write/export/download/send/submit/apply behavior.
 
 OAuth/real-data/write-action constraints remain active: no OAuth runtime, callback, token storage, real user data, Convex real-data reads/writes, handlers, production connector, tool execution, outbound HTTP, LLM calls, export/download/send/submit/apply, or package/lockfile changes without an explicit unlocking PR.
 
