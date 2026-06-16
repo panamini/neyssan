@@ -200,10 +200,14 @@ function validateSurface(surface: string, payload: unknown) {
   });
 }
 
-function sourceFiles(): readonly string[] {
-  return [UX_SOURCE_FILE, TEST_SOURCE_FILE].map((file) =>
-    readFileSync(file, "utf8"),
-  );
+function sourceFileEntries(): readonly Readonly<{
+  file: string;
+  source: string;
+}>[] {
+  return [UX_SOURCE_FILE, TEST_SOURCE_FILE].map((file) => ({
+    file,
+    source: readFileSync(file, "utf8"),
+  }));
 }
 
 function stripStringAndPatternLiterals(source: string): string {
@@ -212,9 +216,12 @@ function stripStringAndPatternLiterals(source: string): string {
     .replace(/(["'`])(?:\\.|(?!\1)[\s\S])*?\1/gu, "");
 }
 
-const FORBIDDEN_SCOPE_PATTERNS: readonly RegExp[] = [
+const RAW_IMPLEMENTATION_SCOPE_PATTERNS: readonly RegExp[] = [
   /from\s+["'][^"']*(?:components|pages|routes|convex)\//iu,
   /package\.json|package-lock|pnpm-lock|schema\.ts/iu,
+];
+
+const STRIPPED_SCOPE_PATTERNS: readonly RegExp[] = [
   /\b(window|document|localStorage|sessionStorage)\b/u,
   /\bsetTimeout|setInterval|requestAnimationFrame\b/u,
 ];
@@ -512,14 +519,17 @@ describe("PR67 component error loading refusal UX boundary", () => {
   });
 
   it("keeps PR67 changed sources out of package, schema, runtime, and component files", () => {
-    const hits = sourceFiles()
-      .map(stripStringAndPatternLiterals)
+    const rawImplementationHits = RAW_IMPLEMENTATION_SCOPE_PATTERNS.filter(
+      (pattern) => pattern.test(readFileSync(UX_SOURCE_FILE, "utf8")),
+    ).map(String);
+    const strippedHits = sourceFileEntries()
+      .map(({ source }) => stripStringAndPatternLiterals(source))
       .flatMap((source) =>
-        FORBIDDEN_SCOPE_PATTERNS.filter((pattern) => pattern.test(source)).map(
+        STRIPPED_SCOPE_PATTERNS.filter((pattern) => pattern.test(source)).map(
           String,
         ),
       );
 
-    expect(hits).toEqual([]);
+    expect([...rawImplementationHits, ...strippedHits]).toEqual([]);
   });
 });
