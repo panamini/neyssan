@@ -257,6 +257,7 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "safeRefusal",
   "safeRefs",
   "safeSummary",
+  "source",
   "sourceDocuments",
   "sourceFacts",
   "src",
@@ -545,7 +546,8 @@ const FORBIDDEN_TEXT_PATTERNS: readonly RegExp[] = [
   /\brawClaims\b/u,
   /\bstructured[_ -]?shadow\b/iu,
   /\bdebug\s+payload\b/iu,
-  /\bDO_NOT_EXPOSE\b/u,
+  /DO_NOT_EXPOSE/iu,
+  /\bDO_NOT_EXPOSE\b/iu,
 ];
 
 export function validateLocalMcpComponentDataPolicy(
@@ -970,11 +972,19 @@ function hasOwnRequiredKeys(
 function readPlainObjectRecord(
   value: unknown,
 ): Record<string, unknown> | undefined {
-  if (value === null || typeof value !== "object" || Array.isArray(value))
+  if (value === null || typeof value !== "object" || isArrayValue(value))
     return undefined;
   const prototype = readObjectPrototype(value);
   if (prototype !== Object.prototype && prototype !== null) return undefined;
   return readEnumerableDataRecord(value);
+}
+
+function isArrayValue(value: object): boolean {
+  try {
+    return Array.isArray(value);
+  } catch {
+    return true;
+  }
 }
 
 function readObjectPrototype(value: object): object | null | undefined {
