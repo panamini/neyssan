@@ -784,6 +784,69 @@ describe("PR64 real read-only E2E ChatGPT harness", () => {
     assertSafeHarnessOutput(result);
   });
 
+  it("returns safe refusals when audit raw payloads are not safely inspectable", () => {
+    const hostileRawInput = new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error("hostile raw input");
+        },
+      },
+    );
+    const rawInputResult = runMcpRealReadOnlyE2EChatGptHarness(hostileRawInput);
+
+    expect(rawInputResult).toEqual(
+      expect.objectContaining({
+        allowed: false,
+        reason: "invalid_input",
+        modelVisible: true,
+      }),
+    );
+    if (rawInputResult.allowed)
+      throw new Error("expected hostile raw input to be blocked");
+    expect(
+      rawInputResult.auditLog[0].redactions.map(
+        (redaction) => redaction.category,
+      ),
+    ).toContain("unknown_payload");
+    assertSafeHarnessOutput(rawInputResult);
+
+    const hostileSummary = new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error("hostile summary");
+        },
+      },
+    );
+    const summaryResult = runMcpRealReadOnlyE2EChatGptHarness(
+      harnessInput({
+        summaries: summaries({
+          evidenceGraphSummary: hostileSummary,
+        }),
+        request: request("twoweeks.evidence_graph.summarize", {
+          evidenceGraphRef: "mcp-safe-ref:evidence-graph:profile",
+        }),
+      }),
+    );
+
+    expect(summaryResult).toEqual(
+      expect.objectContaining({
+        allowed: false,
+        reason: "summary_blocked",
+        modelVisible: true,
+      }),
+    );
+    if (summaryResult.allowed)
+      throw new Error("expected hostile summary to be blocked");
+    expect(
+      summaryResult.auditLog[0].redactions.map(
+        (redaction) => redaction.category,
+      ),
+    ).toContain("unknown_payload");
+    assertSafeHarnessOutput(summaryResult);
+  });
+
   it("blocks malformed ChatGPT-style arguments and keeps raw request material out of audit output", () => {
     const result = runMcpRealReadOnlyE2EChatGptHarness(
       harnessInput({

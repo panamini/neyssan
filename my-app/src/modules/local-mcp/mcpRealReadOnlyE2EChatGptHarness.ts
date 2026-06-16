@@ -230,6 +230,9 @@ const UNSAFE_REQUEST_KEY_PATTERN =
 const UNSAFE_REQUEST_VALUE_PATTERN =
   /(?:bearer\s+\S+|private[_ -]?fact|raw[_ -]?arguments|secret[_ -]?token|source[_ -]?quote|source[_ -]?text)/imu;
 
+const AUDIT_PAYLOAD_UNINSPECTABLE = "uninspectable_audit_payload";
+const MAX_AUDIT_PAYLOAD_DEPTH = 6;
+
 export function runMcpRealReadOnlyE2EChatGptHarness(
   input: unknown,
 ): McpRealReadOnlyE2EChatGptHarnessResultV1 {
@@ -530,7 +533,7 @@ function buildHarnessAuditEntry(input: {
   rawPayload?: unknown;
   consentBoundarySatisfied?: boolean;
 }): LocalMcpRedactedAuditEntryV1 {
-  return buildLocalMcpRedactedAuditEntry({
+  const auditInput = {
     eventId: `redacted-audit:pr64:${input.eventType}`,
     eventType: input.eventType,
     occurredAt: input.occurredAt,
@@ -542,8 +545,66 @@ function buildHarnessAuditEntry(input: {
     safeSummary:
       "Read-only local MCP boundary event recorded. No product action executed.",
     consentBoundarySatisfied: input.consentBoundarySatisfied === true,
-    rawPayload: input.rawPayload,
-  });
+  };
+
+  try {
+    return buildLocalMcpRedactedAuditEntry({
+      ...auditInput,
+      rawPayload: sanitizeAuditPayload(input.rawPayload),
+    });
+  } catch {
+    return buildLocalMcpRedactedAuditEntry({
+      ...auditInput,
+      rawPayload: AUDIT_PAYLOAD_UNINSPECTABLE,
+    });
+  }
+}
+
+function sanitizeAuditPayload(value: unknown): unknown {
+  return sanitizeAuditPayloadInner(value, 0, new WeakSet<object>());
+}
+
+function sanitizeAuditPayloadInner(
+  value: unknown,
+  depth: number,
+  seen: WeakSet<object>,
+): unknown {
+  if (value === null || typeof value !== "object") return value;
+  if (depth > MAX_AUDIT_PAYLOAD_DEPTH) return AUDIT_PAYLOAD_UNINSPECTABLE;
+
+  try {
+    if (seen.has(value)) return AUDIT_PAYLOAD_UNINSPECTABLE;
+    seen.add(value);
+
+    if (Array.isArray(value)) {
+      return AUDIT_PAYLOAD_UNINSPECTABLE;
+    }
+
+    const descriptors = readPlainObjectDescriptors(value);
+    if (!descriptors) return AUDIT_PAYLOAD_UNINSPECTABLE;
+    return sanitizeAuditRecordDescriptors(descriptors, depth, seen);
+  } catch {
+    return AUDIT_PAYLOAD_UNINSPECTABLE;
+  } finally {
+    seen.delete(value);
+  }
+}
+
+function sanitizeAuditRecordDescriptors(
+  descriptors: Record<PropertyKey, PropertyDescriptor | undefined>,
+  depth: number,
+  seen: WeakSet<object>,
+): Record<string, unknown> | string {
+  const record: Record<string, unknown> = {};
+  for (const key of Reflect.ownKeys(descriptors)) {
+    if (typeof key !== "string") return AUDIT_PAYLOAD_UNINSPECTABLE;
+    const descriptor = descriptors[key];
+    if (!descriptor) return AUDIT_PAYLOAD_UNINSPECTABLE;
+    if (descriptor.enumerable !== true) continue;
+    if (!("value" in descriptor)) return AUDIT_PAYLOAD_UNINSPECTABLE;
+    record[key] = sanitizeAuditPayloadInner(descriptor.value, depth + 1, seen);
+  }
+  return record;
 }
 
 function buildHarnessCapabilities(
