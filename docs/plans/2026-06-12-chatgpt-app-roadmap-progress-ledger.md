@@ -21,24 +21,24 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR193 - PR67: Component Error, Loading, and Refusal UX
-GitHub PR: https://github.com/panamini/neyssan/pull/193
-Merge commit: 9be43ea91a680cb89aa8a97d0cbaccc5b024cdd9
-Merged at: 2026-06-16T18:44:40Z
+PR194 - PR68: Generated Artifact Boundary
+GitHub PR: https://github.com/panamini/neyssan/pull/194
+Merge commit: e7fb10883065d0441c9b28a40c2ca5a1773229f1
+Merged at: 2026-06-16T22:13:16Z
 ```
 
 Current open PR:
 
 ```txt
-PR68 - Generated Artifact Boundary
+PR69 - Resume Variant Generation Preview
 GitHub PR: pending
-Head branch: codex/pr68-generated-artifact-boundary
+Head branch: codex/pr69-resume-variant-generation-preview
 ```
 
 Exact next PR:
 
 ```txt
-PR69 - Resume Variant Generation Preview
+PR70 - Cover Letter / Application Message Preview
 ```
 
 PR59 status:
@@ -91,7 +91,8 @@ MERGED_NARROW_PR59 - PR185 merged the narrow read-only adapter scope approved by
 |                        65 | Component/UI Data Policy Implementation                                             | merged      | #191                 | 63cdb9c70235dfd7c87549b17be5bdd54a58ca09                                                     | Component/UI data policy boundary only. Classifies component-visible surfaces including structured content, content, metadata, props, bridge payloads, state snapshots, model-context updates, safe errors/refusals, and safe action labels. `_meta` is not a privacy boundary. Qodo scalar escape bug was fixed before merge. No PR66 component rendering, iframe/widget bundle, `window.openai` runtime, UI bridge runtime, tools runtime, production connector, OAuth/token change, schema change, outbound HTTP, LLM/model call, package change, write, export/download/send/submit/apply behavior. Merged at 2026-06-16T09:16:34Z. |
 |                        66 | Read-Only Review Component                                                          | merged      | #192                 | ba04812c3e94aea2770fef58f6a00cda8fb3c1e0                                                     | Read-only review component view-model/render-contract boundary only. Uses PR65-approved component data surfaces and PR63 safe review cockpit summaries to expose safe review state, gate status, blocker/readiness categories, safe counts, redacted refs, and review-only next-action labels. No PR67 error/loading/refusal UX, iframe/widget bundle, `window.openai` runtime, UI bridge runtime, tools runtime, production connector, OAuth/token runtime, schema change, outbound HTTP, LLM/model call, package change, write/export/download/send/submit/apply behavior. Merged at 2026-06-16T17:11:06Z.                            |
 |                        67 | Component Error, Loading, and Refusal UX                                            | merged      | #193                 | 9be43ea91a680cb89aa8a97d0cbaccc5b024cdd9                                                     | Local MCP/component UX state boundary only. Adds deterministic, policy-checked loading, unavailable, error, and refusal state payloads using PR65 policy surfaces. No PR68 generated artifact boundary, runtime/UI/React/bridge/server/tool wiring, OAuth/token/account-link runtime, budget accounting, rate limits, schema change, package change, outbound HTTP, LLM/model call, write/export/download/send/submit/apply behavior. Merged at 2026-06-16T18:44:40Z.                                                                                                                                                                   |
-|                        68 | Generated Artifact Boundary                                                         | in progress | pending              | codex/pr68-generated-artifact-boundary                                                       | Deterministic generated-artifact boundary only. Separates safe summary/metadata/review state from restricted full generated artifact content for resume variants, cover letters, application packages, and review notes. No PR69 generation preview, artifact persistence, UI/runtime/bridge/server/tool wiring, OAuth/token changes, schema change, package change, outbound HTTP, LLM/model call, write/export/download/send/submit/apply behavior.                                                                                                                                                                                   |
+|                        68 | Generated Artifact Boundary                                                         | merged      | #194                 | e7fb10883065d0441c9b28a40c2ca5a1773229f1                                                     | Deterministic generated-artifact boundary only. Separates safe summary/metadata/review state from restricted full generated artifact content for resume variants, cover letters, application packages, and review notes. No PR69 generation preview, artifact persistence, UI/runtime/bridge/server/tool wiring, OAuth/token changes, schema change, package change, outbound HTTP, LLM/model call, write/export/download/send/submit/apply behavior. Merged at 2026-06-16T22:13:16Z.                                                                                                                                                          |
+|                        69 | Resume Variant Generation Preview                                                   | in progress | pending              | codex/pr69-resume-variant-generation-preview                                                  | Deterministic local MCP resume-variant generation preview boundary only. Preview-only and human-review-required; full generated resume variant content must remain restricted behind the PR68 generated artifact boundary. No PR70 cover-letter/application-message preview, artifact revision loop, export/download/send/submit/apply, persistence writes, UI/runtime/bridge/server/tool wiring, Convex schema/write changes, outbound HTTP, LLM/model call, package change, or lockfile change.                                                                                                                                            |
 
 ---
 
@@ -164,7 +165,9 @@ PR192 merged PR66 into `application-os-foundation` with merge commit `ba04812c3e
 
 PR193 merged PR67 into `application-os-foundation` with merge commit `9be43ea91a680cb89aa8a97d0cbaccc5b024cdd9` at `2026-06-16T18:44:40Z`. It added deterministic, policy-checked component-visible loading, unavailable, error, and refusal UX state payloads using PR65 policy surfaces. It did not start PR68 or add generated artifact boundary behavior, generation/storage, runtime wiring, OAuth/token changes, outbound HTTP, LLM/model calls, package changes, schema changes, or write/export/download/send/submit/apply behavior.
 
-PR68 is the active implementation PR. It is limited to a deterministic generated-artifact boundary separating safe summaries/metadata/review state from restricted full generated artifact content. It must not start PR69, generate resume variants, generate cover letters/application packages/review notes, add artifact preview/export/persistence, add UI/React/runtime/bridge/server/tool wiring, add OAuth/token/account-link runtime, or add write/export/download/send/submit/apply behavior.
+PR194 merged PR68 into `application-os-foundation` with merge commit `e7fb10883065d0441c9b28a40c2ca5a1773229f1` at `2026-06-16T22:13:16Z`. It added the deterministic generated-artifact boundary separating safe summary metadata from restricted full generated artifact content. It did not start PR69, generate resume variants, add artifact persistence, add UI/runtime wiring, add OAuth/token/account-link runtime, or add write/export/download/send/submit/apply behavior.
+
+PR69 is the active implementation PR. It is limited to deterministic local resume-variant generation preview, with human review required and PR68 safe-summary projection only. It must not start PR70, generate cover letters/application messages/review notes, add artifact revision/export/persistence, add UI/React/runtime/bridge/server/tool wiring, add Convex schema/write changes, add outbound HTTP or LLM/model calls, or add write/export/download/send/submit/apply behavior.
 
 OAuth/real-data/write-action constraints remain active: no OAuth runtime, callback, token storage, real user data, Convex real-data reads/writes, handlers, production connector, tool execution, outbound HTTP, LLM calls, export/download/send/submit/apply, or package/lockfile changes without an explicit unlocking PR.
 
