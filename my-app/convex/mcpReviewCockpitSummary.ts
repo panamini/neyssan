@@ -380,9 +380,7 @@ async function summarizeMcpReviewCockpit(
       ...reviewCockpitRef,
       status: "available",
       count: clampSafeCount(
-        safeCounts.reviewContexts +
-          safeCounts.reviewRuns +
-          safeCounts.reviewArtifacts,
+        safeCounts.reviewContexts + safeCounts.reviewRuns,
       ),
       ...(latestUpdatedAt ? { updatedAt: latestUpdatedAt } : {}),
     },
@@ -495,7 +493,7 @@ function buildSafeCounts(
   const pendingPackages = rows.applicationPackages.filter(
     isPackagePendingReview,
   );
-  const approvedPackages = rows.applicationPackages.filter(
+  const readyForReviewPackages = rows.applicationPackages.filter(
     (row) => row.status === "ready_for_review",
   );
   const blockedPackages = rows.applicationPackages.filter(
@@ -544,7 +542,7 @@ function buildSafeCounts(
     approvedReviews: clampSafeCount(
       approvedContexts.length +
         approvedArtifacts.length +
-        approvedPackages.length,
+        readyForReviewPackages.length,
     ),
     blockedReviews: clampSafeCount(blockedReviews),
     failedRuns: clampSafeCount(failedRuns.length),
