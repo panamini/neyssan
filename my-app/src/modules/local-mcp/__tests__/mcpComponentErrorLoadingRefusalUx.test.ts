@@ -223,7 +223,7 @@ const RAW_IMPLEMENTATION_SCOPE_PATTERNS: readonly RegExp[] = [
 
 const STRIPPED_SCOPE_PATTERNS: readonly RegExp[] = [
   /\b(window|document|localStorage|sessionStorage)\b/u,
-  /\bsetTimeout|setInterval|requestAnimationFrame\b/u,
+  /\b(?:setTimeout|setInterval|requestAnimationFrame)\b/u,
 ];
 
 describe("PR67 component error loading refusal UX boundary", () => {
