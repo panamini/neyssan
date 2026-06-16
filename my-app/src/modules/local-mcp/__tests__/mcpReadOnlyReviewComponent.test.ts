@@ -368,6 +368,16 @@ describe("PR66 read-only review component boundary", () => {
     expect(result.reason).toBe("invalid_input");
   });
 
+  it("fails closed when reviewSummary and unavailableReason are both present", () => {
+    const result = expectBlocked(
+      componentInput({
+        unavailableReason: "missing_consent",
+      }),
+    );
+
+    expect(result.reason).toBe("invalid_input");
+  });
+
   it("fails closed when PR65 rejects unsafe review data", () => {
     const result = expectBlocked(
       componentInput({
@@ -399,6 +409,23 @@ describe("PR66 read-only review component boundary", () => {
     );
 
     expect(result.reason).toBe("invalid_input");
+  });
+
+  it("does not throw for proxy inputs with throwing get traps", () => {
+    const proxy = new Proxy(
+      {
+        kind: "mcp_read_only_review_component_input",
+        unavailableReason: "no_review_data",
+        version: 1,
+      },
+      {
+        get() {
+          throw new TypeError("unsafe get trap");
+        },
+      },
+    );
+
+    expect(() => buildMcpReadOnlyReviewComponent(proxy)).not.toThrow();
   });
 
   it("treats _meta as component-visible and blocks unsafe metadata", () => {

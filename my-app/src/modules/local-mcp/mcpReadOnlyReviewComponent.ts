@@ -242,7 +242,7 @@ function parseInput(
   if (!hasAllowedInputKeys(record)) return undefined;
   if (!isInputEnvelope(record)) return undefined;
   if (!hasValidUnavailableReason(record)) return undefined;
-  if (!hasInputPayload(record)) return undefined;
+  if (!hasExactlyOneInputPayload(record)) return undefined;
   return {
     kind: "mcp_read_only_review_component_input",
     ...(record.reviewSummary !== undefined
@@ -643,9 +643,7 @@ function readPlainObjectRecord(
 ): Record<string, unknown> | undefined {
   if (!isPlainObjectCandidate(value)) return undefined;
   if (!hasPlainObjectPrototype(value)) return undefined;
-  if (!hasOnlyEnumerableDataProperties(value)) return undefined;
-  if (hasSymbolKeys(value)) return undefined;
-  return value as Record<string, unknown>;
+  return readEnumerableDataRecord(value);
 }
 
 function hasAllowedInputKeys(record: Record<string, unknown>): boolean {
@@ -666,10 +664,10 @@ function hasValidUnavailableReason(record: Record<string, unknown>): boolean {
   );
 }
 
-function hasInputPayload(record: Record<string, unknown>): boolean {
-  return (
-    record.reviewSummary !== undefined || record.unavailableReason !== undefined
-  );
+function hasExactlyOneInputPayload(record: Record<string, unknown>): boolean {
+  const hasReviewSummary = record.reviewSummary !== undefined;
+  const hasUnavailableReason = record.unavailableReason !== undefined;
+  return hasReviewSummary !== hasUnavailableReason;
 }
 
 function isSafeReviewSummaryEnvelope(record: Record<string, unknown>): boolean {
@@ -1069,25 +1067,32 @@ function hasPlainObjectPrototype(value: Record<string, unknown>): boolean {
   }
 }
 
-function hasOnlyEnumerableDataProperties(
+function readEnumerableDataRecord(
   value: Record<string, unknown>,
-): boolean {
+): Record<string, unknown> | undefined {
   try {
-    return Object.values(Object.getOwnPropertyDescriptors(value)).every(
-      (descriptor) =>
-        descriptor.enumerable &&
-        !("get" in descriptor) &&
-        !("set" in descriptor),
-    );
+    const descriptors = Object.getOwnPropertyDescriptors(value);
+    const record: Record<string, unknown> = Object.create(null);
+
+    for (const key of Reflect.ownKeys(descriptors)) {
+      if (typeof key !== "string") return undefined;
+      const descriptor = descriptors[key];
+      if (!isEnumerableDataDescriptor(descriptor)) return undefined;
+      record[key] = descriptor.value;
+    }
+
+    return record;
   } catch {
-    return false;
+    return undefined;
   }
 }
 
-function hasSymbolKeys(value: Record<string, unknown>): boolean {
-  try {
-    return Object.getOwnPropertySymbols(value).length > 0;
-  } catch {
-    return true;
-  }
+function isEnumerableDataDescriptor(
+  descriptor: PropertyDescriptor | undefined,
+): descriptor is PropertyDescriptor & { value: unknown } {
+  return (
+    descriptor !== undefined &&
+    descriptor.enumerable === true &&
+    "value" in descriptor
+  );
 }
