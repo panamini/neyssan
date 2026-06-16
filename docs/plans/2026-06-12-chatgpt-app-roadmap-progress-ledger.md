@@ -31,7 +31,7 @@ Current open PR:
 
 ```txt
 PR67 - Component Error, Loading, and Refusal UX
-GitHub PR: pending
+GitHub PR: https://github.com/panamini/neyssan/pull/193
 Head branch: codex/pr67-component-error-loading-refusal-ux
 ```
 
