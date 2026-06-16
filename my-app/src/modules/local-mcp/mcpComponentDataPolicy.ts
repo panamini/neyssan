@@ -257,6 +257,7 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "safeRefusal",
   "safeRefs",
   "safeSummary",
+  "source",
   "sourceDocuments",
   "sourceFacts",
   "src",
@@ -545,6 +546,7 @@ const FORBIDDEN_TEXT_PATTERNS: readonly RegExp[] = [
   /\brawClaims\b/u,
   /\bstructured[_ -]?shadow\b/iu,
   /\bdebug\s+payload\b/iu,
+  /DO_NOT_EXPOSE/u,
   /\bDO_NOT_EXPOSE\b/u,
 ];
 

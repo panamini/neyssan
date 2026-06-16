@@ -338,6 +338,11 @@ describe("PR65 component UI data policy", () => {
         policyInput("component_visible_meta", {
           kind: "local_mcp_component_data_policy_safe_meta",
           status: "ready_for_review",
+          availability: {
+            source: "convex_review_cockpit_summary",
+            ownerState: "resolved",
+            version: 1,
+          },
           refIds: ["mcp-safe-ref:review-cockpit:latest"],
           safeCounts: {
             pendingReviews: 2,
