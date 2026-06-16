@@ -21,24 +21,24 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR188 - PR62: Real Resume Variant Plan Summary
-GitHub PR: https://github.com/panamini/neyssan/pull/188
-Merge commit: 7638384450dbe790953d7b2410534617c7576ae0
-Merged at: 2026-06-15T23:10:41Z
+PR189 - PR63: Real Review Cockpit Summary
+GitHub PR: https://github.com/panamini/neyssan/pull/189
+Merge commit: deb867f2aae5c661dcba297c952ffc2465268f65
+Merged at: 2026-06-16T05:12:27Z
 ```
 
 Current open PR:
 
 ```txt
-PR63 - Real Review Cockpit Summary
-GitHub PR: pending
-Head branch: codex/pr63-real-review-cockpit-summary
+PR64 - Real Read-Only E2E ChatGPT Test
+GitHub PR: https://github.com/panamini/neyssan/pull/190
+Head branch: codex/pr64-real-read-only-e2e-chatgpt-test
 ```
 
 Exact next PR:
 
 ```txt
-PR64 - Real Read-Only ChatGPT E2E
+PR65 - Component/UI Data Policy Implementation
 ```
 
 PR59 status:
@@ -86,7 +86,8 @@ MERGED_NARROW_PR59 - PR185 merged the narrow read-only adapter scope approved by
 |                        60 | Real Application Package Summary                                                    | merged      | #186                 | 6f671f5075943cfcf8c83b29e2a7bff7caea509b                                                     | Read-only real application package summary boundary built on PR59 refs only; safe aggregate counts/categories/status only; no runtime wiring, tools runtime, production connector, OAuth/token changes, outbound HTTP, LLM/model calls, package changes, writes, export/download/send/submit/apply, or PR61 evidence graph scope; merged_at 2026-06-15T19:07:19Z                                                                   |
 |                        61 | Real Evidence Graph Summary                                                         | merged      | #187                 | b99dd35dcf57e4cbf646ece6f8d517fed3252c04                                                     | Read-only real evidence graph summary boundary built on PR59 refs and server-only Convex aggregate metadata only; safe evidence/provenance counts/categories only; no runtime wiring, tools runtime, production connector, OAuth/token changes, outbound HTTP, LLM/model calls, package changes, writes, export/download/send/submit/apply, or PR62 resume variant plan scope; merged_at 2026-06-15T21:57:34Z                      |
 |                        62 | Real Resume Variant Plan Summary                                                    | merged      | #188                 | 7638384450dbe790953d7b2410534617c7576ae0                                                     | Read-only real resume variant plan summary boundary built on PR59 refs and server-only Convex aggregate metadata only; safe plan status/count/category output only; no runtime wiring, tools runtime, production connector, OAuth/token changes, outbound HTTP, LLM/model calls, package changes, writes, export/download/send/submit/apply, or PR63 review cockpit scope; merged_at 2026-06-15T23:10:41Z                          |
-|                        63 | Real Review Cockpit Summary                                                         | in progress | pending              | codex/pr63-real-review-cockpit-summary                                                       | Read-only real review cockpit summary boundary built on PR59 refs and server-only Convex aggregate metadata only; safe review gate status, blocker/missing-review categories, approval/stale flags, counts, and next-action hints only; no runtime wiring, tools runtime, production connector, OAuth/token changes, outbound HTTP, LLM/model calls, package changes, writes, export/download/send/submit/apply, or PR64 E2E scope |
+|                        63 | Real Review Cockpit Summary                                                         | merged      | #189                 | deb867f2aae5c661dcba297c952ffc2465268f65                                                     | Read-only real review cockpit summary boundary built on PR59 refs and server-only Convex aggregate metadata only; safe review gate status, blocker/missing-review categories, approval/stale flags, counts, and next-action hints only; no runtime wiring, tools runtime, production connector, OAuth/token changes, outbound HTTP, LLM/model calls, package changes, writes, export/download/send/submit/apply, or PR64 E2E scope; merged_at 2026-06-16T05:12:27Z |
+|                        64 | Real Read-Only E2E ChatGPT Test                                                      | in progress | #190                 | codex/pr64-real-read-only-e2e-chatgpt-test                                                   | Local in-process read-only E2E harness and tests only; validates auth/account-link/consent/retention, PR59 safe refs, real safe-summary projection, and redacted audit output. No runtime wiring, tools runtime, production connector, OAuth/token changes, outbound HTTP, LLM/model calls, package changes, writes, export/download/send/submit/apply, or PR65/UI scope. |
 
 ---
 
@@ -149,7 +150,9 @@ PR187 merged PR61 into `application-os-foundation` with merge commit `b99dd35dcf
 
 PR188 merged PR62 into `application-os-foundation` with merge commit `7638384450dbe790953d7b2410534617c7576ae0` at `2026-06-15T23:10:41Z`. It added the real resume variant plan summary boundary and Convex aggregate query only. It did not start PR63 or add runtime wiring beyond the approved PR62 scope.
 
-PR63 is the active implementation PR. It is limited to a read-only real review cockpit summary over PR59's safe review cockpit ref and server-only Convex aggregate metadata. It must not add runtime wiring, production connector behavior, OAuth/token changes, outbound HTTP, LLM/model calls, write/export/send/submit/apply behavior, package changes, or PR64 E2E behavior.
+PR189 merged PR63 into `application-os-foundation` with merge commit `deb867f2aae5c661dcba297c952ffc2465268f65` at `2026-06-16T05:12:27Z`. It added the real review cockpit summary boundary and Convex aggregate query only. It did not start PR64 or add runtime wiring beyond the approved PR63 scope.
+
+PR64 is the active implementation PR. It is limited to a local in-process read-only E2E ChatGPT-style harness and tests over the PR59 safe refs and existing real safe-summary projectors. It must not add runtime wiring, production connector behavior, OAuth/token changes, outbound HTTP, LLM/model calls, write/export/download/send/submit/apply behavior, package changes, or PR65 UI behavior.
 
 OAuth/real-data/write-action constraints remain active: no OAuth runtime, callback, token storage, real user data, Convex real-data reads/writes, handlers, production connector, tool execution, outbound HTTP, LLM calls, export/download/send/submit/apply, or package/lockfile changes without an explicit unlocking PR.
 
