@@ -163,9 +163,13 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "applicationPackageRef",
   "applicationPackages",
   "approvalNeeded",
+  "approvedForPreview",
   "approvedFacts",
   "approvedReviews",
   "archivedEvidence",
+  "artifactKind",
+  "artifactRef",
+  "artifactStatus",
   "artifactTextBlockers",
   "artifacts",
   "availability",
@@ -196,7 +200,9 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "excludedFactBlockers",
   "exportActions",
   "failedRuns",
+  "fullContentRestricted",
   "handlerExecution",
+  "humanReviewRequired",
   "id",
   "kind",
   "label",
@@ -209,6 +215,7 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "missingReviewItems",
   "modelCalls",
   "modelVisible",
+  "msg",
   "networkAccess",
   "nextReviewHint",
   "nextUserAction",
@@ -237,6 +244,8 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "rejectedItems",
   "restrictedEvidence",
   "restrictedFactBlockers",
+  "retentionCategory",
+  "retentionPending",
   "resumeVariantArtifactStatus",
   "resumeVariantPlanRef",
   "riskFlags",
@@ -273,6 +282,7 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "type",
   "updatedAt",
   "version",
+  "visibilityCategory",
   "warnings",
   "writeActionExecuted",
   "writeActions",
@@ -331,19 +341,30 @@ const NUMERIC_KEYS = new Set([
 const BOOLEAN_KEYS = new Set([
   "allowed",
   "approvalNeeded",
+  "approvedForPreview",
   "componentDataExposed",
   "componentVisible",
   "credentialsExposed",
+  "fullContentRestricted",
+  "humanReviewRequired",
   "modelVisible",
   "overLimit",
   "ownerIdentityExposed",
   "rawDataExposed",
   "safeForModel",
   "staleData",
+  "retentionPending",
   "writeActionExecuted",
 ]);
 
-const TEXT_KEYS = new Set(["label", "message", "safeSummary", "text", "title"]);
+const TEXT_KEYS = new Set([
+  "label",
+  "message",
+  "msg",
+  "safeSummary",
+  "text",
+  "title",
+]);
 
 const REF_ARRAY_KEYS = new Set(["refIds", "safeRefs"]);
 
@@ -381,6 +402,7 @@ const ALLOWED_SAFE_STRING_VALUES = new Set([
   "application_package",
   "application_package_not_available",
   "application_package_ref_missing",
+  "approved_for_preview",
   "available",
   "blocked",
   "blocked_artifact",
@@ -396,13 +418,16 @@ const ALLOWED_SAFE_STRING_VALUES = new Set([
   "convex_review_cockpit_summary",
   "cv",
   "draft",
+  "draft_created",
   "error",
   "evidence_graph",
   "evidence_graph_not_available",
   "evidence_graph_ref_missing",
   "expired_auth",
   "failed_run",
+  "generated_artifact_boundary_blocked",
   "generated_text_as_fact",
+  "human_review_required",
   "loading",
   "missing",
   "missing_account_link",
@@ -426,6 +451,7 @@ const ALLOWED_SAFE_STRING_VALUES = new Set([
   "partial",
   "pending",
   "pending_review_items",
+  "preview_required",
   "privacy_blocked",
   "private_fact",
   "pr59_read_only_adapter",
@@ -435,8 +461,10 @@ const ALLOWED_SAFE_STRING_VALUES = new Set([
   "ready_for_review",
   "refusal",
   "refresh_inputs",
+  "redacted",
   "resolved",
   "resume",
+  "resume_variant",
   "resume_variant_plan",
   "resume_variant_plan_not_available",
   "resume_variant_plan_ref_missing",
@@ -453,6 +481,7 @@ const ALLOWED_SAFE_STRING_VALUES = new Set([
   "review_cockpit_not_available",
   "review_cockpit_ref_missing",
   "safe_refusal",
+  "safe_summary_only",
   "safe_unavailable",
   "server_only",
   "source_truth",
@@ -464,6 +493,10 @@ const ALLOWED_SAFE_STRING_VALUES = new Set([
   "unavailable_review_data",
   "unsafe_action_refused",
   "unsupported",
+  "restricted_full_content",
+  "retention_pending",
+  "cover_letter",
+  "review_notes",
 ]);
 
 const ALLOWED_KIND_VALUES = new Set([
@@ -474,6 +507,7 @@ const ALLOWED_KIND_VALUES = new Set([
   "local_mcp_component_data_policy_safe_props",
   "local_mcp_component_data_policy_safe_state_snapshot",
   "mcp_component_error_loading_refusal_ux_state",
+  "mcp_generated_artifact_boundary_summary",
   "mcp_real_application_package_summary_result",
   "mcp_real_evidence_graph_summary_result",
   "mcp_real_resume_variant_plan_summary_result",
@@ -942,7 +976,7 @@ function isSafeCount(value: number): boolean {
 
 function isSafeOpaqueRefId(value: string): boolean {
   return (
-    /^mcp-safe-ref:(?:application-package|evidence-graph|resume-variant-plan|review-cockpit):[a-z0-9][a-z0-9._:-]{0,64}$/u.test(
+    /^mcp-safe-ref:(?:application-package|cover-letter|evidence-graph|resume-variant|resume-variant-plan|review-cockpit|review-notes):[a-z0-9][a-z0-9._:-]{0,64}$/u.test(
       value,
     ) && !containsForbiddenText(value)
   );
