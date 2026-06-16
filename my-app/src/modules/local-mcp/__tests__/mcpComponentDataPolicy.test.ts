@@ -305,6 +305,72 @@ function reviewCockpitSummary() {
   } as const;
 }
 
+function generatedArtifactBoundarySummary() {
+  return {
+    kind: "mcp_generated_artifact_boundary_summary",
+    allowed: true,
+    artifactKind: "cover_letter",
+    artifactStatus: "human_review_required",
+    artifactRef: {
+      id: "mcp-safe-ref:cover-letter:latest",
+      label: "Generated artifact availability",
+      status: "human_review_required",
+      category: "cover_letter",
+      count: 1,
+      updatedAt: "2026-06-16T18:55:00.000Z",
+      version: 1,
+    },
+    status: "human_review_required",
+    category: "cover_letter",
+    visibilityCategory: "safe_summary_only",
+    retentionCategory: "retention_pending",
+    safeSummary:
+      "Generated artifact boundary accepted. Full content is restricted.",
+    nextUserAction: "review_pending_items",
+    refIds: ["mcp-safe-ref:cover-letter:latest"],
+    safeCounts: {
+      artifacts: 1,
+      artifactTextBlockers: 0,
+      blockers: 0,
+      warnings: 1,
+      version: 1,
+    },
+    safeCategories: {
+      artifactKind: "cover_letter",
+      artifactStatus: "human_review_required",
+      visibilityCategory: "safe_summary_only",
+      retentionCategory: "retention_pending",
+      nextUserAction: "review_pending_items",
+      version: 1,
+    },
+    safeFlags: {
+      humanReviewRequired: true,
+      approvedForPreview: false,
+      fullContentRestricted: true,
+      retentionPending: true,
+      rawDataExposed: false,
+      version: 1,
+    },
+    capabilities: {
+      dataReads: "blocked",
+      dataWrites: "blocked",
+      handlerExecution: "blocked",
+      productionConnector: "blocked",
+      networkAccess: "blocked",
+      modelCalls: "blocked",
+      writeActions: "blocked",
+      exportActions: "blocked",
+      rawDataProjection: "blocked",
+      credentialStorage: "none",
+      tokenStorage: "none",
+      version: 1,
+    },
+    modelVisible: true,
+    componentVisible: true,
+    version: 1,
+  } as const;
+}
+
 function stripStringAndPatternLiterals(source: string): string {
   return source
     .replace(/`(?:\\.|[^`\\])*`/gmu, '""')
@@ -386,6 +452,69 @@ describe("PR65 component UI data policy", () => {
       expect(result.safePayload).toEqual(payload);
     },
   );
+
+  it("allows exact PR68 generated artifact safe-summary enums and refs", () => {
+    const result = validateLocalMcpComponentDataPolicy(
+      policyInput(
+        "component_visible_structured_content",
+        generatedArtifactBoundarySummary(),
+      ),
+    );
+    expectAllowed(result);
+    if (!result.allowed) {
+      throw new TypeError("expected generated artifact summary to be allowed");
+    }
+    expect(result.safePayload).toEqual(generatedArtifactBoundarySummary());
+
+    for (const refId of [
+      "mcp-safe-ref:resume-variant:latest",
+      "mcp-safe-ref:cover-letter:latest",
+      "mcp-safe-ref:application-package:latest",
+      "mcp-safe-ref:review-notes:latest",
+    ] as const) {
+      expectAllowed(
+        validateLocalMcpComponentDataPolicy(
+          policyInput("component_visible_meta", {
+            kind: "local_mcp_component_data_policy_safe_meta",
+            artifactRef: {
+              id: refId,
+              label: "Generated artifact availability",
+              status: "preview_required",
+              category:
+                refId === "mcp-safe-ref:resume-variant:latest"
+                  ? "resume_variant"
+                  : refId === "mcp-safe-ref:cover-letter:latest"
+                    ? "cover_letter"
+                    : refId === "mcp-safe-ref:application-package:latest"
+                      ? "application_package"
+                      : "review_notes",
+              count: 1,
+              version: 1,
+            },
+            visibilityCategory: "safe_summary_only",
+            retentionCategory: "retention_pending",
+            refIds: [refId],
+            version: 1,
+          }),
+        ),
+      );
+    }
+  });
+
+  it("rejects unknown PR68 generated artifact enum and unsafe ref values", () => {
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...generatedArtifactBoundarySummary(),
+        artifactStatus: "submitted",
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...generatedArtifactBoundarySummary(),
+        refIds: ["mcp-safe-ref:resume-variant:raw-cv"],
+      }),
+    );
+  });
 
   it.each([
     [
