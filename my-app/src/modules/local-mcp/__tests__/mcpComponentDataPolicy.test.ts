@@ -575,6 +575,104 @@ describe("PR65 component UI data policy", () => {
     },
   );
 
+  it("allows only exact PR67 UX state enums and safe refusal code", () => {
+    const pr67StateValues = [
+      "loading",
+      "missing_consent",
+      "missing_auth",
+      "missing_account_link",
+      "expired_auth",
+      "privacy_blocked",
+      "unavailable_review_data",
+      "budget_exceeded",
+      "unsafe_action_refused",
+      "safe_unavailable",
+      "safe_refusal",
+      "unavailable",
+      "error",
+      "refusal",
+      "pending",
+      "refresh_inputs",
+    ] as const;
+
+    for (const value of pr67StateValues) {
+      expectAllowed(
+        validateLocalMcpComponentDataPolicy(
+          policyInput("component_visible_structured_content", {
+            kind: "mcp_component_error_loading_refusal_ux_state",
+            allowed: true,
+            status: "pending",
+            reason: value,
+            category: "loading",
+            title: "Review state pending",
+            message: "Review state is loading.",
+            safeSummary: "Review state is pending.",
+            nextUserAction: "refresh_inputs",
+            refIds: ["mcp-safe-ref:review-cockpit:latest"],
+            safeCounts: {
+              blockers: 0,
+              warnings: 0,
+              version: 1,
+            },
+            safeFlags: {
+              approvalNeeded: false,
+              staleData: false,
+              overLimit: false,
+              version: 1,
+            },
+            modelVisible: true,
+            componentVisible: true,
+            version: 1,
+          }),
+        ),
+      );
+    }
+
+    expectAllowed(
+      validateLocalMcpComponentDataPolicy(
+        policyInput("component_visible_error", {
+          kind: "local_mcp_component_data_policy_safe_error",
+          code: "component_error_loading_refusal_ux_blocked",
+          message: "Refused. Component UX state blocked.",
+          safeForModel: true,
+          rawDataExposed: false,
+          componentDataExposed: false,
+          writeActionExecuted: false,
+          version: 1,
+        }),
+      ),
+    );
+
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        kind: "mcp_component_error_loading_refusal_ux_state",
+        allowed: true,
+        status: "retry_later",
+        reason: "retry_later",
+        category: "loading",
+        title: "Review state pending",
+        message: "Review state is loading.",
+        safeSummary: "Review state is pending.",
+        nextUserAction: "refresh_inputs",
+        refIds: ["mcp-safe-ref:review-cockpit:latest"],
+        safeCounts: {
+          blockers: 0,
+          warnings: 0,
+          version: 1,
+        },
+        safeFlags: {
+          approvalNeeded: false,
+          staleData: false,
+          overLimit: false,
+          version: 1,
+        },
+        modelVisible: true,
+        componentVisible: true,
+        version: 1,
+      }),
+    );
+  });
+
   it("allows safe next-action labels and rejects write/export/download/send/submit/apply labels", () => {
     expectAllowed(
       validateLocalMcpComponentDataPolicy(
