@@ -448,7 +448,7 @@ function parseArtifactRef(
   if (!fields) return undefined;
   return {
     id: fields.id,
-    label: fields.label,
+    label: artifactLabelForKind(artifactKind),
     status: artifactStatus,
     category: artifactKind,
     count: fields.count,
@@ -469,7 +469,7 @@ function readArtifactRefFields(
   }
   return {
     id: record.id as string,
-    label: record.label as string,
+    label: artifactLabelForKind(artifactKind),
     count: record.count as number,
     ...(updatedAt ? { updatedAt } : {}),
   };
@@ -488,6 +488,19 @@ function hasValidArtifactRefFields(
     isSafeCount(record.count),
     record.version === 1,
   ].every(Boolean);
+}
+
+function artifactLabelForKind(kind: McpGeneratedArtifactKindV1): string {
+  switch (kind) {
+    case "resume_variant":
+      return "Resume variant artifact";
+    case "cover_letter":
+      return "Cover letter artifact";
+    case "application_package":
+      return "Application package artifact";
+    case "review_notes":
+      return "Review notes artifact";
+  }
 }
 
 function parseReviewFlags(

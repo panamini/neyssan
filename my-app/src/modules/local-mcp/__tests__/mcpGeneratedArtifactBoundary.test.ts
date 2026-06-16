@@ -72,6 +72,31 @@ const FORBIDDEN_FRAGMENTS = [
   "j97convexdocumentid",
 ] as const;
 
+const CANONICAL_LABEL_BY_KIND: Record<McpGeneratedArtifactKindV1, string> = {
+  resume_variant: "Resume variant artifact",
+  cover_letter: "Cover letter artifact",
+  application_package: "Application package artifact",
+  review_notes: "Review notes artifact",
+};
+
+const RAW_SCOPE_PATTERNS = [
+  /from\s+["'][^"']*(?:components|pages|routes|convex)\//iu,
+  new RegExp(
+    [
+      "pkg\\.json",
+      "package\\.json",
+      ["package", "lock"].join("-"),
+      ["pnpm", "lock"].join("-"),
+      "schema\\.ts",
+    ].join("|"),
+    "iu",
+  ),
+] as const;
+
+const STRIPPED_SCOPE_PATTERNS = [
+  /\b(window|document|localStorage|sessionStorage)\b/u,
+] as const;
+
 function artifactRef(
   artifactKind: McpGeneratedArtifactKindV1,
   artifactStatus: McpGeneratedArtifactStatusV1,
@@ -262,6 +287,9 @@ describe("PR68 generated artifact boundary", () => {
       expect(result.summary.artifactRef.id).toBe(
         `mcp-safe-ref:${SAFE_REF_SUFFIX_BY_KIND[artifactKind]}`,
       );
+      expect(result.summary.artifactRef.label).toBe(
+        CANONICAL_LABEL_BY_KIND[artifactKind],
+      );
       expect(result.summary.safeFlags).toMatchObject({
         humanReviewRequired: true,
         approvedForPreview: false,
@@ -328,6 +356,30 @@ describe("PR68 generated artifact boundary", () => {
       );
     },
   );
+
+  it("does not expose caller-provided artifact ref labels", () => {
+    const result = expectAllowed(
+      buildMcpGeneratedArtifactBoundary(
+        boundaryInput("resume_variant", "human_review_required", {
+          artifactRef: artifactRef(
+            "resume_variant",
+            "human_review_required",
+            {
+              label: "SecretStealthCorp private role context",
+            },
+          ),
+        }),
+      ),
+    );
+
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("SecretStealthCorp");
+    expect(serialized).not.toContain("private role context");
+    expect(result.summary.artifactRef.label).toBe("Resume variant artifact");
+    expect(result.component.meta.artifactRef).toMatchObject({
+      label: "Resume variant artifact",
+    });
+  });
 
   it("validates _meta as component-visible and safe-summary-only", () => {
     const result = expectAllowed(
@@ -545,16 +597,16 @@ describe("PR68 generated artifact boundary", () => {
   });
 
   it("keeps changed source files out of package, lockfile, schema, and UI/runtime imports", () => {
+    for (const source of sourceFiles()) {
+      for (const pattern of RAW_SCOPE_PATTERNS) {
+        expect(source).not.toMatch(pattern);
+      }
+    }
+
     for (const source of sourceFiles().map(stripStringAndPatternLiterals)) {
-      expect(source).not.toMatch(
-        /from\s+["'][^"']*(?:components|pages|routes|convex)\//iu,
-      );
-      expect(source).not.toMatch(
-        /pkg\.json|package-lock|pnpm-lock|schema\.ts/iu,
-      );
-      expect(source).not.toMatch(
-        /\b(window|document|localStorage|sessionStorage)\b/u,
-      );
+      for (const pattern of STRIPPED_SCOPE_PATTERNS) {
+        expect(source).not.toMatch(pattern);
+      }
     }
   });
 });
