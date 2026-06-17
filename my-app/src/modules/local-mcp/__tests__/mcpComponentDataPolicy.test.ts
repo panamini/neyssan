@@ -371,6 +371,81 @@ function generatedArtifactBoundarySummary() {
   } as const;
 }
 
+function coverLetterApplicationMessagePreviewSummary() {
+  return {
+    kind: "mcp_cover_letter_application_message_preview_summary",
+    allowed: true,
+    artifactKind: "cover_letter",
+    artifactStatus: "human_review_required",
+    previewStatus: "cover_letter_preview_created",
+    artifactRef: {
+      id: "mcp-safe-ref:cover-letter:preview",
+      label: "Cover letter artifact",
+      status: "human_review_required",
+      category: "cover_letter",
+      count: 1,
+      updatedAt: "2026-06-17T00:00:00.000Z",
+      version: 1,
+    },
+    status: "human_review_required",
+    category: "cover_letter",
+    visibilityCategory: "safe_summary_only",
+    retentionCategory: "retention_pending",
+    safeSummary: "Cover letter preview created. Full content is restricted.",
+    nextUserAction: "review_pending_items",
+    refIds: ["mcp-safe-ref:cover-letter:preview"],
+    safeCounts: {
+      artifacts: 1,
+      artifactTextBlockers: 0,
+      blockers: 0,
+      warnings: 1,
+      allowedClaims: 2,
+      sourceFacts: 2,
+      evidenceMatches: 2,
+      version: 1,
+    },
+    safeCategories: {
+      artifactKind: "cover_letter",
+      artifactStatus: "human_review_required",
+      previewStatus: "cover_letter_preview_created",
+      visibilityCategory: "safe_summary_only",
+      retentionCategory: "retention_pending",
+      nextUserAction: "review_pending_items",
+      version: 1,
+    },
+    safeFlags: {
+      humanReviewRequired: true,
+      approvedForPreview: false,
+      approvedForExport: false,
+      approvedForDownload: false,
+      approvedForSend: false,
+      approvedForSubmit: false,
+      approvedForApply: false,
+      fullContentRestricted: true,
+      retentionPending: true,
+      rawDataExposed: false,
+      version: 1,
+    },
+    capabilities: {
+      dataReads: "blocked",
+      dataWrites: "blocked",
+      handlerExecution: "blocked",
+      productionConnector: "blocked",
+      networkAccess: "blocked",
+      modelCalls: "blocked",
+      writeActions: "blocked",
+      exportActions: "blocked",
+      rawDataProjection: "blocked",
+      credentialStorage: "none",
+      tokenStorage: "none",
+      version: 1,
+    },
+    modelVisible: true,
+    componentVisible: true,
+    version: 1,
+  } as const;
+}
+
 function stripStringAndPatternLiterals(source: string): string {
   return source
     .replace(/`(?:\\.|[^`\\])*`/gmu, '""')
@@ -499,6 +574,80 @@ describe("PR65 component UI data policy", () => {
         ),
       );
     }
+  });
+
+  it("allows exact PR70 preview safe-summary enums, refs, and approval flags", () => {
+    const coverLetterSummary = coverLetterApplicationMessagePreviewSummary();
+    const applicationMessageSummary = {
+      ...coverLetterSummary,
+      artifactKind: "application_package",
+      previewStatus: "application_message_preview_created",
+      artifactRef: {
+        id: "mcp-safe-ref:application-package:message-preview",
+        label: "Application package artifact",
+        status: "human_review_required",
+        category: "application_package",
+        count: 1,
+        updatedAt: "2026-06-17T00:00:00.000Z",
+        version: 1,
+      },
+      category: "application_package",
+      safeSummary:
+        "Application message preview created. Full content is restricted.",
+      refIds: ["mcp-safe-ref:application-package:message-preview"],
+      safeCategories: {
+        ...coverLetterSummary.safeCategories,
+        artifactKind: "application_package",
+        previewStatus: "application_message_preview_created",
+      },
+    } as const;
+
+    expect(coverLetterSummary.safeFlags).toMatchObject({
+      approvedForDownload: false,
+      approvedForSubmit: false,
+    });
+    expect(coverLetterSummary.safeRefusal).toBeUndefined();
+
+    for (const payload of [coverLetterSummary, applicationMessageSummary]) {
+      const result = validateLocalMcpComponentDataPolicy(
+        policyInput("component_visible_structured_content", payload),
+      );
+      expectAllowed(result);
+      if (!result.allowed) {
+        throw new TypeError("expected PR70 preview summary to be allowed");
+      }
+      expect(result.safePayload).toEqual(payload);
+    }
+
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...coverLetterSummary,
+        previewStatus: "application_message_sent",
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...applicationMessageSummary,
+        artifactKind: "application_message",
+        category: "application_message",
+        safeCategories: {
+          ...applicationMessageSummary.safeCategories,
+          artifactKind: "application_message",
+        },
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_error", {
+        kind: "local_mcp_component_data_policy_safe_error",
+        code: "application_message_preview_blocked",
+        msg: "Refused. Application message preview blocked.",
+        safeForModel: true,
+        rawDataExposed: false,
+        componentDataExposed: false,
+        writeActionExecuted: false,
+        version: 1,
+      }),
+    );
   });
 
   it("rejects unknown PR68 generated artifact enum and unsafe ref values", () => {
