@@ -21,24 +21,24 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR199 - PR73: Export/Download Policy Implementation
-GitHub PR: https://github.com/panamini/neyssan/pull/199
-Merge commit: a0e503d525d944402ce1cdfad312a0de1c3b157c
-Merged at: 2026-06-17T18:05:12Z
+PR200 - PR74: Resume Export
+GitHub PR: https://github.com/panamini/neyssan/pull/200
+Merge commit: 7796a41da34e7e18675417a6a1f7adc46b5505d5
+Merged at: 2026-06-17T19:14:03Z
 ```
 
 Current open PR:
 
 ```txt
-PR74 - Resume Export
+PR75 - Cover Letter / Application Package Export
 GitHub PR: pending
-Head branch: codex/pr74-resume-export
+Head branch: codex/pr75-cover-letter-application-package-export
 ```
 
 Exact next PR:
 
 ```txt
-PR75 - Cover Letter / Application Package Export
+PR76 - Write Action Framework
 ```
 
 PR59 status:
@@ -97,7 +97,8 @@ MERGED_NARROW_PR59 - PR185 merged the narrow read-only adapter scope approved by
 |                        71 | Human Approval Workflow for Generated Artifacts                                      | merged      | #197                 | eb3261b2ca26da044fe51c69f4e2c51294e8d3d5                                                     | Deterministic local MCP human approval workflow boundary only. Preview approval is safe-summary-only and sets only `approvedForPreview`; export/download/send/submit/apply, artifact revision loop, regeneration, persistence writes, UI/runtime/bridge/server/tool wiring, Convex schema/write changes, outbound HTTP, LLM/model calls, package changes, and lockfile changes remain blocked. Merged at 2026-06-17T15:42:41Z.                                                                                |
 |                        72 | Artifact Revision Loop                                                              | merged      | #198                 | fbcc5cb2497d163c45497ba9bb1ae068da2e5e6e                                                     | Deterministic local MCP artifact revision loop boundary only. Accepts PR71 edit-request safe-summary state, creates restricted revised artifacts internally through PR68, and returns safe revision summary metadata only. Export/download/send/submit/apply, persistence writes, UI/runtime/bridge/server/tool wiring, Convex schema/write changes, outbound HTTP, LLM/model calls, package changes, and lockfile changes remain blocked. Merged at 2026-06-17T17:03:37Z.                                                                                 |
 |                        73 | Export/Download Policy Implementation                                                | merged      | #199                 | a0e503d525d944402ce1cdfad312a0de1c3b157c                                                     | Deterministic local MCP export/download policy boundary only. Authorizes eligibility metadata after PR71 approval, PR72 freshness/lineage checks, explicit safe confirmation, retention/delete/rollback checks, safe filename metadata, and redacted audit metadata. Actual resume export, cover letter export, application package export, downloadable files, file bytes, URLs, persistence writes, UI/runtime/bridge/server/tool wiring, Convex schema/write changes, outbound HTTP, LLM/model calls, package changes, and lockfile changes remained blocked. Merged at 2026-06-17T18:05:12Z. |
-|                        74 | Resume Export                                                                        | in progress | pending              | codex/pr74-resume-export                                                                      | Deterministic local MCP resume export boundary only. Uses PR73 export/download policy result, explicit resume-export confirmation, approved/fresh resume variant state, controlled local markdown representation, safe file metadata, and redacted audit metadata. Cover letter/application package export, send/submit/apply/upload/email, URLs, filesystem writes, persistence writes, UI/runtime/bridge/server/tool wiring, Convex schema/write changes, outbound HTTP, LLM/model calls, package changes, and lockfile changes remain blocked. |
+|                        74 | Resume Export                                                                        | merged      | #200                 | 7796a41da34e7e18675417a6a1f7adc46b5505d5                                                     | Deterministic local MCP resume export boundary only. Uses PR73 export/download policy result, explicit resume-export confirmation, approved/fresh resume variant state, controlled local markdown representation, safe file metadata, and redacted audit metadata. Cover letter/application package export, send/submit/apply/upload/email, URLs, filesystem writes, persistence writes, UI/runtime/bridge/server/tool wiring, Convex schema/write changes, outbound HTTP, LLM/model calls, package changes, and lockfile changes remained blocked. Merged at 2026-06-17T19:14:03Z. |
+|                        75 | Cover Letter / Application Package Export                                             | in progress | pending              | codex/pr75-cover-letter-application-package-export                                           | Deterministic local MCP cover-letter/application-package export boundary only. Uses PR73 export/download policy result, explicit artifact-specific export confirmation, approved/fresh cover-letter or application-package state, controlled local markdown representation, safe file metadata, and redacted audit metadata. Resume export changes, send/submit/apply/upload/email, URLs, filesystem writes, persistence writes, UI/runtime/bridge/server/tool wiring, Convex schema/write changes, outbound HTTP, LLM/model calls, package changes, and lockfile changes remain blocked. |
 
 ---
 
@@ -180,7 +181,9 @@ PR198 merged PR72 into `application-os-foundation` with merge commit `fbcc5cb249
 
 PR199 merged PR73 into `application-os-foundation` with merge commit `a0e503d525d944402ce1cdfad312a0de1c3b157c` at `2026-06-17T18:05:12Z`. It added deterministic local MCP export/download policy eligibility metadata after PR71 approval, PR72 freshness/lineage checks, explicit safe confirmation, retention/delete/rollback checks, safe filename metadata, and redacted audit metadata. It did not start PR74 or PR75, implement real resume/cover-letter/application-package export, create downloadable files, generate file bytes or URLs, persist artifacts, add UI/React/runtime/bridge/server/tool wiring, add Convex schema/write changes, add outbound HTTP or LLM/model calls, or add write/send/submit/apply behavior.
 
-PR74 is the active implementation PR on `codex/pr74-resume-export`. It is limited to deterministic local MCP resume export representation after PR73 policy authorization, explicit resume-export confirmation, approved/fresh resume variant state, safe file metadata, controlled local markdown payload separation, and redacted audit metadata. It must not start PR75, implement cover-letter/application-package export, create URLs, write files, persist artifacts, add UI/React/runtime/bridge/server/tool wiring, add Convex schema/write changes, add outbound HTTP or LLM/model calls, add package/lockfile changes, or add send/submit/apply/upload/email behavior.
+PR200 merged PR74 into `application-os-foundation` with merge commit `7796a41da34e7e18675417a6a1f7adc46b5505d5` at `2026-06-17T19:14:03Z`. It added deterministic local MCP resume export representation after PR73 policy authorization, explicit resume-export confirmation, approved/fresh resume variant state, safe file metadata, controlled local markdown payload separation, and redacted audit metadata. It did not start PR75, implement cover-letter/application-package export, create URLs, write files, persist artifacts, add UI/React/runtime/bridge/server/tool wiring, add Convex schema/write changes, add outbound HTTP or LLM/model calls, add package/lockfile changes, or add send/submit/apply/upload/email behavior.
+
+PR75 is the active implementation PR on `codex/pr75-cover-letter-application-package-export`. It is limited to deterministic local MCP cover-letter/application-package export representation after PR73 policy authorization, explicit artifact-specific export confirmation, approved/fresh cover-letter or application-package state, safe file metadata, controlled local markdown payload separation, and redacted audit metadata. It must not start PR76, implement write actions, create URLs, write files, persist artifacts, add UI/React/runtime/bridge/server/tool wiring, add Convex schema/write changes, add outbound HTTP or LLM/model calls, add package/lockfile changes, or add send/submit/apply/upload/email behavior.
 
 OAuth/real-data/write-action constraints remain active: no OAuth runtime, callback, token storage, real user data, Convex real-data reads/writes, handlers, production connector, tool execution, outbound HTTP, LLM calls, export/download/send/submit/apply, or package/lockfile changes without an explicit unlocking PR.
 

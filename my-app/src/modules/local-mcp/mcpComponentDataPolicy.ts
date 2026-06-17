@@ -495,6 +495,10 @@ const ALLOWED_SAFE_STRING_VALUES = new Set([
   "component_error_loading_refusal_ux_blocked",
   "component_data_policy_blocked",
   "complete",
+  "application_package_export_created",
+  "cover_letter_application_package_export_authorized",
+  "cover_letter_application_package_export_blocked",
+  "cover_letter_export_created",
   "cover_letter_application_message_preview_blocked",
   "cover_letter_preview_created",
   "convex_application_package_summary",
@@ -625,6 +629,8 @@ const ALLOWED_KIND_VALUES = new Set([
   "local_mcp_component_data_policy_safe_props",
   "local_mcp_component_data_policy_safe_state_snapshot",
   "mcp_component_error_loading_refusal_ux_state",
+  "mcp_cover_letter_application_package_export_audit_event",
+  "mcp_cover_letter_application_package_export_summary",
   "mcp_cover_letter_application_message_preview_summary",
   "mcp_generated_artifact_boundary_summary",
   "mcp_generated_artifact_export_download_policy_audit_event",
@@ -1046,7 +1052,9 @@ function validateSuggestedFilenameString(value: string): ValidationResult {
 }
 
 function validateFileNameString(value: string): ValidationResult {
-  return value === "resume-export.md"
+  return /^(?:resume|cover-letter|application-package)-export\.md$/u.test(
+    value,
+  ) && !containsForbiddenText(value)
     ? { ok: true }
     : { ok: false, reason: "unsafe_component_text" };
 }

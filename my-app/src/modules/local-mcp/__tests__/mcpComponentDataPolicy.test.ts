@@ -903,6 +903,168 @@ function resumeExportSummary() {
   } as const;
 }
 
+function coverLetterApplicationPackageExportSummary(
+  artifactKind: "cover_letter" | "application_package" = "cover_letter",
+) {
+  const config = {
+    cover_letter: {
+      artifactRef: {
+        id: "mcp-safe-ref:cover-letter:preview",
+        label: "Cover letter artifact",
+        category: "cover_letter",
+      },
+      exportRef: {
+        id: "mcp-safe-ref:cover-letter:export-file",
+        label: "Cover letter export file",
+        status: "cover_letter_export_created",
+        category: "cover_letter",
+      },
+      exportStatus: "cover_letter_export_created",
+      fileName: "cover-letter-export.md",
+      safeSummary:
+        "Cover letter export representation created. File body is restricted.",
+    },
+    application_package: {
+      artifactRef: {
+        id: "mcp-safe-ref:application-package:message-preview",
+        label: "Application pkg artifact",
+        category: "application_package",
+      },
+      exportRef: {
+        id: "mcp-safe-ref:application-package:export-file",
+        label: "Application pkg export file",
+        status: "application_package_export_created",
+        category: "application_package",
+      },
+      exportStatus: "application_package_export_created",
+      fileName: "application-package-export.md",
+      safeSummary:
+        "Application package export representation created. File body is restricted.",
+    },
+  } as const;
+  const selected = config[artifactKind];
+  const artifactRef = {
+    ...selected.artifactRef,
+    status: "approved_for_preview",
+    count: 1,
+    updatedAt: "2026-06-17T05:00:00.000Z",
+    version: 1,
+  } as const;
+  const exportRef = {
+    ...selected.exportRef,
+    count: 1,
+    updatedAt: "2026-06-17T17:30:00.000Z",
+    version: 1,
+  } as const;
+  const safeCounts = {
+    artifacts: 1,
+    files: 1,
+    blockers: 0,
+    warnings: 1,
+    revisionCount: 0,
+    characterCount: 1536,
+    byteCount: 1536,
+    version: 1,
+  } as const;
+  const safeCategories = {
+    artifactKind,
+    artifactStatus: "approved_for_preview",
+    exportStatus: selected.exportStatus,
+    policyStatus: "export_download_policy_allowed",
+    confirmationStatus: "confirmation_confirmed",
+    freshnessStatus: "fresh_artifact_confirmed",
+    retentionPolicyStatus: "retention_policy_satisfied",
+    deletePolicyStatus: "delete_policy_satisfied",
+    rollbackStatus: "rollback_available",
+    visibilityCategory: "safe_summary_only",
+    fileName: selected.fileName,
+    fileExtension: ".md",
+    mimeType: "text/markdown",
+    nextUserAction: "ready_for_review",
+    version: 1,
+  } as const;
+
+  return {
+    kind: "mcp_cover_letter_application_package_export_summary",
+    allowed: true,
+    artifactKind,
+    artifactStatus: "approved_for_preview",
+    exportStatus: selected.exportStatus,
+    policyStatus: "export_download_policy_allowed",
+    confirmationStatus: "confirmation_confirmed",
+    freshnessStatus: "fresh_artifact_confirmed",
+    retentionPolicyStatus: "retention_policy_satisfied",
+    deletePolicyStatus: "delete_policy_satisfied",
+    rollbackStatus: "rollback_available",
+    artifactRef,
+    exportRef,
+    visibilityCategory: "safe_summary_only",
+    fileName: selected.fileName,
+    fileExtension: ".md",
+    mimeType: "text/markdown",
+    characterCount: 1536,
+    byteCount: 1536,
+    checksum: "fnv1a32:7f6a2b11",
+    safeSummary: selected.safeSummary,
+    nextUserAction: "ready_for_review",
+    refIds: [artifactRef.id, exportRef.id],
+    safeCounts,
+    safeCategories,
+    safeFlags: {
+      humanReviewRequired: false,
+      approvedForPreview: true,
+      approvedForExport: true,
+      approvedForDownload: true,
+      approvedForSend: false,
+      approvedForSubmit: false,
+      approvedForApply: false,
+      fullContentRestricted: true,
+      rawDataExposed: false,
+      persisted: false,
+      urlCreated: false,
+      writeActionExecuted: false,
+      version: 1,
+    },
+    auditEvent: {
+      kind: "mcp_cover_letter_application_package_export_audit_event",
+      eventKind: "cover_letter_application_package_export_authorized",
+      artifactKind,
+      artifactRef,
+      exportRef,
+      exportStatus: selected.exportStatus,
+      policyStatus: "export_download_policy_allowed",
+      safeCounts,
+      redactedFlags: {
+        rawDataExposed: false,
+        fullContentRestricted: true,
+        tokenOrIdentityExposed: false,
+        persisted: false,
+        version: 1,
+      },
+      occurredAt: "2026-06-17T17:30:00.000Z",
+      persisted: false,
+      version: 1,
+    },
+    capabilities: {
+      dataReads: "blocked",
+      dataWrites: "blocked",
+      handlerExecution: "blocked",
+      productionConnector: "blocked",
+      networkAccess: "blocked",
+      modelCalls: "blocked",
+      writeActions: "blocked",
+      exportActions: "blocked",
+      rawDataProjection: "blocked",
+      credentialStorage: "none",
+      tokenStorage: "none",
+      version: 1,
+    },
+    modelVisible: true,
+    componentVisible: true,
+    version: 1,
+  } as const;
+}
+
 function stripStringAndPatternLiterals(source: string): string {
   return source
     .replace(/`(?:\\.|[^`\\])*`/gmu, '""')
@@ -1490,6 +1652,104 @@ describe("PR65 component UI data policy", () => {
         safeFlags: {
           ...summary.safeFlags,
           filePayloadCreated: true,
+        },
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        byteCount: 50_001,
+      }),
+    );
+  });
+
+  it("allows exact PR75 cover letter/application package export safe metadata while blocking payload leakage", () => {
+    for (const artifactKind of [
+      "cover_letter",
+      "application_package",
+    ] as const) {
+      const summary = coverLetterApplicationPackageExportSummary(artifactKind);
+
+      const result = validateLocalMcpComponentDataPolicy(
+        policyInput("component_visible_structured_content", summary),
+      );
+      expectAllowed(result);
+      if (!result.allowed) {
+        throw new TypeError("expected PR75 export summary to be allowed");
+      }
+      expect(result.safePayload).toEqual(summary);
+
+      expect(summary.fileName).toBe(
+        artifactKind === "cover_letter"
+          ? "cover-letter-export.md"
+          : "application-package-export.md",
+      );
+      expect(summary.fileExtension).toBe(".md");
+      expect(summary.mimeType).toBe("text/markdown");
+      expect(summary.checksum).toMatch(/^fnv1a32:[a-f0-9]{8}$/u);
+      expect(summary.safeFlags).toMatchObject({
+        approvedForExport: true,
+        approvedForDownload: true,
+        approvedForSend: false,
+        approvedForSubmit: false,
+        approvedForApply: false,
+        urlCreated: false,
+        persisted: false,
+        writeActionExecuted: false,
+      });
+    }
+
+    expectAllowed(
+      validateLocalMcpComponentDataPolicy(
+        policyInput("component_visible_error", {
+          kind: "local_mcp_component_data_policy_safe_error",
+          code: "cover_letter_application_package_export_blocked",
+          msg: "Refused. Cover letter/app pkg export blocked.",
+          safeForModel: true,
+          rawDataExposed: false,
+          componentDataExposed: false,
+          writeActionExecuted: false,
+          version: 1,
+        }),
+      ),
+    );
+
+    const summary = coverLetterApplicationPackageExportSummary();
+    for (const unsafeMetadata of [
+      { fileName: "pana-cover-letter.md" },
+      { fileName: "../cover-letter-export.md" },
+      { fileName: "cover-letter-export.pdf" },
+      { fileName: "real-user@example.test" },
+      { fileExtension: ".pdf" },
+      { mimeType: "application/pdf" },
+      { checksum: "sha256:abc123" },
+      { downloadUrl: "https://example.test/cover-letter-export.md" },
+      { signedUrl: "https://example.test/signed" },
+      { fullContent: "Dear Hiring Manager, private body." },
+    ] as const) {
+      expectBlocked(
+        policyInput("component_visible_structured_content", {
+          ...summary,
+          ...unsafeMetadata,
+        }),
+      );
+    }
+
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        safeFlags: {
+          ...summary.safeFlags,
+          urlCreated: true,
+        },
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        safeFlags: {
+          ...summary.safeFlags,
+          persisted: true,
         },
       }),
     );
