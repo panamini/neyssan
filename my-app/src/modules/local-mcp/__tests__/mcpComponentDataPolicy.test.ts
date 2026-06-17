@@ -602,6 +602,12 @@ describe("PR65 component UI data policy", () => {
       },
     } as const;
 
+    expect(coverLetterSummary.safeFlags).toMatchObject({
+      approvedForDownload: false,
+      approvedForSubmit: false,
+    });
+    expect(coverLetterSummary.safeRefusal).toBeUndefined();
+
     for (const payload of [coverLetterSummary, applicationMessageSummary]) {
       const result = validateLocalMcpComponentDataPolicy(
         policyInput("component_visible_structured_content", payload),
@@ -617,6 +623,29 @@ describe("PR65 component UI data policy", () => {
       policyInput("component_visible_structured_content", {
         ...coverLetterSummary,
         previewStatus: "application_message_sent",
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...applicationMessageSummary,
+        artifactKind: "application_message",
+        category: "application_message",
+        safeCategories: {
+          ...applicationMessageSummary.safeCategories,
+          artifactKind: "application_message",
+        },
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_error", {
+        kind: "local_mcp_component_data_policy_safe_error",
+        code: "application_message_preview_blocked",
+        msg: "Refused. Application message preview blocked.",
+        safeForModel: true,
+        rawDataExposed: false,
+        componentDataExposed: false,
+        writeActionExecuted: false,
+        version: 1,
       }),
     );
   });

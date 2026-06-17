@@ -20,6 +20,10 @@ Base precondition:
 - If `application-os-foundation` is not synced to `origin/application-os-foundation` and does not include PR69 merge commit `676592c0cba3c1fca94ec2f2e9e576c67f5dd70a`, stop with `BLOCKED_BASE_NOT_SYNCED`.
 - Do not implement PR70 on top of the PR69 branch or any other unmerged branch.
 
+Review precondition:
+- If no PR70 diff exists yet, review the implementation prompt against the roadmap and relevant source only.
+- Do not claim to have reviewed a PR70 implementation diff before PR70 is implemented.
+
 Allowed scope:
 - Add deterministic local MCP preview boundary logic for cover letter preview and application message preview.
 - Keep previews human-review-required and not approved for export, download, send, submit, or apply.
@@ -29,6 +33,7 @@ Allowed scope:
 - Expose boolean review flags such as `humanReviewRequired: true` and `approvedForPreview: false` only as static preview safety metadata.
 - Add fail-closed validation for malformed, hostile, or unsafe input.
 - Update PR65 component data policy only for exact PR70 safe enum/key support.
+- Every PR70 policy addition must have a direct targeted test in `mcpComponentDataPolicy.test.ts`.
 - Update the roadmap progress ledger for PR69 merged and PR70 active.
 
 Forbidden scope:
@@ -58,7 +63,7 @@ Files forbidden to touch:
 
 Expected tests:
 - Focused PR70 Vitest coverage for cover letter and application message previews, safe projection, unsafe input refusal, hostile object refusal, determinism, and source guards.
-- PR65 component data policy regression for PR70 safe enum/key support.
+- PR65 component data policy regression for every PR70 safe enum/key support addition.
 - Application message preview is not sendable: no recipient, channel, email body output, send target, delivery metadata, `to`, `subject`, `threadId`, or provider/message IDs.
 - Source guard proving PR69 resume-variant preview module/test do not pick up PR70 cover-letter/application-message behavior.
 - Nearby PR68, PR69, and PR67 local MCP regression tests.
