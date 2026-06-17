@@ -476,62 +476,97 @@ export function createMcpNoopWriteActionResult(
 }
 
 function parseIntent(input: unknown): McpWriteActionIntentV1 | undefined {
+  const parsed = parseIntentBase(input);
+  if (!parsed) return undefined;
+  return parsed.record.intentKind === "read_only_operation"
+    ? parseReadOnlyIntent(parsed.record, parsed.dataClasses)
+    : parseWriteIntent(parsed.record, parsed.dataClasses);
+}
+
+function parseIntentBase(
+  input: unknown,
+):
+  | Readonly<{
+      record: Record<str, unknown>;
+      dataClasses: readonly McpWriteActionDataClassV1[];
+    }>
+  | undefined {
   const record = readExactRecord(input, INTENT_ALLOWED_KEYS, INTENT_REQUIRED_KEYS);
-  if (!record || record.kind !== "mcp_write_action_intent" || record.version !== 1) {
-    return undefined;
-  }
-  if (
-    !isIntentKind(record.intentKind) ||
-    !isCategory(record.actionCategory) ||
-    !isRiskLevel(record.riskLevel) ||
-    !isSafeLabel(record.actionLabel) ||
-    !isSafeLabel(record.affectedSurface) ||
-    !isSafeText(record.userVisibleSummary, MAX_SAFE_TEXT_LENGTH) ||
-    !isSafeText(record.rollbackPlan, MAX_SAFE_TEXT_LENGTH)
-  ) {
-    return undefined;
-  }
+  if (!record || !hasValidIntentMetadata(record)) return undefined;
   const dataClasses = parseDataClasses(record.dataClasses);
   if (!dataClasses) return undefined;
-  if (record.intentKind === "read_only_operation") {
-    if (record.actionCategory !== "read_only" || record.riskLevel !== "none") {
-      return undefined;
-    }
-    return {
-      kind: "mcp_write_action_intent",
-      intentKind: "read_only_operation",
-      actionLabel: record.actionLabel,
-      actionCategory: "read_only",
-      affectedSurface: record.affectedSurface,
-      userVisibleSummary: record.userVisibleSummary,
-      riskLevel: "none",
-      rollbackPlan: record.rollbackPlan,
-      dataClasses,
-      version: 1,
-    };
-  }
-  if (
-    !WRITE_ACTION_CATEGORIES.has(record.actionCategory) ||
-    record.riskLevel === "none" ||
-    !isSafeText(record.requiredConfirmationCopy, MAX_SAFE_TEXT_LENGTH) ||
-    !isSafeIdempotencyKey(record.idempotencyKey)
-  ) {
+  return { record, dataClasses };
+}
+
+function parseReadOnlyIntent(
+  record: Record<str, unknown>,
+  dataClasses: readonly McpWriteActionDataClassV1[],
+): McpWriteActionIntentV1 | undefined {
+  if (record.actionCategory !== "read_only" || record.riskLevel !== "none") {
     return undefined;
   }
   return {
     kind: "mcp_write_action_intent",
-    intentKind: "write_action",
-    actionLabel: record.actionLabel,
-    actionCategory: record.actionCategory,
-    affectedSurface: record.affectedSurface,
-    userVisibleSummary: record.userVisibleSummary,
-    riskLevel: record.riskLevel,
-    requiredConfirmationCopy: record.requiredConfirmationCopy,
-    idempotencyKey: record.idempotencyKey,
-    rollbackPlan: record.rollbackPlan,
+    intentKind: "read_only_operation",
+    actionLabel: record.actionLabel as str,
+    actionCategory: "read_only",
+    affectedSurface: record.affectedSurface as str,
+    userVisibleSummary: record.userVisibleSummary as str,
+    riskLevel: "none",
+    rollbackPlan: record.rollbackPlan as str,
     dataClasses,
     version: 1,
   };
+}
+
+function parseWriteIntent(
+  record: Record<str, unknown>,
+  dataClasses: readonly McpWriteActionDataClassV1[],
+): McpWriteActionIntentV1 | undefined {
+  if (!hasValidWriteIntentMetadata(record)) return undefined;
+  return {
+    kind: "mcp_write_action_intent",
+    intentKind: "write_action",
+    actionLabel: record.actionLabel as str,
+    actionCategory: record.actionCategory as Exclude<
+      McpWriteActionCategoryV1,
+      "read_only"
+    >,
+    affectedSurface: record.affectedSurface as str,
+    userVisibleSummary: record.userVisibleSummary as str,
+    riskLevel: record.riskLevel as Exclude<McpWriteActionRiskLevelV1, "none">,
+    requiredConfirmationCopy: record.requiredConfirmationCopy as str,
+    idempotencyKey: record.idempotencyKey as str,
+    rollbackPlan: record.rollbackPlan as str,
+    dataClasses,
+    version: 1,
+  };
+}
+
+function hasValidIntentMetadata(record: Record<str, unknown>): boolean {
+  return allTrue([
+    record.kind === "mcp_write_action_intent",
+    record.version === 1,
+    isIntentKind(record.intentKind),
+    isCategory(record.actionCategory),
+    isRiskLevel(record.riskLevel),
+    isSafeLabel(record.actionLabel),
+    isSafeLabel(record.affectedSurface),
+    isSafeText(record.userVisibleSummary, MAX_SAFE_TEXT_LENGTH),
+    isSafeText(record.rollbackPlan, MAX_SAFE_TEXT_LENGTH),
+  ]);
+}
+
+function hasValidWriteIntentMetadata(record: Record<str, unknown>): boolean {
+  return allTrue([
+    isCategory(record.actionCategory),
+    record.actionCategory !== "read_only",
+    WRITE_ACTION_CATEGORIES.has(record.actionCategory as McpWriteActionCategoryV1),
+    isRiskLevel(record.riskLevel),
+    record.riskLevel !== "none",
+    isSafeText(record.requiredConfirmationCopy, MAX_SAFE_TEXT_LENGTH),
+    isSafeIdempotencyKey(record.idempotencyKey),
+  ]);
 }
 
 function buildProposal(intent: McpWriteActionIntentV1): McpWriteActionProposalV1 {
@@ -592,28 +627,37 @@ function buildConfirmationRequirement(
 
 function parseProposal(input: unknown): McpWriteActionProposalV1 | undefined {
   const record = readPlainObjectRecord(input);
-  if (
-    !record ||
-    record.kind !== "mcp_write_action_proposal" ||
-    record.version !== 1 ||
-    !isOperationKind(record.operationKind) ||
-    !isCategory(record.actionCategory) ||
-    !isSafeLabel(record.actionLabel) ||
-    !isSafeLabel(record.affectedSurface) ||
-    !isSafeText(record.userVisibleSummary, MAX_SAFE_TEXT_LENGTH) ||
-    !isRiskLevel(record.riskLevel) ||
-    !readPlainObjectRecord(record.confirmation) ||
-    !readPlainObjectRecord(record.capabilities) ||
-    !readPlainObjectRecord(record.auditEvent) ||
-    record.writeActionExecuted !== false ||
-    record.realExecutionAllowed !== false ||
-    record.externalSideEffect !== false ||
-    record.persisted !== false ||
-    record.networkAccess !== false
-  ) {
+  if (!record || !hasValidProposalMetadata(record)) {
     return undefined;
   }
   return input as McpWriteActionProposalV1;
+}
+
+function hasValidProposalMetadata(record: Record<str, unknown>): boolean {
+  return allTrue([
+    record.kind === "mcp_write_action_proposal",
+    record.version === 1,
+    isOperationKind(record.operationKind),
+    isCategory(record.actionCategory),
+    isSafeLabel(record.actionLabel),
+    isSafeLabel(record.affectedSurface),
+    isSafeText(record.userVisibleSummary, MAX_SAFE_TEXT_LENGTH),
+    isRiskLevel(record.riskLevel),
+    readPlainObjectRecord(record.confirmation) !== undefined,
+    readPlainObjectRecord(record.capabilities) !== undefined,
+    readPlainObjectRecord(record.auditEvent) !== undefined,
+    hasDisabledRuntimeFlags(record),
+  ]);
+}
+
+function hasDisabledRuntimeFlags(record: Record<str, unknown>): boolean {
+  return allTrue([
+    record.writeActionExecuted === false,
+    record.realExecutionAllowed === false,
+    record.externalSideEffect === false,
+    record.persisted === false,
+    record.networkAccess === false,
+  ]);
 }
 
 function parseConfirmationResult(
@@ -868,6 +912,10 @@ function isSafeText(input: unknown, maxLength: num): input is str {
 function containsUnsafeText(input: str): boolean {
   const normalized = input.normalize("NFKC");
   return UNSAFE_TEXT_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
+function allTrue(checks: readonly boolean[]): boolean {
+  return checks.every(Boolean);
 }
 
 function readExactRecord(
