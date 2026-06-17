@@ -101,6 +101,7 @@ const MAX_SAFE_LABEL_LENGTH = 120;
 const MAX_SAFE_CONTENT_TEXT_LENGTH = 180;
 const MAX_SAFE_ARRAY_LENGTH = 25;
 const MAX_SAFE_COUNT = 1000;
+const MAX_SAFE_FILE_METADATA_COUNT = 50_000;
 const MAX_COMPONENT_DATA_DEPTH = 7;
 
 const LOCAL_MCP_COMPONENT_DATA_POLICY_SURFACES_V1: readonly LocalMcpComponentDataSurfaceV1[] =
@@ -186,17 +187,20 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "blockedPackages",
   "blockedReviews",
   "blockedRuns",
+  "byteCount",
   "capabilities",
   "category",
   "candidateFacts",
   "changedSections",
   "bytesCreated",
+  "characterCount",
   "claimBackedItems",
   "code",
   "componentDataExposed",
   "componentVisible",
   "confirmationStatus",
   "count",
+  "checksum",
   "coverLetterArtifactStatus",
   "credentialStorage",
   "credentialsExposed",
@@ -216,8 +220,13 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "eventKind",
   "excludedFactBlockers",
   "exportActions",
+  "exportRef",
+  "exportStatus",
   "failedRuns",
+  "fileExtension",
+  "fileName",
   "filePayloadCreated",
+  "files",
   "freshnessStatus",
   "fullContentRestricted",
   "handlerExecution",
@@ -232,6 +241,7 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "missingInputItems",
   "missingReviewCategory",
   "missingReviewItems",
+  "mimeType",
   "modelCalls",
   "modelVisible",
   "msg",
@@ -342,14 +352,17 @@ const NUMERIC_KEYS = new Set([
   "blockedPackages",
   "blockedReviews",
   "blockedRuns",
+  "byteCount",
   "candidateFacts",
   "changedSections",
+  "characterCount",
   "claimBackedItems",
   "count",
   "demands",
   "evidenceMatches",
   "excludedFactBlockers",
   "failedRuns",
+  "files",
   "missingEvidence",
   "missingInputItems",
   "missingReviewItems",
@@ -378,6 +391,11 @@ const NUMERIC_KEYS = new Set([
   "staleInputs",
   "staleSources",
   "warnings",
+]);
+
+const FILE_METADATA_COUNT_KEYS = new Set([
+  "byteCount",
+  "characterCount",
 ]);
 
 const BOOLEAN_KEYS = new Set([
@@ -592,6 +610,9 @@ const ALLOWED_SAFE_STRING_VALUES = new Set([
   "request_edit",
   "restricted_full_content",
   "retention_pending",
+  "resume_export_authorized",
+  "resume_export_blocked",
+  "resume_export_created",
   "cover_letter",
   "review_notes",
 ]);
@@ -613,6 +634,8 @@ const ALLOWED_KIND_VALUES = new Set([
   "mcp_generated_artifact_human_approval_workflow_summary",
   "mcp_generated_artifact_revision_audit_event",
   "mcp_generated_artifact_revision_loop_summary",
+  "mcp_resume_export_audit_event",
+  "mcp_resume_export_summary",
   "mcp_resume_variant_generation_preview_summary",
   "mcp_real_application_package_summary_result",
   "mcp_real_evidence_graph_summary_result",
@@ -904,8 +927,8 @@ function validateComponentFieldValue(
 ): ValidationResult {
   if (key === "version") return validateVersionField(value);
   if (NUMERIC_KEYS.has(key) && BOOLEAN_KEYS.has(key))
-    return validateNumericOrBooleanField(value);
-  if (NUMERIC_KEYS.has(key)) return validateNumericField(value);
+    return validateNumericOrBooleanField(key, value);
+  if (NUMERIC_KEYS.has(key)) return validateNumericField(key, value);
   if (BOOLEAN_KEYS.has(key)) return validateBooleanField(key, value);
   return validateSafeComponentValue(value, key, depth + 1, seen);
 }
@@ -916,8 +939,11 @@ function validateVersionField(value: unknown): ValidationResult {
     : { ok: false, reason: "unsafe_component_payload" };
 }
 
-function validateNumericField(value: unknown): ValidationResult {
-  return typeof value === "number" && isSafeCount(value)
+function validateNumericField(key: string, value: unknown): ValidationResult {
+  const maxCount = FILE_METADATA_COUNT_KEYS.has(key)
+    ? MAX_SAFE_FILE_METADATA_COUNT
+    : MAX_SAFE_COUNT;
+  return typeof value === "number" && isSafeCount(value, maxCount)
     ? { ok: true }
     : { ok: false, reason: "unsafe_component_payload" };
 }
@@ -935,8 +961,11 @@ function validateBooleanField(
   return { ok: true };
 }
 
-function validateNumericOrBooleanField(value: unknown): ValidationResult {
-  return validateNumericField(value).ok || typeof value === "boolean"
+function validateNumericOrBooleanField(
+  key: string,
+  value: unknown,
+): ValidationResult {
+  return validateNumericField(key, value).ok || typeof value === "boolean"
     ? { ok: true }
     : { ok: false, reason: "unsafe_component_payload" };
 }
@@ -957,16 +986,25 @@ function validateSafeComponentString(
 
 type ComponentStringValidator = (value: string) => ValidationResult;
 
+const COMPONENT_STRING_VALIDATOR_BY_KEY: Readonly<
+  Record<string, ComponentStringValidator | undefined>
+> = {
+  kind: validateKindString,
+  checksum: validateChecksumString,
+  fileExtension: validateFileExtensionString,
+  fileName: validateFileNameString,
+  mimeType: validateMimeTypeString,
+  id: validateSafeRefString,
+  occurredAt: validateUpdatedAtString,
+  suggestedFilename: validateSuggestedFilenameString,
+  updatedAt: validateUpdatedAtString,
+  type: validateTextBlockTypeString,
+};
+
 function componentStringValidatorForKey(
   key: string,
 ): ComponentStringValidator | undefined {
-  if (key === "kind") return validateKindString;
-  if (key === "id") return validateSafeRefString;
-  if (key === "occurredAt") return validateUpdatedAtString;
-  if (key === "suggestedFilename") return validateSuggestedFilenameString;
-  if (key === "updatedAt") return validateUpdatedAtString;
-  if (key === "type") return validateTextBlockTypeString;
-  return undefined;
+  return COMPONENT_STRING_VALIDATOR_BY_KEY[key];
 }
 
 function validateSafeFreeText(value: string): ValidationResult {
@@ -1003,6 +1041,30 @@ function validateSuggestedFilenameString(value: string): ValidationResult {
   return /^(?:resume-variant|cover-letter|application-package)-export-policy$/u.test(
     value,
   ) && !containsForbiddenText(value)
+    ? { ok: true }
+    : { ok: false, reason: "unsafe_component_text" };
+}
+
+function validateFileNameString(value: string): ValidationResult {
+  return value === "resume-export.md"
+    ? { ok: true }
+    : { ok: false, reason: "unsafe_component_text" };
+}
+
+function validateFileExtensionString(value: string): ValidationResult {
+  return value === ".md"
+    ? { ok: true }
+    : { ok: false, reason: "unsafe_component_text" };
+}
+
+function validateMimeTypeString(value: string): ValidationResult {
+  return value === "text/markdown"
+    ? { ok: true }
+    : { ok: false, reason: "unsafe_component_text" };
+}
+
+function validateChecksumString(value: string): ValidationResult {
+  return /^fnv1a32:[a-f0-9]{8}$/u.test(value)
     ? { ok: true }
     : { ok: false, reason: "unsafe_component_text" };
 }
@@ -1093,8 +1155,8 @@ function cloneSafeComponentPayload(value: unknown): unknown {
   );
 }
 
-function isSafeCount(value: number): boolean {
-  return Number.isInteger(value) && value >= 0 && value <= MAX_SAFE_COUNT;
+function isSafeCount(value: number, maxCount = MAX_SAFE_COUNT): boolean {
+  return Number.isInteger(value) && value >= 0 && value <= maxCount;
 }
 
 function isSafeOpaqueRefId(value: string): boolean {

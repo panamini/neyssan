@@ -772,6 +772,137 @@ function generatedArtifactExportDownloadPolicySummary() {
   } as const;
 }
 
+function resumeExportSummary() {
+  const artifactRef = {
+    id: "mcp-safe-ref:resume-variant:preview",
+    label: "Resume variant artifact",
+    status: "approved_for_preview",
+    category: "resume_variant",
+    count: 1,
+    updatedAt: "2026-06-17T05:00:00.000Z",
+    version: 1,
+  } as const;
+  const exportRef = {
+    id: "mcp-safe-ref:resume-variant:export-file",
+    label: "Resume export file",
+    status: "resume_export_created",
+    category: "resume_variant",
+    count: 1,
+    updatedAt: "2026-06-17T17:30:00.000Z",
+    version: 1,
+  } as const;
+  const safeCounts = {
+    artifacts: 1,
+    files: 1,
+    blockers: 0,
+    warnings: 1,
+    revisionCount: 0,
+    characterCount: 1536,
+    byteCount: 1536,
+    version: 1,
+  } as const;
+  const safeCategories = {
+    artifactKind: "resume_variant",
+    artifactStatus: "approved_for_preview",
+    exportStatus: "resume_export_created",
+    policyStatus: "export_download_policy_allowed",
+    confirmationStatus: "confirmation_confirmed",
+    freshnessStatus: "fresh_artifact_confirmed",
+    retentionPolicyStatus: "retention_policy_satisfied",
+    deletePolicyStatus: "delete_policy_satisfied",
+    rollbackStatus: "rollback_available",
+    visibilityCategory: "safe_summary_only",
+    fileName: "resume-export.md",
+    fileExtension: ".md",
+    mimeType: "text/markdown",
+    nextUserAction: "ready_for_review",
+    version: 1,
+  } as const;
+
+  return {
+    kind: "mcp_resume_export_summary",
+    allowed: true,
+    artifactKind: "resume_variant",
+    artifactStatus: "approved_for_preview",
+    exportStatus: "resume_export_created",
+    policyStatus: "export_download_policy_allowed",
+    confirmationStatus: "confirmation_confirmed",
+    freshnessStatus: "fresh_artifact_confirmed",
+    retentionPolicyStatus: "retention_policy_satisfied",
+    deletePolicyStatus: "delete_policy_satisfied",
+    rollbackStatus: "rollback_available",
+    artifactRef,
+    exportRef,
+    visibilityCategory: "safe_summary_only",
+    fileName: "resume-export.md",
+    fileExtension: ".md",
+    mimeType: "text/markdown",
+    characterCount: 1536,
+    byteCount: 1536,
+    checksum: "fnv1a32:7f6a2b11",
+    safeSummary: "Resume export representation created. File body is restricted.",
+    nextUserAction: "ready_for_review",
+    refIds: [
+      "mcp-safe-ref:resume-variant:preview",
+      "mcp-safe-ref:resume-variant:export-file",
+    ],
+    safeCounts,
+    safeCategories,
+    safeFlags: {
+      humanReviewRequired: false,
+      approvedForPreview: true,
+      approvedForExport: true,
+      approvedForDownload: true,
+      approvedForSend: false,
+      approvedForSubmit: false,
+      approvedForApply: false,
+      fullContentRestricted: true,
+      rawDataExposed: false,
+      persisted: false,
+      urlCreated: false,
+      writeActionExecuted: false,
+      version: 1,
+    },
+    auditEvent: {
+      kind: "mcp_resume_export_audit_event",
+      eventKind: "resume_export_authorized",
+      artifactKind: "resume_variant",
+      artifactRef,
+      exportRef,
+      exportStatus: "resume_export_created",
+      policyStatus: "export_download_policy_allowed",
+      safeCounts,
+      redactedFlags: {
+        rawDataExposed: false,
+        fullContentRestricted: true,
+        tokenOrIdentityExposed: false,
+        persisted: false,
+        version: 1,
+      },
+      occurredAt: "2026-06-17T17:30:00.000Z",
+      persisted: false,
+      version: 1,
+    },
+    capabilities: {
+      dataReads: "blocked",
+      dataWrites: "blocked",
+      handlerExecution: "blocked",
+      productionConnector: "blocked",
+      networkAccess: "blocked",
+      modelCalls: "blocked",
+      writeActions: "blocked",
+      exportActions: "blocked",
+      rawDataProjection: "blocked",
+      credentialStorage: "none",
+      tokenStorage: "none",
+      version: 1,
+    },
+    modelVisible: true,
+    componentVisible: true,
+    version: 1,
+  } as const;
+}
+
 function stripStringAndPatternLiterals(source: string): string {
   return source
     .replace(/`(?:\\.|[^`\\])*`/gmu, '""')
@@ -1286,6 +1417,86 @@ describe("PR65 component UI data policy", () => {
       policyInput("component_visible_structured_content", {
         ...summary,
         attachment: { name: "resume.pdf" },
+      }),
+    );
+  });
+
+  it("allows exact PR74 resume export safe metadata while blocking payload leakage", () => {
+    const summary = resumeExportSummary();
+
+    const result = validateLocalMcpComponentDataPolicy(
+      policyInput("component_visible_structured_content", summary),
+    );
+    expectAllowed(result);
+    if (!result.allowed) {
+      throw new TypeError("expected PR74 resume export summary to be allowed");
+    }
+    expect(result.safePayload).toEqual(summary);
+
+    expectAllowed(
+      validateLocalMcpComponentDataPolicy(
+        policyInput("component_visible_error", {
+          kind: "local_mcp_component_data_policy_safe_error",
+          code: "resume_export_blocked",
+          msg: "Refused. Resume export blocked.",
+          safeForModel: true,
+          rawDataExposed: false,
+          componentDataExposed: false,
+          writeActionExecuted: false,
+          version: 1,
+        }),
+      ),
+    );
+
+    expect(summary.safeCounts.byteCount).toBeGreaterThan(1000);
+    expect(summary.safeCounts.characterCount).toBeGreaterThan(1000);
+    expect(summary.fileName).toBe("resume-export.md");
+    expect(summary.fileExtension).toBe(".md");
+    expect(summary.mimeType).toBe("text/markdown");
+    expect(summary.checksum).toMatch(/^fnv1a32:[a-f0-9]{8}$/u);
+    expect(summary.safeFlags).toMatchObject({
+      approvedForExport: true,
+      approvedForDownload: true,
+      approvedForSend: false,
+      approvedForSubmit: false,
+      approvedForApply: false,
+      urlCreated: false,
+      persisted: false,
+      writeActionExecuted: false,
+    });
+
+    for (const unsafeMetadata of [
+      { fileName: "pana-resume.md" },
+      { fileName: "resume/export.md" },
+      { fileName: "resume-export.pdf" },
+      { fileExtension: ".pdf" },
+      { mimeType: "application/pdf" },
+      { checksum: "sha256:abc123" },
+      { downloadUrl: "https://example.test/resume-export.md" },
+      { signedUrl: "https://example.test/signed" },
+      { fullContent: "Work Experience:\nPrivate resume body." },
+    ] as const) {
+      expectBlocked(
+        policyInput("component_visible_structured_content", {
+          ...summary,
+          ...unsafeMetadata,
+        }),
+      );
+    }
+
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        safeFlags: {
+          ...summary.safeFlags,
+          filePayloadCreated: true,
+        },
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        byteCount: 50_001,
       }),
     );
   });
