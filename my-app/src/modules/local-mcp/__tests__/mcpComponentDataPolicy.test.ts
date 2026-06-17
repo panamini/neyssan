@@ -550,6 +550,120 @@ function generatedArtifactHumanApprovalWorkflowSummary() {
   } as const;
 }
 
+function generatedArtifactRevisionLoopSummary() {
+  const previousArtifactRef = {
+    id: "mcp-safe-ref:cover-letter:preview",
+    label: "Cover letter artifact",
+    status: "edit_requested",
+    category: "cover_letter",
+    count: 1,
+    updatedAt: "2026-06-17T15:50:00.000Z",
+    version: 1,
+  } as const;
+  const newArtifactRevisionRef = {
+    id: "mcp-safe-ref:cover-letter:preview:revision-1",
+    label: "Cover letter artifact",
+    status: "human_review_required",
+    category: "cover_letter",
+    count: 1,
+    updatedAt: "2026-06-17T15:52:00.000Z",
+    version: 1,
+  } as const;
+  const safeCounts = {
+    artifacts: 1,
+    artifactTextBlockers: 0,
+    blockers: 0,
+    warnings: 1,
+    changedSections: 2,
+    redactedChangedSections: 2,
+    revisionIndex: 1,
+    revisionCount: 1,
+    version: 1,
+  } as const;
+  const safeCategories = {
+    artifactKind: "cover_letter",
+    artifactStatus: "human_review_required",
+    revisionStatus: "revision_created",
+    revisionIntent: "shorter",
+    visibilityCategory: "safe_summary_only",
+    retentionCategory: "retention_pending",
+    nextUserAction: "review_pending_items",
+    version: 1,
+  } as const;
+
+  return {
+    kind: "mcp_generated_artifact_revision_loop_summary",
+    allowed: true,
+    artifactKind: "cover_letter",
+    artifactStatus: "human_review_required",
+    revisionStatus: "revision_created",
+    revisionIntent: "shorter",
+    previousArtifactRef,
+    newArtifactRevisionRef,
+    artifactRef: newArtifactRevisionRef,
+    visibilityCategory: "safe_summary_only",
+    retentionCategory: "retention_pending",
+    safeSummary: "Artifact revision created. Full content is restricted.",
+    nextUserAction: "review_pending_items",
+    refIds: [
+      "mcp-safe-ref:cover-letter:preview",
+      "mcp-safe-ref:cover-letter:preview:revision-1",
+    ],
+    safeCounts,
+    safeCategories,
+    safeFlags: {
+      humanReviewRequired: true,
+      approvedForPreview: false,
+      approvedForExport: false,
+      approvedForDownload: false,
+      approvedForSend: false,
+      approvedForSubmit: false,
+      approvedForApply: false,
+      fullContentRestricted: true,
+      retentionPending: true,
+      rawDataExposed: false,
+      version: 1,
+    },
+    revisionAuditEvent: {
+      kind: "mcp_generated_artifact_revision_audit_event",
+      eventKind: "artifact_revision_created",
+      artifactKind: "cover_letter",
+      previousArtifactRef,
+      newArtifactRevisionRef,
+      revisionIntent: "shorter",
+      revisionStatus: "revision_created",
+      safeCounts,
+      redactedFlags: {
+        rawDataExposed: false,
+        fullContentRestricted: true,
+        tokenOrIdentityExposed: false,
+        persisted: false,
+        version: 1,
+      },
+      occurredAt: "2026-06-17T15:52:00.000Z",
+      persisted: false,
+      version: 1,
+    },
+    capabilities: {
+      dataReads: "blocked",
+      dataWrites: "blocked",
+      handlerExecution: "blocked",
+      productionConnector: "blocked",
+      networkAccess: "blocked",
+      modelCalls: "blocked",
+      writeActions: "blocked",
+      exportActions: "blocked",
+      rawDataProjection: "blocked",
+      credentialStorage: "none",
+      tokenStorage: "none",
+      version: 1,
+    },
+    modelVisible: true,
+    componentVisible: true,
+    version: 1,
+  } as const;
+}
+
 function stripStringAndPatternLiterals(source: string): string {
   return source
     .replace(/`(?:\\.|[^`\\])*`/gmu, '""')
@@ -852,6 +966,90 @@ describe("PR65 component UI data policy", () => {
       policyInput("component_visible_structured_content", {
         ...summary,
         rawApprovalNote: "Looks good.",
+      }),
+    );
+  });
+
+  it("allows exact PR72 artifact revision loop safe-summary enums, refs, audit, and flags", () => {
+    const summary = generatedArtifactRevisionLoopSummary();
+
+    const result = validateLocalMcpComponentDataPolicy(
+      policyInput("component_visible_structured_content", summary),
+    );
+    expectAllowed(result);
+    if (!result.allowed) {
+      throw new TypeError("expected PR72 revision loop summary to be allowed");
+    }
+    expect(result.safePayload).toEqual(summary);
+
+    for (const revisionIntent of [
+      "shorter",
+      "more_formal",
+      "focus_on_requirements",
+      "preserve_never_use",
+    ] as const) {
+      const revisionSummary = {
+        ...summary,
+        revisionIntent,
+        safeCategories: {
+          ...summary.safeCategories,
+          revisionIntent,
+        },
+        revisionAuditEvent: {
+          ...summary.revisionAuditEvent,
+          revisionIntent,
+        },
+      } as const;
+      expectAllowed(
+        validateLocalMcpComponentDataPolicy(
+          policyInput("component_visible_structured_content", revisionSummary),
+        ),
+      );
+    }
+
+    expectAllowed(
+      validateLocalMcpComponentDataPolicy(
+        policyInput("component_visible_error", {
+          kind: "local_mcp_component_data_policy_safe_error",
+          code: "generated_artifact_revision_loop_blocked",
+          msg: "Refused. Generated artifact revision loop blocked.",
+          safeForModel: true,
+          rawDataExposed: false,
+          componentDataExposed: false,
+          writeActionExecuted: false,
+          version: 1,
+        }),
+      ),
+    );
+
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        revisionStatus: "export_ready",
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        revisionAuditEvent: {
+          ...summary.revisionAuditEvent,
+          persisted: true,
+        },
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        rawGeneratedRevisionText: "GENERATED_FULL_TEXT_SENTINEL_DO_NOT_EXPOSE",
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        newArtifactRevisionRef: {
+          ...summary.newArtifactRevisionRef,
+          id: "mcp-safe-ref:cover-letter:raw-text",
+        },
       }),
     );
   });
