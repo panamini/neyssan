@@ -21,24 +21,24 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR196 - PR70: Cover Letter / Application Message Preview
-GitHub PR: https://github.com/panamini/neyssan/pull/196
-Merge commit: 84e22971951f618b3b86ab3ae57d1294e1177485
-Merged at: 2026-06-17T04:57:58Z
+PR197 - PR71: Human Approval Workflow for Generated Artifacts
+GitHub PR: https://github.com/panamini/neyssan/pull/197
+Merge commit: eb3261b2ca26da044fe51c69f4e2c51294e8d3d5
+Merged at: 2026-06-17T15:42:41Z
 ```
 
 Current open PR:
 
 ```txt
-PR71 - Human Approval Workflow for Generated Artifacts
+PR72 - Artifact Revision Loop
 GitHub PR: pending
-Head branch: codex/pr71-human-approval-workflow-generated-artifacts
+Head branch: codex/pr72-artifact-revision-loop
 ```
 
 Exact next PR:
 
 ```txt
-PR72 - Artifact Revision Loop
+PR73 - Export/Download Policy Implementation
 ```
 
 PR59 status:
@@ -94,7 +94,8 @@ MERGED_NARROW_PR59 - PR185 merged the narrow read-only adapter scope approved by
 |                        68 | Generated Artifact Boundary                                                         | merged      | #194                 | e7fb10883065d0441c9b28a40c2ca5a1773229f1                                                     | Deterministic generated-artifact boundary only. Separates safe summary/metadata/review state from restricted full generated artifact content for resume variants, cover letters, application packages, and review notes. No PR69 generation preview, artifact persistence, UI/runtime/bridge/server/tool wiring, OAuth/token changes, schema change, package change, outbound HTTP, LLM/model call, write/export/download/send/submit/apply behavior. Merged at 2026-06-16T22:13:16Z.                                                                                                                                                          |
 |                        69 | Resume Variant Generation Preview                                                   | merged      | #195                 | 676592c0cba3c1fca94ec2f2e9e576c67f5dd70a                                                     | Deterministic local MCP resume-variant generation preview boundary only. Preview-only and human-review-required; full generated resume variant content remains restricted behind the PR68 generated artifact boundary. No PR70 cover-letter/application-message preview, artifact revision loop, export/download/send/submit/apply, persistence writes, UI/runtime/bridge/server/tool wiring, Convex schema/write changes, outbound HTTP, LLM/model call, package change, or lockfile change. Merged at 2026-06-17T03:30:06Z.                                                                                   |
 |                        70 | Cover Letter / Application Message Preview                                          | merged      | #196                 | 84e22971951f618b3b86ab3ae57d1294e1177485                                                     | Deterministic local MCP cover-letter/application-message preview boundary only. Preview-only and human-review-required; full generated cover-letter/application-message content must remain restricted behind the PR68 generated artifact boundary. No PR71 approval workflow, PR72 revision loop, export/download/send/submit/apply, persistence writes, UI/runtime/bridge/server/tool wiring, Convex schema/write changes, outbound HTTP, LLM/model call, package change, or lockfile change. Merged at 2026-06-17T04:57:58Z.                                                                                |
-|                        71 | Human Approval Workflow for Generated Artifacts                                      | in progress | pending              | codex/pr71-human-approval-workflow-generated-artifacts                                        | Deterministic local MCP human approval workflow boundary only. Preview approval is safe-summary-only and sets only `approvedForPreview`; export/download/send/submit/apply, artifact revision loop, regeneration, persistence writes, UI/runtime/bridge/server/tool wiring, Convex schema/write changes, outbound HTTP, LLM/model calls, package changes, and lockfile changes remain blocked.                                                                                                                                                |
+|                        71 | Human Approval Workflow for Generated Artifacts                                      | merged      | #197                 | eb3261b2ca26da044fe51c69f4e2c51294e8d3d5                                                     | Deterministic local MCP human approval workflow boundary only. Preview approval is safe-summary-only and sets only `approvedForPreview`; export/download/send/submit/apply, artifact revision loop, regeneration, persistence writes, UI/runtime/bridge/server/tool wiring, Convex schema/write changes, outbound HTTP, LLM/model calls, package changes, and lockfile changes remain blocked. Merged at 2026-06-17T15:42:41Z.                                                                                |
+|                        72 | Artifact Revision Loop                                                              | in progress | pending              | codex/pr72-artifact-revision-loop                                                            | Deterministic local MCP artifact revision loop boundary only. Accepts PR71 edit-request safe-summary state, creates restricted revised artifacts internally through PR68, and returns safe revision summary metadata only. Export/download/send/submit/apply, persistence writes, UI/runtime/bridge/server/tool wiring, Convex schema/write changes, outbound HTTP, LLM/model calls, package changes, and lockfile changes remain blocked.                                                                                 |
 
 ---
 
@@ -171,7 +172,9 @@ PR194 merged PR68 into `application-os-foundation` with merge commit `e7fb108830
 
 PR196 merged PR70 into `application-os-foundation` with merge commit `84e22971951f618b3b86ab3ae57d1294e1177485` at `2026-06-17T04:57:58Z`. It added deterministic local cover-letter/application-message preview boundary behavior only, with preview-only and human-review-required safe summaries. It did not start PR71 or PR72, expose full generated content, add artifact revision/export/persistence, add UI/React/runtime/bridge/server/tool wiring, add Convex schema/write changes, add outbound HTTP or LLM/model calls, or add write/export/download/send/submit/apply behavior.
 
-PR71 is the active implementation PR. It is limited to deterministic local MCP human approval workflow for generated artifacts, with safe-summary-only preview approval and no persistence writes. It must not start PR72, implement artifact revision/regeneration/export/persistence, add UI/React/runtime/bridge/server/tool wiring, add Convex schema/write changes, add outbound HTTP or LLM/model calls, or add write/export/download/send/submit/apply behavior.
+PR197 merged PR71 into `application-os-foundation` with merge commit `eb3261b2ca26da044fe51c69f4e2c51294e8d3d5` at `2026-06-17T15:42:41Z`. It added deterministic local MCP human approval workflow boundary behavior only, with safe-summary-only preview approval and no persistence writes. It did not start PR72, implement artifact revision/regeneration/export/persistence, add UI/React/runtime/bridge/server/tool wiring, add Convex schema/write changes, add outbound HTTP or LLM/model calls, or add write/export/download/send/submit/apply behavior.
+
+PR72 is the active implementation PR. It is limited to deterministic local MCP artifact revision loop boundary behavior, with PR71 edit-request state as input and PR68 restricted revised artifacts internally. It must not start PR73, implement export/download, persist artifacts, add UI/React/runtime/bridge/server/tool wiring, add Convex schema/write changes, add outbound HTTP or LLM/model calls, or add write/export/download/send/submit/apply behavior.
 
 OAuth/real-data/write-action constraints remain active: no OAuth runtime, callback, token storage, real user data, Convex real-data reads/writes, handlers, production connector, tool execution, outbound HTTP, LLM calls, export/download/send/submit/apply, or package/lockfile changes without an explicit unlocking PR.
 
