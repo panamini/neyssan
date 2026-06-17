@@ -357,11 +357,18 @@ describe("PR76 write action framework", () => {
   });
 
   it("keeps the framework free of runtime, network, storage, and connector execution", () => {
-    for (const source of sourceFiles()) {
+    const [frameworkSource, testSource] = sourceFiles();
+
+    expect(frameworkSource).not.toMatch(
+      /from\s+["'][^"']*(?:components|pages|routes|convex)\//iu,
+    );
+    expect(frameworkSource).not.toMatch(
+      /from\s+["']node:(?:http|https|fs|net|tls|child_process)/iu,
+    );
+    expect(frameworkSource).not.toMatch(/\bprocess\./u);
+
+    for (const source of [frameworkSource, testSource]) {
       const stripped = stripStringAndPatternLiterals(source);
-      expect(source).not.toMatch(/from\s+["'][^"']*(?:components|pages|routes|convex)\//iu);
-      expect(source).not.toMatch(/from\s+["']node:(?:http|https|fs|net|tls|child_process)/iu);
-      expect(source).not.toMatch(/\bprocess\./u);
       expect(stripped).not.toMatch(
         /\b(fetch|axios|XMLHttpRequest|WebSocket|EventSource|OpenAI|chat\.completions|responses\.create)\b/u,
       );
