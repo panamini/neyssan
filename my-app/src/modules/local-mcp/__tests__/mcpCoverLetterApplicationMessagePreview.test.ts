@@ -16,10 +16,18 @@ const PREVIEW_SOURCE_FILE = resolve(
   TEST_DIR,
   "../mcpCoverLetterApplicationMessagePreview.ts",
 );
+const RESUME_VARIANT_PREVIEW_SOURCE_FILE = resolve(
+  TEST_DIR,
+  "../mcpResumeVariantGenerationPreview.ts",
+);
 const POLICY_SOURCE_FILE = resolve(TEST_DIR, "../mcpComponentDataPolicy.ts");
 const TEST_SOURCE_FILE = resolve(
   TEST_DIR,
   "mcpCoverLetterApplicationMessagePreview.test.ts",
+);
+const RESUME_VARIANT_PREVIEW_TEST_FILE = resolve(
+  TEST_DIR,
+  "mcpResumeVariantGenerationPreview.test.ts",
 );
 
 const COVER_LETTER_DRAFT_BODY =
@@ -64,7 +72,29 @@ const STRIPPED_SOURCE_GUARDS = [
   /\b(fetch|axios|XMLHttpRequest|WebSocket|EventSource|OpenAI|chat\.completions|responses\.create)\b/u,
   /\b(mutation|action|internalMutation|internalAction)\s*\(/u,
   /\b(download|send|submit|apply|export|approve)\s*\(/u,
-  /\b(approvalWorkflow|revisionLoop|generateResume|resumeVariantPreview|reviewNotesPreview|promptTemplate)\b/u,
+  /\b(approvalWorkflow|approvalState|approvalTransition|revisionLoop|generateResume|resumeVariantPreview|reviewNotesPreview|promptTemplate)\b/u,
+  /\b(stateMachine|approvePreview|rejectPreview|editPreview|diffReview|auditEvent)\b/u,
+] as const;
+
+const SENDABLE_MESSAGE_FIELD_KEYS = new Set([
+  "body",
+  "channel",
+  "deliverymetadata",
+  "emailbody",
+  "messageid",
+  "providermessageid",
+  "recipient",
+  "sendtarget",
+  "subject",
+  "threadid",
+  "to",
+]);
+
+const PR70_SOURCE_TOKENS = [
+  "application_message_preview",
+  "application_message_preview_created",
+  "mcp_cover_letter_application_message_preview",
+  "mcp-safe-ref:application-package:message-preview",
 ] as const;
 
 type PreviewIntent = "cover_letter_preview" | "application_message_preview";
@@ -226,10 +256,43 @@ function implementationSource(): string {
   return readFileSync(PREVIEW_SOURCE_FILE, "utf8");
 }
 
+function resumeVariantPreviewSources(): readonly string[] {
+  return [
+    RESUME_VARIANT_PREVIEW_SOURCE_FILE,
+    RESUME_VARIANT_PREVIEW_TEST_FILE,
+  ].map((file) => readFileSync(file, "utf8"));
+}
+
 function stripStringAndPatternLiterals(source: string): string {
   return source
     .replace(/\/(?:\\.|[^/\\\n])+\/[dgimsuvy]*/gu, "")
     .replace(/(["'`])(?:\\.|(?!\1)[\s\S])*?\1/gu, "");
+}
+
+function collectObjectKeys(value: unknown): readonly string[] {
+  const keys: string[] = [];
+  const seen = new WeakSet<object>();
+
+  function visit(item: unknown): void {
+    if (!item || typeof item !== "object") return;
+    if (seen.has(item)) return;
+    seen.add(item);
+    if (Array.isArray(item)) {
+      item.forEach(visit);
+      return;
+    }
+    for (const [key, val] of Object.entries(item)) {
+      keys.push(key);
+      visit(val);
+    }
+  }
+
+  visit(value);
+  return keys;
+}
+
+function normalizeFieldKey(key: string): string {
+  return key.normalize("NFKC").replace(/[\s_/-]/gu, "").toLowerCase();
 }
 
 describe("PR70 cover letter/application message preview", () => {
@@ -297,6 +360,41 @@ describe("PR70 cover letter/application message preview", () => {
       category: "application_package",
       count: 1,
       version: 1,
+    });
+  });
+
+  it("represents application message preview as application package, not a new artifact kind", () => {
+    const result = expectAllowed(
+      buildMcpCoverLetterApplicationMessagePreview(
+        previewInput("application_message_preview"),
+      ),
+    );
+    const serialized = JSON.stringify(result);
+
+    expect(result.summary.artifactKind).toBe("application_package");
+    expect(result.summary.artifactRef.category).toBe("application_package");
+    expect(result.summary.category).toBe("application_package");
+    expect(serialized).not.toContain('"artifactKind":"application_message"');
+    expect(serialized).not.toContain('"category":"application_message"');
+  });
+
+  it("proves application message preview is not sendable", () => {
+    const result = expectAllowed(
+      buildMcpCoverLetterApplicationMessagePreview(
+        previewInput("application_message_preview"),
+      ),
+    );
+
+    for (const key of collectObjectKeys(result)) {
+      expect(SENDABLE_MESSAGE_FIELD_KEYS.has(normalizeFieldKey(key))).toBe(
+        false,
+      );
+    }
+    expect(result.summary.safeFlags).toMatchObject({
+      approvedForDownload: false,
+      approvedForSend: false,
+      approvedForSubmit: false,
+      approvedForApply: false,
     });
   });
 
@@ -730,6 +828,14 @@ describe("PR70 cover letter/application message preview", () => {
     const impl = stripStringAndPatternLiterals(implementationSource());
     for (const pattern of STRIPPED_SOURCE_GUARDS) {
       expect(impl).not.toMatch(pattern);
+    }
+  });
+
+  it("keeps PR69 resume variant preview files free of PR70 behavior", () => {
+    for (const source of resumeVariantPreviewSources()) {
+      for (const token of PR70_SOURCE_TOKENS) {
+        expect(source).not.toContain(token);
+      }
     }
   });
 
