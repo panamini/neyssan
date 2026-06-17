@@ -21,24 +21,24 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR201 - PR75: Cover Letter / Application Package Export
-GitHub PR: https://github.com/panamini/neyssan/pull/201
-Merge commit: c331b032be98e77bedb109ba7e0c7e95a7584ac9
-Merged at: 2026-06-17T20:41:15Z
+PR202 - PR76: Write Action Framework
+GitHub PR: https://github.com/panamini/neyssan/pull/202
+Merge commit: 4fcb45cc4cf48a1373e9191e69cd8869d86464cf
+Merged at: 2026-06-17T23:39:46Z
 ```
 
 Current open PR:
 
 ```txt
-PR76 - Write Action Framework
-GitHub PR: https://github.com/panamini/neyssan/pull/202
-Head branch: codex/pr76-write-action-framework
+PR77 - Outbound Egress Allowlist and SSRF Protection
+GitHub PR: pending draft PR
+Head branch: codex/pr77-outbound-egress-allowlist-ssrf-protection
 ```
 
-Exact next PR after PR76 merge:
+Exact next PR after PR77 merge:
 
 ```txt
-PR77 - Outbound Egress Allowlist and SSRF Protection
+PR78 - Send Application Email/Message, Manual Confirmation Only
 ```
 
 PR59 status:
@@ -99,7 +99,8 @@ MERGED_NARROW_PR59 - PR185 merged the narrow read-only adapter scope approved by
 |                        73 | Export/Download Policy Implementation                                                | merged      | #199                 | a0e503d525d944402ce1cdfad312a0de1c3b157c                                                     | Deterministic local MCP export/download policy boundary only. Authorizes eligibility metadata after PR71 approval, PR72 freshness/lineage checks, explicit safe confirmation, retention/delete/rollback checks, safe filename metadata, and redacted audit metadata. Actual resume export, cover letter export, application package export, downloadable files, file bytes, URLs, persistence writes, UI/runtime/bridge/server/tool wiring, Convex schema/write changes, outbound HTTP, LLM/model calls, package changes, and lockfile changes remained blocked. Merged at 2026-06-17T18:05:12Z. |
 |                        74 | Resume Export                                                                        | merged      | #200                 | 7796a41da34e7e18675417a6a1f7adc46b5505d5                                                     | Deterministic local MCP resume export boundary only. Uses PR73 export/download policy result, explicit resume-export confirmation, approved/fresh resume variant state, controlled local markdown representation, safe file metadata, and redacted audit metadata. Cover letter/application package export, send/submit/apply/upload/email, URLs, filesystem writes, persistence writes, UI/runtime/bridge/server/tool wiring, Convex schema/write changes, outbound HTTP, LLM/model calls, package changes, and lockfile changes remained blocked. Merged at 2026-06-17T19:14:03Z. |
 |                        75 | Cover Letter / Application Package Export                                             | merged      | #201                 | c331b032be98e77bedb109ba7e0c7e95a7584ac9                                                     | Deterministic local MCP cover-letter/application-package export boundary only. Uses PR73 export/download policy result, explicit artifact-specific export confirmation, approved/fresh cover-letter or application-package state, controlled local markdown representation, safe file metadata, and redacted audit metadata. Resume export changes, send/submit/apply/upload/email, URLs, filesystem writes, persistence writes, UI/runtime/bridge/server/tool wiring, Convex schema/write changes, outbound HTTP, LLM/model calls, package changes, and lockfile changes remained blocked. Merged at 2026-06-17T20:41:15Z. |
-|                        76 | Write Action Framework                                                               | in progress | #202                 | codex/pr76-write-action-framework                                                           | Framework-only local MCP write-action foundation. Adds typed write/read intent, proposal, confirmation request/result, central execution-disabled guard, deterministic blocked result, confirmed non-executable placeholder, and simulated no-op result. Focused PR76 test, PR65 component data policy test, PR75 export test, full Local MCP suite, TypeScript, and Convex codegen passed locally before PR creation. No real send/submit/apply, outbound HTTP, persistence writes, package/lockfile/schema/runtime/OAuth/UI/tool wiring, or production connector behavior. |
+|                        76 | Write Action Framework                                                               | merged      | #202                 | 4fcb45cc4cf48a1373e9191e69cd8869d86464cf                                                     | Framework-only local MCP write-action foundation. Adds typed write/read intent, proposal, confirmation request/result, central execution-disabled guard, deterministic blocked result, confirmed non-executable placeholder, and simulated no-op result. Focused PR76 test, PR65 component data policy test, PR75 export test, full Local MCP suite, TypeScript, and Convex codegen passed locally before PR creation. No real send/submit/apply, outbound HTTP, persistence writes, package/lockfile/schema/runtime/OAuth/UI/tool wiring, or production connector behavior. Merged at 2026-06-17T23:39:46Z. |
+|                        77 | Outbound Egress Allowlist and SSRF Protection                                        | in progress | pending draft PR     | codex/pr77-outbound-egress-allowlist-ssrf-protection                                         | Deny-by-default local MCP outbound egress allowlist and SSRF policy guard. Adds deterministic URL/host/method/scheme/path decisioning, explicit allowlist metadata, redirect-disabled decisions, safe refusal metadata, and redacted audit URL output. Policy decisions only; no live network execution, real send/submit/apply, persistence writes, package/lockfile/schema/runtime/OAuth/UI/tool wiring, or production connector behavior. Focused tests passed locally before draft PR creation. |
 
 ---
 
