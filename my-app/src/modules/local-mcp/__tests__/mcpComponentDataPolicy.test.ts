@@ -446,6 +446,110 @@ function coverLetterApplicationMessagePreviewSummary() {
   } as const;
 }
 
+function generatedArtifactHumanApprovalWorkflowSummary() {
+  const artifactRef = {
+    id: "mcp-safe-ref:cover-letter:preview",
+    label: "Cover letter artifact",
+    status: "approved_for_preview",
+    category: "cover_letter",
+    count: 1,
+    updatedAt: "2026-06-17T05:00:00.000Z",
+    version: 1,
+  } as const;
+
+  const safeCounts = {
+    artifacts: 1,
+    blockers: 0,
+    warnings: 1,
+    changedSections: 2,
+    redactedChangedSections: 2,
+    version: 1,
+  } as const;
+
+  const safeCategories = {
+    artifactKind: "cover_letter",
+    workflowStatus: "approved_for_preview",
+    decisionStatus: "approved_for_preview",
+    visibilityCategory: "safe_summary_only",
+    nextUserAction: "ready_for_review",
+    version: 1,
+  } as const;
+
+  return {
+    kind: "mcp_generated_artifact_human_approval_workflow_summary",
+    allowed: true,
+    artifactKind: "cover_letter",
+    artifactStatus: "approved_for_preview",
+    workflowStatus: "approved_for_preview",
+    decision: "approve_preview",
+    decisionStatus: "approved_for_preview",
+    artifactRef,
+    visibilityCategory: "safe_summary_only",
+    safeSummary: "Preview approval recorded. Full content remains restricted.",
+    nextUserAction: "ready_for_review",
+    refIds: ["mcp-safe-ref:cover-letter:preview"],
+    safeCounts,
+    safeCategories,
+    safeFlags: {
+      humanReviewRequired: false,
+      approvedForPreview: true,
+      approvedForExport: false,
+      approvedForDownload: false,
+      approvedForSend: false,
+      approvedForSubmit: false,
+      approvedForApply: false,
+      fullContentRestricted: true,
+      rawDataExposed: false,
+      version: 1,
+    },
+    diffReview: {
+      kind: "mcp_generated_artifact_human_approval_diff_review",
+      artifactKind: "cover_letter",
+      artifactRef,
+      decisionStatus: "approved_for_preview",
+      safeCounts,
+      safeCategories,
+      nextUserAction: "ready_for_review",
+      version: 1,
+    },
+    auditEvent: {
+      kind: "mcp_generated_artifact_human_approval_audit_event",
+      eventKind: "human_approval_decision_recorded",
+      artifactKind: "cover_letter",
+      artifactRef,
+      decision: "approve_preview",
+      safeCounts,
+      redactedFlags: {
+        rawDataExposed: false,
+        fullContentRestricted: true,
+        tokenOrIdentityExposed: false,
+        persisted: false,
+        version: 1,
+      },
+      occurredAt: "2026-06-17T05:10:00.000Z",
+      persisted: false,
+      version: 1,
+    },
+    capabilities: {
+      dataReads: "blocked",
+      dataWrites: "blocked",
+      handlerExecution: "blocked",
+      productionConnector: "blocked",
+      networkAccess: "blocked",
+      modelCalls: "blocked",
+      writeActions: "blocked",
+      exportActions: "blocked",
+      rawDataProjection: "blocked",
+      credentialStorage: "none",
+      tokenStorage: "none",
+      version: 1,
+    },
+    modelVisible: true,
+    componentVisible: true,
+    version: 1,
+  } as const;
+}
+
 function stripStringAndPatternLiterals(source: string): string {
   return source
     .replace(/`(?:\\.|[^`\\])*`/gmu, '""')
@@ -646,6 +750,83 @@ describe("PR65 component UI data policy", () => {
         componentDataExposed: false,
         writeActionExecuted: false,
         version: 1,
+      }),
+    );
+  });
+
+  it("allows exact PR71 human approval workflow safe-summary enums, refs, diff, audit, and flags", () => {
+    const summary = generatedArtifactHumanApprovalWorkflowSummary();
+
+    const result = validateLocalMcpComponentDataPolicy(
+      policyInput("component_visible_structured_content", summary),
+    );
+    expectAllowed(result);
+    if (!result.allowed) {
+      throw new TypeError("expected PR71 approval workflow summary to be allowed");
+    }
+    expect(result.safePayload).toEqual(summary);
+
+    for (const editIntent of [
+      "shorter",
+      "more_formal",
+      "focus_on_requirements",
+      "preserve_never_use",
+    ] as const) {
+      expectAllowed(
+        validateLocalMcpComponentDataPolicy(
+          policyInput("component_visible_structured_content", {
+            ...summary,
+            workflowStatus: "edit_requested",
+            decision: "request_edit",
+            decisionStatus: "edit_requested",
+            editIntent,
+            safeCategories: {
+              ...summary.safeCategories,
+              workflowStatus: "edit_requested",
+              decisionStatus: "edit_requested",
+              editIntent,
+              nextUserAction: "review_pending_items",
+            },
+            nextUserAction: "review_pending_items",
+          }),
+        ),
+      );
+    }
+
+    expectAllowed(
+      validateLocalMcpComponentDataPolicy(
+        policyInput("component_visible_error", {
+          kind: "local_mcp_component_data_policy_safe_error",
+          code: "generated_artifact_human_approval_workflow_blocked",
+          msg: "Refused. Generated artifact approval workflow blocked.",
+          safeForModel: true,
+          rawDataExposed: false,
+          componentDataExposed: false,
+          writeActionExecuted: false,
+          version: 1,
+        }),
+      ),
+    );
+
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        decision: "approve_export",
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        auditEvent: {
+          ...summary.auditEvent,
+          persisted: true,
+        },
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        rawApprovalNote: "Looks good.",
       }),
     );
   });
