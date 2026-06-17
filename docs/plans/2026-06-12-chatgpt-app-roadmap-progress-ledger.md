@@ -21,24 +21,24 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR194 - PR68: Generated Artifact Boundary
-GitHub PR: https://github.com/panamini/neyssan/pull/194
-Merge commit: e7fb10883065d0441c9b28a40c2ca5a1773229f1
-Merged at: 2026-06-16T22:13:16Z
+PR195 - PR69: Resume Variant Generation Preview
+GitHub PR: https://github.com/panamini/neyssan/pull/195
+Merge commit: 676592c0cba3c1fca94ec2f2e9e576c67f5dd70a
+Merged at: 2026-06-17T03:30:06Z
 ```
 
 Current open PR:
 
 ```txt
-PR69 - Resume Variant Generation Preview
+PR70 - Cover Letter / Application Message Preview
 GitHub PR: pending
-Head branch: codex/pr69-resume-variant-generation-preview
+Head branch: codex/pr70-cover-letter-application-message-preview
 ```
 
 Exact next PR:
 
 ```txt
-PR70 - Cover Letter / Application Message Preview
+PR71 - Human Approval Workflow for Generated Artifacts
 ```
 
 PR59 status:
@@ -92,7 +92,8 @@ MERGED_NARROW_PR59 - PR185 merged the narrow read-only adapter scope approved by
 |                        66 | Read-Only Review Component                                                          | merged      | #192                 | ba04812c3e94aea2770fef58f6a00cda8fb3c1e0                                                     | Read-only review component view-model/render-contract boundary only. Uses PR65-approved component data surfaces and PR63 safe review cockpit summaries to expose safe review state, gate status, blocker/readiness categories, safe counts, redacted refs, and review-only next-action labels. No PR67 error/loading/refusal UX, iframe/widget bundle, `window.openai` runtime, UI bridge runtime, tools runtime, production connector, OAuth/token runtime, schema change, outbound HTTP, LLM/model call, package change, write/export/download/send/submit/apply behavior. Merged at 2026-06-16T17:11:06Z.                            |
 |                        67 | Component Error, Loading, and Refusal UX                                            | merged      | #193                 | 9be43ea91a680cb89aa8a97d0cbaccc5b024cdd9                                                     | Local MCP/component UX state boundary only. Adds deterministic, policy-checked loading, unavailable, error, and refusal state payloads using PR65 policy surfaces. No PR68 generated artifact boundary, runtime/UI/React/bridge/server/tool wiring, OAuth/token/account-link runtime, budget accounting, rate limits, schema change, package change, outbound HTTP, LLM/model call, write/export/download/send/submit/apply behavior. Merged at 2026-06-16T18:44:40Z.                                                                                                                                                                   |
 |                        68 | Generated Artifact Boundary                                                         | merged      | #194                 | e7fb10883065d0441c9b28a40c2ca5a1773229f1                                                     | Deterministic generated-artifact boundary only. Separates safe summary/metadata/review state from restricted full generated artifact content for resume variants, cover letters, application packages, and review notes. No PR69 generation preview, artifact persistence, UI/runtime/bridge/server/tool wiring, OAuth/token changes, schema change, package change, outbound HTTP, LLM/model call, write/export/download/send/submit/apply behavior. Merged at 2026-06-16T22:13:16Z.                                                                                                                                                          |
-|                        69 | Resume Variant Generation Preview                                                   | in progress | pending              | codex/pr69-resume-variant-generation-preview                                                  | Deterministic local MCP resume-variant generation preview boundary only. Preview-only and human-review-required; full generated resume variant content must remain restricted behind the PR68 generated artifact boundary. No PR70 cover-letter/application-message preview, artifact revision loop, export/download/send/submit/apply, persistence writes, UI/runtime/bridge/server/tool wiring, Convex schema/write changes, outbound HTTP, LLM/model call, package change, or lockfile change.                                                                                                                                            |
+|                        69 | Resume Variant Generation Preview                                                   | merged      | #195                 | 676592c0cba3c1fca94ec2f2e9e576c67f5dd70a                                                     | Deterministic local MCP resume-variant generation preview boundary only. Preview-only and human-review-required; full generated resume variant content remains restricted behind the PR68 generated artifact boundary. No PR70 cover-letter/application-message preview, artifact revision loop, export/download/send/submit/apply, persistence writes, UI/runtime/bridge/server/tool wiring, Convex schema/write changes, outbound HTTP, LLM/model call, package change, or lockfile change. Merged at 2026-06-17T03:30:06Z.                                                                                   |
+|                        70 | Cover Letter / Application Message Preview                                          | in progress | pending              | codex/pr70-cover-letter-application-message-preview                                           | Deterministic local MCP cover-letter/application-message preview boundary only. Preview-only and human-review-required; full generated cover-letter/application-message content must remain restricted behind the PR68 generated artifact boundary. No PR71 approval workflow, PR72 revision loop, export/download/send/submit/apply, persistence writes, UI/runtime/bridge/server/tool wiring, Convex schema/write changes, outbound HTTP, LLM/model call, package change, or lockfile change.                                                                                                                |
 
 ---
 
