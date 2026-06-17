@@ -748,6 +748,19 @@ describe("PR75 cover letter/application package export boundary", () => {
       "j97convexdocumentid",
       `${UNSAFE_DELIVERY_KEYS[0]}: hiring@example.test`,
       `${UNSAFE_DELIVERY_KEYS[7]}: Role`,
+      "To: hiring@example.test",
+      "Cc: reviewer@example.test",
+      "Bcc: hidden@example.test",
+      "Subject: Application for role",
+      "Email subject: Application",
+      "Email body: Please find my application",
+      "Recipient: hiring@example.test",
+      "Delivery channel: email",
+      "Thread ID: abc",
+      "Provider message ID: abc",
+      "Send target: hiring@example.test",
+      "Submit target: platform",
+      "Apply target: job",
     ] as const) {
       expect(
         expectBlocked(

@@ -562,6 +562,9 @@ const DELIVERABLE_METADATA_PATTERN = new RegExp(
   "iu",
 );
 
+const DELIVERABLE_HEADER_PATTERN =
+  /^\s*(?:to|cc|bcc|subject|email\s+subject|email\s+body|recipient|delivery\s+channel|thread\s+id|provider\s+message\s+id|send\s+target|submit\s+target|apply\s+target)\s*:/imu;
+
 const UNSAFE_EXPORT_CONTENT_PATTERNS: readonly RegExp[] = [
   /RAW_(?:(?:CV|RESUME|JOB|PROPOSAL|app|COVER_LETTER)(?:_TEXT)?|SOURCE_DOCUMENT)_SENTINEL_DO_NOT_EXPOSE/u,
   /SOURCE_QUOTE_DUMP_SENTINEL_DO_NOT_EXPOSE/u,
@@ -576,6 +579,7 @@ const UNSAFE_EXPORT_CONTENT_PATTERNS: readonly RegExp[] = [
   /\b(?:data:|blob:|base64)\b/iu,
   /\bj97convexdocumentid\b/iu,
   DELIVERABLE_METADATA_PATTERN,
+  DELIVERABLE_HEADER_PATTERN,
 ];
 
 export function buildMcpCoverLetterApplicationPackageExport(
