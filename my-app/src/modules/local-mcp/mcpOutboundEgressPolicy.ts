@@ -1,0 +1,951 @@
+export type McpOutboundEgressHttpMethodV1 =
+  | "GET"
+  | "POST"
+  | "PUT"
+  | "PATCH"
+  | "DELETE"
+  | "HEAD"
+  | "OPTIONS";
+
+export type McpOutboundEgressSchemeV1 = "https" | "http";
+
+export type McpOutboundEgressActionCategoryV1 =
+  | "read_only"
+  | "send_message"
+  | "submit_application"
+  | "apply_to_job"
+  | "save_artifact"
+  | "export_to_destination";
+
+export type McpOutboundEgressDataClassV1 =
+  | "safe_summary"
+  | "generated_artifact"
+  | "application_material"
+  | "destination_metadata"
+  | "safe_ref"
+  | "user_confirmation"
+  | "audit_metadata";
+
+export type McpOutboundEgressBlockedReasonV1 =
+  | "invalid_url"
+  | "unsupported_scheme"
+  | "credentials_in_url"
+  | "host_not_allowlisted"
+  | "localhost_blocked"
+  | "private_network_blocked"
+  | "link_local_blocked"
+  | "metadata_endpoint_blocked"
+  | "reserved_ip_blocked"
+  | "method_not_allowlisted"
+  | "path_not_allowlisted"
+  | "redirects_disabled"
+  | "unsafe_output_metadata";
+
+export type McpOutboundEgressAllowlistRuleV1 = Readonly<{
+  id: string;
+  host: string;
+  includeSubdomains?: boolean;
+  schemes?: readonly McpOutboundEgressSchemeV1[];
+  methods: readonly McpOutboundEgressHttpMethodV1[];
+  pathPrefixes?: readonly string[];
+  actionCategory: McpOutboundEgressActionCategoryV1;
+  purpose: string;
+  dataClasses: readonly McpOutboundEgressDataClassV1[];
+  userVisibleReason: string;
+  timeoutMs?: number;
+  maxResponseBytes?: number;
+  version: 1;
+}>;
+
+export type McpOutboundEgressPolicyV1 = Readonly<{
+  kind: "mcp_outbound_egress_policy";
+  defaultAllowed: false;
+  allowlist: readonly McpOutboundEgressAllowlistRuleV1[];
+  redirectPolicy: McpOutboundEgressRedirectPolicyDecisionV1;
+  networkRequestExecuted: false;
+  externalSideEffect: false;
+  persisted: false;
+  credentialStorage: "none";
+  tokenStorage: "none";
+  version: 1;
+}>;
+
+export type McpOutboundEgressRedirectPolicyInputV1 = Readonly<{
+  mode: "disabled" | "follow";
+  maxRedirects: number;
+  version: 1;
+}>;
+
+export type McpOutboundEgressRedirectPolicyDecisionV1 = Readonly<{
+  mode: "disabled";
+  maxRedirects: 0;
+  redirectsFollowed: 0;
+  version: 1;
+}>;
+
+export type McpOutboundEgressRequestV1 = Readonly<{
+  kind: "mcp_outbound_egress_request";
+  destinationUrl: string;
+  method?: string;
+  actionCategory: McpOutboundEgressActionCategoryV1;
+  dataClasses: readonly McpOutboundEgressDataClassV1[];
+  redirectPolicy?: McpOutboundEgressRedirectPolicyInputV1;
+  headers?: Readonly<Record<string, string>>;
+  bodyPreview?: unknown;
+  version: 1;
+}>;
+
+export type McpOutboundEgressDestinationV1 = Readonly<{
+  kind: "mcp_outbound_egress_destination";
+  scheme: string;
+  host: string;
+  origin: string;
+  path: string;
+  pathClassification: "root_path" | "path_present" | "allowlisted_path_prefix";
+  blockedReason?: McpOutboundEgressBlockedReasonV1;
+  version: 1;
+}>;
+
+export type McpOutboundEgressDecisionV1 = Readonly<
+  | {
+      kind: "mcp_outbound_egress_decision";
+      allowed: true;
+      reason: "allowlist_rule_matched";
+      userVisibleReason: string;
+      normalizedDestination: McpOutboundEgressDestinationV1;
+      redactedUrl: string;
+      method: McpOutboundEgressHttpMethodV1;
+      actionCategory: McpOutboundEgressActionCategoryV1;
+      dataClasses: readonly McpOutboundEgressDataClassV1[];
+      allowlistRuleId: string;
+      purpose: string;
+      timeoutMs?: number;
+      maxResponseBytes?: number;
+      redirectPolicy: McpOutboundEgressRedirectPolicyDecisionV1;
+      networkRequestExecuted: false;
+      externalSideEffect: false;
+      persisted: false;
+      credentialStorage: "none";
+      tokenStorage: "none";
+      version: 1;
+    }
+  | {
+      kind: "mcp_outbound_egress_decision";
+      allowed: false;
+      reason: McpOutboundEgressBlockedReasonV1;
+      userVisibleReason: string;
+      normalizedDestination?: McpOutboundEgressDestinationV1;
+      redactedUrl: string;
+      method: McpOutboundEgressHttpMethodV1 | "UNKNOWN";
+      actionCategory?: McpOutboundEgressActionCategoryV1;
+      dataClasses: readonly McpOutboundEgressDataClassV1[];
+      redirectPolicy: McpOutboundEgressRedirectPolicyDecisionV1;
+      networkRequestExecuted: false;
+      externalSideEffect: false;
+      persisted: false;
+      credentialStorage: "none";
+      tokenStorage: "none";
+      version: 1;
+    }
+>;
+
+export type McpOutboundEgressSafeRefusalV1 = Readonly<{
+  code: "mcp_outbound_egress_blocked";
+  message: "Refused. Outbound egress policy blocked.";
+  safeForModel: true;
+  rawDataExposed: false;
+  componentDataExposed: false;
+  networkRequestExecuted: false;
+  externalSideEffect: false;
+  version: 1;
+}>;
+
+export type McpOutboundEgressBlockedResultV1 = Readonly<{
+  kind: "mcp_outbound_egress_blocked_result";
+  allowed: false;
+  decision: Extract<McpOutboundEgressDecisionV1, { allowed: false }>;
+  safeRefusal: McpOutboundEgressSafeRefusalV1;
+  networkRequestExecuted: false;
+  externalSideEffect: false;
+  persisted: false;
+  credentialStorage: "none";
+  tokenStorage: "none";
+  version: 1;
+}>;
+
+type ParsedRequest = Readonly<{
+  destinationUrl: string;
+  method: McpOutboundEgressHttpMethodV1 | "UNKNOWN";
+  actionCategory: McpOutboundEgressActionCategoryV1;
+  dataClasses: readonly McpOutboundEgressDataClassV1[];
+  redirectsDisabled: boolean;
+}>;
+
+type HostRisk = Readonly<{
+  reason: McpOutboundEgressBlockedReasonV1;
+}>;
+
+const DEFAULT_REDIRECT_POLICY: McpOutboundEgressRedirectPolicyDecisionV1 = {
+  mode: "disabled",
+  maxRedirects: 0,
+  redirectsFollowed: 0,
+  version: 1,
+};
+
+const DEFAULT_POLICY: McpOutboundEgressPolicyV1 = {
+  kind: "mcp_outbound_egress_policy",
+  defaultAllowed: false,
+  allowlist: [],
+  redirectPolicy: DEFAULT_REDIRECT_POLICY,
+  networkRequestExecuted: false,
+  externalSideEffect: false,
+  persisted: false,
+  credentialStorage: "none",
+  tokenStorage: "none",
+  version: 1,
+};
+
+const HTTP_METHODS = new Set<McpOutboundEgressHttpMethodV1>([
+  "GET",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "HEAD",
+  "OPTIONS",
+]);
+
+const ACTION_CATEGORIES = new Set<McpOutboundEgressActionCategoryV1>([
+  "read_only",
+  "send_message",
+  "submit_application",
+  "apply_to_job",
+  "save_artifact",
+  "export_to_destination",
+]);
+
+const DATA_CLASSES = new Set<McpOutboundEgressDataClassV1>([
+  "safe_summary",
+  "generated_artifact",
+  "application_material",
+  "destination_metadata",
+  "safe_ref",
+  "user_confirmation",
+  "audit_metadata",
+]);
+
+const SAFE_TEXT_PATTERNS: readonly RegExp[] = [
+  /RAW_(?:(?:CV|RESUME|JOB|PROPOSAL|APP|COVER_LETTER)(?:_TEXT)?|SOURCE_DOCUMENT|ARGUMENTS)_SENTINEL_DO_NOT_EXPOSE/u,
+  /SOURCE_QUOTE_DUMP_SENTINEL_DO_NOT_EXPOSE/u,
+  /PRIVATE_FACT_SENTINEL_DO_NOT_EXPOSE/u,
+  /NEVER_USE_SENTINEL_DO_NOT_EXPOSE/u,
+  /GENERATED_FULL_TEXT_SENTINEL_DO_NOT_EXPOSE/u,
+  /SECRET_TOKEN_SENTINEL_DO_NOT_EXPOSE/u,
+  /SESSION_DETAIL_SENTINEL_DO_NOT_EXPOSE/u,
+  /STACK_TRACE_SENTINEL_DO_NOT_EXPOSE/u,
+  /DO_NOT_EXPOSE/u,
+  /\bBearer\s+[A-Za-z0-9._-]+/u,
+  /\b(?:access|refresh)[_-]?token\b/iu,
+  /\b(?:authorization|cookie|set-cookie)\b/iu,
+  /\braw[_ -]?(?:cv|resume|job|proposal|application|arguments|text)\b/iu,
+  /\b(?:private[_ -]?fact|never[_ -]?use|source[_ -]?quote)\b/iu,
+];
+
+export function createMcpOutboundEgressPolicy(
+  input: Readonly<{
+    allowlist?: readonly McpOutboundEgressAllowlistRuleV1[];
+  }> = {},
+): McpOutboundEgressPolicyV1 {
+  const allowlist = (input.allowlist ?? []).map(normalizeAllowlistRule);
+  return {
+    ...DEFAULT_POLICY,
+    allowlist: allowlist.sort((left, right) => compareStrings(left.id, right.id)),
+  };
+}
+
+export function evaluateMcpOutboundEgressRequest(
+  input: unknown,
+  policy: McpOutboundEgressPolicyV1 = DEFAULT_POLICY,
+): McpOutboundEgressDecisionV1 {
+  const parsedRequest = parseRequest(input);
+  if (!parsedRequest) {
+    return createBlockedDecision("invalid_url", undefined, undefined);
+  }
+
+  const destination = normalizeMcpOutboundDestination(
+    parsedRequest.destinationUrl,
+  );
+  if (!destination) {
+    return createBlockedDecision("invalid_url", parsedRequest, undefined);
+  }
+  if (destination.blockedReason === "unsupported_scheme") {
+    return createBlockedDecision(
+      "unsupported_scheme",
+      parsedRequest,
+      destination,
+    );
+  }
+  if (destination.blockedReason === "credentials_in_url") {
+    return createBlockedDecision(
+      "credentials_in_url",
+      parsedRequest,
+      destination,
+    );
+  }
+
+  const hostRisk = classifyHostRisk(destination.host);
+  if (hostRisk) {
+    return createBlockedDecision(hostRisk.reason, parsedRequest, destination);
+  }
+  if (parsedRequest.redirectsDisabled === false) {
+    return createBlockedDecision("redirects_disabled", parsedRequest, destination);
+  }
+
+  const hostRules = policy.allowlist.filter((rule) =>
+    hostMatchesRule(destination.host, rule),
+  );
+  if (hostRules.length === 0) {
+    return createBlockedDecision(
+      "host_not_allowlisted",
+      parsedRequest,
+      destination,
+    );
+  }
+
+  const schemeRules = hostRules.filter((rule) =>
+    (rule.schemes ?? ["https"]).includes(
+      destination.scheme as McpOutboundEgressSchemeV1,
+    ),
+  );
+  if (schemeRules.length === 0) {
+    return createBlockedDecision(
+      "unsupported_scheme",
+      parsedRequest,
+      destination,
+    );
+  }
+
+  const methodRules = schemeRules.filter((rule) =>
+    parsedRequest.method !== "UNKNOWN" && rule.methods.includes(parsedRequest.method),
+  );
+  if (methodRules.length === 0) {
+    return createBlockedDecision(
+      "method_not_allowlisted",
+      parsedRequest,
+      destination,
+    );
+  }
+
+  const pathRules = methodRules.filter((rule) =>
+    pathMatchesRule(destination.path, rule),
+  );
+  if (pathRules.length === 0) {
+    return createBlockedDecision("path_not_allowlisted", parsedRequest, destination);
+  }
+
+  const rule = pathRules.find((candidate) =>
+    candidate.actionCategory === parsedRequest.actionCategory &&
+    dataClassesAllowed(parsedRequest.dataClasses, candidate.dataClasses),
+  );
+  if (!rule) {
+    return createBlockedDecision(
+      "host_not_allowlisted",
+      parsedRequest,
+      destination,
+    );
+  }
+
+  return createMcpAllowedOutboundEgressDecision(
+    parsedRequest,
+    {
+      ...destination,
+      pathClassification: "allowlisted_path_prefix",
+    },
+    rule,
+  );
+}
+
+export function assertMcpOutboundEgressAllowed(
+  input: unknown,
+  policy: McpOutboundEgressPolicyV1 = DEFAULT_POLICY,
+): McpOutboundEgressDecisionV1 {
+  return evaluateMcpOutboundEgressRequest(input, policy);
+}
+
+export function createMcpAllowedOutboundEgressDecision(
+  request: ParsedRequest,
+  destination: McpOutboundEgressDestinationV1,
+  rule: McpOutboundEgressAllowlistRuleV1,
+): Extract<McpOutboundEgressDecisionV1, { allowed: true }> {
+  return {
+    kind: "mcp_outbound_egress_decision",
+    allowed: true,
+    reason: "allowlist_rule_matched",
+    userVisibleReason: rule.userVisibleReason,
+    normalizedDestination: destination,
+    redactedUrl: redactedUrlFromDestination(destination),
+    method: request.method === "UNKNOWN" ? "GET" : request.method,
+    actionCategory: request.actionCategory,
+    dataClasses: [...request.dataClasses],
+    allowlistRuleId: rule.id,
+    purpose: rule.purpose,
+    ...(rule.timeoutMs ? { timeoutMs: rule.timeoutMs } : {}),
+    ...(rule.maxResponseBytes ? { maxResponseBytes: rule.maxResponseBytes } : {}),
+    redirectPolicy: DEFAULT_REDIRECT_POLICY,
+    networkRequestExecuted: false,
+    externalSideEffect: false,
+    persisted: false,
+    credentialStorage: "none",
+    tokenStorage: "none",
+    version: 1,
+  };
+}
+
+export function createMcpBlockedOutboundEgressResult(
+  decision: McpOutboundEgressDecisionV1,
+): McpOutboundEgressBlockedResultV1 {
+  const blockedDecision = decision.allowed
+    ? createBlockedDecision(
+        "unsafe_output_metadata",
+        {
+          destinationUrl: decision.redactedUrl,
+          method: decision.method,
+          actionCategory: decision.actionCategory,
+          dataClasses: decision.dataClasses,
+          redirectsDisabled: true,
+        },
+        decision.normalizedDestination,
+      )
+    : decision;
+  return {
+    kind: "mcp_outbound_egress_blocked_result",
+    allowed: false,
+    decision: blockedDecision,
+    safeRefusal: {
+      code: "mcp_outbound_egress_blocked",
+      message: "Refused. Outbound egress policy blocked.",
+      safeForModel: true,
+      rawDataExposed: false,
+      componentDataExposed: false,
+      networkRequestExecuted: false,
+      externalSideEffect: false,
+      version: 1,
+    },
+    networkRequestExecuted: false,
+    externalSideEffect: false,
+    persisted: false,
+    credentialStorage: "none",
+    tokenStorage: "none",
+    version: 1,
+  };
+}
+
+export function normalizeMcpOutboundDestination(
+  value: string,
+): McpOutboundEgressDestinationV1 | undefined {
+  const parsed = parseUrl(value);
+  if (!parsed) return undefined;
+
+  const scheme = parsed.protocol.replace(/:$/u, "").toLowerCase();
+  const host = normalizeParsedHost(parsed.hostname);
+  const path = safePathForAudit(parsed.pathname);
+  const destination: McpOutboundEgressDestinationV1 = {
+    kind: "mcp_outbound_egress_destination",
+    scheme,
+    host,
+    origin: buildSafeOrigin(scheme, host, parsed.port),
+    path,
+    pathClassification: path === "/" ? "root_path" : "path_present",
+    ...(!isHttpScheme(scheme) ? { blockedReason: "unsupported_scheme" as const } : {}),
+    ...((parsed.username || parsed.password)
+      ? { blockedReason: "credentials_in_url" as const }
+      : {}),
+    version: 1,
+  };
+  return destination;
+}
+
+export function redactMcpOutboundUrlForAudit(value: string): string {
+  const destination = normalizeMcpOutboundDestination(value);
+  if (!destination) return "invalid_url";
+  return redactedUrlFromDestination(destination);
+}
+
+function parseRequest(input: unknown): ParsedRequest | undefined {
+  const record = readPlainObjectRecord(input);
+  if (
+    !record ||
+    record.kind !== "mcp_outbound_egress_request" ||
+    record.version !== 1 ||
+    typeof record.destinationUrl !== "string" ||
+    !isActionCategory(record.actionCategory)
+  ) {
+    return undefined;
+  }
+  const dataClasses = parseDataClasses(record.dataClasses);
+  if (!dataClasses) return undefined;
+  const method = normalizeMethod(record.method ?? "GET");
+  return {
+    destinationUrl: record.destinationUrl,
+    method,
+    actionCategory: record.actionCategory,
+    dataClasses,
+    redirectsDisabled: parseRedirectPolicy(record.redirectPolicy),
+  };
+}
+
+function normalizeAllowlistRule(
+  rule: McpOutboundEgressAllowlistRuleV1,
+): McpOutboundEgressAllowlistRuleV1 {
+  const normalizedHost = normalizeRuleHost(rule.host);
+  const schemes = normalizeSchemes(rule.schemes ?? ["https"]);
+  const methods = normalizeMethods(rule.methods);
+  const pathPrefixes = normalizePathPrefixes(rule.pathPrefixes ?? ["/"]);
+  const dataClasses = parseDataClasses(rule.dataClasses);
+  if (
+    !isSafeRuleId(rule.id) ||
+    !normalizedHost ||
+    !schemes ||
+    !methods ||
+    !pathPrefixes ||
+    !isActionCategory(rule.actionCategory) ||
+    !dataClasses ||
+    !isSafeText(rule.purpose, 300) ||
+    !isSafeText(rule.userVisibleReason, 240) ||
+    !isOptionalPositiveInteger(rule.timeoutMs) ||
+    !isOptionalPositiveInteger(rule.maxResponseBytes) ||
+    rule.version !== 1
+  ) {
+    throw new TypeError("Local MCP outbound egress allowlist rule is invalid");
+  }
+  return {
+    id: rule.id,
+    host: normalizedHost,
+    ...(rule.includeSubdomains ? { includeSubdomains: true } : {}),
+    schemes,
+    methods,
+    pathPrefixes,
+    actionCategory: rule.actionCategory,
+    purpose: rule.purpose,
+    dataClasses,
+    userVisibleReason: rule.userVisibleReason,
+    ...(rule.timeoutMs ? { timeoutMs: rule.timeoutMs } : {}),
+    ...(rule.maxResponseBytes ? { maxResponseBytes: rule.maxResponseBytes } : {}),
+    version: 1,
+  };
+}
+
+function createBlockedDecision(
+  reason: McpOutboundEgressBlockedReasonV1,
+  request: ParsedRequest | undefined,
+  destination: McpOutboundEgressDestinationV1 | undefined,
+): Extract<McpOutboundEgressDecisionV1, { allowed: false }> {
+  return {
+    kind: "mcp_outbound_egress_decision",
+    allowed: false,
+    reason,
+    userVisibleReason: userVisibleReasonFor(reason),
+    ...(destination ? { normalizedDestination: destination } : {}),
+    redactedUrl: destination ? redactedUrlFromDestination(destination) : "invalid_url",
+    method: request?.method ?? "UNKNOWN",
+    ...(request ? { actionCategory: request.actionCategory } : {}),
+    dataClasses: request ? [...request.dataClasses] : [],
+    redirectPolicy: DEFAULT_REDIRECT_POLICY,
+    networkRequestExecuted: false,
+    externalSideEffect: false,
+    persisted: false,
+    credentialStorage: "none",
+    tokenStorage: "none",
+    version: 1,
+  };
+}
+
+function classifyHostRisk(host: string): HostRisk | undefined {
+  const normalizedHost = stripTrailingDot(host.toLowerCase());
+  if (
+    normalizedHost === "localhost" ||
+    normalizedHost.endsWith(".localhost")
+  ) {
+    return { reason: "localhost_blocked" };
+  }
+  if (
+    normalizedHost === "metadata.google.internal" ||
+    normalizedHost.endsWith(".metadata.google.internal")
+  ) {
+    return { reason: "metadata_endpoint_blocked" };
+  }
+  const ipv4 = parseIPv4Address(normalizedHost);
+  if (ipv4) return classifyIPv4Risk(ipv4);
+  const ipv6 = parseIPv6Address(normalizedHost);
+  if (ipv6) return classifyIPv6Risk(ipv6);
+  return undefined;
+}
+
+function classifyIPv4Risk(ipv4: readonly number[]): HostRisk | undefined {
+  const [a, b, c, d] = ipv4;
+  if (a === 169 && b === 254 && c === 169 && d === 254) {
+    return { reason: "metadata_endpoint_blocked" };
+  }
+  if (a === 127) return { reason: "localhost_blocked" };
+  if (
+    a === 10 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 100 && b >= 64 && b <= 127)
+  ) {
+    return { reason: "private_network_blocked" };
+  }
+  if (a === 169 && b === 254) return { reason: "link_local_blocked" };
+  if (
+    a === 0 ||
+    (a === 192 && b === 0 && (c === 0 || c === 2)) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    (a === 198 && b === 51 && c === 100) ||
+    (a === 203 && b === 0 && c === 113) ||
+    a >= 224 ||
+    (a === 255 && b === 255 && c === 255 && d === 255)
+  ) {
+    return { reason: "reserved_ip_blocked" };
+  }
+  return undefined;
+}
+
+function classifyIPv6Risk(ipv6: readonly number[]): HostRisk | undefined {
+  if (isIpv6Loopback(ipv6)) return { reason: "localhost_blocked" };
+  const mappedIpv4 = ipv4FromMappedIpv6(ipv6);
+  if (mappedIpv4) return classifyIPv4Risk(mappedIpv4);
+  const first = ipv6[0];
+  if (ipv6.every((segment) => segment === 0)) {
+    return { reason: "reserved_ip_blocked" };
+  }
+  if ((first & 0xfe00) === 0xfc00) {
+    return { reason: "private_network_blocked" };
+  }
+  if ((first & 0xffc0) === 0xfe80) {
+    return { reason: "link_local_blocked" };
+  }
+  if ((first & 0xff00) === 0xff00 || (first === 0x2001 && ipv6[1] === 0x0db8)) {
+    return { reason: "reserved_ip_blocked" };
+  }
+  return undefined;
+}
+
+function hostMatchesRule(
+  host: string,
+  rule: McpOutboundEgressAllowlistRuleV1,
+): boolean {
+  const normalizedHost = stripTrailingDot(host.toLowerCase());
+  const normalizedRuleHost = stripTrailingDot(rule.host.toLowerCase());
+  return (
+    normalizedHost === normalizedRuleHost ||
+    Boolean(
+      rule.includeSubdomains &&
+        normalizedHost.endsWith(`.${normalizedRuleHost}`),
+    )
+  );
+}
+
+function pathMatchesRule(
+  path: string,
+  rule: McpOutboundEgressAllowlistRuleV1,
+): boolean {
+  return (rule.pathPrefixes ?? ["/"]).some((prefix) => path.startsWith(prefix));
+}
+
+function dataClassesAllowed(
+  requested: readonly McpOutboundEgressDataClassV1[],
+  allowed: readonly McpOutboundEgressDataClassV1[],
+): boolean {
+  return requested.every((item) => allowed.includes(item));
+}
+
+function parseRedirectPolicy(
+  input: unknown,
+): boolean {
+  if (input === undefined) return true;
+  const record = readPlainObjectRecord(input);
+  return Boolean(
+    record &&
+      record.mode === "disabled" &&
+      record.maxRedirects === 0 &&
+      record.version === 1,
+  );
+}
+
+function parseDataClasses(
+  input: unknown,
+): readonly McpOutboundEgressDataClassV1[] | undefined {
+  if (!Array.isArray(input) || input.length === 0 || input.length > 12) {
+    return undefined;
+  }
+  const output: McpOutboundEgressDataClassV1[] = [];
+  for (const item of input) {
+    if (typeof item !== "string" || !DATA_CLASSES.has(item)) return undefined;
+    if (!output.includes(item)) output.push(item);
+  }
+  return output;
+}
+
+function normalizeMethod(input: unknown): McpOutboundEgressHttpMethodV1 | "UNKNOWN" {
+  if (typeof input !== "string") return "UNKNOWN";
+  const normalized = input.trim().toUpperCase();
+  return HTTP_METHODS.has(normalized as McpOutboundEgressHttpMethodV1)
+    ? (normalized as McpOutboundEgressHttpMethodV1)
+    : "UNKNOWN";
+}
+
+function normalizeMethods(
+  input: readonly McpOutboundEgressHttpMethodV1[],
+): readonly McpOutboundEgressHttpMethodV1[] | undefined {
+  if (!Array.isArray(input) || input.length === 0) return undefined;
+  const methods = input.map(normalizeMethod);
+  if (methods.some((method) => method === "UNKNOWN")) return undefined;
+  return [...new Set(methods as McpOutboundEgressHttpMethodV1[])].sort(
+    compareStrings,
+  );
+}
+
+function normalizeSchemes(
+  input: readonly McpOutboundEgressSchemeV1[],
+): readonly McpOutboundEgressSchemeV1[] | undefined {
+  if (!Array.isArray(input) || input.length === 0) return undefined;
+  const schemes = input.map((scheme) => scheme.toLowerCase());
+  if (!schemes.every((scheme) => scheme === "https" || scheme === "http")) {
+    return undefined;
+  }
+  return [...new Set(schemes as McpOutboundEgressSchemeV1[])].sort(compareStrings);
+}
+
+function normalizePathPrefixes(
+  input: readonly string[],
+): readonly string[] | undefined {
+  if (!Array.isArray(input) || input.length === 0) return undefined;
+  const prefixes = input.map((prefix) =>
+    typeof prefix === "string" && prefix.startsWith("/") && isSafePath(prefix)
+      ? prefix
+      : undefined,
+  );
+  if (prefixes.some((prefix) => prefix === undefined)) return undefined;
+  return [...new Set(prefixes as string[])].sort(compareStrings);
+}
+
+function normalizeRuleHost(value: string): string | undefined {
+  if (
+    typeof value !== "string" ||
+    value.trim().length === 0 ||
+    value.includes("*") ||
+    value.includes("/") ||
+    value.includes("\\") ||
+    value.includes("@") ||
+    value.includes("://")
+  ) {
+    return undefined;
+  }
+  const parsed = parseUrl(`https://${value.trim()}`);
+  if (!parsed || parsed.pathname !== "/" || parsed.search || parsed.hash) {
+    return undefined;
+  }
+  return normalizeParsedHost(parsed.hostname);
+}
+
+function parseUrl(value: string): URL | undefined {
+  try {
+    return new URL(value);
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeParsedHost(host: string): string {
+  return stripTrailingDot(
+    host.toLowerCase().replace(/^\[/u, "").replace(/\]$/u, ""),
+  );
+}
+
+function stripTrailingDot(value: string): string {
+  return value.replace(/\.+$/u, "");
+}
+
+function isHttpScheme(value: string): value is McpOutboundEgressSchemeV1 {
+  return value === "https" || value === "http";
+}
+
+function buildSafeOrigin(scheme: string, host: string, port: string): string {
+  const hostForOrigin = host.includes(":") ? `[${host}]` : host;
+  const portSuffix = port ? `:${port}` : "";
+  return `${scheme}://${hostForOrigin}${portSuffix}`;
+}
+
+function redactedUrlFromDestination(
+  destination: McpOutboundEgressDestinationV1,
+): string {
+  return `${destination.origin}${destination.path}`;
+}
+
+function safePathForAudit(path: string): string {
+  const normalized = path || "/";
+  return isSafePath(normalized) ? normalized : "/redacted-path";
+}
+
+function isSafePath(path: string): boolean {
+  return (
+    path.startsWith("/") &&
+    path.length <= 256 &&
+    !SAFE_TEXT_PATTERNS.some((pattern) => pattern.test(path.normalize("NFKC")))
+  );
+}
+
+function isSafeRuleId(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^mcp-egress-rule:[a-z0-9][a-z0-9._:-]{1,96}$/u.test(value) &&
+    isSafeText(value, 120)
+  );
+}
+
+function isSafeText(value: unknown, maxLength: number): value is string {
+  return (
+    typeof value === "string" &&
+    /\S/u.test(value) &&
+    value.length <= maxLength &&
+    !SAFE_TEXT_PATTERNS.some((pattern) => pattern.test(value.normalize("NFKC")))
+  );
+}
+
+function isActionCategory(
+  value: unknown,
+): value is McpOutboundEgressActionCategoryV1 {
+  return typeof value === "string" && ACTION_CATEGORIES.has(value);
+}
+
+function isOptionalPositiveInteger(value: unknown): boolean {
+  return (
+    value === undefined ||
+    (Number.isInteger(value) && (value as number) > 0 && (value as number) <= 10_000_000)
+  );
+}
+
+function parseIPv4Address(value: string): readonly number[] | undefined {
+  if (!/^\d{1,3}(?:\.\d{1,3}){3}$/u.test(value)) return undefined;
+  const parts = value.split(".").map((part) => Number(part));
+  return parts.every((part) => Number.isInteger(part) && part >= 0 && part <= 255)
+    ? parts
+    : undefined;
+}
+
+function parseIPv6Address(value: string): readonly number[] | undefined {
+  if (!value.includes(":") || value.includes("%")) return undefined;
+  const halves = value.split("::");
+  if (halves.length > 2) return undefined;
+  const left = parseIPv6SegmentList(halves[0]);
+  const right = halves.length === 2 ? parseIPv6SegmentList(halves[1]) : [];
+  if (!left || !right) return undefined;
+  if (halves.length === 1) return left.length === 8 ? left : undefined;
+  const missing = 8 - left.length - right.length;
+  if (missing < 1) return undefined;
+  return [...left, ...Array.from({ length: missing }, () => 0), ...right];
+}
+
+function parseIPv6SegmentList(value: string): readonly number[] | undefined {
+  if (value.length === 0) return [];
+  const output: number[] = [];
+  for (const segment of value.split(":")) {
+    if (segment.includes(".")) {
+      const ipv4 = parseIPv4Address(segment);
+      if (!ipv4) return undefined;
+      output.push((ipv4[0] << 8) | ipv4[1], (ipv4[2] << 8) | ipv4[3]);
+      continue;
+    }
+    if (!/^[0-9a-f]{1,4}$/iu.test(segment)) return undefined;
+    output.push(Number.parseInt(segment, 16));
+  }
+  return output;
+}
+
+function isIpv6Loopback(ipv6: readonly number[]): boolean {
+  return ipv6.slice(0, 7).every((segment) => segment === 0) && ipv6[7] === 1;
+}
+
+function ipv4FromMappedIpv6(ipv6: readonly number[]): readonly number[] | undefined {
+  const isMapped =
+    ipv6.slice(0, 5).every((segment) => segment === 0) && ipv6[5] === 0xffff;
+  const isCompatible =
+    ipv6.slice(0, 6).every((segment) => segment === 0) &&
+    (ipv6[6] !== 0 || ipv6[7] > 1);
+  if (!isMapped && !isCompatible) return undefined;
+  return [
+    (ipv6[6] >> 8) & 0xff,
+    ipv6[6] & 0xff,
+    (ipv6[7] >> 8) & 0xff,
+    ipv6[7] & 0xff,
+  ];
+}
+
+function readPlainObjectRecord(
+  value: unknown,
+): Record<string, unknown> | undefined {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  try {
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) return undefined;
+    const descriptors = Object.getOwnPropertyDescriptors(value);
+    const record: Record<string, unknown> = Object.create(null);
+    for (const key of Reflect.ownKeys(descriptors)) {
+      if (typeof key !== "string") return undefined;
+      const descriptor = descriptors[key];
+      if (!isEnumerableDataDescriptor(descriptor)) return undefined;
+      record[key] = descriptor.value;
+    }
+    return record;
+  } catch {
+    return undefined;
+  }
+}
+
+function isEnumerableDataDescriptor(
+  descriptor: PropertyDescriptor | undefined,
+): descriptor is PropertyDescriptor & { value: unknown } {
+  return (
+    descriptor !== undefined &&
+    descriptor.enumerable === true &&
+    "value" in descriptor
+  );
+}
+
+function userVisibleReasonFor(reason: McpOutboundEgressBlockedReasonV1): string {
+  switch (reason) {
+    case "invalid_url":
+      return "Outbound destination URL is invalid.";
+    case "unsupported_scheme":
+      return "Outbound destination scheme is not allowed.";
+    case "credentials_in_url":
+      return "Outbound destination must not include embedded credentials.";
+    case "host_not_allowlisted":
+      return "Outbound destination is not allowlisted.";
+    case "localhost_blocked":
+      return "Localhost destinations are blocked.";
+    case "private_network_blocked":
+      return "Private network destinations are blocked.";
+    case "link_local_blocked":
+      return "Link-local destinations are blocked.";
+    case "metadata_endpoint_blocked":
+      return "Cloud metadata destinations are blocked.";
+    case "reserved_ip_blocked":
+      return "Reserved network destinations are blocked.";
+    case "method_not_allowlisted":
+      return "Outbound method is not allowlisted.";
+    case "path_not_allowlisted":
+      return "Outbound path is not allowlisted.";
+    case "redirects_disabled":
+      return "Outbound redirects are disabled.";
+    case "unsafe_output_metadata":
+      return "Outbound egress metadata is unsafe.";
+  }
+}
+
+function compareStrings(left: string, right: string): number {
+  if (left === right) return 0;
+  return left < right ? -1 : 1;
+}
