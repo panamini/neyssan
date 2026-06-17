@@ -772,25 +772,50 @@ describe("PR65 component UI data policy", () => {
       "focus_on_requirements",
       "preserve_never_use",
     ] as const) {
-      expectAllowed(
-        validateLocalMcpComponentDataPolicy(
-          policyInput("component_visible_structured_content", {
-            ...summary,
-            workflowStatus: "edit_requested",
-            decision: "request_edit",
-            decisionStatus: "edit_requested",
-            editIntent,
-            safeCategories: {
-              ...summary.safeCategories,
-              workflowStatus: "edit_requested",
-              decisionStatus: "edit_requested",
-              editIntent,
-              nextUserAction: "review_pending_items",
-            },
-            nextUserAction: "review_pending_items",
-          }),
-        ),
+      const editRequestedSafeCategories = {
+        ...summary.safeCategories,
+        workflowStatus: "edit_requested",
+        decisionStatus: "edit_requested",
+        editIntent,
+        nextUserAction: "review_pending_items",
+      } as const;
+      const editRequestedSummary = {
+        ...summary,
+        artifactStatus: "edit_requested",
+        workflowStatus: "edit_requested",
+        decision: "request_edit",
+        decisionStatus: "edit_requested",
+        editIntent,
+        nextUserAction: "review_pending_items",
+        safeFlags: {
+          ...summary.safeFlags,
+          humanReviewRequired: true,
+          approvedForPreview: false,
+        },
+        safeCategories: editRequestedSafeCategories,
+        diffReview: {
+          ...summary.diffReview,
+          decisionStatus: "edit_requested",
+          nextUserAction: "review_pending_items",
+          safeCategories: editRequestedSafeCategories,
+        },
+        auditEvent: {
+          ...summary.auditEvent,
+          decision: "request_edit",
+        },
+      } as const;
+
+      const editRequestedResult = validateLocalMcpComponentDataPolicy(
+        policyInput("component_visible_structured_content", editRequestedSummary),
       );
+      expectAllowed(editRequestedResult);
+      expect(editRequestedSummary.safeFlags).toMatchObject({
+        approvedForExport: false,
+        approvedForDownload: false,
+        approvedForSend: false,
+        approvedForSubmit: false,
+        approvedForApply: false,
+      });
     }
 
     expectAllowed(
