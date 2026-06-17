@@ -190,10 +190,12 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "category",
   "candidateFacts",
   "changedSections",
+  "bytesCreated",
   "claimBackedItems",
   "code",
   "componentDataExposed",
   "componentVisible",
+  "confirmationStatus",
   "count",
   "coverLetterArtifactStatus",
   "credentialStorage",
@@ -202,8 +204,11 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "dataWrites",
   "decision",
   "decisionStatus",
+  "deletePolicyStatus",
   "demands",
   "diffReview",
+  "eligibleForLaterDownload",
+  "eligibleForLaterExport",
   "editIntent",
   "evidenceCoverage",
   "evidenceGraphRef",
@@ -212,6 +217,8 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "excludedFactBlockers",
   "exportActions",
   "failedRuns",
+  "filePayloadCreated",
+  "freshnessStatus",
   "fullContentRestricted",
   "handlerExecution",
   "humanReviewRequired",
@@ -250,6 +257,7 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "previewStatus",
   "previousArtifactRef",
   "productionConnector",
+  "policyStatus",
   "provenanceCoverage",
   "provenanceLinks",
   "qualityStatus",
@@ -265,6 +273,7 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "restrictedFactBlockers",
   "retentionCategory",
   "retentionPending",
+  "retentionPolicyStatus",
   "revisionAuditEvent",
   "revisionCount",
   "revisionIndex",
@@ -282,6 +291,7 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "reviewReadiness",
   "reviewRuns",
   "reviewCockpitRef",
+  "rollbackStatus",
   "safeBooleans",
   "safeCategories",
   "safeCounts",
@@ -298,6 +308,7 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "staleInputs",
   "staleSources",
   "status",
+  "suggestedFilename",
   "tailoringCompleteness",
   "targetDocumentKind",
   "text",
@@ -306,6 +317,7 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "tokenOrIdentityExposed",
   "type",
   "updatedAt",
+  "urlCreated",
   "version",
   "visibilityCategory",
   "warnings",
@@ -380,6 +392,10 @@ const BOOLEAN_KEYS = new Set([
   "componentDataExposed",
   "componentVisible",
   "credentialsExposed",
+  "bytesCreated",
+  "eligibleForLaterDownload",
+  "eligibleForLaterExport",
+  "filePayloadCreated",
   "fullContentRestricted",
   "humanReviewRequired",
   "modelVisible",
@@ -391,12 +407,16 @@ const BOOLEAN_KEYS = new Set([
   "staleData",
   "retentionPending",
   "tokenOrIdentityExposed",
+  "urlCreated",
   "writeActionExecuted",
 ]);
 
 const FALSE_ONLY_BOOLEAN_KEYS = new Set([
+  "bytesCreated",
+  "filePayloadCreated",
   "persisted",
   "tokenOrIdentityExposed",
+  "urlCreated",
 ]);
 
 const TEXT_KEYS = new Set([
@@ -472,7 +492,16 @@ const ALLOWED_SAFE_STRING_VALUES = new Set([
   "evidence_graph_ref_missing",
   "expired_auth",
   "failed_run",
+  "confirmation_confirmed",
+  "confirmation_required",
+  "delete_policy_blocked",
+  "delete_policy_satisfied",
+  "export_download_policy_allowed",
+  "export_download_policy_authorized",
+  "export_download_policy_blocked",
+  "fresh_artifact_confirmed",
   "generated_artifact_boundary_blocked",
+  "generated_artifact_export_download_policy_blocked",
   "generated_artifact_human_approval_workflow_blocked",
   "generated_artifact_revision_loop_blocked",
   "generated_text_as_fact",
@@ -518,6 +547,8 @@ const ALLOWED_SAFE_STRING_VALUES = new Set([
   "rejected",
   "reject_preview",
   "resolved",
+  "retention_policy_blocked",
+  "retention_policy_satisfied",
   "revision_created",
   "resume",
   "resume_variant",
@@ -546,6 +577,7 @@ const ALLOWED_SAFE_STRING_VALUES = new Set([
   "shorter",
   "source_truth",
   "stale_sources",
+  "stale_artifact_blocked",
   "summary_unavailable",
   "text",
   "unknown",
@@ -553,6 +585,8 @@ const ALLOWED_SAFE_STRING_VALUES = new Set([
   "unavailable_review_data",
   "unsafe_action_refused",
   "unsupported",
+  "rollback_available",
+  "rollback_policy_blocked",
   "more_formal",
   "preserve_never_use",
   "request_edit",
@@ -572,6 +606,8 @@ const ALLOWED_KIND_VALUES = new Set([
   "mcp_component_error_loading_refusal_ux_state",
   "mcp_cover_letter_application_message_preview_summary",
   "mcp_generated_artifact_boundary_summary",
+  "mcp_generated_artifact_export_download_policy_audit_event",
+  "mcp_generated_artifact_export_download_policy_summary",
   "mcp_generated_artifact_human_approval_audit_event",
   "mcp_generated_artifact_human_approval_diff_review",
   "mcp_generated_artifact_human_approval_workflow_summary",
@@ -927,6 +963,7 @@ function componentStringValidatorForKey(
   if (key === "kind") return validateKindString;
   if (key === "id") return validateSafeRefString;
   if (key === "occurredAt") return validateUpdatedAtString;
+  if (key === "suggestedFilename") return validateSuggestedFilenameString;
   if (key === "updatedAt") return validateUpdatedAtString;
   if (key === "type") return validateTextBlockTypeString;
   return undefined;
@@ -960,6 +997,14 @@ function validateTextBlockTypeString(value: string): ValidationResult {
   return value === "text"
     ? { ok: true }
     : { ok: false, reason: "unsafe_component_payload" };
+}
+
+function validateSuggestedFilenameString(value: string): ValidationResult {
+  return /^(?:resume-variant|cover-letter|application-package)-export-policy$/u.test(
+    value,
+  ) && !containsForbiddenText(value)
+    ? { ok: true }
+    : { ok: false, reason: "unsafe_component_text" };
 }
 
 function validateSafeTextFieldString(

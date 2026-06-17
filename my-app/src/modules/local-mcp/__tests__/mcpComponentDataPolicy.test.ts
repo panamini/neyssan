@@ -664,6 +664,114 @@ function generatedArtifactRevisionLoopSummary() {
   } as const;
 }
 
+function generatedArtifactExportDownloadPolicySummary() {
+  const artifactRef = {
+    id: "mcp-safe-ref:resume-variant:preview",
+    label: "Resume variant artifact",
+    status: "approved_for_preview",
+    category: "resume_variant",
+    count: 1,
+    updatedAt: "2026-06-17T05:00:00.000Z",
+    version: 1,
+  } as const;
+  const safeCounts = {
+    artifacts: 1,
+    blockers: 0,
+    warnings: 1,
+    revisionCount: 0,
+    version: 1,
+  } as const;
+  const safeCategories = {
+    artifactKind: "resume_variant",
+    artifactStatus: "approved_for_preview",
+    policyStatus: "export_download_policy_allowed",
+    confirmationStatus: "confirmation_confirmed",
+    freshnessStatus: "fresh_artifact_confirmed",
+    retentionPolicyStatus: "retention_policy_satisfied",
+    deletePolicyStatus: "delete_policy_satisfied",
+    rollbackStatus: "rollback_available",
+    visibilityCategory: "safe_summary_only",
+    nextUserAction: "ready_for_review",
+    version: 1,
+  } as const;
+
+  return {
+    kind: "mcp_generated_artifact_export_download_policy_summary",
+    allowed: true,
+    artifactKind: "resume_variant",
+    artifactStatus: "approved_for_preview",
+    policyStatus: "export_download_policy_allowed",
+    confirmationStatus: "confirmation_confirmed",
+    freshnessStatus: "fresh_artifact_confirmed",
+    retentionPolicyStatus: "retention_policy_satisfied",
+    deletePolicyStatus: "delete_policy_satisfied",
+    rollbackStatus: "rollback_available",
+    artifactRef,
+    visibilityCategory: "safe_summary_only",
+    suggestedFilename: "resume-variant-export-policy",
+    safeSummary:
+      "Export/download policy eligibility confirmed. No product action executed.",
+    nextUserAction: "ready_for_review",
+    refIds: ["mcp-safe-ref:resume-variant:preview"],
+    safeCounts,
+    safeCategories,
+    safeFlags: {
+      humanReviewRequired: false,
+      approvedForPreview: true,
+      approvedForExport: true,
+      approvedForDownload: true,
+      approvedForSend: false,
+      approvedForSubmit: false,
+      approvedForApply: false,
+      eligibleForLaterExport: true,
+      eligibleForLaterDownload: true,
+      fullContentRestricted: true,
+      rawDataExposed: false,
+      persisted: false,
+      bytesCreated: false,
+      filePayloadCreated: false,
+      urlCreated: false,
+      writeActionExecuted: false,
+      version: 1,
+    },
+    auditEvent: {
+      kind: "mcp_generated_artifact_export_download_policy_audit_event",
+      eventKind: "export_download_policy_authorized",
+      artifactKind: "resume_variant",
+      artifactRef,
+      policyStatus: "export_download_policy_allowed",
+      safeCounts,
+      redactedFlags: {
+        rawDataExposed: false,
+        fullContentRestricted: true,
+        tokenOrIdentityExposed: false,
+        persisted: false,
+        version: 1,
+      },
+      occurredAt: "2026-06-17T17:10:00.000Z",
+      persisted: false,
+      version: 1,
+    },
+    capabilities: {
+      dataReads: "blocked",
+      dataWrites: "blocked",
+      handlerExecution: "blocked",
+      productionConnector: "blocked",
+      networkAccess: "blocked",
+      modelCalls: "blocked",
+      writeActions: "blocked",
+      exportActions: "blocked",
+      rawDataProjection: "blocked",
+      credentialStorage: "none",
+      tokenStorage: "none",
+      version: 1,
+    },
+    modelVisible: true,
+    componentVisible: true,
+    version: 1,
+  } as const;
+}
+
 function stripStringAndPatternLiterals(source: string): string {
   return source
     .replace(/`(?:\\.|[^`\\])*`/gmu, '""')
@@ -1050,6 +1158,134 @@ describe("PR65 component UI data policy", () => {
           ...summary.newArtifactRevisionRef,
           id: "mcp-safe-ref:cover-letter:raw-text",
         },
+      }),
+    );
+  });
+
+  it("allows exact PR73 export/download policy safe-summary enums, refs, audit, filename, and flags", () => {
+    const summary = generatedArtifactExportDownloadPolicySummary();
+
+    const result = validateLocalMcpComponentDataPolicy(
+      policyInput("component_visible_structured_content", summary),
+    );
+    expectAllowed(result);
+    if (!result.allowed) {
+      throw new TypeError(
+        "expected PR73 export/download policy summary to be allowed",
+      );
+    }
+    expect(result.safePayload).toEqual(summary);
+
+    for (const suggestedFilename of [
+      "resume-variant-export-policy",
+      "cover-letter-export-policy",
+      "application-package-export-policy",
+    ] as const) {
+      expectAllowed(
+        validateLocalMcpComponentDataPolicy(
+          policyInput("component_visible_structured_content", {
+            ...summary,
+            suggestedFilename,
+          }),
+        ),
+      );
+    }
+
+    expectAllowed(
+      validateLocalMcpComponentDataPolicy(
+        policyInput("component_visible_error", {
+          kind: "local_mcp_component_data_policy_safe_error",
+          code: "generated_artifact_export_download_policy_blocked",
+          msg: "Refused. Generated artifact export/download policy blocked.",
+          safeForModel: true,
+          rawDataExposed: false,
+          componentDataExposed: false,
+          writeActionExecuted: false,
+          version: 1,
+        }),
+      ),
+    );
+
+    expect(summary.safeFlags).toMatchObject({
+      approvedForExport: true,
+      approvedForDownload: true,
+      eligibleForLaterExport: true,
+      eligibleForLaterDownload: true,
+      approvedForSend: false,
+      approvedForSubmit: false,
+      approvedForApply: false,
+      bytesCreated: false,
+      filePayloadCreated: false,
+      urlCreated: false,
+      persisted: false,
+      writeActionExecuted: false,
+    });
+
+    for (const unsafeFilename of [
+      "resume-variant-export-policy.pdf",
+      "resume/variant-export-policy",
+      "real-user@example.test",
+      "https://example.test/file",
+      "cmVzdW1lLXZhcmlhbnQ=",
+    ] as const) {
+      expectBlocked(
+        policyInput("component_visible_structured_content", {
+          ...summary,
+          suggestedFilename: unsafeFilename,
+        }),
+      );
+    }
+
+    for (const unsafeStatus of [
+      { policyStatus: "resume_export_ready" },
+      { confirmationStatus: "free_form_confirmed" },
+      { freshnessStatus: "revised_after_approval" },
+      { retentionPolicyStatus: "delete_real_file" },
+      { deletePolicyStatus: "deleted_from_storage" },
+      { rollbackStatus: "rollback_executed" },
+    ] as const) {
+      expectBlocked(
+        policyInput("component_visible_structured_content", {
+          ...summary,
+          ...unsafeStatus,
+        }),
+      );
+    }
+
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        auditEvent: {
+          ...summary.auditEvent,
+          persisted: true,
+        },
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        safeFlags: {
+          ...summary.safeFlags,
+          bytesCreated: true,
+        },
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        downloadUrl: "https://example.test/file",
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        base64: "cmVzdW1l",
+      }),
+    );
+    expectBlocked(
+      policyInput("component_visible_structured_content", {
+        ...summary,
+        attachment: { name: "resume.pdf" },
       }),
     );
   });
