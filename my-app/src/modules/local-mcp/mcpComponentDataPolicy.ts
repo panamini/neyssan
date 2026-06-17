@@ -177,6 +177,7 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "artifactStatus",
   "artifactTextBlockers",
   "artifacts",
+  "auditEvent",
   "availability",
   "blockerCategory",
   "blockers",
@@ -188,6 +189,7 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "capabilities",
   "category",
   "candidateFacts",
+  "changedSections",
   "claimBackedItems",
   "code",
   "componentDataExposed",
@@ -198,10 +200,15 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "credentialsExposed",
   "dataReads",
   "dataWrites",
+  "decision",
+  "decisionStatus",
   "demands",
+  "diffReview",
+  "editIntent",
   "evidenceCoverage",
   "evidenceGraphRef",
   "evidenceMatches",
+  "eventKind",
   "excludedFactBlockers",
   "exportActions",
   "failedRuns",
@@ -224,6 +231,7 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "networkAccess",
   "nextReviewHint",
   "nextUserAction",
+  "occurredAt",
   "ownerIdentityExposed",
   "ownerResolution",
   "ownerState",
@@ -234,6 +242,7 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "packages",
   "pendingFacts",
   "pendingReviews",
+  "persisted",
   "planItems",
   "planStatus",
   "plans",
@@ -245,6 +254,8 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "rawDataExposed",
   "rawDataProjection",
   "reason",
+  "redactedChangedSections",
+  "redactedFlags",
   "refIds",
   "rejectedFacts",
   "rejectedItems",
@@ -285,6 +296,7 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "text",
   "title",
   "tokenStorage",
+  "tokenOrIdentityExposed",
   "type",
   "updatedAt",
   "version",
@@ -292,6 +304,7 @@ const ALLOWED_COMPONENT_DATA_KEYS = new Set([
   "warnings",
   "writeActionExecuted",
   "writeActions",
+  "workflowStatus",
 ]);
 
 const NUMERIC_KEYS = new Set([
@@ -311,6 +324,7 @@ const NUMERIC_KEYS = new Set([
   "blockedReviews",
   "blockedRuns",
   "candidateFacts",
+  "changedSections",
   "claimBackedItems",
   "count",
   "demands",
@@ -327,6 +341,7 @@ const NUMERIC_KEYS = new Set([
   "planItems",
   "plans",
   "provenanceLinks",
+  "redactedChangedSections",
   "rejectedFacts",
   "rejectedItems",
   "restrictedEvidence",
@@ -361,11 +376,18 @@ const BOOLEAN_KEYS = new Set([
   "modelVisible",
   "overLimit",
   "ownerIdentityExposed",
+  "persisted",
   "rawDataExposed",
   "safeForModel",
   "staleData",
   "retentionPending",
+  "tokenOrIdentityExposed",
   "writeActionExecuted",
+]);
+
+const FALSE_ONLY_BOOLEAN_KEYS = new Set([
+  "persisted",
+  "tokenOrIdentityExposed",
 ]);
 
 const TEXT_KEYS = new Set([
@@ -414,6 +436,7 @@ const ALLOWED_SAFE_STRING_VALUES = new Set([
   "application_package",
   "application_package_not_available",
   "application_package_ref_missing",
+  "approve_preview",
   "approved_for_preview",
   "available",
   "blocked",
@@ -440,7 +463,11 @@ const ALLOWED_SAFE_STRING_VALUES = new Set([
   "expired_auth",
   "failed_run",
   "generated_artifact_boundary_blocked",
+  "generated_artifact_human_approval_workflow_blocked",
   "generated_text_as_fact",
+  "edit_requested",
+  "focus_on_requirements",
+  "human_approval_decision_recorded",
   "human_review_required",
   "loading",
   "missing",
@@ -466,6 +493,7 @@ const ALLOWED_SAFE_STRING_VALUES = new Set([
   "pending",
   "pending_review_items",
   "preview_required",
+  "preview_only",
   "privacy_blocked",
   "private_fact",
   "pr59_read_only_adapter",
@@ -476,6 +504,8 @@ const ALLOWED_SAFE_STRING_VALUES = new Set([
   "refusal",
   "refresh_inputs",
   "redacted",
+  "rejected",
+  "reject_preview",
   "resolved",
   "resume",
   "resume_variant",
@@ -501,6 +531,7 @@ const ALLOWED_SAFE_STRING_VALUES = new Set([
   "safe_summary_only",
   "safe_unavailable",
   "server_only",
+  "shorter",
   "source_truth",
   "stale_sources",
   "summary_unavailable",
@@ -510,6 +541,9 @@ const ALLOWED_SAFE_STRING_VALUES = new Set([
   "unavailable_review_data",
   "unsafe_action_refused",
   "unsupported",
+  "more_formal",
+  "preserve_never_use",
+  "request_edit",
   "restricted_full_content",
   "retention_pending",
   "cover_letter",
@@ -526,6 +560,9 @@ const ALLOWED_KIND_VALUES = new Set([
   "mcp_component_error_loading_refusal_ux_state",
   "mcp_cover_letter_application_message_preview_summary",
   "mcp_generated_artifact_boundary_summary",
+  "mcp_generated_artifact_human_approval_audit_event",
+  "mcp_generated_artifact_human_approval_diff_review",
+  "mcp_generated_artifact_human_approval_workflow_summary",
   "mcp_resume_variant_generation_preview_summary",
   "mcp_real_application_package_summary_result",
   "mcp_real_evidence_graph_summary_result",
@@ -819,7 +856,7 @@ function validateComponentFieldValue(
   if (NUMERIC_KEYS.has(key) && BOOLEAN_KEYS.has(key))
     return validateNumericOrBooleanField(value);
   if (NUMERIC_KEYS.has(key)) return validateNumericField(value);
-  if (BOOLEAN_KEYS.has(key)) return validateBooleanField(value);
+  if (BOOLEAN_KEYS.has(key)) return validateBooleanField(key, value);
   return validateSafeComponentValue(value, key, depth + 1, seen);
 }
 
@@ -835,14 +872,21 @@ function validateNumericField(value: unknown): ValidationResult {
     : { ok: false, reason: "unsafe_component_payload" };
 }
 
-function validateBooleanField(value: unknown): ValidationResult {
-  return typeof value === "boolean"
-    ? { ok: true }
-    : { ok: false, reason: "unsafe_component_payload" };
+function validateBooleanField(
+  key: string,
+  value: unknown,
+): ValidationResult {
+  if (typeof value !== "boolean") {
+    return { ok: false, reason: "unsafe_component_payload" };
+  }
+  if (FALSE_ONLY_BOOLEAN_KEYS.has(key) && value !== false) {
+    return { ok: false, reason: "unsafe_component_payload" };
+  }
+  return { ok: true };
 }
 
 function validateNumericOrBooleanField(value: unknown): ValidationResult {
-  return validateNumericField(value).ok || validateBooleanField(value).ok
+  return validateNumericField(value).ok || typeof value === "boolean"
     ? { ok: true }
     : { ok: false, reason: "unsafe_component_payload" };
 }
@@ -868,6 +912,7 @@ function componentStringValidatorForKey(
 ): ComponentStringValidator | undefined {
   if (key === "kind") return validateKindString;
   if (key === "id") return validateSafeRefString;
+  if (key === "occurredAt") return validateUpdatedAtString;
   if (key === "updatedAt") return validateUpdatedAtString;
   if (key === "type") return validateTextBlockTypeString;
   return undefined;
