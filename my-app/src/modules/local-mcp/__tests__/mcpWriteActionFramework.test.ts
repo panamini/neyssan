@@ -320,6 +320,145 @@ describe("PR76 write action framework", () => {
     expect(executableMetadata.operationKind).toBe("proposed_write_action");
   });
 
+  it("fails closed for contradictory proposal metadata passed to the guard", () => {
+    const proposal = expectProposal(createMcpWriteActionProposal(writeIntent()));
+    const forged = {
+      ...proposal,
+      operationKind: "read_only_operation",
+    };
+
+    const guard = assertMcpWriteActionExecutionDisabled(forged);
+
+    expect(guard).toMatchObject({
+      allowed: false,
+      reason: "confirmation_required",
+      operationKind: "blocked_write_action",
+      executionStatus: "blocked",
+      writeActionExecuted: false,
+      realExecutionAllowed: false,
+    });
+    expect("proposal" in guard).toBe(false);
+    assertLocalMcpPrivacySafeOutput(guard);
+  });
+
+  it("accepts generated read-only proposals with long safe action labels", () => {
+    const proposal = expectProposal(
+      createMcpWriteActionProposal(
+        readOnlyIntent({
+          actionLabel:
+            "summarize_safe_review_state_for_application_material_preview",
+        }),
+      ),
+    );
+
+    const guard = assertMcpWriteActionExecutionDisabled(proposal);
+
+    expect(guard).toMatchObject({
+      allowed: true,
+      reason: "read_only_operation",
+      operationKind: "read_only_operation",
+      executionStatus: "read_only_no_write",
+    });
+    assertLocalMcpPrivacySafeOutput(guard);
+  });
+
+  it("does not echo extra proposal fields from untrusted guard input", () => {
+    const proposal = expectProposal(createMcpWriteActionProposal(readOnlyIntent()));
+    const guard = assertMcpWriteActionExecutionDisabled({
+      ...proposal,
+      rawResumeText: "PRIVATE_FACT_SENTINEL_DO_NOT_EXPOSE",
+    });
+
+    expect(guard).toMatchObject({
+      allowed: false,
+      reason: "confirmation_required",
+      operationKind: "blocked_write_action",
+      executionStatus: "blocked",
+    });
+    expect("proposal" in guard).toBe(false);
+    assertLocalMcpPrivacySafeOutput(guard);
+  });
+
+  it("fails closed without throwing for incomplete proposal objects", () => {
+    const proposal = expectProposal(createMcpWriteActionProposal(writeIntent()));
+    const { dataClasses: _dataClasses, ...missingDataClasses } = proposal;
+    let guard:
+      | ReturnType<typeof assertMcpWriteActionExecutionDisabled>
+      | undefined;
+
+    expect(() => {
+      guard = assertMcpWriteActionExecutionDisabled(missingDataClasses);
+    }).not.toThrow();
+
+    expect(guard).toMatchObject({
+      allowed: false,
+      reason: "confirmation_required",
+      operationKind: "blocked_write_action",
+      executionStatus: "blocked",
+      writeActionExecuted: false,
+      realExecutionAllowed: false,
+    });
+    assertLocalMcpPrivacySafeOutput(guard);
+  });
+
+  it("distinguishes rejected confirmations from missing confirmations", () => {
+    const proposal = expectProposal(createMcpWriteActionProposal(writeIntent()));
+    const rejected = {
+      ...confirmedFor(proposal),
+      state: "rejected",
+    } satisfies McpWriteActionConfirmationResultV1;
+
+    const guard = assertMcpWriteActionExecutionDisabled(proposal, rejected);
+
+    expect(guard).toMatchObject({
+      allowed: false,
+      reason: "confirmation_rejected",
+      operationKind: "blocked_write_action",
+      executionStatus: "blocked",
+      userVisibleReason: "Confirmation was rejected for this write action.",
+    });
+    assertLocalMcpPrivacySafeOutput(guard);
+  });
+
+  it("returns a safe blocked result for stale no-op confirmations", () => {
+    const proposal = expectProposal(createMcpWriteActionProposal(writeIntent()));
+    const staleConfirmation = {
+      ...confirmedFor(proposal),
+      confirmationCopy: "I confirm a different write action.",
+    };
+
+    const result = createMcpNoopWriteActionResult(proposal, staleConfirmation);
+
+    expect(result).toMatchObject({
+      allowed: false,
+      reason: "confirmation_required",
+      operationKind: "blocked_write_action",
+      executionStatus: "blocked",
+      writeActionExecuted: false,
+      realExecutionAllowed: false,
+    });
+    assertLocalMcpPrivacySafeOutput(result);
+  });
+
+  it("does not treat read-only proposals as write no-op results", () => {
+    const proposal = expectProposal(createMcpWriteActionProposal(readOnlyIntent()));
+    const confirmation = confirmedFor(
+      expectProposal(createMcpWriteActionProposal(writeIntent())),
+    );
+
+    const result = createMcpNoopWriteActionResult(proposal, confirmation);
+
+    expect(result).toMatchObject({
+      allowed: false,
+      reason: "unsupported_write_action",
+      operationKind: "blocked_write_action",
+      executionStatus: "blocked",
+      userVisibleReason:
+        "No-op simulation requires a confirmed write action proposal.",
+    });
+    assertLocalMcpPrivacySafeOutput(result);
+  });
+
   it("fails closed for malformed write metadata", () => {
     for (const input of [
       {

@@ -43,6 +43,7 @@ export type McpWriteActionExecutionStatusV1 =
 export type McpWriteActionBlockedReasonV1 =
   | "invalid_input"
   | "confirmation_required"
+  | "confirmation_rejected"
   | "write_execution_disabled"
   | "unsupported_write_action"
   | "policy_forbidden";
@@ -294,6 +295,122 @@ const CONFIRMATION_RESULT_KEYS = [
   "version",
 ] as const;
 
+const CONFIRMATION_REQUIREMENT_ALLOWED_KEYS = [
+  "kind",
+  "required",
+  "state",
+  "requiredCopy",
+  "version",
+] as const;
+
+const CONFIRMATION_REQUIREMENT_REQUIRED_KEYS = [
+  "kind",
+  "required",
+  "state",
+  "version",
+] as const;
+
+const PROPOSAL_ALLOWED_KEYS = [
+  "kind",
+  "proposalRef",
+  "operationKind",
+  "actionLabel",
+  "actionCategory",
+  "affectedSurface",
+  "userVisibleSummary",
+  "riskLevel",
+  "idempotencyKey",
+  "rollbackPlan",
+  "dataClasses",
+  "confirmation",
+  "executionStatus",
+  "capabilities",
+  "auditEvent",
+  "writeActionExecuted",
+  "realExecutionAllowed",
+  "externalSideEffect",
+  "persisted",
+  "networkAccess",
+  "version",
+] as const;
+
+const PROPOSAL_REQUIRED_KEYS = [
+  "kind",
+  "proposalRef",
+  "operationKind",
+  "actionLabel",
+  "actionCategory",
+  "affectedSurface",
+  "userVisibleSummary",
+  "riskLevel",
+  "rollbackPlan",
+  "dataClasses",
+  "confirmation",
+  "executionStatus",
+  "capabilities",
+  "auditEvent",
+  "writeActionExecuted",
+  "realExecutionAllowed",
+  "externalSideEffect",
+  "persisted",
+  "networkAccess",
+  "version",
+] as const;
+
+const CAPABILITIES_KEYS = [
+  "dataReads",
+  "dataWrites",
+  "writeActions",
+  "handlerExecution",
+  "productionConnector",
+  "networkAccess",
+  "modelCalls",
+  "persistenceWrites",
+  "externalSideEffects",
+  "rawDataProjection",
+  "credentialStorage",
+  "tokenStorage",
+  "version",
+] as const;
+
+const AUDIT_EVENT_ALLOWED_KEYS = [
+  "kind",
+  "eventKind",
+  "actionLabel",
+  "actionCategory",
+  "affectedSurface",
+  "riskLevel",
+  "idempotencyKey",
+  "dataClasses",
+  "redactedFlags",
+  "persisted",
+  "writeActionExecuted",
+  "version",
+] as const;
+
+const AUDIT_EVENT_REQUIRED_KEYS = [
+  "kind",
+  "eventKind",
+  "actionLabel",
+  "actionCategory",
+  "affectedSurface",
+  "riskLevel",
+  "dataClasses",
+  "redactedFlags",
+  "persisted",
+  "writeActionExecuted",
+  "version",
+] as const;
+
+const REDACTED_FLAGS_KEYS = [
+  "rawDataExposed",
+  "tokenOrIdentityExposed",
+  "persisted",
+  "writeActionExecuted",
+  "externalSideEffect",
+  "version",
+] as const;
+
 const WRITE_ACTION_CATEGORIES = new Set<McpWriteActionCategoryV1>([
   "send_message",
   "submit_application",
@@ -410,6 +527,18 @@ export function assertMcpWriteActionExecutionDisabled(
     };
   }
   const confirmed = parseConfirmationResult(confirmation);
+  if (
+    confirmed?.state === "rejected" &&
+    confirmationMatchesProposal(parsedProposal, confirmed)
+  ) {
+    return buildBlockedResult(
+      parsedProposal,
+      "confirmation_rejected",
+      "blocked_write_action",
+      "blocked",
+      "Confirmation was rejected for this write action.",
+    );
+  }
   if (!confirmed || !confirmationMatchesProposal(parsedProposal, confirmed)) {
     return buildBlockedResult(
       parsedProposal,
@@ -432,7 +561,10 @@ export function blockMcpWriteAction(
   proposal: McpWriteActionProposalV1,
   reason: Exclude<
     McpWriteActionBlockedReasonV1,
-    "invalid_input" | "confirmation_required" | "write_execution_disabled"
+    | "invalid_input"
+    | "confirmation_required"
+    | "confirmation_rejected"
+    | "write_execution_disabled"
   >,
   userVisibleReason: str,
 ): McpWriteActionGuardResultV1 {
@@ -450,10 +582,19 @@ export function blockMcpWriteAction(
 export function createMcpNoopWriteActionResult(
   proposal: McpWriteActionProposalV1,
   confirmation: McpWriteActionConfirmationResultV1,
-): McpWriteActionNoopResultV1 {
+): McpWriteActionNoopResultV1 | McpWriteActionGuardResultV1 {
   const guard = assertMcpWriteActionExecutionDisabled(proposal, confirmation);
-  if (guard.allowed || guard.reason !== "write_execution_disabled") {
-    throw new TypeError("Write action no-op requires a confirmed disabled guard");
+  if (guard.allowed) {
+    return buildBlockedResult(
+      undefined,
+      "unsupported_write_action",
+      "blocked_write_action",
+      "blocked",
+      "No-op simulation requires a confirmed write action proposal.",
+    );
+  }
+  if (guard.reason !== "write_execution_disabled") {
+    return guard;
   }
   return {
     kind: "mcp_write_action_noop_result",
@@ -626,26 +767,78 @@ function buildConfirmationRequirement(
 }
 
 function parseProposal(input: unknown): McpWriteActionProposalV1 | undefined {
-  const record = readPlainObjectRecord(input);
+  const record = readExactRecord(
+    input,
+    PROPOSAL_ALLOWED_KEYS,
+    PROPOSAL_REQUIRED_KEYS,
+  );
   if (!record || !hasValidProposalMetadata(record)) {
     return undefined;
   }
-  return input as McpWriteActionProposalV1;
+  const dataClasses = parseDataClasses(record.dataClasses);
+  const confirmation = parseConfirmationRequirement(record.confirmation);
+  const capabilities = parseCapabilities(record.capabilities);
+  const auditEvent = parseProposalAuditEvent(record.auditEvent);
+  if (
+    !dataClasses ||
+    !confirmation ||
+    !capabilities ||
+    !auditEvent ||
+    !hasConsistentProposalMetadata(
+      record,
+      dataClasses,
+      confirmation,
+      auditEvent,
+    )
+  ) {
+    return undefined;
+  }
+  return {
+    kind: "mcp_write_action_proposal",
+    proposalRef: record.proposalRef as str,
+    operationKind: record.operationKind as Extract<
+      McpWriteActionOperationKindV1,
+      "read_only_operation" | "proposed_write_action"
+    >,
+    actionLabel: record.actionLabel as str,
+    actionCategory: record.actionCategory as McpWriteActionCategoryV1,
+    affectedSurface: record.affectedSurface as str,
+    userVisibleSummary: record.userVisibleSummary as str,
+    riskLevel: record.riskLevel as McpWriteActionRiskLevelV1,
+    ...(isSafeIdempotencyKey(record.idempotencyKey)
+      ? { idempotencyKey: record.idempotencyKey }
+      : {}),
+    rollbackPlan: record.rollbackPlan as str,
+    dataClasses,
+    confirmation,
+    executionStatus: record.executionStatus as Extract<
+      McpWriteActionExecutionStatusV1,
+      "read_only_no_write" | "proposed_pending_confirmation"
+    >,
+    capabilities,
+    auditEvent,
+    writeActionExecuted: false,
+    realExecutionAllowed: false,
+    externalSideEffect: false,
+    persisted: false,
+    networkAccess: false,
+    version: 1,
+  };
 }
 
 function hasValidProposalMetadata(record: Record<str, unknown>): boolean {
   return allTrue([
     record.kind === "mcp_write_action_proposal",
     record.version === 1,
-    isOperationKind(record.operationKind),
+    isProposalOperationKind(record.operationKind),
+    isSafeProposalRef(record.proposalRef),
     isCategory(record.actionCategory),
     isSafeLabel(record.actionLabel),
     isSafeLabel(record.affectedSurface),
     isSafeText(record.userVisibleSummary, MAX_SAFE_TEXT_LENGTH),
     isRiskLevel(record.riskLevel),
-    readPlainObjectRecord(record.confirmation) !== undefined,
-    readPlainObjectRecord(record.capabilities) !== undefined,
-    readPlainObjectRecord(record.auditEvent) !== undefined,
+    isSafeText(record.rollbackPlan, MAX_SAFE_TEXT_LENGTH),
+    isOptionalSafeIdempotencyKey(record, "idempotencyKey"),
     hasDisabledRuntimeFlags(record),
   ]);
 }
@@ -657,6 +850,214 @@ function hasDisabledRuntimeFlags(record: Record<str, unknown>): boolean {
     record.externalSideEffect === false,
     record.persisted === false,
     record.networkAccess === false,
+  ]);
+}
+
+function parseConfirmationRequirement(
+  input: unknown,
+): McpWriteActionConfirmationRequirementV1 | undefined {
+  const record = readExactRecord(
+    input,
+    CONFIRMATION_REQUIREMENT_ALLOWED_KEYS,
+    CONFIRMATION_REQUIREMENT_REQUIRED_KEYS,
+  );
+  if (
+    !record ||
+    record.kind !== "mcp_write_action_confirmation_requirement" ||
+    record.version !== 1
+  ) {
+    return undefined;
+  }
+  if (
+    record.required === false &&
+    record.state === "not_required" &&
+    !hasOwn(record, "requiredCopy")
+  ) {
+    return {
+      kind: "mcp_write_action_confirmation_requirement",
+      required: false,
+      state: "not_required",
+      version: 1,
+    };
+  }
+  if (
+    record.required === true &&
+    record.state === "required_unconfirmed" &&
+    isSafeText(record.requiredCopy, MAX_SAFE_TEXT_LENGTH)
+  ) {
+    return {
+      kind: "mcp_write_action_confirmation_requirement",
+      required: true,
+      state: "required_unconfirmed",
+      requiredCopy: record.requiredCopy as str,
+      version: 1,
+    };
+  }
+  return undefined;
+}
+
+function parseCapabilities(
+  input: unknown,
+): McpWriteActionCapabilitiesV1 | undefined {
+  const record = readExactRecord(input, CAPABILITIES_KEYS, CAPABILITIES_KEYS);
+  if (
+    !record ||
+    !allTrue([
+      record.dataReads === "blocked",
+      record.dataWrites === "blocked",
+      record.writeActions === "blocked",
+      record.handlerExecution === "blocked",
+      record.productionConnector === "blocked",
+      record.networkAccess === "blocked",
+      record.modelCalls === "blocked",
+      record.persistenceWrites === "blocked",
+      record.externalSideEffects === "blocked",
+      record.rawDataProjection === "blocked",
+      record.credentialStorage === "none",
+      record.tokenStorage === "none",
+      record.version === 1,
+    ])
+  ) {
+    return undefined;
+  }
+  return buildCapabilities();
+}
+
+function parseProposalAuditEvent(
+  input: unknown,
+): McpWriteActionAuditEventV1 | undefined {
+  const record = readExactRecord(
+    input,
+    AUDIT_EVENT_ALLOWED_KEYS,
+    AUDIT_EVENT_REQUIRED_KEYS,
+  );
+  const dataClasses = record ? parseDataClasses(record.dataClasses) : undefined;
+  const redactedFlags = record
+    ? parseRedactedFlags(record.redactedFlags)
+    : undefined;
+  if (
+    !record ||
+    !dataClasses ||
+    !redactedFlags ||
+    record.kind !== "mcp_write_action_audit_event" ||
+    !isProposalAuditEventKind(record.eventKind) ||
+    !isSafeLabel(record.actionLabel) ||
+    !isCategory(record.actionCategory) ||
+    !isSafeLabel(record.affectedSurface) ||
+    !isRiskLevel(record.riskLevel) ||
+    !isOptionalSafeIdempotencyKey(record, "idempotencyKey") ||
+    record.persisted !== false ||
+    record.writeActionExecuted !== false ||
+    record.version !== 1
+  ) {
+    return undefined;
+  }
+  return {
+    kind: "mcp_write_action_audit_event",
+    eventKind: record.eventKind,
+    actionLabel: record.actionLabel as str,
+    actionCategory: record.actionCategory as McpWriteActionCategoryV1,
+    affectedSurface: record.affectedSurface as str,
+    riskLevel: record.riskLevel as McpWriteActionRiskLevelV1,
+    ...(isSafeIdempotencyKey(record.idempotencyKey)
+      ? { idempotencyKey: record.idempotencyKey }
+      : {}),
+    dataClasses,
+    redactedFlags,
+    persisted: false,
+    writeActionExecuted: false,
+    version: 1,
+  };
+}
+
+function parseRedactedFlags(
+  input: unknown,
+): McpWriteActionAuditEventV1["redactedFlags"] | undefined {
+  const record = readExactRecord(input, REDACTED_FLAGS_KEYS, REDACTED_FLAGS_KEYS);
+  if (
+    !record ||
+    !allTrue([
+      record.rawDataExposed === false,
+      record.tokenOrIdentityExposed === false,
+      record.persisted === false,
+      record.writeActionExecuted === false,
+      record.externalSideEffect === false,
+      record.version === 1,
+    ])
+  ) {
+    return undefined;
+  }
+  return {
+    rawDataExposed: false,
+    tokenOrIdentityExposed: false,
+    persisted: false,
+    writeActionExecuted: false,
+    externalSideEffect: false,
+    version: 1,
+  };
+}
+
+function hasConsistentProposalMetadata(
+  record: Record<str, unknown>,
+  dataClasses: readonly McpWriteActionDataClassV1[],
+  confirmation: McpWriteActionConfirmationRequirementV1,
+  auditEvent: McpWriteActionAuditEventV1,
+): boolean {
+  if (!auditEventMatchesProposal(record, dataClasses, auditEvent)) {
+    return false;
+  }
+  return record.operationKind === "read_only_operation"
+    ? hasConsistentReadOnlyProposal(record, confirmation, auditEvent)
+    : hasConsistentWriteProposal(record, confirmation, auditEvent);
+}
+
+function hasConsistentReadOnlyProposal(
+  record: Record<str, unknown>,
+  confirmation: McpWriteActionConfirmationRequirementV1,
+  auditEvent: McpWriteActionAuditEventV1,
+): boolean {
+  return allTrue([
+    record.actionCategory === "read_only",
+    record.riskLevel === "none",
+    record.executionStatus === "read_only_no_write",
+    !hasOwn(record, "idempotencyKey"),
+    confirmation.required === false,
+    confirmation.state === "not_required",
+    auditEvent.eventKind === "read_only_operation_recorded",
+    !hasOwn(auditEvent, "idempotencyKey"),
+  ]);
+}
+
+function hasConsistentWriteProposal(
+  record: Record<str, unknown>,
+  confirmation: McpWriteActionConfirmationRequirementV1,
+  auditEvent: McpWriteActionAuditEventV1,
+): boolean {
+  return allTrue([
+    record.operationKind === "proposed_write_action",
+    WRITE_ACTION_CATEGORIES.has(record.actionCategory as McpWriteActionCategoryV1),
+    record.riskLevel !== "none",
+    record.executionStatus === "proposed_pending_confirmation",
+    isSafeIdempotencyKey(record.idempotencyKey),
+    confirmation.required === true,
+    confirmation.state === "required_unconfirmed",
+    isSafeText(confirmation.requiredCopy, MAX_SAFE_TEXT_LENGTH),
+    auditEvent.eventKind === "write_action_proposed",
+    auditEvent.idempotencyKey === record.idempotencyKey,
+  ]);
+}
+
+function auditEventMatchesProposal(
+  record: Record<str, unknown>,
+  dataClasses: readonly McpWriteActionDataClassV1[],
+  auditEvent: McpWriteActionAuditEventV1,
+): boolean {
+  return allTrue([
+    auditEvent.actionLabel === record.actionLabel,
+    auditEvent.actionCategory === record.actionCategory,
+    auditEvent.affectedSurface === record.affectedSurface,
+    auditEvent.riskLevel === record.riskLevel,
+    arrayEquals(auditEvent.dataClasses, dataClasses),
   ]);
 }
 
@@ -672,7 +1073,7 @@ function parseConfirmationResult(
     !record ||
     record.kind !== "mcp_write_action_confirmation_result" ||
     record.version !== 1 ||
-    record.state !== "confirmed" ||
+    (record.state !== "confirmed" && record.state !== "rejected") ||
     record.actor !== "human_user" ||
     !isSafeText(record.confirmationCopy, MAX_SAFE_TEXT_LENGTH) ||
     !isSafeIdempotencyKey(record.idempotencyKey) ||
@@ -683,7 +1084,7 @@ function parseConfirmationResult(
   return {
     kind: "mcp_write_action_confirmation_result",
     proposalRef: record.proposalRef,
-    state: "confirmed",
+    state: record.state,
     actor: "human_user",
     confirmationCopy: record.confirmationCopy,
     idempotencyKey: record.idempotencyKey,
@@ -858,13 +1259,24 @@ function isIntentKind(input: unknown): input is McpWriteActionIntentKindV1 {
   return input === "read_only_operation" || input === "write_action";
 }
 
-function isOperationKind(input: unknown): input is McpWriteActionOperationKindV1 {
+function isProposalOperationKind(
+  input: unknown,
+): input is Extract<
+  McpWriteActionOperationKindV1,
+  "read_only_operation" | "proposed_write_action"
+> {
+  return input === "read_only_operation" || input === "proposed_write_action";
+}
+
+function isProposalAuditEventKind(
+  input: unknown,
+): input is Extract<
+  McpWriteActionAuditEventV1["eventKind"],
+  "read_only_operation_recorded" | "write_action_proposed"
+> {
   return (
-    input === "read_only_operation" ||
-    input === "proposed_write_action" ||
-    input === "blocked_write_action" ||
-    input === "confirmed_not_executable_placeholder" ||
-    input === "simulated_noop_result"
+    input === "read_only_operation_recorded" ||
+    input === "write_action_proposed"
   );
 }
 
@@ -892,12 +1304,27 @@ function isSafeLabel(input: unknown): input is str {
   );
 }
 
+function isSafeProposalRef(input: unknown): input is str {
+  return (
+    typeof input === "string" &&
+    /^mcp-write-action:[a-z0-9][a-z0-9._:-]{1,160}$/u.test(input) &&
+    !containsUnsafeText(input)
+  );
+}
+
 function isSafeIdempotencyKey(input: unknown): input is str {
   return (
     typeof input === "string" &&
     /^mcp-write-action:[a-z0-9][a-z0-9._:-]{1,96}$/u.test(input) &&
     !containsUnsafeText(input)
   );
+}
+
+function isOptionalSafeIdempotencyKey(
+  record: Record<str, unknown>,
+  key: str,
+): boolean {
+  return !hasOwn(record, key) || isSafeIdempotencyKey(record[key]);
 }
 
 function isSafeText(input: unknown, maxLength: num): input is str {
@@ -916,6 +1343,17 @@ function containsUnsafeText(input: str): boolean {
 
 function allTrue(checks: readonly boolean[]): boolean {
   return checks.every(Boolean);
+}
+
+function arrayEquals(left: readonly unknown[], right: readonly unknown[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every((item, index) => item === right[index])
+  );
+}
+
+function hasOwn(record: object, key: PropertyKey): boolean {
+  return Object.prototype.hasOwnProperty.call(record, key);
 }
 
 function readExactRecord(
