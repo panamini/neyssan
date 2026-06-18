@@ -1074,6 +1074,23 @@ describe("createMcpJobPlatformApplyDryRun", () => {
     }
   });
 
+  it("fails closed on arrays with extra non-canonical numeric keys", () => {
+    const request = baseRequest();
+    Object.defineProperty(request.approvedFacts, "01", {
+      enumerable: true,
+      value: makeFact("candidate_email", "email", "shadow@example.test", {
+        factRef: "mcp-safe-ref:candidate-fact:shadow",
+        sourceRef: "mcp-safe-ref:evidence-graph:shadow",
+      }),
+    });
+
+    const result = createMcpJobPlatformApplyDryRun(request);
+
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toBe("invalid_input");
+    expectNoExecution(result);
+  });
+
   it("does not trigger proxy get traps while copying plain descriptor values", () => {
     let getTrapHits = 0;
     const proxyRequest = new Proxy(baseRequest(), {

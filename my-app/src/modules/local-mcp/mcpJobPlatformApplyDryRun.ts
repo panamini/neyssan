@@ -332,9 +332,61 @@ type ParsedRequest = Readonly<{
   requestedAt: string;
 }>;
 
+type ValidRequestRecord = Record<string, unknown> &
+  Readonly<{
+    integrationSchemaVersion: string;
+    intendedAction: McpJobPlatformDryRunActionV1;
+    jobRef: string;
+    applicationPackageRef: string;
+    requestedAt: string;
+  }>;
+
+type ParsedRequestCollections = Readonly<{
+  approvedFacts: McpJobPlatformDryRunApprovedFactV1[];
+  sourceBindings: McpJobPlatformDryRunSourceBindingV1[];
+  approvedAnswerArtifacts: McpJobPlatformDryRunApprovedAnswerArtifactV1[];
+  approvedArtifactRefs: McpJobPlatformDryRunApprovedArtifactRefV1[];
+}>;
+
+type ParsedArtifactRefParts = Readonly<{
+  artifactKind: McpJobPlatformDryRunArtifactKindV1;
+  artifactRef: string;
+  approvedArtifactUpdatedAt: string;
+  currentArtifactUpdatedAt: string;
+  revisionLineage: readonly string[];
+  latestApprovedRevisionRef: string;
+}>;
+
 type SchemaValidation =
   | Readonly<{ ok: true; schema: McpJobPlatformDryRunSchemaV1 }>
   | Readonly<{ ok: false }>;
+
+type ValidSchemaRecord = Record<string, unknown> & { schemaVersion: string };
+
+type ParsedSchemaCollections = Readonly<{
+  supportedFieldKinds: McpJobPlatformDryRunFieldKindV1[];
+  fields: McpJobPlatformDryRunFieldDefinitionV1[];
+  slots: McpJobPlatformDryRunAttachmentSlotV1[];
+}>;
+
+type ParsedFieldParts = McpJobPlatformDryRunFieldDefinitionV1;
+
+type RequiredFieldParts = Readonly<{
+  fieldId: string;
+  safeLabel: string;
+  fieldKind: McpJobPlatformDryRunFieldKindV1;
+  required: boolean;
+  sourcePolicy: McpJobPlatformDryRunSourcePolicyV1;
+  sensitivity: McpJobPlatformDryRunSensitivityV1;
+  humanInputPolicy: McpJobPlatformDryRunHumanInputPolicyV1;
+}>;
+
+type OptionalFieldParts = Readonly<
+  Pick<
+    McpJobPlatformDryRunFieldDefinitionV1,
+    "sourceKey" | "maxLength" | "allowedOptionCodes" | "questionSchemaVersion"
+  >
+>;
 
 type ParsedValue = Readonly<{
   value: string | boolean;
@@ -835,46 +887,10 @@ function parseDeps(deps: unknown): SchemaValidation {
 }
 
 function validateSchema(schema: unknown): SchemaValidation {
-  const record = readExactRecord(schema, SCHEMA_KEYS, SCHEMA_KEYS);
-  if (
-    !record ||
-    record.kind !== "mcp_job_platform_dry_run_schema" ||
-    record.integrationId !== INTEGRATION_ID ||
-    record.nonProduction !== true ||
-    !isSafeSchemaVersion(record.schemaVersion) ||
-    record.version !== CURRENT_VERSION
-  ) {
-    return { ok: false };
-  }
-  const supportedFieldKinds = readStringArray(record.supportedFieldKinds);
-  const supportedFields = readArrayValues(record.supportedFields)?.map(parseField);
-  const attachmentSlots = readArrayValues(record.attachmentSlots)?.map(parseSlot);
-  if (
-    !supportedFieldKinds ||
-    !supportedFields ||
-    !attachmentSlots ||
-    supportedFields.some((field) => field === undefined) ||
-    attachmentSlots.some((slot) => slot === undefined) ||
-    !supportedFieldKinds.every((kind) =>
-      FIELD_KINDS.has(kind as McpJobPlatformDryRunFieldKindV1),
-    )
-  ) {
-    return { ok: false };
-  }
-  const fields = supportedFields as McpJobPlatformDryRunFieldDefinitionV1[];
-  const slots = attachmentSlots as McpJobPlatformDryRunAttachmentSlotV1[];
-  if (hasDuplicate(fields.map((field) => field.fieldId))) return { ok: false };
-  if (hasDuplicate(slots.map((slot) => slot.slotId))) return { ok: false };
-  if (hasDuplicate(supportedFieldKinds)) return { ok: false };
-  if (
-    fields.some(
-      (field) =>
-        !supportedFieldKinds.includes(field.fieldKind) ||
-        !isFieldPolicyCoherent(field),
-    )
-  ) {
-    return { ok: false };
-  }
+  const record = readValidSchemaRecord(schema);
+  if (!record) return { ok: false };
+  const parsed = readSchemaCollections(record);
+  if (!parsed || !areSchemaCollectionsCoherent(parsed)) return { ok: false };
   return {
     ok: true,
     schema: {
@@ -882,27 +898,87 @@ function validateSchema(schema: unknown): SchemaValidation {
       integrationId: INTEGRATION_ID,
       schemaVersion: record.schemaVersion,
       nonProduction: true,
-      supportedFieldKinds: supportedFieldKinds as McpJobPlatformDryRunFieldKindV1[],
-      supportedFields: fields,
-      attachmentSlots: slots,
+      supportedFieldKinds: parsed.supportedFieldKinds,
+      supportedFields: parsed.fields,
+      attachmentSlots: parsed.slots,
       version: 1,
     },
   };
 }
 
+function readValidSchemaRecord(schema: unknown): ValidSchemaRecord | undefined {
+  const record = readExactRecord(schema, SCHEMA_KEYS, SCHEMA_KEYS);
+  if (!record) return undefined;
+  if (record.kind !== "mcp_job_platform_dry_run_schema") return undefined;
+  if (record.integrationId !== INTEGRATION_ID) return undefined;
+  if (record.nonProduction !== true) return undefined;
+  if (!isSafeSchemaVersion(record.schemaVersion)) return undefined;
+  if (record.version !== CURRENT_VERSION) return undefined;
+  return record as ValidSchemaRecord;
+}
+
+function readSchemaCollections(
+  record: Record<string, unknown>,
+): ParsedSchemaCollections | undefined {
+  const supportedFieldKinds = readStringArray(record.supportedFieldKinds);
+  const supportedFields = readArrayValues(record.supportedFields)?.map(parseField);
+  const attachmentSlots = readArrayValues(record.attachmentSlots)?.map(parseSlot);
+  if (!supportedFieldKinds || !supportedFields || !attachmentSlots) return undefined;
+  if (supportedFields.some((field) => field === undefined)) return undefined;
+  if (attachmentSlots.some((slot) => slot === undefined)) return undefined;
+  if (!areSupportedFieldKindsValid(supportedFieldKinds)) return undefined;
+  return {
+    supportedFieldKinds: supportedFieldKinds as McpJobPlatformDryRunFieldKindV1[],
+    fields: supportedFields as McpJobPlatformDryRunFieldDefinitionV1[],
+    slots: attachmentSlots as McpJobPlatformDryRunAttachmentSlotV1[],
+  };
+}
+
+function areSupportedFieldKindsValid(kinds: readonly string[]): boolean {
+  return (
+    !hasDuplicate(kinds) &&
+    kinds.every((kind) => FIELD_KINDS.has(kind as McpJobPlatformDryRunFieldKindV1))
+  );
+}
+
+function areSchemaCollectionsCoherent(parsed: ParsedSchemaCollections): boolean {
+  if (hasDuplicate(parsed.fields.map((field) => field.fieldId))) return false;
+  if (hasDuplicate(parsed.slots.map((slot) => slot.slotId))) return false;
+  return parsed.fields.every(
+    (field) =>
+      parsed.supportedFieldKinds.includes(field.fieldKind) && isFieldPolicyCoherent(field),
+  );
+}
+
 function parseField(input: unknown): McpJobPlatformDryRunFieldDefinitionV1 | undefined {
   const record = readExactRecord(input, FIELD_KEYS, FIELD_REQUIRED_KEYS);
   if (!record) return undefined;
+  const field = readFieldParts(record);
+  if (!field) return undefined;
+  if (!isFieldSourceShapeValid(field)) return undefined;
+  if (!isSelectFieldShapeValid(field)) return undefined;
+  return field;
+}
+
+function readFieldParts(record: Record<string, unknown>): ParsedFieldParts | undefined {
+  const requiredParts = readRequiredFieldParts(record);
+  const optionalParts = readOptionalFieldParts(record);
+  if (!requiredParts || !optionalParts) return undefined;
+  if (record.version !== CURRENT_VERSION) return undefined;
+  return {
+    ...requiredParts,
+    ...optionalParts,
+    version: 1,
+  };
+}
+
+function readRequiredFieldParts(
+  record: Record<string, unknown>,
+): RequiredFieldParts | undefined {
   const fieldKind = readFieldKind(record.fieldKind);
   const sourcePolicy = readSourcePolicy(record.sourcePolicy);
   const sensitivity = readSensitivity(record.sensitivity);
   const humanInputPolicy = readHumanInputPolicy(record.humanInputPolicy);
-  const sourceKey = readOptionalSourceKey(record.sourceKey);
-  const maxLength = readOptionalPositiveInteger(record.maxLength, 5000);
-  const allowedOptionCodes = readOptionalOptionCodes(record.allowedOptionCodes);
-  const questionSchemaVersion = readOptionalSchemaVersion(
-    record.questionSchemaVersion,
-  );
   if (
     !isSafeFieldId(record.fieldId) ||
     !isSafeLabel(record.safeLabel) ||
@@ -910,23 +986,8 @@ function parseField(input: unknown): McpJobPlatformDryRunFieldDefinitionV1 | und
     typeof record.required !== "boolean" ||
     !sourcePolicy ||
     !sensitivity ||
-    !humanInputPolicy ||
-    sourceKey === false ||
-    maxLength === false ||
-    allowedOptionCodes === false ||
-    questionSchemaVersion === false ||
-    record.version !== CURRENT_VERSION
+    !humanInputPolicy
   ) {
-    return undefined;
-  }
-  if (
-    (sourcePolicy === "explicit_approved_fact" ||
-      sourcePolicy === "approved_answer_artifact") &&
-    !sourceKey
-  ) {
-    return undefined;
-  }
-  if (fieldKind === "select" && (!allowedOptionCodes || allowedOptionCodes.length === 0)) {
     return undefined;
   }
   return {
@@ -935,14 +996,44 @@ function parseField(input: unknown): McpJobPlatformDryRunFieldDefinitionV1 | und
     fieldKind,
     required: record.required,
     sourcePolicy,
+    sensitivity,
+    humanInputPolicy,
+  };
+}
+
+function readOptionalFieldParts(
+  record: Record<string, unknown>,
+): OptionalFieldParts | undefined {
+  const sourceKey = readOptionalSourceKey(record.sourceKey);
+  const maxLength = readOptionalPositiveInteger(record.maxLength, 5000);
+  const allowedOptionCodes = readOptionalOptionCodes(record.allowedOptionCodes);
+  const questionSchemaVersion = readOptionalSchemaVersion(record.questionSchemaVersion);
+  if (
+    sourceKey === false ||
+    maxLength === false ||
+    allowedOptionCodes === false ||
+    questionSchemaVersion === false
+  ) {
+    return undefined;
+  }
+  return {
     ...(sourceKey ? { sourceKey } : {}),
     ...(maxLength ? { maxLength } : {}),
     ...(allowedOptionCodes ? { allowedOptionCodes } : {}),
-    sensitivity,
-    humanInputPolicy,
     ...(questionSchemaVersion ? { questionSchemaVersion } : {}),
-    version: 1,
   };
+}
+
+function isFieldSourceShapeValid(field: McpJobPlatformDryRunFieldDefinitionV1): boolean {
+  return (
+    (field.sourcePolicy !== "explicit_approved_fact" &&
+      field.sourcePolicy !== "approved_answer_artifact") ||
+    Boolean(field.sourceKey)
+  );
+}
+
+function isSelectFieldShapeValid(field: McpJobPlatformDryRunFieldDefinitionV1): boolean {
+  return field.fieldKind !== "select" || Boolean(field.allowedOptionCodes?.length);
 }
 
 function parseSlot(input: unknown): McpJobPlatformDryRunAttachmentSlotV1 | undefined {
@@ -971,53 +1062,59 @@ function parseSlot(input: unknown): McpJobPlatformDryRunAttachmentSlotV1 | undef
 }
 
 function parseRequest(input: unknown): ParsedRequest | undefined {
-  const record = readExactRecord(input, REQUEST_KEYS, REQUEST_KEYS);
-  if (
-    !record ||
-    record.kind !== "mcp_job_platform_apply_dry_run_request" ||
-    record.integrationId !== INTEGRATION_ID ||
-    !isSafeSchemaVersion(record.integrationSchemaVersion) ||
-    !isDryRunAction(record.intendedAction) ||
-    !isSafeRef(record.jobRef) ||
-    !isSafeRef(record.applicationPackageRef) ||
-    !isIsoTimestamp(record.requestedAt) ||
-    record.version !== CURRENT_VERSION
-  ) {
-    return undefined;
-  }
-  const approvedFacts = readArrayValues(record.approvedFacts)?.map(parseApprovedFact);
-  const sourceBindings = readArrayValues(record.sourceBindings)?.map(parseSourceBinding);
-  const approvedAnswerArtifacts = readArrayValues(record.approvedAnswerArtifacts)?.map(
-    parseApprovedAnswerArtifact,
-  );
-  const approvedArtifactRefs = readArrayValues(record.approvedArtifactRefs)?.map(
-    parseApprovedArtifactRef,
-  );
-  if (
-    !approvedFacts ||
-    !sourceBindings ||
-    !approvedAnswerArtifacts ||
-    !approvedArtifactRefs ||
-    approvedFacts.some((fact) => fact === undefined) ||
-    sourceBindings.some((binding) => binding === undefined) ||
-    approvedAnswerArtifacts.some((answer) => answer === undefined) ||
-    approvedArtifactRefs.some((artifact) => artifact === undefined)
-  ) {
-    return undefined;
-  }
+  const record = readValidRequestRecord(input);
+  if (!record) return undefined;
+  const collections = readRequestCollections(record);
+  if (!collections) return undefined;
   return {
     integrationId: INTEGRATION_ID,
     integrationSchemaVersion: record.integrationSchemaVersion,
     intendedAction: record.intendedAction,
     jobRef: record.jobRef,
     applicationPackageRef: record.applicationPackageRef,
-    approvedFacts: approvedFacts as McpJobPlatformDryRunApprovedFactV1[],
-    sourceBindings: sourceBindings as McpJobPlatformDryRunSourceBindingV1[],
-    approvedAnswerArtifacts:
-      approvedAnswerArtifacts as McpJobPlatformDryRunApprovedAnswerArtifactV1[],
-    approvedArtifactRefs:
-      approvedArtifactRefs as McpJobPlatformDryRunApprovedArtifactRefV1[],
+    approvedFacts: collections.approvedFacts,
+    sourceBindings: collections.sourceBindings,
+    approvedAnswerArtifacts: collections.approvedAnswerArtifacts,
+    approvedArtifactRefs: collections.approvedArtifactRefs,
     requestedAt: record.requestedAt,
+  };
+}
+
+function readValidRequestRecord(input: unknown): ValidRequestRecord | undefined {
+  const record = readExactRecord(input, REQUEST_KEYS, REQUEST_KEYS);
+  if (!record) return undefined;
+  if (record.kind !== "mcp_job_platform_apply_dry_run_request") return undefined;
+  if (record.integrationId !== INTEGRATION_ID) return undefined;
+  if (!isSafeSchemaVersion(record.integrationSchemaVersion)) return undefined;
+  if (!isDryRunAction(record.intendedAction)) return undefined;
+  if (!isSafeRef(record.jobRef)) return undefined;
+  if (!isSafeRef(record.applicationPackageRef)) return undefined;
+  if (!isIsoTimestamp(record.requestedAt)) return undefined;
+  if (record.version !== CURRENT_VERSION) return undefined;
+  return record as ValidRequestRecord;
+}
+
+function readRequestCollections(
+  record: Record<string, unknown>,
+): ParsedRequestCollections | undefined {
+  const approvedFacts = readParsedArray(record.approvedFacts, parseApprovedFact);
+  const sourceBindings = readParsedArray(record.sourceBindings, parseSourceBinding);
+  const approvedAnswerArtifacts = readParsedArray(
+    record.approvedAnswerArtifacts,
+    parseApprovedAnswerArtifact,
+  );
+  const approvedArtifactRefs = readParsedArray(
+    record.approvedArtifactRefs,
+    parseApprovedArtifactRef,
+  );
+  if (!approvedFacts || !sourceBindings || !approvedAnswerArtifacts || !approvedArtifactRefs) {
+    return undefined;
+  }
+  return {
+    approvedFacts,
+    sourceBindings,
+    approvedAnswerArtifacts,
+    approvedArtifactRefs,
   };
 }
 
@@ -1137,6 +1234,24 @@ function parseApprovedArtifactRef(
   if (!record || record.kind !== "mcp_job_platform_dry_run_approved_artifact_ref") {
     return undefined;
   }
+  const parts = readApprovedArtifactRefParts(record);
+  if (!parts || !isApprovedArtifactRefCurrent(parts)) return undefined;
+  return {
+    kind: "mcp_job_platform_dry_run_approved_artifact_ref",
+    artifactKind: parts.artifactKind,
+    artifactRef: parts.artifactRef,
+    approvedArtifactUpdatedAt: parts.approvedArtifactUpdatedAt,
+    currentArtifactUpdatedAt: parts.currentArtifactUpdatedAt,
+    revisionLineage: parts.revisionLineage,
+    latestApprovedRevisionRef: parts.latestApprovedRevisionRef,
+    hasPendingRevision: false,
+    version: 1,
+  };
+}
+
+function readApprovedArtifactRefParts(
+  record: Record<string, unknown>,
+): ParsedArtifactRefParts | undefined {
   const artifactKind = readArtifactKind(record.artifactKind);
   const revisionLineage = readStringArray(record.revisionLineage);
   if (
@@ -1153,24 +1268,22 @@ function parseApprovedArtifactRef(
   ) {
     return undefined;
   }
-  if (
-    record.approvedArtifactUpdatedAt !== record.currentArtifactUpdatedAt ||
-    revisionLineage[revisionLineage.length - 1] !== record.artifactRef ||
-    record.latestApprovedRevisionRef !== record.artifactRef
-  ) {
-    return undefined;
-  }
   return {
-    kind: "mcp_job_platform_dry_run_approved_artifact_ref",
     artifactKind,
     artifactRef: record.artifactRef,
     approvedArtifactUpdatedAt: record.approvedArtifactUpdatedAt,
     currentArtifactUpdatedAt: record.currentArtifactUpdatedAt,
     revisionLineage,
     latestApprovedRevisionRef: record.latestApprovedRevisionRef,
-    hasPendingRevision: false,
-    version: 1,
   };
+}
+
+function isApprovedArtifactRefCurrent(parts: ParsedArtifactRefParts): boolean {
+  return (
+    parts.approvedArtifactUpdatedAt === parts.currentArtifactUpdatedAt &&
+    parts.revisionLineage[parts.revisionLineage.length - 1] === parts.artifactRef &&
+    parts.latestApprovedRevisionRef === parts.artifactRef
+  );
 }
 
 function hasApprovedApplicationPackage(parsed: ParsedRequest): boolean {
@@ -1304,8 +1417,6 @@ function fieldPlan(
   answer?: McpJobPlatformDryRunApprovedAnswerArtifactV1,
   artifact?: McpJobPlatformDryRunApprovedArtifactRefV1,
 ): McpJobPlatformDryRunFieldPlanV1 {
-  const sourceRef = fact?.sourceRef ?? answer?.sourceRef ?? artifact?.artifactRef;
-  const valueRef = fact?.factRef ?? answer?.answerRef ?? artifact?.artifactRef;
   return {
     kind: "mcp_job_platform_dry_run_field_plan",
     fieldId: field.fieldId,
@@ -1317,10 +1428,20 @@ function fieldPlan(
     sensitivity: field.sensitivity,
     mappingState,
     reasonCode,
-    ...(sourceRef ? { sourceRef } : {}),
-    ...(valueRef ? { valueRef } : {}),
+    ...fieldPlanRefs(fact, answer, artifact),
     version: 1,
   };
+}
+
+function fieldPlanRefs(
+  fact?: McpJobPlatformDryRunApprovedFactV1,
+  answer?: McpJobPlatformDryRunApprovedAnswerArtifactV1,
+  artifact?: McpJobPlatformDryRunApprovedArtifactRefV1,
+): Pick<McpJobPlatformDryRunFieldPlanV1, "sourceRef" | "valueRef"> {
+  if (fact) return { sourceRef: fact.sourceRef, valueRef: fact.factRef };
+  if (answer) return { sourceRef: answer.sourceRef, valueRef: answer.answerRef };
+  if (artifact) return { sourceRef: artifact.artifactRef, valueRef: artifact.artifactRef };
+  return {};
 }
 
 function parseMappedValue(
@@ -1328,39 +1449,36 @@ function parseMappedValue(
   fact: McpJobPlatformDryRunApprovedFactV1,
 ): ParsedValue | undefined {
   if (!fieldKindAcceptsFactValue(field.fieldKind, fact)) return undefined;
-  if (field.fieldKind === "select") {
-    return typeof fact.value === "string" &&
-      (field.allowedOptionCodes ?? []).includes(fact.value)
-      ? mappedValue(field, fact, fact.value)
-      : undefined;
-  }
-  if (field.fieldKind === "boolean") {
-    return typeof fact.value === "boolean" ? mappedValue(field, fact, fact.value) : undefined;
-  }
-  if (field.fieldKind === "date") {
-    return typeof fact.value === "string" && isCanonicalDate(fact.value)
-      ? mappedValue(field, fact, fact.value)
-      : undefined;
-  }
-  if (field.fieldKind === "email") {
-    return typeof fact.value === "string" && isEmail(fact.value)
-      ? mappedValue(field, fact, fact.value.trim().toLowerCase())
-      : undefined;
-  }
-  if (field.fieldKind === "phone") {
-    return typeof fact.value === "string" && isPhone(fact.value)
-      ? mappedValue(field, fact, fact.value.trim())
-      : undefined;
-  }
-  if (field.fieldKind === "url") {
-    return typeof fact.value === "string" && isSafeHttpsUrl(fact.value)
-      ? mappedValue(field, fact, fact.value.trim())
-      : undefined;
-  }
+  if (field.fieldKind === "boolean") return parseMappedBooleanValue(field, fact);
   if (typeof fact.value !== "string") return undefined;
-  return isTextValueAllowed(fact.value, field.maxLength ?? 5000)
-    ? mappedValue(field, fact, fact.value.trim())
-    : undefined;
+  const value = parseMappedStringValue(field, fact.value);
+  return value === undefined ? undefined : mappedValue(field, fact, value);
+}
+
+function parseMappedBooleanValue(
+  field: McpJobPlatformDryRunFieldDefinitionV1,
+  fact: McpJobPlatformDryRunApprovedFactV1,
+): ParsedValue | undefined {
+  return typeof fact.value === "boolean" ? mappedValue(field, fact, fact.value) : undefined;
+}
+
+function parseMappedStringValue(
+  field: McpJobPlatformDryRunFieldDefinitionV1,
+  value: string,
+): string | undefined {
+  if (field.fieldKind === "select") return parseSelectValue(field, value);
+  if (field.fieldKind === "date") return isCanonicalDate(value) ? value : undefined;
+  if (field.fieldKind === "email") return isEmail(value) ? value.trim().toLowerCase() : undefined;
+  if (field.fieldKind === "phone") return isPhone(value) ? value.trim() : undefined;
+  if (field.fieldKind === "url") return isSafeHttpsUrl(value) ? value.trim() : undefined;
+  return isTextValueAllowed(value, field.maxLength ?? 5000) ? value.trim() : undefined;
+}
+
+function parseSelectValue(
+  field: McpJobPlatformDryRunFieldDefinitionV1,
+  value: string,
+): string | undefined {
+  return (field.allowedOptionCodes ?? []).includes(value) ? value : undefined;
 }
 
 function mappedValue(
@@ -2137,27 +2255,57 @@ function readArrayValues(input: unknown): readonly unknown[] | undefined {
   try {
     if (!Array.isArray(input)) return undefined;
     const descriptors = Object.getOwnPropertyDescriptors(input);
-    const lengthDescriptor = descriptors.length;
-    if (
-      !isDataDescriptor(lengthDescriptor) ||
-      !Number.isInteger(lengthDescriptor.value) ||
-      lengthDescriptor.value < 0 ||
-      !Reflect.ownKeys(descriptors).every(
-        (key) => key === "length" || (typeof key === "string" && /^\d+$/u.test(key)),
-      )
-    ) {
-      return undefined;
-    }
-    const output: unknown[] = [];
-    for (let index = 0; index < lengthDescriptor.value; index += 1) {
-      const descriptor = descriptors[String(index)];
-      if (!isEnumerableDataDescriptor(descriptor)) return undefined;
-      output.push(descriptor.value);
-    }
-    return output;
+    const arrayLength = readArrayDescriptorLength(descriptors.length);
+    if (arrayLength === undefined) return undefined;
+    if (!hasOnlyArrayIndexDescriptorKeys(descriptors, arrayLength)) return undefined;
+    return readDenseArrayDescriptorValues(descriptors, arrayLength);
   } catch {
     return undefined;
   }
+}
+
+function readParsedArray<T>(
+  input: unknown,
+  parseItem: (item: unknown) => T | undefined,
+): T[] | undefined {
+  const values = readArrayValues(input);
+  if (!values) return undefined;
+  const parsed = values.map(parseItem);
+  return parsed.some((item) => item === undefined) ? undefined : (parsed as T[]);
+}
+
+function readArrayDescriptorLength(descriptor: PropertyDescriptor | undefined): number | undefined {
+  if (!isDataDescriptor(descriptor) || typeof descriptor.value !== "number") return undefined;
+  if (!Number.isInteger(descriptor.value) || descriptor.value < 0) return undefined;
+  return descriptor.value;
+}
+
+function hasOnlyArrayIndexDescriptorKeys(
+  descriptors: Record<PropertyKey, PropertyDescriptor | undefined>,
+  length: number,
+): boolean {
+  return Reflect.ownKeys(descriptors).every(
+    (key) => key === "length" || isArrayIndexDescriptorKey(key, length),
+  );
+}
+
+function isArrayIndexDescriptorKey(key: PropertyKey, length: number): boolean {
+  if (typeof key !== "string" || !/^(0|[1-9]\d*)$/u.test(key)) return false;
+  const index = Number(key);
+  return Number.isSafeInteger(index) && index >= 0 && index < length && String(index) === key;
+}
+
+function readDenseArrayDescriptorValues(
+  descriptors: Record<PropertyKey, PropertyDescriptor | undefined>,
+  length: number,
+): readonly unknown[] | undefined {
+  const output: unknown[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const descriptor = descriptors[String(index)];
+    if (!isEnumerableDataDescriptor(descriptor)) return undefined;
+    output.push(descriptor.value);
+  }
+  return output;
 }
 
 function isEnumerableDataDescriptor(
