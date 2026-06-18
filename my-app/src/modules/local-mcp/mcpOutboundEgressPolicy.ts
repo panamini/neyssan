@@ -38,6 +38,7 @@ export type McpOutboundEgressBlockedReasonV1 =
   | "reserved_ip_blocked"
   | "method_not_allowlisted"
   | "path_not_allowlisted"
+  | "port_not_allowlisted"
   | "redirects_disabled"
   | "unsafe_output_metadata";
 
@@ -100,6 +101,7 @@ export type McpOutboundEgressDestinationV1 = Readonly<{
   scheme: string;
   host: string;
   origin: string;
+  port?: number;
   path: string;
   pathClassification: "root_path" | "path_present" | "allowlisted_path_prefix";
   blockedReason?: McpOutboundEgressBlockedReasonV1;
@@ -190,6 +192,16 @@ type NormalizedDestinationForPolicy = Readonly<{
   policyPath: string;
 }>;
 
+export class McpOutboundEgressBlockedError extends Error {
+  readonly decision: Extract<McpOutboundEgressDecisionV1, { allowed: false }>;
+
+  constructor(decision: Extract<McpOutboundEgressDecisionV1, { allowed: false }>) {
+    super("Outbound egress policy blocked");
+    this.name = "McpOutboundEgressBlockedError";
+    this.decision = decision;
+  }
+}
+
 const DEFAULT_REDIRECT_POLICY: McpOutboundEgressRedirectPolicyDecisionV1 = {
   mode: "disabled",
   maxRedirects: 0,
@@ -270,6 +282,7 @@ const USER_VISIBLE_REASON_BY_BLOCKED_REASON: Readonly<
   reserved_ip_blocked: "Reserved network destinations are blocked.",
   method_not_allowlisted: "Outbound method is not allowlisted.",
   path_not_allowlisted: "Outbound path is not allowlisted.",
+  port_not_allowlisted: "Outbound destination port is not allowlisted.",
   redirects_disabled: "Outbound redirects are disabled.",
   unsafe_output_metadata: "Outbound egress metadata is unsafe.",
 };
@@ -356,6 +369,9 @@ export function evaluateMcpOutboundEgressRequest(
       destination,
     );
   }
+  if (!defaultPortAllowed(destination)) {
+    return createBlockedDecision("port_not_allowlisted", parsedRequest, destination);
+  }
 
   const methodRules = schemeRules.filter((rule) =>
     parsedRequest.method !== "UNKNOWN" && rule.methods.includes(parsedRequest.method),
@@ -400,8 +416,12 @@ export function evaluateMcpOutboundEgressRequest(
 export function assertMcpOutboundEgressAllowed(
   input: unknown,
   policy: McpOutboundEgressPolicyV1 = DEFAULT_POLICY,
-): McpOutboundEgressDecisionV1 {
-  return evaluateMcpOutboundEgressRequest(input, policy);
+): Extract<McpOutboundEgressDecisionV1, { allowed: true }> {
+  const decision = evaluateMcpOutboundEgressRequest(input, policy);
+  if (!decision.allowed) {
+    throw new McpOutboundEgressBlockedError(decision);
+  }
+  return decision;
 }
 
 function createAllowedOutboundEgressDecision(
@@ -488,11 +508,13 @@ function normalizeMcpOutboundDestinationForPolicy(
   const host = normalizeParsedHost(parsed.hostname);
   const policyPath = parsed.pathname || "/";
   const path = safePathForAudit(policyPath);
+  const port = parsePort(parsed.port);
   const destination: McpOutboundEgressDestinationV1 = {
     kind: "mcp_outbound_egress_destination",
     scheme,
     host,
     origin: buildSafeOrigin(scheme, host, parsed.port),
+    ...(port ? { port } : {}),
     path,
     pathClassification: path === "/" ? "root_path" : "path_present",
     ...(!isHttpScheme(scheme) ? { blockedReason: "unsupported_scheme" as const } : {}),
@@ -657,7 +679,22 @@ function pathMatchesRule(
   path: string,
   rule: McpOutboundEgressAllowlistRuleV1,
 ): boolean {
-  return (rule.pathPrefixes ?? ["/"]).some((prefix) => path.startsWith(prefix));
+  return (rule.pathPrefixes ?? ["/"]).some((prefix) =>
+    pathMatchesPrefix(path, prefix),
+  );
+}
+
+function pathMatchesPrefix(path: string, prefix: string): boolean {
+  if (prefix === "/") return true;
+  if (prefix.endsWith("/")) return path.startsWith(prefix);
+  return path === prefix || path.startsWith(`${prefix}/`);
+}
+
+function defaultPortAllowed(destination: McpOutboundEgressDestinationV1): boolean {
+  if (destination.port === undefined) return true;
+  if (destination.scheme === "https") return destination.port === 443;
+  if (destination.scheme === "http") return destination.port === 80;
+  return false;
 }
 
 function dataClassesAllowed(
@@ -788,6 +825,12 @@ function parseUrl(value: string): URL | undefined {
   } catch {
     return undefined;
   }
+}
+
+function parsePort(value: string): number | undefined {
+  if (!value) return undefined;
+  const port = Number(value);
+  return Number.isInteger(port) && port > 0 ? port : undefined;
 }
 
 function normalizeParsedHost(host: string): string {

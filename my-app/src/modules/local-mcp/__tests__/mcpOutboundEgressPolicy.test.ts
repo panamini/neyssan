@@ -9,6 +9,7 @@ import {
   createMcpBlockedOutboundEgressResult,
   createMcpOutboundEgressPolicy,
   evaluateMcpOutboundEgressRequest,
+  McpOutboundEgressBlockedError,
   normalizeMcpOutboundDestination,
   redactMcpOutboundUrlForAudit,
   type McpOutboundEgressAllowlistRuleV1,
@@ -187,6 +188,39 @@ describe("PR77 outbound egress allowlist and SSRF policy", () => {
     assertLocalMcpPrivacySafeOutput(result);
   });
 
+  it("matches path prefixes only on segment boundaries", () => {
+    const v1Rule: McpOutboundEgressAllowlistRuleV1 = {
+      ...BASE_RULE,
+      id: "mcp-egress-rule:v1-segment-prefix",
+      pathPrefixes: ["/v1"],
+    };
+    const apiRule: McpOutboundEgressAllowlistRuleV1 = {
+      ...BASE_RULE,
+      id: "mcp-egress-rule:api-segment-prefix",
+      pathPrefixes: ["/api"],
+    };
+
+    expectAllowed({ destinationUrl: "https://api.allowed.example/v1" }, [v1Rule]);
+    expectAllowed(
+      { destinationUrl: "https://api.allowed.example/v1/messages" },
+      [v1Rule],
+    );
+
+    for (const destinationUrl of [
+      "https://api.allowed.example/v10/messages",
+      "https://api.allowed.example/api-evil/messages",
+      "https://api.allowed.example/api_private/messages",
+    ] as const) {
+      const result = evaluateMcpOutboundEgressRequest(
+        request({ destinationUrl }),
+        policy([destinationUrl.includes("/v10/") ? v1Rule : apiRule]),
+      );
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe("path_not_allowlisted");
+      assertLocalMcpPrivacySafeOutput(result);
+    }
+  });
+
   it("requires explicit subdomain rules with real dot-boundary matching", () => {
     const subdomainRule: McpOutboundEgressAllowlistRuleV1 = {
       ...BASE_RULE,
@@ -252,6 +286,42 @@ describe("PR77 outbound egress allowlist and SSRF policy", () => {
       { destinationUrl: "http://api.allowed.example/v1/messages" },
       [httpRule],
     );
+  });
+
+  it("rejects non-default ports before future outbound execution", () => {
+    expectAllowed({ destinationUrl: "https://api.allowed.example:443/v1/messages" });
+
+    const httpsNonDefault = evaluateMcpOutboundEgressRequest(
+      request({ destinationUrl: "https://api.allowed.example:444/v1/messages" }),
+      policy(),
+    );
+    expect(httpsNonDefault.allowed).toBe(false);
+    expect(httpsNonDefault.reason).toBe("port_not_allowlisted");
+    expect(httpsNonDefault.redactedUrl).toBe(
+      "https://api.allowed.example:444/v1/messages",
+    );
+    assertLocalMcpPrivacySafeOutput(httpsNonDefault);
+
+    const httpRule: McpOutboundEgressAllowlistRuleV1 = {
+      ...BASE_RULE,
+      id: "mcp-egress-rule:http-default-port",
+      schemes: ["http"],
+    };
+    expectAllowed(
+      { destinationUrl: "http://api.allowed.example:80/v1/messages" },
+      [httpRule],
+    );
+
+    const httpNonDefault = evaluateMcpOutboundEgressRequest(
+      request({ destinationUrl: "http://api.allowed.example:8080/v1/messages" }),
+      policy([httpRule]),
+    );
+    expect(httpNonDefault.allowed).toBe(false);
+    expect(httpNonDefault.reason).toBe("port_not_allowlisted");
+    expect(httpNonDefault.redactedUrl).toBe(
+      "http://api.allowed.example:8080/v1/messages",
+    );
+    assertLocalMcpPrivacySafeOutput(httpNonDefault);
   });
 
   it("blocks URLs with embedded credentials", () => {
@@ -503,16 +573,30 @@ describe("PR77 outbound egress allowlist and SSRF policy", () => {
     expect(strippedTestSource).not.toMatch(/\b(fetch|axios|undici)\s*\(/u);
   });
 
-  it("assert helper returns the same non-executing policy decision", () => {
+  it("assert helper returns only allowed decisions and blocks unsafe continuation", () => {
     const allowed = assertMcpOutboundEgressAllowed(request(), policy());
     expect(allowed.allowed).toBe(true);
     expect(allowed.networkRequestExecuted).toBe(false);
 
-    const blocked = assertMcpOutboundEgressAllowed(
-      request({ destinationUrl: "https://evil-example.com/v1/messages" }),
-      policy(),
-    );
-    expect(blocked.allowed).toBe(false);
-    expect(blocked.networkRequestExecuted).toBe(false);
+    expect(() =>
+      assertMcpOutboundEgressAllowed(
+        request({ destinationUrl: "https://evil-example.com/v1/messages" }),
+        policy(),
+      ),
+    ).toThrow(McpOutboundEgressBlockedError);
+
+    try {
+      assertMcpOutboundEgressAllowed(
+        request({ destinationUrl: "https://evil-example.com/v1/messages" }),
+        policy(),
+      );
+      throw new TypeError("expected outbound egress assertion to throw");
+    } catch (error) {
+      expect(error).toBeInstanceOf(McpOutboundEgressBlockedError);
+      if (!(error instanceof McpOutboundEgressBlockedError)) throw error;
+      expect(error.decision.allowed).toBe(false);
+      expect(error.decision.reason).toBe("host_not_allowlisted");
+      assertLocalMcpPrivacySafeOutput(error.decision);
+    }
   });
 });
