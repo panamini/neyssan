@@ -185,6 +185,11 @@ type HostRisk = Readonly<{
   reason: McpOutboundEgressBlockedReasonV1;
 }>;
 
+type NormalizedDestinationForPolicy = Readonly<{
+  destination: McpOutboundEgressDestinationV1;
+  policyPath: string;
+}>;
+
 const DEFAULT_REDIRECT_POLICY: McpOutboundEgressRedirectPolicyDecisionV1 = {
   mode: "disabled",
   maxRedirects: 0,
@@ -298,12 +303,13 @@ export function evaluateMcpOutboundEgressRequest(
     return createBlockedDecision("invalid_url", undefined, undefined);
   }
 
-  const destination = normalizeMcpOutboundDestination(
+  const normalizedDestination = normalizeMcpOutboundDestinationForPolicy(
     parsedRequest.destinationUrl,
   );
-  if (!destination) {
+  if (!normalizedDestination) {
     return createBlockedDecision("invalid_url", parsedRequest, undefined);
   }
+  const { destination, policyPath } = normalizedDestination;
   if (destination.blockedReason === "unsupported_scheme") {
     return createBlockedDecision(
       "unsupported_scheme",
@@ -363,7 +369,7 @@ export function evaluateMcpOutboundEgressRequest(
   }
 
   const pathRules = methodRules.filter((rule) =>
-    pathMatchesRule(destination.path, rule),
+    pathMatchesRule(policyPath, rule),
   );
   if (pathRules.length === 0) {
     return createBlockedDecision("path_not_allowlisted", parsedRequest, destination);
@@ -381,7 +387,7 @@ export function evaluateMcpOutboundEgressRequest(
     );
   }
 
-  return createMcpAllowedOutboundEgressDecision(
+  return createAllowedOutboundEgressDecision(
     parsedRequest,
     {
       ...destination,
@@ -398,7 +404,7 @@ export function assertMcpOutboundEgressAllowed(
   return evaluateMcpOutboundEgressRequest(input, policy);
 }
 
-export function createMcpAllowedOutboundEgressDecision(
+function createAllowedOutboundEgressDecision(
   request: ParsedRequest,
   destination: McpOutboundEgressDestinationV1,
   rule: McpOutboundEgressAllowlistRuleV1,
@@ -469,12 +475,19 @@ export function createMcpBlockedOutboundEgressResult(
 export function normalizeMcpOutboundDestination(
   value: string,
 ): McpOutboundEgressDestinationV1 | undefined {
+  return normalizeMcpOutboundDestinationForPolicy(value)?.destination;
+}
+
+function normalizeMcpOutboundDestinationForPolicy(
+  value: string,
+): NormalizedDestinationForPolicy | undefined {
   const parsed = parseUrl(value);
   if (!parsed) return undefined;
 
   const scheme = parsed.protocol.replace(/:$/u, "").toLowerCase();
   const host = normalizeParsedHost(parsed.hostname);
-  const path = safePathForAudit(parsed.pathname);
+  const policyPath = parsed.pathname || "/";
+  const path = safePathForAudit(policyPath);
   const destination: McpOutboundEgressDestinationV1 = {
     kind: "mcp_outbound_egress_destination",
     scheme,
@@ -488,7 +501,7 @@ export function normalizeMcpOutboundDestination(
       : {}),
     version: 1,
   };
-  return destination;
+  return { destination, policyPath };
 }
 
 export function redactMcpOutboundUrlForAudit(value: string): string {

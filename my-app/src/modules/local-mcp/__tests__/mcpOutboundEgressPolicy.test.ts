@@ -6,7 +6,6 @@ import { assertLocalMcpPrivacySafeOutput } from "../privacyRedactionFixtures";
 import { createMcpWriteActionProposal } from "../mcpWriteActionFramework";
 import {
   assertMcpOutboundEgressAllowed,
-  createMcpAllowedOutboundEgressDecision,
   createMcpBlockedOutboundEgressResult,
   createMcpOutboundEgressPolicy,
   evaluateMcpOutboundEgressRequest,
@@ -166,6 +165,26 @@ describe("PR77 outbound egress allowlist and SSRF policy", () => {
       { destinationUrl: "http://api.allowed.example/v1/messages" },
       "unsupported_scheme",
     );
+  });
+
+  it("does not let audit path redaction satisfy path allowlist matching", () => {
+    const redactedPathRule: McpOutboundEgressAllowlistRuleV1 = {
+      ...BASE_RULE,
+      id: "mcp-egress-rule:redacted-path-prefix",
+      pathPrefixes: ["/redacted-path"],
+    };
+
+    const result = evaluateMcpOutboundEgressRequest(
+      request({ destinationUrl: "https://api.allowed.example/access-token" }),
+      policy([redactedPathRule]),
+    );
+
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toBe("path_not_allowlisted");
+    expect(result.redactedUrl).toBe("https://api.allowed.example/redacted-path");
+    expect(result.normalizedDestination?.path).toBe("/redacted-path");
+    expect(JSON.stringify(result)).not.toContain("access-token");
+    assertLocalMcpPrivacySafeOutput(result);
   });
 
   it("requires explicit subdomain rules with real dot-boundary matching", () => {
@@ -453,38 +472,13 @@ describe("PR77 outbound egress allowlist and SSRF policy", () => {
     assertLocalMcpPrivacySafeOutput(blocked);
   });
 
-  it("creates direct allowed decisions for future policy-only callers", () => {
-    const destination = expectAllowed().normalizedDestination;
-
-    const direct = createMcpAllowedOutboundEgressDecision(
-      {
-        destinationUrl: "https://api.allowed.example/v1/messages",
-        method: "GET",
-        actionCategory: "send_message",
-        dataClasses: ["safe_summary", "destination_metadata", "audit_metadata"],
-        redirectsDisabled: true,
-      },
-      destination,
-      BASE_RULE,
-    );
-
-    expect(direct).toMatchObject({
-      allowed: true,
-      reason: "allowlist_rule_matched",
-      allowlistRuleId: BASE_RULE.id,
-      networkRequestExecuted: false,
-      externalSideEffect: false,
-      persisted: false,
-      credentialStorage: "none",
-      tokenStorage: "none",
-    });
-    assertLocalMcpPrivacySafeOutput(direct);
-  });
-
   it("keeps PR77 source free of live network execution APIs", () => {
     const [policySource, testSource] = sourceFiles();
     const strippedPolicySource = stripStringAndPatternLiterals(policySource);
 
+    expect(policySource).not.toMatch(
+      /export\s+function\s+createMcpAllowedOutboundEgressDecision\b/u,
+    );
     expect(policySource).not.toMatch(
       /from\s+["'][^"']*(?:node:http|node:https|node:dns|undici|axios|node-fetch)["']/iu,
     );
