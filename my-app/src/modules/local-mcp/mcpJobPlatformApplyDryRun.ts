@@ -584,7 +584,7 @@ export const LOCAL_FIXTURE_JOB_PLATFORM_SCHEMA_V1: McpJobPlatformDryRunSchemaV1 
         slotId: "cover_letter_upload",
         safeLabel: "Cover letter attachment",
         required: false,
-        acceptedArtifactKinds: ["cover_letter", "application_package"],
+        acceptedArtifactKinds: ["cover_letter"],
         version: 1,
       },
     ],
@@ -765,7 +765,7 @@ export function createMcpJobPlatformApplyDryRun(
   ) {
     return buildBlockedResult("unsupported_schema", parsed, schema);
   }
-  if (hasAmbiguousInput(parsed)) {
+  if (hasAmbiguousInput(parsed, schema)) {
     return buildBlockedResult("ambiguous_input", parsed, schema);
   }
   if (!hasApprovedApplicationPackage(parsed)) {
@@ -1025,11 +1025,11 @@ function readOptionalFieldParts(
 }
 
 function isFieldSourceShapeValid(field: McpJobPlatformDryRunFieldDefinitionV1): boolean {
-  return (
-    (field.sourcePolicy !== "explicit_approved_fact" &&
-      field.sourcePolicy !== "approved_answer_artifact") ||
-    Boolean(field.sourceKey)
-  );
+  if (field.sourcePolicy === "explicit_approved_fact") return Boolean(field.sourceKey);
+  if (field.sourcePolicy === "approved_answer_artifact") {
+    return Boolean(field.sourceKey && field.questionSchemaVersion);
+  }
+  return true;
 }
 
 function isSelectFieldShapeValid(field: McpJobPlatformDryRunFieldDefinitionV1): boolean {
@@ -1294,7 +1294,10 @@ function hasApprovedApplicationPackage(parsed: ParsedRequest): boolean {
   );
 }
 
-function hasAmbiguousInput(parsed: ParsedRequest): boolean {
+function hasAmbiguousInput(
+  parsed: ParsedRequest,
+  schema: McpJobPlatformDryRunSchemaV1,
+): boolean {
   return (
     hasDuplicate(parsed.approvedFacts.map((fact) => fact.sourceKey)) ||
     hasDuplicate(parsed.sourceBindings.map((binding) => binding.sourceKey)) ||
@@ -1304,7 +1307,27 @@ function hasAmbiguousInput(parsed: ParsedRequest): boolean {
       ),
     ) ||
     hasDuplicate(parsed.approvedArtifactRefs.map((artifact) => artifact.artifactRef)) ||
-    hasDuplicate(parsed.approvedArtifactRefs.map((artifact) => artifact.artifactKind))
+    hasDuplicate(parsed.approvedArtifactRefs.map((artifact) => artifact.artifactKind)) ||
+    hasAmbiguousAttachmentSlotMappings(parsed, schema)
+  );
+}
+
+function hasAmbiguousAttachmentSlotMappings(
+  parsed: ParsedRequest,
+  schema: McpJobPlatformDryRunSchemaV1,
+): boolean {
+  return schema.attachmentSlots.some(
+    (slot) => compatibleArtifactsForSlot(slot, parsed).length > 1,
+  );
+}
+
+function compatibleArtifactsForSlot(
+  slot: McpJobPlatformDryRunAttachmentSlotV1,
+  parsed: ParsedRequest,
+): readonly McpJobPlatformDryRunApprovedArtifactRefV1[] {
+  const acceptedArtifactKinds = new Set(slot.acceptedArtifactKinds);
+  return parsed.approvedArtifactRefs.filter((artifact) =>
+    acceptedArtifactKinds.has(artifact.artifactKind),
   );
 }
 
@@ -1498,11 +1521,8 @@ function buildAttachmentPlan(
   slot: McpJobPlatformDryRunAttachmentSlotV1,
   parsed: ParsedRequest,
 ): McpJobPlatformDryRunAttachmentPlanV1 {
-  const artifact = slot.acceptedArtifactKinds
-    .map((artifactKind) =>
-      parsed.approvedArtifactRefs.find((item) => item.artifactKind === artifactKind),
-    )
-    .find((item): item is McpJobPlatformDryRunApprovedArtifactRefV1 => item !== undefined);
+  const compatibleArtifacts = compatibleArtifactsForSlot(slot, parsed);
+  const artifact = compatibleArtifacts.length === 1 ? compatibleArtifacts[0] : undefined;
   if (!artifact) {
     return {
       kind: "mcp_job_platform_dry_run_attachment_plan",
@@ -1699,14 +1719,13 @@ function buildSafeCounts(
   fieldPlans: readonly McpJobPlatformDryRunFieldPlanV1[],
   attachmentPlans: readonly McpJobPlatformDryRunAttachmentPlanV1[],
 ): McpJobPlatformDryRunSafeCountsV1 {
+  const requiredBlockingFields = fieldPlans.filter(isRequiredBlockingFieldPlan);
   return {
     fields: fieldPlans.length,
     mappedFields: countStates(fieldPlans, "mapped"),
     missingFields: countStates(fieldPlans, "missing"),
-    missingRequiredFields: fieldPlans.filter(
-      (plan) => plan.required && plan.mappingState === "missing",
-    ).length,
-    requiredBlockingFields: fieldPlans.filter(isRequiredBlockingFieldPlan).length,
+    missingRequiredFields: requiredBlockingFields.length,
+    requiredBlockingFields: requiredBlockingFields.length,
     humanInputRequiredFields: countStates(fieldPlans, "human_input_required"),
     unsupportedFields: countStates(fieldPlans, "unsupported"),
     blockedByPolicyFields: countStates(fieldPlans, "blocked_by_policy"),
@@ -1758,6 +1777,9 @@ function buildSafeSummary(input: Readonly<{
   attachmentPlans: readonly McpJobPlatformDryRunAttachmentPlanV1[];
   auditEvent: McpJobPlatformDryRunAuditEventV1;
 }>): McpJobPlatformDryRunSafeSummaryV1 {
+  const requiredBlockingFieldIds = input.fieldPlans
+    .filter(isRequiredBlockingFieldPlan)
+    .map((plan) => plan.fieldId);
   return {
     kind: "mcp_job_platform_apply_dry_run_safe_summary",
     allowed: input.allowed,
@@ -1776,12 +1798,8 @@ function buildSafeSummary(input: Readonly<{
     ...(input.mappingRef ? { mappingRef: input.mappingRef } : {}),
     ...(input.safeCounts ? { safeCounts: input.safeCounts } : {}),
     mappedFieldPlans: input.fieldPlans,
-    missingRequiredFieldIds: input.fieldPlans
-      .filter((plan) => plan.required && plan.mappingState === "missing")
-      .map((plan) => plan.fieldId),
-    requiredBlockingFieldIds: input.fieldPlans
-      .filter(isRequiredBlockingFieldPlan)
-      .map((plan) => plan.fieldId),
+    missingRequiredFieldIds: requiredBlockingFieldIds,
+    requiredBlockingFieldIds,
     humanInputRequiredFieldIds: input.fieldPlans
       .filter((plan) => plan.mappingState === "human_input_required")
       .map((plan) => plan.fieldId),

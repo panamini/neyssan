@@ -914,6 +914,24 @@ describe("createMcpJobPlatformApplyDryRun", () => {
     }
   });
 
+  it("blocks attachment slots when more than one approved artifact is compatible", () => {
+    const schema = makeSchema({
+      attachmentSlots: [
+        {
+          slotId: "ambiguous_attachment_upload",
+          safeLabel: "Ambiguous attachment",
+          required: true,
+          acceptedArtifactKinds: ["resume_variant", "cover_letter"],
+          version: 1,
+        },
+      ],
+    });
+
+    const result = run(baseRequest(), schema);
+
+    expectAmbiguousBlocked(result);
+  });
+
   it("includes every required non-mapped state in required blocking field ids", () => {
     const requiredUnsupportedSchema = withFields(
       LOCAL_FIXTURE_JOB_PLATFORM_SCHEMA_V1.supportedFields.map((field) =>
@@ -973,8 +991,10 @@ describe("createMcpJobPlatformApplyDryRun", () => {
       expectAllowed(item.result);
       expect(item.result.dryRunStatus).not.toBe("mapping_complete");
       expect(plan(item.result, item.fieldId).mappingState).toBe(item.state);
+      expect(item.result.missingRequiredFieldIds).toContain(item.fieldId);
       expect(item.result.requiredBlockingFieldIds).toContain(item.fieldId);
-      expect(item.result.safeCounts?.requiredBlockingFields).toBeGreaterThan(0);
+      expect(item.result.safeCounts?.missingRequiredFields).toBe(1);
+      expect(item.result.safeCounts?.requiredBlockingFields).toBe(1);
     }
   });
 
@@ -1021,6 +1041,22 @@ describe("createMcpJobPlatformApplyDryRun", () => {
       expect(result.reason).toBe("unsupported_schema");
       expectNoExecution(result);
     }
+  });
+
+  it("rejects approved answer artifact fields without a question schema version", () => {
+    const { questionSchemaVersion: _questionSchemaVersion, ...fieldWithoutVersion } =
+      fieldById("screening_motivation");
+    const schema = withFields(
+      LOCAL_FIXTURE_JOB_PLATFORM_SCHEMA_V1.supportedFields.map((field) =>
+        field.fieldId === "screening_motivation" ? fieldWithoutVersion : field,
+      ),
+    );
+
+    const result = run(baseRequest(), schema);
+
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toBe("unsupported_schema");
+    expectNoExecution(result);
   });
 
   it("keeps PR76 write-action execution disabled even for complete mappings", () => {
