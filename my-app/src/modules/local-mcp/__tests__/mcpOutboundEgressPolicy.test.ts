@@ -6,6 +6,7 @@ import { assertLocalMcpPrivacySafeOutput } from "../privacyRedactionFixtures";
 import { createMcpWriteActionProposal } from "../mcpWriteActionFramework";
 import {
   assertMcpOutboundEgressAllowed,
+  createMcpAllowedOutboundEgressDecision,
   createMcpBlockedOutboundEgressResult,
   createMcpOutboundEgressPolicy,
   evaluateMcpOutboundEgressRequest,
@@ -93,11 +94,16 @@ function sourceFiles(): readonly string[] {
 }
 
 function stripStringAndPatternLiterals(source: string): string {
-  return source
-    .replace(/`(?:\\.|[^`\\])*`/gmu, '""')
-    .replace(/"(?:\\.|[^"\\])*"/gmu, '""')
-    .replace(/'(?:\\.|[^'\\])*'/gmu, '""')
-    .replace(/\/(?:\\.|[^/\\\n])+\/[a-z]*/gimu, "/_/u");
+  const replacements: readonly [RegExp, string][] = [
+    [/`(?:\\.|[^`\\])*`/gmu, '""'],
+    [/"(?:\\.|[^"\\])*"/gmu, '""'],
+    [/'(?:\\.|[^'\\])*'/gmu, '""'],
+    [/\/(?:\\.|[^/\\\n])+\/[a-z]*/gimu, "/_/u"],
+  ];
+  return replacements.reduce(
+    (output, [pattern, replacement]) => output.replace(pattern, replacement),
+    source,
+  );
 }
 
 describe("PR77 outbound egress allowlist and SSRF policy", () => {
@@ -445,6 +451,34 @@ describe("PR77 outbound egress allowlist and SSRF policy", () => {
       version: 1,
     });
     assertLocalMcpPrivacySafeOutput(blocked);
+  });
+
+  it("creates direct allowed decisions for future policy-only callers", () => {
+    const destination = expectAllowed().normalizedDestination;
+
+    const direct = createMcpAllowedOutboundEgressDecision(
+      {
+        destinationUrl: "https://api.allowed.example/v1/messages",
+        method: "GET",
+        actionCategory: "send_message",
+        dataClasses: ["safe_summary", "destination_metadata", "audit_metadata"],
+        redirectsDisabled: true,
+      },
+      destination,
+      BASE_RULE,
+    );
+
+    expect(direct).toMatchObject({
+      allowed: true,
+      reason: "allowlist_rule_matched",
+      allowlistRuleId: BASE_RULE.id,
+      networkRequestExecuted: false,
+      externalSideEffect: false,
+      persisted: false,
+      credentialStorage: "none",
+      tokenStorage: "none",
+    });
+    assertLocalMcpPrivacySafeOutput(direct);
   });
 
   it("keeps PR77 source free of live network execution APIs", () => {

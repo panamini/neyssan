@@ -251,6 +251,32 @@ const SAFE_TEXT_PATTERNS: readonly RegExp[] = [
   /\b(?:private[_ -]?fact|never[_ -]?use|source[_ -]?quote)\b/iu,
 ];
 
+const USER_VISIBLE_REASON_BY_BLOCKED_REASON: Readonly<
+  Record<McpOutboundEgressBlockedReasonV1, string>
+> = {
+  invalid_url: "Outbound destination URL is invalid.",
+  unsupported_scheme: "Outbound destination scheme is not allowed.",
+  credentials_in_url: "Outbound destination must not include embedded credentials.",
+  host_not_allowlisted: "Outbound destination is not allowlisted.",
+  localhost_blocked: "Localhost destinations are blocked.",
+  private_network_blocked: "Private network destinations are blocked.",
+  link_local_blocked: "Link-local destinations are blocked.",
+  metadata_endpoint_blocked: "Cloud metadata destinations are blocked.",
+  reserved_ip_blocked: "Reserved network destinations are blocked.",
+  method_not_allowlisted: "Outbound method is not allowlisted.",
+  path_not_allowlisted: "Outbound path is not allowlisted.",
+  redirects_disabled: "Outbound redirects are disabled.",
+  unsafe_output_metadata: "Outbound egress metadata is unsafe.",
+};
+
+const UNSAFE_RULE_HOST_FRAGMENTS = ["*", "/", "\\", "@", "://"] as const;
+const DOCUMENTATION_IPV4_PREFIXES: readonly (readonly number[])[] = [
+  [192, 0, 0],
+  [192, 0, 2],
+  [198, 51, 100],
+  [203, 0, 113],
+] as const;
+
 export function createMcpOutboundEgressPolicy(
   input: Readonly<{
     allowlist?: readonly McpOutboundEgressAllowlistRuleV1[];
@@ -497,27 +523,14 @@ function parseRequest(input: unknown): ParsedRequest | undefined {
 function normalizeAllowlistRule(
   rule: McpOutboundEgressAllowlistRuleV1,
 ): McpOutboundEgressAllowlistRuleV1 {
-  const normalizedHost = normalizeRuleHost(rule.host);
-  const schemes = normalizeSchemes(rule.schemes ?? ["https"]);
-  const methods = normalizeMethods(rule.methods);
-  const pathPrefixes = normalizePathPrefixes(rule.pathPrefixes ?? ["/"]);
-  const dataClasses = parseDataClasses(rule.dataClasses);
-  if (
-    !isSafeRuleId(rule.id) ||
-    !normalizedHost ||
-    !schemes ||
-    !methods ||
-    !pathPrefixes ||
-    !isActionCategory(rule.actionCategory) ||
-    !dataClasses ||
-    !isSafeText(rule.purpose, 300) ||
-    !isSafeText(rule.userVisibleReason, 240) ||
-    !isOptionalPositiveInteger(rule.timeoutMs) ||
-    !isOptionalPositiveInteger(rule.maxResponseBytes) ||
-    rule.version !== 1
-  ) {
-    throw new TypeError("Local MCP outbound egress allowlist rule is invalid");
-  }
+  assertValidAllowlistRuleMetadata(rule);
+  const normalizedHost = requireRulePart(normalizeRuleHost(rule.host));
+  const schemes = requireRulePart(normalizeSchemes(rule.schemes ?? ["https"]));
+  const methods = requireRulePart(normalizeMethods(rule.methods));
+  const pathPrefixes = requireRulePart(
+    normalizePathPrefixes(rule.pathPrefixes ?? ["/"]),
+  );
+  const dataClasses = requireRulePart(parseDataClasses(rule.dataClasses));
   return {
     id: rule.id,
     host: normalizedHost,
@@ -582,31 +595,13 @@ function classifyHostRisk(host: string): HostRisk | undefined {
 }
 
 function classifyIPv4Risk(ipv4: readonly number[]): HostRisk | undefined {
-  const [a, b, c, d] = ipv4;
-  if (a === 169 && b === 254 && c === 169 && d === 254) {
+  if (isMetadataIPv4(ipv4)) {
     return { reason: "metadata_endpoint_blocked" };
   }
-  if (a === 127) return { reason: "localhost_blocked" };
-  if (
-    a === 10 ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 100 && b >= 64 && b <= 127)
-  ) {
-    return { reason: "private_network_blocked" };
-  }
-  if (a === 169 && b === 254) return { reason: "link_local_blocked" };
-  if (
-    a === 0 ||
-    (a === 192 && b === 0 && (c === 0 || c === 2)) ||
-    (a === 198 && (b === 18 || b === 19)) ||
-    (a === 198 && b === 51 && c === 100) ||
-    (a === 203 && b === 0 && c === 113) ||
-    a >= 224 ||
-    (a === 255 && b === 255 && c === 255 && d === 255)
-  ) {
-    return { reason: "reserved_ip_blocked" };
-  }
+  if (isLoopbackIPv4(ipv4)) return { reason: "localhost_blocked" };
+  if (isPrivateIPv4(ipv4)) return { reason: "private_network_blocked" };
+  if (isLinkLocalIPv4(ipv4)) return { reason: "link_local_blocked" };
+  if (isReservedIPv4(ipv4)) return { reason: "reserved_ip_blocked" };
   return undefined;
 }
 
@@ -730,22 +725,48 @@ function normalizePathPrefixes(
 }
 
 function normalizeRuleHost(value: string): string | undefined {
-  if (
-    typeof value !== "string" ||
-    value.trim().length === 0 ||
-    value.includes("*") ||
-    value.includes("/") ||
-    value.includes("\\") ||
-    value.includes("@") ||
-    value.includes("://")
-  ) {
-    return undefined;
-  }
+  if (!isSafeRuleHostText(value)) return undefined;
   const parsed = parseUrl(`https://${value.trim()}`);
-  if (!parsed || parsed.pathname !== "/" || parsed.search || parsed.hash) {
-    return undefined;
-  }
+  if (!isRootHostRuleUrl(parsed)) return undefined;
   return normalizeParsedHost(parsed.hostname);
+}
+
+function assertValidAllowlistRuleMetadata(
+  rule: McpOutboundEgressAllowlistRuleV1,
+): void {
+  const checks = [
+    isSafeRuleId(rule.id),
+    isActionCategory(rule.actionCategory),
+    isSafeText(rule.purpose, 300),
+    isSafeText(rule.userVisibleReason, 240),
+    isOptionalPositiveInteger(rule.timeoutMs),
+    isOptionalPositiveInteger(rule.maxResponseBytes),
+    rule.version === 1,
+  ];
+  if (checks.every(Boolean)) return;
+  throw new TypeError("Local MCP outbound egress allowlist rule is invalid");
+}
+
+function requireRulePart<T>(value: T | undefined): T {
+  if (value !== undefined) return value;
+  throw new TypeError("Local MCP outbound egress allowlist rule is invalid");
+}
+
+function isSafeRuleHostText(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.trim().length > 0 &&
+    UNSAFE_RULE_HOST_FRAGMENTS.every((fragment) => !value.includes(fragment))
+  );
+}
+
+function isRootHostRuleUrl(value: URL | undefined): value is URL {
+  return Boolean(
+    value &&
+      value.pathname === "/" &&
+      value.search.length === 0 &&
+      value.hash.length === 0,
+  );
 }
 
 function parseUrl(value: string): URL | undefined {
@@ -833,17 +854,69 @@ function parseIPv4Address(value: string): readonly number[] | undefined {
     : undefined;
 }
 
+function isMetadataIPv4(ipv4: readonly number[]): boolean {
+  return ipv4[0] === 169 && ipv4[1] === 254 && ipv4[2] === 169 && ipv4[3] === 254;
+}
+
+function isLoopbackIPv4(ipv4: readonly number[]): boolean {
+  return ipv4[0] === 127;
+}
+
+function isPrivateIPv4(ipv4: readonly number[]): boolean {
+  const [first, second] = ipv4;
+  return (
+    first === 10 ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168) ||
+    (first === 100 && second >= 64 && second <= 127)
+  );
+}
+
+function isLinkLocalIPv4(ipv4: readonly number[]): boolean {
+  return ipv4[0] === 169 && ipv4[1] === 254;
+}
+
+function isReservedIPv4(ipv4: readonly number[]): boolean {
+  return (
+    ipv4[0] === 0 ||
+    isDocumentationIPv4(ipv4) ||
+    isBenchmarkIPv4(ipv4) ||
+    ipv4[0] >= 224 ||
+    ipv4.every((part) => part === 255)
+  );
+}
+
+function isDocumentationIPv4(ipv4: readonly number[]): boolean {
+  return DOCUMENTATION_IPV4_PREFIXES.some((prefix) =>
+    prefix.every((part, index) => ipv4[index] === part),
+  );
+}
+
+function isBenchmarkIPv4(ipv4: readonly number[]): boolean {
+  return ipv4[0] === 198 && (ipv4[1] === 18 || ipv4[1] === 19);
+}
+
 function parseIPv6Address(value: string): readonly number[] | undefined {
   if (!value.includes(":") || value.includes("%")) return undefined;
   const halves = value.split("::");
   if (halves.length > 2) return undefined;
   const left = parseIPv6SegmentList(halves[0]);
   const right = halves.length === 2 ? parseIPv6SegmentList(halves[1]) : [];
-  if (!left || !right) return undefined;
-  if (halves.length === 1) return left.length === 8 ? left : undefined;
+  return left && right
+    ? expandIPv6Segments(left, right, halves.length === 2)
+    : undefined;
+}
+
+function expandIPv6Segments(
+  left: readonly number[],
+  right: readonly number[],
+  hasCompression: boolean,
+): readonly number[] | undefined {
+  if (!hasCompression) return left.length === 8 ? left : undefined;
   const missing = 8 - left.length - right.length;
-  if (missing < 1) return undefined;
-  return [...left, ...Array.from({ length: missing }, () => 0), ...right];
+  return missing >= 1
+    ? [...left, ...Array.from({ length: missing }, () => 0), ...right]
+    : undefined;
 }
 
 function parseIPv6SegmentList(value: string): readonly number[] | undefined {
@@ -884,17 +957,36 @@ function ipv4FromMappedIpv6(ipv6: readonly number[]): readonly number[] | undefi
 function readPlainObjectRecord(
   value: unknown,
 ): Record<string, unknown> | undefined {
+  if (!isPlainObjectCandidate(value)) return undefined;
+  return readPlainObjectDescriptorValues(value);
+}
+
+function isPlainObjectCandidate(value: unknown): value is object {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    return undefined;
+    return false;
   }
+  return readObjectPrototype(value) !== undefined;
+}
+
+function readObjectPrototype(value: object): object | null | undefined {
   try {
     const prototype = Object.getPrototypeOf(value);
-    if (prototype !== Object.prototype && prototype !== null) return undefined;
+    return prototype === Object.prototype || prototype === null
+      ? prototype
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function readPlainObjectDescriptorValues(
+  value: object,
+): Record<string, unknown> | undefined {
+  try {
     const descriptors = Object.getOwnPropertyDescriptors(value);
+    if (Object.getOwnPropertySymbols(descriptors).length > 0) return undefined;
     const record: Record<string, unknown> = Object.create(null);
-    for (const key of Reflect.ownKeys(descriptors)) {
-      if (typeof key !== "string") return undefined;
-      const descriptor = descriptors[key];
+    for (const [key, descriptor] of Object.entries(descriptors)) {
       if (!isEnumerableDataDescriptor(descriptor)) return undefined;
       record[key] = descriptor.value;
     }
@@ -915,34 +1007,7 @@ function isEnumerableDataDescriptor(
 }
 
 function userVisibleReasonFor(reason: McpOutboundEgressBlockedReasonV1): string {
-  switch (reason) {
-    case "invalid_url":
-      return "Outbound destination URL is invalid.";
-    case "unsupported_scheme":
-      return "Outbound destination scheme is not allowed.";
-    case "credentials_in_url":
-      return "Outbound destination must not include embedded credentials.";
-    case "host_not_allowlisted":
-      return "Outbound destination is not allowlisted.";
-    case "localhost_blocked":
-      return "Localhost destinations are blocked.";
-    case "private_network_blocked":
-      return "Private network destinations are blocked.";
-    case "link_local_blocked":
-      return "Link-local destinations are blocked.";
-    case "metadata_endpoint_blocked":
-      return "Cloud metadata destinations are blocked.";
-    case "reserved_ip_blocked":
-      return "Reserved network destinations are blocked.";
-    case "method_not_allowlisted":
-      return "Outbound method is not allowlisted.";
-    case "path_not_allowlisted":
-      return "Outbound path is not allowlisted.";
-    case "redirects_disabled":
-      return "Outbound redirects are disabled.";
-    case "unsafe_output_metadata":
-      return "Outbound egress metadata is unsafe.";
-  }
+  return USER_VISIBLE_REASON_BY_BLOCKED_REASON[reason];
 }
 
 function compareStrings(left: string, right: string): number {
