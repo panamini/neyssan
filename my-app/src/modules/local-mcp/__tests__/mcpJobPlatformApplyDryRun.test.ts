@@ -305,6 +305,16 @@ function expectNoExecution(value: {
   expect(value.externalSideEffect).toBe(false);
 }
 
+function expectAmbiguousBlocked(result: McpJobPlatformDryRunResultV1): void {
+  expect(result.allowed).toBe(false);
+  if (!result.allowed) {
+    expect(result.reason).toBe("ambiguous_input");
+  }
+  expect(result.dryRunStatus).toBe("blocked");
+  expectNoExecution(result);
+  expectSafeSummaryHasNoRawValues(result);
+}
+
 function plan(result: McpJobPlatformDryRunResultV1, fieldId: string) {
   const item = result.mappedFieldPlans.find((fieldPlan) => fieldPlan.fieldId === fieldId);
   if (!item) throw new TypeError(`Missing field plan ${fieldId}`);
@@ -466,6 +476,8 @@ describe("createMcpJobPlatformApplyDryRun", () => {
     expectAllowed(result);
     expect(result.dryRunStatus).toBe("missing_required_data");
     expect(result.missingRequiredFieldIds).toEqual(["candidate_email"]);
+    expect(result.requiredBlockingFieldIds).toEqual(["candidate_email"]);
+    expect(result.safeCounts?.requiredBlockingFields).toBe(1);
     expect(plan(result, "candidate_email").mappingState).toBe("missing");
     expect(result.restrictedPreview.fieldValues.map((field) => field.fieldId)).not.toContain(
       "candidate_email",
@@ -484,6 +496,7 @@ describe("createMcpJobPlatformApplyDryRun", () => {
     expectAllowed(result);
     expect(result.dryRunStatus).toBe("human_input_required");
     expect(result.humanInputRequiredFieldIds).toContain("terms_attestation");
+    expect(result.requiredBlockingFieldIds).toContain("terms_attestation");
     expect(plan(result, "terms_attestation").mappingState).toBe("human_input_required");
     expect(result.restrictedPreview.fieldValues.map((field) => field.fieldId)).not.toContain(
       "terms_attestation",
@@ -555,6 +568,7 @@ describe("createMcpJobPlatformApplyDryRun", () => {
       expectAllowed(result);
       expect(plan(result, "candidate_full_name").mappingState).toBe("blocked_by_policy");
       expect(result.dryRunStatus).toBe("missing_required_data");
+      expect(result.requiredBlockingFieldIds).toContain("candidate_full_name");
     }
   });
 
@@ -718,6 +732,7 @@ describe("createMcpJobPlatformApplyDryRun", () => {
       expectAllowed(result);
       expect(plan(result, "candidate_full_name").mappingState).toBe("invalid_value");
       expect(result.dryRunStatus).toBe("missing_required_data");
+      expect(result.requiredBlockingFieldIds).toContain("candidate_full_name");
     }
   });
 
@@ -836,6 +851,178 @@ describe("createMcpJobPlatformApplyDryRun", () => {
     expect(uploadUrlInjection.reason).toBe("invalid_input");
   });
 
+  it("blocks ambiguous facts, bindings, answers, and artifacts instead of choosing the first item", () => {
+    const duplicateFact = run(
+      baseRequest({
+        approvedFacts: [
+          ...baseFacts(),
+          makeFact("candidate_email", "email", "alex.other@example.test", {
+            factRef: "mcp-safe-ref:candidate-fact:contact2",
+            sourceRef: "mcp-safe-ref:evidence-graph:contact2",
+          }),
+        ],
+      }),
+    );
+    const duplicateBinding = run(
+      baseRequest({
+        sourceBindings: [
+          ...baseSourceBindings(),
+          makeSourceBinding("candidate_email", {
+            sourceRef: "mcp-safe-ref:evidence-graph:contact2",
+          }),
+        ],
+      }),
+    );
+    const duplicateAnswer = run(
+      baseRequest({
+        approvedAnswerArtifacts: [
+          makeAnswer(),
+          makeAnswer({
+            answerRef: "mcp-safe-ref:screening-answer:motivation2",
+            answerText: "A second approved answer should not be guessed.",
+          }),
+        ],
+      }),
+    );
+    const duplicateArtifactRef = run(
+      baseRequest({
+        approvedArtifactRefs: [
+          makeArtifact("application_package", APPLICATION_PACKAGE_REF),
+          makeArtifact("resume_variant", RESUME_REF),
+          makeArtifact("resume_variant", RESUME_REF),
+        ],
+      }),
+    );
+    const duplicateArtifactKind = run(
+      baseRequest({
+        approvedArtifactRefs: [
+          makeArtifact("application_package", APPLICATION_PACKAGE_REF),
+          makeArtifact("resume_variant", RESUME_REF),
+          makeArtifact("resume_variant", "mcp-safe-ref:resume-variant:resume2"),
+        ],
+      }),
+    );
+
+    for (const result of [
+      duplicateFact,
+      duplicateBinding,
+      duplicateAnswer,
+      duplicateArtifactRef,
+      duplicateArtifactKind,
+    ]) {
+      expectAmbiguousBlocked(result);
+    }
+  });
+
+  it("includes every required non-mapped state in required blocking field ids", () => {
+    const requiredUnsupportedSchema = withFields(
+      LOCAL_FIXTURE_JOB_PLATFORM_SCHEMA_V1.supportedFields.map((field) =>
+        field.fieldId === "candidate_email"
+          ? { ...field, sourcePolicy: "unsupported" }
+          : field,
+      ),
+    );
+    const requiredHumanSchema = withFields(
+      LOCAL_FIXTURE_JOB_PLATFORM_SCHEMA_V1.supportedFields.map((field) =>
+        field.fieldId === "terms_attestation" ? { ...field, required: true } : field,
+      ),
+    );
+    const cases = [
+      {
+        result: run(replaceFact(baseRequest(), "candidate_email", undefined)),
+        fieldId: "candidate_email",
+        state: "missing",
+      },
+      {
+        result: run(
+          replaceFact(
+            baseRequest(),
+            "candidate_full_name",
+            makeFact("candidate_full_name", "short_text", "A".repeat(121)),
+          ),
+        ),
+        fieldId: "candidate_full_name",
+        state: "invalid_value",
+      },
+      {
+        result: run(
+          replaceFact(
+            baseRequest(),
+            "candidate_full_name",
+            makeFact("candidate_full_name", "short_text", "Alex Rivera", {
+              approval: approval({ approved: false }),
+            }),
+          ),
+        ),
+        fieldId: "candidate_full_name",
+        state: "blocked_by_policy",
+      },
+      {
+        result: run(baseRequest(), requiredUnsupportedSchema),
+        fieldId: "candidate_email",
+        state: "unsupported",
+      },
+      {
+        result: run(baseRequest(), requiredHumanSchema),
+        fieldId: "terms_attestation",
+        state: "human_input_required",
+      },
+    ];
+
+    for (const item of cases) {
+      expectAllowed(item.result);
+      expect(item.result.dryRunStatus).not.toBe("mapping_complete");
+      expect(plan(item.result, item.fieldId).mappingState).toBe(item.state);
+      expect(item.result.requiredBlockingFieldIds).toContain(item.fieldId);
+      expect(item.result.safeCounts?.requiredBlockingFields).toBeGreaterThan(0);
+    }
+  });
+
+  it("rejects schema fields whose kind is not declared as supported", () => {
+    const schema = makeSchema({
+      supportedFieldKinds: LOCAL_FIXTURE_JOB_PLATFORM_SCHEMA_V1.supportedFieldKinds.filter(
+        (kind) => kind !== "email",
+      ),
+    });
+
+    const result = run(baseRequest(), schema);
+
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toBe("unsupported_schema");
+    expectNoExecution(result);
+  });
+
+  it("rejects approved artifact ref fields with incompatible value kinds", () => {
+    const booleanArtifactField: McpJobPlatformDryRunFieldDefinitionV1 = {
+      fieldId: "package_ref_boolean",
+      safeLabel: "Package ref boolean",
+      fieldKind: "boolean",
+      required: false,
+      sourcePolicy: "approved_artifact_ref",
+      sourceKey: "package_ref_boolean",
+      sensitivity: "standard",
+      humanInputPolicy: "auto_map_if_explicit",
+      version: 1,
+    };
+    const textArtifactField: McpJobPlatformDryRunFieldDefinitionV1 = {
+      ...booleanArtifactField,
+      fieldId: "package_ref_text",
+      safeLabel: "Package ref text",
+      fieldKind: "short_text",
+      sourceKey: "package_ref_text",
+    };
+
+    for (const schema of [
+      addField(makeSchema(), booleanArtifactField),
+      addField(makeSchema(), textArtifactField),
+    ]) {
+      const result = run(baseRequest(), schema);
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe("unsupported_schema");
+      expectNoExecution(result);
+    }
+  });
+
   it("keeps PR76 write-action execution disabled even for complete mappings", () => {
     const result = run(baseRequest({ intendedAction: "submit_application" }));
 
@@ -885,6 +1072,21 @@ describe("createMcpJobPlatformApplyDryRun", () => {
       expect(result.reason).toBe("invalid_input");
       expectNoExecution(result);
     }
+  });
+
+  it("does not trigger proxy get traps while copying plain descriptor values", () => {
+    let getTrapHits = 0;
+    const proxyRequest = new Proxy(baseRequest(), {
+      get(target, prop, receiver) {
+        if (prop === "kind") getTrapHits += 1;
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+
+    const result = createMcpJobPlatformApplyDryRun(proxyRequest);
+
+    expect(getTrapHits).toBe(0);
+    expectAllowed(result);
   });
 
   it("never changes execution flags for complete, missing-data, human-required, or blocked outcomes", () => {

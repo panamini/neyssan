@@ -203,6 +203,7 @@ export type McpJobPlatformDryRunSafeCountsV1 = Readonly<{
   mappedFields: number;
   missingFields: number;
   missingRequiredFields: number;
+  requiredBlockingFields: number;
   humanInputRequiredFields: number;
   unsupportedFields: number;
   blockedByPolicyFields: number;
@@ -268,6 +269,7 @@ export type McpJobPlatformDryRunSafeSummaryV1 = Readonly<{
   safeCounts?: McpJobPlatformDryRunSafeCountsV1;
   mappedFieldPlans: readonly McpJobPlatformDryRunFieldPlanV1[];
   missingRequiredFieldIds: readonly string[];
+  requiredBlockingFieldIds: readonly string[];
   humanInputRequiredFieldIds: readonly string[];
   unsupportedFieldIds: readonly string[];
   attachmentPlans: readonly McpJobPlatformDryRunAttachmentPlanV1[];
@@ -312,6 +314,7 @@ export type McpJobPlatformDryRunResultV1 = Readonly<
       reason:
         | "invalid_input"
         | "unsupported_schema"
+        | "ambiguous_input"
         | "approved_application_required";
     })
 >;
@@ -710,6 +713,9 @@ export function createMcpJobPlatformApplyDryRun(
   ) {
     return buildBlockedResult("unsupported_schema", parsed, schema);
   }
+  if (hasAmbiguousInput(parsed)) {
+    return buildBlockedResult("ambiguous_input", parsed, schema);
+  }
   if (!hasApprovedApplicationPackage(parsed)) {
     return buildBlockedResult("approved_application_required", parsed, schema);
   }
@@ -797,6 +803,7 @@ export function createMcpJobPlatformDryRunSafeSummary(
     ...(result.safeCounts ? { safeCounts: result.safeCounts } : {}),
     mappedFieldPlans: result.mappedFieldPlans,
     missingRequiredFieldIds: result.missingRequiredFieldIds,
+    requiredBlockingFieldIds: result.requiredBlockingFieldIds,
     humanInputRequiredFieldIds: result.humanInputRequiredFieldIds,
     unsupportedFieldIds: result.unsupportedFieldIds,
     attachmentPlans: result.attachmentPlans,
@@ -858,6 +865,16 @@ function validateSchema(schema: unknown): SchemaValidation {
   const slots = attachmentSlots as McpJobPlatformDryRunAttachmentSlotV1[];
   if (hasDuplicate(fields.map((field) => field.fieldId))) return { ok: false };
   if (hasDuplicate(slots.map((slot) => slot.slotId))) return { ok: false };
+  if (hasDuplicate(supportedFieldKinds)) return { ok: false };
+  if (
+    fields.some(
+      (field) =>
+        !supportedFieldKinds.includes(field.fieldKind) ||
+        !isFieldPolicyCoherent(field),
+    )
+  ) {
+    return { ok: false };
+  }
   return {
     ok: true,
     schema: {
@@ -1161,6 +1178,20 @@ function hasApprovedApplicationPackage(parsed: ParsedRequest): boolean {
     (artifact) =>
       artifact.artifactKind === "application_package" &&
       artifact.artifactRef === parsed.applicationPackageRef,
+  );
+}
+
+function hasAmbiguousInput(parsed: ParsedRequest): boolean {
+  return (
+    hasDuplicate(parsed.approvedFacts.map((fact) => fact.sourceKey)) ||
+    hasDuplicate(parsed.sourceBindings.map((binding) => binding.sourceKey)) ||
+    hasDuplicate(
+      parsed.approvedAnswerArtifacts.map(
+        (answer) => `${answer.sourceKey}\u0000${answer.questionSchemaVersion}`,
+      ),
+    ) ||
+    hasDuplicate(parsed.approvedArtifactRefs.map((artifact) => artifact.artifactRef)) ||
+    hasDuplicate(parsed.approvedArtifactRefs.map((artifact) => artifact.artifactKind))
   );
 }
 
@@ -1557,6 +1588,7 @@ function buildSafeCounts(
     missingRequiredFields: fieldPlans.filter(
       (plan) => plan.required && plan.mappingState === "missing",
     ).length,
+    requiredBlockingFields: fieldPlans.filter(isRequiredBlockingFieldPlan).length,
     humanInputRequiredFields: countStates(fieldPlans, "human_input_required"),
     unsupportedFields: countStates(fieldPlans, "unsupported"),
     blockedByPolicyFields: countStates(fieldPlans, "blocked_by_policy"),
@@ -1628,6 +1660,9 @@ function buildSafeSummary(input: Readonly<{
     mappedFieldPlans: input.fieldPlans,
     missingRequiredFieldIds: input.fieldPlans
       .filter((plan) => plan.required && plan.mappingState === "missing")
+      .map((plan) => plan.fieldId),
+    requiredBlockingFieldIds: input.fieldPlans
+      .filter(isRequiredBlockingFieldPlan)
       .map((plan) => plan.fieldId),
     humanInputRequiredFieldIds: input.fieldPlans
       .filter((plan) => plan.mappingState === "human_input_required")
@@ -1749,12 +1784,41 @@ function countStates(
   return plans.filter((plan) => plan.mappingState === state).length;
 }
 
+function isRequiredBlockingFieldPlan(plan: McpJobPlatformDryRunFieldPlanV1): boolean {
+  return (
+    plan.required &&
+    [
+      "missing",
+      "invalid_value",
+      "blocked_by_policy",
+      "unsupported",
+      "human_input_required",
+    ].includes(plan.mappingState)
+  );
+}
+
 function fieldKindAcceptsFactValue(
   fieldKind: McpJobPlatformDryRunFieldKindV1,
   fact: McpJobPlatformDryRunApprovedFactV1,
 ): boolean {
   if (fieldKind === "attestation" || fieldKind === "artifact_ref") return false;
   return fact.valueKind === fieldKind;
+}
+
+function isFieldPolicyCoherent(field: McpJobPlatformDryRunFieldDefinitionV1): boolean {
+  if (field.sourcePolicy === "approved_artifact_ref") {
+    return field.fieldKind === "artifact_ref";
+  }
+  if (field.sourcePolicy === "approved_answer_artifact") {
+    return field.fieldKind === "short_text" || field.fieldKind === "long_text";
+  }
+  if (field.sourcePolicy === "explicit_approved_fact") {
+    return field.fieldKind !== "artifact_ref" && field.fieldKind !== "attestation";
+  }
+  if (field.sourcePolicy === "human_only") {
+    return field.humanInputPolicy === "human_only";
+  }
+  return field.sourcePolicy === "unsupported";
 }
 
 function isHumanOnlySensitiveField(
@@ -2046,8 +2110,6 @@ function readPlainObjectRecord(input: unknown): Record<string, unknown> | undefi
       if (typeof key !== "string") return undefined;
       const descriptor = descriptors[key];
       if (!isEnumerableDataDescriptor(descriptor)) return undefined;
-      const directValue = (input as Record<string, unknown>)[key];
-      if (directValue !== descriptor.value) return undefined;
       record[key] = descriptor.value;
     }
     return record;
@@ -2075,7 +2137,11 @@ function readArrayValues(input: unknown): readonly unknown[] | undefined {
   try {
     if (!Array.isArray(input)) return undefined;
     const descriptors = Object.getOwnPropertyDescriptors(input);
+    const lengthDescriptor = descriptors.length;
     if (
+      !isDataDescriptor(lengthDescriptor) ||
+      !Number.isInteger(lengthDescriptor.value) ||
+      lengthDescriptor.value < 0 ||
       !Reflect.ownKeys(descriptors).every(
         (key) => key === "length" || (typeof key === "string" && /^\d+$/u.test(key)),
       )
@@ -2083,11 +2149,9 @@ function readArrayValues(input: unknown): readonly unknown[] | undefined {
       return undefined;
     }
     const output: unknown[] = [];
-    for (let index = 0; index < input.length; index += 1) {
+    for (let index = 0; index < lengthDescriptor.value; index += 1) {
       const descriptor = descriptors[String(index)];
       if (!isEnumerableDataDescriptor(descriptor)) return undefined;
-      const directValue = (input as readonly unknown[])[index];
-      if (directValue !== descriptor.value) return undefined;
       output.push(descriptor.value);
     }
     return output;
@@ -2104,6 +2168,12 @@ function isEnumerableDataDescriptor(
     descriptor.enumerable === true &&
     Object.prototype.hasOwnProperty.call(descriptor, "value")
   );
+}
+
+function isDataDescriptor(
+  descriptor: PropertyDescriptor | undefined,
+): descriptor is PropertyDescriptor & { value: unknown } {
+  return descriptor !== undefined && Object.prototype.hasOwnProperty.call(descriptor, "value");
 }
 
 function compareStrings(left: string, right: string): number {
