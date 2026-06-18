@@ -16,6 +16,7 @@ import {
 } from "../mcpApplicationMessageSend";
 import {
   createMcpOutboundEgressPolicy,
+  type McpOutboundEgressPolicyV1,
   type McpOutboundEgressAllowlistRuleV1,
 } from "../mcpOutboundEgressPolicy";
 import {
@@ -61,6 +62,10 @@ const CHANNEL_ENDPOINT =
   "https://api.twoweeks-send.example/v1/application-messages";
 const CONFIGURED_CHANNEL_ENDPOINT =
   "https://api.pr78-configured.example/v1/application-messages";
+const QUERY_CHANNEL_ENDPOINT = `${CHANNEL_ENDPOINT}?token=secret`;
+const GENERIC_QUERY_CHANNEL_ENDPOINT = `${CHANNEL_ENDPOINT}?preview=1`;
+const NON_DEFAULT_PORT_CHANNEL_ENDPOINT =
+  "https://api.twoweeks-send.example:444/v1/application-messages";
 const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/u;
 
 const BASE_EGRESS_RULE: McpOutboundEgressAllowlistRuleV1 = {
@@ -435,6 +440,36 @@ function makeControlledChannel(options: {
   };
 }
 
+function makeThrowingEgressPolicy(): McpOutboundEgressPolicyV1 {
+  const throwingRule: McpOutboundEgressAllowlistRuleV1 = {
+    ...BASE_EGRESS_RULE,
+    id: "mcp-egress-rule:throwing-guard",
+    get host(): string {
+      throw new Error(
+        "egress policy rule failed with SECRET_TOKEN_SENTINEL_DO_NOT_EXPOSE",
+      );
+    },
+  };
+
+  return {
+    kind: "mcp_outbound_egress_policy",
+    defaultAllowed: false,
+    allowlist: [throwingRule],
+    redirectPolicy: {
+      mode: "disabled",
+      maxRedirects: 0,
+      redirectsFollowed: 0,
+      version: 1,
+    },
+    networkRequestExecuted: false,
+    externalSideEffect: false,
+    persisted: false,
+    credentialStorage: "none",
+    tokenStorage: "none",
+    version: 1,
+  };
+}
+
 function makeProviderReceipt(
   status: McpApplicationMessageProviderReceiptV1["status"],
   providerReceiptRef: string,
@@ -653,6 +688,40 @@ describe("mcpApplicationMessageSend", () => {
     expectSafeSendResult(result);
   });
 
+  it("rejects controlled channel endpoints with query strings or non-default ports before preview or send", async () => {
+    for (const endpointUrl of [
+      QUERY_CHANNEL_ENDPOINT,
+      GENERIC_QUERY_CHANNEL_ENDPOINT,
+      NON_DEFAULT_PORT_CHANNEL_ENDPOINT,
+    ]) {
+      const previewResult = createMcpApplicationMessageFinalPreview(
+        makePreviewRequest(),
+        { channelConfig: makeChannelConfig(endpointUrl) },
+      );
+      expect(previewResult.allowed, endpointUrl).toBe(false);
+      if (!previewResult.allowed) {
+        expect(previewResult.reason, endpointUrl).toBe("invalid_input");
+        expectSafeSendResult(previewResult);
+      }
+    }
+
+    const preview = expectPreviewAllowed();
+    const controlled = makeControlledChannel({
+      endpointUrl: QUERY_CHANNEL_ENDPOINT,
+    });
+    const sendResult = await sendMcpApprovedApplicationMessage(
+      makeSendAuthorization(preview),
+      { channel: controlled.channel, egressPolicy: makeEgressPolicy() },
+    );
+
+    expect(sendResult.allowed).toBe(false);
+    expect(sendResult.reason).toBe("invalid_input");
+    expect(sendResult.writeActionExecuted).toBe(false);
+    expect(sendResult.networkRequestExecuted).toBe(false);
+    expect(controlled.calls).toHaveLength(0);
+    expectSafeSendResult(sendResult);
+  });
+
   it("sends exactly once through the controlled channel after exact human confirmation and allowlisted egress", async () => {
     const preview = expectPreviewAllowed();
     const controlled = makeControlledChannel();
@@ -727,6 +796,14 @@ describe("mcpApplicationMessageSend", () => {
         }),
       },
       {
+        name: "same-time-as-preview",
+        value: makeSendAuthorization(preview, {
+          manualConfirmation: makeManualConfirmation(preview, {
+            confirmedAt: preview.createdAt,
+          }),
+        }),
+      },
+      {
         name: "copy-mismatch",
         value: makeSendAuthorization(preview, {
           manualConfirmation: makeManualConfirmation(preview, {
@@ -766,6 +843,33 @@ describe("mcpApplicationMessageSend", () => {
       expect(controlled.calls, blockedAuthorization.name).toHaveLength(0);
       expectSafeSendResult(result);
     }
+  });
+
+  it("blocks final previews with tampered PR76 write-action proposal structure before channel invocation", async () => {
+    const preview = expectPreviewAllowed();
+    const controlled = makeControlledChannel();
+    const tamperedPreview = {
+      ...preview,
+      proposal: {
+        ...preview.proposal,
+        actionCategory: "apply_to_job",
+        auditEvent: {
+          ...preview.proposal.auditEvent,
+          actionCategory: "apply_to_job",
+        },
+      },
+    } as McpApplicationMessageFinalPreviewV1;
+
+    const result = await sendMcpApprovedApplicationMessage(
+      makeSendAuthorization(tamperedPreview),
+      { channel: controlled.channel, egressPolicy: makeEgressPolicy() },
+    );
+
+    expect(result.allowed).toBe(false);
+    expect(result.writeActionExecuted).toBe(false);
+    expect(result.networkRequestExecuted).toBe(false);
+    expect(controlled.calls).toHaveLength(0);
+    expectSafeSendResult(result);
   });
 
   it("blocks stale artifact freshness, pending revisions, and non-approved workflow states", () => {
@@ -982,6 +1086,23 @@ describe("mcpApplicationMessageSend", () => {
 
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe("egress_blocked");
+    expect(result.writeActionExecuted).toBe(false);
+    expect(result.networkRequestExecuted).toBe(false);
+    expect(controlled.calls).toHaveLength(0);
+    expectSafeSendResult(result);
+  });
+
+  it("distinguishes unexpected egress guard failures from policy blocks without invoking the channel", async () => {
+    const preview = expectPreviewAllowed();
+    const controlled = makeControlledChannel();
+
+    const result = await sendMcpApprovedApplicationMessage(
+      makeSendAuthorization(preview),
+      { channel: controlled.channel, egressPolicy: makeThrowingEgressPolicy() },
+    );
+
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toBe("egress_guard_error");
     expect(result.writeActionExecuted).toBe(false);
     expect(result.networkRequestExecuted).toBe(false);
     expect(controlled.calls).toHaveLength(0);

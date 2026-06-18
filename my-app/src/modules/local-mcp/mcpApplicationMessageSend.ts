@@ -34,6 +34,7 @@ export type McpApplicationMessageSendReasonV1 =
   | "final_preview_mismatch"
   | "channel_mismatch"
   | "egress_blocked"
+  | "egress_guard_error"
   | "controlled_channel_error"
   | "idempotency_conflict"
   | "provider_rejected"
@@ -270,6 +271,18 @@ type ParsedDeps = Readonly<{
 }>;
 
 type AllowedEgressDecision = Extract<McpOutboundEgressDecisionV1, { allowed: true }>;
+type ControlledEgressDecision = Readonly<
+  | {
+      kind: "allowed";
+      decision: AllowedEgressDecision;
+    }
+  | {
+      kind: "blocked";
+    }
+  | {
+      kind: "guard_error";
+    }
+>;
 
 type PreviewRequestRecord = Record<string, unknown> & {
   artifactKind: McpApplicationMessageArtifactKindV1;
@@ -357,6 +370,7 @@ const CURRENT_VERSION = 1;
 const MAX_SUBJECT_LENGTH = 180;
 const MAX_BODY_LENGTH = 50_000;
 const MAX_SAFE_REF_LENGTH = 120;
+const MAX_REVISION_LINEAGE_LENGTH = 26;
 const TEXT_ENCODER = new TextEncoder();
 const EGRESS_DATA_CLASSES: readonly McpOutboundEgressDataClassV1[] = [
   "generated_artifact",
@@ -453,6 +467,73 @@ const FINAL_PREVIEW_PAYLOAD_KEYS = [
   "revisionLineage",
   "idempotencyKey",
   "channelId",
+  "version",
+] as const;
+const WRITE_ACTION_PROPOSAL_KEYS = [
+  "kind",
+  "proposalRef",
+  "operationKind",
+  "actionLabel",
+  "actionCategory",
+  "affectedSurface",
+  "userVisibleSummary",
+  "riskLevel",
+  "idempotencyKey",
+  "rollbackPlan",
+  "dataClasses",
+  "confirmation",
+  "executionStatus",
+  "capabilities",
+  "auditEvent",
+  "writeActionExecuted",
+  "realExecutionAllowed",
+  "externalSideEffect",
+  "persisted",
+  "networkAccess",
+  "version",
+] as const;
+const WRITE_ACTION_CONFIRMATION_KEYS = [
+  "kind",
+  "required",
+  "state",
+  "requiredCopy",
+  "version",
+] as const;
+const WRITE_ACTION_CAPABILITIES_KEYS = [
+  "dataReads",
+  "dataWrites",
+  "writeActions",
+  "handlerExecution",
+  "productionConnector",
+  "networkAccess",
+  "modelCalls",
+  "persistenceWrites",
+  "externalSideEffects",
+  "rawDataProjection",
+  "credentialStorage",
+  "tokenStorage",
+  "version",
+] as const;
+const WRITE_ACTION_AUDIT_EVENT_KEYS = [
+  "kind",
+  "eventKind",
+  "actionLabel",
+  "actionCategory",
+  "affectedSurface",
+  "riskLevel",
+  "idempotencyKey",
+  "dataClasses",
+  "redactedFlags",
+  "persisted",
+  "writeActionExecuted",
+  "version",
+] as const;
+const WRITE_ACTION_REDACTED_FLAGS_KEYS = [
+  "rawDataExposed",
+  "tokenOrIdentityExposed",
+  "persisted",
+  "writeActionExecuted",
+  "externalSideEffect",
   "version",
 ] as const;
 const PROVIDER_RECEIPT_KEYS = [
@@ -647,12 +728,17 @@ export async function sendMcpApprovedApplicationMessage(
     parsedDeps.channel.endpointUrl,
     parsedDeps.egressPolicy,
   );
-  if (!egressDecision) return buildBlockedSendResult("egress_blocked", preview);
+  if (egressDecision.kind === "blocked") {
+    return buildBlockedSendResult("egress_blocked", preview);
+  }
+  if (egressDecision.kind === "guard_error") {
+    return buildBlockedSendResult("egress_guard_error", preview);
+  }
 
   return executeControlledApplicationMessageSend(
     preview,
     parsedDeps.channel,
-    egressDecision,
+    egressDecision.decision,
   );
 }
 
@@ -702,9 +788,9 @@ function writeGuardAcceptsConfirmedPreview(
 function getControlledEgressDecision(
   endpointUrl: string,
   egressPolicy: McpOutboundEgressPolicyV1,
-): AllowedEgressDecision | undefined {
+): ControlledEgressDecision {
   try {
-    return assertMcpOutboundEgressAllowed(
+    const decision = assertMcpOutboundEgressAllowed(
       {
         kind: "mcp_outbound_egress_request",
         destinationUrl: endpointUrl,
@@ -720,9 +806,15 @@ function getControlledEgressDecision(
       },
       egressPolicy,
     );
+    return {
+      kind: "allowed",
+      decision,
+    };
   } catch (error) {
-    if (error instanceof McpOutboundEgressBlockedError) return undefined;
-    return undefined;
+    if (error instanceof McpOutboundEgressBlockedError) {
+      return { kind: "blocked" };
+    }
+    return { kind: "guard_error" };
   }
 }
 
@@ -1018,8 +1110,21 @@ function parseFinalPreview(
   const artifactRef = parseArtifactRef(record.artifactRef);
   const revisionLineage = parseRevisionLineage(record.revisionLineage);
   const payload = parseFinalPreviewPayload(record.payload);
-  if (!artifactRef || !revisionLineage || !payload) return undefined;
-  if (!finalPreviewPartsAreConsistent(record, artifactRef, revisionLineage, payload)) {
+  const proposal = parseApplicationMessageWriteProposal(
+    record.proposal,
+    record.requiredConfirmationCopy,
+    record.idempotencyKey,
+  );
+  if (!artifactRef || !revisionLineage || !payload || !proposal) return undefined;
+  if (
+    !finalPreviewPartsAreConsistent(
+      record,
+      artifactRef,
+      revisionLineage,
+      payload,
+      proposal,
+    )
+  ) {
     return undefined;
   }
   return {
@@ -1037,7 +1142,7 @@ function parseFinalPreview(
     payloadFingerprint: record.payloadFingerprint,
     requiredConfirmationCopy: record.requiredConfirmationCopy,
     idempotencyKey: record.idempotencyKey,
-    proposal: record.proposal as McpWriteActionProposalV1,
+    proposal,
     payload,
     createdAt: record.createdAt,
     version: 1,
@@ -1069,6 +1174,266 @@ function parseFinalPreviewPayload(
     channelId: CONTROLLED_CHANNEL_ID,
     version: 1,
   };
+}
+
+function parseApplicationMessageWriteProposal(
+  input: unknown,
+  requiredConfirmationCopy: string,
+  idempotencyKey: string,
+): McpWriteActionProposalV1 | undefined {
+  const record = readPlainObjectRecord(input);
+  if (!record || !hasOnlyKeys(record, WRITE_ACTION_PROPOSAL_KEYS)) return undefined;
+
+  const dataClasses = parseExpectedWriteActionDataClasses(record.dataClasses);
+  if (!dataClasses) return undefined;
+
+  const confirmation = parseApplicationMessageProposalConfirmation(
+    record.confirmation,
+    requiredConfirmationCopy,
+  );
+  const capabilities = parseApplicationMessageProposalCapabilities(record.capabilities);
+  const auditEvent = parseApplicationMessageProposalAuditEvent(
+    record.auditEvent,
+    idempotencyKey,
+    dataClasses,
+  );
+  if (!confirmation || !capabilities || !auditEvent) return undefined;
+
+  if (!applicationMessageProposalRecordIsConsistent(record, auditEvent, idempotencyKey)) {
+    return undefined;
+  }
+
+  return buildApplicationMessageWriteProposal(
+    record,
+    idempotencyKey,
+    dataClasses,
+    confirmation,
+    capabilities,
+    auditEvent,
+  );
+}
+
+function applicationMessageProposalRecordIsConsistent(
+  record: Record<string, unknown>,
+  auditEvent: McpWriteActionProposalV1["auditEvent"],
+  idempotencyKey: string,
+): boolean {
+  return allChecks([
+    record.kind === "mcp_write_action_proposal",
+    record.proposalRef === idempotencyKey,
+    record.operationKind === "proposed_write_action",
+    record.actionLabel === "send_application_message",
+    record.actionCategory === "send_message",
+    record.affectedSurface === "controlled_application_message_channel",
+    typeof record.userVisibleSummary === "string",
+    typeof record.userVisibleSummary === "string" &&
+      record.userVisibleSummary.length > 0,
+    record.riskLevel === "high" || record.riskLevel === "critical",
+    record.idempotencyKey === idempotencyKey,
+    typeof record.rollbackPlan === "string",
+    typeof record.rollbackPlan === "string" && record.rollbackPlan.length > 0,
+    record.executionStatus === "proposed_pending_confirmation",
+    auditEvent.riskLevel === record.riskLevel,
+    record.writeActionExecuted === false,
+    record.realExecutionAllowed === false,
+    record.externalSideEffect === false,
+    record.persisted === false,
+    record.networkAccess === false,
+    record.version === CURRENT_VERSION,
+  ]);
+}
+
+function buildApplicationMessageWriteProposal(
+  record: Record<string, unknown>,
+  idempotencyKey: string,
+  dataClasses: readonly McpWriteActionDataClassV1[],
+  confirmation: McpWriteActionProposalV1["confirmation"],
+  capabilities: McpWriteActionProposalV1["capabilities"],
+  auditEvent: McpWriteActionProposalV1["auditEvent"],
+): McpWriteActionProposalV1 {
+  return {
+    kind: "mcp_write_action_proposal",
+    proposalRef: idempotencyKey,
+    operationKind: "proposed_write_action",
+    actionLabel: "send_application_message",
+    actionCategory: "send_message",
+    affectedSurface: "controlled_application_message_channel",
+    userVisibleSummary: record.userVisibleSummary as string,
+    riskLevel: record.riskLevel as McpWriteActionProposalV1["riskLevel"],
+    idempotencyKey,
+    rollbackPlan: record.rollbackPlan as string,
+    dataClasses,
+    confirmation,
+    executionStatus: "proposed_pending_confirmation",
+    capabilities,
+    auditEvent,
+    writeActionExecuted: false,
+    realExecutionAllowed: false,
+    externalSideEffect: false,
+    persisted: false,
+    networkAccess: false,
+    version: 1,
+  };
+}
+
+function parseApplicationMessageProposalConfirmation(
+  input: unknown,
+  requiredConfirmationCopy: string,
+): McpWriteActionProposalV1["confirmation"] | undefined {
+  const record = readPlainObjectRecord(input);
+  if (
+    !record ||
+    !hasOnlyKeys(record, WRITE_ACTION_CONFIRMATION_KEYS) ||
+    record.kind !== "mcp_write_action_confirmation_requirement" ||
+    record.required !== true ||
+    record.state !== "required_unconfirmed" ||
+    record.requiredCopy !== requiredConfirmationCopy ||
+    record.version !== CURRENT_VERSION
+  ) {
+    return undefined;
+  }
+  return {
+    kind: "mcp_write_action_confirmation_requirement",
+    required: true,
+    state: "required_unconfirmed",
+    requiredCopy: requiredConfirmationCopy,
+    version: 1,
+  };
+}
+
+function parseApplicationMessageProposalCapabilities(
+  input: unknown,
+): McpWriteActionProposalV1["capabilities"] | undefined {
+  const record = readPlainObjectRecord(input);
+  if (
+    !record ||
+    !hasOnlyKeys(record, WRITE_ACTION_CAPABILITIES_KEYS) ||
+    !allChecks([
+      record.dataReads === "blocked",
+      record.dataWrites === "blocked",
+      record.writeActions === "blocked",
+      record.handlerExecution === "blocked",
+      record.productionConnector === "blocked",
+      record.networkAccess === "blocked",
+      record.modelCalls === "blocked",
+      record.persistenceWrites === "blocked",
+      record.externalSideEffects === "blocked",
+      record.rawDataProjection === "blocked",
+      record.credentialStorage === "none",
+      record.tokenStorage === "none",
+      record.version === CURRENT_VERSION,
+    ])
+  ) {
+    return undefined;
+  }
+  return {
+    dataReads: "blocked",
+    dataWrites: "blocked",
+    writeActions: "blocked",
+    handlerExecution: "blocked",
+    productionConnector: "blocked",
+    networkAccess: "blocked",
+    modelCalls: "blocked",
+    persistenceWrites: "blocked",
+    externalSideEffects: "blocked",
+    rawDataProjection: "blocked",
+    credentialStorage: "none",
+    tokenStorage: "none",
+    version: 1,
+  };
+}
+
+function parseApplicationMessageProposalAuditEvent(
+  input: unknown,
+  idempotencyKey: string,
+  proposalDataClasses: readonly McpWriteActionDataClassV1[],
+): McpWriteActionProposalV1["auditEvent"] | undefined {
+  const record = readPlainObjectRecord(input);
+  if (!record || !hasOnlyKeys(record, WRITE_ACTION_AUDIT_EVENT_KEYS)) {
+    return undefined;
+  }
+
+  const dataClasses = parseExpectedWriteActionDataClasses(record.dataClasses);
+  const redactedFlags = parseApplicationMessageProposalRedactedFlags(
+    record.redactedFlags,
+  );
+  if (!dataClasses || !redactedFlags) return undefined;
+
+  if (
+    !allChecks([
+      arraysEqual(dataClasses, proposalDataClasses),
+      record.kind === "mcp_write_action_audit_event",
+      record.eventKind === "write_action_proposed",
+      record.actionLabel === "send_application_message",
+      record.actionCategory === "send_message",
+      record.affectedSurface === "controlled_application_message_channel",
+      record.riskLevel === "high" || record.riskLevel === "critical",
+      record.idempotencyKey === idempotencyKey,
+      record.persisted === false,
+      record.writeActionExecuted === false,
+      record.version === CURRENT_VERSION,
+    ])
+  ) {
+    return undefined;
+  }
+
+  return {
+    kind: "mcp_write_action_audit_event",
+    eventKind: "write_action_proposed",
+    actionLabel: "send_application_message",
+    actionCategory: "send_message",
+    affectedSurface: "controlled_application_message_channel",
+    riskLevel: record.riskLevel as McpWriteActionProposalV1["riskLevel"],
+    idempotencyKey,
+    dataClasses,
+    redactedFlags,
+    persisted: false,
+    writeActionExecuted: false,
+    version: 1,
+  };
+}
+
+function parseApplicationMessageProposalRedactedFlags(
+  input: unknown,
+): McpWriteActionProposalV1["auditEvent"]["redactedFlags"] | undefined {
+  const record = readPlainObjectRecord(input);
+  if (
+    !record ||
+    !hasOnlyKeys(record, WRITE_ACTION_REDACTED_FLAGS_KEYS) ||
+    !allChecks([
+      record.rawDataExposed === false,
+      record.tokenOrIdentityExposed === false,
+      record.persisted === false,
+      record.writeActionExecuted === false,
+      record.externalSideEffect === false,
+      record.version === CURRENT_VERSION,
+    ])
+  ) {
+    return undefined;
+  }
+  return {
+    rawDataExposed: false,
+    tokenOrIdentityExposed: false,
+    persisted: false,
+    writeActionExecuted: false,
+    externalSideEffect: false,
+    version: 1,
+  };
+}
+
+function parseExpectedWriteActionDataClasses(
+  input: unknown,
+): readonly McpWriteActionDataClassV1[] | undefined {
+  if (!Array.isArray(input) || input.length !== WRITE_ACTION_DATA_CLASSES.length) {
+    return undefined;
+  }
+  const dataClasses: McpWriteActionDataClassV1[] = [];
+  for (const value of input) {
+    if (!isExpectedWriteActionDataClass(value)) return undefined;
+    dataClasses.push(value);
+  }
+  if (!arraysEqual(dataClasses, WRITE_ACTION_DATA_CLASSES)) return undefined;
+  return dataClasses;
 }
 
 function parseManualConfirmation(
@@ -1150,6 +1515,7 @@ function parseControlledChannel(
     record.credentialMode !== "none" ||
     record.version !== CURRENT_VERSION ||
     typeof record.endpointUrl !== "string" ||
+    !isTrustedChannelEndpointUrl(record.endpointUrl) ||
     typeof record.sendApprovedApplicationMessage !== "function"
   ) {
     return undefined;
@@ -1309,9 +1675,8 @@ function finalPreviewPartsAreConsistent(
   artifactRef: McpApplicationMessageSafeArtifactRefV1,
   revisionLineage: readonly string[],
   payload: McpApplicationMessageFinalPreviewPayloadV1,
+  proposal: McpWriteActionProposalV1,
 ): boolean {
-  const proposal = readPlainObjectRecord(record.proposal);
-  const proposalConfirmation = readPlainObjectRecord(proposal?.confirmation);
   return allChecks([
     artifactRef.category === record.artifactKind,
     sameArtifactRef(artifactRef, payload.artifactRef),
@@ -1330,10 +1695,9 @@ function finalPreviewPartsAreConsistent(
         "mcp-safe-ref:application-message-destination",
         payload.destination.email,
       ),
-    !!proposal,
-    proposal?.proposalRef === record.idempotencyKey,
-    proposal?.idempotencyKey === record.idempotencyKey,
-    proposalConfirmation?.requiredCopy === record.requiredConfirmationCopy,
+    proposal.proposalRef === record.idempotencyKey,
+    proposal.idempotencyKey === record.idempotencyKey,
+    proposal.confirmation.requiredCopy === record.requiredConfirmationCopy,
   ]);
 }
 
@@ -1435,8 +1799,14 @@ function validateFinalPreview(
     payloadFingerprint: expectedPayloadFingerprint,
     requestedAt: preview.createdAt,
   });
+  const proposal = parseApplicationMessageWriteProposal(
+    preview.proposal,
+    preview.requiredConfirmationCopy,
+    preview.idempotencyKey,
+  );
   return {
     ok:
+      !!proposal &&
       expectedDigest === preview.finalPreviewDigest &&
       expectedPayloadFingerprint === preview.payloadFingerprint &&
       preview.requiredConfirmationCopy === `SEND ${expectedDigest}` &&
@@ -1463,7 +1833,7 @@ function validateManualConfirmation(
     confirmation.idempotencyKey !== preview.idempotencyKey ||
     confirmation.finalPreviewDigest !== preview.finalPreviewDigest ||
     confirmation.confirmationCopy !== preview.requiredConfirmationCopy ||
-    Date.parse(confirmation.confirmedAt) < Date.parse(preview.createdAt)
+    Date.parse(confirmation.confirmedAt) <= Date.parse(preview.createdAt)
   ) {
     return "confirmation_mismatch";
   }
@@ -1686,7 +2056,9 @@ function normalizeBody(value: string): string | undefined {
 }
 
 function parseRevisionLineage(input: readonly unknown[]): readonly string[] | undefined {
-  if (input.length === 0 || input.length > 26) return undefined;
+  if (input.length === 0 || input.length > MAX_REVISION_LINEAGE_LENGTH) {
+    return undefined;
+  }
   const lineage: string[] = [];
   for (const entry of input) {
     if (typeof entry !== "string" || !isSafeRef(entry)) return undefined;
@@ -1773,6 +2145,7 @@ const SHA256_INITIAL_STATE: Sha256State = [
   0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
 ];
 
+// Keep hashing synchronous and runtime-neutral for this boundary.
 function sha256Hex(value: string): string {
   const padded = padSha256Bytes(TEXT_ENCODER.encode(value));
   return sha256StateToHex(compressSha256Bytes(padded));
@@ -1884,13 +2257,22 @@ function canonicalJson(value: unknown): string {
       .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
       .join(",")}}`;
   }
-  return JSON.stringify(value);
+  return JSON.stringify(value) ?? "null";
 }
 
 function isArtifactKind(
   value: unknown,
 ): value is McpApplicationMessageArtifactKindV1 {
   return value === "cover_letter" || value === "application_package";
+}
+
+function isExpectedWriteActionDataClass(
+  value: unknown,
+): value is McpWriteActionDataClassV1 {
+  return (
+    typeof value === "string" &&
+    WRITE_ACTION_DATA_CLASSES.includes(value as McpWriteActionDataClassV1)
+  );
 }
 
 function isDeliveryStatus(
@@ -1937,11 +2319,14 @@ function isSafeRef(value: string): boolean {
 function isTrustedChannelEndpointUrl(value: string): boolean {
   try {
     const parsed = new URL(value);
+    const usesDefaultHttpsPort = parsed.port === "" || parsed.port === "443";
     return (
       parsed.protocol === "https:" &&
       parsed.username === "" &&
       parsed.password === "" &&
+      parsed.search === "" &&
       parsed.hash === "" &&
+      usesDefaultHttpsPort &&
       parsed.hostname.length > 0
     );
   } catch {
