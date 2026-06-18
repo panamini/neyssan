@@ -4,9 +4,11 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
+  McpApplicationMessageDeliveryDispatchError,
   createMcpApplicationMessageFinalPreview,
   sendMcpApprovedApplicationMessage,
   type McpApplicationMessageChannelSendRequestV1,
+  type McpApplicationMessageControlledChannelConfigV1,
   type McpApplicationMessageControlledChannelV1,
   type McpApplicationMessageFinalPreviewV1,
   type McpApplicationMessageProviderReceiptV1,
@@ -39,11 +41,27 @@ const ARTIFACT_REF = {
   version: 1,
 } as const;
 
+const COVER_LETTER_REF = {
+  id: "mcp-safe-ref:cover-letter:message-preview",
+  label: "Cover letter artifact",
+  status: "approved_for_preview",
+  category: "cover_letter",
+  count: 1,
+  updatedAt: "2026-06-18T07:00:00.000Z",
+  version: 1,
+} as const;
+
 const APPROVED_BODY =
   "Dear Hiring Team,\n\nI am applying for the role with a focused, approved application message.\n\nRegards,\nAlex";
+const APPROVED_COVER_LETTER_BODY =
+  "Dear Hiring Team,\n\nPlease find my approved cover letter for the role.\n\nRegards,\nAlex";
 
 const CHANNEL_ENDPOINT =
   "https://api.twoweeks-send.example/v1/application-messages";
+const CONFIGURED_CHANNEL_ENDPOINT =
+  "https://api.pr78-configured.example/v1/application-messages";
+const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/u;
+const SAFE_REF_PATTERN = /^mcp-safe-ref:[a-z0-9][a-z0-9._:-]+:[a-f0-9]{64}$/u;
 
 const BASE_EGRESS_RULE: McpOutboundEgressAllowlistRuleV1 = {
   id: "mcp-egress-rule:application-message-api",
@@ -66,6 +84,12 @@ const BASE_EGRESS_RULE: McpOutboundEgressAllowlistRuleV1 = {
   timeoutMs: 5000,
   maxResponseBytes: 4096,
   version: 1,
+};
+
+const CONFIGURED_EGRESS_RULE: McpOutboundEgressAllowlistRuleV1 = {
+  ...BASE_EGRESS_RULE,
+  id: "mcp-egress-rule:configured-application-message-api",
+  host: "api.pr78-configured.example",
 };
 
 const FORBIDDEN_SAFE_RESULT_FRAGMENTS = [
@@ -225,17 +249,68 @@ function makePreviewRequest(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function makeChannelConfig(
+  endpointUrl = CHANNEL_ENDPOINT,
+): McpApplicationMessageControlledChannelConfigV1 {
+  return {
+    kind: "mcp_application_message_controlled_channel_config",
+    channelId: "application_message_api",
+    endpointUrl,
+    credentialMode: "none",
+    version: 1,
+  };
+}
+
+function makeCoverLetterPreviewRequest() {
+  const approvalState = makeApprovalState();
+  const auditEvent = approvalState.auditEvent as Record<string, unknown>;
+  return makePreviewRequest({
+    artifactKind: "cover_letter",
+    approvalState: makeApprovalState({
+      artifactKind: "cover_letter",
+      artifactRef: COVER_LETTER_REF,
+      refIds: [COVER_LETTER_REF.id],
+      safeCategories: {
+        artifactKinds: ["cover_letter"],
+        version: 1,
+      },
+      auditEvent: {
+        ...auditEvent,
+        artifactKind: "cover_letter",
+        artifactRef: COVER_LETTER_REF,
+      },
+    }),
+    approvedArtifact: makeRestrictedArtifact({
+      artifactKind: "cover_letter",
+      artifactRef: COVER_LETTER_REF,
+      plainTextBody: APPROVED_COVER_LETTER_BODY,
+    }),
+    freshnessState: makeFreshnessState({
+      artifactRef: COVER_LETTER_REF,
+      approvedArtifactUpdatedAt: COVER_LETTER_REF.updatedAt,
+      currentArtifactUpdatedAt: COVER_LETTER_REF.updatedAt,
+      revisionLineage: [COVER_LETTER_REF.id],
+      latestApprovedRevisionRef: COVER_LETTER_REF.id,
+    }),
+  });
+}
+
 function expectPreviewAllowed(
   request: unknown = makePreviewRequest(),
+  deps?: { channelConfig: McpApplicationMessageControlledChannelConfigV1 },
 ): McpApplicationMessageFinalPreviewV1 {
-  const result = createMcpApplicationMessageFinalPreview(request);
+  const result = createMcpApplicationMessageFinalPreview(request, deps);
   expect(result.allowed).toBe(true);
   if (!result.allowed) {
     throw new Error(result.reason);
   }
   expect(result.finalPreview.modelVisible).toBe(false);
   expect(result.finalPreview.componentVisible).toBe(false);
-  expect(result.finalPreview.finalPreviewDigest).toMatch(/^fnv1a32:[a-f0-9]{8}$/u);
+  expect(result.finalPreview.finalPreviewDigest).toMatch(DIGEST_PATTERN);
+  expect(result.finalPreview.payloadFingerprint).toMatch(DIGEST_PATTERN);
+  expect(result.finalPreview.payloadFingerprint).not.toBe(
+    result.finalPreview.finalPreviewDigest,
+  );
   expect(result.finalPreview.requiredConfirmationCopy).toBe(
     `SEND ${result.finalPreview.finalPreviewDigest}`,
   );
@@ -395,12 +470,8 @@ describe("mcpApplicationMessageSend", () => {
     expect(preview.artifactRef).toEqual(ARTIFACT_REF);
     expect(preview.revisionLineage).toEqual([ARTIFACT_REF.id]);
     expect(preview.channelId).toBe("application_message_api");
-    expect(preview.channelEndpointRef).toMatch(
-      /^mcp-safe-ref:application-message-endpoint:[a-f0-9]{8}$/u,
-    );
-    expect(preview.destinationRef).toMatch(
-      /^mcp-safe-ref:application-message-destination:[a-f0-9]{8}$/u,
-    );
+    expect(preview.channelEndpointRef).toMatch(SAFE_REF_PATTERN);
+    expect(preview.destinationRef).toMatch(SAFE_REF_PATTERN);
     expect(preview.payload.body).toBe(APPROVED_BODY);
     expect(preview.payload.destination.email).toBe("hiring@example.test");
   });
@@ -441,6 +512,77 @@ describe("mcpApplicationMessageSend", () => {
     ])).toHaveLength(5);
   });
 
+  it("keeps payload idempotency stable when the same send material is regenerated later", async () => {
+    const controlled = makeControlledChannel();
+    const original = expectPreviewAllowed();
+    const regenerated = expectPreviewAllowed(
+      makePreviewRequest({ requestedAt: "2026-06-18T07:05:30.000Z" }),
+    );
+
+    expect(regenerated.finalPreviewDigest).not.toBe(original.finalPreviewDigest);
+    expect(regenerated.payloadFingerprint).toBe(original.payloadFingerprint);
+
+    const first = await sendMcpApprovedApplicationMessage(
+      makeSendAuthorization(original),
+      { channel: controlled.channel, egressPolicy: makeEgressPolicy() },
+    );
+    const duplicate = await sendMcpApprovedApplicationMessage(
+      makeSendAuthorization(regenerated),
+      { channel: controlled.channel, egressPolicy: makeEgressPolicy() },
+    );
+
+    expect(first.allowed).toBe(true);
+    expect(first.deliveryStatus).toBe("sent");
+    expect(duplicate.allowed).toBe(true);
+    expect(duplicate.deliveryStatus).toBe("duplicate_accepted");
+    expect(controlled.externalDeliveries).toBe(1);
+    expectSafeSendResult(first);
+    expectSafeSendResult(duplicate);
+  });
+
+  it("creates and sends the same guarded flow for cover letter artifacts", async () => {
+    const preview = expectPreviewAllowed(makeCoverLetterPreviewRequest());
+    const controlled = makeControlledChannel();
+
+    const result = await sendMcpApprovedApplicationMessage(
+      makeSendAuthorization(preview),
+      { channel: controlled.channel, egressPolicy: makeEgressPolicy() },
+    );
+
+    expect(result.allowed).toBe(true);
+    expect(result.deliveryStatus).toBe("sent");
+    expect(preview.artifactKind).toBe("cover_letter");
+    expect(preview.artifactRef).toEqual(COVER_LETTER_REF);
+    expect(controlled.calls[0]?.artifactRef.category).toBe("cover_letter");
+    expect(controlled.calls[0]?.body).toBe(APPROVED_COVER_LETTER_BODY);
+    expectSafeSendResult(result);
+  });
+
+  it("binds final preview and egress approval to a trusted configured channel endpoint", async () => {
+    const preview = expectPreviewAllowed(makePreviewRequest(), {
+      channelConfig: makeChannelConfig(CONFIGURED_CHANNEL_ENDPOINT),
+    });
+    const controlled = makeControlledChannel({
+      endpointUrl: CONFIGURED_CHANNEL_ENDPOINT,
+    });
+
+    const result = await sendMcpApprovedApplicationMessage(
+      makeSendAuthorization(preview),
+      {
+        channel: controlled.channel,
+        egressPolicy: makeEgressPolicy([CONFIGURED_EGRESS_RULE]),
+      },
+    );
+
+    expect(result.allowed).toBe(true);
+    expect(result.auditEvent.allowlistRuleId).toBe(
+      "mcp-egress-rule:configured-application-message-api",
+    );
+    expect(controlled.calls).toHaveLength(1);
+    expect(controlled.calls[0]?.endpointUrl).toBe(CONFIGURED_CHANNEL_ENDPOINT);
+    expectSafeSendResult(result);
+  });
+
   it("sends exactly once through the controlled channel after exact human confirmation and allowlisted egress", async () => {
     const preview = expectPreviewAllowed();
     const controlled = makeControlledChannel();
@@ -464,6 +606,11 @@ describe("mcpApplicationMessageSend", () => {
     expect(result.auditEvent.destinationRef).toBe(preview.destinationRef);
     expect(controlled.calls).toHaveLength(1);
     expect(controlled.calls[0]?.endpointUrl).toBe(CHANNEL_ENDPOINT);
+    expect(controlled.calls[0]?.allowlistRuleId).toBe(
+      "mcp-egress-rule:application-message-api",
+    );
+    expect(controlled.calls[0]?.timeoutMs).toBe(5000);
+    expect(controlled.calls[0]?.maxResponseBytes).toBe(4096);
     expect(controlled.calls[0]?.redirectPolicy).toEqual({
       mode: "disabled",
       maxRedirects: 0,
@@ -513,7 +660,7 @@ describe("mcpApplicationMessageSend", () => {
         name: "copy-mismatch",
         value: makeSendAuthorization(preview, {
           manualConfirmation: makeManualConfirmation(preview, {
-            confirmationCopy: "SEND fnv1a32:00000000",
+            confirmationCopy: `SEND sha256:${"0".repeat(64)}`,
           }),
         }),
       },
@@ -521,7 +668,7 @@ describe("mcpApplicationMessageSend", () => {
         name: "digest-mismatch",
         value: makeSendAuthorization(preview, {
           manualConfirmation: makeManualConfirmation(preview, {
-            finalPreviewDigest: "fnv1a32:00000000",
+            finalPreviewDigest: `sha256:${"0".repeat(64)}`,
           }),
         }),
       },
@@ -854,6 +1001,45 @@ describe("mcpApplicationMessageSend", () => {
         reason: "unsafe_provider_receipt",
       },
       {
+        name: "sent-without-network",
+        receipt: {
+          kind: "mcp_application_message_provider_receipt",
+          status: "sent",
+          providerReceiptRef: "mcp-provider-receipt:sent-without-network",
+          networkRequestExecuted: false,
+          externalSideEffect: true,
+          retrySafe: false,
+          version: 1,
+        } satisfies McpApplicationMessageProviderReceiptV1,
+        reason: "unsafe_provider_receipt",
+      },
+      {
+        name: "provider-rejected-with-side-effect",
+        receipt: {
+          kind: "mcp_application_message_provider_receipt",
+          status: "rejected_by_provider",
+          providerReceiptRef: "mcp-provider-receipt:rejected-with-effect",
+          networkRequestExecuted: true,
+          externalSideEffect: true,
+          retrySafe: false,
+          version: 1,
+        } satisfies McpApplicationMessageProviderReceiptV1,
+        reason: "unsafe_provider_receipt",
+      },
+      {
+        name: "duplicate-not-retry-safe",
+        receipt: {
+          kind: "mcp_application_message_provider_receipt",
+          status: "duplicate_accepted",
+          providerReceiptRef: "mcp-provider-receipt:duplicate-not-retry-safe",
+          networkRequestExecuted: true,
+          externalSideEffect: false,
+          retrySafe: false,
+          version: 1,
+        } satisfies McpApplicationMessageProviderReceiptV1,
+        reason: "unsafe_provider_receipt",
+      },
+      {
         name: "delivery-unknown",
         receipt: {
           kind: "mcp_application_message_provider_receipt",
@@ -884,11 +1070,34 @@ describe("mcpApplicationMessageSend", () => {
     }
   });
 
-  it("returns delivery_status_unknown without retrying when the controlled channel throws after dispatch", async () => {
+  it("treats plain controlled channel errors as pre-dispatch failures", async () => {
     const preview = expectPreviewAllowed();
     const controlled = makeControlledChannel({
       onSend() {
-        throw new Error("socket closed after dispatch to hiring@example.test");
+        throw new Error("invalid controlled channel request shape");
+      },
+    });
+
+    const result = await sendMcpApprovedApplicationMessage(
+      makeSendAuthorization(preview),
+      { channel: controlled.channel, egressPolicy: makeEgressPolicy() },
+    );
+
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toBe("controlled_channel_error");
+    expect(result.deliveryStatus).toBe("delivery_status_unknown");
+    expect(result.writeActionExecuted).toBe(false);
+    expect(result.networkRequestExecuted).toBe(false);
+    expect(result.externalSideEffect).toBe(false);
+    expect(controlled.calls).toHaveLength(1);
+    expectSafeSendResult(result);
+  });
+
+  it("returns delivery_status_unknown without retrying for explicit post-dispatch channel errors", async () => {
+    const preview = expectPreviewAllowed();
+    const controlled = makeControlledChannel({
+      onSend() {
+        throw new McpApplicationMessageDeliveryDispatchError();
       },
     });
 
@@ -902,6 +1111,7 @@ describe("mcpApplicationMessageSend", () => {
     expect(result.deliveryStatus).toBe("delivery_status_unknown");
     expect(result.writeActionExecuted).toBe(true);
     expect(result.networkRequestExecuted).toBe(true);
+    expect(result.externalSideEffect).toBe(true);
     expect(controlled.calls).toHaveLength(1);
     expectSafeSendResult(result);
   });
@@ -949,6 +1159,7 @@ describe("mcpApplicationMessageSend", () => {
   it("keeps all network APIs and provider SDKs out of the PR78 orchestration module", () => {
     const source = readFileSync(SEND_SOURCE_FILE, "utf8");
 
+    expect(source).not.toContain("fnv1a32");
     for (const pattern of FORBIDDEN_SEND_SOURCE_PATTERNS) {
       expect(source).not.toMatch(pattern);
     }
