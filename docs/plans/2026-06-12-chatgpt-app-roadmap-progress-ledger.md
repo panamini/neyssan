@@ -21,24 +21,24 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR203 - PR77: Outbound Egress Allowlist and SSRF Protection
-GitHub PR: https://github.com/panamini/neyssan/pull/203
-Merge commit: 48227d5cad16fc58b5fff5b4c9a3545ca7ec6e44
-Merged at: 2026-06-18T04:20:58Z
+PR204 - PR78: Send Application Email/Message, Manual Confirmation Only
+GitHub PR: https://github.com/panamini/neyssan/pull/204
+Merge commit: 07662e212007db0ba332094ff32e91b51d9435ea
+Merged at: 2026-06-18T16:52:13Z
 ```
 
 Current implementation PR:
 
 ```txt
-PR78 - Send Application Email/Message, Manual Confirmation Only
-GitHub PR: https://github.com/panamini/neyssan/pull/204
-Head branch: codex/pr78-send-application-message-manual-confirmation
+PR79 - Job Platform Submit/Apply Dry Run
+GitHub PR: https://github.com/panamini/neyssan/pull/205
+Head branch: codex/pr79-job-platform-submit-apply-dry-run
 ```
 
-Exact next PR after PR78:
+Exact next PR after PR79:
 
 ```txt
-PR79 - Submit Application, Manual Confirmation Only
+PR80 - Live Submit/Apply for One Integration
 ```
 
 PR59 status:
@@ -101,7 +101,8 @@ MERGED_NARROW_PR59 - PR185 merged the narrow read-only adapter scope approved by
 |                        75 | Cover Letter / Application Package Export                                             | merged      | #201                 | c331b032be98e77bedb109ba7e0c7e95a7584ac9                                                     | Deterministic local MCP cover-letter/application-package export boundary only. Uses PR73 export/download policy result, explicit artifact-specific export confirmation, approved/fresh cover-letter or application-package state, controlled local markdown representation, safe file metadata, and redacted audit metadata. Resume export changes, send/submit/apply/upload/email, URLs, filesystem writes, persistence writes, UI/runtime/bridge/server/tool wiring, Convex schema/write changes, outbound HTTP, LLM/model calls, package changes, and lockfile changes remained blocked. Merged at 2026-06-17T20:41:15Z. |
 |                        76 | Write Action Framework                                                               | merged      | #202                 | 4fcb45cc4cf48a1373e9191e69cd8869d86464cf                                                     | Framework-only local MCP write-action foundation. Adds typed write/read intent, proposal, confirmation request/result, central execution-disabled guard, deterministic blocked result, confirmed non-executable placeholder, and simulated no-op result. Focused PR76 test, PR65 component data policy test, PR75 export test, full Local MCP suite, TypeScript, and Convex codegen passed locally before PR creation. No real send/submit/apply, outbound HTTP, persistence writes, package/lockfile/schema/runtime/OAuth/UI/tool wiring, or production connector behavior. Merged at 2026-06-17T23:39:46Z. |
 |                        77 | Outbound Egress Allowlist and SSRF Protection                                        | merged      | #203                 | 48227d5cad16fc58b5fff5b4c9a3545ca7ec6e44                                                     | Deny-by-default local MCP outbound egress allowlist and SSRF policy guard. Adds deterministic URL/host/method/scheme/path decisioning, explicit allowlist metadata, redirect-disabled decisions, safe refusal metadata, and redacted audit URL output. Policy decisions only; no live network execution, real send/submit/apply, persistence writes, package/lockfile/schema/runtime/OAuth/UI/tool wiring, or production connector behavior. Merged at 2026-06-18T04:20:58Z. |
-|                        78 | Send Application Email/Message, Manual Confirmation Only                             | open draft  | #204                 | codex/pr78-send-application-message-manual-confirmation                                      | Local MCP controlled application-message send boundary only. Adds restricted final preview binding, exact human-only confirmation, PR76 write-action proposal/guard reuse, PR77 outbound egress allowlist enforcement, provider-side idempotency contract, safe redacted result/audit metadata, and dependency-injected controlled channel execution. No UI/runtime/bridge/server/tool wiring, Convex schema/write changes, OAuth/token storage, live provider credentials, concrete internet adapter, package/lockfile change, bulk/attachment/html/header send, submit/apply behavior, or automatic retry. |
+|                        78 | Send Application Email/Message, Manual Confirmation Only                             | merged      | #204                 | 07662e212007db0ba332094ff32e91b51d9435ea                                                    | Local MCP controlled application-message send boundary only. Added restricted final preview binding, exact human-only confirmation, PR76 write-action proposal/guard reuse, PR77 outbound egress allowlist enforcement, provider-side idempotency contract, safe redacted result/audit metadata, and dependency-injected controlled channel execution. No UI/runtime/bridge/server/tool wiring, Convex schema/write changes, OAuth/token storage, live provider credentials, concrete internet adapter, package/lockfile change, bulk/attachment/html/header send, submit/apply behavior, or automatic retry. Merged at 2026-06-18T16:52:13Z. |
+|                        79 | Job Platform Submit/Apply Dry Run                                                    | open draft  | #205                 | codex/pr79-job-platform-submit-apply-dry-run                                                 | Local MCP dry-run mapping boundary only. Simulates one approved application package against one non-production job-platform form contract and returns safe mapping status, restricted user-review preview, PR76 disabled write-action proposal, and redacted audit metadata. No submit/apply/upload/click/browser automation/auth/platform call/outbound HTTP, persistence writes, UI/runtime/bridge/server/tool wiring, Convex schema/write changes, package/lockfile changes, or live integration behavior. |
 
 ---
 
@@ -192,7 +193,9 @@ PR202 merged PR76 into `application-os-foundation` with merge commit `4fcb45cc4c
 
 PR203 merged PR77 into `application-os-foundation` with merge commit `48227d5cad16fc58b5fff5b4c9a3545ca7ec6e44` at `2026-06-18T04:20:58Z`. It added deny-by-default outbound egress allowlist and SSRF policy decisioning only. It did not add live network execution, real send/submit/apply, persistence writes, credentials, OAuth/token behavior, UI/runtime wiring, package/lockfile changes, or schema changes.
 
-PR78 is the active implementation PR on `codex/pr78-send-application-message-manual-confirmation`. It is limited to a Local MCP controlled application-message send boundary after approved artifact freshness, exact restricted final preview, human-only confirmation, PR76 write-action guard reuse, PR77 egress approval, provider-side idempotency contract, and safe redacted result/audit output. It must not start PR79, add submit/apply behavior, add UI/React/runtime/bridge/server/tool wiring, add Convex schema/write changes, add OAuth/token storage, store or log credentials, add package/lockfile changes, add a concrete internet adapter, or support bulk/attachment/html/header sends.
+PR204 merged PR78 into `application-os-foundation` with merge commit `07662e212007db0ba332094ff32e91b51d9435ea` at `2026-06-18T16:52:13Z`. It added the Local MCP controlled application-message send boundary after approved artifact freshness, exact restricted final preview, human-only confirmation, PR76 write-action guard reuse, PR77 egress approval, provider-side idempotency contract, and safe redacted result/audit output. It did not start PR79, add submit/apply behavior, add UI/React/runtime/bridge/server/tool wiring, add Convex schema/write changes, add OAuth/token storage, store or log credentials, add package/lockfile changes, add a concrete internet adapter, or support bulk/attachment/html/header sends.
+
+PR79 is the active implementation PR on `codex/pr79-job-platform-submit-apply-dry-run`. It is limited to a Local MCP dry-run mapping boundary for one approved application package and one non-production job-platform form contract. It may produce safe mapping status and a restricted user-review-only mapped preview, but must not submit, apply, upload, click, authenticate, call a platform, perform outbound HTTP, write persistence, add browser automation, add UI/React/runtime/bridge/server/tool wiring, add Convex schema/write changes, add package/lockfile changes, or create live integration behavior. PR80 is the first possible live submit/apply integration step and still requires fresh validation and manual confirmation.
 
 OAuth/real-data/write-action constraints remain active: no OAuth runtime, callback, token storage, real user data, Convex real-data reads/writes, handlers, production connector, tool execution, outbound HTTP, LLM calls, export/download/send/submit/apply, or package/lockfile changes without an explicit unlocking PR.
 
