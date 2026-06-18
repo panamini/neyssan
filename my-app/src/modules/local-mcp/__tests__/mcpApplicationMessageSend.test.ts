@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -61,7 +62,6 @@ const CHANNEL_ENDPOINT =
 const CONFIGURED_CHANNEL_ENDPOINT =
   "https://api.pr78-configured.example/v1/application-messages";
 const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/u;
-const SAFE_REF_PATTERN = /^mcp-safe-ref:[a-z0-9][a-z0-9._:-]+:[a-f0-9]{64}$/u;
 
 const BASE_EGRESS_RULE: McpOutboundEgressAllowlistRuleV1 = {
   id: "mcp-egress-rule:application-message-api",
@@ -435,6 +435,45 @@ function makeControlledChannel(options: {
   };
 }
 
+function makeProviderReceipt(
+  status: McpApplicationMessageProviderReceiptV1["status"],
+  providerReceiptRef: string,
+  effects: Pick<
+    McpApplicationMessageProviderReceiptV1,
+    "networkRequestExecuted" | "externalSideEffect" | "retrySafe"
+  >,
+): McpApplicationMessageProviderReceiptV1 {
+  return {
+    kind: "mcp_application_message_provider_receipt",
+    status,
+    providerReceiptRef,
+    ...effects,
+    version: 1,
+  };
+}
+
+function expectedSha256Digest(value: unknown): string {
+  return `sha256:${createHash("sha256")
+    .update(testCanonicalJson(value))
+    .digest("hex")}`;
+}
+
+function expectedSafeRef(prefix: string, value: string): string {
+  return `${prefix}:${createHash("sha256").update(value).digest("hex")}`;
+}
+
+function testCanonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(testCanonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${testCanonicalJson(record[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
 function expectSafeSendResult(result: unknown) {
   expect(
     (result as { localPersistenceWrite?: unknown }).localPersistenceWrite,
@@ -466,12 +505,43 @@ async function sendWith(
 describe("mcpApplicationMessageSend", () => {
   it("creates a restricted final preview bound to the approved application message artifact", () => {
     const preview = expectPreviewAllowed();
+    const expectedChannelEndpointRef = expectedSafeRef(
+      "mcp-safe-ref:application-message-endpoint",
+      CHANNEL_ENDPOINT,
+    );
+    const expectedPayloadFingerprint = expectedSha256Digest({
+      digestKind: "application_message_payload_fingerprint",
+      artifactKind: "application_package",
+      artifactRef: ARTIFACT_REF,
+      body: APPROVED_BODY,
+      channelEndpointRef: expectedChannelEndpointRef,
+      channelId: "application_message_api",
+      destinationEmail: "hiring@example.test",
+      revisionLineage: [ARTIFACT_REF.id],
+      subject: "Application for Senior Product Engineer",
+      version: 1,
+    });
 
     expect(preview.artifactRef).toEqual(ARTIFACT_REF);
     expect(preview.revisionLineage).toEqual([ARTIFACT_REF.id]);
     expect(preview.channelId).toBe("application_message_api");
-    expect(preview.channelEndpointRef).toMatch(SAFE_REF_PATTERN);
-    expect(preview.destinationRef).toMatch(SAFE_REF_PATTERN);
+    expect(preview.channelEndpointRef).toBe(expectedChannelEndpointRef);
+    expect(preview.destinationRef).toBe(
+      expectedSafeRef(
+        "mcp-safe-ref:application-message-destination",
+        "hiring@example.test",
+      ),
+    );
+    expect(preview.payloadFingerprint).toBe(expectedPayloadFingerprint);
+    expect(preview.finalPreviewDigest).toBe(
+      expectedSha256Digest({
+        digestKind: "application_message_final_preview",
+        idempotencyKey: "mcp-write-action:send-application-message:001",
+        payloadFingerprint: expectedPayloadFingerprint,
+        requestedAt: "2026-06-18T07:05:00.000Z",
+        version: 1,
+      }),
+    );
     expect(preview.payload.body).toBe(APPROVED_BODY);
     expect(preview.payload.destination.email).toBe("hiring@example.test");
   });
@@ -976,91 +1046,87 @@ describe("mcpApplicationMessageSend", () => {
     const cases = [
       {
         name: "provider-rejected",
-        receipt: {
-          kind: "mcp_application_message_provider_receipt",
-          status: "rejected_by_provider",
-          providerReceiptRef: "mcp-provider-receipt:rejected-001",
-          networkRequestExecuted: true,
-          externalSideEffect: false,
-          retrySafe: false,
-          version: 1,
-        } satisfies McpApplicationMessageProviderReceiptV1,
+        receipt: makeProviderReceipt(
+          "rejected_by_provider",
+          "mcp-provider-receipt:rejected-001",
+          {
+            networkRequestExecuted: true,
+            externalSideEffect: false,
+            retrySafe: false,
+          },
+        ),
         reason: "provider_rejected",
       },
       {
         name: "unsafe-receipt",
-        receipt: {
-          kind: "mcp_application_message_provider_receipt",
-          status: "sent",
-          providerReceiptRef: "hiring@example.test",
+        receipt: makeProviderReceipt("sent", "hiring@example.test", {
           networkRequestExecuted: true,
           externalSideEffect: true,
           retrySafe: false,
-          version: 1,
-        } satisfies McpApplicationMessageProviderReceiptV1,
+        }),
         reason: "unsafe_provider_receipt",
       },
       {
         name: "sent-without-network",
-        receipt: {
-          kind: "mcp_application_message_provider_receipt",
-          status: "sent",
-          providerReceiptRef: "mcp-provider-receipt:sent-without-network",
-          networkRequestExecuted: false,
-          externalSideEffect: true,
-          retrySafe: false,
-          version: 1,
-        } satisfies McpApplicationMessageProviderReceiptV1,
+        receipt: makeProviderReceipt(
+          "sent",
+          "mcp-provider-receipt:sent-without-network",
+          {
+            networkRequestExecuted: false,
+            externalSideEffect: true,
+            retrySafe: false,
+          },
+        ),
         reason: "unsafe_provider_receipt",
       },
       {
         name: "provider-rejected-with-side-effect",
-        receipt: {
-          kind: "mcp_application_message_provider_receipt",
-          status: "rejected_by_provider",
-          providerReceiptRef: "mcp-provider-receipt:rejected-with-effect",
-          networkRequestExecuted: true,
-          externalSideEffect: true,
-          retrySafe: false,
-          version: 1,
-        } satisfies McpApplicationMessageProviderReceiptV1,
+        receipt: makeProviderReceipt(
+          "rejected_by_provider",
+          "mcp-provider-receipt:rejected-with-effect",
+          {
+            networkRequestExecuted: true,
+            externalSideEffect: true,
+            retrySafe: false,
+          },
+        ),
         reason: "unsafe_provider_receipt",
       },
       {
         name: "duplicate-not-retry-safe",
-        receipt: {
-          kind: "mcp_application_message_provider_receipt",
-          status: "duplicate_accepted",
-          providerReceiptRef: "mcp-provider-receipt:duplicate-not-retry-safe",
-          networkRequestExecuted: true,
-          externalSideEffect: false,
-          retrySafe: false,
-          version: 1,
-        } satisfies McpApplicationMessageProviderReceiptV1,
+        receipt: makeProviderReceipt(
+          "duplicate_accepted",
+          "mcp-provider-receipt:duplicate-not-retry-safe",
+          {
+            networkRequestExecuted: true,
+            externalSideEffect: false,
+            retrySafe: false,
+          },
+        ),
         reason: "unsafe_provider_receipt",
       },
       {
         name: "delivery-unknown",
-        receipt: {
-          kind: "mcp_application_message_provider_receipt",
-          status: "delivery_status_unknown",
-          providerReceiptRef: "mcp-provider-receipt:unknown-001",
-          networkRequestExecuted: true,
-          externalSideEffect: true,
-          retrySafe: false,
-          version: 1,
-        } satisfies McpApplicationMessageProviderReceiptV1,
+        receipt: makeProviderReceipt(
+          "delivery_status_unknown",
+          "mcp-provider-receipt:unknown-001",
+          {
+            networkRequestExecuted: true,
+            externalSideEffect: true,
+            retrySafe: false,
+          },
+        ),
         reason: "delivery_status_unknown",
       },
     ];
-
+ 
     for (const testCase of cases) {
       const controlled = makeControlledChannel({ receipt: testCase.receipt });
       const result = await sendMcpApprovedApplicationMessage(
         makeSendAuthorization(preview),
         { channel: controlled.channel, egressPolicy: makeEgressPolicy() },
       );
-
+ 
       expect(result.allowed, testCase.name).toBe(false);
       expect(result.reason, testCase.name).toBe(testCase.reason);
       expect(result.deliveryStatus, testCase.name).not.toBe("sent");
@@ -1069,7 +1135,7 @@ describe("mcpApplicationMessageSend", () => {
       expectSafeSendResult(result);
     }
   });
-
+ 
   it("treats plain controlled channel errors as pre-dispatch failures", async () => {
     const preview = expectPreviewAllowed();
     const controlled = makeControlledChannel({
@@ -1077,12 +1143,12 @@ describe("mcpApplicationMessageSend", () => {
         throw new Error("invalid controlled channel request shape");
       },
     });
-
+ 
     const result = await sendMcpApprovedApplicationMessage(
       makeSendAuthorization(preview),
       { channel: controlled.channel, egressPolicy: makeEgressPolicy() },
     );
-
+ 
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe("controlled_channel_error");
     expect(result.deliveryStatus).toBe("delivery_status_unknown");
@@ -1092,7 +1158,7 @@ describe("mcpApplicationMessageSend", () => {
     expect(controlled.calls).toHaveLength(1);
     expectSafeSendResult(result);
   });
-
+ 
   it("returns delivery_status_unknown without retrying for explicit post-dispatch channel errors", async () => {
     const preview = expectPreviewAllowed();
     const controlled = makeControlledChannel({
@@ -1100,12 +1166,12 @@ describe("mcpApplicationMessageSend", () => {
         throw new McpApplicationMessageDeliveryDispatchError();
       },
     });
-
+ 
     const result = await sendMcpApprovedApplicationMessage(
       makeSendAuthorization(preview),
       { channel: controlled.channel, egressPolicy: makeEgressPolicy() },
     );
-
+ 
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe("delivery_status_unknown");
     expect(result.deliveryStatus).toBe("delivery_status_unknown");
@@ -1115,7 +1181,7 @@ describe("mcpApplicationMessageSend", () => {
     expect(controlled.calls).toHaveLength(1);
     expectSafeSendResult(result);
   });
-
+ 
   it("keeps PR76 generic write execution disabled for unrelated write actions", () => {
     const proposalResult = createMcpWriteActionProposal({
       kind: "mcp_write_action_intent",
@@ -1135,7 +1201,7 @@ describe("mcpApplicationMessageSend", () => {
     if (!proposalResult.allowed) {
       throw new Error("Expected unrelated write proposal to be created.");
     }
-
+ 
     const result = assertMcpWriteActionExecutionDisabled(
       proposalResult.proposal,
       {
@@ -1148,14 +1214,13 @@ describe("mcpApplicationMessageSend", () => {
         version: 1,
       },
     );
-
+ 
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe("write_execution_disabled");
     expect(result.writeActionExecuted).toBe(false);
     expect(result.externalSideEffect).toBe(false);
     expect(result.networkAccess).toBe(false);
   });
-
   it("keeps all network APIs and provider SDKs out of the PR78 orchestration module", () => {
     const source = readFileSync(SEND_SOURCE_FILE, "utf8");
 

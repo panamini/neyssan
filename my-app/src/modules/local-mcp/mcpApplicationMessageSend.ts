@@ -2,6 +2,7 @@ import {
   assertMcpOutboundEgressAllowed,
   McpOutboundEgressBlockedError,
   type McpOutboundEgressDataClassV1,
+  type McpOutboundEgressDecisionV1,
   type McpOutboundEgressPolicyV1,
 } from "./mcpOutboundEgressPolicy";
 import {
@@ -33,6 +34,7 @@ export type McpApplicationMessageSendReasonV1 =
   | "final_preview_mismatch"
   | "channel_mismatch"
   | "egress_blocked"
+  | "controlled_channel_error"
   | "idempotency_conflict"
   | "provider_rejected"
   | "unsafe_provider_receipt"
@@ -122,6 +124,9 @@ export type McpApplicationMessageChannelSendRequestV1 = Readonly<{
   kind: "mcp_application_message_channel_send_request";
   channelId: "application_message_api";
   endpointUrl: string;
+  allowlistRuleId: string;
+  timeoutMs?: number;
+  maxResponseBytes?: number;
   redirectPolicy: Readonly<{
     mode: "disabled";
     maxRedirects: 0;
@@ -137,6 +142,14 @@ export type McpApplicationMessageChannelSendRequestV1 = Readonly<{
   version: 1;
 }>;
 
+export type McpApplicationMessageControlledChannelConfigV1 = Readonly<{
+  kind: "mcp_application_message_controlled_channel_config";
+  channelId: "application_message_api";
+  endpointUrl: string;
+  credentialMode: "none";
+  version: 1;
+}>;
+
 export type McpApplicationMessageControlledChannelV1 = Readonly<{
   kind: "mcp_application_message_controlled_channel";
   channelId: "application_message_api";
@@ -147,6 +160,15 @@ export type McpApplicationMessageControlledChannelV1 = Readonly<{
     request: McpApplicationMessageChannelSendRequestV1,
   ) => Promise<McpApplicationMessageProviderReceiptV1>;
 }>;
+
+export class McpApplicationMessageDeliveryDispatchError extends Error {
+  constructor(
+    message = "Controlled application message delivery status is unknown after dispatch.",
+  ) {
+    super(message);
+    this.name = "McpApplicationMessageDeliveryDispatchError";
+  }
+}
 
 export type McpApplicationMessageSendAuditEventV1 = Readonly<{
   kind: "mcp_application_message_send_audit_event";
@@ -233,6 +255,10 @@ type ParsedPreviewRequest = Readonly<{
   requestedAt: string;
 }>;
 
+type ParsedPreviewDeps = Readonly<{
+  channelConfig: McpApplicationMessageControlledChannelConfigV1;
+}>;
+
 type ParsedSendAuthorization = Readonly<{
   finalPreview: McpApplicationMessageFinalPreviewV1;
   manualConfirmation: McpApplicationMessageManualConfirmationV1;
@@ -242,6 +268,8 @@ type ParsedDeps = Readonly<{
   channel: McpApplicationMessageControlledChannelV1;
   egressPolicy: McpOutboundEgressPolicyV1;
 }>;
+
+type AllowedEgressDecision = Extract<McpOutboundEgressDecisionV1, { allowed: true }>;
 
 type PreviewRequestRecord = Record<string, unknown> & {
   artifactKind: McpApplicationMessageArtifactKindV1;
@@ -316,12 +344,20 @@ type ArtifactRefRecord = Record<string, unknown> & {
 };
 
 const CONTROLLED_CHANNEL_ID = "application_message_api";
-const CONTROLLED_CHANNEL_ENDPOINT =
+const DEFAULT_CONTROLLED_CHANNEL_ENDPOINT =
   "https://api.twoweeks-send.example/v1/application-messages";
+const DEFAULT_CONTROLLED_CHANNEL_CONFIG: McpApplicationMessageControlledChannelConfigV1 = {
+  kind: "mcp_application_message_controlled_channel_config",
+  channelId: CONTROLLED_CHANNEL_ID,
+  endpointUrl: DEFAULT_CONTROLLED_CHANNEL_ENDPOINT,
+  credentialMode: "none",
+  version: 1,
+};
 const CURRENT_VERSION = 1;
 const MAX_SUBJECT_LENGTH = 180;
 const MAX_BODY_LENGTH = 50_000;
 const MAX_SAFE_REF_LENGTH = 120;
+const TEXT_ENCODER = new TextEncoder();
 const EGRESS_DATA_CLASSES: readonly McpOutboundEgressDataClassV1[] = [
   "generated_artifact",
   "application_material",
@@ -428,6 +464,47 @@ const PROVIDER_RECEIPT_KEYS = [
   "retrySafe",
   "version",
 ] as const;
+const PROVIDER_RECEIPT_EXPECTED_EFFECTS = {
+  sent: {
+    networkRequestExecuted: true,
+    externalSideEffect: true,
+    retrySafe: false,
+  },
+  duplicate_accepted: {
+    networkRequestExecuted: true,
+    externalSideEffect: false,
+    retrySafe: true,
+  },
+  idempotency_conflict: {
+    networkRequestExecuted: true,
+    externalSideEffect: false,
+    retrySafe: false,
+  },
+  rejected_by_provider: {
+    networkRequestExecuted: true,
+    externalSideEffect: false,
+    retrySafe: false,
+  },
+  delivery_status_unknown: {
+    networkRequestExecuted: true,
+    externalSideEffect: true,
+    retrySafe: false,
+  },
+} as const satisfies Record<
+  McpApplicationMessageDeliveryStatusV1,
+  Pick<
+    McpApplicationMessageProviderReceiptV1,
+    "networkRequestExecuted" | "externalSideEffect" | "retrySafe"
+  >
+>;
+const PREVIEW_DEPS_KEYS = ["channelConfig"] as const;
+const CONTROLLED_CHANNEL_CONFIG_KEYS = [
+  "kind",
+  "channelId",
+  "endpointUrl",
+  "credentialMode",
+  "version",
+] as const;
 
 const FORBIDDEN_BODY_PATTERNS = [
   /<\s*html\b/iu,
@@ -445,7 +522,11 @@ const FORBIDDEN_BODY_PATTERNS = [
 
 export function createMcpApplicationMessageFinalPreview(
   input: unknown,
+  deps?: unknown,
 ): McpApplicationMessageFinalPreviewResultV1 {
+  const parsedDeps = parsePreviewDeps(deps);
+  if (!parsedDeps) return buildBlockedSendResult("invalid_input");
+
   const parsed = parsePreviewRequest(input);
   if (!parsed) return buildBlockedSendResult("invalid_input");
 
@@ -473,18 +554,22 @@ export function createMcpApplicationMessageFinalPreview(
   );
   const channelEndpointRef = buildSafeRef(
     "mcp-safe-ref:application-message-endpoint",
-    CONTROLLED_CHANNEL_ENDPOINT,
+    parsedDeps.channelConfig.endpointUrl,
   );
-  const digest = buildFinalPreviewDigest({
+  const payloadFingerprint = buildPayloadFingerprint({
     artifactKind: parsed.artifactKind,
     artifactRef: parsed.approvedArtifact.artifactRef,
     body: parsed.approvedArtifact.plainTextBody,
     channelId: parsed.channelId,
+    channelEndpointRef,
     destinationEmail: parsed.destination.email,
-    idempotencyKey: parsed.idempotencyKey,
-    requestedAt: parsed.requestedAt,
     revisionLineage: parsed.freshnessState.revisionLineage,
     subject: parsed.subject,
+  });
+  const digest = buildFinalPreviewDigest({
+    idempotencyKey: parsed.idempotencyKey,
+    payloadFingerprint,
+    requestedAt: parsed.requestedAt,
   });
   const requiredConfirmationCopy = `SEND ${digest}`;
   const proposal = {
@@ -511,7 +596,7 @@ export function createMcpApplicationMessageFinalPreview(
       channelId: parsed.channelId,
       channelEndpointRef,
       finalPreviewDigest: digest,
-      payloadFingerprint: digest,
+      payloadFingerprint,
       requiredConfirmationCopy,
       idempotencyKey: parsed.idempotencyKey,
       proposal,
@@ -558,15 +643,16 @@ export async function sendMcpApprovedApplicationMessage(
   );
   if (blockedReason) return buildBlockedSendResult(blockedReason, preview);
 
-  const allowlistRuleId = getControlledEgressAllowlistRuleId(
+  const egressDecision = getControlledEgressDecision(
+    parsedDeps.channel.endpointUrl,
     parsedDeps.egressPolicy,
   );
-  if (!allowlistRuleId) return buildBlockedSendResult("egress_blocked", preview);
+  if (!egressDecision) return buildBlockedSendResult("egress_blocked", preview);
 
   return executeControlledApplicationMessageSend(
     preview,
     parsedDeps.channel,
-    allowlistRuleId,
+    egressDecision,
   );
 }
 
@@ -613,14 +699,15 @@ function writeGuardAcceptsConfirmedPreview(
   return !writeGuard.allowed && writeGuard.reason === "write_execution_disabled";
 }
 
-function getControlledEgressAllowlistRuleId(
+function getControlledEgressDecision(
+  endpointUrl: string,
   egressPolicy: McpOutboundEgressPolicyV1,
-): string | undefined {
+): AllowedEgressDecision | undefined {
   try {
     return assertMcpOutboundEgressAllowed(
       {
         kind: "mcp_outbound_egress_request",
-        destinationUrl: CONTROLLED_CHANNEL_ENDPOINT,
+        destinationUrl: endpointUrl,
         method: "POST",
         actionCategory: "send_message",
         dataClasses: EGRESS_DATA_CLASSES,
@@ -632,7 +719,7 @@ function getControlledEgressAllowlistRuleId(
         version: 1,
       },
       egressPolicy,
-    ).allowlistRuleId;
+    );
   } catch (error) {
     if (error instanceof McpOutboundEgressBlockedError) return undefined;
     return undefined;
@@ -642,21 +729,28 @@ function getControlledEgressAllowlistRuleId(
 async function executeControlledApplicationMessageSend(
   preview: McpApplicationMessageFinalPreviewV1,
   channel: McpApplicationMessageControlledChannelV1,
-  allowlistRuleId: string,
+  egressDecision: AllowedEgressDecision,
 ): Promise<McpApplicationMessageSendResultV1> {
   try {
     const receipt = await channel.sendApprovedApplicationMessage(
-      buildChannelSendRequest(preview),
+      buildChannelSendRequest(preview, channel.endpointUrl, egressDecision),
     );
-    return buildSendResultForProviderReceipt(preview, allowlistRuleId, receipt);
-  } catch {
+    return buildSendResultForProviderReceipt(
+      preview,
+      egressDecision.allowlistRuleId,
+      receipt,
+    );
+  } catch (error) {
+    if (!isDeliveryDispatchError(error)) {
+      return buildBlockedSendResult("controlled_channel_error", preview);
+    }
     return buildExecutedSendResult({
       allowed: false,
       reason: "delivery_status_unknown",
       deliveryStatus: "delivery_status_unknown",
       retrySafe: false,
       preview,
-      allowlistRuleId,
+      allowlistRuleId: egressDecision.allowlistRuleId,
       providerReceiptRef: undefined,
       networkRequestExecuted: true,
       externalSideEffect: true,
@@ -666,11 +760,18 @@ async function executeControlledApplicationMessageSend(
 
 function buildChannelSendRequest(
   preview: McpApplicationMessageFinalPreviewV1,
+  endpointUrl: string,
+  egressDecision: AllowedEgressDecision,
 ): McpApplicationMessageChannelSendRequestV1 {
   return {
     kind: "mcp_application_message_channel_send_request",
     channelId: preview.channelId,
-    endpointUrl: CONTROLLED_CHANNEL_ENDPOINT,
+    endpointUrl,
+    allowlistRuleId: egressDecision.allowlistRuleId,
+    ...(egressDecision.timeoutMs ? { timeoutMs: egressDecision.timeoutMs } : {}),
+    ...(egressDecision.maxResponseBytes
+      ? { maxResponseBytes: egressDecision.maxResponseBytes }
+      : {}),
     redirectPolicy: {
       mode: "disabled",
       maxRedirects: 0,
@@ -1001,6 +1102,43 @@ function parseDeps(input: unknown): ParsedDeps | undefined {
   };
 }
 
+function parsePreviewDeps(input: unknown): ParsedPreviewDeps | undefined {
+  if (input === undefined) {
+    return { channelConfig: DEFAULT_CONTROLLED_CHANNEL_CONFIG };
+  }
+  const record = readPlainObjectRecord(input);
+  if (!record || !hasOnlyKeys(record, PREVIEW_DEPS_KEYS)) return undefined;
+
+  const channelConfig = parseControlledChannelConfig(record.channelConfig);
+  if (!channelConfig) return undefined;
+  return { channelConfig };
+}
+
+function parseControlledChannelConfig(
+  input: unknown,
+): McpApplicationMessageControlledChannelConfigV1 | undefined {
+  const record = readPlainObjectRecord(input);
+  if (
+    !record ||
+    !hasOnlyKeys(record, CONTROLLED_CHANNEL_CONFIG_KEYS) ||
+    record.kind !== "mcp_application_message_controlled_channel_config" ||
+    record.channelId !== CONTROLLED_CHANNEL_ID ||
+    record.credentialMode !== "none" ||
+    record.version !== CURRENT_VERSION ||
+    typeof record.endpointUrl !== "string" ||
+    !isTrustedChannelEndpointUrl(record.endpointUrl)
+  ) {
+    return undefined;
+  }
+  return {
+    kind: "mcp_application_message_controlled_channel_config",
+    channelId: CONTROLLED_CHANNEL_ID,
+    endpointUrl: record.endpointUrl,
+    credentialMode: "none",
+    version: 1,
+  };
+}
+
 function parseControlledChannel(
   input: unknown,
 ): McpApplicationMessageControlledChannelV1 | undefined {
@@ -1024,6 +1162,7 @@ function parseProviderReceipt(
 ): McpApplicationMessageProviderReceiptV1 | undefined {
   const record = readPlainObjectRecord(input);
   if (!record || !isProviderReceiptRecord(record)) return undefined;
+  if (!providerReceiptStatusMatchesEffects(record)) return undefined;
 
   return {
     kind: "mcp_application_message_provider_receipt",
@@ -1183,17 +1322,13 @@ function finalPreviewPartsAreConsistent(
     isIdempotencyKey(record.idempotencyKey),
     isDigest(record.finalPreviewDigest),
     isDigest(record.payloadFingerprint),
-    record.finalPreviewDigest === record.payloadFingerprint,
+    record.finalPreviewDigest !== record.payloadFingerprint,
     record.requiredConfirmationCopy === `SEND ${record.finalPreviewDigest}`,
+    isSafeRef(record.channelEndpointRef),
     record.destinationRef ===
       buildSafeRef(
         "mcp-safe-ref:application-message-destination",
         payload.destination.email,
-      ),
-    record.channelEndpointRef ===
-      buildSafeRef(
-        "mcp-safe-ref:application-message-endpoint",
-        CONTROLLED_CHANNEL_ENDPOINT,
       ),
     !!proposal,
     proposal?.proposalRef === record.idempotencyKey,
@@ -1253,6 +1388,17 @@ function isProviderReceiptRecord(
   ]);
 }
 
+function providerReceiptStatusMatchesEffects(
+  receipt: ProviderReceiptRecord,
+): boolean {
+  const expected = PROVIDER_RECEIPT_EXPECTED_EFFECTS[receipt.status];
+  return (
+    receipt.networkRequestExecuted === expected.networkRequestExecuted &&
+    receipt.externalSideEffect === expected.externalSideEffect &&
+    receipt.retrySafe === expected.retrySafe
+  );
+}
+
 function isArtifactRefRecord(
   record: Record<string, unknown>,
 ): record is ArtifactRefRecord {
@@ -1274,21 +1420,25 @@ function isArtifactRefRecord(
 function validateFinalPreview(
   preview: McpApplicationMessageFinalPreviewV1,
 ): Readonly<{ ok: boolean }> {
-  const expectedDigest = buildFinalPreviewDigest({
+  const expectedPayloadFingerprint = buildPayloadFingerprint({
     artifactKind: preview.artifactKind,
     artifactRef: preview.artifactRef,
     body: preview.payload.body,
     channelId: preview.channelId,
+    channelEndpointRef: preview.channelEndpointRef,
     destinationEmail: preview.payload.destination.email,
-    idempotencyKey: preview.idempotencyKey,
-    requestedAt: preview.createdAt,
     revisionLineage: preview.revisionLineage,
     subject: preview.payload.subject,
+  });
+  const expectedDigest = buildFinalPreviewDigest({
+    idempotencyKey: preview.idempotencyKey,
+    payloadFingerprint: expectedPayloadFingerprint,
+    requestedAt: preview.createdAt,
   });
   return {
     ok:
       expectedDigest === preview.finalPreviewDigest &&
-      expectedDigest === preview.payloadFingerprint &&
+      expectedPayloadFingerprint === preview.payloadFingerprint &&
       preview.requiredConfirmationCopy === `SEND ${expectedDigest}` &&
       preview.proposal.proposalRef === preview.idempotencyKey &&
       preview.proposal.idempotencyKey === preview.idempotencyKey &&
@@ -1326,8 +1476,21 @@ function channelMatchesPreview(
 ): boolean {
   return (
     channel.channelId === preview.channelId &&
-    channel.endpointUrl === CONTROLLED_CHANNEL_ENDPOINT &&
+    buildSafeRef(
+      "mcp-safe-ref:application-message-endpoint",
+      channel.endpointUrl,
+    ) === preview.channelEndpointRef &&
     channel.credentialMode === "none"
+  );
+}
+
+function isDeliveryDispatchError(
+  error: unknown,
+): error is McpApplicationMessageDeliveryDispatchError {
+  return (
+    error instanceof McpApplicationMessageDeliveryDispatchError ||
+    (error instanceof Error &&
+      error.name === "McpApplicationMessageDeliveryDispatchError")
   );
 }
 
@@ -1532,43 +1695,184 @@ function parseRevisionLineage(input: readonly unknown[]): readonly string[] | un
   return lineage;
 }
 
-function buildFinalPreviewDigest(input: Readonly<{
+function buildPayloadFingerprint(input: Readonly<{
   artifactKind: McpApplicationMessageArtifactKindV1;
   artifactRef: McpApplicationMessageSafeArtifactRefV1;
   body: string;
   channelId: "application_message_api";
+  channelEndpointRef: string;
   destinationEmail: string;
-  idempotencyKey: string;
-  requestedAt: string;
   revisionLineage: readonly string[];
   subject: string;
 }>): string {
-  return `fnv1a32:${fnv1a32(
-    canonicalJson({
-      artifactKind: input.artifactKind,
-      artifactRef: input.artifactRef,
-      body: input.body,
-      channelId: input.channelId,
-      destinationEmail: input.destinationEmail,
-      idempotencyKey: input.idempotencyKey,
-      requestedAt: input.requestedAt,
-      revisionLineage: input.revisionLineage,
-      subject: input.subject,
-    }),
-  )}`;
+  return buildSha256Digest({
+    digestKind: "application_message_payload_fingerprint",
+    artifactKind: input.artifactKind,
+    artifactRef: input.artifactRef,
+    body: input.body,
+    channelEndpointRef: input.channelEndpointRef,
+    channelId: input.channelId,
+    destinationEmail: input.destinationEmail,
+    revisionLineage: input.revisionLineage,
+    subject: input.subject,
+    version: 1,
+  });
+}
+
+function buildFinalPreviewDigest(input: Readonly<{
+  idempotencyKey: string;
+  payloadFingerprint: string;
+  requestedAt: string;
+}>): string {
+  return buildSha256Digest({
+    digestKind: "application_message_final_preview",
+    idempotencyKey: input.idempotencyKey,
+    payloadFingerprint: input.payloadFingerprint,
+    requestedAt: input.requestedAt,
+    version: 1,
+  });
+}
+
+function buildSha256Digest(value: unknown): string {
+  return `sha256:${sha256Hex(canonicalJson(value))}`;
 }
 
 function buildSafeRef(prefix: string, value: string): string {
-  return `${prefix}:${fnv1a32(value)}`;
+  return `${prefix}:${sha256Hex(value)}`;
 }
 
-function fnv1a32(value: string): string {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
+const SHA256_K = [
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b,
+  0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01,
+  0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7,
+  0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc,
+  0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152,
+  0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147,
+  0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
+  0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819,
+  0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116, 0x1e376c08,
+  0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f,
+  0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
+  0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+] as const;
+
+type Sha256State = readonly [
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+  number,
+];
+
+const SHA256_INITIAL_STATE: Sha256State = [
+  0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f,
+  0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+];
+
+function sha256Hex(value: string): string {
+  const padded = padSha256Bytes(TEXT_ENCODER.encode(value));
+  return sha256StateToHex(compressSha256Bytes(padded));
+}
+
+function padSha256Bytes(bytes: Uint8Array): Uint8Array {
+  const bitLength = bytes.length * 8;
+  const paddedLength = Math.ceil((bytes.length + 9) / 64) * 64;
+  const padded = new Uint8Array(paddedLength);
+  padded.set(bytes);
+  padded[bytes.length] = 0x80;
+  const view = new DataView(padded.buffer);
+  view.setUint32(paddedLength - 8, Math.floor(bitLength / 0x100000000));
+  view.setUint32(paddedLength - 4, bitLength >>> 0);
+  return padded;
+}
+
+function compressSha256Bytes(padded: Uint8Array): Sha256State {
+  const view = new DataView(padded.buffer, padded.byteOffset, padded.byteLength);
+  const words = new Uint32Array(64);
+  let state = SHA256_INITIAL_STATE;
+
+  for (let offset = 0; offset < padded.length; offset += 64) {
+    loadSha256Words(view, offset, words);
+    expandSha256Words(words);
+    state = compressSha256Words(words, state);
   }
-  return (hash >>> 0).toString(16).padStart(8, "0");
+  return state;
+}
+
+function loadSha256Words(
+  view: DataView,
+  offset: number,
+  words: Uint32Array,
+): void {
+  for (let index = 0; index < 16; index += 1) {
+    words[index] = view.getUint32(offset + index * 4);
+  }
+}
+
+function expandSha256Words(words: Uint32Array): void {
+  for (let index = 16; index < 64; index += 1) {
+    const previous15 = words[index - 15] ?? 0;
+    const previous2 = words[index - 2] ?? 0;
+    const s0 =
+      rotateRight(previous15, 7) ^
+      rotateRight(previous15, 18) ^
+      (previous15 >>> 3);
+    const s1 =
+      rotateRight(previous2, 17) ^
+      rotateRight(previous2, 19) ^
+      (previous2 >>> 10);
+    words[index] =
+      ((words[index - 16] ?? 0) + s0 + (words[index - 7] ?? 0) + s1) >>>
+      0;
+  }
+}
+
+function compressSha256Words(
+  words: Uint32Array,
+  state: Sha256State,
+): Sha256State {
+  let [a, b, c, d, e, f, g, h] = state;
+  for (let index = 0; index < 64; index += 1) {
+    const s1 = rotateRight(e, 6) ^ rotateRight(e, 11) ^ rotateRight(e, 25);
+    const ch = (e & f) ^ (~e & g);
+    const temp1 =
+      (h + s1 + ch + (SHA256_K[index] ?? 0) + (words[index] ?? 0)) >>> 0;
+    const s0 = rotateRight(a, 2) ^ rotateRight(a, 13) ^ rotateRight(a, 22);
+    const maj = (a & b) ^ (a & c) ^ (b & c);
+    const temp2 = (s0 + maj) >>> 0;
+    h = g;
+    g = f;
+    f = e;
+    e = (d + temp1) >>> 0;
+    d = c;
+    c = b;
+    b = a;
+    a = (temp1 + temp2) >>> 0;
+  }
+  return [
+    (state[0] + a) >>> 0,
+    (state[1] + b) >>> 0,
+    (state[2] + c) >>> 0,
+    (state[3] + d) >>> 0,
+    (state[4] + e) >>> 0,
+    (state[5] + f) >>> 0,
+    (state[6] + g) >>> 0,
+    (state[7] + h) >>> 0,
+  ];
+}
+
+function sha256StateToHex(state: Sha256State): string {
+  return state
+    .map((word) => word.toString(16).padStart(8, "0"))
+    .join("");
+}
+
+function rotateRight(value: number, bits: number): number {
+  return ((value >>> bits) | (value << (32 - bits))) >>> 0;
 }
 
 function canonicalJson(value: unknown): string {
@@ -1623,11 +1927,26 @@ function isIdempotencyKey(value: string): boolean {
 }
 
 function isDigest(value: string): boolean {
-  return /^fnv1a32:[a-f0-9]{8}$/u.test(value);
+  return /^sha256:[a-f0-9]{64}$/u.test(value);
 }
 
 function isSafeRef(value: string): boolean {
   return /^mcp-safe-ref:[a-z0-9][a-z0-9._:-]{1,160}$/u.test(value);
+}
+
+function isTrustedChannelEndpointUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return (
+      parsed.protocol === "https:" &&
+      parsed.username === "" &&
+      parsed.password === "" &&
+      parsed.hash === "" &&
+      parsed.hostname.length > 0
+    );
+  } catch {
+    return false;
+  }
 }
 
 function isSafeProviderReceiptRef(value: string): boolean {
