@@ -288,6 +288,7 @@ const USER_VISIBLE_REASON_BY_BLOCKED_REASON: Readonly<
 };
 
 const UNSAFE_RULE_HOST_FRAGMENTS = ["*", "/", "\\", "@", "://"] as const;
+const ENCODED_PATH_BOUNDARY_PATTERN = /%(?:2e|2f|5c)/iu;
 const DOCUMENTATION_IPV4_PREFIXES: readonly (readonly number[])[] = [
   [192, 0, 0],
   [192, 0, 2],
@@ -301,10 +302,23 @@ export function createMcpOutboundEgressPolicy(
   }> = {},
 ): McpOutboundEgressPolicyV1 {
   const allowlist = (input.allowlist ?? []).map(normalizeAllowlistRule);
+  assertUniqueAllowlistRuleIds(allowlist);
   return {
     ...DEFAULT_POLICY,
     allowlist: allowlist.sort((left, right) => compareStrings(left.id, right.id)),
   };
+}
+
+function assertUniqueAllowlistRuleIds(
+  allowlist: readonly McpOutboundEgressAllowlistRuleV1[],
+): void {
+  const seen = new Set<string>();
+  for (const rule of allowlist) {
+    if (seen.has(rule.id)) {
+      throw new TypeError("Local MCP outbound egress allowlist rule id is duplicated");
+    }
+    seen.add(rule.id);
+  }
 }
 
 export function evaluateMcpOutboundEgressRequest(
@@ -333,6 +347,13 @@ export function evaluateMcpOutboundEgressRequest(
   if (destination.blockedReason === "credentials_in_url") {
     return createBlockedDecision(
       "credentials_in_url",
+      parsedRequest,
+      destination,
+    );
+  }
+  if (destination.blockedReason === "unsafe_output_metadata") {
+    return createBlockedDecision(
+      "unsafe_output_metadata",
       parsedRequest,
       destination,
     );
@@ -507,23 +528,41 @@ function normalizeMcpOutboundDestinationForPolicy(
   const scheme = parsed.protocol.replace(/:$/u, "").toLowerCase();
   const host = normalizeParsedHost(parsed.hostname);
   const policyPath = parsed.pathname || "/";
-  const path = safePathForAudit(policyPath);
+  const pathSafeForPolicy = isSafePolicyPath(policyPath);
+  const path = auditPathForPolicy(policyPath, pathSafeForPolicy);
   const port = parsePort(parsed.port);
+  const blockedReason = destinationBlockedReason(
+    parsed,
+    scheme,
+    pathSafeForPolicy,
+  );
   const destination: McpOutboundEgressDestinationV1 = {
     kind: "mcp_outbound_egress_destination",
     scheme,
     host,
     origin: buildSafeOrigin(scheme, host, parsed.port),
-    ...(port ? { port } : {}),
+    ...(port !== undefined ? { port } : {}),
     path,
     pathClassification: path === "/" ? "root_path" : "path_present",
-    ...(!isHttpScheme(scheme) ? { blockedReason: "unsupported_scheme" as const } : {}),
-    ...((parsed.username || parsed.password)
-      ? { blockedReason: "credentials_in_url" as const }
-      : {}),
+    ...(blockedReason ? { blockedReason } : {}),
     version: 1,
   };
   return { destination, policyPath };
+}
+
+function auditPathForPolicy(path: string, safeForPolicy: boolean): string {
+  return safeForPolicy ? path : "/redacted-path";
+}
+
+function destinationBlockedReason(
+  parsed: URL,
+  scheme: string,
+  pathSafeForPolicy: boolean,
+): McpOutboundEgressBlockedReasonV1 | undefined {
+  if (parsed.username || parsed.password) return "credentials_in_url";
+  if (!isHttpScheme(scheme)) return "unsupported_scheme";
+  if (!pathSafeForPolicy) return "unsafe_output_metadata";
+  return undefined;
 }
 
 export function redactMcpOutboundUrlForAudit(value: string): string {
@@ -829,8 +868,11 @@ function parseUrl(value: string): URL | undefined {
 
 function parsePort(value: string): number | undefined {
   if (!value) return undefined;
+  if (!/^\d+$/u.test(value)) return undefined;
   const port = Number(value);
-  return Number.isInteger(port) && port > 0 ? port : undefined;
+  return Number.isInteger(port) && port >= 0 && port <= 65_535
+    ? port
+    : undefined;
 }
 
 function normalizeParsedHost(host: string): string {
@@ -862,6 +904,10 @@ function redactedUrlFromDestination(
 function safePathForAudit(path: string): string {
   const normalized = path || "/";
   return isSafePath(normalized) ? normalized : "/redacted-path";
+}
+
+function isSafePolicyPath(path: string): boolean {
+  return isSafePath(path) && !ENCODED_PATH_BOUNDARY_PATTERN.test(path);
 }
 
 function isSafePath(path: string): boolean {

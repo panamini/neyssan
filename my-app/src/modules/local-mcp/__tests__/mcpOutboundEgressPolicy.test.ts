@@ -66,6 +66,8 @@ function expectBlocked(
   expect(result.networkRequestExecuted).toBe(false);
   expect(result.externalSideEffect).toBe(false);
   expect(result.persisted).toBe(false);
+  expect(result.credentialStorage).toBe("none");
+  expect(result.tokenStorage).toBe("none");
   assertLocalMcpPrivacySafeOutput(result);
   return result;
 }
@@ -181,11 +183,33 @@ describe("PR77 outbound egress allowlist and SSRF policy", () => {
     );
 
     expect(result.allowed).toBe(false);
-    expect(result.reason).toBe("path_not_allowlisted");
+    expect(result.reason).toBe("unsafe_output_metadata");
     expect(result.redactedUrl).toBe("https://api.allowed.example/redacted-path");
     expect(result.normalizedDestination?.path).toBe("/redacted-path");
     expect(JSON.stringify(result)).not.toContain("access-token");
     assertLocalMcpPrivacySafeOutput(result);
+  });
+
+  it("blocks unsafe policy paths before allowlist matching", () => {
+    for (const destinationUrl of [
+      "https://api.allowed.example/v1/SECRET_TOKEN_SENTINEL_DO_NOT_EXPOSE",
+      "https://api.allowed.example/v1/%2e%2e%2fadmin",
+    ] as const) {
+      const result = evaluateMcpOutboundEgressRequest(
+        request({ destinationUrl }),
+        policy(),
+      );
+      const serialized = JSON.stringify(result);
+
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe("unsafe_output_metadata");
+      expect(result.redactedUrl).toBe("https://api.allowed.example/redacted-path");
+      expect(result.normalizedDestination?.path).toBe("/redacted-path");
+      expect(serialized).not.toContain("SECRET_TOKEN_SENTINEL_DO_NOT_EXPOSE");
+      expect(serialized).not.toContain("%2e");
+      expect(serialized).not.toContain("%2f");
+      assertLocalMcpPrivacySafeOutput(result);
+    }
   });
 
   it("matches path prefixes only on segment boundaries", () => {
@@ -322,6 +346,29 @@ describe("PR77 outbound egress allowlist and SSRF policy", () => {
       "http://api.allowed.example:8080/v1/messages",
     );
     assertLocalMcpPrivacySafeOutput(httpNonDefault);
+
+    const explicitZeroPort = evaluateMcpOutboundEgressRequest(
+      request({ destinationUrl: "https://api.allowed.example:0/v1/messages" }),
+      policy(),
+    );
+    expect(explicitZeroPort.allowed).toBe(false);
+    expect(explicitZeroPort.reason).toBe("port_not_allowlisted");
+    expect(explicitZeroPort.normalizedDestination?.port).toBe(0);
+    assertLocalMcpPrivacySafeOutput(explicitZeroPort);
+  });
+
+  it("rejects duplicate allowlist rule ids", () => {
+    expect(() =>
+      createMcpOutboundEgressPolicy({
+        allowlist: [
+          BASE_RULE,
+          {
+            ...BASE_RULE,
+            schemes: ["http"],
+          },
+        ],
+      }),
+    ).toThrow(TypeError);
   });
 
   it("blocks URLs with embedded credentials", () => {
