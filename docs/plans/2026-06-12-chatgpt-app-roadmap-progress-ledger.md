@@ -21,28 +21,30 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR80B-follow-up - Approved Handoff Artifact Delivery
-GitHub PR: https://github.com/panamini/neyssan/pull/209
-Head commit: 9e4ed852c708eba75789c5df34091c8d27e0ee72
-Merge commit: 9cfc9accd691f6d9c69ade6164dff2b6e1aeb6f9
-Merged at: 2026-06-19T17:25:07Z
+PR80B-follow-up-2-prep - Authoritative Approved Answer Source Decision
+GitHub PR: https://github.com/panamini/neyssan/pull/210
+Head commit: d5b63ccd459029d0952b70aa597907d190f3fc65
+Merge commit: 8e37506459846fc0497d5c1b3be11ac50671f250
+Merged at: 2026-06-19T18:19:33Z
 ```
 
 Current implementation PR:
 
 ```txt
-PR80B-follow-up-2-prep - Authoritative Approved Answer Source Decision
-Branch: codex/pr80b-follow-up-2-approved-answer-source-preflight
-Scope: docs-only preflight; no code implementation.
+PR80-to-PR81 manual handoff completion preflight
+Branch: codex/pr80-to-pr81-manual-handoff-completion-preflight
+Scope: docs-only transition preflight; no code implementation.
+Final decision: READY_TO_START_PR81_NARROW_MANUAL_HANDOFF_SCOPE.
 ```
 
 Exact next implementation PR:
 
 ```txt
-None unlocked by the ledger alone.
-Approved answer copy stays blocked until a fresh source decision returns READY_TO_IMPLEMENT_EXISTING_SOURCE or READY_TO_IMPLEMENT_NARROW_BOUNDARY.
+PR81 - Rate Limits, Budget Limits, and Abuse Protection for Manual Handoff and Existing Write-Capable Flows.
+May start only after this transition preflight merges.
+Approved answer copy stays blocked until a future source-model decision creates an authoritative approved answer source.
 PR80-live remains blocked by provider authorization prerequisites.
-PR81 must not start automatically after PR80B or this preflight.
+PR81 must not include PR80-live, answer-copy implementation, PR82+ work, OAuth/token work, provider integration, browser automation, external HTTP, package changes, or lockfile changes.
 ```
 
 PR59 status:
@@ -110,8 +112,10 @@ MERGED_NARROW_PR59 - PR185 merged the narrow read-only adapter scope approved by
 |                       80A | Durable Live External Action Safety Foundation                                       | merged      | #206                 | 69bec4a88e3d720b75ae89bd3bceb1fdcdba4a76                                                     | Provider-neutral prerequisite code PR for future live external actions while ATS submit/apply authorization remains pending. Added only durable safe live external-action idempotency/execution metadata, at-most-once transition safety, provider-neutral default-off live external-action config status, and tests. No provider adapter, provider API call, upload, live apply, final preview, provider parser, UI/runtime/tool wiring, OAuth/token storage, package changes, or provider request in tests. Merged at 2026-06-19T03:21:03Z. Live ATS submit/apply remains blocked until provider authorization, credentials, a test tenant, and a test posting exist. |
 |                       80B | Safe Application Handoff While ATS Authorization Is Pending                          | merged      | #208                 | dd71c10b45582894c2f445db7443d7748618abab                                                     | Manual handoff only: authenticated owner-scoped Convex records, final preview, exact human confirmation, direct-user open controls, user-reported result explicitly unverified, no provider-verified state, no server-side destination fetch, no browser automation, and separate default-off feature flag. Approved answer copy was intentionally blocked until approved answers are server-derived. Merged at 2026-06-19T14:33:28Z. |
 |          80B-follow-up | Approved Handoff Artifact Delivery                                                   | merged      | #209                 | head 9e4ed852c708eba75789c5df34091c8d27e0ee72; merge 9cfc9accd691f6d9c69ade6164dff2b6e1aeb6f9 | Added approved manual-handoff artifact delivery from approved export representations only. Approved answer copy remains blocked because no authoritative server-derived approved application-answer source is available. No provider-verified state, live apply, browser automation, provider fetch, destination fetch, or server-side submit/apply behavior was added. Merged at 2026-06-19T17:25:07Z. |
-|   80B-follow-up-2-prep | Authoritative Approved Answer Source Decision                                        | current     | none                 | branch codex/pr80b-follow-up-2-approved-answer-source-preflight                               | Docs-only preflight to decide whether an existing authoritative owner-scoped approved application-answer source exists for manual handoff per-answer copy. No code implementation, schema changes, UI changes, runtime wiring, provider calls, browser automation, live apply, or generated answer persistence is authorized by this row. |
+|   80B-follow-up-2-prep | Authoritative Approved Answer Source Decision                                        | merged      | #210                 | head d5b63ccd459029d0952b70aa597907d190f3fc65; merge 8e37506459846fc0497d5c1b3be11ac50671f250 | Docs-only preflight returned `BLOCKED_NO_AUTHORITATIVE_SOURCE`. It decided that no existing authoritative owner-scoped approved application-answer source exists for manual handoff per-answer copy. No code implementation, schema changes, UI changes, runtime wiring, provider calls, browser automation, live apply, or generated answer persistence was authorized. Merged at 2026-06-19T18:19:33Z. |
+|      80-to-81-preflight | PR80 to PR81 manual handoff completion preflight                                     | current     | none                 | branch codex/pr80-to-pr81-manual-handoff-completion-preflight                                | Docs-only transition preflight. Final decision: `READY_TO_START_PR81_NARROW_MANUAL_HANDOFF_SCOPE`. It treats PR80 as complete enough only for manual handoff, approved artifact delivery, existing controlled export/send surfaces, and abuse/rate-limit hardening. Answer copy and PR80-live remain blocked. |
 |                   80-live | Live Submit/Apply for One Authorized Integration                                     | blocked     | none                 | no provider selected                                                                          | May begin only after one provider supplies written use-case authorization, official server-to-server credentials, test tenant or sandbox, one authorized test posting, official schema/questions endpoint, official submit endpoint, and receipt/error/duplicate/retry clarification. |
+|                        81 | Rate Limits, Budget Limits, and Abuse Protection for Manual Handoff and Existing Write-Capable Flows | next after transition preflight | none                 | no implementation branch                                                                       | Narrow PR81 only. Scope is rate limits/action caps/event-spam guards for manual handoff prepare/confirm/open/outcome, artifact delivery content loading, and existing controlled send/export flows if already in scope. It must not include ATS live provider submit, provider adapters, OAuth/token work, external HTTP, browser automation, answer copy, PR82+ work, package changes, or lockfile changes. |
 
 ---
 
@@ -212,7 +216,9 @@ PR208 merged PR80B into `application-os-foundation` with merge commit `dd71c10b4
 
 PR209 merged PR80B-follow-up into `application-os-foundation` with head commit `9e4ed852c708eba75789c5df34091c8d27e0ee72` and merge commit `9cfc9accd691f6d9c69ade6164dff2b6e1aeb6f9` at `2026-06-19T17:25:07Z`. It added approved manual-handoff artifact delivery from approved export representations only. It did not add an authoritative application-answer source, provider-verified state, live apply, browser automation, provider fetch, destination fetch, or server-side submit/apply behavior. Approved answer copy still remains blocked.
 
-PR80B-follow-up-2-prep is the current docs-only source decision. It must decide whether an existing authoritative, owner-scoped, approved application-answer source exists for manual handoff per-answer copy. Until that decision returns `READY_TO_IMPLEMENT_EXISTING_SOURCE` or `READY_TO_IMPLEMENT_NARROW_BOUNDARY`, answer copy remains blocked. `BLOCKED_NO_AUTHORITATIVE_SOURCE` means a separate governance/source-model decision is required before any code PR can enable per-answer copy.
+PR210 merged PR80B-follow-up-2-prep into `application-os-foundation` with head commit `d5b63ccd459029d0952b70aa597907d190f3fc65` and merge commit `8e37506459846fc0497d5c1b3be11ac50671f250` at `2026-06-19T18:19:33Z`. It returned `BLOCKED_NO_AUTHORITATIVE_SOURCE`: no existing active table, artifact kind, package item, or manual handoff record provides owner-scoped, human-approved, fresh, provider-question-bound answer text for manual copy cards. Approved answer copy remains blocked until a future source-model decision creates an authoritative approved answer source.
+
+PR80-to-PR81 manual handoff completion preflight returns `READY_TO_START_PR81_NARROW_MANUAL_HANDOFF_SCOPE`. PR80 is complete enough for PR81 only in the current manual handoff/export/send sense: final approved package handoff, exact human confirmation, approved artifact delivery, user-opened destination, unverified user-reported outcome, redacted audit events, default-off feature flag, no provider-verified state, no live submit/apply, no browser automation, and no answer copy unless a future source model exists. This unlocks only narrow PR81 rate/budget/abuse hardening for manual handoff and existing controlled send/export flows. It does not unlock answer copy, PR80-live, PR82+ work, OAuth/token work, provider integration, browser automation, external HTTP, package changes, or lockfile changes.
 
 Maintainer decision after PR80A still keeps live ATS submit/apply blocked until one provider supplies written use-case authorization, official server-to-server credentials, a test tenant or sandbox, one authorized test posting, official schema/questions endpoint, official submit endpoint, and receipt/error/duplicate/retry clarification. Manual handoff must not reserve, dispatch, or finalize PR80A `liveExternalActionExecutions`, and it must not represent a user-reported outcome as provider-submitted or provider-verified. PR80B, PR80B-follow-up, and PR80B-follow-up-2-prep do not automatically unlock PR81.
 
