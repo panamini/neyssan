@@ -146,7 +146,7 @@ export function ManualApplicationHandoffPanel({
     if (!canUsePackage || !applicationUrl) return;
     void runAction(async () => {
       await onRecordDestinationOpenRequested({ handoffId, manifestDigest });
-      window.open(applicationUrl, "_blank", "noopener");
+      window.open(applicationUrl, "_blank", "noopener,noreferrer");
     });
   };
 

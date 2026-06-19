@@ -232,7 +232,11 @@ describe("ManualApplicationHandoffPanel", () => {
         manifestDigest: MANIFEST_DIGEST,
       }),
     );
-    expect(open).toHaveBeenCalledWith(APPLICATION_URL, "_blank", "noopener");
+    expect(open).toHaveBeenCalledWith(
+      APPLICATION_URL,
+      "_blank",
+      "noopener,noreferrer",
+    );
   });
 
   it("labels user-reported outcomes as unverified provider truth", async () => {
