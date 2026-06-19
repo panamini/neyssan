@@ -30,12 +30,24 @@ export const MANUAL_APPLICATION_HANDOFF_EVENT_KINDS = [
   "manual_handoff.confirmation_invalidated",
 ] as const;
 
+export const MANUAL_APPLICATION_HANDOFF_RATE_LIMIT_CAPABILITIES = [
+  "manual_handoff.prepare",
+  "manual_handoff.confirm",
+  "manual_handoff.delivery_content_load",
+  "manual_handoff.file_download_request",
+  "manual_handoff.destination_open_request",
+  "manual_handoff.outcome_report",
+  "manual_handoff.answer_copy_blocked_attempt",
+] as const;
+
 export type ManualApplicationHandoffState =
   (typeof MANUAL_APPLICATION_HANDOFF_STATES)[number];
 export type ManualApplicationHandoffEvidence =
   (typeof MANUAL_APPLICATION_HANDOFF_EVIDENCE)[number];
 export type ManualApplicationHandoffEventKind =
   (typeof MANUAL_APPLICATION_HANDOFF_EVENT_KINDS)[number];
+export type ManualApplicationHandoffRateLimitCapability =
+  (typeof MANUAL_APPLICATION_HANDOFF_RATE_LIMIT_CAPABILITIES)[number];
 
 export type ManualApplicationHandoffManifestInput = Readonly<{
   ownerProfileId: string;
@@ -127,6 +139,16 @@ export const manualApplicationHandoffEventKindValidator = v.union(
   v.literal("manual_handoff.confirmation_invalidated"),
 );
 
+export const manualApplicationHandoffRateLimitCapabilityValidator = v.union(
+  v.literal("manual_handoff.prepare"),
+  v.literal("manual_handoff.confirm"),
+  v.literal("manual_handoff.delivery_content_load"),
+  v.literal("manual_handoff.file_download_request"),
+  v.literal("manual_handoff.destination_open_request"),
+  v.literal("manual_handoff.outcome_report"),
+  v.literal("manual_handoff.answer_copy_blocked_attempt"),
+);
+
 export const manualApplicationHandoffFields = {
   handoffId: v.string(),
   ownerProfileId: v.string(),
@@ -167,6 +189,22 @@ export const manualApplicationHandoffEventFields = {
   destinationHostname: v.optional(v.string()),
   destinationUrlHash: v.optional(v.string()),
   occurredAt: v.number(),
+  version: v.literal(1),
+};
+
+export const manualApplicationHandoffRateLimitFields = {
+  rateLimitId: v.string(),
+  ownerProfileId: v.string(),
+  capability: manualApplicationHandoffRateLimitCapabilityValidator,
+  resourceHash: v.string(),
+  shortWindowStartedAt: v.number(),
+  shortWindowCount: v.number(),
+  longWindowStartedAt: v.number(),
+  longWindowCount: v.number(),
+  lastAllowedAt: v.number(),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+  expiresAt: v.number(),
   version: v.literal(1),
 };
 

@@ -105,6 +105,9 @@ export function ManualApplicationHandoffPanel({
 }: ManualApplicationHandoffPanelProps): JSX.Element {
   const [confirmationCopy, setConfirmationCopy] = React.useState("");
   const [actionState, setActionState] = React.useState<ActionState>("idle");
+  const [actionErrorMessage, setActionErrorMessage] = React.useState<
+    string | null
+  >(null);
   const handoffId = handoff?.handoffId ?? "";
   const manifestDigest = handoff?.manifestDigest ?? "";
   const requiredConfirmationCopy = handoff?.requiredConfirmationCopy ?? "";
@@ -137,15 +140,18 @@ export function ManualApplicationHandoffPanel({
   React.useEffect(() => {
     setConfirmationCopy("");
     setActionState("idle");
+    setActionErrorMessage(null);
   }, [jobId, handoffId, manifestDigest]);
 
   const runAction = async (action: () => Promise<unknown>) => {
     setActionState("working");
+    setActionErrorMessage(null);
     try {
       await action();
       setActionState("done");
-    } catch {
+    } catch (error) {
       setActionState("failed");
+      setActionErrorMessage(formatHandoffActionErrorMessage(error));
     }
   };
 
@@ -337,7 +343,7 @@ export function ManualApplicationHandoffPanel({
           <button
             type="button"
             className="dasti-button dasti-button--pill dasti-button--sm"
-            disabled={!applicationUrl}
+            disabled={!applicationUrl || actionState === "working"}
             onClick={handleOpenDestination}
           >
             Open application form
@@ -347,6 +353,7 @@ export function ManualApplicationHandoffPanel({
             <button
               type="button"
               className="dasti-button dasti-button--pill dasti-button--sm"
+              disabled={actionState === "working"}
               onClick={() => handleReportOutcome("user_reported_submitted")}
             >
               I submitted it
@@ -354,6 +361,7 @@ export function ManualApplicationHandoffPanel({
             <button
               type="button"
               className="dasti-button dasti-button--pill dasti-button--sm"
+              disabled={actionState === "working"}
               onClick={() => handleReportOutcome("user_reported_not_submitted")}
             >
               I did not submit it
@@ -361,6 +369,7 @@ export function ManualApplicationHandoffPanel({
             <button
               type="button"
               className="dasti-button dasti-button--pill dasti-button--sm"
+              disabled={actionState === "working"}
               onClick={() => handleReportOutcome("abandoned")}
             >
               Mark abandoned
@@ -371,11 +380,72 @@ export function ManualApplicationHandoffPanel({
 
       {actionState === "failed" ? (
         <div className="dasti-empty-state__subtitle" role="status">
-          Handoff action failed.
+          {actionErrorMessage ?? "Handoff action failed."}
         </div>
       ) : null}
     </section>
   );
+}
+
+function formatHandoffActionErrorMessage(error: unknown): string {
+  const structuredRateLimitCategory =
+    readStructuredHandoffRateLimitCategory(error);
+  if (structuredRateLimitCategory) {
+    return formatHandoffRateLimitMessage(structuredRateLimitCategory);
+  }
+
+  return formatHandoffActionErrorMessageFromText(readErrorMessage(error));
+}
+
+function readStructuredHandoffRateLimitCategory(error: unknown): string | null {
+  const structuredData = readStructuredHandoffErrorData(error);
+  if (structuredData?.code !== "manual_application_handoff_rate_limited") {
+    return null;
+  }
+  return structuredData.category ?? "rate_limited";
+}
+
+function formatHandoffRateLimitMessage(category: string): string {
+  if (category === "budget_exhausted") {
+    return "Manual handoff budget reached. Try again later.";
+  }
+  return "Too many handoff actions. Try again later.";
+}
+
+function readErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  return "";
+}
+
+function formatHandoffActionErrorMessageFromText(message: string): string {
+  if (message.includes("budget_exhausted")) {
+    return "Manual handoff budget reached. Try again later.";
+  }
+  if (
+    message.includes("manual_application_handoff_rate_limited") ||
+    message.includes("Too many manual handoff actions")
+  ) {
+    return "Too many handoff actions. Try again later.";
+  }
+  return "Handoff action failed.";
+}
+
+function readStructuredHandoffErrorData(error: unknown): {
+  code?: string;
+  category?: string;
+} | null {
+  if (!error || typeof error !== "object" || !("data" in error)) {
+    return null;
+  }
+  const data = (error as { data?: unknown }).data;
+  if (!data || typeof data !== "object") return null;
+  const record = data as Record<string, unknown>;
+  return {
+    code: typeof record.code === "string" ? record.code : undefined,
+    category:
+      typeof record.category === "string" ? record.category : undefined,
+  };
 }
 
 function triggerLocalTextDownload(
