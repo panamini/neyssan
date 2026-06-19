@@ -9,6 +9,7 @@ import { JobDetail } from "./JobDetail";
 import { JobsList } from "./JobsList";
 import {
   ManualApplicationHandoffPanel,
+  type ManualApplicationHandoffDeliveryContent,
   type ManualApplicationHandoffPanelState,
 } from "./ManualApplicationHandoffPanel";
 import { useToast } from "../ui/toast";
@@ -1210,6 +1211,7 @@ function buildJobResumePickerOption(cv: CvDocument): JobResumePickerOption {
 }
 
 function JobsPageContent(): JSX.Element {
+  const convex = useConvex();
   const navigate = useNavigate();
   const location = useLocation();
   const { jobId: selectedJobId } = useParams<JobsPageRouteParams>();
@@ -1336,6 +1338,12 @@ function JobsPageContent(): JSX.Element {
         "manualApplicationHandoff.getForJob") as any,
     [],
   );
+  const manualApplicationHandoffDeliveryQueryReference = React.useMemo(
+    () =>
+      ((api as any).manualApplicationHandoff?.getDeliveryContentForHandoff ??
+        "manualApplicationHandoff.getDeliveryContentForHandoff") as any,
+    [],
+  );
   const prepareManualApplicationHandoff = useMutation(
     ((api as any).manualApplicationHandoff?.prepare ??
       "manualApplicationHandoff.prepare") as any,
@@ -1343,10 +1351,6 @@ function JobsPageContent(): JSX.Element {
   const confirmManualApplicationHandoff = useMutation(
     ((api as any).manualApplicationHandoff?.confirm ??
       "manualApplicationHandoff.confirm") as any,
-  );
-  const recordManualApplicationHandoffCopySucceeded = useMutation(
-    ((api as any).manualApplicationHandoff?.recordCopySucceeded ??
-      "manualApplicationHandoff.recordCopySucceeded") as any,
   );
   const recordManualApplicationHandoffFileDownloadRequested = useMutation(
     ((api as any).manualApplicationHandoff?.recordFileDownloadRequested ??
@@ -1380,6 +1384,18 @@ function JobsPageContent(): JSX.Element {
       ? { jobId: selectedJobId }
       : "skip",
   ) as ManualApplicationHandoffPanelState | undefined;
+  const [
+    manualApplicationHandoffDeliveryContent,
+    setManualApplicationHandoffDeliveryContent,
+  ] = React.useState<ManualApplicationHandoffDeliveryContent | null>(null);
+
+  React.useEffect(() => {
+    setManualApplicationHandoffDeliveryContent(null);
+  }, [
+    selectedJobId,
+    manualApplicationHandoff?.handoffId,
+    manualApplicationHandoff?.manifestDigest,
+  ]);
 
   React.useEffect(() => {
     if (typeof window === "undefined") {
@@ -2052,16 +2068,16 @@ function JobsPageContent(): JSX.Element {
     [confirmManualApplicationHandoff],
   );
 
-  const handleRecordManualApplicationHandoffCopySucceeded = React.useCallback(
-    async (args: {
-      handoffId: string;
-      manifestDigest: string;
-      answerRef: string;
-      answerDigest: string;
-    }) => {
-      await recordManualApplicationHandoffCopySucceeded(args);
+  const handleLoadManualApplicationHandoffDeliveryContent = React.useCallback(
+    async (args: { handoffId: string; manifestDigest: string }) => {
+      const content = (await convex.query(
+        manualApplicationHandoffDeliveryQueryReference,
+        args,
+      )) as ManualApplicationHandoffDeliveryContent | null;
+      setManualApplicationHandoffDeliveryContent(content);
+      return content;
     },
-    [recordManualApplicationHandoffCopySucceeded],
+    [convex, manualApplicationHandoffDeliveryQueryReference],
   );
 
   const handleRecordManualApplicationHandoffFileDownloadRequested =
@@ -2248,11 +2264,12 @@ function JobsPageContent(): JSX.Element {
             jobId={selectedJob.id}
             applicationUrl={selectedJob.applicationUrl}
             handoff={manualApplicationHandoff ?? null}
+            deliveryContent={manualApplicationHandoffDeliveryContent}
+            onLoadDeliveryContent={
+              handleLoadManualApplicationHandoffDeliveryContent
+            }
             onPrepare={handlePrepareManualApplicationHandoff}
             onConfirm={handleConfirmManualApplicationHandoff}
-            onRecordCopySucceeded={
-              handleRecordManualApplicationHandoffCopySucceeded
-            }
             onRecordFileDownloadRequested={
               handleRecordManualApplicationHandoffFileDownloadRequested
             }

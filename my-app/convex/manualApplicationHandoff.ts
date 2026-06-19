@@ -2,6 +2,7 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { listProfilesForClerk } from "./lib/userProfiles";
 import { assertApplicationPackageStorageShape } from "./lib/applicationPackages";
+import { buildStableHash } from "../src/modules/application-harness/fingerprints";
 import {
   assertManualApplicationHandoffStorageIsRedacted,
   assertSafeHash,
@@ -22,6 +23,19 @@ const ANSWER_COPY_BLOCKED_REASON =
   "Approved answer copy is blocked until approved answers are server-derived.";
 const DOWNLOAD_BLOCKED_REASON =
   "Approved artifact downloads are blocked until an approved export representation is available.";
+const MAX_DELIVERY_CONTENT_BYTES = 100_000;
+const MAX_CONTEXT_ARTIFACT_SCAN_COUNT = 200;
+const SAFE_FILENAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._ -]{0,120}\.(?:md|txt)$/u;
+const UNSAFE_DELIVERY_TEXT_PATTERNS: readonly RegExp[] = [
+  /RAW_(?:(?:CV|RESUME|JOB|PROPOSAL|APPLICATION|COVER_LETTER)(?:_TEXT)?|SOURCE_DOCUMENT)_SENTINEL/u,
+  /SOURCE_QUOTE_DUMP_SENTINEL/u,
+  /PRIVATE_FACT_SENTINEL/u,
+  /NEVER_USE_SENTINEL/u,
+  /GENERATED_FULL_TEXT_SENTINEL/u,
+  /DO_NOT_EXPOSE/u,
+  new RegExp(`\\b${"Bea"}${"rer"}\\s+[A-Za-z0-9._-]+`, "u"),
+  new RegExp(`\\b(?:access${"Token"}|refresh${"Token"}|rawClaims)\\b`, "u"),
+];
 
 type OwnerJob = Readonly<{
   normalizedJobId: string;
@@ -31,6 +45,30 @@ type OwnerJob = Readonly<{
 
 type StoredPackage = Readonly<Record<string, any>>;
 type StoredHandoff = Readonly<Record<string, any>>;
+type StoredArtifact = Readonly<Record<string, any>>;
+type DownloadableArtifact = Readonly<{
+  artifactRef: string;
+  label: string;
+  filename: string;
+  mimeType: string;
+  text: string;
+  artifactDigest: string;
+  approvalProof: {
+    artifactStatus: "approved";
+    packageStatus: "ready_for_review";
+    manifestDigest: string;
+    version: 1;
+  };
+  freshnessProof: {
+    applicationPackageId: string;
+    applicationContextId: string;
+    packageHash: string;
+    packageContentHash?: string;
+    artifactContentHash: string;
+    version: 1;
+  };
+  version: 1;
+}>;
 
 const handoffViewValidator = v.any();
 
@@ -280,8 +318,73 @@ export const recordFileDownloadRequested = mutation({
     assertEnabled();
     assertSafeRef(args.artifactRef, "artifactRef");
     assertSafeHash(args.artifactDigest, "artifactDigest");
-    await requireConfirmedUsableHandoff(ctx, args);
-    throw new Error(DOWNLOAD_BLOCKED_REASON);
+    const { ownerJob, handoff, applicationPackage } =
+      await requireConfirmedUsableHandoff(ctx, args);
+    const artifacts = await buildDownloadableArtifacts(ctx, {
+      ownerJob,
+      handoff,
+      applicationPackage,
+      manifestDigest: args.manifestDigest,
+    });
+    const matchingArtifact = artifacts.find(
+      (artifact) =>
+        artifact.artifactRef === args.artifactRef &&
+        artifact.artifactDigest === args.artifactDigest,
+    );
+    if (!matchingArtifact) {
+      throw new Error(DOWNLOAD_BLOCKED_REASON);
+    }
+    await appendEvent(ctx, {
+      handoffId: handoff.handoffId,
+      ownerProfileId: ownerJob.ownerProfileId,
+      jobId: ownerJob.normalizedJobId,
+      eventKind: "manual_handoff.file_download_requested",
+      evidence: "user_interaction_observed",
+      stateAfter: handoff.state,
+      manifestDigest: args.manifestDigest,
+      applicationPackageId: handoff.applicationPackageId,
+      applicationContextId: handoff.applicationContextId,
+      artifactRef: matchingArtifact.artifactRef,
+      artifactDigest: matchingArtifact.artifactDigest,
+      occurredAt: Date.now(),
+    });
+    return buildHandoffView({
+      status: handoff.state,
+      config: readManualApplicationHandoffServerConfigStatus(),
+      ownerJob,
+      handoff,
+      applicationPackage,
+    });
+  },
+});
+
+export const getDeliveryContentForHandoff = query({
+  args: {
+    handoffId: v.string(),
+    manifestDigest: v.string(),
+  },
+  returns: handoffViewValidator,
+  handler: async (ctx, args) => {
+    assertEnabled();
+    const { ownerJob, handoff, applicationPackage } =
+      await requireConfirmedUsableHandoff(ctx, args);
+    const downloadableArtifacts = await buildDownloadableArtifacts(ctx, {
+      ownerJob,
+      handoff,
+      applicationPackage,
+      manifestDigest: args.manifestDigest,
+    });
+    return {
+      handoffId: handoff.handoffId,
+      manifestDigest: args.manifestDigest,
+      approvedAnswers: [],
+      answerCopyBlockedReason: ANSWER_COPY_BLOCKED_REASON,
+      downloadableArtifacts,
+      downloadBlockedReason:
+        downloadableArtifacts.length > 0 ? null : DOWNLOAD_BLOCKED_REASON,
+      providerVerified: false,
+      version: 1,
+    };
   },
 });
 
@@ -579,6 +682,19 @@ async function getHandoffById(
     .unique();
 }
 
+async function getApplicationArtifactById(
+  ctx: any,
+  ownerProfileId: string,
+  artifactId: string,
+): Promise<StoredArtifact | null> {
+  return await ctx.db
+    .query("applicationArtifacts")
+    .withIndex("by_user_id", (q: any) =>
+      q.eq("userId", ownerProfileId).eq("id", artifactId),
+    )
+    .unique();
+}
+
 async function findLatestHandoffForJob(
   ctx: any,
   ownerProfileId: string,
@@ -702,6 +818,242 @@ function getPackageArtifactById(
     throw new Error("Application package artifact is missing");
   }
   return artifact;
+}
+
+async function buildDownloadableArtifacts(
+  ctx: any,
+  args: {
+    ownerJob: OwnerJob;
+    handoff: StoredHandoff;
+    applicationPackage: StoredPackage;
+    manifestDigest: string;
+  },
+): Promise<DownloadableArtifact[]> {
+  const packagePayload = getApplicationPackagePayload(args.applicationPackage);
+  const candidates = [
+    {
+      artifactId: args.applicationPackage.resumeVariantArtifactId,
+      packageArtifactKind: "resume_variant_artifact",
+      exportKind: "resume_variant",
+      label: "Resume export",
+    },
+    {
+      artifactId: args.applicationPackage.coverLetterArtifactId,
+      packageArtifactKind: "cover_letter_artifact",
+      exportKind: "cover_letter",
+      label: "Cover letter export",
+    },
+  ] as const;
+  const artifacts: DownloadableArtifact[] = [];
+  const contextArtifacts = await listApplicationArtifactsForContext(
+    ctx,
+    args.ownerJob.ownerProfileId,
+    args.applicationPackage.applicationContextId,
+  );
+
+  for (const candidate of candidates) {
+    const packageArtifact = getPackageArtifactById(
+      packagePayload,
+      candidate.artifactId,
+      candidate.packageArtifactKind,
+    );
+    const packageArtifactContentHash = assertRequiredArtifactContentHash(
+      packageArtifact,
+      candidate.label,
+    );
+    const exportContent = extractDownloadableArtifactContent({
+      storedArtifacts: contextArtifacts,
+      expectedArtifactId: candidate.artifactId,
+      expectedContextId: args.applicationPackage.applicationContextId,
+      expectedJobId: args.ownerJob.normalizedJobId,
+      expectedExportKind: candidate.exportKind,
+      expectedContentHash: packageArtifactContentHash,
+      defaultLabel: candidate.label,
+    });
+    if (!exportContent) continue;
+
+    artifacts.push({
+      artifactRef: candidate.artifactId,
+      label: exportContent.label,
+      filename: exportContent.filename,
+      mimeType: exportContent.mimeType,
+      text: exportContent.text,
+      artifactDigest: await buildDeliveryArtifactDigest({
+        artifactRef: candidate.artifactId,
+        manifestDigest: args.manifestDigest,
+        text: exportContent.text,
+        mimeType: exportContent.mimeType,
+        artifactContentHash: packageArtifactContentHash,
+      }),
+      approvalProof: {
+        artifactStatus: "approved",
+        packageStatus: "ready_for_review",
+        manifestDigest: args.manifestDigest,
+        version: 1,
+      },
+      freshnessProof: {
+        applicationPackageId: args.applicationPackage.applicationPackageId,
+        applicationContextId: args.applicationPackage.applicationContextId,
+        packageHash: args.applicationPackage.packageHash,
+        ...(args.applicationPackage.contentHash
+          ? { packageContentHash: args.applicationPackage.contentHash }
+          : {}),
+        artifactContentHash: packageArtifactContentHash,
+        version: 1,
+      },
+      version: 1,
+    });
+  }
+
+  return artifacts;
+}
+
+async function listApplicationArtifactsForContext(
+  ctx: any,
+  ownerProfileId: string,
+  applicationContextId: string,
+): Promise<StoredArtifact[]> {
+  const artifacts = await ctx.db
+    .query("applicationArtifacts")
+    .withIndex("by_user_context", (q: any) =>
+      q.eq("userId", ownerProfileId).eq("contextId", applicationContextId),
+    )
+    .order("desc")
+    .take(MAX_CONTEXT_ARTIFACT_SCAN_COUNT);
+  return [...artifacts].sort(compareApplicationArtifactsForDelivery);
+}
+
+function compareApplicationArtifactsForDelivery(
+  left: StoredArtifact,
+  right: StoredArtifact,
+): number {
+  const rightTimestamp = getApplicationArtifactDeliveryTimestamp(right);
+  const leftTimestamp = getApplicationArtifactDeliveryTimestamp(left);
+  if (rightTimestamp !== leftTimestamp) {
+    return rightTimestamp - leftTimestamp;
+  }
+  return String(right.id ?? right._id ?? "").localeCompare(
+    String(left.id ?? left._id ?? ""),
+  );
+}
+
+function getApplicationArtifactDeliveryTimestamp(artifact: StoredArtifact): number {
+  return Number(
+    artifact.updatedAt ?? artifact.createdAt ?? artifact._creationTime ?? 0,
+  );
+}
+
+function extractDownloadableArtifactContent(args: {
+  storedArtifacts: readonly StoredArtifact[];
+  expectedArtifactId: string;
+  expectedContextId: string;
+  expectedJobId: string;
+  expectedExportKind: "resume_variant" | "cover_letter";
+  expectedContentHash: string;
+  defaultLabel: string;
+}): {
+  label: string;
+  filename: string;
+  mimeType: string;
+  text: string;
+} | null {
+  for (const storedArtifact of args.storedArtifacts) {
+    if (
+      storedArtifact.contextId !== args.expectedContextId ||
+      storedArtifact.status !== "approved" ||
+      storedArtifact.type !== "export" ||
+      (storedArtifact.provenance?.jobId &&
+        storedArtifact.provenance.jobId !== args.expectedJobId)
+    ) {
+      continue;
+    }
+    const sourceRefMatches =
+      storedArtifact.sourceRefs?.some(
+        (sourceRef: any) =>
+          sourceRef?.sourceType === "artifact" &&
+          sourceRef?.sourceId === args.expectedArtifactId &&
+          sourceRef?.sourceHash === args.expectedContentHash,
+      ) ?? false;
+    if (!sourceRefMatches) continue;
+    const exportPayload = readLocalExportPayload(
+      storedArtifact.content,
+      args.expectedExportKind,
+    );
+    if (!exportPayload) continue;
+    assertDeliveryTextIsSafe(exportPayload.text);
+    return {
+      label: args.defaultLabel,
+      filename: exportPayload.filename,
+      mimeType: exportPayload.mimeType,
+      text: exportPayload.text,
+    };
+  }
+  return null;
+}
+
+function readLocalExportPayload(
+  value: unknown,
+  expectedExportKind: "resume_variant" | "cover_letter",
+): { filename: string; mimeType: string; text: string } | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  if (
+    record.kind !== "mcp_resume_export_payload" &&
+    record.kind !== "mcp_cover_letter_application_package_export_payload"
+  ) {
+    return null;
+  }
+  if (
+    typeof record.content !== "string" ||
+    typeof record.fileName !== "string" ||
+    typeof record.mimeType !== "string" ||
+    record.artifactKind !== expectedExportKind
+  ) {
+    return null;
+  }
+  const filename = normalizeDeliveryFilename(record.fileName);
+  if (!filename || !isAllowedMimeType(record.mimeType)) return null;
+  return {
+    filename,
+    mimeType: record.mimeType,
+    text: record.content,
+  };
+}
+
+function normalizeDeliveryFilename(value: string): string | null {
+  const filename = value.trim();
+  return SAFE_FILENAME_PATTERN.test(filename) ? filename : null;
+}
+
+function isAllowedMimeType(value: string): boolean {
+  return value === "text/markdown" || value === "text/plain";
+}
+
+function assertDeliveryTextIsSafe(text: string): void {
+  if (text.trim().length === 0) {
+    throw new Error("Approved artifact export content is empty");
+  }
+  if (new TextEncoder().encode(text).byteLength > MAX_DELIVERY_CONTENT_BYTES) {
+    throw new Error("Approved artifact export content is too large");
+  }
+  if (UNSAFE_DELIVERY_TEXT_PATTERNS.some((pattern) => pattern.test(text))) {
+    throw new Error("Approved artifact export content is unsafe");
+  }
+}
+
+function buildDeliveryArtifactDigest(input: {
+  artifactRef: string;
+  manifestDigest: string;
+  text: string;
+  mimeType: string;
+  artifactContentHash: string;
+}): Promise<string> {
+  return buildStableHash({
+    namespace: "manual-application-handoff",
+    type: "delivery-artifact",
+    version: 1,
+    input,
+  });
 }
 
 function assertIncludedArtifactItemsFresh(
