@@ -1044,7 +1044,7 @@ PR80 is decomposed into provider-neutral safety, safe manual handoff while ATS a
 
 **Type:** code/tests, no external write.
 
-**Status:** exact next implementation PR.
+**Status:** merged through PR208. Approved artifact delivery follow-up merged through PR209. Approved answer source preflight merged through PR210 with `BLOCKED_NO_AUTHORITATIVE_SOURCE`.
 
 **Purpose:** let users complete applications manually from an immutable, confirmed Twoweeks package while official ATS access is unavailable.
 
@@ -1077,6 +1077,8 @@ broad refactor or multi-provider framework
 
 **Output:** Twoweeks can safely hand an approved application package to the user without claiming to have submitted it.
 
+**Post-PR210 transition note:** PR80 is complete enough for a narrow PR81 only in the current manual handoff/export/send sense: final approved package handoff, exact human confirmation, approved artifact delivery, user-opened destination, unverified user-reported outcome, redacted audit events, default-off feature flag, no provider-verified state, no live submit/apply, no browser automation, and no answer copy unless a future source model exists.
+
 ### PR80 live — Live Submit/Apply for One Authorized Integration
 
 **Status:** blocked.
@@ -1099,22 +1101,43 @@ Do not create PR80C, do not select a provider, and do not start PR81 automatical
 
 # Phase 12 — Production/business readiness
 
-## PR81 — Rate Limits, Budget Limits, and Abuse Protection
+## PR81 — Rate Limits, Budget Limits, and Abuse Protection for Manual Handoff and Existing Write-Capable Flows
 
 **Type :** code/tests.
 
-**But :** protéger coût et disponibilité.
+**But :** protéger coût, disponibilité, et abus sur les surfaces existantes seulement.
+
+**Status after PR80-to-PR81 transition preflight:** ready to start only if scoped to the narrow manual-handoff/export/send boundary below.
 
 **Inclut :**
 
 ```txt
-per-user limits
-per-session limits
-per-tool limits
-model token limits
-concurrency
-retry limits
-budget exhaustion UX
+rate limits for manual handoff prepare/confirm/open/outcome
+rate limits for artifact delivery content loading
+rate limits for existing controlled send/export flows already in scope
+per-user/per-profile/per-job action caps
+repeated confirmation/open/outcome abuse guards
+event spam protection
+feature-flag-safe disabled behavior
+redacted safe refusal metadata
+tests
+```
+
+**Forbidden in PR81:**
+
+```txt
+ATS live provider submit
+provider adapter
+OAuth runtime
+token storage
+external HTTP
+browser automation
+answer-copy implementation
+new package dependencies
+broad production observability
+PR82 secrets/token work
+PR83 incident dashboards
+PR84 workspace/business tenant expansion
 ```
 
 ---
