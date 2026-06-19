@@ -37,6 +37,7 @@ export const MANUAL_APPLICATION_HANDOFF_RATE_LIMIT_CAPABILITIES = [
   "manual_handoff.file_download_request",
   "manual_handoff.destination_open_request",
   "manual_handoff.outcome_report",
+  "manual_handoff.answer_copy_blocked_attempt",
 ] as const;
 
 export type ManualApplicationHandoffState =
@@ -145,6 +146,7 @@ export const manualApplicationHandoffRateLimitCapabilityValidator = v.union(
   v.literal("manual_handoff.file_download_request"),
   v.literal("manual_handoff.destination_open_request"),
   v.literal("manual_handoff.outcome_report"),
+  v.literal("manual_handoff.answer_copy_blocked_attempt"),
 );
 
 export const manualApplicationHandoffFields = {

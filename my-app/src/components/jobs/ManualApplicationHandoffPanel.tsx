@@ -343,7 +343,7 @@ export function ManualApplicationHandoffPanel({
           <button
             type="button"
             className="dasti-button dasti-button--pill dasti-button--sm"
-            disabled={!applicationUrl}
+            disabled={!applicationUrl || actionState === "working"}
             onClick={handleOpenDestination}
           >
             Open application form
@@ -353,6 +353,7 @@ export function ManualApplicationHandoffPanel({
             <button
               type="button"
               className="dasti-button dasti-button--pill dasti-button--sm"
+              disabled={actionState === "working"}
               onClick={() => handleReportOutcome("user_reported_submitted")}
             >
               I submitted it
@@ -360,6 +361,7 @@ export function ManualApplicationHandoffPanel({
             <button
               type="button"
               className="dasti-button dasti-button--pill dasti-button--sm"
+              disabled={actionState === "working"}
               onClick={() => handleReportOutcome("user_reported_not_submitted")}
             >
               I did not submit it
@@ -367,6 +369,7 @@ export function ManualApplicationHandoffPanel({
             <button
               type="button"
               className="dasti-button dasti-button--pill dasti-button--sm"
+              disabled={actionState === "working"}
               onClick={() => handleReportOutcome("abandoned")}
             >
               Mark abandoned
@@ -385,12 +388,37 @@ export function ManualApplicationHandoffPanel({
 }
 
 function formatHandoffActionErrorMessage(error: unknown): string {
-  const message =
-    error instanceof Error
-      ? error.message
-      : typeof error === "string"
-        ? error
-        : "";
+  const structuredRateLimitCategory =
+    readStructuredHandoffRateLimitCategory(error);
+  if (structuredRateLimitCategory) {
+    return formatHandoffRateLimitMessage(structuredRateLimitCategory);
+  }
+
+  return formatHandoffActionErrorMessageFromText(readErrorMessage(error));
+}
+
+function readStructuredHandoffRateLimitCategory(error: unknown): string | null {
+  const structuredData = readStructuredHandoffErrorData(error);
+  if (structuredData?.code !== "manual_application_handoff_rate_limited") {
+    return null;
+  }
+  return structuredData.category ?? "rate_limited";
+}
+
+function formatHandoffRateLimitMessage(category: string): string {
+  if (category === "budget_exhausted") {
+    return "Manual handoff budget reached. Try again later.";
+  }
+  return "Too many handoff actions. Try again later.";
+}
+
+function readErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  return "";
+}
+
+function formatHandoffActionErrorMessageFromText(message: string): string {
   if (message.includes("budget_exhausted")) {
     return "Manual handoff budget reached. Try again later.";
   }
@@ -401,6 +429,23 @@ function formatHandoffActionErrorMessage(error: unknown): string {
     return "Too many handoff actions. Try again later.";
   }
   return "Handoff action failed.";
+}
+
+function readStructuredHandoffErrorData(error: unknown): {
+  code?: string;
+  category?: string;
+} | null {
+  if (!error || typeof error !== "object" || !("data" in error)) {
+    return null;
+  }
+  const data = (error as { data?: unknown }).data;
+  if (!data || typeof data !== "object") return null;
+  const record = data as Record<string, unknown>;
+  return {
+    code: typeof record.code === "string" ? record.code : undefined,
+    category:
+      typeof record.category === "string" ? record.category : undefined,
+  };
 }
 
 function triggerLocalTextDownload(

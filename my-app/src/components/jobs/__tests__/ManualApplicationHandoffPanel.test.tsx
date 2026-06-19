@@ -163,8 +163,16 @@ describe("ManualApplicationHandoffPanel", () => {
   it("shows safe quota refusal copy without raw server payloads", async () => {
     const props = handlers();
     props.onLoadDeliveryContent.mockRejectedValueOnce(
-      new Error(
-        'Uncaught ConvexError: {"code":"manual_application_handoff_rate_limited","category":"budget_exhausted","retryAfterSeconds":42,"ownerProfileId":"profile_owner"}',
+      Object.assign(
+        new Error("raw server payload ownerProfileId profile_owner retryAfterSeconds"),
+        {
+          data: {
+            code: "manual_application_handoff_rate_limited",
+            category: "budget_exhausted",
+            retryAfterSeconds: 42,
+            ownerProfileId: "profile_owner",
+          },
+        },
       ),
     );
 
@@ -190,6 +198,42 @@ describe("ManualApplicationHandoffPanel", () => {
     expect(status).not.toHaveTextContent("retryAfterSeconds");
     expect(status).not.toHaveTextContent("ownerProfileId");
     expect(status).not.toHaveTextContent("profile_owner");
+  });
+
+  it("disables manual handoff actions while a quota-protected mutation is pending", async () => {
+    const props = handlers();
+    props.onLoadDeliveryContent.mockImplementationOnce(
+      () => new Promise(() => {}),
+    );
+
+    render(
+      <ManualApplicationHandoffPanel
+        jobId="job_1"
+        applicationUrl={APPLICATION_URL}
+        handoff={preparedState({
+          status: "handoff_confirmed",
+          canConfirm: false,
+          canUseConfirmedPackage: true,
+        })}
+        {...props}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Load approved files" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Load approved files" }),
+      ).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: "Open application form" }),
+      ).toBeDisabled();
+      expect(screen.getByRole("button", { name: "I submitted it" })).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: "I did not submit it" }),
+      ).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Mark abandoned" })).toBeDisabled();
+    });
   });
 
   it("does not render placeholder markdown download controls even if stale artifact props arrive", () => {

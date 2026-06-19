@@ -27,6 +27,7 @@ const DOWNLOAD_BLOCKED_REASON =
 const RATE_LIMITED_REASON =
   "Too many manual handoff actions. Try again later.";
 const RATE_LIMIT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_EXPIRED_RATE_LIMIT_CLEANUP_BATCH = 10;
 const MAX_DELIVERY_CONTENT_BYTES = 100_000;
 const MAX_CONTEXT_ARTIFACT_SCAN_COUNT = 200;
 const SAFE_FILENAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._ -]{0,120}\.(?:md|txt)$/u;
@@ -120,6 +121,12 @@ const RATE_LIMIT_POLICIES: Record<
     shortLimit: 8,
     longWindowMs: 24 * 60 * 60 * 1000,
     longLimit: 30,
+  },
+  "manual_handoff.answer_copy_blocked_attempt": {
+    shortWindowMs: 60 * 1000,
+    shortLimit: 3,
+    longWindowMs: 24 * 60 * 60 * 1000,
+    longLimit: 10,
   },
 };
 
@@ -368,8 +375,22 @@ export const recordCopySucceeded = mutation({
     assertEnabled();
     assertSafeRef(args.answerRef, "answerRef");
     assertSafeHash(args.answerDigest, "answerDigest");
-    await requireConfirmedUsableHandoff(ctx, args);
-    throw new Error(ANSWER_COPY_BLOCKED_REASON);
+    const { ownerJob, handoff, applicationPackage } =
+      await requireConfirmedUsableHandoff(ctx, args);
+    const now = Date.now();
+    await acquireManualApplicationHandoffRateLimit(ctx, {
+      ownerProfileId: ownerJob.ownerProfileId,
+      capability: "manual_handoff.answer_copy_blocked_attempt",
+      resourceParts: ["handoff", handoff.handoffId, "answer", args.answerRef],
+      now,
+    });
+    return buildHandoffView({
+      status: handoff.state,
+      config: readManualApplicationHandoffServerConfigStatus(),
+      ownerJob,
+      handoff,
+      applicationPackage,
+    });
   },
 });
 
@@ -610,6 +631,7 @@ async function acquireManualApplicationHandoffRateLimit(
 ): Promise<void> {
   assertSafeRef(args.ownerProfileId, "ownerProfileId");
   const policy = RATE_LIMIT_POLICIES[args.capability];
+  await deleteExpiredManualApplicationHandoffRateLimits(ctx, args.now);
   const resourceHash = await buildStableHash({
     namespace: "manual-application-handoff",
     type: "rate-limit-resource",
@@ -699,6 +721,20 @@ async function acquireManualApplicationHandoffRateLimit(
     "handoff rate limit",
   );
   await ctx.db.patch(existing._id, patch);
+}
+
+async function deleteExpiredManualApplicationHandoffRateLimits(
+  ctx: any,
+  now: number,
+): Promise<void> {
+  const expiredRows = await ctx.db
+    .query("manualApplicationHandoffRateLimits")
+    .withIndex("by_expires_at", (q: any) => q.lt("expiresAt", now))
+    .take(MAX_EXPIRED_RATE_LIMIT_CLEANUP_BATCH);
+
+  for (const row of expiredRows) {
+    await ctx.db.delete(row._id);
+  }
 }
 
 function getActiveWindowStart(
