@@ -26,24 +26,12 @@ function preparedState(
     destinationHostname: "jobs.example.com",
     destinationOrigin: "https://jobs.example.com",
     providerVerified: false,
-    approvedAnswers: [
-      {
-        answerRef: "application-answer:one",
-        label: "Why are you interested?",
-        text: "I am interested because the role matches my operations work.",
-        answerDigest: "b".repeat(64),
-      },
-    ],
-    downloadableArtifacts: [
-      {
-        artifactRef: "resume-variant-artifact:hash-a",
-        label: "Resume variant",
-        filename: "resume-variant.md",
-        mimeType: "text/markdown",
-        text: "# Resume variant",
-        artifactDigest: "c".repeat(64),
-      },
-    ],
+    approvedAnswers: [],
+    downloadableArtifacts: [],
+    answerCopyBlockedReason:
+      "Approved answer copy is blocked until approved answers are server-derived.",
+    downloadBlockedReason:
+      "Approved artifact downloads are blocked until an approved export representation is available.",
     ...overrides,
   };
 }
@@ -115,14 +103,8 @@ describe("ManualApplicationHandoffPanel", () => {
     );
   });
 
-  it("records copy only after clipboard write succeeds and never sends answer text to Convex", async () => {
+  it("marks answer copy and artifact downloads blocked when no approved representation exists", () => {
     const props = handlers();
-    const writeText = vi.fn(async () => undefined);
-    Object.assign(navigator, {
-      clipboard: {
-        writeText,
-      },
-    });
 
     render(
       <ManualApplicationHandoffPanel
@@ -137,42 +119,24 @@ describe("ManualApplicationHandoffPanel", () => {
       />,
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Copy Why are you interested?" }),
-    );
-    await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
-    expect(writeText).toHaveBeenCalledWith(
-      "I am interested because the role matches my operations work.",
-    );
-    expect(props.onRecordCopySucceeded).toHaveBeenCalledWith({
-      handoffId: "manual-application-handoff:one",
-      manifestDigest: MANIFEST_DIGEST,
-      answerRef: "application-answer:one",
-      answerDigest: "b".repeat(64),
-    });
-    expect(JSON.stringify(props.onRecordCopySucceeded.mock.calls)).not.toContain(
-      "I am interested because",
-    );
+    expect(
+      screen.getByText(
+        "Approved answer copy is blocked until approved answers are server-derived.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Approved artifact downloads are blocked until an approved export representation is available.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /copy/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /download/i })).toBeNull();
+    expect(props.onRecordCopySucceeded).not.toHaveBeenCalled();
+    expect(props.onRecordFileDownloadRequested).not.toHaveBeenCalled();
   });
 
-  it("records a file download request from a direct click without claiming completion", async () => {
+  it("does not render placeholder markdown download controls even if stale artifact props arrive", () => {
     const props = handlers();
-    const createObjectURL = vi.fn(() => "blob:handoff");
-    const revokeObjectURL = vi.fn();
-    Object.assign(URL, { createObjectURL, revokeObjectURL });
-    const click = vi.fn();
-    const appendChild = vi.spyOn(document.body, "appendChild");
-    const removeChild = vi.spyOn(document.body, "removeChild");
-    vi.spyOn(document, "createElement").mockImplementation((tagName) => {
-      const element = document.createElementNS(
-        "http://www.w3.org/1999/xhtml",
-        tagName,
-      ) as HTMLElement;
-      if (tagName === "a") {
-        Object.assign(element, { click });
-      }
-      return element as any;
-    });
 
     render(
       <ManualApplicationHandoffPanel
@@ -182,25 +146,65 @@ describe("ManualApplicationHandoffPanel", () => {
           status: "handoff_confirmed",
           canConfirm: false,
           canUseConfirmedPackage: true,
+          downloadableArtifacts: [
+            {
+              artifactRef: "resume-variant-artifact:hash-a",
+              label: "Resume variant",
+              filename: "resume-variant.md",
+              mimeType: "text/markdown",
+              text: "# Resume variant",
+              artifactDigest: "c".repeat(64),
+            },
+          ],
         })}
         {...props}
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Download Resume variant" }));
-    await waitFor(() =>
-      expect(props.onRecordFileDownloadRequested).toHaveBeenCalledWith({
-        handoffId: "manual-application-handoff:one",
-        manifestDigest: MANIFEST_DIGEST,
-        artifactRef: "resume-variant-artifact:hash-a",
-        artifactDigest: "c".repeat(64),
-      }),
+    expect(
+      screen.queryByRole("button", { name: "Download Resume variant" }),
+    ).toBeNull();
+    expect(
+      screen.getByText(
+        "Approved artifact downloads are blocked until an approved export representation is available.",
+      ),
+    ).toBeInTheDocument();
+    expect(props.onRecordFileDownloadRequested).not.toHaveBeenCalled();
+  });
+
+  it("does not render answer copy controls when only test-only answer props arrive", () => {
+    const props = handlers();
+
+    render(
+      <ManualApplicationHandoffPanel
+        jobId="job_1"
+        applicationUrl={APPLICATION_URL}
+        handoff={preparedState({
+          status: "handoff_confirmed",
+          canConfirm: false,
+          canUseConfirmedPackage: true,
+          approvedAnswers: [
+            {
+              answerRef: "application-answer:one",
+              label: "Why are you interested?",
+              text: "I am interested because the role matches my operations work.",
+              answerDigest: "b".repeat(64),
+            },
+          ],
+        })}
+        {...props}
+      />,
     );
-    expect(click).toHaveBeenCalledOnce();
-    expect(createObjectURL).toHaveBeenCalledOnce();
-    expect(revokeObjectURL).toHaveBeenCalledWith("blob:handoff");
-    expect(appendChild).toHaveBeenCalled();
-    expect(removeChild).toHaveBeenCalled();
+
+    expect(
+      screen.queryByRole("button", { name: "Copy Why are you interested?" }),
+    ).toBeNull();
+    expect(
+      screen.getByText(
+        "Approved answer copy is blocked until approved answers are server-derived.",
+      ),
+    ).toBeInTheDocument();
+    expect(props.onRecordCopySucceeded).not.toHaveBeenCalled();
   });
 
   it("records destination open requested before opening the owned job application URL", async () => {

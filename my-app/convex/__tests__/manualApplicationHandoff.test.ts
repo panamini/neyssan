@@ -12,6 +12,7 @@ import {
 } from "../manualApplicationHandoff";
 import {
   MANUAL_APPLICATION_HANDOFF_EVIDENCE,
+  MANUAL_APPLICATION_HANDOFF_EVENT_KINDS,
   MANUAL_APPLICATION_HANDOFF_STATES,
   buildManualApplicationHandoffManifestDigest,
   readManualApplicationHandoffServerConfigStatus,
@@ -131,7 +132,7 @@ function buildApplicationPackageFixture(
 function buildStoredPackage(
   overrides: Partial<StoredDocument<any>> = {},
 ): StoredDocument<any> {
-  const pkg = buildApplicationPackageFixture(overrides.pkg);
+  const pkg = buildApplicationPackageFixture(overrides.package);
   return {
     _id: "applicationPackages_1",
     _creationTime: NOW,
@@ -151,7 +152,7 @@ function buildStoredPackage(
     reviewItemIds: pkg.provenance.reviewItemIds,
     packageHash: "hash-a",
     contentHash: "package-content-hash-a",
-    pkg,
+    package: pkg,
     createdAt: NOW,
     updatedAt: NOW,
     version: 1,
@@ -401,6 +402,10 @@ describe("manual application handoff", () => {
     });
     expect(result.applicationUrl).toBe(APPLICATION_URL);
     expect(result.requiredConfirmationCopy).toContain(result.manifestDigest);
+    expect(result.approvedAnswers).toEqual([]);
+    expect(result.downloadableArtifacts).toEqual([]);
+    expect(result.answerCopyBlockedReason).toMatch(/blocked/i);
+    expect(result.downloadBlockedReason).toMatch(/blocked/i);
     expect(tables.manualApplicationHandoffs).toHaveLength(1);
     expect(tables.manualApplicationHandoffEvents).toHaveLength(1);
     expect(tables.liveExternalActionExecutions).toHaveLength(0);
@@ -445,7 +450,7 @@ describe("manual application handoff", () => {
     vi.stubEnv("TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED", "true");
     const blockedPackage = buildStoredPackage({
       status: "draft",
-      pkg: buildApplicationPackageFixture({ status: "draft" }),
+      package: buildApplicationPackageFixture({ status: "draft" }),
     });
     const { ctx } = makeCtx({ packageOverrides: blockedPackage });
     await expect(
@@ -455,6 +460,50 @@ describe("manual application handoff", () => {
         now: NOW,
       }),
     ).rejects.toThrow(/ready_for_review/i);
+
+    const blockedResumeArtifact = makeCtx({
+      packageOverrides: {
+        resumeVariantArtifactStatus: "needs_review",
+      },
+    });
+    await expect(
+      prepare._handler(blockedResumeArtifact.ctx as any, {
+        jobId: JOB_ID,
+        applicationPackageId: APPLICATION_PACKAGE_ID,
+        now: NOW,
+      }),
+    ).rejects.toThrow(/artifact/i);
+
+    const staleArtifactPackage = buildApplicationPackageFixture({
+      artifacts: [
+        {
+          id: RESUME_ARTIFACT_ID,
+          kind: "resume_variant_artifact",
+          contentHash: "changed-resume-content-hash",
+          status: "ready_for_generation",
+          version: 1,
+        },
+        {
+          id: COVER_LETTER_ARTIFACT_ID,
+          kind: "cover_letter_artifact",
+          contentHash: "cover-letter-content-hash-a",
+          status: "ready_for_review",
+          version: 1,
+        },
+      ],
+    });
+    const staleArtifact = makeCtx({
+      packageOverrides: {
+        package: staleArtifactPackage,
+      },
+    });
+    await expect(
+      prepare._handler(staleArtifact.ctx as any, {
+        jobId: JOB_ID,
+        applicationPackageId: APPLICATION_PACKAGE_ID,
+        now: NOW,
+      }),
+    ).rejects.toThrow(/artifact/i);
   });
 
   it("uses stable manifest digests and rejects stale or inexact confirmations", async () => {
@@ -536,33 +585,40 @@ describe("manual application handoff", () => {
     });
     tables.applicationPackages[0].contentHash = "changed-package-content-hash";
     await expect(
-      recordCopySucceeded._handler(ctx as any, {
+      recordDestinationOpenRequested._handler(ctx as any, {
         handoffId: prepared.handoffId,
         manifestDigest: prepared.manifestDigest,
-        answerRef: "application-answer:one",
-        answerDigest: "a".repeat(64),
         now: NOW + 2,
       }),
     ).rejects.toThrow(/stale/i);
   });
 
-  it("records copy, file-download request, destination-open request, and user-reported outcome truthfully", async () => {
+  it("blocks copy and download until real approved representations are available", async () => {
+    const { ctx, prepared } = await prepareConfirmedHandoff();
+
+    await expect(
+      recordCopySucceeded._handler(ctx as any, {
+        handoffId: prepared.handoffId,
+        manifestDigest: prepared.manifestDigest,
+        answerRef: "application-answer:screening-question-1",
+        answerDigest: "a".repeat(64),
+        now: NOW + 2,
+      }),
+    ).rejects.toThrow(/blocked/i);
+    await expect(
+      recordFileDownloadRequested._handler(ctx as any, {
+        handoffId: prepared.handoffId,
+        manifestDigest: prepared.manifestDigest,
+        artifactRef: RESUME_ARTIFACT_ID,
+        artifactDigest: "b".repeat(64),
+        now: NOW + 3,
+      }),
+    ).rejects.toThrow(/blocked/i);
+  });
+
+  it("records destination-open request and user-reported outcome with approved event names", async () => {
     const { ctx, tables, prepared } = await prepareConfirmedHandoff();
 
-    await recordCopySucceeded._handler(ctx as any, {
-      handoffId: prepared.handoffId,
-      manifestDigest: prepared.manifestDigest,
-      answerRef: "application-answer:screening-question-1",
-      answerDigest: "a".repeat(64),
-      now: NOW + 2,
-    });
-    await recordFileDownloadRequested._handler(ctx as any, {
-      handoffId: prepared.handoffId,
-      manifestDigest: prepared.manifestDigest,
-      artifactRef: RESUME_ARTIFACT_ID,
-      artifactDigest: "b".repeat(64),
-      now: NOW + 3,
-    });
     const openResult = await recordDestinationOpenRequested._handler(ctx as any, {
       handoffId: prepared.handoffId,
       manifestDigest: prepared.manifestDigest,
@@ -591,17 +647,13 @@ describe("manual application handoff", () => {
     ).toEqual([
       "manual_handoff.prepared",
       "manual_handoff.confirmed",
-      "manual_handoff.copy_succeeded",
-      "manual_handoff.file_download_requested",
       "manual_handoff.destination_open_requested",
-      "manual_handoff.user_reported_submitted",
+      "manual_handoff.outcome_reported",
     ]);
     expect(
       tables.manualApplicationHandoffEvents.map((event) => event.evidence),
     ).toEqual([
       "twoweeks_prepared",
-      "user_interaction_observed",
-      "user_interaction_observed",
       "user_interaction_observed",
       "user_interaction_observed",
       "user_reported",
@@ -612,7 +664,74 @@ describe("manual application handoff", () => {
     expect(persisted).not.toMatch(/provider|receipt|verified/i);
   });
 
-  it("allows only the approved persisted states and evidence values", () => {
+  it("invalidates confirmation when the owned job application URL changes", async () => {
+    const { ctx, tables, prepared } = await prepareConfirmedHandoff();
+    tables.jobs[0].applicationUrl =
+      "https://jobs.example.com/apply/changed?candidate=changed#later";
+
+    await expect(
+      recordDestinationOpenRequested._handler(ctx as any, {
+        handoffId: prepared.handoffId,
+        manifestDigest: prepared.manifestDigest,
+        now: NOW + 2,
+      }),
+    ).rejects.toThrow(/stale/i);
+
+    expect(
+      tables.manualApplicationHandoffEvents.map((event) => event.eventKind),
+    ).toContain("manual_handoff.confirmation_invalidated");
+    const persisted = JSON.stringify(tables.manualApplicationHandoffEvents);
+    expect(persisted).not.toContain("changed?candidate=changed");
+    expect(persisted).not.toContain("#later");
+    expect(tables.manualApplicationHandoffs[0].state).toBe("handoff_confirmed");
+  });
+
+  it("keeps terminal outcomes idempotent and rejects conflicting terminal reports", async () => {
+    const { ctx, tables, prepared } = await prepareConfirmedHandoff();
+
+    await recordDestinationOpenRequested._handler(ctx as any, {
+      handoffId: prepared.handoffId,
+      manifestDigest: prepared.manifestDigest,
+      now: NOW + 2,
+    });
+    const submitted = await reportOutcome._handler(ctx as any, {
+      handoffId: prepared.handoffId,
+      manifestDigest: prepared.manifestDigest,
+      outcome: "user_reported_submitted",
+      now: NOW + 3,
+    });
+    const eventCount = tables.manualApplicationHandoffEvents.length;
+
+    await expect(
+      reportOutcome._handler(ctx as any, {
+        handoffId: prepared.handoffId,
+        manifestDigest: prepared.manifestDigest,
+        outcome: "user_reported_not_submitted",
+        now: NOW + 4,
+      }),
+    ).rejects.toThrow(/conflict/i);
+    const repeated = await reportOutcome._handler(ctx as any, {
+      handoffId: prepared.handoffId,
+      manifestDigest: prepared.manifestDigest,
+      outcome: "user_reported_submitted",
+      now: NOW + 5,
+    });
+    const preparedAgain = await prepare._handler(ctx as any, {
+      jobId: JOB_ID,
+      applicationPackageId: APPLICATION_PACKAGE_ID,
+      now: NOW + 6,
+    });
+
+    expect(submitted.status).toBe("user_reported_submitted");
+    expect(repeated.status).toBe("user_reported_submitted");
+    expect(preparedAgain.status).toBe("user_reported_submitted");
+    expect(tables.manualApplicationHandoffs[0].state).toBe(
+      "user_reported_submitted",
+    );
+    expect(tables.manualApplicationHandoffEvents).toHaveLength(eventCount);
+  });
+
+  it("allows only the approved persisted states, evidence values, and event names", () => {
     expect(MANUAL_APPLICATION_HANDOFF_STATES).toEqual([
       "handoff_prepared",
       "handoff_confirmed",
@@ -633,6 +752,22 @@ describe("manual application handoff", () => {
       "user_interaction_observed",
       "user_reported",
     ]);
+    expect(MANUAL_APPLICATION_HANDOFF_EVENT_KINDS).toEqual([
+      "manual_handoff.prepared",
+      "manual_handoff.confirmed",
+      "manual_handoff.item_copy_succeeded",
+      "manual_handoff.file_download_requested",
+      "manual_handoff.destination_open_requested",
+      "manual_handoff.outcome_reported",
+      "manual_handoff.abandoned",
+      "manual_handoff.confirmation_invalidated",
+    ]);
+    expect(MANUAL_APPLICATION_HANDOFF_EVENT_KINDS).not.toContain(
+      "manual_handoff.copy_succeeded",
+    );
+    expect(MANUAL_APPLICATION_HANDOFF_EVENT_KINDS).not.toContain(
+      "manual_handoff.user_reported_submitted",
+    );
   });
 
   it("validates destination URL from job.applicationUrl only and stores only origin host and hash", async () => {
@@ -642,6 +777,27 @@ describe("manual application handoff", () => {
     await expect(
       validateManualApplicationDestination("https://localhost/apply"),
     ).rejects.toThrow(/destination/i);
+    await expect(
+      validateManualApplicationDestination("https://jobs.local/apply"),
+    ).rejects.toThrow(/destination/i);
+    await expect(
+      validateManualApplicationDestination("https://user:pass@example.com/apply"),
+    ).rejects.toThrow(/auth/i);
+    await expect(
+      validateManualApplicationDestination("https://8.8.8.8/apply"),
+    ).rejects.toThrow(/destination/i);
+    await expect(
+      validateManualApplicationDestination("https://127.0.0.1/apply"),
+    ).rejects.toThrow(/destination/i);
+    await expect(
+      validateManualApplicationDestination("https://[2606:4700:4700::1111]/apply"),
+    ).rejects.toThrow(/destination/i);
+    await expect(
+      validateManualApplicationDestination("data:text/plain,hello"),
+    ).rejects.toThrow(/https/i);
+    await expect(
+      validateManualApplicationDestination("file:///tmp/application"),
+    ).rejects.toThrow(/https/i);
     await expect(
       validateManualApplicationDestination("javascript:alert(1)"),
     ).rejects.toThrow(/https/i);
