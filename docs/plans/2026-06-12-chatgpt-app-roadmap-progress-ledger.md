@@ -21,24 +21,24 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR204 - PR78: Send Application Email/Message, Manual Confirmation Only
-GitHub PR: https://github.com/panamini/neyssan/pull/204
-Merge commit: 07662e212007db0ba332094ff32e91b51d9435ea
-Merged at: 2026-06-18T16:52:13Z
+PR205 - PR79: Job Platform Submit/Apply Dry Run
+GitHub PR: https://github.com/panamini/neyssan/pull/205
+Merge commit: fbb5342b23be5e5a0f1387d158f127b7a42d1467
+Merged at: 2026-06-18T23:36:12Z
 ```
 
 Current implementation PR:
 
 ```txt
-PR79 - Job Platform Submit/Apply Dry Run
-GitHub PR: https://github.com/panamini/neyssan/pull/205
-Head branch: codex/pr79-job-platform-submit-apply-dry-run
+PR80A - Durable Live External Action Safety Foundation
+Head branch: codex/pr80a-live-external-action-safety-foundation
+GitHub PR: draft to open
 ```
 
-Exact next PR after PR79:
+Exact next PR after PR80A:
 
 ```txt
-PR80 - Live Submit/Apply for One Integration
+PR80 - Live Lever Apply Pilot
 ```
 
 PR59 status:
@@ -102,7 +102,8 @@ MERGED_NARROW_PR59 - PR185 merged the narrow read-only adapter scope approved by
 |                        76 | Write Action Framework                                                               | merged      | #202                 | 4fcb45cc4cf48a1373e9191e69cd8869d86464cf                                                     | Framework-only local MCP write-action foundation. Adds typed write/read intent, proposal, confirmation request/result, central execution-disabled guard, deterministic blocked result, confirmed non-executable placeholder, and simulated no-op result. Focused PR76 test, PR65 component data policy test, PR75 export test, full Local MCP suite, TypeScript, and Convex codegen passed locally before PR creation. No real send/submit/apply, outbound HTTP, persistence writes, package/lockfile/schema/runtime/OAuth/UI/tool wiring, or production connector behavior. Merged at 2026-06-17T23:39:46Z. |
 |                        77 | Outbound Egress Allowlist and SSRF Protection                                        | merged      | #203                 | 48227d5cad16fc58b5fff5b4c9a3545ca7ec6e44                                                     | Deny-by-default local MCP outbound egress allowlist and SSRF policy guard. Adds deterministic URL/host/method/scheme/path decisioning, explicit allowlist metadata, redirect-disabled decisions, safe refusal metadata, and redacted audit URL output. Policy decisions only; no live network execution, real send/submit/apply, persistence writes, package/lockfile/schema/runtime/OAuth/UI/tool wiring, or production connector behavior. Merged at 2026-06-18T04:20:58Z. |
 |                        78 | Send Application Email/Message, Manual Confirmation Only                             | merged      | #204                 | 07662e212007db0ba332094ff32e91b51d9435ea                                                    | Local MCP controlled application-message send boundary only. Added restricted final preview binding, exact human-only confirmation, PR76 write-action proposal/guard reuse, PR77 outbound egress allowlist enforcement, provider-side idempotency contract, safe redacted result/audit metadata, and dependency-injected controlled channel execution. No UI/runtime/bridge/server/tool wiring, Convex schema/write changes, OAuth/token storage, live provider credentials, concrete internet adapter, package/lockfile change, bulk/attachment/html/header send, submit/apply behavior, or automatic retry. Merged at 2026-06-18T16:52:13Z. |
-|                        79 | Job Platform Submit/Apply Dry Run                                                    | open draft  | #205                 | codex/pr79-job-platform-submit-apply-dry-run                                                 | Local MCP dry-run mapping boundary only. Simulates one approved application package against one non-production job-platform form contract and returns safe mapping status, restricted user-review preview, PR76 disabled write-action proposal, and redacted audit metadata. No submit/apply/upload/click/browser automation/auth/platform call/outbound HTTP, persistence writes, UI/runtime/bridge/server/tool wiring, Convex schema/write changes, package/lockfile changes, or live integration behavior. |
+|                        79 | Job Platform Submit/Apply Dry Run                                                    | merged      | #205                 | fbb5342b23be5e5a0f1387d158f127b7a42d1467                                                     | Local MCP dry-run mapping boundary only. Simulates one approved application package against one non-production job-platform form contract and returns safe mapping status, restricted user-review preview, PR76 disabled write-action proposal, and redacted audit metadata. No submit/apply/upload/click/browser automation/auth/platform call/outbound HTTP, persistence writes, UI/runtime/bridge/server/tool wiring, Convex schema/write changes, package/lockfile changes, or live integration behavior. Merged at 2026-06-18T23:36:12Z. |
+|                       80A | Durable Live External Action Safety Foundation                                       | open draft  | draft to open        | codex/pr80a-live-external-action-safety-foundation                                           | Prerequisite code PR for PR80 after Lever pilot selection. Adds only durable safe live external-action idempotency/execution metadata, server-owned default-off Lever pilot flag/config status, and tests. No Lever API call, upload, live apply, final preview, provider parser, UI/runtime/tool wiring, OAuth/token storage, package changes, or provider request in tests. PR80 remains blocked until PR80A is merged. |
 
 ---
 
@@ -195,7 +196,11 @@ PR203 merged PR77 into `application-os-foundation` with merge commit `48227d5cad
 
 PR204 merged PR78 into `application-os-foundation` with merge commit `07662e212007db0ba332094ff32e91b51d9435ea` at `2026-06-18T16:52:13Z`. It added the Local MCP controlled application-message send boundary after approved artifact freshness, exact restricted final preview, human-only confirmation, PR76 write-action guard reuse, PR77 egress approval, provider-side idempotency contract, and safe redacted result/audit output. It did not start PR79, add submit/apply behavior, add UI/React/runtime/bridge/server/tool wiring, add Convex schema/write changes, add OAuth/token storage, store or log credentials, add package/lockfile changes, add a concrete internet adapter, or support bulk/attachment/html/header sends.
 
-PR79 is the active implementation PR on `codex/pr79-job-platform-submit-apply-dry-run`. It is limited to a Local MCP dry-run mapping boundary for one approved application package and one non-production job-platform form contract. It may produce safe mapping status and a restricted user-review-only mapped preview, but must not submit, apply, upload, click, authenticate, call a platform, perform outbound HTTP, write persistence, add browser automation, add UI/React/runtime/bridge/server/tool wiring, add Convex schema/write changes, add package/lockfile changes, or create live integration behavior. PR80 is the first possible live submit/apply integration step and still requires fresh validation and manual confirmation.
+PR205 merged PR79 into `application-os-foundation` with merge commit `fbb5342b23be5e5a0f1387d158f127b7a42d1467` at `2026-06-18T23:36:12Z`. It added the Local MCP dry-run mapping boundary for one approved application package and one non-production job-platform form contract. It did not add submit/apply/upload/click/browser automation/auth/platform calls, outbound HTTP, persistence writes, UI/runtime/bridge/server/tool wiring, Convex schema/write changes, package/lockfile changes, or live integration behavior.
+
+Maintainer decision after PR79 selected the first live integration as a controlled single-tenant Lever pilot: integration id `lever_live_apply_pilot_v1`, action category `apply_to_job`, server-only Lever customer API key via Basic Auth, and server-owned posting id. Provider idempotency is not assumed, so Twoweeks must enforce durable at-most-once dispatch before PR80 can implement the Lever adapter.
+
+PR80A is the active prerequisite implementation PR on `codex/pr80a-live-external-action-safety-foundation`. It exists because the base did not already provide a dedicated durable live external-action execution ledger plus narrow default-off Lever flag/config status boundary. PR80A must stay limited to that safety foundation and must not implement the Lever API call, upload, live apply, final preview, provider response parser, UI/runtime/tool wiring, OAuth/token storage, or any provider request in tests. PR80 remains blocked on PR80A merge.
 
 OAuth/real-data/write-action constraints remain active: no OAuth runtime, callback, token storage, real user data, Convex real-data reads/writes, handlers, production connector, tool execution, outbound HTTP, LLM calls, export/download/send/submit/apply, or package/lockfile changes without an explicit unlocking PR.
 
