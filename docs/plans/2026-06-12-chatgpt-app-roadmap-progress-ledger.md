@@ -21,21 +21,21 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR205 - PR79: Job Platform Submit/Apply Dry Run
-GitHub PR: https://github.com/panamini/neyssan/pull/205
-Merge commit: fbb5342b23be5e5a0f1387d158f127b7a42d1467
-Merged at: 2026-06-18T23:36:12Z
+PR80A - Durable Live External Action Safety Foundation
+GitHub PR: https://github.com/panamini/neyssan/pull/206
+Merge commit: 69bec4a88e3d720b75ae89bd3bceb1fdcdba4a76
+Merged at: 2026-06-19T03:21:03Z
 ```
 
 Current implementation PR:
 
 ```txt
-PR80A - Durable Live External Action Safety Foundation
-Head branch: codex/pr80a-live-external-action-safety-foundation
-GitHub PR: https://github.com/panamini/neyssan/pull/206
+None.
+PR80B implementation has not started.
+No PR80B implementation branch or GitHub PR exists as of this ledger update.
 ```
 
-Exact next PR after PR80A:
+Exact next implementation PR:
 
 ```txt
 PR80B - Safe Application Handoff While ATS Authorization Is Pending
@@ -103,7 +103,9 @@ MERGED_NARROW_PR59 - PR185 merged the narrow read-only adapter scope approved by
 |                        77 | Outbound Egress Allowlist and SSRF Protection                                        | merged      | #203                 | 48227d5cad16fc58b5fff5b4c9a3545ca7ec6e44                                                     | Deny-by-default local MCP outbound egress allowlist and SSRF policy guard. Adds deterministic URL/host/method/scheme/path decisioning, explicit allowlist metadata, redirect-disabled decisions, safe refusal metadata, and redacted audit URL output. Policy decisions only; no live network execution, real send/submit/apply, persistence writes, package/lockfile/schema/runtime/OAuth/UI/tool wiring, or production connector behavior. Merged at 2026-06-18T04:20:58Z. |
 |                        78 | Send Application Email/Message, Manual Confirmation Only                             | merged      | #204                 | 07662e212007db0ba332094ff32e91b51d9435ea                                                    | Local MCP controlled application-message send boundary only. Added restricted final preview binding, exact human-only confirmation, PR76 write-action proposal/guard reuse, PR77 outbound egress allowlist enforcement, provider-side idempotency contract, safe redacted result/audit metadata, and dependency-injected controlled channel execution. No UI/runtime/bridge/server/tool wiring, Convex schema/write changes, OAuth/token storage, live provider credentials, concrete internet adapter, package/lockfile change, bulk/attachment/html/header send, submit/apply behavior, or automatic retry. Merged at 2026-06-18T16:52:13Z. |
 |                        79 | Job Platform Submit/Apply Dry Run                                                    | merged      | #205                 | fbb5342b23be5e5a0f1387d158f127b7a42d1467                                                     | Local MCP dry-run mapping boundary only. Simulates one approved application package against one non-production job-platform form contract and returns safe mapping status, restricted user-review preview, PR76 disabled write-action proposal, and redacted audit metadata. No submit/apply/upload/click/browser automation/auth/platform call/outbound HTTP, persistence writes, UI/runtime/bridge/server/tool wiring, Convex schema/write changes, package/lockfile changes, or live integration behavior. Merged at 2026-06-18T23:36:12Z. |
-|                       80A | Durable Live External Action Safety Foundation                                       | open draft  | #206                 | codex/pr80a-live-external-action-safety-foundation                                           | Prerequisite code PR for future live external actions while ATS submit/apply authorization remains pending. Adds only durable safe live external-action idempotency/execution metadata, provider-neutral default-off live external-action config status, and tests. No provider adapter, provider API call, upload, live apply, final preview, provider parser, UI/runtime/tool wiring, OAuth/token storage, package changes, or provider request in tests. Live ATS submit/apply remains blocked until provider authorization, credentials, a test tenant, and a test posting exist. |
+|                       80A | Durable Live External Action Safety Foundation                                       | merged      | #206                 | 69bec4a88e3d720b75ae89bd3bceb1fdcdba4a76                                                     | Provider-neutral prerequisite code PR for future live external actions while ATS submit/apply authorization remains pending. Added only durable safe live external-action idempotency/execution metadata, at-most-once transition safety, provider-neutral default-off live external-action config status, and tests. No provider adapter, provider API call, upload, live apply, final preview, provider parser, UI/runtime/tool wiring, OAuth/token storage, package changes, or provider request in tests. Merged at 2026-06-19T03:21:03Z. Live ATS submit/apply remains blocked until provider authorization, credentials, a test tenant, and a test posting exist. |
+|                       80B | Safe Application Handoff While ATS Authorization Is Pending                          | planned/not started | none                 | no implementation branch or head                                                             | Exact next implementation PR. Manual handoff only: authenticated owner-scoped Convex records, final preview, exact human confirmation, direct-user copy/download/open controls, user-reported result explicitly unverified, no provider-verified state, no server-side destination fetch, no browser automation, and separate default-off feature flag. This row records intended scope only; it does not open PR80B. |
+|                   80-live | Live Submit/Apply for One Authorized Integration                                     | blocked     | none                 | no provider selected                                                                          | May begin only after one provider supplies written use-case authorization, official server-to-server credentials, test tenant or sandbox, one authorized test posting, official schema/questions endpoint, official submit endpoint, and receipt/error/duplicate/retry clarification. |
 
 ---
 
@@ -198,9 +200,9 @@ PR204 merged PR78 into `application-os-foundation` with merge commit `07662e2120
 
 PR205 merged PR79 into `application-os-foundation` with merge commit `fbb5342b23be5e5a0f1387d158f127b7a42d1467` at `2026-06-18T23:36:12Z`. It added the Local MCP dry-run mapping boundary for one approved application package and one non-production job-platform form contract. It did not add submit/apply/upload/click/browser automation/auth/platform calls, outbound HTTP, persistence writes, UI/runtime/bridge/server/tool wiring, Convex schema/write changes, package/lockfile changes, or live integration behavior.
 
-Maintainer decision after PR79 paused live ATS submit/apply until provider authorization, credentials, a test tenant, and a test posting exist. No ATS provider is selected for live submit/apply in PR80A. Provider idempotency must not be assumed, so Twoweeks must enforce durable at-most-once dispatch before any future provider adapter can execute a live external action.
+PR206 merged PR80A into `application-os-foundation` with merge commit `69bec4a88e3d720b75ae89bd3bceb1fdcdba4a76` at `2026-06-19T03:21:03Z`. It added a provider-neutral durable live external-action safety foundation only: safe execution metadata, durable idempotency/payload fingerprinting, at-most-once transition safety, unknown-status terminal handling, and default-off config status. It did not add any provider adapter, provider API call, upload, live apply, final preview, provider response parser, UI/runtime/tool wiring, OAuth/token storage, package changes, or provider request in tests.
 
-PR80A is the active prerequisite implementation PR on `codex/pr80a-live-external-action-safety-foundation`. It exists because the base did not already provide a dedicated durable live external-action execution ledger plus narrow default-off live external-action config status boundary. PR80A must stay limited to that safety foundation and must not implement any provider API call, upload, live apply, final preview, provider response parser, UI/runtime/tool wiring, OAuth/token storage, or any provider request in tests. The next intended PR is PR80B - Safe Application Handoff While ATS Authorization Is Pending; live ATS submit/apply remains blocked.
+Maintainer decision after PR80A keeps live ATS submit/apply blocked until one provider supplies written use-case authorization, official server-to-server credentials, a test tenant or sandbox, one authorized test posting, official schema/questions endpoint, official submit endpoint, and receipt/error/duplicate/retry clarification. PR80B is the next implementation PR and is limited to safe manual application handoff while ATS authorization is pending. Manual handoff must not reserve, dispatch, or finalize PR80A `liveExternalActionExecutions`, and it must not represent a user-reported outcome as provider-submitted or provider-verified. PR80B does not automatically unlock PR81.
 
 OAuth/real-data/write-action constraints remain active: no OAuth runtime, callback, token storage, real user data, Convex real-data reads/writes, handlers, production connector, tool execution, outbound HTTP, LLM calls, export/download/send/submit/apply, or package/lockfile changes without an explicit unlocking PR.
 

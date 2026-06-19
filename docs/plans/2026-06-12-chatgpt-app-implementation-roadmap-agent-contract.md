@@ -1026,23 +1026,74 @@ SSRF tests
 
 ---
 
-## PR80 — Live Submit/Apply for One Integration
+## PR80 — External Application Action Track
 
-**Type :** code/tests.
+PR80 is decomposed into provider-neutral safety, safe manual handoff while ATS access is pending, and a later blocked live submit/apply step.
 
-**But :** activer apply/send live pour une intégration, derrière flags stricts.
+### PR80A — Durable Live External Action Safety Foundation
 
-**Obligatoire :**
+**Status:** merged.
+
+**Merge commit:** `69bec4a88e3d720b75ae89bd3bceb1fdcdba4a76`.
+
+**Scope:** provider-neutral durable local execution/idempotency safety only.
+
+**Forbidden:** provider transport, provider adapter, live network call, credentials, OAuth, upload, submit/apply, browser automation, scraping, UI/runtime/tool wiring, or production connector behavior.
+
+### PR80B — Safe Application Handoff While ATS Authorization Is Pending
+
+**Type:** code/tests, no external write.
+
+**Status:** exact next implementation PR.
+
+**Purpose:** let users complete applications manually from an immutable, confirmed Twoweeks package while official ATS access is unavailable.
+
+**Required:**
 
 ```txt
-manual confirmation
-final preview
-audit
-idempotency
-rollback/recovery
-no model-only approval
-no bulk apply
+authenticated owner-scoped Convex records
+final handoff preview
+exact human confirmation bound to the package digest
+copy/download/open controls through direct user interaction
+redacted audit events
+user-reported outcome explicitly labeled unverified
+no provider-verified state
+no server-side destination fetch
+no browser automation
+separate default-off feature flag
 ```
+
+**Forbidden:**
+
+```txt
+external write
+ATS transport or credentials
+provider adapter
+scraping, DOM access, autofill, browser automation, or submit
+fake provider presented as live
+bulk or auto-apply
+broad refactor or multi-provider framework
+```
+
+**Output:** Twoweeks can safely hand an approved application package to the user without claiming to have submitted it.
+
+### PR80 live — Live Submit/Apply for One Authorized Integration
+
+**Status:** blocked.
+
+**May begin only after one provider supplies:**
+
+```txt
+written use-case authorization
+official server-to-server credentials
+test tenant or sandbox
+one authorized test posting
+official schema/questions endpoint
+official submit endpoint
+receipt, error, duplicate, and retry clarification
+```
+
+Do not create PR80C, do not select a provider, and do not start PR81 automatically after PR80B.
 
 ---
 
