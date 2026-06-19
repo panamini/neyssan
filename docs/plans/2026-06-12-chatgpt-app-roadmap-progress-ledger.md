@@ -21,33 +21,29 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR81 - Rate Limits, Budget Limits, and Abuse Protection for Manual Handoff and Existing Write-Capable Flows
-GitHub PR: https://github.com/panamini/neyssan/pull/212
-Head commit: cd3bf82836dcb7fa3819efd961f633ddc0bfea91
-Merge commit: 01e8046cc9e6d8d23968fcea113b9d84273b36b8
-Merged at: 2026-06-19T21:39:51Z
+PR81-to-PR82-prep - Secrets, Token Storage, and Revocation Hardening Preflight
+GitHub PR: https://github.com/panamini/neyssan/pull/213
+Head commit: 511c904ed992f04e17185e7e5e1b686135749bdf
+Merge commit: a5c1a5cf97ea07240697861960b72f7532506304
+Merged at: 2026-06-19T22:18:08Z
 ```
 
 Current implementation PR:
 
 ```txt
-PR81-to-PR82-prep - Secrets, Token Storage, and Revocation Hardening Preflight
-Branch: codex/pr81-to-pr82-secrets-token-revocation-preflight
-Scope: docs-only security/governance preflight; no code, schema, runtime, UI, provider, OAuth, browser automation, package, or lockfile changes.
-Final decision: READY_TO_IMPLEMENT_NARROW_PR82.
+PR82 - Secrets, Token Storage, and Revocation Hardening
+Branch: codex/pr82-secrets-account-link-redaction-hardening
+Scope: narrow hardening of existing MCP/Stytch server-only config validation, account-link mapping, redacted audit/source guards, and local account-link disconnect/stale/revoked metadata only.
+No token storage, OAuth callback, token exchange, refresh-token flow, live provider revocation, provider credentials/API calls, browser automation, PR80-live, answer-copy implementation, package, or lockfile changes.
 ```
 
 Exact next implementation PR:
 
 ```txt
-PR82 - Secrets, Token Storage, and Revocation Hardening.
-May start only after this PR81-to-PR82 preflight merges.
-Narrow allowed scope: harden existing MCP/Stytch server-only config validation, account-link mapping, redacted audit/source guards, and local account-link disconnect/stale/revoked metadata only.
-No token storage exists yet, so PR82 must not invent encrypted token storage.
-No provider revocation runtime exists yet, so PR82 must not add live provider revocation calls.
+No next implementation PR is unlocked while PR82 is open.
 Approved answer copy stays blocked until a future source-model decision creates an authoritative approved answer source.
 PR80-live remains blocked by provider authorization prerequisites.
-PR82 must not include PR80-live, answer-copy implementation, OAuth callback, token exchange, refresh-token flow, live provider revocation, provider credentials, provider API calls, browser automation, external HTTP, package changes, lockfile changes, or broad refactors.
+PR83 is not started.
 ```
 
 PR59 status:
@@ -119,8 +115,8 @@ MERGED_NARROW_PR59 - PR185 merged the narrow read-only adapter scope approved by
 |      80-to-81-preflight | PR80 to PR81 manual handoff completion preflight                                     | merged      | #211                 | merge 90a5ff3c18623e8f99f39524536081ba5f8faf13                                             | Docs-only transition preflight. Final decision: `READY_TO_START_PR81_NARROW_MANUAL_HANDOFF_SCOPE`. It treated PR80 as complete enough only for manual handoff, approved artifact delivery, existing controlled export/send surfaces, and abuse/rate-limit hardening. Answer copy and PR80-live remain blocked. Merged at 2026-06-19T19:39:33Z. |
 |                   80-live | Live Submit/Apply for One Authorized Integration                                     | blocked     | none                 | no provider selected                                                                          | May begin only after one provider supplies written use-case authorization, official server-to-server credentials, test tenant or sandbox, one authorized test posting, official schema/questions endpoint, official submit endpoint, and receipt/error/duplicate/retry clarification. |
 |                        81 | Rate Limits, Budget Limits, and Abuse Protection for Manual Handoff and Existing Write-Capable Flows | merged      | #212                 | head cd3bf82836dcb7fa3819efd961f633ddc0bfea91; merge 01e8046cc9e6d8d23968fcea113b9d84273b36b8 | Added manual handoff rate/budget protection for prepare, confirm, delivery-content mutation load, file-download audit, destination-open audit, outcome report, and blocked answer-copy attempts. Quota rows are redacted and bounded; expired cleanup uses a bounded batch; UI uses structured safe refusal copy and disables pending actions. No package or lockfile changes. Final preflight accepted inherited red repo gates: `rtk npm run lint` remains red on base and branch because `.eslintrc.cjs` requires missing `./scraping-server/tsconfig.json`; `rtk npm run build` remains red on base and branch due existing repo-wide TypeScript debt first at `convex/activeCvSnapshots.ts:153`. Merged at 2026-06-19T21:39:51Z. |
-|      81-to-82-preflight | Secrets, Token Storage, and Revocation Hardening Preflight                           | current     | none                 | branch codex/pr81-to-pr82-secrets-token-revocation-preflight                                | Docs-only security/governance preflight. Final decision: `READY_TO_IMPLEMENT_NARROW_PR82`. It verifies no token storage or provider revocation runtime exists to implement broadly, but allows narrow hardening of existing MCP/Stytch server-only config, account-link mapping, redacted audit/source guards, and local disconnect/stale/revoked metadata. |
-|                        82 | Secrets, Token Storage, and Revocation Hardening                                     | next after preflight | none                 | no implementation branch                                                                       | Future PR82 may start only after the PR81-to-PR82 preflight merges and only within the exact narrow scope it defines. It must not add OAuth callback/token exchange, refresh-token flow, real token storage, provider credentials, provider API calls, live provider revocation, PR80-live, browser automation, package changes, lockfile changes, or broad refactors. |
+|      81-to-82-preflight | Secrets, Token Storage, and Revocation Hardening Preflight                           | merged      | #213                 | head 511c904ed992f04e17185e7e5e1b686135749bdf; merge a5c1a5cf97ea07240697861960b72f7532506304 | Docs-only security/governance preflight. Final decision: `READY_TO_IMPLEMENT_NARROW_PR82`. It verified no token storage or provider revocation runtime exists to implement broadly, but allowed narrow hardening of existing MCP/Stytch server-only config, account-link mapping, redacted audit/source guards, and local disconnect/stale/revoked metadata. Merged at 2026-06-19T22:18:08Z. |
+|                        82 | Secrets, Token Storage, and Revocation Hardening                                     | current draft | none                 | branch codex/pr82-secrets-account-link-redaction-hardening                                  | Narrow PR82 hardening only: existing Stytch config/raw logging guard, account-link mapping validation/expiry/local stale-revoked metadata, redacted audit/source guards, and projection guards. No token storage, OAuth callback/token exchange, refresh-token flow, provider credentials/API calls, live provider revocation, PR80-live, browser automation, package changes, lockfile changes, or answer-copy implementation. |
 
 ---
 

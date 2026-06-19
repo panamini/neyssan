@@ -14,6 +14,7 @@ import {
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const BOUNDARY_SOURCE = resolve(TEST_DIR, "../mcpProductionStytchOAuthConfigBoundary.ts");
+const AUTH_CONFIG_SOURCE = resolve(TEST_DIR, "../../../../convex/auth.config.ts");
 const PACKAGE_MANIFEST = resolve(TEST_DIR, "../../../../package.json");
 const FIXTURE_NOW = new Date("2026-06-15T05:40:00.000Z");
 const FIXTURE_NOW_SECONDS = Math.floor(FIXTURE_NOW.getTime() / 1000);
@@ -355,6 +356,13 @@ describe("MCP production Stytch OAuth config boundary", () => {
     expect(source).not.toMatch(/\bObject\.(?:keys|entries)\s*\(/u);
     expect(source).toMatch(/\bObject\.getOwnPropertyDescriptors\s*\(/u);
     expect(source).toMatch(/\bReflect\.ownKeys\s*\(/u);
+  });
+
+  it("does not log raw Convex auth config values", () => {
+    const source = readFileSync(AUTH_CONFIG_SOURCE, "utf8");
+
+    expect(source).not.toMatch(/\bconsole\.(?:log|info|warn|error)\s*\(/u);
+    expect(source).not.toMatch(/CLERK_JWT_ISSUER_DOMAIN from env/u);
   });
 
   it("does not require package or lockfile edits", () => {

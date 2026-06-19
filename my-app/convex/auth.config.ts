@@ -1,4 +1,3 @@
-console.log("CLERK_JWT_ISSUER_DOMAIN from env:", process.env.CLERK_JWT_ISSUER_DOMAIN);
 export default {
   providers: [
     {

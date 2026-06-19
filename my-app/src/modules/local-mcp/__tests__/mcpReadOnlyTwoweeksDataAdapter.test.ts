@@ -674,6 +674,39 @@ describe("PR59 read-only Twoweeks data adapter", () => {
     assertNoSensitiveOutput(result);
   });
 
+  it("fails closed when safe-ref candidates contain auth, cookie, or provider credential material", () => {
+    for (const extra of [
+      { authorizationHeader: "Bearer fixture-token" },
+      { clientSecret: "client_secret_real" },
+      { idToken: "id_token_real" },
+      { sessionCookie: "session_cookie_real" },
+      { providerCredentials: "provider_credentials_real" },
+    ] as const) {
+      const result = projectMcpReadOnlyTwoweeksDataAdapter(
+        adapterInput({
+          readOnlyDataRefs: dataRefs({
+            refs: [
+              {
+                kind: "mcp_read_only_twoweeks_data_ref_candidate",
+                refClass: "applicationPackageRef",
+                refId: "mcp-safe-ref:application-package:latest",
+                label: "Application package availability",
+                status: "available",
+                category: "application_package",
+                count: 1,
+                version: 1,
+                ...extra,
+              },
+            ],
+          }),
+        }),
+      );
+
+      expect(result).toMatchObject({ allowed: false, reason: "unsafe_projection_blocked" });
+      assertNoSensitiveOutput(result);
+    }
+  });
+
   it("keeps the source disconnected from handlers, tools runtime, connectors, network, model calls, and writes", () => {
     const allowedImports = new Set([
       "../mcpReadOnlyTwoweeksDataAdapter",

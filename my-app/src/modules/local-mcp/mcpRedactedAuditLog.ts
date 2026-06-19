@@ -131,8 +131,8 @@ const SENSITIVE_VALUE_PATTERNS: readonly Readonly<{
   category: LocalMcpRedactedAuditRedactionCategoryV1;
   pattern: RegExp;
 }>[] = [
-  { category: "credential", pattern: /bearer\s+\S+|access[_-]?token|refresh[_-]?token|client[_-]?secret|secret[_-]?token|oauth/uim },
-  { category: "session_marker", pattern: /session[_-]?(secret|token|id)|\bsid(?:[_-]|\b)/uim },
+  { category: "credential", pattern: /bearer\s+\S+|authorization|access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|secret[_-]?token|provider[_-]?credentials?|credential[_-]?(id|secret|token|key)|oauth/uim },
+  { category: "session_marker", pattern: /cookie|session[_-]?(secret|token|id|cookie)|\bsid(?:[_-]|\b)/uim },
   { category: "source_text", pattern: /raw[_-]?(cv|resume|job)|cv\s+text|resume\s+text|job\s+(description|text)/uim },
   { category: "restricted_fact", pattern: /private[_-]?fact|never[_-]?use/uim },
   { category: "artifact_text", pattern: /generated[_-]?(full|artifact)|full\s+generated/uim },
@@ -144,7 +144,7 @@ const SENSITIVE_KEY_PATTERNS: readonly Readonly<{
   pattern: RegExp;
 }>[] = [
   { category: "credential", pattern: /token|secret|authorization|credential/uim },
-  { category: "session_marker", pattern: /(?:^|[_-])session(?:[_-]?(secret|token|id))?(?:[_-]|$)|(?:^|[_-])sid(?:[_-]|$)/uim },
+  { category: "session_marker", pattern: /cookie|(?:^|[_-])session(?:[_-]?(secret|token|id|cookie))?(?:[_-]|$)|(?:^|[_-])sid(?:[_-]|$)/uim },
   { category: "source_text", pattern: /raw|cv|resume|job|source/uim },
   { category: "restricted_fact", pattern: /private|never[_-]?use|policy/uim },
   { category: "artifact_text", pattern: /generated|artifact|cover[_-]?letter/uim },

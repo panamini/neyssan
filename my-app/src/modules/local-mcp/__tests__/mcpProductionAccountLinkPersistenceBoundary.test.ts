@@ -277,12 +277,28 @@ describe("MCP production account-link persistence boundary", () => {
     for (const forbiddenRecord of [
       buildRawRecord({ accessToken: "secret" }),
       buildRawRecord({ refreshToken: "secret" }),
+      buildRawRecord({ idToken: "secret" }),
+      buildRawRecord({ authorizationHeader: "secret" }),
+      buildRawRecord({ cookie: "secret" }),
+      buildRawRecord({ providerCredentials: "secret" }),
       buildRawRecord({ rawClaims: { sub: FIXTURE_PROVIDER_SUBJECT } }),
       buildRawRecord({ email: "real-user@example.test" }),
       buildRawRecord({ rawCvText: "raw resume text" }),
       buildRawRecord({ rawJobText: "raw job text" }),
       buildRawRecord({ proposalContent: "full generated artifact" }),
       buildRawRecord({ convexDocumentId: "jd7convexrealid" }),
+    ] as const) {
+      expectDenied(buildInput({ accountLinks: [forbiddenRecord] }), "malformed_record");
+    }
+  });
+
+  it("rejects token, cookie, session, and credential-shaped values inside server-only identifier fields", () => {
+    for (const forbiddenRecord of [
+      buildRawRecord({ providerSubject: "access_token_real" }),
+      buildRawRecord({ twoweeksClerkId: "id_token_real" }),
+      buildRawRecord({ clientId: "client_secret_real" }),
+      buildRawRecord({ grantRef: "session_cookie_real" }),
+      buildRawRecord({ consentRef: "provider_credentials_real" }),
     ] as const) {
       expectDenied(buildInput({ accountLinks: [forbiddenRecord] }), "malformed_record");
     }
