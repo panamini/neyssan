@@ -1,6 +1,6 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ManualApplicationHandoffPanel,
   type ManualApplicationHandoffPanelState,
@@ -9,6 +9,12 @@ import {
 const APPLICATION_URL = "https://jobs.example.com/apply/123?private=value";
 const MANIFEST_DIGEST = "a".repeat(64);
 const REQUIRED_COPY = `I confirm this Twoweeks handoff package ${MANIFEST_DIGEST}.`;
+const ARTIFACT_DIGEST = "c".repeat(64);
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 function preparedState(
   overrides: Partial<ManualApplicationHandoffPanelState> = {},
@@ -38,9 +44,9 @@ function preparedState(
 
 function handlers() {
   return {
+    onLoadDeliveryContent: vi.fn(async () => null),
     onPrepare: vi.fn(async () => undefined),
     onConfirm: vi.fn(async () => undefined),
-    onRecordCopySucceeded: vi.fn(async () => undefined),
     onRecordFileDownloadRequested: vi.fn(async () => undefined),
     onRecordDestinationOpenRequested: vi.fn(async () => undefined),
     onReportOutcome: vi.fn(async () => undefined),
@@ -76,6 +82,26 @@ describe("ManualApplicationHandoffPanel", () => {
 
   it("requires exact confirmation copy before the package can be used", async () => {
     const props = handlers();
+    const deliveryContent = {
+      handoffId: "manual-application-handoff:one",
+      manifestDigest: MANIFEST_DIGEST,
+      approvedAnswers: [],
+      downloadableArtifacts: [
+        {
+          artifactRef: "cover-letter-artifact:hash-a",
+          label: "Cover letter export",
+          filename: "cover-letter-export.md",
+          mimeType: "text/markdown",
+          text: "Dear Example co,\n\nI am excited to apply.",
+          artifactDigest: ARTIFACT_DIGEST,
+        },
+      ],
+      answerCopyBlockedReason:
+        "Approved answer copy is blocked until approved answers are server-derived.",
+      downloadBlockedReason: null,
+      providerVerified: false,
+    } as const;
+    props.onLoadDeliveryContent.mockResolvedValueOnce(deliveryContent);
     render(
       <ManualApplicationHandoffPanel
         jobId="job_1"
@@ -131,7 +157,6 @@ describe("ManualApplicationHandoffPanel", () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /copy/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /download/i })).toBeNull();
-    expect(props.onRecordCopySucceeded).not.toHaveBeenCalled();
     expect(props.onRecordFileDownloadRequested).not.toHaveBeenCalled();
   });
 
@@ -172,6 +197,100 @@ describe("ManualApplicationHandoffPanel", () => {
     expect(props.onRecordFileDownloadRequested).not.toHaveBeenCalled();
   });
 
+  it("downloads only artifacts delivered by the owner-scoped delivery content query", async () => {
+    const props = handlers();
+    const deliveryContent = {
+      handoffId: "manual-application-handoff:one",
+      manifestDigest: MANIFEST_DIGEST,
+      approvedAnswers: [],
+      downloadableArtifacts: [
+        {
+          artifactRef: "cover-letter-artifact:hash-a",
+          label: "Cover letter export",
+          filename: "cover-letter-export.md",
+          mimeType: "text/markdown",
+          text: "Dear Example co,\n\nI am excited to apply.",
+          artifactDigest: ARTIFACT_DIGEST,
+        },
+      ],
+      answerCopyBlockedReason:
+        "Approved answer copy is blocked until approved answers are server-derived.",
+      downloadBlockedReason: null,
+      providerVerified: false,
+    } as const;
+    props.onLoadDeliveryContent.mockResolvedValueOnce(deliveryContent);
+    const createObjectUrl = vi.fn(() => "download-url");
+    const revokeObjectUrl = vi.fn();
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectUrl,
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectUrl,
+    });
+    const originalCreateElement = document.createElement.bind(document);
+    const click = vi.fn();
+    vi.spyOn(document, "createElement").mockImplementation((tagName) => {
+      const element = originalCreateElement(tagName);
+      if (tagName.toLowerCase() === "a") {
+        Object.defineProperty(element, "click", {
+          configurable: true,
+          value: click,
+        });
+      }
+      return element;
+    });
+
+    function HandoffPanelHarness(): JSX.Element {
+      const [content, setContent] =
+        React.useState<typeof deliveryContent | null>(null);
+      return (
+        <ManualApplicationHandoffPanel
+          jobId="job_1"
+          applicationUrl={APPLICATION_URL}
+          handoff={preparedState({
+            status: "handoff_confirmed",
+            canConfirm: false,
+            canUseConfirmedPackage: true,
+          })}
+          deliveryContent={content}
+          {...props}
+          onLoadDeliveryContent={async (args) => {
+            const nextContent = await props.onLoadDeliveryContent(args);
+            setContent(nextContent as typeof deliveryContent);
+            return nextContent;
+          }}
+        />
+      );
+    }
+
+    render(<HandoffPanelHarness />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Load approved files" }));
+    await waitFor(() =>
+      expect(props.onLoadDeliveryContent).toHaveBeenCalledWith({
+        handoffId: "manual-application-handoff:one",
+        manifestDigest: MANIFEST_DIGEST,
+      }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Download Cover letter export" }),
+    );
+
+    await waitFor(() =>
+      expect(props.onRecordFileDownloadRequested).toHaveBeenCalledWith({
+        handoffId: "manual-application-handoff:one",
+        manifestDigest: MANIFEST_DIGEST,
+        artifactRef: "cover-letter-artifact:hash-a",
+        artifactDigest: ARTIFACT_DIGEST,
+      }),
+    );
+    expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob));
+    expect(click).toHaveBeenCalled();
+    expect(revokeObjectUrl).toHaveBeenCalledWith("download-url");
+  });
+
   it("does not render answer copy controls when only test-only answer props arrive", () => {
     const props = handlers();
 
@@ -204,7 +323,6 @@ describe("ManualApplicationHandoffPanel", () => {
         "Approved answer copy is blocked until approved answers are server-derived.",
       ),
     ).toBeInTheDocument();
-    expect(props.onRecordCopySucceeded).not.toHaveBeenCalled();
   });
 
   it("records destination open requested before opening the owned job application URL", async () => {

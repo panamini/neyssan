@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ApplicationPackageV1 } from "../../src/modules/application-package/schema";
 import {
   confirm,
+  getDeliveryContentForHandoff,
   getForJob,
   prepare,
   recordCopySucceeded,
@@ -29,6 +30,8 @@ const RESUME_ARTIFACT_ID = "resume-variant-artifact:hash-a";
 const COVER_LETTER_ARTIFACT_ID = "cover-letter-artifact:hash-a";
 const APPLICATION_URL =
   "https://jobs.example.com/apply/123?candidate=private#section";
+const APPROVED_COVER_LETTER_TEXT =
+  "Dear Example co,\n\nI am excited to apply for the Operations lead role.";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -45,6 +48,7 @@ type TableName =
   | "jobs"
   | "applicationContexts"
   | "applicationPackages"
+  | "applicationArtifacts"
   | "manualApplicationHandoffs"
   | "manualApplicationHandoffEvents"
   | "liveExternalActionExecutions";
@@ -160,12 +164,142 @@ function buildStoredPackage(
   };
 }
 
+function buildCoverLetterArtifactFixture() {
+  return {
+    id: COVER_LETTER_ARTIFACT_ID,
+    userId: OWNER_PROFILE_ID,
+    applicationContextId: APPLICATION_CONTEXT_ID,
+    status: "ready_for_review",
+    text: {
+      value: APPROVED_COVER_LETTER_TEXT,
+      format: "markdown",
+      sourceKind: "manual_text",
+      textHash: "cover-letter-text-hash-a",
+      paragraphCount: 2,
+      characterCount: APPROVED_COVER_LETTER_TEXT.length,
+      version: 1,
+    },
+    warnings: [],
+    provenance: {
+      applicationContextId: APPLICATION_CONTEXT_ID,
+      resumeVariantArtifactId: RESUME_ARTIFACT_ID,
+      resumeVariantArtifactContentHash: "resume-content-hash-a",
+      evidenceGraphId: "evidence-graph:hash-a",
+      evidenceGraphHash: "hash-a",
+      resumeVariantPlanId: "resume-variant-plan:hash-a",
+      resumeVariantPlanHash: "hash-a",
+      reviewCockpitId: "review-cockpit:hash-a",
+      sourceFactIds: ["candidate-fact:b"],
+      allowedClaimIds: ["allowed-claim:b"],
+      evidenceMatchIds: ["evidence-match:b"],
+      demandIds: ["demand:b"],
+      riskFlagIds: [],
+      reviewItemIds: ["review:b"],
+      version: 1,
+    },
+    createdAt: NOW,
+    updatedAt: NOW,
+    version: 1,
+  };
+}
+
+function buildApprovedCoverLetterExportArtifact(
+  overrides: Partial<StoredDocument<any>> = {},
+): StoredDocument<any> {
+  return {
+    _id: "applicationArtifacts_cover_letter_export",
+    _creationTime: NOW,
+    id: "application-export:cover-letter-a",
+    userId: OWNER_PROFILE_ID,
+    contextId: APPLICATION_CONTEXT_ID,
+    type: "export",
+    status: "approved",
+    title: "Approved cover letter export",
+    content: {
+      kind: "mcp_cover_letter_application_package_export_payload",
+      artifactKind: "cover_letter",
+      fileName: "cover-letter-export.md",
+      mimeType: "text/markdown",
+      content: APPROVED_COVER_LETTER_TEXT,
+      checksum: "cover-letter-export-checksum-a",
+      persisted: false,
+      urlCreated: false,
+      writeActionExecuted: false,
+      version: 1,
+    },
+    textPreview: "Cover letter export ready",
+    sourceHashes: {
+      contextHash: "context-hash",
+    },
+    provenance: {
+      jobId: JOB_ID,
+      sourceFactIds: ["candidate-fact:b"],
+    },
+    sourceRefs: [
+      {
+        sourceType: "artifact",
+        sourceId: COVER_LETTER_ARTIFACT_ID,
+        sourceHash: "cover-letter-content-hash-a",
+      },
+    ],
+    createdAt: NOW,
+    updatedAt: NOW,
+    version: 1,
+    ...overrides,
+  };
+}
+
+function buildRawApprovedCoverLetterArtifact(): StoredDocument<any> {
+  return {
+    _id: "applicationArtifacts_cover_letter_raw",
+    _creationTime: NOW,
+    id: COVER_LETTER_ARTIFACT_ID,
+    userId: OWNER_PROFILE_ID,
+    contextId: APPLICATION_CONTEXT_ID,
+    type: "cover_letter",
+    status: "approved",
+    title: "Approved cover letter",
+    content: {
+      kind: "cover_letter_artifact",
+      artifact: buildCoverLetterArtifactFixture(),
+      version: 1,
+    },
+    textPreview: "Dear Example co,",
+    sourceHashes: {
+      contextHash: "context-hash",
+    },
+    provenance: {
+      jobId: JOB_ID,
+      sourceFactIds: ["candidate-fact:b"],
+    },
+    sourceRefs: [
+      {
+        sourceType: "artifact",
+        sourceId: COVER_LETTER_ARTIFACT_ID,
+        sourceHash: "cover-letter-content-hash-a",
+      },
+    ],
+    createdAt: NOW,
+    updatedAt: NOW,
+    version: 1,
+  };
+}
+
+function buildPackageWithApprovedCoverLetterExport() {
+  return {
+    packagePayload: buildApplicationPackageFixture(),
+    coverLetterContentHash: "cover-letter-content-hash-a",
+    storedArtifact: buildApprovedCoverLetterExportArtifact(),
+  };
+}
+
 function makeCtx(options: {
   clerkId?: string | null;
   applicationUrl?: string | null;
   sourceUrl?: string | null;
   packageOverrides?: Partial<StoredDocument<any>>;
   includePackage?: boolean;
+  applicationArtifacts?: StoredDocument<any>[];
 } = {}) {
   const tables: Record<TableName, StoredDocument<any>[]> = {
     userProfiles: [
@@ -234,6 +368,7 @@ function makeCtx(options: {
       options.includePackage === false
         ? []
         : [buildStoredPackage(options.packageOverrides)],
+    applicationArtifacts: options.applicationArtifacts ?? [],
     manualApplicationHandoffs: [],
     manualApplicationHandoffEvents: [],
     liveExternalActionExecutions: [],
@@ -752,6 +887,142 @@ describe("manual application handoff", () => {
         now: NOW + 3,
       }),
     ).rejects.toThrow(/blocked/i);
+  });
+
+  it("delivers approved artifact export content through an owner-scoped confirmed handoff query", async () => {
+    vi.stubEnv("TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED", "true");
+    const { packagePayload, coverLetterContentHash, storedArtifact } =
+      buildPackageWithApprovedCoverLetterExport();
+    expect(storedArtifact).toMatchObject({
+      type: "export",
+      content: {
+        kind: "mcp_cover_letter_application_package_export_payload",
+        artifactKind: "cover_letter",
+      },
+    });
+    const { ctx, tables } = makeCtx({
+      packageOverrides: {
+        package: packagePayload,
+      },
+      applicationArtifacts: [storedArtifact],
+    });
+    const prepared = await prepare._handler(ctx as any, {
+      jobId: JOB_ID,
+      applicationPackageId: APPLICATION_PACKAGE_ID,
+      now: NOW,
+    });
+    await confirm._handler(ctx as any, {
+      handoffId: prepared.handoffId,
+      manifestDigest: prepared.manifestDigest,
+      confirmationCopy: prepared.requiredConfirmationCopy,
+      now: NOW + 1,
+    });
+
+    const delivery = await getDeliveryContentForHandoff._handler(ctx as any, {
+      handoffId: prepared.handoffId,
+      manifestDigest: prepared.manifestDigest,
+    });
+
+    expect(delivery.approvedAnswers).toEqual([]);
+    expect(delivery.answerCopyBlockedReason).toMatch(/blocked/i);
+    expect(delivery.downloadBlockedReason).toBeNull();
+    expect(delivery.downloadableArtifacts).toEqual([
+      expect.objectContaining({
+        artifactRef: COVER_LETTER_ARTIFACT_ID,
+        label: "Cover letter export",
+        filename: "cover-letter-export.md",
+        mimeType: "text/markdown",
+        text: APPROVED_COVER_LETTER_TEXT,
+        artifactDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
+        approvalProof: expect.objectContaining({
+          artifactStatus: "approved",
+          packageStatus: "ready_for_review",
+          manifestDigest: prepared.manifestDigest,
+        }),
+        freshnessProof: expect.objectContaining({
+          applicationPackageId: APPLICATION_PACKAGE_ID,
+          applicationContextId: APPLICATION_CONTEXT_ID,
+          artifactContentHash: coverLetterContentHash,
+        }),
+      }),
+    ]);
+    expect(tables.manualApplicationHandoffEvents).toHaveLength(2);
+  });
+
+  it("does not deliver raw approved artifact content without an export payload", async () => {
+    vi.stubEnv("TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED", "true");
+    const { ctx } = makeCtx({
+      applicationArtifacts: [buildRawApprovedCoverLetterArtifact()],
+    });
+    const prepared = await prepare._handler(ctx as any, {
+      jobId: JOB_ID,
+      applicationPackageId: APPLICATION_PACKAGE_ID,
+      now: NOW,
+    });
+    await confirm._handler(ctx as any, {
+      handoffId: prepared.handoffId,
+      manifestDigest: prepared.manifestDigest,
+      confirmationCopy: prepared.requiredConfirmationCopy,
+      now: NOW + 1,
+    });
+
+    const delivery = await getDeliveryContentForHandoff._handler(ctx as any, {
+      handoffId: prepared.handoffId,
+      manifestDigest: prepared.manifestDigest,
+    });
+
+    expect(delivery.downloadableArtifacts).toEqual([]);
+    expect(delivery.downloadBlockedReason).toMatch(/blocked/i);
+  });
+
+  it("records artifact download requests with only artifact refs and digests", async () => {
+    vi.stubEnv("TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED", "true");
+    const { packagePayload, storedArtifact } =
+      buildPackageWithApprovedCoverLetterExport();
+    const { ctx, tables } = makeCtx({
+      packageOverrides: {
+        package: packagePayload,
+      },
+      applicationArtifacts: [storedArtifact],
+    });
+    const prepared = await prepare._handler(ctx as any, {
+      jobId: JOB_ID,
+      applicationPackageId: APPLICATION_PACKAGE_ID,
+      now: NOW,
+    });
+    await confirm._handler(ctx as any, {
+      handoffId: prepared.handoffId,
+      manifestDigest: prepared.manifestDigest,
+      confirmationCopy: prepared.requiredConfirmationCopy,
+      now: NOW + 1,
+    });
+    const delivery = await getDeliveryContentForHandoff._handler(ctx as any, {
+      handoffId: prepared.handoffId,
+      manifestDigest: prepared.manifestDigest,
+    });
+    const artifact = delivery.downloadableArtifacts[0];
+
+    await expect(
+      recordFileDownloadRequested._handler(ctx as any, {
+        handoffId: prepared.handoffId,
+        manifestDigest: prepared.manifestDigest,
+        artifactRef: artifact.artifactRef,
+        artifactDigest: artifact.artifactDigest,
+        now: NOW + 2,
+      }),
+    ).resolves.toMatchObject({
+      status: "handoff_confirmed",
+    });
+
+    expect(tables.manualApplicationHandoffEvents.at(-1)).toMatchObject({
+      eventKind: "manual_handoff.file_download_requested",
+      evidence: "user_interaction_observed",
+      artifactRef: COVER_LETTER_ARTIFACT_ID,
+      artifactDigest: artifact.artifactDigest,
+    });
+    const persisted = JSON.stringify(tables.manualApplicationHandoffEvents);
+    expect(persisted).not.toContain(APPROVED_COVER_LETTER_TEXT);
+    expect(persisted).not.toContain(APPLICATION_URL);
   });
 
   it("records destination-open request and user-reported outcome with approved event names", async () => {

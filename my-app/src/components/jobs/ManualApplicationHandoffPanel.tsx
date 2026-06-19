@@ -28,6 +28,16 @@ export type ManualApplicationHandoffPanelState = {
   downloadBlockedReason?: string | null;
 };
 
+export type ManualApplicationHandoffDeliveryContent = {
+  handoffId: string;
+  manifestDigest: string;
+  approvedAnswers: ManualApplicationHandoffAnswer[];
+  downloadableArtifacts: ManualApplicationHandoffArtifact[];
+  answerCopyBlockedReason?: string | null;
+  downloadBlockedReason?: string | null;
+  providerVerified: false;
+};
+
 export type ManualApplicationHandoffAnswer = {
   answerRef: string;
   label: string;
@@ -48,17 +58,16 @@ type ManualApplicationHandoffPanelProps = {
   jobId: string;
   applicationUrl?: string | null;
   handoff: ManualApplicationHandoffPanelState | null | undefined;
+  deliveryContent?: ManualApplicationHandoffDeliveryContent | null;
+  onLoadDeliveryContent: (args: {
+    handoffId: string;
+    manifestDigest: string;
+  }) => Promise<ManualApplicationHandoffDeliveryContent | null>;
   onPrepare: (args: { jobId: string }) => Promise<unknown>;
   onConfirm: (args: {
     handoffId: string;
     manifestDigest: string;
     confirmationCopy: string;
-  }) => Promise<unknown>;
-  onRecordCopySucceeded: (args: {
-    handoffId: string;
-    manifestDigest: string;
-    answerRef: string;
-    answerDigest: string;
   }) => Promise<unknown>;
   onRecordFileDownloadRequested: (args: {
     handoffId: string;
@@ -86,9 +95,12 @@ export function ManualApplicationHandoffPanel({
   jobId,
   applicationUrl,
   handoff,
+  deliveryContent,
+  onLoadDeliveryContent,
   onPrepare,
   onConfirm,
   onRecordDestinationOpenRequested,
+  onRecordFileDownloadRequested,
   onReportOutcome,
 }: ManualApplicationHandoffPanelProps): JSX.Element {
   const [confirmationCopy, setConfirmationCopy] = React.useState("");
@@ -97,9 +109,19 @@ export function ManualApplicationHandoffPanel({
   const manifestDigest = handoff?.manifestDigest ?? "";
   const requiredConfirmationCopy = handoff?.requiredConfirmationCopy ?? "";
   const answerCopyBlockedReason =
+    deliveryContent?.answerCopyBlockedReason ??
     handoff?.answerCopyBlockedReason ??
     "Approved answer copy is blocked until approved answers are server-derived.";
+  const activeDeliveryContent = deliveryContent;
+  const deliveryContentMatches =
+    activeDeliveryContent?.handoffId === handoffId &&
+    activeDeliveryContent?.manifestDigest === manifestDigest;
+  const hasLoadedDeliveryContent = Boolean(deliveryContentMatches);
+  const downloadableArtifacts = deliveryContentMatches && activeDeliveryContent
+    ? activeDeliveryContent.downloadableArtifacts
+    : [];
   const downloadBlockedReason =
+    activeDeliveryContent?.downloadBlockedReason ??
     handoff?.downloadBlockedReason ??
     "Approved artifact downloads are blocked until an approved export representation is available.";
   const canUsePackage = Boolean(
@@ -164,6 +186,26 @@ export function ManualApplicationHandoffPanel({
         outcome,
       }),
     );
+  };
+
+  const handleDownloadArtifact = (artifact: ManualApplicationHandoffArtifact) => {
+    if (!canUsePackage) return;
+    void runAction(async () => {
+      await onRecordFileDownloadRequested({
+        handoffId,
+        manifestDigest,
+        artifactRef: artifact.artifactRef,
+        artifactDigest: artifact.artifactDigest,
+      });
+      triggerLocalTextDownload(artifact);
+    });
+  };
+
+  const handleLoadDeliveryContent = () => {
+    if (!canUsePackage) return;
+    void runAction(async () => {
+      await onLoadDeliveryContent({ handoffId, manifestDigest });
+    });
   };
 
   return (
@@ -260,9 +302,37 @@ export function ManualApplicationHandoffPanel({
           </div>
 
           <div className="dasti-brief-card__summary-label">Approved files</div>
-          <div className="dasti-empty-state__subtitle">
-            {downloadBlockedReason}
-          </div>
+          {downloadableArtifacts.length > 0 ? (
+            <div className="dasti-jobs-filter-chips">
+              {downloadableArtifacts.map((artifact) => (
+                <button
+                  key={artifact.artifactRef}
+                  type="button"
+                  className="dasti-button dasti-button--pill dasti-button--sm"
+                  disabled={actionState === "working"}
+                  onClick={() => handleDownloadArtifact(artifact)}
+                >
+                  Download {artifact.label}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <>
+              <div className="dasti-empty-state__subtitle">
+                {downloadBlockedReason}
+              </div>
+              {!hasLoadedDeliveryContent ? (
+                <button
+                  type="button"
+                  className="dasti-button dasti-button--pill dasti-button--sm"
+                  disabled={actionState === "working"}
+                  onClick={handleLoadDeliveryContent}
+                >
+                  Load approved files
+                </button>
+              ) : null}
+            </>
+          )}
 
           <button
             type="button"
@@ -306,4 +376,18 @@ export function ManualApplicationHandoffPanel({
       ) : null}
     </section>
   );
+}
+
+function triggerLocalTextDownload(
+  artifact: ManualApplicationHandoffArtifact,
+): void {
+  if (typeof document === "undefined") return;
+  const blob = new Blob([artifact.text], { type: artifact.mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = artifact.filename;
+  link.rel = "noopener";
+  link.click();
+  URL.revokeObjectURL(url);
 }
