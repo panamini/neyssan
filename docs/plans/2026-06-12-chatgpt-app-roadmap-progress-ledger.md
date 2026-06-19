@@ -21,30 +21,33 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR80B-follow-up-2-prep - Authoritative Approved Answer Source Decision
-GitHub PR: https://github.com/panamini/neyssan/pull/210
-Head commit: d5b63ccd459029d0952b70aa597907d190f3fc65
-Merge commit: 8e37506459846fc0497d5c1b3be11ac50671f250
-Merged at: 2026-06-19T18:19:33Z
+PR81 - Rate Limits, Budget Limits, and Abuse Protection for Manual Handoff and Existing Write-Capable Flows
+GitHub PR: https://github.com/panamini/neyssan/pull/212
+Head commit: cd3bf82836dcb7fa3819efd961f633ddc0bfea91
+Merge commit: 01e8046cc9e6d8d23968fcea113b9d84273b36b8
+Merged at: 2026-06-19T21:39:51Z
 ```
 
 Current implementation PR:
 
 ```txt
-PR80-to-PR81 manual handoff completion preflight
-Branch: codex/pr80-to-pr81-manual-handoff-completion-preflight
-Scope: docs-only transition preflight; no code implementation.
-Final decision: READY_TO_START_PR81_NARROW_MANUAL_HANDOFF_SCOPE.
+PR81-to-PR82-prep - Secrets, Token Storage, and Revocation Hardening Preflight
+Branch: codex/pr81-to-pr82-secrets-token-revocation-preflight
+Scope: docs-only security/governance preflight; no code, schema, runtime, UI, provider, OAuth, browser automation, package, or lockfile changes.
+Final decision: READY_TO_IMPLEMENT_NARROW_PR82.
 ```
 
 Exact next implementation PR:
 
 ```txt
-PR81 - Rate Limits, Budget Limits, and Abuse Protection for Manual Handoff and Existing Write-Capable Flows.
-May start only after this transition preflight merges.
+PR82 - Secrets, Token Storage, and Revocation Hardening.
+May start only after this PR81-to-PR82 preflight merges.
+Narrow allowed scope: harden existing MCP/Stytch server-only config validation, account-link mapping, redacted audit/source guards, and local account-link disconnect/stale/revoked metadata only.
+No token storage exists yet, so PR82 must not invent encrypted token storage.
+No provider revocation runtime exists yet, so PR82 must not add live provider revocation calls.
 Approved answer copy stays blocked until a future source-model decision creates an authoritative approved answer source.
 PR80-live remains blocked by provider authorization prerequisites.
-PR81 must not include PR80-live, answer-copy implementation, PR82+ work, OAuth/token work, provider integration, browser automation, external HTTP, package changes, or lockfile changes.
+PR82 must not include PR80-live, answer-copy implementation, OAuth callback, token exchange, refresh-token flow, live provider revocation, provider credentials, provider API calls, browser automation, external HTTP, package changes, lockfile changes, or broad refactors.
 ```
 
 PR59 status:
@@ -113,9 +116,11 @@ MERGED_NARROW_PR59 - PR185 merged the narrow read-only adapter scope approved by
 |                       80B | Safe Application Handoff While ATS Authorization Is Pending                          | merged      | #208                 | dd71c10b45582894c2f445db7443d7748618abab                                                     | Manual handoff only: authenticated owner-scoped Convex records, final preview, exact human confirmation, direct-user open controls, user-reported result explicitly unverified, no provider-verified state, no server-side destination fetch, no browser automation, and separate default-off feature flag. Approved answer copy was intentionally blocked until approved answers are server-derived. Merged at 2026-06-19T14:33:28Z. |
 |          80B-follow-up | Approved Handoff Artifact Delivery                                                   | merged      | #209                 | head 9e4ed852c708eba75789c5df34091c8d27e0ee72; merge 9cfc9accd691f6d9c69ade6164dff2b6e1aeb6f9 | Added approved manual-handoff artifact delivery from approved export representations only. Approved answer copy remains blocked because no authoritative server-derived approved application-answer source is available. No provider-verified state, live apply, browser automation, provider fetch, destination fetch, or server-side submit/apply behavior was added. Merged at 2026-06-19T17:25:07Z. |
 |   80B-follow-up-2-prep | Authoritative Approved Answer Source Decision                                        | merged      | #210                 | head d5b63ccd459029d0952b70aa597907d190f3fc65; merge 8e37506459846fc0497d5c1b3be11ac50671f250 | Docs-only preflight returned `BLOCKED_NO_AUTHORITATIVE_SOURCE`. It decided that no existing authoritative owner-scoped approved application-answer source exists for manual handoff per-answer copy. No code implementation, schema changes, UI changes, runtime wiring, provider calls, browser automation, live apply, or generated answer persistence was authorized. Merged at 2026-06-19T18:19:33Z. |
-|      80-to-81-preflight | PR80 to PR81 manual handoff completion preflight                                     | current     | none                 | branch codex/pr80-to-pr81-manual-handoff-completion-preflight                                | Docs-only transition preflight. Final decision: `READY_TO_START_PR81_NARROW_MANUAL_HANDOFF_SCOPE`. It treats PR80 as complete enough only for manual handoff, approved artifact delivery, existing controlled export/send surfaces, and abuse/rate-limit hardening. Answer copy and PR80-live remain blocked. |
+|      80-to-81-preflight | PR80 to PR81 manual handoff completion preflight                                     | merged      | #211                 | merge 90a5ff3c18623e8f99f39524536081ba5f8faf13                                             | Docs-only transition preflight. Final decision: `READY_TO_START_PR81_NARROW_MANUAL_HANDOFF_SCOPE`. It treated PR80 as complete enough only for manual handoff, approved artifact delivery, existing controlled export/send surfaces, and abuse/rate-limit hardening. Answer copy and PR80-live remain blocked. Merged at 2026-06-19T19:39:33Z. |
 |                   80-live | Live Submit/Apply for One Authorized Integration                                     | blocked     | none                 | no provider selected                                                                          | May begin only after one provider supplies written use-case authorization, official server-to-server credentials, test tenant or sandbox, one authorized test posting, official schema/questions endpoint, official submit endpoint, and receipt/error/duplicate/retry clarification. |
-|                        81 | Rate Limits, Budget Limits, and Abuse Protection for Manual Handoff and Existing Write-Capable Flows | next after transition preflight | none                 | no implementation branch                                                                       | Narrow PR81 only. Scope is rate limits/action caps/event-spam guards for manual handoff prepare/confirm/open/outcome, artifact delivery content loading, and existing controlled send/export flows if already in scope. It must not include ATS live provider submit, provider adapters, OAuth/token work, external HTTP, browser automation, answer copy, PR82+ work, package changes, or lockfile changes. |
+|                        81 | Rate Limits, Budget Limits, and Abuse Protection for Manual Handoff and Existing Write-Capable Flows | merged      | #212                 | head cd3bf82836dcb7fa3819efd961f633ddc0bfea91; merge 01e8046cc9e6d8d23968fcea113b9d84273b36b8 | Added manual handoff rate/budget protection for prepare, confirm, delivery-content mutation load, file-download audit, destination-open audit, outcome report, and blocked answer-copy attempts. Quota rows are redacted and bounded; expired cleanup uses a bounded batch; UI uses structured safe refusal copy and disables pending actions. No package or lockfile changes. Final preflight accepted inherited red repo gates: `rtk npm run lint` remains red on base and branch because `.eslintrc.cjs` requires missing `./scraping-server/tsconfig.json`; `rtk npm run build` remains red on base and branch due existing repo-wide TypeScript debt first at `convex/activeCvSnapshots.ts:153`. Merged at 2026-06-19T21:39:51Z. |
+|      81-to-82-preflight | Secrets, Token Storage, and Revocation Hardening Preflight                           | current     | none                 | branch codex/pr81-to-pr82-secrets-token-revocation-preflight                                | Docs-only security/governance preflight. Final decision: `READY_TO_IMPLEMENT_NARROW_PR82`. It verifies no token storage or provider revocation runtime exists to implement broadly, but allows narrow hardening of existing MCP/Stytch server-only config, account-link mapping, redacted audit/source guards, and local disconnect/stale/revoked metadata. |
+|                        82 | Secrets, Token Storage, and Revocation Hardening                                     | next after preflight | none                 | no implementation branch                                                                       | Future PR82 may start only after the PR81-to-PR82 preflight merges and only within the exact narrow scope it defines. It must not add OAuth callback/token exchange, refresh-token flow, real token storage, provider credentials, provider API calls, live provider revocation, PR80-live, browser automation, package changes, lockfile changes, or broad refactors. |
 
 ---
 
@@ -220,9 +225,15 @@ PR210 merged PR80B-follow-up-2-prep into `application-os-foundation` with head c
 
 PR80-to-PR81 manual handoff completion preflight returns `READY_TO_START_PR81_NARROW_MANUAL_HANDOFF_SCOPE`. PR80 is complete enough for PR81 only in the current manual handoff/export/send sense: final approved package handoff, exact human confirmation, approved artifact delivery, user-opened destination, unverified user-reported outcome, redacted audit events, default-off feature flag, no provider-verified state, no live submit/apply, no browser automation, and no answer copy unless a future source model exists. This unlocks only narrow PR81 rate/budget/abuse hardening for manual handoff and existing controlled send/export flows. It does not unlock answer copy, PR80-live, PR82+ work, OAuth/token work, provider integration, browser automation, external HTTP, package changes, or lockfile changes.
 
-Maintainer decision after PR80A still keeps live ATS submit/apply blocked until one provider supplies written use-case authorization, official server-to-server credentials, a test tenant or sandbox, one authorized test posting, official schema/questions endpoint, official submit endpoint, and receipt/error/duplicate/retry clarification. Manual handoff must not reserve, dispatch, or finalize PR80A `liveExternalActionExecutions`, and it must not represent a user-reported outcome as provider-submitted or provider-verified. PR80B, PR80B-follow-up, and PR80B-follow-up-2-prep do not automatically unlock PR81.
+PR211 merged the PR80-to-PR81 preflight into `application-os-foundation` with merge commit `90a5ff3c18623e8f99f39524536081ba5f8faf13` at `2026-06-19T19:39:33Z`.
 
-OAuth/real-data/write-action constraints remain active: no OAuth runtime, callback, token storage, real user data, Convex real-data reads/writes, handlers, production connector, tool execution, outbound HTTP, LLM calls, export/download/send/submit/apply, or package/lockfile changes without an explicit unlocking PR.
+PR212 merged PR81 into `application-os-foundation` with head commit `cd3bf82836dcb7fa3819efd961f633ddc0bfea91` and merge commit `01e8046cc9e6d8d23968fcea113b9d84273b36b8` at `2026-06-19T21:39:51Z`. It added manual handoff rate/budget protection for prepare, confirm, delivery-content load, file-download audit, destination-open audit, outcome report, and blocked answer-copy attempts. Delivery-content load remains mutation-protected. Quota rows are redacted and bounded, expired cleanup is bounded, structured safe UI refusal copy is used, and pending actions are disabled. It did not add answer-copy implementation, PR80-live, provider/OAuth/token/browser automation changes, package changes, or lockfile changes.
+
+PR81-to-PR82 preflight returns `READY_TO_IMPLEMENT_NARROW_PR82`. Current active MCP/Stytch auth surfaces include a local JWT verifier/config boundary, server-only account-link persistence, Convex account-link records, consent, redacted audit, retention/deletion, safe selector projection, and read-only data refs. They expose a real hardening target for config validation, account-link state/redaction, local disconnect/stale/revoked metadata, and source guards. They do not expose real token storage, refresh-token storage, token exchange, OAuth callback, provider credentials, live provider revocation, or PR80-live behavior. PR82 must therefore be narrow and must not invent token storage or provider revocation runtime.
+
+Maintainer decision after PR80A still keeps live ATS submit/apply blocked until one provider supplies written use-case authorization, official server-to-server credentials, a test tenant or sandbox, one authorized test posting, official schema/questions endpoint, official submit endpoint, and receipt/error/duplicate/retry clarification. Manual handoff must not reserve, dispatch, or finalize PR80A `liveExternalActionExecutions`, and it must not represent a user-reported outcome as provider-submitted or provider-verified. PR80B, PR80B-follow-up, and PR80B-follow-up-2-prep did not automatically unlock PR81; PR211 unlocked only narrow PR81 rate/budget hardening, and PR80-live remains blocked.
+
+OAuth/token/provider constraints remain active for PR82 and PR80-live: no OAuth runtime, callback, token exchange, token storage, refresh-token flow, provider credentials, provider API calls, live provider revocation, production connector runtime, PR80-live, answer-copy implementation, browser automation, package changes, or lockfile changes without an explicit unlocking PR.
 
 ---
 
