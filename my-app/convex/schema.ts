@@ -13,6 +13,7 @@ import {
   candidateSourceDocumentFields,
 } from "./lib/candidateEvidence";
 import { applicationPackageFields } from "./lib/applicationPackages";
+import { liveExternalActionExecutionFields } from "./lib/liveExternalActionSafety";
 
 const proposalVoicePresetChoice = v.union(
   v.literal("signature"),
@@ -897,6 +898,12 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_user_status", ["userId", "status"])
     .index("by_user_operation", ["userId", "operation"])
+    .index("by_updated", ["updatedAt"]),
+
+  liveExternalActionExecutions: defineTable(liveExternalActionExecutionFields)
+    .index("by_idempotency_key_hash", ["idempotencyKeyHash"])
+    .index("by_integration_action", ["integrationId", "actionCategory"])
+    .index("by_state", ["state"])
     .index("by_updated", ["updatedAt"]),
 
   applicationArtifacts: defineTable(applicationHarnessArtifactFields)
