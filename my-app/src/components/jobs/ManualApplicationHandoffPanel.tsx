@@ -24,6 +24,8 @@ export type ManualApplicationHandoffPanelState = {
   providerVerified: false;
   approvedAnswers: ManualApplicationHandoffAnswer[];
   downloadableArtifacts: ManualApplicationHandoffArtifact[];
+  answerCopyBlockedReason?: string | null;
+  downloadBlockedReason?: string | null;
 };
 
 export type ManualApplicationHandoffAnswer = {
@@ -86,8 +88,6 @@ export function ManualApplicationHandoffPanel({
   handoff,
   onPrepare,
   onConfirm,
-  onRecordCopySucceeded,
-  onRecordFileDownloadRequested,
   onRecordDestinationOpenRequested,
   onReportOutcome,
 }: ManualApplicationHandoffPanelProps): JSX.Element {
@@ -96,8 +96,12 @@ export function ManualApplicationHandoffPanel({
   const handoffId = handoff?.handoffId ?? "";
   const manifestDigest = handoff?.manifestDigest ?? "";
   const requiredConfirmationCopy = handoff?.requiredConfirmationCopy ?? "";
-  const approvedAnswers = handoff?.approvedAnswers ?? [];
-  const downloadableArtifacts = handoff?.downloadableArtifacts ?? [];
+  const answerCopyBlockedReason =
+    handoff?.answerCopyBlockedReason ??
+    "Approved answer copy is blocked until approved answers are server-derived.";
+  const downloadBlockedReason =
+    handoff?.downloadBlockedReason ??
+    "Approved artifact downloads are blocked until an approved export representation is available.";
   const canUsePackage = Boolean(
     handoffId &&
       manifestDigest &&
@@ -136,32 +140,6 @@ export function ManualApplicationHandoffPanel({
         confirmationCopy,
       }),
     );
-  };
-
-  const handleCopy = (answer: ManualApplicationHandoffAnswer) => {
-    if (!canUsePackage || !navigator.clipboard?.writeText) return;
-    void runAction(async () => {
-      await navigator.clipboard.writeText(answer.text);
-      await onRecordCopySucceeded({
-        handoffId,
-        manifestDigest,
-        answerRef: answer.answerRef,
-        answerDigest: answer.answerDigest,
-      });
-    });
-  };
-
-  const handleDownload = (artifact: ManualApplicationHandoffArtifact) => {
-    if (!canUsePackage) return;
-    void runAction(async () => {
-      await onRecordFileDownloadRequested({
-        handoffId,
-        manifestDigest,
-        artifactRef: artifact.artifactRef,
-        artifactDigest: artifact.artifactDigest,
-      });
-      triggerTextDownload(artifact);
-    });
   };
 
   const handleOpenDestination = () => {
@@ -277,36 +255,14 @@ export function ManualApplicationHandoffPanel({
           <div className="dasti-brief-card__summary-label">
             Approved answers
           </div>
-          {approvedAnswers.length > 0 ? (
-            approvedAnswers.map((answer) => (
-              <div key={answer.answerRef} className="dasti-brief-card__summary">
-                <span>{answer.label}</span>
-                <button
-                  type="button"
-                  className="dasti-button dasti-button--pill dasti-button--sm"
-                  onClick={() => handleCopy(answer)}
-                >
-                  Copy {answer.label}
-                </button>
-              </div>
-            ))
-          ) : (
-            <div className="dasti-empty-state__subtitle">
-              No approved answer copies are available for this package.
-            </div>
-          )}
+          <div className="dasti-empty-state__subtitle">
+            {answerCopyBlockedReason}
+          </div>
 
           <div className="dasti-brief-card__summary-label">Approved files</div>
-          {downloadableArtifacts.map((artifact) => (
-            <button
-              key={artifact.artifactRef}
-              type="button"
-              className="dasti-button dasti-button--pill dasti-button--sm"
-              onClick={() => handleDownload(artifact)}
-            >
-              Download {artifact.label}
-            </button>
-          ))}
+          <div className="dasti-empty-state__subtitle">
+            {downloadBlockedReason}
+          </div>
 
           <button
             type="button"
@@ -350,17 +306,4 @@ export function ManualApplicationHandoffPanel({
       ) : null}
     </section>
   );
-}
-
-function triggerTextDownload(artifact: ManualApplicationHandoffArtifact): void {
-  const blob = new Blob([artifact.text], { type: artifact.mimeType });
-  const href = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = href;
-  anchor.download = artifact.filename;
-  anchor.rel = "noopener";
-  document.body.appendChild(anchor);
-  anchor.click();
-  document.body.removeChild(anchor);
-  URL.revokeObjectURL(href);
 }

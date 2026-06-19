@@ -22,12 +22,12 @@ export const MANUAL_APPLICATION_HANDOFF_EVIDENCE = [
 export const MANUAL_APPLICATION_HANDOFF_EVENT_KINDS = [
   "manual_handoff.prepared",
   "manual_handoff.confirmed",
-  "manual_handoff.copy_succeeded",
+  "manual_handoff.item_copy_succeeded",
   "manual_handoff.file_download_requested",
   "manual_handoff.destination_open_requested",
-  "manual_handoff.user_reported_submitted",
-  "manual_handoff.user_reported_not_submitted",
+  "manual_handoff.outcome_reported",
   "manual_handoff.abandoned",
+  "manual_handoff.confirmation_invalidated",
 ] as const;
 
 export type ManualApplicationHandoffState =
@@ -119,12 +119,12 @@ export const manualApplicationHandoffEvidenceValidator = v.union(
 export const manualApplicationHandoffEventKindValidator = v.union(
   v.literal("manual_handoff.prepared"),
   v.literal("manual_handoff.confirmed"),
-  v.literal("manual_handoff.copy_succeeded"),
+  v.literal("manual_handoff.item_copy_succeeded"),
   v.literal("manual_handoff.file_download_requested"),
   v.literal("manual_handoff.destination_open_requested"),
-  v.literal("manual_handoff.user_reported_submitted"),
-  v.literal("manual_handoff.user_reported_not_submitted"),
+  v.literal("manual_handoff.outcome_reported"),
   v.literal("manual_handoff.abandoned"),
+  v.literal("manual_handoff.confirmation_invalidated"),
 );
 
 export const manualApplicationHandoffFields = {
@@ -336,8 +336,7 @@ function assertPublicHostname(hostname: string): void {
   }
 
   if (IPV4_PATTERN.test(hostname)) {
-    assertPublicIpv4(hostname);
-    return;
+    throw new Error("Manual application destination must be public");
   }
 
   const labels = hostname.split(".");
@@ -345,32 +344,6 @@ function assertPublicHostname(hostname: string): void {
     labels.length < 2 ||
     labels.some((label) => !HOSTNAME_LABEL_PATTERN.test(label))
   ) {
-    throw new Error("Manual application destination must be public");
-  }
-}
-
-function assertPublicIpv4(hostname: string): void {
-  const octets = hostname.split(".").map((part) => Number(part));
-  if (
-    octets.length !== 4 ||
-    octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)
-  ) {
-    throw new Error("Manual application destination must be public");
-  }
-
-  const [first, second] = octets;
-  const privateOrReserved =
-    first === 0 ||
-    first === 10 ||
-    first === 127 ||
-    first >= 224 ||
-    (first === 100 && second >= 64 && second <= 127) ||
-    (first === 169 && second === 254) ||
-    (first === 172 && second >= 16 && second <= 31) ||
-    (first === 192 && second === 168) ||
-    (first === 198 && (second === 18 || second === 19));
-
-  if (privateOrReserved) {
     throw new Error("Manual application destination must be public");
   }
 }

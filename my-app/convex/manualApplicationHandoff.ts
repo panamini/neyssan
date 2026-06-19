@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { listProfilesForClerk } from "./lib/userProfiles";
+import { assertApplicationPackageStorageShape } from "./lib/applicationPackages";
 import {
   assertManualApplicationHandoffStorageIsRedacted,
   assertSafeHash,
@@ -17,6 +18,10 @@ import {
 } from "./lib/manualApplicationHandoff";
 
 const HANDOFF_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const ANSWER_COPY_BLOCKED_REASON =
+  "Approved answer copy is blocked until approved answers are server-derived.";
+const DOWNLOAD_BLOCKED_REASON =
+  "Approved artifact downloads are blocked until an approved export representation is available.";
 
 type OwnerJob = Readonly<{
   normalizedJobId: string;
@@ -130,22 +135,28 @@ export const prepare = mutation({
     };
     assertManualApplicationHandoffStorageIsRedacted(handoffDoc, "handoff");
 
+    const latest = await findLatestHandoffForJob(
+      ctx,
+      ownerJob.ownerProfileId,
+      ownerJob.normalizedJobId,
+    );
     const existing = await getHandoffById(ctx, handoffId);
     if (existing) {
-      await ctx.db.patch(existing._id, {
-        state: "handoff_prepared",
-        manifestDigest,
-        destinationOrigin: destination.destinationOrigin,
-        destinationHostname: destination.destinationHostname,
-        destinationUrlHash: destination.destinationUrlHash,
-        confirmationDigest: undefined,
-        confirmedAt: undefined,
-        updatedAt: now,
-        expiresAt: now + HANDOFF_TTL_MS,
+      return buildHandoffView({
+        status: existing.state,
+        config: readManualApplicationHandoffServerConfigStatus(),
+        ownerJob,
+        handoff: existing,
+        applicationPackage,
       });
-    } else {
-      await ctx.db.insert("manualApplicationHandoffs", handoffDoc);
     }
+    if (latest && isTerminalHandoffState(latest.state)) {
+      throw new Error(
+        "Manual application handoff terminal state blocks a new preparation",
+      );
+    }
+
+    await ctx.db.insert("manualApplicationHandoffs", handoffDoc);
 
     await appendEvent(ctx, {
       handoffId,
@@ -252,30 +263,8 @@ export const recordCopySucceeded = mutation({
     assertEnabled();
     assertSafeRef(args.answerRef, "answerRef");
     assertSafeHash(args.answerDigest, "answerDigest");
-    const { ownerJob, handoff, applicationPackage } =
-      await requireConfirmedUsableHandoff(ctx, args);
-    const now = Date.now();
-    await appendEvent(ctx, {
-      handoffId: handoff.handoffId,
-      ownerProfileId: ownerJob.ownerProfileId,
-      jobId: ownerJob.normalizedJobId,
-      eventKind: "manual_handoff.copy_succeeded",
-      evidence: "user_interaction_observed",
-      stateAfter: handoff.state,
-      manifestDigest: args.manifestDigest,
-      applicationPackageId: handoff.applicationPackageId,
-      applicationContextId: handoff.applicationContextId,
-      answerRef: args.answerRef,
-      answerDigest: args.answerDigest,
-      occurredAt: now,
-    });
-    return buildHandoffView({
-      status: handoff.state,
-      config: readManualApplicationHandoffServerConfigStatus(),
-      ownerJob,
-      handoff,
-      applicationPackage,
-    });
+    await requireConfirmedUsableHandoff(ctx, args);
+    throw new Error(ANSWER_COPY_BLOCKED_REASON);
   },
 });
 
@@ -291,30 +280,8 @@ export const recordFileDownloadRequested = mutation({
     assertEnabled();
     assertSafeRef(args.artifactRef, "artifactRef");
     assertSafeHash(args.artifactDigest, "artifactDigest");
-    const { ownerJob, handoff, applicationPackage } =
-      await requireConfirmedUsableHandoff(ctx, args);
-    const now = Date.now();
-    await appendEvent(ctx, {
-      handoffId: handoff.handoffId,
-      ownerProfileId: ownerJob.ownerProfileId,
-      jobId: ownerJob.normalizedJobId,
-      eventKind: "manual_handoff.file_download_requested",
-      evidence: "user_interaction_observed",
-      stateAfter: handoff.state,
-      manifestDigest: args.manifestDigest,
-      applicationPackageId: handoff.applicationPackageId,
-      applicationContextId: handoff.applicationContextId,
-      artifactRef: args.artifactRef,
-      artifactDigest: args.artifactDigest,
-      occurredAt: now,
-    });
-    return buildHandoffView({
-      status: handoff.state,
-      config: readManualApplicationHandoffServerConfigStatus(),
-      ownerJob,
-      handoff,
-      applicationPackage,
-    });
+    await requireConfirmedUsableHandoff(ctx, args);
+    throw new Error(DOWNLOAD_BLOCKED_REASON);
   },
 });
 
@@ -377,6 +344,18 @@ export const reportOutcome = mutation({
     assertEnabled();
     const { ownerJob, handoff, applicationPackage } =
       await requireFreshOwnedHandoff(ctx, args);
+    if (isTerminalHandoffState(handoff.state)) {
+      if (handoff.state === args.outcome) {
+        return buildHandoffView({
+          status: handoff.state,
+          config: readManualApplicationHandoffServerConfigStatus(),
+          ownerJob,
+          handoff,
+          applicationPackage,
+        });
+      }
+      throw new Error("Manual application handoff terminal outcome conflict");
+    }
     if (
       handoff.state !== "handoff_confirmed" &&
       handoff.state !== "destination_open_requested"
@@ -392,7 +371,10 @@ export const reportOutcome = mutation({
       handoffId: handoff.handoffId,
       ownerProfileId: ownerJob.ownerProfileId,
       jobId: ownerJob.normalizedJobId,
-      eventKind: `manual_handoff.${args.outcome}` as ManualApplicationHandoffEventKind,
+      eventKind:
+        args.outcome === "abandoned"
+          ? "manual_handoff.abandoned"
+          : "manual_handoff.outcome_reported",
       evidence: "user_reported",
       stateAfter: args.outcome,
       manifestDigest: args.manifestDigest,
@@ -462,6 +444,8 @@ async function requireReadyApplicationPackage(args: {
   if (applicationPackage.status !== "ready_for_review") {
     throw new Error("Application package must be ready_for_review");
   }
+  assertApplicationPackageStorageShape(applicationPackage as any);
+  assertApplicationPackageArtifactGate(applicationPackage);
   const context = await args.ctx.db
     .query("applicationContexts")
     .withIndex("by_user_id", (q: any) =>
@@ -500,11 +484,22 @@ async function requireFreshOwnedHandoff(
     jobId: ownerJob.normalizedJobId,
     applicationPackageId: handoff.applicationPackageId,
   });
-  const destination = {
-    destinationOrigin: handoff.destinationOrigin,
-    destinationHostname: handoff.destinationHostname,
-    destinationUrlHash: handoff.destinationUrlHash,
-  };
+  const destination = await validateManualApplicationDestination(
+    ownerJob.job.applicationUrl,
+  );
+  if (
+    destination.destinationOrigin !== handoff.destinationOrigin ||
+    destination.destinationHostname !== handoff.destinationHostname ||
+    destination.destinationUrlHash !== handoff.destinationUrlHash
+  ) {
+    await appendConfirmationInvalidatedEvent(ctx, {
+      ownerJob,
+      handoff,
+      manifestDigest: handoff.manifestDigest,
+      destination,
+    });
+    throw new Error("Manual application handoff stale destination");
+  }
   const manifestDigest = await buildManualApplicationHandoffManifestDigest(
     buildManifestInput({
       ownerProfileId: ownerJob.ownerProfileId,
@@ -517,7 +512,33 @@ async function requireFreshOwnedHandoff(
     manifestDigest !== handoff.manifestDigest ||
     args.manifestDigest !== handoff.manifestDigest
   ) {
+    await appendConfirmationInvalidatedEvent(ctx, {
+      ownerJob,
+      handoff,
+      manifestDigest: handoff.manifestDigest,
+      destination,
+    });
     throw new Error("Manual application handoff stale digest");
+  }
+  if (handoff.confirmationDigest) {
+    const confirmationDigest = await buildManualApplicationHandoffManifestDigest({
+      ...buildManifestInput({
+        ownerProfileId: ownerJob.ownerProfileId,
+        jobId: ownerJob.normalizedJobId,
+        applicationPackage,
+        destination,
+      }),
+      contentHash: applicationPackage.contentHash,
+    });
+    if (confirmationDigest !== handoff.confirmationDigest) {
+      await appendConfirmationInvalidatedEvent(ctx, {
+        ownerJob,
+        handoff,
+        manifestDigest: handoff.manifestDigest,
+        destination,
+      });
+      throw new Error("Manual application handoff stale confirmation");
+    }
   }
   return { ownerJob, handoff, applicationPackage };
 }
@@ -596,7 +617,9 @@ async function findLatestReadyPackageForJob(
       )
       .take(10);
     packages.push(
-      ...rows.filter((row: StoredPackage) => row.status === "ready_for_review"),
+      ...rows.filter((row: StoredPackage) =>
+        isApplicationPackageReadyForManualHandoff(row),
+      ),
     );
   }
   return packages.sort((left, right) => {
@@ -609,6 +632,104 @@ async function findLatestReadyPackageForJob(
   })[0];
 }
 
+function isApplicationPackageReadyForManualHandoff(
+  applicationPackage: StoredPackage,
+): boolean {
+  try {
+    if (applicationPackage.status !== "ready_for_review") return false;
+    assertApplicationPackageStorageShape(applicationPackage as any);
+    assertApplicationPackageArtifactGate(applicationPackage);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function assertApplicationPackageArtifactGate(
+  applicationPackage: StoredPackage,
+): void {
+  const packagePayload = getApplicationPackagePayload(applicationPackage);
+  const resumeArtifact = getPackageArtifactById(
+    packagePayload,
+    applicationPackage.resumeVariantArtifactId,
+    "resume_variant_artifact",
+  );
+  const coverLetterArtifact = getPackageArtifactById(
+    packagePayload,
+    applicationPackage.coverLetterArtifactId,
+    "cover_letter_artifact",
+  );
+
+  if (
+    applicationPackage.resumeVariantArtifactStatus !== "ready_for_generation" ||
+    resumeArtifact.status !== "ready_for_generation"
+  ) {
+    throw new Error("Application package resume artifact is not approved");
+  }
+  if (
+    applicationPackage.coverLetterArtifactStatus !== "ready_for_review" ||
+    coverLetterArtifact.status !== "ready_for_review"
+  ) {
+    throw new Error("Application package cover letter artifact is not approved");
+  }
+
+  assertArtifactItemFreshness(
+    packagePayload,
+    applicationPackage.resumeVariantArtifactId,
+    resumeArtifact.contentHash,
+  );
+  assertArtifactItemFreshness(
+    packagePayload,
+    applicationPackage.coverLetterArtifactId,
+    coverLetterArtifact.contentHash,
+  );
+}
+
+function getApplicationPackagePayload(
+  applicationPackage: StoredPackage,
+): Record<string, any> {
+  const packagePayload = applicationPackage.package;
+  if (!packagePayload || typeof packagePayload !== "object") {
+    throw new Error("Application package payload is required");
+  }
+  return packagePayload;
+}
+
+function getPackageArtifactById(
+  packagePayload: Record<string, any>,
+  artifactId: string,
+  artifactKind: string,
+): Record<string, any> {
+  const artifact = packagePayload.artifacts?.find(
+    (candidate: any) =>
+      candidate.id === artifactId && candidate.kind === artifactKind,
+  );
+  if (!artifact) {
+    throw new Error("Application package artifact is missing");
+  }
+  return artifact;
+}
+
+function assertArtifactItemFreshness(
+  packagePayload: Record<string, any>,
+  artifactId: string,
+  artifactContentHash: unknown,
+): void {
+  const item = packagePayload.items?.find(
+    (candidate: any) => candidate.artifactId === artifactId,
+  );
+  if (!item || item.status !== "included") {
+    throw new Error("Application package artifact item is not included");
+  }
+  if (
+    artifactContentHash &&
+    item.artifactContentHash &&
+    item.artifactContentHash !== artifactContentHash
+  ) {
+    throw new Error("Application package artifact content is stale");
+  }
+}
+
 function buildManifestInput(args: {
   ownerProfileId: string;
   jobId: string;
@@ -619,12 +740,15 @@ function buildManifestInput(args: {
     destinationUrlHash: string;
   };
 }): ManualApplicationHandoffManifestInput {
+  const applicationPackagePayload = getApplicationPackagePayload(
+    args.applicationPackage,
+  );
   const resumeArtifact =
-    args.applicationPackage.pkg?.artifacts?.find(
+    applicationPackagePayload.artifacts.find(
       (artifact: any) => artifact.id === args.applicationPackage.resumeVariantArtifactId,
     ) ?? {};
   const coverLetterArtifact =
-    args.applicationPackage.pkg?.artifacts?.find(
+    applicationPackagePayload.artifacts.find(
       (artifact: any) => artifact.id === args.applicationPackage.coverLetterArtifactId,
     ) ?? {};
   return {
@@ -678,6 +802,44 @@ async function appendEvent(
   };
   assertManualApplicationHandoffStorageIsRedacted(eventDoc, "handoff event");
   await ctx.db.insert("manualApplicationHandoffEvents", eventDoc);
+}
+
+async function appendConfirmationInvalidatedEvent(
+  ctx: any,
+  args: {
+    ownerJob: OwnerJob;
+    handoff: StoredHandoff;
+    manifestDigest: string;
+    destination: {
+      destinationOrigin: string;
+      destinationHostname: string;
+      destinationUrlHash: string;
+    };
+  },
+) {
+  await appendEvent(ctx, {
+    handoffId: args.handoff.handoffId,
+    ownerProfileId: args.ownerJob.ownerProfileId,
+    jobId: args.ownerJob.normalizedJobId,
+    eventKind: "manual_handoff.confirmation_invalidated",
+    evidence: "twoweeks_prepared",
+    stateAfter: args.handoff.state,
+    manifestDigest: args.manifestDigest,
+    applicationPackageId: args.handoff.applicationPackageId,
+    applicationContextId: args.handoff.applicationContextId,
+    destinationOrigin: args.destination.destinationOrigin,
+    destinationHostname: args.destination.destinationHostname,
+    destinationUrlHash: args.destination.destinationUrlHash,
+    occurredAt: Date.now(),
+  });
+}
+
+function isTerminalHandoffState(state: unknown): boolean {
+  return (
+    state === "user_reported_submitted" ||
+    state === "user_reported_not_submitted" ||
+    state === "abandoned"
+  );
 }
 
 function buildHandoffView(args: {
@@ -734,45 +896,12 @@ function buildHandoffView(args: {
       ? String(args.ownerJob.job.applicationUrl ?? "")
       : "",
     approvedAnswers: [],
-    downloadableArtifacts: buildDownloadableArtifacts(args.applicationPackage, handoff),
+    answerCopyBlockedReason: ANSWER_COPY_BLOCKED_REASON,
+    downloadableArtifacts: [],
+    downloadBlockedReason: DOWNLOAD_BLOCKED_REASON,
     providerVerified: false,
     version: 1,
   };
-}
-
-function buildDownloadableArtifacts(
-  applicationPackage: StoredPackage | undefined,
-  handoff: StoredHandoff | null,
-) {
-  if (!applicationPackage || !handoff) return [];
-  return [
-    {
-      artifactRef: applicationPackage.resumeVariantArtifactId,
-      label: "Resume variant",
-      filename: "resume-variant-handoff.md",
-      mimeType: "text/markdown",
-      text: buildArtifactDownloadText("Resume variant", applicationPackage),
-      artifactDigest: handoff.manifestDigest,
-    },
-    {
-      artifactRef: applicationPackage.coverLetterArtifactId,
-      label: "Cover letter",
-      filename: "cover-letter-handoff.md",
-      mimeType: "text/markdown",
-      text: buildArtifactDownloadText("Cover letter", applicationPackage),
-      artifactDigest: handoff.manifestDigest,
-    },
-  ];
-}
-
-function buildArtifactDownloadText(label: string, applicationPackage: StoredPackage): string {
-  return [
-    `${label} handoff reference`,
-    "",
-    `Application package: ${applicationPackage.applicationPackageId}`,
-    `Application context: ${applicationPackage.applicationContextId}`,
-    `Package digest: ${applicationPackage.contentHash ?? applicationPackage.packageHash}`,
-  ].join("\n");
 }
 
 function safeOriginFromApplicationUrl(applicationUrl: unknown): string | null {
