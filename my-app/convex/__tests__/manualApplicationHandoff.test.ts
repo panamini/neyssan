@@ -506,6 +506,144 @@ describe("manual application handoff", () => {
     ).rejects.toThrow(/artifact/i);
   });
 
+  it("fails closed when the resume artifact contentHash is missing", async () => {
+    vi.stubEnv("TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED", "true");
+    const packageMissingResumeHash = buildApplicationPackageFixture({
+      artifacts: [
+        {
+          id: RESUME_ARTIFACT_ID,
+          kind: "resume_variant_artifact",
+          status: "ready_for_generation",
+          version: 1,
+        },
+        {
+          id: COVER_LETTER_ARTIFACT_ID,
+          kind: "cover_letter_artifact",
+          contentHash: "cover-letter-content-hash-a",
+          status: "ready_for_review",
+          version: 1,
+        },
+      ],
+    });
+    const { ctx } = makeCtx({
+      packageOverrides: { package: packageMissingResumeHash },
+    });
+
+    await expect(
+      prepare._handler(ctx as any, {
+        jobId: JOB_ID,
+        applicationPackageId: APPLICATION_PACKAGE_ID,
+        now: NOW,
+      }),
+    ).rejects.toThrow(/artifact contentHash/i);
+  });
+
+  it("fails closed when the cover-letter artifact contentHash is missing", async () => {
+    vi.stubEnv("TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED", "true");
+    const packageMissingCoverLetterHash = buildApplicationPackageFixture({
+      artifacts: [
+        {
+          id: RESUME_ARTIFACT_ID,
+          kind: "resume_variant_artifact",
+          contentHash: "resume-content-hash-a",
+          status: "ready_for_generation",
+          version: 1,
+        },
+        {
+          id: COVER_LETTER_ARTIFACT_ID,
+          kind: "cover_letter_artifact",
+          status: "ready_for_review",
+          version: 1,
+        },
+      ],
+    });
+    const { ctx } = makeCtx({
+      packageOverrides: { package: packageMissingCoverLetterHash },
+    });
+
+    await expect(
+      prepare._handler(ctx as any, {
+        jobId: JOB_ID,
+        applicationPackageId: APPLICATION_PACKAGE_ID,
+        now: NOW,
+      }),
+    ).rejects.toThrow(/artifact contentHash/i);
+  });
+
+  it("fails closed when an included artifact item contentHash is missing", async () => {
+    vi.stubEnv("TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED", "true");
+    const basePackage = buildApplicationPackageFixture();
+    const packageMissingItemHash = buildApplicationPackageFixture({
+      items: basePackage.items.map((item) => {
+        if (item.artifactId !== RESUME_ARTIFACT_ID) return item;
+        const nextItem = { ...item };
+        delete (nextItem as Record<string, unknown>).artifactContentHash;
+        return nextItem;
+      }),
+    });
+    const { ctx } = makeCtx({
+      packageOverrides: { package: packageMissingItemHash },
+    });
+
+    await expect(
+      prepare._handler(ctx as any, {
+        jobId: JOB_ID,
+        applicationPackageId: APPLICATION_PACKAGE_ID,
+        now: NOW,
+      }),
+    ).rejects.toThrow(/artifactContentHash/i);
+  });
+
+  it("fails closed when artifact and item content hashes differ", async () => {
+    vi.stubEnv("TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED", "true");
+    const packageWithMismatchedHashes = buildApplicationPackageFixture({
+      artifacts: [
+        {
+          id: RESUME_ARTIFACT_ID,
+          kind: "resume_variant_artifact",
+          contentHash: "changed-resume-content-hash",
+          status: "ready_for_generation",
+          version: 1,
+        },
+        {
+          id: COVER_LETTER_ARTIFACT_ID,
+          kind: "cover_letter_artifact",
+          contentHash: "cover-letter-content-hash-a",
+          status: "ready_for_review",
+          version: 1,
+        },
+      ],
+    });
+    const { ctx } = makeCtx({
+      packageOverrides: { package: packageWithMismatchedHashes },
+    });
+
+    await expect(
+      prepare._handler(ctx as any, {
+        jobId: JOB_ID,
+        applicationPackageId: APPLICATION_PACKAGE_ID,
+        now: NOW,
+      }),
+    ).rejects.toThrow(/artifact contentHash/i);
+  });
+
+  it("allows prepare when artifact and included item content hashes match", async () => {
+    vi.stubEnv("TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED", "true");
+    const { ctx } = makeCtx();
+
+    await expect(
+      prepare._handler(ctx as any, {
+        jobId: JOB_ID,
+        applicationPackageId: APPLICATION_PACKAGE_ID,
+        now: NOW,
+      }),
+    ).resolves.toMatchObject({
+      status: "handoff_prepared",
+      resumeVariantArtifactId: RESUME_ARTIFACT_ID,
+      coverLetterArtifactId: COVER_LETTER_ARTIFACT_ID,
+    });
+  });
+
   it("uses stable manifest digests and rejects stale or inexact confirmations", async () => {
     const destination = await validateManualApplicationDestination(APPLICATION_URL);
     const baseManifest = {

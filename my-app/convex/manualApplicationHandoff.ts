@@ -673,16 +673,9 @@ function assertApplicationPackageArtifactGate(
     throw new Error("Application package cover letter artifact is not approved");
   }
 
-  assertArtifactItemFreshness(
-    packagePayload,
-    applicationPackage.resumeVariantArtifactId,
-    resumeArtifact.contentHash,
-  );
-  assertArtifactItemFreshness(
-    packagePayload,
-    applicationPackage.coverLetterArtifactId,
-    coverLetterArtifact.contentHash,
-  );
+  assertRequiredArtifactContentHash(resumeArtifact, "resume");
+  assertRequiredArtifactContentHash(coverLetterArtifact, "cover letter");
+  assertIncludedArtifactItemsFresh(packagePayload);
 }
 
 function getApplicationPackagePayload(
@@ -698,11 +691,12 @@ function getApplicationPackagePayload(
 function getPackageArtifactById(
   packagePayload: Record<string, any>,
   artifactId: string,
-  artifactKind: string,
+  artifactKind?: string,
 ): Record<string, any> {
   const artifact = packagePayload.artifacts?.find(
     (candidate: any) =>
-      candidate.id === artifactId && candidate.kind === artifactKind,
+      candidate.id === artifactId &&
+      (artifactKind === undefined || candidate.kind === artifactKind),
   );
   if (!artifact) {
     throw new Error("Application package artifact is missing");
@@ -710,24 +704,44 @@ function getPackageArtifactById(
   return artifact;
 }
 
-function assertArtifactItemFreshness(
+function assertIncludedArtifactItemsFresh(
   packagePayload: Record<string, any>,
-  artifactId: string,
-  artifactContentHash: unknown,
 ): void {
-  const item = packagePayload.items?.find(
-    (candidate: any) => candidate.artifactId === artifactId,
-  );
-  if (!item || item.status !== "included") {
-    throw new Error("Application package artifact item is not included");
+  for (const item of packagePayload.items ?? []) {
+    if (item?.status !== "included" || !item.artifactId) continue;
+    const itemArtifactContentHash = item.artifactContentHash;
+    if (
+      typeof itemArtifactContentHash !== "string" ||
+      itemArtifactContentHash.trim().length === 0
+    ) {
+      throw new Error(
+        "Application package included item artifactContentHash is required",
+      );
+    }
+    const artifact = getPackageArtifactById(packagePayload, item.artifactId);
+    const artifactContentHash = assertRequiredArtifactContentHash(
+      artifact,
+      String(item.artifactId),
+    );
+    if (itemArtifactContentHash !== artifactContentHash) {
+      throw new Error("Application package artifact contentHash is stale");
+    }
   }
+}
+
+function assertRequiredArtifactContentHash(
+  artifact: Record<string, any>,
+  label: string,
+): string {
   if (
-    artifactContentHash &&
-    item.artifactContentHash &&
-    item.artifactContentHash !== artifactContentHash
+    typeof artifact.contentHash !== "string" ||
+    artifact.contentHash.trim().length === 0
   ) {
-    throw new Error("Application package artifact content is stale");
+    throw new Error(
+      `Application package ${label} artifact contentHash is required`,
+    );
   }
+  return artifact.contentHash;
 }
 
 function buildManifestInput(args: {
