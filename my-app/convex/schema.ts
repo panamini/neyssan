@@ -14,6 +14,10 @@ import {
 } from "./lib/candidateEvidence";
 import { applicationPackageFields } from "./lib/applicationPackages";
 import { liveExternalActionExecutionFields } from "./lib/liveExternalActionSafety";
+import {
+  manualApplicationHandoffEventFields,
+  manualApplicationHandoffFields,
+} from "./lib/manualApplicationHandoff";
 
 const proposalVoicePresetChoice = v.union(
   v.literal("signature"),
@@ -905,6 +909,23 @@ export default defineSchema({
     .index("by_integration_action", ["integrationId", "actionCategory"])
     .index("by_state", ["state"])
     .index("by_updated", ["updatedAt"]),
+
+  manualApplicationHandoffs: defineTable(manualApplicationHandoffFields)
+    .index("by_handoff_id", ["handoffId"])
+    .index("by_owner_profile_id", ["ownerProfileId"])
+    .index("by_owner_job_updated", ["ownerProfileId", "jobId", "updatedAt"])
+    .index("by_application_package_id", ["applicationPackageId"])
+    .index("by_state", ["state"])
+    .index("by_expires_at", ["expiresAt"]),
+
+  manualApplicationHandoffEvents: defineTable(
+    manualApplicationHandoffEventFields,
+  )
+    .index("by_handoff_id", ["handoffId"])
+    .index("by_owner_profile_id", ["ownerProfileId"])
+    .index("by_owner_job", ["ownerProfileId", "jobId"])
+    .index("by_event_kind", ["eventKind"])
+    .index("by_occurred_at", ["occurredAt"]),
 
   applicationArtifacts: defineTable(applicationHarnessArtifactFields)
     .index("by_artifact_id", ["id"])

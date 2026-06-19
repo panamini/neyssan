@@ -1,5 +1,5 @@
 import React from "react";
-import { useConvex, useConvexAuth, useMutation } from "convex/react";
+import { useConvex, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useAuth } from "@clerk/clerk-react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ClipboardText } from "@/lib/icons";
@@ -7,6 +7,10 @@ import { api } from "../../../convex/_generated/api";
 import { FirstRunPanel } from "./FirstRunPanel";
 import { JobDetail } from "./JobDetail";
 import { JobsList } from "./JobsList";
+import {
+  ManualApplicationHandoffPanel,
+  type ManualApplicationHandoffPanelState,
+} from "./ManualApplicationHandoffPanel";
 import { useToast } from "../ui/toast";
 import { useCvLibrary } from "../../contexts/CvLibraryContext";
 import { useJobsQuery } from "../../hooks/useJobsQuery";
@@ -1326,6 +1330,36 @@ function JobsPageContent(): JSX.Element {
     ((api as any).jobsPublic?.refreshStructuredMatch ??
       "jobsPublic.refreshStructuredMatch") as any,
   );
+  const manualApplicationHandoffQueryReference = React.useMemo(
+    () =>
+      ((api as any).manualApplicationHandoff?.getForJob ??
+        "manualApplicationHandoff.getForJob") as any,
+    [],
+  );
+  const prepareManualApplicationHandoff = useMutation(
+    ((api as any).manualApplicationHandoff?.prepare ??
+      "manualApplicationHandoff.prepare") as any,
+  );
+  const confirmManualApplicationHandoff = useMutation(
+    ((api as any).manualApplicationHandoff?.confirm ??
+      "manualApplicationHandoff.confirm") as any,
+  );
+  const recordManualApplicationHandoffCopySucceeded = useMutation(
+    ((api as any).manualApplicationHandoff?.recordCopySucceeded ??
+      "manualApplicationHandoff.recordCopySucceeded") as any,
+  );
+  const recordManualApplicationHandoffFileDownloadRequested = useMutation(
+    ((api as any).manualApplicationHandoff?.recordFileDownloadRequested ??
+      "manualApplicationHandoff.recordFileDownloadRequested") as any,
+  );
+  const recordManualApplicationHandoffDestinationOpenRequested = useMutation(
+    ((api as any).manualApplicationHandoff?.recordDestinationOpenRequested ??
+      "manualApplicationHandoff.recordDestinationOpenRequested") as any,
+  );
+  const reportManualApplicationHandoffOutcome = useMutation(
+    ((api as any).manualApplicationHandoff?.reportOutcome ??
+      "manualApplicationHandoff.reportOutcome") as any,
+  );
   const {
     jobs,
     archivedJobs,
@@ -1340,6 +1374,12 @@ function JobsPageContent(): JSX.Element {
   const selectedJobRecord = selectedJobRecordFromQuery as
     | JobsPageDetail
     | undefined;
+  const manualApplicationHandoff = useQuery(
+    manualApplicationHandoffQueryReference,
+    selectedJobId && isLoaded && isSignedIn && isConvexAuthenticated
+      ? { jobId: selectedJobId }
+      : "skip",
+  ) as ManualApplicationHandoffPanelState | undefined;
 
   React.useEffect(() => {
     if (typeof window === "undefined") {
@@ -1983,6 +2023,82 @@ function JobsPageContent(): JSX.Element {
     window.open(nextUrl, "_blank", "noopener");
   }, []);
 
+  const handlePrepareManualApplicationHandoff = React.useCallback(
+    async ({ jobId }: { jobId: string }) => {
+      const applicationPackageId =
+        manualApplicationHandoff?.applicationPackageId ?? "";
+      if (!applicationPackageId) {
+        throw new Error("Application package not ready");
+      }
+      await prepareManualApplicationHandoff({
+        jobId,
+        applicationPackageId,
+      });
+    },
+    [
+      manualApplicationHandoff?.applicationPackageId,
+      prepareManualApplicationHandoff,
+    ],
+  );
+
+  const handleConfirmManualApplicationHandoff = React.useCallback(
+    async (args: {
+      handoffId: string;
+      manifestDigest: string;
+      confirmationCopy: string;
+    }) => {
+      await confirmManualApplicationHandoff(args);
+    },
+    [confirmManualApplicationHandoff],
+  );
+
+  const handleRecordManualApplicationHandoffCopySucceeded = React.useCallback(
+    async (args: {
+      handoffId: string;
+      manifestDigest: string;
+      answerRef: string;
+      answerDigest: string;
+    }) => {
+      await recordManualApplicationHandoffCopySucceeded(args);
+    },
+    [recordManualApplicationHandoffCopySucceeded],
+  );
+
+  const handleRecordManualApplicationHandoffFileDownloadRequested =
+    React.useCallback(
+      async (args: {
+        handoffId: string;
+        manifestDigest: string;
+        artifactRef: string;
+        artifactDigest: string;
+      }) => {
+        await recordManualApplicationHandoffFileDownloadRequested(args);
+      },
+      [recordManualApplicationHandoffFileDownloadRequested],
+    );
+
+  const handleRecordManualApplicationHandoffDestinationOpenRequested =
+    React.useCallback(
+      async (args: { handoffId: string; manifestDigest: string }) => {
+        await recordManualApplicationHandoffDestinationOpenRequested(args);
+      },
+      [recordManualApplicationHandoffDestinationOpenRequested],
+    );
+
+  const handleReportManualApplicationHandoffOutcome = React.useCallback(
+    async (args: {
+      handoffId: string;
+      manifestDigest: string;
+      outcome:
+        | "user_reported_submitted"
+        | "user_reported_not_submitted"
+        | "abandoned";
+    }) => {
+      await reportManualApplicationHandoffOutcome(args);
+    },
+    [reportManualApplicationHandoffOutcome],
+  );
+
   const handleArchiveJob = React.useCallback(
     async (jobId: string) => {
       try {
@@ -2126,6 +2242,27 @@ function JobsPageContent(): JSX.Element {
       onSaveReviewItem={(item, nextValue) => {
         void handleSaveReviewItem(item as JobsPageReviewItem, nextValue);
       }}
+      handoffPanel={
+        selectedJob ? (
+          <ManualApplicationHandoffPanel
+            jobId={selectedJob.id}
+            applicationUrl={selectedJob.applicationUrl}
+            handoff={manualApplicationHandoff ?? null}
+            onPrepare={handlePrepareManualApplicationHandoff}
+            onConfirm={handleConfirmManualApplicationHandoff}
+            onRecordCopySucceeded={
+              handleRecordManualApplicationHandoffCopySucceeded
+            }
+            onRecordFileDownloadRequested={
+              handleRecordManualApplicationHandoffFileDownloadRequested
+            }
+            onRecordDestinationOpenRequested={
+              handleRecordManualApplicationHandoffDestinationOpenRequested
+            }
+            onReportOutcome={handleReportManualApplicationHandoffOutcome}
+          />
+        ) : null
+      }
       debugPanels={
         <>
           <JobsStructuredShadowInternalPanel

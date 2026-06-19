@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ApplicationPackageV1 } from "../../src/modules/application-package/schema";
 import {
   confirm,
@@ -28,6 +28,11 @@ const RESUME_ARTIFACT_ID = "resume-variant-artifact:hash-a";
 const COVER_LETTER_ARTIFACT_ID = "cover-letter-artifact:hash-a";
 const APPLICATION_URL =
   "https://jobs.example.com/apply/123?candidate=private#section";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
 
 type StoredDocument<T> = T & {
   _id: string;
@@ -327,19 +332,18 @@ function readField(doc: Record<string, unknown>, field: string): unknown {
 }
 
 async function prepareConfirmedHandoff() {
+  vi.stubEnv("TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED", "true");
   const { ctx, tables } = makeCtx();
   const prepared = await prepare._handler(ctx as any, {
     jobId: JOB_ID,
     applicationPackageId: APPLICATION_PACKAGE_ID,
     now: NOW,
-    env: { TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED: "true" },
   });
   const confirmed = await confirm._handler(ctx as any, {
     handoffId: prepared.handoffId,
     manifestDigest: prepared.manifestDigest,
     confirmationCopy: prepared.requiredConfirmationCopy,
     now: NOW + 1,
-    env: { TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED: "true" },
   });
   return { ctx, tables, prepared, confirmed };
 }
@@ -371,7 +375,6 @@ describe("manual application handoff", () => {
         jobId: JOB_ID,
         applicationPackageId: APPLICATION_PACKAGE_ID,
         now: NOW,
-        env: {},
       }),
     ).rejects.toThrow(/disabled/i);
     expect(tables.manualApplicationHandoffs).toHaveLength(0);
@@ -379,12 +382,12 @@ describe("manual application handoff", () => {
   });
 
   it("prepares a redacted owner-scoped package handoff without creating PR80A records", async () => {
+    vi.stubEnv("TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED", "true");
     const { ctx, tables } = makeCtx();
     const result = await prepare._handler(ctx as any, {
       jobId: JOB_ID,
       applicationPackageId: APPLICATION_PACKAGE_ID,
       now: NOW,
-      env: { TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED: "true" },
     });
 
     expect(result).toMatchObject({
@@ -422,24 +425,24 @@ describe("manual application handoff", () => {
   });
 
   it("derives ownership from ctx.auth and rejects non-owner access", async () => {
+    vi.stubEnv("TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED", "true");
     const { ctx } = makeCtx({ clerkId: "clerk_other" });
     await expect(
       prepare._handler(ctx as any, {
         jobId: JOB_ID,
         applicationPackageId: APPLICATION_PACKAGE_ID,
         now: NOW,
-        env: { TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED: "true" },
       }),
     ).rejects.toThrow(/job not found/i);
     await expect(
       getForJob._handler(ctx as any, {
         jobId: JOB_ID,
-        env: { TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED: "true" },
       }),
     ).rejects.toThrow(/job not found/i);
   });
 
   it("requires a ready application package bound to the job application context", async () => {
+    vi.stubEnv("TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED", "true");
     const blockedPackage = buildStoredPackage({
       status: "draft",
       pkg: buildApplicationPackageFixture({ status: "draft" }),
@@ -450,7 +453,6 @@ describe("manual application handoff", () => {
         jobId: JOB_ID,
         applicationPackageId: APPLICATION_PACKAGE_ID,
         now: NOW,
-        env: { TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED: "true" },
       }),
     ).rejects.toThrow(/ready_for_review/i);
   });
@@ -503,11 +505,11 @@ describe("manual application handoff", () => {
     );
 
     const { ctx, tables } = makeCtx();
+    vi.stubEnv("TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED", "true");
     const prepared = await prepare._handler(ctx as any, {
       jobId: JOB_ID,
       applicationPackageId: APPLICATION_PACKAGE_ID,
       now: NOW,
-      env: { TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED: "true" },
     });
     await expect(
       confirm._handler(ctx as any, {
@@ -515,7 +517,6 @@ describe("manual application handoff", () => {
         manifestDigest: "0".repeat(64),
         confirmationCopy: prepared.requiredConfirmationCopy,
         now: NOW + 1,
-        env: { TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED: "true" },
       }),
     ).rejects.toThrow(/digest/i);
     await expect(
@@ -524,7 +525,6 @@ describe("manual application handoff", () => {
         manifestDigest: prepared.manifestDigest,
         confirmationCopy: "I confirm a different package.",
         now: NOW + 1,
-        env: { TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED: "true" },
       }),
     ).rejects.toThrow(/confirmation/i);
 
@@ -533,7 +533,6 @@ describe("manual application handoff", () => {
       manifestDigest: prepared.manifestDigest,
       confirmationCopy: prepared.requiredConfirmationCopy,
       now: NOW + 1,
-      env: { TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED: "true" },
     });
     tables.applicationPackages[0].contentHash = "changed-package-content-hash";
     await expect(
@@ -543,7 +542,6 @@ describe("manual application handoff", () => {
         answerRef: "application-answer:one",
         answerDigest: "a".repeat(64),
         now: NOW + 2,
-        env: { TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED: "true" },
       }),
     ).rejects.toThrow(/stale/i);
   });
@@ -557,7 +555,6 @@ describe("manual application handoff", () => {
       answerRef: "application-answer:screening-question-1",
       answerDigest: "a".repeat(64),
       now: NOW + 2,
-      env: { TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED: "true" },
     });
     await recordFileDownloadRequested._handler(ctx as any, {
       handoffId: prepared.handoffId,
@@ -565,20 +562,17 @@ describe("manual application handoff", () => {
       artifactRef: RESUME_ARTIFACT_ID,
       artifactDigest: "b".repeat(64),
       now: NOW + 3,
-      env: { TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED: "true" },
     });
     const openResult = await recordDestinationOpenRequested._handler(ctx as any, {
       handoffId: prepared.handoffId,
       manifestDigest: prepared.manifestDigest,
       now: NOW + 4,
-      env: { TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED: "true" },
     });
     const outcome = await reportOutcome._handler(ctx as any, {
       handoffId: prepared.handoffId,
       manifestDigest: prepared.manifestDigest,
       outcome: "user_reported_submitted",
       now: NOW + 5,
-      env: { TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED: "true" },
     });
 
     expect(openResult).toMatchObject({
@@ -653,12 +647,12 @@ describe("manual application handoff", () => {
     ).rejects.toThrow(/https/i);
 
     const { ctx } = makeCtx({ applicationUrl: "", sourceUrl: APPLICATION_URL });
+    vi.stubEnv("TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED", "true");
     await expect(
       prepare._handler(ctx as any, {
         jobId: JOB_ID,
         applicationPackageId: APPLICATION_PACKAGE_ID,
         now: NOW,
-        env: { TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED: "true" },
       }),
     ).rejects.toThrow(/applicationUrl/i);
   });
@@ -674,6 +668,7 @@ describe("manual application handoff", () => {
     );
     expect(runtimeText).not.toMatch(/\bnode:(?:http|https)\b/u);
     expect(runtimeText).not.toMatch(/\b(Authorization|Bearer|Basic|OAuth)\b/u);
+    expect(runtimeText).not.toMatch(/\b(credentials|cookies|tokens)\b/iu);
     expect(runtimeText).not.toMatch(
       /api\.smartrecruiters\.com|lever|ashby|teamtailor|greenhouse/iu,
     );

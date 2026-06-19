@@ -82,11 +82,11 @@ describe("ManualApplicationHandoffPanel", () => {
     expect(screen.getByText("Manual application handoff")).toBeInTheDocument();
     expect(screen.getByText("Manual handoff is disabled.")).toBeInTheDocument();
     expect(
-      screen.getByText("Twoweeks will not submit, autofill, or contact the provider."),
+      screen.getByText("Twoweeks will not submit, fill forms, or contact the provider."),
     ).toBeInTheDocument();
   });
 
-  it("requires exact confirmation copy before the package can be used", () => {
+  it("requires exact confirmation copy before the package can be used", async () => {
     const props = handlers();
     render(
       <ManualApplicationHandoffPanel
@@ -106,11 +106,13 @@ describe("ManualApplicationHandoffPanel", () => {
     });
     expect(confirmButton).not.toBeDisabled();
     fireEvent.click(confirmButton);
-    expect(props.onConfirm).toHaveBeenCalledWith({
-      handoffId: "manual-application-handoff:one",
-      manifestDigest: MANIFEST_DIGEST,
-      confirmationCopy: REQUIRED_COPY,
-    });
+    await waitFor(() =>
+      expect(props.onConfirm).toHaveBeenCalledWith({
+        handoffId: "manual-application-handoff:one",
+        manifestDigest: MANIFEST_DIGEST,
+        confirmationCopy: REQUIRED_COPY,
+      }),
+    );
   });
 
   it("records copy only after clipboard write succeeds and never sends answer text to Convex", async () => {
@@ -229,7 +231,7 @@ describe("ManualApplicationHandoffPanel", () => {
     expect(open).toHaveBeenCalledWith(APPLICATION_URL, "_blank", "noopener");
   });
 
-  it("labels user-reported outcomes as unverified provider truth", () => {
+  it("labels user-reported outcomes as unverified provider truth", async () => {
     const props = handlers();
     render(
       <ManualApplicationHandoffPanel
@@ -248,10 +250,12 @@ describe("ManualApplicationHandoffPanel", () => {
       screen.getByText("Reported by you, not verified by the provider."),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "I submitted it" }));
-    expect(props.onReportOutcome).toHaveBeenCalledWith({
-      handoffId: "manual-application-handoff:one",
-      manifestDigest: MANIFEST_DIGEST,
-      outcome: "user_reported_submitted",
-    });
+    await waitFor(() =>
+      expect(props.onReportOutcome).toHaveBeenCalledWith({
+        handoffId: "manual-application-handoff:one",
+        manifestDigest: MANIFEST_DIGEST,
+        outcome: "user_reported_submitted",
+      }),
+    );
   });
 });
