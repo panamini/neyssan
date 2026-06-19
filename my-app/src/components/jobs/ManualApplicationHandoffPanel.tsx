@@ -105,6 +105,9 @@ export function ManualApplicationHandoffPanel({
 }: ManualApplicationHandoffPanelProps): JSX.Element {
   const [confirmationCopy, setConfirmationCopy] = React.useState("");
   const [actionState, setActionState] = React.useState<ActionState>("idle");
+  const [actionErrorMessage, setActionErrorMessage] = React.useState<
+    string | null
+  >(null);
   const handoffId = handoff?.handoffId ?? "";
   const manifestDigest = handoff?.manifestDigest ?? "";
   const requiredConfirmationCopy = handoff?.requiredConfirmationCopy ?? "";
@@ -137,15 +140,18 @@ export function ManualApplicationHandoffPanel({
   React.useEffect(() => {
     setConfirmationCopy("");
     setActionState("idle");
+    setActionErrorMessage(null);
   }, [jobId, handoffId, manifestDigest]);
 
   const runAction = async (action: () => Promise<unknown>) => {
     setActionState("working");
+    setActionErrorMessage(null);
     try {
       await action();
       setActionState("done");
-    } catch {
+    } catch (error) {
       setActionState("failed");
+      setActionErrorMessage(formatHandoffActionErrorMessage(error));
     }
   };
 
@@ -371,11 +377,30 @@ export function ManualApplicationHandoffPanel({
 
       {actionState === "failed" ? (
         <div className="dasti-empty-state__subtitle" role="status">
-          Handoff action failed.
+          {actionErrorMessage ?? "Handoff action failed."}
         </div>
       ) : null}
     </section>
   );
+}
+
+function formatHandoffActionErrorMessage(error: unknown): string {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "";
+  if (message.includes("budget_exhausted")) {
+    return "Manual handoff budget reached. Try again later.";
+  }
+  if (
+    message.includes("manual_application_handoff_rate_limited") ||
+    message.includes("Too many manual handoff actions")
+  ) {
+    return "Too many handoff actions. Try again later.";
+  }
+  return "Handoff action failed.";
 }
 
 function triggerLocalTextDownload(

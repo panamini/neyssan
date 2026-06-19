@@ -14,6 +14,7 @@ import {
 import {
   MANUAL_APPLICATION_HANDOFF_EVIDENCE,
   MANUAL_APPLICATION_HANDOFF_EVENT_KINDS,
+  MANUAL_APPLICATION_HANDOFF_RATE_LIMIT_CAPABILITIES,
   MANUAL_APPLICATION_HANDOFF_STATES,
   buildManualApplicationHandoffManifestDigest,
   readManualApplicationHandoffServerConfigStatus,
@@ -53,6 +54,7 @@ type TableName =
   | "applicationArtifacts"
   | "manualApplicationHandoffs"
   | "manualApplicationHandoffEvents"
+  | "manualApplicationHandoffRateLimits"
   | "liveExternalActionExecutions";
 
 type Constraint = Readonly<{ field: string; val: unknown }>;
@@ -429,6 +431,7 @@ function makeCtx(options: {
     applicationArtifacts: options.applicationArtifacts ?? [],
     manualApplicationHandoffs: [],
     manualApplicationHandoffEvents: [],
+    manualApplicationHandoffRateLimits: [],
     liveExternalActionExecutions: [],
   };
   let sequence = 0;
@@ -947,7 +950,7 @@ describe("manual application handoff", () => {
     ).rejects.toThrow(/blocked/i);
   });
 
-  it("delivers approved artifact export content through an owner-scoped confirmed handoff query", async () => {
+  it("delivers approved artifact export content through an owner-scoped confirmed handoff mutation", async () => {
     vi.stubEnv("TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED", "true");
     const { packagePayload, coverLetterContentHash, storedArtifact } =
       buildPackageWithApprovedCoverLetterExport();
@@ -1005,6 +1008,62 @@ describe("manual application handoff", () => {
       }),
     ]);
     expect(tables.manualApplicationHandoffEvents).toHaveLength(2);
+  });
+
+  it("rate limits delivery content loads with one redacted owner-scoped quota record", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+    const { ctx, tables, prepared } = await prepareConfirmedHandoff();
+
+    for (let index = 0; index < 12; index += 1) {
+      await expect(
+        getDeliveryContentForHandoff._handler(ctx as any, {
+          handoffId: prepared.handoffId,
+          manifestDigest: prepared.manifestDigest,
+        }),
+      ).resolves.toMatchObject({
+        handoffId: prepared.handoffId,
+        manifestDigest: prepared.manifestDigest,
+        approvedAnswers: [],
+        providerVerified: false,
+      });
+    }
+
+    await expect(
+      getDeliveryContentForHandoff._handler(ctx as any, {
+        handoffId: prepared.handoffId,
+        manifestDigest: prepared.manifestDigest,
+      }),
+    ).rejects.toMatchObject({
+      data: expect.objectContaining({
+        code: "manual_application_handoff_rate_limited",
+        category: "rate_limited",
+        retryAfterSeconds: expect.any(Number),
+        refusalVersion: 1,
+      }),
+    });
+
+    const deliveryQuotaRows = tables.manualApplicationHandoffRateLimits.filter(
+      (row) => row.capability === "manual_handoff.delivery_content_load",
+    );
+    expect(deliveryQuotaRows).toHaveLength(1);
+    expect(deliveryQuotaRows[0]).toMatchObject({
+      ownerProfileId: OWNER_PROFILE_ID,
+      capability: "manual_handoff.delivery_content_load",
+      shortWindowCount: 12,
+      longWindowCount: 12,
+      resourceHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      version: 1,
+    });
+    expect(tables.manualApplicationHandoffEvents).toHaveLength(2);
+
+    const persistedQuota = JSON.stringify(deliveryQuotaRows);
+    expect(persistedQuota).not.toContain("clerk_owner");
+    expect(persistedQuota).not.toContain("owner@example.com");
+    expect(persistedQuota).not.toContain(APPLICATION_URL);
+    expect(persistedQuota).not.toContain("candidate=private");
+    expect(persistedQuota).not.toContain("#section");
+    expect(persistedQuota).not.toContain(APPROVED_RESUME_EXPORT_TEXT);
+    expect(persistedQuota).not.toContain(APPROVED_COVER_LETTER_TEXT);
   });
 
   it("delivers approved resume export content from the real export payload", async () => {
@@ -1306,6 +1365,9 @@ describe("manual application handoff", () => {
       artifactRef: COVER_LETTER_ARTIFACT_ID,
       artifactDigest: artifact.artifactDigest,
     });
+    expect(
+      tables.manualApplicationHandoffRateLimits.map((row) => row.capability),
+    ).toContain("manual_handoff.file_download_request");
     const persisted = JSON.stringify(tables.manualApplicationHandoffEvents);
     expect(persisted).not.toContain(APPROVED_COVER_LETTER_TEXT);
     expect(persisted).not.toContain(APPLICATION_URL);
@@ -1357,6 +1419,20 @@ describe("manual application handoff", () => {
     expect(persisted).not.toContain("application-answer text");
     expect(persisted).not.toContain(APPLICATION_URL);
     expect(persisted).not.toMatch(/provider|receipt|verified/i);
+    expect(
+      tables.manualApplicationHandoffRateLimits.map((row) => row.capability),
+    ).toEqual([
+      "manual_handoff.prepare",
+      "manual_handoff.confirm",
+      "manual_handoff.destination_open_request",
+      "manual_handoff.outcome_report",
+    ]);
+    const persistedLimits = JSON.stringify(
+      tables.manualApplicationHandoffRateLimits,
+    );
+    expect(persistedLimits).not.toContain("clerk_owner");
+    expect(persistedLimits).not.toContain("owner@example.com");
+    expect(persistedLimits).not.toContain(APPLICATION_URL);
   });
 
   it("invalidates confirmation when the owned job application URL changes", async () => {
@@ -1463,6 +1539,14 @@ describe("manual application handoff", () => {
     expect(MANUAL_APPLICATION_HANDOFF_EVENT_KINDS).not.toContain(
       "manual_handoff.user_reported_submitted",
     );
+    expect(MANUAL_APPLICATION_HANDOFF_RATE_LIMIT_CAPABILITIES).toEqual([
+      "manual_handoff.prepare",
+      "manual_handoff.confirm",
+      "manual_handoff.delivery_content_load",
+      "manual_handoff.file_download_request",
+      "manual_handoff.destination_open_request",
+      "manual_handoff.outcome_report",
+    ]);
   });
 
   it("validates destination URL from job.applicationUrl only and stores only origin host and hash", async () => {

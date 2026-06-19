@@ -1,5 +1,5 @@
 import { mutation, query } from "./_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { listProfilesForClerk } from "./lib/userProfiles";
 import { assertApplicationPackageStorageShape } from "./lib/applicationPackages";
 import { buildStableHash } from "../src/modules/application-harness/fingerprints";
@@ -15,6 +15,7 @@ import {
   type ManualApplicationHandoffEventKind,
   type ManualApplicationHandoffEvidence,
   type ManualApplicationHandoffManifestInput,
+  type ManualApplicationHandoffRateLimitCapability,
   type ManualApplicationHandoffState,
 } from "./lib/manualApplicationHandoff";
 
@@ -23,6 +24,9 @@ const ANSWER_COPY_BLOCKED_REASON =
   "Approved answer copy is blocked until approved answers are server-derived.";
 const DOWNLOAD_BLOCKED_REASON =
   "Approved artifact downloads are blocked until an approved export representation is available.";
+const RATE_LIMITED_REASON =
+  "Too many manual handoff actions. Try again later.";
+const RATE_LIMIT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_DELIVERY_CONTENT_BYTES = 100_000;
 const MAX_CONTEXT_ARTIFACT_SCAN_COUNT = 200;
 const SAFE_FILENAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._ -]{0,120}\.(?:md|txt)$/u;
@@ -46,6 +50,13 @@ type OwnerJob = Readonly<{
 type StoredPackage = Readonly<Record<string, any>>;
 type StoredHandoff = Readonly<Record<string, any>>;
 type StoredArtifact = Readonly<Record<string, any>>;
+type StoredRateLimit = Readonly<Record<string, any>>;
+type ManualApplicationHandoffRateLimitPolicy = Readonly<{
+  shortWindowMs: number;
+  shortLimit: number;
+  longWindowMs: number;
+  longLimit: number;
+}>;
 type DownloadableArtifact = Readonly<{
   artifactRef: string;
   label: string;
@@ -69,6 +80,48 @@ type DownloadableArtifact = Readonly<{
   };
   version: 1;
 }>;
+
+const RATE_LIMIT_POLICIES: Record<
+  ManualApplicationHandoffRateLimitCapability,
+  ManualApplicationHandoffRateLimitPolicy
+> = {
+  "manual_handoff.prepare": {
+    shortWindowMs: 60 * 1000,
+    shortLimit: 4,
+    longWindowMs: 24 * 60 * 60 * 1000,
+    longLimit: 20,
+  },
+  "manual_handoff.confirm": {
+    shortWindowMs: 60 * 1000,
+    shortLimit: 8,
+    longWindowMs: 24 * 60 * 60 * 1000,
+    longLimit: 50,
+  },
+  "manual_handoff.delivery_content_load": {
+    shortWindowMs: 60 * 1000,
+    shortLimit: 12,
+    longWindowMs: 24 * 60 * 60 * 1000,
+    longLimit: 80,
+  },
+  "manual_handoff.file_download_request": {
+    shortWindowMs: 60 * 1000,
+    shortLimit: 20,
+    longWindowMs: 24 * 60 * 60 * 1000,
+    longLimit: 120,
+  },
+  "manual_handoff.destination_open_request": {
+    shortWindowMs: 60 * 1000,
+    shortLimit: 10,
+    longWindowMs: 24 * 60 * 60 * 1000,
+    longLimit: 60,
+  },
+  "manual_handoff.outcome_report": {
+    shortWindowMs: 60 * 1000,
+    shortLimit: 8,
+    longWindowMs: 24 * 60 * 60 * 1000,
+    longLimit: 30,
+  },
+};
 
 const handoffViewValidator = v.any();
 
@@ -194,6 +247,13 @@ export const prepare = mutation({
       );
     }
 
+    await acquireManualApplicationHandoffRateLimit(ctx, {
+      ownerProfileId: ownerJob.ownerProfileId,
+      capability: "manual_handoff.prepare",
+      resourceParts: ["job", ownerJob.normalizedJobId],
+      now,
+    });
+
     await ctx.db.insert("manualApplicationHandoffs", handoffDoc);
 
     await appendEvent(ctx, {
@@ -258,6 +318,13 @@ export const confirm = mutation({
         },
       }),
       contentHash: applicationPackage.contentHash,
+    });
+
+    await acquireManualApplicationHandoffRateLimit(ctx, {
+      ownerProfileId: ownerJob.ownerProfileId,
+      capability: "manual_handoff.confirm",
+      resourceParts: ["handoff", handoff.handoffId],
+      now,
     });
 
     await ctx.db.patch(handoff._id, {
@@ -334,6 +401,18 @@ export const recordFileDownloadRequested = mutation({
     if (!matchingArtifact) {
       throw new Error(DOWNLOAD_BLOCKED_REASON);
     }
+    const now = Date.now();
+    await acquireManualApplicationHandoffRateLimit(ctx, {
+      ownerProfileId: ownerJob.ownerProfileId,
+      capability: "manual_handoff.file_download_request",
+      resourceParts: [
+        "handoff",
+        handoff.handoffId,
+        "artifact",
+        matchingArtifact.artifactRef,
+      ],
+      now,
+    });
     await appendEvent(ctx, {
       handoffId: handoff.handoffId,
       ownerProfileId: ownerJob.ownerProfileId,
@@ -346,7 +425,7 @@ export const recordFileDownloadRequested = mutation({
       applicationContextId: handoff.applicationContextId,
       artifactRef: matchingArtifact.artifactRef,
       artifactDigest: matchingArtifact.artifactDigest,
-      occurredAt: Date.now(),
+      occurredAt: now,
     });
     return buildHandoffView({
       status: handoff.state,
@@ -358,7 +437,7 @@ export const recordFileDownloadRequested = mutation({
   },
 });
 
-export const getDeliveryContentForHandoff = query({
+export const getDeliveryContentForHandoff = mutation({
   args: {
     handoffId: v.string(),
     manifestDigest: v.string(),
@@ -368,6 +447,13 @@ export const getDeliveryContentForHandoff = query({
     assertEnabled();
     const { ownerJob, handoff, applicationPackage } =
       await requireConfirmedUsableHandoff(ctx, args);
+    const now = Date.now();
+    await acquireManualApplicationHandoffRateLimit(ctx, {
+      ownerProfileId: ownerJob.ownerProfileId,
+      capability: "manual_handoff.delivery_content_load",
+      resourceParts: ["handoff", handoff.handoffId],
+      now,
+    });
     const downloadableArtifacts = await buildDownloadableArtifacts(ctx, {
       ownerJob,
       handoff,
@@ -399,6 +485,12 @@ export const recordDestinationOpenRequested = mutation({
     const { ownerJob, handoff, applicationPackage } =
       await requireConfirmedUsableHandoff(ctx, args);
     const now = Date.now();
+    await acquireManualApplicationHandoffRateLimit(ctx, {
+      ownerProfileId: ownerJob.ownerProfileId,
+      capability: "manual_handoff.destination_open_request",
+      resourceParts: ["handoff", handoff.handoffId],
+      now,
+    });
     await ctx.db.patch(handoff._id, {
       state: "destination_open_requested",
       updatedAt: now,
@@ -466,6 +558,12 @@ export const reportOutcome = mutation({
       throw new Error("Manual application handoff must be confirmed before outcome report");
     }
     const now = Date.now();
+    await acquireManualApplicationHandoffRateLimit(ctx, {
+      ownerProfileId: ownerJob.ownerProfileId,
+      capability: "manual_handoff.outcome_report",
+      resourceParts: ["handoff", handoff.handoffId],
+      now,
+    });
     await ctx.db.patch(handoff._id, {
       state: args.outcome,
       updatedAt: now,
@@ -499,6 +597,137 @@ function assertEnabled(): void {
   if (!readManualApplicationHandoffServerConfigStatus().enabled) {
     throw new Error("Manual application handoff disabled");
   }
+}
+
+async function acquireManualApplicationHandoffRateLimit(
+  ctx: any,
+  args: {
+    ownerProfileId: string;
+    capability: ManualApplicationHandoffRateLimitCapability;
+    resourceParts: readonly string[];
+    now: number;
+  },
+): Promise<void> {
+  assertSafeRef(args.ownerProfileId, "ownerProfileId");
+  const policy = RATE_LIMIT_POLICIES[args.capability];
+  const resourceHash = await buildStableHash({
+    namespace: "manual-application-handoff",
+    type: "rate-limit-resource",
+    version: 1,
+    ownerProfileId: args.ownerProfileId,
+    capability: args.capability,
+    resourceParts: args.resourceParts,
+  });
+  assertSafeHash(resourceHash, "resourceHash");
+  const rateLimitId = `manual-application-handoff-rate-limit:${resourceHash}`;
+  const existing = await getRateLimitById(ctx, rateLimitId);
+
+  if (!existing) {
+    const rateLimitDoc = {
+      rateLimitId,
+      ownerProfileId: args.ownerProfileId,
+      capability: args.capability,
+      resourceHash,
+      shortWindowStartedAt: args.now,
+      shortWindowCount: 1,
+      longWindowStartedAt: args.now,
+      longWindowCount: 1,
+      lastAllowedAt: args.now,
+      createdAt: args.now,
+      updatedAt: args.now,
+      expiresAt: args.now + policy.longWindowMs + RATE_LIMIT_RETENTION_MS,
+      version: 1 as const,
+    };
+    assertManualApplicationHandoffStorageIsRedacted(
+      rateLimitDoc,
+      "handoff rate limit",
+    );
+    await ctx.db.insert("manualApplicationHandoffRateLimits", rateLimitDoc);
+    return;
+  }
+
+  const shortWindowStartedAt = getActiveWindowStart(
+    existing.shortWindowStartedAt,
+    policy.shortWindowMs,
+    args.now,
+  );
+  const longWindowStartedAt = getActiveWindowStart(
+    existing.longWindowStartedAt,
+    policy.longWindowMs,
+    args.now,
+  );
+  const shortWindowCount =
+    shortWindowStartedAt === existing.shortWindowStartedAt
+      ? safeNonNegativeInteger(existing.shortWindowCount)
+      : 0;
+  const longWindowCount =
+    longWindowStartedAt === existing.longWindowStartedAt
+      ? safeNonNegativeInteger(existing.longWindowCount)
+      : 0;
+  const shortRetryMs =
+    shortWindowCount >= policy.shortLimit
+      ? shortWindowStartedAt + policy.shortWindowMs - args.now
+      : 0;
+  const longRetryMs =
+    longWindowCount >= policy.longLimit
+      ? longWindowStartedAt + policy.longWindowMs - args.now
+      : 0;
+
+  if (shortRetryMs > 0 || longRetryMs > 0) {
+    throwManualApplicationHandoffRateLimited({
+      capability: args.capability,
+      retryAfterSeconds: Math.max(
+        1,
+        Math.ceil(Math.max(shortRetryMs, longRetryMs) / 1000),
+      ),
+      category:
+        longRetryMs > shortRetryMs ? "budget_exhausted" : "rate_limited",
+    });
+  }
+
+  const patch = {
+    shortWindowStartedAt,
+    shortWindowCount: shortWindowCount + 1,
+    longWindowStartedAt,
+    longWindowCount: longWindowCount + 1,
+    lastAllowedAt: args.now,
+    updatedAt: args.now,
+    expiresAt: args.now + policy.longWindowMs + RATE_LIMIT_RETENTION_MS,
+  };
+  assertManualApplicationHandoffStorageIsRedacted(
+    { ...existing, ...patch },
+    "handoff rate limit",
+  );
+  await ctx.db.patch(existing._id, patch);
+}
+
+function getActiveWindowStart(
+  value: unknown,
+  windowMs: number,
+  now: number,
+): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return now;
+  return now - value >= windowMs ? now : value;
+}
+
+function safeNonNegativeInteger(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.floor(value));
+}
+
+function throwManualApplicationHandoffRateLimited(args: {
+  capability: ManualApplicationHandoffRateLimitCapability;
+  retryAfterSeconds: number;
+  category: "rate_limited" | "budget_exhausted";
+}): never {
+  throw new ConvexError({
+    code: "manual_application_handoff_rate_limited",
+    message: RATE_LIMITED_REASON,
+    category: args.category,
+    retryAfterSeconds: args.retryAfterSeconds,
+    capability: args.capability,
+    refusalVersion: 1,
+  });
 }
 
 async function requireOwnerJob(ctx: any, jobId: string): Promise<OwnerJob> {
@@ -679,6 +908,18 @@ async function getHandoffById(
   return await ctx.db
     .query("manualApplicationHandoffs")
     .withIndex("by_handoff_id", (q: any) => q.eq("handoffId", handoffId))
+    .unique();
+}
+
+async function getRateLimitById(
+  ctx: any,
+  rateLimitId: string,
+): Promise<StoredRateLimit | null> {
+  return await ctx.db
+    .query("manualApplicationHandoffRateLimits")
+    .withIndex("by_rate_limit_id", (q: any) =>
+      q.eq("rateLimitId", rateLimitId),
+    )
     .unique();
 }
 

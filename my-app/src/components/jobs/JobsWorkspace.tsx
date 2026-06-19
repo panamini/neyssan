@@ -1211,7 +1211,6 @@ function buildJobResumePickerOption(cv: CvDocument): JobResumePickerOption {
 }
 
 function JobsPageContent(): JSX.Element {
-  const convex = useConvex();
   const navigate = useNavigate();
   const location = useLocation();
   const { jobId: selectedJobId } = useParams<JobsPageRouteParams>();
@@ -1338,12 +1337,6 @@ function JobsPageContent(): JSX.Element {
         "manualApplicationHandoff.getForJob") as any,
     [],
   );
-  const manualApplicationHandoffDeliveryQueryReference = React.useMemo(
-    () =>
-      ((api as any).manualApplicationHandoff?.getDeliveryContentForHandoff ??
-        "manualApplicationHandoff.getDeliveryContentForHandoff") as any,
-    [],
-  );
   const prepareManualApplicationHandoff = useMutation(
     ((api as any).manualApplicationHandoff?.prepare ??
       "manualApplicationHandoff.prepare") as any,
@@ -1351,6 +1344,10 @@ function JobsPageContent(): JSX.Element {
   const confirmManualApplicationHandoff = useMutation(
     ((api as any).manualApplicationHandoff?.confirm ??
       "manualApplicationHandoff.confirm") as any,
+  );
+  const loadManualApplicationHandoffDeliveryContent = useMutation(
+    ((api as any).manualApplicationHandoff?.getDeliveryContentForHandoff ??
+      "manualApplicationHandoff.getDeliveryContentForHandoff") as any,
   );
   const recordManualApplicationHandoffFileDownloadRequested = useMutation(
     ((api as any).manualApplicationHandoff?.recordFileDownloadRequested ??
@@ -2070,14 +2067,13 @@ function JobsPageContent(): JSX.Element {
 
   const handleLoadManualApplicationHandoffDeliveryContent = React.useCallback(
     async (args: { handoffId: string; manifestDigest: string }) => {
-      const content = (await convex.query(
-        manualApplicationHandoffDeliveryQueryReference,
+      const content = (await loadManualApplicationHandoffDeliveryContent(
         args,
       )) as ManualApplicationHandoffDeliveryContent | null;
       setManualApplicationHandoffDeliveryContent(content);
       return content;
     },
-    [convex, manualApplicationHandoffDeliveryQueryReference],
+    [loadManualApplicationHandoffDeliveryContent],
   );
 
   const handleRecordManualApplicationHandoffFileDownloadRequested =

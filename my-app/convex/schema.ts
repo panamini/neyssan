@@ -17,6 +17,7 @@ import { liveExternalActionExecutionFields } from "./lib/liveExternalActionSafet
 import {
   manualApplicationHandoffEventFields,
   manualApplicationHandoffFields,
+  manualApplicationHandoffRateLimitFields,
 } from "./lib/manualApplicationHandoff";
 
 const proposalVoicePresetChoice = v.union(
@@ -926,6 +927,13 @@ export default defineSchema({
     .index("by_owner_job", ["ownerProfileId", "jobId"])
     .index("by_event_kind", ["eventKind"])
     .index("by_occurred_at", ["occurredAt"]),
+
+  manualApplicationHandoffRateLimits: defineTable(
+    manualApplicationHandoffRateLimitFields,
+  )
+    .index("by_rate_limit_id", ["rateLimitId"])
+    .index("by_owner_capability", ["ownerProfileId", "capability"])
+    .index("by_expires_at", ["expiresAt"]),
 
   applicationArtifacts: defineTable(applicationHarnessArtifactFields)
     .index("by_artifact_id", ["id"])
