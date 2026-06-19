@@ -3,7 +3,7 @@ import liveExternalActionSafetySource from "../liveExternalActionSafety.ts?raw";
 import {
   finalizeExternalAction,
   markExternalActionDispatching,
-  readLeverLiveApplyPilotServerConfigStatus,
+  readLiveExternalActionServerConfigStatus,
   reserveExternalAction,
 } from "../liveExternalActionSafety";
 
@@ -20,7 +20,7 @@ type ExecutionRecord = {
   _creationTime: number;
   idempotencyKeyHash: string;
   payloadFingerprint: string;
-  integrationId: "lever_live_apply_pilot_v1";
+  integrationId: string;
   actionCategory: "apply_to_job";
   safeJobRef: string;
   state: ExecutionState;
@@ -34,7 +34,8 @@ type ExecutionRecord = {
 const IDEMPOTENCY_HASH = "a".repeat(64);
 const PAYLOAD_FINGERPRINT = "b".repeat(64);
 const OTHER_PAYLOAD_FINGERPRINT = "c".repeat(64);
-const SAFE_JOB_REF = "mcp-safe-ref:job-target:lever-pilot-job-1";
+const INTEGRATION_ID = "ats_authorization_pending_v1";
+const SAFE_JOB_REF = "mcp-safe-ref:job-target:authorized-job-1";
 
 function baseRecord(
   overrides: Partial<ExecutionRecord> = {},
@@ -44,7 +45,7 @@ function baseRecord(
     _creationTime: 1,
     idempotencyKeyHash: IDEMPOTENCY_HASH,
     payloadFingerprint: PAYLOAD_FINGERPRINT,
-    integrationId: "lever_live_apply_pilot_v1",
+    integrationId: INTEGRATION_ID,
     actionCategory: "apply_to_job",
     safeJobRef: SAFE_JOB_REF,
     state: "reserved",
@@ -59,7 +60,7 @@ function reserveArgs(overrides: Record<string, unknown> = {}) {
   return {
     idempotencyKeyHash: IDEMPOTENCY_HASH,
     payloadFingerprint: PAYLOAD_FINGERPRINT,
-    integrationId: "lever_live_apply_pilot_v1",
+    integrationId: INTEGRATION_ID,
     actionCategory: "apply_to_job",
     safeJobRef: SAFE_JOB_REF,
     now: 2000,
@@ -81,7 +82,7 @@ function finalizeArgs(overrides: Record<string, unknown> = {}) {
     idempotencyKeyHash: IDEMPOTENCY_HASH,
     payloadFingerprint: PAYLOAD_FINGERPRINT,
     finalState: "submitted",
-    safeProviderReceiptRef: "mcp-safe-ref:lever-application:app-123",
+    safeProviderReceiptRef: "mcp-safe-ref:external-action-receipt:app-123",
     now: 4000,
     ...overrides,
   };
@@ -147,7 +148,7 @@ describe("live external action safety foundation", () => {
     expect(records[0]).toMatchObject({
       idempotencyKeyHash: IDEMPOTENCY_HASH,
       payloadFingerprint: PAYLOAD_FINGERPRINT,
-      integrationId: "lever_live_apply_pilot_v1",
+      integrationId: INTEGRATION_ID,
       actionCategory: "apply_to_job",
       safeJobRef: SAFE_JOB_REF,
       state: "reserved",
@@ -265,7 +266,7 @@ describe("live external action safety foundation", () => {
     });
     expect(patch).toHaveBeenCalledWith("live_external_action_1", {
       state: "submitted",
-      safeProviderReceiptRef: "mcp-safe-ref:lever-application:app-123",
+      safeProviderReceiptRef: "mcp-safe-ref:external-action-receipt:app-123",
       updatedAt: 4000,
     });
     expect(records[0].state).toBe("submitted");
@@ -287,43 +288,43 @@ describe("live external action safety foundation", () => {
     expect(patch).not.toHaveBeenCalled();
   });
 
-  it("defaults the Lever live apply feature flag off and treats malformed values as off", () => {
-    expect(readLeverLiveApplyPilotServerConfigStatus({}).enabled).toBe(false);
+  it("defaults the live external action feature flag off and treats malformed values as off", () => {
+    expect(readLiveExternalActionServerConfigStatus({}).enabled).toBe(false);
     expect(
-      readLeverLiveApplyPilotServerConfigStatus({
-        TWOWEEKS_LEVER_LIVE_APPLY_ENABLED: "1",
+      readLiveExternalActionServerConfigStatus({
+        TWOWEEKS_LIVE_EXTERNAL_ACTIONS_ENABLED: "1",
       }).enabled,
     ).toBe(false);
     expect(
-      readLeverLiveApplyPilotServerConfigStatus({
-        TWOWEEKS_LEVER_LIVE_APPLY_ENABLED: "true",
-        TWOWEEKS_LEVER_API_KEY: "server-only-key",
-        TWOWEEKS_LEVER_PILOT_POSTING_ID: "posting_123",
+      readLiveExternalActionServerConfigStatus({
+        TWOWEEKS_LIVE_EXTERNAL_ACTIONS_ENABLED: "true",
       }),
     ).toMatchObject({
       enabled: true,
-      configured: true,
-      status: "configured",
+      configured: false,
+      status: "provider_authorization_required",
       valuesExposed: false,
       credentialStorage: "none",
       tokenStorage: "none",
     });
   });
 
-  it("reports missing Lever credentials as integration_not_configured without exposing values", () => {
-    const status = readLeverLiveApplyPilotServerConfigStatus({
-      TWOWEEKS_LEVER_LIVE_APPLY_ENABLED: "true",
+  it("reports missing provider authorization without exposing credential values", () => {
+    const status = readLiveExternalActionServerConfigStatus({
+      TWOWEEKS_LIVE_EXTERNAL_ACTIONS_ENABLED: "true",
     });
 
     expect(status).toMatchObject({
       enabled: true,
       configured: false,
-      status: "integration_not_configured",
+      status: "provider_authorization_required",
       valuesExposed: false,
     });
     expect(status.missingConfiguration).toEqual([
-      "TWOWEEKS_LEVER_API_KEY",
-      "TWOWEEKS_LEVER_PILOT_POSTING_ID",
+      "provider_authorization",
+      "provider_credentials",
+      "test_tenant",
+      "test_posting",
     ]);
     expect(JSON.stringify(status)).not.toContain("server-only");
   });
@@ -350,12 +351,12 @@ describe("live external action safety foundation", () => {
     expect(insert).not.toHaveBeenCalled();
   });
 
-  it("contains no provider transport or live Lever API call path", () => {
+  it("contains no provider transport or provider-specific live API call path", () => {
     expect(liveExternalActionSafetySource).not.toMatch(
       /\b(fetch|axios|undici|XMLHttpRequest|WebSocket|EventSource)\b/u,
     );
     expect(liveExternalActionSafetySource).not.toMatch(
-      /api\.lever\.co|\/v1\/postings|\/v1\/uploads|Authorization|Basic\s/u,
+      /api\.lever\.co|api\.smartrecruiters\.com|ashby|teamtailor|greenhouse|\/v1\/postings|\/v1\/uploads|Authorization|Basic\s/u,
     );
   });
 });

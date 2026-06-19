@@ -9,18 +9,22 @@ import {
 } from "./lib/liveExternalActionSafety";
 
 const CURRENT_VERSION = 1;
-const LEVER_INTEGRATION_ID = "lever_live_apply_pilot_v1" as const;
-const LEVER_ACTION_CATEGORY = "apply_to_job" as const;
-const LEVER_ENABLED_FLAG = "TWOWEEKS_LEVER_LIVE_APPLY_ENABLED" as const;
-const LEVER_API_KEY = "TWOWEEKS_LEVER_API_KEY" as const;
-const LEVER_PILOT_POSTING_ID = "TWOWEEKS_LEVER_PILOT_POSTING_ID" as const;
+const LIVE_EXTERNAL_ACTION_CATEGORY = "apply_to_job" as const;
+const LIVE_EXTERNAL_ACTIONS_ENABLED_FLAG =
+  "TWOWEEKS_LIVE_EXTERNAL_ACTIONS_ENABLED" as const;
+const PROVIDER_ACCESS_BLOCKERS = [
+  "provider_authorization",
+  "provider_credentials",
+  "test_tenant",
+  "test_posting",
+] as const;
 
 const HASH_PATTERN = /^[a-f0-9]{64}$/u;
+const SAFE_INTEGRATION_ID_PATTERN = /^[a-z][a-z0-9_]{1,80}$/u;
 const SAFE_JOB_REF_PATTERN = /^mcp-safe-ref:job-target:[A-Za-z0-9][A-Za-z0-9._:-]{0,160}$/u;
 const SAFE_RECEIPT_REF_PATTERN =
-  /^mcp-safe-ref:lever-application:[A-Za-z0-9][A-Za-z0-9._:-]{0,160}$/u;
+  /^mcp-safe-ref:external-action-receipt:[A-Za-z0-9][A-Za-z0-9._:-]{0,160}$/u;
 const SAFE_FAILURE_CODE_PATTERN = /^[a-z][a-z0-9_]{1,80}$/u;
-const SAFE_POSTING_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{1,127}$/u;
 const UNSAFE_TEXT_PATTERN =
   /(?:@|Bearer|token|secret|cookie|raw|payload|candidate|resume|cover|answer|phone|email|address|PRIVATE_FACT|NEVER_USE|DO_NOT_EXPOSE)/iu;
 
@@ -50,8 +54,8 @@ const FINALIZE_REQUIRED_ARG_KEYS = [
   "now",
 ] as const;
 
-type LiveExternalActionIntegrationId = typeof LEVER_INTEGRATION_ID;
-type LiveExternalActionCategory = typeof LEVER_ACTION_CATEGORY;
+type LiveExternalActionIntegrationId = string;
+type LiveExternalActionCategory = typeof LIVE_EXTERNAL_ACTION_CATEGORY;
 type LiveExternalActionState =
   | "reserved"
   | "dispatching"
@@ -107,52 +111,41 @@ const executionResultValidator = v.object({
   version: v.literal(1),
 });
 
-export type LeverLiveApplyPilotSafeConfigStatus = Readonly<{
-  kind: "lever_live_apply_pilot_server_config_status";
+type ProviderAccessBlocker = (typeof PROVIDER_ACCESS_BLOCKERS)[number];
+
+export type LiveExternalActionSafeConfigStatus = Readonly<{
+  kind: "live_external_action_server_config_status";
   integrationId: LiveExternalActionIntegrationId;
   actionCategory: LiveExternalActionCategory;
-  featureFlagId: typeof LEVER_ENABLED_FLAG;
+  featureFlagId: typeof LIVE_EXTERNAL_ACTIONS_ENABLED_FLAG;
   featureFlagVersion: 1;
   enabled: boolean;
-  configured: boolean;
-  status: "feature_disabled" | "integration_not_configured" | "configured";
-  missingConfiguration: readonly (typeof LEVER_API_KEY | typeof LEVER_PILOT_POSTING_ID)[];
+  configured: false;
+  status: "feature_disabled" | "provider_authorization_required";
+  missingConfiguration: readonly ProviderAccessBlocker[];
   credentialStorage: "none";
   tokenStorage: "none";
   valuesExposed: false;
   version: 1;
 }>;
 
-export function readLeverLiveApplyPilotServerConfigStatus(
+export function readLiveExternalActionServerConfigStatus(
   env: Readonly<Record<string, string | undefined>> = process.env,
-): LeverLiveApplyPilotSafeConfigStatus {
-  const enabled = env[LEVER_ENABLED_FLAG] === "true";
-  const missingConfiguration: (typeof LEVER_API_KEY | typeof LEVER_PILOT_POSTING_ID)[] =
-    [];
-
-  if (!hasServerSecretShape(env[LEVER_API_KEY])) {
-    missingConfiguration.push(LEVER_API_KEY);
-  }
-  if (!isSafeLeverPostingId(env[LEVER_PILOT_POSTING_ID])) {
-    missingConfiguration.push(LEVER_PILOT_POSTING_ID);
-  }
-
-  const configured = enabled && missingConfiguration.length === 0;
+): LiveExternalActionSafeConfigStatus {
+  const enabled = env[LIVE_EXTERNAL_ACTIONS_ENABLED_FLAG] === "true";
 
   return {
-    kind: "lever_live_apply_pilot_server_config_status",
-    integrationId: LEVER_INTEGRATION_ID,
-    actionCategory: LEVER_ACTION_CATEGORY,
-    featureFlagId: LEVER_ENABLED_FLAG,
+    kind: "live_external_action_server_config_status",
+    integrationId: "ats_authorization_pending_v1",
+    actionCategory: LIVE_EXTERNAL_ACTION_CATEGORY,
+    featureFlagId: LIVE_EXTERNAL_ACTIONS_ENABLED_FLAG,
     featureFlagVersion: 1,
     enabled,
-    configured,
+    configured: false,
     status: !enabled
       ? "feature_disabled"
-      : configured
-        ? "configured"
-        : "integration_not_configured",
-    missingConfiguration,
+      : "provider_authorization_required",
+    missingConfiguration: enabled ? PROVIDER_ACCESS_BLOCKERS : [],
     credentialStorage: "none",
     tokenStorage: "none",
     valuesExposed: false,
@@ -347,10 +340,10 @@ function parseReservationArgs(input: unknown): ReservationArgs {
   assertSafeHash(record.idempotencyKeyHash, "idempotencyKeyHash");
   assertSafeHash(record.payloadFingerprint, "payloadFingerprint");
   assertTimestamp(record.now);
-  if (record.integrationId !== LEVER_INTEGRATION_ID) {
+  if (!isSafeIntegrationId(record.integrationId)) {
     throw new Error("Invalid live external action execution input");
   }
-  if (record.actionCategory !== LEVER_ACTION_CATEGORY) {
+  if (record.actionCategory !== LIVE_EXTERNAL_ACTION_CATEGORY) {
     throw new Error("Invalid live external action execution input");
   }
   assertSafeJobRef(record.safeJobRef);
@@ -494,14 +487,10 @@ function isSafeFailureCode(value: string): boolean {
   return SAFE_FAILURE_CODE_PATTERN.test(value) && !UNSAFE_TEXT_PATTERN.test(value);
 }
 
-function isSafeLeverPostingId(value: unknown): value is string {
+function isSafeIntegrationId(value: unknown): value is string {
   return (
     typeof value === "string" &&
-    SAFE_POSTING_ID_PATTERN.test(value) &&
+    SAFE_INTEGRATION_ID_PATTERN.test(value) &&
     !UNSAFE_TEXT_PATTERN.test(value)
   );
-}
-
-function hasServerSecretShape(value: unknown): value is string {
-  return typeof value === "string" && value.trim().length >= 8;
 }

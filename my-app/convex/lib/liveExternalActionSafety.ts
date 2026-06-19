@@ -1,8 +1,6 @@
 import { v } from "convex/values";
 
-export const liveExternalActionIntegrationIdValidator = v.literal(
-  "lever_live_apply_pilot_v1",
-);
+export const liveExternalActionIntegrationIdValidator = v.string();
 
 export const liveExternalActionCategoryValidator = v.literal("apply_to_job");
 
