@@ -30,6 +30,8 @@ const RESUME_ARTIFACT_ID = "resume-variant-artifact:hash-a";
 const COVER_LETTER_ARTIFACT_ID = "cover-letter-artifact:hash-a";
 const APPLICATION_URL =
   "https://jobs.example.com/apply/123?candidate=private#section";
+const APPROVED_RESUME_EXPORT_TEXT =
+  "Jane Example\n\nOperations lead resume export approved for handoff.";
 const APPROVED_COVER_LETTER_TEXT =
   "Dear Example co,\n\nI am excited to apply for the Operations lead role.";
 
@@ -203,6 +205,52 @@ function buildCoverLetterArtifactFixture() {
   };
 }
 
+function buildApprovedResumeExportArtifact(
+  overrides: Partial<StoredDocument<any>> = {},
+): StoredDocument<any> {
+  return {
+    _id: "applicationArtifacts_resume_export",
+    _creationTime: NOW,
+    id: "application-export:resume-a",
+    userId: OWNER_PROFILE_ID,
+    contextId: APPLICATION_CONTEXT_ID,
+    type: "export",
+    status: "approved",
+    title: "Approved resume export",
+    content: {
+      kind: "mcp_resume_export_payload",
+      artifactKind: "resume_variant",
+      fileName: "resume-export.md",
+      mimeType: "text/markdown",
+      content: APPROVED_RESUME_EXPORT_TEXT,
+      checksum: "resume-export-checksum-a",
+      persisted: false,
+      urlCreated: false,
+      writeActionExecuted: false,
+      version: 1,
+    },
+    textPreview: "Resume export ready",
+    sourceHashes: {
+      contextHash: "context-hash",
+    },
+    provenance: {
+      jobId: JOB_ID,
+      sourceFactIds: ["candidate-fact:a"],
+    },
+    sourceRefs: [
+      {
+        sourceType: "artifact",
+        sourceId: RESUME_ARTIFACT_ID,
+        sourceHash: "resume-content-hash-a",
+      },
+    ],
+    createdAt: NOW,
+    updatedAt: NOW,
+    version: 1,
+    ...overrides,
+  };
+}
+
 function buildApprovedCoverLetterExportArtifact(
   overrides: Partial<StoredDocument<any>> = {},
 ): StoredDocument<any> {
@@ -290,6 +338,16 @@ function buildPackageWithApprovedCoverLetterExport() {
     packagePayload: buildApplicationPackageFixture(),
     coverLetterContentHash: "cover-letter-content-hash-a",
     storedArtifact: buildApprovedCoverLetterExportArtifact(),
+  };
+}
+
+function buildPackageWithApprovedResumeExport(
+  storedArtifact: StoredDocument<any> = buildApprovedResumeExportArtifact(),
+) {
+  return {
+    packagePayload: buildApplicationPackageFixture(),
+    resumeContentHash: "resume-content-hash-a",
+    storedArtifact,
   };
 }
 
@@ -947,6 +1005,234 @@ describe("manual application handoff", () => {
       }),
     ]);
     expect(tables.manualApplicationHandoffEvents).toHaveLength(2);
+  });
+
+  it("delivers approved resume export content from the real export payload", async () => {
+    vi.stubEnv("TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED", "true");
+    const { packagePayload, resumeContentHash, storedArtifact } =
+      buildPackageWithApprovedResumeExport();
+    expect(storedArtifact).toMatchObject({
+      type: "export",
+      content: {
+        kind: "mcp_resume_export_payload",
+        artifactKind: "resume_variant",
+      },
+    });
+    const { ctx } = makeCtx({
+      packageOverrides: {
+        package: packagePayload,
+      },
+      applicationArtifacts: [storedArtifact],
+    });
+    const prepared = await prepare._handler(ctx as any, {
+      jobId: JOB_ID,
+      applicationPackageId: APPLICATION_PACKAGE_ID,
+      now: NOW,
+    });
+    await confirm._handler(ctx as any, {
+      handoffId: prepared.handoffId,
+      manifestDigest: prepared.manifestDigest,
+      confirmationCopy: prepared.requiredConfirmationCopy,
+      now: NOW + 1,
+    });
+
+    const delivery = await getDeliveryContentForHandoff._handler(ctx as any, {
+      handoffId: prepared.handoffId,
+      manifestDigest: prepared.manifestDigest,
+    });
+
+    expect(delivery.approvedAnswers).toEqual([]);
+    expect(delivery.downloadBlockedReason).toBeNull();
+    expect(delivery.downloadableArtifacts).toEqual([
+      expect.objectContaining({
+        artifactRef: RESUME_ARTIFACT_ID,
+        label: "Resume export",
+        filename: "resume-export.md",
+        mimeType: "text/markdown",
+        text: APPROVED_RESUME_EXPORT_TEXT,
+        artifactDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
+        freshnessProof: expect.objectContaining({
+          applicationPackageId: APPLICATION_PACKAGE_ID,
+          applicationContextId: APPLICATION_CONTEXT_ID,
+          artifactContentHash: resumeContentHash,
+        }),
+      }),
+    ]);
+  });
+
+  it("does not deliver stale or wrong-user approved resume exports", async () => {
+    vi.stubEnv("TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED", "true");
+    const staleResumeExport = buildApprovedResumeExportArtifact({
+      sourceRefs: [
+        {
+          sourceType: "artifact",
+          sourceId: RESUME_ARTIFACT_ID,
+          sourceHash: "stale-resume-content-hash",
+        },
+      ],
+    });
+    const wrongUserResumeExport = buildApprovedResumeExportArtifact({
+      _id: "applicationArtifacts_resume_export_wrong_user",
+      id: "application-export:resume-wrong-user",
+      userId: OTHER_PROFILE_ID,
+    });
+    const { ctx } = makeCtx({
+      applicationArtifacts: [staleResumeExport, wrongUserResumeExport],
+    });
+    const prepared = await prepare._handler(ctx as any, {
+      jobId: JOB_ID,
+      applicationPackageId: APPLICATION_PACKAGE_ID,
+      now: NOW,
+    });
+    await confirm._handler(ctx as any, {
+      handoffId: prepared.handoffId,
+      manifestDigest: prepared.manifestDigest,
+      confirmationCopy: prepared.requiredConfirmationCopy,
+      now: NOW + 1,
+    });
+
+    const delivery = await getDeliveryContentForHandoff._handler(ctx as any, {
+      handoffId: prepared.handoffId,
+      manifestDigest: prepared.manifestDigest,
+    });
+
+    expect(delivery.downloadableArtifacts).toEqual([]);
+    expect(delivery.downloadBlockedReason).toMatch(/blocked/i);
+  });
+
+  it("records resume download requests with only safe refs and rejects wrong digests", async () => {
+    vi.stubEnv("TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED", "true");
+    const { packagePayload, storedArtifact } =
+      buildPackageWithApprovedResumeExport();
+    const { ctx, tables } = makeCtx({
+      packageOverrides: {
+        package: packagePayload,
+      },
+      applicationArtifacts: [storedArtifact],
+    });
+    const prepared = await prepare._handler(ctx as any, {
+      jobId: JOB_ID,
+      applicationPackageId: APPLICATION_PACKAGE_ID,
+      now: NOW,
+    });
+    await confirm._handler(ctx as any, {
+      handoffId: prepared.handoffId,
+      manifestDigest: prepared.manifestDigest,
+      confirmationCopy: prepared.requiredConfirmationCopy,
+      now: NOW + 1,
+    });
+    const delivery = await getDeliveryContentForHandoff._handler(ctx as any, {
+      handoffId: prepared.handoffId,
+      manifestDigest: prepared.manifestDigest,
+    });
+    const artifact = delivery.downloadableArtifacts[0];
+
+    await expect(
+      recordFileDownloadRequested._handler(ctx as any, {
+        handoffId: prepared.handoffId,
+        manifestDigest: prepared.manifestDigest,
+        artifactRef: artifact.artifactRef,
+        artifactDigest: "d".repeat(64),
+        now: NOW + 2,
+      }),
+    ).rejects.toThrow(/blocked/i);
+
+    await expect(
+      recordFileDownloadRequested._handler(ctx as any, {
+        handoffId: prepared.handoffId,
+        manifestDigest: prepared.manifestDigest,
+        artifactRef: artifact.artifactRef,
+        artifactDigest: artifact.artifactDigest,
+        now: NOW + 3,
+      }),
+    ).resolves.toMatchObject({
+      status: "handoff_confirmed",
+    });
+
+    expect(tables.manualApplicationHandoffEvents.at(-1)).toMatchObject({
+      eventKind: "manual_handoff.file_download_requested",
+      evidence: "user_interaction_observed",
+      artifactRef: RESUME_ARTIFACT_ID,
+      artifactDigest: artifact.artifactDigest,
+    });
+    const persisted = JSON.stringify(tables.manualApplicationHandoffEvents);
+    expect(persisted).not.toContain(APPROVED_RESUME_EXPORT_TEXT);
+    expect(persisted).not.toContain(APPLICATION_URL);
+  });
+
+  it("selects the newest matching resume export when more than 50 context artifacts exist", async () => {
+    vi.stubEnv("TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED", "true");
+    const newestResumeExportText =
+      "Jane Example\n\nNewest approved resume export selected for handoff.";
+    const olderResumeExport = buildApprovedResumeExportArtifact({
+      _id: "applicationArtifacts_resume_export_older",
+      id: "application-export:resume-older",
+      updatedAt: NOW + 1,
+    });
+    const fillerArtifacts = Array.from({ length: 60 }, (_, index) =>
+      buildApprovedResumeExportArtifact({
+        _id: `applicationArtifacts_resume_export_noise_${index}`,
+        _creationTime: NOW + 100 + index,
+        id: `application-export:resume-noise-${index}`,
+        sourceRefs: [
+          {
+            sourceType: "artifact",
+            sourceId: `resume-variant-artifact:noise-${index}`,
+            sourceHash: "resume-content-hash-a",
+          },
+        ],
+        updatedAt: NOW + 100 + index,
+      }),
+    );
+    const newestResumeExport = buildApprovedResumeExportArtifact({
+      _id: "applicationArtifacts_resume_export_newest",
+      _creationTime: NOW + 10_000,
+      id: "application-export:resume-newest",
+      content: {
+        kind: "mcp_resume_export_payload",
+        artifactKind: "resume_variant",
+        fileName: "resume-export-newest.md",
+        mimeType: "text/markdown",
+        content: newestResumeExportText,
+        checksum: "resume-export-checksum-newest",
+        persisted: false,
+        urlCreated: false,
+        writeActionExecuted: false,
+        version: 1,
+      },
+      updatedAt: NOW + 10_000,
+    });
+    const { ctx } = makeCtx({
+      applicationArtifacts: [
+        olderResumeExport,
+        ...fillerArtifacts,
+        newestResumeExport,
+      ],
+    });
+    const prepared = await prepare._handler(ctx as any, {
+      jobId: JOB_ID,
+      applicationPackageId: APPLICATION_PACKAGE_ID,
+      now: NOW,
+    });
+    await confirm._handler(ctx as any, {
+      handoffId: prepared.handoffId,
+      manifestDigest: prepared.manifestDigest,
+      confirmationCopy: prepared.requiredConfirmationCopy,
+      now: NOW + 1,
+    });
+
+    const delivery = await getDeliveryContentForHandoff._handler(ctx as any, {
+      handoffId: prepared.handoffId,
+      manifestDigest: prepared.manifestDigest,
+    });
+
+    expect(delivery.downloadableArtifacts).toEqual([
+      expect.objectContaining({
+        artifactRef: RESUME_ARTIFACT_ID,
+        filename: "resume-export-newest.md",
+        text: newestResumeExportText,
+      }),
+    ]);
   });
 
   it("does not deliver raw approved artifact content without an export payload", async () => {

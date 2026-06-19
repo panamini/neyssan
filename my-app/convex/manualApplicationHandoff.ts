@@ -24,6 +24,7 @@ const ANSWER_COPY_BLOCKED_REASON =
 const DOWNLOAD_BLOCKED_REASON =
   "Approved artifact downloads are blocked until an approved export representation is available.";
 const MAX_DELIVERY_CONTENT_BYTES = 100_000;
+const MAX_CONTEXT_ARTIFACT_SCAN_COUNT = 200;
 const SAFE_FILENAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._ -]{0,120}\.(?:md|txt)$/u;
 const UNSAFE_DELIVERY_TEXT_PATTERNS: readonly RegExp[] = [
   /RAW_(?:(?:CV|RESUME|JOB|PROPOSAL|APPLICATION|COVER_LETTER)(?:_TEXT)?|SOURCE_DOCUMENT)_SENTINEL/u,
@@ -912,12 +913,34 @@ async function listApplicationArtifactsForContext(
   ownerProfileId: string,
   applicationContextId: string,
 ): Promise<StoredArtifact[]> {
-  return await ctx.db
+  const artifacts = await ctx.db
     .query("applicationArtifacts")
     .withIndex("by_user_context", (q: any) =>
       q.eq("userId", ownerProfileId).eq("contextId", applicationContextId),
     )
-    .take(50);
+    .order("desc")
+    .take(MAX_CONTEXT_ARTIFACT_SCAN_COUNT);
+  return [...artifacts].sort(compareApplicationArtifactsForDelivery);
+}
+
+function compareApplicationArtifactsForDelivery(
+  left: StoredArtifact,
+  right: StoredArtifact,
+): number {
+  const rightTimestamp = getApplicationArtifactDeliveryTimestamp(right);
+  const leftTimestamp = getApplicationArtifactDeliveryTimestamp(left);
+  if (rightTimestamp !== leftTimestamp) {
+    return rightTimestamp - leftTimestamp;
+  }
+  return String(right.id ?? right._id ?? "").localeCompare(
+    String(left.id ?? left._id ?? ""),
+  );
+}
+
+function getApplicationArtifactDeliveryTimestamp(artifact: StoredArtifact): number {
+  return Number(
+    artifact.updatedAt ?? artifact.createdAt ?? artifact._creationTime ?? 0,
+  );
 }
 
 function extractDownloadableArtifactContent(args: {

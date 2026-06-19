@@ -389,5 +389,5 @@ function triggerLocalTextDownload(
   link.download = artifact.filename;
   link.rel = "noopener";
   link.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }

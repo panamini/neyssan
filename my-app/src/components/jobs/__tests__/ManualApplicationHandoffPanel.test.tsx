@@ -219,6 +219,8 @@ describe("ManualApplicationHandoffPanel", () => {
       providerVerified: false,
     } as const;
     props.onLoadDeliveryContent.mockResolvedValueOnce(deliveryContent);
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
     const createObjectUrl = vi.fn(() => "download-url");
     const revokeObjectUrl = vi.fn();
     Object.defineProperty(URL, "createObjectURL", {
@@ -288,7 +290,10 @@ describe("ManualApplicationHandoffPanel", () => {
     );
     expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob));
     expect(click).toHaveBeenCalled();
-    expect(revokeObjectUrl).toHaveBeenCalledWith("download-url");
+    expect(fetchSpy).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(revokeObjectUrl).toHaveBeenCalledWith("download-url"),
+    );
   });
 
   it("does not render answer copy controls when only test-only answer props arrive", () => {
