@@ -21,29 +21,27 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR84 - Owner/Profile Boundary Hardening
-GitHub PR: https://github.com/panamini/neyssan/pull/218
-Head commit: afa17af45df710b96ef89cb8d905bb792ef98159
-Merge commit: a9cc0b12c54bde647cd49ed7fe719b905e3a670b
-Merged at: 2026-06-20T21:01:39Z
-Scope: narrow owner/profile boundary hardening only. It requires authenticated Clerk identity for profiles.saveProfile, fails closed for unauthenticated create/patch and foreign-owned profile writes, stamps new and legacy unclaimed rows with the authenticated Clerk subject, keeps linked-profile job mutations rejecting cross-owner access, and adds source guards. No code outside the approved owner/profile boundary, schema, UI, workspace/tenant/role/admin/member runtime, billing/entitlement work, provider/OAuth/token work, PR80-live, answer-copy, package, lockfile, or PR85 work.
+PR84-to-PR85-prep - Billing, Plan Limits, and Entitlements Decision
+GitHub PR: https://github.com/panamini/neyssan/pull/219
+Head commit: c32be2d3ef74c8acb952f65576025b77a329635a
+Merge commit: cf7b2f9476d611a21e3b2920e12aa4235139ea24
+Merged at: 2026-06-20T21:53:46Z
+Scope: docs-only product/governance/security preflight. Final decision: READY_TO_IMPLEMENT_NARROW_PR85_STRIPE_TEST_MODE_BOUNDARY. It selects Stripe test mode for local/testing only and narrows PR85 to a server-only Stripe test-mode config validator, internal/no-Stripe test mode fallback, safe billing config status, optional pure capability entitlement helper, and source guards proving no real keys are committed. No PR85 code, schema, UI, Stripe SDK, checkout, webhooks, subscriptions, billing portal, pricing, paid entitlements, external HTTP, workspace/tenant/role/admin/member runtime, real keys, PR80-live, answer-copy, package, lockfile, or PR86 work.
 ```
 
 Current implementation PR:
 
 ```txt
-PR84-to-PR85-prep - Billing, Plan Limits, and Entitlements Decision
-Branch: codex/pr84-to-pr85-billing-entitlements-preflight
-Scope: docs-only product/governance/security decision after PR84. Decide whether PR85 should implement a narrow server-side capability entitlement boundary, be deferred, or be blocked pending explicit business/pricing decisions.
-Updated founder decision: Stripe test mode is selected for local/testing only. PR85 should be a narrow server-only Stripe test-mode config boundary with internal/no-Stripe test fallback and safe status output, not live billing.
-No PR85 code, schema, UI, Stripe SDK, checkout, webhooks, subscriptions, billing portal, pricing, paid entitlements, external HTTP, package or lockfile changes, workspace/tenant/role/admin/member runtime, real keys, PR80-live, answer-copy implementation, or PR86 work.
+PR85 - Stripe Test Mode Boundary and Internal Test Access
+Branch: codex/pr85-stripe-test-mode-boundary
+Scope: implement only a server-only Stripe test-mode config boundary, internal/no-Stripe test mode fallback, safe billing config status, optional pure capability entitlement helper, and source guards proving no real keys are committed.
+No Stripe SDK, checkout, webhooks, subscriptions, billing portal, pricing, paid entitlements, external HTTP, workspace/tenant/role/admin/member runtime, real keys, PR80-live, answer-copy implementation, package or lockfile changes, schema changes, UI changes, or PR86 work.
 ```
 
 Exact next PR:
 
 ```txt
-PR84 is merged.
-PR85 Stripe test-mode boundary code is not started.
+PR85 is active only for the narrow Stripe test-mode boundary and internal test access scope from PR219.
 PR80-live remains blocked by provider authorization prerequisites.
 Approved answer copy stays blocked until a future source-model decision creates an authoritative approved answer source.
 PR86 is not started.
@@ -124,7 +122,8 @@ MERGED_NARROW_PR59 - PR185 merged the narrow read-only adapter scope approved by
 |                        83 | Observability and Incident Response                                                  | merged      | #216                 | head 6375528bb54a235775288b48a0371ed93fdc9dc3; merge 6de9d609f910f3e8a4f2872bbd7e16a067e87a49 | Narrow implementation only: bounded redacted operational event taxonomy, safe event builder, incident taxonomy, kill-switch/status inventory helpers, incident runbook, and tests/source guards over existing MCP/manual-handoff/live-safety/account-link/egress/write-action surfaces. No provider integration, OAuth/token flow, token storage, provider revocation, browser automation, public dashboard, external observability vendor, package changes, lockfile changes, schema changes, UI changes, PR80-live, answer-copy implementation, or PR84 work. Merged at 2026-06-20T16:41:48Z. |
 |      83-to-84-preflight | Workspace / Business Tenant Boundaries Preflight                                     | merged      | #217                 | head 4671370ad9158c9abb77e64c64bd957b0fc9e044; merge 7494710b3da8d5de2f1b2453feddb45cb135f91f | Docs-only governance/security preflight. Final decision: `READY_TO_IMPLEMENT_NARROW_PR84`. It confirms there is no current workspace/team/tenant/role/billing/entitlement model and narrows PR84 to owner/profile boundary hardening only. No code, schema, UI, route, dashboard, invitation, billing/entitlement, workspace runtime, role migration, OAuth/token/provider, PR80-live, answer-copy, package, lockfile, or PR85 work. Merged at 2026-06-20T17:48:00Z. |
 |                        84 | Owner/Profile Boundary Hardening                                                    | merged      | #218                 | head afa17af45df710b96ef89cb8d905bb792ef98159; merge a9cc0b12c54bde647cd49ed7fe719b905e3a670b | Narrow owner/profile boundary hardening only over existing single-user Clerk/profile ownership, jobs/packages/artifacts/manual handoff, and account-link surfaces. profiles.saveProfile now requires authenticated Clerk identity; unauthenticated create/patch and foreign-owned profile writes fail closed; new and legacy unclaimed profile rows are stamped with the authenticated Clerk subject; linked-profile job mutation tests reject cross-owner access. No tenant, workspace, role, billing, entitlement, invitation, admin/member, provider/OAuth/token, PR80-live, answer-copy, package, lockfile, schema, UI, or PR85 work. Merged at 2026-06-20T21:01:39Z. |
-|      84-to-85-preflight | Billing, Plan Limits, and Entitlements Decision                                     | current branch | draft PR pending      | branch codex/pr84-to-pr85-billing-entitlements-preflight                                | Docs-only product/governance/security preflight after PR84. Updated founder decision selects Stripe test mode for local/testing only and narrows PR85 to Stripe test-mode config validation plus internal/no-Stripe test fallback. No PR85 code, schema, UI, Stripe SDK, checkout, webhooks, subscriptions, billing portal, pricing, paid entitlements, external HTTP, workspace/tenant/role/admin/member runtime, real keys, PR80-live, answer-copy, package, lockfile, or PR86 work. |
+|      84-to-85-preflight | Billing, Plan Limits, and Entitlements Decision                                     | merged      | #219                 | head c32be2d3ef74c8acb952f65576025b77a329635a; merge cf7b2f9476d611a21e3b2920e12aa4235139ea24 | Docs-only product/governance/security preflight after PR84. Final decision: `READY_TO_IMPLEMENT_NARROW_PR85_STRIPE_TEST_MODE_BOUNDARY`. Updated founder decision selects Stripe test mode for local/testing only and narrows PR85 to Stripe test-mode config validation plus internal/no-Stripe test fallback. No PR85 code, schema, UI, Stripe SDK, checkout, webhooks, subscriptions, billing portal, pricing, paid entitlements, external HTTP, workspace/tenant/role/admin/member runtime, real keys, PR80-live, answer-copy, package, lockfile, or PR86 work. Merged at 2026-06-20T21:53:46Z. |
+|                        85 | Stripe Test Mode Boundary and Internal Test Access                                  | current branch | draft PR pending      | branch codex/pr85-stripe-test-mode-boundary                                             | Narrow implementation only: server-only Stripe test-mode config validator, internal/no-Stripe test fallback, safe billing config status, optional pure capability entitlement helper, source guards proving no real keys are committed, and docs/ledger update. No Stripe SDK, checkout, webhooks, subscriptions, billing portal, pricing, paid entitlements, external HTTP, workspace/tenant/role/admin/member runtime, real keys, PR80-live, answer-copy, package, lockfile, schema, UI, or PR86 work. |
 
 ---
 
@@ -245,7 +244,9 @@ PR217 merged the PR83-to-PR84 workspace/business tenant boundaries preflight int
 
 PR218 merged PR84 into `application-os-foundation` with head commit `afa17af45df710b96ef89cb8d905bb792ef98159` and merge commit `a9cc0b12c54bde647cd49ed7fe719b905e3a670b` at `2026-06-20T21:01:39Z`. It hardened only existing single-user owner/profile boundaries: authenticated `profiles.saveProfile`, unauthenticated create/patch fail-closed behavior, foreign-owned profile write rejection, authenticated stamping of new and legacy unclaimed profile rows, linked-profile cross-owner mutation tests, and source guards. It did not add tenant, workspace, role, billing, entitlement, invitation, admin/member, provider/OAuth/token, PR80-live, answer-copy, package, lockfile, schema, UI, or PR85 work.
 
-PR84-to-PR85 preflight is now the active docs-only decision PR on `codex/pr84-to-pr85-billing-entitlements-preflight`. The updated founder decision selects Stripe test mode for local/testing only. PR85 should be narrowed to a server-only Stripe test-mode config validator, internal/no-Stripe test mode fallback, safe billing config status, optional pure capability entitlement helper, and source guards proving no real keys are committed. PR85 code, PR86, PR80-live, answer-copy implementation, live billing, checkout, webhooks, subscriptions, billing portal, pricing, paid entitlement state, schema changes, UI changes, package changes, and lockfile changes are not started.
+PR219 merged the PR84-to-PR85 preflight into `application-os-foundation` with head commit `c32be2d3ef74c8acb952f65576025b77a329635a` and merge commit `cf7b2f9476d611a21e3b2920e12aa4235139ea24` at `2026-06-20T21:53:46Z`. It returned `READY_TO_IMPLEMENT_NARROW_PR85_STRIPE_TEST_MODE_BOUNDARY`. The updated founder decision selects Stripe test mode for local/testing only. PR85 is narrowed to a server-only Stripe test-mode config validator, internal/no-Stripe test mode fallback, safe billing config status, optional pure capability entitlement helper, and source guards proving no real keys are committed. PR85 must not add Stripe SDK, live billing, checkout, webhooks, subscriptions, billing portal, pricing, paid entitlement state, schema changes, UI changes, package changes, lockfile changes, PR86, PR80-live, or answer-copy implementation.
+
+PR85 is now the active implementation PR on `codex/pr85-stripe-test-mode-boundary`. It may implement only the narrow Stripe test-mode boundary and internal test access scope unlocked by PR219.
 
 Maintainer decision after PR80A still keeps live ATS submit/apply blocked until one provider supplies written use-case authorization, official server-to-server credentials, a test tenant or sandbox, one authorized test posting, official schema/questions endpoint, official submit endpoint, and receipt/error/duplicate/retry clarification. Manual handoff must not reserve, dispatch, or finalize PR80A `liveExternalActionExecutions`, and it must not represent a user-reported outcome as provider-submitted or provider-verified. PR80B, PR80B-follow-up, and PR80B-follow-up-2-prep did not automatically unlock PR81; PR211 unlocked only narrow PR81 rate/budget hardening, and PR80-live remains blocked.
 
