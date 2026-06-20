@@ -8,13 +8,13 @@ Preflight branch: `codex/pr84-to-pr85-billing-entitlements-preflight`
 
 This is a docs-only product/governance/security preflight. It does not implement PR85 code.
 
-Local repository state before this preflight:
+Local repository state before this preflight update:
 
 ```txt
 application-os-foundation HEAD: a9cc0b12c54bde647cd49ed7fe719b905e3a670b
-Working tree: clean
-Open PRs on application-os-foundation: none
-Existing PR85 branch/PR: none found
+PR219 branch head before update: 2109df493a606053e92357c2b68c4f62526906f6
+Working tree: clean before docs update
+Open PR: #219 draft
 ```
 
 ## PR84 Merge Verification
@@ -53,6 +53,31 @@ Actual PR84 scope:
 
 PR84 did not add schema, UI, workspace, tenant, role, admin/member, billing, entitlement, provider/OAuth/token, PR80-live, answer-copy, package, lockfile, or PR85 work.
 
+## Updated Founder Decision
+
+Stripe test mode is selected for local/testing only.
+
+Test keys are supplied locally/server-side through env vars only.
+
+Live keys fail closed.
+
+No live billing is implemented.
+
+No real paid subscription state is implemented.
+
+This does not authorize Stripe SDK installation in PR219.
+
+This does not authorize checkout, webhooks, subscriptions, billing portal, pricing, paid entitlements, product IDs, price IDs, customer IDs, subscription IDs, or raw Stripe payload handling.
+
+Only these environment variable names may be documented:
+
+```txt
+STRIPE_SECRET_KEY
+STRIPE_PUBLISHABLE_KEY
+```
+
+Real values must be supplied only through local/server environment variables outside the repo. They must not be pasted into chat, Codex, GitHub, docs, code, tests, snapshots, logs, or GitHub Actions.
+
 ## Current Product And Business Mode
 
 Confirmed:
@@ -61,7 +86,9 @@ Confirmed:
 - Current runtime model is single-user owner/profile.
 - There is no workspace/team/tenant/role/admin/member runtime.
 - There is no billing, subscription, payment, checkout, plan, entitlement, or price schema.
-- No payment provider is selected.
+- Stripe test mode is selected only as a future local/testing config boundary.
+- Stripe is optional for local/internal testing.
+- Missing Stripe env must not block app testing.
 - PR81 already protects operation rate/budget for manual handoff.
 - PR80-live remains blocked.
 - Approved answer copy remains blocked.
@@ -71,16 +98,16 @@ Probable:
 
 ```txt
 - The product is in an internal/pre-private-beta implementation phase.
-- Monetization is intentionally undecided in the active codebase.
+- Production monetization remains undecided in the active codebase.
 - PR88 private beta and PR89 public business launch remain future roadmap phases.
 ```
 
-To verify before any real billing work:
+To verify before any production billing work:
 
 ```txt
-- Founder-approved product mode: free, private beta, paid single-user, business, or other.
+- Founder-approved product mode beyond local/testing.
 - Plan names and tier boundaries.
-- Payment provider, if any.
+- Whether Stripe remains the production provider.
 - Whether payments must exist before PR86, PR87, or PR88.
 ```
 
@@ -101,7 +128,7 @@ Search findings:
 
 There is no safe existing persisted source of truth for paid plan status.
 
-## Rate Limits Versus Entitlements
+## Rate Limits Versus Billing Test Mode
 
 PR81 rate/budget protection answers:
 
@@ -111,104 +138,117 @@ What operation budget is available?
 How are retries and abuse bounded?
 ```
 
-PR85 entitlement policy should answer:
+PR85 Stripe test-mode config should answer:
 
 ```txt
-May this capability be accessed at all?
-Is the capability hard-blocked because a safety prerequisite is missing?
-Is the capability outside the current product mode?
+Can the app run without Stripe for local/internal testing?
+Can local/server Stripe test configuration be detected safely?
+Are live-mode keys rejected fail-closed?
+Is the secret key kept server-only and never exposed?
 ```
 
-Billing would answer:
+Optional PR85 entitlement helper should answer:
+
+```txt
+May this current test/internal capability be accessed at all?
+Is the capability hard-blocked because a safety prerequisite is missing?
+Is billing config invalid in a way that should deny a capability?
+```
+
+Production billing would answer:
 
 ```txt
 Does payment status grant or revoke entitlement?
 ```
 
-Billing is not currently implementable because no payment provider, plan authority, pricing decision, or subscription source exists.
+Production billing is not currently implementable because no production pricing decision, subscription source, checkout flow, webhook handling, or paid entitlement state is authorized.
 
 ## Capability Matrix
 
-| Capability | Current state | Feature flag/config | Owner/profile auth | PR81 rate/budget | Privacy level | Entitlement needed now | Must remain false/blocked | Plan/status output safe |
+| Capability | Current state | Feature flag/config | Owner/profile auth | PR81 rate/budget | Privacy level | PR85 test-mode policy needed now | Must remain false/blocked | Plan/status output safe |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Read-only MCP application package summary | Active read-only boundary | Account-link read scope | Server-only Stytch subject -> Twoweeks Clerk mapping | Not PR81 | Model-visible safe summary | Yes, for access classification | No | Only bounded capability/decision |
-| Evidence graph summary | Active read-only boundary | Account-link read scope | Server-only owner resolution | Not PR81 | Model-visible safe summary | Yes | No | Only bounded capability/decision |
-| Resume variant plan summary | Active read-only boundary | Account-link read scope | Server-only owner resolution | Not PR81 | Model-visible safe summary | Yes | No | Only bounded capability/decision |
-| Review cockpit summary | Active read-only boundary | Account-link read scope | Server-only owner resolution | Not PR81 | Model-visible safe summary | Yes | No | Only bounded capability/decision |
-| Generated artifact preview | Local boundary | None found | Input boundary, no persisted entitlement | Not PR81 | Safe summary, restricted content separation | Yes | No | Only bounded capability/decision |
-| Artifact approval/revision | Local boundary | None found | Input boundary, no entitlement | Not PR81 | Safe summary and redacted audit metadata | Yes | No | Only bounded capability/decision |
-| Resume export | Local controlled representation | None found | Requires approved/fresh policy input | Not PR81 | Controlled local markdown payload separation | Yes | No | Only bounded capability/decision |
-| Cover-letter/application-package export | Local controlled representation | None found | Requires approved/fresh policy input | Not PR81 | Controlled local markdown payload separation | Yes | No | Only bounded capability/decision |
-| Manual application handoff | Active Convex runtime, default-off | `TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED` | Authenticated owner profile and owner job/package checks | Yes | Redacted records/events, no provider verification | Yes | No | Only bounded capability/decision |
-| Approved artifact delivery | Active manual-handoff delivery | Manual handoff flag and mutation path | Owner-scoped handoff/package checks | Yes for delivery-content load and audits | Approved exports only, no answers | Yes | No | Only bounded capability/decision |
-| Controlled application-message send boundary | Local boundary, not provider integration | Egress allowlist input, write-action guard | Manual confirmation and exact preview | Not PR81 | Redacted result/audit | Yes | No live provider grant | Only bounded capability/decision |
-| PR80-live external action | Blocked boundary only | `TWOWEEKS_LIVE_EXTERNAL_ACTIONS_ENABLED`, configured false | Provider prerequisites absent | Not enough | No provider credentials or calls | Yes, as explicit denial | Yes | Denied category only |
-| Approved answer copy | Blocked | None | No authoritative approved answer source | Blocked attempts rate-limited | Answer text must not be exposed | Yes, as explicit denial | Yes | Denied category only |
-| Operational/admin status | Active safe helpers | Safe status helpers | No raw config authority | Not PR81 | Bounded operational categories | Yes, read-only classification | No admin runtime | Bounded status only |
-| Future workspace/business features | Non-existent | None | No tenant/role model | None | Not applicable | No positive grant | Yes | Denied category only |
+| App test access | Local/internal target | Missing Stripe env must allow internal test mode | Existing auth still applies where needed | Not PR81 | No key exposure | Yes | No | Safe status only |
+| Read-only MCP summaries | Active read-only boundaries | Account-link read scopes | Server-only Stytch subject -> Twoweeks Clerk mapping | Not PR81 | Model-visible safe summaries | Optional helper can allow | No | Bounded decision only |
+| Artifact export | Local controlled representations | None found | Requires approved/fresh policy input | Not PR81 | Controlled local payload separation | Optional helper can allow | No | Bounded decision only |
+| Manual application handoff | Active Convex runtime, default-off | `TWOWEEKS_MANUAL_APPLICATION_HANDOFF_ENABLED` | Authenticated owner profile and owner job/package checks | Yes | Redacted records/events, no provider verification | Optional helper can allow | No | Bounded decision only |
+| PR80-live submit/apply | Blocked boundary only | Live external action config remains not configured | Provider prerequisites absent | Not enough | No provider credentials or calls | Deny explicitly | Yes | Denied category only |
+| Approved answer copy | Blocked | None | No authoritative approved answer source | Blocked attempts rate-limited | Answer text must not be exposed | Deny explicitly | Yes | Denied category only |
+| Workspace/team/admin | Non-existent | None | No tenant/role model | None | Not applicable | Deny explicitly | Yes | Denied category only |
+| Billing portal | Non-existent | None | No customer/subscription model | None | Not applicable | Deny explicitly | Yes | Denied category only |
 
-## Entitlement Source-Of-Truth Decision
+## Stripe Test-Mode Source-Of-Truth Decision
 
 Do not add a schema migration in PR85.
 
 Initial authority should be:
 
 ```txt
-server_static_policy_v1
+server_env_test_mode_config_v1
 ```
 
 Assignment source:
 
 ```txt
-- Server-owned static policy code or server config only.
-- Client input may request a capability but cannot assert product mode or grant state.
-- Model output cannot assert product mode or grant state.
-- Clerk ID, email, provider subject, profile metadata, and arbitrary client metadata are not plan authority.
+- Server-owned environment only.
+- Client input cannot assert Stripe mode.
+- Model output cannot assert Stripe mode.
+- Clerk ID, email, provider subject, profile metadata, and arbitrary client metadata are not billing authority.
+- Stripe test mode configuration is not a paid subscription.
 ```
 
 Revocation source:
 
 ```txt
-- Code/config rollback or policy update.
-- No persisted entitlement rows exist to revoke in PR85.
+- Remove or change local/server environment variables.
+- Code/config rollback.
+- No persisted billing or entitlement rows exist to revoke in PR85.
 ```
 
 Default behavior:
 
 ```txt
+- Missing Stripe env returns internal test mode and does not block app testing.
+- Valid test-mode config returns configured test status.
+- Invalid config fails closed for Stripe-backed behavior but does not break no-Stripe internal testing.
+- Live-mode keys fail closed.
 - Unknown capability fails closed.
-- Unknown product mode fails closed.
-- Missing server authority fails closed.
-- Blocked safety prerequisites fail closed.
 ```
 
 Deletion, retention, and audit:
 
 ```txt
-- No new entitlement table.
-- No entitlement assignment rows.
-- No long-lived billing state.
-- Bounded redacted operational event may record capability, decision, denial category, policy version, and safe product mode.
+- No new billing table.
+- No entitlement assignment table.
+- No customer, subscription, product, price, invoice, or checkout records.
+- Safe status may expose only bounded mode/status/category fields.
 - Repeated denied attempts must not create unbounded audit rows.
 ```
 
 ## Privacy And Security Model
 
-Allowed entitlement output fields:
+Allowed billing config status output fields:
 
 ```txt
-- bounded capability
+- bounded mode/status
+- configured true/false
 - allowed or denied
 - bounded denial category
-- product-policy version
-- optional safe product mode
+- policy/config version
 ```
 
 Forbidden output fields:
 
 ```txt
+- secret key value
+- publishable key value
+- raw env values
+- raw Stripe errors
 - billing account IDs
 - payment IDs
+- customer IDs
+- subscription IDs
+- product IDs
+- price IDs
 - emails
 - Clerk IDs
 - provider subjects
@@ -216,34 +256,32 @@ Forbidden output fields:
 - usage history
 - private quota counters
 - payment status details
-- raw config values
-- raw errors
 - tokens
 - credentials
 - arbitrary metadata
 ```
 
-Entitlement must never bypass authentication, ownership, consent, privacy, approval, freshness, confirmation, idempotency, PR81 rate/budget controls, provider authorization, or source-model prerequisites.
+Entitlement or billing status must never bypass authentication, ownership, consent, privacy, approval, freshness, confirmation, idempotency, PR81 rate/budget controls, provider authorization, or source-model prerequisites.
 
 ## Business Decisions Required Later
 
-Not required for a narrow PR85 policy boundary:
+Not required for a narrow PR85 Stripe test-mode boundary:
 
 ```txt
 - Paid/free pricing.
 - Plan names.
-- Payment provider.
 - Checkout.
 - Subscription webhooks.
 - Billing persistence.
+- Production paid entitlements.
 ```
 
 Required before real billing or paid plans:
 
 ```txt
-- Founder-approved product mode.
+- Founder-approved production product mode.
 - Plan names and capability tiers.
-- Payment provider and account owner.
+- Production payment provider confirmation.
 - Whether billing provider status becomes entitlement authority.
 - Persistence requirements and retention policy.
 - Refund/tax/invoice/customer support handling.
@@ -254,107 +292,102 @@ Required before real billing or paid plans:
 Recommended future code PR:
 
 ```txt
-PR85 - Plan Limits and Entitlement Boundary
-Proposed branch: codex/pr85-plan-limits-entitlement-boundary
+PR85 - Stripe Test Mode Boundary and Internal Test Access
+Proposed branch: codex/pr85-stripe-test-mode-boundary
 ```
 
-PR85 should implement only a server-side product capability policy boundary. It should not implement billing.
+PR85 should implement only a server-only Stripe test-mode config boundary and no-Stripe internal fallback. It should not implement live billing.
 
-Exact capability enum:
+Exact billing config statuses:
 
 ```txt
-read_application_package_summary
-read_evidence_graph_summary
-read_resume_variant_plan_summary
-read_review_cockpit_summary
-generated_artifact_preview
-generated_artifact_human_approval
-generated_artifact_revision
-generated_artifact_export_download_policy
-resume_export
-cover_letter_application_package_export
-manual_application_handoff
-approved_artifact_delivery
-controlled_application_message_send
-operational_status_read
-pr80_live_external_action
+internal_test_mode
+stripe_test_configured
+stripe_not_configured
+stripe_config_invalid
+stripe_live_mode_blocked
+```
+
+Exact optional capability enum:
+
+```txt
+app_test_access
+read_only_summaries
+artifact_export
+manual_handoff
+pr80_live_submit_apply
 approved_answer_copy
-workspace_business_runtime
+workspace_team_admin
+billing_portal
+unknown
 ```
 
-Exact policy states:
+Exact optional capability decisions:
 
 ```txt
-Product modes:
-- single_user_default
-- product_mode_unknown
-
-Decision outcomes:
-- allowed
-- denied
-
-Denial categories:
-- unknown_capability
-- unknown_product_mode
-- missing_server_authority
-- disabled_by_server_policy
-- blocked_by_product_policy
-- blocked_safety_prerequisite_missing
-- business_model_not_defined
+allowed_internal_test
+allowed_stripe_test_configured
+denied_blocked_safety_prerequisite
+denied_unknown_capability
+denied_invalid_billing_config
 ```
 
 Initial policy expectations:
 
 ```txt
-- single_user_default may allow current read-only summaries, generated artifact boundaries, approved export/download representations, manual handoff, approved artifact delivery, controlled application-message boundary checks, and operational status reads.
-- pr80_live_external_action must deny with blocked_safety_prerequisite_missing.
-- approved_answer_copy must deny with blocked_safety_prerequisite_missing.
-- workspace_business_runtime must deny with business_model_not_defined.
-- product_mode_unknown must deny every capability.
+- No Stripe env allows app_test_access through internal_test_mode.
+- Test-mode Stripe env allows app_test_access through stripe_test_configured.
+- read_only_summaries, artifact_export, and manual_handoff may be allowed by the optional helper but still require their existing auth/ownership/safety checks.
+- pr80_live_submit_apply must deny with denied_blocked_safety_prerequisite.
+- approved_answer_copy must deny with denied_blocked_safety_prerequisite.
+- workspace_team_admin must deny with denied_blocked_safety_prerequisite.
+- billing_portal must deny with denied_blocked_safety_prerequisite.
+- unknown capability must deny with denied_unknown_capability.
+- invalid billing config must deny Stripe-backed behavior with denied_invalid_billing_config.
 ```
 
 Exact helper contract:
 
 ```ts
-type TwoweeksProductCapabilityV1 = /* bounded enum above */;
-type TwoweeksProductModeV1 = "single_user_default" | "product_mode_unknown";
-type TwoweeksEntitlementDecisionV1 = Readonly<{
-  kind: "twoweeks_entitlement_decision";
-  capability: TwoweeksProductCapabilityV1;
-  allowed: boolean;
-  denialCategory?: TwoweeksEntitlementDenialCategoryV1;
-  productMode: TwoweeksProductModeV1;
-  policyVersion: 1;
+type StripeBillingConfigStatusV1 = Readonly<{
+  kind: "stripe_billing_config_status";
+  status:
+    | "internal_test_mode"
+    | "stripe_test_configured"
+    | "stripe_not_configured"
+    | "stripe_config_invalid"
+    | "stripe_live_mode_blocked";
+  configured: boolean;
+  valuesExposed: false;
+  secretKeyExposed: false;
+  publishableKeyExposed: false;
+  liveBillingEnabled: false;
+  version: 1;
 }>;
 
-function evaluateTwoweeksCapabilityEntitlement(input: {
-  capability: unknown;
-  productMode: unknown;
-  authority: "server_static_policy_v1";
-}): TwoweeksEntitlementDecisionV1;
+function readStripeBillingConfigStatus(env: Readonly<Record<string, string | undefined>>): StripeBillingConfigStatusV1;
+function evaluateBillingTestMode(env: Readonly<Record<string, string | undefined>>): StripeBillingConfigStatusV1;
+function assertNoLiveStripeMode(env: Readonly<Record<string, string | undefined>>): void;
 ```
 
 Ordering:
 
 ```txt
-1. Server derives identity and owner context where the surface requires identity.
-2. Existing auth, ownership, consent, redaction, freshness, approval, and confirmation checks still apply.
-3. Entitlement is checked before expensive or write-capable work.
-4. PR81 rate/budget checks run independently after entitlement succeeds for the already-allowed operation.
-5. Provider/OAuth/PR80-live prerequisites cannot be bypassed by an entitlement allow result.
+1. Server reads local/server environment.
+2. Billing config status is reduced to safe bounded status.
+3. Existing auth, ownership, consent, redaction, freshness, approval, confirmation, and PR81 rate/budget checks still apply.
+4. Optional capability helper can run before expensive or write-capable work.
+5. PR80-live and approved answer copy cannot be enabled by Stripe test-mode config.
 ```
 
 Exact PR85 files allowed:
 
 ```txt
 docs/plans/2026-06-12-chatgpt-app-roadmap-progress-ledger.md
-my-app/src/modules/application-harness/capabilityEntitlementPolicy.ts
-my-app/src/modules/application-harness/__tests__/capabilityEntitlementPolicy.test.ts
-my-app/src/modules/application-harness/__tests__/capabilityEntitlementPolicyScopeGuards.test.ts
-my-app/convex/manualApplicationHandoff.ts
-my-app/convex/__tests__/manualApplicationHandoff.entitlementBoundary.test.ts
-my-app/src/modules/local-mcp/mcpApplicationMessageSend.ts
-my-app/src/modules/local-mcp/__tests__/mcpApplicationMessageSend.test.ts
+docs/plans/2026-06-20-pr85-stripe-test-mode-boundary.md
+my-app/src/modules/billing/stripeBillingConfigBoundary.ts
+my-app/src/modules/billing/__tests__/stripeBillingConfigBoundary.test.ts
+my-app/src/modules/billing/__tests__/stripeBillingConfigBoundaryScopeGuards.test.ts
 ```
 
 Files forbidden in PR85 unless a new explicit preflight changes scope:
@@ -366,7 +399,11 @@ pnpm-lock.yaml
 yarn.lock
 my-app/convex/schema.ts
 UI/routes/components
-payment provider/client files
+checkout files
+webhook files
+subscription files
+billing portal files
+payment provider client execution files
 OAuth callback/token exchange/token storage files
 browser automation files
 workspace/tenant/role/admin/member runtime files
@@ -378,10 +415,8 @@ PR86 audit files
 Exact PR85 tests:
 
 ```txt
-rtk npx vitest run my-app/src/modules/application-harness/__tests__/capabilityEntitlementPolicy.test.ts
-rtk npx vitest run my-app/src/modules/application-harness/__tests__/capabilityEntitlementPolicyScopeGuards.test.ts
-rtk npx vitest run my-app/convex/__tests__/manualApplicationHandoff.entitlementBoundary.test.ts
-rtk npx vitest run my-app/src/modules/local-mcp/__tests__/mcpApplicationMessageSend.test.ts
+rtk npx vitest run my-app/src/modules/billing/__tests__/stripeBillingConfigBoundary.test.ts
+rtk npx vitest run my-app/src/modules/billing/__tests__/stripeBillingConfigBoundaryScopeGuards.test.ts
 rtk npx tsc --noEmit --pretty false
 rtk git diff --check
 rtk npx fallow audit --changed-since application-os-foundation --format compact
@@ -390,22 +425,32 @@ rtk npx fallow audit --changed-since application-os-foundation --format compact
 Exact source guards:
 
 ```txt
-- No package or lockfile changes.
+- No real Stripe keys in committed files.
+- No package or lockfile changes unless explicitly approved.
 - No schema changes.
 - No UI changes.
-- No payment provider, checkout, webhook, customer, invoice, productId, priceId, or subscriptionId.
-- No workspace, tenant, role, admin, member, invitation, or entitlement persistence table.
-- No OAuth callback, token exchange, access-token storage, refresh-token storage, provider credentials, provider API calls, or provider revocation.
-- No browser automation, external HTTP, PR80-live provider behavior, or answer-copy implementation.
-- Public/model-visible entitlement output contains only bounded capability, allow/deny, denial category, policy version, and optional safe product mode.
+- No checkout session creation.
+- No webhook handler.
+- No subscription table.
+- No customer table.
+- No Stripe price/product hardcoding.
+- No billing portal.
+- No live billing.
+- No PR80-live behavior.
+- No answer-copy implementation.
+- Public/model-visible output contains only bounded mode/status/category/version booleans and never raw env values.
 ```
 
 Merge conditions for PR85:
 
 ```txt
 - CI green on the PR85 head.
-- Focused policy tests pass.
-- Manual handoff and controlled-send behavior remain fail-closed for denied entitlement.
+- Focused Stripe test-mode config tests pass.
+- Source guards pass.
+- Missing Stripe env does not block app testing.
+- Live-mode keys fail closed.
+- Secret key is never exposed.
+- Publishable key value is not exposed unless a future UI PR explicitly approves it.
 - PR80-live remains blocked.
 - Approved answer copy remains blocked.
 - Docs and ledger match GitHub state.
@@ -416,8 +461,8 @@ Rollback:
 
 ```txt
 - Revert the PR85 commit.
-- Because no schema or persisted entitlement rows are added, rollback is code/docs only.
-- If a server config product mode is added later, default it to product_mode_unknown or remove it to fail closed.
+- Because no schema, SDK dependency, checkout, webhook, subscription, or persisted entitlement rows are added, rollback is code/docs only.
+- Removing local/server Stripe env returns the app to internal_test_mode.
 ```
 
 ## PR85 Non-Goals
@@ -425,18 +470,18 @@ Rollback:
 PR85 must not:
 
 ```txt
-- select Stripe, Paddle, Lemon Squeezy, Chargebee, Shopify, app-store billing, or invoices;
+- add Stripe SDK without explicit package approval;
 - create checkout, webhook, portal, pricing, upgrade, admin plan editor, or plan comparison UI;
-- create fake subscriptions or fake paid-plan records;
+- create subscriptions or fake paid-plan records;
 - add schema migrations or persisted entitlement rows;
 - introduce workspace, tenant, role, admin/member, invitation, billing, or enterprise runtime;
 - enable PR80-live;
 - enable answer copy;
 - add external HTTP;
-- add package or lockfile changes;
+- add package or lockfile changes unless explicitly approved;
 - start PR86.
 ```
 
 ## Final Decision
 
-READY_TO_IMPLEMENT_NARROW_PR85_POLICY_BOUNDARY
+READY_TO_IMPLEMENT_NARROW_PR85_STRIPE_TEST_MODE_BOUNDARY
