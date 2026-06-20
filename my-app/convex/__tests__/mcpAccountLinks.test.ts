@@ -173,6 +173,8 @@ describe("Convex MCP account links", () => {
       { grantRef: "session_cookie_real" },
       { consentRef: "provider_credentials_real" },
       { auditReasonCode: "a".repeat(82) },
+      { revokedAt: NOW + 1 },
+      { staleAt: NOW + 1 },
     ] satisfies Array<Partial<McpAccountLinkRecord>>) {
       const { ctx } = makeCtx();
 
@@ -198,6 +200,8 @@ describe("Convex MCP account links", () => {
       resolveWith([storedAccountLink({ state: "revoked", revokedAt: NOW - 1 })]),
     ).resolves.toBeNull();
     await expect(resolveWith([storedAccountLink({ state: "stale", staleAt: NOW - 1 })])).resolves.toBeNull();
+    await expect(resolveWith([storedAccountLink({ revokedAt: NOW - 1 })])).resolves.toBeNull();
+    await expect(resolveWith([storedAccountLink({ staleAt: NOW - 1 })])).resolves.toBeNull();
     await expect(resolveWith([storedAccountLink({ lastVerifiedAt: NOW - 2_000 })])).resolves.toBeNull();
     await expect(resolveWith([storedAccountLink({ lastVerifiedAt: Number.NaN })])).resolves.toBeNull();
     await expect(resolveWith([storedAccountLink({ grantedReadScopes: ["twoweeks.review_cockpit.read"] })])).resolves.toBeNull();

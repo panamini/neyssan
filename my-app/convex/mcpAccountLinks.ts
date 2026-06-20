@@ -105,6 +105,7 @@ export const internalResolveActiveMcpAccountLink = internalQuery({
 
     const row = nonRevokedRows[0];
     if (row.state !== "active") return null;
+    if (row.revokedAt !== undefined || row.staleAt !== undefined) return null;
     if (isExpiredAccountLink(row, { now: args.now, maxLinkAgeMs: args.maxLinkAgeMs })) return null;
     if (!hasRequiredScopes(row.grantedReadScopes, args.requiredReadScopes)) return null;
 
@@ -274,6 +275,7 @@ function hasValidAccountLinkTerminalTimestamp(value: number | undefined, created
 function hasRequiredAccountLinkTerminalTimestamp(
   record: Readonly<{ state: "active" | "revoked" | "stale"; revokedAt?: number; staleAt?: number }>,
 ): boolean {
+  if (record.state === "active") return record.revokedAt === undefined && record.staleAt === undefined;
   if (record.state === "revoked") return record.revokedAt !== undefined;
   if (record.state === "stale") return record.staleAt !== undefined;
   return true;
