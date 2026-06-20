@@ -18,8 +18,8 @@ Do not implement PR83 code in this PR.
 - PR214 merge commit: `02c943c1c17e3c4421cf7067ca56f35c1a7d2d24`.
 - PR214 merged at: `2026-06-20T03:40:57Z`.
 - Local `application-os-foundation` is at `02c943c1c17e3c4421cf7067ca56f35c1a7d2d24`.
-- No open GitHub PRs target `application-os-foundation` at preflight time.
-- No remote PR83 or PR82-to-PR83 preflight branch exists at preflight time.
+- Draft GitHub PR: `#215`.
+- Remote preflight branch: `codex/pr82-to-pr83-observability-incident-response-preflight`.
 - PR80-live remains blocked by provider authorization prerequisites.
 - Approved answer copy remains blocked by `BLOCKED_NO_AUTHORITATIVE_SOURCE`.
 - No live provider integration, OAuth callback, token exchange, token storage, provider revocation, browser automation, or production connector runtime is active.
