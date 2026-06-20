@@ -647,7 +647,7 @@ function isFiniteTimestamp(value: unknown): value is number {
 }
 
 function containsForbiddenStoredText(value: string): boolean {
-  return /@|bearer\s+\S+|access[_-]?token|refresh[_-]?token|raw[_-]?(cv|resume|job|proposal|claims)|private[_-]?fact|never[_-]?use|source[_-]?(text|quote)|structured[_-]?shadow|convex[_-]?(id|document)|debug[_-]?payload/iu.test(
+  return /@|bearer\s+\S+|authorization|access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|api[_-]?key|credential|cookie|session|raw[_-]?(cv|resume|job|proposal|claims)|private[_-]?fact|never[_-]?use|source[_-]?(text|quote)|structured[_-]?shadow|convex[_-]?(id|document)|debug[_-]?payload/iu.test(
     value,
   );
 }

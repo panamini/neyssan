@@ -210,6 +210,12 @@ describe("local MCP safe Convex selector projection boundary", () => {
       { sessionId: "session_real_123" },
       { accessToken: "Bearer fixture-token" },
       { refreshToken: "refresh-token-real" },
+      { idToken: "id-token-real" },
+      { clientSecret: "client-secret-real" },
+      { authorizationHeader: "Bearer fixture-token" },
+      { cookie: "session_cookie_real" },
+      { providerCredentials: "provider_credentials_real" },
+      { apiKey: "api_key_real" },
       { rawClaims: { scope: "openid email profile" } },
     ] as const;
 

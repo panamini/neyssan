@@ -45,6 +45,11 @@ const resolvedServerOnlyAccountLinkValidator = v.object({
   version: v.literal(1),
 });
 
+const MCP_ACCOUNT_LINK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{1,191}$/u;
+const MCP_ACCOUNT_LINK_AUDIT_REASON_CODE_PATTERN = /^[a-z][a-z0-9_]{2,80}$/u;
+const FORBIDDEN_MCP_ACCOUNT_LINK_STORED_TEXT_PATTERN =
+  /@|bearer\s+\S+|authorization|access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|api[_-]?key|credential|cookie|session|raw[_-]?(cv|resume|job|proposal|claims)|private[_-]?fact|never[_-]?use|source[_-]?(text|quote)|structured[_-]?shadow|convex[_-]?(id|document)|debug[_-]?payload/iu;
+
 export const internalCreateMcpAccountLink = internalMutation({
   args: {
     record: mcpAccountLinkRecordValidator,
@@ -76,9 +81,15 @@ export const internalResolveActiveMcpAccountLink = internalQuery({
     providerSubject: v.string(),
     clientId: v.string(),
     requiredReadScopes: v.array(mcpReadScopeValidator),
+    now: v.optional(v.number()),
+    maxLinkAgeMs: v.optional(v.number()),
   },
   returns: v.union(v.null(), resolvedServerOnlyAccountLinkValidator),
   handler: async (ctx, args) => {
+    if (!isSafeAccountLinkIdentifier(args.providerSubject) || !isSafeAccountLinkIdentifier(args.clientId)) {
+      return null;
+    }
+
     const rows = await ctx.db
       .query("mcpAccountLinks")
       .withIndex("by_provider_subject_client", (q) =>
@@ -94,17 +105,19 @@ export const internalResolveActiveMcpAccountLink = internalQuery({
 
     const row = nonRevokedRows[0];
     if (row.state !== "active") return null;
+    if (row.revokedAt !== undefined || row.staleAt !== undefined) return null;
+    if (isExpiredAccountLink(row, { now: args.now, maxLinkAgeMs: args.maxLinkAgeMs })) return null;
     if (!hasRequiredScopes(row.grantedReadScopes, args.requiredReadScopes)) return null;
 
     return {
-      kind: "mcp_account_link_server_only_owner_resolution",
-      provider: "stytch",
+      kind: "mcp_account_link_server_only_owner_resolution" as const,
+      provider: "stytch" as const,
       twoweeksClerkId: row.twoweeksClerkId,
       grantedReadScopes: [...row.grantedReadScopes],
       grantRef: row.grantRef,
       consentRef: row.consentRef,
       auditReasonCode: row.auditReasonCode,
-      version: 1,
+      version: 1 as const,
     };
   },
 });
@@ -119,6 +132,11 @@ export const internalMarkMcpAccountLinkState = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    assertSafeAccountLinkIdentifier("provider subject", args.providerSubject);
+    assertSafeAccountLinkIdentifier("client id", args.clientId);
+    assertFiniteAccountLinkTimestamp(args.changedAt);
+    assertSafeAuditReasonCode(args.auditReasonCode);
+
     const rows = await ctx.db
       .query("mcpAccountLinks")
       .withIndex("by_provider_subject_client", (q) =>
@@ -133,6 +151,8 @@ export const internalMarkMcpAccountLinkState = internalMutation({
     if (nonRevokedRows.length !== 1) return null;
 
     const row = nonRevokedRows[0];
+    if (row.state === args.state) return null;
+
     await ctx.db.patch(row._id, {
       state: args.state,
       updatedAt: args.changedAt,
@@ -153,15 +173,22 @@ function assertValidAccountLinkRecord(
     grantedReadScopes: readonly string[];
     grantRef: string;
     consentRef: string;
+    state: "active" | "revoked" | "stale";
     createdAt: number;
     updatedAt: number;
     lastVerifiedAt: number;
+    revokedAt?: number;
+    staleAt?: number;
     auditReasonCode: string;
   }>,
 ): void {
+  assertSafeAccountLinkIdentifier("provider subject", record.providerSubject);
+  assertSafeAccountLinkIdentifier("Twoweeks owner", record.twoweeksClerkId);
+  assertSafeAccountLinkIdentifier("client id", record.clientId);
   assertDistinctAccountLinkOwner(record);
   assertRequiredAccountLinkScopes(record.grantedReadScopes);
   assertRequiredAccountLinkRefs(record);
+  assertSafeAuditReasonCode(record.auditReasonCode);
   assertAccountLinkTimestamps(record);
 }
 
@@ -192,18 +219,106 @@ function assertRequiredAccountLinkRefs(
   if (!record.grantRef || !record.consentRef || !record.auditReasonCode) {
     throw new Error("MCP account link requires grant, consent, and audit refs");
   }
+  assertSafeAccountLinkIdentifier("grant ref", record.grantRef);
+  assertSafeAccountLinkIdentifier("consent ref", record.consentRef);
 }
 
 function assertAccountLinkTimestamps(
   record: Readonly<{
+    state: "active" | "revoked" | "stale";
     createdAt: number;
     updatedAt: number;
     lastVerifiedAt: number;
+    revokedAt?: number;
+    staleAt?: number;
   }>,
 ): void {
-  if (record.updatedAt < record.createdAt || record.lastVerifiedAt < record.createdAt) {
+  if (!hasValidAccountLinkTimestamps(record)) {
     throw new Error("MCP account link timestamps are invalid");
   }
+}
+
+function hasValidAccountLinkTimestamps(
+  record: Readonly<{
+    state: "active" | "revoked" | "stale";
+    createdAt: number;
+    updatedAt: number;
+    lastVerifiedAt: number;
+    revokedAt?: number;
+    staleAt?: number;
+  }>,
+): boolean {
+  return (
+    hasValidAccountLinkBaseTimestamps(record) &&
+    hasValidAccountLinkTerminalTimestamp(record.revokedAt, record.createdAt) &&
+    hasValidAccountLinkTerminalTimestamp(record.staleAt, record.createdAt) &&
+    hasRequiredAccountLinkTerminalTimestamp(record)
+  );
+}
+
+function hasValidAccountLinkBaseTimestamps(
+  record: Readonly<{ createdAt: number; updatedAt: number; lastVerifiedAt: number }>,
+): boolean {
+  return (
+    isFiniteAccountLinkTimestamp(record.createdAt) &&
+    isFiniteAccountLinkTimestamp(record.updatedAt) &&
+    isFiniteAccountLinkTimestamp(record.lastVerifiedAt) &&
+    record.updatedAt >= record.createdAt &&
+    record.lastVerifiedAt >= record.createdAt
+  );
+}
+
+function hasValidAccountLinkTerminalTimestamp(value: number | undefined, createdAt: number): boolean {
+  return value === undefined || (isFiniteAccountLinkTimestamp(value) && value >= createdAt);
+}
+
+function hasRequiredAccountLinkTerminalTimestamp(
+  record: Readonly<{ state: "active" | "revoked" | "stale"; revokedAt?: number; staleAt?: number }>,
+): boolean {
+  if (record.state === "active") return record.revokedAt === undefined && record.staleAt === undefined;
+  if (record.state === "revoked") return record.revokedAt !== undefined;
+  if (record.state === "stale") return record.staleAt !== undefined;
+  return true;
+}
+
+function assertSafeAccountLinkIdentifier(label: string, value: string): void {
+  if (!isSafeAccountLinkIdentifier(value)) {
+    throw new Error(`MCP account link ${label} is invalid`);
+  }
+}
+
+function isSafeAccountLinkIdentifier(value: string): boolean {
+  return MCP_ACCOUNT_LINK_ID_PATTERN.test(value) && !FORBIDDEN_MCP_ACCOUNT_LINK_STORED_TEXT_PATTERN.test(value);
+}
+
+function assertSafeAuditReasonCode(value: string): void {
+  if (!MCP_ACCOUNT_LINK_AUDIT_REASON_CODE_PATTERN.test(value)) {
+    throw new Error("MCP account link audit reason code is invalid");
+  }
+}
+
+function assertFiniteAccountLinkTimestamp(value: number): void {
+  if (!isFiniteAccountLinkTimestamp(value)) {
+    throw new Error("MCP account link timestamp is invalid");
+  }
+}
+
+function isFiniteAccountLinkTimestamp(value: number): boolean {
+  return Number.isFinite(value) && value >= 0;
+}
+
+function isExpiredAccountLink(
+  row: Readonly<{ lastVerifiedAt: number }>,
+  options: Readonly<{ now?: number; maxLinkAgeMs?: number }>,
+): boolean {
+  if (!isFiniteAccountLinkTimestamp(row.lastVerifiedAt)) return true;
+  if (options.now !== undefined && !isFiniteAccountLinkTimestamp(options.now)) return true;
+  if (options.maxLinkAgeMs !== undefined && (!Number.isFinite(options.maxLinkAgeMs) || options.maxLinkAgeMs <= 0)) {
+    return true;
+  }
+  if (options.maxLinkAgeMs === undefined) return false;
+  if (options.now === undefined) return true;
+  return options.now - row.lastVerifiedAt > options.maxLinkAgeMs;
 }
 
 function hasRequiredScopes(

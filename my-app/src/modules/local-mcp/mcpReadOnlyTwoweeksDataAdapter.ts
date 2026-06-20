@@ -816,13 +816,13 @@ function visitUnsafeProjectionMaterial(value: unknown, seen: WeakSet<object>, de
 }
 
 function containsUnsafeProjectionKey(key: string): boolean {
-  return /(?:raw|content|source|quote|private|never|debug|shadow|token|claims|email|clerk|subject|documentid)/iu.test(
+  return /(?:raw|content|source|quote|private|never|debug|shadow|token|claims|email|clerk|subject|documentid|authorization|bearer|secret|credential|cookie|session|provider)/iu.test(
     key,
   );
 }
 
 function containsUnsafeProjectionText(value: string): boolean {
-  return /(?:raw[_ -]?(?:cv|job|resume|proposal|text)|source[_ -]?(?:text|quote)|private[_ -]?fact|never[_ -]?use|structured[_ -]?shadow|documentid|bearer\s+\S+|[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/iu.test(
+  return /(?:raw[_ -]?(?:cv|job|resume|proposal|text)|source[_ -]?(?:text|quote)|private[_ -]?fact|never[_ -]?use|structured[_ -]?shadow|documentid|bearer\s+\S+|(?:access|refresh|id)[_ -]?token|authorization[_ -]?header|client[_ -]?secret|provider[_ -]?credentials?|session[_ -]?cookie|cookie|[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/iu.test(
     value,
   );
 }
