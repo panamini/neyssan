@@ -796,6 +796,11 @@ export const saveProfile = mutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now();
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity?.subject) {
+      throw new Error("Not authenticated");
+    }
+
     const incoming = args.profile || {};
     const dedupeStrings = (arr: any) => {
       if (!Array.isArray(arr)) return [];
@@ -816,7 +821,7 @@ export const saveProfile = mutation({
     const normalizedProfile = {
       profileId: args.profileId,
       name: incoming.name ?? undefined,
-      email: incoming.email ?? "",
+      email: incoming.email ?? identity.email ?? "",
       summary: incoming.summary ?? undefined,
       skills: dedupeStrings(incoming.skills),
       keywords: dedupeStrings(incoming.keywords),
@@ -835,6 +840,10 @@ export const saveProfile = mutation({
  
     if (existingRows && existingRows.length > 0) {
       const existing = existingRows[0];
+      if (existing.clerkId && existing.clerkId !== identity.subject) {
+        throw new Error("Not authorized to access this profile");
+      }
+
       const existingKeys = Array.isArray(existing.idempotencyKeys) ? existing.idempotencyKeys : [];
       if (args.idempotencyKey && existingKeys.includes(args.idempotencyKey)) {
         return { profileId: args.profileId, convexId: existing._id, updatedAt: existing.updatedAt ?? existing.updatedAt, written: false };
@@ -842,6 +851,7 @@ export const saveProfile = mutation({
  
       const merged: any = {
         profileId: args.profileId,
+        clerkId: existing.clerkId || identity.subject,
         idempotencyKeys: args.idempotencyKey ? Array.from(new Set([...existingKeys, args.idempotencyKey])) : existingKeys,
         name: normalizedProfile.name ?? existing.name ?? undefined,
         email: normalizedProfile.email ?? existing.email ?? "",
@@ -883,6 +893,7 @@ export const saveProfile = mutation({
     } else {
       const doc: any = {
         profileId: args.profileId,
+        clerkId: identity.subject,
         idempotencyKeys: args.idempotencyKey ? [args.idempotencyKey] : [],
         ...(normalizedProfile.name !== undefined && { name: normalizedProfile.name }),
         email: normalizedProfile.email,

@@ -215,4 +215,51 @@ describe("jobsPublic linked-profile review mutations", () => {
       }),
     ]);
   });
+
+  it("rejects updateField for jobs outside linked profiles without patching", async () => {
+    const linkedProfiles = buildLinkedProfiles();
+    const job = {
+      _id: "job_foreign",
+      userId: "profile_other",
+      summary: "Foreign summary",
+      reviewState: "needs_review",
+      reviewItems: [],
+    };
+    const patchCalls: Array<{ id: string; patch: Record<string, unknown> }> =
+      [];
+
+    await expect(
+      updateField._handler(
+        {
+          auth: {
+            getUserIdentity: async () => ({ subject: "clerk_123" }),
+          },
+          db: {
+            normalizeId(table: string, id: string) {
+              expect(table).toBe("jobs");
+              return id;
+            },
+            get: async (id: string) => (id === job._id ? job : null),
+            patch: async (id: string, patch: Record<string, unknown>) => {
+              patchCalls.push({ id, patch });
+            },
+            query(table: string) {
+              if (table === "userProfiles") {
+                return buildUserProfilesQuery(linkedProfiles);
+              }
+
+              throw new Error(`Unexpected table: ${table}`);
+            },
+          },
+        } as any,
+        {
+          jobId: "job_foreign",
+          fieldKey: "summary",
+          value: "Cross-owner update",
+        },
+      ),
+    ).rejects.toThrow("Job not found");
+
+    expect(patchCalls).toEqual([]);
+  });
 });
