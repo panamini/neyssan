@@ -4,6 +4,7 @@ import {
   buildScoringProfileFieldsFromCvDocument,
   patch as patchProfile,
   resolvePatchProfileRow,
+  saveProfile,
 } from "../profiles";
 import { buildMatchReadProfile, computeMatchRead } from "../lib/jobs/matchRead";
 
@@ -95,6 +96,54 @@ function makePatchCtx(rows: any[]) {
             return {
               collect: async () =>
                 rows.filter((row) => row.profileId === profileId),
+            };
+          },
+        };
+      },
+    },
+  };
+}
+
+function makeSaveProfileCtx(
+  rows: any[],
+  identity: { subject: string; email?: string; name?: string } | null = {
+    subject: "clerk_123",
+    email: "candidate@example.com",
+    name: "Candidate",
+  },
+) {
+  const insert = vi.fn(async (_table: string, doc: any) => {
+    rows.push({ _id: `profile_${rows.length + 1}`, ...doc });
+    return rows.at(-1)._id;
+  });
+  const patch = vi.fn(async (id: string, next: any) => {
+    const row = rows.find((candidate) => candidate._id === id);
+    if (!row) throw new Error(`Missing profile ${id}`);
+    Object.assign(row, next);
+  });
+
+  return {
+    auth: {
+      getUserIdentity: async () => identity,
+    },
+    db: {
+      insert,
+      patch,
+      query(table: string) {
+        expect(table).toBe("userProfiles");
+        return {
+          withIndex(_indexName: string, buildIndex: any) {
+            const scope = {
+              eq(_field: string, value: string) {
+                return value;
+              },
+            };
+            const profileId = buildIndex(scope);
+            return {
+              take: async (limit: number) =>
+                rows
+                  .filter((row) => row.profileId === profileId)
+                  .slice(0, limit),
             };
           },
         };
@@ -689,6 +738,103 @@ describe("profiles.patch resume scoring sync", () => {
     expect(matchRead.score).not.toBeNull();
     expect(matchRead.matched).toEqual(
       expect.arrayContaining(["Miami", "Retail design", "part-time"]),
+    );
+  });
+});
+
+describe("profiles.saveProfile owner boundary", () => {
+  it("rejects unauthenticated profile saves before insert or patch", async () => {
+    const ctx = makeSaveProfileCtx([], null);
+
+    await expect(
+      saveProfile._handler(ctx as any, {
+        profileId: "cv_content",
+        profile: { email: "candidate@example.com", name: "Candidate" },
+      }),
+    ).rejects.toThrow(/Not authenticated/i);
+
+    expect(ctx.db.insert).not.toHaveBeenCalled();
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+  });
+
+  it("rejects saves to a profile owned by another Clerk subject", async () => {
+    const existing = {
+      _id: "profile_foreign",
+      profileId: "cv_content",
+      clerkId: "clerk_foreign",
+      email: "foreign@example.com",
+      version: 1,
+      createdAt: 100,
+      updatedAt: 100,
+      preferences: {
+        autoSend: false,
+        rateLimits: undefined,
+        tonePreference: "neutral",
+        writingStyle: "conversational",
+      },
+    };
+    const ctx = makeSaveProfileCtx([existing]);
+
+    await expect(
+      saveProfile._handler(ctx as any, {
+        profileId: "cv_content",
+        profile: { name: "Intruder" },
+      }),
+    ).rejects.toThrow(/Not authorized/i);
+
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+    expect(existing.name).toBeUndefined();
+  });
+
+  it("claims unowned profile rows for the authenticated Clerk subject", async () => {
+    const existing = {
+      _id: "profile_unclaimed",
+      profileId: "cv_content",
+      email: "",
+      version: 1,
+      createdAt: 100,
+      updatedAt: 100,
+      preferences: {
+        autoSend: false,
+        rateLimits: undefined,
+        tonePreference: "neutral",
+        writingStyle: "conversational",
+      },
+    };
+    const ctx = makeSaveProfileCtx([existing]);
+
+    await saveProfile._handler(ctx as any, {
+      profileId: "cv_content",
+      profile: { name: "Candidate", email: "candidate@example.com" },
+    });
+
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "profile_unclaimed",
+      expect.objectContaining({
+        clerkId: "clerk_123",
+        email: "candidate@example.com",
+        name: "Candidate",
+      }),
+    );
+  });
+
+  it("creates new fallback profile rows under the authenticated Clerk subject", async () => {
+    const rows: any[] = [];
+    const ctx = makeSaveProfileCtx(rows);
+
+    await saveProfile._handler(ctx as any, {
+      profileId: "cv_content",
+      profile: { name: "Candidate", email: "candidate@example.com" },
+    });
+
+    expect(ctx.db.insert).toHaveBeenCalledWith(
+      "userProfiles",
+      expect.objectContaining({
+        profileId: "cv_content",
+        clerkId: "clerk_123",
+        email: "candidate@example.com",
+        name: "Candidate",
+      }),
     );
   });
 });
