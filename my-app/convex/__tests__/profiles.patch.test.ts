@@ -790,6 +790,7 @@ describe("profiles.saveProfile owner boundary", () => {
     const existing = {
       _id: "profile_unclaimed",
       profileId: "cv_content",
+      clerkId: "",
       email: "",
       version: 1,
       createdAt: 100,
