@@ -3700,6 +3700,31 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     })();
   }, [adapter, canUseRemoteCv, currentCv]);
 
+  useEffect(() => {
+    if (
+      !isVisualRestorePending ||
+      !currentCv ||
+      readAnyResumeTemplateId(currentCv) ||
+      !isAuthLoaded ||
+      isConvexAuthLoading
+    ) {
+      return;
+    }
+
+    if (canUseRemoteCv && !lastLibraryFetchFailed) {
+      return;
+    }
+
+    setIsVisualRestorePending(false);
+  }, [
+    canUseRemoteCv,
+    currentCv,
+    isAuthLoaded,
+    isConvexAuthLoading,
+    isVisualRestorePending,
+    lastLibraryFetchFailed,
+  ]);
+
   /**
    * Create a CvDocument from an ICvState snapshot and set it as the current CV.
    * This is used to restore backups or import exported CV state.

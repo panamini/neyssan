@@ -156,6 +156,71 @@ describe('CvLibraryContext', () => {
     expect(ctx.lastLibraryFetchFailed).toBe(false);
   });
 
+  it('releases visual restore pending for a signed-out local route CV without a template', async () => {
+    authState.isLoaded = false;
+    authState.isSignedIn = false;
+    authState.isConvexAuthenticated = false;
+    authState.isConvexAuthLoading = true;
+
+    const now = '2026-05-27T00:00:00.000Z';
+    const storedCv = {
+      id: 'cv-template-less-local-route',
+      title: 'Template-less Local CV',
+      metadata: {
+        createdAt: now,
+        updatedAt: now,
+        version: 1,
+        verbatiStyle: {
+          layout: 'swiss',
+          typography: 'quiet-editorial',
+          palette: 'sauge',
+        },
+      },
+      sections: [
+        {
+          id: 'profile-template-less-local-route',
+          title: 'Profile',
+          type: 'profile',
+          blocks: [],
+          structuredContent: [
+            {
+              id: 'profile-item-template-less-local-route',
+              name: 'Smoke Candidate',
+            },
+          ],
+        },
+      ],
+    };
+
+    mockLocalStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([storedCv]));
+    mockLocalStorage.setItem(`cv:${storedCv.id}`, JSON.stringify(storedCv));
+    mockLocalStorage.setItem(ACTIVE_CV_STORAGE_KEY, storedCv.id);
+    window.history.pushState({}, '', `/cv?id=${storedCv.id}`);
+
+    let ctx: any;
+    const { rerender } = render(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx.currentCvId).toBe(storedCv.id));
+    await waitFor(() => expect(ctx.isVisualRestorePending).toBe(true));
+
+    authState.isLoaded = true;
+    authState.isConvexAuthLoading = false;
+
+    rerender(
+      <CvLibraryProvider>
+        <TestConsumer setCtx={(c) => (ctx = c)} />
+      </CvLibraryProvider>
+    );
+
+    await waitFor(() => expect(ctx.isLibraryHydrated).toBe(true));
+    await waitFor(() => expect(ctx.isVisualRestorePending).toBe(false));
+    expect(ctx.currentCv.title).toBe('Template-less Local CV');
+  });
+
   it('keeps the library unhydrated until signed-in remote reconciliation resolves and merges', async () => {
     authState.isLoaded = true;
     authState.isSignedIn = true;
