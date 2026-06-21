@@ -90,10 +90,26 @@ test.describe("PR Playwright smoke", () => {
     return page.getByRole("region", { name: "Proposal document stage" });
   }
 
+  test("renders the founder shell routes with safe signed-out gates", async ({
+    page,
+  }) => {
+    const dashboardResponse = await page.goto(`${APP_URL}/dashboard`);
+    expect(dashboardResponse?.status()).toBe(200);
+    await expect(page.getByText("Recent work").first()).toBeVisible();
+    await expect(
+      page.getByText("Resume the work already in progress.").first(),
+    ).toBeVisible();
+
+    const jobsResponse = await page.goto(`${APP_URL}/jobs`);
+    expect(jobsResponse?.status()).toBe(200);
+    await expect(page.getByText("Sign in to see jobs.")).toBeVisible();
+  });
+
   test("loads the seeded CV preview and opens the profile editor panel", async ({
     page,
   }) => {
-    await page.goto(`${APP_URL}/cv?id=${smokeCv.id}`);
+    const response = await page.goto(`${APP_URL}/cv?id=${smokeCv.id}`);
+    expect(response?.status()).toBe(200);
 
     await expect(page.getByText("Smoke Candidate").first()).toBeVisible();
     await expect(
@@ -109,7 +125,8 @@ test.describe("PR Playwright smoke", () => {
   test("loads the seeded proposal workspace and toggles edit/preview mode", async ({
     page,
   }) => {
-    await page.goto(`${APP_URL}/proposal`);
+    const response = await page.goto(`${APP_URL}/proposal`);
+    expect(response?.status()).toBe(200);
 
     await expect(proposalStage(page)).toBeVisible();
     await expect(proposalStage(page)).toContainText("Smoke proposal body.");

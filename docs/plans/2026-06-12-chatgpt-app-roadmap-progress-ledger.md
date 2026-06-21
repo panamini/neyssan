@@ -21,27 +21,27 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR85 - Stripe Test Mode Boundary and Internal Test Access
-GitHub PR: https://github.com/panamini/neyssan/pull/220
-Head branch: codex/pr85-stripe-test-mode-boundary
-Merge commit: 1e0aadee60dba69d6044b31d050fcfdba400153e
-Merged at: 2026-06-20T22:53:42Z
-Scope: narrow server-only Stripe test-mode config boundary and internal test access. It added the no-Stripe `internal_test_mode` fallback, optional test-mode `stripe_test_configured` status, live-mode block, safe capability helper, and source guards. No Stripe SDK, checkout, webhooks, subscriptions, billing portal, paid entitlement state, external HTTP, workspace/tenant/admin runtime, PR80-live, answer-copy, package, lockfile, schema, or UI work.
+PR86 - Founder App Smoke Test and Pre-Launch Audit
+GitHub PR: https://github.com/panamini/neyssan/pull/221
+Head branch: codex/pr86-founder-app-smoke-test-prelaunch-audit
+Merge commit: f99fba59a28d9e9278ad3c13989337c2dd8186b2
+Merged at: 2026-06-21T00:33:52Z
+Scope: practical founder app smoke-testability audit and pre-launch evidence only. Final verdict was `BLOCKED_APP_TEST_PATH` because `local-fast` could not start without Docker daemon access in that run, TestDino was missing `TESTDINO_TOKEN`, and the frontend-only fallback left `/cv` at `Loading CV.`. No code, schema, package, lockfile, PR80-live, answer-copy, production billing, provider/OAuth/token, PR87, PR88, or PR89 work.
 ```
 
 Current implementation PR:
 
 ```txt
-PR86 - Founder App Smoke Test and Pre-Launch Audit
-Branch: codex/pr86-founder-app-smoke-test-prelaunch-audit
-Scope: practical founder app smoke-testability audit over the current app path, PR85 Stripe boundary, PR84 owner/profile boundary, manual handoff, read-only summaries, blocked PR80-live, blocked answer-copy, and inherited repo gates.
-No PR80-live, answer-copy implementation, production billing, checkout, webhooks, subscriptions, billing portal, workspace/team/admin runtime, provider integration, OAuth/token storage, broad UI refactor, package/lockfile change, PR87 deployment, or PR88/PR89 launch work.
+PR86.1 - Founder App Test Path Unlock
+Branch: codex/pr86-1-founder-app-test-path-unlock
+Scope: narrow local founder app test-path unlock after PR86. It may start and verify the existing `local-fast` stack, fix the active `/cv` smoke blocker, strengthen `/dashboard`, `/cv`, `/jobs`, and `/proposal` smoke coverage, and record evidence.
+No PR87 deployment, PR80-live, answer-copy implementation, production billing, Stripe SDK, checkout, webhooks, subscriptions, billing portal, workspace/team/admin runtime, provider integration, OAuth/token storage, Norma Core, broad UI/parser refactor, package change, or lockfile change.
 ```
 
 Exact next PR:
 
 ```txt
-PR86 is active only for the founder app smoke-test and pre-launch audit scope.
+PR86.1 is active only for the narrow founder app local test-path unlock after PR86.
 PR80-live remains blocked by provider authorization prerequisites.
 Approved answer copy stays blocked until a future source-model decision creates an authoritative approved answer source.
 PR87 is not started.
@@ -124,7 +124,8 @@ MERGED_NARROW_PR59 - PR185 merged the narrow read-only adapter scope approved by
 |                        84 | Owner/Profile Boundary Hardening                                                    | merged      | #218                 | head afa17af45df710b96ef89cb8d905bb792ef98159; merge a9cc0b12c54bde647cd49ed7fe719b905e3a670b | Narrow owner/profile boundary hardening only over existing single-user Clerk/profile ownership, jobs/packages/artifacts/manual handoff, and account-link surfaces. profiles.saveProfile now requires authenticated Clerk identity; unauthenticated create/patch and foreign-owned profile writes fail closed; new and legacy unclaimed profile rows are stamped with the authenticated Clerk subject; linked-profile job mutation tests reject cross-owner access. No tenant, workspace, role, billing, entitlement, invitation, admin/member, provider/OAuth/token, PR80-live, answer-copy, package, lockfile, schema, UI, or PR85 work. Merged at 2026-06-20T21:01:39Z. |
 |      84-to-85-preflight | Billing, Plan Limits, and Entitlements Decision                                     | merged      | #219                 | head c32be2d3ef74c8acb952f65576025b77a329635a; merge cf7b2f9476d611a21e3b2920e12aa4235139ea24 | Docs-only product/governance/security preflight after PR84. Final decision: `READY_TO_IMPLEMENT_NARROW_PR85_STRIPE_TEST_MODE_BOUNDARY`. Updated founder decision selects Stripe test mode for local/testing only and narrows PR85 to Stripe test-mode config validation plus internal/no-Stripe test fallback. No PR85 code, schema, UI, Stripe SDK, checkout, webhooks, subscriptions, billing portal, pricing, paid entitlements, external HTTP, workspace/tenant/role/admin/member runtime, real keys, PR80-live, answer-copy, package, lockfile, or PR86 work. Merged at 2026-06-20T21:53:46Z. |
 |                        85 | Stripe Test Mode Boundary and Internal Test Access                                  | merged      | #220                 | 1e0aadee60dba69d6044b31d050fcfdba400153e                                                     | Narrow implementation only: server-only Stripe test-mode config validator, internal/no-Stripe test fallback, safe billing config status, optional pure capability entitlement helper, source guards proving no real keys are committed, and docs/ledger update. No Stripe SDK, checkout, webhooks, subscriptions, billing portal, pricing, paid entitlements, external HTTP, workspace/tenant/role/admin/member runtime, real keys, PR80-live, answer-copy, package, lockfile, schema, UI, or PR86 work. Merged at 2026-06-20T22:53:42Z. |
-|                        86 | Founder App Smoke Test and Pre-Launch Audit                                        | current branch | draft PR pending      | branch codex/pr86-founder-app-smoke-test-prelaunch-audit                                | Practical founder app smoke-testability audit. Current verdict: `BLOCKED_APP_TEST_PATH` because `./run.sh local-fast` cannot start without Docker daemon access, TestDino is missing `TESTDINO_TOKEN`, and fallback Playwright PR smoke is only partially green. Verified PR85 Stripe boundary, PR84 owner/profile guards, manual handoff/rate limits/answer-copy block, PR80-live block, read-only summaries, TypeScript, lint/build inherited failures, and exact founder checklist. No code, schema, package, lockfile, PR80-live, answer-copy, production billing, provider/OAuth/token, PR87, PR88, or PR89 work. |
+|                        86 | Founder App Smoke Test and Pre-Launch Audit                                        | merged      | #221                 | f99fba59a28d9e9278ad3c13989337c2dd8186b2                                                     | Practical founder app smoke-testability audit only. Final verdict: `BLOCKED_APP_TEST_PATH` because `local-fast` could not start without Docker daemon access in that run, TestDino was missing `TESTDINO_TOKEN`, and the frontend-only fallback left `/cv` at `Loading CV.`. No code, schema, package, lockfile, PR80-live, answer-copy, production billing, provider/OAuth/token, PR87, PR88, or PR89 work. Merged at 2026-06-21T00:33:52Z. |
+|                      86.1 | Founder App Test Path Unlock                                                       | current branch | draft PR pending      | branch codex/pr86-1-founder-app-test-path-unlock                                          | Narrow local app test-path unlock after PR86: verify `local-fast`, fix the active `/cv` template-less local restore loading blocker, broaden PR smoke coverage across `/dashboard`, `/cv`, `/jobs`, and `/proposal`, and record evidence. No PR87, PR80-live, answer-copy, production billing, Stripe SDK, OAuth/token/provider, Norma Core, package, or lockfile work. |
 
 ---
 
@@ -249,7 +250,9 @@ PR219 merged the PR84-to-PR85 preflight into `application-os-foundation` with he
 
 PR220 merged PR85 into `application-os-foundation` with merge commit `1e0aadee60dba69d6044b31d050fcfdba400153e` at `2026-06-20T22:53:42Z`. It implemented only the narrow Stripe test-mode boundary and internal test access scope unlocked by PR219: no-Stripe `internal_test_mode`, optional test-shaped `stripe_test_configured`, live Stripe block, safe billing capability decisions, and source guards. It did not add Stripe SDK, live billing, checkout, webhooks, subscriptions, billing portal, pricing, paid entitlement state, schema changes, UI changes, package changes, lockfile changes, PR86, PR80-live, or answer-copy implementation.
 
-PR86 is now the active audit PR on `codex/pr86-founder-app-smoke-test-prelaunch-audit`. It may only produce practical founder app smoke-testability evidence, the required audit document, and a ledger update. It must not start PR87, PR80-live, answer-copy, production billing, provider/OAuth/token storage, workspace/team/admin runtime, package/lockfile changes, or broad UI work.
+PR221 merged PR86 into `application-os-foundation` with merge commit `f99fba59a28d9e9278ad3c13989337c2dd8186b2` at `2026-06-21T00:33:52Z`. It produced practical founder app smoke-testability evidence, the required audit document, and a ledger update only. Final verdict was `BLOCKED_APP_TEST_PATH`; it did not start PR87, PR80-live, answer-copy, production billing, provider/OAuth/token storage, workspace/team/admin runtime, package/lockfile changes, or broad UI work.
+
+PR86.1 is now the active corrective PR on `codex/pr86-1-founder-app-test-path-unlock`. It may only verify the existing `local-fast` stack, fix the active `/cv` local test blocker, broaden route smoke coverage, and record evidence. It must not start PR87, PR80-live, answer-copy, production billing, provider/OAuth/token storage, workspace/team/admin runtime, Norma Core, package/lockfile changes, or broad UI/parser work.
 
 Maintainer decision after PR80A still keeps live ATS submit/apply blocked until one provider supplies written use-case authorization, official server-to-server credentials, a test tenant or sandbox, one authorized test posting, official schema/questions endpoint, official submit endpoint, and receipt/error/duplicate/retry clarification. Manual handoff must not reserve, dispatch, or finalize PR80A `liveExternalActionExecutions`, and it must not represent a user-reported outcome as provider-submitted or provider-verified. PR80B, PR80B-follow-up, and PR80B-follow-up-2-prep did not automatically unlock PR81; PR211 unlocked only narrow PR81 rate/budget hardening, and PR80-live remains blocked.
 
