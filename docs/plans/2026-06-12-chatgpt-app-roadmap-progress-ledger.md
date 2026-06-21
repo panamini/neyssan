@@ -21,30 +21,32 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR86 - Founder App Smoke Test and Pre-Launch Audit
-GitHub PR: https://github.com/panamini/neyssan/pull/221
-Head branch: codex/pr86-founder-app-smoke-test-prelaunch-audit
-Merge commit: f99fba59a28d9e9278ad3c13989337c2dd8186b2
-Merged at: 2026-06-21T00:33:52Z
-Scope: practical founder app smoke-testability audit and pre-launch evidence only. Final verdict was `BLOCKED_APP_TEST_PATH` because `local-fast` could not start without Docker daemon access in that run, TestDino was missing `TESTDINO_TOKEN`, and the frontend-only fallback left `/cv` at `Loading CV.`. No code, schema, package, lockfile, PR80-live, answer-copy, production billing, provider/OAuth/token, PR87, PR88, or PR89 work.
+PR86.1 - Founder App Test Path Unlock
+GitHub PR: https://github.com/panamini/neyssan/pull/222
+Head branch: codex/pr86-1-founder-app-test-path-unlock
+Merge commit: a032632704ce89e0679508a40050cce9fe341bbe
+Merged at: 2026-06-21T01:53:52Z
+Scope: narrow local founder app test-path unlock after PR86. Final verdict was `APP_TESTABLE_NOW` for the full local stack and signed-out fixture smoke only. It did not prove production build, preview/staging deployment, signed-in Clerk smoke, MCP production runtime, runtime monitoring, rollback, PR80-live, answer-copy, production billing, provider/OAuth/token storage, package/lockfile/schema changes, or PR87 readiness.
 ```
 
 Current implementation PR:
 
 ```txt
-PR86.1 - Founder App Test Path Unlock
-Branch: codex/pr86-1-founder-app-test-path-unlock
-Scope: narrow local founder app test-path unlock after PR86. It may start and verify the existing `local-fast` stack, fix the active `/cv` smoke blocker, strengthen `/dashboard`, `/cv`, `/jobs`, and `/proposal` smoke coverage, and record evidence.
-No PR87 deployment, PR80-live, answer-copy implementation, production billing, Stripe SDK, checkout, webhooks, subscriptions, billing portal, workspace/team/admin runtime, provider integration, OAuth/token storage, Norma Core, broad UI/parser refactor, package change, or lockfile change.
+PR87 - Production Deployment Gate
+Branch: codex/pr87-production-deployment-gate
+Scope: determine whether Twoweeks is deployable to a controlled preview/staging environment and add only the smallest safe gate if the repository proves an existing target. Current PR87 result is blocked at preflight by `npm run build` failing on base.
+No PR88, PR89, PR80-live, answer-copy implementation, production billing, provider/OAuth/token storage, Norma Core, package/lockfile/schema changes, or provider-specific infrastructure selection is authorized by this blocked PR87 report.
 ```
 
 Exact next PR:
 
 ```txt
-PR86.1 is active only for the narrow founder app local test-path unlock after PR86.
+PR87 is active as a production deployment gate preflight only.
+Current PR87 verdict: `BLOCKED_PRODUCTION_GATE`.
+Current PR87 blocker: `PRODUCTION_BUILD_RED`.
 PR80-live remains blocked by provider authorization prerequisites.
 Approved answer copy stays blocked until a future source-model decision creates an authoritative approved answer source.
-PR87 is not started.
+PR88 and PR89 are not started.
 ```
 
 PR59 status:
@@ -252,7 +254,9 @@ PR220 merged PR85 into `application-os-foundation` with merge commit `1e0aadee60
 
 PR221 merged PR86 into `application-os-foundation` with merge commit `f99fba59a28d9e9278ad3c13989337c2dd8186b2` at `2026-06-21T00:33:52Z`. It produced practical founder app smoke-testability evidence, the required audit document, and a ledger update only. Final verdict was `BLOCKED_APP_TEST_PATH`; it did not start PR87, PR80-live, answer-copy, production billing, provider/OAuth/token storage, workspace/team/admin runtime, package/lockfile changes, or broad UI work.
 
-PR86.1 is now the active corrective PR on `codex/pr86-1-founder-app-test-path-unlock`. It may only verify the existing `local-fast` stack, fix the active `/cv` local test blocker, broaden route smoke coverage, and record evidence. It must not start PR87, PR80-live, answer-copy, production billing, provider/OAuth/token storage, workspace/team/admin runtime, Norma Core, package/lockfile changes, or broad UI/parser work.
+PR222 merged PR86.1 into `application-os-foundation` with merge commit `a032632704ce89e0679508a40050cce9fe341bbe` at `2026-06-21T01:53:52Z`. It unlocked the full local founder app test path and signed-out fixture smoke only. It did not prove production build, preview/staging deployment, signed-in Clerk smoke, MCP production runtime, runtime observability, rollback, PR80-live, answer-copy, production billing, provider/OAuth/token storage, Norma Core, package/lockfile/schema changes, or PR87 readiness.
+
+PR87 is now active on `codex/pr87-production-deployment-gate`. Preflight returns `BLOCKED_PRODUCTION_GATE` with `BLOCKER_CODE=PRODUCTION_BUILD_RED`: `npm run build` fails on base in `my-app` during `tsc -b`, `npm run lint` is also unusable because `.eslintrc.cjs` references missing `./scraping-server/tsconfig.json`, and only standalone `rtk npx tsc --noEmit --pretty false` plus focused safety tests passed. PR87 must not proceed to PR88/private beta or PR89/public launch until production build, lint, CI gates, preview/staging target, signed-in smoke, MCP deployability, runtime observability, parser/Convex/frontend topology, and rollback are proven.
 
 Maintainer decision after PR80A still keeps live ATS submit/apply blocked until one provider supplies written use-case authorization, official server-to-server credentials, a test tenant or sandbox, one authorized test posting, official schema/questions endpoint, official submit endpoint, and receipt/error/duplicate/retry clarification. Manual handoff must not reserve, dispatch, or finalize PR80A `liveExternalActionExecutions`, and it must not represent a user-reported outcome as provider-submitted or provider-verified. PR80B, PR80B-follow-up, and PR80B-follow-up-2-prep did not automatically unlock PR81; PR211 unlocked only narrow PR81 rate/budget hardening, and PR80-live remains blocked.
 
