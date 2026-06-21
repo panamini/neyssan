@@ -3172,6 +3172,7 @@ type PremiumBodyPartValidationIssue = {
     | "unsupported_license_claim"
     | "unsupported_education_credential"
     | "fabricated_mission_claim"
+    | "meta_prose"
     | "unsupported_numeric_claim"
     | "unsupported_ownership_verb"
     | "candidate_name_mismatch";

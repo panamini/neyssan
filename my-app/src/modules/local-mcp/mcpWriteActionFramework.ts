@@ -1,3 +1,6 @@
+type str = string;
+type num = number;
+
 export type McpWriteActionIntentKindV1 =
   | "read_only_operation"
   | "write_action";
