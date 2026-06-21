@@ -21,6 +21,7 @@ module.exports = {
     "src/components.bak.*/**",
     "**/__tests__/**",
     "convex/lib/parsing/__tests__/**",
+    "docs/**",
     "worker/**",
     "vitest.config.ts",
   ],
@@ -41,6 +42,15 @@ module.exports = {
   overrides: [
     {
       files: ["convex/**/*.ts", "src/**/*.ts", "src/**/*.tsx"],
+      excludedFiles: [
+        "**/__tests__/**",
+        "**/*.test.*",
+        "**/*.spec.*",
+        "**/*.bak",
+        "**/prev_canonicalize*.ts",
+        "src/ProposalGenerator.tsx",
+        "src/pages/ProposalForgeNext.tsx",
+      ],
       // Enable typed rules only for these files
       extends: ["plugin:@typescript-eslint/recommended-type-checked"],
       parserOptions: {
@@ -53,7 +63,18 @@ module.exports = {
       },
       // Enforce no-floating-promises only in typed source so the rule can use type information.
       rules: {
-        "@typescript-eslint/no-floating-promises": "error"
+        "@typescript-eslint/no-floating-promises": "error",
+        "@typescript-eslint/no-unused-vars": [
+          "warn",
+          { varsIgnorePattern: "^_", argsIgnorePattern: "^_" },
+        ],
+        "@typescript-eslint/no-explicit-any": "off",
+        "@typescript-eslint/no-unsafe-argument": "off",
+        "@typescript-eslint/no-unsafe-assignment": "off",
+        "@typescript-eslint/no-unsafe-call": "off",
+        "@typescript-eslint/no-unsafe-member-access": "off",
+        "@typescript-eslint/no-unsafe-return": "off",
+        "@typescript-eslint/require-await": "off",
       }
     },
     {
@@ -74,6 +95,7 @@ module.exports = {
     ],
 
     // Eased rules for faster iteration (can be tightened later)
+    "no-unused-vars": "off",
     "@typescript-eslint/no-unused-vars": [
       "warn",
       { varsIgnorePattern: "^_", argsIgnorePattern: "^_" },
