@@ -57,15 +57,9 @@ module.exports = {
       }
     },
     {
-      files: ["scraping-server/**/*.ts"],
-      parserOptions: {
-        project: [require.resolve("./scraping-server/tsconfig.json")],
-      },
-    },
-    {
       // Non-typed linting for other TS files (tests, scripts, worker, etc.)
       files: ["**/*.ts", "**/*.tsx"],
-      excludedFiles: ["convex/**/*.ts", "src/**/*.ts", "src/**/*.tsx", "scraping-server/**/*.ts"],
+      excludedFiles: ["convex/**/*.ts", "src/**/*.ts", "src/**/*.tsx"],
       parserOptions: {
         tsconfigRootDir: __dirname,
       },

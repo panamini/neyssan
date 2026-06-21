@@ -21,29 +21,28 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR86.1 - Founder App Test Path Unlock
-GitHub PR: https://github.com/panamini/neyssan/pull/222
-Head branch: codex/pr86-1-founder-app-test-path-unlock
-Merge commit: a032632704ce89e0679508a40050cce9fe341bbe
-Merged at: 2026-06-21T01:53:52Z
-Scope: narrow local founder app test-path unlock after PR86. Final verdict was `APP_TESTABLE_NOW` for the full local stack and signed-out fixture smoke only. It did not prove production build, preview/staging deployment, signed-in Clerk smoke, MCP production runtime, runtime monitoring, rollback, PR80-live, answer-copy, production billing, provider/OAuth/token storage, package/lockfile/schema changes, or PR87 readiness.
+PR87 - Production Deployment Gate
+GitHub PR: https://github.com/panamini/neyssan/pull/223
+Head branch: codex/pr87-production-deployment-gate
+Merge commit: 2102d8136cf03d142dac4290421d6aa392369809
+Merged at: 2026-06-21T04:32:36Z
+Scope: docs-only production deployment gate. Final verdict was `BLOCKED_PRODUCTION_GATE` with blocker `PRODUCTION_BUILD_RED`; it did not prove production build, lint, runtime dependency audit, preview/staging deployment, signed-in Clerk smoke, MCP production runtime, runtime monitoring, rollback, PR80-live, answer-copy, production billing, provider/OAuth/token storage, or package/lockfile/schema changes.
 ```
 
 Current implementation PR:
 
 ```txt
-PR87 - Production Deployment Gate
-Branch: codex/pr87-production-deployment-gate
-Scope: determine whether Twoweeks is deployable to a controlled preview/staging environment and add only the smallest safe gate if the repository proves an existing target. Current PR87 result is blocked at preflight by `npm run build` failing on base.
-No PR88, PR89, PR80-live, answer-copy implementation, production billing, provider/OAuth/token storage, Norma Core, package/lockfile/schema changes, or provider-specific infrastructure selection is authorized by this blocked PR87 report.
+PR87.1 - Production Build / Lint Gate Unblock
+Branch: codex/pr87-1-production-build-lint-gate-unblock
+Scope: unblock the production build/lint gate recorded by PR87 where safe. This PR may remove stale lint configuration that references missing projects and may fix real TypeScript build errors only without weakening TypeScript, hiding source files, broad excludes, package/lockfile churn, schema changes, production billing, provider/OAuth/token work, PR80-live, answer-copy, PR88, or PR89.
 ```
 
 Exact next PR:
 
 ```txt
-PR87 is active as a production deployment gate preflight only.
-Current PR87 verdict: `BLOCKED_PRODUCTION_GATE`.
-Current PR87 blocker: `PRODUCTION_BUILD_RED`.
+PR87 is merged with verdict `BLOCKED_PRODUCTION_GATE`.
+Current PR87.1 status: `BLOCKED_PRODUCTION_BUILD_LINT_REMAINING`.
+Current PR87.1 blockers: production build remains red, lint remains red after the stale missing-project blocker was removed, and runtime dependency audit remains red.
 PR80-live remains blocked by provider authorization prerequisites.
 Approved answer copy stays blocked until a future source-model decision creates an authoritative approved answer source.
 PR88 and PR89 are not started.
@@ -127,7 +126,9 @@ MERGED_NARROW_PR59 - PR185 merged the narrow read-only adapter scope approved by
 |      84-to-85-preflight | Billing, Plan Limits, and Entitlements Decision                                     | merged      | #219                 | head c32be2d3ef74c8acb952f65576025b77a329635a; merge cf7b2f9476d611a21e3b2920e12aa4235139ea24 | Docs-only product/governance/security preflight after PR84. Final decision: `READY_TO_IMPLEMENT_NARROW_PR85_STRIPE_TEST_MODE_BOUNDARY`. Updated founder decision selects Stripe test mode for local/testing only and narrows PR85 to Stripe test-mode config validation plus internal/no-Stripe test fallback. No PR85 code, schema, UI, Stripe SDK, checkout, webhooks, subscriptions, billing portal, pricing, paid entitlements, external HTTP, workspace/tenant/role/admin/member runtime, real keys, PR80-live, answer-copy, package, lockfile, or PR86 work. Merged at 2026-06-20T21:53:46Z. |
 |                        85 | Stripe Test Mode Boundary and Internal Test Access                                  | merged      | #220                 | 1e0aadee60dba69d6044b31d050fcfdba400153e                                                     | Narrow implementation only: server-only Stripe test-mode config validator, internal/no-Stripe test fallback, safe billing config status, optional pure capability entitlement helper, source guards proving no real keys are committed, and docs/ledger update. No Stripe SDK, checkout, webhooks, subscriptions, billing portal, pricing, paid entitlements, external HTTP, workspace/tenant/role/admin/member runtime, real keys, PR80-live, answer-copy, package, lockfile, schema, UI, or PR86 work. Merged at 2026-06-20T22:53:42Z. |
 |                        86 | Founder App Smoke Test and Pre-Launch Audit                                        | merged      | #221                 | f99fba59a28d9e9278ad3c13989337c2dd8186b2                                                     | Practical founder app smoke-testability audit only. Final verdict: `BLOCKED_APP_TEST_PATH` because `local-fast` could not start without Docker daemon access in that run, TestDino was missing `TESTDINO_TOKEN`, and the frontend-only fallback left `/cv` at `Loading CV.`. No code, schema, package, lockfile, PR80-live, answer-copy, production billing, provider/OAuth/token, PR87, PR88, or PR89 work. Merged at 2026-06-21T00:33:52Z. |
-|                      86.1 | Founder App Test Path Unlock                                                       | current branch | draft PR pending      | branch codex/pr86-1-founder-app-test-path-unlock                                          | Narrow local app test-path unlock after PR86: verify `local-fast`, fix the active `/cv` template-less local restore loading blocker, broaden PR smoke coverage across `/dashboard`, `/cv`, `/jobs`, and `/proposal`, and record evidence. No PR87, PR80-live, answer-copy, production billing, Stripe SDK, OAuth/token/provider, Norma Core, package, or lockfile work. |
+|                      86.1 | Founder App Test Path Unlock                                                       | merged      | #222                 | merge a032632704ce89e0679508a40050cce9fe341bbe                                          | Narrow local app test-path unlock after PR86. Final verdict was `APP_TESTABLE_NOW` for the full local stack and signed-out fixture smoke only. It did not prove production build, preview/staging deployment, signed-in Clerk smoke, MCP production runtime, runtime monitoring, rollback, PR80-live, answer-copy, production billing, provider/OAuth/token storage, package/lockfile/schema changes, or PR87 readiness. |
+|                        87 | Production Deployment Gate                                                          | merged      | #223                 | merge 2102d8136cf03d142dac4290421d6aa392369809                                          | Docs-only production deployment gate. Final verdict was `BLOCKED_PRODUCTION_GATE`; blocker code `PRODUCTION_BUILD_RED`. Production build red, lint blocked by missing `./scraping-server/tsconfig.json`, runtime dependency audit red, preview/staging target unproven, MCP production runtime not deployable, signed-in smoke missing, runtime observability and rollback unproven. PR88 must not start yet. |
+|                      87.1 | Production Build / Lint Gate Unblock                                                | current branch | draft PR pending      | branch codex/pr87-1-production-build-lint-gate-unblock                                  | Narrow implementation follow-up to PR87. Removes stale lint project configuration for missing `scraping-server`; lint now starts but remains red on existing ESLint violations, production build remains red in `tsc -b`, runtime dependency audit remains red, and PR88 remains blocked. No package/lockfile/schema/code-path broadening, PR80-live, answer-copy, production billing, or provider/OAuth/token work. |
 
 ---
 
@@ -257,6 +258,8 @@ PR221 merged PR86 into `application-os-foundation` with merge commit `f99fba59a2
 PR222 merged PR86.1 into `application-os-foundation` with merge commit `a032632704ce89e0679508a40050cce9fe341bbe` at `2026-06-21T01:53:52Z`. It unlocked the full local founder app test path and signed-out fixture smoke only. It did not prove production build, preview/staging deployment, signed-in Clerk smoke, MCP production runtime, runtime observability, rollback, PR80-live, answer-copy, production billing, provider/OAuth/token storage, Norma Core, package/lockfile/schema changes, or PR87 readiness.
 
 PR87 is now active on `codex/pr87-production-deployment-gate`. Preflight returns `BLOCKED_PRODUCTION_GATE` with `BLOCKER_CODE=PRODUCTION_BUILD_RED`: `npm run build` fails on base in `my-app` during `tsc -b`, `npm run lint` is also unusable because `.eslintrc.cjs` references missing `./scraping-server/tsconfig.json`, and only standalone `rtk npx tsc --noEmit --pretty false` plus focused safety tests passed. PR87 must not proceed to PR88/private beta or PR89/public launch until production build, lint, CI gates, preview/staging target, signed-in smoke, MCP deployability, runtime observability, parser/Convex/frontend topology, and rollback are proven.
+
+PR223 merged PR87 into `application-os-foundation` with merge commit `2102d8136cf03d142dac4290421d6aa392369809` at `2026-06-21T04:32:36Z`. PR87.1 is now active on `codex/pr87-1-production-build-lint-gate-unblock` to unblock the production build/lint gate only. The first narrow implementation removed the stale lint project reference for missing `scraping-server`; lint now starts but remains red on existing ESLint violations, production build remains red during `tsc -b`, runtime dependency audit remains red, preview/staging target remains unproven, MCP production runtime remains not deployable, signed-in smoke remains missing, runtime observability and rollback remain unproven, and PR88 must not start yet.
 
 Maintainer decision after PR80A still keeps live ATS submit/apply blocked until one provider supplies written use-case authorization, official server-to-server credentials, a test tenant or sandbox, one authorized test posting, official schema/questions endpoint, official submit endpoint, and receipt/error/duplicate/retry clarification. Manual handoff must not reserve, dispatch, or finalize PR80A `liveExternalActionExecutions`, and it must not represent a user-reported outcome as provider-submitted or provider-verified. PR80B, PR80B-follow-up, and PR80B-follow-up-2-prep did not automatically unlock PR81; PR211 unlocked only narrow PR81 rate/budget hardening, and PR80-live remains blocked.
 
