@@ -167,7 +167,7 @@ Result: blocked by missing `TESTDINO_TOKEN`. This matches the PR86 finding and d
 Command:
 
 ```sh
-rtk npx tsx -e 'import { evaluateBillingTestMode } from "./src/modules/billing/stripeBillingConfig"; console.log(JSON.stringify({ noStripe: evaluateBillingTestMode({}).status, testStripe: evaluateBillingTestMode({ STRIPE_SECRET_KEY: "sk_test_123", STRIPE_PRICE_ID: "price_123" }).status, liveStripe: evaluateBillingTestMode({ STRIPE_SECRET_KEY: "sk_live_123", STRIPE_PRICE_ID: "price_123" }).status }))'
+rtk npx tsx -e 'import { evaluateBillingTestMode } from "./src/modules/billing/stripeBillingConfigBoundary.ts"; console.log(JSON.stringify({ noStripe: evaluateBillingTestMode({}).status, testStripe: evaluateBillingTestMode({ STRIPE_SECRET_KEY: "sk_test_12345678", STRIPE_PUBLISHABLE_KEY: "pk_test_12345678" }).status, liveStripe: evaluateBillingTestMode({ STRIPE_SECRET_KEY: "sk_live_12345678", STRIPE_PUBLISHABLE_KEY: "pk_live_12345678" }).status }))'
 ```
 
 Observed:
