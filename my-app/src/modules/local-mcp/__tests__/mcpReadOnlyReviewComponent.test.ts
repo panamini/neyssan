@@ -352,6 +352,31 @@ describe("PR66 read-only review component boundary", () => {
     },
   );
 
+  it("keeps missing-auth unavailable user action neutral while surfacing the visible action", () => {
+    const result = expectAllowed(
+      buildMcpReadOnlyReviewComponent({
+        kind: "mcp_read_only_review_component_input",
+        unavailableReason: "missing_auth",
+        version: 1,
+      }),
+    );
+
+    expect(result.component.structuredContent.safeCategories).toEqual(
+      expect.objectContaining({
+        nextReviewHint: "add_application_context",
+        nextUserAction: "none",
+      }),
+    );
+    expect(result.component.actionLabel).toBe("add_application_context");
+    expect(result.component.props.nextUserAction).toBe("add_application_context");
+    expect(result.component.stateSnapshot.nextUserAction).toBe(
+      "add_application_context",
+    );
+    expect(result.component.content[1]?.text).toBe(
+      "Next action: add application context.",
+    );
+  });
+
   it("fails closed for envelope-valid summaries missing required nested fields", () => {
     const result = expectBlocked(
       componentInput({

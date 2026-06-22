@@ -121,6 +121,7 @@ Related TS6307 evidence outside local-MCP:
 
 ## Validation
 
+- Review fix note: unavailable review component summaries intentionally keep `safeCategories.nextUserAction` as `none`; the visible user action is carried by `safeCategories.nextReviewHint`, then projected to the component `actionLabel`, `props.nextUserAction`, and `stateSnapshot.nextUserAction`.
 - `rtk npx vitest run src/modules/local-mcp`: passed, 56 files / 1190 tests.
 - `rtk npx tsc --noEmit --pretty false`: passed.
 - Targeted ESLint on touched local-MCP implementation files: passed.
