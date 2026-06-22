@@ -21,31 +21,36 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR87 - Production Deployment Gate
-GitHub PR: https://github.com/panamini/neyssan/pull/223
-Head branch: codex/pr87-production-deployment-gate
-Merge commit: 2102d8136cf03d142dac4290421d6aa392369809
-Merged at: 2026-06-21T04:32:36Z
-Scope: docs-only production deployment gate. Final verdict was `BLOCKED_PRODUCTION_GATE` with blocker `PRODUCTION_BUILD_RED`; it did not prove production build, lint, runtime dependency audit, preview/staging deployment, signed-in Clerk smoke, MCP production runtime, runtime monitoring, rollback, PR80-live, answer-copy, production billing, provider/OAuth/token storage, or package/lockfile/schema changes.
+PR87.1 - Production Build / Lint Gate Unblock
+GitHub PR: https://github.com/panamini/neyssan/pull/224
+Head branch: codex/pr87-1-production-build-lint-gate-unblock
+Merge commit: 9389a487f6c6ef658980983033e358dbafafed4f
+Merged at: 2026-06-21T23:15:11Z
+Scope: narrow production build/lint gate unblock. It removed the stale ESLint `scraping-server/tsconfig.json` blocker and fixed several first-order TypeScript build blockers; build, lint, and runtime dependency audit remain red. No PR88, PR80-live, production billing, OAuth/provider/token, approved answer-copy, package/lockfile/schema, or deployment broadening.
 ```
 
 Current implementation PR:
 
 ```txt
-PR87.1 - Production Build / Lint Gate Unblock
-Branch: codex/pr87-1-production-build-lint-gate-unblock
-Scope: unblock the production build/lint gate recorded by PR87 where safe. This PR may remove stale lint configuration that references missing projects and may fix real TypeScript build errors only without weakening TypeScript, hiding source files, broad excludes, package/lockfile churn, schema changes, production billing, provider/OAuth/token work, PR80-live, answer-copy, PR88, or PR89.
+PR87.2 - Production TypeScript Build Unblock
+Branch: codex/pr87-2-production-typescript-build-unblock
+Status: not started
+Scope: make `rtk npm run build` pass or isolate remaining TypeScript build blockers with exact evidence.
+Final status must later be exactly `PRODUCTION_TYPESCRIPT_BUILD_GREEN` or `BLOCKED_PRODUCTION_TYPESCRIPT_BUILD_REMAINING`.
 ```
 
 Exact next PR:
 
 ```txt
-PR87 is merged with verdict `BLOCKED_PRODUCTION_GATE`.
-Current PR87.1 status: `BLOCKED_PRODUCTION_BUILD_LINT_REMAINING`.
-Current PR87.1 blockers: production build remains red after narrow first-error fixes, lint remains red after the stale missing-project blocker was removed, and runtime dependency audit remains red.
+Exact next PR is PR87.2 - Production TypeScript Build Unblock.
+PR87.1 final status: `BLOCKED_PRODUCTION_BUILD_LINT_REMAINING`.
+PR87.2 must focus only on production TypeScript build unblock.
+Lint and npm audit remain separate future gates unless naturally fixed by TypeScript work.
 PR80-live remains blocked by provider authorization prerequisites.
 Approved answer copy stays blocked until a future source-model decision creates an authoritative approved answer source.
-PR88 and PR89 are not started.
+Production billing remains unimplemented.
+Provider/OAuth/token work remains blocked.
+PR88 and PR89 remain blocked.
 ```
 
 PR59 status:
@@ -128,7 +133,7 @@ MERGED_NARROW_PR59 - PR185 merged the narrow read-only adapter scope approved by
 |                        86 | Founder App Smoke Test and Pre-Launch Audit                                        | merged      | #221                 | f99fba59a28d9e9278ad3c13989337c2dd8186b2                                                     | Practical founder app smoke-testability audit only. Final verdict: `BLOCKED_APP_TEST_PATH` because `local-fast` could not start without Docker daemon access in that run, TestDino was missing `TESTDINO_TOKEN`, and the frontend-only fallback left `/cv` at `Loading CV.`. No code, schema, package, lockfile, PR80-live, answer-copy, production billing, provider/OAuth/token, PR87, PR88, or PR89 work. Merged at 2026-06-21T00:33:52Z. |
 |                      86.1 | Founder App Test Path Unlock                                                       | merged      | #222                 | merge a032632704ce89e0679508a40050cce9fe341bbe                                          | Narrow local app test-path unlock after PR86. Final verdict was `APP_TESTABLE_NOW` for the full local stack and signed-out fixture smoke only. It did not prove production build, preview/staging deployment, signed-in Clerk smoke, MCP production runtime, runtime monitoring, rollback, PR80-live, answer-copy, production billing, provider/OAuth/token storage, package/lockfile/schema changes, or PR87 readiness. |
 |                        87 | Production Deployment Gate                                                          | merged      | #223                 | merge 2102d8136cf03d142dac4290421d6aa392369809                                          | Docs-only production deployment gate. Final verdict was `BLOCKED_PRODUCTION_GATE`; blocker code `PRODUCTION_BUILD_RED`. Production build red, lint blocked by missing `./scraping-server/tsconfig.json`, runtime dependency audit red, preview/staging target unproven, MCP production runtime not deployable, signed-in smoke missing, runtime observability and rollback unproven. PR88 must not start yet. |
-|                      87.1 | Production Build / Lint Gate Unblock                                                | current branch | draft PR #224         | branch codex/pr87-1-production-build-lint-gate-unblock                                  | Narrow implementation follow-up to PR87. Removed stale lint project configuration for missing `scraping-server`, aligned typed lint scoping, and fixed several first-order TypeScript blockers named by `tsc -b`. Lint now starts but remains red on existing ESLint violations; production build remains red in `tsc -b`; runtime dependency audit remains red; PR88 remains blocked. No package/lockfile/schema broadening, PR80-live, answer-copy, production billing, or provider/OAuth/token work. |
+|                      87.1 | Production Build / Lint Gate Unblock                                                | merged      | #224                 | merge 9389a487f6c6ef658980983033e358dbafafed4f                                          | Partial production build/lint gate unblock only. Removed stale lint project configuration for missing `scraping-server`, aligned typed lint scoping, and fixed several first-order TypeScript blockers named by `tsc -b`; build, lint, and runtime dependency audit remain red. PR88 remains blocked. No package/lockfile/schema broadening, PR80-live, answer-copy, production billing, or provider/OAuth/token work. |
 
 ---
 
@@ -257,9 +262,11 @@ PR221 merged PR86 into `application-os-foundation` with merge commit `f99fba59a2
 
 PR222 merged PR86.1 into `application-os-foundation` with merge commit `a032632704ce89e0679508a40050cce9fe341bbe` at `2026-06-21T01:53:52Z`. It unlocked the full local founder app test path and signed-out fixture smoke only. It did not prove production build, preview/staging deployment, signed-in Clerk smoke, MCP production runtime, runtime observability, rollback, PR80-live, answer-copy, production billing, provider/OAuth/token storage, Norma Core, package/lockfile/schema changes, or PR87 readiness.
 
-PR87 is now active on `codex/pr87-production-deployment-gate`. Preflight returns `BLOCKED_PRODUCTION_GATE` with `BLOCKER_CODE=PRODUCTION_BUILD_RED`: `npm run build` fails on base in `my-app` during `tsc -b`, `npm run lint` is also unusable because `.eslintrc.cjs` references missing `./scraping-server/tsconfig.json`, and only standalone `rtk npx tsc --noEmit --pretty false` plus focused safety tests passed. PR87 must not proceed to PR88/private beta or PR89/public launch until production build, lint, CI gates, preview/staging target, signed-in smoke, MCP deployability, runtime observability, parser/Convex/frontend topology, and rollback are proven.
+PR87 ran on `codex/pr87-production-deployment-gate`. Preflight returned `BLOCKED_PRODUCTION_GATE` with `BLOCKER_CODE=PRODUCTION_BUILD_RED`: `npm run build` failed on base in `my-app` during `tsc -b`, `npm run lint` was also unusable because `.eslintrc.cjs` referenced missing `./scraping-server/tsconfig.json`, and only standalone `rtk npx tsc --noEmit --pretty false` plus focused safety tests passed. PR87 did not proceed to PR88/private beta or PR89/public launch because production build, lint, CI gates, preview/staging target, signed-in smoke, MCP deployability, runtime observability, parser/Convex/frontend topology, and rollback remained unproven.
 
-PR223 merged PR87 into `application-os-foundation` with merge commit `2102d8136cf03d142dac4290421d6aa392369809` at `2026-06-21T04:32:36Z`. PR87.1 is now active on `codex/pr87-1-production-build-lint-gate-unblock` / GitHub #224 to unblock the production build/lint gate only. The first narrow implementation removed the stale lint project reference for missing `scraping-server`, aligned typed lint scoping with TS project excludes, and fixed several first-order TypeScript blockers named by `tsc -b`. Lint now starts but remains red on existing ESLint violations, production build remains red during `tsc -b`, runtime dependency audit remains red, preview/staging target remains unproven, MCP production runtime remains not deployable, signed-in smoke remains missing, runtime observability and rollback remain unproven, and PR88 must not start yet.
+PR223 merged PR87 into `application-os-foundation` with merge commit `2102d8136cf03d142dac4290421d6aa392369809` at `2026-06-21T04:32:36Z`.
+
+PR224 merged PR87.1 into `application-os-foundation` with merge commit `9389a487f6c6ef658980983033e358dbafafed4f` at `2026-06-21T23:15:11Z`. PR87.2 is now the next implementation PR. PR87.2 must focus only on production TypeScript build unblock. It must not broaden into lint-wide cleanup, npm audit, production deployment, PR88, PR80-live, billing, OAuth/provider/token, or answer-copy.
 
 Maintainer decision after PR80A still keeps live ATS submit/apply blocked until one provider supplies written use-case authorization, official server-to-server credentials, a test tenant or sandbox, one authorized test posting, official schema/questions endpoint, official submit endpoint, and receipt/error/duplicate/retry clarification. Manual handoff must not reserve, dispatch, or finalize PR80A `liveExternalActionExecutions`, and it must not represent a user-reported outcome as provider-submitted or provider-verified. PR80B, PR80B-follow-up, and PR80B-follow-up-2-prep did not automatically unlock PR81; PR211 unlocked only narrow PR81 rate/budget hardening, and PR80-live remains blocked.
 
