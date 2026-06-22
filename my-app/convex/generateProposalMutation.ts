@@ -106,6 +106,7 @@ import {
   type CoverLetterBodyParts,
   type PremiumCoverLetterFailureTrace,
   type PremiumCoverLetterFinalProvenance,
+  type PremiumCoverLetterQualityRepairTrace,
   type PremiumCoverLetterQualityShadowResult,
 } from "./lib/proposals/premiumCoverLetter";
 import {
@@ -997,6 +998,15 @@ export type CoverLetterRoutingTelemetry = {
   premium_path_saved: boolean | null;
   premium_validation_passed: boolean | null;
   premium_quality_shadow_passed: boolean | null;
+  premium_quality_repair_enabled: boolean | null;
+  premium_quality_repair_eligible: boolean | null;
+  premium_quality_repair_attempted: boolean | null;
+  premium_quality_repair_outcome: string | null;
+  premium_quality_repair_rejection_category: string | null;
+  premium_quality_repair_before: PremiumCoverLetterQualityShadowResult | null;
+  premium_quality_repair_after: PremiumCoverLetterQualityShadowResult | null;
+  premium_final_provenance_status: string | null;
+  premium_verified_candidate_fact_count: number | null;
   premium_quality_gate_passed: boolean | null;
 };
 
@@ -3131,6 +3141,7 @@ function buildProposalRoutingMetadata(args: {
   attemptedPath: ProposalGenerationPathLabel;
   premiumValidationPassed?: boolean | null;
   premiumQualityShadowPassed?: boolean | null;
+  premiumQualityRepair?: PremiumCoverLetterQualityRepairTrace | null;
 }) {
   const premiumPathSaved =
     args.attemptedPath === "premium path saved" &&
@@ -3329,6 +3340,7 @@ export function buildCoverLetterRoutingTelemetry(args: {
   usedFallback?: boolean;
   premiumValidationPassed?: boolean | null;
   premiumQualityShadowPassed?: boolean | null;
+  premiumQualityRepair?: PremiumCoverLetterQualityRepairTrace | null;
 }): CoverLetterRoutingTelemetry {
   const resolvedStructuredRolloutMode =
     resolveStructuredMistralCoverLetterRolloutMode(args.rolloutValue);
@@ -3401,6 +3413,33 @@ export function buildCoverLetterRoutingTelemetry(args: {
       : null,
     premium_quality_shadow_passed: premiumPathAttempted
       ? args.premiumQualityShadowPassed ?? null
+      : null,
+    premium_quality_repair_enabled: premiumPathAttempted
+      ? args.premiumQualityRepair?.enabled ?? null
+      : null,
+    premium_quality_repair_eligible: premiumPathAttempted
+      ? args.premiumQualityRepair?.eligible ?? null
+      : null,
+    premium_quality_repair_attempted: premiumPathAttempted
+      ? args.premiumQualityRepair?.attempted ?? null
+      : null,
+    premium_quality_repair_outcome: premiumPathAttempted
+      ? args.premiumQualityRepair?.outcome ?? null
+      : null,
+    premium_quality_repair_rejection_category: premiumPathAttempted
+      ? args.premiumQualityRepair?.rejectionCategory ?? null
+      : null,
+    premium_quality_repair_before: premiumPathAttempted
+      ? args.premiumQualityRepair?.qualityBefore ?? null
+      : null,
+    premium_quality_repair_after: premiumPathAttempted
+      ? args.premiumQualityRepair?.qualityAfter ?? null
+      : null,
+    premium_final_provenance_status: premiumPathAttempted
+      ? args.premiumQualityRepair?.finalProvenanceStatus ?? null
+      : null,
+    premium_verified_candidate_fact_count: premiumPathAttempted
+      ? args.premiumQualityRepair?.verifiedCandidateFactCount ?? null
       : null,
     premium_quality_gate_passed: null,
   };
@@ -9919,6 +9958,7 @@ export function finalizePremiumCoverLetterPayloadForPersistence(args: {
     sections: Array<{ type: "text"; content: string }>;
     bodyParts?: CoverLetterBodyParts;
     qualityShadow?: PremiumCoverLetterQualityShadowResult;
+    qualityRepair?: PremiumCoverLetterQualityRepairTrace;
     finalProvenance?: PremiumCoverLetterFinalProvenance;
   };
   format: OutputFormat;
@@ -9932,6 +9972,7 @@ export function finalizePremiumCoverLetterPayloadForPersistence(args: {
   sections: Array<{ type: "text"; content: string }>;
   bodyParts?: CoverLetterBodyParts;
   qualityShadow?: PremiumCoverLetterQualityShadowResult;
+  qualityRepair?: PremiumCoverLetterQualityRepairTrace;
   finalProvenance?: PremiumCoverLetterFinalProvenance;
 } {
   const noContextMode =
@@ -9972,12 +10013,22 @@ export function finalizePremiumCoverLetterPayloadForPersistence(args: {
         content,
       })
     : args.payload.qualityShadow;
+  const qualityRepair =
+    args.payload.qualityRepair && finalProvenance
+      ? {
+          ...args.payload.qualityRepair,
+          finalProvenanceStatus: finalProvenance.status,
+          verifiedCandidateFactCount:
+            finalProvenance.verifiedCandidateFactIds.length,
+        }
+      : args.payload.qualityRepair;
 
   return {
     ...args.payload,
     content,
     sections: [{ type: "text", content }],
     qualityShadow,
+    qualityRepair,
     finalProvenance,
   };
 }
@@ -10710,7 +10761,7 @@ export async function handleGenerateProposal(
     proposalType: outputFormat,
   };
   let residualVerifierWarningTag: string | null = null;
-        let proposalContent = "";
+  let proposalContent: string | undefined;
   let structuredPersistencePayload: StructuredCoverLetterAttemptResult | null =
     null;
   let premiumPersistencePayload: {
@@ -10721,6 +10772,7 @@ export async function handleGenerateProposal(
     }>;
     bodyParts?: CoverLetterBodyParts;
     qualityShadow?: PremiumCoverLetterQualityShadowResult;
+    qualityRepair?: PremiumCoverLetterQualityRepairTrace;
     finalProvenance?: PremiumCoverLetterFinalProvenance;
   } | null = null;
   let actualModelType: ProposalModelType = requestedModelType;
@@ -10766,6 +10818,7 @@ export async function handleGenerateProposal(
   let premiumMistralCoverLetterAttempted = false;
   let premiumValidationPassed: boolean | null = null;
   let premiumQualityShadowPassed: boolean | null = null;
+  let premiumQualityRepair: PremiumCoverLetterQualityRepairTrace | null = null;
   let coverLetterRoutingTelemetryLogged = false;
   const mistralDiagnostics = createMistralDiagnosticsAccumulator();
   const getExecutionProvenance = (): ProposalExecutionProvenance => ({
@@ -10788,10 +10841,18 @@ export async function handleGenerateProposal(
   });
   const getGenerateProposalResult = () => ({
     proposalId,
-    proposalContent,
+    proposalContent: requireProposalContent(),
     ...getExecutionProvenance(),
     routing: getExecutionRoutingSummary(),
   });
+  const requireProposalContent = (): string => {
+    if (proposalContent === undefined) {
+      throw new ConvexError(
+        "Proposal generation reached persistence without generated content.",
+      );
+    }
+    return proposalContent;
+  };
   let mistralDiagnosticsLogged = false;
   const emitMistralDiagnosticsSummary = (
     outcome: "success" | "failure",
@@ -10842,6 +10903,7 @@ export async function handleGenerateProposal(
         usedFallback,
         premiumValidationPassed,
         premiumQualityShadowPassed,
+        premiumQualityRepair,
       }),
     );
     coverLetterRoutingTelemetryLogged = true;
@@ -10908,6 +10970,7 @@ export async function handleGenerateProposal(
       premiumPersistencePayload = null;
       premiumValidationPassed = null;
       premiumQualityShadowPassed = null;
+      premiumQualityRepair = null;
       residualVerifierWarningTag = null;
       try {
         await ensureGenerationActive();
@@ -10975,17 +11038,21 @@ export async function handleGenerateProposal(
                       failure,
                     });
                   },
-                  writer: ({ prompt }) =>
+                  writer: ({ prompt, schema }) =>
                     generatePremiumCoverLetterBodyPartsWithOpenAI({
                       apiKey,
                       prompt,
                       writerModel: premiumCoverLetterWriterModel,
+                      schema,
                       signal: cancellationContext?.signal,
                     }),
                 });
               premiumValidationPassed = premiumPersistencePayload !== null;
               actualModelName = premiumCoverLetterWriterModel;
             } catch (premiumError) {
+              if (isProposalGenerationCanceledError(premiumError)) {
+                throw premiumError;
+              }
               console.warn(
                 isControlledPremiumMistralGptFallback
                   ? "Controlled GPT premium fallback failed after Mistral premium validation failure."
@@ -11108,6 +11175,9 @@ export async function handleGenerateProposal(
               premiumValidationPassed = premiumPersistencePayload !== null;
               actualModelName = qwenPremiumCoverLetterWriterModel;
             } catch (premiumError) {
+              if (isProposalGenerationCanceledError(premiumError)) {
+                throw premiumError;
+              }
               const qwenDiagnostics =
                 buildQwenPremiumOuterDiagnostics(premiumError);
               if (qwenDiagnostics) {
@@ -11311,6 +11381,9 @@ export async function handleGenerateProposal(
                 });
               premiumValidationPassed = premiumPersistencePayload !== null;
             } catch (premiumError) {
+              if (isProposalGenerationCanceledError(premiumError)) {
+                throw premiumError;
+              }
               console.warn(
                 "Premium Mistral cover letter path failed; falling back to existing Mistral generation.",
                 premiumError,
@@ -11786,6 +11859,7 @@ export async function handleGenerateProposal(
           });
           premiumQualityShadowPassed =
             premiumPersistencePayload.qualityShadow?.passed ?? null;
+          premiumQualityRepair = premiumPersistencePayload.qualityRepair ?? null;
           proposalContent = premiumPersistencePayload.content;
           routingTrace.executedPath = "structured";
           routingTrace.fallbackReason =
@@ -11816,12 +11890,21 @@ export async function handleGenerateProposal(
               attemptedPath: attemptedGenerationPath,
               premiumValidationPassed,
               premiumQualityShadowPassed,
+              premiumQualityRepair,
               provenance: getExecutionProvenance(),
               tags: [
                 `model:${actualModelType}`,
                 "premium_cover_letter_path_v1",
                 ...(premiumCoverLetterFlagEnabled
                   ? ["feature_flag:cover_letter_premium_path_v1"]
+                  : []),
+                ...(premiumQualityRepair
+                  ? [
+                      `premium_quality_repair:${premiumQualityRepair.outcome}`,
+                      ...(premiumQualityRepair.enabled
+                        ? ["feature_flag:cover_letter_quality_repair_v1"]
+                        : []),
+                    ]
                   : []),
                 toGenerationPathTag(attemptedGenerationPath),
               ],
@@ -11837,8 +11920,9 @@ export async function handleGenerateProposal(
         const noContextPersistenceMode =
           plannerResult?.context_mode === "none" ||
           plannerContextMode === "none";
+        const generatedProposalContent = requireProposalContent();
         lastFinalizationTraceArgs = {
-          content: proposalContent,
+          content: generatedProposalContent,
           format: outputFormat,
           outputLanguage,
           candidateName,
@@ -11848,7 +11932,7 @@ export async function handleGenerateProposal(
             outputFormat === "cover_letter" && hasCandidateContext,
         };
         proposalContent = finalizeProposalForPersistence({
-          content: proposalContent,
+          content: generatedProposalContent,
           format: outputFormat,
           outputLanguage,
           candidateName,
