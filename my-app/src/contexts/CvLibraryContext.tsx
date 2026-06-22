@@ -63,6 +63,7 @@ import { resolveVerbatiStyle, serializeVerbatiStyle } from "../features/verbati/
 import type { VerbatiStylePreset } from "../features/verbati/types";
 import type { DocumentStyleMetadata } from "../lib/document-style-slots";
 import type { DocumentIconSettings } from "../lib/document-icons";
+import type { DocumentIconOverrides } from "../lib/document-icon-overrides";
 import {
   normalizeDocumentDecoration,
   type DocumentDecoration,
@@ -75,6 +76,7 @@ import {
 type CvVisualMetadataPatch = DocumentStyleMetadata & {
   resumeTemplateId?: ResumeTemplateId;
   documentIcons?: DocumentIconSettings;
+  documentIconOverrides?: DocumentIconOverrides;
   documentDecoration?: DocumentDecoration;
 };
 

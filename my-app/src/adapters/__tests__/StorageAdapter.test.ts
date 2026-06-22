@@ -1050,6 +1050,28 @@ describe("StorageAdapter persistence", () => {
     expect(JSON.stringify(payload)).not.toContain("data:image");
   });
 
+  it("saves document icon overrides metadata without sending cvDocument", async () => {
+    const patchMutation = vi.fn().mockResolvedValue(undefined);
+    const adapter = new ConvexStorageAdapter(patchMutation);
+
+    await adapter.saveMetadataPatch("icon-overrides-cv", {
+      documentIconOverrides: {
+        listItems: {
+          "experience|work|item-1|responsibilities|0|0": "check",
+        },
+      },
+    });
+
+    expect(patchMutation).toHaveBeenCalledTimes(1);
+    const payload = patchMutation.mock.calls[0][0].patch;
+    expect(payload.cvDocument).toBeUndefined();
+    expect(payload.metadata.documentIconOverrides).toEqual({
+      listItems: {
+        "experience|work|item-1|responsibilities|0|0": "check",
+      },
+    });
+  });
+
   it("reports unauthorized metadata-only decoration saves as remote failures", async () => {
     const patchMutation = vi
       .fn()
