@@ -254,6 +254,62 @@ Commands run from `my-app` unless noted:
 
 `npm audit --omit=dev` was not run in PR87.7 because lint did not become green. Audit remediation was not attempted and no package or lockfile files were changed.
 
+## Review Revalidation 2026-06-23
+
+Production-gate review for draft PR #238 rechecked the branch at head
+`23d12f979089187c4166af45cc55cc0da5da2e57`.
+
+Repo and PR state:
+
+- Current branch: `codex/pr87-7-production-lint-gate`.
+- PR #238: open, draft, mergeable, head SHA unchanged.
+- Changed files against `origin/application-os-foundation`: 90.
+- Protected local file `docs/plans/2026-06-22-cover-letter-quality-production-roadmap.md`: untracked and not staged.
+- `rtk` was unavailable in this shell, so review commands were run directly.
+
+Diff review:
+
+- The 88 source-file changes remain mechanical ESLint cleanup except for the two documented type-narrowing repairs.
+- `convex/proposalSettings.ts`: `getProposalPresetFieldKey` maps slot `1 | 2 | 3` to the same preset field names previously built by template literal. This is active code and is the intended type repair.
+- `src/features/verbati/VerbatiResumePreview.tsx`: `closestHTMLElement` narrows `closest()` results before `dataset` access. This is active code and is the intended DOM type repair.
+- No intentional user-facing copy/UI text changes were found in the source diff.
+- No generated-code churn was found. The touched `convex/lib/parsing/prev_canonicalize.XXXXXX.ts` file appears legacy but informative; the PR only removed lint-reported stale disable/typing noise there.
+
+Fallow read-only audit:
+
+- Command: `FALLOW_AGENT_SOURCE=codex npx fallow audit --format json --quiet --base origin/application-os-foundation --explain`.
+- Verdict: `warn`.
+- Attribution: 0 introduced dead-code issues, 0 introduced complexity findings, 9 introduced duplication clone groups.
+- The 9 introduced duplication groups were inspected and classified as advisory/mechanical-touch false positives for this PR. They occur in pre-existing repeated parser name-token guards, Remirror extension setup blocks, `normalize-cv` structured-content normalization helpers, and `CvForge` structured-item helper patterns. The PR only touched those repeated regions through lint autofix edits such as removing `!`/redundant assertions; it did not add new duplicated logic.
+- No Fallow fixes were applied because consolidating those clones would be broad refactoring outside PR87.7.
+
+Revalidation commands:
+
+- `npm run build`: passed.
+- `npx tsc -b --force --pretty false`: passed.
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run lint`: failed with 1175 problems, 793 errors, 382 warnings.
+
+Focused and safety tests:
+
+- `npx vitest run convex/__tests__/proposalSettings.voice.test.ts --reporter=dot`: passed, 4 tests.
+- `npx vitest run src/features/verbati/__tests__/VerbatiResumePreview.test.tsx src/features/verbati/__tests__/VerbatiResumePreview.rendering.test.tsx src/features/verbati/__tests__/resumePreviewInteractionTokens.test.ts --reporter=dot`: failed. 30 tests passed, 2 tests failed in `VerbatiResumePreview.test.tsx` because viewport height was `1122.5196850393702px` instead of expected `1123px`. The changed `VerbatiResumePreview.tsx` diff only adds DOM narrowing, not the viewport height path, but the focused test failure still blocks ready status.
+- `npx vitest run convex/actions/__tests__/structuredUpload.buildCanonicalizeInput.test.ts convex/actions/__tests__/formatCompleteCV.test.ts convex/lib/parsing/__tests__/canonicalize.test.ts convex/lib/parsing/__tests__/canonicalMapper.test.ts convex/lib/parsing/__tests__/hybridParser.adapter.test.ts convex/lib/proposals/__tests__/proposalPlanner.test.ts convex/lib/proposals/__tests__/proposalEnforcement.test.ts convex/lib/proposals/__tests__/proposalCriteriaAudit.test.ts convex/lib/proposals/__tests__/premiumCoverLetter.test.ts --reporter=dot`: passed, 9 files / 241 tests.
+- `npx vitest run src/pages/__tests__/SettingsPage.preview.test.tsx --reporter=dot`: passed, 32 tests.
+- `npx vitest run src/components/cv/__tests__/SectionEditorSheet.test.tsx --reporter=dot`: passed, 23 tests.
+- `npx vitest run src/components/__tests__/FloatingAiToolbar.test.tsx --reporter=dot`: passed, 32 tests.
+- `npx vitest run src/pages/__tests__/CvForge.workspace-preview.integration.test.tsx --reporter=dot`: failed, 13 tests failed and 1 passed. All failures share `TypeError: Cannot read properties of undefined (reading 'status')` at `src/pages/CvForge.tsx:3599`, where the test mock omits `remoteSaveStatus`. The PR diff does not touch that effect, but this affected-area test failure blocks ready status.
+- `npx vitest run src/pages/__tests__/ProposalForge.preview-header.test.tsx --reporter=dot`: did not complete under the default Node heap; the process ended with JavaScript heap out of memory.
+- Combined UI safety bundles also hit JavaScript heap out of memory before producing a useful summary.
+- Local-MCP tests were not run because no local-MCP files changed.
+
+Review decision:
+
+- No PR87.7-introduced unsafe behavior change was confirmed from the diff review.
+- The PR should remain draft because focused/affected tests failed or could not complete.
+- No behavior or test fixes were applied during this review to avoid adding non-lint product/test churn to the mechanical PR.
+- Current review verdict: `BLOCKED_PR87_7_REVIEW_FIX_REQUIRED`.
+
 ## Source Guards
 
 - No package or lockfile changes.
@@ -263,7 +319,7 @@ Commands run from `my-app` unless noted:
 - No large file-level eslint-disable comments.
 - No added `ts-ignore`.
 - No added `ts-expect-error`.
-- No broad `as any` expansion. Total `as any` occurrences decreased from 1893 on `HEAD` to 1635 in the working tree.
+- No broad `as any` expansion. Total `as any` occurrences decreased from 1893 on `origin/application-os-foundation` to 1637 on the PR head.
 - No value-shaped Stripe secrets.
 - `docs/plans/2026-06-22-cover-letter-quality-production-roadmap.md` remains untracked and uncommitted.
 
@@ -273,4 +329,6 @@ Revert the PR87.7 commit. This restores the pre-PR87.7 lint state and removes on
 
 ## Final Verdict
 
-`BLOCKED_PRODUCTION_LINT_REMAINING`
+`BLOCKED_PR87_7_REVIEW_FIX_REQUIRED`
+
+Original lint-gate state remains `BLOCKED_PRODUCTION_LINT_REMAINING`.
