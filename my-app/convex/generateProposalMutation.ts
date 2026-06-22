@@ -100,9 +100,12 @@ import {
   generatePremiumCoverLetterBodyPartsWithMistral,
   generatePremiumCoverLetterBodyPartsWithOpenAI,
   isCoverLetterPremiumPathV1Enabled,
+  premiumCoverLetterFinalProvenanceSatisfiesCandidateEvidence,
+  refreshPremiumCoverLetterFinalProvenanceForContent,
   resolvePremiumCoverLetterWriterModel,
   type CoverLetterBodyParts,
   type PremiumCoverLetterFailureTrace,
+  type PremiumCoverLetterFinalProvenance,
   type PremiumCoverLetterQualityShadowResult,
 } from "./lib/proposals/premiumCoverLetter";
 import {
@@ -7323,6 +7326,7 @@ function assertCvBackedCoverLetterHasCandidateEvidence(args: {
   outputLanguage: ProposalOutputLanguage;
   candidateName?: string;
   requiresCandidateEvidence?: boolean;
+  premiumFinalProvenance?: PremiumCoverLetterFinalProvenance;
   debugTrace?: ProposalFinalizationDebugTrace;
 }): void {
   if (args.format !== "cover_letter" || !args.requiresCandidateEvidence) {
@@ -7336,6 +7340,14 @@ function assertCvBackedCoverLetterHasCandidateEvidence(args: {
     candidateName: args.candidateName,
   });
   if (coverLetterBodyHasCvBackedCandidateEvidence(body)) {
+    return;
+  }
+  if (
+    premiumCoverLetterFinalProvenanceSatisfiesCandidateEvidence({
+      provenance: args.premiumFinalProvenance,
+      finalText: body,
+    })
+  ) {
     return;
   }
 
@@ -9598,6 +9610,7 @@ export function finalizeProposalForPersistence(args: {
   noContextMode: boolean;
   requiresCandidateEvidence?: boolean;
   acceptanceMode?: ProposalBodyAcceptanceMode;
+  premiumFinalProvenance?: PremiumCoverLetterFinalProvenance;
   debugTrace?: ProposalFinalizationDebugTrace;
 }): string {
   const acceptanceMode =
@@ -9834,6 +9847,7 @@ export function finalizeProposalForPersistence(args: {
     outputLanguage: args.outputLanguage,
     candidateName: args.candidateName,
     requiresCandidateEvidence: args.requiresCandidateEvidence,
+    premiumFinalProvenance: args.premiumFinalProvenance,
     debugTrace: args.debugTrace,
   });
 
@@ -9905,6 +9919,7 @@ export function finalizePremiumCoverLetterPayloadForPersistence(args: {
     sections: Array<{ type: "text"; content: string }>;
     bodyParts?: CoverLetterBodyParts;
     qualityShadow?: PremiumCoverLetterQualityShadowResult;
+    finalProvenance?: PremiumCoverLetterFinalProvenance;
   };
   format: OutputFormat;
   outputLanguage: ProposalOutputLanguage;
@@ -9917,6 +9932,7 @@ export function finalizePremiumCoverLetterPayloadForPersistence(args: {
   sections: Array<{ type: "text"; content: string }>;
   bodyParts?: CoverLetterBodyParts;
   qualityShadow?: PremiumCoverLetterQualityShadowResult;
+  finalProvenance?: PremiumCoverLetterFinalProvenance;
 } {
   const noContextMode =
     args.format === "cover_letter" && !args.hasCandidateContext;
@@ -9929,9 +9945,21 @@ export function finalizePremiumCoverLetterPayloadForPersistence(args: {
     noContextMode,
     requiresCandidateEvidence:
       args.format === "cover_letter" && args.hasCandidateContext,
+    premiumFinalProvenance: args.payload.finalProvenance,
     debugTrace: args.debugTrace,
   });
 
+  const finalProvenance = args.payload.finalProvenance
+    ? refreshPremiumCoverLetterFinalProvenanceForContent({
+        provenance: args.payload.finalProvenance,
+        finalText: sanitizeGeneratedProposalBody({
+          content,
+          format: args.format,
+          outputLanguage: args.outputLanguage,
+          candidateName: args.candidateName,
+        }),
+      })
+    : undefined;
   const qualityShadow = args.payload.bodyParts
     ? evaluatePremiumCoverLetterQualityShadow({
         bodyParts: buildPremiumQualityShadowBodyPartsFromSavedContent({
@@ -9950,6 +9978,7 @@ export function finalizePremiumCoverLetterPayloadForPersistence(args: {
     content,
     sections: [{ type: "text", content }],
     qualityShadow,
+    finalProvenance,
   };
 }
 
@@ -10692,6 +10721,7 @@ export async function handleGenerateProposal(
     }>;
     bodyParts?: CoverLetterBodyParts;
     qualityShadow?: PremiumCoverLetterQualityShadowResult;
+    finalProvenance?: PremiumCoverLetterFinalProvenance;
   } | null = null;
   let actualModelType: ProposalModelType = requestedModelType;
   let actualModelName: string =

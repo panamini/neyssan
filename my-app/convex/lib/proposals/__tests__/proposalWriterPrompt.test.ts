@@ -24,6 +24,7 @@ import { analyzeProposalDraft } from "../proposalEnforcement";
 import {
   validatePremiumCoverLetterBodyParts,
   validatePremiumWriterOutputV1,
+  type PremiumCoverLetterFinalProvenance,
 } from "../premiumCoverLetter";
 
 const BASE_ARGS = {
@@ -1117,6 +1118,139 @@ describe("proposal writer prompt contract", () => {
         voicePreset: "expert",
         noContextMode: false,
         requiresCandidateEvidence: true,
+      }),
+    ).toThrow(/candidate-backed evidence/i);
+  });
+
+  it("allows trusted premium provenance to satisfy the final candidate guard only when tied to final text", () => {
+    const opening =
+      "Weekly QA reporting, field notes, and issue handoffs shaped the operating discipline behind my support work.";
+    const proof =
+      "Those habits are useful where escalation records and follow-up notes need to stay clear across shifts.";
+    const employerValue =
+      "That record discipline fits teams that need reliable support handoffs without losing context.";
+    const closeLine = "I would be glad to discuss the position further.";
+    const content = [
+      "Dear Hiring Manager,",
+      "",
+      opening,
+      "",
+      proof,
+      "",
+      employerValue,
+      "",
+      closeLine,
+      "",
+      "Sincerely,",
+      "Casey Reed",
+    ].join("\n");
+    const baseArgs = {
+      content,
+      format: "cover_letter" as const,
+      outputLanguage: "English" as const,
+      candidateName: "Casey Reed",
+      voicePreset: "signature" as const,
+      noContextMode: false,
+      requiresCandidateEvidence: true,
+    };
+    const premiumFinalProvenance: PremiumCoverLetterFinalProvenance = {
+      version: "premium_cover_letter_final_provenance_v1",
+      status: "validated_final_text",
+      origin: "provider_reported",
+      contextClass: "cv_direct",
+      candidateFactIds: ["fact_cv_support_reporting"],
+      verifiedCandidateFactIds: ["fact_cv_support_reporting"],
+      candidateFacts: [
+        {
+          id: "fact_cv_support_reporting",
+          section: "opening",
+          text: "Completed weekly QA reports, field notes, and issue handoffs for support escalations.",
+          source: "cv",
+          metrics: [],
+          entities: [],
+        },
+      ],
+      sections: {
+        opening: {
+          section: "opening",
+          text: opening,
+          claimIds: ["claim_opening"],
+          factIds: ["fact_cv_support_reporting"],
+          demandIds: [],
+          candidateFactIds: ["fact_cv_support_reporting"],
+          verifiedCandidateFactIds: ["fact_cv_support_reporting"],
+        },
+        proofBlock: {
+          section: "proofBlock",
+          text: proof,
+          claimIds: ["claim_proof"],
+          factIds: [],
+          demandIds: [],
+          candidateFactIds: [],
+          verifiedCandidateFactIds: [],
+        },
+        employerValueBlock: {
+          section: "employerValueBlock",
+          text: employerValue,
+          claimIds: ["claim_employer_value"],
+          factIds: [],
+          demandIds: ["demand_core"],
+          candidateFactIds: [],
+          verifiedCandidateFactIds: [],
+        },
+        closeLine: {
+          section: "closeLine",
+          text: closeLine,
+          claimIds: ["claim_close"],
+          factIds: [],
+          demandIds: [],
+          candidateFactIds: [],
+          verifiedCandidateFactIds: [],
+        },
+      },
+    };
+
+    expect(() => finalizeProposalForPersistence(baseArgs)).toThrow(
+      /candidate-backed evidence/i,
+    );
+
+    const saved = finalizeProposalForPersistence({
+      ...baseArgs,
+      premiumFinalProvenance,
+    });
+    expect(saved).toContain("Weekly QA reporting");
+    expect(saved).toContain("Casey Reed");
+
+    const decorativeFactIdOnly = {
+      ...premiumFinalProvenance,
+      candidateFactIds: ["fact_cv_unrelated"],
+      verifiedCandidateFactIds: ["fact_cv_unrelated"],
+      candidateFacts: [
+        {
+          id: "fact_cv_unrelated",
+          section: "opening" as const,
+          text: "Reconciled vendor invoices and purchase orders for the finance team.",
+          source: "cv" as const,
+          metrics: [],
+          entities: [],
+        },
+      ],
+    };
+    expect(() =>
+      finalizeProposalForPersistence({
+        ...baseArgs,
+        premiumFinalProvenance: decorativeFactIdOnly,
+      }),
+    ).toThrow(/candidate-backed evidence/i);
+
+    expect(() =>
+      finalizeProposalForPersistence({
+        ...baseArgs,
+        premiumFinalProvenance: {
+          ...premiumFinalProvenance,
+          status: "untrusted_legacy_wrapped",
+          origin: "legacy_wrapped",
+        },
       }),
     ).toThrow(/candidate-backed evidence/i);
   });
