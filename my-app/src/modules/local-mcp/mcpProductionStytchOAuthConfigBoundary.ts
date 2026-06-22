@@ -424,8 +424,11 @@ function validateTimingClaims(
   now: Date | undefined,
 ): { ok: true } | ClaimValidationFailure {
   const nowSeconds = Math.floor((now ?? new Date()).getTime() / 1000);
-  if (!Number.isInteger(payload.exp)) return invalidClaim("malformed_claims");
-  if (payload.exp <= nowSeconds) return invalidClaim("expired_token");
+  const exp = payload.exp;
+  if (typeof exp !== "number" || !Number.isInteger(exp)) {
+    return invalidClaim("malformed_claims");
+  }
+  if (exp <= nowSeconds) return invalidClaim("expired_token");
   if (payload.nbf !== undefined && !Number.isInteger(payload.nbf)) {
     return invalidClaim("malformed_claims");
   }

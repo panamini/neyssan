@@ -369,6 +369,7 @@ function isAuditRedaction(value: unknown): value is LocalMcpRedactedAuditRedacti
     isRecordLike(value) &&
     hasOnlyAllowedKeys(value, REDACTION_KEYS) &&
     isRedactionCategory(value.category) &&
+    typeof value.occurrences === "number" &&
     Number.isInteger(value.occurrences) &&
     value.occurrences > 0 &&
     value.version === 1

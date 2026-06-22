@@ -677,6 +677,7 @@ function parseEditRequestedRef(
   artifactKind: McpGeneratedArtifactRevisionLoopArtifactKindV1,
 ): McpGeneratedArtifactRevisionLoopRefV1 | undefined {
   const record = readExactRecord(value, ARTIFACT_REF_KEYS, ARTIFACT_REF_KEYS);
+  const updatedAt = record ? readIsoTimestamp(record.updatedAt) : undefined;
   if (
     !record ||
     !isSafeArtifactRefId(record.id, artifactKind) ||
@@ -684,7 +685,7 @@ function parseEditRequestedRef(
     record.status !== "edit_requested" ||
     record.category !== artifactKind ||
     !isSafeCount(record.count) ||
-    !readIsoTimestamp(record.updatedAt) ||
+    !updatedAt ||
     record.version !== 1
   ) {
     return undefined;
@@ -695,7 +696,7 @@ function parseEditRequestedRef(
     status: "edit_requested",
     category: artifactKind,
     count: record.count,
-    updatedAt: record.updatedAt,
+    updatedAt,
     version: 1,
   };
 }
@@ -1260,11 +1261,21 @@ function isSafeText(value: unknown): value is string {
 }
 
 function isSafeCount(value: unknown): value is number {
-  return Number.isInteger(value) && value >= 0 && value <= MAX_SAFE_COUNT;
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= MAX_SAFE_COUNT
+  );
 }
 
 function isRevisionCount(value: unknown): value is number {
-  return Number.isInteger(value) && value >= 0 && value <= MAX_REVISION_COUNT;
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= MAX_REVISION_COUNT
+  );
 }
 
 function readIsoTimestamp(value: unknown): string | undefined {

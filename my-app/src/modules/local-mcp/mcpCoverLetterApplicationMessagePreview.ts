@@ -846,7 +846,12 @@ function isTailoringCompleteness(
 }
 
 function isSafeCount(val: unknown): val is number {
-  return Number.isInteger(val) && val >= 0 && val <= MAX_SAFE_COUNT;
+  return (
+    typeof val === "number" &&
+    Number.isInteger(val) &&
+    val >= 0 &&
+    val <= MAX_SAFE_COUNT
+  );
 }
 
 function isSafeText(val: string): boolean {

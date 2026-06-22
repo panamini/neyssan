@@ -146,6 +146,11 @@ type ParsedDataRefsResult = Readonly<{
   ownerResolvedServerOnly: boolean;
 }>;
 
+type AvailabilitySummary = Extract<
+  McpReadOnlyTwoweeksDataAdapterResultV1,
+  { allowed: true }
+>["availabilitySummary"];
+
 type ParsedDataRefCandidate = Readonly<{
   refClass: LocalMcpSafeConvexSelectorProjectionRefClassV1;
   refId: string;
@@ -371,14 +376,20 @@ function evaluateAdapterGates(
   input: McpReadOnlyTwoweeksDataAdapterInputV1,
 ): { ok: true } & AdapterGateState | { ok: false; result: McpReadOnlyTwoweeksDataAdapterResultV1 } {
   if (!isAuthorized(input.authBoundary)) return { ok: false, result: deny("auth_required") };
+  const authBoundary = input.authBoundary;
   if (!isAccountLinkAllowed(input.accountLinkBoundary)) {
     return { ok: false, result: deny("account_link_required") };
   }
+  const accountLinkBoundary = input.accountLinkBoundary;
 
   const accountLinkResolution = parseAccountLinkResolution(input.accountLinkResolution);
   if (!accountLinkResolution) return { ok: false, result: deny("account_link_required") };
 
-  const grantedScopeSets = buildGrantedScopeSets(input, accountLinkResolution);
+  const grantedScopeSets = buildGrantedScopeSets(
+    authBoundary,
+    accountLinkBoundary,
+    accountLinkResolution,
+  );
   if (!hasBaseReadScope(grantedScopeSets)) {
     return { ok: false, result: deny("missing_required_scope") };
   }
@@ -410,12 +421,19 @@ function isAdapterInputEnvelope(
 }
 
 function buildGrantedScopeSets(
-  input: McpReadOnlyTwoweeksDataAdapterInputV1,
+  authBoundary: Extract<
+    McpProductionStytchOAuthConfigBoundaryResultV1,
+    { allowed: true }
+  >,
+  accountLinkBoundary: Extract<
+    McpProductionAccountLinkPersistenceResultV1,
+    { allowed: true }
+  >,
   accountLinkResolution: McpReadOnlyTwoweeksDataAccountLinkResolutionV1,
 ): readonly (readonly McpProductionStytchOAuthReadScopeV1[])[] {
   return [
-    input.authBoundary.serverOnly.grantedReadScopes,
-    input.accountLinkBoundary.serverOnly.grantedReadScopes,
+    authBoundary.serverOnly.grantedReadScopes,
+    accountLinkBoundary.serverOnly.grantedReadScopes,
     accountLinkResolution.grantedReadScopes,
   ];
 }
@@ -489,16 +507,24 @@ function parseDataRefsResult(value: unknown): ParsedDataRefsResult | undefined {
   const capabilities = parseDataRefsCapabilities(record.capabilities);
   if (!capabilities) return undefined;
 
-  const refs = record.refs.map(parseDataRefCandidate);
-  const blockedRefClasses = record.blockedRefClasses.map(parseBlockedRefClass);
-  if (refs.some((ref) => ref === undefined) || blockedRefClasses.some((item) => item === undefined)) {
-    return undefined;
+  const refs: ParsedDataRefCandidate[] = [];
+  for (const ref of record.refs) {
+    const parsedRef = parseDataRefCandidate(ref);
+    if (!parsedRef) return undefined;
+    refs.push(parsedRef);
+  }
+
+  const blockedRefClasses: McpReadOnlyTwoweeksDataBlockedRefClassV1[] = [];
+  for (const item of record.blockedRefClasses) {
+    const parsedItem = parseBlockedRefClass(item);
+    if (!parsedItem) return undefined;
+    blockedRefClasses.push(parsedItem);
   }
 
   return {
     ownerState: record.ownerState,
-    refs: refs as ParsedDataRefCandidate[],
-    blockedRefClasses: blockedRefClasses as McpReadOnlyTwoweeksDataBlockedRefClassV1[],
+    refs,
+    blockedRefClasses,
     ownerResolvedServerOnly: capabilities.ownerResolvedServerOnly,
   };
 }
@@ -532,7 +558,15 @@ function parseBlockedRefClass(value: unknown): McpReadOnlyTwoweeksDataBlockedRef
   return { refClass: record.refClass, reason: "missing_class_scope", version: 1 };
 }
 
-function isAccountLinkResolutionShape(record: Record<string, unknown>): boolean {
+function isAccountLinkResolutionShape(
+  record: Record<string, unknown>,
+): record is Record<string, unknown> & {
+  twoweeksClerkId: string;
+  grantedReadScopes: McpProductionAccountLinkReadScopeV1[];
+  grantRef: string;
+  consentRef: string;
+  auditReasonCode: string;
+} {
   return [
     record.kind === "mcp_account_link_server_only_owner_resolution",
     record.provider === "stytch",
@@ -546,7 +580,13 @@ function isAccountLinkResolutionShape(record: Record<string, unknown>): boolean 
   ].every(Boolean);
 }
 
-function isDataRefsResultEnvelope(record: Record<string, unknown>): boolean {
+function isDataRefsResultEnvelope(
+  record: Record<string, unknown>,
+): record is Record<string, unknown> & {
+  ownerState: ParsedDataRefsResult["ownerState"];
+  refs: readonly unknown[];
+  blockedRefClasses: readonly unknown[];
+} {
   return [
     record.kind === "mcp_read_only_twoweeks_data_refs_result",
     isOwnerState(record.ownerState),
@@ -681,9 +721,7 @@ function addBlockedRefClass(
 function summarizeAvailability(
   refs: Partial<Record<LocalMcpSafeConvexSelectorProjectionRefClassV1, McpReadOnlyTwoweeksDataRefV1>>,
   blockedRefClasses: readonly McpReadOnlyTwoweeksDataBlockedRefClassV1[],
-): McpReadOnlyTwoweeksDataAdapterResultV1 extends { allowed: true; availabilitySummary: infer T }
-  ? T
-  : never {
+): AvailabilitySummary {
   const values = Object.values(refs);
   return {
     available: values.filter((ref) => ref.status === "available").length,
@@ -691,12 +729,7 @@ function summarizeAvailability(
     onboarding: values.filter((ref) => ref.status === "onboarding_required").length,
     blocked: blockedRefClasses.length,
     version: 1,
-  } as McpReadOnlyTwoweeksDataAdapterResultV1 extends {
-    allowed: true;
-    availabilitySummary: infer T;
-  }
-    ? T
-    : never;
+  };
 }
 
 function deny(
@@ -869,7 +902,12 @@ function isCategory(value: unknown): value is McpReadOnlyTwoweeksDataRefCategory
 }
 
 function isSafeCount(value: unknown): value is number {
-  return Number.isInteger(value) && value >= 0 && value <= MAX_SAFE_COUNT;
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= MAX_SAFE_COUNT
+  );
 }
 
 function isOptionalIsoTimestamp(value: unknown): value is string | undefined {

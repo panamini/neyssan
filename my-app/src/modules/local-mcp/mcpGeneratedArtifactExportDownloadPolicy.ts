@@ -705,6 +705,7 @@ function parseArtifactRef(
   artifactKind: McpGeneratedArtifactExportDownloadPolicyArtifactKindV1,
 ): McpGeneratedArtifactExportDownloadPolicyRefV1 | undefined {
   const record = readExactRecord(value, ARTIFACT_REF_KEYS, ARTIFACT_REF_KEYS);
+  const updatedAt = record ? readIsoTimestamp(record.updatedAt) : undefined;
   if (
     !record ||
     !isSafeArtifactRefId(record.id, artifactKind) ||
@@ -712,7 +713,7 @@ function parseArtifactRef(
     record.status !== "approved_for_preview" ||
     record.category !== artifactKind ||
     !isSafeCount(record.count) ||
-    !readIsoTimestamp(record.updatedAt) ||
+    !updatedAt ||
     record.version !== 1
   ) {
     return undefined;
@@ -724,7 +725,7 @@ function parseArtifactRef(
     status: "approved_for_preview",
     category: artifactKind,
     count: record.count,
-    updatedAt: record.updatedAt,
+    updatedAt,
     version: 1,
   };
 }
@@ -1239,7 +1240,12 @@ function isSafeText(value: unknown): value is string {
 }
 
 function isSafeCount(value: unknown): value is number {
-  return Number.isInteger(value) && value >= 0 && value <= MAX_SAFE_COUNT;
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= MAX_SAFE_COUNT
+  );
 }
 
 function readIsoTimestamp(value: unknown): string | undefined {

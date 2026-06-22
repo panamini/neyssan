@@ -764,7 +764,7 @@ function parseDataClasses(
   }
   const output: McpOutboundEgressDataClassV1[] = [];
   for (const item of input) {
-    if (typeof item !== "string" || !DATA_CLASSES.has(item)) return undefined;
+    if (!isDataClass(item)) return undefined;
     if (!output.includes(item)) output.push(item);
   }
   return output;
@@ -901,11 +901,6 @@ function redactedUrlFromDestination(
   return `${destination.origin}${destination.path}`;
 }
 
-function safePathForAudit(path: string): string {
-  const normalized = path || "/";
-  return isSafePath(normalized) ? normalized : "/redacted-path";
-}
-
 function isSafePolicyPath(path: string): boolean {
   return isSafePath(path) && !ENCODED_PATH_BOUNDARY_PATTERN.test(path);
 }
@@ -938,13 +933,26 @@ function isSafeText(value: unknown, maxLength: number): value is string {
 function isActionCategory(
   value: unknown,
 ): value is McpOutboundEgressActionCategoryV1 {
-  return typeof value === "string" && ACTION_CATEGORIES.has(value);
+  return (
+    typeof value === "string" &&
+    ACTION_CATEGORIES.has(value as McpOutboundEgressActionCategoryV1)
+  );
+}
+
+function isDataClass(value: unknown): value is McpOutboundEgressDataClassV1 {
+  return (
+    typeof value === "string" &&
+    DATA_CLASSES.has(value as McpOutboundEgressDataClassV1)
+  );
 }
 
 function isOptionalPositiveInteger(value: unknown): boolean {
   return (
     value === undefined ||
-    (Number.isInteger(value) && (value as number) > 0 && (value as number) <= 10_000_000)
+    (typeof value === "number" &&
+      Number.isInteger(value) &&
+      value > 0 &&
+      value <= 10_000_000)
   );
 }
 

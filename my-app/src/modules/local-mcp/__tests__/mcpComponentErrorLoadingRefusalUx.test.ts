@@ -386,6 +386,67 @@ describe("PR67 component error loading refusal UX boundary", () => {
     }
   });
 
+  it("accepts valid safe ref id arrays without widening them to raw payload", () => {
+    const refIds = [
+      "mcp-safe-ref:application-package:pkg-1",
+      "mcp-safe-ref:review-cockpit:latest",
+    ] as const;
+    const result = expectAllowed(
+      buildMcpComponentErrorLoadingRefusalUx(
+        componentInput("loading", {
+          refIds,
+        }),
+      ),
+    );
+
+    expect(result.component.structuredContent.refIds).toEqual([...refIds]);
+    expect(result.component.stateSnapshot.safeRefs).toEqual([...refIds]);
+    assertSafeOutput(result);
+  });
+
+  it("accepts an empty safe ref id array", () => {
+    const result = expectAllowed(
+      buildMcpComponentErrorLoadingRefusalUx(
+        componentInput("safe_unavailable", {
+          refIds: [],
+        }),
+      ),
+    );
+
+    expect(result.component.structuredContent.refIds).toEqual([]);
+    expect(result.component.stateSnapshot.safeRefs).toEqual([]);
+  });
+
+  it.each([
+    ["string", "mcp-safe-ref:review-cockpit:latest"],
+    ["object", { value: "mcp-safe-ref:review-cockpit:latest" }],
+    ["null", null],
+  ] as const)("fails closed for non-array ref ids: %s", (_label, refIds) => {
+    const result = expectBlocked(
+      componentInput("loading", {
+        refIds,
+      }),
+    );
+
+    expect(result.reason).toBe("invalid_input");
+  });
+
+  it("fails closed without leaking arrays that contain non-string private payloads", () => {
+    const result = expectBlocked(
+      componentInput("privacy_blocked", {
+        refIds: [
+          "mcp-safe-ref:review-cockpit:latest",
+          { privateFact: "PRIVATE_FACT_SENTINEL_DO_NOT_EXPOSE" },
+        ],
+      }),
+    );
+
+    expect(result.reason).toBe("invalid_input");
+    expect(JSON.stringify(result)).not.toContain(
+      "PRIVATE_FACT_SENTINEL_DO_NOT_EXPOSE",
+    );
+  });
+
   it.each([
     [
       "raw CV ref",

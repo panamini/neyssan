@@ -594,18 +594,18 @@ function isUxReason(
 }
 
 function readSafeRefIds(value: unknown): readonly string[] | undefined {
-  let items: unknown[];
   try {
     if (!Array.isArray(value) || value.length > MAX_REF_IDS) return undefined;
-    items = [...value];
+
+    const items: string[] = [];
+    for (const item of value) {
+      if (typeof item !== "string" || !isSafeOpaqueRefId(item)) return undefined;
+      items.push(item);
+    }
+    return Object.freeze(items);
   } catch {
     return undefined;
   }
-
-  for (const item of items) {
-    if (typeof item !== "string" || !isSafeOpaqueRefId(item)) return undefined;
-  }
-  return items;
 }
 
 function deny(

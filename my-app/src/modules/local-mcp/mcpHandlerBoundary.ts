@@ -381,16 +381,22 @@ function validateEffectPolicy(
     addError(errors, "effect_policy_invalid", "$.effectPolicy", "Local MCP effect policy is required.");
     return;
   }
+  const allowedEffects = Array.isArray(value.allowedEffects)
+    ? value.allowedEffects
+    : undefined;
+  const forbiddenEffects = Array.isArray(value.forbiddenEffects)
+    ? value.forbiddenEffects
+    : undefined;
   if (
     value.kind !== "local_mcp_handler_effect_policy" ||
     value.version !== 1 ||
-    !Array.isArray(value.allowedEffects) ||
-    !Array.isArray(value.forbiddenEffects) ||
-    !sameStringSet(value.allowedEffects, LOCAL_MCP_HANDLER_ALLOWED_EFFECTS_V1) ||
-    !sameStringSet(value.forbiddenEffects, LOCAL_MCP_HANDLER_FORBIDDEN_EFFECTS_V1) ||
-    value.allowedEffects.some((item) => !isAllowedEffect(item)) ||
-    value.forbiddenEffects.some((item) => !isForbiddenEffect(item)) ||
-    value.allowedEffects.some((item) => value.forbiddenEffects.includes(item))
+    !allowedEffects ||
+    !forbiddenEffects ||
+    !sameStringSet(allowedEffects, LOCAL_MCP_HANDLER_ALLOWED_EFFECTS_V1) ||
+    !sameStringSet(forbiddenEffects, LOCAL_MCP_HANDLER_FORBIDDEN_EFFECTS_V1) ||
+    allowedEffects.some((item) => !isAllowedEffect(item)) ||
+    forbiddenEffects.some((item) => !isForbiddenEffect(item)) ||
+    allowedEffects.some((item) => forbiddenEffects.includes(item))
   ) {
     addError(errors, "effect_policy_invalid", "$.effectPolicy", "Local MCP effect policy is invalid.");
   }

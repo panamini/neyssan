@@ -5,7 +5,6 @@ import {
 } from "./mcpComponentDataPolicy";
 import type {
   McpGeneratedArtifactExportDownloadPolicyRefV1,
-  McpGeneratedArtifactExportDownloadPolicyResultV1,
   McpGeneratedArtifactExportDownloadPolicySummaryV1,
 } from "./mcpGeneratedArtifactExportDownloadPolicy";
 
@@ -1125,6 +1124,7 @@ function parseArtifactRef(
   value: unknown,
 ): McpGeneratedArtifactExportDownloadPolicyRefV1 | undefined {
   const record = readExactRecord(value, ARTIFACT_REF_KEYS, ARTIFACT_REF_KEYS);
+  const updatedAt = record ? readIsoTimestamp(record.updatedAt) : undefined;
   if (
     !record ||
     !isSafeArtifactRefId(record.id) ||
@@ -1132,7 +1132,7 @@ function parseArtifactRef(
     record.status !== "approved_for_preview" ||
     record.category !== "resume_variant" ||
     !isSafeCount(record.count) ||
-    !readIsoTimestamp(record.updatedAt) ||
+    !updatedAt ||
     record.version !== 1
   ) {
     return undefined;
@@ -1144,7 +1144,7 @@ function parseArtifactRef(
     status: "approved_for_preview",
     category: "resume_variant",
     count: record.count,
-    updatedAt: record.updatedAt,
+    updatedAt,
     version: 1,
   };
 }
@@ -1424,7 +1424,12 @@ function isSafeSummaryText(value: unknown): value is string {
 }
 
 function isSafeCount(value: unknown): value is number {
-  return Number.isInteger(value) && value >= 0 && value <= MAX_SAFE_COUNT;
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= MAX_SAFE_COUNT
+  );
 }
 
 function readIsoTimestamp(value: unknown): string | undefined {

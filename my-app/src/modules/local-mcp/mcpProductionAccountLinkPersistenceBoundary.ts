@@ -361,17 +361,22 @@ function parseInputCore(record: Record<string, unknown>): ParsedAccountLinkInput
 function parseInputOptions(
   record: Record<string, unknown>,
 ): ParsedAccountLinkInputOptions | undefined {
-  if (record.now !== undefined && !isFiniteTimestamp(record.now)) return undefined;
+  const now = record.now === undefined ? undefined : record.now;
+  const maxLinkAgeMs =
+    record.maxLinkAgeMs === undefined ? undefined : record.maxLinkAgeMs;
+  if (now !== undefined && !isFiniteTimestamp(now)) return undefined;
   if (
-    record.maxLinkAgeMs !== undefined &&
-    (!Number.isInteger(record.maxLinkAgeMs) || record.maxLinkAgeMs <= 0)
+    maxLinkAgeMs !== undefined &&
+    (typeof maxLinkAgeMs !== "number" ||
+      !Number.isInteger(maxLinkAgeMs) ||
+      maxLinkAgeMs <= 0)
   ) {
     return undefined;
   }
 
   return {
-    ...(record.now !== undefined ? { now: record.now } : {}),
-    ...(record.maxLinkAgeMs !== undefined ? { maxLinkAgeMs: record.maxLinkAgeMs } : {}),
+    ...(now !== undefined ? { now } : {}),
+    ...(maxLinkAgeMs !== undefined ? { maxLinkAgeMs } : {}),
   };
 }
 

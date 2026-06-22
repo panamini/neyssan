@@ -2202,9 +2202,19 @@ function isTextValueAllowed(value: string, maxLength: number): boolean {
   return (
     /\S/u.test(normalized) &&
     normalized.length <= maxLength &&
-    !/[\u0000-\u001f\u007f]/u.test(normalized) &&
+    !containsControlCharacter(normalized) &&
     !containsUnsafeText(normalized)
   );
+}
+
+function containsControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 0x1f || code === 0x7f) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function containsUnsafeText(value: string): boolean {
@@ -2272,7 +2282,11 @@ function readPlainObjectDescriptors(
 function readArrayValues(input: unknown): readonly unknown[] | undefined {
   try {
     if (!Array.isArray(input)) return undefined;
-    const descriptors = Object.getOwnPropertyDescriptors(input);
+    const descriptors: Record<PropertyKey, PropertyDescriptor | undefined> =
+      Object.create(null);
+    for (const key of Reflect.ownKeys(input)) {
+      descriptors[key] = Object.getOwnPropertyDescriptor(input, key);
+    }
     const arrayLength = readArrayDescriptorLength(descriptors.length);
     if (arrayLength === undefined) return undefined;
     if (!hasOnlyArrayIndexDescriptorKeys(descriptors, arrayLength)) return undefined;

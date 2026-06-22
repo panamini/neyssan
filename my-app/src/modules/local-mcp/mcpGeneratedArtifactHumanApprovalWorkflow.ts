@@ -502,7 +502,8 @@ function parseArtifactContext(value: unknown): ParsedArtifactContext | undefined
 
   const artifactKind = readArtifactKind(record.artifactKind);
   if (!artifactKind) return undefined;
-  if (record.previewStatus !== PREVIEW_STATUS_BY_ARTIFACT_KIND[artifactKind]) {
+  const previewStatus = PREVIEW_STATUS_BY_ARTIFACT_KIND[artifactKind];
+  if (record.previewStatus !== previewStatus) {
     return undefined;
   }
 
@@ -512,7 +513,7 @@ function parseArtifactContext(value: unknown): ParsedArtifactContext | undefined
 
   return {
     artifactKind,
-    previewStatus: record.previewStatus,
+    previewStatus,
     artifactRef,
     safeCounts,
   };
@@ -527,6 +528,7 @@ function parseArtifactRef(
     ARTIFACT_REF_KEYS,
     ARTIFACT_REF_KEYS,
   );
+  const updatedAt = record ? readIsoTimestamp(record.updatedAt) : undefined;
   if (
     !record ||
     !isSafeArtifactRefId(record.id, artifactKind) ||
@@ -534,7 +536,7 @@ function parseArtifactRef(
     record.status !== "human_review_required" ||
     record.category !== artifactKind ||
     !isSafeCount(record.count) ||
-    !readIsoTimestamp(record.updatedAt) ||
+    !updatedAt ||
     record.version !== 1
   ) {
     return undefined;
@@ -542,7 +544,7 @@ function parseArtifactRef(
   return {
     id: record.id,
     count: record.count,
-    updatedAt: record.updatedAt,
+    updatedAt,
   };
 }
 
@@ -1082,7 +1084,12 @@ function isSafeText(value: unknown): value is string {
 }
 
 function isSafeCount(value: unknown): value is number {
-  return Number.isInteger(value) && value >= 0 && value <= MAX_SAFE_COUNT;
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= MAX_SAFE_COUNT
+  );
 }
 
 function readIsoTimestamp(value: unknown): string | undefined {
