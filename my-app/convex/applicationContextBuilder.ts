@@ -1,4 +1,5 @@
 import { internalMutation } from "./_generated/server";
+import type { Infer } from "convex/values";
 import { v } from "convex/values";
 import { applicationHarnessContextValidator } from "./lib/applicationHarness";
 import { buildApplicationContextV1FromExistingData } from "./lib/applicationContextBuilder";
@@ -26,6 +27,7 @@ const buildAndPersistResultValidator = v.object({
 type BuiltApplicationContext = Awaited<
   ReturnType<typeof buildApplicationContextV1FromExistingData>
 >["context"];
+type ProjectedApplicationContext = Infer<typeof applicationHarnessContextValidator>;
 
 type StoredApplicationContext = BuiltApplicationContext & {
   _id: unknown;
@@ -118,16 +120,16 @@ export const buildAndPersistFromJobAndProfile = internalMutation({
 
 function projectApplicationContext(
   context: BuiltApplicationContext | StoredApplicationContext,
-): BuiltApplicationContext {
+): ProjectedApplicationContext {
   return {
     id: context.id,
     userId: context.userId,
-    job: context.job,
-    candidate: context.candidate,
+    job: { ...context.job },
+    candidate: { ...context.candidate },
     settingsHash: context.settingsHash,
     contextHash: context.contextHash,
     reviewState: context.reviewState,
-    sourceRefs: [...context.sourceRefs],
+    sourceRefs: context.sourceRefs.map((sourceRef) => ({ ...sourceRef })),
     createdAt: context.createdAt,
     updatedAt: context.updatedAt,
     version: context.version,

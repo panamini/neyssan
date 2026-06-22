@@ -211,7 +211,7 @@ export const internalSummarizeMcpEvidenceGraph = internalQuery({
   },
   returns: mcpEvidenceGraphSummaryResultValidator,
   handler: async (ctx, args): Promise<McpEvidenceGraphSummaryResultV1> => {
-    return await summarizeMcpEvidenceGraph(ctx.db, args);
+    return await summarizeMcpEvidenceGraph(ctx.db as unknown as DbReader, args);
   },
 });
 

@@ -1,4 +1,6 @@
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, internalQuery } from "./_generated/server";
+import type { Infer } from "convex/values";
 import { v } from "convex/values";
 import {
   liveExternalActionCategoryValidator,
@@ -111,6 +113,10 @@ const executionResultValidator = v.object({
   version: v.literal(1),
 });
 
+type LiveExternalActionStoredExecution = Infer<
+  typeof liveExternalActionStoredExecutionValidator
+>;
+type LiveExternalActionExecutionResult = Infer<typeof executionResultValidator>;
 type ProviderAccessBlocker = (typeof PROVIDER_ACCESS_BLOCKERS)[number];
 
 export type LiveExternalActionSafeConfigStatus = Readonly<{
@@ -163,7 +169,7 @@ export const reserveExternalAction = internalMutation({
     now: v.number(),
   },
   returns: executionResultValidator,
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<LiveExternalActionExecutionResult> => {
     const parsed = parseReservationArgs(args);
     const existing = await getExecutionByIdempotencyKeyHash(
       ctx,
@@ -212,7 +218,7 @@ export const markExternalActionDispatching = internalMutation({
     now: v.number(),
   },
   returns: executionResultValidator,
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<LiveExternalActionExecutionResult> => {
     const parsed = parseMarkArgs(args);
     const existing = await getExecutionByIdempotencyKeyHash(
       ctx,
@@ -258,7 +264,7 @@ export const finalizeExternalAction = internalMutation({
     now: v.number(),
   },
   returns: executionResultValidator,
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<LiveExternalActionExecutionResult> => {
     const parsed = parseFinalizeArgs(args);
     const existing = await getExecutionByIdempotencyKeyHash(
       ctx,
@@ -310,23 +316,9 @@ export const getExternalActionByIdempotencyKeyHash = internalQuery({
 });
 
 async function getExecutionByIdempotencyKeyHash(
-  ctx: {
-    db: {
-      query: (table: "liveExternalActionExecutions") => {
-        withIndex: (
-          indexName: "by_idempotency_key_hash",
-          buildQuery: (q: {
-            eq: (
-              fieldName: "idempotencyKeyHash",
-              value: string,
-            ) => unknown;
-          }) => unknown,
-        ) => { unique: () => Promise<any> };
-      };
-    };
-  },
+  ctx: Pick<QueryCtx | MutationCtx, "db">,
   idempotencyKeyHash: string,
-) {
+): Promise<LiveExternalActionStoredExecution | null> {
   return await ctx.db
     .query("liveExternalActionExecutions")
     .withIndex("by_idempotency_key_hash", (q) =>
@@ -413,12 +405,12 @@ function executionResult(
     | "finalize_blocked"
     | "not_found",
   options: Readonly<{
-    id?: string;
+    id?: LiveExternalActionExecutionResult["id"];
     state?: LiveExternalActionState;
     canDispatch?: boolean;
     canFinalize?: boolean;
   }>,
-) {
+): LiveExternalActionExecutionResult {
   return {
     kind: "live_external_action_execution_result" as const,
     outcome,
@@ -426,7 +418,7 @@ function executionResult(
     canFinalize: options.canFinalize ?? false,
     ...(options.id ? { id: options.id } : {}),
     ...(options.state ? { state: options.state } : {}),
-    version: CURRENT_VERSION,
+    version: 1,
   };
 }
 

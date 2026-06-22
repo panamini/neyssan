@@ -47,8 +47,8 @@ export type McpReadOnlyTwoweeksDataBlockedRefClassV1 = Readonly<{
 export type McpReadOnlyTwoweeksDataRefsResultV1 = Readonly<{
   kind: "mcp_read_only_twoweeks_data_refs_result";
   ownerState: "resolved" | "onboarding_required";
-  refs: readonly McpReadOnlyTwoweeksDataRefCandidateV1[];
-  blockedRefClasses: readonly McpReadOnlyTwoweeksDataBlockedRefClassV1[];
+  refs: McpReadOnlyTwoweeksDataRefCandidateV1[];
+  blockedRefClasses: McpReadOnlyTwoweeksDataBlockedRefClassV1[];
   capabilities: {
     ownerResolvedServerOnly: boolean;
     dataReads: "convex_read_only_refs";
@@ -228,7 +228,7 @@ export const internalListMcpReadOnlyTwoweeksDataRefs = internalQuery({
   },
   returns: mcpReadOnlyDataRefsResultValidator,
   handler: async (ctx, args): Promise<McpReadOnlyTwoweeksDataRefsResultV1> => {
-    return await listMcpReadOnlyTwoweeksDataRefs(ctx.db, args);
+    return await listMcpReadOnlyTwoweeksDataRefs(ctx.db as unknown as DbReader, args);
   },
 });
 
