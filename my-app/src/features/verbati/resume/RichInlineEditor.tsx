@@ -13,7 +13,7 @@ import {
 } from "remirror/extensions";
 
 import type { ActivePaperEditTarget } from "./InlineEditableText";
-import type { WorkshopResponsibilitiesRichContent } from "../resume.types";
+import type { WorkshopResponsibilitiesRichContent } from "./resume.types";
 import type { WorkshopCommittedResponsibilitiesRichContent } from "../../../lib/resume/resumePagination";
 import { useEditorFormattingActions } from "../../../components/remirror-editor/components/EditorToolbar";
 import {
@@ -364,7 +364,7 @@ export function PaperRichInlineEditor(args: {
           enabled={args.editable}
           formattingKey={formattingKey}
         />
-        <EditorComponent autoFocus={false} />
+        <EditorComponent />
       </Remirror>
     </div>
   );

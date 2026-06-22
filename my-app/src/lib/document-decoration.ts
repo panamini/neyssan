@@ -386,7 +386,7 @@ export function applyDocumentDecorationSizePreset(
 
 export function getDefaultDocumentDecorationPlacementForTemplate(
   templateId: string | null | undefined,
-): typeof DEFAULT_DOCUMENT_DECORATION_PLACEMENT {
+): { readonly xMm: number; readonly yMm: number } {
   if (templateId === "editorial_wide") {
     return EDITORIAL_TEMPLATE_FLOWER_DECORATION_PLACEMENT;
   }

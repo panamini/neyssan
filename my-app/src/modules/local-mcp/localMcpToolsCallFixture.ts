@@ -221,7 +221,13 @@ function parseOptionalRequestFields(
   value: Record<string, unknown>,
   approval: LocalMcpApprovalV1 | undefined,
 ): Partial<Pick<LocalMcpToolsCallFixtureRequestV1, "approval" | "consent" | "requestedSurface" | "prompt" | "requestId">> {
-  const fields: Partial<Pick<LocalMcpToolsCallFixtureRequestV1, "approval" | "consent" | "requestedSurface" | "prompt" | "requestId">> = {};
+  const fields: {
+    approval?: LocalMcpApprovalV1;
+    consent?: unknown;
+    requestedSurface?: LocalMcpConsentSurfaceV1;
+    prompt?: string;
+    requestId?: string;
+  } = {};
   if (approval) fields.approval = approval;
   if (value.consent !== undefined) fields.consent = value.consent;
   if (value.requestedSurface !== undefined && optionalRequestedSurfaceIsValid(value.requestedSurface)) {

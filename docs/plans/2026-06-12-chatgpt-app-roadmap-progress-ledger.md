@@ -34,16 +34,20 @@ Current implementation PR:
 ```txt
 PR87.3 - Production TypeScript Build Follow-up
 Branch: codex/pr87-3-production-typescript-build-followup
-Status: not started
-Scope: continue production TypeScript build unblock from first remaining blocker `src/components/cv/SectionEditorSheet.tsx(1632,24) TS2352`.
-Final status must later be either `PRODUCTION_TYPESCRIPT_BUILD_GREEN` or `BLOCKED_PRODUCTION_TYPESCRIPT_BUILD_REMAINING`.
+GitHub PR: https://github.com/panamini/neyssan/pull/228
+Status: open; production build still blocked.
+Scope: continued production TypeScript build unblock from first remaining blocker `src/components/cv/SectionEditorSheet.tsx(1632,24) TS2352`.
+Starting build state: `rtk npm run build` failed with 203 compressed TypeScript errors.
+Ending build state: `rtk npm run build` still fails with 145 compressed TypeScript errors / 144 parsed file-scoped diagnostics; first remaining blocker is `src/modules/local-mcp/mcpComponentErrorLoadingRefusalUx.ts(608,3) TS2322`.
+Final status: `BLOCKED_PRODUCTION_TYPESCRIPT_BUILD_REMAINING`.
 ```
 
 Exact next PR:
 
 ```txt
-Exact next PR is PR87.3 - Production TypeScript Build Follow-up.
-PR87.2 final status: `BLOCKED_PRODUCTION_TYPESCRIPT_BUILD_REMAINING`.
+Exact active PR is PR87.3 - Production TypeScript Build Follow-up until merged.
+PR87.3 final status: `BLOCKED_PRODUCTION_TYPESCRIPT_BUILD_REMAINING`.
+If PR87.3 is merged, the next implementation work must remain a production TypeScript build follow-up starting from `src/modules/local-mcp/mcpComponentErrorLoadingRefusalUx.ts(608,3) TS2322` and the remaining ProposalForge/CvForge/local-MCP/Settings/tsconfig-node clusters.
 Lint and npm audit remain separate future gates unless naturally fixed by TypeScript work.
 PR80-live remains blocked by provider authorization prerequisites.
 Approved answer copy stays blocked until a future source-model decision creates an authoritative approved answer source.
@@ -269,6 +273,8 @@ PR223 merged PR87 into `application-os-foundation` with merge commit `2102d8136c
 PR224 merged PR87.1 into `application-os-foundation` with merge commit `9389a487f6c6ef658980983033e358dbafafed4f` at `2026-06-21T23:15:11Z`. PR87.2 is now the next implementation PR. PR87.2 must focus only on production TypeScript build unblock. It must not broaden into lint-wide cleanup, npm audit, production deployment, PR88, PR80-live, billing, OAuth/provider/token, or answer-copy.
 
 PR226 merged PR87.2 into `application-os-foundation` with merge commit `888fba3ee37e19dcffa98c2289dd2a136bcb2875` at `2026-06-22T15:17:27Z`. PR87.2 was a partial production TypeScript build unblock/evidence PR only; build remains red with 203 TypeScript errors and first remaining blocker `src/components/cv/SectionEditorSheet.tsx(1632,24) TS2352`. PR87.2 final status is `BLOCKED_PRODUCTION_TYPESCRIPT_BUILD_REMAINING`. PR87.3 is now the next implementation PR and must remain limited to production TypeScript build follow-up. PR88, PR89, PR80-live, approved answer-copy, production billing, provider/OAuth/token work, deployment, lint-wide cleanup, and npm audit remain blocked or separate future gates.
+
+PR87.3 ran on `codex/pr87-3-production-typescript-build-followup` as GitHub PR #228 from base/head `a73a51212177253ddaac9d34d77dd0943593b478`. It reduced the production build from 203 compressed TypeScript errors to 145 compressed errors / 144 parsed file-scoped diagnostics by clearing the first `SectionEditorSheet.tsx` skill-item cast blocker, adjacent React/ref/locale/resume editor drift, the `CvLibraryContext.tsx` document-decoration narrowing cluster, and several narrow local-MCP parser/readonly tuple blockers. `rtk npx tsc --noEmit --pretty false` remains green, focused tests passed, and no package, lockfile, tsconfig, schema, billing, provider/OAuth/token, PR80-live, answer-copy, deployment, lint-wide cleanup, or npm audit work was added. Final status is `BLOCKED_PRODUCTION_TYPESCRIPT_BUILD_REMAINING`; PR88 and PR89 remain blocked.
 
 Maintainer decision after PR80A still keeps live ATS submit/apply blocked until one provider supplies written use-case authorization, official server-to-server credentials, a test tenant or sandbox, one authorized test posting, official schema/questions endpoint, official submit endpoint, and receipt/error/duplicate/retry clarification. Manual handoff must not reserve, dispatch, or finalize PR80A `liveExternalActionExecutions`, and it must not represent a user-reported outcome as provider-submitted or provider-verified. PR80B, PR80B-follow-up, and PR80B-follow-up-2-prep did not automatically unlock PR81; PR211 unlocked only narrow PR81 rate/budget hardening, and PR80-live remains blocked.
 

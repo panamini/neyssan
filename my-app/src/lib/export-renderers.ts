@@ -4386,7 +4386,10 @@ function renderResumeHtml(args: {
 
   const isEditorialSidebarResume =
     args.data.resumeTemplateId === EDITORIAL_SIDEBAR_RESUME_TEMPLATE_ID;
-  const renderExperienceTitle = (item: ResumeExperienceItem): string => {
+  const renderExperienceTitle = (item: {
+    role: string;
+    company: string;
+  }): string => {
     if (!isEditorialSidebarResume) {
       return `<h3 class="entry-title">${escapeHtml(
         [item.role, item.company].filter(Boolean).join(" · "),

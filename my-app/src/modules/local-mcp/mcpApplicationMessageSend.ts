@@ -2055,7 +2055,8 @@ function normalizeBody(value: string): string | undefined {
   return body;
 }
 
-function parseRevisionLineage(input: readonly unknown[]): readonly string[] | undefined {
+function parseRevisionLineage(input: unknown): readonly string[] | undefined {
+  if (!Array.isArray(input)) return undefined;
   if (input.length === 0 || input.length > MAX_REVISION_LINEAGE_LENGTH) {
     return undefined;
   }

@@ -561,14 +561,16 @@ describe("SectionEditorSheet", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Refresh suggestions" })).toBeInTheDocument();
 
-    fireEvent.click(
-      screen.getAllByRole("button", { name: "Add to Other Skills" })[0]!,
-    );
+    fireEvent.change(screen.getByLabelText("Add SIOP training to category"), {
+      target: { value: "__other_skills__" },
+    });
     expect(onAcceptListAiSuggestion).toHaveBeenCalledWith("SIOP training", {
       persist: false,
     });
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Dismiss" })[0]!);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Dismiss SIOP training" }),
+    );
     expect(onDismissListAiSuggestion).toHaveBeenCalledWith("SIOP training");
     expect(onClearListAiSuggestions).not.toHaveBeenCalled();
   });

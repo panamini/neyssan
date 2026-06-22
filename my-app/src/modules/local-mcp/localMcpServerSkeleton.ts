@@ -147,10 +147,10 @@ function assertDisabledConstraints(value: unknown): void {
 function cloneSkeleton(skeleton: LocalMcpServerSkeletonV1): LocalMcpServerSkeletonV1 {
   return Object.freeze({
     ...skeleton,
-    routePaths: Object.freeze([]),
-    exposedToolNames: Object.freeze([]),
-    callableToolNames: Object.freeze([]),
-    resourceUris: Object.freeze([]),
+    routePaths: Object.freeze([]) as readonly [],
+    exposedToolNames: Object.freeze([]) as readonly [],
+    callableToolNames: Object.freeze([]) as readonly [],
+    resourceUris: Object.freeze([]) as readonly [],
     constraints: Object.freeze({ ...skeleton.constraints }),
   });
 }

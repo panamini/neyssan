@@ -607,10 +607,7 @@ export default function ProposalsList({
         const leftRank = left.status === "saved" ? 0 : 1;
         const rightRank = right.status === "saved" ? 0 : 1;
         if (leftRank !== rightRank) return leftRank - rightRank;
-        return (
-          (right.updatedAt ?? right._creationTime ?? 0) -
-          (left.updatedAt ?? left._creationTime ?? 0)
-        );
+        return (right._creationTime ?? 0) - (left._creationTime ?? 0);
       });
   }, [fallbackProposals, optimisticSavedProposal, proposals]);
   const deleteProposal = useMutation(
