@@ -11238,7 +11238,10 @@ export async function handleGenerateProposal(
               });
               proposalContent = proposal.content;
               actualModelName = proposal.metadata.modelName;
-            } else if (outputFormat === "application_message") {
+            } else if (
+              outputFormat === "application_message" ||
+              outputFormat === "cover_letter"
+            ) {
               const proposal = await proposalService.generateTextWithFallbacks(
                 prompt,
                 cancellationContext?.signal

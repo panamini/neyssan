@@ -43,45 +43,54 @@ vi.mock("@langchain/mistralai", () => ({
 }));
 
 vi.mock("../../../langchain", () => ({
-  ProposalService: vi.fn().mockImplementation(() => ({
-    generateCreativeProposal: async (...args: unknown[]) => {
-      const result = await mockGenerateCreativeProposal(...args);
-      if (!result || typeof result !== "object") return result;
-      const typedResult = result as {
-        content?: string;
-        metadata?: Record<string, unknown>;
-      };
+  ProposalService: vi.fn().mockImplementation(
+    (config?: {
+      modelAdapters?: Array<{ getModelName?: () => string }>;
+    }) => {
+      const textModelName =
+        config?.modelAdapters?.[0]?.getModelName?.() ?? "gpt-5.5";
+
       return {
-        ...typedResult,
-        metadata: {
-          modelName: "gpt-5.5",
-          ...(typedResult.metadata ?? {}),
+        generateCreativeProposal: async (...args: unknown[]) => {
+          const result = await mockGenerateCreativeProposal(...args);
+          if (!result || typeof result !== "object") return result;
+          const typedResult = result as {
+            content?: string;
+            metadata?: Record<string, unknown>;
+          };
+          return {
+            ...typedResult,
+            metadata: {
+              modelName: "gpt-5.5",
+              ...(typedResult.metadata ?? {}),
+            },
+          };
         },
+        generateTechnicalProposal: async (...args: unknown[]) => {
+          const result = await mockGenerateTechnicalProposal(...args);
+          if (!result || typeof result !== "object") return result;
+          const typedResult = result as {
+            content?: string;
+            metadata?: Record<string, unknown>;
+          };
+          return {
+            ...typedResult,
+            metadata: {
+              modelName: "mistral-large-latest",
+              ...(typedResult.metadata ?? {}),
+            },
+          };
+        },
+        generateTextWithFallbacks: async (
+          prompt: string,
+          config: { signal?: AbortSignal },
+        ) => ({
+          text: await mockGpt4Generate(prompt, config ?? {}),
+          modelName: textModelName,
+        }),
       };
     },
-    generateTechnicalProposal: async (...args: unknown[]) => {
-      const result = await mockGenerateTechnicalProposal(...args);
-      if (!result || typeof result !== "object") return result;
-      const typedResult = result as {
-        content?: string;
-        metadata?: Record<string, unknown>;
-      };
-      return {
-        ...typedResult,
-        metadata: {
-          modelName: "mistral-large-latest",
-          ...(typedResult.metadata ?? {}),
-        },
-      };
-    },
-    generateTextWithFallbacks: async (
-      prompt: string,
-      config: { signal?: AbortSignal },
-    ) => ({
-      text: await mockGpt4Generate(prompt, config ?? {}),
-      modelName: "gpt-5.5",
-    }),
-  })),
+  ),
 }));
 
 vi.mock("../../../langchain/models/gpt4_adapter", () => ({
@@ -1017,16 +1026,15 @@ describe("proposal provider busy handling", () => {
         },
       ],
     });
-    mockGenerateCreativeProposal.mockResolvedValue({
-      content: [
+    mockGpt4Generate.mockResolvedValue(
+      [
         "At ADT Security, I completed reports by recording observations and surveillance activities.",
         "",
         "At Copwatch, I monitored selected areas through CCTV apps and scanned grounds for suspicious items.",
         "",
         "I would be glad to discuss the position further.",
       ].join("\n"),
-      metadata: { modelName: "chatgpt" },
-    });
+    );
 
     const { handleGenerateProposal } = await loadProposalModule();
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -1089,7 +1097,14 @@ describe("proposal provider busy handling", () => {
         actualModelType: "chatgpt",
       });
       expect(mockOpenAIResponsesCreate).toHaveBeenCalledTimes(1);
-      expect(mockGenerateCreativeProposal).toHaveBeenCalledTimes(1);
+      expect(mockGenerateCreativeProposal).not.toHaveBeenCalled();
+      expect(mockGpt4Generate).toHaveBeenCalledTimes(1);
+      expect(mockGpt4Generate.mock.calls[0]?.[0]).toContain(
+        'Write a tailored employment cover letter for "High Level Security Officer".',
+      );
+      expect(mockGpt4Generate.mock.calls[0]?.[0]).toContain(
+        "Do not let the body read like a CV summary or a job-description summary",
+      );
       expect(warnSpy).toHaveBeenCalledWith(
         "Premium cover-letter failure trace",
         expect.objectContaining({
@@ -1335,11 +1350,9 @@ describe("proposal provider busy handling", () => {
       process.env.QWEN_CHAT_COMPLETIONS_URL =
         "https://qwen.test/chat/completions";
 
-      mockGenerateCreativeProposal.mockResolvedValue({
-        content:
-          "I led shared React and TypeScript interface work across customer-facing surfaces and stayed close to product decisions that shaped everyday user experience. That background keeps me focused on roles where interface quality, collaboration, and steady delivery all matter.",
-        metadata: { modelName: "qwen3.7-max" },
-      });
+      mockGpt4Generate.mockResolvedValue(
+        "I led shared React and TypeScript interface work across customer-facing surfaces and stayed close to product decisions that shaped everyday user experience. That background keeps me focused on roles where interface quality, collaboration, and steady delivery all matter.",
+      );
       const fetchSpy = vi
         .spyOn(globalThis, "fetch")
         .mockResolvedValue(qwenChatResponse(responseContent));
@@ -1360,7 +1373,8 @@ describe("proposal provider busy handling", () => {
         expectQwenPremiumRequest(fetchSpy);
         expect(mockOpenAIResponsesCreate).not.toHaveBeenCalled();
         expect(mockGenerateTechnicalProposal).not.toHaveBeenCalled();
-        expect(mockGenerateCreativeProposal).toHaveBeenCalledTimes(1);
+        expect(mockGenerateCreativeProposal).not.toHaveBeenCalled();
+        expect(mockGpt4Generate).toHaveBeenCalledTimes(1);
         expect(ctx.runMutation).toHaveBeenCalledTimes(1);
         const mutationPayload = ctx.runMutation.mock.calls[0]?.[1] as {
           metadata?: {
@@ -1411,11 +1425,9 @@ describe("proposal provider busy handling", () => {
       closeLine:
         "I bring experience in coordination, documentation, scheduling, vendor correspondence, and stakeholder communication.",
     };
-    mockGenerateCreativeProposal.mockResolvedValue({
-      content:
-        "I maintained records, coordinated schedules, handled vendor correspondence, and shared timely updates across teams. That background keeps the focus on documentation, scheduling, and communication rather than unsupported claims.",
-      metadata: { modelName: "qwen3.7-max" },
-    });
+    mockGpt4Generate.mockResolvedValue(
+      "I maintained records, coordinated schedules, handled vendor correspondence, and shared timely updates across teams. That background keeps the focus on documentation, scheduling, and communication rather than unsupported claims.",
+    );
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(
@@ -1439,7 +1451,8 @@ describe("proposal provider busy handling", () => {
         fallbackTriggerCode: null,
       });
       expectQwenPremiumRequest(fetchSpy);
-      expect(mockGenerateCreativeProposal).toHaveBeenCalledTimes(1);
+      expect(mockGenerateCreativeProposal).not.toHaveBeenCalled();
+      expect(mockGpt4Generate).toHaveBeenCalledTimes(1);
       expect(ctx.runMutation).toHaveBeenCalledTimes(1);
       const mutationPayload = ctx.runMutation.mock.calls[0]?.[1] as {
         metadata?: {
@@ -1611,10 +1624,9 @@ describe("proposal provider busy handling", () => {
 
   it("falls back to ChatGPT after a legacy-generation 429 in the CV-backed bypass path", async () => {
     mockModelInvoke.mockRejectedValue(makeRateLimitError(5));
-    mockGenerateCreativeProposal.mockResolvedValue({
-      content:
-        "I led a design system migration used across four product squads and stayed close to the product-facing decisions that shaped everyday user experience. That background keeps me especially interested in roles where interface quality, collaboration, and iteration all matter in the final outcome.",
-    });
+    mockGpt4Generate.mockResolvedValue(
+      "I led a design system migration used across four product squads and stayed close to the product-facing decisions that shaped everyday user experience. That background keeps me especially interested in roles where interface quality, collaboration, and iteration all matter in the final outcome.",
+    );
     const { handleGenerateProposal } = await loadProposalModule();
     const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
 
@@ -1661,7 +1673,8 @@ describe("proposal provider busy handling", () => {
       expect(mockChatParse).not.toHaveBeenCalled();
       expect(mockChatComplete).not.toHaveBeenCalled();
       expect(mockModelInvoke).toHaveBeenCalledTimes(1);
-      expect(mockGenerateCreativeProposal).toHaveBeenCalledTimes(1);
+      expect(mockGenerateCreativeProposal).not.toHaveBeenCalled();
+      expect(mockGpt4Generate).toHaveBeenCalledTimes(1);
       expect(ctx.runMutation).toHaveBeenCalledTimes(1);
       expect(result).toMatchObject({
         proposalId: "proposal_123",
@@ -1801,13 +1814,83 @@ describe("proposal provider busy handling", () => {
     }
   });
 
+  it("routes chatgpt no-CV cover letters through the inline cover-letter prompt instead of the creative proposal service", async () => {
+    delete process.env.OPENAI_API_KEY;
+    mockGpt4Generate.mockResolvedValue(
+      "Updating internal records and keeping recurring processes moving across teams depends on careful follow-through. Clear communication, organized handoffs, and consistent status updates are what make that support work effective in practice.",
+    );
+    const { handleGenerateProposal } = await loadProposalModule();
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+
+    const ctx = {
+      auth: {
+        getUserIdentity: vi.fn().mockResolvedValue({ subject: "user_123" }),
+      },
+      runQuery: vi.fn().mockResolvedValue({
+        _id: "profile_123",
+        proposalVoicePreset: "signature",
+        experience: [],
+        skills: [],
+        achievements: [],
+      }),
+      runMutation: vi.fn().mockResolvedValue("proposal_123"),
+    };
+
+    try {
+      const result = await handleGenerateProposal(ctx, {
+        jobTitle: "Operations Associate",
+        jobDescription:
+          "Support recurring processes, update internal records, and coordinate communication across teams.",
+        proposalType: "cover_letter",
+        modelType: "chatgpt",
+        voicePreset: "signature",
+        personalizationMode: "explicit_only",
+      });
+
+      expect(result).toMatchObject({
+        proposalId: "proposal_123",
+        requestedModelType: "chatgpt",
+        actualModelType: "chatgpt",
+        fallbackTriggerCode: null,
+      });
+      expect(result.proposalContent).toMatch(/^Dear Hiring Manager,/);
+      expect(mockGpt4Generate).toHaveBeenCalledTimes(1);
+      expect(mockGenerateCreativeProposal).not.toHaveBeenCalled();
+      const prompt = mockGpt4Generate.mock.calls[0]?.[0] ?? "";
+      expect(prompt).toContain(
+        'Write a tailored employment cover letter for "Operations Associate".',
+      );
+      expect(prompt).toContain(
+        "When no candidate background is available, write a grounded, non-claiming cover-letter body",
+      );
+      expect(prompt).toContain(
+        "Do not let the body read like a CV summary or a job-description summary",
+      );
+      expect(prompt).not.toContain(
+        "Write a client-facing freelance proposal",
+      );
+      expect(prompt).not.toContain("Return exactly three labeled lines");
+      expect(ctx.runMutation).toHaveBeenCalledTimes(1);
+      const mutationPayload = ctx.runMutation.mock.calls[0]?.[1] as {
+        metadata?: { executed_path?: string; tags?: string[] };
+      };
+      expect(mutationPayload.metadata).toEqual(
+        expect.objectContaining({
+          executed_path: "legacy",
+          tags: expect.arrayContaining(["model:chatgpt"]),
+        }),
+      );
+    } finally {
+      infoSpy.mockRestore();
+    }
+  });
+
   it("falls back to ChatGPT after a legacy-generation 429 in the no-CV path", async () => {
     mockChatParse.mockRejectedValue(makeRateLimitError());
     mockModelInvoke.mockRejectedValue(makeRateLimitError(5));
-    mockGenerateCreativeProposal.mockResolvedValue({
-      content:
-        "Updating internal records and keeping recurring processes moving across teams depends on careful follow-through. Clear communication, organized handoffs, and consistent status updates are what make that support work effective in practice.",
-    });
+    mockGpt4Generate.mockResolvedValue(
+      "Updating internal records and keeping recurring processes moving across teams depends on careful follow-through. Clear communication, organized handoffs, and consistent status updates are what make that support work effective in practice.",
+    );
     const { handleGenerateProposal } = await loadProposalModule();
     const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
 
@@ -1839,7 +1922,8 @@ describe("proposal provider busy handling", () => {
       expect(mockChatParse).not.toHaveBeenCalled();
       expect(mockChatComplete).not.toHaveBeenCalled();
       expect(mockModelInvoke).toHaveBeenCalledTimes(1);
-      expect(mockGenerateCreativeProposal).toHaveBeenCalledTimes(1);
+      expect(mockGenerateCreativeProposal).not.toHaveBeenCalled();
+      expect(mockGpt4Generate).toHaveBeenCalledTimes(1);
       expect(ctx.runMutation).toHaveBeenCalledTimes(1);
       expect(result).toMatchObject({
         proposalId: "proposal_123",
@@ -1992,10 +2076,9 @@ describe("proposal provider busy handling", () => {
 
   it("falls back to ChatGPT after a controlled legacy-generation transport failure in the no-CV path", async () => {
     mockModelInvoke.mockRejectedValue(makeContentLengthRequiredError());
-    mockGenerateCreativeProposal.mockResolvedValue({
-      content:
-        "Updating internal records and keeping recurring processes moving across teams depends on careful follow-through. Clear communication, organized handoffs, and consistent status updates are what make that support work effective in practice.",
-    });
+    mockGpt4Generate.mockResolvedValue(
+      "Updating internal records and keeping recurring processes moving across teams depends on careful follow-through. Clear communication, organized handoffs, and consistent status updates are what make that support work effective in practice.",
+    );
     const { handleGenerateProposal } = await loadProposalModule();
     const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
 
@@ -2027,7 +2110,8 @@ describe("proposal provider busy handling", () => {
       expect(mockChatParse).not.toHaveBeenCalled();
       expect(mockChatComplete).not.toHaveBeenCalled();
       expect(mockModelInvoke).toHaveBeenCalledTimes(1);
-      expect(mockGenerateCreativeProposal).toHaveBeenCalledTimes(1);
+      expect(mockGenerateCreativeProposal).not.toHaveBeenCalled();
+      expect(mockGpt4Generate).toHaveBeenCalledTimes(1);
       expect(result).toMatchObject({
         proposalId: "proposal_123",
         requestedModelType: "mistral-small-latest",
