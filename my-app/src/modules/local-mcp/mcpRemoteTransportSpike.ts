@@ -382,7 +382,7 @@ function assertTrue(value: unknown, label: string): void {
 }
 
 function assertPositiveInteger(value: unknown, label: string): void {
-  if (!Number.isInteger(value) || (value as number) <= 0) {
+  if (!isPositiveInteger(value)) {
     throw new TypeError(`Local MCP remote transport requires positive ${label}`);
   }
 }
@@ -396,13 +396,14 @@ function assertRateLimit(value: unknown): void {
 function isValidRateLimit(value: unknown): value is LocalMcpRemoteTransportConfigV1["rateLimit"] {
   return (
     isPlainRecord(value) &&
-    Number.isInteger(value.perUserPerMinute) &&
-    value.perUserPerMinute > 0 &&
-    Number.isInteger(value.perSessionPerMinute) &&
-    value.perSessionPerMinute > 0 &&
-    Number.isInteger(value.globalPerMinute) &&
-    value.globalPerMinute > 0
+    isPositiveInteger(value.perUserPerMinute) &&
+    isPositiveInteger(value.perSessionPerMinute) &&
+    isPositiveInteger(value.globalPerMinute)
   );
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
 }
 
 function isWithinSizeLimit(value: number, max: number): boolean {

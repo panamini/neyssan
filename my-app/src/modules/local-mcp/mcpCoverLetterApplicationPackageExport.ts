@@ -5,7 +5,6 @@ import {
 } from "./mcpComponentDataPolicy";
 import type {
   McpGeneratedArtifactExportDownloadPolicyRefV1,
-  McpGeneratedArtifactExportDownloadPolicyResultV1,
   McpGeneratedArtifactExportDownloadPolicySummaryV1,
 } from "./mcpGeneratedArtifactExportDownloadPolicy";
 
@@ -274,8 +273,13 @@ type McpCoverLetterApplicationPackageExportCategoriesV1 = Readonly<{
   version: 1;
 }>;
 
+type ParsedPolicySummary = McpGeneratedArtifactExportDownloadPolicySummaryV1 &
+  Readonly<{
+    artifactKind: McpCoverLetterApplicationPackageExportArtifactKindV1;
+  }>;
+
 type ParsedPolicyResult = Readonly<{
-  summary: McpGeneratedArtifactExportDownloadPolicySummaryV1;
+  summary: ParsedPolicySummary;
   warnings: number;
 }>;
 
@@ -716,9 +720,7 @@ function parsePolicyResult(
   };
 }
 
-function parsePolicySummary(
-  value: unknown,
-): ParserResult<McpGeneratedArtifactExportDownloadPolicySummaryV1> {
+function parsePolicySummary(value: unknown): ParserResult<ParsedPolicySummary> {
   const record = readExactRecord(
     value,
     POLICY_SUMMARY_KEYS,
@@ -766,7 +768,7 @@ function parsePolicySummary(
 
   return {
     ok: true,
-    val: record as unknown as McpGeneratedArtifactExportDownloadPolicySummaryV1,
+    val: { ...record, artifactKind } as ParsedPolicySummary,
   };
 }
 
@@ -1593,7 +1595,12 @@ function isSafeSummaryText(value: unknown): value is string {
 }
 
 function isSafeCount(value: unknown): value is number {
-  return Number.isInteger(value) && value >= 0 && value <= MAX_SAFE_COUNT;
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= MAX_SAFE_COUNT
+  );
 }
 
 function readIsoTimestamp(value: unknown): string | undefined {

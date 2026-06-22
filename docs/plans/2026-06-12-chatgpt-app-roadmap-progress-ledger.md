@@ -21,33 +21,33 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR87.2 - Production TypeScript Build Unblock
-GitHub PR: https://github.com/panamini/neyssan/pull/226
-Head branch: codex/pr87-2-production-typescript-build-unblock
-Merge commit: 888fba3ee37e19dcffa98c2289dd2a136bcb2875
-Merged at: 2026-06-22T15:17:27Z
-Scope: partial production TypeScript build unblock/evidence PR. `rtk npm run build` remains red with 203 TypeScript errors; first remaining blocker is `src/components/cv/SectionEditorSheet.tsx(1632,24) TS2352`. Final verdict: `BLOCKED_PRODUCTION_TYPESCRIPT_BUILD_REMAINING`. No PR88, PR89, PR80-live, production billing, OAuth/provider/token, approved answer-copy, deployment, lint-wide cleanup, npm audit, package, or lockfile work.
+PR87.3 - Production TypeScript Build Follow-up
+GitHub PR: https://github.com/panamini/neyssan/pull/228
+Head branch: codex/pr87-3-production-typescript-build-followup
+Merge commit: 8cdb3ef1f6c45b0df2afa6b5db49bd7a5d29414c
+Merged at: 2026-06-22T17:40:56Z
+Scope: partial production TypeScript build follow-up/evidence PR. `rtk npm run build` remains red with 145 compressed TypeScript errors / 144 parsed file-scoped diagnostics; first remaining blocker is `src/modules/local-mcp/mcpComponentErrorLoadingRefusalUx.ts(608,3) TS2322`. Final verdict: `BLOCKED_PRODUCTION_TYPESCRIPT_BUILD_REMAINING`. No PR88, PR89, PR80-live, production billing, OAuth/provider/token, approved answer-copy, deployment, lint-wide cleanup, npm audit, package, or lockfile work.
 ```
 
 Current implementation PR:
 
 ```txt
-PR87.3 - Production TypeScript Build Follow-up
-Branch: codex/pr87-3-production-typescript-build-followup
-GitHub PR: https://github.com/panamini/neyssan/pull/228
-Status: open; production build still blocked.
-Scope: continued production TypeScript build unblock from first remaining blocker `src/components/cv/SectionEditorSheet.tsx(1632,24) TS2352`.
-Starting build state: `rtk npm run build` failed with 203 compressed TypeScript errors.
-Ending build state: `rtk npm run build` still fails with 145 compressed TypeScript errors / 144 parsed file-scoped diagnostics; first remaining blocker is `src/modules/local-mcp/mcpComponentErrorLoadingRefusalUx.ts(608,3) TS2322`.
+PR87.4 - Production TypeScript Build Follow-up
+Branch: codex/pr87-4-production-typescript-build-followup
+GitHub PR: https://github.com/panamini/neyssan/pull/229
+Status: draft/open/blocking; production build still blocked.
+Scope: continued production TypeScript build unblock from first remaining blocker `src/modules/local-mcp/mcpComponentErrorLoadingRefusalUx.ts(608,3) TS2322`, constrained to the coherent local-MCP TypeScript cluster.
+Starting build state: `rtk npm run build` failed with 145 compressed TypeScript errors / 144 parsed file-scoped diagnostics.
+Ending build state: `rtk npm run build` still fails with 56 compressed and parsed TypeScript errors; first remaining blocker is `src/pages/CvForge.tsx(1017,59) TS2698`.
 Final status: `BLOCKED_PRODUCTION_TYPESCRIPT_BUILD_REMAINING`.
 ```
 
 Exact next PR:
 
 ```txt
-Exact active PR is PR87.3 - Production TypeScript Build Follow-up until merged.
-PR87.3 final status: `BLOCKED_PRODUCTION_TYPESCRIPT_BUILD_REMAINING`.
-If PR87.3 is merged, the next implementation work must remain a production TypeScript build follow-up starting from `src/modules/local-mcp/mcpComponentErrorLoadingRefusalUx.ts(608,3) TS2322` and the remaining ProposalForge/CvForge/local-MCP/Settings/tsconfig-node clusters.
+Exact active PR is PR87.4 - Production TypeScript Build Follow-up until merged.
+PR87.4 final status: `BLOCKED_PRODUCTION_TYPESCRIPT_BUILD_REMAINING`.
+If PR87.4 is merged, the next implementation work must remain a production TypeScript build follow-up starting from `src/pages/CvForge.tsx(1017,59) TS2698` and the remaining CvForge/ProposalForge/Settings/application-harness/tsconfig-node TS6307 clusters.
 Lint and npm audit remain separate future gates unless naturally fixed by TypeScript work.
 PR80-live remains blocked by provider authorization prerequisites.
 Approved answer copy stays blocked until a future source-model decision creates an authoritative approved answer source.
@@ -138,6 +138,8 @@ MERGED_NARROW_PR59 - PR185 merged the narrow read-only adapter scope approved by
 |                        87 | Production Deployment Gate                                                          | merged      | #223                 | merge 2102d8136cf03d142dac4290421d6aa392369809                                          | Docs-only production deployment gate. Final verdict was `BLOCKED_PRODUCTION_GATE`; blocker code `PRODUCTION_BUILD_RED`. Production build red, lint blocked by missing `./scraping-server/tsconfig.json`, runtime dependency audit red, preview/staging target unproven, MCP production runtime not deployable, signed-in smoke missing, runtime observability and rollback unproven. PR88 must not start yet. |
 |                      87.1 | Production Build / Lint Gate Unblock                                                | merged      | #224                 | merge 9389a487f6c6ef658980983033e358dbafafed4f                                          | Partial production build/lint gate unblock only. Removed stale lint project configuration for missing `scraping-server`, aligned typed lint scoping, and fixed several first-order TypeScript blockers named by `tsc -b`; build, lint, and runtime dependency audit remain red. PR88 remains blocked. No package/lockfile/schema broadening, PR80-live, answer-copy, production billing, or provider/OAuth/token work. |
 |                      87.2 | Production TypeScript Build Unblock                                                  | merged      | #226                 | merge 888fba3ee37e19dcffa98c2289dd2a136bcb2875                                      | Partial TypeScript build unblock/evidence PR. Build still red with 203 TypeScript errors; first remaining blocker `src/components/cv/SectionEditorSheet.tsx(1632,24) TS2352`. PR88 remains blocked. No package/lockfile, PR80-live, answer-copy, production billing, provider/OAuth/token, deployment, lint-wide cleanup, or npm audit work. |
+|                      87.3 | Production TypeScript Build Follow-up                                                | merged      | #228                 | merge 8cdb3ef1f6c45b0df2afa6b5db49bd7a5d29414c                                      | Partial production TypeScript build follow-up/evidence PR. Merged at 2026-06-22T17:40:56Z. Build still red with 145 compressed TypeScript errors / 144 parsed file-scoped diagnostics; first remaining blocker `src/modules/local-mcp/mcpComponentErrorLoadingRefusalUx.ts(608,3) TS2322`. PR88/PR89 remain blocked. No package/lockfile, PR80-live, answer-copy, production billing, provider/OAuth/token, deployment, lint-wide cleanup, or npm audit work. |
+|                      87.4 | Production TypeScript Build Follow-up                                                | draft       | #229                 | head codex/pr87-4-production-typescript-build-followup                              | Current implementation PR. Starting build red with 145 compressed TypeScript errors / 144 parsed diagnostics. Ending build red with 56 compressed and parsed TypeScript errors; first remaining blocker `src/pages/CvForge.tsx(1017,59) TS2698`. Local-MCP non-TS6307 errors were cleared; remaining local-MCP build errors are TS6307 project-membership only. PR88/PR89 remain blocked. Lint/npm audit remain separate gates. No package/lockfile/schema/tsconfig, frontend page cluster, PR80-live, answer-copy, production billing, provider/OAuth/token, or deployment work. |
 
 ---
 

@@ -149,7 +149,10 @@ const UNAVAILABLE_REASON_CONFIG: Record<
   Readonly<{
     status: McpRealReviewCockpitSummaryStatusV1;
     message: string;
-    actionLabel: McpReadOnlyReviewComponentActionLabelV1;
+    actionLabel: Extract<
+      McpReadOnlyReviewComponentActionLabelV1,
+      NonNullable<McpRealReviewCockpitSummaryCategoriesV1["nextReviewHint"]>
+    >;
   }>
 > = {
   missing_auth: {
@@ -243,14 +246,15 @@ function parseInput(
   if (!isInputEnvelope(record)) return undefined;
   if (!hasValidUnavailableReason(record)) return undefined;
   if (!hasExactlyOneInputPayload(record)) return undefined;
+  const unavailableReason = isUnavailableReason(record.unavailableReason)
+    ? record.unavailableReason
+    : undefined;
   return {
     kind: "mcp_read_only_review_component_input",
     ...(record.reviewSummary !== undefined
       ? { reviewSummary: record.reviewSummary }
       : {}),
-    ...(record.unavailableReason !== undefined
-      ? { unavailableReason: record.unavailableReason }
-      : {}),
+    ...(unavailableReason ? { unavailableReason } : {}),
     version: 1,
   };
 }
@@ -345,15 +349,6 @@ const SAFE_REVIEW_FIXED_CAPABILITIES = {
   tokenStorage: "none",
 } as const;
 
-const SAFE_REVIEW_CATEGORY_SPECS = [
-  ["reviewReadiness", SAFE_REVIEW_READINESS_VALUES],
-  ["reviewGateStatus", SAFE_REVIEW_GATE_STATUS_VALUES],
-  ["blockerCategory", SAFE_BLOCKER_CATEGORY_VALUES],
-  ["missingReviewCategory", SAFE_MISSING_REVIEW_CATEGORY_VALUES],
-  ["nextReviewHint", SAFE_NEXT_REVIEW_HINT_VALUES],
-  ["nextUserAction", SAFE_NEXT_USER_ACTION_VALUES],
-] as const;
-
 function readSafeReviewSummary(value: unknown): SafeReviewSummary | undefined {
   const envelope = readSafeReviewSummaryEnvelope(value);
   if (!envelope) return undefined;
@@ -399,7 +394,7 @@ function buildUnavailableSummary(
       missingReviewCategory:
         reason === "no_review_data" ? "missing_review_context" : "none",
       nextReviewHint: config.actionLabel,
-      nextUserAction: config.actionLabel,
+      nextUserAction: "none",
       version: 1,
     },
     safeFlags: {
@@ -548,7 +543,12 @@ function readReviewActionLabel(
 function isReviewActionLabel(
   value: unknown,
 ): value is McpReadOnlyReviewComponentActionLabelV1 {
-  return typeof value === "string" && SAFE_REVIEW_ACTION_LABELS.has(value);
+  return (
+    typeof value === "string" &&
+    SAFE_REVIEW_ACTION_LABELS.has(
+      value as McpReadOnlyReviewComponentActionLabelV1,
+    )
+  );
 }
 
 function statusMessage(reviewSummary: SafeReviewSummary): string {
@@ -713,13 +713,13 @@ function readSafeReviewAvailability(
   const record = readVersionedRecord(value);
   const source =
     record &&
-    readRequiredEnum(
+    readRequiredEnum<McpRealReviewCockpitSummaryAvailabilityV1["source"]>(
       record.source,
       new Set(["pr59_read_only_adapter", "convex_review_cockpit_summary"]),
     );
   const ownerState =
     record &&
-    readRequiredEnum(
+    readRequiredEnum<McpRealReviewCockpitSummaryAvailabilityV1["ownerState"]>(
       record.ownerState,
       new Set(["resolved", "onboarding_required"]),
     );
@@ -745,9 +745,52 @@ function readSafeReviewCategories(
   value: unknown,
 ): McpRealReviewCockpitSummaryCategoriesV1 | undefined {
   const record = readVersionedRecord(value);
-  const fields =
-    record && readOptionalEnumFields(record, SAFE_REVIEW_CATEGORY_SPECS);
-  return record && fields ? { ...fields, version: 1 } : undefined;
+  if (!record) return undefined;
+
+  const reviewReadiness = readOptionalEnum(
+    record.reviewReadiness,
+    SAFE_REVIEW_READINESS_VALUES,
+  );
+  const reviewGateStatus = readOptionalEnum(
+    record.reviewGateStatus,
+    SAFE_REVIEW_GATE_STATUS_VALUES,
+  );
+  const blockerCategory = readOptionalEnum(
+    record.blockerCategory,
+    SAFE_BLOCKER_CATEGORY_VALUES,
+  );
+  const missingReviewCategory = readOptionalEnum(
+    record.missingReviewCategory,
+    SAFE_MISSING_REVIEW_CATEGORY_VALUES,
+  );
+  const nextReviewHint = readOptionalEnum(
+    record.nextReviewHint,
+    SAFE_NEXT_REVIEW_HINT_VALUES,
+  );
+  const nextUserAction = readOptionalEnum(
+    record.nextUserAction,
+    SAFE_NEXT_USER_ACTION_VALUES,
+  );
+  if (
+    reviewReadiness === false ||
+    reviewGateStatus === false ||
+    blockerCategory === false ||
+    missingReviewCategory === false ||
+    nextReviewHint === false ||
+    nextUserAction === false
+  ) {
+    return undefined;
+  }
+
+  return {
+    ...(reviewReadiness !== undefined ? { reviewReadiness } : {}),
+    ...(reviewGateStatus !== undefined ? { reviewGateStatus } : {}),
+    ...(blockerCategory !== undefined ? { blockerCategory } : {}),
+    ...(missingReviewCategory !== undefined ? { missingReviewCategory } : {}),
+    ...(nextReviewHint !== undefined ? { nextReviewHint } : {}),
+    ...(nextUserAction !== undefined ? { nextUserAction } : {}),
+    version: 1,
+  };
 }
 
 function readSafeReviewFlags(
@@ -777,13 +820,13 @@ function readSafeReviewCapabilities(
   const record = readVersionedRecord(value);
   const adapter =
     record &&
-    readRequiredEnum(
+    readRequiredEnum<McpRealReviewCockpitSummaryCapabilitiesV1["adapter"]>(
       record.adapter,
       new Set(["blocked", "pr59_read_only_adapter_verified"]),
     );
   const dataReads =
     record &&
-    readRequiredEnum(
+    readRequiredEnum<McpRealReviewCockpitSummaryCapabilitiesV1["dataReads"]>(
       record.dataReads,
       new Set(["blocked", "convex_review_cockpit_summary"]),
     );
@@ -911,9 +954,15 @@ function readOptionalMissingDataReason(
   value: unknown,
 ): McpRealReviewCockpitSummaryMissingDataReasonV1 | undefined | false {
   if (value === undefined) return undefined;
-  return typeof value === "string" && SAFE_MISSING_DATA_REASON_VALUES.has(value)
-    ? value
-    : false;
+  if (
+    typeof value !== "string" ||
+    !SAFE_MISSING_DATA_REASON_VALUES.has(
+      value as McpRealReviewCockpitSummaryMissingDataReasonV1,
+    )
+  ) {
+    return false;
+  }
+  return value as McpRealReviewCockpitSummaryMissingDataReasonV1;
 }
 
 function readVersionedRecord(
@@ -927,12 +976,13 @@ function readStringFields<T extends readonly string[]>(
   record: Record<string, unknown>,
   keys: T,
 ): { [K in T[number]]: string } | undefined {
-  const values = {} as { [K in T[number]]: string };
+  const values: Partial<Record<T[number], string>> = {};
   for (const key of keys) {
-    if (typeof record[key] !== "string") return undefined;
-    values[key] = record[key];
+    const value = record[key];
+    if (typeof value !== "string") return undefined;
+    values[key as T[number]] = value;
   }
-  return values;
+  return values as { [K in T[number]]: string };
 }
 
 function readSafeReviewCockpitRefFields(
@@ -977,13 +1027,13 @@ function readCountFields<T extends readonly string[]>(
   record: Record<string, unknown>,
   keys: T,
 ): { [K in T[number]]: number } | undefined {
-  const values = {} as { [K in T[number]]: number };
+  const values: Partial<Record<T[number], number>> = {};
   for (const key of keys) {
     const count = readCountField(record, key);
     if (count === undefined) return undefined;
-    values[key] = count;
+    values[key as T[number]] = count;
   }
-  return values;
+  return values as { [K in T[number]]: number };
 }
 
 function hasExactFieldValues<T extends Record<string, string>>(
@@ -1002,21 +1052,6 @@ function readRequiredEnum<T extends string>(
   return typeof value === "string" && allowed.has(value as T)
     ? (value as T)
     : undefined;
-}
-
-function readOptionalEnumFields<
-  T extends readonly [string, ReadonlySet<string>][],
->(
-  record: Record<string, unknown>,
-  specs: T,
-): Record<string, string> | undefined {
-  const values: Record<string, string> = {};
-  for (const [key, allowed] of specs) {
-    const value = readOptionalEnum(record[key], allowed);
-    if (value === false) return undefined;
-    if (value !== undefined) values[key] = value;
-  }
-  return values;
 }
 
 function readOptionalEnum<T extends string>(

@@ -892,7 +892,7 @@ function parseConfirmationRequirement(
       kind: "mcp_write_action_confirmation_requirement",
       required: true,
       state: "required_unconfirmed",
-      requiredCopy: record.requiredCopy as str,
+      requiredCopy: record.requiredCopy,
       version: 1,
     };
   }
@@ -958,10 +958,10 @@ function parseProposalAuditEvent(
   return {
     kind: "mcp_write_action_audit_event",
     eventKind: record.eventKind,
-    actionLabel: record.actionLabel as str,
-    actionCategory: record.actionCategory as McpWriteActionCategoryV1,
-    affectedSurface: record.affectedSurface as str,
-    riskLevel: record.riskLevel as McpWriteActionRiskLevelV1,
+    actionLabel: record.actionLabel,
+    actionCategory: record.actionCategory,
+    affectedSurface: record.affectedSurface,
+    riskLevel: record.riskLevel,
     ...(isSafeIdempotencyKey(record.idempotencyKey)
       ? { idempotencyKey: record.idempotencyKey }
       : {}),
@@ -1252,7 +1252,7 @@ function parseDataClasses(
   }
   const dataClasses: McpWriteActionDataClassV1[] = [];
   for (const item of input) {
-    if (typeof item !== "string" || !DATA_CLASSES.has(item)) return undefined;
+    if (!isDataClass(item)) return undefined;
     if (!dataClasses.includes(item)) dataClasses.push(item);
   }
   return dataClasses;
@@ -1295,7 +1295,17 @@ function isCategory(input: unknown): input is McpWriteActionCategoryV1 {
 }
 
 function isRiskLevel(input: unknown): input is McpWriteActionRiskLevelV1 {
-  return typeof input === "string" && RISK_LEVELS.has(input);
+  return (
+    typeof input === "string" &&
+    RISK_LEVELS.has(input as McpWriteActionRiskLevelV1)
+  );
+}
+
+function isDataClass(input: unknown): input is McpWriteActionDataClassV1 {
+  return (
+    typeof input === "string" &&
+    DATA_CLASSES.has(input as McpWriteActionDataClassV1)
+  );
 }
 
 function isSafeLabel(input: unknown): input is str {

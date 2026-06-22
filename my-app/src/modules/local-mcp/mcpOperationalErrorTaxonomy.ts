@@ -121,6 +121,9 @@ const MCP_OPERATIONAL_REASON_CATEGORY_MAP = Object.freeze({
   malformed_input: "internal_validation_error",
 } satisfies Readonly<Record<string, McpOperationalErrorCategoryV1>>);
 
+type McpOperationalErrorReasonV1 =
+  keyof typeof MCP_OPERATIONAL_REASON_CATEGORY_MAP;
+
 const MCP_OPERATIONAL_ERROR_CATEGORY_SET = new Set<string>(
   MCP_OPERATIONAL_ERROR_CATEGORIES,
 );
@@ -150,9 +153,17 @@ export function assertMcpOperationalErrorCategory(
 export function mapMcpOperationalReasonToCategory(
   reason: unknown,
 ): McpOperationalErrorCategoryV1 | undefined {
-  if (typeof reason !== "string") {
+  if (
+    typeof reason !== "string" ||
+    !Object.prototype.hasOwnProperty.call(
+      MCP_OPERATIONAL_REASON_CATEGORY_MAP,
+      reason,
+    )
+  ) {
     return undefined;
   }
 
-  return MCP_OPERATIONAL_REASON_CATEGORY_MAP[reason];
+  return MCP_OPERATIONAL_REASON_CATEGORY_MAP[
+    reason as McpOperationalErrorReasonV1
+  ];
 }
