@@ -526,6 +526,10 @@ function overlayProfileMetadataPatch(
     metadata.documentIcons = rawMetadata.documentIcons;
   }
 
+  if (rawMetadata.documentIconOverrides !== undefined) {
+    metadata.documentIconOverrides = rawMetadata.documentIconOverrides;
+  }
+
   if (rawMetadata.documentDecoration !== undefined) {
     metadata.documentDecoration = sanitizeRuntimeDocumentDecoration(
       rawMetadata.documentDecoration,
@@ -641,6 +645,7 @@ export class ConvexStorageAdapter {
         | "verbatiStyleBaseSnapshot"
         | "documentStyleVersion"
         | "documentIcons"
+        | "documentIconOverrides"
         | "documentDecoration"
       >
     >,
@@ -664,6 +669,9 @@ export class ConvexStorageAdapter {
     );
     if (metadataPatch?.documentIcons !== undefined) {
       metadata.documentIcons = metadataPatch.documentIcons;
+    }
+    if (metadataPatch?.documentIconOverrides !== undefined) {
+      metadata.documentIconOverrides = metadataPatch.documentIconOverrides;
     }
     if (metadataPatch?.documentDecoration !== undefined) {
       metadata.documentDecoration = sanitizeRemoteDocumentDecoration(

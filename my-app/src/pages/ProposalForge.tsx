@@ -194,6 +194,7 @@ import {
   resolveDocumentStyleSlotId,
   type DocumentStyleSlotId,
   type DocumentStyleMetadata,
+  type DocumentStyleSlotSource,
 } from "../lib/document-style-slots";
 import {
   findProposalTemplateBundleIdByStylePreset,
@@ -3813,12 +3814,12 @@ export function ProposalForge(): JSX.Element {
     React.useRef<Promise<Id<"proposals"> | null> | null>(null);
   type ComposeSaveSnapshot = {
     id: Id<"proposals"> | null;
-    title: string;
-    content: string;
-    metadata: ProposalDocumentMetadata | undefined;
-    status: string;
-    token: string;
-  };
+  title: string;
+  content: string;
+  metadata: ProposalDocumentMetadata | undefined;
+  status: "draft" | "saved";
+  token: string;
+};
   const pendingQueuedComposeSnapshotRef =
     React.useRef<ComposeSaveSnapshot | null>(null);
   const latestComposeAutosaveSnapshotRef =
@@ -4719,7 +4720,7 @@ export function ProposalForge(): JSX.Element {
     } else {
       setProposalStyleChoice(settingsStyleChoice);
     }
-    setProposalPaletteOverride(settingsPaletteOverride);
+    setProposalPaletteOverride(settingsPaletteOverride ?? null);
     setProposalCustomAccentHex(settingsAccentHex);
     appliedSettingsAppearanceDefaultsRef.current = true;
   }, [
@@ -6823,7 +6824,7 @@ export function ProposalForge(): JSX.Element {
       setProposalPaletteOverride(
         shouldUseCanonicalWorkshop || activeCvProposalStylePreset
           ? null
-          : settingsPaletteOverride,
+          : settingsPaletteOverride ?? null,
       );
       setProposalCustomAccentHex(
         shouldUseCanonicalWorkshop || activeCvProposalStylePreset
@@ -7717,7 +7718,7 @@ export function ProposalForge(): JSX.Element {
       paletteOverride: nextPaletteOverride,
       customAccentHex: nextCustomAccentHex,
       templateBundleId: nextTemplateBundleId,
-      typographyOverride: nextStylePreset?.typography,
+      typographyOverride: nextStylePreset?.typography ?? null,
       layoutOverride:
         nextStylePreset?.layout === "swiss" ||
         nextStylePreset?.layout === "editorial" ||
@@ -8127,7 +8128,7 @@ export function ProposalForge(): JSX.Element {
       latestProposalStyleCommitRevisionRef.current += 1;
       const nextDocumentStyleSlotId =
         getDocumentStyleSlotIdForProposalBundle(nextTemplateBundleId);
-      const nextDocumentStyleSlotSource =
+      const nextDocumentStyleSlotSource: DocumentStyleSlotSource =
         nextDocumentStyleSlotId &&
         getProposalSettingsPresetForSlot(
           proposalSettingsPresets,
@@ -8234,7 +8235,7 @@ export function ProposalForge(): JSX.Element {
 
       latestProposalStyleCommitRevisionRef.current += 1;
       const documentStyleSlotId = getDocumentStyleSlotIdForProposalBundle(null);
-      const documentStyleSlotSource =
+      const documentStyleSlotSource: DocumentStyleSlotSource =
         documentStyleSlotId &&
         getProposalSettingsPresetForSlot(
           proposalSettingsPresets,
@@ -8641,11 +8642,11 @@ export function ProposalForge(): JSX.Element {
           ...(values.jobDescription?.trim()
             ? { sourceJobDescription: values.jobDescription.trim() }
             : {}),
-          ...(values.sourceUrl?.trim()
-            ? { sourceUrl: values.sourceUrl.trim() }
+          ...(submittedComposeDraft.sourceUrl?.trim()
+            ? { sourceUrl: submittedComposeDraft.sourceUrl.trim() }
             : {}),
-          ...(values.platform?.trim()
-            ? { platform: values.platform.trim() }
+          ...(submittedComposeDraft.platform?.trim()
+            ? { platform: submittedComposeDraft.platform.trim() }
             : {}),
           ...(committedSourceCvId ? { sourceCvId: committedSourceCvId } : {}),
           ...buildProposalHeadingMetadataPatch({
@@ -11114,8 +11115,8 @@ export function ProposalForge(): JSX.Element {
       loading ||
       error ||
       statusMessage ||
-      composeGenerateControl.state === "loading" ||
-      composeGenerateControl.state === "error",
+      composeSaveStatus === "saving" ||
+      composeSaveStatus === "error",
   );
   const shouldShowCoverLetterStartSurface =
     !isSavedView &&
@@ -12784,6 +12785,7 @@ export function ProposalForge(): JSX.Element {
         resolvedLanguage,
         "workspace.draftProposalShort",
       ),
+      jobAndCv: translateUi(resolvedLanguage, "workspace.jobAndCv"),
       ask: translateUi(resolvedLanguage, "workspace.ask"),
     }),
     [resolvedLanguage],
@@ -13011,7 +13013,7 @@ export function ProposalForge(): JSX.Element {
                               loading={
                                 loading ||
                                 isLoadingHandoff ||
-                                composeGenerateControl.state === "loading"
+                                composeSaveStatus === "saving"
                               }
                               error={error}
                               statusMessage={statusMessage}

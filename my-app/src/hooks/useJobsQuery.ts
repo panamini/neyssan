@@ -7,20 +7,41 @@ export type JobsQueryListItem = {
   title: string;
   company: string;
   location: string;
+  rawDescription?: string | null;
   isSample: boolean;
   isFavorite: boolean;
   sourceUrl: string;
   sourceDomain: string;
   sourceType: string;
+  summary?: string | null;
+  visibleSummary?: string | null;
+  visibleRequirements?: string[];
   parseStatus: string;
   reviewState: string;
+  reviewItems?: unknown[];
   matchTier: "strong" | "partial" | "weak" | "unknown";
+  matchRead?: {
+    tier: "strong" | "partial" | "weak" | "unknown";
+  } | null;
+  matchReview?: {
+    verdict:
+      | "strong_lead"
+      | "possible_lead"
+      | "probably_skip"
+      | "not_enough_signal";
+    score?: number | null;
+  } | null;
   status: string;
   importedAt: number;
   updatedAt: number;
   lastOpenedAt: number;
   lastActivityAt: number;
   linkedDocumentCount: number;
+  linkedProposalCount?: number;
+  linkedProposals?: unknown[];
+  resumeId?: string | null;
+  resumeName?: string | null;
+  sourceLanguage?: string | null;
   keywords?: string[];
   visibleKeywords?: string[];
   skills?: string[];

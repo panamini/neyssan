@@ -951,7 +951,7 @@ function addStructuredItemDraftDescription(
   };
 }
 
-type MutableRemirrorNode = RemirrorJSON & {
+type MutableRemirrorNode = Omit<RemirrorJSON, "content" | "marks"> & {
   content?: MutableRemirrorNode[];
   marks?: Array<{ type: string }>;
 };
@@ -1141,11 +1141,13 @@ function updateResponsibilityBulletDoc(
   const nextDoc = cloneRemirrorNode(doc);
   let cursor = 0;
   let updated = false;
-  let lastListNode: MutableRemirrorNode | null = null;
+  const lastListNodeRef: { current: MutableRemirrorNode | null } = {
+    current: null,
+  };
 
   const visit = (node: MutableRemirrorNode) => {
     if (isResponsibilityListNode(node)) {
-      lastListNode = node;
+      lastListNodeRef.current = node;
       node.content = (node.content ?? []).map((child) => {
         if (!isResponsibilityListItemNode(child)) {
           visit(child);
@@ -1169,6 +1171,7 @@ function updateResponsibilityBulletDoc(
 
   if (!updated) {
     const nextItem = remirrorListItemFromPlainText(text);
+    const lastListNode = lastListNodeRef.current;
     if (lastListNode) {
       lastListNode.content = [...(lastListNode.content ?? []), nextItem];
     } else {
