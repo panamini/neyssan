@@ -3,7 +3,10 @@ import { v } from "convex/values";
 import { stableSerialize } from "../../src/modules/application-harness/fingerprints";
 import { buildApplicationPackageContentHash } from "../../src/modules/application-package/buildApplicationPackage";
 import { isApplicationPackageStatus } from "../../src/modules/application-package/packageRules";
-import type { ApplicationPackageV1 } from "../../src/modules/application-package/schema";
+import type {
+  ApplicationPackageStatusV1,
+  ApplicationPackageV1,
+} from "../../src/modules/application-package/schema";
 
 const APPLICATION_PACKAGE_ID_PREFIX = "application-package:";
 
@@ -24,6 +27,64 @@ const FORBIDDEN_TOP_LEVEL_STORAGE_FIELDS = [
   "rejectionDecision",
 ] as const;
 
+type MutableApplicationPackageArtifactRefV1 = {
+  id: string;
+  kind: "resume_variant_artifact" | "cover_letter_artifact";
+  contentHash?: string;
+  status: string;
+  version: 1;
+};
+
+type MutableApplicationPackageItemV1 = {
+  id: string;
+  kind:
+    | "resume_variant"
+    | "cover_letter"
+    | "supporting_provenance"
+    | "warning"
+    | "blocker";
+  artifactId?: string;
+  artifactContentHash?: string;
+  status: ApplicationPackageStatusV1 | "included" | "notice";
+  label: string;
+  note: string;
+  sourceFactIds: string[];
+  allowedClaimIds: string[];
+  evidenceMatchIds: string[];
+  demandIds: string[];
+  riskFlagIds: string[];
+  reviewItemIds: string[];
+  version: 1;
+};
+
+type MutableApplicationPackageProvenanceV1 = {
+  applicationContextId: string;
+  resumeVariantArtifactId: string;
+  coverLetterArtifactId: string;
+  sourceFactIds: string[];
+  allowedClaimIds: string[];
+  evidenceMatchIds: string[];
+  demandIds: string[];
+  riskFlagIds: string[];
+  reviewItemIds: string[];
+  version: 1;
+};
+
+type MutableApplicationPackageV1 = {
+  id: string;
+  userId: string;
+  applicationContextId: string;
+  status: ApplicationPackageStatusV1;
+  artifacts: MutableApplicationPackageArtifactRefV1[];
+  items: MutableApplicationPackageItemV1[];
+  warnings: string[];
+  blockedReason?: string;
+  provenance: MutableApplicationPackageProvenanceV1;
+  createdAt: number;
+  updatedAt: number;
+  version: 1;
+};
+
 export type ApplicationPackageStorageRecordV1 = Readonly<{
   applicationPackageId: string;
   userId: string;
@@ -33,15 +94,15 @@ export type ApplicationPackageStorageRecordV1 = Readonly<{
   coverLetterArtifactId: string;
   resumeVariantArtifactStatus?: string;
   coverLetterArtifactStatus?: string;
-  sourceFactIds: readonly string[];
-  allowedClaimIds: readonly string[];
-  evidenceMatchIds: readonly string[];
-  demandIds: readonly string[];
-  riskFlagIds: readonly string[];
-  reviewItemIds: readonly string[];
+  sourceFactIds: string[];
+  allowedClaimIds: string[];
+  evidenceMatchIds: string[];
+  demandIds: string[];
+  riskFlagIds: string[];
+  reviewItemIds: string[];
   packageHash: string;
   contentHash?: string;
-  package: ApplicationPackageV1;
+  package: MutableApplicationPackageV1;
   createdAt: number;
   updatedAt: number;
   version: 1;
@@ -162,7 +223,7 @@ export const applicationPackageStoredValidator = v.object({
 
 export function sanitizeApplicationPackageForStorage(
   input: ApplicationPackageV1,
-): ApplicationPackageV1 {
+): MutableApplicationPackageV1 {
   assertApplicationPackageShape(input);
   assertNoForbiddenTopLevelFields(input, "ApplicationPackage");
 
@@ -170,7 +231,7 @@ export function sanitizeApplicationPackageForStorage(
     input,
     "applicationPackage",
     new WeakSet<object>(),
-  ) as ApplicationPackageV1;
+  ) as MutableApplicationPackageV1;
 
   assertApplicationPackageShape(applicationPackage);
   assertNoForbiddenTopLevelFields(applicationPackage, "ApplicationPackage");

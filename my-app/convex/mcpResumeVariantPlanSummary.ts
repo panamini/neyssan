@@ -266,7 +266,7 @@ export const internalSummarizeMcpResumeVariantPlan = internalQuery({
   },
   returns: mcpResumeVariantPlanSummaryResultValidator,
   handler: async (ctx, args): Promise<McpResumeVariantPlanSummaryResultV1> => {
-    return await summarizeMcpResumeVariantPlan(ctx.db, args);
+    return await summarizeMcpResumeVariantPlan(ctx.db as unknown as DbReader, args);
   },
 });
 
@@ -716,7 +716,10 @@ function readNextReviewHint(
 
 function readRecordArray(value: unknown): readonly Record<string, unknown>[] {
   return Array.isArray(value)
-    ? value.flatMap((item) => readPlainObjectRecord(item) ?? [])
+    ? value.flatMap((item): Record<string, unknown>[] => {
+        const record = readPlainObjectRecord(item);
+        return record ? [record] : [];
+      })
     : [];
 }
 

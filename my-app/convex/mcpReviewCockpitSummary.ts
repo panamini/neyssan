@@ -277,7 +277,7 @@ export const internalSummarizeMcpReviewCockpit = internalQuery({
   },
   returns: mcpReviewCockpitSummaryResultValidator,
   handler: async (ctx, args): Promise<McpReviewCockpitSummaryResultV1> => {
-    return await summarizeMcpReviewCockpit(ctx.db, args);
+    return await summarizeMcpReviewCockpit(ctx.db as unknown as DbReader, args);
   },
 });
 

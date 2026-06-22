@@ -29,6 +29,13 @@ import {
 const DEFAULT_LIST_LIMIT = 50;
 const MAX_LIST_LIMIT = 100;
 
+type MutableCandidateImportBatchV1 = Omit<
+  CandidateImportBatchV1,
+  "sourceDocumentIds"
+> & {
+  sourceDocumentIds: string[];
+};
+
 function resolveListLimit(limit: number | undefined): number {
   if (typeof limit !== "number" || !Number.isFinite(limit)) {
     return DEFAULT_LIST_LIMIT;
@@ -400,7 +407,7 @@ async function sanitizeCandidateFact(fact: CandidateFactV1): Promise<CandidateFa
 
 async function sanitizeCandidateImportBatch(
   importBatch: CandidateImportBatchV1,
-): Promise<CandidateImportBatchV1> {
+): Promise<MutableCandidateImportBatchV1> {
   const sourceDocumentIds = [...importBatch.sourceDocumentIds];
   if (sourceDocumentIds.length === 0) {
     throw new TypeError("CandidateImportBatch sourceDocumentIds must not be empty");
@@ -412,7 +419,7 @@ async function sanitizeCandidateImportBatch(
     }
   }
 
-  const candidateImportBatch: CandidateImportBatchV1 = {
+  const candidateImportBatch: MutableCandidateImportBatchV1 = {
     id: importBatch.id,
     userId: importBatch.userId,
     sourceDocumentIds,

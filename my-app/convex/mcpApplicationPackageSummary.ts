@@ -159,7 +159,7 @@ export const internalSummarizeMcpApplicationPackage = internalQuery({
   },
   returns: mcpApplicationPackageSummaryResultValidator,
   handler: async (ctx, args): Promise<McpApplicationPackageSummaryResultV1> => {
-    return await summarizeMcpApplicationPackage(ctx.db, args);
+    return await summarizeMcpApplicationPackage(ctx.db as unknown as DbReader, args);
   },
 });
 

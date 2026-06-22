@@ -45,7 +45,7 @@ export function isWorkshopResumeTemplateId(
 }
 
 export function isResumeTemplateId(
-  templateId: ResumeTemplateId | null | undefined,
+  templateId: unknown,
 ): templateId is ResumeTemplateId {
   return RESUME_TEMPLATE_IDS.includes(templateId as ResumeTemplateId);
 }
