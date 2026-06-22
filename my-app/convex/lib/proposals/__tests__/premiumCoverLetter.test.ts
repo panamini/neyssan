@@ -20,7 +20,9 @@ import {
   evaluatePremiumCoverLetterEligibility,
   extractOpenAIJsonPayload,
   inferPremiumCoverLetterContextClass,
+  isCoverLetterPremiumPromptV2Enabled,
   isCoverLetterPremiumPathV1Enabled,
+  isPremiumCoverLetterPromptV2MistralEnabled,
   premiumCoverLetterFinalProvenanceSatisfiesCandidateEvidence,
   rankAllowedFacts,
   repairPremiumCoverLetterBodyParts,
@@ -1089,6 +1091,144 @@ describe("premium cover letter prompt contract", () => {
     expect(qwenPrompt).not.toContain("MISTRAL ADJACENT-FIT ADDENDUM");
     expect(qwenPrompt).not.toContain("MISTRAL ADJACENT-FIT STRICT ADDENDUM");
     expect(qwenPrompt).not.toContain("MISTRAL ADJACENT ROLE-MAPPING LOCK");
+  });
+
+  it("keeps premium prompt V2 off by default and enables it only for explicit Mistral provider", () => {
+    const brief = buildDirectBrief();
+    const flagEnv = {
+      lower: process.env.cover_letter_premium_prompt_v2,
+      upper: process.env.COVER_LETTER_PREMIUM_PROMPT_V2,
+      enable: process.env.ENABLE_COVER_LETTER_PREMIUM_PROMPT_V2,
+    };
+    const versionMarker =
+      "Premium cover-letter prompt version: premium_cover_letter_prompt_v2_mistral.";
+
+    delete process.env.cover_letter_premium_prompt_v2;
+    delete process.env.COVER_LETTER_PREMIUM_PROMPT_V2;
+    delete process.env.ENABLE_COVER_LETTER_PREMIUM_PROMPT_V2;
+
+    try {
+      const v1DefaultPrompt = buildPremiumCoverLetterPrompt({ brief });
+      const v1OpenAiPrompt = buildPremiumCoverLetterPrompt({
+        brief,
+        writerProvider: "openai",
+        writerModel: "gpt-5.5",
+      });
+      const v1QwenPrompt = buildPremiumCoverLetterPrompt({
+        brief,
+        writerProvider: "qwen",
+        writerModel: "qwen3.7-max",
+      });
+      const v1MistralPrompt = buildPremiumCoverLetterPrompt({
+        brief,
+        writerProvider: "mistral",
+        writerModel: "mistral-large-latest",
+      });
+      const v1ModelOnlyMistralPrompt = buildPremiumCoverLetterPrompt({
+        brief,
+        writerProvider: "unknown",
+        writerModel: "mistral-large-latest",
+      });
+
+      expect(v1MistralPrompt).not.toContain(versionMarker);
+
+      process.env.ENABLE_COVER_LETTER_PREMIUM_PROMPT_V2 = "1";
+
+      const v2MistralPrompt = buildPremiumCoverLetterPrompt({
+        brief,
+        writerProvider: "mistral",
+        writerModel: "mistral-large-latest",
+      });
+
+      expect(v2MistralPrompt).toContain(versionMarker);
+      expect(v2MistralPrompt).toContain("Offer appropriation:");
+      expect(v2MistralPrompt).toContain("Requirement-to-candidate angle:");
+      expect(v2MistralPrompt).toContain("No job-offer listing:");
+      expect(v2MistralPrompt).toContain("Factuality lock:");
+      expect(v2MistralPrompt).toContain("Structured evidence lock:");
+      expect(v2MistralPrompt).toContain("Provider adapter: Mistral");
+      expect(v2MistralPrompt).toContain(
+        "Return only PremiumWriterOutputV1 JSON.",
+      );
+      expect(v2MistralPrompt).not.toBe(v1MistralPrompt);
+
+      expect(buildPremiumCoverLetterPrompt({ brief })).toBe(v1DefaultPrompt);
+      expect(
+        buildPremiumCoverLetterPrompt({
+          brief,
+          writerProvider: "openai",
+          writerModel: "gpt-5.5",
+        }),
+      ).toBe(v1OpenAiPrompt);
+      expect(
+        buildPremiumCoverLetterPrompt({
+          brief,
+          writerProvider: "qwen",
+          writerModel: "qwen3.7-max",
+        }),
+      ).toBe(v1QwenPrompt);
+      expect(
+        buildPremiumCoverLetterPrompt({
+          brief,
+          writerProvider: "unknown",
+          writerModel: "mistral-large-latest",
+        }),
+      ).toBe(v1ModelOnlyMistralPrompt);
+    } finally {
+      if (flagEnv.lower === undefined) {
+        delete process.env.cover_letter_premium_prompt_v2;
+      } else {
+        process.env.cover_letter_premium_prompt_v2 = flagEnv.lower;
+      }
+      if (flagEnv.upper === undefined) {
+        delete process.env.COVER_LETTER_PREMIUM_PROMPT_V2;
+      } else {
+        process.env.COVER_LETTER_PREMIUM_PROMPT_V2 = flagEnv.upper;
+      }
+      if (flagEnv.enable === undefined) {
+        delete process.env.ENABLE_COVER_LETTER_PREMIUM_PROMPT_V2;
+      } else {
+        process.env.ENABLE_COVER_LETTER_PREMIUM_PROMPT_V2 = flagEnv.enable;
+      }
+    }
+  });
+
+  it("keeps premium prompt V2 inside existing provenance and factuality constraints", () => {
+    const brief = buildDirectBrief();
+    const previousFlag = process.env.ENABLE_COVER_LETTER_PREMIUM_PROMPT_V2;
+    process.env.ENABLE_COVER_LETTER_PREMIUM_PROMPT_V2 = "true";
+    try {
+      const prompt = buildPremiumCoverLetterPrompt({
+        brief,
+        writerProvider: "mistral",
+        writerModel: "mistral-large-latest",
+      });
+
+      expect(prompt).toContain(
+        "Each body part must cite the claimIds, factIds, and demandIds it used.",
+      );
+      expect(prompt).toContain(
+        "Job demands are role context only and must not become candidate experience.",
+      );
+      expect(prompt).toContain(
+        "Use brief facts only. Do not invent credentials, ownership, metrics, tools, timelines, or proof.",
+      );
+      expect(prompt).toContain(
+        "Cite only claimIds, factIds, and demandIds actually used by that section; demandIds remain role context and never candidate proof.",
+      );
+      expect(prompt).toContain(
+        "Missing requirements are gaps, omissions, or non-claims.",
+      );
+      expect(prompt).toContain(
+        "Never convert a job demand, preferred qualification, compliance framework, credential, or employer goal into candidate experience.",
+      );
+    } finally {
+      if (previousFlag === undefined) {
+        delete process.env.ENABLE_COVER_LETTER_PREMIUM_PROMPT_V2;
+      } else {
+        process.env.ENABLE_COVER_LETTER_PREMIUM_PROMPT_V2 = previousFlag;
+      }
+    }
   });
 
   it("adds Qwen cv_direct ownership and scope guidance without leaking to GPT or Mistral", () => {
@@ -4202,6 +4342,32 @@ describe("premium cover letter generation and rendering", () => {
     expect(isCoverLetterPremiumPathV1Enabled("on")).toBe(true);
     expect(isCoverLetterPremiumPathV1Enabled("off")).toBe(false);
     expect(isCoverLetterPremiumPathV1Enabled("")).toBe(false);
+  });
+
+  it("reads the premium prompt V2 flag conservatively and gates it to Mistral provider", () => {
+    expect(isCoverLetterPremiumPromptV2Enabled("1")).toBe(true);
+    expect(isCoverLetterPremiumPromptV2Enabled("true")).toBe(true);
+    expect(isCoverLetterPremiumPromptV2Enabled("on")).toBe(true);
+    expect(isCoverLetterPremiumPromptV2Enabled("off")).toBe(false);
+    expect(isCoverLetterPremiumPromptV2Enabled("")).toBe(false);
+    expect(
+      isPremiumCoverLetterPromptV2MistralEnabled({
+        writerProvider: "mistral",
+        rawFlagValue: "1",
+      }),
+    ).toBe(true);
+    expect(
+      isPremiumCoverLetterPromptV2MistralEnabled({
+        writerProvider: "openai",
+        rawFlagValue: "1",
+      }),
+    ).toBe(false);
+    expect(
+      isPremiumCoverLetterPromptV2MistralEnabled({
+        writerProvider: "unknown",
+        rawFlagValue: "1",
+      }),
+    ).toBe(false);
   });
 
   it("accepts the ENABLE_* env convention for the premium flag", () => {
