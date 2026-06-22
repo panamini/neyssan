@@ -12,6 +12,7 @@ import {
 } from "../../lib/document-style-slots";
 import {
   getVerbatiFontPairOption,
+  resolveVerbatiFontPairId,
   type VerbatiFontPairId,
 } from "../../features/verbati/fontCatalog";
 import {
@@ -23,7 +24,12 @@ import {
   WORKSHOP_RESUME_TWOCOL_TEMPLATE_ID,
   type ResumeTemplateId,
 } from "../../lib/layout/resumeTemplates";
-import { translateUi, type UiMessageKey, type UiMessageLocale } from "../../lib/i18n";
+import {
+  normalizeUiMessageLocale,
+  translateUi,
+  type UiMessageKey,
+  type UiMessageLocale,
+} from "../../lib/i18n";
 import { useUiLanguagePreference } from "../../lib/ui-preferences";
 
 type OnboardingNavigateOptions = {
@@ -177,9 +183,11 @@ function resolveOnboardingStyleSlot(
   const factorySlot = getFactoryDocumentStyleSlot(definition.slotId);
   const raw = getPresetForOnboardingSlot(presets, definition.slotId);
   const fontPair = getVerbatiFontPairOption(
-    raw?.fontPairId ??
-      raw?.verbatiStyle?.typography ??
-      factorySlot.appearance.typography,
+    resolveVerbatiFontPairId(
+      raw?.fontPairId ??
+        raw?.verbatiStyle?.typography ??
+        factorySlot.appearance.typography,
+    ),
   );
 
   return {
@@ -413,6 +421,7 @@ export function OnboardingReplay({
   onOpenCommandPalette,
 }: OnboardingReplayProps): JSX.Element | null {
   const { resolvedLanguage } = useUiLanguagePreference();
+  const uiMessageLocale = normalizeUiMessageLocale(resolvedLanguage);
   const [stepIndex, setStepIndex] = React.useState(0);
   const [supportedSitesOpen, setSupportedSitesOpen] = React.useState(false);
   const [selectedTone, setSelectedTone] = React.useState("warm");
@@ -662,7 +671,7 @@ export function OnboardingReplay({
                           <span className="onb-replay__choice-layout">
                             {getOnboardingLayoutName(
                               styleSlot.resumeTemplateId,
-                              resolvedLanguage,
+                              uiMessageLocale,
                             )}
                           </span>
                           <span className="onb-replay__choice-meta">

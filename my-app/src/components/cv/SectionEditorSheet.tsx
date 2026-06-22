@@ -17,7 +17,13 @@ import type { RemirrorJSON } from "remirror";
 import { api } from "../../../convex/_generated/api";
 import { Button, IslandPanel } from "../ui";
 import AiSuggestionCard from "../ai/AiSuggestionCard";
-import type { CvSection, ISkillItem, SkillCategory } from "../../types/cvDocument";
+import type {
+  CvSection,
+  ISkillItem,
+  Level,
+  SkillBucket,
+  SkillCategory,
+} from "../../types/cvDocument";
 import { formatSectionDisplayTitle } from "../../lib/cv-section-organization";
 import { projectResponsibilitiesForWorkshop } from "../../lib/resumeResponsibilityAuthority";
 import { remirrorJsonToString } from "../../lib/utils";
@@ -373,8 +379,51 @@ function isPillSection(section: CvSection | null): boolean {
   );
 }
 
+const SKILL_LEVELS: readonly Level[] = [
+  "Beginner",
+  "Elementary",
+  "Intermediate",
+  "Advanced",
+  "Fluent",
+];
+
+const SKILL_BUCKETS: readonly SkillBucket[] = ["core", "secondary", "familiar"];
+
+function isSkillLevel(value: unknown): value is Level {
+  return typeof value === "string" && SKILL_LEVELS.some((level) => level === value);
+}
+
+function isSkillBucket(value: unknown): value is SkillBucket {
+  return typeof value === "string" && SKILL_BUCKETS.some((bucket) => bucket === value);
+}
+
 function getPillItemName(item: Record<string, unknown>): string {
   return String(item.name ?? "").trim();
+}
+
+function getOptionalString(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed || undefined;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  return undefined;
+}
+
+function toSkillItem(item: Record<string, unknown>): ISkillItem | null {
+  const name = getPillItemName(item);
+  if (!name) return null;
+
+  return {
+    ...item,
+    id: getOptionalString(item.id),
+    name,
+    level: isSkillLevel(item.level) ? item.level : "Intermediate",
+    bucket: isSkillBucket(item.bucket) ? item.bucket : undefined,
+    categoryId: getOptionalString(item.categoryId),
+  };
 }
 
 function sanitizeSectionForSave(section: CvSection | null): CvSection | null {
@@ -1629,9 +1678,10 @@ export function SectionEditorSheet({
       aiSuggestion.sectionId === sectionId
         ? aiSuggestion
         : null;
-    const skillItems = structuredItems.filter((item) =>
-      Boolean(getPillItemName(item)),
-    ) as ISkillItem[];
+    const skillItems = structuredItems.flatMap((item) => {
+      const skillItem = toSkillItem(item);
+      return skillItem ? [skillItem] : [];
+    });
     const categories = Array.isArray(editableSection.skillCategories)
       ? (editableSection.skillCategories as SkillCategory[])
       : [];

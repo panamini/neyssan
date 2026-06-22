@@ -40,7 +40,10 @@ function isMatchTier(value: unknown): value is VisibleJobMatchTier {
 
 export function hasUsableMatchReview(
   matchReview: VisibleJobMatchReviewInput | undefined,
-): matchReview is NonNullable<VisibleJobMatchReviewInput> {
+): matchReview is {
+  verdict: VisibleJobMatchReviewVerdict;
+  score?: number | null;
+} {
   if (!matchReview?.verdict) {
     return false;
   }

@@ -256,8 +256,12 @@ function matchesToolArguments(
   args: Readonly<Record<string, unknown>>,
   inputKinds: readonly InternalToolInputKindV1[],
 ): boolean {
-  const expectedFields = inputKinds.map((kind) => INPUT_KIND_TO_FIELD[kind]);
-  if (expectedFields.some((field) => field === undefined)) return false;
+  const expectedFields: string[] = [];
+  for (const kind of inputKinds) {
+    const field = INPUT_KIND_TO_FIELD[kind];
+    if (field === undefined) return false;
+    expectedFields.push(field);
+  }
   if (!sameStringSet(Object.keys(args), expectedFields)) return false;
 
   return expectedFields.every((field) => isValidRefArgument(args[field]));

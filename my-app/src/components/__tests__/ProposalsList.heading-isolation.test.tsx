@@ -9,6 +9,7 @@ const SAVED_PROPOSALS = [
   {
     _id: "proposal_a",
     _creationTime: 1710000000000,
+    updatedAt: 1710000003000,
     title: "Proposal A",
     content: "Proposal A body.",
     status: "saved",
@@ -112,23 +113,23 @@ describe("ProposalsList heading isolation", () => {
     mockUpdateProposal.mockClear();
   });
 
-  it("renders saved rows from row-local heading metadata instead of active profile defaults", () => {
+  it("sorts saved rows by latest activity and renders row-local heading metadata", () => {
     render(<ProposalsList />);
 
     expect(screen.getAllByTestId("proposal-display")).toHaveLength(2);
     expect(proposalDisplayProps[0]).toMatchObject({
-      railTitle: "Row B Name",
-      railMeta: "Row B Role",
-      contactLine: "row-b@example.com",
-      letterDate: "Paris, 2 May 2026",
-      recipientDetails: "Company B",
-    });
-    expect(proposalDisplayProps[1]).toMatchObject({
       railTitle: "Row A Name",
       railMeta: "Row A Role",
       contactLine: "row-a@example.com",
       letterDate: "Paris, 1 May 2026",
       recipientDetails: "Company A",
+    });
+    expect(proposalDisplayProps[1]).toMatchObject({
+      railTitle: "Row B Name",
+      railMeta: "Row B Role",
+      contactLine: "row-b@example.com",
+      letterDate: "Paris, 2 May 2026",
+      recipientDetails: "Company B",
     });
     expect(
       proposalDisplayProps.flatMap((props) => [

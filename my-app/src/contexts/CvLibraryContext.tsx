@@ -63,7 +63,10 @@ import { resolveVerbatiStyle, serializeVerbatiStyle } from "../features/verbati/
 import type { VerbatiStylePreset } from "../features/verbati/types";
 import type { DocumentStyleMetadata } from "../lib/document-style-slots";
 import type { DocumentIconSettings } from "../lib/document-icons";
-import type { DocumentDecoration } from "../lib/document-decoration";
+import {
+  normalizeDocumentDecoration,
+  type DocumentDecoration,
+} from "../lib/document-decoration";
 import {
   isResumeTemplateId,
   type ResumeTemplateId,
@@ -206,9 +209,19 @@ function sanitizeRuntimeCvDocument(doc: CvDocument): CvDocument {
   return sanitizeRuntimeImageStateFields(doc);
 }
 
-function readDecorationRuntimeDebug(doc: CvDocument | null | undefined) {
+function readCvDocumentDecoration(
+  doc: CvDocument | null | undefined,
+): DocumentDecoration | null {
   const decoration = doc?.metadata?.documentDecoration;
   if (!decoration || typeof decoration !== "object") {
+    return null;
+  }
+  return normalizeDocumentDecoration(decoration);
+}
+
+function readDecorationRuntimeDebug(doc: CvDocument | null | undefined) {
+  const decoration = readCvDocumentDecoration(doc);
+  if (!decoration) {
     return {
       hasDecoration: false,
       hasAssetId: false,
@@ -240,8 +253,8 @@ function canOverlayRuntimeDocumentDecoration(
   if (!localDoc || !remoteDoc) return false;
   if (String(localDoc.id) !== String(remoteDoc.id)) return false;
 
-  const localDecoration = localDoc.metadata?.documentDecoration;
-  const remoteDecoration = remoteDoc.metadata?.documentDecoration;
+  const localDecoration = readCvDocumentDecoration(localDoc);
+  const remoteDecoration = readCvDocumentDecoration(remoteDoc);
   if (!localDecoration || !remoteDecoration) return false;
   if (localDecoration.visible !== true) return false;
   if (!localDecoration.assetId) return false;
@@ -254,8 +267,10 @@ function overlayRuntimeDocumentDecoration(
   localDoc: CvDocument,
   remoteDoc: CvDocument,
 ): CvDocument {
-  const localDecoration = localDoc.metadata?.documentDecoration ?? {};
-  const remoteDecoration = remoteDoc.metadata?.documentDecoration ?? {};
+  const localDecoration =
+    readCvDocumentDecoration(localDoc) ?? normalizeDocumentDecoration(null);
+  const remoteDecoration =
+    readCvDocumentDecoration(remoteDoc) ?? normalizeDocumentDecoration(null);
   return {
     ...localDoc,
     metadata: {

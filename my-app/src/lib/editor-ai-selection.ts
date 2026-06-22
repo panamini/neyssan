@@ -289,7 +289,7 @@ export function getDomRangeSelectionState(
   const lastLineRect = sortedRects[sortedRects.length - 1] ?? rect;
   const containerRect = root.getBoundingClientRect();
   const focusRect =
-    measureCollapsedSelectionRect(focus?.focusNode, focus?.focusOffset ?? 0) ??
+    measureCollapsedSelectionRect(focus?.focusNode ?? null, focus?.focusOffset ?? 0) ??
     (focus?.isBackward ? firstLineRect : lastLineRect);
 
   return {

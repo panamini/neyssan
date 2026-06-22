@@ -356,7 +356,12 @@ function assertLocalMcpSafeArgumentSummary(value: unknown): void {
   if (!Array.isArray(summary.refIds) || !summary.refIds.every(isNonEmptyString)) {
     throw new TypeError("LocalMcpSafeArgumentSummary requires refIds");
   }
-  if (!Number.isInteger(summary.omittedRawValueCount) || summary.omittedRawValueCount < 0) {
+  const omittedRawValueCount = summary.omittedRawValueCount;
+  if (
+    typeof omittedRawValueCount !== "number" ||
+    !Number.isInteger(omittedRawValueCount) ||
+    omittedRawValueCount < 0
+  ) {
     throw new TypeError("LocalMcpSafeArgumentSummary requires omittedRawValueCount");
   }
   if (summary.version !== 1) throw new TypeError("LocalMcpSafeArgumentSummary version must be 1");

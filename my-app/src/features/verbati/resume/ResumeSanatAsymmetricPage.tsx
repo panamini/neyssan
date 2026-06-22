@@ -122,7 +122,9 @@ function SanatSkillLineItems({ skills }: { skills: string[] }) {
         ? null
         : new ResizeObserver(() => measureRows());
 
-    resizeObserver?.observe(parentNode);
+    if (resizeObserver && parentNode) {
+      resizeObserver.observe(parentNode);
+    }
     window.addEventListener("resize", measureRows);
 
     return () => {

@@ -18,6 +18,9 @@ const KNOWN_MARKETS: readonly CareerKnowledgeMarketV1[] = [
   "other",
 ] as const;
 
+const CAREER_KNOWLEDGE_RULES: readonly CareerKnowledgeRuleV1[] =
+  CAREER_KNOWLEDGE_RULES_V1;
+
 export function resolveCareerKnowledgeRules(
   input: CareerKnowledgeResolveInputV1,
 ): CareerKnowledgeResolveResultV1 {
@@ -40,12 +43,12 @@ export function resolveCareerKnowledgeRules(
 export function getCareerKnowledgeRuleById(
   id: CareerKnowledgeRuleIdV1,
 ): CareerKnowledgeRuleV1 | undefined {
-  return CAREER_KNOWLEDGE_RULES_V1.find((rule) => rule.id === id);
+  return CAREER_KNOWLEDGE_RULES.find((rule) => rule.id === id);
 }
 
 export function listCareerKnowledgeRules(): readonly CareerKnowledgeRuleV1[] {
   assertUniqueCareerKnowledgeRuleIds();
-  return CAREER_KNOWLEDGE_RULES_V1;
+  return CAREER_KNOWLEDGE_RULES;
 }
 
 export function filterCareerKnowledgeRules(
@@ -55,7 +58,7 @@ export function filterCareerKnowledgeRules(
 
   const market = normalizeCareerKnowledgeMarket(input.market);
 
-  return CAREER_KNOWLEDGE_RULES_V1.filter((rule) => {
+  return CAREER_KNOWLEDGE_RULES.filter((rule) => {
     if (!matchesDocumentKind(rule, input.documentKind)) {
       return false;
     }
@@ -95,7 +98,7 @@ export function filterCareerKnowledgeRules(
 export function assertUniqueCareerKnowledgeRuleIds(): void {
   const seen = new Set<CareerKnowledgeRuleIdV1>();
 
-  for (const rule of CAREER_KNOWLEDGE_RULES_V1) {
+  for (const rule of CAREER_KNOWLEDGE_RULES) {
     if (seen.has(rule.id)) {
       throw new Error(`Duplicate CareerKnowledge rule id: ${rule.id}`);
     }
