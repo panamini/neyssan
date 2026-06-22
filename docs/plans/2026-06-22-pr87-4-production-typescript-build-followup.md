@@ -45,6 +45,7 @@ Top starting local-MCP code classes:
 - Narrowed generated-artifact policy summaries and artifact kinds before returning package/export, approval, revision, and resume export results.
 - Validated timestamps, preview status, action categories, risk levels, data classes, operational reasons, egress policy values, remote transport limits, and account-link/OAuth boundary numbers through typed local variables before returning them.
 - Reworked read-only review and Twoweeks data adapter parsing so unavailable reasons, review labels, availability summaries, refs, blocked ref classes, and granted scope sets are narrowed before use.
+- Added focused `mcpReadOnlyReviewComponent` coverage for the intentional `missing_auth` action contract: `safeCategories.nextUserAction` stays `none`, while visible/actionable guidance is projected through `nextReviewHint`, `actionLabel`, `props.nextUserAction`, and `stateSnapshot.nextUserAction`.
 - Replaced a local-MCP text-safety control-character regex with an equivalent char-code loop to keep targeted ESLint clean.
 
 ## Files Changed
@@ -122,7 +123,7 @@ Related TS6307 evidence outside local-MCP:
 ## Validation
 
 - Review fix note: unavailable review component summaries intentionally keep `safeCategories.nextUserAction` as `none`; the visible user action is carried by `safeCategories.nextReviewHint`, then projected to the component `actionLabel`, `props.nextUserAction`, and `stateSnapshot.nextUserAction`.
-- `rtk npx vitest run src/modules/local-mcp`: passed, 56 files / 1190 tests.
+- `rtk npx vitest run src/modules/local-mcp`: passed, 56 files / 1191 tests.
 - `rtk npx tsc --noEmit --pretty false`: passed.
 - Targeted ESLint on touched local-MCP implementation files: passed.
 - `rtk npm run build`: failed with 56 TypeScript errors; first blocker is now outside the scoped local-MCP cluster.
