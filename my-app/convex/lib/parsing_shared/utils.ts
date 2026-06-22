@@ -62,7 +62,7 @@ export function sanitizeProviderResponse(raw: string): string {
       }
 
       if (parsed.metadata && typeof parsed.metadata === "object") {
-        const metaOut = (parsed.metadata as any).output_text;
+        const metaOut = (parsed.metadata).output_text;
         if (typeof metaOut === "string" && metaOut.trim()) {
           const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec(metaOut);
           if (fence && fence[1]) return fence[1].trim();
@@ -73,22 +73,22 @@ export function sanitizeProviderResponse(raw: string): string {
       if (parsed.output && Array.isArray(parsed.output)) {
         for (const item of parsed.output) {
           if (!item || typeof item !== "object") continue;
-          if ((item as any).json) return JSON.stringify((item as any).json);
-          if (typeof (item as any).output_text === "string" && (item as any).output_text.trim()) {
-            const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec((item as any).output_text);
+          if ((item).json) return JSON.stringify((item).json);
+          if (typeof (item).output_text === "string" && (item).output_text.trim()) {
+            const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec((item).output_text);
             if (fence && fence[1]) return fence[1].trim();
-            return String((item as any).output_text);
+            return String((item).output_text);
           }
-          if (typeof (item as any).text === "string" && (item as any).text.trim()) {
-            const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec((item as any).text);
+          if (typeof (item).text === "string" && (item).text.trim()) {
+            const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec((item).text);
             if (fence && fence[1]) return fence[1].trim();
-            return String((item as any).text);
+            return String((item).text);
           }
         }
       }
 
-      if ((parsed as any).full_response && Array.isArray((parsed as any).full_response.choices)) {
-        const c = (parsed as any).full_response.choices[0];
+      if ((parsed).full_response && Array.isArray((parsed).full_response.choices)) {
+        const c = (parsed).full_response.choices[0];
         if (c?.message?.content) {
           const content = String(c.message.content);
           const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec(content);
@@ -97,7 +97,7 @@ export function sanitizeProviderResponse(raw: string): string {
         }
       }
 
-      if (Array.isArray((parsed as any).sections) || (parsed as any).profile || (parsed as any).experience || (parsed as any).skills) {
+      if (Array.isArray((parsed).sections) || (parsed).profile || (parsed).experience || (parsed).skills) {
         return JSON.stringify(parsed);
       }
     }

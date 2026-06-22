@@ -66,7 +66,7 @@ function coerceParsedCV(input: unknown): ParsedCV {
   }
 
   const method = typeof obj.method === "string" ? obj.method : null;
-  const cv = Object.prototype.hasOwnProperty.call(obj, "cv") ? (obj.cv as unknown) : null;
+  const cv = Object.prototype.hasOwnProperty.call(obj, "cv") ? (obj.cv) : null;
   const warnings =
     Array.isArray(obj.warnings) && (obj.warnings as unknown[]).every((w) => typeof w === "string")
       ? (obj.warnings as string[])
@@ -148,7 +148,7 @@ export const extractProfileStrict = action({
     // We consume the result directly and pass through to strictProfileAdapter.
     const mappedCvCombined: unknown | null = parsed.cv;
 
-    let strict = mapParsedToStrict({
+    const strict = mapParsedToStrict({
       rawText,
       parsedSections: finalSections,
       metadata: parsed.metadata,

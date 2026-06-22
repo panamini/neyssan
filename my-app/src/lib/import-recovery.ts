@@ -699,7 +699,7 @@ function ensureSection(
           id: uuidv4(),
           title: "Summary",
           type: "text",
-          content: ensureRemirrorDoc((summaryItem as ISummaryItem).summary),
+          content: ensureRemirrorDoc((summaryItem).summary),
           attributes: { linkedStructuredId: summaryItem.id },
         },
       ],

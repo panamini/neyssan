@@ -311,7 +311,7 @@ async function runStructuredMistralImport(
     logStructuredImportTiming(trace, "structured_upload.finish");
   } catch (err: any) {
     const message = String(err?.message ?? err ?? "");
-    const code = String((err as any)?.code ?? "");
+    const code = String((err)?.code ?? "");
     const shouldRetry =
       message.includes("Connection lost while action was in flight") ||
       code === "NetworkingError" ||

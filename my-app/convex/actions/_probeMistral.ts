@@ -26,11 +26,11 @@ BT  /F1 12 Tf  72 128 Td  (Hello OCR) Tj  ET
 endstream endobj
 xref
 0 5
-0000000000 65535 f 
-0000000010 00000 n 
-0000000060 00000 n 
-0000000116 00000 n 
-0000000221 00000 n 
+0000000000 65535 f
+0000000010 00000 n
+0000000060 00000 n
+0000000116 00000 n
+0000000221 00000 n
 trailer<< /Size 5 /Root 1 0 R >>
 startxref
 320
@@ -47,13 +47,13 @@ export const probe = action({
   handler: async (ctx) => {
     const traceId = `probe:${nowMs()}`;
     const envGet = (ctx as any)?.env?.get?.bind((ctx as any).env);
-    const raw = envGet ? envGet("CONVEX_PARSER_URL") : (process.env.CONVEX_PARSER_URL as string | undefined);
+    const raw = envGet ? envGet("CONVEX_PARSER_URL") : (process.env.CONVEX_PARSER_URL);
     const cfAccessClientId = envGet
       ? (envGet("CF_ACCESS_CLIENT_ID") as string | undefined)
-      : (process.env.CF_ACCESS_CLIENT_ID as string | undefined);
+      : (process.env.CF_ACCESS_CLIENT_ID);
     const cfAccessClientSecret = envGet
       ? (envGet("CF_ACCESS_CLIENT_SECRET") as string | undefined)
-      : (process.env.CF_ACCESS_CLIENT_SECRET as string | undefined);
+      : (process.env.CF_ACCESS_CLIENT_SECRET);
     const useAccessHeaders = Boolean(cfAccessClientId && cfAccessClientSecret);
     if (!useAccessHeaders) {
       console.info("[_probeMistral] CF Access headers: disabled (missing env)");

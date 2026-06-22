@@ -729,7 +729,7 @@ function mapSkills(
   }
 
   const skillCategories = Array.isArray(skillsContext.section.skillCategories)
-    ? (skillsContext.section.skillCategories as SkillCategory[])
+    ? (skillsContext.section.skillCategories)
         .map((category, order) => ({
           id: String(category.id ?? "").trim(),
           label: String(category.label ?? "").trim(),

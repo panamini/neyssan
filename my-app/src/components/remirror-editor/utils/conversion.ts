@@ -11,7 +11,7 @@ const ENABLE_CONVERSION_TRACE = false;
 // Debug toggle honoring global __CV_EDITOR_DEBUG__ flag
 function conversionDebugEnabled(): boolean {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+
     return ENABLE_CONVERSION_TRACE || (typeof window !== 'undefined' && (window as any).__CV_EDITOR_DEBUG__ === true);
   } catch {
     return ENABLE_CONVERSION_TRACE;
@@ -120,7 +120,7 @@ function htmlToPmFragment(html: string): PMNode[] {
   const container = document.createElement('div');
   container.innerHTML = html;
   const nodes: PMNode[] = [];
- 
+
   // Remirror expects marks to be an array of string or ObjectMark with attrs of literal values.
   // Keep attrs as Record<string, string> to satisfy the literal constraint.
   type MarkLiteral = string | { type: string; attrs?: Record<string, string> };
@@ -133,7 +133,7 @@ function htmlToPmFragment(html: string): PMNode[] {
     ol: 'ordered_list',
     li: 'list_item',
   };
- 
+
   function marksForTag(tag: string, el: HTMLElement): MarkLiteral[] {
     if (tag === 'strong' || tag === 'b') return [{ type: 'bold' }];
     if (tag === 'em' || tag === 'i') return [{ type: 'italic' }];
@@ -416,18 +416,18 @@ export function remirrorJsonToStructuredFields(json: RemirrorJSON, sectionType?:
 
     const structuredData: Record<string, any> = {};
     const unmappedTypes: Set<string> = new Set();
-  
+
     function traverse(nodes: PMNode[]) {
       // Log the raw types for debugging when enabled
       if (conversionDebugEnabled()) {
-        // eslint-disable-next-line no-console
+
         console.debug('[DBG][conversion] traversing node types', nodes.map(n => n.type));
       }
       for (const node of nodes) {
         // Normalize incoming node.type to handle variations like "experience-title" or "ExperienceTitle"
         const normalized = normalizeNodeType(node.type);
         const fieldName = NORMALIZED_FIELD_TYPE_MAP[normalized];
-  
+
         if (fieldName) {
           if (fieldName === 'responsibilities' || fieldName === 'description' || fieldName === 'summary') {
             // Keep rich content shape for these fields
@@ -445,14 +445,14 @@ export function remirrorJsonToStructuredFields(json: RemirrorJSON, sectionType?:
       }
     }
 
-    traverse(json.content as PMNode[]);
-  
+    traverse(json.content);
+
     // Diagnostics: log unmapped node types when enabled
     if (conversionDebugEnabled() && unmappedTypes.size > 0) {
-      // eslint-disable-next-line no-console
+
       console.debug('[DBG][conversion] unmapped node types observed', Array.from(unmappedTypes).slice(0, 20));
     }
-  
+
     // If no structured fields were found via traversal, apply fallback heuristics
     if (Object.keys(structuredData).length === 0) {
       const text = extractPlainText(json);
@@ -460,26 +460,26 @@ export function remirrorJsonToStructuredFields(json: RemirrorJSON, sectionType?:
       if (sectionType === 'summary') {
         return { summary: json };
       }
-  
+
       if (!text) return {};
-  
+
       switch (sectionType) {
         case 'experience': {
           const expMatch = text.match(/(.*) at (.*)/);
           if (expMatch) return { position: expMatch[1].trim(), company: expMatch[2].trim() };
-  
+
           const sepMatch = text.match(/(.+)[\u2014\u2013\-•\u2022]\s*(.+)/);
           if (sepMatch) return { position: sepMatch[1].trim(), company: sepMatch[2].trim() };
-          
+
           return { position: text };
         }
         case 'education': {
           const eduMatchIn = text.match(/(.*) in (.*)/);
           if (eduMatchIn) return { degree: eduMatchIn[1].trim(), fieldOfStudy: eduMatchIn[2].trim() };
-  
+
           const eduMatchFrom = text.match(/(.*) from (.*)/);
           if (eduMatchFrom) return { degree: eduMatchFrom[1].trim(), institution: eduMatchFrom[2].trim() };
-  
+
           return { degree: text };
         }
         default:
@@ -487,7 +487,7 @@ export function remirrorJsonToStructuredFields(json: RemirrorJSON, sectionType?:
           return {};
       }
     }
-  
+
     return structuredData;
 }
 
@@ -537,7 +537,7 @@ export function remirrorJSONToSections(doc: RemirrorJSON): Section[] {
         ? (attrs.type as Section['type'])
         : typeof attrs.sectionType === 'string'
         ? (attrs.sectionType as Section['type'])
-        : 'text') as Section['type'];
+        : 'text');
 
       // Detect raw structured data in several possible attribute keys
       const rawStructured = Array.isArray(attrs.structuredContent)
@@ -838,7 +838,7 @@ export function remirrorJSONToSections(doc: RemirrorJSON): Section[] {
         };
         return sectionObj;
       }
- 
+
        // -------- Achievements (structured objects { id, text }) --------
        if (Array.isArray(rawStructured) && rawStructured.length > 0 && sectionType === 'achievements') {
         const structured = rawStructured.map((it: any, idx: number) => {
@@ -955,13 +955,13 @@ export function sectionToRemirrorDoc(section: Section): RemirrorJSON {
 
 export function ensureRemirrorDoc(content: string | RemirrorJSON | undefined | null): RemirrorJSON {
   if (ENABLE_CONVERSION_TRACE) {
-    // eslint-disable-next-line no-console
+
     console.debug('[TRACE-CV][conversion] ensureRemirrorDoc input type:', typeof content, content);
   }
 
   if (!content) {
     if (ENABLE_CONVERSION_TRACE) {
-      // eslint-disable-next-line no-console
+
       console.debug('[TRACE-CV][conversion] ensureRemirrorDoc: content is falsy, returning emptyDoc');
     }
     return emptyDoc;
@@ -971,13 +971,13 @@ export function ensureRemirrorDoc(content: string | RemirrorJSON | undefined | n
     const fragment = htmlToPmFragment(content ?? '');
     if (Array.isArray(fragment) && fragment.length > 0) {
       if (ENABLE_CONVERSION_TRACE) {
-        // eslint-disable-next-line no-console
+
         console.debug('[conversion] ensureRemirrorDoc: converted string to doc with fragment length', fragment.length);
       }
       return { type: 'doc', content: fragment } as RemirrorJSON;
     }
     if (ENABLE_CONVERSION_TRACE) {
-      // eslint-disable-next-line no-console
+
       console.debug('[conversion] ensureRemirrorDoc: string conversion produced empty fragment, returning emptyDoc');
     }
     return emptyDoc;
@@ -995,13 +995,13 @@ export function ensureRemirrorDoc(content: string | RemirrorJSON | undefined | n
       const fragment = Array.isArray(first.content) ? first.content : [];
       if (fragment.length > 0) {
         if (ENABLE_CONVERSION_TRACE) {
-          // eslint-disable-next-line no-console
+
           console.debug('[conversion] ensureRemirrorDoc: extracted fragment from cvSection node, length=', fragment.length);
         }
         return { type: 'doc', content: fragment } as RemirrorJSON;
       }
       if (ENABLE_CONVERSION_TRACE) {
-        // eslint-disable-next-line no-console
+
         console.debug('[conversion] ensureRemirrorDoc: cvSection node present but empty, falling back to emptyDoc');
       }
       return emptyDoc;
@@ -1010,7 +1010,7 @@ export function ensureRemirrorDoc(content: string | RemirrorJSON | undefined | n
     // If no cvSection wrappers, but the doc has block content, return it (it's already editor-ready).
     if (Array.isArray(doc.content) && doc.content.length > 0) {
       if (ENABLE_CONVERSION_TRACE) {
-        // eslint-disable-next-line no-console
+
         console.debug('[conversion] ensureRemirrorDoc: doc has block content, returning as-is');
       }
       return doc as RemirrorJSON;
@@ -1018,7 +1018,7 @@ export function ensureRemirrorDoc(content: string | RemirrorJSON | undefined | n
 
     // Fallback for empty doc.content
     if (ENABLE_CONVERSION_TRACE) {
-      // eslint-disable-next-line no-console
+
       console.debug('[conversion] ensureRemirrorDoc: doc has no content, returning emptyDoc');
     }
     return emptyDoc;
@@ -1026,7 +1026,7 @@ export function ensureRemirrorDoc(content: string | RemirrorJSON | undefined | n
 
   // Unexpected shape
   if (ENABLE_CONVERSION_TRACE) {
-    // eslint-disable-next-line no-console
+
     console.debug('[conversion] ensureRemirrorDoc: content has unexpected shape, falling back to emptyDoc');
   }
   return emptyDoc;
@@ -1121,12 +1121,12 @@ export function remirrorDocToSection(doc: RemirrorJSON, sectionId: string, title
       content: blockContent,
     };
     if (ENABLE_CONVERSION_TRACE) {
-      // eslint-disable-next-line no-console
+
       console.debug('[TRACE-CV][conversion] remirrorDocToSection produced block for', sectionId);
     }
     return { id: sectionId, title, type: 'text' as const, blocks: [blk], structuredContent: null } as Section;
   } catch (err) {
-    // eslint-disable-next-line no-console
+
     console.warn('[TRACE-CV][conversion] remirrorDocToSection failed', err, doc);
     const emptyBlock = {
       id: uuidv4(),

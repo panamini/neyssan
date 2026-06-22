@@ -1878,7 +1878,7 @@ export function buildProposalEvidenceSummary(
     topAchievements.length >= 2
       ? topAchievements.slice(0, 2)
       : topAchievements.length === 1 && topScopePoints.length > 0
-        ? [topScopePoints[0]!, topAchievements[0]!]
+        ? [topScopePoints[0], topAchievements[0]]
       : topScopePoints.length > 0
         ? topScopePoints.slice(0, 2)
         : relevantBackgroundFacts.slice(0, 2);

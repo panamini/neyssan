@@ -700,7 +700,7 @@ export function FloatingAiToolbar({
       : metrics.actionWidth;
   const compactTrackX =
     compactMode === "format" && hasFormattingActions
-      ? -(metrics.actionWidth + resolveCssLength(panelRef.current!, "--s1", 4))
+      ? -(metrics.actionWidth + resolveCssLength(panelRef.current, "--s1", 4))
       : 0;
 
   React.useEffect(() => {
@@ -827,7 +827,7 @@ export function FloatingAiToolbar({
                             className="ds-ai-toolbar__ai-icon"
                             aria-hidden="true"
                           >
-                            {AI_ACTION_ICONS[action.id as InlineAiActionId] ??
+                            {AI_ACTION_ICONS[action.id] ??
                               action.label}
                           </span>
                           <span className="ds-ai-toolbar__ai-label">

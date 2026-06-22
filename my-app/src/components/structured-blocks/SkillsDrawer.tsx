@@ -259,7 +259,7 @@ function moveSkill(
   );
   if (targetIndex < 0) return groups;
   const overSkillId = stripDndId(overId, SKILL_DND_PREFIX);
-  const overSkillIndex = nextGroups[targetIndex]!.items.findIndex(
+  const overSkillIndex = nextGroups[targetIndex].items.findIndex(
     (item) => idOf(item) === overSkillId,
   );
   const flatSkillIds = groups.flatMap((group) => group.items.map(idOf));
@@ -272,13 +272,13 @@ function moveSkill(
         activeFlatIndex < overFlatIndex
         ? overSkillIndex + 1
         : overSkillIndex
-      : nextGroups[targetIndex]!.items.length;
-  nextGroups[targetIndex]!.items.splice(insertIndex, 0, {
+      : nextGroups[targetIndex].items.length;
+  nextGroups[targetIndex].items.splice(insertIndex, 0, {
     ...activeItem,
     ...(overGroup.categoryId ? { categoryId: overGroup.categoryId } : {}),
   });
   if (!overGroup.categoryId) {
-    delete nextGroups[targetIndex]!.items[insertIndex]!.categoryId;
+    delete nextGroups[targetIndex].items[insertIndex].categoryId;
   }
   return nextGroups;
 }

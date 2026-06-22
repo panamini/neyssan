@@ -233,16 +233,16 @@ export function mapStrictProfileToCanonical(strict: StrictProfile): CanonicalCV 
   };
 
   const work = (strict.experience ?? []).map((item, index) =>
-    mapExperienceItem(item as StrictExperienceItem, index, telemetry, confidenceSummary)
+    mapExperienceItem(item, index, telemetry, confidenceSummary)
   );
   const education = (strict.education ?? []).map((item, index) =>
-    mapEducationItem(item as StrictEducationItem, index, telemetry, confidenceSummary)
+    mapEducationItem(item, index, telemetry, confidenceSummary)
   );
   const skills = (strict.skills ?? []).map((item, index) =>
-    mapSkillItem(item as StrictSkillItem, index, telemetry, confidenceSummary)
+    mapSkillItem(item, index, telemetry, confidenceSummary)
   );
   const languages = (strict.languages ?? []).map((item, index) =>
-    mapLanguageItem(item as StrictLanguageItem, index, telemetry, confidenceSummary)
+    mapLanguageItem(item, index, telemetry, confidenceSummary)
   );
 
   const achievementsProv = rootProv.achievements;

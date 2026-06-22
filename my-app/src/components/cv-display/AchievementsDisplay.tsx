@@ -47,7 +47,7 @@ export function AchievementsDisplay({
   }, [items]);
 
   if (DEBUG) {
-    // eslint-disable-next-line no-console
+
     console.debug("[AchievementsDisplay] render", { itemId, rawItems: items, texts });
   }
 
@@ -100,7 +100,7 @@ function coerceToString(input: unknown): string {
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === "object") {
           // If parsed appears like a Remirror doc/node, extract plain text.
-          if (Array.isArray((parsed as any).content) || typeof (parsed as any).type === "string") {
+          if (Array.isArray((parsed).content) || typeof (parsed).type === "string") {
             try {
               return docToPlainText(parsed as RemirrorJSON);
             } catch {
@@ -137,7 +137,7 @@ function coerceToString(input: unknown): string {
     }
     if ((obj as { doc?: unknown }).doc && typeof (obj as { doc?: unknown }).doc === "object" && Array.isArray(((obj as { doc?: unknown }).doc as any).content)) {
       try {
-        return docToPlainText((obj as { doc?: unknown }).doc as unknown as RemirrorJSON);
+        return docToPlainText((obj as { doc?: unknown }).doc as RemirrorJSON);
       } catch {
         // noop
       }
@@ -182,7 +182,7 @@ function parseMaybeRemirror(input: unknown): RemirrorJSON | null {
       ((obj as { doc?: unknown }).doc && typeof (obj as { doc?: unknown }).doc === "object" && Array.isArray(((obj as { doc?: unknown }).doc as any).content))
     ) {
       // Normalize { doc: {...} } to its doc
-      if ((obj as { doc?: unknown }).doc && typeof (obj as { doc?: unknown }).doc === "object") return ((obj as { doc?: unknown }).doc as unknown) as RemirrorJSON;
+      if ((obj as { doc?: unknown }).doc && typeof (obj as { doc?: unknown }).doc === "object") return ((obj as { doc?: unknown }).doc) as RemirrorJSON;
       return (obj as unknown) as RemirrorJSON;
     }
   }
@@ -264,12 +264,12 @@ function ReadOnlyAchievements({ doc }: ReadOnlyAchievementsProps): JSX.Element {
   );
 
   const initialDoc: RemirrorJSON =
-    doc && typeof doc === "object" ? (doc as RemirrorJSON) : ({ type: "doc", content: [] } as RemirrorJSON);
+    doc && typeof doc === "object" ? (doc) : ({ type: "doc", content: [] } as RemirrorJSON);
 
   const { manager, state } = useRemirror({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     extensions: () => extensions as any,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     content: initialDoc as any,
   });
 

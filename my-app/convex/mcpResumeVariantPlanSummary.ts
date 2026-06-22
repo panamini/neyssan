@@ -322,7 +322,7 @@ async function summarizeMcpResumeVariantPlan(
     );
   }
 
-  const latestArtifact = artifacts[0]!;
+  const latestArtifact = artifacts[0];
   const latestPlan = readPlan(latestArtifact.content);
   const safeCounts = buildSafeCounts(
     artifacts.length,

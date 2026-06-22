@@ -19,7 +19,7 @@ function ensureEducationArray(cv: ICVObject): ICVArrayItem[] {
   if (!Array.isArray(cv.education)) {
     cv.education = [];
   }
-  return cv.education as ICVArrayItem[];
+  return cv.education;
 }
 
 export function migrateLanguagesToEducation(cv: ICVObject): void {

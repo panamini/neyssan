@@ -297,7 +297,7 @@ function dedupeAchievementTextsConservative(values: string[]): string[] {
     if (!normalized) return;
 
     for (let index = 0; index < resolved.length; index += 1) {
-      const existing = resolved[index]!;
+      const existing = resolved[index];
       if (existing.normalized === normalized) {
         if (raw.length > existing.raw.length) {
           resolved[index] = { raw, normalized };
@@ -419,8 +419,8 @@ function mergeNarrativeIntoExperience(target: any, source: any): boolean {
       return entry.responsibilityBullets.map((val: unknown) => coerceString(val)).filter(Boolean);
     }
     const extraSegments =
-      Array.isArray((entry as any)?.__extraNarrative) && (entry as any).__extraNarrative.length > 0
-        ? ((entry as any).__extraNarrative as string[])
+      Array.isArray((entry)?.__extraNarrative) && (entry).__extraNarrative.length > 0
+        ? ((entry).__extraNarrative as string[])
         : [];
     const text = coerceString(entry?.responsibilities ?? entry?.summary ?? "");
     const segments = [...extraSegments];
@@ -654,9 +654,9 @@ function sanitizeExperienceEntries(entries: any[]): any[] {
       }
     }
     if (locationNarrative.length) {
-      (clone as any).__extraNarrative = locationNarrative;
+      (clone).__extraNarrative = locationNarrative;
     }
-    const extraNarrative = Array.isArray((clone as any).__extraNarrative) ? (clone as any).__extraNarrative : [];
+    const extraNarrative = Array.isArray((clone).__extraNarrative) ? (clone).__extraNarrative : [];
     const hasNarrativePayload = bullets.length > 0 || Boolean(textResponsibilities) || extraNarrative.length > 0;
     const hasCompany = Boolean(company);
 
@@ -1920,7 +1920,7 @@ function isUsablePersonName(value: string | null | undefined, rawCandidate?: str
 
   const normalizedTokens = formattedTokens
     .map((token) => normalizeCandidateForStoplist(token))
-    .filter(Boolean) as string[];
+    .filter(Boolean);
   if (!normalizedTokens.length) return false;
   if (normalizedTokens.some((token) => isHeaderStopword(token) || isGeoStopword(token))) return false;
   if (normalizedTokens.every((token) => ROLEISH_NAME_TOKENS.has(token))) return false;
@@ -2171,7 +2171,7 @@ function deriveDesiredPosition(normalized: any, context: CanonicalizeContext): s
         const bonus = segIdx === 0 ? 0 : segIdx * 0.3;
         const score = weight - idx * 0.7 - bonus;
         if (process.env.DEBUG_ROLE === "1") {
-          // eslint-disable-next-line no-console
+
           console.log("[role candidate]", segment, score);
         }
         considerCandidate(segment, score);
@@ -2196,7 +2196,7 @@ function deriveDesiredPosition(normalized: any, context: CanonicalizeContext): s
           .join(" ");
         const candidateTokens = candidate.toLowerCase().split(/\s+/);
         if (process.env.DEBUG_ROLE === "1") {
-          // eslint-disable-next-line no-console
+
           console.log("[role fallback candidate]", candidate, candidateTokens);
         }
         if (candidateTokens.some((token: string) => ROLE_KEYWORD_HINTS.has(token))) {
@@ -2218,7 +2218,7 @@ function deriveDesiredPosition(normalized: any, context: CanonicalizeContext): s
       }
     }
     if (process.env.DEBUG_ROLE === "1") {
-      // eslint-disable-next-line no-console
+
       console.log("[role fallback]", fallbackRole);
     }
   }
@@ -2725,7 +2725,7 @@ function looksLikeStandaloneHeaderLocationLine(value: unknown): boolean {
   const formattedTokens = formatLooseNameTokens(tokens);
   const normalizedTokens = formattedTokens
     .map((token) => normalizeCandidateForStoplist(token))
-    .filter(Boolean) as string[];
+    .filter(Boolean);
   if (!normalizedTokens.length) return false;
   if (normalizedTokens.some((token) => isHeaderStopword(token) || ROLEISH_NAME_TOKENS.has(token))) return false;
 
@@ -3382,8 +3382,8 @@ function splitCompanyPositionFromHeader(headerRaw: string): {
   // A. “<position> at <company>[, <location>]”
   const atMatch = header.match(/^\s*(.+?)\s+at\s+(.+?)\s*$/i);
   if (atMatch) {
-    let position = cleanLine(atMatch[1] || "");
-    let companyPart = cleanLine(atMatch[2] || "");
+    const position = cleanLine(atMatch[1] || "");
+    const companyPart = cleanLine(atMatch[2] || "");
     let company = companyPart;
     let location = "";
 
@@ -3539,7 +3539,7 @@ function parseExperienceBlock(content: string, idx: number) {
 
   const split = splitCompanyLocation(companyLine);
   // Prefer header-derived company (from robust heuristic) over inline token guess
-  let company = headerCompany || inlineCompany || split.company;
+  const company = headerCompany || inlineCompany || split.company;
   const location = stripDrivingLicense(headerLocation ?? split.location ?? "");
   const narrative: string[] = [];
   const responsibilityBullets: string[] = [];
@@ -3572,7 +3572,7 @@ function parseExperienceBlock(content: string, idx: number) {
     }
   }
 
-  let responsibilitiesText = narrative.join(" ");
+  const responsibilitiesText = narrative.join(" ");
 
   const parsedRange = parseDateRange(dateText);
   startDate = startDate ?? parsedRange.startDate;
@@ -3731,7 +3731,7 @@ function deriveNormalizedConvenienceFieldsFromSections(
       .filter((section) => String(section.type || "").trim().toLowerCase() === type)
       .flatMap((section) =>
         Array.isArray(section.structuredContent)
-          ? (section.structuredContent as any[]).filter(Boolean)
+          ? (section.structuredContent).filter(Boolean)
           : [],
       );
   };
@@ -3740,7 +3740,7 @@ function deriveNormalizedConvenienceFieldsFromSections(
 
   const summaryItems = collectStructuredByType("summary");
   if (summaryItems.length > 0) {
-    const summaryText = structuredValueToPlainText((summaryItems[0] as any)?.summary);
+    const summaryText = structuredValueToPlainText((summaryItems[0])?.summary);
     if (summaryText) {
       aligned.summary = {
         text: summaryText,
@@ -3770,7 +3770,7 @@ function deriveNormalizedConvenienceFieldsFromSections(
   if (skillItems.length > 0) {
     aligned.skills = skillItems.map((item) => ({ ...item }));
     aligned.skillsText = skillItems
-      .map((item) => coerceString((item as any)?.name))
+      .map((item) => coerceString((item)?.name))
       .filter(Boolean)
       .join(", ");
   }
@@ -3779,13 +3779,13 @@ function deriveNormalizedConvenienceFieldsFromSections(
   if (languageItems.length > 0) {
     aligned.languages = languageItems.map((item) => ({ ...item }));
     aligned.languagesText = languageItems
-      .map((item) => coerceString((item as any)?.name))
+      .map((item) => coerceString((item)?.name))
       .filter(Boolean)
       .join(", ");
     aligned.languagesRaw = languageItems
       .map((item) => {
-        const name = coerceString((item as any)?.name);
-        const level = coerceString((item as any)?.level);
+        const name = coerceString((item)?.name);
+        const level = coerceString((item)?.level);
         return [name, level].filter(Boolean).join(" — ");
       })
       .filter(Boolean);
@@ -4015,13 +4015,13 @@ function parseEducationBlock(content: string, idx: number) {
     return null;
   }
 
-  let header = collapseSpacedCaps(stripLeadingLanguagesPrefix(lines.shift() ?? ""));
+  const header = collapseSpacedCaps(stripLeadingLanguagesPrefix(lines.shift() ?? ""));
   const degreeLineRaw = stripLeadingLanguagesPrefix(lines.shift() ?? "");
   const degreeLine = degreeLineRaw.trim();
 
   const { company: institution, location } = splitCompanyLocation(header);
   let degree = degreeLine;
-  let dateText = (degreeLine.match(DATE_RANGE_RE) || [])[0] || (degreeLine.match(SINGLE_DATE_RE) || [])[0];
+  const dateText = (degreeLine.match(DATE_RANGE_RE) || [])[0] || (degreeLine.match(SINGLE_DATE_RE) || [])[0];
   if (dateText) {
     degree = cleanLine(degreeLine.replace(dateText, ""));
   }
@@ -4220,7 +4220,7 @@ function buildEducationEntry(segment: string, idx: number) {
   }
 
   let header = stripLeadingLanguagesPrefix(lines.shift() ?? "");
-  let dateLineIndex = lines.findIndex((line) => DATE_RANGE_RE.test(line) || SINGLE_DATE_RE.test(line));
+  const dateLineIndex = lines.findIndex((line) => DATE_RANGE_RE.test(line) || SINGLE_DATE_RE.test(line));
   let dateLine: string | undefined;
   if (dateLineIndex >= 0) {
     dateLine = lines.splice(dateLineIndex, 1)[0];
@@ -4875,9 +4875,9 @@ function canonicalizeExperience(
       last.achievements = achievements;
     }
     if (changed || achievements.length) {
-      const existing: string[] = Array.isArray((last as any).provenanceTags) ? (last as any).provenanceTags : [];
+      const existing: string[] = Array.isArray((last).provenanceTags) ? (last).provenanceTags : [];
       if (!existing.includes("heuristic:narrative_merge")) {
-        (last as any).provenanceTags = [...existing, "heuristic:narrative_merge"];
+        (last).provenanceTags = [...existing, "heuristic:narrative_merge"];
       }
     }
   };
@@ -5032,8 +5032,8 @@ function canonicalizeExperience(
     }
     const parsedSegment = parseExperienceSegment(segment, key);
     if (!parsedSegment) return;
-    if ((parsedSegment as any).__narrative) {
-      appendNarrativeToLast((parsedSegment as any).__narrative as string[]);
+    if ((parsedSegment).__narrative) {
+      appendNarrativeToLast((parsedSegment).__narrative as string[]);
       return;
     }
     fallbackItems.push(parsedSegment);
@@ -5088,13 +5088,13 @@ function canonicalizeExperience(
 
   sanitizedFallback = sanitizedFallback.map((item) => {
     if (!item) return item;
-    if (!Array.isArray((item as any).responsibilityBullets)) {
-      if (Array.isArray((item as any).responsibilities)) {
-        (item as any).responsibilityBullets = ((item as any).responsibilities as string[]).slice();
+    if (!Array.isArray((item).responsibilityBullets)) {
+      if (Array.isArray((item).responsibilities)) {
+        (item).responsibilityBullets = ((item).responsibilities as string[]).slice();
       } else {
-        const derived = splitResponsibilitiesText((item as any).responsibilities ?? "");
+        const derived = splitResponsibilitiesText((item).responsibilities ?? "");
         if (derived.length) {
-          (item as any).responsibilityBullets = derived;
+          (item).responsibilityBullets = derived;
         }
       }
     }
@@ -5772,7 +5772,7 @@ function canonicalizeAchievements(rawValue: unknown, normalized: any, rawSection
   }
 
   const directSegments: string[] = [];
-  const normalizedText = coerceString((normalized as any)?.achievements?.text ?? "");
+  const normalizedText = coerceString((normalized)?.achievements?.text ?? "");
   if (normalizedText) directSegments.push(normalizedText);
   const normalizedAsString = typeof rawValue === "string" ? rawValue : "";
   if (normalizedAsString) directSegments.push(normalizedAsString);
@@ -5920,7 +5920,7 @@ export function canonicalizeParserResult(result: any, context: CanonicalizeConte
 
   const rawSummarySection = filterRawSection(rawSections, "summary")[0];
   const profileSection = filterRawSection(rawSections, "profile")[0];
-  const normalizedSummaryText = coerceString((normalized.summary as any)?.text);
+  const normalizedSummaryText = coerceString((normalized.summary)?.text);
   let summaryText =
     (rawSummarySection && looksLikeExperienceBulletSummary(normalizedSummaryText)
       ? rawSummarySection
@@ -5985,8 +5985,8 @@ export function canonicalizeParserResult(result: any, context: CanonicalizeConte
   // Guarantee object shape
   const uniformSummary = coerceSummaryObject(summaryText, 0.5);
   if (uniformSummary) {
-    (normalized as any).summary = uniformSummary;
-    (normalized as any).summaryFirstSentence = firstSentence(uniformSummary.text);
+    (normalized).summary = uniformSummary;
+    (normalized).summaryFirstSentence = firstSentence(uniformSummary.text);
   }
 
   const schemaFirstIdentityContact = buildSchemaFirstIdentityContactCandidate(normalized, rawSections, context);
@@ -5995,40 +5995,40 @@ export function canonicalizeParserResult(result: any, context: CanonicalizeConte
     normalized.contact = {};
   }
 
-  const sanitizedPhone = sanitizePhoneValue((normalized.contact as any).phone ?? (normalized.contact as any).phoneRaw);
+  const sanitizedPhone = sanitizePhoneValue((normalized.contact).phone ?? (normalized.contact).phoneRaw);
   if (sanitizedPhone) {
-    (normalized.contact as any).phone = sanitizedPhone;
-    (normalized.contact as any).phoneRaw = sanitizedPhone;
+    (normalized.contact).phone = sanitizedPhone;
+    (normalized.contact).phoneRaw = sanitizedPhone;
   } else {
-    delete (normalized.contact as any).phone;
-    delete (normalized.contact as any).phoneRaw;
+    delete (normalized.contact).phone;
+    delete (normalized.contact).phoneRaw;
   }
 
   const desiredPosition = deriveDesiredPosition(normalized, context);
   if (desiredPosition) {
     normalized.desiredPosition = desiredPosition;
-    (normalized.contact as any).desiredPosition = desiredPosition;
+    (normalized.contact).desiredPosition = desiredPosition;
   } else {
-    delete (normalized as any).desiredPosition;
-    delete (normalized.contact as any).desiredPosition;
+    delete (normalized).desiredPosition;
+    delete (normalized.contact).desiredPosition;
   }
 
   sanitizeContactLocation(normalized);
 
-  if (locationBirth && !(normalized.contact as any).locationBirth) {
-    (normalized.contact as any).locationBirth = locationBirth;
+  if (locationBirth && !(normalized.contact).locationBirth) {
+    (normalized.contact).locationBirth = locationBirth;
   }
 
   const derivedName = deriveNameFromContext(normalized, context);
   if (derivedName) {
     normalized.name = derivedName;
     if (normalized.contact) {
-      (normalized.contact as any).name = derivedName;
+      (normalized.contact).name = derivedName;
     }
   }
 
-  (normalized as any).identitySchema = schemaFirstIdentityContact.identity;
-  (normalized as any).contactSchema = schemaFirstIdentityContact.contact;
+  (normalized).identitySchema = schemaFirstIdentityContact.identity;
+  (normalized).contactSchema = schemaFirstIdentityContact.contact;
 
   const currentContact = normalized.contact as Record<string, any>;
   const heuristicName = coerceString(normalized.name ?? currentContact.name ?? "");
@@ -6124,7 +6124,7 @@ export function canonicalizeParserResult(result: any, context: CanonicalizeConte
 
   const experienceDiagnostics = experienceResult.diagnostics;
   if (experienceDiagnostics.droppedEmpty || experienceDiagnostics.fallbackCount) {
-    (normalized as any).experienceDiagnostics = experienceDiagnostics;
+    (normalized).experienceDiagnostics = experienceDiagnostics;
     baseDiagnostics.experience_dropped_empty = experienceDiagnostics.droppedEmpty;
     baseDiagnostics.experience_fallback_count = experienceDiagnostics.fallbackCount;
     baseDiagnostics.experience_source = experienceDiagnostics.source;

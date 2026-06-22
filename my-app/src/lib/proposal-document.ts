@@ -548,11 +548,11 @@ export function isValidProposalDocument(value: unknown): value is ProposalDocume
           (item) =>
             item &&
             typeof item === "object" &&
-            typeof (item as ProposalDocumentListItem).id === "string" &&
-            typeof (item as ProposalDocumentListItem).text === "string" &&
-            ((item as ProposalDocumentListItem).richText === undefined ||
+            typeof (item).id === "string" &&
+            typeof (item).text === "string" &&
+            ((item).richText === undefined ||
               normalizeProposalRichText(
-                (item as ProposalDocumentListItem).richText,
+                (item).richText,
               ) !== undefined),
         )
       );
@@ -603,7 +603,7 @@ export function normalizeProposalDocument(
                   : normalizeProposalDocumentEditText(item.text),
                 ...(richText ? { richText } : null),
                 ...(cleanString(item.iconKey)
-                  ? { iconKey: cleanString(item.iconKey) as DocumentIconKey }
+                  ? { iconKey: cleanString(item.iconKey) }
                   : null),
                 marker: item.marker ?? block.marker ?? null,
               };

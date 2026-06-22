@@ -65,7 +65,7 @@
     }
 
     const method = typeof obj.method === "string" ? obj.method : null;
-    const cv = Object.prototype.hasOwnProperty.call(obj, "cv") ? (obj.cv as unknown) : null;
+    const cv = Object.prototype.hasOwnProperty.call(obj, "cv") ? (obj.cv) : null;
     const warnings =
       Array.isArray(obj.warnings) && (obj.warnings as unknown[]).every((w) => typeof w === "string")
         ? (obj.warnings as string[])
@@ -182,9 +182,9 @@
         cv: (parsed as any)?.cv ?? null,
         // Convenience for UI: display-ready contacts from strict profile
         contacts: {
-          email: (profile as any)?.email ?? null,
-          phone: (profile as any)?.phone ?? null,
-          location: (profile as any)?.location ?? null,
+          email: (profile)?.email ?? null,
+          phone: (profile)?.phone ?? null,
+          location: (profile)?.location ?? null,
         },
         method: parsed.method ?? null,
         warnings: (parsed as any)?.warnings ?? [],

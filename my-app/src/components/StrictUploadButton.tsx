@@ -83,27 +83,27 @@ function pickStrictProfileShape(input: unknown): StrictProfileMinimal | null {
     return {
       name:
         typeof p.name === "string" || p.name === null
-          ? (p.name as string | null)
+          ? (p.name)
           : null,
       email:
         typeof p.email === "string" || p.email === null
-          ? (p.email as string | null)
+          ? (p.email)
           : null,
       phone:
         typeof p.phone === "string" || p.phone === null
-          ? (p.phone as string | null)
+          ? (p.phone)
           : null,
       location:
         typeof p.location === "string" || p.location === null
-          ? (p.location as string | null)
+          ? (p.location)
           : null,
       desiredPosition:
         typeof p.desiredPosition === "string" || p.desiredPosition === null
-          ? (p.desiredPosition as string | null)
+          ? (p.desiredPosition)
           : undefined,
     };
   }
-  const root = input as Record<string, unknown>;
+  const root = input;
   const hasSlots =
     ("name" in root ||
       "email" in root ||
@@ -117,24 +117,24 @@ function pickStrictProfileShape(input: unknown): StrictProfileMinimal | null {
     return {
       name:
         typeof root.name === "string" || root.name === null
-          ? (root.name as string | null)
+          ? (root.name)
           : null,
       email:
         typeof root.email === "string" || root.email === null
-          ? (root.email as string | null)
+          ? (root.email)
           : null,
       phone:
         typeof root.phone === "string" || root.phone === null
-          ? (root.phone as string | null)
+          ? (root.phone)
           : null,
       location:
         typeof root.location === "string" || root.location === null
-          ? (root.location as string | null)
+          ? (root.location)
           : null,
       desiredPosition:
         typeof root.desiredPosition === "string" ||
         root.desiredPosition === null
-          ? (root.desiredPosition as string | null)
+          ? (root.desiredPosition)
           : undefined,
     };
   }
@@ -267,12 +267,12 @@ export function StrictUploadButton(props: StrictUploadButtonProps) {
     if (typeof withSpans === "function") {
       try {
         payload = await withSpans({ rawText });
-        // eslint-disable-next-line no-console
+
         console.debug(
           "[StrictUploadButton] used action: extractProfileStrictWithSpans",
         );
       } catch (e) {
-        // eslint-disable-next-line no-console
+
         console.warn(
           "[StrictUploadButton] with-spans failed:",
           String((e as any)?.message ?? e),
@@ -284,10 +284,10 @@ export function StrictUploadButton(props: StrictUploadButtonProps) {
     if (!payload && typeof strictOnly === "function") {
       try {
         payload = await strictOnly({ rawText });
-        // eslint-disable-next-line no-console
+
         console.debug("[StrictUploadButton] used action: extractProfileStrict");
       } catch (e) {
-        // eslint-disable-next-line no-console
+
         console.warn(
           "[StrictUploadButton] strict-only failed:",
           String((e as any)?.message ?? e),
@@ -329,26 +329,26 @@ export function StrictUploadButton(props: StrictUploadButtonProps) {
 
           if (res.ok) {
             payload = await res.json().catch(() => null);
-            // eslint-disable-next-line no-console
+
             console.debug(
               "[StrictUploadButton] used HTTP fallback (site endpoints)",
               { siteUrl: CONVEX_SITE_URL },
             );
           } else {
-            // eslint-disable-next-line no-console
+
             console.warn(
               "[StrictUploadButton] HTTP fallback endpoints returned non-OK status",
             );
           }
         } else {
-          // eslint-disable-next-line no-console
+
           console.warn(
             "[StrictUploadButton] HTTP fallback unavailable: could not derive CONVEX_SITE_URL from VITE_CONVEX_URL or CONVEX_DEPLOYMENT",
             { VITE_CONVEX_URL: CONVEX_URL, CONVEX_DEPLOYMENT },
           );
         }
       } catch (e) {
-        // eslint-disable-next-line no-console
+
         console.warn(
           "[StrictUploadButton] HTTP fallback failed:",
           String((e as any)?.message ?? e),

@@ -83,6 +83,24 @@ type ProposalSignatureSettingsData = {
   imageDataUrl: string | null;
 };
 
+type ProposalPresetFieldKey =
+  | "proposalPreset1"
+  | "proposalPreset2"
+  | "proposalPreset3";
+
+const getProposalPresetFieldKey = (
+  slot: 1 | 2 | 3,
+): ProposalPresetFieldKey => {
+  switch (slot) {
+    case 1:
+      return "proposalPreset1";
+    case 2:
+      return "proposalPreset2";
+    case 3:
+      return "proposalPreset3";
+  }
+};
+
 const DEFAULT_PROPOSAL_SIGNATURE_SETTINGS: ProposalSignatureSettingsData = {
   mode: "auto",
   fontId: null,
@@ -176,14 +194,12 @@ export const getCurrent = query({
 
     const user = await getCurrentSettingsProfileForClerk(ctx, identity.subject);
     const activeSlot =
-      (user?.proposalActivePresetSlot as 1 | 2 | 3 | undefined) ?? null;
-    const activePreset = activeSlot
-      ? (user?.[
-          `proposalPreset${activeSlot}` as
-            | "proposalPreset1"
-            | "proposalPreset2"
-            | "proposalPreset3"
-        ] as PresetSlotData | null | undefined) ?? null
+      (user?.proposalActivePresetSlot) ?? null;
+    const activePresetKey = activeSlot
+      ? getProposalPresetFieldKey(activeSlot)
+      : null;
+    const activePreset = activePresetKey
+      ? (user?.[activePresetKey] as PresetSlotData | null | undefined) ?? null
       : null;
     const currentVerbatiStyle =
       activePreset?.verbatiStyle ??
@@ -363,7 +379,7 @@ export const getPresets = query({
       preset1: (user?.proposalPreset1 as PresetSlotData | null | undefined) ?? null,
       preset2: (user?.proposalPreset2 as PresetSlotData | null | undefined) ?? null,
       preset3: (user?.proposalPreset3 as PresetSlotData | null | undefined) ?? null,
-      activeSlot: (user?.proposalActivePresetSlot as 1 | 2 | 3 | undefined) ?? null,
+      activeSlot: (user?.proposalActivePresetSlot) ?? null,
     };
   },
 });
@@ -380,7 +396,7 @@ export const savePreset = mutation({
 
     const user = await ensureCurrentSettingsProfile(ctx, identity);
 
-    const fieldKey = `proposalPreset${args.slot}` as "proposalPreset1" | "proposalPreset2" | "proposalPreset3";
+    const fieldKey = getProposalPresetFieldKey(args.slot);
     const nextAccentHex =
       typeof args.preset.accentHex === "string" &&
       /^#[0-9a-fA-F]{6}$/.test(args.preset.accentHex)
@@ -396,7 +412,7 @@ export const savePreset = mutation({
           | undefined,
       ),
     };
-    const activeSlot = (user.proposalActivePresetSlot as 1 | 2 | 3 | undefined) ?? 1;
+    const activeSlot = (user.proposalActivePresetSlot) ?? 1;
 
     const { _creationTime, _id, ...rest } = user;
     const nextReplacement: UserProfileReplacement = {
@@ -425,7 +441,7 @@ export const setActivePreset = mutation({
 
     const user = await ensureCurrentSettingsProfile(ctx, identity);
 
-    const fieldKey = `proposalPreset${args.slot}` as "proposalPreset1" | "proposalPreset2" | "proposalPreset3";
+    const fieldKey = getProposalPresetFieldKey(args.slot);
     const preset = (user[fieldKey] as PresetSlotData | null | undefined) ?? null;
 
     const { _creationTime, _id, ...rest } = user;

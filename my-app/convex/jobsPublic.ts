@@ -2204,7 +2204,7 @@ export const getById = query({
       resumeId: job.lastResumeId ?? null,
     });
     const profiles = normalizeProjectionProfiles(
-      [primaryProfile, ownerProfile, explicitProfile].filter(Boolean) as any[],
+      [primaryProfile, ownerProfile, explicitProfile].filter(Boolean),
     );
     if (
       profiles.length === 0

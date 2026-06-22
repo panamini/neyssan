@@ -134,7 +134,7 @@ function isNERResponse(x: unknown): x is NERResponse {
   if (o.layout !== undefined) {
     const layout = o.layout as Record<string, unknown>;
     if (!layout || typeof layout !== "object") return false;
-    const blocks = (layout as Record<string, unknown>).blocks;
+    const blocks = (layout).blocks;
     if (blocks !== undefined && (!Array.isArray(blocks) || !blocks.every(isLayoutBlock))) return false;
   }
   return true;

@@ -1,5 +1,5 @@
 "use strict";
- 
+
 import { parseCvDocumentStrict, CvDocumentSchema } from "../schemas/cvDocument.schema";
 import type { CvDocument, CvDocumentStrict } from "../schemas/cvDocument.schema";
 import {
@@ -8,7 +8,7 @@ import {
 } from "../features/verbati/style";
 import { isResumeTemplateId } from "../lib/layout/resumeTemplates";
 import type { INormalizedProfile } from "../types/profile";
- 
+
 /**
  * ConvexUserProfile
  *
@@ -65,7 +65,7 @@ export interface ConvexUserProfile {
   } | undefined;
   cvDocument?: unknown;
 }
- 
+
 /**
  * normalizeConvexProfile
  *
@@ -199,7 +199,7 @@ export function mapProfileToCvDocument(profile: any, forcedId?: string): CvDocum
         {
           id: "summary-block",
           type: "text",
-          content: typeof profile.summary === "string" ? { type: "text", text: profile.summary } as any : (profile.summary as any),
+          content: typeof profile.summary === "string" ? { type: "text", text: profile.summary } as any : (profile.summary),
           plainText: typeof profile.summary === "string" ? profile.summary : undefined,
           order: 0,
         },
@@ -234,7 +234,7 @@ export function mapProfileToCvDocument(profile: any, forcedId?: string): CvDocum
       title: "Experience",
       type: "experience",
       blocks: [],
-      structuredContent: profile.experience as any,
+      structuredContent: profile.experience,
       collapsed: false,
     });
   }
@@ -245,7 +245,7 @@ export function mapProfileToCvDocument(profile: any, forcedId?: string): CvDocum
       title: "Education",
       type: "education",
       blocks: [],
-      structuredContent: profile.education as any,
+      structuredContent: profile.education,
       collapsed: false,
     });
   }
@@ -294,5 +294,5 @@ export function mapProfileToCvDocumentStrict(profile: any, forcedId?: string): C
   const loose = mapProfileToCvDocument(profile, forcedId);
   if (!loose) throw new Error("Unable to map profile to CvDocument");
   // Validate strict shape — parseCvDocumentStrict will throw on invalid input.
-  return parseCvDocumentStrict(loose) as CvDocumentStrict;
+  return parseCvDocumentStrict(loose);
 }

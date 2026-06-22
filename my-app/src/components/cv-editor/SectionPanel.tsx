@@ -25,7 +25,7 @@ export function SectionPanel({
       const generatedBlocks: CvBlock[] = (section.structuredContent || []).map(item => {
         const itemId = String((item && (item.id ?? undefined)) ?? uid());
         const title = (item && (item.company || item.institution || item.skill || item.title || "Entry")) as string;
-        const content = ensureRemirrorDoc((item.responsibilities || item.description || item.skill || "") as any);
+        const content = ensureRemirrorDoc((item.responsibilities || item.description || item.skill || ""));
         return {
           id: uid(),
           title: title,

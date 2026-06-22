@@ -21,7 +21,7 @@ export function FirstRunPanel({
   const { resolvedLanguage } = useUiLanguagePreference();
   const recordFirstRunPath = useMutation(
     ((api as any).jobsPublic?.recordFirstRunPath ??
-      "jobsPublic.recordFirstRunPath") as any,
+      "jobsPublic.recordFirstRunPath"),
   );
   const selectedPathRef = React.useRef<"import" | "sample" | null>(null);
 

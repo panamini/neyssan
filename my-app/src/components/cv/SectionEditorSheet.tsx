@@ -135,7 +135,7 @@ function DrawerRichTextEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
-  const latestDocRef = React.useRef<RemirrorJSON>(initialContent as RemirrorJSON);
+  const latestDocRef = React.useRef<RemirrorJSON>(initialContent);
   const lastCommittedDocJsonRef = React.useRef(JSON.stringify(initialContent));
   const lastExternalDocJsonRef = React.useRef(JSON.stringify(initialContent));
   const isFocusedRef = React.useRef(false);
@@ -550,7 +550,7 @@ export function SectionEditorSheet({
 }: SectionEditorSheetProps): JSX.Element {
   const runCvSectionAiAction = useAction(
     ((api.functions as any)?.runCvSectionAiAction ??
-      "functions.runCvSectionAiAction") as any,
+      "functions.runCvSectionAiAction"),
   );
   const { showToast } = useToast();
   const [draftSection, setDraftSection] = React.useState<CvSection | null>(section);
@@ -1683,7 +1683,7 @@ export function SectionEditorSheet({
       return skillItem ? [skillItem] : [];
     });
     const categories = Array.isArray(editableSection.skillCategories)
-      ? (editableSection.skillCategories as SkillCategory[])
+      ? (editableSection.skillCategories)
       : [];
 
     function applySkillsDrawer(next: {
@@ -1746,7 +1746,7 @@ export function SectionEditorSheet({
         onClose={saveAndClose}
         onApply={(next) => {
           if (Array.isArray(next)) {
-            applySkillsDrawer({ items: next as ISkillItem[], categories });
+            applySkillsDrawer({ items: next, categories });
             return;
           }
           applySkillsDrawer(next);

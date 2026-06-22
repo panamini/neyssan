@@ -133,7 +133,7 @@ export function mapParsedToStrict(params: {
   }
 
   const DEBUG = readFlag("DEBUG_CV_PARSE", false);
-  
+
   function logSlot(slot: string, payload: unknown) {
     if (!DEBUG) return;
     try {
@@ -143,7 +143,7 @@ export function mapParsedToStrict(params: {
       /* ignore */
     }
   }
-  
+
   // Lightweight telemetry (console-based) to observe fusion decisions in QA
   const ENABLE_STRICT_TELEMETRY = readFlag("ENABLE_STRICT_TELEMETRY", false);
   type TelemetrySource = "llm" | "validator" | "heuristic" | "ner" | "unknown";
@@ -1250,14 +1250,14 @@ function deriveAchievementsFromText(text: string): string[] {
     });
   };
 
-  const mappedCv = params.mappedCv as unknown;
+  const mappedCv = params.mappedCv;
   const rawExperience: RawExpItem[] =
     mappedCv && typeof mappedCv === "object" && Array.isArray((mappedCv as any).experience)
       ? ((mappedCv as any).experience as RawExpItem[])
       : [];
 
   const expItems = rawExperience
-    .map((it) => (it && typeof it === "object" ? (it as RawExpItem) : null))
+    .map((it) => (it && typeof it === "object" ? (it) : null))
     .filter((x): x is RawExpItem => !!x);
 
   const textConfBase = 0.6 * (0.75 + 0.25 * globalLLMConf);
@@ -1523,7 +1523,7 @@ function deriveAchievementsFromText(text: string): string[] {
 
   const mappedEducation = rawEducationMapped
     .map((item) => {
-      const textParts = [item.title, item.content].filter((x) => typeof x === "string") as string[];
+      const textParts = [item.title, item.content].filter((x) => typeof x === "string");
       if (!textParts.length) return null;
       const text = textParts.join("\n");
       const conf = clamp01(Number((item as any)?.confidence ?? textConfBase));
@@ -1815,7 +1815,7 @@ function deriveAchievementsFromText(text: string): string[] {
     // 1) Prefer mappedCv.achievements.text
     const a = mappedCv && typeof mappedCv === "object" ? (mappedCv as any).achievements : null;
     const text1: string | null =
-      a && typeof a === "object" && a !== null && typeof (a as any).text === "string" ? String((a as any).text) : null;
+      a && typeof a === "object" && a !== null && typeof (a).text === "string" ? String((a).text) : null;
     if (text1 && text1.trim()) {
       const arr = text1
         .split(/[\r\n]+|[•\u2022]/g)

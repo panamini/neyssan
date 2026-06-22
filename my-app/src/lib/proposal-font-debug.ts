@@ -53,7 +53,7 @@ function readComputedFontFamily(
   selectors: string[],
 ): string {
   for (const selector of selectors) {
-    const element = root.querySelector?.(selector) as HTMLElement | null;
+    const element = root.querySelector?.(selector);
     if (element) {
       return getComputedStyle(element).fontFamily;
     }

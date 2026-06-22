@@ -48,7 +48,7 @@ export function SectionDisplay({ section }: SectionDisplayProps): JSX.Element {
           typeof descriptionValue === 'string'
             ? descriptionValue.trim()
             : descriptionValue && typeof descriptionValue === 'object'
-            ? remirrorJsonToString(descriptionValue as any).trim()
+            ? remirrorJsonToString(descriptionValue).trim()
             : '';
         return Boolean(title || name || description);
       })
@@ -100,7 +100,7 @@ export function SectionDisplay({ section }: SectionDisplayProps): JSX.Element {
     const bulletSource = responsibilityBullets.length > 0 ? responsibilityBullets : achievements;
     const bulletList = bulletSource.slice(0, 5);
     const remainingCount = Math.max(bulletSource.length - bulletList.length, 0);
-    const dates = formatRangeFromItem(rawItem as any);
+    const dates = formatRangeFromItem(rawItem);
 
     return (
       <article key={key} className="space-y-1">
@@ -154,7 +154,7 @@ export function SectionDisplay({ section }: SectionDisplayProps): JSX.Element {
           )
           .filter(Boolean)
       : [];
-    const dates = formatRangeFromItem(rawItem as any);
+    const dates = formatRangeFromItem(rawItem);
 
     return (
       <article key={key} className="space-y-1">

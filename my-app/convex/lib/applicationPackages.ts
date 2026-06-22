@@ -576,7 +576,7 @@ function cloneConvexCompatibleJson(
       });
     }
 
-    const record = value as Record<string, unknown>;
+    const record = value;
     return Object.fromEntries(
       Object.keys(record)
         .filter((key) => record[key] !== undefined)

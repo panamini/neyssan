@@ -75,12 +75,12 @@ export function useCvParser(): UseCvParserState {
   const CONVEX_SITE_URL = CONVEX_URL.replace?.(".cloud", ".site") ?? CONVEX_URL;
   // Allow tests to override polling intervals/timeouts
   // Read TEST_POLL_* safely from globalThis or process when available; fall back to defaults.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   const _envPollInterval = (typeof globalThis !== 'undefined' && (globalThis as any).process?.env?.TEST_POLL_MS)
     ?? (typeof process !== 'undefined' ? (process as any).env?.TEST_POLL_MS : undefined)
     ?? '2000';
   const POLL_INTERVAL_MS = Number(_envPollInterval);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   const _envPollTimeout = (typeof globalThis !== 'undefined' && (globalThis as any).process?.env?.TEST_POLL_TIMEOUT_MS)
     ?? (typeof process !== 'undefined' ? (process as any).env?.TEST_POLL_TIMEOUT_MS : undefined)
     ?? '60000';
@@ -120,19 +120,19 @@ export function useCvParser(): UseCvParserState {
           if (!res.ok) {
             let body = null;
             try { body = await res.json(); } catch (e) {}
-            throw new Error((body && (body as any).message) || `Request failed with status ${res.status}`);
+            throw new Error((body && (body).message) || `Request failed with status ${res.status}`);
           }
           return res.json();
         }
         // if no token returned, fallthrough to unauthenticated fetch below
       } catch (e) {
         // Token retrieval failed (maybe Clerk not ready). Fall back to unauthenticated fetch.
-        // eslint-disable-next-line no-console
+
         console.warn("[useCvParser] authenticatedFetch: could not get token, falling back to unauthenticated fetch:", String(e));
       }
     } else {
       // getToken not a function (Clerk not present); perform unauthenticated fetch.
-      // eslint-disable-next-line no-console
+
       console.debug("[useCvParser] authenticatedFetch: getToken unavailable, performing unauthenticated fetch");
     }
     // Best-effort unauthenticated fetch fallback
@@ -140,7 +140,7 @@ export function useCvParser(): UseCvParserState {
     if (!res.ok) {
       let body = null;
       try { body = await res.json(); } catch (e) {}
-      throw new Error((body && (body as any).message) || `Request failed with status ${res.status}`);
+      throw new Error((body && (body).message) || `Request failed with status ${res.status}`);
     }
     return res.json();
   }, [getToken]);
@@ -153,8 +153,8 @@ export function useCvParser(): UseCvParserState {
         try {
           const actionResult = await formatCompleteAction({ rawText });
           if (actionResult) {
-            const normalized = (actionResult && typeof actionResult === "object" && "status" in actionResult && (actionResult as any).status === "ok" && "result" in actionResult)
-              ? (actionResult as any).result
+            const normalized = (actionResult && typeof actionResult === "object" && "status" in actionResult && (actionResult).status === "ok" && "result" in actionResult)
+              ? (actionResult).result
               : actionResult;
             return normalized;
           }
@@ -180,7 +180,7 @@ export function useCvParser(): UseCvParserState {
         const msg = String(e?.message ?? e);
         // swallow but continue to client fallback
         // If CORS or auth prevents HTTP fallback, fall back to client parser
-        // eslint-disable-next-line no-console
+
         console.warn("callFormatCompleteCV.backendError:", msg);
       }
     }
@@ -200,7 +200,7 @@ export function useCvParser(): UseCvParserState {
       for (let i = 0; i < s.length; i++) h = ((h << 5) + h) + s.charCodeAt(i);
       return Math.abs(h).toString(36).slice(0, 8);
     }
-  
+
     /**
      * Build canonical reviewer sections from either a rawParsedSections array (preferred)
      * or from a normalized object that may contain summary/skills/experience/education fields.
@@ -220,7 +220,7 @@ export function useCvParser(): UseCvParserState {
         education: "Education",
         achievements: "Achievements",
       };
-  
+
       // If explicit parsed sections exist, normalize and sort them into canonical order.
       const parsed = Array.isArray(normalized.rawParsedSections) ? normalized.rawParsedSections.map((s: any, idx: number) => {
         const fieldKey = (s.fieldKey && String(s.fieldKey)) || undefined;
@@ -235,7 +235,7 @@ export function useCvParser(): UseCvParserState {
           dismissed: !!s.dismissed,
         } as IReviewerSection;
       }) : [];
-  
+
       // If we have parsed sections, ensure deterministic ordering:
       if (parsed.length > 0) {
         // Group by fieldKey to pick canonical order, but keep original order for unknown keys.
@@ -253,7 +253,7 @@ export function useCvParser(): UseCvParserState {
         Object.keys(byKey).filter(k => !canonicalOrder.includes(k)).forEach(k => ordered.push(...byKey[k]));
         return ordered;
       }
-  
+
       // Fallback: synthesize sections from normalized fields using canonical order.
       const synth: IReviewerSection[] = [];
       if (normalized.summary) synth.push({ id: "summary-0", title: titleMap.summary, content: String(normalized.summary), fieldKey: "summary", dismissed: false });
@@ -281,8 +281,8 @@ export function useCvParser(): UseCvParserState {
         const normalized = data?.result?.patch?.normalized ?? data?.result?.normalized ?? null;
         if (normalized) {
           try { setLastNormalized(normalized); setLastNormalizedSource("server"); } catch {}
-          if ((normalized as any).warning === "repair_failed") {
-            const snippet = (normalized as any).rawTextSnippet ?? String((data?.result?.full_response && JSON.stringify(data.result.full_response).slice(0,2000)) || "");
+          if ((normalized).warning === "repair_failed") {
+            const snippet = (normalized).rawTextSnippet ?? String((data?.result?.full_response && JSON.stringify(data.result.full_response).slice(0,2000)) || "");
             setMappedSections([
               { id: "snippet-0", title: "Refine preview (partial)", content: snippet, fieldKey: "summary", dismissed: false },
             ]);
@@ -471,8 +471,8 @@ export function useCvParser(): UseCvParserState {
             console.debug("[useCvParser] startRefine: calling convex mutation startRefineMutation");
             const data = await startRefineMutation(payload);
             console.debug("[useCvParser] startRefine: mutation returned", data);
-            if (data && typeof data === "object" && "status" in data && (data as any).status === "enqueued") {
-              const jid = (data as any).jobId;
+            if (data && typeof data === "object" && "status" in data && (data).status === "enqueued") {
+              const jid = (data).jobId;
               setJobId(jid);
               // Perform a single immediate poll after enqueue.
               const handled = await doPoll(jid);
@@ -486,7 +486,7 @@ export function useCvParser(): UseCvParserState {
               return data;
             }
             if (data && typeof data === "object" && ("_id" in data || "id" in data)) {
-              const id = (data as any)._id ?? (data as any).id;
+              const id = (data)._id ?? (data).id;
               if (id) {
                 setJobId(id);
                 const handled = await doPoll(id);
@@ -575,12 +575,12 @@ export function useCvParser(): UseCvParserState {
       // Prefer native File.arrayBuffer if available
       if (typeof (file as any)?.arrayBuffer === "function") {
         // Browser File with modern API
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
         arrayBuffer = await (file as any).arrayBuffer();
       } else if (typeof Blob !== "undefined" && file instanceof Blob && typeof Response !== "undefined") {
         // Some test runtimes expose Blob but not File.arrayBuffer; Response can convert a Blob to ArrayBuffer.
         // This covers jsdom/happy-dom cases where File.arrayBuffer may be missing.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
         arrayBuffer = await (new Response(file as any)).arrayBuffer();
       } else if (file instanceof ArrayBuffer) {
         arrayBuffer = file;
@@ -589,10 +589,10 @@ export function useCvParser(): UseCvParserState {
         arrayBuffer = (file as ArrayBufferView).buffer as unknown as ArrayBuffer;
       } else if (typeof Buffer !== "undefined" && (file as any) instanceof Buffer) {
         const buf = file as unknown as Buffer;
-        arrayBuffer = (buf.buffer as unknown as ArrayBuffer).slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+        arrayBuffer = (buf.buffer as unknown as ArrayBuffer).slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
       } else {
         // Fallback attempt: if tests passed a plain object with .buffer
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
         const maybe = (file as any);
         if (maybe && maybe.buffer && (maybe.buffer instanceof ArrayBuffer || (typeof SharedArrayBuffer !== "undefined" && maybe.buffer instanceof SharedArrayBuffer))) {
           arrayBuffer = maybe.buffer as unknown as ArrayBuffer;
@@ -615,17 +615,17 @@ export function useCvParser(): UseCvParserState {
             // - rawParsedSections: direct passthrough so UI can render original sections faithfully
             // - strict.profile: strict contact to overlay on Profile section (Sidebar already supports this)
             const normalizedFromStrict: any = {
-              rawParsedSections: Array.isArray((strictResult as any).sections) ? (strictResult as any).sections : [],
-              strict: { profile: (strictResult as any).profile ?? null },
+              rawParsedSections: Array.isArray((strictResult).sections) ? (strictResult).sections : [],
+              strict: { profile: (strictResult).profile ?? null },
               // keep for potential future use/diagnostics
-              metadata: (strictResult as any).metadata ?? null,
-              cv: (strictResult as any).cv ?? null,
+              metadata: (strictResult).metadata ?? null,
+              cv: (strictResult).cv ?? null,
             };
             try { setLastNormalized(normalizedFromStrict); setLastNormalizedSource("server"); } catch {}
           }
         }
       } catch (e) {
-        // eslint-disable-next-line no-console
+
         console.warn("[useCvParser] extractProfileStrictWithSpans action failed (continuing refine path):", String((e as any)?.message ?? e));
       }
       // Use a temporary profileId for server refine since ensureSavedForRefine is not part of this hook.
@@ -653,7 +653,7 @@ export function useCvParser(): UseCvParserState {
         }
       } catch (e) {
         // enqueue failure should not block UI; surface minimal error and clear refining flag
-        // eslint-disable-next-line no-console
+
         console.warn("startRefine failed:", e);
         setIsRefining(false);
       }

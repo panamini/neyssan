@@ -417,6 +417,6 @@ export function buildAuthoritativeResumeExportModel(
     projects,
     certifications,
     achievements: toAchievementTextList(normalized.achievements),
-    hobbies: cleanNamedStringArray((normalized as UnknownRecord).hobbies),
+    hobbies: cleanNamedStringArray((normalized).hobbies),
   };
 }

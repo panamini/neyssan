@@ -134,13 +134,13 @@ function trimPhraseTokens(tokens: string[]): string[] {
   let end = tokens.length;
   while (
     start < end &&
-    PHRASE_STOPWORDS.has(tokens[start]!.toLowerCase())
+    PHRASE_STOPWORDS.has(tokens[start].toLowerCase())
   ) {
     start += 1;
   }
   while (
     end > start &&
-    PHRASE_STOPWORDS.has(tokens[end - 1]!.toLowerCase())
+    PHRASE_STOPWORDS.has(tokens[end - 1].toLowerCase())
   ) {
     end -= 1;
   }
@@ -153,7 +153,7 @@ function isGenericPhrase(phrase: string): boolean {
   if (tokens.every((token) => GENERIC_ADJECTIVES.has(token))) return true;
   if (
     tokens.length === 1 &&
-    (GENERIC_ADJECTIVES.has(tokens[0]!) || PHRASE_STOPWORDS.has(tokens[0]!))
+    (GENERIC_ADJECTIVES.has(tokens[0]) || PHRASE_STOPWORDS.has(tokens[0]))
   ) {
     return true;
   }
@@ -231,7 +231,7 @@ function extractCandidatePhrases(value: string): Array<{
       const matches = candidates.filter(
         (candidate) => normalizePhrase(candidate.phrase) === normalizePhrase(phrase),
       );
-      return matches.sort((left, right) => right.score - left.score)[0]!;
+      return matches.sort((left, right) => right.score - left.score)[0];
     })
     .sort((left, right) => right.score - left.score);
 }

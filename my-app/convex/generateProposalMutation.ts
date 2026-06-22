@@ -4447,7 +4447,7 @@ function applyStructuredParagraphLocalRepairs(args: {
       normalizeProposalConstraintText(
         sentenceLocations[flaggedSentence.sentenceIndex]?.sentence ?? "",
       ) === normalizedOriginalSentence
-        ? sentenceLocations[flaggedSentence.sentenceIndex]!
+        ? sentenceLocations[flaggedSentence.sentenceIndex]
         : sentenceLocations.find(
             (candidate) =>
               normalizeProposalConstraintText(candidate.sentence) ===
@@ -6728,7 +6728,7 @@ function hasSubstantiveBodyContent(args: {
   };
 
   if (args.format === "cover_letter" && substantiveSentences.length === 1) {
-    return sentenceLooksStandaloneConcrete(substantiveSentences[0]!);
+    return sentenceLooksStandaloneConcrete(substantiveSentences[0]);
   }
 
   return true;
@@ -7925,10 +7925,10 @@ function cleanupNoContextEarlyBodySentences(args: {
     const nextParagraphSentences = paragraphSentences.map((sentences) => [
       ...sentences,
     ]);
-    nextParagraphSentences[location.paragraphIndex]![location.sentenceIndex] =
+    nextParagraphSentences[location.paragraphIndex][location.sentenceIndex] =
       cleanup.replacement;
     nextParagraphSentences[location.paragraphIndex] =
-      nextParagraphSentences[location.paragraphIndex]!.filter(Boolean);
+      nextParagraphSentences[location.paragraphIndex].filter(Boolean);
     const cleanedBody = rebuildNoContextParagraphSentences(
       nextParagraphSentences,
     );

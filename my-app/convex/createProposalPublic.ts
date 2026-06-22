@@ -335,7 +335,7 @@ export default mutation({
     let user = args.profileId
       ? await ctx.db
           .query("userProfiles")
-          .withIndex("by_profileId", (q) => q.eq("profileId", args.profileId!))
+          .withIndex("by_profileId", (q) => q.eq("profileId", args.profileId))
           .filter((q) => q.eq(q.field("clerkId"), identity.subject))
           .first()
       : await getPrimaryProfileForClerk(ctx, identity.subject);

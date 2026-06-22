@@ -49,7 +49,7 @@ export function RemirrorEditor({
     try {
       const isDebug = typeof window !== "undefined" && (window as any).__CV_EDITOR_DEBUG__ === true;
       if (isDebug) {
-        // eslint-disable-next-line no-console
+
         console.debug("[RemirrorEditor] sections", Array.isArray(sections) ? sections.map((s) => s.id) : sections);
       }
     } catch {

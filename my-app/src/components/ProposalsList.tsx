@@ -421,7 +421,7 @@ function hasSavedProposalArtifactSnapshot(
 function serializeSavedProposalMetadataVerbatiStyle(
   style:
     | ReturnType<typeof resolveVerbatiStyle>
-    | ReturnType<typeof serializeVerbatiStyle>
+
     | Partial<VerbatiStylePreset>
     | null
     | undefined,

@@ -86,7 +86,7 @@ function SanatSkillLineItems({ skills }: { skills: string[] }) {
       if (index === 0) return;
 
       const currentNode = itemRefs.current.get(`${index}:${skill}`);
-      const previousSkill = visibleSkills[index - 1]!;
+      const previousSkill = visibleSkills[index - 1];
       const previousNode = itemRefs.current.get(
         `${index - 1}:${previousSkill}`,
       );

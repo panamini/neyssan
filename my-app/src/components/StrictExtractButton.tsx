@@ -68,28 +68,28 @@ function pickStrictProfileShape(input: unknown): StrictProfileMinimal | null {
     return {
       name:
         typeof p.name === "string" || p.name === null
-          ? (p.name as string | null)
+          ? (p.name)
           : null,
       email:
         typeof p.email === "string" || p.email === null
-          ? (p.email as string | null)
+          ? (p.email)
           : null,
       phone:
         typeof p.phone === "string" || p.phone === null
-          ? (p.phone as string | null)
+          ? (p.phone)
           : null,
       location:
         typeof p.location === "string" || p.location === null
-          ? (p.location as string | null)
+          ? (p.location)
           : null,
       desiredPosition:
         typeof p.desiredPosition === "string" || p.desiredPosition === null
-          ? (p.desiredPosition as string | null)
+          ? (p.desiredPosition)
           : undefined,
     };
   }
   // Case B: strict-only shape is the profile itself at root
-  const root = input as Record<string, unknown>;
+  const root = input;
   const hasSlots =
     ("name" in root ||
       "email" in root ||
@@ -103,24 +103,24 @@ function pickStrictProfileShape(input: unknown): StrictProfileMinimal | null {
     return {
       name:
         typeof root.name === "string" || root.name === null
-          ? (root.name as string | null)
+          ? (root.name)
           : null,
       email:
         typeof root.email === "string" || root.email === null
-          ? (root.email as string | null)
+          ? (root.email)
           : null,
       phone:
         typeof root.phone === "string" || root.phone === null
-          ? (root.phone as string | null)
+          ? (root.phone)
           : null,
       location:
         typeof root.location === "string" || root.location === null
-          ? (root.location as string | null)
+          ? (root.location)
           : null,
       desiredPosition:
         typeof root.desiredPosition === "string" ||
         root.desiredPosition === null
-          ? (root.desiredPosition as string | null)
+          ? (root.desiredPosition)
           : undefined,
     };
   }
@@ -191,7 +191,7 @@ export function StrictExtractButton(props: StrictExtractButtonProps) {
       // 1) Prefer Convex action with spans
       if (typeof extractWithSpans === "function") {
         try {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+
           payload = await extractWithSpans({ rawText: String(raw) });
         } catch (_err) {
           // fall back
@@ -201,7 +201,7 @@ export function StrictExtractButton(props: StrictExtractButtonProps) {
       // 2) Fallback to strict-only Convex action
       if (!payload && typeof extractStrictOnly === "function") {
         try {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+
           const strictOnly = await extractStrictOnly({ rawText: String(raw) });
           if (strictOnly && typeof strictOnly === "object") {
             payload = strictOnly;

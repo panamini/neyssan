@@ -62,7 +62,7 @@ function ReadOnlySummary({ doc }: ReadOnlySummaryProps) {
   const initialDoc: RemirrorJSON = useMemo<RemirrorJSON>(
     () =>
       doc && typeof doc === "object"
-        ? (doc as RemirrorJSON)
+        ? (doc)
         : ({ type: "doc", content: [] } as RemirrorJSON),
     [doc],
   );
@@ -89,7 +89,7 @@ export function SummaryBlock({ section, onOpenEditor }: SummaryBlockProps) {
               summary?: RemirrorJSON;
             })
           : null;
-      return (first?.summary as RemirrorJSON | undefined) ?? undefined;
+      return (first?.summary) ?? undefined;
     } catch {
       return undefined;
     }

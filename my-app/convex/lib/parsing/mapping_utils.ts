@@ -124,7 +124,7 @@ function parseDateToken(token: string): { iso: string; confidence: RangeConfiden
   const lower = token.trim().toLowerCase();
   const monthMatch = lower.match(MONTH_TOKEN_RE);
   if (monthMatch) {
-    const month = MONTH_MAP[monthMatch[1] as keyof typeof MONTH_MAP] ?? 1;
+    const month = MONTH_MAP[monthMatch[1]] ?? 1;
     const year = Number(monthMatch[2]);
     const date = new Date(Date.UTC(year, month - 1, 1));
     return { iso: date.toISOString().slice(0, 10), confidence: "high" };

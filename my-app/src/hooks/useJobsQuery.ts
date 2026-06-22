@@ -70,17 +70,17 @@ export function useJobsQuery({
 } {
   const jobsListReference = React.useMemo(
     () =>
-      ((api as any).jobsPublic?.listForUser ?? "jobsPublic.listForUser") as any,
+      ((api as any).jobsPublic?.listForUser ?? "jobsPublic.listForUser"),
     [],
   );
   const archivedJobsListReference = React.useMemo(
     () =>
       ((api as any).jobsPublic?.listArchivedForUser ??
-        "jobsPublic.listArchivedForUser") as any,
+        "jobsPublic.listArchivedForUser"),
     [],
   );
   const jobByIdReference = React.useMemo(
-    () => ((api as any).jobsPublic?.getById ?? "jobsPublic.getById") as any,
+    () => ((api as any).jobsPublic?.getById ?? "jobsPublic.getById"),
     [],
   );
   const queryArgs = isLoaded && isSignedIn && isConvexAuthenticated ? {} : "skip";

@@ -933,7 +933,7 @@ class ErrorBoundary extends React.Component<
     return { hasError: true };
   }
   componentDidCatch(error: unknown) {
-    // eslint-disable-next-line no-console
+
     console.error("[SectionEditor][ErrorBoundary]", error);
   }
   render() {
@@ -1022,7 +1022,7 @@ const EntryRemirror = forwardRef<
       localOnChange(param);
       // Intentionally avoid calling onPersist on every keystroke.
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
     [localOnChange],
   );
 
@@ -1070,7 +1070,7 @@ export default function SectionEditor({
         typeof window !== "undefined" &&
         (window as any).__CV_EDITOR_DEBUG__ === true
       ) {
-        // eslint-disable-next-line no-console
+
         console.log("[SectionEditor] render", {
           sectionId: section.id,
           title: section.title,
@@ -1088,7 +1088,7 @@ export default function SectionEditor({
       typeof window !== "undefined" &&
       (window as any).__CV_EDITOR_DEBUG__ === true
     ) {
-      // eslint-disable-next-line no-console
+
       console.debug("[SectionEditor] mount", {
         mountId: mountIdRef.current,
         sectionId: section.id,
@@ -1099,7 +1099,7 @@ export default function SectionEditor({
         typeof window !== "undefined" &&
         (window as any).__CV_EDITOR_DEBUG__ === true
       ) {
-        // eslint-disable-next-line no-console
+
         console.debug("[SectionEditor] unmount", {
           mountId: mountIdRef.current,
           sectionId: section.id,
@@ -1185,7 +1185,7 @@ export default function SectionEditor({
 
   // Initialize safe JSON content once at mount to avoid remounts stomping caret.
   const initialContentRef = useRef<RemirrorJSON>(
-    ensureRemirrorDoc((section as any).content as any),
+    ensureRemirrorDoc((section as any).content),
   );
   function sanitizeRemirrorDoc(doc: RemirrorJSON | undefined): RemirrorJSON {
     if (
@@ -1263,7 +1263,7 @@ export default function SectionEditor({
     extensions: () => extensions as any,
     content: safeContent as any,
     onError: (err: unknown) => {
-      // eslint-disable-next-line no-console
+
       console.error("[SectionEditor] remirror onError", err);
       return safeContent as any;
     },
@@ -1296,7 +1296,7 @@ export default function SectionEditor({
       typeof window !== "undefined" &&
       (window as any).__CV_EDITOR_DEBUG__ === true
     ) {
-      // eslint-disable-next-line no-console
+
       console.log(
         "[SectionEditor] section.title changed",
         section.title,
@@ -1460,10 +1460,10 @@ export default function SectionEditor({
       if (view.hasFocus && view.hasFocus()) return;
       // Build a normalized Remirror doc from incoming content
       const externalDoc = sanitizeRemirrorDoc(
-        ensureRemirrorDoc((section as any).content as any),
+        ensureRemirrorDoc((section as any).content),
       );
       // Create a new EditorState via manager and update the view atomically
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       const newState = (manager as any).createState
         ? (manager as any).createState({ content: externalDoc as any })
         : undefined;
@@ -1471,7 +1471,7 @@ export default function SectionEditor({
         view.updateState(newState);
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
+
       console.debug("[SectionEditor] sync external content failed", err);
     }
     // Depend only on the section's content (use any-cast to avoid TS error on CvSection type)
@@ -2025,7 +2025,7 @@ export default function SectionEditor({
       (candidate) => String(candidate.id) !== String(section.id),
     );
     closeInspector?.();
-    reorderSections(nextSections as CvSection[]);
+    reorderSections(nextSections);
   }, [closeInspector, currentCv, reorderSections, section.id]);
 
   const renderOptionalSectionDismissButton = useCallback(() => {
@@ -2337,7 +2337,7 @@ export default function SectionEditor({
     } catch {
       /* noop */
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [section, index, onChange, flushAllNestedEditors]);
 
   /**
@@ -2371,8 +2371,8 @@ export default function SectionEditor({
         ).filter((b: any) => {
           if (linkedId) {
             const linked =
-              (b as any).attributes?.linkedStructuredId ??
-              (b as any).attributes?.linkedstructuredid;
+              (b).attributes?.linkedStructuredId ??
+              (b).attributes?.linkedstructuredid;
             return String(linked) !== String(linkedId);
           }
           return String(b.id) !== String(blockId);
@@ -2423,7 +2423,7 @@ export default function SectionEditor({
           try {
             onContentChange(
               String(updatedSection.id),
-              ensureRemirrorDoc(summary as any),
+              ensureRemirrorDoc(summary),
             );
           } catch {
             /* noop */
@@ -2589,7 +2589,7 @@ export default function SectionEditor({
                       ? (section.structuredContent[0] as ISummaryItem)
                       : null;
                   const doc = ensureRemirrorDoc(
-                    (sumItem as any)?.summary as any,
+                    (sumItem as any)?.summary,
                   );
                   const txt = extractPlainTextLocal(doc);
                   return txt || "Start typing here";
@@ -2653,8 +2653,8 @@ export default function SectionEditor({
         : [];
       if (structuredItems.length > 0) {
         return structuredItems.map((item, index) => ({
-          id: String((item as any)?.id ?? `hobby-${index}-${String(section.id)}`),
-          name: String((item as any)?.name ?? (item as any)?.text ?? "").trim(),
+          id: String((item)?.id ?? `hobby-${index}-${String(section.id)}`),
+          name: String((item)?.name ?? (item)?.text ?? "").trim(),
         }));
       }
 
@@ -3199,7 +3199,7 @@ export default function SectionEditor({
           nextStructured = (sc as any[]).filter((_, i) => i !== idx);
         } else {
           nextStructured = (sc as any[]).filter(
-            (it) => String((it as any).id ?? "") !== String(skillId),
+            (it) => String((it).id ?? "") !== String(skillId),
           );
         }
         const updatedSection = {
@@ -3448,7 +3448,7 @@ export default function SectionEditor({
                     <div key={String(b.id)} className="p-0">
                       <BlockRenderer
                         sectionId={String(section.id)}
-                        block={b as any}
+                        block={b}
                         onDelete={() => handleDeleteBlock(String(b.id))}
                         disableChevron={true}
                       />
@@ -3569,7 +3569,7 @@ export default function SectionEditor({
                   <div key={String(b.id)} className="p-0">
                     <BlockRenderer
                       sectionId={String(section.id)}
-                      block={b as any}
+                      block={b}
                       onDelete={() => handleDeleteBlock(String(b.id))}
                     />
                   </div>
@@ -3993,15 +3993,15 @@ export default function SectionEditor({
     const items: ICertificationItem[] = useMemo(() => {
       if (!Array.isArray(section.structuredContent)) return [];
       return (section.structuredContent as any[]).map((item, idx) => ({
-        id: String((item as any)?.id ?? `cert-${idx}-${String(section.id)}`),
-        certificationName: String((item as any)?.certificationName ?? (item as any)?.name ?? ""),
-        issuingOrganization: String((item as any)?.issuingOrganization ?? (item as any)?.issuer ?? ""),
-        issueDate: typeof (item as any)?.issueDate === "string" ? (item as any).issueDate : undefined,
+        id: String((item)?.id ?? `cert-${idx}-${String(section.id)}`),
+        certificationName: String((item)?.certificationName ?? (item)?.name ?? ""),
+        issuingOrganization: String((item)?.issuingOrganization ?? (item)?.issuer ?? ""),
+        issueDate: typeof (item)?.issueDate === "string" ? (item).issueDate : undefined,
         expirationDate:
-          typeof (item as any)?.expirationDate === "string" || (item as any)?.expirationDate === null
-            ? ((item as any).expirationDate ?? null)
+          typeof (item)?.expirationDate === "string" || (item)?.expirationDate === null
+            ? ((item).expirationDate ?? null)
             : null,
-        credentialId: String((item as any)?.credentialId ?? (item as any)?.licenseNumber ?? ""),
+        credentialId: String((item)?.credentialId ?? (item)?.licenseNumber ?? ""),
       }));
     }, [section.id, section.structuredContent]);
 
@@ -4235,16 +4235,16 @@ export default function SectionEditor({
     const items: IAffiliationItem[] = useMemo(() => {
       if (!Array.isArray(section.structuredContent)) return [];
       return (section.structuredContent as any[]).map((item, idx) => ({
-        id: String((item as any)?.id ?? `aff-${idx}-${String(section.id)}`),
-        organizationName: String((item as any)?.organizationName ?? (item as any)?.organization ?? ""),
-        roleOrMembershipType: String((item as any)?.roleOrMembershipType ?? (item as any)?.membershipType ?? (item as any)?.role ?? ""),
-        startDate: typeof (item as any)?.startDate === "string" ? (item as any).startDate : undefined,
+        id: String((item)?.id ?? `aff-${idx}-${String(section.id)}`),
+        organizationName: String((item)?.organizationName ?? (item)?.organization ?? ""),
+        roleOrMembershipType: String((item)?.roleOrMembershipType ?? (item)?.membershipType ?? (item)?.role ?? ""),
+        startDate: typeof (item)?.startDate === "string" ? (item).startDate : undefined,
         endDate:
-          typeof (item as any)?.endDate === "string" || (item as any)?.endDate === null
-            ? ((item as any).endDate ?? null)
+          typeof (item)?.endDate === "string" || (item)?.endDate === null
+            ? ((item).endDate ?? null)
             : null,
-        isCurrent: Boolean((item as any)?.isCurrent ?? false),
-        notes: (item as any)?.notes ?? "",
+        isCurrent: Boolean((item)?.isCurrent ?? false),
+        notes: (item)?.notes ?? "",
       }));
     }, [section.id, section.structuredContent]);
 
@@ -4475,7 +4475,7 @@ export default function SectionEditor({
       .trim();
     const modalInitialDoc =
       blocks.length === 1
-        ? ensureRemirrorDoc((blocks[0] as any)?.content as any)
+        ? ensureRemirrorDoc((blocks[0] as any)?.content)
         : ensureRemirrorDoc(previewText);
     const isModalOpen = isCustomTextSection
       ? isCustomTextModalOpen
@@ -5135,8 +5135,8 @@ export default function SectionEditor({
           Array.isArray(section.blocks) ? section.blocks : []
         ).filter((b: any) => {
           const linked =
-            (b as any).attributes?.linkedStructuredId ??
-            (b as any).attributes?.linkedstructuredid;
+            (b).attributes?.linkedStructuredId ??
+            (b).attributes?.linkedstructuredid;
           return String(linked) !== itemId;
         });
         const updatedSection = {
@@ -5285,10 +5285,10 @@ export default function SectionEditor({
         if (currentCv && typeof reorderSections === "function") {
           const nextSections = (currentCv.sections ?? []).map((s) =>
             String(s.id) === String(updatedSection.id)
-              ? (updatedSection as CvSection)
+              ? (updatedSection)
               : s,
           );
-          reorderSections(nextSections as CvSection[]);
+          reorderSections(nextSections);
           return;
         }
       } catch {
@@ -5377,7 +5377,7 @@ export default function SectionEditor({
         nextStructured,
         (targetItem: any, existingBlock?: any) => ({
           ...(existingBlock ?? {}),
-          id: String((existingBlock as any)?.id ?? uuidv4()),
+          id: String((existingBlock)?.id ?? uuidv4()),
           title: String(targetItem?.position || targetItem?.company || "Experience"),
           type: "text" as const,
           content:
@@ -5386,11 +5386,11 @@ export default function SectionEditor({
               : ensureRemirrorDoc(
                   typeof targetItem?.responsibilities !== "undefined" &&
                     targetItem?.responsibilities !== null
-                    ? (targetItem.responsibilities as any)
-                    : (existingBlock as any)?.content,
+                    ? (targetItem.responsibilities)
+                    : (existingBlock)?.content,
                 ),
           attributes: {
-            ...((existingBlock as any)?.attributes ?? {}),
+            ...((existingBlock)?.attributes ?? {}),
             linkedStructuredId: String(targetItem?.id ?? ""),
           },
         }),
@@ -5419,7 +5419,7 @@ export default function SectionEditor({
         Boolean(expandedStructuredPreviewIds[structuredId]);
       const trim = (value: unknown) =>
         typeof value === "string" ? value.trim() : "";
-      const dates = formatRangeFromItem(rawItem as any);
+      const dates = formatRangeFromItem(rawItem);
 
       if (isExp) {
         const company = trim(rawItem?.company);
@@ -5645,7 +5645,7 @@ export default function SectionEditor({
         typeof descriptionRaw === "string"
           ? descriptionRaw.trim()
           : descriptionRaw && typeof descriptionRaw === "object"
-            ? docToPlainText(descriptionRaw as any).trim()
+            ? docToPlainText(descriptionRaw).trim()
             : "";
       const title = degree || institution || fieldOfStudy || "Education entry";
       const subtitle = [institution, fieldOfStudy].filter(Boolean).join(" • ");
@@ -6001,7 +6001,7 @@ export default function SectionEditor({
                   next,
                   (it: IExperienceItem, existing?: any) => ({
                     ...(existing ?? {}),
-                    id: String((existing as any)?.id ?? uuidv4()),
+                    id: String((existing)?.id ?? uuidv4()),
                     title: String(it.position || it.company || "Experience"),
                     type: "text" as const,
                     content:
@@ -6009,10 +6009,10 @@ export default function SectionEditor({
                       it.responsibilities !== null
                         ? ensureRemirrorDoc(it.responsibilities as any)
                         : existing
-                          ? ensureRemirrorDoc((existing as any).content as any)
+                          ? ensureRemirrorDoc((existing).content)
                           : ensureRemirrorDoc(undefined as any),
                     attributes: {
-                      ...((existing as any)?.attributes ?? {}),
+                      ...((existing)?.attributes ?? {}),
                       linkedStructuredId: String(it.id ?? ""),
                     },
                   }),
@@ -6057,7 +6057,7 @@ export default function SectionEditor({
                   next,
                   (it: IEducationItem, existing?: any) => ({
                     ...(existing ?? {}),
-                    id: String((existing as any)?.id ?? uuidv4()),
+                    id: String((existing)?.id ?? uuidv4()),
                     title: String(it.institution || it.degree || "Education"),
                     type: "text" as const,
                     content:
@@ -6065,10 +6065,10 @@ export default function SectionEditor({
                       it.description !== null
                         ? ensureRemirrorDoc(it.description as any)
                         : existing
-                          ? ensureRemirrorDoc((existing as any).content as any)
+                          ? ensureRemirrorDoc((existing).content)
                           : ensureRemirrorDoc(undefined as any),
                     attributes: {
-                      ...((existing as any)?.attributes ?? {}),
+                      ...((existing)?.attributes ?? {}),
                       linkedStructuredId: String(it.id ?? ""),
                     },
                   }),
@@ -6107,7 +6107,7 @@ export default function SectionEditor({
                   next,
                   (it: IProjectItem, existing?: any) => ({
                     ...(existing ?? {}),
-                    id: String((existing as any)?.id ?? uuidv4()),
+                    id: String((existing)?.id ?? uuidv4()),
                     title: String(it.title ?? it.name ?? "Project"),
                     type: "text" as const,
                     content: ensureRemirrorDoc(
@@ -6119,7 +6119,7 @@ export default function SectionEditor({
                         .join("\n"),
                     ),
                     attributes: {
-                      ...((existing as any)?.attributes ?? {}),
+                      ...((existing)?.attributes ?? {}),
                       linkedStructuredId: String(it.id ?? ""),
                     },
                   }),
@@ -6216,7 +6216,7 @@ export default function SectionEditor({
                 typeof window !== "undefined" &&
                 (window as any).__CV_EDITOR_DEBUG__ === true
               ) {
-                // eslint-disable-next-line no-console
+
                 console.log("[SectionEditor] onCollapseChange clicked");
               }
               try {
@@ -6265,7 +6265,7 @@ export default function SectionEditor({
                           (section as any).content !== null
                         ) {
                           const sec = remirrorDocToSection(
-                            ensureRemirrorDoc((section as any).content as any),
+                            ensureRemirrorDoc((section as any).content),
                             String(section.id),
                             section.title ?? "",
                           );
@@ -6286,14 +6286,14 @@ export default function SectionEditor({
                     }, 0);
                   }
                 } catch (err) {
-                  // eslint-disable-next-line no-console
+
                   console.warn(
                     "[SectionEditor] deferredContentFlush failed",
                     err,
                   );
                 }
               } catch (err) {
-                // eslint-disable-next-line no-console
+
                 console.warn("[SectionEditor] flushBeforeCollapse failed", err);
               } finally {
                 // Release the guard on the next macrotask so the syncing effect can run again.
@@ -6367,7 +6367,7 @@ export default function SectionEditor({
                             ) {
                               const sec = remirrorDocToSection(
                                 ensureRemirrorDoc(
-                                  (section as any).content as any,
+                                  (section as any).content,
                                 ),
                                 String(section.id),
                                 section.title ?? "",

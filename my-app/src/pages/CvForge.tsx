@@ -496,7 +496,7 @@ function filterNewListSuggestions(
 function getCurrentCvSummaryText(cv: CvDocument | null | undefined): string {
   const summarySection = cv?.sections?.find(
     (section) => String(section.type) === "summary",
-  ) as CvSection | undefined;
+  );
   const item = summarySection ? getStructuredItems(summarySection)[0] : null;
   return collectPlainText(
     item?.summary ?? summarySection?.blocks?.[0]?.content,
@@ -507,7 +507,7 @@ function getCurrentCvSkills(cv: CvDocument | null | undefined): string[] {
   return dedupeTextList(
     (cv?.sections ?? [])
       .filter((section) => String(section.type) === "skills")
-      .flatMap((section) => getListSectionItems(section as CvSection)),
+      .flatMap((section) => getListSectionItems(section)),
   );
 }
 
@@ -517,7 +517,7 @@ function getCurrentCvLanguages(
   return (cv?.sections ?? [])
     .filter((section) => getCanonicalSectionType(section) === "languages")
     .flatMap((section) =>
-      getStructuredItems(section as CvSection).map((item) => ({
+      getStructuredItems(section).map((item) => ({
         name: typeof item.name === "string" ? item.name.trim() : undefined,
         level: typeof item.level === "string" ? item.level.trim() : undefined,
       })),
@@ -534,7 +534,7 @@ function getCurrentCvExperiences(cv: CvDocument | null | undefined): Array<{
   return (cv?.sections ?? [])
     .filter((section) => String(section.type) === "experience")
     .flatMap((section) =>
-      getStructuredItems(section as CvSection).map((item) => ({
+      getStructuredItems(section).map((item) => ({
         company:
           typeof item.company === "string" ? item.company.trim() : undefined,
         position:
@@ -556,7 +556,7 @@ function getCurrentCvEducations(cv: CvDocument | null | undefined): Array<{
   return (cv?.sections ?? [])
     .filter((section) => String(section.type) === "education")
     .flatMap((section) =>
-      getStructuredItems(section as CvSection).map((item) => ({
+      getStructuredItems(section).map((item) => ({
         institution:
           typeof item.institution === "string"
             ? item.institution.trim()
@@ -889,7 +889,7 @@ function updateStructuredItemField(
   const items = getStructuredItems(section);
   const itemIndex = items.findIndex((item) => String(item.id ?? "") === itemId);
   if (itemIndex < 0) return section;
-  const item = items[itemIndex]!;
+  const item = items[itemIndex];
   const richTextFields = new Set([
     "summary",
     "description",
@@ -935,7 +935,7 @@ function addStructuredItemDraftDescription(
   const items = getStructuredItems(section);
   const itemIndex = items.findIndex((item) => String(item.id ?? "") === itemId);
   if (itemIndex < 0) return section;
-  const item = items[itemIndex]!;
+  const item = items[itemIndex];
 
   return {
     ...section,
@@ -1292,7 +1292,7 @@ function updateStructuredItemBullet(
   const items = getStructuredItems(section);
   const itemIndex = items.findIndex((item) => String(item.id ?? "") === itemId);
   if (itemIndex < 0) return section;
-  const item = items[itemIndex]!;
+  const item = items[itemIndex];
   const storedText = text.trim() ? text : DRAFT_EMPTY_RESPONSIBILITY_BULLET;
 
   if (typeof item.responsibilities !== "undefined") {
@@ -1325,7 +1325,7 @@ function updateStructuredItemBullet(
     bullets[bulletIndex] = storedText;
     const draftBulletCount = Math.max(
       Number(
-        (item as Record<string, unknown>).__draftResponsibilityBulletCount ?? 0,
+        (item).__draftResponsibilityBulletCount ?? 0,
       ),
       bulletIndex + 1,
     );
@@ -1349,7 +1349,7 @@ function updateStructuredItemBullet(
   bullets[bulletIndex] = storedText;
   const draftBulletCount = Math.max(
     Number(
-      (item as Record<string, unknown>).__draftResponsibilityBulletCount ?? 0,
+      (item).__draftResponsibilityBulletCount ?? 0,
     ),
     bulletIndex + 1,
   );
@@ -1492,7 +1492,7 @@ function updateStructuredItemResponsibilities(
   const items = getStructuredItems(section);
   const itemIndex = items.findIndex((item) => String(item.id ?? "") === itemId);
   if (itemIndex < 0) return section;
-  const item = items[itemIndex]!;
+  const item = items[itemIndex];
   const nextItem: Record<string, unknown> = {
     ...item,
     responsibilities,
@@ -1522,7 +1522,7 @@ function removeStructuredItemBullet(
   const items = getStructuredItems(section);
   const itemIndex = items.findIndex((item) => String(item.id ?? "") === itemId);
   if (itemIndex < 0) return section;
-  const item = items[itemIndex]!;
+  const item = items[itemIndex];
   if (typeof item.responsibilities !== "undefined") {
     const nextDoc = removeResponsibilityBulletDoc(
       item.responsibilities,
@@ -3048,11 +3048,11 @@ export function CvForge(): JSX.Element {
   } = useConvexAuth();
   const setJobResume = useMutation(
     ((api as any).jobsPublic?.setResumeForJob ??
-      "jobsPublic.setResumeForJob") as any,
+      "jobsPublic.setResumeForJob"),
   );
   const generateDocumentAssetUploadUrl = useMutation(
     ((api as any).documentAssets?.generateUploadUrl ??
-      "documentAssets.generateUploadUrl") as any,
+      "documentAssets.generateUploadUrl"),
   ) as () => Promise<string>;
   const {
     currentCv,
@@ -3087,15 +3087,15 @@ export function CvForge(): JSX.Element {
   });
   const runCvSectionAiAction = useAction(
     ((api.functions as any)?.runCvSectionAiAction ??
-      "functions.runCvSectionAiAction") as any,
+      "functions.runCvSectionAiAction"),
   );
   const transformEditorSelectionAction = useAction(
     ((api.functions as any)?.transformEditorSelection ??
-      "functions.transformEditorSelection") as any,
+      "functions.transformEditorSelection"),
   );
   const defaultProposalSettings = useQuery(
     ((api.proposalSettings as any)?.getCurrent ??
-      "proposalSettings.getCurrent") as any,
+      "proposalSettings.getCurrent"),
     isConvexAuthenticated ? {} : "skip",
   ) as
     | {
@@ -3110,7 +3110,7 @@ export function CvForge(): JSX.Element {
   ) as LibraryProposalRecord[] | undefined;
   const documentStylePresets = useQuery(
     ((api.proposalSettings as any)?.getPresets ??
-      "proposalSettings.getPresets") as any,
+      "proposalSettings.getPresets"),
     isConvexAuthenticated ? {} : "skip",
   ) as
     | {
@@ -3220,7 +3220,7 @@ export function CvForge(): JSX.Element {
     number | null
   >(null);
   const rawCurrentSections = React.useMemo<CvSection[]>(
-    () => (currentCv?.sections ?? []) as CvSection[],
+    () => (currentCv?.sections ?? []),
     [currentCv?.sections],
   );
   const currentSections = React.useMemo<CvSection[]>(
@@ -3346,11 +3346,11 @@ export function CvForge(): JSX.Element {
       factorySlot.appearance.typography;
     const palette =
       (source.paletteOverride as VerbatiStylePreset["palette"] | undefined) ??
-      (sourceStyle?.palette as VerbatiStylePreset["palette"] | undefined) ??
+      (sourceStyle?.palette) ??
       factorySlot.appearance.palette;
     const accentHex =
       (typeof source.accentHex === "string" ? source.accentHex : undefined) ??
-      (sourceStyle?.accentHex as string | undefined);
+      (sourceStyle?.accentHex);
 
     return resolveVerbatiStyle({
       ...factorySlot.appearance,
@@ -3399,11 +3399,11 @@ export function CvForge(): JSX.Element {
         (source?.paletteOverride as
           | VerbatiStylePreset["palette"]
           | undefined) ??
-        (sourceStyle?.palette as VerbatiStylePreset["palette"] | undefined) ??
+        (sourceStyle?.palette) ??
         factorySlot.appearance.palette;
       const accentHex =
         (typeof source?.accentHex === "string" ? source.accentHex : undefined) ??
-        (sourceStyle?.accentHex as string | undefined);
+        (sourceStyle?.accentHex);
       const resumeTemplateId =
         activeSettingsCvStylePreset?.resumeTemplateId ??
         sourceStyle?.resumeTemplateId ??
@@ -3903,7 +3903,7 @@ export function CvForge(): JSX.Element {
     }
   }, [activeSectionId, currentSections, pendingActiveSection]);
   const requestedJobRecord = useQuery(
-    ((api as any).jobsPublic?.getById ?? "jobsPublic.getById") as any,
+    ((api as any).jobsPublic?.getById ?? "jobsPublic.getById"),
     requestedJobId && isConvexAuthenticated
       ? { jobId: requestedJobId }
       : "skip",
@@ -5175,13 +5175,13 @@ export function CvForge(): JSX.Element {
           let parent = parentItemId
             ? items.find(
                 (item) =>
-                  String((item as Record<string, unknown>).id ?? "") ===
+                  String((item).id ?? "") ===
                   parentItemId,
               )
             : undefined;
           if (!parent && items.length > 0) {
             parent = items[0];
-            parentItemId = String((parent as Record<string, unknown>).id ?? "");
+            parentItemId = String((parent).id ?? "");
           }
           if (!parentItemId) return;
           const bulletIndex = parent
@@ -5207,13 +5207,13 @@ export function CvForge(): JSX.Element {
           let parent = parentItemId
             ? items.find(
                 (item) =>
-                  String((item as Record<string, unknown>).id ?? "") ===
+                  String((item).id ?? "") ===
                   parentItemId,
               )
             : undefined;
           if (!parent && items.length > 0) {
             parent = items[0];
-            parentItemId = String((parent as Record<string, unknown>).id ?? "");
+            parentItemId = String((parent).id ?? "");
           }
           if (!parentItemId) return;
           nextSection = addStructuredItemDraftDescription(
@@ -6155,12 +6155,12 @@ export function CvForge(): JSX.Element {
         (source?.paletteOverride as
           | VerbatiStylePreset["palette"]
           | undefined) ??
-        (sourceStyle?.palette as VerbatiStylePreset["palette"] | undefined) ??
+        (sourceStyle?.palette) ??
         factorySlot.appearance.palette;
       const accentHex =
         (typeof source?.accentHex === "string"
           ? source.accentHex
-          : undefined) ?? (sourceStyle?.accentHex as string | undefined);
+          : undefined) ?? (sourceStyle?.accentHex);
       const resumeTemplateId =
         sourceStyle?.resumeTemplateId ?? factorySlot.defaultCvTemplateId;
 
@@ -7985,7 +7985,7 @@ export function CvForge(): JSX.Element {
       const nextSections = restoredSection
         ? baseSections.map((section, index) =>
             getCvSectionId(section, index) === suggestion.target.sectionId
-              ? restoredSection!
+              ? restoredSection
               : section,
           )
         : suggestion.previousSections ??

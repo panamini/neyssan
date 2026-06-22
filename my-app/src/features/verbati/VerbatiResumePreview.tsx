@@ -315,6 +315,10 @@ function getDecorationPointerClientPosition(
   return { clientX, clientY };
 }
 
+function closestHTMLElement(element: Element | null): HTMLElement | null {
+  return element instanceof HTMLElement ? element : null;
+}
+
 function CvDocumentDecorationLayer({
   decoration,
   isDesignMode,
@@ -400,9 +404,9 @@ function CvDocumentDecorationLayer({
     kind: "move" | "resize",
   ) => {
     if (!isDesignMode || pageWidthPx <= 0 || pageHeightPx <= 0) return;
-    const page = event.currentTarget.closest(
-      '[data-document-page="true"]',
-    ) as HTMLElement | null;
+    const page = closestHTMLElement(
+      event.currentTarget.closest('[data-document-page="true"]'),
+    );
     if (!page) return;
     const pageRect = page.getBoundingClientRect();
     if (pageRect.width <= 0 || pageRect.height <= 0) return;
@@ -1113,16 +1117,16 @@ export function VerbatiResumePreview({
       const target =
         e.target instanceof HTMLElement
           ? e.target
-          : ((e.target as Node).parentElement as HTMLElement | null);
+          : ((e.target as Node).parentElement);
       if (!target) return;
       if (inlineEditing?.enabled) {
         return;
       }
-      const sectionEl = target.closest(
-        "[data-preview-section]",
-      ) as HTMLElement | null;
+      const sectionEl = closestHTMLElement(
+        target.closest("[data-preview-section]"),
+      );
       const headerEl = !sectionEl
-        ? (target.closest("header") as HTMLElement | null)
+        ? closestHTMLElement(target.closest("header"))
         : null;
       const rawSectionType =
         sectionEl?.dataset.previewSection ?? (headerEl ? "profile" : null);
@@ -1130,11 +1134,11 @@ export function VerbatiResumePreview({
       if (!sectionType) {
         return;
       }
-      const itemEl = target.closest(
-        "[data-preview-item-id]",
-      ) as HTMLElement | null;
+      const itemEl = closestHTMLElement(
+        target.closest("[data-preview-item-id]"),
+      );
       const rowEl = !itemEl
-        ? (target.closest("[data-preview-row-id]") as HTMLElement | null)
+        ? closestHTMLElement(target.closest("[data-preview-row-id]"))
         : null;
       const source =
         hostMode === "workspace" ? "preview-workspace" : "preview-panel";

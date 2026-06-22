@@ -524,7 +524,7 @@ export const patch = mutation({
         doc.raw_text = rawText;
       }
 
-      const convexId = await ctx.db.insert("userProfiles", doc as any);
+      const convexId = await ctx.db.insert("userProfiles", doc);
       console.log("[profiles.patch] written", {
         profileId: args.profileId,
         convexId,
@@ -783,7 +783,7 @@ export const patch = mutation({
     throw new Error("Invalid arguments: expected `profile` or `patch`");
   },
 });
- 
+
 // Public, idempotent save endpoint used by the UI as a reliable fallback.
 // Accepts an external profileId and a profile payload and performs an upsert.
 export const saveProfile = mutation({
@@ -817,7 +817,7 @@ export const saveProfile = mutation({
       }
       return out;
     };
- 
+
     const normalizedProfile = {
       profileId: args.profileId,
       name: incoming.name ?? undefined,
@@ -832,12 +832,12 @@ export const saveProfile = mutation({
       achievements: dedupeStrings(incoming.achievements),
       updatedAt: now,
     };
- 
+
     const existingRows = await ctx.db
       .query("userProfiles")
       .withIndex("by_profileId", (q) => q.eq("profileId", args.profileId))
       .take(1);
- 
+
     if (existingRows && existingRows.length > 0) {
       const existing = existingRows[0];
       if (existing.clerkId && existing.clerkId !== identity.subject) {
@@ -848,7 +848,7 @@ export const saveProfile = mutation({
       if (args.idempotencyKey && existingKeys.includes(args.idempotencyKey)) {
         return { profileId: args.profileId, convexId: existing._id, updatedAt: existing.updatedAt ?? existing.updatedAt, written: false };
       }
- 
+
       const merged: any = {
         profileId: args.profileId,
         clerkId: existing.clerkId || identity.subject,
@@ -887,8 +887,8 @@ export const saveProfile = mutation({
         },
         updatedAt: now,
       };
- 
-      await ctx.db.patch(existing._id, merged as any);
+
+      await ctx.db.patch(existing._id, merged);
       return { profileId: args.profileId, convexId: existing._id, updatedAt: merged.updatedAt, written: true };
     } else {
       const doc: any = {
@@ -924,7 +924,7 @@ export const saveProfile = mutation({
         createdAt: now,
         updatedAt: normalizedProfile.updatedAt,
       };
-      const convexId = await ctx.db.insert("userProfiles", doc as any);
+      const convexId = await ctx.db.insert("userProfiles", doc);
       return { profileId: args.profileId, convexId, updatedAt: normalizedProfile.updatedAt, written: true };
     }
   },

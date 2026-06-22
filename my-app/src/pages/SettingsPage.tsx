@@ -1407,7 +1407,7 @@ export function SettingsPage(): JSX.Element {
         styleChoice:
           raw?.styleChoice === undefined
             ? defaults.styleChoice
-            : (raw.styleChoice as ProposalStyleChoice),
+            : (raw.styleChoice),
         paletteOverride:
           raw?.paletteOverride === undefined
             ? defaults.paletteOverride
@@ -1876,7 +1876,7 @@ export function SettingsPage(): JSX.Element {
                           </div>
                           <FontPairGrid
                             selectedId={
-                              currentPreset.fontPairId as VerbatiFontPairId | null
+                              currentPreset.fontPairId
                             }
                             onChange={(id) => updatePreset({ fontPairId: id })}
                           />

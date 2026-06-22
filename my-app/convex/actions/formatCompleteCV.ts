@@ -413,8 +413,8 @@ export async function runFormatCompleteCV(args: { rawText: string; profileId?: s
     }
     if (!parsed) {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-unsafe-assignment
-        const legacy = (() => { try { return require("../lib/parsing/hybridParser"); } catch { return null; } })() as any;
+
+        const legacy = (() => { try { return require("../lib/parsing/hybridParser"); } catch { return null; } })();
         if (legacy && typeof legacy.parseCV === "function") {
           parsed = await legacy.parseCV(rawText);
           parsedFromLegacy = true;
@@ -424,17 +424,17 @@ export async function runFormatCompleteCV(args: { rawText: string; profileId?: s
       }
     }
     if (!parsed) parsed = await parseCVEngine(rawText);
-    try { console.log("[DEBUG][formatCompleteCV] parsedFromLegacy:", parsedFromLegacy, "parsedProvidedSections:", Array.isArray((parsed as any)?.sections) ? (parsed as any).sections.length : 0); } catch {}
-    sections = parsed.sections as any;
-    metadata = parsed.metadata as any;
+    try { console.log("[DEBUG][formatCompleteCV] parsedFromLegacy:", parsedFromLegacy, "parsedProvidedSections:", Array.isArray((parsed)?.sections) ? (parsed).sections.length : 0); } catch {}
+    sections = parsed.sections;
+    metadata = parsed.metadata;
     method = parsed.method;
     warnings = parsed.warnings || [];
   }
 
   const findSection = (fieldKey: string) => sections.find(s => s.fieldKey === fieldKey)?.content;
- 
+
   const summary = findSection("introduction") ?? undefined;
- 
+
   const skillsRaw = findSection("skills");
   const { skills, skillsText } = normalizeSkills(skillsRaw ?? "");
   const skillsMeta = skills.map(s => {
@@ -447,17 +447,17 @@ export async function runFormatCompleteCV(args: { rawText: string; profileId?: s
       sourceSpan: start !== undefined && end !== undefined ? { start, end } : undefined,
     };
   });
- 
+
   const experienceRaw = findSection("experience");
   const experience = experienceRaw ? (experienceRaw.trim().startsWith("[") ? tryParseJsonArray(experienceRaw) : parseExperienceFallback(experienceRaw)) : [];
   const experienceText = experience.length ? JSON.stringify(experience, null, 2) : undefined;
- 
+
   const educationRaw = findSection("education");
   const education = educationRaw ? (educationRaw.trim().startsWith("[") ? tryParseJsonArray(educationRaw) : parseEducationFallback(educationRaw)) : [];
   const educationText = education.length ? JSON.stringify(education, null, 2) : undefined;
- 
+
   const achievements = findSection("achievements") ?? undefined;
- 
+
   // New: extract languages and contact sections when present
   const languagesRaw = findSection("languages") ?? undefined;
   let languages: string[] | undefined = undefined;
@@ -475,7 +475,7 @@ export async function runFormatCompleteCV(args: { rawText: string; profileId?: s
       languages = languagesRaw.split(/[,;\n•·\u2022-]+/).map(s => s.trim()).filter(Boolean);
     }
   }
- 
+
   const contactRaw = findSection("contact") ?? undefined;
   let contact: { phone?: string; address?: string } | undefined = undefined;
   if (contactRaw) {
@@ -495,7 +495,7 @@ export async function runFormatCompleteCV(args: { rawText: string; profileId?: s
     if (phone) contact.phone = phone;
     if (address) contact.address = address;
   }
- 
+
   const rawParsedSections = sections.map((s, idx) => {
     const id = generateReviewerId(s.fieldKey, idx);
     const start = rawText.indexOf(s.content);
@@ -509,20 +509,20 @@ export async function runFormatCompleteCV(args: { rawText: string; profileId?: s
       confidence: s.confidence,
     };
   });
- 
+
   const diagnostics = {
     parseConfidence: computeParseConfidence({ summary, skills, experience, education }),
     warnings: warnings,
     method,
   };
-  
+
   // Normalize metadata safely: convert null -> undefined and coerce to string when present
   const safeMetadata = {
     name: metadata && metadata.name != null ? String(metadata.name) : undefined,
     email: metadata && metadata.email != null ? String(metadata.email) : undefined,
     phone: metadata && metadata.phone != null ? String(metadata.phone) : undefined,
   };
-  
+
   const parsed = {
     summary,
     skills,

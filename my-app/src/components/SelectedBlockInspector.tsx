@@ -224,12 +224,12 @@ export function SelectedBlockInspector({
         // Derive UI date parts from stored ISO + precision
         const sp = parseIsoToParts(deep.startDate);
         const ep = parseIsoToParts(deep.endDate);
-        const startPrec = (deep as any).startDatePrecision as
+        const startPrec = (deep).startDatePrecision as
           | "year"
           | "month"
           | "day"
           | undefined;
-        const endPrec = (deep as any).endDatePrecision as
+        const endPrec = (deep).endDatePrecision as
           | "year"
           | "month"
           | "day"
@@ -298,9 +298,9 @@ export function SelectedBlockInspector({
 
   const flushAllChanges = async (mode: "auto" | "commit" = "auto") => {
     const linkedIdRaw = String(
-      (effectiveLinked as any)?.id ?? (effectiveLinked as any)?._id ?? "",
+      (effectiveLinked)?.id ?? (effectiveLinked)?._id ?? "",
     );
-    // eslint-disable-next-line no-console
+
     dbg("[DBG][Inspector] flushAllChanges start", {
       sectionId,
       resolvedSectionId,
@@ -690,7 +690,7 @@ export function SelectedBlockInspector({
   useEffect(() => {
     if (!block?.id) return;
     // log mount claim
-    // eslint-disable-next-line no-console
+
     dbg("[SelectedBlockInspector] mount claim", { blockId: String(block.id) });
     try {
       setActiveEditorBlockId(String(block.id));
@@ -700,7 +700,7 @@ export function SelectedBlockInspector({
     return () => {
       // Use functional setter to avoid adding activeEditorBlockId to deps
       try {
-        // eslint-disable-next-line no-console
+
         dbg(
           "[SelectedBlockInspector] cleanup attempting to clear activeEditor if still owner",
           { blockId: String(block.id) },
@@ -955,7 +955,7 @@ export function SelectedBlockInspector({
 
     const bid = String(block.id);
     const linkedId = String(
-      (effectiveLinked as any)?.id ?? (effectiveLinked as any)?._id ?? "",
+      (effectiveLinked)?.id ?? (effectiveLinked)?._id ?? "",
     );
     const blockSecId = resolveSectionIdForBlock(bid);
     const structuredSecId = resolveSectionIdForStructured(linkedId);
@@ -964,7 +964,7 @@ export function SelectedBlockInspector({
     // Keep this section to potentially derive title only (below).
 
     let updatedFields: Record<string, any> | null = null;
-    let appliedStructured = false;
+    const appliedStructured = false;
     let titleUpdated = false;
     let newTitle = "";
 
@@ -1032,13 +1032,13 @@ export function SelectedBlockInspector({
    */
   function flushPendingSync() {
     const linkedId = String(
-      (effectiveLinked as any)?.id ?? (effectiveLinked as any)?._id ?? "",
+      (effectiveLinked)?.id ?? (effectiveLinked)?._id ?? "",
     );
     dbg("[DBG][Inspector] flushPendingSync wrapper start", { linkedId });
     try {
       flushAllChanges("auto");
     } catch (err) {
-      // eslint-disable-next-line no-console
+
       dbg("[DBG][Inspector] flushPendingSync wrapper error", err);
     }
     dbg("[DBG][Inspector] flushPendingSync wrapper exit", { linkedId });
@@ -1098,10 +1098,10 @@ export function SelectedBlockInspector({
       for (const s of currentCv.sections ?? []) {
         const arr = (s as any)?.blocks;
         if (!Array.isArray(arr)) continue;
-        const found = (arr as any[]).find(
+        const found = (arr).find(
           (b: any) => String(b?.id) === String(bid),
         );
-        if (found) return String((found as any)?.title ?? "");
+        if (found) return String((found)?.title ?? "");
       }
       return String(block?.title ?? "");
     } catch {
@@ -1512,7 +1512,7 @@ export function SelectedBlockInspector({
                     className="w-full px-2 py-1 mt-1 text-sm bg-transparent border border-[color:var(--color-border-strong)] rounded-[var(--radius-control)] focus:border-[color:var(--ti)] outline-none dasti-field-no-glow"
                     value={
                       Array.isArray(formState.achievements)
-                        ? (formState.achievements as any[]).join("\n")
+                        ? (formState.achievements).join("\n")
                         : String(formState.achievements ?? "")
                     }
                     onChange={(e) => {
@@ -1788,13 +1788,13 @@ export function SelectedBlockInspector({
             <div className="mb-2 text-xs [color:var(--tg2)]">Block content</div>
             {sectionForEditor && (
               <RemirrorEditor
-                sections={[sectionForEditor as any]}
+                sections={[sectionForEditor]}
                 embedded={true}
                 onSectionChange={(_index: number, updatedSection: any) => {
                   try {
                     if (!block?.id) return;
                     const doc = ensureRemirrorDoc(
-                      (updatedSection as any)?.content as any,
+                      (updatedSection)?.content,
                     );
                     setPendingBlockContent(doc);
                     const blockSecId = resolveSectionIdForBlockLocal(
@@ -1808,7 +1808,7 @@ export function SelectedBlockInspector({
                       });
                     }
                     const newTitle = String(
-                      (updatedSection as any)?.title ?? "",
+                      (updatedSection)?.title ?? "",
                     );
                     if (newTitle && newTitle !== String(block.title ?? "")) {
                       const secIdForTitle =

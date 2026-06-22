@@ -31,7 +31,7 @@ async function callLLM(prompt: string, schema?: unknown, skipAdapters?: boolean,
   // Short, consistent preview so logs are readable
   const preview = (typeof prompt === "string" && prompt.length > 100) ? prompt.substring(0, 100) + "..." : prompt;
   console.log("[callLLM] prompt preview:", preview, " schemaPresent:", !!schema, " skipAdapters:", !!skipAdapters, " hasSignal:", !!opts?.signal);
- 
+
   // If an adapter factory is available, prefer delegating to it (this allows tests to mock adapters).
   // When skipAdapters is true we bypass adapter delegation and call the internal OpenAI/fetch path directly.
   if (!skipAdapters) {
@@ -104,13 +104,13 @@ async function callLLM(prompt: string, schema?: unknown, skipAdapters?: boolean,
   try {
     // Best-effort: attach a strict instruction when we want JSON back
     const promptWithForceJson = schema ? `${prompt}\n\nIMPORTANT: Return ONLY valid JSON (no markdown, no surrounding explanation).` : prompt;
- 
+
     // Build a generic request body for the OpenAI Responses endpoint.
     const body: any = {
       model: llmConfig.openaiModel ?? process.env.LLM_MODEL ?? "gpt-5o-mini",
       input: promptWithForceJson
     };
-  
+
     // Heuristic: treat parsing prompts as "wanting JSON" so primary parse attempts request structured JSON.
     // This reduces reliance on a separate repair step and improves first-pass success rate.
     const parsingMarkers = [
@@ -121,7 +121,7 @@ async function callLLM(prompt: string, schema?: unknown, skipAdapters?: boolean,
       "INSTRUCTIONS (FR)"
     ];
     const wantsJson = Boolean(schema) || parsingMarkers.some((m) => typeof m === "string" && prompt.includes(m));
- 
+
     // Only attach a text.format when the caller provided an explicit schema.
     // Heuristic "wantsJson" alone should not cause us to send an empty generic schema
     // because OpenAI Responses rejects unnamed/empty object schemas. If the caller did
@@ -139,7 +139,7 @@ async function callLLM(prompt: string, schema?: unknown, skipAdapters?: boolean,
         }
       };
     }
- 
+
     // Normalize/guard: ensure text.format and nested json_schema contain required fields.
     if (body.text?.format?.type === "json_schema") {
       body.text.format.json_schema = body.text.format.json_schema ?? { name: "response", schema: { type: "object", additionalProperties: false } };
@@ -147,7 +147,7 @@ async function callLLM(prompt: string, schema?: unknown, skipAdapters?: boolean,
       if (!body.text.format.name) body.text.format.name = body.text.format.json_schema.name ?? "response";
       if (!body.text.format.schema) body.text.format.schema = body.text.format.json_schema.schema ?? { type: "object", additionalProperties: false };
     }
- 
+
     // One-off debug: log a redacted view of outgoing text.format and emit lightweight telemetry.
     try {
       if (body.text?.format) {
@@ -164,7 +164,7 @@ async function callLLM(prompt: string, schema?: unknown, skipAdapters?: boolean,
       console.warn("[callLLM][DEBUG] unable to stringify outgoing format:", String(e));
     }
     try { recordTelemetry("adapter.request_shape", { provider: "openai", model: body.model, hasTopLevelSchema: !!body.text?.format?.schema, hasNestedSchema: !!body.text?.format?.json_schema?.schema }); } catch {}
- 
+
     console.log("[callLLM] Sending request to provider with model:", body.model, "response_format:", !!body.response_format);
 
     // Safety check: Do not send text.format unless a top-level schema is present.
@@ -333,7 +333,7 @@ interface ParseResult {
 export async function parseCV(rawText: string, options?: { returnMappedCV?: boolean; mapperStrip?: boolean }): Promise<ParseResult> {
   const warnings: string[] = [];
   let fallbackReason = '';
-  
+
   // --- Helper: NER enrichment (layout + entities fuse) ---
   async function enrichWithNER(
     base: { sections: Array<{ title: string; content: string; fieldKey: string; confidence: number }>; metadata: ExtractedMetadata }
@@ -435,7 +435,7 @@ export async function parseCV(rawText: string, options?: { returnMappedCV?: bool
     if (loc) meta.location = loc;
     return meta;
   }
-  
+
   try {
     // dynamic import of post-processor helpers
     const { parseLLMSections, parseLLMMetadata } = await import("./llmPostProcessor");
@@ -449,7 +449,7 @@ export async function parseCV(rawText: string, options?: { returnMappedCV?: bool
  * Emits lightweight telemetry traces so we can observe requestedModel -> attemptedModel -> outcome.
  */
 const defaultLLMCaller = createLLMCaller();
-const openaiOnlyLLMCaller = createLLMCaller({ ...(llmConfig as any), provider: "openai" } as any);
+const openaiOnlyLLMCaller = createLLMCaller({ ...(llmConfig as any), provider: "openai" });
 
 /**
  * callPreferredProvider (delegates to parsing_shared createLLMCaller)
@@ -578,7 +578,7 @@ async function callPreferredProvider(
       required: ["name", "email", "phone", "linkedinUrl"],
       additionalProperties: false
     };
-    
+
 
     async function attemptLLMParse(
       promptTemplate: string,
@@ -761,7 +761,7 @@ async function callPreferredProvider(
       sectionTimeout,
       SECTION_RESPONSE_SCHEMA
     );
- 
+
     // Perform metadata extraction (lighter validation) using same language-aware strategy
     const metadataPrompt = detectLanguageIsFrench(rawText)
       ? METADATA_EXTRACTION_PROMPT + "\n\nINSTRUCTIONS (FR): Répondez uniquement en JSON valide (aucune explication). Si le CV est en français, répondez en français."
@@ -774,7 +774,7 @@ async function callPreferredProvider(
       metadataTimeout,
       METADATA_RESPONSE_SCHEMA
     );
- 
+
     // Debug: surface what we received from the LLM adapters/parsers
     try {
       console.log("[parseCV] parsedSections present:", !!parsedSections, "sections.length:", parsedSections?.sections?.length ?? 0);
@@ -782,7 +782,7 @@ async function callPreferredProvider(
     } catch {
       // ignore logging errors
     }
- 
+
     // Final validation pass for sections
     const validation = validateLLMOutput(parsedSections, rawText);
     if (validation.isValid && validation.confidence > 0.7) {
@@ -845,10 +845,10 @@ async function callPreferredProvider(
     fallbackReason = `LLM error: ${error.message}`;
     warnings.push(fallbackReason);
   }
-  
+
   // Fallback to enhanced heuristics
   console.warn(`Falling back to heuristics: ${fallbackReason}`);
-  
+
   const heuristicSections = parseWithEnhancedHeuristics(rawText);
   const heuristicMetadata = extractMetadataHeuristically(rawText);
 
@@ -875,12 +875,12 @@ async function callOpenAIResponsesForRepair(prompt: string, text: string, opts?:
   const apiKey = process.env.OPENAI_API_KEY ?? llmConfig.openaiKey ?? null;
   const promptWithText = prompt.replace('{{cvText}}', text);
   if (!apiKey) throw new Error("No OpenAI key available for strong repair");
- 
+
   // Prefer SDK (dynamic import) for stricter response_format handling and better extraction guarantees.
   const modelForRepair = (llmConfig as any)?.openaiModel ?? process.env.OPENAI_MODEL ?? "gpt-5-nano";
   const fallbackModelRepair = "gpt-5-nano"; // keep gpt-5-nano as the stable repair model
   const startOverall = Date.now();
- 
+
   // Build a strict response_format requesting JSON schema
   const responseFormat = {
     type: "json_schema",
@@ -1103,7 +1103,7 @@ async function callLLMWithTimeout(prompt: string, text: string, timeoutMs: numbe
   // Use the shared LLM caller so provider logic is centralized.
   // When skipAdapters is true, create an OpenAI-only caller by forcing provider:"openai".
   const caller = skipAdapters
-    ? createLLMCaller({ ...(llmConfig as any), provider: "openai" } as any)
+    ? createLLMCaller({ ...(llmConfig as any), provider: "openai" })
     : createLLMCaller();
 
   // Delegate to the shared caller and surface the text result.

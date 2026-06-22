@@ -3,7 +3,7 @@ import type { ICvState, ICvStateActions, IDraftForm } from "../types/cv";
 import type { INormalizedProfile, IReviewerSection } from "../types/profile";
 import { useCvLibrary } from "../contexts/CvLibraryContext";
 import { remirrorJsonToString } from "../lib/utils";
- 
+
 /**
  * Compatibility hook: useCvState
  *
@@ -20,7 +20,7 @@ import { remirrorJsonToString } from "../lib/utils";
  * This file should be removed as the migration completes and consumers are updated
  * to the new block-based primitives.
  */
- 
+
 /* Minimal helpers to build reviewer-style sections from a draft profile */
 function buildSectionsFromDraft(form: IDraftForm): IReviewerSection[] {
   const sections: IReviewerSection[] = [];
@@ -40,7 +40,7 @@ function buildSectionsFromDraft(form: IDraftForm): IReviewerSection[] {
   }
   return sections;
 }
- 
+
 function buildSectionsFromProfile(profile: INormalizedProfile): IReviewerSection[] {
   const sections: IReviewerSection[] = [];
   if (profile.summary) sections.push({ id: "summary-0", title: "Summary", content: String(profile.summary), fieldKey: "summary", dismissed: false });
@@ -54,15 +54,15 @@ function buildSectionsFromProfile(profile: INormalizedProfile): IReviewerSection
   }
   if (profile.achievements && Array.isArray(profile.achievements) && profile.achievements.length)
     sections.push({ id: "achievements-0", title: "Achievements", content: profile.achievements.join("\n"), fieldKey: "achievements", dismissed: false });
- 
+
   if (profile.name || profile.email) {
     const parts = [profile.name ?? "", profile.email ?? ""].filter(Boolean).join(" / ");
     if (parts.length) sections.unshift({ id: "identity-0", title: "Identity", content: parts, fieldKey: "identity", dismissed: false });
   }
- 
+
   return sections;
 }
- 
+
 /**
  * useCvState compatibility hook
  *
@@ -84,11 +84,11 @@ export function useCvState(): [ // Return a legacy-friendly state where mapped/r
   const [controls, setControlsInternal] = useState<ICvState["controls"]>({ showRaw: false, useMapperStripping: true });
   const [draftProfile, setDraftProfile] = useState<Partial<import("../types/profile").INormalizedProfile> & IDraftForm>({});
   const [source, setSource] = useState<ICvState["source"]>("none");
- 
+
   // Expose the new CvLibraryContext so migration can co-exist. We do not rely on it for core behavior,
   // but consumers may use the new provider elsewhere.
   const cvLibrary = useCvLibrary();
- 
+
   const updateManualInput = useCallback((formData: IDraftForm) => {
     const raw = buildSectionsFromDraft(formData);
     setRawSections(raw);
@@ -97,7 +97,7 @@ export function useCvState(): [ // Return a legacy-friendly state where mapped/r
     setDraftProfile((prev) => ({ ...(prev ?? {}), ...formData }));
     setSource("manual");
   }, []);
- 
+
   const loadProfile = useCallback((profile: INormalizedProfile) => {
     // Prefer incoming rawSections from parser when provided, otherwise derive from profile fields
     const incomingRaw: any = (profile as unknown as { rawSections?: Array<{ id?: string; title?: string; content?: unknown; fieldKey?: string; dismissed?: boolean }> })?.rawSections;
@@ -106,7 +106,7 @@ export function useCvState(): [ // Return a legacy-friendly state where mapped/r
         id: s?.id ?? `raw-${i}`,
         title: String(s?.title ?? `Raw Section ${i}`),
         fieldKey: s?.fieldKey ?? "unknown",
-        content: remirrorJsonToString((s as any)?.content),
+        content: remirrorJsonToString((s)?.content),
         dismissed: Boolean(s?.dismissed ?? false),
       }));
       setRawSections(normalized);
@@ -119,11 +119,11 @@ export function useCvState(): [ // Return a legacy-friendly state where mapped/r
     setDraftProfile(profile as Partial<INormalizedProfile> & IDraftForm);
     setSource("loaded");
   }, []);
- 
+
   const setControls = useCallback((updates: Partial<ICvState["controls"]>) => {
     setControlsInternal((prev) => ({ ...prev, ...updates }));
   }, []);
- 
+
   const reset = useCallback(() => {
     setRawSections([]);
     setMappedSectionsInternal([]);
@@ -131,7 +131,7 @@ export function useCvState(): [ // Return a legacy-friendly state where mapped/r
     setDraftProfile({});
     setSource("none");
   }, []);
- 
+
   const state = useMemo(
     () =>
       ({
@@ -151,7 +151,7 @@ export function useCvState(): [ // Return a legacy-friendly state where mapped/r
       }),
     [rawSections, mappedSections, controls, draftProfile, source]
   );
- 
+
   const actions: ICvStateActions & { setMappedSections: (sections: IReviewerSection[]) => void } = {
     updateManualInput,
     loadProfile,
@@ -159,6 +159,6 @@ export function useCvState(): [ // Return a legacy-friendly state where mapped/r
     reset,
     setMappedSections: (sections: IReviewerSection[]) => setMappedSectionsInternal(sections),
   };
- 
+
   return [state as any, actions];
 }

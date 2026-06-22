@@ -2352,10 +2352,7 @@ function resolveProposalStyleForDocumentSlot(args: {
 }): ReturnType<typeof resolveVerbatiStyle> {
   const factorySlot = getFactoryDocumentStyleSlot(args.slotId);
   const savedStyle =
-    (args.savedPreset?.verbatiStyle as
-      | Partial<ReturnType<typeof resolveVerbatiStyle>>
-      | null
-      | undefined) ?? null;
+    (args.savedPreset?.verbatiStyle) ?? null;
   const baseStyle = resolveVerbatiStyle({
     ...factorySlot.appearance,
     resumeTemplateId: factorySlot.defaultCvTemplateId,
@@ -2431,7 +2428,7 @@ function buildProposalStyleTraceMetadataSnapshot(input: {
   templateId?: unknown;
   verbatiStyle?:
     | ReturnType<typeof serializeVerbatiStyle>
-    | ReturnType<typeof resolveVerbatiStyle>
+
     | null;
   sourceCvId?: unknown;
   styleLinkMode?: unknown;
@@ -2465,7 +2462,7 @@ function buildProposalStyleTraceMetadataSnapshot(input: {
 function serializeProposalMetadataVerbatiStyle(
   style:
     | ReturnType<typeof resolveVerbatiStyle>
-    | ReturnType<typeof serializeVerbatiStyle>
+
     | null
     | undefined,
 ): ProposalDocumentMetadata["verbatiStyle"] {
@@ -3020,7 +3017,7 @@ export function ProposalForge(): JSX.Element {
   );
   const setJobResume = useMutation(
     ((api as any).jobsPublic?.setResumeForJob ??
-      "jobsPublic.setResumeForJob") as any,
+      "jobsPublic.setResumeForJob"),
   );
   const createProposal = useMutation(
     (api as any).createProposalPublic?.default ??
@@ -3028,7 +3025,7 @@ export function ProposalForge(): JSX.Element {
   );
   const generateDocumentAssetUploadUrl = useMutation(
     ((api as any).documentAssets?.generateUploadUrl ??
-      "documentAssets.generateUploadUrl") as any,
+      "documentAssets.generateUploadUrl"),
   );
   const handleAttachedCvChange = React.useCallback(
     (nextId: string | null) => {
@@ -3896,7 +3893,7 @@ export function ProposalForge(): JSX.Element {
 
   const publicHandoffRecord = useQuery(
     ((api as any).proposalHandoffs?.getPublic ??
-      "proposalHandoffs.getPublic") as any,
+      "proposalHandoffs.getPublic"),
     handoffId && handoffToken ? { handoffId, handoffToken } : "skip",
   ) as ProposalForgeHandoffRecord | undefined;
   const handoffRecord = useQuery(
@@ -3906,7 +3903,7 @@ export function ProposalForge(): JSX.Element {
       : "skip",
   ) as ProposalForgeHandoffRecord | undefined;
   const jobByIdQueryReference = React.useMemo(
-    () => ((api as any).jobsPublic?.getById ?? "jobsPublic.getById") as any,
+    () => ((api as any).jobsPublic?.getById ?? "jobsPublic.getById"),
     [],
   );
   const canonicalJobRecord = useQuery(
@@ -5925,7 +5922,7 @@ export function ProposalForge(): JSX.Element {
     ) {
       return {
         winnerSource: (draftWinnerSource ??
-          "local_output_draft") as ProposalStyleTraceWinnerSource,
+          "local_output_draft"),
         winnerReason: "same-id optimistic overlay matched selected proposal",
         rawServerRow: null,
         rawQueryRow: snapshotSavedProposalRecord(querySelectedSavedProposal),
@@ -7460,9 +7457,9 @@ export function ProposalForge(): JSX.Element {
       setProposalDocumentMeta(nextDocumentMeta);
       setDocumentDecoration(nextDocumentDecoration);
       setProposalDocumentIconSettings(nextDocumentIconSettings);
-      setGeneratedProposalId(openedSavedProposal._id as Id<"proposals">);
+      setGeneratedProposalId(openedSavedProposal._id);
       generatedProposalIdRef.current =
-        openedSavedProposal._id as Id<"proposals">;
+        openedSavedProposal._id;
       setProposalOutputMode("preview");
       setIsComposePanelVisible(true);
       setIsBriefExpanded(false);
@@ -7563,7 +7560,7 @@ export function ProposalForge(): JSX.Element {
     const nextTitle = draftProposal.title || "Untitled proposal";
     const nextTitleManual = Boolean(draftProposal.title?.trim());
     const nextMeta = nextType ? formatProposalTypeLabel(nextType) : "Draft";
-    const nextGeneratedId = draftProposal._id as Id<"proposals">;
+    const nextGeneratedId = draftProposal._id;
     const nextApplicantName =
       resolveProposalHeadingText(draftProposal.metadata, "applicantName") ?? "";
     const nextApplicantRole =

@@ -109,7 +109,7 @@ export async function extractTextFromPdf(arrayBuffer: ArrayBuffer): Promise<stri
   // Primary heuristic: too-short extracted text suggests image / scan or failed extraction.
   if (!fullText || fullText.length < TEXT_EXTRACTION_THRESHOLD) {
     // Rely on server-side OCR instead of invoking a browser fallback that may be outdated.
-    // eslint-disable-next-line no-console
+
     console.warn(
       "Browser PDF extraction produced limited text (length=%d); rely on server pipeline for OCR.",
       fullText?.length ?? 0,

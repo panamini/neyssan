@@ -244,7 +244,7 @@ export function StructuredUploadButton({
         if (!isCurrentRequest()) return;
         let toastMessage = "Upload failed.";
         const errorData =
-          err && typeof err === "object" ? (err as any).data : null;
+          err && typeof err === "object" ? (err).data : null;
         if (errorData && typeof errorData === "object" && errorData.code) {
           toastMessage = "Upload failed.";
           if (errorData.detail) {

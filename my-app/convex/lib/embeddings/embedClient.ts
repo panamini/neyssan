@@ -28,10 +28,10 @@ function validateEmbeddingVector(vec: unknown): vec is EmbeddingVector {
 }
 
 function normalizeVectors(data: any, expected: number): EmbeddingVector[] {
-  if (!data || typeof data !== "object" || !Array.isArray((data as any).data)) {
+  if (!data || typeof data !== "object" || !Array.isArray((data).data)) {
     throw new Error("Embedding response missing data array");
   }
-  const entries = (data as any).data as Array<{ embedding: unknown; index?: number }>;
+  const entries = (data).data as Array<{ embedding: unknown; index?: number }>;
   if (entries.length !== expected) {
     throw new Error(`Embedding response count mismatch: expected ${expected}, received ${entries.length}`);
   }

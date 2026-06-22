@@ -15,7 +15,7 @@
  * migrate consumers to use a dedicated function name (e.g. parseCVEngine) and
  * keep this shim as the stable entrypoint used by callers.
  */
- 
+
 /* Types kept here so consumers importing parsing_shared/engine.ts retain types */
 export interface ExtractedMetadata {
   name: string | null;
@@ -23,7 +23,7 @@ export interface ExtractedMetadata {
   phone: string | null;
   linkedinUrl: string | null;
 }
- 
+
 export interface ParseResult {
   sections: Array<{
     title: string;
@@ -36,7 +36,7 @@ export interface ParseResult {
   warnings: string[];
   telemetry?: Record<string, unknown>;
 }
- 
+
 /**
  * parseCV shim
  *
@@ -54,18 +54,18 @@ export async function parseCV(rawText: string): Promise<ParseResult> {
   } catch {
     // fallthrough to require below
   }
- 
+
   // Fall back to require() for environments that mock CommonJS modules.
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-unsafe-assignment
-    const legacy = (() => { try { return require("../parsing/hybridParser"); } catch { return null; } })() as any;
+
+    const legacy = (() => { try { return require("../parsing/hybridParser"); } catch { return null; } })();
     if (legacy && typeof legacy.parseCV === "function") {
       return await legacy.parseCV(rawText) as ParseResult;
     }
   } catch {
     // ignored
   }
- 
+
   throw new Error("parseCV shim: legacy hybrid parser not found (../parsing/hybridParser).");
 }
 /* --- Canonical engine implementation (under a new export: parseCVEngine) --- */
@@ -285,7 +285,7 @@ async function callLLMWithTimeout(prompt: string, text: string, timeoutMs: numbe
   const promptWithText = prompt.replace("{{cvText}}", text);
   const effectiveTimeout = Math.min(timeoutMs, 30000);
   const caller = skipAdapters
-    ? createLLMCaller({ ...(llmConfig as any), provider: "openai" } as any)
+    ? createLLMCaller({ ...(llmConfig as any), provider: "openai" })
     : createLLMCaller();
   const res = await caller(promptWithText, schema, { timeoutMs: effectiveTimeout, allowProviderFallback: !skipAdapters } as any);
   return res.text;
@@ -302,7 +302,7 @@ async function attemptLLMParse(
 ): Promise<any> {
   const attempts = 2;
   let lastErr: Error | null = null;
-  let providerSwitched = false;
+  const providerSwitched = false;
 
   for (let attempt = 1; attempt <= attempts; attempt++) {
     let sanitizedForRepairFlag = false;
@@ -412,7 +412,7 @@ async function attemptLLMParse(
             if (validateOutput) {
               const v2 = validateOutput(reparsed);
               if (v2.isValid && (v2.confidence ?? 1) > 0.45) {
-                try { if (typeof reparsed === "object" && reparsed) (reparsed as any).telemetry = { providerUsed: null, sanitizedForRepair: sanitizedForRepairFlag, repairReturnedProviderShape: true }; } catch {}
+                try { if (typeof reparsed === "object" && reparsed) (reparsed).telemetry = { providerUsed: null, sanitizedForRepair: sanitizedForRepairFlag, repairReturnedProviderShape: true }; } catch {}
                 return reparsed;
               }
               // Stricter acceptance for repair paths:
@@ -420,16 +420,16 @@ async function attemptLLMParse(
               // meaningful 'languages' or 'contact' section. This reduces false positives
               // while still allowing useful repaired outputs through.
               try {
-                const sectionsArr = Array.isArray((reparsed as any).sections) ? (reparsed as any).sections : [];
+                const sectionsArr = Array.isArray((reparsed).sections) ? (reparsed).sections : [];
                 const hasMeaningfulLanguage = sectionsArr.some((s: any) => String(s.fieldKey).toLowerCase() === "languages" && String(s.content || "").trim().length > 0);
                 const hasMeaningfulContact = sectionsArr.some((s: any) => String(s.fieldKey).toLowerCase() === "contact" && String(s.content || "").trim().length > 0);
                 if (sectionsArr.length > 0 && (hasMeaningfulLanguage || hasMeaningfulContact)) {
-                  try { if (typeof reparsed === "object" && reparsed) (reparsed as any).telemetry = { providerUsed: null, sanitizedForRepair: sanitizedForRepairFlag, repairReturnedProviderShape: true, acceptedDespiteValidation: true }; } catch {}
+                  try { if (typeof reparsed === "object" && reparsed) (reparsed).telemetry = { providerUsed: null, sanitizedForRepair: sanitizedForRepairFlag, repairReturnedProviderShape: true, acceptedDespiteValidation: true }; } catch {}
                   return reparsed;
                 }
               } catch {}
             } else {
-              try { if (typeof reparsed === "object" && reparsed) (reparsed as any).telemetry = { providerUsed: null, sanitizedForRepair: sanitizedForRepairFlag, repairReturnedProviderShape: true }; } catch {}
+              try { if (typeof reparsed === "object" && reparsed) (reparsed).telemetry = { providerUsed: null, sanitizedForRepair: sanitizedForRepairFlag, repairReturnedProviderShape: true }; } catch {}
               return reparsed;
             }
           }
@@ -554,7 +554,7 @@ export async function parseCVEngine(rawText: string): Promise<ParseResult> {
               } catch {}
             }
             if (lang && lang.length) {
-              sections.push({ title: "Languages", content: Array.isArray(lang) ? (lang as string[]).join(", ") : String(lang), fieldKey: "languages", confidence: 0.6 });
+              sections.push({ title: "Languages", content: Array.isArray(lang) ? (lang).join(", ") : String(lang), fieldKey: "languages", confidence: 0.6 });
             }
           }
           const hasContact = sections.some((s: any) => String(s.fieldKey).toLowerCase() === "contact" && String(s.content || "").trim().length > 0);

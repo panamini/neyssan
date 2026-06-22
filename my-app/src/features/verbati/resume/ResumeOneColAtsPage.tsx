@@ -1574,7 +1574,7 @@ function WorkshopSkillInlineItems(args: {
       if (itemIndex === 0) return;
 
       const currentNode = itemRefs.current.get(item.id);
-      const previousNode = itemRefs.current.get(args.items[itemIndex - 1]!.id);
+      const previousNode = itemRefs.current.get(args.items[itemIndex - 1].id);
       if (!currentNode || !previousNode) return;
 
       const currentTop = currentNode.getBoundingClientRect().top;

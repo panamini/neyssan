@@ -21,33 +21,33 @@ Do not rely on chat memory or compressed context.
 Last merged PR:
 
 ```txt
-PR87.5 - Production TypeScript Build Follow-up
-GitHub PR: https://github.com/panamini/neyssan/pull/234
-Head branch: codex/pr87-5-production-typescript-build-followup
-Merge commit: dad3c407a5fda1e0b20aa0df62f220a344599190
-Merged at: verified locally on 2026-06-22
-Scope: crash recovery and narrow frontend TypeScript build follow-up over CvForge/ProposalForge/Settings/storage metadata WIP only. It reduced direct production build errors from 56 to 11 TS6307 project-membership diagnostics, with first remaining blocker `src/modules/application-harness/fingerprints.ts(1,34) TS6307`. Final verdict: `BLOCKED_PRODUCTION_TYPESCRIPT_BUILD_REMAINING`. No package, lockfile, tsconfig, schema, PR88, PR89, PR80-live, approved answer-copy, production billing, provider/OAuth/token, deployment, lint-wide cleanup, or npm audit work.
+PR87.6 - TS6307 Project Membership Build Fix
+GitHub PR: https://github.com/panamini/neyssan/pull/235
+Head branch: codex/pr87-6-tsconfig-node-membership-fix
+Merge commit: 142dbe39d641f4bd437a4f8f541b10818886379a
+Merged at: verified locally on 2026-06-23
+Scope: tsconfig-node project-membership correctness only. It made `npm run build`, `npx tsc -b --force --pretty false`, and `npx tsc --noEmit --pretty false` pass locally. `npm run lint` still failed on inherited repo-wide lint debt with 1505 errors / 381 warnings, and `npm audit --omit=dev` still failed separately. No package, lockfile, schema, feature, billing, provider/OAuth/token, PR80-live, answer-copy, deployment, lint-wide cleanup, or npm audit fixes.
 ```
 
 Current implementation PR:
 
 ```txt
-PR87.6 - TS6307 Project Membership Build Fix
-Branch: codex/pr87-6-tsconfig-node-membership-fix
-Status: current implementation PR; production TypeScript build is green locally.
-Scope: tsconfig-node project-membership correctness only. No package, lockfile, schema, feature, billing, provider/OAuth/token, PR80-live, answer-copy, deployment, lint-wide cleanup, or npm audit fixes.
-Starting build state: 11 TS6307 project-membership diagnostics from `tsconfig.node.json`.
-Ending build state: `npm run build`, `npx tsc -b --force --pretty false`, and `npx tsc --noEmit --pretty false` pass locally.
-Final status: `PRODUCTION_TYPESCRIPT_BUILD_GREEN`; lint and audit still fail separately and keep PR88/PR89 blocked.
+PR87.7 - Production Lint Gate
+Branch: codex/pr87-7-production-lint-gate
+Status: current implementation PR; production lint gate remains red after safe mechanical reduction.
+Scope: production lint gate only. No package, lockfile, schema, tsconfig, billing, provider/OAuth/token, PR80-live, answer-copy, deployment, or npm audit fixes.
+Starting lint state: `npm run lint` failed with 1505 errors / 381 warnings.
+Current lint state: `npm run lint` fails with 793 errors / 382 warnings after ESLint autofixable cleanup and narrow build-mode type repairs.
+Final status: `BLOCKED_PRODUCTION_LINT_REMAINING`; PR88/PR89 remain blocked.
 ```
 
 Exact next PR:
 
 ```txt
-Exact active PR is PR87.6 - TS6307 Project Membership Build Fix until merged.
-PR87.6 final local TypeScript status: `PRODUCTION_TYPESCRIPT_BUILD_GREEN`.
+Exact active PR is PR87.7 - Production Lint Gate until merged.
+PR87.7 final local lint status: `BLOCKED_PRODUCTION_LINT_REMAINING` with 793 errors / 382 warnings remaining.
 Do not advance to PR88/private beta or PR89/public launch until build, lint, audit, deployment/staging, smoke, rollback, and production readiness gates are truly cleared.
-Lint and npm audit remain separate failing gates after PR87.6 validation.
+Lint and npm audit remain separate failing gates after PR87.7 validation.
 PR80-live remains blocked by provider authorization prerequisites.
 Approved answer copy stays blocked until a future source-model decision creates an authoritative approved answer source.
 Production billing remains unimplemented.
@@ -140,7 +140,8 @@ MERGED_NARROW_PR59 - PR185 merged the narrow read-only adapter scope approved by
 |                      87.3 | Production TypeScript Build Follow-up                                                | merged      | #228                 | merge 8cdb3ef1f6c45b0df2afa6b5db49bd7a5d29414c                                      | Partial production TypeScript build follow-up/evidence PR. Merged at 2026-06-22T17:40:56Z. Build still red with 145 compressed TypeScript errors / 144 parsed file-scoped diagnostics; first remaining blocker `src/modules/local-mcp/mcpComponentErrorLoadingRefusalUx.ts(608,3) TS2322`. PR88/PR89 remain blocked. No package/lockfile, PR80-live, answer-copy, production billing, provider/OAuth/token, deployment, lint-wide cleanup, or npm audit work. |
 |                      87.4 | Production TypeScript Build Follow-up                                                | merged      | #229                 | merge ad4a6bb2945188e974146e35650ce7163df1bd26                            | Partial production TypeScript build follow-up/evidence PR. Starting build red with 145 compressed TypeScript errors / 144 parsed diagnostics. Ending build red with 56 compressed and parsed TypeScript errors; first remaining blocker `src/pages/CvForge.tsx(1017,59) TS2698`. Local-MCP non-TS6307 errors were cleared; remaining local-MCP build errors are TS6307 project-membership only. PR88/PR89 remain blocked. Lint/npm audit remain separate gates. No package/lockfile/schema/tsconfig, frontend page cluster, PR80-live, answer-copy, production billing, provider/OAuth/token, or deployment work. |
 |                      87.5 | Production TypeScript Build Follow-up                                                | merged      | #234               | merge dad3c407a5fda1e0b20aa0df62f220a344599190                            | Crash recovery and narrow frontend TypeScript build follow-up. Starting count was the PR87.4 ending count of 56. Ending direct build count was 11 TS6307 project-membership errors; first remaining blocker `src/modules/application-harness/fingerprints.ts(1,34) TS6307`. `npx tsc --noEmit --pretty false` passed. PR88/PR89 remain blocked. No package/lockfile/schema/tsconfig, PR80-live, answer-copy, production billing, provider/OAuth/token, deployment, lint-wide cleanup, or npm audit work. |
-|                      87.6 | TS6307 Project Membership Build Fix                                                  | current implementation | pending          | branch codex/pr87-6-tsconfig-node-membership-fix                           | Fixes the remaining 11 TS6307 project-membership diagnostics by listing the exact `vite.config.ts` local-MCP/internal-contract/application-harness import graph in `tsconfig.node.json`. `npm run build`, `npx tsc -b --force --pretty false`, and `npx tsc --noEmit --pretty false` pass locally. `npm run lint` and `npm audit --omit=dev` still fail separately; PR88/PR89 remain blocked. No package/lockfile/schema, PR80-live, answer-copy, production billing, provider/OAuth/token, deployment, lint-wide cleanup, or npm audit fixes. |
+|                      87.6 | TS6307 Project Membership Build Fix                                                  | merged      | #235               | merge 142dbe39d641f4bd437a4f8f541b10818886379a                            | Fixed the remaining 11 TS6307 project-membership diagnostics by listing the exact `vite.config.ts` local-MCP/internal-contract/application-harness import graph in `tsconfig.node.json`. `npm run build`, `npx tsc -b --force --pretty false`, and `npx tsc --noEmit --pretty false` passed locally. `npm run lint` still failed with 1505 errors / 381 warnings, and `npm audit --omit=dev` still failed separately; PR88/PR89 remain blocked. No package/lockfile/schema, PR80-live, answer-copy, production billing, provider/OAuth/token, deployment, lint-wide cleanup, or npm audit fixes. |
+|                      87.7 | Production Lint Gate                                                                 | current implementation | pending          | branch codex/pr87-7-production-lint-gate                                   | Production lint gate reduction only. Starting state: `npm run lint` failed with 1505 errors / 381 warnings. Current state: ESLint autofixable cleanup reduced lint to 793 errors / 382 warnings, with remaining blockers concentrated in parser/Convex, large CV/Proposal UI, and config files. `npm run build`, `npx tsc -b --force --pretty false`, and `npx tsc --noEmit --pretty false` remain green. Final verdict for this implementation branch: `BLOCKED_PRODUCTION_LINT_REMAINING`; PR88/PR89 remain blocked. No package/lockfile/schema/tsconfig, PR80-live, answer-copy, production billing, provider/OAuth/token, deployment, or npm audit fixes. |
 
 ---
 
@@ -283,7 +284,9 @@ PR229 merged PR87.4 into `application-os-foundation` with merge commit `ad4a6bb2
 
 PR234 merged PR87.5 into `application-os-foundation` with merge commit `dad3c407a5fda1e0b20aa0df62f220a344599190`. It preserved the expected 8 WIP files, left `docs/plans/2026-06-22-cover-letter-quality-production-roadmap.md` untracked, and reduced the direct production build from the inherited 56-error state to 11 TS6307 project-membership errors. The first remaining blocker was `src/modules/application-harness/fingerprints.ts(1,34) TS6307`. Review validation on 2026-06-22 confirmed `npx tsc --noEmit --pretty false`, StorageAdapter, Settings, and ProposalForge guard tests passed; stale ProposalForge page-test selectors and the broad CvForge focused-run stall remained separate test-maintenance concerns. PR88, PR89, PR80-live, approved answer-copy, production billing, provider/OAuth/token work, deployment, lint-wide cleanup, and npm audit remained blocked or separate future gates.
 
-PR87.6 runs on `codex/pr87-6-tsconfig-node-membership-fix`. Starting build state was 11 TS6307 diagnostics emitted by `tsconfig.node.json`. It makes the node project graph honest by adding only the exact `vite.config.ts` local-MCP/internal-contract/application-harness import chain to `tsconfig.node.json`. Ending local TypeScript state is green: `npm run build`, `npx tsc -b --force --pretty false`, and `npx tsc --noEmit --pretty false` pass. `npm run lint` still fails on existing repo-wide lint debt, and `npm audit --omit=dev` still reports dependency advisories; neither was fixed in PR87.6 because lint-wide cleanup, npm audit fixes, package changes, and lockfile changes are out of scope. PR88, PR89, PR80-live, approved answer-copy, production billing, provider/OAuth/token work, deployment, and staging/smoke/rollback gates remain blocked or separate future gates.
+PR235 merged PR87.6 into `application-os-foundation` with merge commit `142dbe39d641f4bd437a4f8f541b10818886379a`. Starting build state was 11 TS6307 diagnostics emitted by `tsconfig.node.json`. It made the node project graph honest by adding only the exact `vite.config.ts` local-MCP/internal-contract/application-harness import chain to `tsconfig.node.json`. Ending local TypeScript state was green: `npm run build`, `npx tsc -b --force --pretty false`, and `npx tsc --noEmit --pretty false` passed. `npm run lint` still failed with 1505 errors / 381 warnings, and `npm audit --omit=dev` still reported dependency advisories; neither was fixed in PR87.6 because lint-wide cleanup, npm audit fixes, package changes, and lockfile changes were out of scope. PR88, PR89, PR80-live, approved answer-copy, production billing, provider/OAuth/token work, deployment, and staging/smoke/rollback gates remained blocked or separate future gates.
+
+PR87.7 runs on `codex/pr87-7-production-lint-gate`. Starting lint state was 1505 errors / 381 warnings from `npm run lint`. It applied the ESLint autofixable cleanup cluster and repaired the few build-mode type narrowings introduced by assertion removal. Current lint state is 793 errors / 382 warnings, with zero ESLint-reported fixable errors remaining. Remaining blockers are broad and behavior-sensitive across parser/Convex, large CV/Proposal UI files, config adapters, promise handling, hook ordering, unknown-to-string coercion, empty catch/block semantics, and parser regex escapes. Final status is `BLOCKED_PRODUCTION_LINT_REMAINING`; PR88 and PR89 remain blocked. No package, lockfile, schema, tsconfig, PR80-live, answer-copy, production billing, provider/OAuth/token, deployment, or npm audit fixes were added.
 
 Maintainer decision after PR80A still keeps live ATS submit/apply blocked until one provider supplies written use-case authorization, official server-to-server credentials, a test tenant or sandbox, one authorized test posting, official schema/questions endpoint, official submit endpoint, and receipt/error/duplicate/retry clarification. Manual handoff must not reserve, dispatch, or finalize PR80A `liveExternalActionExecutions`, and it must not represent a user-reported outcome as provider-submitted or provider-verified. PR80B, PR80B-follow-up, and PR80B-follow-up-2-prep did not automatically unlock PR81; PR211 unlocked only narrow PR81 rate/budget hardening, and PR80-live remains blocked.
 

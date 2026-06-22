@@ -789,7 +789,7 @@ function trimResponsibilityRuns(
   const next = cloneResponsibilityRuns(runs);
 
   while (next.length > 0) {
-    const first = next[0]!;
+    const first = next[0];
     const trimmed = first.text.replace(/^\s+/, "");
     if (!trimmed) {
       next.shift();
@@ -803,7 +803,7 @@ function trimResponsibilityRuns(
 
   while (next.length > 0) {
     const lastIndex = next.length - 1;
-    const last = next[lastIndex]!;
+    const last = next[lastIndex];
     const trimmed = last.text.replace(/\s+$/, "");
     if (!trimmed) {
       next.pop();
@@ -1720,7 +1720,7 @@ function splitExperienceEntryToFit(args: {
   const placedBlocks: WorkshopPlannerExperienceContentBlock[] = [];
 
   for (let index = 0; index < args.entry.blocks.length; index += 1) {
-    const block = args.entry.blocks[index]!;
+    const block = args.entry.blocks[index];
     const nextPlacedBlocks = [...placedBlocks, block];
     if (
       fitsWithinWorkshopAvailableHeight(
@@ -3201,7 +3201,7 @@ export function planWorkshopResumePages(args: {
     let blockedByPendingAtomicSection = false;
 
     for (let stateIndex = 0; stateIndex < sectionStates.length; stateIndex += 1) {
-      const state = sectionStates[stateIndex]!;
+      const state = sectionStates[stateIndex];
       const nextState = sectionStates[stateIndex + 1];
       while (true) {
         const entry = getNextEntry(state);

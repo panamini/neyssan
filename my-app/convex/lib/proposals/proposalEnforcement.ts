@@ -1169,7 +1169,7 @@ export function extractProposalBodyForRepair(
     return compactLines(lines).join("\n").replace(/\n{3,}/g, "\n\n").trim();
   }
 
-  let lines = extracted
+  const lines = extracted
     .replace(/\r\n/g, "\n")
     .split("\n")
     .map((line) => line.trim());

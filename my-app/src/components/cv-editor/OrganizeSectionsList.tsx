@@ -119,7 +119,7 @@ function moveSection(
 
   let targetIndex = currentIndex + direction;
   while (targetIndex >= 0 && targetIndex < sections.length) {
-    if (!isSectionReorderLocked(sections[targetIndex]!)) {
+    if (!isSectionReorderLocked(sections[targetIndex])) {
       return arrayMove(sections, currentIndex, targetIndex);
     }
     targetIndex += direction;

@@ -460,7 +460,7 @@ function JobsStructuredShadowInternalPanel({
 }): JSX.Element | null {
   const recordStructuredMatchReview = useMutation(
     ((api as any).jobsPublic?.recordStructuredMatchReview ??
-      "jobsPublic.recordStructuredMatchReview") as any,
+      "jobsPublic.recordStructuredMatchReview"),
   );
   const [reviewLabel, setReviewLabel] =
     React.useState<(typeof STRUCTURED_MATCH_REVIEW_LABELS)[number]>("good");
@@ -781,7 +781,7 @@ function JobsMatchInputDebugPanel({
   const debugInspectMatchInputReference = React.useMemo(
     () =>
       ((api as any).jobsPublic?.debugInspectMatchInputByJobId ??
-        "jobsPublic.debugInspectMatchInputByJobId") as any,
+        "jobsPublic.debugInspectMatchInputByJobId"),
     [],
   );
   const [payload, setPayload] = React.useState<
@@ -1290,76 +1290,76 @@ function JobsPageContent(): JSX.Element {
 
   const approveReviewItem = useMutation(
     ((api as any).jobsPublic?.approveReviewItem ??
-      "jobsPublic.approveReviewItem") as any,
+      "jobsPublic.approveReviewItem"),
   );
   const seedSampleJob = useMutation(
     ((api as any).jobsPublic?.seedSampleJob ??
-      "jobsPublic.seedSampleJob") as any,
+      "jobsPublic.seedSampleJob"),
   );
   const trackJobsEvent = useMutation(
-    ((api as any).jobsPublic?.trackEvent ?? "jobsPublic.trackEvent") as any,
+    ((api as any).jobsPublic?.trackEvent ?? "jobsPublic.trackEvent"),
   );
   const markJobOpened = useMutation(
-    ((api as any).jobsPublic?.markOpened ?? "jobsPublic.markOpened") as any,
+    ((api as any).jobsPublic?.markOpened ?? "jobsPublic.markOpened"),
   );
   const archiveJob = useMutation(
-    ((api as any).jobsPublic?.archiveJob ?? "jobsPublic.archiveJob") as any,
+    ((api as any).jobsPublic?.archiveJob ?? "jobsPublic.archiveJob"),
   );
   const restoreArchivedJob = useMutation(
     ((api as any).jobsPublic?.restoreArchivedJob ??
-      "jobsPublic.restoreArchivedJob") as any,
+      "jobsPublic.restoreArchivedJob"),
   );
   const deleteArchivedJob = useMutation(
     ((api as any).jobsPublic?.deleteArchivedJob ??
-      "jobsPublic.deleteArchivedJob") as any,
+      "jobsPublic.deleteArchivedJob"),
   );
   const duplicateJob = useMutation(
-    ((api as any).jobsPublic?.duplicateJob ?? "jobsPublic.duplicateJob") as any,
+    ((api as any).jobsPublic?.duplicateJob ?? "jobsPublic.duplicateJob"),
   );
   const updateJobField = useMutation(
-    ((api as any).jobsPublic?.updateField ?? "jobsPublic.updateField") as any,
+    ((api as any).jobsPublic?.updateField ?? "jobsPublic.updateField"),
   );
   const setJobResume = useMutation(
     ((api as any).jobsPublic?.setResumeForJob ??
-      "jobsPublic.setResumeForJob") as any,
+      "jobsPublic.setResumeForJob"),
   );
   const setJobFavorite = useMutation(
     ((api as any).jobsPublic?.setJobFavorite ??
-      "jobsPublic.setJobFavorite") as any,
+      "jobsPublic.setJobFavorite"),
   );
   const refreshStructuredMatch = useMutation(
     ((api as any).jobsPublic?.refreshStructuredMatch ??
-      "jobsPublic.refreshStructuredMatch") as any,
+      "jobsPublic.refreshStructuredMatch"),
   );
   const manualApplicationHandoffQueryReference = React.useMemo(
     () =>
       ((api as any).manualApplicationHandoff?.getForJob ??
-        "manualApplicationHandoff.getForJob") as any,
+        "manualApplicationHandoff.getForJob"),
     [],
   );
   const prepareManualApplicationHandoff = useMutation(
     ((api as any).manualApplicationHandoff?.prepare ??
-      "manualApplicationHandoff.prepare") as any,
+      "manualApplicationHandoff.prepare"),
   );
   const confirmManualApplicationHandoff = useMutation(
     ((api as any).manualApplicationHandoff?.confirm ??
-      "manualApplicationHandoff.confirm") as any,
+      "manualApplicationHandoff.confirm"),
   );
   const loadManualApplicationHandoffDeliveryContent = useMutation(
     ((api as any).manualApplicationHandoff?.getDeliveryContentForHandoff ??
-      "manualApplicationHandoff.getDeliveryContentForHandoff") as any,
+      "manualApplicationHandoff.getDeliveryContentForHandoff"),
   );
   const recordManualApplicationHandoffFileDownloadRequested = useMutation(
     ((api as any).manualApplicationHandoff?.recordFileDownloadRequested ??
-      "manualApplicationHandoff.recordFileDownloadRequested") as any,
+      "manualApplicationHandoff.recordFileDownloadRequested"),
   );
   const recordManualApplicationHandoffDestinationOpenRequested = useMutation(
     ((api as any).manualApplicationHandoff?.recordDestinationOpenRequested ??
-      "manualApplicationHandoff.recordDestinationOpenRequested") as any,
+      "manualApplicationHandoff.recordDestinationOpenRequested"),
   );
   const reportManualApplicationHandoffOutcome = useMutation(
     ((api as any).manualApplicationHandoff?.reportOutcome ??
-      "manualApplicationHandoff.reportOutcome") as any,
+      "manualApplicationHandoff.reportOutcome"),
   );
   const {
     jobs,

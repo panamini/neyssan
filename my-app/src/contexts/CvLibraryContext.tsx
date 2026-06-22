@@ -1107,7 +1107,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
               "education",
               "skills",
               "languages",
-            ].includes(String((s as any)?.type)),
+            ].includes(String((s)?.type)),
           ),
       );
     } catch {
@@ -1330,7 +1330,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
             );
             if (found) {
               effectiveSectionId = String(s.id);
-              effectiveBlock = found as CvBlock;
+              effectiveBlock = found;
               break;
             }
           }
@@ -1343,13 +1343,13 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
           for (const s of currentCv.sections) {
             const list = (s as any)?.structuredContent;
             if (!Array.isArray(list)) continue;
-            const found = (list as any[]).find(
+            const found = (list).find(
               (it) =>
-                String((it as any)?.id ?? (it as any)?._id) ===
+                String((it)?.id ?? (it)?._id) ===
                 String(linkedIdAttr),
             );
             if (found) {
-              effectiveLinked = found as any;
+              effectiveLinked = found;
               break;
             }
           }
@@ -1522,7 +1522,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         return merged;
       } catch (err) {
         // if anything goes wrong fall back to assigning next (safe).
-        // eslint-disable-next-line no-console
+
         console.warn(
           "[CvLibraryContext] safeSetCurrentCv merge failed, falling back",
           err,
@@ -2382,7 +2382,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         return {
           id: String(parsed.id),
           title: String(parsed.title ?? "Untitled CV"),
-          metadata: (parsed as any).metadata ?? {
+          metadata: (parsed).metadata ?? {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             version: 1,
@@ -2693,7 +2693,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
             lastSavedRef.current = {
               ...(docCopy as any),
               cvState: (currentCvRef.current as any)?.cvState,
-            } as any;
+            };
           }
         }
         setRemoteSaveStatus({ status: "synced", documentId: String(docCopy.id) });
@@ -3041,8 +3041,8 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
               /* noop */
             }
 
-            const docV1 = normalizeToV1Document(doc as CvDocument);
-            const docNorm = ensureRepresentativeBlocks(docV1 as CvDocument);
+            const docV1 = normalizeToV1Document(doc);
+            const docNorm = ensureRepresentativeBlocks(docV1);
             const shouldHoldTemplateLessRestore =
               shouldHoldTemplateLessRestoreForRemote(docNorm, targetId);
             if (shouldHoldTemplateLessRestore) {
@@ -3090,7 +3090,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
                   doc = {
                     id: String(parsed.id),
                     title: String(parsed.title ?? "Untitled CV"),
-                    metadata: (parsed as any).metadata ?? {
+                    metadata: (parsed).metadata ?? {
                       createdAt:
                         visibleTargetCreatedAt ?? new Date().toISOString(),
                       updatedAt:
@@ -3113,7 +3113,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
               }
             }
           } catch (err) {
-            // eslint-disable-next-line no-console
+
             console.warn("[CvLibraryContext] local cache read failed", err);
           }
 
@@ -3125,8 +3125,8 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
               /* noop */
             }
 
-            const docV1 = normalizeToV1Document(doc as CvDocument);
-            const docNorm = ensureRepresentativeBlocks(docV1 as CvDocument);
+            const docV1 = normalizeToV1Document(doc);
+            const docNorm = ensureRepresentativeBlocks(docV1);
             const shouldHoldTemplateLessRestore =
               shouldHoldTemplateLessRestoreForRemote(docNorm, targetId);
             if (shouldHoldTemplateLessRestore) {
@@ -3159,15 +3159,15 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
                 if (!remoteLoaded) return;
                 let migratedRemote: CvDocument;
                 try {
-                  migratedRemote = migrateLegacyIds(remoteLoaded as CvDocument);
+                  migratedRemote = migrateLegacyIds(remoteLoaded);
                 } catch {
-                  migratedRemote = remoteLoaded as CvDocument;
+                  migratedRemote = remoteLoaded;
                 }
                 const remoteV1 = normalizeToV1Document(
-                  migratedRemote as CvDocument,
+                  migratedRemote,
                 );
                 const remoteNorm = ensureRepresentativeBlocks(
-                  remoteV1 as CvDocument,
+                  remoteV1,
                 );
                 dbg(
                   "[CvLibraryContext] loadCv remote authoritative snapshot",
@@ -3222,7 +3222,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
                 cacheDocumentLocally(remoteWithLocalVisualTemplate);
                 lastSavedRef.current = remoteWithLocalVisualTemplate;
               } catch (err) {
-                // eslint-disable-next-line no-console
+
                 console.warn(
                   "[CvLibraryContext] background adapter.load failed",
                   err,
@@ -3252,7 +3252,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
                   }
                 }
               } catch (err) {
-                // eslint-disable-next-line no-console
+
                 console.warn(
                   "[CvLibraryContext] adapter.load failed, attempting local fallback",
                   err,
@@ -3277,7 +3277,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
                         remoteDoc = {
                           id: String(parsed.id),
                           title: String(parsed.title ?? "Untitled CV"),
-                          metadata: (parsed as any).metadata ?? {
+                          metadata: (parsed).metadata ?? {
                             createdAt:
                               visibleTargetCreatedAt ??
                               new Date().toISOString(),
@@ -3324,8 +3324,8 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
               }
 
               if (remoteDoc) {
-                const docV1 = normalizeToV1Document(remoteDoc as CvDocument);
-                const docNorm = ensureRepresentativeBlocks(docV1 as CvDocument);
+                const docV1 = normalizeToV1Document(remoteDoc);
+                const docNorm = ensureRepresentativeBlocks(docV1);
                 const shouldHoldTemplateLessRestore =
                   shouldHoldTemplateLessRestoreForRemote(docNorm, targetId);
                 if (shouldHoldTemplateLessRestore) {
@@ -3359,10 +3359,10 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
                   /* noop */
                 }
                 const repairedV1 = normalizeToV1Document(
-                  repairedDoc as CvDocument,
+                  repairedDoc,
                 );
                 const repairedNorm = ensureRepresentativeBlocks(
-                  repairedV1 as CvDocument,
+                  repairedV1,
                 );
                 const requestedRouteCvId = readRequestedCvIdFromWindowLocation();
                 const shouldDeferTemplateLessSummaryFallback =
@@ -3404,7 +3404,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
                 safeSetCurrentCv(null);
               }
             } catch (err) {
-              // eslint-disable-next-line no-console
+
               console.warn(
                 "[CvLibraryContext] asynchronous loadCv failed",
                 err,
@@ -3499,9 +3499,9 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         } catch {
           /* noop */
         }
-        const restoredV1 = normalizeToV1Document(restored as CvDocument);
+        const restoredV1 = normalizeToV1Document(restored);
         const restoredNorm = ensureRepresentativeBlocks(
-          restoredV1 as CvDocument,
+          restoredV1,
         );
         const shouldHoldTemplateLessRestore =
           shouldHoldTemplateLessRestoreForRemote(restoredNorm, restoreId);
@@ -3631,12 +3631,12 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         const remoteLoaded = remoteState.document;
         let migratedRemote: CvDocument;
         try {
-          migratedRemote = migrateLegacyIds(remoteLoaded as CvDocument);
+          migratedRemote = migrateLegacyIds(remoteLoaded);
         } catch {
-          migratedRemote = remoteLoaded as CvDocument;
+          migratedRemote = remoteLoaded;
         }
         const remoteNorm = ensureRepresentativeBlocks(
-          normalizeToV1Document(migratedRemote as CvDocument),
+          normalizeToV1Document(migratedRemote),
         );
         if (
           !shouldApplyBackgroundRefresh(
@@ -3788,10 +3788,10 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       });
       cacheDocumentLocally(cv);
       // Schedule save like other entry points for consistency
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+
       void scheduleSave(cv);
     } catch (err) {
-      // eslint-disable-next-line no-console
+
       console.error("[CvLibraryContext] createCvFromState failed", err);
     }
   }
@@ -3837,7 +3837,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         // This helps QA/devs confirm whether the v1 template (or legacy) is being used at runtime.
         if (process.env.NODE_ENV !== "production") {
           try {
-            // eslint-disable-next-line no-console
+
             console.debug(
               "[CvLibraryContext] createNewCv chose template (aggressive v1)",
               {
@@ -3872,7 +3872,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
               : [];
             const unexpected = types.filter((t: string) => !allowed.has(t));
             if (unexpected.length > 0) {
-              // eslint-disable-next-line no-console
+
               console.warn(
                 "[CvLibraryContext] createNewCv expected v1 template but found unexpected section types, replacing with canonical v1 template",
                 {
@@ -3888,9 +3888,9 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         }
 
         const cv = {
-          ...(ensureRepresentativeBlocks(cvRaw as CvDocument) as CvDocument),
+          ...(ensureRepresentativeBlocks(cvRaw)),
           metadata: {
-            ...((cvRaw as CvDocument).metadata ?? {}),
+            ...((cvRaw).metadata ?? {}),
             ...(initialVerbatiStyle
               ? { verbatiStyle: initialVerbatiStyle }
               : null),
@@ -3903,7 +3903,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         // This is intentionally gated to dev to avoid noise in production.
         if (process.env.NODE_ENV !== "production") {
           try {
-            // eslint-disable-next-line no-console
+
             console.debug("[CvLibraryContext] createNewCv created document", {
               createdId: cv.id,
               sectionTypes: Array.isArray(cv.sections)
@@ -3929,11 +3929,11 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         });
         cacheDocumentLocally(cv);
         // Trigger a debounced save but do not await here.
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+
         void scheduleSave(cv);
         return cv;
       } catch (err) {
-        // eslint-disable-next-line no-console
+
         console.error("[CvLibraryContext] createNewCv failed", err);
         return null;
       }
@@ -3958,7 +3958,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       if (!result.success) {
         // Surface validation errors to the caller so UI can display them.
         const msg = `Import validation failed: ${result.errors.join("; ")}`;
-        // eslint-disable-next-line no-console
+
         console.warn(
           "[CvLibraryContext] importCv validation failed",
           result.errors,
@@ -4047,10 +4047,10 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       });
       cacheDocumentLocally(validatedWithReps);
       // Schedule a save and await to ensure persistent storage is updated in background.
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+
       await scheduleSave(validatedWithReps);
     } catch (err) {
-      // eslint-disable-next-line no-console
+
       console.error("[CvLibraryContext] importCv failed", err);
       throw err;
     }
@@ -4170,7 +4170,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
   // This decouples the save logic from the volatile `currentCv` object identity.
   useEffect(() => {
     if (isDirty && currentCv && !isSavingRef.current) {
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+
       void scheduleSave(currentCv);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -4187,7 +4187,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       return;
     }
     pendingRemoteSaveRef.current = null;
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+
     void scheduleSave(pendingDoc);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canUseRemoteCv]);
@@ -4411,7 +4411,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
 
     const items = (sec as any).structuredContent as any[];
     const itemIdx = items.findIndex((it) => {
-      const curId = String((it as any)?.id ?? (it as any)?._id ?? "");
+      const curId = String((it)?.id ?? (it)?._id ?? "");
       return curId === String(itemId);
     });
     if (itemIdx === -1) return;
@@ -4419,7 +4419,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
     const prevItem = items[itemIdx];
     // Preserve existing identifiers; ensure id populated for consistent lookups
     const preservedId =
-      (prevItem as any)?.id ?? (prevItem as any)?._id ?? itemId;
+      (prevItem)?.id ?? (prevItem)?._id ?? itemId;
     const nextItem = { ...prevItem, ...patch, id: preservedId };
 
     // Compute changed keys for diagnostics
@@ -4432,23 +4432,23 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       );
       const changed = keys.filter(
         (k) =>
-          JSON.stringify((prevItem as any)?.[k]) !==
-          JSON.stringify((nextItem as any)?.[k]),
+          JSON.stringify((prevItem)?.[k]) !==
+          JSON.stringify((nextItem)?.[k]),
       );
       try {
         const previewObj = {
-          company: (nextItem as any)?.company,
-          position: (nextItem as any)?.position,
-          location: (nextItem as any)?.location,
-          achievementsLen: Array.isArray((nextItem as any)?.achievements)
-            ? (nextItem as any).achievements.length
+          company: (nextItem)?.company,
+          position: (nextItem)?.position,
+          location: (nextItem)?.location,
+          achievementsLen: Array.isArray((nextItem)?.achievements)
+            ? (nextItem).achievements.length
             : undefined,
-          institution: (nextItem as any)?.institution,
-          degree: (nextItem as any)?.degree,
-          fieldOfStudy: (nextItem as any)?.fieldOfStudy,
-          grade: (nextItem as any)?.grade,
-          startDate: (nextItem as any)?.startDate,
-          endDate: (nextItem as any)?.endDate,
+          institution: (nextItem)?.institution,
+          degree: (nextItem)?.degree,
+          fieldOfStudy: (nextItem)?.fieldOfStudy,
+          grade: (nextItem)?.grade,
+          startDate: (nextItem)?.startDate,
+          endDate: (nextItem)?.endDate,
         };
         dbg("[CvLibraryContext] updateStructuredItem diff", {
           sectionId,
@@ -4557,7 +4557,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
         const isTyped = stype === "experience" || stype === "education";
 
         // Ensure representative linking for typed sections (experience/education)
-        let nextStructured: any[] = Array.isArray(s.structuredContent)
+        const nextStructured: any[] = Array.isArray(s.structuredContent)
           ? [...(s.structuredContent as any[])]
           : [];
         let toInsertInput: any = block;
@@ -4601,7 +4601,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
             // If the caller provided a linked id, ensure structuredContent contains a matching item (id or _id)
             const exists = nextStructured.some(
               (it) =>
-                String((it as any)?.id ?? (it as any)?._id) ===
+                String((it)?.id ?? (it)?._id) ===
                 String(existingLinked),
             );
             if (!exists) {
@@ -4977,7 +4977,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       setCvs((prev) =>
         prev.map((c) =>
           String(c.id) === id
-            ? ({ ...(c as any), cvState: newState as any } as any)
+            ? ({ ...(c as any), cvState: newState as any })
             : c,
         ),
       );
@@ -5046,7 +5046,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       setCvs((prev) =>
         prev.map((c) =>
           String(c.id) === id
-            ? ({ ...(c as any), cvState: previous } as any)
+            ? ({ ...(c as any), cvState: previous })
             : c,
         ),
       );
@@ -5074,7 +5074,7 @@ export const CvLibraryProvider: React.FC<{ children: ReactNode }> = ({
       setCvs((prev) =>
         prev.map((c) =>
           String(c.id) === id
-            ? ({ ...(c as any), cvState: nextState } as any)
+            ? ({ ...(c as any), cvState: nextState })
             : c,
         ),
       );
@@ -5287,8 +5287,8 @@ function normalizeToV1Section(input: CvSection): CvSection {
       const hasLinked = (s.blocks ?? []).some((b: any) => {
         try {
           const linked =
-            (b as any)?.attributes?.linkedStructuredId ??
-            (b as any)?.attributes?.linkedstructuredid;
+            (b)?.attributes?.linkedStructuredId ??
+            (b)?.attributes?.linkedstructuredid;
           return String(linked) === String(summaryItem.id);
         } catch {
           return false;
@@ -5300,7 +5300,7 @@ function normalizeToV1Section(input: CvSection): CvSection {
           id: uuidv4(),
           title: "Summary",
           type: "text",
-          content: ensureRemirrorDoc((summaryItem as any).summary),
+          content: ensureRemirrorDoc((summaryItem).summary),
           attributes: { linkedStructuredId: summaryItem.id },
         } as any;
         s = { ...s, blocks: [...(s.blocks ?? []), newBlock] } as CvSection;

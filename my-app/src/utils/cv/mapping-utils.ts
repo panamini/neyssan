@@ -141,7 +141,7 @@ function buildExperienceRepresentativeBlocks(items: any[]): CvBlock[] {
         id: uuidv4(),
         title,
         type: "text" as const,
-        content: ensureRemirrorDoc(item?.responsibilities as any),
+        content: ensureRemirrorDoc(item?.responsibilities),
         attributes: { linkedStructuredId: itemId },
       };
     })
@@ -164,7 +164,7 @@ function buildEducationRepresentativeBlocks(items: any[]): CvBlock[] {
         id: uuidv4(),
         title: baseTitle,
         type: "text" as const,
-        content: ensureRemirrorDoc(item?.description as any),
+        content: ensureRemirrorDoc(item?.description),
         attributes: { linkedStructuredId: itemId },
       };
     })
@@ -661,7 +661,7 @@ function mapLevelString(input?: string): "Beginner" | "Elementary" | "Intermedia
 }
 
 function parseLanguageToken(raw: string): { name: string; level: ReturnType<typeof mapLevelString> } | null {
-  let s = sanitizeToken(raw);
+  const s = sanitizeToken(raw);
   if (!s) return null;
   const match = s.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
   let name = s;
@@ -688,7 +688,7 @@ function parseLanguagesFromHeadings(rawText: string): Array<{ name: string; leve
 
   const window: string[] = [];
   for (let i = idx + 1; i < Math.min(lines.length, idx + 12); i++) {
-    const ln = lines[i]!.trim();
+    const ln = lines[i].trim();
     if (!ln) break;
     // stop at next ALL-CAPS header
     if (/^[A-Z0-9 .,'-]{3,}$/.test(ln) && ln === ln.toUpperCase()) break;
@@ -737,7 +737,7 @@ function isLikelyLocation(s: string): boolean {
   if (/,/.test(t)) {
     const parts = t.split(",").map((x) => x.trim());
     if (parts.length >= 2 && parts.every(isTitleCaseToken)) return true;
-    const lastPart = parts[parts.length - 1]!;
+    const lastPart = parts[parts.length - 1];
     if (/^[A-Z]{2,3}$/.test(lastPart)) return true; // e.g., NY, USA
   }
   if (/\b(city|town|village|province|county|state)\b/i.test(t)) return true;
@@ -1133,12 +1133,12 @@ function sanitizeNormalizedProfileLocationValue(value: unknown): string | undefi
 
 function resolveMaterializedProfileLocation(normalized: PartialNormalizedCv): string | undefined {
   const orderedCandidates = [
-    (normalized.profile as Record<string, unknown> | undefined)?.location,
-    (normalized.details as Record<string, unknown> | undefined)?.location,
+    (normalized.profile)?.location,
+    (normalized.details)?.location,
     (normalized as Record<string, unknown> | undefined)?.location,
-    (normalized.contact as Record<string, unknown> | undefined)?.location,
-    (normalized.contact as Record<string, unknown> | undefined)?.addressNormalized,
-    (normalized.contact as Record<string, unknown> | undefined)?.address,
+    (normalized.contact)?.location,
+    (normalized.contact)?.addressNormalized,
+    (normalized.contact)?.address,
     (normalized as Record<string, unknown> | undefined)?.identitySchema &&
       typeof (normalized as Record<string, unknown>).identitySchema === "object"
       ? ((normalized as Record<string, unknown>).identitySchema as Record<string, unknown>).location
@@ -1201,7 +1201,7 @@ function pickBestPhoneFromText(text: string): string | undefined {
   const re = /(\+?\d[\d\s\-().]{8,}\d)/g;
   let match: RegExpExecArray | null;
   while ((match = re.exec(text)) !== null) {
-    const raw = match[1]!;
+    const raw = match[1];
     const digits = (raw.match(/\d/g) || []).length;
     if (digits >= 10 && digits <= 16) {
       candidates.push({ raw: raw.trim(), digits });
@@ -1210,7 +1210,7 @@ function pickBestPhoneFromText(text: string): string | undefined {
   if (candidates.length === 0) return undefined;
   // Prefer the candidate with the most digits
   candidates.sort((a, b) => b.digits - a.digits);
-  return candidates[0]!.raw;
+  return candidates[0].raw;
 }
 
 /* Email/phone guards for Profile merging */
@@ -1315,13 +1315,13 @@ function extractProfileFromText(text: string) {
     const hits = ROLE_PHRASES
       .map((p) => s.match(new RegExp(`\\b${p.replace(/\s+/g, "\\s+")}\\b`, "i")))
       .filter(Boolean)
-      .map((m) => m![0]!)
+      .map((m) => m![0])
       .sort((a, b) => b.length - a.length);
     return hits[0];
   };
   const posLine = lines.find((l) => l === l.toUpperCase() && l.length <= 120 && textHasLetters(l));
   if (posLine) {
-    const head = posLine.split(/[,\-–—]/)[0]!.trim();
+    const head = posLine.split(/[,\-–—]/)[0].trim();
     const role = extractRole(head) ?? extractRole(posLine);
     if (role) out.desiredPosition = toTitleCase(role);
   }
@@ -1418,7 +1418,7 @@ function consolidateExperience(expArr: any[]): { items: any[]; diag: Consolidate
 
     const isLocFromCompany = !!company && isLikelyLocation(company) && !textHasLetters(position) && !isLikelyDateish(company);
     const isLocFromPosition = !!position && isLikelyLocation(position) && !textHasLetters(company) && !isLikelyDateish(position);
-    
+
     // Case 1: Row is likely a location for the current job
     if (currentJob && (isLocFromCompany || isLocFromPosition)) {
       currentJob.location = sanitizeToken(isLocFromCompany ? company : position);
@@ -1502,7 +1502,7 @@ function consolidateExperience(expArr: any[]): { items: any[]; diag: Consolidate
       diag.dateMarkersApplied++;
       continue;
     }
-    
+
     // Otherwise, ignore as noise.
   }
 
@@ -1927,7 +1927,7 @@ export function buildTypedSectionsFromNormalized(normalized: PartialNormalizedCv
   for (const entry of canonicalNormalizedLanguages) {
     if (entry == null) continue;
     if (typeof entry === "object") {
-      pushCanonicalLanguage((entry as any)?.name ?? "", (entry as any)?.level ?? "");
+      pushCanonicalLanguage((entry)?.name ?? "", (entry)?.level ?? "");
     } else {
       pushCanonicalLanguage(entry, "");
     }
@@ -1944,7 +1944,7 @@ export function buildTypedSectionsFromNormalized(normalized: PartialNormalizedCv
     for (const entry of initialRawLanguages) {
       if (entry == null) continue;
       if (typeof entry === "object") {
-        const label = cleanToken(String((entry as any)?.name ?? ""));
+        const label = cleanToken(String((entry)?.name ?? ""));
         if (!label) continue;
         if (siphonEducationToken(label)) continue;
         filteredRawLangs.push({ ...entry, name: label });
@@ -2073,7 +2073,7 @@ export function buildTypedSectionsFromNormalized(normalized: PartialNormalizedCv
     };
 
     for (let i = 0; i < window.length; i++) {
-      const ln = window[i]!.trim();
+      const ln = window[i].trim();
       if (!ln) continue;
       if (isEducationBoundary(ln)) break;
 
@@ -2279,7 +2279,7 @@ export function buildTypedSectionsFromNormalized(normalized: PartialNormalizedCv
     findFirstValue(["desiredPosition", "title"], profileSources),
     { profileName: profileItem.name },
   );
-  
+
   // Fallback profile extraction from raw text with guards
   const rawText = getRawTextFromNormalized(normalized);
   if (rawText) {
@@ -2310,7 +2310,7 @@ export function buildTypedSectionsFromNormalized(normalized: PartialNormalizedCv
       profileItem.location = sanitizeUpstreamProfileLocation(extracted.location) ?? profileItem.location;
     }
   }
-  
+
   const profileFieldCount = Object.values(profileItem).filter(v => typeof v === 'string' && v.trim()).length;
   if (profileFieldCount >= 2) {
       profileSection = {
@@ -2322,7 +2322,7 @@ export function buildTypedSectionsFromNormalized(normalized: PartialNormalizedCv
         structuredContent: [profileItem] as any,
       };
   }
-  
+
   // --- Achievements ---
   const achArr = Array.isArray(normalized.achievements) ? normalized.achievements : [];
   let achItems = achArr
@@ -2485,14 +2485,14 @@ export function applyStrictContactToSections(sections: CvSection[], strict?: Str
 
   const i = out.findIndex((s) => String(s?.type).toLowerCase() === "profile");
   if (i < 0) return out; // nothing to update
-  const sec = out[i]!;
+  const sec = out[i];
 
   if (!Array.isArray((sec as any).structuredContent) || (sec as any).structuredContent.length === 0) {
     // Keep non-invasive: if profile structuredContent missing, do not synthesize it here.
     return out;
   }
 
-  const item = { ...(sec as any).structuredContent[0] } as any;
+  const item = { ...(sec as any).structuredContent[0] };
 
   // Name: accept non-empty text (do not overrule user-entered with null)
   if (typeof strict.name === "string" && strict.name.trim().length >= 2) {
@@ -2658,7 +2658,7 @@ export function buildTypedSectionsFromReviewerSections(
   const parseJsonField = (key: "experience" | "education") => {
     if (mapByKey[key]) {
       try {
-        const parsed = JSON.parse(mapByKey[key][0] as string);
+        const parsed = JSON.parse(mapByKey[key][0]);
         normalized[key] = Array.isArray(parsed) ? parsed : [];
       } catch {
         normalized[key] = [];
@@ -2794,7 +2794,7 @@ export async function buildTypedSectionsFromReviewerSectionsAsync(
   const parseJsonField = (key: "experience" | "education") => {
     if (mapByKey[key]) {
       try {
-        const parsed = JSON.parse(mapByKey[key][0] as string);
+        const parsed = JSON.parse(mapByKey[key][0]);
         normalized[key] = Array.isArray(parsed) ? parsed : [];
       } catch {
         normalized[key] = [];

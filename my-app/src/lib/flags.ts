@@ -14,7 +14,7 @@ function readEnv(key: string): string | undefined {
   }
   try {
     // Vitest/Node
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     const nodeEnv = (typeof process !== "undefined" ? (process as any).env : undefined) as Record<string, string | undefined> | undefined;
     if (nodeEnv && typeof nodeEnv[key] !== "undefined") return nodeEnv[key];
   } catch {

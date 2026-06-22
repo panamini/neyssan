@@ -551,15 +551,15 @@ export const structuredUpload = action({
       throw new ConvexError({ code: "invalid_input_file_missing" });
     }
 
-    const trimmed = hasRawText ? rawText!.trim() : "";
+    const trimmed = hasRawText ? rawText.trim() : "";
     let fileNameForUpload = (fileName && fileName.trim()) || null;
     let mimeTypeForUpload = mimeType?.trim() || null;
     let fileBytes: Uint8Array | null = null;
 
     if (hasDirectFile) {
-      fileBytes = new Uint8Array(file as ArrayBuffer);
+      fileBytes = new Uint8Array(file);
     } else if (hasStorageId) {
-      const stored = await ctx.storage.get(storageIdValue!);
+      const stored = await ctx.storage.get(storageIdValue);
       if (!stored) {
         throw new Error(`storageId not found: ${storageIdValue}`);
       }
@@ -630,13 +630,13 @@ export const structuredUpload = action({
     const parserPath = activeUseMistral ? "/mistral-ocr/parse" : "/parse-cv";
     // Read origin from Convex server env
     const envGet = (ctx as any)?.env?.get?.bind((ctx as any).env) ?? null;
-    const envRaw = envGet ? (envGet("CONVEX_PARSER_URL") as string | undefined) : (process.env.CONVEX_PARSER_URL as string | undefined);
+    const envRaw = envGet ? (envGet("CONVEX_PARSER_URL") as string | undefined) : (process.env.CONVEX_PARSER_URL);
     const cfAccessClientId = envGet
       ? (envGet("CF_ACCESS_CLIENT_ID") as string | undefined)
-      : (process.env.CF_ACCESS_CLIENT_ID as string | undefined);
+      : (process.env.CF_ACCESS_CLIENT_ID);
     const cfAccessClientSecret = envGet
       ? (envGet("CF_ACCESS_CLIENT_SECRET") as string | undefined)
-      : (process.env.CF_ACCESS_CLIENT_SECRET as string | undefined);
+      : (process.env.CF_ACCESS_CLIENT_SECRET);
     const useAccessHeaders = Boolean(cfAccessClientId && cfAccessClientSecret);
     if (!useAccessHeaders) {
       console.info("[structuredUpload] CF Access headers: disabled (missing env)");
@@ -723,7 +723,7 @@ export const structuredUpload = action({
         return null;
       }
       if (payload.result && typeof payload.result === "object") {
-        return payload.result as CanonicalPayload;
+        return payload.result;
       }
       return payload as CanonicalPayload;
     };
@@ -746,8 +746,8 @@ export const structuredUpload = action({
       const collectRawSectionText = (): string[] => {
         const sectionsSource = Array.isArray(normalized.rawSections)
           ? normalized.rawSections
-          : Array.isArray((resultObj as any)?.rawSections)
-            ? (resultObj as any).rawSections
+          : Array.isArray((resultObj)?.rawSections)
+            ? (resultObj).rawSections
             : [];
         return sectionsSource
           .map((section: any) => trim(section?.content ?? section?.text ?? section))
@@ -758,7 +758,7 @@ export const structuredUpload = action({
         trim(resultObj.text),
         trim(resultObj.rawText),
         trim(resultObj.raw),
-        trim((resultObj as any)?.raw_text),
+        trim((resultObj)?.raw_text),
         trim(normalized.rawText),
         trim(normalized.raw),
         trim(normalized.contact?.raw),
@@ -775,18 +775,18 @@ export const structuredUpload = action({
         return Number.isFinite(num) ? Number(num) : 0;
       };
 
-      const diagEngine = trim((diagnostics as any)?.engine);
+      const diagEngine = trim((diagnostics)?.engine);
       const diagChars = parseNumeric(
-        (diagnostics as any)?.ocr_chars ?? (diagnostics as any)?.total_chars ?? (diagnostics as any)?.chars,
+        (diagnostics)?.ocr_chars ?? (diagnostics)?.total_chars ?? (diagnostics)?.chars,
       );
       const diagBlocks = parseNumeric(
-        (diagnostics as any)?.ocr_blocks ?? (diagnostics as any)?.ocr_line_count ?? (diagnostics as any)?.blocks,
+        (diagnostics)?.ocr_blocks ?? (diagnostics)?.ocr_line_count ?? (diagnostics)?.blocks,
       );
 
       const computePagesCount = (): number => {
-        const diagPages = (diagnostics as any)?.pages;
-        const diagPagesSampled = (diagnostics as any)?.pages_sampled ?? (diagnostics as any)?.pages_scanned;
-        const diagTextLike = (diagnostics as any)?.text_like_pages;
+        const diagPages = (diagnostics)?.pages;
+        const diagPagesSampled = (diagnostics)?.pages_sampled ?? (diagnostics)?.pages_scanned;
+        const diagTextLike = (diagnostics)?.text_like_pages;
         let pagesCount = 0;
         if (typeof diagPagesSampled === "number" && Number.isFinite(diagPagesSampled)) {
           pagesCount = Math.max(pagesCount, diagPagesSampled);
@@ -853,7 +853,7 @@ export const structuredUpload = action({
         return true;
       }
 
-      const diagMessage = trim((diagnostics as any)?.empty_reason) || trim((diagnostics as any)?.error);
+      const diagMessage = trim((diagnostics)?.empty_reason) || trim((diagnostics)?.error);
       if (diagMessage) {
         return true;
       }
@@ -1483,8 +1483,8 @@ export const structuredUpload = action({
       (lastPayload as any)?.cv?.rawSections,
       (lastPayload as any)?.result?.rawSections,
       (lastPayload as any)?.result?.normalized?.rawSections,
-      (normalizedResult as any)?.rawSections,
-      (normalizedResult as any)?.normalized?.rawSections,
+      (normalizedResult)?.rawSections,
+      (normalizedResult)?.normalized?.rawSections,
     );
     const normalized = (normalizedResult?.normalized ?? {}) as Record<string, any>;
     const filteredRecoverySource = filterRecoverySourceSectionsForRedundantHeader(
@@ -1503,8 +1503,8 @@ export const structuredUpload = action({
       fullResult: normalizedResult as Record<string, any>,
       context: {
         rawText:
-          typeof (normalizedResult as any)?.normalized?.rawText === "string"
-            ? (normalizedResult as any).normalized.rawText
+          typeof (normalizedResult)?.normalized?.rawText === "string"
+            ? (normalizedResult).normalized.rawText
             : trimmed,
         mode: resolvedMode,
         parserUrl,
@@ -1583,8 +1583,8 @@ export const structuredUpload = action({
     if (!normalizedHasMeaningfulContent(normalizedResult)) {
       const rawSectionsLength = Array.isArray(normalized.rawSections)
         ? normalized.rawSections.length
-        : Array.isArray((normalizedResult as any)?.rawSections)
-          ? (normalizedResult as any).rawSections.length
+        : Array.isArray((normalizedResult)?.rawSections)
+          ? (normalizedResult).rawSections.length
           : 0;
       console.error(
         "[structuredUpload] parser returned empty normalized payload label=%s url=%s rawSections=%d diagnostics=%j runner=%j",
@@ -1624,7 +1624,7 @@ export const structuredUpload = action({
     const runner = lastPayload.runner ?? {};
     const fallbackTriggered = Boolean(runner.fallback_triggered);
 
-    const experienceDiagnostics = (normalizedResult?.normalized as any)?.experienceDiagnostics || null;
+    const experienceDiagnostics = (normalizedResult?.normalized)?.experienceDiagnostics || null;
 
     try {
       recordTelemetry("structured_upload.diagnostics", {
@@ -1705,7 +1705,7 @@ export const structuredUpload = action({
       // logging of metadata only
     }
 
-    const diagSource = (normalizedResult as any)?.diagnostics;
+    const diagSource = (normalizedResult)?.diagnostics;
     const payloadDiagSource = lastPayload?.diagnostics;
     const diag = {
       ...(payloadDiagSource && typeof payloadDiagSource === "object" ? payloadDiagSource : {}),
@@ -1764,7 +1764,7 @@ export const structuredUpload = action({
       );
     }
 
-    (normalizedResult as any).diagnostics = diag;
+    (normalizedResult).diagnostics = diag;
     if (lastPayload && typeof lastPayload === "object") {
       lastPayload.diagnostics = diag;
       lastPayload.result = normalizedResult;

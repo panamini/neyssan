@@ -184,8 +184,8 @@ export function computeDocumentCommandLayerLayout(
     };
   };
 
-  let toolbarPlacement = makeToolbarPlacement(canvasSafeRight);
-  let toolbarRect = toolbarPlacement.rect;
+  const toolbarPlacement = makeToolbarPlacement(canvasSafeRight);
+  const toolbarRect = toolbarPlacement.rect;
 
   const askTop = Math.max(
     input.paperRect.top + input.askOffsetFromPaperTop,

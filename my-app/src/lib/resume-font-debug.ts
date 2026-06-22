@@ -259,17 +259,17 @@ export function collectResumeFontDebugSnapshot(
   });
   const root = args.root ?? document;
   const surface =
-    (root.querySelector?.(".resume-page") as HTMLElement | null) ??
+    (root.querySelector?.(".resume-page")) ??
     (root instanceof HTMLElement ? root : null);
   const headingProbe = root.querySelector?.(
     '[data-font-probe="heading"]',
-  ) as HTMLElement | null;
+  );
   const bodyProbe = root.querySelector?.(
     '[data-font-probe="body"]',
-  ) as HTMLElement | null;
+  );
   const inheritedBodyProbe = root.querySelector?.(
     '[data-font-probe="body-inherited"]',
-  ) as HTMLElement | null;
+  );
   const headingStyles = headingProbe ? getComputedStyle(headingProbe) : null;
   const bodyStyles = bodyProbe ? getComputedStyle(bodyProbe) : null;
 

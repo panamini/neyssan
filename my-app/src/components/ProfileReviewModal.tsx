@@ -55,7 +55,7 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
         return;
       }
       setCanonicalProfile(parsedProfile);
-      cvActions.loadProfile(parsedProfile as INormalizedProfile);
+      cvActions.loadProfile(parsedProfile);
       setForm({
         name: parsedProfile.name ?? "",
         email: parsedProfile.email ?? "",
@@ -74,7 +74,7 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
   const updateForm = useCallback((updates: Partial<IDraftForm>) => {
     setForm((prev) => ({ ...prev, ...updates }));
   }, []);
-  
+
   /**
    * Map a reviewer section field key to draft form updates.
    * The old reviewer uses generic keys like "skills" or "experience" while
@@ -142,15 +142,15 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
   const handleReviewerEdit = useCallback((id: string, newContent: string) => {
     const prevSection = (cvState?.mappedSections ?? []).find(s => s.id === id);
     if (!prevSection) return;
-  
+
     // Update the reviewer view
     const ms = (cvState?.mappedSections ?? []).map((s) => (s.id === id ? { ...s, content: newContent } : s));
     cvActions.setMappedSections(ms);
-  
+
     // Update the draft form using the compatibility mapping
     const updates = mapReviewerFieldToFormUpdates(prevSection.fieldKey, newContent);
     if (Object.keys(updates).length) updateForm(updates);
-  
+
     void handleSave(false);
   }, [cvState?.mappedSections, cvActions, updateForm, handleSave]);
 
@@ -164,7 +164,7 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
         acceptedValue: JSON.stringify(remaining),
         previousSuggestions: suggestions ? JSON.parse(JSON.stringify(suggestions)) : null,
       });
-  
+
       for (const s of remaining) {
         const sectionContent = remirrorJsonToString(s.content);
         if (s.fieldKey) {
@@ -197,7 +197,7 @@ export default function ProfileReviewModal({ visible, parsedProfile, onClose, on
     if (!parsed) return;
     setCanonicalProfile(parsed);
     try {
-      cvActions.loadProfile(parsed as INormalizedProfile);
+      cvActions.loadProfile(parsed);
     } catch (_e) {
       // compatibility safe: some implementations may not support loadProfile
       try { (cvActions as any).updateManualInput(parsed as Partial<INormalizedProfile> & IDraftForm); } catch (_err) {}

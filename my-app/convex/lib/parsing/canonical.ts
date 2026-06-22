@@ -109,7 +109,7 @@ function monthIndex(value: string | null | undefined): number | null {
 export function applyFinalValidation(normalized: CanonicalNormalized, diagnostics: DiagnosticsPayload): void {
   if (!diagnostics || typeof diagnostics !== "object") return;
   const debleedCounts: Record<string, number> = typeof diagnostics.debleed_removed_count === "object" && diagnostics.debleed_removed_count !== null
-    ? { ...(diagnostics.debleed_removed_count as Record<string, number>) }
+    ? { ...(diagnostics.debleed_removed_count) }
     : {};
   const validationSection = diagnostics.validation;
   const warnings: string[] = Array.isArray(validationSection?.warnings)

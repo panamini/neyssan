@@ -768,12 +768,12 @@ export function ProfileReviewCard({
       }
     } catch (err) {
       requestedCvIdRef.current = null;
-      // eslint-disable-next-line no-console
+
       console.error("[ProfileReviewCard] loadCv failed for id", cvId, err);
     }
   }, [currentCvId, cvId, loadCv]);
 
-  const sections: CvSection[] = (currentCv?.sections ?? []) as CvSection[];
+  const sections: CvSection[] = (currentCv?.sections ?? []);
   const sectionCatalog = useMemo<ManualSectionOption[]>(() => {
     const typedOptions: ManualSectionOption[] = v1Enabled
       ? [
@@ -981,7 +981,7 @@ export function ProfileReviewCard({
       (window as any).__CV_EDITOR_DEBUG__ === true
     ) {
       try {
-        // eslint-disable-next-line no-console
+
         console.debug(
           "[ProfileReviewCard] sections snapshot",
           sections.map((section) => ({
@@ -2123,7 +2123,7 @@ export function ProfileReviewCard({
   function updateSectionInDoc(updated: CvSection) {
     try {
       const updatedList = sections.map((s) =>
-        String(s.id) === String(updated.id) ? (updated as CvSection) : s,
+        String(s.id) === String(updated.id) ? (updated) : s,
       );
       reorderSections(updatedList as any);
     } catch {
@@ -2313,7 +2313,7 @@ export function ProfileReviewCard({
           // Dev log to aid QA: which template we picked and why
           if (process.env.NODE_ENV !== "production") {
             try {
-              // eslint-disable-next-line no-console
+
               console.debug(
                 "[ProfileReviewCard] handleAddSection templateChoice",
                 {
@@ -2327,7 +2327,7 @@ export function ProfileReviewCard({
             } catch {}
           }
 
-          let matched = tmpl.sections.find((s) => s.type === (type as any));
+          const matched = tmpl.sections.find((s) => s.type === (type as any));
           if (!matched) {
             pushToast(`"${type}" unavailable.`);
             return;
@@ -2337,14 +2337,14 @@ export function ProfileReviewCard({
           newSection = { ...matched, id: uuidv4() } as CvSection;
         } catch (err) {
           // If template generation fails, fail safely instead of creating a legacy text section.
-          // eslint-disable-next-line no-console
+
           console.error("[ProfileReviewCard] generateCvTemplate failed", err);
           pushToast("Create failed.");
           return;
         }
       }
 
-      const existingSections = (currentCv?.sections ?? sections) as CvSection[];
+      const existingSections = (currentCv?.sections ?? sections);
       if (existingSections.length > 0) {
         reorderSections(
           insertSectionByCanonicalOrder(existingSections, newSection) as any,
@@ -2355,7 +2355,7 @@ export function ProfileReviewCard({
       pushToast("Added.");
       setRecentlyAddedSectionType(option.value);
     } catch (err) {
-      // eslint-disable-next-line no-console
+
       console.error("[ProfileReviewCard] addSection failed", err);
       pushToast("Add failed.");
     }
@@ -2772,7 +2772,7 @@ export function ProfileReviewCard({
               onApplyToSections={(updated, structured) => {
                 void importSectionsIntoFreshCv(
                   updated,
-                  structured as StructuredPayload | undefined,
+                  structured,
                 );
               }}
               onResult={(payload) => {
@@ -2904,7 +2904,7 @@ export function ProfileReviewCard({
                     updated,
                     "existing",
                     undefined,
-                    structured as StructuredPayload | undefined,
+                    structured,
                   );
                 }}
                 onResult={(payload) => {

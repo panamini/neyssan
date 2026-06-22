@@ -122,7 +122,7 @@ function readProfileIdentityForTitle(sections: CvSection[]): {
 } {
   const profileSection = sections.find((section) => String(section?.type) === "profile");
   const profileItem = Array.isArray(profileSection?.structuredContent)
-    ? (profileSection!.structuredContent?.[0] as Record<string, unknown> | undefined)
+    ? (profileSection.structuredContent?.[0] as Record<string, unknown> | undefined)
     : undefined;
 
   return {
@@ -435,7 +435,7 @@ function normalizeEducationItem(entry: any, idx: number): IEducationItem {
   };
   return EducationItemSchema.parse(base);
 }
- 
+
 /** Normalize skill item; ensure id and default bucket */
 function normalizeSkillItem(entry: any, idx: number, validCategoryIds?: ReadonlySet<string>): ISkillItem {
   const id =
@@ -444,9 +444,9 @@ function normalizeSkillItem(entry: any, idx: number, validCategoryIds?: Readonly
       : `sk-${uuidv4()}-${idx}`;
   const name = typeof entry?.name === "string" ? entry.name : String(entry ?? "");
   const allowedLevels = new Set(["Beginner","Elementary","Intermediate","Advanced","Fluent"]);
-  const levelRaw = (entry as any)?.level;
+  const levelRaw = (entry)?.level;
   const level: ISkillItem["level"] = allowedLevels.has(String(levelRaw)) ? (levelRaw as ISkillItem["level"]) : "Intermediate";
-  const bucketRaw = (entry as any)?.bucket;
+  const bucketRaw = (entry)?.bucket;
   const allowedBuckets = new Set(["core","secondary","familiar"]);
   const bucket = allowedBuckets.has(String(bucketRaw)) ? (bucketRaw as "core" | "secondary" | "familiar") : "secondary";
   const rawCategoryId =
@@ -571,7 +571,7 @@ function normalizeLanguageItem(entry: any, idx: number): ILanguageItem {
       : `lang-${uuidv4()}-${idx}`;
   const name = typeof entry?.name === "string" ? entry.name : String(entry ?? "");
   const allowedLevels = new Set(["Beginner","Elementary","Intermediate","Advanced","Fluent"]);
-  const levelRaw = (entry as any)?.level;
+  const levelRaw = (entry)?.level;
   const level: ILanguageItem["level"] = allowedLevels.has(String(levelRaw)) ? (levelRaw as ILanguageItem["level"]) : "Intermediate";
   return { id, name, level };
 }
@@ -579,21 +579,21 @@ function normalizeLanguageItem(entry: any, idx: number): ILanguageItem {
 /** Normalize achievement item; convert legacy strings/objects to { id, text } */
 function normalizeAchievementItem(entry: any, idx: number): IAchievementItem {
   const rawId =
-    typeof (entry as any)?.id === "string" && (entry as any).id.trim().length > 0
-      ? String((entry as any).id)
+    typeof (entry)?.id === "string" && (entry).id.trim().length > 0
+      ? String((entry).id)
       : `ach-${uuidv4()}-${idx}`;
   const text =
     typeof entry === "string"
       ? entry
-      : typeof (entry as any)?.text === "string"
-      ? (entry as any).text
-      : typeof (entry as any)?.achievement === "string"
-      ? (entry as any).achievement
+      : typeof (entry)?.text === "string"
+      ? (entry).text
+      : typeof (entry)?.achievement === "string"
+      ? (entry).achievement
       : String(entry ?? "");
   return { id: rawId, text: String(text ?? "").trim() };
 }
 
- 
+
 /** Normalize summary structured content; ensure stable id */
 function normalizeSummaryItem(entry: any, idx = 0): z.infer<typeof SummaryItemSchema> {
   const base = SummaryItemSchema.parse(entry ?? {});
@@ -670,7 +670,7 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
         const isEmptyDoc = (doc: any): boolean => {
           try {
             if (!doc || typeof doc !== "object") return true;
-            const c = (doc as any).content;
+            const c = (doc).content;
             if (!Array.isArray(c) || c.length === 0) return true;
             if (c.length === 1 && c[0]?.type === "paragraph") {
               const p = c[0];
@@ -730,11 +730,11 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
           if (secType === "experience") {
             const resp = item?.responsibilities;
             if (typeof resp !== "undefined") {
-              derivedContent = ensureRemirrorDoc(resp as any);
+              derivedContent = ensureRemirrorDoc(resp);
             }
           } else if (secType === "education") {
             const desc = item?.description;
-            if (typeof desc !== "undefined") derivedContent = ensureRemirrorDoc(desc as any);
+            if (typeof desc !== "undefined") derivedContent = ensureRemirrorDoc(desc);
           }
 
           // Try to repurpose an existing unlinked block for this item
@@ -767,7 +767,7 @@ export function ensureRepresentativeBlocks(cv: CvDocument): CvDocument {
               if (titleChanged || contentChanged || attrsChanged) {
                 ensureBlocksCopy();
                 blocks[matchIdx] = CvBlockSchemaStrict.parse({
-                  ...(candidate as any),
+                  ...(candidate),
                   attributes: nextAttributes,
                   title: nextTitle,
                   content: nextContent,
@@ -987,10 +987,10 @@ export function normalizeAndValidateCvDocument(
   try {
     const now = new Date().toISOString();
     const docId =
-      typeof (loose as any).id === "string" && (loose as any).id.trim() ? (loose as any).id : generateId("cv");
+      typeof (loose).id === "string" && (loose).id.trim() ? (loose).id : generateId("cv");
 
     // Metadata
-    const meta = (loose as any).metadata ?? {};
+    const meta = (loose).metadata ?? {};
     const metadata = {
       ...(meta && typeof meta === "object" ? meta : {}),
       createdAt: String(meta.createdAt ?? now),
@@ -1019,8 +1019,8 @@ export function normalizeAndValidateCvDocument(
     );
 
     // Canonical template
-    const template = generateCvTemplate(titleFallback ?? (loose as any).title ?? undefined);
-    const incomingSections = Array.isArray((loose as any).sections) ? (loose as any).sections : [];
+    const template = generateCvTemplate(titleFallback ?? (loose).title ?? undefined);
+    const incomingSections = Array.isArray((loose).sections) ? (loose).sections : [];
 
     const templateByType = new Map<string, CvSection>();
     for (const s of template.sections) templateByType.set(String(s.type), s);
@@ -1038,7 +1038,7 @@ export function normalizeAndValidateCvDocument(
 
       // Normalize blocks
       const blocksInput = Array.isArray(s?.blocks) ? s.blocks : [];
-      let blocks: CvBlock[] = blocksInput.map(normalizeBlock);
+      const blocks: CvBlock[] = blocksInput.map(normalizeBlock);
 
       // Fill missing blocks from template except for "summary" (summary uses a structured UI, not blocks)
       // IMPORTANT: If the incoming section already provides structuredContent, do NOT seed template blocks.
@@ -1105,7 +1105,7 @@ export function normalizeAndValidateCvDocument(
         } else {
           const tmpl = templateByType.get(secType);
           if (Array.isArray(tmpl?.structuredContent)) {
-            structuredContent = (tmpl!.structuredContent as any[]).map((it, idx) => normalizeSummaryItem(it, idx));
+            structuredContent = (tmpl.structuredContent as any[]).map((it, idx) => normalizeSummaryItem(it, idx));
           } else {
             structuredContent = [normalizeSummaryItem({}, 0)];
           }
@@ -1121,7 +1121,7 @@ export function normalizeAndValidateCvDocument(
         } else {
           const tmpl = templateByType.get(secType);
           if (Array.isArray(tmpl?.structuredContent)) {
-            structuredContent = (tmpl!.structuredContent as any[]).map((it, idx) => normalizeSkillItem(it, idx, validCategoryIds));
+            structuredContent = (tmpl.structuredContent as any[]).map((it, idx) => normalizeSkillItem(it, idx, validCategoryIds));
           } else {
             structuredContent = [];
           }
@@ -1135,7 +1135,7 @@ export function normalizeAndValidateCvDocument(
         } else {
           const tmpl = templateByType.get(secType);
           if (Array.isArray(tmpl?.structuredContent)) {
-            structuredContent = (tmpl!.structuredContent as any[]).map((it, idx) => normalizeCertificationItem(it, idx));
+            structuredContent = (tmpl.structuredContent as any[]).map((it, idx) => normalizeCertificationItem(it, idx));
           } else {
             structuredContent = [];
           }
@@ -1150,7 +1150,7 @@ export function normalizeAndValidateCvDocument(
         } else {
           const tmpl = templateByType.get(secType);
           if (Array.isArray(tmpl?.structuredContent)) {
-            structuredContent = (tmpl!.structuredContent as any[]).map((it, idx) => normalizeLanguageItem(it, idx));
+            structuredContent = (tmpl.structuredContent as any[]).map((it, idx) => normalizeLanguageItem(it, idx));
           } else {
             structuredContent = [];
           }
@@ -1165,7 +1165,7 @@ export function normalizeAndValidateCvDocument(
         } else {
           const tmpl = templateByType.get(secType);
           if (Array.isArray(tmpl?.structuredContent)) {
-            structuredContent = (tmpl!.structuredContent as any[]).map((it, idx) => normalizeAchievementItem(it, idx));
+            structuredContent = (tmpl.structuredContent as any[]).map((it, idx) => normalizeAchievementItem(it, idx));
           } else {
             structuredContent = [];
           }
@@ -1194,13 +1194,13 @@ export function normalizeAndValidateCvDocument(
       // Do NOT synthesize text blocks here to avoid duplicate render paths; the UI renders from structuredContent.
       if (secType === "summary") {
         // Ensure structured array exists with at least one item
-        if (!Array.isArray(structuredContent) || (structuredContent as any[]).length === 0) {
+        if (!Array.isArray(structuredContent) || (structuredContent).length === 0) {
           structuredContent = [normalizeSummaryItem({}, 0)];
         }
         // Ensure the first structured item has a valid Remirror JSON doc for summary
         try {
           const arr = (structuredContent as any[]) as Array<Record<string, unknown>>;
-          const first = (arr[0] ?? {}) as Record<string, unknown>;
+          const first = (arr[0] ?? {});
           const rawSummary = (first as any).summary as import("remirror").RemirrorJSON | string | null | undefined;
           const safeSummary = ensureRemirrorDoc(rawSummary);
           arr[0] = { ...first, summary: safeSummary };
@@ -1238,11 +1238,11 @@ export function normalizeAndValidateCvDocument(
     // Build candidate CV document
     const candidate = {
       id: docId,
-      title: resolveCvTitle((loose as any).title, sections, titleFallback),
+      title: resolveCvTitle((loose).title, sections, titleFallback),
       metadata,
       sections,
-      tags: Array.isArray((loose as any).tags) ? (loose as any).tags.map(String) : undefined,
-      summary: (loose as any).summary ?? undefined,
+      tags: Array.isArray((loose).tags) ? (loose).tags.map(String) : undefined,
+      summary: (loose).summary ?? undefined,
     };
 
     const strict = parseCvDocumentStrict(candidate);

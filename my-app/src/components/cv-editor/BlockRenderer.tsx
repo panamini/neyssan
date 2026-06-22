@@ -13,7 +13,7 @@ import { useBlockFlushSubscription } from "../../hooks/use-flush-subscription";
 const DEBUG_CV_EDITOR = typeof window !== "undefined" && (window as any).__CV_EDITOR_DEBUG__ === true;
 function dbg(...args: any[]) {
   if (DEBUG_CV_EDITOR) {
-    // eslint-disable-next-line no-console
+
     console.debug(...args);
   }
 }
@@ -45,22 +45,22 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
     setActiveEditorBlockId,
     selectedInspector,
   } = useCvLibrary();
- 
+
   function handleSectionChange(_index: number, updatedSection: any) {
     try {
-      if (!sectionId || !block?.id || !(updatedSection as any)?.content) return;
- 
-      const newContent = ensureRemirrorDoc((updatedSection as any).content as any);
+      if (!sectionId || !block?.id || !(updatedSection)?.content) return;
+
+      const newContent = ensureRemirrorDoc((updatedSection).content);
       void updateBlockContent(sectionId, String(block.id), newContent);
- 
-      if ((updatedSection as any).title && (updatedSection as any).title !== block.title) {
-        void updateBlockTitle(sectionId, String(block.id), (updatedSection as any).title);
+
+      if ((updatedSection).title && (updatedSection).title !== block.title) {
+        void updateBlockTitle(sectionId, String(block.id), (updatedSection).title);
       }
     } catch (err) {
       console.error("[BlockRenderer] handleSectionChange failed", err);
     }
   }
- 
+
   const sectionForEditor: any = useMemo(
     () => ({
       id: block.id ?? sectionId,
@@ -105,7 +105,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
 
   function handleCollapseToggle(id: string) {
     setCollapsedSections((prev) => {
-      const next = { ...prev, [id]: !Boolean(prev[id]) };
+      const next = { ...prev, [id]: !prev[id] };
       persistCollapsedSections(next);
       return next;
     });
@@ -114,7 +114,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
   const linkedStructuredId =
     (block as any)?.attributes?.linkedStructuredId ??
     (block as any)?.attributes?.linkedstructuredid;
-  
+
   const section = useMemo(() => {
     return currentCv?.sections?.find(
       (s) => String(s.id) === String(sectionId)
@@ -126,7 +126,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
     !["experience", "education"].includes(sectionType);
 
   const isStructuredSection = section?.type === "experience" || section?.type === "education";
-  
+
   const linkedItem = useMemo(() => {
     try {
       if (!linkedStructuredId) {
@@ -134,7 +134,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
         // For non-structured blocks it's normal to not have one — avoid noisy warnings there.
         if (isStructuredSection) {
           if (DEBUG_CV_EDITOR) {
-            // eslint-disable-next-line no-console
+
             console.warn("[BlockRenderer] Missing linkedStructuredId for structured block", {
               blockId: block?.id,
               sectionId,
@@ -170,7 +170,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
           if (found) return found;
         }
       }
-      // eslint-disable-next-line no-console
+
       console.warn("[BlockRenderer] No linkedItem found for linkedStructuredId", {
         linkedStructuredId,
         blockId: block?.id,
@@ -178,7 +178,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
       });
       return null;
     } catch (err) {
-      // eslint-disable-next-line no-console
+
       console.error("[BlockRenderer] Error computing linkedItem", err);
       return null;
     }
@@ -188,7 +188,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
     try {
       // Only log when debug mode is enabled to reduce console spam
       if (DEBUG_CV_EDITOR) {
-        // eslint-disable-next-line no-console
+
         console.debug("[BlockRenderer] linkedItem (stable log)", {
           linkedStructuredId,
           linkedItem,
@@ -228,7 +228,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
   }, [block]);
   const genericPreviewDoc = useMemo(() => {
     try {
-      return ensureRemirrorDoc((block as any)?.content as any);
+      return ensureRemirrorDoc((block as any)?.content);
     } catch {
       return null;
     }
@@ -249,10 +249,10 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
       : String(Math.random())
   );
   useEffect(() => {
-    // eslint-disable-next-line no-console
+
     console.debug("[BlockRenderer] mount", { mountId: mountIdRef.current, sectionId, blockId: block?.id, linkedStructuredId });
     return () => {
-      // eslint-disable-next-line no-console
+
       console.debug("[BlockRenderer] unmount", { mountId: mountIdRef.current, sectionId, blockId: block?.id });
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -261,7 +261,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
   // Dev-only diagnostic: surface whether this renderer is running in v1 mode and link resolution state.
   useEffect(() => {
     try {
-      // eslint-disable-next-line no-console
+
       console.debug("[BlockRenderer] v1-render-debug", {
         mountId: mountIdRef.current,
         sectionId,
@@ -289,7 +289,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
           sectionStructured: section?.structuredContent,
           selectedInspectorBlockId: selectedInspector?.block?.id ?? null,
         });
-        // eslint-disable-next-line no-console
+
         console.debug("[BlockRenderer] linkedItem debug", { blockId: String(block?.id), linkedStructuredId, linkedItem });
       }
     } catch (e) {
@@ -350,7 +350,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
         null;
       const basePayload = { sectionId, block, linkedStructured: linkedItem };
 
-      // eslint-disable-next-line no-console
+
       console.debug("[BlockRenderer] handleEditClick", {
         sectionId,
         blockId: String(block?.id),
@@ -360,13 +360,13 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
       });
 
       if (typeof openInspector !== "function") {
-        // eslint-disable-next-line no-console
+
         console.error("[BlockRenderer] openInspector is not a function", { openInspector });
         return;
       }
       openInspector(basePayload as any);
     } catch (err) {
-      // eslint-disable-next-line no-console
+
       console.error("[BlockRenderer] handleEditClick error", err);
     }
   }
@@ -391,7 +391,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
             onSectionContentChange={(secId: string, json: RemirrorJSON) => {
               try {
                 if (pendingUpdateRef.current) {
-                  clearTimeout(pendingUpdateRef.current as ReturnType<typeof setTimeout>);
+                  clearTimeout(pendingUpdateRef.current);
                   pendingUpdateRef.current = null;
                 }
                 // Replace zero-timeout with a short debounce to reduce remount/update churn
@@ -463,11 +463,11 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
                 }
                 return null;
               })();
-              const linkedAchievements = Array.isArray((effectiveLinkedItem as any)?.achievements)
-                ? ((effectiveLinkedItem as any).achievements as unknown[]).filter(Boolean)
+              const linkedAchievements = Array.isArray((effectiveLinkedItem)?.achievements)
+                ? ((effectiveLinkedItem).achievements as unknown[]).filter(Boolean)
                 : [];
 
-              const responsibilities = (effectiveLinkedItem as any)?.responsibilities as unknown;
+              const responsibilities = (effectiveLinkedItem)?.responsibilities as unknown;
               let responsibilitiesDoc: RemirrorJSON | null = null;
               try {
                 if (typeof responsibilities !== "undefined" && responsibilities !== null) {
@@ -480,13 +480,13 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
               const hasResponsibilitiesPreview = responsibilitiesText.trim().length > 0;
 
               const seedPlaceholder = "Start typing here…";
-              const rawFallbackText = (block as any)?.plainText ?? extractPlainTextFromRemirror((block as any)?.content as any);
+              const rawFallbackText = (block as any)?.plainText ?? extractPlainTextFromRemirror((block as any)?.content);
               const fallbackText = typeof rawFallbackText === "string" ? rawFallbackText : "";
               const isSeed = fallbackText.replace(/\s+/g, " ").trim() === seedPlaceholder;
               const fallbackDoc = fallbackText && !isSeed ? ensureRemirrorDoc(fallbackText) : null;
 
               console.debug("[BlockRenderer] ExperiencePreviewMount", {
-                itemId: String((((effectiveLinkedItem as any)?.id ?? (linkedItem as any)?.id) ?? block?.id) ?? ""),
+                itemId: String((((effectiveLinkedItem)?.id ?? (linkedItem)?.id) ?? block?.id) ?? ""),
                 linkedAchievements,
                 hasResponsibilitiesPreview,
                 responsibilitiesType: responsibilities === null ? "null" : typeof responsibilities,
@@ -508,7 +508,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
                 return (
                   <div className="mt-2">
                     <AchievementsDisplay
-                      itemId={String((((effectiveLinkedItem as any)?.id ?? (linkedItem as any)?.id) ?? block?.id) ?? "")}
+                      itemId={String((((effectiveLinkedItem)?.id ?? (linkedItem)?.id) ?? block?.id) ?? "")}
                       items={linkedAchievements}
                     />
                   </div>
@@ -526,7 +526,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
         </div>
         )}
       </div>
-  
+
       {showDeleteAction && (
         <div className="mt-2">
           <button

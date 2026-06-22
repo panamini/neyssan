@@ -275,7 +275,7 @@ function textToMixedDoc(text: string): RemirrorJSON {
     const clean = bulletLines.map((line) => line.trim()).filter(Boolean);
     bulletLines = [];
     if (clean.length === 0) return;
-    blocks.push((achievementsToBulletDoc(clean).content ?? [])[0] as RemirrorJSON);
+    blocks.push((achievementsToBulletDoc(clean).content ?? [])[0]);
   };
 
   text
@@ -993,7 +993,7 @@ const RichEditor = forwardRef<
         setInlineSelectionState(null);
         const afterDoc = shouldReplaceWholeDoc
           ? shapeResult.doc
-          : ensureRemirrorDoc(view.state.doc.toJSON() as any);
+          : ensureRemirrorDoc(view.state.doc.toJSON());
         setInlineAiSuggestion({
           ...suggestionBase,
           afterText,
@@ -1063,7 +1063,7 @@ const RichEditor = forwardRef<
     const afterDoc =
       inlineAiSuggestion.afterDoc && inlineAiSuggestion.replaceWholeDoc
         ? inlineAiSuggestion.afterDoc
-        : ensureRemirrorDoc(view.state.doc.toJSON() as any);
+        : ensureRemirrorDoc(view.state.doc.toJSON());
     setInlineAiSuggestion({
       ...inlineAiSuggestion,
       status: "accepted",
@@ -1135,7 +1135,7 @@ const RichEditor = forwardRef<
       const tr = view.state.tr.replaceSelectionWith(hardBreak.create()).scrollIntoView();
       view.dispatch(tr);
       view.focus();
-      const doc = ensureRemirrorDoc(view.state.doc.toJSON() as any);
+      const doc = ensureRemirrorDoc(view.state.doc.toJSON());
       editorChangedRef.current = true;
       onChangeDoc(doc);
       scheduleSelectionCheck();
@@ -1434,7 +1434,7 @@ export function ExperienceModal({
         const intendedStartPrecision: "year" | "month" | undefined =
           merged.startMonth ? "month" : merged.startYear ? "year" : undefined;
 
-        (base as IExperienceItem).startDatePrecision = intendedStartPrecision;
+        (base).startDatePrecision = intendedStartPrecision;
 
         const startComposed = composeIsoFromParts({
           year: String(merged.startYear ?? "").trim() || undefined,
@@ -1443,25 +1443,25 @@ export function ExperienceModal({
         });
 
         if (startComposed.iso) {
-          (base as IExperienceItem).startDate = startComposed.iso;
+          (base).startDate = startComposed.iso;
         } else {
-          (base as IExperienceItem).startDate = "";
+          (base).startDate = "";
         }
 
         // end with Present
         const isCurrent = Boolean(merged.isCurrent);
         if (isCurrent) {
-          (base as IExperienceItem).isCurrent = true;
-          (base as IExperienceItem).currentlyWorking = true;
-          (base as IExperienceItem).endDate = null;
-          (base as IExperienceItem).endDatePrecision = undefined;
+          (base).isCurrent = true;
+          (base).currentlyWorking = true;
+          (base).endDate = null;
+          (base).endDatePrecision = undefined;
         } else {
           const intendedEndPrecision: "year" | "month" | undefined =
             merged.endMonth ? "month" : merged.endYear ? "year" : undefined;
 
-          (base as IExperienceItem).isCurrent = undefined;
-          (base as IExperienceItem).currentlyWorking = undefined;
-          (base as IExperienceItem).endDatePrecision = intendedEndPrecision;
+          (base).isCurrent = undefined;
+          (base).currentlyWorking = undefined;
+          (base).endDatePrecision = intendedEndPrecision;
 
           const endComposed = composeIsoFromParts({
             year: String(merged.endYear ?? "").trim() || undefined,
@@ -1469,10 +1469,10 @@ export function ExperienceModal({
             precision: intendedEndPrecision,
           });
 
-          (base as IExperienceItem).endDate = endComposed.iso ?? null;
+          (base).endDate = endComposed.iso ?? null;
         }
 
-        next[idx] = base as IExperienceItem;
+        next[idx] = base;
         localRef.current = next;
         return next;
       });
@@ -2124,7 +2124,7 @@ export function ExperienceModal({
                       editorRefs.current[idx] = node;
                     }}
                     initialContent={(() => {
-                      const existing = (row as IExperienceItem)
+                      const existing = (row)
                         .responsibilities as RemirrorJSON | string | undefined;
                       if (existing) return ensureRemirrorDoc(existing as any);
                       const legacy = Array.isArray(row.achievements)
@@ -2339,7 +2339,7 @@ export function EducationModal({
         const intendedStartPrecision: "year" | "month" | undefined =
           merged.startMonth ? "month" : merged.startYear ? "year" : undefined;
 
-        (base as IEducationItem).startDatePrecision = intendedStartPrecision;
+        (base).startDatePrecision = intendedStartPrecision;
 
         const startComposed = composeIsoFromParts({
           year: String(merged.startYear ?? "").trim() || undefined,
@@ -2347,20 +2347,20 @@ export function EducationModal({
           precision: intendedStartPrecision,
         });
 
-        (base as IEducationItem).startDate = startComposed.iso ?? undefined;
+        (base).startDate = startComposed.iso ?? undefined;
 
         // end with Present
         const isCurrent = Boolean(merged.isCurrent);
         if (isCurrent) {
-          (base as IEducationItem).isCurrent = true;
-          (base as IEducationItem).endDate = null;
-          (base as IEducationItem).endDatePrecision = undefined;
+          (base).isCurrent = true;
+          (base).endDate = null;
+          (base).endDatePrecision = undefined;
         } else {
           const intendedEndPrecision: "year" | "month" | undefined =
             merged.endMonth ? "month" : merged.endYear ? "year" : undefined;
 
-          (base as IEducationItem).isCurrent = undefined;
-          (base as IEducationItem).endDatePrecision = intendedEndPrecision;
+          (base).isCurrent = undefined;
+          (base).endDatePrecision = intendedEndPrecision;
 
           const endComposed = composeIsoFromParts({
             year: String(merged.endYear ?? "").trim() || undefined,
@@ -2368,10 +2368,10 @@ export function EducationModal({
             precision: intendedEndPrecision,
           });
 
-          (base as IEducationItem).endDate = endComposed.iso ?? undefined;
+          (base).endDate = endComposed.iso ?? undefined;
         }
 
-        next[idx] = base as IEducationItem;
+        next[idx] = base;
         localRef.current = next;
         return next;
       });

@@ -50,8 +50,8 @@ export function stableStringify(value: unknown): string {
 
     // Plain object
     if (typeof v === "object" && v) {
-      if (seen.has(v as object)) return JSON.stringify("[[Circular]]");
-      seen.add(v as object);
+      if (seen.has(v)) return JSON.stringify("[[Circular]]");
+      seen.add(v);
 
       const obj = v as Record<string, unknown>;
       const keys = Object.keys(obj).sort();

@@ -73,8 +73,8 @@ export function useProfilePersistence(
       });
 
       if (!res || !res.profileId) throw new Error("Failed to save profile");
-      
-      const convexId = (res as any).convexId ?? res.profileId;
+
+      const convexId = (res).convexId ?? res.profileId;
       setLocalSavedProfileId(convexId);
       if (res.updatedAt) {
         setLocalProfileVersion(typeof res.updatedAt === 'number' ? Math.floor(res.updatedAt / 1000) : localProfileVersion);

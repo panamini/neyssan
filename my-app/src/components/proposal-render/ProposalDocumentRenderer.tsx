@@ -3896,7 +3896,7 @@ function ProposalDocumentDecorationLayer({
     if (!isDesignMode) return;
     const page = event.currentTarget.closest(
       ".dasti-proposal-document__page",
-    ) as HTMLElement | null;
+    );
     if (!page) return;
     const pageRect = page.getBoundingClientRect();
     if (pageRect.width <= 0 || pageRect.height <= 0) return;

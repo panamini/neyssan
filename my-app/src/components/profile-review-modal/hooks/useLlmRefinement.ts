@@ -46,7 +46,7 @@ export function useLlmRefinement(
     if (!res.ok) {
       let body = null;
       try { body = await res.json(); } catch (e) {}
-      throw new Error((body && (body as any).message) || `Request failed with status ${res.status}`);
+      throw new Error((body && (body).message) || `Request failed with status ${res.status}`);
     }
     return res.json();
   };
@@ -57,8 +57,8 @@ export function useLlmRefinement(
       if (typeof formatCompleteAction === "function") {
         const actionResult = await formatCompleteAction({ rawText });
         if (actionResult) {
-          const normalized = (actionResult && typeof actionResult === "object" && "status" in actionResult && (actionResult as any).status === "ok" && "result" in actionResult)
-            ? (actionResult as any).result
+          const normalized = (actionResult && typeof actionResult === "object" && "status" in actionResult && (actionResult).status === "ok" && "result" in actionResult)
+            ? (actionResult).result
             : actionResult;
           return normalized;
         }

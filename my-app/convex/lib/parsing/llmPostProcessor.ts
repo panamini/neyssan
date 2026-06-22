@@ -771,11 +771,11 @@ export function parseLLMMetadata(text: string): { name: string | null; email: st
 // The worker attempted to call global.parseLLMSections; ensure it's available.
 declare global {
   // allow adding these to global in Node environments
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   var parseLLMSections: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   var parseLLMMetadata: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   var recoverSpans: any;
 }
 
