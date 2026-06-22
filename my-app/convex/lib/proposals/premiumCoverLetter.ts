@@ -3334,6 +3334,16 @@ export type PremiumCoverLetterQualityShadowResult = {
   issues: PremiumCoverLetterQualityShadowIssueCode[];
 };
 
+const REPAIRABLE_PREMIUM_COVER_LETTER_QUALITY_SHADOW_ISSUES =
+  new Set<PremiumCoverLetterQualityShadowIssueCode>([
+    "meta_prose",
+    "generic_tone",
+    "factual_inventory",
+    "weak_employer_argument",
+    "low_value_job_echo",
+    "too_verbose",
+  ]);
+
 export function toCoverLetterBodyParts(
   output: PremiumWriterOutputV1,
 ): CoverLetterBodyParts {
@@ -5106,6 +5116,26 @@ export function evaluatePremiumCoverLetterQualityShadow(args: {
   };
 }
 
+function getRepairablePremiumCoverLetterQualityShadowIssues(
+  qualityShadow: PremiumCoverLetterQualityShadowResult,
+): PremiumCoverLetterQualityShadowIssueCode[] {
+  if (qualityShadow.passed) return [];
+  return qualityShadow.issues.filter((issue) =>
+    REPAIRABLE_PREMIUM_COVER_LETTER_QUALITY_SHADOW_ISSUES.has(issue),
+  );
+}
+
+function premiumCoverLetterQualityShadowImproved(args: {
+  before: PremiumCoverLetterQualityShadowResult;
+  after: PremiumCoverLetterQualityShadowResult;
+}): boolean {
+  if (args.after.passed) return true;
+  return (
+    args.after.score > args.before.score &&
+    args.after.issues.length < args.before.issues.length
+  );
+}
+
 export function repairPremiumCoverLetterBodyParts(args: {
   bodyParts: CoverLetterBodyParts;
   brief: CoverLetterBrief;
@@ -5624,6 +5654,41 @@ function buildPremiumCoverLetterRepairPrompt(args: {
   ].join("\n");
 }
 
+function buildPremiumCoverLetterQualityRepairPrompt(args: {
+  brief: CoverLetterBrief;
+  previousBodyParts: CoverLetterBodyParts;
+  qualityShadow: PremiumCoverLetterQualityShadowResult;
+  issues: PremiumCoverLetterQualityShadowIssueCode[];
+}): string {
+  return [
+    "Repair cover-letter body parts for quality only.",
+    "",
+    "This is a bounded quality pass after the output already passed safety validation.",
+    "Make at most small wording changes that address the listed quality issues.",
+    "If a listed issue cannot be fixed using only the structured brief, return the previous body parts unchanged.",
+    "",
+    "Allowed repairs:",
+    "- remove meta-writing and generic cover-letter phrases",
+    "- make the employerValueBlock use the job context as an angle instead of listing the job offer",
+    "- replace low-value job echo with candidate-backed overlap already present in the brief",
+    "- reduce verbosity by shortening or deduplicating sentences",
+    "- keep every candidate claim grounded in existing candidate facts from the brief",
+    "",
+    "Not allowed:",
+    "- add new candidate experience, credentials, metrics, names, employers, tools, certifications, or outcomes",
+    "- turn job demands into candidate history",
+    "- change claim strategy or invent proof",
+    "- add greeting, signoff, candidate name, markdown, explanation, audit, or labels",
+    "- use this repair to satisfy provenance; final validation still decides",
+    "",
+    "Return only the same JSON body parts.",
+    `Quality issues: ${JSON.stringify(args.issues)}`,
+    `Quality shadow: ${JSON.stringify(args.qualityShadow)}`,
+    `Previous body parts: ${JSON.stringify(args.previousBodyParts)}`,
+    `Structured brief: ${JSON.stringify(args.brief)}`,
+  ].join("\n");
+}
+
 function buildPremiumWriterOutputRepairPrompt(args: {
   brief: CoverLetterBrief;
   previousWriterOutput: PremiumWriterOutputV1;
@@ -5642,6 +5707,108 @@ function buildPremiumWriterOutputRepairPrompt(args: {
     `Previous PremiumWriterOutputV1: ${JSON.stringify(args.previousWriterOutput)}`,
     `Structured brief: ${JSON.stringify(args.brief)}`,
   ].join("\n");
+}
+
+async function tryRepairPremiumCoverLetterQualityShadow(args: {
+  bodyParts: CoverLetterBodyParts;
+  qualityShadow: PremiumCoverLetterQualityShadowResult;
+  brief: CoverLetterBrief;
+  writer: PremiumCoverLetterWriter;
+  signal?: AbortSignal;
+  outputLanguage: ProposalOutputLanguage;
+  candidateName?: string;
+  writerOutput: PremiumWriterOutputV1;
+  claimPlan: ClaimPlanV1;
+  factGraph: FactGraphV1;
+  legacyWrapped: boolean;
+  provenanceIdsNormalized: boolean;
+}): Promise<{
+  bodyParts: CoverLetterBodyParts;
+  rendered: { content: string; sections: Array<{ type: "text"; content: string }> };
+  qualityShadow: PremiumCoverLetterQualityShadowResult;
+} | null> {
+  if (args.legacyWrapped || args.brief.contextClass === "no_cv") {
+    return null;
+  }
+
+  const repairableIssues = getRepairablePremiumCoverLetterQualityShadowIssues(
+    args.qualityShadow,
+  );
+  if (repairableIssues.length === 0) {
+    return null;
+  }
+
+  let repairedBodyParts: CoverLetterBodyParts;
+  try {
+    repairedBodyParts = parseCoverLetterBodyPartsWriterPayload(
+      await args.writer({
+        prompt: buildPremiumCoverLetterQualityRepairPrompt({
+          brief: args.brief,
+          previousBodyParts: args.bodyParts,
+          qualityShadow: args.qualityShadow,
+          issues: repairableIssues,
+        }),
+        schema: PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA,
+        signal: args.signal,
+      }),
+    );
+  } catch {
+    return null;
+  }
+
+  const repairedIssues = validatePremiumCoverLetterBodyParts({
+    bodyParts: repairedBodyParts,
+    brief: args.brief,
+  });
+  if (repairedIssues.length > 0) {
+    return null;
+  }
+
+  const repairedProvenance = buildPremiumCoverLetterFinalProvenance({
+    writerOutput: args.writerOutput,
+    finalBodyParts: repairedBodyParts,
+    claimPlan: args.claimPlan,
+    factGraph: args.factGraph,
+    legacyWrapped: args.legacyWrapped,
+    provenanceIdsNormalized: args.provenanceIdsNormalized,
+  });
+  if (!isTrustedPremiumFinalProvenanceStatus(repairedProvenance.status)) {
+    return null;
+  }
+
+  const repairedRendered = renderPremiumCoverLetter({
+    bodyParts: repairedBodyParts,
+    outputLanguage: args.outputLanguage,
+    candidateName: args.candidateName,
+  });
+  if (
+    !hasExpectedCandidateSignature({
+      content: repairedRendered.content,
+      outputLanguage: args.outputLanguage,
+      candidateName: args.candidateName,
+    })
+  ) {
+    return null;
+  }
+
+  const repairedQualityShadow = evaluatePremiumCoverLetterQualityShadow({
+    bodyParts: repairedBodyParts,
+    content: repairedRendered.content,
+  });
+  if (
+    !premiumCoverLetterQualityShadowImproved({
+      before: args.qualityShadow,
+      after: repairedQualityShadow,
+    })
+  ) {
+    return null;
+  }
+
+  return {
+    bodyParts: repairedBodyParts,
+    rendered: repairedRendered,
+    qualityShadow: repairedQualityShadow,
+  };
 }
 
 export function extractOpenAIJsonPayload(response: any): unknown {
@@ -6082,6 +6249,36 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     }
   }
 
+  let rendered = renderPremiumCoverLetter({
+    bodyParts,
+    outputLanguage: args.outputLanguage,
+    candidateName: args.candidateName,
+  });
+  let qualityShadow = evaluatePremiumCoverLetterQualityShadow({
+    bodyParts,
+    content: rendered.content,
+  });
+
+  const qualityRepair = await tryRepairPremiumCoverLetterQualityShadow({
+    bodyParts,
+    qualityShadow,
+    brief,
+    writer: args.writer,
+    signal: args.signal,
+    outputLanguage: args.outputLanguage,
+    candidateName: args.candidateName,
+    writerOutput,
+    claimPlan,
+    factGraph,
+    legacyWrapped,
+    provenanceIdsNormalized,
+  });
+  if (qualityRepair) {
+    bodyParts = qualityRepair.bodyParts;
+    rendered = qualityRepair.rendered;
+    qualityShadow = qualityRepair.qualityShadow;
+  }
+
   const finalProvenance = buildPremiumCoverLetterFinalProvenance({
     writerOutput,
     finalBodyParts: bodyParts,
@@ -6089,15 +6286,6 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     factGraph,
     legacyWrapped,
     provenanceIdsNormalized,
-  });
-  const rendered = renderPremiumCoverLetter({
-    bodyParts,
-    outputLanguage: args.outputLanguage,
-    candidateName: args.candidateName,
-  });
-  const qualityShadow = evaluatePremiumCoverLetterQualityShadow({
-    bodyParts,
-    content: rendered.content,
   });
   if (
     !hasExpectedCandidateSignature({
