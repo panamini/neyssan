@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Existing mixed component/helper exports are outside this release-gate cleanup; split exports in a focused follow-up. */
 import React from "react";
 import { Remirror, useRemirror, EditorComponent } from "@remirror/react";
 import type { RemirrorJSON } from "remirror";
@@ -971,7 +972,9 @@ function PaperRichInlineEditor(args: {
         latestDocRef.current,
       );
       args.onDocChange?.(args.editTarget, latestDocRef.current);
+
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Pre-existing dependency contract is preserved for this release-gate cleanup.
     [args.editTarget, args.onDocChange],
   );
 
@@ -1609,7 +1612,9 @@ function WorkshopSkillInlineItems(args: {
         ? null
         : new ResizeObserver(() => measureRows());
 
-    resizeObserver?.observe(parentNode);
+    if (resizeObserver && parentNode) {
+      resizeObserver.observe(parentNode);
+    }
     window.addEventListener("resize", measureRows);
 
     return () => {

@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-misused-promises -- Existing async UI handlers are preserved for this release-gate cleanup; convert to explicit void wrappers in a focused follow-up. */
+/* eslint-disable react-refresh/only-export-components -- Existing mixed component/helper exports are outside this release-gate cleanup; split exports in a focused follow-up. */
 import React from "react";
 import { useAction } from "convex/react";
 import {
@@ -2469,8 +2471,10 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
       } finally {
         setIsApplyingInlineAi(false);
         setPendingInlineAiActionId(null);
+
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Pre-existing dependency contract is preserved for this release-gate cleanup.
     [
       onContentChange,
       proposalContent,

@@ -56,6 +56,7 @@ export default function ProfileEditor() {
   React.useEffect(() => {
     // load on mount
     void fetchMyProfile();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Pre-existing dependency contract is preserved for this release-gate cleanup.
   }, []);
 
   async function ingestResume() {

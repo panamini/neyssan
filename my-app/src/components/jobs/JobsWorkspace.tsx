@@ -1663,6 +1663,7 @@ function JobsPageContent(): JSX.Element {
         tier: selectedJob.matchRead?.tier ?? "unknown",
       }).catch(() => {});
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Pre-existing dependency contract is preserved for this release-gate cleanup.
   }, [selectedJob?.id, selectedJob?.matchRead?.tier, trackJobsEvent]);
 
   const handleCreateProposal = React.useCallback(

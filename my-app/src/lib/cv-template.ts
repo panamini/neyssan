@@ -470,7 +470,7 @@ export function generateCvTemplateV1(title?: string): CvDocument {
   // Development-only diagnostic: expose the v1 template section types in dev mode.
   if (process.env.NODE_ENV !== "production") {
     try {
-      // eslint-disable-next-line no-console
+
       console.debug("[cv-template] generateCvTemplateV1 sections", { sectionTypes: sections.map((s) => s.type) });
     } catch {
       /* non-fatal diagnostics */

@@ -38,15 +38,19 @@ export const DOCUMENT_DECORATION_UPLOAD_ACCEPT =
   ".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml";
 export const DOCUMENT_DECORATION_MAX_FILE_BYTES = 10 * 1024 * 1024;
 export const DOCUMENT_DECORATION_MAX_DATA_URL_BYTES = 220 * 1024;
-export const DEFAULT_DOCUMENT_DECORATION_PLACEMENT = {
+type DocumentDecorationPlacement = {
+  xMm: number;
+  yMm: number;
+};
+export const DEFAULT_DOCUMENT_DECORATION_PLACEMENT: DocumentDecorationPlacement = {
   xMm: 17,
   yMm: 35,
-} as const;
+};
 export const EDITORIAL_TEMPLATE_FLOWER_FILE_NAME = "Flower template mark.svg";
-export const EDITORIAL_TEMPLATE_FLOWER_DECORATION_PLACEMENT = {
+export const EDITORIAL_TEMPLATE_FLOWER_DECORATION_PLACEMENT: DocumentDecorationPlacement = {
   xMm: 157,
   yMm: 18,
-} as const;
+};
 export const DEFAULT_DOCUMENT_DECORATION_PAGE_SIZE_MM = {
   pageWidthMm: 210,
   pageHeightMm: 297,

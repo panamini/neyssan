@@ -6,7 +6,10 @@ import {
   resolveVerbatiStyle,
   serializeVerbatiStyle,
 } from "../features/verbati/style";
-import { isResumeTemplateId } from "../lib/layout/resumeTemplates";
+import {
+  isResumeTemplateId,
+  type ResumeTemplateId,
+} from "../lib/layout/resumeTemplates";
 import type { INormalizedProfile } from "../types/profile";
  
 /**
@@ -136,10 +139,10 @@ export function mapProfileToCvDocument(profile: any, forcedId?: string): CvDocum
     profile.metadata && typeof profile.metadata === "object"
       ? (profile.metadata as Record<string, unknown>)
       : null;
-  const persistedResumeTemplateId = isResumeTemplateId(
-    persistedMetadata?.resumeTemplateId,
-  )
-    ? persistedMetadata?.resumeTemplateId
+  const persistedResumeTemplateId: ResumeTemplateId | undefined =
+    typeof persistedMetadata?.resumeTemplateId === "string" &&
+    isResumeTemplateId(persistedMetadata.resumeTemplateId as never)
+    ? (persistedMetadata.resumeTemplateId as ResumeTemplateId)
     : undefined;
 
   const metadata = {

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Existing mixed component/helper exports are outside this release-gate cleanup; split exports in a focused follow-up. */
 import React from "react";
 import {
   useCommands,

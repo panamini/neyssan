@@ -23,14 +23,14 @@ export function RichSummary({
     typeof window !== "undefined" &&
     (window as any).__CV_EDITOR_DEBUG__ === true;
   if (isDebug) {
-    // eslint-disable-next-line no-console
+
     console.log("[RichSummary] props", { sectionType, item });
   }
 
   if (sectionType === "experience") {
     const exp = safeItem as IExperienceItem;
     if (isDebug) {
-      // eslint-disable-next-line no-console
+
       console.debug("[RichSummary] experience item fields", exp);
     }
     const range = formatRangeFromItem(exp);
@@ -53,7 +53,7 @@ export function RichSummary({
   if (sectionType === "education") {
     const edu = safeItem as IEducationItem;
     if (isDebug) {
-      // eslint-disable-next-line no-console
+
       console.debug("[RichSummary] education item fields", edu);
     }
     const range = formatRangeFromItem(edu);

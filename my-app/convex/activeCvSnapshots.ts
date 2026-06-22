@@ -1,4 +1,5 @@
 import { mutation, query } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 
 const personalizationContextValidator = v.union(
@@ -149,7 +150,7 @@ export const setCurrentFromProfile = mutation({
       throw new Error("Not authenticated");
     }
 
-    const profile = await ctx.db.get(args.profileId as any);
+    const profile = await ctx.db.get(args.profileId as Id<"userProfiles">);
     if (!profile || profile.clerkId !== identity.subject) {
       throw new Error("CV profile not found");
     }

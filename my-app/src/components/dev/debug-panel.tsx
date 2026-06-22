@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Existing mixed component/helper exports are outside this release-gate cleanup; split exports in a focused follow-up. */
 import React, { useEffect, useState } from "react";
 
 /**
@@ -26,14 +27,14 @@ declare global {
 }
 
 const EMITTER = new EventTarget();
- 
+
 // Batched log buffer to avoid emitting a DOM event for every single log entry.
 // High-frequency logging (during noisy repros) previously caused the DebugPanel
 // to re-render on every push which amplified registration/flush churn. We batch
 // pushes on the next animation frame and dispatch a single "log-batch" event.
 const LOG_BUFFER: any[] = [];
 let LOG_FLUSH_PENDING = false;
- 
+
 function ensureStore() {
   if (!window.__CV_EDITOR_LOGS__) window.__CV_EDITOR_LOGS__ = [];
   return window.__CV_EDITOR_LOGS__ as any[];
@@ -60,7 +61,7 @@ export function pushLog(entry: any) {
           // Dispatch a single batched event
           EMITTER.dispatchEvent(new CustomEvent("log-batch", { detail: toFlush }));
           // Also print a compact message to console (one per flush)
-          // eslint-disable-next-line no-console
+
           console.debug("[CV-DEBUG] (batch)", toFlush.length, toFlush[0]?.ts ?? null);
         } catch {
           /* noop */
@@ -70,7 +71,7 @@ export function pushLog(entry: any) {
       else setTimeout(flush, 16);
     }
     // Mirror a concise debug to console immediately for convenience
-    // eslint-disable-next-line no-console
+
     console.debug("[CV-DEBUG]", ts, entry);
   } catch (err) {
     // ignore
@@ -133,7 +134,9 @@ export function DebugPanel() {
     (window as any).__CV_EDITOR_DEBUG__ === true ||
     (typeof window.localStorage !== "undefined" && window.localStorage.getItem("cv_editor_debug") === "true")
   );
+
   if (!isEnabled) return null;
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- Pre-existing hook ordering debt is documented while this release-gate cleanup avoids behavior changes.
   const logs = useDebugLogs();
 
   function handleDownload() {

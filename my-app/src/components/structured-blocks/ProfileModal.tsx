@@ -305,7 +305,6 @@ export function ProfileModal({
                   }
                 >
                   {form.photoUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={form.photoUrl}
                       alt=""

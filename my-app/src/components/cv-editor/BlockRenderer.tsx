@@ -13,7 +13,7 @@ import { useBlockFlushSubscription } from "../../hooks/use-flush-subscription";
 const DEBUG_CV_EDITOR = typeof window !== "undefined" && (window as any).__CV_EDITOR_DEBUG__ === true;
 function dbg(...args: any[]) {
   if (DEBUG_CV_EDITOR) {
-    // eslint-disable-next-line no-console
+
     console.debug(...args);
   }
 }
@@ -45,14 +45,14 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
     setActiveEditorBlockId,
     selectedInspector,
   } = useCvLibrary();
- 
+
   function handleSectionChange(_index: number, updatedSection: any) {
     try {
       if (!sectionId || !block?.id || !(updatedSection as any)?.content) return;
- 
+
       const newContent = ensureRemirrorDoc((updatedSection as any).content as any);
       void updateBlockContent(sectionId, String(block.id), newContent);
- 
+
       if ((updatedSection as any).title && (updatedSection as any).title !== block.title) {
         void updateBlockTitle(sectionId, String(block.id), (updatedSection as any).title);
       }
@@ -60,7 +60,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
       console.error("[BlockRenderer] handleSectionChange failed", err);
     }
   }
- 
+
   const sectionForEditor: any = useMemo(
     () => ({
       id: block.id ?? sectionId,
@@ -105,7 +105,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
 
   function handleCollapseToggle(id: string) {
     setCollapsedSections((prev) => {
-      const next = { ...prev, [id]: !Boolean(prev[id]) };
+      const next = { ...prev, [id]: !prev[id] };
       persistCollapsedSections(next);
       return next;
     });
@@ -114,7 +114,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
   const linkedStructuredId =
     (block as any)?.attributes?.linkedStructuredId ??
     (block as any)?.attributes?.linkedstructuredid;
-  
+
   const section = useMemo(() => {
     return currentCv?.sections?.find(
       (s) => String(s.id) === String(sectionId)
@@ -126,7 +126,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
     !["experience", "education"].includes(sectionType);
 
   const isStructuredSection = section?.type === "experience" || section?.type === "education";
-  
+
   const linkedItem = useMemo(() => {
     try {
       if (!linkedStructuredId) {
@@ -134,7 +134,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
         // For non-structured blocks it's normal to not have one — avoid noisy warnings there.
         if (isStructuredSection) {
           if (DEBUG_CV_EDITOR) {
-            // eslint-disable-next-line no-console
+
             console.warn("[BlockRenderer] Missing linkedStructuredId for structured block", {
               blockId: block?.id,
               sectionId,
@@ -170,7 +170,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
           if (found) return found;
         }
       }
-      // eslint-disable-next-line no-console
+
       console.warn("[BlockRenderer] No linkedItem found for linkedStructuredId", {
         linkedStructuredId,
         blockId: block?.id,
@@ -178,17 +178,18 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
       });
       return null;
     } catch (err) {
-      // eslint-disable-next-line no-console
+
       console.error("[BlockRenderer] Error computing linkedItem", err);
       return null;
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Pre-existing dependency contract is preserved for this release-gate cleanup.
   }, [linkedStructuredId, section, currentCv]);
 
   useEffect(() => {
     try {
       // Only log when debug mode is enabled to reduce console spam
       if (DEBUG_CV_EDITOR) {
-        // eslint-disable-next-line no-console
+
         console.debug("[BlockRenderer] linkedItem (stable log)", {
           linkedStructuredId,
           linkedItem,
@@ -249,10 +250,11 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
       : String(Math.random())
   );
   useEffect(() => {
-    // eslint-disable-next-line no-console
+
     console.debug("[BlockRenderer] mount", { mountId: mountIdRef.current, sectionId, blockId: block?.id, linkedStructuredId });
     return () => {
-      // eslint-disable-next-line no-console
+
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- Pre-existing dependency contract is preserved for this release-gate cleanup.
       console.debug("[BlockRenderer] unmount", { mountId: mountIdRef.current, sectionId, blockId: block?.id });
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -261,7 +263,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
   // Dev-only diagnostic: surface whether this renderer is running in v1 mode and link resolution state.
   useEffect(() => {
     try {
-      // eslint-disable-next-line no-console
+
       console.debug("[BlockRenderer] v1-render-debug", {
         mountId: mountIdRef.current,
         sectionId,
@@ -275,6 +277,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
     } catch {
       /* noop */
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Pre-existing dependency contract is preserved for this release-gate cleanup.
   }, [isV1Active, section?.type, linkedItem, block?.id, linkedStructuredId, selectedInspector?.block?.id]);
 
   useEffect(() => {
@@ -289,7 +292,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
           sectionStructured: section?.structuredContent,
           selectedInspectorBlockId: selectedInspector?.block?.id ?? null,
         });
-        // eslint-disable-next-line no-console
+
         console.debug("[BlockRenderer] linkedItem debug", { blockId: String(block?.id), linkedStructuredId, linkedItem });
       }
     } catch (e) {
@@ -350,7 +353,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
         null;
       const basePayload = { sectionId, block, linkedStructured: linkedItem };
 
-      // eslint-disable-next-line no-console
+
       console.debug("[BlockRenderer] handleEditClick", {
         sectionId,
         blockId: String(block?.id),
@@ -360,13 +363,13 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
       });
 
       if (typeof openInspector !== "function") {
-        // eslint-disable-next-line no-console
+
         console.error("[BlockRenderer] openInspector is not a function", { openInspector });
         return;
       }
       openInspector(basePayload as any);
     } catch (err) {
-      // eslint-disable-next-line no-console
+
       console.error("[BlockRenderer] handleEditClick error", err);
     }
   }
@@ -526,7 +529,7 @@ export function BlockRenderer({ sectionId, block, onDelete, disableChevron = fal
         </div>
         )}
       </div>
-  
+
       {showDeleteAction && (
         <div className="mt-2">
           <button

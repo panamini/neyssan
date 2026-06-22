@@ -768,11 +768,12 @@ export function ProfileReviewCard({
       }
     } catch (err) {
       requestedCvIdRef.current = null;
-      // eslint-disable-next-line no-console
+
       console.error("[ProfileReviewCard] loadCv failed for id", cvId, err);
     }
   }, [currentCvId, cvId, loadCv]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Pre-existing dependency contract is preserved for this release-gate cleanup.
   const sections: CvSection[] = (currentCv?.sections ?? []) as CvSection[];
   const sectionCatalog = useMemo<ManualSectionOption[]>(() => {
     const typedOptions: ManualSectionOption[] = v1Enabled
@@ -981,7 +982,7 @@ export function ProfileReviewCard({
       (window as any).__CV_EDITOR_DEBUG__ === true
     ) {
       try {
-        // eslint-disable-next-line no-console
+
         console.debug(
           "[ProfileReviewCard] sections snapshot",
           sections.map((section) => ({
@@ -1208,6 +1209,7 @@ export function ProfileReviewCard({
     }
     previousCvIdRef.current = nextCvId;
     setCopyFeedback(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Pre-existing dependency contract is preserved for this release-gate cleanup.
   }, [currentCv?.id]);
 
   useEffect(() => {
@@ -2313,7 +2315,7 @@ export function ProfileReviewCard({
           // Dev log to aid QA: which template we picked and why
           if (process.env.NODE_ENV !== "production") {
             try {
-              // eslint-disable-next-line no-console
+
               console.debug(
                 "[ProfileReviewCard] handleAddSection templateChoice",
                 {
@@ -2337,7 +2339,7 @@ export function ProfileReviewCard({
           newSection = { ...matched, id: uuidv4() } as CvSection;
         } catch (err) {
           // If template generation fails, fail safely instead of creating a legacy text section.
-          // eslint-disable-next-line no-console
+
           console.error("[ProfileReviewCard] generateCvTemplate failed", err);
           pushToast("Create failed.");
           return;
@@ -2355,7 +2357,7 @@ export function ProfileReviewCard({
       pushToast("Added.");
       setRecentlyAddedSectionType(option.value);
     } catch (err) {
-      // eslint-disable-next-line no-console
+
       console.error("[ProfileReviewCard] addSection failed", err);
       pushToast("Add failed.");
     }

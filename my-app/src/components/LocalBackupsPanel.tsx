@@ -42,7 +42,7 @@ export function LocalBackupsPanel(): JSX.Element {
       }
     } catch (err) {
       // localStorage can throw in some environments; fail gracefully
-      // eslint-disable-next-line no-console
+
       console.error("[LocalBackupsPanel] scanBackups failed", err);
     }
     // sort newest-first by savedAt (fallback to key order)
@@ -60,14 +60,14 @@ export function LocalBackupsPanel(): JSX.Element {
       const state: ICvState | undefined = raw?.cvState ?? raw?.state ?? undefined;
       const title: string | undefined = raw?.title ?? undefined;
       if (!state) {
-        // eslint-disable-next-line no-console
+
         console.warn("[LocalBackupsPanel] backup missing cvState", key);
         return;
       }
       createCvFromState(state, title);
       setOpen(false);
     } catch (err) {
-      // eslint-disable-next-line no-console
+
       console.error("[LocalBackupsPanel] restore failed", err);
     }
   }
@@ -77,7 +77,7 @@ export function LocalBackupsPanel(): JSX.Element {
       localStorage.removeItem(key);
       scanBackups();
     } catch (err) {
-      // eslint-disable-next-line no-console
+
       console.error("[LocalBackupsPanel] delete failed", err);
     }
   }
@@ -92,14 +92,14 @@ export function LocalBackupsPanel(): JSX.Element {
         const state: ICvState | undefined = raw?.cvState ?? raw?.state ?? undefined;
         const title: string | undefined = raw?.title ?? raw?.id ?? undefined;
         if (!state) {
-          // eslint-disable-next-line no-console
+
           console.warn("[LocalBackupsPanel] imported file missing cvState");
           return;
         }
         createCvFromState(state, title);
         setOpen(false);
       } catch (err) {
-        // eslint-disable-next-line no-console
+
         console.error("[LocalBackupsPanel] failed to import file", err);
       }
     };

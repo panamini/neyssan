@@ -15,7 +15,7 @@
  * migrate consumers to use a dedicated function name (e.g. parseCVEngine) and
  * keep this shim as the stable entrypoint used by callers.
  */
- 
+
 /* Types kept here so consumers importing parsing_shared/engine.ts retain types */
 export interface ExtractedMetadata {
   name: string | null;
@@ -23,7 +23,7 @@ export interface ExtractedMetadata {
   phone: string | null;
   linkedinUrl: string | null;
 }
- 
+
 export interface ParseResult {
   sections: Array<{
     title: string;
@@ -36,7 +36,7 @@ export interface ParseResult {
   warnings: string[];
   telemetry?: Record<string, unknown>;
 }
- 
+
 /**
  * parseCV shim
  *
@@ -54,10 +54,10 @@ export async function parseCV(rawText: string): Promise<ParseResult> {
   } catch {
     // fallthrough to require below
   }
- 
+
   // Fall back to require() for environments that mock CommonJS modules.
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-unsafe-assignment
+
     const legacy = (() => { try { return require("../parsing/hybridParser"); } catch { return null; } })() as any;
     if (legacy && typeof legacy.parseCV === "function") {
       return await legacy.parseCV(rawText) as ParseResult;
@@ -65,7 +65,7 @@ export async function parseCV(rawText: string): Promise<ParseResult> {
   } catch {
     // ignored
   }
- 
+
   throw new Error("parseCV shim: legacy hybrid parser not found (../parsing/hybridParser).");
 }
 /* --- Canonical engine implementation (under a new export: parseCVEngine) --- */

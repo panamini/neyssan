@@ -2171,7 +2171,7 @@ function deriveDesiredPosition(normalized: any, context: CanonicalizeContext): s
         const bonus = segIdx === 0 ? 0 : segIdx * 0.3;
         const score = weight - idx * 0.7 - bonus;
         if (process.env.DEBUG_ROLE === "1") {
-          // eslint-disable-next-line no-console
+
           console.log("[role candidate]", segment, score);
         }
         considerCandidate(segment, score);
@@ -2196,7 +2196,7 @@ function deriveDesiredPosition(normalized: any, context: CanonicalizeContext): s
           .join(" ");
         const candidateTokens = candidate.toLowerCase().split(/\s+/);
         if (process.env.DEBUG_ROLE === "1") {
-          // eslint-disable-next-line no-console
+
           console.log("[role fallback candidate]", candidate, candidateTokens);
         }
         if (candidateTokens.some((token: string) => ROLE_KEYWORD_HINTS.has(token))) {
@@ -2218,7 +2218,7 @@ function deriveDesiredPosition(normalized: any, context: CanonicalizeContext): s
       }
     }
     if (process.env.DEBUG_ROLE === "1") {
-      // eslint-disable-next-line no-console
+
       console.log("[role fallback]", fallbackRole);
     }
   }

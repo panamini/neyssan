@@ -146,7 +146,7 @@ export async function parsePdfBuffer(buffer: Buffer): Promise<NormalizedProfile>
   let pdf: any;
   try {
     // Use require to avoid static ESM imports that some bundlers analyze eagerly.
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+
     pdf = require("pdf-parse");
   } catch (e: any) {
     throw new Error("Failed to load pdf-parse module: " + (e?.message ?? String(e)));

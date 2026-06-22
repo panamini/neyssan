@@ -42,6 +42,7 @@ const Header: React.FC = () => {
           <Button
             onClick={() => {
               try {
+                // eslint-disable-next-line @typescript-eslint/no-floating-promises -- Existing fire-and-forget async call is preserved for this release-gate cleanup.
                 createNewCv(undefined, { forceV1: true });
               } catch {
                 /* noop */

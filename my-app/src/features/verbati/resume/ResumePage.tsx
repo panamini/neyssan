@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-misused-promises -- Existing async UI handlers are preserved for this release-gate cleanup; convert to explicit void wrappers in a focused follow-up. */
+/* eslint-disable react-refresh/only-export-components -- Existing mixed component/helper exports are outside this release-gate cleanup; split exports in a focused follow-up. */
 import React from "react";
 import { X } from "@/lib/icons";
 import "./resume-preview.css";
@@ -3489,8 +3491,10 @@ function SwissMinimaPage({
             value,
           ): value is SwissMinimaSupportSection => Boolean(value),
         )
+
         .sort((left, right) => left.sectionOrder - right.sectionOrder);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Pre-existing dependency contract is preserved for this release-gate cleanup.
     [
       activeTarget,
       data.achievementItems,
@@ -3526,8 +3530,10 @@ function SwissMinimaPage({
       Math.floor(
         (canonical.geometry.page.liveArea?.heightMm ?? pageSize.heightMm) *
           MM_TO_PX,
+
       ),
     );
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Pre-existing dependency contract is preserved for this release-gate cleanup.
   }, [pageSize, stylePreset, variant]);
   const swissMinimaPageStyle = React.useMemo(
     () =>

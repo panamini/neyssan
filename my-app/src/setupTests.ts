@@ -14,7 +14,7 @@ vi.stubGlobal('alert', vi.fn());
 vi.mock('convex/react', async (importOriginal) => {
   const actualAny: any = await importOriginal();
   class ConvexReactClient {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     constructor(_url: string) {}
     // add no-op auth methods for compatibility
     async setAuth(_token: string | null) { return; }
@@ -155,7 +155,7 @@ if (typeof window !== 'undefined' && typeof (window as any).matchMedia !== 'func
 // ResizeObserver polyfill for components relying on measurements
 if (typeof (globalThis as any).ResizeObserver === 'undefined') {
   (globalThis as any).ResizeObserver = class {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     constructor(_cb: any) {}
     observe() {}
     unobserve() {}
@@ -181,13 +181,13 @@ try {
   const originalSetInterval = global.setInterval.bind(global);
   const originalSetTimeout = global.setTimeout.bind(global);
   // Override globals
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   (global as any).setInterval = function (fn: any, ms?: any, ...args: any[]) {
     const id = originalSetInterval(fn, ms, ...args);
     try { trackedIntervals.push(id as any); } catch { /* noop */ }
     return id;
   };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   (global as any).setTimeout = function (fn: any, ms?: any, ...args: any[]) {
     const id = originalSetTimeout(fn, ms, ...args);
     try { trackedTimeouts.push(id as any); } catch { /* noop */ }
@@ -197,7 +197,7 @@ try {
   // Ensure test framework hooks are available before calling afterEach
   // `afterEach` and `vi` are provided by Vitest via setupFiles.
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     (global as any).afterEach(() => {
       try {
         for (const id of trackedIntervals.splice(0)) {

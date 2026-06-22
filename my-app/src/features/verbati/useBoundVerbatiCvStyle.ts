@@ -61,6 +61,7 @@ export function useBoundVerbatiCvStyle({
   }, [currentCv, fallbackStylePreset]);
   const persistedStyleKey = React.useMemo(
     () => buildBoundStyleKey(currentCv, persistedStylePreset),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Pre-existing dependency contract is preserved for this release-gate cleanup.
     [
       currentCv?.id,
       persistedStylePreset.accentHex,

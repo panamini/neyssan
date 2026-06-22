@@ -38,9 +38,9 @@ export function ReadOnlyRichDoc({ doc, className }: ReadOnlyRichDocProps): JSX.E
     doc && typeof doc === "object" ? (doc as RemirrorJSON) : ({ type: "doc", content: [] } as RemirrorJSON);
 
   const { manager, state } = useRemirror({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     extensions: () => extensions as any,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
     content: initialDoc as any,
   });
 

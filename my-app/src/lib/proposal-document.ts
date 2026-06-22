@@ -91,7 +91,7 @@ function cleanString(value: unknown): string {
 }
 
 function stripZeroWidthPlaceholders(value: string): string {
-  return value.replace(/[\u200b\u200c\u200d\ufeff]/g, "");
+  return value.replace(/\u200b|\u200c|\u200d|\ufeff/g, "");
 }
 
 export function normalizeEditableText(input: string): string {

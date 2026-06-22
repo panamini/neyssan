@@ -40,6 +40,10 @@ import {
   LEGACY_LOCAL_CV_DOC_STORAGE_KEY_PREFIX,
   LOCAL_CV_DOC_STORAGE_KEY_PREFIX,
 } from "../lib/cv-local-storage";
+import {
+  isResumeTemplateId,
+  type ResumeTemplateId,
+} from "../lib/layout/resumeTemplates";
 
 function hasLocalStorage(): boolean {
   try {
@@ -375,7 +379,8 @@ function sanitizeBackendVerbatiStyle(value: unknown):
     accentHex:
       typeof candidate.accentHex === "string" ? candidate.accentHex : undefined,
     resumeTemplateId:
-      typeof candidate.resumeTemplateId === "string"
+      typeof candidate.resumeTemplateId === "string" &&
+      isResumeTemplateId(candidate.resumeTemplateId as never)
         ? candidate.resumeTemplateId
         : undefined,
   };
@@ -401,6 +406,12 @@ function sanitizeBackendDocumentAppearanceSnapshot(
     return undefined;
   }
 
+  const resumeTemplateId: ResumeTemplateId | undefined =
+    typeof candidate.resumeTemplateId === "string" &&
+    isResumeTemplateId(candidate.resumeTemplateId as never)
+      ? (candidate.resumeTemplateId as ResumeTemplateId)
+      : undefined;
+
   return {
     ...(typeof candidate.familyId === "string"
       ? {
@@ -415,8 +426,8 @@ function sanitizeBackendDocumentAppearanceSnapshot(
     ...(typeof candidate.accentHex === "string"
       ? { accentHex: candidate.accentHex }
       : null),
-    ...(typeof candidate.resumeTemplateId === "string"
-      ? { resumeTemplateId: candidate.resumeTemplateId }
+    ...(resumeTemplateId
+      ? { resumeTemplateId }
       : null),
   };
 }
@@ -425,18 +436,23 @@ function assignDocumentStyleMetadataPatch(
   metadata: Record<string, unknown>,
   metadataPatch: CvDocument["metadata"],
 ): void {
+  const verbatiStylePatch =
+    metadataPatch.verbatiStyle &&
+    typeof metadataPatch.verbatiStyle === "object"
+      ? (metadataPatch.verbatiStyle as Record<string, unknown>)
+      : null;
+  const baseSnapshotPatch =
+    metadataPatch.verbatiStyleBaseSnapshot &&
+    typeof metadataPatch.verbatiStyleBaseSnapshot === "object"
+      ? (metadataPatch.verbatiStyleBaseSnapshot as Record<string, unknown>)
+      : null;
   const resumeTemplateId =
     typeof metadataPatch.resumeTemplateId === "string"
       ? metadataPatch.resumeTemplateId
-      : metadataPatch.verbatiStyle &&
-          typeof metadataPatch.verbatiStyle === "object" &&
-          typeof metadataPatch.verbatiStyle.resumeTemplateId === "string"
-        ? metadataPatch.verbatiStyle.resumeTemplateId
-        : metadataPatch.verbatiStyleBaseSnapshot &&
-            typeof metadataPatch.verbatiStyleBaseSnapshot === "object" &&
-            typeof metadataPatch.verbatiStyleBaseSnapshot.resumeTemplateId ===
-              "string"
-          ? metadataPatch.verbatiStyleBaseSnapshot.resumeTemplateId
+      : typeof verbatiStylePatch?.resumeTemplateId === "string"
+        ? verbatiStylePatch.resumeTemplateId
+        : typeof baseSnapshotPatch?.resumeTemplateId === "string"
+          ? baseSnapshotPatch.resumeTemplateId
           : undefined;
 
   if (resumeTemplateId) {

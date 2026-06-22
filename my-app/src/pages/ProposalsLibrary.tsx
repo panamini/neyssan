@@ -237,7 +237,7 @@ export function ProposalsLibrary(): JSX.Element {
   const sorted = filteredProposals;
   const proposalCount = React.useMemo(
     () =>
-      (proposals ?? []).filter((proposal) =>
+      (proposals ?? []).filter((proposal: { status?: string }) =>
         statusFilter === "sent"
           ? proposal.status === "sent" ||
             proposal.status === "exported" ||

@@ -129,7 +129,7 @@ export function resolveVisibleJobVerdict({
   matchTier?: VisibleJobMatchTier | string | null;
 }): VisibleJobVerdict {
   if (hasUsableMatchReview(matchReview)) {
-    return resolveFromReview(matchReview.verdict);
+    return resolveFromReview(matchReview.verdict!);
   }
 
   if (isMatchTier(matchRead?.tier)) {

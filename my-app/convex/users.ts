@@ -107,7 +107,7 @@ export const deleteUser = internalMutation({
 
 export const getUser = query({
   handler: async (
-    ctx: QueryCtx, // @ts-ignore unused args
+    ctx: QueryCtx,
     args: {},
   ): Promise<UserProfile | null> => {
     // 'args' unused but required by Convex signature —ts-ignore suppress if needed

@@ -133,6 +133,7 @@ export function AchievementsBlock({
     [section.id],
   );
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Pre-existing dependency contract is preserved for this release-gate cleanup.
   function publishActiveTarget(
     source: ResumeActiveTarget["source"],
     itemId?: string,

@@ -10,7 +10,6 @@ const PG_BATCH_SIZE = 1000;
 /**
  * Interface for sync operation state
  */
-// @ts-ignore
 interface SyncState {
   lastSyncId: string;
   status: "in_progress" | "completed" | "failed";

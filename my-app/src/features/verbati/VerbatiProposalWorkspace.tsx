@@ -413,11 +413,13 @@ export function VerbatiProposalWorkspace({
       const params = new URLSearchParams();
       params.set("view", "saved");
       params.set("id", pendingPreviewProposalId);
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises -- Existing fire-and-forget async call is preserved for this release-gate cleanup.
       navigate(`/proposal?${params.toString()}`);
       setIsProposalPickerOpen(false);
       return;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises -- Existing fire-and-forget async call is preserved for this release-gate cleanup.
     navigate("/proposal");
     setIsProposalPickerOpen(false);
   }, [navigate, pendingPreviewProposalId]);

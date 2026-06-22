@@ -88,7 +88,7 @@ function useTopbarDocumentTitle(): string | null {
     })();
     const proposalCount =
       (proposals ?? readStoredSavedProposalFixtures()).filter(
-        (proposal) =>
+        (proposal: { status?: string }) =>
           proposal.status === "saved" || proposal.status === "draft",
       ).length;
 
@@ -137,6 +137,7 @@ function useTopbarDocumentTitle(): string | null {
     }
 
     return null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Pre-existing dependency contract is preserved for this release-gate cleanup.
   }, [
     composeDraftToken,
     currentCv?.id,

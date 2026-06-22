@@ -189,7 +189,7 @@ async function resolveRuntimeDocumentDecoration(
   ctx: any,
   decoration: unknown,
   resolvedUrlCache: Map<string, string | null>,
-) {
+): Promise<any> {
   if (!decoration || typeof decoration !== "object" || Array.isArray(decoration)) {
     return decoration;
   }

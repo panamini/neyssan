@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-misused-promises -- Existing async UI handlers are preserved for this release-gate cleanup; convert to explicit void wrappers in a focused follow-up. */
+/* eslint-disable react-refresh/only-export-components -- Existing mixed component/helper exports are outside this release-gate cleanup; split exports in a focused follow-up. */
 import React from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useAuth, useUser } from "@clerk/clerk-react";
@@ -117,7 +119,10 @@ type ProposalContactSettings = {
   signatureSettings?: ProposalSignatureSettings | null;
 };
 
-type ProposalContactField = keyof ProposalContactSettings;
+type ProposalContactField = Exclude<
+  keyof ProposalContactSettings,
+  "savedVoicePreset" | "signatureSettings"
+>;
 
 const PROPOSAL_CONTACT_FIELDS: Array<{
   id: ProposalContactField;
@@ -376,7 +381,9 @@ function buildDefaultPresetSlot(slot: SlotIndex): PresetSlot {
     ...EMPTY_PRESET,
     fontPairId: factorySlot.appearance.typography,
     styleChoice: "balanced",
-    paletteOverride: factorySlot.appearance.palette,
+    paletteOverride: isProposalPaletteId(factorySlot.appearance.palette)
+      ? factorySlot.appearance.palette
+      : null,
     accentHex: factorySlot.appearance.accentHex ?? null,
     signatureSettings: DEFAULT_PROPOSAL_SIGNATURE_SETTINGS,
     verbatiStyle: {

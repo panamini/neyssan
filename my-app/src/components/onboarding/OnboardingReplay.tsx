@@ -14,6 +14,7 @@ import {
   getVerbatiFontPairOption,
   type VerbatiFontPairId,
 } from "../../features/verbati/fontCatalog";
+import type { VerbatiTypographyPreset } from "../../features/verbati/types";
 import {
   PROPOSAL_PALETTE_OPTIONS,
   isProposalPaletteId,
@@ -146,6 +147,12 @@ function resolveOnboardingResumeTemplateId(
   return fallback;
 }
 
+function resolveOnboardingFontPairCandidate(
+  value: unknown,
+): VerbatiTypographyPreset | undefined {
+  return typeof value === "string" ? (value as VerbatiTypographyPreset) : undefined;
+}
+
 function resolveOnboardingAccentColor(
   raw: OnboardingStylePresetRecord | null | undefined,
   factorySlot: ReturnType<typeof getFactoryDocumentStyleSlot>,
@@ -177,8 +184,8 @@ function resolveOnboardingStyleSlot(
   const factorySlot = getFactoryDocumentStyleSlot(definition.slotId);
   const raw = getPresetForOnboardingSlot(presets, definition.slotId);
   const fontPair = getVerbatiFontPairOption(
-    raw?.fontPairId ??
-      raw?.verbatiStyle?.typography ??
+    resolveOnboardingFontPairCandidate(raw?.fontPairId) ??
+      resolveOnboardingFontPairCandidate(raw?.verbatiStyle?.typography) ??
       factorySlot.appearance.typography,
   );
 
@@ -662,7 +669,7 @@ export function OnboardingReplay({
                           <span className="onb-replay__choice-layout">
                             {getOnboardingLayoutName(
                               styleSlot.resumeTemplateId,
-                              resolvedLanguage,
+                              resolvedLanguage as UiMessageLocale,
                             )}
                           </span>
                           <span className="onb-replay__choice-meta">

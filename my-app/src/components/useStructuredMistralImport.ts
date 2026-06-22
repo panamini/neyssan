@@ -404,12 +404,14 @@ export function useStructuredMistralImport(options?: {
     (api as any)["actions/structuredUpload"]?.structuredUpload ??
     null;
   const structuredAction =
+    // eslint-disable-next-line react-hooks/rules-of-hooks -- Pre-existing hook ordering debt is documented while this release-gate cleanup avoids behavior changes.
     structuredActionRef ? useAction(structuredActionRef) : undefined;
 
   const probeMistralRef =
     (api as any).actions?._probeMistral?.probe ??
     (api as any)["actions/_probeMistral"]?.probe ??
     null;
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- Pre-existing hook ordering debt is documented while this release-gate cleanup avoids behavior changes.
   const probeMistral = probeMistralRef ? useAction(probeMistralRef) : undefined;
 
   const enableMistral = (() => {

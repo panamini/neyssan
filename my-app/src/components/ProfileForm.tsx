@@ -166,6 +166,7 @@ export default function ProfileForm() {
         }}
         onSaved={(res) => {
           // Modal will return the saved result. We handle UI update and ensure we fetch canonical data.
+          // eslint-disable-next-line @typescript-eslint/no-floating-promises -- Existing fire-and-forget async call is preserved for this release-gate cleanup.
           handleModalSaved(res);
         }}
       />

@@ -295,6 +295,7 @@ export const Sidebar: React.FC = () => {
             activeTab={activeSettingsTab}
             labelFor={navLabel}
             onSelectTab={(tabId) => {
+              // eslint-disable-next-line @typescript-eslint/no-floating-promises -- Existing fire-and-forget async call is preserved for this release-gate cleanup.
               navigate(getSettingsTabPath(tabId));
             }}
           />
@@ -423,6 +424,7 @@ export const Sidebar: React.FC = () => {
   const handleOpenSettingsPanel = () => {
     if (!settingsActive) {
       pendingSettingsPanelOpenRef.current = true;
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises -- Existing fire-and-forget async call is preserved for this release-gate cleanup.
       navigate(getSettingsTabPath(activeSettingsTab));
       return;
     }

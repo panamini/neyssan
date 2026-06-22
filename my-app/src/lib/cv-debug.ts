@@ -34,7 +34,7 @@ export function dbg(...args: any[]) {
       // ignore panel errors
     }
     // Also mirror to console for convenience
-    // eslint-disable-next-line no-console
+
     console.debug("[CV-DBG]", ...args);
   } catch {
     // noop

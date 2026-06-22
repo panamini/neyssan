@@ -84,6 +84,7 @@ type SavedProposalType =
 type SavedProposalRecord = {
   _id: string;
   _creationTime: number;
+  updatedAt?: number;
   status?: string;
   title?: string;
   content?: string;
@@ -730,6 +731,7 @@ export default function ProposalsList({
     [selectProposal],
   );
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Pre-existing dependency contract is preserved for this release-gate cleanup.
   const applyLocalUpdate = (
     id: string,
     patch: Partial<SavedProposalRecord>,
@@ -1026,6 +1028,7 @@ export default function ProposalsList({
     }
 
     return nextMetadata;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Pre-existing dependency contract is preserved for this release-gate cleanup.
   }, [
     editContent,
     selected,

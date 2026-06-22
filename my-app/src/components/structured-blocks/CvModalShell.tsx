@@ -58,6 +58,7 @@ export function CvModalShell({
       if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
       if (enterFrameRef.current) cancelAnimationFrame(enterFrameRef.current);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Pre-existing dependency contract is preserved for this release-gate cleanup.
   }, [open]);
 
   React.useEffect(() => {

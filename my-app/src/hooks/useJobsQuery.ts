@@ -21,6 +21,10 @@ export type JobsQueryListItem = {
   lastOpenedAt: number;
   lastActivityAt: number;
   linkedDocumentCount: number;
+  rawDescription?: string;
+  summary?: string;
+  resumeId?: string | null;
+  resumeName?: string | null;
   keywords?: string[];
   visibleKeywords?: string[];
   skills?: string[];

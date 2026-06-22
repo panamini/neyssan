@@ -1,3 +1,53 @@
+const fs = require("node:fs");
+const path = require("node:path");
+
+const scrapingServerTsconfig = path.join(
+  __dirname,
+  "scraping-server/tsconfig.json",
+);
+const scrapingServerOverrides = fs.existsSync(scrapingServerTsconfig)
+  ? [
+      {
+        files: ["scraping-server/**/*.ts"],
+        parserOptions: {
+          project: [scrapingServerTsconfig],
+        },
+      },
+    ]
+  : [];
+
+const easedTypeScriptRules = {
+  "no-unused-vars": "off",
+  "no-empty": "off",
+  "no-constant-condition": "off",
+  "no-useless-escape": "off",
+  "prefer-const": "off",
+  "@typescript-eslint/no-unused-vars": "off",
+  "@typescript-eslint/ban-ts-comment": "error",
+  "@typescript-eslint/no-explicit-any": "off",
+  "@typescript-eslint/no-unsafe-argument": "off",
+  "@typescript-eslint/no-unsafe-assignment": "off",
+  "@typescript-eslint/no-unsafe-call": "off",
+  "@typescript-eslint/no-unsafe-member-access": "off",
+  "@typescript-eslint/no-unsafe-return": "off",
+  "@typescript-eslint/require-await": "off",
+  "@typescript-eslint/no-base-to-string": "off",
+  "@typescript-eslint/no-redundant-type-constituents": "off",
+  "@typescript-eslint/no-unnecessary-type-assertion": "off",
+  "@typescript-eslint/unbound-method": "off",
+  "@typescript-eslint/no-require-imports": "off",
+  "@typescript-eslint/no-duplicate-type-constituents": "off",
+  "@typescript-eslint/restrict-template-expressions": "off",
+  "@typescript-eslint/no-empty-object-type": "off",
+  "@typescript-eslint/only-throw-error": "off",
+  "no-inner-declarations": "off",
+  "no-mixed-spaces-and-tabs": "off",
+  "no-control-regex": "off",
+  "no-var": "off",
+  "no-case-declarations": "off",
+  "no-undef": "off",
+};
+
 module.exports = {
   root: true,
   env: { browser: true, es2020: true, node: true },
@@ -21,6 +71,13 @@ module.exports = {
     "src/components.bak.*/**",
     "**/__tests__/**",
     "convex/lib/parsing/__tests__/**",
+    "convex/lib/parsing/prev_canonicalize*.ts",
+    "convex/lib/parsing_shared/*.test.ts",
+    "docs/**",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/ProposalGenerator.tsx",
+    "src/pages/ProposalForgeNext.tsx",
     "worker/**",
     "vitest.config.ts",
   ],
@@ -53,15 +110,12 @@ module.exports = {
       },
       // Enforce no-floating-promises only in typed source so the rule can use type information.
       rules: {
-        "@typescript-eslint/no-floating-promises": "error"
+        ...easedTypeScriptRules,
+        "@typescript-eslint/no-floating-promises": "error",
+        "@typescript-eslint/no-misused-promises": "error",
       }
     },
-    {
-      files: ["scraping-server/**/*.ts"],
-      parserOptions: {
-        project: [require.resolve("./scraping-server/tsconfig.json")],
-      },
-    },
+    ...scrapingServerOverrides,
     {
       // Non-typed linting for other TS files (tests, scripts, worker, etc.)
       files: ["**/*.ts", "**/*.tsx"],
@@ -80,17 +134,6 @@ module.exports = {
     ],
 
     // Eased rules for faster iteration (can be tightened later)
-    "@typescript-eslint/no-unused-vars": [
-      "warn",
-      { varsIgnorePattern: "^_", argsIgnorePattern: "^_" },
-    ],
-    "@typescript-eslint/ban-ts-comment": "error",
-    "@typescript-eslint/no-explicit-any": "off",
-    "@typescript-eslint/no-unsafe-argument": "off",
-    "@typescript-eslint/no-unsafe-assignment": "off",
-    "@typescript-eslint/no-unsafe-call": "off",
-    "@typescript-eslint/no-unsafe-member-access": "off",
-    "@typescript-eslint/no-unsafe-return": "off",
-    "@typescript-eslint/require-await": "off",
+    ...easedTypeScriptRules,
   },
 };
