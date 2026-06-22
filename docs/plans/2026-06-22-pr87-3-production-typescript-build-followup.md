@@ -147,12 +147,22 @@ Implementation brief status: `READY_TO_IMPLEMENT`
 - Cleared the first `SectionEditorSheet.tsx` skill drawer blocker by normalizing generic structured skill records into `ISkillItem` with valid `name`, `level`, `bucket`, and optional string fields.
 - Cleared a `FloatingAiToolbar.tsx` React/framer ref type mismatch by using `React.RefObject<HTMLDivElement>` for the panel ref.
 - Cleared `OnboardingReplay.tsx` typography and locale narrowing errors by reusing `resolveVerbatiFontPairId` and `normalizeUiMessageLocale`.
-- Cleared `ProposalsList.tsx` timestamp sorting errors by sorting on the guaranteed `_creationTime` field.
+- Cleared `ProposalsList.tsx` timestamp typing without changing the product sort contract: saved proposals now sort by latest activity, `updatedAt ?? _creationTime`.
 - Cleared the `CvLibraryContext.tsx` document-decoration object narrowing cluster by reading passthrough metadata through `normalizeDocumentDecoration`.
 - Cleared resume editor drift in `ResumeOneColAtsPage.tsx`, `ResumeSanatAsymmetricPage.tsx`, and `RichInlineEditor.tsx`.
 - Cleared small shared/library blockers in `document-decoration.ts`, `editor-ai-selection.ts`, `export-renderers.ts`, `visibleJobVerdict.ts`, `ui-preferences.ts`, and `career-knowledge/resolver.ts`.
 - Cleared narrow local-MCP tuple, readonly field, unknown-array, audit-count, and envelope field narrowing blockers in the touched local-MCP modules.
 - Updated `SectionEditorSheet.test.tsx` to exercise the current skill-suggestion select and dismiss accessible labels.
+
+## Review Fix Evidence
+
+- Review blocker fixed: `ProposalsList.tsx` restores saved-proposal latest-activity sorting with typed `updatedAt?: number` / `createdAt?: number` fields on `SavedProposalRecord`; no broad `any` or type weakening was added.
+- Regression test added: `ProposalsList.heading-isolation.test.tsx` now uses proposal A with older `_creationTime` and newer `updatedAt`, proposal B with newer `_creationTime` and no `updatedAt`, and asserts A renders first.
+- Existing targeted test failure resolved: `ProposalsList.toolbar-grouping.test.tsx` was stale against current copy/accessibility (`Proposal Library`, `0 draft proposals and 2 saved proposals`) and current default sort selection (`beta` when no `updatedAt` is present). The component copy was not changed.
+- Targeted lint introduced by PR87.3 changed lines fixed: the unnecessary local-MCP `as readonly []` assertions were replaced by a typed frozen empty tuple constant, and the unnecessary validation failure assertion in `localMcpToolsCallFixture.ts` was removed.
+- CV normalization choice documented: `documentDecoration` is treated as a closed shape in local `DocumentDecoration` and Convex validators, so `CvLibraryContext.tsx` uses `normalizeDocumentDecoration` at the runtime overlay boundary instead of preserving unknown decoration keys.
+- Skills normalization choice documented: `ISkillItem.level` is required by `cvDocument.ts`, so skill drawer records with missing/invalid level are normalized to the existing neutral `"Intermediate"` level before entering `SkillsDrawer`.
+- Remaining targeted ESLint on all changed files is still red due inherited large-file issues outside the review-fix lines; the narrow local-MCP introduced lint subset now passes.
 
 ## Final Evidence
 
@@ -160,7 +170,7 @@ Final build command:
 
 - `rtk npm run build`
 - Result: failed during `tsc -b`
-- Final build log: `/Users/pana/.lean-ctx/tee/2026-06-22_180145_rtk_npm_run_build.log`
+- Final build log after review fixes: `/Users/pana/.lean-ctx/tee/2026-06-22_193346_rtk_npm_run_build.log`
 - Final compressed build summary: 145 TypeScript errors
 - Final parsed file-scoped diagnostics: 144
 - Final first blocker: `src/modules/local-mcp/mcpComponentErrorLoadingRefusalUx.ts(608,3) TS2322`
@@ -191,6 +201,8 @@ Files touched:
 
 - `my-app/src/components/FloatingAiToolbar.tsx`
 - `my-app/src/components/ProposalsList.tsx`
+- `my-app/src/components/__tests__/ProposalsList.heading-isolation.test.tsx`
+- `my-app/src/components/__tests__/ProposalsList.toolbar-grouping.test.tsx`
 - `my-app/src/components/cv/SectionEditorSheet.tsx`
 - `my-app/src/components/cv/__tests__/SectionEditorSheet.test.tsx`
 - `my-app/src/components/onboarding/OnboardingReplay.tsx`
@@ -227,6 +239,9 @@ Commands run:
 - `rtk npx tsc --noEmit --pretty false`
 - `rtk npx tsc -b --pretty false`
 - `rtk npx vitest run src/components/cv/__tests__/SectionEditorSheet.test.tsx src/components/__tests__/FloatingAiToolbar.test.tsx src/__tests__/ui-preferences.test.tsx src/components/jobs/__tests__/MatchReadBlock.test.tsx src/modules/local-mcp/__tests__/localMcpServerSkeleton.test.ts src/modules/local-mcp/__tests__/localMcpToolsCallFixture.test.ts src/modules/local-mcp/__tests__/mcpApplicationMessageSend.test.ts src/modules/local-mcp/__tests__/mcpApprovalAuditBoundary.test.ts`
+- `rtk npx vitest run src/components/__tests__/ProposalsList.autosave.test.tsx src/components/__tests__/ProposalsList.heading-isolation.test.tsx src/components/__tests__/ProposalsList.route-selection.test.tsx src/components/__tests__/ProposalsList.saved-view-typography.test.tsx src/components/__tests__/ProposalsList.toolbar-grouping.test.tsx`
+- `rtk npx eslint src/modules/local-mcp/localMcpServerSkeleton.ts src/modules/local-mcp/localMcpToolsCallFixture.ts`
+- Focused ESLint summary for changed TS/TSX files.
 - `rtk git diff --check`
 - `rtk npx fallow audit --changed-since origin/application-os-foundation --format compact`
 - Source guard commands over added diff lines and forbidden files.
@@ -236,6 +251,9 @@ Validation results:
 - `rtk npm run build`: failed; 145 compressed TypeScript errors remain.
 - `rtk npx tsc --noEmit --pretty false`: passed.
 - Focused Vitest: passed, 7 files / 122 tests.
+- ProposalsList targeted Vitest: passed, 5 files / 8 tests. The run emits inherited React warnings about duplicate `workshop` keys in the layout menu, but tests pass.
+- Introduced local-MCP lint subset: passed, no ESLint issues in `localMcpServerSkeleton.ts` and `localMcpToolsCallFixture.ts`.
+- Focused ESLint summary for all changed TS/TSX files: still red with 130 errors / 36 warnings, down from 135 / 34 after removing introduced local-MCP assertions. Remaining errors are inherited large-file lint debt outside the review-fix lines.
 - `rtk git diff --check`: passed.
 - Fallow advisory: red with inherited complexity/dead-code/duplication findings on changed large files; no auto-fixes applied.
 - Added `ts-ignore`: none.

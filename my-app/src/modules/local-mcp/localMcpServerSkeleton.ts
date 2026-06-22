@@ -84,6 +84,8 @@ const REQUIRED_TRUE_CONSTRAINTS = [
   "noProductionBehavior",
 ] as const;
 
+const EMPTY_SKELETON_LIST: readonly [] = Object.freeze([]);
+
 export function buildDisabledLocalMcpServerSkeleton(): LocalMcpServerSkeletonV1 {
   const skeleton: LocalMcpServerSkeletonV1 = {
     kind: "local_mcp_server_skeleton",
@@ -147,10 +149,10 @@ function assertDisabledConstraints(value: unknown): void {
 function cloneSkeleton(skeleton: LocalMcpServerSkeletonV1): LocalMcpServerSkeletonV1 {
   return Object.freeze({
     ...skeleton,
-    routePaths: Object.freeze([]) as readonly [],
-    exposedToolNames: Object.freeze([]) as readonly [],
-    callableToolNames: Object.freeze([]) as readonly [],
-    resourceUris: Object.freeze([]) as readonly [],
+    routePaths: EMPTY_SKELETON_LIST,
+    exposedToolNames: EMPTY_SKELETON_LIST,
+    callableToolNames: EMPTY_SKELETON_LIST,
+    resourceUris: EMPTY_SKELETON_LIST,
     constraints: Object.freeze({ ...skeleton.constraints }),
   });
 }

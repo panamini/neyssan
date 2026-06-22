@@ -91,7 +91,11 @@ describe("ProposalsList toolbar grouping", () => {
   function getMainProposalDisplayCall() {
     return [...proposalDisplaySpy.mock.calls]
       .reverse()
-      .find(([props]) => props.documentHeaderMode === "actions-only")?.[0] as
+      .find(
+        ([props]) =>
+          (props as Record<string, unknown> | undefined)?.documentHeaderMode ===
+          "actions-only",
+      )?.[0] as
       | Record<string, unknown>
       | undefined;
   }
@@ -99,7 +103,11 @@ describe("ProposalsList toolbar grouping", () => {
   function getSecondaryProposalDisplayCall() {
     return [...proposalDisplaySpy.mock.calls]
       .reverse()
-      .find(([props]) => props.hideDocumentHeader === true)?.[0] as
+      .find(
+        ([props]) =>
+          (props as Record<string, unknown> | undefined)?.hideDocumentHeader ===
+          true,
+      )?.[0] as
       | Record<string, unknown>
       | undefined;
   }
@@ -168,8 +176,10 @@ describe("ProposalsList toolbar grouping", () => {
         ".dasti-proposal-library-selected-sidebar .dasti-proposal-library-info-card",
       ),
     ).toBeTruthy();
-    expect(screen.getByText("Saved proposals")).toBeInTheDocument();
-    expect(screen.getByLabelText("2 saved proposals")).toBeInTheDocument();
+    expect(screen.getByText("Proposal Library")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("0 draft proposals and 2 saved proposals"),
+    ).toBeInTheDocument();
     expect(
       container.querySelector(".dasti-proposal-library-info-card"),
     ).toBeTruthy();
@@ -177,13 +187,13 @@ describe("ProposalsList toolbar grouping", () => {
     const titleInput = screen.getByRole("textbox", {
       name: "Proposal title",
     }) as HTMLInputElement;
-    expect(titleInput).toHaveValue("Saved proposal alpha");
+    expect(titleInput).toHaveValue("Saved proposal beta");
     fireEvent.change(titleInput, {
-      target: { value: "Renamed proposal alpha" },
+      target: { value: "Renamed proposal beta" },
     });
     fireEvent.blur(titleInput);
     await waitFor(() => {
-      expect(screen.getByText("Renamed proposal alpha")).toBeInTheDocument();
+      expect(screen.getByText("Renamed proposal beta")).toBeInTheDocument();
     });
     expect(
       screen.queryByRole("searchbox", { name: "Search saved proposals" }),
@@ -229,28 +239,27 @@ describe("ProposalsList toolbar grouping", () => {
       );
     });
 
-    expect(
-      screen.getByRole("button", { name: /layout swiss/i }),
-    ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /layout swiss/i }));
+    const layoutButton = screen.getByRole("button", { name: /Layout/i });
+    expect(layoutButton).toBeInTheDocument();
+    fireEvent.click(layoutButton);
     expect(
       screen.getByRole("menu", { name: "Layout options" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("menuitemradio", {
-        name: "Workshop",
+        name: "Workshop two-column",
       }),
     ).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("menuitemradio", {
-        name: "Editorial",
+        name: "Workshop two-column",
       }),
     );
 
     await waitFor(() => {
       expect(getMainProposalDisplayCall()?.stylePreset).toEqual(
         expect.objectContaining({
-          layout: "editorial",
+          layout: "workshop",
         }),
       );
     });

@@ -164,11 +164,10 @@ export function simulateLocalMcpToolsCallFixture(
   );
 
   if (validation.valid !== true) {
-    const failed = validation as Extract<typeof validation, { valid: false }>;
     return buildFailure(
       parsed.toolName,
-      messageForValidationCode(failed.error.code),
-      fixtureErrorCodeForValidationCode(failed.error.code),
+      messageForValidationCode(validation.error.code),
+      fixtureErrorCodeForValidationCode(validation.error.code),
     );
   }
 
