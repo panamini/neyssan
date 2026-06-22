@@ -17,6 +17,19 @@
 
     "esModuleInterop": true
   },
-  "include": ["vite.config.ts"]
+  "include": [
+    "vite.config.ts",
+    "src/modules/application-harness/fingerprints.ts",
+    "src/modules/application-harness/schema.ts",
+    "src/modules/internal-tool-contracts/contractRules.ts",
+    "src/modules/internal-tool-contracts/contracts.ts",
+    "src/modules/internal-tool-contracts/schema.ts",
+    "src/modules/local-mcp/localMcpDevEndpoint.ts",
+    "src/modules/local-mcp/localMcpToolsListFixture.ts",
+    "src/modules/local-mcp/mcpDescriptorRegistry.ts",
+    "src/modules/local-mcp/mcpSchemaProjection.ts",
+    "src/modules/local-mcp/schema.ts",
+    "src/modules/local-mcp/toolRegistry.ts"
+  ]
   
 }
