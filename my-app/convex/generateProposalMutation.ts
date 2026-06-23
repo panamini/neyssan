@@ -7359,6 +7359,98 @@ function coverLetterBodyHasCvBackedCandidateEvidence(body: string): boolean {
   );
 }
 
+function premiumCoverLetterFinalProvenanceSatisfiesSubstantiveBody(args: {
+  provenance?: PremiumCoverLetterFinalProvenance;
+  finalText: string;
+}): boolean {
+  const provenance = args.provenance;
+  if (
+    !provenance ||
+    (provenance.status !== "validated_final_text" &&
+      provenance.status !== "validated_after_structured_repair")
+  ) {
+    return false;
+  }
+
+  const verifiedCvFactIds = new Set(
+    provenance.candidateFacts
+      .filter((fact) => fact.source === "cv")
+      .map((fact) => fact.id)
+      .filter((id) => provenance.verifiedCandidateFactIds.includes(id)),
+  );
+  if (verifiedCvFactIds.size === 0) {
+    return false;
+  }
+
+  const visibleSentences = new Set(
+    splitParagraphs(args.finalText)
+      .flatMap((paragraph) => splitSentences(paragraph))
+      .map((sentence) => compactWhitespace(sentence))
+      .filter(Boolean),
+  );
+  if (visibleSentences.size === 0) {
+    return false;
+  }
+
+  const sentenceLooksVerifiedPremiumCvEvidence = (sentence: string): boolean => {
+    const normalized = compactWhitespace(sentence);
+    if (
+      !normalized ||
+      sentenceLooksNumericResidue(normalized) ||
+      sentenceLooksMalformedFragment(normalized) ||
+      sentenceLooksGenericRoleSummary(normalized) ||
+      sentenceLooksUnsupportedRequirementLeakage(normalized) ||
+      containsForbiddenProposalBridge(normalized)
+    ) {
+      return false;
+    }
+
+    if (sentenceLooksCandidateBackedCvGroundedSentence(normalized)) {
+      return true;
+    }
+
+    const hasConcreteCvWorkDetail =
+      EVIDENCE_ACTION_VERB_PATTERN.test(normalized) ||
+      /\b(?:at|with)\s+[A-Z][\w&'.-]+/u.test(sentence) ||
+      /\b\d+(?:[%+]|k\b|x\b|\s*(?:percent|months?|years?|days?|hours?))\b/i.test(
+        normalized,
+      );
+    if (!hasConcreteCvWorkDetail) {
+      return false;
+    }
+
+    if (sentenceHasCvBackedCandidateEvidenceAnchor(sentence)) {
+      return true;
+    }
+
+    return /^(?:that|this)\s+work\s+included\b/i.test(normalized);
+  };
+
+  const verifiedCandidateSentences = new Set<string>();
+  for (const section of Object.values(provenance.sections)) {
+    if (
+      !section.verifiedCandidateFactIds.some((factId) =>
+        verifiedCvFactIds.has(factId),
+      )
+    ) {
+      continue;
+    }
+
+    for (const sentence of splitSentences(section.text)) {
+      const normalized = compactWhitespace(sentence);
+      if (
+        normalized &&
+        visibleSentences.has(normalized) &&
+        sentenceLooksVerifiedPremiumCvEvidence(sentence)
+      ) {
+        verifiedCandidateSentences.add(normalized);
+      }
+    }
+  }
+
+  return verifiedCandidateSentences.size >= 2;
+}
+
 function assertCvBackedCoverLetterHasCandidateEvidence(args: {
   content: string;
   format: OutputFormat;
@@ -8494,6 +8586,7 @@ function assertSavedOutputHasSubstantiveBody(args: {
   candidateName?: string;
   noContextMode: boolean;
   acceptanceMode?: ProposalBodyAcceptanceMode;
+  premiumFinalProvenance?: PremiumCoverLetterFinalProvenance;
   debugTrace?: ProposalFinalizationDebugTrace;
 }): void {
   const body = stripTrailingClosingDiscussion(
@@ -8528,6 +8621,30 @@ function assertSavedOutputHasSubstantiveBody(args: {
         };
       }
       return;
+    }
+    if (args.format === "cover_letter" && !args.noContextMode) {
+      const provenanceBody = stripTrailingClosingDiscussion(
+        cleanProposalBodyText({
+          content: args.content,
+          candidateName: args.candidateName,
+          dropDuplicateSentences: false,
+          format: args.format,
+        }),
+      );
+      if (
+        premiumCoverLetterFinalProvenanceSatisfiesSubstantiveBody({
+          provenance: args.premiumFinalProvenance,
+          finalText: provenanceBody,
+        })
+      ) {
+        if (args.debugTrace) {
+          args.debugTrace.substantiveBodyAssertion = {
+            body: provenanceBody,
+            passed: true,
+          };
+        }
+        return;
+      }
     }
     if (
       args.format === "cover_letter" &&
@@ -9833,6 +9950,7 @@ export function finalizeProposalForPersistence(args: {
         candidateName: args.candidateName,
         noContextMode: args.noContextMode,
         acceptanceMode,
+        premiumFinalProvenance: args.premiumFinalProvenance,
         debugTrace: args.debugTrace,
       });
     } catch (error) {
@@ -9864,6 +9982,7 @@ export function finalizeProposalForPersistence(args: {
         candidateName: args.candidateName,
         noContextMode: args.noContextMode,
         acceptanceMode,
+        premiumFinalProvenance: args.premiumFinalProvenance,
         debugTrace: args.debugTrace,
       });
       usedFailOpenPersistenceFallback = true;
