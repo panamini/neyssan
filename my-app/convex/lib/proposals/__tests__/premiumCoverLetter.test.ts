@@ -14,12 +14,14 @@ import {
   buildJobOfferPriorityPack,
   buildPremiumCoverLetterOpenAIRequest,
   buildPremiumCoverLetterBrief,
+  buildPremiumCoverLetterFinalProvenance,
   buildPremiumCoverLetterPrompt,
   evaluatePremiumCoverLetterQualityShadow,
   evaluatePremiumCoverLetterEligibility,
   extractOpenAIJsonPayload,
   inferPremiumCoverLetterContextClass,
   isCoverLetterPremiumPathV1Enabled,
+  premiumCoverLetterFinalProvenanceSatisfiesCandidateEvidence,
   rankAllowedFacts,
   repairPremiumCoverLetterBodyParts,
   resolvePremiumCoverLetterWriterModel,
@@ -348,6 +350,104 @@ describe("premium ClaimPlan provenance v1", () => {
       employerValueBlock: writerOutput.bodyParts.employerValueBlock.text,
       closeLine: writerOutput.bodyParts.closeLine.text,
     });
+  });
+
+  it("validates premium final provenance from final text instead of cited ids alone", () => {
+    const { claimPlan, factGraph } = buildDirectClaimPlanFixture();
+    const openingClaim = claimPlan.claims.find((claim) => claim.section === "opening")!;
+    const proofClaim = claimPlan.claims.find((claim) => claim.section === "proofBlock")!;
+    const employerClaim = claimPlan.claims.find(
+      (claim) => claim.section === "employerValueBlock",
+    )!;
+    const closeClaim = claimPlan.claims.find((claim) => claim.section === "closeLine")!;
+    const writerOutput = {
+      version: "premium_writer_output_v1" as const,
+      bodyParts: {
+        opening: {
+          section: "opening" as const,
+          text: "I improved signup conversion by 11% after iterative UI experiments.",
+          claimIds: [openingClaim.id],
+          factIds: openingClaim.factIds,
+          demandIds: [],
+        },
+        proofBlock: {
+          section: "proofBlock" as const,
+          text: "I led a design system migration used across 4 product squads.",
+          claimIds: [proofClaim.id],
+          factIds: proofClaim.factIds,
+          demandIds: [],
+        },
+        employerValueBlock: {
+          section: "employerValueBlock" as const,
+          text: "That work is relevant to customer-facing React and TypeScript delivery.",
+          claimIds: [employerClaim.id],
+          factIds: employerClaim.factIds,
+          demandIds: employerClaim.demandIds,
+        },
+        closeLine: {
+          section: "closeLine" as const,
+          text: "I bring grounded frontend evidence around experimentation and product-facing interfaces.",
+          claimIds: [closeClaim.id],
+          factIds: closeClaim.factIds,
+          demandIds: [],
+        },
+      },
+    };
+
+    const validated = buildPremiumCoverLetterFinalProvenance({
+      writerOutput,
+      finalBodyParts: toCoverLetterBodyParts(writerOutput),
+      claimPlan,
+      factGraph,
+      legacyWrapped: false,
+      provenanceIdsNormalized: false,
+    });
+    expect(validated.status).toBe("validated_final_text");
+    expect(validated.origin).toBe("provider_reported");
+    expect(validated.verifiedCandidateFactIds.length).toBeGreaterThan(0);
+    expect(
+      premiumCoverLetterFinalProvenanceSatisfiesCandidateEvidence({
+        provenance: validated,
+        finalText: Object.values(toCoverLetterBodyParts(writerOutput)).join(" "),
+      }),
+    ).toBe(true);
+
+    const decorativeIdsOnly = buildPremiumCoverLetterFinalProvenance({
+      writerOutput,
+      finalBodyParts: {
+        opening:
+          "The role centers on structured delivery, collaboration, and careful stakeholder communication.",
+        proofBlock:
+          "The team needs someone who can understand priorities and keep projects moving.",
+        employerValueBlock:
+          "That context makes the opportunity interesting for a product-focused team.",
+        closeLine: "I would be glad to discuss the role further.",
+      },
+      claimPlan,
+      factGraph,
+      legacyWrapped: false,
+      provenanceIdsNormalized: false,
+    });
+    expect(decorativeIdsOnly.candidateFactIds.length).toBeGreaterThan(0);
+    expect(decorativeIdsOnly.status).toBe("invalidated_by_late_mutation");
+    expect(
+      premiumCoverLetterFinalProvenanceSatisfiesCandidateEvidence({
+        provenance: decorativeIdsOnly,
+        finalText: Object.values(decorativeIdsOnly.sections)
+          .map((section) => section.text)
+          .join(" "),
+      }),
+    ).toBe(false);
+
+    const legacyWrapped = buildPremiumCoverLetterFinalProvenance({
+      writerOutput,
+      finalBodyParts: toCoverLetterBodyParts(writerOutput),
+      claimPlan,
+      factGraph,
+      legacyWrapped: true,
+      provenanceIdsNormalized: false,
+    });
+    expect(legacyWrapped.status).toBe("untrusted_legacy_wrapped");
   });
 
   it("fails non-repairable writer provenance and keeps greeting leakage repairable", () => {

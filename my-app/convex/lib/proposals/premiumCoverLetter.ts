@@ -210,9 +210,53 @@ export type PremiumWriterOutputV1 = {
   };
 };
 
+export type PremiumCoverLetterFinalProvenanceStatus =
+  | "validated_final_text"
+  | "validated_after_structured_repair"
+  | "invalidated_by_late_mutation"
+  | "untrusted_legacy_wrapped"
+  | "untrusted_no_cv"
+  | "untrusted_no_candidate_fact";
+
+export type PremiumCoverLetterFinalProvenanceOrigin =
+  | "provider_reported"
+  | "provider_normalized"
+  | "legacy_wrapped";
+
+export type PremiumCoverLetterFinalProvenanceFact = {
+  id: string;
+  section: ClaimPlanSection;
+  text: string;
+  source: "cv";
+  metrics: string[];
+  entities: string[];
+};
+
+export type PremiumCoverLetterFinalProvenanceSection = {
+  section: ClaimPlanSection;
+  text: string;
+  claimIds: string[];
+  factIds: string[];
+  demandIds: string[];
+  candidateFactIds: string[];
+  verifiedCandidateFactIds: string[];
+};
+
+export type PremiumCoverLetterFinalProvenance = {
+  version: "premium_cover_letter_final_provenance_v1";
+  status: PremiumCoverLetterFinalProvenanceStatus;
+  origin: PremiumCoverLetterFinalProvenanceOrigin;
+  contextClass: PremiumCoverLetterContextClass;
+  candidateFactIds: string[];
+  verifiedCandidateFactIds: string[];
+  candidateFacts: PremiumCoverLetterFinalProvenanceFact[];
+  sections: Record<ClaimPlanSection, PremiumCoverLetterFinalProvenanceSection>;
+};
+
 export type PremiumCoverLetterGenerationResult = {
   bodyParts: CoverLetterBodyParts;
   qualityShadow?: PremiumCoverLetterQualityShadowResult;
+  finalProvenance?: PremiumCoverLetterFinalProvenance;
   mode: "direct" | "transfer" | "no_cv";
   evidenceUsed: string[];
   omittedWeakEvidence: string[];
@@ -4270,6 +4314,298 @@ function normalizeProviderWriterOutputProvenance(args: {
   };
 }
 
+function stringArraysEqual(left: string[], right: string[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
+}
+
+function writerOutputProvenanceChanged(
+  before: PremiumWriterOutputV1,
+  after: PremiumWriterOutputV1,
+): boolean {
+  return CLAIM_PLAN_SECTIONS.some((section) => {
+    const beforePart = before.bodyParts[section];
+    const afterPart = after.bodyParts[section];
+    return (
+      !stringArraysEqual(beforePart.claimIds, afterPart.claimIds) ||
+      !stringArraysEqual(beforePart.factIds, afterPart.factIds) ||
+      !stringArraysEqual(beforePart.demandIds, afterPart.demandIds)
+    );
+  });
+}
+
+function premiumBodyPartTextChanged(
+  writerOutput: PremiumWriterOutputV1,
+  bodyParts: CoverLetterBodyParts,
+): boolean {
+  return CLAIM_PLAN_SECTIONS.some(
+    (section) =>
+      compactWhitespace(writerOutput.bodyParts[section].text) !==
+      compactWhitespace(bodyParts[section]),
+  );
+}
+
+function normalizePremiumProvenanceText(value: string): string {
+  return normalizeProposalConstraintText(value);
+}
+
+function premiumTextSupportsCandidateFact(args: {
+  generatedText: string;
+  fact: Pick<
+    PremiumCoverLetterFinalProvenanceFact,
+    "text" | "source" | "metrics" | "entities"
+  >;
+}): boolean {
+  if (args.fact.source !== "cv") return false;
+
+  const generatedText = compactWhitespace(args.generatedText);
+  const factText = compactWhitespace(args.fact.text);
+  if (!generatedText || !factText) return false;
+
+  const normalizedGenerated = normalizePremiumProvenanceText(generatedText);
+  const normalizedFact = normalizePremiumProvenanceText(factText);
+  if (
+    normalizedFact.length >= 24 &&
+    normalizedGenerated.includes(normalizedFact)
+  ) {
+    return true;
+  }
+
+  const generatedTokens = new Set(normalizeTokens(generatedText));
+  const factTokens = normalizeTokens(factText);
+  const overlap = countOverlap(factTokens, generatedTokens);
+  const threshold = Math.min(5, Math.max(3, Math.ceil(factTokens.length * 0.35)));
+  if (overlap >= threshold) {
+    return true;
+  }
+
+  const hasMetricOverlap = args.fact.metrics.some((metric) => {
+    const normalizedMetric = normalizePremiumProvenanceText(metric);
+    return (
+      normalizedMetric.length > 0 &&
+      normalizedGenerated.includes(normalizedMetric)
+    );
+  });
+  if (hasMetricOverlap && overlap >= 2) {
+    return true;
+  }
+
+  const hasEntityOverlap = args.fact.entities.some((entity) => {
+    const normalizedEntity = normalizePremiumProvenanceText(entity);
+    return (
+      normalizedEntity.length >= 3 &&
+      normalizedGenerated.includes(normalizedEntity)
+    );
+  });
+  return hasEntityOverlap && overlap >= 2;
+}
+
+function buildPremiumProvenanceSection(args: {
+  section: ClaimPlanSection;
+  part: PremiumWriterBodyPartV1;
+  finalText: string;
+  factById: Map<string, FactNodeV1>;
+}): {
+  section: PremiumCoverLetterFinalProvenanceSection;
+  candidateFacts: PremiumCoverLetterFinalProvenanceFact[];
+} {
+  const candidateFacts: PremiumCoverLetterFinalProvenanceFact[] = [];
+  for (const factId of args.part.factIds) {
+    const fact = args.factById.get(factId);
+    if (!fact || fact.source !== "cv") continue;
+    candidateFacts.push({
+      id: fact.id,
+      section: args.section,
+      text: fact.text,
+      source: "cv",
+      metrics: fact.metrics,
+      entities: fact.entities,
+    });
+  }
+
+  const verifiedCandidateFactIds = candidateFacts
+    .filter((fact) =>
+      premiumTextSupportsCandidateFact({
+        generatedText: args.finalText,
+        fact,
+      }),
+    )
+    .map((fact) => fact.id);
+
+  return {
+    section: {
+      section: args.section,
+      text: args.finalText,
+      claimIds: [...args.part.claimIds],
+      factIds: [...args.part.factIds],
+      demandIds: [...args.part.demandIds],
+      candidateFactIds: candidateFacts.map((fact) => fact.id),
+      verifiedCandidateFactIds,
+    },
+    candidateFacts,
+  };
+}
+
+export function buildPremiumCoverLetterFinalProvenance(args: {
+  writerOutput: PremiumWriterOutputV1;
+  finalBodyParts: CoverLetterBodyParts;
+  claimPlan: ClaimPlanV1;
+  factGraph: FactGraphV1;
+  legacyWrapped: boolean;
+  provenanceIdsNormalized: boolean;
+}): PremiumCoverLetterFinalProvenance {
+  const factById = new Map(args.factGraph.facts.map((fact) => [fact.id, fact]));
+  const sections = {} as Record<
+    ClaimPlanSection,
+    PremiumCoverLetterFinalProvenanceSection
+  >;
+  const candidateFacts: PremiumCoverLetterFinalProvenanceFact[] = [];
+
+  for (const section of CLAIM_PLAN_SECTIONS) {
+    const built = buildPremiumProvenanceSection({
+      section,
+      part: args.writerOutput.bodyParts[section],
+      finalText: args.finalBodyParts[section],
+      factById,
+    });
+    sections[section] = built.section;
+    candidateFacts.push(...built.candidateFacts);
+  }
+
+  const candidateFactIds = dedupeStrings(candidateFacts.map((fact) => fact.id));
+  const verifiedCandidateFactIds = dedupeStrings(
+    CLAIM_PLAN_SECTIONS.flatMap(
+      (section) => sections[section].verifiedCandidateFactIds,
+    ),
+  );
+  const origin: PremiumCoverLetterFinalProvenanceOrigin = args.legacyWrapped
+    ? "legacy_wrapped"
+    : args.provenanceIdsNormalized
+      ? "provider_normalized"
+      : "provider_reported";
+  const mutatedAfterStructuredOutput = premiumBodyPartTextChanged(
+    args.writerOutput,
+    args.finalBodyParts,
+  );
+  const status: PremiumCoverLetterFinalProvenanceStatus =
+    args.claimPlan.contextClass === "no_cv"
+      ? "untrusted_no_cv"
+      : args.legacyWrapped
+        ? "untrusted_legacy_wrapped"
+        : verifiedCandidateFactIds.length > 0
+          ? mutatedAfterStructuredOutput
+            ? "validated_after_structured_repair"
+            : "validated_final_text"
+          : candidateFactIds.length > 0
+            ? "invalidated_by_late_mutation"
+            : "untrusted_no_candidate_fact";
+
+  return {
+    version: "premium_cover_letter_final_provenance_v1",
+    status,
+    origin,
+    contextClass: args.claimPlan.contextClass,
+    candidateFactIds,
+    verifiedCandidateFactIds,
+    candidateFacts,
+    sections,
+  };
+}
+
+function isTrustedPremiumFinalProvenanceStatus(
+  status: PremiumCoverLetterFinalProvenanceStatus,
+): boolean {
+  return (
+    status === "validated_final_text" ||
+    status === "validated_after_structured_repair"
+  );
+}
+
+export function refreshPremiumCoverLetterFinalProvenanceForContent(args: {
+  provenance: PremiumCoverLetterFinalProvenance;
+  finalText: string;
+}): PremiumCoverLetterFinalProvenance {
+  if (!isTrustedPremiumFinalProvenanceStatus(args.provenance.status)) {
+    return args.provenance;
+  }
+
+  const verifiedCandidateFacts = args.provenance.candidateFacts.filter((fact) =>
+    premiumTextSupportsCandidateFact({
+      generatedText: args.finalText,
+      fact,
+    }),
+  );
+  const verifiedCandidateFactIds = dedupeStrings(
+    verifiedCandidateFacts.map((fact) => fact.id),
+  );
+  if (verifiedCandidateFactIds.length === 0) {
+    return {
+      ...args.provenance,
+      status: "invalidated_by_late_mutation",
+      verifiedCandidateFactIds: [],
+      sections: Object.fromEntries(
+        CLAIM_PLAN_SECTIONS.map((section) => [
+          section,
+          {
+            ...args.provenance.sections[section],
+            verifiedCandidateFactIds: [],
+          },
+        ]),
+      ) as Record<ClaimPlanSection, PremiumCoverLetterFinalProvenanceSection>,
+    };
+  }
+
+  const originalBodyText = compactWhitespace(
+    CLAIM_PLAN_SECTIONS.map(
+      (section) => args.provenance.sections[section].text,
+    ).join(" "),
+  );
+  const finalTextChanged =
+    normalizePremiumProvenanceText(originalBodyText) !==
+    normalizePremiumProvenanceText(args.finalText);
+
+  return {
+    ...args.provenance,
+    status:
+      args.provenance.status === "validated_after_structured_repair" ||
+      finalTextChanged
+        ? "validated_after_structured_repair"
+        : "validated_final_text",
+    verifiedCandidateFactIds,
+    sections: Object.fromEntries(
+      CLAIM_PLAN_SECTIONS.map((section) => [
+        section,
+        {
+          ...args.provenance.sections[section],
+          verifiedCandidateFactIds: args.provenance.candidateFacts
+            .filter(
+              (fact) =>
+                fact.section === section && verifiedCandidateFactIds.includes(fact.id),
+            )
+            .map((fact) => fact.id),
+        },
+      ]),
+    ) as Record<ClaimPlanSection, PremiumCoverLetterFinalProvenanceSection>,
+  };
+}
+
+export function premiumCoverLetterFinalProvenanceSatisfiesCandidateEvidence(args: {
+  provenance: PremiumCoverLetterFinalProvenance | undefined;
+  finalText: string;
+}): boolean {
+  if (!args.provenance) return false;
+  const refreshed = refreshPremiumCoverLetterFinalProvenanceForContent({
+    provenance: args.provenance,
+    finalText: args.finalText,
+  });
+  return (
+    isTrustedPremiumFinalProvenanceStatus(refreshed.status) &&
+    refreshed.verifiedCandidateFactIds.length > 0
+  );
+}
+
 function lowerUnsupportedOwnershipVerbs(args: {
   value: string;
   brief: CoverLetterBrief;
@@ -5437,10 +5773,12 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     }),
     claimPlan,
   });
+  let legacyWrapped = parsedWriterOutput.legacyWrapped;
+  let provenanceIdsNormalized = false;
   let writerOutput = cleanPremiumWriterOutputText(
     parsedWriterOutput.writerOutput,
   );
-  writerOutput = normalizeProviderWriterOutputProvenance({
+  const normalizedWriterOutput = normalizeProviderWriterOutputProvenance({
     writerOutput,
     claimPlan,
     factGraph,
@@ -5448,6 +5786,11 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     writerProvider: args.writerProvider,
     writerModel: args.writerModel,
   });
+  provenanceIdsNormalized = writerOutputProvenanceChanged(
+    writerOutput,
+    normalizedWriterOutput,
+  );
+  writerOutput = normalizedWriterOutput;
   let writerOutputIssues = validatePremiumWriterOutputV1({
     writerOutput,
     claimPlan,
@@ -5494,6 +5837,11 @@ export async function attemptPremiumCoverLetterGeneration(args: {
       writerProvider: args.writerProvider,
       writerModel: args.writerModel,
     });
+    legacyWrapped = repairedParsedWriterOutput.legacyWrapped;
+    provenanceIdsNormalized = writerOutputProvenanceChanged(
+      repairedWriterOutput,
+      normalizedRepairedWriterOutput,
+    );
     writerOutputIssues = validatePremiumWriterOutputV1({
       writerOutput: normalizedRepairedWriterOutput,
       claimPlan,
@@ -5683,6 +6031,14 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     }
   }
 
+  const finalProvenance = buildPremiumCoverLetterFinalProvenance({
+    writerOutput,
+    finalBodyParts: bodyParts,
+    claimPlan,
+    factGraph,
+    legacyWrapped,
+    provenanceIdsNormalized,
+  });
   const rendered = renderPremiumCoverLetter({
     bodyParts,
     outputLanguage: args.outputLanguage,
@@ -5716,6 +6072,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     contextClass,
     bodyParts,
     qualityShadow,
+    finalProvenance,
     mode:
       contextClass === "cv_direct"
         ? "direct"
