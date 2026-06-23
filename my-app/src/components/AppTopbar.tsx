@@ -88,7 +88,7 @@ function useTopbarDocumentTitle(): string | null {
     })();
     const proposalCount =
       (proposals ?? readStoredSavedProposalFixtures()).filter(
-        (proposal) =>
+        (proposal: { status?: string }) =>
           proposal.status === "saved" || proposal.status === "draft",
       ).length;
 

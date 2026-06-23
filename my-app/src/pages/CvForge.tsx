@@ -264,7 +264,7 @@ function withCvInlinePaperAiTimeout<T>(request: Promise<T>): Promise<T> {
       },
       (error: unknown) => {
         window.clearTimeout(timeoutId);
-        reject(error);
+        reject(error instanceof Error ? error : new Error(String(error)));
       },
     );
   });
@@ -951,7 +951,7 @@ function addStructuredItemDraftDescription(
   };
 }
 
-type MutableRemirrorNode = RemirrorJSON & {
+type MutableRemirrorNode = Omit<RemirrorJSON, "content" | "marks"> & {
   content?: MutableRemirrorNode[];
   marks?: Array<{ type: string }>;
 };
@@ -1169,8 +1169,9 @@ function updateResponsibilityBulletDoc(
 
   if (!updated) {
     const nextItem = remirrorListItemFromPlainText(text);
-    if (lastListNode) {
-      lastListNode.content = [...(lastListNode.content ?? []), nextItem];
+    const targetListNode = lastListNode as MutableRemirrorNode | null;
+    if (targetListNode) {
+      targetListNode.content = [...(targetListNode.content ?? []), nextItem];
     } else {
       nextDoc.content = [
         ...(nextDoc.content ?? []),
@@ -2660,10 +2661,12 @@ function CvForgeDrawerPreview({
     );
   }
 
+
   const sourceId = cvForgeDrawerSourceId(item);
   const [hydratedCv, setHydratedCv] = React.useState<CvDocument | null>(
     item.cvDocument && !isSummaryOnlyCvDocument(item.cvDocument)
       ? item.cvDocument
+
       : null,
   );
   const [failed, setFailed] = React.useState(false);
@@ -2675,6 +2678,7 @@ function CvForgeDrawerPreview({
       setFailed(false);
       return () => undefined;
     }
+
     setHydratedCv(null);
     setFailed(false);
     hydrateCvDocument(sourceId).then((doc) => {
@@ -3356,6 +3360,7 @@ export function CvForge(): JSX.Element {
       palette,
       resumeTemplateId:
         sourceStyle?.resumeTemplateId ?? factorySlot.defaultCvTemplateId,
+
       ...(accentHex ? { accentHex } : {}),
     });
   }, [
@@ -3443,6 +3448,7 @@ export function CvForge(): JSX.Element {
       resumeTemplateId,
       verbatiStyle: importStyle,
       verbatiStyleBaseSnapshot: buildDocumentAppearanceSnapshot(importStyle),
+
       documentStyleVersion: DOCUMENT_STYLE_VERSION,
     };
   }, [
@@ -3821,6 +3827,7 @@ export function CvForge(): JSX.Element {
       sanitizeHiddenSectionIds(
         currentCv?.sections ?? [],
         readStoredHiddenSectionIds(nextCvId),
+
       ),
     );
   }, [currentCv?.id]);
@@ -6174,6 +6181,7 @@ export function CvForge(): JSX.Element {
     return {
       1: buildSlotPreset(1, documentStylePresets?.preset1),
       2: buildSlotPreset(2, documentStylePresets?.preset2),
+
       3: buildSlotPreset(3, documentStylePresets?.preset3),
     };
   }, [
@@ -6862,6 +6870,7 @@ export function CvForge(): JSX.Element {
           onImageUpload={handleCvDesignImageUpload}
           onImageChange={updateCvDocumentDecoration}
         />
+
       ),
     }),
     [

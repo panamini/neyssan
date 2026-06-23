@@ -1631,7 +1631,7 @@ export function SectionEditorSheet({
         : null;
     const skillItems = structuredItems.filter((item) =>
       Boolean(getPillItemName(item)),
-    ) as ISkillItem[];
+    ) as unknown as ISkillItem[];
     const categories = Array.isArray(editableSection.skillCategories)
       ? (editableSection.skillCategories as SkillCategory[])
       : [];

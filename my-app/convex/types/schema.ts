@@ -1,4 +1,5 @@
 import type { Doc, Id } from "../_generated/dataModel";
+import type { UserProfileMetadata } from "../lib/userProfileMetadata";
 import type { ProposalTemplateId } from "../lib/proposals/renderTemplates";
 
 export type ProposalDocumentDecoration = {
@@ -7,6 +8,8 @@ export type ProposalDocumentDecoration = {
   suppressed?: boolean;
   assetId?: string;
   dataUrl?: string;
+  resolvedUrl?: string;
+  assetMissing?: boolean;
   fileName?: string;
   mimeType?: "image/png" | "image/jpeg" | "image/svg+xml";
   alt?: string;
@@ -192,67 +195,7 @@ export interface UserProfileDoc extends Doc<"userProfiles"> {
   proposalAccentHex?: string | null;
   proposalFontPairId?: string | null;
   proposalSourceMode?: "inherit_cv" | "proposal_local";
-  metadata?: {
-    source?: string;
-    importedAt?: number;
-    confidence?: number;
-    filename?: string;
-    verbatiStyle?: {
-      layout:
-        | "swiss"
-        | "volk-register"
-        | "two-column"
-        | "editorial"
-        | "modernist"
-        | "quire"
-        | "playful-photo"
-        | "soft-ribbon"
-        | "slate-column";
-      typography:
-        | "quiet-editorial"
-        | "geist-baskervville"
-        | "civic-correspondence"
-        | "ledger-sans"
-        | "mono-signal"
-        | "studio-grotesk"
-        | "soft-serif"
-        | "special-correspondence"
-        | "fd-garamond-geist"
-        | "poster-accent"
-        | "high-contrast-editorial"
-        | "bricolage-hepta"
-        | "nunito-ortica"
-        | "nunito-code"
-        | "doto-code"
-        | "signature"
-        | "engaging"
-        | "expert";
-      palette:
-        | "terre"
-        | "cobalt"
-        | "ink"
-        | "sauge"
-        | "plum"
-        | "ochre"
-        | "ocre"
-        | "pierre"
-        | "bordeaux"
-        | "encre"
-        | "custom";
-      accentHex?: string;
-    };
-    verbatiStyleSlotId?: 1 | 2 | 3;
-    verbatiStyleSlotSource?: "factory" | "settings";
-    verbatiStyleSlotNameSnapshot?: string;
-    verbatiStyleBaseSnapshot?: {
-      familyId?: string;
-      layout: string;
-      typography: string;
-      palette: string;
-      accentHex?: string;
-    };
-    documentStyleVersion?: 1;
-  };
+  metadata?: UserProfileMetadata;
 }
 
 export interface RateLimitDoc extends Doc<"rateLimits"> {

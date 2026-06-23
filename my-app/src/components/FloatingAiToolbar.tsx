@@ -377,7 +377,7 @@ export function FloatingSelectionToolbarShell({
     <BodyPortal>
       {shouldRenderToolbar && renderAnchor ? (
         <motion.div
-          ref={panelRef}
+          ref={panelRef as React.Ref<HTMLDivElement>}
           className="ds-ai-toolbar"
           data-inline-ai-toolbar="true"
           data-selection-toolbar="true"
@@ -556,6 +556,7 @@ export function FloatingAiToolbar({
 
     setMetrics((current) =>
       isSameMetrics(current, nextMetrics) ? current : nextMetrics,
+
     );
   }, [anchor, compactMode, hasFormattingActions, isAskOpen]);
 

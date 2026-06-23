@@ -117,7 +117,10 @@ type ProposalContactSettings = {
   signatureSettings?: ProposalSignatureSettings | null;
 };
 
-type ProposalContactField = keyof ProposalContactSettings;
+type ProposalContactField = Exclude<
+  keyof ProposalContactSettings,
+  "savedVoicePreset" | "signatureSettings"
+>;
 
 const PROPOSAL_CONTACT_FIELDS: Array<{
   id: ProposalContactField;
@@ -376,7 +379,9 @@ function buildDefaultPresetSlot(slot: SlotIndex): PresetSlot {
     ...EMPTY_PRESET,
     fontPairId: factorySlot.appearance.typography,
     styleChoice: "balanced",
-    paletteOverride: factorySlot.appearance.palette,
+    paletteOverride: isProposalPaletteId(factorySlot.appearance.palette)
+      ? factorySlot.appearance.palette
+      : null,
     accentHex: factorySlot.appearance.accentHex ?? null,
     signatureSettings: DEFAULT_PROPOSAL_SIGNATURE_SETTINGS,
     verbatiStyle: {

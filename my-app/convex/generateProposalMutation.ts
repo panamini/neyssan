@@ -10681,7 +10681,7 @@ export async function handleGenerateProposal(
     proposalType: outputFormat,
   };
   let residualVerifierWarningTag: string | null = null;
-  let proposalContent: string;
+  let proposalContent = "";
   let structuredPersistencePayload: StructuredCoverLetterAttemptResult | null =
     null;
   let premiumPersistencePayload: {

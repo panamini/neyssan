@@ -84,6 +84,7 @@ type SavedProposalType =
 type SavedProposalRecord = {
   _id: string;
   _creationTime: number;
+  updatedAt?: number;
   status?: string;
   title?: string;
   content?: string;

@@ -62,7 +62,10 @@ import {
 import { resolveVerbatiStyle, serializeVerbatiStyle } from "../features/verbati/style";
 import type { VerbatiStylePreset } from "../features/verbati/types";
 import type { DocumentStyleMetadata } from "../lib/document-style-slots";
-import type { DocumentIconSettings } from "../lib/document-icons";
+import type {
+  DocumentIconSettings,
+} from "../lib/document-icons";
+import type { DocumentIconOverrides } from "../lib/document-icon-overrides";
 import type { DocumentDecoration } from "../lib/document-decoration";
 import {
   isResumeTemplateId,
@@ -72,6 +75,7 @@ import {
 type CvVisualMetadataPatch = DocumentStyleMetadata & {
   resumeTemplateId?: ResumeTemplateId;
   documentIcons?: DocumentIconSettings;
+  documentIconOverrides?: DocumentIconOverrides;
   documentDecoration?: DocumentDecoration;
 };
 
@@ -206,9 +210,17 @@ function sanitizeRuntimeCvDocument(doc: CvDocument): CvDocument {
   return sanitizeRuntimeImageStateFields(doc);
 }
 
+function asDocumentDecoration(
+  value: unknown,
+): Partial<DocumentDecoration> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Partial<DocumentDecoration>)
+    : null;
+}
+
 function readDecorationRuntimeDebug(doc: CvDocument | null | undefined) {
-  const decoration = doc?.metadata?.documentDecoration;
-  if (!decoration || typeof decoration !== "object") {
+  const decoration = asDocumentDecoration(doc?.metadata?.documentDecoration);
+  if (!decoration) {
     return {
       hasDecoration: false,
       hasAssetId: false,
@@ -240,8 +252,8 @@ function canOverlayRuntimeDocumentDecoration(
   if (!localDoc || !remoteDoc) return false;
   if (String(localDoc.id) !== String(remoteDoc.id)) return false;
 
-  const localDecoration = localDoc.metadata?.documentDecoration;
-  const remoteDecoration = remoteDoc.metadata?.documentDecoration;
+  const localDecoration = asDocumentDecoration(localDoc.metadata?.documentDecoration);
+  const remoteDecoration = asDocumentDecoration(remoteDoc.metadata?.documentDecoration);
   if (!localDecoration || !remoteDecoration) return false;
   if (localDecoration.visible !== true) return false;
   if (!localDecoration.assetId) return false;
@@ -254,8 +266,10 @@ function overlayRuntimeDocumentDecoration(
   localDoc: CvDocument,
   remoteDoc: CvDocument,
 ): CvDocument {
-  const localDecoration = localDoc.metadata?.documentDecoration ?? {};
-  const remoteDecoration = remoteDoc.metadata?.documentDecoration ?? {};
+  const localDecoration =
+    asDocumentDecoration(localDoc.metadata?.documentDecoration) ?? {};
+  const remoteDecoration =
+    asDocumentDecoration(remoteDoc.metadata?.documentDecoration) ?? {};
   return {
     ...localDoc,
     metadata: {

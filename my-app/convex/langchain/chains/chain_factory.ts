@@ -5,6 +5,7 @@ import { CreativeProposalChain } from "./creative_chain"; // Import CreativeProp
 import { ModelAdapter } from "../models/model_adapter"; // Import ModelAdapter
 
 export type ChainType = "technical" | "creative";
+export type { ChainConfig };
 
 /**
  * Factory for creating proposal chains

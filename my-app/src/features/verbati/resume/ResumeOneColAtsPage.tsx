@@ -971,6 +971,7 @@ function PaperRichInlineEditor(args: {
         latestDocRef.current,
       );
       args.onDocChange?.(args.editTarget, latestDocRef.current);
+
     },
     [args.editTarget, args.onDocChange],
   );
@@ -1609,7 +1610,9 @@ function WorkshopSkillInlineItems(args: {
         ? null
         : new ResizeObserver(() => measureRows());
 
-    resizeObserver?.observe(parentNode);
+    if (resizeObserver && parentNode) {
+      resizeObserver.observe(parentNode);
+    }
     window.addEventListener("resize", measureRows);
 
     return () => {
