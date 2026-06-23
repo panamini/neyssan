@@ -1476,6 +1476,108 @@ describe("proposal writer prompt contract", () => {
         premiumFinalProvenance: oneSentenceVerifiedProvenance,
       }),
     ).toThrow(/substantive body content/i);
+
+    const candidateFactIdsOnlyProvenance: PremiumCoverLetterFinalProvenance = {
+      ...premiumFinalProvenance,
+      verifiedCandidateFactIds: [],
+      sections: {
+        opening: {
+          ...premiumFinalProvenance.sections.opening,
+          verifiedCandidateFactIds: [],
+        },
+        proofBlock: {
+          ...premiumFinalProvenance.sections.proofBlock,
+          verifiedCandidateFactIds: [],
+        },
+        employerValueBlock: {
+          ...premiumFinalProvenance.sections.employerValueBlock,
+          verifiedCandidateFactIds: [],
+        },
+        closeLine: {
+          ...premiumFinalProvenance.sections.closeLine,
+          verifiedCandidateFactIds: [],
+        },
+      },
+    };
+    expect(() =>
+      finalizeProposalForPersistence({
+        content,
+        format: "cover_letter",
+        outputLanguage: "English",
+        candidateName: "Alex Martin",
+        voicePreset: "signature",
+        noContextMode: false,
+        requiresCandidateEvidence: true,
+        premiumFinalProvenance: candidateFactIdsOnlyProvenance,
+      }),
+    ).toThrow(/substantive body content/i);
+
+    const demandOnlyProvenance: PremiumCoverLetterFinalProvenance = {
+      ...premiumFinalProvenance,
+      candidateFactIds: [],
+      verifiedCandidateFactIds: [],
+      candidateFacts: [],
+      sections: {
+        opening: {
+          ...premiumFinalProvenance.sections.opening,
+          factIds: [],
+          candidateFactIds: [],
+          verifiedCandidateFactIds: [],
+          demandIds: ["demand_core_001"],
+        },
+        proofBlock: {
+          ...premiumFinalProvenance.sections.proofBlock,
+          factIds: [],
+          candidateFactIds: [],
+          verifiedCandidateFactIds: [],
+          demandIds: ["demand_core_001"],
+        },
+        employerValueBlock: {
+          ...premiumFinalProvenance.sections.employerValueBlock,
+          factIds: [],
+          candidateFactIds: [],
+          verifiedCandidateFactIds: [],
+          demandIds: ["demand_core_001"],
+        },
+        closeLine: {
+          ...premiumFinalProvenance.sections.closeLine,
+          factIds: [],
+          candidateFactIds: [],
+          verifiedCandidateFactIds: [],
+          demandIds: ["demand_core_001"],
+        },
+      },
+    };
+    expect(() =>
+      finalizeProposalForPersistence({
+        content,
+        format: "cover_letter",
+        outputLanguage: "English",
+        candidateName: "Alex Martin",
+        voicePreset: "signature",
+        noContextMode: false,
+        requiresCandidateEvidence: true,
+        premiumFinalProvenance: demandOnlyProvenance,
+      }),
+    ).toThrow(/substantive body content/i);
+
+    const untrustedNoCvProvenance: PremiumCoverLetterFinalProvenance = {
+      ...premiumFinalProvenance,
+      status: "untrusted_no_cv",
+      contextClass: "no_cv",
+    };
+    expect(() =>
+      finalizeProposalForPersistence({
+        content,
+        format: "cover_letter",
+        outputLanguage: "English",
+        candidateName: "Alex Martin",
+        voicePreset: "signature",
+        noContextMode: false,
+        requiresCandidateEvidence: true,
+        premiumFinalProvenance: untrustedNoCvProvenance,
+      }),
+    ).toThrow(/substantive body content/i);
   });
 
   it("keeps generic GPT premium prose fail-closed even when provenance is present", () => {
