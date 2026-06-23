@@ -256,13 +256,14 @@ Commands run from `my-app` unless noted:
 
 ## Review Revalidation 2026-06-23
 
-Production-gate review for draft PR #238 rechecked the branch at head
-`23d12f979089187c4166af45cc55cc0da5da2e57`.
+Production-gate review for draft PR #238 rechecked the branch at heads
+`23d12f979089187c4166af45cc55cc0da5da2e57` and
+`3f5289e615837b3d718a27b34e19a1c358be8a93`.
 
 Repo and PR state:
 
 - Current branch: `codex/pr87-7-production-lint-gate`.
-- PR #238: open, draft, mergeable, head SHA unchanged.
+- PR #238: open, draft, mergeable during review.
 - Changed files against `origin/application-os-foundation`: 90.
 - Protected local file `docs/plans/2026-06-22-cover-letter-quality-production-roadmap.md`: untracked and not staged.
 - `rtk` was unavailable in this shell, so review commands were run directly.
@@ -293,20 +294,21 @@ Revalidation commands:
 Focused and safety tests:
 
 - `npx vitest run convex/__tests__/proposalSettings.voice.test.ts --reporter=dot`: passed, 4 tests.
-- `npx vitest run src/features/verbati/__tests__/VerbatiResumePreview.test.tsx src/features/verbati/__tests__/VerbatiResumePreview.rendering.test.tsx src/features/verbati/__tests__/resumePreviewInteractionTokens.test.ts --reporter=dot`: failed. 30 tests passed, 2 tests failed in `VerbatiResumePreview.test.tsx` because viewport height was `1122.5196850393702px` instead of expected `1123px`. The changed `VerbatiResumePreview.tsx` diff only adds DOM narrowing, not the viewport height path, but the focused test failure still blocks ready status.
+- `npx vitest run src/features/verbati/__tests__/VerbatiResumePreview.test.tsx`: PR failed 2/27 and base failed 2/27 with the same viewport height assertion: expected `1123px`, received `1122.5196850393702px`. This failure is inherited from `origin/application-os-foundation`, not PR87.7-caused.
 - `npx vitest run convex/actions/__tests__/structuredUpload.buildCanonicalizeInput.test.ts convex/actions/__tests__/formatCompleteCV.test.ts convex/lib/parsing/__tests__/canonicalize.test.ts convex/lib/parsing/__tests__/canonicalMapper.test.ts convex/lib/parsing/__tests__/hybridParser.adapter.test.ts convex/lib/proposals/__tests__/proposalPlanner.test.ts convex/lib/proposals/__tests__/proposalEnforcement.test.ts convex/lib/proposals/__tests__/proposalCriteriaAudit.test.ts convex/lib/proposals/__tests__/premiumCoverLetter.test.ts --reporter=dot`: passed, 9 files / 241 tests.
 - `npx vitest run src/pages/__tests__/SettingsPage.preview.test.tsx --reporter=dot`: passed, 32 tests.
 - `npx vitest run src/components/cv/__tests__/SectionEditorSheet.test.tsx --reporter=dot`: passed, 23 tests.
 - `npx vitest run src/components/__tests__/FloatingAiToolbar.test.tsx --reporter=dot`: passed, 32 tests.
-- `npx vitest run src/pages/__tests__/CvForge.workspace-preview.integration.test.tsx --reporter=dot`: failed, 13 tests failed and 1 passed. All failures share `TypeError: Cannot read properties of undefined (reading 'status')` at `src/pages/CvForge.tsx:3599`, where the test mock omits `remoteSaveStatus`. The PR diff does not touch that effect, but this affected-area test failure blocks ready status.
-- `npx vitest run src/pages/__tests__/ProposalForge.preview-header.test.tsx --reporter=dot`: did not complete under the default Node heap; the process ended with JavaScript heap out of memory.
+- `DEBUG_PRINT_LIMIT=1200 npx vitest run src/pages/__tests__/CvForge.workspace-preview.integration.test.tsx`: PR failed 13/14 and base failed 13/14 with the same `TypeError: Cannot read properties of undefined (reading 'status')` at `src/pages/CvForge.tsx:3599`. The base worktree required an ignored `convex/_generated` symlink because generated files are not checked in. This failure is inherited from `origin/application-os-foundation`, not PR87.7-caused.
+- `NODE_OPTIONS=--max-old-space-size=8192 DEBUG_PRINT_LIMIT=1200 npx vitest run src/pages/__tests__/ProposalForge.preview-header.test.tsx`: base did not reach a Vitest summary and ended with JavaScript heap out of memory. PR did not reach a Vitest summary either, but stalled until manually interrupted after outlasting the base OOM window. A single-worker PR attempt also stalled until manually interrupted. The `ProposalForge.tsx` PR diff was inspected and contains only mechanical type/assertion cleanup, with no render loop, timer, promise, or state-flow change. This remains inconclusive enough to keep the PR draft.
 - Combined UI safety bundles also hit JavaScript heap out of memory before producing a useful summary.
 - Local-MCP tests were not run because no local-MCP files changed.
 
 Review decision:
 
 - No PR87.7-introduced unsafe behavior change was confirmed from the diff review.
-- The PR should remain draft because focused/affected tests failed or could not complete.
+- `VerbatiResumePreview.test.tsx` and `CvForge.workspace-preview.integration.test.tsx` are proven inherited failures.
+- `ProposalForge.preview-header.test.tsx` is not proven safe enough to mark ready because the requested increased-heap command still did not produce a clean PR result and behaved differently from the base worktree.
 - No behavior or test fixes were applied during this review to avoid adding non-lint product/test churn to the mechanical PR.
 - Current review verdict: `BLOCKED_PR87_7_REVIEW_FIX_REQUIRED`.
 
