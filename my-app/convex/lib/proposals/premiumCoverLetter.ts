@@ -317,6 +317,22 @@ export const PREMIUM_COVER_LETTER_SUPPORTED_PRESETS = [
   "engaging",
 ] as const satisfies readonly PremiumCoverLetterPreset[];
 
+export const PREMIUM_COVER_LETTER_PROMPT_V2_MISTRAL_VERSION =
+  "premium_cover_letter_prompt_v2_mistral";
+
+const PREMIUM_COVER_LETTER_PROMPT_V2_MISTRAL_GUIDANCE = [
+  `Premium cover-letter prompt version: ${PREMIUM_COVER_LETTER_PROMPT_V2_MISTRAL_VERSION}.`,
+  "This V2 block is Mistral-only and feature-flagged. It refines writing behavior without changing ClaimPlan, facts, provenance, schema, retries, or provider routing.",
+  "Offer appropriation: read the job offer as prioritization context, then write from the candidate's strongest relevant evidence. Do not summarize, repeat, enumerate, or paraphrase the offer back to the employer.",
+  "Requirement-to-candidate angle: transform each selected requirement into a candidate-side angle only when a CV fact supports the action, artifact, scope, stakeholder, tool, metric, environment, or operating habit.",
+  "Missing requirements are gaps, omissions, or non-claims. Never convert a job demand, preferred qualification, compliance framework, credential, or employer goal into candidate experience.",
+  "No job-offer listing: do not write a checklist of responsibilities, benefits, requirements, keywords, or company claims. Use job terms only when attached to structured CV evidence.",
+  "Factuality lock: do not invent facts, credentials, numbers, timelines, seniority, ownership, outcomes, motivation, values alignment, or company-specific admiration.",
+  "Structured evidence lock: keep PremiumWriterOutputV1 provenance precise. Cite only claimIds, factIds, and demandIds actually used by that section; demandIds remain role context and never candidate proof.",
+  "Keep candidate proof structured and visible through the JSON ids while making the prose read like a natural premium cover letter.",
+  "Prefer one sharp CV-backed hiring case over comprehensive coverage of the offer.",
+];
+
 export const MISTRAL_PREMIUM_COVER_LETTER_ADAPTER = [
   "Provider adapter: Mistral",
   "",
@@ -2126,6 +2142,27 @@ export function isCoverLetterPremiumPathV1Enabled(
   return normalized === "1" || normalized === "true" || normalized === "on";
 }
 
+export function isCoverLetterPremiumPromptV2Enabled(
+  rawValue:
+    | string
+    | undefined = process.env.cover_letter_premium_prompt_v2 ??
+    process.env.COVER_LETTER_PREMIUM_PROMPT_V2 ??
+    process.env.ENABLE_COVER_LETTER_PREMIUM_PROMPT_V2,
+): boolean {
+  const normalized = compactWhitespace(rawValue ?? "").toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "on";
+}
+
+export function isPremiumCoverLetterPromptV2MistralEnabled(args: {
+  writerProvider?: PremiumCoverLetterWriterProvider;
+  rawFlagValue?: string;
+}): boolean {
+  return (
+    args.writerProvider === "mistral" &&
+    isCoverLetterPremiumPromptV2Enabled(args.rawFlagValue)
+  );
+}
+
 export function evaluatePremiumCoverLetterEligibility(args: {
   personalizationContext: PremiumCoverLetterPersonalizationContext | null;
   voicePreset: ProposalVoicePreset;
@@ -2885,6 +2922,9 @@ export function buildPremiumCoverLetterPrompt(args: {
     writerProvider: args.writerProvider,
     writerModel: args.writerModel,
   });
+  const promptVersionGuidance = resolvePremiumCoverLetterPromptVersionGuidance({
+    writerProvider: args.writerProvider,
+  });
   return [
     "Write premium cover-letter body parts.",
     "The ClaimPlan owns strategy. Do not choose claims. Realize only the claim assigned to each section.",
@@ -2917,6 +2957,7 @@ export function buildPremiumCoverLetterPrompt(args: {
     "closeLine: concise evidence-grounded contribution, not generic interview-request wording.",
     presetGuidance,
     args.generationControlsBlock,
+    ...promptVersionGuidance,
     ...contextGuidance,
     "Do not include greeting, signoff, signature, candidate name, date, subject, sender block, recipient block, markdown, XML, citations, audit, or explanation.",
     "Return only PremiumWriterOutputV1 JSON.",
@@ -3166,6 +3207,16 @@ function resolvePremiumCoverLetterBodyPartGuidance(args: {
     "Body-part rules: complete natural sentences only; no greeting, signoff, markdown, bullets, generic excitement, mission praise, defensive gaps, keyword lists, clipped fragments like 'St.' or guessed facility/team names.",
     "Opening: position through the strongest relevant evidence, not generic fit language. ProofBlock: develop top evidence first. EmployerValueBlock: move directly to an employer-facing implication from the candidate evidence; do not name company hierarchy, career-growth language, support-staff boilerplate, or the target role title as proof. Use topResponsibilities before requirements. Never echo preferredQualifications or checklist noise. CloseLine: one short role-specific sentence.",
   ];
+}
+
+function resolvePremiumCoverLetterPromptVersionGuidance(args: {
+  writerProvider?: PremiumCoverLetterWriterProvider;
+}): string[] {
+  return isPremiumCoverLetterPromptV2MistralEnabled({
+    writerProvider: args.writerProvider,
+  })
+    ? PREMIUM_COVER_LETTER_PROMPT_V2_MISTRAL_GUIDANCE
+    : [];
 }
 
 function resolvePremiumCoverLetterProviderAdapter(args: {
