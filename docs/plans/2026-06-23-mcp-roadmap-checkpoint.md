@@ -1,288 +1,384 @@
-# MCP Roadmap Checkpoint
+# Twoweeks MCP/App SDK Roadmap Checkpoint
 
 Date: 2026-06-23
+Branch: `codex/mcp-roadmap-checkpoint`
 Base branch: `application-os-foundation`
-Checkpoint base SHA: `2ceb98d071b51e87a368dc3d01f33d7ce147f724`
-Status: `PAUSED_UNTIL_CURRENT_RELEASE_TROUBLES_SETTLE`
+Base checkpoint after PR245: `2ceb98d071b51e87a368dc3d01f33d7ce147f724`
+Status: `CORRECTED_CHECKPOINT`
 
-## Purpose
+## Correction
 
-We had a long release-trouble sequence around cover-letter finalization, Playwright, lint boundaries, PR restacking, GPT premium finalization, and flags-off smoke tests.
+The previous draft of this checkpoint was wrong.
 
-This document exists so MCP work does not get lost while we finish stabilizing the current release.
+It treated MCP as if it were only an early placeholder client. That is not the actual project state.
 
-Rules for this checkpoint:
+The actual project is the Twoweeks ChatGPT/App SDK / MCP product: a full tool surface intended to be accessible from ChatGPT/Codex-style agents to review Twoweeks application data, generate professional job-application artifacts, support human approval, export/download/send/apply flows, and eventually run with auth, consent, audit, privacy, rate limits, rollback, and production monitoring.
 
-- Do not restart MCP implementation work until the current release/canary situation is quiet.
-- Do not mix MCP work with lint cleanup.
-- Do not mix MCP work with cover-letter prompt/canary/quality-repair changes.
-- Do not enable write-capable MCP tools in the first MCP unlock.
-- Keep the first MCP follow-up PR docs/spec-only unless there is a very small reviewed blocker.
+Canonical sources to use from now on:
 
-## Current repo evidence
-
-### Existing project roadmap
-
-`PROJECT_ROADMAP-v0.md` exists, but it is old and broader than MCP. It mainly describes app, extension, profile ingestion, proposals UI, tests, and deployment work from 2025-08-20.
-
-Use this new file as the active MCP-specific checkpoint.
-
-### Existing MCP code surface
-
-Current repo has an MCP client placeholder:
-
-- `my-app/src/services/mcp-client.ts`
-- `my-app/src/types/mcp-client.d.ts`
-
-Current state of that code:
-
-- `McpClient` exposes only `callTool<T>(name, params)`.
-- `createMcpClient()` does not connect to a real MCP server yet.
-- The implementation currently calls `mockToolCall(...)`.
-- Response schemas exist for draft tool names such as `fetch_html`, `check_url_support`, `detect_platform`, `save_proposal`, and `scrape_job`.
-
-Conclusion:
-
-```text
-There is no production-ready MCP server/runtime in this checkpoint.
-There is only a placeholder client surface and roadmap memory.
+```txt
+docs/plans/2026-06-12-chatgpt-app-implementation-roadmap-agent-contract.md
+docs/plans/2026-06-12-chatgpt-app-roadmap-progress-ledger.md
 ```
 
-## Current product/release state before resuming MCP
+Do not use `my-app/src/services/mcp-client.ts` as the roadmap source of truth. That old client placeholder is not the actual progress ledger.
 
-Already merged into `application-os-foundation`:
+## Roadmap definition
 
-- PR242 — lint config boundary.
-- PR243 — proposal body composer prompt contract / release gate superseding PR236.
-- PR230 — premium cover-letter provenance/finalization.
-- PR231 — better legacy cover-letter prompt routing.
-- PR232 — Mistral premium prompt V2, merged but default-off.
-- PR233 — quality shadow repair, merged but default-off.
-- PR245 — GPT premium finalization hardening.
+The canonical roadmap spans PR41 through PR89.
 
-Current flag posture:
+High-level roadmap milestones:
 
-```text
+```txt
+PR41-PR52  -> first working non-production ChatGPT/MCP demo
+PR53-PR64  -> useful real read-only ChatGPT integration
+PR65-PR67  -> ChatGPT UI/component experience
+PR68-PR75  -> artifact generation and export boundaries
+PR76-PR80  -> send/submit/apply write-action foundations
+PR81-PR89  -> production readiness, beta, and business launch
+```
+
+The long-term finished product is not a placeholder MCP client. It is a Twoweeks ChatGPT/App SDK integration that can safely:
+
+```txt
+1. expose Twoweeks tools to ChatGPT/Codex-style agents;
+2. summarize and review real Twoweeks application data;
+3. generate professional resume, cover-letter, application-message, and package artifacts;
+4. require human approval before risky or outward actions;
+5. export/download/send/apply only with explicit confirmation;
+6. run with audit, privacy, auth, rate limits, rollback, and production monitoring.
+```
+
+## Current actual position
+
+As of this checkpoint, `application-os-foundation` is after PR245:
+
+```txt
+PR245: Harden GPT premium cover-letter finalization
+Merge SHA: 2ceb98d071b51e87a368dc3d01f33d7ce147f724
+```
+
+PR245 was a release-trouble fix, not a roadmap reset.
+
+The MCP/App SDK roadmap is already far past the early PR41-PR64 phases.
+
+## What is already merged from the MCP/App SDK roadmap
+
+### Foundation and local demo
+
+```txt
+PR41-PR52: merged
+```
+
+Includes:
+
+- canonical roadmap/agent contract;
+- package and dependency boundaries;
+- local disabled MCP skeleton;
+- descriptor registry;
+- fixture-only `tools/list` and `tools/call` simulations;
+- golden safety tests;
+- local dev transport and `/mcp` endpoint behind flag;
+- fake ChatGPT end-to-end demo.
+
+### Auth, consent, audit, privacy, and real read-only data
+
+```txt
+PR53-PR64: merged
+```
+
+Important merged milestones:
+
+- PR59 read-only Twoweeks data adapter merged via GitHub #185.
+- PR60 real application package summary merged via GitHub #186.
+- PR61 real evidence graph summary merged via GitHub #187.
+- PR62 real resume variant plan summary merged via GitHub #188.
+- PR63 real review cockpit summary merged via GitHub #189.
+- PR64 real read-only E2E ChatGPT-style harness merged via GitHub #190.
+
+This means the roadmap has already crossed the first genuinely useful real-data read-only integration milestone.
+
+### ChatGPT component / UI policy
+
+```txt
+PR65-PR67: merged
+```
+
+Includes:
+
+- component data policy;
+- read-only review component contract;
+- error/loading/refusal UX states;
+- `_meta` explicitly not treated as a privacy boundary.
+
+### Artifact generation, approval, revision, and export boundaries
+
+```txt
+PR68-PR75: merged
+```
+
+Includes:
+
+- generated artifact boundary;
+- resume variant preview;
+- cover-letter/application-message preview;
+- human approval workflow;
+- artifact revision loop;
+- export/download policy;
+- resume export representation;
+- cover-letter/application-package export representation.
+
+### Write-action foundations and manual handoff path
+
+```txt
+PR76-PR80B-follow-up: merged
+```
+
+Includes:
+
+- write-action framework;
+- outbound egress/SSRF protection policy;
+- controlled application-message send boundary;
+- job-platform submit/apply dry-run;
+- durable live external-action safety foundation;
+- safe manual application handoff while ATS authorization is pending;
+- approved manual-handoff artifact delivery.
+
+Important blockers that remain from this area:
+
+```txt
+PR80-live submit/apply: BLOCKED
+Approved answer copy: BLOCKED
+```
+
+### Production-readiness hardening already done
+
+```txt
+PR81-PR85: merged
+```
+
+Includes:
+
+- manual handoff rate/budget/abuse protection;
+- MCP/Stytch config/account-link hardening;
+- observability and incident-response helpers/runbook;
+- owner/profile boundary hardening;
+- Stripe test-mode boundary and internal test access.
+
+### PR86 / PR87 state
+
+PR86 founder smoke/pre-launch audit merged but recorded blockers.
+
+PR87 production deployment gate exists and returned `BLOCKED_PRODUCTION_GATE`.
+
+Known production blockers from PR87 history:
+
+```txt
+- production build was red at the first PR87 gate;
+- lint had boundary/debt blockers;
+- runtime dependency audit was red;
+- preview/staging target was not fully proven;
+- MCP production runtime was not deployable;
+- signed-in smoke was missing;
+- runtime observability and rollback were not fully proven;
+- PR88 private beta and PR89 public launch remain blocked.
+```
+
+Follow-up PRs improved parts of this:
+
+```txt
+PR87.5: production TypeScript build follow-up
+PR87.6: TS6307 project-membership build fix
+PR87.7/PR242-PR245 release trouble fixes around lint boundary, Playwright, proposal body contract, cover-letter stack, and GPT finalization
+```
+
+Current release-trouble status after PR245:
+
+```txt
+GPT premium cover letter flags OFF: PASS
+Mistral medium premium V2 OFF: PASS
+Mistral large premium V2 OFF: PASS
+No-CV Mistral: PASS
+Qwen flags OFF legacy path: PASS
 Mistral V2 canary: small internal only
 Quality repair: OFF / NO-GO
 Full production GO: not yet
 ```
 
-MCP work should resume only after this posture is explicitly stable.
+## Correct current roadmap status
 
-## MCP status summary
-
-```text
-MCP product status: NOT READY
-MCP implementation status: PLACEHOLDER CLIENT ONLY
-MCP auth status: UNDECIDED / NEEDS PROVIDER-SCOPE CONFIRMATION
-MCP first safe unlock: READ-ONLY, DOCS-FIRST
-MCP write tools: BLOCKED
-MCP production exposure: BLOCKED
+```txt
+Roadmap stage: PR87 / production deployment gate and release stabilization
+Not at: early MCP skeleton
+Not at: PR59 preflight
+Not at: PR64 read-only E2E
 ```
 
-## Exit criteria before touching MCP again
+The system is already a broad local-MCP/App SDK implementation with real read-only summaries, local component contracts, artifact preview/export boundaries, manual handoff foundations, rate limits, security/owner-boundary hardening, and release-gate work.
 
-- [ ] PR245 post-merge flags-off smoke remains clean after a short stabilization window.
-- [ ] Mistral V2 internal canary is either completed successfully or explicitly parked.
-- [ ] Quality repair remains OFF unless a separate reviewed decision changes that.
-- [ ] No open release-gate blocker is active.
-- [ ] No Playwright/CI rerun is still pending.
-- [ ] No broad lint cleanup is in progress.
+The next work is not “start MCP.”
 
-When all are true, MCP can restart with Phase 1 below.
+The next work is to finish stabilization and production gate readiness without losing the roadmap state.
 
-## Phase 1 — Reconfirm MCP product scope
+## Immediate do-not-touch list while current troubles settle
 
-Goal: decide exactly what MCP v0 is allowed to expose.
+Do not start these until explicitly approved:
 
-Checklist:
-
-- [ ] Confirm target client: ChatGPT MCP, local developer MCP, or both.
-- [ ] Confirm transport for v0: remote HTTP/SSE, stdio, or local-only skeleton.
-- [ ] Confirm v0 is read-only.
-- [ ] Confirm no write/mutation tools in v0.
-- [ ] Confirm no payment, billing, deployment, or OAuth side effects in v0.
-- [ ] Define the user-visible MCP promise in one paragraph.
-- [ ] Define what data is allowed to leave the app boundary.
-- [ ] Define what data must stay private/server-side.
-- [ ] Decide whether the first PR is only an ADR/spec freeze.
-
-Recommended first PR:
-
-```text
-PR-MCP-0 — MCP scope checkpoint / ADR only
+```txt
+- broad lint cleanup;
+- quality repair enablement;
+- full production launch;
+- PR88 private beta;
+- PR89 public launch;
+- PR80-live provider submit/apply;
+- approved answer-copy implementation;
+- production billing beyond existing Stripe test-mode boundary;
+- broad OAuth/token/provider runtime expansion;
+- browser automation or live ATS submission;
+- package/lockfile changes outside a specific approved PR.
 ```
 
-Acceptance:
+## Remaining tasks checklist after current troubles are quiet
 
-- One docs file or ADR only.
-- No runtime code.
-- No dependency changes.
-- No auth implementation.
-- No tool implementation.
+### A. Close the current release trouble loop
 
-## Phase 2 — Auth and authorization decision
+- [ ] Keep quality repair OFF.
+- [ ] Run only a small internal Mistral V2 canary.
+- [ ] Record Mistral V2 canary results with exact telemetry/outcomes.
+- [ ] If Mistral V2 canary fails, revert/disable without touching quality repair.
+- [ ] If Mistral V2 canary passes, decide whether it remains internal-only or expands gradually.
+- [ ] Do not treat GPT/Mistral/Qwen flags-off smoke as production launch approval.
 
-Goal: avoid building an MCP server before scopes/token rules are clear.
+### B. Reconcile PR87 production gate status
 
-Current prior decision memory:
+- [ ] Update `docs/plans/2026-06-12-chatgpt-app-roadmap-progress-ledger.md` after PR242-PR245.
+- [ ] State the exact current `application-os-foundation` SHA.
+- [ ] State which PR87 blockers are now fixed.
+- [ ] State which PR87 blockers remain.
+- [ ] Confirm whether build is green on current `application-os-foundation`.
+- [ ] Confirm whether lint is still red and whether it is blocking PR88/PR89.
+- [ ] Confirm whether npm audit/runtime dependency audit is still red.
+- [ ] Confirm signed-in smoke status.
+- [ ] Confirm preview/staging target status.
+- [ ] Confirm rollback/kill-switch status.
 
-- Stytch Connected Apps looked like the safer first unlock because custom connected-app scopes were confirmed in docs.
-- WorkOS Standalone Connect remains attractive only if WorkOS confirms custom Twoweeks OAuth scopes for Connect/MCP.
-- Clerk remains the app login layer; MCP OAuth/token issuance must not break Clerk login.
+Recommended next roadmap PR after canary is quiet:
 
-Checklist:
-
-- [ ] Confirm provider: Stytch, WorkOS, or other.
-- [ ] Confirm custom scopes are supported for Twoweeks MCP.
-- [ ] Define v0 scopes, likely:
-  - `twoweeks.mcp.read`
-  - future only: `twoweeks.mcp.write`
-- [ ] Define token audience/resource.
-- [ ] Define JWKS/token verification path.
-- [ ] Define revoke/consent behavior.
-- [ ] Define protected resource metadata endpoint if remote MCP requires it.
-- [ ] Define failure behavior for missing/invalid/expired token.
-
-Recommended second PR:
-
-```text
-PR-MCP-1 — Auth provider decision ADR
+```txt
+PR87.8 - Production Gate Reconciliation After PR245
+Type: docs/test/status PR first, code only if one narrow blocker is proven
 ```
 
-Acceptance:
+### C. Keep the MCP/App SDK product state accurate
 
-- Provider decision is documented.
-- Exact scopes are documented.
-- No package install unless separately approved.
-- No runtime server exposure yet.
+- [ ] Treat the canonical roadmap and progress ledger as source of truth.
+- [ ] Do not infer MCP state from old `my-app/src/services/mcp-client.ts` alone.
+- [ ] Verify actual local-MCP modules and tests before any new MCP work.
+- [ ] For each future PR, generate a PR-local implementation brief from the canonical roadmap, ledger, repo state, and GitHub PR state.
+- [ ] Do not invent new PR numbers or reorder the roadmap.
 
-## Phase 3 — MCP protocol/runtime skeleton
+### D. Blocked product areas that need decisions or prerequisites
 
-Goal: create a minimal server only after scope/auth is accepted.
+#### PR80-live submit/apply
 
-Checklist:
+- [ ] Provider authorization exists.
+- [ ] Credentials exist in safe env only.
+- [ ] Test tenant exists.
+- [ ] Test posting exists.
+- [ ] No browser automation unless separately approved.
+- [ ] No live submit/apply before final preview, confirmation, idempotency, audit, rollback, and provider-specific safety review.
 
-- [ ] Decide exact MCP protocol version target.
-- [ ] Implement strict JSON-RPC parsing.
-- [ ] Implement `initialize` response only with approved capabilities.
-- [ ] Do not advertise tools/resources/prompts until implemented and tested.
-- [ ] Add invalid JSON / invalid request / unknown method tests.
-- [ ] Add deterministic request/response fixtures.
-- [ ] Add no-real-data fixture mode.
-- [ ] Add security logging without leaking user content.
+#### Approved answer copy
 
-Recommended third PR:
+- [ ] Authoritative owner-scoped approved answer source exists.
+- [ ] Answer is tied to exact provider question/prompt.
+- [ ] Human approval state is fresh.
+- [ ] Source model has retention/delete policy.
+- [ ] Copy card/export logic uses only that authoritative source.
 
-```text
-PR-MCP-2 — Local-only MCP skeleton, no tools, no real data
+#### Production billing / entitlements
+
+- [ ] Founder-approved production pricing/product mode.
+- [ ] Plan names and tiers.
+- [ ] Production payment provider decision.
+- [ ] Checkout/webhook/subscription source-of-truth design.
+- [ ] Entitlement source and revocation model.
+- [ ] Retention and privacy model for billing records.
+
+#### PR88 / PR89 launch
+
+- [ ] Production gate closed.
+- [ ] CI/build/lint/audit gates acceptable or explicitly waived with evidence.
+- [ ] Staging/preview and signed-in smoke pass.
+- [ ] Runtime monitoring and incident response ready.
+- [ ] Kill switches verified.
+- [ ] Rollback plan verified.
+- [ ] Feature flags set intentionally.
+- [ ] Quality repair remains OFF unless separately approved.
+
+## Standing per-PR agent rule
+
+Before implementing any roadmap PR, create a PR-local implementation brief derived from:
+
+```txt
+AGENTS.md
+canonical roadmap
+roadmap progress ledger
+current repo files
+current GitHub PR state
+merged decisions
 ```
 
-Acceptance:
+The PR-local brief must include:
 
-- Local-only.
-- No production exposure.
-- No real user data.
-- No write tools.
-- Tests pass with fixtures.
-
-## Phase 4 — Read-only tool candidates
-
-Goal: add only safe read-only tools after skeleton is accepted.
-
-Candidate tool families to verify against current code before implementation:
-
-- Application package summary.
-- Evidence graph summary.
-- Resume variant plan summary.
-- Review cockpit summary.
-- Read-only ChatGPT E2E harness.
-
-Checklist:
-
-- [ ] Verify each candidate exists in current code before adding it to MCP.
-- [ ] Define one input schema per tool.
-- [ ] Define one output schema per tool.
-- [ ] Add fixture-only tests first.
-- [ ] Add permission checks per tool.
-- [ ] Add redaction policy.
-- [ ] Add rate limit policy.
-- [ ] Add audit log policy.
-- [ ] Prove each tool is read-only.
-
-Do not implement all tools at once.
-
-Recommended split:
-
-```text
-PR-MCP-3A — one read-only tool, fixture-backed
-PR-MCP-3B — second read-only tool, fixture-backed
-PR-MCP-3C — ChatGPT read-only E2E smoke, fixture-backed
+```txt
+- current PR number and title;
+- base branch and proposed branch name;
+- exact roadmap section controlling the PR;
+- merged decisions that narrow or constrain the PR;
+- files to read before coding;
+- files proposed to touch;
+- files forbidden to touch;
+- exact allowed scope;
+- exact forbidden scope;
+- expected tests;
+- expected grep/source guards;
+- acceptance criteria;
+- rollback plan;
+- READY_TO_IMPLEMENT or BLOCKED.
 ```
 
-## Phase 5 — Replace placeholder client behavior
+For high-risk PRs, stop after the PR-local brief and wait for maintainer approval.
 
-Current `mcp-client.ts` still uses a mock tool call. Do not wire it to a real server until the server and auth are ready.
+High-risk includes:
 
-Checklist:
-
-- [ ] Decide whether frontend still needs an MCP client at all.
-- [ ] If yes, replace `mockToolCall` with a real, authenticated call only after auth PR is accepted.
-- [ ] If no, remove or quarantine the placeholder client in a separate cleanup PR.
-- [ ] Keep response validation schemas if still useful.
-- [ ] Add tests for connection errors, tool-not-found, invalid params, and invalid response.
-
-Acceptance:
-
-- No mock path is mistaken for production behavior.
-- No hidden MCP client writes.
-- No unauthenticated MCP calls.
-
-## Phase 6 — Deployment and monitoring
-
-Goal: only after read-only tools are stable.
-
-Checklist:
-
-- [ ] Decide deployment target.
-- [ ] Add environment variable checklist.
-- [ ] Add CORS/origin policy if remote.
-- [ ] Add per-user rate limits.
-- [ ] Add logs/metrics without sensitive content.
-- [ ] Add incident rollback plan.
-- [ ] Add off switch.
-- [ ] Run ChatGPT connection smoke.
-- [ ] Run no-auth, invalid-auth, expired-token tests.
-
-Production exposure remains blocked until all checks pass.
-
-## Explicit non-goals for the next MCP pass
-
-- [ ] No lint baseline.
-- [ ] No broad refactor.
-- [ ] No write tools.
-- [ ] No real-data ChatGPT tool before auth is proven.
-- [ ] No OAuth provider switch inside runtime skeleton PR.
-- [ ] No Mistral V2 or quality repair work in MCP PRs.
-- [ ] No deployment flag enablement.
-
-## Next action when current troubles are over
-
-Run this exact planning prompt before coding:
-
-```text
-You are a senior engineer. Prepare PR-MCP-0 only.
-Read docs/plans/2026-06-23-mcp-roadmap-checkpoint.md and PROJECT_ROADMAP-v0.md first.
-Do not modify runtime code.
-Do not install packages.
-Do not open MCP server work yet.
-Produce an ADR/docs-only PR that freezes MCP v0 scope, transport, auth assumptions, read-only constraints, and the first 3 implementation PRs.
-Status must be READY_TO_REVIEW or BLOCKED_ON_DECISION.
+```txt
+- real data selectors;
+- OAuth/auth/token changes;
+- Convex reads/writes;
+- handlers;
+- production connector/runtime;
+- export/download/send/submit/apply;
+- live provider actions;
+- package/lockfile changes;
+- security/privacy gates;
+- production deployment gates.
 ```
 
-## Current recommendation
+## Correct next action
 
-Stop MCP work for now.
+Do not merge this document as “new roadmap.”
 
-Resume only with `PR-MCP-0` after the cover-letter release/canary situation is stable and the team explicitly decides to restart MCP work.
+Merge only as a corrected checkpoint if it accurately records current reality.
+
+Then, after current cover-letter/canary trouble is quiet, run:
+
+```txt
+PR87.8 - Production Gate Reconciliation After PR245
+```
+
+That PR should update the ledger and answer:
+
+```txt
+What is still blocking PR88/private beta and PR89/public business launch now that PR245 and flags-off smoke are green?
+```
