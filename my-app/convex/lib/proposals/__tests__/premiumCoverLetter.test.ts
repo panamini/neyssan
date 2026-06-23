@@ -1301,6 +1301,165 @@ describe("premium cover letter prompt contract", () => {
     }
   });
 
+  it("keeps Mistral V2 from expanding design-system migration into unsupported system details", async () => {
+    const previousFlag = process.env.ENABLE_COVER_LETTER_PREMIUM_PROMPT_V2;
+    process.env.ENABLE_COVER_LETTER_PREMIUM_PROMPT_V2 = "true";
+    const designSystemMigrationContext = {
+      name: "Alex Martin",
+      summary:
+        "Frontend engineer building customer-facing web applications and reusable UI systems.",
+      topSkills: ["React", "TypeScript", "Design systems"],
+      recentExperience: [
+        {
+          company: "Orbit",
+          position: "Senior Frontend Engineer",
+          highlights: [
+            "Led a design system migration used across 4 product squads.",
+            "Improved release consistency across shared interface work.",
+          ],
+        },
+      ],
+    };
+    const forbiddenUnsupportedInferencePatterns = [
+      /standardizing component usage and versioning/i,
+      /\bcomponent versioning\b/i,
+      /\bcomponent governance\b/i,
+      /\btoken architecture\b/i,
+      /\brelease process ownership\b/i,
+      /\btooling ownership\b/i,
+      /\bsystem standardization\b/i,
+    ];
+    let capturedPrompt = "";
+
+    try {
+      const result = await attemptPremiumCoverLetterGeneration({
+        personalizationContext: designSystemMigrationContext,
+        voicePreset: "signature",
+        outputLanguage: "English",
+        jobTitle: "Senior Frontend Engineer",
+        jobDescription:
+          "Lead React and TypeScript delivery for customer-facing web applications, design systems, shared interfaces, release consistency, component versioning, component governance, token architecture, release process ownership, tooling ownership, and system standardization.",
+        candidateName: "Alex Martin",
+        writerProvider: "mistral",
+        writerModel: "mistral-large-latest",
+        writer: async ({ prompt }) => {
+          capturedPrompt = prompt;
+          const hasAtomicMigrationBoundary =
+            prompt.includes(
+              "Atomic CV fact lock: CV facts are atomic and non-expandable.",
+            ) &&
+            prompt.includes(
+              'Migration boundary: "migration" describes movement only.',
+            ) &&
+            prompt.includes("Design-system migration boundary:") &&
+            prompt.includes(
+              "component versioning, component governance, token architecture, release process ownership, tooling ownership, or system standardization",
+            ) &&
+            prompt.includes("unless the CV evidence explicitly says");
+
+          if (!hasAtomicMigrationBoundary) {
+            return {
+              opening:
+                "I led a design system migration used across 4 product squads.",
+              proofBlock:
+                "I improved release consistency across shared interface work.",
+              employerValueBlock:
+                "That work is relevant to standardizing component usage and versioning, component versioning, component governance, token architecture, release process ownership, tooling ownership, and system standardization.",
+              closeLine:
+                "I bring React, TypeScript, design systems, and system standardization experience.",
+            };
+          }
+
+          return {
+            opening:
+              "I led a design system migration used across 4 product squads.",
+            proofBlock:
+              "I improved release consistency across shared interface work.",
+            employerValueBlock:
+              "That work is relevant to frontend teams maintaining shared interface quality.",
+            closeLine:
+              "I bring experience in React, TypeScript, design-system migration, and shared interface work.",
+          };
+        },
+      });
+
+      expect(capturedPrompt).toContain(
+        "Atomic CV fact lock: CV facts are atomic and non-expandable.",
+      );
+      expect(capturedPrompt).toContain(
+        'Migration boundary: "migration" describes movement only.',
+      );
+      expect(capturedPrompt).toContain("Design-system migration boundary:");
+      expect(capturedPrompt).toContain(
+        "unless the CV evidence explicitly says that exact system or process detail",
+      );
+      expect(capturedPrompt).toContain(
+        "If the CV says only design-system migration across squads and improved release consistency across shared interface work",
+      );
+
+      expect(result).not.toBeNull();
+      const finalText = result?.content ?? "";
+      expect(finalText).toContain(
+        "design system migration used across 4 product squads",
+      );
+      expect(finalText).toContain(
+        "improved release consistency across shared interface work",
+      );
+      for (const pattern of forbiddenUnsupportedInferencePatterns) {
+        expect(finalText).not.toMatch(pattern);
+      }
+
+      const explicitCvSupportedResult = await attemptPremiumCoverLetterGeneration({
+        personalizationContext: {
+          ...designSystemMigrationContext,
+          recentExperience: [
+            {
+              company: "Orbit",
+              position: "Senior Frontend Engineer",
+              highlights: [
+                "Led a design system migration used across 4 product squads.",
+                "Improved release consistency across shared interface work.",
+                "Owned component versioning, component governance, token architecture, release process ownership, tooling ownership, and system standardization for a shared design system.",
+              ],
+            },
+          ],
+        },
+        voicePreset: "signature",
+        outputLanguage: "English",
+        jobTitle: "Senior Frontend Engineer",
+        jobDescription:
+          "Lead React and TypeScript delivery for customer-facing web applications and shared design systems.",
+        candidateName: "Alex Martin",
+        writerProvider: "mistral",
+        writerModel: "mistral-large-latest",
+        writer: async () => ({
+          opening:
+            "I owned component versioning, component governance, token architecture, release process ownership, tooling ownership, and system standardization for a shared design system.",
+          proofBlock:
+            "I led a design system migration used across 4 product squads and improved release consistency across shared interface work.",
+          employerValueBlock:
+            "That work is relevant to frontend teams maintaining shared interface quality.",
+          closeLine:
+            "I bring experience in React, TypeScript, component versioning, component governance, token architecture, release process ownership, tooling ownership, system standardization, and shared interface work.",
+        }),
+      });
+
+      expect(explicitCvSupportedResult).not.toBeNull();
+      expect(explicitCvSupportedResult?.content).toContain(
+        "component versioning, component governance, token architecture, release process ownership, tooling ownership, and system standardization",
+      );
+      expect(explicitCvSupportedResult?.content).toContain(
+        "owned component versioning, component governance, token architecture, release process ownership, tooling ownership, and system standardization for a shared design system",
+      );
+    } finally {
+      if (previousFlag === undefined) {
+        delete process.env.ENABLE_COVER_LETTER_PREMIUM_PROMPT_V2;
+      } else {
+        process.env.ENABLE_COVER_LETTER_PREMIUM_PROMPT_V2 = previousFlag;
+      }
+    }
+  });
+
   it("adds Qwen cv_direct ownership and scope guidance without leaking to GPT or Mistral", () => {
     const brief = buildDirectBrief();
     const defaultPrompt = buildPremiumCoverLetterPrompt({ brief });
