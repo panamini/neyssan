@@ -5001,6 +5001,248 @@ describe("proposal writer prompt contract", () => {
     ).toThrow(/substantive body content/i);
   });
 
+  it("preserves safe French no-CV premium role-surface content through persistence finalization", () => {
+    const bodyParts = {
+      opening:
+        "Ce poste demande de la rigueur, une communication claire et un suivi régulier.",
+      proofBlock:
+        "La mission repose sur l’organisation des tâches quotidiennes et la gestion des échanges.",
+      employerValueBlock:
+        "J’aborderais ce travail avec méthode, attention aux détails et communication claire.",
+      closeLine:
+        "Je serais ravi d’échanger sur la manière dont j’aborderais ce type de mission.",
+    };
+    const content = [
+      "Madame, Monsieur,",
+      "",
+      bodyParts.opening,
+      "",
+      bodyParts.proofBlock,
+      "",
+      bodyParts.employerValueBlock,
+      "",
+      bodyParts.closeLine,
+      "",
+      "Veuillez agréer, Madame, Monsieur, l'expression de mes salutations distinguées.",
+    ].join("\n");
+
+    const finalized = finalizePremiumCoverLetterPayloadForPersistence({
+      payload: {
+        content,
+        sections: [{ type: "text", content }],
+        bodyParts,
+      },
+      format: "cover_letter",
+      outputLanguage: "French",
+      voicePreset: "signature",
+      hasCandidateContext: false,
+    });
+
+    expect(finalized.content).toContain(bodyParts.opening);
+    expect(finalized.content).toContain(bodyParts.proofBlock);
+    expect(finalized.content).toContain(bodyParts.employerValueBlock);
+    expect(finalized.content).toContain(bodyParts.closeLine);
+  });
+
+  it("preserves French no-CV role-surface content when the operational detail is in the consequence sentence", () => {
+    const bodyParts = {
+      opening:
+        "Je suis intéressé par ce poste d'Assistant administratif en raison de son accent sur la rigueur et l'organisation quotidienne.",
+      proofBlock:
+        "Le rôle implique une communication claire et un suivi régulier pour soutenir une équipe active.",
+      employerValueBlock:
+        "Une gestion structurée des échanges et des tâches permet à l'équipe de maintenir son rythme.",
+      closeLine:
+        "Je serais ravi d'échanger sur la manière dont j'aborderais ce travail avec rigueur et suivi.",
+    };
+    const content = [
+      "Madame, Monsieur,",
+      "",
+      bodyParts.opening,
+      "",
+      bodyParts.proofBlock,
+      "",
+      bodyParts.employerValueBlock,
+      "",
+      bodyParts.closeLine,
+      "",
+      "Veuillez agréer, Madame, Monsieur, l'expression de mes salutations distinguées.",
+    ].join("\n");
+
+    const trace = inspectProposalFinalization({
+      content,
+      format: "cover_letter",
+      outputLanguage: "French",
+      voicePreset: "signature",
+      noContextMode: true,
+    });
+    expect(trace.failureStage).toBeUndefined();
+    expect(
+      trace.cleanedBodySelection.aggressive.groundedOperationalSentenceCount,
+    ).toBeGreaterThanOrEqual(1);
+
+    const finalized = finalizePremiumCoverLetterPayloadForPersistence({
+      payload: {
+        content,
+        sections: [{ type: "text", content }],
+        bodyParts,
+      },
+      format: "cover_letter",
+      outputLanguage: "French",
+      voicePreset: "signature",
+      hasCandidateContext: false,
+    });
+
+    expect(finalized.content).toContain(bodyParts.proofBlock);
+    expect(finalized.content).toContain(bodyParts.employerValueBlock);
+  });
+
+  it("preserves French no-CV interest openers when role surface follows the interest phrase", () => {
+    const bodyParts = {
+      opening:
+        "Je suis intéressé par ce poste qui implique de gérer l'organisation quotidienne et de coordonner les échanges avec les équipes.",
+      proofBlock:
+        "Le rôle demande de suivre les dossiers et de maintenir une communication claire avec les interlocuteurs internes.",
+      employerValueBlock:
+        "Ce suivi fiable aide les équipes à garder les tâches lisibles.",
+      closeLine:
+        "Je serais ravi d'échanger sur la manière dont j'aborderais ce type de mission.",
+    };
+    const content = [
+      "Madame, Monsieur,",
+      "",
+      bodyParts.opening,
+      "",
+      bodyParts.proofBlock,
+      "",
+      bodyParts.employerValueBlock,
+      "",
+      bodyParts.closeLine,
+      "",
+      "Veuillez agréer, Madame, Monsieur, l'expression de mes salutations distinguées.",
+    ].join("\n");
+
+    const trace = inspectProposalFinalization({
+      content,
+      format: "cover_letter",
+      outputLanguage: "French",
+      voicePreset: "signature",
+      noContextMode: true,
+    });
+    expect(trace.failureStage).toBeUndefined();
+    expect(
+      trace.cleanedBodySelection.aggressive.groundedOperationalSentenceCount,
+    ).toBeGreaterThanOrEqual(2);
+
+    const finalized = finalizePremiumCoverLetterPayloadForPersistence({
+      payload: {
+        content,
+        sections: [{ type: "text", content }],
+        bodyParts,
+      },
+      format: "cover_letter",
+      outputLanguage: "French",
+      voicePreset: "signature",
+      hasCandidateContext: false,
+    });
+
+    expect(finalized.content).toContain(bodyParts.opening);
+    expect(finalized.content).toContain(bodyParts.proofBlock);
+  });
+
+  it("preserves French no-CV role continuations after the role has been introduced", () => {
+    const bodyParts = {
+      opening:
+        "Ce poste, centré sur le suivi administratif et la coordination des tâches, m'intéresse particulièrement.",
+      proofBlock:
+        "Il implique une organisation rigoureuse des dossiers, une communication fluide avec les équipes et une planification fiable.",
+      employerValueBlock:
+        "Une gestion structurée des échanges aide les équipes à garder un suivi régulier.",
+      closeLine:
+        "Je serais ravi d'échanger sur la manière dont j'aborderais ce type de mission.",
+    };
+    const content = [
+      "Madame, Monsieur,",
+      "",
+      bodyParts.opening,
+      "",
+      bodyParts.proofBlock,
+      "",
+      bodyParts.employerValueBlock,
+      "",
+      bodyParts.closeLine,
+      "",
+      "Veuillez agréer, Madame, Monsieur, l'expression de mes salutations distinguées.",
+    ].join("\n");
+
+    const trace = inspectProposalFinalization({
+      content,
+      format: "cover_letter",
+      outputLanguage: "French",
+      voicePreset: "signature",
+      noContextMode: true,
+    });
+    expect(trace.failureStage).toBeUndefined();
+    expect(
+      trace.cleanedBodySelection.aggressive.groundedOperationalSentenceCount,
+    ).toBeGreaterThanOrEqual(2);
+
+    const finalized = finalizePremiumCoverLetterPayloadForPersistence({
+      payload: {
+        content,
+        sections: [{ type: "text", content }],
+        bodyParts,
+      },
+      format: "cover_letter",
+      outputLanguage: "French",
+      voicePreset: "signature",
+      hasCandidateContext: false,
+    });
+
+    expect(finalized.content).toContain(bodyParts.opening);
+    expect(finalized.content).toContain(bodyParts.proofBlock);
+  });
+
+  it("still fails closed for French no-CV generic close without role-surface substance", () => {
+    const trace = inspectProposalFinalization({
+      content: [
+        "Je serais ravi d’échanger sur la manière dont j’aborderais ce type de mission.",
+        "",
+        "Je vous remercie pour votre temps et votre considération.",
+      ].join("\n"),
+      format: "cover_letter",
+      outputLanguage: "French",
+      voicePreset: "signature",
+      noContextMode: true,
+    });
+
+    expect(trace.finalOutput).toBeUndefined();
+    expect(trace.failureStage).toBe("cleaned_body_selection");
+    expect(trace.errorMessage).toMatch(/substantive body content/i);
+  });
+
+  it("still fails closed for French no-CV candidate-operation claims during finalization", () => {
+    const trace = inspectProposalFinalization({
+      content: [
+        "Je coordonne les opérations quotidiennes avec attention à la planification et à la communication.",
+        "",
+        "Je gère les échanges entre équipes et je m’occupe de garder les dossiers à jour.",
+        "",
+        "Je veille à maintenir des flux de travail organisés.",
+        "",
+        "Je suis spécialisé dans la coordination administrative.",
+      ].join("\n"),
+      format: "cover_letter",
+      outputLanguage: "French",
+      voicePreset: "signature",
+      noContextMode: true,
+    });
+
+    expect(trace.finalOutput).toBeUndefined();
+    expect(trace.failureStage).toBe("cleaned_body_selection");
+    expect(trace.errorMessage).toMatch(/substantive body content/i);
+  });
+
   it("still fails closed for nearby weak shells with entity names containing initials and periods", () => {
     const trace = inspectProposalFinalization({
       content: [

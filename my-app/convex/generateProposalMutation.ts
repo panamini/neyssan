@@ -5335,9 +5335,13 @@ const GENERIC_ROLE_SUMMARY_SENTENCE_PATTERNS = [
   /^working remotely\b/i,
 ] as const;
 const NO_CONTEXT_ROLE_SUMMARY_OPENER_PATTERN =
-  /^(?:the\s+(?:role|position)\b|the\s+role['’]s\s+focus\b|the\s+responsibilities?\s+of\b|this\s+(?:includes|involves|requires)\b)/i;
+  /^(?:the\s+(?:role|position)\b|the\s+role['’]s\s+focus\b|the\s+responsibilities?\s+of\b|this\s+(?:includes|involves|requires)\b|(?:ce|cet|cette|le|la|les)\s+(?:r[oô]le|poste|mission|missions?|travail)\b)/iu;
 const NO_CONTEXT_OPERATIONAL_ROLE_SUMMARY_DETAIL_PATTERN =
-  /\b(?:coordinating|coordinate|managing|manage|supporting|support|drafting|draft|tracking|track|maintaining|maintain|leveraging|leverage|collaborating|collaborate|campaigns?|client\s+communications?|business\s+development|proposals?|pitch\s+materials?|marketing\s+collateral|credentials|brochures?|crm|engagement|content|events?|sector\s+trends|strategies|client\s+outreach|teams?|patrolling|patrol|monitoring|monitor|surveillance|incidents?|incident\s+reporting|logs?|log|hotel\s+policies|security\s+standards|safety\s+concerns?|guest\s+services?|property|departments?)\b/i;
+  /\b(?:coordinating|coordinate|managing|manage|supporting|support|drafting|draft|tracking|track|maintaining|maintain|leveraging|leverage|collaborating|collaborate|campaigns?|client\s+communications?|business\s+development|proposals?|pitch\s+materials?|marketing\s+collateral|credentials|brochures?|crm|engagement|content|events?|sector\s+trends|strategies|client\s+outreach|teams?|patrolling|patrol|monitoring|monitor|surveillance|incidents?|incident\s+reporting|logs?|log|hotel\s+policies|security\s+standards|safety\s+concerns?|guest\s+services?|property|departments?|coordination|communication|suivi|organisation|t[aâ]ches?|[ée]changes?|gestion|planification|dossiers?|relances?|op[ée]rations?|flux(?:\s+de\s+travail)?|[ée]quipes?)\b/iu;
+const NO_CONTEXT_FRENCH_ROLE_SURFACE_OPENER_PATTERN =
+  /^(?:(?:ce|cet|cette|le|la|les)\s+(?:r[oô]le|poste|mission|missions?|travail)(?=\s|$|[,.!?;:])|je\s+suis\s+int[eé]ress[ée]e?\s+par\s+(?:ce|cet|cette|le|la)\s+(?:r[oô]le|poste|mission|travail)(?=\s|$|[,.!?;:])|il\s+(?:implique|demande|exige|repose\s+sur|semble\s+(?:impliquer|demander))\b|elle\s+(?:implique|demande|exige|repose\s+sur|semble\s+(?:impliquer|demander))\b|une\s+(?:gestion|organisation|communication|coordination|planification)(?=\s|$|[,.!?;:])|un\s+suivi(?=\s|$|[,.!?;:]))/iu;
+const NO_CONTEXT_FRENCH_OPERATIONAL_DETAIL_PATTERN =
+  /(?:coordination|communication|suivi|organisation|t[aâ]ches?|[ée]changes?|gestion|planification|dossiers?|relances?|op[ée]rations?|flux(?:\s+de\s+travail)?|[ée]quipes?|rigueur)/iu;
 const LOW_VALUE_NO_CONTEXT_LEAD_PATTERNS = [
   /^the role at\b/i,
   /^the role of\b/i,
@@ -5759,10 +5763,15 @@ function sentenceLooksGroundedNoContextRoleSummarySentence(
   sentence: string,
 ): boolean {
   const normalized = compactWhitespace(sentence);
+  const normalizedConstraint = normalizeProposalConstraintText(sentence);
+  const looksFrenchRoleSurface =
+    NO_CONTEXT_FRENCH_ROLE_SURFACE_OPENER_PATTERN.test(normalizedConstraint) &&
+    NO_CONTEXT_FRENCH_OPERATIONAL_DETAIL_PATTERN.test(normalizedConstraint);
   if (
     !normalized ||
     sentenceLooksNumericResidue(normalized) ||
-    !NO_CONTEXT_ROLE_SUMMARY_OPENER_PATTERN.test(normalized)
+    (!NO_CONTEXT_ROLE_SUMMARY_OPENER_PATTERN.test(normalized) &&
+      !looksFrenchRoleSurface)
   ) {
     return false;
   }
@@ -5770,7 +5779,8 @@ function sentenceLooksGroundedNoContextRoleSummarySentence(
   const factTokens = extractSentenceFactTokens(sentence);
   return (
     factTokens.length >= 5 &&
-    NO_CONTEXT_OPERATIONAL_ROLE_SUMMARY_DETAIL_PATTERN.test(normalized)
+    (NO_CONTEXT_OPERATIONAL_ROLE_SUMMARY_DETAIL_PATTERN.test(normalized) ||
+      looksFrenchRoleSurface)
   );
 }
 
@@ -5826,7 +5836,8 @@ function countNoContextGroundedOperationalSentences(
       return (
         groundedSentenceIndices.has(otherIndex) ||
         groundedRoleSummaryIndices.has(otherIndex) ||
-        sentenceLooksSaveableWorkSurfaceSentence(otherSentence)
+        sentenceLooksSaveableWorkSurfaceSentence(otherSentence) ||
+        sentenceLooksGroundedNoContextSupportSentence(otherSentence)
       );
     });
     if (hasGroundedPartner) {
