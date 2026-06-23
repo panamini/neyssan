@@ -1178,8 +1178,14 @@ const ADJACENT_UNSUPPORTED_OUTCOME_PHRASES = [
   "remove friction",
   "support smooth office operations",
 ] as const;
-const NO_CV_HISTORY_CLAIM_PATTERN =
-  /\b(?:in previous roles?|at my previous|during my|my experience|my background|experience includes|background includes|my experience includes|my background includes|i have worked with|i have managed|i worked(?: as| at)?|i served as|i led|i managed|i coordinated|i developed|i built|i improved|i delivered|i implemented|i maintained|i operated|i supervised|i trained|i documented|i reviewed|i monitored|i hold\b|i earned\b|i completed\b|i studied\b)\b/i;
+const NO_CV_HISTORY_CLAIM_PATTERNS = [
+  /\b(?:in previous roles?|at my previous|during my|my experience|my background|experience includes|background includes|my experience includes|my background includes|i have (?:experience|worked|managed|handled|coordinated|maintained|supported|specialized)\b|i worked(?: as| at)?|i served as|i led|i manage|i managed|i coordinate|i coordinated|i handle|i handled|i maintain|i maintained|i support|i supported|i specialize|i specialize in|i developed|i built|i improve|i improved|i deliver|i delivered|i implement|i implemented|i operate|i operated|i supervise|i supervised|i train|i trained|i document|i documented|i review|i reviewed|i monitor|i monitored|i focus on|i bring (?:experience|background|skills?|discipline|strength|capability|ability|expertise)\b|i hold\b|i earned\b|i completed\b|i studied\b|i(?:'m| am)\s+(?:a|an)\s+(?:administrator|analyst|assistant|coordinator|engineer|lead|manager|officer|operator|professional|specialist|supervisor|worker)\b)\b/i,
+  /\b(?:mon\s+(?:exp[ée]rience|parcours)|mes\s+exp[ée]riences|je\s+coordonne|je\s+g[eè]re|je\s+m(?:['’]|\s+)occupe\s+de|je\s+veille\s+(?:à|a)(?:\s|$)|je\s+suis\s+sp[eé]cialis[ée]e?(?:\s|$)|j(?:['’]|\s+)ai\s+(?:travaill[ée]e?|coordonn[ée]e?|g[ée]r[ée]e?|maintenu|d[ée]velopp[ée]e?|r[ée]alis[ée]e?|supervis[ée]e?|document[ée]e?|suivi))\b/iu,
+] as const;
+
+function hasNoCvHistoryClaim(value: string): boolean {
+  return NO_CV_HISTORY_CLAIM_PATTERNS.some((pattern) => pattern.test(value));
+}
 
 function compactWhitespace(value: string | null | undefined): string {
   if (typeof value !== "string") return "";
@@ -2566,7 +2572,7 @@ export function buildPremiumClaimPlanV1(args: {
           : safeFacts.map((fact) => fact.text),
       allowedVerbs:
         args.contextClass === "no_cv"
-          ? ["discuss", "understand", "focus"]
+          ? ["interested", "discuss", "approach"]
           : collectAllowedVerbs(safeFacts),
       forbiddenVerbs:
         args.contextClass === "no_cv"
@@ -3154,12 +3160,17 @@ function resolvePremiumCoverLetterContextGuidance(args: {
     if (args.contextClass === "no_cv") {
       return [
         "Mistral no_cv contract:",
-        "- There is no candidate history. Do not write a role summary, process memo, detached noun phrases, or fake experience.",
-        "- Keep a modest first-person candidate voice without claiming prior work.",
-        "- opening: one sentence beginning with I, focused on the role's work surface.",
+        "- There is no CV evidence. Operate with three layers only: JOB SURFACE, INTENT LAYER, and CV EVIDENCE when present.",
+        "- Never convert JOB SURFACE into CANDIDATE EXPERIENCE.",
+        "- Job descriptions can become neutral role explanation, intent statements, or conditional approach statements only.",
+        "- Keep a modest first-person candidate voice without claiming prior work, skills, habits, capability, or worker identity.",
+        "- Allowed no_cv stems include \"I am interested in this role because\", \"The role involves\", \"The position appears to focus on\", and \"I would approach this work by\".",
+        "- Use any \"I would be glad to discuss\" sentence only once, in closeLine.",
+        "- Forbidden no_cv stems include \"I coordinate\", \"I manage\", \"I handle\", \"I maintain\", \"I focus on\", \"I bring experience\", \"My background is\", \"I specialize\", and \"I have worked\".",
+        "- opening: one sentence expressing interest or intent tied to the role's work surface.",
         "- proofBlock: one sentence about what the role requires operationally, not what the candidate has done.",
-        "- employerValueBlock: one sentence about the practical consequence for the team.",
-        "- closeLine: one modest first-person sentence such as \"I would be glad to discuss how I can approach this work with care and follow-through.\"",
+        "- employerValueBlock: one sentence about the practical consequence for the team, not another discussion sentence.",
+        "- closeLine: one modest first-person sentence such as \"I would be glad to discuss how I would approach this work with care and follow-through.\"",
         "- Do not begin closeLine with \"Experience includes\", \"Background includes\", or a detached task noun.",
         "- Do not claim achievements, tools used, managed workflows, maintained systems, or completed tasks.",
       ];
@@ -3177,8 +3188,9 @@ function resolvePremiumCoverLetterContextGuidance(args: {
   }
   if (args.contextClass === "no_cv") {
     return [
-      "For no_cv, there is no supported candidate history. Use job-offer work surfaces not prior history.",
-      "For no_cv, stay in first person and sound like a candidate, not a role summary or memo; vary the opening and avoid repeated stems like 'I am drawn to work...', 'I am applying... with a clear focus on...', 'This role centers on...', or 'The highest-value work...'; do not claim prior roles, achievements, credentials, tool usage, readiness, or impact; keep employerValueBlock on operational consequence and closeLine on modest first-person ownership.",
+      "For no_cv, there is no supported candidate history. Use job-offer work surfaces and candidate intent only, never prior history.",
+      "For no_cv, job descriptions can become neutral role explanation, intent statements, or conditional approach statements only; never convert job surface into candidate experience.",
+      "For no_cv, stay in first person and sound like a candidate, not a role summary or memo; vary the opening and avoid repeated stems like 'I am drawn to work...', 'I am applying... with a clear focus on...', 'This role centers on...', or 'The highest-value work...'; do not claim prior roles, achievements, credentials, tool usage, skills, habits, worker identity, readiness, or impact; keep employerValueBlock on operational consequence and closeLine on modest first-person intent.",
     ];
   }
   return [];
@@ -3729,7 +3741,7 @@ export function validatePremiumWriterOutputV1(args: {
     }
     if (
       args.claimPlan.contextClass === "no_cv" &&
-      NO_CV_HISTORY_CLAIM_PATTERN.test(compact)
+      hasNoCvHistoryClaim(compact)
     ) {
       issues.push({
         code: "no_cv_uses_candidate_fact",
@@ -5016,7 +5028,7 @@ export function validatePremiumCoverLetterBodyParts(args: {
     }
     if (
       args.brief.contextClass === "no_cv" &&
-      NO_CV_HISTORY_CLAIM_PATTERN.test(compact)
+      hasNoCvHistoryClaim(compact)
     ) {
       issues.push({ code: "no_cv_history_claim", repairable: false });
     }

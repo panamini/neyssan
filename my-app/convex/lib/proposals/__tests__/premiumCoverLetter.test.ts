@@ -1892,7 +1892,10 @@ describe("premium cover letter prompt contract", () => {
       "For no_cv, there is no supported candidate history.",
     );
     expect(prompt).toContain(
-      "Use job-offer work surfaces not prior history.",
+      "Use job-offer work surfaces and candidate intent only, never prior history.",
+    );
+    expect(prompt).toContain(
+      "job descriptions can become neutral role explanation, intent statements, or conditional approach statements only",
     );
     expect(prompt).toContain(
       "stay in first person and sound like a candidate, not a role summary or memo",
@@ -1901,10 +1904,10 @@ describe("premium cover letter prompt contract", () => {
       "vary the opening and avoid repeated stems like 'I am drawn to work...', 'I am applying... with a clear focus on...', 'This role centers on...', or 'The highest-value work...'",
     );
     expect(prompt).toContain(
-      "do not claim prior roles, achievements, credentials, tool usage, readiness, or impact",
+      "do not claim prior roles, achievements, credentials, tool usage, skills, habits, worker identity, readiness, or impact",
     );
     expect(prompt).toContain(
-      "keep employerValueBlock on operational consequence and closeLine on modest first-person ownership",
+      "keep employerValueBlock on operational consequence and closeLine on modest first-person intent",
     );
     const mistralPrompt = buildPremiumCoverLetterPrompt({
       brief,
@@ -1913,13 +1916,19 @@ describe("premium cover letter prompt contract", () => {
     });
     expect(mistralPrompt).toContain("Mistral no_cv contract:");
     expect(mistralPrompt).toContain(
-      "Do not write a role summary, process memo, detached noun phrases, or fake experience.",
+      "Never convert JOB SURFACE into CANDIDATE EXPERIENCE.",
+    );
+    expect(mistralPrompt).toContain(
+      "Allowed no_cv stems include \"I am interested in this role because\"",
+    );
+    expect(mistralPrompt).toContain(
+      "Forbidden no_cv stems include \"I coordinate\"",
     );
     expect(mistralPrompt).toContain(
       "Do not begin closeLine with \"Experience includes\"",
     );
-    expect(prompt.length).toBeLessThan(6200);
-    expect(prompt.split("\n").length).toBeLessThan(42);
+    expect(prompt.length).toBeLessThan(6500);
+    expect(prompt.split("\n").length).toBeLessThan(44);
   });
 
   it("requests strict JSON-schema body parts from OpenAI for premium generation", () => {
@@ -2033,6 +2042,29 @@ describe("premium cover letter generation and rendering", () => {
         jobDescription: directJob.jobDescription,
         contextClass: "cv_direct",
       }),
+    });
+  };
+
+  const buildNoCvBrief = () => {
+    const allowedFactsPack = buildAllowedFactsPack({
+      personalizationContext: null,
+      jobTitle: noCvJob.jobTitle,
+      jobDescription: noCvJob.jobDescription,
+    });
+    const rankedEvidencePack = rankAllowedFacts({
+      allowedFactsPack,
+      jobTitle: noCvJob.jobTitle,
+      jobDescription: noCvJob.jobDescription,
+      contextClass: "no_cv",
+    });
+    return buildPremiumCoverLetterBrief({
+      preset: "signature",
+      outputLanguage: "English",
+      jobTitle: noCvJob.jobTitle,
+      jobDescription: noCvJob.jobDescription,
+      contextClass: "no_cv",
+      allowedFactsPack,
+      rankedEvidencePack,
     });
   };
 
@@ -5014,6 +5046,158 @@ describe("premium cover letter generation and rendering", () => {
     expect(result?.content).not.toMatch(/my experience|in previous roles|I have worked with/i);
   });
 
+  it("scopes no-CV operational-identity validation while allowing conditional intent", () => {
+    const noCvBrief = buildNoCvBrief();
+    const directBrief = buildDirectFrontendBrief();
+    const issueCodesFor = (text: string, brief = noCvBrief) =>
+      validatePremiumCoverLetterBodyParts({
+        bodyParts: {
+          opening: text,
+          proofBlock:
+            "The role involves coordination, communication, and steady follow-through.",
+          employerValueBlock:
+            "Clear organization helps the team keep daily work moving.",
+          closeLine:
+            "I would welcome the opportunity to discuss the position further.",
+        },
+        brief,
+      }).map((issue) => issue.code);
+
+    for (const blocked of [
+      "I focus on coordinating daily office operations.",
+      "I handle scheduling and communication.",
+      "I maintain organized administrative workflows.",
+      "I bring discipline around coordination and follow-through.",
+      "I specialize in keeping shared operations organized.",
+    ]) {
+      expect(issueCodesFor(blocked)).toContain("no_cv_history_claim");
+      expect(issueCodesFor(blocked, directBrief)).not.toContain(
+        "no_cv_history_claim",
+      );
+    }
+
+    const allowedIssues = validatePremiumCoverLetterBodyParts({
+      bodyParts: {
+        opening:
+          "I'm interested in this role because it involves structured coordination.",
+        proofBlock:
+          "I understand the role involves scheduling, correspondence, and follow-through.",
+        employerValueBlock:
+          "I would approach this work by keeping communication and handoffs clear.",
+        closeLine:
+          "I would focus on understanding the team's needs, and I would welcome the opportunity to discuss the position further.",
+      },
+      brief: noCvBrief,
+    }).map((issue) => issue.code);
+
+    expect(allowedIssues).not.toContain("no_cv_history_claim");
+  });
+
+  it("blocks French no-CV present-tense candidate operations while allowing conditional intent", () => {
+    const noCvBrief = buildNoCvBrief();
+    const issueCodesFor = (text: string) =>
+      validatePremiumCoverLetterBodyParts({
+        bodyParts: {
+          opening: text,
+          proofBlock:
+            "Le poste implique coordination, communication et suivi régulier.",
+          employerValueBlock:
+            "Une organisation claire aide l'équipe à garder les opérations quotidiennes lisibles.",
+          closeLine: "Je serais ravi d'en discuter.",
+        },
+        brief: noCvBrief,
+      }).map((issue) => issue.code);
+
+    for (const blocked of [
+      "Je coordonne les opérations quotidiennes.",
+      "Je gère la planification et la communication.",
+      "Je m’occupe de garder les dossiers à jour.",
+      "Je veille à maintenir des flux de travail organisés.",
+      "Je suis spécialisé dans la coordination administrative.",
+    ]) {
+      expect(issueCodesFor(blocked)).toContain("no_cv_history_claim");
+    }
+
+    const allowedIssues = validatePremiumCoverLetterBodyParts({
+      bodyParts: {
+        opening:
+          "Je souhaite échanger sur ce rôle parce qu'il implique une coordination structurée.",
+        proofBlock:
+          "Le poste implique de maintenir l'organisation, la communication et le suivi.",
+        employerValueBlock:
+          "Je veillerais à aborder ce travail avec méthode et clarté.",
+        closeLine: "Je serais ravi d'en discuter.",
+      },
+      brief: noCvBrief,
+    }).map((issue) => issue.code);
+
+    expect(allowedIssues).not.toContain("no_cv_history_claim");
+  });
+
+  it("allows no-CV premium drafts that keep job surface separate from candidate intent", async () => {
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: null,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: noCvJob.jobTitle,
+      jobDescription: noCvJob.jobDescription,
+      writer: async () => ({
+        opening:
+          "I'm interested in this role because it involves structured coordination, clear communication, and reliable day-to-day operations.",
+        proofBlock:
+          "The position appears to focus on maintaining organization, handling communication between teams, and ensuring consistent follow-through.",
+        employerValueBlock:
+          "I would approach this work by keeping the role's communication and follow-through needs clear.",
+        closeLine:
+          "I would be glad to discuss how I would approach this type of work.",
+      }),
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.contextClass).toBe("no_cv");
+    expect(result?.finalProvenance?.status).toBe("untrusted_no_cv");
+    expect(result?.finalProvenance?.verifiedCandidateFactIds).toHaveLength(0);
+    expect(result?.qualityRepair).toMatchObject({
+      enabled: false,
+      eligible: false,
+      attempted: false,
+      outcome: "disabled",
+    });
+  });
+
+  it("fails closed when a French no-CV premium draft turns job surface into candidate operations", async () => {
+    let failure: any = null;
+
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: null,
+      voicePreset: "signature",
+      outputLanguage: "French",
+      jobTitle: noCvJob.jobTitle,
+      jobDescription: noCvJob.jobDescription,
+      onFailure: (trace) => {
+        failure = trace;
+      },
+      writer: async () => ({
+        opening:
+          "Je coordonne les opérations quotidiennes avec attention à la planification et à la communication.",
+        proofBlock:
+          "Je gère les échanges entre équipes et je m’occupe de garder les dossiers à jour.",
+        employerValueBlock:
+          "Je veille à maintenir des flux de travail organisés.",
+        closeLine:
+          "Je suis spécialisé dans la coordination administrative.",
+      }),
+    });
+
+    expect(result).toBeNull();
+    expect(failure).toEqual({
+      stage: "validation",
+      reason: "non_repairable_validation",
+      contextClass: "no_cv",
+      issues: expect.arrayContaining(["no_cv_uses_candidate_fact"]),
+    });
+  });
+
   it("fails closed when a no-CV premium draft invents prior experience", async () => {
     let failure: any = null;
 
@@ -5035,6 +5219,39 @@ describe("premium cover letter generation and rendering", () => {
           "That experience would help me step into the role immediately.",
         closeLine:
           "I would welcome the opportunity to discuss the role further.",
+      }),
+    });
+
+    expect(result).toBeNull();
+    expect(failure).toEqual({
+      stage: "validation",
+      reason: "non_repairable_validation",
+      contextClass: "no_cv",
+      issues: expect.arrayContaining(["no_cv_uses_candidate_fact"]),
+    });
+  });
+
+  it("fails closed when a no-CV premium draft turns job surface into present-tense candidate operations", async () => {
+    let failure: any = null;
+
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: null,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: noCvJob.jobTitle,
+      jobDescription: noCvJob.jobDescription,
+      onFailure: (trace) => {
+        failure = trace;
+      },
+      writer: async () => ({
+        opening:
+          "I focus on coordinating daily office operations with attention to scheduling, correspondence, and onboarding logistics.",
+        proofBlock:
+          "I handle scheduling, communication, and reliable day-to-day operations.",
+        employerValueBlock:
+          "I bring discipline around coordination, documentation, and follow-through.",
+        closeLine:
+          "I specialize in maintaining organized workflows for busy teams.",
       }),
     });
 
