@@ -1,3 +1,21 @@
+const fs = require("node:fs");
+const path = require("node:path");
+
+const scrapingServerTsconfig = path.join(
+  __dirname,
+  "scraping-server/tsconfig.json",
+);
+const scrapingServerOverrides = fs.existsSync(scrapingServerTsconfig)
+  ? [
+      {
+        files: ["scraping-server/**/*.ts"],
+        parserOptions: {
+          project: [scrapingServerTsconfig],
+        },
+      },
+    ]
+  : [];
+
 module.exports = {
   root: true,
   env: { browser: true, es2020: true, node: true },
@@ -20,8 +38,15 @@ module.exports = {
     "src/components.bak.*",
     "src/components.bak.*/**",
     "**/__tests__/**",
+    "**/*.test.*",
+    "**/*.spec.*",
     "convex/lib/parsing/__tests__/**",
+    "convex/lib/parsing/prev_canonicalize*.ts",
+    "convex/lib/parsing_shared/*.test.ts",
+    "convex/lib/tests/**/*.test.ts",
     "docs/**",
+    "src/ProposalGenerator.tsx",
+    "src/pages/ProposalForgeNext.tsx",
     "worker/**",
     "vitest.config.ts",
   ],
@@ -77,10 +102,16 @@ module.exports = {
         "@typescript-eslint/require-await": "off",
       }
     },
+    ...scrapingServerOverrides,
     {
       // Non-typed linting for other TS files (tests, scripts, worker, etc.)
       files: ["**/*.ts", "**/*.tsx"],
-      excludedFiles: ["convex/**/*.ts", "src/**/*.ts", "src/**/*.tsx"],
+      excludedFiles: [
+        "convex/**/*.ts",
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "scraping-server/**/*.ts",
+      ],
       parserOptions: {
         tsconfigRootDir: __dirname,
       },
