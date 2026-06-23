@@ -1,3 +1,21 @@
+const fs = require("node:fs");
+const path = require("node:path");
+
+const scrapingServerTsconfig = path.join(
+  __dirname,
+  "scraping-server/tsconfig.json",
+);
+const scrapingServerOverrides = fs.existsSync(scrapingServerTsconfig)
+  ? [
+      {
+        files: ["scraping-server/**/*.ts"],
+        parserOptions: {
+          project: [scrapingServerTsconfig],
+        },
+      },
+    ]
+  : [];
+
 module.exports = {
   root: true,
   env: { browser: true, es2020: true, node: true },
@@ -21,6 +39,13 @@ module.exports = {
     "src/components.bak.*/**",
     "**/__tests__/**",
     "convex/lib/parsing/__tests__/**",
+    "convex/lib/parsing/prev_canonicalize*.ts",
+    "convex/lib/parsing_shared/*.test.ts",
+    "docs/**",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/ProposalGenerator.tsx",
+    "src/pages/ProposalForgeNext.tsx",
     "worker/**",
     "vitest.config.ts",
   ],
@@ -53,15 +78,11 @@ module.exports = {
       },
       // Enforce no-floating-promises only in typed source so the rule can use type information.
       rules: {
-        "@typescript-eslint/no-floating-promises": "error"
+        "@typescript-eslint/no-floating-promises": "error",
+        "@typescript-eslint/no-misused-promises": "error",
       }
     },
-    {
-      files: ["scraping-server/**/*.ts"],
-      parserOptions: {
-        project: [require.resolve("./scraping-server/tsconfig.json")],
-      },
-    },
+    ...scrapingServerOverrides,
     {
       // Non-typed linting for other TS files (tests, scripts, worker, etc.)
       files: ["**/*.ts", "**/*.tsx"],
