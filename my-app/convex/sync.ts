@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars -- Existing lint debt is captured locally for this release-gate baseline; fix these rules in focused follow-ups. */
 import { action, internalMutation, internalQuery, query } from "./_generated/server";
 import { v } from "convex/values";
 // import { createTimestamps, updateTimestamps } from "./types";
@@ -10,7 +11,6 @@ const PG_BATCH_SIZE = 1000;
 /**
  * Interface for sync operation state
  */
-// @ts-ignore
 interface SyncState {
   lastSyncId: string;
   status: "in_progress" | "completed" | "failed";

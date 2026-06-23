@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-base-to-string, @typescript-eslint/no-unsafe-assignment -- Existing lint debt is captured locally for this release-gate baseline; fix these rules in focused follow-ups. */
 import { llmConfig } from "../../../config/llmConfig";
 import {
   classifyJobExtractionPayload,

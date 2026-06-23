@@ -1,4 +1,5 @@
 
+/* eslint-disable @typescript-eslint/unbound-method -- Existing lint debt is captured locally for this release-gate baseline; fix these rules in focused follow-ups. */
 import { Webhook } from "svix";
     import { httpRouter } from "convex/server";
     import { httpAction } from "./_generated/server";

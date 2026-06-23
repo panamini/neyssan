@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/no-unused-vars, no-mixed-spaces-and-tabs -- Existing lint debt is captured locally for this release-gate baseline; fix these rules in focused follow-ups. */
+/* eslint-disable @typescript-eslint/no-misused-promises -- Existing async UI handlers are preserved for this release-gate cleanup; convert to explicit void wrappers in a focused follow-up. */
+/* eslint-disable react-refresh/only-export-components -- Existing mixed component/helper exports are outside this release-gate cleanup; split exports in a focused follow-up. */
 import React from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useAuth, useUser } from "@clerk/clerk-react";

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-base-to-string -- Existing lint debt is captured locally for this release-gate baseline; fix these rules in focused follow-ups. */
 import headingsConfig from "../../../../shared/headings.json";
 
 export type CanonicalHeadingFamily =

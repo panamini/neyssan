@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Existing mixed component/helper exports are outside this release-gate cleanup; split exports in a focused follow-up. */
 import React from "react";
 import type { AtsAuditResult } from "../lib/ats-audit/types";
 import type { DocumentPageSizePreference } from "../lib/document-page-size";

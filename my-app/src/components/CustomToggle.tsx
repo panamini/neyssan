@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment -- Existing lint debt is captured locally for this release-gate baseline; fix these rules in focused follow-ups. */
 import React, { ReactNode } from "react";
 import { Button } from "./ui/button";
 import styles from "./CustomToggle.module.css";

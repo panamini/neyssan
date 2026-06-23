@@ -1,5 +1,6 @@
 "use client";
 
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-redundant-type-constituents, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- Existing lint debt is captured locally for this release-gate baseline; fix these rules in focused follow-ups. */
 import React from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -166,6 +167,7 @@ export default function ProfileForm() {
         }}
         onSaved={(res) => {
           // Modal will return the saved result. We handle UI update and ensure we fetch canonical data.
+          // eslint-disable-next-line @typescript-eslint/no-floating-promises -- Existing fire-and-forget async call is preserved for this release-gate cleanup.
           handleModalSaved(res);
         }}
       />

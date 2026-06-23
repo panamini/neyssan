@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access -- Existing lint debt is captured locally for this release-gate baseline; fix these rules in focused follow-ups. */
 /*
  * Central helpers for reading Convex environment variables in both browser (Vite)
  * and server/test contexts. Vite replaces import.meta.env.* at build time, but

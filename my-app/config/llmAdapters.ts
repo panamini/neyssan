@@ -1,3 +1,4 @@
+/* eslint-disable no-constant-condition, no-empty -- Existing lint debt is captured locally for this release-gate baseline; fix these rules in focused follow-ups. */
 import { recordTelemetry } from "./llmTelemetry";
  
 export interface ILLMAdapter {

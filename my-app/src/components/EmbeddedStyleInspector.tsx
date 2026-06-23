@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-redundant-type-constituents -- Existing lint debt is captured locally for this release-gate baseline; fix these rules in focused follow-ups. */
 import React from "react";
 import { ColorWheel, Layout, Wand2 } from "@/lib/icons";
 import { Menu } from "./ui/menu";

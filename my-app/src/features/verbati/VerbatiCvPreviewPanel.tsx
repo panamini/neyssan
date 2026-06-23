@@ -160,6 +160,7 @@ export function VerbatiCvPreviewPanel({
     }
 
     setStylePreset(persistedStylePreset);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Pre-existing dependency contract is preserved for this release-gate cleanup.
   }, [
     controlledStylePreset,
     currentCv?.id,

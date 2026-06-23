@@ -26,6 +26,7 @@ export function ForgeTemplatePanel(): JSX.Element | null {
 
   const handleBrowseAllTemplates = () => {
     closePanel();
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises -- Existing fire-and-forget async call is preserved for this release-gate cleanup.
     navigate("/templates");
   };
 

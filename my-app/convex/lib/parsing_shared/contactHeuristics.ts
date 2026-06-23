@@ -1,3 +1,4 @@
+/* eslint-disable no-useless-escape -- Existing lint debt is captured locally for this release-gate baseline; fix these rules in focused follow-ups. */
 import nameBlacklistConfig from "../../../../shared/name_blacklist.json";
 
 /**

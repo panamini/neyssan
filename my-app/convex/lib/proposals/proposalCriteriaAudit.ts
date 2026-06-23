@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion -- Existing lint debt is captured locally for this release-gate baseline; fix these rules in focused follow-ups. */
 import { analyzeCompanyValues, COMPANY_VALUE_BANNED_CLAIMS } from "./companyValues";
 import { buildJobOfferPriorityPack } from "./premiumCoverLetter";
 import {

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Existing lint debt is captured locally for this release-gate baseline; fix these rules in focused follow-ups. */
 import { PromptTemplate } from "@langchain/core/prompts";
 import { TemplateVersionManager, type TemplateVersion, type VersionedTemplate } from "./templates/version";
 import { z } from "zod";

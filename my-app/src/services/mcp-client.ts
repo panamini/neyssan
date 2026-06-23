@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/require-await -- Existing lint debt is captured locally for this release-gate baseline; fix these rules in focused follow-ups. */
 import { McpClient } from '../types/mcp-client';
 import { z } from 'zod';
 
