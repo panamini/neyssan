@@ -375,6 +375,7 @@ describe("proposal provider busy handling", () => {
     delete process.env.QWEN_CHAT_COMPLETIONS_URL;
     delete process.env.QWEN_BASE_URL;
     delete process.env.ENABLE_COVER_LETTER_PREMIUM_PATH_V1;
+    delete process.env.ENABLE_COVER_LETTER_QUALITY_REPAIR_V1;
     delete process.env.COVER_LETTER_PREMIUM_WRITER_MODEL;
     delete process.env.DEV_STUB;
   });
@@ -612,6 +613,7 @@ describe("proposal provider busy handling", () => {
             tags: expect.arrayContaining([
               "model:chatgpt",
               "premium_cover_letter_path_v1",
+              "premium_quality_repair:disabled",
               "generation_path:premium_path_saved",
             ]),
           }),
@@ -624,6 +626,19 @@ describe("proposal provider busy handling", () => {
         premium_path_saved: true,
         premium_validation_passed: true,
         premium_quality_shadow_passed: expect.any(Boolean),
+        premium_quality_repair_enabled: false,
+        premium_quality_repair_eligible: false,
+        premium_quality_repair_attempted: false,
+        premium_quality_repair_outcome: "disabled",
+        premium_quality_repair_rejection_category: null,
+        premium_quality_repair_before: expect.objectContaining({
+          passed: expect.any(Boolean),
+          score: expect.any(Number),
+          issues: expect.any(Array),
+        }),
+        premium_quality_repair_after: null,
+        premium_final_provenance_status: expect.any(String),
+        premium_verified_candidate_fact_count: expect.any(Number),
         premium_quality_gate_passed: null,
         finalOutcome: "structured_saved",
         failureStage: null,
@@ -636,6 +651,254 @@ describe("proposal provider busy handling", () => {
     } finally {
       infoSpy.mockRestore();
     }
+  });
+
+  it("routes enabled OpenAI quality repair through the body-parts schema and records non-sensitive telemetry", async () => {
+    process.env.COVER_LETTER_PREMIUM_WRITER_MODEL = "gpt-5-mini";
+    process.env.ENABLE_COVER_LETTER_QUALITY_REPAIR_V1 = "1";
+    mockOpenAIResponsesCreate
+      .mockResolvedValueOnce({
+        output: [
+          {
+            content: [
+              {
+                json: {
+                  version: "premium_writer_output_v1",
+                  bodyParts: {
+                    opening: {
+                      section: "opening",
+                      text: "At Acme, I led a design system migration used across four product squads.",
+                      claimIds: ["claim_opening_001"],
+                      factIds: ["fact_experience_001_highlight_001"],
+                      demandIds: [],
+                    },
+                    proofBlock: {
+                      section: "proofBlock",
+                      text: "That migration gave four product squads a shared design-system foundation.",
+                      claimIds: ["claim_proof_001"],
+                      factIds: ["fact_experience_001_highlight_001"],
+                      demandIds: [],
+                    },
+                    employerValueBlock: {
+                      section: "employerValueBlock",
+                      text: "That design-system work is relevant to customer-facing product surfaces where React, TypeScript, and collaboration shape interface quality.",
+                      claimIds: ["claim_employer_value_001"],
+                      factIds: ["fact_experience_001_highlight_001"],
+                      demandIds: ["demand_core_001"],
+                    },
+                    closeLine: {
+                      section: "closeLine",
+                      text: "I would be glad to discuss the position further.",
+                      claimIds: ["claim_close_001"],
+                      factIds: ["fact_experience_001_highlight_001"],
+                      demandIds: [],
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        output: [
+          {
+            content: [
+              {
+                json: {
+                  opening:
+                    "At Acme, I led a design system migration used across four product squads.",
+                  proofBlock:
+                    "That migration gave four product squads a shared design-system foundation.",
+                  employerValueBlock:
+                    "That design-system work is relevant to customer-facing product surfaces where React, TypeScript, and collaboration shape interface quality.",
+                  closeLine:
+                    "I led a design system migration used across four product squads.",
+                },
+              },
+            ],
+          },
+        ],
+      });
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      const { handleGenerateProposal } = await loadProposalModule();
+      const ctx = {
+        auth: {
+          getUserIdentity: vi.fn().mockResolvedValue({ subject: "user_123" }),
+        },
+        runQuery: vi.fn().mockResolvedValue({
+          _id: "profile_123",
+          proposalVoicePreset: "direct",
+          experience: [],
+          skills: [],
+          achievements: [],
+        }),
+        runMutation: vi.fn().mockResolvedValue("proposal_123"),
+      };
+
+      await handleGenerateProposal(ctx as any, {
+        userId: "user_123",
+        jobTitle: "Frontend Engineer",
+        jobDescription:
+          "Lead React and TypeScript development across customer-facing product surfaces and collaborate closely with product teams.",
+        proposalType: "cover_letter",
+        modelType: "chatgpt",
+        voicePreset: "signature",
+        personalizationMode: "explicit_only",
+        personalizationRichness: "rich",
+        personalizationContext: {
+          name: "Alex Martin",
+          summary: "Frontend engineer focused on design systems.",
+          topSkills: ["React", "TypeScript", "Design systems"],
+          recentExperience: [
+            {
+              company: "Acme",
+              position: "Senior Frontend Engineer",
+              highlights: [
+                "Led a design system migration used across four product squads.",
+                "Improved release consistency across shared interface work.",
+              ],
+            },
+          ],
+          standoutAchievements: [
+            "Improved release consistency across shared interface work.",
+          ],
+        },
+      });
+
+      expect(mockOpenAIResponsesCreate).toHaveBeenCalledTimes(2);
+      expect(mockOpenAIResponsesCreate.mock.calls[1]?.[0]).toMatchObject({
+        text: {
+          format: expect.objectContaining({
+            name: "premium_cover_letter_body_parts",
+          }),
+        },
+      });
+      const mutationPayload = ctx.runMutation.mock.calls[0]?.[1] as {
+        metadata?: { tags?: string[]; premium_quality_repair_enabled?: unknown };
+      };
+      expect(mutationPayload.metadata?.tags).toEqual(
+        expect.arrayContaining([
+          "premium_quality_repair:attempted_accepted",
+          "feature_flag:cover_letter_quality_repair_v1",
+        ]),
+      );
+      expect(mutationPayload.metadata?.premium_quality_repair_enabled).toBeUndefined();
+      expect(getLoggedRoutingTelemetry(infoSpy)).toMatchObject({
+        premium_quality_repair_enabled: true,
+        premium_quality_repair_eligible: true,
+        premium_quality_repair_attempted: true,
+        premium_quality_repair_outcome: "attempted_accepted",
+        premium_quality_repair_after: expect.objectContaining({
+          passed: true,
+        }),
+        premium_final_provenance_status: "validated_after_structured_repair",
+        premium_verified_candidate_fact_count: expect.any(Number),
+      });
+    } finally {
+      infoSpy.mockRestore();
+    }
+  });
+
+  it("propagates OpenAI quality-repair cancellation without legacy fallback or persistence", async () => {
+    process.env.COVER_LETTER_PREMIUM_WRITER_MODEL = "gpt-5-mini";
+    process.env.ENABLE_COVER_LETTER_QUALITY_REPAIR_V1 = "1";
+    const abortError = new Error("The operation was aborted.");
+    abortError.name = "AbortError";
+    mockOpenAIResponsesCreate
+      .mockResolvedValueOnce({
+        output: [
+          {
+            content: [
+              {
+                json: {
+                  version: "premium_writer_output_v1",
+                  bodyParts: {
+                    opening: {
+                      section: "opening",
+                      text: "At Acme, I led a design system migration used across four product squads.",
+                      claimIds: ["claim_opening_001"],
+                      factIds: ["fact_experience_001_highlight_001"],
+                      demandIds: [],
+                    },
+                    proofBlock: {
+                      section: "proofBlock",
+                      text: "That migration gave four product squads a shared design-system foundation.",
+                      claimIds: ["claim_proof_001"],
+                      factIds: ["fact_experience_001_highlight_001"],
+                      demandIds: [],
+                    },
+                    employerValueBlock: {
+                      section: "employerValueBlock",
+                      text: "That design-system work is relevant to customer-facing product surfaces where React, TypeScript, and collaboration shape interface quality.",
+                      claimIds: ["claim_employer_value_001"],
+                      factIds: ["fact_experience_001_highlight_001"],
+                      demandIds: ["demand_core_001"],
+                    },
+                    closeLine: {
+                      section: "closeLine",
+                      text: "I would be glad to discuss the position further.",
+                      claimIds: ["claim_close_001"],
+                      factIds: ["fact_experience_001_highlight_001"],
+                      demandIds: [],
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      })
+      .mockRejectedValueOnce(abortError);
+    const { handleGenerateProposal } = await loadProposalModule();
+    const ctx = {
+      auth: {
+        getUserIdentity: vi.fn().mockResolvedValue({ subject: "user_123" }),
+      },
+      runQuery: vi.fn().mockResolvedValue({
+        _id: "profile_123",
+        proposalVoicePreset: "direct",
+        experience: [],
+        skills: [],
+        achievements: [],
+      }),
+      runMutation: vi.fn().mockResolvedValue("proposal_123"),
+    };
+
+    await expect(
+      handleGenerateProposal(ctx as any, {
+        userId: "user_123",
+        jobTitle: "Frontend Engineer",
+        jobDescription:
+          "Lead React and TypeScript development across customer-facing product surfaces and collaborate closely with product teams.",
+        proposalType: "cover_letter",
+        modelType: "chatgpt",
+        voicePreset: "signature",
+        personalizationMode: "explicit_only",
+        personalizationRichness: "rich",
+        personalizationContext: {
+          name: "Alex Martin",
+          summary: "Frontend engineer focused on design systems.",
+          topSkills: ["React", "TypeScript", "Design systems"],
+          recentExperience: [
+            {
+              company: "Acme",
+              position: "Senior Frontend Engineer",
+              highlights: [
+                "Led a design system migration used across four product squads.",
+                "Improved release consistency across shared interface work.",
+              ],
+            },
+          ],
+        },
+      }),
+    ).rejects.toThrow("Proposal generation canceled.");
+
+    expect(mockOpenAIResponsesCreate).toHaveBeenCalledTimes(2);
+    expect(mockGenerateCreativeProposal).not.toHaveBeenCalled();
+    expect(mockGenerateTechnicalProposal).not.toHaveBeenCalled();
+    expect(ctx.runMutation).not.toHaveBeenCalled();
   });
 
   it.each([

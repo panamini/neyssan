@@ -256,6 +256,7 @@ export type PremiumCoverLetterFinalProvenance = {
 export type PremiumCoverLetterGenerationResult = {
   bodyParts: CoverLetterBodyParts;
   qualityShadow?: PremiumCoverLetterQualityShadowResult;
+  qualityRepair?: PremiumCoverLetterQualityRepairTrace;
   finalProvenance?: PremiumCoverLetterFinalProvenance;
   mode: "direct" | "transfer" | "no_cv";
   evidenceUsed: string[];
@@ -284,6 +285,32 @@ export type PremiumCoverLetterEligibility = {
     | "preset_not_supported"
     | "unsupported_context_class"
     | "no_allowed_facts";
+};
+
+export type PremiumCoverLetterQualityRepairOutcome =
+  | "disabled"
+  | "not_needed"
+  | "attempted_accepted"
+  | "rejected_invalid_output"
+  | "rejected_validation"
+  | "rejected_provenance"
+  | "rejected_not_improved"
+  | "provider_error"
+  | "canceled";
+
+export type PremiumCoverLetterQualityRepairTrace = {
+  enabled: boolean;
+  eligible: boolean;
+  attempted: boolean;
+  outcome: PremiumCoverLetterQualityRepairOutcome;
+  rejectionCategory?: Exclude<
+    PremiumCoverLetterQualityRepairOutcome,
+    "disabled" | "not_needed" | "attempted_accepted" | "canceled"
+  >;
+  qualityBefore: PremiumCoverLetterQualityShadowResult;
+  qualityAfter?: PremiumCoverLetterQualityShadowResult;
+  finalProvenanceStatus?: PremiumCoverLetterFinalProvenanceStatus;
+  verifiedCandidateFactCount?: number;
 };
 
 export type PremiumCoverLetterAttemptResult =
@@ -2153,6 +2180,15 @@ export function isCoverLetterPremiumPromptV2Enabled(
   return normalized === "1" || normalized === "true" || normalized === "on";
 }
 
+export function isCoverLetterQualityRepairV1Enabled(
+  rawValue:
+    | string
+    | undefined = process.env.ENABLE_COVER_LETTER_QUALITY_REPAIR_V1,
+): boolean {
+  const normalized = compactWhitespace(rawValue ?? "").toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "on";
+}
+
 export function isPremiumCoverLetterPromptV2MistralEnabled(args: {
   writerProvider?: PremiumCoverLetterWriterProvider;
   rawFlagValue?: string;
@@ -3333,6 +3369,16 @@ export type PremiumCoverLetterQualityShadowResult = {
   score: number;
   issues: PremiumCoverLetterQualityShadowIssueCode[];
 };
+
+const REPAIRABLE_PREMIUM_COVER_LETTER_QUALITY_SHADOW_ISSUES =
+  new Set<PremiumCoverLetterQualityShadowIssueCode>([
+    "meta_prose",
+    "generic_tone",
+    "factual_inventory",
+    "weak_employer_argument",
+    "low_value_job_echo",
+    "too_verbose",
+  ]);
 
 export function toCoverLetterBodyParts(
   output: PremiumWriterOutputV1,
@@ -4604,7 +4650,10 @@ export function refreshPremiumCoverLetterFinalProvenanceForContent(args: {
             verifiedCandidateFactIds: [],
           },
         ]),
-      ) as Record<ClaimPlanSection, PremiumCoverLetterFinalProvenanceSection>,
+      ) as unknown as Record<
+        ClaimPlanSection,
+        PremiumCoverLetterFinalProvenanceSection
+      >,
     };
   }
 
@@ -5106,6 +5155,26 @@ export function evaluatePremiumCoverLetterQualityShadow(args: {
   };
 }
 
+function getRepairablePremiumCoverLetterQualityShadowIssues(
+  qualityShadow: PremiumCoverLetterQualityShadowResult,
+): PremiumCoverLetterQualityShadowIssueCode[] {
+  if (qualityShadow.passed) return [];
+  return qualityShadow.issues.filter((issue) =>
+    REPAIRABLE_PREMIUM_COVER_LETTER_QUALITY_SHADOW_ISSUES.has(issue),
+  );
+}
+
+function premiumCoverLetterQualityShadowImproved(args: {
+  before: PremiumCoverLetterQualityShadowResult;
+  after: PremiumCoverLetterQualityShadowResult;
+}): boolean {
+  if (args.after.passed) return true;
+  return (
+    args.after.score > args.before.score &&
+    args.after.issues.length < args.before.issues.length
+  );
+}
+
 export function repairPremiumCoverLetterBodyParts(args: {
   bodyParts: CoverLetterBodyParts;
   brief: CoverLetterBrief;
@@ -5365,12 +5434,18 @@ export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
   apiKey: string;
   prompt: string;
   writerModel?: PremiumCoverLetterWriterModel;
+  schema?: Record<string, unknown>;
   signal?: AbortSignal;
 }): Promise<unknown> {
   const resolvedModel = resolvePremiumCoverLetterWriterModel(args.writerModel);
+  const responseFormat = resolvePremiumCoverLetterOpenAIResponseFormat({
+    schema: args.schema,
+  });
   const requestBody = buildPremiumCoverLetterOpenAIRequest({
     prompt: args.prompt,
     writerModel: resolvedModel,
+    schema: responseFormat.jsonSchema,
+    schemaName: responseFormat.name,
   });
 
   const openaiModule: any = await import("openai").catch(() => null);
@@ -5392,16 +5467,13 @@ export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
           },
           text: {
             verbosity: "medium",
-            format: zodTextFormat(
-              PREMIUM_WRITER_OUTPUT_V1_SCHEMA,
-              "premium_writer_output_v1",
-            ),
+            format: zodTextFormat(responseFormat.zodSchema, responseFormat.name),
           },
         } as any,
         args.signal ? ({ signal: args.signal } as any) : undefined,
       );
 
-      return PREMIUM_WRITER_OUTPUT_V1_SCHEMA.parse(
+      return responseFormat.zodSchema.parse(
         response?.output_parsed ?? extractOpenAIJsonPayload(response),
       );
     }
@@ -5410,9 +5482,7 @@ export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
       requestBody as any,
       args.signal ? ({ signal: args.signal } as any) : undefined,
     );
-    return PREMIUM_WRITER_OUTPUT_V1_SCHEMA.parse(
-      extractOpenAIJsonPayload(response),
-    );
+    return responseFormat.zodSchema.parse(extractOpenAIJsonPayload(response));
   }
 
   const response = await fetch("https://api.openai.com/v1/responses", {
@@ -5429,7 +5499,7 @@ export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
       `OpenAI premium cover-letter request failed: ${response.status} ${response.statusText} ${await response.text()}`,
     );
   }
-  return PREMIUM_WRITER_OUTPUT_V1_SCHEMA.parse(
+  return responseFormat.zodSchema.parse(
     extractOpenAIJsonPayload(await response.json()),
   );
 }
@@ -5539,7 +5609,11 @@ export async function generatePremiumCoverLetterBodyPartsWithMistral(args: {
 export function buildPremiumCoverLetterOpenAIRequest(args: {
   prompt: string;
   writerModel?: PremiumCoverLetterWriterModel;
+  schema?: Record<string, unknown>;
+  schemaName?: string;
 }) {
+  const schema = args.schema ?? PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA;
+  const schemaName = args.schemaName ?? "premium_writer_output_v1";
   return {
     model: resolvePremiumCoverLetterWriterModel(args.writerModel),
     input: args.prompt,
@@ -5550,16 +5624,37 @@ export function buildPremiumCoverLetterOpenAIRequest(args: {
       verbosity: "medium",
       format: {
         type: "json_schema",
-        name: "premium_writer_output_v1",
-        schema: PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
+        name: schemaName,
+        schema,
         strict: true,
         json_schema: {
-          name: "premium_writer_output_v1",
-          schema: PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
+          name: schemaName,
+          schema,
           strict: true,
         },
       },
     },
+  };
+}
+
+function resolvePremiumCoverLetterOpenAIResponseFormat(args: {
+  schema?: Record<string, unknown>;
+}): {
+  name: string;
+  jsonSchema: Record<string, unknown>;
+  zodSchema: z.ZodTypeAny;
+} {
+  if (args.schema === PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA) {
+    return {
+      name: "premium_cover_letter_body_parts",
+      jsonSchema: PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA,
+      zodSchema: PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA,
+    };
+  }
+  return {
+    name: "premium_writer_output_v1",
+    jsonSchema: PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
+    zodSchema: PREMIUM_WRITER_OUTPUT_V1_SCHEMA,
   };
 }
 
@@ -5624,6 +5719,41 @@ function buildPremiumCoverLetterRepairPrompt(args: {
   ].join("\n");
 }
 
+function buildPremiumCoverLetterQualityRepairPrompt(args: {
+  brief: CoverLetterBrief;
+  previousBodyParts: CoverLetterBodyParts;
+  qualityShadow: PremiumCoverLetterQualityShadowResult;
+  issues: PremiumCoverLetterQualityShadowIssueCode[];
+}): string {
+  return [
+    "Repair cover-letter body parts for quality only.",
+    "",
+    "This is a bounded quality pass after the output already passed safety validation.",
+    "Make at most small wording changes that address the listed quality issues.",
+    "If a listed issue cannot be fixed using only the structured brief, return the previous body parts unchanged.",
+    "",
+    "Allowed repairs:",
+    "- remove meta-writing and generic cover-letter phrases",
+    "- make the employerValueBlock use the job context as an angle instead of listing the job offer",
+    "- replace low-value job echo with candidate-backed overlap already present in the brief",
+    "- reduce verbosity by shortening or deduplicating sentences",
+    "- keep every candidate claim grounded in existing candidate facts from the brief",
+    "",
+    "Not allowed:",
+    "- add new candidate experience, credentials, metrics, names, employers, tools, certifications, or outcomes",
+    "- turn job demands into candidate history",
+    "- change claim strategy or invent proof",
+    "- add greeting, signoff, candidate name, markdown, explanation, audit, or labels",
+    "- use this repair to satisfy provenance; final validation still decides",
+    "",
+    "Return only the same JSON body parts.",
+    `Quality issues: ${JSON.stringify(args.issues)}`,
+    `Quality shadow: ${JSON.stringify(args.qualityShadow)}`,
+    `Previous body parts: ${JSON.stringify(args.previousBodyParts)}`,
+    `Structured brief: ${JSON.stringify(args.brief)}`,
+  ].join("\n");
+}
+
 function buildPremiumWriterOutputRepairPrompt(args: {
   brief: CoverLetterBrief;
   previousWriterOutput: PremiumWriterOutputV1;
@@ -5642,6 +5772,333 @@ function buildPremiumWriterOutputRepairPrompt(args: {
     `Previous PremiumWriterOutputV1: ${JSON.stringify(args.previousWriterOutput)}`,
     `Structured brief: ${JSON.stringify(args.brief)}`,
   ].join("\n");
+}
+
+function isAbortLikeError(error: unknown, signal?: AbortSignal): boolean {
+  if (signal?.aborted) return true;
+  if (!(error instanceof Error)) return false;
+  const name = error.name.toLowerCase();
+  const message = error.message.toLowerCase();
+  const code = typeof (error as any).code === "string" ? (error as any).code : "";
+  return (
+    name === "aborterror" ||
+    name === "cancelederror" ||
+    name === "cancellederror" ||
+    name === "proposalgenerationcancelederror" ||
+    code === "ERR_CANCELED" ||
+    message === "proposal generation canceled." ||
+    message.includes("aborted")
+  );
+}
+
+function buildPremiumCoverLetterQualityRepairTrace(args: {
+  enabled: boolean;
+  eligible: boolean;
+  attempted: boolean;
+  outcome: PremiumCoverLetterQualityRepairOutcome;
+  qualityBefore: PremiumCoverLetterQualityShadowResult;
+  qualityAfter?: PremiumCoverLetterQualityShadowResult;
+}): PremiumCoverLetterQualityRepairTrace {
+  const rejected =
+    args.outcome !== "disabled" &&
+    args.outcome !== "not_needed" &&
+    args.outcome !== "attempted_accepted" &&
+    args.outcome !== "canceled";
+  const trace: PremiumCoverLetterQualityRepairTrace = {
+    enabled: args.enabled,
+    eligible: args.eligible,
+    attempted: args.attempted,
+    outcome: args.outcome,
+    qualityBefore: args.qualityBefore,
+    ...(args.qualityAfter ? { qualityAfter: args.qualityAfter } : {}),
+  };
+  if (rejected) {
+    trace.rejectionCategory = args.outcome as NonNullable<
+      PremiumCoverLetterQualityRepairTrace["rejectionCategory"]
+    >;
+  }
+  return trace;
+}
+
+function getChangedPremiumCoverLetterSections(args: {
+  before: CoverLetterBodyParts;
+  after: CoverLetterBodyParts;
+}): ClaimPlanSection[] {
+  return CLAIM_PLAN_SECTIONS.filter(
+    (section) =>
+      compactWhitespace(args.before[section]) !==
+      compactWhitespace(args.after[section]),
+  );
+}
+
+function repairTextHasCandidateUnsupportedClaim(args: {
+  text: string;
+  candidateEvidenceSurface: string;
+}): boolean {
+  const compact = compactWhitespace(args.text);
+  if (
+    hasUnsupportedNumericClaim({
+      generatedText: compact,
+      sourceSurface: args.candidateEvidenceSurface,
+    })
+  ) {
+    return true;
+  }
+  if (
+    (UNSUPPORTED_LICENSE_CLAIM_PATTERN.test(compact) &&
+      !UNSUPPORTED_LICENSE_CLAIM_PATTERN.test(args.candidateEvidenceSurface)) ||
+    (UNSUPPORTED_EDUCATION_CREDENTIAL_PATTERN.test(compact) &&
+      !UNSUPPORTED_EDUCATION_CREDENTIAL_PATTERN.test(
+        args.candidateEvidenceSurface,
+      ))
+  ) {
+    return true;
+  }
+  if (
+    COMPLIANCE_FRAMEWORK_PATTERNS.some((pattern) => pattern.test(compact)) &&
+    !COMPLIANCE_FRAMEWORK_PATTERNS.some((pattern) =>
+      pattern.test(args.candidateEvidenceSurface),
+    )
+  ) {
+    return true;
+  }
+  return hasUnsupportedOwnershipVerb({
+    generatedText: compact,
+    candidateEvidenceSurface: args.candidateEvidenceSurface,
+  });
+}
+
+function premiumCoverLetterQualityRepairPreservesCandidateGrounding(args: {
+  before: CoverLetterBodyParts;
+  after: CoverLetterBodyParts;
+  brief: CoverLetterBrief;
+  repairedProvenance: PremiumCoverLetterFinalProvenance;
+}): boolean {
+  const changedSections = getChangedPremiumCoverLetterSections({
+    before: args.before,
+    after: args.after,
+  });
+  if (changedSections.length === 0) return true;
+
+  const candidateEvidenceSurface = buildCandidateEvidenceSurface({
+    brief: args.brief,
+  });
+  return changedSections.every((section) => {
+    const repairedSection = args.repairedProvenance.sections[section];
+    return (
+      repairedSection.verifiedCandidateFactIds.length > 0 &&
+      !repairTextHasCandidateUnsupportedClaim({
+        text: args.after[section],
+        candidateEvidenceSurface,
+      })
+    );
+  });
+}
+
+async function tryRepairPremiumCoverLetterQualityShadow(args: {
+  bodyParts: CoverLetterBodyParts;
+  qualityShadow: PremiumCoverLetterQualityShadowResult;
+  brief: CoverLetterBrief;
+  writer: PremiumCoverLetterWriter;
+  signal?: AbortSignal;
+  outputLanguage: ProposalOutputLanguage;
+  candidateName?: string;
+  writerOutput: PremiumWriterOutputV1;
+  claimPlan: ClaimPlanV1;
+  factGraph: FactGraphV1;
+  legacyWrapped: boolean;
+  provenanceIdsNormalized: boolean;
+}): Promise<{
+  bodyParts?: CoverLetterBodyParts;
+  rendered?: { content: string; sections: Array<{ type: "text"; content: string }> };
+  qualityShadow?: PremiumCoverLetterQualityShadowResult;
+  trace: PremiumCoverLetterQualityRepairTrace;
+}> {
+  const repairEnabled = isCoverLetterQualityRepairV1Enabled();
+  if (!repairEnabled) {
+    return {
+      trace: buildPremiumCoverLetterQualityRepairTrace({
+        enabled: false,
+        eligible: false,
+        attempted: false,
+        outcome: "disabled",
+        qualityBefore: args.qualityShadow,
+      }),
+    };
+  }
+
+  if (args.legacyWrapped || args.brief.contextClass === "no_cv") {
+    return {
+      trace: buildPremiumCoverLetterQualityRepairTrace({
+        enabled: true,
+        eligible: false,
+        attempted: false,
+        outcome: "not_needed",
+        qualityBefore: args.qualityShadow,
+      }),
+    };
+  }
+
+  const repairableIssues = getRepairablePremiumCoverLetterQualityShadowIssues(
+    args.qualityShadow,
+  );
+  if (repairableIssues.length === 0) {
+    return {
+      trace: buildPremiumCoverLetterQualityRepairTrace({
+        enabled: true,
+        eligible: false,
+        attempted: false,
+        outcome: "not_needed",
+        qualityBefore: args.qualityShadow,
+      }),
+    };
+  }
+
+  let repairedBodyParts: CoverLetterBodyParts;
+  try {
+    repairedBodyParts = parseCoverLetterBodyPartsWriterPayload(
+      await args.writer({
+        prompt: buildPremiumCoverLetterQualityRepairPrompt({
+          brief: args.brief,
+          previousBodyParts: args.bodyParts,
+          qualityShadow: args.qualityShadow,
+          issues: repairableIssues,
+        }),
+        schema: PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA,
+        signal: args.signal,
+      }),
+    );
+  } catch (error) {
+    if (isAbortLikeError(error, args.signal)) {
+      throw error;
+    }
+    const outcome =
+      error instanceof z.ZodError || error instanceof SyntaxError
+        ? "rejected_invalid_output"
+        : "provider_error";
+    return {
+      trace: buildPremiumCoverLetterQualityRepairTrace({
+        enabled: true,
+        eligible: true,
+        attempted: true,
+        outcome,
+        qualityBefore: args.qualityShadow,
+      }),
+    };
+  }
+
+  const repairedIssues = validatePremiumCoverLetterBodyParts({
+    bodyParts: repairedBodyParts,
+    brief: args.brief,
+  });
+  if (repairedIssues.length > 0) {
+    return {
+      trace: buildPremiumCoverLetterQualityRepairTrace({
+        enabled: true,
+        eligible: true,
+        attempted: true,
+        outcome: "rejected_validation",
+        qualityBefore: args.qualityShadow,
+      }),
+    };
+  }
+
+  const repairedProvenance = buildPremiumCoverLetterFinalProvenance({
+    writerOutput: args.writerOutput,
+    finalBodyParts: repairedBodyParts,
+    claimPlan: args.claimPlan,
+    factGraph: args.factGraph,
+    legacyWrapped: args.legacyWrapped,
+    provenanceIdsNormalized: args.provenanceIdsNormalized,
+  });
+  if (!isTrustedPremiumFinalProvenanceStatus(repairedProvenance.status)) {
+    return {
+      trace: buildPremiumCoverLetterQualityRepairTrace({
+        enabled: true,
+        eligible: true,
+        attempted: true,
+        outcome: "rejected_provenance",
+        qualityBefore: args.qualityShadow,
+      }),
+    };
+  }
+  if (
+    !premiumCoverLetterQualityRepairPreservesCandidateGrounding({
+      before: args.bodyParts,
+      after: repairedBodyParts,
+      brief: args.brief,
+      repairedProvenance,
+    })
+  ) {
+    return {
+      trace: buildPremiumCoverLetterQualityRepairTrace({
+        enabled: true,
+        eligible: true,
+        attempted: true,
+        outcome: "rejected_provenance",
+        qualityBefore: args.qualityShadow,
+      }),
+    };
+  }
+
+  const repairedRendered = renderPremiumCoverLetter({
+    bodyParts: repairedBodyParts,
+    outputLanguage: args.outputLanguage,
+    candidateName: args.candidateName,
+  });
+  if (
+    !hasExpectedCandidateSignature({
+      content: repairedRendered.content,
+      outputLanguage: args.outputLanguage,
+      candidateName: args.candidateName,
+    })
+  ) {
+    return {
+      trace: buildPremiumCoverLetterQualityRepairTrace({
+        enabled: true,
+        eligible: true,
+        attempted: true,
+        outcome: "rejected_validation",
+        qualityBefore: args.qualityShadow,
+      }),
+    };
+  }
+
+  const repairedQualityShadow = evaluatePremiumCoverLetterQualityShadow({
+    bodyParts: repairedBodyParts,
+    content: repairedRendered.content,
+  });
+  if (
+    !premiumCoverLetterQualityShadowImproved({
+      before: args.qualityShadow,
+      after: repairedQualityShadow,
+    })
+  ) {
+    return {
+      trace: buildPremiumCoverLetterQualityRepairTrace({
+        enabled: true,
+        eligible: true,
+        attempted: true,
+        outcome: "rejected_not_improved",
+        qualityBefore: args.qualityShadow,
+        qualityAfter: repairedQualityShadow,
+      }),
+    };
+  }
+
+  return {
+    bodyParts: repairedBodyParts,
+    rendered: repairedRendered,
+    qualityShadow: repairedQualityShadow,
+    trace: buildPremiumCoverLetterQualityRepairTrace({
+      enabled: true,
+      eligible: true,
+      attempted: true,
+      outcome: "attempted_accepted",
+      qualityBefore: args.qualityShadow,
+      qualityAfter: repairedQualityShadow,
+    }),
+  };
 }
 
 export function extractOpenAIJsonPayload(response: any): unknown {
@@ -6082,6 +6539,38 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     }
   }
 
+  let rendered = renderPremiumCoverLetter({
+    bodyParts,
+    outputLanguage: args.outputLanguage,
+    candidateName: args.candidateName,
+  });
+  let qualityShadow = evaluatePremiumCoverLetterQualityShadow({
+    bodyParts,
+    content: rendered.content,
+  });
+  let qualityRepairTrace: PremiumCoverLetterQualityRepairTrace | undefined;
+
+  const qualityRepair = await tryRepairPremiumCoverLetterQualityShadow({
+    bodyParts,
+    qualityShadow,
+    brief,
+    writer: args.writer,
+    signal: args.signal,
+    outputLanguage: args.outputLanguage,
+    candidateName: args.candidateName,
+    writerOutput,
+    claimPlan,
+    factGraph,
+    legacyWrapped,
+    provenanceIdsNormalized,
+  });
+  qualityRepairTrace = qualityRepair.trace;
+  if (qualityRepair.bodyParts && qualityRepair.rendered && qualityRepair.qualityShadow) {
+    bodyParts = qualityRepair.bodyParts;
+    rendered = qualityRepair.rendered;
+    qualityShadow = qualityRepair.qualityShadow;
+  }
+
   const finalProvenance = buildPremiumCoverLetterFinalProvenance({
     writerOutput,
     finalBodyParts: bodyParts,
@@ -6089,15 +6578,6 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     factGraph,
     legacyWrapped,
     provenanceIdsNormalized,
-  });
-  const rendered = renderPremiumCoverLetter({
-    bodyParts,
-    outputLanguage: args.outputLanguage,
-    candidateName: args.candidateName,
-  });
-  const qualityShadow = evaluatePremiumCoverLetterQualityShadow({
-    bodyParts,
-    content: rendered.content,
   });
   if (
     !hasExpectedCandidateSignature({
@@ -6114,6 +6594,14 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     });
     return null;
   }
+  qualityRepairTrace = qualityRepairTrace
+    ? {
+        ...qualityRepairTrace,
+        finalProvenanceStatus: finalProvenance.status,
+        verifiedCandidateFactCount:
+          finalProvenance.verifiedCandidateFactIds.length,
+      }
+    : undefined;
 
   return {
     content: rendered.content,
@@ -6123,6 +6611,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     contextClass,
     bodyParts,
     qualityShadow,
+    qualityRepair: qualityRepairTrace,
     finalProvenance,
     mode:
       contextClass === "cv_direct"
