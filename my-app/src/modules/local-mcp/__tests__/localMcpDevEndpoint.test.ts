@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildLocalMcpDevEndpointConfig,
   handleLocalMcpDevEndpointRequest,
+  handleLocalMcpDevEndpointRequestAsync,
   isLocalMcpDevEndpointHandledPath,
   type LocalMcpDevEndpointDependenciesV1,
   type LocalMcpDevEndpointConfigV1,
@@ -102,7 +103,7 @@ async function callEndpoint(
   config: LocalMcpDevEndpointConfigV1 = ENABLED_CONFIG,
   dependencies: LocalMcpDevEndpointDependenciesV1 = {},
 ): Promise<LocalMcpDevEndpointResponseV1> {
-  return Promise.resolve(handleLocalMcpDevEndpointRequest(request(overrides), config, dependencies));
+  return handleLocalMcpDevEndpointRequestAsync(request(overrides), config, dependencies);
 }
 
 function expectNoStoreJsonHeaders(response: LocalMcpDevEndpointResponseV1): void {
@@ -357,7 +358,7 @@ describe("local MCP dev endpoint", () => {
   });
 
   it("returns fixture-only local-dev metadata for initialize", async () => {
-    const response = await callEndpoint({ bodyText: jsonRpc("initialize", "init_1") });
+    const response = handleLocalMcpDevEndpointRequest(request({ bodyText: jsonRpc("initialize", "init_1") }), ENABLED_CONFIG);
 
     expect(response).toEqual({
       handled: true,
@@ -381,6 +382,7 @@ describe("local MCP dev endpoint", () => {
         },
       },
     });
+    expect(response).not.toHaveProperty("then");
   });
 
   it("validates initialize params and handles initialized notifications without exposing a body", async () => {
@@ -641,11 +643,22 @@ describe("local MCP dev endpoint", () => {
       json: {
         result: {
           isError: true,
-          content: [{ type: "text", text: "Local development account linking is unavailable." }],
+          content: [{ type: "text", text: "Authentication required." }],
+          _meta: { "mcp/www_authenticate": expect.any(Array) },
         },
       },
     });
-    expect((unlinked.json as { result: Record<string, unknown> }).result).not.toHaveProperty("_meta");
+    expect(JSON.stringify(unlinked)).toContain(AUTH_METADATA_URL);
+    expect(JSON.stringify(unlinked)).toContain(TWOWEEKS_APPLICATIONS_READ_SCOPE);
+    expectNotEchoed(unlinked, [
+      AUTH_TOKEN,
+      AUTH_SUBJECT,
+      AUTH_CLIENT_ID,
+      AUTH_CLERK_OWNER,
+      AUTH_PROVIDER_ENVIRONMENT,
+      "kind\":\"mcp_auth_verified_access_token_claims",
+      "kind\":\"mcp_auth_policy_account_link_record",
+    ]);
     expect(insufficientScopeDependencies.accountLinkLookup).not.toHaveBeenCalled();
     expect(insufficientScopeDependencies.onFixtureHandlerInvoke).not.toHaveBeenCalled();
     expect(unlinkedDependencies.accountLinkLookup).toHaveBeenCalledTimes(1);

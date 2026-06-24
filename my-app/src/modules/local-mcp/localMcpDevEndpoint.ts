@@ -197,6 +197,29 @@ export function handleLocalMcpDevEndpointRequest(
   request: LocalMcpDevEndpointRequestV1,
   config: LocalMcpDevEndpointConfigV1 = buildLocalMcpDevEndpointConfig(),
   dependencies: LocalMcpDevEndpointDependenciesV1 = {},
+): LocalMcpDevEndpointResponseV1 {
+  if (isAuthPolicyModeEnabled(config)) {
+    throw new TypeError("Local MCP dev endpoint auth mode requires async request handling.");
+  }
+  const response = handleLocalMcpDevEndpointRequestCore(request, config, dependencies);
+  if (isPromiseLike<LocalMcpDevEndpointResponseV1>(response)) {
+    throw new TypeError("Local MCP dev endpoint async response requires async request handling.");
+  }
+  return response;
+}
+
+export async function handleLocalMcpDevEndpointRequestAsync(
+  request: LocalMcpDevEndpointRequestV1,
+  config: LocalMcpDevEndpointConfigV1 = buildLocalMcpDevEndpointConfig(),
+  dependencies: LocalMcpDevEndpointDependenciesV1 = {},
+): Promise<LocalMcpDevEndpointResponseV1> {
+  return handleLocalMcpDevEndpointRequestCore(request, config, dependencies);
+}
+
+function handleLocalMcpDevEndpointRequestCore(
+  request: LocalMcpDevEndpointRequestV1,
+  config: LocalMcpDevEndpointConfigV1,
+  dependencies: LocalMcpDevEndpointDependenciesV1,
 ): LocalMcpDevEndpointResponseV1 | Promise<LocalMcpDevEndpointResponseV1> {
   assertLocalMcpDevEndpointConfig(config);
   if (isLocalMcpDevProtectedResourceMetadataPath(request.path)) {
@@ -502,8 +525,8 @@ function buildAuthDeniedToolCallJsonRpc(
 
 function shouldAttachWwwAuthenticateMeta(authDecision: McpAuthRequestOrchestratorDenialDecisionV1): boolean {
   if (authDecision.failureStage === "account_link_lookup") return false;
-  if (authDecision.failureStage === "account_link_resolution" && authDecision.reason !== "missing_required_scope") {
-    return false;
+  if (authDecision.failureStage === "account_link_resolution") {
+    return authDecision.reason === "missing_account_link" || authDecision.reason === "missing_required_scope";
   }
   return true;
 }
@@ -513,7 +536,7 @@ function readNowEpochSeconds(dependencies: LocalMcpDevEndpointDependenciesV1): n
   return Number.isInteger(candidate) && candidate >= 0 ? candidate : Math.floor(Date.now() / 1000);
 }
 
-function isPromiseLike(value: unknown): value is Promise<unknown> {
+function isPromiseLike<T = unknown>(value: unknown): value is Promise<T> {
   return !!value && typeof value === "object" && "then" in value && typeof (value as { then?: unknown }).then === "function";
 }
 
@@ -662,8 +685,9 @@ function isJsonContentType(value: string | readonly string[] | undefined): boole
 }
 
 function readFirstHeaderValue(value: string | readonly string[] | undefined): string {
+  if (typeof value === "string") return value;
   if (Array.isArray(value)) return value[0] ?? "";
-  return value ?? "";
+  return "";
 }
 
 function byteLength(value: string): number {

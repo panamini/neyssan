@@ -6,7 +6,7 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 import {
   buildLocalMcpDevEndpointConfig,
-  handleLocalMcpDevEndpointRequest,
+  handleLocalMcpDevEndpointRequestAsync,
   isLocalMcpDevEndpointHandledPath,
 } from "./src/modules/local-mcp/localMcpDevEndpoint";
 
@@ -66,7 +66,7 @@ async function respondToLocalMcpDevRequest(
   pathName: string,
   bodyText: string,
 ): Promise<void> {
-  const response = await handleLocalMcpDevEndpointRequest(
+  const response = await handleLocalMcpDevEndpointRequestAsync(
     {
       method: req.method ?? "GET",
       path: pathName,
