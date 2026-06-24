@@ -19,6 +19,8 @@ This PR grants no PR89 public launch permission.
 
 No package, Convex, runtime, source, config, test, production, cover-letter, billing, OAuth, provider, or Apps SDK exposure change is approved here.
 
+PR87.11 adds an auth/account-linking architecture decision only. OAuth runtime, production `/mcp`, production `tools/list`, production `tools/call`, real handlers, PR88, and PR89 remain blocked.
+
 ## Current repo state
 
 The active MCP/App SDK boundary remains blocked for production:
@@ -49,7 +51,7 @@ Official OpenAI Apps SDK guidance treats these categories as separate readiness 
 | Production `/mcp` | No production MCP endpoint. Existing path is dev-only and flag-gated. | Approved transport/hosting decision, HTTPS endpoint, auth/privacy/ops gates, deployment proof, rollback proof. | `my-app/vite.config.ts:13-25`; `docs/plans/2026-06-21-pr87-production-deployment-gate.md:105-111` | blocked endpoint guard hardening or dev-only transport smoke | Yes |
 | `tools/list` | Only fixture/dev response exists behind local dev endpoint. | Approved tool allowlist, accurate schemas/annotations, privacy review, Inspector and Developer Mode evidence. | `my-app/src/modules/local-mcp/localMcpDevEndpoint.ts:117-122`; `docs/decisions/2026-06-12-chatgpt-app-mcp-server-architecture-boundary.md:350-369` | test-only reachability proof | Yes |
 | `tools/call` | Dev endpoint returns a safe error and runs no handlers. | Approved call runtime, auth, consent, audit, input validation, idempotency, handler readiness, negative prompt tests. | `my-app/src/modules/local-mcp/localMcpDevEndpoint.ts:123-124`; `docs/decisions/2026-06-12-chatgpt-app-mcp-server-architecture-boundary.md:300-348` | test-only blocked proof | Yes |
-| OAuth runtime | No OAuth runtime is approved for MCP/App SDK production. | Auth architecture decision covering OAuth 2.1, resource metadata, scopes, token validation, account linking, test credentials, reauth, and failure handling. | `docs/decisions/2026-06-12-chatgpt-app-mcp-server-architecture-boundary.md:32-56`; `docs/decisions/2026-06-12-dependency-package-server-skeleton-approval-checkpoint.md:332-391` | auth architecture decision | Yes |
+| OAuth runtime | Architecture decided by PR87.11 only; no OAuth runtime is approved for MCP/App SDK production. | Implement only after the ADR prerequisites are satisfied: OAuth 2.1 metadata, canonical resource, `twoweeks:applications:read`, token validation, account linking, test credentials, reauth, unlink/revocation, and failure handling. | `docs/decisions/2026-06-24-chatgpt-app-mcp-auth-account-linking-architecture.md`; `docs/decisions/2026-06-12-chatgpt-app-mcp-server-architecture-boundary.md:32-56`; `docs/decisions/2026-06-12-dependency-package-server-skeleton-approval-checkpoint.md:332-391` | auth metadata/verifier/account-link implementation gate, still no production runtime without separate approval | Yes |
 | Real handlers | No real MCP tool handlers are production-approved. | Handler execution policy, product ownership, auth/approval/audit/privacy gates, retry/idempotency behavior, and test plan. | `my-app/src/modules/local-mcp/localMcpServerSkeleton.ts:16-31`; `docs/decisions/2026-06-12-chatgpt-app-mcp-server-architecture-boundary.md:300-348` | architecture/docs-only handler boundary | Yes |
 | Outbound HTTP | No MCP outbound HTTP path is approved. | Egress allowlist, SSRF controls, timeout/body limits, redirect policy, private-network denial, redacted logging, and tests. | `docs/decisions/2026-06-12-dependency-package-server-skeleton-approval-checkpoint.md:276-310` | security/privacy checklist | Yes |
 | Model calls | No MCP model-call path is approved. | Budget/rate-limit policy, model allowlist, token caps, timeout/cancel/retry controls, and observability without raw sensitive logs. | `docs/decisions/2026-06-12-dependency-package-server-skeleton-approval-checkpoint.md:312-330` | security/privacy checklist | Yes |
@@ -83,7 +85,7 @@ The following remain blocked after PR87.9:
 These are candidate next PR types only. This document does not approve them.
 
 1. Test-only reachability proof for the blocked local/dev path, with no production endpoint and no real handler execution.
-2. Auth architecture decision covering OAuth/account-linking requirements without runtime implementation.
+2. Auth metadata/verifier/account-link implementation gate against the PR87.11 ADR, without production runtime approval.
 3. Blocked endpoint guard hardening if reviewers identify a concrete guard gap.
 4. Dev-only transport smoke that proves local fixture behavior without enabling production.
 5. Privacy/security checklist for data minimization, prompt injection, egress, logging, consent, and audit.
