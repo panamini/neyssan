@@ -184,8 +184,6 @@ function handleJsonRpc(request: JsonRpcRequestWithId, config: LocalMcpDevEndpoin
           fixtureDemoEnabled: config.fixtureDemoEnabled,
         },
       };
-    case "notifications/initialized":
-      return safeError(request.id, -32600, "Invalid JSON-RPC notification.");
     case "tools/list":
       return {
         jsonrpc: "2.0",
