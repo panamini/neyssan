@@ -206,8 +206,8 @@ describe("local MCP dev endpoint", () => {
       }),
     });
     const malformedInitialize = callEndpoint({ bodyText: jsonRpc("initialize", "bad_init", []) });
-    const unsupportedInitialize = callEndpoint({
-      bodyText: jsonRpc("initialize", "unsupported_init", { protocolVersion: "1900-01-01" }),
+    const futureInitialize = callEndpoint({
+      bodyText: jsonRpc("initialize", "future_init", { protocolVersion: "2099-01-01" }),
     });
     const initializedNotification = callEndpoint({
       bodyText: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
@@ -222,7 +222,11 @@ describe("local MCP dev endpoint", () => {
       json: { id: "init_with_params", result: { fixtureOnly: true, localDevOnly: true } },
     });
     expectSafeJsonRpcError(malformedInitialize, -32602, "bad_init");
-    expectSafeJsonRpcError(unsupportedInitialize, -32002, "unsupported_init");
+    expect(futureInitialize).toMatchObject({
+      handled: true,
+      status: 200,
+      json: { id: "future_init", result: { protocolVersion: "2025-11-25" } },
+    });
     expect(initializedNotification).toEqual({
       handled: true,
       status: 202,

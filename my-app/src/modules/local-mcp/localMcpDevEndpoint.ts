@@ -30,7 +30,7 @@ const JSON_HEADERS = Object.freeze({
   "content-type": "application/json; charset=utf-8",
   "cache-control": "no-store",
 });
-const SUPPORTED_PROTOCOL_VERSIONS = ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"] as const;
+const FIXTURE_PROTOCOL_VERSION = "2025-11-25";
 const FIXTURE_DEMO_TOOLS: readonly Readonly<{
   name: string;
   localToolId: string;
@@ -172,7 +172,7 @@ function handleJsonRpc(request: JsonRpcRequestWithId, config: LocalMcpDevEndpoin
         jsonrpc: "2.0",
         id: request.id,
         result: {
-          protocolVersion: "2025-11-25",
+          protocolVersion: FIXTURE_PROTOCOL_VERSION,
           serverInfo: {
             name: "twoweeks-local-dev-fixture",
             version: "1.0.0",
@@ -252,9 +252,6 @@ function validateInitializeParams(params: unknown): Readonly<{ code: number; mes
   }
   if (params.protocolVersion !== undefined) {
     if (typeof params.protocolVersion !== "string") return { code: -32602, message: "Invalid initialize request." };
-    if (!SUPPORTED_PROTOCOL_VERSIONS.includes(params.protocolVersion as (typeof SUPPORTED_PROTOCOL_VERSIONS)[number])) {
-      return { code: -32002, message: "Unsupported MCP protocol version." };
-    }
   }
   if (params.capabilities !== undefined && !isPlainRecord(params.capabilities)) {
     return { code: -32602, message: "Invalid initialize request." };
