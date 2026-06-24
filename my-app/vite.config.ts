@@ -7,17 +7,27 @@ import path from "path";
 import {
   buildLocalMcpDevEndpointConfig,
   handleLocalMcpDevEndpointRequest,
+  isLocalMcpDevEndpointHandledPath,
 } from "./src/modules/local-mcp/localMcpDevEndpoint";
 
 const LOCAL_CLERK_SYNC_PORT = 5173;
 const LOCAL_MCP_DEV_ENDPOINT_FLAG = "LOCAL_MCP_DEV_ENDPOINT";
 const LOCAL_MCP_DEV_FIXTURE_DEMO_FLAG = "LOCAL_MCP_DEV_FIXTURE_DEMO";
+const LOCAL_MCP_DEV_AUTH_POLICY_FLAG = "LOCAL_MCP_DEV_AUTH_POLICY";
+const LOCAL_MCP_DEV_AUTH_RESOURCE_VAR = "LOCAL_MCP_DEV_AUTH_RESOURCE";
+const LOCAL_MCP_DEV_AUTH_ISSUER_VAR = "LOCAL_MCP_DEV_AUTH_ISSUER";
+const LOCAL_MCP_DEV_AUTH_PROVIDER_ENVIRONMENT_VAR = "LOCAL_MCP_DEV_AUTH_PROVIDER_ENVIRONMENT";
+const LOCAL_MCP_DEV_AUTH_CLIENT_ID_VAR = "LOCAL_MCP_DEV_AUTH_CLIENT_ID";
 
 function localMcpDevEndpointPlugin(): Plugin | undefined {
   if (!isStrictEnabledFlag(LOCAL_MCP_DEV_ENDPOINT_FLAG)) return undefined;
+  const fixtureDemoEnabled = isStrictEnabledFlag(LOCAL_MCP_DEV_FIXTURE_DEMO_FLAG);
+  const authPolicyEnabled = fixtureDemoEnabled && isStrictEnabledFlag(LOCAL_MCP_DEV_AUTH_POLICY_FLAG);
   const config = buildLocalMcpDevEndpointConfig({
     enabled: true,
-    fixtureDemoEnabled: isStrictEnabledFlag(LOCAL_MCP_DEV_FIXTURE_DEMO_FLAG),
+    fixtureDemoEnabled,
+    authPolicyEnabled,
+    auth: authPolicyEnabled ? readLocalMcpDevAuthConfigInput() : undefined,
   });
 
   return {
@@ -37,30 +47,33 @@ function handleLocalMcpDevMiddlewareRequest(
   config: ReturnType<typeof buildLocalMcpDevEndpointConfig>,
 ): void {
   const pathName = (req.url ?? "").split("?")[0];
-  if (pathName !== config.endpointPath) {
+  if (!isLocalMcpDevEndpointHandledPath(pathName)) {
     next();
     return;
   }
   readLocalMcpDevBody(req, res, config.maxRequestBytes, (bodyText) => {
-    respondToLocalMcpDevRequest(req, res, next, config, pathName, bodyText);
+    void respondToLocalMcpDevRequest(req, res, next, config, pathName, bodyText).catch(() => {
+      sendInvalidLocalMcpDevRequest(res);
+    });
   });
 }
 
-function respondToLocalMcpDevRequest(
+async function respondToLocalMcpDevRequest(
   req: IncomingMessage,
   res: ServerResponse,
   next: () => void,
   config: ReturnType<typeof buildLocalMcpDevEndpointConfig>,
   pathName: string,
   bodyText: string,
-): void {
-  const response = handleLocalMcpDevEndpointRequest(
+): Promise<void> {
+  const response = await handleLocalMcpDevEndpointRequest(
     {
       method: req.method ?? "GET",
       path: pathName,
       headers: {
         host: headerValue(req.headers.host),
         "content-type": headerValue(req.headers["content-type"]),
+        authorization: req.headers.authorization,
       },
       remoteAddress: req.socket.remoteAddress,
       bodyText,
@@ -152,6 +165,21 @@ function sendLocalMcpJson(
 
 function headerValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function readLocalMcpDevAuthConfigInput(): Readonly<{
+  resourceUrl?: string;
+  authorizationServerIssuerUrl?: string;
+  providerEnvironment?: string;
+  allowedClientIds?: readonly string[];
+}> {
+  const clientId = process.env[LOCAL_MCP_DEV_AUTH_CLIENT_ID_VAR]?.trim();
+  return {
+    resourceUrl: process.env[LOCAL_MCP_DEV_AUTH_RESOURCE_VAR],
+    authorizationServerIssuerUrl: process.env[LOCAL_MCP_DEV_AUTH_ISSUER_VAR],
+    providerEnvironment: process.env[LOCAL_MCP_DEV_AUTH_PROVIDER_ENVIRONMENT_VAR],
+    allowedClientIds: clientId ? [clientId] : [],
+  };
 }
 
 function isStrictEnabledFlag(name: string): boolean {
