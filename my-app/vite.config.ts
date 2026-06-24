@@ -123,7 +123,13 @@ function sendInvalidLocalMcpDevRequest(res: ServerResponse): void {
   sendLocalMcpJson(res, 400, {
     jsonrpc: "2.0",
     id: null,
-    error: { code: -32700, message: "Invalid local dev MCP request." },
+    error: {
+      code: -32700,
+      message: "Invalid local dev MCP request.",
+      safeForModel: true,
+      fixtureOnly: true,
+      localDevOnly: true,
+    },
   });
 }
 
