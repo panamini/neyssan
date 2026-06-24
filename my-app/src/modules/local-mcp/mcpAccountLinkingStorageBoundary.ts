@@ -5,7 +5,7 @@ export type LocalMcpAccountLinkingStorageReadScopeV1 =
   | "twoweeks.resume_variant_plan.read"
   | "twoweeks.review_cockpit.read";
 
-type LocalMcpAccountLinkingStorageRecordStateV1 = "active" | "revoked" | "stale";
+export type LocalMcpAccountLinkingStorageRecordStateV1 = "active" | "revoked" | "stale";
 
 export type LocalMcpAccountLinkingStorageRecordShapeV1 = Readonly<{
   kind: "local_mcp_account_link_record";
