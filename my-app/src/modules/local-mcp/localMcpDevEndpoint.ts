@@ -1,9 +1,27 @@
+import {
+  applyLocalMcpDevAuthSecuritySchemesToToolsListFixture,
+  buildLocalMcpDevAuthConfig,
+  buildLocalMcpDevProtectedResourceMetadata,
+  isLocalMcpDevProtectedResourceMetadataPath,
+  type LocalMcpDevAuthConfigInputV1,
+  type LocalMcpDevAuthConfigV1,
+} from "./localMcpDevAuthConfig";
 import { simulateLocalMcpToolsListFixture } from "./localMcpToolsListFixture";
+import {
+  authenticateMcpBearerRequest,
+  denyAllMcpBearerTokenVerifier,
+  type McpAccountLinkLookupPortV1,
+  type McpAuthRequestAuthorizedContextV1,
+  type McpAuthRequestOrchestratorDenialDecisionV1,
+  type McpBearerTokenVerifierPortV1,
+} from "./mcpAuthRequestOrchestrator";
 
 export type LocalMcpDevEndpointConfigV1 = Readonly<{
   kind: "local_mcp_dev_endpoint_config";
   enabled: boolean;
   fixtureDemoEnabled: boolean;
+  authPolicyEnabled: boolean;
+  authConfig: LocalMcpDevAuthConfigV1 | undefined;
   localOnly: true;
   endpointPath: "/mcp";
   maxRequestBytes: number;
@@ -13,7 +31,7 @@ export type LocalMcpDevEndpointConfigV1 = Readonly<{
 export type LocalMcpDevEndpointRequestV1 = Readonly<{
   method: string;
   path: string;
-  headers: Readonly<Record<string, string | undefined>>;
+  headers: Readonly<Record<string, string | readonly string[] | undefined>>;
   remoteAddress?: string;
   bodyText?: string;
 }>;
@@ -23,6 +41,19 @@ export type LocalMcpDevEndpointResponseV1 = Readonly<{
   status: number;
   headers: Readonly<Record<string, string>>;
   json: unknown;
+}>;
+
+export type LocalMcpDevFixtureHandlerInvocationV1 = Readonly<{
+  toolName: string;
+  arguments: Readonly<Record<string, unknown>>;
+  authContext?: McpAuthRequestAuthorizedContextV1;
+}>;
+
+export type LocalMcpDevEndpointDependenciesV1 = Readonly<{
+  tokenVerifier?: McpBearerTokenVerifierPortV1;
+  accountLinkLookup?: McpAccountLinkLookupPortV1;
+  nowEpochSeconds?: () => number;
+  onFixtureHandlerInvoke?: (invocation: LocalMcpDevFixtureHandlerInvocationV1) => void;
 }>;
 
 const DEFAULT_MAX_REQUEST_BYTES = 16 * 1024;
@@ -85,12 +116,27 @@ const FORBIDDEN_ARGUMENT_KEYS: readonly string[] = [
 ] as const;
 
 export function buildLocalMcpDevEndpointConfig(
-  input: Readonly<{ enabled?: boolean; fixtureDemoEnabled?: boolean; maxRequestBytes?: number }> = {},
+  input: Readonly<{
+    enabled?: boolean;
+    fixtureDemoEnabled?: boolean;
+    authPolicyEnabled?: boolean;
+    auth?: LocalMcpDevAuthConfigInputV1;
+    maxRequestBytes?: number;
+  }> = {},
 ): LocalMcpDevEndpointConfigV1 {
+  const endpointEnabled = input.enabled === true;
+  const fixtureDemoRequested = endpointEnabled && input.fixtureDemoEnabled === true;
+  const authPolicyRequested = fixtureDemoRequested && input.authPolicyEnabled === true;
+  const authConfig = buildLocalMcpDevAuthConfig({
+    ...(input.auth ?? {}),
+    enabled: authPolicyRequested,
+  });
   const config: LocalMcpDevEndpointConfigV1 = {
     kind: "local_mcp_dev_endpoint_config",
-    enabled: input.enabled === true,
-    fixtureDemoEnabled: input.enabled === true && input.fixtureDemoEnabled === true,
+    enabled: endpointEnabled,
+    fixtureDemoEnabled: fixtureDemoRequested && (!authPolicyRequested || authConfig !== undefined),
+    authPolicyEnabled: authConfig !== undefined,
+    authConfig,
     localOnly: true,
     endpointPath: "/mcp",
     maxRequestBytes: input.maxRequestBytes ?? DEFAULT_MAX_REQUEST_BYTES,
@@ -105,7 +151,17 @@ function assertLocalMcpDevEndpointConfig(config: LocalMcpDevEndpointConfigV1): v
   const record = asPlainRecord(config, "Local MCP dev endpoint config must be an object");
   assertExactKeys(
     record,
-    ["kind", "enabled", "fixtureDemoEnabled", "localOnly", "endpointPath", "maxRequestBytes", "version"],
+    [
+      "kind",
+      "enabled",
+      "fixtureDemoEnabled",
+      "authPolicyEnabled",
+      "authConfig",
+      "localOnly",
+      "endpointPath",
+      "maxRequestBytes",
+      "version",
+    ],
     "Local MCP dev endpoint config",
   );
   if (record.kind !== "local_mcp_dev_endpoint_config") {
@@ -116,6 +172,15 @@ function assertLocalMcpDevEndpointConfig(config: LocalMcpDevEndpointConfigV1): v
   }
   if (typeof record.fixtureDemoEnabled !== "boolean" || (record.fixtureDemoEnabled === true && record.enabled !== true)) {
     throw new TypeError("Local MCP dev endpoint fixture demo flag must be boolean and require the endpoint flag");
+  }
+  if (
+    typeof record.authPolicyEnabled !== "boolean" ||
+    (record.authPolicyEnabled === true && (record.enabled !== true || record.fixtureDemoEnabled !== true || record.authConfig === undefined))
+  ) {
+    throw new TypeError("Local MCP dev endpoint auth policy flag must be boolean and require the endpoint and fixture flags");
+  }
+  if (record.authPolicyEnabled === false && record.authConfig !== undefined) {
+    throw new TypeError("Local MCP dev endpoint auth config must be absent when auth policy is disabled");
   }
   if (record.localOnly !== true || record.endpointPath !== "/mcp") {
     throw new TypeError("Local MCP dev endpoint must stay local-only on the fixed dev path");
@@ -131,8 +196,35 @@ function assertLocalMcpDevEndpointConfig(config: LocalMcpDevEndpointConfigV1): v
 export function handleLocalMcpDevEndpointRequest(
   request: LocalMcpDevEndpointRequestV1,
   config: LocalMcpDevEndpointConfigV1 = buildLocalMcpDevEndpointConfig(),
+  dependencies: LocalMcpDevEndpointDependenciesV1 = {},
 ): LocalMcpDevEndpointResponseV1 {
+  if (isAuthPolicyModeEnabled(config)) {
+    throw new TypeError("Local MCP dev endpoint auth mode requires async request handling.");
+  }
+  const response = handleLocalMcpDevEndpointRequestCore(request, config, dependencies);
+  if (isPromiseLike<LocalMcpDevEndpointResponseV1>(response)) {
+    throw new TypeError("Local MCP dev endpoint async response requires async request handling.");
+  }
+  return response;
+}
+
+export async function handleLocalMcpDevEndpointRequestAsync(
+  request: LocalMcpDevEndpointRequestV1,
+  config: LocalMcpDevEndpointConfigV1 = buildLocalMcpDevEndpointConfig(),
+  dependencies: LocalMcpDevEndpointDependenciesV1 = {},
+): Promise<LocalMcpDevEndpointResponseV1> {
+  return handleLocalMcpDevEndpointRequestCore(request, config, dependencies);
+}
+
+function handleLocalMcpDevEndpointRequestCore(
+  request: LocalMcpDevEndpointRequestV1,
+  config: LocalMcpDevEndpointConfigV1,
+  dependencies: LocalMcpDevEndpointDependenciesV1,
+): LocalMcpDevEndpointResponseV1 | Promise<LocalMcpDevEndpointResponseV1> {
   assertLocalMcpDevEndpointConfig(config);
+  if (isLocalMcpDevProtectedResourceMetadataPath(request.path)) {
+    return handleProtectedResourceMetadataRequest(request, config);
+  }
   if (request.path !== config.endpointPath || !config.enabled) {
     return buildResponse(false, 404, safeError(null, -32004, "Local dev MCP endpoint is disabled."));
   }
@@ -157,10 +249,36 @@ export function handleLocalMcpDevEndpointRequest(
     return buildResponse(true, 202, null);
   }
 
-  return buildResponse(true, 200, handleJsonRpc(parsed, config));
+  const json = handleJsonRpc(parsed, config, request, dependencies);
+  return isPromiseLike(json) ? json.then((resolvedJson) => buildResponse(true, 200, resolvedJson)) : buildResponse(true, 200, json);
 }
 
-function handleJsonRpc(request: JsonRpcRequestWithId, config: LocalMcpDevEndpointConfigV1): unknown {
+export function isLocalMcpDevEndpointHandledPath(path: string): boolean {
+  return path === "/mcp" || isLocalMcpDevProtectedResourceMetadataPath(path);
+}
+
+function handleProtectedResourceMetadataRequest(
+  request: LocalMcpDevEndpointRequestV1,
+  config: LocalMcpDevEndpointConfigV1,
+): LocalMcpDevEndpointResponseV1 {
+  if (!isAuthPolicyModeEnabled(config)) {
+    return buildResponse(false, 404, safeError(null, -32004, "Local dev MCP auth policy is disabled."));
+  }
+  if (!isLocalRequest(request)) {
+    return buildResponse(true, 403, safeError(null, -32003, "Local dev MCP endpoint only accepts loopback requests."));
+  }
+  if (request.method.toUpperCase() !== "GET") {
+    return buildResponse(true, 405, safeError(null, -32005, "Local dev MCP auth metadata only accepts GET."));
+  }
+  return buildResponse(true, 200, buildLocalMcpDevProtectedResourceMetadata(config.authConfig));
+}
+
+function handleJsonRpc(
+  request: JsonRpcRequestWithId,
+  config: LocalMcpDevEndpointConfigV1,
+  endpointRequest: LocalMcpDevEndpointRequestV1,
+  dependencies: LocalMcpDevEndpointDependenciesV1,
+): unknown {
   switch (request.method) {
     case "initialize":
       {
@@ -188,13 +306,21 @@ function handleJsonRpc(request: JsonRpcRequestWithId, config: LocalMcpDevEndpoin
       return {
         jsonrpc: "2.0",
         id: request.id,
-        result: simulateLocalMcpToolsListFixture(),
+        result: isAuthPolicyModeEnabled(config)
+          ? applyLocalMcpDevAuthSecuritySchemesToToolsListFixture(simulateLocalMcpToolsListFixture())
+          : simulateLocalMcpToolsListFixture(),
       };
     case "tools/call":
-      return handleToolsCallJsonRpc(request, config);
+      return handleToolsCallJsonRpc(request, config, endpointRequest, dependencies);
     default:
       return safeError(request.id, -32601, "Method not found.");
   }
+}
+
+function isAuthPolicyModeEnabled(
+  config: LocalMcpDevEndpointConfigV1,
+): config is LocalMcpDevEndpointConfigV1 & Readonly<{ authPolicyEnabled: true; authConfig: LocalMcpDevAuthConfigV1 }> {
+  return config.enabled === true && config.fixtureDemoEnabled === true && config.authPolicyEnabled === true && config.authConfig !== undefined;
 }
 
 type JsonRpcRequest = JsonRpcRequestWithId | JsonRpcNotification;
@@ -268,7 +394,12 @@ function validateInitializeParams(params: unknown): Readonly<{ code: number; mes
   return undefined;
 }
 
-function handleToolsCallJsonRpc(request: JsonRpcRequestWithId, config: LocalMcpDevEndpointConfigV1): unknown {
+function handleToolsCallJsonRpc(
+  request: JsonRpcRequestWithId,
+  config: LocalMcpDevEndpointConfigV1,
+  endpointRequest: LocalMcpDevEndpointRequestV1,
+  dependencies: LocalMcpDevEndpointDependenciesV1,
+): unknown {
   if (!config.fixtureDemoEnabled) {
     return safeError(request.id, -32020, "Local dev MCP endpoint does not run tool handlers.");
   }
@@ -278,6 +409,42 @@ function handleToolsCallJsonRpc(request: JsonRpcRequestWithId, config: LocalMcpD
     return safeError(request.id, -32602, validation.message);
   }
 
+  if (isAuthPolicyModeEnabled(config)) {
+    return authenticateMcpBearerRequest({
+      authorizationHeader: endpointRequest.headers.authorization,
+      tokenVerifier: dependencies.tokenVerifier ?? denyAllMcpBearerTokenVerifier,
+      accountLinkLookup: dependencies.accountLinkLookup ?? emptyMcpAccountLinkLookup,
+      expectedIssuer: config.authConfig.authorizationServerIssuerUrl,
+      expectedAudience: config.authConfig.resourceUrl,
+      expectedProviderEnvironment: config.authConfig.providerEnvironment,
+      allowedClientIds: config.authConfig.allowedClientIds,
+      requiredScope: config.authConfig.requiredScope,
+      nowEpochSeconds: readNowEpochSeconds(dependencies),
+      protectedResourceMetadataUrl: config.authConfig.protectedResourceMetadataUrl,
+      requestArguments: validation.arguments,
+      version: 1,
+    }).then((authDecision) => {
+      if (!authDecision.authorized) {
+        return buildAuthDeniedToolCallJsonRpc(request.id, authDecision);
+      }
+
+      dependencies.onFixtureHandlerInvoke?.({
+        toolName: validation.name,
+        arguments: validation.arguments,
+        authContext: authDecision,
+      });
+      return {
+        jsonrpc: "2.0",
+        id: request.id,
+        result: buildFixtureDemoToolResult(validation.name),
+      };
+    });
+  }
+
+  dependencies.onFixtureHandlerInvoke?.({
+    toolName: validation.name,
+    arguments: validation.arguments,
+  });
   return {
     jsonrpc: "2.0",
     id: request.id,
@@ -288,6 +455,8 @@ function handleToolsCallJsonRpc(request: JsonRpcRequestWithId, config: LocalMcpD
 type FixtureDemoToolsCallValidation =
   | Readonly<{ valid: true; name: string; arguments: Readonly<Record<string, unknown>> }>
   | Readonly<{ valid: false; message: string }>;
+
+const emptyMcpAccountLinkLookup: McpAccountLinkLookupPortV1 = async () => Object.freeze([]);
 
 function validateFixtureDemoToolsCallParams(params: unknown): FixtureDemoToolsCallValidation {
   if (!isPlainRecord(params) || !hasOnlyAllowedKeys(params, ["name", "arguments", "_meta", "task"]) || typeof params.name !== "string") {
@@ -331,6 +500,44 @@ function buildFixtureDemoToolResult(toolName: string): unknown {
     content: [{ type: "text", text: summary }],
     structuredContent,
   };
+}
+
+function buildAuthDeniedToolCallJsonRpc(
+  id: string | number | null,
+  authDecision: McpAuthRequestOrchestratorDenialDecisionV1,
+): unknown {
+  const attachChallenge = shouldAttachWwwAuthenticateMeta(authDecision);
+  return {
+    jsonrpc: "2.0",
+    id,
+    result: {
+      content: [
+        {
+          type: "text",
+          text: attachChallenge ? authDecision.message : "Local development account linking is unavailable.",
+        },
+      ],
+      isError: true,
+      ...(attachChallenge ? { _meta: authDecision.mcpWwwAuthenticateMeta } : {}),
+    },
+  };
+}
+
+function shouldAttachWwwAuthenticateMeta(authDecision: McpAuthRequestOrchestratorDenialDecisionV1): boolean {
+  if (authDecision.failureStage === "account_link_lookup") return false;
+  if (authDecision.failureStage === "account_link_resolution") {
+    return authDecision.reason === "missing_account_link" || authDecision.reason === "missing_required_scope";
+  }
+  return true;
+}
+
+function readNowEpochSeconds(dependencies: LocalMcpDevEndpointDependenciesV1): number {
+  const candidate = dependencies.nowEpochSeconds?.() ?? Math.floor(Date.now() / 1000);
+  return Number.isInteger(candidate) && candidate >= 0 ? candidate : Math.floor(Date.now() / 1000);
+}
+
+function isPromiseLike<T = unknown>(value: unknown): value is Promise<T> {
+  return !!value && typeof value === "object" && "then" in value && typeof (value as { then?: unknown }).then === "function";
 }
 
 function fixtureToolDescriptor(toolName: string): Readonly<{
@@ -457,8 +664,8 @@ function isLocalRequest(request: LocalMcpDevEndpointRequestV1): boolean {
   return isLocalHost(host) && isLoopbackAddress(remoteAddress);
 }
 
-function normalizeHost(value: string | undefined): string {
-  const normalized = (value ?? "").trim().toLowerCase();
+function normalizeHost(value: string | readonly string[] | undefined): string {
+  const normalized = readFirstHeaderValue(value).trim().toLowerCase();
   if (normalized.startsWith("[")) {
     return normalized.replace(/^\[/u, "").replace(/\](?::\d+)?$/u, "");
   }
@@ -473,8 +680,14 @@ function isLoopbackAddress(value: string): boolean {
   return value === "::1" || value === "127.0.0.1" || value.startsWith("127.") || value.startsWith("::ffff:127.");
 }
 
-function isJsonContentType(value: string | undefined): boolean {
-  return (value ?? "").toLowerCase().split(";")[0].trim() === "application/json";
+function isJsonContentType(value: string | readonly string[] | undefined): boolean {
+  return readFirstHeaderValue(value).toLowerCase().split(";")[0].trim() === "application/json";
+}
+
+function readFirstHeaderValue(value: string | readonly string[] | undefined): string {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value[0] ?? "";
+  return "";
 }
 
 function byteLength(value: string): number {
