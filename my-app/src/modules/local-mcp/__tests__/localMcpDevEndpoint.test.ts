@@ -17,6 +17,8 @@ const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
   "cache-control": "no-store",
 } as const;
+const TASK_AUGMENTED_TOOLS_CALL_UNSUPPORTED_MESSAGE =
+  "Task-augmented tools/call is not supported by this fixture endpoint.";
 const FIXTURE_TOOL_CALLS = [
   {
     name: "twoweeks.application_package.summarize",
@@ -89,6 +91,64 @@ function expectSafeJsonRpcError(response: LocalMcpDevEndpointResponseV1, code: n
       localDevOnly: true,
     },
   });
+}
+
+function expectNotEchoed(value: unknown, forbidden: readonly string[]): void {
+  const serialized = JSON.stringify(value);
+  for (const term of forbidden) {
+    expect(serialized).not.toContain(term);
+  }
+}
+
+function toolsListDescriptors(): Array<Record<string, unknown>> {
+  const response = callEndpoint({ bodyText: jsonRpc("tools/list", "schema_list") });
+  expect(response).toMatchObject({ handled: true, status: 200 });
+  return ((response.json as { result: { tools: Array<Record<string, unknown>> } }).result.tools);
+}
+
+function expectPlainRecord(value: unknown): Record<string, unknown> {
+  expect(value).toBeTruthy();
+  expect(typeof value).toBe("object");
+  expect(Array.isArray(value)).toBe(false);
+  return value as Record<string, unknown>;
+}
+
+function expectStructuredContentMatchesOutputSchema(value: unknown, schema: unknown): void {
+  const record = expectPlainRecord(value);
+  const schemaRecord = expectPlainRecord(schema);
+  const properties = expectPlainRecord(schemaRecord.properties);
+  const required = schemaRecord.required;
+  expect(schemaRecord.type).toBe("object");
+  expect(Array.isArray(required)).toBe(true);
+  for (const field of required as string[]) {
+    expect(record).toHaveProperty(field);
+  }
+  if (schemaRecord.additionalProperties === false) {
+    expect(Object.keys(record).sort()).toEqual(Object.keys(properties).sort());
+  }
+  for (const [field, propertySchema] of Object.entries(properties)) {
+    if (field in record) expectValueMatchesJsonSchema(record[field], propertySchema);
+  }
+}
+
+function expectValueMatchesJsonSchema(value: unknown, schema: unknown): void {
+  const schemaRecord = expectPlainRecord(schema);
+  if ("const" in schemaRecord) {
+    expect(value).toEqual(schemaRecord.const);
+  }
+  switch (schemaRecord.type) {
+    case "object":
+      expectStructuredContentMatchesOutputSchema(value, schemaRecord);
+      break;
+    case "string":
+      expect(typeof value).toBe("string");
+      break;
+    case "number":
+      expect(typeof value).toBe("number");
+      break;
+    default:
+      break;
+  }
 }
 
 describe("local MCP dev endpoint", () => {
@@ -205,7 +265,18 @@ describe("local MCP dev endpoint", () => {
         clientInfo: { name: "fixture-client", version: "1.0.0" },
       }),
     });
+    const initializeWithMeta = callEndpoint({
+      bodyText: jsonRpc("initialize", "initMetadata", {
+        protocolVersion: "2025-11-25",
+        capabilities: {},
+        clientInfo: { name: "fixture-client", version: "1.0.0" },
+        _meta: { progressToken: "secret-progress-token", extraFixtureKey: "allowed-extra-meta" },
+      }),
+    });
     const malformedInitialize = callEndpoint({ bodyText: jsonRpc("initialize", "bad_init", []) });
+    const malformedInitializeMeta = callEndpoint({
+      bodyText: jsonRpc("initialize", "bad_init_meta", { _meta: "secret-progress-token" }),
+    });
     const futureInitialize = callEndpoint({
       bodyText: jsonRpc("initialize", "future_init", { protocolVersion: "2099-01-01" }),
     });
@@ -221,7 +292,15 @@ describe("local MCP dev endpoint", () => {
       status: 200,
       json: { id: "init_with_params", result: { fixtureOnly: true, localDevOnly: true } },
     });
+    expect(initializeWithMeta).toMatchObject({
+      handled: true,
+      status: 200,
+      json: { id: "initMetadata", result: { protocolVersion: "2025-11-25" } },
+    });
+    expectNotEchoed(initializeWithMeta, ["_meta", "secret-progress-token", "allowed-extra-meta"]);
     expectSafeJsonRpcError(malformedInitialize, -32602, "bad_init");
+    expectSafeJsonRpcError(malformedInitializeMeta, -32602, "bad_init_meta");
+    expectNotEchoed(malformedInitializeMeta, ["secret-progress-token"]);
     expect(futureInitialize).toMatchObject({
       handled: true,
       status: 200,
@@ -326,6 +405,16 @@ describe("local MCP dev endpoint", () => {
         { bodyText: jsonRpc("tools/call", `${toolCall.name}:first`, { name: toolCall.name, arguments: toolCall.arguments }) },
         FIXTURE_DEMO_CONFIG,
       );
+      const withMeta = callEndpoint(
+        {
+          bodyText: jsonRpc("tools/call", `${toolCall.name}:meta`, {
+            name: toolCall.name,
+            arguments: toolCall.arguments,
+            _meta: { progressToken: "fixture-progress-token", extraFixtureKey: "ignored-meta" },
+          }),
+        },
+        FIXTURE_DEMO_CONFIG,
+      );
 
       expect(first).toEqual(second);
       expect(first).toMatchObject({
@@ -343,24 +432,49 @@ describe("local MCP dev endpoint", () => {
               },
             ],
             structuredContent: {
-              kind: "twoweeks_local_mcp_fixture_tool_result",
-              fixtureOnly: true,
-              localDevOnly: true,
-              noRealUserData: true,
-              toolName: toolCall.name,
-              localToolId: toolCall.localToolId,
-              result: {
-                kind: "local_mcp_safe_text_fixture_output",
-                status: "safe_summary_only",
-                refIds: [`fixture:${toolCall.localToolId}`],
-                version: 1,
-              },
+              kind: "local_mcp_dry_run",
+              input: toolCall.arguments,
               version: 1,
             },
           },
         },
       });
+      expect(withMeta).toMatchObject({
+        handled: true,
+        status: 200,
+        json: {
+          jsonrpc: "2.0",
+          id: `${toolCall.name}:meta`,
+          result: {
+            structuredContent: {
+              kind: "local_mcp_dry_run",
+              input: toolCall.arguments,
+              version: 1,
+            },
+          },
+        },
+      });
+      expectNotEchoed(withMeta, ["_meta", "fixture-progress-token", "ignored-meta"]);
       expect(JSON.stringify(first)).not.toMatch(/rawCv|rawResume|rawJob|coverLetter|privateFacts|never_use|oauth|clerk|convex|https?:\/\//iu);
+    }
+  });
+
+  it("keeps fixture tools/call structuredContent aligned with advertised outputSchema", () => {
+    const descriptors = toolsListDescriptors();
+    for (const toolCall of FIXTURE_TOOL_CALLS) {
+      const descriptor = descriptors.find((candidate) => candidate.name === toolCall.name);
+      expect(descriptor, toolCall.name).toBeTruthy();
+      const outputSchema = (descriptor as { outputSchema: unknown }).outputSchema;
+      const response = callEndpoint(
+        { bodyText: jsonRpc("tools/call", `${toolCall.name}:schema`, { name: toolCall.name, arguments: toolCall.arguments }) },
+        FIXTURE_DEMO_CONFIG,
+      );
+
+      expect(response).toMatchObject({ handled: true, status: 200 });
+      const structuredContent = (response.json as { result: { structuredContent: Record<string, unknown> } }).result.structuredContent;
+      const schemaProperties = ((outputSchema as { properties: Record<string, { const?: unknown }> }).properties);
+      expect(structuredContent.kind).toBe(schemaProperties.kind.const);
+      expectStructuredContentMatchesOutputSchema(structuredContent, outputSchema);
     }
   });
 
@@ -410,6 +524,26 @@ describe("local MCP dev endpoint", () => {
         params: { name: "twoweeks.application_package.summarize", arguments: [], userId: "fixture-user" },
         message: "Invalid tools/call request.",
         forbiddenEcho: "fixture-user",
+      },
+      {
+        name: "malformed meta",
+        params: {
+          name: "twoweeks.application_package.summarize",
+          arguments: { applicationPackageRef: { id: "fixture-application-package" } },
+          _meta: "secret-progress-token",
+        },
+        message: "Invalid tools/call metadata.",
+        forbiddenEcho: "secret-progress-token",
+      },
+      {
+        name: "task augmented call",
+        params: {
+          name: "twoweeks.application_package.summarize",
+          arguments: { applicationPackageRef: { id: "fixture-application-package" } },
+          task: { id: "secret-task-id" },
+        },
+        message: TASK_AUGMENTED_TOOLS_CALL_UNSUPPORTED_MESSAGE,
+        forbiddenEcho: "secret-task-id",
       },
     ] as const;
 

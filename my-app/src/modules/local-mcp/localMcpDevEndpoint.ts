@@ -60,9 +60,8 @@ const FIXTURE_DEMO_TOOLS: readonly Readonly<{
 const FIXTURE_ARGUMENTS_BY_TOOL: Readonly<Record<string, Readonly<Record<string, Readonly<{ id: string }>>>>> = Object.fromEntries(
   FIXTURE_DEMO_TOOLS.map((tool) => [tool.name, tool.arguments]),
 );
-const FIXTURE_LOCAL_TOOL_ID_BY_TOOL: Readonly<Record<string, string>> = Object.fromEntries(
-  FIXTURE_DEMO_TOOLS.map((tool) => [tool.name, tool.localToolId]),
-);
+const TASK_AUGMENTED_TOOLS_CALL_UNSUPPORTED_MESSAGE =
+  "Task-augmented tools/call is not supported by this fixture endpoint.";
 const WRITE_ACTION_TERMS = ["apply", "submit", "send", "export", "download", "auto-apply"] as const;
 const RAW_PRIVATE_TEXT_TERMS = ["raw cv", "raw resume", "raw résumé", "raw job", "cover letter body", "private facts", "never_use"] as const;
 const FORBIDDEN_ARGUMENT_KEYS: readonly string[] = [
@@ -247,8 +246,11 @@ function hasJsonRpcRequestId(request: JsonRpcRequest): request is JsonRpcRequest
 
 function validateInitializeParams(params: unknown): Readonly<{ code: number; message: string }> | undefined {
   if (params === undefined) return undefined;
-  if (!isPlainRecord(params) || !hasOnlyAllowedKeys(params, ["protocolVersion", "capabilities", "clientInfo"])) {
+  if (!isPlainRecord(params) || !hasOnlyAllowedKeys(params, ["protocolVersion", "capabilities", "clientInfo", "_meta"])) {
     return { code: -32602, message: "Invalid initialize request." };
+  }
+  if ("_meta" in params && !isPlainRecord(params._meta)) {
+    return { code: -32602, message: "Invalid initialize metadata." };
   }
   if (params.protocolVersion !== undefined) {
     if (typeof params.protocolVersion !== "string") return { code: -32602, message: "Invalid initialize request." };
@@ -290,8 +292,14 @@ type FixtureDemoToolsCallValidation =
   | Readonly<{ valid: false; message: string }>;
 
 function validateFixtureDemoToolsCallParams(params: unknown): FixtureDemoToolsCallValidation {
-  if (!isPlainRecord(params) || !hasOnlyAllowedKeys(params, ["name", "arguments"]) || typeof params.name !== "string") {
+  if (!isPlainRecord(params) || !hasOnlyAllowedKeys(params, ["name", "arguments", "_meta", "task"]) || typeof params.name !== "string") {
     return { valid: false, message: "Invalid tools/call request." };
+  }
+  if ("_meta" in params && !isPlainRecord(params._meta)) {
+    return { valid: false, message: "Invalid tools/call metadata." };
+  }
+  if ("task" in params) {
+    return { valid: false, message: TASK_AUGMENTED_TOOLS_CALL_UNSUPPORTED_MESSAGE };
   }
   if (!hasOwn(FIXTURE_ARGUMENTS_BY_TOOL, params.name)) {
     return { valid: false, message: "Unknown fixture tool." };
@@ -316,29 +324,58 @@ function validateFixtureDemoToolsCallParams(params: unknown): FixtureDemoToolsCa
 }
 
 function buildFixtureDemoToolResult(toolName: string): unknown {
-  const localToolId = FIXTURE_LOCAL_TOOL_ID_BY_TOOL[toolName];
+  const descriptor = fixtureToolDescriptor(toolName);
+  const localToolId = descriptor.localToolId;
   const summary = `Fixture-only tools/call accepted for ${localToolId}. No product action executed.`;
-  const structuredContent = {
-    kind: "twoweeks_local_mcp_fixture_tool_result",
-    fixtureOnly: true,
-    localDevOnly: true,
-    noRealUserData: true,
-    toolName,
-    localToolId,
-    result: {
-      kind: "local_mcp_safe_text_fixture_output",
-      status: "safe_summary_only",
-      summary,
-      refIds: [`fixture:${localToolId}`],
-      version: 1,
-    },
-    version: 1,
-  };
+  const structuredContent = buildFixtureDryRunStructuredContent(toolName, descriptor);
 
   return {
     content: [{ type: "text", text: summary }],
     structuredContent,
   };
+}
+
+function fixtureToolDescriptor(toolName: string): Readonly<{
+  name: string;
+  localToolId: string;
+  internalToolId: string;
+  inputSchema: unknown;
+  outputSchema: unknown;
+}> {
+  const toolsList = simulateLocalMcpToolsListFixture();
+  if (!toolsList.success) throw new TypeError("Local MCP tools/list fixture must be available");
+  const descriptor = toolsList.tools.find((tool) => tool.name === toolName);
+  if (!descriptor) throw new TypeError("Fixture tool descriptor is missing");
+  return descriptor;
+}
+
+function buildFixtureDryRunStructuredContent(
+  toolName: string,
+  descriptor: Readonly<{
+    internalToolId: string;
+    inputSchema: unknown;
+    outputSchema: unknown;
+  }>,
+): Readonly<Record<string, unknown>> {
+  const expectedArguments = FIXTURE_ARGUMENTS_BY_TOOL[toolName];
+  return {
+    kind: schemaConst(descriptor.outputSchema, "kind"),
+    internalToolId: schemaConst(descriptor.outputSchema, "internalToolId"),
+    input: clonePlainRecord(expectedArguments),
+    outputKind: schemaConst(descriptor.outputSchema, "outputKind"),
+    version: schemaConst(descriptor.outputSchema, "version"),
+  };
+}
+
+function schemaConst(schema: unknown, propertyName: string): string | number | boolean {
+  const schemaRecord = asPlainRecord(schema, "Local MCP output schema must be an object");
+  const properties = asPlainRecord(schemaRecord.properties, "Local MCP output schema properties must be an object");
+  const property = asPlainRecord(properties[propertyName], "Local MCP output schema property must be an object");
+  const constValue = property.const;
+  if (typeof constValue !== "string" && typeof constValue !== "number" && typeof constValue !== "boolean") {
+    throw new TypeError("Local MCP output schema property must define const");
+  }
+  return constValue;
 }
 
 function unsafeFixtureArgumentMessage(value: unknown, key = ""): string | undefined {
