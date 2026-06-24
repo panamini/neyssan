@@ -11,10 +11,14 @@ import {
 
 const LOCAL_CLERK_SYNC_PORT = 5173;
 const LOCAL_MCP_DEV_ENDPOINT_FLAG = "LOCAL_MCP_DEV_ENDPOINT";
+const LOCAL_MCP_DEV_FIXTURE_DEMO_FLAG = "LOCAL_MCP_DEV_FIXTURE_DEMO";
 
 function localMcpDevEndpointPlugin(): Plugin | undefined {
-  if (process.env[LOCAL_MCP_DEV_ENDPOINT_FLAG] !== "1") return undefined;
-  const config = buildLocalMcpDevEndpointConfig({ enabled: true });
+  if (!isStrictEnabledFlag(LOCAL_MCP_DEV_ENDPOINT_FLAG)) return undefined;
+  const config = buildLocalMcpDevEndpointConfig({
+    enabled: true,
+    fixtureDemoEnabled: isStrictEnabledFlag(LOCAL_MCP_DEV_FIXTURE_DEMO_FLAG),
+  });
 
   return {
     name: "twoweeks-local-mcp-dev-endpoint",
@@ -119,7 +123,13 @@ function sendInvalidLocalMcpDevRequest(res: ServerResponse): void {
   sendLocalMcpJson(res, 400, {
     jsonrpc: "2.0",
     id: null,
-    error: { code: -32700, message: "Invalid local dev MCP request." },
+    error: {
+      code: -32700,
+      message: "Invalid local dev MCP request.",
+      safeForModel: true,
+      fixtureOnly: true,
+      localDevOnly: true,
+    },
   });
 }
 
@@ -133,11 +143,19 @@ function sendLocalMcpJson(
   for (const [key, value] of Object.entries(headers)) {
     res.setHeader(key, value);
   }
+  if (status === 202 && json === null) {
+    res.end();
+    return;
+  }
   res.end(JSON.stringify(json));
 }
 
 function headerValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function isStrictEnabledFlag(name: string): boolean {
+  return process.env[name] === "1";
 }
 
 // https://vitejs.dev/config/

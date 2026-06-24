@@ -12,10 +12,35 @@ import {
 
 const SOURCE_FILE = resolve(dirname(fileURLToPath(import.meta.url)), "../localMcpDevEndpoint.ts");
 const ENABLED_CONFIG = buildLocalMcpDevEndpointConfig({ enabled: true });
+const FIXTURE_DEMO_CONFIG = buildLocalMcpDevEndpointConfig({ enabled: true, fixtureDemoEnabled: true });
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
   "cache-control": "no-store",
 } as const;
+const TASK_AUGMENTED_TOOLS_CALL_UNSUPPORTED_MESSAGE =
+  "Task-augmented tools/call is not supported by this fixture endpoint.";
+const FIXTURE_TOOL_CALLS = [
+  {
+    name: "twoweeks.application_package.summarize",
+    arguments: { applicationPackageRef: { id: "fixture-application-package" } },
+    localToolId: "local_mcp.application_package.summarize",
+  },
+  {
+    name: "twoweeks.evidence_graph.summarize",
+    arguments: { evidenceGraphRef: { id: "fixture-evidence-graph" } },
+    localToolId: "local_mcp.evidence_graph.summarize",
+  },
+  {
+    name: "twoweeks.resume_variant_plan.summarize",
+    arguments: { resumeVariantPlanRef: { id: "fixture-resume-variant-plan" } },
+    localToolId: "local_mcp.resume_variant_plan.summarize",
+  },
+  {
+    name: "twoweeks.review_cockpit.summarize",
+    arguments: { reviewCockpitRef: { id: "fixture-review-cockpit" } },
+    localToolId: "local_mcp.review_cockpit.summarize",
+  },
+] as const;
 
 function implementationSource(): string {
   return readFileSync(SOURCE_FILE, "utf8");
@@ -66,6 +91,64 @@ function expectSafeJsonRpcError(response: LocalMcpDevEndpointResponseV1, code: n
       localDevOnly: true,
     },
   });
+}
+
+function expectNotEchoed(value: unknown, forbidden: readonly string[]): void {
+  const serialized = JSON.stringify(value);
+  for (const term of forbidden) {
+    expect(serialized).not.toContain(term);
+  }
+}
+
+function toolsListDescriptors(): Array<Record<string, unknown>> {
+  const response = callEndpoint({ bodyText: jsonRpc("tools/list", "schema_list") });
+  expect(response).toMatchObject({ handled: true, status: 200 });
+  return ((response.json as { result: { tools: Array<Record<string, unknown>> } }).result.tools);
+}
+
+function expectPlainRecord(value: unknown): Record<string, unknown> {
+  expect(value).toBeTruthy();
+  expect(typeof value).toBe("object");
+  expect(Array.isArray(value)).toBe(false);
+  return value as Record<string, unknown>;
+}
+
+function expectStructuredContentMatchesOutputSchema(value: unknown, schema: unknown): void {
+  const record = expectPlainRecord(value);
+  const schemaRecord = expectPlainRecord(schema);
+  const properties = expectPlainRecord(schemaRecord.properties);
+  const required = schemaRecord.required;
+  expect(schemaRecord.type).toBe("object");
+  expect(Array.isArray(required)).toBe(true);
+  for (const field of required as string[]) {
+    expect(record).toHaveProperty(field);
+  }
+  if (schemaRecord.additionalProperties === false) {
+    expect(Object.keys(record).sort()).toEqual(Object.keys(properties).sort());
+  }
+  for (const [field, propertySchema] of Object.entries(properties)) {
+    if (field in record) expectValueMatchesJsonSchema(record[field], propertySchema);
+  }
+}
+
+function expectValueMatchesJsonSchema(value: unknown, schema: unknown): void {
+  const schemaRecord = expectPlainRecord(schema);
+  if ("const" in schemaRecord) {
+    expect(value).toEqual(schemaRecord.const);
+  }
+  switch (schemaRecord.type) {
+    case "object":
+      expectStructuredContentMatchesOutputSchema(value, schemaRecord);
+      break;
+    case "string":
+      expect(typeof value).toBe("string");
+      break;
+    case "number":
+      expect(typeof value).toBe("number");
+      break;
+    default:
+      break;
+  }
 }
 
 describe("local MCP dev endpoint", () => {
@@ -168,9 +251,69 @@ describe("local MCP dev endpoint", () => {
           },
           fixtureOnly: true,
           localDevOnly: true,
+          fixtureDemoEnabled: false,
         },
       },
     });
+  });
+
+  it("validates initialize params and handles initialized notifications without exposing a body", () => {
+    const validInitialize = callEndpoint({
+      bodyText: jsonRpc("initialize", "init_with_params", {
+        protocolVersion: "2025-11-25",
+        capabilities: {},
+        clientInfo: { name: "fixture-client", version: "1.0.0" },
+      }),
+    });
+    const initializeWithMeta = callEndpoint({
+      bodyText: jsonRpc("initialize", "initMetadata", {
+        protocolVersion: "2025-11-25",
+        capabilities: {},
+        clientInfo: { name: "fixture-client", version: "1.0.0" },
+        _meta: { progressToken: "secret-progress-token", extraFixtureKey: "allowed-extra-meta" },
+      }),
+    });
+    const malformedInitialize = callEndpoint({ bodyText: jsonRpc("initialize", "bad_init", []) });
+    const malformedInitializeMeta = callEndpoint({
+      bodyText: jsonRpc("initialize", "bad_init_meta", { _meta: "secret-progress-token" }),
+    });
+    const futureInitialize = callEndpoint({
+      bodyText: jsonRpc("initialize", "future_init", { protocolVersion: "2099-01-01" }),
+    });
+    const initializedNotification = callEndpoint({
+      bodyText: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
+    });
+    const malformedNotification = callEndpoint({
+      bodyText: JSON.stringify({ jsonrpc: "2.0", id: "not_a_notification", method: "notifications/initialized" }),
+    });
+
+    expect(validInitialize).toMatchObject({
+      handled: true,
+      status: 200,
+      json: { id: "init_with_params", result: { fixtureOnly: true, localDevOnly: true } },
+    });
+    expect(initializeWithMeta).toMatchObject({
+      handled: true,
+      status: 200,
+      json: { id: "initMetadata", result: { protocolVersion: "2025-11-25" } },
+    });
+    expectNotEchoed(initializeWithMeta, ["_meta", "secret-progress-token", "allowed-extra-meta"]);
+    expectSafeJsonRpcError(malformedInitialize, -32602, "bad_init");
+    expectSafeJsonRpcError(malformedInitializeMeta, -32602, "bad_init_meta");
+    expectNotEchoed(malformedInitializeMeta, ["secret-progress-token"]);
+    expect(futureInitialize).toMatchObject({
+      handled: true,
+      status: 200,
+      json: { id: "future_init", result: { protocolVersion: "2025-11-25" } },
+    });
+    expect(initializedNotification).toEqual({
+      handled: true,
+      status: 202,
+      headers: JSON_HEADERS,
+      json: null,
+    });
+    expect(malformedNotification).toMatchObject({ handled: true, status: 400 });
+    expectSafeJsonRpcError(malformedNotification, -32700);
   });
 
   it("returns only inert fixture data for tools/list", () => {
@@ -225,7 +368,7 @@ describe("local MCP dev endpoint", () => {
     expect(JSON.stringify(response.json)).not.toMatch(/provider_verified_submitted|billing|oauth|https?:\/\/|modelCall|openai|submitApplication|applyToJob/u);
   });
 
-  it("blocks tools/call and never echoes handler arguments", () => {
+  it("keeps tools/call blocked in reachability-only mode and never echoes handler arguments", () => {
     const response = callEndpoint({
       bodyText: jsonRpc("tools/call", "call_1", {
         name: "twoweeks.application_package.summarize",
@@ -250,6 +393,180 @@ describe("local MCP dev endpoint", () => {
       },
     });
     expect(JSON.stringify(response)).not.toContain("pkg_1");
+  });
+
+  it("runs deterministic fixture-only tools/call responses only with the explicit demo flag", () => {
+    for (const toolCall of FIXTURE_TOOL_CALLS) {
+      const first = callEndpoint(
+        { bodyText: jsonRpc("tools/call", `${toolCall.name}:first`, { name: toolCall.name, arguments: toolCall.arguments }) },
+        FIXTURE_DEMO_CONFIG,
+      );
+      const second = callEndpoint(
+        { bodyText: jsonRpc("tools/call", `${toolCall.name}:first`, { name: toolCall.name, arguments: toolCall.arguments }) },
+        FIXTURE_DEMO_CONFIG,
+      );
+      const withMeta = callEndpoint(
+        {
+          bodyText: jsonRpc("tools/call", `${toolCall.name}:meta`, {
+            name: toolCall.name,
+            arguments: toolCall.arguments,
+            _meta: { progressToken: "fixture-progress-token", extraFixtureKey: "ignored-meta" },
+          }),
+        },
+        FIXTURE_DEMO_CONFIG,
+      );
+
+      expect(first).toEqual(second);
+      expect(first).toMatchObject({
+        handled: true,
+        status: 200,
+        headers: JSON_HEADERS,
+        json: {
+          jsonrpc: "2.0",
+          id: `${toolCall.name}:first`,
+          result: {
+            content: [
+              {
+                type: "text",
+                text: `Fixture-only tools/call accepted for ${toolCall.localToolId}. No product action executed.`,
+              },
+            ],
+            structuredContent: {
+              kind: "local_mcp_dry_run",
+              input: toolCall.arguments,
+              version: 1,
+            },
+          },
+        },
+      });
+      expect(withMeta).toMatchObject({
+        handled: true,
+        status: 200,
+        json: {
+          jsonrpc: "2.0",
+          id: `${toolCall.name}:meta`,
+          result: {
+            structuredContent: {
+              kind: "local_mcp_dry_run",
+              input: toolCall.arguments,
+              version: 1,
+            },
+          },
+        },
+      });
+      expectNotEchoed(withMeta, ["_meta", "fixture-progress-token", "ignored-meta"]);
+      expect(JSON.stringify(first)).not.toMatch(/rawCv|rawResume|rawJob|coverLetter|privateFacts|never_use|oauth|clerk|convex|https?:\/\//iu);
+    }
+  });
+
+  it("keeps fixture tools/call structuredContent aligned with advertised outputSchema", () => {
+    const descriptors = toolsListDescriptors();
+    for (const toolCall of FIXTURE_TOOL_CALLS) {
+      const descriptor = descriptors.find((candidate) => candidate.name === toolCall.name);
+      expect(descriptor, toolCall.name).toBeTruthy();
+      const outputSchema = (descriptor as { outputSchema: unknown }).outputSchema;
+      const response = callEndpoint(
+        { bodyText: jsonRpc("tools/call", `${toolCall.name}:schema`, { name: toolCall.name, arguments: toolCall.arguments }) },
+        FIXTURE_DEMO_CONFIG,
+      );
+
+      expect(response).toMatchObject({ handled: true, status: 200 });
+      const structuredContent = (response.json as { result: { structuredContent: Record<string, unknown> } }).result.structuredContent;
+      const schemaProperties = ((outputSchema as { properties: Record<string, { const?: unknown }> }).properties);
+      expect(structuredContent.kind).toBe(schemaProperties.kind.const);
+      expectStructuredContentMatchesOutputSchema(structuredContent, outputSchema);
+    }
+  });
+
+  it("refuses unsafe, malformed, unknown, and write-like fixture demo calls without echoing input", () => {
+    const cases = [
+      {
+        name: "unknown tool",
+        params: { name: "twoweeks.unknown.summarize", arguments: {} },
+        message: "Unknown fixture tool.",
+        forbiddenEcho: "twoweeks.unknown.summarize",
+      },
+      {
+        name: "malformed args",
+        params: { name: "twoweeks.application_package.summarize", arguments: { applicationPackageRef: { id: "app_123_realish" } } },
+        message: "Invalid fixture arguments.",
+        forbiddenEcho: "app_123_realish",
+      },
+      {
+        name: "write-like args",
+        params: {
+          name: "twoweeks.application_package.summarize",
+          arguments: { applicationPackageRef: { id: "fixture-application-package" }, instruction: "apply now" },
+        },
+        message: "Refused. Write action blocked.",
+        forbiddenEcho: "apply now",
+      },
+      {
+        name: "external URL args",
+        params: {
+          name: "twoweeks.application_package.summarize",
+          arguments: { applicationPackageRef: { id: "fixture-application-package" }, url: "https://example.com/private" },
+        },
+        message: "Refused. Private identifier or raw document input blocked.",
+        forbiddenEcho: "https://example.com/private",
+      },
+      {
+        name: "raw resume args",
+        params: {
+          name: "twoweeks.application_package.summarize",
+          arguments: { applicationPackageRef: { id: "fixture-application-package" }, rawResume: "raw resume body" },
+        },
+        message: "Refused. Private identifier or raw document input blocked.",
+        forbiddenEcho: "raw resume body",
+      },
+      {
+        name: "malformed params",
+        params: { name: "twoweeks.application_package.summarize", arguments: [], userId: "fixture-user" },
+        message: "Invalid tools/call request.",
+        forbiddenEcho: "fixture-user",
+      },
+      {
+        name: "malformed meta",
+        params: {
+          name: "twoweeks.application_package.summarize",
+          arguments: { applicationPackageRef: { id: "fixture-application-package" } },
+          _meta: "secret-progress-token",
+        },
+        message: "Invalid tools/call metadata.",
+        forbiddenEcho: "secret-progress-token",
+      },
+      {
+        name: "task augmented call",
+        params: {
+          name: "twoweeks.application_package.summarize",
+          arguments: { applicationPackageRef: { id: "fixture-application-package" } },
+          task: { id: "secret-task-id" },
+        },
+        message: TASK_AUGMENTED_TOOLS_CALL_UNSUPPORTED_MESSAGE,
+        forbiddenEcho: "secret-task-id",
+      },
+    ] as const;
+
+    for (const testCase of cases) {
+      const response = callEndpoint(
+        { bodyText: jsonRpc("tools/call", testCase.name, testCase.params) },
+        FIXTURE_DEMO_CONFIG,
+      );
+
+      expect(response, testCase.name).toMatchObject({ handled: true, status: 200 });
+      expect(response.json).toMatchObject({
+        jsonrpc: "2.0",
+        id: testCase.name,
+        error: {
+          code: -32602,
+          message: testCase.message,
+          safeForModel: true,
+          fixtureOnly: true,
+          localDevOnly: true,
+        },
+      });
+      expect(JSON.stringify(response), testCase.name).not.toContain(testCase.forbiddenEcho);
+    }
   });
 
   it("returns method-not-found for unknown JSON-RPC methods", () => {
@@ -282,6 +599,7 @@ describe("local MCP dev endpoint", () => {
     expect(buildLocalMcpDevEndpointConfig()).toEqual({
       kind: "local_mcp_dev_endpoint_config",
       enabled: false,
+      fixtureDemoEnabled: false,
       localOnly: true,
       endpointPath: "/mcp",
       maxRequestBytes: 16 * 1024,
@@ -289,10 +607,22 @@ describe("local MCP dev endpoint", () => {
     });
     expect(buildLocalMcpDevEndpointConfig({ enabled: true, maxRequestBytes: 512 })).toMatchObject({
       enabled: true,
+      fixtureDemoEnabled: false,
       localOnly: true,
       endpointPath: "/mcp",
       maxRequestBytes: 512,
       version: 1,
+    });
+    expect(FIXTURE_DEMO_CONFIG).toMatchObject({
+      enabled: true,
+      fixtureDemoEnabled: true,
+      localOnly: true,
+      endpointPath: "/mcp",
+      version: 1,
+    });
+    expect(buildLocalMcpDevEndpointConfig({ enabled: false, fixtureDemoEnabled: true })).toMatchObject({
+      enabled: false,
+      fixtureDemoEnabled: false,
     });
     expect(() => buildLocalMcpDevEndpointConfig({ enabled: true, maxRequestBytes: 0 })).toThrow(
       "max request bytes must be a positive integer",
