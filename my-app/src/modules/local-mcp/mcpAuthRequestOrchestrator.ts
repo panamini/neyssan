@@ -102,7 +102,7 @@ export type McpAccountLinkLookupPortV1 = (
 
 export type McpAuthRequestOrchestratorFailureReasonV1 =
   | McpAuthRequestOrchestratorHeaderFailureReasonV1
-  | "verifier_rejected"
+  | McpBearerTokenVerifierRejectionReasonV1
   | "verifier_exception"
   | McpAuthVerifiedClaimsPolicyFailureReasonV1
   | "lookup_exception"
@@ -213,10 +213,12 @@ export async function authenticateMcpBearerRequest(
   }
 
   if (!verificationResult || verificationResult.verified !== true) {
+    const verifierRejectionReason =
+      verificationResult?.verified === false ? verificationResult.reason : undefined;
     return buildFailureDecision(
       {
         failureStage: "token_verifier",
-        reason: "verifier_rejected",
+        reason: readSafeVerifierRejectionReason(verifierRejectionReason),
       },
       input.protectedResourceMetadataUrl,
     );
@@ -302,7 +304,7 @@ export async function authenticateMcpBearerRequest(
     reason: "authorized",
     serverOnly: Object.freeze({
       twoweeksClerkId: accountLinkResolution.serverOnly.twoweeksClerkId,
-      grantedScopes: accountLinkResolution.serverOnly.grantedScopes,
+      grantedScopes: Object.freeze([TWOWEEKS_APPLICATIONS_READ_SCOPE] as const),
       version: 1,
     }),
     modelVisible: false,
@@ -394,7 +396,7 @@ function mapFailureToChallengeReason(
     case "authorization_header":
       return failure.reason === "missing_token" ? "missing_token" : "invalid_token";
     case "token_verifier":
-      return "invalid_token";
+      return failure.reason === "insufficient_scope" ? "insufficient_scope" : "invalid_token";
     case "claims_policy":
       return failure.reason === "missing_scope" ? "insufficient_scope" : "invalid_token";
     case "account_link_lookup":
@@ -431,6 +433,17 @@ function containsControlCharacters(value: string): boolean {
     if (code <= 0x1f || code === 0x7f) return true;
   }
   return false;
+}
+
+function readSafeVerifierRejectionReason(value: unknown): McpBearerTokenVerifierRejectionReasonV1 {
+  switch (value) {
+    case "invalid_request":
+    case "invalid_token":
+    case "insufficient_scope":
+      return value;
+    default:
+      return "invalid_token";
+  }
 }
 
 function exhaustive(value: never): never {

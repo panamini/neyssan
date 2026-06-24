@@ -214,7 +214,7 @@ describe("MCP auth request orchestrator verifier boundary", () => {
     });
   });
 
-  it("passes the raw bearer token only to the verifier port and fails closed on verifier rejection", async () => {
+  it("passes the raw bearer token only to the verifier port and fails closed on invalid verifier rejection", async () => {
     const { result, verifier, lookup } = await runAuthRequest(
       undefined,
       { verificationResult: buildVerificationFailure("invalid_token") },
@@ -234,7 +234,7 @@ describe("MCP auth request orchestrator verifier boundary", () => {
     expect(result).toMatchObject({
       authorized: false,
       failureStage: "token_verifier",
-      reason: "verifier_rejected",
+      reason: "invalid_token",
       challengeReason: "invalid_token",
       httpStatus: 401,
       safeForModel: true,
@@ -243,6 +243,54 @@ describe("MCP auth request orchestrator verifier boundary", () => {
       modelVisible: false,
       version: 1,
     });
+    expect(JSON.stringify(result)).not.toContain(RAW_TOKEN);
+  });
+
+  it("preserves verifier insufficient_scope as a safe Bearer challenge", async () => {
+    const { result, verifier, lookup } = await runAuthRequest(
+      undefined,
+      { verificationResult: buildVerificationFailure("insufficient_scope") },
+    );
+
+    expect(verifier).toHaveBeenCalledTimes(1);
+    expect(lookup).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      authorized: false,
+      failureStage: "token_verifier",
+      reason: "insufficient_scope",
+      challengeReason: "insufficient_scope",
+      httpStatus: 401,
+      safeForModel: true,
+      tokenEchoed: false,
+      identityEchoed: false,
+    });
+    expect(result.challenge.header).toContain('error="insufficient_scope"');
+    expect(result.challenge.header).toContain(`scope="${TWOWEEKS_APPLICATIONS_READ_SCOPE}"`);
+    expect(JSON.stringify(result)).not.toContain(RAW_TOKEN);
+  });
+
+  it("falls back safely for malformed verifier rejection reasons without echoing verifier text", async () => {
+    const { result, lookup } = await runAuthRequest(undefined, {
+      verificationResult: {
+        kind: "mcp_bearer_token_verification_result",
+        verified: false,
+        reason: "provider says attacker@example.test raw-token-12345 is blocked",
+        version: 1,
+      } as unknown as McpBearerTokenVerificationResultV1,
+    });
+
+    expect(lookup).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      authorized: false,
+      failureStage: "token_verifier",
+      reason: "invalid_token",
+      challengeReason: "invalid_token",
+      httpStatus: 401,
+      safeForModel: true,
+      tokenEchoed: false,
+      identityEchoed: false,
+    });
+    expect(JSON.stringify(result)).not.toContain("attacker@example.test");
     expect(JSON.stringify(result)).not.toContain(RAW_TOKEN);
   });
 
@@ -457,6 +505,10 @@ describe("MCP auth request orchestrator authorized context", () => {
     expect(Object.isFrozen(result)).toBe(true);
     expect(Object.isFrozen(result.serverOnly)).toBe(true);
     expect(Object.isFrozen(result.serverOnly.grantedScopes)).toBe(true);
+    expect(result.serverOnly.grantedScopes).toHaveLength(1);
+    const grantedScopes: readonly [typeof TWOWEEKS_APPLICATIONS_READ_SCOPE] =
+      result.serverOnly.grantedScopes;
+    expect(grantedScopes).toEqual([TWOWEEKS_APPLICATIONS_READ_SCOPE]);
     expect(JSON.stringify(result)).not.toContain(RAW_TOKEN);
     expect(JSON.stringify(result)).not.toContain(SUBJECT);
     expect(JSON.stringify(result)).not.toContain(CLIENT_ID);
