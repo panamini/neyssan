@@ -53,6 +53,7 @@ type SignFixtureTokenOptions = Readonly<{
   algorithm?: Algorithm;
   kid?: string;
   privateKey?: string;
+  includeProviderEnvironment?: boolean;
   providerEnvironment?: string;
   extraClaims?: Record<string, unknown>;
 }>;
@@ -160,6 +161,17 @@ describe("Stytch MCP bearer verifier token verification", () => {
     ["missing kid", () => signFixtureToken({ kid: "" }), "invalid_token"],
     ["unknown kid", () => signFixtureToken({ kid: "unknown-key" }), "invalid_token"],
     ["invalid signature", () => signFixtureToken({ privateKey: fixtureKeys.wrongPrivateKeyPem }), "invalid_token"],
+    [
+      "invalid signature with missing canonical scope",
+      () => signFixtureToken({ privateKey: fixtureKeys.wrongPrivateKeyPem, scope: "openid profile" }),
+      "invalid_token",
+    ],
+    ["legacy dotted scope", () => signFixtureToken({ scope: "twoweeks.mcp.read" }), "insufficient_scope"],
+    [
+      "mixed canonical and legacy dotted scopes",
+      () => signFixtureToken({ scope: `${TWOWEEKS_APPLICATIONS_READ_SCOPE} twoweeks.mcp.read` }),
+      "insufficient_scope",
+    ],
     ["wrong issuer", () => signFixtureToken({ issuer: "https://wrong-issuer.example.test/oauth" }), "invalid_token"],
     ["wrong audience/resource", () => signFixtureToken({ audience: "https://wrong-resource.example.test/mcp" }), "invalid_token"],
     ["missing subject", () => signFixtureToken({ includeSubject: false }), "invalid_token"],
@@ -169,6 +181,7 @@ describe("Stytch MCP bearer verifier token verification", () => {
     ["expired token", () => signFixtureToken({ exp: EXPIRED_EXP }), "invalid_token"],
     ["future nbf", () => signFixtureToken({ nbf: FAR_FUTURE_NBF }), "invalid_token"],
     ["malformed scope claim", () => signFixtureToken({ scope: ["not-a-string-scope"] }), "invalid_token"],
+    ["missing provider environment", () => signFixtureToken({ includeProviderEnvironment: false }), "invalid_token"],
     ["wrong provider environment", () => signFixtureToken({ providerEnvironment: "other-environment" }), "invalid_token"],
   ] as const)("rejects %s", async (_label, tokenFactory, reason) => {
     const token = typeof tokenFactory === "string" ? tokenFactory : tokenFactory();
@@ -445,7 +458,7 @@ function baseFixturePayload(options: SignFixtureTokenOptions): JWTPayload & Reco
     ...clientIdClaim(options),
     azp: options.azp ?? options.clientId ?? CLIENT_ID,
     scope: options.scope ?? TWOWEEKS_APPLICATIONS_READ_SCOPE,
-    provider_environment: options.providerEnvironment ?? ENVIRONMENT,
+    ...providerEnvironmentClaim(options),
     iat: 1_800_000_000,
     exp: options.exp ?? FAR_FUTURE_EXP,
     ...notBeforeClaim(options),
@@ -477,6 +490,12 @@ function clientIdClaim(options: SignFixtureTokenOptions): Record<string, string>
 
 function notBeforeClaim(options: SignFixtureTokenOptions): Record<string, number> {
   return options.nbf === undefined ? {} : { nbf: options.nbf };
+}
+
+function providerEnvironmentClaim(options: SignFixtureTokenOptions): Record<string, string> {
+  return options.includeProviderEnvironment === false
+    ? {}
+    : { provider_environment: options.providerEnvironment ?? ENVIRONMENT };
 }
 
 function buildFixtureKeys() {

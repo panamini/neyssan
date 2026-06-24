@@ -111,6 +111,13 @@ const VERIFIER_INPUT_KEYS = [
 ] as const;
 
 const COMPACT_JWT_PATTERN = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u;
+const LEGACY_DOTTED_SCOPE_DENYLIST = new Set([
+  "twoweeks.application_package.read",
+  "twoweeks.evidence_graph.read",
+  "twoweeks.mcp.read",
+  "twoweeks.resume_variant_plan.read",
+  "twoweeks.review_cockpit.read",
+]);
 
 export function buildStytchMcpBearerTokenVerifier(
   config: StytchMcpBearerVerifierConfigV1,
@@ -130,9 +137,6 @@ export function buildStytchMcpBearerTokenVerifier(
 
     const unverifiedPayload = parseUnverifiedPayload(parsedInput.value.rawBearerToken);
     if (!unverifiedPayload.ok) return rejectToken(unverifiedPayload.reason);
-
-    const preVerificationClaims = validateVerifiedPayloadClaims(unverifiedPayload.payload, parsedConfig);
-    if (!preVerificationClaims.ok) return rejectToken(preVerificationClaims.reason);
 
     const verifiedPayload = await verifyLocalJwt(parsedInput.value.rawBearerToken, parsedConfig);
     if (!verifiedPayload.ok) return rejectToken("invalid_token");
@@ -277,6 +281,9 @@ function validateVerifiedPayloadClaims(
 
   const scopes = collectScopes(payload);
   if (scopes === undefined) return { ok: false, reason: "invalid_token" };
+  if (scopes.some((scope) => LEGACY_DOTTED_SCOPE_DENYLIST.has(scope))) {
+    return { ok: false, reason: "insufficient_scope" };
+  }
   if (!scopes.includes(TWOWEEKS_APPLICATIONS_READ_SCOPE)) {
     return { ok: false, reason: "insufficient_scope" };
   }
@@ -369,7 +376,7 @@ function providerEnvironmentMatches(payload: JWTPayload, expectedProviderEnviron
   ]
     .map(readNonEmptyString)
     .find((value): value is string => value !== undefined);
-  return environmentClaim === undefined || environmentClaim === expectedProviderEnvironment;
+  return environmentClaim === expectedProviderEnvironment;
 }
 
 function collectScopes(payload: JWTPayload): readonly string[] | undefined {
