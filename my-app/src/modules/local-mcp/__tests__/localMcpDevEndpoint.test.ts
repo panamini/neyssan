@@ -979,6 +979,69 @@ describe("local MCP dev endpoint", () => {
       authPolicyEnabled: false,
       authConfig: undefined,
     });
+    expect(
+      buildLocalMcpDevEndpointConfig({
+        enabled: true,
+        fixtureDemoEnabled: true,
+        authPolicyEnabled: true,
+        auth: {
+          resourceUrl: AUTH_RESOURCE_URL,
+          authorizationServerIssuerUrl: AUTH_ISSUER_URL,
+          providerEnvironment: AUTH_PROVIDER_ENVIRONMENT,
+        },
+      }),
+    ).toMatchObject({
+      fixtureDemoEnabled: false,
+      authPolicyEnabled: false,
+      authConfig: undefined,
+    });
+    expect(
+      buildLocalMcpDevEndpointConfig({
+        enabled: true,
+        fixtureDemoEnabled: true,
+        authPolicyEnabled: true,
+        auth: {
+          resourceUrl: AUTH_RESOURCE_URL,
+          authorizationServerIssuerUrl: AUTH_ISSUER_URL,
+          providerEnvironment: AUTH_PROVIDER_ENVIRONMENT,
+          allowedClientIds: [],
+        },
+      }),
+    ).toMatchObject({
+      fixtureDemoEnabled: false,
+      authPolicyEnabled: false,
+      authConfig: undefined,
+    });
+    expect(
+      buildLocalMcpDevEndpointConfig({
+        enabled: true,
+        fixtureDemoEnabled: true,
+        authPolicyEnabled: true,
+        auth: {
+          resourceUrl: AUTH_RESOURCE_URL,
+          authorizationServerIssuerUrl: AUTH_ISSUER_URL,
+          providerEnvironment: AUTH_PROVIDER_ENVIRONMENT,
+          allowedClientIds: ["  "],
+        },
+      }),
+    ).toMatchObject({
+      fixtureDemoEnabled: false,
+      authPolicyEnabled: false,
+      authConfig: undefined,
+    });
+    expect(
+      buildLocalMcpDevEndpointConfig({
+        enabled: true,
+        fixtureDemoEnabled: true,
+        authPolicyEnabled: true,
+        auth: {
+          resourceUrl: AUTH_RESOURCE_URL,
+          authorizationServerIssuerUrl: AUTH_ISSUER_URL,
+          providerEnvironment: AUTH_PROVIDER_ENVIRONMENT,
+          allowedClientIds: [AUTH_CLIENT_ID, AUTH_CLIENT_ID],
+        },
+      }).authConfig?.allowedClientIds,
+    ).toEqual([AUTH_CLIENT_ID]);
     expect(() => buildLocalMcpDevEndpointConfig({ enabled: true, maxRequestBytes: 0 })).toThrow(
       "max request bytes must be a positive integer",
     );

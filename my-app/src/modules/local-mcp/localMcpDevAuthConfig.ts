@@ -57,6 +57,9 @@ export function buildLocalMcpDevAuthConfig(
         .map((clientId) => parseSafeTokenLikeValue(clientId, "allowed client ID"))
         .filter((clientId, index, values) => values.indexOf(clientId) === index),
     );
+    if (allowedClientIds.length === 0) {
+      throw new TypeError("allowed client ID list must not be empty.");
+    }
 
     const config: LocalMcpDevAuthConfigV1 = Object.freeze({
       kind: "local_mcp_dev_auth_config",
