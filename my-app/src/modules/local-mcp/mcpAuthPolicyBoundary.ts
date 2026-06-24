@@ -27,10 +27,9 @@ export type McpBearerAuthChallengeReasonV1 =
   | "reauthorization_required";
 
 export type McpBearerAuthChallengeErrorV1 =
+  | "invalid_request"
   | "invalid_token"
-  | "insufficient_scope"
-  | "account_link_required"
-  | "reauthorization_required";
+  | "insufficient_scope";
 
 export type McpBearerAuthChallengeInputV1 = Readonly<{
   reason: McpBearerAuthChallengeReasonV1;
@@ -268,6 +267,17 @@ const ACCOUNT_LINK_REQUIRED_KEYS = [
   "expiresAtEpochSeconds",
   "version",
 ] as const;
+const PRINCIPAL_ALLOWED_KEYS = [
+  "kind",
+  "issuer",
+  "subject",
+  "audience",
+  "clientId",
+  "grantedScopes",
+  "providerEnvironment",
+  "version",
+] as const;
+const PRINCIPAL_REQUIRED_KEYS = PRINCIPAL_ALLOWED_KEYS;
 const IDENTITY_OVERRIDE_KEYS = new Set([
   "userId",
   "workspaceId",
@@ -277,8 +287,6 @@ const IDENTITY_OVERRIDE_KEYS = new Set([
   "ownerId",
   "email",
 ]);
-const SAFE_HEADER_TOKEN_PATTERN = /^[a-z][a-z0-9_]{2,64}$/u;
-const SAFE_DESCRIPTION_PATTERN = /^[A-Za-z0-9 .,:;!?()/-]{1,160}$/u;
 
 export function buildProtectedResourceMetadata(
   input: McpProtectedResourceMetadataInputV1,
@@ -314,10 +322,12 @@ export function buildBearerAuthChallenge(
     input.protectedResourceMetadataUrl,
     "protected resource metadata URL",
   );
-  const error = readSafeHeaderToken(input.error ?? defaultChallengeError(input.reason));
-  const errorDescription = readSafeDescription(
-    input.errorDescription ?? defaultChallengeDescription(input.reason),
-  );
+  const callerError = readAllowedChallengeError(input.error);
+  const error = callerError ?? defaultChallengeError(input.reason);
+  const errorDescription =
+    callerError === undefined
+      ? defaultChallengeDescriptionForReason(input.reason)
+      : defaultChallengeDescriptionForError(callerError);
 
   return Object.freeze({
     kind: "mcp_auth_bearer_challenge",
@@ -422,26 +432,28 @@ export function resolveMcpAuthPolicyAccountLink(
   if (!Number.isInteger(input.nowEpochSeconds) || input.requiredScope !== TWOWEEKS_APPLICATIONS_READ_SCOPE) {
     return denyAccountLink("missing_required_scope");
   }
+  const principal = parseAuthorizedPrincipal(input.principal);
+  if (!principal.ok) return denyAccountLink(principal.reason);
   if (input.accountLinks.length === 0) return denyAccountLink("missing_account_link");
 
   const records = input.accountLinks.map(parseAccountLinkRecord);
   if (records.some((record) => record === undefined)) return denyAccountLink("malformed_account_link");
   const links = records.filter((record): record is ParsedAccountLinkRecordV1 => record !== undefined);
 
-  const issuerMatches = links.filter((link) => link.issuer === input.principal.issuer);
+  const issuerMatches = links.filter((link) => link.issuer === principal.value.issuer);
   if (issuerMatches.length === 0) return denyAccountLink("issuer_mismatch");
 
-  const subjectMatches = issuerMatches.filter((link) => link.subject === input.principal.subject);
+  const subjectMatches = issuerMatches.filter((link) => link.subject === principal.value.subject);
   if (subjectMatches.length === 0) return denyAccountLink("subject_mismatch");
 
   const environmentMatches = subjectMatches.filter(
-    (link) => link.providerEnvironment === input.principal.providerEnvironment,
+    (link) => link.providerEnvironment === principal.value.providerEnvironment,
   );
   if (environmentMatches.length === 0) return denyAccountLink("wrong_environment");
   if (environmentMatches.length > 1) return denyAccountLink("duplicate_account_link");
 
   const clientMatches = environmentMatches.filter(
-    (link) => input.principal.clientId !== undefined && link.clientId === input.principal.clientId,
+    (link) => link.clientId === principal.value.clientId,
   );
   if (clientMatches.length === 0) return denyAccountLink("disallowed_client");
   if (clientMatches.length > 1) return denyAccountLink("duplicate_account_link");
@@ -451,7 +463,7 @@ export function resolveMcpAuthPolicyAccountLink(
   if (link.state === "stale") return denyAccountLink("stale_account_link");
   if (link.expiresAtEpochSeconds <= input.nowEpochSeconds) return denyAccountLink("expired_account_link");
   if (
-    !input.principal.grantedScopes.includes(input.requiredScope) ||
+    !principal.value.grantedScopes.includes(input.requiredScope) ||
     !link.grantedScopes.includes(input.requiredScope)
   ) {
     return denyAccountLink("missing_required_scope");
@@ -504,6 +516,8 @@ type ParsedAccountLinkRecordV1 = Readonly<{
   twoweeksClerkId: string;
   grantedScopes: readonly TwoweeksApplicationsReadScopeV1[];
   state: LocalMcpAccountLinkingStorageRecordStateV1;
+  createdAtEpochSeconds: number;
+  updatedAtEpochSeconds: number;
   expiresAtEpochSeconds: number;
 }>;
 
@@ -544,15 +558,14 @@ function defaultChallengeError(
     case "insufficient_scope":
       return "insufficient_scope";
     case "account_link_required":
-      return "account_link_required";
     case "reauthorization_required":
-      return "reauthorization_required";
+      return "invalid_token";
     default:
       return exhaustive(reason);
   }
 }
 
-function defaultChallengeDescription(reason: McpBearerAuthChallengeReasonV1): string {
+function defaultChallengeDescriptionForReason(reason: McpBearerAuthChallengeReasonV1): string {
   switch (reason) {
     case "missing_token":
       return "Access token required.";
@@ -569,18 +582,28 @@ function defaultChallengeDescription(reason: McpBearerAuthChallengeReasonV1): st
   }
 }
 
-function readSafeHeaderToken(value: string): string {
-  if (!SAFE_HEADER_TOKEN_PATTERN.test(value)) {
-    throw new TypeError("Bearer challenge error value is unsafe.");
+function defaultChallengeDescriptionForError(error: McpBearerAuthChallengeErrorV1): string {
+  switch (error) {
+    case "invalid_request":
+      return "Authorization request is invalid.";
+    case "invalid_token":
+      return "Access token is invalid.";
+    case "insufficient_scope":
+      return "Required read scope missing.";
+    default:
+      return exhaustive(error);
   }
-  return value;
 }
 
-function readSafeDescription(value: string): string {
-  if (!SAFE_DESCRIPTION_PATTERN.test(value)) {
-    throw new TypeError("Bearer challenge error description is unsafe.");
+function readAllowedChallengeError(value: unknown): McpBearerAuthChallengeErrorV1 | undefined {
+  switch (value) {
+    case "invalid_request":
+    case "invalid_token":
+    case "insufficient_scope":
+      return value;
+    default:
+      return undefined;
   }
-  return value;
 }
 
 function parseVerifiedClaims(
@@ -666,6 +689,54 @@ function parsePolicy(value: unknown): ParsedPolicyV1 | undefined {
   };
 }
 
+function parseAuthorizedPrincipal(
+  value: unknown,
+):
+  | { ok: true; value: McpAuthPolicyAuthorizedPrincipalV1 }
+  | {
+      ok: false;
+      reason:
+        | "identity_override_forbidden"
+        | "malformed_account_link"
+        | "missing_required_scope";
+    } {
+  if (containsIdentityOverride(value)) return { ok: false, reason: "identity_override_forbidden" };
+  const record = readRecordWithAllowedKeys(value, PRINCIPAL_ALLOWED_KEYS);
+  if (!record || !hasOwnRequiredKeys(record, PRINCIPAL_REQUIRED_KEYS)) {
+    return { ok: false, reason: "malformed_account_link" };
+  }
+  if (record.kind !== "mcp_auth_policy_authorized_principal" || record.version !== 1) {
+    return { ok: false, reason: "malformed_account_link" };
+  }
+
+  const issuer = readNonEmptyString(record.issuer);
+  const subject = readNonEmptyString(record.subject);
+  const audience = readNonEmptyString(record.audience);
+  const clientId = readNonEmptyString(record.clientId);
+  const grantedScopes = readCanonicalScopeList(record.grantedScopes);
+  const providerEnvironment = readNonEmptyString(record.providerEnvironment);
+  if (!grantedScopes || !grantedScopes.includes(TWOWEEKS_APPLICATIONS_READ_SCOPE)) {
+    return { ok: false, reason: "missing_required_scope" };
+  }
+  if (!issuer || !subject || !audience || !clientId || !providerEnvironment) {
+    return { ok: false, reason: "malformed_account_link" };
+  }
+
+  return {
+    ok: true,
+    value: Object.freeze({
+      kind: "mcp_auth_policy_authorized_principal",
+      issuer,
+      subject,
+      audience,
+      clientId,
+      grantedScopes,
+      providerEnvironment,
+      version: 1,
+    }),
+  };
+}
+
 function parseAccountLinkRecord(value: unknown): ParsedAccountLinkRecordV1 | undefined {
   const record = readRecordWithAllowedKeys(value, ACCOUNT_LINK_ALLOWED_KEYS);
   if (!record || !hasOwnRequiredKeys(record, ACCOUNT_LINK_REQUIRED_KEYS)) return undefined;
@@ -677,7 +748,9 @@ function parseAccountLinkRecord(value: unknown): ParsedAccountLinkRecordV1 | und
   const twoweeksClerkId = readNonEmptyString(record.twoweeksClerkId);
   const grantedScopes = readCanonicalScopeList(record.grantedScopes);
   const state = readAccountLinkState(record.state);
-  const expiresAtEpochSeconds = readInteger(record.expiresAtEpochSeconds);
+  const createdAtEpochSeconds = readSafeEpochSeconds(record.createdAtEpochSeconds);
+  const updatedAtEpochSeconds = readSafeEpochSeconds(record.updatedAtEpochSeconds);
+  const expiresAtEpochSeconds = readSafeEpochSeconds(record.expiresAtEpochSeconds);
   if (
     !issuer ||
     !subject ||
@@ -686,6 +759,9 @@ function parseAccountLinkRecord(value: unknown): ParsedAccountLinkRecordV1 | und
     !twoweeksClerkId ||
     !grantedScopes ||
     !state ||
+    createdAtEpochSeconds === undefined ||
+    updatedAtEpochSeconds === undefined ||
+    updatedAtEpochSeconds < createdAtEpochSeconds ||
     expiresAtEpochSeconds === undefined
   ) {
     return undefined;
@@ -698,6 +774,8 @@ function parseAccountLinkRecord(value: unknown): ParsedAccountLinkRecordV1 | und
     twoweeksClerkId,
     grantedScopes,
     state,
+    createdAtEpochSeconds,
+    updatedAtEpochSeconds,
     expiresAtEpochSeconds,
   };
 }
@@ -829,6 +907,15 @@ function readOptionalNonEmptyString(value: unknown): string | undefined | false 
 
 function readInteger(value: unknown): number | undefined {
   return typeof value === "number" && Number.isInteger(value) ? value : undefined;
+}
+
+function readSafeEpochSeconds(value: unknown): number | undefined {
+  return typeof value === "number" &&
+    Number.isFinite(value) &&
+    Number.isSafeInteger(value) &&
+    value >= 0
+    ? value
+    : undefined;
 }
 
 function readOptionalInteger(value: unknown): number | undefined | false {

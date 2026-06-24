@@ -174,8 +174,8 @@ describe("MCP auth Bearer challenges", () => {
   it.each([
     ["invalid_token", "invalid_token"],
     ["insufficient_scope", "insufficient_scope"],
-    ["account_link_required", "account_link_required"],
-    ["reauthorization_required", "reauthorization_required"],
+    ["account_link_required", "invalid_token"],
+    ["reauthorization_required", "invalid_token"],
   ] as const)("builds deterministic %s challenges", (reason, expectedError) => {
     const challenge = buildBearerAuthChallenge({
       reason,
@@ -187,6 +187,23 @@ describe("MCP auth Bearer challenges", () => {
     expect(challenge.header).not.toMatch(/SECRET_TOKEN|stytch_subject|real-user@example|clerk_/u);
   });
 
+  it.each([
+    ["invalid_request", "Authorization request is invalid."],
+    ["invalid_token", "Access token is invalid."],
+    ["insufficient_scope", "Required read scope missing."],
+  ] as const)("uses canned descriptions for allowed OAuth Bearer error %s", (error, description) => {
+    const challenge = buildBearerAuthChallenge({
+      reason: "invalid_token",
+      protectedResourceMetadataUrl: METADATA_URL,
+      error,
+      errorDescription: "Caller supplied text must never appear.",
+    });
+
+    expect(challenge.header).toContain(`error="${error}"`);
+    expect(challenge.header).toContain(`error_description="${description}"`);
+    expect(challenge.header).not.toContain("Caller supplied text");
+  });
+
   it("maps the same challenge into MCP mcp/www_authenticate metadata", () => {
     const challenge = buildBearerAuthChallenge({
       reason: "insufficient_scope",
@@ -194,6 +211,8 @@ describe("MCP auth Bearer challenges", () => {
       errorDescription: "Additional read scope required.",
     });
 
+    expect(challenge.header).toContain('error_description="Required read scope missing."');
+    expect(challenge.header).not.toContain("Additional read scope required.");
     expect(buildMcpWwwAuthenticateMeta(challenge)).toEqual({
       "mcp/www_authenticate": [challenge.header],
     });
@@ -202,15 +221,33 @@ describe("MCP auth Bearer challenges", () => {
   it.each([
     { error: "invalid_token\r\nHeader: injected" },
     { error: "bad\"quote" },
+    { error: "bearercredential123" },
     { errorDescription: "Bad\r\nHeader: injected" },
-    { errorDescription: "SECRET_TOKEN_DO_NOT_ECHO" },
-    { protectedResourceMetadataUrl: "https://mcp.example/bad\"quote" },
-  ] as const)("rejects header injection and sensitive challenge text: %j", (overrides) => {
+    { errorDescription: "Bearer authorization token abcdef123456" },
+    { errorDescription: "real-user@example.test" },
+    { errorDescription: SUBJECT },
+  ] as const)("does not reflect arbitrary or sensitive challenge text: %j", (overrides) => {
+    const challenge = buildBearerAuthChallenge({
+      reason: "invalid_token",
+      protectedResourceMetadataUrl: METADATA_URL,
+      ...overrides,
+    });
+
+    expect(challenge.header).toContain('error="invalid_token"');
+    expect(challenge.header).toContain('error_description="Access token is invalid."');
+    expect(challenge.header).not.toContain("Header: injected");
+    expect(challenge.header).not.toContain("bad");
+    expect(challenge.header).not.toContain("bearercredential123");
+    expect(challenge.header).not.toContain("Bearer authorization token");
+    expect(challenge.header).not.toContain("real-user@example.test");
+    expect(challenge.header).not.toContain(SUBJECT);
+  });
+
+  it("still rejects malformed protected-resource metadata URLs", () => {
     expect(() =>
       buildBearerAuthChallenge({
         reason: "invalid_token",
-        protectedResourceMetadataUrl: METADATA_URL,
-        ...overrides,
+        protectedResourceMetadataUrl: "https://mcp.example/bad\"quote",
       }),
     ).toThrow(TypeError);
   });
@@ -326,6 +363,37 @@ describe("MCP account-link resolver policy", () => {
   });
 
   it.each([
+    ["missing principal", undefined, "malformed_account_link"],
+    ["null principal", null, "malformed_account_link"],
+    ["array principal", [], "malformed_account_link"],
+    ["empty issuer", { ...authorizedPrincipal(), issuer: " " }, "malformed_account_link"],
+    ["empty subject", { ...authorizedPrincipal(), subject: " " }, "malformed_account_link"],
+    ["wrong field type", { ...authorizedPrincipal(), clientId: 123 }, "malformed_account_link"],
+    ["missing canonical scope", { ...authorizedPrincipal(), grantedScopes: [] }, "missing_required_scope"],
+    [
+      "extra identity override field",
+      { ...authorizedPrincipal(), twoweeksClerkId: "attacker_clerk" },
+      "identity_override_forbidden",
+    ],
+  ] as const)("rejects malformed authorized principal: %s", (_label, principal, reason) => {
+    const result = resolveMcpAuthPolicyAccountLink({
+      principal: principal as unknown as McpAuthPolicyAuthorizedPrincipalV1,
+      accountLinks: [accountLink()],
+      requiredScope: TWOWEEKS_APPLICATIONS_READ_SCOPE,
+      nowEpochSeconds: NOW_SECONDS,
+      version: 1,
+    });
+
+    expect(result).toMatchObject({
+      resolved: false,
+      reason,
+      safeFailure: { code: "account_link_denied", safeForModel: true },
+      modelVisible: false,
+    });
+    expect(JSON.stringify(result)).not.toContain("attacker_clerk");
+  });
+
+  it.each([
     ["zero links", [], "missing_account_link"],
     ["duplicate links", [accountLink(), accountLink({ updatedAtEpochSeconds: NOW_SECONDS - 30 })], "duplicate_account_link"],
     ["revoked link", [accountLink({ state: "revoked" })], "revoked_account_link"],
@@ -379,6 +447,81 @@ describe("MCP account-link resolver policy", () => {
       reason: "identity_override_forbidden",
     });
     expect(JSON.stringify(result)).not.toContain("attacker_clerk");
+  });
+
+  it("accepts valid safe integer account-link timestamps", () => {
+    expect(
+      resolveMcpAuthPolicyAccountLink({
+        principal: authorizedPrincipal(),
+        accountLinks: [
+          accountLink({
+            createdAtEpochSeconds: 0,
+            updatedAtEpochSeconds: NOW_SECONDS - 1,
+            expiresAtEpochSeconds: NOW_SECONDS + 1,
+          }),
+        ],
+        requiredScope: TWOWEEKS_APPLICATIONS_READ_SCOPE,
+        nowEpochSeconds: NOW_SECONDS,
+        version: 1,
+      }),
+    ).toMatchObject({ resolved: true, reason: "resolved" });
+  });
+
+  it.each([
+    ["createdAtEpochSeconds", Number.NaN],
+    ["createdAtEpochSeconds", Number.POSITIVE_INFINITY],
+    ["createdAtEpochSeconds", "123"],
+    ["createdAtEpochSeconds", null],
+    ["createdAtEpochSeconds", []],
+    ["createdAtEpochSeconds", {}],
+    ["createdAtEpochSeconds", -1],
+    ["createdAtEpochSeconds", 1.5],
+    ["createdAtEpochSeconds", Number.MAX_SAFE_INTEGER + 1],
+    ["updatedAtEpochSeconds", Number.NaN],
+    ["updatedAtEpochSeconds", Number.POSITIVE_INFINITY],
+    ["updatedAtEpochSeconds", "123"],
+    ["updatedAtEpochSeconds", null],
+    ["updatedAtEpochSeconds", []],
+    ["updatedAtEpochSeconds", {}],
+    ["updatedAtEpochSeconds", -1],
+    ["updatedAtEpochSeconds", 1.5],
+    ["updatedAtEpochSeconds", Number.MAX_SAFE_INTEGER + 1],
+    ["expiresAtEpochSeconds", Number.NaN],
+    ["expiresAtEpochSeconds", Number.POSITIVE_INFINITY],
+    ["expiresAtEpochSeconds", "123"],
+    ["expiresAtEpochSeconds", null],
+    ["expiresAtEpochSeconds", []],
+    ["expiresAtEpochSeconds", {}],
+    ["expiresAtEpochSeconds", -1],
+    ["expiresAtEpochSeconds", 1.5],
+    ["expiresAtEpochSeconds", Number.MAX_SAFE_INTEGER + 1],
+  ] as const)("rejects malformed account-link timestamp %s=%j", (field, value) => {
+    expect(
+      resolveMcpAuthPolicyAccountLink({
+        principal: authorizedPrincipal(),
+        accountLinks: [accountLink({ [field]: value } as Partial<McpAuthPolicyAccountLinkRecordV1>)],
+        requiredScope: TWOWEEKS_APPLICATIONS_READ_SCOPE,
+        nowEpochSeconds: NOW_SECONDS,
+        version: 1,
+      }),
+    ).toMatchObject({ resolved: false, reason: "malformed_account_link" });
+  });
+
+  it("rejects account-link timestamps when updated time predates created time", () => {
+    expect(
+      resolveMcpAuthPolicyAccountLink({
+        principal: authorizedPrincipal(),
+        accountLinks: [
+          accountLink({
+            createdAtEpochSeconds: NOW_SECONDS,
+            updatedAtEpochSeconds: NOW_SECONDS - 1,
+          }),
+        ],
+        requiredScope: TWOWEEKS_APPLICATIONS_READ_SCOPE,
+        nowEpochSeconds: NOW_SECONDS,
+        version: 1,
+      }),
+    ).toMatchObject({ resolved: false, reason: "malformed_account_link" });
   });
 });
 
