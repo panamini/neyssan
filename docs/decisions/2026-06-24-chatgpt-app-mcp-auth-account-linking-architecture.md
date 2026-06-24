@@ -10,11 +10,11 @@ Scope: docs-only decision for future ChatGPT Apps SDK MCP account linking
 
 This decision grants no runtime permission.
 
-This decision grants no production permission.
+Production use is not granted.
 
-This decision grants no PR88 private beta permission.
+PR88 private beta is not approved.
 
-This decision grants no PR89 public launch permission.
+PR89 public launch is not approved.
 
 This decision does not approve OAuth routes, callbacks, token exchange, token storage, provider configuration, production `/mcp`, production `tools/list`, production `tools/call`, real handlers, outbound HTTP, model calls, real-user-data access, live submit/apply, approved-answer copy, provider-verified submission, billing, or Apps SDK submission.
 
