@@ -47,6 +47,11 @@ export type McpBearerAuthorizationHeaderParseDecisionV1 = Readonly<
     }
 >;
 
+type McpBearerAuthorizationHeaderParseFailureV1 = Extract<
+  McpBearerAuthorizationHeaderParseDecisionV1,
+  { parsed: false }
+>;
+
 export type McpBearerTokenVerifierInputV1 = Readonly<{
   rawBearerToken: string;
   expectedIssuer: string;
@@ -160,6 +165,7 @@ export type McpAuthRequestOrchestratorInputV1 = Readonly<{
 
 const MAX_AUTHORIZATION_HEADER_LENGTH = 8_192;
 const MAX_BEARER_TOKEN_LENGTH = 4_096;
+const BEARER_TOKEN_PATTERN = /^[A-Za-z0-9._~+/-]+=*$/u;
 const AUTHENTICATION_REQUIRED_MESSAGE = "Authentication required." as const;
 
 export function parseMcpBearerAuthorizationHeader(
@@ -335,6 +341,9 @@ function parseSingleAuthorizationHeader(
   if (bearerToken.length === 0) return denyHeaderParse("missing_token");
   if (bearerToken.length > MAX_BEARER_TOKEN_LENGTH) return denyHeaderParse("excessive_length");
   if (containsControlCharacters(bearerToken)) return denyHeaderParse("control_characters");
+  if (!BEARER_TOKEN_PATTERN.test(bearerToken)) {
+    return denyHeaderParse("malformed_authorization_header");
+  }
 
   return {
     parsed: true,
@@ -343,7 +352,7 @@ function parseSingleAuthorizationHeader(
 }
 
 function buildDenialDecision(
-  failure: McpBearerAuthorizationHeaderParseDecisionV1,
+  failure: McpBearerAuthorizationHeaderParseFailureV1,
   protectedResourceMetadataUrl: string,
 ): McpAuthRequestOrchestratorDenialDecisionV1 {
   return buildFailureDecision(

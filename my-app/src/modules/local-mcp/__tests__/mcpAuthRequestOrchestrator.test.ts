@@ -184,6 +184,9 @@ describe("MCP auth request orchestrator Authorization header parser", () => {
     ["extra token segments", `Bearer ${RAW_TOKEN} extra`, "extra_credential_segments"],
     ["CRLF", `Bearer ${RAW_TOKEN}\r\nX-Injected: yes`, "control_characters"],
     ["NUL/control characters", `Bearer ${RAW_TOKEN}\u0000`, "control_characters"],
+    ["quoted token", `Bearer "${RAW_TOKEN}"`, "malformed_authorization_header"],
+    ["Unicode token", "Bearer jetoné", "malformed_authorization_header"],
+    ["mid-token padding", "Bearer abc=def", "malformed_authorization_header"],
     ["oversized header", `Bearer ${"a".repeat(9000)}`, "excessive_length"],
   ] as const)("rejects %s", (_label, header, reason) => {
     expect(parseMcpBearerAuthorizationHeader(header)).toEqual({
