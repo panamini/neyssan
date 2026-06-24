@@ -438,6 +438,7 @@ export function resolveMcpAuthPolicyAccountLink(
     (link) => link.providerEnvironment === input.principal.providerEnvironment,
   );
   if (environmentMatches.length === 0) return denyAccountLink("wrong_environment");
+  if (environmentMatches.length > 1) return denyAccountLink("duplicate_account_link");
 
   const clientMatches = environmentMatches.filter(
     (link) => input.principal.clientId !== undefined && link.clientId === input.principal.clientId,

@@ -333,6 +333,14 @@ describe("MCP account-link resolver policy", () => {
     ["expired link", [accountLink({ expiresAtEpochSeconds: NOW_SECONDS - 1 })], "expired_account_link"],
     ["issuer mismatch", [accountLink({ issuer: "https://other-issuer.example/oauth" })], "issuer_mismatch"],
     ["subject mismatch", [accountLink({ subject: "other_subject", displayEmail: "same-user@example.test" })], "subject_mismatch"],
+    [
+      "same external principal linked through another client",
+      [
+        accountLink(),
+        accountLink({ clientId: "other-chatgpt-client", twoweeksClerkId: "other_clerk_owner" }),
+      ],
+      "duplicate_account_link",
+    ],
     ["client mismatch", [accountLink({ clientId: "blocked-client" })], "disallowed_client"],
     ["missing required scope", [accountLink({ grantedScopes: [] })], "missing_required_scope"],
   ] as const)("rejects %s", (_label, accountLinks, reason) => {
