@@ -118,11 +118,11 @@ function createPorts(options?: {
   lookupResult?: readonly unknown[];
   lookupThrow?: Error;
 }) {
-  const verifier = vi.fn(async (input: Parameters<McpAuthRequestOrchestratorInputV1["tokenVerifier"]>[0]) => {
+  const verifier = vi.fn(async (_input: Parameters<McpAuthRequestOrchestratorInputV1["tokenVerifier"]>[0]) => {
     if (options?.verificationThrow) throw options.verificationThrow;
     return options?.verificationResult ?? buildVerificationSuccess();
   });
-  const lookup = vi.fn(async (input: Parameters<McpAuthRequestOrchestratorInputV1["accountLinkLookup"]>[0]) => {
+  const lookup = vi.fn(async (_input: Parameters<McpAuthRequestOrchestratorInputV1["accountLinkLookup"]>[0]) => {
     if (options?.lookupThrow) throw options.lookupThrow;
     return options?.lookupResult ?? [buildAccountLink()];
   });
