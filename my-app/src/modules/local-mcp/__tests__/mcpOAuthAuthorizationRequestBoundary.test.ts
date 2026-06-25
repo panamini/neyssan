@@ -291,6 +291,8 @@ describe("MCP OAuth authorization request boundary", () => {
         expect(result.serverOnly.providerForwardRequest.approvedOptionalParameters).toEqual({
           id_token_hint: ID_TOKEN_HINT,
         });
+        expect(result.serverOnly.loginReturn.path).not.toContain("id_token_hint=");
+        expect(result.serverOnly.loginReturn.path).not.toContain(ID_TOKEN_HINT);
         expect(result.modelVisible).toBe(false);
         expect(result.safeForLogging).toBe(false);
       }
@@ -359,6 +361,11 @@ describe("MCP OAuth authorization request boundary", () => {
       if (result.accepted) {
         expect(result.serverOnly.trustedOwner.twoweeksClerkId).toBe(OWNER_ID);
         expect(result.serverOnly.trustedOwner.twoweeksClerkId).not.toBe("clerk_user_attempt_123");
+        expect(result.serverOnly.providerForwardRequest.approvedOptionalParameters).toEqual({
+          login_hint: "other-user@example.test",
+        });
+        expect(result.serverOnly.loginReturn.path).not.toContain("login_hint=");
+        expect(result.serverOnly.loginReturn.path).not.toContain("other-user@example.test");
       }
     });
   });

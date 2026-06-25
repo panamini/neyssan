@@ -261,6 +261,13 @@ const OPTIONAL_PARAMETERS = new Set<McpOAuthAuthorizationOptionalParameterV1>([
   "login_hint",
   "id_token_hint",
 ]);
+const PROVIDER_FORWARD_OPTIONAL_QUERY_PARAMETERS: readonly McpOAuthAuthorizationOptionalParameterV1[] = [
+  "nonce",
+  "prompt",
+  "login_hint",
+  "id_token_hint",
+];
+const LOGIN_RETURN_OPTIONAL_QUERY_PARAMETERS: readonly McpOAuthAuthorizationOptionalParameterV1[] = ["nonce", "prompt"];
 const OPTIONAL_SCOPE_ORDER: readonly McpOAuthAuthorizationOptionalScopeV1[] = ["openid", "email", "profile"];
 const SAFE_IDENTIFIER_PATTERN = /^[A-Za-z0-9._:-]{1,256}$/u;
 const SAFE_SCOPE_PATTERN = /^[A-Za-z][A-Za-z0-9:._-]{0,127}$/u;
@@ -711,7 +718,7 @@ function buildHandoff(
       version: 1,
     }),
     loginReturn: Object.freeze({
-      path: `${parsedUrl.pathname}?${request.normalizedQuery}`,
+      path: `${parsedUrl.pathname}?${buildLoginReturnQuery(request)}`,
       target: "authorization_page",
       usesClientRedirectUri: false,
       containsOwnerIdentity: false,
@@ -728,17 +735,36 @@ function buildNormalizedQuery(
   required: RequiredParametersV1,
   scopes: readonly string[],
   optional: Readonly<Partial<Record<McpOAuthAuthorizationOptionalParameterV1, string>>>,
+  optionalQueryParameters: readonly McpOAuthAuthorizationOptionalParameterV1[] = PROVIDER_FORWARD_OPTIONAL_QUERY_PARAMETERS,
 ): string {
   const query = new URLSearchParams();
   for (const parameter of NORMALIZED_QUERY_ORDER) {
     const value = parameter === "scope" ? scopes.join(" ") : required[parameter];
     query.append(parameter, value);
   }
-  for (const parameter of ["nonce", "prompt", "login_hint", "id_token_hint"] as const) {
+  for (const parameter of optionalQueryParameters) {
     const value = optional[parameter];
     if (value !== undefined) query.append(parameter, value);
   }
   return query.toString();
+}
+
+function buildLoginReturnQuery(request: ParsedRequestParametersV1): string {
+  return buildNormalizedQuery(
+    {
+      response_type: request.responseType,
+      client_id: request.clientId,
+      redirect_uri: request.redirectUri,
+      scope: request.scopes.join(" "),
+      state: request.state,
+      code_challenge: request.codeChallenge,
+      code_challenge_method: request.codeChallengeMethod,
+      resource: request.resource,
+    },
+    request.scopes,
+    request.approvedOptionalParameters,
+    LOGIN_RETURN_OPTIONAL_QUERY_PARAMETERS,
+  );
 }
 
 function collectQueryValues(searchParams: URLSearchParams): QueryValuesV1 {
