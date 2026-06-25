@@ -500,6 +500,15 @@ export const internalLinkCanonicalMcpAccount = internalMutation({
     );
     if (exactClientLegacyNonRevoked) return denyLifecycle("link", "malformed_candidate");
 
+    const exactClientCanonicalOutsideLifecycleIdentity = exactClientRows.some(
+      (candidate) =>
+        candidate.classification === "canonical_ready" &&
+        candidate.row.state !== "revoked" &&
+        (candidate.row.issuer !== evidence.value.issuer ||
+          candidate.row.providerEnvironment !== evidence.value.providerEnvironment),
+    );
+    if (exactClientCanonicalOutsideLifecycleIdentity) return denyLifecycle("link", "duplicate_account_link");
+
     const canonicalRows = candidates.rows;
     if (canonicalRows.some((candidate) => candidate.policyCandidate.twoweeksClerkId !== owner.twoweeksClerkId)) {
       return denyLifecycle("link", "cross_owner_conflict");
