@@ -723,7 +723,7 @@ function buildHandoff(
       storage: "future_short_lived_server_store",
       preservesProviderForwardRequest: true,
       serverMustPersistBeforeLoginReturn: true,
-      serverPreservedSensitiveOptionalParameters: Object.freeze(["login_hint", "id_token_hint"]),
+      serverPreservedSensitiveOptionalParameters: Object.freeze(["login_hint", "id_token_hint"] as const),
       modelVisible: false,
       version: 1,
     }),
