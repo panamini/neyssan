@@ -9,6 +9,8 @@ const mcpReadScopeValidator = v.union(
   v.literal("twoweeks.review_cockpit.read"),
 );
 
+const TWOWEEKS_APPLICATIONS_READ_SCOPE = "twoweeks:applications:read" as const;
+
 const mcpAccountLinkStateValidator = v.union(
   v.literal("active"),
   v.literal("revoked"),
@@ -32,6 +34,11 @@ const mcpAccountLinkRecordValidator = v.object({
   revokedAt: v.optional(v.number()),
   staleAt: v.optional(v.number()),
   auditReasonCode: v.string(),
+  issuer: v.optional(v.string()),
+  providerEnvironment: v.optional(v.string()),
+  canonicalGrantedScopes: v.optional(v.array(v.string())),
+  expiresAtEpochSeconds: v.optional(v.number()),
+  canonicalAccountLinkVersion: v.optional(v.literal(1)),
 });
 
 const resolvedServerOnlyAccountLinkValidator = v.object({
@@ -49,6 +56,82 @@ const MCP_ACCOUNT_LINK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{1,191}$/u;
 const MCP_ACCOUNT_LINK_AUDIT_REASON_CODE_PATTERN = /^[a-z][a-z0-9_]{2,80}$/u;
 const FORBIDDEN_MCP_ACCOUNT_LINK_STORED_TEXT_PATTERN =
   /@|bearer\s+\S+|authorization|access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|api[_-]?key|credential|cookie|session|raw[_-]?(cv|resume|job|proposal|claims)|private[_-]?fact|never[_-]?use|source[_-]?(text|quote)|structured[_-]?shadow|convex[_-]?(id|document)|debug[_-]?payload/iu;
+const ACCOUNT_LINK_RECORD_ALLOWED_KEYS = [
+  "kind",
+  "version",
+  "provider",
+  "providerSubject",
+  "twoweeksClerkId",
+  "clientId",
+  "grantedReadScopes",
+  "grantRef",
+  "consentRef",
+  "state",
+  "createdAt",
+  "updatedAt",
+  "lastVerifiedAt",
+  "revokedAt",
+  "staleAt",
+  "auditReasonCode",
+  "issuer",
+  "providerEnvironment",
+  "canonicalGrantedScopes",
+  "expiresAtEpochSeconds",
+  "canonicalAccountLinkVersion",
+] as const;
+const ACCOUNT_LINK_STORAGE_DOCUMENT_ALLOWED_KEYS = [
+  ...ACCOUNT_LINK_RECORD_ALLOWED_KEYS,
+  "_id",
+  "_creationTime",
+] as const;
+const CANONICAL_ACCOUNT_LINK_FIELD_KEYS = [
+  "issuer",
+  "providerEnvironment",
+  "canonicalGrantedScopes",
+  "expiresAtEpochSeconds",
+  "canonicalAccountLinkVersion",
+] as const;
+
+export type McpAccountLinkCanonicalStorageClassificationV1 =
+  | "canonical_ready"
+  | "legacy_missing_canonical_fields"
+  | "malformed";
+
+export type McpAccountLinkCanonicalPolicyCandidateV1 = Readonly<{
+  kind: "mcp_auth_policy_account_link_record";
+  issuer: string;
+  subject: string;
+  providerEnvironment: string;
+  clientId: string;
+  twoweeksClerkId: string;
+  grantedScopes: readonly [typeof TWOWEEKS_APPLICATIONS_READ_SCOPE];
+  state: "active" | "revoked" | "stale";
+  createdAtEpochSeconds: number;
+  updatedAtEpochSeconds: number;
+  expiresAtEpochSeconds: number;
+  version: 1;
+}>;
+
+export type McpAccountLinkCanonicalProjectionV1 = Readonly<
+  | {
+      classification: "canonical_ready";
+      policyCandidate: McpAccountLinkCanonicalPolicyCandidateV1;
+      version: 1;
+    }
+  | {
+      classification: Exclude<McpAccountLinkCanonicalStorageClassificationV1, "canonical_ready">;
+  policyCandidate: null;
+      version: 1;
+    }
+>;
+
+type CanonicalAccountLinkFieldBag = Readonly<{
+  issuer?: unknown;
+  providerEnvironment?: unknown;
+  canonicalGrantedScopes?: unknown;
+  expiresAtEpochSeconds?: unknown;
+  canonicalAccountLinkVersion?: unknown;
+}>;
 
 export const internalCreateMcpAccountLink = internalMutation({
   args: {
@@ -180,8 +263,16 @@ function assertValidAccountLinkRecord(
     revokedAt?: number;
     staleAt?: number;
     auditReasonCode: string;
+    issuer?: string;
+    providerEnvironment?: string;
+    canonicalGrantedScopes?: readonly string[];
+    expiresAtEpochSeconds?: number;
+    canonicalAccountLinkVersion?: 1;
   }>,
 ): void {
+  if (!hasOnlyAllowedAccountLinkKeys(record, ACCOUNT_LINK_RECORD_ALLOWED_KEYS)) {
+    throw new Error("MCP account link record contains unsupported fields");
+  }
   assertSafeAccountLinkIdentifier("provider subject", record.providerSubject);
   assertSafeAccountLinkIdentifier("Twoweeks owner", record.twoweeksClerkId);
   assertSafeAccountLinkIdentifier("client id", record.clientId);
@@ -190,6 +281,7 @@ function assertValidAccountLinkRecord(
   assertRequiredAccountLinkRefs(record);
   assertSafeAuditReasonCode(record.auditReasonCode);
   assertAccountLinkTimestamps(record);
+  assertCanonicalAccountLinkFields(record);
 }
 
 function assertDistinctAccountLinkOwner(
@@ -289,6 +381,338 @@ function assertSafeAccountLinkIdentifier(label: string, value: string): void {
 
 function isSafeAccountLinkIdentifier(value: string): boolean {
   return MCP_ACCOUNT_LINK_ID_PATTERN.test(value) && !FORBIDDEN_MCP_ACCOUNT_LINK_STORED_TEXT_PATTERN.test(value);
+}
+
+export function classifyMcpAccountLinkCanonicalStorageRecord(
+  value: unknown,
+): McpAccountLinkCanonicalStorageClassificationV1 {
+  const parsed = parseStorageAccountLinkRecord(value);
+  if (!parsed) return "malformed";
+  return hasAnyCanonicalAccountLinkField(parsed)
+    ? hasCompleteCanonicalAccountLinkFields(parsed) && hasValidCanonicalAccountLinkFields(parsed)
+      ? "canonical_ready"
+      : "malformed"
+    : "legacy_missing_canonical_fields";
+}
+
+export function projectMcpAccountLinkCanonicalStorageRecordToPolicyCandidate(
+  value: unknown,
+): McpAccountLinkCanonicalProjectionV1 {
+  const parsed = parseStorageAccountLinkRecord(value);
+  const classification = classifyMcpAccountLinkCanonicalStorageRecord(value);
+  if (!parsed) {
+    return {
+      classification: "malformed",
+      policyCandidate: null,
+      version: 1,
+    };
+  }
+  if (classification === "legacy_missing_canonical_fields" || classification === "malformed") {
+    return {
+      classification,
+      policyCandidate: null,
+      version: 1,
+    };
+  }
+  if (!isCanonicalReadyParsedAccountLinkRecord(parsed)) {
+    return {
+      classification: "malformed",
+      policyCandidate: null,
+      version: 1,
+    };
+  }
+
+  return {
+    classification,
+    policyCandidate: {
+      kind: "mcp_auth_policy_account_link_record",
+      issuer: parsed.issuer,
+      subject: parsed.providerSubject,
+      providerEnvironment: parsed.providerEnvironment,
+      clientId: parsed.clientId,
+      twoweeksClerkId: parsed.twoweeksClerkId,
+      grantedScopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
+      state: parsed.state,
+      createdAtEpochSeconds: toEpochSeconds(parsed.createdAt),
+      updatedAtEpochSeconds: toEpochSeconds(parsed.updatedAt),
+      expiresAtEpochSeconds: parsed.expiresAtEpochSeconds,
+      version: 1,
+    },
+    version: 1,
+  };
+}
+
+type ParsedStorageAccountLinkRecord = Readonly<{
+  provider: "stytch";
+  providerSubject: string;
+  twoweeksClerkId: string;
+  clientId: string;
+  grantedReadScopes: readonly string[];
+  state: "active" | "revoked" | "stale";
+  createdAt: number;
+  updatedAt: number;
+  lastVerifiedAt: number;
+  revokedAt?: number;
+  staleAt?: number;
+  issuer?: string;
+  providerEnvironment?: string;
+  canonicalGrantedScopes?: readonly string[];
+  expiresAtEpochSeconds?: number;
+  canonicalAccountLinkVersion?: 1;
+}>;
+
+type CanonicalReadyParsedStorageAccountLinkRecord = ParsedStorageAccountLinkRecord &
+  Readonly<{
+    issuer: string;
+    providerEnvironment: string;
+    canonicalGrantedScopes: readonly [typeof TWOWEEKS_APPLICATIONS_READ_SCOPE, ...string[]];
+    expiresAtEpochSeconds: number;
+    canonicalAccountLinkVersion: 1;
+  }>;
+
+type ParsedStorageAccountLinkTiming = Pick<
+  ParsedStorageAccountLinkRecord,
+  "state" | "createdAt" | "updatedAt" | "lastVerifiedAt" | "revokedAt" | "staleAt"
+>;
+
+function parseStorageAccountLinkRecord(value: unknown): ParsedStorageAccountLinkRecord | undefined {
+  const record = readStorageAccountLinkRecord(value);
+  if (!record) return undefined;
+
+  const identity = parseStorageAccountLinkIdentity(record);
+  if (!identity) return undefined;
+
+  const timing = parseStorageAccountLinkTiming(record);
+  if (!timing) return undefined;
+
+  const canonicalFields = parseCanonicalAccountLinkFields(record);
+  if (canonicalFields === false) return undefined;
+
+  return {
+    provider: "stytch" as const,
+    ...identity,
+    ...timing,
+    ...canonicalFields,
+  };
+}
+
+function readStorageAccountLinkRecord(value: unknown): Record<string, unknown> | undefined {
+  if (!isPlainRecord(value)) return undefined;
+  if (!hasOnlyAllowedAccountLinkKeys(value, ACCOUNT_LINK_STORAGE_DOCUMENT_ALLOWED_KEYS)) return undefined;
+  if (value.kind !== "local_mcp_account_link_record" || value.version !== 1 || value.provider !== "stytch") {
+    return undefined;
+  }
+  return value;
+}
+
+function parseStorageAccountLinkIdentity(
+  record: Record<string, unknown>,
+):
+  | Pick<
+      ParsedStorageAccountLinkRecord,
+      "providerSubject" | "twoweeksClerkId" | "clientId" | "grantedReadScopes"
+    >
+  | undefined {
+  if (!isSafeAccountLinkIdentifierValue(record.providerSubject)) return undefined;
+  if (!isSafeAccountLinkIdentifierValue(record.twoweeksClerkId)) return undefined;
+  if (!isSafeAccountLinkIdentifierValue(record.clientId)) return undefined;
+  if (!Array.isArray(record.grantedReadScopes) || !record.grantedReadScopes.every(isLegacyMcpReadScope)) {
+    return undefined;
+  }
+  return {
+    providerSubject: record.providerSubject,
+    twoweeksClerkId: record.twoweeksClerkId,
+    clientId: record.clientId,
+    grantedReadScopes: [...record.grantedReadScopes],
+  };
+}
+
+function parseStorageAccountLinkTiming(
+  record: Record<string, unknown>,
+): ParsedStorageAccountLinkTiming | undefined {
+  if (!isAccountLinkState(record.state)) return undefined;
+
+  const baseTiming = parseStorageAccountLinkBaseTiming(record);
+  if (!baseTiming) return undefined;
+
+  const terminalTiming = parseStorageAccountLinkTerminalTiming(record);
+  if (!terminalTiming) return undefined;
+
+  const timing = {
+    state: record.state,
+    ...baseTiming,
+    ...terminalTiming,
+  };
+  return hasValidAccountLinkTimestamps(timing) ? timing : undefined;
+}
+
+function parseStorageAccountLinkBaseTiming(
+  record: Record<string, unknown>,
+): Pick<ParsedStorageAccountLinkRecord, "createdAt" | "updatedAt" | "lastVerifiedAt"> | undefined {
+  const { createdAt, updatedAt, lastVerifiedAt } = record;
+  if (typeof createdAt !== "number" || typeof updatedAt !== "number" || typeof lastVerifiedAt !== "number") {
+    return undefined;
+  }
+  return { createdAt, updatedAt, lastVerifiedAt };
+}
+
+function parseStorageAccountLinkTerminalTiming(
+  record: Record<string, unknown>,
+): Pick<ParsedStorageAccountLinkRecord, "revokedAt" | "staleAt"> | undefined {
+  if (!isOptionalAccountLinkTimestamp(record.revokedAt) || !isOptionalAccountLinkTimestamp(record.staleAt)) {
+    return undefined;
+  }
+  return {
+    ...(record.revokedAt !== undefined ? { revokedAt: record.revokedAt } : {}),
+    ...(record.staleAt !== undefined ? { staleAt: record.staleAt } : {}),
+  };
+}
+
+function parseCanonicalAccountLinkFields(
+  record: Record<string, unknown>,
+):
+  | Pick<
+      ParsedStorageAccountLinkRecord,
+      | "issuer"
+      | "providerEnvironment"
+      | "canonicalGrantedScopes"
+      | "expiresAtEpochSeconds"
+      | "canonicalAccountLinkVersion"
+    >
+  | Record<string, never>
+  | false {
+  if (!hasAnyCanonicalAccountLinkField(record)) return {};
+  if (!hasCompleteCanonicalAccountLinkFields(record)) return false;
+  if (!hasValidCanonicalAccountLinkFields(record)) return false;
+  return {
+    issuer: record.issuer,
+    providerEnvironment: record.providerEnvironment,
+    canonicalGrantedScopes: [...record.canonicalGrantedScopes],
+    expiresAtEpochSeconds: record.expiresAtEpochSeconds,
+    canonicalAccountLinkVersion: 1,
+  };
+}
+
+function assertCanonicalAccountLinkFields(
+  record: Readonly<{
+    issuer?: string;
+    providerEnvironment?: string;
+    canonicalGrantedScopes?: readonly string[];
+    expiresAtEpochSeconds?: number;
+    canonicalAccountLinkVersion?: 1;
+  }>,
+): void {
+  if (!hasAnyCanonicalAccountLinkField(record)) return;
+  if (!hasCompleteCanonicalAccountLinkFields(record) || !hasValidCanonicalAccountLinkFields(record)) {
+    throw new Error("MCP account link canonical fields are invalid");
+  }
+}
+
+function hasAnyCanonicalAccountLinkField(value: CanonicalAccountLinkFieldBag): boolean {
+  return (
+    value.issuer !== undefined ||
+    value.providerEnvironment !== undefined ||
+    value.canonicalGrantedScopes !== undefined ||
+    value.expiresAtEpochSeconds !== undefined ||
+    value.canonicalAccountLinkVersion !== undefined
+  );
+}
+
+function hasCompleteCanonicalAccountLinkFields(
+  value: CanonicalAccountLinkFieldBag,
+): value is {
+  issuer: string;
+  providerEnvironment: string;
+  canonicalGrantedScopes: readonly string[];
+  expiresAtEpochSeconds: number;
+  canonicalAccountLinkVersion: 1;
+} {
+  return CANONICAL_ACCOUNT_LINK_FIELD_KEYS.every((key) => value[key] !== undefined);
+}
+
+function hasValidCanonicalAccountLinkFields(
+  value: CanonicalAccountLinkFieldBag,
+): value is {
+  issuer: string;
+  providerEnvironment: string;
+  canonicalGrantedScopes: readonly [typeof TWOWEEKS_APPLICATIONS_READ_SCOPE, ...string[]];
+  expiresAtEpochSeconds: number;
+  canonicalAccountLinkVersion: 1;
+} {
+  return (
+    isSafeHttpsIssuer(value.issuer) &&
+    isSafeAccountLinkIdentifierValue(value.providerEnvironment) &&
+    Array.isArray(value.canonicalGrantedScopes) &&
+    value.canonicalGrantedScopes.length > 0 &&
+    value.canonicalGrantedScopes.every((scope) => scope === TWOWEEKS_APPLICATIONS_READ_SCOPE) &&
+    isSafeEpochSeconds(value.expiresAtEpochSeconds) &&
+    value.canonicalAccountLinkVersion === 1
+  );
+}
+
+function isCanonicalReadyParsedAccountLinkRecord(
+  value: ParsedStorageAccountLinkRecord,
+): value is CanonicalReadyParsedStorageAccountLinkRecord {
+  return hasCompleteCanonicalAccountLinkFields(value) && hasValidCanonicalAccountLinkFields(value);
+}
+
+function isSafeHttpsIssuer(value: unknown): value is string {
+  if (typeof value !== "string" || !/\S/u.test(value)) return false;
+  if (FORBIDDEN_MCP_ACCOUNT_LINK_STORED_TEXT_PATTERN.test(value)) return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+  return parsed.protocol === "https:" && !parsed.username && !parsed.password && !parsed.hash;
+}
+
+function isSafeAccountLinkIdentifierValue(value: unknown): value is string {
+  return typeof value === "string" && isSafeAccountLinkIdentifier(value);
+}
+
+function isLegacyMcpReadScope(value: unknown): value is string {
+  switch (value) {
+    case "twoweeks.mcp.read":
+    case "twoweeks.application_package.read":
+    case "twoweeks.evidence_graph.read":
+    case "twoweeks.resume_variant_plan.read":
+    case "twoweeks.review_cockpit.read":
+      return true;
+    default:
+      return false;
+  }
+}
+
+function isAccountLinkState(value: unknown): value is "active" | "revoked" | "stale" {
+  return value === "active" || value === "revoked" || value === "stale";
+}
+
+function isSafeEpochSeconds(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
+function toEpochSeconds(epochMilliseconds: number): number {
+  return Math.floor(epochMilliseconds / 1_000);
+}
+
+function isOptionalAccountLinkTimestamp(value: unknown): value is number | undefined {
+  return value === undefined || typeof value === "number";
+}
+
+function hasOnlyAllowedAccountLinkKeys(
+  value: object,
+  allowedKeys: readonly string[],
+): boolean {
+  const allowed = new Set(allowedKeys);
+  return Object.keys(value).every((key) => allowed.has(key));
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
 function assertSafeAuditReasonCode(value: string): void {
