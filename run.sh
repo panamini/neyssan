@@ -14,6 +14,7 @@ cd "${ROOT_DIR}"
 if [[ -f "${ROOT_DIR}/.env" ]]; then set -a; source "${ROOT_DIR}/.env"; set +a; fi
 if [[ -f "${ROOT_DIR}/.env.local" ]]; then set -a; source "${ROOT_DIR}/.env.local"; set +a; fi
 if [[ -f "${ROOT_DIR}/my-app/.env" ]]; then set -a; source "${ROOT_DIR}/my-app/.env"; set +a; fi
+if [[ -f "${ROOT_DIR}/my-app/.env.local" ]]; then set -a; source "${ROOT_DIR}/my-app/.env.local"; set +a; fi
 
 # Defaults
 : "${PARSER_ORIGIN:=https://parser.dasti.ai}"   # Edge origin (Cloudflare Zero Trust)
@@ -109,8 +110,8 @@ env_reload_hash() {
   local env_files=(
     "${ROOT_DIR}/.env"
     "${ROOT_DIR}/.env.local"
-    "${ROOT_DIR}/my-app/.env.local"
     "${ROOT_DIR}/my-app/.env"
+    "${ROOT_DIR}/my-app/.env.local"
   )
   for file in "${env_files[@]}"; do
     payload+="${file}:$(hash_file "${file}")"$'\n'
@@ -1633,6 +1634,9 @@ usage:
   ./run.sh kill-vite-ports
 
 notes:
+- Env files are loaded in this order, with later files overriding earlier ones:
+  .env -> .env.local -> my-app/.env -> my-app/.env.local
+- Env values are never printed by help because they may contain secrets.
 - local-fast = recommended fast full-app parser workflow: local parser + local Convex + Vite + autoreload, with export/runtime deps preserved inside the container.
 - tunnel = stable validation mode on the validated image runtime.
 - local = local parser + export-capable image runtime + Vite pointed at http://127.0.0.1:8001.
