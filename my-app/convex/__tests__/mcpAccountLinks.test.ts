@@ -38,6 +38,14 @@ const CANONICAL_READ_SCOPE = TWOWEEKS_APPLICATIONS_READ_SCOPE;
 const CANONICAL_ISSUER = "https://auth.example.test/oauth";
 const CANONICAL_ENVIRONMENT = "production";
 const CANONICAL_RESOURCE = "https://mcp.example.test/mcp";
+const UNSAFE_EPOCH_SECONDS_CASES = [
+  ["Number.MAX_SAFE_INTEGER", Number.MAX_SAFE_INTEGER],
+  ["1e100", 1e100],
+  ["Infinity", Number.POSITIVE_INFINITY],
+  ["NaN", Number.NaN],
+  ["decimal", NOW_SECONDS + 0.5],
+  ["negative", -1],
+] as const;
 const TOKEN_STORAGE_FIELD_NAMES = [
   "accessToken",
   "refreshToken",
@@ -905,6 +913,43 @@ describe("Convex MCP account links", () => {
     ).resolves.toMatchObject({ ok: false, reason });
   });
 
+  it.each(UNSAFE_EPOCH_SECONDS_CASES)(
+    "rejects unsafe link evidence verifiedAtEpochSeconds: %s",
+    async (_label, unsafeEpochSeconds) => {
+      const { ctx, inserts } = makeCtx();
+
+      await expect(
+        internalLinkCanonicalMcpAccount._handler(ctx as any, {
+          trustedOwner: trustedOwner(),
+          evidence: verifiedEvidence({
+            verifiedAtEpochSeconds: unsafeEpochSeconds,
+            expiresAtEpochSeconds: NOW_SECONDS + 3_600,
+          }),
+          config: lifecycleConfig(),
+          nowEpochSeconds: NOW_SECONDS,
+        }),
+      ).resolves.toMatchObject({ ok: false, reason: "malformed_evidence" });
+      expect(inserts).toHaveLength(0);
+    },
+  );
+
+  it.each(UNSAFE_EPOCH_SECONDS_CASES)(
+    "rejects unsafe link evidence expiresAtEpochSeconds: %s",
+    async (_label, unsafeEpochSeconds) => {
+      const { ctx, inserts } = makeCtx();
+
+      await expect(
+        internalLinkCanonicalMcpAccount._handler(ctx as any, {
+          trustedOwner: trustedOwner(),
+          evidence: verifiedEvidence({ expiresAtEpochSeconds: unsafeEpochSeconds }),
+          config: lifecycleConfig(),
+          nowEpochSeconds: NOW_SECONDS,
+        }),
+      ).resolves.toMatchObject({ ok: false, reason: "malformed_evidence" });
+      expect(inserts).toHaveLength(0);
+    },
+  );
+
   it("creates one canonical active account link from authoritative evidence and authorizes through lookup", async () => {
     const { ctx, rows, inserts } = makeCtx();
 
@@ -1178,6 +1223,49 @@ describe("Convex MCP account links", () => {
     expect(patches).toHaveLength(1);
   });
 
+  it.each(UNSAFE_EPOCH_SECONDS_CASES)(
+    "rejects unsafe refresh evidence verifiedAtEpochSeconds: %s",
+    async (_label, unsafeEpochSeconds) => {
+      const { ctx, rows, patches } = makeCtx([
+        storedAccountLink({ _id: "mcpAccountLinks_fixture_1", ...canonicalAccountLinkRecord() }),
+      ]);
+
+      await expect(
+        internalRefreshCanonicalMcpAccountLink._handler(ctx as any, {
+          trustedOwner: trustedOwner(),
+          evidence: verifiedEvidence({
+            verifiedAtEpochSeconds: unsafeEpochSeconds,
+            expiresAtEpochSeconds: NOW_SECONDS + 3_600,
+          }),
+          config: lifecycleConfig(),
+          nowEpochSeconds: NOW_SECONDS,
+        }),
+      ).resolves.toMatchObject({ ok: false, reason: "malformed_evidence" });
+      expect(patches).toHaveLength(0);
+      expect(rows[0]).toMatchObject(canonicalAccountLinkRecord());
+    },
+  );
+
+  it.each(UNSAFE_EPOCH_SECONDS_CASES)(
+    "rejects unsafe refresh evidence expiresAtEpochSeconds: %s",
+    async (_label, unsafeEpochSeconds) => {
+      const { ctx, rows, patches } = makeCtx([
+        storedAccountLink({ _id: "mcpAccountLinks_fixture_1", ...canonicalAccountLinkRecord() }),
+      ]);
+
+      await expect(
+        internalRefreshCanonicalMcpAccountLink._handler(ctx as any, {
+          trustedOwner: trustedOwner(),
+          evidence: verifiedEvidence({ expiresAtEpochSeconds: unsafeEpochSeconds }),
+          config: lifecycleConfig(),
+          nowEpochSeconds: NOW_SECONDS,
+        }),
+      ).resolves.toMatchObject({ ok: false, reason: "malformed_evidence" });
+      expect(patches).toHaveLength(0);
+      expect(rows[0]).toMatchObject(canonicalAccountLinkRecord());
+    },
+  );
+
   it("revokes canonical links idempotently and resolver denies after revoke", async () => {
     const { ctx, rows, patches } = makeCtx([
       storedAccountLink({ _id: "mcpAccountLinks_fixture_1", ...canonicalAccountLinkRecord() }),
@@ -1232,6 +1320,63 @@ describe("Convex MCP account links", () => {
       }),
     ).toMatchObject({ resolved: false, reason: "revoked_account_link" });
   });
+
+  it("revokes the requested client when another client shares the issuer, subject, and environment", async () => {
+    const { ctx, rows, patches } = makeCtx([
+      storedAccountLink({ _id: "mcpAccountLinks_fixture_1", ...canonicalAccountLinkRecord() }),
+      storedAccountLink({
+        _id: "mcpAccountLinks_fixture_2",
+        ...canonicalAccountLinkRecord({
+          clientId: "stytch_client_fixture_999",
+          twoweeksClerkId: "user_fixture_999",
+          grantRef: "grant:fixture:999",
+          consentRef: "consent:fixture:999",
+        }),
+      }),
+    ]);
+
+    await expect(
+      internalRevokeCanonicalMcpAccountLink._handler(ctx as any, {
+        trustedOwner: trustedOwner(),
+        identity: lifecycleIdentity(),
+        nowEpochSeconds: NOW_SECONDS + 20,
+      }),
+    ).resolves.toMatchObject({ ok: true, reason: "revoked" });
+
+    expect(rows[0]).toMatchObject({
+      clientId: "stytch_client_fixture_123",
+      state: "revoked",
+      revokedAt: NOW + 20_000,
+      auditReasonCode: "account_link_revoked",
+    });
+    expect(rows[1]).toMatchObject({
+      clientId: "stytch_client_fixture_999",
+      state: "active",
+    });
+    expect(rows[1]).not.toHaveProperty("revokedAt");
+    expect(patches).toHaveLength(1);
+    expect(patches[0]?.id).toBe("mcpAccountLinks_fixture_1");
+  });
+
+  it.each(UNSAFE_EPOCH_SECONDS_CASES)(
+    "rejects unsafe revoke nowEpochSeconds: %s",
+    async (_label, unsafeEpochSeconds) => {
+      const { ctx, rows, patches } = makeCtx([
+        storedAccountLink({ _id: "mcpAccountLinks_fixture_1", ...canonicalAccountLinkRecord() }),
+      ]);
+
+      await expect(
+        internalRevokeCanonicalMcpAccountLink._handler(ctx as any, {
+          trustedOwner: trustedOwner(),
+          identity: lifecycleIdentity(),
+          nowEpochSeconds: unsafeEpochSeconds,
+        }),
+      ).resolves.toMatchObject({ ok: false, reason: "malformed_evidence" });
+      expect(patches).toHaveLength(0);
+      expect(rows[0]).toMatchObject({ state: "active" });
+      expect(rows[0]).not.toHaveProperty("revokedAt");
+    },
+  );
 
   it("resolves only one active, non-expired account link with required scopes", async () => {
     await expect(resolveWith([storedAccountLink()])).resolves.toMatchObject({

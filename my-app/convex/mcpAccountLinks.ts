@@ -13,6 +13,7 @@ const TWOWEEKS_APPLICATIONS_READ_SCOPE = "twoweeks:applications:read" as const;
 const MCP_AUTH_VERIFIED_BY_PROVIDER_ADAPTER_PROOF = "already_verified_by_provider_adapter" as const;
 const MCP_ACCOUNT_LINK_LIFECYCLE_DEFAULT_CLOCK_SKEW_SECONDS = 300;
 const MCP_ACCOUNT_LINK_LIFECYCLE_LEGACY_BASE_SCOPES = ["twoweeks.mcp.read"] as const;
+const MAX_SAFE_EPOCH_SECONDS_FOR_MILLISECONDS = Math.floor(Number.MAX_SAFE_INTEGER / 1_000);
 
 const mcpAccountLinkStateValidator = v.union(
   v.literal("active"),
@@ -607,9 +608,14 @@ export const internalRevokeCanonicalMcpAccountLink = internalMutation({
     });
     if (!candidates.ok) return denyLifecycle("revoke", candidates.reason);
     if (candidates.rows.length === 0) return denyLifecycle("revoke", "not_found");
-    if (candidates.rows.length > 1) return denyLifecycle("revoke", "duplicate_account_link");
 
-    const existing = candidates.rows[0];
+    const exactClientRows = candidates.rows.filter(
+      (candidate) => candidate.policyCandidate.clientId === identity.clientId,
+    );
+    if (exactClientRows.length === 0) return denyLifecycle("revoke", "mismatched_active_link");
+    if (exactClientRows.length > 1) return denyLifecycle("revoke", "duplicate_account_link");
+
+    const existing = exactClientRows[0];
     if (existing.policyCandidate.twoweeksClerkId !== owner.twoweeksClerkId) {
       return denyLifecycle("revoke", "cross_owner_conflict");
     }
@@ -1607,7 +1613,12 @@ function isAccountLinkState(value: unknown): value is "active" | "revoked" | "st
 }
 
 function isSafeEpochSeconds(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+  return (
+    typeof value === "number" &&
+    Number.isSafeInteger(value) &&
+    value >= 0 &&
+    value <= MAX_SAFE_EPOCH_SECONDS_FOR_MILLISECONDS
+  );
 }
 
 function toEpochSeconds(epochMilliseconds: number): number {
@@ -1615,6 +1626,9 @@ function toEpochSeconds(epochMilliseconds: number): number {
 }
 
 function toEpochMilliseconds(epochSeconds: number): number {
+  if (!isSafeEpochSeconds(epochSeconds)) {
+    throw new Error("MCP account link epoch seconds are invalid");
+  }
   return epochSeconds * 1_000;
 }
 
