@@ -24,7 +24,7 @@ const PKCE_CHALLENGE = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const ID_TOKEN_HINT = "id-token-hint-fixture-sensitive";
 const STATIC_MODULE_SPECIFIER_PATTERN =
   /^\s*(?:import(?:\s+type)?(?:\s+[\s\S]*?\s+from)?|export[\s\S]*?\sfrom)\s+(["'])([^"'`]+)\1\s*;?/gmu;
-const DYNAMIC_MODULE_SPECIFIER_PATTERN = /\bimport\s*\(\s*(["'])([^"'`]+)\1\s*\)/gmu;
+const DYNAMIC_MODULE_SPECIFIER_PATTERN = /\bimport\s*\(\s*(?:(["'])([^"'`]+)\1|`([^`$]+)`)\s*\)/gmu;
 const FORBIDDEN_MODULE_PATTERN =
   /(?:axios|@stytch|@clerk|convex|vite|react|node:https?|openai|@modelcontextprotocol)/iu;
 
@@ -467,6 +467,7 @@ describe("MCP OAuth authorization request boundary", () => {
     ["side-effect import", "import 'vite/client';"],
     ["export-from re-export", "export { Client } from '@modelcontextprotocol/sdk';"],
     ["dynamic import", "const sdk = await import('openai');"],
+    ["template-literal dynamic import", "const sdk = await import(`openai`);"],
   ] as const)("would detect a forbidden %s", (_label, source) => {
     expect(collectModuleSpecifiersForTest(source).some((specifier) => FORBIDDEN_MODULE_PATTERN.test(specifier))).toBe(true);
   });
@@ -612,7 +613,7 @@ function buildAuthorizationSearch(
 function collectModuleSpecifiersForTest(source: string): readonly string[] {
   return [
     ...[...source.matchAll(STATIC_MODULE_SPECIFIER_PATTERN)].map((match) => match[2]).filter(isString),
-    ...[...source.matchAll(DYNAMIC_MODULE_SPECIFIER_PATTERN)].map((match) => match[2]).filter(isString),
+    ...[...source.matchAll(DYNAMIC_MODULE_SPECIFIER_PATTERN)].map((match) => match[2] ?? match[3]).filter(isString),
   ];
 }
 
