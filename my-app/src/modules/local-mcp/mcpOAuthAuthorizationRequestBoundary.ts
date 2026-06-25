@@ -469,11 +469,33 @@ function validateQueryParameterEnvelope(
     ) {
       return { ok: false, reason: "missing_parameter" };
     }
-    if (value === undefined || !readBoundedText(value, config.maxParameterLength)) {
-      return { ok: false, reason: "malformed_input" };
-    }
+    const boundedValue = readBoundedEnvelopeValue(key, value, config);
+    if (!boundedValue.ok) return boundedValue;
   }
   return { ok: true, value: undefined };
+}
+
+function readBoundedEnvelopeValue(
+  key: string,
+  value: string | undefined,
+  config: ParsedConfigV1,
+): BoundaryParseResultV1<undefined> {
+  if (value === undefined) return { ok: false, reason: "malformed_input" };
+  if (key === "state") return readBoundedStateValue(value, config);
+  if (key === "id_token_hint") return readBoundedOptionalValue(value, config.maxIdTokenHintLength);
+  return readBoundedOptionalValue(value, config.maxParameterLength);
+}
+
+function readBoundedStateValue(value: string, config: ParsedConfigV1): BoundaryParseResultV1<undefined> {
+  return readBoundedText(value, config.maxStateLength)
+    ? { ok: true, value: undefined }
+    : { ok: false, reason: "invalid_state" };
+}
+
+function readBoundedOptionalValue(value: string, maxLength: number): BoundaryParseResultV1<undefined> {
+  return readBoundedText(value, maxLength)
+    ? { ok: true, value: undefined }
+    : { ok: false, reason: "malformed_input" };
 }
 
 function validateRequiredParameterValues(

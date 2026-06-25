@@ -8,15 +8,9 @@ The boundary parses an incoming authorization-page URL, validates the local requ
 
 It does not grant authorization, create an account link, call providers, persist intent, register routes, or wire runtime behavior.
 
-## Base And Preflight
+## PR87.17A Boundary
 
-- Base branch: `origin/application-os-foundation`
-- Actual base SHA: `ba62200d28deaae56387e06fd13e20aea580758d`
-- Required PR264 merge SHA: `ba62200d28deaae56387e06fd13e20aea580758d`
-- PR264 final head: `1a3a94821b0d5409db64b88d5a7d500672c09b22`
-- Branch: `codex/pr87-17a-mcp-oauth-authorization-request-boundary`
-- Worktree: `/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan-pr87-17a-mcp-oauth-authorization-request-boundary`
-- PR264 checkpoint: pushed to `twoweeks-wiki/origin/main` at `11bf32795fc3388f4cdd332cfbd3fc1a4435cafd`
+This slice only defines the local authorization-request parser and server-only handoff contract needed before a future authorization page can be wired.
 
 ## External Contract Notes
 

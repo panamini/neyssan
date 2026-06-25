@@ -22,6 +22,11 @@ const OWNER_ID = "user_twoweeks_fixture_123";
 const STATE = "opaque_state_1234567890";
 const PKCE_CHALLENGE = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const ID_TOKEN_HINT = "id-token-hint-fixture-sensitive";
+const STATIC_MODULE_SPECIFIER_PATTERN =
+  /^\s*(?:import(?:\s+type)?(?:\s+[\s\S]*?\s+from)?|export[\s\S]*?\sfrom)\s+(["'])([^"'`]+)\1\s*;?/gmu;
+const DYNAMIC_MODULE_SPECIFIER_PATTERN = /\bimport\s*\(\s*(["'])([^"'`]+)\1\s*\)/gmu;
+const FORBIDDEN_MODULE_PATTERN =
+  /(?:axios|@stytch|@clerk|convex|vite|react|node:https?|openai|@modelcontextprotocol)/iu;
 
 describe("MCP OAuth authorization request boundary", () => {
   it("accepts a valid synthetic authorization request as an immutable provider-pending handoff", () => {
@@ -110,7 +115,11 @@ describe("MCP OAuth authorization request boundary", () => {
       ["wrong path", buildAuthorizationUrl({ path: "/oauth/other" }), "wrong_authorization_path"],
       ["credentials", buildAuthorizationUrl({ origin: "https://user:pass@auth.twoweeks.example.test" }), "malformed_input"],
       ["fragment", `${validUrl()}#fragment`, "malformed_input"],
-      ["malformed percent encoding", `${AUTHORIZATION_ORIGIN}${AUTHORIZATION_PATH}?state=%E0%A4%A`, "malformed_input"],
+      [
+        "malformed percent encoding",
+        validUrl().replace(`state=${encodeURIComponent(STATE)}`, "state=%E0%A4%A"),
+        "malformed_input",
+      ],
       ["oversized URL", `${validUrl()}&extra=${"x".repeat(600)}`, "malformed_input"],
       ["control characters", `${validUrl()}\n`, "malformed_input"],
     ] as const)("rejects %s", (_label, authorizationUrl, reason) => {
@@ -236,6 +245,39 @@ describe("MCP OAuth authorization request boundary", () => {
   });
 
   describe("sensitive optional parameters", () => {
+    it("accepts state longer than the generic parameter limit when it is within the state limit", () => {
+      const state = "s".repeat(120);
+      const result = parseMcpOAuthAuthorizationRequestBoundary(
+        buildInput({
+          authorizationUrl: buildAuthorizationUrl({ overrides: { state } }),
+          config: buildConfig({
+            maxParameterLength: 90,
+            maxStateLength: 128,
+            maxUrlLength: 700,
+          }),
+        }),
+      );
+
+      expect(result.accepted).toBe(true);
+      if (result.accepted) {
+        expect(result.serverOnly.providerForwardRequest.state).toBe(state);
+      }
+    });
+
+    it("rejects state longer than the dedicated state limit", () => {
+      expectDenied(
+        buildInput({
+          authorizationUrl: buildAuthorizationUrl({ overrides: { state: "s".repeat(129) } }),
+          config: buildConfig({
+            maxParameterLength: 90,
+            maxStateLength: 128,
+            maxUrlLength: 700,
+          }),
+        }),
+        "invalid_state",
+      );
+    });
+
     it("keeps accepted id_token_hint server-only and out of safe metadata", () => {
       const result = parseMcpOAuthAuthorizationRequestBoundary(
         buildInput({
@@ -251,6 +293,41 @@ describe("MCP OAuth authorization request boundary", () => {
         expect(result.modelVisible).toBe(false);
         expect(result.safeForLogging).toBe(false);
       }
+    });
+
+    it("accepts id_token_hint longer than the generic parameter limit when it is within the hint limit", () => {
+      const idTokenHint = "h".repeat(120);
+      const result = parseMcpOAuthAuthorizationRequestBoundary(
+        buildInput({
+          authorizationUrl: buildAuthorizationUrl({ overrides: { id_token_hint: idTokenHint } }),
+          config: buildConfig({
+            maxParameterLength: 90,
+            maxIdTokenHintLength: 128,
+            maxUrlLength: 700,
+          }),
+        }),
+      );
+
+      expect(result.accepted).toBe(true);
+      if (result.accepted) {
+        expect(result.serverOnly.providerForwardRequest.approvedOptionalParameters).toEqual({
+          id_token_hint: idTokenHint,
+        });
+      }
+    });
+
+    it("rejects id_token_hint longer than the dedicated hint limit", () => {
+      expectDenied(
+        buildInput({
+          authorizationUrl: buildAuthorizationUrl({ overrides: { id_token_hint: "h".repeat(129) } }),
+          config: buildConfig({
+            maxParameterLength: 90,
+            maxIdTokenHintLength: 128,
+            maxUrlLength: 700,
+          }),
+        }),
+        "malformed_input",
+      );
     });
 
     it("rejects oversized id_token_hint without echoing it", () => {
@@ -364,12 +441,9 @@ describe("MCP OAuth authorization request boundary", () => {
 
   it("does not import or call forbidden runtime surfaces", () => {
     const source = readFileSync(BOUNDARY_SOURCE, "utf8");
-    const importSpecifiers = [...source.matchAll(/^\s*import(?:\s+type)?[\s\S]*?\sfrom\s+"([^"]+)";/gmu)].map(
-      (match) => match[1],
-    );
 
-    for (const specifier of importSpecifiers) {
-      expect(specifier).not.toMatch(/(?:axios|@stytch|@clerk|convex|vite|react|node:https?|openai|@modelcontextprotocol)/iu);
+    for (const specifier of collectModuleSpecifiersForTest(source)) {
+      expect(specifier).not.toMatch(FORBIDDEN_MODULE_PATTERN);
     }
 
     expect(source).not.toMatch(/\bfetch\s*\(/u);
@@ -384,6 +458,17 @@ describe("MCP OAuth authorization request boundary", () => {
     expect(source).not.toMatch(/\binternal(?:Link|Refresh|Revoke)CanonicalMcpAccount/u);
     expect(source).not.toMatch(/\b(?:app|router)\.(?:get|post|use|all|route)\s*\(/u);
     expect(source).not.toMatch(/twoweeks\.ai|neyssan\.ai|real-user@example/u);
+  });
+
+  it.each([
+    ["double-quoted normal import", "import { client } from \"@stytch/vanilla-js\";"],
+    ["single-quoted normal import", "import client from '@clerk/backend';"],
+    ["type import", "import type { QueryCtx } from 'convex/server';"],
+    ["side-effect import", "import 'vite/client';"],
+    ["export-from re-export", "export { Client } from '@modelcontextprotocol/sdk';"],
+    ["dynamic import", "const sdk = await import('openai');"],
+  ] as const)("would detect a forbidden %s", (_label, source) => {
+    expect(collectModuleSpecifiersForTest(source).some((specifier) => FORBIDDEN_MODULE_PATTERN.test(specifier))).toBe(true);
   });
 });
 
@@ -522,4 +607,15 @@ function buildAuthorizationSearch(
     search.append(options.duplicate, params[options.duplicate] ?? "duplicate");
   }
   return search;
+}
+
+function collectModuleSpecifiersForTest(source: string): readonly string[] {
+  return [
+    ...[...source.matchAll(STATIC_MODULE_SPECIFIER_PATTERN)].map((match) => match[2]).filter(isString),
+    ...[...source.matchAll(DYNAMIC_MODULE_SPECIFIER_PATTERN)].map((match) => match[2]).filter(isString),
+  ];
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === "string";
 }
