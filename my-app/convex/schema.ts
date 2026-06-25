@@ -799,6 +799,11 @@ export default defineSchema({
     revokedAt: v.optional(v.number()),
     staleAt: v.optional(v.number()),
     auditReasonCode: v.string(),
+    issuer: v.optional(v.string()),
+    providerEnvironment: v.optional(v.string()),
+    canonicalGrantedScopes: v.optional(v.array(v.string())),
+    expiresAtEpochSeconds: v.optional(v.number()),
+    canonicalAccountLinkVersion: v.optional(v.literal(1)),
   })
     .index("by_provider_subject_client", ["provider", "providerSubject", "clientId"])
     .index("by_provider_subject_client_state", [
@@ -806,6 +811,12 @@ export default defineSchema({
       "providerSubject",
       "clientId",
       "state",
+    ])
+    .index("by_provider_issuer_subject_environment", [
+      "provider",
+      "issuer",
+      "providerSubject",
+      "providerEnvironment",
     ])
     .index("by_twoweeks_clerk_id", ["twoweeksClerkId"]),
 
