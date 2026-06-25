@@ -129,6 +129,10 @@ export type McpOAuthAuthorizationRequestBoundaryHandoffV1 = Readonly<{
     storage: "future_short_lived_server_store";
     preservesProviderForwardRequest: true;
     serverMustPersistBeforeLoginReturn: true;
+    serverPreservedSensitiveOptionalParameters: readonly Extract<
+      McpOAuthAuthorizationOptionalParameterV1,
+      "login_hint" | "id_token_hint"
+    >[];
     modelVisible: false;
     version: 1;
   }>;
@@ -719,6 +723,7 @@ function buildHandoff(
       storage: "future_short_lived_server_store",
       preservesProviderForwardRequest: true,
       serverMustPersistBeforeLoginReturn: true,
+      serverPreservedSensitiveOptionalParameters: Object.freeze(["login_hint", "id_token_hint"]),
       modelVisible: false,
       version: 1,
     }),

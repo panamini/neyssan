@@ -79,6 +79,7 @@ describe("MCP OAuth authorization request boundary", () => {
         futureIntent: {
           preservesProviderForwardRequest: true,
           serverMustPersistBeforeLoginReturn: true,
+          serverPreservedSensitiveOptionalParameters: ["login_hint", "id_token_hint"],
         },
       },
       modelVisible: false,
@@ -148,6 +149,21 @@ describe("MCP OAuth authorization request boundary", () => {
       if (result.accepted) {
         expect(result.serverOnly.authorizationPage.origin).toBe(authorizationPageOrigin);
       }
+    });
+
+    it("rejects IPv6 localhost HTTP authorization origin when local mode is disabled", () => {
+      const authorizationPageOrigin = "http://[::1]";
+
+      expectDenied(
+        buildInput({
+          authorizationUrl: buildAuthorizationUrl({ origin: authorizationPageOrigin }),
+          config: buildConfig({
+            authorizationPageOrigin,
+            allowHttpLocalhostAuthorizationOrigin: false,
+          }),
+        }),
+        "malformed_config",
+      );
     });
   });
 
@@ -359,8 +375,15 @@ describe("MCP OAuth authorization request boundary", () => {
         expect(result.serverOnly.providerForwardRequest.approvedOptionalParameters).toEqual({
           id_token_hint: ID_TOKEN_HINT,
         });
+        expect(result.serverOnly.futureIntent.preservesProviderForwardRequest).toBe(true);
+        expect(result.serverOnly.futureIntent.serverMustPersistBeforeLoginReturn).toBe(true);
+        expect(result.serverOnly.futureIntent.serverPreservedSensitiveOptionalParameters).toEqual([
+          "login_hint",
+          "id_token_hint",
+        ]);
         expect(result.serverOnly.loginReturn.path).not.toContain("id_token_hint=");
         expect(result.serverOnly.loginReturn.path).not.toContain(ID_TOKEN_HINT);
+        expect(result.serverOnly.loginReturn.sensitiveOptionalParametersInUrl).toBe(false);
         expect(result.modelVisible).toBe(false);
         expect(result.safeForLogging).toBe(false);
       }
@@ -436,6 +459,10 @@ describe("MCP OAuth authorization request boundary", () => {
         expect(result.serverOnly.loginReturn.path).not.toContain("other-user@example.test");
         expect(result.serverOnly.futureIntent.preservesProviderForwardRequest).toBe(true);
         expect(result.serverOnly.futureIntent.serverMustPersistBeforeLoginReturn).toBe(true);
+        expect(result.serverOnly.futureIntent.serverPreservedSensitiveOptionalParameters).toEqual([
+          "login_hint",
+          "id_token_hint",
+        ]);
         expect(result.serverOnly.loginReturn.sensitiveOptionalParametersInUrl).toBe(false);
       }
     });
