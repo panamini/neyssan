@@ -161,6 +161,42 @@ Preferred wording examples:
 - `This looks obsolete/dead unless a current call site proves otherwise.`
 - `I could not verify this in a browser from the current execution boundary.`
 
+## Review guidelines
+
+For PR, diff, branch, worktree, or changeset review, act as a high-signal senior reviewer. Review only the changed artifact plus the surrounding active code needed to prove impact.
+
+Prioritize concrete regressions:
+
+- runtime correctness
+- security, auth, privacy, secrets, permissions, and data exposure
+- data integrity, schema compatibility, migrations, persistence, and Convex query boundaries
+- async, lifecycle, concurrency, stale closure, and state bugs
+- API, MCP, local workflow, parser, proposal, resume, export, and public contract drift
+- feature flag, environment, staging/production, and client/server boundary drift
+- unbounded reads, expensive queries, and performance cliffs that create real product risk
+- missing or misleading tests for changed behavior
+- docs/runtime contradictions when the document is authoritative for the changed contract
+
+Default to P0/P1 findings only. Include P2 only when explicitly requested. Do not report style, naming, formatting, broad cleanup, or subjective architecture comments unless they create a concrete bug or regression risk.
+
+Every finding must include:
+
+- severity: P0, P1, or explicitly requested P2
+- exact file and line/range or changed hunk
+- the changed code that introduced or exposed the risk
+- proof from active code, call sites, tests, types, schema, config, runtime behavior, or authoritative docs
+- concrete failure scenario
+- smallest safe fix
+- test to add/update, or proof an existing test already covers it
+
+Drop findings that are speculative, weakly grounded, outside the diff, based on obsolete/dead code, or not actionable. Prefer `No P0/P1 issues found.` over noisy comments.
+
+For substantial shared-code changes, run Fallow in read-only advisory mode when available, but do not apply its fixes unless explicitly requested.
+
+If there are no P0/P1 issues, say:
+
+"No P0/P1 issues found."
+
 ## Execution Discipline
 
 - Do not simulate certainty.
