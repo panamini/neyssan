@@ -928,7 +928,8 @@ function containsControlCharacters(value: string): boolean {
 }
 
 function isLocalhost(hostname: string): boolean {
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+  const normalized = hostname.toLowerCase();
+  return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1" || normalized === "[::1]";
 }
 
 function readExactRecord(value: unknown, allowedKeys: readonly string[]): Record<string, unknown> | undefined {

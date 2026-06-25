@@ -126,6 +126,24 @@ describe("MCP OAuth authorization request boundary", () => {
     ] as const)("rejects %s", (_label, authorizationUrl, reason) => {
       expectDenied(buildInput({ authorizationUrl }), reason);
     });
+
+    it("accepts IPv6 localhost HTTP authorization origin only when local mode allows it", () => {
+      const authorizationPageOrigin = "http://[::1]";
+      const result = parseMcpOAuthAuthorizationRequestBoundary(
+        buildInput({
+          authorizationUrl: buildAuthorizationUrl({ origin: authorizationPageOrigin }),
+          config: buildConfig({
+            authorizationPageOrigin,
+            allowHttpLocalhostAuthorizationOrigin: true,
+          }),
+        }),
+      );
+
+      expect(result.accepted).toBe(true);
+      if (result.accepted) {
+        expect(result.serverOnly.authorizationPage.origin).toBe(authorizationPageOrigin);
+      }
+    });
   });
 
   describe("parameter cardinality", () => {
