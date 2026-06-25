@@ -396,11 +396,58 @@ function readSafeStringList(value: unknown): readonly string[] | undefined {
   return new Set(strings).size === strings.length ? Object.freeze([...strings]) : undefined;
 }
 
+function readNonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && /\S/u.test(value) ? value : undefined;
+}
+
 function sameStringList(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function isJsonWebKeySet(value: unknown): boolean {
-  if (!isPlainRecord(value) || !Array.isArray(value.keys) || value.keys.length === 0) return false;
-  return value.keys.every((key) => isPlainRecord(key));
+  const record = readDescriptorSafePlainObjectRecord(value);
+  if (!record || !Array.isArray(record.keys) || record.keys.length === 0) return false;
+  return record.keys.every(isRsaSigningJsonWebKey);
+}
+
+function isRsaSigningJsonWebKey(value: unknown): boolean {
+  const record = readDescriptorSafePlainObjectRecord(value);
+  if (!record) return false;
+  const alg = record.alg;
+  const use = record.use;
+  return (
+    record.kty === "RSA" &&
+    readNonEmptyString(record.kid) !== undefined &&
+    readNonEmptyString(record.n) !== undefined &&
+    readNonEmptyString(record.e) !== undefined &&
+    (alg === undefined || alg === "RS256") &&
+    (use === undefined || use === "sig")
+  );
+}
+
+function readDescriptorSafePlainObjectRecord(value: unknown): Record<string, unknown> | undefined {
+  const descriptors = readDescriptorSafePlainObjectDescriptors(value);
+  if (!descriptors) return undefined;
+  const record: Record<string, unknown> = {};
+  for (const key of Reflect.ownKeys(descriptors)) {
+    const descriptor = descriptors[key];
+    if (typeof key !== "string" || !descriptor || descriptor.enumerable !== true || !("value" in descriptor)) {
+      return undefined;
+    }
+    record[key] = descriptor.value;
+  }
+  return record;
+}
+
+function readDescriptorSafePlainObjectDescriptors(
+  value: unknown,
+): Record<PropertyKey, PropertyDescriptor | undefined> | undefined {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
+  try {
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) return undefined;
+    return Object.getOwnPropertyDescriptors(value) as Record<PropertyKey, PropertyDescriptor | undefined>;
+  } catch {
+    return undefined;
+  }
 }

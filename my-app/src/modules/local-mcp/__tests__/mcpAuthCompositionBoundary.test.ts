@@ -106,6 +106,26 @@ describe("MCP auth composition config validation", () => {
   });
 
   it.each([
+    ["missing keys", {}],
+    ["empty keys", { keys: [] }],
+    ["non-RSA key", { keys: [{ kty: "EC", kid: "raw-secret-key-material", crv: "P-256" }] }],
+    ["missing modulus", { keys: [{ kty: "RSA", kid: "raw-secret-key-material", e: "AQAB" }] }],
+    ["wrong algorithm", { keys: [{ kty: "RSA", kid: "raw-secret-key-material", n: "abc", e: "AQAB", alg: "RS512" }] }],
+    ["wrong use", { keys: [{ kty: "RSA", kid: "raw-secret-key-material", n: "abc", e: "AQAB", use: "enc" }] }],
+    ["descriptor-unsafe getter", buildDescriptorUnsafeJwks()],
+  ] as const)("fails closed for malformed JWKS: %s", (_label, jwks) => {
+    const result = buildMcpAuthCompositionDependencies(
+      buildCompositionConfig({
+        stytchVerifierConfig: buildStytchConfig({ jwks: jwks as unknown as JSONWebKeySet }),
+      }),
+    );
+
+    expectFailure(result, "verifier_config_mismatch");
+    expect(JSON.stringify(result)).not.toContain("raw-secret-key-material");
+    expect(JSON.stringify(result)).not.toContain("abc");
+  });
+
+  it.each([
     ["extra top-level key", () => ({ extra: true }), "malformed_config"],
     ["HTTP issuer", () => ({ authorizationServerIssuerUrl: "http://connected-apps.stytch.example.test/oauth" }), "issuer_mismatch"],
     ["HTTP audience/resource", () => ({ canonicalResourceAudience: "http://mcp.example.test/mcp" }), "resource_mismatch"],
@@ -633,4 +653,15 @@ function buildFixtureKeys() {
     wrongPrivateKeyPem: wrongKeyPair.privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
     jwks: { keys: [jwk] } satisfies JSONWebKeySet,
   };
+}
+
+function buildDescriptorUnsafeJwks(): unknown {
+  const jwks: Record<string, unknown> = {};
+  Object.defineProperty(jwks, "keys", {
+    enumerable: true,
+    get() {
+      return [{ kty: "RSA", kid: "raw-secret-key-material", n: "abc", e: "AQAB" }];
+    },
+  });
+  return jwks;
 }
