@@ -25,13 +25,17 @@
     "src/modules/internal-tool-contracts/contracts.ts",
     "src/modules/internal-tool-contracts/schema.ts",
     "src/modules/local-mcp/localMcpDevAuthConfig.ts",
+    "src/modules/local-mcp/localMcpDevAuthRuntimeComposition.ts",
     "src/modules/local-mcp/localMcpDevEndpoint.ts",
     "src/modules/local-mcp/localMcpToolsListFixture.ts",
     "src/modules/local-mcp/mcpAccountLinkingStorageBoundary.ts",
+    "src/modules/local-mcp/mcpAuthCompositionBoundary.ts",
     "src/modules/local-mcp/mcpAuthPolicyBoundary.ts",
     "src/modules/local-mcp/mcpAuthRequestOrchestrator.ts",
+    "src/modules/local-mcp/mcpConvexAccountLinkLookupAdapter.ts",
     "src/modules/local-mcp/mcpDescriptorRegistry.ts",
     "src/modules/local-mcp/mcpSchemaProjection.ts",
+    "src/modules/local-mcp/mcpStytchBearerVerifierBoundary.ts",
     "src/modules/local-mcp/schema.ts",
     "src/modules/local-mcp/toolRegistry.ts"
   ]
