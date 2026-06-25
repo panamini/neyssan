@@ -6,12 +6,18 @@ import { describe, expect, it } from "vitest";
 import {
   classifyMcpAccountLinkCanonicalStorageRecord,
   internalCreateMcpAccountLink,
+  internalLinkCanonicalMcpAccount,
   internalLookupMcpAuthPolicyAccountLinkCandidates,
   internalMarkMcpAccountLinkState,
+  internalRefreshCanonicalMcpAccountLink,
+  internalRevokeCanonicalMcpAccountLink,
   internalResolveActiveMcpAccountLink,
   MCP_AUTH_POLICY_ACCOUNT_LINK_LOOKUP_MAX_CANDIDATES,
   projectMcpAccountLinkCanonicalStorageRecordToPolicyCandidate,
   type McpAccountLinkCanonicalPolicyCandidateV1,
+  type McpAccountLinkLifecycleConfigV1,
+  type McpTrustedAccountLinkOwnerV1,
+  type McpVerifiedAccountLinkEvidenceV1,
 } from "../mcpAccountLinks";
 import {
   resolveMcpAuthPolicyAccountLink,
@@ -31,6 +37,7 @@ const GRANTED_READ_SCOPES = [
 const CANONICAL_READ_SCOPE = TWOWEEKS_APPLICATIONS_READ_SCOPE;
 const CANONICAL_ISSUER = "https://auth.example.test/oauth";
 const CANONICAL_ENVIRONMENT = "production";
+const CANONICAL_RESOURCE = "https://mcp.example.test/mcp";
 const TOKEN_STORAGE_FIELD_NAMES = [
   "accessToken",
   "refreshToken",
@@ -231,6 +238,64 @@ function canonicalPolicyCandidate(
     expiresAtEpochSeconds: NOW_SECONDS + 3_600,
     version: 1,
     ...overrides,
+  };
+}
+
+function trustedOwner(
+  overrides: Partial<McpTrustedAccountLinkOwnerV1> = {},
+): McpTrustedAccountLinkOwnerV1 {
+  return {
+    kind: "mcp_trusted_account_link_owner",
+    twoweeksClerkId: "user_fixture_123",
+    version: 1,
+    ...overrides,
+  };
+}
+
+function lifecycleConfig(
+  overrides: Partial<McpAccountLinkLifecycleConfigV1> = {},
+): McpAccountLinkLifecycleConfigV1 {
+  return {
+    kind: "mcp_account_link_lifecycle_config",
+    expectedIssuer: CANONICAL_ISSUER,
+    expectedResource: CANONICAL_RESOURCE,
+    expectedProviderEnvironment: CANONICAL_ENVIRONMENT,
+    allowedClientIds: ["stytch_client_fixture_123"],
+    clockSkewSeconds: 300,
+    version: 1,
+    ...overrides,
+  };
+}
+
+function verifiedEvidence(
+  overrides: Partial<McpVerifiedAccountLinkEvidenceV1> = {},
+): McpVerifiedAccountLinkEvidenceV1 {
+  return {
+    kind: "mcp_verified_account_link_evidence",
+    provider: "stytch",
+    issuer: CANONICAL_ISSUER,
+    subject: "stytch_subject_fixture_123",
+    providerEnvironment: CANONICAL_ENVIRONMENT,
+    clientId: "stytch_client_fixture_123",
+    resource: CANONICAL_RESOURCE,
+    grantedScopes: [CANONICAL_READ_SCOPE],
+    expiresAtEpochSeconds: NOW_SECONDS + 3_600,
+    verifiedAtEpochSeconds: NOW_SECONDS,
+    cryptographicVerification: "already_verified_by_provider_adapter",
+    version: 1,
+    ...overrides,
+  };
+}
+
+function lifecycleIdentity(overrides: Partial<ReturnType<typeof verifiedEvidence>> = {}) {
+  const evidence = verifiedEvidence(overrides);
+  return {
+    kind: "mcp_account_link_lifecycle_identity" as const,
+    issuer: evidence.issuer,
+    subject: evidence.subject,
+    providerEnvironment: evidence.providerEnvironment,
+    clientId: evidence.clientId,
+    version: 1 as const,
   };
 }
 
@@ -792,6 +857,306 @@ describe("Convex MCP account links", () => {
         version: 1,
       }),
     ).toMatchObject({ resolved: false, reason: "malformed_account_link" });
+  });
+
+  it.each([
+    ["null evidence", null, "malformed_evidence"],
+    ["array evidence", [], "malformed_evidence"],
+    ["extra key", { rawAccessToken: "token_fixture" }, "malformed_evidence"],
+    ["wrong proof", { cryptographicVerification: "decoded_only" }, "malformed_evidence"],
+    ["missing issuer", { issuer: undefined }, "malformed_evidence"],
+    ["missing subject", { subject: undefined }, "malformed_evidence"],
+    ["missing provider environment", { providerEnvironment: undefined }, "malformed_evidence"],
+    ["missing client", { clientId: undefined }, "malformed_evidence"],
+    ["missing resource", { resource: undefined }, "malformed_evidence"],
+    ["wrong resource", { resource: "https://other.example.test/mcp" }, "wrong_resource"],
+    ["missing canonical scope", { grantedScopes: [] }, "missing_canonical_scope"],
+    ["legacy dotted scope", { grantedScopes: ["twoweeks.mcp.read"] }, "missing_canonical_scope"],
+    [
+      "mixed canonical and legacy scopes",
+      { grantedScopes: [CANONICAL_READ_SCOPE, "twoweeks.mcp.read"] },
+      "legacy_scope",
+    ],
+    [
+      "expired evidence",
+      { verifiedAtEpochSeconds: NOW_SECONDS - 3_600, expiresAtEpochSeconds: NOW_SECONDS - 1 },
+      "expired_evidence",
+    ],
+    ["future verification", { verifiedAtEpochSeconds: NOW_SECONDS + 301 }, "future_evidence"],
+    ["invalid expiry", { expiresAtEpochSeconds: 1.5 }, "malformed_evidence"],
+    ["refresh token field", { refreshToken: "refresh_fixture" }, "malformed_evidence"],
+    ["authorization code field", { authorizationCode: "code_fixture" }, "malformed_evidence"],
+    ["email identity field", { email: "person@example.test" }, "malformed_evidence"],
+    ["owner override field", { twoweeksClerkId: "user_fixture_999" }, "malformed_evidence"],
+  ] as const)("rejects invalid authoritative lifecycle evidence: %s", async (_label, overrides, reason) => {
+    const { ctx } = makeCtx();
+    const evidence =
+      overrides === null || Array.isArray(overrides)
+        ? overrides
+        : verifiedEvidence(overrides as Partial<McpVerifiedAccountLinkEvidenceV1>);
+
+    await expect(
+      internalLinkCanonicalMcpAccount._handler(ctx as any, {
+        trustedOwner: trustedOwner(),
+        evidence,
+        config: lifecycleConfig(),
+        nowEpochSeconds: NOW_SECONDS,
+      }),
+    ).resolves.toMatchObject({ ok: false, reason });
+  });
+
+  it("creates one canonical active account link from authoritative evidence and authorizes through lookup", async () => {
+    const { ctx, rows, inserts } = makeCtx();
+
+    const result = await internalLinkCanonicalMcpAccount._handler(ctx as any, {
+      trustedOwner: trustedOwner(),
+      evidence: verifiedEvidence(),
+      config: lifecycleConfig(),
+      nowEpochSeconds: NOW_SECONDS,
+    });
+
+    expect(result).toMatchObject({ ok: true, reason: "linked" });
+    expect(inserts).toHaveLength(1);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      providerSubject: "stytch_subject_fixture_123",
+      twoweeksClerkId: "user_fixture_123",
+      clientId: "stytch_client_fixture_123",
+      issuer: CANONICAL_ISSUER,
+      providerEnvironment: CANONICAL_ENVIRONMENT,
+      canonicalGrantedScopes: [CANONICAL_READ_SCOPE],
+      expiresAtEpochSeconds: NOW_SECONDS + 3_600,
+      canonicalAccountLinkVersion: 1,
+      state: "active",
+      lastVerifiedAt: NOW,
+    });
+    for (const fieldName of TOKEN_STORAGE_FIELD_NAMES) {
+      expect(Object.prototype.hasOwnProperty.call(rows[0], fieldName)).toBe(false);
+    }
+    expect(JSON.stringify(rows[0])).not.toContain("token_fixture");
+
+    await expect(
+      internalLinkCanonicalMcpAccount._handler(ctx as any, {
+        trustedOwner: trustedOwner(),
+        evidence: verifiedEvidence(),
+        config: lifecycleConfig(),
+        nowEpochSeconds: NOW_SECONDS,
+      }),
+    ).resolves.toMatchObject({ ok: true, reason: "already_linked" });
+    expect(rows).toHaveLength(1);
+
+    const { candidates } = await lookupPolicyCandidatesWith(rows);
+    expect(candidates).toEqual([canonicalPolicyCandidate()]);
+    expect(
+      resolveMcpAuthPolicyAccountLink({
+        principal: authorizedPrincipal(),
+        accountLinks: candidates,
+        requiredScope: CANONICAL_READ_SCOPE,
+        nowEpochSeconds: NOW_SECONDS,
+        version: 1,
+      }),
+    ).toMatchObject({
+      resolved: true,
+      serverOnly: { twoweeksClerkId: "user_fixture_123", grantedScopes: [CANONICAL_READ_SCOPE] },
+    });
+  });
+
+  it("fails closed for cross-owner, malformed, overflow, and revoked relink create attempts", async () => {
+    await expect(
+      internalLinkCanonicalMcpAccount._handler(
+        makeCtx([
+          storedAccountLink({
+            _id: "mcpAccountLinks_fixture_1",
+            ...canonicalAccountLinkRecord({
+              clientId: "stytch_client_fixture_999",
+              twoweeksClerkId: "user_fixture_999",
+              grantRef: "grant:fixture:999",
+              consentRef: "consent:fixture:999",
+            }),
+          }),
+        ]).ctx as any,
+        {
+          trustedOwner: trustedOwner(),
+          evidence: verifiedEvidence(),
+          config: lifecycleConfig(),
+          nowEpochSeconds: NOW_SECONDS,
+        },
+      ),
+    ).resolves.toMatchObject({ ok: false, reason: "cross_owner_conflict" });
+
+    await expect(
+      internalLinkCanonicalMcpAccount._handler(
+        makeCtx([
+          storedAccountLink({
+            _id: "mcpAccountLinks_fixture_1",
+            ...accountLinkRecord({
+              issuer: CANONICAL_ISSUER,
+              providerEnvironment: CANONICAL_ENVIRONMENT,
+            }),
+          }),
+        ]).ctx as any,
+        {
+          trustedOwner: trustedOwner(),
+          evidence: verifiedEvidence(),
+          config: lifecycleConfig(),
+          nowEpochSeconds: NOW_SECONDS,
+        },
+      ),
+    ).resolves.toMatchObject({ ok: false, reason: "malformed_candidate" });
+
+    await expect(
+      internalLinkCanonicalMcpAccount._handler(
+        makeCtx(
+          Array.from({ length: MCP_AUTH_POLICY_ACCOUNT_LINK_LOOKUP_MAX_CANDIDATES + 1 }, (_, index) =>
+            storedAccountLink({
+              _id: `mcpAccountLinks_fixture_${index + 1}`,
+              ...canonicalAccountLinkRecord({
+                clientId: `stytch_client_fixture_${String(index).padStart(3, "0")}`,
+                twoweeksClerkId: `user_fixture_${String(index).padStart(3, "0")}`,
+                grantRef: `grant:fixture:${String(index).padStart(3, "0")}`,
+                consentRef: `consent:fixture:${String(index).padStart(3, "0")}`,
+              }),
+            }),
+          ),
+        ).ctx as any,
+        {
+          trustedOwner: trustedOwner(),
+          evidence: verifiedEvidence(),
+          config: lifecycleConfig(),
+          nowEpochSeconds: NOW_SECONDS,
+        },
+      ),
+    ).resolves.toMatchObject({ ok: false, reason: "candidate_overflow" });
+
+    const revoked = storedAccountLink({
+      _id: "mcpAccountLinks_fixture_1",
+      ...canonicalAccountLinkRecord({ state: "revoked", revokedAt: NOW }),
+    });
+    const { ctx, rows } = makeCtx([revoked]);
+    await expect(
+      internalLinkCanonicalMcpAccount._handler(ctx as any, {
+        trustedOwner: trustedOwner(),
+        evidence: verifiedEvidence({ verifiedAtEpochSeconds: NOW_SECONDS + 10 }),
+        config: lifecycleConfig(),
+        nowEpochSeconds: NOW_SECONDS + 10,
+      }),
+    ).resolves.toMatchObject({ ok: false, reason: "relink_required" });
+    expect(rows[0]).toMatchObject({ state: "revoked", revokedAt: NOW });
+  });
+
+  it("refreshes newer evidence idempotently and rejects replay or expiry regression", async () => {
+    const { ctx, rows, patches } = makeCtx([
+      storedAccountLink({ _id: "mcpAccountLinks_fixture_1", ...canonicalAccountLinkRecord() }),
+    ]);
+
+    await expect(
+      internalRefreshCanonicalMcpAccountLink._handler(ctx as any, {
+        trustedOwner: trustedOwner(),
+        evidence: verifiedEvidence(),
+        config: lifecycleConfig(),
+        nowEpochSeconds: NOW_SECONDS,
+      }),
+    ).resolves.toMatchObject({ ok: true, reason: "unchanged" });
+
+    await expect(
+      internalRefreshCanonicalMcpAccountLink._handler(ctx as any, {
+        trustedOwner: trustedOwner(),
+        evidence: verifiedEvidence({
+          verifiedAtEpochSeconds: NOW_SECONDS - 1,
+          expiresAtEpochSeconds: NOW_SECONDS + 3_700,
+        }),
+        config: lifecycleConfig(),
+        nowEpochSeconds: NOW_SECONDS,
+      }),
+    ).resolves.toMatchObject({ ok: false, reason: "stale_evidence" });
+
+    await expect(
+      internalRefreshCanonicalMcpAccountLink._handler(ctx as any, {
+        trustedOwner: trustedOwner(),
+        evidence: verifiedEvidence({
+          verifiedAtEpochSeconds: NOW_SECONDS + 10,
+          expiresAtEpochSeconds: NOW_SECONDS + 3_500,
+        }),
+        config: lifecycleConfig(),
+        nowEpochSeconds: NOW_SECONDS + 10,
+      }),
+    ).resolves.toMatchObject({ ok: false, reason: "expiry_regression" });
+
+    await expect(
+      internalRefreshCanonicalMcpAccountLink._handler(ctx as any, {
+        trustedOwner: trustedOwner(),
+        evidence: verifiedEvidence({
+          verifiedAtEpochSeconds: NOW_SECONDS + 10,
+          expiresAtEpochSeconds: NOW_SECONDS + 7_200,
+        }),
+        config: lifecycleConfig(),
+        nowEpochSeconds: NOW_SECONDS + 10,
+      }),
+    ).resolves.toMatchObject({ ok: true, reason: "refreshed" });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      lastVerifiedAt: NOW + 10_000,
+      updatedAt: NOW + 10_000,
+      expiresAtEpochSeconds: NOW_SECONDS + 7_200,
+      auditReasonCode: "account_link_refreshed",
+    });
+    expect(patches).toHaveLength(1);
+  });
+
+  it("revokes canonical links idempotently and resolver denies after revoke", async () => {
+    const { ctx, rows, patches } = makeCtx([
+      storedAccountLink({ _id: "mcpAccountLinks_fixture_1", ...canonicalAccountLinkRecord() }),
+    ]);
+
+    await expect(
+      internalRevokeCanonicalMcpAccountLink._handler(ctx as any, {
+        trustedOwner: trustedOwner({ twoweeksClerkId: "user_fixture_999" }),
+        identity: lifecycleIdentity(),
+        nowEpochSeconds: NOW_SECONDS + 20,
+      }),
+    ).resolves.toMatchObject({ ok: false, reason: "cross_owner_conflict" });
+
+    await expect(
+      internalRevokeCanonicalMcpAccountLink._handler(ctx as any, {
+        trustedOwner: trustedOwner(),
+        identity: lifecycleIdentity({ subject: "stytch_subject_fixture_missing" }),
+        nowEpochSeconds: NOW_SECONDS + 20,
+      }),
+    ).resolves.toMatchObject({ ok: false, reason: "not_found" });
+
+    await expect(
+      internalRevokeCanonicalMcpAccountLink._handler(ctx as any, {
+        trustedOwner: trustedOwner(),
+        identity: lifecycleIdentity(),
+        nowEpochSeconds: NOW_SECONDS + 20,
+      }),
+    ).resolves.toMatchObject({ ok: true, reason: "revoked" });
+    await expect(
+      internalRevokeCanonicalMcpAccountLink._handler(ctx as any, {
+        trustedOwner: trustedOwner(),
+        identity: lifecycleIdentity(),
+        nowEpochSeconds: NOW_SECONDS + 30,
+      }),
+    ).resolves.toMatchObject({ ok: true, reason: "unchanged" });
+
+    expect(rows[0]).toMatchObject({
+      state: "revoked",
+      revokedAt: NOW + 20_000,
+      auditReasonCode: "account_link_revoked",
+    });
+    expect(patches).toHaveLength(1);
+
+    const { candidates } = await lookupPolicyCandidatesWith(rows);
+    expect(
+      resolveMcpAuthPolicyAccountLink({
+        principal: authorizedPrincipal(),
+        accountLinks: candidates,
+        requiredScope: CANONICAL_READ_SCOPE,
+        nowEpochSeconds: NOW_SECONDS + 30,
+        version: 1,
+      }),
+    ).toMatchObject({ resolved: false, reason: "revoked_account_link" });
   });
 
   it("resolves only one active, non-expired account link with required scopes", async () => {
