@@ -489,20 +489,13 @@ export const internalLinkCanonicalMcpAccount = internalMutation({
     const candidates = await readLifecycleCandidates(ctx, evidence.value);
     if (!candidates.ok) return denyLifecycle("link", candidates.reason);
 
-    const exactClientRows = await readExactClientAccountLinkRows(ctx, evidence.value);
-    if (exactClientRows.length > MCP_AUTH_POLICY_ACCOUNT_LINK_LOOKUP_MAX_CANDIDATES) {
-      return denyLifecycle("link", "candidate_overflow");
-    }
+    const exactClientRowsRead = await readExactClientAccountLinkRows(ctx, evidence.value);
+    if (!exactClientRowsRead.ok) return denyLifecycle("link", exactClientRowsRead.reason);
 
-    const exactClientMalformed = exactClientRows.some(
-      (row) => classifyMcpAccountLinkCanonicalStorageRecord(row) === "malformed",
-    );
-    if (exactClientMalformed) return denyLifecycle("link", "malformed_candidate");
+    const exactClientRows = exactClientRowsRead.rows;
 
     const exactClientLegacyNonRevoked = exactClientRows.some(
-      (row) =>
-        classifyMcpAccountLinkCanonicalStorageRecord(row) === "legacy_missing_canonical_fields" &&
-        row.state !== "revoked",
+      (candidate) => candidate.classification === "legacy_missing_canonical_fields" && candidate.row.state !== "revoked",
     );
     if (exactClientLegacyNonRevoked) return denyLifecycle("link", "malformed_candidate");
 
@@ -525,7 +518,7 @@ export const internalLinkCanonicalMcpAccount = internalMutation({
       return denyLifecycle("link", "duplicate_account_link");
     }
 
-    const exactClientRevoked = exactClientRows.some((row) => row.state === "revoked");
+    const exactClientRevoked = exactClientRows.some((candidate) => candidate.row.state === "revoked");
     if (exactClientRevoked) return denyLifecycle("link", "relink_required");
 
     const record = buildCanonicalAccountLinkRecord(owner, evidence.value);
@@ -856,7 +849,7 @@ async function readLifecycleCandidates(
 async function readExactClientAccountLinkRows(
   ctx: unknown,
   evidence: Pick<ParsedLifecycleEvidence, "subject" | "clientId">,
-): Promise<readonly LifecycleStorageRow[]> {
+): Promise<ExactClientAccountLinkRowsRead> {
   const lifecycleCtx = ctx as LifecycleQueryCtx;
   const rows = await lifecycleCtx.db
     .query("mcpAccountLinks")
@@ -867,7 +860,27 @@ async function readExactClientAccountLinkRows(
         .eq("clientId", evidence.clientId),
     )
     .take(MCP_AUTH_POLICY_ACCOUNT_LINK_LOOKUP_MAX_CANDIDATES + 1);
-  return Object.freeze(rows.filter(isLifecycleStorageRow));
+
+  if (rows.length > MCP_AUTH_POLICY_ACCOUNT_LINK_LOOKUP_MAX_CANDIDATES) {
+    return { ok: false, reason: "candidate_overflow" };
+  }
+
+  const candidates = rows.map((row): ExactClientLifecycleStorageRow | undefined => {
+    const classification = classifyMcpAccountLinkCanonicalStorageRecord(row);
+    if (!isLifecycleStorageRow(row) || classification === "malformed") return undefined;
+    return { row, classification };
+  });
+
+  if (candidates.some((candidate) => candidate === undefined)) {
+    return { ok: false, reason: "malformed_candidate" };
+  }
+
+  return {
+    ok: true,
+    rows: Object.freeze(
+      candidates.filter((candidate): candidate is ExactClientLifecycleStorageRow => candidate !== undefined),
+    ),
+  };
 }
 
 function isLifecycleStorageRow(value: unknown): value is LifecycleStorageRow {
@@ -1346,6 +1359,19 @@ type LifecycleCandidateRead =
         row: LifecycleStorageRow;
         policyCandidate: McpAccountLinkCanonicalPolicyCandidateV1;
       }[];
+    }
+  | {
+      ok: false;
+      reason: "candidate_overflow" | "malformed_candidate";
+    };
+type ExactClientLifecycleStorageRow = Readonly<{
+  row: LifecycleStorageRow;
+  classification: Exclude<McpAccountLinkCanonicalStorageClassificationV1, "malformed">;
+}>;
+type ExactClientAccountLinkRowsRead =
+  | {
+      ok: true;
+      rows: readonly ExactClientLifecycleStorageRow[];
     }
   | {
       ok: false;

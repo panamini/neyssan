@@ -961,6 +961,80 @@ describe("Convex MCP account links", () => {
     });
   });
 
+  it("fails closed for exact-client rows hidden from canonical lookup before insert", async () => {
+    const malformedExactClientRow = storedAccountLink({
+      _id: "mcpAccountLinks_fixture_1",
+      ...accountLinkRecord({ twoweeksClerkId: "access_token_owner" }),
+    });
+    expect(classifyMcpAccountLinkCanonicalStorageRecord(malformedExactClientRow)).toBe("malformed");
+
+    const malformedCtx = makeCtx([malformedExactClientRow]);
+    await expect(
+      internalLinkCanonicalMcpAccount._handler(malformedCtx.ctx as any, {
+        trustedOwner: trustedOwner(),
+        evidence: verifiedEvidence(),
+        config: lifecycleConfig(),
+        nowEpochSeconds: NOW_SECONDS,
+      }),
+    ).resolves.toMatchObject({ ok: false, reason: "malformed_candidate" });
+    expect(malformedCtx.inserts).toHaveLength(0);
+    expect(malformedCtx.rows).toEqual([malformedExactClientRow]);
+
+    const exactClientOverflowCtx = makeCtx(
+      Array.from({ length: MCP_AUTH_POLICY_ACCOUNT_LINK_LOOKUP_MAX_CANDIDATES + 1 }, (_, index) =>
+        storedAccountLink({
+          _id: `mcpAccountLinks_fixture_${index + 1}`,
+          ...accountLinkRecord({
+            twoweeksClerkId: `user_fixture_${String(index).padStart(3, "0")}`,
+            grantRef: `grant:fixture:${String(index).padStart(3, "0")}`,
+            consentRef: `consent:fixture:${String(index).padStart(3, "0")}`,
+          }),
+        }),
+      ),
+    );
+    await expect(
+      internalLinkCanonicalMcpAccount._handler(exactClientOverflowCtx.ctx as any, {
+        trustedOwner: trustedOwner(),
+        evidence: verifiedEvidence(),
+        config: lifecycleConfig(),
+        nowEpochSeconds: NOW_SECONDS,
+      }),
+    ).resolves.toMatchObject({ ok: false, reason: "candidate_overflow" });
+    expect(exactClientOverflowCtx.inserts).toHaveLength(0);
+
+    const legacyExactClientRow = storedAccountLink({
+      _id: "mcpAccountLinks_fixture_1",
+      ...accountLinkRecord(),
+    });
+    const legacyCtx = makeCtx([legacyExactClientRow]);
+    await expect(
+      internalLinkCanonicalMcpAccount._handler(legacyCtx.ctx as any, {
+        trustedOwner: trustedOwner(),
+        evidence: verifiedEvidence(),
+        config: lifecycleConfig(),
+        nowEpochSeconds: NOW_SECONDS,
+      }),
+    ).resolves.toMatchObject({ ok: false, reason: "malformed_candidate" });
+    expect(legacyCtx.inserts).toHaveLength(0);
+    expect(legacyCtx.rows).toEqual([legacyExactClientRow]);
+
+    const revokedExactClientRow = storedAccountLink({
+      _id: "mcpAccountLinks_fixture_1",
+      ...accountLinkRecord({ state: "revoked", revokedAt: NOW }),
+    });
+    const revokedCtx = makeCtx([revokedExactClientRow]);
+    await expect(
+      internalLinkCanonicalMcpAccount._handler(revokedCtx.ctx as any, {
+        trustedOwner: trustedOwner(),
+        evidence: verifiedEvidence(),
+        config: lifecycleConfig(),
+        nowEpochSeconds: NOW_SECONDS,
+      }),
+    ).resolves.toMatchObject({ ok: false, reason: "relink_required" });
+    expect(revokedCtx.inserts).toHaveLength(0);
+    expect(revokedCtx.rows).toEqual([revokedExactClientRow]);
+  });
+
   it("fails closed for cross-owner, malformed, overflow, and revoked relink create attempts", async () => {
     await expect(
       internalLinkCanonicalMcpAccount._handler(
