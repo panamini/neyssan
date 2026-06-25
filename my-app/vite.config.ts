@@ -5,9 +5,15 @@ import type { Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import {
+  buildLocalMcpDevAuthRuntimeCompositionDependencies,
+  LOCAL_MCP_DEV_STYTCH_COMPOSITION_FLAG,
+  LOCAL_MCP_DEV_STYTCH_JWKS_JSON_VAR,
+} from "./src/modules/local-mcp/localMcpDevAuthRuntimeComposition";
+import {
   buildLocalMcpDevEndpointConfig,
   handleLocalMcpDevEndpointRequestAsync,
   isLocalMcpDevEndpointHandledPath,
+  type LocalMcpDevEndpointDependenciesV1,
 } from "./src/modules/local-mcp/localMcpDevEndpoint";
 
 const LOCAL_CLERK_SYNC_PORT = 5173;
@@ -19,22 +25,48 @@ const LOCAL_MCP_DEV_AUTH_ISSUER_VAR = "LOCAL_MCP_DEV_AUTH_ISSUER";
 const LOCAL_MCP_DEV_AUTH_PROVIDER_ENVIRONMENT_VAR = "LOCAL_MCP_DEV_AUTH_PROVIDER_ENVIRONMENT";
 const LOCAL_MCP_DEV_AUTH_CLIENT_ID_VAR = "LOCAL_MCP_DEV_AUTH_CLIENT_ID";
 
-function localMcpDevEndpointPlugin(): Plugin | undefined {
-  if (!isStrictEnabledFlag(LOCAL_MCP_DEV_ENDPOINT_FLAG)) return undefined;
-  const fixtureDemoEnabled = isStrictEnabledFlag(LOCAL_MCP_DEV_FIXTURE_DEMO_FLAG);
-  const authPolicyEnabled = fixtureDemoEnabled && isStrictEnabledFlag(LOCAL_MCP_DEV_AUTH_POLICY_FLAG);
+export type LocalMcpDevEndpointPluginOptions = Readonly<{
+  env?: Readonly<Record<string, string | undefined>>;
+  endpointDependencies?: LocalMcpDevEndpointDependenciesV1;
+}>;
+
+export function createLocalMcpDevEndpointPlugin(
+  options: LocalMcpDevEndpointPluginOptions = {},
+): Plugin | undefined {
+  const env = options.env ?? process.env;
+  if (!isStrictEnabledFlag(env, LOCAL_MCP_DEV_ENDPOINT_FLAG)) return undefined;
+  const fixtureDemoEnabled = isStrictEnabledFlag(env, LOCAL_MCP_DEV_FIXTURE_DEMO_FLAG);
+  const authPolicyEnabled = fixtureDemoEnabled && isStrictEnabledFlag(env, LOCAL_MCP_DEV_AUTH_POLICY_FLAG);
+  const authConfigInput = authPolicyEnabled ? readLocalMcpDevAuthConfigInput(env) : undefined;
   const config = buildLocalMcpDevEndpointConfig({
     enabled: true,
     fixtureDemoEnabled,
     authPolicyEnabled,
-    auth: authPolicyEnabled ? readLocalMcpDevAuthConfigInput() : undefined,
+    auth: authConfigInput,
+  });
+  const composition = buildLocalMcpDevAuthRuntimeCompositionDependencies({
+    endpointEnabled: true,
+    fixtureDemoEnabled,
+    authPolicyEnabled,
+    compositionEnabled: isStrictEnabledFlag(env, LOCAL_MCP_DEV_STYTCH_COMPOSITION_FLAG),
+    authConfigInput,
+    jwksJson: env[LOCAL_MCP_DEV_STYTCH_JWKS_JSON_VAR],
+  });
+  if (composition.reason !== "disabled" && !composition.enabled) {
+    throw new TypeError(
+      `Local MCP dev Stytch composition configuration is invalid (${composition.reason}).`,
+    );
+  }
+  const endpointDependencies = Object.freeze({
+    ...(composition.enabled ? composition.dependencies : {}),
+    ...(options.endpointDependencies ?? {}),
   });
 
   return {
     name: "twoweeks-local-mcp-dev-endpoint",
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
-        handleLocalMcpDevMiddlewareRequest(req, res, next, config);
+        handleLocalMcpDevMiddlewareRequest(req, res, next, config, endpointDependencies);
       });
     },
   };
@@ -45,6 +77,7 @@ function handleLocalMcpDevMiddlewareRequest(
   res: ServerResponse,
   next: () => void,
   config: ReturnType<typeof buildLocalMcpDevEndpointConfig>,
+  dependencies: LocalMcpDevEndpointDependenciesV1,
 ): void {
   const pathName = (req.url ?? "").split("?")[0];
   if (!isLocalMcpDevEndpointHandledPath(pathName)) {
@@ -52,7 +85,7 @@ function handleLocalMcpDevMiddlewareRequest(
     return;
   }
   readLocalMcpDevBody(req, res, config.maxRequestBytes, (bodyText) => {
-    void respondToLocalMcpDevRequest(req, res, next, config, pathName, bodyText).catch(() => {
+    void respondToLocalMcpDevRequest(req, res, next, config, dependencies, pathName, bodyText).catch(() => {
       sendInvalidLocalMcpDevRequest(res);
     });
   });
@@ -63,6 +96,7 @@ async function respondToLocalMcpDevRequest(
   res: ServerResponse,
   next: () => void,
   config: ReturnType<typeof buildLocalMcpDevEndpointConfig>,
+  dependencies: LocalMcpDevEndpointDependenciesV1,
   pathName: string,
   bodyText: string,
 ): Promise<void> {
@@ -79,6 +113,7 @@ async function respondToLocalMcpDevRequest(
       bodyText,
     },
     config,
+    dependencies,
   );
   if (!response.handled) {
     next();
@@ -167,28 +202,28 @@ function headerValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function readLocalMcpDevAuthConfigInput(): Readonly<{
+function readLocalMcpDevAuthConfigInput(env: Readonly<Record<string, string | undefined>>): Readonly<{
   resourceUrl?: string;
   authorizationServerIssuerUrl?: string;
   providerEnvironment?: string;
   allowedClientIds?: readonly string[];
 }> {
-  const clientId = process.env[LOCAL_MCP_DEV_AUTH_CLIENT_ID_VAR]?.trim();
+  const clientId = env[LOCAL_MCP_DEV_AUTH_CLIENT_ID_VAR]?.trim();
   return {
-    resourceUrl: process.env[LOCAL_MCP_DEV_AUTH_RESOURCE_VAR],
-    authorizationServerIssuerUrl: process.env[LOCAL_MCP_DEV_AUTH_ISSUER_VAR],
-    providerEnvironment: process.env[LOCAL_MCP_DEV_AUTH_PROVIDER_ENVIRONMENT_VAR],
+    resourceUrl: env[LOCAL_MCP_DEV_AUTH_RESOURCE_VAR],
+    authorizationServerIssuerUrl: env[LOCAL_MCP_DEV_AUTH_ISSUER_VAR],
+    providerEnvironment: env[LOCAL_MCP_DEV_AUTH_PROVIDER_ENVIRONMENT_VAR],
     allowedClientIds: clientId ? [clientId] : [],
   };
 }
 
-function isStrictEnabledFlag(name: string): boolean {
-  return process.env[name] === "1";
+function isStrictEnabledFlag(env: Readonly<Record<string, string | undefined>>, name: string): boolean {
+  return env[name] === "1";
 }
 
 // https://vitejs.dev/config/
-export default defineConfig({
-  plugins: [react(), localMcpDevEndpointPlugin()].filter((plugin): plugin is Plugin => plugin !== undefined),
+export default defineConfig(() => ({
+  plugins: [react(), createLocalMcpDevEndpointPlugin()].filter((plugin): plugin is Plugin => plugin !== undefined),
   server: {
     host: "localhost",
     port: LOCAL_CLERK_SYNC_PORT,
@@ -211,4 +246,4 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["src/setupTests.ts"],
   },
-});
+}));
