@@ -1,0 +1,38 @@
+name: Semgrep CE
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: semgrep-ce-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semgrep:
+    name: semgrep-ce/scan
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    if: github.actor != 'dependabot[bot]'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Mark workspace safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Run Semgrep CE on pull request changes
+        if: github.event_name == 'pull_request'
+        run: |
+          BASELINE_COMMIT="$(git merge-base HEAD "${{ github.event.pull_request.base.sha }}")"
+          semgrep scan --config auto --baseline-commit "$BASELINE_COMMIT" --error
+
+      - name: Run Semgrep CE full scan
+        if: github.event_name == 'workflow_dispatch'
+        run: semgrep scan --config auto --error
