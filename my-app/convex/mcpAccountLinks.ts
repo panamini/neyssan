@@ -52,10 +52,36 @@ const resolvedServerOnlyAccountLinkValidator = v.object({
   version: v.literal(1),
 });
 
+const mcpAuthPolicyAccountLinkCandidateValidator = v.object({
+  kind: v.literal("mcp_auth_policy_account_link_record"),
+  issuer: v.string(),
+  subject: v.string(),
+  providerEnvironment: v.string(),
+  clientId: v.string(),
+  twoweeksClerkId: v.string(),
+  grantedScopes: v.array(v.literal(TWOWEEKS_APPLICATIONS_READ_SCOPE)),
+  state: mcpAccountLinkStateValidator,
+  createdAtEpochSeconds: v.number(),
+  updatedAtEpochSeconds: v.number(),
+  expiresAtEpochSeconds: v.number(),
+  version: v.literal(1),
+});
+
+const mcpAuthPolicyAccountLinkLookupMalformedCandidateValidator = v.object({
+  kind: v.literal("mcp_auth_policy_account_link_lookup_malformed_candidate"),
+  reason: v.union(
+    v.literal("malformed_lookup_input"),
+    v.literal("malformed_storage_record"),
+    v.literal("candidate_overflow"),
+  ),
+  version: v.literal(1),
+});
+
 const MCP_ACCOUNT_LINK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{1,191}$/u;
 const MCP_ACCOUNT_LINK_AUDIT_REASON_CODE_PATTERN = /^[a-z][a-z0-9_]{2,80}$/u;
 const FORBIDDEN_MCP_ACCOUNT_LINK_STORED_TEXT_PATTERN =
   /@|bearer\s+\S+|authorization|access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|api[_-]?key|credential|cookie|session|raw[_-]?(cv|resume|job|proposal|claims)|private[_-]?fact|never[_-]?use|source[_-]?(text|quote)|structured[_-]?shadow|convex[_-]?(id|document)|debug[_-]?payload/iu;
+export const MCP_AUTH_POLICY_ACCOUNT_LINK_LOOKUP_MAX_CANDIDATES = 25;
 const ACCOUNT_LINK_RECORD_ALLOWED_KEYS = [
   "kind",
   "version",
@@ -104,13 +130,23 @@ export type McpAccountLinkCanonicalPolicyCandidateV1 = Readonly<{
   providerEnvironment: string;
   clientId: string;
   twoweeksClerkId: string;
-  grantedScopes: readonly [typeof TWOWEEKS_APPLICATIONS_READ_SCOPE];
+  grantedScopes: [typeof TWOWEEKS_APPLICATIONS_READ_SCOPE];
   state: "active" | "revoked" | "stale";
   createdAtEpochSeconds: number;
   updatedAtEpochSeconds: number;
   expiresAtEpochSeconds: number;
   version: 1;
 }>;
+
+export type McpAccountLinkLookupMalformedCandidateV1 = Readonly<{
+  kind: "mcp_auth_policy_account_link_lookup_malformed_candidate";
+  reason: "malformed_lookup_input" | "malformed_storage_record" | "candidate_overflow";
+  version: 1;
+}>;
+
+export type McpAccountLinkLookupCandidateV1 =
+  | McpAccountLinkCanonicalPolicyCandidateV1
+  | McpAccountLinkLookupMalformedCandidateV1;
 
 export type McpAccountLinkCanonicalProjectionV1 = Readonly<
   | {
@@ -120,7 +156,7 @@ export type McpAccountLinkCanonicalProjectionV1 = Readonly<
     }
   | {
       classification: Exclude<McpAccountLinkCanonicalStorageClassificationV1, "canonical_ready">;
-  policyCandidate: null;
+      policyCandidate: null;
       version: 1;
     }
 >;
@@ -132,6 +168,7 @@ type CanonicalAccountLinkFieldBag = Readonly<{
   expiresAtEpochSeconds?: unknown;
   canonicalAccountLinkVersion?: unknown;
 }>;
+type LookupCandidateSortKey = string | number;
 
 export const internalCreateMcpAccountLink = internalMutation({
   args: {
@@ -202,6 +239,54 @@ export const internalResolveActiveMcpAccountLink = internalQuery({
       auditReasonCode: row.auditReasonCode,
       version: 1 as const,
     };
+  },
+});
+
+export const internalLookupMcpAuthPolicyAccountLinkCandidates = internalQuery({
+  args: {
+    issuer: v.string(),
+    subject: v.string(),
+    providerEnvironment: v.string(),
+    version: v.literal(1),
+  },
+  returns: v.array(
+    v.union(
+      mcpAuthPolicyAccountLinkCandidateValidator,
+      mcpAuthPolicyAccountLinkLookupMalformedCandidateValidator,
+    ),
+  ),
+  handler: async (ctx, args) => {
+    if (
+      !isSafeHttpsIssuer(args.issuer) ||
+      !isSafeAccountLinkIdentifier(args.subject) ||
+      !isSafeAccountLinkIdentifier(args.providerEnvironment)
+    ) {
+      return [malformedLookupCandidate("malformed_lookup_input")];
+    }
+
+    const rows = await ctx.db
+      .query("mcpAccountLinks")
+      .withIndex("by_provider_issuer_subject_environment", (q) =>
+        q
+          .eq("provider", "stytch")
+          .eq("issuer", args.issuer)
+          .eq("providerSubject", args.subject)
+          .eq("providerEnvironment", args.providerEnvironment),
+      )
+      .take(MCP_AUTH_POLICY_ACCOUNT_LINK_LOOKUP_MAX_CANDIDATES + 1);
+
+    if (rows.length > MCP_AUTH_POLICY_ACCOUNT_LINK_LOOKUP_MAX_CANDIDATES) {
+      return [malformedLookupCandidate("candidate_overflow")];
+    }
+
+    return rows
+      .map((row): McpAccountLinkLookupCandidateV1 => {
+        const projection = projectMcpAccountLinkCanonicalStorageRecordToPolicyCandidate(row);
+        return projection.classification === "canonical_ready" && projection.policyCandidate
+          ? projection.policyCandidate
+          : malformedLookupCandidate("malformed_storage_record");
+      })
+      .sort(compareLookupCandidates);
   },
 });
 
@@ -440,6 +525,78 @@ export function projectMcpAccountLinkCanonicalStorageRecordToPolicyCandidate(
     },
     version: 1,
   };
+}
+
+function malformedLookupCandidate(
+  reason: McpAccountLinkLookupMalformedCandidateV1["reason"],
+): McpAccountLinkLookupMalformedCandidateV1 {
+  return {
+    kind: "mcp_auth_policy_account_link_lookup_malformed_candidate",
+    reason,
+    version: 1,
+  };
+}
+
+function compareLookupCandidates(
+  left: McpAccountLinkLookupCandidateV1,
+  right: McpAccountLinkLookupCandidateV1,
+): number {
+  return compareLookupCandidateSortKeys(
+    getLookupCandidateSortKeys(left),
+    getLookupCandidateSortKeys(right),
+  );
+}
+
+function getLookupCandidateSortKeys(
+  candidate: McpAccountLinkLookupCandidateV1,
+): readonly LookupCandidateSortKey[] {
+  if (candidate.kind === "mcp_auth_policy_account_link_lookup_malformed_candidate") {
+    return [candidate.kind, candidate.reason];
+  }
+  return [
+    candidate.kind,
+    candidate.issuer,
+    candidate.subject,
+    candidate.providerEnvironment,
+    candidate.clientId,
+    candidate.twoweeksClerkId,
+    candidate.state,
+    candidate.createdAtEpochSeconds,
+    candidate.updatedAtEpochSeconds,
+    candidate.expiresAtEpochSeconds,
+  ];
+}
+
+function compareLookupCandidateSortKeys(
+  left: readonly LookupCandidateSortKey[],
+  right: readonly LookupCandidateSortKey[],
+): number {
+  for (let index = 0; index < Math.min(left.length, right.length); index += 1) {
+    const comparison = compareLookupCandidateSortKey(left[index], right[index]);
+    if (comparison !== 0) return comparison;
+  }
+  return compareNumber(left.length, right.length);
+}
+
+function compareLookupCandidateSortKey(
+  left: LookupCandidateSortKey,
+  right: LookupCandidateSortKey,
+): number {
+  return typeof left === "number" && typeof right === "number"
+    ? compareNumber(left, right)
+    : compareText(String(left), String(right));
+}
+
+function compareText(left: string, right: string): number {
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return 0;
+}
+
+function compareNumber(left: number, right: number): number {
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return 0;
 }
 
 type ParsedStorageAccountLinkRecord = Readonly<{

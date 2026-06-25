@@ -6,10 +6,18 @@ import { describe, expect, it } from "vitest";
 import {
   classifyMcpAccountLinkCanonicalStorageRecord,
   internalCreateMcpAccountLink,
+  internalLookupMcpAuthPolicyAccountLinkCandidates,
   internalMarkMcpAccountLinkState,
   internalResolveActiveMcpAccountLink,
+  MCP_AUTH_POLICY_ACCOUNT_LINK_LOOKUP_MAX_CANDIDATES,
   projectMcpAccountLinkCanonicalStorageRecordToPolicyCandidate,
+  type McpAccountLinkCanonicalPolicyCandidateV1,
 } from "../mcpAccountLinks";
+import {
+  resolveMcpAuthPolicyAccountLink,
+  TWOWEEKS_APPLICATIONS_READ_SCOPE,
+  type McpAuthPolicyAuthorizedPrincipalV1,
+} from "../../src/modules/local-mcp/mcpAuthPolicyBoundary";
 
 const SOURCE_FILE = resolve(dirname(fileURLToPath(import.meta.url)), "../mcpAccountLinks.ts");
 const SCHEMA_FILE = resolve(dirname(fileURLToPath(import.meta.url)), "../schema.ts");
@@ -20,7 +28,7 @@ const GRANTED_READ_SCOPES = [
   "twoweeks.mcp.read",
   "twoweeks.application_package.read",
 ] as const;
-const CANONICAL_READ_SCOPE = "twoweeks:applications:read" as const;
+const CANONICAL_READ_SCOPE = TWOWEEKS_APPLICATIONS_READ_SCOPE;
 const CANONICAL_ISSUER = "https://auth.example.test/oauth";
 const CANONICAL_ENVIRONMENT = "production";
 const TOKEN_STORAGE_FIELD_NAMES = [
@@ -65,6 +73,7 @@ type StoredMcpAccountLink = McpAccountLinkRecord & {
 };
 
 type Constraint = Readonly<{ field: string; value: unknown }>;
+type IndexCall = Readonly<{ indexName: string; constraints: readonly Constraint[] }>;
 
 function accountLinkRecord(overrides: Partial<McpAccountLinkRecord> = {}): McpAccountLinkRecord {
   return {
@@ -115,6 +124,7 @@ function makeCtx(seed: StoredMcpAccountLink[] = []) {
   }));
   const patches: Array<{ id: string; patch: Partial<StoredMcpAccountLink> }> = [];
   const inserts: McpAccountLinkRecord[] = [];
+  const indexCalls: IndexCall[] = [];
   let nextId = rows.length + 1;
 
   function applyConstraints(documents: StoredMcpAccountLink[], constraints: Constraint[]) {
@@ -136,8 +146,15 @@ function makeCtx(seed: StoredMcpAccountLink[] = []) {
             },
           };
           buildQuery(query);
+          indexCalls.push({
+            indexName: _indexName,
+            constraints: constraints.map((constraint) => ({ ...constraint })),
+          });
           const matching = applyConstraints(rows, constraints);
-          return { collect: async () => matching };
+          return {
+            collect: async () => matching,
+            take: async (limit: number) => matching.slice(0, limit),
+          };
         },
       };
     },
@@ -156,7 +173,7 @@ function makeCtx(seed: StoredMcpAccountLink[] = []) {
     },
   };
 
-  return { ctx: { db }, rows, patches, inserts };
+  return { ctx: { db }, rows, patches, inserts, indexCalls };
 }
 
 async function resolveWith(seed: StoredMcpAccountLink[]) {
@@ -168,6 +185,61 @@ async function resolveWith(seed: StoredMcpAccountLink[]) {
     now: NOW,
     maxLinkAgeMs: 1_000,
   });
+}
+
+async function lookupPolicyCandidatesWith(seed: StoredMcpAccountLink[]) {
+  const { ctx, indexCalls } = makeCtx(seed);
+  const candidates = await internalLookupMcpAuthPolicyAccountLinkCandidates._handler(ctx as any, {
+    issuer: CANONICAL_ISSUER,
+    subject: "stytch_subject_fixture_123",
+    providerEnvironment: CANONICAL_ENVIRONMENT,
+    version: 1,
+  });
+  return { candidates, indexCalls };
+}
+
+function authorizedPrincipal(
+  overrides: Partial<McpAuthPolicyAuthorizedPrincipalV1> = {},
+): McpAuthPolicyAuthorizedPrincipalV1 {
+  return {
+    kind: "mcp_auth_policy_authorized_principal",
+    issuer: CANONICAL_ISSUER,
+    subject: "stytch_subject_fixture_123",
+    audience: "https://mcp.example.test/mcp",
+    clientId: "stytch_client_fixture_123",
+    grantedScopes: [CANONICAL_READ_SCOPE],
+    providerEnvironment: CANONICAL_ENVIRONMENT,
+    version: 1,
+    ...overrides,
+  };
+}
+
+function canonicalPolicyCandidate(
+  overrides: Partial<McpAccountLinkCanonicalPolicyCandidateV1> = {},
+): McpAccountLinkCanonicalPolicyCandidateV1 {
+  return {
+    kind: "mcp_auth_policy_account_link_record",
+    issuer: CANONICAL_ISSUER,
+    subject: "stytch_subject_fixture_123",
+    providerEnvironment: CANONICAL_ENVIRONMENT,
+    clientId: "stytch_client_fixture_123",
+    twoweeksClerkId: "user_fixture_123",
+    grantedScopes: [CANONICAL_READ_SCOPE],
+    state: "active",
+    createdAtEpochSeconds: NOW_SECONDS,
+    updatedAtEpochSeconds: NOW_SECONDS,
+    expiresAtEpochSeconds: NOW_SECONDS + 3_600,
+    version: 1,
+    ...overrides,
+  };
+}
+
+function malformedLookupCandidate(reason: "malformed_storage_record" | "candidate_overflow") {
+  return {
+    kind: "mcp_auth_policy_account_link_lookup_malformed_candidate",
+    reason,
+    version: 1,
+  };
 }
 
 describe("Convex MCP account links", () => {
@@ -338,6 +410,388 @@ describe("Convex MCP account links", () => {
         }),
       ),
     ).toBe("canonical_ready");
+  });
+
+  it("looks up canonical policy candidates by provider, issuer, subject, and environment only", async () => {
+    const { candidates, indexCalls } = await lookupPolicyCandidatesWith([
+      storedAccountLink({ _id: "mcpAccountLinks_fixture_1", ...canonicalAccountLinkRecord() }),
+      storedAccountLink({
+        _id: "mcpAccountLinks_fixture_2",
+        ...canonicalAccountLinkRecord({
+          clientId: "stytch_client_fixture_999",
+          twoweeksClerkId: "user_fixture_999",
+          grantRef: "grant:fixture:999",
+          consentRef: "consent:fixture:999",
+        }),
+      }),
+      storedAccountLink({
+        _id: "mcpAccountLinks_fixture_3",
+        ...canonicalAccountLinkRecord({ providerEnvironment: "staging" }),
+      }),
+      storedAccountLink({
+        _id: "mcpAccountLinks_fixture_4",
+        ...canonicalAccountLinkRecord({ issuer: "https://other-auth.example.test/oauth" }),
+      }),
+      storedAccountLink({
+        _id: "mcpAccountLinks_fixture_5",
+        ...canonicalAccountLinkRecord({ providerSubject: "other_subject_fixture_123" }),
+      }),
+    ]);
+
+    expect(indexCalls).toEqual([
+      {
+        indexName: "by_provider_issuer_subject_environment",
+        constraints: [
+          { field: "provider", value: "stytch" },
+          { field: "issuer", value: CANONICAL_ISSUER },
+          { field: "providerSubject", value: "stytch_subject_fixture_123" },
+          { field: "providerEnvironment", value: CANONICAL_ENVIRONMENT },
+        ],
+      },
+    ]);
+    expect(candidates).toEqual([
+      canonicalPolicyCandidate(),
+      canonicalPolicyCandidate({
+        clientId: "stytch_client_fixture_999",
+        twoweeksClerkId: "user_fixture_999",
+      }),
+    ]);
+  });
+
+  it("returns zero and one canonical candidates without inventing account-link fields", async () => {
+    const emptyLookup = await lookupPolicyCandidatesWith([]);
+    expect(emptyLookup.candidates).toEqual([]);
+    expect(
+      resolveMcpAuthPolicyAccountLink({
+        principal: authorizedPrincipal(),
+        accountLinks: emptyLookup.candidates,
+        requiredScope: CANONICAL_READ_SCOPE,
+        nowEpochSeconds: NOW_SECONDS,
+        version: 1,
+      }),
+    ).toMatchObject({ resolved: false, reason: "missing_account_link" });
+
+    const singleLookup = await lookupPolicyCandidatesWith([
+      storedAccountLink({ _id: "mcpAccountLinks_fixture_1", ...canonicalAccountLinkRecord() }),
+    ]);
+    expect(singleLookup.candidates).toEqual([canonicalPolicyCandidate()]);
+    expect(JSON.stringify(singleLookup.candidates)).not.toContain("grant:fixture");
+    expect(JSON.stringify(singleLookup.candidates)).not.toContain("consent:fixture");
+    expect(
+      resolveMcpAuthPolicyAccountLink({
+        principal: authorizedPrincipal(),
+        accountLinks: singleLookup.candidates,
+        requiredScope: CANONICAL_READ_SCOPE,
+        nowEpochSeconds: NOW_SECONDS,
+        version: 1,
+      }),
+    ).toMatchObject({
+      resolved: true,
+      serverOnly: { twoweeksClerkId: "user_fixture_123", grantedScopes: [CANONICAL_READ_SCOPE] },
+    });
+  });
+
+  it("keeps same-principal different-client candidates visible so resolver fails closed before client filtering", async () => {
+    const { candidates } = await lookupPolicyCandidatesWith([
+      storedAccountLink({ _id: "mcpAccountLinks_fixture_1", ...canonicalAccountLinkRecord() }),
+      storedAccountLink({
+        _id: "mcpAccountLinks_fixture_2",
+        ...canonicalAccountLinkRecord({
+          clientId: "stytch_client_fixture_999",
+          twoweeksClerkId: "user_fixture_999",
+          grantRef: "grant:fixture:999",
+          consentRef: "consent:fixture:999",
+        }),
+      }),
+    ]);
+
+    expect(candidates).toEqual([
+      canonicalPolicyCandidate(),
+      canonicalPolicyCandidate({
+        clientId: "stytch_client_fixture_999",
+        twoweeksClerkId: "user_fixture_999",
+      }),
+    ]);
+    expect(
+      resolveMcpAuthPolicyAccountLink({
+        principal: authorizedPrincipal(),
+        accountLinks: candidates,
+        requiredScope: CANONICAL_READ_SCOPE,
+        nowEpochSeconds: NOW_SECONDS,
+        version: 1,
+      }),
+    ).toMatchObject({ resolved: false, reason: "duplicate_account_link" });
+  });
+
+  it("keeps revoked, stale, and expired same-principal candidates visible to the resolver", async () => {
+    const { candidates } = await lookupPolicyCandidatesWith([
+      storedAccountLink({ _id: "mcpAccountLinks_fixture_1", ...canonicalAccountLinkRecord() }),
+      storedAccountLink({
+        _id: "mcpAccountLinks_fixture_2",
+        ...canonicalAccountLinkRecord({
+          clientId: "stytch_client_fixture_124",
+          twoweeksClerkId: "user_fixture_124",
+          grantRef: "grant:fixture:124",
+          consentRef: "consent:fixture:124",
+          state: "revoked",
+          revokedAt: NOW,
+        }),
+      }),
+      storedAccountLink({
+        _id: "mcpAccountLinks_fixture_3",
+        ...canonicalAccountLinkRecord({
+          clientId: "stytch_client_fixture_125",
+          twoweeksClerkId: "user_fixture_125",
+          grantRef: "grant:fixture:125",
+          consentRef: "consent:fixture:125",
+          state: "stale",
+          staleAt: NOW,
+        }),
+      }),
+      storedAccountLink({
+        _id: "mcpAccountLinks_fixture_4",
+        ...canonicalAccountLinkRecord({
+          clientId: "stytch_client_fixture_126",
+          twoweeksClerkId: "user_fixture_126",
+          grantRef: "grant:fixture:126",
+          consentRef: "consent:fixture:126",
+          expiresAtEpochSeconds: NOW_SECONDS - 1,
+        }),
+      }),
+    ]);
+
+    expect(candidates).toEqual([
+      canonicalPolicyCandidate(),
+      canonicalPolicyCandidate({
+        clientId: "stytch_client_fixture_124",
+        twoweeksClerkId: "user_fixture_124",
+        state: "revoked",
+      }),
+      canonicalPolicyCandidate({
+        clientId: "stytch_client_fixture_125",
+        twoweeksClerkId: "user_fixture_125",
+        state: "stale",
+      }),
+      canonicalPolicyCandidate({
+        clientId: "stytch_client_fixture_126",
+        twoweeksClerkId: "user_fixture_126",
+        expiresAtEpochSeconds: NOW_SECONDS - 1,
+      }),
+    ]);
+    expect(
+      resolveMcpAuthPolicyAccountLink({
+        principal: authorizedPrincipal(),
+        accountLinks: candidates,
+        requiredScope: CANONICAL_READ_SCOPE,
+        nowEpochSeconds: NOW_SECONDS,
+        version: 1,
+      }),
+    ).toMatchObject({ resolved: false, reason: "duplicate_account_link" });
+  });
+
+  it.each([
+    ["revoked", { state: "revoked" as const, revokedAt: NOW }, "revoked_account_link"],
+    ["stale", { state: "stale" as const, staleAt: NOW }, "stale_account_link"],
+    ["expired", { expiresAtEpochSeconds: NOW_SECONDS - 1 }, "expired_account_link"],
+  ] as const)("leaves final %s candidate denial to the resolver", async (_label, overrides, reason) => {
+    const { candidates } = await lookupPolicyCandidatesWith([
+      storedAccountLink({
+        _id: "mcpAccountLinks_fixture_1",
+        ...canonicalAccountLinkRecord(overrides),
+      }),
+    ]);
+
+    expect(candidates).toHaveLength(1);
+    expect(
+      resolveMcpAuthPolicyAccountLink({
+        principal: authorizedPrincipal(),
+        accountLinks: candidates,
+        requiredScope: CANONICAL_READ_SCOPE,
+        nowEpochSeconds: NOW_SECONDS,
+        version: 1,
+      }),
+    ).toMatchObject({ resolved: false, reason });
+  });
+
+  it("returns deterministic candidate order independent of fixture insertion order", async () => {
+    const first = storedAccountLink({
+      _id: "mcpAccountLinks_fixture_1",
+      ...canonicalAccountLinkRecord({
+        clientId: "stytch_client_fixture_222",
+        twoweeksClerkId: "user_fixture_222",
+        grantRef: "grant:fixture:222",
+        consentRef: "consent:fixture:222",
+      }),
+    });
+    const second = storedAccountLink({
+      _id: "mcpAccountLinks_fixture_2",
+      ...canonicalAccountLinkRecord({
+        clientId: "stytch_client_fixture_111",
+        twoweeksClerkId: "user_fixture_111",
+        grantRef: "grant:fixture:111",
+        consentRef: "consent:fixture:111",
+      }),
+    });
+
+    await expect(lookupPolicyCandidatesWith([first, second])).resolves.toMatchObject({
+      candidates: [
+        canonicalPolicyCandidate({
+          clientId: "stytch_client_fixture_111",
+          twoweeksClerkId: "user_fixture_111",
+        }),
+        canonicalPolicyCandidate({
+          clientId: "stytch_client_fixture_222",
+          twoweeksClerkId: "user_fixture_222",
+        }),
+      ],
+    });
+    await expect(lookupPolicyCandidatesWith([second, first])).resolves.toMatchObject({
+      candidates: [
+        canonicalPolicyCandidate({
+          clientId: "stytch_client_fixture_111",
+          twoweeksClerkId: "user_fixture_111",
+        }),
+        canonicalPolicyCandidate({
+          clientId: "stytch_client_fixture_222",
+          twoweeksClerkId: "user_fixture_222",
+        }),
+      ],
+    });
+  });
+
+  it("returns a malformed lookup candidate for matching partial canonical storage rows", async () => {
+    const { candidates } = await lookupPolicyCandidatesWith([
+      storedAccountLink({
+        _id: "mcpAccountLinks_fixture_1",
+        ...accountLinkRecord({
+          issuer: CANONICAL_ISSUER,
+          providerEnvironment: CANONICAL_ENVIRONMENT,
+        }),
+      }),
+    ]);
+
+    expect(candidates).toEqual([malformedLookupCandidate("malformed_storage_record")]);
+    expect(
+      resolveMcpAuthPolicyAccountLink({
+        principal: authorizedPrincipal(),
+        accountLinks: candidates,
+        requiredScope: CANONICAL_READ_SCOPE,
+        nowEpochSeconds: NOW_SECONDS,
+        version: 1,
+      }),
+    ).toMatchObject({ resolved: false, reason: "malformed_account_link" });
+  });
+
+  it.each([
+    [
+      "missing expiry",
+      accountLinkRecord({
+        issuer: CANONICAL_ISSUER,
+        providerEnvironment: CANONICAL_ENVIRONMENT,
+        canonicalGrantedScopes: [CANONICAL_READ_SCOPE],
+        canonicalAccountLinkVersion: 1,
+      }),
+    ],
+    [
+      "missing client id",
+      canonicalAccountLinkRecord({ clientId: undefined as unknown as string }),
+    ],
+    [
+      "malformed timestamps",
+      canonicalAccountLinkRecord({ updatedAt: NOW - 1, lastVerifiedAt: NOW - 1 }),
+    ],
+    [
+      "legacy dotted canonical scope",
+      canonicalAccountLinkRecord({ canonicalGrantedScopes: ["twoweeks.mcp.read"] }),
+    ],
+    [
+      "mixed canonical and legacy dotted scopes",
+      canonicalAccountLinkRecord({
+        canonicalGrantedScopes: [CANONICAL_READ_SCOPE, "twoweeks.mcp.read"],
+      }),
+    ],
+    [
+      "malformed owner reference",
+      canonicalAccountLinkRecord({ twoweeksClerkId: "access_token_owner" }),
+    ],
+  ] as const)("fails closed for matching malformed canonical rows: %s", async (_label, record) => {
+    const { candidates } = await lookupPolicyCandidatesWith([
+      storedAccountLink({ _id: "mcpAccountLinks_fixture_1", ...record }),
+    ]);
+
+    expect(candidates).toEqual([malformedLookupCandidate("malformed_storage_record")]);
+  });
+
+  it("keeps incomplete legacy rows out of canonical lookup without mutating or synthesizing fields", async () => {
+    const row = storedAccountLink({ _id: "mcpAccountLinks_fixture_1", ...accountLinkRecord() });
+    const { candidates } = await lookupPolicyCandidatesWith([row]);
+
+    expect(candidates).toEqual([]);
+    expect(row).not.toHaveProperty("issuer");
+    expect(row).not.toHaveProperty("providerEnvironment");
+    expect(row).not.toHaveProperty("canonicalGrantedScopes");
+    expect(row).not.toHaveProperty("expiresAtEpochSeconds");
+    expect(row).not.toHaveProperty("canonicalAccountLinkVersion");
+  });
+
+  it("returns the full exact-bound candidate set without truncation", async () => {
+    const { candidates } = await lookupPolicyCandidatesWith(
+      Array.from({ length: MCP_AUTH_POLICY_ACCOUNT_LINK_LOOKUP_MAX_CANDIDATES }, (_, index) =>
+        storedAccountLink({
+          _id: `mcpAccountLinks_fixture_${index + 1}`,
+          ...canonicalAccountLinkRecord({
+            clientId: `stytch_client_fixture_${String(index).padStart(3, "0")}`,
+            twoweeksClerkId: `user_fixture_${String(index).padStart(3, "0")}`,
+            grantRef: `grant:fixture:${String(index).padStart(3, "0")}`,
+            consentRef: `consent:fixture:${String(index).padStart(3, "0")}`,
+          }),
+        }),
+      ),
+    );
+
+    expect(candidates).toHaveLength(MCP_AUTH_POLICY_ACCOUNT_LINK_LOOKUP_MAX_CANDIDATES);
+    expect(candidates[0]).toEqual(
+      canonicalPolicyCandidate({
+        clientId: "stytch_client_fixture_000",
+        twoweeksClerkId: "user_fixture_000",
+      }),
+    );
+    expect(
+      resolveMcpAuthPolicyAccountLink({
+        principal: authorizedPrincipal(),
+        accountLinks: candidates,
+        requiredScope: CANONICAL_READ_SCOPE,
+        nowEpochSeconds: NOW_SECONDS,
+        version: 1,
+      }),
+    ).toMatchObject({ resolved: false, reason: "duplicate_account_link" });
+  });
+
+  it("fails closed when the same-principal candidate set exceeds the lookup bound", async () => {
+    const { candidates } = await lookupPolicyCandidatesWith(
+      Array.from({ length: MCP_AUTH_POLICY_ACCOUNT_LINK_LOOKUP_MAX_CANDIDATES + 1 }, (_, index) =>
+        storedAccountLink({
+          _id: `mcpAccountLinks_fixture_${index + 1}`,
+          ...canonicalAccountLinkRecord({
+            clientId: `stytch_client_fixture_${String(index).padStart(3, "0")}`,
+            twoweeksClerkId: `user_fixture_${String(index).padStart(3, "0")}`,
+            grantRef: `grant:fixture:${String(index).padStart(3, "0")}`,
+            consentRef: `consent:fixture:${String(index).padStart(3, "0")}`,
+          }),
+        }),
+      ),
+    );
+
+    expect(candidates).toEqual([malformedLookupCandidate("candidate_overflow")]);
+    expect(
+      resolveMcpAuthPolicyAccountLink({
+        principal: authorizedPrincipal(),
+        accountLinks: candidates,
+        requiredScope: CANONICAL_READ_SCOPE,
+        nowEpochSeconds: NOW_SECONDS,
+        version: 1,
+      }),
+    ).toMatchObject({ resolved: false, reason: "malformed_account_link" });
   });
 
   it("resolves only one active, non-expired account link with required scopes", async () => {
