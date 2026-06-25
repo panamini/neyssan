@@ -127,6 +127,8 @@ export type McpOAuthAuthorizationRequestBoundaryHandoffV1 = Readonly<{
   futureIntent: Readonly<{
     kind: "mcp_oauth_authorization_intent_contract";
     storage: "future_short_lived_server_store";
+    preservesProviderForwardRequest: true;
+    serverMustPersistBeforeLoginReturn: true;
     modelVisible: false;
     version: 1;
   }>;
@@ -135,6 +137,7 @@ export type McpOAuthAuthorizationRequestBoundaryHandoffV1 = Readonly<{
     target: "authorization_page";
     usesClientRedirectUri: false;
     containsOwnerIdentity: false;
+    sensitiveOptionalParametersInUrl: false;
     persisted: false;
     version: 1;
   }>;
@@ -328,7 +331,7 @@ function parseConfig(value: unknown): ParsedConfigV1 | undefined {
   if (!lists) return undefined;
   const limits = parseConfigLimits(record);
   if (!limits) return undefined;
-  const clientIdPolicy = parseClientIdPolicy(record.clientIdPolicy);
+  const clientIdPolicy = parseClientIdPolicy(record.clientIdPolicy, limits.maxParameterLength);
   if (!clientIdPolicy) return undefined;
 
   return Object.freeze({
@@ -395,11 +398,11 @@ function parseConfigLimits(record: Record<string, unknown>): ConfigLimitPartsV1 
   return Object.freeze({ maxUrlLength, maxParameterLength, maxStateLength, maxIdTokenHintLength });
 }
 
-function parseClientIdPolicy(value: unknown): ParsedConfigV1["clientIdPolicy"] | undefined {
+function parseClientIdPolicy(value: unknown, maxClientIdLength: number): ParsedConfigV1["clientIdPolicy"] | undefined {
   const record = readExactRecord(value, CLIENT_ID_POLICY_KEYS);
   if (!record || record.mode !== "predefined_allowlist" || record.version !== 1) return undefined;
   const allowedClientIds = readStringList(record.allowedClientIds);
-  if (!allowedClientIds || allowedClientIds.length === 0 || !allowedClientIds.every(isSafeIdentifier)) {
+  if (!allowedClientIds || allowedClientIds.length === 0 || !allowedClientIds.every((clientId) => isSafeClientId(clientId, maxClientIdLength))) {
     return undefined;
   }
   return Object.freeze({
@@ -714,6 +717,8 @@ function buildHandoff(
     futureIntent: Object.freeze({
       kind: "mcp_oauth_authorization_intent_contract",
       storage: "future_short_lived_server_store",
+      preservesProviderForwardRequest: true,
+      serverMustPersistBeforeLoginReturn: true,
       modelVisible: false,
       version: 1,
     }),
@@ -722,6 +727,7 @@ function buildHandoff(
       target: "authorization_page",
       usesClientRedirectUri: false,
       containsOwnerIdentity: false,
+      sensitiveOptionalParametersInUrl: false,
       persisted: false,
       version: 1,
     }),
@@ -859,7 +865,7 @@ function readAllowedAuthorizationOrigin(parsed: URL, allowHttpLocalhost: unknown
 }
 
 function isSafeHttpsUrl(parsed: URL): boolean {
-  return parsed.protocol === "https:" && !parsed.username && !parsed.password && !parsed.hash;
+  return parsed.protocol === "https:" && !parsed.username && !parsed.password && !parsed.hash && isSafeUrlHostname(parsed.hostname);
 }
 
 function hasMalformedPercentEncoding(value: string): boolean {
@@ -917,6 +923,17 @@ function readPositiveInteger(value: unknown): number | undefined {
 
 function isSafeIdentifier(value: string): boolean {
   return SAFE_IDENTIFIER_PATTERN.test(value) && !value.includes("*");
+}
+
+function isSafeClientId(value: string, maxLength: number): boolean {
+  if (!readBoundedText(value, maxLength)) return false;
+  if (isSafeIdentifier(value)) return true;
+  const parsed = readSafeUrlFromText(value);
+  return parsed !== undefined && isSafeHttpsUrl(parsed);
+}
+
+function isSafeUrlHostname(hostname: string): boolean {
+  return hostname.length > 0 && !hostname.includes("*");
 }
 
 function containsControlCharacters(value: string): boolean {

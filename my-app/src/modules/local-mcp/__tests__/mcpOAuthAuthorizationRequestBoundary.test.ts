@@ -74,6 +74,11 @@ describe("MCP OAuth authorization request boundary", () => {
           target: "authorization_page",
           usesClientRedirectUri: false,
           containsOwnerIdentity: false,
+          sensitiveOptionalParametersInUrl: false,
+        },
+        futureIntent: {
+          preservesProviderForwardRequest: true,
+          serverMustPersistBeforeLoginReturn: true,
         },
       },
       modelVisible: false,
@@ -196,6 +201,17 @@ describe("MCP OAuth authorization request boundary", () => {
         "unapproved_redirect_uri",
       );
     });
+
+    it("rejects wildcard hosts in configured redirect URIs", () => {
+      const redirectUri = "https://*.example.test/connector/oauth/callback-fixture";
+      expectDenied(
+        buildInput({
+          authorizationUrl: buildAuthorizationUrl({ overrides: { redirect_uri: redirectUri } }),
+          config: buildConfig({ allowedRedirectUris: [redirectUri] }),
+        }),
+        "malformed_config",
+      );
+    });
   });
 
   describe("resource", () => {
@@ -210,6 +226,40 @@ describe("MCP OAuth authorization request boundary", () => {
         buildInput({ authorizationUrl: buildAuthorizationUrl({ overrides: { resource } }) }),
         "wrong_resource",
       );
+    });
+
+    it("rejects wildcard hosts in the configured canonical resource", () => {
+      const resource = "https://*.example.test/mcp";
+      expectDenied(
+        buildInput({
+          authorizationUrl: buildAuthorizationUrl({ overrides: { resource } }),
+          config: buildConfig({ canonicalResource: resource }),
+        }),
+        "malformed_config",
+      );
+    });
+  });
+
+  describe("client ID", () => {
+    it("accepts an exact allowlisted CIMD URL client ID", () => {
+      const clientId = "https://chatgpt.com/oauth/client-fixture/client.json";
+      const result = parseMcpOAuthAuthorizationRequestBoundary(
+        buildInput({
+          authorizationUrl: buildAuthorizationUrl({ overrides: { client_id: clientId } }),
+          config: buildConfig({
+            clientIdPolicy: {
+              mode: "predefined_allowlist",
+              allowedClientIds: [clientId],
+              version: 1,
+            },
+          }),
+        }),
+      );
+
+      expect(result.accepted).toBe(true);
+      if (result.accepted) {
+        expect(result.serverOnly.providerForwardRequest.clientId).toBe(clientId);
+      }
     });
   });
 
@@ -384,6 +434,9 @@ describe("MCP OAuth authorization request boundary", () => {
         });
         expect(result.serverOnly.loginReturn.path).not.toContain("login_hint=");
         expect(result.serverOnly.loginReturn.path).not.toContain("other-user@example.test");
+        expect(result.serverOnly.futureIntent.preservesProviderForwardRequest).toBe(true);
+        expect(result.serverOnly.futureIntent.serverMustPersistBeforeLoginReturn).toBe(true);
+        expect(result.serverOnly.loginReturn.sensitiveOptionalParametersInUrl).toBe(false);
       }
     });
   });
