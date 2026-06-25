@@ -10,6 +10,10 @@ const mcpReadScopeValidator = v.union(
 );
 
 const TWOWEEKS_APPLICATIONS_READ_SCOPE = "twoweeks:applications:read" as const;
+const MCP_AUTH_VERIFIED_BY_PROVIDER_ADAPTER_PROOF = "already_verified_by_provider_adapter" as const;
+const MCP_ACCOUNT_LINK_LIFECYCLE_DEFAULT_CLOCK_SKEW_SECONDS = 300;
+const MCP_ACCOUNT_LINK_LIFECYCLE_LEGACY_BASE_SCOPES = ["twoweeks.mcp.read"] as const;
+const MAX_SAFE_EPOCH_SECONDS_FOR_MILLISECONDS = Math.floor(Number.MAX_SAFE_INTEGER / 1_000);
 
 const mcpAccountLinkStateValidator = v.union(
   v.literal("active"),
@@ -77,6 +81,46 @@ const mcpAuthPolicyAccountLinkLookupMalformedCandidateValidator = v.object({
   version: v.literal(1),
 });
 
+const mcpTrustedAccountLinkOwnerValidator = v.object({
+  kind: v.literal("mcp_trusted_account_link_owner"),
+  twoweeksClerkId: v.string(),
+  version: v.literal(1),
+});
+
+const mcpVerifiedAccountLinkEvidenceValidator = v.object({
+  kind: v.literal("mcp_verified_account_link_evidence"),
+  provider: v.literal("stytch"),
+  issuer: v.string(),
+  subject: v.string(),
+  providerEnvironment: v.string(),
+  clientId: v.string(),
+  resource: v.string(),
+  grantedScopes: v.array(v.string()),
+  expiresAtEpochSeconds: v.number(),
+  verifiedAtEpochSeconds: v.number(),
+  cryptographicVerification: v.literal(MCP_AUTH_VERIFIED_BY_PROVIDER_ADAPTER_PROOF),
+  version: v.literal(1),
+});
+
+const mcpAccountLinkLifecycleConfigValidator = v.object({
+  kind: v.literal("mcp_account_link_lifecycle_config"),
+  expectedIssuer: v.string(),
+  expectedResource: v.string(),
+  expectedProviderEnvironment: v.string(),
+  allowedClientIds: v.array(v.string()),
+  clockSkewSeconds: v.optional(v.number()),
+  version: v.literal(1),
+});
+
+const mcpAccountLinkLifecycleIdentityValidator = v.object({
+  kind: v.literal("mcp_account_link_lifecycle_identity"),
+  issuer: v.string(),
+  subject: v.string(),
+  providerEnvironment: v.string(),
+  clientId: v.string(),
+  version: v.literal(1),
+});
+
 const MCP_ACCOUNT_LINK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{1,191}$/u;
 const MCP_ACCOUNT_LINK_AUDIT_REASON_CODE_PATTERN = /^[a-z][a-z0-9_]{2,80}$/u;
 const FORBIDDEN_MCP_ACCOUNT_LINK_STORED_TEXT_PATTERN =
@@ -117,6 +161,38 @@ const CANONICAL_ACCOUNT_LINK_FIELD_KEYS = [
   "expiresAtEpochSeconds",
   "canonicalAccountLinkVersion",
 ] as const;
+const TRUSTED_OWNER_KEYS = ["kind", "twoweeksClerkId", "version"] as const;
+const VERIFIED_ACCOUNT_LINK_EVIDENCE_KEYS = [
+  "kind",
+  "provider",
+  "issuer",
+  "subject",
+  "providerEnvironment",
+  "clientId",
+  "resource",
+  "grantedScopes",
+  "expiresAtEpochSeconds",
+  "verifiedAtEpochSeconds",
+  "cryptographicVerification",
+  "version",
+] as const;
+const LIFECYCLE_CONFIG_KEYS = [
+  "kind",
+  "expectedIssuer",
+  "expectedResource",
+  "expectedProviderEnvironment",
+  "allowedClientIds",
+  "clockSkewSeconds",
+  "version",
+] as const;
+const LIFECYCLE_IDENTITY_KEYS = [
+  "kind",
+  "issuer",
+  "subject",
+  "providerEnvironment",
+  "clientId",
+  "version",
+] as const;
 
 export type McpAccountLinkCanonicalStorageClassificationV1 =
   | "canonical_ready"
@@ -147,6 +223,112 @@ export type McpAccountLinkLookupMalformedCandidateV1 = Readonly<{
 export type McpAccountLinkLookupCandidateV1 =
   | McpAccountLinkCanonicalPolicyCandidateV1
   | McpAccountLinkLookupMalformedCandidateV1;
+
+export type McpTrustedAccountLinkOwnerV1 = Readonly<{
+  kind: "mcp_trusted_account_link_owner";
+  twoweeksClerkId: string;
+  version: 1;
+}>;
+
+export type McpVerifiedAccountLinkEvidenceV1 = Readonly<{
+  kind: "mcp_verified_account_link_evidence";
+  provider: "stytch";
+  issuer: string;
+  subject: string;
+  providerEnvironment: string;
+  clientId: string;
+  resource: string;
+  grantedScopes: readonly string[];
+  expiresAtEpochSeconds: number;
+  verifiedAtEpochSeconds: number;
+  cryptographicVerification: typeof MCP_AUTH_VERIFIED_BY_PROVIDER_ADAPTER_PROOF;
+  version: 1;
+}>;
+
+export type McpAccountLinkLifecycleConfigV1 = Readonly<{
+  kind: "mcp_account_link_lifecycle_config";
+  expectedIssuer: string;
+  expectedResource: string;
+  expectedProviderEnvironment: string;
+  allowedClientIds: readonly string[];
+  clockSkewSeconds?: number;
+  version: 1;
+}>;
+
+export type McpAccountLinkLifecycleIdentityV1 = Readonly<{
+  kind: "mcp_account_link_lifecycle_identity";
+  issuer: string;
+  subject: string;
+  providerEnvironment: string;
+  clientId: string;
+  version: 1;
+}>;
+
+export type McpAccountLinkLifecycleReasonV1 =
+  | "linked"
+  | "refreshed"
+  | "revoked"
+  | "already_linked"
+  | "unchanged"
+  | "not_found"
+  | "invalid_owner"
+  | "malformed_evidence"
+  | "wrong_issuer"
+  | "wrong_resource"
+  | "wrong_environment"
+  | "unknown_client"
+  | "missing_canonical_scope"
+  | "legacy_scope"
+  | "expired_evidence"
+  | "future_evidence"
+  | "candidate_overflow"
+  | "malformed_candidate"
+  | "cross_owner_conflict"
+  | "duplicate_account_link"
+  | "mismatched_active_link"
+  | "stale_evidence"
+  | "expiry_regression"
+  | "relink_required";
+
+export type McpAccountLinkLifecycleResultV1 = Readonly<
+  | {
+      kind: "mcp_account_link_lifecycle_result";
+      operation: "link" | "refresh" | "revoke";
+      ok: true;
+      reason: Extract<
+        McpAccountLinkLifecycleReasonV1,
+        "linked" | "refreshed" | "revoked" | "already_linked" | "unchanged"
+      >;
+      serverOnly: {
+        twoweeksClerkId: string;
+        provider: "stytch";
+        subject: string;
+        clientId: string;
+        version: 1;
+      };
+      modelVisible: false;
+      version: 1;
+    }
+  | {
+      kind: "mcp_account_link_lifecycle_result";
+      operation: "link" | "refresh" | "revoke";
+      ok: false;
+      reason: Exclude<
+        McpAccountLinkLifecycleReasonV1,
+        "linked" | "refreshed" | "revoked" | "already_linked" | "unchanged"
+      >;
+      safeFailure: {
+        code: "mcp_account_link_lifecycle_denied";
+        message: "Account-link lifecycle denied.";
+        safeForModel: true;
+        tokenEchoed: false;
+        identityEchoed: false;
+        version: 1;
+      };
+      modelVisible: false;
+      version: 1;
+    }
+>;
 
 export type McpAccountLinkCanonicalProjectionV1 = Readonly<
   | {
@@ -289,6 +471,530 @@ export const internalLookupMcpAuthPolicyAccountLinkCandidates = internalQuery({
       .sort(compareLookupCandidates);
   },
 });
+
+export const internalLinkCanonicalMcpAccount = internalMutation({
+  args: {
+    trustedOwner: mcpTrustedAccountLinkOwnerValidator,
+    evidence: mcpVerifiedAccountLinkEvidenceValidator,
+    config: mcpAccountLinkLifecycleConfigValidator,
+    nowEpochSeconds: v.number(),
+  },
+  returns: v.any(),
+  handler: async (ctx, args): Promise<McpAccountLinkLifecycleResultV1> => {
+    const owner = parseTrustedAccountLinkOwner(args.trustedOwner);
+    if (!owner) return denyLifecycle("link", "invalid_owner");
+
+    const evidence = parseMcpVerifiedAccountLinkEvidence(args.evidence, args.config, args.nowEpochSeconds);
+    if (!evidence.ok) return denyLifecycle("link", evidence.reason);
+
+    const candidates = await readLifecycleCandidates(ctx, evidence.value);
+    if (!candidates.ok) return denyLifecycle("link", candidates.reason);
+
+    const exactClientRowsRead = await readExactClientAccountLinkRows(ctx, evidence.value);
+    if (!exactClientRowsRead.ok) return denyLifecycle("link", exactClientRowsRead.reason);
+
+    const exactClientRows = exactClientRowsRead.rows;
+
+    const exactClientLegacyNonRevoked = exactClientRows.some(
+      (candidate) => candidate.classification === "legacy_missing_canonical_fields" && candidate.row.state !== "revoked",
+    );
+    if (exactClientLegacyNonRevoked) return denyLifecycle("link", "malformed_candidate");
+
+    const canonicalRows = candidates.rows;
+    if (canonicalRows.some((candidate) => candidate.policyCandidate.twoweeksClerkId !== owner.twoweeksClerkId)) {
+      return denyLifecycle("link", "cross_owner_conflict");
+    }
+
+    if (canonicalRows.length > 1) return denyLifecycle("link", "duplicate_account_link");
+
+    if (canonicalRows.length === 1) {
+      const existing = canonicalRows[0];
+      if (existing.policyCandidate.clientId !== evidence.value.clientId) {
+        return denyLifecycle("link", "duplicate_account_link");
+      }
+      if (existing.row.state !== "active") return denyLifecycle("link", "relink_required");
+      if (isSameEvidenceAsStored(existing.row, evidence.value)) {
+        return allowLifecycle("link", "already_linked", owner.twoweeksClerkId, evidence.value);
+      }
+      return denyLifecycle("link", "duplicate_account_link");
+    }
+
+    const exactClientRevoked = exactClientRows.some((candidate) => candidate.row.state === "revoked");
+    if (exactClientRevoked) return denyLifecycle("link", "relink_required");
+
+    const record = buildCanonicalAccountLinkRecord(owner, evidence.value);
+    assertValidAccountLinkRecord(record);
+    await ctx.db.insert("mcpAccountLinks", record);
+
+    return allowLifecycle("link", "linked", owner.twoweeksClerkId, evidence.value);
+  },
+});
+
+export const internalRefreshCanonicalMcpAccountLink = internalMutation({
+  args: {
+    trustedOwner: mcpTrustedAccountLinkOwnerValidator,
+    evidence: mcpVerifiedAccountLinkEvidenceValidator,
+    config: mcpAccountLinkLifecycleConfigValidator,
+    nowEpochSeconds: v.number(),
+  },
+  returns: v.any(),
+  handler: async (ctx, args): Promise<McpAccountLinkLifecycleResultV1> => {
+    const owner = parseTrustedAccountLinkOwner(args.trustedOwner);
+    if (!owner) return denyLifecycle("refresh", "invalid_owner");
+
+    const evidence = parseMcpVerifiedAccountLinkEvidence(args.evidence, args.config, args.nowEpochSeconds);
+    if (!evidence.ok) return denyLifecycle("refresh", evidence.reason);
+
+    const candidates = await readLifecycleCandidates(ctx, evidence.value);
+    if (!candidates.ok) return denyLifecycle("refresh", candidates.reason);
+    if (candidates.rows.length === 0) return denyLifecycle("refresh", "not_found");
+    if (candidates.rows.length > 1) return denyLifecycle("refresh", "duplicate_account_link");
+
+    const existing = candidates.rows[0];
+    if (existing.policyCandidate.twoweeksClerkId !== owner.twoweeksClerkId) {
+      return denyLifecycle("refresh", "cross_owner_conflict");
+    }
+    if (existing.policyCandidate.clientId !== evidence.value.clientId) {
+      return denyLifecycle("refresh", "mismatched_active_link");
+    }
+    if (existing.row.state !== "active") return denyLifecycle("refresh", "relink_required");
+
+    const storedVerifiedAtEpochSeconds = toEpochSeconds(existing.row.lastVerifiedAt);
+    if (evidence.value.verifiedAtEpochSeconds < storedVerifiedAtEpochSeconds) {
+      return denyLifecycle("refresh", "stale_evidence");
+    }
+    if (evidence.value.verifiedAtEpochSeconds === storedVerifiedAtEpochSeconds) {
+      if (evidence.value.expiresAtEpochSeconds === existing.policyCandidate.expiresAtEpochSeconds) {
+        return allowLifecycle("refresh", "unchanged", owner.twoweeksClerkId, evidence.value);
+      }
+      return denyLifecycle("refresh", "stale_evidence");
+    }
+    if (evidence.value.expiresAtEpochSeconds < existing.policyCandidate.expiresAtEpochSeconds) {
+      return denyLifecycle("refresh", "expiry_regression");
+    }
+
+    await ctx.db.patch(existing.row._id as Parameters<typeof ctx.db.patch>[0], {
+      updatedAt: toEpochMilliseconds(evidence.value.verifiedAtEpochSeconds),
+      lastVerifiedAt: toEpochMilliseconds(evidence.value.verifiedAtEpochSeconds),
+      expiresAtEpochSeconds: evidence.value.expiresAtEpochSeconds,
+      canonicalGrantedScopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
+      canonicalAccountLinkVersion: 1,
+      auditReasonCode: "account_link_refreshed",
+    });
+
+    return allowLifecycle("refresh", "refreshed", owner.twoweeksClerkId, evidence.value);
+  },
+});
+
+export const internalRevokeCanonicalMcpAccountLink = internalMutation({
+  args: {
+    trustedOwner: mcpTrustedAccountLinkOwnerValidator,
+    identity: mcpAccountLinkLifecycleIdentityValidator,
+    nowEpochSeconds: v.number(),
+  },
+  returns: v.any(),
+  handler: async (ctx, args): Promise<McpAccountLinkLifecycleResultV1> => {
+    const owner = parseTrustedAccountLinkOwner(args.trustedOwner);
+    if (!owner) return denyLifecycle("revoke", "invalid_owner");
+
+    const identity = parseLifecycleIdentity(args.identity, args.nowEpochSeconds);
+    if (!identity) return denyLifecycle("revoke", "malformed_evidence");
+
+    const candidates = await readLifecycleCandidates(ctx, {
+      issuer: identity.issuer,
+      subject: identity.subject,
+      providerEnvironment: identity.providerEnvironment,
+      clientId: identity.clientId,
+    });
+    if (!candidates.ok) return denyLifecycle("revoke", candidates.reason);
+    if (candidates.rows.length === 0) return denyLifecycle("revoke", "not_found");
+
+    const exactClientRows = candidates.rows.filter(
+      (candidate) => candidate.policyCandidate.clientId === identity.clientId,
+    );
+    if (exactClientRows.length === 0) return denyLifecycle("revoke", "mismatched_active_link");
+    if (exactClientRows.length > 1) return denyLifecycle("revoke", "duplicate_account_link");
+
+    const existing = exactClientRows[0];
+    if (existing.policyCandidate.twoweeksClerkId !== owner.twoweeksClerkId) {
+      return denyLifecycle("revoke", "cross_owner_conflict");
+    }
+    if (existing.policyCandidate.clientId !== identity.clientId) {
+      return denyLifecycle("revoke", "mismatched_active_link");
+    }
+    if (existing.row.state === "revoked") {
+      return allowLifecycle("revoke", "unchanged", owner.twoweeksClerkId, {
+        subject: identity.subject,
+        clientId: identity.clientId,
+      });
+    }
+    if (existing.row.state !== "active") return denyLifecycle("revoke", "relink_required");
+
+    const revokedAt = toEpochMilliseconds(args.nowEpochSeconds);
+    await ctx.db.patch(existing.row._id as Parameters<typeof ctx.db.patch>[0], {
+      state: "revoked",
+      updatedAt: revokedAt,
+      revokedAt,
+      auditReasonCode: "account_link_revoked",
+    });
+
+    return allowLifecycle("revoke", "revoked", owner.twoweeksClerkId, {
+      subject: identity.subject,
+      clientId: identity.clientId,
+    });
+  },
+});
+
+function parseTrustedAccountLinkOwner(value: unknown): McpTrustedAccountLinkOwnerV1 | undefined {
+  if (!isPlainRecord(value) || !hasOnlyAllowedAccountLinkKeys(value, TRUSTED_OWNER_KEYS)) return undefined;
+  if (value.kind !== "mcp_trusted_account_link_owner" || value.version !== 1) return undefined;
+  if (!isSafeAccountLinkIdentifierValue(value.twoweeksClerkId)) return undefined;
+  return {
+    kind: "mcp_trusted_account_link_owner",
+    twoweeksClerkId: value.twoweeksClerkId,
+    version: 1,
+  };
+}
+
+function parseMcpVerifiedAccountLinkEvidence(
+  evidenceValue: unknown,
+  configValue: unknown,
+  nowEpochSeconds: number,
+):
+  | { ok: true; value: ParsedLifecycleEvidence }
+  | {
+      ok: false;
+      reason:
+        | "malformed_evidence"
+        | "wrong_issuer"
+        | "wrong_resource"
+        | "wrong_environment"
+        | "unknown_client"
+        | "missing_canonical_scope"
+        | "legacy_scope"
+        | "expired_evidence"
+        | "future_evidence";
+    } {
+  const evidence = readLifecycleEvidenceRecord(evidenceValue);
+  const config = readLifecycleConfigRecord(configValue);
+  if (!evidence || !config || !isSafeEpochSeconds(nowEpochSeconds)) {
+    return { ok: false, reason: "malformed_evidence" };
+  }
+
+  if (evidence.issuer !== config.expectedIssuer) return { ok: false, reason: "wrong_issuer" };
+  if (evidence.resource !== config.expectedResource) return { ok: false, reason: "wrong_resource" };
+  if (evidence.providerEnvironment !== config.expectedProviderEnvironment) {
+    return { ok: false, reason: "wrong_environment" };
+  }
+  if (!config.allowedClientIds.includes(evidence.clientId)) return { ok: false, reason: "unknown_client" };
+
+  const scopeDecision = evaluateLifecycleScopes(evidence.grantedScopes);
+  if (!scopeDecision.ok) return { ok: false, reason: scopeDecision.reason };
+
+  if (evidence.expiresAtEpochSeconds <= evidence.verifiedAtEpochSeconds) {
+    return { ok: false, reason: "malformed_evidence" };
+  }
+  if (evidence.expiresAtEpochSeconds <= nowEpochSeconds) return { ok: false, reason: "expired_evidence" };
+  const clockSkewSeconds =
+    config.clockSkewSeconds ?? MCP_ACCOUNT_LINK_LIFECYCLE_DEFAULT_CLOCK_SKEW_SECONDS;
+  if (!Number.isFinite(clockSkewSeconds) || clockSkewSeconds < 0) {
+    return { ok: false, reason: "malformed_evidence" };
+  }
+  if (evidence.verifiedAtEpochSeconds > nowEpochSeconds + clockSkewSeconds) {
+    return { ok: false, reason: "future_evidence" };
+  }
+
+  return {
+    ok: true,
+    value: Object.freeze({
+      issuer: evidence.issuer,
+      subject: evidence.subject,
+      providerEnvironment: evidence.providerEnvironment,
+      clientId: evidence.clientId,
+      resource: evidence.resource,
+      expiresAtEpochSeconds: evidence.expiresAtEpochSeconds,
+      verifiedAtEpochSeconds: evidence.verifiedAtEpochSeconds,
+    }),
+  };
+}
+
+function readLifecycleEvidenceRecord(value: unknown): McpVerifiedAccountLinkEvidenceV1 | undefined {
+  if (!isPlainRecord(value) || !hasOnlyAllowedAccountLinkKeys(value, VERIFIED_ACCOUNT_LINK_EVIDENCE_KEYS)) {
+    return undefined;
+  }
+  if (
+    value.kind !== "mcp_verified_account_link_evidence" ||
+    value.provider !== "stytch" ||
+    value.cryptographicVerification !== MCP_AUTH_VERIFIED_BY_PROVIDER_ADAPTER_PROOF ||
+    value.version !== 1
+  ) {
+    return undefined;
+  }
+  if (!isSafeHttpsIssuer(value.issuer)) return undefined;
+  if (!isSafeAccountLinkIdentifierValue(value.subject)) return undefined;
+  if (!isSafeAccountLinkIdentifierValue(value.providerEnvironment)) return undefined;
+  if (!isSafeAccountLinkIdentifierValue(value.clientId)) return undefined;
+  if (!isSafeHttpsIssuer(value.resource)) return undefined;
+  if (!Array.isArray(value.grantedScopes) || !value.grantedScopes.every((scope) => typeof scope === "string")) {
+    return undefined;
+  }
+  if (!isSafeEpochSeconds(value.expiresAtEpochSeconds) || !isSafeEpochSeconds(value.verifiedAtEpochSeconds)) {
+    return undefined;
+  }
+  return {
+    kind: "mcp_verified_account_link_evidence",
+    provider: "stytch",
+    issuer: value.issuer,
+    subject: value.subject,
+    providerEnvironment: value.providerEnvironment,
+    clientId: value.clientId,
+    resource: value.resource,
+    grantedScopes: Object.freeze([...value.grantedScopes]),
+    expiresAtEpochSeconds: value.expiresAtEpochSeconds,
+    verifiedAtEpochSeconds: value.verifiedAtEpochSeconds,
+    cryptographicVerification: MCP_AUTH_VERIFIED_BY_PROVIDER_ADAPTER_PROOF,
+    version: 1,
+  };
+}
+
+function readLifecycleConfigRecord(value: unknown): McpAccountLinkLifecycleConfigV1 | undefined {
+  if (!isPlainRecord(value) || !hasOnlyAllowedAccountLinkKeys(value, LIFECYCLE_CONFIG_KEYS)) return undefined;
+  if (value.kind !== "mcp_account_link_lifecycle_config" || value.version !== 1) return undefined;
+  if (!isSafeHttpsIssuer(value.expectedIssuer)) return undefined;
+  if (!isSafeHttpsIssuer(value.expectedResource)) return undefined;
+  if (!isSafeAccountLinkIdentifierValue(value.expectedProviderEnvironment)) return undefined;
+  if (!Array.isArray(value.allowedClientIds) || !value.allowedClientIds.every(isSafeAccountLinkIdentifierValue)) {
+    return undefined;
+  }
+  if (value.clockSkewSeconds !== undefined && typeof value.clockSkewSeconds !== "number") return undefined;
+  return {
+    kind: "mcp_account_link_lifecycle_config",
+    expectedIssuer: value.expectedIssuer,
+    expectedResource: value.expectedResource,
+    expectedProviderEnvironment: value.expectedProviderEnvironment,
+    allowedClientIds: Object.freeze([...value.allowedClientIds]),
+    ...(value.clockSkewSeconds !== undefined ? { clockSkewSeconds: value.clockSkewSeconds } : {}),
+    version: 1,
+  };
+}
+
+function evaluateLifecycleScopes(
+  scopes: readonly string[],
+): { ok: true } | { ok: false; reason: "missing_canonical_scope" | "legacy_scope" } {
+  if (!scopes.includes(TWOWEEKS_APPLICATIONS_READ_SCOPE)) return { ok: false, reason: "missing_canonical_scope" };
+  if (scopes.some((scope) => scope.includes(".") || scope !== TWOWEEKS_APPLICATIONS_READ_SCOPE)) {
+    return { ok: false, reason: "legacy_scope" };
+  }
+  return { ok: true };
+}
+
+function parseLifecycleIdentity(
+  value: unknown,
+  nowEpochSeconds: number,
+): Pick<ParsedLifecycleEvidence, "issuer" | "subject" | "providerEnvironment" | "clientId"> | undefined {
+  if (!isPlainRecord(value) || !hasOnlyAllowedAccountLinkKeys(value, LIFECYCLE_IDENTITY_KEYS)) return undefined;
+  if (value.kind !== "mcp_account_link_lifecycle_identity" || value.version !== 1) return undefined;
+  if (!isSafeEpochSeconds(nowEpochSeconds)) return undefined;
+  if (!isSafeHttpsIssuer(value.issuer)) return undefined;
+  if (!isSafeAccountLinkIdentifierValue(value.subject)) return undefined;
+  if (!isSafeAccountLinkIdentifierValue(value.providerEnvironment)) return undefined;
+  if (!isSafeAccountLinkIdentifierValue(value.clientId)) return undefined;
+  return {
+    issuer: value.issuer,
+    subject: value.subject,
+    providerEnvironment: value.providerEnvironment,
+    clientId: value.clientId,
+  };
+}
+
+async function readLifecycleCandidates(
+  ctx: unknown,
+  evidence: Pick<ParsedLifecycleEvidence, "issuer" | "subject" | "providerEnvironment" | "clientId">,
+): Promise<LifecycleCandidateRead> {
+  const lifecycleCtx = ctx as LifecycleQueryCtx;
+  const rows = await lifecycleCtx.db
+    .query("mcpAccountLinks")
+    .withIndex("by_provider_issuer_subject_environment", (q) =>
+      q
+        .eq("provider", "stytch")
+        .eq("issuer", evidence.issuer)
+        .eq("providerSubject", evidence.subject)
+        .eq("providerEnvironment", evidence.providerEnvironment),
+    )
+    .take(MCP_AUTH_POLICY_ACCOUNT_LINK_LOOKUP_MAX_CANDIDATES + 1);
+
+  if (rows.length > MCP_AUTH_POLICY_ACCOUNT_LINK_LOOKUP_MAX_CANDIDATES) {
+    return { ok: false, reason: "candidate_overflow" };
+  }
+
+  const candidates = rows.map((row) => {
+    const projection = projectMcpAccountLinkCanonicalStorageRecordToPolicyCandidate(row);
+    if (projection.classification !== "canonical_ready" || !projection.policyCandidate) return undefined;
+    if (!isLifecycleStorageRow(row)) return undefined;
+    return {
+      row,
+      policyCandidate: projection.policyCandidate,
+    };
+  });
+
+  if (candidates.some((candidate) => candidate === undefined)) {
+    return { ok: false, reason: "malformed_candidate" };
+  }
+
+  return {
+    ok: true,
+    rows: Object.freeze(
+      candidates.filter(
+        (candidate): candidate is { row: LifecycleStorageRow; policyCandidate: McpAccountLinkCanonicalPolicyCandidateV1 } =>
+          candidate !== undefined,
+      ),
+    ),
+  };
+}
+
+async function readExactClientAccountLinkRows(
+  ctx: unknown,
+  evidence: Pick<ParsedLifecycleEvidence, "subject" | "clientId">,
+): Promise<ExactClientAccountLinkRowsRead> {
+  const lifecycleCtx = ctx as LifecycleQueryCtx;
+  const rows = await lifecycleCtx.db
+    .query("mcpAccountLinks")
+    .withIndex("by_provider_subject_client", (q) =>
+      q
+        .eq("provider", "stytch")
+        .eq("providerSubject", evidence.subject)
+        .eq("clientId", evidence.clientId),
+    )
+    .take(MCP_AUTH_POLICY_ACCOUNT_LINK_LOOKUP_MAX_CANDIDATES + 1);
+
+  if (rows.length > MCP_AUTH_POLICY_ACCOUNT_LINK_LOOKUP_MAX_CANDIDATES) {
+    return { ok: false, reason: "candidate_overflow" };
+  }
+
+  const candidates = rows.map((row): ExactClientLifecycleStorageRow | undefined => {
+    const classification = classifyMcpAccountLinkCanonicalStorageRecord(row);
+    if (!isLifecycleStorageRow(row) || classification === "malformed") return undefined;
+    return { row, classification };
+  });
+
+  if (candidates.some((candidate) => candidate === undefined)) {
+    return { ok: false, reason: "malformed_candidate" };
+  }
+
+  return {
+    ok: true,
+    rows: Object.freeze(
+      candidates.filter((candidate): candidate is ExactClientLifecycleStorageRow => candidate !== undefined),
+    ),
+  };
+}
+
+function isLifecycleStorageRow(value: unknown): value is LifecycleStorageRow {
+  const parsed = parseStorageAccountLinkRecord(value);
+  return (
+    parsed !== undefined &&
+    isPlainRecord(value) &&
+    typeof value._id === "string" &&
+    value.kind === "local_mcp_account_link_record" &&
+    value.version === 1 &&
+    typeof value.grantRef === "string" &&
+    typeof value.consentRef === "string" &&
+    typeof value.auditReasonCode === "string"
+  );
+}
+
+function buildCanonicalAccountLinkRecord(
+  owner: McpTrustedAccountLinkOwnerV1,
+  evidence: ParsedLifecycleEvidence,
+) {
+  const verifiedAtMilliseconds = toEpochMilliseconds(evidence.verifiedAtEpochSeconds);
+  return {
+    kind: "local_mcp_account_link_record" as const,
+    version: 1 as const,
+    provider: "stytch" as const,
+    providerSubject: evidence.subject,
+    twoweeksClerkId: owner.twoweeksClerkId,
+    clientId: evidence.clientId,
+    grantedReadScopes: [...MCP_ACCOUNT_LINK_LIFECYCLE_LEGACY_BASE_SCOPES],
+    grantRef: "mcp_lifecycle_grant_v1",
+    consentRef: "mcp_lifecycle_consent_v1",
+    state: "active" as const,
+    createdAt: verifiedAtMilliseconds,
+    updatedAt: verifiedAtMilliseconds,
+    lastVerifiedAt: verifiedAtMilliseconds,
+    auditReasonCode: "account_link_verified",
+    issuer: evidence.issuer,
+    providerEnvironment: evidence.providerEnvironment,
+    canonicalGrantedScopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
+    expiresAtEpochSeconds: evidence.expiresAtEpochSeconds,
+    canonicalAccountLinkVersion: 1 as const,
+  };
+}
+
+function isSameEvidenceAsStored(row: LifecycleStorageRow, evidence: ParsedLifecycleEvidence): boolean {
+  return (
+    row.issuer === evidence.issuer &&
+    row.providerSubject === evidence.subject &&
+    row.providerEnvironment === evidence.providerEnvironment &&
+    row.clientId === evidence.clientId &&
+    row.lastVerifiedAt === toEpochMilliseconds(evidence.verifiedAtEpochSeconds) &&
+    row.expiresAtEpochSeconds === evidence.expiresAtEpochSeconds &&
+    row.canonicalGrantedScopes?.length === 1 &&
+    row.canonicalGrantedScopes[0] === TWOWEEKS_APPLICATIONS_READ_SCOPE &&
+    row.canonicalAccountLinkVersion === 1
+  );
+}
+
+function allowLifecycle(
+  operation: "link" | "refresh" | "revoke",
+  reason: Extract<
+    McpAccountLinkLifecycleReasonV1,
+    "linked" | "refreshed" | "revoked" | "already_linked" | "unchanged"
+  >,
+  twoweeksClerkId: string,
+  identity: Pick<ParsedLifecycleEvidence, "subject" | "clientId">,
+): McpAccountLinkLifecycleResultV1 {
+  return Object.freeze({
+    kind: "mcp_account_link_lifecycle_result",
+    operation,
+    ok: true,
+    reason,
+    serverOnly: Object.freeze({
+      twoweeksClerkId,
+      provider: "stytch" as const,
+      subject: identity.subject,
+      clientId: identity.clientId,
+      version: 1 as const,
+    }),
+    modelVisible: false,
+    version: 1,
+  });
+}
+
+function denyLifecycle(
+  operation: "link" | "refresh" | "revoke",
+  reason: Exclude<
+    McpAccountLinkLifecycleReasonV1,
+    "linked" | "refreshed" | "revoked" | "already_linked" | "unchanged"
+  >,
+): McpAccountLinkLifecycleResultV1 {
+  return Object.freeze({
+    kind: "mcp_account_link_lifecycle_result",
+    operation,
+    ok: false,
+    reason,
+    safeFailure: Object.freeze({
+      code: "mcp_account_link_lifecycle_denied" as const,
+      message: "Account-link lifecycle denied." as const,
+      safeForModel: true as const,
+      tokenEchoed: false as const,
+      identityEchoed: false as const,
+      version: 1 as const,
+    }),
+    modelVisible: false,
+    version: 1,
+  });
+}
 
 export const internalMarkMcpAccountLinkState = internalMutation({
   args: {
@@ -618,6 +1324,16 @@ type ParsedStorageAccountLinkRecord = Readonly<{
   canonicalAccountLinkVersion?: 1;
 }>;
 
+type LifecycleStorageRow = ParsedStorageAccountLinkRecord &
+  Readonly<{
+    _id: string;
+    kind: "local_mcp_account_link_record";
+    version: 1;
+    grantRef: string;
+    consentRef: string;
+    auditReasonCode: string;
+  }>;
+
 type CanonicalReadyParsedStorageAccountLinkRecord = ParsedStorageAccountLinkRecord &
   Readonly<{
     issuer: string;
@@ -631,6 +1347,56 @@ type ParsedStorageAccountLinkTiming = Pick<
   ParsedStorageAccountLinkRecord,
   "state" | "createdAt" | "updatedAt" | "lastVerifiedAt" | "revokedAt" | "staleAt"
 >;
+
+type ParsedLifecycleEvidence = Readonly<{
+  issuer: string;
+  subject: string;
+  providerEnvironment: string;
+  clientId: string;
+  resource: string;
+  expiresAtEpochSeconds: number;
+  verifiedAtEpochSeconds: number;
+}>;
+
+type LifecycleCandidateRead =
+  | {
+      ok: true;
+      rows: readonly {
+        row: LifecycleStorageRow;
+        policyCandidate: McpAccountLinkCanonicalPolicyCandidateV1;
+      }[];
+    }
+  | {
+      ok: false;
+      reason: "candidate_overflow" | "malformed_candidate";
+    };
+type ExactClientLifecycleStorageRow = Readonly<{
+  row: LifecycleStorageRow;
+  classification: Exclude<McpAccountLinkCanonicalStorageClassificationV1, "malformed">;
+}>;
+type ExactClientAccountLinkRowsRead =
+  | {
+      ok: true;
+      rows: readonly ExactClientLifecycleStorageRow[];
+    }
+  | {
+      ok: false;
+      reason: "candidate_overflow" | "malformed_candidate";
+    };
+type LifecycleIndexBuilder = {
+  eq(fieldName: string, value: unknown): LifecycleIndexBuilder;
+};
+type LifecycleIndexedQuery = {
+  take(limit: number): Promise<unknown[]>;
+};
+type LifecycleTableQuery = {
+  withIndex(indexName: string, buildQuery: (query: LifecycleIndexBuilder) => unknown): LifecycleIndexedQuery;
+};
+type LifecycleQueryCtx = {
+  db: {
+    query(tableName: "mcpAccountLinks"): LifecycleTableQuery;
+  };
+};
 
 function parseStorageAccountLinkRecord(value: unknown): ParsedStorageAccountLinkRecord | undefined {
   const record = readStorageAccountLinkRecord(value);
@@ -847,11 +1613,23 @@ function isAccountLinkState(value: unknown): value is "active" | "revoked" | "st
 }
 
 function isSafeEpochSeconds(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+  return (
+    typeof value === "number" &&
+    Number.isSafeInteger(value) &&
+    value >= 0 &&
+    value <= MAX_SAFE_EPOCH_SECONDS_FOR_MILLISECONDS
+  );
 }
 
 function toEpochSeconds(epochMilliseconds: number): number {
   return Math.floor(epochMilliseconds / 1_000);
+}
+
+function toEpochMilliseconds(epochSeconds: number): number {
+  if (!isSafeEpochSeconds(epochSeconds)) {
+    throw new Error("MCP account link epoch seconds are invalid");
+  }
+  return epochSeconds * 1_000;
 }
 
 function isOptionalAccountLinkTimestamp(value: unknown): value is number | undefined {
