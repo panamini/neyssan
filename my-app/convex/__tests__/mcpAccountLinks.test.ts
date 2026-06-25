@@ -1063,6 +1063,24 @@ describe("Convex MCP account links", () => {
     expect(legacyCtx.inserts).toHaveLength(0);
     expect(legacyCtx.rows).toEqual([legacyExactClientRow]);
 
+    const hiddenCanonicalExactClientRow = storedAccountLink({
+      _id: "mcpAccountLinks_fixture_1",
+      ...canonicalAccountLinkRecord({
+        issuer: "https://other-auth.example.test/oauth",
+      }),
+    });
+    const hiddenCanonicalCtx = makeCtx([hiddenCanonicalExactClientRow]);
+    await expect(
+      internalLinkCanonicalMcpAccount._handler(hiddenCanonicalCtx.ctx as any, {
+        trustedOwner: trustedOwner(),
+        evidence: verifiedEvidence(),
+        config: lifecycleConfig(),
+        nowEpochSeconds: NOW_SECONDS,
+      }),
+    ).resolves.toMatchObject({ ok: false, reason: "duplicate_account_link" });
+    expect(hiddenCanonicalCtx.inserts).toHaveLength(0);
+    expect(hiddenCanonicalCtx.rows).toEqual([hiddenCanonicalExactClientRow]);
+
     const revokedExactClientRow = storedAccountLink({
       _id: "mcpAccountLinks_fixture_1",
       ...accountLinkRecord({ state: "revoked", revokedAt: NOW }),
