@@ -1,0 +1,49 @@
+name: Semgrep CE
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: semgrep-ce-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semgrep:
+    name: semgrep-ce/scan
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep:latest@sha256:06938c1f365d3f67b8cedd8bc117607ae64253f88a0e768e9da9408548927dd6
+    if: github.actor != 'dependabot[bot]'
+    steps:
+      - name: Checkout repository
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git init .
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}"
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            git fetch --no-tags --prune origin \
+              "+${{ github.event.pull_request.base.sha }}:refs/remotes/pr/base" \
+              "+${{ github.event.pull_request.head.sha }}:refs/remotes/pr/head"
+            git checkout --force refs/remotes/pr/head
+          else
+            git fetch --no-tags --prune origin "${GITHUB_SHA}"
+            git checkout --force FETCH_HEAD
+          fi
+
+      - name: Run Semgrep CE on pull request changes
+        if: github.event_name == 'pull_request'
+        run: |
+          BASELINE_COMMIT="$(git merge-base HEAD "${{ github.event.pull_request.base.sha }}")"
+          semgrep scan --config auto --baseline-commit "$BASELINE_COMMIT" --error
+
+      - name: Run Semgrep CE full scan
+        if: github.event_name == 'workflow_dispatch'
+        run: semgrep scan --config auto --error
