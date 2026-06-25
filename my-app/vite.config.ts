@@ -53,7 +53,9 @@ export function createLocalMcpDevEndpointPlugin(
     jwksJson: env[LOCAL_MCP_DEV_STYTCH_JWKS_JSON_VAR],
   });
   if (composition.reason !== "disabled" && !composition.enabled) {
-    throw new TypeError("Local MCP dev Stytch composition configuration is invalid.");
+    throw new TypeError(
+      `Local MCP dev Stytch composition configuration is invalid (${composition.reason}).`,
+    );
   }
   const endpointDependencies = Object.freeze({
     ...(composition.enabled ? composition.dependencies : {}),
@@ -220,7 +222,7 @@ function isStrictEnabledFlag(env: Readonly<Record<string, string | undefined>>, 
 }
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(() => ({
   plugins: [react(), createLocalMcpDevEndpointPlugin()].filter((plugin): plugin is Plugin => plugin !== undefined),
   server: {
     host: "localhost",
@@ -244,4 +246,4 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["src/setupTests.ts"],
   },
-});
+}));

@@ -1,4 +1,5 @@
 import { generateKeyPairSync } from "node:crypto";
+import { readFileSync } from "node:fs";
 import type { JWK, JSONWebKeySet } from "jose";
 import { describe, expect, it } from "vitest";
 import {
@@ -110,6 +111,15 @@ describe("local MCP dev auth runtime composition", () => {
     expect(Object.isFrozen(parsed.jwks)).toBe(true);
     expect(Object.isFrozen(parsed.jwks.keys)).toBe(true);
     expect(Object.isFrozen(parsed.jwks.keys[0])).toBe(true);
+  });
+
+  it("keeps Vite default config plugin construction lazy and reports safe reasons", () => {
+    const source = readFileSync("vite.config.ts", "utf8");
+
+    expect(source).toMatch(/export\s+default\s+defineConfig\(\s*\(\)\s*=>/u);
+    expect(source).toContain(
+      "Local MCP dev Stytch composition configuration is invalid (${composition.reason}).",
+    );
   });
 });
 
