@@ -175,7 +175,6 @@ async function main() {
           {
             cwd: appRoot,
             stdio: "inherit",
-            shell: true,
           },
         );
         if (syncResult.status !== 0) {
@@ -186,7 +185,6 @@ async function main() {
             ["convex", "env", "get", "CONVEX_PARSER_URL"],
             {
               cwd: appRoot,
-              shell: true,
               stdio: "pipe",
               encoding: "utf8",
             },
