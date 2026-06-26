@@ -171,6 +171,12 @@ export type McpOAuthPreAuthIntentRecordV1 = Readonly<{
   storageVersion: 1;
 }>;
 
+export type McpOAuthPreAuthIntentClaimableRecordV1 = McpOAuthPreAuthIntentRecordV1 &
+  Readonly<{
+    _id: unknown;
+    _creationTime?: number;
+  }>;
+
 type StoredMcpOAuthPreAuthIntentRecordV1 = McpOAuthPreAuthIntentRecordV1 &
   Readonly<{
     _id?: unknown;
@@ -400,6 +406,17 @@ export function classifyMcpOAuthPreAuthIntentStorageRecord(
   if (record.status === "pre_auth_pending") return "pre_auth_pending_valid";
   if (record.status === "claimed") return "claimed_valid";
   return "expired_valid";
+}
+
+export function readMcpOAuthPreAuthIntentClaimableRecord(
+  value: unknown,
+): McpOAuthPreAuthIntentClaimableRecordV1 | undefined {
+  const record = parseStorageRecord(value);
+  if (!record || record._id === undefined) return undefined;
+  return {
+    ...record,
+    _id: record._id,
+  };
 }
 
 function buildPreAuthIntentRecord(
