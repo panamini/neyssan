@@ -744,6 +744,31 @@ describe("MCP OAuth login-return continuation boundary", () => {
     expect(JSON.stringify(result)).not.toContain(HANDLE_HASH);
   });
 
+  it("rejects consumed handoffs without the canonical applications read scope", async () => {
+    const result = await resumeMcpOAuthAuthorizationAfterLoginReturn({
+      kind: "resume_mcp_oauth_authorization_after_login_return_input",
+      continuationUrlOrPath: `${MCP_OAUTH_CONTINUATION_PATH}?${MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER}=${RAW_HANDLE}`,
+      trustedOwner: OWNER,
+      consumeIntent: async () =>
+        consumeOk(
+          handoff({
+            scopes: ["openid"],
+          }),
+        ),
+      handleCodec: deterministicCodec,
+      now: NOW,
+      config: config(),
+      version: 1,
+    });
+
+    expect(result).toMatchObject({
+      resumed: false,
+      reason: "malformed_consumed_handoff",
+    });
+    expect(JSON.stringify(result)).not.toContain("openid");
+    expect(JSON.stringify(result)).not.toContain(RAW_HANDLE);
+  });
+
   it("rejects consumed handoffs with unknown optional provider parameters", async () => {
     const result = await resumeMcpOAuthAuthorizationAfterLoginReturn({
       kind: "resume_mcp_oauth_authorization_after_login_return_input",
@@ -786,6 +811,41 @@ describe("MCP OAuth login-return continuation boundary", () => {
           safeForLogging: false,
           version: 1,
         }) as unknown as McpOAuthIntentConsumeResultV1,
+      handleCodec: deterministicCodec,
+      now: NOW,
+      config: config(),
+      version: 1,
+    });
+
+    expect(result).toMatchObject({
+      resumed: false,
+      reason: "malformed_consumed_handoff",
+    });
+    expect(JSON.stringify(result)).not.toContain(RAW_HANDLE);
+    expect(JSON.stringify(result)).not.toContain(HANDLE_HASH);
+  });
+
+  it("fails closed when consume storage returns accessor-backed success records", async () => {
+    const consumeResult = {
+      kind: "mcp_oauth_authorization_intent_consume_result",
+      ok: true,
+      reason: "consumed",
+      modelVisible: false,
+      safeForLogging: false,
+      version: 1,
+    };
+    Object.defineProperty(consumeResult, "serverOnly", {
+      enumerable: true,
+      get: () => {
+        throw new Error("serverOnly getter should not run");
+      },
+    });
+
+    const result = await resumeMcpOAuthAuthorizationAfterLoginReturn({
+      kind: "resume_mcp_oauth_authorization_after_login_return_input",
+      continuationUrlOrPath: `${MCP_OAUTH_CONTINUATION_PATH}?${MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER}=${RAW_HANDLE}`,
+      trustedOwner: OWNER,
+      consumeIntent: async () => consumeResult as unknown as McpOAuthIntentConsumeResultV1,
       handleCodec: deterministicCodec,
       now: NOW,
       config: config(),
@@ -898,6 +958,7 @@ function handoff(
     trustedOwner?: McpOAuthAuthorizationTrustedOwnerV1;
     authorizationOrigin?: string;
     approvedOptionalParameters?: McpOAuthAuthorizationRequestBoundaryHandoffV1["providerForwardRequest"]["approvedOptionalParameters"];
+    scopes?: readonly string[];
   }> = {},
 ): McpOAuthAuthorizationRequestBoundaryHandoffV1 {
   const approvedOptionalParameters = overrides.approvedOptionalParameters;
@@ -911,7 +972,7 @@ function handoff(
       clientId: CLIENT_ID,
       redirectUri: REDIRECT_URI,
       resource: RESOURCE,
-      scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE, "openid"],
+      scopes: overrides.scopes ?? [TWOWEEKS_APPLICATIONS_READ_SCOPE, "openid"],
       state: STATE,
       pkce: {
         codeChallenge: PKCE,

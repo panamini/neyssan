@@ -3,6 +3,7 @@ import type {
   McpOAuthAuthorizationRequestBoundaryHandoffV1,
   McpOAuthAuthorizationTrustedOwnerV1,
 } from "./mcpOAuthAuthorizationRequestBoundary";
+import { TWOWEEKS_APPLICATIONS_READ_SCOPE } from "./mcpAuthPolicyBoundary";
 import {
   MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER,
   MCP_OAUTH_CONTINUATION_PATH,
@@ -803,7 +804,11 @@ function hasAcceptedProviderEnvelope(providerForwardRequest: Record<string, unkn
 }
 
 function hasAcceptedProviderScopes(scopes: unknown): scopes is string[] {
-  return Array.isArray(scopes) && scopes.every((scope) => typeof scope === "string");
+  return (
+    Array.isArray(scopes) &&
+    scopes.every((scope) => typeof scope === "string") &&
+    scopes.includes(TWOWEEKS_APPLICATIONS_READ_SCOPE)
+  );
 }
 
 function hasAcceptedPkce(pkce: Record<string, unknown>): boolean {
@@ -1060,10 +1065,14 @@ function readRecord<T extends readonly string[]>(
   if (!isPlainRecord(value)) return undefined;
   const actualKeys = Reflect.ownKeys(value);
   if (actualKeys.length !== allowedKeys.length) return undefined;
+  const record: Partial<Record<T[number], unknown>> = {};
   for (const key of actualKeys) {
     if (typeof key !== "string" || !allowedKeys.includes(key)) return undefined;
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor || !descriptor.enumerable || !("value" in descriptor)) return undefined;
+    record[key as T[number]] = descriptor.value;
   }
-  return value as Record<T[number], unknown>;
+  return Object.freeze(record) as Record<T[number], unknown>;
 }
 
 function isLocalhost(hostname: string): boolean {
