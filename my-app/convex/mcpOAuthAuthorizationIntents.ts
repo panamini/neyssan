@@ -346,22 +346,22 @@ export const internalConsumeMcpOAuthAuthorizationIntent = internalMutation({
     if (rows.length > 1) return denyConsume("duplicate_storage_record");
 
     const row = rows[0] as StoredMcpOAuthAuthorizationIntentRecordV1;
-    const classification = classifyMcpOAuthAuthorizationIntentStorageRecord(row);
-    if (classification === "malformed") return denyConsume("malformed_storage_record");
-    if (row.twoweeksClerkId !== trustedOwner.twoweeksClerkId) return denyConsume("not_found_or_forbidden");
-    if (classification === "consumed_valid") return denyConsume("already_consumed");
-    if (classification === "expired_valid") return denyConsume("expired");
-    if (args.now < row.createdAt) return denyConsume("invalid_input");
-    if (args.now >= row.expiresAt) {
-      await ctx.db.patch(row._id as never, {
+    const parsedRow = parseStorageRecord(row);
+    if (!parsedRow) return denyConsume("malformed_storage_record");
+    if (parsedRow.twoweeksClerkId !== trustedOwner.twoweeksClerkId) return denyConsume("not_found_or_forbidden");
+    if (parsedRow.status === "consumed") return denyConsume("already_consumed");
+    if (parsedRow.status === "expired") return denyConsume("expired");
+    if (args.now < parsedRow.createdAt) return denyConsume("invalid_input");
+    if (args.now >= parsedRow.expiresAt) {
+      await ctx.db.patch(parsedRow._id as never, {
         status: "expired",
         updatedAt: args.now,
       });
       return denyConsume("expired");
     }
 
-    const handoff = buildAuthorizationRequestHandoff(row);
-    await ctx.db.patch(row._id as never, {
+    const handoff = buildAuthorizationRequestHandoff(parsedRow);
+    await ctx.db.patch(parsedRow._id as never, {
       status: "consumed",
       updatedAt: args.now,
       consumedAt: args.now,
@@ -826,7 +826,7 @@ function readSafeHttpsUrl(value: unknown, options: { allowSearch: boolean }): st
     return undefined;
   }
   if (!options.allowSearch && parsed.search) return undefined;
-  return text;
+  return parsed.toString();
 }
 
 function readBoundedStorageText(value: unknown, maxLength: number): string | undefined {

@@ -420,6 +420,23 @@ describe("Convex MCP OAuth authorization intents", () => {
     expect(classifyMcpOAuthAuthorizationIntentStorageRecord(record)).toBe(expected);
   });
 
+  it("reconstructs provider URLs in the same canonical form as the request boundary", async () => {
+    const redirectUri = "https://chatgpt.example.test";
+    const canonicalRedirectUri = new URL(redirectUri).toString();
+    const { ctx } = makeCtx([storedIntent({ redirectUri })]);
+
+    const result = await internalConsumeMcpOAuthAuthorizationIntent._handler(ctx as any, {
+      trustedOwner: trustedOwner(),
+      intentHandleHash: VALID_HANDLE_HASH,
+      now: NOW + 1,
+      version: 1,
+    });
+
+    expect(result.ok && result.serverOnly.authorizationRequestHandoff.providerForwardRequest.redirectUri).toBe(
+      canonicalRedirectUri,
+    );
+  });
+
   it("does not echo sensitive values in serialized failures", async () => {
     const sensitiveValues = [
       STATE,
