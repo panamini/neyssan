@@ -186,6 +186,65 @@ describe("MCP OAuth login-return continuation boundary", () => {
     expect(JSON.stringify(result)).not.toContain(OTHER_HANDLE_HASH);
   });
 
+  it("enforces the configured raw handle length before creating storage", async () => {
+    const longRawHandle = "C".repeat(44);
+    const createIntent = vi.fn<[McpOAuthIntentCreateInputV1], Promise<McpOAuthIntentCreateResultV1>>(
+      async () => createOk(),
+    );
+    const longHandleCodec: McpOAuthContinuationHandleCodecV1 = Object.freeze({
+      generate: () => Object.freeze({ rawHandle: longRawHandle, intentHandleHash: sha256Hex(longRawHandle) }),
+      validate: (rawHandle: unknown): rawHandle is string =>
+        typeof rawHandle === "string" && /^[A-Za-z0-9_-]+$/u.test(rawHandle),
+      hash: (rawHandle: string) => sha256Hex(rawHandle),
+    });
+
+    const result = await prepareMcpOAuthLoginReturnContinuation({
+      kind: "prepare_mcp_oauth_login_return_continuation_input",
+      authorizationRequestHandoff: handoff(),
+      trustedOwner: OWNER,
+      createIntent,
+      handleCodec: longHandleCodec,
+      now: NOW,
+      config: config({ maxRawHandleLength: RAW_HANDLE.length }),
+      version: 1,
+    });
+
+    expect(result).toMatchObject({
+      prepared: false,
+      reason: "invalid_continuation_handle",
+    });
+    expect(createIntent).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain(longRawHandle);
+  });
+
+  it("fails closed when create storage returns a malformed success payload", async () => {
+    const result = await prepareMcpOAuthLoginReturnContinuation({
+      kind: "prepare_mcp_oauth_login_return_continuation_input",
+      authorizationRequestHandoff: handoff(),
+      trustedOwner: OWNER,
+      createIntent: async () =>
+        ({
+          kind: "mcp_oauth_authorization_intent_create_result",
+          ok: true,
+          reason: "created",
+          modelVisible: false,
+          safeForLogging: false,
+          version: 1,
+        }) as unknown as McpOAuthIntentCreateResultV1,
+      handleCodec: deterministicCodec,
+      now: NOW,
+      config: config(),
+      version: 1,
+    });
+
+    expect(result).toMatchObject({
+      prepared: false,
+      reason: "intent_create_failed",
+    });
+    expect(JSON.stringify(result)).not.toContain(RAW_HANDLE);
+    expect(JSON.stringify(result)).not.toContain(HANDLE_HASH);
+  });
+
   it("requires an explicit sensitive-hint decision instead of silently omitting hints", async () => {
     const createIntent = vi.fn<[McpOAuthIntentCreateInputV1], Promise<McpOAuthIntentCreateResultV1>>(
       async () => createOk(),
@@ -278,6 +337,37 @@ describe("MCP OAuth login-return continuation boundary", () => {
     expect(JSON.stringify(result)).not.toContain(RAW_HANDLE);
   });
 
+  it("rejects oversized continuation handles before calling consume storage", async () => {
+    const longRawHandle = "D".repeat(44);
+    const consumeIntent = vi.fn<[McpOAuthIntentConsumeInputV1], Promise<McpOAuthIntentConsumeResultV1>>(
+      async () => consumeOk(handoff()),
+    );
+    const longHandleCodec: McpOAuthContinuationHandleCodecV1 = Object.freeze({
+      generate: () => Object.freeze({ rawHandle: longRawHandle, intentHandleHash: sha256Hex(longRawHandle) }),
+      validate: (rawHandle: unknown): rawHandle is string =>
+        typeof rawHandle === "string" && /^[A-Za-z0-9_-]+$/u.test(rawHandle),
+      hash: (rawHandle: string) => sha256Hex(rawHandle),
+    });
+
+    const result = await resumeMcpOAuthAuthorizationAfterLoginReturn({
+      kind: "resume_mcp_oauth_authorization_after_login_return_input",
+      continuationUrlOrPath: `${MCP_OAUTH_CONTINUATION_PATH}?${MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER}=${longRawHandle}`,
+      trustedOwner: OWNER,
+      consumeIntent,
+      handleCodec: longHandleCodec,
+      now: NOW,
+      config: config({ maxRawHandleLength: RAW_HANDLE.length }),
+      version: 1,
+    });
+
+    expect(result).toMatchObject({
+      resumed: false,
+      reason: "invalid_continuation_handle",
+    });
+    expect(consumeIntent).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain(longRawHandle);
+  });
+
   it.each([
     ["wrong origin", "https://evil.example.test/mcp/oauth/authorize/continue?mcp_oauth_intent=abc"],
     ["wrong path", "/cv?mcp_oauth_intent=abc"],
@@ -361,6 +451,85 @@ describe("MCP OAuth login-return continuation boundary", () => {
     expect(JSON.stringify(result)).not.toContain(OTHER_OWNER.twoweeksClerkId);
   });
 
+  it("rejects consumed handoffs with an unconfigured authorization origin", async () => {
+    const result = await resumeMcpOAuthAuthorizationAfterLoginReturn({
+      kind: "resume_mcp_oauth_authorization_after_login_return_input",
+      continuationUrlOrPath: `${MCP_OAUTH_CONTINUATION_PATH}?${MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER}=${RAW_HANDLE}`,
+      trustedOwner: OWNER,
+      consumeIntent: async () => consumeOk(handoff({ authorizationOrigin: "https://evil.example.test" })),
+      handleCodec: deterministicCodec,
+      now: NOW,
+      config: config(),
+      version: 1,
+    });
+
+    expect(result).toMatchObject({
+      resumed: false,
+      reason: "malformed_consumed_handoff",
+    });
+    expect(JSON.stringify(result)).not.toContain("https://evil.example.test");
+  });
+
+  it("fails closed when consume storage returns a malformed success payload", async () => {
+    const result = await resumeMcpOAuthAuthorizationAfterLoginReturn({
+      kind: "resume_mcp_oauth_authorization_after_login_return_input",
+      continuationUrlOrPath: `${MCP_OAUTH_CONTINUATION_PATH}?${MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER}=${RAW_HANDLE}`,
+      trustedOwner: OWNER,
+      consumeIntent: async () =>
+        ({
+          kind: "mcp_oauth_authorization_intent_consume_result",
+          ok: true,
+          reason: "consumed",
+          modelVisible: false,
+          safeForLogging: false,
+          version: 1,
+        }) as unknown as McpOAuthIntentConsumeResultV1,
+      handleCodec: deterministicCodec,
+      now: NOW,
+      config: config(),
+      version: 1,
+    });
+
+    expect(result).toMatchObject({
+      resumed: false,
+      reason: "malformed_consumed_handoff",
+    });
+    expect(JSON.stringify(result)).not.toContain(RAW_HANDLE);
+    expect(JSON.stringify(result)).not.toContain(HANDLE_HASH);
+  });
+
+  it("fails closed when consume storage returns a null handoff", async () => {
+    const result = await resumeMcpOAuthAuthorizationAfterLoginReturn({
+      kind: "resume_mcp_oauth_authorization_after_login_return_input",
+      continuationUrlOrPath: `${MCP_OAUTH_CONTINUATION_PATH}?${MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER}=${RAW_HANDLE}`,
+      trustedOwner: OWNER,
+      consumeIntent: async () =>
+        ({
+          kind: "mcp_oauth_authorization_intent_consume_result",
+          ok: true,
+          reason: "consumed",
+          serverOnly: {
+            authorizationRequestHandoff: null,
+            version: 1,
+          },
+          modelVisible: false,
+          safeForLogging: false,
+          version: 1,
+        }) as unknown as McpOAuthIntentConsumeResultV1,
+      handleCodec: deterministicCodec,
+      now: NOW,
+      config: config(),
+      version: 1,
+    });
+
+    expect(result).toMatchObject({
+      resumed: false,
+      reason: "malformed_consumed_handoff",
+    });
+    expect(JSON.stringify(result)).not.toContain(RAW_HANDLE);
+    expect(JSON.stringify(result)).not.toContain(HANDLE_HASH);
+  });
+
   it("keeps source route-independent and free of provider/runtime wiring", () => {
     const source = readFileSync(SOURCE_PATH, "utf8");
 
@@ -381,6 +550,7 @@ function config(
     applicationOrigin: APP_ORIGIN,
     fixedSignInPath: "/sign-in",
     fixedContinuationPath: MCP_OAUTH_CONTINUATION_PATH,
+    fixedAuthorizationPageOrigin: AUTHORIZATION_ORIGIN,
     fixedAuthorizationPagePath: AUTHORIZATION_PATH,
     signInReturnParameterName: MCP_OAUTH_SIGN_IN_RETURN_PARAMETER,
     continuationHandleParameterName: MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER,
@@ -404,13 +574,14 @@ function config(
 function handoff(
   overrides: Readonly<{
     trustedOwner?: McpOAuthAuthorizationTrustedOwnerV1;
+    authorizationOrigin?: string;
     approvedOptionalParameters?: McpOAuthAuthorizationRequestBoundaryHandoffV1["providerForwardRequest"]["approvedOptionalParameters"];
   }> = {},
 ): McpOAuthAuthorizationRequestBoundaryHandoffV1 {
   const approvedOptionalParameters = overrides.approvedOptionalParameters;
   return {
     authorizationPage: {
-      origin: AUTHORIZATION_ORIGIN,
+      origin: overrides.authorizationOrigin ?? AUTHORIZATION_ORIGIN,
       path: AUTHORIZATION_PATH,
     },
     providerForwardRequest: {

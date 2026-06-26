@@ -14,6 +14,7 @@ export type McpOAuthLoginReturnContinuationBoundaryConfigV1 = Readonly<{
   applicationOrigin: string;
   fixedSignInPath: "/sign-in";
   fixedContinuationPath: typeof MCP_OAUTH_CONTINUATION_PATH;
+  fixedAuthorizationPageOrigin: string;
   fixedAuthorizationPagePath: string;
   signInReturnParameterName: typeof MCP_OAUTH_SIGN_IN_RETURN_PARAMETER;
   continuationHandleParameterName: typeof MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER;
@@ -238,6 +239,7 @@ const CONFIG_KEYS = [
   "applicationOrigin",
   "fixedSignInPath",
   "fixedContinuationPath",
+  "fixedAuthorizationPageOrigin",
   "fixedAuthorizationPagePath",
   "signInReturnParameterName",
   "continuationHandleParameterName",
@@ -256,6 +258,18 @@ const ROUTE_CONTRACT_KEYS = [
   "robotsTag",
   "version",
 ] as const;
+const CREATE_SUCCESS_KEYS = [
+  "kind",
+  "ok",
+  "reason",
+  "serverOnly",
+  "modelVisible",
+  "safeForLogging",
+  "version",
+] as const;
+const CREATE_SUCCESS_SERVER_ONLY_KEYS = ["status", "expiresAt", "version"] as const;
+const CONSUME_SUCCESS_KEYS = CREATE_SUCCESS_KEYS;
+const CONSUME_SUCCESS_SERVER_ONLY_KEYS = ["authorizationRequestHandoff", "version"] as const;
 const SENSITIVE_OPTIONAL_PARAMETERS = ["login_hint", "id_token_hint"] as const;
 const RESTORED_OPTIONAL_PARAMETERS = ["nonce", "prompt"] as const;
 
@@ -307,6 +321,7 @@ export async function prepareMcpOAuthLoginReturnContinuation(
   const expectedIntentHandleHash = hashContinuationHandleWithCodec(codec, generated.rawHandle);
   if (
     !codec.validate(generated.rawHandle) ||
+    generated.rawHandle.length > config.maxRawHandleLength ||
     !isValidIntentHandleHash(generated.intentHandleHash) ||
     generated.intentHandleHash !== expectedIntentHandleHash
   ) {
@@ -335,7 +350,7 @@ export async function prepareMcpOAuthLoginReturnContinuation(
     return prepareDenied("intent_create_failed");
   }
 
-  if (!createResult.ok) return prepareDenied("intent_create_failed");
+  if (!isCreateIntentSuccess(createResult)) return prepareDenied("intent_create_failed");
 
   return Object.freeze({
     kind: "prepare_mcp_oauth_login_return_continuation_result",
@@ -401,6 +416,7 @@ export async function resumeMcpOAuthAuthorizationAfterLoginReturn(
   }
 
   if (!consumeResult.ok) return resumeDenied(mapConsumeFailure(consumeResult.reason));
+  if (!isConsumeIntentSuccess(consumeResult)) return resumeDenied("malformed_consumed_handoff");
 
   const handoff = consumeResult.serverOnly.authorizationRequestHandoff;
   if (!sameTrustedOwner(input.trustedOwner, handoff.trustedOwner) || !isAcceptedAuthorizationHandoff(handoff, config)) {
@@ -474,6 +490,7 @@ function reconstructAuthorizationUrl(
   handoff: McpOAuthAuthorizationRequestBoundaryHandoffV1,
   config: McpOAuthLoginReturnContinuationBoundaryConfigV1,
 ): Readonly<{ authorizationUrl: string; authorizationPath: string }> | undefined {
+  if (handoff.authorizationPage.origin !== config.fixedAuthorizationPageOrigin) return undefined;
   if (handoff.authorizationPage.path !== config.fixedAuthorizationPagePath) return undefined;
 
   const query = new URLSearchParams();
@@ -494,7 +511,7 @@ function reconstructAuthorizationUrl(
   const authorizationPath = `${handoff.authorizationPage.path}?${query.toString()}`;
   return Object.freeze({
     authorizationPath,
-    authorizationUrl: `${handoff.authorizationPage.origin}${authorizationPath}`,
+    authorizationUrl: `${config.fixedAuthorizationPageOrigin}${authorizationPath}`,
   });
 }
 
@@ -515,19 +532,12 @@ function parseContinuationUrlOrPath(
     return { ok: false, reason: "invalid_continuation_url" };
   }
 
-  const isPath = value.startsWith("/") && !value.startsWith("//");
-  const url = readContinuationUrl(value, isPath, config);
-  if (!url || !isConfiguredContinuationUrl(url, config)) {
+  const url = readConfiguredContinuationUrl(value, config);
+  if (!url || !hasSingleContinuationHandleParameter(url, config)) {
     return { ok: false, reason: "invalid_continuation_url" };
   }
 
-  if (!hasConfiguredRawPath(value, isPath, url, config) || !hasSingleContinuationHandleParameter(url, config)) {
-    return { ok: false, reason: "invalid_continuation_url" };
-  }
-
-  const rawHandle = url.searchParams.get(config.continuationHandleParameterName);
-  if (!codec.validate(rawHandle)) return { ok: false, reason: "invalid_continuation_handle" };
-  return { ok: true, rawHandle };
+  return readValidContinuationRawHandle(url, config, codec);
 }
 
 function parseBoundaryConfig(
@@ -559,13 +569,16 @@ function isUnsafeContinuationInput(
   );
 }
 
-function readContinuationUrl(
+function readConfiguredContinuationUrl(
   value: string,
-  isPath: boolean,
   config: McpOAuthLoginReturnContinuationBoundaryConfigV1,
 ): URL | undefined {
+  const isPath = value.startsWith("/") && !value.startsWith("//");
   try {
-    return isPath ? new URL(value, config.applicationOrigin) : new URL(value);
+    const url = isPath ? new URL(value, config.applicationOrigin) : new URL(value);
+    if (!isConfiguredContinuationUrl(url, config)) return undefined;
+    if (!hasConfiguredRawPath(value, isPath, url, config)) return undefined;
+    return url;
   } catch {
     return undefined;
   }
@@ -607,6 +620,30 @@ function hasSingleContinuationHandleParameter(
   );
 }
 
+function readValidContinuationRawHandle(
+  url: URL,
+  config: McpOAuthLoginReturnContinuationBoundaryConfigV1,
+  codec: McpOAuthContinuationHandleCodecV1,
+):
+  | { ok: true; rawHandle: string }
+  | {
+      ok: false;
+      reason: "invalid_continuation_handle";
+    } {
+  const rawHandle = url.searchParams.get(config.continuationHandleParameterName);
+  if (!isBoundedRawHandle(rawHandle, config) || !codec.validate(rawHandle)) {
+    return { ok: false, reason: "invalid_continuation_handle" };
+  }
+  return { ok: true, rawHandle };
+}
+
+function isBoundedRawHandle(
+  rawHandle: unknown,
+  config: McpOAuthLoginReturnContinuationBoundaryConfigV1,
+): rawHandle is string {
+  return typeof rawHandle === "string" && rawHandle.length <= config.maxRawHandleLength;
+}
+
 function hasValidBoundaryConfigValues(
   record: Record<(typeof CONFIG_KEYS)[number], unknown>,
   routeContract: Record<(typeof ROUTE_CONTRACT_KEYS)[number], unknown> | undefined,
@@ -615,6 +652,7 @@ function hasValidBoundaryConfigValues(
     hasFixedBoundaryConfigValues(record) &&
     hasValidRouteContract(routeContract) &&
     isAbsoluteOrigin(record.applicationOrigin, record.allowHttpLocalhostApplicationOrigin === true) &&
+    isAbsoluteOrigin(record.fixedAuthorizationPageOrigin, record.allowHttpLocalhostApplicationOrigin === true) &&
     isSafeAbsolutePath(record.fixedAuthorizationPagePath) &&
     isPositiveBound(record.maxContinuationUrlLength) &&
     isPositiveBound(record.maxRawHandleLength) &&
@@ -649,9 +687,10 @@ function hasValidRouteContract(
 }
 
 function isAcceptedAuthorizationHandoff(
-  handoff: McpOAuthAuthorizationRequestBoundaryHandoffV1,
+  handoff: unknown,
   config: McpOAuthLoginReturnContinuationBoundaryConfigV1,
-): boolean {
+): handoff is McpOAuthAuthorizationRequestBoundaryHandoffV1 {
+  if (!isPlainRecord(handoff)) return false;
   return (
     hasAcceptedHandoffEnvelope(handoff) &&
     hasAcceptedAuthorizationPage(handoff, config) &&
@@ -662,58 +701,67 @@ function isAcceptedAuthorizationHandoff(
   );
 }
 
-function hasAcceptedHandoffEnvelope(handoff: McpOAuthAuthorizationRequestBoundaryHandoffV1): boolean {
+function hasAcceptedHandoffEnvelope(handoff: Record<string, unknown>): boolean {
   return handoff.modelVisible === false && handoff.safeForLogging === false && handoff.version === 1;
 }
 
 function hasAcceptedAuthorizationPage(
-  handoff: McpOAuthAuthorizationRequestBoundaryHandoffV1,
+  handoff: Record<string, unknown>,
   config: McpOAuthLoginReturnContinuationBoundaryConfigV1,
 ): boolean {
+  const authorizationPage = handoff.authorizationPage;
+  if (!isPlainRecord(authorizationPage)) return false;
   return (
-    handoff.authorizationPage.path === config.fixedAuthorizationPagePath &&
-    isAbsoluteOrigin(handoff.authorizationPage.origin, true)
+    authorizationPage.origin === config.fixedAuthorizationPageOrigin &&
+    authorizationPage.path === config.fixedAuthorizationPagePath &&
+    isAbsoluteOrigin(authorizationPage.origin, config.allowHttpLocalhostApplicationOrigin)
   );
 }
 
-function hasAcceptedProviderForwardRequest(
-  handoff: McpOAuthAuthorizationRequestBoundaryHandoffV1,
-): boolean {
+function hasAcceptedProviderForwardRequest(handoff: Record<string, unknown>): boolean {
+  const providerForwardRequest = handoff.providerForwardRequest;
+  if (!isPlainRecord(providerForwardRequest) || !isPlainRecord(providerForwardRequest.pkce)) return false;
   return (
-    handoff.providerForwardRequest.responseType === "code" &&
-    handoff.providerForwardRequest.pkce.codeChallengeMethod === "S256"
+    providerForwardRequest.responseType === "code" &&
+    providerForwardRequest.pkce.codeChallengeMethod === "S256"
   );
 }
 
-function hasPendingProviderValidation(handoff: McpOAuthAuthorizationRequestBoundaryHandoffV1): boolean {
+function hasPendingProviderValidation(handoff: Record<string, unknown>): boolean {
+  const providerValidation = handoff.providerValidation;
+  if (!isPlainRecord(providerValidation)) return false;
   return (
-    handoff.providerValidation.status === "pending" &&
-    handoff.providerValidation.clientRegistrationValidated === false &&
-    handoff.providerValidation.redirectUriValidatedByProvider === false &&
-    handoff.providerValidation.consentCompleted === false &&
-    handoff.providerValidation.authorizationCodeIssued === false &&
-    handoff.providerValidation.tokenIssued === false &&
-    handoff.providerValidation.stytchSubjectResolved === false &&
-    handoff.providerValidation.accountLinkCreated === false
+    providerValidation.status === "pending" &&
+    providerValidation.clientRegistrationValidated === false &&
+    providerValidation.redirectUriValidatedByProvider === false &&
+    providerValidation.consentCompleted === false &&
+    providerValidation.authorizationCodeIssued === false &&
+    providerValidation.tokenIssued === false &&
+    providerValidation.stytchSubjectResolved === false &&
+    providerValidation.accountLinkCreated === false
   );
 }
 
-function hasAcceptedFutureIntent(handoff: McpOAuthAuthorizationRequestBoundaryHandoffV1): boolean {
+function hasAcceptedFutureIntent(handoff: Record<string, unknown>): boolean {
+  const futureIntent = handoff.futureIntent;
+  if (!isPlainRecord(futureIntent)) return false;
   return (
-    handoff.futureIntent.kind === "mcp_oauth_authorization_intent_contract" &&
-    handoff.futureIntent.preservesProviderForwardRequest === true &&
-    handoff.futureIntent.serverMustPersistBeforeLoginReturn === true &&
-    handoff.futureIntent.modelVisible === false
+    futureIntent.kind === "mcp_oauth_authorization_intent_contract" &&
+    futureIntent.preservesProviderForwardRequest === true &&
+    futureIntent.serverMustPersistBeforeLoginReturn === true &&
+    futureIntent.modelVisible === false
   );
 }
 
-function hasAcceptedLoginReturnContract(handoff: McpOAuthAuthorizationRequestBoundaryHandoffV1): boolean {
+function hasAcceptedLoginReturnContract(handoff: Record<string, unknown>): boolean {
+  const loginReturn = handoff.loginReturn;
+  if (!isPlainRecord(loginReturn)) return false;
   return (
-    handoff.loginReturn.target === "authorization_page" &&
-    handoff.loginReturn.usesClientRedirectUri === false &&
-    handoff.loginReturn.containsOwnerIdentity === false &&
-    handoff.loginReturn.sensitiveOptionalParametersInUrl === false &&
-    handoff.loginReturn.persisted === false
+    loginReturn.target === "authorization_page" &&
+    loginReturn.usesClientRedirectUri === false &&
+    loginReturn.containsOwnerIdentity === false &&
+    loginReturn.sensitiveOptionalParametersInUrl === false &&
+    loginReturn.persisted === false
   );
 }
 
@@ -729,6 +777,71 @@ function mapConsumeFailure(reason: string): McpOAuthLoginReturnContinuationFailu
   if (reason === "not_found_or_forbidden") return "owner_or_intent_mismatch";
   if (reason === "malformed_storage_record") return "malformed_consumed_handoff";
   return "intent_unavailable";
+}
+
+function isCreateIntentSuccess(value: McpOAuthIntentCreateResultV1): value is Extract<
+  McpOAuthIntentCreateResultV1,
+  { ok: true }
+> {
+  const record = readSuccessEnvelope(value, CREATE_SUCCESS_KEYS);
+  return (
+    record !== undefined &&
+    hasExpectedSuccessEnvelope(record, "mcp_oauth_authorization_intent_create_result", "created") &&
+    hasExpectedCreateSuccessServerOnly(record.serverOnly)
+  );
+}
+
+function isConsumeIntentSuccess(value: McpOAuthIntentConsumeResultV1): value is Extract<
+  McpOAuthIntentConsumeResultV1,
+  { ok: true }
+> {
+  const record = readSuccessEnvelope(value, CONSUME_SUCCESS_KEYS);
+  return (
+    record !== undefined &&
+    hasExpectedSuccessEnvelope(record, "mcp_oauth_authorization_intent_consume_result", "consumed") &&
+    hasExpectedConsumeSuccessServerOnly(record.serverOnly)
+  );
+}
+
+function readSuccessEnvelope<T extends readonly string[]>(
+  value: unknown,
+  keys: T,
+): Record<T[number], unknown> | undefined {
+  return readRecord(value, keys);
+}
+
+function hasExpectedSuccessEnvelope(
+  record: Record<string, unknown>,
+  kind: string,
+  reason: string,
+): boolean {
+  return (
+    record.kind === kind &&
+    record.ok === true &&
+    record.reason === reason &&
+    record.modelVisible === false &&
+    record.safeForLogging === false &&
+    record.version === 1
+  );
+}
+
+function hasExpectedCreateSuccessServerOnly(value: unknown): boolean {
+  const serverOnly = readRecord(value, CREATE_SUCCESS_SERVER_ONLY_KEYS);
+  return (
+    serverOnly !== undefined &&
+    serverOnly.status === "pending" &&
+    isValidNow(serverOnly.expiresAt) &&
+    serverOnly.version === 1
+  );
+}
+
+function hasExpectedConsumeSuccessServerOnly(value: unknown): boolean {
+  const serverOnly = readRecord(value, CONSUME_SUCCESS_SERVER_ONLY_KEYS);
+  return (
+    serverOnly !== undefined &&
+    isPlainRecord(serverOnly.authorizationRequestHandoff) &&
+    serverOnly.version === 1
+  );
 }
 
 function isValidCodec(codec: McpOAuthContinuationHandleCodecV1): boolean {
