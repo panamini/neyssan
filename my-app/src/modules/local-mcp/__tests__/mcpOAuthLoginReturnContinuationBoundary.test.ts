@@ -312,6 +312,38 @@ describe("MCP OAuth login-return continuation boundary", () => {
     expect(JSON.stringify(result)).not.toContain(RAW_HANDLE);
   });
 
+  it("rejects generated handles outside the sign-in return alphabet before creating storage", async () => {
+    const dottedRawHandle = `${"A".repeat(42)}.`;
+    const createIntent = vi.fn<(input: McpOAuthIntentCreateInputV1) => Promise<McpOAuthIntentCreateResultV1>>(
+      async () => createOk(),
+    );
+    const dottedCodec: McpOAuthContinuationHandleCodecV1 = Object.freeze({
+      generate: () =>
+        Object.freeze({ rawHandle: dottedRawHandle, intentHandleHash: sha256Hex(dottedRawHandle) }),
+      validate: (rawHandle: unknown): rawHandle is string =>
+        typeof rawHandle === "string" && /^[A-Za-z0-9_.-]+$/u.test(rawHandle),
+      hash: (rawHandle: string) => sha256Hex(rawHandle),
+    });
+
+    const result = await prepareMcpOAuthLoginReturnContinuation({
+      kind: "prepare_mcp_oauth_login_return_continuation_input",
+      authorizationRequestHandoff: handoff(),
+      trustedOwner: OWNER,
+      createIntent,
+      handleCodec: dottedCodec,
+      now: NOW,
+      config: config(),
+      version: 1,
+    });
+
+    expect(result).toMatchObject({
+      prepared: false,
+      reason: "invalid_continuation_handle",
+    });
+    expect(createIntent).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain(dottedRawHandle);
+  });
+
   it("enforces the configured raw handle length before creating storage", async () => {
     const longRawHandle = "C".repeat(44);
     const createIntent = vi.fn<(input: McpOAuthIntentCreateInputV1) => Promise<McpOAuthIntentCreateResultV1>>(
@@ -357,6 +389,33 @@ describe("MCP OAuth login-return continuation boundary", () => {
           safeForLogging: false,
           version: 1,
         }) as unknown as McpOAuthIntentCreateResultV1,
+      handleCodec: deterministicCodec,
+      now: NOW,
+      config: config(),
+      version: 1,
+    });
+
+    expect(result).toMatchObject({
+      prepared: false,
+      reason: "intent_create_failed",
+    });
+    expect(JSON.stringify(result)).not.toContain(RAW_HANDLE);
+    expect(JSON.stringify(result)).not.toContain(HANDLE_HASH);
+  });
+
+  it("rejects already-expired create successes before issuing a sign-in URL", async () => {
+    const result = await prepareMcpOAuthLoginReturnContinuation({
+      kind: "prepare_mcp_oauth_login_return_continuation_input",
+      authorizationRequestHandoff: handoff(),
+      trustedOwner: OWNER,
+      createIntent: async () => ({
+        ...createOk(),
+        serverOnly: {
+          status: "pending",
+          expiresAt: NOW,
+          version: 1,
+        },
+      }),
       handleCodec: deterministicCodec,
       now: NOW,
       config: config(),
@@ -485,6 +544,37 @@ describe("MCP OAuth login-return continuation boundary", () => {
       reason: "invalid_continuation_handle",
     });
     expect(consumeIntent).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain(RAW_HANDLE);
+  });
+
+  it("fails closed when the resume codec throws during handle validation", async () => {
+    const consumeIntent = vi.fn<(input: McpOAuthIntentConsumeInputV1) => Promise<McpOAuthIntentConsumeResultV1>>(
+      async () => consumeOk(handoff()),
+    );
+    const throwingCodec: McpOAuthContinuationHandleCodecV1 = Object.freeze({
+      ...deterministicCodec,
+      validate: () => {
+        throw new Error("resume codec leaked fixture text");
+      },
+    });
+
+    const result = await resumeMcpOAuthAuthorizationAfterLoginReturn({
+      kind: "resume_mcp_oauth_authorization_after_login_return_input",
+      continuationUrlOrPath: `${MCP_OAUTH_CONTINUATION_PATH}?${MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER}=${RAW_HANDLE}`,
+      trustedOwner: OWNER,
+      consumeIntent,
+      handleCodec: throwingCodec,
+      now: NOW,
+      config: config(),
+      version: 1,
+    });
+
+    expect(result).toMatchObject({
+      resumed: false,
+      reason: "invalid_continuation_handle",
+    });
+    expect(consumeIntent).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain("resume codec leaked fixture text");
     expect(JSON.stringify(result)).not.toContain(RAW_HANDLE);
   });
 

@@ -336,7 +336,7 @@ export async function prepareMcpOAuthLoginReturnContinuation(
     return prepareDenied("intent_create_failed");
   }
 
-  if (!isCreateIntentSuccess(createResult)) return prepareDenied("intent_create_failed");
+  if (!isCreateIntentSuccess(createResult, input.now)) return prepareDenied("intent_create_failed");
 
   return Object.freeze({
     kind: "prepare_mcp_oauth_login_return_continuation_result",
@@ -592,6 +592,7 @@ function hasValidGeneratedContinuationHandle(
 ): boolean {
   return (
     codec.validate(generated.rawHandle) &&
+    isCanonicalRawHandle(generated.rawHandle) &&
     generated.rawHandle.length <= config.maxRawHandleLength &&
     isValidIntentHandleHash(generated.intentHandleHash) &&
     generated.intentHandleHash === expectedIntentHandleHash
@@ -687,7 +688,11 @@ function readValidContinuationRawHandle(
       reason: "invalid_continuation_handle";
     } {
   const rawHandle = url.searchParams.get(config.continuationHandleParameterName);
-  if (!isBoundedRawHandle(rawHandle, config) || !codec.validate(rawHandle)) {
+  try {
+    if (!isBoundedRawHandle(rawHandle, config) || !codec.validate(rawHandle)) {
+      return { ok: false, reason: "invalid_continuation_handle" };
+    }
+  } catch {
     return { ok: false, reason: "invalid_continuation_handle" };
   }
   return { ok: true, rawHandle };
@@ -872,7 +877,7 @@ function readFailureReason(reason: unknown): string {
   return typeof reason === "string" ? reason : "intent_unavailable";
 }
 
-function isCreateIntentSuccess(value: McpOAuthIntentCreateResultV1): value is Extract<
+function isCreateIntentSuccess(value: McpOAuthIntentCreateResultV1, now: number): value is Extract<
   McpOAuthIntentCreateResultV1,
   { ok: true }
 > {
@@ -880,7 +885,7 @@ function isCreateIntentSuccess(value: McpOAuthIntentCreateResultV1): value is Ex
   return (
     record !== undefined &&
     hasExpectedSuccessEnvelope(record, "mcp_oauth_authorization_intent_create_result", "created") &&
-    hasExpectedCreateSuccessServerOnly(record.serverOnly)
+    hasExpectedCreateSuccessServerOnly(record.serverOnly, now)
   );
 }
 
@@ -918,12 +923,13 @@ function hasExpectedSuccessEnvelope(
   );
 }
 
-function hasExpectedCreateSuccessServerOnly(value: unknown): boolean {
+function hasExpectedCreateSuccessServerOnly(value: unknown, now: number): boolean {
   const serverOnly = readRecord(value, CREATE_SUCCESS_SERVER_ONLY_KEYS);
   return (
     serverOnly !== undefined &&
     serverOnly.status === "pending" &&
     isValidNow(serverOnly.expiresAt) &&
+    serverOnly.expiresAt > now &&
     serverOnly.version === 1
   );
 }
