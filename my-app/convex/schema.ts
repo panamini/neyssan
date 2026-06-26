@@ -820,6 +820,38 @@ export default defineSchema({
     ])
     .index("by_twoweeks_clerk_id", ["twoweeksClerkId"]),
 
+  mcpOAuthAuthorizationIntents: defineTable({
+    kind: v.literal("mcp_oauth_authorization_intent_record"),
+    version: v.literal(1),
+    intentHandleHash: v.string(),
+    twoweeksClerkId: v.string(),
+    authorizationPageOrigin: v.string(),
+    authorizationPagePath: v.string(),
+    responseType: v.literal("code"),
+    clientId: v.string(),
+    redirectUri: v.string(),
+    resource: v.string(),
+    scopes: v.array(v.string()),
+    state: v.string(),
+    codeChallenge: v.string(),
+    codeChallengeMethod: v.literal("S256"),
+    approvedOptionalParameters: v.optional(
+      v.object({
+        nonce: v.optional(v.string()),
+        prompt: v.optional(v.string()),
+      }),
+    ),
+    providerValidationStatus: v.literal("pending"),
+    status: v.union(v.literal("pending"), v.literal("consumed"), v.literal("expired")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    expiresAt: v.number(),
+    consumedAt: v.optional(v.number()),
+    storageVersion: v.literal(1),
+  })
+    .index("by_intent_handle_hash", ["intentHandleHash"])
+    .index("by_expires_at", ["expiresAt"]),
+
   // New: LLM jobs queue table
   llmJobs: defineTable({
     profileId: v.id("userProfiles"),
