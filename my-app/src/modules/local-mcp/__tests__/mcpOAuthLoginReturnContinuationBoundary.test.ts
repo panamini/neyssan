@@ -281,6 +281,37 @@ describe("MCP OAuth login-return continuation boundary", () => {
     expect(JSON.stringify(result)).not.toContain(RAW_HANDLE);
   });
 
+  it("fails closed when a custom codec throws during handle validation", async () => {
+    const createIntent = vi.fn<(input: McpOAuthIntentCreateInputV1) => Promise<McpOAuthIntentCreateResultV1>>(
+      async () => createOk(),
+    );
+    const throwingCodec: McpOAuthContinuationHandleCodecV1 = Object.freeze({
+      ...deterministicCodec,
+      validate: () => {
+        throw new Error("codec leaked fixture text");
+      },
+    });
+
+    const result = await prepareMcpOAuthLoginReturnContinuation({
+      kind: "prepare_mcp_oauth_login_return_continuation_input",
+      authorizationRequestHandoff: handoff(),
+      trustedOwner: OWNER,
+      createIntent,
+      handleCodec: throwingCodec,
+      now: NOW,
+      config: config(),
+      version: 1,
+    });
+
+    expect(result).toMatchObject({
+      prepared: false,
+      reason: "invalid_continuation_handle",
+    });
+    expect(createIntent).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain("codec leaked fixture text");
+    expect(JSON.stringify(result)).not.toContain(RAW_HANDLE);
+  });
+
   it("enforces the configured raw handle length before creating storage", async () => {
     const longRawHandle = "C".repeat(44);
     const createIntent = vi.fn<(input: McpOAuthIntentCreateInputV1) => Promise<McpOAuthIntentCreateResultV1>>(
@@ -499,7 +530,10 @@ describe("MCP OAuth login-return continuation boundary", () => {
     ["owner override", "/mcp/oauth/authorize/continue?mcp_oauth_intent=abc&owner=user"],
     ["path traversal", "/mcp/oauth/authorize/%2e%2e/continue?mcp_oauth_intent=abc"],
     ["encoded origin confusion", "/mcp/oauth/authorize/continue?mcp_oauth_intent=https%3A%2F%2Fevil.example"],
-    ["raw control character", `/mcp/oauth/authorize/continue?mcp_oauth_intent=${RAW_HANDLE.slice(0, 20)}\n${RAW_HANDLE.slice(20)}`],
+    [
+      "raw control character",
+      `${MCP_OAUTH_CONTINUATION_PATH}?${MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER}=${RAW_HANDLE.slice(0, 20)}\n${RAW_HANDLE.slice(20)}`,
+    ],
   ])("rejects invalid continuation URL: %s", async (_label, continuationUrlOrPath) => {
     const consumeIntent = vi.fn<(input: McpOAuthIntentConsumeInputV1) => Promise<McpOAuthIntentConsumeResultV1>>(
       async () => consumeOk(handoff()),
@@ -618,6 +652,34 @@ describe("MCP OAuth login-return continuation boundary", () => {
     });
     expect(JSON.stringify(result)).not.toContain(RAW_HANDLE);
     expect(JSON.stringify(result)).not.toContain(HANDLE_HASH);
+  });
+
+  it("rejects consumed handoffs with unknown optional provider parameters", async () => {
+    const result = await resumeMcpOAuthAuthorizationAfterLoginReturn({
+      kind: "resume_mcp_oauth_authorization_after_login_return_input",
+      continuationUrlOrPath: `${MCP_OAUTH_CONTINUATION_PATH}?${MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER}=${RAW_HANDLE}`,
+      trustedOwner: OWNER,
+      consumeIntent: async () =>
+        consumeOk(
+          handoff({
+            approvedOptionalParameters: {
+              prompt: "consent",
+              unknown_optional_fixture: "should-not-pass",
+            },
+          }),
+        ),
+      handleCodec: deterministicCodec,
+      now: NOW,
+      config: config(),
+      version: 1,
+    });
+
+    expect(result).toMatchObject({
+      resumed: false,
+      reason: "malformed_consumed_handoff",
+    });
+    expect(JSON.stringify(result)).not.toContain("should-not-pass");
+    expect(JSON.stringify(result)).not.toContain(RAW_HANDLE);
   });
 
   it("fails closed when consume storage returns a malformed success payload", async () => {

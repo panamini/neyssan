@@ -572,12 +572,16 @@ function readValidGeneratedContinuationHandle(
   codec: McpOAuthContinuationHandleCodecV1,
   config: McpOAuthLoginReturnContinuationBoundaryConfigV1,
 ): Readonly<{ rawHandle: string; intentHandleHash: string }> | undefined {
-  const generated = codec.generate();
-  if (!isGeneratedContinuationHandle(generated)) return undefined;
-  const expectedIntentHandleHash = hashContinuationHandleWithCodec(codec, generated.rawHandle);
-  if (!isValidIntentHandleHash(expectedIntentHandleHash)) return undefined;
-  if (!hasValidGeneratedContinuationHandle(generated, expectedIntentHandleHash, codec, config)) return undefined;
-  return generated;
+  try {
+    const generated = codec.generate();
+    if (!isGeneratedContinuationHandle(generated)) return undefined;
+    const expectedIntentHandleHash = hashContinuationHandleWithCodec(codec, generated.rawHandle);
+    if (!isValidIntentHandleHash(expectedIntentHandleHash)) return undefined;
+    if (!hasValidGeneratedContinuationHandle(generated, expectedIntentHandleHash, codec, config)) return undefined;
+    return generated;
+  } catch {
+    return undefined;
+  }
 }
 
 function hasValidGeneratedContinuationHandle(
@@ -804,7 +808,9 @@ function hasAcceptedPkce(pkce: Record<string, unknown>): boolean {
 function hasAcceptedOptionalParameters(value: unknown): boolean {
   if (value === undefined) return true;
   if (!isPlainRecord(value)) return false;
-  return [...SENSITIVE_OPTIONAL_PARAMETERS, ...RESTORED_OPTIONAL_PARAMETERS].every((parameter) => {
+  const acceptedParameters: readonly string[] = [...SENSITIVE_OPTIONAL_PARAMETERS, ...RESTORED_OPTIONAL_PARAMETERS];
+  if (!Object.keys(value).every((parameter) => acceptedParameters.includes(parameter))) return false;
+  return acceptedParameters.every((parameter) => {
     const parameterValue = value[parameter];
     return parameterValue === undefined || typeof parameterValue === "string";
   });
