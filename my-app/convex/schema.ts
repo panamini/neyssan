@@ -839,6 +839,8 @@ export default defineSchema({
       v.object({
         nonce: v.optional(v.string()),
         prompt: v.optional(v.string()),
+        login_hint: v.optional(v.string()),
+        id_token_hint: v.optional(v.string()),
       }),
     ),
     providerValidationStatus: v.literal("pending"),

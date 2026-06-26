@@ -48,7 +48,7 @@ type IntentRecord = {
   state: string;
   codeChallenge: string;
   codeChallengeMethod: "S256";
-  approvedOptionalParameters?: Partial<Record<"nonce" | "prompt", string>>;
+  approvedOptionalParameters?: Partial<Record<"nonce" | "prompt" | "login_hint" | "id_token_hint", string>>;
   providerValidationStatus: "pending";
   status: "pending" | "consumed" | "expired";
   createdAt: number;
@@ -63,7 +63,7 @@ type StoredIntentRecord = IntentRecord & {
   _creationTime: number;
 };
 
-type Constraint = Readonly<{ field: string; op: "eq" | "lt"; value: unknown }>;
+type Constraint = Readonly<{ field: string; op: "eq" | "lt" | "lte"; value: unknown }>;
 
 function makeCtx(seed: StoredIntentRecord[] = []) {
   const rows = seed.map((row) => ({ ...row, scopes: [...row.scopes] }));
@@ -88,13 +88,20 @@ function makeCtx(seed: StoredIntentRecord[] = []) {
               constraints.push({ field, op: "lt", value });
               return query;
             },
+            lte(field: string, value: unknown) {
+              constraints.push({ field, op: "lte", value });
+              return query;
+            },
           };
           buildQuery(query);
           const matching = rows.filter((row) => {
             return constraints.every((constraint) => {
               const fieldValue = row[constraint.field as keyof StoredIntentRecord];
               if (constraint.op === "eq") return fieldValue === constraint.value;
-              return typeof fieldValue === "number" && typeof constraint.value === "number" && fieldValue < constraint.value;
+              if (constraint.op === "lt") {
+                return typeof fieldValue === "number" && typeof constraint.value === "number" && fieldValue < constraint.value;
+              }
+              return typeof fieldValue === "number" && typeof constraint.value === "number" && fieldValue <= constraint.value;
             });
           });
           return {
@@ -238,7 +245,7 @@ describe("Convex MCP OAuth authorization intents", () => {
     expect(inserts).toHaveLength(0);
   });
 
-  it("fails closed on handle collision and sensitive optional hints without echoing values", async () => {
+  it("fails closed on handle collision and preserves accepted OAuth hints server-only", async () => {
     const collisionCtx = makeCtx([storedIntent()]);
     await expect(
       internalCreateMcpOAuthAuthorizationIntent._handler(collisionCtx.ctx as any, {
@@ -250,16 +257,18 @@ describe("Convex MCP OAuth authorization intents", () => {
     ).resolves.toMatchObject({ ok: false, reason: "handle_collision" });
     expect(collisionCtx.inserts).toHaveLength(0);
 
-    for (const overrides of [{ login_hint: "person@example.test" }, { id_token_hint: "id-token-sensitive" }] as const) {
-      const { result, inserts } = await createWith(validHandoff({ overrides }));
-      expect(result).toMatchObject({ ok: false, reason: "sensitive_optional_parameter_not_supported" });
-      expect(JSON.stringify(result)).not.toContain(Object.values(overrides)[0]);
-      expect(inserts).toHaveLength(0);
-    }
+    const sensitiveHints = { login_hint: "person@example.test", id_token_hint: "id-token-sensitive" };
+    const { result, rows, inserts } = await createWith(validHandoff({ overrides: sensitiveHints }));
+    expect(result).toMatchObject({ ok: true, reason: "created", safeForLogging: false, modelVisible: false });
+    expect(JSON.stringify(result)).not.toContain(sensitiveHints.login_hint);
+    expect(JSON.stringify(result)).not.toContain(sensitiveHints.id_token_hint);
+    expect(inserts).toHaveLength(1);
+    expect(rows[0].approvedOptionalParameters).toMatchObject(sensitiveHints);
   });
 
   it("consumes the exact owner-bound pending handoff once and preserves provider-pending flags", async () => {
-    const handoff = validHandoff({ overrides: { nonce: "nonce_fixture", prompt: "consent" } });
+    const sensitiveHints = { login_hint: "person@example.test", id_token_hint: "id-token-sensitive" };
+    const handoff = validHandoff({ overrides: { nonce: "nonce_fixture", prompt: "consent", ...sensitiveHints } });
     const created = await createWith(handoff);
     const { ctx, rows, patches } = makeCtx([rowsToStored(created.rows[0])]);
 
@@ -292,6 +301,12 @@ describe("Convex MCP OAuth authorization intents", () => {
       tokenIssued: false,
       accountLinkCreated: false,
     });
+    if (!first.ok) throw new Error("Expected consume to succeed");
+    expect(first.serverOnly.authorizationRequestHandoff.providerForwardRequest.approvedOptionalParameters).toMatchObject(
+      sensitiveHints,
+    );
+    expect(first.serverOnly.authorizationRequestHandoff.loginReturn.path).not.toContain(sensitiveHints.login_hint);
+    expect(first.serverOnly.authorizationRequestHandoff.loginReturn.path).not.toContain(sensitiveHints.id_token_hint);
     expect(second).toMatchObject({ ok: false, reason: "already_consumed" });
     expect(second.ok).toBe(false);
     expect(rows[0]).toMatchObject({ status: "consumed", consumedAt: NOW + 1, updatedAt: NOW + 1 });
@@ -332,7 +347,7 @@ describe("Convex MCP OAuth authorization intents", () => {
     expect(patches).toHaveLength(0);
   });
 
-  it("deletes expired intent records in a bounded internal cleanup pass", async () => {
+  it("deletes expired intent records at the inclusive expiry boundary in a bounded internal cleanup pass", async () => {
     const expiredPending = storedIntent({
       _id: "mcpOAuthAuthorizationIntents_expired_pending",
       expiresAt: NOW + MCP_OAUTH_AUTHORIZATION_INTENT_TTL_MS,
@@ -352,7 +367,7 @@ describe("Convex MCP OAuth authorization intents", () => {
     const { ctx, rows, deletes } = makeCtx([expiredPending, expiredConsumed, activePending]);
 
     const result = await internalDeleteExpiredMcpOAuthAuthorizationIntents._handler(ctx as any, {
-      now: NOW + MCP_OAUTH_AUTHORIZATION_INTENT_TTL_MS + 1,
+      now: NOW + MCP_OAUTH_AUTHORIZATION_INTENT_TTL_MS,
       version: 1,
     });
 
@@ -400,7 +415,7 @@ describe("Convex MCP OAuth authorization intents", () => {
     ["invalid status", { ...storedIntent(), status: "approved" }, "malformed"],
     ["invalid timestamp", storedIntent({ expiresAt: Number.MAX_SAFE_INTEGER }), "malformed"],
     ["invalid terminal field", storedIntent({ status: "pending", consumedAt: NOW + 1 }), "malformed"],
-    ["sensitive optional hint present", { ...storedIntent(), approvedOptionalParameters: { login_hint: "person@example.test" } }, "malformed"],
+    ["sensitive optional hint present", { ...storedIntent(), approvedOptionalParameters: { login_hint: "person@example.test" } }, "pending_valid"],
   ] as const)("classifies %s storage as %s", (_label, record, expected) => {
     expect(classifyMcpOAuthAuthorizationIntentStorageRecord(record)).toBe(expected);
   });
@@ -421,7 +436,7 @@ describe("Convex MCP OAuth authorization intents", () => {
       "provider_payload",
     ];
     const failures = [
-      (await createWith(validHandoff({ overrides: { id_token_hint: "id-token-sensitive" } }))).result,
+      (await createWith({ ...validHandoff(), modelVisible: true })).result,
       await consumeWith([storedIntent()], trustedOwner(OTHER_OWNER_ID)),
       await consumeWith([storedIntent({ status: "expired", updatedAt: NOW + MCP_OAUTH_AUTHORIZATION_INTENT_TTL_MS })]),
     ];

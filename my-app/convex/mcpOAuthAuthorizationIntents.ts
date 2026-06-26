@@ -94,8 +94,8 @@ const LOGIN_RETURN_KEYS = [
   "persisted",
   "version",
 ] as const;
-const NON_SENSITIVE_OPTIONAL_PARAMETER_KEYS = ["nonce", "prompt"] as const;
 const ANY_OPTIONAL_PARAMETER_KEYS = ["nonce", "prompt", "login_hint", "id_token_hint"] as const;
+type ApprovedOptionalParameterKeyV1 = (typeof ANY_OPTIONAL_PARAMETER_KEYS)[number];
 const STORAGE_RECORD_KEYS = [
   "kind",
   "version",
@@ -157,8 +157,7 @@ export type McpOAuthAuthorizationIntentStorageReasonV1 =
   | "malformed_storage_record"
   | "expired"
   | "already_consumed"
-  | "duplicate_storage_record"
-  | "sensitive_optional_parameter_not_supported";
+  | "duplicate_storage_record";
 
 export type McpOAuthAuthorizationIntentRecordV1 = Readonly<{
   kind: "mcp_oauth_authorization_intent_record";
@@ -175,7 +174,7 @@ export type McpOAuthAuthorizationIntentRecordV1 = Readonly<{
   state: string;
   codeChallenge: string;
   codeChallengeMethod: "S256";
-  approvedOptionalParameters?: Readonly<Partial<Record<"nonce" | "prompt", string>>>;
+  approvedOptionalParameters?: Readonly<Partial<Record<ApprovedOptionalParameterKeyV1, string>>>;
   providerValidationStatus: "pending";
   status: McpOAuthAuthorizationIntentStatusV1;
   createdAt: number;
@@ -200,7 +199,7 @@ type ParsedProviderForwardRequestV1 = Readonly<{
   state: string;
   codeChallenge: string;
   codeChallengeMethod: "S256";
-  approvedOptionalParameters?: Readonly<Partial<Record<"nonce" | "prompt", string>>>;
+  approvedOptionalParameters?: Readonly<Partial<Record<ApprovedOptionalParameterKeyV1, string>>>;
 }>;
 
 type ParsedAuthorizationHandoffV1 = Readonly<{
@@ -396,7 +395,7 @@ export const internalDeleteExpiredMcpOAuthAuthorizationIntents = internalMutatio
 
     const expiredRows = await ctx.db
       .query("mcpOAuthAuthorizationIntents")
-      .withIndex("by_expires_at", (q) => q.lt("expiresAt", args.now))
+      .withIndex("by_expires_at", (q) => q.lte("expiresAt", args.now))
       .take(MAX_EXPIRED_INTENT_CLEANUP_BATCH);
 
     for (const row of expiredRows) {
@@ -452,7 +451,7 @@ function parseAuthorizationHandoff(
   value: unknown,
 ):
   | { ok: true; value: ParsedAuthorizationHandoffV1 }
-  | { ok: false; reason: Extract<McpOAuthAuthorizationIntentStorageReasonV1, "invalid_input" | "sensitive_optional_parameter_not_supported"> } {
+  | { ok: false; reason: Extract<McpOAuthAuthorizationIntentStorageReasonV1, "invalid_input"> } {
   const handoff = readRecord(value, HANDOFF_KEYS);
   if (!handoff || handoff.modelVisible !== false || handoff.safeForLogging !== false || handoff.version !== 1) {
     return { ok: false, reason: "invalid_input" };
@@ -490,7 +489,7 @@ function parseProviderForwardRequest(
   value: unknown,
 ):
   | { ok: true; value: ParsedProviderForwardRequestV1 }
-  | { ok: false; reason: Extract<McpOAuthAuthorizationIntentStorageReasonV1, "invalid_input" | "sensitive_optional_parameter_not_supported"> } {
+  | { ok: false; reason: Extract<McpOAuthAuthorizationIntentStorageReasonV1, "invalid_input"> } {
   const record = readRecord(value, PROVIDER_FORWARD_REQUEST_KEYS, PROVIDER_FORWARD_REQUEST_REQUIRED_KEYS);
   if (!record || record.responseType !== "code" || record.version !== 1) return { ok: false, reason: "invalid_input" };
   const clientId = readBoundedStorageText(record.clientId, MAX_OAUTH_PARAMETER_LENGTH);
@@ -548,16 +547,13 @@ function parseTrustedOwner(value: unknown): McpOAuthAuthorizationTrustedOwnerV1 
 function parseOptionalParameters(
   value: unknown,
 ):
-  | { ok: true; value?: Readonly<Partial<Record<"nonce" | "prompt", string>>> }
-  | { ok: false; reason: "invalid_input" | "sensitive_optional_parameter_not_supported" } {
+  | { ok: true; value?: Readonly<Partial<Record<ApprovedOptionalParameterKeyV1, string>>> }
+  | { ok: false; reason: "invalid_input" } {
   if (value === undefined) return { ok: true };
   const record = readRecord(value, ANY_OPTIONAL_PARAMETER_KEYS, []);
   if (!record) return { ok: false, reason: "invalid_input" };
-  if (record.login_hint !== undefined || record.id_token_hint !== undefined) {
-    return { ok: false, reason: "sensitive_optional_parameter_not_supported" };
-  }
-  const parsed: Partial<Record<"nonce" | "prompt", string>> = {};
-  for (const key of NON_SENSITIVE_OPTIONAL_PARAMETER_KEYS) {
+  const parsed: Partial<Record<ApprovedOptionalParameterKeyV1, string>> = {};
+  for (const key of ANY_OPTIONAL_PARAMETER_KEYS) {
     if (record[key] === undefined) continue;
     const value = readBoundedStorageText(record[key], MAX_OAUTH_PARAMETER_LENGTH);
     if (!value) return { ok: false, reason: "invalid_input" };
@@ -830,7 +826,7 @@ function readSafeHttpsUrl(value: unknown, options: { allowSearch: boolean }): st
     return undefined;
   }
   if (!options.allowSearch && parsed.search) return undefined;
-  return parsed.toString();
+  return text;
 }
 
 function readBoundedStorageText(value: unknown, maxLength: number): string | undefined {
