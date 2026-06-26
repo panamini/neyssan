@@ -94,8 +94,13 @@ const LOGIN_RETURN_KEYS = [
   "persisted",
   "version",
 ] as const;
-const ANY_OPTIONAL_PARAMETER_KEYS = ["nonce", "prompt", "login_hint", "id_token_hint"] as const;
-type ApprovedOptionalParameterKeyV1 = (typeof ANY_OPTIONAL_PARAMETER_KEYS)[number];
+const STORAGE_OPTIONAL_PARAMETER_KEYS = ["nonce", "prompt"] as const;
+const SENSITIVE_OPTIONAL_PARAMETER_KEYS = ["login_hint", "id_token_hint"] as const;
+const PROVIDER_FORWARD_OPTIONAL_PARAMETER_KEYS = [
+  ...STORAGE_OPTIONAL_PARAMETER_KEYS,
+  ...SENSITIVE_OPTIONAL_PARAMETER_KEYS,
+] as const;
+type ApprovedOptionalParameterKeyV1 = (typeof STORAGE_OPTIONAL_PARAMETER_KEYS)[number];
 const STORAGE_RECORD_KEYS = [
   "kind",
   "version",
@@ -550,10 +555,13 @@ function parseOptionalParameters(
   | { ok: true; value?: Readonly<Partial<Record<ApprovedOptionalParameterKeyV1, string>>> }
   | { ok: false; reason: "invalid_input" } {
   if (value === undefined) return { ok: true };
-  const record = readRecord(value, ANY_OPTIONAL_PARAMETER_KEYS, []);
+  const record = readRecord(value, PROVIDER_FORWARD_OPTIONAL_PARAMETER_KEYS, []);
   if (!record) return { ok: false, reason: "invalid_input" };
+  for (const key of SENSITIVE_OPTIONAL_PARAMETER_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(record, key)) return { ok: false, reason: "invalid_input" };
+  }
   const parsed: Partial<Record<ApprovedOptionalParameterKeyV1, string>> = {};
-  for (const key of ANY_OPTIONAL_PARAMETER_KEYS) {
+  for (const key of STORAGE_OPTIONAL_PARAMETER_KEYS) {
     if (record[key] === undefined) continue;
     const value = readBoundedStorageText(record[key], MAX_OAUTH_PARAMETER_LENGTH);
     if (!value) return { ok: false, reason: "invalid_input" };
