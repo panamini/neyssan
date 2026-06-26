@@ -8,6 +8,7 @@ import type {
 export const MCP_OAUTH_AUTHORIZATION_INTENT_TTL_MS = 10 * 60 * 1_000;
 export const MCP_OAUTH_AUTHORIZATION_INTENT_MIN_TTL_MS = 60 * 1_000;
 export const MCP_OAUTH_AUTHORIZATION_INTENT_MAX_TTL_MS = 15 * 60 * 1_000;
+const MAX_EXPIRED_INTENT_CLEANUP_BATCH = 100;
 
 const TWOWEEKS_APPLICATIONS_READ_SCOPE = "twoweeks:applications:read" as const;
 const INTENT_HANDLE_HASH_PATTERN = /^[0-9a-f]{64}$/u;
@@ -28,6 +29,7 @@ const trustedOwnerValidator = v.object({
 
 const CREATE_ARGS_KEYS = ["authorizationRequestHandoff", "intentHandleHash", "now", "version"] as const;
 const CONSUME_ARGS_KEYS = ["trustedOwner", "intentHandleHash", "now", "version"] as const;
+const CLEANUP_ARGS_KEYS = ["now", "version"] as const;
 const TRUSTED_OWNER_KEYS = ["kind", "twoweeksClerkId", "version"] as const;
 const HANDOFF_KEYS = [
   "authorizationPage",
@@ -257,6 +259,15 @@ export type McpOAuthAuthorizationIntentConsumeResultV1 = Readonly<
     }
 >;
 
+export type McpOAuthAuthorizationIntentCleanupResultV1 = Readonly<{
+  kind: "mcp_oauth_authorization_intent_cleanup_result";
+  ok: true;
+  deletedCount: number;
+  modelVisible: false;
+  safeForLogging: true;
+  version: 1;
+}>;
+
 type SafeIntentFailureV1 = Readonly<{
   code: "mcp_oauth_authorization_intent_denied";
   message: "Authorization intent denied.";
@@ -369,6 +380,30 @@ export const internalConsumeMcpOAuthAuthorizationIntent = internalMutation({
       safeForLogging: false,
       version: 1,
     };
+  },
+});
+
+export const internalDeleteExpiredMcpOAuthAuthorizationIntents = internalMutation({
+  args: {
+    now: v.number(),
+    version: v.literal(1),
+  },
+  returns: v.any(),
+  handler: async (ctx, args): Promise<McpOAuthAuthorizationIntentCleanupResultV1> => {
+    if (!readRecord(args, CLEANUP_ARGS_KEYS) || !isValidStorageTimestamp(args.now)) {
+      return cleanupResult(0);
+    }
+
+    const expiredRows = await ctx.db
+      .query("mcpOAuthAuthorizationIntents")
+      .withIndex("by_expires_at", (q) => q.lt("expiresAt", args.now))
+      .take(MAX_EXPIRED_INTENT_CLEANUP_BATCH);
+
+    for (const row of expiredRows) {
+      await ctx.db.delete(row._id);
+    }
+
+    return cleanupResult(expiredRows.length);
   },
 });
 
@@ -882,6 +917,17 @@ function safeFailure(): SafeIntentFailureV1 {
     message: "Authorization intent denied.",
     safeForModel: true,
     sensitiveValuesEchoed: false,
+    version: 1,
+  };
+}
+
+function cleanupResult(deletedCount: number): McpOAuthAuthorizationIntentCleanupResultV1 {
+  return {
+    kind: "mcp_oauth_authorization_intent_cleanup_result",
+    ok: true,
+    deletedCount,
+    modelVisible: false,
+    safeForLogging: true,
     version: 1,
   };
 }

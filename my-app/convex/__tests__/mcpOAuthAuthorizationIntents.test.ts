@@ -7,6 +7,7 @@ import {
   classifyMcpOAuthAuthorizationIntentStorageRecord,
   internalConsumeMcpOAuthAuthorizationIntent,
   internalCreateMcpOAuthAuthorizationIntent,
+  internalDeleteExpiredMcpOAuthAuthorizationIntents,
   MCP_OAUTH_AUTHORIZATION_INTENT_TTL_MS,
 } from "../mcpOAuthAuthorizationIntents";
 import {
@@ -62,12 +63,13 @@ type StoredIntentRecord = IntentRecord & {
   _creationTime: number;
 };
 
-type Constraint = Readonly<{ field: string; value: unknown }>;
+type Constraint = Readonly<{ field: string; op: "eq" | "lt"; value: unknown }>;
 
 function makeCtx(seed: StoredIntentRecord[] = []) {
   const rows = seed.map((row) => ({ ...row, scopes: [...row.scopes] }));
   const inserts: IntentRecord[] = [];
   const patches: Array<{ id: string; patch: Partial<StoredIntentRecord> }> = [];
+  const deletes: string[] = [];
   let nextId = rows.length + 1;
 
   const db = {
@@ -75,19 +77,30 @@ function makeCtx(seed: StoredIntentRecord[] = []) {
       if (tableName !== "mcpOAuthAuthorizationIntents") throw new Error(`Unexpected table ${tableName}`);
       return {
         withIndex: (indexName: string, buildQuery: (query: any) => unknown) => {
-          expect(indexName).toBe("by_intent_handle_hash");
+          expect(["by_intent_handle_hash", "by_expires_at"]).toContain(indexName);
           const constraints: Constraint[] = [];
           const query = {
             eq(field: string, value: unknown) {
-              constraints.push({ field, value });
+              constraints.push({ field, op: "eq", value });
+              return query;
+            },
+            lt(field: string, value: unknown) {
+              constraints.push({ field, op: "lt", value });
               return query;
             },
           };
           buildQuery(query);
-          const matching = rows.filter((row) =>
-            constraints.every((constraint) => row[constraint.field as keyof StoredIntentRecord] === constraint.value),
-          );
-          return { collect: async () => matching };
+          const matching = rows.filter((row) => {
+            return constraints.every((constraint) => {
+              const fieldValue = row[constraint.field as keyof StoredIntentRecord];
+              if (constraint.op === "eq") return fieldValue === constraint.value;
+              return typeof fieldValue === "number" && typeof constraint.value === "number" && fieldValue < constraint.value;
+            });
+          });
+          return {
+            collect: async () => matching,
+            take: async (count: number) => matching.slice(0, count),
+          };
         },
       };
     },
@@ -104,9 +117,15 @@ function makeCtx(seed: StoredIntentRecord[] = []) {
       patches.push({ id, patch });
       Object.assign(row, patch);
     },
+    delete: async (id: string) => {
+      const index = rows.findIndex((item) => item._id === id);
+      if (index === -1) throw new Error(`Missing row ${id}`);
+      deletes.push(id);
+      rows.splice(index, 1);
+    },
   };
 
-  return { ctx: { db }, rows, inserts, patches };
+  return { ctx: { db }, rows, inserts, patches, deletes };
 }
 
 function validHandoff(
@@ -311,6 +330,43 @@ describe("Convex MCP OAuth authorization intents", () => {
     expect(rows[0]).toMatchObject({ status: "pending", updatedAt: NOW });
     expect(rows[0]).not.toHaveProperty("consumedAt");
     expect(patches).toHaveLength(0);
+  });
+
+  it("deletes expired intent records in a bounded internal cleanup pass", async () => {
+    const expiredPending = storedIntent({
+      _id: "mcpOAuthAuthorizationIntents_expired_pending",
+      expiresAt: NOW + MCP_OAUTH_AUTHORIZATION_INTENT_TTL_MS,
+    });
+    const expiredConsumed = storedIntent({
+      _id: "mcpOAuthAuthorizationIntents_expired_consumed",
+      intentHandleHash: "b".repeat(64),
+      status: "consumed",
+      consumedAt: NOW + 1,
+      expiresAt: NOW + MCP_OAUTH_AUTHORIZATION_INTENT_TTL_MS,
+    });
+    const activePending = storedIntent({
+      _id: "mcpOAuthAuthorizationIntents_active_pending",
+      intentHandleHash: "c".repeat(64),
+      expiresAt: NOW + MCP_OAUTH_AUTHORIZATION_INTENT_TTL_MS + 2,
+    });
+    const { ctx, rows, deletes } = makeCtx([expiredPending, expiredConsumed, activePending]);
+
+    const result = await internalDeleteExpiredMcpOAuthAuthorizationIntents._handler(ctx as any, {
+      now: NOW + MCP_OAUTH_AUTHORIZATION_INTENT_TTL_MS + 1,
+      version: 1,
+    });
+
+    expect(result).toEqual({
+      kind: "mcp_oauth_authorization_intent_cleanup_result",
+      ok: true,
+      deletedCount: 2,
+      modelVisible: false,
+      safeForLogging: true,
+      version: 1,
+    });
+    expect(deletes).toEqual(["mcpOAuthAuthorizationIntents_expired_pending", "mcpOAuthAuthorizationIntents_expired_consumed"]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]._id).toBe("mcpOAuthAuthorizationIntents_active_pending");
   });
 
   it("fails closed on wrong owner, missing rows, duplicate rows, and malformed storage", async () => {
