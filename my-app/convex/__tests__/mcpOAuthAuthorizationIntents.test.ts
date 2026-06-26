@@ -200,9 +200,9 @@ describe("Convex MCP OAuth authorization intents", () => {
       approvedOptionalParameters: { nonce: "nonce_fixture", prompt: "consent" },
     });
     expect(JSON.stringify(rows[0])).not.toContain(`${AUTHORIZATION_ORIGIN}${AUTHORIZATION_PATH}?`);
-    expect(Object.keys(rows[0])).not.toEqual(
-      expect.arrayContaining(["authorizationUrl", "query", "accessToken", "refreshToken", "clientSecret"]),
-    );
+    for (const key of ["authorizationUrl", "query", "accessToken", "refreshToken", "clientSecret"]) {
+      expect(Object.keys(rows[0])).not.toContain(key);
+    }
   });
 
   it.each([
@@ -297,6 +297,22 @@ describe("Convex MCP OAuth authorization intents", () => {
     expect(patches).toHaveLength(1);
   });
 
+  it("fails closed when consume receives a timestamp before row creation", async () => {
+    const { ctx, rows, patches } = makeCtx([storedIntent()]);
+
+    const result = await internalConsumeMcpOAuthAuthorizationIntent._handler(ctx as any, {
+      trustedOwner: trustedOwner(),
+      intentHandleHash: VALID_HANDLE_HASH,
+      now: NOW - 1,
+      version: 1,
+    });
+
+    expect(result).toMatchObject({ ok: false, reason: "invalid_input" });
+    expect(rows[0]).toMatchObject({ status: "pending", updatedAt: NOW });
+    expect(rows[0]).not.toHaveProperty("consumedAt");
+    expect(patches).toHaveLength(0);
+  });
+
   it("fails closed on wrong owner, missing rows, duplicate rows, and malformed storage", async () => {
     await expect(consumeWith([], trustedOwner())).resolves.toMatchObject({ ok: false, reason: "not_found_or_forbidden" });
     await expect(consumeWith([storedIntent()], trustedOwner(OTHER_OWNER_ID))).resolves.toMatchObject({
@@ -322,6 +338,7 @@ describe("Convex MCP OAuth authorization intents", () => {
     ["missing owner", storedIntent({ twoweeksClerkId: "" }), "malformed"],
     ["wrong PKCE method", { ...storedIntent(), codeChallengeMethod: "plain" }, "malformed"],
     ["malformed resource", storedIntent({ resource: "https://mcp.twoweeks.example.test/mcp?x=1" }), "malformed"],
+    ["query-bearing authorization page path", storedIntent({ authorizationPagePath: "/oauth/authorize?x=1" }), "malformed"],
     ["missing canonical scope", storedIntent({ scopes: ["openid"] }), "malformed"],
     ["unsupported extra field", { ...storedIntent(), debugPayload: "private" }, "malformed"],
     ["invalid status", { ...storedIntent(), status: "approved" }, "malformed"],

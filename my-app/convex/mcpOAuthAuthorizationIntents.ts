@@ -341,6 +341,7 @@ export const internalConsumeMcpOAuthAuthorizationIntent = internalMutation({
     if (row.twoweeksClerkId !== trustedOwner.twoweeksClerkId) return denyConsume("not_found_or_forbidden");
     if (classification === "consumed_valid") return denyConsume("already_consumed");
     if (classification === "expired_valid") return denyConsume("expired");
+    if (args.now < row.createdAt) return denyConsume("invalid_input");
     if (args.now >= row.expiresAt) {
       await ctx.db.patch(row._id as never, {
         status: "expired",
@@ -777,7 +778,7 @@ function readAuthorizationOrigin(value: unknown): string | undefined {
 function readAuthorizationPagePath(value: unknown): string | undefined {
   const text = readBoundedStorageText(value, MAX_AUTHORIZATION_PAGE_PATH_LENGTH);
   if (!text || !text.startsWith("/") || text.startsWith("//")) return undefined;
-  if (text.includes("#")) return undefined;
+  if (text.includes("?") || text.includes("#")) return undefined;
   return text;
 }
 
