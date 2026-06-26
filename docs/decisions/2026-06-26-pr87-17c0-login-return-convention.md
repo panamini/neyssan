@@ -38,12 +38,13 @@ The resolver rejects:
 
 ## Implementation Boundary
 
-This slice changes only the active `SignInPage` return target and its pure resolver.
+This slice changes only the active `SignInPage` return target, its pure resolver, and a placeholder client route for the fixed continuation path.
 
 It does not implement:
 
 - OAuth authorization endpoint behavior;
 - OAuth callback behavior;
+- continuation-handle consumption;
 - Convex reads or writes;
 - MCP endpoint or runtime composition;
 - account-link lifecycle;
@@ -57,3 +58,4 @@ It does not implement:
 - Authenticated users navigate to the resolved destination.
 - Clerk `SignIn` receives the same resolved destination for both `forceRedirectUrl` and `fallbackRedirectUrl`.
 - Invalid or missing return input resolves to `/cv`.
+- `/mcp/oauth/authorize/continue` is an explicit placeholder client route so the SPA catch-all does not discard the reserved continuation URL before PR87.17C.

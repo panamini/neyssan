@@ -22,6 +22,7 @@ import { TemplatesPage } from "./pages/TemplatesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SignInPage } from "./pages/SignInPage";
 import { SignOutPage } from "./pages/SignOutPage";
+import { McpOAuthContinuationPage } from "./pages/McpOAuthContinuationPage";
 import { ResumePrintPage } from "./pages/ResumePrintPage";
 import { ProposalPrintPage } from "./pages/ProposalPrintPage";
 import { ResumeFontParityHarnessPage } from "./pages/ResumeFontParityHarnessPage";
@@ -217,6 +218,7 @@ function AppShellFrame(): JSX.Element {
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/sign-in/*" element={<SignInPage />} />
               <Route path="/sign-out" element={<SignOutPage />} />
+              <Route path="/mcp/oauth/authorize/continue" element={<McpOAuthContinuationPage />} />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
@@ -236,7 +238,9 @@ function AppShellFrame(): JSX.Element {
         open={onboardingReplayOpen}
         initialStepId={onboardingReplayInitialStepId}
         onClose={() => setOnboardingReplayOpen(false)}
-        onNavigate={(to, options) => navigate(to, options)}
+        onNavigate={(to, options) => {
+          void navigate(to, options);
+        }}
         onOpenCommandPalette={() => setCommandPaletteOpen(true)}
       />
     </div>
