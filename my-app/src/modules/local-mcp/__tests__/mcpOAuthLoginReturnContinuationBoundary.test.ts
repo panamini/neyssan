@@ -157,6 +157,35 @@ describe("MCP OAuth login-return continuation boundary", () => {
     expect(serialized).not.toContain("database leaked fixture text");
   });
 
+  it("rejects a generated digest that does not match the generated raw handle", async () => {
+    const createIntent = vi.fn<[McpOAuthIntentCreateInputV1], Promise<McpOAuthIntentCreateResultV1>>(
+      async () => createOk(),
+    );
+    const mismatchedCodec: McpOAuthContinuationHandleCodecV1 = Object.freeze({
+      ...deterministicCodec,
+      generate: () => Object.freeze({ rawHandle: RAW_HANDLE, intentHandleHash: OTHER_HANDLE_HASH }),
+    });
+
+    const result = await prepareMcpOAuthLoginReturnContinuation({
+      kind: "prepare_mcp_oauth_login_return_continuation_input",
+      authorizationRequestHandoff: handoff(),
+      trustedOwner: OWNER,
+      createIntent,
+      handleCodec: mismatchedCodec,
+      now: NOW,
+      config: config(),
+      version: 1,
+    });
+
+    expect(result).toMatchObject({
+      prepared: false,
+      reason: "invalid_continuation_handle",
+    });
+    expect(createIntent).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain(RAW_HANDLE);
+    expect(JSON.stringify(result)).not.toContain(OTHER_HANDLE_HASH);
+  });
+
   it("requires an explicit sensitive-hint decision instead of silently omitting hints", async () => {
     const createIntent = vi.fn<[McpOAuthIntentCreateInputV1], Promise<McpOAuthIntentCreateResultV1>>(
       async () => createOk(),
@@ -219,6 +248,34 @@ describe("MCP OAuth login-return continuation boundary", () => {
     expect(result.serverOnly.authorizationUrl).not.toContain(OWNER.twoweeksClerkId);
     expect(result.serverOnly.authorizationGranted).toBe(false);
     expect(result.safeForLogging).toBe(false);
+  });
+
+  it("rejects malformed codec digests before calling consume storage", async () => {
+    const consumeIntent = vi.fn<[McpOAuthIntentConsumeInputV1], Promise<McpOAuthIntentConsumeResultV1>>(
+      async () => consumeOk(handoff()),
+    );
+    const rawHandleHashingCodec: McpOAuthContinuationHandleCodecV1 = Object.freeze({
+      ...deterministicCodec,
+      hash: () => RAW_HANDLE,
+    });
+
+    const result = await resumeMcpOAuthAuthorizationAfterLoginReturn({
+      kind: "resume_mcp_oauth_authorization_after_login_return_input",
+      continuationUrlOrPath: `${MCP_OAUTH_CONTINUATION_PATH}?${MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER}=${RAW_HANDLE}`,
+      trustedOwner: OWNER,
+      consumeIntent,
+      handleCodec: rawHandleHashingCodec,
+      now: NOW,
+      config: config(),
+      version: 1,
+    });
+
+    expect(result).toMatchObject({
+      resumed: false,
+      reason: "invalid_continuation_handle",
+    });
+    expect(consumeIntent).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain(RAW_HANDLE);
   });
 
   it.each([

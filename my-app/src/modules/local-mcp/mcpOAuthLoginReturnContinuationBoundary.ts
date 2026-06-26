@@ -304,7 +304,12 @@ export async function prepareMcpOAuthLoginReturnContinuation(
   }
 
   const generated = codec.generate();
-  if (!codec.validate(generated.rawHandle) || !isValidIntentHandleHash(generated.intentHandleHash)) {
+  const expectedIntentHandleHash = hashContinuationHandleWithCodec(codec, generated.rawHandle);
+  if (
+    !codec.validate(generated.rawHandle) ||
+    !isValidIntentHandleHash(generated.intentHandleHash) ||
+    generated.intentHandleHash !== expectedIntentHandleHash
+  ) {
     return prepareDenied("invalid_continuation_handle");
   }
 
@@ -380,12 +385,14 @@ export async function resumeMcpOAuthAuthorizationAfterLoginReturn(
 
   const continuation = parseContinuationUrlOrPath(input.continuationUrlOrPath, config, codec);
   if (!continuation.ok) return resumeDenied(continuation.reason);
+  const intentHandleHash = hashContinuationHandleWithCodec(codec, continuation.rawHandle);
+  if (!isValidIntentHandleHash(intentHandleHash)) return resumeDenied("invalid_continuation_handle");
 
   let consumeResult: McpOAuthIntentConsumeResultV1;
   try {
     consumeResult = await input.consumeIntent({
       trustedOwner: input.trustedOwner,
-      intentHandleHash: codec.hash(continuation.rawHandle),
+      intentHandleHash,
       now: input.now,
       version: 1,
     });
@@ -430,6 +437,17 @@ export async function resumeMcpOAuthAuthorizationAfterLoginReturn(
 
 function hashMcpOAuthContinuationHandle(rawHandle: string): string {
   return createHash("sha256").update(rawHandle, "utf8").digest("hex");
+}
+
+function hashContinuationHandleWithCodec(
+  codec: McpOAuthContinuationHandleCodecV1,
+  rawHandle: string,
+): string | undefined {
+  try {
+    return codec.hash(rawHandle);
+  } catch {
+    return undefined;
+  }
 }
 
 function buildContinuationPath(
