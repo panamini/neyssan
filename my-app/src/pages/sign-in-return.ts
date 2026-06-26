@@ -61,7 +61,14 @@ function isAllowedMcpOAuthContinuationPath(candidate: string): boolean {
     return false;
   }
 
-  if (url.origin !== LOCAL_ORIGIN || url.pathname !== MCP_OAUTH_CONTINUATION_PATH) {
+  const queryStart = candidate.indexOf("?");
+  const rawPath = queryStart === -1 ? candidate : candidate.slice(0, queryStart);
+
+  if (
+    url.origin !== LOCAL_ORIGIN ||
+    url.pathname !== MCP_OAUTH_CONTINUATION_PATH ||
+    rawPath !== MCP_OAUTH_CONTINUATION_PATH
+  ) {
     return false;
   }
 

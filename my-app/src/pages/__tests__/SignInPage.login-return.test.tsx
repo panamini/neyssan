@@ -1,7 +1,7 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { SignInPage } from "../SignInPage";
 import {
   DEFAULT_SIGN_IN_RETURN_PATH,
@@ -46,6 +46,11 @@ function encodeMcpOAuthReturn(intentHandle = "intent_abc-123"): string {
   return `?${MCP_OAUTH_SIGN_IN_RETURN_PARAMETER}=${encodeURIComponent(continuationPath)}`;
 }
 
+function ContinuationProbe(): React.ReactElement {
+  const location = useLocation();
+  return <div data-testid="mcp-oauth-continuation" data-search={location.search} />;
+}
+
 describe("sign-in return convention", () => {
   beforeEach(() => {
     testState.authenticated = false;
@@ -74,6 +79,7 @@ describe("sign-in return convention", () => {
     ["encoded external URL", "https%3A%2F%2Fevil.example%2Fcontinue"],
     ["encoded protocol-relative URL", "%2F%2Fevil.example%2Fcontinue"],
     ["malformed path", "mcp/oauth/authorize/continue"],
+    ["dot-segment continuation", "/mcp/oauth/authorize/./continue?mcp_oauth_intent=abc"],
     ["fragmented continuation", "/mcp/oauth/authorize/continue?mcp_oauth_intent=abc#fragment"],
     ["arbitrary app path", "/cv?mcp_oauth_intent=abc"],
     ["unknown continuation parameter", "/mcp/oauth/authorize/continue?mcp_oauth_intent=abc&next=/cv"],
@@ -112,12 +118,16 @@ describe("sign-in return convention", () => {
           <Route path="/sign-in" element={<SignInPage />} />
           <Route
             path={MCP_OAUTH_CONTINUATION_PATH}
-            element={<div data-testid="mcp-oauth-continuation" />}
+            element={<ContinuationProbe />}
           />
         </Routes>
       </MemoryRouter>,
     );
 
     expect(screen.getByTestId("mcp-oauth-continuation")).toBeInTheDocument();
+    expect(screen.getByTestId("mcp-oauth-continuation")).toHaveAttribute(
+      "data-search",
+      `?${MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER}=already_auth-456`,
+    );
   });
 });
