@@ -804,11 +804,20 @@ function hasAcceptedProviderEnvelope(providerForwardRequest: Record<string, unkn
 }
 
 function hasAcceptedProviderScopes(scopes: unknown): scopes is string[] {
-  return (
-    Array.isArray(scopes) &&
-    scopes.every((scope) => typeof scope === "string") &&
-    scopes.includes(TWOWEEKS_APPLICATIONS_READ_SCOPE)
-  );
+  if (!Array.isArray(scopes)) return false;
+  if (Object.keys(scopes).length !== scopes.length) return false;
+
+  let hasApplicationsReadScope = false;
+  for (let index = 0; index < scopes.length; index += 1) {
+    const descriptor = Object.getOwnPropertyDescriptor(scopes, String(index));
+    if (!descriptor || !descriptor.enumerable || !("value" in descriptor)) return false;
+    if (typeof descriptor.value !== "string") return false;
+    if (descriptor.value === TWOWEEKS_APPLICATIONS_READ_SCOPE) {
+      hasApplicationsReadScope = true;
+    }
+  }
+
+  return hasApplicationsReadScope;
 }
 
 function hasAcceptedPkce(pkce: Record<string, unknown>): boolean {

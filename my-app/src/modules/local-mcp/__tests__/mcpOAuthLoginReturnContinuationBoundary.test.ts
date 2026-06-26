@@ -744,6 +744,38 @@ describe("MCP OAuth login-return continuation boundary", () => {
     expect(JSON.stringify(result)).not.toContain(HANDLE_HASH);
   });
 
+  it("rejects consumed handoffs with accessor-backed scope arrays", async () => {
+    const scopes = ["openid"] as string[];
+    Object.defineProperty(scopes, "0", {
+      enumerable: true,
+      get: () => {
+        throw new Error("scope getter should not run");
+      },
+    });
+
+    const result = await resumeMcpOAuthAuthorizationAfterLoginReturn({
+      kind: "resume_mcp_oauth_authorization_after_login_return_input",
+      continuationUrlOrPath: `${MCP_OAUTH_CONTINUATION_PATH}?${MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER}=${RAW_HANDLE}`,
+      trustedOwner: OWNER,
+      consumeIntent: async () =>
+        consumeOk(
+          handoff({
+            scopes,
+          }),
+        ),
+      handleCodec: deterministicCodec,
+      now: NOW,
+      config: config(),
+      version: 1,
+    });
+
+    expect(result).toMatchObject({
+      resumed: false,
+      reason: "malformed_consumed_handoff",
+    });
+    expect(JSON.stringify(result)).not.toContain(RAW_HANDLE);
+  });
+
   it("rejects consumed handoffs without the canonical applications read scope", async () => {
     const result = await resumeMcpOAuthAuthorizationAfterLoginReturn({
       kind: "resume_mcp_oauth_authorization_after_login_return_input",
