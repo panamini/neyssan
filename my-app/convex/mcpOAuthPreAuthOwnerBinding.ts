@@ -101,7 +101,7 @@ export const internalBindMcpOAuthPreAuthIntentToAuthenticatedOwner =
         .withIndex("by_pre_auth_handle_hash", (q) =>
           q.eq("preAuthHandleHash", args.preAuthHandleHash),
         )
-        .collect();
+        .take(2);
       if (preAuthRows.length === 0) return deny("not_found_or_forbidden");
       if (preAuthRows.length > 1) return deny("duplicate_pre_auth_record");
 
@@ -125,7 +125,7 @@ export const internalBindMcpOAuthPreAuthIntentToAuthenticatedOwner =
         .withIndex("by_intent_handle_hash", (q) =>
           q.eq("intentHandleHash", args.preAuthHandleHash),
         )
-        .collect();
+        .take(1);
       if (ownerBoundRows.length > 0)
         return deny("owner_bound_handle_collision");
 
@@ -219,6 +219,9 @@ async function readTrustedOwnerFromSession(ctx: {
       version: 1,
     };
   } catch {
+    console.warn(
+      "[mcp-oauth-pre-auth-owner-binding] Clerk identity lookup failed",
+    );
     return undefined;
   }
 }

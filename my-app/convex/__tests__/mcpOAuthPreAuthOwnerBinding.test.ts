@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   internalConsumeMcpOAuthAuthorizationIntent,
@@ -74,6 +74,7 @@ function makeCtx(
     preAuthRows?: StoredPreAuthIntentRecord[];
     authorizationRows?: StoredAuthorizationIntentRecord[];
     subject?: string | null;
+    throwOnIdentityLookup?: boolean;
   }> = {},
 ) {
   const preAuthRows = (options.preAuthRows ?? []).map(clonePreAuthRow);
@@ -91,7 +92,11 @@ function makeCtx(
 
   const ctx = {
     auth: {
-      getUserIdentity: async () => (subject === null ? null : { subject }),
+      getUserIdentity: async () => {
+        if (options.throwOnIdentityLookup)
+          throw new Error("identity lookup unavailable");
+        return subject === null ? null : { subject };
+      },
     },
     db: {
       query: (tableName: string) => {
@@ -303,6 +308,27 @@ describe("Convex MCP OAuth pre-auth owner binding", () => {
     expect(authorizationRows).toHaveLength(0);
     expect(patches).toHaveLength(0);
     expectFailureDoesNotEchoSensitiveValues(result);
+  });
+
+  it("logs a non-sensitive server signal when Clerk identity lookup fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const { ctx, authorizationRows } = makeCtx({
+        throwOnIdentityLookup: true,
+        preAuthRows: [storedPreAuthIntent()],
+      });
+
+      const result = await bindWith(ctx);
+
+      expect(result).toMatchObject({ ok: false, reason: "unauthenticated" });
+      expect(authorizationRows).toHaveLength(0);
+      expect(warn).toHaveBeenCalledWith(
+        "[mcp-oauth-pre-auth-owner-binding] Clerk identity lookup failed",
+      );
+      expect(JSON.stringify(warn.mock.calls)).not.toContain(OWNER_ID);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("rejects request-supplied owner input and uses only the authenticated session owner", async () => {
