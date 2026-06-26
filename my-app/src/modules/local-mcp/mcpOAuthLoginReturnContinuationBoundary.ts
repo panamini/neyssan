@@ -270,6 +270,7 @@ const CREATE_SUCCESS_KEYS = [
 const CREATE_SUCCESS_SERVER_ONLY_KEYS = ["status", "expiresAt", "version"] as const;
 const CONSUME_SUCCESS_KEYS = CREATE_SUCCESS_KEYS;
 const CONSUME_SUCCESS_SERVER_ONLY_KEYS = ["authorizationRequestHandoff", "version"] as const;
+const GENERATED_HANDLE_KEYS = ["rawHandle", "intentHandleHash"] as const;
 const SENSITIVE_OPTIONAL_PARAMETERS = ["login_hint", "id_token_hint"] as const;
 const RESTORED_OPTIONAL_PARAMETERS = ["nonce", "prompt"] as const;
 
@@ -293,22 +294,18 @@ export const defaultMcpOAuthContinuationHandleCodecV1: McpOAuthContinuationHandl
 export async function prepareMcpOAuthLoginReturnContinuation(
   input: PrepareMcpOAuthLoginReturnContinuationInputV1,
 ): Promise<PrepareMcpOAuthLoginReturnContinuationResultV1> {
+  if (!isPlainRecord(input)) return prepareDenied("invalid_input");
   const config = parseBoundaryConfig(input.config);
   const codec = input.handleCodec ?? defaultMcpOAuthContinuationHandleCodecV1;
-  if (
-    input.kind !== "prepare_mcp_oauth_login_return_continuation_input" ||
-    input.version !== 1 ||
-    !isValidNow(input.now) ||
-    !isValidCodec(codec)
-  ) {
+  if (!isValidCodec(codec) || !hasValidPrepareInput(input)) {
     return prepareDenied("invalid_input");
   }
   if (!config) {
     return prepareDenied("invalid_configuration");
   }
   if (
-    !sameTrustedOwner(input.trustedOwner, input.authorizationRequestHandoff.trustedOwner) ||
-    !isAcceptedAuthorizationHandoff(input.authorizationRequestHandoff, config)
+    !isAcceptedAuthorizationHandoff(input.authorizationRequestHandoff, config) ||
+    !sameTrustedOwner(input.trustedOwner, input.authorizationRequestHandoff.trustedOwner)
   ) {
     return prepareDenied("invalid_input");
   }
@@ -317,24 +314,13 @@ export async function prepareMcpOAuthLoginReturnContinuation(
     return prepareDenied("sensitive_hint_continuation_decision_required");
   }
 
-  const generated = codec.generate();
-  const expectedIntentHandleHash = hashContinuationHandleWithCodec(codec, generated.rawHandle);
-  if (
-    !codec.validate(generated.rawHandle) ||
-    generated.rawHandle.length > config.maxRawHandleLength ||
-    !isValidIntentHandleHash(generated.intentHandleHash) ||
-    generated.intentHandleHash !== expectedIntentHandleHash
-  ) {
-    return prepareDenied("invalid_continuation_handle");
-  }
+  const generated = readValidGeneratedContinuationHandle(codec, config);
+  if (!generated) return prepareDenied("invalid_continuation_handle");
 
   const continuationPath = buildContinuationPath(generated.rawHandle, config);
   const continuationUrl = `${config.applicationOrigin}${continuationPath}`;
   const signInUrl = buildSignInUrl(continuationPath, config);
-  if (
-    continuationUrl.length > config.maxContinuationUrlLength ||
-    signInUrl.length > config.maxContinuationUrlLength
-  ) {
+  if (!hasBoundedContinuationUrls(continuationUrl, signInUrl, config)) {
     return prepareDenied("invalid_continuation_url");
   }
 
@@ -383,6 +369,7 @@ export async function prepareMcpOAuthLoginReturnContinuation(
 export async function resumeMcpOAuthAuthorizationAfterLoginReturn(
   input: ResumeMcpOAuthAuthorizationAfterLoginReturnInputV1,
 ): Promise<ResumeMcpOAuthAuthorizationAfterLoginReturnResultV1> {
+  if (!isPlainRecord(input)) return resumeDenied("invalid_input");
   const config = parseBoundaryConfig(input.config);
   const codec = input.handleCodec ?? defaultMcpOAuthContinuationHandleCodecV1;
   if (
@@ -390,6 +377,7 @@ export async function resumeMcpOAuthAuthorizationAfterLoginReturn(
     input.version !== 1 ||
     !isValidNow(input.now) ||
     !isTrustedOwner(input.trustedOwner) ||
+    typeof input.consumeIntent !== "function" ||
     !isValidCodec(codec)
   ) {
     return resumeDenied("invalid_input");
@@ -415,7 +403,8 @@ export async function resumeMcpOAuthAuthorizationAfterLoginReturn(
     return resumeDenied("intent_unavailable");
   }
 
-  if (!consumeResult.ok) return resumeDenied(mapConsumeFailure(consumeResult.reason));
+  if (!isPlainRecord(consumeResult)) return resumeDenied("malformed_consumed_handoff");
+  if (consumeResult.ok !== true) return resumeDenied(mapConsumeFailure(readFailureReason(consumeResult.reason)));
   if (!isConsumeIntentSuccess(consumeResult)) return resumeDenied("malformed_consumed_handoff");
 
   const handoff = consumeResult.serverOnly.authorizationRequestHandoff;
@@ -550,7 +539,70 @@ function parseBoundaryConfig(
     return undefined;
   }
 
-  return value;
+  const applicationOrigin = readCanonicalOrigin(
+    record.applicationOrigin,
+    record.allowHttpLocalhostApplicationOrigin === true,
+  );
+  const fixedAuthorizationPageOrigin = readCanonicalOrigin(
+    record.fixedAuthorizationPageOrigin,
+    record.allowHttpLocalhostApplicationOrigin === true,
+  );
+  if (!applicationOrigin || !fixedAuthorizationPageOrigin) return undefined;
+
+  return Object.freeze({
+    ...value,
+    applicationOrigin,
+    fixedAuthorizationPageOrigin,
+  });
+}
+
+function hasValidPrepareInput(
+  input: Record<string, unknown>,
+): input is PrepareMcpOAuthLoginReturnContinuationInputV1 {
+  return (
+    input.kind === "prepare_mcp_oauth_login_return_continuation_input" &&
+    input.version === 1 &&
+    isValidNow(input.now) &&
+    isTrustedOwner(input.trustedOwner) &&
+    typeof input.createIntent === "function"
+  );
+}
+
+function readValidGeneratedContinuationHandle(
+  codec: McpOAuthContinuationHandleCodecV1,
+  config: McpOAuthLoginReturnContinuationBoundaryConfigV1,
+): Readonly<{ rawHandle: string; intentHandleHash: string }> | undefined {
+  const generated = codec.generate();
+  if (!isGeneratedContinuationHandle(generated)) return undefined;
+  const expectedIntentHandleHash = hashContinuationHandleWithCodec(codec, generated.rawHandle);
+  if (!isValidIntentHandleHash(expectedIntentHandleHash)) return undefined;
+  if (!hasValidGeneratedContinuationHandle(generated, expectedIntentHandleHash, codec, config)) return undefined;
+  return generated;
+}
+
+function hasValidGeneratedContinuationHandle(
+  generated: Readonly<{ rawHandle: string; intentHandleHash: string }>,
+  expectedIntentHandleHash: string,
+  codec: McpOAuthContinuationHandleCodecV1,
+  config: McpOAuthLoginReturnContinuationBoundaryConfigV1,
+): boolean {
+  return (
+    codec.validate(generated.rawHandle) &&
+    generated.rawHandle.length <= config.maxRawHandleLength &&
+    isValidIntentHandleHash(generated.intentHandleHash) &&
+    generated.intentHandleHash === expectedIntentHandleHash
+  );
+}
+
+function hasBoundedContinuationUrls(
+  continuationUrl: string,
+  signInUrl: string,
+  config: McpOAuthLoginReturnContinuationBoundaryConfigV1,
+): boolean {
+  return (
+    continuationUrl.length <= config.maxContinuationUrlLength &&
+    signInUrl.length <= config.maxContinuationUrlLength
+  );
 }
 
 function isUnsafeContinuationInput(
@@ -561,7 +613,7 @@ function isUnsafeContinuationInput(
     typeof value !== "string" ||
     value.length === 0 ||
     value.length > config.maxContinuationUrlLength ||
-    value.includes("\0") ||
+    hasControlCharacter(value) ||
     value.includes("\\") ||
     value.includes("#") ||
     hasDotSegment(value) ||
@@ -720,11 +772,42 @@ function hasAcceptedAuthorizationPage(
 
 function hasAcceptedProviderForwardRequest(handoff: Record<string, unknown>): boolean {
   const providerForwardRequest = handoff.providerForwardRequest;
-  if (!isPlainRecord(providerForwardRequest) || !isPlainRecord(providerForwardRequest.pkce)) return false;
+  if (!isPlainRecord(providerForwardRequest)) return false;
+  const pkce = providerForwardRequest.pkce;
+  if (!isPlainRecord(pkce)) return false;
+  return (
+    hasAcceptedProviderEnvelope(providerForwardRequest) &&
+    hasAcceptedProviderScopes(providerForwardRequest.scopes) &&
+    hasAcceptedPkce(pkce) &&
+    hasAcceptedOptionalParameters(providerForwardRequest.approvedOptionalParameters)
+  );
+}
+
+function hasAcceptedProviderEnvelope(providerForwardRequest: Record<string, unknown>): boolean {
   return (
     providerForwardRequest.responseType === "code" &&
-    providerForwardRequest.pkce.codeChallengeMethod === "S256"
+    typeof providerForwardRequest.clientId === "string" &&
+    typeof providerForwardRequest.redirectUri === "string" &&
+    typeof providerForwardRequest.resource === "string" &&
+    typeof providerForwardRequest.state === "string"
   );
+}
+
+function hasAcceptedProviderScopes(scopes: unknown): scopes is string[] {
+  return Array.isArray(scopes) && scopes.every((scope) => typeof scope === "string");
+}
+
+function hasAcceptedPkce(pkce: Record<string, unknown>): boolean {
+  return typeof pkce.codeChallenge === "string" && pkce.codeChallengeMethod === "S256";
+}
+
+function hasAcceptedOptionalParameters(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!isPlainRecord(value)) return false;
+  return [...SENSITIVE_OPTIONAL_PARAMETERS, ...RESTORED_OPTIONAL_PARAMETERS].every((parameter) => {
+    const parameterValue = value[parameter];
+    return parameterValue === undefined || typeof parameterValue === "string";
+  });
 }
 
 function hasPendingProviderValidation(handoff: Record<string, unknown>): boolean {
@@ -777,6 +860,10 @@ function mapConsumeFailure(reason: string): McpOAuthLoginReturnContinuationFailu
   if (reason === "not_found_or_forbidden") return "owner_or_intent_mismatch";
   if (reason === "malformed_storage_record") return "malformed_consumed_handoff";
   return "intent_unavailable";
+}
+
+function readFailureReason(reason: unknown): string {
+  return typeof reason === "string" ? reason : "intent_unavailable";
 }
 
 function isCreateIntentSuccess(value: McpOAuthIntentCreateResultV1): value is Extract<
@@ -844,6 +931,18 @@ function hasExpectedConsumeSuccessServerOnly(value: unknown): boolean {
   );
 }
 
+function isGeneratedContinuationHandle(value: unknown): value is Readonly<{
+  rawHandle: string;
+  intentHandleHash: string;
+}> {
+  const generated = readRecord(value, GENERATED_HANDLE_KEYS);
+  return (
+    generated !== undefined &&
+    typeof generated.rawHandle === "string" &&
+    typeof generated.intentHandleHash === "string"
+  );
+}
+
 function isValidCodec(codec: McpOAuthContinuationHandleCodecV1): boolean {
   return (
     typeof codec.generate === "function" &&
@@ -879,6 +978,7 @@ function sameTrustedOwner(
 
 function isAbsoluteOrigin(value: unknown, allowHttpLocalhost: boolean): value is string {
   if (typeof value !== "string") return false;
+  if (hasControlCharacter(value)) return false;
   try {
     const url = new URL(value);
     if (!hasOriginOnlyUrlShape(url)) return false;
@@ -886,6 +986,11 @@ function isAbsoluteOrigin(value: unknown, allowHttpLocalhost: boolean): value is
   } catch {
     return false;
   }
+}
+
+function readCanonicalOrigin(value: unknown, allowHttpLocalhost: boolean): string | undefined {
+  if (!isAbsoluteOrigin(value, allowHttpLocalhost)) return undefined;
+  return new URL(value).origin;
 }
 
 function hasOriginOnlyUrlShape(url: URL): boolean {
@@ -902,10 +1007,24 @@ function isAllowedLocalHttpOrigin(url: URL, allowHttpLocalhost: boolean): boolea
 
 function isSafeAbsolutePath(value: unknown): value is string {
   if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) return false;
-  if (value.includes("\\") || value.includes("?") || value.includes("#") || /%2e|%2f|%5c/iu.test(value)) {
+  if (
+    hasControlCharacter(value) ||
+    value.includes("\\") ||
+    value.includes("?") ||
+    value.includes("#") ||
+    /%2e|%2f|%5c/iu.test(value)
+  ) {
     return false;
   }
   return !hasDotSegment(value);
+}
+
+function hasControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
 }
 
 function isPositiveBound(value: unknown): value is number {
