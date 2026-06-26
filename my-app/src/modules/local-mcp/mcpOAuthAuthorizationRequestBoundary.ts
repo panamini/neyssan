@@ -93,6 +93,27 @@ export type McpOAuthAuthorizationRequestBoundaryResultV1 = Readonly<
     }
 >;
 
+export type McpOAuthPreAuthAuthorizationRequestProjectionResultV1 = Readonly<
+  | {
+      kind: "mcp_oauth_pre_auth_authorization_request_projection_result";
+      accepted: true;
+      reason: "accepted";
+      serverOnly: McpOAuthPreAuthAuthorizationRequestProjectionV1;
+      modelVisible: false;
+      safeForLogging: false;
+      version: 1;
+    }
+  | {
+      kind: "mcp_oauth_pre_auth_authorization_request_projection_result";
+      accepted: false;
+      reason: McpOAuthAuthorizationRequestBoundaryDenialReasonV1;
+      safeFailure: McpOAuthAuthorizationRequestBoundarySafeFailureV1;
+      modelVisible: false;
+      safeForLogging: true;
+      version: 1;
+    }
+>;
+
 export type McpOAuthAuthorizationRequestBoundaryHandoffV1 = Readonly<{
   authorizationPage: Readonly<{
     origin: string;
@@ -150,6 +171,32 @@ export type McpOAuthAuthorizationRequestBoundaryHandoffV1 = Readonly<{
   version: 1;
 }>;
 
+export type McpOAuthPreAuthAuthorizationRequestProjectionV1 = Readonly<{
+  kind: "mcp_oauth_pre_auth_authorization_request_projection";
+  authorizationPage: Readonly<{
+    origin: string;
+    path: string;
+  }>;
+  providerForwardRequest: McpOAuthAuthorizationRequestBoundaryHandoffV1["providerForwardRequest"];
+  providerValidation: McpOAuthAuthorizationRequestBoundaryHandoffV1["providerValidation"];
+  preAuthIntent: Readonly<{
+    status: "pre_auth_pending";
+    containsOwnerIdentity: false;
+    containsProviderSubject: false;
+    containsAccountLinkId: false;
+    authorizationGranted: false;
+    consentCompleted: false;
+    authorizationCodeIssued: false;
+    tokenIssued: false;
+    accountLinkCreated: false;
+    modelVisible: false;
+    version: 1;
+  }>;
+  modelVisible: false;
+  safeForLogging: false;
+  version: 1;
+}>;
+
 type ParsedConfigV1 = Readonly<{
   authorizationPageOrigin: string;
   authorizationPagePath: string;
@@ -178,6 +225,11 @@ type ParsedRequestParametersV1 = Readonly<{
   codeChallengeMethod: "S256";
   approvedOptionalParameters: Readonly<Partial<Record<McpOAuthAuthorizationOptionalParameterV1, string>>>;
   normalizedQuery: string;
+}>;
+
+type ParsedAuthorizationRequestPartsV1 = Readonly<{
+  parsedUrl: URL;
+  parameters: ParsedRequestParametersV1;
 }>;
 
 type QueryValuesV1 = ReadonlyMap<string, readonly string[]>;
@@ -222,6 +274,7 @@ type ConfigHeaderRecordV1 = Record<string, unknown> & Readonly<{
 }>;
 
 const INPUT_KEYS = ["kind", "authorizationUrl", "trustedOwner", "config", "version"] as const;
+const PRE_AUTH_INPUT_KEYS = ["kind", "authorizationUrl", "config", "version"] as const;
 const OWNER_KEYS = ["kind", "twoweeksClerkId", "version"] as const;
 const CONFIG_KEYS = [
   "kind",
@@ -294,26 +347,10 @@ export function parseMcpOAuthAuthorizationRequestBoundary(
   const owner = parseTrustedOwner(inputRecord.trustedOwner);
   if (!owner) return deny("invalid_owner");
 
-  const authorizationUrl = readBoundedText(inputRecord.authorizationUrl, config.maxUrlLength);
-  if (!authorizationUrl || hasMalformedPercentEncoding(authorizationUrl)) return deny("malformed_input");
+  const requestParts = parseAuthorizationRequestParts(inputRecord.authorizationUrl, config);
+  if (!requestParts.ok) return deny(requestParts.reason);
 
-  let parsedUrl: URL;
-  try {
-    parsedUrl = new URL(authorizationUrl);
-  } catch {
-    return deny("malformed_input");
-  }
-
-  if (parsedUrl.username || parsedUrl.password || parsedUrl.hash) return deny("malformed_input");
-  if (parsedUrl.origin !== config.authorizationPageOrigin) return deny("wrong_authorization_origin");
-  if (!authorizationProtocolAllowed(parsedUrl, config)) return deny("wrong_authorization_origin");
-  if (parsedUrl.pathname !== config.authorizationPagePath) return deny("wrong_authorization_path");
-
-  const queryValues = collectQueryValues(parsedUrl.searchParams);
-  const parameters = parseRequestParameters(queryValues, config);
-  if (!parameters.ok) return deny(parameters.reason);
-
-  const handoff = buildHandoff(parsedUrl, owner, parameters.value);
+  const handoff = buildHandoff(requestParts.value.parsedUrl, owner, requestParts.value.parameters);
   return Object.freeze({
     kind: "mcp_oauth_authorization_request_boundary_result",
     accepted: true,
@@ -323,6 +360,67 @@ export function parseMcpOAuthAuthorizationRequestBoundary(
     safeForLogging: false,
     version: 1,
   });
+}
+
+export function projectMcpOAuthPreAuthAuthorizationRequest(
+  input: unknown,
+): McpOAuthPreAuthAuthorizationRequestProjectionResultV1 {
+  const inputRecord = readExactRecord(input, PRE_AUTH_INPUT_KEYS);
+  if (
+    !inputRecord ||
+    inputRecord.kind !== "mcp_oauth_pre_auth_authorization_request_projection_input" ||
+    inputRecord.version !== 1
+  ) {
+    return denyPreAuthProjection("malformed_input");
+  }
+
+  const config = parseConfig(inputRecord.config);
+  if (!config) return denyPreAuthProjection("malformed_config");
+
+  const requestParts = parseAuthorizationRequestParts(inputRecord.authorizationUrl, config);
+  if (!requestParts.ok) return denyPreAuthProjection(requestParts.reason);
+
+  return Object.freeze({
+    kind: "mcp_oauth_pre_auth_authorization_request_projection_result",
+    accepted: true,
+    reason: "accepted",
+    serverOnly: buildPreAuthProjection(requestParts.value.parsedUrl, requestParts.value.parameters),
+    modelVisible: false,
+    safeForLogging: false,
+    version: 1,
+  });
+}
+
+function parseAuthorizationRequestParts(
+  authorizationUrlValue: unknown,
+  config: ParsedConfigV1,
+): BoundaryParseResultV1<ParsedAuthorizationRequestPartsV1> {
+  const authorizationUrl = readBoundedText(authorizationUrlValue, config.maxUrlLength);
+  if (!authorizationUrl || hasMalformedPercentEncoding(authorizationUrl)) return { ok: false, reason: "malformed_input" };
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(authorizationUrl);
+  } catch {
+    return { ok: false, reason: "malformed_input" };
+  }
+
+  if (parsedUrl.username || parsedUrl.password || parsedUrl.hash) return { ok: false, reason: "malformed_input" };
+  if (parsedUrl.origin !== config.authorizationPageOrigin) return { ok: false, reason: "wrong_authorization_origin" };
+  if (!authorizationProtocolAllowed(parsedUrl, config)) return { ok: false, reason: "wrong_authorization_origin" };
+  if (parsedUrl.pathname !== config.authorizationPagePath) return { ok: false, reason: "wrong_authorization_path" };
+
+  const queryValues = collectQueryValues(parsedUrl.searchParams);
+  const parameters = parseRequestParameters(queryValues, config);
+  if (!parameters.ok) return parameters;
+
+  return {
+    ok: true,
+    value: Object.freeze({
+      parsedUrl,
+      parameters: parameters.value,
+    }),
+  };
 }
 
 function parseConfig(value: unknown): ParsedConfigV1 | undefined {
@@ -683,29 +781,12 @@ function buildHandoff(
   trustedOwner: McpOAuthAuthorizationTrustedOwnerV1,
   request: ParsedRequestParametersV1,
 ): McpOAuthAuthorizationRequestBoundaryHandoffV1 {
-  const optionalParameters = Object.keys(request.approvedOptionalParameters).length > 0
-    ? { approvedOptionalParameters: request.approvedOptionalParameters }
-    : {};
-
   return Object.freeze({
     authorizationPage: Object.freeze({
       origin: parsedUrl.origin,
       path: parsedUrl.pathname,
     }),
-    providerForwardRequest: Object.freeze({
-      responseType: request.responseType,
-      clientId: request.clientId,
-      redirectUri: request.redirectUri,
-      resource: request.resource,
-      scopes: request.scopes,
-      state: request.state,
-      pkce: Object.freeze({
-        codeChallenge: request.codeChallenge,
-        codeChallengeMethod: request.codeChallengeMethod,
-      }),
-      ...optionalParameters,
-      version: 1,
-    }),
+    providerForwardRequest: buildProviderForwardRequest(request),
     trustedOwner,
     providerValidation: Object.freeze({
       status: "pending",
@@ -738,6 +819,70 @@ function buildHandoff(
     }),
     modelVisible: false,
     safeForLogging: false,
+    version: 1,
+  });
+}
+
+function buildPreAuthProjection(
+  parsedUrl: URL,
+  request: ParsedRequestParametersV1,
+): McpOAuthPreAuthAuthorizationRequestProjectionV1 {
+  return Object.freeze({
+    kind: "mcp_oauth_pre_auth_authorization_request_projection",
+    authorizationPage: Object.freeze({
+      origin: parsedUrl.origin,
+      path: parsedUrl.pathname,
+    }),
+    providerForwardRequest: buildProviderForwardRequest(request),
+    providerValidation: Object.freeze({
+      status: "pending",
+      clientRegistrationValidated: false,
+      redirectUriValidatedByProvider: false,
+      consentCompleted: false,
+      authorizationCodeIssued: false,
+      tokenIssued: false,
+      stytchSubjectResolved: false,
+      accountLinkCreated: false,
+      version: 1,
+    }),
+    preAuthIntent: Object.freeze({
+      status: "pre_auth_pending",
+      containsOwnerIdentity: false,
+      containsProviderSubject: false,
+      containsAccountLinkId: false,
+      authorizationGranted: false,
+      consentCompleted: false,
+      authorizationCodeIssued: false,
+      tokenIssued: false,
+      accountLinkCreated: false,
+      modelVisible: false,
+      version: 1,
+    }),
+    modelVisible: false,
+    safeForLogging: false,
+    version: 1,
+  });
+}
+
+function buildProviderForwardRequest(
+  request: ParsedRequestParametersV1,
+): McpOAuthAuthorizationRequestBoundaryHandoffV1["providerForwardRequest"] {
+  const optionalParameters = Object.keys(request.approvedOptionalParameters).length > 0
+    ? { approvedOptionalParameters: request.approvedOptionalParameters }
+    : {};
+
+  return Object.freeze({
+    responseType: request.responseType,
+    clientId: request.clientId,
+    redirectUri: request.redirectUri,
+    resource: request.resource,
+    scopes: request.scopes,
+    state: request.state,
+    pkce: Object.freeze({
+      codeChallenge: request.codeChallenge,
+      codeChallengeMethod: request.codeChallengeMethod,
+    }),
+    ...optionalParameters,
     version: 1,
   });
 }
@@ -1004,6 +1149,26 @@ function deny(
 ): McpOAuthAuthorizationRequestBoundaryResultV1 {
   return Object.freeze({
     kind: "mcp_oauth_authorization_request_boundary_result",
+    accepted: false,
+    reason,
+    safeFailure: Object.freeze({
+      code: "authorization_request_denied",
+      message: "Authorization request denied.",
+      safeForModel: true,
+      sensitiveValuesEchoed: false,
+      version: 1,
+    }),
+    modelVisible: false,
+    safeForLogging: true,
+    version: 1,
+  });
+}
+
+function denyPreAuthProjection(
+  reason: McpOAuthAuthorizationRequestBoundaryDenialReasonV1,
+): McpOAuthPreAuthAuthorizationRequestProjectionResultV1 {
+  return Object.freeze({
+    kind: "mcp_oauth_pre_auth_authorization_request_projection_result",
     accepted: false,
     reason,
     safeFailure: Object.freeze({

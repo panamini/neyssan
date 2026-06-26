@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import {
   parseMcpOAuthAuthorizationRequestBoundary,
+  projectMcpOAuthPreAuthAuthorizationRequest,
   type McpOAuthAuthorizationRequestBoundaryConfigV1,
   type McpOAuthAuthorizationRequestBoundaryDenialReasonV1,
   type McpOAuthAuthorizationTrustedOwnerV1,
@@ -112,6 +113,96 @@ describe("MCP OAuth authorization request boundary", () => {
     );
 
     expect(first).toEqual(second);
+  });
+
+  it("projects a validated ownerless pre-auth request without trusting or storing an owner", () => {
+    const result = projectMcpOAuthPreAuthAuthorizationRequest(
+      buildPreAuthProjectionInput({
+        authorizationUrl: buildAuthorizationUrl({
+          overrides: {
+            nonce: "nonce_fixture",
+            prompt: "consent",
+          },
+        }),
+      }),
+    );
+
+    expect(result).toMatchObject({
+      kind: "mcp_oauth_pre_auth_authorization_request_projection_result",
+      accepted: true,
+      reason: "accepted",
+      serverOnly: {
+        kind: "mcp_oauth_pre_auth_authorization_request_projection",
+        authorizationPage: {
+          origin: AUTHORIZATION_ORIGIN,
+          path: AUTHORIZATION_PATH,
+        },
+        providerForwardRequest: {
+          responseType: "code",
+          clientId: CLIENT_ID,
+          redirectUri: CHATGPT_REDIRECT_URI,
+          resource: CANONICAL_RESOURCE,
+          scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
+          state: STATE,
+          pkce: {
+            codeChallenge: PKCE_CHALLENGE,
+            codeChallengeMethod: "S256",
+          },
+          approvedOptionalParameters: {
+            nonce: "nonce_fixture",
+            prompt: "consent",
+          },
+        },
+        preAuthIntent: {
+          status: "pre_auth_pending",
+          containsOwnerIdentity: false,
+          containsProviderSubject: false,
+          containsAccountLinkId: false,
+          authorizationGranted: false,
+          authorizationCodeIssued: false,
+          tokenIssued: false,
+          accountLinkCreated: false,
+        },
+      },
+      modelVisible: false,
+      safeForLogging: false,
+      version: 1,
+    });
+    expect(JSON.stringify(result)).not.toContain(OWNER_ID);
+    expect(JSON.stringify(result)).not.toContain("twoweeksClerkId");
+    expect(JSON.stringify(result)).not.toContain("accountLinkId");
+    expect(Object.isFrozen(result)).toBe(true);
+  });
+
+  it("keeps owner-bound parsing unchanged while pre-auth rejects the same invalid request", () => {
+    const invalidUrl = buildAuthorizationUrl({ overrides: { scope: "openid" } });
+
+    expectDenied(buildInput({ authorizationUrl: invalidUrl }), "missing_canonical_scope");
+    expectPreAuthProjectionDenied(
+      buildPreAuthProjectionInput({ authorizationUrl: invalidUrl }),
+      "missing_canonical_scope",
+    );
+  });
+
+  it("denies malformed pre-auth projection inputs before parsing request details", () => {
+    expectPreAuthProjectionDenied(
+      {
+        ...buildPreAuthProjectionInput(),
+        kind: "mcp_oauth_authorization_request_boundary_input",
+      },
+      "malformed_input",
+    );
+    expectPreAuthProjectionDenied({ ...buildPreAuthProjectionInput(), version: 2 }, "malformed_input");
+  });
+
+  it("denies malformed pre-auth projection config before accepting the request", () => {
+    expectPreAuthProjectionDenied(
+      {
+        ...buildPreAuthProjectionInput(),
+        config: { ...buildConfig(), version: 2 },
+      },
+      "malformed_config",
+    );
   });
 
   describe("authorization URL", () => {
@@ -617,6 +708,43 @@ function buildInput(
     config: overrides.config ?? buildConfig(),
     version: 1,
   } as const;
+}
+
+function buildPreAuthProjectionInput(
+  overrides: Readonly<{
+    authorizationUrl?: string;
+    config?: McpOAuthAuthorizationRequestBoundaryConfigV1;
+  }> = {},
+) {
+  return {
+    kind: "mcp_oauth_pre_auth_authorization_request_projection_input",
+    authorizationUrl: overrides.authorizationUrl ?? validUrl(),
+    config: overrides.config ?? buildConfig(),
+    version: 1,
+  } as const;
+}
+
+function expectPreAuthProjectionDenied(
+  input: unknown,
+  reason: McpOAuthAuthorizationRequestBoundaryDenialReasonV1,
+): void {
+  const result = projectMcpOAuthPreAuthAuthorizationRequest(input);
+
+  expect(result).toEqual({
+    kind: "mcp_oauth_pre_auth_authorization_request_projection_result",
+    accepted: false,
+    reason,
+    safeFailure: {
+      code: "authorization_request_denied",
+      message: "Authorization request denied.",
+      safeForModel: true,
+      sensitiveValuesEchoed: false,
+      version: 1,
+    },
+    modelVisible: false,
+    safeForLogging: true,
+    version: 1,
+  });
 }
 
 function trustedOwner(): McpOAuthAuthorizationTrustedOwnerV1 {

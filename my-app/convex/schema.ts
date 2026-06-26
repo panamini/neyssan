@@ -852,6 +852,37 @@ export default defineSchema({
     .index("by_intent_handle_hash", ["intentHandleHash"])
     .index("by_expires_at", ["expiresAt"]),
 
+  mcpOAuthPreAuthIntents: defineTable({
+    kind: v.literal("mcp_oauth_pre_auth_intent_record"),
+    version: v.literal(1),
+    preAuthHandleHash: v.string(),
+    authorizationPageOrigin: v.string(),
+    authorizationPagePath: v.string(),
+    responseType: v.literal("code"),
+    clientId: v.string(),
+    redirectUri: v.string(),
+    resource: v.string(),
+    scopes: v.array(v.string()),
+    state: v.string(),
+    codeChallenge: v.string(),
+    codeChallengeMethod: v.literal("S256"),
+    approvedOptionalParameters: v.optional(
+      v.object({
+        nonce: v.optional(v.string()),
+        prompt: v.optional(v.string()),
+      }),
+    ),
+    providerValidationStatus: v.literal("pending"),
+    status: v.union(v.literal("pre_auth_pending"), v.literal("claimed"), v.literal("expired")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    expiresAt: v.number(),
+    claimedAt: v.optional(v.number()),
+    storageVersion: v.literal(1),
+  })
+    .index("by_pre_auth_handle_hash", ["preAuthHandleHash"])
+    .index("by_expires_at", ["expiresAt"]),
+
   // New: LLM jobs queue table
   llmJobs: defineTable({
     profileId: v.id("userProfiles"),
