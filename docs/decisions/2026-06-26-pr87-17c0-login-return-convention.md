@@ -45,7 +45,6 @@ It does not implement:
 - OAuth authorization endpoint behavior;
 - OAuth callback behavior;
 - Convex reads or writes;
-- Stytch provider integration;
 - MCP endpoint or runtime composition;
 - account-link lifecycle;
 - Vite routing changes;
