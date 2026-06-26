@@ -15,6 +15,16 @@ import {
   isLocalMcpDevEndpointHandledPath,
   type LocalMcpDevEndpointDependenciesV1,
 } from "./src/modules/local-mcp/localMcpDevEndpoint";
+import {
+  buildMcpOAuthLocalDevRouteAdapterConfig,
+  handleMcpOAuthLocalDevRouteRequest,
+  isMcpOAuthLocalDevRouteHandledPath,
+  LOCAL_MCP_DEV_OAUTH_APPLICATION_ORIGIN_VAR,
+  LOCAL_MCP_DEV_OAUTH_AUTHORIZATION_FLAG,
+  LOCAL_MCP_DEV_OAUTH_REDIRECT_URI_VAR,
+  type McpOAuthLocalDevRouteAdapterConfigV1,
+  type McpOAuthLocalDevRouteAdapterDependenciesV1,
+} from "./src/modules/local-mcp/mcpOAuthLocalDevRouteAdapter";
 
 const LOCAL_CLERK_SYNC_PORT = 5173;
 const LOCAL_MCP_DEV_ENDPOINT_FLAG = "LOCAL_MCP_DEV_ENDPOINT";
@@ -28,18 +38,22 @@ const LOCAL_MCP_DEV_AUTH_CLIENT_ID_VAR = "LOCAL_MCP_DEV_AUTH_CLIENT_ID";
 export type LocalMcpDevEndpointPluginOptions = Readonly<{
   env?: Readonly<Record<string, string | undefined>>;
   endpointDependencies?: LocalMcpDevEndpointDependenciesV1;
+  oauthAuthorizationConfig?: McpOAuthLocalDevRouteAdapterConfigV1;
+  oauthAuthorizationDependencies?: McpOAuthLocalDevRouteAdapterDependenciesV1;
 }>;
 
 export function createLocalMcpDevEndpointPlugin(
   options: LocalMcpDevEndpointPluginOptions = {},
 ): Plugin | undefined {
   const env = options.env ?? process.env;
-  if (!isStrictEnabledFlag(env, LOCAL_MCP_DEV_ENDPOINT_FLAG)) return undefined;
-  const fixtureDemoEnabled = isStrictEnabledFlag(env, LOCAL_MCP_DEV_FIXTURE_DEMO_FLAG);
-  const authPolicyEnabled = fixtureDemoEnabled && isStrictEnabledFlag(env, LOCAL_MCP_DEV_AUTH_POLICY_FLAG);
+  const endpointEnabled = isStrictEnabledFlag(env, LOCAL_MCP_DEV_ENDPOINT_FLAG);
+  const oauthAuthorizationEnabled = isStrictEnabledFlag(env, LOCAL_MCP_DEV_OAUTH_AUTHORIZATION_FLAG);
+  if (!endpointEnabled && !oauthAuthorizationEnabled) return undefined;
+  const fixtureDemoEnabled = endpointEnabled && isStrictEnabledFlag(env, LOCAL_MCP_DEV_FIXTURE_DEMO_FLAG);
+  const authPolicyEnabled = endpointEnabled && fixtureDemoEnabled && isStrictEnabledFlag(env, LOCAL_MCP_DEV_AUTH_POLICY_FLAG);
   const authConfigInput = authPolicyEnabled ? readLocalMcpDevAuthConfigInput(env) : undefined;
   const config = buildLocalMcpDevEndpointConfig({
-    enabled: true,
+    enabled: endpointEnabled,
     fixtureDemoEnabled,
     authPolicyEnabled,
     auth: authConfigInput,
@@ -61,12 +75,25 @@ export function createLocalMcpDevEndpointPlugin(
     ...(composition.enabled ? composition.dependencies : {}),
     ...(options.endpointDependencies ?? {}),
   });
+  const oauthAuthorizationConfig = options.oauthAuthorizationConfig ?? buildMcpOAuthLocalDevRouteAdapterConfig({
+    enabled: oauthAuthorizationEnabled,
+    ...readLocalMcpDevOAuthConfigInput(env),
+  });
+  const oauthAuthorizationDependencies = options.oauthAuthorizationDependencies ?? {};
 
   return {
     name: "twoweeks-local-mcp-dev-endpoint",
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
-        handleLocalMcpDevMiddlewareRequest(req, res, next, config, endpointDependencies);
+        handleLocalMcpDevMiddlewareRequest(
+          req,
+          res,
+          next,
+          config,
+          endpointDependencies,
+          oauthAuthorizationConfig,
+          oauthAuthorizationDependencies,
+        );
       });
     },
   };
@@ -78,8 +105,23 @@ function handleLocalMcpDevMiddlewareRequest(
   next: () => void,
   config: ReturnType<typeof buildLocalMcpDevEndpointConfig>,
   dependencies: LocalMcpDevEndpointDependenciesV1,
+  oauthAuthorizationConfig: McpOAuthLocalDevRouteAdapterConfigV1,
+  oauthAuthorizationDependencies: McpOAuthLocalDevRouteAdapterDependenciesV1,
 ): void {
   const pathName = (req.url ?? "").split("?")[0];
+  if (isMcpOAuthLocalDevRouteHandledPath(pathName)) {
+    void respondToMcpOAuthLocalDevRouteRequest(
+      req,
+      res,
+      next,
+      oauthAuthorizationConfig,
+      oauthAuthorizationDependencies,
+      pathName,
+    ).catch(() => {
+      sendInvalidLocalMcpDevRequest(res);
+    });
+    return;
+  }
   if (!isLocalMcpDevEndpointHandledPath(pathName)) {
     next();
     return;
@@ -89,6 +131,33 @@ function handleLocalMcpDevMiddlewareRequest(
       sendInvalidLocalMcpDevRequest(res);
     });
   });
+}
+
+async function respondToMcpOAuthLocalDevRouteRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  next: () => void,
+  config: McpOAuthLocalDevRouteAdapterConfigV1,
+  dependencies: McpOAuthLocalDevRouteAdapterDependenciesV1,
+  pathName: string,
+): Promise<void> {
+  const response = await handleMcpOAuthLocalDevRouteRequest(
+    {
+      method: req.method ?? "GET",
+      path: pathName,
+      url: req.url ?? pathName,
+      headers: {
+        host: headerValue(req.headers.host),
+      },
+    },
+    config,
+    dependencies,
+  );
+  if (!response.handled) {
+    next();
+    return;
+  }
+  sendLocalMcpRouteResponse(res, response.status, response.headers, response.json, response.bodyText);
 }
 
 async function respondToLocalMcpDevRequest(
@@ -198,6 +267,24 @@ function sendLocalMcpJson(
   res.end(JSON.stringify(json));
 }
 
+function sendLocalMcpRouteResponse(
+  res: ServerResponse,
+  status: number,
+  headers: Readonly<Record<string, string>>,
+  json: unknown,
+  bodyText: string | undefined,
+): void {
+  res.statusCode = status;
+  for (const [key, value] of Object.entries(headers)) {
+    res.setHeader(key, value);
+  }
+  if (json !== undefined) {
+    res.end(JSON.stringify(json));
+    return;
+  }
+  res.end(bodyText ?? "");
+}
+
 function headerValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -215,6 +302,30 @@ function readLocalMcpDevAuthConfigInput(env: Readonly<Record<string, string | un
     providerEnvironment: env[LOCAL_MCP_DEV_AUTH_PROVIDER_ENVIRONMENT_VAR],
     allowedClientIds: clientId ? [clientId] : [],
   };
+}
+
+function readLocalMcpDevOAuthConfigInput(env: Readonly<Record<string, string | undefined>>): Readonly<{
+  applicationOrigin?: string;
+  canonicalResource?: string;
+  allowedRedirectUris?: readonly string[];
+  allowedClientIds?: readonly string[];
+}> {
+  const clientId = env[LOCAL_MCP_DEV_AUTH_CLIENT_ID_VAR]?.trim();
+  return {
+    applicationOrigin: env[LOCAL_MCP_DEV_OAUTH_APPLICATION_ORIGIN_VAR],
+    canonicalResource: env[LOCAL_MCP_DEV_AUTH_RESOURCE_VAR],
+    allowedRedirectUris: readCommaSeparatedEnv(env[LOCAL_MCP_DEV_OAUTH_REDIRECT_URI_VAR]),
+    allowedClientIds: clientId ? [clientId] : [],
+  };
+}
+
+function readCommaSeparatedEnv(value: string | undefined): readonly string[] {
+  return Object.freeze(
+    (value ?? "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0),
+  );
 }
 
 function isStrictEnabledFlag(env: Readonly<Record<string, string | undefined>>, name: string): boolean {
