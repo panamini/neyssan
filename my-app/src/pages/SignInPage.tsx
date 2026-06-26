@@ -1,7 +1,8 @@
 import React from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import { Authenticated, Unauthenticated } from "convex/react";
 import { SignIn } from "@clerk/clerk-react";
+import { resolveSignInReturnPath } from "./sign-in-return";
 
 const signInAppearance = {
   elements: {
@@ -109,10 +110,13 @@ const signInAppearance = {
 
 // Dedicated web-app entrypoint for the extension popup's Clerk sync-host handoff.
 export function SignInPage(): JSX.Element {
+  const location = useLocation();
+  const signInReturn = resolveSignInReturnPath(location.search);
+
   return (
     <>
       <Authenticated>
-        <Navigate to="/cv" replace />
+        <Navigate to={signInReturn.path} replace />
       </Authenticated>
       <Unauthenticated>
         <section className="dasti-auth-page" aria-labelledby="dasti-auth-title">
@@ -138,8 +142,8 @@ export function SignInPage(): JSX.Element {
             <SignIn
               path="/sign-in"
               routing="path"
-              forceRedirectUrl="/cv"
-              fallbackRedirectUrl="/cv"
+              forceRedirectUrl={signInReturn.path}
+              fallbackRedirectUrl={signInReturn.path}
               withSignUp={false}
               appearance={signInAppearance}
             />
