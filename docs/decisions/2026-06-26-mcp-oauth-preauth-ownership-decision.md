@@ -146,6 +146,13 @@ OAuth state and PKCE preservation:
 - `state`, `code_challenge`, `code_challenge_method`, `resource`, `client_id`, `redirect_uri`, and approved scopes must be preserved exactly after validation.
 - The PKCE method must remain `S256`.
 
+Browser storage policy:
+
+- Future implementation must not preserve the raw OAuth authorization URL, raw query string, raw pre-auth handle, OAuth `state`, `code_challenge`, `redirect_uri`, `login_hint`, `id_token_hint`, owner identifiers, provider identifiers, or tokens in `localStorage`, `sessionStorage`, IndexedDB, cookies, URL fragments, or model-visible state.
+- The browser may carry only the approved opaque continuation handle in the fixed same-origin continuation URL.
+- Durable pre-auth preservation must be server-side, short-lived, one-time, and digest-backed.
+- This intentionally does not copy generic browser `returnTo` examples from provider docs because Twoweeks needs stronger owner-binding and leakage controls.
+
 Replay prevention:
 
 - Both pre-auth and owner-bound handles must be one-time consumable.
