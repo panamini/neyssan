@@ -781,29 +781,12 @@ function buildHandoff(
   trustedOwner: McpOAuthAuthorizationTrustedOwnerV1,
   request: ParsedRequestParametersV1,
 ): McpOAuthAuthorizationRequestBoundaryHandoffV1 {
-  const optionalParameters = Object.keys(request.approvedOptionalParameters).length > 0
-    ? { approvedOptionalParameters: request.approvedOptionalParameters }
-    : {};
-
   return Object.freeze({
     authorizationPage: Object.freeze({
       origin: parsedUrl.origin,
       path: parsedUrl.pathname,
     }),
-    providerForwardRequest: Object.freeze({
-      responseType: request.responseType,
-      clientId: request.clientId,
-      redirectUri: request.redirectUri,
-      resource: request.resource,
-      scopes: request.scopes,
-      state: request.state,
-      pkce: Object.freeze({
-        codeChallenge: request.codeChallenge,
-        codeChallengeMethod: request.codeChallengeMethod,
-      }),
-      ...optionalParameters,
-      version: 1,
-    }),
+    providerForwardRequest: buildProviderForwardRequest(request),
     trustedOwner,
     providerValidation: Object.freeze({
       status: "pending",
@@ -844,30 +827,13 @@ function buildPreAuthProjection(
   parsedUrl: URL,
   request: ParsedRequestParametersV1,
 ): McpOAuthPreAuthAuthorizationRequestProjectionV1 {
-  const optionalParameters = Object.keys(request.approvedOptionalParameters).length > 0
-    ? { approvedOptionalParameters: request.approvedOptionalParameters }
-    : {};
-
   return Object.freeze({
     kind: "mcp_oauth_pre_auth_authorization_request_projection",
     authorizationPage: Object.freeze({
       origin: parsedUrl.origin,
       path: parsedUrl.pathname,
     }),
-    providerForwardRequest: Object.freeze({
-      responseType: request.responseType,
-      clientId: request.clientId,
-      redirectUri: request.redirectUri,
-      resource: request.resource,
-      scopes: request.scopes,
-      state: request.state,
-      pkce: Object.freeze({
-        codeChallenge: request.codeChallenge,
-        codeChallengeMethod: request.codeChallengeMethod,
-      }),
-      ...optionalParameters,
-      version: 1,
-    }),
+    providerForwardRequest: buildProviderForwardRequest(request),
     providerValidation: Object.freeze({
       status: "pending",
       clientRegistrationValidated: false,
@@ -894,6 +860,29 @@ function buildPreAuthProjection(
     }),
     modelVisible: false,
     safeForLogging: false,
+    version: 1,
+  });
+}
+
+function buildProviderForwardRequest(
+  request: ParsedRequestParametersV1,
+): McpOAuthAuthorizationRequestBoundaryHandoffV1["providerForwardRequest"] {
+  const optionalParameters = Object.keys(request.approvedOptionalParameters).length > 0
+    ? { approvedOptionalParameters: request.approvedOptionalParameters }
+    : {};
+
+  return Object.freeze({
+    responseType: request.responseType,
+    clientId: request.clientId,
+    redirectUri: request.redirectUri,
+    resource: request.resource,
+    scopes: request.scopes,
+    state: request.state,
+    pkce: Object.freeze({
+      codeChallenge: request.codeChallenge,
+      codeChallengeMethod: request.codeChallengeMethod,
+    }),
+    ...optionalParameters,
     version: 1,
   });
 }

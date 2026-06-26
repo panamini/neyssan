@@ -60,6 +60,10 @@ type StoredPreAuthIntentRecord = PreAuthIntentRecord & {
 };
 
 type Constraint = Readonly<{ field: string; op: "eq" | "lte"; value: unknown }>;
+type IndexConstraintBuilder = Readonly<{
+  eq: (field: string, value: unknown) => IndexConstraintBuilder;
+  lte: (field: string, value: unknown) => IndexConstraintBuilder;
+}>;
 
 function makeCtx(seed: StoredPreAuthIntentRecord[] = []) {
   const rows = seed.map((row) => ({ ...row, scopes: [...row.scopes] }));
@@ -72,10 +76,9 @@ function makeCtx(seed: StoredPreAuthIntentRecord[] = []) {
     query: (tableName: string) => {
       if (tableName !== "mcpOAuthPreAuthIntents") throw new Error(`Unexpected table ${tableName}`);
       return {
-        withIndex: (indexName: string, buildQuery: (query: any) => unknown) => {
-          expect(["by_pre_auth_handle_hash", "by_expires_at"]).toContain(indexName);
+        withIndex: (indexName: string, buildQuery: (query: IndexConstraintBuilder) => unknown) => {
           const constraints: Constraint[] = [];
-          const query = {
+          const query: IndexConstraintBuilder = {
             eq(field: string, value: unknown) {
               constraints.push({ field, op: "eq", value });
               return query;
@@ -86,6 +89,7 @@ function makeCtx(seed: StoredPreAuthIntentRecord[] = []) {
             },
           };
           buildQuery(query);
+          expectIndexConstraints(indexName, constraints);
           const matching = rows.filter((row) => {
             return constraints.every((constraint) => {
               const fieldValue = row[constraint.field as keyof StoredPreAuthIntentRecord];
@@ -122,6 +126,22 @@ function makeCtx(seed: StoredPreAuthIntentRecord[] = []) {
   };
 
   return { ctx: { db }, rows, inserts, patches, deletes };
+}
+
+function expectIndexConstraints(indexName: string, constraints: readonly Constraint[]): void {
+  if (indexName === "by_pre_auth_handle_hash") {
+    expect(constraints).toEqual([
+      expect.objectContaining({ field: "preAuthHandleHash", op: "eq" }),
+    ]);
+    return;
+  }
+  if (indexName === "by_expires_at") {
+    expect(constraints).toEqual([
+      expect.objectContaining({ field: "expiresAt", op: "lte" }),
+    ]);
+    return;
+  }
+  throw new Error(`Unexpected index ${indexName}`);
 }
 
 function validProjection(
@@ -396,6 +416,11 @@ describe("Convex MCP OAuth pre-auth intents", () => {
     ["malformed resource", storedPreAuthIntent({ resource: "https://mcp.twoweeks.example.test/mcp?x=1" }), "malformed"],
     ["query-bearing authorization page path", storedPreAuthIntent({ authorizationPagePath: "/oauth/authorize?x=1" }), "malformed"],
     ["missing canonical scope", storedPreAuthIntent({ scopes: ["openid"] }), "malformed"],
+    [
+      "oversized scope list",
+      storedPreAuthIntent({ scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE, "openid", "email", "profile", "extra"] }),
+      "malformed",
+    ],
     ["unsupported extra field", { ...storedPreAuthIntent(), debugPayload: "private" }, "malformed"],
     ["invalid status", { ...storedPreAuthIntent(), status: "consumed" }, "malformed"],
     ["invalid timestamp", storedPreAuthIntent({ expiresAt: Number.MAX_SAFE_INTEGER }), "malformed"],

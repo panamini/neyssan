@@ -8,6 +8,8 @@ export const MCP_OAUTH_PRE_AUTH_INTENT_MAX_TTL_MS = 15 * 60 * 1_000;
 const MAX_EXPIRED_PRE_AUTH_INTENT_CLEANUP_BATCH = 100;
 
 const TWOWEEKS_APPLICATIONS_READ_SCOPE = "twoweeks:applications:read" as const;
+const APPROVED_OPTIONAL_SCOPES = ["openid", "email", "profile"] as const;
+const MAX_ACCEPTED_SCOPE_COUNT = 1 + APPROVED_OPTIONAL_SCOPES.length;
 const PRE_AUTH_HANDLE_HASH_PATTERN = /^[0-9a-f]{64}$/u;
 const PKCE_S256_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43,128}$/u;
 const SAFE_SCOPE_PATTERN = /^[A-Za-z][A-Za-z0-9:._-]{0,127}$/u;
@@ -703,17 +705,21 @@ function buildPreAuthProjection(
 }
 
 function parseScopes(value: unknown): readonly string[] | undefined {
-  if (!Array.isArray(value) || value.length === 0) return undefined;
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_ACCEPTED_SCOPE_COUNT) return undefined;
   const scopes = value.map((scope) => readBoundedStorageText(scope, 128));
   if (scopes.some((scope) => scope === undefined)) return undefined;
   const parsed = scopes.filter((scope): scope is string => scope !== undefined);
   if (new Set(parsed).size !== parsed.length) return undefined;
   if (!parsed.includes(TWOWEEKS_APPLICATIONS_READ_SCOPE)) return undefined;
-  if (parsed.some((scope) => scope !== TWOWEEKS_APPLICATIONS_READ_SCOPE && !["openid", "email", "profile"].includes(scope))) {
+  if (parsed.some((scope) => scope !== TWOWEEKS_APPLICATIONS_READ_SCOPE && !isApprovedOptionalScope(scope))) {
     return undefined;
   }
   if (parsed.some((scope) => !SAFE_SCOPE_PATTERN.test(scope))) return undefined;
   return Object.freeze([...parsed]);
+}
+
+function isApprovedOptionalScope(scope: string): boolean {
+  return (APPROVED_OPTIONAL_SCOPES as readonly string[]).includes(scope);
 }
 
 function readAuthorizationOrigin(value: unknown): string | undefined {

@@ -184,6 +184,27 @@ describe("MCP OAuth authorization request boundary", () => {
     );
   });
 
+  it("denies malformed pre-auth projection inputs before parsing request details", () => {
+    expectPreAuthProjectionDenied(
+      {
+        ...buildPreAuthProjectionInput(),
+        kind: "mcp_oauth_authorization_request_boundary_input",
+      },
+      "malformed_input",
+    );
+    expectPreAuthProjectionDenied({ ...buildPreAuthProjectionInput(), version: 2 }, "malformed_input");
+  });
+
+  it("denies malformed pre-auth projection config before accepting the request", () => {
+    expectPreAuthProjectionDenied(
+      {
+        ...buildPreAuthProjectionInput(),
+        config: { ...buildConfig(), version: 2 },
+      },
+      "malformed_config",
+    );
+  });
+
   describe("authorization URL", () => {
     it.each([
       ["relative URL", `${AUTHORIZATION_PATH}?response_type=code`, "malformed_input"],
