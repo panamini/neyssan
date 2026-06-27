@@ -230,10 +230,10 @@ describe("MCP OAuth production route preflight boundary", () => {
     }
     for (const productionEntrypointSource of [viteSource, convexHttpSource] as const) {
       expect(productionEntrypointSource).not.toMatch(
-        /\bpath:\s*["'`](?:\/oauth\/(?:authorize|callback|token)|\/mcp)["'`]/u,
+        /\bpath:\s*["'`](?:\/oauth\/(?:authorize|callback|token)|\/mcp(?:\/[^"'`]*)?)["'`]/u,
       );
       expect(productionEntrypointSource).not.toMatch(
-        /\/oauth\/(?:authorize|callback|token)|["'`]\/mcp["'`]/u,
+        /\/oauth\/(?:authorize|callback|token)|["'`]\/mcp(?:\/[^"'`]*)?["'`]/u,
       );
     }
     expect(boundarySource).not.toMatch(/\b(?:app|router)\.(?:get|post|use|all|route)\s*\(/u);
