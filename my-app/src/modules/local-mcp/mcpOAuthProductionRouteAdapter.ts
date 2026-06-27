@@ -106,6 +106,7 @@ type McpOAuthProductionRouteFailureReasonV1 =
   | McpOAuthProductionRoutePreflightDecisionV1
   | "unsupported_method"
   | "dependency_unavailable"
+  | "invalid_host"
   | "invalid_authorization_request"
   | "invalid_configuration"
   | "pre_auth_create_failed";
@@ -165,6 +166,9 @@ async function handleAuthorizationRequest(
   if (!dependencies.authorizationRequestConfig || !dependencies.createPreAuthIntent) {
     return failClosedResponse("oauth_authorize", preflight, "dependency_unavailable", 503);
   }
+  if (!requestHostMatchesAuthorizationOrigin(request, dependencies.authorizationRequestConfig)) {
+    return failClosedResponse("oauth_authorize", preflight, "invalid_host", 403);
+  }
 
   const authorizationUrl = readSameOriginAuthorizationUrl(
     request.url,
@@ -181,6 +185,9 @@ async function handleAuthorizationRequest(
     version: 1,
   });
   if (!projection.accepted) {
+    if (projection.reason === "malformed_config") {
+      return failClosedResponse("oauth_authorize", preflight, "invalid_configuration", 500);
+    }
     return failClosedResponse("oauth_authorize", preflight, "invalid_authorization_request", 400);
   }
 
@@ -200,10 +207,15 @@ async function handleAuthorizationRequest(
       version: 1,
     });
   } catch {
-    return failClosedResponse("oauth_authorize", preflight, "pre_auth_create_failed", 409);
+    return failClosedResponse("oauth_authorize", preflight, "pre_auth_create_failed", 503);
   }
   if (!isPreAuthCreateSuccess(createResult, now)) {
-    return failClosedResponse("oauth_authorize", preflight, "pre_auth_create_failed", 409);
+    return failClosedResponse(
+      "oauth_authorize",
+      preflight,
+      "pre_auth_create_failed",
+      statusForPreAuthCreateFailure(createResult),
+    );
   }
 
   return redirectToSignIn(generated.rawHandle, dependencies.authorizationRequestConfig);
@@ -358,6 +370,15 @@ function readSameOriginAuthorizationUrl(
   }
 }
 
+function requestHostMatchesAuthorizationOrigin(
+  request: McpOAuthProductionRouteAdapterRequestV1,
+  config: McpOAuthAuthorizationRequestBoundaryConfigV1,
+): boolean {
+  const host = readFirstHeaderValue(request.headers?.host).trim().toLowerCase();
+  if (!host) return false;
+  return host === new URL(config.authorizationPageOrigin).host.toLowerCase();
+}
+
 function readGeneratedHandle(
   codec: McpOAuthContinuationHandleCodecV1,
 ): Readonly<{ rawHandle: string; intentHandleHash: string }> | undefined {
@@ -407,6 +428,12 @@ function isPreAuthCreateSuccess(
   );
 }
 
+function statusForPreAuthCreateFailure(
+  value: McpOAuthProductionPreAuthIntentCreatePortResultV1,
+): 409 | 503 {
+  return isPlainRecord(value) && value.reason === "handle_collision" ? 409 : 503;
+}
+
 function readNow(dependencies: McpOAuthProductionRouteAdapterDependenciesV1): number {
   let now: number;
   try {
@@ -419,6 +446,11 @@ function readNow(dependencies: McpOAuthProductionRouteAdapterDependenciesV1): nu
 
 function isValidIntentHandleHash(value: unknown): value is string {
   return typeof value === "string" && INTENT_HANDLE_HASH_PATTERN.test(value);
+}
+
+function readFirstHeaderValue(value: string | readonly string[] | undefined): string {
+  if (typeof value === "string") return value;
+  return Array.isArray(value) ? value[0] ?? "" : "";
 }
 
 function isUnsafeRouteInput(value: string): boolean {

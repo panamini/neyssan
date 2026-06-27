@@ -313,6 +313,149 @@ describe("MCP OAuth production route adapter", () => {
     expectNoRouteLeakage(response, ["owner_should_not_echo"]);
   });
 
+  it("rejects production authorization requests on an unexpected host before storage", async () => {
+    const ctx = makeCtx();
+    const dependencies = routeDependencies(ctx);
+    const response = await handleMcpOAuthProductionRouteRequest(
+      {
+        ...request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+        headers: { host: "unexpected.example.test" },
+      },
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 403,
+      json: {
+        status: "blocked",
+        reason: "invalid_host",
+        route: "oauth_authorize",
+        preAuthIntentCreated: false,
+        ownerBound: false,
+        providerCalled: false,
+        tokenExchangeAttempted: false,
+        accountLinkCreated: false,
+      },
+    });
+    expect(dependencies.createPreAuthIntent).not.toHaveBeenCalled();
+    expect(ctx.preAuthRows).toHaveLength(0);
+    expectNoRouteLeakage(response);
+  });
+
+  it("maps malformed production authorization config to a server-side failure", async () => {
+    const ctx = makeCtx();
+    const dependencies = {
+      ...routeDependencies(ctx),
+      authorizationRequestConfig: {
+        ...authorizationRequestConfig(),
+        allowedRedirectUris: [],
+      },
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+    const response = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 500,
+      json: {
+        status: "blocked",
+        reason: "invalid_configuration",
+        route: "oauth_authorize",
+        preAuthIntentCreated: false,
+        ownerBound: false,
+        providerCalled: false,
+        tokenExchangeAttempted: false,
+        accountLinkCreated: false,
+      },
+    });
+    expect(dependencies.createPreAuthIntent).not.toHaveBeenCalled();
+    expect(ctx.preAuthRows).toHaveLength(0);
+    expectNoRouteLeakage(response);
+  });
+
+  it("maps thrown pre-auth storage failures to retryable dependency failure", async () => {
+    const ctx = makeCtx();
+    const dependencies = {
+      ...routeDependencies(ctx),
+      createPreAuthIntent: vi.fn(async () => {
+        throw new Error("storage unavailable");
+      }),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+    const response = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 503,
+      json: {
+        status: "blocked",
+        reason: "pre_auth_create_failed",
+        route: "oauth_authorize",
+        preAuthIntentCreated: false,
+        ownerBound: false,
+        providerCalled: false,
+        tokenExchangeAttempted: false,
+        accountLinkCreated: false,
+      },
+    });
+    expect(dependencies.createPreAuthIntent).toHaveBeenCalledTimes(1);
+    expect(ctx.preAuthRows).toHaveLength(0);
+    expectNoRouteLeakage(response);
+  });
+
+  it("maps pre-auth handle collisions to conflict without leaking the handle", async () => {
+    const ctx = makeCtx();
+    const dependencies = {
+      ...routeDependencies(ctx),
+      createPreAuthIntent: vi.fn(async () => ({
+        kind: "mcp_oauth_pre_auth_intent_create_result",
+        ok: false,
+        reason: "handle_collision",
+        safeFailure: {
+          code: "mcp_oauth_pre_auth_intent_denied",
+          message: "Pre-auth intent denied.",
+          safeForModel: true,
+          sensitiveValuesEchoed: false,
+          version: 1,
+        },
+        modelVisible: false,
+        safeForLogging: true,
+        version: 1,
+      })),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+    const response = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 409,
+      json: {
+        status: "blocked",
+        reason: "pre_auth_create_failed",
+        route: "oauth_authorize",
+        preAuthIntentCreated: false,
+        ownerBound: false,
+        providerCalled: false,
+        tokenExchangeAttempted: false,
+        accountLinkCreated: false,
+      },
+    });
+    expect(dependencies.createPreAuthIntent).toHaveBeenCalledTimes(1);
+    expect(ctx.preAuthRows).toHaveLength(0);
+    expectNoRouteLeakage(response);
+  });
+
   it("creates one ownerless pre-auth intent and redirects to the fixed Clerk sign-in return path", async () => {
     const ctx = makeCtx();
     const activation = activationDependencies();
