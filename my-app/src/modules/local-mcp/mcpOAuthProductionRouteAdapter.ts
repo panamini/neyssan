@@ -82,7 +82,9 @@ export async function handleMcpOAuthProductionRouteRequest(
     return failClosedResponse(route, config.preflight, config.preflight.decision, 404);
   }
   if (!isAllowedMethod(route, request.method)) {
-    return failClosedResponse(route, config.preflight, "unsupported_method", 405);
+    return failClosedResponse(route, config.preflight, "unsupported_method", 405, {
+      allow: allowedMethodForRoute(route),
+    });
   }
   return inertGuardedResponse(route, config.preflight);
 }
@@ -95,9 +97,12 @@ function routeNameForPath(path: string): McpOAuthProductionRouteNameV1 | undefin
 }
 
 function isAllowedMethod(route: McpOAuthProductionRouteNameV1, method: string): boolean {
-  const normalized = method.toUpperCase();
-  if (route === "mcp") return normalized === "POST";
-  return normalized === "GET";
+  return method.toUpperCase() === allowedMethodForRoute(route);
+}
+
+function allowedMethodForRoute(route: McpOAuthProductionRouteNameV1): "GET" | "POST" {
+  if (route === "mcp") return "POST";
+  return "GET";
 }
 
 function failClosedResponse(
@@ -105,6 +110,7 @@ function failClosedResponse(
   preflight: McpOAuthProductionRoutePreflightResultV1,
   reason: McpOAuthProductionRouteFailureReasonV1,
   status: number,
+  headers: Readonly<Record<string, string>> = {},
 ): McpOAuthProductionRouteAdapterResponseV1 {
   return jsonResponse(status, {
     kind: "mcp_oauth_production_route_response",
@@ -133,7 +139,7 @@ function failClosedResponse(
     redirectSecretsExposed: false,
     hostedMcpStarted: false,
     version: 1,
-  });
+  }, headers);
 }
 
 function inertGuardedResponse(
@@ -184,12 +190,14 @@ function notHandled(): McpOAuthProductionRouteAdapterResponseV1 {
 function jsonResponse(
   status: number,
   json: unknown,
+  headers: Readonly<Record<string, string>> = {},
 ): McpOAuthProductionRouteAdapterResponseV1 {
   return Object.freeze({
     handled: true,
     status,
     headers: {
       ...noStoreHeaders(),
+      ...headers,
       "content-type": "application/json; charset=utf-8",
     },
     json,

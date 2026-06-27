@@ -199,6 +199,32 @@ describe("MCP OAuth production route adapter", () => {
       });
       expectNoRouteLeakage(response);
     }
+
+    const unsupported = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_MCP_PATH, "GET"),
+      config,
+    );
+    expect(unsupported).toMatchObject({
+      handled: true,
+      status: 405,
+      headers: {
+        allow: "POST",
+        "cache-control": "no-store",
+        "content-type": "application/json; charset=utf-8",
+      },
+      json: {
+        status: "blocked",
+        reason: "unsupported_method",
+        route: "mcp",
+        allowedByPreflight: true,
+        preflightDecision: "ready_to_wire",
+        guardedInertHandlerReached: false,
+        providerCalled: false,
+        tokenExchangeAttempted: false,
+        accountLinkCreated: false,
+      },
+    });
+    expectNoRouteLeakage(unsupported);
   });
 
   it("keeps blocked responses free of secrets, provider config values, owner identifiers, codes, and redirect secrets", async () => {
@@ -301,9 +327,12 @@ function routeConfig(flags: Readonly<{ runtime?: string; approved?: string; rout
   });
 }
 
-function request(path: McpOAuthProductionRoutePathV1): McpOAuthProductionRouteAdapterRequestV1 {
+function request(
+  path: McpOAuthProductionRoutePathV1,
+  method = path === MCP_OAUTH_PRODUCTION_MCP_PATH ? "POST" : "GET",
+): McpOAuthProductionRouteAdapterRequestV1 {
   return {
-    method: path === MCP_OAUTH_PRODUCTION_MCP_PATH ? "POST" : "GET",
+    method,
     path,
     url: path,
     headers: { host: "mcp.twoweeks.example.test" },
