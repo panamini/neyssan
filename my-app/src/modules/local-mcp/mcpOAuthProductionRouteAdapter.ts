@@ -111,6 +111,13 @@ type McpOAuthProductionRouteFailureReasonV1 =
   | "invalid_configuration"
   | "pre_auth_create_failed";
 
+type McpOAuthProductionAuthorizationOriginV1 = Readonly<{
+  origin: string;
+  protocol: string;
+  hostname: string;
+  port: string;
+}>;
+
 const HANDLED_PATHS = Object.freeze([
   MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
   MCP_OAUTH_PRODUCTION_CALLBACK_PATH,
@@ -166,13 +173,18 @@ async function handleAuthorizationRequest(
   if (!dependencies.authorizationRequestConfig || !dependencies.createPreAuthIntent) {
     return failClosedResponse("oauth_authorize", preflight, "dependency_unavailable", 503);
   }
-  if (!requestHostMatchesAuthorizationOrigin(request, dependencies.authorizationRequestConfig)) {
+  const authorizationOrigin = readAuthorizationOrigin(dependencies.authorizationRequestConfig);
+  if (!authorizationOrigin) {
+    return failClosedResponse("oauth_authorize", preflight, "invalid_configuration", 500);
+  }
+  if (!requestHostMatchesAuthorizationOrigin(request, authorizationOrigin)) {
     return failClosedResponse("oauth_authorize", preflight, "invalid_host", 403);
   }
 
   const authorizationUrl = readSameOriginAuthorizationUrl(
     request.url,
     dependencies.authorizationRequestConfig,
+    authorizationOrigin.origin,
   );
   if (!authorizationUrl) {
     return failClosedResponse("oauth_authorize", preflight, "invalid_authorization_request", 400);
@@ -218,7 +230,7 @@ async function handleAuthorizationRequest(
     );
   }
 
-  return redirectToSignIn(generated.rawHandle, dependencies.authorizationRequestConfig);
+  return redirectToSignIn(generated.rawHandle, authorizationOrigin.origin);
 }
 
 function routeNameForPath(path: string): McpOAuthProductionRouteNameV1 | undefined {
@@ -327,12 +339,12 @@ function notHandled(): McpOAuthProductionRouteAdapterResponseV1 {
 
 function redirectToSignIn(
   rawHandle: string,
-  config: McpOAuthAuthorizationRequestBoundaryConfigV1,
+  authorizationPageOrigin: string,
 ): McpOAuthProductionRouteAdapterResponseV1 {
   const continuationPath = `${MCP_OAUTH_CONTINUATION_PATH}?${new URLSearchParams({
     [MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER]: rawHandle,
   }).toString()}`;
-  const signInUrl = `${config.authorizationPageOrigin}/sign-in?${new URLSearchParams({
+  const signInUrl = `${authorizationPageOrigin}/sign-in?${new URLSearchParams({
     [MCP_OAUTH_SIGN_IN_RETURN_PARAMETER]: continuationPath,
   }).toString()}`;
   return Object.freeze({
@@ -349,14 +361,15 @@ function redirectToSignIn(
 function readSameOriginAuthorizationUrl(
   urlOrPath: string,
   config: McpOAuthAuthorizationRequestBoundaryConfigV1,
+  authorizationPageOrigin: string,
 ): string | undefined {
   if (isUnsafeRouteInput(urlOrPath)) return undefined;
   try {
-    const parsed = new URL(urlOrPath, config.authorizationPageOrigin);
+    const parsed = new URL(urlOrPath, authorizationPageOrigin);
     const queryStart = urlOrPath.indexOf("?");
     const rawPath = queryStart === -1 ? urlOrPath : urlOrPath.slice(0, queryStart);
     if (
-      parsed.origin !== config.authorizationPageOrigin ||
+      parsed.origin !== authorizationPageOrigin ||
       parsed.pathname !== config.authorizationPagePath ||
       rawPath !== config.authorizationPagePath ||
       parsed.hash ||
@@ -372,15 +385,14 @@ function readSameOriginAuthorizationUrl(
 
 function requestHostMatchesAuthorizationOrigin(
   request: McpOAuthProductionRouteAdapterRequestV1,
-  config: McpOAuthAuthorizationRequestBoundaryConfigV1,
+  origin: McpOAuthProductionAuthorizationOriginV1,
 ): boolean {
-  const origin = new URL(config.authorizationPageOrigin);
   const host = readSingleHeaderValue(request.headers?.host);
   const parsedHost = host ? parseHostHeader(host, origin.protocol) : undefined;
   return (
     parsedHost !== undefined &&
-    parsedHost.hostname === origin.hostname.toLowerCase() &&
-    parsedHost.port === normalizedOriginPort(origin)
+    parsedHost.hostname === origin.hostname &&
+    parsedHost.port === origin.port
   );
 }
 
@@ -459,9 +471,36 @@ function readSingleHeaderValue(value: string | readonly string[] | undefined): s
   return undefined;
 }
 
+function readAuthorizationOrigin(
+  config: McpOAuthAuthorizationRequestBoundaryConfigV1,
+): McpOAuthProductionAuthorizationOriginV1 | undefined {
+  try {
+    const origin = new URL(config.authorizationPageOrigin);
+    if (
+      origin.origin === "null" ||
+      !origin.hostname ||
+      origin.username ||
+      origin.password ||
+      (origin.pathname !== "" && origin.pathname !== "/") ||
+      origin.search ||
+      origin.hash
+    ) {
+      return undefined;
+    }
+    return Object.freeze({
+      origin: origin.origin,
+      protocol: origin.protocol,
+      hostname: origin.hostname.toLowerCase(),
+      port: normalizedOriginPort(origin),
+    });
+  } catch {
+    return undefined;
+  }
+}
+
 function parseHostHeader(
   host: string,
-  protocol: "http:" | "https:",
+  protocol: string,
 ): Readonly<{ hostname: string; port: string }> | undefined {
   if (!host || host.includes("/") || host.includes("@") || hasControlCharacter(host)) {
     return undefined;
