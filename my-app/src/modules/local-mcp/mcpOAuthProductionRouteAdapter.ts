@@ -374,9 +374,14 @@ function requestHostMatchesAuthorizationOrigin(
   request: McpOAuthProductionRouteAdapterRequestV1,
   config: McpOAuthAuthorizationRequestBoundaryConfigV1,
 ): boolean {
-  const host = readFirstHeaderValue(request.headers?.host).trim().toLowerCase();
-  if (!host) return false;
-  return host === new URL(config.authorizationPageOrigin).host.toLowerCase();
+  const origin = new URL(config.authorizationPageOrigin);
+  const host = readSingleHeaderValue(request.headers?.host);
+  const parsedHost = host ? parseHostHeader(host, origin.protocol) : undefined;
+  return (
+    parsedHost !== undefined &&
+    parsedHost.hostname === origin.hostname.toLowerCase() &&
+    parsedHost.port === normalizedOriginPort(origin)
+  );
 }
 
 function readGeneratedHandle(
@@ -448,9 +453,41 @@ function isValidIntentHandleHash(value: unknown): value is string {
   return typeof value === "string" && INTENT_HANDLE_HASH_PATTERN.test(value);
 }
 
-function readFirstHeaderValue(value: string | readonly string[] | undefined): string {
-  if (typeof value === "string") return value;
-  return Array.isArray(value) ? value[0] ?? "" : "";
+function readSingleHeaderValue(value: string | readonly string[] | undefined): string | undefined {
+  if (typeof value === "string") return value.trim();
+  if (Array.isArray(value) && value.length === 1) return value[0]?.trim();
+  return undefined;
+}
+
+function parseHostHeader(
+  host: string,
+  protocol: "http:" | "https:",
+): Readonly<{ hostname: string; port: string }> | undefined {
+  if (!host || host.includes("/") || host.includes("@") || hasControlCharacter(host)) {
+    return undefined;
+  }
+  try {
+    const parsed = new URL(`${protocol}//${host}`);
+    if (parsed.username || parsed.password || parsed.pathname !== "/" || parsed.search || parsed.hash) {
+      return undefined;
+    }
+    return Object.freeze({
+      hostname: parsed.hostname.toLowerCase(),
+      port: parsed.port || defaultPortForProtocol(protocol),
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizedOriginPort(origin: URL): string {
+  return origin.port || defaultPortForProtocol(origin.protocol);
+}
+
+function defaultPortForProtocol(protocol: string): "80" | "443" | "" {
+  if (protocol === "https:") return "443";
+  if (protocol === "http:") return "80";
+  return "";
 }
 
 function isUnsafeRouteInput(value: string): boolean {

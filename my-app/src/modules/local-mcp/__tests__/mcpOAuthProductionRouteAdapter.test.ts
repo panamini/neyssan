@@ -344,6 +344,59 @@ describe("MCP OAuth production route adapter", () => {
     expectNoRouteLeakage(response);
   });
 
+  it("accepts production authorization requests with an explicit default HTTPS host port", async () => {
+    const ctx = makeCtx();
+    const dependencies = routeDependencies(ctx);
+    const response = await handleMcpOAuthProductionRouteRequest(
+      {
+        ...request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+        headers: { host: "mcp.twoweeks.example.test:443" },
+      },
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({ handled: true, status: 303 });
+    expect(dependencies.createPreAuthIntent).toHaveBeenCalledTimes(1);
+    expect(ctx.preAuthRows).toHaveLength(1);
+    expect(ctx.preAuthRows[0]).toMatchObject({
+      status: "pre_auth_pending",
+      preAuthHandleHash: HANDLE_HASH,
+    });
+    expectNoRouteLeakage(response, [], { allowRawHandle: true });
+  });
+
+  it("rejects ambiguous multi-valued host headers before storage", async () => {
+    const ctx = makeCtx();
+    const dependencies = routeDependencies(ctx);
+    const response = await handleMcpOAuthProductionRouteRequest(
+      {
+        ...request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+        headers: { host: ["mcp.twoweeks.example.test", "unexpected.example.test"] },
+      },
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 403,
+      json: {
+        status: "blocked",
+        reason: "invalid_host",
+        route: "oauth_authorize",
+        preAuthIntentCreated: false,
+        ownerBound: false,
+        providerCalled: false,
+        tokenExchangeAttempted: false,
+        accountLinkCreated: false,
+      },
+    });
+    expect(dependencies.createPreAuthIntent).not.toHaveBeenCalled();
+    expect(ctx.preAuthRows).toHaveLength(0);
+    expectNoRouteLeakage(response);
+  });
+
   it("maps malformed production authorization config to a server-side failure", async () => {
     const ctx = makeCtx();
     const dependencies = {
