@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   classifyMcpOAuthPreAuthIntentStorageRecord,
@@ -207,6 +207,14 @@ describe("Convex MCP OAuth pre-auth intents", () => {
       serverOnly: {
         status: "pre_auth_pending",
         expiresAt: NOW + MCP_OAUTH_PRE_AUTH_INTENT_TTL_MS,
+        containsOwnerIdentity: false,
+        containsProviderSubject: false,
+        containsAccountLinkId: false,
+        authorizationGranted: false,
+        consentCompleted: false,
+        authorizationCodeIssued: false,
+        tokenIssued: false,
+        accountLinkCreated: false,
         version: 1,
       },
       modelVisible: false,
@@ -285,6 +293,26 @@ describe("Convex MCP OAuth pre-auth intents", () => {
       }
       expect(inserts).toHaveLength(0);
       expect(rows).toHaveLength(0);
+    }
+  });
+
+  it("rejects create requests whose caller deadline has already passed on the server", async () => {
+    const { ctx, inserts } = makeCtx();
+    const dateNow = vi.spyOn(Date, "now").mockReturnValue(NOW + 2_501);
+    try {
+      const result = await internalCreateMcpOAuthPreAuthIntent._handler(ctx as any, {
+        authorizationRequestProjection: validProjection(),
+        preAuthHandleHash: VALID_HANDLE_HASH,
+        now: NOW,
+        deadlineEpochMs: NOW + 2_500,
+        timeoutMs: 2_500,
+        version: 1,
+      });
+
+      expect(result).toMatchObject({ ok: false, reason: "invalid_input" });
+      expect(inserts).toHaveLength(0);
+    } finally {
+      dateNow.mockRestore();
     }
   });
 

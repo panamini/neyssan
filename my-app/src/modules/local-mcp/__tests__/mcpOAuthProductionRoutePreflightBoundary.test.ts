@@ -56,6 +56,7 @@ describe("MCP OAuth production route preflight boundary", () => {
     expect(buildMcpOAuthProductionRoutePreflight()).toEqual({
       kind: "mcp_oauth_production_route_preflight",
       decision: "disabled",
+      authorizeAllowedToWire: false,
       allowedToWire: false,
       safeForModel: true,
       requiredFlags: {
@@ -103,6 +104,7 @@ describe("MCP OAuth production route preflight boundary", () => {
       }),
     ).toMatchObject({
       decision: "blocked_missing_approval_flag",
+      authorizeAllowedToWire: false,
       allowedToWire: false,
       requiredFlags: {
         runtimeEnabled: true,
@@ -122,6 +124,7 @@ describe("MCP OAuth production route preflight boundary", () => {
       }),
     ).toMatchObject({
       decision: "blocked_endpoint_exposure_not_enabled",
+      authorizeAllowedToWire: false,
       allowedToWire: false,
       requiredFlags: {
         runtimeEnabled: true,
@@ -151,6 +154,7 @@ describe("MCP OAuth production route preflight boundary", () => {
       }),
     ).toMatchObject({
       decision: "blocked_misconfigured_provider",
+      authorizeAllowedToWire: false,
       allowedToWire: false,
       provider: {
         provider: "unavailable",
@@ -168,7 +172,7 @@ describe("MCP OAuth production route preflight boundary", () => {
     });
   });
 
-  it("does not allow route wiring when activation dependencies are unavailable", () => {
+  it("allows authorize route wiring but not activation route wiring when activation dependencies are unavailable", () => {
     expect(
       buildMcpOAuthProductionRoutePreflight({
         flags: { runtime: "1", approved: "1", routeWiring: "1" },
@@ -176,6 +180,7 @@ describe("MCP OAuth production route preflight boundary", () => {
       }),
     ).toMatchObject({
       decision: "blocked_missing_activation_dependency",
+      authorizeAllowedToWire: true,
       allowedToWire: false,
       activationDependencies: {
         providerAdapterAvailable: false,
@@ -196,6 +201,7 @@ describe("MCP OAuth production route preflight boundary", () => {
     ).toEqual({
       kind: "mcp_oauth_production_route_preflight",
       decision: "ready_to_wire",
+      authorizeAllowedToWire: true,
       allowedToWire: true,
       safeForModel: true,
       requiredFlags: {
@@ -271,31 +277,24 @@ describe("MCP OAuth production route preflight boundary", () => {
     }
   });
 
-  it("does not register endpoints or route wiring in this PR", () => {
+  it("keeps production route wiring constrained to the Vite authorize entrypoint", () => {
     const boundarySource = readFileSync(BOUNDARY_SOURCE, "utf8");
     const viteSource = readFileSync(VITE_CONFIG_SOURCE, "utf8");
     const convexHttpSource = readFileSync(CONVEX_HTTP_SOURCE, "utf8");
     const localDevEndpointSource = readFileSync(LOCAL_DEV_ENDPOINT_SOURCE, "utf8");
-    const routeEntrypointSources = [
-      viteSource,
-      convexHttpSource,
-      localDevEndpointSource,
-    ] as const;
 
-    for (const source of routeEntrypointSources) {
-      expect(source).not.toContain(MCP_OAUTH_PRODUCTION_ROUTE_WIRING_FLAG);
-      expect(source).not.toMatch(/\bmcpOAuthProductionRoutePreflight\b/u);
-      expect(source).not.toMatch(/\bbuildMcpOAuthProductionRoutePreflight\b/u);
-      expect(source).not.toMatch(/\bMCP_OAUTH_PRODUCTION_(?:RUNTIME|APPROVED|ROUTE_WIRING)\b/u);
-    }
-    for (const productionEntrypointSource of [viteSource, convexHttpSource] as const) {
-      expect(productionEntrypointSource).not.toMatch(
-        /\bpath:\s*["'`](?:\/oauth\/(?:authorize|callback|token)|\/mcp(?:\/[^"'`]*)?)["'`]/u,
-      );
-      expect(productionEntrypointSource).not.toMatch(
-        /\/oauth\/(?:authorize|callback|token)|["'`]\/mcp(?:\/[^"'`]*)?["'`]/u,
-      );
-    }
+    expect(viteSource).toContain(MCP_OAUTH_PRODUCTION_ROUTE_WIRING_FLAG);
+    expect(viteSource).toContain("handleMcpOAuthProductionRouteRequest");
+    expect(viteSource).toContain("isMcpOAuthProductionRouteHandledPath");
+    expect(viteSource).toMatch(/\bisMcpOAuthProductionRouteHandledPath\(pathName\)/u);
+    expect(viteSource).not.toMatch(/\bpath:\s*["'`]\/oauth\/(?:callback|token)["'`]/u);
+    expect(viteSource).not.toMatch(/["'`]\/mcp(?:\/[^"'`]*)?["'`]/u);
+    expect(convexHttpSource).not.toMatch(
+      /\/oauth\/(?:authorize|callback|token)|["'`]\/mcp(?:\/[^"'`]*)?["'`]/u,
+    );
+    expect(localDevEndpointSource).not.toContain(MCP_OAUTH_PRODUCTION_ROUTE_WIRING_FLAG);
+    expect(localDevEndpointSource).not.toMatch(/\bmcpOAuthProductionRoutePreflight\b/u);
+    expect(localDevEndpointSource).not.toMatch(/\bMCP_OAUTH_PRODUCTION_(?:RUNTIME|APPROVED|ROUTE_WIRING)\b/u);
     expect(boundarySource).not.toMatch(/\b(?:app|router)\.(?:get|post|use|all|route)\s*\(/u);
     expect(boundarySource).not.toMatch(/\bhttp\.route\s*\(/u);
     expect(boundarySource).not.toMatch(/\b(?:createServer|serve|listen)\s*\(/u);

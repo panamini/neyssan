@@ -18,7 +18,15 @@ const MAX_OAUTH_PARAMETER_LENGTH = 512;
 const MAX_AUTHORIZATION_PAGE_PATH_LENGTH = 256;
 const MAX_STATE_LENGTH = 512;
 
-const CREATE_ARGS_KEYS = ["authorizationRequestProjection", "preAuthHandleHash", "now", "version"] as const;
+const CREATE_ARGS_KEYS = [
+  "authorizationRequestProjection",
+  "preAuthHandleHash",
+  "now",
+  "deadlineEpochMs",
+  "timeoutMs",
+  "version",
+] as const;
+const CREATE_REQUIRED_ARGS_KEYS = ["authorizationRequestProjection", "preAuthHandleHash", "now", "version"] as const;
 const CLAIM_ARGS_KEYS = ["preAuthHandleHash", "now", "version"] as const;
 const CLEANUP_ARGS_KEYS = ["now", "version"] as const;
 const PROJECTION_KEYS = [
@@ -209,6 +217,14 @@ export type McpOAuthPreAuthIntentCreateResultV1 = Readonly<
       serverOnly: {
         status: "pre_auth_pending";
         expiresAt: number;
+        containsOwnerIdentity: false;
+        containsProviderSubject: false;
+        containsAccountLinkId: false;
+        authorizationGranted: false;
+        consentCompleted: false;
+        authorizationCodeIssued: false;
+        tokenIssued: false;
+        accountLinkCreated: false;
         version: 1;
       };
       modelVisible: false;
@@ -279,12 +295,17 @@ export const internalCreateMcpOAuthPreAuthIntent = internalMutation({
     authorizationRequestProjection: v.any(),
     preAuthHandleHash: v.string(),
     now: v.number(),
+    deadlineEpochMs: v.optional(v.number()),
+    timeoutMs: v.optional(v.number()),
     version: v.literal(1),
   },
   returns: v.any(),
   handler: async (ctx, args): Promise<McpOAuthPreAuthIntentCreateResultV1> => {
-    if (!readRecord(args, CREATE_ARGS_KEYS)) return denyCreate("invalid_input");
+    if (!readRecord(args, CREATE_ARGS_KEYS, CREATE_REQUIRED_ARGS_KEYS)) return denyCreate("invalid_input");
     if (!isValidStorageTimestamp(args.now) || args.now > MAX_SAFE_TIMESTAMP_BEFORE_TTL) {
+      return denyCreate("invalid_input");
+    }
+    if (!hasValidCreateDeadline(args.deadlineEpochMs, args.timeoutMs, args.now, Date.now())) {
       return denyCreate("invalid_input");
     }
     if (!isValidPreAuthHandleHash(args.preAuthHandleHash)) return denyCreate("invalid_handle_hash");
@@ -308,6 +329,14 @@ export const internalCreateMcpOAuthPreAuthIntent = internalMutation({
       serverOnly: {
         status: "pre_auth_pending",
         expiresAt: record.expiresAt,
+        containsOwnerIdentity: false,
+        containsProviderSubject: false,
+        containsAccountLinkId: false,
+        authorizationGranted: false,
+        consentCompleted: false,
+        authorizationCodeIssued: false,
+        tokenIssued: false,
+        accountLinkCreated: false,
         version: 1,
       },
       modelVisible: false,
@@ -316,6 +345,17 @@ export const internalCreateMcpOAuthPreAuthIntent = internalMutation({
     };
   },
 });
+
+function hasValidCreateDeadline(
+  deadlineEpochMs: unknown,
+  timeoutMs: unknown,
+  now: number,
+  serverNow: number,
+): boolean {
+  if (deadlineEpochMs === undefined && timeoutMs === undefined) return true;
+  if (!isValidStorageTimestamp(deadlineEpochMs) || !isValidStorageTimestamp(timeoutMs)) return false;
+  return timeoutMs > 0 && deadlineEpochMs >= now && deadlineEpochMs - now === timeoutMs && serverNow <= deadlineEpochMs;
+}
 
 export const internalClaimMcpOAuthPreAuthIntent = internalMutation({
   args: {
