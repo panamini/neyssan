@@ -294,6 +294,11 @@ function readProductionOAuthActivationConfig(
     return undefined;
   }
 
+  const enabled = value.enabled;
+  if (typeof enabled !== "boolean") {
+    return undefined;
+  }
+
   const requiredFlags = readProductionOAuthActivationRequiredFlags(value.requiredFlags);
   if (!requiredFlags) {
     return undefined;
@@ -304,7 +309,7 @@ function readProductionOAuthActivationConfig(
   }
 
   return {
-    enabled: value.enabled,
+    enabled,
     runtimeValue: requiredFlags.runtimeValue,
     approvedValue: requiredFlags.approvedValue,
     providerConfigPresent,
