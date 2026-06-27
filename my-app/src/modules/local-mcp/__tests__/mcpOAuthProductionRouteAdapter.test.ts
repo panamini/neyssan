@@ -12,6 +12,7 @@ import {
   LOCAL_MCP_DEV_OAUTH_AUTHORIZATION_FLAG,
   LOCAL_MCP_DEV_OAUTH_REDIRECT_URI_VAR,
 } from "../mcpOAuthLocalDevRouteAdapter";
+import type { McpOAuthProductionActivationDependenciesV1 } from "../mcpOAuthProductionActivationBoundary";
 import {
   buildMcpOAuthProductionRouteAdapterConfig,
   handleMcpOAuthProductionRouteRequest,
@@ -56,6 +57,30 @@ const PROVIDER_CONFIG = {
   requiredReadScopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
   version: 1,
 } as const;
+const ACTIVATION_DEPENDENCIES = {
+  providerAdapter: {
+    provider: "stytch",
+    exchangeAuthorizationCode: async () => ({
+      kind: "mcp_oauth_production_token_exchange_result",
+      ok: false,
+      reason: "not_executed_in_route_adapter_test",
+      safeFailure: { code: "not_executed" },
+      modelVisible: false,
+      safeForLogging: true,
+      version: 1,
+    }),
+    version: 1,
+  },
+  executeAccountLinkLifecycle: async () => ({
+    kind: "mcp_account_link_lifecycle_result",
+    operation: "link",
+    ok: false,
+    reason: "not_executed_in_route_adapter_test",
+    safeFailure: { code: "not_executed" },
+    modelVisible: false,
+    version: 1,
+  }),
+} as const satisfies McpOAuthProductionActivationDependenciesV1;
 
 describe("MCP OAuth production route adapter", () => {
   it("keeps production routes disabled by default", async () => {
@@ -152,6 +177,33 @@ describe("MCP OAuth production route adapter", () => {
         route: "oauth_callback",
         allowedByPreflight: false,
         preflightDecision: "blocked_misconfigured_provider",
+        guardedInertHandlerReached: false,
+        providerCalled: false,
+        tokenExchangeAttempted: false,
+        accountLinkCreated: false,
+      },
+    });
+    expectNoRouteLeakage(response);
+  });
+
+  it("blocks route handling when activation dependency ports are unavailable", async () => {
+    const response = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_CALLBACK_PATH),
+      buildMcpOAuthProductionRouteAdapterConfig({
+        flags: { runtime: "1", approved: "1", routeWiring: "1" },
+        providerConfig: PROVIDER_CONFIG,
+      }),
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 404,
+      json: {
+        status: "blocked",
+        reason: "blocked_missing_activation_dependency",
+        route: "oauth_callback",
+        allowedByPreflight: false,
+        preflightDecision: "blocked_missing_activation_dependency",
         guardedInertHandlerReached: false,
         providerCalled: false,
         tokenExchangeAttempted: false,
@@ -324,6 +376,7 @@ function routeConfig(flags: Readonly<{ runtime?: string; approved?: string; rout
   return buildMcpOAuthProductionRouteAdapterConfig({
     flags,
     providerConfig: PROVIDER_CONFIG,
+    activationDependencies: ACTIVATION_DEPENDENCIES,
   });
 }
 
