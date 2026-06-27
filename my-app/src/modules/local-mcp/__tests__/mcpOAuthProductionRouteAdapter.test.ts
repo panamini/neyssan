@@ -1,9 +1,10 @@
 // @vitest-environment node
 import { createHash } from "node:crypto";
+import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createLocalMcpDevEndpointPlugin } from "../../../../vite.config";
 import { TWOWEEKS_APPLICATIONS_READ_SCOPE } from "../mcpAuthPolicyBoundary";
 import type { McpOAuthAuthorizationRequestBoundaryConfigV1 } from "../mcpOAuthAuthorizationRequestBoundary";
@@ -36,6 +37,18 @@ import {
   MCP_OAUTH_CONTINUATION_PATH,
   MCP_OAUTH_SIGN_IN_RETURN_PARAMETER,
 } from "../../../pages/sign-in-return";
+
+const { convexHttpClientMutation, ConvexHttpClientMock } = vi.hoisted(() => {
+  const mutation = vi.fn();
+  return {
+    convexHttpClientMutation: mutation,
+    ConvexHttpClientMock: vi.fn(() => ({ mutation })),
+  };
+});
+
+vi.mock("convex/browser", () => ({
+  ConvexHttpClient: ConvexHttpClientMock,
+}));
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const SOURCE_FILE = resolve(TEST_DIR, "../mcpOAuthProductionRouteAdapter.ts");
@@ -101,6 +114,12 @@ const PROVIDER_CONFIG = {
   requiredReadScopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
   version: 1,
 } as const;
+
+afterEach(() => {
+  convexHttpClientMutation.mockReset();
+  ConvexHttpClientMock.mockClear();
+  vi.unstubAllEnvs();
+});
 
 const deterministicCodec: McpOAuthContinuationHandleCodecV1 = Object.freeze({
   generate: () => Object.freeze({ rawHandle: RAW_HANDLE, intentHandleHash: HANDLE_HASH }),
@@ -1225,6 +1244,35 @@ describe("MCP OAuth production route adapter", () => {
     expect(response.body).toBe("");
   });
 
+  it("keeps local /mcp endpoint ahead of production route wiring when both flags are enabled", async () => {
+    const plugin = createLocalMcpDevEndpointPlugin({
+      env: {
+        ...prodRouteEnv(),
+        LOCAL_MCP_DEV_ENDPOINT: "1",
+      },
+    });
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeStreamingMiddleware(middleware, {
+      method: "POST",
+      url: MCP_OAUTH_PRODUCTION_MCP_PATH,
+      headers: {
+        host: "localhost:5173",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: "init_local_mcp", method: "initialize" }),
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body)).toMatchObject({
+      id: "init_local_mcp",
+      result: {
+        serverInfo: { name: "twoweeks-local-dev-fixture" },
+      },
+    });
+    expect(response.body).not.toContain("inert_handler_only");
+  });
+
   it("wires production authorize requests into the live Vite middleware", async () => {
     const ctx = makeCtx();
     const plugin = createLocalMcpDevEndpointPlugin({
@@ -1252,6 +1300,75 @@ describe("MCP OAuth production route adapter", () => {
       status: "pre_auth_pending",
       preAuthHandleHash: HANDLE_HASH,
     });
+  });
+
+  it("wires production authorize requests through real no-options Vite defaults", async () => {
+    for (const [key, value] of Object.entries(prodRouteEnv())) {
+      vi.stubEnv(key, value);
+    }
+    convexHttpClientMutation.mockImplementationOnce(async () => ({
+      kind: "mcp_oauth_pre_auth_intent_create_result",
+      ok: true,
+      reason: "created",
+      serverOnly: {
+        status: "pre_auth_pending",
+        expiresAt: Date.now() + 10 * 60 * 1_000,
+        containsOwnerIdentity: false,
+        containsProviderSubject: false,
+        containsAccountLinkId: false,
+        authorizationGranted: false,
+        consentCompleted: false,
+        authorizationCodeIssued: false,
+        tokenIssued: false,
+        accountLinkCreated: false,
+        version: 1,
+      },
+      modelVisible: false,
+      safeForLogging: false,
+      version: 1,
+    }));
+
+    const plugin = createLocalMcpDevEndpointPlugin();
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeMiddleware(middleware, {
+      method: "GET",
+      url: authorizationRequestPath(),
+      headers: { host: "mcp.twoweeks.example.test" },
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(303);
+    expect(response.headers.location).toContain(`${PROD_APP_ORIGIN}/sign-in?`);
+    expect(ConvexHttpClientMock).toHaveBeenCalledWith("http://127.0.0.1:3210", { auth: "convex_admin_key_fixture" });
+    expect(convexHttpClientMutation).toHaveBeenCalledTimes(1);
+    expect(convexHttpClientMutation.mock.calls[0]?.[1]).toMatchObject({
+      authorizationRequestProjection: {
+        authorizationPage: {
+          origin: PROD_APP_ORIGIN,
+          path: MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
+        },
+      },
+      version: 1,
+    });
+  });
+
+  it("registers the production authorize middleware for Vite preview", async () => {
+    const ctx = makeCtx();
+    const plugin = createLocalMcpDevEndpointPlugin({
+      env: prodRouteEnv(),
+      productionOAuthAuthorizationConfig: routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      productionOAuthAuthorizationDependencies: routeDependencies(ctx),
+    });
+    const middleware = readConfiguredPreviewMiddleware(plugin);
+    const response = await invokeMiddleware(middleware, {
+      method: "GET",
+      url: authorizationRequestPath(),
+      headers: { host: "mcp.twoweeks.example.test" },
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(303);
+    expect(ctx.preAuthRows).toHaveLength(1);
   });
 
   it("uses the PR92 route preflight instead of reimplementing production activation or status logic", () => {
@@ -1501,6 +1618,16 @@ function readConfiguredMiddleware(plugin: ReturnType<typeof createLocalMcpDevEnd
   ) => void;
 }
 
+function readConfiguredPreviewMiddleware(plugin: ReturnType<typeof createLocalMcpDevEndpointPlugin>) {
+  expect(plugin).toBeTruthy();
+  const middlewares = {
+    use: vi.fn(),
+  };
+  plugin?.configurePreviewServer?.({ middlewares } as never);
+  expect(middlewares.use).toHaveBeenCalledTimes(1);
+  return middlewares.use.mock.calls[0]?.[0] as ReturnType<typeof readConfiguredMiddleware>;
+}
+
 function invokeMiddleware(
   middleware: ReturnType<typeof readConfiguredMiddleware>,
   requestInput: { method: string; url: string; headers: Record<string, string | undefined> },
@@ -1536,11 +1663,66 @@ function invokeMiddleware(
   });
 }
 
+function invokeStreamingMiddleware(
+  middleware: ReturnType<typeof readConfiguredMiddleware>,
+  requestInput: { method: string; url: string; headers: Record<string, string | undefined>; body: string },
+): Promise<Readonly<{ statusCode: number | undefined; headers: Record<string, string>; body: string; next: ReturnType<typeof vi.fn> }>> {
+  const next = vi.fn();
+  const headers: Record<string, string> = {};
+  const request = Object.assign(new EventEmitter(), {
+    method: requestInput.method,
+    url: requestInput.url,
+    headers: requestInput.headers,
+    socket: { remoteAddress: "127.0.0.1" },
+    setEncoding: vi.fn(),
+    destroy: vi.fn(),
+  });
+  return new Promise((resolve) => {
+    const response = {
+      statusCode: undefined as number | undefined,
+      writableEnded: false,
+      setHeader(key: string, value: string) {
+        headers[key.toLowerCase()] = value;
+      },
+      end(body = "") {
+        response.writableEnded = true;
+        resolve({
+          statusCode: response.statusCode,
+          headers,
+          body,
+          next,
+        });
+      },
+    };
+    middleware(request, response, () => {
+      next();
+      resolve({
+        statusCode: response.statusCode,
+        headers,
+        body: "",
+        next,
+      });
+    });
+    queueMicrotask(() => {
+      request.emit("data", requestInput.body);
+      request.emit("end");
+    });
+  });
+}
+
 function prodRouteEnv(): Record<string, string> {
   return {
     MCP_OAUTH_PRODUCTION_RUNTIME: "1",
     MCP_OAUTH_PRODUCTION_APPROVED: "1",
     [MCP_OAUTH_PRODUCTION_ROUTE_WIRING_FLAG]: "1",
+    MCP_OAUTH_PRODUCTION_RESOURCE: RESOURCE,
+    MCP_OAUTH_PRODUCTION_ISSUER: PROVIDER_CONFIG.issuer,
+    MCP_OAUTH_PRODUCTION_PROVIDER_ENVIRONMENT: PROVIDER_CONFIG.providerEnvironment,
+    MCP_OAUTH_PRODUCTION_CLIENT_IDS: CLIENT_ID,
+    MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN: PROD_APP_ORIGIN,
+    MCP_OAUTH_PRODUCTION_REDIRECT_URIS: REDIRECT_URI,
+    CONVEX_URL: "http://127.0.0.1:3210",
+    CONVEX_KEY: "convex_admin_key_fixture",
   };
 }
 

@@ -1,9 +1,11 @@
 /// <reference types="vitest" />
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { ConvexHttpClient } from "convex/browser";
 import { defineConfig } from "vite";
 import type { Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
+import { internal } from "./convex/_generated/api";
 import {
   buildLocalMcpDevAuthRuntimeCompositionDependencies,
   LOCAL_MCP_DEV_STYTCH_COMPOSITION_FLAG,
@@ -34,6 +36,7 @@ import {
   buildMcpOAuthProductionRouteAdapterConfig,
   handleMcpOAuthProductionRouteRequest,
   isMcpOAuthProductionRouteHandledPath,
+  MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
   type McpOAuthProductionRouteAdapterConfigV1,
   type McpOAuthProductionRouteAdapterDependenciesV1,
 } from "./src/modules/local-mcp/mcpOAuthProductionRouteAdapter";
@@ -51,6 +54,16 @@ const MCP_OAUTH_PRODUCTION_RESOURCE_VAR = "MCP_OAUTH_PRODUCTION_RESOURCE";
 const MCP_OAUTH_PRODUCTION_ISSUER_VAR = "MCP_OAUTH_PRODUCTION_ISSUER";
 const MCP_OAUTH_PRODUCTION_PROVIDER_ENVIRONMENT_VAR = "MCP_OAUTH_PRODUCTION_PROVIDER_ENVIRONMENT";
 const MCP_OAUTH_PRODUCTION_CLIENT_IDS_VAR = "MCP_OAUTH_PRODUCTION_CLIENT_IDS";
+const MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN_VAR = "MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN";
+const MCP_OAUTH_PRODUCTION_REDIRECT_URIS_VAR = "MCP_OAUTH_PRODUCTION_REDIRECT_URIS";
+const CONVEX_KEY_VAR = "CONVEX_KEY";
+const CONVEX_AUTH_TOKEN_VAR = "CONVEX_AUTH_TOKEN";
+const CONVEX_URL_VAR = "CONVEX_URL";
+const VITE_CONVEX_URL_VAR = "VITE_CONVEX_URL";
+const NEXT_PUBLIC_CONVEX_URL_VAR = "NEXT_PUBLIC_CONVEX_URL";
+const PRE_AUTH_QUOTA_WINDOW_MS = 60_000;
+const PRE_AUTH_QUOTA_LIMIT = 60;
+const productionPreAuthQuotaBuckets = new Map<string, { count: number; windowStartedAt: number }>();
 
 export type LocalMcpDevEndpointPluginOptions = Readonly<{
   env?: Readonly<Record<string, string | undefined>>;
@@ -105,25 +118,32 @@ export function createLocalMcpDevEndpointPlugin(
   const productionOAuthAuthorizationConfig =
     options.productionOAuthAuthorizationConfig ??
     buildMcpOAuthProductionRouteAdapterConfig(readProductionMcpOAuthConfigInput(env));
-  const productionOAuthAuthorizationDependencies = options.productionOAuthAuthorizationDependencies ?? {};
+  const productionOAuthAuthorizationDependencies =
+    options.productionOAuthAuthorizationDependencies ??
+    buildProductionMcpOAuthRouteDependencies(env);
+
+  const middleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => {
+    handleLocalMcpDevMiddlewareRequest(
+      req,
+      res,
+      next,
+      config,
+      endpointDependencies,
+      oauthAuthorizationConfig,
+      oauthAuthorizationDependencies,
+      productionOAuthAuthorizationEnabled,
+      productionOAuthAuthorizationConfig,
+      productionOAuthAuthorizationDependencies,
+    );
+  };
 
   return {
     name: "twoweeks-local-mcp-dev-endpoint",
     configureServer(server) {
-      server.middlewares.use((req, res, next) => {
-        handleLocalMcpDevMiddlewareRequest(
-          req,
-          res,
-          next,
-          config,
-          endpointDependencies,
-          oauthAuthorizationConfig,
-          oauthAuthorizationDependencies,
-          productionOAuthAuthorizationEnabled,
-          productionOAuthAuthorizationConfig,
-          productionOAuthAuthorizationDependencies,
-        );
-      });
+      server.middlewares.use(middleware);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(middleware);
     },
   };
 }
@@ -154,6 +174,14 @@ function handleLocalMcpDevMiddlewareRequest(
     });
     return;
   }
+  if (config.enabled && isLocalMcpDevEndpointHandledPath(pathName)) {
+    readLocalMcpDevBody(req, res, config.maxRequestBytes, (bodyText) => {
+      void respondToLocalMcpDevRequest(req, res, next, config, dependencies, pathName, bodyText).catch(() => {
+        sendInvalidLocalMcpDevRequest(res);
+      });
+    });
+    return;
+  }
   if (productionOAuthAuthorizationEnabled && isMcpOAuthProductionRouteHandledPath(pathName)) {
     void respondToMcpOAuthProductionRouteRequest(
       req,
@@ -171,11 +199,7 @@ function handleLocalMcpDevMiddlewareRequest(
     next();
     return;
   }
-  readLocalMcpDevBody(req, res, config.maxRequestBytes, (bodyText) => {
-    void respondToLocalMcpDevRequest(req, res, next, config, dependencies, pathName, bodyText).catch(() => {
-      sendInvalidLocalMcpDevRequest(res);
-    });
-  });
+  next();
 }
 
 async function respondToMcpOAuthLocalDevRouteRequest(
@@ -408,6 +432,127 @@ function readProductionMcpOAuthConfigInput(env: Readonly<Record<string, string |
       version: 1,
     },
   };
+}
+
+function buildProductionMcpOAuthRouteDependencies(
+  env: Readonly<Record<string, string | undefined>>,
+): McpOAuthProductionRouteAdapterDependenciesV1 {
+  return Object.freeze({
+    authorizationRequestConfig: readProductionMcpOAuthAuthorizationRequestConfig(env),
+    checkPreAuthQuota: checkProductionPreAuthQuota,
+    createPreAuthIntent: buildProductionPreAuthIntentCreatePort(env),
+  });
+}
+
+function readProductionMcpOAuthAuthorizationRequestConfig(
+  env: Readonly<Record<string, string | undefined>>,
+): NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["authorizationRequestConfig"]> {
+  const allowedClientIds = readCommaSeparatedEnv(env[MCP_OAUTH_PRODUCTION_CLIENT_IDS_VAR]);
+  return Object.freeze({
+    kind: "mcp_oauth_authorization_request_boundary_config",
+    authorizationPageOrigin: env[MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN_VAR]?.trim() ?? "",
+    authorizationPagePath: MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
+    canonicalResource: env[MCP_OAUTH_PRODUCTION_RESOURCE_VAR]?.trim() ?? "",
+    allowedRedirectUris: readCommaSeparatedEnv(env[MCP_OAUTH_PRODUCTION_REDIRECT_URIS_VAR]),
+    requiredScope: TWOWEEKS_APPLICATIONS_READ_SCOPE,
+    approvedOptionalScopes: ["openid", "email", "profile"],
+    allowedOptionalParameters: ["nonce", "prompt"],
+    maxUrlLength: 4_096,
+    maxParameterLength: 512,
+    maxStateLength: 512,
+    maxIdTokenHintLength: 1_024,
+    clientIdPolicy: Object.freeze({
+      mode: "predefined_allowlist",
+      allowedClientIds,
+      version: 1,
+    }),
+    localDevelopmentOnly: true,
+    allowHttpLocalhostAuthorizationOrigin: false,
+    version: 1,
+  });
+}
+
+const checkProductionPreAuthQuota: NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["checkPreAuthQuota"]> = async (input) => {
+  const key = `${input.authorizationPageOrigin}\n${input.clientId}\n${input.resource}`;
+  const existing = productionPreAuthQuotaBuckets.get(key);
+  const bucket =
+    existing && input.now - existing.windowStartedAt < PRE_AUTH_QUOTA_WINDOW_MS
+      ? existing
+      : { count: 0, windowStartedAt: input.now };
+  bucket.count += 1;
+  productionPreAuthQuotaBuckets.set(key, bucket);
+  if (bucket.count > PRE_AUTH_QUOTA_LIMIT) {
+    return Object.freeze({
+      kind: "mcp_oauth_pre_auth_quota_result",
+      ok: false,
+      reason: "rate_limited",
+      safeFailure: { code: "pre_auth_quota_denied" },
+      safeForLogging: true,
+      version: 1,
+    });
+  }
+  return Object.freeze({
+    kind: "mcp_oauth_pre_auth_quota_result",
+    ok: true,
+    reason: "accepted",
+    safeForLogging: true,
+    version: 1,
+  });
+};
+
+function buildProductionPreAuthIntentCreatePort(
+  env: Readonly<Record<string, string | undefined>>,
+): NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["createPreAuthIntent"]> {
+  const convexClient = readConvexHttpClient(env);
+  return async (input) => {
+    if (!convexClient) return preAuthCreateUnavailableResult();
+    return convexClient.mutation(
+      (internal as any).mcpOAuthPreAuthIntents.internalCreateMcpOAuthPreAuthIntent,
+      input,
+    ) as Promise<Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["createPreAuthIntent"]>>>>;
+  };
+}
+
+function readConvexHttpClient(env: Readonly<Record<string, string | undefined>>): ConvexHttpClient | undefined {
+  const url = readFirstEnvValue(env, [CONVEX_URL_VAR, VITE_CONVEX_URL_VAR, NEXT_PUBLIC_CONVEX_URL_VAR]);
+  const auth = readFirstEnvValue(env, [CONVEX_KEY_VAR, CONVEX_AUTH_TOKEN_VAR]);
+  if (!url || !auth || !isAbsoluteUrl(url)) return undefined;
+  return new ConvexHttpClient(url, { auth });
+}
+
+function preAuthCreateUnavailableResult(): Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["createPreAuthIntent"]>>> {
+  return Object.freeze({
+    kind: "mcp_oauth_pre_auth_intent_create_result",
+    ok: false,
+    reason: "storage_unavailable",
+    safeFailure: {
+      code: "mcp_oauth_pre_auth_intent_denied",
+      message: "Pre-auth intent denied.",
+      safeForModel: true,
+      sensitiveValuesEchoed: false,
+      version: 1,
+    },
+    modelVisible: false,
+    safeForLogging: true,
+    version: 1,
+  });
+}
+
+function readFirstEnvValue(env: Readonly<Record<string, string | undefined>>, names: readonly string[]): string | undefined {
+  for (const name of names) {
+    const value = env[name]?.trim();
+    if (value) return value;
+  }
+  return undefined;
+}
+
+function isAbsoluteUrl(value: string): boolean {
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function readCommaSeparatedEnv(value: string | undefined): readonly string[] {
