@@ -288,6 +288,25 @@ describe("MCP OAuth production activation boundary", () => {
     expect(dependencies.executeAccountLinkLifecycle).not.toHaveBeenCalled();
   });
 
+  it("refuses forged nested provider config without throwing or calling provider ports", async () => {
+    const dependencies = buildDependencies();
+    const forgedConfig = {
+      ...enabledConfig(),
+      providerConfig: {
+        ...PROVIDER_CONFIG,
+        allowedClientIds: 123,
+      },
+    } as unknown as McpOAuthProductionActivationConfigV1;
+
+    await expect(executeMcpOAuthProductionActivation(buildInput(forgedConfig, dependencies))).resolves.toMatchObject({
+      allowed: false,
+      reason: "invalid_input",
+      safeRefusal: { tokenEchoed: false, authorizationCodeEchoed: false },
+    });
+    expect(dependencies.providerAdapter.exchangeAuthorizationCode).not.toHaveBeenCalled();
+    expect(dependencies.executeAccountLinkLifecycle).not.toHaveBeenCalled();
+  });
+
   it("does not echo authorization code, provider subject, owner id, or token-shaped values", async () => {
     const dependencies = buildDependencies();
     const result = await executeMcpOAuthProductionActivation(buildInput(enabledConfig(), dependencies));

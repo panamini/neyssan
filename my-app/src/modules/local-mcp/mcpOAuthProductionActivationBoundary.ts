@@ -457,7 +457,47 @@ function readActivationConfig(value: unknown): McpOAuthProductionActivationConfi
   ) {
     return undefined;
   }
-  return value as McpOAuthProductionActivationConfigV1;
+  const providerConfig =
+    value.providerConfig === undefined
+      ? undefined
+      : parseProviderConfig(value.providerConfig as Partial<McpOAuthProductionProviderConfigV1>);
+  if (value.providerConfig !== undefined && providerConfig === undefined) return undefined;
+  if (value.enabled === true && providerConfig === undefined) return undefined;
+  if (
+    value.enabled === true &&
+    (requiredFlags.runtimeValue !== "1" || requiredFlags.approvedValue !== "1")
+  ) {
+    return undefined;
+  }
+  if (
+    value.providerAbstraction !== "stytch_adapter_required" ||
+    value.tokenExchange !== "provider_adapter_only" ||
+    value.accountLinkLifecycle !== "provider_verified_server_hook_only"
+  ) {
+    return undefined;
+  }
+  return {
+    kind: "mcp_oauth_production_activation_config",
+    enabled: value.enabled === true,
+    requiredFlags: {
+      runtimeFlagName: MCP_OAUTH_PRODUCTION_RUNTIME_FLAG,
+      approvedFlagName: MCP_OAUTH_PRODUCTION_APPROVED_FLAG,
+      runtimeValue: requiredFlags.runtimeValue,
+      approvedValue: requiredFlags.approvedValue,
+      bothRequired: true,
+      version: 1,
+    },
+    providerConfig,
+    providerAbstraction: "stytch_adapter_required",
+    tokenExchange: "provider_adapter_only",
+    accountLinkLifecycle: "provider_verified_server_hook_only",
+    publicEndpointExposed: false,
+    frontendWiring: false,
+    tokenStorage: "none",
+    refreshTokenStorage: "none",
+    defaultProductionBehavior: "disabled",
+    version: 1,
+  };
 }
 
 async function exchangeToken(
