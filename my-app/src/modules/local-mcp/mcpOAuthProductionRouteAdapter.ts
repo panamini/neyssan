@@ -4,6 +4,20 @@ import {
   type McpOAuthProductionRoutePreflightInputV1,
   type McpOAuthProductionRoutePreflightResultV1,
 } from "./mcpOAuthProductionRoutePreflightBoundary";
+import {
+  projectMcpOAuthPreAuthAuthorizationRequest,
+  type McpOAuthAuthorizationRequestBoundaryConfigV1,
+  type McpOAuthPreAuthAuthorizationRequestProjectionV1,
+} from "./mcpOAuthAuthorizationRequestBoundary";
+import {
+  defaultMcpOAuthContinuationHandleCodecV1,
+  type McpOAuthContinuationHandleCodecV1,
+} from "./mcpOAuthLoginReturnContinuationBoundary";
+import {
+  MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER,
+  MCP_OAUTH_CONTINUATION_PATH,
+  MCP_OAUTH_SIGN_IN_RETURN_PARAMETER,
+} from "../../pages/sign-in-return";
 
 export const MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH = "/oauth/authorize";
 export const MCP_OAUTH_PRODUCTION_CALLBACK_PATH = "/oauth/callback";
@@ -24,9 +38,53 @@ export type McpOAuthProductionRouteAdapterConfigV1 = Readonly<{
   preflight: McpOAuthProductionRoutePreflightResultV1;
   handledPaths: readonly McpOAuthProductionRoutePathV1[];
   failClosedUnlessPreflightReady: true;
-  inertGuardedHandlersOnly: true;
+  authorizeCreatesOwnerlessPreAuthIntentOnly: true;
+  callbackAndMcpInertGuardedHandlersOnly: true;
   safeForModel: true;
   version: 1;
+}>;
+
+export type McpOAuthProductionPreAuthIntentCreatePortInputV1 = Readonly<{
+  authorizationRequestProjection: McpOAuthPreAuthAuthorizationRequestProjectionV1;
+  preAuthHandleHash: string;
+  now: number;
+  version: 1;
+}>;
+
+export type McpOAuthProductionPreAuthIntentCreatePortResultV1 = Readonly<
+  | {
+      kind: "mcp_oauth_pre_auth_intent_create_result";
+      ok: true;
+      reason: "created";
+      serverOnly: {
+        status: "pre_auth_pending";
+        expiresAt: number;
+        version: 1;
+      };
+      modelVisible: false;
+      safeForLogging: false;
+      version: 1;
+    }
+  | {
+      kind: "mcp_oauth_pre_auth_intent_create_result";
+      ok: false;
+      reason: string;
+      safeFailure: unknown;
+      modelVisible: false;
+      safeForLogging: true;
+      version: 1;
+    }
+>;
+
+export type McpOAuthProductionPreAuthIntentCreatePortV1 = (
+  input: McpOAuthProductionPreAuthIntentCreatePortInputV1,
+) => Promise<McpOAuthProductionPreAuthIntentCreatePortResultV1>;
+
+export type McpOAuthProductionRouteAdapterDependenciesV1 = Readonly<{
+  authorizationRequestConfig?: McpOAuthAuthorizationRequestBoundaryConfigV1;
+  createPreAuthIntent?: McpOAuthProductionPreAuthIntentCreatePortV1;
+  handleCodec?: McpOAuthContinuationHandleCodecV1;
+  now?: () => number;
 }>;
 
 export type McpOAuthProductionRouteAdapterRequestV1 = Readonly<{
@@ -46,13 +104,26 @@ export type McpOAuthProductionRouteAdapterResponseV1 = Readonly<{
 
 type McpOAuthProductionRouteFailureReasonV1 =
   | McpOAuthProductionRoutePreflightDecisionV1
-  | "unsupported_method";
+  | "unsupported_method"
+  | "dependency_unavailable"
+  | "invalid_host"
+  | "invalid_authorization_request"
+  | "invalid_configuration"
+  | "pre_auth_create_failed";
+
+type McpOAuthProductionAuthorizationOriginV1 = Readonly<{
+  origin: string;
+  protocol: string;
+  hostname: string;
+  port: string;
+}>;
 
 const HANDLED_PATHS = Object.freeze([
   MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
   MCP_OAUTH_PRODUCTION_CALLBACK_PATH,
   MCP_OAUTH_PRODUCTION_MCP_PATH,
 ] as const);
+const INTENT_HANDLE_HASH_PATTERN = /^[0-9a-f]{64}$/u;
 
 export function buildMcpOAuthProductionRouteAdapterConfig(
   input: McpOAuthProductionRoutePreflightInputV1 = {},
@@ -62,7 +133,8 @@ export function buildMcpOAuthProductionRouteAdapterConfig(
     preflight: buildMcpOAuthProductionRoutePreflight(input),
     handledPaths: HANDLED_PATHS,
     failClosedUnlessPreflightReady: true,
-    inertGuardedHandlersOnly: true,
+    authorizeCreatesOwnerlessPreAuthIntentOnly: true,
+    callbackAndMcpInertGuardedHandlersOnly: true,
     safeForModel: true,
     version: 1,
   });
@@ -75,6 +147,7 @@ export function isMcpOAuthProductionRouteHandledPath(path: string): boolean {
 export async function handleMcpOAuthProductionRouteRequest(
   request: McpOAuthProductionRouteAdapterRequestV1,
   config: McpOAuthProductionRouteAdapterConfigV1 = buildMcpOAuthProductionRouteAdapterConfig(),
+  dependencies: McpOAuthProductionRouteAdapterDependenciesV1 = {},
 ): Promise<McpOAuthProductionRouteAdapterResponseV1> {
   const route = routeNameForPath(request.path);
   if (!route) return notHandled();
@@ -86,7 +159,78 @@ export async function handleMcpOAuthProductionRouteRequest(
       allow: allowedMethodForRoute(route),
     });
   }
+  if (route === "oauth_authorize") {
+    return handleAuthorizationRequest(request, config.preflight, dependencies);
+  }
   return inertGuardedResponse(route, config.preflight);
+}
+
+async function handleAuthorizationRequest(
+  request: McpOAuthProductionRouteAdapterRequestV1,
+  preflight: McpOAuthProductionRoutePreflightResultV1,
+  dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+): Promise<McpOAuthProductionRouteAdapterResponseV1> {
+  if (!dependencies.authorizationRequestConfig || !dependencies.createPreAuthIntent) {
+    return failClosedResponse("oauth_authorize", preflight, "dependency_unavailable", 503);
+  }
+  const authorizationOrigin = readAuthorizationOrigin(dependencies.authorizationRequestConfig);
+  if (!authorizationOrigin) {
+    return failClosedResponse("oauth_authorize", preflight, "invalid_configuration", 500);
+  }
+  if (!requestHostMatchesAuthorizationOrigin(request, authorizationOrigin)) {
+    return failClosedResponse("oauth_authorize", preflight, "invalid_host", 403);
+  }
+
+  const authorizationUrl = readSameOriginAuthorizationUrl(
+    request.url,
+    dependencies.authorizationRequestConfig,
+    authorizationOrigin.origin,
+  );
+  if (!authorizationUrl) {
+    return failClosedResponse("oauth_authorize", preflight, "invalid_authorization_request", 400);
+  }
+
+  const projection = projectMcpOAuthPreAuthAuthorizationRequest({
+    kind: "mcp_oauth_pre_auth_authorization_request_projection_input",
+    authorizationUrl,
+    config: dependencies.authorizationRequestConfig,
+    version: 1,
+  });
+  if (!projection.accepted) {
+    if (projection.reason === "malformed_config") {
+      return failClosedResponse("oauth_authorize", preflight, "invalid_configuration", 500);
+    }
+    return failClosedResponse("oauth_authorize", preflight, "invalid_authorization_request", 400);
+  }
+
+  const codec = dependencies.handleCodec ?? defaultMcpOAuthContinuationHandleCodecV1;
+  const generated = readGeneratedHandle(codec);
+  if (!generated) {
+    return failClosedResponse("oauth_authorize", preflight, "invalid_configuration", 500);
+  }
+
+  const now = readNow(dependencies);
+  let createResult: McpOAuthProductionPreAuthIntentCreatePortResultV1;
+  try {
+    createResult = await dependencies.createPreAuthIntent({
+      authorizationRequestProjection: projection.serverOnly,
+      preAuthHandleHash: generated.intentHandleHash,
+      now,
+      version: 1,
+    });
+  } catch {
+    return failClosedResponse("oauth_authorize", preflight, "pre_auth_create_failed", 503);
+  }
+  if (!isPreAuthCreateSuccess(createResult, now)) {
+    return failClosedResponse(
+      "oauth_authorize",
+      preflight,
+      "pre_auth_create_failed",
+      statusForPreAuthCreateFailure(createResult),
+    );
+  }
+
+  return redirectToSignIn(generated.rawHandle, authorizationOrigin.origin);
 }
 
 function routeNameForPath(path: string): McpOAuthProductionRouteNameV1 | undefined {
@@ -129,6 +273,9 @@ function failClosedResponse(
     providerCalled: false,
     tokenExchangeAttempted: false,
     tokenIssued: false,
+    preAuthIntentCreated: false,
+    ownerBound: false,
+    consentCompleted: false,
     accountLinkCreated: false,
     tokenPersisted: false,
     refreshTokenPersisted: false,
@@ -164,6 +311,9 @@ function inertGuardedResponse(
     providerCalled: false,
     tokenExchangeAttempted: false,
     tokenIssued: false,
+    preAuthIntentCreated: false,
+    ownerBound: false,
+    consentCompleted: false,
     accountLinkCreated: false,
     tokenPersisted: false,
     refreshTokenPersisted: false,
@@ -185,6 +335,232 @@ function notHandled(): McpOAuthProductionRouteAdapterResponseV1 {
     headers: noStoreHeaders(),
     bodyText: "",
   });
+}
+
+function redirectToSignIn(
+  rawHandle: string,
+  authorizationPageOrigin: string,
+): McpOAuthProductionRouteAdapterResponseV1 {
+  const continuationPath = `${MCP_OAUTH_CONTINUATION_PATH}?${new URLSearchParams({
+    [MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER]: rawHandle,
+  }).toString()}`;
+  const signInUrl = `${authorizationPageOrigin}/sign-in?${new URLSearchParams({
+    [MCP_OAUTH_SIGN_IN_RETURN_PARAMETER]: continuationPath,
+  }).toString()}`;
+  return Object.freeze({
+    handled: true,
+    status: 303,
+    headers: {
+      ...noStoreHeaders(),
+      location: signInUrl,
+    },
+    bodyText: "",
+  });
+}
+
+function readSameOriginAuthorizationUrl(
+  urlOrPath: string,
+  config: McpOAuthAuthorizationRequestBoundaryConfigV1,
+  authorizationPageOrigin: string,
+): string | undefined {
+  if (isUnsafeRouteInput(urlOrPath)) return undefined;
+  try {
+    const parsed = new URL(urlOrPath, authorizationPageOrigin);
+    const queryStart = urlOrPath.indexOf("?");
+    const rawPath = queryStart === -1 ? urlOrPath : urlOrPath.slice(0, queryStart);
+    if (
+      parsed.origin !== authorizationPageOrigin ||
+      parsed.pathname !== config.authorizationPagePath ||
+      rawPath !== config.authorizationPagePath ||
+      parsed.hash ||
+      hasUnsafeRawPath(rawPath)
+    ) {
+      return undefined;
+    }
+    return parsed.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+function requestHostMatchesAuthorizationOrigin(
+  request: McpOAuthProductionRouteAdapterRequestV1,
+  origin: McpOAuthProductionAuthorizationOriginV1,
+): boolean {
+  const host = readSingleHeaderValue(request.headers?.host);
+  const parsedHost = host ? parseHostHeader(host, origin.protocol) : undefined;
+  return (
+    parsedHost !== undefined &&
+    parsedHost.hostname === origin.hostname &&
+    parsedHost.port === origin.port
+  );
+}
+
+function readGeneratedHandle(
+  codec: McpOAuthContinuationHandleCodecV1,
+): Readonly<{ rawHandle: string; intentHandleHash: string }> | undefined {
+  try {
+    const generated = codec.generate();
+    if (
+      !generated ||
+      typeof generated.rawHandle !== "string" ||
+      typeof generated.intentHandleHash !== "string" ||
+      !codec.validate(generated.rawHandle) ||
+      readHandleHash(generated.rawHandle, codec) !== generated.intentHandleHash
+    ) {
+      return undefined;
+    }
+    return isValidIntentHandleHash(generated.intentHandleHash) ? generated : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function readHandleHash(rawHandle: string, codec: McpOAuthContinuationHandleCodecV1): string | undefined {
+  try {
+    const digest = codec.hash(rawHandle);
+    return isValidIntentHandleHash(digest) ? digest : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function isPreAuthCreateSuccess(
+  value: McpOAuthProductionPreAuthIntentCreatePortResultV1,
+  now: number,
+): value is Extract<McpOAuthProductionPreAuthIntentCreatePortResultV1, { ok: true }> {
+  return (
+    isPlainRecord(value) &&
+    value.kind === "mcp_oauth_pre_auth_intent_create_result" &&
+    value.ok === true &&
+    value.reason === "created" &&
+    isPlainRecord(value.serverOnly) &&
+    value.serverOnly.status === "pre_auth_pending" &&
+    typeof value.serverOnly.expiresAt === "number" &&
+    value.serverOnly.expiresAt > now &&
+    value.serverOnly.version === 1 &&
+    value.modelVisible === false &&
+    value.safeForLogging === false &&
+    value.version === 1
+  );
+}
+
+function statusForPreAuthCreateFailure(
+  value: McpOAuthProductionPreAuthIntentCreatePortResultV1,
+): 409 | 503 {
+  return isPlainRecord(value) && value.reason === "handle_collision" ? 409 : 503;
+}
+
+function readNow(dependencies: McpOAuthProductionRouteAdapterDependenciesV1): number {
+  let now: number;
+  try {
+    now = dependencies.now?.() ?? Date.now();
+  } catch {
+    now = Date.now();
+  }
+  return Number.isSafeInteger(now) && now >= 0 ? now : Date.now();
+}
+
+function isValidIntentHandleHash(value: unknown): value is string {
+  return typeof value === "string" && INTENT_HANDLE_HASH_PATTERN.test(value);
+}
+
+function readSingleHeaderValue(value: string | readonly string[] | undefined): string | undefined {
+  if (typeof value === "string") return value.trim();
+  if (Array.isArray(value) && value.length === 1) return value[0]?.trim();
+  return undefined;
+}
+
+function readAuthorizationOrigin(
+  config: McpOAuthAuthorizationRequestBoundaryConfigV1,
+): McpOAuthProductionAuthorizationOriginV1 | undefined {
+  try {
+    const origin = new URL(config.authorizationPageOrigin);
+    if (
+      origin.origin === "null" ||
+      !origin.hostname ||
+      origin.username ||
+      origin.password ||
+      (origin.pathname !== "" && origin.pathname !== "/") ||
+      origin.search ||
+      origin.hash
+    ) {
+      return undefined;
+    }
+    return Object.freeze({
+      origin: origin.origin,
+      protocol: origin.protocol,
+      hostname: origin.hostname.toLowerCase(),
+      port: normalizedOriginPort(origin),
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+function parseHostHeader(
+  host: string,
+  protocol: string,
+): Readonly<{ hostname: string; port: string }> | undefined {
+  if (!host || host.includes("/") || host.includes("@") || hasControlCharacter(host)) {
+    return undefined;
+  }
+  try {
+    const parsed = new URL(`${protocol}//${host}`);
+    if (parsed.username || parsed.password || parsed.pathname !== "/" || parsed.search || parsed.hash) {
+      return undefined;
+    }
+    return Object.freeze({
+      hostname: parsed.hostname.toLowerCase(),
+      port: parsed.port || defaultPortForProtocol(protocol),
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizedOriginPort(origin: URL): string {
+  return origin.port || defaultPortForProtocol(origin.protocol);
+}
+
+function defaultPortForProtocol(protocol: string): "80" | "443" | "" {
+  if (protocol === "https:") return "443";
+  if (protocol === "http:") return "80";
+  return "";
+}
+
+function isUnsafeRouteInput(value: string): boolean {
+  return (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    !value.startsWith("/") ||
+    value.startsWith("//") ||
+    value.includes("\\") ||
+    value.includes("#") ||
+    hasControlCharacter(value)
+  );
+}
+
+function hasUnsafeRawPath(value: string): boolean {
+  return hasDotSegment(value) || /%2e|%2f|%5c/iu.test(value);
+}
+
+function hasControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
+}
+
+function hasDotSegment(value: string): boolean {
+  return value.split(/[/?#]/u).some((part) => part === "." || part === "..");
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
 function jsonResponse(
