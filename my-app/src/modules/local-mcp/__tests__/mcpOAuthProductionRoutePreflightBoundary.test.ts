@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { TWOWEEKS_APPLICATIONS_READ_SCOPE } from "../mcpAuthPolicyBoundary";
+import type { McpOAuthProductionActivationDependenciesV1 } from "../mcpOAuthProductionActivationBoundary";
 import {
   MCP_OAUTH_PRODUCTION_ROUTE_WIRING_FLAG,
   buildMcpOAuthProductionRoutePreflight,
@@ -24,6 +25,31 @@ const PROVIDER_CONFIG = {
   requiredReadScopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
   version: 1,
 } as const;
+
+const ACTIVATION_DEPENDENCIES = {
+  providerAdapter: {
+    provider: "stytch",
+    exchangeAuthorizationCode: async () => ({
+      kind: "mcp_oauth_production_token_exchange_result",
+      ok: false,
+      reason: "not_executed_in_route_preflight",
+      safeFailure: { code: "not_executed" },
+      modelVisible: false,
+      safeForLogging: true,
+      version: 1,
+    }),
+    version: 1,
+  },
+  executeAccountLinkLifecycle: async () => ({
+    kind: "mcp_account_link_lifecycle_result",
+    operation: "link",
+    ok: false,
+    reason: "not_executed_in_route_preflight",
+    safeFailure: { code: "not_executed" },
+    modelVisible: false,
+    version: 1,
+  }),
+} as const satisfies McpOAuthProductionActivationDependenciesV1;
 
 describe("MCP OAuth production route preflight boundary", () => {
   it("is disabled by default without exposing routes or config values", () => {
@@ -58,6 +84,12 @@ describe("MCP OAuth production route preflight boundary", () => {
         valuesExposed: false,
         version: 1,
       },
+      activationDependencies: {
+        providerAdapterAvailable: false,
+        accountLinkLifecycleAvailable: false,
+        valuesExposed: false,
+        version: 1,
+      },
       capabilities: expectedBlockedCapabilities(),
       version: 1,
     });
@@ -86,6 +118,7 @@ describe("MCP OAuth production route preflight boundary", () => {
       buildMcpOAuthProductionRoutePreflight({
         flags: { runtime: "1", approved: "1" },
         providerConfig: PROVIDER_CONFIG,
+        activationDependencies: ACTIVATION_DEPENDENCIES,
       }),
     ).toMatchObject({
       decision: "blocked_endpoint_exposure_not_enabled",
@@ -114,6 +147,7 @@ describe("MCP OAuth production route preflight boundary", () => {
           ...PROVIDER_CONFIG,
           issuer: "http://stytch.example.test/",
         },
+        activationDependencies: ACTIVATION_DEPENDENCIES,
       }),
     ).toMatchObject({
       decision: "blocked_misconfigured_provider",
@@ -134,11 +168,30 @@ describe("MCP OAuth production route preflight boundary", () => {
     });
   });
 
-  it("returns ready_to_wire only when all production flags, provider config, and status agree", () => {
+  it("does not allow route wiring when activation dependencies are unavailable", () => {
     expect(
       buildMcpOAuthProductionRoutePreflight({
         flags: { runtime: "1", approved: "1", routeWiring: "1" },
         providerConfig: PROVIDER_CONFIG,
+      }),
+    ).toMatchObject({
+      decision: "blocked_missing_activation_dependency",
+      allowedToWire: false,
+      activationDependencies: {
+        providerAdapterAvailable: false,
+        accountLinkLifecycleAvailable: false,
+        valuesExposed: false,
+      },
+      capabilities: expectedBlockedCapabilities(),
+    });
+  });
+
+  it("returns ready_to_wire only when all production flags, provider config, status, and activation dependencies agree", () => {
+    expect(
+      buildMcpOAuthProductionRoutePreflight({
+        flags: { runtime: "1", approved: "1", routeWiring: "1" },
+        providerConfig: PROVIDER_CONFIG,
+        activationDependencies: ACTIVATION_DEPENDENCIES,
       }),
     ).toEqual({
       kind: "mcp_oauth_production_route_preflight",
@@ -171,6 +224,12 @@ describe("MCP OAuth production route preflight boundary", () => {
         valuesExposed: false,
         version: 1,
       },
+      activationDependencies: {
+        providerAdapterAvailable: true,
+        accountLinkLifecycleAvailable: true,
+        valuesExposed: false,
+        version: 1,
+      },
       capabilities: expectedBlockedCapabilities(),
       version: 1,
     });
@@ -179,6 +238,7 @@ describe("MCP OAuth production route preflight boundary", () => {
   it("never exposes secrets, token material, raw provider config, or owner identifiers", () => {
     const result = buildMcpOAuthProductionRoutePreflight({
       flags: { runtime: "1", approved: "1", routeWiring: "1" },
+      activationDependencies: ACTIVATION_DEPENDENCIES,
       providerConfig: {
         ...PROVIDER_CONFIG,
         clientSecret: "client_secret_should_not_echo",
@@ -241,7 +301,7 @@ describe("MCP OAuth production route preflight boundary", () => {
     expect(boundarySource).not.toMatch(/\b(?:createServer|serve|listen)\s*\(/u);
     expect(boundarySource).not.toMatch(/\bfetch\s*\(|\bXMLHttpRequest\b/u);
     expect(boundarySource).not.toMatch(/from\s+["']@stytch|from\s+["']node:https|from\s+["']node:http/u);
-    expect(boundarySource).not.toMatch(/exchangeAuthorizationCode|executeAccountLinkLifecycle/u);
+    expect(boundarySource).not.toMatch(/\.exchangeAuthorizationCode\s*\(|executeAccountLinkLifecycle\s*\(/u);
     expect(boundarySource).not.toMatch(/\/oauth\/(?:authorize|callback|token)|["'`]\/mcp["'`]/u);
   });
 });
