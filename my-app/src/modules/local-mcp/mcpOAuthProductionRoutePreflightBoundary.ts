@@ -36,7 +36,7 @@ export type McpOAuthProductionRoutePreflightResultV1 = Readonly<{
   decision: McpOAuthProductionRoutePreflightDecisionV1;
   allowedToWire: boolean;
   safeForModel: true;
-  requiredFlags: {
+  requiredFlags: Readonly<{
     runtimeFlagName: typeof MCP_OAUTH_PRODUCTION_RUNTIME_FLAG;
     approvedFlagName: typeof MCP_OAUTH_PRODUCTION_APPROVED_FLAG;
     routeWiringFlagName: typeof MCP_OAUTH_PRODUCTION_ROUTE_WIRING_FLAG;
@@ -45,14 +45,14 @@ export type McpOAuthProductionRoutePreflightResultV1 = Readonly<{
     routeWiringEnabled: boolean;
     allRequired: true;
     version: 1;
-  };
-  provider: {
+  }>;
+  provider: Readonly<{
     provider: "stytch" | "unavailable";
     configShape: "valid" | "invalid_or_missing";
     valuesExposed: false;
     version: 1;
-  };
-  operationalStatus: {
+  }>;
+  operationalStatus: Readonly<{
     capability: "production_oauth_activation";
     agreesWithActivationConfig: boolean;
     enabled: boolean;
@@ -61,8 +61,8 @@ export type McpOAuthProductionRoutePreflightResultV1 = Readonly<{
     category?: McpOperationalStatusV1["category"];
     valuesExposed: false;
     version: 1;
-  };
-  capabilities: {
+  }>;
+  capabilities: Readonly<{
     publicEndpointExposure: "not_exposed";
     routeRegistration: "not_registered";
     viteProductionRouteWiring: "blocked";
@@ -76,7 +76,7 @@ export type McpOAuthProductionRoutePreflightResultV1 = Readonly<{
     authorizationCodes: "not_accepted";
     providerSecrets: "not_accepted";
     version: 1;
-  };
+  }>;
   version: 1;
 }>;
 

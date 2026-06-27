@@ -205,6 +205,10 @@ describe("MCP OAuth production route preflight boundary", () => {
     ] as const) {
       expect(serialized).not.toContain(forbidden);
     }
+    const outputKeys = collectJsonKeys(result);
+    for (const forbiddenKey of ["ownerId", "authorizationCode"] as const) {
+      expect(outputKeys).not.toContain(forbiddenKey);
+    }
   });
 
   it("does not register endpoints or route wiring in this PR", () => {
@@ -212,10 +216,26 @@ describe("MCP OAuth production route preflight boundary", () => {
     const viteSource = readFileSync(VITE_CONFIG_SOURCE, "utf8");
     const convexHttpSource = readFileSync(CONVEX_HTTP_SOURCE, "utf8");
     const localDevEndpointSource = readFileSync(LOCAL_DEV_ENDPOINT_SOURCE, "utf8");
+    const routeEntrypointSources = [
+      viteSource,
+      convexHttpSource,
+      localDevEndpointSource,
+    ] as const;
 
-    expect(viteSource).not.toContain(MCP_OAUTH_PRODUCTION_ROUTE_WIRING_FLAG);
-    expect(convexHttpSource).not.toContain(MCP_OAUTH_PRODUCTION_ROUTE_WIRING_FLAG);
-    expect(localDevEndpointSource).not.toContain(MCP_OAUTH_PRODUCTION_ROUTE_WIRING_FLAG);
+    for (const source of routeEntrypointSources) {
+      expect(source).not.toContain(MCP_OAUTH_PRODUCTION_ROUTE_WIRING_FLAG);
+      expect(source).not.toMatch(/\bmcpOAuthProductionRoutePreflight\b/u);
+      expect(source).not.toMatch(/\bbuildMcpOAuthProductionRoutePreflight\b/u);
+      expect(source).not.toMatch(/\bMCP_OAUTH_PRODUCTION_(?:RUNTIME|APPROVED|ROUTE_WIRING)\b/u);
+    }
+    for (const productionEntrypointSource of [viteSource, convexHttpSource] as const) {
+      expect(productionEntrypointSource).not.toMatch(
+        /\bpath:\s*["'`](?:\/oauth\/(?:authorize|callback|token)|\/mcp)["'`]/u,
+      );
+      expect(productionEntrypointSource).not.toMatch(
+        /\/oauth\/(?:authorize|callback|token)|["'`]\/mcp["'`]/u,
+      );
+    }
     expect(boundarySource).not.toMatch(/\b(?:app|router)\.(?:get|post|use|all|route)\s*\(/u);
     expect(boundarySource).not.toMatch(/\bhttp\.route\s*\(/u);
     expect(boundarySource).not.toMatch(/\b(?:createServer|serve|listen)\s*\(/u);
@@ -242,4 +262,22 @@ function expectedBlockedCapabilities() {
     providerSecrets: "not_accepted",
     version: 1,
   } as const;
+}
+
+function collectJsonKeys(value: unknown): ReadonlySet<string> {
+  const keys = new Set<string>();
+  collectJsonKeysInto(value, keys);
+  return keys;
+}
+
+function collectJsonKeysInto(value: unknown, keys: Set<string>): void {
+  if (value === null || typeof value !== "object") return;
+  if (Array.isArray(value)) {
+    for (const item of value) collectJsonKeysInto(item, keys);
+    return;
+  }
+  for (const [key, nestedValue] of Object.entries(value)) {
+    keys.add(key);
+    collectJsonKeysInto(nestedValue, keys);
+  }
 }
