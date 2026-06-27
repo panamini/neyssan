@@ -252,6 +252,39 @@ describe("MCP OAuth production activation boundary", () => {
     });
   });
 
+  it("accepts provider evidence URLs after applying the boundary URL normalization rules", async () => {
+    const dependencies = buildDependencies();
+    vi.mocked(dependencies.providerAdapter.exchangeAuthorizationCode).mockResolvedValueOnce({
+      kind: "mcp_oauth_production_token_exchange_result",
+      ok: true,
+      reason: "exchanged",
+      serverOnly: {
+        provider: "stytch",
+        subject: FIXTURE_PROVIDER_SUBJECT,
+        issuer: "https://stytch.example.test",
+        resource: "https://mcp.twoweeks.example.test/resource",
+        providerEnvironment: "prod_us_1",
+        clientId: FIXTURE_CLIENT_ID,
+        grantedScopes: ["twoweeks:applications:read"],
+        expiresAtEpochSeconds: NOW_EPOCH_SECONDS + 3_600,
+        verifiedAtEpochSeconds: NOW_EPOCH_SECONDS,
+        tokenMaterial: "handled_by_provider_adapter",
+        accessTokenStored: false,
+        refreshTokenStored: false,
+        version: 1,
+      },
+      modelVisible: false,
+      safeForLogging: false,
+      version: 1,
+    });
+
+    await expect(executeMcpOAuthProductionActivation(buildInput(enabledConfig(), dependencies))).resolves.toMatchObject({
+      allowed: true,
+      reason: "production_activation_completed",
+    });
+    expect(dependencies.executeAccountLinkLifecycle).toHaveBeenCalledTimes(1);
+  });
+
   it("refuses unsafe provider exchange output without running account-link lifecycle", async () => {
     const dependencies = buildDependencies();
     vi.mocked(dependencies.providerAdapter.exchangeAuthorizationCode).mockResolvedValueOnce({
@@ -281,6 +314,40 @@ describe("MCP OAuth production activation boundary", () => {
     const result = await executeMcpOAuthProductionActivation(buildInput(enabledConfig(), dependencies));
 
     expect(result).toMatchObject({
+      allowed: false,
+      reason: "token_exchange_failed",
+      safeRefusal: { tokenEchoed: false, authorizationCodeEchoed: false },
+    });
+    expect(dependencies.executeAccountLinkLifecycle).not.toHaveBeenCalled();
+  });
+
+  it("refuses non-canonical provider scopes before account-link lifecycle execution", async () => {
+    const dependencies = buildDependencies();
+    vi.mocked(dependencies.providerAdapter.exchangeAuthorizationCode).mockResolvedValueOnce({
+      kind: "mcp_oauth_production_token_exchange_result",
+      ok: true,
+      reason: "exchanged",
+      serverOnly: {
+        provider: "stytch",
+        subject: FIXTURE_PROVIDER_SUBJECT,
+        issuer: "https://stytch.example.test/",
+        resource: "https://mcp.twoweeks.example.test/resource",
+        providerEnvironment: "prod_us_1",
+        clientId: FIXTURE_CLIENT_ID,
+        grantedScopes: ["twoweeks:applications:read", "twoweeks.mcp.read"],
+        expiresAtEpochSeconds: NOW_EPOCH_SECONDS + 3_600,
+        verifiedAtEpochSeconds: NOW_EPOCH_SECONDS,
+        tokenMaterial: "handled_by_provider_adapter",
+        accessTokenStored: false,
+        refreshTokenStored: false,
+        version: 1,
+      },
+      modelVisible: false,
+      safeForLogging: false,
+      version: 1,
+    } as never);
+
+    await expect(executeMcpOAuthProductionActivation(buildInput(enabledConfig(), dependencies))).resolves.toMatchObject({
       allowed: false,
       reason: "token_exchange_failed",
       safeRefusal: { tokenEchoed: false, authorizationCodeEchoed: false },
@@ -333,6 +400,22 @@ describe("MCP OAuth production activation boundary", () => {
     });
     expect(dependencies.providerAdapter.exchangeAuthorizationCode).toHaveBeenCalledTimes(1);
     expect(dependencies.executeAccountLinkLifecycle).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses activation configs whose enabled value does not match parsed flags and provider config", async () => {
+    const dependencies = buildDependencies();
+    const forgedConfig = {
+      ...enabledConfig(),
+      enabled: false,
+    } as unknown as McpOAuthProductionActivationConfigV1;
+
+    await expect(executeMcpOAuthProductionActivation(buildInput(forgedConfig, dependencies))).resolves.toMatchObject({
+      allowed: false,
+      reason: "invalid_input",
+      safeRefusal: { tokenEchoed: false, authorizationCodeEchoed: false },
+    });
+    expect(dependencies.providerAdapter.exchangeAuthorizationCode).not.toHaveBeenCalled();
+    expect(dependencies.executeAccountLinkLifecycle).not.toHaveBeenCalled();
   });
 
   it("refuses forged nested provider config without throwing or calling provider ports", async () => {

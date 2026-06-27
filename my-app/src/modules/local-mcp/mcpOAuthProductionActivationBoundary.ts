@@ -7,12 +7,7 @@ import type { McpOAuthAuthorizationTrustedOwnerV1 } from "./mcpOAuthAuthorizatio
 export const MCP_OAUTH_PRODUCTION_RUNTIME_FLAG = "MCP_OAUTH_PRODUCTION_RUNTIME";
 export const MCP_OAUTH_PRODUCTION_APPROVED_FLAG = "MCP_OAUTH_PRODUCTION_APPROVED";
 
-export type McpOAuthProductionActivationReadScopeV1 =
-  | TwoweeksApplicationsReadScopeV1
-  | "twoweeks.mcp.read"
-  | "twoweeks.evidence_graph.read"
-  | "twoweeks.resume_variant_plan.read"
-  | "twoweeks.review_cockpit.read";
+export type McpOAuthProductionActivationReadScopeV1 = TwoweeksApplicationsReadScopeV1;
 
 export type McpOAuthProductionActivationFlagsV1 = Readonly<{
   runtime?: string;
@@ -263,13 +258,7 @@ export type McpOAuthProductionActivationResultV1 = Readonly<
     }
 >;
 
-const APPROVED_READ_SCOPES = [
-  TWOWEEKS_APPLICATIONS_READ_SCOPE,
-  "twoweeks.evidence_graph.read",
-  "twoweeks.mcp.read",
-  "twoweeks.resume_variant_plan.read",
-  "twoweeks.review_cockpit.read",
-] as const satisfies readonly McpOAuthProductionActivationReadScopeV1[];
+const APPROVED_READ_SCOPES = [TWOWEEKS_APPLICATIONS_READ_SCOPE] as const satisfies readonly McpOAuthProductionActivationReadScopeV1[];
 
 const OPAQUE_TEXT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{1,191}$/u;
 const CODE_VERIFIER_PATTERN = /^[A-Za-z0-9._~-]{43,128}$/u;
@@ -467,13 +456,11 @@ function readActivationConfig(value: unknown): McpOAuthProductionActivationConfi
       ? undefined
       : parseProviderConfig(value.providerConfig as Partial<McpOAuthProductionProviderConfigV1>);
   if (value.providerConfig !== undefined && providerConfig === undefined) return undefined;
-  if (value.enabled === true && providerConfig === undefined) return undefined;
-  if (
-    value.enabled === true &&
-    (requiredFlags.runtimeValue !== "1" || requiredFlags.approvedValue !== "1")
-  ) {
-    return undefined;
-  }
+  const enabled =
+    requiredFlags.runtimeValue === "1" &&
+    requiredFlags.approvedValue === "1" &&
+    providerConfig !== undefined;
+  if (value.enabled !== enabled) return undefined;
   if (
     value.providerAbstraction !== "stytch_adapter_required" ||
     value.tokenExchange !== "provider_adapter_only" ||
@@ -483,7 +470,7 @@ function readActivationConfig(value: unknown): McpOAuthProductionActivationConfi
   }
   return {
     kind: "mcp_oauth_production_activation_config",
-    enabled: value.enabled === true,
+    enabled,
     requiredFlags: {
       runtimeFlagName: MCP_OAUTH_PRODUCTION_RUNTIME_FLAG,
       approvedFlagName: MCP_OAUTH_PRODUCTION_APPROVED_FLAG,
@@ -573,11 +560,13 @@ function isAcceptedExchangeResult(
   if (value.ok !== true || value.reason !== "exchanged" || value.modelVisible !== false || value.version !== 1) return false;
   if (!isPlainRecord(value.serverOnly)) return false;
   const evidence = value.serverOnly;
+  const evidenceIssuer = readSafeHttpsUrl(evidence.issuer, "issuer");
+  const evidenceResource = readSafeHttpsUrl(evidence.resource, "resource");
   return (
     evidence.provider === "stytch" &&
     readOpaqueIdentifier(evidence.subject) !== undefined &&
-    evidence.issuer === config.issuer &&
-    evidence.resource === config.resource &&
+    evidenceIssuer === config.issuer &&
+    evidenceResource === config.resource &&
     evidence.providerEnvironment === config.providerEnvironment &&
     config.allowedClientIds.includes(String(evidence.clientId)) &&
     hasRequiredScopes(evidence.grantedScopes, config.requiredReadScopes) &&
