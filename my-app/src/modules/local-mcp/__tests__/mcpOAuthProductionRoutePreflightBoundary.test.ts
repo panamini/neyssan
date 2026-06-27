@@ -277,31 +277,24 @@ describe("MCP OAuth production route preflight boundary", () => {
     }
   });
 
-  it("does not register endpoints or route wiring in this PR", () => {
+  it("keeps production route wiring constrained to the Vite authorize entrypoint", () => {
     const boundarySource = readFileSync(BOUNDARY_SOURCE, "utf8");
     const viteSource = readFileSync(VITE_CONFIG_SOURCE, "utf8");
     const convexHttpSource = readFileSync(CONVEX_HTTP_SOURCE, "utf8");
     const localDevEndpointSource = readFileSync(LOCAL_DEV_ENDPOINT_SOURCE, "utf8");
-    const routeEntrypointSources = [
-      viteSource,
-      convexHttpSource,
-      localDevEndpointSource,
-    ] as const;
 
-    for (const source of routeEntrypointSources) {
-      expect(source).not.toContain(MCP_OAUTH_PRODUCTION_ROUTE_WIRING_FLAG);
-      expect(source).not.toMatch(/\bmcpOAuthProductionRoutePreflight\b/u);
-      expect(source).not.toMatch(/\bbuildMcpOAuthProductionRoutePreflight\b/u);
-      expect(source).not.toMatch(/\bMCP_OAUTH_PRODUCTION_(?:RUNTIME|APPROVED|ROUTE_WIRING)\b/u);
-    }
-    for (const productionEntrypointSource of [viteSource, convexHttpSource] as const) {
-      expect(productionEntrypointSource).not.toMatch(
-        /\bpath:\s*["'`](?:\/oauth\/(?:authorize|callback|token)|\/mcp(?:\/[^"'`]*)?)["'`]/u,
-      );
-      expect(productionEntrypointSource).not.toMatch(
-        /\/oauth\/(?:authorize|callback|token)|["'`]\/mcp(?:\/[^"'`]*)?["'`]/u,
-      );
-    }
+    expect(viteSource).toContain(MCP_OAUTH_PRODUCTION_ROUTE_WIRING_FLAG);
+    expect(viteSource).toContain("handleMcpOAuthProductionRouteRequest");
+    expect(viteSource).toContain("isMcpOAuthProductionRouteHandledPath");
+    expect(viteSource).toMatch(/\bisMcpOAuthProductionRouteHandledPath\(pathName\)/u);
+    expect(viteSource).not.toMatch(/\bpath:\s*["'`]\/oauth\/(?:callback|token)["'`]/u);
+    expect(viteSource).not.toMatch(/["'`]\/mcp(?:\/[^"'`]*)?["'`]/u);
+    expect(convexHttpSource).not.toMatch(
+      /\/oauth\/(?:authorize|callback|token)|["'`]\/mcp(?:\/[^"'`]*)?["'`]/u,
+    );
+    expect(localDevEndpointSource).not.toContain(MCP_OAUTH_PRODUCTION_ROUTE_WIRING_FLAG);
+    expect(localDevEndpointSource).not.toMatch(/\bmcpOAuthProductionRoutePreflight\b/u);
+    expect(localDevEndpointSource).not.toMatch(/\bMCP_OAUTH_PRODUCTION_(?:RUNTIME|APPROVED|ROUTE_WIRING)\b/u);
     expect(boundarySource).not.toMatch(/\b(?:app|router)\.(?:get|post|use|all|route)\s*\(/u);
     expect(boundarySource).not.toMatch(/\bhttp\.route\s*\(/u);
     expect(boundarySource).not.toMatch(/\b(?:createServer|serve|listen)\s*\(/u);

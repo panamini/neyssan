@@ -25,6 +25,19 @@ import {
   type McpOAuthLocalDevRouteAdapterConfigV1,
   type McpOAuthLocalDevRouteAdapterDependenciesV1,
 } from "./src/modules/local-mcp/mcpOAuthLocalDevRouteAdapter";
+import { TWOWEEKS_APPLICATIONS_READ_SCOPE } from "./src/modules/local-mcp/mcpAuthPolicyBoundary";
+import {
+  MCP_OAUTH_PRODUCTION_APPROVED_FLAG,
+  MCP_OAUTH_PRODUCTION_RUNTIME_FLAG,
+} from "./src/modules/local-mcp/mcpOAuthProductionActivationBoundary";
+import {
+  buildMcpOAuthProductionRouteAdapterConfig,
+  handleMcpOAuthProductionRouteRequest,
+  isMcpOAuthProductionRouteHandledPath,
+  type McpOAuthProductionRouteAdapterConfigV1,
+  type McpOAuthProductionRouteAdapterDependenciesV1,
+} from "./src/modules/local-mcp/mcpOAuthProductionRouteAdapter";
+import { MCP_OAUTH_PRODUCTION_ROUTE_WIRING_FLAG } from "./src/modules/local-mcp/mcpOAuthProductionRoutePreflightBoundary";
 
 const LOCAL_CLERK_SYNC_PORT = 5173;
 const LOCAL_MCP_DEV_ENDPOINT_FLAG = "LOCAL_MCP_DEV_ENDPOINT";
@@ -34,12 +47,18 @@ const LOCAL_MCP_DEV_AUTH_RESOURCE_VAR = "LOCAL_MCP_DEV_AUTH_RESOURCE";
 const LOCAL_MCP_DEV_AUTH_ISSUER_VAR = "LOCAL_MCP_DEV_AUTH_ISSUER";
 const LOCAL_MCP_DEV_AUTH_PROVIDER_ENVIRONMENT_VAR = "LOCAL_MCP_DEV_AUTH_PROVIDER_ENVIRONMENT";
 const LOCAL_MCP_DEV_AUTH_CLIENT_ID_VAR = "LOCAL_MCP_DEV_AUTH_CLIENT_ID";
+const MCP_OAUTH_PRODUCTION_RESOURCE_VAR = "MCP_OAUTH_PRODUCTION_RESOURCE";
+const MCP_OAUTH_PRODUCTION_ISSUER_VAR = "MCP_OAUTH_PRODUCTION_ISSUER";
+const MCP_OAUTH_PRODUCTION_PROVIDER_ENVIRONMENT_VAR = "MCP_OAUTH_PRODUCTION_PROVIDER_ENVIRONMENT";
+const MCP_OAUTH_PRODUCTION_CLIENT_IDS_VAR = "MCP_OAUTH_PRODUCTION_CLIENT_IDS";
 
 export type LocalMcpDevEndpointPluginOptions = Readonly<{
   env?: Readonly<Record<string, string | undefined>>;
   endpointDependencies?: LocalMcpDevEndpointDependenciesV1;
   oauthAuthorizationConfig?: McpOAuthLocalDevRouteAdapterConfigV1;
   oauthAuthorizationDependencies?: McpOAuthLocalDevRouteAdapterDependenciesV1;
+  productionOAuthAuthorizationConfig?: McpOAuthProductionRouteAdapterConfigV1;
+  productionOAuthAuthorizationDependencies?: McpOAuthProductionRouteAdapterDependenciesV1;
 }>;
 
 export function createLocalMcpDevEndpointPlugin(
@@ -48,7 +67,10 @@ export function createLocalMcpDevEndpointPlugin(
   const env = options.env ?? process.env;
   const endpointEnabled = isStrictEnabledFlag(env, LOCAL_MCP_DEV_ENDPOINT_FLAG);
   const oauthAuthorizationEnabled = isStrictEnabledFlag(env, LOCAL_MCP_DEV_OAUTH_AUTHORIZATION_FLAG);
-  if (!endpointEnabled && !oauthAuthorizationEnabled) return undefined;
+  const productionOAuthAuthorizationEnabled =
+    isStrictEnabledFlag(env, MCP_OAUTH_PRODUCTION_ROUTE_WIRING_FLAG) ||
+    options.productionOAuthAuthorizationConfig !== undefined;
+  if (!endpointEnabled && !oauthAuthorizationEnabled && !productionOAuthAuthorizationEnabled) return undefined;
   const fixtureDemoEnabled = endpointEnabled && isStrictEnabledFlag(env, LOCAL_MCP_DEV_FIXTURE_DEMO_FLAG);
   const authPolicyEnabled = endpointEnabled && fixtureDemoEnabled && isStrictEnabledFlag(env, LOCAL_MCP_DEV_AUTH_POLICY_FLAG);
   const authConfigInput = authPolicyEnabled ? readLocalMcpDevAuthConfigInput(env) : undefined;
@@ -80,6 +102,10 @@ export function createLocalMcpDevEndpointPlugin(
     ...readLocalMcpDevOAuthConfigInput(env),
   });
   const oauthAuthorizationDependencies = options.oauthAuthorizationDependencies ?? {};
+  const productionOAuthAuthorizationConfig =
+    options.productionOAuthAuthorizationConfig ??
+    buildMcpOAuthProductionRouteAdapterConfig(readProductionMcpOAuthConfigInput(env));
+  const productionOAuthAuthorizationDependencies = options.productionOAuthAuthorizationDependencies ?? {};
 
   return {
     name: "twoweeks-local-mcp-dev-endpoint",
@@ -93,6 +119,9 @@ export function createLocalMcpDevEndpointPlugin(
           endpointDependencies,
           oauthAuthorizationConfig,
           oauthAuthorizationDependencies,
+          productionOAuthAuthorizationEnabled,
+          productionOAuthAuthorizationConfig,
+          productionOAuthAuthorizationDependencies,
         );
       });
     },
@@ -107,15 +136,31 @@ function handleLocalMcpDevMiddlewareRequest(
   dependencies: LocalMcpDevEndpointDependenciesV1,
   oauthAuthorizationConfig: McpOAuthLocalDevRouteAdapterConfigV1,
   oauthAuthorizationDependencies: McpOAuthLocalDevRouteAdapterDependenciesV1,
+  productionOAuthAuthorizationEnabled: boolean,
+  productionOAuthAuthorizationConfig: McpOAuthProductionRouteAdapterConfigV1,
+  productionOAuthAuthorizationDependencies: McpOAuthProductionRouteAdapterDependenciesV1,
 ): void {
   const pathName = (req.url ?? "").split("?")[0];
-  if (isMcpOAuthLocalDevRouteHandledPath(pathName)) {
+  if (oauthAuthorizationConfig.enabled && isMcpOAuthLocalDevRouteHandledPath(pathName)) {
     void respondToMcpOAuthLocalDevRouteRequest(
       req,
       res,
       next,
       oauthAuthorizationConfig,
       oauthAuthorizationDependencies,
+      pathName,
+    ).catch(() => {
+      sendInvalidLocalMcpDevRequest(res);
+    });
+    return;
+  }
+  if (productionOAuthAuthorizationEnabled && isMcpOAuthProductionRouteHandledPath(pathName)) {
+    void respondToMcpOAuthProductionRouteRequest(
+      req,
+      res,
+      next,
+      productionOAuthAuthorizationConfig,
+      productionOAuthAuthorizationDependencies,
       pathName,
     ).catch(() => {
       sendInvalidLocalMcpDevRequest(res);
@@ -142,6 +187,33 @@ async function respondToMcpOAuthLocalDevRouteRequest(
   pathName: string,
 ): Promise<void> {
   const response = await handleMcpOAuthLocalDevRouteRequest(
+    {
+      method: req.method ?? "GET",
+      path: pathName,
+      url: req.url ?? pathName,
+      headers: {
+        host: headerValue(req.headers.host),
+      },
+    },
+    config,
+    dependencies,
+  );
+  if (!response.handled) {
+    next();
+    return;
+  }
+  sendLocalMcpRouteResponse(res, response.status, response.headers, response.json, response.bodyText);
+}
+
+async function respondToMcpOAuthProductionRouteRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  next: () => void,
+  config: McpOAuthProductionRouteAdapterConfigV1,
+  dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+  pathName: string,
+): Promise<void> {
+  const response = await handleMcpOAuthProductionRouteRequest(
     {
       method: req.method ?? "GET",
       path: pathName,
@@ -316,6 +388,25 @@ function readLocalMcpDevOAuthConfigInput(env: Readonly<Record<string, string | u
     canonicalResource: env[LOCAL_MCP_DEV_AUTH_RESOURCE_VAR],
     allowedRedirectUris: readCommaSeparatedEnv(env[LOCAL_MCP_DEV_OAUTH_REDIRECT_URI_VAR]),
     allowedClientIds: clientId ? [clientId] : [],
+  };
+}
+
+function readProductionMcpOAuthConfigInput(env: Readonly<Record<string, string | undefined>>): Parameters<typeof buildMcpOAuthProductionRouteAdapterConfig>[0] {
+  return {
+    flags: {
+      runtime: env[MCP_OAUTH_PRODUCTION_RUNTIME_FLAG],
+      approved: env[MCP_OAUTH_PRODUCTION_APPROVED_FLAG],
+      routeWiring: env[MCP_OAUTH_PRODUCTION_ROUTE_WIRING_FLAG],
+    },
+    providerConfig: {
+      provider: "stytch",
+      issuer: env[MCP_OAUTH_PRODUCTION_ISSUER_VAR],
+      resource: env[MCP_OAUTH_PRODUCTION_RESOURCE_VAR],
+      providerEnvironment: env[MCP_OAUTH_PRODUCTION_PROVIDER_ENVIRONMENT_VAR],
+      allowedClientIds: readCommaSeparatedEnv(env[MCP_OAUTH_PRODUCTION_CLIENT_IDS_VAR]),
+      requiredReadScopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
+      version: 1,
+    },
   };
 }
 

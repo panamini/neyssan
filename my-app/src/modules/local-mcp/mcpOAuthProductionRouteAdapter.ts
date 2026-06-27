@@ -183,6 +183,7 @@ const PRE_AUTH_CREATE_FALSE_PROOF_KEYS = Object.freeze([
   "accountLinkCreated",
 ] as const);
 const INTENT_HANDLE_HASH_PATTERN = /^[0-9a-f]{64}$/u;
+const PRE_AUTH_QUOTA_TIMEOUT_MS = 2_500;
 const PRE_AUTH_CREATE_TIMEOUT_MS = 2_500;
 
 export function buildMcpOAuthProductionRouteAdapterConfig(
@@ -270,14 +271,19 @@ async function handleAuthorizationRequest(
 
   const now = readNow(dependencies);
   let quotaResult: McpOAuthProductionPreAuthQuotaPortResultV1;
+  const quotaInput = Object.freeze({
+    authorizationPageOrigin: projection.serverOnly.authorizationPage.origin,
+    clientId: projection.serverOnly.providerForwardRequest.clientId,
+    resource: projection.serverOnly.providerForwardRequest.resource,
+    now,
+    version: 1,
+  } satisfies McpOAuthProductionPreAuthQuotaPortInputV1);
   try {
-    quotaResult = await dependencies.checkPreAuthQuota({
-      authorizationPageOrigin: projection.serverOnly.authorizationPage.origin,
-      clientId: projection.serverOnly.providerForwardRequest.clientId,
-      resource: projection.serverOnly.providerForwardRequest.resource,
-      now,
-      version: 1,
-    });
+    quotaResult = await checkPreAuthQuotaWithTimeout(
+      dependencies.checkPreAuthQuota,
+      quotaInput,
+      PRE_AUTH_QUOTA_TIMEOUT_MS,
+    );
   } catch {
     return failClosedResponse("oauth_authorize", preflight, "pre_auth_quota_denied", 503);
   }
@@ -333,11 +339,7 @@ function buildAuthorizationRequestGuard(
   const providerConfig = input.providerConfig;
   return Object.freeze({
     expectedResource: typeof providerConfig?.resource === "string" ? providerConfig.resource : undefined,
-    allowedClientIds: Object.freeze(
-      Array.isArray(providerConfig?.allowedClientIds)
-        ? providerConfig.allowedClientIds.filter((clientId): clientId is string => typeof clientId === "string")
-        : [],
-    ),
+    allowedClientIds: normalizeStringSet(providerConfig?.allowedClientIds),
     version: 1,
   });
 }
@@ -383,6 +385,34 @@ function statusForPreAuthQuotaFailure(
   return isPlainRecord(value) && value.ok === false && value.reason === "invalid_request" ? 400 : 429;
 }
 
+function checkPreAuthQuotaWithTimeout(
+  checkPreAuthQuota: McpOAuthProductionPreAuthQuotaPortV1,
+  input: McpOAuthProductionPreAuthQuotaPortInputV1,
+  timeoutMs: number,
+): Promise<McpOAuthProductionPreAuthQuotaPortResultV1> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error("pre_auth_quota_timeout"));
+    }, timeoutMs);
+
+    try {
+      checkPreAuthQuota(input).then(
+        (result) => {
+          clearTimeout(timeout);
+          resolve(result);
+        },
+        (error: unknown) => {
+          clearTimeout(timeout);
+          reject(error);
+        },
+      );
+    } catch (error) {
+      clearTimeout(timeout);
+      reject(error);
+    }
+  });
+}
+
 function createPreAuthIntentWithTimeout(
   createPreAuthIntent: McpOAuthProductionPreAuthIntentCreatePortV1,
   input: McpOAuthProductionPreAuthIntentCreatePortInputV1,
@@ -409,6 +439,14 @@ function createPreAuthIntentWithTimeout(
       reject(error);
     }
   });
+}
+
+function normalizeStringSet(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) return [];
+  return Object.freeze(
+    [...new Set(value.map((item) => (typeof item === "string" ? item.trim() : "")).filter((item) => item.length > 0))]
+      .sort(),
+  );
 }
 
 function routeNameForPath(path: string): McpOAuthProductionRouteNameV1 | undefined {
