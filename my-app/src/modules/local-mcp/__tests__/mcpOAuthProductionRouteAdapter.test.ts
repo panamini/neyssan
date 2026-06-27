@@ -861,6 +861,9 @@ describe("MCP OAuth production route adapter", () => {
     });
     expect(dependencies.createPreAuthIntent).toHaveBeenCalledTimes(1);
     expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(1);
+    expect(dependencies.checkPreAuthQuota.mock.calls[0]?.[0]).toMatchObject({
+      callerKey: "unknown",
+    });
     expect(dependencies.createPreAuthIntent.mock.calls[0]?.[0]).toMatchObject({
       preAuthHandleHash: HANDLE_HASH,
       now: NOW,
@@ -882,6 +885,49 @@ describe("MCP OAuth production route adapter", () => {
     expect(activation.providerAdapter.exchangeAuthorizationCode).not.toHaveBeenCalled();
     expect(activation.executeAccountLinkLifecycle).not.toHaveBeenCalled();
     expectNoRouteLeakage(response, [], { allowRawHandle: true });
+  });
+
+  it("matches the production authorization guard against the trimmed provider resource", async () => {
+    const dependencies = routeDependencies(makeCtx());
+    const config = buildMcpOAuthProductionRouteAdapterConfig({
+      flags: { runtime: "1", approved: "1", routeWiring: "1" },
+      providerConfig: {
+        ...PROVIDER_CONFIG,
+        resource: ` ${RESOURCE} `,
+      },
+      activationDependencies: activationDependencies(),
+    });
+
+    const response = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      config,
+      dependencies,
+    );
+
+    expect(response).toMatchObject({ handled: true, status: 303 });
+    expect(dependencies.createPreAuthIntent).toHaveBeenCalledTimes(1);
+  });
+
+  it("scopes pre-auth quota checks to the forwarded caller when present", async () => {
+    const dependencies = routeDependencies(makeCtx());
+
+    const response = await handleMcpOAuthProductionRouteRequest(
+      {
+        ...request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+        headers: {
+          host: "mcp.twoweeks.example.test",
+          "x-forwarded-for": " 203.0.113.9, 198.51.100.1 ",
+        },
+        remoteAddress: "198.51.100.9",
+      },
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({ handled: true, status: 303 });
+    expect(dependencies.checkPreAuthQuota.mock.calls[0]?.[0]).toMatchObject({
+      callerKey: "203.0.113.9",
+    });
   });
 
   it("refreshes the pre-auth create deadline after quota succeeds", async () => {

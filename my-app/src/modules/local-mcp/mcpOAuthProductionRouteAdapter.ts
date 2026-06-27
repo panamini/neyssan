@@ -55,6 +55,7 @@ export type McpOAuthProductionPreAuthQuotaPortInputV1 = Readonly<{
   authorizationPageOrigin: string;
   clientId: string;
   resource: string;
+  callerKey: string;
   now: number;
   version: 1;
 }>;
@@ -140,6 +141,7 @@ export type McpOAuthProductionRouteAdapterRequestV1 = Readonly<{
   path: string;
   url: string;
   headers?: Readonly<Record<string, string | readonly string[] | undefined>>;
+  remoteAddress?: string;
 }>;
 
 export type McpOAuthProductionRouteAdapterResponseV1 = Readonly<{
@@ -275,6 +277,7 @@ async function handleAuthorizationRequest(
     authorizationPageOrigin: projection.serverOnly.authorizationPage.origin,
     clientId: projection.serverOnly.providerForwardRequest.clientId,
     resource: projection.serverOnly.providerForwardRequest.resource,
+    callerKey: readQuotaCallerKey(request),
     now,
     version: 1,
   } satisfies McpOAuthProductionPreAuthQuotaPortInputV1);
@@ -338,8 +341,11 @@ function buildAuthorizationRequestGuard(
   input: McpOAuthProductionRoutePreflightInputV1,
 ): McpOAuthProductionAuthorizationRequestGuardV1 {
   const providerConfig = input.providerConfig;
+  const expectedResource = typeof providerConfig?.resource === "string"
+    ? providerConfig.resource.trim()
+    : undefined;
   return Object.freeze({
-    expectedResource: typeof providerConfig?.resource === "string" ? providerConfig.resource : undefined,
+    expectedResource,
     allowedClientIds: normalizeStringSet(providerConfig?.allowedClientIds),
     version: 1,
   });
@@ -618,6 +624,33 @@ function requestHostMatchesAuthorizationOrigin(
     parsedHost.hostname === origin.hostname &&
     parsedHost.port === origin.port
   );
+}
+
+function readQuotaCallerKey(request: McpOAuthProductionRouteAdapterRequestV1): string {
+  return (
+    readForwardedCallerKey(request.headers?.["x-forwarded-for"]) ??
+    readHeaderCallerKey(request.headers?.["cf-connecting-ip"]) ??
+    readHeaderCallerKey(request.headers?.["x-real-ip"]) ??
+    normalizeCallerKey(request.remoteAddress) ??
+    "unknown"
+  );
+}
+
+function readForwardedCallerKey(value: string | readonly string[] | undefined): string | undefined {
+  const header = readSingleHeaderValue(value);
+  if (!header) return undefined;
+  return normalizeCallerKey(header.split(",")[0] ?? "");
+}
+
+function readHeaderCallerKey(value: string | readonly string[] | undefined): string | undefined {
+  const header = readSingleHeaderValue(value);
+  return header ? normalizeCallerKey(header) : undefined;
+}
+
+function normalizeCallerKey(value: string | undefined): string | undefined {
+  const normalized = value?.trim();
+  if (!normalized || normalized.length > 128 || hasControlCharacter(normalized)) return undefined;
+  return normalized;
 }
 
 function readGeneratedHandle(

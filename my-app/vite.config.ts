@@ -261,7 +261,11 @@ async function respondToMcpOAuthProductionRouteRequest(
       url: req.url ?? pathName,
       headers: {
         host: headerValue(req.headers.host),
+        "x-forwarded-for": headerValue(req.headers["x-forwarded-for"]),
+        "x-real-ip": headerValue(req.headers["x-real-ip"]),
+        "cf-connecting-ip": headerValue(req.headers["cf-connecting-ip"]),
       },
+      remoteAddress: req.socket.remoteAddress,
     },
     config,
     dependencies,
@@ -490,7 +494,7 @@ function readProductionMcpOAuthAuthorizationRequestConfig(
 }
 
 const checkProductionPreAuthQuota: NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["checkPreAuthQuota"]> = async (input) => {
-  const key = `${input.authorizationPageOrigin}\n${input.clientId}\n${input.resource}`;
+  const key = `${input.authorizationPageOrigin}\n${input.clientId}\n${input.resource}\n${input.callerKey}`;
   const existing = productionPreAuthQuotaBuckets.get(key);
   const bucket =
     existing && input.now - existing.windowStartedAt < PRE_AUTH_QUOTA_WINDOW_MS

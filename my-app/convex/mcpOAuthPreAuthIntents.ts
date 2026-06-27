@@ -305,7 +305,7 @@ export const internalCreateMcpOAuthPreAuthIntent = internalMutation({
     if (!isValidStorageTimestamp(args.now) || args.now > MAX_SAFE_TIMESTAMP_BEFORE_TTL) {
       return denyCreate("invalid_input");
     }
-    if (!hasValidCreateDeadline(args.deadlineEpochMs, args.timeoutMs, args.now)) {
+    if (!hasValidCreateDeadline(args.deadlineEpochMs, args.timeoutMs, args.now, Date.now())) {
       return denyCreate("invalid_input");
     }
     if (!isValidPreAuthHandleHash(args.preAuthHandleHash)) return denyCreate("invalid_handle_hash");
@@ -346,10 +346,15 @@ export const internalCreateMcpOAuthPreAuthIntent = internalMutation({
   },
 });
 
-function hasValidCreateDeadline(deadlineEpochMs: unknown, timeoutMs: unknown, now: number): boolean {
+function hasValidCreateDeadline(
+  deadlineEpochMs: unknown,
+  timeoutMs: unknown,
+  now: number,
+  serverNow: number,
+): boolean {
   if (deadlineEpochMs === undefined && timeoutMs === undefined) return true;
   if (!isValidStorageTimestamp(deadlineEpochMs) || !isValidStorageTimestamp(timeoutMs)) return false;
-  return timeoutMs > 0 && deadlineEpochMs >= now && deadlineEpochMs - now === timeoutMs;
+  return timeoutMs > 0 && deadlineEpochMs >= now && deadlineEpochMs - now === timeoutMs && serverNow <= deadlineEpochMs;
 }
 
 export const internalClaimMcpOAuthPreAuthIntent = internalMutation({
