@@ -632,6 +632,48 @@ describe("MCP OAuth production route adapter", () => {
     expectNoRouteLeakage(response);
   });
 
+  it("maps invalid quota requests to bad request instead of throttling", async () => {
+    const ctx = makeCtx();
+    const dependencies = {
+      ...routeDependencies(ctx),
+      checkPreAuthQuota: vi.fn(async () => ({
+        kind: "mcp_oauth_pre_auth_quota_result",
+        ok: false,
+        reason: "invalid_request",
+        safeFailure: {
+          code: "mcp_oauth_pre_auth_quota_denied",
+          message: "Pre-auth quota denied.",
+          safeForModel: true,
+          sensitiveValuesEchoed: false,
+          version: 1,
+        },
+        safeForLogging: true,
+        version: 1,
+      })),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+
+    const response = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 400,
+      json: {
+        status: "blocked",
+        reason: "pre_auth_quota_denied",
+        route: "oauth_authorize",
+        preAuthIntentCreated: false,
+      },
+    });
+    expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(1);
+    expect(dependencies.createPreAuthIntent).not.toHaveBeenCalled();
+    expect(ctx.preAuthRows).toHaveLength(0);
+    expectNoRouteLeakage(response);
+  });
+
   it("maps thrown pre-auth storage failures to retryable dependency failure", async () => {
     const ctx = makeCtx();
     const dependencies = {
@@ -850,6 +892,55 @@ describe("MCP OAuth production route adapter", () => {
     expectNoRouteLeakage(response);
   });
 
+  it("rejects storage success that expires before post-write validation", async () => {
+    const dependencies = {
+      ...routeDependencies(makeCtx()),
+      now: vi.fn()
+        .mockReturnValueOnce(NOW)
+        .mockReturnValueOnce(NOW + 2),
+      createPreAuthIntent: vi.fn(async () => ({
+        kind: "mcp_oauth_pre_auth_intent_create_result",
+        ok: true,
+        reason: "created",
+        serverOnly: {
+          status: "pre_auth_pending",
+          expiresAt: NOW + 1,
+          containsOwnerIdentity: false,
+          containsProviderSubject: false,
+          containsAccountLinkId: false,
+          authorizationGranted: false,
+          consentCompleted: false,
+          authorizationCodeIssued: false,
+          tokenIssued: false,
+          accountLinkCreated: false,
+          version: 1,
+        },
+        modelVisible: false,
+        safeForLogging: false,
+        version: 1,
+      })),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+
+    const response = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 503,
+      json: {
+        status: "blocked",
+        reason: "pre_auth_create_failed",
+        preAuthIntentCreated: false,
+      },
+    });
+    expect(dependencies.now).toHaveBeenCalledTimes(2);
+    expect(dependencies.createPreAuthIntent).toHaveBeenCalledTimes(1);
+    expectNoRouteLeakage(response);
+  });
+
   it("bounds stalled pre-auth storage before returning a production authorize response", async () => {
     vi.useFakeTimers();
     const dependencies = {
@@ -907,7 +998,7 @@ describe("MCP OAuth production route adapter", () => {
       );
 
       expect(response).toMatchObject({ handled: true, status: 303 });
-      expect(dependencies.now).toHaveBeenCalledTimes(1);
+      expect(dependencies.now).toHaveBeenCalledTimes(2);
       expect(ctx.preAuthRows).toHaveLength(1);
       expect(ctx.preAuthRows[0]).toMatchObject({
         status: "pre_auth_pending",

@@ -282,7 +282,12 @@ async function handleAuthorizationRequest(
     return failClosedResponse("oauth_authorize", preflight, "pre_auth_quota_denied", 503);
   }
   if (!isQuotaAccepted(quotaResult)) {
-    return failClosedResponse("oauth_authorize", preflight, "pre_auth_quota_denied", 429);
+    return failClosedResponse(
+      "oauth_authorize",
+      preflight,
+      "pre_auth_quota_denied",
+      statusForPreAuthQuotaFailure(quotaResult),
+    );
   }
 
   const codec = dependencies.handleCodec ?? defaultMcpOAuthContinuationHandleCodecV1;
@@ -309,7 +314,8 @@ async function handleAuthorizationRequest(
   } catch {
     return failClosedResponse("oauth_authorize", preflight, "pre_auth_create_failed", 503);
   }
-  if (!isPreAuthCreateSuccess(createResult, now)) {
+  const validationNow = readNow(dependencies);
+  if (!isPreAuthCreateSuccess(createResult, validationNow)) {
     return failClosedResponse(
       "oauth_authorize",
       preflight,
@@ -369,6 +375,12 @@ function isQuotaAccepted(
     value.safeForLogging === true &&
     value.version === 1
   );
+}
+
+function statusForPreAuthQuotaFailure(
+  value: McpOAuthProductionPreAuthQuotaPortResultV1,
+): 400 | 429 {
+  return isPlainRecord(value) && value.ok === false && value.reason === "invalid_request" ? 400 : 429;
 }
 
 function createPreAuthIntentWithTimeout(
