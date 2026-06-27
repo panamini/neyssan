@@ -288,6 +288,53 @@ describe("MCP OAuth production activation boundary", () => {
     expect(dependencies.executeAccountLinkLifecycle).not.toHaveBeenCalled();
   });
 
+  it("refuses malformed provider scopes without throwing or running account-link lifecycle", async () => {
+    const dependencies = buildDependencies();
+    vi.mocked(dependencies.providerAdapter.exchangeAuthorizationCode).mockResolvedValueOnce({
+      kind: "mcp_oauth_production_token_exchange_result",
+      ok: true,
+      reason: "exchanged",
+      serverOnly: {
+        provider: "stytch",
+        subject: FIXTURE_PROVIDER_SUBJECT,
+        issuer: "https://stytch.example.test/",
+        resource: "https://mcp.twoweeks.example.test/resource",
+        providerEnvironment: "prod_us_1",
+        clientId: FIXTURE_CLIENT_ID,
+        grantedScopes: 123,
+        expiresAtEpochSeconds: NOW_EPOCH_SECONDS + 3_600,
+        verifiedAtEpochSeconds: NOW_EPOCH_SECONDS,
+        tokenMaterial: "handled_by_provider_adapter",
+        accessTokenStored: false,
+        refreshTokenStored: false,
+        version: 1,
+      },
+      modelVisible: false,
+      safeForLogging: false,
+      version: 1,
+    } as never);
+
+    await expect(executeMcpOAuthProductionActivation(buildInput(enabledConfig(), dependencies))).resolves.toMatchObject({
+      allowed: false,
+      reason: "token_exchange_failed",
+      safeRefusal: { tokenEchoed: false, authorizationCodeEchoed: false },
+    });
+    expect(dependencies.executeAccountLinkLifecycle).not.toHaveBeenCalled();
+  });
+
+  it("refuses thrown account-link lifecycle hooks without rejecting activation", async () => {
+    const dependencies = buildDependencies();
+    vi.mocked(dependencies.executeAccountLinkLifecycle).mockRejectedValueOnce(new Error("lifecycle unavailable"));
+
+    await expect(executeMcpOAuthProductionActivation(buildInput(enabledConfig(), dependencies))).resolves.toMatchObject({
+      allowed: false,
+      reason: "account_link_lifecycle_failed",
+      safeRefusal: { tokenEchoed: false, authorizationCodeEchoed: false },
+    });
+    expect(dependencies.providerAdapter.exchangeAuthorizationCode).toHaveBeenCalledTimes(1);
+    expect(dependencies.executeAccountLinkLifecycle).toHaveBeenCalledTimes(1);
+  });
+
   it("refuses forged nested provider config without throwing or calling provider ports", async () => {
     const dependencies = buildDependencies();
     const forgedConfig = {

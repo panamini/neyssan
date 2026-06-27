@@ -339,9 +339,14 @@ export async function executeMcpOAuthProductionActivation(
     return deny("token_exchange_failed", true);
   }
 
-  const lifecycleResult = await executeAccountLinkLifecycle(
-    buildAccountLinkLifecycleRequest(parsed, config.providerConfig, exchangeResult.serverOnly),
-  );
+  let lifecycleResult: Awaited<ReturnType<McpOAuthProductionAccountLinkLifecyclePortV1>>;
+  try {
+    lifecycleResult = await executeAccountLinkLifecycle(
+      buildAccountLinkLifecycleRequest(parsed, config.providerConfig, exchangeResult.serverOnly),
+    );
+  } catch {
+    return deny("account_link_lifecycle_failed", true);
+  }
   if (!isAcceptedLifecycleResult(lifecycleResult, exchangeResult.serverOnly, parsed.trustedOwner)) {
     return deny("account_link_lifecycle_failed", true);
   }
@@ -732,9 +737,10 @@ function readSafeEpochSeconds(value: unknown): number | undefined {
 }
 
 function hasRequiredScopes(
-  grantedScopes: readonly unknown[],
+  grantedScopes: unknown,
   requiredScopes: readonly McpOAuthProductionActivationReadScopeV1[],
 ): grantedScopes is readonly McpOAuthProductionActivationReadScopeV1[] {
+  if (!Array.isArray(grantedScopes)) return false;
   const normalized = new Set<McpOAuthProductionActivationReadScopeV1>();
   for (const scope of grantedScopes) {
     if (!isApprovedReadScope(scope)) return false;
