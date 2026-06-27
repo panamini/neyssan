@@ -408,7 +408,12 @@ function isPreAuthCreateSuccess(
 }
 
 function readNow(dependencies: McpOAuthProductionRouteAdapterDependenciesV1): number {
-  const now = dependencies.now?.() ?? Date.now();
+  let now: number;
+  try {
+    now = dependencies.now?.() ?? Date.now();
+  } catch {
+    now = Date.now();
+  }
   return Number.isSafeInteger(now) && now >= 0 ? now : Date.now();
 }
 

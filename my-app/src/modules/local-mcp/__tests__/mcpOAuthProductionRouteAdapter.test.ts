@@ -357,6 +357,39 @@ describe("MCP OAuth production route adapter", () => {
     expectNoRouteLeakage(response, [], { allowRawHandle: true });
   });
 
+  it("keeps production authorize guarded when the injected clock throws", async () => {
+    const fallbackNow = NOW + 1_000;
+    const dateNow = vi.spyOn(Date, "now").mockReturnValue(fallbackNow);
+    const ctx = makeCtx();
+    const dependencies = {
+      ...routeDependencies(ctx),
+      now: vi.fn(() => {
+        throw new Error("clock unavailable");
+      }),
+    };
+
+    try {
+      const response = await handleMcpOAuthProductionRouteRequest(
+        request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+        routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+        dependencies,
+      );
+
+      expect(response).toMatchObject({ handled: true, status: 303 });
+      expect(dependencies.now).toHaveBeenCalledTimes(1);
+      expect(ctx.preAuthRows).toHaveLength(1);
+      expect(ctx.preAuthRows[0]).toMatchObject({
+        status: "pre_auth_pending",
+        preAuthHandleHash: HANDLE_HASH,
+        createdAt: fallbackNow,
+        updatedAt: fallbackNow,
+      });
+      expectNoRouteLeakage(response, [], { allowRawHandle: true });
+    } finally {
+      dateNow.mockRestore();
+    }
+  });
+
   it("keeps /oauth/callback and /mcp guarded inert when production preflight is ready", async () => {
     const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
 
