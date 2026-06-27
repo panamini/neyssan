@@ -212,6 +212,32 @@ describe("mcpOperationalStatus", () => {
     });
   });
 
+  it("fails closed when raw production OAuth activation provider config has invalid nested shape", () => {
+    const parsedConfig = buildMcpOAuthProductionActivationConfig({
+      flags: { runtime: "1", approved: "1" },
+      providerConfig: PRODUCTION_OAUTH_PROVIDER_CONFIG,
+    });
+
+    expect(
+      buildMcpOperationalProductionOAuthActivationStatus({
+        ...parsedConfig,
+        providerConfig: {
+          ...PRODUCTION_OAUTH_PROVIDER_CONFIG,
+          issuer: "http://stytch.example.test/",
+        },
+      }),
+    ).toEqual({
+      kind: "mcp_operational_status",
+      capability: "production_oauth_activation",
+      enabled: false,
+      configValid: false,
+      featureState: "misconfigured",
+      category: "config_invalid",
+      valuesExposed: false,
+      version: 1,
+    });
+  });
+
   it("fails closed when production OAuth activation config has unknown keys", () => {
     const parsedConfig = buildMcpOAuthProductionActivationConfig({
       flags: { runtime: "1", approved: "1" },

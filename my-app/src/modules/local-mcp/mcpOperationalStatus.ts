@@ -6,6 +6,7 @@ import {
   MCP_OAUTH_PRODUCTION_APPROVED_FLAG,
   MCP_OAUTH_PRODUCTION_RUNTIME_FLAG,
 } from "./mcpOAuthProductionActivationBoundary";
+import { TWOWEEKS_APPLICATIONS_READ_SCOPE } from "./mcpAuthPolicyBoundary";
 
 export type McpOperationalStatusCapabilityV1 =
   | "manual_handoff"
@@ -35,6 +36,7 @@ const STATUS_FORBIDDEN_KEY_RE =
   /(?:authorization|cookie|session|secret|clientsecret|providersubject|stytchsubject|clerk|claims|jwt|jwks|raw|url|metadata|labels|error|stack|artifact|answer|source)/iu;
 const STATUS_FORBIDDEN_VALUE_RE =
   /\b(?:bearer|access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|api[_-]?key|authorization|cookie|session|credential|private_fact|never_use|generated artifact|answer text|source quote)\b|https?:\/\/\S+|\beyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/iu;
+const STATUS_OPAQUE_IDENTIFIER_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{1,191}$/u;
 const PRODUCTION_OAUTH_ACTIVATION_CONFIG_KEYS = new Set([
   "kind",
   "enabled",
@@ -48,6 +50,15 @@ const PRODUCTION_OAUTH_ACTIVATION_CONFIG_KEYS = new Set([
   "tokenStorage",
   "refreshTokenStorage",
   "defaultProductionBehavior",
+  "version",
+]);
+const PRODUCTION_OAUTH_PROVIDER_CONFIG_KEYS = new Set([
+  "provider",
+  "issuer",
+  "resource",
+  "providerEnvironment",
+  "allowedClientIds",
+  "requiredReadScopes",
   "version",
 ]);
 const PRODUCTION_OAUTH_ACTIVATION_CONFIG_SHAPE_CHECKS = [
@@ -287,8 +298,8 @@ function readProductionOAuthActivationConfig(
   if (!requiredFlags) {
     return undefined;
   }
-  const providerConfigPresent = value.providerConfig !== undefined;
-  if (providerConfigPresent && !isPlainRecord(value.providerConfig)) {
+  const providerConfigPresent = readProductionOAuthActivationProviderConfigPresent(value.providerConfig);
+  if (providerConfigPresent === undefined) {
     return undefined;
   }
 
@@ -310,6 +321,36 @@ function hasUnknownProductionOAuthActivationConfigKeys(
   value: Record<string, unknown>,
 ): boolean {
   return Object.keys(value).some((key) => !PRODUCTION_OAUTH_ACTIVATION_CONFIG_KEYS.has(key));
+}
+
+function readProductionOAuthActivationProviderConfigPresent(
+  value: unknown,
+): boolean | undefined {
+  if (value === undefined) {
+    return false;
+  }
+
+  if (!isPlainRecord(value)) {
+    return undefined;
+  }
+
+  if (Object.keys(value).some((key) => !PRODUCTION_OAUTH_PROVIDER_CONFIG_KEYS.has(key))) {
+    return undefined;
+  }
+
+  if (
+    value.provider !== "stytch" ||
+    !isSafeProductionOAuthConfigHttpsUrl(value.issuer, "issuer") ||
+    !isSafeProductionOAuthConfigHttpsUrl(value.resource, "resource") ||
+    !isSafeProductionOAuthOpaqueIdentifier(value.providerEnvironment) ||
+    !isSafeProductionOAuthOpaqueIdentifierList(value.allowedClientIds) ||
+    !isCanonicalProductionOAuthReadScopeList(value.requiredReadScopes) ||
+    value.version !== 1
+  ) {
+    return undefined;
+  }
+
+  return true;
 }
 
 function readProductionOAuthActivationRequiredFlags(
@@ -346,6 +387,58 @@ function isProductionOAuthActivationFlagValue(
   value: unknown,
 ): value is "1" | "not_enabled" {
   return value === "1" || value === "not_enabled";
+}
+
+function isSafeProductionOAuthConfigHttpsUrl(
+  value: unknown,
+  kind: "issuer" | "resource",
+): boolean {
+  if (typeof value !== "string" || value.length === 0 || hasControlCharacter(value)) {
+    return false;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.hash) {
+    return false;
+  }
+  if (kind === "issuer" && parsed.search) {
+    return false;
+  }
+  return Boolean(parsed.hostname) && !parsed.hostname.includes("*");
+}
+
+function isSafeProductionOAuthOpaqueIdentifier(value: unknown): boolean {
+  return typeof value === "string" && STATUS_OPAQUE_IDENTIFIER_RE.test(value.trim());
+}
+
+function isSafeProductionOAuthOpaqueIdentifierList(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((item) => isSafeProductionOAuthOpaqueIdentifier(item))
+  );
+}
+
+function isCanonicalProductionOAuthReadScopeList(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.length === 1 &&
+    value[0] === TWOWEEKS_APPLICATIONS_READ_SCOPE
+  );
+}
+
+function hasControlCharacter(value: string): boolean {
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    if (code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
 }
 
 export function buildMcpOperationalEgressStatus(
