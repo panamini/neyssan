@@ -2,6 +2,7 @@ import {
   MCP_OAUTH_PRODUCTION_APPROVED_FLAG,
   MCP_OAUTH_PRODUCTION_RUNTIME_FLAG,
   buildMcpOAuthProductionActivationConfig,
+  type McpOAuthProductionActivationDependenciesV1,
   type McpOAuthProductionProviderConfigV1,
 } from "./mcpOAuthProductionActivationBoundary";
 import {
@@ -18,6 +19,7 @@ export type McpOAuthProductionRoutePreflightDecisionV1 =
   | "blocked_missing_approval_flag"
   | "blocked_misconfigured_provider"
   | "blocked_endpoint_exposure_not_enabled"
+  | "blocked_missing_activation_dependency"
   | "ready_to_wire";
 
 export type McpOAuthProductionRoutePreflightFlagsV1 = Readonly<{
@@ -29,6 +31,7 @@ export type McpOAuthProductionRoutePreflightFlagsV1 = Readonly<{
 export type McpOAuthProductionRoutePreflightInputV1 = Readonly<{
   flags?: McpOAuthProductionRoutePreflightFlagsV1;
   providerConfig?: Partial<McpOAuthProductionProviderConfigV1>;
+  activationDependencies?: Partial<McpOAuthProductionActivationDependenciesV1>;
 }>;
 
 export type McpOAuthProductionRoutePreflightResultV1 = Readonly<{
@@ -59,6 +62,12 @@ export type McpOAuthProductionRoutePreflightResultV1 = Readonly<{
     configValid: boolean;
     featureState: McpOperationalStatusV1["featureState"];
     category?: McpOperationalStatusV1["category"];
+    valuesExposed: false;
+    version: 1;
+  }>;
+  activationDependencies: Readonly<{
+    providerAdapterAvailable: boolean;
+    accountLinkLifecycleAvailable: boolean;
     valuesExposed: false;
     version: 1;
   }>;
@@ -99,12 +108,14 @@ export function buildMcpOAuthProductionRoutePreflight(
   const operationalStatusAgrees =
     providerConfigValid &&
     doesOperationalStatusAgreeWithActivationConfig(operationalStatus);
+  const activationDependencies = readActivationDependencyReadiness(input.activationDependencies);
   const decision = decideRoutePreflight({
     runtimeEnabled,
     approved,
     routeWiringEnabled,
     providerConfigValid,
     operationalStatusAgrees,
+    activationDependenciesReady: activationDependencies.ready,
   });
 
   return Object.freeze({
@@ -138,6 +149,12 @@ export function buildMcpOAuthProductionRoutePreflight(
       valuesExposed: false,
       version: 1,
     }),
+    activationDependencies: Object.freeze({
+      providerAdapterAvailable: activationDependencies.providerAdapterAvailable,
+      accountLinkLifecycleAvailable: activationDependencies.accountLinkLifecycleAvailable,
+      valuesExposed: false,
+      version: 1,
+    }),
     capabilities: Object.freeze({
       publicEndpointExposure: "not_exposed",
       routeRegistration: "not_registered",
@@ -163,17 +180,55 @@ function decideRoutePreflight(input: {
   routeWiringEnabled: boolean;
   providerConfigValid: boolean;
   operationalStatusAgrees: boolean;
+  activationDependenciesReady: boolean;
 }): McpOAuthProductionRoutePreflightDecisionV1 {
-  if (!input.runtimeEnabled && !input.approved && !input.routeWiringEnabled) {
-    return "disabled";
-  }
-  if (!input.runtimeEnabled) return "blocked_missing_runtime_flag";
-  if (!input.approved) return "blocked_missing_approval_flag";
-  if (!input.routeWiringEnabled) return "blocked_endpoint_exposure_not_enabled";
-  if (!input.providerConfigValid || !input.operationalStatusAgrees) {
-    return "blocked_misconfigured_provider";
-  }
-  return "ready_to_wire";
+  const blockedDecision = (
+    [
+      [isFullyDisabled(input), "disabled"],
+      [!input.runtimeEnabled, "blocked_missing_runtime_flag"],
+      [!input.approved, "blocked_missing_approval_flag"],
+      [!input.routeWiringEnabled, "blocked_endpoint_exposure_not_enabled"],
+      [isProviderOrStatusMisconfigured(input), "blocked_misconfigured_provider"],
+      [!input.activationDependenciesReady, "blocked_missing_activation_dependency"],
+    ] as const
+  ).find(([blocked]) => blocked)?.[1];
+  return blockedDecision ?? "ready_to_wire";
+}
+
+function isFullyDisabled(input: {
+  runtimeEnabled: boolean;
+  approved: boolean;
+  routeWiringEnabled: boolean;
+}): boolean {
+  return !input.runtimeEnabled && !input.approved && !input.routeWiringEnabled;
+}
+
+function isProviderOrStatusMisconfigured(input: {
+  providerConfigValid: boolean;
+  operationalStatusAgrees: boolean;
+}): boolean {
+  return !input.providerConfigValid || !input.operationalStatusAgrees;
+}
+
+function readActivationDependencyReadiness(
+  dependencies: Partial<McpOAuthProductionActivationDependenciesV1> | undefined,
+): {
+  ready: boolean;
+  providerAdapterAvailable: boolean;
+  accountLinkLifecycleAvailable: boolean;
+} {
+  const providerAdapter = dependencies?.providerAdapter;
+  const providerAdapterAvailable =
+    providerAdapter?.provider === "stytch" &&
+    providerAdapter.version === 1 &&
+    typeof providerAdapter.exchangeAuthorizationCode === "function";
+  const accountLinkLifecycleAvailable =
+    typeof dependencies?.executeAccountLinkLifecycle === "function";
+  return {
+    ready: providerAdapterAvailable && accountLinkLifecycleAvailable,
+    providerAdapterAvailable,
+    accountLinkLifecycleAvailable,
+  };
 }
 
 function doesOperationalStatusAgreeWithActivationConfig(

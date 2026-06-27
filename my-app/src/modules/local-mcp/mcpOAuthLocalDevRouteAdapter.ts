@@ -32,6 +32,15 @@ const DEFAULT_MAX_STATE_LENGTH = 512;
 const DEFAULT_MAX_ID_TOKEN_HINT_LENGTH = 1_024;
 const DEFAULT_MAX_CONTINUATION_URL_LENGTH = 2_048;
 const DEFAULT_MAX_RAW_HANDLE_LENGTH = 256;
+const DEFAULT_APPROVED_OPTIONAL_SCOPES = [
+  "openid",
+  "email",
+  "profile",
+] as const satisfies readonly McpOAuthAuthorizationOptionalScopeV1[];
+const DEFAULT_ALLOWED_OPTIONAL_PARAMETERS = [
+  "nonce",
+  "prompt",
+] as const satisfies readonly McpOAuthAuthorizationOptionalParameterV1[];
 const INTENT_HANDLE_HASH_PATTERN = /^[0-9a-f]{64}$/u;
 
 export type McpOAuthPreAuthIntentCreatePortInputV1 = Readonly<{
@@ -206,8 +215,12 @@ export function buildMcpOAuthLocalDevRouteAdapterConfig(
     canonicalResource,
     allowedRedirectUris,
     requiredScope: TWOWEEKS_APPLICATIONS_READ_SCOPE,
-    approvedOptionalScopes: input.approvedOptionalScopes ?? ["openid", "email", "profile"],
-    allowedOptionalParameters: input.allowedOptionalParameters ?? ["nonce", "prompt"],
+    approvedOptionalScopes: freezeOptionalScopes(
+      input.approvedOptionalScopes ?? DEFAULT_APPROVED_OPTIONAL_SCOPES,
+    ),
+    allowedOptionalParameters: freezeOptionalParameters(
+      input.allowedOptionalParameters ?? DEFAULT_ALLOWED_OPTIONAL_PARAMETERS,
+    ),
     maxUrlLength: input.maxUrlLength ?? DEFAULT_MAX_URL_LENGTH,
     maxParameterLength: input.maxParameterLength ?? DEFAULT_MAX_PARAMETER_LENGTH,
     maxStateLength: input.maxStateLength ?? DEFAULT_MAX_STATE_LENGTH,
@@ -668,6 +681,18 @@ function readCanonicalOrigin(value: string, allowHttpLocalhost: boolean): string
 
 function uniqueNonEmptyStrings(values: readonly string[]): readonly string[] {
   return Object.freeze([...new Set(values.map((value) => value.trim()).filter((value) => value.length > 0))]);
+}
+
+function freezeOptionalScopes(
+  values: readonly McpOAuthAuthorizationOptionalScopeV1[],
+): readonly McpOAuthAuthorizationOptionalScopeV1[] {
+  return Object.freeze([...values]);
+}
+
+function freezeOptionalParameters(
+  values: readonly McpOAuthAuthorizationOptionalParameterV1[],
+): readonly McpOAuthAuthorizationOptionalParameterV1[] {
+  return Object.freeze([...values]);
 }
 
 function readFirstHeaderValue(value: string | readonly string[] | undefined): string {
