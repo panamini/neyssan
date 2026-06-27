@@ -1,10 +1,16 @@
 // @vitest-environment node
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createLocalMcpDevEndpointPlugin } from "../../../../vite.config";
+import {
+  internalCreateMcpOAuthPreAuthIntent,
+  type McpOAuthPreAuthIntentRecordV1,
+} from "../../../../convex/mcpOAuthPreAuthIntents";
 import { TWOWEEKS_APPLICATIONS_READ_SCOPE } from "../mcpAuthPolicyBoundary";
+import type { McpOAuthAuthorizationRequestBoundaryConfigV1 } from "../mcpOAuthAuthorizationRequestBoundary";
 import {
   buildMcpOAuthLocalDevRouteAdapterConfig,
   handleMcpOAuthLocalDevRouteRequest,
@@ -20,18 +26,34 @@ import {
   MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
   MCP_OAUTH_PRODUCTION_CALLBACK_PATH,
   MCP_OAUTH_PRODUCTION_MCP_PATH,
+  type McpOAuthProductionRouteAdapterDependenciesV1,
   type McpOAuthProductionRouteAdapterRequestV1,
   type McpOAuthProductionRoutePathV1,
 } from "../mcpOAuthProductionRouteAdapter";
 import { MCP_OAUTH_PRODUCTION_ROUTE_WIRING_FLAG } from "../mcpOAuthProductionRoutePreflightBoundary";
+import {
+  defaultMcpOAuthContinuationHandleCodecV1,
+  type McpOAuthContinuationHandleCodecV1,
+} from "../mcpOAuthLoginReturnContinuationBoundary";
+import {
+  MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER,
+  MCP_OAUTH_CONTINUATION_PATH,
+  MCP_OAUTH_SIGN_IN_RETURN_PARAMETER,
+} from "../../../pages/sign-in-return";
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const SOURCE_FILE = resolve(TEST_DIR, "../mcpOAuthProductionRouteAdapter.ts");
 const VITE_CONFIG_SOURCE = resolve(TEST_DIR, "../../../../vite.config.ts");
 const APP_ORIGIN = "http://localhost:5173";
+const PROD_APP_ORIGIN = "https://mcp.twoweeks.example.test";
 const REDIRECT_URI = "https://chatgpt.example.test/connector/oauth/callback-fixture";
 const RESOURCE = "https://mcp.twoweeks.example.test/resource";
 const CLIENT_ID = "chatgpt_apps_sdk_client";
+const STATE = "opaque_state_1234567890";
+const PKCE = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const RAW_HANDLE = "A".repeat(43);
+const HANDLE_HASH = sha256Hex(RAW_HANDLE);
+const NOW = Date.parse("2026-06-27T09:00:00.000Z");
 const FORBIDDEN_ROUTE_SOURCE_PATTERNS = Object.freeze([
   /\b(?:fetch|axios|XMLHttpRequest|WebSocket|EventSource)\b/u,
   /from\s+["']@stytch|Stytch|OAuthProvider/u,
@@ -48,6 +70,17 @@ const FORBIDDEN_PREFLIGHT_REIMPLEMENTATION_PATTERNS = Object.freeze([
   /MCP_OAUTH_PRODUCTION_APPROVED_FLAG/u,
   /routeWiringEnabled\s*=/u,
 ] as const);
+
+type StoredPreAuthIntentRecord = McpOAuthPreAuthIntentRecordV1 & {
+  _id: string;
+  _creationTime: number;
+};
+
+type Constraint = Readonly<{ field: string; op: "eq"; value: unknown }>;
+type IndexConstraintBuilder = Readonly<{
+  eq: (field: string, value: unknown) => IndexConstraintBuilder;
+}>;
+
 const PROVIDER_CONFIG = {
   provider: "stytch",
   issuer: "https://stytch.example.test/",
@@ -57,30 +90,13 @@ const PROVIDER_CONFIG = {
   requiredReadScopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
   version: 1,
 } as const;
-const ACTIVATION_DEPENDENCIES = {
-  providerAdapter: {
-    provider: "stytch",
-    exchangeAuthorizationCode: async () => ({
-      kind: "mcp_oauth_production_token_exchange_result",
-      ok: false,
-      reason: "not_executed_in_route_adapter_test",
-      safeFailure: { code: "not_executed" },
-      modelVisible: false,
-      safeForLogging: true,
-      version: 1,
-    }),
-    version: 1,
-  },
-  executeAccountLinkLifecycle: async () => ({
-    kind: "mcp_account_link_lifecycle_result",
-    operation: "link",
-    ok: false,
-    reason: "not_executed_in_route_adapter_test",
-    safeFailure: { code: "not_executed" },
-    modelVisible: false,
-    version: 1,
-  }),
-} as const satisfies McpOAuthProductionActivationDependenciesV1;
+
+const deterministicCodec: McpOAuthContinuationHandleCodecV1 = Object.freeze({
+  generate: () => Object.freeze({ rawHandle: RAW_HANDLE, intentHandleHash: HANDLE_HASH }),
+  validate: (rawHandle: unknown): rawHandle is string =>
+    defaultMcpOAuthContinuationHandleCodecV1.validate(rawHandle),
+  hash: (rawHandle: string) => sha256Hex(rawHandle),
+});
 
 describe("MCP OAuth production route adapter", () => {
   it("keeps production routes disabled by default", async () => {
@@ -124,6 +140,29 @@ describe("MCP OAuth production route adapter", () => {
         reason: "blocked_missing_approval_flag",
         allowedByPreflight: false,
         preflightDecision: "blocked_missing_approval_flag",
+        guardedInertHandlerReached: false,
+        providerCalled: false,
+        tokenExchangeAttempted: false,
+        accountLinkCreated: false,
+      },
+    });
+    expectNoRouteLeakage(response);
+  });
+
+  it("blocks route handling when the production runtime flag is missing", async () => {
+    const response = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH),
+      routeConfig({ approved: "1", routeWiring: "1" }),
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 404,
+      json: {
+        status: "blocked",
+        reason: "blocked_missing_runtime_flag",
+        allowedByPreflight: false,
+        preflightDecision: "blocked_missing_runtime_flag",
         guardedInertHandlerReached: false,
         providerCalled: false,
         tokenExchangeAttempted: false,
@@ -213,14 +252,115 @@ describe("MCP OAuth production route adapter", () => {
     expectNoRouteLeakage(response);
   });
 
-  it("reaches only guarded inert handlers when all production flags and config are valid", async () => {
+  it("fails closed when production authorize is ready but missing pre-auth dependencies", async () => {
     const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
 
-    for (const path of [
-      MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
-      MCP_OAUTH_PRODUCTION_CALLBACK_PATH,
-      MCP_OAUTH_PRODUCTION_MCP_PATH,
-    ] as const) {
+    const response = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH),
+      config,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 503,
+      json: {
+        status: "blocked",
+        reason: "dependency_unavailable",
+        route: "oauth_authorize",
+        allowedByPreflight: true,
+        preflightDecision: "ready_to_wire",
+        preAuthIntentCreated: false,
+        ownerBound: false,
+        providerCalled: false,
+        tokenExchangeAttempted: false,
+        accountLinkCreated: false,
+      },
+    });
+    expectNoRouteLeakage(response);
+  });
+
+  it("rejects invalid production authorization requests before creating pre-auth storage", async () => {
+    const ctx = makeCtx();
+    const dependencies = routeDependencies(ctx);
+    const response = await handleMcpOAuthProductionRouteRequest(
+      request(
+        MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
+        "GET",
+        authorizationRequestPath({ owner: "owner_should_not_echo" }),
+      ),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 400,
+      json: {
+        status: "blocked",
+        reason: "invalid_authorization_request",
+        route: "oauth_authorize",
+        authorizationCodeIssued: false,
+        preAuthIntentCreated: false,
+        ownerBound: false,
+        providerCalled: false,
+        tokenExchangeAttempted: false,
+        tokenIssued: false,
+        accountLinkCreated: false,
+      },
+    });
+    expect(dependencies.createPreAuthIntent).not.toHaveBeenCalled();
+    expect(ctx.preAuthRows).toHaveLength(0);
+    expectNoRouteLeakage(response, ["owner_should_not_echo"]);
+  });
+
+  it("creates one ownerless pre-auth intent and redirects to the fixed Clerk sign-in return path", async () => {
+    const ctx = makeCtx();
+    const activation = activationDependencies();
+    const dependencies = routeDependencies(ctx);
+    const response = await handleMcpOAuthProductionRouteRequest(
+      request(
+        MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
+        "GET",
+        authorizationRequestPath({ nonce: "nonce_fixture", prompt: "consent" }),
+      ),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }, activation),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({ handled: true, status: 303, bodyText: "" });
+    expect(response.headers).toMatchObject({
+      "cache-control": "no-store",
+      pragma: "no-cache",
+      location: `${PROD_APP_ORIGIN}/sign-in?${MCP_OAUTH_SIGN_IN_RETURN_PARAMETER}=${encodeURIComponent(
+        continuationPath(),
+      )}`,
+    });
+    expect(dependencies.createPreAuthIntent).toHaveBeenCalledTimes(1);
+    expect(dependencies.createPreAuthIntent.mock.calls[0]?.[0]).toMatchObject({
+      preAuthHandleHash: HANDLE_HASH,
+      now: NOW,
+      version: 1,
+    });
+    expect(JSON.stringify(dependencies.createPreAuthIntent.mock.calls[0]?.[0])).not.toContain(RAW_HANDLE);
+    expect(ctx.preAuthRows).toHaveLength(1);
+    expect(ctx.preAuthRows[0]).toMatchObject({
+      status: "pre_auth_pending",
+      preAuthHandleHash: HANDLE_HASH,
+      approvedOptionalParameters: { nonce: "nonce_fixture", prompt: "consent" },
+    });
+    expect(Object.keys(ctx.preAuthRows[0])).not.toContain("twoweeksClerkId");
+    expect(Object.keys(ctx.preAuthRows[0])).not.toContain("stytchSubject");
+    expect(Object.keys(ctx.preAuthRows[0])).not.toContain("accountLinkId");
+    expect(JSON.stringify(ctx.preAuthRows[0])).not.toContain(RAW_HANDLE);
+    expect(activation.providerAdapter.exchangeAuthorizationCode).not.toHaveBeenCalled();
+    expect(activation.executeAccountLinkLifecycle).not.toHaveBeenCalled();
+    expectNoRouteLeakage(response, [], { allowRawHandle: true });
+  });
+
+  it("keeps /oauth/callback and /mcp guarded inert when production preflight is ready", async () => {
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
+
+    for (const path of [MCP_OAUTH_PRODUCTION_CALLBACK_PATH, MCP_OAUTH_PRODUCTION_MCP_PATH] as const) {
       const response = await handleMcpOAuthProductionRouteRequest(request(path), config);
 
       expect(response).toMatchObject({
@@ -239,6 +379,8 @@ describe("MCP OAuth production route adapter", () => {
           authorizationRequestAccepted: false,
           authorizationCodeAccepted: false,
           authorizationCodeIssued: false,
+          preAuthIntentCreated: false,
+          ownerBound: false,
           providerCalled: false,
           tokenExchangeAttempted: false,
           tokenIssued: false,
@@ -372,24 +514,189 @@ describe("MCP OAuth production route adapter", () => {
   });
 });
 
-function routeConfig(flags: Readonly<{ runtime?: string; approved?: string; routeWiring?: string }>) {
+function activationDependencies(): McpOAuthProductionActivationDependenciesV1 {
+  return {
+    providerAdapter: {
+      provider: "stytch",
+      exchangeAuthorizationCode: vi.fn(async () => ({
+        kind: "mcp_oauth_production_token_exchange_result",
+        ok: false,
+        reason: "not_executed_in_route_adapter_test",
+        safeFailure: { code: "not_executed" },
+        modelVisible: false,
+        safeForLogging: true,
+        version: 1,
+      })),
+      version: 1,
+    },
+    executeAccountLinkLifecycle: vi.fn(async () => ({
+      kind: "mcp_account_link_lifecycle_result",
+      operation: "link",
+      ok: false,
+      reason: "not_executed_in_route_adapter_test",
+      safeFailure: { code: "not_executed" },
+      modelVisible: false,
+      version: 1,
+    })),
+  };
+}
+
+function routeConfig(
+  flags: Readonly<{ runtime?: string; approved?: string; routeWiring?: string }>,
+  dependencies: McpOAuthProductionActivationDependenciesV1 = activationDependencies(),
+) {
   return buildMcpOAuthProductionRouteAdapterConfig({
     flags,
     providerConfig: PROVIDER_CONFIG,
-    activationDependencies: ACTIVATION_DEPENDENCIES,
+    activationDependencies: dependencies,
   });
 }
 
 function request(
   path: McpOAuthProductionRoutePathV1,
   method = path === MCP_OAUTH_PRODUCTION_MCP_PATH ? "POST" : "GET",
+  url = path,
 ): McpOAuthProductionRouteAdapterRequestV1 {
   return {
     method,
     path,
-    url: path,
+    url,
     headers: { host: "mcp.twoweeks.example.test" },
   };
+}
+
+function routeDependencies(ctx: ReturnType<typeof makeCtx>) {
+  const dependencies = {
+    authorizationRequestConfig: authorizationRequestConfig(),
+    createPreAuthIntent: vi.fn(async (input) =>
+      await internalCreateMcpOAuthPreAuthIntent._handler(ctx.ctx as any, input),
+    ),
+    handleCodec: deterministicCodec,
+    now: vi.fn(() => NOW),
+  } satisfies Required<
+    Pick<
+      McpOAuthProductionRouteAdapterDependenciesV1,
+      "authorizationRequestConfig" | "createPreAuthIntent" | "handleCodec" | "now"
+    >
+  >;
+  return dependencies;
+}
+
+function authorizationRequestConfig(): McpOAuthAuthorizationRequestBoundaryConfigV1 {
+  return Object.freeze({
+    kind: "mcp_oauth_authorization_request_boundary_config",
+    authorizationPageOrigin: PROD_APP_ORIGIN,
+    authorizationPagePath: MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
+    canonicalResource: RESOURCE,
+    allowedRedirectUris: [REDIRECT_URI],
+    requiredScope: TWOWEEKS_APPLICATIONS_READ_SCOPE,
+    approvedOptionalScopes: ["openid", "email", "profile"],
+    allowedOptionalParameters: ["nonce", "prompt"],
+    maxUrlLength: 4_096,
+    maxParameterLength: 512,
+    maxStateLength: 512,
+    maxIdTokenHintLength: 1_024,
+    clientIdPolicy: Object.freeze({
+      mode: "predefined_allowlist",
+      allowedClientIds: [CLIENT_ID],
+      version: 1,
+    }),
+    localDevelopmentOnly: true,
+    allowHttpLocalhostAuthorizationOrigin: false,
+    version: 1,
+  });
+}
+
+function authorizationRequestPath(
+  overrides: Readonly<Partial<Record<string, string>>> = {},
+): string {
+  const params = new URLSearchParams();
+  params.append("response_type", overrides.response_type ?? "code");
+  params.append("client_id", overrides.client_id ?? CLIENT_ID);
+  params.append("redirect_uri", overrides.redirect_uri ?? REDIRECT_URI);
+  params.append("scope", overrides.scope ?? `${TWOWEEKS_APPLICATIONS_READ_SCOPE} openid`);
+  params.append("state", overrides.state ?? STATE);
+  params.append("code_challenge", overrides.code_challenge ?? PKCE);
+  params.append("code_challenge_method", overrides.code_challenge_method ?? "S256");
+  params.append("resource", overrides.resource ?? RESOURCE);
+  if (overrides.nonce !== undefined) params.append("nonce", overrides.nonce);
+  if (overrides.prompt !== undefined) params.append("prompt", overrides.prompt);
+  if (overrides.owner !== undefined) params.append("owner", overrides.owner);
+  return `${MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH}?${params.toString()}`;
+}
+
+function continuationPath(): string {
+  return `${MCP_OAUTH_CONTINUATION_PATH}?${MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER}=${RAW_HANDLE}`;
+}
+
+function makeCtx() {
+  const preAuthRows: StoredPreAuthIntentRecord[] = [];
+  let nextPreAuthId = 1;
+
+  const ctx = {
+    db: {
+      query: (tableName: string) => {
+        if (tableName !== "mcpOAuthPreAuthIntents") {
+          throw new Error(`Unexpected table ${tableName}`);
+        }
+        return {
+          withIndex: (
+            indexName: string,
+            buildQuery: (query: IndexConstraintBuilder) => unknown,
+          ) => {
+            const constraints: Constraint[] = [];
+            const query: IndexConstraintBuilder = {
+              eq(field: string, value: unknown) {
+                constraints.push({ field, op: "eq", value });
+                return query;
+              },
+            };
+            buildQuery(query);
+            expectKnownIndex(tableName, indexName, constraints);
+            const matching = preAuthRows.filter((row) =>
+              constraints.every((constraint) => {
+                const fieldValue = row[constraint.field as keyof typeof row];
+                return fieldValue === constraint.value;
+              }),
+            );
+            return {
+              collect: async () => matching,
+            };
+          },
+        };
+      },
+      insert: async (tableName: string, record: unknown) => {
+        if (tableName !== "mcpOAuthPreAuthIntents") {
+          throw new Error(`Unexpected insert table ${tableName}`);
+        }
+        const id = `mcpOAuthPreAuthIntents_fixture_${nextPreAuthId++}`;
+        preAuthRows.push({
+          ...(record as McpOAuthPreAuthIntentRecordV1),
+          scopes: [...(record as McpOAuthPreAuthIntentRecordV1).scopes],
+          _id: id,
+          _creationTime: NOW,
+        });
+        return id;
+      },
+    },
+  };
+
+  return {
+    ctx,
+    preAuthRows,
+  };
+}
+
+function expectKnownIndex(
+  tableName: string,
+  indexName: string,
+  constraints: readonly Constraint[],
+): void {
+  if (tableName === "mcpOAuthPreAuthIntents" && indexName === "by_pre_auth_handle_hash") {
+    expect(constraints).toEqual([expect.objectContaining({ field: "preAuthHandleHash", op: "eq" })]);
+    return;
+  }
+  throw new Error(`Unexpected index ${tableName}.${indexName}`);
 }
 
 function expectedRouteName(path: McpOAuthProductionRoutePathV1) {
@@ -406,7 +713,11 @@ function prodRouteEnv(): Record<string, string> {
   };
 }
 
-function expectNoRouteLeakage(value: unknown, extraForbidden: readonly string[] = []): void {
+function expectNoRouteLeakage(
+  value: unknown,
+  extraForbidden: readonly string[] = [],
+  options: Readonly<{ allowRawHandle?: boolean }> = {},
+): void {
   const serialized = JSON.stringify(value);
   for (const forbidden of [
     PROVIDER_CONFIG.provider,
@@ -414,6 +725,10 @@ function expectNoRouteLeakage(value: unknown, extraForbidden: readonly string[] 
     PROVIDER_CONFIG.resource,
     PROVIDER_CONFIG.providerEnvironment,
     PROVIDER_CONFIG.allowedClientIds[0],
+    REDIRECT_URI,
+    STATE,
+    PKCE,
+    HANDLE_HASH,
     "authorization_code",
     "auth_code",
     "access_token",
@@ -426,10 +741,15 @@ function expectNoRouteLeakage(value: unknown, extraForbidden: readonly string[] 
   ] as const) {
     expect(serialized).not.toContain(forbidden);
   }
+  if (!options.allowRawHandle) expect(serialized).not.toContain(RAW_HANDLE);
 }
 
 function expectSourceNotToMatch(source: string, patterns: readonly RegExp[]): void {
   for (const pattern of patterns) {
     expect(source).not.toMatch(pattern);
   }
+}
+
+function sha256Hex(value: string): string {
+  return createHash("sha256").update(value, "utf8").digest("hex");
 }
