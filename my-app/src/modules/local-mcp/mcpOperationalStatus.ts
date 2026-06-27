@@ -2,6 +2,10 @@ import {
   mapMcpOperationalReasonToCategory,
   type McpOperationalErrorCategoryV1,
 } from "./mcpOperationalErrorTaxonomy";
+import {
+  MCP_OAUTH_PRODUCTION_APPROVED_FLAG,
+  MCP_OAUTH_PRODUCTION_RUNTIME_FLAG,
+} from "./mcpOAuthProductionActivationBoundary";
 
 export type McpOperationalStatusCapabilityV1 =
   | "manual_handoff"
@@ -54,6 +58,7 @@ const PRODUCTION_OAUTH_ACTIVATION_CONFIG_SHAPE_CHECKS = [
   (value: Record<string, unknown>) => value.tokenStorage === "none",
   (value: Record<string, unknown>) => value.refreshTokenStorage === "none",
   (value: Record<string, unknown>) => value.defaultProductionBehavior === "disabled",
+  (value: Record<string, unknown>) => value.version === 1,
 ] as const;
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -270,7 +275,7 @@ function readProductionOAuthActivationConfig(
     return undefined;
   }
 
-  if (hasUnsafeUnknownProductionOAuthActivationConfigMaterial(value)) {
+  if (hasUnknownProductionOAuthActivationConfigKeys(value)) {
     return undefined;
   }
 
@@ -282,12 +287,16 @@ function readProductionOAuthActivationConfig(
   if (!requiredFlags) {
     return undefined;
   }
+  const providerConfigPresent = value.providerConfig !== undefined;
+  if (providerConfigPresent && !isPlainRecord(value.providerConfig)) {
+    return undefined;
+  }
 
   return {
     enabled: value.enabled,
     runtimeValue: requiredFlags.runtimeValue,
     approvedValue: requiredFlags.approvedValue,
-    providerConfigPresent: value.providerConfig !== undefined,
+    providerConfigPresent,
   };
 }
 
@@ -297,13 +306,10 @@ function hasProductionOAuthActivationConfigShape(
   return PRODUCTION_OAUTH_ACTIVATION_CONFIG_SHAPE_CHECKS.every((check) => check(value));
 }
 
-function hasUnsafeUnknownProductionOAuthActivationConfigMaterial(
+function hasUnknownProductionOAuthActivationConfigKeys(
   value: Record<string, unknown>,
 ): boolean {
-  return Object.entries(value).some(
-    ([key, nestedValue]) =>
-      !PRODUCTION_OAUTH_ACTIVATION_CONFIG_KEYS.has(key) && containsUnsafeStatusMaterial({ [key]: nestedValue }),
-  );
+  return Object.keys(value).some((key) => !PRODUCTION_OAUTH_ACTIVATION_CONFIG_KEYS.has(key));
 }
 
 function readProductionOAuthActivationRequiredFlags(
@@ -314,8 +320,8 @@ function readProductionOAuthActivationRequiredFlags(
 }> | undefined {
   if (
     !isPlainRecord(value) ||
-    value.runtimeFlagName !== "MCP_OAUTH_PRODUCTION_RUNTIME" ||
-    value.approvedFlagName !== "MCP_OAUTH_PRODUCTION_APPROVED" ||
+    value.runtimeFlagName !== MCP_OAUTH_PRODUCTION_RUNTIME_FLAG ||
+    value.approvedFlagName !== MCP_OAUTH_PRODUCTION_APPROVED_FLAG ||
     value.bothRequired !== true ||
     value.version !== 1
   ) {

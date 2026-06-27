@@ -189,6 +189,52 @@ describe("mcpOperationalStatus", () => {
     });
   });
 
+  it("fails closed when production OAuth activation provider config is not a record", () => {
+    const parsedConfig = buildMcpOAuthProductionActivationConfig({
+      flags: { runtime: "1", approved: "1" },
+      providerConfig: PRODUCTION_OAUTH_PROVIDER_CONFIG,
+    });
+
+    expect(
+      buildMcpOperationalProductionOAuthActivationStatus({
+        ...parsedConfig,
+        providerConfig: null,
+      }),
+    ).toEqual({
+      kind: "mcp_operational_status",
+      capability: "production_oauth_activation",
+      enabled: false,
+      configValid: false,
+      featureState: "misconfigured",
+      category: "config_invalid",
+      valuesExposed: false,
+      version: 1,
+    });
+  });
+
+  it("fails closed when production OAuth activation config has unknown keys", () => {
+    const parsedConfig = buildMcpOAuthProductionActivationConfig({
+      flags: { runtime: "1", approved: "1" },
+      providerConfig: PRODUCTION_OAUTH_PROVIDER_CONFIG,
+    });
+
+    expect(
+      buildMcpOperationalProductionOAuthActivationStatus({
+        ...parsedConfig,
+        extraStatus: "benign",
+      }),
+    ).toEqual({
+      kind: "mcp_operational_status",
+      capability: "production_oauth_activation",
+      enabled: false,
+      configValid: false,
+      featureState: "misconfigured",
+      category: "config_invalid",
+      valuesExposed: false,
+      version: 1,
+    });
+  });
+
   it("maps existing account-link, egress, and write-action refusals to bounded categories", () => {
     expect(buildMcpOperationalAccountLinkStatus("missing_account_link")).toMatchObject({
       capability: "account_link",
