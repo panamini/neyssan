@@ -69,6 +69,8 @@ const STATE = "opaque_state_1234567890";
 const PKCE = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const RAW_HANDLE = "A".repeat(43);
 const HANDLE_HASH = sha256Hex(RAW_HANDLE);
+const OWNER_ID = "user_twoweeks_fixture_123";
+const OTHER_OWNER_ID = "user_twoweeks_fixture_456";
 const NOW = Date.parse("2026-06-27T09:00:00.000Z");
 const FORBIDDEN_ROUTE_SOURCE_PATTERNS = Object.freeze([
   /\b(?:fetch|axios|XMLHttpRequest|WebSocket|EventSource)\b/u,
@@ -103,10 +105,11 @@ type StoredPreAuthIntentRecord = {
   codeChallengeMethod: "S256";
   approvedOptionalParameters?: Readonly<Partial<Record<"nonce" | "prompt", string>>>;
   providerValidationStatus: "pending";
-  status: "pre_auth_pending";
+  status: "pre_auth_pending" | "claimed" | "expired";
   createdAt: number;
   updatedAt: number;
   expiresAt: number;
+  claimedAt?: number;
   storageVersion: 1;
   _id: string;
   _creationTime: number;
@@ -887,6 +890,247 @@ describe("MCP OAuth production route adapter", () => {
     expectNoRouteLeakage(response, [], { allowRawHandle: true });
   });
 
+  it("binds the production login-return continuation to the authenticated owner without provider, code, token, or account-link behavior", async () => {
+    const ctx = makeCtx();
+    const activation = activationDependencies();
+    const dependencies = routeDependencies(ctx);
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }, activation);
+
+    const authorizeResponse = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      config,
+      dependencies,
+    );
+    const continuationResponse = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPath()),
+      config,
+      dependencies,
+    );
+
+    expect(authorizeResponse).toMatchObject({ handled: true, status: 303 });
+    expect(continuationResponse).toMatchObject({
+      handled: true,
+      status: 200,
+      json: {
+        kind: "mcp_oauth_production_route_response",
+        status: "owner_bound_continuation_prepared",
+        reason: "owner_binding_continuation_prepared",
+        route: "oauth_login_return",
+        preflightDecision: "ready_to_wire",
+        preAuthContinuationConsumed: true,
+        ownerBound: true,
+        ownerBoundIntentPending: true,
+        ownerBoundContinuationPrepared: true,
+        authorizationCodeIssued: false,
+        providerCalled: false,
+        tokenExchangeAttempted: false,
+        tokenIssued: false,
+        consentCompleted: false,
+        accountLinkCreated: false,
+        tokenPersisted: false,
+        hostedMcpStarted: false,
+        modelVisible: false,
+        safeForLogging: true,
+      },
+    });
+    expect(dependencies.createPreAuthIntent).toHaveBeenCalledTimes(1);
+    expect(dependencies.bindPreAuthIntentToAuthenticatedOwner).toHaveBeenCalledTimes(1);
+    expect(dependencies.bindPreAuthIntentToAuthenticatedOwner.mock.calls[0]?.[0]).toEqual({
+      preAuthHandleHash: HANDLE_HASH,
+      now: NOW,
+      version: 1,
+    });
+    expect(JSON.stringify(dependencies.bindPreAuthIntentToAuthenticatedOwner.mock.calls[0]?.[0])).not.toContain(
+      RAW_HANDLE,
+    );
+    expect(ctx.preAuthRows[0]).toMatchObject({
+      status: "claimed",
+      claimedAt: NOW,
+      updatedAt: NOW,
+    });
+    expect(activation.providerAdapter.exchangeAuthorizationCode).not.toHaveBeenCalled();
+    expect(activation.executeAccountLinkLifecycle).not.toHaveBeenCalled();
+    expectNoRouteLeakage(authorizeResponse, [], { allowRawHandle: true });
+    expectNoRouteLeakage(continuationResponse);
+  });
+
+  it("fails production login-return continuation closed without authenticated owner identity", async () => {
+    const ctx = makeCtx({ subject: null });
+    const dependencies = routeDependencies(ctx);
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      config,
+      dependencies,
+    );
+
+    const response = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPath()),
+      config,
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 401,
+      json: {
+        status: "blocked",
+        reason: "owner_binding_failed",
+        route: "oauth_login_return",
+        ownerBound: false,
+        providerCalled: false,
+        tokenExchangeAttempted: false,
+        authorizationCodeIssued: false,
+        tokenIssued: false,
+        accountLinkCreated: false,
+      },
+    });
+    expect(ctx.preAuthRows[0]).toMatchObject({ status: "pre_auth_pending" });
+    expectNoRouteLeakage(response);
+  });
+
+  it("rejects invalid production login-return continuation handles before owner binding", async () => {
+    const ctx = makeCtx();
+    const dependencies = routeDependencies(ctx);
+
+    const response = await handleMcpOAuthProductionRouteRequest(
+      request(
+        MCP_OAUTH_CONTINUATION_PATH,
+        "GET",
+        `${MCP_OAUTH_CONTINUATION_PATH}?${MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER}=short`,
+      ),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 400,
+      json: {
+        status: "blocked",
+        reason: "invalid_continuation_request",
+        route: "oauth_login_return",
+        ownerBound: false,
+        providerCalled: false,
+        tokenExchangeAttempted: false,
+        authorizationCodeIssued: false,
+        accountLinkCreated: false,
+      },
+    });
+    expect(dependencies.bindPreAuthIntentToAuthenticatedOwner).not.toHaveBeenCalled();
+    expectNoRouteLeakage(response);
+  });
+
+  it("fails expired production login-return continuations without preparing owner-bound handoff", async () => {
+    const ctx = makeCtx();
+    const dependencies = routeDependencies(ctx);
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      config,
+      dependencies,
+    );
+    ctx.preAuthRows[0].expiresAt = NOW;
+
+    const response = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPath()),
+      config,
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 409,
+      json: {
+        status: "blocked",
+        reason: "owner_binding_failed",
+        route: "oauth_login_return",
+        ownerBound: false,
+        providerCalled: false,
+        tokenExchangeAttempted: false,
+        authorizationCodeIssued: false,
+        accountLinkCreated: false,
+      },
+    });
+    expect(ctx.preAuthRows[0]).toMatchObject({ status: "expired", updatedAt: NOW });
+    expectNoRouteLeakage(response);
+  });
+
+  it("makes production login-return continuation replay explicit and one-time", async () => {
+    const ctx = makeCtx();
+    const dependencies = routeDependencies(ctx);
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      config,
+      dependencies,
+    );
+
+    const first = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPath()),
+      config,
+      dependencies,
+    );
+    ctx.subject = OTHER_OWNER_ID;
+    const replay = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPath()),
+      config,
+      dependencies,
+    );
+
+    expect(first).toMatchObject({
+      handled: true,
+      status: 200,
+      json: { status: "owner_bound_continuation_prepared", ownerBound: true },
+    });
+    expect(replay).toMatchObject({
+      handled: true,
+      status: 409,
+      json: {
+        status: "blocked",
+        reason: "owner_binding_failed",
+        route: "oauth_login_return",
+        ownerBound: false,
+        authorizationCodeIssued: false,
+        tokenIssued: false,
+        accountLinkCreated: false,
+      },
+    });
+    expect(dependencies.bindPreAuthIntentToAuthenticatedOwner).toHaveBeenCalledTimes(2);
+    expect(ctx.preAuthRows[0]).toMatchObject({ status: "claimed", claimedAt: NOW });
+    expectNoRouteLeakage(replay);
+  });
+
+  it("fails production login-return continuation closed when owner-binding dependencies are unavailable", async () => {
+    const dependencies = {
+      authorizationRequestConfig: authorizationRequestConfig(),
+      handleCodec: deterministicCodec,
+      now: vi.fn(() => NOW),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+
+    const response = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPath()),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 503,
+      json: {
+        status: "blocked",
+        reason: "dependency_unavailable",
+        route: "oauth_login_return",
+        ownerBound: false,
+        providerCalled: false,
+        tokenExchangeAttempted: false,
+        authorizationCodeIssued: false,
+        accountLinkCreated: false,
+      },
+    });
+    expectNoRouteLeakage(response);
+  });
+
   it("matches the production authorization guard against the trimmed provider resource", async () => {
     const dependencies = routeDependencies(makeCtx());
     const config = buildMcpOAuthProductionRouteAdapterConfig({
@@ -1399,6 +1643,49 @@ describe("MCP OAuth production route adapter", () => {
     expect(convexHttpClientMutation).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps production login-return continuation ahead of the local OAuth route when both flags are enabled", async () => {
+    const ctx = makeCtx();
+    const dependencies = routeDependencies(ctx);
+    const plugin = createLocalMcpDevEndpointPlugin({
+      env: {
+        ...prodRouteEnv(),
+        [LOCAL_MCP_DEV_OAUTH_AUTHORIZATION_FLAG]: "1",
+        [LOCAL_MCP_DEV_OAUTH_APPLICATION_ORIGIN_VAR]: APP_ORIGIN,
+        [LOCAL_MCP_DEV_OAUTH_REDIRECT_URI_VAR]: REDIRECT_URI,
+        LOCAL_MCP_DEV_AUTH_RESOURCE: RESOURCE,
+        LOCAL_MCP_DEV_AUTH_CLIENT_ID: CLIENT_ID,
+      },
+      productionOAuthAuthorizationConfig: routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      productionOAuthAuthorizationDependencies: dependencies,
+    });
+    const middleware = readConfiguredMiddleware(plugin);
+
+    await invokeMiddleware(middleware, {
+      method: "GET",
+      url: authorizationRequestPath(),
+      headers: { host: "mcp.twoweeks.example.test" },
+    });
+    const response = await invokeMiddleware(middleware, {
+      method: "GET",
+      url: continuationPath(),
+      headers: { host: "mcp.twoweeks.example.test" },
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body)).toMatchObject({
+      status: "owner_bound_continuation_prepared",
+      route: "oauth_login_return",
+      ownerBound: true,
+      providerCalled: false,
+      tokenExchangeAttempted: false,
+      authorizationCodeIssued: false,
+      accountLinkCreated: false,
+    });
+    expect(response.body).not.toContain("mcp_oauth_local_dev_route_failure");
+    expectNoRouteLeakage(response);
+  });
+
   it("wires production authorize requests into the live Vite middleware", async () => {
     const ctx = makeCtx();
     const plugin = createLocalMcpDevEndpointPlugin({
@@ -1480,6 +1767,67 @@ describe("MCP OAuth production route adapter", () => {
     expect(convexHttpClientMutation.mock.calls[0]?.[2]).toEqual({ skipQueue: true });
   });
 
+  it("wires production login-return continuation through real no-options Vite defaults", async () => {
+    for (const [key, value] of Object.entries(prodRouteEnv())) {
+      vi.stubEnv(key, value);
+    }
+    convexHttpClientMutation.mockImplementationOnce(async () => ({
+      kind: "mcp_oauth_pre_auth_owner_binding_result",
+      ok: true,
+      reason: "bound",
+      serverOnly: {
+        ownerBoundIntent: {
+          status: "pending",
+          expiresAt: Date.now() + 10 * 60 * 1_000,
+          version: 1,
+        },
+        preAuthIntent: {
+          status: "claimed",
+          version: 1,
+        },
+        trustedOwner: {
+          kind: "mcp_oauth_authorization_trusted_owner",
+          twoweeksClerkId: OWNER_ID,
+          version: 1,
+        },
+        version: 1,
+      },
+      modelVisible: false,
+      safeForLogging: false,
+      version: 1,
+    }));
+
+    const plugin = createLocalMcpDevEndpointPlugin();
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeMiddleware(middleware, {
+      method: "GET",
+      url: continuationPath(),
+      headers: { host: "mcp.twoweeks.example.test" },
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body)).toMatchObject({
+      status: "owner_bound_continuation_prepared",
+      route: "oauth_login_return",
+      ownerBound: true,
+      providerCalled: false,
+      tokenExchangeAttempted: false,
+      authorizationCodeIssued: false,
+      accountLinkCreated: false,
+    });
+    expect(ConvexHttpClientMock).toHaveBeenCalledWith("http://127.0.0.1:3210");
+    expect(convexHttpClientSetAdminAuth).toHaveBeenCalledWith("convex_admin_key_fixture");
+    expect(convexHttpClientMutation).toHaveBeenCalledTimes(1);
+    expect(convexHttpClientMutation.mock.calls[0]?.[1]).toEqual({
+      preAuthHandleHash: HANDLE_HASH,
+      now: expect.any(Number),
+      version: 1,
+    });
+    expect(convexHttpClientMutation.mock.calls[0]?.[2]).toEqual({ skipQueue: true });
+    expectNoRouteLeakage(response);
+  });
+
   it("fails closed when the default Convex client cannot be constructed", async () => {
     for (const [key, value] of Object.entries(prodRouteEnv())) {
       vi.stubEnv(key, value);
@@ -1549,10 +1897,12 @@ describe("MCP OAuth production route adapter", () => {
 
   it("only claims the intended production entrypoint paths", () => {
     expect(isMcpOAuthProductionRouteHandledPath(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH)).toBe(true);
+    expect(isMcpOAuthProductionRouteHandledPath(MCP_OAUTH_CONTINUATION_PATH)).toBe(true);
     expect(isMcpOAuthProductionRouteHandledPath(MCP_OAUTH_PRODUCTION_CALLBACK_PATH)).toBe(true);
     expect(isMcpOAuthProductionRouteHandledPath(MCP_OAUTH_PRODUCTION_MCP_PATH)).toBe(true);
     expect(isMcpOAuthProductionRouteHandledPath("/oauth/token")).toBe(false);
     expect(isMcpOAuthProductionRouteHandledPath("/oauth/authorize/extra")).toBe(false);
+    expect(isMcpOAuthProductionRouteHandledPath("/mcp/oauth/authorize/continue/extra")).toBe(false);
     expect(isMcpOAuthProductionRouteHandledPath("/mcp/tools/list")).toBe(false);
   });
 });
@@ -1619,12 +1969,20 @@ function routeDependencies(ctx: ReturnType<typeof makeCtx>) {
       version: 1,
     })),
     createPreAuthIntent: vi.fn(async (input) => createFakePreAuthIntent(ctx, input)),
+    bindPreAuthIntentToAuthenticatedOwner: vi.fn(async (input) =>
+      bindFakePreAuthIntentToAuthenticatedOwner(ctx, input),
+    ),
     handleCodec: deterministicCodec,
     now: vi.fn(() => NOW),
   } satisfies Required<
     Pick<
       McpOAuthProductionRouteAdapterDependenciesV1,
-      "authorizationRequestConfig" | "checkPreAuthQuota" | "createPreAuthIntent" | "handleCodec" | "now"
+      | "authorizationRequestConfig"
+      | "checkPreAuthQuota"
+      | "createPreAuthIntent"
+      | "bindPreAuthIntentToAuthenticatedOwner"
+      | "handleCodec"
+      | "now"
     >
   >;
   return dependencies;
@@ -1677,11 +2035,12 @@ function continuationPath(): string {
   return `${MCP_OAUTH_CONTINUATION_PATH}?${MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER}=${RAW_HANDLE}`;
 }
 
-function makeCtx() {
+function makeCtx(options: Readonly<{ subject?: string | null }> = {}) {
   const preAuthRows: StoredPreAuthIntentRecord[] = [];
 
   return {
     preAuthRows,
+    subject: options.subject === undefined ? OWNER_ID : options.subject,
   };
 }
 
@@ -1758,9 +2117,119 @@ function createFakePreAuthIntent(
   });
 }
 
+function bindFakePreAuthIntentToAuthenticatedOwner(
+  ctx: ReturnType<typeof makeCtx>,
+  input: Parameters<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["bindPreAuthIntentToAuthenticatedOwner"]>>[0],
+): ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["bindPreAuthIntentToAuthenticatedOwner"]>> {
+  if (ctx.subject === null) {
+    return Promise.resolve({
+      kind: "mcp_oauth_pre_auth_owner_binding_result",
+      ok: false,
+      reason: "unauthenticated",
+      safeFailure: safeOwnerBindingFailure(),
+      modelVisible: false,
+      safeForLogging: true,
+      version: 1,
+    });
+  }
+
+  const rows = ctx.preAuthRows.filter((row) => row.preAuthHandleHash === input.preAuthHandleHash);
+  if (rows.length === 0) {
+    return Promise.resolve({
+      kind: "mcp_oauth_pre_auth_owner_binding_result",
+      ok: false,
+      reason: "not_found_or_forbidden",
+      safeFailure: safeOwnerBindingFailure(),
+      modelVisible: false,
+      safeForLogging: true,
+      version: 1,
+    });
+  }
+  if (rows.length > 1) {
+    return Promise.resolve({
+      kind: "mcp_oauth_pre_auth_owner_binding_result",
+      ok: false,
+      reason: "duplicate_pre_auth_record",
+      safeFailure: safeOwnerBindingFailure(),
+      modelVisible: false,
+      safeForLogging: true,
+      version: 1,
+    });
+  }
+
+  const row = rows[0];
+  if (row.status === "claimed") {
+    return Promise.resolve({
+      kind: "mcp_oauth_pre_auth_owner_binding_result",
+      ok: false,
+      reason: "already_claimed",
+      safeFailure: safeOwnerBindingFailure(),
+      modelVisible: false,
+      safeForLogging: true,
+      version: 1,
+    });
+  }
+  if (row.status === "expired" || input.now >= row.expiresAt) {
+    row.status = "expired";
+    row.updatedAt = input.now;
+    return Promise.resolve({
+      kind: "mcp_oauth_pre_auth_owner_binding_result",
+      ok: false,
+      reason: "expired",
+      safeFailure: safeOwnerBindingFailure(),
+      modelVisible: false,
+      safeForLogging: true,
+      version: 1,
+    });
+  }
+
+  row.status = "claimed";
+  row.updatedAt = input.now;
+  row.claimedAt = input.now;
+  return Promise.resolve({
+    kind: "mcp_oauth_pre_auth_owner_binding_result",
+    ok: true,
+    reason: "bound",
+    serverOnly: {
+      ownerBoundIntent: {
+        status: "pending",
+        expiresAt: input.now + 10 * 60 * 1_000,
+        version: 1,
+      },
+      preAuthIntent: {
+        status: "claimed",
+        version: 1,
+      },
+      trustedOwner: {
+        kind: "mcp_oauth_authorization_trusted_owner",
+        twoweeksClerkId: ctx.subject,
+        version: 1,
+      },
+      version: 1,
+    },
+    modelVisible: false,
+    safeForLogging: false,
+    version: 1,
+  });
+}
+
+function safeOwnerBindingFailure() {
+  return {
+    code: "mcp_oauth_pre_auth_owner_binding_denied",
+    message: "Pre-auth owner binding denied.",
+    safeForModel: true,
+    handleEchoed: false,
+    digestEchoed: false,
+    identityEchoed: false,
+    sensitiveValuesEchoed: false,
+    version: 1,
+  } as const;
+}
+
 function expectedRouteName(path: McpOAuthProductionRoutePathV1) {
   if (path === MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH) return "oauth_authorize";
   if (path === MCP_OAUTH_PRODUCTION_CALLBACK_PATH) return "oauth_callback";
+  if (path === MCP_OAUTH_CONTINUATION_PATH) return "oauth_login_return";
   return "mcp";
 }
 
@@ -1907,6 +2376,8 @@ function expectNoRouteLeakage(
     STATE,
     PKCE,
     HANDLE_HASH,
+    OWNER_ID,
+    OTHER_OWNER_ID,
     "authorization_code",
     "auth_code",
     "access_token",

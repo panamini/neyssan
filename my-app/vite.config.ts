@@ -41,6 +41,7 @@ import {
   type McpOAuthProductionRouteAdapterDependenciesV1,
 } from "./src/modules/local-mcp/mcpOAuthProductionRouteAdapter";
 import { MCP_OAUTH_PRODUCTION_ROUTE_WIRING_FLAG } from "./src/modules/local-mcp/mcpOAuthProductionRoutePreflightBoundary";
+import { MCP_OAUTH_CONTINUATION_PATH } from "./src/pages/sign-in-return";
 
 const LOCAL_CLERK_SYNC_PORT = 5173;
 const LOCAL_MCP_DEV_ENDPOINT_FLAG = "LOCAL_MCP_DEV_ENDPOINT";
@@ -66,6 +67,9 @@ const PRE_AUTH_QUOTA_LIMIT = 60;
 const DEFAULT_VITE_ALLOWED_HOSTS = Object.freeze(["host.docker.internal"]);
 const CREATE_MCP_OAUTH_PRE_AUTH_INTENT_MUTATION = makeFunctionReference(
   "mcpOAuthPreAuthIntents:internalCreateMcpOAuthPreAuthIntent",
+);
+const BIND_MCP_OAUTH_PRE_AUTH_INTENT_TO_OWNER_MUTATION = makeFunctionReference(
+  "mcpOAuthPreAuthOwnerBinding:internalBindMcpOAuthPreAuthIntentToAuthenticatedOwner",
 );
 const productionPreAuthQuotaBuckets = new Map<string, { count: number; windowStartedAt: number }>();
 
@@ -165,7 +169,10 @@ function handleLocalMcpDevMiddlewareRequest(
   productionOAuthAuthorizationDependencies: McpOAuthProductionRouteAdapterDependenciesV1,
 ): void {
   const pathName = (req.url ?? "").split("?")[0];
-  if (productionOAuthAuthorizationEnabled && pathName === MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH) {
+  if (
+    productionOAuthAuthorizationEnabled &&
+    (pathName === MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH || pathName === MCP_OAUTH_CONTINUATION_PATH)
+  ) {
     void respondToMcpOAuthProductionRouteRequest(
       req,
       res,
@@ -458,10 +465,12 @@ function readProductionMcpOAuthConfigInput(env: Readonly<Record<string, string |
 function buildProductionMcpOAuthRouteDependencies(
   env: Readonly<Record<string, string | undefined>>,
 ): McpOAuthProductionRouteAdapterDependenciesV1 {
+  const convexClient = readConvexHttpClient(env);
   return Object.freeze({
     authorizationRequestConfig: readProductionMcpOAuthAuthorizationRequestConfig(env),
     checkPreAuthQuota: checkProductionPreAuthQuota,
-    createPreAuthIntent: buildProductionPreAuthIntentCreatePort(env),
+    createPreAuthIntent: buildProductionPreAuthIntentCreatePort(convexClient),
+    bindPreAuthIntentToAuthenticatedOwner: buildProductionPreAuthOwnerBindingPort(convexClient),
   });
 }
 
@@ -522,9 +531,8 @@ const checkProductionPreAuthQuota: NonNullable<McpOAuthProductionRouteAdapterDep
 };
 
 function buildProductionPreAuthIntentCreatePort(
-  env: Readonly<Record<string, string | undefined>>,
+  convexClient: ConvexHttpClient | undefined,
 ): NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["createPreAuthIntent"]> {
-  const convexClient = readConvexHttpClient(env);
   return async (input) => {
     if (!convexClient) return preAuthCreateUnavailableResult();
     return convexClient.mutation(
@@ -532,6 +540,19 @@ function buildProductionPreAuthIntentCreatePort(
       input,
       { skipQueue: true },
     ) as Promise<Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["createPreAuthIntent"]>>>>;
+  };
+}
+
+function buildProductionPreAuthOwnerBindingPort(
+  convexClient: ConvexHttpClient | undefined,
+): NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["bindPreAuthIntentToAuthenticatedOwner"]> {
+  return async (input) => {
+    if (!convexClient) return preAuthOwnerBindingUnavailableResult();
+    return convexClient.mutation(
+      BIND_MCP_OAUTH_PRE_AUTH_INTENT_TO_OWNER_MUTATION,
+      input,
+      { skipQueue: true },
+    ) as Promise<Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["bindPreAuthIntentToAuthenticatedOwner"]>>>>;
   };
 }
 
@@ -557,6 +578,27 @@ function preAuthCreateUnavailableResult(): Awaited<ReturnType<NonNullable<McpOAu
       code: "mcp_oauth_pre_auth_intent_denied",
       message: "Pre-auth intent denied.",
       safeForModel: true,
+      sensitiveValuesEchoed: false,
+      version: 1,
+    },
+    modelVisible: false,
+    safeForLogging: true,
+    version: 1,
+  });
+}
+
+function preAuthOwnerBindingUnavailableResult(): Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["bindPreAuthIntentToAuthenticatedOwner"]>>> {
+  return Object.freeze({
+    kind: "mcp_oauth_pre_auth_owner_binding_result",
+    ok: false,
+    reason: "storage_unavailable",
+    safeFailure: {
+      code: "mcp_oauth_pre_auth_owner_binding_denied",
+      message: "Pre-auth owner binding denied.",
+      safeForModel: true,
+      handleEchoed: false,
+      digestEchoed: false,
+      identityEchoed: false,
       sensitiveValuesEchoed: false,
       version: 1,
     },
