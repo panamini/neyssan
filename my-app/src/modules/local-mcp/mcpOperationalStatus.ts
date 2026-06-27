@@ -2,11 +2,17 @@ import {
   mapMcpOperationalReasonToCategory,
   type McpOperationalErrorCategoryV1,
 } from "./mcpOperationalErrorTaxonomy";
+import {
+  MCP_OAUTH_PRODUCTION_APPROVED_FLAG,
+  MCP_OAUTH_PRODUCTION_RUNTIME_FLAG,
+} from "./mcpOAuthProductionActivationBoundary";
+import { TWOWEEKS_APPLICATIONS_READ_SCOPE } from "./mcpAuthPolicyBoundary";
 
 export type McpOperationalStatusCapabilityV1 =
   | "manual_handoff"
   | "live_external_action"
   | "account_link"
+  | "production_oauth_activation"
   | "outbound_egress"
   | "write_action";
 
@@ -30,6 +36,41 @@ const STATUS_FORBIDDEN_KEY_RE =
   /(?:authorization|cookie|session|secret|clientsecret|providersubject|stytchsubject|clerk|claims|jwt|jwks|raw|url|metadata|labels|error|stack|artifact|answer|source)/iu;
 const STATUS_FORBIDDEN_VALUE_RE =
   /\b(?:bearer|access[_-]?token|refresh[_-]?token|id[_-]?token|client[_-]?secret|api[_-]?key|authorization|cookie|session|credential|private_fact|never_use|generated artifact|answer text|source quote)\b|https?:\/\/\S+|\beyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/iu;
+const STATUS_OPAQUE_IDENTIFIER_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{1,191}$/u;
+const PRODUCTION_OAUTH_ACTIVATION_CONFIG_KEYS = new Set([
+  "kind",
+  "enabled",
+  "requiredFlags",
+  "providerConfig",
+  "providerAbstraction",
+  "tokenExchange",
+  "accountLinkLifecycle",
+  "publicEndpointExposed",
+  "frontendWiring",
+  "tokenStorage",
+  "refreshTokenStorage",
+  "defaultProductionBehavior",
+  "version",
+]);
+const PRODUCTION_OAUTH_PROVIDER_CONFIG_KEYS = new Set([
+  "provider",
+  "issuer",
+  "resource",
+  "providerEnvironment",
+  "allowedClientIds",
+  "requiredReadScopes",
+  "version",
+]);
+const PRODUCTION_OAUTH_ACTIVATION_CONFIG_SHAPE_CHECKS = [
+  (value: Record<string, unknown>) => value.kind === "mcp_oauth_production_activation_config",
+  (value: Record<string, unknown>) => typeof value.enabled === "boolean",
+  (value: Record<string, unknown>) => value.publicEndpointExposed === false,
+  (value: Record<string, unknown>) => value.frontendWiring === false,
+  (value: Record<string, unknown>) => value.tokenStorage === "none",
+  (value: Record<string, unknown>) => value.refreshTokenStorage === "none",
+  (value: Record<string, unknown>) => value.defaultProductionBehavior === "disabled",
+  (value: Record<string, unknown>) => value.version === 1,
+] as const;
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return (
@@ -173,6 +214,37 @@ export function buildMcpOperationalLiveExternalActionStatus(
   return unsafeConfigStatus("live_external_action");
 }
 
+export function buildMcpOperationalProductionOAuthActivationStatus(
+  activationConfig: unknown,
+): McpOperationalStatusV1 {
+  const config = readProductionOAuthActivationConfig(activationConfig);
+  if (!config) {
+    return unsafeConfigStatus("production_oauth_activation");
+  }
+
+  if (config.runtimeValue !== "1" || config.approvedValue !== "1") {
+    return buildStatus({
+      capability: "production_oauth_activation",
+      enabled: false,
+      configValid: true,
+      featureState: "disabled",
+      category: "feature_disabled",
+    });
+  }
+
+  if (!config.enabled || config.providerConfigPresent !== true) {
+    return unsafeConfigStatus("production_oauth_activation");
+  }
+
+  return buildStatus({
+    capability: "production_oauth_activation",
+    enabled: true,
+    configValid: true,
+    featureState: "blocked",
+    category: "auth_invalid",
+  });
+}
+
 export function buildMcpOperationalAccountLinkStatus(
   reason: unknown,
 ): McpOperationalStatusV1 {
@@ -198,6 +270,180 @@ export function buildMcpOperationalAccountLinkStatus(
     featureState: "blocked",
     category,
   });
+}
+
+function readProductionOAuthActivationConfig(
+  value: unknown,
+):
+  | Readonly<{
+      enabled: boolean;
+      runtimeValue: string;
+      approvedValue: string;
+      providerConfigPresent: boolean;
+    }>
+  | undefined {
+  if (!isPlainRecord(value)) {
+    return undefined;
+  }
+
+  if (hasUnknownProductionOAuthActivationConfigKeys(value)) {
+    return undefined;
+  }
+
+  if (!hasProductionOAuthActivationConfigShape(value)) {
+    return undefined;
+  }
+
+  const enabled = value.enabled;
+  if (typeof enabled !== "boolean") {
+    return undefined;
+  }
+
+  const requiredFlags = readProductionOAuthActivationRequiredFlags(value.requiredFlags);
+  if (!requiredFlags) {
+    return undefined;
+  }
+  const providerConfigPresent = readProductionOAuthActivationProviderConfigPresent(value.providerConfig);
+  if (providerConfigPresent === undefined) {
+    return undefined;
+  }
+
+  return {
+    enabled,
+    runtimeValue: requiredFlags.runtimeValue,
+    approvedValue: requiredFlags.approvedValue,
+    providerConfigPresent,
+  };
+}
+
+function hasProductionOAuthActivationConfigShape(
+  value: Record<string, unknown>,
+): boolean {
+  return PRODUCTION_OAUTH_ACTIVATION_CONFIG_SHAPE_CHECKS.every((check) => check(value));
+}
+
+function hasUnknownProductionOAuthActivationConfigKeys(
+  value: Record<string, unknown>,
+): boolean {
+  return Object.keys(value).some((key) => !PRODUCTION_OAUTH_ACTIVATION_CONFIG_KEYS.has(key));
+}
+
+function readProductionOAuthActivationProviderConfigPresent(
+  value: unknown,
+): boolean | undefined {
+  if (value === undefined) {
+    return false;
+  }
+
+  if (!isPlainRecord(value)) {
+    return undefined;
+  }
+
+  if (Object.keys(value).some((key) => !PRODUCTION_OAUTH_PROVIDER_CONFIG_KEYS.has(key))) {
+    return undefined;
+  }
+
+  if (
+    value.provider !== "stytch" ||
+    !isSafeProductionOAuthConfigHttpsUrl(value.issuer, "issuer") ||
+    !isSafeProductionOAuthConfigHttpsUrl(value.resource, "resource") ||
+    !isSafeProductionOAuthOpaqueIdentifier(value.providerEnvironment) ||
+    !isSafeProductionOAuthOpaqueIdentifierList(value.allowedClientIds) ||
+    !isCanonicalProductionOAuthReadScopeList(value.requiredReadScopes) ||
+    value.version !== 1
+  ) {
+    return undefined;
+  }
+
+  return true;
+}
+
+function readProductionOAuthActivationRequiredFlags(
+  value: unknown,
+): Readonly<{
+  runtimeValue: "1" | "not_enabled";
+  approvedValue: "1" | "not_enabled";
+}> | undefined {
+  if (
+    !isPlainRecord(value) ||
+    value.runtimeFlagName !== MCP_OAUTH_PRODUCTION_RUNTIME_FLAG ||
+    value.approvedFlagName !== MCP_OAUTH_PRODUCTION_APPROVED_FLAG ||
+    value.bothRequired !== true ||
+    value.version !== 1
+  ) {
+    return undefined;
+  }
+
+  if (!isProductionOAuthActivationFlagValue(value.runtimeValue)) {
+    return undefined;
+  }
+
+  if (!isProductionOAuthActivationFlagValue(value.approvedValue)) {
+    return undefined;
+  }
+
+  return {
+    runtimeValue: value.runtimeValue,
+    approvedValue: value.approvedValue,
+  };
+}
+
+function isProductionOAuthActivationFlagValue(
+  value: unknown,
+): value is "1" | "not_enabled" {
+  return value === "1" || value === "not_enabled";
+}
+
+function isSafeProductionOAuthConfigHttpsUrl(
+  value: unknown,
+  kind: "issuer" | "resource",
+): boolean {
+  if (typeof value !== "string" || value.length === 0 || hasControlCharacter(value)) {
+    return false;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.hash) {
+    return false;
+  }
+  if (kind === "issuer" && parsed.search) {
+    return false;
+  }
+  return Boolean(parsed.hostname) && !parsed.hostname.includes("*");
+}
+
+function isSafeProductionOAuthOpaqueIdentifier(value: unknown): boolean {
+  return typeof value === "string" && STATUS_OPAQUE_IDENTIFIER_RE.test(value.trim());
+}
+
+function isSafeProductionOAuthOpaqueIdentifierList(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((item) => isSafeProductionOAuthOpaqueIdentifier(item))
+  );
+}
+
+function isCanonicalProductionOAuthReadScopeList(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.length === 1 &&
+    value[0] === TWOWEEKS_APPLICATIONS_READ_SCOPE
+  );
+}
+
+function hasControlCharacter(value: string): boolean {
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    if (code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
 }
 
 export function buildMcpOperationalEgressStatus(
