@@ -5,10 +5,6 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import { createLocalMcpDevEndpointPlugin } from "../../../../vite.config";
-import {
-  internalCreateMcpOAuthPreAuthIntent,
-  type McpOAuthPreAuthIntentRecordV1,
-} from "../../../../convex/mcpOAuthPreAuthIntents";
 import { TWOWEEKS_APPLICATIONS_READ_SCOPE } from "../mcpAuthPolicyBoundary";
 import type { McpOAuthAuthorizationRequestBoundaryConfigV1 } from "../mcpOAuthAuthorizationRequestBoundary";
 import {
@@ -71,15 +67,30 @@ const FORBIDDEN_PREFLIGHT_REIMPLEMENTATION_PATTERNS = Object.freeze([
   /routeWiringEnabled\s*=/u,
 ] as const);
 
-type StoredPreAuthIntentRecord = McpOAuthPreAuthIntentRecordV1 & {
+type StoredPreAuthIntentRecord = {
+  kind: "mcp_oauth_pre_auth_intent_record";
+  version: 1;
+  preAuthHandleHash: string;
+  authorizationPageOrigin: string;
+  authorizationPagePath: string;
+  responseType: "code";
+  clientId: string;
+  redirectUri: string;
+  resource: string;
+  scopes: string[];
+  state: string;
+  codeChallenge: string;
+  codeChallengeMethod: "S256";
+  approvedOptionalParameters?: Readonly<Partial<Record<"nonce" | "prompt", string>>>;
+  providerValidationStatus: "pending";
+  status: "pre_auth_pending";
+  createdAt: number;
+  updatedAt: number;
+  expiresAt: number;
+  storageVersion: 1;
   _id: string;
   _creationTime: number;
 };
-
-type Constraint = Readonly<{ field: string; op: "eq"; value: unknown }>;
-type IndexConstraintBuilder = Readonly<{
-  eq: (field: string, value: unknown) => IndexConstraintBuilder;
-}>;
 
 const PROVIDER_CONFIG = {
   provider: "stytch",
@@ -492,6 +503,91 @@ describe("MCP OAuth production route adapter", () => {
     expectNoRouteLeakage(response);
   });
 
+  it("rejects production authorization config that drifts from the preflighted provider config", async () => {
+    const ctx = makeCtx();
+    const dependencies = {
+      ...routeDependencies(ctx),
+      authorizationRequestConfig: {
+        ...authorizationRequestConfig(),
+        canonicalResource: "https://mcp.twoweeks.example.test/drifted-resource",
+      },
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+
+    const response = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 500,
+      json: {
+        status: "blocked",
+        reason: "invalid_configuration",
+        route: "oauth_authorize",
+        preAuthIntentCreated: false,
+      },
+    });
+    expect(dependencies.checkPreAuthQuota).not.toHaveBeenCalled();
+    expect(dependencies.createPreAuthIntent).not.toHaveBeenCalled();
+    expect(ctx.preAuthRows).toHaveLength(0);
+    expectNoRouteLeakage(response);
+  });
+
+  it("requires a quota gate before unauthenticated production pre-auth storage", async () => {
+    const ctx = makeCtx();
+    const dependencies = {
+      ...routeDependencies(ctx),
+      checkPreAuthQuota: vi.fn(async () => ({
+        kind: "mcp_oauth_pre_auth_quota_result",
+        ok: false,
+        reason: "rate_limited",
+        safeFailure: {
+          code: "mcp_oauth_pre_auth_quota_denied",
+          message: "Pre-auth quota denied.",
+          safeForModel: true,
+          sensitiveValuesEchoed: false,
+          version: 1,
+        },
+        safeForLogging: true,
+        version: 1,
+      })),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+
+    const response = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 429,
+      json: {
+        status: "blocked",
+        reason: "pre_auth_quota_denied",
+        route: "oauth_authorize",
+        preAuthIntentCreated: false,
+        ownerBound: false,
+        providerCalled: false,
+        tokenExchangeAttempted: false,
+        accountLinkCreated: false,
+      },
+    });
+    expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(1);
+    expect(dependencies.checkPreAuthQuota.mock.calls[0]?.[0]).toMatchObject({
+      authorizationPageOrigin: PROD_APP_ORIGIN,
+      clientId: CLIENT_ID,
+      resource: RESOURCE,
+      now: NOW,
+      version: 1,
+    });
+    expect(dependencies.createPreAuthIntent).not.toHaveBeenCalled();
+    expect(ctx.preAuthRows).toHaveLength(0);
+    expectNoRouteLeakage(response);
+  });
+
   it("maps thrown pre-auth storage failures to retryable dependency failure", async () => {
     const ctx = makeCtx();
     const dependencies = {
@@ -593,9 +689,12 @@ describe("MCP OAuth production route adapter", () => {
       )}`,
     });
     expect(dependencies.createPreAuthIntent).toHaveBeenCalledTimes(1);
+    expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(1);
     expect(dependencies.createPreAuthIntent.mock.calls[0]?.[0]).toMatchObject({
       preAuthHandleHash: HANDLE_HASH,
       now: NOW,
+      deadlineEpochMs: NOW + 2_500,
+      timeoutMs: 2_500,
       version: 1,
     });
     expect(JSON.stringify(dependencies.createPreAuthIntent.mock.calls[0]?.[0])).not.toContain(RAW_HANDLE);
@@ -612,6 +711,137 @@ describe("MCP OAuth production route adapter", () => {
     expect(activation.providerAdapter.exchangeAuthorizationCode).not.toHaveBeenCalled();
     expect(activation.executeAccountLinkLifecycle).not.toHaveBeenCalled();
     expectNoRouteLeakage(response, [], { allowRawHandle: true });
+  });
+
+  it("rejects storage success unless it proves the created intent is still ownerless and non-executing", async () => {
+    const dependencies = {
+      ...routeDependencies(makeCtx()),
+      createPreAuthIntent: vi.fn(async () => ({
+        kind: "mcp_oauth_pre_auth_intent_create_result",
+        ok: true,
+        reason: "created",
+        serverOnly: {
+          status: "pre_auth_pending",
+          expiresAt: NOW + 60_000,
+          containsOwnerIdentity: true,
+          containsProviderSubject: false,
+          containsAccountLinkId: false,
+          authorizationGranted: false,
+          consentCompleted: false,
+          authorizationCodeIssued: false,
+          tokenIssued: false,
+          accountLinkCreated: false,
+          version: 1,
+        },
+        modelVisible: false,
+        safeForLogging: false,
+        version: 1,
+      })),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+
+    const response = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 503,
+      json: {
+        status: "blocked",
+        reason: "pre_auth_create_failed",
+        preAuthIntentCreated: false,
+        ownerBound: false,
+        consentCompleted: false,
+        authorizationCodeIssued: false,
+        tokenIssued: false,
+        accountLinkCreated: false,
+      },
+    });
+    expectNoRouteLeakage(response);
+  });
+
+  it("rejects non-finite storage expiry before returning the sign-in redirect", async () => {
+    const dependencies = {
+      ...routeDependencies(makeCtx()),
+      createPreAuthIntent: vi.fn(async () => ({
+        kind: "mcp_oauth_pre_auth_intent_create_result",
+        ok: true,
+        reason: "created",
+        serverOnly: {
+          status: "pre_auth_pending",
+          expiresAt: Number.POSITIVE_INFINITY,
+          containsOwnerIdentity: false,
+          containsProviderSubject: false,
+          containsAccountLinkId: false,
+          authorizationGranted: false,
+          consentCompleted: false,
+          authorizationCodeIssued: false,
+          tokenIssued: false,
+          accountLinkCreated: false,
+          version: 1,
+        },
+        modelVisible: false,
+        safeForLogging: false,
+        version: 1,
+      })),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+
+    const response = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 503,
+      json: {
+        status: "blocked",
+        reason: "pre_auth_create_failed",
+        preAuthIntentCreated: false,
+      },
+    });
+    expectNoRouteLeakage(response);
+  });
+
+  it("bounds stalled pre-auth storage before returning a production authorize response", async () => {
+    vi.useFakeTimers();
+    const dependencies = {
+      ...routeDependencies(makeCtx()),
+      createPreAuthIntent: vi.fn(
+        () => new Promise<never>(() => undefined),
+      ),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+
+    try {
+      const responsePromise = handleMcpOAuthProductionRouteRequest(
+        request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+        routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+        dependencies,
+      );
+      await vi.advanceTimersByTimeAsync(2_500);
+      const response = await responsePromise;
+
+      expect(response).toMatchObject({
+        handled: true,
+        status: 503,
+        json: {
+          status: "blocked",
+          reason: "pre_auth_create_failed",
+          preAuthIntentCreated: false,
+        },
+      });
+      expect(dependencies.createPreAuthIntent).toHaveBeenCalledTimes(1);
+      expect(dependencies.createPreAuthIntent.mock.calls[0]?.[0]).toMatchObject({
+        deadlineEpochMs: NOW + 2_500,
+        timeoutMs: 2_500,
+      });
+      expectNoRouteLeakage(response);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps production authorize guarded when the injected clock throws", async () => {
@@ -858,15 +1088,20 @@ function request(
 function routeDependencies(ctx: ReturnType<typeof makeCtx>) {
   const dependencies = {
     authorizationRequestConfig: authorizationRequestConfig(),
-    createPreAuthIntent: vi.fn(async (input) =>
-      await internalCreateMcpOAuthPreAuthIntent._handler(ctx.ctx as any, input),
-    ),
+    checkPreAuthQuota: vi.fn(async () => ({
+      kind: "mcp_oauth_pre_auth_quota_result",
+      ok: true,
+      reason: "accepted",
+      safeForLogging: true,
+      version: 1,
+    })),
+    createPreAuthIntent: vi.fn(async (input) => createFakePreAuthIntent(ctx, input)),
     handleCodec: deterministicCodec,
     now: vi.fn(() => NOW),
   } satisfies Required<
     Pick<
       McpOAuthProductionRouteAdapterDependenciesV1,
-      "authorizationRequestConfig" | "createPreAuthIntent" | "handleCodec" | "now"
+      "authorizationRequestConfig" | "checkPreAuthQuota" | "createPreAuthIntent" | "handleCodec" | "now"
     >
   >;
   return dependencies;
@@ -921,72 +1156,83 @@ function continuationPath(): string {
 
 function makeCtx() {
   const preAuthRows: StoredPreAuthIntentRecord[] = [];
-  let nextPreAuthId = 1;
-
-  const ctx = {
-    db: {
-      query: (tableName: string) => {
-        if (tableName !== "mcpOAuthPreAuthIntents") {
-          throw new Error(`Unexpected table ${tableName}`);
-        }
-        return {
-          withIndex: (
-            indexName: string,
-            buildQuery: (query: IndexConstraintBuilder) => unknown,
-          ) => {
-            const constraints: Constraint[] = [];
-            const query: IndexConstraintBuilder = {
-              eq(field: string, value: unknown) {
-                constraints.push({ field, op: "eq", value });
-                return query;
-              },
-            };
-            buildQuery(query);
-            expectKnownIndex(tableName, indexName, constraints);
-            const matching = preAuthRows.filter((row) =>
-              constraints.every((constraint) => {
-                const fieldValue = row[constraint.field as keyof typeof row];
-                return fieldValue === constraint.value;
-              }),
-            );
-            return {
-              collect: async () => matching,
-            };
-          },
-        };
-      },
-      insert: async (tableName: string, record: unknown) => {
-        if (tableName !== "mcpOAuthPreAuthIntents") {
-          throw new Error(`Unexpected insert table ${tableName}`);
-        }
-        const id = `mcpOAuthPreAuthIntents_fixture_${nextPreAuthId++}`;
-        preAuthRows.push({
-          ...(record as McpOAuthPreAuthIntentRecordV1),
-          scopes: [...(record as McpOAuthPreAuthIntentRecordV1).scopes],
-          _id: id,
-          _creationTime: NOW,
-        });
-        return id;
-      },
-    },
-  };
 
   return {
-    ctx,
     preAuthRows,
   };
 }
 
-function expectKnownIndex(
-  tableName: string,
-  indexName: string,
-  constraints: readonly Constraint[],
-): void {
-  if (tableName === "mcpOAuthPreAuthIntents" && indexName === "by_pre_auth_handle_hash") {
-    expect(constraints).toEqual([expect.objectContaining({ field: "preAuthHandleHash", op: "eq" })]);
-    return;
+function createFakePreAuthIntent(
+  ctx: ReturnType<typeof makeCtx>,
+  input: Parameters<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["createPreAuthIntent"]>>[0],
+): ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["createPreAuthIntent"]>> {
+  if (ctx.preAuthRows.some((row) => row.preAuthHandleHash === input.preAuthHandleHash)) {
+    return Promise.resolve({
+      kind: "mcp_oauth_pre_auth_intent_create_result",
+      ok: false,
+      reason: "handle_collision",
+      safeFailure: {
+        code: "mcp_oauth_pre_auth_intent_denied",
+        message: "Pre-auth intent denied.",
+        safeForModel: true,
+        sensitiveValuesEchoed: false,
+        version: 1,
+      },
+      modelVisible: false,
+      safeForLogging: true,
+      version: 1,
+    });
   }
-  throw new Error(`Unexpected index ${tableName}.${indexName}`);
+
+  const projection = input.authorizationRequestProjection;
+  const optionalParameters = projection.providerForwardRequest.approvedOptionalParameters;
+  const row: StoredPreAuthIntentRecord = {
+    kind: "mcp_oauth_pre_auth_intent_record",
+    version: 1,
+    preAuthHandleHash: input.preAuthHandleHash,
+    authorizationPageOrigin: projection.authorizationPage.origin,
+    authorizationPagePath: projection.authorizationPage.path,
+    responseType: "code",
+    clientId: projection.providerForwardRequest.clientId,
+    redirectUri: projection.providerForwardRequest.redirectUri,
+    resource: projection.providerForwardRequest.resource,
+    scopes: [...projection.providerForwardRequest.scopes],
+    state: projection.providerForwardRequest.state,
+    codeChallenge: projection.providerForwardRequest.pkce.codeChallenge,
+    codeChallengeMethod: "S256",
+    ...(optionalParameters ? { approvedOptionalParameters: optionalParameters } : {}),
+    providerValidationStatus: "pending",
+    status: "pre_auth_pending",
+    createdAt: input.now,
+    updatedAt: input.now,
+    expiresAt: input.now + 10 * 60 * 1_000,
+    storageVersion: 1,
+    _id: `mcpOAuthPreAuthIntents_fixture_${ctx.preAuthRows.length + 1}`,
+    _creationTime: NOW,
+  };
+  ctx.preAuthRows.push(row);
+
+  return Promise.resolve({
+    kind: "mcp_oauth_pre_auth_intent_create_result",
+    ok: true,
+    reason: "created",
+    serverOnly: {
+      status: "pre_auth_pending",
+      expiresAt: row.expiresAt,
+      containsOwnerIdentity: false,
+      containsProviderSubject: false,
+      containsAccountLinkId: false,
+      authorizationGranted: false,
+      consentCompleted: false,
+      authorizationCodeIssued: false,
+      tokenIssued: false,
+      accountLinkCreated: false,
+      version: 1,
+    },
+    modelVisible: false,
+    safeForLogging: false,
+    version: 1,
+  });
 }
 
 function expectedRouteName(path: McpOAuthProductionRoutePathV1) {

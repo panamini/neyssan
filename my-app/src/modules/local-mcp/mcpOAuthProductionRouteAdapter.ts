@@ -36,6 +36,7 @@ type McpOAuthProductionRouteNameV1 =
 export type McpOAuthProductionRouteAdapterConfigV1 = Readonly<{
   kind: "mcp_oauth_production_route_adapter_config";
   preflight: McpOAuthProductionRoutePreflightResultV1;
+  authorizationRequestGuard: McpOAuthProductionAuthorizationRequestGuardV1;
   handledPaths: readonly McpOAuthProductionRoutePathV1[];
   failClosedUnlessPreflightReady: true;
   authorizeCreatesOwnerlessPreAuthIntentOnly: true;
@@ -44,10 +45,48 @@ export type McpOAuthProductionRouteAdapterConfigV1 = Readonly<{
   version: 1;
 }>;
 
+type McpOAuthProductionAuthorizationRequestGuardV1 = Readonly<{
+  expectedResource?: string;
+  allowedClientIds: readonly string[];
+  version: 1;
+}>;
+
+export type McpOAuthProductionPreAuthQuotaPortInputV1 = Readonly<{
+  authorizationPageOrigin: string;
+  clientId: string;
+  resource: string;
+  now: number;
+  version: 1;
+}>;
+
+export type McpOAuthProductionPreAuthQuotaPortResultV1 = Readonly<
+  | {
+      kind: "mcp_oauth_pre_auth_quota_result";
+      ok: true;
+      reason: "accepted";
+      safeForLogging: true;
+      version: 1;
+    }
+  | {
+      kind: "mcp_oauth_pre_auth_quota_result";
+      ok: false;
+      reason: "rate_limited" | "quota_exhausted" | "invalid_request";
+      safeFailure: unknown;
+      safeForLogging: true;
+      version: 1;
+    }
+>;
+
+export type McpOAuthProductionPreAuthQuotaPortV1 = (
+  input: McpOAuthProductionPreAuthQuotaPortInputV1,
+) => Promise<McpOAuthProductionPreAuthQuotaPortResultV1>;
+
 export type McpOAuthProductionPreAuthIntentCreatePortInputV1 = Readonly<{
   authorizationRequestProjection: McpOAuthPreAuthAuthorizationRequestProjectionV1;
   preAuthHandleHash: string;
   now: number;
+  deadlineEpochMs: number;
+  timeoutMs: number;
   version: 1;
 }>;
 
@@ -59,6 +98,14 @@ export type McpOAuthProductionPreAuthIntentCreatePortResultV1 = Readonly<
       serverOnly: {
         status: "pre_auth_pending";
         expiresAt: number;
+        containsOwnerIdentity: false;
+        containsProviderSubject: false;
+        containsAccountLinkId: false;
+        authorizationGranted: false;
+        consentCompleted: false;
+        authorizationCodeIssued: false;
+        tokenIssued: false;
+        accountLinkCreated: false;
         version: 1;
       };
       modelVisible: false;
@@ -82,6 +129,7 @@ export type McpOAuthProductionPreAuthIntentCreatePortV1 = (
 
 export type McpOAuthProductionRouteAdapterDependenciesV1 = Readonly<{
   authorizationRequestConfig?: McpOAuthAuthorizationRequestBoundaryConfigV1;
+  checkPreAuthQuota?: McpOAuthProductionPreAuthQuotaPortV1;
   createPreAuthIntent?: McpOAuthProductionPreAuthIntentCreatePortV1;
   handleCodec?: McpOAuthContinuationHandleCodecV1;
   now?: () => number;
@@ -109,6 +157,7 @@ type McpOAuthProductionRouteFailureReasonV1 =
   | "invalid_host"
   | "invalid_authorization_request"
   | "invalid_configuration"
+  | "pre_auth_quota_denied"
   | "pre_auth_create_failed";
 
 type McpOAuthProductionAuthorizationOriginV1 = Readonly<{
@@ -123,7 +172,18 @@ const HANDLED_PATHS = Object.freeze([
   MCP_OAUTH_PRODUCTION_CALLBACK_PATH,
   MCP_OAUTH_PRODUCTION_MCP_PATH,
 ] as const);
+const PRE_AUTH_CREATE_FALSE_PROOF_KEYS = Object.freeze([
+  "containsOwnerIdentity",
+  "containsProviderSubject",
+  "containsAccountLinkId",
+  "authorizationGranted",
+  "consentCompleted",
+  "authorizationCodeIssued",
+  "tokenIssued",
+  "accountLinkCreated",
+] as const);
 const INTENT_HANDLE_HASH_PATTERN = /^[0-9a-f]{64}$/u;
+const PRE_AUTH_CREATE_TIMEOUT_MS = 2_500;
 
 export function buildMcpOAuthProductionRouteAdapterConfig(
   input: McpOAuthProductionRoutePreflightInputV1 = {},
@@ -131,6 +191,7 @@ export function buildMcpOAuthProductionRouteAdapterConfig(
   return Object.freeze({
     kind: "mcp_oauth_production_route_adapter_config",
     preflight: buildMcpOAuthProductionRoutePreflight(input),
+    authorizationRequestGuard: buildAuthorizationRequestGuard(input),
     handledPaths: HANDLED_PATHS,
     failClosedUnlessPreflightReady: true,
     authorizeCreatesOwnerlessPreAuthIntentOnly: true,
@@ -160,18 +221,22 @@ export async function handleMcpOAuthProductionRouteRequest(
     });
   }
   if (route === "oauth_authorize") {
-    return handleAuthorizationRequest(request, config.preflight, dependencies);
+    return handleAuthorizationRequest(request, config, dependencies);
   }
   return inertGuardedResponse(route, config.preflight);
 }
 
 async function handleAuthorizationRequest(
   request: McpOAuthProductionRouteAdapterRequestV1,
-  preflight: McpOAuthProductionRoutePreflightResultV1,
+  config: McpOAuthProductionRouteAdapterConfigV1,
   dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
 ): Promise<McpOAuthProductionRouteAdapterResponseV1> {
-  if (!dependencies.authorizationRequestConfig || !dependencies.createPreAuthIntent) {
+  const preflight = config.preflight;
+  if (!dependencies.authorizationRequestConfig || !dependencies.checkPreAuthQuota || !dependencies.createPreAuthIntent) {
     return failClosedResponse("oauth_authorize", preflight, "dependency_unavailable", 503);
+  }
+  if (!authorizationRequestConfigMatchesGuard(dependencies.authorizationRequestConfig, config.authorizationRequestGuard)) {
+    return failClosedResponse("oauth_authorize", preflight, "invalid_configuration", 500);
   }
   const authorizationOrigin = readAuthorizationOrigin(dependencies.authorizationRequestConfig);
   if (!authorizationOrigin) {
@@ -203,21 +268,44 @@ async function handleAuthorizationRequest(
     return failClosedResponse("oauth_authorize", preflight, "invalid_authorization_request", 400);
   }
 
+  const now = readNow(dependencies);
+  let quotaResult: McpOAuthProductionPreAuthQuotaPortResultV1;
+  try {
+    quotaResult = await dependencies.checkPreAuthQuota({
+      authorizationPageOrigin: projection.serverOnly.authorizationPage.origin,
+      clientId: projection.serverOnly.providerForwardRequest.clientId,
+      resource: projection.serverOnly.providerForwardRequest.resource,
+      now,
+      version: 1,
+    });
+  } catch {
+    return failClosedResponse("oauth_authorize", preflight, "pre_auth_quota_denied", 503);
+  }
+  if (!isQuotaAccepted(quotaResult)) {
+    return failClosedResponse("oauth_authorize", preflight, "pre_auth_quota_denied", 429);
+  }
+
   const codec = dependencies.handleCodec ?? defaultMcpOAuthContinuationHandleCodecV1;
   const generated = readGeneratedHandle(codec);
   if (!generated) {
     return failClosedResponse("oauth_authorize", preflight, "invalid_configuration", 500);
   }
 
-  const now = readNow(dependencies);
+  const createInput = Object.freeze({
+    authorizationRequestProjection: projection.serverOnly,
+    preAuthHandleHash: generated.intentHandleHash,
+    now,
+    deadlineEpochMs: now + PRE_AUTH_CREATE_TIMEOUT_MS,
+    timeoutMs: PRE_AUTH_CREATE_TIMEOUT_MS,
+    version: 1,
+  } satisfies McpOAuthProductionPreAuthIntentCreatePortInputV1);
   let createResult: McpOAuthProductionPreAuthIntentCreatePortResultV1;
   try {
-    createResult = await dependencies.createPreAuthIntent({
-      authorizationRequestProjection: projection.serverOnly,
-      preAuthHandleHash: generated.intentHandleHash,
-      now,
-      version: 1,
-    });
+    createResult = await createPreAuthIntentWithTimeout(
+      dependencies.createPreAuthIntent,
+      createInput,
+      PRE_AUTH_CREATE_TIMEOUT_MS,
+    );
   } catch {
     return failClosedResponse("oauth_authorize", preflight, "pre_auth_create_failed", 503);
   }
@@ -231,6 +319,84 @@ async function handleAuthorizationRequest(
   }
 
   return redirectToSignIn(generated.rawHandle, authorizationOrigin.origin);
+}
+
+function buildAuthorizationRequestGuard(
+  input: McpOAuthProductionRoutePreflightInputV1,
+): McpOAuthProductionAuthorizationRequestGuardV1 {
+  const providerConfig = input.providerConfig;
+  return Object.freeze({
+    expectedResource: typeof providerConfig?.resource === "string" ? providerConfig.resource : undefined,
+    allowedClientIds: Object.freeze(
+      Array.isArray(providerConfig?.allowedClientIds)
+        ? providerConfig.allowedClientIds.filter((clientId): clientId is string => typeof clientId === "string")
+        : [],
+    ),
+    version: 1,
+  });
+}
+
+function authorizationRequestConfigMatchesGuard(
+  config: McpOAuthAuthorizationRequestBoundaryConfigV1,
+  guard: McpOAuthProductionAuthorizationRequestGuardV1,
+): boolean {
+  return (
+    typeof guard.expectedResource === "string" &&
+    guard.expectedResource.length > 0 &&
+    config.canonicalResource === guard.expectedResource &&
+    config.clientIdPolicy.mode === "predefined_allowlist" &&
+    isSameStringSet(config.clientIdPolicy.allowedClientIds, guard.allowedClientIds)
+  );
+}
+
+function isSameStringSet(left: readonly string[], right: readonly string[]): boolean {
+  return (
+    left.length > 0 &&
+    left.length === right.length &&
+    left.every((value) => right.includes(value)) &&
+    right.every((value) => left.includes(value))
+  );
+}
+
+function isQuotaAccepted(
+  value: McpOAuthProductionPreAuthQuotaPortResultV1,
+): value is Extract<McpOAuthProductionPreAuthQuotaPortResultV1, { ok: true }> {
+  return (
+    isPlainRecord(value) &&
+    value.kind === "mcp_oauth_pre_auth_quota_result" &&
+    value.ok === true &&
+    value.reason === "accepted" &&
+    value.safeForLogging === true &&
+    value.version === 1
+  );
+}
+
+function createPreAuthIntentWithTimeout(
+  createPreAuthIntent: McpOAuthProductionPreAuthIntentCreatePortV1,
+  input: McpOAuthProductionPreAuthIntentCreatePortInputV1,
+  timeoutMs: number,
+): Promise<McpOAuthProductionPreAuthIntentCreatePortResultV1> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error("pre_auth_create_timeout"));
+    }, timeoutMs);
+
+    try {
+      createPreAuthIntent(input).then(
+        (result) => {
+          clearTimeout(timeout);
+          resolve(result);
+        },
+        (error: unknown) => {
+          clearTimeout(timeout);
+          reject(error);
+        },
+      );
+    } catch (error) {
+      clearTimeout(timeout);
+      reject(error);
+    }
+  });
 }
 
 function routeNameForPath(path: string): McpOAuthProductionRouteNameV1 | undefined {
@@ -437,7 +603,9 @@ function isPreAuthCreateSuccess(
     isPlainRecord(value.serverOnly) &&
     value.serverOnly.status === "pre_auth_pending" &&
     typeof value.serverOnly.expiresAt === "number" &&
+    Number.isSafeInteger(value.serverOnly.expiresAt) &&
     value.serverOnly.expiresAt > now &&
+    PRE_AUTH_CREATE_FALSE_PROOF_KEYS.every((key) => value.serverOnly[key] === false) &&
     value.serverOnly.version === 1 &&
     value.modelVisible === false &&
     value.safeForLogging === false &&
