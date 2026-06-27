@@ -29,6 +29,14 @@
     "src/modules/local-mcp/localMcpDevEndpoint.ts",
     "src/modules/local-mcp/localMcpToolsListFixture.ts",
     "src/modules/local-mcp/mcpAccountLinkingStorageBoundary.ts",
+    "src/modules/local-mcp/mcpOperationalErrorTaxonomy.ts",
+    "src/modules/local-mcp/mcpOperationalStatus.ts",
+    "src/modules/local-mcp/mcpOAuthAuthorizationRequestBoundary.ts",
+    "src/modules/local-mcp/mcpOAuthLocalDevRouteAdapter.ts",
+    "src/modules/local-mcp/mcpOAuthLoginReturnContinuationBoundary.ts",
+    "src/modules/local-mcp/mcpOAuthProductionActivationBoundary.ts",
+    "src/modules/local-mcp/mcpOAuthProductionRouteAdapter.ts",
+    "src/modules/local-mcp/mcpOAuthProductionRoutePreflightBoundary.ts",
     "src/modules/local-mcp/mcpAuthCompositionBoundary.ts",
     "src/modules/local-mcp/mcpAuthPolicyBoundary.ts",
     "src/modules/local-mcp/mcpAuthRequestOrchestrator.ts",
@@ -37,7 +45,8 @@
     "src/modules/local-mcp/mcpSchemaProjection.ts",
     "src/modules/local-mcp/mcpStytchBearerVerifierBoundary.ts",
     "src/modules/local-mcp/schema.ts",
-    "src/modules/local-mcp/toolRegistry.ts"
+    "src/modules/local-mcp/toolRegistry.ts",
+    "src/pages/sign-in-return.ts"
   ]
   
 }

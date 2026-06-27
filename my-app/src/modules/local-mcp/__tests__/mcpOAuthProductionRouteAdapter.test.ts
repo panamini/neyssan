@@ -53,8 +53,18 @@ const { convexHttpClientMutation, convexHttpClientSetAdminAuth, ConvexHttpClient
   };
 });
 
+const { createRemoteJWKSetMock, jwtVerifyMock } = vi.hoisted(() => ({
+  createRemoteJWKSetMock: vi.fn(() => "clerk_jwks_fixture"),
+  jwtVerifyMock: vi.fn(),
+}));
+
 vi.mock("convex/browser", () => ({
   ConvexHttpClient: ConvexHttpClientMock,
+}));
+
+vi.mock("jose", () => ({
+  createRemoteJWKSet: createRemoteJWKSetMock,
+  jwtVerify: jwtVerifyMock,
 }));
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
@@ -71,6 +81,8 @@ const RAW_HANDLE = "A".repeat(43);
 const HANDLE_HASH = sha256Hex(RAW_HANDLE);
 const OWNER_ID = "user_twoweeks_fixture_123";
 const OTHER_OWNER_ID = "user_twoweeks_fixture_456";
+const CLERK_ISSUER = "https://clerk.twoweeks.example.test";
+const CLERK_JWT = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJmaXh0dXJlIn0.signature";
 const NOW = Date.parse("2026-06-27T09:00:00.000Z");
 const FORBIDDEN_ROUTE_SOURCE_PATTERNS = Object.freeze([
   /\b(?:fetch|axios|XMLHttpRequest|WebSocket|EventSource)\b/u,
@@ -129,6 +141,8 @@ afterEach(() => {
   convexHttpClientMutation.mockReset();
   convexHttpClientSetAdminAuth.mockReset();
   ConvexHttpClientMock.mockClear();
+  createRemoteJWKSetMock.mockClear();
+  jwtVerifyMock.mockReset();
   vi.unstubAllEnvs();
 });
 
@@ -937,6 +951,11 @@ describe("MCP OAuth production route adapter", () => {
     expect(dependencies.bindPreAuthIntentToAuthenticatedOwner).toHaveBeenCalledTimes(1);
     expect(dependencies.bindPreAuthIntentToAuthenticatedOwner.mock.calls[0]?.[0]).toEqual({
       preAuthHandleHash: HANDLE_HASH,
+      authenticatedOwnerIdentity: {
+        subject: OWNER_ID,
+        issuer: CLERK_ISSUER,
+        version: 1,
+      },
       now: NOW,
       version: 1,
     });
@@ -986,6 +1005,7 @@ describe("MCP OAuth production route adapter", () => {
       },
     });
     expect(ctx.preAuthRows[0]).toMatchObject({ status: "pre_auth_pending" });
+    expect(dependencies.bindPreAuthIntentToAuthenticatedOwner).not.toHaveBeenCalled();
     expectNoRouteLeakage(response);
   });
 
@@ -1686,6 +1706,34 @@ describe("MCP OAuth production route adapter", () => {
     expectNoRouteLeakage(response);
   });
 
+  it("lets localhost login-return continuations fall through to the local OAuth route when production wiring is also enabled", async () => {
+    const plugin = createLocalMcpDevEndpointPlugin({
+      env: {
+        ...prodRouteEnv(),
+        [LOCAL_MCP_DEV_OAUTH_AUTHORIZATION_FLAG]: "1",
+        [LOCAL_MCP_DEV_OAUTH_APPLICATION_ORIGIN_VAR]: APP_ORIGIN,
+        [LOCAL_MCP_DEV_OAUTH_REDIRECT_URI_VAR]: REDIRECT_URI,
+        LOCAL_MCP_DEV_AUTH_RESOURCE: RESOURCE,
+        LOCAL_MCP_DEV_AUTH_CLIENT_ID: CLIENT_ID,
+      },
+    });
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeMiddleware(middleware, {
+      method: "GET",
+      url: continuationPath(),
+      headers: { host: "localhost:5173" },
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(503);
+    expect(JSON.parse(response.body)).toMatchObject({
+      kind: "mcp_oauth_local_dev_route_failure",
+      reason: "dependency_unavailable",
+    });
+    expect(response.body).not.toContain("invalid_host");
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
+  });
+
   it("wires production authorize requests into the live Vite middleware", async () => {
     const ctx = makeCtx();
     const plugin = createLocalMcpDevEndpointPlugin({
@@ -1753,7 +1801,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(response.statusCode).toBe(303);
     expect(response.headers.location).toContain(`${PROD_APP_ORIGIN}/sign-in?`);
     expect(ConvexHttpClientMock).toHaveBeenCalledWith("http://127.0.0.1:3210");
-    expect(convexHttpClientSetAdminAuth).toHaveBeenCalledWith("convex_admin_key_fixture");
+    expect(convexHttpClientSetAdminAuth).toHaveBeenCalledWith("convex_admin_key_fixture", undefined);
     expect(convexHttpClientMutation).toHaveBeenCalledTimes(1);
     expect(convexHttpClientMutation.mock.calls[0]?.[1]).toMatchObject({
       authorizationRequestProjection: {
@@ -1771,6 +1819,13 @@ describe("MCP OAuth production route adapter", () => {
     for (const [key, value] of Object.entries(prodRouteEnv())) {
       vi.stubEnv(key, value);
     }
+    jwtVerifyMock.mockResolvedValueOnce({
+      payload: {
+        sub: OWNER_ID,
+        iss: CLERK_ISSUER,
+        aud: "convex",
+      },
+    });
     convexHttpClientMutation.mockImplementationOnce(async () => ({
       kind: "mcp_oauth_pre_auth_owner_binding_result",
       ok: true,
@@ -1802,7 +1857,7 @@ describe("MCP OAuth production route adapter", () => {
     const response = await invokeMiddleware(middleware, {
       method: "GET",
       url: continuationPath(),
-      headers: { host: "mcp.twoweeks.example.test" },
+      headers: { host: "mcp.twoweeks.example.test", authorization: `Bearer ${CLERK_JWT}` },
     });
 
     expect(response.next).not.toHaveBeenCalled();
@@ -1817,7 +1872,20 @@ describe("MCP OAuth production route adapter", () => {
       accountLinkCreated: false,
     });
     expect(ConvexHttpClientMock).toHaveBeenCalledWith("http://127.0.0.1:3210");
-    expect(convexHttpClientSetAdminAuth).toHaveBeenCalledWith("convex_admin_key_fixture");
+    expect(createRemoteJWKSetMock).toHaveBeenCalledWith(new URL(`${CLERK_ISSUER}/.well-known/jwks.json`));
+    expect(jwtVerifyMock).toHaveBeenCalledWith(
+      CLERK_JWT,
+      "clerk_jwks_fixture",
+      {
+        issuer: CLERK_ISSUER,
+        audience: "convex",
+      },
+    );
+    expect(convexHttpClientSetAdminAuth).toHaveBeenNthCalledWith(1, "convex_admin_key_fixture", undefined);
+    expect(convexHttpClientSetAdminAuth).toHaveBeenNthCalledWith(2, "convex_admin_key_fixture", {
+      subject: OWNER_ID,
+      issuer: CLERK_ISSUER,
+    });
     expect(convexHttpClientMutation).toHaveBeenCalledTimes(1);
     expect(convexHttpClientMutation.mock.calls[0]?.[1]).toEqual({
       preAuthHandleHash: HANDLE_HASH,
@@ -1825,6 +1893,34 @@ describe("MCP OAuth production route adapter", () => {
       version: 1,
     });
     expect(convexHttpClientMutation.mock.calls[0]?.[2]).toEqual({ skipQueue: true });
+    expectNoRouteLeakage(response);
+  });
+
+  it("fails default production login-return continuation closed without a verified request identity", async () => {
+    for (const [key, value] of Object.entries(prodRouteEnv())) {
+      vi.stubEnv(key, value);
+    }
+    const plugin = createLocalMcpDevEndpointPlugin();
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeMiddleware(middleware, {
+      method: "GET",
+      url: continuationPath(),
+      headers: { host: "mcp.twoweeks.example.test" },
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(401);
+    expect(JSON.parse(response.body)).toMatchObject({
+      status: "blocked",
+      reason: "owner_binding_failed",
+      route: "oauth_login_return",
+      ownerBound: false,
+      authorizationCodeIssued: false,
+      tokenExchangeAttempted: false,
+      accountLinkCreated: false,
+    });
+    expect(jwtVerifyMock).not.toHaveBeenCalled();
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
     expectNoRouteLeakage(response);
   });
 
@@ -1972,6 +2068,15 @@ function routeDependencies(ctx: ReturnType<typeof makeCtx>) {
     bindPreAuthIntentToAuthenticatedOwner: vi.fn(async (input) =>
       bindFakePreAuthIntentToAuthenticatedOwner(ctx, input),
     ),
+    readAuthenticatedOwnerIdentity: vi.fn(async () =>
+      ctx.subject === null
+        ? undefined
+        : {
+            subject: ctx.subject,
+            issuer: CLERK_ISSUER,
+            version: 1,
+          },
+    ),
     handleCodec: deterministicCodec,
     now: vi.fn(() => NOW),
   } satisfies Required<
@@ -1981,9 +2086,10 @@ function routeDependencies(ctx: ReturnType<typeof makeCtx>) {
       | "checkPreAuthQuota"
       | "createPreAuthIntent"
       | "bindPreAuthIntentToAuthenticatedOwner"
+      | "readAuthenticatedOwnerIdentity"
       | "handleCodec"
       | "now"
-    >
+      >
   >;
   return dependencies;
 }
@@ -2126,6 +2232,20 @@ function bindFakePreAuthIntentToAuthenticatedOwner(
       kind: "mcp_oauth_pre_auth_owner_binding_result",
       ok: false,
       reason: "unauthenticated",
+      safeFailure: safeOwnerBindingFailure(),
+      modelVisible: false,
+      safeForLogging: true,
+      version: 1,
+    });
+  }
+  if (
+    input.authenticatedOwnerIdentity.subject !== ctx.subject ||
+    input.authenticatedOwnerIdentity.issuer !== CLERK_ISSUER
+  ) {
+    return Promise.resolve({
+      kind: "mcp_oauth_pre_auth_owner_binding_result",
+      ok: false,
+      reason: "not_found_or_forbidden",
       safeFailure: safeOwnerBindingFailure(),
       modelVisible: false,
       safeForLogging: true,
@@ -2355,6 +2475,7 @@ function prodRouteEnv(): Record<string, string> {
     MCP_OAUTH_PRODUCTION_CLIENT_IDS: CLIENT_ID,
     MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN: PROD_APP_ORIGIN,
     MCP_OAUTH_PRODUCTION_REDIRECT_URIS: REDIRECT_URI,
+    CLERK_JWT_ISSUER_DOMAIN: CLERK_ISSUER,
     CONVEX_URL: "http://127.0.0.1:3210",
     CONVEX_KEY: "convex_admin_key_fixture",
   };

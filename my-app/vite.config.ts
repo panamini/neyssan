@@ -1,7 +1,9 @@
 /// <reference types="vitest" />
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { ConvexHttpClient } from "convex/browser";
-import { makeFunctionReference } from "convex/server";
+import { makeFunctionReference, type FunctionReference, type UserIdentityAttributes } from "convex/server";
+import { createRemoteJWKSet, jwtVerify } from "jose";
+import type { JWTPayload } from "jose";
 import { defineConfig } from "vite";
 import type { Plugin } from "vite";
 import react from "@vitejs/plugin-react";
@@ -37,6 +39,7 @@ import {
   handleMcpOAuthProductionRouteRequest,
   isMcpOAuthProductionRouteHandledPath,
   MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
+  type McpOAuthProductionAuthenticatedOwnerIdentityV1,
   type McpOAuthProductionRouteAdapterConfigV1,
   type McpOAuthProductionRouteAdapterDependenciesV1,
 } from "./src/modules/local-mcp/mcpOAuthProductionRouteAdapter";
@@ -62,16 +65,23 @@ const CONVEX_AUTH_TOKEN_VAR = "CONVEX_AUTH_TOKEN";
 const CONVEX_URL_VAR = "CONVEX_URL";
 const VITE_CONVEX_URL_VAR = "VITE_CONVEX_URL";
 const NEXT_PUBLIC_CONVEX_URL_VAR = "NEXT_PUBLIC_CONVEX_URL";
+const CLERK_JWT_ISSUER_DOMAIN_VAR = "CLERK_JWT_ISSUER_DOMAIN";
+const CLERK_CONVEX_AUDIENCE = "convex";
 const PRE_AUTH_QUOTA_WINDOW_MS = 60_000;
 const PRE_AUTH_QUOTA_LIMIT = 60;
 const DEFAULT_VITE_ALLOWED_HOSTS = Object.freeze(["host.docker.internal"]);
 const CREATE_MCP_OAUTH_PRE_AUTH_INTENT_MUTATION = makeFunctionReference(
   "mcpOAuthPreAuthIntents:internalCreateMcpOAuthPreAuthIntent",
-);
+) as FunctionReference<"mutation">;
 const BIND_MCP_OAUTH_PRE_AUTH_INTENT_TO_OWNER_MUTATION = makeFunctionReference(
   "mcpOAuthPreAuthOwnerBinding:internalBindMcpOAuthPreAuthIntentToAuthenticatedOwner",
-);
+) as FunctionReference<"mutation">;
 const productionPreAuthQuotaBuckets = new Map<string, { count: number; windowStartedAt: number }>();
+const productionClerkJwksByIssuer = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
+
+type ConvexHttpClientWithAdminAuthV1 = ConvexHttpClient & Readonly<{
+  setAdminAuth: (token: string, identity?: UserIdentityAttributes) => void;
+}>;
 
 export type LocalMcpDevEndpointPluginOptions = Readonly<{
   env?: Readonly<Record<string, string | undefined>>;
@@ -171,7 +181,8 @@ function handleLocalMcpDevMiddlewareRequest(
   const pathName = (req.url ?? "").split("?")[0];
   if (
     productionOAuthAuthorizationEnabled &&
-    (pathName === MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH || pathName === MCP_OAUTH_CONTINUATION_PATH)
+    (pathName === MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH || pathName === MCP_OAUTH_CONTINUATION_PATH) &&
+    productionOAuthRequestHostMatchesAuthorizationOrigin(req, productionOAuthAuthorizationDependencies)
   ) {
     void respondToMcpOAuthProductionRouteRequest(
       req,
@@ -268,6 +279,8 @@ async function respondToMcpOAuthProductionRouteRequest(
       url: req.url ?? pathName,
       headers: {
         host: headerValue(req.headers.host),
+        authorization: headerValue(req.headers.authorization),
+        cookie: headerValue(req.headers.cookie),
         "x-forwarded-for": headerValue(req.headers["x-forwarded-for"]),
         "x-real-ip": headerValue(req.headers["x-real-ip"]),
         "cf-connecting-ip": headerValue(req.headers["cf-connecting-ip"]),
@@ -409,8 +422,9 @@ function sendLocalMcpRouteResponse(
   res.end(bodyText ?? "");
 }
 
-function headerValue(value: string | string[] | undefined): string | undefined {
-  return Array.isArray(value) ? value[0] : value;
+function headerValue(value: string | readonly string[] | undefined): string | undefined {
+  if (typeof value === "string") return value;
+  return value?.[0];
 }
 
 function readLocalMcpDevAuthConfigInput(env: Readonly<Record<string, string | undefined>>): Readonly<{
@@ -465,12 +479,14 @@ function readProductionMcpOAuthConfigInput(env: Readonly<Record<string, string |
 function buildProductionMcpOAuthRouteDependencies(
   env: Readonly<Record<string, string | undefined>>,
 ): McpOAuthProductionRouteAdapterDependenciesV1 {
-  const convexClient = readConvexHttpClient(env);
+  const convexConnection = readConvexConnection(env);
+  const convexClient = readConvexHttpClient(convexConnection);
   return Object.freeze({
     authorizationRequestConfig: readProductionMcpOAuthAuthorizationRequestConfig(env),
     checkPreAuthQuota: checkProductionPreAuthQuota,
     createPreAuthIntent: buildProductionPreAuthIntentCreatePort(convexClient),
-    bindPreAuthIntentToAuthenticatedOwner: buildProductionPreAuthOwnerBindingPort(convexClient),
+    bindPreAuthIntentToAuthenticatedOwner: buildProductionPreAuthOwnerBindingPort(convexConnection),
+    readAuthenticatedOwnerIdentity: buildProductionAuthenticatedOwnerIdentityReader(env),
   });
 }
 
@@ -485,8 +501,8 @@ function readProductionMcpOAuthAuthorizationRequestConfig(
     canonicalResource: env[MCP_OAUTH_PRODUCTION_RESOURCE_VAR]?.trim() ?? "",
     allowedRedirectUris: readCommaSeparatedEnv(env[MCP_OAUTH_PRODUCTION_REDIRECT_URIS_VAR]),
     requiredScope: TWOWEEKS_APPLICATIONS_READ_SCOPE,
-    approvedOptionalScopes: ["openid", "email", "profile"],
-    allowedOptionalParameters: ["nonce", "prompt"],
+    approvedOptionalScopes: ["openid", "email", "profile"] as const,
+    allowedOptionalParameters: ["nonce", "prompt"] as const,
     maxUrlLength: 4_096,
     maxParameterLength: 512,
     maxStateLength: 512,
@@ -544,29 +560,126 @@ function buildProductionPreAuthIntentCreatePort(
 }
 
 function buildProductionPreAuthOwnerBindingPort(
-  convexClient: ConvexHttpClient | undefined,
+  convexConnection: ConvexConnectionV1 | undefined,
 ): NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["bindPreAuthIntentToAuthenticatedOwner"]> {
   return async (input) => {
+    const convexClient = readConvexHttpClient(convexConnection, {
+      subject: input.authenticatedOwnerIdentity.subject,
+      issuer: input.authenticatedOwnerIdentity.issuer,
+    });
     if (!convexClient) return preAuthOwnerBindingUnavailableResult();
     return convexClient.mutation(
       BIND_MCP_OAUTH_PRE_AUTH_INTENT_TO_OWNER_MUTATION,
-      input,
+      {
+        preAuthHandleHash: input.preAuthHandleHash,
+        now: input.now,
+        version: input.version,
+      },
       { skipQueue: true },
     ) as Promise<Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["bindPreAuthIntentToAuthenticatedOwner"]>>>>;
   };
 }
 
-function readConvexHttpClient(env: Readonly<Record<string, string | undefined>>): ConvexHttpClient | undefined {
+type ConvexConnectionV1 = Readonly<{
+  url: string;
+  adminAuth: string;
+}>;
+
+function readConvexConnection(env: Readonly<Record<string, string | undefined>>): ConvexConnectionV1 | undefined {
   const url = readFirstEnvValue(env, [CONVEX_URL_VAR, VITE_CONVEX_URL_VAR, NEXT_PUBLIC_CONVEX_URL_VAR]);
   const auth = readFirstEnvValue(env, [CONVEX_KEY_VAR, CONVEX_AUTH_TOKEN_VAR]);
   if (!url || !auth || !isAbsoluteUrl(url)) return undefined;
+  return Object.freeze({ url, adminAuth: auth });
+}
+
+function readConvexHttpClient(
+  connection: ConvexConnectionV1 | undefined,
+  actingAsIdentity?: UserIdentityAttributes,
+): ConvexHttpClient | undefined {
+  if (!connection) return undefined;
   try {
-    const client = new ConvexHttpClient(url);
-    client.setAdminAuth(auth);
+    const client = new ConvexHttpClient(connection.url) as ConvexHttpClientWithAdminAuthV1;
+    client.setAdminAuth(connection.adminAuth, actingAsIdentity);
     return client;
   } catch {
     return undefined;
   }
+}
+
+function buildProductionAuthenticatedOwnerIdentityReader(
+  env: Readonly<Record<string, string | undefined>>,
+): NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["readAuthenticatedOwnerIdentity"]> {
+  const issuer = readProductionClerkIssuer(env);
+  return async (request) => {
+    if (!issuer) return undefined;
+    const token = readRequestBearerToken(request.headers?.authorization) ?? readClerkSessionCookie(request.headers?.cookie);
+    if (!token) return undefined;
+    return verifyProductionClerkOwnerIdentity(token, issuer);
+  };
+}
+
+async function verifyProductionClerkOwnerIdentity(
+  token: string,
+  issuer: string,
+): Promise<McpOAuthProductionAuthenticatedOwnerIdentityV1 | undefined> {
+  try {
+    const { payload } = await jwtVerify(token, readProductionClerkJwks(issuer), {
+      issuer,
+      audience: CLERK_CONVEX_AUDIENCE,
+    });
+    const identity = readVerifiedOwnerIdentity(payload, issuer);
+    return identity ? Object.freeze({ ...identity, version: 1 }) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function readProductionClerkJwks(issuer: string): ReturnType<typeof createRemoteJWKSet> {
+  const existing = productionClerkJwksByIssuer.get(issuer);
+  if (existing) return existing;
+  const jwks = createRemoteJWKSet(new URL("/.well-known/jwks.json", issuer));
+  productionClerkJwksByIssuer.set(issuer, jwks);
+  return jwks;
+}
+
+function readVerifiedOwnerIdentity(
+  payload: JWTPayload,
+  issuer: string,
+): Omit<McpOAuthProductionAuthenticatedOwnerIdentityV1, "version"> | undefined {
+  const subject = typeof payload.sub === "string" ? payload.sub.trim() : "";
+  const verifiedIssuer = typeof payload.iss === "string" ? payload.iss.trim() : "";
+  if (
+    verifiedIssuer !== issuer ||
+    !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,511}$/u.test(subject)
+  ) {
+    return undefined;
+  }
+  return { subject, issuer: verifiedIssuer };
+}
+
+function readProductionClerkIssuer(env: Readonly<Record<string, string | undefined>>): string | undefined {
+  const issuer = env[CLERK_JWT_ISSUER_DOMAIN_VAR]?.trim();
+  if (!issuer || !isHttpsOrigin(issuer)) return undefined;
+  return new URL(issuer).origin;
+}
+
+function readRequestBearerToken(value: string | readonly string[] | undefined): string | undefined {
+  const authorization = headerValue(value);
+  const match = /^Bearer\s+([A-Za-z0-9._-]+)$/u.exec(authorization ?? "");
+  return match?.[1];
+}
+
+function readClerkSessionCookie(value: string | readonly string[] | undefined): string | undefined {
+  const cookie = headerValue(value);
+  if (!cookie) return undefined;
+  for (const part of cookie.split(";")) {
+    const [rawName, ...rawValue] = part.trim().split("=");
+    if (rawName === "__session") {
+      const token = rawValue.join("=").trim();
+      return /^[A-Za-z0-9._-]+$/u.test(token) ? token : undefined;
+    }
+  }
+  return undefined;
 }
 
 function preAuthCreateUnavailableResult(): Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["createPreAuthIntent"]>>> {
@@ -623,6 +736,50 @@ function isAbsoluteUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+function isHttpsOrigin(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      url.origin !== "null" &&
+      !url.username &&
+      !url.password &&
+      (url.pathname === "" || url.pathname === "/") &&
+      !url.search &&
+      !url.hash
+    );
+  } catch {
+    return false;
+  }
+}
+
+function productionOAuthRequestHostMatchesAuthorizationOrigin(
+  req: IncomingMessage,
+  dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+): boolean {
+  const origin = dependencies.authorizationRequestConfig?.authorizationPageOrigin;
+  if (typeof origin !== "string") return false;
+  try {
+    const parsedOrigin = new URL(origin);
+    const host = headerValue(req.headers.host);
+    if (!host || host.includes("/") || host.includes("@")) return false;
+    const parsedHost = new URL(`${parsedOrigin.protocol}//${host}`);
+    return (
+      parsedHost.hostname.toLowerCase() === parsedOrigin.hostname.toLowerCase() &&
+      (parsedHost.port || defaultPortForProtocol(parsedOrigin.protocol)) ===
+        (parsedOrigin.port || defaultPortForProtocol(parsedOrigin.protocol))
+    );
+  } catch {
+    return false;
+  }
+}
+
+function defaultPortForProtocol(protocol: string): "80" | "443" | "" {
+  if (protocol === "https:") return "443";
+  if (protocol === "http:") return "80";
+  return "";
 }
 
 export function buildMcpOAuthProductionViteAllowedHosts(

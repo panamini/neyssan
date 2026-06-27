@@ -133,6 +133,7 @@ export type McpOAuthProductionPreAuthIntentCreatePortV1 = (
 
 export type McpOAuthProductionPreAuthOwnerBindingPortInputV1 = Readonly<{
   preAuthHandleHash: string;
+  authenticatedOwnerIdentity: McpOAuthProductionAuthenticatedOwnerIdentityV1;
   now: number;
   version: 1;
 }>;
@@ -174,11 +175,22 @@ export type McpOAuthProductionPreAuthOwnerBindingPortV1 = (
   input: McpOAuthProductionPreAuthOwnerBindingPortInputV1,
 ) => Promise<McpOAuthProductionPreAuthOwnerBindingPortResultV1>;
 
+export type McpOAuthProductionAuthenticatedOwnerIdentityV1 = Readonly<{
+  subject: string;
+  issuer: string;
+  version: 1;
+}>;
+
+export type McpOAuthProductionAuthenticatedOwnerIdentityReaderV1 = (
+  request: McpOAuthProductionRouteAdapterRequestV1,
+) => Promise<McpOAuthProductionAuthenticatedOwnerIdentityV1 | undefined>;
+
 export type McpOAuthProductionRouteAdapterDependenciesV1 = Readonly<{
   authorizationRequestConfig?: McpOAuthAuthorizationRequestBoundaryConfigV1;
   checkPreAuthQuota?: McpOAuthProductionPreAuthQuotaPortV1;
   createPreAuthIntent?: McpOAuthProductionPreAuthIntentCreatePortV1;
   bindPreAuthIntentToAuthenticatedOwner?: McpOAuthProductionPreAuthOwnerBindingPortV1;
+  readAuthenticatedOwnerIdentity?: McpOAuthProductionAuthenticatedOwnerIdentityReaderV1;
   handleCodec?: McpOAuthContinuationHandleCodecV1;
   now?: () => number;
 }>;
@@ -397,7 +409,11 @@ async function handleLoginReturnContinuationRequest(
   dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
 ): Promise<McpOAuthProductionRouteAdapterResponseV1> {
   const preflight = config.preflight;
-  if (!dependencies.authorizationRequestConfig || !dependencies.bindPreAuthIntentToAuthenticatedOwner) {
+  if (
+    !dependencies.authorizationRequestConfig ||
+    !dependencies.bindPreAuthIntentToAuthenticatedOwner ||
+    !dependencies.readAuthenticatedOwnerIdentity
+  ) {
     return failClosedResponse("oauth_login_return", preflight, "dependency_unavailable", 503);
   }
   if (!authorizationRequestConfigMatchesGuard(dependencies.authorizationRequestConfig, config.authorizationRequestGuard)) {
@@ -422,12 +438,23 @@ async function handleLoginReturnContinuationRequest(
   }
 
   const now = readNow(dependencies);
+  let authenticatedOwnerIdentity: McpOAuthProductionAuthenticatedOwnerIdentityV1 | undefined;
+  try {
+    authenticatedOwnerIdentity = await dependencies.readAuthenticatedOwnerIdentity(request);
+  } catch {
+    return failClosedResponse("oauth_login_return", preflight, "owner_binding_failed", 401);
+  }
+  if (!isAuthenticatedOwnerIdentity(authenticatedOwnerIdentity)) {
+    return failClosedResponse("oauth_login_return", preflight, "owner_binding_failed", 401);
+  }
+
   let bindingResult: McpOAuthProductionPreAuthOwnerBindingPortResultV1;
   try {
     bindingResult = await bindPreAuthIntentToAuthenticatedOwnerWithTimeout(
       dependencies.bindPreAuthIntentToAuthenticatedOwner,
       {
         preAuthHandleHash,
+        authenticatedOwnerIdentity,
         now,
         version: 1,
       },
@@ -946,6 +973,20 @@ function isOwnerBindingSuccess(
     value.serverOnly.version === 1 &&
     value.modelVisible === false &&
     value.safeForLogging === false &&
+    value.version === 1
+  );
+}
+
+function isAuthenticatedOwnerIdentity(
+  value: unknown,
+): value is McpOAuthProductionAuthenticatedOwnerIdentityV1 {
+  return (
+    isPlainRecord(value) &&
+    typeof value.subject === "string" &&
+    /^[A-Za-z0-9][A-Za-z0-9._:-]{0,511}$/u.test(value.subject) &&
+    typeof value.issuer === "string" &&
+    value.issuer.length > 0 &&
+    value.issuer.length <= 512 &&
     value.version === 1
   );
 }
