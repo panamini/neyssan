@@ -302,11 +302,12 @@ async function handleAuthorizationRequest(
     return failClosedResponse("oauth_authorize", preflight, "invalid_configuration", 500);
   }
 
+  const createNow = readNow(dependencies);
   const createInput = Object.freeze({
     authorizationRequestProjection: projection.serverOnly,
     preAuthHandleHash: generated.intentHandleHash,
-    now,
-    deadlineEpochMs: now + PRE_AUTH_CREATE_TIMEOUT_MS,
+    now: createNow,
+    deadlineEpochMs: createNow + PRE_AUTH_CREATE_TIMEOUT_MS,
     timeoutMs: PRE_AUTH_CREATE_TIMEOUT_MS,
     version: 1,
   } satisfies McpOAuthProductionPreAuthIntentCreatePortInputV1);

@@ -1,11 +1,11 @@
 /// <reference types="vitest" />
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { ConvexHttpClient } from "convex/browser";
+import { makeFunctionReference } from "convex/server";
 import { defineConfig } from "vite";
 import type { Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
-import { internal } from "./convex/_generated/api";
 import {
   buildLocalMcpDevAuthRuntimeCompositionDependencies,
   LOCAL_MCP_DEV_STYTCH_COMPOSITION_FLAG,
@@ -63,6 +63,10 @@ const VITE_CONVEX_URL_VAR = "VITE_CONVEX_URL";
 const NEXT_PUBLIC_CONVEX_URL_VAR = "NEXT_PUBLIC_CONVEX_URL";
 const PRE_AUTH_QUOTA_WINDOW_MS = 60_000;
 const PRE_AUTH_QUOTA_LIMIT = 60;
+const DEFAULT_VITE_ALLOWED_HOSTS = Object.freeze(["host.docker.internal"]);
+const CREATE_MCP_OAUTH_PRE_AUTH_INTENT_MUTATION = makeFunctionReference(
+  "mcpOAuthPreAuthIntents:internalCreateMcpOAuthPreAuthIntent",
+);
 const productionPreAuthQuotaBuckets = new Map<string, { count: number; windowStartedAt: number }>();
 
 export type LocalMcpDevEndpointPluginOptions = Readonly<{
@@ -161,6 +165,19 @@ function handleLocalMcpDevMiddlewareRequest(
   productionOAuthAuthorizationDependencies: McpOAuthProductionRouteAdapterDependenciesV1,
 ): void {
   const pathName = (req.url ?? "").split("?")[0];
+  if (productionOAuthAuthorizationEnabled && pathName === MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH) {
+    void respondToMcpOAuthProductionRouteRequest(
+      req,
+      res,
+      next,
+      productionOAuthAuthorizationConfig,
+      productionOAuthAuthorizationDependencies,
+      pathName,
+    ).catch(() => {
+      sendInvalidLocalMcpDevRequest(res);
+    });
+    return;
+  }
   if (oauthAuthorizationConfig.enabled && isMcpOAuthLocalDevRouteHandledPath(pathName)) {
     void respondToMcpOAuthLocalDevRouteRequest(
       req,
@@ -507,8 +524,9 @@ function buildProductionPreAuthIntentCreatePort(
   return async (input) => {
     if (!convexClient) return preAuthCreateUnavailableResult();
     return convexClient.mutation(
-      (internal as any).mcpOAuthPreAuthIntents.internalCreateMcpOAuthPreAuthIntent,
+      CREATE_MCP_OAUTH_PRE_AUTH_INTENT_MUTATION,
       input,
+      { skipQueue: true },
     ) as Promise<Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["createPreAuthIntent"]>>>>;
   };
 }
@@ -517,7 +535,13 @@ function readConvexHttpClient(env: Readonly<Record<string, string | undefined>>)
   const url = readFirstEnvValue(env, [CONVEX_URL_VAR, VITE_CONVEX_URL_VAR, NEXT_PUBLIC_CONVEX_URL_VAR]);
   const auth = readFirstEnvValue(env, [CONVEX_KEY_VAR, CONVEX_AUTH_TOKEN_VAR]);
   if (!url || !auth || !isAbsoluteUrl(url)) return undefined;
-  return new ConvexHttpClient(url, { auth });
+  try {
+    const client = new ConvexHttpClient(url);
+    client.setAdminAuth(auth);
+    return client;
+  } catch {
+    return undefined;
+  }
 }
 
 function preAuthCreateUnavailableResult(): Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["createPreAuthIntent"]>>> {
@@ -555,6 +579,41 @@ function isAbsoluteUrl(value: string): boolean {
   }
 }
 
+export function buildMcpOAuthProductionViteAllowedHosts(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): string[] {
+  const allowedHosts = [...DEFAULT_VITE_ALLOWED_HOSTS];
+  const productionAuthorizationHost = readProductionAuthorizationAllowedHost(env);
+  if (productionAuthorizationHost && !allowedHosts.includes(productionAuthorizationHost)) {
+    allowedHosts.push(productionAuthorizationHost);
+  }
+  return allowedHosts;
+}
+
+function readProductionAuthorizationAllowedHost(
+  env: Readonly<Record<string, string | undefined>>,
+): string | undefined {
+  const value = env[MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN_VAR]?.trim();
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    if (
+      url.origin === "null" ||
+      !url.hostname ||
+      url.username ||
+      url.password ||
+      url.pathname !== "/" ||
+      url.search ||
+      url.hash
+    ) {
+      return undefined;
+    }
+    return url.hostname.toLowerCase();
+  } catch {
+    return undefined;
+  }
+}
+
 function readCommaSeparatedEnv(value: string | undefined): readonly string[] {
   return Object.freeze(
     (value ?? "")
@@ -569,28 +628,31 @@ function isStrictEnabledFlag(env: Readonly<Record<string, string | undefined>>, 
 }
 
 // https://vitejs.dev/config/
-export default defineConfig(() => ({
-  plugins: [react(), createLocalMcpDevEndpointPlugin()].filter((plugin): plugin is Plugin => plugin !== undefined),
-  server: {
-    host: "localhost",
-    port: LOCAL_CLERK_SYNC_PORT,
-    strictPort: true,
-    allowedHosts: ["host.docker.internal"],
-  },
-  preview: {
-    host: "localhost",
-    port: LOCAL_CLERK_SYNC_PORT,
-    strictPort: true,
-    allowedHosts: ["host.docker.internal"],
-  },
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
+export default defineConfig(() => {
+  const allowedHosts = buildMcpOAuthProductionViteAllowedHosts(process.env);
+  return {
+    plugins: [react(), createLocalMcpDevEndpointPlugin()].filter((plugin): plugin is Plugin => plugin !== undefined),
+    server: {
+      host: "localhost",
+      port: LOCAL_CLERK_SYNC_PORT,
+      strictPort: true,
+      allowedHosts: [...allowedHosts],
     },
-  },
-  test: {
-    globals: true,
-    environment: "jsdom",
-    setupFiles: ["src/setupTests.ts"],
-  },
-}));
+    preview: {
+      host: "localhost",
+      port: LOCAL_CLERK_SYNC_PORT,
+      strictPort: true,
+      allowedHosts: [...allowedHosts],
+    },
+    resolve: {
+      alias: {
+        "@": path.resolve(__dirname, "./src"),
+      },
+    },
+    test: {
+      globals: true,
+      environment: "jsdom",
+      setupFiles: ["src/setupTests.ts"],
+    },
+  };
+});

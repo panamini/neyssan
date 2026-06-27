@@ -5,7 +5,10 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createLocalMcpDevEndpointPlugin } from "../../../../vite.config";
+import {
+  buildMcpOAuthProductionViteAllowedHosts,
+  createLocalMcpDevEndpointPlugin,
+} from "../../../../vite.config";
 import { TWOWEEKS_APPLICATIONS_READ_SCOPE } from "../mcpAuthPolicyBoundary";
 import type { McpOAuthAuthorizationRequestBoundaryConfigV1 } from "../mcpOAuthAuthorizationRequestBoundary";
 import {
@@ -38,11 +41,13 @@ import {
   MCP_OAUTH_SIGN_IN_RETURN_PARAMETER,
 } from "../../../pages/sign-in-return";
 
-const { convexHttpClientMutation, ConvexHttpClientMock } = vi.hoisted(() => {
+const { convexHttpClientMutation, convexHttpClientSetAdminAuth, ConvexHttpClientMock } = vi.hoisted(() => {
   const mutation = vi.fn();
+  const setAdminAuth = vi.fn();
   return {
     convexHttpClientMutation: mutation,
-    ConvexHttpClientMock: vi.fn(() => ({ mutation })),
+    convexHttpClientSetAdminAuth: setAdminAuth,
+    ConvexHttpClientMock: vi.fn(() => ({ mutation, setAdminAuth })),
   };
 });
 
@@ -117,6 +122,7 @@ const PROVIDER_CONFIG = {
 
 afterEach(() => {
   convexHttpClientMutation.mockReset();
+  convexHttpClientSetAdminAuth.mockReset();
   ConvexHttpClientMock.mockClear();
   vi.unstubAllEnvs();
 });
@@ -876,6 +882,32 @@ describe("MCP OAuth production route adapter", () => {
     expectNoRouteLeakage(response, [], { allowRawHandle: true });
   });
 
+  it("refreshes the pre-auth create deadline after quota succeeds", async () => {
+    const dependencies = {
+      ...routeDependencies(makeCtx()),
+      now: vi.fn()
+        .mockReturnValueOnce(NOW)
+        .mockReturnValueOnce(NOW + 1_000)
+        .mockReturnValueOnce(NOW + 1_000),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+
+    const response = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({ handled: true, status: 303 });
+    expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(1);
+    expect(dependencies.checkPreAuthQuota.mock.calls[0]?.[0]).toMatchObject({ now: NOW });
+    expect(dependencies.createPreAuthIntent).toHaveBeenCalledTimes(1);
+    expect(dependencies.createPreAuthIntent.mock.calls[0]?.[0]).toMatchObject({
+      now: NOW + 1_000,
+      deadlineEpochMs: NOW + 1_000 + 2_500,
+      timeoutMs: 2_500,
+    });
+  });
+
   it("rejects storage success unless it proves the created intent is still ownerless and non-executing", async () => {
     const dependencies = {
       ...routeDependencies(makeCtx()),
@@ -974,6 +1006,7 @@ describe("MCP OAuth production route adapter", () => {
       ...routeDependencies(makeCtx()),
       now: vi.fn()
         .mockReturnValueOnce(NOW)
+        .mockReturnValueOnce(NOW)
         .mockReturnValueOnce(NOW + 2),
       createPreAuthIntent: vi.fn(async () => ({
         kind: "mcp_oauth_pre_auth_intent_create_result",
@@ -1013,7 +1046,7 @@ describe("MCP OAuth production route adapter", () => {
         preAuthIntentCreated: false,
       },
     });
-    expect(dependencies.now).toHaveBeenCalledTimes(2);
+    expect(dependencies.now).toHaveBeenCalledTimes(3);
     expect(dependencies.createPreAuthIntent).toHaveBeenCalledTimes(1);
     expectNoRouteLeakage(response);
   });
@@ -1075,7 +1108,7 @@ describe("MCP OAuth production route adapter", () => {
       );
 
       expect(response).toMatchObject({ handled: true, status: 303 });
-      expect(dependencies.now).toHaveBeenCalledTimes(2);
+      expect(dependencies.now).toHaveBeenCalledTimes(3);
       expect(ctx.preAuthRows).toHaveLength(1);
       expect(ctx.preAuthRows[0]).toMatchObject({
         status: "pre_auth_pending",
@@ -1273,6 +1306,51 @@ describe("MCP OAuth production route adapter", () => {
     expect(response.body).not.toContain("inert_handler_only");
   });
 
+  it("keeps production /oauth/authorize ahead of the local OAuth route when both flags are enabled", async () => {
+    convexHttpClientMutation.mockImplementationOnce(async () => ({
+      kind: "mcp_oauth_pre_auth_intent_create_result",
+      ok: true,
+      reason: "created",
+      serverOnly: {
+        status: "pre_auth_pending",
+        expiresAt: Date.now() + 10 * 60 * 1_000,
+        containsOwnerIdentity: false,
+        containsProviderSubject: false,
+        containsAccountLinkId: false,
+        authorizationGranted: false,
+        consentCompleted: false,
+        authorizationCodeIssued: false,
+        tokenIssued: false,
+        accountLinkCreated: false,
+        version: 1,
+      },
+      modelVisible: false,
+      safeForLogging: false,
+      version: 1,
+    }));
+    const plugin = createLocalMcpDevEndpointPlugin({
+      env: {
+        ...prodRouteEnv(),
+        [LOCAL_MCP_DEV_OAUTH_AUTHORIZATION_FLAG]: "1",
+        [LOCAL_MCP_DEV_OAUTH_APPLICATION_ORIGIN_VAR]: APP_ORIGIN,
+        [LOCAL_MCP_DEV_OAUTH_REDIRECT_URI_VAR]: REDIRECT_URI,
+        LOCAL_MCP_DEV_AUTH_RESOURCE: RESOURCE,
+        LOCAL_MCP_DEV_AUTH_CLIENT_ID: CLIENT_ID,
+      },
+    });
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeMiddleware(middleware, {
+      method: "GET",
+      url: authorizationRequestPath(),
+      headers: { host: "mcp.twoweeks.example.test" },
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(303);
+    expect(response.headers.location).toContain(`${PROD_APP_ORIGIN}/sign-in?`);
+    expect(convexHttpClientMutation).toHaveBeenCalledTimes(1);
+  });
+
   it("wires production authorize requests into the live Vite middleware", async () => {
     const ctx = makeCtx();
     const plugin = createLocalMcpDevEndpointPlugin({
@@ -1339,7 +1417,8 @@ describe("MCP OAuth production route adapter", () => {
     expect(response.next).not.toHaveBeenCalled();
     expect(response.statusCode).toBe(303);
     expect(response.headers.location).toContain(`${PROD_APP_ORIGIN}/sign-in?`);
-    expect(ConvexHttpClientMock).toHaveBeenCalledWith("http://127.0.0.1:3210", { auth: "convex_admin_key_fixture" });
+    expect(ConvexHttpClientMock).toHaveBeenCalledWith("http://127.0.0.1:3210");
+    expect(convexHttpClientSetAdminAuth).toHaveBeenCalledWith("convex_admin_key_fixture");
     expect(convexHttpClientMutation).toHaveBeenCalledTimes(1);
     expect(convexHttpClientMutation.mock.calls[0]?.[1]).toMatchObject({
       authorizationRequestProjection: {
@@ -1350,6 +1429,30 @@ describe("MCP OAuth production route adapter", () => {
       },
       version: 1,
     });
+    expect(convexHttpClientMutation.mock.calls[0]?.[2]).toEqual({ skipQueue: true });
+  });
+
+  it("fails closed when the default Convex client cannot be constructed", async () => {
+    for (const [key, value] of Object.entries(prodRouteEnv())) {
+      vi.stubEnv(key, value);
+    }
+    ConvexHttpClientMock.mockImplementationOnce(() => {
+      throw new Error("invalid deployment url");
+    });
+
+    const plugin = createLocalMcpDevEndpointPlugin();
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeMiddleware(middleware, {
+      method: "GET",
+      url: authorizationRequestPath(),
+      headers: { host: "mcp.twoweeks.example.test" },
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(503);
+    expect(response.body).toContain("pre_auth_create_failed");
+    expect(convexHttpClientSetAdminAuth).not.toHaveBeenCalled();
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
   });
 
   it("registers the production authorize middleware for Vite preview", async () => {
@@ -1369,6 +1472,17 @@ describe("MCP OAuth production route adapter", () => {
     expect(response.next).not.toHaveBeenCalled();
     expect(response.statusCode).toBe(303);
     expect(ctx.preAuthRows).toHaveLength(1);
+  });
+
+  it("allows the production OAuth host through Vite preview host validation", () => {
+    expect(buildMcpOAuthProductionViteAllowedHosts(prodRouteEnv())).toEqual([
+      "host.docker.internal",
+      "mcp.twoweeks.example.test",
+    ]);
+    expect(buildMcpOAuthProductionViteAllowedHosts({})).toEqual(["host.docker.internal"]);
+    expect(buildMcpOAuthProductionViteAllowedHosts({
+      MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN: "https://mcp.twoweeks.example.test/path",
+    })).toEqual(["host.docker.internal"]);
   });
 
   it("uses the PR92 route preflight instead of reimplementing production activation or status logic", () => {
