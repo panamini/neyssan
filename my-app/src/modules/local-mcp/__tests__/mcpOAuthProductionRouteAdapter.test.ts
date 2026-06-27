@@ -47,7 +47,9 @@ const { convexHttpClientMutation, convexHttpClientSetAdminAuth, ConvexHttpClient
   return {
     convexHttpClientMutation: mutation,
     convexHttpClientSetAdminAuth: setAdminAuth,
-    ConvexHttpClientMock: vi.fn(() => ({ mutation, setAdminAuth })),
+    ConvexHttpClientMock: vi.fn(function ConvexHttpClient() {
+      return { mutation, setAdminAuth };
+    }),
   };
 });
 
@@ -1482,6 +1484,9 @@ describe("MCP OAuth production route adapter", () => {
     expect(buildMcpOAuthProductionViteAllowedHosts({})).toEqual(["host.docker.internal"]);
     expect(buildMcpOAuthProductionViteAllowedHosts({
       MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN: "https://mcp.twoweeks.example.test/path",
+    })).toEqual(["host.docker.internal"]);
+    expect(buildMcpOAuthProductionViteAllowedHosts({
+      MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN: "file://mcp.twoweeks.example.test/",
     })).toEqual(["host.docker.internal"]);
   });
 

@@ -599,6 +599,7 @@ function readProductionAuthorizationAllowedHost(
     const url = new URL(value);
     if (
       url.origin === "null" ||
+      (url.protocol !== "https:" && url.protocol !== "http:") ||
       !url.hostname ||
       url.username ||
       url.password ||
