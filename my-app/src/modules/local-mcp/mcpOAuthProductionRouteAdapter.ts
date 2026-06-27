@@ -212,7 +212,7 @@ export async function handleMcpOAuthProductionRouteRequest(
 ): Promise<McpOAuthProductionRouteAdapterResponseV1> {
   const route = routeNameForPath(request.path);
   if (!route) return notHandled();
-  if (!config.preflight.allowedToWire) {
+  if (!isRouteAllowedByPreflight(route, config.preflight)) {
     return failClosedResponse(route, config.preflight, config.preflight.decision, 404);
   }
   if (!isAllowedMethod(route, request.method)) {
@@ -406,6 +406,13 @@ function routeNameForPath(path: string): McpOAuthProductionRouteNameV1 | undefin
   return undefined;
 }
 
+function isRouteAllowedByPreflight(
+  route: McpOAuthProductionRouteNameV1,
+  preflight: McpOAuthProductionRoutePreflightResultV1,
+): boolean {
+  return route === "oauth_authorize" ? preflight.authorizeAllowedToWire : preflight.allowedToWire;
+}
+
 function isAllowedMethod(route: McpOAuthProductionRouteNameV1, method: string): boolean {
   return method.toUpperCase() === allowedMethodForRoute(route);
 }
@@ -429,7 +436,7 @@ function failClosedResponse(
     route,
     message: "Production MCP OAuth route unavailable.",
     safeForModel: true,
-    allowedByPreflight: preflight.allowedToWire,
+    allowedByPreflight: isRouteAllowedByPreflight(route, preflight),
     preflightDecision: preflight.decision,
     guardedInertHandlerReached: false,
     authorizationRequestAccepted: false,
@@ -466,7 +473,7 @@ function inertGuardedResponse(
     route,
     message: "Production MCP OAuth route is guarded and inert.",
     safeForModel: true,
-    allowedByPreflight: preflight.allowedToWire,
+    allowedByPreflight: isRouteAllowedByPreflight(route, preflight),
     preflightDecision: preflight.decision,
     guardedInertHandlerReached: true,
     oauthExecutionStarted: false,

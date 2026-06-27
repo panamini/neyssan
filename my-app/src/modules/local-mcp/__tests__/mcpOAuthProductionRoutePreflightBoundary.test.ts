@@ -56,6 +56,7 @@ describe("MCP OAuth production route preflight boundary", () => {
     expect(buildMcpOAuthProductionRoutePreflight()).toEqual({
       kind: "mcp_oauth_production_route_preflight",
       decision: "disabled",
+      authorizeAllowedToWire: false,
       allowedToWire: false,
       safeForModel: true,
       requiredFlags: {
@@ -103,6 +104,7 @@ describe("MCP OAuth production route preflight boundary", () => {
       }),
     ).toMatchObject({
       decision: "blocked_missing_approval_flag",
+      authorizeAllowedToWire: false,
       allowedToWire: false,
       requiredFlags: {
         runtimeEnabled: true,
@@ -122,6 +124,7 @@ describe("MCP OAuth production route preflight boundary", () => {
       }),
     ).toMatchObject({
       decision: "blocked_endpoint_exposure_not_enabled",
+      authorizeAllowedToWire: false,
       allowedToWire: false,
       requiredFlags: {
         runtimeEnabled: true,
@@ -151,6 +154,7 @@ describe("MCP OAuth production route preflight boundary", () => {
       }),
     ).toMatchObject({
       decision: "blocked_misconfigured_provider",
+      authorizeAllowedToWire: false,
       allowedToWire: false,
       provider: {
         provider: "unavailable",
@@ -168,7 +172,7 @@ describe("MCP OAuth production route preflight boundary", () => {
     });
   });
 
-  it("does not allow route wiring when activation dependencies are unavailable", () => {
+  it("allows authorize route wiring but not activation route wiring when activation dependencies are unavailable", () => {
     expect(
       buildMcpOAuthProductionRoutePreflight({
         flags: { runtime: "1", approved: "1", routeWiring: "1" },
@@ -176,6 +180,7 @@ describe("MCP OAuth production route preflight boundary", () => {
       }),
     ).toMatchObject({
       decision: "blocked_missing_activation_dependency",
+      authorizeAllowedToWire: true,
       allowedToWire: false,
       activationDependencies: {
         providerAdapterAvailable: false,
@@ -196,6 +201,7 @@ describe("MCP OAuth production route preflight boundary", () => {
     ).toEqual({
       kind: "mcp_oauth_production_route_preflight",
       decision: "ready_to_wire",
+      authorizeAllowedToWire: true,
       allowedToWire: true,
       safeForModel: true,
       requiredFlags: {

@@ -37,6 +37,7 @@ export type McpOAuthProductionRoutePreflightInputV1 = Readonly<{
 export type McpOAuthProductionRoutePreflightResultV1 = Readonly<{
   kind: "mcp_oauth_production_route_preflight";
   decision: McpOAuthProductionRoutePreflightDecisionV1;
+  authorizeAllowedToWire: boolean;
   allowedToWire: boolean;
   safeForModel: true;
   requiredFlags: Readonly<{
@@ -109,6 +110,12 @@ export function buildMcpOAuthProductionRoutePreflight(
     providerConfigValid &&
     doesOperationalStatusAgreeWithActivationConfig(operationalStatus);
   const activationDependencies = readActivationDependencyReadiness(input.activationDependencies);
+  const authorizeAllowedToWire =
+    runtimeEnabled &&
+    approved &&
+    routeWiringEnabled &&
+    providerConfigValid &&
+    operationalStatusAgrees;
   const decision = decideRoutePreflight({
     runtimeEnabled,
     approved,
@@ -121,6 +128,7 @@ export function buildMcpOAuthProductionRoutePreflight(
   return Object.freeze({
     kind: "mcp_oauth_production_route_preflight",
     decision,
+    authorizeAllowedToWire,
     allowedToWire: decision === "ready_to_wire",
     safeForModel: true,
     requiredFlags: Object.freeze({

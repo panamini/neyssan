@@ -263,6 +263,50 @@ describe("MCP OAuth production route adapter", () => {
     expectNoRouteLeakage(response);
   });
 
+  it("allows authorize pre-auth creation when activation dependency ports are unavailable", async () => {
+    const ctx = makeCtx();
+    const dependencies = routeDependencies(ctx);
+    const config = buildMcpOAuthProductionRouteAdapterConfig({
+      flags: { runtime: "1", approved: "1", routeWiring: "1" },
+      providerConfig: PROVIDER_CONFIG,
+    });
+
+    const authorizeResponse = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      config,
+      dependencies,
+    );
+    const callbackResponse = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_CALLBACK_PATH),
+      config,
+    );
+
+    expect(authorizeResponse).toMatchObject({ handled: true, status: 303 });
+    expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(1);
+    expect(dependencies.createPreAuthIntent).toHaveBeenCalledTimes(1);
+    expect(ctx.preAuthRows).toHaveLength(1);
+    expect(ctx.preAuthRows[0]).toMatchObject({
+      status: "pre_auth_pending",
+      preAuthHandleHash: HANDLE_HASH,
+    });
+    expect(callbackResponse).toMatchObject({
+      handled: true,
+      status: 404,
+      json: {
+        status: "blocked",
+        reason: "blocked_missing_activation_dependency",
+        route: "oauth_callback",
+        allowedByPreflight: false,
+        preflightDecision: "blocked_missing_activation_dependency",
+        providerCalled: false,
+        tokenExchangeAttempted: false,
+        accountLinkCreated: false,
+      },
+    });
+    expectNoRouteLeakage(authorizeResponse, [], { allowRawHandle: true });
+    expectNoRouteLeakage(callbackResponse);
+  });
+
   it("fails closed when production authorize is ready but missing pre-auth dependencies", async () => {
     const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
 
@@ -1020,7 +1064,9 @@ describe("MCP OAuth production route adapter", () => {
 
     expect(source).toContain("buildMcpOAuthProductionRoutePreflight");
     expect(source).toContain("from \"./mcpOAuthProductionRoutePreflightBoundary\"");
-    expect(source).toContain("config.preflight.allowedToWire");
+    expect(source).toContain("isRouteAllowedByPreflight(route, config.preflight)");
+    expect(source).toContain("preflight.authorizeAllowedToWire");
+    expect(source).toContain("preflight.allowedToWire");
     expectSourceNotToMatch(source, FORBIDDEN_PREFLIGHT_REIMPLEMENTATION_PATTERNS);
   });
 
