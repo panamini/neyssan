@@ -5,8 +5,20 @@ import {
   buildMcpOperationalEgressStatus,
   buildMcpOperationalLiveExternalActionStatus,
   buildMcpOperationalManualHandoffStatus,
+  buildMcpOperationalProductionOAuthActivationStatus,
   buildMcpOperationalWriteActionStatus,
 } from "../mcpOperationalStatus";
+import { buildMcpOAuthProductionActivationConfig } from "../mcpOAuthProductionActivationBoundary";
+
+const PRODUCTION_OAUTH_PROVIDER_CONFIG = {
+  provider: "stytch",
+  issuer: "https://stytch.example.test/",
+  resource: "https://mcp.twoweeks.example.test/resource",
+  providerEnvironment: "prod_us_1",
+  allowedClientIds: ["chatgpt_apps_sdk_client"],
+  requiredReadScopes: ["twoweeks:applications:read"],
+  version: 1,
+} as const;
 
 describe("mcpOperationalStatus", () => {
   it("summarizes manual handoff kill-switch state without exposing config values", () => {
@@ -63,6 +75,68 @@ describe("mcpOperationalStatus", () => {
     });
   });
 
+  it("summarizes production OAuth activation as disabled unless both PR89 flags are present", () => {
+    expect(
+      buildMcpOperationalProductionOAuthActivationStatus(
+        buildMcpOAuthProductionActivationConfig({
+          providerConfig: PRODUCTION_OAUTH_PROVIDER_CONFIG,
+        }),
+      ),
+    ).toEqual({
+      kind: "mcp_operational_status",
+      capability: "production_oauth_activation",
+      enabled: false,
+      configValid: true,
+      featureState: "disabled",
+      category: "feature_disabled",
+      valuesExposed: false,
+      version: 1,
+    });
+  });
+
+  it.each([
+    { runtime: "1" as const },
+    { approved: "1" as const },
+  ])("keeps production OAuth activation disabled when flags are partial: %j", (flags) => {
+    expect(
+      buildMcpOperationalProductionOAuthActivationStatus(
+        buildMcpOAuthProductionActivationConfig({
+          flags,
+          providerConfig: PRODUCTION_OAUTH_PROVIDER_CONFIG,
+        }),
+      ),
+    ).toEqual({
+      kind: "mcp_operational_status",
+      capability: "production_oauth_activation",
+      enabled: false,
+      configValid: true,
+      featureState: "disabled",
+      category: "feature_disabled",
+      valuesExposed: false,
+      version: 1,
+    });
+  });
+
+  it("summarizes dual-flagged production OAuth activation as runtime-blocked status only", () => {
+    expect(
+      buildMcpOperationalProductionOAuthActivationStatus(
+        buildMcpOAuthProductionActivationConfig({
+          flags: { runtime: "1", approved: "1" },
+          providerConfig: PRODUCTION_OAUTH_PROVIDER_CONFIG,
+        }),
+      ),
+    ).toEqual({
+      kind: "mcp_operational_status",
+      capability: "production_oauth_activation",
+      enabled: true,
+      configValid: true,
+      featureState: "blocked",
+      category: "auth_invalid",
+      valuesExposed: false,
+      version: 1,
+    });
+  });
+
   it("fails closed when safe config status includes unsafe material", () => {
     expect(
       buildMcpOperationalManualHandoffStatus({
@@ -77,6 +151,35 @@ describe("mcpOperationalStatus", () => {
     ).toEqual({
       kind: "mcp_operational_status",
       capability: "manual_handoff",
+      enabled: false,
+      configValid: false,
+      featureState: "misconfigured",
+      category: "config_invalid",
+      valuesExposed: false,
+      version: 1,
+    });
+  });
+
+  it("fails closed when production OAuth activation parsing rejects unsafe provider config", () => {
+    const parsedConfig = buildMcpOAuthProductionActivationConfig({
+      flags: { runtime: "1", approved: "1" },
+      providerConfig: {
+        ...PRODUCTION_OAUTH_PROVIDER_CONFIG,
+        issuer: "http://stytch.example.test/",
+      },
+    });
+
+    expect(parsedConfig).toMatchObject({
+      enabled: false,
+      providerConfig: undefined,
+      requiredFlags: {
+        runtimeValue: "1",
+        approvedValue: "1",
+      },
+    });
+    expect(buildMcpOperationalProductionOAuthActivationStatus(parsedConfig)).toEqual({
+      kind: "mcp_operational_status",
+      capability: "production_oauth_activation",
       enabled: false,
       configValid: false,
       featureState: "misconfigured",
