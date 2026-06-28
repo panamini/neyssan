@@ -185,12 +185,15 @@ export type McpOAuthProductionAuthenticatedOwnerIdentityReaderV1 = (
   request: McpOAuthProductionRouteAdapterRequestV1,
 ) => Promise<McpOAuthProductionAuthenticatedOwnerIdentityV1 | undefined>;
 
+export type McpOAuthProductionBrowserBoundContinuationNonceGeneratorV1 = () => string | undefined;
+
 export type McpOAuthProductionRouteAdapterDependenciesV1 = Readonly<{
   authorizationRequestConfig?: McpOAuthAuthorizationRequestBoundaryConfigV1;
   checkPreAuthQuota?: McpOAuthProductionPreAuthQuotaPortV1;
   createPreAuthIntent?: McpOAuthProductionPreAuthIntentCreatePortV1;
   bindPreAuthIntentToAuthenticatedOwner?: McpOAuthProductionPreAuthOwnerBindingPortV1;
   readAuthenticatedOwnerIdentity?: McpOAuthProductionAuthenticatedOwnerIdentityReaderV1;
+  generateBrowserBoundContinuationNonce?: McpOAuthProductionBrowserBoundContinuationNonceGeneratorV1;
   handleCodec?: McpOAuthContinuationHandleCodecV1;
   now?: () => number;
 }>;
@@ -221,6 +224,7 @@ type McpOAuthProductionRouteFailureReasonV1 =
   | "pre_auth_quota_denied"
   | "pre_auth_create_failed"
   | "invalid_continuation_request"
+  | "browser_bound_continuation_missing"
   | "owner_binding_failed";
 
 type McpOAuthProductionAuthorizationOriginV1 = Readonly<{
@@ -250,6 +254,11 @@ const INTENT_HANDLE_HASH_PATTERN = /^[0-9a-f]{64}$/u;
 const PRE_AUTH_QUOTA_TIMEOUT_MS = 2_500;
 const PRE_AUTH_CREATE_TIMEOUT_MS = 2_500;
 const OWNER_BINDING_TIMEOUT_MS = 2_500;
+const BROWSER_BOUND_CONTINUATION_NONCE_PARAMETER = "mcp_oauth_browser_nonce";
+const BROWSER_BOUND_CONTINUATION_COOKIE_NAME = "tw_mcp_oauth_continue";
+const BROWSER_BOUND_CONTINUATION_NONCE_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
+const BROWSER_BOUND_CONTINUATION_MAX_AGE_SECONDS = 600;
+const BASE64_URL_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 export function buildMcpOAuthProductionRouteAdapterConfig(
   input: McpOAuthProductionRoutePreflightInputV1 = {},
@@ -400,7 +409,12 @@ async function handleAuthorizationRequest(
     );
   }
 
-  return redirectToSignIn(generated.rawHandle, authorizationOrigin.origin);
+  const browserNonce = readGeneratedBrowserBoundContinuationNonce(dependencies);
+  if (!browserNonce) {
+    return failClosedResponse("oauth_authorize", preflight, "invalid_configuration", 500);
+  }
+
+  return redirectToSignIn(generated.rawHandle, browserNonce, authorizationOrigin.origin);
 }
 
 async function handleLoginReturnContinuationRequest(
@@ -428,11 +442,14 @@ async function handleLoginReturnContinuationRequest(
   }
 
   const codec = dependencies.handleCodec ?? defaultMcpOAuthContinuationHandleCodecV1;
-  const rawHandle = readContinuationRawHandle(request.url, authorizationOrigin.origin, codec);
-  if (!rawHandle) {
+  const continuationRequest = readContinuationRequest(request.url, authorizationOrigin.origin, codec);
+  if (!continuationRequest) {
     return failClosedResponse("oauth_login_return", preflight, "invalid_continuation_request", 400);
   }
-  const preAuthHandleHash = readHandleHash(rawHandle, codec);
+  if (!browserBoundContinuationCookieMatches(request, continuationRequest.browserNonce)) {
+    return failClosedResponse("oauth_login_return", preflight, "browser_bound_continuation_missing", 401);
+  }
+  const preAuthHandleHash = readHandleHash(continuationRequest.rawHandle, codec);
   if (!preAuthHandleHash) {
     return failClosedResponse("oauth_login_return", preflight, "invalid_continuation_request", 400);
   }
@@ -780,10 +797,12 @@ function notHandled(): McpOAuthProductionRouteAdapterResponseV1 {
 
 function redirectToSignIn(
   rawHandle: string,
+  browserNonce: string,
   authorizationPageOrigin: string,
 ): McpOAuthProductionRouteAdapterResponseV1 {
   const continuationPath = `${MCP_OAUTH_CONTINUATION_PATH}?${new URLSearchParams({
     [MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER]: rawHandle,
+    [BROWSER_BOUND_CONTINUATION_NONCE_PARAMETER]: browserNonce,
   }).toString()}`;
   const signInUrl = `${authorizationPageOrigin}/sign-in?${new URLSearchParams({
     [MCP_OAUTH_SIGN_IN_RETURN_PARAMETER]: continuationPath,
@@ -794,6 +813,7 @@ function redirectToSignIn(
     headers: {
       ...noStoreHeaders(),
       location: signInUrl,
+      "set-cookie": browserBoundContinuationCookie(browserNonce),
     },
     bodyText: "",
   });
@@ -884,6 +904,77 @@ function readGeneratedHandle(
   }
 }
 
+function readGeneratedBrowserBoundContinuationNonce(
+  dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+): string | undefined {
+  try {
+    const nonce = dependencies.generateBrowserBoundContinuationNonce?.() ?? generateDefaultBrowserBoundContinuationNonce();
+    return isBrowserBoundContinuationNonce(nonce) ? nonce : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function generateDefaultBrowserBoundContinuationNonce(): string | undefined {
+  const crypto = globalThis.crypto;
+  if (!crypto?.getRandomValues) return undefined;
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return base64UrlNoPadding(bytes);
+}
+
+function base64UrlNoPadding(bytes: Uint8Array): string {
+  let output = "";
+  let index = 0;
+  for (; index + 2 < bytes.length; index += 3) {
+    const value = (bytes[index] << 16) | (bytes[index + 1] << 8) | bytes[index + 2];
+    output += BASE64_URL_ALPHABET[(value >> 18) & 63];
+    output += BASE64_URL_ALPHABET[(value >> 12) & 63];
+    output += BASE64_URL_ALPHABET[(value >> 6) & 63];
+    output += BASE64_URL_ALPHABET[value & 63];
+  }
+  if (index < bytes.length) {
+    const remaining = bytes.length - index;
+    const value = (bytes[index] << 16) | (remaining === 2 ? bytes[index + 1] << 8 : 0);
+    output += BASE64_URL_ALPHABET[(value >> 18) & 63];
+    output += BASE64_URL_ALPHABET[(value >> 12) & 63];
+    if (remaining === 2) {
+      output += BASE64_URL_ALPHABET[(value >> 6) & 63];
+    }
+  }
+  return output;
+}
+
+function isBrowserBoundContinuationNonce(value: unknown): value is string {
+  return typeof value === "string" && BROWSER_BOUND_CONTINUATION_NONCE_PATTERN.test(value);
+}
+
+function browserBoundContinuationCookie(browserNonce: string): string {
+  return [
+    `${BROWSER_BOUND_CONTINUATION_COOKIE_NAME}=${browserNonce}`,
+    `Max-Age=${BROWSER_BOUND_CONTINUATION_MAX_AGE_SECONDS}`,
+    `Path=${MCP_OAUTH_CONTINUATION_PATH}`,
+    "HttpOnly",
+    "Secure",
+    "SameSite=Lax",
+  ].join("; ");
+}
+
+function browserBoundContinuationCookieMatches(
+  request: McpOAuthProductionRouteAdapterRequestV1,
+  expectedNonce: string,
+): boolean {
+  const cookie = readSingleHeaderValue(request.headers?.cookie);
+  if (!cookie) return false;
+  for (const part of cookie.split(";")) {
+    const [rawName, ...rawValue] = part.trim().split("=");
+    if (rawName === BROWSER_BOUND_CONTINUATION_COOKIE_NAME) {
+      return rawValue.join("=") === expectedNonce;
+    }
+  }
+  return false;
+}
+
 function readHandleHash(rawHandle: string, codec: McpOAuthContinuationHandleCodecV1): string | undefined {
   try {
     const digest = codec.hash(rawHandle);
@@ -893,11 +984,11 @@ function readHandleHash(rawHandle: string, codec: McpOAuthContinuationHandleCode
   }
 }
 
-function readContinuationRawHandle(
+function readContinuationRequest(
   urlOrPath: string,
   authorizationPageOrigin: string,
   codec: McpOAuthContinuationHandleCodecV1,
-): string | undefined {
+): Readonly<{ rawHandle: string; browserNonce: string }> | undefined {
   if (isUnsafeRouteInput(urlOrPath) || hasUnsafeRawPath(readRawPath(urlOrPath))) return undefined;
   try {
     const parsed = new URL(urlOrPath, authorizationPageOrigin);
@@ -912,17 +1003,23 @@ function readContinuationRawHandle(
     }
     const keys = [...parsed.searchParams.keys()];
     if (
-      keys.length !== 1 ||
+      keys.length !== 2 ||
       keys[0] !== MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER ||
-      parsed.searchParams.getAll(MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER).length !== 1
+      keys[1] !== BROWSER_BOUND_CONTINUATION_NONCE_PARAMETER ||
+      parsed.searchParams.getAll(MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER).length !== 1 ||
+      parsed.searchParams.getAll(BROWSER_BOUND_CONTINUATION_NONCE_PARAMETER).length !== 1
     ) {
       return undefined;
     }
     const rawHandle = parsed.searchParams.get(MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER);
+    const browserNonce = parsed.searchParams.get(BROWSER_BOUND_CONTINUATION_NONCE_PARAMETER);
     if (typeof rawHandle !== "string" || rawHandle.length === 0 || !codec.validate(rawHandle)) {
       return undefined;
     }
-    return rawHandle;
+    if (!isBrowserBoundContinuationNonce(browserNonce)) {
+      return undefined;
+    }
+    return Object.freeze({ rawHandle, browserNonce });
   } catch {
     return undefined;
   }

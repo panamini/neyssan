@@ -7,6 +7,15 @@ export function McpOAuthContinuationPage(): JSX.Element {
   const intentHandle = new URLSearchParams(location.search).get(
     MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER,
   );
+  const continuationHref = `${location.pathname}${location.search}`;
+
+  React.useEffect(() => {
+    if (!intentHandle || !/^https?:$/u.test(window.location.protocol)) return;
+    const storageKey = `mcp-oauth-continuation-document-request:${continuationHref}`;
+    if (window.sessionStorage.getItem(storageKey) === "1") return;
+    window.sessionStorage.setItem(storageKey, "1");
+    window.location.replace(continuationHref);
+  }, [continuationHref, intentHandle]);
 
   return (
     <main

@@ -36,6 +36,7 @@ import {
   type McpOAuthContinuationHandleCodecV1,
 } from "../mcpOAuthLoginReturnContinuationBoundary";
 import {
+  MCP_OAUTH_CONTINUATION_BROWSER_NONCE_PARAMETER,
   MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER,
   MCP_OAUTH_CONTINUATION_PATH,
   MCP_OAUTH_SIGN_IN_RETURN_PARAMETER,
@@ -79,6 +80,8 @@ const STATE = "opaque_state_1234567890";
 const PKCE = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const RAW_HANDLE = "A".repeat(43);
 const HANDLE_HASH = sha256Hex(RAW_HANDLE);
+const BROWSER_NONCE = "B".repeat(43);
+const BROWSER_NONCE_COOKIE = `tw_mcp_oauth_continue=${BROWSER_NONCE}`;
 const OWNER_ID = "user_twoweeks_fixture_123";
 const OTHER_OWNER_ID = "user_twoweeks_fixture_456";
 const CLERK_ISSUER = "https://clerk.twoweeks.example.test";
@@ -922,6 +925,12 @@ describe("MCP OAuth production route adapter", () => {
     );
 
     expect(authorizeResponse).toMatchObject({ handled: true, status: 303 });
+    expect(authorizeResponse.headers["set-cookie"]).toContain(BROWSER_NONCE_COOKIE);
+    expect(authorizeResponse.headers["set-cookie"]).toContain("HttpOnly");
+    expect(authorizeResponse.headers["set-cookie"]).toContain("SameSite=Lax");
+    expect(authorizeResponse.headers.location).toContain(
+      encodeURIComponent(`${MCP_OAUTH_CONTINUATION_BROWSER_NONCE_PARAMETER}=${BROWSER_NONCE}`),
+    );
     expect(continuationResponse).toMatchObject({
       handled: true,
       status: 200,
@@ -971,6 +980,71 @@ describe("MCP OAuth production route adapter", () => {
     expect(activation.executeAccountLinkLifecycle).not.toHaveBeenCalled();
     expectNoRouteLeakage(authorizeResponse, [], { allowRawHandle: true });
     expectNoRouteLeakage(continuationResponse);
+  });
+
+  it("blocks copied production login-return handles without the browser-bound continuation cookie", async () => {
+    const ctx = makeCtx();
+    const dependencies = routeDependencies(ctx);
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      config,
+      dependencies,
+    );
+
+    const copiedHandleRequest = {
+      ...request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPath()),
+      headers: { host: "mcp.twoweeks.example.test" },
+    };
+    const response = await handleMcpOAuthProductionRouteRequest(copiedHandleRequest, config, dependencies);
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 401,
+      json: {
+        status: "blocked",
+        reason: "browser_bound_continuation_missing",
+        route: "oauth_login_return",
+        ownerBound: false,
+        authorizationCodeIssued: false,
+        tokenIssued: false,
+        accountLinkCreated: false,
+      },
+    });
+    expect(ctx.preAuthRows[0]).toMatchObject({ status: "pre_auth_pending" });
+    expect(dependencies.bindPreAuthIntentToAuthenticatedOwner).not.toHaveBeenCalled();
+    expectNoRouteLeakage(response);
+  });
+
+  it("blocks production login-return continuations with a mismatched browser-bound cookie", async () => {
+    const ctx = makeCtx();
+    const dependencies = routeDependencies(ctx);
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      config,
+      dependencies,
+    );
+
+    const mismatchedCookieRequest = {
+      ...request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPath()),
+      headers: { host: "mcp.twoweeks.example.test", cookie: `tw_mcp_oauth_continue=${"C".repeat(43)}` },
+    };
+    const response = await handleMcpOAuthProductionRouteRequest(mismatchedCookieRequest, config, dependencies);
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 401,
+      json: {
+        status: "blocked",
+        reason: "browser_bound_continuation_missing",
+        route: "oauth_login_return",
+        ownerBound: false,
+      },
+    });
+    expect(ctx.preAuthRows[0]).toMatchObject({ status: "pre_auth_pending" });
+    expect(dependencies.bindPreAuthIntentToAuthenticatedOwner).not.toHaveBeenCalled();
+    expectNoRouteLeakage(response);
   });
 
   it("fails production login-return continuation closed without authenticated owner identity", async () => {
@@ -1688,7 +1762,7 @@ describe("MCP OAuth production route adapter", () => {
     const response = await invokeMiddleware(middleware, {
       method: "GET",
       url: continuationPath(),
-      headers: { host: "mcp.twoweeks.example.test" },
+      headers: { host: "mcp.twoweeks.example.test", cookie: BROWSER_NONCE_COOKIE },
     });
 
     expect(response.next).not.toHaveBeenCalled();
@@ -1857,7 +1931,11 @@ describe("MCP OAuth production route adapter", () => {
     const response = await invokeMiddleware(middleware, {
       method: "GET",
       url: continuationPath(),
-      headers: { host: "mcp.twoweeks.example.test", authorization: `Bearer ${CLERK_JWT}` },
+      headers: {
+        host: "mcp.twoweeks.example.test",
+        authorization: `Bearer ${CLERK_JWT}`,
+        cookie: BROWSER_NONCE_COOKIE,
+      },
     });
 
     expect(response.next).not.toHaveBeenCalled();
@@ -1905,7 +1983,7 @@ describe("MCP OAuth production route adapter", () => {
     const response = await invokeMiddleware(middleware, {
       method: "GET",
       url: continuationPath(),
-      headers: { host: "mcp.twoweeks.example.test" },
+      headers: { host: "mcp.twoweeks.example.test", cookie: BROWSER_NONCE_COOKIE },
     });
 
     expect(response.next).not.toHaveBeenCalled();
@@ -2050,7 +2128,10 @@ function request(
     method,
     path,
     url,
-    headers: { host: "mcp.twoweeks.example.test" },
+    headers: {
+      host: "mcp.twoweeks.example.test",
+      ...(path === MCP_OAUTH_CONTINUATION_PATH ? { cookie: BROWSER_NONCE_COOKIE } : {}),
+    },
   };
 }
 
@@ -2077,6 +2158,7 @@ function routeDependencies(ctx: ReturnType<typeof makeCtx>) {
             version: 1,
           },
     ),
+    generateBrowserBoundContinuationNonce: vi.fn(() => BROWSER_NONCE),
     handleCodec: deterministicCodec,
     now: vi.fn(() => NOW),
   } satisfies Required<
@@ -2087,6 +2169,7 @@ function routeDependencies(ctx: ReturnType<typeof makeCtx>) {
       | "createPreAuthIntent"
       | "bindPreAuthIntentToAuthenticatedOwner"
       | "readAuthenticatedOwnerIdentity"
+      | "generateBrowserBoundContinuationNonce"
       | "handleCodec"
       | "now"
       >
@@ -2138,7 +2221,11 @@ function authorizationRequestPath(
 }
 
 function continuationPath(): string {
-  return `${MCP_OAUTH_CONTINUATION_PATH}?${MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER}=${RAW_HANDLE}`;
+  const params = new URLSearchParams({
+    [MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER]: RAW_HANDLE,
+    [MCP_OAUTH_CONTINUATION_BROWSER_NONCE_PARAMETER]: BROWSER_NONCE,
+  });
+  return `${MCP_OAUTH_CONTINUATION_PATH}?${params.toString()}`;
 }
 
 function makeCtx(options: Readonly<{ subject?: string | null }> = {}) {
