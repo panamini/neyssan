@@ -852,6 +852,30 @@ export default defineSchema({
     .index("by_intent_handle_hash", ["intentHandleHash"])
     .index("by_expires_at", ["expiresAt"]),
 
+  mcpOAuthAuthorizationCodes: defineTable({
+    kind: v.literal("mcp_oauth_authorization_code_record"),
+    version: v.literal(1),
+    authorizationCodeDigest: v.string(),
+    twoweeksClerkId: v.string(),
+    ownerIssuer: v.string(),
+    clientId: v.string(),
+    redirectUri: v.string(),
+    resource: v.string(),
+    scopes: v.array(v.string()),
+    state: v.string(),
+    codeChallenge: v.string(),
+    codeChallengeMethod: v.literal("S256"),
+    productionEnvironment: v.literal("mcp_oauth_production_v1"),
+    status: v.union(v.literal("pending"), v.literal("consumed"), v.literal("expired")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    expiresAt: v.number(),
+    consumedAt: v.optional(v.number()),
+    storageVersion: v.literal(1),
+  })
+    .index("by_authorization_code_digest", ["authorizationCodeDigest"])
+    .index("by_expires_at", ["expiresAt"]),
+
   mcpOAuthPreAuthIntents: defineTable({
     kind: v.literal("mcp_oauth_pre_auth_intent_record"),
     version: v.literal(1),
