@@ -76,6 +76,12 @@ const CREATE_MCP_OAUTH_PRE_AUTH_INTENT_MUTATION = makeFunctionReference(
 const BIND_MCP_OAUTH_PRE_AUTH_INTENT_TO_OWNER_MUTATION = makeFunctionReference(
   "mcpOAuthPreAuthOwnerBinding:internalBindMcpOAuthPreAuthIntentToAuthenticatedOwner",
 ) as FunctionReference<"mutation">;
+const CONSUME_MCP_OAUTH_AUTHORIZATION_INTENT_MUTATION = makeFunctionReference(
+  "mcpOAuthAuthorizationIntents:internalConsumeMcpOAuthAuthorizationIntent",
+) as FunctionReference<"mutation">;
+const CREATE_MCP_OAUTH_AUTHORIZATION_CODE_MUTATION = makeFunctionReference(
+  "mcpOAuthAuthorizationCodes:internalCreateMcpOAuthAuthorizationCode",
+) as FunctionReference<"mutation">;
 const productionPreAuthQuotaBuckets = new Map<string, { count: number; windowStartedAt: number }>();
 const productionClerkJwksByIssuer = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 
@@ -486,6 +492,8 @@ function buildProductionMcpOAuthRouteDependencies(
     checkPreAuthQuota: checkProductionPreAuthQuota,
     createPreAuthIntent: buildProductionPreAuthIntentCreatePort(convexClient),
     bindPreAuthIntentToAuthenticatedOwner: buildProductionPreAuthOwnerBindingPort(convexConnection),
+    consumeAuthorizationIntent: buildProductionAuthorizationIntentConsumePort(convexClient),
+    createAuthorizationCode: buildProductionAuthorizationCodeCreatePort(convexClient),
     readAuthenticatedOwnerIdentity: buildProductionAuthenticatedOwnerIdentityReader(env),
   });
 }
@@ -577,6 +585,32 @@ function buildProductionPreAuthOwnerBindingPort(
       },
       { skipQueue: true },
     ) as Promise<Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["bindPreAuthIntentToAuthenticatedOwner"]>>>>;
+  };
+}
+
+function buildProductionAuthorizationIntentConsumePort(
+  convexClient: ConvexHttpClient | undefined,
+): NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["consumeAuthorizationIntent"]> {
+  return async (input) => {
+    if (!convexClient) return authorizationIntentConsumeUnavailableResult();
+    return convexClient.mutation(
+      CONSUME_MCP_OAUTH_AUTHORIZATION_INTENT_MUTATION,
+      input,
+      { skipQueue: true },
+    ) as Promise<Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["consumeAuthorizationIntent"]>>>>;
+  };
+}
+
+function buildProductionAuthorizationCodeCreatePort(
+  convexClient: ConvexHttpClient | undefined,
+): NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["createAuthorizationCode"]> {
+  return async (input) => {
+    if (!convexClient) return authorizationCodeCreateUnavailableResult();
+    return convexClient.mutation(
+      CREATE_MCP_OAUTH_AUTHORIZATION_CODE_MUTATION,
+      input,
+      { skipQueue: true },
+    ) as Promise<Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["createAuthorizationCode"]>>>>;
   };
 }
 
@@ -710,6 +744,45 @@ function preAuthOwnerBindingUnavailableResult(): Awaited<ReturnType<NonNullable<
       message: "Pre-auth owner binding denied.",
       safeForModel: true,
       handleEchoed: false,
+      digestEchoed: false,
+      identityEchoed: false,
+      sensitiveValuesEchoed: false,
+      version: 1,
+    },
+    modelVisible: false,
+    safeForLogging: true,
+    version: 1,
+  });
+}
+
+function authorizationIntentConsumeUnavailableResult(): Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["consumeAuthorizationIntent"]>>> {
+  return Object.freeze({
+    kind: "mcp_oauth_authorization_intent_consume_result",
+    ok: false,
+    reason: "not_found_or_forbidden",
+    safeFailure: {
+      code: "mcp_oauth_authorization_intent_denied",
+      message: "Authorization intent denied.",
+      safeForModel: true,
+      sensitiveValuesEchoed: false,
+      version: 1,
+    },
+    modelVisible: false,
+    safeForLogging: true,
+    version: 1,
+  });
+}
+
+function authorizationCodeCreateUnavailableResult(): Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["createAuthorizationCode"]>>> {
+  return Object.freeze({
+    kind: "mcp_oauth_authorization_code_create_result",
+    ok: false,
+    reason: "storage_unavailable",
+    safeFailure: {
+      code: "mcp_oauth_authorization_code_denied",
+      message: "Authorization code denied.",
+      safeForModel: true,
+      rawCodeEchoed: false,
       digestEchoed: false,
       identityEchoed: false,
       sensitiveValuesEchoed: false,

@@ -10,7 +10,11 @@ import {
   createLocalMcpDevEndpointPlugin,
 } from "../../../../vite.config";
 import { TWOWEEKS_APPLICATIONS_READ_SCOPE } from "../mcpAuthPolicyBoundary";
-import type { McpOAuthAuthorizationRequestBoundaryConfigV1 } from "../mcpOAuthAuthorizationRequestBoundary";
+import type {
+  McpOAuthAuthorizationRequestBoundaryConfigV1,
+  McpOAuthAuthorizationRequestBoundaryHandoffV1,
+  McpOAuthAuthorizationTrustedOwnerV1,
+} from "../mcpOAuthAuthorizationRequestBoundary";
 import {
   buildMcpOAuthLocalDevRouteAdapterConfig,
   handleMcpOAuthLocalDevRouteRequest,
@@ -26,6 +30,8 @@ import {
   MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
   MCP_OAUTH_PRODUCTION_CALLBACK_PATH,
   MCP_OAUTH_PRODUCTION_MCP_PATH,
+  MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT,
+  type McpOAuthProductionAuthorizationCodeCreatePortInputV1,
   type McpOAuthProductionRouteAdapterDependenciesV1,
   type McpOAuthProductionRouteAdapterRequestV1,
   type McpOAuthProductionRoutePathV1,
@@ -82,6 +88,8 @@ const RAW_HANDLE = "A".repeat(43);
 const HANDLE_HASH = sha256Hex(RAW_HANDLE);
 const BROWSER_NONCE = "B".repeat(43);
 const BROWSER_NONCE_COOKIE = `tw_mcp_oauth_continue=${BROWSER_NONCE}`;
+const RAW_AUTHORIZATION_CODE = "C".repeat(43);
+const AUTHORIZATION_CODE_DIGEST = sha256Hex(RAW_AUTHORIZATION_CODE);
 const OWNER_ID = "user_twoweeks_fixture_123";
 const OTHER_OWNER_ID = "user_twoweeks_fixture_456";
 const CLERK_ISSUER = "https://clerk.twoweeks.example.test";
@@ -125,6 +133,56 @@ type StoredPreAuthIntentRecord = {
   updatedAt: number;
   expiresAt: number;
   claimedAt?: number;
+  storageVersion: 1;
+  _id: string;
+  _creationTime: number;
+};
+
+type StoredAuthorizationIntentRecord = {
+  kind: "mcp_oauth_authorization_intent_record";
+  version: 1;
+  intentHandleHash: string;
+  twoweeksClerkId: string;
+  authorizationPageOrigin: string;
+  authorizationPagePath: string;
+  responseType: "code";
+  clientId: string;
+  redirectUri: string;
+  resource: string;
+  scopes: string[];
+  state: string;
+  codeChallenge: string;
+  codeChallengeMethod: "S256";
+  approvedOptionalParameters?: Readonly<Partial<Record<"nonce" | "prompt", string>>>;
+  providerValidationStatus: "pending";
+  status: "pending" | "consumed" | "expired";
+  createdAt: number;
+  updatedAt: number;
+  expiresAt: number;
+  consumedAt?: number;
+  storageVersion: 1;
+  _id: string;
+  _creationTime: number;
+};
+
+type StoredAuthorizationCodeRecord = {
+  kind: "mcp_oauth_authorization_code_record";
+  version: 1;
+  authorizationCodeDigest: string;
+  twoweeksClerkId: string;
+  ownerIssuer: string;
+  clientId: string;
+  redirectUri: string;
+  resource: string;
+  scopes: string[];
+  state: string;
+  codeChallenge: string;
+  codeChallengeMethod: "S256";
+  productionEnvironment: typeof MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT;
+  status: "pending" | "consumed" | "expired";
+  createdAt: number;
+  updatedAt: number;
+  expiresAt: number;
   storageVersion: 1;
   _id: string;
   _creationTime: number;
@@ -907,7 +965,7 @@ describe("MCP OAuth production route adapter", () => {
     expectNoRouteLeakage(response, [], { allowRawHandle: true });
   });
 
-  it("binds the production login-return continuation to the authenticated owner without provider, code, token, or account-link behavior", async () => {
+  it("issues a production authorization code from a valid owner-bound continuation without provider, token, or account-link behavior", async () => {
     const ctx = makeCtx();
     const activation = activationDependencies();
     const dependencies = routeDependencies(ctx);
@@ -933,31 +991,17 @@ describe("MCP OAuth production route adapter", () => {
     );
     expect(continuationResponse).toMatchObject({
       handled: true,
-      status: 200,
-      json: {
-        kind: "mcp_oauth_production_route_response",
-        status: "owner_bound_continuation_prepared",
-        reason: "owner_binding_continuation_prepared",
-        route: "oauth_login_return",
-        preflightDecision: "ready_to_wire",
-        preAuthContinuationConsumed: true,
-        ownerBound: true,
-        ownerBoundIntentPending: true,
-        ownerBoundContinuationPrepared: true,
-        authorizationCodeIssued: false,
-        providerCalled: false,
-        tokenExchangeAttempted: false,
-        tokenIssued: false,
-        consentCompleted: false,
-        accountLinkCreated: false,
-        tokenPersisted: false,
-        hostedMcpStarted: false,
-        modelVisible: false,
-        safeForLogging: true,
-      },
+      status: 303,
+      bodyText: "",
     });
+    const clientRedirect = new URL(continuationResponse.headers.location);
+    expect(`${clientRedirect.origin}${clientRedirect.pathname}`).toBe(REDIRECT_URI);
+    expect(clientRedirect.searchParams.get("code")).toBe(RAW_AUTHORIZATION_CODE);
+    expect(clientRedirect.searchParams.get("state")).toBe(STATE);
     expect(dependencies.createPreAuthIntent).toHaveBeenCalledTimes(1);
     expect(dependencies.bindPreAuthIntentToAuthenticatedOwner).toHaveBeenCalledTimes(1);
+    expect(dependencies.consumeAuthorizationIntent).toHaveBeenCalledTimes(1);
+    expect(dependencies.createAuthorizationCode).toHaveBeenCalledTimes(1);
     expect(dependencies.bindPreAuthIntentToAuthenticatedOwner.mock.calls[0]?.[0]).toEqual({
       preAuthHandleHash: HANDLE_HASH,
       authenticatedOwnerIdentity: {
@@ -976,10 +1020,32 @@ describe("MCP OAuth production route adapter", () => {
       claimedAt: NOW,
       updatedAt: NOW,
     });
+    expect(ctx.authorizationRows[0]).toMatchObject({ status: "consumed", consumedAt: NOW });
+    expect(ctx.authorizationCodeRows).toHaveLength(1);
+    expect(ctx.authorizationCodeRows[0]).toMatchObject({
+      authorizationCodeDigest: AUTHORIZATION_CODE_DIGEST,
+      twoweeksClerkId: OWNER_ID,
+      ownerIssuer: CLERK_ISSUER,
+      clientId: CLIENT_ID,
+      redirectUri: REDIRECT_URI,
+      resource: RESOURCE,
+      scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE, "openid"],
+      state: STATE,
+      codeChallenge: PKCE,
+      codeChallengeMethod: "S256",
+      productionEnvironment: MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT,
+      status: "pending",
+    });
+    expect(JSON.stringify(dependencies.createAuthorizationCode.mock.calls[0]?.[0])).not.toContain(
+      RAW_AUTHORIZATION_CODE,
+    );
+    expect(JSON.stringify(ctx.authorizationCodeRows[0])).not.toContain(RAW_AUTHORIZATION_CODE);
     expect(activation.providerAdapter.exchangeAuthorizationCode).not.toHaveBeenCalled();
     expect(activation.executeAccountLinkLifecycle).not.toHaveBeenCalled();
     expectNoRouteLeakage(authorizeResponse, [], { allowRawHandle: true });
-    expectNoRouteLeakage(continuationResponse);
+    expect(JSON.stringify(continuationResponse)).not.toContain(AUTHORIZATION_CODE_DIGEST);
+    expect(JSON.stringify(continuationResponse)).not.toContain(OWNER_ID);
+    expect(JSON.stringify(continuationResponse)).not.toContain(PKCE);
   });
 
   it("blocks copied production login-return handles without the browser-bound continuation cookie", async () => {
@@ -1174,9 +1240,9 @@ describe("MCP OAuth production route adapter", () => {
 
     expect(first).toMatchObject({
       handled: true,
-      status: 200,
-      json: { status: "owner_bound_continuation_prepared", ownerBound: true },
+      status: 303,
     });
+    expect(new URL(first.headers.location).searchParams.get("code")).toBe(RAW_AUTHORIZATION_CODE);
     expect(replay).toMatchObject({
       handled: true,
       status: 409,
@@ -1191,6 +1257,8 @@ describe("MCP OAuth production route adapter", () => {
       },
     });
     expect(dependencies.bindPreAuthIntentToAuthenticatedOwner).toHaveBeenCalledTimes(2);
+    expect(dependencies.createAuthorizationCode).toHaveBeenCalledTimes(1);
+    expect(ctx.authorizationCodeRows).toHaveLength(1);
     expect(ctx.preAuthRows[0]).toMatchObject({ status: "claimed", claimedAt: NOW });
     expectNoRouteLeakage(replay);
   });
@@ -1223,6 +1291,122 @@ describe("MCP OAuth production route adapter", () => {
       },
     });
     expectNoRouteLeakage(response);
+  });
+
+  it.each([
+    [
+      "client mismatch",
+      (handoff: McpOAuthAuthorizationRequestBoundaryHandoffV1): McpOAuthAuthorizationRequestBoundaryHandoffV1 => ({
+        ...handoff,
+        providerForwardRequest: {
+          ...handoff.providerForwardRequest,
+          clientId: "unexpected_client",
+        },
+      }),
+    ],
+    [
+      "redirect URI mismatch",
+      (handoff: McpOAuthAuthorizationRequestBoundaryHandoffV1): McpOAuthAuthorizationRequestBoundaryHandoffV1 => ({
+        ...handoff,
+        providerForwardRequest: {
+          ...handoff.providerForwardRequest,
+          redirectUri: "https://chatgpt.example.test/connector/oauth/other-callback",
+        },
+      }),
+    ],
+  ] as const)("fails closed on owner-bound continuation %s before issuing a code", async (_label, mutateHandoff) => {
+    const ctx = makeCtx();
+    const dependencies = {
+      ...routeDependencies(ctx),
+      consumeAuthorizationIntent: vi.fn(async () => ({
+        kind: "mcp_oauth_authorization_intent_consume_result",
+        ok: true,
+        reason: "consumed",
+        serverOnly: {
+          authorizationRequestHandoff: mutateHandoff(authorizationHandoff()),
+          version: 1,
+        },
+        modelVisible: false,
+        safeForLogging: false,
+        version: 1,
+      })),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      config,
+      dependencies,
+    );
+
+    const response = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPath()),
+      config,
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 409,
+      json: {
+        status: "blocked",
+        reason: "authorization_intent_consume_failed",
+        route: "oauth_login_return",
+        authorizationCodeIssued: false,
+        tokenExchangeAttempted: false,
+        accountLinkCreated: false,
+      },
+    });
+    expect(dependencies.createAuthorizationCode).not.toHaveBeenCalled();
+    expect(ctx.authorizationCodeRows).toHaveLength(0);
+    expectNoRouteLeakage(response);
+  });
+
+  it("fails closed when authorization-code storage is unavailable after owner binding", async () => {
+    const ctx = makeCtx();
+    const dependencies = {
+      ...routeDependencies(ctx),
+      createAuthorizationCode: vi.fn(async () => ({
+        kind: "mcp_oauth_authorization_code_create_result",
+        ok: false,
+        reason: "storage_unavailable",
+        safeFailure: { code: "mcp_oauth_authorization_code_denied" },
+        modelVisible: false,
+        safeForLogging: true,
+        version: 1,
+      })),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      config,
+      dependencies,
+    );
+
+    const response = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPath()),
+      config,
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 503,
+      json: {
+        status: "blocked",
+        reason: "authorization_code_create_failed",
+        route: "oauth_login_return",
+        authorizationCodeIssued: false,
+        tokenExchangeAttempted: false,
+        accountLinkCreated: false,
+      },
+    });
+    expect(ctx.authorizationRows[0]).toMatchObject({ status: "consumed" });
+    expect(ctx.authorizationCodeRows).toHaveLength(0);
+    expect(JSON.stringify(response)).not.toContain(RAW_AUTHORIZATION_CODE);
+    expect(JSON.stringify(response)).not.toContain(AUTHORIZATION_CODE_DIGEST);
+    expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+    expect(JSON.stringify(response)).not.toContain("access_token");
+    expect(JSON.stringify(response)).not.toContain("refresh_token");
   });
 
   it("matches the production authorization guard against the trimmed provider resource", async () => {
@@ -1766,18 +1950,11 @@ describe("MCP OAuth production route adapter", () => {
     });
 
     expect(response.next).not.toHaveBeenCalled();
-    expect(response.statusCode).toBe(200);
-    expect(JSON.parse(response.body)).toMatchObject({
-      status: "owner_bound_continuation_prepared",
-      route: "oauth_login_return",
-      ownerBound: true,
-      providerCalled: false,
-      tokenExchangeAttempted: false,
-      authorizationCodeIssued: false,
-      accountLinkCreated: false,
-    });
+    expect(response.statusCode).toBe(303);
+    expect(new URL(response.headers.location).searchParams.get("code")).toBe(RAW_AUTHORIZATION_CODE);
+    expect(new URL(response.headers.location).searchParams.get("state")).toBe(STATE);
     expect(response.body).not.toContain("mcp_oauth_local_dev_route_failure");
-    expectNoRouteLeakage(response);
+    expect(ctx.authorizationCodeRows).toHaveLength(1);
   });
 
   it("lets localhost login-return continuations fall through to the local OAuth route when production wiring is also enabled", async () => {
@@ -1900,31 +2077,54 @@ describe("MCP OAuth production route adapter", () => {
         aud: "convex",
       },
     });
-    convexHttpClientMutation.mockImplementationOnce(async () => ({
-      kind: "mcp_oauth_pre_auth_owner_binding_result",
-      ok: true,
-      reason: "bound",
-      serverOnly: {
-        ownerBoundIntent: {
-          status: "pending",
-          expiresAt: Date.now() + 10 * 60 * 1_000,
+    convexHttpClientMutation
+      .mockImplementationOnce(async () => ({
+        kind: "mcp_oauth_pre_auth_owner_binding_result",
+        ok: true,
+        reason: "bound",
+        serverOnly: {
+          ownerBoundIntent: {
+            status: "pending",
+            expiresAt: Date.now() + 10 * 60 * 1_000,
+            version: 1,
+          },
+          preAuthIntent: {
+            status: "claimed",
+            version: 1,
+          },
+          trustedOwner: trustedOwner(),
           version: 1,
         },
-        preAuthIntent: {
-          status: "claimed",
-          version: 1,
-        },
-        trustedOwner: {
-          kind: "mcp_oauth_authorization_trusted_owner",
-          twoweeksClerkId: OWNER_ID,
-          version: 1,
-        },
+        modelVisible: false,
+        safeForLogging: false,
         version: 1,
-      },
-      modelVisible: false,
-      safeForLogging: false,
-      version: 1,
-    }));
+      }))
+      .mockImplementationOnce(async () => ({
+        kind: "mcp_oauth_authorization_intent_consume_result",
+        ok: true,
+        reason: "consumed",
+        serverOnly: {
+          authorizationRequestHandoff: authorizationHandoff(),
+          version: 1,
+        },
+        modelVisible: false,
+        safeForLogging: false,
+        version: 1,
+      }))
+      .mockImplementationOnce(async () => ({
+        kind: "mcp_oauth_authorization_code_create_result",
+        ok: true,
+        reason: "created",
+        serverOnly: {
+          status: "pending",
+          expiresAt: Date.now() + 5 * 60 * 1_000,
+          rawAuthorizationCodePersisted: false,
+          version: 1,
+        },
+        modelVisible: false,
+        safeForLogging: false,
+        version: 1,
+      }));
 
     const plugin = createLocalMcpDevEndpointPlugin();
     const middleware = readConfiguredMiddleware(plugin);
@@ -1939,16 +2139,9 @@ describe("MCP OAuth production route adapter", () => {
     });
 
     expect(response.next).not.toHaveBeenCalled();
-    expect(response.statusCode).toBe(200);
-    expect(JSON.parse(response.body)).toMatchObject({
-      status: "owner_bound_continuation_prepared",
-      route: "oauth_login_return",
-      ownerBound: true,
-      providerCalled: false,
-      tokenExchangeAttempted: false,
-      authorizationCodeIssued: false,
-      accountLinkCreated: false,
-    });
+    expect(response.statusCode).toBe(303);
+    expect(new URL(response.headers.location).searchParams.get("code")).toMatch(/^[A-Za-z0-9_-]{43}$/u);
+    expect(new URL(response.headers.location).searchParams.get("state")).toBe(STATE);
     expect(ConvexHttpClientMock).toHaveBeenCalledWith("http://127.0.0.1:3210");
     expect(createRemoteJWKSetMock).toHaveBeenCalledWith(new URL(`${CLERK_ISSUER}/.well-known/jwks.json`));
     expect(jwtVerifyMock).toHaveBeenCalledWith(
@@ -1964,14 +2157,29 @@ describe("MCP OAuth production route adapter", () => {
       subject: OWNER_ID,
       issuer: CLERK_ISSUER,
     });
-    expect(convexHttpClientMutation).toHaveBeenCalledTimes(1);
+    expect(convexHttpClientMutation).toHaveBeenCalledTimes(3);
     expect(convexHttpClientMutation.mock.calls[0]?.[1]).toEqual({
       preAuthHandleHash: HANDLE_HASH,
       now: expect.any(Number),
       version: 1,
     });
     expect(convexHttpClientMutation.mock.calls[0]?.[2]).toEqual({ skipQueue: true });
-    expectNoRouteLeakage(response);
+    expect(convexHttpClientMutation.mock.calls[1]?.[1]).toMatchObject({
+      trustedOwner: trustedOwner(),
+      intentHandleHash: HANDLE_HASH,
+      version: 1,
+    });
+    expect(convexHttpClientMutation.mock.calls[2]?.[1]).toMatchObject({
+      authorizationCodeDigest: expect.stringMatching(/^[0-9a-f]{64}$/u),
+      trustedOwner: trustedOwner(),
+      productionEnvironment: MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT,
+      version: 1,
+    });
+    expect(JSON.stringify(convexHttpClientMutation.mock.calls[2]?.[1])).not.toContain(
+      new URL(response.headers.location).searchParams.get("code") ?? "",
+    );
+    expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+    expect(JSON.stringify(response)).not.toContain(PKCE);
   });
 
   it("fails default production login-return continuation closed without a verified request identity", async () => {
@@ -2078,6 +2286,9 @@ describe("MCP OAuth production route adapter", () => {
     expect(isMcpOAuthProductionRouteHandledPath("/oauth/authorize/extra")).toBe(false);
     expect(isMcpOAuthProductionRouteHandledPath("/mcp/oauth/authorize/continue/extra")).toBe(false);
     expect(isMcpOAuthProductionRouteHandledPath("/mcp/tools/list")).toBe(false);
+    expect(isMcpOAuthProductionRouteHandledPath("/mcp/tools/call")).toBe(false);
+    expect(isMcpOAuthProductionRouteHandledPath("/tools/list")).toBe(false);
+    expect(isMcpOAuthProductionRouteHandledPath("/tools/call")).toBe(false);
   });
 });
 
@@ -2149,6 +2360,8 @@ function routeDependencies(ctx: ReturnType<typeof makeCtx>) {
     bindPreAuthIntentToAuthenticatedOwner: vi.fn(async (input) =>
       bindFakePreAuthIntentToAuthenticatedOwner(ctx, input),
     ),
+    consumeAuthorizationIntent: vi.fn(async (input) => consumeFakeAuthorizationIntent(ctx, input)),
+    createAuthorizationCode: vi.fn(async (input) => createFakeAuthorizationCode(ctx, input)),
     readAuthenticatedOwnerIdentity: vi.fn(async () =>
       ctx.subject === null
         ? undefined
@@ -2159,6 +2372,7 @@ function routeDependencies(ctx: ReturnType<typeof makeCtx>) {
           },
     ),
     generateBrowserBoundContinuationNonce: vi.fn(() => BROWSER_NONCE),
+    generateAuthorizationCode: vi.fn(() => RAW_AUTHORIZATION_CODE),
     handleCodec: deterministicCodec,
     now: vi.fn(() => NOW),
   } satisfies Required<
@@ -2168,8 +2382,11 @@ function routeDependencies(ctx: ReturnType<typeof makeCtx>) {
       | "checkPreAuthQuota"
       | "createPreAuthIntent"
       | "bindPreAuthIntentToAuthenticatedOwner"
+      | "consumeAuthorizationIntent"
+      | "createAuthorizationCode"
       | "readAuthenticatedOwnerIdentity"
       | "generateBrowserBoundContinuationNonce"
+      | "generateAuthorizationCode"
       | "handleCodec"
       | "now"
       >
@@ -2230,9 +2447,13 @@ function continuationPath(): string {
 
 function makeCtx(options: Readonly<{ subject?: string | null }> = {}) {
   const preAuthRows: StoredPreAuthIntentRecord[] = [];
+  const authorizationRows: StoredAuthorizationIntentRecord[] = [];
+  const authorizationCodeRows: StoredAuthorizationCodeRecord[] = [];
 
   return {
     preAuthRows,
+    authorizationRows,
+    authorizationCodeRows,
     subject: options.subject === undefined ? OWNER_ID : options.subject,
   };
 }
@@ -2393,6 +2614,7 @@ function bindFakePreAuthIntentToAuthenticatedOwner(
   row.status = "claimed";
   row.updatedAt = input.now;
   row.claimedAt = input.now;
+  ctx.authorizationRows.push(ownerBoundIntentFromPreAuthRow(ctx, row, input.now));
   return Promise.resolve({
     kind: "mcp_oauth_pre_auth_owner_binding_result",
     ok: true,
@@ -2418,6 +2640,231 @@ function bindFakePreAuthIntentToAuthenticatedOwner(
     safeForLogging: false,
     version: 1,
   });
+}
+
+function ownerBoundIntentFromPreAuthRow(
+  ctx: ReturnType<typeof makeCtx>,
+  row: StoredPreAuthIntentRecord,
+  now: number,
+): StoredAuthorizationIntentRecord {
+  return {
+    kind: "mcp_oauth_authorization_intent_record",
+    version: 1,
+    intentHandleHash: row.preAuthHandleHash,
+    twoweeksClerkId: ctx.subject ?? OWNER_ID,
+    authorizationPageOrigin: row.authorizationPageOrigin,
+    authorizationPagePath: row.authorizationPagePath,
+    responseType: "code",
+    clientId: row.clientId,
+    redirectUri: row.redirectUri,
+    resource: row.resource,
+    scopes: [...row.scopes],
+    state: row.state,
+    codeChallenge: row.codeChallenge,
+    codeChallengeMethod: "S256",
+    ...(row.approvedOptionalParameters ? { approvedOptionalParameters: row.approvedOptionalParameters } : {}),
+    providerValidationStatus: "pending",
+    status: "pending",
+    createdAt: now,
+    updatedAt: now,
+    expiresAt: now + 10 * 60 * 1_000,
+    storageVersion: 1,
+    _id: `mcpOAuthAuthorizationIntents_fixture_${ctx.authorizationRows.length + 1}`,
+    _creationTime: NOW,
+  };
+}
+
+function consumeFakeAuthorizationIntent(
+  ctx: ReturnType<typeof makeCtx>,
+  input: Parameters<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["consumeAuthorizationIntent"]>>[0],
+): ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["consumeAuthorizationIntent"]>> {
+  const rows = ctx.authorizationRows.filter((row) => row.intentHandleHash === input.intentHandleHash);
+  if (rows.length !== 1) return Promise.resolve(safeAuthorizationIntentConsumeFailure("not_found_or_forbidden"));
+  const row = rows[0];
+  if (row.twoweeksClerkId !== input.trustedOwner.twoweeksClerkId) {
+    return Promise.resolve(safeAuthorizationIntentConsumeFailure("not_found_or_forbidden"));
+  }
+  if (row.status === "consumed") return Promise.resolve(safeAuthorizationIntentConsumeFailure("already_consumed"));
+  if (row.status === "expired" || input.now >= row.expiresAt) {
+    row.status = "expired";
+    row.updatedAt = input.now;
+    return Promise.resolve(safeAuthorizationIntentConsumeFailure("expired"));
+  }
+  row.status = "consumed";
+  row.updatedAt = input.now;
+  row.consumedAt = input.now;
+  return Promise.resolve({
+    kind: "mcp_oauth_authorization_intent_consume_result",
+    ok: true,
+    reason: "consumed",
+    serverOnly: {
+      authorizationRequestHandoff: authorizationHandoff(row),
+      version: 1,
+    },
+    modelVisible: false,
+    safeForLogging: false,
+    version: 1,
+  });
+}
+
+function createFakeAuthorizationCode(
+  ctx: ReturnType<typeof makeCtx>,
+  input: McpOAuthProductionAuthorizationCodeCreatePortInputV1,
+): ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["createAuthorizationCode"]>> {
+  if (ctx.authorizationCodeRows.some((row) => row.authorizationCodeDigest === input.authorizationCodeDigest)) {
+    return Promise.resolve({
+      kind: "mcp_oauth_authorization_code_create_result",
+      ok: false,
+      reason: "digest_collision",
+      safeFailure: { code: "mcp_oauth_authorization_code_denied" },
+      modelVisible: false,
+      safeForLogging: true,
+      version: 1,
+    });
+  }
+  const row: StoredAuthorizationCodeRecord = {
+    kind: "mcp_oauth_authorization_code_record",
+    version: 1,
+    authorizationCodeDigest: input.authorizationCodeDigest,
+    twoweeksClerkId: input.trustedOwner.twoweeksClerkId,
+    ownerIssuer: input.authenticatedOwnerIdentity.issuer,
+    clientId: input.authorizationRequest.clientId,
+    redirectUri: input.authorizationRequest.redirectUri,
+    resource: input.authorizationRequest.resource,
+    scopes: [...input.authorizationRequest.scopes],
+    state: input.authorizationRequest.state,
+    codeChallenge: input.authorizationRequest.codeChallenge,
+    codeChallengeMethod: "S256",
+    productionEnvironment: input.productionEnvironment,
+    status: "pending",
+    createdAt: input.now,
+    updatedAt: input.now,
+    expiresAt: input.now + 5 * 60 * 1_000,
+    storageVersion: 1,
+    _id: `mcpOAuthAuthorizationCodes_fixture_${ctx.authorizationCodeRows.length + 1}`,
+    _creationTime: NOW,
+  };
+  ctx.authorizationCodeRows.push(row);
+  return Promise.resolve({
+    kind: "mcp_oauth_authorization_code_create_result",
+    ok: true,
+    reason: "created",
+    serverOnly: {
+      status: "pending",
+      expiresAt: row.expiresAt,
+      rawAuthorizationCodePersisted: false,
+      version: 1,
+    },
+    modelVisible: false,
+    safeForLogging: false,
+    version: 1,
+  });
+}
+
+function safeAuthorizationIntentConsumeFailure(reason: string) {
+  return {
+    kind: "mcp_oauth_authorization_intent_consume_result",
+    ok: false,
+    reason,
+    safeFailure: {
+      code: "mcp_oauth_authorization_intent_denied",
+      message: "Authorization intent denied.",
+      safeForModel: true,
+      sensitiveValuesEchoed: false,
+      version: 1,
+    },
+    modelVisible: false,
+    safeForLogging: true,
+    version: 1,
+  } as const;
+}
+
+function authorizationHandoff(
+  row: StoredAuthorizationIntentRecord = ownerBoundIntentFromPreAuthRow(makeCtx(), {
+    kind: "mcp_oauth_pre_auth_intent_record",
+    version: 1,
+    preAuthHandleHash: HANDLE_HASH,
+    authorizationPageOrigin: PROD_APP_ORIGIN,
+    authorizationPagePath: MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
+    responseType: "code",
+    clientId: CLIENT_ID,
+    redirectUri: REDIRECT_URI,
+    resource: RESOURCE,
+    scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE, "openid"],
+    state: STATE,
+    codeChallenge: PKCE,
+    codeChallengeMethod: "S256",
+    providerValidationStatus: "pending",
+    status: "claimed",
+    createdAt: NOW,
+    updatedAt: NOW,
+    expiresAt: NOW + 10 * 60 * 1_000,
+    storageVersion: 1,
+    _id: "mcpOAuthPreAuthIntents_fixture_handoff",
+    _creationTime: NOW,
+  }, NOW),
+): McpOAuthAuthorizationRequestBoundaryHandoffV1 {
+  return {
+    authorizationPage: {
+      origin: row.authorizationPageOrigin,
+      path: row.authorizationPagePath,
+    },
+    providerForwardRequest: {
+      responseType: "code",
+      clientId: row.clientId,
+      redirectUri: row.redirectUri,
+      resource: row.resource,
+      scopes: [...row.scopes],
+      state: row.state,
+      pkce: {
+        codeChallenge: row.codeChallenge,
+        codeChallengeMethod: "S256",
+      },
+      ...(row.approvedOptionalParameters ? { approvedOptionalParameters: row.approvedOptionalParameters } : {}),
+      version: 1,
+    },
+    trustedOwner: trustedOwner(row.twoweeksClerkId),
+    providerValidation: {
+      status: "pending",
+      clientRegistrationValidated: false,
+      redirectUriValidatedByProvider: false,
+      consentCompleted: false,
+      authorizationCodeIssued: false,
+      tokenIssued: false,
+      stytchSubjectResolved: false,
+      accountLinkCreated: false,
+      version: 1,
+    },
+    futureIntent: {
+      kind: "mcp_oauth_authorization_intent_contract",
+      storage: "future_short_lived_server_store",
+      preservesProviderForwardRequest: true,
+      serverMustPersistBeforeLoginReturn: true,
+      serverPreservedSensitiveOptionalParameters: ["login_hint", "id_token_hint"],
+      modelVisible: false,
+      version: 1,
+    },
+    loginReturn: {
+      path: MCP_OAUTH_CONTINUATION_PATH,
+      target: "authorization_page",
+      usesClientRedirectUri: false,
+      containsOwnerIdentity: false,
+      sensitiveOptionalParametersInUrl: false,
+      persisted: false,
+      version: 1,
+    },
+    modelVisible: false,
+    safeForLogging: false,
+    version: 1,
+  };
+}
+
+function trustedOwner(twoweeksClerkId = OWNER_ID): McpOAuthAuthorizationTrustedOwnerV1 {
+  return {
+    kind: "mcp_oauth_authorization_trusted_owner",
+    twoweeksClerkId,
+    version: 1,
+  };
 }
 
 function safeOwnerBindingFailure() {
