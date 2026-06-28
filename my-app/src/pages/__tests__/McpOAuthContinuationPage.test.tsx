@@ -6,6 +6,10 @@ import { McpOAuthContinuationPage } from "../McpOAuthContinuationPage";
 
 describe("McpOAuthContinuationPage", () => {
   it("keeps the continuation handle out of rendered text", () => {
+    window.sessionStorage.setItem(
+      "mcp-oauth-continuation-document-request:/mcp/oauth/authorize/continue?mcp_oauth_intent=secret_handle-123",
+      "1",
+    );
     render(
       <MemoryRouter initialEntries={["/mcp/oauth/authorize/continue?mcp_oauth_intent=secret_handle-123"]}>
         <McpOAuthContinuationPage />

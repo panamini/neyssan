@@ -6,6 +6,7 @@ import {
 } from "./mcpOAuthProductionRoutePreflightBoundary";
 import {
   projectMcpOAuthPreAuthAuthorizationRequest,
+  type McpOAuthAuthorizationTrustedOwnerV1,
   type McpOAuthAuthorizationRequestBoundaryConfigV1,
   type McpOAuthPreAuthAuthorizationRequestProjectionV1,
 } from "./mcpOAuthAuthorizationRequestBoundary";
@@ -26,10 +27,12 @@ export const MCP_OAUTH_PRODUCTION_MCP_PATH = "/mcp";
 export type McpOAuthProductionRoutePathV1 =
   | typeof MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH
   | typeof MCP_OAUTH_PRODUCTION_CALLBACK_PATH
-  | typeof MCP_OAUTH_PRODUCTION_MCP_PATH;
+  | typeof MCP_OAUTH_PRODUCTION_MCP_PATH
+  | typeof MCP_OAUTH_CONTINUATION_PATH;
 
 type McpOAuthProductionRouteNameV1 =
   | "oauth_authorize"
+  | "oauth_login_return"
   | "oauth_callback"
   | "mcp";
 
@@ -128,10 +131,69 @@ export type McpOAuthProductionPreAuthIntentCreatePortV1 = (
   input: McpOAuthProductionPreAuthIntentCreatePortInputV1,
 ) => Promise<McpOAuthProductionPreAuthIntentCreatePortResultV1>;
 
+export type McpOAuthProductionPreAuthOwnerBindingPortInputV1 = Readonly<{
+  preAuthHandleHash: string;
+  authenticatedOwnerIdentity: McpOAuthProductionAuthenticatedOwnerIdentityV1;
+  now: number;
+  version: 1;
+}>;
+
+export type McpOAuthProductionPreAuthOwnerBindingPortResultV1 = Readonly<
+  | {
+      kind: "mcp_oauth_pre_auth_owner_binding_result";
+      ok: true;
+      reason: "bound";
+      serverOnly: {
+        ownerBoundIntent: {
+          status: "pending";
+          expiresAt: number;
+          version: 1;
+        };
+        preAuthIntent: {
+          status: "claimed";
+          version: 1;
+        };
+        trustedOwner: McpOAuthAuthorizationTrustedOwnerV1;
+        version: 1;
+      };
+      modelVisible: false;
+      safeForLogging: false;
+      version: 1;
+    }
+  | {
+      kind: "mcp_oauth_pre_auth_owner_binding_result";
+      ok: false;
+      reason: string;
+      safeFailure: unknown;
+      modelVisible: false;
+      safeForLogging: true;
+      version: 1;
+    }
+>;
+
+export type McpOAuthProductionPreAuthOwnerBindingPortV1 = (
+  input: McpOAuthProductionPreAuthOwnerBindingPortInputV1,
+) => Promise<McpOAuthProductionPreAuthOwnerBindingPortResultV1>;
+
+export type McpOAuthProductionAuthenticatedOwnerIdentityV1 = Readonly<{
+  subject: string;
+  issuer: string;
+  version: 1;
+}>;
+
+export type McpOAuthProductionAuthenticatedOwnerIdentityReaderV1 = (
+  request: McpOAuthProductionRouteAdapterRequestV1,
+) => Promise<McpOAuthProductionAuthenticatedOwnerIdentityV1 | undefined>;
+
+export type McpOAuthProductionBrowserBoundContinuationNonceGeneratorV1 = () => string | undefined;
+
 export type McpOAuthProductionRouteAdapterDependenciesV1 = Readonly<{
   authorizationRequestConfig?: McpOAuthAuthorizationRequestBoundaryConfigV1;
   checkPreAuthQuota?: McpOAuthProductionPreAuthQuotaPortV1;
   createPreAuthIntent?: McpOAuthProductionPreAuthIntentCreatePortV1;
+  bindPreAuthIntentToAuthenticatedOwner?: McpOAuthProductionPreAuthOwnerBindingPortV1;
+  readAuthenticatedOwnerIdentity?: McpOAuthProductionAuthenticatedOwnerIdentityReaderV1;
+  generateBrowserBoundContinuationNonce?: McpOAuthProductionBrowserBoundContinuationNonceGeneratorV1;
   handleCodec?: McpOAuthContinuationHandleCodecV1;
   now?: () => number;
 }>;
@@ -160,7 +222,10 @@ type McpOAuthProductionRouteFailureReasonV1 =
   | "invalid_authorization_request"
   | "invalid_configuration"
   | "pre_auth_quota_denied"
-  | "pre_auth_create_failed";
+  | "pre_auth_create_failed"
+  | "invalid_continuation_request"
+  | "browser_bound_continuation_missing"
+  | "owner_binding_failed";
 
 type McpOAuthProductionAuthorizationOriginV1 = Readonly<{
   origin: string;
@@ -171,6 +236,7 @@ type McpOAuthProductionAuthorizationOriginV1 = Readonly<{
 
 const HANDLED_PATHS = Object.freeze([
   MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
+  MCP_OAUTH_CONTINUATION_PATH,
   MCP_OAUTH_PRODUCTION_CALLBACK_PATH,
   MCP_OAUTH_PRODUCTION_MCP_PATH,
 ] as const);
@@ -187,6 +253,12 @@ const PRE_AUTH_CREATE_FALSE_PROOF_KEYS = Object.freeze([
 const INTENT_HANDLE_HASH_PATTERN = /^[0-9a-f]{64}$/u;
 const PRE_AUTH_QUOTA_TIMEOUT_MS = 2_500;
 const PRE_AUTH_CREATE_TIMEOUT_MS = 2_500;
+const OWNER_BINDING_TIMEOUT_MS = 2_500;
+const BROWSER_BOUND_CONTINUATION_NONCE_PARAMETER = "mcp_oauth_browser_nonce";
+const BROWSER_BOUND_CONTINUATION_COOKIE_NAME = "tw_mcp_oauth_continue";
+const BROWSER_BOUND_CONTINUATION_NONCE_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
+const BROWSER_BOUND_CONTINUATION_MAX_AGE_SECONDS = 600;
+const BASE64_URL_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 export function buildMcpOAuthProductionRouteAdapterConfig(
   input: McpOAuthProductionRoutePreflightInputV1 = {},
@@ -225,6 +297,9 @@ export async function handleMcpOAuthProductionRouteRequest(
   }
   if (route === "oauth_authorize") {
     return handleAuthorizationRequest(request, config, dependencies);
+  }
+  if (route === "oauth_login_return") {
+    return handleLoginReturnContinuationRequest(request, config, dependencies);
   }
   return inertGuardedResponse(route, config.preflight);
 }
@@ -334,7 +409,87 @@ async function handleAuthorizationRequest(
     );
   }
 
-  return redirectToSignIn(generated.rawHandle, authorizationOrigin.origin);
+  const browserNonce = readGeneratedBrowserBoundContinuationNonce(dependencies);
+  if (!browserNonce) {
+    return failClosedResponse("oauth_authorize", preflight, "invalid_configuration", 500);
+  }
+
+  return redirectToSignIn(generated.rawHandle, browserNonce, authorizationOrigin.origin);
+}
+
+async function handleLoginReturnContinuationRequest(
+  request: McpOAuthProductionRouteAdapterRequestV1,
+  config: McpOAuthProductionRouteAdapterConfigV1,
+  dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+): Promise<McpOAuthProductionRouteAdapterResponseV1> {
+  const preflight = config.preflight;
+  if (
+    !dependencies.authorizationRequestConfig ||
+    !dependencies.bindPreAuthIntentToAuthenticatedOwner ||
+    !dependencies.readAuthenticatedOwnerIdentity
+  ) {
+    return failClosedResponse("oauth_login_return", preflight, "dependency_unavailable", 503);
+  }
+  if (!authorizationRequestConfigMatchesGuard(dependencies.authorizationRequestConfig, config.authorizationRequestGuard)) {
+    return failClosedResponse("oauth_login_return", preflight, "invalid_configuration", 500);
+  }
+  const authorizationOrigin = readAuthorizationOrigin(dependencies.authorizationRequestConfig);
+  if (!authorizationOrigin) {
+    return failClosedResponse("oauth_login_return", preflight, "invalid_configuration", 500);
+  }
+  if (!requestHostMatchesAuthorizationOrigin(request, authorizationOrigin)) {
+    return failClosedResponse("oauth_login_return", preflight, "invalid_host", 403);
+  }
+
+  const codec = dependencies.handleCodec ?? defaultMcpOAuthContinuationHandleCodecV1;
+  const continuationRequest = readContinuationRequest(request.url, authorizationOrigin.origin, codec);
+  if (!continuationRequest) {
+    return failClosedResponse("oauth_login_return", preflight, "invalid_continuation_request", 400);
+  }
+  if (!browserBoundContinuationCookieMatches(request, continuationRequest.browserNonce)) {
+    return failClosedResponse("oauth_login_return", preflight, "browser_bound_continuation_missing", 401);
+  }
+  const preAuthHandleHash = readHandleHash(continuationRequest.rawHandle, codec);
+  if (!preAuthHandleHash) {
+    return failClosedResponse("oauth_login_return", preflight, "invalid_continuation_request", 400);
+  }
+
+  const now = readNow(dependencies);
+  let authenticatedOwnerIdentity: McpOAuthProductionAuthenticatedOwnerIdentityV1 | undefined;
+  try {
+    authenticatedOwnerIdentity = await dependencies.readAuthenticatedOwnerIdentity(request);
+  } catch {
+    return failClosedResponse("oauth_login_return", preflight, "owner_binding_failed", 401);
+  }
+  if (!isAuthenticatedOwnerIdentity(authenticatedOwnerIdentity)) {
+    return failClosedResponse("oauth_login_return", preflight, "owner_binding_failed", 401);
+  }
+
+  let bindingResult: McpOAuthProductionPreAuthOwnerBindingPortResultV1;
+  try {
+    bindingResult = await bindPreAuthIntentToAuthenticatedOwnerWithTimeout(
+      dependencies.bindPreAuthIntentToAuthenticatedOwner,
+      {
+        preAuthHandleHash,
+        authenticatedOwnerIdentity,
+        now,
+        version: 1,
+      },
+      OWNER_BINDING_TIMEOUT_MS,
+    );
+  } catch {
+    return failClosedResponse("oauth_login_return", preflight, "owner_binding_failed", 503);
+  }
+  if (!isOwnerBindingSuccess(bindingResult, now)) {
+    return failClosedResponse(
+      "oauth_login_return",
+      preflight,
+      "owner_binding_failed",
+      statusForOwnerBindingFailure(bindingResult),
+    );
+  }
+
+  return ownerBoundContinuationResponse(config.preflight, bindingResult);
 }
 
 function buildAuthorizationRequestGuard(
@@ -410,12 +565,12 @@ function checkPreAuthQuotaWithTimeout(
         },
         (error: unknown) => {
           clearTimeout(timeout);
-          reject(error);
+          reject(toRejectedError(error, "pre_auth_quota_failed"));
         },
       );
     } catch (error) {
       clearTimeout(timeout);
-      reject(error);
+      reject(toRejectedError(error, "pre_auth_quota_failed"));
     }
   });
 }
@@ -438,12 +593,40 @@ function createPreAuthIntentWithTimeout(
         },
         (error: unknown) => {
           clearTimeout(timeout);
-          reject(error);
+          reject(toRejectedError(error, "pre_auth_create_failed"));
         },
       );
     } catch (error) {
       clearTimeout(timeout);
-      reject(error);
+      reject(toRejectedError(error, "pre_auth_create_failed"));
+    }
+  });
+}
+
+function bindPreAuthIntentToAuthenticatedOwnerWithTimeout(
+  bindPreAuthIntentToAuthenticatedOwner: McpOAuthProductionPreAuthOwnerBindingPortV1,
+  input: McpOAuthProductionPreAuthOwnerBindingPortInputV1,
+  timeoutMs: number,
+): Promise<McpOAuthProductionPreAuthOwnerBindingPortResultV1> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error("owner_binding_timeout"));
+    }, timeoutMs);
+
+    try {
+      bindPreAuthIntentToAuthenticatedOwner(input).then(
+        (result) => {
+          clearTimeout(timeout);
+          resolve(result);
+        },
+        (error: unknown) => {
+          clearTimeout(timeout);
+          reject(toRejectedError(error, "owner_binding_failed"));
+        },
+      );
+    } catch (error) {
+      clearTimeout(timeout);
+      reject(toRejectedError(error, "owner_binding_failed"));
     }
   });
 }
@@ -458,6 +641,7 @@ function normalizeStringSet(value: unknown): readonly string[] {
 
 function routeNameForPath(path: string): McpOAuthProductionRouteNameV1 | undefined {
   if (path === MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH) return "oauth_authorize";
+  if (path === MCP_OAUTH_CONTINUATION_PATH) return "oauth_login_return";
   if (path === MCP_OAUTH_PRODUCTION_CALLBACK_PATH) return "oauth_callback";
   if (path === MCP_OAUTH_PRODUCTION_MCP_PATH) return "mcp";
   return undefined;
@@ -467,7 +651,9 @@ function isRouteAllowedByPreflight(
   route: McpOAuthProductionRouteNameV1,
   preflight: McpOAuthProductionRoutePreflightResultV1,
 ): boolean {
-  return route === "oauth_authorize" ? preflight.authorizeAllowedToWire : preflight.allowedToWire;
+  return route === "oauth_authorize" || route === "oauth_login_return"
+    ? preflight.authorizeAllowedToWire
+    : preflight.allowedToWire;
 }
 
 function isAllowedMethod(route: McpOAuthProductionRouteNameV1, method: string): boolean {
@@ -558,6 +744,48 @@ function inertGuardedResponse(
   });
 }
 
+function ownerBoundContinuationResponse(
+  preflight: McpOAuthProductionRoutePreflightResultV1,
+  bindingResult: Extract<McpOAuthProductionPreAuthOwnerBindingPortResultV1, { ok: true }>,
+): McpOAuthProductionRouteAdapterResponseV1 {
+  return jsonResponse(200, {
+    kind: "mcp_oauth_production_route_response",
+    status: "owner_bound_continuation_prepared",
+    reason: "owner_binding_continuation_prepared",
+    route: "oauth_login_return",
+    message: "Production MCP OAuth owner-bound continuation prepared.",
+    safeForModel: true,
+    allowedByPreflight: true,
+    preflightDecision: preflight.decision,
+    guardedInertHandlerReached: false,
+    authorizationRequestAccepted: false,
+    authorizationCodeAccepted: false,
+    authorizationCodeIssued: false,
+    redirectSecretAccepted: false,
+    providerCalled: false,
+    tokenExchangeAttempted: false,
+    tokenIssued: false,
+    preAuthIntentCreated: false,
+    preAuthContinuationConsumed: true,
+    ownerBound: true,
+    ownerBoundIntentPending: bindingResult.serverOnly.ownerBoundIntent.status === "pending",
+    ownerBoundContinuationPrepared: true,
+    consentCompleted: false,
+    accountLinkCreated: false,
+    tokenPersisted: false,
+    refreshTokenPersisted: false,
+    providerSecretsExposed: false,
+    rawProviderConfigExposed: false,
+    ownerIdentifiersExposed: false,
+    authorizationCodesExposed: false,
+    redirectSecretsExposed: false,
+    hostedMcpStarted: false,
+    modelVisible: false,
+    safeForLogging: true,
+    version: 1,
+  });
+}
+
 function notHandled(): McpOAuthProductionRouteAdapterResponseV1 {
   return Object.freeze({
     handled: false,
@@ -569,10 +797,12 @@ function notHandled(): McpOAuthProductionRouteAdapterResponseV1 {
 
 function redirectToSignIn(
   rawHandle: string,
+  browserNonce: string,
   authorizationPageOrigin: string,
 ): McpOAuthProductionRouteAdapterResponseV1 {
   const continuationPath = `${MCP_OAUTH_CONTINUATION_PATH}?${new URLSearchParams({
     [MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER]: rawHandle,
+    [BROWSER_BOUND_CONTINUATION_NONCE_PARAMETER]: browserNonce,
   }).toString()}`;
   const signInUrl = `${authorizationPageOrigin}/sign-in?${new URLSearchParams({
     [MCP_OAUTH_SIGN_IN_RETURN_PARAMETER]: continuationPath,
@@ -583,6 +813,7 @@ function redirectToSignIn(
     headers: {
       ...noStoreHeaders(),
       location: signInUrl,
+      "set-cookie": browserBoundContinuationCookie(browserNonce),
     },
     bodyText: "",
   });
@@ -673,10 +904,122 @@ function readGeneratedHandle(
   }
 }
 
+function readGeneratedBrowserBoundContinuationNonce(
+  dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+): string | undefined {
+  try {
+    const nonce = dependencies.generateBrowserBoundContinuationNonce?.() ?? generateDefaultBrowserBoundContinuationNonce();
+    return isBrowserBoundContinuationNonce(nonce) ? nonce : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function generateDefaultBrowserBoundContinuationNonce(): string | undefined {
+  const crypto = globalThis.crypto;
+  if (!crypto?.getRandomValues) return undefined;
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return base64UrlNoPadding(bytes);
+}
+
+function base64UrlNoPadding(bytes: Uint8Array): string {
+  let output = "";
+  let index = 0;
+  for (; index + 2 < bytes.length; index += 3) {
+    const value = (bytes[index] << 16) | (bytes[index + 1] << 8) | bytes[index + 2];
+    output += BASE64_URL_ALPHABET[(value >> 18) & 63];
+    output += BASE64_URL_ALPHABET[(value >> 12) & 63];
+    output += BASE64_URL_ALPHABET[(value >> 6) & 63];
+    output += BASE64_URL_ALPHABET[value & 63];
+  }
+  if (index < bytes.length) {
+    const remaining = bytes.length - index;
+    const value = (bytes[index] << 16) | (remaining === 2 ? bytes[index + 1] << 8 : 0);
+    output += BASE64_URL_ALPHABET[(value >> 18) & 63];
+    output += BASE64_URL_ALPHABET[(value >> 12) & 63];
+    if (remaining === 2) {
+      output += BASE64_URL_ALPHABET[(value >> 6) & 63];
+    }
+  }
+  return output;
+}
+
+function isBrowserBoundContinuationNonce(value: unknown): value is string {
+  return typeof value === "string" && BROWSER_BOUND_CONTINUATION_NONCE_PATTERN.test(value);
+}
+
+function browserBoundContinuationCookie(browserNonce: string): string {
+  return [
+    `${BROWSER_BOUND_CONTINUATION_COOKIE_NAME}=${browserNonce}`,
+    `Max-Age=${BROWSER_BOUND_CONTINUATION_MAX_AGE_SECONDS}`,
+    `Path=${MCP_OAUTH_CONTINUATION_PATH}`,
+    "HttpOnly",
+    "Secure",
+    "SameSite=Lax",
+  ].join("; ");
+}
+
+function browserBoundContinuationCookieMatches(
+  request: McpOAuthProductionRouteAdapterRequestV1,
+  expectedNonce: string,
+): boolean {
+  const cookie = readSingleHeaderValue(request.headers?.cookie);
+  if (!cookie) return false;
+  for (const part of cookie.split(";")) {
+    const [rawName, ...rawValue] = part.trim().split("=");
+    if (rawName === BROWSER_BOUND_CONTINUATION_COOKIE_NAME) {
+      return rawValue.join("=") === expectedNonce;
+    }
+  }
+  return false;
+}
+
 function readHandleHash(rawHandle: string, codec: McpOAuthContinuationHandleCodecV1): string | undefined {
   try {
     const digest = codec.hash(rawHandle);
     return isValidIntentHandleHash(digest) ? digest : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function readContinuationRequest(
+  urlOrPath: string,
+  authorizationPageOrigin: string,
+  codec: McpOAuthContinuationHandleCodecV1,
+): Readonly<{ rawHandle: string; browserNonce: string }> | undefined {
+  if (isUnsafeRouteInput(urlOrPath) || hasUnsafeRawPath(readRawPath(urlOrPath))) return undefined;
+  try {
+    const parsed = new URL(urlOrPath, authorizationPageOrigin);
+    const rawPath = readRawPath(urlOrPath);
+    if (
+      parsed.origin !== authorizationPageOrigin ||
+      parsed.pathname !== MCP_OAUTH_CONTINUATION_PATH ||
+      rawPath !== MCP_OAUTH_CONTINUATION_PATH ||
+      parsed.hash
+    ) {
+      return undefined;
+    }
+    const keys = [...parsed.searchParams.keys()];
+    if (
+      keys.length !== 2 ||
+      keys[0] !== MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER ||
+      keys[1] !== BROWSER_BOUND_CONTINUATION_NONCE_PARAMETER ||
+      parsed.searchParams.getAll(MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER).length !== 1 ||
+      parsed.searchParams.getAll(BROWSER_BOUND_CONTINUATION_NONCE_PARAMETER).length !== 1
+    ) {
+      return undefined;
+    }
+    const rawHandle = parsed.searchParams.get(MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER);
+    const browserNonce = parsed.searchParams.get(BROWSER_BOUND_CONTINUATION_NONCE_PARAMETER);
+    if (typeof rawHandle !== "string" || rawHandle.length === 0 || !codec.validate(rawHandle)) {
+      return undefined;
+    }
+    if (!isBrowserBoundContinuationNonce(browserNonce)) {
+      return undefined;
+    }
+    return Object.freeze({ rawHandle, browserNonce });
   } catch {
     return undefined;
   }
@@ -704,10 +1047,61 @@ function isPreAuthCreateSuccess(
   );
 }
 
+function isOwnerBindingSuccess(
+  value: McpOAuthProductionPreAuthOwnerBindingPortResultV1,
+  now: number,
+): value is Extract<McpOAuthProductionPreAuthOwnerBindingPortResultV1, { ok: true }> {
+  return (
+    isPlainRecord(value) &&
+    value.kind === "mcp_oauth_pre_auth_owner_binding_result" &&
+    value.ok === true &&
+    value.reason === "bound" &&
+    isPlainRecord(value.serverOnly) &&
+    isPlainRecord(value.serverOnly.ownerBoundIntent) &&
+    value.serverOnly.ownerBoundIntent.status === "pending" &&
+    typeof value.serverOnly.ownerBoundIntent.expiresAt === "number" &&
+    Number.isSafeInteger(value.serverOnly.ownerBoundIntent.expiresAt) &&
+    value.serverOnly.ownerBoundIntent.expiresAt > now &&
+    value.serverOnly.ownerBoundIntent.version === 1 &&
+    isPlainRecord(value.serverOnly.preAuthIntent) &&
+    value.serverOnly.preAuthIntent.status === "claimed" &&
+    value.serverOnly.preAuthIntent.version === 1 &&
+    isTrustedOwner(value.serverOnly.trustedOwner) &&
+    value.serverOnly.version === 1 &&
+    value.modelVisible === false &&
+    value.safeForLogging === false &&
+    value.version === 1
+  );
+}
+
+function isAuthenticatedOwnerIdentity(
+  value: unknown,
+): value is McpOAuthProductionAuthenticatedOwnerIdentityV1 {
+  return (
+    isPlainRecord(value) &&
+    typeof value.subject === "string" &&
+    /^[A-Za-z0-9][A-Za-z0-9._:-]{0,511}$/u.test(value.subject) &&
+    typeof value.issuer === "string" &&
+    value.issuer.length > 0 &&
+    value.issuer.length <= 512 &&
+    value.version === 1
+  );
+}
+
 function statusForPreAuthCreateFailure(
   value: McpOAuthProductionPreAuthIntentCreatePortResultV1,
 ): 409 | 503 {
   return isPlainRecord(value) && value.reason === "handle_collision" ? 409 : 503;
+}
+
+function statusForOwnerBindingFailure(
+  value: McpOAuthProductionPreAuthOwnerBindingPortResultV1,
+): 400 | 401 | 409 | 503 {
+  if (!isPlainRecord(value)) return 503;
+  if (value.reason === "unauthenticated") return 401;
+  if (value.reason === "invalid_input" || value.reason === "invalid_handle_hash") return 400;
+  if (value.reason === "storage_unavailable" || value.reason === "dependency_unavailable") return 503;
+  return 409;
 }
 
 function readNow(dependencies: McpOAuthProductionRouteAdapterDependenciesV1): number {
@@ -778,6 +1172,21 @@ function parseHostHeader(
   }
 }
 
+function isTrustedOwner(value: unknown): value is McpOAuthAuthorizationTrustedOwnerV1 {
+  return (
+    isPlainRecord(value) &&
+    value.kind === "mcp_oauth_authorization_trusted_owner" &&
+    typeof value.twoweeksClerkId === "string" &&
+    /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/u.test(value.twoweeksClerkId) &&
+    value.version === 1
+  );
+}
+
+function readRawPath(value: string): string {
+  const queryStart = value.indexOf("?");
+  return queryStart === -1 ? value : value.slice(0, queryStart);
+}
+
 function normalizedOriginPort(origin: URL): string {
   return origin.port || defaultPortForProtocol(origin.protocol);
 }
@@ -820,6 +1229,10 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
+}
+
+function toRejectedError(error: unknown, fallbackMessage: string): Error {
+  return error instanceof Error ? error : new Error(fallbackMessage);
 }
 
 function jsonResponse(

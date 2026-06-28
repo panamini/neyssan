@@ -2,10 +2,12 @@ export const DEFAULT_SIGN_IN_RETURN_PATH = "/cv";
 export const MCP_OAUTH_SIGN_IN_RETURN_PARAMETER = "mcp_oauth_return";
 export const MCP_OAUTH_CONTINUATION_PATH = "/mcp/oauth/authorize/continue";
 export const MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER = "mcp_oauth_intent";
+export const MCP_OAUTH_CONTINUATION_BROWSER_NONCE_PARAMETER = "mcp_oauth_browser_nonce";
 
 const MAX_RETURN_PATH_LENGTH = 2048;
 const MAX_INTENT_HANDLE_LENGTH = 256;
 const INTENT_HANDLE_PATTERN = /^[A-Za-z0-9_-]+$/u;
+const BROWSER_NONCE_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 const LOCAL_ORIGIN = "https://twoweeks.local";
 
 type SignInReturnSource = "default" | "mcp_oauth_continuation";
@@ -74,28 +76,36 @@ function isAllowedMcpOAuthContinuationPath(candidate: string): boolean {
 
   const searchParams = [...url.searchParams.keys()];
   if (
-    searchParams.length !== 1 ||
+    (searchParams.length !== 1 && searchParams.length !== 2) ||
     searchParams[0] !== MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER ||
-    url.searchParams.getAll(MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER).length !== 1
+    (searchParams.length === 2 && searchParams[1] !== MCP_OAUTH_CONTINUATION_BROWSER_NONCE_PARAMETER) ||
+    url.searchParams.getAll(MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER).length !== 1 ||
+    url.searchParams.getAll(MCP_OAUTH_CONTINUATION_BROWSER_NONCE_PARAMETER).length > 1
   ) {
     return false;
   }
 
   const intentHandle = url.searchParams.get(MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER);
+  const browserNonce = url.searchParams.get(MCP_OAUTH_CONTINUATION_BROWSER_NONCE_PARAMETER);
   return (
     intentHandle !== null &&
     intentHandle.length > 0 &&
     intentHandle.length <= MAX_INTENT_HANDLE_LENGTH &&
-    INTENT_HANDLE_PATTERN.test(intentHandle)
+    INTENT_HANDLE_PATTERN.test(intentHandle) &&
+    (browserNonce === null || BROWSER_NONCE_PATTERN.test(browserNonce))
   );
 }
 
 function canonicalizeMcpOAuthContinuationPath(candidate: string): string {
   const url = new URL(candidate, LOCAL_ORIGIN);
   const intentHandle = url.searchParams.get(MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER) ?? "";
+  const browserNonce = url.searchParams.get(MCP_OAUTH_CONTINUATION_BROWSER_NONCE_PARAMETER);
   const params = new URLSearchParams({
     [MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER]: intentHandle,
   });
+  if (browserNonce !== null) {
+    params.set(MCP_OAUTH_CONTINUATION_BROWSER_NONCE_PARAMETER, browserNonce);
+  }
 
   return `${MCP_OAUTH_CONTINUATION_PATH}?${params.toString()}`;
 }
