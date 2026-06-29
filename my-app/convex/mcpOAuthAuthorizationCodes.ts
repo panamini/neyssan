@@ -18,6 +18,8 @@ const MAX_SAFE_TIMESTAMP_BEFORE_TTL = Number.MAX_SAFE_INTEGER - MCP_OAUTH_AUTHOR
 const MAX_SAFE_TIMESTAMP_BEFORE_ACCESS_TOKEN_TTL = Number.MAX_SAFE_INTEGER - MCP_OAUTH_ACCESS_TOKEN_TTL_MS;
 const MAX_EXPIRED_CODE_CLEANUP_BATCH = 100;
 const MAX_EXPIRED_ACCESS_TOKEN_CLEANUP_BATCH = 100;
+const ACCESS_TOKEN_ISSUE_CLOCK_SKEW_MS = 60_000;
+const ACCESS_TOKEN_ISSUE_COMMIT_SAFETY_MARGIN_MS = 100;
 const CODE_DIGEST_PATTERN = /^[0-9a-f]{64}$/u;
 const SAFE_IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,511}$/u;
 const SAFE_SCOPE_PATTERN = /^[A-Za-z][A-Za-z0-9:._-]{0,127}$/u;
@@ -518,6 +520,8 @@ export const internalIssueMcpOAuthAccessTokenFromAuthorizationCode = internalMut
   handler: async (ctx, args): Promise<McpOAuthProductionAccessTokenIssuePortResultV1> => {
     const input = parseAccessTokenIssueInput(args);
     if (!input) return denyAccessTokenIssue("invalid_input");
+    let storageNow = Date.now();
+    if (!isAccessTokenIssueDeadlineActive(input, storageNow)) return denyAccessTokenIssue("invalid_input");
 
     const rows = await ctx.db
       .query("mcpOAuthAuthorizationCodes")
@@ -540,11 +544,13 @@ export const internalIssueMcpOAuthAccessTokenFromAuthorizationCode = internalMut
     }
     if (row.status === "consumed") return denyAccessTokenIssue("already_consumed");
     if (row.status === "expired") return denyAccessTokenIssue("expired");
-    if (input.now < row.createdAt) return denyAccessTokenIssue("invalid_input");
-    if (input.now >= row.expiresAt) {
+    if (storageNow + ACCESS_TOKEN_ISSUE_CLOCK_SKEW_MS < row.createdAt) {
+      return denyAccessTokenIssue("invalid_input");
+    }
+    if (Math.max(storageNow, row.createdAt) >= row.expiresAt) {
       await ctx.db.patch(row._id as never, {
         status: "expired",
-        updatedAt: input.now,
+        updatedAt: Math.max(storageNow, row.createdAt),
       });
       return denyAccessTokenIssue("expired");
     }
@@ -554,15 +560,29 @@ export const internalIssueMcpOAuthAccessTokenFromAuthorizationCode = internalMut
       .withIndex("by_access_token_digest", (q) => q.eq("accessTokenDigest", input.accessTokenDigest))
       .take(1);
     if (existingTokenRows.length > 0) return denyAccessTokenIssue("access_token_digest_collision");
-    if (!isAccessTokenIssueDeadlineActive(input, Date.now())) return denyAccessTokenIssue("invalid_input");
+    storageNow = Date.now();
+    if (!isAccessTokenIssueDeadlineActive(input, storageNow)) return denyAccessTokenIssue("invalid_input");
+    if (storageNow + ACCESS_TOKEN_ISSUE_CLOCK_SKEW_MS < row.createdAt) {
+      return denyAccessTokenIssue("invalid_input");
+    }
+    const issueNow = Math.max(storageNow, row.createdAt);
+    if (issueNow >= row.expiresAt) {
+      await ctx.db.patch(row._id as never, {
+        status: "expired",
+        updatedAt: issueNow,
+      });
+      return denyAccessTokenIssue("expired");
+    }
 
-    const accessTokenRecord = buildAccessTokenRecord(row, input.accessTokenDigest, input.now);
+    const accessTokenRecord = buildAccessTokenRecord(row, input.accessTokenDigest, issueNow);
     await ctx.db.insert("mcpOAuthAccessTokens", accessTokenRecord);
+    assertAccessTokenIssueDeadlineActive(input);
     await ctx.db.patch(row._id as never, {
       status: "consumed",
-      updatedAt: input.now,
-      consumedAt: input.now,
+      updatedAt: issueNow,
+      consumedAt: issueNow,
     });
+    assertAccessTokenIssueDeadlineActive(input);
 
     return {
       kind: "mcp_oauth_access_token_issue_result",
@@ -570,8 +590,9 @@ export const internalIssueMcpOAuthAccessTokenFromAuthorizationCode = internalMut
       reason: "issued",
       serverOnly: {
         tokenType: "Bearer",
+        issuedAt: accessTokenRecord.issuedAt,
         expiresAt: accessTokenRecord.expiresAt,
-        expiresIn: Math.floor((accessTokenRecord.expiresAt - input.now) / 1_000),
+        expiresIn: Math.floor((accessTokenRecord.expiresAt - accessTokenRecord.issuedAt) / 1_000),
         clientId: row.clientId,
         redirectUri: row.redirectUri,
         resource: row.resource,
@@ -694,7 +715,7 @@ function parseAccessTokenIssueInput(value: unknown): ParsedAccessTokenIssueInput
   if (!isValidStorageTimestamp(record.now) || record.now > MAX_SAFE_TIMESTAMP_BEFORE_ACCESS_TOKEN_TTL) return undefined;
   const deadlineEpochMs = record.deadlineEpochMs;
   const timeoutMs = record.timeoutMs;
-  if (!hasValidAccessTokenIssueDeadline(deadlineEpochMs, timeoutMs, Date.now())) return undefined;
+  if (!hasValidAccessTokenIssueDeadline(deadlineEpochMs, timeoutMs, record.now, Date.now())) return undefined;
   if (!isAuthorizationCodeDigest(record.authorizationCodeDigest)) return undefined;
   if (!isAuthorizationCodeDigest(record.accessTokenDigest)) return undefined;
   const clientId = readBoundedText(record.clientId, MAX_OAUTH_PARAMETER_LENGTH);
@@ -1022,17 +1043,21 @@ function hasValidCreateDeadline(
 function hasValidAccessTokenIssueDeadline(
   deadlineEpochMs: unknown,
   timeoutMs: unknown,
+  callerNow: unknown,
   wallClockNow: number,
 ): deadlineEpochMs is number {
   return (
     typeof deadlineEpochMs === "number" &&
     typeof timeoutMs === "number" &&
+    typeof callerNow === "number" &&
     Number.isSafeInteger(deadlineEpochMs) &&
     Number.isSafeInteger(timeoutMs) &&
+    Number.isSafeInteger(callerNow) &&
     timeoutMs > 0 &&
     timeoutMs <= 10_000 &&
+    deadlineEpochMs === callerNow + timeoutMs &&
     deadlineEpochMs >= wallClockNow &&
-    deadlineEpochMs - wallClockNow <= timeoutMs
+    callerNow <= wallClockNow + ACCESS_TOKEN_ISSUE_CLOCK_SKEW_MS
   );
 }
 
@@ -1040,7 +1065,13 @@ function isAccessTokenIssueDeadlineActive(
   input: ParsedAccessTokenIssueInputV1,
   wallClockNow: number,
 ): boolean {
-  return hasValidAccessTokenIssueDeadline(input.deadlineEpochMs, input.timeoutMs, wallClockNow);
+  return wallClockNow + ACCESS_TOKEN_ISSUE_COMMIT_SAFETY_MARGIN_MS <= input.deadlineEpochMs;
+}
+
+function assertAccessTokenIssueDeadlineActive(input: ParsedAccessTokenIssueInputV1): void {
+  if (!isAccessTokenIssueDeadlineActive(input, Date.now())) {
+    throw new Error("mcp_oauth_access_token_issue_deadline_elapsed");
+  }
 }
 
 function hasValidTerminalTimestamp(record: Record<string, unknown>): boolean {

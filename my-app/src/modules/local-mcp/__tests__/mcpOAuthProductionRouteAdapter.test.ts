@@ -1103,7 +1103,7 @@ describe("MCP OAuth production route adapter", () => {
         access_token: RAW_ACCESS_TOKEN,
         token_type: "Bearer",
         expires_in: 3_600,
-        scope: `${TWOWEEKS_APPLICATIONS_READ_SCOPE} openid`,
+        scope: TWOWEEKS_APPLICATIONS_READ_SCOPE,
       },
     });
     expect(dependencies.issueAccessToken).toHaveBeenCalledTimes(1);
@@ -1228,6 +1228,7 @@ describe("MCP OAuth production route adapter", () => {
       reason: "issued",
       serverOnly: {
         tokenType: "Bearer",
+        issuedAt: NOW - 60 * 60 * 1_000,
         expiresAt: NOW + 60 * 60 * 1_000,
         expiresIn: 7_200,
         clientId: CLIENT_ID,
@@ -2722,6 +2723,7 @@ describe("MCP OAuth production route adapter", () => {
       reason: "issued",
       serverOnly: {
         tokenType: "Bearer",
+        issuedAt: input.now,
         expiresAt: input.now + 60 * 60 * 1_000,
         expiresIn: 3_600,
         clientId: CLIENT_ID,
@@ -2759,9 +2761,10 @@ describe("MCP OAuth production route adapter", () => {
     expect(responseJson).toMatchObject({
       access_token: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/u),
       token_type: "Bearer",
-      expires_in: 3_600,
-      scope: `${TWOWEEKS_APPLICATIONS_READ_SCOPE} openid`,
+      scope: TWOWEEKS_APPLICATIONS_READ_SCOPE,
     });
+    expect(responseJson.expires_in).toBeGreaterThan(0);
+    expect(responseJson.expires_in).toBeLessThanOrEqual(3_600);
     expect(responseJson).not.toHaveProperty("refresh_token");
     expect(ConvexHttpClientMock).toHaveBeenCalledWith("http://127.0.0.1:3210");
     expect(convexHttpClientSetAdminAuth).toHaveBeenCalledWith("convex_admin_key_fixture", undefined);
@@ -3623,8 +3626,9 @@ function issueFakeAccessToken(
     reason: "issued",
     serverOnly: {
       tokenType: "Bearer",
+      issuedAt: tokenRow.issuedAt,
       expiresAt: tokenRow.expiresAt,
-      expiresIn: Math.floor((tokenRow.expiresAt - input.now) / 1_000),
+      expiresIn: Math.floor((tokenRow.expiresAt - tokenRow.issuedAt) / 1_000),
       clientId: row.clientId,
       redirectUri: row.redirectUri,
       resource: row.resource,

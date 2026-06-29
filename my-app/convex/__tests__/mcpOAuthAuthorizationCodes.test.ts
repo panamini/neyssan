@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   classifyMcpOAuthAccessTokenStorageRecord,
@@ -53,6 +53,10 @@ type IndexConstraintBuilder = Readonly<{
 }>;
 
 describe("Convex MCP OAuth authorization codes", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("stores only a digest-backed pending authorization code state", async () => {
     const { ctx, rows, inserts } = makeCtx();
 
@@ -166,6 +170,7 @@ describe("Convex MCP OAuth authorization codes", () => {
   });
 
   it("atomically issues a digest-backed access token and consumes the authorization code", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW + 1);
     const { ctx, rows, accessTokenRows, patches, inserts } = makeCtx([storedCode()]);
 
     const result = await internalIssueMcpOAuthAccessTokenFromAuthorizationCode._handler(
@@ -182,6 +187,7 @@ describe("Convex MCP OAuth authorization codes", () => {
       reason: "issued",
       serverOnly: {
         tokenType: "Bearer",
+        issuedAt: NOW + 1,
         expiresAt: NOW + 1 + MCP_OAUTH_ACCESS_TOKEN_TTL_MS,
         expiresIn: 3_600,
         clientId: CLIENT_ID,
@@ -224,6 +230,7 @@ describe("Convex MCP OAuth authorization codes", () => {
   });
 
   it("does not consume the authorization code when access-token persistence cannot proceed", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW + 1);
     const { ctx, rows, accessTokenRows, patches } = makeCtx([storedCode()], [storedAccessToken()]);
 
     const result = await internalIssueMcpOAuthAccessTokenFromAuthorizationCode._handler(
@@ -257,6 +264,72 @@ describe("Convex MCP OAuth authorization codes", () => {
     expect(JSON.stringify(result)).not.toContain(RAW_ACCESS_TOKEN);
     expect(JSON.stringify(result)).not.toContain(ACCESS_TOKEN_DIGEST);
     expect(JSON.stringify(result)).not.toContain(CODE_DIGEST);
+  });
+
+  it("rejects stale caller time even when a fresh deadline is supplied", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW + MCP_OAUTH_AUTHORIZATION_CODE_TTL_MS);
+    const { ctx, rows, accessTokenRows, patches } = makeCtx([storedCode()]);
+
+    const result = await internalIssueMcpOAuthAccessTokenFromAuthorizationCode._handler(
+      ctx as any,
+      issueAccessTokenArgs({
+        now: NOW + 1,
+        deadlineEpochMs: NOW + MCP_OAUTH_AUTHORIZATION_CODE_TTL_MS + 2_500,
+      }),
+    );
+
+    expect(result).toMatchObject({ ok: false, reason: "invalid_input" });
+    expect(rows[0]).toMatchObject({ status: "pending", updatedAt: NOW });
+    expect(rows[0]).not.toHaveProperty("consumedAt");
+    expect(accessTokenRows).toHaveLength(0);
+    expect(patches).toHaveLength(0);
+  });
+
+  it("expires authorization codes using the storage-side clock before token issuance", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW + MCP_OAUTH_AUTHORIZATION_CODE_TTL_MS);
+    const { ctx, rows, accessTokenRows, patches } = makeCtx([storedCode()]);
+
+    const result = await internalIssueMcpOAuthAccessTokenFromAuthorizationCode._handler(
+      ctx as any,
+      issueAccessTokenArgs({
+        now: NOW + MCP_OAUTH_AUTHORIZATION_CODE_TTL_MS,
+        deadlineEpochMs: NOW + MCP_OAUTH_AUTHORIZATION_CODE_TTL_MS + 2_500,
+      }),
+    );
+
+    expect(result).toMatchObject({ ok: false, reason: "expired" });
+    expect(rows[0]).toMatchObject({
+      status: "expired",
+      updatedAt: NOW + MCP_OAUTH_AUTHORIZATION_CODE_TTL_MS,
+    });
+    expect(rows[0]).not.toHaveProperty("consumedAt");
+    expect(accessTokenRows).toHaveLength(0);
+    expect(patches).toHaveLength(1);
+  });
+
+  it("accepts token issuance when the storage clock is slightly behind the caller", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW - 500);
+    const { ctx, rows, accessTokenRows } = makeCtx([storedCode()]);
+
+    const result = await internalIssueMcpOAuthAccessTokenFromAuthorizationCode._handler(
+      ctx as any,
+      issueAccessTokenArgs({
+        now: NOW,
+        deadlineEpochMs: NOW + 2_500,
+      }),
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      reason: "issued",
+      serverOnly: {
+        issuedAt: NOW,
+        expiresAt: NOW + MCP_OAUTH_ACCESS_TOKEN_TTL_MS,
+        expiresIn: 3_600,
+      },
+    });
+    expect(rows[0]).toMatchObject({ status: "consumed", consumedAt: NOW, updatedAt: NOW });
+    expect(accessTokenRows[0]).toMatchObject({ issuedAt: NOW, expiresAt: NOW + MCP_OAUTH_ACCESS_TOKEN_TTL_MS });
   });
 
   it("marks expired pending code digests without returning code state", async () => {
@@ -557,6 +630,7 @@ function issueAccessTokenArgs(
   overrides: Partial<Parameters<typeof internalIssueMcpOAuthAccessTokenFromAuthorizationCode._handler>[1]> = {},
 ) {
   const timeoutMs = 2_500;
+  const now = overrides.now ?? NOW;
   return {
     authorizationCodeDigest: CODE_DIGEST,
     accessTokenDigest: ACCESS_TOKEN_DIGEST,
@@ -564,8 +638,8 @@ function issueAccessTokenArgs(
     redirectUri: REDIRECT_URI,
     resource: RESOURCE,
     codeChallenge: PKCE,
-    now: NOW,
-    deadlineEpochMs: Date.now() + timeoutMs,
+    now,
+    deadlineEpochMs: now + timeoutMs,
     timeoutMs,
     version: 1,
     ...overrides,

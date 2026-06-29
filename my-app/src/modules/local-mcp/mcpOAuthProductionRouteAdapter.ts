@@ -319,6 +319,7 @@ export type McpOAuthProductionAccessTokenIssuePortResultV1 = Readonly<
       reason: "issued";
       serverOnly: {
         tokenType: "Bearer";
+        issuedAt: number;
         expiresAt: number;
         expiresIn: number;
         clientId: string;
@@ -475,6 +476,7 @@ const AUTHORIZATION_INTENT_CONSUME_TIMEOUT_MS = 2_500;
 const AUTHORIZATION_CODE_CREATE_TIMEOUT_MS = 2_500;
 const AUTHORIZATION_CODE_VALIDATE_TIMEOUT_MS = 2_500;
 const ACCESS_TOKEN_ISSUE_TIMEOUT_MS = 2_500;
+const ACCESS_TOKEN_RESPONSE_CLOCK_SKEW_SECONDS = 60;
 const TOKEN_REQUEST_BODY_MAX_BYTES = 4_096;
 const BROWSER_BOUND_CONTINUATION_NONCE_PARAMETER = "mcp_oauth_browser_nonce";
 const BROWSER_BOUND_CONTINUATION_COOKIE_NAME = "tw_mcp_oauth_continue";
@@ -899,7 +901,7 @@ async function handleTokenRequest(
     );
   }
 
-  return oauthAccessTokenResponse(rawAccessToken, issueResult);
+  return oauthAccessTokenResponse(rawAccessToken, issueResult, readNow(dependencies));
 }
 
 function buildAuthorizationRequestGuard(
@@ -1281,14 +1283,27 @@ function notHandled(): McpOAuthProductionRouteAdapterResponseV1 {
 function oauthAccessTokenResponse(
   rawAccessToken: string,
   issueResult: Extract<McpOAuthProductionAccessTokenIssuePortResultV1, { ok: true }>,
+  now: number,
 ): McpOAuthProductionRouteAdapterResponseV1 {
-  const scopes = issueResult.serverOnly.scopes.join(" ");
+  const scopes = tokenResponseAccessScopes(issueResult.serverOnly.scopes).join(" ");
+  const expiresIn = Math.min(
+    issueResult.serverOnly.expiresIn,
+    Math.max(0, Math.floor((issueResult.serverOnly.expiresAt - now) / 1_000)),
+  );
   return jsonResponse(200, {
     access_token: rawAccessToken,
     token_type: issueResult.serverOnly.tokenType,
-    expires_in: issueResult.serverOnly.expiresIn,
+    expires_in: expiresIn,
     ...(scopes ? { scope: scopes } : {}),
   });
+}
+
+function tokenResponseAccessScopes(scopes: readonly string[]): readonly string[] {
+  return Object.freeze(scopes.filter((scope) => !isOpenIdConnectIdentityScope(scope)));
+}
+
+function isOpenIdConnectIdentityScope(scope: string): boolean {
+  return scope === "openid" || scope === "email" || scope === "profile";
 }
 
 function redirectToSignIn(
@@ -1997,15 +2012,21 @@ function isAccessTokenIssueExpiryProof(
   now: number,
 ): boolean {
   const expectedExpiresIn = readExpectedExpiresIn(value.expiresAt, now);
+  const storageExpectedExpiresIn = readStorageExpiresIn(value.issuedAt, value.expiresAt);
   return (
     value.tokenType === "Bearer" &&
+    typeof value.issuedAt === "number" &&
+    Number.isSafeInteger(value.issuedAt) &&
     typeof value.expiresAt === "number" &&
     Number.isSafeInteger(value.expiresAt) &&
     value.expiresAt > now &&
     typeof value.expiresIn === "number" &&
     Number.isSafeInteger(value.expiresIn) &&
     value.expiresIn > 0 &&
-    value.expiresIn === expectedExpiresIn
+    expectedExpiresIn !== undefined &&
+    storageExpectedExpiresIn !== undefined &&
+    value.expiresIn === storageExpectedExpiresIn &&
+    value.expiresIn <= expectedExpiresIn + ACCESS_TOKEN_RESPONSE_CLOCK_SKEW_SECONDS
   );
 }
 
@@ -2014,6 +2035,19 @@ function readExpectedExpiresIn(expiresAt: unknown, now: number): number | undefi
     return undefined;
   }
   return Math.floor((expiresAt - now) / 1_000);
+}
+
+function readStorageExpiresIn(issuedAt: unknown, expiresAt: unknown): number | undefined {
+  if (
+    typeof issuedAt !== "number" ||
+    typeof expiresAt !== "number" ||
+    !Number.isSafeInteger(issuedAt) ||
+    !Number.isSafeInteger(expiresAt) ||
+    expiresAt <= issuedAt
+  ) {
+    return undefined;
+  }
+  return Math.floor((expiresAt - issuedAt) / 1_000);
 }
 
 function isAccessTokenIssueBindingProof(
