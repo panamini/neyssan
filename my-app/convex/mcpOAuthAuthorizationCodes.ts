@@ -9,7 +9,9 @@ import type {
   McpOAuthProductionAuthorizationCodeCreatePortResultV1,
   McpOAuthProductionAuthorizationCodeValidatePortResultV1,
   McpOAuthProductionAccessTokenIssuePortResultV1,
+  McpOAuthProductionAccessTokenVerifyPortResultV1,
 } from "../src/modules/local-mcp/mcpOAuthProductionRouteAdapter";
+import { TWOWEEKS_APPLICATIONS_READ_SCOPE } from "../src/modules/local-mcp/mcpAuthPolicyBoundary";
 
 export const MCP_OAUTH_AUTHORIZATION_CODE_TTL_MS = 5 * 60 * 1_000;
 export const MCP_OAUTH_ACCESS_TOKEN_TTL_MS = 60 * 60 * 1_000;
@@ -74,6 +76,14 @@ const ISSUE_ACCESS_TOKEN_ARGS_KEYS = [
   "now",
   "deadlineEpochMs",
   "timeoutMs",
+  "version",
+] as const;
+const VERIFY_ACCESS_TOKEN_ARGS_KEYS = [
+  "accessTokenDigest",
+  "allowedClientIds",
+  "resource",
+  "requiredScope",
+  "now",
   "version",
 ] as const;
 const CLEANUP_ARGS_KEYS = ["now", "version"] as const;
@@ -243,6 +253,14 @@ type ParsedAccessTokenIssueInputV1 = Readonly<{
   now: number;
   deadlineEpochMs: number;
   timeoutMs: number;
+}>;
+
+type ParsedAccessTokenVerifyInputV1 = Readonly<{
+  accessTokenDigest: string;
+  allowedClientIds: readonly string[];
+  resource: string;
+  requiredScope: typeof TWOWEEKS_APPLICATIONS_READ_SCOPE;
+  now: number;
 }>;
 
 export type McpOAuthAuthorizationCodeConsumeResultV1 = Readonly<
@@ -613,6 +631,67 @@ export const internalIssueMcpOAuthAccessTokenFromAuthorizationCode = internalMut
   },
 });
 
+export const internalVerifyMcpOAuthAccessTokenForMcpBoundary = internalQuery({
+  args: {
+    accessTokenDigest: v.string(),
+    allowedClientIds: v.array(v.string()),
+    resource: v.string(),
+    requiredScope: v.literal(TWOWEEKS_APPLICATIONS_READ_SCOPE),
+    now: v.number(),
+    version: v.literal(1),
+  },
+  returns: v.any(),
+  handler: async (ctx, args): Promise<McpOAuthProductionAccessTokenVerifyPortResultV1> => {
+    const input = parseAccessTokenVerifyInput(args);
+    if (!input) return denyAccessTokenVerify("invalid_input");
+
+    const rows = await ctx.db
+      .query("mcpOAuthAccessTokens")
+      .withIndex("by_access_token_digest", (q) => q.eq("accessTokenDigest", input.accessTokenDigest))
+      .collect();
+    if (rows.length === 0) return denyAccessTokenVerify("not_found_or_forbidden");
+    if (rows.length > 1) return denyAccessTokenVerify("duplicate_storage_record");
+
+    const row = parseAccessTokenStorageRecord(rows[0]);
+    if (!row) return denyAccessTokenVerify("malformed_storage_record");
+    if (!input.allowedClientIds.includes(row.clientId)) return denyAccessTokenVerify("wrong_client");
+    if (row.resource !== input.resource) return denyAccessTokenVerify("wrong_resource");
+    if (!row.scopes.includes(input.requiredScope)) return denyAccessTokenVerify("missing_required_scope");
+    if (!isAuthorizedAccessTokenScopeState(row.scopes, input.requiredScope)) {
+      return denyAccessTokenVerify("unauthorized_scope_state");
+    }
+    if (row.status === "expired" || input.now >= row.expiresAt) return denyAccessTokenVerify("expired");
+    if (row.status !== "active") return denyAccessTokenVerify("inactive");
+    if (input.now < row.issuedAt) return denyAccessTokenVerify("malformed_storage_record");
+
+    return {
+      kind: "mcp_oauth_access_token_verify_result",
+      ok: true,
+      reason: "verified",
+      serverOnly: {
+        status: "active",
+        twoweeksClerkId: row.twoweeksClerkId,
+        ownerIssuer: row.ownerIssuer,
+        clientId: row.clientId,
+        resource: row.resource,
+        scopes: Object.freeze([...row.scopes]),
+        productionEnvironment: row.productionEnvironment,
+        expiresAt: row.expiresAt,
+        tokenActive: true,
+        tokenExpired: false,
+        tokenRevoked: false,
+        rawAccessTokenPersisted: false,
+        rawAccessTokenEchoed: false,
+        digestEchoed: false,
+        version: 1,
+      },
+      modelVisible: false,
+      safeForLogging: false,
+      version: 1,
+    };
+  },
+});
+
 export const internalDeleteExpiredMcpOAuthAuthorizationCodes = internalMutation({
   args: {
     now: v.number(),
@@ -737,6 +816,29 @@ function parseAccessTokenIssueInput(value: unknown): ParsedAccessTokenIssueInput
     deadlineEpochMs: deadlineEpochMs as number,
     timeoutMs: timeoutMs as number,
   };
+}
+
+function parseAccessTokenVerifyInput(value: unknown): ParsedAccessTokenVerifyInputV1 | undefined {
+  const record = readRecord(value, VERIFY_ACCESS_TOKEN_ARGS_KEYS);
+  if (!record || record.version !== 1) return undefined;
+  if (!isAuthorizationCodeDigest(record.accessTokenDigest)) return undefined;
+  if (!isValidStorageTimestamp(record.now)) return undefined;
+  const allowedClientIds = parseAllowedClientIds(record.allowedClientIds);
+  const resource = readSafeHttpsUrl(record.resource, { allowSearch: false });
+  if (
+    !allowedClientIds ||
+    !resource ||
+    record.requiredScope !== TWOWEEKS_APPLICATIONS_READ_SCOPE
+  ) {
+    return undefined;
+  }
+  return Object.freeze({
+    accessTokenDigest: record.accessTokenDigest,
+    allowedClientIds,
+    resource,
+    requiredScope: TWOWEEKS_APPLICATIONS_READ_SCOPE,
+    now: record.now,
+  });
 }
 
 function buildAuthorizationCodeRecord(
@@ -993,6 +1095,25 @@ function parseScopes(value: unknown): readonly string[] | undefined {
   return unique.length === scopes.length ? Object.freeze(unique) : undefined;
 }
 
+function parseAllowedClientIds(value: unknown): readonly string[] | undefined {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 16) return undefined;
+  const clientIds = value.map((clientId) => readBoundedText(clientId, MAX_OAUTH_PARAMETER_LENGTH));
+  if (clientIds.some((clientId) => !clientId || !SAFE_IDENTIFIER_PATTERN.test(clientId))) return undefined;
+  const unique = [...new Set(clientIds as string[])];
+  return unique.length === clientIds.length ? Object.freeze(unique) : undefined;
+}
+
+function isAuthorizedAccessTokenScopeState(
+  scopes: readonly string[],
+  requiredScope: typeof TWOWEEKS_APPLICATIONS_READ_SCOPE,
+): boolean {
+  for (const scope of scopes) {
+    if (scope === requiredScope || scope === "openid" || scope === "email" || scope === "profile") continue;
+    return false;
+  }
+  return true;
+}
+
 function readBoundedText(value: unknown, maxLength: number): string | undefined {
   if (typeof value !== "string" || value.length === 0 || value.length > maxLength) return undefined;
   return hasControlCharacter(value) ? undefined : value;
@@ -1160,6 +1281,29 @@ function denyAccessTokenIssue(
     ok: false,
     reason,
     safeFailure: safeFailure(),
+    modelVisible: false,
+    safeForLogging: true,
+    version: 1,
+  };
+}
+
+function denyAccessTokenVerify(
+  reason: Extract<McpOAuthProductionAccessTokenVerifyPortResultV1, { ok: false }>["reason"],
+): McpOAuthProductionAccessTokenVerifyPortResultV1 {
+  return {
+    kind: "mcp_oauth_access_token_verify_result",
+    ok: false,
+    reason,
+    safeFailure: {
+      code: "mcp_oauth_access_token_denied",
+      message: "Access token denied.",
+      safeForModel: true,
+      rawTokenEchoed: false,
+      digestEchoed: false,
+      identityEchoed: false,
+      sensitiveValuesEchoed: false,
+      version: 1,
+    },
     modelVisible: false,
     safeForLogging: true,
     version: 1,

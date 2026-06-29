@@ -91,6 +91,9 @@ const VALIDATE_MCP_OAUTH_AUTHORIZATION_CODE_QUERY = makeFunctionReference(
 const ISSUE_MCP_OAUTH_ACCESS_TOKEN_MUTATION = makeFunctionReference(
   "mcpOAuthAuthorizationCodes:internalIssueMcpOAuthAccessTokenFromAuthorizationCode",
 ) as FunctionReference<"mutation">;
+const VERIFY_MCP_OAUTH_ACCESS_TOKEN_QUERY = makeFunctionReference(
+  "mcpOAuthAuthorizationCodes:internalVerifyMcpOAuthAccessTokenForMcpBoundary",
+) as FunctionReference<"query">;
 const productionPreAuthQuotaBuckets = new Map<string, { count: number; windowStartedAt: number }>();
 const productionClerkJwksByIssuer = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 
@@ -337,7 +340,7 @@ async function respondToMcpOAuthProductionRouteRequestWithBody(
       url: req.url ?? pathName,
       headers: {
         host: headerValue(req.headers.host),
-        authorization: headerValue(req.headers.authorization),
+        authorization: req.headers.authorization,
         cookie: headerValue(req.headers.cookie),
         "x-forwarded-for": headerValue(req.headers["x-forwarded-for"]),
         "x-real-ip": headerValue(req.headers["x-real-ip"]),
@@ -601,6 +604,7 @@ function buildProductionMcpOAuthRouteDependencies(
     createAuthorizationCode: buildProductionAuthorizationCodeCreatePort(convexClient),
     validateAuthorizationCode: buildProductionAuthorizationCodeValidatePort(convexClient),
     issueAccessToken: buildProductionAccessTokenIssuePort(convexClient),
+    verifyAccessToken: buildProductionAccessTokenVerifyPort(convexClient),
     readAuthenticatedOwnerIdentity: buildProductionAuthenticatedOwnerIdentityReader(env),
   });
 }
@@ -743,6 +747,18 @@ function buildProductionAccessTokenIssuePort(
       input,
       { skipQueue: true },
     ) as Promise<Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["issueAccessToken"]>>>>;
+  };
+}
+
+function buildProductionAccessTokenVerifyPort(
+  convexClient: ConvexHttpClient | undefined,
+): NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["verifyAccessToken"]> {
+  return async (input) => {
+    if (!convexClient) return accessTokenVerifyUnavailableResult();
+    return convexClient.query(
+      VERIFY_MCP_OAUTH_ACCESS_TOKEN_QUERY,
+      input,
+    ) as Promise<Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["verifyAccessToken"]>>>>;
   };
 }
 
@@ -957,6 +973,27 @@ function accessTokenIssueUnavailableResult(): Awaited<ReturnType<NonNullable<Mcp
       message: "Authorization code denied.",
       safeForModel: true,
       rawCodeEchoed: false,
+      digestEchoed: false,
+      identityEchoed: false,
+      sensitiveValuesEchoed: false,
+      version: 1,
+    } as const,
+    modelVisible: false,
+    safeForLogging: true,
+    version: 1,
+  });
+}
+
+function accessTokenVerifyUnavailableResult(): Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["verifyAccessToken"]>>> {
+  return Object.freeze({
+    kind: "mcp_oauth_access_token_verify_result",
+    ok: false,
+    reason: "storage_unavailable",
+    safeFailure: {
+      code: "mcp_oauth_access_token_denied",
+      message: "Access token denied.",
+      safeForModel: true,
+      rawTokenEchoed: false,
       digestEchoed: false,
       identityEchoed: false,
       sensitiveValuesEchoed: false,
