@@ -2284,9 +2284,7 @@ describe("MCP OAuth production route adapter", () => {
       version: 1,
     }));
 
-    const plugin = createLocalMcpDevEndpointPlugin({
-      productionOAuthAuthorizationConfig: routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
-    });
+    const plugin = createLocalMcpDevEndpointPlugin();
     const middleware = readConfiguredMiddleware(plugin);
     const response = await invokeMiddleware(middleware, {
       method: "GET",
@@ -2372,9 +2370,7 @@ describe("MCP OAuth production route adapter", () => {
         version: 1,
       }));
 
-    const plugin = createLocalMcpDevEndpointPlugin({
-      productionOAuthAuthorizationConfig: routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
-    });
+    const plugin = createLocalMcpDevEndpointPlugin();
     const middleware = readConfiguredMiddleware(plugin);
     const response = await invokeMiddleware(middleware, {
       method: "GET",
@@ -2458,9 +2454,7 @@ describe("MCP OAuth production route adapter", () => {
       version: 1,
     });
 
-    const plugin = createLocalMcpDevEndpointPlugin({
-      productionOAuthAuthorizationConfig: routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
-    });
+    const plugin = createLocalMcpDevEndpointPlugin();
     const middleware = readConfiguredMiddleware(plugin);
     const response = await invokeStreamingMiddleware(middleware, {
       method: "POST",
@@ -2478,6 +2472,7 @@ describe("MCP OAuth production route adapter", () => {
       status: "blocked",
       reason: "token_issuance_blocked",
       route: "oauth_token",
+      allowedByPreflight: true,
       authorizationCodeAccepted: true,
       authorizationCodeConsumed: false,
       providerCalled: false,
@@ -2535,6 +2530,41 @@ describe("MCP OAuth production route adapter", () => {
       authorizationCodeConsumed: false,
       tokenIssued: false,
     });
+    expect(convexHttpClientQuery).not.toHaveBeenCalled();
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
+  });
+
+  it("keeps production token request bodies unread when the preflight gate is closed", async () => {
+    const plugin = createLocalMcpDevEndpointPlugin({
+      env: {
+        ...prodRouteEnv(),
+        MCP_OAUTH_PRODUCTION_RUNTIME: "0",
+      },
+    });
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeStreamingMiddleware(middleware, {
+      method: "POST",
+      url: MCP_OAUTH_PRODUCTION_TOKEN_PATH,
+      headers: {
+        host: "mcp.twoweeks.example.test",
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: `grant_type=authorization_code&code=${"C".repeat(5_000)}`,
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(404);
+    expect(JSON.parse(response.body)).toMatchObject({
+      kind: "mcp_oauth_production_route_response",
+      status: "blocked",
+      reason: "blocked_missing_runtime_flag",
+      route: "oauth_token",
+      allowedByPreflight: false,
+      authorizationCodeAccepted: false,
+      authorizationCodeConsumed: false,
+      tokenIssued: false,
+    });
+    expect(response.body).not.toContain("token_request_body_too_large");
     expect(convexHttpClientQuery).not.toHaveBeenCalled();
     expect(convexHttpClientMutation).not.toHaveBeenCalled();
   });

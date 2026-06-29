@@ -37,6 +37,7 @@ import {
 import {
   buildMcpOAuthProductionRouteAdapterConfig,
   handleMcpOAuthProductionRouteRequest,
+  isMcpOAuthProductionRouteAllowedByPreflightPath,
   isMcpOAuthProductionRouteHandledPath,
   MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
   MCP_OAUTH_PRODUCTION_TOKEN_PATH,
@@ -287,7 +288,11 @@ async function respondToMcpOAuthProductionRouteRequest(
   dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
   pathName: string,
 ): Promise<void> {
-  if (pathName === MCP_OAUTH_PRODUCTION_TOKEN_PATH && (req.method ?? "GET").toUpperCase() === "POST") {
+  if (
+    pathName === MCP_OAUTH_PRODUCTION_TOKEN_PATH &&
+    (req.method ?? "GET").toUpperCase() === "POST" &&
+    isMcpOAuthProductionRouteAllowedByPreflightPath(pathName, config.preflight)
+  ) {
     readProductionMcpOAuthTokenBody(req, res, PRODUCTION_OAUTH_TOKEN_MAX_REQUEST_BYTES, (bodyText) => {
       void respondToMcpOAuthProductionRouteRequestWithBody(
         req,

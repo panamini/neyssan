@@ -434,6 +434,14 @@ export function isMcpOAuthProductionRouteHandledPath(path: string): boolean {
   return routeNameForPath(path) !== undefined;
 }
 
+export function isMcpOAuthProductionRouteAllowedByPreflightPath(
+  path: string,
+  preflight: McpOAuthProductionRoutePreflightResultV1,
+): boolean {
+  const route = routeNameForPath(path);
+  return route ? isRouteAllowedByPreflight(route, preflight) : false;
+}
+
 export async function handleMcpOAuthProductionRouteRequest(
   request: McpOAuthProductionRouteAdapterRequestV1,
   config: McpOAuthProductionRouteAdapterConfigV1 = buildMcpOAuthProductionRouteAdapterConfig(),
@@ -1010,7 +1018,7 @@ function isRouteAllowedByPreflight(
   route: McpOAuthProductionRouteNameV1,
   preflight: McpOAuthProductionRoutePreflightResultV1,
 ): boolean {
-  return route === "oauth_authorize" || route === "oauth_login_return"
+  return route === "oauth_authorize" || route === "oauth_login_return" || route === "oauth_token"
     ? preflight.authorizeAllowedToWire
     : preflight.allowedToWire;
 }
