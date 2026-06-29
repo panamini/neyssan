@@ -205,6 +205,10 @@ describe("Convex MCP OAuth authorization codes", () => {
     await expect(
       validateWith([storedCode({ redirectUri: "https://chatgpt.example.test/connector/oauth/other-callback" })], validateArgs()),
     ).resolves.toMatchObject({ ok: false, reason: "not_found_or_forbidden" });
+    await expect(validateWith([storedCode({ resource: "https://mcp.twoweeks.example.test/other-resource" })], validateArgs())).resolves.toMatchObject({
+      ok: false,
+      reason: "not_found_or_forbidden",
+    });
     await expect(validateWith([storedCode({ codeChallenge: "B".repeat(43) })], validateArgs())).resolves.toMatchObject({
       ok: false,
       reason: "not_found_or_forbidden",
@@ -361,6 +365,7 @@ function validateArgs(
     authorizationCodeDigest: CODE_DIGEST,
     clientId: CLIENT_ID,
     redirectUri: REDIRECT_URI,
+    resource: RESOURCE,
     codeChallenge: PKCE,
     now: NOW,
     version: 1,

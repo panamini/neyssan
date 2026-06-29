@@ -53,6 +53,7 @@ const VALIDATE_ARGS_KEYS = [
   "authorizationCodeDigest",
   "clientId",
   "redirectUri",
+  "resource",
   "codeChallenge",
   "now",
   "version",
@@ -336,6 +337,7 @@ export const internalValidateMcpOAuthAuthorizationCodeForTokenBoundary = interna
     authorizationCodeDigest: v.string(),
     clientId: v.string(),
     redirectUri: v.string(),
+    resource: v.string(),
     codeChallenge: v.string(),
     now: v.number(),
     version: v.literal(1),
@@ -348,8 +350,9 @@ export const internalValidateMcpOAuthAuthorizationCodeForTokenBoundary = interna
     if (!isAuthorizationCodeDigest(authorizationCodeDigest)) return denyValidate("invalid_code_digest");
     const clientId = readBoundedText(input.clientId, MAX_OAUTH_PARAMETER_LENGTH);
     const redirectUri = readSafeHttpsUrl(input.redirectUri, { allowSearch: true });
+    const resource = readSafeHttpsUrl(input.resource, { allowSearch: false });
     const codeChallenge = readBoundedText(input.codeChallenge, 128);
-    if (!clientId || !redirectUri || !codeChallenge || !PKCE_S256_CHALLENGE_PATTERN.test(codeChallenge)) {
+    if (!clientId || !redirectUri || !resource || !codeChallenge || !PKCE_S256_CHALLENGE_PATTERN.test(codeChallenge)) {
       return denyValidate("invalid_input");
     }
 
@@ -364,7 +367,7 @@ export const internalValidateMcpOAuthAuthorizationCodeForTokenBoundary = interna
 
     const row = parseStorageRecord(rows[0]);
     if (!row) return denyValidate("malformed_storage_record");
-    if (row.clientId !== clientId || row.redirectUri !== redirectUri || row.codeChallenge !== codeChallenge) {
+    if (row.clientId !== clientId || row.redirectUri !== redirectUri || row.resource !== resource || row.codeChallenge !== codeChallenge) {
       return denyValidate("not_found_or_forbidden");
     }
     if (row.status === "consumed") return denyValidate("already_consumed");

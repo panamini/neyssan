@@ -237,6 +237,7 @@ export type McpOAuthProductionAuthorizationCodeValidatePortInputV1 = Readonly<{
   authorizationCodeDigest: string;
   clientId: string;
   redirectUri: string;
+  resource: string;
   codeChallenge: string;
   now: number;
   version: 1;
@@ -273,6 +274,7 @@ export type McpOAuthProductionAuthorizationCodeValidatePortResultV1 = Readonly<
         | "invalid_input"
         | "invalid_code_digest"
         | "not_found_or_forbidden"
+        | "storage_unavailable"
         | "malformed_storage_record"
         | "expired"
         | "already_consumed"
@@ -350,6 +352,7 @@ type McpOAuthProductionRouteFailureReasonV1 =
   | "invalid_authorization_request"
   | "invalid_configuration"
   | "pre_auth_quota_denied"
+  | "token_quota_denied"
   | "pre_auth_create_failed"
   | "invalid_continuation_request"
   | "browser_bound_continuation_missing"
@@ -360,6 +363,7 @@ type McpOAuthProductionRouteFailureReasonV1 =
   | "unsupported_token_content_type"
   | "token_request_body_too_large"
   | "invalid_request"
+  | "invalid_target"
   | "code_validation_failed"
   | "token_issuance_blocked";
 
@@ -409,6 +413,7 @@ const TOKEN_REQUEST_KEYS = Object.freeze([
   "code",
   "client_id",
   "redirect_uri",
+  "resource",
   "code_verifier",
 ] as const);
 export const MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT = "mcp_oauth_production_v1";
@@ -725,7 +730,7 @@ async function handleTokenRequest(
   dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
 ): Promise<McpOAuthProductionRouteAdapterResponseV1> {
   const preflight = config.preflight;
-  if (!dependencies.authorizationRequestConfig || !dependencies.validateAuthorizationCode) {
+  if (!dependencies.authorizationRequestConfig || !dependencies.checkPreAuthQuota || !dependencies.validateAuthorizationCode) {
     return failClosedResponse("oauth_token", preflight, "dependency_unavailable", 503);
   }
   if (!authorizationRequestConfigMatchesGuard(dependencies.authorizationRequestConfig, config.authorizationRequestGuard)) {
@@ -738,13 +743,44 @@ async function handleTokenRequest(
   if (!requestHostMatchesAuthorizationOrigin(request, authorizationOrigin)) {
     return failClosedResponse("oauth_token", preflight, "invalid_host", 403);
   }
+  const expectedResource = readTokenResource(dependencies.authorizationRequestConfig.canonicalResource);
+  if (!expectedResource) {
+    return failClosedResponse("oauth_token", preflight, "invalid_configuration", 500);
+  }
 
-  const tokenRequest = readTokenRequest(request);
+  const tokenRequest = readTokenRequest(request, expectedResource);
   if (!tokenRequest.ok) {
     return failClosedResponse("oauth_token", preflight, tokenRequest.reason, tokenRequest.status);
   }
 
   const now = readNow(dependencies);
+  let quotaResult: McpOAuthProductionPreAuthQuotaPortResultV1;
+  const quotaInput = Object.freeze({
+    authorizationPageOrigin: authorizationOrigin.origin,
+    clientId: tokenRequest.serverOnly.clientId,
+    resource: tokenRequest.serverOnly.resource,
+    callerKey: readQuotaCallerKey(request),
+    now,
+    version: 1,
+  } satisfies McpOAuthProductionPreAuthQuotaPortInputV1);
+  try {
+    quotaResult = await checkPreAuthQuotaWithTimeout(
+      dependencies.checkPreAuthQuota,
+      quotaInput,
+      PRE_AUTH_QUOTA_TIMEOUT_MS,
+    );
+  } catch {
+    return failClosedResponse("oauth_token", preflight, "token_quota_denied", 503);
+  }
+  if (!isQuotaAccepted(quotaResult)) {
+    return failClosedResponse(
+      "oauth_token",
+      preflight,
+      "token_quota_denied",
+      statusForPreAuthQuotaFailure(quotaResult),
+    );
+  }
+
   let validationResult: McpOAuthProductionAuthorizationCodeValidatePortResultV1;
   try {
     validationResult = await validateAuthorizationCodeWithTimeout(
@@ -753,6 +789,7 @@ async function handleTokenRequest(
         authorizationCodeDigest: tokenRequest.serverOnly.authorizationCodeDigest,
         clientId: tokenRequest.serverOnly.clientId,
         redirectUri: tokenRequest.serverOnly.redirectUri,
+        resource: tokenRequest.serverOnly.resource,
         codeChallenge: tokenRequest.serverOnly.codeChallenge,
         now,
         version: 1,
@@ -1203,13 +1240,17 @@ function redirectToOAuthClientWithAuthorizationCode(
   });
 }
 
-function readTokenRequest(request: McpOAuthProductionRouteAdapterRequestV1): Readonly<
+function readTokenRequest(
+  request: McpOAuthProductionRouteAdapterRequestV1,
+  expectedResource: string,
+): Readonly<
   | {
       ok: true;
       serverOnly: {
         authorizationCodeDigest: string;
         clientId: string;
         redirectUri: string;
+        resource: string;
         codeChallenge: string;
         version: 1;
       };
@@ -1219,7 +1260,8 @@ function readTokenRequest(request: McpOAuthProductionRouteAdapterRequestV1): Rea
       reason:
         | "unsupported_token_content_type"
         | "token_request_body_too_large"
-        | "invalid_request";
+        | "invalid_request"
+        | "invalid_target";
       status: 400 | 413 | 415;
     }
 > {
@@ -1238,6 +1280,10 @@ function readTokenRequest(request: McpOAuthProductionRouteAdapterRequestV1): Rea
   }
 
   const params = new URLSearchParams(bodyText);
+  const resourceValues = params.getAll("resource");
+  if (resourceValues.length === 0) {
+    return Object.freeze({ ok: false, reason: "invalid_target", status: 400 });
+  }
   if (!hasExactlyTokenRequestKeys(params)) {
     return Object.freeze({ ok: false, reason: "invalid_request", status: 400 });
   }
@@ -1248,7 +1294,11 @@ function readTokenRequest(request: McpOAuthProductionRouteAdapterRequestV1): Rea
   const code = params.get("code");
   const clientId = readBoundedTokenParameter(params.get("client_id"), 512);
   const redirectUri = readTokenRedirectUri(params.get("redirect_uri"));
+  const resource = readTokenResource(resourceValues[0]);
   const codeVerifier = readCodeVerifier(params.get("code_verifier"));
+  if (!resource || resource !== expectedResource) {
+    return Object.freeze({ ok: false, reason: "invalid_target", status: 400 });
+  }
   if (!code || !AUTHORIZATION_CODE_PATTERN.test(code) || !clientId || !redirectUri || !codeVerifier) {
     return Object.freeze({ ok: false, reason: "invalid_request", status: 400 });
   }
@@ -1259,6 +1309,7 @@ function readTokenRequest(request: McpOAuthProductionRouteAdapterRequestV1): Rea
       authorizationCodeDigest: hashAuthorizationCode(code),
       clientId,
       redirectUri,
+      resource,
       codeChallenge: hashPkceCodeVerifierS256(codeVerifier),
       version: 1,
     }),
@@ -1297,6 +1348,28 @@ function readTokenRedirectUri(value: unknown): string | undefined {
       parsed.username ||
       parsed.password ||
       parsed.hash
+    ) {
+      return undefined;
+    }
+    return parsed.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+function readTokenResource(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.length === 0 || value.length > 512) return undefined;
+  if (hasControlCharacter(value) || hasMalformedPercentEncoding(value)) return undefined;
+  try {
+    const parsed = new URL(value);
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.origin === "null" ||
+      !parsed.hostname ||
+      parsed.username ||
+      parsed.password ||
+      parsed.hash ||
+      parsed.search
     ) {
       return undefined;
     }
@@ -1747,6 +1820,7 @@ function isAuthorizationCodeValidationSuccess(
   tokenRequest: Readonly<{
     clientId: string;
     redirectUri: string;
+    resource: string;
     codeChallenge: string;
   }>,
   now: number,
@@ -1760,7 +1834,7 @@ function isAuthorizationCodeValidationSuccess(
     value.serverOnly.status === "pending" &&
     value.serverOnly.clientId === tokenRequest.clientId &&
     value.serverOnly.redirectUri === tokenRequest.redirectUri &&
-    typeof value.serverOnly.resource === "string" &&
+    value.serverOnly.resource === tokenRequest.resource &&
     Array.isArray(value.serverOnly.scopes) &&
     typeof value.serverOnly.state === "string" &&
     value.serverOnly.codeChallenge === tokenRequest.codeChallenge &&
@@ -1824,7 +1898,13 @@ function statusForAuthorizationCodeValidationFailure(
   value: McpOAuthProductionAuthorizationCodeValidatePortResultV1,
 ): 400 | 503 {
   if (!isPlainRecord(value)) return 503;
-  if (value.reason === "malformed_storage_record" || value.reason === "duplicate_storage_record") return 503;
+  if (
+    value.reason === "storage_unavailable" ||
+    value.reason === "malformed_storage_record" ||
+    value.reason === "duplicate_storage_record"
+  ) {
+    return 503;
+  }
   return 400;
 }
 

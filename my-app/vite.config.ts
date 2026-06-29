@@ -913,7 +913,7 @@ function authorizationCodeValidateUnavailableResult(): Awaited<ReturnType<NonNul
   return Object.freeze({
     kind: "mcp_oauth_authorization_code_validate_result",
     ok: false,
-    reason: "not_found_or_forbidden",
+    reason: "storage_unavailable",
     safeFailure: {
       code: "mcp_oauth_authorization_code_denied",
       message: "Authorization code denied.",

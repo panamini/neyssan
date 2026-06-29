@@ -1099,6 +1099,7 @@ describe("MCP OAuth production route adapter", () => {
       authorizationCodeDigest: AUTHORIZATION_CODE_DIGEST,
       clientId: CLIENT_ID,
       redirectUri: REDIRECT_URI,
+      resource: RESOURCE,
       codeChallenge: PKCE,
       now: NOW,
       version: 1,
@@ -1140,6 +1141,55 @@ describe("MCP OAuth production route adapter", () => {
     expect(ctx.authorizationCodeRows[0]).not.toHaveProperty("consumedAt");
     expectNoRouteLeakage(first);
     expectNoRouteLeakage(second);
+  });
+
+  it("checks token request quota before authorization-code validation", async () => {
+    const ctx = makeCtx();
+    const dependencies = routeDependencies(ctx);
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      config,
+      dependencies,
+    );
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPath()),
+      config,
+      dependencies,
+    );
+    dependencies.checkPreAuthQuota.mockResolvedValueOnce({
+      kind: "mcp_oauth_pre_auth_quota_result",
+      ok: false,
+      reason: "rate_limited",
+      safeFailure: { code: "token_quota_denied" },
+      safeForLogging: true,
+      version: 1,
+    });
+
+    const response = await handleMcpOAuthProductionRouteRequest(tokenRequest(), config, dependencies);
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 429,
+      json: {
+        status: "blocked",
+        reason: "token_quota_denied",
+        route: "oauth_token",
+        authorizationCodeAccepted: false,
+        authorizationCodeConsumed: false,
+        tokenIssued: false,
+      },
+    });
+    expect(dependencies.checkPreAuthQuota).toHaveBeenLastCalledWith({
+      authorizationPageOrigin: PROD_APP_ORIGIN,
+      clientId: CLIENT_ID,
+      resource: RESOURCE,
+      callerKey: "unknown",
+      now: NOW,
+      version: 1,
+    });
+    expect(dependencies.validateAuthorizationCode).not.toHaveBeenCalled();
+    expect(ctx.authorizationCodeRows[0]).toMatchObject({ status: "pending" });
   });
 
   it("fails production token requests with the wrong method before validation", async () => {
@@ -1210,6 +1260,38 @@ describe("MCP OAuth production route adapter", () => {
   });
 
   it.each([
+    ["missing resource", tokenRequestBody({ resource: "" })],
+    ["malformed resource", tokenRequestBody({ resource: "not-a-url" })],
+    ["non-HTTPS resource", tokenRequestBody({ resource: "http://mcp.twoweeks.example.test/resource" })],
+    ["query resource", tokenRequestBody({ resource: `${RESOURCE}?unexpected=1` })],
+    ["fragment resource", tokenRequestBody({ resource: `${RESOURCE}#fragment` })],
+    ["mismatched resource", tokenRequestBody({ resource: "https://mcp.twoweeks.example.test/other-resource" })],
+  ] as const)("fails production token request with %s before code lookup", async (_label, bodyText) => {
+    const dependencies = routeDependencies(makeCtx());
+    const response = await handleMcpOAuthProductionRouteRequest(
+      tokenRequest(bodyText),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 400,
+      json: {
+        status: "blocked",
+        reason: "invalid_target",
+        route: "oauth_token",
+        authorizationCodeAccepted: false,
+        authorizationCodeConsumed: false,
+        tokenIssued: false,
+      },
+    });
+    expect(dependencies.checkPreAuthQuota).not.toHaveBeenCalled();
+    expect(dependencies.validateAuthorizationCode).not.toHaveBeenCalled();
+    expectNoRouteLeakage(response);
+  });
+
+  it.each([
     ["expired code", (row: StoredAuthorizationCodeRecord) => Object.assign(row, { expiresAt: NOW })],
     ["already consumed code", (row: StoredAuthorizationCodeRecord) => Object.assign(row, { status: "consumed" as const, consumedAt: NOW })],
     ["wrong client_id", (row: StoredAuthorizationCodeRecord) => Object.assign(row, { clientId: "other_client" })],
@@ -1263,11 +1345,11 @@ describe("MCP OAuth production route adapter", () => {
   it.each([
     [
       "malformed percent redirect_uri",
-      `grant_type=authorization_code&code=${RAW_AUTHORIZATION_CODE}&client_id=${CLIENT_ID}&redirect_uri=https://chatgpt.example.test/connector/oauth/%&code_verifier=${RAW_CODE_VERIFIER}`,
+      `grant_type=authorization_code&code=${RAW_AUTHORIZATION_CODE}&client_id=${CLIENT_ID}&redirect_uri=https://chatgpt.example.test/connector/oauth/%&resource=${encodeURIComponent(RESOURCE)}&code_verifier=${RAW_CODE_VERIFIER}`,
     ],
     [
       "control-character redirect_uri",
-      `grant_type=authorization_code&code=${RAW_AUTHORIZATION_CODE}&client_id=${CLIENT_ID}&redirect_uri=https%3A%2F%2Fchatgpt.example.test%2Fconnector%2Foauth%2Fcallback%0A&code_verifier=${RAW_CODE_VERIFIER}`,
+      `grant_type=authorization_code&code=${RAW_AUTHORIZATION_CODE}&client_id=${CLIENT_ID}&redirect_uri=https%3A%2F%2Fchatgpt.example.test%2Fconnector%2Foauth%2Fcallback%0A&resource=${encodeURIComponent(RESOURCE)}&code_verifier=${RAW_CODE_VERIFIER}`,
     ],
   ] as const)("fails production token request with %s before code lookup", async (_label, bodyText) => {
     const dependencies = routeDependencies(makeCtx());
@@ -2490,6 +2572,7 @@ describe("MCP OAuth production route adapter", () => {
       authorizationCodeDigest: AUTHORIZATION_CODE_DIGEST,
       clientId: CLIENT_ID,
       redirectUri: REDIRECT_URI,
+      resource: RESOURCE,
       codeChallenge: PKCE,
       now: expect.any(Number),
       version: 1,
@@ -2617,6 +2700,41 @@ describe("MCP OAuth production route adapter", () => {
     expect(response.statusCode).toBe(503);
     expect(response.body).toContain("pre_auth_create_failed");
     expect(convexHttpClientSetAdminAuth).not.toHaveBeenCalled();
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
+  });
+
+  it("maps default token validation storage unavailability to a retryable failure", async () => {
+    for (const [key, value] of Object.entries(prodRouteEnv())) {
+      vi.stubEnv(key, value);
+    }
+    ConvexHttpClientMock.mockImplementationOnce(() => {
+      throw new Error("invalid deployment url");
+    });
+
+    const plugin = createLocalMcpDevEndpointPlugin();
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeStreamingMiddleware(middleware, {
+      method: "POST",
+      url: MCP_OAUTH_PRODUCTION_TOKEN_PATH,
+      headers: {
+        host: "mcp.twoweeks.example.test",
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: tokenRequestBody(),
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(503);
+    expect(JSON.parse(response.body)).toMatchObject({
+      status: "blocked",
+      reason: "code_validation_failed",
+      route: "oauth_token",
+      authorizationCodeAccepted: false,
+      authorizationCodeConsumed: false,
+      tokenIssued: false,
+    });
+    expect(convexHttpClientSetAdminAuth).not.toHaveBeenCalled();
+    expect(convexHttpClientQuery).not.toHaveBeenCalled();
     expect(convexHttpClientMutation).not.toHaveBeenCalled();
   });
 
@@ -2853,13 +2971,14 @@ function continuationPath(): string {
 }
 
 function tokenRequestBody(
-  overrides: Readonly<Partial<Record<"grant_type" | "code" | "client_id" | "redirect_uri" | "code_verifier", string>>> = {},
+  overrides: Readonly<Partial<Record<"grant_type" | "code" | "client_id" | "redirect_uri" | "resource" | "code_verifier", string>>> = {},
 ): string {
   const params = new URLSearchParams();
   params.append("grant_type", overrides.grant_type ?? "authorization_code");
   if (overrides.code !== "") params.append("code", overrides.code ?? RAW_AUTHORIZATION_CODE);
   params.append("client_id", overrides.client_id ?? CLIENT_ID);
   params.append("redirect_uri", overrides.redirect_uri ?? REDIRECT_URI);
+  if (overrides.resource !== "") params.append("resource", overrides.resource ?? RESOURCE);
   params.append("code_verifier", overrides.code_verifier ?? RAW_CODE_VERIFIER);
   return params.toString();
 }
