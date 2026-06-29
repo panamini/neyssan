@@ -1232,6 +1232,7 @@ describe("MCP OAuth production route adapter", () => {
     ["malformed body", tokenRequest("grant_type=authorization_code&code=%"), "invalid_request", 400],
     ["wrong grant type", tokenRequest(tokenRequestBody({ grant_type: "refresh_token" })), "invalid_request", 400],
     ["missing code", tokenRequest(tokenRequestBody({ code: "" })), "invalid_request", 400],
+    ["unallowed client_id", tokenRequest(tokenRequestBody({ client_id: "rotated_client_id" })), "invalid_request", 400],
   ] as const)("fails production token request with %s", async (_label, tokenInput, reason, status) => {
     const dependencies = routeDependencies(makeCtx());
     const response = await handleMcpOAuthProductionRouteRequest(
@@ -1255,6 +1256,7 @@ describe("MCP OAuth production route adapter", () => {
         accountLinkCreated: false,
       },
     });
+    expect(dependencies.checkPreAuthQuota).not.toHaveBeenCalled();
     expect(dependencies.validateAuthorizationCode).not.toHaveBeenCalled();
     expectNoRouteLeakage(response);
   });

@@ -752,6 +752,9 @@ async function handleTokenRequest(
   if (!tokenRequest.ok) {
     return failClosedResponse("oauth_token", preflight, tokenRequest.reason, tokenRequest.status);
   }
+  if (!dependencies.authorizationRequestConfig.clientIdPolicy.allowedClientIds.includes(tokenRequest.serverOnly.clientId)) {
+    return failClosedResponse("oauth_token", preflight, "invalid_request", 400);
+  }
 
   const now = readNow(dependencies);
   let quotaResult: McpOAuthProductionPreAuthQuotaPortResultV1;
