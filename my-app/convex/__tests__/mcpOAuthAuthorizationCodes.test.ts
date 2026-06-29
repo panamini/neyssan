@@ -267,6 +267,33 @@ describe("Convex MCP OAuth authorization codes", () => {
     expect(JSON.stringify(result)).not.toContain(ACCESS_TOKEN_DIGEST);
   });
 
+  it("accepts configured access-token verifier allowlists larger than sixteen clients", async () => {
+    const allowedClientIds = Array.from({ length: 20 }, (_value, index) => `chatgpt_apps_sdk_client_${index}`);
+    const matchingClientId = allowedClientIds[17];
+    const { ctx, patches } = makeCtx([], [storedAccessToken({ clientId: matchingClientId })]);
+
+    const result = await internalVerifyMcpOAuthAccessTokenForMcpBoundary._handler(
+      ctx as any,
+      verifyAccessTokenArgs({ allowedClientIds }),
+    );
+
+    expect(result).toMatchObject({
+      kind: "mcp_oauth_access_token_verify_result",
+      ok: true,
+      reason: "verified",
+      serverOnly: {
+        clientId: matchingClientId,
+        resource: RESOURCE,
+        tokenActive: true,
+        tokenExpired: false,
+        tokenRevoked: false,
+      },
+    });
+    expect(patches).toHaveLength(0);
+    expect(JSON.stringify(result)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(result)).not.toContain(ACCESS_TOKEN_DIGEST);
+  });
+
   it.each([
     ["digest miss", [], verifyAccessTokenArgs({ accessTokenDigest: sha256Hex("R".repeat(43)) }), "not_found_or_forbidden"],
     [

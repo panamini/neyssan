@@ -40,6 +40,7 @@ import {
   isMcpOAuthProductionRouteAllowedByPreflightPath,
   isMcpOAuthProductionRouteHandledPath,
   MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
+  MCP_OAUTH_PRODUCTION_MCP_PATH,
   MCP_OAUTH_PRODUCTION_TOKEN_PATH,
   type McpOAuthProductionAuthenticatedOwnerIdentityV1,
   type McpOAuthProductionRouteAdapterConfigV1,
@@ -202,7 +203,8 @@ function handleLocalMcpDevMiddlewareRequest(
     (
       pathName === MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH ||
       pathName === MCP_OAUTH_CONTINUATION_PATH ||
-      pathName === MCP_OAUTH_PRODUCTION_TOKEN_PATH
+      pathName === MCP_OAUTH_PRODUCTION_TOKEN_PATH ||
+      pathName === MCP_OAUTH_PRODUCTION_MCP_PATH
     ) &&
     productionOAuthRequestHostMatchesAuthorizationOrigin(req, productionOAuthAuthorizationDependencies)
   ) {

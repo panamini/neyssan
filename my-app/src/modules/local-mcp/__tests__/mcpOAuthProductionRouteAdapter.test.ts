@@ -1234,8 +1234,9 @@ describe("MCP OAuth production route adapter", () => {
         hostedMcpStarted: false,
       },
     });
+    expectMcpBearerChallenge(response);
     expect(dependencies.verifyAccessToken).not.toHaveBeenCalled();
-    expectNoRouteLeakage(response);
+    expectNoRouteLeakage(response, [], { allowBearerChallenge: true });
     expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
     expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
   });
@@ -1259,6 +1260,7 @@ describe("MCP OAuth production route adapter", () => {
         hostedMcpStarted: false,
       },
     });
+    expectMcpBearerChallenge(response);
     expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
     expect(dependencies.verifyAccessToken.mock.calls[0]?.[0].accessTokenDigest).toBe(sha256Hex(rawUnknownToken));
     expect(JSON.stringify(response)).not.toContain(rawUnknownToken);
@@ -1306,10 +1308,13 @@ describe("MCP OAuth production route adapter", () => {
       },
     });
     expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
+    if (status === 401 || status === 403) {
+      expectMcpBearerChallenge(response);
+    }
     expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
     expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
     expect(JSON.stringify(response)).not.toContain(OWNER_ID);
-    expectNoRouteLeakage(response);
+    expectNoRouteLeakage(response, [], { allowBearerChallenge: true });
   });
 
   it("maps /mcp bearer verification storage unavailability to retryable 503", async () => {
@@ -1335,6 +1340,7 @@ describe("MCP OAuth production route adapter", () => {
       },
     });
     expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
+    expect(response.headers).not.toHaveProperty("WWW-Authenticate");
     expectNoRouteLeakage(response);
     expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
     expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
@@ -3156,6 +3162,74 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(OWNER_ID);
   });
 
+  it("wires default production /mcp through auth-level preflight without activation dependencies", async () => {
+    convexHttpClientQuery.mockResolvedValue({
+      kind: "mcp_oauth_access_token_verify_result",
+      ok: true,
+      reason: "verified",
+      serverOnly: {
+        status: "active",
+        twoweeksClerkId: OWNER_ID,
+        ownerIssuer: CLERK_ISSUER,
+        clientId: CLIENT_ID,
+        resource: RESOURCE,
+        scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
+        productionEnvironment: MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT,
+        expiresAt: Date.now() + 60 * 60 * 1_000,
+        tokenActive: true,
+        tokenExpired: false,
+        tokenRevoked: false,
+        rawAccessTokenPersisted: false,
+        rawAccessTokenEchoed: false,
+        digestEchoed: false,
+        version: 1,
+      },
+      modelVisible: false,
+      safeForLogging: false,
+      version: 1,
+    });
+    const plugin = createLocalMcpDevEndpointPlugin({ env: prodRouteEnv() });
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeMiddleware(middleware, {
+      method: "POST",
+      url: MCP_OAUTH_PRODUCTION_MCP_PATH,
+      headers: {
+        host: "mcp.twoweeks.example.test",
+        authorization: `Bearer ${RAW_ACCESS_TOKEN}`,
+      },
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(501);
+    expect(JSON.parse(response.body)).toMatchObject({
+      status: "authenticated_mcp_blocked",
+      reason: "mcp_execution_blocked",
+      route: "mcp",
+      allowedByPreflight: true,
+      preflightDecision: "blocked_missing_activation_dependency",
+      accessTokenAccepted: true,
+      hostedMcpStarted: false,
+      toolsListExecuted: false,
+      toolsCallExecuted: false,
+      providerCallExecuted: false,
+      accountLinkLifecycleExecuted: false,
+      privateBetaEnabled: false,
+      publicLaunchEnabled: false,
+    });
+    expect(convexHttpClientQuery).toHaveBeenCalledTimes(1);
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
+    expect(convexHttpClientQuery.mock.calls[0]?.[1]).toMatchObject({
+      accessTokenDigest: ACCESS_TOKEN_DIGEST,
+      allowedClientIds: [CLIENT_ID],
+      resource: RESOURCE,
+      requiredScope: TWOWEEKS_APPLICATIONS_READ_SCOPE,
+      version: 1,
+    });
+    expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
+    expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+  });
+
   it("bounds production token request bodies in Vite before adapter validation", async () => {
     const plugin = createLocalMcpDevEndpointPlugin({
       env: prodRouteEnv(),
@@ -4463,7 +4537,11 @@ function prodRouteEnv(): Record<string, string> {
 function expectNoRouteLeakage(
   value: unknown,
   extraForbidden: readonly string[] = [],
-  options: Readonly<{ allowRawHandle?: boolean; allowAccessTokenResponse?: boolean }> = {},
+  options: Readonly<{
+    allowRawHandle?: boolean;
+    allowAccessTokenResponse?: boolean;
+    allowBearerChallenge?: boolean;
+  }> = {},
 ): void {
   const serialized = JSON.stringify(value);
   for (const forbidden of [
@@ -4482,7 +4560,7 @@ function expectNoRouteLeakage(
     "auth_code",
     ...(options.allowAccessTokenResponse ? [] : ["access_token"]),
     "refresh_token",
-    "id_token",
+    ...(options.allowBearerChallenge ? [] : ["id_token"]),
     "client_secret",
     "redirect_secret",
     "owner_should_not_echo",
@@ -4491,6 +4569,19 @@ function expectNoRouteLeakage(
     expect(serialized).not.toContain(forbidden);
   }
   if (!options.allowRawHandle) expect(serialized).not.toContain(RAW_HANDLE);
+}
+
+function expectMcpBearerChallenge(response: {
+  headers: Readonly<Record<string, string>>;
+  json?: unknown;
+}): void {
+  const challenge = response.headers["WWW-Authenticate"];
+  expect(challenge).toContain(
+    'Bearer resource_metadata="https://mcp.twoweeks.example.test/.well-known/oauth-protected-resource/resource"',
+  );
+  expect(challenge).toContain(`scope="${TWOWEEKS_APPLICATIONS_READ_SCOPE}"`);
+  const body = response.json as { _meta?: { "mcp/www_authenticate"?: readonly string[] } };
+  expect(body._meta).toEqual({ "mcp/www_authenticate": [challenge] });
 }
 
 function expectSourceNotToMatch(source: string, patterns: readonly RegExp[]): void {

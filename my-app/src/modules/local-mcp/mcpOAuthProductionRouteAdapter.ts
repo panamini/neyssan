@@ -18,7 +18,13 @@ import {
   type McpOAuthIntentConsumePortV1,
   type McpOAuthIntentConsumeResultV1,
 } from "./mcpOAuthLoginReturnContinuationBoundary";
-import { TWOWEEKS_APPLICATIONS_READ_SCOPE } from "./mcpAuthPolicyBoundary";
+import {
+  buildBearerAuthChallenge,
+  buildMcpWwwAuthenticateMeta,
+  TWOWEEKS_APPLICATIONS_READ_SCOPE,
+  type McpBearerAuthChallengeErrorV1,
+  type McpBearerAuthChallengeReasonV1,
+} from "./mcpAuthPolicyBoundary";
 import {
   MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER,
   MCP_OAUTH_CONTINUATION_PATH,
@@ -568,6 +574,7 @@ const ACCESS_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 const AUTHORIZATION_CODE_DIGEST_PATTERN = /^[0-9a-f]{64}$/u;
 const PKCE_CODE_VERIFIER_PATTERN = /^[A-Za-z0-9._~-]{43,128}$/u;
 const PKCE_CODE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43,128}$/u;
+const WELL_KNOWN_PROTECTED_RESOURCE_PATH = "/.well-known/oauth-protected-resource";
 const TOKEN_REQUEST_KEYS = Object.freeze([
   "grant_type",
   "code",
@@ -1012,7 +1019,13 @@ async function handleMcpRequest(
 
   const bearerToken = readBearerAccessToken(request.headers, "authorization");
   if (!bearerToken.ok) {
-    return failClosedResponse("mcp", preflight, "invalid_authorization_header", 401);
+    return mcpBearerAuthFailureResponse(
+      preflight,
+      expectedResource,
+      "invalid_authorization_header",
+      401,
+      challengeForAuthorizationHeaderFailure(bearerToken.reason),
+    );
   }
 
   const now = readNow(dependencies);
@@ -1034,11 +1047,13 @@ async function handleMcpRequest(
     return failClosedResponse("mcp", preflight, "bearer_verification_failed", 503);
   }
   if (!isAccessTokenVerifySuccess(verifyResult, dependencies.authorizationRequestConfig, expectedResource, now)) {
-    return failClosedResponse(
-      "mcp",
+    const status = statusForAccessTokenVerifyFailure(verifyResult);
+    return mcpBearerAuthFailureResponse(
       preflight,
+      expectedResource,
       "bearer_verification_failed",
-      statusForAccessTokenVerifyFailure(verifyResult),
+      status,
+      challengeForAccessTokenVerifyFailure(verifyResult),
     );
   }
 
@@ -1345,7 +1360,7 @@ function isRouteAllowedByPreflight(
   route: McpOAuthProductionRouteNameV1,
   preflight: McpOAuthProductionRoutePreflightResultV1,
 ): boolean {
-  return route === "oauth_authorize" || route === "oauth_login_return" || route === "oauth_token"
+  return route === "oauth_authorize" || route === "oauth_login_return" || route === "oauth_token" || route === "mcp"
     ? preflight.authorizeAllowedToWire
     : preflight.allowedToWire;
 }
@@ -1365,6 +1380,7 @@ function failClosedResponse(
   reason: McpOAuthProductionRouteFailureReasonV1,
   status: number,
   headers: Readonly<Record<string, string>> = {},
+  extraJson: Readonly<Record<string, unknown>> = {},
 ): McpOAuthProductionRouteAdapterResponseV1 {
   return jsonResponse(status, {
     kind: "mcp_oauth_production_route_response",
@@ -1396,8 +1412,87 @@ function failClosedResponse(
     authorizationCodesExposed: false,
     redirectSecretsExposed: false,
     hostedMcpStarted: false,
+    ...extraJson,
     version: 1,
   }, headers);
+}
+
+function mcpBearerAuthFailureResponse(
+  preflight: McpOAuthProductionRoutePreflightResultV1,
+  expectedResource: string,
+  reason: Extract<McpOAuthProductionRouteFailureReasonV1, "invalid_authorization_header" | "bearer_verification_failed">,
+  status: number,
+  challengeInput: Readonly<{
+    reason: McpBearerAuthChallengeReasonV1;
+    error?: McpBearerAuthChallengeErrorV1;
+  }> | undefined,
+): McpOAuthProductionRouteAdapterResponseV1 {
+  if (!challengeInput || status < 400 || status >= 500) {
+    return failClosedResponse("mcp", preflight, reason, status);
+  }
+  const protectedResourceMetadataUrl = protectedResourceMetadataUrlForResource(expectedResource);
+  if (!protectedResourceMetadataUrl) {
+    return failClosedResponse("mcp", preflight, reason, status);
+  }
+  const challenge = buildBearerAuthChallenge({
+    reason: challengeInput.reason,
+    protectedResourceMetadataUrl,
+    ...(challengeInput.error ? { error: challengeInput.error } : {}),
+  });
+  return failClosedResponse(
+    "mcp",
+    preflight,
+    reason,
+    status,
+    { "WWW-Authenticate": challenge.header },
+    { _meta: buildMcpWwwAuthenticateMeta(challenge) },
+  );
+}
+
+function challengeForAuthorizationHeaderFailure(
+  reason: Exclude<ReturnType<typeof readBearerAccessToken>, { ok: true }>["reason"],
+): Readonly<{
+  reason: McpBearerAuthChallengeReasonV1;
+  error?: McpBearerAuthChallengeErrorV1;
+}> {
+  return reason === "missing_authorization_header"
+    ? { reason: "missing_token" }
+    : { reason: "invalid_token", error: "invalid_request" };
+}
+
+function challengeForAccessTokenVerifyFailure(
+  value: McpOAuthProductionAccessTokenVerifyPortResultV1,
+): Readonly<{
+  reason: McpBearerAuthChallengeReasonV1;
+  error?: McpBearerAuthChallengeErrorV1;
+}> | undefined {
+  if (!isPlainRecord(value) || value.ok !== false) return { reason: "invalid_token" };
+  if (value.reason === "storage_unavailable" || value.reason === "malformed_storage_record" || value.reason === "duplicate_storage_record") {
+    return undefined;
+  }
+  if (value.reason === "missing_required_scope" || value.reason === "unauthorized_scope_state") {
+    return { reason: "insufficient_scope" };
+  }
+  return { reason: "invalid_token" };
+}
+
+function protectedResourceMetadataUrlForResource(resource: string): string | undefined {
+  try {
+    const parsed = new URL(resource);
+    const normalizedPath = canonicalResourcePath(parsed.pathname);
+    return `${parsed.origin}${WELL_KNOWN_PROTECTED_RESOURCE_PATH}${normalizedPath === "/" ? "" : normalizedPath}`;
+  } catch {
+    return undefined;
+  }
+}
+
+function canonicalResourcePath(path: string): string {
+  let end = path.length;
+  while (end > 1 && path.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  const normalized = path.slice(0, end);
+  return normalized.length === 0 ? "/" : normalized;
 }
 
 function inertGuardedResponse(

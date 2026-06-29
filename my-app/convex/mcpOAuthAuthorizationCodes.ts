@@ -656,10 +656,8 @@ export const internalVerifyMcpOAuthAccessTokenForMcpBoundary = internalQuery({
     if (!row) return denyAccessTokenVerify("malformed_storage_record");
     if (!input.allowedClientIds.includes(row.clientId)) return denyAccessTokenVerify("wrong_client");
     if (row.resource !== input.resource) return denyAccessTokenVerify("wrong_resource");
-    if (!row.scopes.includes(input.requiredScope)) return denyAccessTokenVerify("missing_required_scope");
-    if (!isAuthorizedAccessTokenScopeState(row.scopes, input.requiredScope)) {
-      return denyAccessTokenVerify("unauthorized_scope_state");
-    }
+    const scopePolicy = validateAccessTokenScopePolicy(row.scopes, input.requiredScope);
+    if (scopePolicy !== "authorized") return denyAccessTokenVerify(scopePolicy);
     if (row.status === "expired" || input.now >= row.expiresAt) return denyAccessTokenVerify("expired");
     if (row.status !== "active") return denyAccessTokenVerify("inactive");
     if (input.now < row.issuedAt) return denyAccessTokenVerify("malformed_storage_record");
@@ -1096,22 +1094,27 @@ function parseScopes(value: unknown): readonly string[] | undefined {
 }
 
 function parseAllowedClientIds(value: unknown): readonly string[] | undefined {
-  if (!Array.isArray(value) || value.length === 0 || value.length > 16) return undefined;
+  if (!Array.isArray(value) || value.length === 0) return undefined;
   const clientIds = value.map((clientId) => readBoundedText(clientId, MAX_OAUTH_PARAMETER_LENGTH));
   if (clientIds.some((clientId) => !clientId || !SAFE_IDENTIFIER_PATTERN.test(clientId))) return undefined;
   const unique = [...new Set(clientIds as string[])];
   return unique.length === clientIds.length ? Object.freeze(unique) : undefined;
 }
 
-function isAuthorizedAccessTokenScopeState(
+function validateAccessTokenScopePolicy(
   scopes: readonly string[],
   requiredScope: typeof TWOWEEKS_APPLICATIONS_READ_SCOPE,
-): boolean {
+): "authorized" | "missing_required_scope" | "unauthorized_scope_state" {
+  let requiredScopeFound = false;
   for (const scope of scopes) {
-    if (scope === requiredScope || scope === "openid" || scope === "email" || scope === "profile") continue;
-    return false;
+    if (scope === requiredScope) {
+      requiredScopeFound = true;
+      continue;
+    }
+    if (scope === "openid" || scope === "email" || scope === "profile") continue;
+    return "unauthorized_scope_state";
   }
-  return true;
+  return requiredScopeFound ? "authorized" : "missing_required_scope";
 }
 
 function readBoundedText(value: unknown, maxLength: number): string | undefined {
