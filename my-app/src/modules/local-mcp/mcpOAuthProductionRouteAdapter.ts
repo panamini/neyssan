@@ -1335,13 +1335,13 @@ function isFormUrlEncodedContentType(value: string | readonly string[] | undefin
 
 function readBoundedTokenParameter(value: unknown, maxLength: number): string | undefined {
   if (typeof value !== "string" || value.length === 0 || value.length > maxLength) return undefined;
-  if (hasControlCharacter(value) || hasMalformedPercentEncoding(value)) return undefined;
+  if (hasControlCharacter(value)) return undefined;
   return value;
 }
 
 function readTokenRedirectUri(value: unknown): string | undefined {
   if (typeof value !== "string" || value.length === 0 || value.length > 512) return undefined;
-  if (hasControlCharacter(value) || hasMalformedPercentEncoding(value)) return undefined;
+  if (hasControlCharacter(value)) return undefined;
   try {
     const parsed = new URL(value);
     if (
@@ -1362,7 +1362,7 @@ function readTokenRedirectUri(value: unknown): string | undefined {
 
 function readTokenResource(value: unknown): string | undefined {
   if (typeof value !== "string" || value.length === 0 || value.length > 512) return undefined;
-  if (hasControlCharacter(value) || hasMalformedPercentEncoding(value)) return undefined;
+  if (hasControlCharacter(value)) return undefined;
   try {
     const parsed = new URL(value);
     if (

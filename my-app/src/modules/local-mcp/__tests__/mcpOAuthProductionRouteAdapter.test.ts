@@ -1116,6 +1116,48 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain("refresh_token");
   });
 
+  it("accepts form-encoded percent characters in decoded token parameters", async () => {
+    const ctx = makeCtx();
+    const dependencies = routeDependencies(ctx);
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      config,
+      dependencies,
+    );
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPath()),
+      config,
+      dependencies,
+    );
+    const percentRedirectUri = `${REDIRECT_URI}%`;
+    Object.assign(ctx.authorizationCodeRows[0], { redirectUri: percentRedirectUri });
+
+    const response = await handleMcpOAuthProductionRouteRequest(
+      tokenRequest(tokenRequestBody({ redirect_uri: percentRedirectUri })),
+      config,
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 501,
+      json: {
+        status: "blocked",
+        reason: "token_issuance_blocked",
+        route: "oauth_token",
+        authorizationCodeAccepted: true,
+        authorizationCodeConsumed: false,
+        tokenIssued: false,
+      },
+    });
+    expect(dependencies.checkPreAuthQuota).toHaveBeenCalled();
+    expect(dependencies.validateAuthorizationCode).toHaveBeenCalledWith(
+      expect.objectContaining({ redirectUri: percentRedirectUri }),
+    );
+    expectNoRouteLeakage(response);
+  });
+
   it("does not consume a valid authorization code when token issuance remains blocked", async () => {
     const ctx = makeCtx();
     const dependencies = routeDependencies(ctx);
