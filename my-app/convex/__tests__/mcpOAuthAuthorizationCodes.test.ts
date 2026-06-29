@@ -5,12 +5,16 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
+  classifyMcpOAuthAccessTokenStorageRecord,
   classifyMcpOAuthAuthorizationCodeStorageRecord,
   internalConsumeMcpOAuthAuthorizationCode,
   internalCreateMcpOAuthAuthorizationCode,
+  internalIssueMcpOAuthAccessTokenFromAuthorizationCode,
   internalValidateMcpOAuthAuthorizationCodeForTokenBoundary,
+  MCP_OAUTH_ACCESS_TOKEN_TTL_MS,
   MCP_OAUTH_AUTHORIZATION_CODE_PRODUCTION_ENVIRONMENT,
   MCP_OAUTH_AUTHORIZATION_CODE_TTL_MS,
+  type McpOAuthAccessTokenRecordV1,
   type McpOAuthAuthorizationCodeRecordV1,
 } from "../mcpOAuthAuthorizationCodes";
 import { TWOWEEKS_APPLICATIONS_READ_SCOPE } from "../../src/modules/local-mcp/mcpAuthPolicyBoundary";
@@ -21,6 +25,8 @@ const SCHEMA_FILE = resolve(TEST_DIR, "../schema.ts");
 const NOW = Date.UTC(2026, 5, 28, 12, 0, 0, 0);
 const RAW_CODE = "C".repeat(43);
 const CODE_DIGEST = sha256Hex(RAW_CODE);
+const RAW_ACCESS_TOKEN = "T".repeat(43);
+const ACCESS_TOKEN_DIGEST = sha256Hex(RAW_ACCESS_TOKEN);
 const OWNER_ID = "user_twoweeks_fixture_123";
 const OWNER_ISSUER = "https://clerk.twoweeks.example.test";
 const CLIENT_ID = "chatgpt_apps_sdk_client";
@@ -30,6 +36,11 @@ const STATE = "opaque_state_1234567890";
 const PKCE = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 type StoredCodeRecord = McpOAuthAuthorizationCodeRecordV1 & {
+  _id: string;
+  _creationTime: number;
+};
+
+type StoredAccessTokenRecord = McpOAuthAccessTokenRecordV1 & {
   _id: string;
   _creationTime: number;
 };
@@ -153,6 +164,82 @@ describe("Convex MCP OAuth authorization codes", () => {
     expect(JSON.stringify(result)).not.toContain(RAW_CODE);
   });
 
+  it("atomically issues a digest-backed access token and consumes the authorization code", async () => {
+    const { ctx, rows, accessTokenRows, patches, inserts } = makeCtx([storedCode()]);
+
+    const result = await internalIssueMcpOAuthAccessTokenFromAuthorizationCode._handler(
+      ctx as any,
+      issueAccessTokenArgs({ now: NOW + 1 }),
+    );
+    const replay = await internalIssueMcpOAuthAccessTokenFromAuthorizationCode._handler(
+      ctx as any,
+      issueAccessTokenArgs({ now: NOW + 2, accessTokenDigest: sha256Hex("U".repeat(43)) }),
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      reason: "issued",
+      serverOnly: {
+        tokenType: "Bearer",
+        expiresAt: NOW + 1 + MCP_OAUTH_ACCESS_TOKEN_TTL_MS,
+        expiresIn: 3_600,
+        clientId: CLIENT_ID,
+        redirectUri: REDIRECT_URI,
+        resource: RESOURCE,
+        scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE, "openid"],
+        productionEnvironment: MCP_OAUTH_AUTHORIZATION_CODE_PRODUCTION_ENVIRONMENT,
+        codeConsumed: true,
+        tokenIssued: true,
+        tokenPersisted: true,
+        rawAccessTokenPersisted: false,
+        refreshTokenPersisted: false,
+      },
+      modelVisible: false,
+      safeForLogging: false,
+    });
+    expect(replay).toMatchObject({ ok: false, reason: "already_consumed" });
+    expect(rows[0]).toMatchObject({ status: "consumed", consumedAt: NOW + 1, updatedAt: NOW + 1 });
+    expect(accessTokenRows).toHaveLength(1);
+    expect(accessTokenRows[0]).toMatchObject({
+      accessTokenDigest: ACCESS_TOKEN_DIGEST,
+      authorizationCodeDigest: CODE_DIGEST,
+      twoweeksClerkId: OWNER_ID,
+      ownerIssuer: new URL(OWNER_ISSUER).toString(),
+      clientId: CLIENT_ID,
+      redirectUri: REDIRECT_URI,
+      resource: RESOURCE,
+      scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE, "openid"],
+      status: "active",
+      issuedAt: NOW + 1,
+      expiresAt: NOW + 1 + MCP_OAUTH_ACCESS_TOKEN_TTL_MS,
+    });
+    expect(inserts).toHaveLength(1);
+    expect(patches).toHaveLength(1);
+    expect(JSON.stringify(accessTokenRows[0])).not.toContain(RAW_ACCESS_TOKEN);
+    expect(Object.keys(accessTokenRows[0])).not.toContain("accessToken");
+    expect(JSON.stringify(result)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(result)).not.toContain(ACCESS_TOKEN_DIGEST);
+    expect(JSON.stringify(replay)).not.toContain(CODE_DIGEST);
+  });
+
+  it("does not consume the authorization code when access-token persistence cannot proceed", async () => {
+    const { ctx, rows, accessTokenRows, patches } = makeCtx([storedCode()], [storedAccessToken()]);
+
+    const result = await internalIssueMcpOAuthAccessTokenFromAuthorizationCode._handler(
+      ctx as any,
+      issueAccessTokenArgs({ now: NOW + 1 }),
+    );
+
+    expect(result).toMatchObject({ ok: false, reason: "access_token_digest_collision" });
+    expect(rows[0]).toMatchObject({ status: "pending", updatedAt: NOW });
+    expect(rows[0]).not.toHaveProperty("consumedAt");
+    expect(accessTokenRows).toHaveLength(1);
+    expect(patches).toHaveLength(0);
+    expect(JSON.stringify(result)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(result)).not.toContain(ACCESS_TOKEN_DIGEST);
+    expect(JSON.stringify(result)).not.toContain(CODE_DIGEST);
+  });
+
   it("marks expired pending code digests without returning code state", async () => {
     const { ctx, rows, patches } = makeCtx([storedCode()]);
 
@@ -230,6 +317,11 @@ describe("Convex MCP OAuth authorization codes", () => {
     expect(classifyMcpOAuthAuthorizationCodeStorageRecord(storedCode({ authorizationCodeDigest: "A".repeat(64) }))).toBe(
       "malformed",
     );
+    expect(classifyMcpOAuthAccessTokenStorageRecord(storedAccessToken())).toBe("active_valid");
+    expect(classifyMcpOAuthAccessTokenStorageRecord(storedAccessToken({ status: "expired" }))).toBe("expired_valid");
+    expect(classifyMcpOAuthAccessTokenStorageRecord(storedAccessToken({ accessTokenDigest: "A".repeat(64) }))).toBe(
+      "malformed",
+    );
     expect(source).toContain("internalMutation");
     expect(source).toContain("internalQuery");
     expect(source).not.toMatch(/export\s+const\s+\w+\s*=\s*(?:query|mutation|httpAction)\s*\(/u);
@@ -237,9 +329,12 @@ describe("Convex MCP OAuth authorization codes", () => {
     expect(source).not.toMatch(/\b(?:@stytch|@clerk|openai|react|vite|exchangeAuthorizationCode)\b/u);
     expect(source).not.toMatch(/\binternal(?:Link|Refresh|Revoke)CanonicalMcpAccount/u);
     expect(schemaSource).toContain("mcpOAuthAuthorizationCodes: defineTable");
+    expect(schemaSource).toContain("mcpOAuthAccessTokens: defineTable");
     expect(schemaSource).toContain('.index("by_authorization_code_digest", ["authorizationCodeDigest"])');
+    expect(schemaSource).toContain('.index("by_access_token_digest", ["accessTokenDigest"])');
     expect(schemaSource).toContain('.index("by_expires_at", ["expiresAt"])');
     expect(schemaSource).not.toContain("authorizationCode: v.string()");
+    expect(schemaSource).not.toContain("accessToken: v.string()");
   });
 });
 
@@ -255,16 +350,20 @@ async function validateWith(seed: StoredCodeRecord[], args: ReturnType<typeof va
   return result;
 }
 
-function makeCtx(seed: StoredCodeRecord[] = []) {
+function makeCtx(seed: StoredCodeRecord[] = [], accessTokenSeed: StoredAccessTokenRecord[] = []) {
   const rows = seed.map((row) => ({ ...row, scopes: [...row.scopes] }));
+  const accessTokenRows = accessTokenSeed.map((row) => ({ ...row, scopes: [...row.scopes] }));
   const inserts: Array<{ tableName: string; record: unknown }> = [];
   const patches: Array<{ id: string; patch: Record<string, unknown> }> = [];
   let nextId = rows.length + 1;
+  let nextAccessTokenId = accessTokenRows.length + 1;
 
   const ctx = {
     db: {
       query: (tableName: string) => {
-        if (tableName !== "mcpOAuthAuthorizationCodes") throw new Error(`Unexpected table ${tableName}`);
+        if (tableName !== "mcpOAuthAuthorizationCodes" && tableName !== "mcpOAuthAccessTokens") {
+          throw new Error(`Unexpected table ${tableName}`);
+        }
         return {
           withIndex: (indexName: string, buildQuery: (query: IndexConstraintBuilder) => unknown) => {
             const constraints: Constraint[] = [];
@@ -279,10 +378,11 @@ function makeCtx(seed: StoredCodeRecord[] = []) {
               },
             };
             buildQuery(query);
-            expect(["by_authorization_code_digest", "by_expires_at"]).toContain(indexName);
-            const matching = rows.filter((row) =>
+            expect(["by_authorization_code_digest", "by_access_token_digest", "by_expires_at"]).toContain(indexName);
+            const sourceRows = tableName === "mcpOAuthAuthorizationCodes" ? rows : accessTokenRows;
+            const matching = sourceRows.filter((row) =>
               constraints.every((constraint) => {
-                const fieldValue = row[constraint.field as keyof StoredCodeRecord];
+                const fieldValue = row[constraint.field as keyof typeof row];
                 if (constraint.op === "eq") return fieldValue === constraint.value;
                 return typeof fieldValue === "number" && fieldValue <= constraint.value;
               }),
@@ -294,11 +394,19 @@ function makeCtx(seed: StoredCodeRecord[] = []) {
           },
         };
       },
-      insert: async (tableName: string, record: McpOAuthAuthorizationCodeRecordV1) => {
-        if (tableName !== "mcpOAuthAuthorizationCodes") throw new Error(`Unexpected insert table ${tableName}`);
-        const id = `mcpOAuthAuthorizationCodes_fixture_${nextId++}`;
+      insert: async (tableName: string, record: McpOAuthAuthorizationCodeRecordV1 | McpOAuthAccessTokenRecordV1) => {
+        if (tableName !== "mcpOAuthAuthorizationCodes" && tableName !== "mcpOAuthAccessTokens") {
+          throw new Error(`Unexpected insert table ${tableName}`);
+        }
+        const id = tableName === "mcpOAuthAuthorizationCodes"
+          ? `mcpOAuthAuthorizationCodes_fixture_${nextId++}`
+          : `mcpOAuthAccessTokens_fixture_${nextAccessTokenId++}`;
         inserts.push({ tableName, record });
-        rows.push({ ...record, scopes: [...record.scopes], _id: id, _creationTime: NOW });
+        if (tableName === "mcpOAuthAuthorizationCodes") {
+          rows.push({ ...(record as McpOAuthAuthorizationCodeRecordV1), scopes: [...record.scopes], _id: id, _creationTime: NOW });
+        } else {
+          accessTokenRows.push({ ...(record as McpOAuthAccessTokenRecordV1), scopes: [...record.scopes], _id: id, _creationTime: NOW });
+        }
         return id;
       },
       patch: async (id: string, patch: Record<string, unknown>) => {
@@ -314,7 +422,7 @@ function makeCtx(seed: StoredCodeRecord[] = []) {
     },
   };
 
-  return { ctx, rows, inserts, patches };
+  return { ctx, rows, accessTokenRows, inserts, patches };
 }
 
 function createArgs(overrides: Partial<Parameters<typeof internalCreateMcpOAuthAuthorizationCode._handler>[1]> = {}) {
@@ -373,6 +481,22 @@ function validateArgs(
   };
 }
 
+function issueAccessTokenArgs(
+  overrides: Partial<Parameters<typeof internalIssueMcpOAuthAccessTokenFromAuthorizationCode._handler>[1]> = {},
+) {
+  return {
+    authorizationCodeDigest: CODE_DIGEST,
+    accessTokenDigest: ACCESS_TOKEN_DIGEST,
+    clientId: CLIENT_ID,
+    redirectUri: REDIRECT_URI,
+    resource: RESOURCE,
+    codeChallenge: PKCE,
+    now: NOW,
+    version: 1,
+    ...overrides,
+  };
+}
+
 function storedCode(overrides: Partial<StoredCodeRecord> = {}): StoredCodeRecord {
   return {
     kind: "mcp_oauth_authorization_code_record",
@@ -394,6 +518,30 @@ function storedCode(overrides: Partial<StoredCodeRecord> = {}): StoredCodeRecord
     expiresAt: NOW + MCP_OAUTH_AUTHORIZATION_CODE_TTL_MS,
     storageVersion: 1,
     _id: "mcpOAuthAuthorizationCodes_fixture_1",
+    _creationTime: NOW,
+    ...overrides,
+  };
+}
+
+function storedAccessToken(overrides: Partial<StoredAccessTokenRecord> = {}): StoredAccessTokenRecord {
+  return {
+    kind: "mcp_oauth_access_token_record",
+    version: 1,
+    accessTokenDigest: ACCESS_TOKEN_DIGEST,
+    authorizationCodeDigest: CODE_DIGEST,
+    twoweeksClerkId: OWNER_ID,
+    ownerIssuer: OWNER_ISSUER,
+    clientId: CLIENT_ID,
+    redirectUri: REDIRECT_URI,
+    resource: RESOURCE,
+    scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE, "openid"],
+    productionEnvironment: MCP_OAUTH_AUTHORIZATION_CODE_PRODUCTION_ENVIRONMENT,
+    status: "active",
+    issuedAt: NOW,
+    updatedAt: NOW,
+    expiresAt: NOW + MCP_OAUTH_ACCESS_TOKEN_TTL_MS,
+    storageVersion: 1,
+    _id: "mcpOAuthAccessTokens_fixture_1",
     _creationTime: NOW,
     ...overrides,
   };

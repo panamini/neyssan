@@ -88,6 +88,9 @@ const CREATE_MCP_OAUTH_AUTHORIZATION_CODE_MUTATION = makeFunctionReference(
 const VALIDATE_MCP_OAUTH_AUTHORIZATION_CODE_QUERY = makeFunctionReference(
   "mcpOAuthAuthorizationCodes:internalValidateMcpOAuthAuthorizationCodeForTokenBoundary",
 ) as FunctionReference<"query">;
+const ISSUE_MCP_OAUTH_ACCESS_TOKEN_MUTATION = makeFunctionReference(
+  "mcpOAuthAuthorizationCodes:internalIssueMcpOAuthAccessTokenFromAuthorizationCode",
+) as FunctionReference<"mutation">;
 const productionPreAuthQuotaBuckets = new Map<string, { count: number; windowStartedAt: number }>();
 const productionClerkJwksByIssuer = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 
@@ -597,6 +600,7 @@ function buildProductionMcpOAuthRouteDependencies(
     consumeAuthorizationIntent: buildProductionAuthorizationIntentConsumePort(convexClient),
     createAuthorizationCode: buildProductionAuthorizationCodeCreatePort(convexClient),
     validateAuthorizationCode: buildProductionAuthorizationCodeValidatePort(convexClient),
+    issueAccessToken: buildProductionAccessTokenIssuePort(convexClient),
     readAuthenticatedOwnerIdentity: buildProductionAuthenticatedOwnerIdentityReader(env),
   });
 }
@@ -726,6 +730,19 @@ function buildProductionAuthorizationCodeValidatePort(
       VALIDATE_MCP_OAUTH_AUTHORIZATION_CODE_QUERY,
       input,
     ) as Promise<Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["validateAuthorizationCode"]>>>>;
+  };
+}
+
+function buildProductionAccessTokenIssuePort(
+  convexClient: ConvexHttpClient | undefined,
+): NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["issueAccessToken"]> {
+  return async (input) => {
+    if (!convexClient) return accessTokenIssueUnavailableResult();
+    return convexClient.mutation(
+      ISSUE_MCP_OAUTH_ACCESS_TOKEN_MUTATION,
+      input,
+      { skipQueue: true },
+    ) as Promise<Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["issueAccessToken"]>>>>;
   };
 }
 
@@ -912,6 +929,27 @@ function authorizationCodeCreateUnavailableResult(): Awaited<ReturnType<NonNulla
 function authorizationCodeValidateUnavailableResult(): Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["validateAuthorizationCode"]>>> {
   return Object.freeze({
     kind: "mcp_oauth_authorization_code_validate_result",
+    ok: false,
+    reason: "storage_unavailable",
+    safeFailure: {
+      code: "mcp_oauth_authorization_code_denied",
+      message: "Authorization code denied.",
+      safeForModel: true,
+      rawCodeEchoed: false,
+      digestEchoed: false,
+      identityEchoed: false,
+      sensitiveValuesEchoed: false,
+      version: 1,
+    } as const,
+    modelVisible: false,
+    safeForLogging: true,
+    version: 1,
+  });
+}
+
+function accessTokenIssueUnavailableResult(): Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["issueAccessToken"]>>> {
+  return Object.freeze({
+    kind: "mcp_oauth_access_token_issue_result",
     ok: false,
     reason: "storage_unavailable",
     safeFailure: {

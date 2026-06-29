@@ -8,11 +8,14 @@ import type {
   McpOAuthProductionAuthorizationCodeCreatePortInputV1,
   McpOAuthProductionAuthorizationCodeCreatePortResultV1,
   McpOAuthProductionAuthorizationCodeValidatePortResultV1,
+  McpOAuthProductionAccessTokenIssuePortResultV1,
 } from "../src/modules/local-mcp/mcpOAuthProductionRouteAdapter";
 
 export const MCP_OAUTH_AUTHORIZATION_CODE_TTL_MS = 5 * 60 * 1_000;
+export const MCP_OAUTH_ACCESS_TOKEN_TTL_MS = 60 * 60 * 1_000;
 export const MCP_OAUTH_AUTHORIZATION_CODE_PRODUCTION_ENVIRONMENT = "mcp_oauth_production_v1";
 const MAX_SAFE_TIMESTAMP_BEFORE_TTL = Number.MAX_SAFE_INTEGER - MCP_OAUTH_AUTHORIZATION_CODE_TTL_MS;
+const MAX_SAFE_TIMESTAMP_BEFORE_ACCESS_TOKEN_TTL = Number.MAX_SAFE_INTEGER - MCP_OAUTH_ACCESS_TOKEN_TTL_MS;
 const MAX_EXPIRED_CODE_CLEANUP_BATCH = 100;
 const CODE_DIGEST_PATTERN = /^[0-9a-f]{64}$/u;
 const SAFE_IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,511}$/u;
@@ -51,6 +54,16 @@ const CONSUME_ARGS_KEYS = [
 ] as const;
 const VALIDATE_ARGS_KEYS = [
   "authorizationCodeDigest",
+  "clientId",
+  "redirectUri",
+  "resource",
+  "codeChallenge",
+  "now",
+  "version",
+] as const;
+const ISSUE_ACCESS_TOKEN_ARGS_KEYS = [
+  "authorizationCodeDigest",
+  "accessTokenDigest",
   "clientId",
   "redirectUri",
   "resource",
@@ -114,8 +127,47 @@ const STORAGE_RECORD_REQUIRED_KEYS = [
   "expiresAt",
   "storageVersion",
 ] as const;
+const ACCESS_TOKEN_STORAGE_RECORD_KEYS = [
+  "kind",
+  "version",
+  "accessTokenDigest",
+  "authorizationCodeDigest",
+  "twoweeksClerkId",
+  "ownerIssuer",
+  "clientId",
+  "redirectUri",
+  "resource",
+  "scopes",
+  "productionEnvironment",
+  "status",
+  "issuedAt",
+  "updatedAt",
+  "expiresAt",
+  "storageVersion",
+  "_id",
+  "_creationTime",
+] as const;
+const ACCESS_TOKEN_STORAGE_RECORD_REQUIRED_KEYS = [
+  "kind",
+  "version",
+  "accessTokenDigest",
+  "authorizationCodeDigest",
+  "twoweeksClerkId",
+  "ownerIssuer",
+  "clientId",
+  "redirectUri",
+  "resource",
+  "scopes",
+  "productionEnvironment",
+  "status",
+  "issuedAt",
+  "updatedAt",
+  "expiresAt",
+  "storageVersion",
+] as const;
 
 export type McpOAuthAuthorizationCodeStatusV1 = "pending" | "consumed" | "expired";
+export type McpOAuthAccessTokenStatusV1 = "active" | "expired" | "revoked";
 
 export type McpOAuthAuthorizationCodeRecordV1 = Readonly<{
   kind: "mcp_oauth_authorization_code_record";
@@ -144,11 +196,45 @@ type StoredMcpOAuthAuthorizationCodeRecordV1 = McpOAuthAuthorizationCodeRecordV1
   _creationTime?: number;
 }>;
 
+export type McpOAuthAccessTokenRecordV1 = Readonly<{
+  kind: "mcp_oauth_access_token_record";
+  version: 1;
+  accessTokenDigest: string;
+  authorizationCodeDigest: string;
+  twoweeksClerkId: string;
+  ownerIssuer: string;
+  clientId: string;
+  redirectUri: string;
+  resource: string;
+  scopes: string[];
+  productionEnvironment: typeof MCP_OAUTH_AUTHORIZATION_CODE_PRODUCTION_ENVIRONMENT;
+  status: McpOAuthAccessTokenStatusV1;
+  issuedAt: number;
+  updatedAt: number;
+  expiresAt: number;
+  storageVersion: 1;
+}>;
+
+type StoredMcpOAuthAccessTokenRecordV1 = McpOAuthAccessTokenRecordV1 & Readonly<{
+  _id?: unknown;
+  _creationTime?: number;
+}>;
+
 type ParsedAuthorizationCodeCreateInputV1 = Readonly<{
   authorizationCodeDigest: string;
   authenticatedOwnerIdentity: McpOAuthProductionAuthenticatedOwnerIdentityV1;
   trustedOwner: McpOAuthAuthorizationTrustedOwnerV1;
   authorizationRequest: McpOAuthProductionAuthorizationCodeCreatePortInputV1["authorizationRequest"];
+  now: number;
+}>;
+
+type ParsedAccessTokenIssueInputV1 = Readonly<{
+  authorizationCodeDigest: string;
+  accessTokenDigest: string;
+  clientId: string;
+  redirectUri: string;
+  resource: string;
+  codeChallenge: string;
   now: number;
 }>;
 
@@ -401,6 +487,93 @@ export const internalValidateMcpOAuthAuthorizationCodeForTokenBoundary = interna
   },
 });
 
+export const internalIssueMcpOAuthAccessTokenFromAuthorizationCode = internalMutation({
+  args: {
+    authorizationCodeDigest: v.string(),
+    accessTokenDigest: v.string(),
+    clientId: v.string(),
+    redirectUri: v.string(),
+    resource: v.string(),
+    codeChallenge: v.string(),
+    now: v.number(),
+    version: v.literal(1),
+  },
+  returns: v.any(),
+  handler: async (ctx, args): Promise<McpOAuthProductionAccessTokenIssuePortResultV1> => {
+    const input = parseAccessTokenIssueInput(args);
+    if (!input) return denyAccessTokenIssue("invalid_input");
+
+    const rows = await ctx.db
+      .query("mcpOAuthAuthorizationCodes")
+      .withIndex("by_authorization_code_digest", (q) =>
+        q.eq("authorizationCodeDigest", input.authorizationCodeDigest),
+      )
+      .collect();
+    if (rows.length === 0) return denyAccessTokenIssue("not_found_or_forbidden");
+    if (rows.length > 1) return denyAccessTokenIssue("duplicate_storage_record");
+
+    const row = parseStorageRecord(rows[0]);
+    if (!row) return denyAccessTokenIssue("malformed_storage_record");
+    if (
+      row.clientId !== input.clientId ||
+      row.redirectUri !== input.redirectUri ||
+      row.resource !== input.resource ||
+      row.codeChallenge !== input.codeChallenge
+    ) {
+      return denyAccessTokenIssue("not_found_or_forbidden");
+    }
+    if (row.status === "consumed") return denyAccessTokenIssue("already_consumed");
+    if (row.status === "expired") return denyAccessTokenIssue("expired");
+    if (input.now < row.createdAt) return denyAccessTokenIssue("invalid_input");
+    if (input.now >= row.expiresAt) {
+      await ctx.db.patch(row._id as never, {
+        status: "expired",
+        updatedAt: input.now,
+      });
+      return denyAccessTokenIssue("expired");
+    }
+
+    const existingTokenRows = await ctx.db
+      .query("mcpOAuthAccessTokens")
+      .withIndex("by_access_token_digest", (q) => q.eq("accessTokenDigest", input.accessTokenDigest))
+      .take(1);
+    if (existingTokenRows.length > 0) return denyAccessTokenIssue("access_token_digest_collision");
+
+    const accessTokenRecord = buildAccessTokenRecord(row, input.accessTokenDigest, input.now);
+    await ctx.db.insert("mcpOAuthAccessTokens", accessTokenRecord);
+    await ctx.db.patch(row._id as never, {
+      status: "consumed",
+      updatedAt: input.now,
+      consumedAt: input.now,
+    });
+
+    return {
+      kind: "mcp_oauth_access_token_issue_result",
+      ok: true,
+      reason: "issued",
+      serverOnly: {
+        tokenType: "Bearer",
+        expiresAt: accessTokenRecord.expiresAt,
+        expiresIn: Math.floor((accessTokenRecord.expiresAt - input.now) / 1_000),
+        clientId: row.clientId,
+        redirectUri: row.redirectUri,
+        resource: row.resource,
+        scopes: Object.freeze([...row.scopes]),
+        productionEnvironment: row.productionEnvironment,
+        codeConsumed: true,
+        tokenIssued: true,
+        tokenPersisted: true,
+        rawAccessTokenPersisted: false,
+        refreshTokenPersisted: false,
+        version: 1,
+      },
+      modelVisible: false,
+      safeForLogging: false,
+      version: 1,
+    };
+  },
+});
+
 export const internalDeleteExpiredMcpOAuthAuthorizationCodes = internalMutation({
   args: {
     now: v.number(),
@@ -434,6 +607,18 @@ export function classifyMcpOAuthAuthorizationCodeStorageRecord(value: unknown):
   return "expired_valid";
 }
 
+export function classifyMcpOAuthAccessTokenStorageRecord(value: unknown):
+  | "active_valid"
+  | "expired_valid"
+  | "revoked_valid"
+  | "malformed" {
+  const record = parseAccessTokenStorageRecord(value);
+  if (!record) return "malformed";
+  if (record.status === "active") return "active_valid";
+  if (record.status === "expired") return "expired_valid";
+  return "revoked_valid";
+}
+
 function parseCreateInput(value: unknown): ParsedAuthorizationCodeCreateInputV1 | undefined {
   const record = readRecord(value, CREATE_ARGS_KEYS, CREATE_REQUIRED_ARGS_KEYS);
   if (!record || record.version !== 1) return undefined;
@@ -465,6 +650,30 @@ function parseCreateInput(value: unknown): ParsedAuthorizationCodeCreateInputV1 
   };
 }
 
+function parseAccessTokenIssueInput(value: unknown): ParsedAccessTokenIssueInputV1 | undefined {
+  const record = readRecord(value, ISSUE_ACCESS_TOKEN_ARGS_KEYS);
+  if (!record || record.version !== 1) return undefined;
+  if (!isValidStorageTimestamp(record.now) || record.now > MAX_SAFE_TIMESTAMP_BEFORE_ACCESS_TOKEN_TTL) return undefined;
+  if (!isAuthorizationCodeDigest(record.authorizationCodeDigest)) return undefined;
+  if (!isAuthorizationCodeDigest(record.accessTokenDigest)) return undefined;
+  const clientId = readBoundedText(record.clientId, MAX_OAUTH_PARAMETER_LENGTH);
+  const redirectUri = readSafeHttpsUrl(record.redirectUri, { allowSearch: true });
+  const resource = readSafeHttpsUrl(record.resource, { allowSearch: false });
+  const codeChallenge = readBoundedText(record.codeChallenge, 128);
+  if (!clientId || !redirectUri || !resource || !codeChallenge || !PKCE_S256_CHALLENGE_PATTERN.test(codeChallenge)) {
+    return undefined;
+  }
+  return {
+    authorizationCodeDigest: record.authorizationCodeDigest,
+    accessTokenDigest: record.accessTokenDigest,
+    clientId,
+    redirectUri,
+    resource,
+    codeChallenge,
+    now: record.now,
+  };
+}
+
 function buildAuthorizationCodeRecord(
   input: ParsedAuthorizationCodeCreateInputV1,
 ): McpOAuthAuthorizationCodeRecordV1 {
@@ -486,6 +695,31 @@ function buildAuthorizationCodeRecord(
     createdAt: input.now,
     updatedAt: input.now,
     expiresAt: input.now + MCP_OAUTH_AUTHORIZATION_CODE_TTL_MS,
+    storageVersion: 1,
+  };
+}
+
+function buildAccessTokenRecord(
+  authorizationCode: StoredMcpOAuthAuthorizationCodeRecordV1,
+  accessTokenDigest: string,
+  now: number,
+): McpOAuthAccessTokenRecordV1 {
+  return {
+    kind: "mcp_oauth_access_token_record",
+    version: 1,
+    accessTokenDigest,
+    authorizationCodeDigest: authorizationCode.authorizationCodeDigest,
+    twoweeksClerkId: authorizationCode.twoweeksClerkId,
+    ownerIssuer: authorizationCode.ownerIssuer,
+    clientId: authorizationCode.clientId,
+    redirectUri: authorizationCode.redirectUri,
+    resource: authorizationCode.resource,
+    scopes: [...authorizationCode.scopes],
+    productionEnvironment: authorizationCode.productionEnvironment,
+    status: "active",
+    issuedAt: now,
+    updatedAt: now,
+    expiresAt: now + MCP_OAUTH_ACCESS_TOKEN_TTL_MS,
     storageVersion: 1,
   };
 }
@@ -601,6 +835,69 @@ function parseStorageRecord(value: unknown): StoredMcpOAuthAuthorizationCodeReco
   };
 }
 
+function parseAccessTokenStorageRecord(value: unknown): StoredMcpOAuthAccessTokenRecordV1 | undefined {
+  const record = readRecord(value, ACCESS_TOKEN_STORAGE_RECORD_KEYS, ACCESS_TOKEN_STORAGE_RECORD_REQUIRED_KEYS);
+  if (!record || record.kind !== "mcp_oauth_access_token_record" || record.version !== 1) return undefined;
+  if (!isAuthorizationCodeDigest(record.accessTokenDigest) || !isAuthorizationCodeDigest(record.authorizationCodeDigest)) {
+    return undefined;
+  }
+  const identity = parseAccessTokenOwnerBinding(record);
+  const authorizationRequest = parseAccessTokenAuthorizationBinding(record);
+  if (!identity || !authorizationRequest || !hasValidAccessTokenStorageMetadata(record)) return undefined;
+  return {
+    kind: "mcp_oauth_access_token_record",
+    version: 1,
+    accessTokenDigest: record.accessTokenDigest,
+    authorizationCodeDigest: record.authorizationCodeDigest,
+    twoweeksClerkId: identity.twoweeksClerkId,
+    ownerIssuer: identity.ownerIssuer,
+    clientId: authorizationRequest.clientId,
+    redirectUri: authorizationRequest.redirectUri,
+    resource: authorizationRequest.resource,
+    scopes: [...authorizationRequest.scopes],
+    productionEnvironment: MCP_OAUTH_AUTHORIZATION_CODE_PRODUCTION_ENVIRONMENT,
+    status: record.status,
+    issuedAt: record.issuedAt,
+    updatedAt: record.updatedAt,
+    expiresAt: record.expiresAt,
+    storageVersion: 1,
+    ...(record._id !== undefined ? { _id: record._id } : {}),
+    ...(typeof record._creationTime === "number" ? { _creationTime: record._creationTime } : {}),
+  };
+}
+
+function parseAccessTokenOwnerBinding(
+  record: Record<string, unknown>,
+): Readonly<{ twoweeksClerkId: string; ownerIssuer: string }> | undefined {
+  const twoweeksClerkId = readBoundedText(record.twoweeksClerkId, MAX_OAUTH_PARAMETER_LENGTH);
+  const ownerIssuer = readSafeHttpsUrl(record.ownerIssuer, { allowSearch: false });
+  if (!twoweeksClerkId || !SAFE_IDENTIFIER_PATTERN.test(twoweeksClerkId) || !ownerIssuer) return undefined;
+  return { twoweeksClerkId, ownerIssuer };
+}
+
+function parseAccessTokenAuthorizationBinding(
+  record: Record<string, unknown>,
+): Readonly<{ clientId: string; redirectUri: string; resource: string; scopes: readonly string[] }> | undefined {
+  const clientId = readBoundedText(record.clientId, MAX_OAUTH_PARAMETER_LENGTH);
+  const redirectUri = readSafeHttpsUrl(record.redirectUri, { allowSearch: true });
+  const resource = readSafeHttpsUrl(record.resource, { allowSearch: false });
+  const scopes = parseScopes(record.scopes);
+  if (!clientId || !redirectUri || !resource || !scopes) return undefined;
+  return { clientId, redirectUri, resource, scopes };
+}
+
+function hasValidAccessTokenStorageMetadata(record: Record<string, unknown>): boolean {
+  return (
+    record.productionEnvironment === MCP_OAUTH_AUTHORIZATION_CODE_PRODUCTION_ENVIRONMENT &&
+    isValidAccessTokenStatus(record.status) &&
+    isValidStorageTimestamp(record.issuedAt) &&
+    isValidStorageTimestamp(record.updatedAt) &&
+    isValidStorageTimestamp(record.expiresAt) &&
+    record.expiresAt - record.issuedAt === MCP_OAUTH_ACCESS_TOKEN_TTL_MS &&
+    record.storageVersion === 1
+  );
+}
+
 function readRecord(
   value: unknown,
   allowedKeys: readonly string[],
@@ -701,6 +998,10 @@ function isValidStatus(value: unknown): value is McpOAuthAuthorizationCodeStatus
   return value === "pending" || value === "consumed" || value === "expired";
 }
 
+function isValidAccessTokenStatus(value: unknown): value is McpOAuthAccessTokenStatusV1 {
+  return value === "active" || value === "expired" || value === "revoked";
+}
+
 function hasControlCharacter(value: string): boolean {
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index);
@@ -740,6 +1041,20 @@ function denyValidate(
 ): McpOAuthProductionAuthorizationCodeValidatePortResultV1 {
   return {
     kind: "mcp_oauth_authorization_code_validate_result",
+    ok: false,
+    reason,
+    safeFailure: safeFailure(),
+    modelVisible: false,
+    safeForLogging: true,
+    version: 1,
+  };
+}
+
+function denyAccessTokenIssue(
+  reason: Extract<McpOAuthProductionAccessTokenIssuePortResultV1, { ok: false }>["reason"],
+): McpOAuthProductionAccessTokenIssuePortResultV1 {
+  return {
+    kind: "mcp_oauth_access_token_issue_result",
     ok: false,
     reason,
     safeFailure: safeFailure(),
