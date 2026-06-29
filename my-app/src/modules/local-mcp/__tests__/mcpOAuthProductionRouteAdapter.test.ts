@@ -1222,31 +1222,11 @@ describe("MCP OAuth production route adapter", () => {
   it("rejects malformed access-token expiry proof without returning token material", async () => {
     const ctx = makeCtx();
     const dependencies = routeDependencies(ctx);
-    dependencies.issueAccessToken.mockResolvedValueOnce({
-      kind: "mcp_oauth_access_token_issue_result",
-      ok: true,
-      reason: "issued",
-      serverOnly: {
-        tokenType: "Bearer",
-        issuedAt: NOW - 60 * 60 * 1_000,
-        expiresAt: NOW + 60 * 60 * 1_000,
-        expiresIn: 7_200,
-        clientId: CLIENT_ID,
-        redirectUri: REDIRECT_URI,
-        resource: RESOURCE,
-        scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE, "openid"],
-        productionEnvironment: MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT,
-        codeConsumed: true,
-        tokenIssued: true,
-        tokenPersisted: true,
-        rawAccessTokenPersisted: false,
-        refreshTokenPersisted: false,
-        version: 1,
-      },
-      modelVisible: false,
-      safeForLogging: false,
-      version: 1,
-    });
+    dependencies.issueAccessToken.mockResolvedValueOnce(accessTokenIssueSuccess({
+      issuedAt: NOW - 60 * 60 * 1_000,
+      expiresAt: NOW + 60 * 60 * 1_000,
+      expiresIn: 7_200,
+    }));
     const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
     await handleMcpOAuthProductionRouteRequest(
       request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
@@ -1277,6 +1257,75 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
     expect(JSON.stringify(response)).not.toContain("access_token");
     expect(JSON.stringify(response)).not.toContain("refresh_token");
+  });
+
+  it("rejects access-token issue success without the submitted PKCE proof", async () => {
+    const ctx = makeCtx();
+    const dependencies = routeDependencies(ctx);
+    dependencies.issueAccessToken.mockResolvedValueOnce(accessTokenIssueSuccess({
+      codeChallenge: pkceChallenge("W".repeat(43)),
+    }));
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      config,
+      dependencies,
+    );
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPath()),
+      config,
+      dependencies,
+    );
+
+    const response = await handleMcpOAuthProductionRouteRequest(tokenRequest(), config, dependencies);
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 503,
+      json: {
+        status: "blocked",
+        reason: "token_issue_failed",
+        route: "oauth_token",
+        tokenIssued: false,
+      },
+    });
+    expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(response)).not.toContain("access_token");
+  });
+
+  it("rejects access-token issue success with unauthorized scopes", async () => {
+    const ctx = makeCtx();
+    const dependencies = routeDependencies(ctx);
+    dependencies.issueAccessToken.mockResolvedValueOnce(accessTokenIssueSuccess({
+      scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE, "admin"],
+    }));
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      config,
+      dependencies,
+    );
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPath()),
+      config,
+      dependencies,
+    );
+
+    const response = await handleMcpOAuthProductionRouteRequest(tokenRequest(), config, dependencies);
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 503,
+      json: {
+        status: "blocked",
+        reason: "token_issue_failed",
+        route: "oauth_token",
+        tokenIssued: false,
+      },
+    });
+    expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(response)).not.toContain("access_token");
+    expect(JSON.stringify(response)).not.toContain("admin");
   });
 
   it("allows exactly one concurrent token redemption success for the same authorization code", async () => {
@@ -2729,6 +2778,7 @@ describe("MCP OAuth production route adapter", () => {
         clientId: CLIENT_ID,
         redirectUri: REDIRECT_URI,
         resource: RESOURCE,
+        codeChallenge: PKCE,
         scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE, "openid"],
         productionEnvironment: MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT,
         codeConsumed: true,
@@ -3632,6 +3682,7 @@ function issueFakeAccessToken(
       clientId: row.clientId,
       redirectUri: row.redirectUri,
       resource: row.resource,
+      codeChallenge: row.codeChallenge,
       scopes: [...row.scopes],
       productionEnvironment: row.productionEnvironment,
       codeConsumed: true,
@@ -3645,6 +3696,43 @@ function issueFakeAccessToken(
     safeForLogging: false,
     version: 1,
   });
+}
+
+type AccessTokenIssueSuccess = Extract<
+  Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["issueAccessToken"]>>>,
+  { ok: true }
+>;
+
+function accessTokenIssueSuccess(
+  serverOnlyOverrides: Partial<AccessTokenIssueSuccess["serverOnly"]> = {},
+): AccessTokenIssueSuccess {
+  return {
+    kind: "mcp_oauth_access_token_issue_result",
+    ok: true,
+    reason: "issued",
+    serverOnly: {
+      tokenType: "Bearer",
+      issuedAt: NOW,
+      expiresAt: NOW + 60 * 60 * 1_000,
+      expiresIn: 3_600,
+      clientId: CLIENT_ID,
+      redirectUri: REDIRECT_URI,
+      resource: RESOURCE,
+      codeChallenge: PKCE,
+      scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE, "openid"],
+      productionEnvironment: MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT,
+      codeConsumed: true,
+      tokenIssued: true,
+      tokenPersisted: true,
+      rawAccessTokenPersisted: false,
+      refreshTokenPersisted: false,
+      version: 1,
+      ...serverOnlyOverrides,
+    },
+    modelVisible: false,
+    safeForLogging: false,
+    version: 1,
+  };
 }
 
 function safeAuthorizationIntentConsumeFailure(reason: string) {

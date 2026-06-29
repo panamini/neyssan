@@ -596,6 +596,7 @@ export const internalIssueMcpOAuthAccessTokenFromAuthorizationCode = internalMut
         clientId: row.clientId,
         redirectUri: row.redirectUri,
         resource: row.resource,
+        codeChallenge: row.codeChallenge,
         scopes: Object.freeze([...row.scopes]),
         productionEnvironment: row.productionEnvironment,
         codeConsumed: true,
@@ -1056,7 +1057,7 @@ function hasValidAccessTokenIssueDeadline(
     timeoutMs > 0 &&
     timeoutMs <= 10_000 &&
     deadlineEpochMs === callerNow + timeoutMs &&
-    deadlineEpochMs >= wallClockNow &&
+    deadlineEpochMs + ACCESS_TOKEN_ISSUE_CLOCK_SKEW_MS >= wallClockNow &&
     callerNow <= wallClockNow + ACCESS_TOKEN_ISSUE_CLOCK_SKEW_MS
   );
 }
@@ -1065,7 +1066,10 @@ function isAccessTokenIssueDeadlineActive(
   input: ParsedAccessTokenIssueInputV1,
   wallClockNow: number,
 ): boolean {
-  return wallClockNow + ACCESS_TOKEN_ISSUE_COMMIT_SAFETY_MARGIN_MS <= input.deadlineEpochMs;
+  return (
+    wallClockNow + ACCESS_TOKEN_ISSUE_COMMIT_SAFETY_MARGIN_MS <=
+    input.deadlineEpochMs + ACCESS_TOKEN_ISSUE_CLOCK_SKEW_MS
+  );
 }
 
 function assertAccessTokenIssueDeadlineActive(input: ParsedAccessTokenIssueInputV1): void {

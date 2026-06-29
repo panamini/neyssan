@@ -193,6 +193,7 @@ describe("Convex MCP OAuth authorization codes", () => {
         clientId: CLIENT_ID,
         redirectUri: REDIRECT_URI,
         resource: RESOURCE,
+        codeChallenge: PKCE,
         scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE, "openid"],
         productionEnvironment: MCP_OAUTH_AUTHORIZATION_CODE_PRODUCTION_ENVIRONMENT,
         codeConsumed: true,
@@ -330,6 +331,34 @@ describe("Convex MCP OAuth authorization codes", () => {
     });
     expect(rows[0]).toMatchObject({ status: "consumed", consumedAt: NOW, updatedAt: NOW });
     expect(accessTokenRows[0]).toMatchObject({ issuedAt: NOW, expiresAt: NOW + MCP_OAUTH_ACCESS_TOKEN_TTL_MS });
+  });
+
+  it("accepts token issuance when the storage clock is ahead within the skew allowance", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW + 3_000);
+    const { ctx, rows, accessTokenRows } = makeCtx([storedCode()]);
+
+    const result = await internalIssueMcpOAuthAccessTokenFromAuthorizationCode._handler(
+      ctx as any,
+      issueAccessTokenArgs({
+        now: NOW,
+        deadlineEpochMs: NOW + 2_500,
+      }),
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      reason: "issued",
+      serverOnly: {
+        issuedAt: NOW + 3_000,
+        expiresAt: NOW + 3_000 + MCP_OAUTH_ACCESS_TOKEN_TTL_MS,
+        expiresIn: 3_600,
+      },
+    });
+    expect(rows[0]).toMatchObject({ status: "consumed", consumedAt: NOW + 3_000, updatedAt: NOW + 3_000 });
+    expect(accessTokenRows[0]).toMatchObject({
+      issuedAt: NOW + 3_000,
+      expiresAt: NOW + 3_000 + MCP_OAUTH_ACCESS_TOKEN_TTL_MS,
+    });
   });
 
   it("marks expired pending code digests without returning code state", async () => {

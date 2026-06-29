@@ -18,6 +18,7 @@ import {
   type McpOAuthIntentConsumePortV1,
   type McpOAuthIntentConsumeResultV1,
 } from "./mcpOAuthLoginReturnContinuationBoundary";
+import { TWOWEEKS_APPLICATIONS_READ_SCOPE } from "./mcpAuthPolicyBoundary";
 import {
   MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER,
   MCP_OAUTH_CONTINUATION_PATH,
@@ -325,6 +326,7 @@ export type McpOAuthProductionAccessTokenIssuePortResultV1 = Readonly<
         clientId: string;
         redirectUri: string;
         resource: string;
+        codeChallenge: string;
         scopes: readonly string[];
         productionEnvironment: typeof MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT;
         codeConsumed: true;
@@ -1989,6 +1991,7 @@ function isAccessTokenIssueSuccess(
     clientId: string;
     redirectUri: string;
     resource: string;
+    codeChallenge: string;
   }>,
   now: number,
 ): value is Extract<McpOAuthProductionAccessTokenIssuePortResultV1, { ok: true }> {
@@ -2056,15 +2059,30 @@ function isAccessTokenIssueBindingProof(
     clientId: string;
     redirectUri: string;
     resource: string;
+    codeChallenge: string;
   }>,
 ): boolean {
   return (
     value.clientId === tokenRequest.clientId &&
     value.redirectUri === tokenRequest.redirectUri &&
     value.resource === tokenRequest.resource &&
-    Array.isArray(value.scopes) &&
+    value.codeChallenge === tokenRequest.codeChallenge &&
+    isAccessTokenIssueScopeProof(value.scopes) &&
     value.productionEnvironment === MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT
   );
+}
+
+function isAccessTokenIssueScopeProof(value: unknown): value is readonly string[] {
+  if (!Array.isArray(value)) return false;
+  const seen = new Set<string>();
+  for (const scope of value) {
+    if (typeof scope !== "string") return false;
+    if (seen.has(scope)) return false;
+    seen.add(scope);
+    if (scope === TWOWEEKS_APPLICATIONS_READ_SCOPE || isOpenIdConnectIdentityScope(scope)) continue;
+    return false;
+  }
+  return seen.has(TWOWEEKS_APPLICATIONS_READ_SCOPE);
 }
 
 function isAccessTokenIssueStorageProof(value: Record<string, unknown>): boolean {
