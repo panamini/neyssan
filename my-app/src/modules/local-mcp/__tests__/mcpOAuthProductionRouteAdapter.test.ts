@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildMcpOAuthProductionViteAllowedHosts,
   createLocalMcpDevEndpointPlugin,
+  normalizeMcpOAuthProductionRedirectUris,
 } from "../../../../vite.config";
 import { TWOWEEKS_APPLICATIONS_READ_SCOPE } from "../mcpAuthPolicyBoundary";
 import type {
@@ -2264,6 +2265,23 @@ describe("MCP OAuth production route adapter", () => {
     expect(buildMcpOAuthProductionViteAllowedHosts({
       MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN: "file://mcp.twoweeks.example.test/",
     })).toEqual(["host.docker.internal"]);
+  });
+
+  it("canonicalizes production OAuth redirect URI env entries before exact handoff comparison", () => {
+    expect(
+      normalizeMcpOAuthProductionRedirectUris(
+        "https://chatgpt.example.test:443/connector/oauth/callback?state=fixture,https://chatgpt.example.test/connector/oauth/callback?state=fixture",
+      ),
+    ).toEqual(["https://chatgpt.example.test/connector/oauth/callback?state=fixture"]);
+    expect(normalizeMcpOAuthProductionRedirectUris("https://*.example.test/connector/oauth/callback")).toEqual([
+      "https://*.example.test/connector/oauth/callback",
+    ]);
+    expect(
+      normalizeMcpOAuthProductionRedirectUris("https://chatgpt.example.test/connector/oauth/ca\nllback"),
+    ).toEqual(["https://chatgpt.example.test/connector/oauth/ca\nllback"]);
+    expect(normalizeMcpOAuthProductionRedirectUris("https://chatgpt.example.test/connector/oauth/%")).toEqual([
+      "https://chatgpt.example.test/connector/oauth/%",
+    ]);
   });
 
   it("uses the PR92 route preflight instead of reimplementing production activation or status logic", () => {

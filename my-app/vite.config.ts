@@ -507,7 +507,7 @@ function readProductionMcpOAuthAuthorizationRequestConfig(
     authorizationPageOrigin: env[MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN_VAR]?.trim() ?? "",
     authorizationPagePath: MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
     canonicalResource: env[MCP_OAUTH_PRODUCTION_RESOURCE_VAR]?.trim() ?? "",
-    allowedRedirectUris: readCommaSeparatedEnv(env[MCP_OAUTH_PRODUCTION_REDIRECT_URIS_VAR]),
+    allowedRedirectUris: normalizeMcpOAuthProductionRedirectUris(env[MCP_OAUTH_PRODUCTION_REDIRECT_URIS_VAR]),
     requiredScope: TWOWEEKS_APPLICATIONS_READ_SCOPE,
     approvedOptionalScopes: ["openid", "email", "profile"] as const,
     allowedOptionalParameters: ["nonce", "prompt"] as const,
@@ -898,6 +898,47 @@ function readCommaSeparatedEnv(value: string | undefined): readonly string[] {
       .map((item) => item.trim())
       .filter((item) => item.length > 0),
   );
+}
+
+export function normalizeMcpOAuthProductionRedirectUris(value: string | undefined): readonly string[] {
+  const rawValues = readCommaSeparatedEnv(value);
+  const normalizedValues = rawValues.map(readCanonicalProductionRedirectUri);
+  if (normalizedValues.some((item) => item === undefined)) return rawValues;
+  return Object.freeze([...new Set(normalizedValues.filter((item): item is string => item !== undefined))]);
+}
+
+function readCanonicalProductionRedirectUri(value: string): string | undefined {
+  if (containsControlCharacters(value) || hasMalformedPercentEncoding(value)) return undefined;
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return undefined;
+  }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.hash || parsed.hostname.includes("*")) {
+    return undefined;
+  }
+  return parsed.toString();
+}
+
+function hasMalformedPercentEncoding(value: string): boolean {
+  if (/%(?![0-9A-Fa-f]{2})/u.test(value)) return true;
+  for (const component of value.split(/[&=]/u)) {
+    try {
+      decodeURIComponent(component.replace(/\+/gu, " "));
+    } catch {
+      return true;
+    }
+  }
+  return false;
+}
+
+function containsControlCharacters(value: string): boolean {
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    if (code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
 }
 
 function isStrictEnabledFlag(env: Readonly<Record<string, string | undefined>>, name: string): boolean {
