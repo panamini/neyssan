@@ -1,4 +1,4 @@
-import { internalMutation } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import type {
   McpOAuthAuthorizationTrustedOwnerV1,
@@ -7,6 +7,7 @@ import type {
   McpOAuthProductionAuthenticatedOwnerIdentityV1,
   McpOAuthProductionAuthorizationCodeCreatePortInputV1,
   McpOAuthProductionAuthorizationCodeCreatePortResultV1,
+  McpOAuthProductionAuthorizationCodeValidatePortResultV1,
 } from "../src/modules/local-mcp/mcpOAuthProductionRouteAdapter";
 
 export const MCP_OAUTH_AUTHORIZATION_CODE_TTL_MS = 5 * 60 * 1_000;
@@ -45,6 +46,15 @@ const CONSUME_ARGS_KEYS = [
   "authorizationCodeDigest",
   "clientId",
   "redirectUri",
+  "now",
+  "version",
+] as const;
+const VALIDATE_ARGS_KEYS = [
+  "authorizationCodeDigest",
+  "clientId",
+  "redirectUri",
+  "resource",
+  "codeChallenge",
   "now",
   "version",
 ] as const;
@@ -313,6 +323,75 @@ export const internalConsumeMcpOAuthAuthorizationCode = internalMutation({
         codeChallenge: row.codeChallenge,
         codeChallengeMethod: "S256",
         productionEnvironment: row.productionEnvironment,
+        version: 1,
+      },
+      modelVisible: false,
+      safeForLogging: false,
+      version: 1,
+    };
+  },
+});
+
+export const internalValidateMcpOAuthAuthorizationCodeForTokenBoundary = internalQuery({
+  args: {
+    authorizationCodeDigest: v.string(),
+    clientId: v.string(),
+    redirectUri: v.string(),
+    resource: v.string(),
+    codeChallenge: v.string(),
+    now: v.number(),
+    version: v.literal(1),
+  },
+  returns: v.any(),
+  handler: async (ctx, args): Promise<McpOAuthProductionAuthorizationCodeValidatePortResultV1> => {
+    const input = readRecord(args, VALIDATE_ARGS_KEYS);
+    if (!input || !isValidStorageTimestamp(input.now)) return denyValidate("invalid_input");
+    const authorizationCodeDigest = input.authorizationCodeDigest;
+    if (!isAuthorizationCodeDigest(authorizationCodeDigest)) return denyValidate("invalid_code_digest");
+    const clientId = readBoundedText(input.clientId, MAX_OAUTH_PARAMETER_LENGTH);
+    const redirectUri = readSafeHttpsUrl(input.redirectUri, { allowSearch: true });
+    const resource = readSafeHttpsUrl(input.resource, { allowSearch: false });
+    const codeChallenge = readBoundedText(input.codeChallenge, 128);
+    if (!clientId || !redirectUri || !resource || !codeChallenge || !PKCE_S256_CHALLENGE_PATTERN.test(codeChallenge)) {
+      return denyValidate("invalid_input");
+    }
+
+    const rows = await ctx.db
+      .query("mcpOAuthAuthorizationCodes")
+      .withIndex("by_authorization_code_digest", (q) =>
+        q.eq("authorizationCodeDigest", authorizationCodeDigest),
+      )
+      .collect();
+    if (rows.length === 0) return denyValidate("not_found_or_forbidden");
+    if (rows.length > 1) return denyValidate("duplicate_storage_record");
+
+    const row = parseStorageRecord(rows[0]);
+    if (!row) return denyValidate("malformed_storage_record");
+    if (row.clientId !== clientId || row.redirectUri !== redirectUri || row.resource !== resource || row.codeChallenge !== codeChallenge) {
+      return denyValidate("not_found_or_forbidden");
+    }
+    if (row.status === "consumed") return denyValidate("already_consumed");
+    if (row.status === "expired") return denyValidate("expired");
+    if (input.now < row.createdAt) return denyValidate("invalid_input");
+    if (input.now >= row.expiresAt) return denyValidate("expired");
+
+    return {
+      kind: "mcp_oauth_authorization_code_validate_result",
+      ok: true,
+      reason: "validated",
+      serverOnly: {
+        status: "pending",
+        clientId: row.clientId,
+        redirectUri: row.redirectUri,
+        resource: row.resource,
+        scopes: Object.freeze([...row.scopes]),
+        state: row.state,
+        codeChallenge: row.codeChallenge,
+        codeChallengeMethod: "S256",
+        productionEnvironment: row.productionEnvironment,
+        expiresAt: row.expiresAt,
+        codeConsumed: false,
+        tokenIssued: false,
         version: 1,
       },
       modelVisible: false,
@@ -647,6 +726,20 @@ function denyConsume(
 ): McpOAuthAuthorizationCodeConsumeResultV1 {
   return {
     kind: "mcp_oauth_authorization_code_consume_result",
+    ok: false,
+    reason,
+    safeFailure: safeFailure(),
+    modelVisible: false,
+    safeForLogging: true,
+    version: 1,
+  };
+}
+
+function denyValidate(
+  reason: Extract<McpOAuthProductionAuthorizationCodeValidatePortResultV1, { ok: false }>["reason"],
+): McpOAuthProductionAuthorizationCodeValidatePortResultV1 {
+  return {
+    kind: "mcp_oauth_authorization_code_validate_result",
     ok: false,
     reason,
     safeFailure: safeFailure(),

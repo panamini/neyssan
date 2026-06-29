@@ -31,6 +31,7 @@ import {
   MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
   MCP_OAUTH_PRODUCTION_CALLBACK_PATH,
   MCP_OAUTH_PRODUCTION_MCP_PATH,
+  MCP_OAUTH_PRODUCTION_TOKEN_PATH,
   MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT,
   type McpOAuthProductionAuthorizationCodeCreatePortInputV1,
   type McpOAuthProductionRouteAdapterDependenciesV1,
@@ -49,14 +50,16 @@ import {
   MCP_OAUTH_SIGN_IN_RETURN_PARAMETER,
 } from "../../../pages/sign-in-return";
 
-const { convexHttpClientMutation, convexHttpClientSetAdminAuth, ConvexHttpClientMock } = vi.hoisted(() => {
+const { convexHttpClientMutation, convexHttpClientQuery, convexHttpClientSetAdminAuth, ConvexHttpClientMock } = vi.hoisted(() => {
   const mutation = vi.fn();
+  const query = vi.fn();
   const setAdminAuth = vi.fn();
   return {
     convexHttpClientMutation: mutation,
+    convexHttpClientQuery: query,
     convexHttpClientSetAdminAuth: setAdminAuth,
     ConvexHttpClientMock: vi.fn(function ConvexHttpClient() {
-      return { mutation, setAdminAuth };
+      return { mutation, query, setAdminAuth };
     }),
   };
 });
@@ -84,7 +87,8 @@ const REDIRECT_URI = "https://chatgpt.example.test/connector/oauth/callback-fixt
 const RESOURCE = "https://mcp.twoweeks.example.test/resource";
 const CLIENT_ID = "chatgpt_apps_sdk_client";
 const STATE = "opaque_state_1234567890";
-const PKCE = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const RAW_CODE_VERIFIER = "V".repeat(43);
+const PKCE = pkceChallenge(RAW_CODE_VERIFIER);
 const RAW_HANDLE = "A".repeat(43);
 const HANDLE_HASH = sha256Hex(RAW_HANDLE);
 const BROWSER_NONCE = "B".repeat(43);
@@ -184,6 +188,7 @@ type StoredAuthorizationCodeRecord = {
   createdAt: number;
   updatedAt: number;
   expiresAt: number;
+  consumedAt?: number;
   storageVersion: 1;
   _id: string;
   _creationTime: number;
@@ -201,6 +206,7 @@ const PROVIDER_CONFIG = {
 
 afterEach(() => {
   convexHttpClientMutation.mockReset();
+  convexHttpClientQuery.mockReset();
   convexHttpClientSetAdminAuth.mockReset();
   ConvexHttpClientMock.mockClear();
   createRemoteJWKSetMock.mockClear();
@@ -1047,6 +1053,369 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(continuationResponse)).not.toContain(AUTHORIZATION_CODE_DIGEST);
     expect(JSON.stringify(continuationResponse)).not.toContain(OWNER_ID);
     expect(JSON.stringify(continuationResponse)).not.toContain(PKCE);
+  });
+
+  it("validates a production token request but returns token issuance blocked without token material", async () => {
+    const ctx = makeCtx();
+    const activation = activationDependencies();
+    const dependencies = routeDependencies(ctx);
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }, activation);
+
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      config,
+      dependencies,
+    );
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPath()),
+      config,
+      dependencies,
+    );
+    const response = await handleMcpOAuthProductionRouteRequest(tokenRequest(), config, dependencies);
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 501,
+      json: {
+        kind: "mcp_oauth_production_route_response",
+        status: "blocked",
+        reason: "token_issuance_blocked",
+        route: "oauth_token",
+        allowedByPreflight: true,
+        authorizationCodeAccepted: true,
+        authorizationCodeConsumed: false,
+        providerCalled: false,
+        tokenExchangeAttempted: false,
+        tokenIssued: false,
+        accountLinkCreated: false,
+        tokenPersisted: false,
+        refreshTokenPersisted: false,
+        hostedMcpStarted: false,
+        handlerMode: "code_validation_only",
+      },
+    });
+    expect(dependencies.validateAuthorizationCode).toHaveBeenCalledTimes(1);
+    expect(dependencies.validateAuthorizationCode.mock.calls[0]?.[0]).toEqual({
+      authorizationCodeDigest: AUTHORIZATION_CODE_DIGEST,
+      clientId: CLIENT_ID,
+      redirectUri: REDIRECT_URI,
+      resource: RESOURCE,
+      codeChallenge: PKCE,
+      now: NOW,
+      version: 1,
+    });
+    expect(ctx.authorizationCodeRows[0]).toMatchObject({ status: "pending" });
+    expect(ctx.authorizationCodeRows[0]).not.toHaveProperty("consumedAt");
+    expect(activation.providerAdapter.exchangeAuthorizationCode).not.toHaveBeenCalled();
+    expect(activation.executeAccountLinkLifecycle).not.toHaveBeenCalled();
+    expectNoRouteLeakage(response);
+    expect(JSON.stringify(response)).not.toContain(RAW_AUTHORIZATION_CODE);
+    expect(JSON.stringify(response)).not.toContain(AUTHORIZATION_CODE_DIGEST);
+    expect(JSON.stringify(response)).not.toContain(RAW_CODE_VERIFIER);
+    expect(JSON.stringify(response)).not.toContain("access_token");
+    expect(JSON.stringify(response)).not.toContain("refresh_token");
+  });
+
+  it("accepts form-encoded percent characters in decoded token parameters", async () => {
+    const ctx = makeCtx();
+    const dependencies = routeDependencies(ctx);
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      config,
+      dependencies,
+    );
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPath()),
+      config,
+      dependencies,
+    );
+    const percentRedirectUri = `${REDIRECT_URI}%`;
+    Object.assign(ctx.authorizationCodeRows[0], { redirectUri: percentRedirectUri });
+
+    const response = await handleMcpOAuthProductionRouteRequest(
+      tokenRequest(tokenRequestBody({ redirect_uri: percentRedirectUri })),
+      config,
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 501,
+      json: {
+        status: "blocked",
+        reason: "token_issuance_blocked",
+        route: "oauth_token",
+        authorizationCodeAccepted: true,
+        authorizationCodeConsumed: false,
+        tokenIssued: false,
+      },
+    });
+    expect(dependencies.checkPreAuthQuota).toHaveBeenCalled();
+    expect(dependencies.validateAuthorizationCode).toHaveBeenCalledWith(
+      expect.objectContaining({ redirectUri: percentRedirectUri }),
+    );
+    expectNoRouteLeakage(response);
+  });
+
+  it("does not consume a valid authorization code when token issuance remains blocked", async () => {
+    const ctx = makeCtx();
+    const dependencies = routeDependencies(ctx);
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      config,
+      dependencies,
+    );
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPath()),
+      config,
+      dependencies,
+    );
+
+    const first = await handleMcpOAuthProductionRouteRequest(tokenRequest(), config, dependencies);
+    const second = await handleMcpOAuthProductionRouteRequest(tokenRequest(), config, dependencies);
+
+    expect(first).toMatchObject({ handled: true, status: 501 });
+    expect(second).toMatchObject({ handled: true, status: 501 });
+    expect(dependencies.validateAuthorizationCode).toHaveBeenCalledTimes(2);
+    expect(ctx.authorizationCodeRows[0]).toMatchObject({ status: "pending" });
+    expect(ctx.authorizationCodeRows[0]).not.toHaveProperty("consumedAt");
+    expectNoRouteLeakage(first);
+    expectNoRouteLeakage(second);
+  });
+
+  it("checks token request quota before authorization-code validation", async () => {
+    const ctx = makeCtx();
+    const dependencies = routeDependencies(ctx);
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      config,
+      dependencies,
+    );
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPath()),
+      config,
+      dependencies,
+    );
+    dependencies.checkPreAuthQuota.mockResolvedValueOnce({
+      kind: "mcp_oauth_pre_auth_quota_result",
+      ok: false,
+      reason: "rate_limited",
+      safeFailure: { code: "token_quota_denied" },
+      safeForLogging: true,
+      version: 1,
+    });
+
+    const response = await handleMcpOAuthProductionRouteRequest(tokenRequest(), config, dependencies);
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 429,
+      json: {
+        status: "blocked",
+        reason: "token_quota_denied",
+        route: "oauth_token",
+        authorizationCodeAccepted: false,
+        authorizationCodeConsumed: false,
+        tokenIssued: false,
+      },
+    });
+    expect(dependencies.checkPreAuthQuota).toHaveBeenLastCalledWith({
+      authorizationPageOrigin: PROD_APP_ORIGIN,
+      clientId: CLIENT_ID,
+      resource: RESOURCE,
+      callerKey: "unknown",
+      now: NOW,
+      version: 1,
+    });
+    expect(dependencies.validateAuthorizationCode).not.toHaveBeenCalled();
+    expect(ctx.authorizationCodeRows[0]).toMatchObject({ status: "pending" });
+  });
+
+  it("fails production token requests with the wrong method before validation", async () => {
+    const dependencies = routeDependencies(makeCtx());
+    const response = await handleMcpOAuthProductionRouteRequest(
+      {
+        ...tokenRequest(),
+        method: "GET",
+        bodyText: undefined,
+      },
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 405,
+      headers: { allow: "POST" },
+      json: {
+        status: "blocked",
+        reason: "unsupported_method",
+        route: "oauth_token",
+        authorizationCodeAccepted: false,
+        authorizationCodeConsumed: false,
+        tokenIssued: false,
+      },
+    });
+    expect(dependencies.validateAuthorizationCode).not.toHaveBeenCalled();
+    expectNoRouteLeakage(response);
+  });
+
+  it.each([
+    ["missing body", { ...tokenRequest(), bodyText: undefined }, "invalid_request", 400],
+    [
+      "unsupported content type",
+      tokenRequest(tokenRequestBody(), { host: "mcp.twoweeks.example.test", "content-type": "application/json" }),
+      "unsupported_token_content_type",
+      415,
+    ],
+    ["malformed body", tokenRequest("grant_type=authorization_code&code=%"), "invalid_request", 400],
+    ["wrong grant type", tokenRequest(tokenRequestBody({ grant_type: "refresh_token" })), "invalid_request", 400],
+    ["missing code", tokenRequest(tokenRequestBody({ code: "" })), "invalid_request", 400],
+    ["unallowed client_id", tokenRequest(tokenRequestBody({ client_id: "rotated_client_id" })), "invalid_request", 400],
+  ] as const)("fails production token request with %s", async (_label, tokenInput, reason, status) => {
+    const dependencies = routeDependencies(makeCtx());
+    const response = await handleMcpOAuthProductionRouteRequest(
+      tokenInput,
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status,
+      json: {
+        status: "blocked",
+        reason,
+        route: "oauth_token",
+        authorizationCodeAccepted: false,
+        authorizationCodeConsumed: false,
+        providerCalled: false,
+        tokenExchangeAttempted: false,
+        tokenIssued: false,
+        accountLinkCreated: false,
+      },
+    });
+    expect(dependencies.checkPreAuthQuota).not.toHaveBeenCalled();
+    expect(dependencies.validateAuthorizationCode).not.toHaveBeenCalled();
+    expectNoRouteLeakage(response);
+  });
+
+  it.each([
+    ["missing resource", tokenRequestBody({ resource: "" })],
+    ["malformed resource", tokenRequestBody({ resource: "not-a-url" })],
+    ["non-HTTPS resource", tokenRequestBody({ resource: "http://mcp.twoweeks.example.test/resource" })],
+    ["query resource", tokenRequestBody({ resource: `${RESOURCE}?unexpected=1` })],
+    ["fragment resource", tokenRequestBody({ resource: `${RESOURCE}#fragment` })],
+    ["mismatched resource", tokenRequestBody({ resource: "https://mcp.twoweeks.example.test/other-resource" })],
+  ] as const)("fails production token request with %s before code lookup", async (_label, bodyText) => {
+    const dependencies = routeDependencies(makeCtx());
+    const response = await handleMcpOAuthProductionRouteRequest(
+      tokenRequest(bodyText),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 400,
+      json: {
+        status: "blocked",
+        reason: "invalid_target",
+        route: "oauth_token",
+        authorizationCodeAccepted: false,
+        authorizationCodeConsumed: false,
+        tokenIssued: false,
+      },
+    });
+    expect(dependencies.checkPreAuthQuota).not.toHaveBeenCalled();
+    expect(dependencies.validateAuthorizationCode).not.toHaveBeenCalled();
+    expectNoRouteLeakage(response);
+  });
+
+  it.each([
+    ["expired code", (row: StoredAuthorizationCodeRecord) => Object.assign(row, { expiresAt: NOW })],
+    ["already consumed code", (row: StoredAuthorizationCodeRecord) => Object.assign(row, { status: "consumed" as const, consumedAt: NOW })],
+    ["wrong client_id", (row: StoredAuthorizationCodeRecord) => Object.assign(row, { clientId: "other_client" })],
+    [
+      "wrong redirect_uri",
+      (row: StoredAuthorizationCodeRecord) =>
+        Object.assign(row, { redirectUri: "https://chatgpt.example.test/connector/oauth/other-callback" }),
+    ],
+    ["PKCE mismatch", (row: StoredAuthorizationCodeRecord) => Object.assign(row, { codeChallenge: pkceChallenge("W".repeat(43)) })],
+  ] as const)("fails production token validation for %s", async (_label, mutateRow) => {
+    const ctx = makeCtx();
+    const dependencies = routeDependencies(ctx);
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      config,
+      dependencies,
+    );
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPath()),
+      config,
+      dependencies,
+    );
+    mutateRow(ctx.authorizationCodeRows[0]);
+
+    const response = await handleMcpOAuthProductionRouteRequest(tokenRequest(), config, dependencies);
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 400,
+      json: {
+        status: "blocked",
+        reason: "code_validation_failed",
+        route: "oauth_token",
+        authorizationCodeAccepted: false,
+        authorizationCodeConsumed: false,
+        tokenExchangeAttempted: false,
+        tokenIssued: false,
+        accountLinkCreated: false,
+      },
+    });
+    expect(dependencies.validateAuthorizationCode).toHaveBeenCalledTimes(1);
+    expect(ctx.authorizationCodeRows).toHaveLength(1);
+    expect(JSON.stringify(response)).not.toContain(RAW_AUTHORIZATION_CODE);
+    expect(JSON.stringify(response)).not.toContain(AUTHORIZATION_CODE_DIGEST);
+    expect(JSON.stringify(response)).not.toContain(RAW_CODE_VERIFIER);
+    expect(JSON.stringify(response)).not.toContain("access_token");
+    expect(JSON.stringify(response)).not.toContain("refresh_token");
+  });
+
+  it.each([
+    [
+      "malformed percent redirect_uri",
+      `grant_type=authorization_code&code=${RAW_AUTHORIZATION_CODE}&client_id=${CLIENT_ID}&redirect_uri=https://chatgpt.example.test/connector/oauth/%&resource=${encodeURIComponent(RESOURCE)}&code_verifier=${RAW_CODE_VERIFIER}`,
+    ],
+    [
+      "control-character redirect_uri",
+      `grant_type=authorization_code&code=${RAW_AUTHORIZATION_CODE}&client_id=${CLIENT_ID}&redirect_uri=https%3A%2F%2Fchatgpt.example.test%2Fconnector%2Foauth%2Fcallback%0A&resource=${encodeURIComponent(RESOURCE)}&code_verifier=${RAW_CODE_VERIFIER}`,
+    ],
+  ] as const)("fails production token request with %s before code lookup", async (_label, bodyText) => {
+    const dependencies = routeDependencies(makeCtx());
+    const response = await handleMcpOAuthProductionRouteRequest(
+      tokenRequest(bodyText),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 400,
+      json: {
+        status: "blocked",
+        reason: "invalid_request",
+        route: "oauth_token",
+        authorizationCodeAccepted: false,
+        tokenIssued: false,
+      },
+    });
+    expect(dependencies.validateAuthorizationCode).not.toHaveBeenCalled();
+    expectNoRouteLeakage(response);
   });
 
   it("blocks copied production login-return handles without the browser-bound continuation cookie", async () => {
@@ -2183,6 +2552,150 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(PKCE);
   });
 
+  it("wires production token requests through real no-options Vite defaults without consuming codes", async () => {
+    for (const [key, value] of Object.entries(prodRouteEnv())) {
+      vi.stubEnv(key, value);
+    }
+    convexHttpClientQuery.mockResolvedValueOnce({
+      kind: "mcp_oauth_authorization_code_validate_result",
+      ok: true,
+      reason: "validated",
+      serverOnly: {
+        status: "pending",
+        clientId: CLIENT_ID,
+        redirectUri: REDIRECT_URI,
+        resource: RESOURCE,
+        scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE, "openid"],
+        state: STATE,
+        codeChallenge: PKCE,
+        codeChallengeMethod: "S256",
+        productionEnvironment: MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT,
+        expiresAt: Date.now() + 5 * 60 * 1_000,
+        codeConsumed: false,
+        tokenIssued: false,
+        version: 1,
+      },
+      modelVisible: false,
+      safeForLogging: false,
+      version: 1,
+    });
+
+    const plugin = createLocalMcpDevEndpointPlugin();
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeStreamingMiddleware(middleware, {
+      method: "POST",
+      url: MCP_OAUTH_PRODUCTION_TOKEN_PATH,
+      headers: {
+        host: "mcp.twoweeks.example.test",
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: tokenRequestBody(),
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(501);
+    expect(JSON.parse(response.body)).toMatchObject({
+      status: "blocked",
+      reason: "token_issuance_blocked",
+      route: "oauth_token",
+      allowedByPreflight: true,
+      authorizationCodeAccepted: true,
+      authorizationCodeConsumed: false,
+      providerCalled: false,
+      tokenExchangeAttempted: false,
+      tokenIssued: false,
+      accountLinkCreated: false,
+      tokenPersisted: false,
+      refreshTokenPersisted: false,
+      hostedMcpStarted: false,
+    });
+    expect(ConvexHttpClientMock).toHaveBeenCalledWith("http://127.0.0.1:3210");
+    expect(convexHttpClientSetAdminAuth).toHaveBeenCalledWith("convex_admin_key_fixture", undefined);
+    expect(convexHttpClientQuery).toHaveBeenCalledTimes(1);
+    expect(convexHttpClientQuery.mock.calls[0]?.[1]).toEqual({
+      authorizationCodeDigest: AUTHORIZATION_CODE_DIGEST,
+      clientId: CLIENT_ID,
+      redirectUri: REDIRECT_URI,
+      resource: RESOURCE,
+      codeChallenge: PKCE,
+      now: expect.any(Number),
+      version: 1,
+    });
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
+    expect(JSON.stringify(response)).not.toContain(RAW_AUTHORIZATION_CODE);
+    expect(JSON.stringify(response)).not.toContain(AUTHORIZATION_CODE_DIGEST);
+    expect(JSON.stringify(response)).not.toContain(RAW_CODE_VERIFIER);
+    expect(JSON.stringify(response)).not.toContain("access_token");
+    expect(JSON.stringify(response)).not.toContain("refresh_token");
+  });
+
+  it("bounds production token request bodies in Vite before adapter validation", async () => {
+    const plugin = createLocalMcpDevEndpointPlugin({
+      env: prodRouteEnv(),
+      productionOAuthAuthorizationConfig: routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      productionOAuthAuthorizationDependencies: routeDependencies(makeCtx()),
+    });
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeStreamingMiddleware(middleware, {
+      method: "POST",
+      url: MCP_OAUTH_PRODUCTION_TOKEN_PATH,
+      headers: {
+        host: "mcp.twoweeks.example.test",
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: `grant_type=authorization_code&code=${"C".repeat(5_000)}`,
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(413);
+    expect(JSON.parse(response.body)).toMatchObject({
+      kind: "mcp_oauth_production_route_response",
+      status: "blocked",
+      reason: "token_request_body_too_large",
+      route: "oauth_token",
+      authorizationCodeAccepted: false,
+      authorizationCodeConsumed: false,
+      tokenIssued: false,
+    });
+    expect(convexHttpClientQuery).not.toHaveBeenCalled();
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
+  });
+
+  it("keeps production token request bodies unread when the preflight gate is closed", async () => {
+    const plugin = createLocalMcpDevEndpointPlugin({
+      env: {
+        ...prodRouteEnv(),
+        MCP_OAUTH_PRODUCTION_RUNTIME: "0",
+      },
+    });
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeStreamingMiddleware(middleware, {
+      method: "POST",
+      url: MCP_OAUTH_PRODUCTION_TOKEN_PATH,
+      headers: {
+        host: "mcp.twoweeks.example.test",
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: `grant_type=authorization_code&code=${"C".repeat(5_000)}`,
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(404);
+    expect(JSON.parse(response.body)).toMatchObject({
+      kind: "mcp_oauth_production_route_response",
+      status: "blocked",
+      reason: "blocked_missing_runtime_flag",
+      route: "oauth_token",
+      allowedByPreflight: false,
+      authorizationCodeAccepted: false,
+      authorizationCodeConsumed: false,
+      tokenIssued: false,
+    });
+    expect(response.body).not.toContain("token_request_body_too_large");
+    expect(convexHttpClientQuery).not.toHaveBeenCalled();
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
+  });
+
   it("fails default production login-return continuation closed without a verified request identity", async () => {
     for (const [key, value] of Object.entries(prodRouteEnv())) {
       vi.stubEnv(key, value);
@@ -2231,6 +2744,41 @@ describe("MCP OAuth production route adapter", () => {
     expect(response.statusCode).toBe(503);
     expect(response.body).toContain("pre_auth_create_failed");
     expect(convexHttpClientSetAdminAuth).not.toHaveBeenCalled();
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
+  });
+
+  it("maps default token validation storage unavailability to a retryable failure", async () => {
+    for (const [key, value] of Object.entries(prodRouteEnv())) {
+      vi.stubEnv(key, value);
+    }
+    ConvexHttpClientMock.mockImplementationOnce(() => {
+      throw new Error("invalid deployment url");
+    });
+
+    const plugin = createLocalMcpDevEndpointPlugin();
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeStreamingMiddleware(middleware, {
+      method: "POST",
+      url: MCP_OAUTH_PRODUCTION_TOKEN_PATH,
+      headers: {
+        host: "mcp.twoweeks.example.test",
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: tokenRequestBody(),
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(503);
+    expect(JSON.parse(response.body)).toMatchObject({
+      status: "blocked",
+      reason: "code_validation_failed",
+      route: "oauth_token",
+      authorizationCodeAccepted: false,
+      authorizationCodeConsumed: false,
+      tokenIssued: false,
+    });
+    expect(convexHttpClientSetAdminAuth).not.toHaveBeenCalled();
+    expect(convexHttpClientQuery).not.toHaveBeenCalled();
     expect(convexHttpClientMutation).not.toHaveBeenCalled();
   });
 
@@ -2298,10 +2846,11 @@ describe("MCP OAuth production route adapter", () => {
   it("only claims the intended production entrypoint paths", () => {
     expect(isMcpOAuthProductionRouteHandledPath(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH)).toBe(true);
     expect(isMcpOAuthProductionRouteHandledPath(MCP_OAUTH_CONTINUATION_PATH)).toBe(true);
+    expect(isMcpOAuthProductionRouteHandledPath(MCP_OAUTH_PRODUCTION_TOKEN_PATH)).toBe(true);
     expect(isMcpOAuthProductionRouteHandledPath(MCP_OAUTH_PRODUCTION_CALLBACK_PATH)).toBe(true);
     expect(isMcpOAuthProductionRouteHandledPath(MCP_OAUTH_PRODUCTION_MCP_PATH)).toBe(true);
-    expect(isMcpOAuthProductionRouteHandledPath("/oauth/token")).toBe(false);
     expect(isMcpOAuthProductionRouteHandledPath("/oauth/authorize/extra")).toBe(false);
+    expect(isMcpOAuthProductionRouteHandledPath("/oauth/token/extra")).toBe(false);
     expect(isMcpOAuthProductionRouteHandledPath("/mcp/oauth/authorize/continue/extra")).toBe(false);
     expect(isMcpOAuthProductionRouteHandledPath("/mcp/tools/list")).toBe(false);
     expect(isMcpOAuthProductionRouteHandledPath("/mcp/tools/call")).toBe(false);
@@ -2350,7 +2899,7 @@ function routeConfig(
 
 function request(
   path: McpOAuthProductionRoutePathV1,
-  method = path === MCP_OAUTH_PRODUCTION_MCP_PATH ? "POST" : "GET",
+  method = path === MCP_OAUTH_PRODUCTION_MCP_PATH || path === MCP_OAUTH_PRODUCTION_TOKEN_PATH ? "POST" : "GET",
   url = path,
 ): McpOAuthProductionRouteAdapterRequestV1 {
   return {
@@ -2380,6 +2929,7 @@ function routeDependencies(ctx: ReturnType<typeof makeCtx>) {
     ),
     consumeAuthorizationIntent: vi.fn(async (input) => consumeFakeAuthorizationIntent(ctx, input)),
     createAuthorizationCode: vi.fn(async (input) => createFakeAuthorizationCode(ctx, input)),
+    validateAuthorizationCode: vi.fn(async (input) => validateFakeAuthorizationCode(ctx, input)),
     readAuthenticatedOwnerIdentity: vi.fn(async () =>
       ctx.subject === null
         ? undefined
@@ -2402,6 +2952,7 @@ function routeDependencies(ctx: ReturnType<typeof makeCtx>) {
       | "bindPreAuthIntentToAuthenticatedOwner"
       | "consumeAuthorizationIntent"
       | "createAuthorizationCode"
+      | "validateAuthorizationCode"
       | "readAuthenticatedOwnerIdentity"
       | "generateBrowserBoundContinuationNonce"
       | "generateAuthorizationCode"
@@ -2461,6 +3012,35 @@ function continuationPath(): string {
     [MCP_OAUTH_CONTINUATION_BROWSER_NONCE_PARAMETER]: BROWSER_NONCE,
   });
   return `${MCP_OAUTH_CONTINUATION_PATH}?${params.toString()}`;
+}
+
+function tokenRequestBody(
+  overrides: Readonly<Partial<Record<"grant_type" | "code" | "client_id" | "redirect_uri" | "resource" | "code_verifier", string>>> = {},
+): string {
+  const params = new URLSearchParams();
+  params.append("grant_type", overrides.grant_type ?? "authorization_code");
+  if (overrides.code !== "") params.append("code", overrides.code ?? RAW_AUTHORIZATION_CODE);
+  params.append("client_id", overrides.client_id ?? CLIENT_ID);
+  params.append("redirect_uri", overrides.redirect_uri ?? REDIRECT_URI);
+  if (overrides.resource !== "") params.append("resource", overrides.resource ?? RESOURCE);
+  params.append("code_verifier", overrides.code_verifier ?? RAW_CODE_VERIFIER);
+  return params.toString();
+}
+
+function tokenRequest(
+  bodyText = tokenRequestBody(),
+  headers: Readonly<Record<string, string | undefined>> = {
+    host: "mcp.twoweeks.example.test",
+    "content-type": "application/x-www-form-urlencoded",
+  },
+): McpOAuthProductionRouteAdapterRequestV1 {
+  return {
+    method: "POST",
+    path: MCP_OAUTH_PRODUCTION_TOKEN_PATH,
+    url: MCP_OAUTH_PRODUCTION_TOKEN_PATH,
+    headers,
+    bodyText,
+  };
 }
 
 function makeCtx(options: Readonly<{ subject?: string | null }> = {}) {
@@ -2779,6 +3359,46 @@ function createFakeAuthorizationCode(
   });
 }
 
+function validateFakeAuthorizationCode(
+  ctx: ReturnType<typeof makeCtx>,
+  input: Parameters<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["validateAuthorizationCode"]>>[0],
+): ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["validateAuthorizationCode"]>> {
+  const rows = ctx.authorizationCodeRows.filter((row) => row.authorizationCodeDigest === input.authorizationCodeDigest);
+  if (rows.length === 0) return Promise.resolve(safeAuthorizationCodeValidateFailure("not_found_or_forbidden"));
+  if (rows.length > 1) return Promise.resolve(safeAuthorizationCodeValidateFailure("duplicate_storage_record"));
+  const row = rows[0];
+  if (row.clientId !== input.clientId || row.redirectUri !== input.redirectUri || row.codeChallenge !== input.codeChallenge) {
+    return Promise.resolve(safeAuthorizationCodeValidateFailure("not_found_or_forbidden"));
+  }
+  if (row.status === "consumed") return Promise.resolve(safeAuthorizationCodeValidateFailure("already_consumed"));
+  if (row.status === "expired" || input.now >= row.expiresAt) {
+    return Promise.resolve(safeAuthorizationCodeValidateFailure("expired"));
+  }
+  return Promise.resolve({
+    kind: "mcp_oauth_authorization_code_validate_result",
+    ok: true,
+    reason: "validated",
+    serverOnly: {
+      status: "pending",
+      clientId: row.clientId,
+      redirectUri: row.redirectUri,
+      resource: row.resource,
+      scopes: [...row.scopes],
+      state: row.state,
+      codeChallenge: row.codeChallenge,
+      codeChallengeMethod: "S256",
+      productionEnvironment: row.productionEnvironment,
+      expiresAt: row.expiresAt,
+      codeConsumed: false,
+      tokenIssued: false,
+      version: 1,
+    },
+    modelVisible: false,
+    safeForLogging: false,
+    version: 1,
+  });
+}
+
 function safeAuthorizationIntentConsumeFailure(reason: string) {
   return {
     kind: "mcp_oauth_authorization_intent_consume_result",
@@ -2788,6 +3408,36 @@ function safeAuthorizationIntentConsumeFailure(reason: string) {
       code: "mcp_oauth_authorization_intent_denied",
       message: "Authorization intent denied.",
       safeForModel: true,
+      sensitiveValuesEchoed: false,
+      version: 1,
+    },
+    modelVisible: false,
+    safeForLogging: true,
+    version: 1,
+  } as const;
+}
+
+function safeAuthorizationCodeValidateFailure(
+  reason:
+    | "invalid_input"
+    | "invalid_code_digest"
+    | "not_found_or_forbidden"
+    | "malformed_storage_record"
+    | "expired"
+    | "already_consumed"
+    | "duplicate_storage_record",
+) {
+  return {
+    kind: "mcp_oauth_authorization_code_validate_result",
+    ok: false,
+    reason,
+    safeFailure: {
+      code: "mcp_oauth_authorization_code_denied",
+      message: "Authorization code denied.",
+      safeForModel: true,
+      rawCodeEchoed: false,
+      digestEchoed: false,
+      identityEchoed: false,
       sensitiveValuesEchoed: false,
       version: 1,
     },
@@ -2900,6 +3550,7 @@ function safeOwnerBindingFailure() {
 
 function expectedRouteName(path: McpOAuthProductionRoutePathV1) {
   if (path === MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH) return "oauth_authorize";
+  if (path === MCP_OAUTH_PRODUCTION_TOKEN_PATH) return "oauth_token";
   if (path === MCP_OAUTH_PRODUCTION_CALLBACK_PATH) return "oauth_callback";
   if (path === MCP_OAUTH_CONTINUATION_PATH) return "oauth_login_return";
   return "mcp";
@@ -3074,4 +3725,8 @@ function expectSourceNotToMatch(source: string, patterns: readonly RegExp[]): vo
 
 function sha256Hex(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+function pkceChallenge(value: string): string {
+  return createHash("sha256").update(value, "ascii").digest("base64url");
 }
