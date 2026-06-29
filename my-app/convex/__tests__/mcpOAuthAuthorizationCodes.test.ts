@@ -9,6 +9,7 @@ import {
   classifyMcpOAuthAuthorizationCodeStorageRecord,
   internalConsumeMcpOAuthAuthorizationCode,
   internalCreateMcpOAuthAuthorizationCode,
+  internalDeleteExpiredMcpOAuthAccessTokens,
   internalIssueMcpOAuthAccessTokenFromAuthorizationCode,
   internalValidateMcpOAuthAuthorizationCodeForTokenBoundary,
   MCP_OAUTH_ACCESS_TOKEN_TTL_MS,
@@ -240,6 +241,24 @@ describe("Convex MCP OAuth authorization codes", () => {
     expect(JSON.stringify(result)).not.toContain(CODE_DIGEST);
   });
 
+  it("does not consume the authorization code after the access-token issue deadline elapses", async () => {
+    const { ctx, rows, accessTokenRows, patches } = makeCtx([storedCode()]);
+
+    const result = await internalIssueMcpOAuthAccessTokenFromAuthorizationCode._handler(
+      ctx as any,
+      issueAccessTokenArgs({ deadlineEpochMs: Date.now() - 1_000 }),
+    );
+
+    expect(result).toMatchObject({ ok: false, reason: "invalid_input" });
+    expect(rows[0]).toMatchObject({ status: "pending", updatedAt: NOW });
+    expect(rows[0]).not.toHaveProperty("consumedAt");
+    expect(accessTokenRows).toHaveLength(0);
+    expect(patches).toHaveLength(0);
+    expect(JSON.stringify(result)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(result)).not.toContain(ACCESS_TOKEN_DIGEST);
+    expect(JSON.stringify(result)).not.toContain(CODE_DIGEST);
+  });
+
   it("marks expired pending code digests without returning code state", async () => {
     const { ctx, rows, patches } = makeCtx([storedCode()]);
 
@@ -257,6 +276,35 @@ describe("Convex MCP OAuth authorization codes", () => {
     expect(patches).toHaveLength(1);
     expect(JSON.stringify(result)).not.toContain(STATE);
     expect(JSON.stringify(result)).not.toContain(CODE_DIGEST);
+  });
+
+  it("deletes expired access-token records in a bounded internal cleanup pass", async () => {
+    const expiredAccessToken = storedAccessToken({ _id: "mcpOAuthAccessTokens_expired_active" });
+    const activeAccessToken = storedAccessToken({
+      _id: "mcpOAuthAccessTokens_active",
+      accessTokenDigest: sha256Hex("V".repeat(43)),
+      issuedAt: NOW + 2,
+      updatedAt: NOW + 2,
+      expiresAt: NOW + 2 + MCP_OAUTH_ACCESS_TOKEN_TTL_MS,
+    });
+    const { ctx, accessTokenRows, deletes } = makeCtx([], [expiredAccessToken, activeAccessToken]);
+
+    const result = await internalDeleteExpiredMcpOAuthAccessTokens._handler(ctx as any, {
+      now: NOW + MCP_OAUTH_ACCESS_TOKEN_TTL_MS,
+      version: 1,
+    });
+
+    expect(result).toEqual({
+      kind: "mcp_oauth_access_token_cleanup_result",
+      ok: true,
+      deletedCount: 1,
+      modelVisible: false,
+      safeForLogging: true,
+      version: 1,
+    });
+    expect(deletes).toEqual(["mcpOAuthAccessTokens_expired_active"]);
+    expect(accessTokenRows).toHaveLength(1);
+    expect(accessTokenRows[0]._id).toBe("mcpOAuthAccessTokens_active");
   });
 
   it("rejects duplicate, malformed, and client-mismatched code digest access", async () => {
@@ -355,6 +403,7 @@ function makeCtx(seed: StoredCodeRecord[] = [], accessTokenSeed: StoredAccessTok
   const accessTokenRows = accessTokenSeed.map((row) => ({ ...row, scopes: [...row.scopes] }));
   const inserts: Array<{ tableName: string; record: unknown }> = [];
   const patches: Array<{ id: string; patch: Record<string, unknown> }> = [];
+  const deletes: string[] = [];
   let nextId = rows.length + 1;
   let nextAccessTokenId = accessTokenRows.length + 1;
 
@@ -417,12 +466,21 @@ function makeCtx(seed: StoredCodeRecord[] = [], accessTokenSeed: StoredAccessTok
       },
       delete: async (id: string) => {
         const index = rows.findIndex((candidate) => candidate._id === id);
-        if (index !== -1) rows.splice(index, 1);
+        const accessTokenIndex = accessTokenRows.findIndex((candidate) => candidate._id === id);
+        if (index !== -1) {
+          rows.splice(index, 1);
+          deletes.push(id);
+          return;
+        }
+        if (accessTokenIndex !== -1) {
+          accessTokenRows.splice(accessTokenIndex, 1);
+          deletes.push(id);
+        }
       },
     },
   };
 
-  return { ctx, rows, accessTokenRows, inserts, patches };
+  return { ctx, rows, accessTokenRows, inserts, patches, deletes };
 }
 
 function createArgs(overrides: Partial<Parameters<typeof internalCreateMcpOAuthAuthorizationCode._handler>[1]> = {}) {
@@ -484,6 +542,7 @@ function validateArgs(
 function issueAccessTokenArgs(
   overrides: Partial<Parameters<typeof internalIssueMcpOAuthAccessTokenFromAuthorizationCode._handler>[1]> = {},
 ) {
+  const timeoutMs = 2_500;
   return {
     authorizationCodeDigest: CODE_DIGEST,
     accessTokenDigest: ACCESS_TOKEN_DIGEST,
@@ -492,6 +551,8 @@ function issueAccessTokenArgs(
     resource: RESOURCE,
     codeChallenge: PKCE,
     now: NOW,
+    deadlineEpochMs: Date.now() + timeoutMs,
+    timeoutMs,
     version: 1,
     ...overrides,
   };

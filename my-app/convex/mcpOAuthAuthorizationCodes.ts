@@ -17,6 +17,7 @@ export const MCP_OAUTH_AUTHORIZATION_CODE_PRODUCTION_ENVIRONMENT = "mcp_oauth_pr
 const MAX_SAFE_TIMESTAMP_BEFORE_TTL = Number.MAX_SAFE_INTEGER - MCP_OAUTH_AUTHORIZATION_CODE_TTL_MS;
 const MAX_SAFE_TIMESTAMP_BEFORE_ACCESS_TOKEN_TTL = Number.MAX_SAFE_INTEGER - MCP_OAUTH_ACCESS_TOKEN_TTL_MS;
 const MAX_EXPIRED_CODE_CLEANUP_BATCH = 100;
+const MAX_EXPIRED_ACCESS_TOKEN_CLEANUP_BATCH = 100;
 const CODE_DIGEST_PATTERN = /^[0-9a-f]{64}$/u;
 const SAFE_IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,511}$/u;
 const SAFE_SCOPE_PATTERN = /^[A-Za-z][A-Za-z0-9:._-]{0,127}$/u;
@@ -69,6 +70,8 @@ const ISSUE_ACCESS_TOKEN_ARGS_KEYS = [
   "resource",
   "codeChallenge",
   "now",
+  "deadlineEpochMs",
+  "timeoutMs",
   "version",
 ] as const;
 const CLEANUP_ARGS_KEYS = ["now", "version"] as const;
@@ -236,6 +239,8 @@ type ParsedAccessTokenIssueInputV1 = Readonly<{
   resource: string;
   codeChallenge: string;
   now: number;
+  deadlineEpochMs: number;
+  timeoutMs: number;
 }>;
 
 export type McpOAuthAuthorizationCodeConsumeResultV1 = Readonly<
@@ -279,6 +284,15 @@ export type McpOAuthAuthorizationCodeConsumeResultV1 = Readonly<
 
 export type McpOAuthAuthorizationCodeCleanupResultV1 = Readonly<{
   kind: "mcp_oauth_authorization_code_cleanup_result";
+  ok: true;
+  deletedCount: number;
+  modelVisible: false;
+  safeForLogging: true;
+  version: 1;
+}>;
+
+export type McpOAuthAccessTokenCleanupResultV1 = Readonly<{
+  kind: "mcp_oauth_access_token_cleanup_result";
   ok: true;
   deletedCount: number;
   modelVisible: false;
@@ -426,6 +440,8 @@ export const internalValidateMcpOAuthAuthorizationCodeForTokenBoundary = interna
     resource: v.string(),
     codeChallenge: v.string(),
     now: v.number(),
+    deadlineEpochMs: v.number(),
+    timeoutMs: v.number(),
     version: v.literal(1),
   },
   returns: v.any(),
@@ -538,6 +554,7 @@ export const internalIssueMcpOAuthAccessTokenFromAuthorizationCode = internalMut
       .withIndex("by_access_token_digest", (q) => q.eq("accessTokenDigest", input.accessTokenDigest))
       .take(1);
     if (existingTokenRows.length > 0) return denyAccessTokenIssue("access_token_digest_collision");
+    if (!isAccessTokenIssueDeadlineActive(input, Date.now())) return denyAccessTokenIssue("invalid_input");
 
     const accessTokenRecord = buildAccessTokenRecord(row, input.accessTokenDigest, input.now);
     await ctx.db.insert("mcpOAuthAccessTokens", accessTokenRecord);
@@ -592,6 +609,27 @@ export const internalDeleteExpiredMcpOAuthAuthorizationCodes = internalMutation(
       await ctx.db.delete(row._id);
     }
     return cleanupResult(expiredRows.length);
+  },
+});
+
+export const internalDeleteExpiredMcpOAuthAccessTokens = internalMutation({
+  args: {
+    now: v.number(),
+    version: v.literal(1),
+  },
+  returns: v.any(),
+  handler: async (ctx, args): Promise<McpOAuthAccessTokenCleanupResultV1> => {
+    if (!readRecord(args, CLEANUP_ARGS_KEYS) || !isValidStorageTimestamp(args.now)) {
+      return accessTokenCleanupResult(0);
+    }
+    const expiredRows = await ctx.db
+      .query("mcpOAuthAccessTokens")
+      .withIndex("by_expires_at", (q) => q.lte("expiresAt", args.now))
+      .take(MAX_EXPIRED_ACCESS_TOKEN_CLEANUP_BATCH);
+    for (const row of expiredRows) {
+      await ctx.db.delete(row._id);
+    }
+    return accessTokenCleanupResult(expiredRows.length);
   },
 });
 
@@ -654,6 +692,9 @@ function parseAccessTokenIssueInput(value: unknown): ParsedAccessTokenIssueInput
   const record = readRecord(value, ISSUE_ACCESS_TOKEN_ARGS_KEYS);
   if (!record || record.version !== 1) return undefined;
   if (!isValidStorageTimestamp(record.now) || record.now > MAX_SAFE_TIMESTAMP_BEFORE_ACCESS_TOKEN_TTL) return undefined;
+  const deadlineEpochMs = record.deadlineEpochMs;
+  const timeoutMs = record.timeoutMs;
+  if (!hasValidAccessTokenIssueDeadline(deadlineEpochMs, timeoutMs, Date.now())) return undefined;
   if (!isAuthorizationCodeDigest(record.authorizationCodeDigest)) return undefined;
   if (!isAuthorizationCodeDigest(record.accessTokenDigest)) return undefined;
   const clientId = readBoundedText(record.clientId, MAX_OAUTH_PARAMETER_LENGTH);
@@ -671,6 +712,8 @@ function parseAccessTokenIssueInput(value: unknown): ParsedAccessTokenIssueInput
     resource,
     codeChallenge,
     now: record.now,
+    deadlineEpochMs: deadlineEpochMs as number,
+    timeoutMs: timeoutMs as number,
   };
 }
 
@@ -976,6 +1019,30 @@ function hasValidCreateDeadline(
   );
 }
 
+function hasValidAccessTokenIssueDeadline(
+  deadlineEpochMs: unknown,
+  timeoutMs: unknown,
+  wallClockNow: number,
+): deadlineEpochMs is number {
+  return (
+    typeof deadlineEpochMs === "number" &&
+    typeof timeoutMs === "number" &&
+    Number.isSafeInteger(deadlineEpochMs) &&
+    Number.isSafeInteger(timeoutMs) &&
+    timeoutMs > 0 &&
+    timeoutMs <= 10_000 &&
+    deadlineEpochMs >= wallClockNow &&
+    deadlineEpochMs - wallClockNow <= timeoutMs
+  );
+}
+
+function isAccessTokenIssueDeadlineActive(
+  input: ParsedAccessTokenIssueInputV1,
+  wallClockNow: number,
+): boolean {
+  return hasValidAccessTokenIssueDeadline(input.deadlineEpochMs, input.timeoutMs, wallClockNow);
+}
+
 function hasValidTerminalTimestamp(record: Record<string, unknown>): boolean {
   if (record.status === "pending" || record.status === "expired") return record.consumedAt === undefined;
   return (
@@ -1080,6 +1147,17 @@ function safeFailure(): SafeAuthorizationCodeFailureV1 {
 function cleanupResult(deletedCount: number): McpOAuthAuthorizationCodeCleanupResultV1 {
   return {
     kind: "mcp_oauth_authorization_code_cleanup_result",
+    ok: true,
+    deletedCount,
+    modelVisible: false,
+    safeForLogging: true,
+    version: 1,
+  };
+}
+
+function accessTokenCleanupResult(deletedCount: number): McpOAuthAccessTokenCleanupResultV1 {
+  return {
+    kind: "mcp_oauth_access_token_cleanup_result",
     ok: true,
     deletedCount,
     modelVisible: false,

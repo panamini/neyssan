@@ -307,6 +307,8 @@ export type McpOAuthProductionAccessTokenIssuePortInputV1 = Readonly<{
   resource: string;
   codeChallenge: string;
   now: number;
+  deadlineEpochMs: number;
+  timeoutMs: number;
   version: 1;
 }>;
 
@@ -866,6 +868,7 @@ async function handleTokenRequest(
     return failClosedResponse("oauth_token", preflight, "token_generation_failed", 500);
   }
 
+  const issueNow = readNow(dependencies);
   let issueResult: McpOAuthProductionAccessTokenIssuePortResultV1;
   try {
     issueResult = await issueAccessTokenWithTimeout(
@@ -877,7 +880,9 @@ async function handleTokenRequest(
         redirectUri: tokenRequest.serverOnly.redirectUri,
         resource: tokenRequest.serverOnly.resource,
         codeChallenge: tokenRequest.serverOnly.codeChallenge,
-        now,
+        now: issueNow,
+        deadlineEpochMs: issueNow + ACCESS_TOKEN_ISSUE_TIMEOUT_MS,
+        timeoutMs: ACCESS_TOKEN_ISSUE_TIMEOUT_MS,
         version: 1,
       },
       ACCESS_TOKEN_ISSUE_TIMEOUT_MS,
@@ -885,7 +890,7 @@ async function handleTokenRequest(
   } catch {
     return failClosedResponse("oauth_token", preflight, "token_issue_failed", 503);
   }
-  if (!isAccessTokenIssueSuccess(issueResult, tokenRequest.serverOnly, now)) {
+  if (!isAccessTokenIssueSuccess(issueResult, tokenRequest.serverOnly, issueNow)) {
     return failClosedResponse(
       "oauth_token",
       preflight,
@@ -1991,6 +1996,7 @@ function isAccessTokenIssueExpiryProof(
   value: Record<string, unknown>,
   now: number,
 ): boolean {
+  const expectedExpiresIn = readExpectedExpiresIn(value.expiresAt, now);
   return (
     value.tokenType === "Bearer" &&
     typeof value.expiresAt === "number" &&
@@ -1998,8 +2004,16 @@ function isAccessTokenIssueExpiryProof(
     value.expiresAt > now &&
     typeof value.expiresIn === "number" &&
     Number.isSafeInteger(value.expiresIn) &&
-    value.expiresIn > 0
+    value.expiresIn > 0 &&
+    value.expiresIn === expectedExpiresIn
   );
+}
+
+function readExpectedExpiresIn(expiresAt: unknown, now: number): number | undefined {
+  if (typeof expiresAt !== "number" || !Number.isSafeInteger(expiresAt) || expiresAt <= now) {
+    return undefined;
+  }
+  return Math.floor((expiresAt - now) / 1_000);
 }
 
 function isAccessTokenIssueBindingProof(
@@ -2090,6 +2104,7 @@ function statusForAccessTokenIssueFailure(
   value: McpOAuthProductionAccessTokenIssuePortResultV1,
 ): 400 | 503 {
   if (!isPlainRecord(value)) return 503;
+  if (value.ok === true) return 503;
   if (
     value.reason === "storage_unavailable" ||
     value.reason === "malformed_storage_record" ||
