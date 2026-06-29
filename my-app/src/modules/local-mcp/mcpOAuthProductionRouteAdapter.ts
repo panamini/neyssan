@@ -25,11 +25,13 @@ import {
 } from "../../pages/sign-in-return";
 
 export const MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH = "/oauth/authorize";
+export const MCP_OAUTH_PRODUCTION_TOKEN_PATH = "/oauth/token";
 export const MCP_OAUTH_PRODUCTION_CALLBACK_PATH = "/oauth/callback";
 export const MCP_OAUTH_PRODUCTION_MCP_PATH = "/mcp";
 
 export type McpOAuthProductionRoutePathV1 =
   | typeof MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH
+  | typeof MCP_OAUTH_PRODUCTION_TOKEN_PATH
   | typeof MCP_OAUTH_PRODUCTION_CALLBACK_PATH
   | typeof MCP_OAUTH_PRODUCTION_MCP_PATH
   | typeof MCP_OAUTH_CONTINUATION_PATH;
@@ -37,6 +39,7 @@ export type McpOAuthProductionRoutePathV1 =
 type McpOAuthProductionRouteNameV1 =
   | "oauth_authorize"
   | "oauth_login_return"
+  | "oauth_token"
   | "oauth_callback"
   | "mcp";
 
@@ -230,6 +233,70 @@ export type McpOAuthProductionAuthorizationCodeCreatePortV1 = (
   input: McpOAuthProductionAuthorizationCodeCreatePortInputV1,
 ) => Promise<McpOAuthProductionAuthorizationCodeCreatePortResultV1>;
 
+export type McpOAuthProductionAuthorizationCodeValidatePortInputV1 = Readonly<{
+  authorizationCodeDigest: string;
+  clientId: string;
+  redirectUri: string;
+  codeChallenge: string;
+  now: number;
+  version: 1;
+}>;
+
+export type McpOAuthProductionAuthorizationCodeValidatePortResultV1 = Readonly<
+  | {
+      kind: "mcp_oauth_authorization_code_validate_result";
+      ok: true;
+      reason: "validated";
+      serverOnly: {
+        status: "pending";
+        clientId: string;
+        redirectUri: string;
+        resource: string;
+        scopes: readonly string[];
+        state: string;
+        codeChallenge: string;
+        codeChallengeMethod: "S256";
+        productionEnvironment: typeof MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT;
+        expiresAt: number;
+        codeConsumed: false;
+        tokenIssued: false;
+        version: 1;
+      };
+      modelVisible: false;
+      safeForLogging: false;
+      version: 1;
+    }
+  | {
+      kind: "mcp_oauth_authorization_code_validate_result";
+      ok: false;
+      reason:
+        | "invalid_input"
+        | "invalid_code_digest"
+        | "not_found_or_forbidden"
+        | "malformed_storage_record"
+        | "expired"
+        | "already_consumed"
+        | "duplicate_storage_record";
+      safeFailure: {
+        code: "mcp_oauth_authorization_code_denied";
+        message: "Authorization code denied.";
+        safeForModel: true;
+        rawCodeEchoed: false;
+        digestEchoed: false;
+        identityEchoed: false;
+        sensitiveValuesEchoed: false;
+        version: 1;
+      };
+      modelVisible: false;
+      safeForLogging: true;
+      version: 1;
+    }
+>;
+
+export type McpOAuthProductionAuthorizationCodeValidatePortV1 = (
+  input: McpOAuthProductionAuthorizationCodeValidatePortInputV1,
+) => Promise<McpOAuthProductionAuthorizationCodeValidatePortResultV1>;
+
 export type McpOAuthProductionAuthenticatedOwnerIdentityV1 = Readonly<{
   subject: string;
   issuer: string;
@@ -250,6 +317,7 @@ export type McpOAuthProductionRouteAdapterDependenciesV1 = Readonly<{
   bindPreAuthIntentToAuthenticatedOwner?: McpOAuthProductionPreAuthOwnerBindingPortV1;
   consumeAuthorizationIntent?: McpOAuthIntentConsumePortV1;
   createAuthorizationCode?: McpOAuthProductionAuthorizationCodeCreatePortV1;
+  validateAuthorizationCode?: McpOAuthProductionAuthorizationCodeValidatePortV1;
   readAuthenticatedOwnerIdentity?: McpOAuthProductionAuthenticatedOwnerIdentityReaderV1;
   generateBrowserBoundContinuationNonce?: McpOAuthProductionBrowserBoundContinuationNonceGeneratorV1;
   generateAuthorizationCode?: McpOAuthProductionAuthorizationCodeGeneratorV1;
@@ -263,6 +331,7 @@ export type McpOAuthProductionRouteAdapterRequestV1 = Readonly<{
   url: string;
   headers?: Readonly<Record<string, string | readonly string[] | undefined>>;
   remoteAddress?: string;
+  bodyText?: string;
 }>;
 
 export type McpOAuthProductionRouteAdapterResponseV1 = Readonly<{
@@ -287,7 +356,12 @@ type McpOAuthProductionRouteFailureReasonV1 =
   | "owner_binding_failed"
   | "authorization_intent_consume_failed"
   | "authorization_code_generation_failed"
-  | "authorization_code_create_failed";
+  | "authorization_code_create_failed"
+  | "unsupported_token_content_type"
+  | "token_request_body_too_large"
+  | "invalid_request"
+  | "code_validation_failed"
+  | "token_issuance_blocked";
 
 type McpOAuthProductionAuthorizationOriginV1 = Readonly<{
   origin: string;
@@ -298,6 +372,7 @@ type McpOAuthProductionAuthorizationOriginV1 = Readonly<{
 
 const HANDLED_PATHS = Object.freeze([
   MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
+  MCP_OAUTH_PRODUCTION_TOKEN_PATH,
   MCP_OAUTH_CONTINUATION_PATH,
   MCP_OAUTH_PRODUCTION_CALLBACK_PATH,
   MCP_OAUTH_PRODUCTION_MCP_PATH,
@@ -318,6 +393,8 @@ const PRE_AUTH_CREATE_TIMEOUT_MS = 2_500;
 const OWNER_BINDING_TIMEOUT_MS = 2_500;
 const AUTHORIZATION_INTENT_CONSUME_TIMEOUT_MS = 2_500;
 const AUTHORIZATION_CODE_CREATE_TIMEOUT_MS = 2_500;
+const AUTHORIZATION_CODE_VALIDATE_TIMEOUT_MS = 2_500;
+const TOKEN_REQUEST_BODY_MAX_BYTES = 4_096;
 const BROWSER_BOUND_CONTINUATION_NONCE_PARAMETER = "mcp_oauth_browser_nonce";
 const BROWSER_BOUND_CONTINUATION_COOKIE_NAME = "tw_mcp_oauth_continue";
 const BROWSER_BOUND_CONTINUATION_NONCE_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
@@ -325,6 +402,15 @@ const BROWSER_BOUND_CONTINUATION_MAX_AGE_SECONDS = 600;
 const AUTHORIZATION_CODE_BYTE_LENGTH = 32;
 const AUTHORIZATION_CODE_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 const AUTHORIZATION_CODE_DIGEST_PATTERN = /^[0-9a-f]{64}$/u;
+const PKCE_CODE_VERIFIER_PATTERN = /^[A-Za-z0-9._~-]{43,128}$/u;
+const PKCE_CODE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43,128}$/u;
+const TOKEN_REQUEST_KEYS = Object.freeze([
+  "grant_type",
+  "code",
+  "client_id",
+  "redirect_uri",
+  "code_verifier",
+] as const);
 export const MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT = "mcp_oauth_production_v1";
 const BASE64_URL_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
@@ -368,6 +454,9 @@ export async function handleMcpOAuthProductionRouteRequest(
   }
   if (route === "oauth_login_return") {
     return handleLoginReturnContinuationRequest(request, config, dependencies);
+  }
+  if (route === "oauth_token") {
+    return handleTokenRequest(request, config, dependencies);
   }
   return inertGuardedResponse(route, config.preflight);
 }
@@ -622,6 +711,61 @@ async function handleLoginReturnContinuationRequest(
   );
 }
 
+async function handleTokenRequest(
+  request: McpOAuthProductionRouteAdapterRequestV1,
+  config: McpOAuthProductionRouteAdapterConfigV1,
+  dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+): Promise<McpOAuthProductionRouteAdapterResponseV1> {
+  const preflight = config.preflight;
+  if (!dependencies.authorizationRequestConfig || !dependencies.validateAuthorizationCode) {
+    return failClosedResponse("oauth_token", preflight, "dependency_unavailable", 503);
+  }
+  if (!authorizationRequestConfigMatchesGuard(dependencies.authorizationRequestConfig, config.authorizationRequestGuard)) {
+    return failClosedResponse("oauth_token", preflight, "invalid_configuration", 500);
+  }
+  const authorizationOrigin = readAuthorizationOrigin(dependencies.authorizationRequestConfig);
+  if (!authorizationOrigin) {
+    return failClosedResponse("oauth_token", preflight, "invalid_configuration", 500);
+  }
+  if (!requestHostMatchesAuthorizationOrigin(request, authorizationOrigin)) {
+    return failClosedResponse("oauth_token", preflight, "invalid_host", 403);
+  }
+
+  const tokenRequest = readTokenRequest(request);
+  if (!tokenRequest.ok) {
+    return failClosedResponse("oauth_token", preflight, tokenRequest.reason, tokenRequest.status);
+  }
+
+  const now = readNow(dependencies);
+  let validationResult: McpOAuthProductionAuthorizationCodeValidatePortResultV1;
+  try {
+    validationResult = await validateAuthorizationCodeWithTimeout(
+      dependencies.validateAuthorizationCode,
+      {
+        authorizationCodeDigest: tokenRequest.serverOnly.authorizationCodeDigest,
+        clientId: tokenRequest.serverOnly.clientId,
+        redirectUri: tokenRequest.serverOnly.redirectUri,
+        codeChallenge: tokenRequest.serverOnly.codeChallenge,
+        now,
+        version: 1,
+      },
+      AUTHORIZATION_CODE_VALIDATE_TIMEOUT_MS,
+    );
+  } catch {
+    return failClosedResponse("oauth_token", preflight, "code_validation_failed", 503);
+  }
+  if (!isAuthorizationCodeValidationSuccess(validationResult, tokenRequest.serverOnly, now)) {
+    return failClosedResponse(
+      "oauth_token",
+      preflight,
+      "code_validation_failed",
+      statusForAuthorizationCodeValidationFailure(validationResult),
+    );
+  }
+
+  return tokenIssuanceBlockedResponse(preflight);
+}
+
 function buildAuthorizationRequestGuard(
   input: McpOAuthProductionRoutePreflightInputV1,
 ): McpOAuthProductionAuthorizationRequestGuardV1 {
@@ -817,6 +961,34 @@ function createAuthorizationCodeWithTimeout(
   });
 }
 
+function validateAuthorizationCodeWithTimeout(
+  validateAuthorizationCode: McpOAuthProductionAuthorizationCodeValidatePortV1,
+  input: McpOAuthProductionAuthorizationCodeValidatePortInputV1,
+  timeoutMs: number,
+): Promise<McpOAuthProductionAuthorizationCodeValidatePortResultV1> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error("authorization_code_validate_timeout"));
+    }, timeoutMs);
+
+    try {
+      validateAuthorizationCode(input).then(
+        (result) => {
+          clearTimeout(timeout);
+          resolve(result);
+        },
+        (error: unknown) => {
+          clearTimeout(timeout);
+          reject(toRejectedError(error, "authorization_code_validate_failed"));
+        },
+      );
+    } catch (error) {
+      clearTimeout(timeout);
+      reject(toRejectedError(error, "authorization_code_validate_failed"));
+    }
+  });
+}
+
 function normalizeStringSet(value: unknown): readonly string[] {
   if (!Array.isArray(value)) return [];
   return Object.freeze(
@@ -828,6 +1000,7 @@ function normalizeStringSet(value: unknown): readonly string[] {
 function routeNameForPath(path: string): McpOAuthProductionRouteNameV1 | undefined {
   if (path === MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH) return "oauth_authorize";
   if (path === MCP_OAUTH_CONTINUATION_PATH) return "oauth_login_return";
+  if (path === MCP_OAUTH_PRODUCTION_TOKEN_PATH) return "oauth_token";
   if (path === MCP_OAUTH_PRODUCTION_CALLBACK_PATH) return "oauth_callback";
   if (path === MCP_OAUTH_PRODUCTION_MCP_PATH) return "mcp";
   return undefined;
@@ -847,7 +1020,7 @@ function isAllowedMethod(route: McpOAuthProductionRouteNameV1, method: string): 
 }
 
 function allowedMethodForRoute(route: McpOAuthProductionRouteNameV1): "GET" | "POST" {
-  if (route === "mcp") return "POST";
+  if (route === "mcp" || route === "oauth_token") return "POST";
   return "GET";
 }
 
@@ -871,6 +1044,7 @@ function failClosedResponse(
     authorizationRequestAccepted: false,
     authorizationCodeAccepted: false,
     authorizationCodeIssued: false,
+    authorizationCodeConsumed: false,
     redirectSecretAccepted: false,
     providerCalled: false,
     tokenExchangeAttempted: false,
@@ -909,6 +1083,7 @@ function inertGuardedResponse(
     authorizationRequestAccepted: false,
     authorizationCodeAccepted: false,
     authorizationCodeIssued: false,
+    authorizationCodeConsumed: false,
     redirectSecretAccepted: false,
     providerCalled: false,
     tokenExchangeAttempted: false,
@@ -926,6 +1101,45 @@ function inertGuardedResponse(
     redirectSecretsExposed: false,
     hostedMcpStarted: false,
     handlerMode: "inert_guarded_only",
+    version: 1,
+  });
+}
+
+function tokenIssuanceBlockedResponse(
+  preflight: McpOAuthProductionRoutePreflightResultV1,
+): McpOAuthProductionRouteAdapterResponseV1 {
+  return jsonResponse(501, {
+    kind: "mcp_oauth_production_route_response",
+    status: "blocked",
+    reason: "token_issuance_blocked",
+    route: "oauth_token",
+    message: "Production OAuth token issuance is blocked.",
+    safeForModel: true,
+    allowedByPreflight: isRouteAllowedByPreflight("oauth_token", preflight),
+    preflightDecision: preflight.decision,
+    guardedInertHandlerReached: false,
+    oauthExecutionStarted: false,
+    authorizationRequestAccepted: false,
+    authorizationCodeAccepted: true,
+    authorizationCodeIssued: false,
+    authorizationCodeConsumed: false,
+    redirectSecretAccepted: false,
+    providerCalled: false,
+    tokenExchangeAttempted: false,
+    tokenIssued: false,
+    preAuthIntentCreated: false,
+    ownerBound: false,
+    consentCompleted: false,
+    accountLinkCreated: false,
+    tokenPersisted: false,
+    refreshTokenPersisted: false,
+    providerSecretsExposed: false,
+    rawProviderConfigExposed: false,
+    ownerIdentifiersExposed: false,
+    authorizationCodesExposed: false,
+    redirectSecretsExposed: false,
+    hostedMcpStarted: false,
+    handlerMode: "code_validation_only",
     version: 1,
   });
 }
@@ -979,6 +1193,120 @@ function redirectToOAuthClientWithAuthorizationCode(
     },
     bodyText: "",
   });
+}
+
+function readTokenRequest(request: McpOAuthProductionRouteAdapterRequestV1): Readonly<
+  | {
+      ok: true;
+      serverOnly: {
+        authorizationCodeDigest: string;
+        clientId: string;
+        redirectUri: string;
+        codeChallenge: string;
+        version: 1;
+      };
+    }
+  | {
+      ok: false;
+      reason:
+        | "unsupported_token_content_type"
+        | "token_request_body_too_large"
+        | "invalid_request";
+      status: 400 | 413 | 415;
+    }
+> {
+  if (!isFormUrlEncodedContentType(request.headers?.["content-type"])) {
+    return Object.freeze({ ok: false, reason: "unsupported_token_content_type", status: 415 });
+  }
+  const bodyText = request.bodyText;
+  if (typeof bodyText !== "string" || bodyText.length === 0 || hasControlCharacter(bodyText)) {
+    return Object.freeze({ ok: false, reason: "invalid_request", status: 400 });
+  }
+  if (byteLength(bodyText) > TOKEN_REQUEST_BODY_MAX_BYTES) {
+    return Object.freeze({ ok: false, reason: "token_request_body_too_large", status: 413 });
+  }
+  if (hasMalformedPercentEncoding(bodyText)) {
+    return Object.freeze({ ok: false, reason: "invalid_request", status: 400 });
+  }
+
+  const params = new URLSearchParams(bodyText);
+  if (!hasExactlyTokenRequestKeys(params)) {
+    return Object.freeze({ ok: false, reason: "invalid_request", status: 400 });
+  }
+  if (params.get("grant_type") !== "authorization_code") {
+    return Object.freeze({ ok: false, reason: "invalid_request", status: 400 });
+  }
+
+  const code = params.get("code");
+  const clientId = readBoundedTokenParameter(params.get("client_id"), 512);
+  const redirectUri = readTokenRedirectUri(params.get("redirect_uri"));
+  const codeVerifier = readCodeVerifier(params.get("code_verifier"));
+  if (!code || !AUTHORIZATION_CODE_PATTERN.test(code) || !clientId || !redirectUri || !codeVerifier) {
+    return Object.freeze({ ok: false, reason: "invalid_request", status: 400 });
+  }
+
+  return Object.freeze({
+    ok: true,
+    serverOnly: Object.freeze({
+      authorizationCodeDigest: hashAuthorizationCode(code),
+      clientId,
+      redirectUri,
+      codeChallenge: hashPkceCodeVerifierS256(codeVerifier),
+      version: 1,
+    }),
+  });
+}
+
+function hasExactlyTokenRequestKeys(params: URLSearchParams): boolean {
+  const keys = [...params.keys()];
+  return (
+    keys.length === TOKEN_REQUEST_KEYS.length &&
+    TOKEN_REQUEST_KEYS.every((key) => params.getAll(key).length === 1) &&
+    keys.every((key) => TOKEN_REQUEST_KEYS.includes(key as never))
+  );
+}
+
+function isFormUrlEncodedContentType(value: string | readonly string[] | undefined): boolean {
+  const contentType = readSingleHeaderValue(value);
+  return contentType?.toLowerCase().split(";")[0]?.trim() === "application/x-www-form-urlencoded";
+}
+
+function readBoundedTokenParameter(value: unknown, maxLength: number): string | undefined {
+  if (typeof value !== "string" || value.length === 0 || value.length > maxLength) return undefined;
+  if (hasControlCharacter(value) || hasMalformedPercentEncoding(value)) return undefined;
+  return value;
+}
+
+function readTokenRedirectUri(value: unknown): string | undefined {
+  if (typeof value !== "string" || value.length === 0 || value.length > 512) return undefined;
+  if (hasControlCharacter(value) || hasMalformedPercentEncoding(value)) return undefined;
+  try {
+    const parsed = new URL(value);
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.origin === "null" ||
+      !parsed.hostname ||
+      parsed.username ||
+      parsed.password ||
+      parsed.hash
+    ) {
+      return undefined;
+    }
+    return parsed.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+function readCodeVerifier(value: unknown): string | undefined {
+  if (typeof value !== "string" || !PKCE_CODE_VERIFIER_PATTERN.test(value) || hasControlCharacter(value)) {
+    return undefined;
+  }
+  return value;
+}
+
+function hashPkceCodeVerifierS256(codeVerifier: string): string {
+  return base64UrlNoPadding(createHash("sha256").update(codeVerifier, "ascii").digest());
 }
 
 function readSameOriginAuthorizationUrl(
@@ -1406,6 +1734,42 @@ function isAuthorizationCodeCreateSuccess(
   );
 }
 
+function isAuthorizationCodeValidationSuccess(
+  value: McpOAuthProductionAuthorizationCodeValidatePortResultV1,
+  tokenRequest: Readonly<{
+    clientId: string;
+    redirectUri: string;
+    codeChallenge: string;
+  }>,
+  now: number,
+): value is Extract<McpOAuthProductionAuthorizationCodeValidatePortResultV1, { ok: true }> {
+  return (
+    isPlainRecord(value) &&
+    value.kind === "mcp_oauth_authorization_code_validate_result" &&
+    value.ok === true &&
+    value.reason === "validated" &&
+    isPlainRecord(value.serverOnly) &&
+    value.serverOnly.status === "pending" &&
+    value.serverOnly.clientId === tokenRequest.clientId &&
+    value.serverOnly.redirectUri === tokenRequest.redirectUri &&
+    typeof value.serverOnly.resource === "string" &&
+    Array.isArray(value.serverOnly.scopes) &&
+    typeof value.serverOnly.state === "string" &&
+    value.serverOnly.codeChallenge === tokenRequest.codeChallenge &&
+    value.serverOnly.codeChallengeMethod === "S256" &&
+    value.serverOnly.productionEnvironment === MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT &&
+    typeof value.serverOnly.expiresAt === "number" &&
+    Number.isSafeInteger(value.serverOnly.expiresAt) &&
+    value.serverOnly.expiresAt > now &&
+    value.serverOnly.codeConsumed === false &&
+    value.serverOnly.tokenIssued === false &&
+    value.serverOnly.version === 1 &&
+    value.modelVisible === false &&
+    value.safeForLogging === false &&
+    value.version === 1
+  );
+}
+
 function isAuthenticatedOwnerIdentity(
   value: unknown,
 ): value is McpOAuthProductionAuthenticatedOwnerIdentityV1 {
@@ -1446,6 +1810,14 @@ function statusForAuthorizationCodeCreateFailure(
   value: McpOAuthProductionAuthorizationCodeCreatePortResultV1,
 ): 409 | 503 {
   return isPlainRecord(value) && value.reason === "digest_collision" ? 409 : 503;
+}
+
+function statusForAuthorizationCodeValidationFailure(
+  value: McpOAuthProductionAuthorizationCodeValidatePortResultV1,
+): 400 | 503 {
+  if (!isPlainRecord(value)) return 503;
+  if (value.reason === "malformed_storage_record" || value.reason === "duplicate_storage_record") return 503;
+  return 400;
 }
 
 function readNow(dependencies: McpOAuthProductionRouteAdapterDependenciesV1): number {
@@ -1561,12 +1933,28 @@ function hasUnsafeRawPath(value: string): boolean {
   return hasDotSegment(value) || /%2e|%2f|%5c/iu.test(value);
 }
 
+function hasMalformedPercentEncoding(value: string): boolean {
+  if (/%(?![0-9A-Fa-f]{2})/u.test(value)) return true;
+  for (const component of value.split(/[&=]/u)) {
+    try {
+      decodeURIComponent(component.split("+").join(" "));
+    } catch {
+      return true;
+    }
+  }
+  return false;
+}
+
 function hasControlCharacter(value: string): boolean {
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index);
     if (code <= 0x1f || code === 0x7f) return true;
   }
   return false;
+}
+
+function byteLength(value: string): number {
+  return new TextEncoder().encode(value).byteLength;
 }
 
 function hasDotSegment(value: string): boolean {

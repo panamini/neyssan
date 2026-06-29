@@ -8,6 +8,7 @@ import {
   classifyMcpOAuthAuthorizationCodeStorageRecord,
   internalConsumeMcpOAuthAuthorizationCode,
   internalCreateMcpOAuthAuthorizationCode,
+  internalValidateMcpOAuthAuthorizationCodeForTokenBoundary,
   MCP_OAUTH_AUTHORIZATION_CODE_PRODUCTION_ENVIRONMENT,
   MCP_OAUTH_AUTHORIZATION_CODE_TTL_MS,
   type McpOAuthAuthorizationCodeRecordV1,
@@ -113,6 +114,45 @@ describe("Convex MCP OAuth authorization codes", () => {
     expect(JSON.stringify(replay)).not.toContain(RAW_CODE);
   });
 
+  it("validates a pending code digest for the token boundary without consuming it", async () => {
+    const { ctx, rows, patches } = makeCtx([storedCode()]);
+
+    const result = await internalValidateMcpOAuthAuthorizationCodeForTokenBoundary._handler(
+      ctx as any,
+      validateArgs({ now: NOW + 1 }),
+    );
+    const replay = await internalValidateMcpOAuthAuthorizationCodeForTokenBoundary._handler(
+      ctx as any,
+      validateArgs({ now: NOW + 2 }),
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      reason: "validated",
+      serverOnly: {
+        status: "pending",
+        clientId: CLIENT_ID,
+        redirectUri: REDIRECT_URI,
+        resource: RESOURCE,
+        scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE, "openid"],
+        state: STATE,
+        codeChallenge: PKCE,
+        codeChallengeMethod: "S256",
+        productionEnvironment: MCP_OAUTH_AUTHORIZATION_CODE_PRODUCTION_ENVIRONMENT,
+        codeConsumed: false,
+        tokenIssued: false,
+      },
+      modelVisible: false,
+      safeForLogging: false,
+    });
+    expect(replay).toMatchObject({ ok: true, reason: "validated" });
+    expect(rows[0]).toMatchObject({ status: "pending", updatedAt: NOW });
+    expect(rows[0]).not.toHaveProperty("consumedAt");
+    expect(patches).toHaveLength(0);
+    expect(JSON.stringify(result)).not.toContain(CODE_DIGEST);
+    expect(JSON.stringify(result)).not.toContain(RAW_CODE);
+  });
+
   it("marks expired pending code digests without returning code state", async () => {
     const { ctx, rows, patches } = makeCtx([storedCode()]);
 
@@ -151,6 +191,30 @@ describe("Convex MCP OAuth authorization codes", () => {
     });
   });
 
+  it("rejects expired, consumed, mismatched, and malformed validation without consuming", async () => {
+    await expect(
+      validateWith([storedCode()], validateArgs({ now: NOW + MCP_OAUTH_AUTHORIZATION_CODE_TTL_MS })),
+    ).resolves.toMatchObject({ ok: false, reason: "expired" });
+    await expect(
+      validateWith([storedCode({ status: "consumed", consumedAt: NOW + 1 })], validateArgs()),
+    ).resolves.toMatchObject({ ok: false, reason: "already_consumed" });
+    await expect(validateWith([storedCode({ clientId: "other_client" })], validateArgs())).resolves.toMatchObject({
+      ok: false,
+      reason: "not_found_or_forbidden",
+    });
+    await expect(
+      validateWith([storedCode({ redirectUri: "https://chatgpt.example.test/connector/oauth/other-callback" })], validateArgs()),
+    ).resolves.toMatchObject({ ok: false, reason: "not_found_or_forbidden" });
+    await expect(validateWith([storedCode({ codeChallenge: "B".repeat(43) })], validateArgs())).resolves.toMatchObject({
+      ok: false,
+      reason: "not_found_or_forbidden",
+    });
+    await expect(validateWith([storedCode({ codeChallengeMethod: "plain" as never })], validateArgs())).resolves.toMatchObject({
+      ok: false,
+      reason: "malformed_storage_record",
+    });
+  });
+
   it("classifies storage records and keeps the boundary server-only", () => {
     const source = readFileSync(SOURCE_FILE, "utf8");
     const schemaSource = readFileSync(SCHEMA_FILE, "utf8");
@@ -163,6 +227,7 @@ describe("Convex MCP OAuth authorization codes", () => {
       "malformed",
     );
     expect(source).toContain("internalMutation");
+    expect(source).toContain("internalQuery");
     expect(source).not.toMatch(/export\s+const\s+\w+\s*=\s*(?:query|mutation|httpAction)\s*\(/u);
     expect(source).not.toMatch(/\b(?:fetch|axios|XMLHttpRequest|localStorage|sessionStorage)\b/u);
     expect(source).not.toMatch(/\b(?:@stytch|@clerk|openai|react|vite|exchangeAuthorizationCode)\b/u);
@@ -177,6 +242,13 @@ describe("Convex MCP OAuth authorization codes", () => {
 async function consumeWith(seed: StoredCodeRecord[], args: ReturnType<typeof consumeArgs>) {
   const { ctx } = makeCtx(seed);
   return await internalConsumeMcpOAuthAuthorizationCode._handler(ctx as any, args);
+}
+
+async function validateWith(seed: StoredCodeRecord[], args: ReturnType<typeof validateArgs>) {
+  const { ctx, patches } = makeCtx(seed);
+  const result = await internalValidateMcpOAuthAuthorizationCodeForTokenBoundary._handler(ctx as any, args);
+  expect(patches).toHaveLength(0);
+  return result;
 }
 
 function makeCtx(seed: StoredCodeRecord[] = []) {
@@ -276,6 +348,20 @@ function consumeArgs(overrides: Partial<Parameters<typeof internalConsumeMcpOAut
     authorizationCodeDigest: CODE_DIGEST,
     clientId: CLIENT_ID,
     redirectUri: REDIRECT_URI,
+    now: NOW,
+    version: 1,
+    ...overrides,
+  };
+}
+
+function validateArgs(
+  overrides: Partial<Parameters<typeof internalValidateMcpOAuthAuthorizationCodeForTokenBoundary._handler>[1]> = {},
+) {
+  return {
+    authorizationCodeDigest: CODE_DIGEST,
+    clientId: CLIENT_ID,
+    redirectUri: REDIRECT_URI,
+    codeChallenge: PKCE,
     now: NOW,
     version: 1,
     ...overrides,

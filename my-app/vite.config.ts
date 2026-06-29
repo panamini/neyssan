@@ -39,6 +39,7 @@ import {
   handleMcpOAuthProductionRouteRequest,
   isMcpOAuthProductionRouteHandledPath,
   MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
+  MCP_OAUTH_PRODUCTION_TOKEN_PATH,
   type McpOAuthProductionAuthenticatedOwnerIdentityV1,
   type McpOAuthProductionRouteAdapterConfigV1,
   type McpOAuthProductionRouteAdapterDependenciesV1,
@@ -69,6 +70,7 @@ const CLERK_JWT_ISSUER_DOMAIN_VAR = "CLERK_JWT_ISSUER_DOMAIN";
 const CLERK_CONVEX_AUDIENCE = "convex";
 const PRE_AUTH_QUOTA_WINDOW_MS = 60_000;
 const PRE_AUTH_QUOTA_LIMIT = 60;
+const PRODUCTION_OAUTH_TOKEN_MAX_REQUEST_BYTES = 4_096;
 const DEFAULT_VITE_ALLOWED_HOSTS = Object.freeze(["host.docker.internal"]);
 const CREATE_MCP_OAUTH_PRE_AUTH_INTENT_MUTATION = makeFunctionReference(
   "mcpOAuthPreAuthIntents:internalCreateMcpOAuthPreAuthIntent",
@@ -82,6 +84,9 @@ const CONSUME_MCP_OAUTH_AUTHORIZATION_INTENT_MUTATION = makeFunctionReference(
 const CREATE_MCP_OAUTH_AUTHORIZATION_CODE_MUTATION = makeFunctionReference(
   "mcpOAuthAuthorizationCodes:internalCreateMcpOAuthAuthorizationCode",
 ) as FunctionReference<"mutation">;
+const VALIDATE_MCP_OAUTH_AUTHORIZATION_CODE_QUERY = makeFunctionReference(
+  "mcpOAuthAuthorizationCodes:internalValidateMcpOAuthAuthorizationCodeForTokenBoundary",
+) as FunctionReference<"query">;
 const productionPreAuthQuotaBuckets = new Map<string, { count: number; windowStartedAt: number }>();
 const productionClerkJwksByIssuer = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 
@@ -187,7 +192,11 @@ function handleLocalMcpDevMiddlewareRequest(
   const pathName = (req.url ?? "").split("?")[0];
   if (
     productionOAuthAuthorizationEnabled &&
-    (pathName === MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH || pathName === MCP_OAUTH_CONTINUATION_PATH) &&
+    (
+      pathName === MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH ||
+      pathName === MCP_OAUTH_CONTINUATION_PATH ||
+      pathName === MCP_OAUTH_PRODUCTION_TOKEN_PATH
+    ) &&
     productionOAuthRequestHostMatchesAuthorizationOrigin(req, productionOAuthAuthorizationDependencies)
   ) {
     void respondToMcpOAuthProductionRouteRequest(
@@ -278,6 +287,41 @@ async function respondToMcpOAuthProductionRouteRequest(
   dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
   pathName: string,
 ): Promise<void> {
+  if (pathName === MCP_OAUTH_PRODUCTION_TOKEN_PATH && (req.method ?? "GET").toUpperCase() === "POST") {
+    readProductionMcpOAuthTokenBody(req, res, PRODUCTION_OAUTH_TOKEN_MAX_REQUEST_BYTES, (bodyText) => {
+      void respondToMcpOAuthProductionRouteRequestWithBody(
+        req,
+        res,
+        next,
+        config,
+        dependencies,
+        pathName,
+        bodyText,
+      ).catch(() => {
+        sendInvalidLocalMcpDevRequest(res);
+      });
+    });
+    return;
+  }
+  await respondToMcpOAuthProductionRouteRequestWithBody(
+    req,
+    res,
+    next,
+    config,
+    dependencies,
+    pathName,
+  );
+}
+
+async function respondToMcpOAuthProductionRouteRequestWithBody(
+  req: IncomingMessage,
+  res: ServerResponse,
+  next: () => void,
+  config: McpOAuthProductionRouteAdapterConfigV1,
+  dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+  pathName: string,
+  bodyText?: string,
+): Promise<void> {
   const response = await handleMcpOAuthProductionRouteRequest(
     {
       method: req.method ?? "GET",
@@ -290,8 +334,10 @@ async function respondToMcpOAuthProductionRouteRequest(
         "x-forwarded-for": headerValue(req.headers["x-forwarded-for"]),
         "x-real-ip": headerValue(req.headers["x-real-ip"]),
         "cf-connecting-ip": headerValue(req.headers["cf-connecting-ip"]),
+        "content-type": headerValue(req.headers["content-type"]),
       },
       remoteAddress: req.socket.remoteAddress,
+      ...(bodyText !== undefined ? { bodyText } : {}),
     },
     config,
     dependencies,
@@ -356,6 +402,28 @@ function readLocalMcpDevBody(
   });
 }
 
+function readProductionMcpOAuthTokenBody(
+  req: IncomingMessage,
+  res: ServerResponse,
+  maxRequestBytes: number,
+  onBody: (bodyText: string) => void,
+): void {
+  let bodyText = "";
+  let rejectedForSize = false;
+  req.setEncoding("utf8");
+  req.on("data", (chunk: string) => {
+    if (rejectedForSize) return;
+    bodyText += chunk;
+    rejectedForSize = rejectIfProductionMcpOAuthTokenBodyTooLarge(req, res, bodyText, maxRequestBytes);
+  });
+  req.on("end", () => {
+    if (!rejectedForSize && !res.writableEnded) onBody(bodyText);
+  });
+  req.on("error", () => {
+    sendInvalidLocalMcpDevRequest(res);
+  });
+}
+
 function rejectIfLocalMcpDevBodyTooLarge(
   req: IncomingMessage,
   res: ServerResponse,
@@ -373,6 +441,35 @@ function rejectIfLocalMcpDevBodyTooLarge(
       fixtureOnly: true,
       localDevOnly: true,
     },
+  });
+  req.destroy();
+  return true;
+}
+
+function rejectIfProductionMcpOAuthTokenBodyTooLarge(
+  req: IncomingMessage,
+  res: ServerResponse,
+  bodyText: string,
+  maxRequestBytes: number,
+): boolean {
+  if (Buffer.byteLength(bodyText, "utf8") <= maxRequestBytes) return false;
+  sendLocalMcpJson(res, 413, {
+    kind: "mcp_oauth_production_route_response",
+    status: "blocked",
+    reason: "token_request_body_too_large",
+    route: "oauth_token",
+    message: "Production OAuth token request is too large.",
+    safeForModel: true,
+    authorizationCodeAccepted: false,
+    authorizationCodeConsumed: false,
+    providerCalled: false,
+    tokenExchangeAttempted: false,
+    tokenIssued: false,
+    accountLinkCreated: false,
+    tokenPersisted: false,
+    refreshTokenPersisted: false,
+    hostedMcpStarted: false,
+    version: 1,
   });
   req.destroy();
   return true;
@@ -494,6 +591,7 @@ function buildProductionMcpOAuthRouteDependencies(
     bindPreAuthIntentToAuthenticatedOwner: buildProductionPreAuthOwnerBindingPort(convexConnection),
     consumeAuthorizationIntent: buildProductionAuthorizationIntentConsumePort(convexClient),
     createAuthorizationCode: buildProductionAuthorizationCodeCreatePort(convexClient),
+    validateAuthorizationCode: buildProductionAuthorizationCodeValidatePort(convexClient),
     readAuthenticatedOwnerIdentity: buildProductionAuthenticatedOwnerIdentityReader(env),
   });
 }
@@ -611,6 +709,18 @@ function buildProductionAuthorizationCodeCreatePort(
       input,
       { skipQueue: true },
     ) as Promise<Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["createAuthorizationCode"]>>>>;
+  };
+}
+
+function buildProductionAuthorizationCodeValidatePort(
+  convexClient: ConvexHttpClient | undefined,
+): NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["validateAuthorizationCode"]> {
+  return async (input) => {
+    if (!convexClient) return authorizationCodeValidateUnavailableResult();
+    return convexClient.query(
+      VALIDATE_MCP_OAUTH_AUTHORIZATION_CODE_QUERY,
+      input,
+    ) as Promise<Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["validateAuthorizationCode"]>>>>;
   };
 }
 
@@ -787,7 +897,28 @@ function authorizationCodeCreateUnavailableResult(): Awaited<ReturnType<NonNulla
       identityEchoed: false,
       sensitiveValuesEchoed: false,
       version: 1,
-    },
+    } as const,
+    modelVisible: false,
+    safeForLogging: true,
+    version: 1,
+  });
+}
+
+function authorizationCodeValidateUnavailableResult(): Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["validateAuthorizationCode"]>>> {
+  return Object.freeze({
+    kind: "mcp_oauth_authorization_code_validate_result",
+    ok: false,
+    reason: "not_found_or_forbidden",
+    safeFailure: {
+      code: "mcp_oauth_authorization_code_denied",
+      message: "Authorization code denied.",
+      safeForModel: true,
+      rawCodeEchoed: false,
+      digestEchoed: false,
+      identityEchoed: false,
+      sensitiveValuesEchoed: false,
+      version: 1,
+    } as const,
     modelVisible: false,
     safeForLogging: true,
     version: 1,
@@ -925,7 +1056,7 @@ function hasMalformedPercentEncoding(value: string): boolean {
   if (/%(?![0-9A-Fa-f]{2})/u.test(value)) return true;
   for (const component of value.split(/[&=]/u)) {
     try {
-      decodeURIComponent(component.replace(/\+/gu, " "));
+      decodeURIComponent(component.split("+").join(" "));
     } catch {
       return true;
     }
