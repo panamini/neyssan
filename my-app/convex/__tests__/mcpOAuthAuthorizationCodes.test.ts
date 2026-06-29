@@ -381,10 +381,24 @@ describe("Convex MCP OAuth authorization codes", () => {
     expect(schemaSource).toContain('.index("by_authorization_code_digest", ["authorizationCodeDigest"])');
     expect(schemaSource).toContain('.index("by_access_token_digest", ["accessTokenDigest"])');
     expect(schemaSource).toContain('.index("by_expires_at", ["expiresAt"])');
+    expect(exportedArgsBlock(source, "internalValidateMcpOAuthAuthorizationCodeForTokenBoundary")).not.toMatch(
+      /\b(?:deadlineEpochMs|timeoutMs)\b/u,
+    );
+    expect(exportedArgsBlock(source, "internalIssueMcpOAuthAccessTokenFromAuthorizationCode")).toMatch(
+      /\bdeadlineEpochMs:\s*v\.number\(\)[\s\S]*\btimeoutMs:\s*v\.number\(\)/u,
+    );
     expect(schemaSource).not.toContain("authorizationCode: v.string()");
     expect(schemaSource).not.toContain("accessToken: v.string()");
   });
 });
+
+function exportedArgsBlock(source: string, exportName: string): string {
+  const match = source.match(
+    new RegExp(`export const ${exportName}[\\s\\S]*?args: \\{([\\s\\S]*?)\\n  \\},\\n  returns:`, "u"),
+  );
+  expect(match?.[1]).toBeTypeOf("string");
+  return match?.[1] ?? "";
+}
 
 async function consumeWith(seed: StoredCodeRecord[], args: ReturnType<typeof consumeArgs>) {
   const { ctx } = makeCtx(seed);
