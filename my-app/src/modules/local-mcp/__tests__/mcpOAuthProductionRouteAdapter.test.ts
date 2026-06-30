@@ -23,6 +23,12 @@ import {
   LOCAL_MCP_DEV_OAUTH_AUTHORIZATION_FLAG,
   LOCAL_MCP_DEV_OAUTH_REDIRECT_URI_VAR,
 } from "../mcpOAuthLocalDevRouteAdapter";
+import {
+  buildMcpAuthenticatedProtocolEnvelope,
+  parseMcpJsonRpcProtocolMessage,
+} from "../mcpAuthenticatedProtocolEnvelope";
+import { evaluateMcpProductionPolicy } from "../mcpProductionPolicyKernel";
+import { buildMcpProductionToolsListResult } from "../mcpProductionToolsListProjection";
 import type { McpOAuthProductionActivationDependenciesV1 } from "../mcpOAuthProductionActivationBoundary";
 import {
   buildMcpOAuthProductionRouteAdapterConfig,
@@ -80,6 +86,9 @@ vi.mock("jose", () => ({
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const SOURCE_FILE = resolve(TEST_DIR, "../mcpOAuthProductionRouteAdapter.ts");
+const AUTHENTICATED_ENVELOPE_SOURCE_FILE = resolve(TEST_DIR, "../mcpAuthenticatedProtocolEnvelope.ts");
+const PRODUCTION_POLICY_SOURCE_FILE = resolve(TEST_DIR, "../mcpProductionPolicyKernel.ts");
+const PRODUCTION_TOOLS_LIST_PROJECTION_SOURCE_FILE = resolve(TEST_DIR, "../mcpProductionToolsListProjection.ts");
 const VITE_CONFIG_SOURCE = resolve(TEST_DIR, "../../../../vite.config.ts");
 const APP_ORIGIN = "http://localhost:5173";
 const PROD_APP_ORIGIN = "https://mcp.twoweeks.example.test";
@@ -1253,6 +1262,289 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(OWNER_ID);
   });
 
+  it("returns authenticated production tools/list metadata only after bearer verification", async () => {
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push(storedAccessToken());
+    const activation = activationDependencies();
+    const dependencies = routeDependencies(ctx);
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(
+        `Bearer ${RAW_ACCESS_TOKEN}`,
+        { jsonrpc: "2.0", id: "tools-list-1", method: "tools/list" },
+        { "mcp-protocol-version": "2025-11-25" },
+      ),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }, activation),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 200,
+      json: {
+        jsonrpc: "2.0",
+        id: "tools-list-1",
+        result: {
+          tools: expect.any(Array),
+        },
+      },
+    });
+    const bodyText = JSON.stringify(response);
+    const tools = (response.json as { result: { tools: readonly Record<string, unknown>[] } }).result.tools;
+    expect(tools).toHaveLength(4);
+    expect(tools.map((tool) => tool.name)).toEqual([
+      "twoweeks.application_package.summarize",
+      "twoweeks.evidence_graph.summarize",
+      "twoweeks.resume_variant_plan.summarize",
+      "twoweeks.review_cockpit.summarize",
+    ]);
+    for (const tool of tools) {
+      expect(Object.keys(tool).sort()).toEqual(["annotations", "description", "inputSchema", "name", "title"]);
+      expect(tool.annotations).toEqual({
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      });
+      expect(tool).not.toHaveProperty("outputSchema");
+      expect(tool).not.toHaveProperty("localToolId");
+      expect(tool).not.toHaveProperty("internalToolId");
+      expect(tool).not.toHaveProperty("handler");
+      expect(tool).not.toHaveProperty("execute");
+      expect(tool).not.toHaveProperty("call");
+    }
+    expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(1);
+    expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
+    expect(dependencies.createPreAuthIntent).not.toHaveBeenCalled();
+    expect(dependencies.consumeAuthorizationIntent).not.toHaveBeenCalled();
+    expect(dependencies.createAuthorizationCode).not.toHaveBeenCalled();
+    expect(dependencies.issueAccessToken).not.toHaveBeenCalled();
+    expect(activation.providerAdapter.exchangeAuthorizationCode).not.toHaveBeenCalled();
+    expect(activation.executeAccountLinkLifecycle).not.toHaveBeenCalled();
+    expect(bodyText).not.toContain(RAW_ACCESS_TOKEN);
+    expect(bodyText).not.toContain(ACCESS_TOKEN_DIGEST);
+    expect(bodyText).not.toContain(OWNER_ID);
+    expect(bodyText).not.toContain("mcpOAuthAccessTokens_fixture");
+    expect(bodyText).not.toContain("provider");
+    expect(bodyText).not.toContain("authorizationCodeDigest");
+    expect(bodyText).not.toContain("localToolId");
+    expect(bodyText).not.toContain("internalToolId");
+    expect(bodyText).not.toContain("local_mcp_dry_run");
+    expect(bodyText).not.toContain("https://");
+  });
+
+  it("accepts safe tools/list metadata params without echoing progress tokens", async () => {
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push(storedAccessToken());
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(
+        `Bearer ${RAW_ACCESS_TOKEN}`,
+        mcpJsonRpcRequest("tools/list", "tools-list-progress", { _meta: { progressToken: "progress-1" } }),
+        { "mcp-protocol-version": "2025-11-25" },
+      ),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      routeDependencies(ctx),
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 200,
+      json: {
+        jsonrpc: "2.0",
+        id: "tools-list-progress",
+        result: {
+          tools: expect.any(Array),
+        },
+      },
+    });
+    expect(JSON.stringify(response)).not.toContain("progress-1");
+  });
+
+  it.each([
+    ["cursor", { cursor: "cursor-1" }],
+    ["filters", { filters: { name: "twoweeks.application_package.summarize" } }],
+    ["unknown param", { unknown: true }],
+    ["unsafe progress token", { _meta: { progressToken: { id: "nested" } } }],
+  ] as const)("fails tools/list closed for %s params", async (_label, params) => {
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push(storedAccessToken());
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(
+        `Bearer ${RAW_ACCESS_TOKEN}`,
+        mcpJsonRpcRequest("tools/list", "tools-list-invalid", params),
+        { "mcp-protocol-version": "2025-11-25" },
+      ),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      routeDependencies(ctx),
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 200,
+      json: {
+        jsonrpc: "2.0",
+        id: "tools-list-invalid",
+        error: {
+          code: -32602,
+          message: "Invalid tools/list params.",
+          safeForModel: true,
+        },
+      },
+    });
+    expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
+    expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+  });
+
+  it("keeps production tools/call blocked distinctly from unknown methods", async () => {
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push(storedAccessToken());
+    const activation = activationDependencies();
+    const dependencies = routeDependencies(ctx);
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(
+        `Bearer ${RAW_ACCESS_TOKEN}`,
+        mcpJsonRpcRequest("tools/call", "tools-call", { name: "twoweeks.application_package.summarize" }),
+        { "mcp-protocol-version": "2025-11-25" },
+      ),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }, activation),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 200,
+      json: {
+        jsonrpc: "2.0",
+        id: "tools-call",
+        error: {
+          code: -32000,
+          message: "Production MCP tools/call execution is blocked.",
+          safeForModel: true,
+        },
+      },
+    });
+    expect(dependencies.createPreAuthIntent).not.toHaveBeenCalled();
+    expect(dependencies.consumeAuthorizationIntent).not.toHaveBeenCalled();
+    expect(dependencies.createAuthorizationCode).not.toHaveBeenCalled();
+    expect(dependencies.issueAccessToken).not.toHaveBeenCalled();
+    expect(activation.providerAdapter.exchangeAuthorizationCode).not.toHaveBeenCalled();
+    expect(activation.executeAccountLinkLifecycle).not.toHaveBeenCalled();
+    expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
+    expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+  });
+
+  it("keeps unknown production /mcp methods method-not-found after bearer verification", async () => {
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push(storedAccessToken());
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(
+        `Bearer ${RAW_ACCESS_TOKEN}`,
+        mcpJsonRpcRequest("twoweeks/provider.call", "unknown-1"),
+        { "mcp-protocol-version": "2025-11-25" },
+      ),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      routeDependencies(ctx),
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 200,
+      json: {
+        jsonrpc: "2.0",
+        id: "unknown-1",
+        error: {
+          code: -32601,
+          message: "Method not found.",
+          safeForModel: true,
+        },
+      },
+    });
+    expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
+    expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+  });
+
+  it("keeps production MCP policy decision-only and tools/list projection separate", () => {
+    const policySource = readFileSync(PRODUCTION_POLICY_SOURCE_FILE, "utf8");
+    const projectionSource = readFileSync(PRODUCTION_TOOLS_LIST_PROJECTION_SOURCE_FILE, "utf8");
+    const adapterSource = readFileSync(SOURCE_FILE, "utf8");
+    const jsonRpcMessage = parseMcpJsonRpcProtocolMessage(JSON.stringify(mcpJsonRpcRequest("tools/list", "tools-list")));
+    if (!jsonRpcMessage) throw new Error("fixture JSON-RPC should parse");
+    const envelope = buildMcpAuthenticatedProtocolEnvelope({
+      verifiedClientId: CLIENT_ID,
+      verifiedResource: RESOURCE,
+      verifiedScopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
+      accessTokenExpiresAt: NOW + 60 * 60 * 1_000,
+      callerKey: "198.51.100.9",
+      jsonRpcMessage,
+      createdAt: NOW,
+    });
+    const decision = evaluateMcpProductionPolicy(envelope);
+    const projection = buildMcpProductionToolsListResult();
+
+    expect(decision).toEqual({
+      kind: "mcp_production_policy_decision",
+      decision: "allow_metadata",
+      method: "tools/list",
+      reason: "metadata_listing_allowed",
+      version: 1,
+    });
+    expect(Object.keys(decision).sort()).toEqual(["decision", "kind", "method", "reason", "version"]);
+    expect(JSON.stringify(decision)).not.toContain("jsonrpc");
+    expect(JSON.stringify(decision)).not.toContain("result");
+    expect(decision).not.toHaveProperty("tools");
+    expect(decision).not.toHaveProperty("response");
+    expect(decision).not.toHaveProperty("payload");
+    expect(policySource).toContain("evaluateMcpProductionPolicy");
+    expect(policySource).not.toContain("jsonResponse");
+    expect(policySource).not.toContain("buildMcpJsonRpcError");
+    expect(policySource).not.toContain("buildMcpProductionToolsListResult");
+    expect(policySource).not.toContain("buildLocalMcpDescriptorRegistryFixtureOnly");
+    expect(projection.tools).toHaveLength(4);
+    expect(projectionSource).toContain("buildMcpProductionToolsListResult");
+    expect(adapterSource).toContain("evaluateMcpProductionPolicy(envelope)");
+    expect(adapterSource).toContain("buildMcpProductionToolsListResult()");
+  });
+
+  it("creates immutable authenticated protocol envelopes before policy evaluation", () => {
+    const envelopeSource = readFileSync(AUTHENTICATED_ENVELOPE_SOURCE_FILE, "utf8");
+    const parsedMessage = parseMcpJsonRpcProtocolMessage(JSON.stringify(
+      mcpJsonRpcRequest("tools/list", "tools-list", { _meta: { progressToken: 1 } }),
+    ));
+    if (!parsedMessage) throw new Error("fixture JSON-RPC should parse");
+
+    const envelope = buildMcpAuthenticatedProtocolEnvelope({
+      verifiedClientId: CLIENT_ID,
+      verifiedResource: RESOURCE,
+      verifiedScopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
+      accessTokenExpiresAt: NOW + 60 * 60 * 1_000,
+      callerKey: "198.51.100.9",
+      jsonRpcMessage: parsedMessage,
+      createdAt: NOW,
+    });
+
+    expect(Object.isFrozen(envelope)).toBe(true);
+    expect(Object.isFrozen(envelope.verifiedScopes)).toBe(true);
+    expect(Object.isFrozen(envelope.jsonRpc)).toBe(true);
+    expect(Object.isFrozen((envelope.jsonRpc.params as { _meta: unknown })._meta)).toBe(true);
+    expect(evaluateMcpProductionPolicy(envelope)).toMatchObject({
+      decision: "allow_metadata",
+      method: "tools/list",
+    });
+    expect(envelope).toMatchObject({
+      authenticated: true,
+      verifiedClientId: CLIENT_ID,
+      verifiedResource: RESOURCE,
+      accessTokenExpiresAt: NOW + 60 * 60 * 1_000,
+      modelVisible: false,
+      safeForLogging: false,
+    });
+    expect(JSON.stringify(envelope)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(envelope)).not.toContain(ACCESS_TOKEN_DIGEST);
+    expect(JSON.stringify(envelope)).not.toContain(OWNER_ID);
+    expect(envelopeSource).toContain("Object.freeze");
+  });
+
   it.each([
     ["missing", {}],
     ["unsupported", { "mcp-protocol-version": "not-a-version" }],
@@ -1342,47 +1634,6 @@ describe("MCP OAuth production route adapter", () => {
         },
       },
     });
-    expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
-    expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
-    expect(JSON.stringify(response)).not.toContain(OWNER_ID);
-  });
-
-  it.each([
-    ["unknown method", mcpJsonRpcRequest("twoweeks/provider.call", "unknown-1"), "Method not found."],
-    ["tools/list", mcpJsonRpcRequest("tools/list", "tools-list"), "Production MCP tools are not available."],
-    ["tools/call", mcpJsonRpcRequest("tools/call", "tools-call", { name: "twoweeks.application_package.summarize" }), "Production MCP tools are not available."],
-  ] as const)("keeps production /mcp %s unsupported after bearer verification", async (_label, body, message) => {
-    const ctx = makeCtx();
-    ctx.accessTokenRows.push(storedAccessToken());
-    const activation = activationDependencies();
-    const dependencies = routeDependencies(ctx);
-
-    const response = await handleMcpOAuthProductionRouteRequest(
-      mcpRequest(`Bearer ${RAW_ACCESS_TOKEN}`, body, { "mcp-protocol-version": "2025-11-25" }),
-      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }, activation),
-      dependencies,
-    );
-
-    expect(response).toMatchObject({
-      handled: true,
-      status: 200,
-      json: {
-        jsonrpc: "2.0",
-        id: body.id,
-        error: {
-          code: -32601,
-          message,
-          safeForModel: true,
-        },
-      },
-    });
-    expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
-    expect(dependencies.createPreAuthIntent).not.toHaveBeenCalled();
-    expect(dependencies.consumeAuthorizationIntent).not.toHaveBeenCalled();
-    expect(dependencies.createAuthorizationCode).not.toHaveBeenCalled();
-    expect(dependencies.issueAccessToken).not.toHaveBeenCalled();
-    expect(activation.providerAdapter.exchangeAuthorizationCode).not.toHaveBeenCalled();
-    expect(activation.executeAccountLinkLifecycle).not.toHaveBeenCalled();
     expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
     expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
     expect(JSON.stringify(response)).not.toContain(OWNER_ID);
