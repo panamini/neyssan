@@ -38,6 +38,10 @@ import {
   type McpProductionPrivateBetaGateConfigInputV1,
   type McpProductionPrivateBetaGateDecisionV1,
 } from "./mcpProductionPrivateBetaGate";
+import {
+  evaluateMcpProductionLaunchReadiness,
+  type McpProductionLaunchReadinessConfigInputV1,
+} from "./mcpProductionLaunchReadiness";
 import { evaluateMcpProductionPolicy, type McpProductionPolicyDecisionV1 } from "./mcpProductionPolicyKernel";
 import {
   buildMcpProductionToolsCallReadonlySyntheticResult,
@@ -75,6 +79,7 @@ export type McpOAuthProductionRouteAdapterConfigV1 = Readonly<{
   preflight: McpOAuthProductionRoutePreflightResultV1;
   authorizationRequestGuard: McpOAuthProductionAuthorizationRequestGuardV1;
   privateBeta?: McpProductionPrivateBetaGateConfigInputV1;
+  launchReadiness?: McpProductionLaunchReadinessConfigInputV1;
   handledPaths: readonly McpOAuthProductionRoutePathV1[];
   failClosedUnlessPreflightReady: true;
   authorizeCreatesOwnerlessPreAuthIntentOnly: true;
@@ -87,6 +92,7 @@ export type McpOAuthProductionRouteAdapterConfigInputV1 =
   McpOAuthProductionRoutePreflightInputV1 &
     Readonly<{
       privateBeta?: McpProductionPrivateBetaGateConfigInputV1;
+      launchReadiness?: McpProductionLaunchReadinessConfigInputV1;
     }>;
 
 type McpOAuthProductionAuthorizationRequestGuardV1 = Readonly<{
@@ -625,6 +631,9 @@ export function buildMcpOAuthProductionRouteAdapterConfig(
     preflight: buildMcpOAuthProductionRoutePreflight(input),
     authorizationRequestGuard: buildAuthorizationRequestGuard(input),
     ...(input.privateBeta ? { privateBeta: freezePrivateBetaConfigInput(input.privateBeta) } : {}),
+    ...(input.launchReadiness ? {
+      launchReadiness: freezeLaunchReadinessConfigInput(input.launchReadiness),
+    } : {}),
     handledPaths: HANDLED_PATHS,
     failClosedUnlessPreflightReady: true,
     authorizeCreatesOwnerlessPreAuthIntentOnly: true,
@@ -1153,6 +1162,11 @@ async function handleMcpRequest(
   if (!privateBetaDecision.allowed) {
     return mcpPrivateBetaGateDeniedResponse(preflight, privateBetaDecision);
   }
+  const launchReadinessDecision = evaluateMcpProductionLaunchReadiness({
+    privateBetaDecision,
+    config: config.launchReadiness,
+  });
+  void launchReadinessDecision;
 
   return handleAuthenticatedMcpJsonRpc(envelope);
 }
@@ -1201,6 +1215,16 @@ function freezePrivateBetaConfigInput(
     ...(input.allowedClientIds ? { allowedClientIds: Object.freeze([...input.allowedClientIds]) } : {}),
     ...(input.allowedResources ? { allowedResources: Object.freeze([...input.allowedResources]) } : {}),
     ...(input.allowedSubjectIds ? { allowedSubjectIds: Object.freeze([...input.allowedSubjectIds]) } : {}),
+    ...(input.version !== undefined ? { version: input.version } : {}),
+  });
+}
+
+function freezeLaunchReadinessConfigInput(
+  input: McpProductionLaunchReadinessConfigInputV1,
+): McpProductionLaunchReadinessConfigInputV1 {
+  return Object.freeze({
+    ...(input.publicLaunchRequested !== undefined ? { publicLaunchRequested: input.publicLaunchRequested } : {}),
+    ...(input.evidence ? { evidence: Object.freeze({ ...input.evidence }) } : {}),
     ...(input.version !== undefined ? { version: input.version } : {}),
   });
 }
