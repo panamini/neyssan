@@ -537,6 +537,46 @@ type McpOAuthProductionAuthorizationOriginV1 = Readonly<{
   port: string;
 }>;
 
+type McpJsonRpcIdV1 = string | number | null;
+
+type McpJsonRpcProtocolRequestV1 = Readonly<{
+  jsonrpc: "2.0";
+  id: McpJsonRpcIdV1;
+  method: string;
+  params?: unknown;
+}>;
+
+type McpJsonRpcInitializedNotificationV1 = Readonly<{
+  jsonrpc: "2.0";
+  method: "notifications/initialized";
+  params?: unknown;
+}>;
+
+type McpJsonRpcProtocolMessageV1 =
+  | McpJsonRpcProtocolRequestV1
+  | McpJsonRpcInitializedNotificationV1;
+
+type McpAuthenticatedProtocolEnvelopeV1 = Readonly<{
+  kind: "mcp_authenticated_protocol_envelope";
+  authenticated: true;
+  verifiedClientId: string;
+  verifiedResource: string;
+  verifiedScopes: readonly string[];
+  accessTokenExpiresAt: number;
+  quotaCallerKey: string;
+  canonicalRemoteAddress: string;
+  jsonRpc: Readonly<{
+    method: string;
+    hasId: boolean;
+    id?: McpJsonRpcIdV1;
+    version: 1;
+  }>;
+  createdAt: number;
+  modelVisible: false;
+  safeForLogging: false;
+  version: 1;
+}>;
+
 const HANDLED_PATHS = Object.freeze([
   MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
   MCP_OAUTH_PRODUCTION_TOKEN_PATH,
@@ -576,6 +616,7 @@ const AUTHORIZATION_CODE_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 const ACCESS_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 const AUTHORIZATION_CODE_DIGEST_PATTERN = /^[0-9a-f]{64}$/u;
 const MCP_BEARER_VERIFICATION_QUOTA_CLIENT_ID = "mcp_bearer_verification";
+const MCP_PRODUCTION_PROTOCOL_VERSION = "2025-11-25";
 const PKCE_CODE_VERIFIER_PATTERN = /^[A-Za-z0-9._~-]{43,128}$/u;
 const PKCE_CODE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43,128}$/u;
 const WELL_KNOWN_PROTECTED_RESOURCE_PATH = "/.well-known/oauth-protected-resource";
@@ -1096,7 +1137,26 @@ async function handleMcpRequest(
     );
   }
 
-  return authenticatedMcpBlockedResponse(preflight, verifyResult);
+  if (!isMcpTransportOriginAllowed(request, [resourceOrigin, authorizationOrigin])) {
+    return jsonResponse(403, buildMcpJsonRpcError(null, -32600, "Invalid Origin header."));
+  }
+
+  const jsonRpcMessage = parseMcpJsonRpcProtocolMessage(request.bodyText ?? "");
+  if (!jsonRpcMessage) {
+    return jsonResponse(400, buildMcpJsonRpcError(null, -32700, "Invalid JSON-RPC request."));
+  }
+  if (!isMcpProtocolVersionHeaderAllowed(request, jsonRpcMessage)) {
+    const id = "id" in jsonRpcMessage ? jsonRpcMessage.id : null;
+    return jsonResponse(400, buildMcpJsonRpcError(id, -32600, "Unsupported MCP protocol version."));
+  }
+  const envelope = buildAuthenticatedMcpProtocolEnvelope({
+    verifyResult,
+    callerKey,
+    jsonRpcMessage,
+    createdAt: now,
+  });
+
+  return handleAuthenticatedMcpJsonRpc(envelope);
 }
 
 function buildAuthorizationRequestGuard(
@@ -1574,56 +1634,106 @@ function inertGuardedResponse(
   });
 }
 
-function authenticatedMcpBlockedResponse(
-  preflight: McpOAuthProductionRoutePreflightResultV1,
-  verifyResult: Extract<McpOAuthProductionAccessTokenVerifyPortResultV1, { ok: true }>,
+function handleAuthenticatedMcpJsonRpc(
+  envelope: McpAuthenticatedProtocolEnvelopeV1,
 ): McpOAuthProductionRouteAdapterResponseV1 {
-  return jsonResponse(501, {
-    kind: "mcp_oauth_production_route_response",
-    status: "authenticated_mcp_blocked",
-    reason: "mcp_execution_blocked",
-    route: "mcp",
-    message: "Production MCP request authenticated, but MCP execution is still blocked.",
-    safeForModel: true,
-    allowedByPreflight: true,
-    preflightDecision: preflight.decision,
-    guardedInertHandlerReached: true,
-    authenticatedMcpRequest: true,
-    accessTokenAccepted: true,
-    accessTokenExpiresAt: verifyResult.serverOnly.expiresAt,
-    oauthExecutionStarted: false,
-    authorizationRequestAccepted: false,
-    authorizationCodeAccepted: false,
-    authorizationCodeIssued: false,
-    authorizationCodeConsumed: false,
-    redirectSecretAccepted: false,
-    providerCalled: false,
-    tokenExchangeAttempted: false,
-    tokenIssued: false,
-    preAuthIntentCreated: false,
-    ownerBound: false,
-    consentCompleted: false,
-    accountLinkCreated: false,
-    tokenPersisted: false,
-    refreshTokenPersisted: false,
-    providerSecretsExposed: false,
-    rawProviderConfigExposed: false,
-    ownerIdentifiersExposed: false,
-    authorizationCodesExposed: false,
-    redirectSecretsExposed: false,
-    accessTokenEchoed: false,
-    accessTokenDigestEchoed: false,
-    hostedMcpStarted: false,
-    toolsListExecuted: false,
-    toolsCallExecuted: false,
-    providerCallExecuted: false,
-    refreshTokenIssued: false,
-    accountLinkLifecycleExecuted: false,
-    privateBetaEnabled: false,
-    publicLaunchEnabled: false,
-    handlerMode: "authenticated_mcp_blocked_only",
+  const method = envelope.jsonRpc.method;
+  if (method === "notifications/initialized") {
+    return jsonResponse(202, null);
+  }
+  const id = envelope.jsonRpc.id ?? null;
+  if (method === "initialize") {
+    return jsonResponse(200, {
+      jsonrpc: "2.0",
+      id,
+      result: {
+        protocolVersion: MCP_PRODUCTION_PROTOCOL_VERSION,
+        serverInfo: {
+          name: "twoweeks-production-mcp-auth-boundary",
+          version: "1.0.0",
+        },
+        capabilities: {},
+      },
+    });
+  }
+  if (method === "ping") {
+    return jsonResponse(200, {
+      jsonrpc: "2.0",
+      id,
+      result: {},
+    });
+  }
+  const message = method === "tools/list" || method === "tools/call"
+    ? "Production MCP tools are not available."
+    : "Method not found.";
+  return jsonResponse(200, buildMcpJsonRpcError(id, -32601, message));
+}
+
+function buildAuthenticatedMcpProtocolEnvelope(input: Readonly<{
+  verifyResult: Extract<McpOAuthProductionAccessTokenVerifyPortResultV1, { ok: true }>;
+  callerKey: string;
+  jsonRpcMessage: McpJsonRpcProtocolMessageV1;
+  createdAt: number;
+}>): McpAuthenticatedProtocolEnvelopeV1 {
+  const hasId = "id" in input.jsonRpcMessage;
+  return Object.freeze({
+    kind: "mcp_authenticated_protocol_envelope",
+    authenticated: true,
+    verifiedClientId: input.verifyResult.serverOnly.clientId,
+    verifiedResource: input.verifyResult.serverOnly.resource,
+    verifiedScopes: Object.freeze([...input.verifyResult.serverOnly.scopes]),
+    accessTokenExpiresAt: input.verifyResult.serverOnly.expiresAt,
+    quotaCallerKey: input.callerKey,
+    canonicalRemoteAddress: input.callerKey,
+    jsonRpc: Object.freeze({
+      method: input.jsonRpcMessage.method,
+      hasId,
+      ...(hasId ? { id: input.jsonRpcMessage.id } : {}),
+      version: 1,
+    }),
+    createdAt: input.createdAt,
+    modelVisible: false,
+    safeForLogging: false,
     version: 1,
   });
+}
+
+function parseMcpJsonRpcProtocolMessage(bodyText: string): McpJsonRpcProtocolMessageV1 | undefined {
+  try {
+    const parsed = JSON.parse(bodyText) as unknown;
+    if (!isPlainRecord(parsed)) return undefined;
+    if (parsed.jsonrpc !== "2.0" || typeof parsed.method !== "string") return undefined;
+    if (parsed.method === "notifications/initialized") {
+      if (!hasOnlyAllowedKeys(parsed, ["jsonrpc", "method", "params"])) return undefined;
+      return Object.freeze({
+        jsonrpc: "2.0",
+        method: "notifications/initialized" as const,
+        ...("params" in parsed ? { params: parsed.params } : {}),
+      });
+    }
+    if (!hasOnlyAllowedKeys(parsed, ["jsonrpc", "id", "method", "params"])) return undefined;
+    if (!isJsonRpcId(parsed.id)) return undefined;
+    return Object.freeze({
+      jsonrpc: "2.0",
+      id: parsed.id,
+      method: parsed.method,
+      ...("params" in parsed ? { params: parsed.params } : {}),
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+function buildMcpJsonRpcError(id: McpJsonRpcIdV1, code: number, message: string): unknown {
+  return {
+    jsonrpc: "2.0",
+    id,
+    error: {
+      code,
+      message,
+      safeForModel: true,
+    },
+  };
 }
 
 function notHandled(): McpOAuthProductionRouteAdapterResponseV1 {
@@ -2005,6 +2115,49 @@ function readForwardedCallerKey(value: string | readonly string[] | undefined): 
 function readHeaderCallerKey(value: string | readonly string[] | undefined): string | undefined {
   const header = readSingleHeaderValue(value);
   return header ? normalizeCallerKey(header) : undefined;
+}
+
+function isMcpTransportOriginAllowed(
+  request: McpOAuthProductionRouteAdapterRequestV1,
+  allowedOrigins: readonly McpOAuthProductionAuthorizationOriginV1[],
+): boolean {
+  const originHeader = readHeaderValueByName(request.headers, "origin");
+  if (originHeader === undefined) return true;
+  if (originHeader === "ambiguous") return false;
+  const origin = readMcpOriginHeaderOrigin(originHeader);
+  return origin !== undefined && allowedOrigins.some((allowedOrigin) => origin === allowedOrigin.origin);
+}
+
+function readMcpOriginHeaderOrigin(value: string): string | undefined {
+  if (!value || value.length > 512 || hasControlCharacter(value)) return undefined;
+  try {
+    const parsed = new URL(value);
+    return isMcpOriginHeaderUrlShapeAllowed(parsed) ? parsed.origin : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function isMcpOriginHeaderUrlShapeAllowed(parsed: URL): boolean {
+  const pathAllowed = parsed.pathname === "" || parsed.pathname === "/";
+  return [
+    parsed.origin !== "null",
+    parsed.hostname.length > 0,
+    parsed.username === "",
+    parsed.password === "",
+    pathAllowed,
+    parsed.search === "",
+    parsed.hash === "",
+  ].every((allowed) => allowed);
+}
+
+function isMcpProtocolVersionHeaderAllowed(
+  request: McpOAuthProductionRouteAdapterRequestV1,
+  message: McpJsonRpcProtocolMessageV1,
+): boolean {
+  if (message.method === "initialize") return true;
+  const protocolVersion = readHeaderValueByName(request.headers, "mcp-protocol-version");
+  return protocolVersion === MCP_PRODUCTION_PROTOCOL_VERSION;
 }
 
 function normalizeCallerKey(value: string | undefined): string | undefined {
@@ -2842,6 +2995,14 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
+}
+
+function hasOnlyAllowedKeys(value: Record<string, unknown>, allowedKeys: readonly string[]): boolean {
+  return Object.keys(value).every((key) => allowedKeys.includes(key));
+}
+
+function isJsonRpcId(value: unknown): value is McpJsonRpcIdV1 {
+  return value === null || typeof value === "string" || (typeof value === "number" && Number.isInteger(value));
 }
 
 function toRejectedError(error: unknown, fallbackMessage: string): Error {

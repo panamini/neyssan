@@ -336,11 +336,11 @@ async function respondToMcpOAuthProductionRouteRequest(
   pathName: string,
 ): Promise<void> {
   if (
-    pathName === MCP_OAUTH_PRODUCTION_TOKEN_PATH &&
+    (pathName === MCP_OAUTH_PRODUCTION_TOKEN_PATH || pathName === MCP_OAUTH_PRODUCTION_MCP_PATH) &&
     (req.method ?? "GET").toUpperCase() === "POST" &&
     isMcpOAuthProductionRouteAllowedByPreflightPath(pathName, config.preflight)
   ) {
-    readProductionMcpOAuthTokenBody(req, res, PRODUCTION_OAUTH_TOKEN_MAX_REQUEST_BYTES, (bodyText) => {
+    readProductionMcpOAuthTokenBody(req, res, pathName, PRODUCTION_OAUTH_TOKEN_MAX_REQUEST_BYTES, (bodyText) => {
       void respondToMcpOAuthProductionRouteRequestWithBody(
         req,
         res,
@@ -387,6 +387,8 @@ async function respondToMcpOAuthProductionRouteRequestWithBody(
         "x-real-ip": headerValue(req.headers["x-real-ip"]),
         "cf-connecting-ip": headerValue(req.headers["cf-connecting-ip"]),
         "content-type": headerValue(req.headers["content-type"]),
+        origin: headerValue(req.headers.origin),
+        "mcp-protocol-version": headerValue(req.headers["mcp-protocol-version"]),
       },
       remoteAddress: req.socket.remoteAddress,
       ...(bodyText !== undefined ? { bodyText } : {}),
@@ -457,6 +459,7 @@ function readLocalMcpDevBody(
 function readProductionMcpOAuthTokenBody(
   req: IncomingMessage,
   res: ServerResponse,
+  pathName: string,
   maxRequestBytes: number,
   onBody: (bodyText: string) => void,
 ): void {
@@ -466,7 +469,7 @@ function readProductionMcpOAuthTokenBody(
   req.on("data", (chunk: string) => {
     if (rejectedForSize) return;
     bodyText += chunk;
-    rejectedForSize = rejectIfProductionMcpOAuthTokenBodyTooLarge(req, res, bodyText, maxRequestBytes);
+    rejectedForSize = rejectIfProductionMcpOAuthBodyTooLarge(req, res, pathName, bodyText, maxRequestBytes);
   });
   req.on("end", () => {
     if (!rejectedForSize && !res.writableEnded) onBody(bodyText);
@@ -498,13 +501,27 @@ function rejectIfLocalMcpDevBodyTooLarge(
   return true;
 }
 
-function rejectIfProductionMcpOAuthTokenBodyTooLarge(
+function rejectIfProductionMcpOAuthBodyTooLarge(
   req: IncomingMessage,
   res: ServerResponse,
+  pathName: string,
   bodyText: string,
   maxRequestBytes: number,
 ): boolean {
   if (Buffer.byteLength(bodyText, "utf8") <= maxRequestBytes) return false;
+  if (pathName === MCP_OAUTH_PRODUCTION_MCP_PATH) {
+    sendLocalMcpJson(res, 413, {
+      jsonrpc: "2.0",
+      id: null,
+      error: {
+        code: -32013,
+        message: "Production MCP request is too large.",
+        safeForModel: true,
+      },
+    });
+    req.destroy();
+    return true;
+  }
   sendLocalMcpJson(res, 413, {
     kind: "mcp_oauth_production_route_response",
     status: "blocked",
@@ -569,6 +586,10 @@ function sendLocalMcpRouteResponse(
   res.statusCode = status;
   for (const [key, value] of Object.entries(headers)) {
     res.setHeader(key, value);
+  }
+  if (status === 202 && json === null) {
+    res.end();
+    return;
   }
   if (json !== undefined) {
     res.end(JSON.stringify(json));
