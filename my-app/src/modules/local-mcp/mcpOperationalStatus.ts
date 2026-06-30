@@ -66,6 +66,7 @@ const PRODUCTION_OAUTH_PROVIDER_CONFIG_KEYS = new Set([
 const PRODUCTION_MCP_LAUNCH_READINESS_DECISION_KEYS = new Set([
   "kind",
   "privateBetaAccessAllowed",
+  "privateBetaGateCode",
   "publicLaunchAllowed",
   "publicLaunchBlocked",
   "code",
@@ -88,6 +89,17 @@ const PRODUCTION_MCP_LAUNCH_READINESS_DECISION_CODES = new Set([
   "launch_config_invalid",
   "launch_evidence_missing",
   "public_launch_blocked",
+]);
+const PRODUCTION_MCP_PRIVATE_BETA_GATE_DECISION_CODES = new Set([
+  "private_beta_allowed",
+  "private_beta_missing_config",
+  "private_beta_disabled",
+  "private_beta_malformed_config",
+  "private_beta_empty_allowlist",
+  "private_beta_ambiguous_eligibility",
+  "private_beta_client_not_allowed",
+  "private_beta_resource_not_allowed",
+  "private_beta_subject_not_allowed",
 ]);
 const PRODUCTION_MCP_LAUNCH_READINESS_TRUE_FIELDS = [
   "safeForModel",
@@ -298,6 +310,22 @@ export function buildMcpOperationalProductionMcpLaunchReadinessStatus(
   }
 
   if (!decision.privateBetaAccessAllowed) {
+    if (decision.privateBetaGateCode === "private_beta_disabled") {
+      return buildStatus({
+        capability: "production_mcp_launch_readiness",
+        enabled: false,
+        configValid: true,
+        featureState: "disabled",
+        category: "feature_disabled",
+      });
+    }
+    if (
+      decision.privateBetaGateCode === "private_beta_missing_config" ||
+      decision.privateBetaGateCode === "private_beta_malformed_config" ||
+      decision.privateBetaGateCode === "private_beta_empty_allowlist"
+    ) {
+      return unsafeConfigStatus("production_mcp_launch_readiness");
+    }
     return buildStatus({
       capability: "production_mcp_launch_readiness",
       enabled: true,
@@ -361,6 +389,7 @@ function readProductionMcpLaunchReadinessDecision(
   if (
     value.kind !== "mcp_production_launch_readiness_decision" ||
     typeof value.privateBetaAccessAllowed !== "boolean" ||
+    !PRODUCTION_MCP_PRIVATE_BETA_GATE_DECISION_CODES.has(String(value.privateBetaGateCode)) ||
     !PRODUCTION_MCP_LAUNCH_READINESS_DECISION_CODES.has(String(value.code)) ||
     !allFieldsEqual(value, PRODUCTION_MCP_LAUNCH_READINESS_TRUE_FIELDS, true) ||
     !allFieldsEqual(value, PRODUCTION_MCP_LAUNCH_READINESS_FALSE_FIELDS, false) ||

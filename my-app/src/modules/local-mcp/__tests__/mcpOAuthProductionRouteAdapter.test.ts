@@ -1487,6 +1487,43 @@ describe("MCP OAuth production route adapter", () => {
     expectNoRouteLeakage(response);
   });
 
+  it("blocks public launch readiness requests before production MCP policy dispatch", async () => {
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push(storedAccessToken());
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(
+        `Bearer ${RAW_ACCESS_TOKEN}`,
+        mcpJsonRpcRequest("tools/list", "public-launch-blocked"),
+        { "mcp-protocol-version": "2025-11-25" },
+      ),
+      routeConfig(
+        { runtime: "1", approved: "1", routeWiring: "1" },
+        activationDependencies(),
+        privateBetaConfig(),
+        launchReadinessConfig({ publicLaunchRequested: true }),
+      ),
+      routeDependencies(ctx),
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 403,
+      json: {
+        status: "blocked",
+        reason: "launch_readiness_blocked",
+        route: "mcp",
+        launchReadinessCode: "public_launch_blocked",
+        launchReadinessPublicLaunchAllowed: false,
+        launchReadinessPublicLaunchBlocked: true,
+        launchReadinessPrivateBetaGateCode: "private_beta_allowed",
+      },
+    });
+    expect(JSON.stringify(response)).not.toContain("tools");
+    expect(JSON.stringify(response)).not.toContain("Method not found.");
+    expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+    expectNoRouteLeakage(response);
+  });
+
   it.each([
     ["cursor", { cursor: "cursor-1" }],
     ["filters", { filters: { name: "twoweeks.application_package.summarize" } }],
@@ -5198,8 +5235,14 @@ describe("MCP OAuth production route adapter", () => {
     const gateIndex = source.indexOf("const privateBetaDecision = evaluateMcpProductionPrivateBetaGate", envelopeIndex);
     const gateDeniedIndex = source.indexOf("return mcpPrivateBetaGateDeniedResponse(preflight, privateBetaDecision)", gateIndex);
     const launchReadinessIndex = source.indexOf("const launchReadinessDecision = evaluateMcpProductionLaunchReadiness", gateDeniedIndex);
-    const dispatchIndex = source.indexOf("return handleAuthenticatedMcpJsonRpc(envelope)", launchReadinessIndex);
-    const policyIndex = source.indexOf("const decision = evaluateMcpProductionPolicy(envelope)", dispatchIndex);
+    const launchReadinessDeniedIndex = source.indexOf(
+      "return handleLaunchReadinessCheckedMcpJsonRpc(preflight, launchReadinessDecision, envelope)",
+      launchReadinessIndex,
+    );
+    const dispatchIndex = source.indexOf(
+      "const decision = evaluateMcpProductionPolicy(envelope)",
+      launchReadinessDeniedIndex,
+    );
 
     expect(bearerIndex).toBeGreaterThanOrEqual(0);
     expect(quotaIndex).toBeGreaterThan(bearerIndex);
@@ -5209,8 +5252,8 @@ describe("MCP OAuth production route adapter", () => {
     expect(gateIndex).toBeGreaterThan(envelopeIndex);
     expect(gateDeniedIndex).toBeGreaterThan(gateIndex);
     expect(launchReadinessIndex).toBeGreaterThan(gateDeniedIndex);
-    expect(dispatchIndex).toBeGreaterThan(launchReadinessIndex);
-    expect(policyIndex).toBeGreaterThan(dispatchIndex);
+    expect(launchReadinessDeniedIndex).toBeGreaterThan(launchReadinessIndex);
+    expect(dispatchIndex).toBeGreaterThan(launchReadinessDeniedIndex);
   });
 
   it("only claims the intended production entrypoint paths", () => {

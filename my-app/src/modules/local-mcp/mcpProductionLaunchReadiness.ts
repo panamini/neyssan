@@ -29,6 +29,7 @@ export type McpProductionLaunchReadinessDecisionCodeV1 =
 export type McpProductionLaunchReadinessDecisionV1 = Readonly<{
   kind: "mcp_production_launch_readiness_decision";
   privateBetaAccessAllowed: boolean;
+  privateBetaGateCode: McpProductionPrivateBetaGateDecisionV1["code"];
   publicLaunchAllowed: false;
   publicLaunchBlocked: true;
   code: McpProductionLaunchReadinessDecisionCodeV1;
@@ -72,14 +73,18 @@ export function evaluateMcpProductionLaunchReadiness(input: Readonly<{
   config?: unknown;
 }>): McpProductionLaunchReadinessDecisionV1 {
   if (!isPrivateBetaAllowedDecision(input.privateBetaDecision)) {
-    return decision("private_beta_not_ready", false);
+    return decision("private_beta_not_ready", false, input.privateBetaDecision.code);
   }
 
   const config = readLaunchReadinessConfig(input.config);
-  if (!config.ok) return decision(config.code, true);
-  if (!config.config.evidenceComplete) return decision("launch_evidence_missing", true);
-  if (config.config.publicLaunchRequested) return decision("public_launch_blocked", true);
-  return decision("private_beta_ready_public_launch_blocked", true);
+  if (!config.ok) return decision(config.code, true, input.privateBetaDecision.code);
+  if (!config.config.evidenceComplete) {
+    return decision("launch_evidence_missing", true, input.privateBetaDecision.code);
+  }
+  if (config.config.publicLaunchRequested) {
+    return decision("public_launch_blocked", true, input.privateBetaDecision.code);
+  }
+  return decision("private_beta_ready_public_launch_blocked", true, input.privateBetaDecision.code);
 }
 
 function readLaunchReadinessConfig(value: unknown):
@@ -162,10 +167,12 @@ function isPrivateBetaAllowedDecision(value: McpProductionPrivateBetaGateDecisio
 function decision(
   code: McpProductionLaunchReadinessDecisionCodeV1,
   privateBetaAccessAllowed: boolean,
+  privateBetaGateCode: McpProductionPrivateBetaGateDecisionV1["code"],
 ): McpProductionLaunchReadinessDecisionV1 {
   return Object.freeze({
     kind: "mcp_production_launch_readiness_decision",
     privateBetaAccessAllowed,
+    privateBetaGateCode,
     publicLaunchAllowed: false,
     publicLaunchBlocked: true,
     code,

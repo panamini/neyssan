@@ -41,6 +41,7 @@ import {
 import {
   evaluateMcpProductionLaunchReadiness,
   type McpProductionLaunchReadinessConfigInputV1,
+  type McpProductionLaunchReadinessDecisionV1,
 } from "./mcpProductionLaunchReadiness";
 import { evaluateMcpProductionPolicy, type McpProductionPolicyDecisionV1 } from "./mcpProductionPolicyKernel";
 import {
@@ -560,7 +561,8 @@ type McpOAuthProductionRouteFailureReasonV1 =
   | "invalid_authorization_header"
   | "bearer_verification_caller_untrusted"
   | "bearer_verification_failed"
-  | "private_beta_gate_denied";
+  | "private_beta_gate_denied"
+  | "launch_readiness_blocked";
 
 type McpOAuthProductionAuthorizationOriginV1 = Readonly<{
   origin: string;
@@ -1166,9 +1168,8 @@ async function handleMcpRequest(
     privateBetaDecision,
     config: config.launchReadiness,
   });
-  void launchReadinessDecision;
 
-  return handleAuthenticatedMcpJsonRpc(envelope);
+  return handleLaunchReadinessCheckedMcpJsonRpc(preflight, launchReadinessDecision, envelope);
 }
 
 function buildAuthorizationRequestGuard(
@@ -1602,6 +1603,37 @@ function mcpPrivateBetaGateDeniedResponse(
   );
 }
 
+function mcpLaunchReadinessBlockedResponse(
+  preflight: McpOAuthProductionRoutePreflightResultV1,
+  decision: McpProductionLaunchReadinessDecisionV1,
+): McpOAuthProductionRouteAdapterResponseV1 {
+  return failClosedResponse(
+    "mcp",
+    preflight,
+    "launch_readiness_blocked",
+    403,
+    {},
+    {
+      message: "Production MCP public launch readiness blocked.",
+      launchReadinessCode: decision.code,
+      launchReadinessPublicLaunchAllowed: decision.publicLaunchAllowed,
+      launchReadinessPublicLaunchBlocked: decision.publicLaunchBlocked,
+      launchReadinessPrivateBetaGateCode: decision.privateBetaGateCode,
+      launchReadinessInputEchoed: decision.inputEchoed,
+      launchReadinessConfigEchoed: decision.configEchoed,
+      launchReadinessEvidenceEchoed: decision.evidenceEchoed,
+    },
+  );
+}
+
+function mcpLaunchReadinessBlockedResponseIfNeeded(
+  preflight: McpOAuthProductionRoutePreflightResultV1,
+  decision: McpProductionLaunchReadinessDecisionV1,
+): McpOAuthProductionRouteAdapterResponseV1 | undefined {
+  if (decision.code !== "public_launch_blocked") return undefined;
+  return mcpLaunchReadinessBlockedResponse(preflight, decision);
+}
+
 function challengeForAuthorizationHeaderFailure(
   reason: Exclude<ReturnType<typeof readBearerAccessToken>, { ok: true }>["reason"],
 ): Readonly<{
@@ -1699,6 +1731,16 @@ function handleAuthenticatedMcpJsonRpc(
     return blockedMcpPolicyDecisionResponse(envelope, decision.decision);
   }
   return allowedMcpPolicyDecisionResponse(envelope, decision);
+}
+
+function handleLaunchReadinessCheckedMcpJsonRpc(
+  preflight: McpOAuthProductionRoutePreflightResultV1,
+  launchReadinessDecision: McpProductionLaunchReadinessDecisionV1,
+  envelope: McpAuthenticatedProtocolEnvelopeV1,
+): McpOAuthProductionRouteAdapterResponseV1 {
+  const launchReadinessBlock = mcpLaunchReadinessBlockedResponseIfNeeded(preflight, launchReadinessDecision);
+  if (launchReadinessBlock) return launchReadinessBlock;
+  return handleAuthenticatedMcpJsonRpc(envelope);
 }
 
 function toolsCallBoundaryResponse(

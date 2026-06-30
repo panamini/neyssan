@@ -210,6 +210,50 @@ describe("mcpOperationalStatus", () => {
     });
   });
 
+  it("maps production MCP launch readiness private beta config failures to misconfigured status", () => {
+    for (const privateBetaGateCode of [
+      "private_beta_missing_config",
+      "private_beta_malformed_config",
+      "private_beta_empty_allowlist",
+    ] as const) {
+      expect(
+        buildMcpOperationalProductionMcpLaunchReadinessStatus(
+          evaluateMcpProductionLaunchReadiness({
+            privateBetaDecision: deniedPrivateBetaDecision(privateBetaGateCode),
+          }),
+        ),
+      ).toEqual({
+        kind: "mcp_operational_status",
+        capability: "production_mcp_launch_readiness",
+        enabled: false,
+        configValid: false,
+        featureState: "misconfigured",
+        category: "config_invalid",
+        valuesExposed: false,
+        version: 1,
+      });
+    }
+  });
+
+  it("maps production MCP launch readiness private beta kill-switch to disabled status", () => {
+    expect(
+      buildMcpOperationalProductionMcpLaunchReadinessStatus(
+        evaluateMcpProductionLaunchReadiness({
+          privateBetaDecision: deniedPrivateBetaDecision("private_beta_disabled"),
+        }),
+      ),
+    ).toEqual({
+      kind: "mcp_operational_status",
+      capability: "production_mcp_launch_readiness",
+      enabled: false,
+      configValid: true,
+      featureState: "disabled",
+      category: "feature_disabled",
+      valuesExposed: false,
+      version: 1,
+    });
+  });
+
   it("fails production MCP launch readiness status closed for invalid or unsafe decision shapes", () => {
     const invalidDecision = evaluateMcpProductionLaunchReadiness({
       privateBetaDecision: allowedPrivateBetaDecision(),
@@ -403,11 +447,14 @@ function allowedPrivateBetaDecision(): McpProductionPrivateBetaGateDecisionV1 {
   });
 }
 
-function deniedPrivateBetaDecision(): McpProductionPrivateBetaGateDecisionV1 {
+function deniedPrivateBetaDecision(
+  code: Exclude<McpProductionPrivateBetaGateDecisionV1["code"], "private_beta_allowed"> =
+    "private_beta_subject_not_allowed",
+): McpProductionPrivateBetaGateDecisionV1 {
   return Object.freeze({
     kind: "mcp_production_private_beta_gate_decision",
     allowed: false,
-    code: "private_beta_subject_not_allowed",
+    code,
     safeForModel: true,
     inputEchoed: false,
     configEchoed: false,

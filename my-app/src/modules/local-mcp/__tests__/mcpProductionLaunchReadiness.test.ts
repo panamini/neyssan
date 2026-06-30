@@ -105,7 +105,7 @@ describe("MCP production launch readiness", () => {
   it("does not mark launch readiness when private beta eligibility has not allowed access", () => {
     expectLaunchReadinessDecision(
       evaluateMcpProductionLaunchReadiness({
-        privateBetaDecision: deniedPrivateBetaDecision(),
+        privateBetaDecision: deniedPrivateBetaDecision("private_beta_missing_config"),
         config: {
           publicLaunchRequested: true,
           evidence: completeEvidence(),
@@ -114,6 +114,7 @@ describe("MCP production launch readiness", () => {
       }),
       "private_beta_not_ready",
       false,
+      "private_beta_missing_config",
     );
   });
 
@@ -133,10 +134,14 @@ function expectLaunchReadinessDecision(
   decision: ReturnType<typeof evaluateMcpProductionLaunchReadiness>,
   code: McpProductionLaunchReadinessDecisionCodeV1,
   privateBetaAccessAllowed: boolean,
+  privateBetaGateCode: McpProductionPrivateBetaGateDecisionV1["code"] = privateBetaAccessAllowed
+    ? "private_beta_allowed"
+    : "private_beta_subject_not_allowed",
 ) {
   expect(decision).toEqual({
     kind: "mcp_production_launch_readiness_decision",
     privateBetaAccessAllowed,
+    privateBetaGateCode,
     publicLaunchAllowed: false,
     publicLaunchBlocked: true,
     code,
@@ -168,11 +173,14 @@ function allowedPrivateBetaDecision(): McpProductionPrivateBetaGateDecisionV1 {
   });
 }
 
-function deniedPrivateBetaDecision(): McpProductionPrivateBetaGateDecisionV1 {
+function deniedPrivateBetaDecision(
+  code: Exclude<McpProductionPrivateBetaGateDecisionV1["code"], "private_beta_allowed"> =
+    "private_beta_subject_not_allowed",
+): McpProductionPrivateBetaGateDecisionV1 {
   return Object.freeze({
     kind: "mcp_production_private_beta_gate_decision",
     allowed: false,
-    code: "private_beta_subject_not_allowed",
+    code,
     safeForModel: true,
     inputEchoed: false,
     configEchoed: false,
