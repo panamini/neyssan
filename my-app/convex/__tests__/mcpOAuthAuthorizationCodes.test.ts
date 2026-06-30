@@ -233,6 +233,7 @@ describe("Convex MCP OAuth authorization codes", () => {
 
   it("verifies active digest-backed access tokens for the MCP boundary", async () => {
     const { ctx, patches } = makeCtx([], [storedAccessToken()]);
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
 
     const result = await internalVerifyMcpOAuthAccessTokenForMcpBoundary._handler(
       ctx as any,
@@ -271,6 +272,7 @@ describe("Convex MCP OAuth authorization codes", () => {
     const allowedClientIds = Array.from({ length: 20 }, (_value, index) => `chatgpt_apps_sdk_client_${index}`);
     const matchingClientId = allowedClientIds[17];
     const { ctx, patches } = makeCtx([], [storedAccessToken({ clientId: matchingClientId })]);
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
 
     const result = await internalVerifyMcpOAuthAccessTokenForMcpBoundary._handler(
       ctx as any,
@@ -319,6 +321,7 @@ describe("Convex MCP OAuth authorization codes", () => {
     ],
   ] as const)("fails access-token verification for %s", async (_label, seed, args, reason) => {
     const { ctx, patches } = makeCtx([], seed);
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
 
     const result = await internalVerifyMcpOAuthAccessTokenForMcpBoundary._handler(ctx as any, args);
 
@@ -337,6 +340,83 @@ describe("Convex MCP OAuth authorization codes", () => {
       safeForLogging: true,
     });
     expect(patches).toHaveLength(0);
+    expect(JSON.stringify(result)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(result)).not.toContain(ACCESS_TOKEN_DIGEST);
+  });
+
+  it("uses Convex storage time, not caller time, for final access-token expiry checks", async () => {
+    const { ctx } = makeCtx([], [storedAccessToken()]);
+    vi.spyOn(Date, "now").mockReturnValue(NOW + MCP_OAUTH_ACCESS_TOKEN_TTL_MS + 1);
+
+    const result = await internalVerifyMcpOAuthAccessTokenForMcpBoundary._handler(
+      ctx as any,
+      verifyAccessTokenArgs({ now: NOW }),
+    );
+
+    expect(result).toMatchObject({
+      kind: "mcp_oauth_access_token_verify_result",
+      ok: false,
+      reason: "expired",
+    });
+    expect(JSON.stringify(result)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(result)).not.toContain(ACCESS_TOKEN_DIGEST);
+  });
+
+  it("does not reject fresh access tokens when caller time is ahead of Convex storage time", async () => {
+    const { ctx } = makeCtx([], [storedAccessToken()]);
+    vi.spyOn(Date, "now").mockReturnValue(NOW + 1);
+
+    const result = await internalVerifyMcpOAuthAccessTokenForMcpBoundary._handler(
+      ctx as any,
+      verifyAccessTokenArgs({ now: NOW + MCP_OAUTH_ACCESS_TOKEN_TTL_MS + 1 }),
+    );
+
+    expect(result).toMatchObject({
+      kind: "mcp_oauth_access_token_verify_result",
+      ok: true,
+      reason: "verified",
+      serverOnly: {
+        tokenActive: true,
+        tokenExpired: false,
+        tokenRevoked: false,
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(result)).not.toContain(ACCESS_TOKEN_DIGEST);
+  });
+
+  it("keeps issued-at validation bounded to storage-side clock skew", async () => {
+    const { ctx } = makeCtx([], [storedAccessToken()]);
+    vi.spyOn(Date, "now").mockReturnValue(NOW - 120_001);
+
+    const result = await internalVerifyMcpOAuthAccessTokenForMcpBoundary._handler(
+      ctx as any,
+      verifyAccessTokenArgs({ now: NOW }),
+    );
+
+    expect(result).toMatchObject({
+      kind: "mcp_oauth_access_token_verify_result",
+      ok: false,
+      reason: "malformed_storage_record",
+    });
+    expect(JSON.stringify(result)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(result)).not.toContain(ACCESS_TOKEN_DIGEST);
+  });
+
+  it("treats an unavailable Convex storage clock as retryable storage failure", async () => {
+    const { ctx } = makeCtx([], [storedAccessToken()]);
+    vi.spyOn(Date, "now").mockReturnValue(Number.NaN);
+
+    const result = await internalVerifyMcpOAuthAccessTokenForMcpBoundary._handler(
+      ctx as any,
+      verifyAccessTokenArgs({ now: NOW }),
+    );
+
+    expect(result).toMatchObject({
+      kind: "mcp_oauth_access_token_verify_result",
+      ok: false,
+      reason: "storage_unavailable",
+    });
     expect(JSON.stringify(result)).not.toContain(RAW_ACCESS_TOKEN);
     expect(JSON.stringify(result)).not.toContain(ACCESS_TOKEN_DIGEST);
   });

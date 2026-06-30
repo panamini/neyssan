@@ -660,7 +660,7 @@ async function handleAuthorizationRequest(
   if (!authorizationOrigin) {
     return failClosedResponse("oauth_authorize", preflight, "invalid_configuration", 500);
   }
-  if (!requestHostMatchesAuthorizationOrigin(request, authorizationOrigin)) {
+  if (!requestHostMatchesOrigin(request, authorizationOrigin)) {
     return failClosedResponse("oauth_authorize", preflight, "invalid_host", 403);
   }
 
@@ -779,7 +779,7 @@ async function handleLoginReturnContinuationRequest(
   if (!authorizationOrigin) {
     return failClosedResponse("oauth_login_return", preflight, "invalid_configuration", 500);
   }
-  if (!requestHostMatchesAuthorizationOrigin(request, authorizationOrigin)) {
+  if (!requestHostMatchesOrigin(request, authorizationOrigin)) {
     return failClosedResponse("oauth_login_return", preflight, "invalid_host", 403);
   }
 
@@ -910,7 +910,7 @@ async function handleTokenRequest(
   if (!authorizationOrigin) {
     return failClosedResponse("oauth_token", preflight, "invalid_configuration", 500);
   }
-  if (!requestHostMatchesAuthorizationOrigin(request, authorizationOrigin)) {
+  if (!requestHostMatchesOrigin(request, authorizationOrigin)) {
     return failClosedResponse("oauth_token", preflight, "invalid_host", 403);
   }
   const expectedResource = readTokenResource(dependencies.authorizationRequestConfig.canonicalResource);
@@ -1009,12 +1009,16 @@ async function handleMcpRequest(
   if (!authorizationOrigin) {
     return failClosedResponse("mcp", preflight, "invalid_configuration", 500);
   }
-  if (!requestHostMatchesAuthorizationOrigin(request, authorizationOrigin)) {
-    return failClosedResponse("mcp", preflight, "invalid_host", 403);
-  }
   const expectedResource = readTokenResource(dependencies.authorizationRequestConfig.canonicalResource);
   if (!expectedResource) {
     return failClosedResponse("mcp", preflight, "invalid_configuration", 500);
+  }
+  const resourceOrigin = readResourceOrigin(expectedResource);
+  if (!resourceOrigin) {
+    return failClosedResponse("mcp", preflight, "invalid_configuration", 500);
+  }
+  if (!requestHostMatchesOrigin(request, resourceOrigin)) {
+    return failClosedResponse("mcp", preflight, "invalid_host", 403);
   }
 
   const bearerToken = readBearerAccessToken(request.headers, "authorization");
@@ -1901,7 +1905,7 @@ function readSameOriginAuthorizationUrl(
   }
 }
 
-function requestHostMatchesAuthorizationOrigin(
+function requestHostMatchesOrigin(
   request: McpOAuthProductionRouteAdapterRequestV1,
   origin: McpOAuthProductionAuthorizationOriginV1,
 ): boolean {
@@ -2650,6 +2654,29 @@ function readAuthorizationOrigin(
       protocol: origin.protocol,
       hostname: origin.hostname.toLowerCase(),
       port: normalizedOriginPort(origin),
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+function readResourceOrigin(resource: string): McpOAuthProductionAuthorizationOriginV1 | undefined {
+  try {
+    const parsed = new URL(resource);
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.origin === "null" ||
+      !parsed.hostname ||
+      parsed.username ||
+      parsed.password
+    ) {
+      return undefined;
+    }
+    return Object.freeze({
+      origin: parsed.origin,
+      protocol: parsed.protocol,
+      hostname: parsed.hostname.toLowerCase(),
+      port: normalizedOriginPort(parsed),
     });
   } catch {
     return undefined;

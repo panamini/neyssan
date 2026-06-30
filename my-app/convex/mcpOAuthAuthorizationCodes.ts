@@ -21,6 +21,7 @@ const MAX_SAFE_TIMESTAMP_BEFORE_ACCESS_TOKEN_TTL = Number.MAX_SAFE_INTEGER - MCP
 const MAX_EXPIRED_CODE_CLEANUP_BATCH = 100;
 const MAX_EXPIRED_ACCESS_TOKEN_CLEANUP_BATCH = 100;
 const ACCESS_TOKEN_ISSUE_CLOCK_SKEW_MS = 60_000;
+const ACCESS_TOKEN_VERIFY_CLOCK_SKEW_MS = 60_000;
 const ACCESS_TOKEN_ISSUE_COMMIT_SAFETY_MARGIN_MS = 100;
 const CODE_DIGEST_PATTERN = /^[0-9a-f]{64}$/u;
 const SAFE_IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,511}$/u;
@@ -658,9 +659,13 @@ export const internalVerifyMcpOAuthAccessTokenForMcpBoundary = internalQuery({
     if (row.resource !== input.resource) return denyAccessTokenVerify("wrong_resource");
     const scopePolicy = validateAccessTokenScopePolicy(row.scopes, input.requiredScope);
     if (scopePolicy !== "authorized") return denyAccessTokenVerify(scopePolicy);
-    if (row.status === "expired" || input.now >= row.expiresAt) return denyAccessTokenVerify("expired");
+    const storageNow = Date.now();
+    if (!isValidStorageTimestamp(storageNow)) return denyAccessTokenVerify("storage_unavailable");
+    if (row.status === "expired" || storageNow >= row.expiresAt) return denyAccessTokenVerify("expired");
     if (row.status !== "active") return denyAccessTokenVerify("inactive");
-    if (input.now < row.issuedAt) return denyAccessTokenVerify("malformed_storage_record");
+    if (storageNow + ACCESS_TOKEN_VERIFY_CLOCK_SKEW_MS < row.issuedAt) {
+      return denyAccessTokenVerify("malformed_storage_record");
+    }
 
     return {
       kind: "mcp_oauth_access_token_verify_result",

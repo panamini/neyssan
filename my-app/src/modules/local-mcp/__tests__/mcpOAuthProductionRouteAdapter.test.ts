@@ -3162,6 +3162,93 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(OWNER_ID);
   });
 
+  it("verifies production /mcp bearer tokens against the protected resource host when origins differ", async () => {
+    const authorizationOrigin = "https://auth.twoweeks.example.test";
+    const resource = "https://resource.twoweeks.example.test/resource";
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push({
+      kind: "mcp_oauth_access_token_record",
+      version: 1,
+      accessTokenDigest: ACCESS_TOKEN_DIGEST,
+      authorizationCodeDigest: AUTHORIZATION_CODE_DIGEST,
+      twoweeksClerkId: OWNER_ID,
+      ownerIssuer: CLERK_ISSUER,
+      clientId: CLIENT_ID,
+      redirectUri: REDIRECT_URI,
+      resource,
+      scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE, "openid"],
+      productionEnvironment: MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT,
+      status: "active",
+      issuedAt: NOW,
+      updatedAt: NOW,
+      expiresAt: NOW + 60 * 60 * 1_000,
+      storageVersion: 1,
+      _id: "mcpOAuthAccessTokens_fixture_cross_origin",
+      _creationTime: NOW,
+    });
+    const config = buildMcpOAuthProductionRouteAdapterConfig({
+      flags: { runtime: "1", approved: "1", routeWiring: "1" },
+      providerConfig: { ...PROVIDER_CONFIG, resource },
+      activationDependencies: activationDependencies(),
+    });
+    const dependencies = {
+      ...routeDependencies(ctx),
+      authorizationRequestConfig: authorizationRequestConfig({
+        authorizationPageOrigin: authorizationOrigin,
+        canonicalResource: resource,
+      }),
+    };
+
+    const response = await handleMcpOAuthProductionRouteRequest(
+      {
+        ...request(MCP_OAUTH_PRODUCTION_MCP_PATH),
+        headers: {
+          host: "resource.twoweeks.example.test",
+          authorization: `Bearer ${RAW_ACCESS_TOKEN}`,
+        },
+      },
+      config,
+      dependencies,
+    );
+    const wrongHostResponse = await handleMcpOAuthProductionRouteRequest(
+      {
+        ...request(MCP_OAUTH_PRODUCTION_MCP_PATH),
+        headers: {
+          host: "auth.twoweeks.example.test",
+          authorization: `Bearer ${RAW_ACCESS_TOKEN}`,
+        },
+      },
+      config,
+      dependencies,
+    );
+
+    expect(response.status).toBe(501);
+    expect(response.json).toMatchObject({
+      status: "authenticated_mcp_blocked",
+      reason: "mcp_execution_blocked",
+      route: "mcp",
+      accessTokenAccepted: true,
+      hostedMcpStarted: false,
+      toolsListExecuted: false,
+      toolsCallExecuted: false,
+      providerCallExecuted: false,
+    });
+    expect(wrongHostResponse).toMatchObject({
+      handled: true,
+      status: 403,
+      json: {
+        status: "blocked",
+        reason: "invalid_host",
+        route: "mcp",
+      },
+    });
+    expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
+    expect(JSON.stringify(wrongHostResponse)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(wrongHostResponse)).not.toContain(ACCESS_TOKEN_DIGEST);
+  });
+
   it("wires default production /mcp through auth-level preflight without activation dependencies", async () => {
     convexHttpClientQuery.mockResolvedValue({
       kind: "mcp_oauth_access_token_verify_result",
@@ -3228,6 +3315,132 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
     expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
     expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+  });
+
+  it("wires default production /mcp through the resource host when auth and resource origins differ", async () => {
+    const authorizationOrigin = "https://auth.twoweeks.example.test";
+    const resource = "https://resource.twoweeks.example.test/resource";
+    convexHttpClientQuery.mockResolvedValue({
+      kind: "mcp_oauth_access_token_verify_result",
+      ok: true,
+      reason: "verified",
+      serverOnly: {
+        status: "active",
+        twoweeksClerkId: OWNER_ID,
+        ownerIssuer: CLERK_ISSUER,
+        clientId: CLIENT_ID,
+        resource,
+        scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
+        productionEnvironment: MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT,
+        expiresAt: Date.now() + 60 * 60 * 1_000,
+        tokenActive: true,
+        tokenExpired: false,
+        tokenRevoked: false,
+        rawAccessTokenPersisted: false,
+        rawAccessTokenEchoed: false,
+        digestEchoed: false,
+        version: 1,
+      },
+      modelVisible: false,
+      safeForLogging: false,
+      version: 1,
+    });
+    const plugin = createLocalMcpDevEndpointPlugin({
+      env: {
+        ...prodRouteEnv(),
+        LOCAL_MCP_DEV_ENDPOINT: "1",
+        MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN: authorizationOrigin,
+        MCP_OAUTH_PRODUCTION_RESOURCE: resource,
+      },
+    });
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeMiddleware(middleware, {
+      method: "POST",
+      url: MCP_OAUTH_PRODUCTION_MCP_PATH,
+      headers: {
+        host: "resource.twoweeks.example.test",
+        authorization: `Bearer ${RAW_ACCESS_TOKEN}`,
+      },
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(501);
+    expect(JSON.parse(response.body)).toMatchObject({
+      status: "authenticated_mcp_blocked",
+      reason: "mcp_execution_blocked",
+      route: "mcp",
+      accessTokenAccepted: true,
+      hostedMcpStarted: false,
+      toolsListExecuted: false,
+      toolsCallExecuted: false,
+      providerCallExecuted: false,
+    });
+    expect(convexHttpClientQuery).toHaveBeenCalledTimes(1);
+    expect(convexHttpClientQuery.mock.calls[0]?.[1]).toMatchObject({
+      accessTokenDigest: ACCESS_TOKEN_DIGEST,
+      resource,
+      requiredScope: TWOWEEKS_APPLICATIONS_READ_SCOPE,
+      version: 1,
+    });
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
+    expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
+  });
+
+  it("serves production protected-resource metadata at the advertised resource URL", async () => {
+    const authorizationOrigin = "https://auth.twoweeks.example.test";
+    const resource = "https://resource.twoweeks.example.test/resource";
+    const plugin = createLocalMcpDevEndpointPlugin({
+      env: {
+        ...prodRouteEnv(),
+        LOCAL_MCP_DEV_ENDPOINT: "1",
+        MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN: authorizationOrigin,
+        MCP_OAUTH_PRODUCTION_RESOURCE: resource,
+      },
+    });
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeMiddleware(middleware, {
+      method: "GET",
+      url: "/.well-known/oauth-protected-resource/resource",
+      headers: { host: "resource.twoweeks.example.test" },
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(200);
+    expect(response.headers).toMatchObject({
+      "cache-control": "no-store",
+      "content-type": "application/json; charset=utf-8",
+    });
+    expect(JSON.parse(response.body)).toEqual({
+      resource,
+      authorization_servers: [`${authorizationOrigin}/`],
+      scopes_supported: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
+    });
+    expect(convexHttpClientQuery).not.toHaveBeenCalled();
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
+  });
+
+  it("does not serve production protected-resource metadata while the auth preflight is closed", async () => {
+    const resource = "https://resource.twoweeks.example.test/resource";
+    const plugin = createLocalMcpDevEndpointPlugin({
+      env: {
+        ...prodRouteEnv(),
+        MCP_OAUTH_PRODUCTION_RUNTIME: "0",
+        MCP_OAUTH_PRODUCTION_RESOURCE: resource,
+      },
+    });
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeMiddleware(middleware, {
+      method: "GET",
+      url: "/.well-known/oauth-protected-resource/resource",
+      headers: { host: "resource.twoweeks.example.test" },
+    });
+
+    expect(response.next).toHaveBeenCalledTimes(1);
+    expect(response.statusCode).toBeUndefined();
+    expect(response.body).toBe("");
+    expect(convexHttpClientQuery).not.toHaveBeenCalled();
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
   });
 
   it("bounds production token request bodies in Vite before adapter validation", async () => {
@@ -3407,9 +3620,21 @@ describe("MCP OAuth production route adapter", () => {
       "host.docker.internal",
       "mcp.twoweeks.example.test",
     ]);
+    expect(buildMcpOAuthProductionViteAllowedHosts({
+      ...prodRouteEnv(),
+      MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN: "https://auth.twoweeks.example.test",
+      MCP_OAUTH_PRODUCTION_RESOURCE: "https://resource.twoweeks.example.test/resource",
+    })).toEqual([
+      "host.docker.internal",
+      "auth.twoweeks.example.test",
+      "resource.twoweeks.example.test",
+    ]);
     expect(buildMcpOAuthProductionViteAllowedHosts({})).toEqual(["host.docker.internal"]);
     expect(buildMcpOAuthProductionViteAllowedHosts({
       MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN: "https://mcp.twoweeks.example.test/path",
+    })).toEqual(["host.docker.internal"]);
+    expect(buildMcpOAuthProductionViteAllowedHosts({
+      MCP_OAUTH_PRODUCTION_RESOURCE: "http://resource.twoweeks.example.test/resource",
     })).toEqual(["host.docker.internal"]);
     expect(buildMcpOAuthProductionViteAllowedHosts({
       MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN: "file://mcp.twoweeks.example.test/",
@@ -3570,7 +3795,9 @@ function routeDependencies(ctx: ReturnType<typeof makeCtx>) {
   return dependencies;
 }
 
-function authorizationRequestConfig(): McpOAuthAuthorizationRequestBoundaryConfigV1 {
+function authorizationRequestConfig(
+  overrides: Partial<McpOAuthAuthorizationRequestBoundaryConfigV1> = {},
+): McpOAuthAuthorizationRequestBoundaryConfigV1 {
   return Object.freeze({
     kind: "mcp_oauth_authorization_request_boundary_config",
     authorizationPageOrigin: PROD_APP_ORIGIN,
@@ -3592,6 +3819,7 @@ function authorizationRequestConfig(): McpOAuthAuthorizationRequestBoundaryConfi
     localDevelopmentOnly: true,
     allowHttpLocalhostAuthorizationOrigin: false,
     version: 1,
+    ...overrides,
   });
 }
 

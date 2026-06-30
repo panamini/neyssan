@@ -29,7 +29,10 @@ import {
   type McpOAuthLocalDevRouteAdapterConfigV1,
   type McpOAuthLocalDevRouteAdapterDependenciesV1,
 } from "./src/modules/local-mcp/mcpOAuthLocalDevRouteAdapter";
-import { TWOWEEKS_APPLICATIONS_READ_SCOPE } from "./src/modules/local-mcp/mcpAuthPolicyBoundary";
+import {
+  buildProtectedResourceMetadata,
+  TWOWEEKS_APPLICATIONS_READ_SCOPE,
+} from "./src/modules/local-mcp/mcpAuthPolicyBoundary";
 import {
   MCP_OAUTH_PRODUCTION_APPROVED_FLAG,
   MCP_OAUTH_PRODUCTION_RUNTIME_FLAG,
@@ -200,13 +203,28 @@ function handleLocalMcpDevMiddlewareRequest(
   const pathName = (req.url ?? "").split("?")[0];
   if (
     productionOAuthAuthorizationEnabled &&
+    isMcpOAuthProductionRouteAllowedByPreflightPath(
+      MCP_OAUTH_PRODUCTION_TOKEN_PATH,
+      productionOAuthAuthorizationConfig.preflight,
+    ) &&
+    productionOAuthProtectedResourceMetadataRequestMatches(
+      req,
+      pathName,
+      productionOAuthAuthorizationDependencies,
+    )
+  ) {
+    sendProductionOAuthProtectedResourceMetadata(res, productionOAuthAuthorizationDependencies);
+    return;
+  }
+  if (
+    productionOAuthAuthorizationEnabled &&
     (
       pathName === MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH ||
       pathName === MCP_OAUTH_CONTINUATION_PATH ||
       pathName === MCP_OAUTH_PRODUCTION_TOKEN_PATH ||
       pathName === MCP_OAUTH_PRODUCTION_MCP_PATH
     ) &&
-    productionOAuthRequestHostMatchesAuthorizationOrigin(req, productionOAuthAuthorizationDependencies)
+    productionOAuthRequestHostMatchesRoute(req, pathName, productionOAuthAuthorizationDependencies)
   ) {
     void respondToMcpOAuthProductionRouteRequest(
       req,
@@ -1041,14 +1059,107 @@ function isHttpsOrigin(value: string): boolean {
   }
 }
 
-function productionOAuthRequestHostMatchesAuthorizationOrigin(
+function productionOAuthRequestHostMatchesRoute(
   req: IncomingMessage,
+  pathName: string | undefined,
   dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
 ): boolean {
-  const origin = dependencies.authorizationRequestConfig?.authorizationPageOrigin;
-  if (typeof origin !== "string") return false;
+  const config = dependencies.authorizationRequestConfig;
+  if (!config) return false;
+  if (pathName === MCP_OAUTH_PRODUCTION_MCP_PATH) {
+    return productionOAuthRequestHostMatchesUrlOrigin(req, config.canonicalResource);
+  }
+  return productionOAuthRequestHostMatchesUrlOrigin(req, config.authorizationPageOrigin);
+}
+
+function productionOAuthProtectedResourceMetadataRequestMatches(
+  req: IncomingMessage,
+  pathName: string | undefined,
+  dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+): boolean {
+  if ((req.method ?? "GET") !== "GET") return false;
+  const metadataUrl = productionOAuthProtectedResourceMetadataUrl(
+    dependencies.authorizationRequestConfig?.canonicalResource,
+  );
+  if (!metadataUrl) return false;
   try {
-    const parsedOrigin = new URL(origin);
+    const parsedMetadataUrl = new URL(metadataUrl);
+    return (
+      pathName === parsedMetadataUrl.pathname &&
+      productionOAuthRequestHostMatchesUrlOrigin(req, parsedMetadataUrl.toString())
+    );
+  } catch {
+    return false;
+  }
+}
+
+function sendProductionOAuthProtectedResourceMetadata(
+  res: ServerResponse,
+  dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+): void {
+  const config = dependencies.authorizationRequestConfig;
+  const protectedResourceMetadataUrl = productionOAuthProtectedResourceMetadataUrl(config?.canonicalResource);
+  if (!config || !protectedResourceMetadataUrl) {
+    sendInvalidLocalMcpDevRequest(res);
+    return;
+  }
+  try {
+    const metadata = buildProtectedResourceMetadata({
+      resourceUrl: config.canonicalResource,
+      protectedResourceMetadataUrl,
+      authorizationServerIssuerUrl: config.authorizationPageOrigin,
+      supportedScopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
+    });
+    sendLocalMcpRouteResponse(
+      res,
+      200,
+      { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+      metadata,
+      undefined,
+    );
+  } catch {
+    sendInvalidLocalMcpDevRequest(res);
+  }
+}
+
+function productionOAuthProtectedResourceMetadataUrl(resourceUrl: string | undefined): string | undefined {
+  if (typeof resourceUrl !== "string") return undefined;
+  try {
+    const parsed = new URL(resourceUrl);
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.origin === "null" ||
+      !parsed.hostname ||
+      parsed.username ||
+      parsed.password ||
+      parsed.search ||
+      parsed.hash
+    ) {
+      return undefined;
+    }
+    const normalizedPath = productionOAuthCanonicalResourcePath(parsed.pathname);
+    return `${parsed.origin}/.well-known/oauth-protected-resource${normalizedPath === "/" ? "" : normalizedPath}`;
+  } catch {
+    return undefined;
+  }
+}
+
+function productionOAuthCanonicalResourcePath(pathName: string): string {
+  let end = pathName.length;
+  while (end > 1 && pathName.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  const normalized = pathName.slice(0, end);
+  return normalized.length === 0 ? "/" : normalized;
+}
+
+function productionOAuthRequestHostMatchesUrlOrigin(
+  req: IncomingMessage,
+  url: string | undefined,
+): boolean {
+  if (typeof url !== "string") return false;
+  try {
+    const parsedOrigin = new URL(url);
     const host = headerValue(req.headers.host);
     if (!host || host.includes("/") || host.includes("@")) return false;
     const parsedHost = new URL(`${parsedOrigin.protocol}//${host}`);
@@ -1076,6 +1187,10 @@ export function buildMcpOAuthProductionViteAllowedHosts(
   if (productionAuthorizationHost && !allowedHosts.includes(productionAuthorizationHost)) {
     allowedHosts.push(productionAuthorizationHost);
   }
+  const productionResourceHost = readProductionResourceAllowedHost(env);
+  if (productionResourceHost && !allowedHosts.includes(productionResourceHost)) {
+    allowedHosts.push(productionResourceHost);
+  }
   return allowedHosts;
 }
 
@@ -1093,6 +1208,30 @@ function readProductionAuthorizationAllowedHost(
       url.username ||
       url.password ||
       url.pathname !== "/" ||
+      url.search ||
+      url.hash
+    ) {
+      return undefined;
+    }
+    return url.hostname.toLowerCase();
+  } catch {
+    return undefined;
+  }
+}
+
+function readProductionResourceAllowedHost(
+  env: Readonly<Record<string, string | undefined>>,
+): string | undefined {
+  const value = env[MCP_OAUTH_PRODUCTION_RESOURCE_VAR]?.trim();
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    if (
+      url.origin === "null" ||
+      url.protocol !== "https:" ||
+      !url.hostname ||
+      url.username ||
+      url.password ||
       url.search ||
       url.hash
     ) {
