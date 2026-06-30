@@ -1040,7 +1040,7 @@ async function handleMcpRequest(
     authorizationPageOrigin: authorizationOrigin.origin,
     clientId: MCP_BEARER_VERIFICATION_QUOTA_CLIENT_ID,
     resource: expectedResource,
-    callerKey: readQuotaCallerKey(request),
+    callerKey: readBearerVerificationQuotaCallerKey(request),
     now,
     version: 1,
   } satisfies McpOAuthProductionPreAuthQuotaPortInputV1);
@@ -1955,6 +1955,10 @@ function readQuotaCallerKey(request: McpOAuthProductionRouteAdapterRequestV1): s
     normalizeCallerKey(request.remoteAddress) ??
     "unknown"
   );
+}
+
+function readBearerVerificationQuotaCallerKey(request: McpOAuthProductionRouteAdapterRequestV1): string {
+  return normalizeCallerKey(request.remoteAddress) ?? "unknown";
 }
 
 function readForwardedCallerKey(value: string | readonly string[] | undefined): string | undefined {
