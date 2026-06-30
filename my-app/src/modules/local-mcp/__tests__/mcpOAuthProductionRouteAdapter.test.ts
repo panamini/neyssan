@@ -1408,7 +1408,7 @@ describe("MCP OAuth production route adapter", () => {
       authorizationPageOrigin: PROD_APP_ORIGIN,
       clientId: "mcp_bearer_verification",
       resource: RESOURCE,
-      callerKey: "unknown",
+      callerKey: "198.51.100.9",
       now: NOW,
       version: 1,
     });
@@ -1485,6 +1485,195 @@ describe("MCP OAuth production route adapter", () => {
       "198.51.100.9",
     ]);
     expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores rotated X-Real-IP and CF-Connecting-IP values for /mcp bearer verification quota", async () => {
+    const quotaCounts = new Map<string, number>();
+    const dependencies = {
+      ...routeDependencies(makeCtx()),
+      checkPreAuthQuota: vi.fn(async (input) => {
+        const count = (quotaCounts.get(input.callerKey) ?? 0) + 1;
+        quotaCounts.set(input.callerKey, count);
+        if (count > 1) {
+          return Object.freeze({
+            kind: "mcp_oauth_pre_auth_quota_result",
+            ok: false,
+            reason: "rate_limited",
+            safeFailure: { code: "pre_auth_quota_denied" },
+            safeForLogging: true,
+            version: 1,
+          });
+        }
+        return Object.freeze({
+          kind: "mcp_oauth_pre_auth_quota_result",
+          ok: true,
+          reason: "accepted",
+          safeForLogging: true,
+          version: 1,
+        });
+      }),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+    const requestWithCallerHeaders = (realIp: string, cfConnectingIp: string) => ({
+      ...mcpRequest(),
+      headers: {
+        host: "mcp.twoweeks.example.test",
+        authorization: `Bearer ${RAW_ACCESS_TOKEN}`,
+        "x-forwarded-for": "203.0.113.10",
+        "x-real-ip": realIp,
+        "cf-connecting-ip": cfConnectingIp,
+      },
+      remoteAddress: "198.51.100.9",
+    } satisfies McpOAuthProductionRouteAdapterRequestV1);
+
+    await handleMcpOAuthProductionRouteRequest(
+      requestWithCallerHeaders("203.0.113.11", "203.0.113.12"),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+    const secondResponse = await handleMcpOAuthProductionRouteRequest(
+      requestWithCallerHeaders("203.0.113.21", "203.0.113.22"),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(secondResponse).toMatchObject({
+      handled: true,
+      status: 429,
+      json: {
+        status: "blocked",
+        reason: "bearer_verification_quota_denied",
+        route: "mcp",
+      },
+    });
+    expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(2);
+    expect(dependencies.checkPreAuthQuota.mock.calls.map((call) => call[0].callerKey)).toEqual([
+      "198.51.100.9",
+      "198.51.100.9",
+    ]);
+    expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
+  });
+
+  it("canonicalizes IPv4-mapped IPv6 socket addresses before /mcp bearer verification quota", async () => {
+    const quotaCounts = new Map<string, number>();
+    const dependencies = {
+      ...routeDependencies(makeCtx()),
+      checkPreAuthQuota: vi.fn(async (input) => {
+        const count = (quotaCounts.get(input.callerKey) ?? 0) + 1;
+        quotaCounts.set(input.callerKey, count);
+        return Object.freeze({
+          kind: "mcp_oauth_pre_auth_quota_result",
+          ok: count === 1,
+          reason: count === 1 ? "accepted" : "rate_limited",
+          ...(count === 1 ? {} : { safeFailure: { code: "pre_auth_quota_denied" } }),
+          safeForLogging: true,
+          version: 1,
+        } as const);
+      }),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+
+    await handleMcpOAuthProductionRouteRequest(
+      { ...mcpRequest(), remoteAddress: "127.0.0.1" },
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+    const secondResponse = await handleMcpOAuthProductionRouteRequest(
+      { ...mcpRequest(), remoteAddress: "::ffff:127.0.0.1" },
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(secondResponse).toMatchObject({
+      handled: true,
+      status: 429,
+      json: {
+        status: "blocked",
+        reason: "bearer_verification_quota_denied",
+        route: "mcp",
+      },
+    });
+    expect(dependencies.checkPreAuthQuota.mock.calls.map((call) => call[0].callerKey)).toEqual([
+      "127.0.0.1",
+      "127.0.0.1",
+    ]);
+    expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
+  });
+
+  it("canonicalizes IPv6 casing before /mcp bearer verification quota", async () => {
+    const quotaCounts = new Map<string, number>();
+    const dependencies = {
+      ...routeDependencies(makeCtx()),
+      checkPreAuthQuota: vi.fn(async (input) => {
+        const count = (quotaCounts.get(input.callerKey) ?? 0) + 1;
+        quotaCounts.set(input.callerKey, count);
+        return Object.freeze({
+          kind: "mcp_oauth_pre_auth_quota_result",
+          ok: count === 1,
+          reason: count === 1 ? "accepted" : "rate_limited",
+          ...(count === 1 ? {} : { safeFailure: { code: "pre_auth_quota_denied" } }),
+          safeForLogging: true,
+          version: 1,
+        } as const);
+      }),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+
+    await handleMcpOAuthProductionRouteRequest(
+      { ...mcpRequest(), remoteAddress: "2001:DB8::1" },
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+    const secondResponse = await handleMcpOAuthProductionRouteRequest(
+      { ...mcpRequest(), remoteAddress: "2001:db8::1" },
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(secondResponse).toMatchObject({
+      handled: true,
+      status: 429,
+      json: {
+        status: "blocked",
+        reason: "bearer_verification_quota_denied",
+        route: "mcp",
+      },
+    });
+    expect(dependencies.checkPreAuthQuota.mock.calls.map((call) => call[0].callerKey)).toEqual([
+      "2001:db8::1",
+      "2001:db8::1",
+    ]);
+    expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["empty", "   "],
+    ["literal unknown", "unknown"],
+    ["malformed", "not-an-ip-address"],
+    ["overlong", "1".repeat(129)],
+    ["control-character-containing", "198.51.100.9\n"],
+  ] as const)("fails /mcp bearer verification closed with %s remoteAddress before quota or digest lookup", async (_label, remoteAddress) => {
+    const dependencies = routeDependencies(makeCtx());
+    const response = await handleMcpOAuthProductionRouteRequest(
+      { ...mcpRequest(), remoteAddress },
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 400,
+      json: {
+        status: "blocked",
+        reason: "bearer_verification_caller_untrusted",
+        route: "mcp",
+        hostedMcpStarted: false,
+      },
+    });
+    expect(dependencies.checkPreAuthQuota).not.toHaveBeenCalled();
+    expect(dependencies.verifyAccessToken).not.toHaveBeenCalled();
+    expect(response.headers).not.toHaveProperty("WWW-Authenticate");
+    expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
+    expect(JSON.stringify(response)).not.toContain("unknown");
   });
 
   it("maps /mcp bearer verification quota dependency failure to retryable 503 before Convex lookup", async () => {
@@ -3327,6 +3516,7 @@ describe("MCP OAuth production route adapter", () => {
     const response = await invokeMiddleware(middleware, {
       method: "POST",
       url: MCP_OAUTH_PRODUCTION_MCP_PATH,
+      remoteAddress: "198.51.100.9",
       headers: {
         host: "mcp.twoweeks.example.test",
         authorization: `Bearer ${RAW_ACCESS_TOKEN}`,
@@ -3403,6 +3593,7 @@ describe("MCP OAuth production route adapter", () => {
     const response = await handleMcpOAuthProductionRouteRequest(
       {
         ...request(MCP_OAUTH_PRODUCTION_MCP_PATH),
+        remoteAddress: "198.51.100.9",
         headers: {
           host: "resource.twoweeks.example.test",
           authorization: `Bearer ${RAW_ACCESS_TOKEN}`,
@@ -3414,6 +3605,7 @@ describe("MCP OAuth production route adapter", () => {
     const wrongHostResponse = await handleMcpOAuthProductionRouteRequest(
       {
         ...request(MCP_OAUTH_PRODUCTION_MCP_PATH),
+        remoteAddress: "198.51.100.9",
         headers: {
           host: "auth.twoweeks.example.test",
           authorization: `Bearer ${RAW_ACCESS_TOKEN}`,
@@ -3481,6 +3673,7 @@ describe("MCP OAuth production route adapter", () => {
     const response = await invokeMiddleware(middleware, {
       method: "POST",
       url: MCP_OAUTH_PRODUCTION_MCP_PATH,
+      remoteAddress: "198.51.100.9",
       headers: {
         host: "mcp.twoweeks.example.test",
         authorization: `Bearer ${RAW_ACCESS_TOKEN}`,
@@ -3558,6 +3751,7 @@ describe("MCP OAuth production route adapter", () => {
     const response = await invokeMiddleware(middleware, {
       method: "POST",
       url: MCP_OAUTH_PRODUCTION_MCP_PATH,
+      remoteAddress: "198.51.100.9",
       headers: {
         host: "resource.twoweeks.example.test",
         authorization: `Bearer ${RAW_ACCESS_TOKEN}`,
@@ -4145,6 +4339,7 @@ function mcpRequest(
     method: "POST",
     path: MCP_OAUTH_PRODUCTION_MCP_PATH,
     url: MCP_OAUTH_PRODUCTION_MCP_PATH,
+    remoteAddress: "198.51.100.9",
     headers: {
       host: "mcp.twoweeks.example.test",
       ...(authorization !== null ? { authorization } : {}),
@@ -4925,7 +5120,7 @@ function readConfiguredPreviewMiddleware(plugin: ReturnType<typeof createLocalMc
 
 function invokeMiddleware(
   middleware: ReturnType<typeof readConfiguredMiddleware>,
-  requestInput: { method: string; url: string; headers: Record<string, string | undefined> },
+  requestInput: { method: string; url: string; headers: Record<string, string | undefined>; remoteAddress?: string },
 ): Promise<Readonly<{ statusCode: number | undefined; headers: Record<string, string>; body: string; next: ReturnType<typeof vi.fn> }>> {
   const next = vi.fn();
   const headers: Record<string, string> = {};
@@ -4946,15 +5141,22 @@ function invokeMiddleware(
         });
       },
     };
-    middleware({ ...requestInput, socket: {} }, response, () => {
-      next();
-      resolve({
-        statusCode: response.statusCode,
-        headers,
-        body: "",
-        next,
-      });
-    });
+    middleware(
+      {
+        ...requestInput,
+        socket: requestInput.remoteAddress === undefined ? {} : { remoteAddress: requestInput.remoteAddress },
+      },
+      response,
+      () => {
+        next();
+        resolve({
+          statusCode: response.statusCode,
+          headers,
+          body: "",
+          next,
+        });
+      },
+    );
   });
 }
 
