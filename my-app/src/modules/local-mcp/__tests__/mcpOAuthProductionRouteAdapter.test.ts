@@ -27,6 +27,7 @@ import {
   buildMcpAuthenticatedProtocolEnvelope,
   parseMcpJsonRpcProtocolMessage,
 } from "../mcpAuthenticatedProtocolEnvelope";
+import type { McpProductionPrivateBetaGateConfigInputV1 } from "../mcpProductionPrivateBetaGate";
 import { evaluateMcpProductionPolicy } from "../mcpProductionPolicyKernel";
 import { MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND } from "../mcpProductionToolsCallBoundary";
 import { buildMcpProductionToolsListResult } from "../mcpProductionToolsListProjection";
@@ -1366,6 +1367,93 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain("progress-1");
   });
 
+  it("denies production /mcp before policy when private beta config is missing", async () => {
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push(storedAccessToken());
+    const dependencies = routeDependencies(ctx);
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(
+        `Bearer ${RAW_ACCESS_TOKEN}`,
+        mcpJsonRpcRequest("twoweeks/provider.call", "beta-missing"),
+        { "mcp-protocol-version": "2025-11-25" },
+      ),
+      buildMcpOAuthProductionRouteAdapterConfig({
+        flags: { runtime: "1", approved: "1", routeWiring: "1" },
+        providerConfig: PROVIDER_CONFIG,
+        activationDependencies: activationDependencies(),
+      }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 403,
+      json: {
+        status: "blocked",
+        reason: "private_beta_gate_denied",
+        route: "mcp",
+        privateBetaGateAllowed: false,
+        privateBetaGateCode: "private_beta_missing_config",
+      },
+    });
+    expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(1);
+    expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(response)).not.toContain("Method not found.");
+    expectNoRouteLeakage(response);
+  });
+
+  it("fails malformed and empty production private beta config before policy", async () => {
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push(storedAccessToken());
+    const dependencies = routeDependencies(ctx);
+    const malformedResponse = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(
+        `Bearer ${RAW_ACCESS_TOKEN}`,
+        mcpJsonRpcRequest("tools/list", "beta-malformed"),
+        { "mcp-protocol-version": "2025-11-25" },
+      ),
+      buildMcpOAuthProductionRouteAdapterConfig({
+        flags: { runtime: "1", approved: "1", routeWiring: "1" },
+        providerConfig: PROVIDER_CONFIG,
+        activationDependencies: activationDependencies(),
+        privateBeta: { enabled: true, allowedClientIds: ["bad\nclient"], allowedResources: [RESOURCE] },
+      }),
+      dependencies,
+    );
+    const emptyResponse = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(
+        `Bearer ${RAW_ACCESS_TOKEN}`,
+        mcpJsonRpcRequest("tools/list", "beta-empty"),
+        { "mcp-protocol-version": "2025-11-25" },
+      ),
+      buildMcpOAuthProductionRouteAdapterConfig({
+        flags: { runtime: "1", approved: "1", routeWiring: "1" },
+        providerConfig: PROVIDER_CONFIG,
+        activationDependencies: activationDependencies(),
+        privateBeta: { enabled: true, allowedClientIds: [], allowedResources: [RESOURCE] },
+      }),
+      dependencies,
+    );
+
+    expect(malformedResponse).toMatchObject({
+      status: 403,
+      json: {
+        reason: "private_beta_gate_denied",
+        privateBetaGateCode: "private_beta_malformed_config",
+      },
+    });
+    expect(emptyResponse).toMatchObject({
+      status: 403,
+      json: {
+        reason: "private_beta_gate_denied",
+        privateBetaGateCode: "private_beta_empty_allowlist",
+      },
+    });
+    expect(JSON.stringify(malformedResponse)).not.toContain("bad\nclient");
+    expect(JSON.stringify(emptyResponse)).not.toContain(CLIENT_ID);
+    expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(2);
+  });
+
   it.each([
     ["cursor", { cursor: "cursor-1" }],
     ["filters", { filters: { name: "twoweeks.application_package.summarize" } }],
@@ -1539,6 +1627,44 @@ describe("MCP OAuth production route adapter", () => {
     });
     expect(JSON.stringify(response)).not.toContain("raw-ref-should-not-echo");
     expect(JSON.stringify(response)).not.toContain(MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND);
+  });
+
+  it("denies non-allowlisted private beta identities before tools/call validation", async () => {
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push(storedAccessToken());
+    const dependencies = routeDependencies(ctx);
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(
+        `Bearer ${RAW_ACCESS_TOKEN}`,
+        mcpJsonRpcRequest("tools/call", "beta-denied-before-tools-call", {
+          name: "twoweeks.application_package.summarize",
+          arguments: { applicationPackageRef: { id: "raw-ref-private-beta-denied" }, task: "do more" },
+        }),
+        { "mcp-protocol-version": "2025-11-25" },
+      ),
+      routeConfig(
+        { runtime: "1", approved: "1", routeWiring: "1" },
+        activationDependencies(),
+        privateBetaConfig({ allowedSubjectIds: [OTHER_OWNER_ID] }),
+      ),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 403,
+      json: {
+        status: "blocked",
+        reason: "private_beta_gate_denied",
+        route: "mcp",
+        privateBetaGateCode: "private_beta_subject_not_allowed",
+      },
+    });
+    expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(response)).not.toContain("Invalid tools/call");
+    expect(JSON.stringify(response)).not.toContain("raw-ref-private-beta-denied");
+    expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+    expect(JSON.stringify(response)).not.toContain(OTHER_OWNER_ID);
   });
 
   it("keeps unknown production /mcp methods method-not-found after bearer verification", async () => {
@@ -2421,6 +2547,31 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
   });
 
+  it("fails invalid bearer headers before private beta eligibility", async () => {
+    const dependencies = routeDependencies(makeCtx());
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(null),
+      buildMcpOAuthProductionRouteAdapterConfig({
+        flags: { runtime: "1", approved: "1", routeWiring: "1" },
+        providerConfig: PROVIDER_CONFIG,
+        activationDependencies: activationDependencies(),
+      }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 401,
+      json: {
+        reason: "invalid_authorization_header",
+        route: "mcp",
+      },
+    });
+    expect(JSON.stringify(response)).not.toContain("private_beta");
+    expect(dependencies.checkPreAuthQuota).not.toHaveBeenCalled();
+    expect(dependencies.verifyAccessToken).not.toHaveBeenCalled();
+  });
+
   it("rejects malformed access-token verification success proofs without executing MCP", async () => {
     const dependencies = {
       ...routeDependencies(makeCtx()),
@@ -2509,6 +2660,39 @@ describe("MCP OAuth production route adapter", () => {
     expect(dependencies.issueAccessToken).toHaveBeenCalledWith(
       expect.objectContaining({ redirectUri: percentRedirectUri }),
     );
+    expectNoRouteLeakage(response, [], { allowAccessTokenResponse: true });
+  });
+
+  it("keeps /oauth/token access-token issuance unchanged when private beta config is absent", async () => {
+    const ctx = makeCtx();
+    const dependencies = routeDependencies(ctx);
+    const config = buildMcpOAuthProductionRouteAdapterConfig({
+      flags: { runtime: "1", approved: "1", routeWiring: "1" },
+      providerConfig: PROVIDER_CONFIG,
+      activationDependencies: activationDependencies(),
+    });
+
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      config,
+      dependencies,
+    );
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPath()),
+      config,
+      dependencies,
+    );
+    const response = await handleMcpOAuthProductionRouteRequest(tokenRequest(), config, dependencies);
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 200,
+      json: {
+        access_token: RAW_ACCESS_TOKEN,
+        token_type: "Bearer",
+      },
+    });
+    expect(dependencies.issueAccessToken).toHaveBeenCalledTimes(1);
     expectNoRouteLeakage(response, [], { allowAccessTokenResponse: true });
   });
 
@@ -4384,6 +4568,7 @@ describe("MCP OAuth production route adapter", () => {
       flags: { runtime: "1", approved: "1", routeWiring: "1" },
       providerConfig: { ...PROVIDER_CONFIG, resource },
       activationDependencies: activationDependencies(),
+      privateBeta: privateBetaConfig({ allowedResources: [resource] }),
     });
     const dependencies = {
       ...routeDependencies(ctx),
@@ -4448,7 +4633,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(wrongHostResponse)).not.toContain(ACCESS_TOKEN_DIGEST);
   });
 
-  it("wires default production /mcp through auth-level preflight without activation dependencies", async () => {
+  it("wires default production /mcp through auth-level preflight without activation dependencies or subject allowlist env", async () => {
     convexHttpClientQuery.mockResolvedValue({
       kind: "mcp_oauth_access_token_verify_result",
       ok: true,
@@ -4474,7 +4659,7 @@ describe("MCP OAuth production route adapter", () => {
       safeForLogging: false,
       version: 1,
     });
-    const plugin = createLocalMcpDevEndpointPlugin({ env: prodRouteEnv() });
+    const plugin = createLocalMcpDevEndpointPlugin({ env: prodRouteEnvWithoutPrivateBetaSubjects() });
     const middleware = readConfiguredMiddleware(plugin);
     const response = await invokeStreamingMiddleware(middleware, {
       method: "POST",
@@ -4550,6 +4735,7 @@ describe("MCP OAuth production route adapter", () => {
         LOCAL_MCP_DEV_ENDPOINT: "1",
         MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN: authorizationOrigin,
         MCP_OAUTH_PRODUCTION_RESOURCE: resource,
+        MCP_OAUTH_PRODUCTION_PRIVATE_BETA_RESOURCES: resource,
       },
     });
     const middleware = readConfiguredMiddleware(plugin);
@@ -4932,6 +5118,29 @@ describe("MCP OAuth production route adapter", () => {
     expectSourceNotToMatch(source, FORBIDDEN_PREFLIGHT_REIMPLEMENTATION_PATTERNS);
   });
 
+  it("runs private beta eligibility only after authenticated /mcp context and before policy dispatch", () => {
+    const source = readFileSync(SOURCE_FILE, "utf8");
+    const bearerIndex = source.indexOf("const bearerToken = readBearerAccessToken");
+    const quotaIndex = source.indexOf("const quotaInput = Object.freeze({", bearerIndex);
+    const verifyIndex = source.indexOf("let verifyResult: McpOAuthProductionAccessTokenVerifyPortResultV1", quotaIndex);
+    const protocolParseIndex = source.indexOf("const jsonRpcMessage = parseMcpJsonRpcProtocolMessage", verifyIndex);
+    const envelopeIndex = source.indexOf("const envelope = buildMcpAuthenticatedProtocolEnvelope", protocolParseIndex);
+    const gateIndex = source.indexOf("const privateBetaDecision = evaluateMcpProductionPrivateBetaGate", envelopeIndex);
+    const gateDeniedIndex = source.indexOf("return mcpPrivateBetaGateDeniedResponse(preflight, privateBetaDecision)", gateIndex);
+    const dispatchIndex = source.indexOf("return handleAuthenticatedMcpJsonRpc(envelope)", gateDeniedIndex);
+    const policyIndex = source.indexOf("const decision = evaluateMcpProductionPolicy(envelope)", dispatchIndex);
+
+    expect(bearerIndex).toBeGreaterThanOrEqual(0);
+    expect(quotaIndex).toBeGreaterThan(bearerIndex);
+    expect(verifyIndex).toBeGreaterThan(quotaIndex);
+    expect(protocolParseIndex).toBeGreaterThan(verifyIndex);
+    expect(envelopeIndex).toBeGreaterThan(protocolParseIndex);
+    expect(gateIndex).toBeGreaterThan(envelopeIndex);
+    expect(gateDeniedIndex).toBeGreaterThan(gateIndex);
+    expect(dispatchIndex).toBeGreaterThan(gateDeniedIndex);
+    expect(policyIndex).toBeGreaterThan(dispatchIndex);
+  });
+
   it("only claims the intended production entrypoint paths", () => {
     expect(isMcpOAuthProductionRouteHandledPath(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH)).toBe(true);
     expect(isMcpOAuthProductionRouteHandledPath(MCP_OAUTH_CONTINUATION_PATH)).toBe(true);
@@ -4978,12 +5187,25 @@ function activationDependencies(): McpOAuthProductionActivationDependenciesV1 {
 function routeConfig(
   flags: Readonly<{ runtime?: string; approved?: string; routeWiring?: string }>,
   dependencies: McpOAuthProductionActivationDependenciesV1 = activationDependencies(),
+  privateBeta: McpProductionPrivateBetaGateConfigInputV1 = privateBetaConfig(),
 ) {
   return buildMcpOAuthProductionRouteAdapterConfig({
     flags,
     providerConfig: PROVIDER_CONFIG,
     activationDependencies: dependencies,
+    privateBeta,
   });
+}
+
+function privateBetaConfig(
+  overrides: Partial<McpProductionPrivateBetaGateConfigInputV1> = {},
+): McpProductionPrivateBetaGateConfigInputV1 {
+  return {
+    enabled: true,
+    allowedClientIds: [CLIENT_ID],
+    allowedResources: [RESOURCE],
+    ...overrides,
+  };
 }
 
 function request(
@@ -6080,10 +6302,20 @@ function prodRouteEnv(): Record<string, string> {
     MCP_OAUTH_PRODUCTION_CLIENT_IDS: CLIENT_ID,
     MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN: PROD_APP_ORIGIN,
     MCP_OAUTH_PRODUCTION_REDIRECT_URIS: REDIRECT_URI,
+    MCP_OAUTH_PRODUCTION_PRIVATE_BETA_ENABLED: "1",
+    MCP_OAUTH_PRODUCTION_PRIVATE_BETA_CLIENT_IDS: CLIENT_ID,
+    MCP_OAUTH_PRODUCTION_PRIVATE_BETA_RESOURCES: RESOURCE,
+    MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECTS: OWNER_ID,
     CLERK_JWT_ISSUER_DOMAIN: CLERK_ISSUER,
     CONVEX_URL: "http://127.0.0.1:3210",
     CONVEX_KEY: "convex_admin_key_fixture",
   };
+}
+
+function prodRouteEnvWithoutPrivateBetaSubjects(): Record<string, string> {
+  const env = prodRouteEnv();
+  delete env.MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECTS;
+  return env;
 }
 
 function expectNoRouteLeakage(

@@ -50,6 +50,12 @@ import {
   type McpOAuthProductionRouteAdapterDependenciesV1,
 } from "./src/modules/local-mcp/mcpOAuthProductionRouteAdapter";
 import { MCP_OAUTH_PRODUCTION_ROUTE_WIRING_FLAG } from "./src/modules/local-mcp/mcpOAuthProductionRoutePreflightBoundary";
+import {
+  MCP_PRODUCTION_PRIVATE_BETA_CLIENT_IDS_VAR,
+  MCP_PRODUCTION_PRIVATE_BETA_ENABLED_FLAG,
+  MCP_PRODUCTION_PRIVATE_BETA_RESOURCES_VAR,
+  MCP_PRODUCTION_PRIVATE_BETA_SUBJECTS_VAR,
+} from "./src/modules/local-mcp/mcpProductionPrivateBetaGate";
 import { MCP_OAUTH_CONTINUATION_PATH } from "./src/pages/sign-in-return";
 
 const LOCAL_CLERK_SYNC_PORT = 5173;
@@ -634,6 +640,7 @@ function readLocalMcpDevOAuthConfigInput(env: Readonly<Record<string, string | u
 }
 
 function readProductionMcpOAuthConfigInput(env: Readonly<Record<string, string | undefined>>): Parameters<typeof buildMcpOAuthProductionRouteAdapterConfig>[0] {
+  const privateBetaSubjectIds = readCommaSeparatedEnv(env[MCP_PRODUCTION_PRIVATE_BETA_SUBJECTS_VAR]);
   return {
     flags: {
       runtime: env[MCP_OAUTH_PRODUCTION_RUNTIME_FLAG],
@@ -647,6 +654,13 @@ function readProductionMcpOAuthConfigInput(env: Readonly<Record<string, string |
       providerEnvironment: env[MCP_OAUTH_PRODUCTION_PROVIDER_ENVIRONMENT_VAR],
       allowedClientIds: readCommaSeparatedEnv(env[MCP_OAUTH_PRODUCTION_CLIENT_IDS_VAR]),
       requiredReadScopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
+      version: 1,
+    },
+    privateBeta: {
+      enabled: isStrictEnabledFlag(env, MCP_PRODUCTION_PRIVATE_BETA_ENABLED_FLAG),
+      allowedClientIds: readCommaSeparatedEnv(env[MCP_PRODUCTION_PRIVATE_BETA_CLIENT_IDS_VAR]),
+      allowedResources: readCommaSeparatedEnv(env[MCP_PRODUCTION_PRIVATE_BETA_RESOURCES_VAR]),
+      ...(privateBetaSubjectIds.length > 0 ? { allowedSubjectIds: privateBetaSubjectIds } : {}),
       version: 1,
     },
   };

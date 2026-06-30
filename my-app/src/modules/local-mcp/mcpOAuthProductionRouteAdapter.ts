@@ -33,6 +33,11 @@ import {
   type McpJsonRpcIdV1,
   type McpJsonRpcProtocolMessageV1,
 } from "./mcpAuthenticatedProtocolEnvelope";
+import {
+  evaluateMcpProductionPrivateBetaGate,
+  type McpProductionPrivateBetaGateConfigInputV1,
+  type McpProductionPrivateBetaGateDecisionV1,
+} from "./mcpProductionPrivateBetaGate";
 import { evaluateMcpProductionPolicy, type McpProductionPolicyDecisionV1 } from "./mcpProductionPolicyKernel";
 import {
   buildMcpProductionToolsCallReadonlySyntheticResult,
@@ -69,6 +74,7 @@ export type McpOAuthProductionRouteAdapterConfigV1 = Readonly<{
   kind: "mcp_oauth_production_route_adapter_config";
   preflight: McpOAuthProductionRoutePreflightResultV1;
   authorizationRequestGuard: McpOAuthProductionAuthorizationRequestGuardV1;
+  privateBeta?: McpProductionPrivateBetaGateConfigInputV1;
   handledPaths: readonly McpOAuthProductionRoutePathV1[];
   failClosedUnlessPreflightReady: true;
   authorizeCreatesOwnerlessPreAuthIntentOnly: true;
@@ -76,6 +82,12 @@ export type McpOAuthProductionRouteAdapterConfigV1 = Readonly<{
   safeForModel: true;
   version: 1;
 }>;
+
+export type McpOAuthProductionRouteAdapterConfigInputV1 =
+  McpOAuthProductionRoutePreflightInputV1 &
+    Readonly<{
+      privateBeta?: McpProductionPrivateBetaGateConfigInputV1;
+    }>;
 
 type McpOAuthProductionAuthorizationRequestGuardV1 = Readonly<{
   expectedResource?: string;
@@ -541,7 +553,8 @@ type McpOAuthProductionRouteFailureReasonV1 =
   | "token_issue_failed"
   | "invalid_authorization_header"
   | "bearer_verification_caller_untrusted"
-  | "bearer_verification_failed";
+  | "bearer_verification_failed"
+  | "private_beta_gate_denied";
 
 type McpOAuthProductionAuthorizationOriginV1 = Readonly<{
   origin: string;
@@ -605,12 +618,13 @@ export const MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT = "mcp_oauth_pr
 const BASE64_URL_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 export function buildMcpOAuthProductionRouteAdapterConfig(
-  input: McpOAuthProductionRoutePreflightInputV1 = {},
+  input: McpOAuthProductionRouteAdapterConfigInputV1 = {},
 ): McpOAuthProductionRouteAdapterConfigV1 {
   return Object.freeze({
     kind: "mcp_oauth_production_route_adapter_config",
     preflight: buildMcpOAuthProductionRoutePreflight(input),
     authorizationRequestGuard: buildAuthorizationRequestGuard(input),
+    ...(input.privateBeta ? { privateBeta: freezePrivateBetaConfigInput(input.privateBeta) } : {}),
     handledPaths: HANDLED_PATHS,
     failClosedUnlessPreflightReady: true,
     authorizeCreatesOwnerlessPreAuthIntentOnly: true,
@@ -1131,6 +1145,14 @@ async function handleMcpRequest(
     jsonRpcMessage,
     createdAt: now,
   });
+  const privateBetaDecision = evaluateMcpProductionPrivateBetaGate({
+    envelope,
+    verifiedSubjectId: verifyResult.serverOnly.twoweeksClerkId,
+    config: config.privateBeta,
+  });
+  if (!privateBetaDecision.allowed) {
+    return mcpPrivateBetaGateDeniedResponse(preflight, privateBetaDecision);
+  }
 
   return handleAuthenticatedMcpJsonRpc(envelope);
 }
@@ -1169,6 +1191,18 @@ function isSameStringSet(left: readonly string[], right: readonly string[]): boo
     left.every((value) => right.includes(value)) &&
     right.every((value) => left.includes(value))
   );
+}
+
+function freezePrivateBetaConfigInput(
+  input: McpProductionPrivateBetaGateConfigInputV1,
+): McpProductionPrivateBetaGateConfigInputV1 {
+  return Object.freeze({
+    ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
+    ...(input.allowedClientIds ? { allowedClientIds: Object.freeze([...input.allowedClientIds]) } : {}),
+    ...(input.allowedResources ? { allowedResources: Object.freeze([...input.allowedResources]) } : {}),
+    ...(input.allowedSubjectIds ? { allowedSubjectIds: Object.freeze([...input.allowedSubjectIds]) } : {}),
+    ...(input.version !== undefined ? { version: input.version } : {}),
+  });
 }
 
 function isQuotaAccepted(
@@ -1521,6 +1555,26 @@ function mcpBearerAuthFailureResponse(
     status,
     { "WWW-Authenticate": challenge.header },
     { _meta: buildMcpWwwAuthenticateMeta(challenge) },
+  );
+}
+
+function mcpPrivateBetaGateDeniedResponse(
+  preflight: McpOAuthProductionRoutePreflightResultV1,
+  decision: Exclude<McpProductionPrivateBetaGateDecisionV1, { allowed: true }>,
+): McpOAuthProductionRouteAdapterResponseV1 {
+  return failClosedResponse(
+    "mcp",
+    preflight,
+    "private_beta_gate_denied",
+    403,
+    {},
+    {
+      message: "Production MCP private beta access denied.",
+      privateBetaGateAllowed: false,
+      privateBetaGateCode: decision.code,
+      privateBetaGateInputEchoed: decision.inputEchoed,
+      privateBetaGateConfigEchoed: decision.configEchoed,
+    },
   );
 }
 
