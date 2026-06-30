@@ -188,7 +188,7 @@ function matchesBooleanSchema(value: unknown): boolean {
 }
 
 function hasRequiredKeys(value: Record<string, unknown>, required: readonly string[]): boolean {
-  return required.every((key) => Object.prototype.hasOwnProperty.call(value, key));
+  return required.every((key) => hasOwnKey(value, key));
 }
 
 function matchesDeclaredProperties(
@@ -198,7 +198,7 @@ function matchesDeclaredProperties(
 ): boolean {
   return Object.entries(properties).every(
     ([key, nestedSchema]) =>
-      !Object.prototype.hasOwnProperty.call(value, key) ||
+      !hasOwnKey(value, key) ||
       matchesNormalizedSchema(value[key], nestedSchema, activeValues),
   );
 }
@@ -209,10 +209,14 @@ function matchesExtraProperties(
   additionalProperties: NormalizedLocalMcpAdditionalPropertiesV1,
   activeValues: WeakSet<object>,
 ): boolean {
-  const extraKeys = Object.keys(value).filter((key) => !(key in properties));
+  const extraKeys = Object.keys(value).filter((key) => !hasOwnKey(properties, key));
   if (extraKeys.length === 0) return true;
   if (additionalProperties.state !== "schema") return false;
   return extraKeys.every((key) => matchesNormalizedSchema(value[key], additionalProperties.schema, activeValues));
+}
+
+function hasOwnKey(value: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key);
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {

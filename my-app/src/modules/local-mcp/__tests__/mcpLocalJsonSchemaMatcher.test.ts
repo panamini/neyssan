@@ -50,8 +50,20 @@ describe("local MCP JSON schema matcher", () => {
       state: "false",
       version: 1,
     });
+    const protoNamedExtras = Object.fromEntries([
+      ["id", "ref-1"],
+      ["toString", "closed"],
+      ["constructor", "closed"],
+    ]);
+    Object.defineProperty(protoNamedExtras, "__proto__", {
+      configurable: true,
+      enumerable: true,
+      value: "closed",
+    });
+
     expect(localMcpJsonSchemaMatches({ id: "ref-1" }, schema)).toBe(true);
     expect(localMcpJsonSchemaMatches({ id: "ref-1", extra: "closed" }, schema)).toBe(false);
+    expect(localMcpJsonSchemaMatches(protoNamedExtras, schema)).toBe(false);
   });
 
   it("validates schema-valued additionalProperties for every extra value", () => {

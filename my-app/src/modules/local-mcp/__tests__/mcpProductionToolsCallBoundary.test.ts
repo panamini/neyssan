@@ -39,6 +39,19 @@ function validate(params: unknown) {
   });
 }
 
+function withPrototypeNamedExtra(validArgs: Readonly<Record<string, unknown>>, key: string): Record<string, unknown> {
+  if (key === "__proto__") {
+    const args = { ...validArgs };
+    Object.defineProperty(args, "__proto__", {
+      configurable: true,
+      enumerable: true,
+      value: "closed",
+    });
+    return args;
+  }
+  return { ...validArgs, [key]: "closed" };
+}
+
 describe("production MCP tools/call boundary", () => {
   it("accepts each listed read-only tool only with its exact declared argument schema", () => {
     const toolsList = buildMcpProductionToolsListResult();
@@ -126,6 +139,12 @@ describe("production MCP tools/call boundary", () => {
         valid: false,
         error: { code: "invalid_arguments" },
       });
+      for (const prototypeNamedExtra of ["toString", "constructor", "__proto__"]) {
+        expect(validate({ name, arguments: withPrototypeNamedExtra(validArgs, prototypeNamedExtra) })).toMatchObject({
+          valid: false,
+          error: { code: "invalid_arguments" },
+        });
+      }
       expect(validate({
         name,
         arguments: {
