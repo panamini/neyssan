@@ -18,6 +18,17 @@ export type LocalMcpDescriptorRegistryFixtureOnlyV1 = Readonly<{
   version: 1;
 }>;
 
+export type LocalMcpDescriptorRegistryMetadataOnlyV1 = Readonly<{
+  kind: "local_mcp_descriptor_registry_metadata_only";
+  metadataOnly: true;
+  callable: false;
+  runnable: false;
+  networkReachable: false;
+  descriptors: readonly LocalMcpProjectedToolDescriptorV1[];
+  descriptorNames: readonly string[];
+  version: 1;
+}>;
+
 const EXPECTED_DESCRIPTOR_NAMES = [
   "twoweeks.application_package.summarize",
   "twoweeks.evidence_graph.summarize",
@@ -36,6 +47,20 @@ const STATIC_DESCRIPTOR_REGISTRY_FIXTURE_ONLY = buildStaticDescriptorRegistry();
 
 export function buildLocalMcpDescriptorRegistryFixtureOnly(): LocalMcpDescriptorRegistryFixtureOnlyV1 {
   return cloneDescriptorRegistry(STATIC_DESCRIPTOR_REGISTRY_FIXTURE_ONLY);
+}
+
+export function buildLocalMcpDescriptorRegistryMetadataOnly(): LocalMcpDescriptorRegistryMetadataOnlyV1 {
+  const registry = cloneDescriptorRegistry(STATIC_DESCRIPTOR_REGISTRY_FIXTURE_ONLY);
+  return Object.freeze({
+    kind: "local_mcp_descriptor_registry_metadata_only",
+    metadataOnly: true,
+    callable: false,
+    runnable: false,
+    networkReachable: false,
+    descriptors: registry.descriptors,
+    descriptorNames: registry.descriptorNames,
+    version: 1,
+  });
 }
 
 export function assertLocalMcpDescriptorRegistryFixtureOnly(
