@@ -2,7 +2,7 @@ import {
   buildMcpProductionToolsListResult,
   type McpProductionToolDescriptorV1,
 } from "./mcpProductionToolsListProjection";
-import type { LocalMcpJsonSchemaV1 } from "./mcpSchemaProjection";
+import { localMcpJsonSchemaMatches } from "./mcpLocalJsonSchemaMatcher";
 
 export const MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND =
   "mcp_production_tools_call_readonly_synthetic_result" as const;
@@ -109,7 +109,7 @@ export function validateMcpProductionToolsCallBoundary(input: Readonly<{
 
   const tool = findProductionTool(input.params.name, input.toolsList);
   if (!tool) return invalid("unknown_tool");
-  if (!matchesJsonSchema(input.params.arguments, tool.inputSchema)) {
+  if (!localMcpJsonSchemaMatches(input.params.arguments, tool.inputSchema)) {
     return invalid("invalid_arguments");
   }
 
@@ -246,76 +246,6 @@ function hasSafeProgressToken(value: unknown): boolean {
 
 function isProgressToken(value: unknown): boolean {
   return typeof value === "string" || (typeof value === "number" && Number.isFinite(value));
-}
-
-function matchesJsonSchema(value: unknown, schema: LocalMcpJsonSchemaV1): boolean {
-  if (!matchesSchemaLiteralGuards(value, schema)) return false;
-  const matcher = schema.type ? JSON_SCHEMA_TYPE_MATCHERS[schema.type] : undefined;
-  return matcher ? matcher(value, schema) : false;
-}
-
-function matchesObjectSchema(value: unknown, schema: LocalMcpJsonSchemaV1): boolean {
-  if (!isPlainRecord(value)) return false;
-  const properties = schema.properties;
-  const required = schema.required;
-  if (!properties || !required) return false;
-  return (
-    hasRequiredKeys(value, required) &&
-    hasNoExtraObjectKeys(value, properties, schema.additionalProperties) &&
-    matchesDeclaredProperties(value, properties)
-  );
-}
-
-type JsonSchemaTypeMatcher = (value: unknown, schema: LocalMcpJsonSchemaV1) => boolean;
-
-const JSON_SCHEMA_TYPE_MATCHERS: Readonly<Record<NonNullable<LocalMcpJsonSchemaV1["type"]>, JsonSchemaTypeMatcher>> =
-  Object.freeze({
-    object: matchesObjectSchema,
-    string: matchesStringSchema,
-    number: matchesFiniteNumberSchema,
-    integer: matchesSafeIntegerSchema,
-    boolean: matchesBooleanSchema,
-  });
-
-function matchesSchemaLiteralGuards(value: unknown, schema: LocalMcpJsonSchemaV1): boolean {
-  const constMatches = !("const" in schema) || value === schema.const;
-  const enumMatches = !schema.enum || (typeof value === "string" && schema.enum.includes(value));
-  return constMatches && enumMatches;
-}
-
-function matchesStringSchema(value: unknown, schema: LocalMcpJsonSchemaV1): boolean {
-  return typeof value === "string" && (schema.minLength === undefined || value.length >= schema.minLength);
-}
-
-function matchesFiniteNumberSchema(value: unknown): boolean {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
-function matchesSafeIntegerSchema(value: unknown): boolean {
-  return typeof value === "number" && Number.isSafeInteger(value);
-}
-
-function matchesBooleanSchema(value: unknown): boolean {
-  return typeof value === "boolean";
-}
-
-function hasRequiredKeys(value: Record<string, unknown>, required: readonly string[]): boolean {
-  return required.every((key) => key in value);
-}
-
-function hasNoExtraObjectKeys(
-  value: Record<string, unknown>,
-  properties: NonNullable<LocalMcpJsonSchemaV1["properties"]>,
-  additionalProperties: LocalMcpJsonSchemaV1["additionalProperties"],
-): boolean {
-  return additionalProperties !== false || hasOnlyAllowedKeys(value, Object.keys(properties));
-}
-
-function matchesDeclaredProperties(
-  value: Record<string, unknown>,
-  properties: NonNullable<LocalMcpJsonSchemaV1["properties"]>,
-): boolean {
-  return Object.entries(properties).every(([key, nestedSchema]) => !(key in value) || matchesJsonSchema(value[key], nestedSchema));
 }
 
 function clonePlainRecord(value: Record<string, unknown>): Readonly<Record<string, unknown>> {
