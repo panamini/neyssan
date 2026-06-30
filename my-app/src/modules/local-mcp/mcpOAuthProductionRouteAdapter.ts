@@ -34,6 +34,11 @@ import {
   type McpJsonRpcProtocolMessageV1,
 } from "./mcpAuthenticatedProtocolEnvelope";
 import { evaluateMcpProductionPolicy, type McpProductionPolicyDecisionV1 } from "./mcpProductionPolicyKernel";
+import {
+  buildMcpProductionToolsCallReadonlySyntheticResult,
+  messageForMcpProductionToolsCallBoundaryError,
+  validateMcpProductionToolsCallBoundary,
+} from "./mcpProductionToolsCallBoundary";
 import { buildMcpProductionToolsListResult } from "./mcpProductionToolsListProjection";
 import {
   MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER,
@@ -536,8 +541,7 @@ type McpOAuthProductionRouteFailureReasonV1 =
   | "token_issue_failed"
   | "invalid_authorization_header"
   | "bearer_verification_caller_untrusted"
-  | "bearer_verification_failed"
-  | "mcp_execution_blocked";
+  | "bearer_verification_failed";
 
 type McpOAuthProductionAuthorizationOriginV1 = Readonly<{
   origin: string;
@@ -1610,22 +1614,44 @@ function handleAuthenticatedMcpJsonRpc(
   envelope: McpAuthenticatedProtocolEnvelopeV1,
 ): McpOAuthProductionRouteAdapterResponseV1 {
   const decision = evaluateMcpProductionPolicy(envelope);
+  if (decision.decision === "allow_read_only_call") {
+    return toolsCallBoundaryResponse(envelope);
+  }
   if (decision.decision !== "allow_protocol" && decision.decision !== "allow_metadata") {
     return blockedMcpPolicyDecisionResponse(envelope, decision.decision);
   }
   return allowedMcpPolicyDecisionResponse(envelope, decision);
 }
 
+function toolsCallBoundaryResponse(
+  envelope: McpAuthenticatedProtocolEnvelopeV1,
+): McpOAuthProductionRouteAdapterResponseV1 {
+  const id = envelope.jsonRpc.id ?? null;
+  const validation = validateMcpProductionToolsCallBoundary({
+    method: envelope.jsonRpc.method,
+    params: envelope.jsonRpc.params,
+    version: 1,
+  });
+  if (!validation.valid) {
+    return jsonResponse(
+      200,
+      buildMcpJsonRpcError(id, -32602, messageForMcpProductionToolsCallBoundaryError(validation.error)),
+    );
+  }
+  return jsonResponse(200, {
+    jsonrpc: "2.0",
+    id,
+    result: buildMcpProductionToolsCallReadonlySyntheticResult(validation),
+  });
+}
+
 function blockedMcpPolicyDecisionResponse(
   envelope: McpAuthenticatedProtocolEnvelopeV1,
-  decision: "invalid_params" | "block_execution" | "method_not_found",
+  decision: "invalid_params" | "method_not_found",
 ): McpOAuthProductionRouteAdapterResponseV1 {
   const id = envelope.jsonRpc.id ?? null;
   if (decision === "invalid_params") {
     return jsonResponse(200, buildMcpJsonRpcError(id, -32602, "Invalid tools/list params."));
-  }
-  if (decision === "block_execution") {
-    return jsonResponse(200, buildMcpJsonRpcError(id, -32000, "Production MCP tools/call execution is blocked."));
   }
   return jsonResponse(200, buildMcpJsonRpcError(id, -32601, "Method not found."));
 }

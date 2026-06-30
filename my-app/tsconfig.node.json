@@ -44,6 +44,7 @@
     "src/modules/local-mcp/mcpConvexAccountLinkLookupAdapter.ts",
     "src/modules/local-mcp/mcpDescriptorRegistry.ts",
     "src/modules/local-mcp/mcpProductionPolicyKernel.ts",
+    "src/modules/local-mcp/mcpProductionToolsCallBoundary.ts",
     "src/modules/local-mcp/mcpProductionToolsListProjection.ts",
     "src/modules/local-mcp/mcpSchemaProjection.ts",
     "src/modules/local-mcp/mcpStytchBearerVerifierBoundary.ts",

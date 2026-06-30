@@ -28,6 +28,7 @@ import {
   parseMcpJsonRpcProtocolMessage,
 } from "../mcpAuthenticatedProtocolEnvelope";
 import { evaluateMcpProductionPolicy } from "../mcpProductionPolicyKernel";
+import { MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND } from "../mcpProductionToolsCallBoundary";
 import { buildMcpProductionToolsListResult } from "../mcpProductionToolsListProjection";
 import type { McpOAuthProductionActivationDependenciesV1 } from "../mcpOAuthProductionActivationBoundary";
 import {
@@ -1401,7 +1402,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(OWNER_ID);
   });
 
-  it("keeps production tools/call blocked distinctly from unknown methods", async () => {
+  it("returns a safe read-only production tools/call boundary result after bearer token", async () => {
     const ctx = makeCtx();
     ctx.accessTokenRows.push(storedAccessToken());
     const activation = activationDependencies();
@@ -1409,7 +1410,11 @@ describe("MCP OAuth production route adapter", () => {
     const response = await handleMcpOAuthProductionRouteRequest(
       mcpRequest(
         `Bearer ${RAW_ACCESS_TOKEN}`,
-        mcpJsonRpcRequest("tools/call", "tools-call", { name: "twoweeks.application_package.summarize" }),
+        mcpJsonRpcRequest("tools/call", "tools-call-preserved", {
+          name: "twoweeks.application_package.summarize",
+          arguments: { applicationPackageRef: { id: "application-package-secret-ref" } },
+          _meta: { progressToken: "progress-token-secret" },
+        }),
         { "mcp-protocol-version": "2025-11-25" },
       ),
       routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }, activation),
@@ -1421,23 +1426,138 @@ describe("MCP OAuth production route adapter", () => {
       status: 200,
       json: {
         jsonrpc: "2.0",
-        id: "tools-call",
+        id: "tools-call-preserved",
+        result: {
+          structuredContent: {
+            kind: MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND,
+            phase: "pr102_readonly_boundary_only",
+            toolName: "twoweeks.application_package.summarize",
+            status: "validated_synthetic_summary_only",
+            validation: {
+              schemaMatched: true,
+              rawArgumentsEchoed: false,
+              progressTokenEchoed: false,
+            },
+            effects: {
+              externalServiceCalled: false,
+              writeActionPerformed: false,
+              outboundNetworkCalled: false,
+              modelCalled: false,
+              accountLinkLifecycleTouched: false,
+              refreshTokenTouched: false,
+              realProductDataRead: false,
+              exportSendSubmitApplyDownloadPerformed: false,
+            },
+            publicOutput: {
+              rawUserDocumentTextIncluded: false,
+              privateOrNeverUseTextIncluded: false,
+              sourceTextIncluded: false,
+              diagnosticTraceIncluded: false,
+              implementationNameIncluded: false,
+              internalIdsIncluded: false,
+            },
+          },
+        },
+      },
+    });
+    const bodyText = JSON.stringify(response);
+    expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(1);
+    expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
+    expect(dependencies.createPreAuthIntent).not.toHaveBeenCalled();
+    expect(dependencies.consumeAuthorizationIntent).not.toHaveBeenCalled();
+    expect(dependencies.createAuthorizationCode).not.toHaveBeenCalled();
+    expect(dependencies.validateAuthorizationCode).not.toHaveBeenCalled();
+    expect(dependencies.issueAccessToken).not.toHaveBeenCalled();
+    expect(dependencies.bindPreAuthIntentToAuthenticatedOwner).not.toHaveBeenCalled();
+    expect(activation.providerAdapter.exchangeAuthorizationCode).not.toHaveBeenCalled();
+    expect(activation.executeAccountLinkLifecycle).not.toHaveBeenCalled();
+    expect(bodyText).not.toContain(RAW_ACCESS_TOKEN);
+    expect(bodyText).not.toContain(ACCESS_TOKEN_DIGEST);
+    expect(bodyText).not.toContain(OWNER_ID);
+    expect(bodyText).not.toContain("application-package-secret-ref");
+    expect(bodyText).not.toContain("progress-token-secret");
+    expect(bodyText).not.toContain("mcpOAuthAccessTokens_fixture");
+    expect(bodyText).not.toContain("mcpOAuthAuthorizationCodes_fixture");
+    expect(bodyText).not.toContain("mcpOAuthAuthorizationIntents_fixture");
+    expect(bodyText).not.toContain("mcpOAuthPreAuthIntents_fixture");
+    expect(bodyText).not.toContain("localToolId");
+    expect(bodyText).not.toContain("internalToolId");
+    expect(bodyText).not.toContain("handler");
+    expect(bodyText).not.toContain("function");
+    expect(bodyText).not.toContain("https://");
+    expect(bodyText).not.toContain("stytch");
+    expect(bodyText).not.toContain("access_token");
+    expect(bodyText).not.toContain("refresh_token");
+    expect(bodyText).not.toContain("authorizationCodeDigest");
+    expect(bodyText).not.toContain("stack");
+  });
+
+  it("fails unknown production tools/call tools distinctly from unknown JSON-RPC methods", async () => {
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push(storedAccessToken());
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(
+        `Bearer ${RAW_ACCESS_TOKEN}`,
+        mcpJsonRpcRequest("tools/call", "unknown-tool", {
+          name: "twoweeks.missing.summarize",
+          arguments: {},
+        }),
+        { "mcp-protocol-version": "2025-11-25" },
+      ),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      routeDependencies(ctx),
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 200,
+      json: {
+        jsonrpc: "2.0",
+        id: "unknown-tool",
         error: {
-          code: -32000,
-          message: "Production MCP tools/call execution is blocked.",
+          code: -32602,
+          message: "Unknown tools/call tool.",
           safeForModel: true,
         },
       },
     });
-    expect(dependencies.createPreAuthIntent).not.toHaveBeenCalled();
-    expect(dependencies.consumeAuthorizationIntent).not.toHaveBeenCalled();
-    expect(dependencies.createAuthorizationCode).not.toHaveBeenCalled();
-    expect(dependencies.issueAccessToken).not.toHaveBeenCalled();
-    expect(activation.providerAdapter.exchangeAuthorizationCode).not.toHaveBeenCalled();
-    expect(activation.executeAccountLinkLifecycle).not.toHaveBeenCalled();
+    expect(JSON.stringify(response)).not.toContain("Method not found.");
     expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
     expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
     expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+  });
+
+  it("fails malformed production tools/call params closed without executing a boundary result", async () => {
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push(storedAccessToken());
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(
+        `Bearer ${RAW_ACCESS_TOKEN}`,
+        mcpJsonRpcRequest("tools/call", "tools-call-invalid", {
+          name: "twoweeks.application_package.summarize",
+          arguments: { applicationPackageRef: { id: "raw-ref-should-not-echo" }, task: "do more" },
+        }),
+        { "mcp-protocol-version": "2025-11-25" },
+      ),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      routeDependencies(ctx),
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 200,
+      json: {
+        jsonrpc: "2.0",
+        id: "tools-call-invalid",
+        error: {
+          code: -32602,
+          message: "Invalid tools/call arguments.",
+          safeForModel: true,
+        },
+      },
+    });
+    expect(JSON.stringify(response)).not.toContain("raw-ref-should-not-echo");
+    expect(JSON.stringify(response)).not.toContain(MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND);
   });
 
   it("keeps unknown production /mcp methods method-not-found after bearer verification", async () => {
@@ -1474,6 +1594,13 @@ describe("MCP OAuth production route adapter", () => {
   it("keeps production MCP policy decision-only and tools/list projection separate", () => {
     const jsonRpcMessage = parseMcpJsonRpcProtocolMessage(JSON.stringify(mcpJsonRpcRequest("tools/list", "tools-list")));
     if (!jsonRpcMessage) throw new Error("fixture JSON-RPC should parse");
+    const toolsCallMessage = parseMcpJsonRpcProtocolMessage(JSON.stringify(
+      mcpJsonRpcRequest("tools/call", "tools-call-policy", {
+        name: "twoweeks.application_package.summarize",
+        arguments: { applicationPackageRef: { id: "policy-raw-ref" }, task: "do more" },
+      }),
+    ));
+    if (!toolsCallMessage) throw new Error("fixture tools/call JSON-RPC should parse");
     const envelope = buildMcpAuthenticatedProtocolEnvelope({
       verifiedClientId: CLIENT_ID,
       verifiedResource: RESOURCE,
@@ -1483,7 +1610,17 @@ describe("MCP OAuth production route adapter", () => {
       jsonRpcMessage,
       createdAt: NOW,
     });
+    const toolsCallEnvelope = buildMcpAuthenticatedProtocolEnvelope({
+      verifiedClientId: CLIENT_ID,
+      verifiedResource: RESOURCE,
+      verifiedScopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
+      accessTokenExpiresAt: NOW + 60 * 60 * 1_000,
+      callerKey: "198.51.100.9",
+      jsonRpcMessage: toolsCallMessage,
+      createdAt: NOW,
+    });
     const decision = evaluateMcpProductionPolicy(envelope);
+    const toolsCallDecision = evaluateMcpProductionPolicy(toolsCallEnvelope);
     const projection = buildMcpProductionToolsListResult();
 
     expect(decision).toEqual({
@@ -1499,6 +1636,21 @@ describe("MCP OAuth production route adapter", () => {
     expect(decision).not.toHaveProperty("tools");
     expect(decision).not.toHaveProperty("response");
     expect(decision).not.toHaveProperty("payload");
+    expect(toolsCallDecision).toEqual({
+      kind: "mcp_production_policy_decision",
+      decision: "allow_read_only_call",
+      method: "tools/call",
+      reason: "read_only_call_boundary_allowed",
+      version: 1,
+    });
+    expect(Object.keys(toolsCallDecision).sort()).toEqual(["decision", "kind", "method", "reason", "version"]);
+    expect(JSON.stringify(toolsCallDecision)).not.toContain("policy-raw-ref");
+    expect(JSON.stringify(toolsCallDecision)).not.toContain("arguments");
+    expect(JSON.stringify(toolsCallDecision)).not.toContain("inputSchema");
+    expect(JSON.stringify(toolsCallDecision)).not.toContain("result");
+    expect(toolsCallDecision).not.toHaveProperty("tools");
+    expect(toolsCallDecision).not.toHaveProperty("response");
+    expect(toolsCallDecision).not.toHaveProperty("payload");
     expect(projection.tools).toHaveLength(4);
     for (const tool of projection.tools) {
       expect(Object.keys(tool).sort()).toEqual(["annotations", "description", "inputSchema", "name", "title"]);
@@ -1719,6 +1871,36 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
   });
 
+  it("fails missing /mcp Authorization before tools/call boundary validation", async () => {
+    const dependencies = routeDependencies(makeCtx());
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(
+        null,
+        mcpJsonRpcRequest("tools/call", "auth-before-tools-call", {
+          name: "twoweeks.application_package.summarize",
+          arguments: { applicationPackageRef: { id: "raw-ref-before-auth" }, task: "do more" },
+        }),
+      ),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 401,
+      json: {
+        status: "blocked",
+        reason: "invalid_authorization_header",
+        route: "mcp",
+      },
+    });
+    expectMcpBearerChallenge(response);
+    expect(dependencies.checkPreAuthQuota).not.toHaveBeenCalled();
+    expect(dependencies.verifyAccessToken).not.toHaveBeenCalled();
+    expect(JSON.stringify(response)).not.toContain("Invalid tools/call");
+    expect(JSON.stringify(response)).not.toContain("raw-ref-before-auth");
+  });
+
   it("fails /mcp closed when a valid-shaped bearer token misses digest storage", async () => {
     const dependencies = routeDependencies(makeCtx());
     const rawUnknownToken = "R".repeat(43);
@@ -1901,6 +2083,45 @@ describe("MCP OAuth production route adapter", () => {
     expect(response.headers).not.toHaveProperty("WWW-Authenticate");
     expect(JSON.stringify(response)).not.toContain(rawUnknownToken);
     expect(JSON.stringify(response)).not.toContain(sha256Hex(rawUnknownToken));
+  });
+
+  it("applies /mcp bearer quota before tools/call boundary validation", async () => {
+    const dependencies = {
+      ...routeDependencies(makeCtx()),
+      checkPreAuthQuota: vi.fn(async () => ({
+        kind: "mcp_oauth_pre_auth_quota_result",
+        ok: false,
+        reason: "rate_limited",
+        safeFailure: { code: "mcp_oauth_bearer_verification_quota_denied" },
+        safeForLogging: true,
+        version: 1,
+      })),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(
+        `Bearer ${RAW_ACCESS_TOKEN}`,
+        mcpJsonRpcRequest("tools/call", "quota-before-tools-call", {
+          name: "twoweeks.application_package.summarize",
+          arguments: { applicationPackageRef: { id: "raw-ref-before-quota" }, task: "do more" },
+        }),
+      ),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 429,
+      json: {
+        status: "blocked",
+        reason: "bearer_verification_quota_denied",
+        route: "mcp",
+      },
+    });
+    expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(1);
+    expect(dependencies.verifyAccessToken).not.toHaveBeenCalled();
+    expect(JSON.stringify(response)).not.toContain("Invalid tools/call");
+    expect(JSON.stringify(response)).not.toContain("raw-ref-before-quota");
   });
 
   it("keys /mcp bearer verification quota from the socket address, not caller-supplied forwarding headers", async () => {
