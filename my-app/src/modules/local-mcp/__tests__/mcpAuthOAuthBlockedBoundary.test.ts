@@ -48,7 +48,7 @@ const VALID_APPROVAL = {
 } as const;
 
 describe("Auth/OAuth blocked boundary", () => {
-  it("does not define OAuth callback, token storage, account-linking, or security-scheme runtime markers", () => {
+  it("does not define OAuth callback, token storage, account-linking, or security-scheme runtime markers outside the gated Vite adapter", () => {
     const forbiddenFragments = [
       "/oauth/callback",
       "/oauth/authorize",
@@ -67,10 +67,22 @@ describe("Auth/OAuth blocked boundary", () => {
       "client_secret",
       "set-cookie",
     ] as const;
+    const viteProductionDiscoveryFragments = new Set([
+      "/oauth/authorize",
+      "/oauth/token",
+      "/.well-known/oauth-authorization-server",
+      "/.well-known/oauth-protected-resource",
+      "authorization_endpoint",
+      "token_endpoint",
+      "access_token",
+    ]);
 
     for (const path of ACTIVE_BOUNDARY_SOURCES) {
       const text = source(path);
       for (const fragment of forbiddenFragments) {
+        if (path === "my-app/vite.config.ts" && viteProductionDiscoveryFragments.has(fragment)) {
+          continue;
+        }
         expect(text, `${path} must not define ${fragment}`).not.toContain(fragment);
       }
     }

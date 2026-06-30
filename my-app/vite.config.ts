@@ -60,6 +60,7 @@ const LOCAL_MCP_DEV_AUTH_RESOURCE_VAR = "LOCAL_MCP_DEV_AUTH_RESOURCE";
 const LOCAL_MCP_DEV_AUTH_ISSUER_VAR = "LOCAL_MCP_DEV_AUTH_ISSUER";
 const LOCAL_MCP_DEV_AUTH_PROVIDER_ENVIRONMENT_VAR = "LOCAL_MCP_DEV_AUTH_PROVIDER_ENVIRONMENT";
 const LOCAL_MCP_DEV_AUTH_CLIENT_ID_VAR = "LOCAL_MCP_DEV_AUTH_CLIENT_ID";
+const WELL_KNOWN_OAUTH_AUTHORIZATION_SERVER_PATH = "/.well-known/oauth-authorization-server";
 const MCP_OAUTH_PRODUCTION_RESOURCE_VAR = "MCP_OAUTH_PRODUCTION_RESOURCE";
 const MCP_OAUTH_PRODUCTION_ISSUER_VAR = "MCP_OAUTH_PRODUCTION_ISSUER";
 const MCP_OAUTH_PRODUCTION_PROVIDER_ENVIRONMENT_VAR = "MCP_OAUTH_PRODUCTION_PROVIDER_ENVIRONMENT";
@@ -202,18 +203,15 @@ function handleLocalMcpDevMiddlewareRequest(
 ): void {
   const pathName = (req.url ?? "").split("?")[0];
   if (
-    productionOAuthAuthorizationEnabled &&
-    isMcpOAuthProductionRouteAllowedByPreflightPath(
-      MCP_OAUTH_PRODUCTION_TOKEN_PATH,
-      productionOAuthAuthorizationConfig.preflight,
-    ) &&
-    productionOAuthProtectedResourceMetadataRequestMatches(
+    handleProductionOAuthMetadataRequest(
       req,
+      res,
       pathName,
+      productionOAuthAuthorizationEnabled,
+      productionOAuthAuthorizationConfig,
       productionOAuthAuthorizationDependencies,
     )
   ) {
-    sendProductionOAuthProtectedResourceMetadata(res, productionOAuthAuthorizationDependencies);
     return;
   }
   if (
@@ -304,6 +302,29 @@ async function respondToMcpOAuthLocalDevRouteRequest(
     return;
   }
   sendLocalMcpRouteResponse(res, response.status, response.headers, response.json, response.bodyText);
+}
+
+function handleProductionOAuthMetadataRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  pathName: string | undefined,
+  enabled: boolean,
+  config: McpOAuthProductionRouteAdapterConfigV1,
+  dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+): boolean {
+  if (!enabled) return false;
+  if (!isMcpOAuthProductionRouteAllowedByPreflightPath(MCP_OAUTH_PRODUCTION_TOKEN_PATH, config.preflight)) {
+    return false;
+  }
+  if (productionOAuthProtectedResourceMetadataRequestMatches(req, pathName, dependencies)) {
+    sendProductionOAuthProtectedResourceMetadata(res, dependencies);
+    return true;
+  }
+  if (productionOAuthAuthorizationServerMetadataRequestMatches(req, pathName, dependencies)) {
+    sendProductionOAuthAuthorizationServerMetadata(res, dependencies);
+    return true;
+  }
+  return false;
 }
 
 async function respondToMcpOAuthProductionRouteRequest(
@@ -1120,6 +1141,79 @@ function sendProductionOAuthProtectedResourceMetadata(
   } catch {
     sendInvalidLocalMcpDevRequest(res);
   }
+}
+
+function productionOAuthAuthorizationServerMetadataRequestMatches(
+  req: IncomingMessage,
+  pathName: string | undefined,
+  dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+): boolean {
+  if ((req.method ?? "GET") !== "GET") return false;
+  if (pathName !== WELL_KNOWN_OAUTH_AUTHORIZATION_SERVER_PATH) return false;
+  return productionOAuthRequestHostMatchesUrlOrigin(
+    req,
+    dependencies.authorizationRequestConfig?.authorizationPageOrigin,
+  );
+}
+
+function sendProductionOAuthAuthorizationServerMetadata(
+  res: ServerResponse,
+  dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+): void {
+  const metadata = productionOAuthAuthorizationServerMetadata(
+    dependencies.authorizationRequestConfig?.authorizationPageOrigin,
+  );
+  if (!metadata) {
+    sendInvalidLocalMcpDevRequest(res);
+    return;
+  }
+  sendLocalMcpRouteResponse(
+    res,
+    200,
+    { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+    metadata,
+    undefined,
+  );
+}
+
+function productionOAuthAuthorizationServerMetadata(authorizationPageOrigin: string | undefined): unknown | undefined {
+  const parsed = parseProductionOAuthHttpsOrigin(authorizationPageOrigin);
+  if (!parsed) return undefined;
+  return Object.freeze({
+    issuer: parsed.toString(),
+    authorization_endpoint: `${parsed.origin}${MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH}`,
+    token_endpoint: `${parsed.origin}${MCP_OAUTH_PRODUCTION_TOKEN_PATH}`,
+    response_types_supported: ["code"],
+    grant_types_supported: ["authorization_code"],
+    code_challenge_methods_supported: ["S256"],
+    token_endpoint_auth_methods_supported: ["none"],
+    scopes_supported: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
+  });
+}
+
+function parseProductionOAuthHttpsOrigin(origin: string | undefined): URL | undefined {
+  if (typeof origin !== "string") return undefined;
+  try {
+    const parsed = new URL(origin);
+    if (!isProductionOAuthHttpsOrigin(parsed)) return undefined;
+    return parsed;
+  } catch {
+    return undefined;
+  }
+}
+
+function isProductionOAuthHttpsOrigin(parsed: URL): boolean {
+  const hasPath = parsed.pathname !== "" && parsed.pathname !== "/";
+  return (
+    parsed.protocol === "https:" &&
+    parsed.origin !== "null" &&
+    Boolean(parsed.hostname) &&
+    !parsed.username &&
+    !parsed.password &&
+    !hasPath &&
+    !parsed.search &&
+    !parsed.hash
+  );
 }
 
 function productionOAuthProtectedResourceMetadataUrl(resourceUrl: string | undefined): string | undefined {
