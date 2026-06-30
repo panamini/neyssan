@@ -18,7 +18,13 @@ import {
   type McpOAuthIntentConsumePortV1,
   type McpOAuthIntentConsumeResultV1,
 } from "./mcpOAuthLoginReturnContinuationBoundary";
-import { TWOWEEKS_APPLICATIONS_READ_SCOPE } from "./mcpAuthPolicyBoundary";
+import {
+  buildBearerAuthChallenge,
+  buildMcpWwwAuthenticateMeta,
+  TWOWEEKS_APPLICATIONS_READ_SCOPE,
+  type McpBearerAuthChallengeErrorV1,
+  type McpBearerAuthChallengeReasonV1,
+} from "./mcpAuthPolicyBoundary";
 import {
   MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER,
   MCP_OAUTH_CONTINUATION_PATH,
@@ -374,6 +380,77 @@ export type McpOAuthProductionAccessTokenIssuePortV1 = (
   input: McpOAuthProductionAccessTokenIssuePortInputV1,
 ) => Promise<McpOAuthProductionAccessTokenIssuePortResultV1>;
 
+export type McpOAuthProductionAccessTokenVerifyPortInputV1 = Readonly<{
+  accessTokenDigest: string;
+  allowedClientIds: readonly string[];
+  resource: string;
+  requiredScope: typeof TWOWEEKS_APPLICATIONS_READ_SCOPE;
+  now: number;
+  version: 1;
+}>;
+
+export type McpOAuthProductionAccessTokenVerifyPortResultV1 = Readonly<
+  | {
+      kind: "mcp_oauth_access_token_verify_result";
+      ok: true;
+      reason: "verified";
+      serverOnly: {
+        status: "active";
+        twoweeksClerkId: string;
+        ownerIssuer: string;
+        clientId: string;
+        resource: string;
+        scopes: readonly string[];
+        productionEnvironment: typeof MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT;
+        expiresAt: number;
+        tokenActive: true;
+        tokenExpired: false;
+        tokenRevoked: false;
+        rawAccessTokenPersisted: false;
+        rawAccessTokenEchoed: false;
+        digestEchoed: false;
+        version: 1;
+      };
+      modelVisible: false;
+      safeForLogging: false;
+      version: 1;
+    }
+  | {
+      kind: "mcp_oauth_access_token_verify_result";
+      ok: false;
+      reason:
+        | "invalid_input"
+        | "invalid_access_token_digest"
+        | "not_found_or_forbidden"
+        | "storage_unavailable"
+        | "malformed_storage_record"
+        | "duplicate_storage_record"
+        | "expired"
+        | "inactive"
+        | "wrong_client"
+        | "wrong_resource"
+        | "missing_required_scope"
+        | "unauthorized_scope_state";
+      safeFailure: {
+        code: "mcp_oauth_access_token_denied";
+        message: "Access token denied.";
+        safeForModel: true;
+        rawTokenEchoed: false;
+        digestEchoed: false;
+        identityEchoed: false;
+        sensitiveValuesEchoed: false;
+        version: 1;
+      };
+      modelVisible: false;
+      safeForLogging: true;
+      version: 1;
+    }
+>;
+
+export type McpOAuthProductionAccessTokenVerifyPortV1 = (
+  input: McpOAuthProductionAccessTokenVerifyPortInputV1,
+) => Promise<McpOAuthProductionAccessTokenVerifyPortResultV1>;
+
 export type McpOAuthProductionAuthenticatedOwnerIdentityV1 = Readonly<{
   subject: string;
   issuer: string;
@@ -397,6 +474,7 @@ export type McpOAuthProductionRouteAdapterDependenciesV1 = Readonly<{
   createAuthorizationCode?: McpOAuthProductionAuthorizationCodeCreatePortV1;
   validateAuthorizationCode?: McpOAuthProductionAuthorizationCodeValidatePortV1;
   issueAccessToken?: McpOAuthProductionAccessTokenIssuePortV1;
+  verifyAccessToken?: McpOAuthProductionAccessTokenVerifyPortV1;
   readAuthenticatedOwnerIdentity?: McpOAuthProductionAuthenticatedOwnerIdentityReaderV1;
   generateBrowserBoundContinuationNonce?: McpOAuthProductionBrowserBoundContinuationNonceGeneratorV1;
   generateAuthorizationCode?: McpOAuthProductionAuthorizationCodeGeneratorV1;
@@ -444,7 +522,10 @@ type McpOAuthProductionRouteFailureReasonV1 =
   | "invalid_target"
   | "code_validation_failed"
   | "token_generation_failed"
-  | "token_issue_failed";
+  | "token_issue_failed"
+  | "invalid_authorization_header"
+  | "bearer_verification_failed"
+  | "mcp_execution_blocked";
 
 type McpOAuthProductionAuthorizationOriginV1 = Readonly<{
   origin: string;
@@ -478,8 +559,10 @@ const AUTHORIZATION_INTENT_CONSUME_TIMEOUT_MS = 2_500;
 const AUTHORIZATION_CODE_CREATE_TIMEOUT_MS = 2_500;
 const AUTHORIZATION_CODE_VALIDATE_TIMEOUT_MS = 2_500;
 const ACCESS_TOKEN_ISSUE_TIMEOUT_MS = 2_500;
+const ACCESS_TOKEN_VERIFY_TIMEOUT_MS = 2_500;
 const ACCESS_TOKEN_RESPONSE_CLOCK_SKEW_SECONDS = 60;
 const TOKEN_REQUEST_BODY_MAX_BYTES = 4_096;
+const AUTHORIZATION_HEADER_MAX_LENGTH = 128;
 const BROWSER_BOUND_CONTINUATION_NONCE_PARAMETER = "mcp_oauth_browser_nonce";
 const BROWSER_BOUND_CONTINUATION_COOKIE_NAME = "tw_mcp_oauth_continue";
 const BROWSER_BOUND_CONTINUATION_NONCE_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
@@ -491,6 +574,7 @@ const ACCESS_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 const AUTHORIZATION_CODE_DIGEST_PATTERN = /^[0-9a-f]{64}$/u;
 const PKCE_CODE_VERIFIER_PATTERN = /^[A-Za-z0-9._~-]{43,128}$/u;
 const PKCE_CODE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43,128}$/u;
+const WELL_KNOWN_PROTECTED_RESOURCE_PATH = "/.well-known/oauth-protected-resource";
 const TOKEN_REQUEST_KEYS = Object.freeze([
   "grant_type",
   "code",
@@ -554,6 +638,9 @@ export async function handleMcpOAuthProductionRouteRequest(
   if (route === "oauth_token") {
     return handleTokenRequest(request, config, dependencies);
   }
+  if (route === "mcp") {
+    return handleMcpRequest(request, config, dependencies);
+  }
   return inertGuardedResponse(route, config.preflight);
 }
 
@@ -573,7 +660,7 @@ async function handleAuthorizationRequest(
   if (!authorizationOrigin) {
     return failClosedResponse("oauth_authorize", preflight, "invalid_configuration", 500);
   }
-  if (!requestHostMatchesAuthorizationOrigin(request, authorizationOrigin)) {
+  if (!requestHostMatchesOrigin(request, authorizationOrigin)) {
     return failClosedResponse("oauth_authorize", preflight, "invalid_host", 403);
   }
 
@@ -692,7 +779,7 @@ async function handleLoginReturnContinuationRequest(
   if (!authorizationOrigin) {
     return failClosedResponse("oauth_login_return", preflight, "invalid_configuration", 500);
   }
-  if (!requestHostMatchesAuthorizationOrigin(request, authorizationOrigin)) {
+  if (!requestHostMatchesOrigin(request, authorizationOrigin)) {
     return failClosedResponse("oauth_login_return", preflight, "invalid_host", 403);
   }
 
@@ -823,7 +910,7 @@ async function handleTokenRequest(
   if (!authorizationOrigin) {
     return failClosedResponse("oauth_token", preflight, "invalid_configuration", 500);
   }
-  if (!requestHostMatchesAuthorizationOrigin(request, authorizationOrigin)) {
+  if (!requestHostMatchesOrigin(request, authorizationOrigin)) {
     return failClosedResponse("oauth_token", preflight, "invalid_host", 403);
   }
   const expectedResource = readTokenResource(dependencies.authorizationRequestConfig.canonicalResource);
@@ -904,6 +991,77 @@ async function handleTokenRequest(
   }
 
   return oauthAccessTokenResponse(rawAccessToken, issueResult, readNow(dependencies));
+}
+
+async function handleMcpRequest(
+  request: McpOAuthProductionRouteAdapterRequestV1,
+  config: McpOAuthProductionRouteAdapterConfigV1,
+  dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+): Promise<McpOAuthProductionRouteAdapterResponseV1> {
+  const preflight = config.preflight;
+  if (!dependencies.authorizationRequestConfig || !dependencies.verifyAccessToken) {
+    return failClosedResponse("mcp", preflight, "dependency_unavailable", 503);
+  }
+  if (!authorizationRequestConfigMatchesGuard(dependencies.authorizationRequestConfig, config.authorizationRequestGuard)) {
+    return failClosedResponse("mcp", preflight, "invalid_configuration", 500);
+  }
+  const authorizationOrigin = readAuthorizationOrigin(dependencies.authorizationRequestConfig);
+  if (!authorizationOrigin) {
+    return failClosedResponse("mcp", preflight, "invalid_configuration", 500);
+  }
+  const expectedResource = readTokenResource(dependencies.authorizationRequestConfig.canonicalResource);
+  if (!expectedResource) {
+    return failClosedResponse("mcp", preflight, "invalid_configuration", 500);
+  }
+  const resourceOrigin = readResourceOrigin(expectedResource);
+  if (!resourceOrigin) {
+    return failClosedResponse("mcp", preflight, "invalid_configuration", 500);
+  }
+  if (!requestHostMatchesOrigin(request, resourceOrigin)) {
+    return failClosedResponse("mcp", preflight, "invalid_host", 403);
+  }
+
+  const bearerToken = readBearerAccessToken(request.headers, "authorization");
+  if (!bearerToken.ok) {
+    return mcpBearerAuthFailureResponse(
+      preflight,
+      expectedResource,
+      "invalid_authorization_header",
+      401,
+      challengeForAuthorizationHeaderFailure(bearerToken.reason),
+    );
+  }
+
+  const now = readNow(dependencies);
+  let verifyResult: McpOAuthProductionAccessTokenVerifyPortResultV1;
+  try {
+    verifyResult = await verifyAccessTokenWithTimeout(
+      dependencies.verifyAccessToken,
+      {
+        accessTokenDigest: hashAccessToken(bearerToken.serverOnly.rawAccessToken),
+        allowedClientIds: Object.freeze([...dependencies.authorizationRequestConfig.clientIdPolicy.allowedClientIds]),
+        resource: expectedResource,
+        requiredScope: TWOWEEKS_APPLICATIONS_READ_SCOPE,
+        now,
+        version: 1,
+      },
+      ACCESS_TOKEN_VERIFY_TIMEOUT_MS,
+    );
+  } catch {
+    return failClosedResponse("mcp", preflight, "bearer_verification_failed", 503);
+  }
+  if (!isAccessTokenVerifySuccess(verifyResult, dependencies.authorizationRequestConfig, expectedResource, now)) {
+    const status = statusForAccessTokenVerifyFailure(verifyResult);
+    return mcpBearerAuthFailureResponse(
+      preflight,
+      expectedResource,
+      "bearer_verification_failed",
+      status,
+      challengeForAccessTokenVerifyFailure(verifyResult),
+    );
+  }
+
+  return authenticatedMcpBlockedResponse(preflight, verifyResult);
 }
 
 function buildAuthorizationRequestGuard(
@@ -1157,6 +1315,34 @@ function issueAccessTokenWithTimeout(
   });
 }
 
+function verifyAccessTokenWithTimeout(
+  verifyAccessToken: McpOAuthProductionAccessTokenVerifyPortV1,
+  input: McpOAuthProductionAccessTokenVerifyPortInputV1,
+  timeoutMs: number,
+): Promise<McpOAuthProductionAccessTokenVerifyPortResultV1> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error("access_token_verify_timeout"));
+    }, timeoutMs);
+
+    try {
+      verifyAccessToken(input).then(
+        (result) => {
+          clearTimeout(timeout);
+          resolve(result);
+        },
+        (error: unknown) => {
+          clearTimeout(timeout);
+          reject(toRejectedError(error, "access_token_verify_failed"));
+        },
+      );
+    } catch (error) {
+      clearTimeout(timeout);
+      reject(toRejectedError(error, "access_token_verify_failed"));
+    }
+  });
+}
+
 function normalizeStringSet(value: unknown): readonly string[] {
   if (!Array.isArray(value)) return [];
   return Object.freeze(
@@ -1178,7 +1364,7 @@ function isRouteAllowedByPreflight(
   route: McpOAuthProductionRouteNameV1,
   preflight: McpOAuthProductionRoutePreflightResultV1,
 ): boolean {
-  return route === "oauth_authorize" || route === "oauth_login_return" || route === "oauth_token"
+  return route === "oauth_authorize" || route === "oauth_login_return" || route === "oauth_token" || route === "mcp"
     ? preflight.authorizeAllowedToWire
     : preflight.allowedToWire;
 }
@@ -1198,6 +1384,7 @@ function failClosedResponse(
   reason: McpOAuthProductionRouteFailureReasonV1,
   status: number,
   headers: Readonly<Record<string, string>> = {},
+  extraJson: Readonly<Record<string, unknown>> = {},
 ): McpOAuthProductionRouteAdapterResponseV1 {
   return jsonResponse(status, {
     kind: "mcp_oauth_production_route_response",
@@ -1229,8 +1416,87 @@ function failClosedResponse(
     authorizationCodesExposed: false,
     redirectSecretsExposed: false,
     hostedMcpStarted: false,
+    ...extraJson,
     version: 1,
   }, headers);
+}
+
+function mcpBearerAuthFailureResponse(
+  preflight: McpOAuthProductionRoutePreflightResultV1,
+  expectedResource: string,
+  reason: Extract<McpOAuthProductionRouteFailureReasonV1, "invalid_authorization_header" | "bearer_verification_failed">,
+  status: number,
+  challengeInput: Readonly<{
+    reason: McpBearerAuthChallengeReasonV1;
+    error?: McpBearerAuthChallengeErrorV1;
+  }> | undefined,
+): McpOAuthProductionRouteAdapterResponseV1 {
+  if (!challengeInput || status < 400 || status >= 500) {
+    return failClosedResponse("mcp", preflight, reason, status);
+  }
+  const protectedResourceMetadataUrl = protectedResourceMetadataUrlForResource(expectedResource);
+  if (!protectedResourceMetadataUrl) {
+    return failClosedResponse("mcp", preflight, reason, status);
+  }
+  const challenge = buildBearerAuthChallenge({
+    reason: challengeInput.reason,
+    protectedResourceMetadataUrl,
+    ...(challengeInput.error ? { error: challengeInput.error } : {}),
+  });
+  return failClosedResponse(
+    "mcp",
+    preflight,
+    reason,
+    status,
+    { "WWW-Authenticate": challenge.header },
+    { _meta: buildMcpWwwAuthenticateMeta(challenge) },
+  );
+}
+
+function challengeForAuthorizationHeaderFailure(
+  reason: Exclude<ReturnType<typeof readBearerAccessToken>, { ok: true }>["reason"],
+): Readonly<{
+  reason: McpBearerAuthChallengeReasonV1;
+  error?: McpBearerAuthChallengeErrorV1;
+}> {
+  return reason === "missing_authorization_header"
+    ? { reason: "missing_token" }
+    : { reason: "invalid_token", error: "invalid_request" };
+}
+
+function challengeForAccessTokenVerifyFailure(
+  value: McpOAuthProductionAccessTokenVerifyPortResultV1,
+): Readonly<{
+  reason: McpBearerAuthChallengeReasonV1;
+  error?: McpBearerAuthChallengeErrorV1;
+}> | undefined {
+  if (!isPlainRecord(value) || value.ok !== false) return { reason: "invalid_token" };
+  if (value.reason === "storage_unavailable" || value.reason === "malformed_storage_record" || value.reason === "duplicate_storage_record") {
+    return undefined;
+  }
+  if (value.reason === "missing_required_scope" || value.reason === "unauthorized_scope_state") {
+    return { reason: "insufficient_scope" };
+  }
+  return { reason: "invalid_token" };
+}
+
+function protectedResourceMetadataUrlForResource(resource: string): string | undefined {
+  try {
+    const parsed = new URL(resource);
+    const normalizedPath = canonicalResourcePath(parsed.pathname);
+    return `${parsed.origin}${WELL_KNOWN_PROTECTED_RESOURCE_PATH}${normalizedPath === "/" ? "" : normalizedPath}`;
+  } catch {
+    return undefined;
+  }
+}
+
+function canonicalResourcePath(path: string): string {
+  let end = path.length;
+  while (end > 1 && path.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  const normalized = path.slice(0, end);
+  return normalized.length === 0 ? "/" : normalized;
 }
 
 function inertGuardedResponse(
@@ -1269,6 +1535,58 @@ function inertGuardedResponse(
     redirectSecretsExposed: false,
     hostedMcpStarted: false,
     handlerMode: "inert_guarded_only",
+    version: 1,
+  });
+}
+
+function authenticatedMcpBlockedResponse(
+  preflight: McpOAuthProductionRoutePreflightResultV1,
+  verifyResult: Extract<McpOAuthProductionAccessTokenVerifyPortResultV1, { ok: true }>,
+): McpOAuthProductionRouteAdapterResponseV1 {
+  return jsonResponse(501, {
+    kind: "mcp_oauth_production_route_response",
+    status: "authenticated_mcp_blocked",
+    reason: "mcp_execution_blocked",
+    route: "mcp",
+    message: "Production MCP request authenticated, but MCP execution is still blocked.",
+    safeForModel: true,
+    allowedByPreflight: true,
+    preflightDecision: preflight.decision,
+    guardedInertHandlerReached: true,
+    authenticatedMcpRequest: true,
+    accessTokenAccepted: true,
+    accessTokenExpiresAt: verifyResult.serverOnly.expiresAt,
+    oauthExecutionStarted: false,
+    authorizationRequestAccepted: false,
+    authorizationCodeAccepted: false,
+    authorizationCodeIssued: false,
+    authorizationCodeConsumed: false,
+    redirectSecretAccepted: false,
+    providerCalled: false,
+    tokenExchangeAttempted: false,
+    tokenIssued: false,
+    preAuthIntentCreated: false,
+    ownerBound: false,
+    consentCompleted: false,
+    accountLinkCreated: false,
+    tokenPersisted: false,
+    refreshTokenPersisted: false,
+    providerSecretsExposed: false,
+    rawProviderConfigExposed: false,
+    ownerIdentifiersExposed: false,
+    authorizationCodesExposed: false,
+    redirectSecretsExposed: false,
+    accessTokenEchoed: false,
+    accessTokenDigestEchoed: false,
+    hostedMcpStarted: false,
+    toolsListExecuted: false,
+    toolsCallExecuted: false,
+    providerCallExecuted: false,
+    refreshTokenIssued: false,
+    accountLinkLifecycleExecuted: false,
+    privateBetaEnabled: false,
+    publicLaunchEnabled: false,
+    handlerMode: "authenticated_mcp_blocked_only",
     version: 1,
   });
 }
@@ -1426,6 +1744,68 @@ function readTokenRequest(
   });
 }
 
+function readBearerAccessToken(
+  headers: McpOAuthProductionRouteAdapterRequestV1["headers"],
+  name: string,
+): Readonly<
+  | {
+      ok: true;
+      serverOnly: {
+        rawAccessToken: string;
+        version: 1;
+      };
+    }
+  | {
+      ok: false;
+      reason:
+        | "missing_authorization_header"
+        | "ambiguous_authorization_header"
+        | "malformed_authorization_header"
+        | "oversized_authorization_header";
+    }
+> {
+  const value = readHeaderValueByName(headers, name);
+  if (value === undefined) {
+    return Object.freeze({ ok: false, reason: "missing_authorization_header" });
+  }
+  if (value === "ambiguous") {
+    return Object.freeze({ ok: false, reason: "ambiguous_authorization_header" });
+  }
+  if (value.length > AUTHORIZATION_HEADER_MAX_LENGTH) {
+    return Object.freeze({ ok: false, reason: "oversized_authorization_header" });
+  }
+  const match = /^Bearer ([A-Za-z0-9_-]{43})$/iu.exec(value);
+  if (!match?.[1] || hasControlCharacter(value)) {
+    return Object.freeze({ ok: false, reason: "malformed_authorization_header" });
+  }
+  return Object.freeze({
+    ok: true,
+    serverOnly: Object.freeze({
+      rawAccessToken: match[1],
+      version: 1,
+    }),
+  });
+}
+
+function readHeaderValueByName(
+  headers: McpOAuthProductionRouteAdapterRequestV1["headers"],
+  name: string,
+): string | "ambiguous" | undefined {
+  if (!headers) return undefined;
+  const values: Array<string | readonly string[] | undefined> = [];
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === name) values.push(value);
+  }
+  if (values.length === 0) return undefined;
+  if (values.length > 1) return "ambiguous";
+  const value = values[0];
+  if (Array.isArray(value)) {
+    if (value.length !== 1) return "ambiguous";
+    return typeof value[0] === "string" ? value[0].trim() : "ambiguous";
+  }
+  return typeof value === "string" ? value.trim() : undefined;
+}
+
 function hasExactlyTokenRequestKeys(params: URLSearchParams): boolean {
   const keys = [...params.keys()];
   return (
@@ -1525,7 +1905,7 @@ function readSameOriginAuthorizationUrl(
   }
 }
 
-function requestHostMatchesAuthorizationOrigin(
+function requestHostMatchesOrigin(
   request: McpOAuthProductionRouteAdapterRequestV1,
   origin: McpOAuthProductionAuthorizationOriginV1,
 ): boolean {
@@ -2096,6 +2476,44 @@ function isAccessTokenIssueStorageProof(value: Record<string, unknown>): boolean
   );
 }
 
+function isAccessTokenVerifySuccess(
+  value: McpOAuthProductionAccessTokenVerifyPortResultV1,
+  config: McpOAuthAuthorizationRequestBoundaryConfigV1,
+  expectedResource: string,
+  now: number,
+): value is Extract<McpOAuthProductionAccessTokenVerifyPortResultV1, { ok: true }> {
+  return (
+    isPlainRecord(value) &&
+    value.kind === "mcp_oauth_access_token_verify_result" &&
+    value.ok === true &&
+    value.reason === "verified" &&
+    isPlainRecord(value.serverOnly) &&
+    value.serverOnly.status === "active" &&
+    typeof value.serverOnly.twoweeksClerkId === "string" &&
+    /^[A-Za-z0-9][A-Za-z0-9._:-]{0,511}$/u.test(value.serverOnly.twoweeksClerkId) &&
+    typeof value.serverOnly.ownerIssuer === "string" &&
+    value.serverOnly.ownerIssuer.length > 0 &&
+    value.serverOnly.ownerIssuer.length <= 512 &&
+    config.clientIdPolicy.allowedClientIds.includes(value.serverOnly.clientId) &&
+    value.serverOnly.resource === expectedResource &&
+    isAccessTokenIssueScopeProof(value.serverOnly.scopes) &&
+    value.serverOnly.productionEnvironment === MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT &&
+    typeof value.serverOnly.expiresAt === "number" &&
+    Number.isSafeInteger(value.serverOnly.expiresAt) &&
+    value.serverOnly.expiresAt > now &&
+    value.serverOnly.tokenActive === true &&
+    value.serverOnly.tokenExpired === false &&
+    value.serverOnly.tokenRevoked === false &&
+    value.serverOnly.rawAccessTokenPersisted === false &&
+    value.serverOnly.rawAccessTokenEchoed === false &&
+    value.serverOnly.digestEchoed === false &&
+    value.serverOnly.version === 1 &&
+    value.modelVisible === false &&
+    value.safeForLogging === false &&
+    value.version === 1
+  );
+}
+
 function isAuthenticatedOwnerIdentity(
   value: unknown,
 ): value is McpOAuthProductionAuthenticatedOwnerIdentityV1 {
@@ -2168,6 +2586,29 @@ function statusForAccessTokenIssueFailure(
   return 400;
 }
 
+function statusForAccessTokenVerifyFailure(
+  value: McpOAuthProductionAccessTokenVerifyPortResultV1,
+): 401 | 403 | 503 {
+  if (!isPlainRecord(value)) return 503;
+  if (value.ok === true) return 503;
+  if (
+    value.reason === "storage_unavailable" ||
+    value.reason === "malformed_storage_record" ||
+    value.reason === "duplicate_storage_record"
+  ) {
+    return 503;
+  }
+  if (
+    value.reason === "wrong_client" ||
+    value.reason === "wrong_resource" ||
+    value.reason === "missing_required_scope" ||
+    value.reason === "unauthorized_scope_state"
+  ) {
+    return 403;
+  }
+  return 401;
+}
+
 function readNow(dependencies: McpOAuthProductionRouteAdapterDependenciesV1): number {
   let now: number;
   try {
@@ -2213,6 +2654,29 @@ function readAuthorizationOrigin(
       protocol: origin.protocol,
       hostname: origin.hostname.toLowerCase(),
       port: normalizedOriginPort(origin),
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+function readResourceOrigin(resource: string): McpOAuthProductionAuthorizationOriginV1 | undefined {
+  try {
+    const parsed = new URL(resource);
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.origin === "null" ||
+      !parsed.hostname ||
+      parsed.username ||
+      parsed.password
+    ) {
+      return undefined;
+    }
+    return Object.freeze({
+      origin: parsed.origin,
+      protocol: parsed.protocol,
+      hostname: parsed.hostname.toLowerCase(),
+      port: normalizedOriginPort(parsed),
     });
   } catch {
     return undefined;

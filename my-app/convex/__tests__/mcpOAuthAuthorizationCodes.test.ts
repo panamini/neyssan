@@ -12,6 +12,7 @@ import {
   internalDeleteExpiredMcpOAuthAccessTokens,
   internalIssueMcpOAuthAccessTokenFromAuthorizationCode,
   internalValidateMcpOAuthAuthorizationCodeForTokenBoundary,
+  internalVerifyMcpOAuthAccessTokenForMcpBoundary,
   MCP_OAUTH_ACCESS_TOKEN_TTL_MS,
   MCP_OAUTH_AUTHORIZATION_CODE_PRODUCTION_ENVIRONMENT,
   MCP_OAUTH_AUTHORIZATION_CODE_TTL_MS,
@@ -228,6 +229,196 @@ describe("Convex MCP OAuth authorization codes", () => {
     expect(JSON.stringify(result)).not.toContain(RAW_ACCESS_TOKEN);
     expect(JSON.stringify(result)).not.toContain(ACCESS_TOKEN_DIGEST);
     expect(JSON.stringify(replay)).not.toContain(CODE_DIGEST);
+  });
+
+  it("verifies active digest-backed access tokens for the MCP boundary", async () => {
+    const { ctx, patches } = makeCtx([], [storedAccessToken()]);
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+
+    const result = await internalVerifyMcpOAuthAccessTokenForMcpBoundary._handler(
+      ctx as any,
+      verifyAccessTokenArgs(),
+    );
+
+    expect(result).toMatchObject({
+      kind: "mcp_oauth_access_token_verify_result",
+      ok: true,
+      reason: "verified",
+      serverOnly: {
+        status: "active",
+        twoweeksClerkId: OWNER_ID,
+        ownerIssuer: new URL(OWNER_ISSUER).toString(),
+        clientId: CLIENT_ID,
+        resource: RESOURCE,
+        scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE, "openid"],
+        productionEnvironment: MCP_OAUTH_AUTHORIZATION_CODE_PRODUCTION_ENVIRONMENT,
+        expiresAt: NOW + MCP_OAUTH_ACCESS_TOKEN_TTL_MS,
+        tokenActive: true,
+        tokenExpired: false,
+        tokenRevoked: false,
+        rawAccessTokenPersisted: false,
+        rawAccessTokenEchoed: false,
+        digestEchoed: false,
+      },
+      modelVisible: false,
+      safeForLogging: false,
+    });
+    expect(patches).toHaveLength(0);
+    expect(JSON.stringify(result)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(result)).not.toContain(ACCESS_TOKEN_DIGEST);
+  });
+
+  it("accepts configured access-token verifier allowlists larger than sixteen clients", async () => {
+    const allowedClientIds = Array.from({ length: 20 }, (_value, index) => `chatgpt_apps_sdk_client_${index}`);
+    const matchingClientId = allowedClientIds[17];
+    const { ctx, patches } = makeCtx([], [storedAccessToken({ clientId: matchingClientId })]);
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+
+    const result = await internalVerifyMcpOAuthAccessTokenForMcpBoundary._handler(
+      ctx as any,
+      verifyAccessTokenArgs({ allowedClientIds }),
+    );
+
+    expect(result).toMatchObject({
+      kind: "mcp_oauth_access_token_verify_result",
+      ok: true,
+      reason: "verified",
+      serverOnly: {
+        clientId: matchingClientId,
+        resource: RESOURCE,
+        tokenActive: true,
+        tokenExpired: false,
+        tokenRevoked: false,
+      },
+    });
+    expect(patches).toHaveLength(0);
+    expect(JSON.stringify(result)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(result)).not.toContain(ACCESS_TOKEN_DIGEST);
+  });
+
+  it.each([
+    ["digest miss", [], verifyAccessTokenArgs({ accessTokenDigest: sha256Hex("R".repeat(43)) }), "not_found_or_forbidden"],
+    [
+      "expired token",
+      [storedAccessToken({ issuedAt: NOW - MCP_OAUTH_ACCESS_TOKEN_TTL_MS, updatedAt: NOW, expiresAt: NOW })],
+      verifyAccessTokenArgs(),
+      "expired",
+    ],
+    ["revoked token", [storedAccessToken({ status: "revoked" })], verifyAccessTokenArgs(), "inactive"],
+    ["wrong client", [storedAccessToken({ clientId: "other_client" })], verifyAccessTokenArgs(), "wrong_client"],
+    [
+      "wrong resource",
+      [storedAccessToken({ resource: "https://mcp.twoweeks.example.test/other-resource" })],
+      verifyAccessTokenArgs(),
+      "wrong_resource",
+    ],
+    ["missing scope", [storedAccessToken({ scopes: ["openid"] })], verifyAccessTokenArgs(), "missing_required_scope"],
+    [
+      "unauthorized scope",
+      [storedAccessToken({ scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE, "twoweeks:write"] })],
+      verifyAccessTokenArgs(),
+      "unauthorized_scope_state",
+    ],
+  ] as const)("fails access-token verification for %s", async (_label, seed, args, reason) => {
+    const { ctx, patches } = makeCtx([], seed);
+    vi.spyOn(Date, "now").mockReturnValue(NOW);
+
+    const result = await internalVerifyMcpOAuthAccessTokenForMcpBoundary._handler(ctx as any, args);
+
+    expect(result).toMatchObject({
+      kind: "mcp_oauth_access_token_verify_result",
+      ok: false,
+      reason,
+      safeFailure: {
+        code: "mcp_oauth_access_token_denied",
+        rawTokenEchoed: false,
+        digestEchoed: false,
+        identityEchoed: false,
+        sensitiveValuesEchoed: false,
+      },
+      modelVisible: false,
+      safeForLogging: true,
+    });
+    expect(patches).toHaveLength(0);
+    expect(JSON.stringify(result)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(result)).not.toContain(ACCESS_TOKEN_DIGEST);
+  });
+
+  it("uses Convex storage time, not caller time, for final access-token expiry checks", async () => {
+    const { ctx } = makeCtx([], [storedAccessToken()]);
+    vi.spyOn(Date, "now").mockReturnValue(NOW + MCP_OAUTH_ACCESS_TOKEN_TTL_MS + 1);
+
+    const result = await internalVerifyMcpOAuthAccessTokenForMcpBoundary._handler(
+      ctx as any,
+      verifyAccessTokenArgs({ now: NOW }),
+    );
+
+    expect(result).toMatchObject({
+      kind: "mcp_oauth_access_token_verify_result",
+      ok: false,
+      reason: "expired",
+    });
+    expect(JSON.stringify(result)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(result)).not.toContain(ACCESS_TOKEN_DIGEST);
+  });
+
+  it("does not reject fresh access tokens when caller time is ahead of Convex storage time", async () => {
+    const { ctx } = makeCtx([], [storedAccessToken()]);
+    vi.spyOn(Date, "now").mockReturnValue(NOW + 1);
+
+    const result = await internalVerifyMcpOAuthAccessTokenForMcpBoundary._handler(
+      ctx as any,
+      verifyAccessTokenArgs({ now: NOW + MCP_OAUTH_ACCESS_TOKEN_TTL_MS + 1 }),
+    );
+
+    expect(result).toMatchObject({
+      kind: "mcp_oauth_access_token_verify_result",
+      ok: true,
+      reason: "verified",
+      serverOnly: {
+        tokenActive: true,
+        tokenExpired: false,
+        tokenRevoked: false,
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(result)).not.toContain(ACCESS_TOKEN_DIGEST);
+  });
+
+  it("keeps issued-at validation bounded to storage-side clock skew", async () => {
+    const { ctx } = makeCtx([], [storedAccessToken()]);
+    vi.spyOn(Date, "now").mockReturnValue(NOW - 120_001);
+
+    const result = await internalVerifyMcpOAuthAccessTokenForMcpBoundary._handler(
+      ctx as any,
+      verifyAccessTokenArgs({ now: NOW }),
+    );
+
+    expect(result).toMatchObject({
+      kind: "mcp_oauth_access_token_verify_result",
+      ok: false,
+      reason: "malformed_storage_record",
+    });
+    expect(JSON.stringify(result)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(result)).not.toContain(ACCESS_TOKEN_DIGEST);
+  });
+
+  it("treats an unavailable Convex storage clock as retryable storage failure", async () => {
+    const { ctx } = makeCtx([], [storedAccessToken()]);
+    vi.spyOn(Date, "now").mockReturnValue(Number.NaN);
+
+    const result = await internalVerifyMcpOAuthAccessTokenForMcpBoundary._handler(
+      ctx as any,
+      verifyAccessTokenArgs({ now: NOW }),
+    );
+
+    expect(result).toMatchObject({
+      kind: "mcp_oauth_access_token_verify_result",
+      ok: false,
+      reason: "storage_unavailable",
+    });
+    expect(JSON.stringify(result)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(result)).not.toContain(ACCESS_TOKEN_DIGEST);
   });
 
   it("does not consume the authorization code when access-token persistence cannot proceed", async () => {
@@ -670,6 +861,20 @@ function issueAccessTokenArgs(
     now,
     deadlineEpochMs: now + timeoutMs,
     timeoutMs,
+    version: 1,
+    ...overrides,
+  };
+}
+
+function verifyAccessTokenArgs(
+  overrides: Partial<Parameters<typeof internalVerifyMcpOAuthAccessTokenForMcpBoundary._handler>[1]> = {},
+) {
+  return {
+    accessTokenDigest: ACCESS_TOKEN_DIGEST,
+    allowedClientIds: [CLIENT_ID],
+    resource: RESOURCE,
+    requiredScope: TWOWEEKS_APPLICATIONS_READ_SCOPE,
+    now: NOW,
     version: 1,
     ...overrides,
   };

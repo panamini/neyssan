@@ -29,7 +29,10 @@ import {
   type McpOAuthLocalDevRouteAdapterConfigV1,
   type McpOAuthLocalDevRouteAdapterDependenciesV1,
 } from "./src/modules/local-mcp/mcpOAuthLocalDevRouteAdapter";
-import { TWOWEEKS_APPLICATIONS_READ_SCOPE } from "./src/modules/local-mcp/mcpAuthPolicyBoundary";
+import {
+  buildProtectedResourceMetadata,
+  TWOWEEKS_APPLICATIONS_READ_SCOPE,
+} from "./src/modules/local-mcp/mcpAuthPolicyBoundary";
 import {
   MCP_OAUTH_PRODUCTION_APPROVED_FLAG,
   MCP_OAUTH_PRODUCTION_RUNTIME_FLAG,
@@ -40,6 +43,7 @@ import {
   isMcpOAuthProductionRouteAllowedByPreflightPath,
   isMcpOAuthProductionRouteHandledPath,
   MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
+  MCP_OAUTH_PRODUCTION_MCP_PATH,
   MCP_OAUTH_PRODUCTION_TOKEN_PATH,
   type McpOAuthProductionAuthenticatedOwnerIdentityV1,
   type McpOAuthProductionRouteAdapterConfigV1,
@@ -91,6 +95,9 @@ const VALIDATE_MCP_OAUTH_AUTHORIZATION_CODE_QUERY = makeFunctionReference(
 const ISSUE_MCP_OAUTH_ACCESS_TOKEN_MUTATION = makeFunctionReference(
   "mcpOAuthAuthorizationCodes:internalIssueMcpOAuthAccessTokenFromAuthorizationCode",
 ) as FunctionReference<"mutation">;
+const VERIFY_MCP_OAUTH_ACCESS_TOKEN_QUERY = makeFunctionReference(
+  "mcpOAuthAuthorizationCodes:internalVerifyMcpOAuthAccessTokenForMcpBoundary",
+) as FunctionReference<"query">;
 const productionPreAuthQuotaBuckets = new Map<string, { count: number; windowStartedAt: number }>();
 const productionClerkJwksByIssuer = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 
@@ -196,12 +203,28 @@ function handleLocalMcpDevMiddlewareRequest(
   const pathName = (req.url ?? "").split("?")[0];
   if (
     productionOAuthAuthorizationEnabled &&
+    isMcpOAuthProductionRouteAllowedByPreflightPath(
+      MCP_OAUTH_PRODUCTION_TOKEN_PATH,
+      productionOAuthAuthorizationConfig.preflight,
+    ) &&
+    productionOAuthProtectedResourceMetadataRequestMatches(
+      req,
+      pathName,
+      productionOAuthAuthorizationDependencies,
+    )
+  ) {
+    sendProductionOAuthProtectedResourceMetadata(res, productionOAuthAuthorizationDependencies);
+    return;
+  }
+  if (
+    productionOAuthAuthorizationEnabled &&
     (
       pathName === MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH ||
       pathName === MCP_OAUTH_CONTINUATION_PATH ||
-      pathName === MCP_OAUTH_PRODUCTION_TOKEN_PATH
+      pathName === MCP_OAUTH_PRODUCTION_TOKEN_PATH ||
+      pathName === MCP_OAUTH_PRODUCTION_MCP_PATH
     ) &&
-    productionOAuthRequestHostMatchesAuthorizationOrigin(req, productionOAuthAuthorizationDependencies)
+    productionOAuthRequestHostMatchesRoute(req, pathName, productionOAuthAuthorizationDependencies)
   ) {
     void respondToMcpOAuthProductionRouteRequest(
       req,
@@ -337,7 +360,7 @@ async function respondToMcpOAuthProductionRouteRequestWithBody(
       url: req.url ?? pathName,
       headers: {
         host: headerValue(req.headers.host),
-        authorization: headerValue(req.headers.authorization),
+        authorization: req.headers.authorization,
         cookie: headerValue(req.headers.cookie),
         "x-forwarded-for": headerValue(req.headers["x-forwarded-for"]),
         "x-real-ip": headerValue(req.headers["x-real-ip"]),
@@ -601,6 +624,7 @@ function buildProductionMcpOAuthRouteDependencies(
     createAuthorizationCode: buildProductionAuthorizationCodeCreatePort(convexClient),
     validateAuthorizationCode: buildProductionAuthorizationCodeValidatePort(convexClient),
     issueAccessToken: buildProductionAccessTokenIssuePort(convexClient),
+    verifyAccessToken: buildProductionAccessTokenVerifyPort(convexClient),
     readAuthenticatedOwnerIdentity: buildProductionAuthenticatedOwnerIdentityReader(env),
   });
 }
@@ -743,6 +767,18 @@ function buildProductionAccessTokenIssuePort(
       input,
       { skipQueue: true },
     ) as Promise<Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["issueAccessToken"]>>>>;
+  };
+}
+
+function buildProductionAccessTokenVerifyPort(
+  convexClient: ConvexHttpClient | undefined,
+): NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["verifyAccessToken"]> {
+  return async (input) => {
+    if (!convexClient) return accessTokenVerifyUnavailableResult();
+    return convexClient.query(
+      VERIFY_MCP_OAUTH_ACCESS_TOKEN_QUERY,
+      input,
+    ) as Promise<Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["verifyAccessToken"]>>>>;
   };
 }
 
@@ -968,6 +1004,27 @@ function accessTokenIssueUnavailableResult(): Awaited<ReturnType<NonNullable<Mcp
   });
 }
 
+function accessTokenVerifyUnavailableResult(): Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["verifyAccessToken"]>>> {
+  return Object.freeze({
+    kind: "mcp_oauth_access_token_verify_result",
+    ok: false,
+    reason: "storage_unavailable",
+    safeFailure: {
+      code: "mcp_oauth_access_token_denied",
+      message: "Access token denied.",
+      safeForModel: true,
+      rawTokenEchoed: false,
+      digestEchoed: false,
+      identityEchoed: false,
+      sensitiveValuesEchoed: false,
+      version: 1,
+    } as const,
+    modelVisible: false,
+    safeForLogging: true,
+    version: 1,
+  });
+}
+
 function readFirstEnvValue(env: Readonly<Record<string, string | undefined>>, names: readonly string[]): string | undefined {
   for (const name of names) {
     const value = env[name]?.trim();
@@ -1002,14 +1059,107 @@ function isHttpsOrigin(value: string): boolean {
   }
 }
 
-function productionOAuthRequestHostMatchesAuthorizationOrigin(
+function productionOAuthRequestHostMatchesRoute(
   req: IncomingMessage,
+  pathName: string | undefined,
   dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
 ): boolean {
-  const origin = dependencies.authorizationRequestConfig?.authorizationPageOrigin;
-  if (typeof origin !== "string") return false;
+  const config = dependencies.authorizationRequestConfig;
+  if (!config) return false;
+  if (pathName === MCP_OAUTH_PRODUCTION_MCP_PATH) {
+    return productionOAuthRequestHostMatchesUrlOrigin(req, config.canonicalResource);
+  }
+  return productionOAuthRequestHostMatchesUrlOrigin(req, config.authorizationPageOrigin);
+}
+
+function productionOAuthProtectedResourceMetadataRequestMatches(
+  req: IncomingMessage,
+  pathName: string | undefined,
+  dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+): boolean {
+  if ((req.method ?? "GET") !== "GET") return false;
+  const metadataUrl = productionOAuthProtectedResourceMetadataUrl(
+    dependencies.authorizationRequestConfig?.canonicalResource,
+  );
+  if (!metadataUrl) return false;
   try {
-    const parsedOrigin = new URL(origin);
+    const parsedMetadataUrl = new URL(metadataUrl);
+    return (
+      pathName === parsedMetadataUrl.pathname &&
+      productionOAuthRequestHostMatchesUrlOrigin(req, parsedMetadataUrl.toString())
+    );
+  } catch {
+    return false;
+  }
+}
+
+function sendProductionOAuthProtectedResourceMetadata(
+  res: ServerResponse,
+  dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+): void {
+  const config = dependencies.authorizationRequestConfig;
+  const protectedResourceMetadataUrl = productionOAuthProtectedResourceMetadataUrl(config?.canonicalResource);
+  if (!config || !protectedResourceMetadataUrl) {
+    sendInvalidLocalMcpDevRequest(res);
+    return;
+  }
+  try {
+    const metadata = buildProtectedResourceMetadata({
+      resourceUrl: config.canonicalResource,
+      protectedResourceMetadataUrl,
+      authorizationServerIssuerUrl: config.authorizationPageOrigin,
+      supportedScopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
+    });
+    sendLocalMcpRouteResponse(
+      res,
+      200,
+      { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+      metadata,
+      undefined,
+    );
+  } catch {
+    sendInvalidLocalMcpDevRequest(res);
+  }
+}
+
+function productionOAuthProtectedResourceMetadataUrl(resourceUrl: string | undefined): string | undefined {
+  if (typeof resourceUrl !== "string") return undefined;
+  try {
+    const parsed = new URL(resourceUrl);
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.origin === "null" ||
+      !parsed.hostname ||
+      parsed.username ||
+      parsed.password ||
+      parsed.search ||
+      parsed.hash
+    ) {
+      return undefined;
+    }
+    const normalizedPath = productionOAuthCanonicalResourcePath(parsed.pathname);
+    return `${parsed.origin}/.well-known/oauth-protected-resource${normalizedPath === "/" ? "" : normalizedPath}`;
+  } catch {
+    return undefined;
+  }
+}
+
+function productionOAuthCanonicalResourcePath(pathName: string): string {
+  let end = pathName.length;
+  while (end > 1 && pathName.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  const normalized = pathName.slice(0, end);
+  return normalized.length === 0 ? "/" : normalized;
+}
+
+function productionOAuthRequestHostMatchesUrlOrigin(
+  req: IncomingMessage,
+  url: string | undefined,
+): boolean {
+  if (typeof url !== "string") return false;
+  try {
+    const parsedOrigin = new URL(url);
     const host = headerValue(req.headers.host);
     if (!host || host.includes("/") || host.includes("@")) return false;
     const parsedHost = new URL(`${parsedOrigin.protocol}//${host}`);
@@ -1037,6 +1187,10 @@ export function buildMcpOAuthProductionViteAllowedHosts(
   if (productionAuthorizationHost && !allowedHosts.includes(productionAuthorizationHost)) {
     allowedHosts.push(productionAuthorizationHost);
   }
+  const productionResourceHost = readProductionResourceAllowedHost(env);
+  if (productionResourceHost && !allowedHosts.includes(productionResourceHost)) {
+    allowedHosts.push(productionResourceHost);
+  }
   return allowedHosts;
 }
 
@@ -1054,6 +1208,30 @@ function readProductionAuthorizationAllowedHost(
       url.username ||
       url.password ||
       url.pathname !== "/" ||
+      url.search ||
+      url.hash
+    ) {
+      return undefined;
+    }
+    return url.hostname.toLowerCase();
+  } catch {
+    return undefined;
+  }
+}
+
+function readProductionResourceAllowedHost(
+  env: Readonly<Record<string, string | undefined>>,
+): string | undefined {
+  const value = env[MCP_OAUTH_PRODUCTION_RESOURCE_VAR]?.trim();
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    if (
+      url.origin === "null" ||
+      url.protocol !== "https:" ||
+      !url.hostname ||
+      url.username ||
+      url.password ||
       url.search ||
       url.hash
     ) {
