@@ -1420,6 +1420,73 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(sha256Hex(rawUnknownToken));
   });
 
+  it("keys /mcp bearer verification quota from the socket address, not caller-supplied forwarding headers", async () => {
+    const quotaCounts = new Map<string, number>();
+    const dependencies = {
+      ...routeDependencies(makeCtx()),
+      checkPreAuthQuota: vi.fn(async (input) => {
+        const count = (quotaCounts.get(input.callerKey) ?? 0) + 1;
+        quotaCounts.set(input.callerKey, count);
+        if (count > 1) {
+          return Object.freeze({
+            kind: "mcp_oauth_pre_auth_quota_result",
+            ok: false,
+            reason: "rate_limited",
+            safeFailure: { code: "pre_auth_quota_denied" },
+            safeForLogging: true,
+            version: 1,
+          });
+        }
+        return Object.freeze({
+          kind: "mcp_oauth_pre_auth_quota_result",
+          ok: true,
+          reason: "accepted",
+          safeForLogging: true,
+          version: 1,
+        });
+      }),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+    const requestWithForwardingHeader = (forwardedFor: string) => ({
+      ...mcpRequest(),
+      headers: {
+        host: "mcp.twoweeks.example.test",
+        authorization: `Bearer ${RAW_ACCESS_TOKEN}`,
+        "x-forwarded-for": forwardedFor,
+        "cf-connecting-ip": "203.0.113.250",
+        "x-real-ip": "203.0.113.251",
+      },
+      remoteAddress: "198.51.100.9",
+    } satisfies McpOAuthProductionRouteAdapterRequestV1);
+
+    const firstResponse = await handleMcpOAuthProductionRouteRequest(
+      requestWithForwardingHeader("203.0.113.10"),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+    const secondResponse = await handleMcpOAuthProductionRouteRequest(
+      requestWithForwardingHeader("203.0.113.11"),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(firstResponse).toMatchObject({ handled: true, status: 401 });
+    expect(secondResponse).toMatchObject({
+      handled: true,
+      status: 429,
+      json: {
+        status: "blocked",
+        reason: "bearer_verification_quota_denied",
+        route: "mcp",
+      },
+    });
+    expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(2);
+    expect(dependencies.checkPreAuthQuota.mock.calls.map((call) => call[0].callerKey)).toEqual([
+      "198.51.100.9",
+      "198.51.100.9",
+    ]);
+    expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
+  });
+
   it("maps /mcp bearer verification quota dependency failure to retryable 503 before Convex lookup", async () => {
     const dependencies = {
       ...routeDependencies(makeCtx()),
