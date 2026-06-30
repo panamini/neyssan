@@ -61,32 +61,6 @@ export type McpProductionToolsCallReadonlySyntheticResultV1 = Readonly<{
     phase: "pr102_readonly_boundary_only";
     toolName: string;
     status: "validated_synthetic_summary_only";
-    validation: Readonly<{
-      schemaMatched: true;
-      rawArgumentsEchoed: false;
-      progressTokenEchoed: false;
-      version: 1;
-    }>;
-    effects: Readonly<{
-      externalServiceCalled: false;
-      writeActionPerformed: false;
-      outboundNetworkCalled: false;
-      modelCalled: false;
-      accountLinkLifecycleTouched: false;
-      refreshTokenTouched: false;
-      realProductDataRead: false;
-      exportSendSubmitApplyDownloadPerformed: false;
-      version: 1;
-    }>;
-    publicOutput: Readonly<{
-      rawUserDocumentTextIncluded: false;
-      privateOrNeverUseTextIncluded: false;
-      sourceTextIncluded: false;
-      diagnosticTraceIncluded: false;
-      implementationNameIncluded: false;
-      internalIdsIncluded: false;
-      version: 1;
-    }>;
     version: 1;
   }>;
 }>;
@@ -165,7 +139,7 @@ export function buildMcpProductionToolsCallReadonlySyntheticResult(
       Object.freeze({
         type: "text" as const,
         text:
-          "Validated read-only boundary call. PR102 returns a synthetic summary only; no external service, write, real data, export, send, submit, apply, download, network, model, account-link, or refresh-token behavior ran.",
+          "Validated read-only boundary call. PR102 returns a synthetic summary only; no external action ran.",
       }),
     ]),
     structuredContent: Object.freeze({
@@ -173,32 +147,6 @@ export function buildMcpProductionToolsCallReadonlySyntheticResult(
       phase: "pr102_readonly_boundary_only",
       toolName: validation.tool.name,
       status: "validated_synthetic_summary_only",
-      validation: Object.freeze({
-        schemaMatched: true,
-        rawArgumentsEchoed: false,
-        progressTokenEchoed: false,
-        version: 1,
-      }),
-      effects: Object.freeze({
-        externalServiceCalled: false,
-        writeActionPerformed: false,
-        outboundNetworkCalled: false,
-        modelCalled: false,
-        accountLinkLifecycleTouched: false,
-        refreshTokenTouched: false,
-        realProductDataRead: false,
-        exportSendSubmitApplyDownloadPerformed: false,
-        version: 1,
-      }),
-      publicOutput: Object.freeze({
-        rawUserDocumentTextIncluded: false,
-        privateOrNeverUseTextIncluded: false,
-        sourceTextIncluded: false,
-        diagnosticTraceIncluded: false,
-        implementationNameIncluded: false,
-        internalIdsIncluded: false,
-        version: 1,
-      }),
       version: 1,
     }),
   });

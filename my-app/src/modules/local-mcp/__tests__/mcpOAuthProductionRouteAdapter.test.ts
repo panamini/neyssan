@@ -1433,29 +1433,6 @@ describe("MCP OAuth production route adapter", () => {
             phase: "pr102_readonly_boundary_only",
             toolName: "twoweeks.application_package.summarize",
             status: "validated_synthetic_summary_only",
-            validation: {
-              schemaMatched: true,
-              rawArgumentsEchoed: false,
-              progressTokenEchoed: false,
-            },
-            effects: {
-              externalServiceCalled: false,
-              writeActionPerformed: false,
-              outboundNetworkCalled: false,
-              modelCalled: false,
-              accountLinkLifecycleTouched: false,
-              refreshTokenTouched: false,
-              realProductDataRead: false,
-              exportSendSubmitApplyDownloadPerformed: false,
-            },
-            publicOutput: {
-              rawUserDocumentTextIncluded: false,
-              privateOrNeverUseTextIncluded: false,
-              sourceTextIncluded: false,
-              diagnosticTraceIncluded: false,
-              implementationNameIncluded: false,
-              internalIdsIncluded: false,
-            },
           },
         },
       },
@@ -1476,6 +1453,10 @@ describe("MCP OAuth production route adapter", () => {
     expect(bodyText).not.toContain(OWNER_ID);
     expect(bodyText).not.toContain("application-package-secret-ref");
     expect(bodyText).not.toContain("progress-token-secret");
+    expect(bodyText).not.toContain("rawArgumentsEchoed");
+    expect(bodyText).not.toContain("progressTokenEchoed");
+    expect(bodyText).not.toContain("effects");
+    expect(bodyText).not.toContain("publicOutput");
     expect(bodyText).not.toContain("mcpOAuthAccessTokens_fixture");
     expect(bodyText).not.toContain("mcpOAuthAuthorizationCodes_fixture");
     expect(bodyText).not.toContain("mcpOAuthAuthorizationIntents_fixture");

@@ -168,23 +168,19 @@ describe("production MCP tools/call boundary", () => {
     expect(result.structuredContent.kind).toBe(MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND);
     expect(result.structuredContent.phase).toBe("pr102_readonly_boundary_only");
     expect(result.structuredContent.status).toBe("validated_synthetic_summary_only");
-    expect(result.structuredContent.validation).toMatchObject({
-      schemaMatched: true,
-      rawArgumentsEchoed: false,
-      progressTokenEchoed: false,
-    });
-    expect(result.structuredContent.effects).toMatchObject({
-      externalServiceCalled: false,
-      writeActionPerformed: false,
-      outboundNetworkCalled: false,
-      modelCalled: false,
-      accountLinkLifecycleTouched: false,
-      refreshTokenTouched: false,
-      realProductDataRead: false,
-      exportSendSubmitApplyDownloadPerformed: false,
-    });
+    expect(Object.keys(result.structuredContent).sort()).toEqual([
+      "kind",
+      "phase",
+      "status",
+      "toolName",
+      "version",
+    ]);
     expect(serialized).not.toContain("application-package-ref-secret");
     expect(serialized).not.toContain("progress-token-secret");
+    expect(serialized).not.toContain("rawArgumentsEchoed");
+    expect(serialized).not.toContain("progressTokenEchoed");
+    expect(serialized).not.toContain("effects");
+    expect(serialized).not.toContain("publicOutput");
     expect(serialized).not.toContain("localToolId");
     expect(serialized).not.toContain("internalToolId");
     expect(serialized).not.toContain("handler");
