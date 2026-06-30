@@ -509,6 +509,7 @@ type McpOAuthProductionRouteFailureReasonV1 =
   | "invalid_configuration"
   | "pre_auth_quota_denied"
   | "token_quota_denied"
+  | "bearer_verification_quota_denied"
   | "pre_auth_create_failed"
   | "invalid_continuation_request"
   | "browser_bound_continuation_missing"
@@ -572,6 +573,7 @@ const ACCESS_TOKEN_BYTE_LENGTH = 32;
 const AUTHORIZATION_CODE_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 const ACCESS_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 const AUTHORIZATION_CODE_DIGEST_PATTERN = /^[0-9a-f]{64}$/u;
+const MCP_BEARER_VERIFICATION_QUOTA_CLIENT_ID = "mcp_bearer_verification";
 const PKCE_CODE_VERIFIER_PATTERN = /^[A-Za-z0-9._~-]{43,128}$/u;
 const PKCE_CODE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43,128}$/u;
 const WELL_KNOWN_PROTECTED_RESOURCE_PATH = "/.well-known/oauth-protected-resource";
@@ -999,7 +1001,7 @@ async function handleMcpRequest(
   dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
 ): Promise<McpOAuthProductionRouteAdapterResponseV1> {
   const preflight = config.preflight;
-  if (!dependencies.authorizationRequestConfig || !dependencies.verifyAccessToken) {
+  if (!dependencies.authorizationRequestConfig || !dependencies.checkPreAuthQuota || !dependencies.verifyAccessToken) {
     return failClosedResponse("mcp", preflight, "dependency_unavailable", 503);
   }
   if (!authorizationRequestConfigMatchesGuard(dependencies.authorizationRequestConfig, config.authorizationRequestGuard)) {
@@ -1033,6 +1035,33 @@ async function handleMcpRequest(
   }
 
   const now = readNow(dependencies);
+  let quotaResult: McpOAuthProductionPreAuthQuotaPortResultV1;
+  const quotaInput = Object.freeze({
+    authorizationPageOrigin: authorizationOrigin.origin,
+    clientId: MCP_BEARER_VERIFICATION_QUOTA_CLIENT_ID,
+    resource: expectedResource,
+    callerKey: readQuotaCallerKey(request),
+    now,
+    version: 1,
+  } satisfies McpOAuthProductionPreAuthQuotaPortInputV1);
+  try {
+    quotaResult = await checkPreAuthQuotaWithTimeout(
+      dependencies.checkPreAuthQuota,
+      quotaInput,
+      PRE_AUTH_QUOTA_TIMEOUT_MS,
+    );
+  } catch {
+    return failClosedResponse("mcp", preflight, "bearer_verification_quota_denied", 503);
+  }
+  if (!isQuotaAccepted(quotaResult)) {
+    return failClosedResponse(
+      "mcp",
+      preflight,
+      "bearer_verification_quota_denied",
+      statusForPreAuthQuotaFailure(quotaResult),
+    );
+  }
+
   let verifyResult: McpOAuthProductionAccessTokenVerifyPortResultV1;
   try {
     verifyResult = await verifyAccessTokenWithTimeout(
@@ -2480,7 +2509,7 @@ function isAccessTokenVerifySuccess(
   value: McpOAuthProductionAccessTokenVerifyPortResultV1,
   config: McpOAuthAuthorizationRequestBoundaryConfigV1,
   expectedResource: string,
-  now: number,
+  _now: number,
 ): value is Extract<McpOAuthProductionAccessTokenVerifyPortResultV1, { ok: true }> {
   return (
     isPlainRecord(value) &&
@@ -2500,7 +2529,6 @@ function isAccessTokenVerifySuccess(
     value.serverOnly.productionEnvironment === MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT &&
     typeof value.serverOnly.expiresAt === "number" &&
     Number.isSafeInteger(value.serverOnly.expiresAt) &&
-    value.serverOnly.expiresAt > now &&
     value.serverOnly.tokenActive === true &&
     value.serverOnly.tokenExpired === false &&
     value.serverOnly.tokenRevoked === false &&
@@ -2599,8 +2627,6 @@ function statusForAccessTokenVerifyFailure(
     return 503;
   }
   if (
-    value.reason === "wrong_client" ||
-    value.reason === "wrong_resource" ||
     value.reason === "missing_required_scope" ||
     value.reason === "unauthorized_scope_state"
   ) {

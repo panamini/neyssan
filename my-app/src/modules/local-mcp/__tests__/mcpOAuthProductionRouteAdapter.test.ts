@@ -1235,6 +1235,7 @@ describe("MCP OAuth production route adapter", () => {
       },
     });
     expectMcpBearerChallenge(response);
+    expect(dependencies.checkPreAuthQuota).not.toHaveBeenCalled();
     expect(dependencies.verifyAccessToken).not.toHaveBeenCalled();
     expectNoRouteLeakage(response, [], { allowBearerChallenge: true });
     expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
@@ -1261,6 +1262,7 @@ describe("MCP OAuth production route adapter", () => {
       },
     });
     expectMcpBearerChallenge(response);
+    expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(1);
     expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
     expect(dependencies.verifyAccessToken.mock.calls[0]?.[0].accessTokenDigest).toBe(sha256Hex(rawUnknownToken));
     expect(JSON.stringify(response)).not.toContain(rawUnknownToken);
@@ -1270,8 +1272,8 @@ describe("MCP OAuth production route adapter", () => {
   it.each([
     ["expired token", 401, (row: StoredAccessTokenRecord) => Object.assign(row, { expiresAt: NOW })],
     ["revoked token", 401, (row: StoredAccessTokenRecord) => Object.assign(row, { status: "revoked" as const })],
-    ["wrong client binding", 403, (row: StoredAccessTokenRecord) => Object.assign(row, { clientId: "other_client" })],
-    ["wrong resource binding", 403, (row: StoredAccessTokenRecord) => Object.assign(row, { resource: "https://mcp.twoweeks.example.test/other-resource" })],
+    ["wrong client binding", 401, (row: StoredAccessTokenRecord) => Object.assign(row, { clientId: "other_client" })],
+    ["wrong resource binding", 401, (row: StoredAccessTokenRecord) => Object.assign(row, { resource: "https://mcp.twoweeks.example.test/other-resource" })],
     ["missing application scope", 403, (row: StoredAccessTokenRecord) => Object.assign(row, { scopes: ["openid"] })],
     ["unauthorized scope state", 403, (row: StoredAccessTokenRecord) => Object.assign(row, { scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE, "twoweeks:write"] })],
   ] as const)("fails /mcp bearer verification for %s", async (_label, status, mutateRow) => {
@@ -1315,6 +1317,138 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
     expect(JSON.stringify(response)).not.toContain(OWNER_ID);
     expectNoRouteLeakage(response, [], { allowBearerChallenge: true });
+  });
+
+  it("trusts storage-side access-token expiry verification when the app clock is ahead", async () => {
+    const dependencies = {
+      ...routeDependencies(makeCtx()),
+      now: vi.fn(() => NOW + 60 * 60 * 1_000),
+      verifyAccessToken: vi.fn(async () => ({
+        kind: "mcp_oauth_access_token_verify_result",
+        ok: true,
+        reason: "verified",
+        serverOnly: {
+          status: "active",
+          twoweeksClerkId: OWNER_ID,
+          ownerIssuer: CLERK_ISSUER,
+          clientId: CLIENT_ID,
+          resource: RESOURCE,
+          scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
+          productionEnvironment: MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT,
+          expiresAt: NOW + 1,
+          tokenActive: true,
+          tokenExpired: false,
+          tokenRevoked: false,
+          rawAccessTokenPersisted: false,
+          rawAccessTokenEchoed: false,
+          digestEchoed: false,
+          version: 1,
+        },
+        modelVisible: false,
+        safeForLogging: false,
+        version: 1,
+      })),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 501,
+      json: {
+        status: "authenticated_mcp_blocked",
+        reason: "mcp_execution_blocked",
+        route: "mcp",
+        accessTokenAccepted: true,
+      },
+    });
+    expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(1);
+    expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
+    expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+  });
+
+  it("applies /mcp bearer verification quota before Convex digest lookup", async () => {
+    const dependencies = {
+      ...routeDependencies(makeCtx()),
+      checkPreAuthQuota: vi.fn(async () => ({
+        kind: "mcp_oauth_pre_auth_quota_result",
+        ok: false,
+        reason: "rate_limited",
+        safeFailure: { code: "mcp_oauth_bearer_verification_quota_denied" },
+        safeForLogging: true,
+        version: 1,
+      })),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+    const rawUnknownToken = "R".repeat(43);
+
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(`Bearer ${rawUnknownToken}`),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 429,
+      json: {
+        status: "blocked",
+        reason: "bearer_verification_quota_denied",
+        route: "mcp",
+        hostedMcpStarted: false,
+      },
+    });
+    expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(1);
+    expect(dependencies.checkPreAuthQuota.mock.calls[0]?.[0]).toMatchObject({
+      authorizationPageOrigin: PROD_APP_ORIGIN,
+      clientId: "mcp_bearer_verification",
+      resource: RESOURCE,
+      callerKey: "unknown",
+      now: NOW,
+      version: 1,
+    });
+    expect(JSON.stringify(dependencies.checkPreAuthQuota.mock.calls[0]?.[0])).not.toContain(rawUnknownToken);
+    expect(JSON.stringify(dependencies.checkPreAuthQuota.mock.calls[0]?.[0])).not.toContain(sha256Hex(rawUnknownToken));
+    expect(dependencies.verifyAccessToken).not.toHaveBeenCalled();
+    expect(response.headers).not.toHaveProperty("WWW-Authenticate");
+    expect(JSON.stringify(response)).not.toContain(rawUnknownToken);
+    expect(JSON.stringify(response)).not.toContain(sha256Hex(rawUnknownToken));
+  });
+
+  it("maps /mcp bearer verification quota dependency failure to retryable 503 before Convex lookup", async () => {
+    const dependencies = {
+      ...routeDependencies(makeCtx()),
+      checkPreAuthQuota: vi.fn(async () => {
+        throw new Error("quota unavailable");
+      }),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 503,
+      json: {
+        status: "blocked",
+        reason: "bearer_verification_quota_denied",
+        route: "mcp",
+        hostedMcpStarted: false,
+      },
+    });
+    expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(1);
+    expect(dependencies.verifyAccessToken).not.toHaveBeenCalled();
+    expect(response.headers).not.toHaveProperty("WWW-Authenticate");
+    expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
   });
 
   it("maps /mcp bearer verification storage unavailability to retryable 503", async () => {
@@ -3416,6 +3550,65 @@ describe("MCP OAuth production route adapter", () => {
       authorization_servers: [`${authorizationOrigin}/`],
       scopes_supported: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
     });
+    expect(convexHttpClientQuery).not.toHaveBeenCalled();
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
+  });
+
+  it("serves production authorization-server metadata for the protected-resource issuer", async () => {
+    const authorizationOrigin = "https://auth.twoweeks.example.test";
+    const resource = "https://resource.twoweeks.example.test/resource";
+    const plugin = createLocalMcpDevEndpointPlugin({
+      env: {
+        ...prodRouteEnv(),
+        LOCAL_MCP_DEV_ENDPOINT: "1",
+        MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN: authorizationOrigin,
+        MCP_OAUTH_PRODUCTION_RESOURCE: resource,
+      },
+    });
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeMiddleware(middleware, {
+      method: "GET",
+      url: "/.well-known/oauth-authorization-server",
+      headers: { host: "auth.twoweeks.example.test" },
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(200);
+    expect(response.headers).toMatchObject({
+      "cache-control": "no-store",
+      "content-type": "application/json; charset=utf-8",
+    });
+    expect(JSON.parse(response.body)).toEqual({
+      issuer: `${authorizationOrigin}/`,
+      authorization_endpoint: `${authorizationOrigin}${MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH}`,
+      token_endpoint: `${authorizationOrigin}${MCP_OAUTH_PRODUCTION_TOKEN_PATH}`,
+      response_types_supported: ["code"],
+      grant_types_supported: ["authorization_code"],
+      code_challenge_methods_supported: ["S256"],
+      token_endpoint_auth_methods_supported: ["none"],
+      scopes_supported: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
+    });
+    expect(convexHttpClientQuery).not.toHaveBeenCalled();
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
+  });
+
+  it("does not serve production authorization-server metadata while the auth preflight is closed", async () => {
+    const plugin = createLocalMcpDevEndpointPlugin({
+      env: {
+        ...prodRouteEnv(),
+        MCP_OAUTH_PRODUCTION_RUNTIME: "0",
+      },
+    });
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeMiddleware(middleware, {
+      method: "GET",
+      url: "/.well-known/oauth-authorization-server",
+      headers: { host: "mcp.twoweeks.example.test" },
+    });
+
+    expect(response.next).toHaveBeenCalledTimes(1);
+    expect(response.statusCode).toBeUndefined();
+    expect(response.body).toBe("");
     expect(convexHttpClientQuery).not.toHaveBeenCalled();
     expect(convexHttpClientMutation).not.toHaveBeenCalled();
   });
