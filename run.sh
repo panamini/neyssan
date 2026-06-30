@@ -33,6 +33,12 @@ if [[ -f "${ROOT_DIR}/my-app/.env.local" ]]; then set -a; source "${ROOT_DIR}/my
 STATE_DIR="${ROOT_DIR}/tmp/dev-stack"
 STATE_FILE="${STATE_DIR}/pids.env"
 LOG_DIR="${ROOT_DIR}/tmp"
+RUN_LOG_FILE="${LOG_DIR}/run.log"
+LOG_LEVEL="${LOG_LEVEL:-info}"
+case "${LOG_LEVEL}" in
+  debug|info|warn|error) ;;
+  *) LOG_LEVEL="info" ;;
+esac
 VITE_LOG="${LOG_DIR}/vite-dev.log"
 CONVEX_LOG="${LOG_DIR}/convex-dev.log"
 LOCAL_CONVEX_URL="${LOCAL_CONVEX_URL:-}"
@@ -59,6 +65,49 @@ if [[ -z "${MISTRAL_API_KEY:-}" && -f "${HOME}/.mistral_key" ]]; then
 fi
 
 # ===== Helpers =====
+log_timestamp() {
+  date -u +"%Y-%m-%dT%H:%M:%SZ"
+}
+
+redact_log_line() {
+  sed -E 's/([A-Za-z0-9_]*(KEY|SECRET|TOKEN|PASSWORD|PRIVATE)[A-Za-z0-9_]*=)[^[:space:]]+/\1[redacted]/g'
+}
+
+log_should_emit() {
+  local level="${1:-info}"
+  case "${LOG_LEVEL}:${level}" in
+    debug:*) return 0 ;;
+    info:debug) return 1 ;;
+    info:*) return 0 ;;
+    warn:debug|warn:info) return 1 ;;
+    warn:*) return 0 ;;
+    error:error) return 0 ;;
+    error:*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+log_line() {
+  local level="${1:?level required}"
+  shift || true
+  log_should_emit "${level}" || return 0
+
+  local line
+  line="[run] $(log_timestamp) ${level^^}: $*"
+  line="$(printf '%s\n' "${line}" | redact_log_line)"
+
+  case "${level}" in
+    error|warn) printf '%s\n' "${line}" >&2 ;;
+    *) printf '%s\n' "${line}" ;;
+  esac
+  printf '%s\n' "${line}" >> "${RUN_LOG_FILE}"
+}
+
+log_debug() { log_line debug "$@"; }
+log_info() { log_line info "$@"; }
+log_warn() { log_line warn "$@"; }
+log_error() { log_line error "$@"; }
+
 map_platform() {
   case "$(uname -m)" in
     x86_64|amd64) echo "linux/amd64" ;;
@@ -141,7 +190,7 @@ convex_binding_hash() {
 
 ensure_buildx() {
   if ! docker buildx inspect >/dev/null 2>&1; then
-    echo "[run] configuring docker buildx builder"
+    log_info "Configuring docker buildx builder"
     docker buildx create --name cvparser-builder --driver docker-container --use >/dev/null
     docker buildx inspect --bootstrap >/dev/null
   fi
@@ -161,12 +210,12 @@ build_runtime_image() {
   last="$(cat "${DOCKER_STATE_DIR}/last-runtime-hash" 2>/dev/null || true)"
 
   if [[ "$(to_bool "${FORCE_REBUILD}")" != "true" ]] && docker image inspect "${IMAGE_NAME}" >/dev/null 2>&1 && [[ "${last}" == "${sig}" ]]; then
-    echo "[run] runtime image up-to-date (${IMAGE_NAME})"
+    log_info "Runtime image up-to-date (${IMAGE_NAME})"
     return 0
   fi
 
   ensure_buildx
-  echo "[run] building parser runtime image (${IMAGE_NAME}, ${platform})"
+  log_info "Building parser runtime image (${IMAGE_NAME}, ${platform})"
   DOCKER_BUILDKIT=1 docker buildx build \
     --platform "${platform}" \
     --build-arg TARGETARCH="${targetarch}" \
@@ -180,10 +229,10 @@ build_runtime_image() {
 
 ensure_runtime_image_exists() {
   if docker image inspect "${IMAGE_NAME}" >/dev/null 2>&1; then
-    echo "[run] runtime image available (${IMAGE_NAME})"
+    log_info "Runtime image available (${IMAGE_NAME})"
     return 0
   fi
-  echo "[run] runtime image missing; building ${IMAGE_NAME}"
+  log_info "Runtime image missing; building ${IMAGE_NAME}"
   build_runtime_image
 }
 
@@ -193,7 +242,7 @@ kill_vite_ports() {
     # macOS & Linux-friendly lsof usage
     pids="$(lsof -ti tcp:$p -sTCP:LISTEN 2>/dev/null || true)"
     if [[ -n "${pids}" ]]; then
-      echo "[run] killing process(es) on :${p} -> ${pids}" >&2
+      log_warn "Killing process(es) on :${p} -> ${pids}"
       kill -9 ${pids} || true
     fi
   done
@@ -315,7 +364,7 @@ Commands:
   ./run.sh down            normal stop
   ./run.sh reset           stronger cleanup
   ./run.sh status          quick stack status
-  ./run.sh logs            parser logs
+  ./run.sh logs            service logs
 EOF
 }
 
@@ -388,10 +437,10 @@ handle_existing_stack_request() {
   tracked_stack_is_live || return 1
 
   if [[ "${ENV_HASH:-}" != "$(env_reload_hash)" || "${CONVEX_BINDING_HASH:-}" != "$(convex_binding_hash)" ]]; then
-    echo "[run] detected env change for active ${requested_stack_mode} stack; reloading without Docker rebuild"
+    log_info "Detected env change for active ${requested_stack_mode} stack; reloading without Docker rebuild"
     reload_env_stack
   else
-    echo "[run] ${requested_stack_mode} already matches current env; nothing to do"
+    log_info "${requested_stack_mode} already matches current env; nothing to do"
   fi
   return 0
 }
@@ -401,11 +450,13 @@ ensure_workspace_runtime_surface() {
   diagnostic="$(
     docker exec "${PARSER_NAME}" node -e 'const fs = require("fs"); const platformTag = `${process.platform}-${process.arch}`; const checks = [["tsx loader", "/app/my-app/node_modules/tsx/dist/esm/index.mjs"], ["playwright package", "/app/node_modules/playwright"], ["playwright browsers", "/ms-playwright"], [`esbuild package (${platformTag})`, `/app/my-app/node_modules/@esbuild/${platformTag}`]]; const missing = checks.filter(([, path]) => !fs.existsSync(path)); if (missing.length) { console.error(missing.map(([label, path]) => `${label}: ${path}`).join("\n")); process.exit(1); }' 2>&1
   )" || {
-    echo "[run] ERROR: workspace parser runtime is missing export dependencies." >&2
+    log_error "Workspace parser runtime is missing export dependencies."
     if [[ -n "${diagnostic}" ]]; then
-      echo "${diagnostic}" >&2
+      while IFS= read -r diagnostic_line; do
+        log_error "${diagnostic_line}"
+      done <<< "${diagnostic}"
     fi
-    echo "[run] Run \`./run.sh rebuild-docker\` to refresh the parser/export runtime image, then retry \`./run.sh local-fast\`." >&2
+    log_error "Run \`./run.sh rebuild-docker\` to refresh the parser/export runtime image, then retry \`./run.sh local-fast\`."
     docker stop "${PARSER_NAME}" >/dev/null 2>&1 || true
     exit 1
   }
@@ -560,8 +611,8 @@ ensure_local_convex_preflight() {
   local site_port="${4:-}"
 
   if local_convex_deployments_disabled; then
-    echo "[run] ERROR: Convex local deployments are disabled on this machine." >&2
-    echo "[run] Run \`cd my-app && npx convex disable-local-deployments --undo-global\` and retry local-fast." >&2
+    log_error "Convex local deployments are disabled on this machine."
+    log_error "  Run \`cd my-app && npx convex disable-local-deployments --undo-global\` and retry local-fast."
     exit 1
   fi
 
@@ -569,12 +620,12 @@ ensure_local_convex_preflight() {
   active_name="$(local_convex_instance_name "${convex_url}")"
   if [[ -n "${active_name}" ]]; then
     if [[ -n "${deployment_name}" && "${active_name}" != "${deployment_name}" ]]; then
-      echo "[run] ERROR: a different local Convex backend (${active_name}) is already running at ${convex_url}." >&2
-      echo "[run] Use ./run.sh down or ./run.sh reset for this repo, or stop the conflicting backend before retrying." >&2
+      log_error "A different local Convex backend (${active_name}) is already running at ${convex_url}."
+      log_error "  Use ./run.sh down or ./run.sh reset for this repo, or stop the conflicting backend before retrying."
       exit 1
     fi
-    echo "[run] ERROR: local Convex backend ${active_name} is already running at ${convex_url}, but it is not tracked by this run.sh state." >&2
-    echo "[run] Stop it with ./run.sh reset or terminate the existing \`convex dev\` process before retrying." >&2
+    log_error "Local Convex backend ${active_name} is already running at ${convex_url}, but it is not tracked by this run.sh state."
+    log_error "  Stop it with ./run.sh reset or terminate the existing \`convex dev\` process before retrying."
     exit 1
   fi
 
@@ -582,14 +633,12 @@ ensure_local_convex_preflight() {
   local site_listener=""
   cloud_listener="$(port_listener_details "${cloud_port}")"
   if [[ -n "${cloud_listener}" ]]; then
-    echo "[run] ERROR: local Convex cloud port ${cloud_port} is already occupied by a non-Convex listener." >&2
-    echo "${cloud_listener}" >&2
+    log_error "Local Convex cloud port ${cloud_port} is already occupied by a non-Convex listener."
     exit 1
   fi
   site_listener="$(port_listener_details "${site_port}")"
   if [[ -n "${site_listener}" ]]; then
-    echo "[run] ERROR: local Convex site port ${site_port} is already occupied by another listener." >&2
-    echo "${site_listener}" >&2
+    log_error "Local Convex site port ${site_port} is already occupied by another listener."
     exit 1
   fi
 }
@@ -615,7 +664,7 @@ reuse_running_local_convex_from_state() {
     return 1
   fi
 
-  echo "[run] reusing tracked local Convex backend ${active_name:-unknown} at ${CONVEX_URL}" >&2
+  log_info "Reusing tracked local Convex backend ${active_name:-unknown} at ${CONVEX_URL}"
   CONVEX_PID_RESULT="${CONVEX_PID}"
   CONVEX_URL_RESULT="${CONVEX_URL}"
   return 0
@@ -654,12 +703,12 @@ sync_local_convex_env() {
   )
   local name=""
   local value=""
-  echo "[run] syncing local Convex env" >&2
+  log_info "Syncing local Convex env"
   (
     cd "${ROOT_DIR}/my-app"
     local convex_bin="./node_modules/.bin/convex"
     if [[ ! -x "${convex_bin}" ]]; then
-      echo "[run] ERROR: missing Convex CLI at ${ROOT_DIR}/my-app/${convex_bin}" >&2
+      log_error "Missing Convex CLI at ${ROOT_DIR}/my-app/${convex_bin}"
       exit 1
     fi
     unset CONVEX_DEPLOYMENT
@@ -694,7 +743,7 @@ sync_local_convex_env() {
       if [[ "$(to_bool "${LOCAL_CONVEX_SYNC_SECRETS}")" != "true" ]]; then
         case "${name}" in
           *API_KEY|*SECRET|*_TOKEN|NER_SERVICE_KEY)
-            echo "[run] skipping secret env sync for ${name}" >&2
+            log_debug "Skipping secret env sync for ${name}"
             continue
             ;;
         esac
@@ -724,16 +773,16 @@ start_parser() {
     current_image="$(parser_image_id)"
     target_image="$(target_image_id)"
     if [[ "${current_mode}" == "${RUNTIME_MODE}" && ( "${RUNTIME_MODE}" == "workspace" || "${current_image}" == "${target_image}" ) ]]; then
-      echo "[run] parser already running in ${current_mode} runtime: ${PARSER_NAME}"
+      log_info "Parser already running in ${current_mode} runtime: ${PARSER_NAME}"
       PARSER_NEEDS_START=0
     else
-      echo "[run] replacing stale parser runtime: ${PARSER_NAME} (have ${current_mode}/${current_image}, want ${RUNTIME_MODE}/${target_image})"
+      log_info "Replacing stale parser runtime: ${PARSER_NAME} (have ${current_mode}/${current_image}, want ${RUNTIME_MODE}/${target_image})"
       docker stop "${PARSER_NAME}" >/dev/null 2>&1 || true
     fi
   fi
 
   if [[ "${PARSER_NEEDS_START}" -eq 1 ]]; then
-    echo "[run] starting parser (${IMAGE_NAME}, runtime=${RUNTIME_MODE}, OCR=${OCR})"
+    log_info "Starting parser (${IMAGE_NAME}, runtime=${RUNTIME_MODE}, OCR=${OCR})"
     local -a envs=(
       -e MALLOC_ARENA_MAX=2
       -e OMP_NUM_THREADS=1
@@ -794,7 +843,7 @@ start_parser() {
     sleep 1
     if [[ "$i" -eq 45 ]]; then
       echo
-      echo "[run] ERROR: parser failed health check" >&2
+      log_error "Parser failed health check"
       exit 1
     fi
   done
@@ -805,7 +854,7 @@ start_parser() {
 
   # Make sure connector net can reach it
   if ! ensure_parsernet; then
-    echo "[run] WARNING: parser not reachable inside ${TUNNEL_NETWORK} (continuing)."
+    log_warn "Parser not reachable inside ${TUNNEL_NETWORK} (continuing)."
   fi
 }
 
@@ -817,14 +866,14 @@ remove_parser_container() {
     docker rm -f "${PARSER_NAME}" >/dev/null 2>&1 || true
     sleep 0.5
   done
-  echo "[run] ERROR: could not remove stale parser container ${PARSER_NAME}" >&2
+  log_error "Could not remove stale parser container ${PARSER_NAME}"
   docker ps -a --filter "name=${PARSER_NAME}" >&2 || true
   exit 1
 }
 
 stop_parser() {
   if docker ps --format '{{.Names}}' | grep -qx "${PARSER_NAME}"; then
-    echo "[run] stopping parser (${PARSER_NAME})"
+    log_info "Stopping parser (${PARSER_NAME})"
     docker stop "${PARSER_NAME}" >/dev/null 2>&1 || true
     remove_parser_container
   fi
@@ -832,12 +881,12 @@ stop_parser() {
 
 start_tunnel() {
   if [[ -z "${TUNNEL_TOKEN}" ]]; then
-    echo "[run] ERROR: TUNNEL_TOKEN is required for tunnel mode" >&2
+    log_error "TUNNEL_TOKEN is required for tunnel mode"
     exit 1
   fi
   docker network create "${TUNNEL_NETWORK}" >/dev/null 2>&1 || true
   docker rm -f "${CLOUDFLARED_NAME}" >/dev/null 2>&1 || true
-  echo "[run] starting cloudflared (${CLOUDFLARED_NAME})"
+  log_info "Starting cloudflared (${CLOUDFLARED_NAME})"
   docker run -d --name "${CLOUDFLARED_NAME}" --restart=unless-stopped \
     --network "${TUNNEL_NETWORK}" \
     cloudflare/cloudflared:latest \
@@ -848,7 +897,7 @@ start_tunnel() {
 
 stop_tunnel() {
   if docker ps --format '{{.Names}}' | grep -qx "${CLOUDFLARED_NAME}"; then
-    echo "[run] stopping tunnel (${CLOUDFLARED_NAME})"
+    log_info "Stopping tunnel (${CLOUDFLARED_NAME})"
     docker stop "${CLOUDFLARED_NAME}" >/dev/null 2>&1 || true
   fi
 }
@@ -857,7 +906,7 @@ kill_stale_convex() {
   local pids=""
   pids="$(pgrep -f 'node .*/node_modules/\.bin/convex dev|npm exec convex dev|convex-local-backend .*--instance-name' 2>/dev/null || true)"
   if [[ -n "${pids}" ]]; then
-    echo "[run] killing stale Convex process(es): ${pids}"
+    log_warn "Killing stale Convex process(es): ${pids}"
     kill ${pids} >/dev/null 2>&1 || true
     sleep 1
     pids="$(pgrep -f 'node .*/node_modules/\.bin/convex dev|npm exec convex dev|convex-local-backend .*--instance-name' 2>/dev/null || true)"
@@ -932,13 +981,13 @@ start_convex() {
   local convex_team=""
   local convex_project=""
   if ! resolve_convex_project_binding; then
-    echo "[run] ERROR: could not determine Convex team/project for local-fast." >&2
-    echo "[run] Add the non-secret Convex binding to .env.local or my-app/.env.local:" >&2
-    echo "[run]   CONVEX_TEAM=<team_slug>" >&2
-    echo "[run]   CONVEX_PROJECT=<project_slug>" >&2
-    echo "[run] Optional if you already have a named local deployment:" >&2
-    echo "[run]   CONVEX_DEPLOYMENT=local:<deployment_name>" >&2
-    echo "[run] Legacy Convex CLI comments are still accepted: CONVEX_DEPLOYMENT=... # team: <team>, project: <project>" >&2
+    log_error "Could not determine Convex team/project for local-fast."
+    log_error "  Add the non-secret Convex binding to .env.local or my-app/.env.local:"
+    log_error "  CONVEX_TEAM=<team_slug>"
+    log_error "  CONVEX_PROJECT=<project_slug>"
+    log_error "  Optional if you already have a named local deployment:"
+    log_error "    CONVEX_DEPLOYMENT=local:<deployment_name>"
+    log_error "  Legacy Convex CLI comments are still accepted: CONVEX_DEPLOYMENT=... # team: <team>, project: <project>"
     exit 1
   fi
   convex_team="${CONVEX_TEAM_RESULT}"
@@ -956,9 +1005,9 @@ start_convex() {
 
   : > "${CONVEX_LOG}"
   if [[ -n "${LOCAL_CONVEX_STATE_CONFIG_RESULT:-}" ]]; then
-    echo "[run] discovered local Convex state ${LOCAL_CONVEX_STATE_CONFIG_RESULT} -> ${actual_url}" >&2
+    log_info "Discovered an existing local Convex state"
   fi
-  echo "[run] starting local Convex deployment (${convex_team}/${convex_project})" >&2
+  log_info "Starting local Convex deployment (${convex_team}/${convex_project})"
 
   local convex_pid_file="${STATE_DIR}/convex.pid"
   rm -f "${convex_pid_file}"
@@ -966,7 +1015,7 @@ start_convex() {
     cd "${ROOT_DIR}/my-app"
     local convex_bin="./node_modules/.bin/convex"
     if [[ ! -x "${convex_bin}" ]]; then
-      echo "[run] ERROR: missing Convex CLI at ${ROOT_DIR}/my-app/${convex_bin}" >&2
+      log_error "Missing Convex CLI at ${ROOT_DIR}/my-app/${convex_bin}"
       exit 1
     fi
     unset CONVEX_DEPLOYMENT
@@ -1053,7 +1102,7 @@ child.unref();
   cpid="$(cat "${convex_pid_file}" 2>/dev/null || true)"
   rm -f "${convex_pid_file}"
   if [[ -z "${cpid}" ]]; then
-    echo "[run] ERROR: failed to launch local Convex process" >&2
+    log_error "Failed to launch local Convex process"
     exit 1
   fi
   printf "[run] waiting for local Convex" >&2
@@ -1074,7 +1123,7 @@ child.unref();
     fi
     if ! kill -0 "${cpid}" >/dev/null 2>&1; then
       echo >&2
-      echo "[run] ERROR: local Convex failed to start (see ${CONVEX_LOG})" >&2
+      log_error "Local Convex failed to start (see ${CONVEX_LOG})"
       exit 1
     fi
     if [[ "${i}" -ge 10 ]] && grep -q 'Started running a deployment locally at http://127.0.0.1:' "${CONVEX_LOG}"; then
@@ -1090,15 +1139,14 @@ child.unref();
     printf "." >&2
     sleep 1
   done
-  echo >&2
-  echo "[run] ERROR: local Convex did not become reachable (see ${CONVEX_LOG})" >&2
+  log_error "Local Convex did not become reachable (see ${CONVEX_LOG})"
   exit 1
 }
 
 stop_convex() {
   local CPID="${1:-}"
   if [[ -n "${CPID}" ]] && kill -0 "${CPID}" >/dev/null 2>&1; then
-    echo "[run] stopping local Convex (PID ${CPID})"
+    log_info "Stopping local Convex (PID ${CPID})"
     kill "${CPID}" >/dev/null 2>&1 || true
     wait "${CPID}" 2>/dev/null || true
   fi
@@ -1124,7 +1172,7 @@ start_vite() {
     export STRUCTURED_UPLOAD_SKIP_HEALTHCHECK=1
     local vite_bin="./node_modules/vite/bin/vite.js"
     if [[ ! -f "${vite_bin}" ]]; then
-      echo "[run] ERROR: missing Vite binary at ${vite_bin}" >&2
+      log_error "Missing Vite binary at ${vite_bin}"
       exit 1
     fi
     local -a vite_cmd=(node "${vite_bin}" --host 127.0.0.1 --port "${VITE_PORT}" --clearScreen false)
@@ -1156,7 +1204,7 @@ child.unref();
 stop_vite() {
   local VPID="${1:-}"
   if [[ -n "${VPID}" ]] && kill -0 "${VPID}" >/dev/null 2>&1; then
-    echo "[run] stopping Vite (PID ${VPID})"
+    log_info "Stopping Vite (PID ${VPID})"
     kill "${VPID}" >/dev/null 2>&1 || true
     wait "${VPID}" 2>/dev/null || true
   fi
@@ -1178,7 +1226,7 @@ reload_env_stack() {
 
   read_state
   if [[ -z "${STACK_MODE:-}" ]]; then
-    echo "[run] ERROR: no tracked stack to reload. Start one with ./run.sh up, ./run.sh local-fast, ./run.sh tunnel, or ./run.sh parser-dev." >&2
+    log_error "No tracked stack to reload. Start one with ./run.sh up, ./run.sh local-fast, ./run.sh tunnel, or ./run.sh parser-dev."
     exit 1
   fi
 
@@ -1191,7 +1239,7 @@ reload_env_stack() {
   fi
 
   if [[ "${env_changed}" != "true" && "${binding_changed}" != "true" ]]; then
-    echo "[run] reload-env: no env changes detected"
+    log_info "Reload-env: no env changes detected"
     return 0
   fi
 
@@ -1229,7 +1277,7 @@ reload_env_stack() {
     OPEN_BROWSER="${current_open_browser}"
     sleep 2
     if ! kill -0 "${next_vite_pid}" >/dev/null 2>&1; then
-      echo "[run] ERROR: Vite failed to restart during env reload (see ${VITE_LOG})" >&2
+      log_error "Vite failed to restart during env reload (see ${VITE_LOG})"
       exit 1
     fi
   fi
@@ -1250,7 +1298,7 @@ reload_env_stack() {
     "${current_env_hash}" \
     "${current_convex_binding_hash}"
 
-  echo "[run] reload-env: refreshed ${STACK_MODE} without Docker rebuild"
+  log_info "Reload-env: refreshed ${STACK_MODE} without Docker rebuild"
 }
 
 # ===== Probes =====
@@ -1350,11 +1398,11 @@ up() {
   done
 
   if [[ "${RUNTIME_MODE}" != "image" && "${RUNTIME_MODE}" != "workspace" ]]; then
-    echo "[run] ERROR: parser runtime mode must be image or workspace" >&2
+    log_error "Parser runtime mode must be image or workspace"
     exit 2
   fi
   if [[ "${USE_LOCAL_ORIGIN}" -eq 1 && "${USE_EDGE_ORIGIN}" -eq 1 ]]; then
-    echo "[run] ERROR: choose one of --local-origin or --edge-origin" >&2
+    log_error "Choose one of --local-origin or --edge-origin"
     exit 2
   fi
 
@@ -1402,9 +1450,9 @@ up() {
     fi
   else
     if [[ "${START_UI}" -eq 1 && "${USE_LOCAL_CONVEX}" -eq 1 && "${USE_LOCAL_ORIGIN}" -eq 1 && "${PARSER_RELOAD}" == "1" ]]; then
-      echo "[run] local-fast: workspace parser runtime with autoreload enabled"
+      log_info "Local-fast: workspace parser runtime with autoreload enabled"
     else
-      echo "[run] WARNING: workspace parser runtime requested explicitly; export runtime parity is not guaranteed"
+      log_warn "Workspace parser runtime requested explicitly; export runtime parity is not guaranteed"
     fi
   fi
 
@@ -1421,7 +1469,7 @@ up() {
       CPID="${CONVEX_PID_RESULT:-}"
       CURL="${CONVEX_URL_RESULT:-}"
     fi
-    echo "[run] starting Vite → ${ACTIVE_ORIGIN}"
+    log_info "Starting Vite"
     if [[ "${USE_LOCAL_CONVEX}" -eq 1 ]]; then
       VPID="$(start_vite "${ACTIVE_ORIGIN}" "${CURL}")"
     else
@@ -1429,7 +1477,7 @@ up() {
     fi
     sleep 2
     if ! kill -0 "${VPID}" >/dev/null 2>&1; then
-      echo "[run] ERROR: Vite failed to start (see ${VITE_LOG})" >&2
+      log_error "Vite failed to start (see ${VITE_LOG})"
       exit 1
     fi
   fi
@@ -1487,7 +1535,7 @@ down() {
     stop_tunnel
   fi
   rm -f "${STATE_FILE}"
-  echo "[run] down: done."
+  log_info "Down: done."
   print_command_banner
 }
 
@@ -1501,7 +1549,7 @@ reset() {
   kill_stale_convex
   kill_vite_ports
   clear_dev_state
-  echo "[run] reset: done."
+  log_info "Reset: done."
   print_command_banner
 }
 
@@ -1510,7 +1558,7 @@ local_stack() {
 }
 
 local_convex_stack() {
-  echo "[run] local-convex is a legacy alias; using local-fast"
+  log_info "local-convex is a legacy alias; using local-fast"
   local_fast_stack "$@"
 }
 
@@ -1564,7 +1612,7 @@ rebuild_docker_stack() {
     restart_mode="local"
   fi
 
-  echo "[run] rebuild-docker: rebuilding parser/runtime image"
+  log_info "rebuild-docker: rebuilding parser/runtime image"
   down >/dev/null 2>&1 || true
   FORCE_REBUILD="true"
   build_runtime_image
@@ -1586,27 +1634,121 @@ rebuild_docker_stack() {
   esac
 
   if curl -fsS http://127.0.0.1:8001/ready >/dev/null 2>&1; then
-    echo "[run] rebuild-docker: local parser ready"
+    log_info "Rebuild-docker: local parser ready"
   else
-    echo "[run] rebuild-docker: local parser failed readiness" >&2
+    log_error "Rebuild-docker: local parser failed readiness"
     exit 1
   fi
   if [[ "${restart_mode}" == "tunnel" ]]; then
     if curl -fsS "$(normalize_origin "${PARSER_ORIGIN}")/ready" >/dev/null 2>&1; then
-      echo "[run] rebuild-docker: edge ready"
+      log_info "Rebuild-docker: edge ready"
     else
-      echo "[run] rebuild-docker: edge readiness check failed" >&2
+      log_error "Rebuild-docker: edge readiness check failed"
       exit 1
     fi
   fi
 
-  echo "[run] rebuild-docker: done (${restart_mode})"
+  log_info "Rebuild-docker: done (${restart_mode})"
   print_command_banner
 }
 
+show_file_logs() {
+  local label="${1:?label required}"
+  local file="${2:?file required}"
+  local tail_count="${3:?tail count required}"
+  local follow="${4:-0}"
+
+  printf '\n== %s ==\n' "${label}"
+
+  if [[ ! -f "${file}" ]]; then
+    log_warn "Log file is not available: ${file}"
+    return 0
+  fi
+
+  if [[ "${follow}" == "1" ]]; then
+    tail -n "${tail_count}" -f "${file}" | redact_log_line
+  else
+    tail -n "${tail_count}" "${file}" | redact_log_line
+  fi
+}
+
+show_parser_logs() {
+  local tail_count="${1:?tail count required}"
+  local follow="${2:-0}"
+  local -a docker_args=(logs --tail "${tail_count}")
+
+  printf '\n== Parser ==\n'
+
+  if ! command -v docker >/dev/null 2>&1; then
+    log_warn "Docker is not installed or unavailable"
+    return 0
+  fi
+  if ! docker info >/dev/null 2>&1; then
+    log_warn "Docker daemon is not available"
+    return 0
+  fi
+  if ! docker inspect "${PARSER_NAME}" >/dev/null 2>&1; then
+    log_warn "Parser container does not exist"
+    return 0
+  fi
+
+  [[ "${follow}" == "1" ]] && docker_args+=(-f)
+  docker "${docker_args[@]}" "${PARSER_NAME}" 2>&1 | redact_log_line
+}
+
 logs() {
-  print_command_banner
-  docker logs -f --tail=200 "${PARSER_NAME}"
+  local service="parser"
+  local tail_count="200"
+  local follow="0"
+
+  if [[ $# -gt 0 && "${1}" != --* ]]; then
+    service="${1}"
+    shift
+  fi
+
+  while [[ $# -gt 0 ]]; do
+    case "${1}" in
+      --tail)
+        if [[ $# -lt 2 || ! "${2:-}" =~ ^[1-9][0-9]*$ ]]; then
+          log_error "--tail requires a positive integer"
+          return 2
+        fi
+        tail_count="${2}"
+        shift 2
+        ;;
+      --follow)
+        follow="1"
+        shift
+        ;;
+      *)
+        log_error "Unknown logs option: ${1}"
+        return 2
+        ;;
+    esac
+  done
+
+  case "${service}" in
+    parser|vite|convex|run|all) ;;
+    *) log_error "Unknown log service: ${service}"; return 2 ;;
+  esac
+
+  if [[ "${service}" == "all" && "${follow}" == "1" ]]; then
+    log_error "logs all --follow is not supported; choose one service"
+    return 2
+  fi
+
+  case "${service}" in
+    parser) show_parser_logs "${tail_count}" "${follow}" ;;
+    vite)   show_file_logs "Vite" "${VITE_LOG}" "${tail_count}" "${follow}" ;;
+    convex) show_file_logs "Convex" "${CONVEX_LOG}" "${tail_count}" "${follow}" ;;
+    run)    show_file_logs "run.sh" "${RUN_LOG_FILE}" "${tail_count}" "${follow}" ;;
+    all)
+      show_parser_logs "${tail_count}" "0"
+      show_file_logs "Vite" "${VITE_LOG}" "${tail_count}" "0"
+      show_file_logs "Convex" "${CONVEX_LOG}" "${tail_count}" "0"
+      show_file_logs "run.sh" "${RUN_LOG_FILE}" "${tail_count}" "0"
+      ;;
+  esac
 }
 
 smoke() {
@@ -1627,7 +1769,7 @@ usage:
   ./run.sh reset
   ./run.sh up [--ui] [--edge-origin | --local-origin] [--local-convex | --cloud-convex] [--ocr auto|doctr|paddle|disabled]
   ./run.sh status
-  ./run.sh logs
+  ./run.sh logs [parser|vite|convex|run|all] [--tail N] [--follow]
   ./run.sh smoke
   ./run.sh assert-ocr FILE.pdf
   ./run.sh probe-edge [FILE.pdf]     # uses CF_ACCESS_CLIENT_ID/SECRET if set
@@ -1653,12 +1795,18 @@ notes:
 - In local-fast, both Vite and server-side structuredUpload resolve the local parser at http://127.0.0.1:8001, and export worker dependencies come from the container image instead of host node_modules.
 - MISTRAL is auto-enabled if MISTRAL_API_KEY is present (env or ~/.mistral_key).
 - OCR flag controls local parser engine: auto (default), doctr, paddle, disabled.
+- logs defaults to parser with the last 200 lines.
+- logs all --follow is not supported; choose one service.
 EOF
   print_command_banner
 }
 
 # Trap: ensure we don't leave Vite/Parser dangling on Ctrl+C
-trap 'echo "[run] interrupt -> down"; down >/dev/null 2>&1 || true; exit 130' INT TERM
+if [[ "${CMD}" == "logs" ]]; then
+  trap 'exit 130' INT TERM
+else
+  trap 'log_warn "interrupt -> down"; down >/dev/null 2>&1 || true; exit 130' INT TERM
+fi
 
 case "${CMD}" in
   local-fast) local_fast_stack "$@";;
@@ -1672,7 +1820,7 @@ case "${CMD}" in
   down) down;;
   reset) reset;;
   status) status;;
-  logs) logs;;
+  logs) logs "$@";;
   smoke) smoke;;
   assert-ocr) assert_ocr "$@";;
   probe-edge) probe_edge "${1:-}";;
