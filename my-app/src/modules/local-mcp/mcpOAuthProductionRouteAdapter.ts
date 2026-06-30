@@ -33,7 +33,7 @@ import {
   type McpJsonRpcIdV1,
   type McpJsonRpcProtocolMessageV1,
 } from "./mcpAuthenticatedProtocolEnvelope";
-import { evaluateMcpProductionPolicy } from "./mcpProductionPolicyKernel";
+import { evaluateMcpProductionPolicy, type McpProductionPolicyDecisionV1 } from "./mcpProductionPolicyKernel";
 import { buildMcpProductionToolsListResult } from "./mcpProductionToolsListProjection";
 import {
   MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER,
@@ -1613,7 +1613,7 @@ function handleAuthenticatedMcpJsonRpc(
   if (decision.decision !== "allow_protocol" && decision.decision !== "allow_metadata") {
     return blockedMcpPolicyDecisionResponse(envelope, decision.decision);
   }
-  return allowedMcpPolicyDecisionResponse(envelope);
+  return allowedMcpPolicyDecisionResponse(envelope, decision);
 }
 
 function blockedMcpPolicyDecisionResponse(
@@ -1632,41 +1632,38 @@ function blockedMcpPolicyDecisionResponse(
 
 function allowedMcpPolicyDecisionResponse(
   envelope: McpAuthenticatedProtocolEnvelopeV1,
+  decision: Extract<McpProductionPolicyDecisionV1, { decision: "allow_protocol" | "allow_metadata" }>,
 ): McpOAuthProductionRouteAdapterResponseV1 {
-  const method = envelope.jsonRpc.method;
-  if (method === "notifications/initialized") {
-    return jsonResponse(202, null);
-  }
   const id = envelope.jsonRpc.id ?? null;
-  if (method === "initialize") {
-    return jsonResponse(200, {
-      jsonrpc: "2.0",
-      id,
-      result: {
-        protocolVersion: MCP_PRODUCTION_PROTOCOL_VERSION,
-        serverInfo: {
-          name: "twoweeks-production-mcp-auth-boundary",
-          version: "1.0.0",
+  switch (decision.method) {
+    case "notifications/initialized":
+      return jsonResponse(202, null);
+    case "initialize":
+      return jsonResponse(200, {
+        jsonrpc: "2.0",
+        id,
+        result: {
+          protocolVersion: MCP_PRODUCTION_PROTOCOL_VERSION,
+          serverInfo: {
+            name: "twoweeks-production-mcp-auth-boundary",
+            version: "1.0.0",
+          },
+          capabilities: {},
         },
-        capabilities: {},
-      },
-    });
+      });
+    case "ping":
+      return jsonResponse(200, {
+        jsonrpc: "2.0",
+        id,
+        result: {},
+      });
+    case "tools/list":
+      return jsonResponse(200, {
+        jsonrpc: "2.0",
+        id,
+        result: buildMcpProductionToolsListResult(),
+      });
   }
-  if (method === "ping") {
-    return jsonResponse(200, {
-      jsonrpc: "2.0",
-      id,
-      result: {},
-    });
-  }
-  if (method === "tools/list") {
-    return jsonResponse(200, {
-      jsonrpc: "2.0",
-      id,
-      result: buildMcpProductionToolsListResult(),
-    });
-  }
-  return jsonResponse(200, buildMcpJsonRpcError(id, -32601, "Method not found."));
 }
 
 function buildMcpJsonRpcError(id: McpJsonRpcIdV1, code: number, message: string): unknown {

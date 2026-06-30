@@ -108,6 +108,8 @@ export function parseMcpJsonRpcProtocolMessage(bodyText: string): McpJsonRpcProt
 }
 
 function cloneAndFreezeJsonValue(value: unknown): unknown {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
   if (Array.isArray(value)) {
     return Object.freeze(value.map(cloneAndFreezeJsonValue));
   }
@@ -116,7 +118,7 @@ function cloneAndFreezeJsonValue(value: unknown): unknown {
       Object.fromEntries(Object.entries(value).map(([key, nestedValue]) => [key, cloneAndFreezeJsonValue(nestedValue)])),
     );
   }
-  return value;
+  throw new TypeError("MCP JSON-RPC params must be JSON-serializable plain values");
 }
 
 function assertJsonSerializablePlainValue(value: unknown): void {

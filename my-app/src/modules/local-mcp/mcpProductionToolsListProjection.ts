@@ -13,7 +13,13 @@ export type McpProductionToolsListResultV1 = Readonly<{
   tools: readonly McpProductionToolDescriptorV1[];
 }>;
 
+const MCP_PRODUCTION_TOOLS_LIST_RESULT = buildMcpProductionToolsListResultFromRegistry();
+
 export function buildMcpProductionToolsListResult(): McpProductionToolsListResultV1 {
+  return MCP_PRODUCTION_TOOLS_LIST_RESULT;
+}
+
+function buildMcpProductionToolsListResultFromRegistry(): McpProductionToolsListResultV1 {
   const registry = buildLocalMcpDescriptorRegistryMetadataOnly();
   return Object.freeze({
     tools: Object.freeze(registry.descriptors.map(projectProductionToolDescriptor)),
