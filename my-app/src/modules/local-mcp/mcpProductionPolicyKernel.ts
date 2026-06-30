@@ -24,9 +24,9 @@ export type McpProductionPolicyDecisionV1 = Readonly<
     }
   | {
       kind: "mcp_production_policy_decision";
-      decision: "block_execution";
+      decision: "allow_read_only_call";
       method: "tools/call";
-      reason: "execution_blocked";
+      reason: "read_only_call_boundary_allowed";
       version: 1;
     }
   | {
@@ -72,9 +72,9 @@ export function evaluateMcpProductionPolicy(
   if (method === "tools/call") {
     return Object.freeze({
       kind: "mcp_production_policy_decision",
-      decision: "block_execution",
+      decision: "allow_read_only_call",
       method,
-      reason: "execution_blocked",
+      reason: "read_only_call_boundary_allowed",
       version: 1,
     });
   }

@@ -1,0 +1,195 @@
+import { describe, expect, it } from "vitest";
+import {
+  MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND,
+  buildMcpProductionToolsCallReadonlySyntheticResult,
+  validateMcpProductionToolsCallBoundary,
+} from "../mcpProductionToolsCallBoundary";
+import { buildMcpProductionToolsListResult } from "../mcpProductionToolsListProjection";
+
+const TOOL_ARGUMENTS = [
+  [
+    "twoweeks.application_package.summarize",
+    { applicationPackageRef: { id: "application-package-ref-1" } },
+  ],
+  [
+    "twoweeks.evidence_graph.summarize",
+    { evidenceGraphRef: { id: "evidence-graph-ref-1" } },
+  ],
+  [
+    "twoweeks.resume_variant_plan.summarize",
+    { resumeVariantPlanRef: { id: "resume-variant-plan-ref-1" } },
+  ],
+  [
+    "twoweeks.review_cockpit.summarize",
+    { reviewCockpitRef: { id: "review-cockpit-ref-1" } },
+  ],
+] as const;
+const TOOL_ARGUMENT_FIELD_NAMES = [
+  "applicationPackageRef",
+  "evidenceGraphRef",
+  "resumeVariantPlanRef",
+  "reviewCockpitRef",
+] as const;
+
+function validate(params: unknown) {
+  return validateMcpProductionToolsCallBoundary({
+    method: "tools/call",
+    params,
+    version: 1,
+  });
+}
+
+describe("production MCP tools/call boundary", () => {
+  it("accepts each listed read-only tool only with its exact declared argument schema", () => {
+    const toolsList = buildMcpProductionToolsListResult();
+
+    for (const [name, args] of TOOL_ARGUMENTS) {
+      const validation = validateMcpProductionToolsCallBoundary({
+        method: "tools/call",
+        params: { name, arguments: args, _meta: { progressToken: "progress-token-1" } },
+        toolsList,
+        version: 1,
+      });
+
+      expect(validation).toMatchObject({
+        valid: true,
+        method: "tools/call",
+        phase: "pr102_readonly_boundary_validation",
+        params: {
+          name,
+          progressTokenAccepted: true,
+          rawArgumentsEchoed: false,
+          metaEchoed: false,
+        },
+      });
+      expect(validation.valid ? validation.tool.name : undefined).toBe(name);
+      expect(JSON.stringify(validation)).not.toContain("progress-token-1");
+    }
+  });
+
+  it("rejects unknown params, unsafe metadata, unknown tools, and non-tools/call methods", () => {
+    expect(validate({ name: "twoweeks.application_package.summarize", arguments: {}, task: "do more" }))
+      .toMatchObject({ valid: false, error: { code: "invalid_param_name" } });
+    expect(validate({ name: "twoweeks.application_package.summarize", arguments: {}, cursor: "cursor-1" }))
+      .toMatchObject({ valid: false, error: { code: "invalid_param_name" } });
+    expect(validate({ name: "twoweeks.application_package.summarize", arguments: {}, filters: {} }))
+      .toMatchObject({ valid: false, error: { code: "invalid_param_name" } });
+    expect(validate({ name: "twoweeks.application_package.summarize", arguments: {}, unknown: true }))
+      .toMatchObject({ valid: false, error: { code: "invalid_param_name" } });
+    expect(validate({ name: "twoweeks.application_package.summarize", arguments: {}, _meta: { progressToken: { id: "nested" } } }))
+      .toMatchObject({ valid: false, error: { code: "invalid_meta" } });
+    expect(validate({ name: "twoweeks.missing.summarize", arguments: {} }))
+      .toMatchObject({ valid: false, error: { code: "unknown_tool" } });
+    expect(validateMcpProductionToolsCallBoundary({ method: "tools/list", params: {}, version: 1 }))
+      .toMatchObject({ valid: false, error: { code: "invalid_method" } });
+  });
+
+  it("fails closed for malformed params and malformed arguments", () => {
+    expect(validate(undefined)).toMatchObject({ valid: false, error: { code: "payload_not_json" } });
+    expect(validate(null)).toMatchObject({ valid: false, error: { code: "invalid_params" } });
+    expect(validate([])).toMatchObject({ valid: false, error: { code: "invalid_params" } });
+    expect(validate({ name: 42, arguments: {} })).toMatchObject({ valid: false, error: { code: "invalid_name" } });
+    expect(validate({ name: "", arguments: {} })).toMatchObject({ valid: false, error: { code: "invalid_name" } });
+    expect(validate({ name: "twoweeks.application_package.summarize", arguments: null }))
+      .toMatchObject({ valid: false, error: { code: "invalid_arguments" } });
+    expect(validate({ name: "twoweeks.application_package.summarize", arguments: [] }))
+      .toMatchObject({ valid: false, error: { code: "invalid_arguments" } });
+  });
+
+  it("rejects invalid arguments for every listed tool schema", () => {
+    for (const [name, validArgs] of TOOL_ARGUMENTS) {
+      const validFieldName = Object.keys(validArgs)[0];
+      const wrongFieldName = TOOL_ARGUMENT_FIELD_NAMES.find((fieldName) => fieldName !== validFieldName);
+      if (!wrongFieldName) throw new Error("test fixture must provide a wrong field name");
+      const wrongFields = [
+        { [wrongFieldName]: { id: "wrong-ref" } },
+        { [validFieldName]: { id: "ref-1" }, extra: { id: "extra" } },
+        { [validFieldName]: {} },
+        { [validFieldName]: { id: "" } },
+        { [validFieldName]: { id: "ref-1", extra: true } },
+      ] as const;
+
+      for (const args of wrongFields) {
+        expect(validate({ name, arguments: args })).toMatchObject({
+          valid: false,
+          error: { code: "invalid_arguments" },
+        });
+      }
+    }
+  });
+
+  it("rejects overlarge, deep, cyclic, non-finite, and non-plain payloads before result construction", () => {
+    const cyclic: Record<string, unknown> = {
+      name: "twoweeks.application_package.summarize",
+      arguments: { applicationPackageRef: { id: "ref-1" } },
+    };
+    cyclic.self = cyclic;
+
+    class NonPlainPayload {
+      readonly id = "ref-1";
+    }
+
+    expect(validate({
+      name: "twoweeks.application_package.summarize",
+      arguments: { applicationPackageRef: { id: "x".repeat(5_000) } },
+    })).toMatchObject({ valid: false, error: { code: "payload_too_large" } });
+    expect(validate({
+      name: "twoweeks.application_package.summarize",
+      arguments: { applicationPackageRef: { id: "ref-1" } },
+      _meta: { progressToken: { a: { b: { c: { d: { e: { f: { g: { h: { i: "too-deep" } } } } } } } } } },
+    })).toMatchObject({ valid: false, error: { code: "payload_too_deep" } });
+    expect(validate(cyclic)).toMatchObject({ valid: false, error: { code: "payload_not_json" } });
+    expect(validate({
+      name: "twoweeks.application_package.summarize",
+      arguments: { applicationPackageRef: { id: Number.NaN } },
+    })).toMatchObject({ valid: false, error: { code: "payload_not_json" } });
+    expect(validate({
+      name: "twoweeks.application_package.summarize",
+      arguments: { applicationPackageRef: new NonPlainPayload() },
+    })).toMatchObject({ valid: false, error: { code: "payload_not_json" } });
+    expect(validate({
+      name: "twoweeks.application_package.summarize",
+      arguments: { applicationPackageRef: { id: "ref-1", fn: () => "nope" } },
+    })).toMatchObject({ valid: false, error: { code: "payload_not_json" } });
+  });
+
+  it("builds a safe read-only synthetic result without raw inputs, internals, or future execution hooks", () => {
+    const validation = validate({
+      name: "twoweeks.application_package.summarize",
+      arguments: { applicationPackageRef: { id: "application-package-ref-secret" } },
+      _meta: { progressToken: "progress-token-secret" },
+    });
+    if (!validation.valid) throw new Error("fixture should validate");
+
+    const result = buildMcpProductionToolsCallReadonlySyntheticResult(validation);
+    const serialized = JSON.stringify(result);
+
+    expect(Object.keys(result).sort()).toEqual(["content", "structuredContent"]);
+    expect(result.structuredContent.kind).toBe(MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND);
+    expect(result.structuredContent.phase).toBe("pr102_readonly_boundary_only");
+    expect(result.structuredContent.status).toBe("validated_synthetic_summary_only");
+    expect(Object.keys(result.structuredContent).sort()).toEqual([
+      "kind",
+      "phase",
+      "status",
+      "toolName",
+      "version",
+    ]);
+    expect(serialized).not.toContain("application-package-ref-secret");
+    expect(serialized).not.toContain("progress-token-secret");
+    expect(serialized).not.toContain("rawArgumentsEchoed");
+    expect(serialized).not.toContain("progressTokenEchoed");
+    expect(serialized).not.toContain("effects");
+    expect(serialized).not.toContain("publicOutput");
+    expect(serialized).not.toContain("localToolId");
+    expect(serialized).not.toContain("internalToolId");
+    expect(serialized).not.toContain("handler");
+    expect(serialized).not.toContain("stack");
+    expect(serialized).not.toContain("access_token");
+    expect(serialized).not.toContain("refresh_token");
+    expect(serialized).not.toContain("authorizationCodeDigest");
+    expect(serialized).not.toContain("mcpOAuthAccessTokens");
+    expect(serialized.toLowerCase()).not.toContain("real handler");
+    expect(serialized.toLowerCase()).toContain("synthetic");
+  });
+});
