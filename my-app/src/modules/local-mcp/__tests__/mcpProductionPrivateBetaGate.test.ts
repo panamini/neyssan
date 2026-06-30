@@ -1,4 +1,7 @@
 // @vitest-environment node
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { TWOWEEKS_APPLICATIONS_READ_SCOPE } from "../mcpAuthPolicyBoundary";
 import {
@@ -10,10 +13,20 @@ import {
   type McpProductionPrivateBetaGateConfigInputV1,
 } from "../mcpProductionPrivateBetaGate";
 
+const TEST_DIR = dirname(fileURLToPath(import.meta.url));
+const SOURCE_FILE = resolve(TEST_DIR, "../mcpProductionPrivateBetaGate.ts");
 const CLIENT_ID = "chatgpt_apps_sdk_client";
 const RESOURCE = "https://mcp.twoweeks.example.test/resource";
 const SUBJECT_ID = "user_twoweeks_fixture_123";
 const NOW = Date.parse("2026-06-30T20:00:00.000Z");
+const FORBIDDEN_GATE_LAYER_PATTERNS = Object.freeze([
+  /mcpOAuthProductionRouteAdapter/u,
+  /mcpProductionPolicyKernel/u,
+  /mcpProductionTools(?:CallBoundary|ListProjection)/u,
+  /buildMcpJsonRpcError|jsonResponse|failClosedResponse/u,
+  /\b(?:fetch|axios|XMLHttpRequest|WebSocket|EventSource)\b/u,
+  /\b(?:insert|patch|replace|delete)\s*\(/u,
+] as const);
 
 describe("MCP production private beta gate", () => {
   it("defaults to denied when private beta config is missing or disabled", () => {
@@ -132,6 +145,17 @@ describe("MCP production private beta gate", () => {
       allowed: false,
       code: "private_beta_ambiguous_eligibility",
     });
+  });
+
+  it("keeps eligibility evaluation separate from route, policy, execution, and response construction layers", () => {
+    const source = readFileSync(SOURCE_FILE, "utf8");
+
+    expect(source).toContain("from \"./mcpAuthenticatedProtocolEnvelope\"");
+    expect(source).toContain("function readPrivateBetaConfig");
+    expect(source).toContain("function isSafeEligibilityEnvelope");
+    for (const pattern of FORBIDDEN_GATE_LAYER_PATTERNS) {
+      expect(source).not.toMatch(pattern);
+    }
   });
 });
 

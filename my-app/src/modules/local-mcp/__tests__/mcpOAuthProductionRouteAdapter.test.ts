@@ -5118,6 +5118,29 @@ describe("MCP OAuth production route adapter", () => {
     expectSourceNotToMatch(source, FORBIDDEN_PREFLIGHT_REIMPLEMENTATION_PATTERNS);
   });
 
+  it("runs private beta eligibility only after authenticated /mcp context and before policy dispatch", () => {
+    const source = readFileSync(SOURCE_FILE, "utf8");
+    const bearerIndex = source.indexOf("const bearerToken = readBearerAccessToken");
+    const quotaIndex = source.indexOf("const quotaInput = Object.freeze({", bearerIndex);
+    const verifyIndex = source.indexOf("let verifyResult: McpOAuthProductionAccessTokenVerifyPortResultV1", quotaIndex);
+    const protocolParseIndex = source.indexOf("const jsonRpcMessage = parseMcpJsonRpcProtocolMessage", verifyIndex);
+    const envelopeIndex = source.indexOf("const envelope = buildMcpAuthenticatedProtocolEnvelope", protocolParseIndex);
+    const gateIndex = source.indexOf("const privateBetaDecision = evaluateMcpProductionPrivateBetaGate", envelopeIndex);
+    const gateDeniedIndex = source.indexOf("return mcpPrivateBetaGateDeniedResponse(preflight, privateBetaDecision)", gateIndex);
+    const dispatchIndex = source.indexOf("return handleAuthenticatedMcpJsonRpc(envelope)", gateDeniedIndex);
+    const policyIndex = source.indexOf("const decision = evaluateMcpProductionPolicy(envelope)", dispatchIndex);
+
+    expect(bearerIndex).toBeGreaterThanOrEqual(0);
+    expect(quotaIndex).toBeGreaterThan(bearerIndex);
+    expect(verifyIndex).toBeGreaterThan(quotaIndex);
+    expect(protocolParseIndex).toBeGreaterThan(verifyIndex);
+    expect(envelopeIndex).toBeGreaterThan(protocolParseIndex);
+    expect(gateIndex).toBeGreaterThan(envelopeIndex);
+    expect(gateDeniedIndex).toBeGreaterThan(gateIndex);
+    expect(dispatchIndex).toBeGreaterThan(gateDeniedIndex);
+    expect(policyIndex).toBeGreaterThan(dispatchIndex);
+  });
+
   it("only claims the intended production entrypoint paths", () => {
     expect(isMcpOAuthProductionRouteHandledPath(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH)).toBe(true);
     expect(isMcpOAuthProductionRouteHandledPath(MCP_OAUTH_CONTINUATION_PATH)).toBe(true);
