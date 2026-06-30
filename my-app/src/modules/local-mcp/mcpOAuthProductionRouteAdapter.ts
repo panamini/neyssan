@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import { isIP, SocketAddress } from "node:net";
 import {
   buildMcpOAuthProductionRoutePreflight,
   type McpOAuthProductionRoutePreflightDecisionV1,
@@ -525,6 +526,7 @@ type McpOAuthProductionRouteFailureReasonV1 =
   | "token_generation_failed"
   | "token_issue_failed"
   | "invalid_authorization_header"
+  | "bearer_verification_caller_untrusted"
   | "bearer_verification_failed"
   | "mcp_execution_blocked";
 
@@ -1035,12 +1037,16 @@ async function handleMcpRequest(
   }
 
   const now = readNow(dependencies);
+  const callerKey = readBearerVerificationQuotaCallerKey(request);
+  if (!callerKey) {
+    return failClosedResponse("mcp", preflight, "bearer_verification_caller_untrusted", 400);
+  }
   let quotaResult: McpOAuthProductionPreAuthQuotaPortResultV1;
   const quotaInput = Object.freeze({
     authorizationPageOrigin: authorizationOrigin.origin,
     clientId: MCP_BEARER_VERIFICATION_QUOTA_CLIENT_ID,
     resource: expectedResource,
-    callerKey: readBearerVerificationQuotaCallerKey(request),
+    callerKey,
     now,
     version: 1,
   } satisfies McpOAuthProductionPreAuthQuotaPortInputV1);
@@ -1957,8 +1963,37 @@ function readQuotaCallerKey(request: McpOAuthProductionRouteAdapterRequestV1): s
   );
 }
 
-function readBearerVerificationQuotaCallerKey(request: McpOAuthProductionRouteAdapterRequestV1): string {
-  return normalizeCallerKey(request.remoteAddress) ?? "unknown";
+function readBearerVerificationQuotaCallerKey(request: McpOAuthProductionRouteAdapterRequestV1): string | undefined {
+  return canonicalizeBearerVerificationQuotaCallerKey(request.remoteAddress);
+}
+
+function canonicalizeBearerVerificationQuotaCallerKey(remoteAddress: string | undefined): string | undefined {
+  if (remoteAddress !== undefined && hasControlCharacter(remoteAddress)) return undefined;
+  const normalized = normalizeCallerKey(remoteAddress);
+  if (!normalized) return undefined;
+  const ipVersion = isIP(normalized);
+  if (ipVersion === 4) return normalized;
+  if (ipVersion !== 6) return undefined;
+  const canonicalIpv6Address = readCanonicalIpv6SocketAddress(normalized) ?? normalized.toLowerCase();
+  return readIpv4MappedIpv6Address(canonicalIpv6Address) ?? canonicalIpv6Address;
+}
+
+function readCanonicalIpv6SocketAddress(value: string): string | undefined {
+  try {
+    const socketAddressParser = SocketAddress as unknown as {
+      parse?: (input: string) => Readonly<{ address: string; family: string }> | undefined;
+    };
+    const parsed = socketAddressParser.parse?.(`[${value}]:0`);
+    return parsed?.family === "ipv6" ? parsed.address : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function readIpv4MappedIpv6Address(value: string): string | undefined {
+  const match = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/u.exec(value.toLowerCase());
+  const ipv4Address = match?.[1];
+  return ipv4Address && isIP(ipv4Address) === 4 ? ipv4Address : undefined;
 }
 
 function readForwardedCallerKey(value: string | readonly string[] | undefined): string | undefined {
