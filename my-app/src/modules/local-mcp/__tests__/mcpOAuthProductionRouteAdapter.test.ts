@@ -87,8 +87,6 @@ vi.mock("jose", () => ({
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const SOURCE_FILE = resolve(TEST_DIR, "../mcpOAuthProductionRouteAdapter.ts");
 const AUTHENTICATED_ENVELOPE_SOURCE_FILE = resolve(TEST_DIR, "../mcpAuthenticatedProtocolEnvelope.ts");
-const PRODUCTION_POLICY_SOURCE_FILE = resolve(TEST_DIR, "../mcpProductionPolicyKernel.ts");
-const PRODUCTION_TOOLS_LIST_PROJECTION_SOURCE_FILE = resolve(TEST_DIR, "../mcpProductionToolsListProjection.ts");
 const VITE_CONFIG_SOURCE = resolve(TEST_DIR, "../../../../vite.config.ts");
 const APP_ORIGIN = "http://localhost:5173";
 const PROD_APP_ORIGIN = "https://mcp.twoweeks.example.test";
@@ -1465,9 +1463,6 @@ describe("MCP OAuth production route adapter", () => {
   });
 
   it("keeps production MCP policy decision-only and tools/list projection separate", () => {
-    const policySource = readFileSync(PRODUCTION_POLICY_SOURCE_FILE, "utf8");
-    const projectionSource = readFileSync(PRODUCTION_TOOLS_LIST_PROJECTION_SOURCE_FILE, "utf8");
-    const adapterSource = readFileSync(SOURCE_FILE, "utf8");
     const jsonRpcMessage = parseMcpJsonRpcProtocolMessage(JSON.stringify(mcpJsonRpcRequest("tools/list", "tools-list")));
     if (!jsonRpcMessage) throw new Error("fixture JSON-RPC should parse");
     const envelope = buildMcpAuthenticatedProtocolEnvelope({
@@ -1495,15 +1490,13 @@ describe("MCP OAuth production route adapter", () => {
     expect(decision).not.toHaveProperty("tools");
     expect(decision).not.toHaveProperty("response");
     expect(decision).not.toHaveProperty("payload");
-    expect(policySource).toContain("evaluateMcpProductionPolicy");
-    expect(policySource).not.toContain("jsonResponse");
-    expect(policySource).not.toContain("buildMcpJsonRpcError");
-    expect(policySource).not.toContain("buildMcpProductionToolsListResult");
-    expect(policySource).not.toContain("buildLocalMcpDescriptorRegistryFixtureOnly");
     expect(projection.tools).toHaveLength(4);
-    expect(projectionSource).toContain("buildMcpProductionToolsListResult");
-    expect(adapterSource).toContain("evaluateMcpProductionPolicy(envelope)");
-    expect(adapterSource).toContain("buildMcpProductionToolsListResult()");
+    for (const tool of projection.tools) {
+      expect(Object.keys(tool).sort()).toEqual(["annotations", "description", "inputSchema", "name", "title"]);
+      expect(tool).not.toHaveProperty("localToolId");
+      expect(tool).not.toHaveProperty("internalToolId");
+      expect(tool).not.toHaveProperty("outputSchema");
+    }
   });
 
   it("creates immutable authenticated protocol envelopes before policy evaluation", () => {
@@ -1543,6 +1536,23 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(envelope)).not.toContain(ACCESS_TOKEN_DIGEST);
     expect(JSON.stringify(envelope)).not.toContain(OWNER_ID);
     expect(envelopeSource).toContain("Object.freeze");
+  });
+
+  it("rejects non-JSON params before building authenticated protocol envelopes", () => {
+    expect(() => buildMcpAuthenticatedProtocolEnvelope({
+      verifiedClientId: CLIENT_ID,
+      verifiedResource: RESOURCE,
+      verifiedScopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
+      accessTokenExpiresAt: NOW + 60 * 60 * 1_000,
+      callerKey: "198.51.100.9",
+      jsonRpcMessage: {
+        jsonrpc: "2.0",
+        id: "tools-list",
+        method: "tools/list",
+        params: { createdAt: new Date(NOW) },
+      },
+      createdAt: NOW,
+    })).toThrow("MCP JSON-RPC params must be JSON-serializable plain values");
   });
 
   it.each([

@@ -1,4 +1,4 @@
-import { buildLocalMcpDescriptorRegistryFixtureOnly } from "./mcpDescriptorRegistry";
+import { buildLocalMcpDescriptorRegistryMetadataOnly } from "./mcpDescriptorRegistry";
 import type { LocalMcpProjectedToolDescriptorV1 } from "./mcpSchemaProjection";
 
 export type McpProductionToolDescriptorV1 = Readonly<{
@@ -14,7 +14,7 @@ export type McpProductionToolsListResultV1 = Readonly<{
 }>;
 
 export function buildMcpProductionToolsListResult(): McpProductionToolsListResultV1 {
-  const registry = buildLocalMcpDescriptorRegistryFixtureOnly();
+  const registry = buildLocalMcpDescriptorRegistryMetadataOnly();
   return Object.freeze({
     tools: Object.freeze(registry.descriptors.map(projectProductionToolDescriptor)),
   });

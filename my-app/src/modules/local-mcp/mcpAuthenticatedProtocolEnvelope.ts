@@ -49,6 +49,9 @@ export function buildMcpAuthenticatedProtocolEnvelope(input: Readonly<{
   createdAt: number;
 }>): McpAuthenticatedProtocolEnvelopeV1 {
   const hasId = "id" in input.jsonRpcMessage;
+  if ("params" in input.jsonRpcMessage) {
+    assertJsonSerializablePlainValue(input.jsonRpcMessage.params);
+  }
   const params = "params" in input.jsonRpcMessage
     ? { params: cloneAndFreezeJsonValue(input.jsonRpcMessage.params) }
     : {};
@@ -114,6 +117,30 @@ function cloneAndFreezeJsonValue(value: unknown): unknown {
     );
   }
   return value;
+}
+
+function assertJsonSerializablePlainValue(value: unknown): void {
+  if (!isJsonSerializablePlainValue(value, new WeakSet<object>())) {
+    throw new TypeError("MCP JSON-RPC params must be JSON-serializable plain values");
+  }
+}
+
+function isJsonSerializablePlainValue(value: unknown, activePath: WeakSet<object>): boolean {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return true;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (typeof value !== "object") return false;
+  if (activePath.has(value)) return false;
+  activePath.add(value);
+  let isSerializable: boolean;
+  if (Array.isArray(value)) {
+    isSerializable = value.every((item) => isJsonSerializablePlainValue(item, activePath));
+  } else if (isPlainRecord(value)) {
+    isSerializable = Object.values(value).every((item) => isJsonSerializablePlainValue(item, activePath));
+  } else {
+    isSerializable = false;
+  }
+  activePath.delete(value);
+  return isSerializable;
 }
 
 function hasOnlyAllowedKeys(value: Record<string, unknown>, allowedKeys: readonly string[]): boolean {
