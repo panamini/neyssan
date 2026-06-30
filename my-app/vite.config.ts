@@ -640,6 +640,7 @@ function readLocalMcpDevOAuthConfigInput(env: Readonly<Record<string, string | u
 }
 
 function readProductionMcpOAuthConfigInput(env: Readonly<Record<string, string | undefined>>): Parameters<typeof buildMcpOAuthProductionRouteAdapterConfig>[0] {
+  const privateBetaSubjectIds = readCommaSeparatedEnv(env[MCP_PRODUCTION_PRIVATE_BETA_SUBJECTS_VAR]);
   return {
     flags: {
       runtime: env[MCP_OAUTH_PRODUCTION_RUNTIME_FLAG],
@@ -659,7 +660,7 @@ function readProductionMcpOAuthConfigInput(env: Readonly<Record<string, string |
       enabled: isStrictEnabledFlag(env, MCP_PRODUCTION_PRIVATE_BETA_ENABLED_FLAG),
       allowedClientIds: readCommaSeparatedEnv(env[MCP_PRODUCTION_PRIVATE_BETA_CLIENT_IDS_VAR]),
       allowedResources: readCommaSeparatedEnv(env[MCP_PRODUCTION_PRIVATE_BETA_RESOURCES_VAR]),
-      allowedSubjectIds: readCommaSeparatedEnv(env[MCP_PRODUCTION_PRIVATE_BETA_SUBJECTS_VAR]),
+      ...(privateBetaSubjectIds.length > 0 ? { allowedSubjectIds: privateBetaSubjectIds } : {}),
       version: 1,
     },
   };

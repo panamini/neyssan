@@ -4633,7 +4633,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(wrongHostResponse)).not.toContain(ACCESS_TOKEN_DIGEST);
   });
 
-  it("wires default production /mcp through auth-level preflight without activation dependencies", async () => {
+  it("wires default production /mcp through auth-level preflight without activation dependencies or subject allowlist env", async () => {
     convexHttpClientQuery.mockResolvedValue({
       kind: "mcp_oauth_access_token_verify_result",
       ok: true,
@@ -4659,7 +4659,7 @@ describe("MCP OAuth production route adapter", () => {
       safeForLogging: false,
       version: 1,
     });
-    const plugin = createLocalMcpDevEndpointPlugin({ env: prodRouteEnv() });
+    const plugin = createLocalMcpDevEndpointPlugin({ env: prodRouteEnvWithoutPrivateBetaSubjects() });
     const middleware = readConfiguredMiddleware(plugin);
     const response = await invokeStreamingMiddleware(middleware, {
       method: "POST",
@@ -6310,6 +6310,12 @@ function prodRouteEnv(): Record<string, string> {
     CONVEX_URL: "http://127.0.0.1:3210",
     CONVEX_KEY: "convex_admin_key_fixture",
   };
+}
+
+function prodRouteEnvWithoutPrivateBetaSubjects(): Record<string, string> {
+  const env = prodRouteEnv();
+  delete env.MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECTS;
+  return env;
 }
 
 function expectNoRouteLeakage(
