@@ -1211,7 +1211,7 @@ describe("MCP OAuth production route adapter", () => {
         jsonrpc: "2.0",
         method: "notifications/initialized",
         params: {},
-      }),
+      }, { "mcp-protocol-version": "2025-11-25" }),
       routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }, activation),
       dependencies,
     );
@@ -1230,7 +1230,11 @@ describe("MCP OAuth production route adapter", () => {
     const ctx = makeCtx();
     ctx.accessTokenRows.push(storedAccessToken());
     const response = await handleMcpOAuthProductionRouteRequest(
-      mcpRequest(`Bearer ${RAW_ACCESS_TOKEN}`, mcpJsonRpcRequest("ping", "ping-1")),
+      mcpRequest(
+        `Bearer ${RAW_ACCESS_TOKEN}`,
+        mcpJsonRpcRequest("ping", "ping-1"),
+        { "mcp-protocol-version": "2025-11-25" },
+      ),
       routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
       routeDependencies(ctx),
     );
@@ -1244,6 +1248,73 @@ describe("MCP OAuth production route adapter", () => {
         result: {},
       },
     });
+    expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
+    expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+  });
+
+  it.each([
+    ["missing", {}],
+    ["unsupported", { "mcp-protocol-version": "not-a-version" }],
+  ] as const)(
+    "rejects %s MCP-Protocol-Version for production /mcp messages after bearer verification",
+    async (_label, extraHeaders) => {
+      const ctx = makeCtx();
+      ctx.accessTokenRows.push(storedAccessToken());
+      const dependencies = routeDependencies(ctx);
+      const response = await handleMcpOAuthProductionRouteRequest(
+        mcpRequest(`Bearer ${RAW_ACCESS_TOKEN}`, mcpJsonRpcRequest("ping", "ping-1"), extraHeaders),
+        routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+        dependencies,
+      );
+
+      expect(response).toMatchObject({
+        handled: true,
+        status: 400,
+        json: {
+          jsonrpc: "2.0",
+          id: "ping-1",
+          error: {
+            code: -32600,
+            message: "Unsupported MCP protocol version.",
+            safeForModel: true,
+          },
+        },
+      });
+      expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(1);
+      expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
+      expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
+      expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
+      expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+    },
+  );
+
+  it("rejects invalid production /mcp Origin after bearer verification before JSON-RPC parsing", async () => {
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push(storedAccessToken());
+    const dependencies = routeDependencies(ctx);
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(`Bearer ${RAW_ACCESS_TOKEN}`, "{not-json", { origin: "https://evil.example" }),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 403,
+      json: {
+        jsonrpc: "2.0",
+        id: null,
+        error: {
+          code: -32600,
+          message: "Invalid Origin header.",
+          safeForModel: true,
+        },
+      },
+    });
+    expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(1);
+    expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(response)).not.toContain("Invalid JSON-RPC request.");
     expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
     expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
     expect(JSON.stringify(response)).not.toContain(OWNER_ID);
@@ -1287,7 +1358,7 @@ describe("MCP OAuth production route adapter", () => {
     const dependencies = routeDependencies(ctx);
 
     const response = await handleMcpOAuthProductionRouteRequest(
-      mcpRequest(`Bearer ${RAW_ACCESS_TOKEN}`, body),
+      mcpRequest(`Bearer ${RAW_ACCESS_TOKEN}`, body, { "mcp-protocol-version": "2025-11-25" }),
       routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }, activation),
       dependencies,
     );
@@ -3688,6 +3759,123 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(OWNER_ID);
   });
 
+  it("wires production /mcp initialized notifications through Vite with an empty 202 body", async () => {
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push(storedAccessToken({ _id: "mcpOAuthAccessTokens_fixture_vite_notification" }));
+    const dependencies = routeDependencies(ctx);
+    const plugin = createLocalMcpDevEndpointPlugin({
+      env: prodRouteEnv(),
+      productionOAuthAuthorizationConfig: routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      productionOAuthAuthorizationDependencies: dependencies,
+    });
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeStreamingMiddleware(middleware, {
+      method: "POST",
+      url: MCP_OAUTH_PRODUCTION_MCP_PATH,
+      remoteAddress: "198.51.100.9",
+      headers: {
+        host: "mcp.twoweeks.example.test",
+        authorization: `Bearer ${RAW_ACCESS_TOKEN}`,
+        "content-type": "application/json",
+        "mcp-protocol-version": "2025-11-25",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "notifications/initialized",
+        params: {},
+      }),
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(202);
+    expect(response.body).toBe("");
+    expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
+    expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
+    expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+  });
+
+  it("forwards MCP-Protocol-Version to reject unsupported production /mcp messages in Vite", async () => {
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push(storedAccessToken({ _id: "mcpOAuthAccessTokens_fixture_vite_protocol" }));
+    const dependencies = routeDependencies(ctx);
+    const plugin = createLocalMcpDevEndpointPlugin({
+      env: prodRouteEnv(),
+      productionOAuthAuthorizationConfig: routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      productionOAuthAuthorizationDependencies: dependencies,
+    });
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeStreamingMiddleware(middleware, {
+      method: "POST",
+      url: MCP_OAUTH_PRODUCTION_MCP_PATH,
+      remoteAddress: "198.51.100.9",
+      headers: {
+        host: "mcp.twoweeks.example.test",
+        authorization: `Bearer ${RAW_ACCESS_TOKEN}`,
+        "content-type": "application/json",
+        "mcp-protocol-version": "not-a-version",
+      },
+      body: JSON.stringify(mcpJsonRpcRequest("ping", "ping-1")),
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(400);
+    expect(JSON.parse(response.body)).toMatchObject({
+      jsonrpc: "2.0",
+      id: "ping-1",
+      error: {
+        code: -32600,
+        message: "Unsupported MCP protocol version.",
+      },
+    });
+    expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
+    expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
+    expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+  });
+
+  it("forwards Origin to reject invalid production /mcp browser origins in Vite", async () => {
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push(storedAccessToken({ _id: "mcpOAuthAccessTokens_fixture_vite_origin" }));
+    const dependencies = routeDependencies(ctx);
+    const plugin = createLocalMcpDevEndpointPlugin({
+      env: prodRouteEnv(),
+      productionOAuthAuthorizationConfig: routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      productionOAuthAuthorizationDependencies: dependencies,
+    });
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeStreamingMiddleware(middleware, {
+      method: "POST",
+      url: MCP_OAUTH_PRODUCTION_MCP_PATH,
+      remoteAddress: "198.51.100.9",
+      headers: {
+        host: "mcp.twoweeks.example.test",
+        authorization: `Bearer ${RAW_ACCESS_TOKEN}`,
+        "content-type": "application/json",
+        origin: "https://evil.example",
+      },
+      body: JSON.stringify(mcpInitializeRequest()),
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(403);
+    expect(JSON.parse(response.body)).toMatchObject({
+      jsonrpc: "2.0",
+      id: null,
+      error: {
+        code: -32600,
+        message: "Invalid Origin header.",
+      },
+    });
+    expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
+    expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
+    expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+  });
+
   it("verifies production /mcp bearer tokens against the protected resource host when origins differ", async () => {
     const authorizationOrigin = "https://auth.twoweeks.example.test";
     const resource = "https://resource.twoweeks.example.test/resource";
@@ -4464,6 +4652,7 @@ function tokenRequest(
 function mcpRequest(
   authorization: string | readonly string[] | null = `Bearer ${RAW_ACCESS_TOKEN}`,
   body: unknown = mcpInitializeRequest(),
+  extraHeaders: Readonly<Record<string, string | readonly string[] | undefined>> = {},
 ): McpOAuthProductionRouteAdapterRequestV1 {
   return {
     method: "POST",
@@ -4473,6 +4662,7 @@ function mcpRequest(
     headers: {
       host: "mcp.twoweeks.example.test",
       ...(authorization !== null ? { authorization } : {}),
+      ...extraHeaders,
     },
     bodyText: typeof body === "string" ? body : JSON.stringify(body),
   };

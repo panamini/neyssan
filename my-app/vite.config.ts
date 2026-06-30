@@ -387,6 +387,8 @@ async function respondToMcpOAuthProductionRouteRequestWithBody(
         "x-real-ip": headerValue(req.headers["x-real-ip"]),
         "cf-connecting-ip": headerValue(req.headers["cf-connecting-ip"]),
         "content-type": headerValue(req.headers["content-type"]),
+        origin: headerValue(req.headers.origin),
+        "mcp-protocol-version": headerValue(req.headers["mcp-protocol-version"]),
       },
       remoteAddress: req.socket.remoteAddress,
       ...(bodyText !== undefined ? { bodyText } : {}),
@@ -584,6 +586,10 @@ function sendLocalMcpRouteResponse(
   res.statusCode = status;
   for (const [key, value] of Object.entries(headers)) {
     res.setHeader(key, value);
+  }
+  if (status === 202 && json === null) {
+    res.end();
+    return;
   }
   if (json !== undefined) {
     res.end(JSON.stringify(json));

@@ -1137,9 +1137,17 @@ async function handleMcpRequest(
     );
   }
 
+  if (!isMcpTransportOriginAllowed(request, [resourceOrigin, authorizationOrigin])) {
+    return jsonResponse(403, buildMcpJsonRpcError(null, -32600, "Invalid Origin header."));
+  }
+
   const jsonRpcMessage = parseMcpJsonRpcProtocolMessage(request.bodyText ?? "");
   if (!jsonRpcMessage) {
     return jsonResponse(400, buildMcpJsonRpcError(null, -32700, "Invalid JSON-RPC request."));
+  }
+  if (!isMcpProtocolVersionHeaderAllowed(request, jsonRpcMessage)) {
+    const id = "id" in jsonRpcMessage ? jsonRpcMessage.id : null;
+    return jsonResponse(400, buildMcpJsonRpcError(id, -32600, "Unsupported MCP protocol version."));
   }
   const envelope = buildAuthenticatedMcpProtocolEnvelope({
     verifyResult,
@@ -2107,6 +2115,49 @@ function readForwardedCallerKey(value: string | readonly string[] | undefined): 
 function readHeaderCallerKey(value: string | readonly string[] | undefined): string | undefined {
   const header = readSingleHeaderValue(value);
   return header ? normalizeCallerKey(header) : undefined;
+}
+
+function isMcpTransportOriginAllowed(
+  request: McpOAuthProductionRouteAdapterRequestV1,
+  allowedOrigins: readonly McpOAuthProductionAuthorizationOriginV1[],
+): boolean {
+  const originHeader = readHeaderValueByName(request.headers, "origin");
+  if (originHeader === undefined) return true;
+  if (originHeader === "ambiguous") return false;
+  const origin = readMcpOriginHeaderOrigin(originHeader);
+  return origin !== undefined && allowedOrigins.some((allowedOrigin) => origin === allowedOrigin.origin);
+}
+
+function readMcpOriginHeaderOrigin(value: string): string | undefined {
+  if (!value || value.length > 512 || hasControlCharacter(value)) return undefined;
+  try {
+    const parsed = new URL(value);
+    return isMcpOriginHeaderUrlShapeAllowed(parsed) ? parsed.origin : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function isMcpOriginHeaderUrlShapeAllowed(parsed: URL): boolean {
+  const pathAllowed = parsed.pathname === "" || parsed.pathname === "/";
+  return [
+    parsed.origin !== "null",
+    parsed.hostname.length > 0,
+    parsed.username === "",
+    parsed.password === "",
+    pathAllowed,
+    parsed.search === "",
+    parsed.hash === "",
+  ].every((allowed) => allowed);
+}
+
+function isMcpProtocolVersionHeaderAllowed(
+  request: McpOAuthProductionRouteAdapterRequestV1,
+  message: McpJsonRpcProtocolMessageV1,
+): boolean {
+  if (message.method === "initialize") return true;
+  const protocolVersion = readHeaderValueByName(request.headers, "mcp-protocol-version");
+  return protocolVersion === MCP_PRODUCTION_PROTOCOL_VERSION;
 }
 
 function normalizeCallerKey(value: string | undefined): string | undefined {
