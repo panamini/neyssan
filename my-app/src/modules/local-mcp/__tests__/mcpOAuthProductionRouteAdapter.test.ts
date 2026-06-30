@@ -1183,7 +1183,11 @@ describe("MCP OAuth production route adapter", () => {
             name: "twoweeks-production-mcp-auth-boundary",
             version: "1.0.0",
           },
-          capabilities: {},
+          capabilities: {
+            tools: {
+              listChanged: false,
+            },
+          },
         },
       },
     });
@@ -1308,6 +1312,10 @@ describe("MCP OAuth production route adapter", () => {
       expect(tool).not.toHaveProperty("handler");
       expect(tool).not.toHaveProperty("execute");
       expect(tool).not.toHaveProperty("call");
+      expect(String(tool.description)).toMatch(/^Use this to inspect read-only /u);
+      expect(String(tool.description)).not.toContain("dry-run");
+      expect(String(tool.description)).not.toContain("internal");
+      expect(String(tool.description)).not.toContain("local");
     }
     expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(1);
     expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
@@ -1326,6 +1334,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(bodyText).not.toContain("localToolId");
     expect(bodyText).not.toContain("internalToolId");
     expect(bodyText).not.toContain("local_mcp_dry_run");
+    expect(bodyText).not.toContain("dry-run");
     expect(bodyText).not.toContain("https://");
   });
 
@@ -1832,7 +1841,11 @@ describe("MCP OAuth production route adapter", () => {
         id: "initialize",
         result: {
           protocolVersion: "2025-11-25",
-          capabilities: {},
+          capabilities: {
+            tools: {
+              listChanged: false,
+            },
+          },
         },
       },
     });
@@ -4002,7 +4015,11 @@ describe("MCP OAuth production route adapter", () => {
       id: "initialize",
       result: {
         protocolVersion: "2025-11-25",
-        capabilities: {},
+        capabilities: {
+          tools: {
+            listChanged: false,
+          },
+        },
       },
     });
     expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
@@ -4206,7 +4223,11 @@ describe("MCP OAuth production route adapter", () => {
       id: "initialize",
       result: {
         protocolVersion: "2025-11-25",
-        capabilities: {},
+        capabilities: {
+          tools: {
+            listChanged: false,
+          },
+        },
       },
     });
     expect(wrongHostResponse).toMatchObject({
@@ -4272,7 +4293,11 @@ describe("MCP OAuth production route adapter", () => {
       id: "initialize",
       result: {
         protocolVersion: "2025-11-25",
-        capabilities: {},
+        capabilities: {
+          tools: {
+            listChanged: false,
+          },
+        },
       },
     });
     expect(convexHttpClientQuery).toHaveBeenCalledTimes(1);
@@ -4345,7 +4370,11 @@ describe("MCP OAuth production route adapter", () => {
       id: "initialize",
       result: {
         protocolVersion: "2025-11-25",
-        capabilities: {},
+        capabilities: {
+          tools: {
+            listChanged: false,
+          },
+        },
       },
     });
     expect(convexHttpClientQuery).toHaveBeenCalledTimes(1);

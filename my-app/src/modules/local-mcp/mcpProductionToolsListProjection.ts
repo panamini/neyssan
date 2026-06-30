@@ -13,6 +13,13 @@ export type McpProductionToolsListResultV1 = Readonly<{
   tools: readonly McpProductionToolDescriptorV1[];
 }>;
 
+const PRODUCTION_TOOL_DESCRIPTIONS: Readonly<Record<string, string>> = Object.freeze({
+  "twoweeks.application_package.summarize": "Use this to inspect read-only application package metadata for an existing reference.",
+  "twoweeks.evidence_graph.summarize": "Use this to inspect read-only evidence graph metadata for an existing reference.",
+  "twoweeks.resume_variant_plan.summarize": "Use this to inspect read-only resume variant plan metadata for an existing reference.",
+  "twoweeks.review_cockpit.summarize": "Use this to inspect read-only review cockpit metadata for an existing reference.",
+});
+
 const MCP_PRODUCTION_TOOLS_LIST_RESULT = buildMcpProductionToolsListResultFromRegistry();
 
 export function buildMcpProductionToolsListResult(): McpProductionToolsListResultV1 {
@@ -32,10 +39,18 @@ function projectProductionToolDescriptor(
   return Object.freeze({
     name: descriptor.name,
     title: descriptor.title,
-    description: descriptor.description,
+    description: productionToolDescription(descriptor),
     inputSchema: cloneJsonSchema(descriptor.inputSchema),
     annotations: Object.freeze({ ...descriptor.annotations }),
   });
+}
+
+function productionToolDescription(descriptor: LocalMcpProjectedToolDescriptorV1): string {
+  const description = PRODUCTION_TOOL_DESCRIPTIONS[descriptor.name];
+  if (!description) {
+    throw new TypeError("Production tools/list descriptor is missing a public description");
+  }
+  return description;
 }
 
 function cloneJsonSchema(

@@ -1648,7 +1648,11 @@ function allowedMcpPolicyDecisionResponse(
             name: "twoweeks-production-mcp-auth-boundary",
             version: "1.0.0",
           },
-          capabilities: {},
+          capabilities: {
+            tools: {
+              listChanged: false,
+            },
+          },
         },
       });
     case "ping":
