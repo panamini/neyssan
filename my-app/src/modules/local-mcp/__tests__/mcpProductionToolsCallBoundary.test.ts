@@ -118,6 +118,29 @@ describe("production MCP tools/call boundary", () => {
     }
   });
 
+  it("rejects extra top-level and nested fields for each current production tool through the matcher", () => {
+    for (const [name, validArgs] of TOOL_ARGUMENTS) {
+      const fieldName = Object.keys(validArgs)[0];
+
+      expect(validate({ name, arguments: { ...validArgs, extra: "closed" } })).toMatchObject({
+        valid: false,
+        error: { code: "invalid_arguments" },
+      });
+      expect(validate({
+        name,
+        arguments: {
+          [fieldName]: {
+            id: `${fieldName}-1`,
+            extra: "closed",
+          },
+        },
+      })).toMatchObject({
+        valid: false,
+        error: { code: "invalid_arguments" },
+      });
+    }
+  });
+
   it("rejects overlarge, deep, cyclic, non-finite, and non-plain payloads before result construction", () => {
     const cyclic: Record<string, unknown> = {
       name: "twoweeks.application_package.summarize",
@@ -151,6 +174,10 @@ describe("production MCP tools/call boundary", () => {
       name: "twoweeks.application_package.summarize",
       arguments: { applicationPackageRef: { id: "ref-1", fn: () => "nope" } },
     })).toMatchObject({ valid: false, error: { code: "payload_not_json" } });
+    expect(validate({
+      name: "twoweeks.application_package.summarize",
+      arguments: { applicationPackageRef: ["ref-1"] },
+    })).toMatchObject({ valid: false, error: { code: "invalid_arguments" } });
   });
 
   it("builds a safe read-only synthetic result without raw inputs, internals, or future execution hooks", () => {
