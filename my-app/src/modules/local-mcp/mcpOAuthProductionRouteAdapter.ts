@@ -1664,6 +1664,7 @@ function allowedMcpPolicyDecisionResponse(
         result: buildMcpProductionToolsListResult(),
       });
   }
+  return assertNeverAllowedMcpPolicyDecision(decision);
 }
 
 function buildMcpJsonRpcError(id: McpJsonRpcIdV1, code: number, message: string): unknown {
@@ -1676,6 +1677,10 @@ function buildMcpJsonRpcError(id: McpJsonRpcIdV1, code: number, message: string)
       safeForModel: true,
     }),
   });
+}
+
+function assertNeverAllowedMcpPolicyDecision(_decision: never): never {
+  throw new Error("Unhandled allowed MCP policy decision.");
 }
 
 function notHandled(): McpOAuthProductionRouteAdapterResponseV1 {
