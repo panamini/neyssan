@@ -28,6 +28,10 @@ import {
   parseMcpJsonRpcProtocolMessage,
 } from "../mcpAuthenticatedProtocolEnvelope";
 import type { McpProductionPrivateBetaGateConfigInputV1 } from "../mcpProductionPrivateBetaGate";
+import type {
+  McpProductionLaunchReadinessConfigInputV1,
+  McpProductionLaunchReadinessEvidenceInputV1,
+} from "../mcpProductionLaunchReadiness";
 import { evaluateMcpProductionPolicy } from "../mcpProductionPolicyKernel";
 import { MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND } from "../mcpProductionToolsCallBoundary";
 import { buildMcpProductionToolsListResult } from "../mcpProductionToolsListProjection";
@@ -1454,6 +1458,72 @@ describe("MCP OAuth production route adapter", () => {
     expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(2);
   });
 
+  it("keeps private beta /mcp available when launch readiness config is absent", async () => {
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push(storedAccessToken());
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(
+        `Bearer ${RAW_ACCESS_TOKEN}`,
+        mcpInitializeRequest("initialize-without-launch-readiness"),
+        { "mcp-protocol-version": "2025-11-25" },
+      ),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      routeDependencies(ctx),
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 200,
+      json: {
+        jsonrpc: "2.0",
+        id: "initialize-without-launch-readiness",
+        result: {
+          protocolVersion: "2025-11-25",
+        },
+      },
+    });
+    expect(JSON.stringify(response)).not.toContain("launch_config_missing");
+    expect(JSON.stringify(response)).not.toContain("public_launch");
+    expectNoRouteLeakage(response);
+  });
+
+  it("blocks public launch readiness requests before production MCP policy dispatch", async () => {
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push(storedAccessToken());
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(
+        `Bearer ${RAW_ACCESS_TOKEN}`,
+        mcpJsonRpcRequest("tools/list", "public-launch-blocked"),
+        { "mcp-protocol-version": "2025-11-25" },
+      ),
+      routeConfig(
+        { runtime: "1", approved: "1", routeWiring: "1" },
+        activationDependencies(),
+        privateBetaConfig(),
+        launchReadinessConfig({ publicLaunchRequested: true }),
+      ),
+      routeDependencies(ctx),
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 403,
+      json: {
+        status: "blocked",
+        reason: "launch_readiness_blocked",
+        route: "mcp",
+        launchReadinessCode: "public_launch_blocked",
+        launchReadinessPublicLaunchAllowed: false,
+        launchReadinessPublicLaunchBlocked: true,
+        launchReadinessPrivateBetaGateCode: "private_beta_allowed",
+      },
+    });
+    expect(JSON.stringify(response)).not.toContain("tools");
+    expect(JSON.stringify(response)).not.toContain("Method not found.");
+    expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+    expectNoRouteLeakage(response);
+  });
+
   it.each([
     ["cursor", { cursor: "cursor-1" }],
     ["filters", { filters: { name: "twoweeks.application_package.summarize" } }],
@@ -1664,6 +1734,43 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain("Invalid tools/call");
     expect(JSON.stringify(response)).not.toContain("raw-ref-private-beta-denied");
     expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+    expect(JSON.stringify(response)).not.toContain(OTHER_OWNER_ID);
+  });
+
+  it("does not let public-launch-shaped readiness config bypass private beta eligibility", async () => {
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push(storedAccessToken());
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(
+        `Bearer ${RAW_ACCESS_TOKEN}`,
+        mcpJsonRpcRequest("tools/call", "public-launch-cannot-bypass-beta", {
+          name: "twoweeks.application_package.summarize",
+          arguments: { applicationPackageRef: { id: "raw-ref-public-launch-bypass" } },
+        }),
+        { "mcp-protocol-version": "2025-11-25" },
+      ),
+      routeConfig(
+        { runtime: "1", approved: "1", routeWiring: "1" },
+        activationDependencies(),
+        privateBetaConfig({ allowedSubjectIds: [OTHER_OWNER_ID] }),
+        launchReadinessConfig({ publicLaunchRequested: true }),
+      ),
+      routeDependencies(ctx),
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 403,
+      json: {
+        status: "blocked",
+        reason: "private_beta_gate_denied",
+        route: "mcp",
+        privateBetaGateCode: "private_beta_subject_not_allowed",
+      },
+    });
+    expect(JSON.stringify(response)).not.toContain("public_launch");
+    expect(JSON.stringify(response)).not.toContain("Invalid tools/call");
+    expect(JSON.stringify(response)).not.toContain("raw-ref-public-launch-bypass");
     expect(JSON.stringify(response)).not.toContain(OTHER_OWNER_ID);
   });
 
@@ -5118,7 +5225,7 @@ describe("MCP OAuth production route adapter", () => {
     expectSourceNotToMatch(source, FORBIDDEN_PREFLIGHT_REIMPLEMENTATION_PATTERNS);
   });
 
-  it("runs private beta eligibility only after authenticated /mcp context and before policy dispatch", () => {
+  it("runs private beta and launch readiness only after authenticated /mcp context and before policy dispatch", () => {
     const source = readFileSync(SOURCE_FILE, "utf8");
     const bearerIndex = source.indexOf("const bearerToken = readBearerAccessToken");
     const quotaIndex = source.indexOf("const quotaInput = Object.freeze({", bearerIndex);
@@ -5127,8 +5234,15 @@ describe("MCP OAuth production route adapter", () => {
     const envelopeIndex = source.indexOf("const envelope = buildMcpAuthenticatedProtocolEnvelope", protocolParseIndex);
     const gateIndex = source.indexOf("const privateBetaDecision = evaluateMcpProductionPrivateBetaGate", envelopeIndex);
     const gateDeniedIndex = source.indexOf("return mcpPrivateBetaGateDeniedResponse(preflight, privateBetaDecision)", gateIndex);
-    const dispatchIndex = source.indexOf("return handleAuthenticatedMcpJsonRpc(envelope)", gateDeniedIndex);
-    const policyIndex = source.indexOf("const decision = evaluateMcpProductionPolicy(envelope)", dispatchIndex);
+    const launchReadinessIndex = source.indexOf("const launchReadinessDecision = evaluateMcpProductionLaunchReadiness", gateDeniedIndex);
+    const launchReadinessDeniedIndex = source.indexOf(
+      "return handleLaunchReadinessCheckedMcpJsonRpc(preflight, launchReadinessDecision, envelope)",
+      launchReadinessIndex,
+    );
+    const dispatchIndex = source.indexOf(
+      "const decision = evaluateMcpProductionPolicy(envelope)",
+      launchReadinessDeniedIndex,
+    );
 
     expect(bearerIndex).toBeGreaterThanOrEqual(0);
     expect(quotaIndex).toBeGreaterThan(bearerIndex);
@@ -5137,8 +5251,9 @@ describe("MCP OAuth production route adapter", () => {
     expect(envelopeIndex).toBeGreaterThan(protocolParseIndex);
     expect(gateIndex).toBeGreaterThan(envelopeIndex);
     expect(gateDeniedIndex).toBeGreaterThan(gateIndex);
-    expect(dispatchIndex).toBeGreaterThan(gateDeniedIndex);
-    expect(policyIndex).toBeGreaterThan(dispatchIndex);
+    expect(launchReadinessIndex).toBeGreaterThan(gateDeniedIndex);
+    expect(launchReadinessDeniedIndex).toBeGreaterThan(launchReadinessIndex);
+    expect(dispatchIndex).toBeGreaterThan(launchReadinessDeniedIndex);
   });
 
   it("only claims the intended production entrypoint paths", () => {
@@ -5188,12 +5303,14 @@ function routeConfig(
   flags: Readonly<{ runtime?: string; approved?: string; routeWiring?: string }>,
   dependencies: McpOAuthProductionActivationDependenciesV1 = activationDependencies(),
   privateBeta: McpProductionPrivateBetaGateConfigInputV1 = privateBetaConfig(),
+  launchReadiness?: McpProductionLaunchReadinessConfigInputV1,
 ) {
   return buildMcpOAuthProductionRouteAdapterConfig({
     flags,
     providerConfig: PROVIDER_CONFIG,
     activationDependencies: dependencies,
     privateBeta,
+    ...(launchReadiness ? { launchReadiness } : {}),
   });
 }
 
@@ -5204,6 +5321,34 @@ function privateBetaConfig(
     enabled: true,
     allowedClientIds: [CLIENT_ID],
     allowedResources: [RESOURCE],
+    ...overrides,
+  };
+}
+
+function launchReadinessConfig(
+  overrides: Partial<McpProductionLaunchReadinessConfigInputV1> = {},
+): McpProductionLaunchReadinessConfigInputV1 {
+  return {
+    publicLaunchRequested: false,
+    evidence: completeLaunchReadinessEvidence(),
+    version: 1,
+    ...overrides,
+  };
+}
+
+function completeLaunchReadinessEvidence(
+  overrides: Partial<McpProductionLaunchReadinessEvidenceInputV1> = {},
+): McpProductionLaunchReadinessEvidenceInputV1 {
+  return {
+    privateBetaGateReviewed: true,
+    authenticatedMcpProtocolReviewed: true,
+    policyKernelReviewed: true,
+    toolsListMetadataReviewed: true,
+    toolsCallReadOnlyReviewed: true,
+    schemaMatcherReviewed: true,
+    providerWriteExpansionBlocked: true,
+    unresolvedBlockingFindings: false,
+    version: 1,
     ...overrides,
   };
 }

@@ -6,6 +6,7 @@ import {
   MCP_OAUTH_PRODUCTION_APPROVED_FLAG,
   MCP_OAUTH_PRODUCTION_RUNTIME_FLAG,
 } from "./mcpOAuthProductionActivationBoundary";
+import type { McpProductionLaunchReadinessDecisionV1 } from "./mcpProductionLaunchReadiness";
 import { TWOWEEKS_APPLICATIONS_READ_SCOPE } from "./mcpAuthPolicyBoundary";
 
 export type McpOperationalStatusCapabilityV1 =
@@ -13,6 +14,7 @@ export type McpOperationalStatusCapabilityV1 =
   | "live_external_action"
   | "account_link"
   | "production_oauth_activation"
+  | "production_mcp_launch_readiness"
   | "outbound_egress"
   | "write_action";
 
@@ -61,6 +63,60 @@ const PRODUCTION_OAUTH_PROVIDER_CONFIG_KEYS = new Set([
   "requiredReadScopes",
   "version",
 ]);
+const PRODUCTION_MCP_LAUNCH_READINESS_DECISION_KEYS = new Set([
+  "kind",
+  "privateBetaAccessAllowed",
+  "privateBetaGateCode",
+  "publicLaunchAllowed",
+  "publicLaunchBlocked",
+  "code",
+  "safeForModel",
+  "inputEchoed",
+  "configEchoed",
+  "evidenceEchoed",
+  "methodPolicyDecision",
+  "responseConstructed",
+  "toolValidation",
+  "schemaValidation",
+  "providerCalled",
+  "storageWritten",
+  "version",
+]);
+const PRODUCTION_MCP_LAUNCH_READINESS_DECISION_CODES = new Set([
+  "private_beta_not_ready",
+  "private_beta_ready_public_launch_blocked",
+  "launch_config_missing",
+  "launch_config_invalid",
+  "launch_evidence_missing",
+  "public_launch_blocked",
+]);
+const PRODUCTION_MCP_PRIVATE_BETA_GATE_DECISION_CODES = new Set([
+  "private_beta_allowed",
+  "private_beta_missing_config",
+  "private_beta_disabled",
+  "private_beta_malformed_config",
+  "private_beta_empty_allowlist",
+  "private_beta_ambiguous_eligibility",
+  "private_beta_client_not_allowed",
+  "private_beta_resource_not_allowed",
+  "private_beta_subject_not_allowed",
+]);
+const PRODUCTION_MCP_LAUNCH_READINESS_TRUE_FIELDS = [
+  "safeForModel",
+  "publicLaunchBlocked",
+] as const;
+const PRODUCTION_MCP_LAUNCH_READINESS_FALSE_FIELDS = [
+  "publicLaunchAllowed",
+  "inputEchoed",
+  "configEchoed",
+  "evidenceEchoed",
+  "methodPolicyDecision",
+  "responseConstructed",
+  "toolValidation",
+  "schemaValidation",
+  "providerCalled",
+  "storageWritten",
+] as const;
 const PRODUCTION_OAUTH_ACTIVATION_CONFIG_SHAPE_CHECKS = [
   (value: Record<string, unknown>) => value.kind === "mcp_oauth_production_activation_config",
   (value: Record<string, unknown>) => typeof value.enabled === "boolean",
@@ -245,6 +301,53 @@ export function buildMcpOperationalProductionOAuthActivationStatus(
   });
 }
 
+export function buildMcpOperationalProductionMcpLaunchReadinessStatus(
+  launchReadinessDecision: unknown,
+): McpOperationalStatusV1 {
+  const decision = readProductionMcpLaunchReadinessDecision(launchReadinessDecision);
+  if (!decision) {
+    return unsafeConfigStatus("production_mcp_launch_readiness");
+  }
+
+  if (!decision.privateBetaAccessAllowed) {
+    if (decision.privateBetaGateCode === "private_beta_disabled") {
+      return buildStatus({
+        capability: "production_mcp_launch_readiness",
+        enabled: false,
+        configValid: true,
+        featureState: "disabled",
+        category: "feature_disabled",
+      });
+    }
+    if (
+      decision.privateBetaGateCode === "private_beta_missing_config" ||
+      decision.privateBetaGateCode === "private_beta_malformed_config" ||
+      decision.privateBetaGateCode === "private_beta_empty_allowlist"
+    ) {
+      return unsafeConfigStatus("production_mcp_launch_readiness");
+    }
+    return buildStatus({
+      capability: "production_mcp_launch_readiness",
+      enabled: true,
+      configValid: true,
+      featureState: "blocked",
+      category: "auth_invalid",
+    });
+  }
+
+  if (decision.code === "launch_config_invalid") {
+    return unsafeConfigStatus("production_mcp_launch_readiness");
+  }
+
+  return buildStatus({
+    capability: "production_mcp_launch_readiness",
+    enabled: true,
+    configValid: true,
+    featureState: "blocked",
+    category: "feature_disabled",
+  });
+}
+
 export function buildMcpOperationalAccountLinkStatus(
   reason: unknown,
 ): McpOperationalStatusV1 {
@@ -270,6 +373,40 @@ export function buildMcpOperationalAccountLinkStatus(
     featureState: "blocked",
     category,
   });
+}
+
+function readProductionMcpLaunchReadinessDecision(
+  value: unknown,
+): McpProductionLaunchReadinessDecisionV1 | undefined {
+  if (!isPlainRecord(value) || containsUnsafeStatusMaterial(value)) {
+    return undefined;
+  }
+
+  if (Object.keys(value).some((key) => !PRODUCTION_MCP_LAUNCH_READINESS_DECISION_KEYS.has(key))) {
+    return undefined;
+  }
+
+  if (
+    value.kind !== "mcp_production_launch_readiness_decision" ||
+    typeof value.privateBetaAccessAllowed !== "boolean" ||
+    !PRODUCTION_MCP_PRIVATE_BETA_GATE_DECISION_CODES.has(String(value.privateBetaGateCode)) ||
+    !PRODUCTION_MCP_LAUNCH_READINESS_DECISION_CODES.has(String(value.code)) ||
+    !allFieldsEqual(value, PRODUCTION_MCP_LAUNCH_READINESS_TRUE_FIELDS, true) ||
+    !allFieldsEqual(value, PRODUCTION_MCP_LAUNCH_READINESS_FALSE_FIELDS, false) ||
+    value.version !== 1
+  ) {
+    return undefined;
+  }
+
+  return value as McpProductionLaunchReadinessDecisionV1;
+}
+
+function allFieldsEqual(
+  value: Record<string, unknown>,
+  fields: readonly string[],
+  expected: boolean,
+): boolean {
+  return fields.every((field) => value[field] === expected);
 }
 
 function readProductionOAuthActivationConfig(

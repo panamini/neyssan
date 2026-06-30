@@ -5,10 +5,16 @@ import {
   buildMcpOperationalEgressStatus,
   buildMcpOperationalLiveExternalActionStatus,
   buildMcpOperationalManualHandoffStatus,
+  buildMcpOperationalProductionMcpLaunchReadinessStatus,
   buildMcpOperationalProductionOAuthActivationStatus,
   buildMcpOperationalWriteActionStatus,
 } from "../mcpOperationalStatus";
 import { buildMcpOAuthProductionActivationConfig } from "../mcpOAuthProductionActivationBoundary";
+import {
+  evaluateMcpProductionLaunchReadiness,
+  type McpProductionLaunchReadinessEvidenceInputV1,
+} from "../mcpProductionLaunchReadiness";
+import type { McpProductionPrivateBetaGateDecisionV1 } from "../mcpProductionPrivateBetaGate";
 
 const PRODUCTION_OAUTH_PROVIDER_CONFIG = {
   provider: "stytch",
@@ -132,6 +138,148 @@ describe("mcpOperationalStatus", () => {
       configValid: true,
       featureState: "blocked",
       category: "auth_invalid",
+      valuesExposed: false,
+      version: 1,
+    });
+  });
+
+  it("summarizes production MCP launch readiness without exposing evidence values", () => {
+    expect(
+      buildMcpOperationalProductionMcpLaunchReadinessStatus(
+        evaluateMcpProductionLaunchReadiness({
+          privateBetaDecision: allowedPrivateBetaDecision(),
+          config: {
+            publicLaunchRequested: true,
+            evidence: completeLaunchReadinessEvidence(),
+            version: 1,
+          },
+        }),
+      ),
+    ).toEqual({
+      kind: "mcp_operational_status",
+      capability: "production_mcp_launch_readiness",
+      enabled: true,
+      configValid: true,
+      featureState: "blocked",
+      category: "feature_disabled",
+      valuesExposed: false,
+      version: 1,
+    });
+  });
+
+  it("keeps production MCP launch readiness blocked when config is missing", () => {
+    expect(
+      buildMcpOperationalProductionMcpLaunchReadinessStatus(
+        evaluateMcpProductionLaunchReadiness({
+          privateBetaDecision: allowedPrivateBetaDecision(),
+        }),
+      ),
+    ).toEqual({
+      kind: "mcp_operational_status",
+      capability: "production_mcp_launch_readiness",
+      enabled: true,
+      configValid: true,
+      featureState: "blocked",
+      category: "feature_disabled",
+      valuesExposed: false,
+      version: 1,
+    });
+  });
+
+  it("maps production MCP launch readiness private beta denial to an auth block", () => {
+    expect(
+      buildMcpOperationalProductionMcpLaunchReadinessStatus(
+        evaluateMcpProductionLaunchReadiness({
+          privateBetaDecision: deniedPrivateBetaDecision(),
+          config: {
+            publicLaunchRequested: true,
+            evidence: completeLaunchReadinessEvidence(),
+            version: 1,
+          },
+        }),
+      ),
+    ).toEqual({
+      kind: "mcp_operational_status",
+      capability: "production_mcp_launch_readiness",
+      enabled: true,
+      configValid: true,
+      featureState: "blocked",
+      category: "auth_invalid",
+      valuesExposed: false,
+      version: 1,
+    });
+  });
+
+  it("maps production MCP launch readiness private beta config failures to misconfigured status", () => {
+    for (const privateBetaGateCode of [
+      "private_beta_missing_config",
+      "private_beta_malformed_config",
+      "private_beta_empty_allowlist",
+    ] as const) {
+      expect(
+        buildMcpOperationalProductionMcpLaunchReadinessStatus(
+          evaluateMcpProductionLaunchReadiness({
+            privateBetaDecision: deniedPrivateBetaDecision(privateBetaGateCode),
+          }),
+        ),
+      ).toEqual({
+        kind: "mcp_operational_status",
+        capability: "production_mcp_launch_readiness",
+        enabled: false,
+        configValid: false,
+        featureState: "misconfigured",
+        category: "config_invalid",
+        valuesExposed: false,
+        version: 1,
+      });
+    }
+  });
+
+  it("maps production MCP launch readiness private beta kill-switch to disabled status", () => {
+    expect(
+      buildMcpOperationalProductionMcpLaunchReadinessStatus(
+        evaluateMcpProductionLaunchReadiness({
+          privateBetaDecision: deniedPrivateBetaDecision("private_beta_disabled"),
+        }),
+      ),
+    ).toEqual({
+      kind: "mcp_operational_status",
+      capability: "production_mcp_launch_readiness",
+      enabled: false,
+      configValid: true,
+      featureState: "disabled",
+      category: "feature_disabled",
+      valuesExposed: false,
+      version: 1,
+    });
+  });
+
+  it("fails production MCP launch readiness status closed for invalid or unsafe decision shapes", () => {
+    const invalidDecision = evaluateMcpProductionLaunchReadiness({
+      privateBetaDecision: allowedPrivateBetaDecision(),
+      config: { evidence: { policyKernelReviewed: "yes" } },
+    });
+
+    expect(buildMcpOperationalProductionMcpLaunchReadinessStatus(invalidDecision)).toEqual({
+      kind: "mcp_operational_status",
+      capability: "production_mcp_launch_readiness",
+      enabled: false,
+      configValid: false,
+      featureState: "misconfigured",
+      category: "config_invalid",
+      valuesExposed: false,
+      version: 1,
+    });
+    expect(buildMcpOperationalProductionMcpLaunchReadinessStatus({
+      ...invalidDecision,
+      rawConfig: "Bearer eyJhbGciOiJIUzI1NiJ9.secret.signature",
+    })).toEqual({
+      kind: "mcp_operational_status",
+      capability: "production_mcp_launch_readiness",
+      enabled: false,
+      configValid: false,
+      featureState: "misconfigured",
+      category: "config_invalid",
       valuesExposed: false,
       version: 1,
     });
@@ -284,3 +432,51 @@ describe("mcpOperationalStatus", () => {
     });
   });
 });
+
+function allowedPrivateBetaDecision(): McpProductionPrivateBetaGateDecisionV1 {
+  return Object.freeze({
+    kind: "mcp_production_private_beta_gate_decision",
+    allowed: true,
+    code: "private_beta_allowed",
+    safeForModel: true,
+    inputEchoed: false,
+    configEchoed: false,
+    methodPolicyDecision: false,
+    responseConstructed: false,
+    version: 1,
+  });
+}
+
+function deniedPrivateBetaDecision(
+  code: Exclude<McpProductionPrivateBetaGateDecisionV1["code"], "private_beta_allowed"> =
+    "private_beta_subject_not_allowed",
+): McpProductionPrivateBetaGateDecisionV1 {
+  return Object.freeze({
+    kind: "mcp_production_private_beta_gate_decision",
+    allowed: false,
+    code,
+    safeForModel: true,
+    inputEchoed: false,
+    configEchoed: false,
+    methodPolicyDecision: false,
+    responseConstructed: false,
+    version: 1,
+  });
+}
+
+function completeLaunchReadinessEvidence(
+  overrides: Partial<McpProductionLaunchReadinessEvidenceInputV1> = {},
+): McpProductionLaunchReadinessEvidenceInputV1 {
+  return {
+    privateBetaGateReviewed: true,
+    authenticatedMcpProtocolReviewed: true,
+    policyKernelReviewed: true,
+    toolsListMetadataReviewed: true,
+    toolsCallReadOnlyReviewed: true,
+    schemaMatcherReviewed: true,
+    providerWriteExpansionBlocked: true,
+    unresolvedBlockingFindings: false,
+    version: 1,
+    ...overrides,
+  };
+}
