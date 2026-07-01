@@ -78,6 +78,18 @@ describe("MCP production launch readiness", () => {
         privateBetaDecision: allowedPrivateBetaDecision(),
         config: {
           publicLaunchRequested: true,
+          evidence: completeEvidence({ schemaMatcherReviewed: false }),
+          version: 1,
+        },
+      }),
+      "public_launch_blocked",
+      true,
+    );
+    expectLaunchReadinessDecision(
+      evaluateMcpProductionLaunchReadiness({
+        privateBetaDecision: allowedPrivateBetaDecision(),
+        config: {
+          publicLaunchRequested: true,
           evidence: completeEvidence(),
           version: 1,
         },

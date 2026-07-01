@@ -28,9 +28,10 @@ import {
   parseMcpJsonRpcProtocolMessage,
 } from "../mcpAuthenticatedProtocolEnvelope";
 import type { McpProductionPrivateBetaGateConfigInputV1 } from "../mcpProductionPrivateBetaGate";
-import type {
-  McpProductionLaunchReadinessConfigInputV1,
-  McpProductionLaunchReadinessEvidenceInputV1,
+import {
+  MCP_PRODUCTION_LAUNCH_READINESS_PUBLIC_LAUNCH_REQUESTED_FLAG,
+  type McpProductionLaunchReadinessConfigInputV1,
+  type McpProductionLaunchReadinessEvidenceInputV1,
 } from "../mcpProductionLaunchReadiness";
 import { evaluateMcpProductionPolicy } from "../mcpProductionPolicyKernel";
 import { MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND } from "../mcpProductionToolsCallBoundary";
@@ -4564,6 +4565,49 @@ describe("MCP OAuth production route adapter", () => {
     expect(convexHttpClientMutation).not.toHaveBeenCalled();
     expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
     expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
+    expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+  });
+
+  it("wires production launch readiness env through the default Vite /mcp config", async () => {
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push(storedAccessToken({ _id: "mcpOAuthAccessTokens_fixture_vite_public_launch" }));
+    const dependencies = routeDependencies(ctx);
+    const plugin = createLocalMcpDevEndpointPlugin({
+      env: {
+        ...prodRouteEnv(),
+        [MCP_PRODUCTION_LAUNCH_READINESS_PUBLIC_LAUNCH_REQUESTED_FLAG]: "1",
+      },
+      productionOAuthAuthorizationDependencies: dependencies,
+    });
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeStreamingMiddleware(middleware, {
+      method: "POST",
+      url: MCP_OAUTH_PRODUCTION_MCP_PATH,
+      remoteAddress: "198.51.100.9",
+      headers: {
+        host: "mcp.twoweeks.example.test",
+        authorization: `Bearer ${RAW_ACCESS_TOKEN}`,
+        "content-type": "application/json",
+        "mcp-protocol-version": "2025-11-25",
+      },
+      body: JSON.stringify(mcpJsonRpcRequest("tools/list", "vite-public-launch-blocked")),
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(403);
+    expect(JSON.parse(response.body)).toMatchObject({
+      status: "blocked",
+      reason: "launch_readiness_blocked",
+      route: "mcp",
+      launchReadinessCode: "public_launch_blocked",
+      launchReadinessPublicLaunchAllowed: false,
+      launchReadinessPublicLaunchBlocked: true,
+      launchReadinessPrivateBetaGateCode: "private_beta_allowed",
+    });
+    expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
+    expect(JSON.stringify(response)).not.toContain("tools/list");
+    expect(JSON.stringify(response)).not.toContain("twoweeks.application_package.summarize");
     expect(JSON.stringify(response)).not.toContain(OWNER_ID);
   });
 

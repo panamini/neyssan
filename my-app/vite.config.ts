@@ -56,6 +56,17 @@ import {
   MCP_PRODUCTION_PRIVATE_BETA_RESOURCES_VAR,
   MCP_PRODUCTION_PRIVATE_BETA_SUBJECTS_VAR,
 } from "./src/modules/local-mcp/mcpProductionPrivateBetaGate";
+import {
+  MCP_PRODUCTION_LAUNCH_READINESS_AUTHENTICATED_PROTOCOL_REVIEWED_FLAG,
+  MCP_PRODUCTION_LAUNCH_READINESS_POLICY_KERNEL_REVIEWED_FLAG,
+  MCP_PRODUCTION_LAUNCH_READINESS_PRIVATE_BETA_GATE_REVIEWED_FLAG,
+  MCP_PRODUCTION_LAUNCH_READINESS_PROVIDER_WRITE_EXPANSION_BLOCKED_FLAG,
+  MCP_PRODUCTION_LAUNCH_READINESS_PUBLIC_LAUNCH_REQUESTED_FLAG,
+  MCP_PRODUCTION_LAUNCH_READINESS_SCHEMA_MATCHER_REVIEWED_FLAG,
+  MCP_PRODUCTION_LAUNCH_READINESS_TOOLS_CALL_READ_ONLY_REVIEWED_FLAG,
+  MCP_PRODUCTION_LAUNCH_READINESS_TOOLS_LIST_METADATA_REVIEWED_FLAG,
+  MCP_PRODUCTION_LAUNCH_READINESS_UNRESOLVED_BLOCKING_FINDINGS_FLAG,
+} from "./src/modules/local-mcp/mcpProductionLaunchReadiness";
 import { MCP_OAUTH_CONTINUATION_PATH } from "./src/pages/sign-in-return";
 
 const LOCAL_CLERK_SYNC_PORT = 5173;
@@ -661,6 +672,48 @@ function readProductionMcpOAuthConfigInput(env: Readonly<Record<string, string |
       allowedClientIds: readCommaSeparatedEnv(env[MCP_PRODUCTION_PRIVATE_BETA_CLIENT_IDS_VAR]),
       allowedResources: readCommaSeparatedEnv(env[MCP_PRODUCTION_PRIVATE_BETA_RESOURCES_VAR]),
       ...(privateBetaSubjectIds.length > 0 ? { allowedSubjectIds: privateBetaSubjectIds } : {}),
+      version: 1,
+    },
+    launchReadiness: {
+      publicLaunchRequested: isStrictEnabledFlag(
+        env,
+        MCP_PRODUCTION_LAUNCH_READINESS_PUBLIC_LAUNCH_REQUESTED_FLAG,
+      ),
+      evidence: {
+        privateBetaGateReviewed: isStrictEnabledFlag(
+          env,
+          MCP_PRODUCTION_LAUNCH_READINESS_PRIVATE_BETA_GATE_REVIEWED_FLAG,
+        ),
+        authenticatedMcpProtocolReviewed: isStrictEnabledFlag(
+          env,
+          MCP_PRODUCTION_LAUNCH_READINESS_AUTHENTICATED_PROTOCOL_REVIEWED_FLAG,
+        ),
+        policyKernelReviewed: isStrictEnabledFlag(
+          env,
+          MCP_PRODUCTION_LAUNCH_READINESS_POLICY_KERNEL_REVIEWED_FLAG,
+        ),
+        toolsListMetadataReviewed: isStrictEnabledFlag(
+          env,
+          MCP_PRODUCTION_LAUNCH_READINESS_TOOLS_LIST_METADATA_REVIEWED_FLAG,
+        ),
+        toolsCallReadOnlyReviewed: isStrictEnabledFlag(
+          env,
+          MCP_PRODUCTION_LAUNCH_READINESS_TOOLS_CALL_READ_ONLY_REVIEWED_FLAG,
+        ),
+        schemaMatcherReviewed: isStrictEnabledFlag(
+          env,
+          MCP_PRODUCTION_LAUNCH_READINESS_SCHEMA_MATCHER_REVIEWED_FLAG,
+        ),
+        providerWriteExpansionBlocked: isStrictEnabledFlag(
+          env,
+          MCP_PRODUCTION_LAUNCH_READINESS_PROVIDER_WRITE_EXPANSION_BLOCKED_FLAG,
+        ),
+        unresolvedBlockingFindings: isStrictEnabledFlag(
+          env,
+          MCP_PRODUCTION_LAUNCH_READINESS_UNRESOLVED_BLOCKING_FINDINGS_FLAG,
+        ),
+        version: 1,
+      },
       version: 1,
     },
   };
