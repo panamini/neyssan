@@ -1865,6 +1865,56 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND);
   });
 
+  it("bounds stalled read-only summary execution before returning a production tools/call response", async () => {
+    vi.useFakeTimers();
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push(storedAccessToken());
+    const dependencies = {
+      ...routeDependencies(ctx),
+      executeReadonlySummaryTool: vi.fn(
+        () => new Promise<never>(() => undefined),
+      ),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+
+    try {
+      const responsePromise = handleMcpOAuthProductionRouteRequest(
+        mcpRequest(
+          `Bearer ${RAW_ACCESS_TOKEN}`,
+          mcpJsonRpcRequest("tools/call", "readonly-executor-timeout", {
+            name: "twoweeks.application_package.summarize",
+            arguments: { applicationPackageRef: { id: "raw-ref-executor-timeout" } },
+          }),
+          { "mcp-protocol-version": "2025-11-25" },
+        ),
+        routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+        dependencies,
+      );
+      await vi.advanceTimersByTimeAsync(2_500);
+      const response = await responsePromise;
+
+      expect(response).toMatchObject({
+        handled: true,
+        status: 200,
+        json: {
+          jsonrpc: "2.0",
+          id: "readonly-executor-timeout",
+          error: {
+            code: -32000,
+            message: MCP_PRODUCTION_READONLY_SUMMARY_EXECUTION_FAILURE_MESSAGE,
+            safeForModel: true,
+          },
+        },
+      });
+      expect(dependencies.executeReadonlySummaryTool).toHaveBeenCalledTimes(1);
+      expect(JSON.stringify(response)).not.toContain("Invalid tools/call");
+      expect(JSON.stringify(response)).not.toContain("raw-ref-executor-timeout");
+      expect(JSON.stringify(response)).not.toContain("readonly_summary_execution_timeout");
+      expect(JSON.stringify(response)).not.toContain(MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("denies non-allowlisted private beta identities before tools/call validation", async () => {
     const ctx = makeCtx();
     ctx.accessTokenRows.push(storedAccessToken());

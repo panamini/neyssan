@@ -602,6 +602,7 @@ const AUTHORIZATION_CODE_CREATE_TIMEOUT_MS = 2_500;
 const AUTHORIZATION_CODE_VALIDATE_TIMEOUT_MS = 2_500;
 const ACCESS_TOKEN_ISSUE_TIMEOUT_MS = 2_500;
 const ACCESS_TOKEN_VERIFY_TIMEOUT_MS = 2_500;
+const READONLY_SUMMARY_EXECUTION_TIMEOUT_MS = 2_500;
 const ACCESS_TOKEN_RESPONSE_CLOCK_SKEW_SECONDS = 60;
 const TOKEN_REQUEST_BODY_MAX_BYTES = 4_096;
 const AUTHORIZATION_HEADER_MAX_LENGTH = 128;
@@ -1484,6 +1485,34 @@ function verifyAccessTokenWithTimeout(
   });
 }
 
+function executeReadonlySummaryToolWithTimeout(
+  executeReadonlySummaryTool: McpProductionReadonlySummaryExecutorV1,
+  input: McpProductionReadonlySummaryExecutionInputV1,
+  timeoutMs: number,
+): ReturnType<McpProductionReadonlySummaryExecutorV1> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error("readonly_summary_execution_timeout"));
+    }, timeoutMs);
+
+    try {
+      executeReadonlySummaryTool(input).then(
+        (result) => {
+          clearTimeout(timeout);
+          resolve(result);
+        },
+        (error: unknown) => {
+          clearTimeout(timeout);
+          reject(toRejectedError(error, "readonly_summary_execution_failed"));
+        },
+      );
+    } catch (error) {
+      clearTimeout(timeout);
+      reject(toRejectedError(error, "readonly_summary_execution_failed"));
+    }
+  });
+}
+
 function normalizeStringSet(value: unknown): readonly string[] {
   if (!Array.isArray(value)) return [];
   return Object.freeze(
@@ -1788,7 +1817,11 @@ async function toolsCallBoundaryResponse(
   }
   let executionResult: Awaited<ReturnType<McpProductionReadonlySummaryExecutorV1>>;
   try {
-    executionResult = await executeReadonlySummaryTool(executionInput);
+    executionResult = await executeReadonlySummaryToolWithTimeout(
+      executeReadonlySummaryTool,
+      executionInput,
+      READONLY_SUMMARY_EXECUTION_TIMEOUT_MS,
+    );
   } catch {
     return jsonResponse(200, buildMcpJsonRpcError(id, -32000, MCP_PRODUCTION_READONLY_SUMMARY_EXECUTION_FAILURE_MESSAGE));
   }
