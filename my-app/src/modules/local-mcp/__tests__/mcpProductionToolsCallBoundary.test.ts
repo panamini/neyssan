@@ -9,19 +9,19 @@ import { buildMcpProductionToolsListResult } from "../mcpProductionToolsListProj
 const TOOL_ARGUMENTS = [
   [
     "twoweeks.application_package.summarize",
-    { applicationPackageRef: { id: "application-package-ref-1" } },
+    { applicationPackageRef: { id: "mcp-safe-ref:application-package:latest" } },
   ],
   [
     "twoweeks.evidence_graph.summarize",
-    { evidenceGraphRef: { id: "evidence-graph-ref-1" } },
+    { evidenceGraphRef: { id: "mcp-safe-ref:evidence-graph:profile" } },
   ],
   [
     "twoweeks.resume_variant_plan.summarize",
-    { resumeVariantPlanRef: { id: "resume-variant-plan-ref-1" } },
+    { resumeVariantPlanRef: { id: "mcp-safe-ref:resume-variant-plan:latest" } },
   ],
   [
     "twoweeks.review_cockpit.summarize",
-    { reviewCockpitRef: { id: "review-cockpit-ref-1" } },
+    { reviewCockpitRef: { id: "mcp-safe-ref:review-cockpit:latest" } },
   ],
 ] as const;
 const TOOL_ARGUMENT_FIELD_NAMES = [
@@ -202,7 +202,7 @@ describe("production MCP tools/call boundary", () => {
   it("builds a safe read-only synthetic result without raw inputs, internals, or future execution hooks", () => {
     const validation = validate({
       name: "twoweeks.application_package.summarize",
-      arguments: { applicationPackageRef: { id: "application-package-ref-secret" } },
+      arguments: { applicationPackageRef: { id: "mcp-safe-ref:application-package:latest" } },
       _meta: { progressToken: "progress-token-secret" },
     });
     if (!validation.valid) throw new Error("fixture should validate");
@@ -221,7 +221,7 @@ describe("production MCP tools/call boundary", () => {
       "toolName",
       "version",
     ]);
-    expect(serialized).not.toContain("application-package-ref-secret");
+    expect(serialized).not.toContain("mcp-safe-ref:application-package:latest");
     expect(serialized).not.toContain("progress-token-secret");
     expect(serialized).not.toContain("rawArgumentsEchoed");
     expect(serialized).not.toContain("progressTokenEchoed");

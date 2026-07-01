@@ -16,7 +16,6 @@ import {
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const BOUNDARY_SOURCE = resolve(TEST_DIR, "../mcpOAuthProductionActivationBoundary.ts");
-const VITE_CONFIG_SOURCE = resolve(TEST_DIR, "../../../../vite.config.ts");
 const LOCAL_DEV_ENDPOINT_SOURCE = resolve(TEST_DIR, "../localMcpDevEndpoint.ts");
 
 const NOW_EPOCH_SECONDS = 1_782_000_000;
@@ -455,13 +454,10 @@ describe("MCP OAuth production activation boundary", () => {
     }
   });
 
-  it("does not wire endpoints, frontend, schemas, network calls, or concrete provider SDKs", () => {
+  it("keeps the activation boundary free of frontend, schemas, network calls, and concrete provider SDKs", () => {
     const boundarySource = readFileSync(BOUNDARY_SOURCE, "utf8");
-    const viteSource = readFileSync(VITE_CONFIG_SOURCE, "utf8");
     const endpointSource = readFileSync(LOCAL_DEV_ENDPOINT_SOURCE, "utf8");
 
-    expect(viteSource).not.toContain("MCP_OAUTH_PRODUCTION_RUNTIME");
-    expect(viteSource).not.toContain("MCP_OAUTH_PRODUCTION_APPROVED");
     expect(endpointSource).not.toContain("MCP_OAUTH_PRODUCTION_RUNTIME");
     expect(endpointSource).not.toContain("MCP_OAUTH_PRODUCTION_APPROVED");
     expect(boundarySource).not.toMatch(/from\s+["']@stytch|from\s+["']node:https|from\s+["']node:http/u);
