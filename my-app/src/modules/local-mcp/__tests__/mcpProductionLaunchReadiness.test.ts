@@ -17,9 +17,12 @@ const FORBIDDEN_READINESS_LAYER_PATTERNS = Object.freeze([
   /mcpProductionPolicyKernel/u,
   /mcpProductionTools(?:CallBoundary|ListProjection)/u,
   /mcpLocalJsonSchemaMatcher/u,
+  /mcpOAuth(?:Production|Authorization|LoginReturn|AccessToken|AccountLink)/u,
   /buildMcpJsonRpcError|jsonResponse|failClosedResponse/u,
   /\b(?:fetch|axios|XMLHttpRequest|WebSocket|EventSource)\b/u,
   /\b(?:insert|patch|replace|delete)\s*\(/u,
+  /createAuthorizationCode|issueAccessToken|validateAuthorizationCode|refreshToken|accountLink/u,
+  /from\s+["'][.]{2}\/[.]{2}\/(?:components|pages|hooks|app|ui)\//u,
 ] as const);
 
 describe("MCP production launch readiness", () => {
@@ -48,9 +51,37 @@ describe("MCP production launch readiness", () => {
       "launch_config_invalid",
       true,
     );
+    expectLaunchReadinessDecision(
+      evaluateMcpProductionLaunchReadiness({
+        privateBetaDecision: allowedPrivateBetaDecision(),
+        config: { evidence: { readonlySummaryExecutionReviewed: "yes" } },
+      }),
+      "launch_config_invalid",
+      true,
+    );
+    expectLaunchReadinessDecision(
+      evaluateMcpProductionLaunchReadiness({
+        privateBetaDecision: allowedPrivateBetaDecision(),
+        config: { evidence: { readonlySummaryStatusReviewed: "yes" } },
+      }),
+      "launch_config_invalid",
+      true,
+    );
   });
 
   it("keeps public launch blocked when readiness evidence is missing or incomplete", () => {
+    const preSummaryEvidence: McpProductionLaunchReadinessEvidenceInputV1 = {
+      privateBetaGateReviewed: true,
+      authenticatedMcpProtocolReviewed: true,
+      policyKernelReviewed: true,
+      toolsListMetadataReviewed: true,
+      toolsCallReadOnlyReviewed: true,
+      schemaMatcherReviewed: true,
+      providerWriteExpansionBlocked: true,
+      unresolvedBlockingFindings: false,
+      version: 1,
+    };
+
     expectLaunchReadinessDecision(
       evaluateMcpProductionLaunchReadiness({
         privateBetaDecision: allowedPrivateBetaDecision(),
@@ -63,7 +94,18 @@ describe("MCP production launch readiness", () => {
       evaluateMcpProductionLaunchReadiness({
         privateBetaDecision: allowedPrivateBetaDecision(),
         config: {
-          evidence: completeEvidence({ schemaMatcherReviewed: false }),
+          evidence: preSummaryEvidence,
+          version: 1,
+        },
+      }),
+      "launch_evidence_missing",
+      true,
+    );
+    expectLaunchReadinessDecision(
+      evaluateMcpProductionLaunchReadiness({
+        privateBetaDecision: allowedPrivateBetaDecision(),
+        config: {
+          evidence: completeEvidence({ readonlySummaryExecutionReviewed: false }),
           version: 1,
         },
       }),
@@ -78,7 +120,7 @@ describe("MCP production launch readiness", () => {
         privateBetaDecision: allowedPrivateBetaDecision(),
         config: {
           publicLaunchRequested: true,
-          evidence: completeEvidence({ schemaMatcherReviewed: false }),
+          evidence: completeEvidence({ readonlySummaryStatusReviewed: false }),
           version: 1,
         },
       }),
@@ -212,6 +254,8 @@ function completeEvidence(
     toolsListMetadataReviewed: true,
     toolsCallReadOnlyReviewed: true,
     schemaMatcherReviewed: true,
+    readonlySummaryExecutionReviewed: true,
+    readonlySummaryStatusReviewed: true,
     providerWriteExpansionBlocked: true,
     unresolvedBlockingFindings: false,
     version: 1,

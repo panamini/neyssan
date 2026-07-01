@@ -14,6 +14,10 @@ export const MCP_PRODUCTION_LAUNCH_READINESS_TOOLS_CALL_READ_ONLY_REVIEWED_FLAG 
   "MCP_OAUTH_PRODUCTION_LAUNCH_TOOLS_CALL_READ_ONLY_REVIEWED";
 export const MCP_PRODUCTION_LAUNCH_READINESS_SCHEMA_MATCHER_REVIEWED_FLAG =
   "MCP_OAUTH_PRODUCTION_LAUNCH_SCHEMA_MATCHER_REVIEWED";
+export const MCP_PRODUCTION_LAUNCH_READINESS_READONLY_SUMMARY_EXECUTION_REVIEWED_FLAG =
+  "MCP_OAUTH_PRODUCTION_LAUNCH_READONLY_SUMMARY_EXECUTION_REVIEWED";
+export const MCP_PRODUCTION_LAUNCH_READINESS_READONLY_SUMMARY_STATUS_REVIEWED_FLAG =
+  "MCP_OAUTH_PRODUCTION_LAUNCH_READONLY_SUMMARY_STATUS_REVIEWED";
 export const MCP_PRODUCTION_LAUNCH_READINESS_PROVIDER_WRITE_EXPANSION_BLOCKED_FLAG =
   "MCP_OAUTH_PRODUCTION_LAUNCH_PROVIDER_WRITE_EXPANSION_BLOCKED";
 export const MCP_PRODUCTION_LAUNCH_READINESS_UNRESOLVED_BLOCKING_FINDINGS_FLAG =
@@ -26,6 +30,8 @@ export type McpProductionLaunchReadinessEvidenceInputV1 = Readonly<{
   toolsListMetadataReviewed?: boolean;
   toolsCallReadOnlyReviewed?: boolean;
   schemaMatcherReviewed?: boolean;
+  readonlySummaryExecutionReviewed?: boolean;
+  readonlySummaryStatusReviewed?: boolean;
   providerWriteExpansionBlocked?: boolean;
   unresolvedBlockingFindings?: boolean;
   version?: 1;
@@ -82,6 +88,8 @@ const LAUNCH_READINESS_EVIDENCE_KEYS = new Set([
   "toolsListMetadataReviewed",
   "toolsCallReadOnlyReviewed",
   "schemaMatcherReviewed",
+  "readonlySummaryExecutionReviewed",
+  "readonlySummaryStatusReviewed",
   "providerWriteExpansionBlocked",
   "unresolvedBlockingFindings",
   "version",
@@ -152,6 +160,8 @@ function isLaunchReadinessEvidence(value: unknown): value is McpProductionLaunch
     optionalBoolean(value.toolsListMetadataReviewed) &&
     optionalBoolean(value.toolsCallReadOnlyReviewed) &&
     optionalBoolean(value.schemaMatcherReviewed) &&
+    optionalBoolean(value.readonlySummaryExecutionReviewed) &&
+    optionalBoolean(value.readonlySummaryStatusReviewed) &&
     optionalBoolean(value.providerWriteExpansionBlocked) &&
     optionalBoolean(value.unresolvedBlockingFindings)
   );
@@ -166,6 +176,8 @@ function isCompleteLaunchReadinessEvidence(value: unknown): boolean {
     value.toolsListMetadataReviewed === true &&
     value.toolsCallReadOnlyReviewed === true &&
     value.schemaMatcherReviewed === true &&
+    value.readonlySummaryExecutionReviewed === true &&
+    value.readonlySummaryStatusReviewed === true &&
     value.providerWriteExpansionBlocked === true &&
     value.unresolvedBlockingFindings === false
   );
