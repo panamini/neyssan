@@ -29,7 +29,17 @@ import {
 } from "../mcpAuthenticatedProtocolEnvelope";
 import type { McpProductionPrivateBetaGateConfigInputV1 } from "../mcpProductionPrivateBetaGate";
 import {
+  MCP_PRODUCTION_LAUNCH_READINESS_AUTHENTICATED_PROTOCOL_REVIEWED_FLAG,
+  MCP_PRODUCTION_LAUNCH_READINESS_POLICY_KERNEL_REVIEWED_FLAG,
+  MCP_PRODUCTION_LAUNCH_READINESS_PRIVATE_BETA_GATE_REVIEWED_FLAG,
+  MCP_PRODUCTION_LAUNCH_READINESS_PROVIDER_WRITE_EXPANSION_BLOCKED_FLAG,
   MCP_PRODUCTION_LAUNCH_READINESS_PUBLIC_LAUNCH_REQUESTED_FLAG,
+  MCP_PRODUCTION_LAUNCH_READINESS_READONLY_SUMMARY_EXECUTION_REVIEWED_FLAG,
+  MCP_PRODUCTION_LAUNCH_READINESS_READONLY_SUMMARY_STATUS_REVIEWED_FLAG,
+  MCP_PRODUCTION_LAUNCH_READINESS_SCHEMA_MATCHER_REVIEWED_FLAG,
+  MCP_PRODUCTION_LAUNCH_READINESS_TOOLS_CALL_READ_ONLY_REVIEWED_FLAG,
+  MCP_PRODUCTION_LAUNCH_READINESS_TOOLS_LIST_METADATA_REVIEWED_FLAG,
+  MCP_PRODUCTION_LAUNCH_READINESS_UNRESOLVED_BLOCKING_FINDINGS_FLAG,
   type McpProductionLaunchReadinessConfigInputV1,
   type McpProductionLaunchReadinessEvidenceInputV1,
 } from "../mcpProductionLaunchReadiness";
@@ -4881,9 +4891,58 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(OWNER_ID);
   });
 
-  it("wires production launch readiness env through the default Vite /mcp config", async () => {
+  it("wires complete production launch readiness evidence env through the default Vite /mcp config", async () => {
     const ctx = makeCtx();
     ctx.accessTokenRows.push(storedAccessToken({ _id: "mcpOAuthAccessTokens_fixture_vite_public_launch" }));
+    const dependencies = routeDependencies(ctx);
+    const plugin = createLocalMcpDevEndpointPlugin({
+      env: {
+        ...prodRouteEnv(),
+        [MCP_PRODUCTION_LAUNCH_READINESS_PRIVATE_BETA_GATE_REVIEWED_FLAG]: "1",
+        [MCP_PRODUCTION_LAUNCH_READINESS_AUTHENTICATED_PROTOCOL_REVIEWED_FLAG]: "1",
+        [MCP_PRODUCTION_LAUNCH_READINESS_POLICY_KERNEL_REVIEWED_FLAG]: "1",
+        [MCP_PRODUCTION_LAUNCH_READINESS_TOOLS_LIST_METADATA_REVIEWED_FLAG]: "1",
+        [MCP_PRODUCTION_LAUNCH_READINESS_TOOLS_CALL_READ_ONLY_REVIEWED_FLAG]: "1",
+        [MCP_PRODUCTION_LAUNCH_READINESS_SCHEMA_MATCHER_REVIEWED_FLAG]: "1",
+        [MCP_PRODUCTION_LAUNCH_READINESS_READONLY_SUMMARY_EXECUTION_REVIEWED_FLAG]: "1",
+        [MCP_PRODUCTION_LAUNCH_READINESS_READONLY_SUMMARY_STATUS_REVIEWED_FLAG]: "1",
+        [MCP_PRODUCTION_LAUNCH_READINESS_PROVIDER_WRITE_EXPANSION_BLOCKED_FLAG]: "1",
+        [MCP_PRODUCTION_LAUNCH_READINESS_UNRESOLVED_BLOCKING_FINDINGS_FLAG]: "0",
+      },
+      productionOAuthAuthorizationDependencies: dependencies,
+    });
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeStreamingMiddleware(middleware, {
+      method: "POST",
+      url: MCP_OAUTH_PRODUCTION_MCP_PATH,
+      remoteAddress: "198.51.100.9",
+      headers: {
+        host: "mcp.twoweeks.example.test",
+        authorization: `Bearer ${RAW_ACCESS_TOKEN}`,
+        "content-type": "application/json",
+        "mcp-protocol-version": "2025-11-25",
+      },
+      body: JSON.stringify(mcpJsonRpcRequest("tools/list", "vite-launch-readiness-complete")),
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body)).toMatchObject({
+      jsonrpc: "2.0",
+      id: "vite-launch-readiness-complete",
+      result: {
+        tools: expect.any(Array),
+      },
+    });
+    expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
+    expect(dependencies.executeReadonlySummaryTool).not.toHaveBeenCalled();
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
+    expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+  });
+
+  it("wires production public launch readiness env through the default Vite /mcp config", async () => {
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push(storedAccessToken({ _id: "mcpOAuthAccessTokens_fixture_vite_public_launch_blocked" }));
     const dependencies = routeDependencies(ctx);
     const plugin = createLocalMcpDevEndpointPlugin({
       env: {
@@ -4918,6 +4977,7 @@ describe("MCP OAuth production route adapter", () => {
       launchReadinessPrivateBetaGateCode: "private_beta_allowed",
     });
     expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
+    expect(dependencies.executeReadonlySummaryTool).not.toHaveBeenCalled();
     expect(convexHttpClientMutation).not.toHaveBeenCalled();
     expect(JSON.stringify(response)).not.toContain("tools/list");
     expect(JSON.stringify(response)).not.toContain("twoweeks.application_package.summarize");
@@ -5811,6 +5871,8 @@ function completeLaunchReadinessEvidence(
     toolsListMetadataReviewed: true,
     toolsCallReadOnlyReviewed: true,
     schemaMatcherReviewed: true,
+    readonlySummaryExecutionReviewed: true,
+    readonlySummaryStatusReviewed: true,
     providerWriteExpansionBlocked: true,
     unresolvedBlockingFindings: false,
     version: 1,
