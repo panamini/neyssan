@@ -49,6 +49,10 @@ import {
   type McpOAuthProductionRouteAdapterConfigV1,
   type McpOAuthProductionRouteAdapterDependenciesV1,
 } from "./src/modules/local-mcp/mcpOAuthProductionRouteAdapter";
+import {
+  buildMcpProductionReadonlySummaryExecutor,
+  type McpProductionReadonlySummaryQueryKeyV1,
+} from "./src/modules/local-mcp/mcpProductionReadonlySummaryExecutor";
 import { MCP_OAUTH_PRODUCTION_ROUTE_WIRING_FLAG } from "./src/modules/local-mcp/mcpOAuthProductionRoutePreflightBoundary";
 import {
   MCP_PRODUCTION_PRIVATE_BETA_CLIENT_IDS_VAR,
@@ -116,6 +120,20 @@ const ISSUE_MCP_OAUTH_ACCESS_TOKEN_MUTATION = makeFunctionReference(
 const VERIFY_MCP_OAUTH_ACCESS_TOKEN_QUERY = makeFunctionReference(
   "mcpOAuthAuthorizationCodes:internalVerifyMcpOAuthAccessTokenForMcpBoundary",
 ) as FunctionReference<"query">;
+const PRODUCTION_MCP_READONLY_SUMMARY_QUERY_REFERENCES = Object.freeze({
+  applicationPackageSummary: makeFunctionReference(
+    "mcpApplicationPackageSummary:internalSummarizeMcpApplicationPackage",
+  ) as FunctionReference<"query">,
+  evidenceGraphSummary: makeFunctionReference(
+    "mcpEvidenceGraphSummary:internalSummarizeMcpEvidenceGraph",
+  ) as FunctionReference<"query">,
+  resumeVariantPlanSummary: makeFunctionReference(
+    "mcpResumeVariantPlanSummary:internalSummarizeMcpResumeVariantPlan",
+  ) as FunctionReference<"query">,
+  reviewCockpitSummary: makeFunctionReference(
+    "mcpReviewCockpitSummary:internalSummarizeMcpReviewCockpit",
+  ) as FunctionReference<"query">,
+} satisfies Record<McpProductionReadonlySummaryQueryKeyV1, FunctionReference<"query">>);
 const productionPreAuthQuotaBuckets = new Map<string, { count: number; windowStartedAt: number }>();
 const productionClerkJwksByIssuer = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 
@@ -734,6 +752,7 @@ function buildProductionMcpOAuthRouteDependencies(
     validateAuthorizationCode: buildProductionAuthorizationCodeValidatePort(convexClient),
     issueAccessToken: buildProductionAccessTokenIssuePort(convexClient),
     verifyAccessToken: buildProductionAccessTokenVerifyPort(convexClient),
+    executeReadonlySummaryTool: buildProductionReadonlySummaryExecutor(convexClient),
     readAuthenticatedOwnerIdentity: buildProductionAuthenticatedOwnerIdentityReader(env),
   });
 }
@@ -889,6 +908,20 @@ function buildProductionAccessTokenVerifyPort(
       input,
     ) as Promise<Awaited<ReturnType<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["verifyAccessToken"]>>>>;
   };
+}
+
+function buildProductionReadonlySummaryExecutor(
+  convexClient: ConvexHttpClient | undefined,
+): NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["executeReadonlySummaryTool"]> {
+  return buildMcpProductionReadonlySummaryExecutor(async (input) => {
+    if (!convexClient) {
+      throw new TypeError("Production MCP read-only summary storage unavailable.");
+    }
+    return convexClient.query(
+      PRODUCTION_MCP_READONLY_SUMMARY_QUERY_REFERENCES[input.query],
+      input.args,
+    ) as Promise<unknown>;
+  });
 }
 
 type ConvexConnectionV1 = Readonly<{

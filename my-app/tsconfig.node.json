@@ -31,6 +31,7 @@
     "src/modules/local-mcp/mcpAuthenticatedProtocolEnvelope.ts",
     "src/modules/local-mcp/mcpProductionPrivateBetaGate.ts",
     "src/modules/local-mcp/mcpProductionLaunchReadiness.ts",
+    "src/modules/local-mcp/mcpProductionReadonlySummaryExecutor.ts",
     "src/modules/local-mcp/mcpAccountLinkingStorageBoundary.ts",
     "src/modules/local-mcp/mcpOperationalErrorTaxonomy.ts",
     "src/modules/local-mcp/mcpOperationalStatus.ts",

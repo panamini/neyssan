@@ -45,10 +45,15 @@ import {
 } from "./mcpProductionLaunchReadiness";
 import { evaluateMcpProductionPolicy, type McpProductionPolicyDecisionV1 } from "./mcpProductionPolicyKernel";
 import {
-  buildMcpProductionToolsCallReadonlySyntheticResult,
   messageForMcpProductionToolsCallBoundaryError,
   validateMcpProductionToolsCallBoundary,
 } from "./mcpProductionToolsCallBoundary";
+import {
+  buildMcpProductionReadonlySummaryExecutionInput,
+  MCP_PRODUCTION_READONLY_SUMMARY_EXECUTION_FAILURE_MESSAGE,
+  type McpProductionReadonlySummaryExecutionInputV1,
+  type McpProductionReadonlySummaryExecutorV1,
+} from "./mcpProductionReadonlySummaryExecutor";
 import { buildMcpProductionToolsListResult } from "./mcpProductionToolsListProjection";
 import {
   MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER,
@@ -509,6 +514,7 @@ export type McpOAuthProductionRouteAdapterDependenciesV1 = Readonly<{
   validateAuthorizationCode?: McpOAuthProductionAuthorizationCodeValidatePortV1;
   issueAccessToken?: McpOAuthProductionAccessTokenIssuePortV1;
   verifyAccessToken?: McpOAuthProductionAccessTokenVerifyPortV1;
+  executeReadonlySummaryTool?: McpProductionReadonlySummaryExecutorV1;
   readAuthenticatedOwnerIdentity?: McpOAuthProductionAuthenticatedOwnerIdentityReaderV1;
   generateBrowserBoundContinuationNonce?: McpOAuthProductionBrowserBoundContinuationNonceGeneratorV1;
   generateAuthorizationCode?: McpOAuthProductionAuthorizationCodeGeneratorV1;
@@ -597,6 +603,7 @@ const AUTHORIZATION_CODE_CREATE_TIMEOUT_MS = 2_500;
 const AUTHORIZATION_CODE_VALIDATE_TIMEOUT_MS = 2_500;
 const ACCESS_TOKEN_ISSUE_TIMEOUT_MS = 2_500;
 const ACCESS_TOKEN_VERIFY_TIMEOUT_MS = 2_500;
+const READONLY_SUMMARY_EXECUTION_TIMEOUT_MS = 2_500;
 const ACCESS_TOKEN_RESPONSE_CLOCK_SKEW_SECONDS = 60;
 const TOKEN_REQUEST_BODY_MAX_BYTES = 4_096;
 const AUTHORIZATION_HEADER_MAX_LENGTH = 128;
@@ -1169,7 +1176,13 @@ async function handleMcpRequest(
     config: config.launchReadiness,
   });
 
-  return handleLaunchReadinessCheckedMcpJsonRpc(preflight, launchReadinessDecision, envelope);
+  return await handleLaunchReadinessCheckedMcpJsonRpc(
+    preflight,
+    launchReadinessDecision,
+    envelope,
+    dependencies,
+    verifyResult.serverOnly.twoweeksClerkId,
+  );
 }
 
 function buildAuthorizationRequestGuard(
@@ -1473,6 +1486,34 @@ function verifyAccessTokenWithTimeout(
   });
 }
 
+function executeReadonlySummaryToolWithTimeout(
+  executeReadonlySummaryTool: McpProductionReadonlySummaryExecutorV1,
+  input: McpProductionReadonlySummaryExecutionInputV1,
+  timeoutMs: number,
+): ReturnType<McpProductionReadonlySummaryExecutorV1> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error("readonly_summary_execution_timeout"));
+    }, timeoutMs);
+
+    try {
+      executeReadonlySummaryTool(input).then(
+        (result) => {
+          clearTimeout(timeout);
+          resolve(result);
+        },
+        (error: unknown) => {
+          clearTimeout(timeout);
+          reject(toRejectedError(error, "readonly_summary_execution_failed"));
+        },
+      );
+    } catch (error) {
+      clearTimeout(timeout);
+      reject(toRejectedError(error, "readonly_summary_execution_failed"));
+    }
+  });
+}
+
 function normalizeStringSet(value: unknown): readonly string[] {
   if (!Array.isArray(value)) return [];
   return Object.freeze(
@@ -1720,12 +1761,14 @@ function inertGuardedResponse(
   });
 }
 
-function handleAuthenticatedMcpJsonRpc(
+async function handleAuthenticatedMcpJsonRpc(
   envelope: McpAuthenticatedProtocolEnvelopeV1,
-): McpOAuthProductionRouteAdapterResponseV1 {
+  dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+  twoweeksClerkId: string,
+): Promise<McpOAuthProductionRouteAdapterResponseV1> {
   const decision = evaluateMcpProductionPolicy(envelope);
   if (decision.decision === "allow_read_only_call") {
-    return toolsCallBoundaryResponse(envelope);
+    return await toolsCallBoundaryResponse(envelope, dependencies.executeReadonlySummaryTool, twoweeksClerkId);
   }
   if (decision.decision !== "allow_protocol" && decision.decision !== "allow_metadata") {
     return blockedMcpPolicyDecisionResponse(envelope, decision.decision);
@@ -1733,19 +1776,23 @@ function handleAuthenticatedMcpJsonRpc(
   return allowedMcpPolicyDecisionResponse(envelope, decision);
 }
 
-function handleLaunchReadinessCheckedMcpJsonRpc(
+async function handleLaunchReadinessCheckedMcpJsonRpc(
   preflight: McpOAuthProductionRoutePreflightResultV1,
   launchReadinessDecision: McpProductionLaunchReadinessDecisionV1,
   envelope: McpAuthenticatedProtocolEnvelopeV1,
-): McpOAuthProductionRouteAdapterResponseV1 {
+  dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+  twoweeksClerkId: string,
+): Promise<McpOAuthProductionRouteAdapterResponseV1> {
   const launchReadinessBlock = mcpLaunchReadinessBlockedResponseIfNeeded(preflight, launchReadinessDecision);
   if (launchReadinessBlock) return launchReadinessBlock;
-  return handleAuthenticatedMcpJsonRpc(envelope);
+  return await handleAuthenticatedMcpJsonRpc(envelope, dependencies, twoweeksClerkId);
 }
 
-function toolsCallBoundaryResponse(
+async function toolsCallBoundaryResponse(
   envelope: McpAuthenticatedProtocolEnvelopeV1,
-): McpOAuthProductionRouteAdapterResponseV1 {
+  executeReadonlySummaryTool: McpProductionReadonlySummaryExecutorV1 | undefined,
+  twoweeksClerkId: string,
+): Promise<McpOAuthProductionRouteAdapterResponseV1> {
   const id = envelope.jsonRpc.id ?? null;
   const validation = validateMcpProductionToolsCallBoundary({
     method: envelope.jsonRpc.method,
@@ -1758,10 +1805,37 @@ function toolsCallBoundaryResponse(
       buildMcpJsonRpcError(id, -32602, messageForMcpProductionToolsCallBoundaryError(validation.error)),
     );
   }
+  if (!executeReadonlySummaryTool) {
+    return jsonResponse(200, buildMcpJsonRpcError(id, -32000, MCP_PRODUCTION_READONLY_SUMMARY_EXECUTION_FAILURE_MESSAGE));
+  }
+  const executionInput = buildMcpProductionReadonlySummaryExecutionInput({
+    validation,
+    twoweeksClerkId,
+    version: 1,
+  });
+  if (!executionInput) {
+    return jsonResponse(200, buildMcpJsonRpcError(id, -32000, MCP_PRODUCTION_READONLY_SUMMARY_EXECUTION_FAILURE_MESSAGE));
+  }
+  let executionResult: Awaited<ReturnType<McpProductionReadonlySummaryExecutorV1>>;
+  try {
+    executionResult = await executeReadonlySummaryToolWithTimeout(
+      executeReadonlySummaryTool,
+      executionInput,
+      READONLY_SUMMARY_EXECUTION_TIMEOUT_MS,
+    );
+  } catch {
+    return jsonResponse(200, buildMcpJsonRpcError(id, -32000, MCP_PRODUCTION_READONLY_SUMMARY_EXECUTION_FAILURE_MESSAGE));
+  }
+  if (!executionResult.ok) {
+    return jsonResponse(200, buildMcpJsonRpcError(id, -32000, MCP_PRODUCTION_READONLY_SUMMARY_EXECUTION_FAILURE_MESSAGE));
+  }
   return jsonResponse(200, {
     jsonrpc: "2.0",
     id,
-    result: buildMcpProductionToolsCallReadonlySyntheticResult(validation),
+    result: {
+      content: executionResult.content,
+      structuredContent: executionResult.structuredContent,
+    },
   });
 }
 
