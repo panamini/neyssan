@@ -1,11 +1,12 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import {
-  MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND,
-  buildMcpProductionToolsCallReadonlySyntheticResult,
-  validateMcpProductionToolsCallBoundary,
-} from "../mcpProductionToolsCallBoundary";
+import { validateMcpProductionToolsCallBoundary } from "../mcpProductionToolsCallBoundary";
 import { buildMcpProductionToolsListResult } from "../mcpProductionToolsListProjection";
 
+const TEST_DIR = dirname(fileURLToPath(import.meta.url));
+const SOURCE_FILE = resolve(TEST_DIR, "../mcpProductionToolsCallBoundary.ts");
 const TOOL_ARGUMENTS = [
   [
     "twoweeks.application_package.summarize",
@@ -30,6 +31,12 @@ const TOOL_ARGUMENT_FIELD_NAMES = [
   "resumeVariantPlanRef",
   "reviewCockpitRef",
 ] as const;
+const STALE_SYNTHETIC_RESULT_MARKERS = Object.freeze([
+  "mcp_production_tools_call_readonly_synthetic_result",
+  "validated_synthetic_summary_only",
+  "buildMcpProductionToolsCallReadonlySyntheticResult",
+  "PR102 returns a synthetic summary only",
+] as const);
 
 function validate(params: unknown) {
   return validateMcpProductionToolsCallBoundary({
@@ -199,7 +206,12 @@ describe("production MCP tools/call boundary", () => {
     })).toMatchObject({ valid: false, error: { code: "invalid_arguments" } });
   });
 
-  it("builds a safe read-only synthetic result without raw inputs, internals, or future execution hooks", () => {
+  it("stays validation-only without stale synthetic result metadata", () => {
+    const source = readFileSync(SOURCE_FILE, "utf8");
+    for (const marker of STALE_SYNTHETIC_RESULT_MARKERS) {
+      expect(source).not.toContain(marker);
+    }
+
     const validation = validate({
       name: "twoweeks.application_package.summarize",
       arguments: { applicationPackageRef: { id: "mcp-safe-ref:application-package:latest" } },
@@ -207,23 +219,26 @@ describe("production MCP tools/call boundary", () => {
     });
     if (!validation.valid) throw new Error("fixture should validate");
 
-    const result = buildMcpProductionToolsCallReadonlySyntheticResult(validation);
-    const serialized = JSON.stringify(result);
+    const serialized = JSON.stringify(validation);
 
-    expect(Object.keys(result).sort()).toEqual(["content", "structuredContent"]);
-    expect(result.structuredContent.kind).toBe(MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND);
-    expect(result.structuredContent.phase).toBe("pr102_readonly_boundary_only");
-    expect(result.structuredContent.status).toBe("validated_synthetic_summary_only");
-    expect(Object.keys(result.structuredContent).sort()).toEqual([
-      "kind",
+    expect(Object.keys(validation).sort()).toEqual([
+      "method",
+      "params",
       "phase",
-      "status",
-      "toolName",
+      "tool",
+      "valid",
       "version",
     ]);
-    expect(serialized).not.toContain("mcp-safe-ref:application-package:latest");
+    expect(validation.params).toEqual({
+      name: "twoweeks.application_package.summarize",
+      arguments: { applicationPackageRef: { id: "mcp-safe-ref:application-package:latest" } },
+      argumentFields: ["applicationPackageRef"],
+      progressTokenAccepted: true,
+      rawArgumentsEchoed: false,
+      metaEchoed: false,
+      version: 1,
+    });
     expect(serialized).not.toContain("progress-token-secret");
-    expect(serialized).not.toContain("rawArgumentsEchoed");
     expect(serialized).not.toContain("progressTokenEchoed");
     expect(serialized).not.toContain("effects");
     expect(serialized).not.toContain("publicOutput");
@@ -236,6 +251,5 @@ describe("production MCP tools/call boundary", () => {
     expect(serialized).not.toContain("authorizationCodeDigest");
     expect(serialized).not.toContain("mcpOAuthAccessTokens");
     expect(serialized.toLowerCase()).not.toContain("real handler");
-    expect(serialized.toLowerCase()).toContain("synthetic");
   });
 });

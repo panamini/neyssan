@@ -4,9 +4,6 @@ import {
 } from "./mcpProductionToolsListProjection";
 import { localMcpJsonSchemaMatches } from "./mcpLocalJsonSchemaMatcher";
 
-export const MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND =
-  "mcp_production_tools_call_readonly_synthetic_result" as const;
-
 export type McpProductionToolsCallBoundaryErrorCodeV1 =
   | "invalid_method"
   | "invalid_params"
@@ -50,20 +47,6 @@ export type McpProductionToolsCallBoundaryValidationV1 = Readonly<
       version: 1;
     }
 >;
-
-export type McpProductionToolsCallReadonlySyntheticResultV1 = Readonly<{
-  content: readonly Readonly<{
-    type: "text";
-    text: string;
-  }>[];
-  structuredContent: Readonly<{
-    kind: typeof MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND;
-    phase: "pr102_readonly_boundary_only";
-    toolName: string;
-    status: "validated_synthetic_summary_only";
-    version: 1;
-  }>;
-}>;
 
 const TOOLS_CALL_PARAM_KEYS = Object.freeze(["name", "arguments", "_meta"] as const);
 const META_KEYS = Object.freeze(["progressToken"] as const);
@@ -128,27 +111,6 @@ export function validateMcpProductionToolsCallBoundary(input: Readonly<{
     }),
     phase: "pr102_readonly_boundary_validation",
     version: 1,
-  });
-}
-
-export function buildMcpProductionToolsCallReadonlySyntheticResult(
-  validation: Extract<McpProductionToolsCallBoundaryValidationV1, { valid: true }>,
-): McpProductionToolsCallReadonlySyntheticResultV1 {
-  return Object.freeze({
-    content: Object.freeze([
-      Object.freeze({
-        type: "text" as const,
-        text:
-          "Validated read-only boundary call. PR102 returns a synthetic summary only; no external action ran.",
-      }),
-    ]),
-    structuredContent: Object.freeze({
-      kind: MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND,
-      phase: "pr102_readonly_boundary_only",
-      toolName: validation.tool.name,
-      status: "validated_synthetic_summary_only",
-      version: 1,
-    }),
   });
 }
 
