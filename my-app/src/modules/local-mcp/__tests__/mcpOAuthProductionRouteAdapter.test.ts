@@ -44,7 +44,6 @@ import {
   type McpProductionLaunchReadinessEvidenceInputV1,
 } from "../mcpProductionLaunchReadiness";
 import { evaluateMcpProductionPolicy } from "../mcpProductionPolicyKernel";
-import { MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND } from "../mcpProductionToolsCallBoundary";
 import {
   MCP_PRODUCTION_READONLY_SUMMARY_EXECUTION_FAILURE_MESSAGE,
   type McpProductionReadonlySummaryExecutionInputV1,
@@ -112,6 +111,7 @@ const SOURCE_FILE = resolve(TEST_DIR, "../mcpOAuthProductionRouteAdapter.ts");
 const AUTHENTICATED_ENVELOPE_SOURCE_FILE = resolve(TEST_DIR, "../mcpAuthenticatedProtocolEnvelope.ts");
 const READONLY_SUMMARY_EXECUTOR_SOURCE_FILE = resolve(TEST_DIR, "../mcpProductionReadonlySummaryExecutor.ts");
 const VITE_CONFIG_SOURCE = resolve(TEST_DIR, "../../../../vite.config.ts");
+const LEGACY_TOOLS_CALL_SYNTHETIC_RESULT_KIND = "mcp_production_tools_call_readonly_synthetic_result";
 const APP_ORIGIN = "http://localhost:5173";
 const PROD_APP_ORIGIN = "https://mcp.twoweeks.example.test";
 const REDIRECT_URI = "https://chatgpt.example.test/connector/oauth/callback-fixture";
@@ -1726,7 +1726,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(bodyText).not.toContain(ACCESS_TOKEN_DIGEST);
     expect(bodyText).not.toContain(OWNER_ID);
     expect(bodyText).not.toContain(toolCase.rawRefId);
-    expect(bodyText).not.toContain(MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND);
+    expect(bodyText).not.toContain(LEGACY_TOOLS_CALL_SYNTHETIC_RESULT_KIND);
     expect(bodyText).not.toContain("progress-token-secret");
     expect(bodyText).not.toContain("rawArgumentsEchoed");
     expect(bodyText).not.toContain("progressTokenEchoed");
@@ -1784,7 +1784,7 @@ describe("MCP OAuth production route adapter", () => {
       expect(dependencies.executeReadonlySummaryTool).not.toHaveBeenCalled();
       expect(JSON.stringify(response)).not.toContain(toolCase.rawRefId);
       expect(JSON.stringify(response)).not.toContain(OWNER_ID);
-      expect(JSON.stringify(response)).not.toContain(MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND);
+      expect(JSON.stringify(response)).not.toContain(LEGACY_TOOLS_CALL_SYNTHETIC_RESULT_KIND);
     },
   );
 
@@ -1857,7 +1857,7 @@ describe("MCP OAuth production route adapter", () => {
     });
     expect(dependencies.executeReadonlySummaryTool).not.toHaveBeenCalled();
     expect(JSON.stringify(response)).not.toContain("raw-ref-should-not-echo");
-    expect(JSON.stringify(response)).not.toContain(MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND);
+    expect(JSON.stringify(response)).not.toContain(LEGACY_TOOLS_CALL_SYNTHETIC_RESULT_KIND);
   });
 
   it("fails a valid production tools/call safely when the read-only summary executor dependency is missing", async () => {
@@ -1896,7 +1896,7 @@ describe("MCP OAuth production route adapter", () => {
     });
     expect(JSON.stringify(response)).not.toContain("Invalid tools/call");
     expect(JSON.stringify(response)).not.toContain("raw-ref-missing-executor");
-    expect(JSON.stringify(response)).not.toContain(MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND);
+    expect(JSON.stringify(response)).not.toContain(LEGACY_TOOLS_CALL_SYNTHETIC_RESULT_KIND);
   });
 
   it("fails read-only summary executor errors safely without reporting invalid client arguments", async () => {
@@ -1943,7 +1943,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain("raw-ref-executor-throw");
     expect(JSON.stringify(response)).not.toContain("storage unavailable");
     expect(JSON.stringify(response)).not.toContain("stack");
-    expect(JSON.stringify(response)).not.toContain(MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND);
+    expect(JSON.stringify(response)).not.toContain(LEGACY_TOOLS_CALL_SYNTHETIC_RESULT_KIND);
   });
 
   it("bounds stalled read-only summary execution before returning a production tools/call response", async () => {
@@ -1994,7 +1994,7 @@ describe("MCP OAuth production route adapter", () => {
       expect(JSON.stringify(response)).not.toContain("Invalid tools/call");
       expect(JSON.stringify(response)).not.toContain("raw-ref-executor-timeout");
       expect(JSON.stringify(response)).not.toContain("readonly_summary_execution_timeout");
-      expect(JSON.stringify(response)).not.toContain(MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND);
+      expect(JSON.stringify(response)).not.toContain(LEGACY_TOOLS_CALL_SYNTHETIC_RESULT_KIND);
     } finally {
       vi.useRealTimers();
     }
@@ -5330,7 +5330,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(OWNER_ID);
     expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
     expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
-    expect(JSON.stringify(response)).not.toContain(MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND);
+    expect(JSON.stringify(response)).not.toContain(LEGACY_TOOLS_CALL_SYNTHETIC_RESULT_KIND);
   });
 
   it("wires default production /mcp through the resource host when auth and resource origins differ", async () => {

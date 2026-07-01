@@ -117,15 +117,18 @@ describe("MCP production read-only summary status normalizer", () => {
 
   it.each([
     ["wrong kind", { kind: "mcp_production_tools_call_readonly_synthetic_result" }],
-    ["unknown shape", { allowed: true, status: "available" }],
+    ["unknown shape", { allowed: true, status: "available", unknownShapeOnly: true }],
     ["unsafe PR106 status", { status: "ready_but_unknown" }],
     ["owner echo", { safeCategories: { owner: OWNER_ID, version: 1 } }],
     ["provider metadata", { safeCategories: { provider: "https://provider.example.test", version: 1 } }],
   ] as const)("maps malformed output safely: %s", (_label, patch) => {
     const toolCase = TOOL_CASES[0];
+    const executionResult = patch.unknownShapeOnly === true
+      ? malformedExecutionResult({ allowed: true, status: "available" })
+      : safeExecutionResult(toolCase, patch);
     const result = normalize(
       toolCase,
-      safeExecutionResult(toolCase, patch),
+      executionResult,
       { forbiddenSubstrings: [OWNER_ID] },
     );
 
@@ -273,6 +276,20 @@ function safeExecutionResult(
       version: 1,
       ...patch,
     }),
+    modelVisible: true as const,
+    version: 1 as const,
+  });
+}
+
+function malformedExecutionResult(
+  structuredContent: Readonly<Record<string, unknown>>,
+): McpProductionReadonlySummaryExecutionResultV1 {
+  return Object.freeze({
+    ok: true as const,
+    content: Object.freeze([
+      Object.freeze({ type: "text" as const, text: "Read-only summary returned." }),
+    ]),
+    structuredContent: Object.freeze(structuredContent),
     modelVisible: true as const,
     version: 1 as const,
   });
