@@ -12,6 +12,8 @@ export const MCP_PRODUCTION_LAUNCH_READINESS_TOOLS_LIST_METADATA_REVIEWED_FLAG =
   "MCP_OAUTH_PRODUCTION_LAUNCH_TOOLS_LIST_METADATA_REVIEWED";
 export const MCP_PRODUCTION_LAUNCH_READINESS_TOOLS_CALL_READ_ONLY_REVIEWED_FLAG =
   "MCP_OAUTH_PRODUCTION_LAUNCH_TOOLS_CALL_READ_ONLY_REVIEWED";
+export const MCP_PRODUCTION_LAUNCH_READINESS_TOOLS_CALL_SYNTHETIC_METADATA_CLEANUP_REVIEWED_FLAG =
+  "MCP_OAUTH_PRODUCTION_LAUNCH_TOOLS_CALL_SYNTHETIC_METADATA_CLEANUP_REVIEWED";
 export const MCP_PRODUCTION_LAUNCH_READINESS_SCHEMA_MATCHER_REVIEWED_FLAG =
   "MCP_OAUTH_PRODUCTION_LAUNCH_SCHEMA_MATCHER_REVIEWED";
 export const MCP_PRODUCTION_LAUNCH_READINESS_READONLY_SUMMARY_EXECUTION_REVIEWED_FLAG =
@@ -29,6 +31,7 @@ export type McpProductionLaunchReadinessEvidenceInputV1 = Readonly<{
   policyKernelReviewed?: boolean;
   toolsListMetadataReviewed?: boolean;
   toolsCallReadOnlyReviewed?: boolean;
+  toolsCallSyntheticMetadataCleanupReviewed?: boolean;
   schemaMatcherReviewed?: boolean;
   readonlySummaryExecutionReviewed?: boolean;
   readonlySummaryStatusReviewed?: boolean;
@@ -87,6 +90,7 @@ const LAUNCH_READINESS_EVIDENCE_KEYS = new Set([
   "policyKernelReviewed",
   "toolsListMetadataReviewed",
   "toolsCallReadOnlyReviewed",
+  "toolsCallSyntheticMetadataCleanupReviewed",
   "schemaMatcherReviewed",
   "readonlySummaryExecutionReviewed",
   "readonlySummaryStatusReviewed",
@@ -159,6 +163,7 @@ function isLaunchReadinessEvidence(value: unknown): value is McpProductionLaunch
     optionalBoolean(value.policyKernelReviewed) &&
     optionalBoolean(value.toolsListMetadataReviewed) &&
     optionalBoolean(value.toolsCallReadOnlyReviewed) &&
+    optionalBoolean(value.toolsCallSyntheticMetadataCleanupReviewed) &&
     optionalBoolean(value.schemaMatcherReviewed) &&
     optionalBoolean(value.readonlySummaryExecutionReviewed) &&
     optionalBoolean(value.readonlySummaryStatusReviewed) &&

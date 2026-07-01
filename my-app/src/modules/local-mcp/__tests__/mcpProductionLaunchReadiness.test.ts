@@ -67,6 +67,14 @@ describe("MCP production launch readiness", () => {
       "launch_config_invalid",
       true,
     );
+    expectLaunchReadinessDecision(
+      evaluateMcpProductionLaunchReadiness({
+        privateBetaDecision: allowedPrivateBetaDecision(),
+        config: { evidence: { toolsCallSyntheticMetadataCleanupReviewed: "yes" } },
+      }),
+      "launch_config_invalid",
+      true,
+    );
   });
 
   it("keeps public launch blocked when readiness evidence is missing or incomplete", () => {
@@ -148,6 +156,33 @@ describe("MCP production launch readiness", () => {
         config: {
           publicLaunchRequested: false,
           evidence: completeEvidence(),
+          version: 1,
+        },
+      }),
+      "private_beta_ready_public_launch_blocked",
+      true,
+    );
+  });
+
+  it("keeps PR300 synthetic metadata cleanup review evidence diagnostic-only", () => {
+    expectLaunchReadinessDecision(
+      evaluateMcpProductionLaunchReadiness({
+        privateBetaDecision: allowedPrivateBetaDecision(),
+        config: {
+          publicLaunchRequested: false,
+          evidence: completeEvidence(),
+          version: 1,
+        },
+      }),
+      "private_beta_ready_public_launch_blocked",
+      true,
+    );
+    expectLaunchReadinessDecision(
+      evaluateMcpProductionLaunchReadiness({
+        privateBetaDecision: allowedPrivateBetaDecision(),
+        config: {
+          publicLaunchRequested: false,
+          evidence: completeEvidence({ toolsCallSyntheticMetadataCleanupReviewed: false }),
           version: 1,
         },
       }),
