@@ -70,7 +70,7 @@ describe("MCP production read-only summary executor", () => {
       expect(executionInput).toEqual({
         toolName: toolCase.toolName,
         twoweeksClerkId: OWNER_ID,
-        ref: { id: toolCase.rawRefId },
+        ref: { id: toolCase.safeRefId },
         version: 1,
       });
       expect(JSON.stringify(executionInput)).not.toContain("progress-token-secret");
@@ -106,7 +106,7 @@ describe("MCP production read-only summary executor", () => {
         args: {
           twoweeksClerkId: OWNER_ID,
           [toolCase.argumentKey]: {
-            id: toolCase.rawRefId,
+            id: toolCase.safeRefId,
             label: toolCase.label,
             status: "available",
             category: toolCase.category,
@@ -120,6 +120,53 @@ describe("MCP production read-only summary executor", () => {
       expect(responseText).not.toContain(OWNER_ID);
       expect(responseText).not.toContain(toolCase.rawRefId);
       expect(responseText).not.toContain("mcp_production_tools_call_readonly_synthetic_result");
+    },
+  );
+
+  it.each(READONLY_SUMMARY_CASES)(
+    "rejects stale or typo refs for $toolName before querying Convex",
+    async (toolCase) => {
+      const validation = validateMcpProductionToolsCallBoundary({
+        method: "tools/call",
+        params: {
+          name: toolCase.toolName,
+          arguments: { [toolCase.argumentKey]: { id: toolCase.rawRefId } },
+        },
+        version: 1,
+      });
+      expect(validation.valid).toBe(true);
+      if (!validation.valid) throw new Error("Expected schema-level tools/call validation to pass.");
+
+      expect(buildMcpProductionReadonlySummaryExecutionInput({
+        validation,
+        twoweeksClerkId: OWNER_ID,
+        version: 1,
+      })).toBeUndefined();
+
+      const runQuery = vi.fn(async () => summaryResultFor(toolCase, {
+        query: toolCase.query,
+        args: {},
+        version: 1,
+      } as McpProductionReadonlySummaryQueryPortInputV1));
+      const executor = buildMcpProductionReadonlySummaryExecutor(runQuery);
+      const result = await executor({
+        toolName: toolCase.toolName,
+        twoweeksClerkId: OWNER_ID,
+        ref: { id: toolCase.rawRefId },
+        version: 1,
+      });
+
+      expect(result).toMatchObject({
+        ok: false,
+        failure: {
+          code: "invalid_validated_ref",
+          message: MCP_PRODUCTION_READONLY_SUMMARY_EXECUTION_FAILURE_MESSAGE,
+          safeForModel: true,
+        },
+      });
+      expect(runQuery).not.toHaveBeenCalled();
+      expect(JSON.stringify(result)).not.toContain(toolCase.rawRefId);
+      expect(JSON.stringify(result)).not.toContain(OWNER_ID);
     },
   );
 
@@ -171,12 +218,13 @@ describe("MCP production read-only summary executor", () => {
 
 function executionInputFor(
   toolCase: typeof READONLY_SUMMARY_CASES[number],
+  refId = toolCase.safeRefId,
 ): McpProductionReadonlySummaryExecutionInputV1 {
   const validation = validateMcpProductionToolsCallBoundary({
     method: "tools/call",
     params: {
       name: toolCase.toolName,
-      arguments: { [toolCase.argumentKey]: { id: toolCase.rawRefId } },
+      arguments: { [toolCase.argumentKey]: { id: refId } },
       _meta: { progressToken: "progress-token-secret" },
     },
     version: 1,
@@ -218,7 +266,12 @@ function summaryResultFor(
       version: 1,
     }),
     safeCounts: Object.freeze({ version: 1 }),
-    safeCategories: Object.freeze({ version: 1 }),
+    safeCategories: Object.freeze({
+      packageStatus: "needs_review",
+      nextReviewHint: "ready_for_review",
+      missingInputCategory: "missing_evidence",
+      version: 1,
+    }),
     capabilities: Object.freeze({
       ownerResolution: "server_only",
       dataReads: toolCase.dataReads,

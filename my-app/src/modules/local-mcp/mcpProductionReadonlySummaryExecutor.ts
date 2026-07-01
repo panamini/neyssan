@@ -211,7 +211,7 @@ export function buildMcpProductionReadonlySummaryExecutionInput(input: Readonly<
 }>): McpProductionReadonlySummaryExecutionInputV1 | undefined {
   const mapping = toolMapping(input.validation.tool.name);
   if (!mapping) return undefined;
-  const ref = readValidatedRef(input.validation.params.arguments[mapping.argumentKey]);
+  const ref = readValidatedRef(input.validation.params.arguments[mapping.argumentKey], mapping);
   if (!ref) return undefined;
   return Object.freeze({
     toolName: mapping.toolName,
@@ -228,7 +228,7 @@ export function buildMcpProductionReadonlySummaryExecutor(
     const mapping = toolMapping(input.toolName);
     if (!mapping) return failure("unsupported_tool");
     if (!isServerOnlyOwnerIdentity(input.twoweeksClerkId)) return failure("invalid_server_owner");
-    if (!isValidatedRef(input.ref)) return failure("invalid_validated_ref");
+    if (!isValidatedRef(input.ref, mapping)) return failure("invalid_validated_ref");
 
     let queryResult: unknown;
     try {
@@ -298,7 +298,7 @@ function isSafeReadonlySummaryResult(
   if (!isSafeJsonRecord(value.safeCounts, 2)) return false;
   if (!isSafeJsonRecord(value.safeCategories, 2)) return false;
   if (value.safeFlags !== undefined && !isSafeJsonRecord(value.safeFlags, 2)) return false;
-  return !containsForbiddenEcho(value, input);
+  return !containsForbiddenEcho(value, mapping, input);
 }
 
 function hasOnlyExpectedResultRefKey(
@@ -359,7 +359,7 @@ function isSafeJsonValue(value: unknown, depth: number): boolean {
   if (depth < 0) return false;
   if (value === null || typeof value === "boolean") return true;
   if (typeof value === "number") return Number.isFinite(value) && value >= 0 && value <= 10_000;
-  if (typeof value === "string") return /^[A-Za-z0-9 _./:-]{0,160}$/u.test(value);
+  if (typeof value === "string") return /^[A-Za-z0-9 _./:_-]{0,160}$/u.test(value);
   if (Array.isArray(value)) return value.length <= 20 && value.every((item) => isSafeJsonValue(item, depth - 1));
   if (!isPlainRecord(value)) return false;
   return Object.keys(value).length <= 40 && Object.entries(value).every(([key, nested]) =>
@@ -369,26 +369,34 @@ function isSafeJsonValue(value: unknown, depth: number): boolean {
 
 function containsForbiddenEcho(
   value: Readonly<Record<string, unknown>>,
+  mapping: SummaryToolMappingV1,
   input: McpProductionReadonlySummaryExecutionInputV1,
 ): boolean {
   const serialized = JSON.stringify(value);
   if (!serialized) return true;
   if (serialized.includes(input.twoweeksClerkId)) return true;
+  if (input.ref.id === mapping.safeRefId) return false;
   return input.ref.id.length >= 8 && serialized.includes(input.ref.id);
 }
 
-function readValidatedRef(value: unknown): Readonly<{ id: string }> | undefined {
+function readValidatedRef(
+  value: unknown,
+  mapping: SummaryToolMappingV1,
+): Readonly<{ id: string }> | undefined {
   if (!isPlainRecord(value)) return undefined;
   if (!hasOnlyAllowedKeys(value, ["id"])) return undefined;
-  return isRefId(value.id) ? Object.freeze({ id: value.id }) : undefined;
+  return isExpectedSafeRefId(value.id, mapping) ? Object.freeze({ id: value.id }) : undefined;
 }
 
-function isValidatedRef(value: unknown): value is Readonly<{ id: string }> {
-  return isPlainRecord(value) && hasOnlyAllowedKeys(value, ["id"]) && isRefId(value.id);
+function isValidatedRef(
+  value: unknown,
+  mapping: SummaryToolMappingV1,
+): value is Readonly<{ id: string }> {
+  return isPlainRecord(value) && hasOnlyAllowedKeys(value, ["id"]) && isExpectedSafeRefId(value.id, mapping);
 }
 
-function isRefId(value: unknown): value is string {
-  return typeof value === "string" && value.trim() === value && value.length > 0 && value.length <= 512;
+function isExpectedSafeRefId(value: unknown, mapping: SummaryToolMappingV1): value is string {
+  return value === mapping.safeRefId;
 }
 
 function isServerOnlyOwnerIdentity(value: unknown): value is string {

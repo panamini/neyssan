@@ -1636,7 +1636,7 @@ describe("MCP OAuth production route adapter", () => {
         `Bearer ${RAW_ACCESS_TOKEN}`,
         mcpJsonRpcRequest("tools/call", "tools-call-preserved", {
           name: toolCase.toolName,
-          arguments: { [toolCase.argumentKey]: { id: toolCase.rawRefId } },
+          arguments: { [toolCase.argumentKey]: { id: toolCase.safeRefId } },
           _meta: { progressToken: "progress-token-secret" },
         }),
         { "mcp-protocol-version": "2025-11-25" },
@@ -1677,7 +1677,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(dependencies.executeReadonlySummaryTool.mock.calls[0]?.[0]).toEqual({
       toolName: toolCase.toolName,
       twoweeksClerkId: OWNER_ID,
-      ref: { id: toolCase.rawRefId },
+      ref: { id: toolCase.safeRefId },
       version: 1,
     });
     expect(dependencies.createPreAuthIntent).not.toHaveBeenCalled();
@@ -1712,6 +1712,46 @@ describe("MCP OAuth production route adapter", () => {
     expect(bodyText).not.toContain("refresh_token");
     expect(bodyText).not.toContain("authorizationCodeDigest");
     expect(bodyText).not.toContain("stack");
+    },
+  );
+
+  it.each(READONLY_SUMMARY_CASES)(
+    "fails stale or typo production summary refs for $toolName before executor dispatch",
+    async (toolCase) => {
+      const ctx = makeCtx();
+      ctx.accessTokenRows.push(storedAccessToken());
+      const dependencies = routeDependencies(ctx);
+      const response = await handleMcpOAuthProductionRouteRequest(
+        mcpRequest(
+          `Bearer ${RAW_ACCESS_TOKEN}`,
+          mcpJsonRpcRequest("tools/call", "stale-summary-ref", {
+            name: toolCase.toolName,
+            arguments: { [toolCase.argumentKey]: { id: toolCase.rawRefId } },
+          }),
+          { "mcp-protocol-version": "2025-11-25" },
+        ),
+        routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+        dependencies,
+      );
+
+      expect(response).toMatchObject({
+        handled: true,
+        status: 200,
+        json: {
+          jsonrpc: "2.0",
+          id: "stale-summary-ref",
+          error: {
+            code: -32000,
+            message: MCP_PRODUCTION_READONLY_SUMMARY_EXECUTION_FAILURE_MESSAGE,
+            safeForModel: true,
+          },
+        },
+      });
+      expect(dependencies.executeReadonlySummaryTool).not.toHaveBeenCalled();
+      expect(JSON.stringify(response)).not.toContain("Invalid tools/call");
+      expect(JSON.stringify(response)).not.toContain(toolCase.rawRefId);
+      expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+      expect(JSON.stringify(response)).not.toContain(MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND);
     },
   );
 
@@ -5146,7 +5186,7 @@ describe("MCP OAuth production route adapter", () => {
       },
       body: JSON.stringify(mcpJsonRpcRequest("tools/call", "vite-readonly-summary", {
         name: toolCase.toolName,
-        arguments: { [toolCase.argumentKey]: { id: "raw-ref-vite-summary" } },
+        arguments: { [toolCase.argumentKey]: { id: toolCase.safeRefId } },
       })),
     });
 
@@ -5176,7 +5216,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(convexHttpClientQuery.mock.calls[1]?.[1]).toEqual({
       twoweeksClerkId: OWNER_ID,
       applicationPackageRef: {
-        id: "raw-ref-vite-summary",
+        id: toolCase.safeRefId,
         label: "Application package availability",
         status: "available",
         category: "application_package",
