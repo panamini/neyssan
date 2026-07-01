@@ -50,10 +50,13 @@ import {
 } from "./mcpProductionToolsCallBoundary";
 import {
   buildMcpProductionReadonlySummaryExecutionInput,
-  MCP_PRODUCTION_READONLY_SUMMARY_EXECUTION_FAILURE_MESSAGE,
   type McpProductionReadonlySummaryExecutionInputV1,
   type McpProductionReadonlySummaryExecutorV1,
 } from "./mcpProductionReadonlySummaryExecutor";
+import {
+  buildMcpProductionReadonlySummaryStatusMcpResult,
+  readMcpProductionReadonlySummaryToolName,
+} from "./mcpProductionReadonlySummaryStatusNormalizer";
 import { buildMcpProductionToolsListResult } from "./mcpProductionToolsListProjection";
 import {
   MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER,
@@ -1805,8 +1808,17 @@ async function toolsCallBoundaryResponse(
       buildMcpJsonRpcError(id, -32602, messageForMcpProductionToolsCallBoundaryError(validation.error)),
     );
   }
+  const toolName = readMcpProductionReadonlySummaryToolName(validation.tool.name);
+  if (!toolName) {
+    return jsonResponse(200, buildMcpJsonRpcError(id, -32602, "Unknown tools/call tool."));
+  }
   if (!executeReadonlySummaryTool) {
-    return jsonResponse(200, buildMcpJsonRpcError(id, -32000, MCP_PRODUCTION_READONLY_SUMMARY_EXECUTION_FAILURE_MESSAGE));
+    return jsonResponse(200, readonlySummaryStatusResponse(id, {
+      toolName,
+      failure: "dependency_missing",
+      nowEpochMs: envelope.createdAt,
+      version: 1,
+    }));
   }
   const executionInput = buildMcpProductionReadonlySummaryExecutionInput({
     validation,
@@ -1814,7 +1826,12 @@ async function toolsCallBoundaryResponse(
     version: 1,
   });
   if (!executionInput) {
-    return jsonResponse(200, buildMcpJsonRpcError(id, -32000, MCP_PRODUCTION_READONLY_SUMMARY_EXECUTION_FAILURE_MESSAGE));
+    return jsonResponse(200, readonlySummaryStatusResponse(id, {
+      toolName,
+      failure: "malformed",
+      nowEpochMs: envelope.createdAt,
+      version: 1,
+    }));
   }
   let executionResult: Awaited<ReturnType<McpProductionReadonlySummaryExecutorV1>>;
   try {
@@ -1823,20 +1840,40 @@ async function toolsCallBoundaryResponse(
       executionInput,
       READONLY_SUMMARY_EXECUTION_TIMEOUT_MS,
     );
-  } catch {
-    return jsonResponse(200, buildMcpJsonRpcError(id, -32000, MCP_PRODUCTION_READONLY_SUMMARY_EXECUTION_FAILURE_MESSAGE));
+  } catch (error) {
+    return jsonResponse(200, readonlySummaryStatusResponse(id, {
+      toolName,
+      failure: isReadonlySummaryExecutionTimeout(error) ? "timeout" : "malformed",
+      nowEpochMs: envelope.createdAt,
+      version: 1,
+    }));
   }
-  if (!executionResult.ok) {
-    return jsonResponse(200, buildMcpJsonRpcError(id, -32000, MCP_PRODUCTION_READONLY_SUMMARY_EXECUTION_FAILURE_MESSAGE));
-  }
-  return jsonResponse(200, {
+  return jsonResponse(200, readonlySummaryStatusResponse(id, {
+    toolName,
+    executionResult,
+    nowEpochMs: envelope.createdAt,
+    forbiddenSubstrings: [twoweeksClerkId],
+    version: 1,
+  }));
+}
+
+function readonlySummaryStatusResponse(
+  id: McpJsonRpcIdV1,
+  input: Parameters<typeof buildMcpProductionReadonlySummaryStatusMcpResult>[0],
+): unknown {
+  const result = buildMcpProductionReadonlySummaryStatusMcpResult(input);
+  return {
     jsonrpc: "2.0",
     id,
     result: {
-      content: executionResult.content,
-      structuredContent: executionResult.structuredContent,
+      content: result.content,
+      structuredContent: result.structuredContent,
     },
-  });
+  };
+}
+
+function isReadonlySummaryExecutionTimeout(error: unknown): boolean {
+  return error instanceof Error && error.message === "readonly_summary_execution_timeout";
 }
 
 function blockedMcpPolicyDecisionResponse(

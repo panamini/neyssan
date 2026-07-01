@@ -40,6 +40,7 @@ import {
   type McpProductionReadonlySummaryExecutionInputV1,
   type McpProductionReadonlySummaryExecutionResultV1,
 } from "../mcpProductionReadonlySummaryExecutor";
+import { MCP_PRODUCTION_READONLY_SUMMARY_STATUS_RESULT_KIND } from "../mcpProductionReadonlySummaryStatusNormalizer";
 import { buildMcpProductionToolsListResult } from "../mcpProductionToolsListProjection";
 import type { McpOAuthProductionActivationDependenciesV1 } from "../mcpOAuthProductionActivationBoundary";
 import {
@@ -1642,23 +1643,23 @@ describe("MCP OAuth production route adapter", () => {
   it.each(READONLY_SUMMARY_CASES)(
     "executes a safe read-only production tools/call summary for $toolName after bearer token",
     async (toolCase) => {
-    const ctx = makeCtx();
-    ctx.accessTokenRows.push(storedAccessToken());
-    const activation = activationDependencies();
-    const dependencies = routeDependencies(ctx);
-    const response = await handleMcpOAuthProductionRouteRequest(
-      mcpRequest(
-        `Bearer ${RAW_ACCESS_TOKEN}`,
-        mcpJsonRpcRequest("tools/call", "tools-call-preserved", {
-          name: toolCase.toolName,
-          arguments: { [toolCase.argumentKey]: { id: toolCase.safeRefId } },
-          _meta: { progressToken: "progress-token-secret" },
-        }),
-        { "mcp-protocol-version": "2025-11-25" },
-      ),
-      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }, activation),
-      dependencies,
-    );
+      const ctx = makeCtx();
+      ctx.accessTokenRows.push(storedAccessToken());
+      const activation = activationDependencies();
+      const dependencies = routeDependencies(ctx);
+      const response = await handleMcpOAuthProductionRouteRequest(
+        mcpRequest(
+          `Bearer ${RAW_ACCESS_TOKEN}`,
+          mcpJsonRpcRequest("tools/call", "tools-call-preserved", {
+            name: toolCase.toolName,
+            arguments: { [toolCase.argumentKey]: { id: toolCase.safeRefId } },
+            _meta: { progressToken: "progress-token-secret" },
+          }),
+          { "mcp-protocol-version": "2025-11-25" },
+        ),
+        routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }, activation),
+        dependencies,
+      );
 
     expect(response).toMatchObject({
       handled: true,
@@ -1667,20 +1668,28 @@ describe("MCP OAuth production route adapter", () => {
         jsonrpc: "2.0",
         id: "tools-call-preserved",
         result: {
-          content: [{ type: "text", text: "Read-only summary returned." }],
+          content: [{ type: "text", text: "Read-only summary status: OK." }],
           structuredContent: {
-            kind: toolCase.expectedKind,
-            [toolCase.resultRefKey]: {
-              id: toolCase.safeRefId,
-              category: toolCase.category,
+            kind: MCP_PRODUCTION_READONLY_SUMMARY_STATUS_RESULT_KIND,
+            status: "OK",
+            toolName: toolCase.toolName,
+            summary: {
+              kind: toolCase.expectedKind,
+              updatedAt: new Date(NOW).toISOString(),
+              [toolCase.resultRefKey]: {
+                id: toolCase.safeRefId,
+                category: toolCase.category,
+                updatedAt: new Date(NOW).toISOString(),
+              },
+              capabilities: {
+                dataReads: toolCase.dataReads,
+                dataWrites: "blocked",
+                networkAccess: "blocked",
+                modelCalls: "blocked",
+                writeActions: "blocked",
+              },
             },
-            capabilities: {
-              dataReads: toolCase.dataReads,
-              dataWrites: "blocked",
-              networkAccess: "blocked",
-              modelCalls: "blocked",
-              writeActions: "blocked",
-            },
+            version: 1,
           },
         },
       },
@@ -1864,10 +1873,14 @@ describe("MCP OAuth production route adapter", () => {
       json: {
         jsonrpc: "2.0",
         id: "missing-readonly-executor",
-        error: {
-          code: -32000,
-          message: MCP_PRODUCTION_READONLY_SUMMARY_EXECUTION_FAILURE_MESSAGE,
-          safeForModel: true,
+        result: {
+          content: [{ type: "text", text: "Read-only summary status: DEPENDENCY_MISSING." }],
+          structuredContent: {
+            kind: MCP_PRODUCTION_READONLY_SUMMARY_STATUS_RESULT_KIND,
+            status: "DEPENDENCY_MISSING",
+            toolName: "twoweeks.application_package.summarize",
+            version: 1,
+          },
         },
       },
     });
@@ -1904,10 +1917,14 @@ describe("MCP OAuth production route adapter", () => {
       json: {
         jsonrpc: "2.0",
         id: "readonly-executor-throw",
-        error: {
-          code: -32000,
-          message: MCP_PRODUCTION_READONLY_SUMMARY_EXECUTION_FAILURE_MESSAGE,
-          safeForModel: true,
+        result: {
+          content: [{ type: "text", text: "Read-only summary status: MALFORMED." }],
+          structuredContent: {
+            kind: MCP_PRODUCTION_READONLY_SUMMARY_STATUS_RESULT_KIND,
+            status: "MALFORMED",
+            toolName: "twoweeks.application_package.summarize",
+            version: 1,
+          },
         },
       },
     });
@@ -1952,10 +1969,14 @@ describe("MCP OAuth production route adapter", () => {
         json: {
           jsonrpc: "2.0",
           id: "readonly-executor-timeout",
-          error: {
-            code: -32000,
-            message: MCP_PRODUCTION_READONLY_SUMMARY_EXECUTION_FAILURE_MESSAGE,
-            safeForModel: true,
+          result: {
+            content: [{ type: "text", text: "Read-only summary status: TIMEOUT." }],
+            structuredContent: {
+              kind: MCP_PRODUCTION_READONLY_SUMMARY_STATUS_RESULT_KIND,
+              status: "TIMEOUT",
+              toolName: "twoweeks.application_package.summarize",
+              version: 1,
+            },
           },
         },
       });
@@ -5210,11 +5231,18 @@ describe("MCP OAuth production route adapter", () => {
       jsonrpc: "2.0",
       id: "vite-readonly-summary",
       result: {
+        content: [{ type: "text", text: "Read-only summary status: OK." }],
         structuredContent: {
-          kind: toolCase.expectedKind,
-          [toolCase.resultRefKey]: {
-            id: toolCase.safeRefId,
+          kind: MCP_PRODUCTION_READONLY_SUMMARY_STATUS_RESULT_KIND,
+          status: "OK",
+          toolName: toolCase.toolName,
+          summary: {
+            kind: toolCase.expectedKind,
+            [toolCase.resultRefKey]: {
+              id: toolCase.safeRefId,
+            },
           },
+          version: 1,
         },
       },
     });
@@ -5881,12 +5909,14 @@ function fakeReadonlySummaryExecutionResult(
       kind: toolCase.expectedKind,
       allowed: true,
       status: "available",
+      updatedAt: new Date(NOW).toISOString(),
       [toolCase.resultRefKey]: Object.freeze({
         id: toolCase.safeRefId,
         label: "Safe summary availability",
         status: "available",
         category: toolCase.category,
         count: 1,
+        updatedAt: new Date(NOW).toISOString(),
         version: 1,
       }),
       availability: Object.freeze({
