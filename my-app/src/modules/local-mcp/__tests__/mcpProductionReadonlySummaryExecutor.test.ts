@@ -134,14 +134,14 @@ describe("MCP production read-only summary executor", () => {
         },
         version: 1,
       });
-      expect(validation.valid).toBe(true);
-      if (!validation.valid) throw new Error("Expected schema-level tools/call validation to pass.");
-
-      expect(buildMcpProductionReadonlySummaryExecutionInput({
-        validation,
-        twoweeksClerkId: OWNER_ID,
-        version: 1,
-      })).toBeUndefined();
+      expect(validation).toMatchObject({
+        valid: false,
+        error: {
+          code: "invalid_arguments",
+          message: "Invalid tools/call arguments.",
+          safeForModel: true,
+        },
+      });
 
       const runQuery = vi.fn(async () => summaryResultFor(toolCase, {
         query: toolCase.query,

@@ -20,6 +20,28 @@ const PRODUCTION_TOOL_DESCRIPTIONS: Readonly<Record<string, string>> = Object.fr
   "twoweeks.review_cockpit.summarize": "Use this to inspect read-only review cockpit metadata for an existing reference.",
 });
 
+const PRODUCTION_SAFE_REF_IDS: Readonly<Record<string, Readonly<{
+  argumentKey: string;
+  safeRefId: string;
+}>>> = Object.freeze({
+  "twoweeks.application_package.summarize": Object.freeze({
+    argumentKey: "applicationPackageRef",
+    safeRefId: "mcp-safe-ref:application-package:latest",
+  }),
+  "twoweeks.evidence_graph.summarize": Object.freeze({
+    argumentKey: "evidenceGraphRef",
+    safeRefId: "mcp-safe-ref:evidence-graph:profile",
+  }),
+  "twoweeks.resume_variant_plan.summarize": Object.freeze({
+    argumentKey: "resumeVariantPlanRef",
+    safeRefId: "mcp-safe-ref:resume-variant-plan:latest",
+  }),
+  "twoweeks.review_cockpit.summarize": Object.freeze({
+    argumentKey: "reviewCockpitRef",
+    safeRefId: "mcp-safe-ref:review-cockpit:latest",
+  }),
+});
+
 const MCP_PRODUCTION_TOOLS_LIST_RESULT = buildMcpProductionToolsListResultFromRegistry();
 
 export function buildMcpProductionToolsListResult(): McpProductionToolsListResultV1 {
@@ -40,7 +62,7 @@ function projectProductionToolDescriptor(
     name: descriptor.name,
     title: descriptor.title,
     description: productionToolDescription(descriptor),
-    inputSchema: cloneJsonSchema(descriptor.inputSchema),
+    inputSchema: productionInputSchema(descriptor),
     annotations: Object.freeze({ ...descriptor.annotations }),
   });
 }
@@ -51,6 +73,40 @@ function productionToolDescription(descriptor: LocalMcpProjectedToolDescriptorV1
     throw new TypeError("Production tools/list descriptor is missing a public description");
   }
   return description;
+}
+
+function productionInputSchema(
+  descriptor: LocalMcpProjectedToolDescriptorV1,
+): LocalMcpProjectedToolDescriptorV1["inputSchema"] {
+  const schema = cloneJsonSchema(descriptor.inputSchema);
+  const safeRef = PRODUCTION_SAFE_REF_IDS[descriptor.name];
+  if (!safeRef) {
+    throw new TypeError("Production tools/list descriptor is missing a public safe ref contract");
+  }
+  const argumentSchema = schema.properties?.[safeRef.argumentKey];
+  const idSchema = argumentSchema?.properties?.id;
+  if (!argumentSchema || !idSchema) {
+    throw new TypeError("Production tools/list descriptor is missing the safe ref input schema");
+  }
+
+  return Object.freeze({
+    ...schema,
+    properties: Object.freeze({
+      ...schema.properties,
+      [safeRef.argumentKey]: Object.freeze({
+        ...argumentSchema,
+        properties: Object.freeze({
+          ...argumentSchema.properties,
+          id: Object.freeze({
+            ...idSchema,
+            description: `Canonical production safe ref id: ${safeRef.safeRefId}.`,
+            const: safeRef.safeRefId,
+            enum: Object.freeze([safeRef.safeRefId]),
+          }),
+        }),
+      }),
+    }),
+  });
 }
 
 function cloneJsonSchema(

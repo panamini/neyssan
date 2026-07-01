@@ -134,7 +134,7 @@ describe("mcpOperationalEvents", () => {
       /@opentelemetry|datadog|newrelic|rollbar/iu,
       /from\s+["']@sentry|import\s+["']@sentry/iu,
       /\bfetch\s*\(|XMLHttpRequest|axios\s*\./iu,
-      /oauth\s*callback|token\s*exchange|refresh\s*token|revocation\s*endpoint/iu,
+      /oauth[\s_-]+callback|token[\s_-]+exchange|refresh[\s_-]+token|revocation[\s_-]+endpoint/iu,
       /playwright|puppeteer|selenium/iu,
       /provider\s+api|provider\s+adapter|live\s+provider/iu,
       /public\s+dashboard|public\s+metrics|external\s+observability/iu,

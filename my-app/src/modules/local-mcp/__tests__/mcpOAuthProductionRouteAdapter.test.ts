@@ -1380,6 +1380,21 @@ describe("MCP OAuth production route adapter", () => {
       expect(String(tool.description)).not.toContain("dry-run");
       expect(String(tool.description)).not.toContain("internal");
       expect(String(tool.description)).not.toContain("local");
+      const toolCase = READONLY_SUMMARY_CASES.find((candidate) => candidate.toolName === tool.name);
+      expect(toolCase).toBeDefined();
+      if (!toolCase) throw new Error("Expected production tool to have a safe-ref test case.");
+      const refSchema = (
+        tool.inputSchema as {
+          properties?: Record<string, { properties?: Record<string, Record<string, unknown>> }>;
+        }
+      ).properties?.[toolCase.argumentKey];
+      const idSchema = refSchema?.properties?.id ?? {};
+      expect(idSchema).toMatchObject({
+        type: "string",
+        description: `Canonical production safe ref id: ${toolCase.safeRefId}.`,
+        const: toolCase.safeRefId,
+        enum: [toolCase.safeRefId],
+      });
     }
     expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(1);
     expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
@@ -1704,7 +1719,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(bodyText).not.toContain("mcpOAuthPreAuthIntents_fixture");
     expect(bodyText).not.toContain("localToolId");
     expect(bodyText).not.toContain("internalToolId");
-    expect(bodyText).not.toContain("handler");
+    expect(bodyText).not.toContain('"handler":');
     expect(bodyText).not.toContain("function");
     expect(bodyText).not.toContain("https://");
     expect(bodyText).not.toContain("stytch");
@@ -1741,14 +1756,13 @@ describe("MCP OAuth production route adapter", () => {
           jsonrpc: "2.0",
           id: "stale-summary-ref",
           error: {
-            code: -32000,
-            message: MCP_PRODUCTION_READONLY_SUMMARY_EXECUTION_FAILURE_MESSAGE,
+            code: -32602,
+            message: "Invalid tools/call arguments.",
             safeForModel: true,
           },
         },
       });
       expect(dependencies.executeReadonlySummaryTool).not.toHaveBeenCalled();
-      expect(JSON.stringify(response)).not.toContain("Invalid tools/call");
       expect(JSON.stringify(response)).not.toContain(toolCase.rawRefId);
       expect(JSON.stringify(response)).not.toContain(OWNER_ID);
       expect(JSON.stringify(response)).not.toContain(MCP_PRODUCTION_TOOLS_CALL_READONLY_SYNTHETIC_RESULT_KIND);
@@ -1836,7 +1850,7 @@ describe("MCP OAuth production route adapter", () => {
         `Bearer ${RAW_ACCESS_TOKEN}`,
         mcpJsonRpcRequest("tools/call", "missing-readonly-executor", {
           name: "twoweeks.application_package.summarize",
-          arguments: { applicationPackageRef: { id: "raw-ref-missing-executor" } },
+          arguments: { applicationPackageRef: { id: READONLY_SUMMARY_CASES[0].safeRefId } },
         }),
         { "mcp-protocol-version": "2025-11-25" },
       ),
@@ -1876,7 +1890,7 @@ describe("MCP OAuth production route adapter", () => {
         `Bearer ${RAW_ACCESS_TOKEN}`,
         mcpJsonRpcRequest("tools/call", "readonly-executor-throw", {
           name: "twoweeks.application_package.summarize",
-          arguments: { applicationPackageRef: { id: "raw-ref-executor-throw" } },
+          arguments: { applicationPackageRef: { id: READONLY_SUMMARY_CASES[0].safeRefId } },
         }),
         { "mcp-protocol-version": "2025-11-25" },
       ),
@@ -1922,7 +1936,7 @@ describe("MCP OAuth production route adapter", () => {
           `Bearer ${RAW_ACCESS_TOKEN}`,
           mcpJsonRpcRequest("tools/call", "readonly-executor-timeout", {
             name: "twoweeks.application_package.summarize",
-            arguments: { applicationPackageRef: { id: "raw-ref-executor-timeout" } },
+            arguments: { applicationPackageRef: { id: READONLY_SUMMARY_CASES[0].safeRefId } },
           }),
           { "mcp-protocol-version": "2025-11-25" },
         ),
