@@ -1,5 +1,24 @@
 import type { McpProductionPrivateBetaGateDecisionV1 } from "./mcpProductionPrivateBetaGate";
 
+export const MCP_PRODUCTION_LAUNCH_READINESS_PUBLIC_LAUNCH_REQUESTED_FLAG =
+  "MCP_OAUTH_PRODUCTION_PUBLIC_LAUNCH_REQUESTED";
+export const MCP_PRODUCTION_LAUNCH_READINESS_PRIVATE_BETA_GATE_REVIEWED_FLAG =
+  "MCP_OAUTH_PRODUCTION_LAUNCH_PRIVATE_BETA_GATE_REVIEWED";
+export const MCP_PRODUCTION_LAUNCH_READINESS_AUTHENTICATED_PROTOCOL_REVIEWED_FLAG =
+  "MCP_OAUTH_PRODUCTION_LAUNCH_AUTHENTICATED_PROTOCOL_REVIEWED";
+export const MCP_PRODUCTION_LAUNCH_READINESS_POLICY_KERNEL_REVIEWED_FLAG =
+  "MCP_OAUTH_PRODUCTION_LAUNCH_POLICY_KERNEL_REVIEWED";
+export const MCP_PRODUCTION_LAUNCH_READINESS_TOOLS_LIST_METADATA_REVIEWED_FLAG =
+  "MCP_OAUTH_PRODUCTION_LAUNCH_TOOLS_LIST_METADATA_REVIEWED";
+export const MCP_PRODUCTION_LAUNCH_READINESS_TOOLS_CALL_READ_ONLY_REVIEWED_FLAG =
+  "MCP_OAUTH_PRODUCTION_LAUNCH_TOOLS_CALL_READ_ONLY_REVIEWED";
+export const MCP_PRODUCTION_LAUNCH_READINESS_SCHEMA_MATCHER_REVIEWED_FLAG =
+  "MCP_OAUTH_PRODUCTION_LAUNCH_SCHEMA_MATCHER_REVIEWED";
+export const MCP_PRODUCTION_LAUNCH_READINESS_PROVIDER_WRITE_EXPANSION_BLOCKED_FLAG =
+  "MCP_OAUTH_PRODUCTION_LAUNCH_PROVIDER_WRITE_EXPANSION_BLOCKED";
+export const MCP_PRODUCTION_LAUNCH_READINESS_UNRESOLVED_BLOCKING_FINDINGS_FLAG =
+  "MCP_OAUTH_PRODUCTION_LAUNCH_UNRESOLVED_BLOCKING_FINDINGS";
+
 export type McpProductionLaunchReadinessEvidenceInputV1 = Readonly<{
   privateBetaGateReviewed?: boolean;
   authenticatedMcpProtocolReviewed?: boolean;
@@ -78,11 +97,11 @@ export function evaluateMcpProductionLaunchReadiness(input: Readonly<{
 
   const config = readLaunchReadinessConfig(input.config);
   if (!config.ok) return decision(config.code, true, input.privateBetaDecision.code);
-  if (!config.config.evidenceComplete) {
-    return decision("launch_evidence_missing", true, input.privateBetaDecision.code);
-  }
   if (config.config.publicLaunchRequested) {
     return decision("public_launch_blocked", true, input.privateBetaDecision.code);
+  }
+  if (!config.config.evidenceComplete) {
+    return decision("launch_evidence_missing", true, input.privateBetaDecision.code);
   }
   return decision("private_beta_ready_public_launch_blocked", true, input.privateBetaDecision.code);
 }
