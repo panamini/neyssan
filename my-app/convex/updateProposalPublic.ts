@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";
 import { listProfilesForClerk } from "./lib/userProfiles";
 import { sanitizeRemoteMetadataImages } from "./lib/documentAssets";
+import { bestEffortMaterializeMcpReadSideForStoredProposal } from "./mcpReadSideMaterialization";
 
 const proposalVoicePresetChoice = v.union(
   v.literal("signature"),
@@ -451,6 +452,14 @@ export default mutation({
     }
 
     await ctx.db.patch(args.id, patch);
+
+    if (hasContentPatch || hasSectionsPatch || hasMetadataPatch) {
+      await bestEffortMaterializeMcpReadSideForStoredProposal(ctx, {
+        ...proposal,
+        ...patch,
+        _id: args.id,
+      });
+    }
 
     if (hasMetadataPatch && isProposalStyleTraceEnabled()) {
       const updatedProposal = await ctx.db.get(args.id);

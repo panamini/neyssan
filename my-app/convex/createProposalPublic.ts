@@ -4,6 +4,7 @@ import { v } from "convex/values";
 import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";
 import { getPrimaryProfileForClerk } from "./lib/userProfiles";
 import { sanitizeRemoteMetadataImages } from "./lib/documentAssets";
+import { bestEffortMaterializeMcpReadSideForStoredProposal } from "./mcpReadSideMaterialization";
 
 const proposalVoicePresetChoice = v.union(
   v.literal("signature"),
@@ -335,7 +336,7 @@ export default mutation({
     let user = args.profileId
       ? await ctx.db
           .query("userProfiles")
-          .withIndex("by_profileId", (q) => q.eq("profileId", args.profileId!))
+          .withIndex("by_profileId", (q) => q.eq("profileId", args.profileId))
           .filter((q) => q.eq(q.field("clerkId"), identity.subject))
           .first()
       : await getPrimaryProfileForClerk(ctx, identity.subject);
@@ -387,7 +388,7 @@ export default mutation({
       args.metadata ?? {},
     ) as NonNullable<typeof args.metadata>;
 
-    const proposalId = await ctx.db.insert("proposals", {
+    const proposal = {
       userId: user._id,
       jobId: args.metadata?.jobId,
       title: trimmedTitle,
@@ -399,12 +400,17 @@ export default mutation({
       sections:
         Array.isArray(args.sections) && args.sections.length > 0
           ? args.sections
-          : [{ type: "text", content: trimmedContent }],
+          : [{ type: "text" as const, content: trimmedContent }],
       metrics: {
         score: 0,
         confidence: 0,
       },
       metadata: sanitizedMetadata,
+    };
+    const proposalId = await ctx.db.insert("proposals", proposal);
+    await bestEffortMaterializeMcpReadSideForStoredProposal(ctx, {
+      _id: proposalId,
+      ...proposal,
     });
 
     if (isProposalStyleTraceEnabled()) {
