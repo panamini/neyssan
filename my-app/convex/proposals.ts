@@ -2,7 +2,10 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";
 import { sanitizeRemoteMetadataImages } from "./lib/documentAssets";
-import { materializeMcpReadSideForStoredProposal } from "./mcpReadSideMaterialization";
+import {
+  bestEffortDeleteMcpReadSidePackageForStoredProposal,
+  bestEffortMaterializeMcpReadSideForStoredProposal,
+} from "./mcpReadSideMaterialization";
 
 const proposalVoicePresetChoice = v.union(
   v.literal("signature"),
@@ -262,7 +265,7 @@ export const storeProposal = internalMutation({
       metadata: sanitizeRemoteMetadataImages(args.metadata) as typeof args.metadata,
     };
     const proposalId = await ctx.db.insert("proposals", proposal);
-    await materializeMcpReadSideForStoredProposal(ctx, {
+    await bestEffortMaterializeMcpReadSideForStoredProposal(ctx, {
       _id: proposalId,
       ...proposal,
     });
@@ -399,11 +402,9 @@ export const updateProposal = internalMutation({
 
     await ctx.db.patch(id, patch);
 
-    if (typeof args.jobId === "string" || typeof args.metadata?.jobId === "string") {
-      const proposal = await ctx.db.get(id);
-      if (proposal) {
-        await materializeMcpReadSideForStoredProposal(ctx, proposal);
-      }
+    const proposal = await ctx.db.get(id);
+    if (proposal) {
+      await bestEffortMaterializeMcpReadSideForStoredProposal(ctx, proposal);
     }
   },
 });
@@ -413,6 +414,11 @@ export const deleteProposal = internalMutation({
     id: v.id("proposals"),
   },
   handler: async (ctx, args) => {
+    const proposal = await ctx.db.get(args.id);
+    if (proposal) {
+      await bestEffortDeleteMcpReadSidePackageForStoredProposal(ctx, proposal);
+    }
+
     return ctx.db.delete(args.id);
   },
 });

@@ -4,7 +4,7 @@ import { v } from "convex/values";
 import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";
 import { getPrimaryProfileForClerk } from "./lib/userProfiles";
 import { sanitizeRemoteMetadataImages } from "./lib/documentAssets";
-import { materializeMcpReadSideForStoredProposal } from "./mcpReadSideMaterialization";
+import { bestEffortMaterializeMcpReadSideForStoredProposal } from "./mcpReadSideMaterialization";
 
 const proposalVoicePresetChoice = v.union(
   v.literal("signature"),
@@ -336,7 +336,7 @@ export default mutation({
     let user = args.profileId
       ? await ctx.db
           .query("userProfiles")
-          .withIndex("by_profileId", (q) => q.eq("profileId", args.profileId!))
+          .withIndex("by_profileId", (q) => q.eq("profileId", args.profileId))
           .filter((q) => q.eq(q.field("clerkId"), identity.subject))
           .first()
       : await getPrimaryProfileForClerk(ctx, identity.subject);
@@ -408,7 +408,7 @@ export default mutation({
       metadata: sanitizedMetadata,
     };
     const proposalId = await ctx.db.insert("proposals", proposal);
-    await materializeMcpReadSideForStoredProposal(ctx, {
+    await bestEffortMaterializeMcpReadSideForStoredProposal(ctx, {
       _id: proposalId,
       ...proposal,
     });

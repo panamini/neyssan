@@ -1,6 +1,7 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { listProfilesForClerk } from "./lib/userProfiles";
+import { bestEffortDeleteMcpReadSidePackageForStoredProposal } from "./mcpReadSideMaterialization";
 
 /**
  * Public mutation to delete a proposal owned by the authenticated user.
@@ -25,6 +26,7 @@ export default mutation({
       throw new Error("Not authorized to delete this proposal");
     }
 
+    await bestEffortDeleteMcpReadSidePackageForStoredProposal(ctx, proposal);
     await ctx.db.delete(args.id);
     return { success: true };
   },

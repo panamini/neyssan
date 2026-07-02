@@ -1,9 +1,6 @@
 import type { ApplicationPackageV1 } from "../src/modules/application-package/schema";
 
-import {
-  assertSameApplicationPackagePayload,
-  buildApplicationPackageStorageRecord,
-} from "./lib/applicationPackages";
+import { buildApplicationPackageStorageRecord } from "./lib/applicationPackages";
 import { buildApplicationContextV1FromExistingData } from "./lib/applicationContextBuilder";
 import { buildStableHash } from "./lib/applicationHarnessHashes";
 
@@ -14,7 +11,8 @@ type MaterializationSkipReason =
   | "proposal_missing_job"
   | "job_not_found"
   | "job_owner_mismatch"
-  | "profile_not_found";
+  | "profile_not_found"
+  | "materialization_failed";
 
 type LooseRecord = Record<string, unknown>;
 
@@ -59,6 +57,7 @@ export async function materializeMcpReadSideForStoredProposal(
 
   const jobStorageId = resolveJobStorageId(ctx, proposal);
   if (!jobStorageId) {
+    await deleteMcpReadSidePackageForStoredProposal(ctx, proposal);
     return skipped("proposal_missing_job");
   }
 
@@ -67,16 +66,19 @@ export async function materializeMcpReadSideForStoredProposal(
     ctx.db.get(jobStorageId),
   ]);
   if (!profile) {
+    await deleteMcpReadSidePackageForStoredProposal(ctx, proposal);
     return skipped("profile_not_found");
   }
   if (!job) {
+    await deleteMcpReadSidePackageForStoredProposal(ctx, proposal);
     return skipped("job_not_found");
   }
   if (readString(job.userId) !== ownerId) {
+    await deleteMcpReadSidePackageForStoredProposal(ctx, proposal);
     return skipped("job_owner_mismatch");
   }
 
-  const now = readFiniteTimestamp(proposal.createdAt) ?? Date.now();
+  const now = Date.now();
   const context = await buildAndPersistApplicationContext(ctx, {
     ownerId,
     job,
@@ -84,13 +86,23 @@ export async function materializeMcpReadSideForStoredProposal(
     proposal,
     now,
   });
-  const applicationPackage = await buildSafeApplicationPackage({
-    ownerId,
-    applicationContextId: context.contextId,
-    proposal,
-    now,
-  });
-  const packageReused = await createOrReuseApplicationPackage(ctx, applicationPackage);
+  let applicationPackage: ApplicationPackageV1;
+  let packageReused: boolean;
+  try {
+    applicationPackage = await buildSafeApplicationPackage({
+      ownerId,
+      applicationContextId: context.contextId,
+      proposal,
+      now,
+    });
+    packageReused = await createOrReuseApplicationPackage(ctx, applicationPackage);
+  } catch (error) {
+    await deleteApplicationContextIfUnreferenced(ctx, {
+      applicationContextId: context.contextId,
+      userId: ownerId,
+    });
+    throw error;
+  }
 
   return {
     status: "materialized",
@@ -100,6 +112,61 @@ export async function materializeMcpReadSideForStoredProposal(
     packageReused,
     version: 1,
   };
+}
+
+export async function bestEffortMaterializeMcpReadSideForStoredProposal(
+  ctx: MaterializationCtx,
+  proposal: StoredProposalForMcpReadSideMaterialization,
+): Promise<McpReadSideMaterializationResult> {
+  try {
+    return await materializeMcpReadSideForStoredProposal(ctx, proposal);
+  } catch (error) {
+    logBestEffortFailure("materialize", error);
+    return skipped("materialization_failed");
+  }
+}
+
+export async function deleteMcpReadSidePackageForStoredProposal(
+  ctx: MaterializationCtx,
+  proposal: StoredProposalForMcpReadSideMaterialization,
+): Promise<boolean> {
+  const applicationPackageId = await buildStableApplicationPackageId(proposal);
+  if (!applicationPackageId) {
+    return false;
+  }
+
+  const existing = await ctx.db
+    .query("applicationPackages")
+    .withIndex("by_application_package_id", (q: any) =>
+      q.eq("applicationPackageId", applicationPackageId),
+    )
+    .unique?.();
+  if (!existing) {
+    return false;
+  }
+
+  const applicationContextId = readString(existing.applicationContextId);
+  const userId = readString(existing.userId) ?? readString(proposal.userId);
+  await ctx.db.delete(existing._id);
+  if (applicationContextId && userId) {
+    await deleteApplicationContextIfUnreferenced(ctx, {
+      applicationContextId,
+      userId,
+    });
+  }
+  return true;
+}
+
+export async function bestEffortDeleteMcpReadSidePackageForStoredProposal(
+  ctx: MaterializationCtx,
+  proposal: StoredProposalForMcpReadSideMaterialization,
+): Promise<boolean> {
+  try {
+    return await deleteMcpReadSidePackageForStoredProposal(ctx, proposal);
+  } catch (error) {
+    logBestEffortFailure("delete-package", error);
+    return false;
+  }
 }
 
 async function buildAndPersistApplicationContext(
@@ -179,17 +246,19 @@ async function buildSafeApplicationPackage(
     namespace: HASH_NAMESPACE,
     type: "proposal-content-hash",
     version: 1,
-    content: readString(input.proposal.content) ?? "",
+    content: readExactString(input.proposal.content) ?? "",
+    sections: readSafeSectionFingerprintInput(input.proposal.sections),
   });
-  const packageHash = await buildStableHash({
-    namespace: HASH_NAMESPACE,
-    type: "application-package-id",
-    version: 1,
-    userId: input.ownerId,
-    applicationContextId: input.applicationContextId,
-    proposalId,
-    proposalContentHash,
-  });
+  const applicationPackageId = await buildStableApplicationPackageId(input.proposal);
+  const packageHash = applicationPackageId
+    ? applicationPackageId.slice("application-package:".length)
+    : await buildStableHash({
+        namespace: HASH_NAMESPACE,
+        type: "application-package-id",
+        version: 1,
+        userId: input.ownerId,
+        proposalId,
+      });
   const resumeVariantArtifactId = `resume-variant-artifact:${await buildStableHash({
     namespace: HASH_NAMESPACE,
     type: "resume-variant-artifact-ref",
@@ -216,10 +285,10 @@ async function buildSafeApplicationPackage(
     packageHash,
     proposalContentHash,
   });
-  const timestamp = readFiniteTimestamp(input.proposal.createdAt) ?? input.now;
+  const timestamp = input.now;
 
   return {
-    id: `application-package:${packageHash}`,
+    id: applicationPackageId ?? `application-package:${packageHash}`,
     userId: input.ownerId,
     applicationContextId: input.applicationContextId,
     status: "needs_review",
@@ -314,20 +383,91 @@ async function createOrReuseApplicationPackage(
   ctx: MaterializationCtx,
   applicationPackage: ApplicationPackageV1,
 ): Promise<boolean> {
-  const next = await buildApplicationPackageStorageRecord(applicationPackage);
   const existing = await ctx.db
     .query("applicationPackages")
     .withIndex("by_application_package_id", (q: any) =>
-      q.eq("applicationPackageId", next.applicationPackageId),
+      q.eq("applicationPackageId", applicationPackage.id),
     )
     .unique?.();
   if (existing) {
-    assertSameApplicationPackagePayload(existing as any, next);
+    const previousApplicationContextId = readString(existing.applicationContextId);
+    const next = await buildApplicationPackageStorageRecord({
+      ...applicationPackage,
+      createdAt: readFiniteTimestamp(existing.createdAt) ?? applicationPackage.createdAt,
+    });
+    if (
+      existing.contentHash !== next.contentHash ||
+      existing.updatedAt !== next.updatedAt ||
+      existing.applicationContextId !== next.applicationContextId
+    ) {
+      await ctx.db.patch(existing._id, next);
+    }
+    if (
+      previousApplicationContextId &&
+      previousApplicationContextId !== next.applicationContextId
+    ) {
+      await deleteApplicationContextIfUnreferenced(ctx, {
+        applicationContextId: previousApplicationContextId,
+        userId: next.userId,
+      });
+    }
     return true;
   }
 
+  const next = await buildApplicationPackageStorageRecord(applicationPackage);
   await ctx.db.insert("applicationPackages", next);
   return false;
+}
+
+async function deleteApplicationContextIfUnreferenced(
+  ctx: MaterializationCtx,
+  input: Readonly<{
+    applicationContextId: string;
+    userId: string;
+  }>,
+): Promise<boolean> {
+  const [referencingPackage, referencingRun, referencingArtifact] = await Promise.all([
+    queryFirstByIndex(ctx, "applicationPackages", "by_application_context_id", (q: any) =>
+      q.eq("applicationContextId", input.applicationContextId),
+    ),
+    queryFirstByIndex(ctx, "applicationRuns", "by_context", (q: any) =>
+      q.eq("contextId", input.applicationContextId),
+    ),
+    queryFirstByIndex(ctx, "applicationArtifacts", "by_context", (q: any) =>
+      q.eq("contextId", input.applicationContextId),
+    ),
+  ]);
+  if (referencingPackage || referencingRun || referencingArtifact) {
+    return false;
+  }
+
+  const context = await queryFirstByIndex(ctx, "applicationContexts", "by_user_id", (q: any) =>
+    q.eq("userId", input.userId).eq("id", input.applicationContextId),
+  );
+  if (!context) {
+    return false;
+  }
+
+  await ctx.db.delete(context._id);
+  return true;
+}
+
+async function queryFirstByIndex(
+  ctx: MaterializationCtx,
+  tableName: string,
+  indexName: string,
+  buildQuery: (query: any) => unknown,
+): Promise<LooseRecord | null> {
+  const query = ctx.db.query(tableName).withIndex(indexName, buildQuery);
+  if (typeof query.take === "function") {
+    const rows = await query.take(1);
+    return rows[0] ?? null;
+  }
+  if (typeof query.unique === "function") {
+    return await query.unique();
+  }
+
+  return null;
 }
 
 function resolveJobStorageId(
@@ -340,7 +480,64 @@ function resolveJobStorageId(
     return null;
   }
 
-  return ctx.db.normalizeId?.("jobs", rawJobId) ?? rawJobId;
+  if (!ctx.db.normalizeId) {
+    return rawJobId;
+  }
+
+  try {
+    return ctx.db.normalizeId("jobs", rawJobId) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function buildStableApplicationPackageId(
+  proposal: StoredProposalForMcpReadSideMaterialization,
+): Promise<string | null> {
+  const ownerId = readString(proposal.userId);
+  const proposalId = readString(proposal._id);
+  if (!ownerId || !proposalId) {
+    return null;
+  }
+
+  const packageHash = await buildStableHash({
+    namespace: HASH_NAMESPACE,
+    type: "application-package-id",
+    version: 2,
+    userId: ownerId,
+    proposalId,
+  });
+
+  return `application-package:${packageHash}`;
+}
+
+function readSafeSectionFingerprintInput(value: unknown): unknown[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((section) => {
+    const record = readRecord(section);
+    return {
+      type: readString(record?.type) ?? "unknown",
+      content: readExactString(record?.content) ?? "",
+    };
+  });
+}
+
+function readExactString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function logBestEffortFailure(operation: "materialize" | "delete-package", error: unknown): void {
+  console.warn("MCP read-side best-effort operation failed", {
+    operation,
+    errorName:
+      error && typeof error === "object" && "name" in error
+        ? readString((error as { name?: unknown }).name)
+        : undefined,
+    version: 1,
+  });
 }
 
 function skipped(reason: MaterializationSkipReason): McpReadSideMaterializationResult {
