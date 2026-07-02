@@ -4,6 +4,7 @@ import { v } from "convex/values";
 import { PROPOSAL_TEMPLATE_IDS } from "./lib/proposals/renderTemplates";
 import { getPrimaryProfileForClerk } from "./lib/userProfiles";
 import { sanitizeRemoteMetadataImages } from "./lib/documentAssets";
+import { materializeMcpReadSideForStoredProposal } from "./mcpReadSideMaterialization";
 
 const proposalVoicePresetChoice = v.union(
   v.literal("signature"),
@@ -387,7 +388,7 @@ export default mutation({
       args.metadata ?? {},
     ) as NonNullable<typeof args.metadata>;
 
-    const proposalId = await ctx.db.insert("proposals", {
+    const proposal = {
       userId: user._id,
       jobId: args.metadata?.jobId,
       title: trimmedTitle,
@@ -399,12 +400,17 @@ export default mutation({
       sections:
         Array.isArray(args.sections) && args.sections.length > 0
           ? args.sections
-          : [{ type: "text", content: trimmedContent }],
+          : [{ type: "text" as const, content: trimmedContent }],
       metrics: {
         score: 0,
         confidence: 0,
       },
       metadata: sanitizedMetadata,
+    };
+    const proposalId = await ctx.db.insert("proposals", proposal);
+    await materializeMcpReadSideForStoredProposal(ctx, {
+      _id: proposalId,
+      ...proposal,
     });
 
     if (isProposalStyleTraceEnabled()) {
