@@ -26,8 +26,8 @@ The separate `twoweeks-wiki` roadmap still needs a wiki-only truth-sync changese
 - PR302 state: merged into `application-os-foundation`
 - PR302 head: `2ced854ff64d2707c73b97e827297f2d2fe3306b`
 - PR302 merge commit: `262444e5ea4ed24e493fd93599452ddb56a0c317`
-- Dirty saved checkout: `/Volumes/video/kay/app/pouraurelien/save/implementation_UI/neyssan-new` was not used for edits because it had pre-existing unrelated changes.
-- Isolated proof worktree: `/Users/pana/.codex/worktrees/2623/neyssan-new`
+- A separate saved checkout was not used for edits because it had pre-existing unrelated changes.
+- Edits were made in a clean dedicated proof worktree.
 
 ## Active code path
 
