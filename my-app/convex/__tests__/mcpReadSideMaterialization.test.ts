@@ -526,6 +526,24 @@ describe("MCP read-side materialization from proposal persistence", () => {
     expect(tables.applicationContexts).toHaveLength(0);
   });
 
+  it("removes stale package and orphan context when a materialized proposal profile is deleted", async () => {
+    const { ctx, tables } = makeCtx();
+
+    await materializeMcpReadSideForStoredProposal(ctx as any, proposal());
+    tables.userProfiles.length = 0;
+
+    await expect(
+      materializeMcpReadSideForStoredProposal(ctx as any, proposal()),
+    ).resolves.toEqual({
+      status: "skipped",
+      reason: "profile_not_found",
+      version: 1,
+    });
+
+    expect(tables.applicationPackages).toHaveLength(0);
+    expect(tables.applicationContexts).toHaveLength(0);
+  });
+
   it("does not fail proposal persistence when materialization throws", async () => {
     const { ctx, tables } = makeCtx();
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
