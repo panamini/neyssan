@@ -232,7 +232,7 @@ export type ResumeMcpOAuthAuthorizationAfterLoginReturnResultV1 = Readonly<
 >;
 
 const RAW_HANDLE_BYTE_LENGTH = 32;
-const RAW_HANDLE_LENGTH = 43;
+const RAW_HANDLE_LENGTH = RAW_HANDLE_BYTE_LENGTH * 2;
 const RAW_HANDLE_PATTERN = /^[0-9a-f]{64}$/u;
 const INTENT_HANDLE_HASH_PATTERN = /^[0-9a-f]{64}$/u;
 const CONFIG_KEYS = [

@@ -479,6 +479,29 @@ describe("MCP OAuth login-return continuation boundary", () => {
     expect(createIntent).not.toHaveBeenCalled();
   });
 
+  it("rejects raw handle length limits below the canonical generated hex handle length", async () => {
+    const createIntent = vi.fn<(input: McpOAuthIntentCreateInputV1) => Promise<McpOAuthIntentCreateResultV1>>(
+      async () => createOk(),
+    );
+
+    const result = await prepareMcpOAuthLoginReturnContinuation({
+      kind: "prepare_mcp_oauth_login_return_continuation_input",
+      authorizationRequestHandoff: handoff(),
+      trustedOwner: OWNER,
+      createIntent,
+      handleCodec: deterministicCodec,
+      now: NOW,
+      config: config({ maxRawHandleLength: RAW_HANDLE.length - 1 }),
+      version: 1,
+    });
+
+    expect(result).toMatchObject({
+      prepared: false,
+      reason: "invalid_configuration",
+    });
+    expect(createIntent).not.toHaveBeenCalled();
+  });
+
   it("resumes by hashing the handle, consuming once, and reconstructing the normalized authorization URL", async () => {
     const consumeIntent = vi.fn<(input: McpOAuthIntentConsumeInputV1) => Promise<McpOAuthIntentConsumeResultV1>>(
       async () => consumeOk(handoff({ approvedOptionalParameters: { nonce: "nonce-123", prompt: "consent" } })),
