@@ -1,13 +1,13 @@
 export const DEFAULT_SIGN_IN_RETURN_PATH = "/cv";
 export const MCP_OAUTH_SIGN_IN_RETURN_PARAMETER = "mcp_oauth_return";
-export const MCP_OAUTH_CONTINUATION_PATH = "/mcp/oauth/authorize/continue";
+export const MCP_OAUTH_CONTINUATION_PATH = "/oauth/continue";
 export const MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER = "mcp_oauth_intent";
 export const MCP_OAUTH_CONTINUATION_BROWSER_NONCE_PARAMETER = "mcp_oauth_browser_nonce";
 
 const MAX_RETURN_PATH_LENGTH = 2048;
 const MAX_INTENT_HANDLE_LENGTH = 256;
 const INTENT_HANDLE_PATTERN = /^[A-Za-z0-9_-]+$/u;
-const BROWSER_NONCE_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
+const BROWSER_NONCE_PATTERN = /^[0-9a-f]{64}$/u;
 const LOCAL_ORIGIN = "https://twoweeks.local";
 
 type SignInReturnSource = "default" | "mcp_oauth_continuation";
@@ -17,8 +17,22 @@ export type SignInReturnResolution = Readonly<{
   source: SignInReturnSource;
 }>;
 
+export function shouldUseDocumentNavigationForSignInReturn(
+  resolution: SignInReturnResolution,
+): boolean {
+  return resolution.source === "mcp_oauth_continuation";
+}
+
 export function resolveSignInReturnPath(search: string): SignInReturnResolution {
   const params = new URLSearchParams(search);
+  const directReturn = resolveDirectMcpOAuthContinuationPath(params);
+  if (directReturn !== undefined) {
+    return {
+      path: directReturn,
+      source: "mcp_oauth_continuation",
+    };
+  }
+
   const returnValues = params.getAll(MCP_OAUTH_SIGN_IN_RETURN_PARAMETER);
 
   if (returnValues.length !== 1) {
@@ -34,6 +48,30 @@ export function resolveSignInReturnPath(search: string): SignInReturnResolution 
     path: canonicalizeMcpOAuthContinuationPath(candidate),
     source: "mcp_oauth_continuation",
   };
+}
+
+function resolveDirectMcpOAuthContinuationPath(params: URLSearchParams): string | undefined {
+  const intentValues = params.getAll(MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER);
+  const browserNonceValues = params.getAll(MCP_OAUTH_CONTINUATION_BROWSER_NONCE_PARAMETER);
+  if (intentValues.length === 0 && browserNonceValues.length === 0) {
+    return undefined;
+  }
+  if (intentValues.length !== 1 || browserNonceValues.length > 1) {
+    return undefined;
+  }
+
+  const intentHandle = intentValues[0];
+  const browserNonce = browserNonceValues[0];
+  if (
+    intentHandle.length === 0 ||
+    intentHandle.length > MAX_INTENT_HANDLE_LENGTH ||
+    !INTENT_HANDLE_PATTERN.test(intentHandle) ||
+    (browserNonce !== undefined && !BROWSER_NONCE_PATTERN.test(browserNonce))
+  ) {
+    return undefined;
+  }
+
+  return canonicalizeMcpOAuthContinuationPathFromParts(intentHandle, browserNonce);
 }
 
 function defaultSignInReturn(): SignInReturnResolution {
@@ -100,10 +138,17 @@ function canonicalizeMcpOAuthContinuationPath(candidate: string): string {
   const url = new URL(candidate, LOCAL_ORIGIN);
   const intentHandle = url.searchParams.get(MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER) ?? "";
   const browserNonce = url.searchParams.get(MCP_OAUTH_CONTINUATION_BROWSER_NONCE_PARAMETER);
+  return canonicalizeMcpOAuthContinuationPathFromParts(intentHandle, browserNonce ?? undefined);
+}
+
+function canonicalizeMcpOAuthContinuationPathFromParts(
+  intentHandle: string,
+  browserNonce: string | undefined,
+): string {
   const params = new URLSearchParams({
     [MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER]: intentHandle,
   });
-  if (browserNonce !== null) {
+  if (browserNonce !== undefined) {
     params.set(MCP_OAUTH_CONTINUATION_BROWSER_NONCE_PARAMETER, browserNonce);
   }
 

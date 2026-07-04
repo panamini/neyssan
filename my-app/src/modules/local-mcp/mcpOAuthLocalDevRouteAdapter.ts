@@ -414,11 +414,8 @@ function redirectToSignIn(
   rawHandle: string,
   config: McpOAuthLocalDevRouteAdapterConfigV1,
 ): McpOAuthLocalDevRouteAdapterResponseV1 {
-  const continuationPath = `${config.continuationPath}?${new URLSearchParams({
-    [MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER]: rawHandle,
-  }).toString()}`;
   const signInUrl = `${config.applicationOrigin}${config.signInPath}?${new URLSearchParams({
-    [MCP_OAUTH_SIGN_IN_RETURN_PARAMETER]: continuationPath,
+    [MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER]: rawHandle,
   }).toString()}`;
   return {
     handled: true,

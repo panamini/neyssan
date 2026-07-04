@@ -8,6 +8,7 @@ import {
 } from "./mcpOAuthProductionRoutePreflightBoundary";
 import {
   projectMcpOAuthPreAuthAuthorizationRequest,
+  redirectUriMatchesPathPrefixWildcard,
   type McpOAuthAuthorizationRequestBoundaryHandoffV1,
   type McpOAuthAuthorizationTrustedOwnerV1,
   type McpOAuthAuthorizationRequestBoundaryConfigV1,
@@ -61,7 +62,6 @@ import { buildMcpProductionToolsListResult } from "./mcpProductionToolsListProje
 import {
   MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER,
   MCP_OAUTH_CONTINUATION_PATH,
-  MCP_OAUTH_SIGN_IN_RETURN_PARAMETER,
 } from "../../pages/sign-in-return";
 
 export const MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH = "/oauth/authorize";
@@ -612,7 +612,7 @@ const TOKEN_REQUEST_BODY_MAX_BYTES = 4_096;
 const AUTHORIZATION_HEADER_MAX_LENGTH = 128;
 const BROWSER_BOUND_CONTINUATION_NONCE_PARAMETER = "mcp_oauth_browser_nonce";
 const BROWSER_BOUND_CONTINUATION_COOKIE_NAME = "tw_mcp_oauth_continue";
-const BROWSER_BOUND_CONTINUATION_NONCE_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
+const BROWSER_BOUND_CONTINUATION_NONCE_PATTERN = /^[0-9a-f]{64}$/u;
 const BROWSER_BOUND_CONTINUATION_MAX_AGE_SECONDS = 600;
 const AUTHORIZATION_CODE_BYTE_LENGTH = 32;
 const ACCESS_TOKEN_BYTE_LENGTH = 32;
@@ -1073,9 +1073,20 @@ async function handleMcpRequest(
   if (!requestHostMatchesOrigin(request, resourceOrigin)) {
     return failClosedResponse("mcp", preflight, "invalid_host", 403);
   }
+  const mcpTransportAllowedOrigins = buildMcpTransportAllowedOrigins(
+    resourceOrigin,
+    authorizationOrigin,
+    dependencies.authorizationRequestConfig,
+  );
 
   const bearerToken = readBearerAccessToken(request.headers, "authorization");
   if (!bearerToken.ok) {
+    const unauthenticatedDiscoveryResponse = handleUnauthenticatedMcpDiscoveryRequest(
+      request,
+      mcpTransportAllowedOrigins,
+      readNow(dependencies),
+    );
+    if (unauthenticatedDiscoveryResponse) return unauthenticatedDiscoveryResponse;
     return mcpBearerAuthFailureResponse(
       preflight,
       expectedResource,
@@ -1145,7 +1156,7 @@ async function handleMcpRequest(
     );
   }
 
-  if (!isMcpTransportOriginAllowed(request, [resourceOrigin, authorizationOrigin])) {
+  if (!isMcpTransportOriginAllowed(request, mcpTransportAllowedOrigins)) {
     return jsonResponse(403, buildMcpJsonRpcError(null, -32600, "Invalid Origin header."));
   }
 
@@ -1186,6 +1197,43 @@ async function handleMcpRequest(
     dependencies,
     verifyResult.serverOnly.twoweeksClerkId,
   );
+}
+
+function handleUnauthenticatedMcpDiscoveryRequest(
+  request: McpOAuthProductionRouteAdapterRequestV1,
+  allowedOrigins: readonly McpOAuthProductionAuthorizationOriginV1[],
+  now: number,
+): McpOAuthProductionRouteAdapterResponseV1 | undefined {
+  const jsonRpcMessage = parseMcpJsonRpcProtocolMessage(request.bodyText ?? "");
+  if (!jsonRpcMessage || !isUnauthenticatedMcpDiscoveryMethod(jsonRpcMessage.method)) {
+    return undefined;
+  }
+  if (!isMcpTransportOriginAllowed(request, allowedOrigins)) {
+    const id = "id" in jsonRpcMessage ? jsonRpcMessage.id : null;
+    return jsonResponse(403, buildMcpJsonRpcError(id, -32600, "Invalid Origin header."));
+  }
+  if (!isMcpProtocolVersionHeaderAllowed(request, jsonRpcMessage)) {
+    const id = "id" in jsonRpcMessage ? jsonRpcMessage.id : null;
+    return jsonResponse(400, buildMcpJsonRpcError(id, -32600, "Unsupported MCP protocol version."));
+  }
+  const envelope = buildMcpAuthenticatedProtocolEnvelope({
+    verifiedClientId: "unauthenticated_mcp_discovery",
+    verifiedResource: "unauthenticated_mcp_discovery",
+    verifiedScopes: [],
+    accessTokenExpiresAt: now,
+    callerKey: "unauthenticated_mcp_discovery",
+    jsonRpcMessage,
+    createdAt: now,
+  });
+  const decision = evaluateMcpProductionPolicy(envelope);
+  if (decision.decision !== "allow_protocol" && decision.decision !== "allow_metadata") {
+    return undefined;
+  }
+  return allowedMcpPolicyDecisionResponse(envelope, decision);
+}
+
+function isUnauthenticatedMcpDiscoveryMethod(method: string): boolean {
+  return method === "initialize" || method === "notifications/initialized" || method === "ping" || method === "tools/list";
 }
 
 function buildAuthorizationRequestGuard(
@@ -1984,12 +2032,9 @@ function redirectToSignIn(
   browserNonce: string,
   authorizationPageOrigin: string,
 ): McpOAuthProductionRouteAdapterResponseV1 {
-  const continuationPath = `${MCP_OAUTH_CONTINUATION_PATH}?${new URLSearchParams({
+  const signInUrl = `${authorizationPageOrigin}/sign-in?${new URLSearchParams({
     [MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER]: rawHandle,
     [BROWSER_BOUND_CONTINUATION_NONCE_PARAMETER]: browserNonce,
-  }).toString()}`;
-  const signInUrl = `${authorizationPageOrigin}/sign-in?${new URLSearchParams({
-    [MCP_OAUTH_SIGN_IN_RETURN_PARAMETER]: continuationPath,
   }).toString()}`;
   return Object.freeze({
     handled: true,
@@ -2336,6 +2381,55 @@ function isMcpTransportOriginAllowed(
   return origin !== undefined && allowedOrigins.some((allowedOrigin) => origin === allowedOrigin.origin);
 }
 
+function buildMcpTransportAllowedOrigins(
+  resourceOrigin: McpOAuthProductionAuthorizationOriginV1,
+  authorizationOrigin: McpOAuthProductionAuthorizationOriginV1,
+  config: McpOAuthAuthorizationRequestBoundaryConfigV1,
+): readonly McpOAuthProductionAuthorizationOriginV1[] {
+  const origins = new Map<string, McpOAuthProductionAuthorizationOriginV1>();
+  addMcpTransportAllowedOrigin(origins, resourceOrigin);
+  addMcpTransportAllowedOrigin(origins, authorizationOrigin);
+  for (const redirectUri of config.allowedRedirectUris) {
+    const redirectOrigin = readRedirectUriOrigin(redirectUri);
+    if (redirectOrigin) {
+      addMcpTransportAllowedOrigin(origins, redirectOrigin);
+    }
+  }
+  return Object.freeze([...origins.values()]);
+}
+
+function addMcpTransportAllowedOrigin(
+  origins: Map<string, McpOAuthProductionAuthorizationOriginV1>,
+  origin: McpOAuthProductionAuthorizationOriginV1,
+): void {
+  if (!origins.has(origin.origin)) {
+    origins.set(origin.origin, origin);
+  }
+}
+
+function readRedirectUriOrigin(uri: string): McpOAuthProductionAuthorizationOriginV1 | undefined {
+  try {
+    const parsed = new URL(uri);
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.origin === "null" ||
+      !parsed.hostname ||
+      parsed.username ||
+      parsed.password
+    ) {
+      return undefined;
+    }
+    return Object.freeze({
+      origin: parsed.origin,
+      protocol: parsed.protocol,
+      hostname: parsed.hostname.toLowerCase(),
+      port: normalizedOriginPort(parsed),
+    });
+  } catch {
+    return undefined;
+  }
+}
+
 function readMcpOriginHeaderOrigin(value: string): string | undefined {
   if (!value || value.length > 512 || hasControlCharacter(value)) return undefined;
   try {
@@ -2456,7 +2550,7 @@ function generateDefaultBrowserBoundContinuationNonce(): string | undefined {
   if (!crypto?.getRandomValues) return undefined;
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
-  return base64UrlNoPadding(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function base64UrlNoPadding(bytes: Uint8Array): string {
@@ -2538,10 +2632,13 @@ function readContinuationRequest(
       return undefined;
     }
     const keys = [...parsed.searchParams.keys()];
+    const allowedKeys = new Set([
+      MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER,
+      BROWSER_BOUND_CONTINUATION_NONCE_PARAMETER,
+    ]);
     if (
       keys.length !== 2 ||
-      keys[0] !== MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER ||
-      keys[1] !== BROWSER_BOUND_CONTINUATION_NONCE_PARAMETER ||
+      keys.some((key) => !allowedKeys.has(key)) ||
       parsed.searchParams.getAll(MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER).length !== 1 ||
       parsed.searchParams.getAll(BROWSER_BOUND_CONTINUATION_NONCE_PARAMETER).length !== 1
     ) {
@@ -2671,7 +2768,7 @@ function isProviderForwardRequestForConfig(
     typeof value.clientId === "string" &&
     config.clientIdPolicy.allowedClientIds.includes(value.clientId) &&
     typeof value.redirectUri === "string" &&
-    config.allowedRedirectUris.includes(value.redirectUri) &&
+    isAllowedRedirectUriForConfig(value.redirectUri, config) &&
     value.resource === config.canonicalResource &&
     Array.isArray(value.scopes) &&
     value.scopes.includes(config.requiredScope) &&
@@ -2682,6 +2779,15 @@ function isProviderForwardRequestForConfig(
     pkce.codeChallengeMethod === "S256" &&
     typeof pkce.codeChallenge === "string" &&
     value.version === 1
+  );
+}
+
+function isAllowedRedirectUriForConfig(
+  redirectUri: string,
+  config: McpOAuthAuthorizationRequestBoundaryConfigV1,
+): boolean {
+  return config.allowedRedirectUris.some((allowedRedirectUri) =>
+    redirectUri === allowedRedirectUri || redirectUriMatchesPathPrefixWildcard(redirectUri, allowedRedirectUri),
   );
 }
 

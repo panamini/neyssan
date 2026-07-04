@@ -48,6 +48,7 @@ import {
   type McpOAuthProductionAuthenticatedOwnerIdentityV1,
   type McpOAuthProductionRouteAdapterConfigV1,
   type McpOAuthProductionRouteAdapterDependenciesV1,
+  type McpOAuthProductionRouteAdapterResponseV1,
 } from "./src/modules/local-mcp/mcpOAuthProductionRouteAdapter";
 import {
   buildMcpProductionReadonlySummaryExecutor,
@@ -262,6 +263,13 @@ function handleLocalMcpDevMiddlewareRequest(
     ) &&
     productionOAuthRequestHostMatchesRoute(req, pathName, productionOAuthAuthorizationDependencies)
   ) {
+    if (
+      isProductionOAuthBrowserContinuationDocumentRequest(req, pathName) &&
+      !hasCookieNamed(req.headers.cookie, "__session")
+    ) {
+      next();
+      return;
+    }
     void respondToMcpOAuthProductionRouteRequest(
       req,
       res,
@@ -438,7 +446,75 @@ async function respondToMcpOAuthProductionRouteRequestWithBody(
     next();
     return;
   }
+  if (isProductionOAuthBrowserContinuationFetch(req, pathName) && isHttpRedirectResponse(response)) {
+    sendLocalMcpRouteResponse(
+      res,
+      200,
+      {
+        "content-type": "application/json; charset=utf-8",
+        "cache-control": "no-store",
+        pragma: "no-cache",
+      },
+      {
+        kind: "mcp_oauth_browser_continuation_redirect",
+        status: "ready",
+        redirectTo: response.headers.location,
+        safeForLogging: false,
+        version: 1,
+      },
+      undefined,
+    );
+    return;
+  }
   sendLocalMcpRouteResponse(res, response.status, response.headers, response.json, response.bodyText);
+}
+
+function isProductionOAuthBrowserContinuationDocumentRequest(
+  req: IncomingMessage,
+  pathName: string,
+): boolean {
+  if (pathName !== MCP_OAUTH_CONTINUATION_PATH || (req.method ?? "GET").toUpperCase() !== "GET") {
+    return false;
+  }
+  if (headerValue(req.headers.authorization)) {
+    return false;
+  }
+  const accept = headerValue(req.headers.accept) ?? "";
+  return accept.includes("text/html");
+}
+
+function hasCookieNamed(cookieHeader: string | readonly string[] | undefined, name: string): boolean {
+  const cookie = headerValue(cookieHeader);
+  if (!cookie) return false;
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return new RegExp(`(?:^|;)\\s*${escapedName}=`, "u").test(cookie);
+}
+
+function isProductionOAuthBrowserContinuationFetch(
+  req: IncomingMessage,
+  pathName: string,
+): boolean {
+  if (pathName !== MCP_OAUTH_CONTINUATION_PATH || (req.method ?? "GET").toUpperCase() !== "GET") {
+    return false;
+  }
+  if (headerValue(req.headers["x-mcp-oauth-browser-continuation"]) === "1") {
+    return true;
+  }
+  const accept = headerValue(req.headers.accept) ?? "";
+  return accept.includes("application/json") && !accept.includes("text/html");
+}
+
+function isHttpRedirectResponse(
+  response: McpOAuthProductionRouteAdapterResponseV1,
+): response is McpOAuthProductionRouteAdapterResponseV1 & {
+  headers: Readonly<Record<string, string> & { location: string }>;
+} {
+  return (
+    response.status >= 300 &&
+    response.status < 400 &&
+    typeof response.headers.location === "string" &&
+    response.headers.location.length > 0
+  );
 }
 
 async function respondToLocalMcpDevRequest(
@@ -784,7 +860,7 @@ function readProductionMcpOAuthAuthorizationRequestConfig(
     allowedRedirectUris: normalizeMcpOAuthProductionRedirectUris(env[MCP_OAUTH_PRODUCTION_REDIRECT_URIS_VAR]),
     requiredScope: TWOWEEKS_APPLICATIONS_READ_SCOPE,
     approvedOptionalScopes: ["openid", "email", "profile"] as const,
-    allowedOptionalParameters: ["nonce", "prompt"] as const,
+    allowedOptionalParameters: ["nonce", "prompt", "ui_locales"] as const,
     maxUrlLength: 4_096,
     maxParameterLength: 512,
     maxStateLength: 512,
@@ -971,21 +1047,24 @@ function buildProductionAuthenticatedOwnerIdentityReader(
   const issuer = readProductionClerkIssuer(env);
   return async (request) => {
     if (!issuer) return undefined;
-    const token = readRequestBearerToken(request.headers?.authorization) ?? readClerkSessionCookie(request.headers?.cookie);
-    if (!token) return undefined;
-    return verifyProductionClerkOwnerIdentity(token, issuer);
+    const bearerToken = readRequestBearerToken(request.headers?.authorization);
+    if (bearerToken) return verifyProductionClerkOwnerIdentity(bearerToken, issuer, { requireAudience: true });
+    const sessionToken = readClerkSessionCookie(request.headers?.cookie);
+    if (!sessionToken) return undefined;
+    return verifyProductionClerkOwnerIdentity(sessionToken, issuer, { requireAudience: false });
   };
 }
 
 async function verifyProductionClerkOwnerIdentity(
   token: string,
   issuer: string,
+  options: Readonly<{ requireAudience: boolean }>,
 ): Promise<McpOAuthProductionAuthenticatedOwnerIdentityV1 | undefined> {
   try {
-    const { payload } = await jwtVerify(token, readProductionClerkJwks(issuer), {
-      issuer,
-      audience: CLERK_CONVEX_AUDIENCE,
-    });
+    const verifyOptions = options.requireAudience
+      ? { issuer, audience: CLERK_CONVEX_AUDIENCE }
+      : { issuer };
+    const { payload } = await jwtVerify(token, readProductionClerkJwks(issuer), verifyOptions);
     const identity = readVerifiedOwnerIdentity(payload, issuer);
     return identity ? Object.freeze({ ...identity, version: 1 }) : undefined;
   } catch {

@@ -15,7 +15,8 @@ export type McpOAuthAuthorizationOptionalParameterV1 =
   | "nonce"
   | "prompt"
   | "login_hint"
-  | "id_token_hint";
+  | "id_token_hint"
+  | "ui_locales";
 
 export type McpOAuthAuthorizationClientIdPolicyV1 = Readonly<{
   mode: "predefined_allowlist";
@@ -320,12 +321,14 @@ const OPTIONAL_PARAMETERS = new Set<McpOAuthAuthorizationOptionalParameterV1>([
   "prompt",
   "login_hint",
   "id_token_hint",
+  "ui_locales",
 ]);
 const PROVIDER_FORWARD_OPTIONAL_QUERY_PARAMETERS: readonly McpOAuthAuthorizationOptionalParameterV1[] = [
   "nonce",
   "prompt",
   "login_hint",
   "id_token_hint",
+  "ui_locales",
 ];
 const LOGIN_RETURN_OPTIONAL_QUERY_PARAMETERS: readonly McpOAuthAuthorizationOptionalParameterV1[] = ["nonce", "prompt"];
 const OPTIONAL_SCOPE_ORDER: readonly McpOAuthAuthorizationOptionalScopeV1[] = ["openid", "email", "profile"];
@@ -646,7 +649,27 @@ function validateBindingParameters(
 }
 
 function isAllowedRedirectUri(redirectUri: string, config: ParsedConfigV1): boolean {
-  return config.allowedRedirectUris.includes(redirectUri) && readSafeHttpsUrl(redirectUri, "redirect") !== undefined;
+  if (readSafeHttpsUrl(redirectUri, "redirect") === undefined) return false;
+  return config.allowedRedirectUris.some((allowedRedirectUri) =>
+    redirectUri === allowedRedirectUri || redirectUriMatchesPathPrefixWildcard(redirectUri, allowedRedirectUri),
+  );
+}
+
+export function redirectUriMatchesPathPrefixWildcard(redirectUri: string, allowedRedirectUri: string): boolean {
+  if (!allowedRedirectUri.endsWith("*")) return false;
+  const prefix = allowedRedirectUri.slice(0, -1);
+  if (!prefix.endsWith("/")) return false;
+  const parsedRedirectUri = readSafeUrlFromText(redirectUri);
+  const parsedPrefix = readSafeUrlFromText(prefix);
+  if (!parsedRedirectUri || !parsedPrefix) return false;
+  return (
+    isSafeHttpsUrl(parsedRedirectUri) &&
+    isSafeHttpsUrl(parsedPrefix) &&
+    parsedRedirectUri.origin === parsedPrefix.origin &&
+    parsedRedirectUri.pathname.startsWith(parsedPrefix.pathname) &&
+    parsedRedirectUri.search === "" &&
+    parsedRedirectUri.hash === ""
+  );
 }
 
 function readRequiredParameters(

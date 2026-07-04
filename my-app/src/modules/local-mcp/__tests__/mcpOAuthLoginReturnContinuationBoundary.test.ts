@@ -28,8 +28,8 @@ import {
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const SOURCE_PATH = resolve(TEST_DIR, "../mcpOAuthLoginReturnContinuationBoundary.ts");
 
-const RAW_HANDLE = "A".repeat(43);
-const OTHER_RAW_HANDLE = "B".repeat(43);
+const RAW_HANDLE = "0123456789abcdef".repeat(4);
+const OTHER_RAW_HANDLE = "fedcba9876543210".repeat(4);
 const HANDLE_HASH = sha256Hex(RAW_HANDLE);
 const OTHER_HANDLE_HASH = sha256Hex(OTHER_RAW_HANDLE);
 const NOW = Date.parse("2026-06-26T08:00:00.000Z");
@@ -65,7 +65,7 @@ describe("MCP OAuth login-return continuation boundary", () => {
     const first = defaultMcpOAuthContinuationHandleCodecV1.generate();
     const second = defaultMcpOAuthContinuationHandleCodecV1.generate();
 
-    expect(first.rawHandle).toMatch(/^[A-Za-z0-9_-]{43}$/u);
+    expect(first.rawHandle).toMatch(/^[0-9a-f]{64}$/u);
     expect(first.rawHandle).not.toBe(second.rawHandle);
     expect(first.intentHandleHash).toMatch(/^[0-9a-f]{64}$/u);
     expect(first.intentHandleHash).toBe(sha256Hex(first.rawHandle));
@@ -107,7 +107,7 @@ describe("MCP OAuth login-return continuation boundary", () => {
     expect(result.serverOnly.continuationPath).toBe(expectedContinuationPath);
     expect(result.serverOnly.continuationUrl).toBe(`${APP_ORIGIN}${expectedContinuationPath}`);
     expect(result.serverOnly.signInUrl).toBe(
-      `${APP_ORIGIN}/sign-in?${MCP_OAUTH_SIGN_IN_RETURN_PARAMETER}=${encodeURIComponent(expectedContinuationPath)}`,
+      `${APP_ORIGIN}/sign-in?${MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER}=${RAW_HANDLE}`,
     );
     expect(result.serverOnly.signInUrl).not.toContain(STATE);
     expect(result.serverOnly.signInUrl).not.toContain(PKCE);
@@ -154,9 +154,7 @@ describe("MCP OAuth login-return continuation boundary", () => {
     if (!resumeResult.resumed) throw new Error("expected resume success");
     expect(createResult.serverOnly.continuationUrl).toBe(`${APP_ORIGIN}${MCP_OAUTH_CONTINUATION_PATH}?${MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER}=${RAW_HANDLE}`);
     expect(createResult.serverOnly.signInUrl).toBe(
-      `${APP_ORIGIN}/sign-in?${MCP_OAUTH_SIGN_IN_RETURN_PARAMETER}=${encodeURIComponent(
-        `${MCP_OAUTH_CONTINUATION_PATH}?${MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER}=${RAW_HANDLE}`,
-      )}`,
+      `${APP_ORIGIN}/sign-in?${MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER}=${RAW_HANDLE}`,
     );
     expect(resumeResult.serverOnly.authorizationUrl).toBe(expectedAuthorizationUrl());
   });
@@ -481,6 +479,29 @@ describe("MCP OAuth login-return continuation boundary", () => {
     expect(createIntent).not.toHaveBeenCalled();
   });
 
+  it("rejects raw handle length limits below the canonical generated hex handle length", async () => {
+    const createIntent = vi.fn<(input: McpOAuthIntentCreateInputV1) => Promise<McpOAuthIntentCreateResultV1>>(
+      async () => createOk(),
+    );
+
+    const result = await prepareMcpOAuthLoginReturnContinuation({
+      kind: "prepare_mcp_oauth_login_return_continuation_input",
+      authorizationRequestHandoff: handoff(),
+      trustedOwner: OWNER,
+      createIntent,
+      handleCodec: deterministicCodec,
+      now: NOW,
+      config: config({ maxRawHandleLength: RAW_HANDLE.length - 1 }),
+      version: 1,
+    });
+
+    expect(result).toMatchObject({
+      prepared: false,
+      reason: "invalid_configuration",
+    });
+    expect(createIntent).not.toHaveBeenCalled();
+  });
+
   it("resumes by hashing the handle, consuming once, and reconstructing the normalized authorization URL", async () => {
     const consumeIntent = vi.fn<(input: McpOAuthIntentConsumeInputV1) => Promise<McpOAuthIntentConsumeResultV1>>(
       async () => consumeOk(handoff({ approvedOptionalParameters: { nonce: "nonce-123", prompt: "consent" } })),
@@ -525,7 +546,7 @@ describe("MCP OAuth login-return continuation boundary", () => {
     );
     const rawHandleHashingCodec: McpOAuthContinuationHandleCodecV1 = Object.freeze({
       ...deterministicCodec,
-      hash: () => RAW_HANDLE,
+      hash: () => "g".repeat(64),
     });
 
     const result = await resumeMcpOAuthAuthorizationAfterLoginReturn({
@@ -579,14 +600,14 @@ describe("MCP OAuth login-return continuation boundary", () => {
   });
 
   it("rejects oversized continuation handles before calling consume storage", async () => {
-    const longRawHandle = "D".repeat(44);
+    const longRawHandle = "d".repeat(65);
     const consumeIntent = vi.fn<(input: McpOAuthIntentConsumeInputV1) => Promise<McpOAuthIntentConsumeResultV1>>(
       async () => consumeOk(handoff()),
     );
     const longHandleCodec: McpOAuthContinuationHandleCodecV1 = Object.freeze({
       generate: () => Object.freeze({ rawHandle: longRawHandle, intentHandleHash: sha256Hex(longRawHandle) }),
       validate: (rawHandle: unknown): rawHandle is string =>
-        typeof rawHandle === "string" && /^[A-Za-z0-9_-]+$/u.test(rawHandle),
+        typeof rawHandle === "string" && /^[0-9a-f]+$/u.test(rawHandle),
       hash: (rawHandle: string) => sha256Hex(rawHandle),
     });
 
@@ -610,16 +631,16 @@ describe("MCP OAuth login-return continuation boundary", () => {
   });
 
   it.each([
-    ["wrong origin", "https://evil.example.test/mcp/oauth/authorize/continue?mcp_oauth_intent=abc"],
+    ["wrong origin", "https://evil.example.test/oauth/continue?mcp_oauth_intent=abc"],
     ["wrong path", "/cv?mcp_oauth_intent=abc"],
-    ["credentials", "https://user:pass@app.twoweeks.example.test/mcp/oauth/authorize/continue?mcp_oauth_intent=abc"],
-    ["fragment", "/mcp/oauth/authorize/continue?mcp_oauth_intent=abc#fragment"],
-    ["missing handle", "/mcp/oauth/authorize/continue"],
-    ["duplicate handle", "/mcp/oauth/authorize/continue?mcp_oauth_intent=abc&mcp_oauth_intent=def"],
-    ["unknown query", "/mcp/oauth/authorize/continue?mcp_oauth_intent=abc&next=/cv"],
-    ["owner override", "/mcp/oauth/authorize/continue?mcp_oauth_intent=abc&owner=user"],
+    ["credentials", "https://user:pass@app.twoweeks.example.test/oauth/continue?mcp_oauth_intent=abc"],
+    ["fragment", "/oauth/continue?mcp_oauth_intent=abc#fragment"],
+    ["missing handle", "/oauth/continue"],
+    ["duplicate handle", "/oauth/continue?mcp_oauth_intent=abc&mcp_oauth_intent=def"],
+    ["unknown query", "/oauth/continue?mcp_oauth_intent=abc&next=/cv"],
+    ["owner override", "/oauth/continue?mcp_oauth_intent=abc&owner=user"],
     ["path traversal", "/mcp/oauth/authorize/%2e%2e/continue?mcp_oauth_intent=abc"],
-    ["encoded origin confusion", "/mcp/oauth/authorize/continue?mcp_oauth_intent=https%3A%2F%2Fevil.example"],
+    ["encoded origin confusion", "/oauth/continue?mcp_oauth_intent=https%3A%2F%2Fevil.example"],
     [
       "raw control character",
       `${MCP_OAUTH_CONTINUATION_PATH}?${MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER}=${RAW_HANDLE.slice(0, 20)}\n${RAW_HANDLE.slice(20)}`,

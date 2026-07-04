@@ -1,8 +1,12 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { Authenticated, Unauthenticated } from "convex/react";
 import { SignIn } from "@clerk/clerk-react";
-import { resolveSignInReturnPath } from "./sign-in-return";
+import {
+  type SignInReturnResolution,
+  resolveSignInReturnPath,
+  shouldUseDocumentNavigationForSignInReturn,
+} from "./sign-in-return";
 
 const signInAppearance = {
   elements: {
@@ -108,15 +112,50 @@ const signInAppearance = {
   },
 } as const;
 
+type SignInPageProps = Readonly<{
+  documentNavigate?: (path: string) => void;
+}>;
+
+function defaultDocumentNavigate(path: string): void {
+  window.location.assign(path);
+}
+
+function AuthenticatedSignInReturnRedirect({
+  signInReturn,
+  documentNavigate,
+}: {
+  signInReturn: SignInReturnResolution;
+  documentNavigate: (path: string) => void;
+}): JSX.Element | null {
+  const useDocumentNavigation = shouldUseDocumentNavigationForSignInReturn(signInReturn);
+
+  useEffect(() => {
+    if (useDocumentNavigation) {
+      documentNavigate(signInReturn.path);
+    }
+  }, [documentNavigate, signInReturn.path, useDocumentNavigation]);
+
+  if (useDocumentNavigation) {
+    return null;
+  }
+
+  return <Navigate to={signInReturn.path} replace />;
+}
+
 // Dedicated web-app entrypoint for the extension popup's Clerk sync-host handoff.
-export function SignInPage(): JSX.Element {
+export function SignInPage({
+  documentNavigate = defaultDocumentNavigate,
+}: SignInPageProps = {}): JSX.Element {
   const location = useLocation();
   const signInReturn = resolveSignInReturnPath(location.search);
 
   return (
     <>
       <Authenticated>
-        <Navigate to={signInReturn.path} replace />
+        <AuthenticatedSignInReturnRedirect
+          signInReturn={signInReturn}
+          documentNavigate={documentNavigate}
+        />
       </Authenticated>
       <Unauthenticated>
         <section className="dasti-auth-page" aria-labelledby="dasti-auth-title">

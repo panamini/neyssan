@@ -218,7 +218,7 @@ function AppShellFrame(): JSX.Element {
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/sign-in/*" element={<SignInPage />} />
               <Route path="/sign-out" element={<SignOutPage />} />
-              <Route path="/mcp/oauth/authorize/continue" element={<McpOAuthContinuationPage />} />
+              <Route path="/oauth/continue" element={<McpOAuthContinuationPage />} />
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
