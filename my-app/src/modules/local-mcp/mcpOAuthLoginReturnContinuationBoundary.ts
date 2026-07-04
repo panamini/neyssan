@@ -233,7 +233,7 @@ export type ResumeMcpOAuthAuthorizationAfterLoginReturnResultV1 = Readonly<
 
 const RAW_HANDLE_BYTE_LENGTH = 32;
 const RAW_HANDLE_LENGTH = 43;
-const RAW_HANDLE_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
+const RAW_HANDLE_PATTERN = /^[0-9a-f]{64}$/u;
 const INTENT_HANDLE_HASH_PATTERN = /^[0-9a-f]{64}$/u;
 const CONFIG_KEYS = [
   "kind",
@@ -278,7 +278,7 @@ const RESTORED_OPTIONAL_PARAMETERS = ["nonce", "prompt"] as const;
 export const defaultMcpOAuthContinuationHandleCodecV1: McpOAuthContinuationHandleCodecV1 =
   Object.freeze({
     generate() {
-      const rawHandle = randomBytes(RAW_HANDLE_BYTE_LENGTH).toString("base64url");
+      const rawHandle = randomBytes(RAW_HANDLE_BYTE_LENGTH).toString("hex");
       return Object.freeze({
         rawHandle,
         intentHandleHash: hashMcpOAuthContinuationHandle(rawHandle),
@@ -320,7 +320,7 @@ export async function prepareMcpOAuthLoginReturnContinuation(
 
   const continuationPath = buildContinuationPath(generated.rawHandle, config);
   const continuationUrl = `${config.applicationOrigin}${continuationPath}`;
-  const signInUrl = buildSignInUrl(continuationPath, config);
+  const signInUrl = buildSignInUrl(generated.rawHandle, config);
   if (!hasBoundedContinuationUrls(continuationUrl, signInUrl, config)) {
     return prepareDenied("invalid_continuation_url");
   }
@@ -467,11 +467,11 @@ function buildContinuationPath(
 }
 
 function buildSignInUrl(
-  continuationPath: string,
+  rawHandle: string,
   config: McpOAuthLoginReturnContinuationBoundaryConfigV1,
 ): string {
   const params = new URLSearchParams({
-    [config.signInReturnParameterName]: continuationPath,
+    [config.continuationHandleParameterName]: rawHandle,
   });
   return `${config.applicationOrigin}${config.fixedSignInPath}?${params.toString()}`;
 }

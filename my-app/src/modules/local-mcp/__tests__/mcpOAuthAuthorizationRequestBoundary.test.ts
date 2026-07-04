@@ -293,6 +293,26 @@ describe("MCP OAuth authorization request boundary", () => {
       expect(parseMcpOAuthAuthorizationRequestBoundary(buildInput()).accepted).toBe(true);
     });
 
+    it("accepts a path-prefix wildcard redirect URI on the configured HTTPS origin", () => {
+      const result = parseMcpOAuthAuthorizationRequestBoundary(
+        buildInput({
+          authorizationUrl: buildAuthorizationUrl({
+            overrides: { redirect_uri: "https://chatgpt.example.test/connector/oauth/runtime-callback" },
+          }),
+          config: buildConfig({ allowedRedirectUris: ["https://chatgpt.example.test/connector/oauth/*"] }),
+        }),
+      );
+
+      expect(result).toMatchObject({
+        accepted: true,
+        serverOnly: {
+          providerForwardRequest: {
+            redirectUri: "https://chatgpt.example.test/connector/oauth/runtime-callback",
+          },
+        },
+      });
+    });
+
     it.each([
       ["unapproved", "https://chatgpt.example.test/connector/oauth/other"],
       ["prefix confusion", `${CHATGPT_REDIRECT_URI}/extra`],
@@ -317,6 +337,21 @@ describe("MCP OAuth authorization request boundary", () => {
           config: buildConfig({ allowedRedirectUris: [redirectUri] }),
         }),
         "malformed_config",
+      );
+    });
+
+    it.each([
+      ["lookalike host", "https://chatgpt.example.test.evil.test/connector/oauth/runtime-callback"],
+      ["prefix confusion", "https://chatgpt.example.test/connector/oauth.evil/runtime-callback"],
+      ["query", "https://chatgpt.example.test/connector/oauth/runtime-callback?code=leak"],
+      ["fragment", "https://chatgpt.example.test/connector/oauth/runtime-callback#fragment"],
+    ] as const)("rejects %s against a path-prefix wildcard redirect URI", (_label, redirectUri) => {
+      expectDenied(
+        buildInput({
+          authorizationUrl: buildAuthorizationUrl({ overrides: { redirect_uri: redirectUri } }),
+          config: buildConfig({ allowedRedirectUris: ["https://chatgpt.example.test/connector/oauth/*"] }),
+        }),
+        "unapproved_redirect_uri",
       );
     });
   });
@@ -477,6 +512,24 @@ describe("MCP OAuth authorization request boundary", () => {
         expect(result.serverOnly.loginReturn.sensitiveOptionalParametersInUrl).toBe(false);
         expect(result.modelVisible).toBe(false);
         expect(result.safeForLogging).toBe(false);
+      }
+    });
+
+    it("accepts ChatGPT ui_locales as a bounded provider-forward optional parameter", () => {
+      const result = parseMcpOAuthAuthorizationRequestBoundary(
+        buildInput({
+          authorizationUrl: buildAuthorizationUrl({ overrides: { ui_locales: "fr-FR" } }),
+          config: buildConfig({ allowedOptionalParameters: ["nonce", "prompt", "ui_locales"] }),
+        }),
+      );
+
+      expect(result.accepted).toBe(true);
+      if (result.accepted) {
+        expect(result.serverOnly.providerForwardRequest.approvedOptionalParameters).toEqual({
+          ui_locales: "fr-FR",
+        });
+        expect(result.serverOnly.loginReturn.path).not.toContain("ui_locales=");
+        expect(result.serverOnly.loginReturn.sensitiveOptionalParametersInUrl).toBe(false);
       }
     });
 

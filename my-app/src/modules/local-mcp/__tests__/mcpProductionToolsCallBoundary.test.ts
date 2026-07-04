@@ -98,10 +98,35 @@ describe("production MCP tools/call boundary", () => {
       .toMatchObject({ valid: false, error: { code: "invalid_param_name" } });
     expect(validate({ name: "twoweeks.application_package.summarize", arguments: {}, _meta: { progressToken: { id: "nested" } } }))
       .toMatchObject({ valid: false, error: { code: "invalid_meta" } });
+    expect(validate({ name: "twoweeks.application_package.summarize", arguments: {}, _meta: [] }))
+      .toMatchObject({ valid: false, error: { code: "invalid_meta" } });
     expect(validate({ name: "twoweeks.missing.summarize", arguments: {} }))
       .toMatchObject({ valid: false, error: { code: "unknown_tool" } });
     expect(validateMcpProductionToolsCallBoundary({ method: "tools/list", params: {}, version: 1 }))
       .toMatchObject({ valid: false, error: { code: "invalid_method" } });
+  });
+
+  it("accepts bounded client metadata without echoing it", () => {
+    const validation = validate({
+      name: "twoweeks.application_package.summarize",
+      arguments: { applicationPackageRef: { id: "mcp-safe-ref:application-package:latest" } },
+      _meta: {
+        progressToken: "progress-token-1",
+        openaiLocale: "fr-FR",
+        clientTrace: { surface: "chatgpt_connector" },
+      },
+    });
+
+    expect(validation).toMatchObject({
+      valid: true,
+      params: {
+        progressTokenAccepted: true,
+        metaEchoed: false,
+      },
+    });
+    expect(JSON.stringify(validation)).not.toContain("progress-token-1");
+    expect(JSON.stringify(validation)).not.toContain("fr-FR");
+    expect(JSON.stringify(validation)).not.toContain("chatgpt_connector");
   });
 
   it("fails closed for malformed params and malformed arguments", () => {

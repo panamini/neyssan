@@ -76,7 +76,6 @@ import {
   MCP_OAUTH_CONTINUATION_BROWSER_NONCE_PARAMETER,
   MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER,
   MCP_OAUTH_CONTINUATION_PATH,
-  MCP_OAUTH_SIGN_IN_RETURN_PARAMETER,
 } from "../../../pages/sign-in-return";
 
 const { convexHttpClientMutation, convexHttpClientQuery, convexHttpClientSetAdminAuth, ConvexHttpClientMock } = vi.hoisted(() => {
@@ -121,9 +120,9 @@ const CLIENT_ID = "chatgpt_apps_sdk_client";
 const STATE = "opaque_state_1234567890";
 const RAW_CODE_VERIFIER = "V".repeat(43);
 const PKCE = pkceChallenge(RAW_CODE_VERIFIER);
-const RAW_HANDLE = "A".repeat(43);
+const RAW_HANDLE = "0123456789abcdef".repeat(4);
 const HANDLE_HASH = sha256Hex(RAW_HANDLE);
-const BROWSER_NONCE = "B".repeat(43);
+const BROWSER_NONCE = "b".repeat(64);
 const BROWSER_NONCE_COOKIE = `tw_mcp_oauth_continue=${BROWSER_NONCE}`;
 const RAW_AUTHORIZATION_CODE = "C".repeat(43);
 const AUTHORIZATION_CODE_DIGEST = sha256Hex(RAW_AUTHORIZATION_CODE);
@@ -1045,9 +1044,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(response.headers).toMatchObject({
       "cache-control": "no-store",
       pragma: "no-cache",
-      location: `${PROD_APP_ORIGIN}/sign-in?${MCP_OAUTH_SIGN_IN_RETURN_PARAMETER}=${encodeURIComponent(
-        continuationPath(),
-      )}`,
+      location: `${PROD_APP_ORIGIN}/sign-in?${MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER}=${RAW_HANDLE}&${MCP_OAUTH_CONTINUATION_BROWSER_NONCE_PARAMETER}=${BROWSER_NONCE}`,
     });
     expect(dependencies.createPreAuthIntent).toHaveBeenCalledTimes(1);
     expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(1);
@@ -1098,9 +1095,9 @@ describe("MCP OAuth production route adapter", () => {
     expect(authorizeResponse.headers["set-cookie"]).toContain(BROWSER_NONCE_COOKIE);
     expect(authorizeResponse.headers["set-cookie"]).toContain("HttpOnly");
     expect(authorizeResponse.headers["set-cookie"]).toContain("SameSite=Lax");
-    expect(authorizeResponse.headers.location).toContain(
-      encodeURIComponent(`${MCP_OAUTH_CONTINUATION_BROWSER_NONCE_PARAMETER}=${BROWSER_NONCE}`),
-    );
+    const signInRedirect = new URL(authorizeResponse.headers.location);
+    expect(signInRedirect.searchParams.get(MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER)).toBe(RAW_HANDLE);
+    expect(signInRedirect.searchParams.get(MCP_OAUTH_CONTINUATION_BROWSER_NONCE_PARAMETER)).toBe(BROWSER_NONCE);
     expect(continuationResponse).toMatchObject({
       handled: true,
       status: 303,
@@ -1158,6 +1155,37 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(continuationResponse)).not.toContain(AUTHORIZATION_CODE_DIGEST);
     expect(JSON.stringify(continuationResponse)).not.toContain(OWNER_ID);
     expect(JSON.stringify(continuationResponse)).not.toContain(PKCE);
+  });
+
+  it("accepts browser-returned production continuation parameters when the nonce precedes the intent", async () => {
+    const ctx = makeCtx();
+    const activation = activationDependencies();
+    const dependencies = routeDependencies(ctx);
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }, activation);
+
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      config,
+      dependencies,
+    );
+    const response = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPathNonceFirst()),
+      config,
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 303,
+      bodyText: "",
+    });
+    expect(new URL(response.headers.location).searchParams.get("code")).toBe(RAW_AUTHORIZATION_CODE);
+    expect(dependencies.bindPreAuthIntentToAuthenticatedOwner).toHaveBeenCalledTimes(1);
+    expect(dependencies.consumeAuthorizationIntent).toHaveBeenCalledTimes(1);
+    expect(dependencies.createAuthorizationCode).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(response)).not.toContain(AUTHORIZATION_CODE_DIGEST);
+    expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+    expect(JSON.stringify(response)).not.toContain(PKCE);
   });
 
   it("issues a production access token for a valid authorization-code token request", async () => {
@@ -1313,6 +1341,105 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(OWNER_ID);
   });
 
+  it("allows unauthenticated production /mcp initialize for ChatGPT mixed-auth discovery only", async () => {
+    const dependencies = routeDependencies(makeCtx());
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(null, mcpInitializeRequest("initialize-discovery"), { "mcp-protocol-version": "2025-11-25" }),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 200,
+      json: {
+        jsonrpc: "2.0",
+        id: "initialize-discovery",
+        result: {
+          protocolVersion: "2025-11-25",
+          capabilities: {
+            tools: {
+              listChanged: false,
+            },
+          },
+        },
+      },
+    });
+    expect(dependencies.checkPreAuthQuota).not.toHaveBeenCalled();
+    expect(dependencies.verifyAccessToken).not.toHaveBeenCalled();
+    expect(dependencies.executeReadonlySummaryTool).not.toHaveBeenCalled();
+    expectNoRouteLeakage(response);
+  });
+
+  it("allows unauthenticated production /mcp tools/list with OAuth-required tool metadata", async () => {
+    const dependencies = routeDependencies(makeCtx());
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(null, mcpJsonRpcRequest("tools/list", "tools-list-discovery"), {
+        "mcp-protocol-version": "2025-11-25",
+      }),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 200,
+      json: {
+        jsonrpc: "2.0",
+        id: "tools-list-discovery",
+        result: {
+          tools: expect.any(Array),
+        },
+      },
+    });
+    const tools = (response.json as { result: { tools: readonly Record<string, unknown>[] } }).result.tools;
+    expect(tools).toHaveLength(4);
+    for (const tool of tools) {
+      expect(tool.securitySchemes).toEqual([
+        { type: "oauth2", scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE] },
+      ]);
+      expect(tool._meta).toEqual({
+        securitySchemes: [{ type: "oauth2", scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE] }],
+      });
+    }
+    expect(dependencies.checkPreAuthQuota).not.toHaveBeenCalled();
+    expect(dependencies.verifyAccessToken).not.toHaveBeenCalled();
+    expect(dependencies.executeReadonlySummaryTool).not.toHaveBeenCalled();
+    expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
+    expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+  });
+
+  it("allows unauthenticated production /mcp discovery from a configured OAuth redirect origin", async () => {
+    const dependencies = routeDependencies(makeCtx());
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(null, mcpJsonRpcRequest("tools/list", "tools-list-chatgpt-origin"), {
+        "mcp-protocol-version": "2025-11-25",
+        origin: new URL(REDIRECT_URI).origin,
+      }),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 200,
+      json: {
+        jsonrpc: "2.0",
+        id: "tools-list-chatgpt-origin",
+        result: {
+          tools: expect.any(Array),
+        },
+      },
+    });
+    expect(dependencies.checkPreAuthQuota).not.toHaveBeenCalled();
+    expect(dependencies.verifyAccessToken).not.toHaveBeenCalled();
+    expect(dependencies.executeReadonlySummaryTool).not.toHaveBeenCalled();
+    expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
+    expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+  });
+
   it("returns safe production /mcp ping responses after bearer verification", async () => {
     const ctx = makeCtx();
     ctx.accessTokenRows.push(storedAccessToken());
@@ -1376,11 +1503,25 @@ describe("MCP OAuth production route adapter", () => {
       "twoweeks.review_cockpit.summarize",
     ]);
     for (const tool of tools) {
-      expect(Object.keys(tool).sort()).toEqual(["annotations", "description", "inputSchema", "name", "title"]);
+      expect(Object.keys(tool).sort()).toEqual([
+        "_meta",
+        "annotations",
+        "description",
+        "inputSchema",
+        "name",
+        "securitySchemes",
+        "title",
+      ]);
       expect(tool.annotations).toEqual({
         readOnlyHint: true,
         destructiveHint: false,
         openWorldHint: false,
+      });
+      expect(tool.securitySchemes).toEqual([
+        { type: "oauth2", scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE] },
+      ]);
+      expect(tool._meta).toEqual({
+        securitySchemes: [{ type: "oauth2", scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE] }],
       });
       expect(tool).not.toHaveProperty("outputSchema");
       expect(tool).not.toHaveProperty("localToolId");
@@ -2172,7 +2313,18 @@ describe("MCP OAuth production route adapter", () => {
     expect(toolsCallDecision).not.toHaveProperty("payload");
     expect(projection.tools).toHaveLength(4);
     for (const tool of projection.tools) {
-      expect(Object.keys(tool).sort()).toEqual(["annotations", "description", "inputSchema", "name", "title"]);
+      expect(Object.keys(tool).sort()).toEqual([
+        "_meta",
+        "annotations",
+        "description",
+        "inputSchema",
+        "name",
+        "securitySchemes",
+        "title",
+      ]);
+      expect(tool.securitySchemes).toEqual([
+        { type: "oauth2", scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE] },
+      ]);
       expect(tool).not.toHaveProperty("localToolId");
       expect(tool).not.toHaveProperty("internalToolId");
       expect(tool).not.toHaveProperty("outputSchema");
@@ -2330,11 +2482,26 @@ describe("MCP OAuth production route adapter", () => {
   });
 
   it.each([
-    ["missing Authorization", mcpRequest(null)],
-    ["malformed Authorization scheme", mcpRequest(`Basic ${RAW_ACCESS_TOKEN}`)],
-    ["missing bearer token", mcpRequest("Bearer")],
-    ["oversized bearer token", mcpRequest(`Bearer ${"T".repeat(200)}`)],
-    ["ambiguous Authorization headers", mcpRequest([`Bearer ${RAW_ACCESS_TOKEN}`, `Bearer ${"R".repeat(43)}`])],
+    ["missing Authorization", mcpRequest(null, mcpJsonRpcRequest("tools/call", "missing-auth", {
+      name: "twoweeks.application_package.summarize",
+      arguments: { applicationPackageRef: { id: "mcp-safe-ref:application-package:latest" } },
+    }))],
+    ["malformed Authorization scheme", mcpRequest(`Basic ${RAW_ACCESS_TOKEN}`, mcpJsonRpcRequest("tools/call", "bad-scheme", {
+      name: "twoweeks.application_package.summarize",
+      arguments: { applicationPackageRef: { id: "mcp-safe-ref:application-package:latest" } },
+    }))],
+    ["missing bearer token", mcpRequest("Bearer", mcpJsonRpcRequest("tools/call", "missing-token", {
+      name: "twoweeks.application_package.summarize",
+      arguments: { applicationPackageRef: { id: "mcp-safe-ref:application-package:latest" } },
+    }))],
+    ["oversized bearer token", mcpRequest(`Bearer ${"T".repeat(200)}`, mcpJsonRpcRequest("tools/call", "oversized-token", {
+      name: "twoweeks.application_package.summarize",
+      arguments: { applicationPackageRef: { id: "mcp-safe-ref:application-package:latest" } },
+    }))],
+    ["ambiguous Authorization headers", mcpRequest([`Bearer ${RAW_ACCESS_TOKEN}`, `Bearer ${"R".repeat(43)}`], mcpJsonRpcRequest("tools/call", "ambiguous-auth", {
+      name: "twoweeks.application_package.summarize",
+      arguments: { applicationPackageRef: { id: "mcp-safe-ref:application-package:latest" } },
+    }))],
   ] as const)("fails /mcp closed with %s before digest lookup", async (_label, input) => {
     const dependencies = routeDependencies(makeCtx());
     const response = await handleMcpOAuthProductionRouteRequest(
@@ -2964,7 +3131,10 @@ describe("MCP OAuth production route adapter", () => {
   it("fails invalid bearer headers before private beta eligibility", async () => {
     const dependencies = routeDependencies(makeCtx());
     const response = await handleMcpOAuthProductionRouteRequest(
-      mcpRequest(null),
+      mcpRequest(null, mcpJsonRpcRequest("tools/call", "private-beta-before-auth", {
+        name: "twoweeks.application_package.summarize",
+        arguments: { applicationPackageRef: { id: "mcp-safe-ref:application-package:latest" } },
+      })),
       buildMcpOAuthProductionRouteAdapterConfig({
         flags: { runtime: "1", approved: "1", routeWiring: "1" },
         providerConfig: PROVIDER_CONFIG,
@@ -3602,7 +3772,7 @@ describe("MCP OAuth production route adapter", () => {
 
     const mismatchedCookieRequest = {
       ...request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPath()),
-      headers: { host: "mcp.twoweeks.example.test", cookie: `tw_mcp_oauth_continue=${"C".repeat(43)}` },
+      headers: { host: "mcp.twoweeks.example.test", cookie: `tw_mcp_oauth_continue=${"c".repeat(64)}` },
     };
     const response = await handleMcpOAuthProductionRouteRequest(mismatchedCookieRequest, config, dependencies);
 
@@ -3867,6 +4037,36 @@ describe("MCP OAuth production route adapter", () => {
     expect(dependencies.createAuthorizationCode).not.toHaveBeenCalled();
     expect(ctx.authorizationCodeRows).toHaveLength(0);
     expectNoRouteLeakage(response);
+  });
+
+  it("accepts a consumed ChatGPT redirect URI matched by a configured path-prefix wildcard", async () => {
+    const ctx = makeCtx();
+    const dependencies = {
+      ...routeDependencies(ctx),
+      authorizationRequestConfig: authorizationRequestConfig({
+        allowedRedirectUris: ["https://chatgpt.example.test/connector/oauth/*"],
+      }),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      config,
+      dependencies,
+    );
+
+    const response = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPath()),
+      config,
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 303,
+    });
+    expect(new URL(response.headers.location).origin).toBe("https://chatgpt.example.test");
+    expect(dependencies.createAuthorizationCode).toHaveBeenCalledTimes(1);
+    expect(ctx.authorizationCodeRows).toHaveLength(1);
   });
 
   it("fails closed when authorization-code storage is unavailable after owner binding", async () => {
@@ -4531,9 +4731,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(response.statusCode).toBe(303);
     expect(response.headers).toMatchObject({
       "cache-control": "no-store",
-      location: `${PROD_APP_ORIGIN}/sign-in?${MCP_OAUTH_SIGN_IN_RETURN_PARAMETER}=${encodeURIComponent(
-        continuationPath(),
-      )}`,
+      location: `${PROD_APP_ORIGIN}/sign-in?${MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER}=${RAW_HANDLE}&${MCP_OAUTH_CONTINUATION_BROWSER_NONCE_PARAMETER}=${BROWSER_NONCE}`,
     });
     expect(ctx.preAuthRows).toHaveLength(1);
     expect(ctx.preAuthRows[0]).toMatchObject({
@@ -4708,6 +4906,93 @@ describe("MCP OAuth production route adapter", () => {
     );
     expect(JSON.stringify(response)).not.toContain(OWNER_ID);
     expect(JSON.stringify(response)).not.toContain(PKCE);
+  });
+
+  it("wires production login-return continuation through real Vite defaults with a Clerk session cookie", async () => {
+    for (const [key, value] of Object.entries(prodRouteEnv())) {
+      vi.stubEnv(key, value);
+    }
+    jwtVerifyMock.mockResolvedValueOnce({
+      payload: {
+        sub: OWNER_ID,
+        iss: CLERK_ISSUER,
+      },
+    });
+    convexHttpClientMutation
+      .mockImplementationOnce(async () => ({
+        kind: "mcp_oauth_pre_auth_owner_binding_result",
+        ok: true,
+        reason: "bound",
+        serverOnly: {
+          ownerBoundIntent: {
+            status: "pending",
+            expiresAt: Date.now() + 10 * 60 * 1_000,
+            version: 1,
+          },
+          preAuthIntent: {
+            status: "claimed",
+            version: 1,
+          },
+          trustedOwner: trustedOwner(),
+          version: 1,
+        },
+        modelVisible: false,
+        safeForLogging: false,
+        version: 1,
+      }))
+      .mockImplementationOnce(async () => ({
+        kind: "mcp_oauth_authorization_intent_consume_result",
+        ok: true,
+        reason: "consumed",
+        serverOnly: {
+          authorizationRequestHandoff: authorizationHandoff(),
+          version: 1,
+        },
+        modelVisible: false,
+        safeForLogging: false,
+        version: 1,
+      }))
+      .mockImplementationOnce(async () => ({
+        kind: "mcp_oauth_authorization_code_create_result",
+        ok: true,
+        reason: "created",
+        serverOnly: {
+          status: "pending",
+          expiresAt: Date.now() + 5 * 60 * 1_000,
+          rawAuthorizationCodePersisted: false,
+          version: 1,
+        },
+        modelVisible: false,
+        safeForLogging: false,
+        version: 1,
+      }));
+
+    const plugin = createLocalMcpDevEndpointPlugin();
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeMiddleware(middleware, {
+      method: "GET",
+      url: continuationPath(),
+      headers: {
+        host: "mcp.twoweeks.example.test",
+        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        cookie: `${BROWSER_NONCE_COOKIE}; __session=${CLERK_JWT}`,
+      },
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(303);
+    expect(jwtVerifyMock).toHaveBeenCalledWith(
+      CLERK_JWT,
+      "clerk_jwks_fixture",
+      {
+        issuer: CLERK_ISSUER,
+      },
+    );
+    expect(convexHttpClientSetAdminAuth).toHaveBeenNthCalledWith(2, "convex_admin_key_fixture", {
+      subject: OWNER_ID,
+      issuer: CLERK_ISSUER,
+    });
+    expect(convexHttpClientMutation).toHaveBeenCalledTimes(3);
   });
 
   it("wires production token requests through real no-options Vite defaults with atomic token issuance", async () => {
@@ -5625,6 +5910,29 @@ describe("MCP OAuth production route adapter", () => {
     expectNoRouteLeakage(response);
   });
 
+  it("lets browser document login-return continuations without a Clerk session fall through to the React bridge", async () => {
+    for (const [key, value] of Object.entries(prodRouteEnv())) {
+      vi.stubEnv(key, value);
+    }
+    const plugin = createLocalMcpDevEndpointPlugin();
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeMiddleware(middleware, {
+      method: "GET",
+      url: continuationPath(),
+      headers: {
+        host: "mcp.twoweeks.example.test",
+        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        cookie: BROWSER_NONCE_COOKIE,
+      },
+    });
+
+    expect(response.next).toHaveBeenCalledTimes(1);
+    expect(response.statusCode).toBeUndefined();
+    expect(response.body).toBe("");
+    expect(jwtVerifyMock).not.toHaveBeenCalled();
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
+  });
+
   it("fails closed when the default Convex client cannot be constructed", async () => {
     for (const [key, value] of Object.entries(prodRouteEnv())) {
       vi.stubEnv(key, value);
@@ -5795,7 +6103,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(isMcpOAuthProductionRouteHandledPath(MCP_OAUTH_PRODUCTION_MCP_PATH)).toBe(true);
     expect(isMcpOAuthProductionRouteHandledPath("/oauth/authorize/extra")).toBe(false);
     expect(isMcpOAuthProductionRouteHandledPath("/oauth/token/extra")).toBe(false);
-    expect(isMcpOAuthProductionRouteHandledPath("/mcp/oauth/authorize/continue/extra")).toBe(false);
+    expect(isMcpOAuthProductionRouteHandledPath("/oauth/continue/extra")).toBe(false);
     expect(isMcpOAuthProductionRouteHandledPath("/mcp/tools/list")).toBe(false);
     expect(isMcpOAuthProductionRouteHandledPath("/mcp/tools/call")).toBe(false);
     expect(isMcpOAuthProductionRouteHandledPath("/tools/list")).toBe(false);
@@ -6086,6 +6394,14 @@ function continuationPath(): string {
   const params = new URLSearchParams({
     [MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER]: RAW_HANDLE,
     [MCP_OAUTH_CONTINUATION_BROWSER_NONCE_PARAMETER]: BROWSER_NONCE,
+  });
+  return `${MCP_OAUTH_CONTINUATION_PATH}?${params.toString()}`;
+}
+
+function continuationPathNonceFirst(): string {
+  const params = new URLSearchParams({
+    [MCP_OAUTH_CONTINUATION_BROWSER_NONCE_PARAMETER]: BROWSER_NONCE,
+    [MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER]: RAW_HANDLE,
   });
   return `${MCP_OAUTH_CONTINUATION_PATH}?${params.toString()}`;
 }

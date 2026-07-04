@@ -199,7 +199,7 @@ function serializedByteLength(value: unknown): number | undefined {
 
 function isSafeMeta(value: unknown): boolean {
   if (!isPlainRecord(value)) return false;
-  return hasOnlyAllowedKeys(value, META_KEYS) && ("progressToken" in value ? isProgressToken(value.progressToken) : true);
+  return "progressToken" in value ? isProgressToken(value.progressToken) : true;
 }
 
 function hasSafeProgressToken(value: unknown): boolean {

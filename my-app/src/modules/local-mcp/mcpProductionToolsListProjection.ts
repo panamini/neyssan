@@ -1,5 +1,11 @@
 import { buildLocalMcpDescriptorRegistryMetadataOnly } from "./mcpDescriptorRegistry";
+import { TWOWEEKS_APPLICATIONS_READ_SCOPE } from "./mcpAuthPolicyBoundary";
 import type { LocalMcpProjectedToolDescriptorV1 } from "./mcpSchemaProjection";
+
+type McpProductionToolSecuritySchemeV1 = Readonly<{
+  type: "oauth2";
+  scopes: readonly [typeof TWOWEEKS_APPLICATIONS_READ_SCOPE];
+}>;
 
 export type McpProductionToolDescriptorV1 = Readonly<{
   name: string;
@@ -7,6 +13,10 @@ export type McpProductionToolDescriptorV1 = Readonly<{
   description: string;
   inputSchema: LocalMcpProjectedToolDescriptorV1["inputSchema"];
   annotations: LocalMcpProjectedToolDescriptorV1["annotations"];
+  securitySchemes: readonly McpProductionToolSecuritySchemeV1[];
+  _meta: Readonly<{
+    securitySchemes: readonly McpProductionToolSecuritySchemeV1[];
+  }>;
 }>;
 
 export type McpProductionToolsListResultV1 = Readonly<{
@@ -42,6 +52,12 @@ const PRODUCTION_SAFE_REF_IDS: Readonly<Record<string, Readonly<{
   }),
 });
 
+const OAUTH_READ_SECURITY_SCHEMES: readonly McpProductionToolSecuritySchemeV1[] = Object.freeze([
+  Object.freeze({
+    type: "oauth2",
+    scopes: Object.freeze([TWOWEEKS_APPLICATIONS_READ_SCOPE]) as readonly [typeof TWOWEEKS_APPLICATIONS_READ_SCOPE],
+  }),
+]);
 const MCP_PRODUCTION_TOOLS_LIST_RESULT = buildMcpProductionToolsListResultFromRegistry();
 
 export function buildMcpProductionToolsListResult(): McpProductionToolsListResultV1 {
@@ -64,6 +80,10 @@ function projectProductionToolDescriptor(
     description: productionToolDescription(descriptor),
     inputSchema: productionInputSchema(descriptor),
     annotations: Object.freeze({ ...descriptor.annotations }),
+    securitySchemes: OAUTH_READ_SECURITY_SCHEMES,
+    _meta: Object.freeze({
+      securitySchemes: OAUTH_READ_SECURITY_SCHEMES,
+    }),
   });
 }
 

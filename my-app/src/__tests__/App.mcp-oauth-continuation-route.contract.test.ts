@@ -12,7 +12,7 @@ const appSource = readFileSync(
 describe("App MCP OAuth continuation route contract", () => {
   it("mounts a concrete continuation route before the dashboard catch-all", () => {
     const continuationRoute =
-      '<Route path="/mcp/oauth/authorize/continue" element={<McpOAuthContinuationPage />} />';
+      '<Route path="/oauth/continue" element={<McpOAuthContinuationPage />} />';
     const catchAllRoute = '<Route path="*" element={<Navigate to="/dashboard" replace />} />';
 
     expect(appSource).toContain(

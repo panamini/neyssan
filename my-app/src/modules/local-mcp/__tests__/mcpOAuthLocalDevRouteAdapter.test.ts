@@ -33,7 +33,6 @@ import {
 import {
   MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER,
   MCP_OAUTH_CONTINUATION_PATH,
-  MCP_OAUTH_SIGN_IN_RETURN_PARAMETER,
 } from "../../../pages/sign-in-return";
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
@@ -48,7 +47,7 @@ const PKCE = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const OWNER_ID = "user_twoweeks_fixture_123";
 const OTHER_OWNER_ID = "user_twoweeks_fixture_456";
 const NOW = Date.parse("2026-06-26T16:00:00.000Z");
-const RAW_HANDLE = "A".repeat(43);
+const RAW_HANDLE = "0123456789abcdef".repeat(4);
 const HANDLE_HASH = sha256Hex(RAW_HANDLE);
 
 type StoredPreAuthIntentRecord = McpOAuthPreAuthIntentRecordV1 & {
@@ -96,7 +95,7 @@ describe("MCP OAuth local/dev two-phase route adapter", () => {
     expect(Object.keys(ctx.preAuthRows[0])).not.toContain("twoweeksClerkId");
     expect(ctx.authorizationRows).toHaveLength(0);
     expect(authorizationResponse.headers.location).toBe(
-      `${APP_ORIGIN}/sign-in?${MCP_OAUTH_SIGN_IN_RETURN_PARAMETER}=${encodeURIComponent(continuationPath())}`,
+      `${APP_ORIGIN}/sign-in?${MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER}=${RAW_HANDLE}`,
     );
     expectNoOAuthLeakage(authorizationResponse, { allowRawHandle: true });
 
