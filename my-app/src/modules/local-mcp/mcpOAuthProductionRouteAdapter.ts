@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { isIP, SocketAddress } from "node:net";
 import {
   buildMcpOAuthProductionRoutePreflight,
@@ -507,8 +507,15 @@ export type McpOAuthProductionBrowserBoundContinuationNonceGeneratorV1 = () => s
 export type McpOAuthProductionAuthorizationCodeGeneratorV1 = () => string | undefined;
 export type McpOAuthProductionAccessTokenGeneratorV1 = () => string | undefined;
 
+export type McpOAuthProductionClientSecretPostPolicyV1 = Readonly<{
+  allowedClientId: string;
+  clientSecretSha256: string;
+  version: 1;
+}>;
+
 export type McpOAuthProductionRouteAdapterDependenciesV1 = Readonly<{
   authorizationRequestConfig?: McpOAuthAuthorizationRequestBoundaryConfigV1;
+  clientSecretPost?: McpOAuthProductionClientSecretPostPolicyV1;
   checkPreAuthQuota?: McpOAuthProductionPreAuthQuotaPortV1;
   createPreAuthIntent?: McpOAuthProductionPreAuthIntentCreatePortV1;
   bindPreAuthIntentToAuthenticatedOwner?: McpOAuthProductionPreAuthOwnerBindingPortV1;
@@ -619,6 +626,7 @@ const ACCESS_TOKEN_BYTE_LENGTH = 32;
 const AUTHORIZATION_CODE_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 const ACCESS_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 const AUTHORIZATION_CODE_DIGEST_PATTERN = /^[0-9a-f]{64}$/u;
+const CLIENT_SECRET_SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 const MCP_BEARER_VERIFICATION_QUOTA_CLIENT_ID = "mcp_bearer_verification";
 const MCP_PRODUCTION_PROTOCOL_VERSION = "2025-11-25";
 const PKCE_CODE_VERIFIER_PATTERN = /^[A-Za-z0-9._~-]{43,128}$/u;
@@ -631,6 +639,10 @@ const TOKEN_REQUEST_KEYS = Object.freeze([
   "redirect_uri",
   "resource",
   "code_verifier",
+] as const);
+const TOKEN_REQUEST_KEYS_WITH_CLIENT_SECRET_POST = Object.freeze([
+  ...TOKEN_REQUEST_KEYS,
+  "client_secret",
 ] as const);
 export const MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT = "mcp_oauth_production_v1";
 const BASE64_URL_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
@@ -971,7 +983,7 @@ async function handleTokenRequest(
     return failClosedResponse("oauth_token", preflight, "invalid_configuration", 500);
   }
 
-  const tokenRequest = readTokenRequest(request, expectedResource);
+  const tokenRequest = readTokenRequest(request, expectedResource, dependencies.clientSecretPost);
   if (!tokenRequest.ok) {
     return failClosedResponse("oauth_token", preflight, tokenRequest.reason, tokenRequest.status);
   }
@@ -2069,6 +2081,7 @@ function redirectToOAuthClientWithAuthorizationCode(
 function readTokenRequest(
   request: McpOAuthProductionRouteAdapterRequestV1,
   expectedResource: string,
+  clientSecretPost: McpOAuthProductionClientSecretPostPolicyV1 | undefined,
 ): Readonly<
   | {
       ok: true;
@@ -2110,7 +2123,7 @@ function readTokenRequest(
   if (resourceValues.length === 0) {
     return Object.freeze({ ok: false, reason: "invalid_target", status: 400 });
   }
-  if (!hasExactlyTokenRequestKeys(params)) {
+  if (!hasExactlyTokenRequestKeys(params, clientSecretPost !== undefined)) {
     return Object.freeze({ ok: false, reason: "invalid_request", status: 400 });
   }
   if (params.get("grant_type") !== "authorization_code") {
@@ -2122,10 +2135,16 @@ function readTokenRequest(
   const redirectUri = readTokenRedirectUri(params.get("redirect_uri"));
   const resource = readTokenResource(resourceValues[0]);
   const codeVerifier = readCodeVerifier(params.get("code_verifier"));
+  const clientSecret = clientSecretPost
+    ? readBoundedTokenParameter(params.get("client_secret"), 1_024)
+    : undefined;
   if (!resource || resource !== expectedResource) {
     return Object.freeze({ ok: false, reason: "invalid_target", status: 400 });
   }
   if (!code || !AUTHORIZATION_CODE_PATTERN.test(code) || !clientId || !redirectUri || !codeVerifier) {
+    return Object.freeze({ ok: false, reason: "invalid_request", status: 400 });
+  }
+  if (clientSecretPost && !clientSecretPostMatches(clientSecretPost, clientId, clientSecret)) {
     return Object.freeze({ ok: false, reason: "invalid_request", status: 400 });
   }
 
@@ -2204,13 +2223,26 @@ function readHeaderValueByName(
   return typeof value === "string" ? value.trim() : undefined;
 }
 
-function hasExactlyTokenRequestKeys(params: URLSearchParams): boolean {
+function hasExactlyTokenRequestKeys(params: URLSearchParams, requireClientSecretPost: boolean): boolean {
+  const expectedKeys = requireClientSecretPost ? TOKEN_REQUEST_KEYS_WITH_CLIENT_SECRET_POST : TOKEN_REQUEST_KEYS;
   const keys = [...params.keys()];
   return (
-    keys.length === TOKEN_REQUEST_KEYS.length &&
-    TOKEN_REQUEST_KEYS.every((key) => params.getAll(key).length === 1) &&
-    keys.every((key) => TOKEN_REQUEST_KEYS.includes(key as never))
+    keys.length === expectedKeys.length &&
+    expectedKeys.every((key) => params.getAll(key).length === 1) &&
+    keys.every((key) => expectedKeys.includes(key as never))
   );
+}
+
+function clientSecretPostMatches(
+  policy: McpOAuthProductionClientSecretPostPolicyV1,
+  clientId: string,
+  clientSecret: string | undefined,
+): boolean {
+  if (clientId !== policy.allowedClientId) return false;
+  if (!clientSecret || !CLIENT_SECRET_SHA256_PATTERN.test(policy.clientSecretSha256)) return false;
+  const actual = Buffer.from(createHash("sha256").update(clientSecret).digest("hex"), "utf8");
+  const expected = Buffer.from(policy.clientSecretSha256, "utf8");
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
 function isFormUrlEncodedContentType(value: string | readonly string[] | undefined): boolean {

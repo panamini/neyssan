@@ -45,6 +45,7 @@ import {
   MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
   MCP_OAUTH_PRODUCTION_MCP_PATH,
   MCP_OAUTH_PRODUCTION_TOKEN_PATH,
+  type McpOAuthProductionClientSecretPostPolicyV1,
   type McpOAuthProductionAuthenticatedOwnerIdentityV1,
   type McpOAuthProductionRouteAdapterConfigV1,
   type McpOAuthProductionRouteAdapterDependenciesV1,
@@ -92,6 +93,7 @@ const MCP_OAUTH_PRODUCTION_PROVIDER_ENVIRONMENT_VAR = "MCP_OAUTH_PRODUCTION_PROV
 const MCP_OAUTH_PRODUCTION_CLIENT_IDS_VAR = "MCP_OAUTH_PRODUCTION_CLIENT_IDS";
 const MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN_VAR = "MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN";
 const MCP_OAUTH_PRODUCTION_REDIRECT_URIS_VAR = "MCP_OAUTH_PRODUCTION_REDIRECT_URIS";
+const MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256_VAR = "MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256";
 const CONVEX_KEY_VAR = "CONVEX_KEY";
 const CONVEX_AUTH_TOKEN_VAR = "CONVEX_AUTH_TOKEN";
 const CONVEX_URL_VAR = "CONVEX_URL";
@@ -102,6 +104,7 @@ const CLERK_CONVEX_AUDIENCE = "convex";
 const PRE_AUTH_QUOTA_WINDOW_MS = 60_000;
 const PRE_AUTH_QUOTA_LIMIT = 60;
 const PRODUCTION_OAUTH_TOKEN_MAX_REQUEST_BYTES = 4_096;
+const CLIENT_SECRET_SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 const DEFAULT_VITE_ALLOWED_HOSTS = Object.freeze(["host.docker.internal"]);
 const CREATE_MCP_OAUTH_PRE_AUTH_INTENT_MUTATION = makeFunctionReference(
   "mcpOAuthPreAuthIntents:internalCreateMcpOAuthPreAuthIntent",
@@ -832,6 +835,7 @@ function buildProductionMcpOAuthRouteDependencies(
   const convexClient = readConvexHttpClient(convexConnection);
   return Object.freeze({
     authorizationRequestConfig: readProductionMcpOAuthAuthorizationRequestConfig(env),
+    clientSecretPost: readProductionMcpOAuthClientSecretPostPolicy(env),
     checkPreAuthQuota: checkProductionPreAuthQuota,
     createPreAuthIntent: buildProductionPreAuthIntentCreatePort(convexClient),
     bindPreAuthIntentToAuthenticatedOwner: buildProductionPreAuthOwnerBindingPort(convexConnection),
@@ -842,6 +846,28 @@ function buildProductionMcpOAuthRouteDependencies(
     verifyAccessToken: buildProductionAccessTokenVerifyPort(convexClient),
     executeReadonlySummaryTool: buildProductionReadonlySummaryExecutor(convexClient),
     readAuthenticatedOwnerIdentity: buildProductionAuthenticatedOwnerIdentityReader(env),
+  });
+}
+
+function readProductionMcpOAuthClientSecretPostPolicy(
+  env: Readonly<Record<string, string | undefined>>,
+): McpOAuthProductionClientSecretPostPolicyV1 | undefined {
+  const digest = env[MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256_VAR]?.trim().toLowerCase();
+  const allowedClientIds = readCommaSeparatedEnv(env[MCP_OAUTH_PRODUCTION_CLIENT_IDS_VAR]);
+  const privateBetaClientIds = readCommaSeparatedEnv(env[MCP_PRODUCTION_PRIVATE_BETA_CLIENT_IDS_VAR]);
+  if (
+    !digest ||
+    !CLIENT_SECRET_SHA256_PATTERN.test(digest) ||
+    allowedClientIds.length !== 1 ||
+    !isStrictEnabledFlag(env, MCP_PRODUCTION_PRIVATE_BETA_ENABLED_FLAG) ||
+    !privateBetaClientIds.includes(allowedClientIds[0])
+  ) {
+    return undefined;
+  }
+  return Object.freeze({
+    allowedClientId: allowedClientIds[0],
+    clientSecretSha256: digest,
+    version: 1,
   });
 }
 
@@ -1374,6 +1400,7 @@ function sendProductionOAuthAuthorizationServerMetadata(
 ): void {
   const metadata = productionOAuthAuthorizationServerMetadata(
     dependencies.authorizationRequestConfig?.authorizationPageOrigin,
+    dependencies.clientSecretPost ? ["client_secret_post"] : ["none"],
   );
   if (!metadata) {
     sendInvalidLocalMcpDevRequest(res);
@@ -1388,7 +1415,10 @@ function sendProductionOAuthAuthorizationServerMetadata(
   );
 }
 
-function productionOAuthAuthorizationServerMetadata(authorizationPageOrigin: string | undefined): unknown | undefined {
+function productionOAuthAuthorizationServerMetadata(
+  authorizationPageOrigin: string | undefined,
+  tokenEndpointAuthMethodsSupported: readonly ["none"] | readonly ["client_secret_post"],
+): unknown | undefined {
   const parsed = parseProductionOAuthHttpsOrigin(authorizationPageOrigin);
   if (!parsed) return undefined;
   return Object.freeze({
@@ -1398,7 +1428,7 @@ function productionOAuthAuthorizationServerMetadata(authorizationPageOrigin: str
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code"],
     code_challenge_methods_supported: ["S256"],
-    token_endpoint_auth_methods_supported: ["none"],
+    token_endpoint_auth_methods_supported: [...tokenEndpointAuthMethodsSupported],
     scopes_supported: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
   });
 }

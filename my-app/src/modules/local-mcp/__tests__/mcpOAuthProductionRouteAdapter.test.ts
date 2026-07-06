@@ -128,6 +128,8 @@ const RAW_AUTHORIZATION_CODE = "C".repeat(43);
 const AUTHORIZATION_CODE_DIGEST = sha256Hex(RAW_AUTHORIZATION_CODE);
 const RAW_ACCESS_TOKEN = "T".repeat(43);
 const ACCESS_TOKEN_DIGEST = sha256Hex(RAW_ACCESS_TOKEN);
+const RAW_CONFIDENTIAL_CLIENT_SECRET = "confidential_client_post_secret_fixture";
+const CONFIDENTIAL_CLIENT_SECRET_DIGEST = sha256Hex(RAW_CONFIDENTIAL_CLIENT_SECRET);
 const OWNER_ID = "user_twoweeks_fixture_123";
 const OTHER_OWNER_ID = "user_twoweeks_fixture_456";
 const CLERK_ISSUER = "https://clerk.twoweeks.example.test";
@@ -3280,6 +3282,98 @@ describe("MCP OAuth production route adapter", () => {
     expectNoRouteLeakage(response, [], { allowAccessTokenResponse: true });
   });
 
+  it("issues an access token when configured client_secret_post matches the allowlisted client digest", async () => {
+    const ctx = makeCtx();
+    const dependencies = {
+      ...routeDependencies(ctx),
+      clientSecretPost: clientSecretPostPolicy(),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      config,
+      dependencies,
+    );
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPath()),
+      config,
+      dependencies,
+    );
+
+    const response = await handleMcpOAuthProductionRouteRequest(
+      tokenRequest(tokenRequestBody({ client_secret: RAW_CONFIDENTIAL_CLIENT_SECRET })),
+      config,
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 200,
+      json: {
+        access_token: RAW_ACCESS_TOKEN,
+        token_type: "Bearer",
+      },
+    });
+    expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(2);
+    expect(dependencies.issueAccessToken).toHaveBeenCalledTimes(1);
+    expectNoRouteLeakage(response, [RAW_CONFIDENTIAL_CLIENT_SECRET], { allowAccessTokenResponse: true });
+  });
+
+  it("fails closed before quota or token issuance when configured client_secret_post is missing", async () => {
+    const ctx = makeCtx();
+    const dependencies = {
+      ...routeDependencies(ctx),
+      clientSecretPost: clientSecretPostPolicy(),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
+
+    const response = await handleMcpOAuthProductionRouteRequest(tokenRequest(), config, dependencies);
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 400,
+      json: {
+        status: "blocked",
+        reason: "invalid_request",
+        route: "oauth_token",
+        tokenIssued: false,
+      },
+    });
+    expect(dependencies.checkPreAuthQuota).not.toHaveBeenCalled();
+    expect(dependencies.issueAccessToken).not.toHaveBeenCalled();
+    expectNoRouteLeakage(response, [RAW_CONFIDENTIAL_CLIENT_SECRET]);
+  });
+
+  it("fails closed before quota or token issuance when configured client_secret_post is wrong", async () => {
+    const ctx = makeCtx();
+    const dependencies = {
+      ...routeDependencies(ctx),
+      clientSecretPost: clientSecretPostPolicy(),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
+    const wrongSecret = "confidential_client_wrong_secret_fixture";
+
+    const response = await handleMcpOAuthProductionRouteRequest(
+      tokenRequest(tokenRequestBody({ client_secret: wrongSecret })),
+      config,
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 400,
+      json: {
+        status: "blocked",
+        reason: "invalid_request",
+        route: "oauth_token",
+        tokenIssued: false,
+      },
+    });
+    expect(dependencies.checkPreAuthQuota).not.toHaveBeenCalled();
+    expect(dependencies.issueAccessToken).not.toHaveBeenCalled();
+    expectNoRouteLeakage(response, [RAW_CONFIDENTIAL_CLIENT_SECRET, wrongSecret]);
+  });
+
   it("consumes a valid authorization code once and rejects token replay", async () => {
     const ctx = makeCtx();
     const dependencies = routeDependencies(ctx);
@@ -5707,6 +5801,36 @@ describe("MCP OAuth production route adapter", () => {
     expect(convexHttpClientMutation).not.toHaveBeenCalled();
   });
 
+  it("advertises client_secret_post in production authorization-server metadata when the private-beta digest is configured", async () => {
+    const authorizationOrigin = "https://auth.twoweeks.example.test";
+    const resource = "https://resource.twoweeks.example.test/resource";
+    const plugin = createLocalMcpDevEndpointPlugin({
+      env: {
+        ...prodRouteEnv(),
+        LOCAL_MCP_DEV_ENDPOINT: "1",
+        MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN: authorizationOrigin,
+        MCP_OAUTH_PRODUCTION_RESOURCE: resource,
+        MCP_OAUTH_PRODUCTION_PRIVATE_BETA_RESOURCES: resource,
+        MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256: CONFIDENTIAL_CLIENT_SECRET_DIGEST,
+      },
+    });
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeMiddleware(middleware, {
+      method: "GET",
+      url: "/.well-known/oauth-authorization-server",
+      headers: { host: "auth.twoweeks.example.test" },
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body)).toMatchObject({
+      token_endpoint_auth_methods_supported: ["client_secret_post"],
+    });
+    expect(response.body).not.toContain(RAW_CONFIDENTIAL_CLIENT_SECRET);
+    expect(convexHttpClientQuery).not.toHaveBeenCalled();
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
+  });
+
   it("does not serve production authorization-server metadata while the auth preflight is closed", async () => {
     const plugin = createLocalMcpDevEndpointPlugin({
       env: {
@@ -6089,6 +6213,17 @@ function routeConfig(
   });
 }
 
+function clientSecretPostPolicy(
+  overrides: Partial<NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["clientSecretPost"]>> = {},
+): NonNullable<McpOAuthProductionRouteAdapterDependenciesV1["clientSecretPost"]> {
+  return Object.freeze({
+    allowedClientId: CLIENT_ID,
+    clientSecretSha256: CONFIDENTIAL_CLIENT_SECRET_DIGEST,
+    version: 1,
+    ...overrides,
+  });
+}
+
 function privateBetaConfig(
   overrides: Partial<McpProductionPrivateBetaGateConfigInputV1> = {},
 ): McpProductionPrivateBetaGateConfigInputV1 {
@@ -6343,7 +6478,14 @@ function continuationPathNonceFirst(): string {
 }
 
 function tokenRequestBody(
-  overrides: Readonly<Partial<Record<"grant_type" | "code" | "client_id" | "redirect_uri" | "resource" | "code_verifier", string>>> = {},
+  overrides: Readonly<
+    Partial<
+      Record<
+        "grant_type" | "code" | "client_id" | "redirect_uri" | "resource" | "code_verifier" | "client_secret",
+        string
+      >
+    >
+  > = {},
 ): string {
   const params = new URLSearchParams();
   params.append("grant_type", overrides.grant_type ?? "authorization_code");
@@ -6352,6 +6494,7 @@ function tokenRequestBody(
   params.append("redirect_uri", overrides.redirect_uri ?? REDIRECT_URI);
   if (overrides.resource !== "") params.append("resource", overrides.resource ?? RESOURCE);
   params.append("code_verifier", overrides.code_verifier ?? RAW_CODE_VERIFIER);
+  if (overrides.client_secret !== undefined) params.append("client_secret", overrides.client_secret);
   return params.toString();
 }
 
