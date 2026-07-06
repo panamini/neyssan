@@ -263,10 +263,7 @@ function handleLocalMcpDevMiddlewareRequest(
     ) &&
     productionOAuthRequestHostMatchesRoute(req, pathName, productionOAuthAuthorizationDependencies)
   ) {
-    if (
-      isProductionOAuthBrowserContinuationDocumentRequest(req, pathName) &&
-      !hasCookieNamed(req.headers.cookie, "__session")
-    ) {
+    if (isProductionOAuthBrowserContinuationDocumentRequest(req, pathName)) {
       next();
       return;
     }

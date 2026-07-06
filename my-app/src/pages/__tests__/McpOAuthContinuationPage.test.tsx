@@ -44,13 +44,21 @@ describe("McpOAuthContinuationPage", () => {
     expect(screen.queryByText("secret_handle-123")).not.toBeInTheDocument();
   });
 
-  it("tries credentialed cookie continuation before requesting a Clerk bearer token", async () => {
+  it("retries owner binding with a Clerk bearer token after a stale cookie failure", async () => {
     authState.isSignedIn = true;
-    const fetchMock = vi.fn(async () => ({
-      json: async () => ({ reason: "owner_binding_failed" }),
-      ok: false,
-      status: 409,
-    }));
+    authState.getToken.mockResolvedValue("safe-test-token");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        json: async () => ({ reason: "owner_binding_failed" }),
+        ok: false,
+        status: 409,
+      })
+      .mockResolvedValueOnce({
+        json: async () => ({ reason: "owner_binding_failed" }),
+        ok: false,
+        status: 409,
+      });
     vi.stubGlobal("fetch", fetchMock);
 
     render(
@@ -63,14 +71,23 @@ describe("McpOAuthContinuationPage", () => {
       </MemoryRouter>,
     );
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(authState.getToken).not.toHaveBeenCalled();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(authState.getToken).toHaveBeenCalledWith({ template: "convex" });
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/oauth/continue"),
       expect.objectContaining({
         credentials: "include",
         headers: expect.not.objectContaining({
           authorization: expect.any(String),
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/oauth/continue"),
+      expect.objectContaining({
+        credentials: "include",
+        headers: expect.objectContaining({
+          authorization: "Bearer safe-test-token",
         }),
       }),
     );

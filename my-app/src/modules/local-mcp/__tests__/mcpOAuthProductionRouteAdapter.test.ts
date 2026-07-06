@@ -4908,65 +4908,10 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(PKCE);
   });
 
-  it("wires production login-return continuation through real Vite defaults with a Clerk session cookie", async () => {
+  it("lets browser document login-return continuations with a stale Clerk session cookie fall through to the React bridge", async () => {
     for (const [key, value] of Object.entries(prodRouteEnv())) {
       vi.stubEnv(key, value);
     }
-    jwtVerifyMock.mockResolvedValueOnce({
-      payload: {
-        sub: OWNER_ID,
-        iss: CLERK_ISSUER,
-      },
-    });
-    convexHttpClientMutation
-      .mockImplementationOnce(async () => ({
-        kind: "mcp_oauth_pre_auth_owner_binding_result",
-        ok: true,
-        reason: "bound",
-        serverOnly: {
-          ownerBoundIntent: {
-            status: "pending",
-            expiresAt: Date.now() + 10 * 60 * 1_000,
-            version: 1,
-          },
-          preAuthIntent: {
-            status: "claimed",
-            version: 1,
-          },
-          trustedOwner: trustedOwner(),
-          version: 1,
-        },
-        modelVisible: false,
-        safeForLogging: false,
-        version: 1,
-      }))
-      .mockImplementationOnce(async () => ({
-        kind: "mcp_oauth_authorization_intent_consume_result",
-        ok: true,
-        reason: "consumed",
-        serverOnly: {
-          authorizationRequestHandoff: authorizationHandoff(),
-          version: 1,
-        },
-        modelVisible: false,
-        safeForLogging: false,
-        version: 1,
-      }))
-      .mockImplementationOnce(async () => ({
-        kind: "mcp_oauth_authorization_code_create_result",
-        ok: true,
-        reason: "created",
-        serverOnly: {
-          status: "pending",
-          expiresAt: Date.now() + 5 * 60 * 1_000,
-          rawAuthorizationCodePersisted: false,
-          version: 1,
-        },
-        modelVisible: false,
-        safeForLogging: false,
-        version: 1,
-      }));
-
     const plugin = createLocalMcpDevEndpointPlugin();
     const middleware = readConfiguredMiddleware(plugin);
     const response = await invokeMiddleware(middleware, {
@@ -4979,20 +4924,11 @@ describe("MCP OAuth production route adapter", () => {
       },
     });
 
-    expect(response.next).not.toHaveBeenCalled();
-    expect(response.statusCode).toBe(303);
-    expect(jwtVerifyMock).toHaveBeenCalledWith(
-      CLERK_JWT,
-      "clerk_jwks_fixture",
-      {
-        issuer: CLERK_ISSUER,
-      },
-    );
-    expect(convexHttpClientSetAdminAuth).toHaveBeenNthCalledWith(2, "convex_admin_key_fixture", {
-      subject: OWNER_ID,
-      issuer: CLERK_ISSUER,
-    });
-    expect(convexHttpClientMutation).toHaveBeenCalledTimes(3);
+    expect(response.next).toHaveBeenCalledTimes(1);
+    expect(response.statusCode).toBeUndefined();
+    expect(response.body).toBe("");
+    expect(jwtVerifyMock).not.toHaveBeenCalled();
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
   });
 
   it("wires production token requests through real no-options Vite defaults with atomic token issuance", async () => {
