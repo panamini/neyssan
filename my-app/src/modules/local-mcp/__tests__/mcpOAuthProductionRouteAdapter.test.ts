@@ -6016,6 +6016,26 @@ describe("MCP OAuth production route adapter", () => {
     expect(convexHttpClientMutation).not.toHaveBeenCalled();
   });
 
+  it("returns explicit not found for unsupported production OpenID discovery instead of Vite HTML", async () => {
+    const plugin = createLocalMcpDevEndpointPlugin({ env: prodRouteEnv() });
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeMiddleware(middleware, {
+      method: "GET",
+      url: "/.well-known/openid-configuration",
+      headers: { host: "mcp.twoweeks.example.test" },
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(404);
+    expect(response.headers["content-type"]).toBe("application/json; charset=utf-8");
+    expect(JSON.parse(response.body)).toMatchObject({
+      error: "not_found",
+    });
+    expect(response.body).not.toContain("<!doctype html>");
+    expect(convexHttpClientQuery).not.toHaveBeenCalled();
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
+  });
+
   it("does not serve production protected-resource metadata while the auth preflight is closed", async () => {
     const resource = "https://resource.twoweeks.example.test/resource";
     const plugin = createLocalMcpDevEndpointPlugin({

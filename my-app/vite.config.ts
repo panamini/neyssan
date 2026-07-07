@@ -87,6 +87,7 @@ const LOCAL_MCP_DEV_AUTH_ISSUER_VAR = "LOCAL_MCP_DEV_AUTH_ISSUER";
 const LOCAL_MCP_DEV_AUTH_PROVIDER_ENVIRONMENT_VAR = "LOCAL_MCP_DEV_AUTH_PROVIDER_ENVIRONMENT";
 const LOCAL_MCP_DEV_AUTH_CLIENT_ID_VAR = "LOCAL_MCP_DEV_AUTH_CLIENT_ID";
 const WELL_KNOWN_OAUTH_AUTHORIZATION_SERVER_PATH = "/.well-known/oauth-authorization-server";
+const WELL_KNOWN_OPENID_CONFIGURATION_PATH = "/.well-known/openid-configuration";
 const MCP_OAUTH_PRODUCTION_RESOURCE_VAR = "MCP_OAUTH_PRODUCTION_RESOURCE";
 const MCP_OAUTH_PRODUCTION_ISSUER_VAR = "MCP_OAUTH_PRODUCTION_ISSUER";
 const MCP_OAUTH_PRODUCTION_PROVIDER_ENVIRONMENT_VAR = "MCP_OAUTH_PRODUCTION_PROVIDER_ENVIRONMENT";
@@ -374,6 +375,10 @@ function handleProductionOAuthMetadataRequest(
   }
   if (productionOAuthAuthorizationServerMetadataRequestMatches(req, pathName, dependencies)) {
     sendProductionOAuthAuthorizationServerMetadata(res, dependencies);
+    return true;
+  }
+  if (productionOAuthUnsupportedOpenIdConfigurationRequestMatches(req, pathName, dependencies)) {
+    sendProductionOAuthUnsupportedOpenIdConfiguration(res);
     return true;
   }
   return false;
@@ -1412,6 +1417,32 @@ function productionOAuthAuthorizationServerMetadataRequestMatches(
   return productionOAuthRequestHostMatchesUrlOrigin(
     req,
     dependencies.authorizationRequestConfig?.authorizationPageOrigin,
+  );
+}
+
+function productionOAuthUnsupportedOpenIdConfigurationRequestMatches(
+  req: IncomingMessage,
+  pathName: string | undefined,
+  dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+): boolean {
+  if ((req.method ?? "GET") !== "GET") return false;
+  if (pathName !== WELL_KNOWN_OPENID_CONFIGURATION_PATH) return false;
+  return productionOAuthRequestHostMatchesUrlOrigin(
+    req,
+    dependencies.authorizationRequestConfig?.authorizationPageOrigin,
+  );
+}
+
+function sendProductionOAuthUnsupportedOpenIdConfiguration(res: ServerResponse): void {
+  sendLocalMcpRouteResponse(
+    res,
+    404,
+    { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+    {
+      error: "not_found",
+      error_description: "OpenID Connect discovery is not available for this OAuth server.",
+    },
+    undefined,
   );
 }
 
