@@ -1,104 +1,92 @@
 # PR305 durable private-beta MCP connector proof
 
 Date: 2026-07-05
+Updated: 2026-07-07
 Branch: `codex/pr305-durable-private-beta-mcp-endpoint`
 Base: `origin/application-os-foundation` at `d158768d28e418aeca5e176e504b8cf79fb1a8c1`
 Classification: `LOCAL_PASS_WITH_LIMITATIONS`
+Live connector state: `BLOCKED_ORIGIN_530`
 
 ## Scope
 
-This is a proof-only changeset for the durable private-beta MCP connector boundary.
+This is a private-beta MCP connector proof for the durable MCP URL:
 
-Durable MCP URL: `https://mcp.twoweeks.ai/mcp`
+`https://mcp.twoweeks.ai/mcp`
 
-Cloudflare named tunnel:
+It does not grant public launch permission and does not open provider calls, write tools, refresh tokens, billing, account-link lifecycle expansion, production/shared database mutation, or public release behavior.
 
-- name: `neyssan-mcp-pr305-twoweeks-ai`
-- id: `935a2064-9473-41bc-bd73-174660892847`
-- DNS route: `mcp.twoweeks.ai`
+## Confidential-client configuration
 
-Connector configuration used for the private/dev ChatGPT connector:
+ChatGPT connector OAuth for this endpoint now requires a confidential OAuth client using `client_secret_post`.
 
-- app name: `twoweeks-mcp-pr305-durable`
-- URL: `https://mcp.twoweeks.ai/mcp`
-- OAuth client id: `local-chatgpt-client`
-- client secret: empty
-- token endpoint auth method: `none`
-- default scope: `twoweeks:applications:read`
+Runtime configuration must use digest-only secret storage:
 
-## Guardrails
+- `MCP_OAUTH_PRODUCTION_CLIENT_IDS`: exact allowlisted ChatGPT OAuth client id.
+- `MCP_PRODUCTION_PRIVATE_BETA_CLIENT_IDS`: same private-beta client allowlist; must include the exact client id above.
+- `MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256`: lowercase SHA-256 hex digest of the raw client secret.
 
-This proof does not grant public launch permission.
+Do not store the raw client secret in the repo, Dockerfile, logs, PR text, or audit output.
 
-This proof does not call providers, model APIs, billing, write tools, refresh tokens, account-link lifecycle expansion, production Convex, or a shared database.
+The exact ChatGPT redirect URI remains:
 
-This proof does not expose raw CV/profile/job/proposal text, user emails, Clerk identifiers, OAuth codes, access tokens, state values, redirect secrets, provider secrets, prompt text, file bytes, or Cloudflare tokens.
+`https://chatgpt.com/connector/oauth/b7v_6OncLEsg`
 
-## Environment corrections discovered
+Wildcard redirect URIs are not allowed.
 
-The first live authorize attempt reached `https://mcp.twoweeks.ai/oauth/authorize` but failed safely with `pre_auth_create_failed`.
+## Current local proof
 
-Direct local probing reproduced the cause as a local Convex admin-auth configuration error: Vite had been started with a fixture admin key. Restarting Vite with the local backend admin key from `~/.convex/convex-backend-state/.../config.json` fixed pre-auth creation.
+Local synthetic Vite proof verifies the confidential-client behavior without using real secrets:
 
-The first MCP calls after token exchange returned `403` because the Vite process was started with `MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECTS="*"`. The private-beta gate does not support wildcards. Restarting Vite without a subject allowlist kept the gate constrained by approved client id plus resource and allowed the proof to continue.
+1. With no `MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256` env key, authorization-server metadata advertises `token_endpoint_auth_methods_supported: ["none"]`.
+2. With a valid configured digest and matching private-beta client allowlist, metadata advertises `token_endpoint_auth_methods_supported: ["client_secret_post"]`.
+3. With a malformed or empty configured digest, metadata does not downgrade to `["none"]`; the token endpoint requires `client_secret_post` and fails closed with `invalid_request` before quota, Convex, or token issuance.
+4. The token endpoint keeps exact `client_id`, `redirect_uri`, `resource`, PKCE, authorization-code validation, and no-refresh-token behavior.
+5. Missing or wrong `client_secret` returns a generic `invalid_request` and does not echo secrets, codes, states, tokens, or configured digests.
 
-## Proof ladder
+Focused Vitest coverage lives in:
 
-All proof requests went through `https://mcp.twoweeks.ai`, backed by local Vite on `127.0.0.1:5187` and local Convex on `127.0.0.1:3210`.
+- `my-app/src/modules/local-mcp/__tests__/mcpOAuthProductionRouteAdapter.test.ts`
 
-1. Local route reachability: pass.
-   - Protected-resource metadata returned `200`.
-   - Resource was `https://mcp.twoweeks.ai/mcp`.
-   - Scope was `twoweeks:applications:read`.
+## Live public endpoint status
 
-2. OAuth authorize and continuation: pass.
-   - `/oauth/authorize` returned `303` to `/sign-in`.
-   - Browser-bound continuation cookie was set.
-   - Authenticated continuation returned the safe ready envelope.
-   - Redirect target was a ChatGPT connector OAuth callback.
-   - State round trip succeeded.
-   - Authorization code was issued.
+The public metadata URL was checked on 2026-07-07:
 
-3. OAuth token exchange: pass.
-   - `/oauth/token` returned `200`.
-   - Bearer access token was issued.
-   - Scope was `twoweeks:applications:read`.
-   - No refresh token was issued.
+`https://mcp.twoweeks.ai/.well-known/oauth-authorization-server`
 
-4. MCP initialize: pass.
-   - `/mcp` returned `200`.
-   - Protocol version was `2025-11-25`.
+Observed result:
 
-5. MCP tools/list: pass.
-   - `/mcp` returned `200`.
-   - Four read-only tools were listed:
-     - `twoweeks.application_package.summarize`
-     - `twoweeks.evidence_graph.summarize`
-     - `twoweeks.resume_variant_plan.summarize`
-     - `twoweeks.review_cockpit.summarize`
+- HTTP status: `530`
+- Cloudflare error: `1033`
 
-6. MCP tools/call application package summary: pass.
-   - Tool: `twoweeks.application_package.summarize`
-   - Safe ref: `mcp-safe-ref:application-package:latest`
-   - Result status: `OK`
-   - Summary kind: `mcp_application_package_summary_result`
-   - Application package status: `available`
-   - Response text: `Read-only summary status: OK.`
+This means the durable public origin is not currently reachable from Cloudflare to the origin. ChatGPT connector activation is therefore not proven connected on the live endpoint in this run.
 
-## ChatGPT UI limitation
+## Not yet proven
 
-The ChatGPT private/dev connector entry was created and displayed the durable URL plus OAuth support. The ChatGPT settings UI later opened an add-connector modal whose visible connect action was disabled, so the final manual ChatGPT callback was not completed through the ChatGPT UI.
+The following are not proven by this PR state:
 
-This did not block the local/private-beta proof ladder because the same durable hostname, ChatGPT callback shape, OAuth code flow, token endpoint, and MCP bearer calls were proven live through the tunnel.
+- ChatGPT connector UI reaches `/oauth/token`.
+- ChatGPT connector activation completes.
+- ChatGPT `tools/list` works through the connector.
+- ChatGPT `tools/call` works through the connector.
 
-## Result
+Do not report those as connected until the public endpoint returns metadata with `client_secret_post`, ChatGPT completes OAuth with the configured secret, and `tools/list` plus a read-only `tools/call` are observed through ChatGPT.
 
-`LOCAL_PASS_WITH_LIMITATIONS`
+## Deployment note
 
-The required local/private-beta route, OAuth, token, MCP initialize, tools/list, and real Convex read-side application-package summary path are proven through the durable `mcp.twoweeks.ai` tunnel.
+For Docker or another process manager, inject the three confidential-client env vars at runtime with an env file, systemd `Environment=`, Docker `--env-file`, or Compose `env_file`.
 
-Remaining limitation: ChatGPT's own connector settings modal did not allow the final UI-driven connect action during this run.
+Do not bake the raw secret or its digest into a Docker image.
 
 ## Rollback
 
-Remove this markdown file. No runtime rollback is required because this PR changes no product code.
+Runtime rollback is to remove or unset `MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256` and restart the Vite/MCP process, which returns metadata to the public-client `["none"]` behavior.
+
+Code rollback requires reverting the PR305 runtime hunks in:
+
+- `my-app/vite.config.ts`
+- `my-app/src/modules/local-mcp/mcpOAuthProductionRouteAdapter.ts`
+- `my-app/src/modules/local-mcp/__tests__/mcpOAuthProductionRouteAdapter.test.ts`
+- `my-app/src/pages/McpOAuthContinuationPage.tsx`
+- `my-app/src/pages/__tests__/McpOAuthContinuationPage.test.tsx`
+
+Do not use destructive Git commands when unrelated work exists in the same worktree.

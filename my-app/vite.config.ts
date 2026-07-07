@@ -105,6 +105,12 @@ const PRE_AUTH_QUOTA_WINDOW_MS = 60_000;
 const PRE_AUTH_QUOTA_LIMIT = 60;
 const PRODUCTION_OAUTH_TOKEN_MAX_REQUEST_BYTES = 4_096;
 const CLIENT_SECRET_SHA256_PATTERN = /^[0-9a-f]{64}$/u;
+const INVALID_CLIENT_SECRET_POST_POLICY = Object.freeze({
+  allowedClientId: "",
+  clientSecretSha256: "0".repeat(64),
+  invalidConfiguration: true,
+  version: 1,
+} satisfies McpOAuthProductionClientSecretPostPolicyV1);
 const DEFAULT_VITE_ALLOWED_HOSTS = Object.freeze(["host.docker.internal"]);
 const CREATE_MCP_OAUTH_PRE_AUTH_INTENT_MUTATION = makeFunctionReference(
   "mcpOAuthPreAuthIntents:internalCreateMcpOAuthPreAuthIntent",
@@ -852,7 +858,9 @@ function buildProductionMcpOAuthRouteDependencies(
 function readProductionMcpOAuthClientSecretPostPolicy(
   env: Readonly<Record<string, string | undefined>>,
 ): McpOAuthProductionClientSecretPostPolicyV1 | undefined {
-  const digest = env[MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256_VAR]?.trim().toLowerCase();
+  const configuredDigest = env[MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256_VAR];
+  if (configuredDigest === undefined) return undefined;
+  const digest = configuredDigest.trim().toLowerCase();
   const allowedClientIds = readCommaSeparatedEnv(env[MCP_OAUTH_PRODUCTION_CLIENT_IDS_VAR]);
   const privateBetaClientIds = readCommaSeparatedEnv(env[MCP_PRODUCTION_PRIVATE_BETA_CLIENT_IDS_VAR]);
   if (
@@ -862,7 +870,7 @@ function readProductionMcpOAuthClientSecretPostPolicy(
     !isStrictEnabledFlag(env, MCP_PRODUCTION_PRIVATE_BETA_ENABLED_FLAG) ||
     !privateBetaClientIds.includes(allowedClientIds[0])
   ) {
-    return undefined;
+    return INVALID_CLIENT_SECRET_POST_POLICY;
   }
   return Object.freeze({
     allowedClientId: allowedClientIds[0],

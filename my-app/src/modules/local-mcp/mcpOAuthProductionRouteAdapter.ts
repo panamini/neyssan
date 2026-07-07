@@ -510,6 +510,7 @@ export type McpOAuthProductionAccessTokenGeneratorV1 = () => string | undefined;
 export type McpOAuthProductionClientSecretPostPolicyV1 = Readonly<{
   allowedClientId: string;
   clientSecretSha256: string;
+  invalidConfiguration?: true;
   version: 1;
 }>;
 
@@ -2238,6 +2239,7 @@ function clientSecretPostMatches(
   clientId: string,
   clientSecret: string | undefined,
 ): boolean {
+  if (policy.invalidConfiguration) return false;
   if (clientId !== policy.allowedClientId) return false;
   if (!clientSecret || !CLIENT_SECRET_SHA256_PATTERN.test(policy.clientSecretSha256)) return false;
   const actual = Buffer.from(createHash("sha256").update(clientSecret).digest("hex"), "utf8");

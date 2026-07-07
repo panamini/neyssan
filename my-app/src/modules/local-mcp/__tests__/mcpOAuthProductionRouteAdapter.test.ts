@@ -5831,6 +5831,51 @@ describe("MCP OAuth production route adapter", () => {
     expect(convexHttpClientMutation).not.toHaveBeenCalled();
   });
 
+  it("does not downgrade production metadata or token parsing when the configured client_secret_post digest is malformed", async () => {
+    const plugin = createLocalMcpDevEndpointPlugin({
+      env: {
+        ...prodRouteEnv(),
+        MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256: "not-a-sha256-digest",
+      },
+    });
+    const middleware = readConfiguredMiddleware(plugin);
+
+    const metadataResponse = await invokeMiddleware(middleware, {
+      method: "GET",
+      url: "/.well-known/oauth-authorization-server",
+      headers: { host: "mcp.twoweeks.example.test" },
+    });
+    const tokenResponse = await invokeStreamingMiddleware(middleware, {
+      method: "POST",
+      url: MCP_OAUTH_PRODUCTION_TOKEN_PATH,
+      headers: {
+        host: "mcp.twoweeks.example.test",
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: tokenRequestBody(),
+    });
+
+    expect(metadataResponse.next).not.toHaveBeenCalled();
+    expect(metadataResponse.statusCode).toBe(200);
+    expect(JSON.parse(metadataResponse.body)).toMatchObject({
+      token_endpoint_auth_methods_supported: ["client_secret_post"],
+    });
+    expect(tokenResponse.next).not.toHaveBeenCalled();
+    expect(tokenResponse.statusCode).toBe(400);
+    expect(JSON.parse(tokenResponse.body)).toMatchObject({
+      status: "blocked",
+      reason: "invalid_request",
+      route: "oauth_token",
+      authorizationCodeAccepted: false,
+      authorizationCodeConsumed: false,
+      tokenIssued: false,
+    });
+    expect(metadataResponse.body).not.toContain("not-a-sha256-digest");
+    expect(tokenResponse.body).not.toContain("not-a-sha256-digest");
+    expect(convexHttpClientQuery).not.toHaveBeenCalled();
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
+  });
+
   it("does not serve production authorization-server metadata while the auth preflight is closed", async () => {
     const plugin = createLocalMcpDevEndpointPlugin({
       env: {
