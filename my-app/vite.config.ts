@@ -370,15 +370,15 @@ function handleProductionOAuthMetadataRequest(
     return false;
   }
   if (productionOAuthProtectedResourceMetadataRequestMatches(req, pathName, dependencies)) {
-    sendProductionOAuthProtectedResourceMetadata(res, dependencies);
+    sendProductionOAuthProtectedResourceMetadata(res, dependencies, isHeadRequest(req));
     return true;
   }
   if (productionOAuthAuthorizationServerMetadataRequestMatches(req, pathName, dependencies)) {
-    sendProductionOAuthAuthorizationServerMetadata(res, dependencies);
+    sendProductionOAuthAuthorizationServerMetadata(res, dependencies, isHeadRequest(req));
     return true;
   }
   if (productionOAuthUnsupportedOpenIdConfigurationRequestMatches(req, pathName, dependencies)) {
-    sendProductionOAuthUnsupportedOpenIdConfiguration(res);
+    sendProductionOAuthUnsupportedOpenIdConfiguration(res, isHeadRequest(req));
     return true;
   }
   return false;
@@ -1362,7 +1362,7 @@ function productionOAuthProtectedResourceMetadataRequestMatches(
   pathName: string | undefined,
   dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
 ): boolean {
-  if ((req.method ?? "GET") !== "GET") return false;
+  if (!isMetadataRequestMethod(req)) return false;
   const metadataUrl = productionOAuthProtectedResourceMetadataUrl(
     dependencies.authorizationRequestConfig?.canonicalResource,
   );
@@ -1381,6 +1381,7 @@ function productionOAuthProtectedResourceMetadataRequestMatches(
 function sendProductionOAuthProtectedResourceMetadata(
   res: ServerResponse,
   dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+  omitBody: boolean,
 ): void {
   const config = dependencies.authorizationRequestConfig;
   const protectedResourceMetadataUrl = productionOAuthProtectedResourceMetadataUrl(config?.canonicalResource);
@@ -1399,7 +1400,7 @@ function sendProductionOAuthProtectedResourceMetadata(
       res,
       200,
       { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
-      metadata,
+      omitBody ? undefined : metadata,
       undefined,
     );
   } catch {
@@ -1412,7 +1413,7 @@ function productionOAuthAuthorizationServerMetadataRequestMatches(
   pathName: string | undefined,
   dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
 ): boolean {
-  if ((req.method ?? "GET") !== "GET") return false;
+  if (!isMetadataRequestMethod(req)) return false;
   if (pathName !== WELL_KNOWN_OAUTH_AUTHORIZATION_SERVER_PATH) return false;
   return productionOAuthRequestHostMatchesUrlOrigin(
     req,
@@ -1425,7 +1426,7 @@ function productionOAuthUnsupportedOpenIdConfigurationRequestMatches(
   pathName: string | undefined,
   dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
 ): boolean {
-  if ((req.method ?? "GET") !== "GET") return false;
+  if (!isMetadataRequestMethod(req)) return false;
   if (pathName !== WELL_KNOWN_OPENID_CONFIGURATION_PATH) return false;
   return productionOAuthRequestHostMatchesUrlOrigin(
     req,
@@ -1433,15 +1434,17 @@ function productionOAuthUnsupportedOpenIdConfigurationRequestMatches(
   );
 }
 
-function sendProductionOAuthUnsupportedOpenIdConfiguration(res: ServerResponse): void {
+function sendProductionOAuthUnsupportedOpenIdConfiguration(res: ServerResponse, omitBody: boolean): void {
   sendLocalMcpRouteResponse(
     res,
     404,
     { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
-    {
-      error: "not_found",
-      error_description: "OpenID Connect discovery is not available for this OAuth server.",
-    },
+    omitBody
+      ? undefined
+      : {
+          error: "not_found",
+          error_description: "OpenID Connect discovery is not available for this OAuth server.",
+        },
     undefined,
   );
 }
@@ -1449,6 +1452,7 @@ function sendProductionOAuthUnsupportedOpenIdConfiguration(res: ServerResponse):
 function sendProductionOAuthAuthorizationServerMetadata(
   res: ServerResponse,
   dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+  omitBody: boolean,
 ): void {
   const metadata = productionOAuthAuthorizationServerMetadata(
     dependencies.authorizationRequestConfig?.authorizationPageOrigin,
@@ -1460,11 +1464,20 @@ function sendProductionOAuthAuthorizationServerMetadata(
   }
   sendLocalMcpRouteResponse(
     res,
-    200,
-    { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
-    metadata,
-    undefined,
-  );
+      200,
+      { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+      omitBody ? undefined : metadata,
+      undefined,
+    );
+}
+
+function isMetadataRequestMethod(req: IncomingMessage): boolean {
+  const method = (req.method ?? "GET").toUpperCase();
+  return method === "GET" || method === "HEAD";
+}
+
+function isHeadRequest(req: IncomingMessage): boolean {
+  return (req.method ?? "GET").toUpperCase() === "HEAD";
 }
 
 function productionOAuthAuthorizationServerMetadata(

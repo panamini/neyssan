@@ -6036,6 +6036,41 @@ describe("MCP OAuth production route adapter", () => {
     expect(convexHttpClientMutation).not.toHaveBeenCalled();
   });
 
+  it("handles production well-known HEAD probes without falling through to Vite HTML", async () => {
+    const plugin = createLocalMcpDevEndpointPlugin({ env: prodRouteEnv() });
+    const middleware = readConfiguredMiddleware(plugin);
+    const authorizationServerResponse = await invokeMiddleware(middleware, {
+      method: "HEAD",
+      url: "/.well-known/oauth-authorization-server",
+      headers: { host: "mcp.twoweeks.example.test" },
+    });
+    const protectedResourceResponse = await invokeMiddleware(middleware, {
+      method: "HEAD",
+      url: "/.well-known/oauth-protected-resource/resource",
+      headers: { host: "mcp.twoweeks.example.test" },
+    });
+    const openIdResponse = await invokeMiddleware(middleware, {
+      method: "HEAD",
+      url: "/.well-known/openid-configuration",
+      headers: { host: "mcp.twoweeks.example.test" },
+    });
+
+    expect(authorizationServerResponse.next).not.toHaveBeenCalled();
+    expect(authorizationServerResponse.statusCode).toBe(200);
+    expect(authorizationServerResponse.headers["content-type"]).toBe("application/json; charset=utf-8");
+    expect(authorizationServerResponse.body).toBe("");
+    expect(protectedResourceResponse.next).not.toHaveBeenCalled();
+    expect(protectedResourceResponse.statusCode).toBe(200);
+    expect(protectedResourceResponse.headers["content-type"]).toBe("application/json; charset=utf-8");
+    expect(protectedResourceResponse.body).toBe("");
+    expect(openIdResponse.next).not.toHaveBeenCalled();
+    expect(openIdResponse.statusCode).toBe(404);
+    expect(openIdResponse.headers["content-type"]).toBe("application/json; charset=utf-8");
+    expect(openIdResponse.body).toBe("");
+    expect(convexHttpClientQuery).not.toHaveBeenCalled();
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
+  });
+
   it("does not serve production protected-resource metadata while the auth preflight is closed", async () => {
     const resource = "https://resource.twoweeks.example.test/resource";
     const plugin = createLocalMcpDevEndpointPlugin({
