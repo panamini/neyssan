@@ -4,8 +4,8 @@ Date: 2026-07-05
 Updated: 2026-07-07
 Branch: `codex/pr305-durable-private-beta-mcp-endpoint`
 Base: `origin/application-os-foundation` at `d158768d28e418aeca5e176e504b8cf79fb1a8c1`
-Classification: `LOCAL_PASS_WITH_LIMITATIONS`
-Live connector state: `BLOCKED_ORIGIN_530`
+Classification: `LOCAL_AND_PUBLIC_METADATA_PASS_WITH_LIMITATIONS`
+Live connector state: `PUBLIC_METADATA_RESTORED_CHATGPT_UI_NOT_PROVEN`
 
 ## Scope
 
@@ -22,7 +22,8 @@ ChatGPT connector OAuth for this endpoint now requires a confidential OAuth clie
 Runtime configuration must use digest-only secret storage:
 
 - `MCP_OAUTH_PRODUCTION_CLIENT_IDS`: exact allowlisted ChatGPT OAuth client id.
-- `MCP_PRODUCTION_PRIVATE_BETA_CLIENT_IDS`: same private-beta client allowlist; must include the exact client id above.
+- `MCP_OAUTH_PRODUCTION_PRIVATE_BETA_ENABLED`: enables the private-beta client gate.
+- `MCP_OAUTH_PRODUCTION_PRIVATE_BETA_CLIENT_IDS`: same private-beta client allowlist; must include the exact client id above.
 - `MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256`: lowercase SHA-256 hex digest of the raw client secret.
 
 Do not store the raw client secret in the repo, Dockerfile, logs, PR text, or audit output.
@@ -49,16 +50,25 @@ Focused Vitest coverage lives in:
 
 ## Live public endpoint status
 
-The public metadata URL was checked on 2026-07-07:
+The public metadata URL was re-checked on 2026-07-07 after restoring the local Vite origin and named Cloudflare tunnel:
 
 `https://mcp.twoweeks.ai/.well-known/oauth-authorization-server`
 
 Observed result:
 
-- HTTP status: `530`
-- Cloudflare error: `1033`
+- HTTP status: `200`
+- `token_endpoint_auth_methods_supported`: `["client_secret_post"]`
 
-This means the durable public origin is not currently reachable from Cloudflare to the origin. ChatGPT connector activation is therefore not proven connected on the live endpoint in this run.
+The protected-resource metadata URL was also re-checked:
+
+`https://mcp.twoweeks.ai/.well-known/oauth-protected-resource/mcp`
+
+Observed result:
+
+- HTTP status: `200`
+- `resource`: `https://mcp.twoweeks.ai/mcp`
+
+This proves the durable public metadata endpoint is reachable through the restored local origin and tunnel. ChatGPT connector activation is still not proven connected in this run.
 
 ## Not yet proven
 
