@@ -1412,6 +1412,40 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(OWNER_ID);
   });
 
+  it("allows unauthenticated production /mcp tools/list discovery without a protocol-version header", async () => {
+    const dependencies = routeDependencies(makeCtx());
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(null, mcpJsonRpcRequest("tools/list", "tools-list-discovery-no-version")),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 200,
+      json: {
+        jsonrpc: "2.0",
+        id: "tools-list-discovery-no-version",
+        result: {
+          tools: expect.any(Array),
+        },
+      },
+    });
+    const tools = (response.json as { result: { tools: readonly Record<string, unknown>[] } }).result.tools;
+    expect(tools).toHaveLength(4);
+    for (const tool of tools) {
+      expect(tool.securitySchemes).toEqual([
+        { type: "oauth2", scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE] },
+      ]);
+    }
+    expect(dependencies.checkPreAuthQuota).not.toHaveBeenCalled();
+    expect(dependencies.verifyAccessToken).not.toHaveBeenCalled();
+    expect(dependencies.executeReadonlySummaryTool).not.toHaveBeenCalled();
+    expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
+    expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+  });
+
   it("allows unauthenticated production /mcp discovery from a configured OAuth redirect origin", async () => {
     const dependencies = routeDependencies(makeCtx());
     const response = await handleMcpOAuthProductionRouteRequest(
@@ -5002,6 +5036,89 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(PKCE);
   });
 
+  it("server-redirects browser document login-return continuations with a verified Clerk session cookie", async () => {
+    for (const [key, value] of Object.entries(prodRouteEnv())) {
+      vi.stubEnv(key, value);
+    }
+    jwtVerifyMock.mockResolvedValueOnce({
+      payload: {
+        sub: OWNER_ID,
+        iss: CLERK_ISSUER,
+      },
+    });
+    convexHttpClientMutation
+      .mockImplementationOnce(async () => ({
+        kind: "mcp_oauth_pre_auth_owner_binding_result",
+        ok: true,
+        reason: "bound",
+        serverOnly: {
+          ownerBoundIntent: {
+            status: "pending",
+            expiresAt: Date.now() + 10 * 60 * 1_000,
+            version: 1,
+          },
+          preAuthIntent: {
+            status: "claimed",
+            version: 1,
+          },
+          trustedOwner: trustedOwner(),
+          version: 1,
+        },
+        modelVisible: false,
+        safeForLogging: false,
+        version: 1,
+      }))
+      .mockImplementationOnce(async () => ({
+        kind: "mcp_oauth_authorization_intent_consume_result",
+        ok: true,
+        reason: "consumed",
+        serverOnly: {
+          authorizationRequestHandoff: authorizationHandoff(),
+          version: 1,
+        },
+        modelVisible: false,
+        safeForLogging: false,
+        version: 1,
+      }))
+      .mockImplementationOnce(async () => ({
+        kind: "mcp_oauth_authorization_code_create_result",
+        ok: true,
+        reason: "created",
+        serverOnly: {
+          status: "pending",
+          expiresAt: Date.now() + 5 * 60 * 1_000,
+          rawAuthorizationCodePersisted: false,
+          version: 1,
+        },
+        modelVisible: false,
+        safeForLogging: false,
+        version: 1,
+      }));
+
+    const plugin = createLocalMcpDevEndpointPlugin();
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeMiddleware(middleware, {
+      method: "GET",
+      url: continuationPath(),
+      headers: {
+        host: "mcp.twoweeks.example.test",
+        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        cookie: `${BROWSER_NONCE_COOKIE}; __session=${CLERK_JWT}`,
+      },
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(303);
+    expect(new URL(response.headers.location).searchParams.get("code")).toMatch(/^[A-Za-z0-9_-]{43}$/u);
+    expect(new URL(response.headers.location).searchParams.get("state")).toBe(STATE);
+    expect(jwtVerifyMock).toHaveBeenCalledWith(CLERK_JWT, "clerk_jwks_fixture", {
+      issuer: CLERK_ISSUER,
+    });
+    expect(convexHttpClientMutation).toHaveBeenCalledTimes(3);
+    expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+    expect(JSON.stringify(response)).not.toContain(PKCE);
+  });
+
   it("lets browser document login-return continuations with a stale Clerk session cookie fall through to the React bridge", async () => {
     for (const [key, value] of Object.entries(prodRouteEnv())) {
       vi.stubEnv(key, value);
@@ -5021,7 +5138,9 @@ describe("MCP OAuth production route adapter", () => {
     expect(response.next).toHaveBeenCalledTimes(1);
     expect(response.statusCode).toBeUndefined();
     expect(response.body).toBe("");
-    expect(jwtVerifyMock).not.toHaveBeenCalled();
+    expect(jwtVerifyMock).toHaveBeenCalledWith(CLERK_JWT, "clerk_jwks_fixture", {
+      issuer: CLERK_ISSUER,
+    });
     expect(convexHttpClientMutation).not.toHaveBeenCalled();
   });
 

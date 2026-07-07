@@ -1225,7 +1225,7 @@ function handleUnauthenticatedMcpDiscoveryRequest(
     const id = "id" in jsonRpcMessage ? jsonRpcMessage.id : null;
     return jsonResponse(403, buildMcpJsonRpcError(id, -32600, "Invalid Origin header."));
   }
-  if (!isMcpProtocolVersionHeaderAllowed(request, jsonRpcMessage)) {
+  if (!isUnauthenticatedMcpDiscoveryProtocolVersionHeaderAllowed(request, jsonRpcMessage)) {
     const id = "id" in jsonRpcMessage ? jsonRpcMessage.id : null;
     return jsonResponse(400, buildMcpJsonRpcError(id, -32600, "Unsupported MCP protocol version."));
   }
@@ -2494,6 +2494,15 @@ function isMcpProtocolVersionHeaderAllowed(
   if (message.method === "initialize") return true;
   const protocolVersion = readHeaderValueByName(request.headers, "mcp-protocol-version");
   return protocolVersion === MCP_PRODUCTION_PROTOCOL_VERSION;
+}
+
+function isUnauthenticatedMcpDiscoveryProtocolVersionHeaderAllowed(
+  request: McpOAuthProductionRouteAdapterRequestV1,
+  message: McpJsonRpcProtocolMessageV1,
+): boolean {
+  if (isMcpProtocolVersionHeaderAllowed(request, message)) return true;
+  const protocolVersion = readHeaderValueByName(request.headers, "mcp-protocol-version");
+  return protocolVersion === undefined && message.method === "tools/list";
 }
 
 function normalizeCallerKey(value: string | undefined): string | undefined {

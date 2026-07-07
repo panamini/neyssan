@@ -272,7 +272,7 @@ function handleLocalMcpDevMiddlewareRequest(
     ) &&
     productionOAuthRequestHostMatchesRoute(req, pathName, productionOAuthAuthorizationDependencies)
   ) {
-    if (isProductionOAuthBrowserContinuationDocumentRequest(req, pathName)) {
+    if (isProductionOAuthBrowserContinuationDocumentRequest(req, pathName) && !hasCookieNamed(req.headers.cookie, "__session")) {
       next();
       return;
     }
@@ -472,6 +472,13 @@ async function respondToMcpOAuthProductionRouteRequestWithBody(
     );
     return;
   }
+  if (
+    isProductionOAuthBrowserContinuationDocumentRequest(req, pathName) &&
+    isProductionOAuthOwnerBindingFailureResponse(response)
+  ) {
+    next();
+    return;
+  }
   sendLocalMcpRouteResponse(res, response.status, response.headers, response.json, response.bodyText);
 }
 
@@ -521,6 +528,12 @@ function isHttpRedirectResponse(
     typeof response.headers.location === "string" &&
     response.headers.location.length > 0
   );
+}
+
+function isProductionOAuthOwnerBindingFailureResponse(response: McpOAuthProductionRouteAdapterResponseV1): boolean {
+  if (response.status !== 401 || !response.json || typeof response.json !== "object") return false;
+  const failure = response.json as { route?: unknown; reason?: unknown };
+  return failure.route === "oauth_login_return" && failure.reason === "owner_binding_failed";
 }
 
 async function respondToLocalMcpDevRequest(
