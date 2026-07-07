@@ -3363,16 +3363,7 @@ describe("MCP OAuth production route adapter", () => {
 
     const response = await handleMcpOAuthProductionRouteRequest(tokenRequest(), config, dependencies);
 
-    expect(response).toMatchObject({
-      handled: true,
-      status: 400,
-      json: {
-        status: "blocked",
-        reason: "invalid_request",
-        route: "oauth_token",
-        tokenIssued: false,
-      },
-    });
+    expectOAuthTokenErrorResponse(response, 400, "invalid_request");
     expect(dependencies.checkPreAuthQuota).not.toHaveBeenCalled();
     expect(dependencies.issueAccessToken).not.toHaveBeenCalled();
     expectNoRouteLeakage(response, [RAW_CONFIDENTIAL_CLIENT_SECRET]);
@@ -3393,16 +3384,7 @@ describe("MCP OAuth production route adapter", () => {
       dependencies,
     );
 
-    expect(response).toMatchObject({
-      handled: true,
-      status: 400,
-      json: {
-        status: "blocked",
-        reason: "invalid_request",
-        route: "oauth_token",
-        tokenIssued: false,
-      },
-    });
+    expectOAuthTokenErrorResponse(response, 400, "invalid_request");
     expect(dependencies.checkPreAuthQuota).not.toHaveBeenCalled();
     expect(dependencies.issueAccessToken).not.toHaveBeenCalled();
     expectNoRouteLeakage(response, [RAW_CONFIDENTIAL_CLIENT_SECRET, wrongSecret]);
@@ -3427,17 +3409,7 @@ describe("MCP OAuth production route adapter", () => {
     const second = await handleMcpOAuthProductionRouteRequest(tokenRequest(), config, dependencies);
 
     expect(first).toMatchObject({ handled: true, status: 200 });
-    expect(second).toMatchObject({
-      handled: true,
-      status: 400,
-      json: {
-        status: "blocked",
-        reason: "token_issue_failed",
-        route: "oauth_token",
-        authorizationCodeConsumed: false,
-        tokenIssued: false,
-      },
-    });
+    expectOAuthTokenErrorResponse(second, 400, "invalid_grant");
     expect(dependencies.issueAccessToken).toHaveBeenCalledTimes(2);
     expect(ctx.authorizationCodeRows[0]).toMatchObject({ status: "consumed", consumedAt: NOW });
     expect(ctx.accessTokenRows).toHaveLength(1);
@@ -3467,18 +3439,7 @@ describe("MCP OAuth production route adapter", () => {
 
     const response = await handleMcpOAuthProductionRouteRequest(tokenRequest(), config, dependencies);
 
-    expect(response).toMatchObject({
-      handled: true,
-      status: 503,
-      json: {
-        status: "blocked",
-        reason: "token_issue_failed",
-        route: "oauth_token",
-        authorizationCodeConsumed: false,
-        tokenIssued: false,
-        tokenPersisted: false,
-      },
-    });
+    expectOAuthTokenErrorResponse(response, 503, "invalid_grant");
     expect(ctx.accessTokenRows).toHaveLength(0);
     expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
     expect(JSON.stringify(response)).not.toContain("access_token");
@@ -3505,16 +3466,7 @@ describe("MCP OAuth production route adapter", () => {
 
     const response = await handleMcpOAuthProductionRouteRequest(tokenRequest(), config, dependencies);
 
-    expect(response).toMatchObject({
-      handled: true,
-      status: 503,
-      json: {
-        status: "blocked",
-        reason: "token_issue_failed",
-        route: "oauth_token",
-        tokenIssued: false,
-      },
-    });
+    expectOAuthTokenErrorResponse(response, 503, "invalid_grant");
     expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
     expect(JSON.stringify(response)).not.toContain("access_token");
   });
@@ -3539,16 +3491,7 @@ describe("MCP OAuth production route adapter", () => {
 
     const response = await handleMcpOAuthProductionRouteRequest(tokenRequest(), config, dependencies);
 
-    expect(response).toMatchObject({
-      handled: true,
-      status: 503,
-      json: {
-        status: "blocked",
-        reason: "token_issue_failed",
-        route: "oauth_token",
-        tokenIssued: false,
-      },
-    });
+    expectOAuthTokenErrorResponse(response, 503, "invalid_grant");
     expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
     expect(JSON.stringify(response)).not.toContain("access_token");
     expect(JSON.stringify(response)).not.toContain("admin");
@@ -3603,17 +3546,7 @@ describe("MCP OAuth production route adapter", () => {
 
     const response = await handleMcpOAuthProductionRouteRequest(tokenRequest(), config, dependencies);
 
-    expect(response).toMatchObject({
-      handled: true,
-      status: 500,
-      json: {
-        status: "blocked",
-        reason: "token_generation_failed",
-        route: "oauth_token",
-        authorizationCodeConsumed: false,
-        tokenIssued: false,
-      },
-    });
+    expectOAuthTokenErrorResponse(response, 500, "invalid_request");
     expect(dependencies.issueAccessToken).not.toHaveBeenCalled();
     expect(ctx.authorizationCodeRows[0]).toMatchObject({ status: "pending" });
     expect(ctx.authorizationCodeRows[0]).not.toHaveProperty("consumedAt");
@@ -3646,18 +3579,7 @@ describe("MCP OAuth production route adapter", () => {
 
     const response = await handleMcpOAuthProductionRouteRequest(tokenRequest(), config, dependencies);
 
-    expect(response).toMatchObject({
-      handled: true,
-      status: 429,
-      json: {
-        status: "blocked",
-        reason: "token_quota_denied",
-        route: "oauth_token",
-        authorizationCodeAccepted: false,
-        authorizationCodeConsumed: false,
-        tokenIssued: false,
-      },
-    });
+    expectOAuthTokenErrorResponse(response, 429, "invalid_request");
     expect(dependencies.checkPreAuthQuota).toHaveBeenLastCalledWith({
       authorizationPageOrigin: PROD_APP_ORIGIN,
       clientId: CLIENT_ID,
@@ -3686,15 +3608,8 @@ describe("MCP OAuth production route adapter", () => {
       handled: true,
       status: 405,
       headers: { allow: "POST" },
-      json: {
-        status: "blocked",
-        reason: "unsupported_method",
-        route: "oauth_token",
-        authorizationCodeAccepted: false,
-        authorizationCodeConsumed: false,
-        tokenIssued: false,
-      },
     });
+    expect(response.json).toEqual({ error: "invalid_request" });
     expect(dependencies.issueAccessToken).not.toHaveBeenCalled();
     expectNoRouteLeakage(response);
   });
@@ -3711,7 +3626,7 @@ describe("MCP OAuth production route adapter", () => {
     ["wrong grant type", tokenRequest(tokenRequestBody({ grant_type: "refresh_token" })), "invalid_request", 400],
     ["missing code", tokenRequest(tokenRequestBody({ code: "" })), "invalid_request", 400],
     ["unallowed client_id", tokenRequest(tokenRequestBody({ client_id: "rotated_client_id" })), "invalid_request", 400],
-  ] as const)("fails production token request with %s", async (_label, tokenInput, reason, status) => {
+  ] as const)("fails production token request with %s", async (_label, tokenInput, _reason, status) => {
     const dependencies = routeDependencies(makeCtx());
     const response = await handleMcpOAuthProductionRouteRequest(
       tokenInput,
@@ -3719,21 +3634,7 @@ describe("MCP OAuth production route adapter", () => {
       dependencies,
     );
 
-    expect(response).toMatchObject({
-      handled: true,
-      status,
-      json: {
-        status: "blocked",
-        reason,
-        route: "oauth_token",
-        authorizationCodeAccepted: false,
-        authorizationCodeConsumed: false,
-        providerCalled: false,
-        tokenExchangeAttempted: false,
-        tokenIssued: false,
-        accountLinkCreated: false,
-      },
-    });
+    expectOAuthTokenErrorResponse(response, status, "invalid_request");
     expect(dependencies.checkPreAuthQuota).not.toHaveBeenCalled();
     expect(dependencies.issueAccessToken).not.toHaveBeenCalled();
     expectNoRouteLeakage(response);
@@ -3754,18 +3655,7 @@ describe("MCP OAuth production route adapter", () => {
       dependencies,
     );
 
-    expect(response).toMatchObject({
-      handled: true,
-      status: 400,
-      json: {
-        status: "blocked",
-        reason: "invalid_target",
-        route: "oauth_token",
-        authorizationCodeAccepted: false,
-        authorizationCodeConsumed: false,
-        tokenIssued: false,
-      },
-    });
+    expectOAuthTokenErrorResponse(response, 400, "invalid_target");
     expect(dependencies.checkPreAuthQuota).not.toHaveBeenCalled();
     expect(dependencies.issueAccessToken).not.toHaveBeenCalled();
     expectNoRouteLeakage(response);
@@ -3799,20 +3689,7 @@ describe("MCP OAuth production route adapter", () => {
 
     const response = await handleMcpOAuthProductionRouteRequest(tokenRequest(), config, dependencies);
 
-    expect(response).toMatchObject({
-      handled: true,
-      status: 400,
-      json: {
-        status: "blocked",
-        reason: "token_issue_failed",
-        route: "oauth_token",
-        authorizationCodeAccepted: false,
-        authorizationCodeConsumed: false,
-        tokenExchangeAttempted: false,
-        tokenIssued: false,
-        accountLinkCreated: false,
-      },
-    });
+    expectOAuthTokenErrorResponse(response, 400, "invalid_grant");
     expect(dependencies.issueAccessToken).toHaveBeenCalledTimes(1);
     expect(ctx.authorizationCodeRows).toHaveLength(1);
     expect(JSON.stringify(response)).not.toContain(RAW_AUTHORIZATION_CODE);
@@ -3839,17 +3716,7 @@ describe("MCP OAuth production route adapter", () => {
       dependencies,
     );
 
-    expect(response).toMatchObject({
-      handled: true,
-      status: 400,
-      json: {
-        status: "blocked",
-        reason: "invalid_request",
-        route: "oauth_token",
-        authorizationCodeAccepted: false,
-        tokenIssued: false,
-      },
-    });
+    expectOAuthTokenErrorResponse(response, 400, "invalid_request");
     expect(dependencies.issueAccessToken).not.toHaveBeenCalled();
     expectNoRouteLeakage(response);
   });
@@ -5981,14 +5848,7 @@ describe("MCP OAuth production route adapter", () => {
     });
     expect(tokenResponse.next).not.toHaveBeenCalled();
     expect(tokenResponse.statusCode).toBe(400);
-    expect(JSON.parse(tokenResponse.body)).toMatchObject({
-      status: "blocked",
-      reason: "invalid_request",
-      route: "oauth_token",
-      authorizationCodeAccepted: false,
-      authorizationCodeConsumed: false,
-      tokenIssued: false,
-    });
+    expect(JSON.parse(tokenResponse.body)).toEqual({ error: "invalid_request" });
     expect(metadataResponse.body).not.toContain("not-a-sha256-digest");
     expect(tokenResponse.body).not.toContain("not-a-sha256-digest");
     expect(convexHttpClientQuery).not.toHaveBeenCalled();
@@ -6257,14 +6117,7 @@ describe("MCP OAuth production route adapter", () => {
 
     expect(response.next).not.toHaveBeenCalled();
     expect(response.statusCode).toBe(503);
-    expect(JSON.parse(response.body)).toMatchObject({
-      status: "blocked",
-      reason: "token_issue_failed",
-      route: "oauth_token",
-      authorizationCodeAccepted: false,
-      authorizationCodeConsumed: false,
-      tokenIssued: false,
-    });
+    expect(JSON.parse(response.body)).toEqual({ error: "invalid_grant" });
     expect(convexHttpClientSetAdminAuth).not.toHaveBeenCalled();
     expect(convexHttpClientQuery).not.toHaveBeenCalled();
     expect(convexHttpClientMutation).not.toHaveBeenCalled();
@@ -7686,6 +7539,19 @@ function prodRouteEnvWithoutPrivateBetaSubjects(): Record<string, string> {
   const env = prodRouteEnv();
   delete env.MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECTS;
   return env;
+}
+
+function expectOAuthTokenErrorResponse(
+  response: Readonly<{ handled: boolean; status: number; json?: unknown }>,
+  status: number,
+  error: "invalid_request" | "invalid_grant" | "invalid_target",
+): void {
+  expect(response).toMatchObject({
+    handled: true,
+    status,
+    json: { error },
+  });
+  expect(response.json).toEqual({ error });
 }
 
 function expectNoRouteLeakage(

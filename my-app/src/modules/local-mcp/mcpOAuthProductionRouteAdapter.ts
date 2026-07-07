@@ -587,6 +587,7 @@ type McpOAuthProductionAuthorizationOriginV1 = Readonly<{
   hostname: string;
   port: string;
 }>;
+type OAuthTokenErrorV1 = "invalid_request" | "invalid_grant" | "invalid_target";
 
 const HANDLED_PATHS = Object.freeze([
   MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
@@ -691,6 +692,11 @@ export async function handleMcpOAuthProductionRouteRequest(
     return failClosedResponse(route, config.preflight, config.preflight.decision, 404);
   }
   if (!isAllowedMethod(route, request.method)) {
+    if (route === "oauth_token") {
+      return failClosedTokenResponse("invalid_request", 405, {
+        allow: allowedMethodForRoute(route),
+      });
+    }
     return failClosedResponse(route, config.preflight, "unsupported_method", 405, {
       allow: allowedMethodForRoute(route),
     });
@@ -965,31 +971,30 @@ async function handleTokenRequest(
   config: McpOAuthProductionRouteAdapterConfigV1,
   dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
 ): Promise<McpOAuthProductionRouteAdapterResponseV1> {
-  const preflight = config.preflight;
   if (!dependencies.authorizationRequestConfig || !dependencies.checkPreAuthQuota || !dependencies.issueAccessToken) {
-    return failClosedResponse("oauth_token", preflight, "dependency_unavailable", 503);
+    return failClosedTokenResponse("invalid_request", 503);
   }
   if (!authorizationRequestConfigMatchesGuard(dependencies.authorizationRequestConfig, config.authorizationRequestGuard)) {
-    return failClosedResponse("oauth_token", preflight, "invalid_configuration", 500);
+    return failClosedTokenResponse("invalid_request", 500);
   }
   const authorizationOrigin = readAuthorizationOrigin(dependencies.authorizationRequestConfig);
   if (!authorizationOrigin) {
-    return failClosedResponse("oauth_token", preflight, "invalid_configuration", 500);
+    return failClosedTokenResponse("invalid_request", 500);
   }
   if (!requestHostMatchesOrigin(request, authorizationOrigin)) {
-    return failClosedResponse("oauth_token", preflight, "invalid_host", 403);
+    return failClosedTokenResponse("invalid_request", 403);
   }
   const expectedResource = readTokenResource(dependencies.authorizationRequestConfig.canonicalResource);
   if (!expectedResource) {
-    return failClosedResponse("oauth_token", preflight, "invalid_configuration", 500);
+    return failClosedTokenResponse("invalid_request", 500);
   }
 
   const tokenRequest = readTokenRequest(request, expectedResource, dependencies.clientSecretPost);
   if (!tokenRequest.ok) {
-    return failClosedResponse("oauth_token", preflight, tokenRequest.reason, tokenRequest.status);
+    return failClosedTokenResponse(oauthTokenErrorForFailureReason(tokenRequest.reason), tokenRequest.status);
   }
   if (!dependencies.authorizationRequestConfig.clientIdPolicy.allowedClientIds.includes(tokenRequest.serverOnly.clientId)) {
-    return failClosedResponse("oauth_token", preflight, "invalid_request", 400);
+    return failClosedTokenResponse("invalid_request", 400);
   }
 
   const now = readNow(dependencies);
@@ -1009,20 +1014,15 @@ async function handleTokenRequest(
       PRE_AUTH_QUOTA_TIMEOUT_MS,
     );
   } catch {
-    return failClosedResponse("oauth_token", preflight, "token_quota_denied", 503);
+    return failClosedTokenResponse("invalid_request", 503);
   }
   if (!isQuotaAccepted(quotaResult)) {
-    return failClosedResponse(
-      "oauth_token",
-      preflight,
-      "token_quota_denied",
-      statusForPreAuthQuotaFailure(quotaResult),
-    );
+    return failClosedTokenResponse("invalid_request", statusForPreAuthQuotaFailure(quotaResult));
   }
 
   const rawAccessToken = readGeneratedAccessToken(dependencies);
   if (!rawAccessToken) {
-    return failClosedResponse("oauth_token", preflight, "token_generation_failed", 500);
+    return failClosedTokenResponse("invalid_request", 500);
   }
 
   const issueNow = readNow(dependencies);
@@ -1045,15 +1045,10 @@ async function handleTokenRequest(
       ACCESS_TOKEN_ISSUE_TIMEOUT_MS,
     );
   } catch {
-    return failClosedResponse("oauth_token", preflight, "token_issue_failed", 503);
+    return failClosedTokenResponse("invalid_request", 503);
   }
   if (!isAccessTokenIssueSuccess(issueResult, tokenRequest.serverOnly, issueNow)) {
-    return failClosedResponse(
-      "oauth_token",
-      preflight,
-      "token_issue_failed",
-      statusForAccessTokenIssueFailure(issueResult),
-    );
+    return failClosedTokenResponse("invalid_grant", statusForAccessTokenIssueFailure(issueResult));
   }
 
   return oauthAccessTokenResponse(rawAccessToken, issueResult, readNow(dependencies));
@@ -1654,6 +1649,20 @@ function failClosedResponse(
     ...extraJson,
     version: 1,
   }, headers);
+}
+
+function failClosedTokenResponse(
+  error: OAuthTokenErrorV1,
+  status: number,
+  headers: Readonly<Record<string, string>> = {},
+): McpOAuthProductionRouteAdapterResponseV1 {
+  return jsonResponse(status, { error }, headers);
+}
+
+function oauthTokenErrorForFailureReason(reason: McpOAuthProductionRouteFailureReasonV1): OAuthTokenErrorV1 {
+  if (reason === "invalid_target") return "invalid_target";
+  if (reason === "code_validation_failed" || reason === "token_issue_failed") return "invalid_grant";
+  return "invalid_request";
 }
 
 function mcpBearerAuthFailureResponse(
