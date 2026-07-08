@@ -789,6 +789,7 @@ function readProductionMcpOAuthConfigInput(env: Readonly<Record<string, string |
       requiredReadScopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
       version: 1,
     },
+    activationDependencies: buildProductionMcpOAuthActivationDependencyStubs(),
     privateBeta: {
       enabled: isStrictEnabledFlag(env, MCP_PRODUCTION_PRIVATE_BETA_ENABLED_FLAG),
       allowedClientIds: readCommaSeparatedEnv(env[MCP_PRODUCTION_PRIVATE_BETA_CLIENT_IDS_VAR]),
@@ -851,6 +852,47 @@ function readProductionMcpOAuthConfigInput(env: Readonly<Record<string, string |
       version: 1,
     },
   };
+}
+
+function buildProductionMcpOAuthActivationDependencyStubs(): NonNullable<
+  NonNullable<Parameters<typeof buildMcpOAuthProductionRouteAdapterConfig>[0]>["activationDependencies"]
+> {
+  const safeFailure = Object.freeze({
+    code: "mcp_oauth_production_activation_blocked",
+    message: "Production OAuth activation blocked.",
+    safeForModel: true,
+    tokenEchoed: false,
+    authorizationCodeEchoed: false,
+    providerSubjectExposed: false,
+    ownerExposed: false,
+    publicEndpointExposed: false,
+    frontendWired: false,
+    version: 1,
+  });
+  return Object.freeze({
+    providerAdapter: Object.freeze({
+      provider: "stytch",
+      exchangeAuthorizationCode: async () => Object.freeze({
+        kind: "mcp_oauth_production_token_exchange_result",
+        ok: false,
+        reason: "provider_adapter_unavailable",
+        safeFailure,
+        modelVisible: false,
+        safeForLogging: true,
+        version: 1,
+      }),
+      version: 1,
+    }),
+    executeAccountLinkLifecycle: async () => Object.freeze({
+      kind: "mcp_account_link_lifecycle_result",
+      operation: "link",
+      ok: false,
+      reason: "account_link_lifecycle_unavailable",
+      safeFailure,
+      modelVisible: false,
+      version: 1,
+    }),
+  });
 }
 
 function buildProductionMcpOAuthRouteDependencies(
