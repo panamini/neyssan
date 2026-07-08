@@ -87,6 +87,7 @@ const LOCAL_MCP_DEV_AUTH_ISSUER_VAR = "LOCAL_MCP_DEV_AUTH_ISSUER";
 const LOCAL_MCP_DEV_AUTH_PROVIDER_ENVIRONMENT_VAR = "LOCAL_MCP_DEV_AUTH_PROVIDER_ENVIRONMENT";
 const LOCAL_MCP_DEV_AUTH_CLIENT_ID_VAR = "LOCAL_MCP_DEV_AUTH_CLIENT_ID";
 const WELL_KNOWN_OAUTH_AUTHORIZATION_SERVER_PATH = "/.well-known/oauth-authorization-server";
+const WELL_KNOWN_OAUTH_AUTHORIZATION_SERVER_MCP_PATH = `${WELL_KNOWN_OAUTH_AUTHORIZATION_SERVER_PATH}${MCP_OAUTH_PRODUCTION_MCP_PATH}`;
 const WELL_KNOWN_OAUTH_PROTECTED_RESOURCE_PATH = "/.well-known/oauth-protected-resource";
 const WELL_KNOWN_OPENID_CONFIGURATION_PATH = "/.well-known/openid-configuration";
 const MCP_OAUTH_PRODUCTION_RESOURCE_VAR = "MCP_OAUTH_PRODUCTION_RESOURCE";
@@ -1461,7 +1462,12 @@ function productionOAuthAuthorizationServerMetadataRequestMatches(
   dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
 ): boolean {
   if (!isMetadataRequestMethod(req)) return false;
-  if (pathName !== WELL_KNOWN_OAUTH_AUTHORIZATION_SERVER_PATH) return false;
+  if (
+    pathName !== WELL_KNOWN_OAUTH_AUTHORIZATION_SERVER_PATH &&
+    pathName !== WELL_KNOWN_OAUTH_AUTHORIZATION_SERVER_MCP_PATH
+  ) {
+    return false;
+  }
   return productionOAuthRequestHostMatchesUrlOrigin(
     req,
     dependencies.authorizationRequestConfig?.authorizationPageOrigin,

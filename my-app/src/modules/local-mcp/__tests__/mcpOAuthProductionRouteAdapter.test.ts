@@ -6022,6 +6022,44 @@ describe("MCP OAuth production route adapter", () => {
     expect(convexHttpClientMutation).not.toHaveBeenCalled();
   });
 
+  it("serves production authorization-server metadata at the MCP-scoped discovery path", async () => {
+    const authorizationOrigin = "https://auth.twoweeks.example.test";
+    const resource = "https://resource.twoweeks.example.test/resource";
+    const plugin = createLocalMcpDevEndpointPlugin({
+      env: {
+        ...prodRouteEnv(),
+        LOCAL_MCP_DEV_ENDPOINT: "1",
+        MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN: authorizationOrigin,
+        MCP_OAUTH_PRODUCTION_RESOURCE: resource,
+        MCP_OAUTH_PRODUCTION_PRIVATE_BETA_RESOURCES: resource,
+        MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256: CONFIDENTIAL_CLIENT_SECRET_DIGEST,
+      },
+    });
+    const middleware = readConfiguredMiddleware(plugin);
+    const response = await invokeMiddleware(middleware, {
+      method: "GET",
+      url: "/.well-known/oauth-authorization-server/mcp",
+      headers: { host: "auth.twoweeks.example.test" },
+    });
+
+    expect(response.next).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(200);
+    expect(response.headers).toMatchObject({
+      "cache-control": "no-store",
+      "content-type": "application/json; charset=utf-8",
+    });
+    expect(JSON.parse(response.body)).toMatchObject({
+      issuer: `${authorizationOrigin}/`,
+      authorization_endpoint: `${authorizationOrigin}${MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH}`,
+      token_endpoint: `${authorizationOrigin}${MCP_OAUTH_PRODUCTION_TOKEN_PATH}`,
+      token_endpoint_auth_methods_supported: ["client_secret_post", "client_secret_basic"],
+      scopes_supported: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
+    });
+    expect(response.body).not.toContain(RAW_CONFIDENTIAL_CLIENT_SECRET);
+    expect(convexHttpClientQuery).not.toHaveBeenCalled();
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
+  });
+
   it("advertises confidential client auth methods in production authorization-server metadata when the private-beta digest is configured", async () => {
     const authorizationOrigin = "https://auth.twoweeks.example.test";
     const resource = "https://resource.twoweeks.example.test/resource";
