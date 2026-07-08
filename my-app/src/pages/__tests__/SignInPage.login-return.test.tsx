@@ -168,6 +168,27 @@ describe("sign-in return convention", () => {
     });
   });
 
+  it("does not duplicate MCP OAuth document navigation under React StrictMode", async () => {
+    testState.authenticated = true;
+    const intentHandle = "abcdef0123456789".repeat(4);
+    const expectedPath = `${MCP_OAUTH_CONTINUATION_PATH}?${MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER}=${intentHandle}`;
+    const documentNavigate = vi.fn();
+
+    render(
+      <React.StrictMode>
+        <MemoryRouter initialEntries={[`/sign-in${encodeDirectMcpOAuthReturn(intentHandle)}`]}>
+          <SignInPage documentNavigate={documentNavigate} />
+        </MemoryRouter>
+      </React.StrictMode>,
+    );
+
+    await waitFor(() => {
+      expect(documentNavigate).toHaveBeenCalledWith(expectedPath);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(documentNavigate).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps React Router navigation for already-authenticated default returns", () => {
     testState.authenticated = true;
     const documentNavigate = vi.fn();
