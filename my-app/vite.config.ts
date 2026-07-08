@@ -87,6 +87,7 @@ const LOCAL_MCP_DEV_AUTH_ISSUER_VAR = "LOCAL_MCP_DEV_AUTH_ISSUER";
 const LOCAL_MCP_DEV_AUTH_PROVIDER_ENVIRONMENT_VAR = "LOCAL_MCP_DEV_AUTH_PROVIDER_ENVIRONMENT";
 const LOCAL_MCP_DEV_AUTH_CLIENT_ID_VAR = "LOCAL_MCP_DEV_AUTH_CLIENT_ID";
 const WELL_KNOWN_OAUTH_AUTHORIZATION_SERVER_PATH = "/.well-known/oauth-authorization-server";
+const WELL_KNOWN_OAUTH_PROTECTED_RESOURCE_PATH = "/.well-known/oauth-protected-resource";
 const WELL_KNOWN_OPENID_CONFIGURATION_PATH = "/.well-known/openid-configuration";
 const MCP_OAUTH_PRODUCTION_RESOURCE_VAR = "MCP_OAUTH_PRODUCTION_RESOURCE";
 const MCP_OAUTH_PRODUCTION_ISSUER_VAR = "MCP_OAUTH_PRODUCTION_ISSUER";
@@ -1363,14 +1364,18 @@ function productionOAuthProtectedResourceMetadataRequestMatches(
   dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
 ): boolean {
   if (!isMetadataRequestMethod(req)) return false;
+  const rootMetadataUrl = productionOAuthProtectedResourceRootMetadataUrl(
+    dependencies.authorizationRequestConfig?.canonicalResource,
+  );
   const metadataUrl = productionOAuthProtectedResourceMetadataUrl(
     dependencies.authorizationRequestConfig?.canonicalResource,
   );
-  if (!metadataUrl) return false;
+  if (!rootMetadataUrl || !metadataUrl) return false;
   try {
+    const parsedRootMetadataUrl = new URL(rootMetadataUrl);
     const parsedMetadataUrl = new URL(metadataUrl);
     return (
-      pathName === parsedMetadataUrl.pathname &&
+      (pathName === parsedRootMetadataUrl.pathname || pathName === parsedMetadataUrl.pathname) &&
       productionOAuthRequestHostMatchesUrlOrigin(req, parsedMetadataUrl.toString())
     );
   } catch {
@@ -1493,6 +1498,7 @@ function productionOAuthAuthorizationServerMetadata(
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code"],
     code_challenge_methods_supported: ["S256"],
+    authorization_response_iss_parameter_supported: true,
     token_endpoint_auth_methods_supported: [...tokenEndpointAuthMethodsSupported],
     scopes_supported: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
   });
@@ -1539,7 +1545,28 @@ function productionOAuthProtectedResourceMetadataUrl(resourceUrl: string | undef
       return undefined;
     }
     const normalizedPath = productionOAuthCanonicalResourcePath(parsed.pathname);
-    return `${parsed.origin}/.well-known/oauth-protected-resource${normalizedPath === "/" ? "" : normalizedPath}`;
+    return `${parsed.origin}${WELL_KNOWN_OAUTH_PROTECTED_RESOURCE_PATH}${normalizedPath === "/" ? "" : normalizedPath}`;
+  } catch {
+    return undefined;
+  }
+}
+
+function productionOAuthProtectedResourceRootMetadataUrl(resourceUrl: string | undefined): string | undefined {
+  if (typeof resourceUrl !== "string") return undefined;
+  try {
+    const parsed = new URL(resourceUrl);
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.origin === "null" ||
+      !parsed.hostname ||
+      parsed.username ||
+      parsed.password ||
+      parsed.search ||
+      parsed.hash
+    ) {
+      return undefined;
+    }
+    return `${parsed.origin}${WELL_KNOWN_OAUTH_PROTECTED_RESOURCE_PATH}`;
   } catch {
     return undefined;
   }

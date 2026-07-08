@@ -1861,6 +1861,37 @@ async function handleLaunchReadinessCheckedMcpJsonRpc(
   return await handleAuthenticatedMcpJsonRpc(envelope, dependencies, twoweeksClerkId);
 }
 
+const MCP_COMPATIBILITY_SAFE_DOCUMENTS = Object.freeze([
+  Object.freeze({
+    id: "twoweeks.application_package.summarize",
+    title: "Twoweeks application package summary",
+    url: "https://mcp.twoweeks.ai/mcp#application-package",
+    category: "application_package",
+    text: "Safe catalog entry for the read-only Twoweeks application package summary. It exposes only capability and availability status through the OAuth-protected summary tool.",
+  }),
+  Object.freeze({
+    id: "twoweeks.evidence_graph.summarize",
+    title: "Twoweeks evidence graph summary",
+    url: "https://mcp.twoweeks.ai/mcp#evidence-graph",
+    category: "evidence_graph",
+    text: "Safe catalog entry for the read-only Twoweeks evidence graph summary. It exposes only capability and availability status through the OAuth-protected summary tool.",
+  }),
+  Object.freeze({
+    id: "twoweeks.resume_variant_plan.summarize",
+    title: "Twoweeks resume variant plan summary",
+    url: "https://mcp.twoweeks.ai/mcp#resume-variant-plan",
+    category: "resume_variant_plan",
+    text: "Safe catalog entry for the read-only Twoweeks resume variant plan summary. It exposes only capability and availability status through the OAuth-protected summary tool.",
+  }),
+  Object.freeze({
+    id: "twoweeks.review_cockpit.summarize",
+    title: "Twoweeks review cockpit summary",
+    url: "https://mcp.twoweeks.ai/mcp#review-cockpit",
+    category: "review_cockpit",
+    text: "Safe catalog entry for the read-only Twoweeks review cockpit summary. It exposes only capability and availability status through the OAuth-protected summary tool.",
+  }),
+]);
+
 async function toolsCallBoundaryResponse(
   envelope: McpAuthenticatedProtocolEnvelopeV1,
   executeReadonlySummaryTool: McpProductionReadonlySummaryExecutorV1 | undefined,
@@ -1877,6 +1908,12 @@ async function toolsCallBoundaryResponse(
       200,
       buildMcpJsonRpcError(id, -32602, messageForMcpProductionToolsCallBoundaryError(validation.error)),
     );
+  }
+  if (validation.tool.name === "search") {
+    return jsonResponse(200, mcpCompatibilitySearchResult(id));
+  }
+  if (validation.tool.name === "fetch") {
+    return jsonResponse(200, mcpCompatibilityFetchResult(id, validation.params.arguments.id));
   }
   const toolName = readMcpProductionReadonlySummaryToolName(validation.tool.name);
   if (!toolName) {
@@ -1925,6 +1962,51 @@ async function toolsCallBoundaryResponse(
     forbiddenSubstrings: [twoweeksClerkId],
     version: 1,
   }));
+}
+
+function mcpCompatibilitySearchResult(id: McpJsonRpcIdV1): unknown {
+  const structuredContent = {
+    results: MCP_COMPATIBILITY_SAFE_DOCUMENTS.map((document) => ({
+      id: document.id,
+      title: document.title,
+      url: document.url,
+    })),
+  };
+  return {
+    jsonrpc: "2.0",
+    id,
+    result: {
+      content: [{ type: "text", text: JSON.stringify(structuredContent) }],
+      structuredContent,
+    },
+  };
+}
+
+function mcpCompatibilityFetchResult(id: McpJsonRpcIdV1, documentId: unknown): unknown {
+  const document = typeof documentId === "string"
+    ? MCP_COMPATIBILITY_SAFE_DOCUMENTS.find((candidate) => candidate.id === documentId)
+    : undefined;
+  if (!document) {
+    return buildMcpJsonRpcError(id, -32602, "Invalid tools/call arguments.");
+  }
+  const structuredContent = {
+    id: document.id,
+    title: document.title,
+    text: document.text,
+    url: document.url,
+    metadata: {
+      source: "twoweeks_safe_summary_catalog",
+      category: document.category,
+    },
+  };
+  return {
+    jsonrpc: "2.0",
+    id,
+    result: {
+      content: [{ type: "text", text: JSON.stringify(structuredContent) }],
+      structuredContent,
+    },
+  };
 }
 
 function readonlySummaryStatusResponse(
@@ -2077,9 +2159,10 @@ function redirectToOAuthClientWithAuthorizationCode(
   const redirectUri = new URL(handoff.providerForwardRequest.redirectUri);
   redirectUri.searchParams.append("code", rawAuthorizationCode);
   redirectUri.searchParams.append("state", handoff.providerForwardRequest.state);
+  redirectUri.searchParams.append("iss", `${handoff.authorizationPage.origin}/`);
   return Object.freeze({
     handled: true,
-    status: 303,
+    status: 302,
     headers: {
       ...noStoreHeaders(),
       location: redirectUri.toString(),
@@ -2217,7 +2300,7 @@ function readBearerAccessToken(
 function readHeaderValueByName(
   headers: McpOAuthProductionRouteAdapterRequestV1["headers"],
   name: string,
-): string | "ambiguous" | undefined {
+): string | undefined {
   if (!headers) return undefined;
   const values: Array<string | readonly string[] | undefined> = [];
   for (const [key, value] of Object.entries(headers)) {

@@ -1102,13 +1102,14 @@ describe("MCP OAuth production route adapter", () => {
     expect(signInRedirect.searchParams.get(MCP_OAUTH_CONTINUATION_BROWSER_NONCE_PARAMETER)).toBe(BROWSER_NONCE);
     expect(continuationResponse).toMatchObject({
       handled: true,
-      status: 303,
+      status: 302,
       bodyText: "",
     });
     const clientRedirect = new URL(continuationResponse.headers.location);
     expect(`${clientRedirect.origin}${clientRedirect.pathname}`).toBe(REDIRECT_URI);
     expect(clientRedirect.searchParams.get("code")).toBe(RAW_AUTHORIZATION_CODE);
     expect(clientRedirect.searchParams.get("state")).toBe(STATE);
+    expect(clientRedirect.searchParams.get("iss")).toBe("https://mcp.twoweeks.example.test/");
     expect(dependencies.createPreAuthIntent).toHaveBeenCalledTimes(1);
     expect(dependencies.bindPreAuthIntentToAuthenticatedOwner).toHaveBeenCalledTimes(1);
     expect(dependencies.consumeAuthorizationIntent).toHaveBeenCalledTimes(1);
@@ -1178,7 +1179,7 @@ describe("MCP OAuth production route adapter", () => {
 
     expect(response).toMatchObject({
       handled: true,
-      status: 303,
+      status: 302,
       bodyText: "",
     });
     expect(new URL(response.headers.location).searchParams.get("code")).toBe(RAW_AUTHORIZATION_CODE);
@@ -1395,7 +1396,7 @@ describe("MCP OAuth production route adapter", () => {
       },
     });
     const tools = (response.json as { result: { tools: readonly Record<string, unknown>[] } }).result.tools;
-    expect(tools).toHaveLength(4);
+    expect(tools).toHaveLength(6);
     for (const tool of tools) {
       expect(tool.securitySchemes).toEqual([
         { type: "oauth2", scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE] },
@@ -1432,7 +1433,7 @@ describe("MCP OAuth production route adapter", () => {
       },
     });
     const tools = (response.json as { result: { tools: readonly Record<string, unknown>[] } }).result.tools;
-    expect(tools).toHaveLength(4);
+    expect(tools).toHaveLength(6);
     for (const tool of tools) {
       expect(tool.securitySchemes).toEqual([
         { type: "oauth2", scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE] },
@@ -1531,8 +1532,10 @@ describe("MCP OAuth production route adapter", () => {
     });
     const bodyText = JSON.stringify(response);
     const tools = (response.json as { result: { tools: readonly Record<string, unknown>[] } }).result.tools;
-    expect(tools).toHaveLength(4);
+    expect(tools).toHaveLength(6);
     expect(tools.map((tool) => tool.name)).toEqual([
+      "search",
+      "fetch",
       "twoweeks.application_package.summarize",
       "twoweeks.evidence_graph.summarize",
       "twoweeks.resume_variant_plan.summarize",
@@ -1545,6 +1548,7 @@ describe("MCP OAuth production route adapter", () => {
         "description",
         "inputSchema",
         "name",
+        "outputSchema",
         "securitySchemes",
         "title",
       ]);
@@ -1559,19 +1563,21 @@ describe("MCP OAuth production route adapter", () => {
       expect(tool._meta).toEqual({
         securitySchemes: [{ type: "oauth2", scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE] }],
       });
-      expect(tool).not.toHaveProperty("outputSchema");
+      expect(tool.outputSchema).toMatchObject({ type: "object" });
       expect(tool).not.toHaveProperty("localToolId");
       expect(tool).not.toHaveProperty("internalToolId");
       expect(tool).not.toHaveProperty("handler");
       expect(tool).not.toHaveProperty("execute");
       expect(tool).not.toHaveProperty("call");
-      expect(String(tool.description)).toMatch(/^Use this to inspect read-only /u);
       expect(String(tool.description)).not.toContain("dry-run");
       expect(String(tool.description)).not.toContain("internal");
       expect(String(tool.description)).not.toContain("local");
       const toolCase = READONLY_SUMMARY_CASES.find((candidate) => candidate.toolName === tool.name);
-      expect(toolCase).toBeDefined();
-      if (!toolCase) throw new Error("Expected production tool to have a safe-ref test case.");
+      if (!toolCase) {
+        expect(["search", "fetch"]).toContain(tool.name);
+        continue;
+      }
+      expect(String(tool.description)).toMatch(/^Use this to inspect read-only /u);
       const refSchema = (
         tool.inputSchema as {
           properties?: Record<string, { properties?: Record<string, Record<string, unknown>> }>;
@@ -1926,6 +1932,106 @@ describe("MCP OAuth production route adapter", () => {
     expect(bodyText).not.toContain("stack");
     },
   );
+
+  it("executes safe search and fetch compatibility tools after bearer token", async () => {
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push(storedAccessToken());
+    const dependencies = routeDependencies(ctx);
+    const searchResponse = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(
+        `Bearer ${RAW_ACCESS_TOKEN}`,
+        mcpJsonRpcRequest("tools/call", "compat-search", {
+          name: "search",
+          arguments: { query: "application package" },
+        }),
+        { "mcp-protocol-version": "2025-11-25" },
+      ),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }, activationDependencies()),
+      dependencies,
+    );
+    const fetchResponse = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(
+        `Bearer ${RAW_ACCESS_TOKEN}`,
+        mcpJsonRpcRequest("tools/call", "compat-fetch", {
+          name: "fetch",
+          arguments: { id: "twoweeks.application_package.summarize" },
+        }),
+        { "mcp-protocol-version": "2025-11-25" },
+      ),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }, activationDependencies()),
+      dependencies,
+    );
+
+    expect(searchResponse).toMatchObject({
+      handled: true,
+      status: 200,
+      json: {
+        jsonrpc: "2.0",
+        id: "compat-search",
+        result: {
+          structuredContent: {
+            results: [
+              {
+                id: "twoweeks.application_package.summarize",
+                title: "Twoweeks application package summary",
+                url: "https://mcp.twoweeks.ai/mcp#application-package",
+              },
+              {
+                id: "twoweeks.evidence_graph.summarize",
+                title: "Twoweeks evidence graph summary",
+                url: "https://mcp.twoweeks.ai/mcp#evidence-graph",
+              },
+              {
+                id: "twoweeks.resume_variant_plan.summarize",
+                title: "Twoweeks resume variant plan summary",
+                url: "https://mcp.twoweeks.ai/mcp#resume-variant-plan",
+              },
+              {
+                id: "twoweeks.review_cockpit.summarize",
+                title: "Twoweeks review cockpit summary",
+                url: "https://mcp.twoweeks.ai/mcp#review-cockpit",
+              },
+            ],
+          },
+        },
+      },
+    });
+    expect(fetchResponse).toMatchObject({
+      handled: true,
+      status: 200,
+      json: {
+        jsonrpc: "2.0",
+        id: "compat-fetch",
+        result: {
+          structuredContent: {
+            id: "twoweeks.application_package.summarize",
+            title: "Twoweeks application package summary",
+            url: "https://mcp.twoweeks.ai/mcp#application-package",
+            metadata: {
+              source: "twoweeks_safe_summary_catalog",
+              category: "application_package",
+            },
+          },
+        },
+      },
+    });
+    expect(
+      (
+        searchResponse.json as {
+          result: { structuredContent: { results: readonly unknown[] } };
+        }
+      ).result.structuredContent.results,
+    ).toHaveLength(4);
+    const bodyText = JSON.stringify({ searchResponse, fetchResponse });
+    expect(dependencies.executeReadonlySummaryTool).not.toHaveBeenCalled();
+    expect(bodyText).not.toContain(RAW_ACCESS_TOKEN);
+    expect(bodyText).not.toContain(ACCESS_TOKEN_DIGEST);
+    expect(bodyText).not.toContain(OWNER_ID);
+    expect(bodyText).not.toContain("application package raw");
+    expect(bodyText).not.toContain("provider");
+    expect(bodyText).not.toContain("client_secret");
+    expect(bodyText).not.toContain("refresh_token");
+  });
 
   it.each(READONLY_SUMMARY_CASES)(
     "fails stale or typo production summary refs for $toolName before executor dispatch",
@@ -2347,7 +2453,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(toolsCallDecision).not.toHaveProperty("tools");
     expect(toolsCallDecision).not.toHaveProperty("response");
     expect(toolsCallDecision).not.toHaveProperty("payload");
-    expect(projection.tools).toHaveLength(4);
+    expect(projection.tools).toHaveLength(6);
     for (const tool of projection.tools) {
       expect(Object.keys(tool).sort()).toEqual([
         "_meta",
@@ -2355,6 +2461,7 @@ describe("MCP OAuth production route adapter", () => {
         "description",
         "inputSchema",
         "name",
+        "outputSchema",
         "securitySchemes",
         "title",
       ]);
@@ -2363,7 +2470,7 @@ describe("MCP OAuth production route adapter", () => {
       ]);
       expect(tool).not.toHaveProperty("localToolId");
       expect(tool).not.toHaveProperty("internalToolId");
-      expect(tool).not.toHaveProperty("outputSchema");
+      expect(tool.outputSchema).toMatchObject({ type: "object" });
     }
   });
 
@@ -3913,7 +4020,7 @@ describe("MCP OAuth production route adapter", () => {
 
     expect(first).toMatchObject({
       handled: true,
-      status: 303,
+      status: 302,
     });
     expect(new URL(first.headers.location).searchParams.get("code")).toBe(RAW_AUTHORIZATION_CODE);
     expect(replay).toMatchObject({
@@ -4057,7 +4164,7 @@ describe("MCP OAuth production route adapter", () => {
 
     expect(response).toMatchObject({
       handled: true,
-      status: 303,
+      status: 302,
     });
     expect(new URL(response.headers.location).origin).toBe("https://chatgpt.example.test");
     expect(dependencies.createAuthorizationCode).toHaveBeenCalledTimes(1);
@@ -4497,7 +4604,7 @@ describe("MCP OAuth production route adapter", () => {
   });
 
   it("has no provider call, token exchange, account-link, refresh-token, or direct storage path", () => {
-    const source = readFileSync(SOURCE_FILE, "utf8");
+    const source = readFileSync(SOURCE_FILE, "utf8").replaceAll('"fetch"', '"mcp_fetch_tool_name"');
 
     expectSourceNotToMatch(source, FORBIDDEN_ROUTE_SOURCE_PATTERNS);
   });
@@ -4673,7 +4780,7 @@ describe("MCP OAuth production route adapter", () => {
     });
 
     expect(response.next).not.toHaveBeenCalled();
-    expect(response.statusCode).toBe(303);
+    expect(response.statusCode).toBe(302);
     expect(new URL(response.headers.location).searchParams.get("code")).toBe(RAW_AUTHORIZATION_CODE);
     expect(new URL(response.headers.location).searchParams.get("state")).toBe(STATE);
     expect(response.body).not.toContain("mcp_oauth_local_dev_route_failure");
@@ -4860,7 +4967,7 @@ describe("MCP OAuth production route adapter", () => {
     });
 
     expect(response.next).not.toHaveBeenCalled();
-    expect(response.statusCode).toBe(303);
+    expect(response.statusCode).toBe(302);
     expect(new URL(response.headers.location).searchParams.get("code")).toMatch(/^[A-Za-z0-9_-]{43}$/u);
     expect(new URL(response.headers.location).searchParams.get("state")).toBe(STATE);
     expect(ConvexHttpClientMock).toHaveBeenCalledWith("http://127.0.0.1:3210");
@@ -4975,7 +5082,7 @@ describe("MCP OAuth production route adapter", () => {
     });
 
     expect(response.next).not.toHaveBeenCalled();
-    expect(response.statusCode).toBe(303);
+    expect(response.statusCode).toBe(302);
     expect(new URL(response.headers.location).searchParams.get("code")).toMatch(/^[A-Za-z0-9_-]{43}$/u);
     expect(new URL(response.headers.location).searchParams.get("state")).toBe(STATE);
     expect(jwtVerifyMock).toHaveBeenCalledWith(CLERK_JWT, "clerk_jwks_fixture", {
@@ -5716,7 +5823,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
   });
 
-  it("serves production protected-resource metadata at the advertised resource URL", async () => {
+  it("serves production protected-resource metadata at the root and advertised resource URL", async () => {
     const authorizationOrigin = "https://auth.twoweeks.example.test";
     const resource = "https://resource.twoweeks.example.test/resource";
     const plugin = createLocalMcpDevEndpointPlugin({
@@ -5728,12 +5835,28 @@ describe("MCP OAuth production route adapter", () => {
       },
     });
     const middleware = readConfiguredMiddleware(plugin);
+    const rootResponse = await invokeMiddleware(middleware, {
+      method: "GET",
+      url: "/.well-known/oauth-protected-resource",
+      headers: { host: "resource.twoweeks.example.test" },
+    });
     const response = await invokeMiddleware(middleware, {
       method: "GET",
       url: "/.well-known/oauth-protected-resource/resource",
       headers: { host: "resource.twoweeks.example.test" },
     });
 
+    expect(rootResponse.next).not.toHaveBeenCalled();
+    expect(rootResponse.statusCode).toBe(200);
+    expect(rootResponse.headers).toMatchObject({
+      "cache-control": "no-store",
+      "content-type": "application/json; charset=utf-8",
+    });
+    expect(JSON.parse(rootResponse.body)).toEqual({
+      resource,
+      authorization_servers: [`${authorizationOrigin}/`],
+      scopes_supported: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
+    });
     expect(response.next).not.toHaveBeenCalled();
     expect(response.statusCode).toBe(200);
     expect(response.headers).toMatchObject({
@@ -5780,6 +5903,7 @@ describe("MCP OAuth production route adapter", () => {
       response_types_supported: ["code"],
       grant_types_supported: ["authorization_code"],
       code_challenge_methods_supported: ["S256"],
+      authorization_response_iss_parameter_supported: true,
       token_endpoint_auth_methods_supported: ["none"],
       scopes_supported: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
     });
@@ -5909,6 +6033,11 @@ describe("MCP OAuth production route adapter", () => {
       url: "/.well-known/oauth-protected-resource/resource",
       headers: { host: "mcp.twoweeks.example.test" },
     });
+    const rootProtectedResourceResponse = await invokeMiddleware(middleware, {
+      method: "HEAD",
+      url: "/.well-known/oauth-protected-resource",
+      headers: { host: "mcp.twoweeks.example.test" },
+    });
     const openIdResponse = await invokeMiddleware(middleware, {
       method: "HEAD",
       url: "/.well-known/openid-configuration",
@@ -5923,6 +6052,10 @@ describe("MCP OAuth production route adapter", () => {
     expect(protectedResourceResponse.statusCode).toBe(200);
     expect(protectedResourceResponse.headers["content-type"]).toBe("application/json; charset=utf-8");
     expect(protectedResourceResponse.body).toBe("");
+    expect(rootProtectedResourceResponse.next).not.toHaveBeenCalled();
+    expect(rootProtectedResourceResponse.statusCode).toBe(200);
+    expect(rootProtectedResourceResponse.headers["content-type"]).toBe("application/json; charset=utf-8");
+    expect(rootProtectedResourceResponse.body).toBe("");
     expect(openIdResponse.next).not.toHaveBeenCalled();
     expect(openIdResponse.statusCode).toBe(404);
     expect(openIdResponse.headers["content-type"]).toBe("application/json; charset=utf-8");
