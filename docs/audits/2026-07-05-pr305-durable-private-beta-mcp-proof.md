@@ -30,6 +30,21 @@ Runtime configuration must use digest-only secret storage:
 
 Do not store the raw client secret in the repo, Dockerfile, logs, PR text, or audit output.
 
+## Team secret source
+
+The canonical raw client secret is stored in the Infisical EU Cloud project `twoweeks`, environment `dev`, as the shared secret `MCP_OAUTH_PRODUCTION_CLIENT_SECRET`. The committed `.infisical.json` contains only the non-secret project binding, default environment, and EU domain.
+
+Each collaborator authenticates the Infisical CLI with an individual account. The local CLI session is stored in the operating-system keyring and is revocable; it is not the OAuth client secret. After authentication, run:
+
+```text
+./run.sh mcp-secret-sync
+./run.sh mcp-check
+```
+
+`mcp-secret-sync` retrieves the raw value in process memory, validates its shape, computes SHA-256, clears the raw shell variable, and atomically replaces only `MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256` in the mode-`600` root `.env.local`. It prints neither the raw secret nor the digest. Do not run a direct `infisical secrets get --plain` command in recorded terminals, agent conversations, logs, or support artifacts.
+
+If the ChatGPT confidential-client secret is rotated, store the replacement in Infisical first, enter that same raw value once in ChatGPT's secure client-secret field, run `mcp-secret-sync`, and fully restart the private-beta runtime. A digest cannot be reversed to recover the raw secret.
+
 The exact ChatGPT redirect URI remains:
 
 `https://chatgpt.com/connector/oauth/b7v_6OncLEsg`
@@ -92,6 +107,8 @@ The final blocker was configuration drift, not ChatGPT callback handling. The ru
 The durable local contract is:
 
 - root `.env.local`, ignored by Git and mode `600`, owns server-only MCP, Convex admin, and tunnel values;
+- Infisical EU Cloud owns the recoverable raw OAuth client secret; root `.env.local` owns only its derived SHA-256 digest;
+- `./run.sh mcp-secret-sync` refreshes that digest from the linked Infisical project without printing either value;
 - `my-app/.env.local` owns client-facing `VITE_*` values only;
 - `./run.sh mcp-check` validates canonical keys and formats without printing values;
 - `./run.sh mcp-check` also proves every canonical server key is defined in the root `.env.local` and rejects those keys in root `.env`, `my-app/.env`, or `my-app/.env.local`;
@@ -103,7 +120,7 @@ The durable local contract is:
 
 ## Deployment note
 
-The MCP OAuth server runs in the host Vite process, not the parser container. Load its server values through the root `.env.local` and `run.sh`; do not inject them into the parser image.
+The MCP OAuth server runs in the host Vite process, not the parser container. Load its server values through the root `.env.local` and `run.sh`; use Infisical only as the team source for the raw OAuth client secret, and do not inject it into the parser image.
 
 Do not bake the raw secret or its digest into a Docker image.
 

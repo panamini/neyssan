@@ -53,6 +53,11 @@ MCP_PRIVATE_BETA_AUTHORIZATION_ORIGIN="https://mcp.twoweeks.ai"
 MCP_PRIVATE_BETA_REDIRECT_URI="https://chatgpt.com/connector/oauth/b7v_6OncLEsg"
 MCP_PRIVATE_BETA_TUNNEL_ID="935a2064-9473-41bc-bd73-174660892847"
 MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE="${MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE:-${HOME}/.cloudflared/${MCP_PRIVATE_BETA_TUNNEL_ID}.json}"
+INFISICAL_MCP_PROJECT_CONFIG_FILE="${ROOT_DIR}/.infisical.json"
+INFISICAL_MCP_DOMAIN="https://eu.infisical.com"
+INFISICAL_MCP_ENVIRONMENT="dev"
+INFISICAL_MCP_SECRET_PATH="/"
+INFISICAL_MCP_SECRET_KEY="MCP_OAUTH_PRODUCTION_CLIENT_SECRET"
 
 mkdir -p "${STATE_DIR}" "${LOG_DIR}"
 mkdir -p "${CONVEX_TMPDIR}"
@@ -219,6 +224,98 @@ mcp_env_file_mode() {
   else
     stat -c '%a' "${file}"
   fi
+}
+
+mcp_secret_sync() {
+  local root_env="${ROOT_DIR}/.env.local"
+  local raw_secret=""
+  local digest=""
+  local temp_env=""
+  local previous_umask=""
+
+  if ! command -v infisical >/dev/null 2>&1; then
+    echo "[run] mcp-secret-sync: Infisical CLI is required" >&2
+    return 1
+  fi
+  if [[ ! -f "${INFISICAL_MCP_PROJECT_CONFIG_FILE}" ]]; then
+    echo "[run] mcp-secret-sync: .infisical.json is required" >&2
+    return 1
+  fi
+  if [[ ! -f "${root_env}" ]]; then
+    echo "[run] mcp-secret-sync: root .env.local is required" >&2
+    return 1
+  fi
+  if [[ "$(mcp_env_file_mode "${root_env}")" != "600" ]]; then
+    echo "[run] mcp-secret-sync: root .env.local must have mode 600" >&2
+    return 1
+  fi
+
+  if ! raw_secret="$(
+    infisical secrets get "${INFISICAL_MCP_SECRET_KEY}" \
+      --env="${INFISICAL_MCP_ENVIRONMENT}" \
+      --path="${INFISICAL_MCP_SECRET_PATH}" \
+      --domain="${INFISICAL_MCP_DOMAIN}" \
+      --plain \
+      --silent 2>/dev/null
+  )"; then
+    echo "[run] mcp-secret-sync: secret retrieval failed; value not printed" >&2
+    return 1
+  fi
+  if [[ ${#raw_secret} -lt 32 || "${raw_secret}" == *$'\n'* || "${raw_secret}" == *$'\r'* ]]; then
+    unset raw_secret
+    echo "[run] mcp-secret-sync: retrieved secret has an invalid shape; value not printed" >&2
+    return 1
+  fi
+
+  digest="$(hash_string "${raw_secret}")"
+  unset raw_secret
+  if [[ ! "${digest}" =~ ^[0-9a-f]{64}$ ]]; then
+    unset digest
+    echo "[run] mcp-secret-sync: digest generation failed; value not printed" >&2
+    return 1
+  fi
+
+  previous_umask="$(umask)"
+  umask 077
+  temp_env="$(mktemp "${root_env}.tmp.XXXXXX")"
+  umask "${previous_umask}"
+  if ! {
+    printf '%s\n' "${digest}"
+    cat "${root_env}"
+  } | awk '
+    NR == 1 {
+      digest = $0
+      replaced = 0
+      next
+    }
+    /^[[:space:]]*(export[[:space:]]+)?MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256=/ {
+      if (!replaced) {
+        print "MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256=" digest
+        replaced = 1
+      }
+      next
+    }
+    { print }
+    END {
+      if (!replaced) {
+        print "MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256=" digest
+      }
+    }
+  ' >"${temp_env}"; then
+    rm -f "${temp_env}"
+    unset digest
+    echo "[run] mcp-secret-sync: root .env.local update failed; value not printed" >&2
+    return 1
+  fi
+  chmod 600 "${temp_env}"
+  if ! mv -f "${temp_env}" "${root_env}"; then
+    rm -f "${temp_env}"
+    unset digest
+    echo "[run] mcp-secret-sync: root .env.local replacement failed; value not printed" >&2
+    return 1
+  fi
+  unset digest
+  echo "[run] mcp-secret-sync: PASS (digest updated; values not printed)"
 }
 
 mcp_check() {
@@ -486,6 +583,7 @@ print_command_banner() {
 
 Commands:
   ./run.sh mcp-private-beta  reproducible private-beta MCP origin + tunnel
+  ./run.sh mcp-secret-sync   refresh the OAuth digest from Infisical without printing values
   ./run.sh mcp-check         validate MCP runtime keys without printing values
   ./run.sh tunnel          stable full workflow
   ./run.sh local-fast      fast full-app parser development
@@ -1856,6 +1954,7 @@ help() {
   cat <<'EOF'
 usage:
   ./run.sh mcp-private-beta [--ocr auto|doctr|paddle|disabled]
+  ./run.sh mcp-secret-sync
   ./run.sh mcp-check
   ./run.sh local-fast [--ocr auto|doctr|paddle|disabled]
   ./run.sh local [--ocr auto|doctr|paddle|disabled]
@@ -1876,6 +1975,7 @@ usage:
 
 notes:
 - mcp-private-beta = exact private-beta MCP origin on port 5196 with local Convex, image parser runtime, and the named Cloudflare tunnel.
+- mcp-secret-sync = retrieve the raw OAuth client secret from the linked Infisical EU project and atomically update only its digest in root .env.local.
 - mcp-check = fail-closed validation of canonical private-beta keys; it prints key names/status only, never values.
 - local-fast = recommended fast full-app parser workflow: local parser + local Convex + Vite + autoreload, with export/runtime deps preserved inside the container.
 - tunnel = stable validation mode on the validated image runtime.
@@ -1902,6 +2002,7 @@ trap 'echo "[run] interrupt -> down"; down >/dev/null 2>&1 || true; exit 130' IN
 
 case "${CMD}" in
   mcp-private-beta) mcp_private_beta_stack "$@";;
+  mcp-secret-sync) mcp_secret_sync;;
   mcp-check) mcp_check;;
   local-fast) local_fast_stack "$@";;
   local) local_stack "$@";;

@@ -9,6 +9,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -126,6 +127,7 @@ const RUN_SCRIPT_SOURCE = resolve(REPOSITORY_ROOT, "run.sh");
 const DOCKERIGNORE_SOURCE = resolve(REPOSITORY_ROOT, ".dockerignore");
 const ROOT_ENV_EXAMPLE_SOURCE = resolve(REPOSITORY_ROOT, ".env.example");
 const APP_ENV_EXAMPLE_SOURCE = resolve(REPOSITORY_ROOT, "my-app/.env.local.example");
+const INFISICAL_PROJECT_CONFIG_SOURCE = resolve(REPOSITORY_ROOT, ".infisical.json");
 const LEGACY_TOOLS_CALL_SYNTHETIC_RESULT_KIND = "mcp_production_tools_call_readonly_synthetic_result";
 const APP_ORIGIN = "http://localhost:5173";
 const PROD_APP_ORIGIN = "https://mcp.twoweeks.example.test";
@@ -6150,6 +6152,11 @@ describe("MCP OAuth production route adapter", () => {
     const dockerignore = readFileSync(DOCKERIGNORE_SOURCE, "utf8");
     const rootEnvExample = readFileSync(ROOT_ENV_EXAMPLE_SOURCE, "utf8");
     const appEnvExample = readFileSync(APP_ENV_EXAMPLE_SOURCE, "utf8");
+    const infisicalProjectConfig = JSON.parse(readFileSync(INFISICAL_PROJECT_CONFIG_SOURCE, "utf8")) as {
+      defaultEnvironment?: string;
+      domain?: string;
+      workspaceId?: string;
+    };
     const canonicalKeys = [
       "MCP_OAUTH_PRODUCTION_CLIENT_IDS",
       "MCP_OAUTH_PRODUCTION_PRIVATE_BETA_ENABLED",
@@ -6159,6 +6166,7 @@ describe("MCP OAuth production route adapter", () => {
     ] as const;
 
     expect(runSource).toContain("mcp-private-beta) mcp_private_beta_stack");
+    expect(runSource).toContain("mcp-secret-sync) mcp_secret_sync");
     expect(runSource).toContain("mcp-check) mcp_check");
     expect(runSource).toContain("mcp_check_root_env_key");
     expect(runSource).toContain("mcp_derive_clerk_publishable_key");
@@ -6174,8 +6182,97 @@ describe("MCP OAuth production route adapter", () => {
       expect(rootEnvExample).toMatch(new RegExp(`^${key}=`, "mu"));
     }
     expect(rootEnvExample).toMatch(/^MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256=$/mu);
+    expect(rootEnvExample).toContain("MCP_OAUTH_PRODUCTION_CLIENT_SECRET");
     expect(rootEnvExample).not.toContain("MCP_PRODUCTION_PRIVATE_BETA_");
     expect(appEnvExample).toContain("server-only MCP_OAUTH_PRODUCTION_*");
+    expect(infisicalProjectConfig.workspaceId).toMatch(/^[0-9a-f-]{36}$/u);
+    expect(infisicalProjectConfig.defaultEnvironment).toBe("dev");
+    expect(infisicalProjectConfig.domain).toBe("https://eu.infisical.com");
+  });
+
+  it("syncs the Infisical MCP client secret to a digest without printing secret material", () => {
+    const fixtureRoot = mkdtempSync(resolve(tmpdir(), "pr305-mcp-secret-sync-"));
+    const fixtureRunScript = resolve(fixtureRoot, "run.sh");
+    const fixtureRootEnv = resolve(fixtureRoot, ".env.local");
+    const fixtureProjectConfig = resolve(fixtureRoot, ".infisical.json");
+    const fixtureBinDir = resolve(fixtureRoot, "bin");
+    const fixtureInfisical = resolve(fixtureBinDir, "infisical");
+    const fixtureArgsFile = resolve(fixtureRoot, "infisical-args.txt");
+    const rawFixtureSecret = "fixture-confidential-client-secret-that-is-never-real";
+    const expectedDigest = createHash("sha256").update(rawFixtureSecret).digest("hex");
+    const originalRootEnv = `MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256=${"0".repeat(64)}\nUNRELATED_FIXTURE=value\n`;
+
+    try {
+      mkdirSync(fixtureBinDir, { recursive: true });
+      copyFileSync(RUN_SCRIPT_SOURCE, fixtureRunScript);
+      chmodSync(fixtureRunScript, 0o700);
+      writeFileSync(fixtureRootEnv, originalRootEnv, { mode: 0o600 });
+      writeFileSync(
+        fixtureProjectConfig,
+        `${JSON.stringify({ workspaceId: "fixture", defaultEnvironment: "dev", domain: "https://eu.infisical.com" })}\n`,
+        { mode: 0o600 },
+      );
+      writeFileSync(
+        fixtureInfisical,
+        `#!/usr/bin/env bash
+set -euo pipefail
+[[ "\${INFISICAL_FIXTURE_MODE:-success}" != "fail" ]] || exit 1
+printf '%s\\n' "\$@" >"\${INFISICAL_FIXTURE_ARGS_FILE:?}"
+printf '%s\\n' '${rawFixtureSecret}'
+`,
+        { mode: 0o700 },
+      );
+
+      const failedRetrieval = spawnSync("bash", [fixtureRunScript, "mcp-secret-sync"], {
+        cwd: fixtureRoot,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          INFISICAL_FIXTURE_MODE: "fail",
+          PATH: `${fixtureBinDir}:${process.env.PATH ?? ""}`,
+        },
+      });
+      const failedOutput = `${failedRetrieval.stdout}${failedRetrieval.stderr}`;
+
+      expect(failedRetrieval.status).not.toBe(0);
+      expect(failedOutput).toContain("secret retrieval failed; value not printed");
+      expect(failedOutput).not.toContain(rawFixtureSecret);
+      expect(failedOutput).not.toContain(expectedDigest);
+      expect(readFileSync(fixtureRootEnv, "utf8")).toBe(originalRootEnv);
+
+      const result = spawnSync("bash", [fixtureRunScript, "mcp-secret-sync"], {
+        cwd: fixtureRoot,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          INFISICAL_FIXTURE_ARGS_FILE: fixtureArgsFile,
+          PATH: `${fixtureBinDir}:${process.env.PATH ?? ""}`,
+        },
+      });
+      const output = `${result.stdout}${result.stderr}`;
+      const updatedRootEnv = readFileSync(fixtureRootEnv, "utf8");
+      const infisicalArgs = readFileSync(fixtureArgsFile, "utf8").trim().split("\n");
+
+      expect(result.status).toBe(0);
+      expect(output).toContain("mcp-secret-sync: PASS");
+      expect(output).not.toContain(rawFixtureSecret);
+      expect(output).not.toContain(expectedDigest);
+      expect(infisicalArgs).toEqual([
+        "secrets",
+        "get",
+        "MCP_OAUTH_PRODUCTION_CLIENT_SECRET",
+        "--env=dev",
+        "--path=/",
+        "--domain=https://eu.infisical.com",
+        "--plain",
+        "--silent",
+      ]);
+      expect(updatedRootEnv).toContain(`MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256=${expectedDigest}`);
+      expect(updatedRootEnv).toContain("UNRELATED_FIXTURE=value");
+      expect(statSync(fixtureRootEnv).mode & 0o777).toBe(0o600);
+    } finally {
+      rmSync(fixtureRoot, { force: true, recursive: true });
+    }
   });
 
   it("requires canonical server keys to originate from root .env.local", () => {
