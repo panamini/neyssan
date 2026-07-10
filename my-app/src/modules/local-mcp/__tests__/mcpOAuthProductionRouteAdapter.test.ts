@@ -111,6 +111,11 @@ const SOURCE_FILE = resolve(TEST_DIR, "../mcpOAuthProductionRouteAdapter.ts");
 const AUTHENTICATED_ENVELOPE_SOURCE_FILE = resolve(TEST_DIR, "../mcpAuthenticatedProtocolEnvelope.ts");
 const READONLY_SUMMARY_EXECUTOR_SOURCE_FILE = resolve(TEST_DIR, "../mcpProductionReadonlySummaryExecutor.ts");
 const VITE_CONFIG_SOURCE = resolve(TEST_DIR, "../../../../vite.config.ts");
+const REPOSITORY_ROOT = resolve(TEST_DIR, "../../../../..");
+const RUN_SCRIPT_SOURCE = resolve(REPOSITORY_ROOT, "run.sh");
+const DOCKERIGNORE_SOURCE = resolve(REPOSITORY_ROOT, ".dockerignore");
+const ROOT_ENV_EXAMPLE_SOURCE = resolve(REPOSITORY_ROOT, ".env.example");
+const APP_ENV_EXAMPLE_SOURCE = resolve(REPOSITORY_ROOT, "my-app/.env.local.example");
 const LEGACY_TOOLS_CALL_SYNTHETIC_RESULT_KIND = "mcp_production_tools_call_readonly_synthetic_result";
 const APP_ORIGIN = "http://localhost:5173";
 const PROD_APP_ORIGIN = "https://mcp.twoweeks.example.test";
@@ -3460,7 +3465,7 @@ describe("MCP OAuth production route adapter", () => {
     expectNoRouteLeakage(response, [RAW_CONFIDENTIAL_CLIENT_SECRET], { allowAccessTokenResponse: true });
   });
 
-  it("issues an access token when configured client_secret_basic matches the allowlisted client digest", async () => {
+  it("rejects client_secret_basic even when its credentials match the allowlisted client", async () => {
     const ctx = makeCtx();
     const dependencies = {
       ...routeDependencies(ctx),
@@ -3488,17 +3493,10 @@ describe("MCP OAuth production route adapter", () => {
       dependencies,
     );
 
-    expect(response).toMatchObject({
-      handled: true,
-      status: 200,
-      json: {
-        access_token: RAW_ACCESS_TOKEN,
-        token_type: "Bearer",
-      },
-    });
-    expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(2);
-    expect(dependencies.issueAccessToken).toHaveBeenCalledTimes(1);
-    expectNoRouteLeakage(response, [RAW_CONFIDENTIAL_CLIENT_SECRET], { allowAccessTokenResponse: true });
+    expectOAuthTokenErrorResponse(response, 400, "invalid_request");
+    expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(1);
+    expect(dependencies.issueAccessToken).not.toHaveBeenCalled();
+    expectNoRouteLeakage(response, [RAW_CONFIDENTIAL_CLIENT_SECRET]);
   });
 
   it("fails closed before quota or token issuance when configured client_secret_post is missing", async () => {
@@ -3584,7 +3582,7 @@ describe("MCP OAuth production route adapter", () => {
     expectNoRouteLeakage(response, [RAW_CONFIDENTIAL_CLIENT_SECRET, wrongSecret]);
   });
 
-  it("fails closed before quota or token issuance when both confidential client auth methods are sent", async () => {
+  it("fails closed before quota or token issuance when client_secret_post and client_secret_basic are both sent", async () => {
     const ctx = makeCtx();
     const dependencies = {
       ...routeDependencies(ctx),
@@ -6052,7 +6050,7 @@ describe("MCP OAuth production route adapter", () => {
       issuer: `${authorizationOrigin}/`,
       authorization_endpoint: `${authorizationOrigin}${MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH}`,
       token_endpoint: `${authorizationOrigin}${MCP_OAUTH_PRODUCTION_TOKEN_PATH}`,
-      token_endpoint_auth_methods_supported: ["client_secret_post", "client_secret_basic"],
+      token_endpoint_auth_methods_supported: ["client_secret_post"],
       scopes_supported: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
     });
     expect(response.body).not.toContain(RAW_CONFIDENTIAL_CLIENT_SECRET);
@@ -6060,7 +6058,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(convexHttpClientMutation).not.toHaveBeenCalled();
   });
 
-  it("advertises confidential client auth methods in production authorization-server metadata when the private-beta digest is configured", async () => {
+  it("advertises only client_secret_post in production authorization-server metadata when the private-beta digest is configured", async () => {
     const authorizationOrigin = "https://auth.twoweeks.example.test";
     const resource = "https://resource.twoweeks.example.test/resource";
     const plugin = createLocalMcpDevEndpointPlugin({
@@ -6083,11 +6081,50 @@ describe("MCP OAuth production route adapter", () => {
     expect(response.next).not.toHaveBeenCalled();
     expect(response.statusCode).toBe(200);
     expect(JSON.parse(response.body)).toMatchObject({
-      token_endpoint_auth_methods_supported: ["client_secret_post", "client_secret_basic"],
+      token_endpoint_auth_methods_supported: ["client_secret_post"],
     });
     expect(response.body).not.toContain(RAW_CONFIDENTIAL_CLIENT_SECRET);
     expect(convexHttpClientQuery).not.toHaveBeenCalled();
     expect(convexHttpClientMutation).not.toHaveBeenCalled();
+  });
+
+  it("keeps the configured confidential-client implementation post-only", () => {
+    const routeSource = readFileSync(SOURCE_FILE, "utf8");
+    const viteSource = readFileSync(VITE_CONFIG_SOURCE, "utf8");
+
+    expect(routeSource).toContain("clientSecretPostMatches");
+    expect(routeSource).not.toContain("client_secret_basic");
+    expect(routeSource).not.toContain("readTokenBasicClientAuthentication");
+    expect(viteSource).toContain('["client_secret_post"]');
+    expect(viteSource).not.toContain("client_secret_basic");
+  });
+
+  it("locks the reproducible private-beta runtime files to secret-safe locations", () => {
+    const runSource = readFileSync(RUN_SCRIPT_SOURCE, "utf8");
+    const dockerignore = readFileSync(DOCKERIGNORE_SOURCE, "utf8");
+    const rootEnvExample = readFileSync(ROOT_ENV_EXAMPLE_SOURCE, "utf8");
+    const appEnvExample = readFileSync(APP_ENV_EXAMPLE_SOURCE, "utf8");
+    const canonicalKeys = [
+      "MCP_OAUTH_PRODUCTION_CLIENT_IDS",
+      "MCP_OAUTH_PRODUCTION_PRIVATE_BETA_ENABLED",
+      "MCP_OAUTH_PRODUCTION_PRIVATE_BETA_CLIENT_IDS",
+      "MCP_OAUTH_PRODUCTION_PRIVATE_BETA_RESOURCES",
+      "MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256",
+    ] as const;
+
+    expect(runSource).toContain("mcp-private-beta) mcp_private_beta_stack");
+    expect(runSource).toContain("mcp-check) mcp_check");
+    expect(runSource).toContain("cloudflared-mcp-credentials.json");
+    expect(runSource).toContain("http://host.docker.internal:${MCP_PRIVATE_BETA_VITE_PORT}");
+    expect(runSource).toContain("--token-file /run/secrets/cloudflared-token");
+    expect(runSource).not.toContain('--token "${TUNNEL_TOKEN}"');
+    expect(dockerignore).toMatch(/^\*\*\/\.env\*$/mu);
+    for (const key of canonicalKeys) {
+      expect(rootEnvExample).toMatch(new RegExp(`^${key}=`, "mu"));
+    }
+    expect(rootEnvExample).toMatch(/^MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256=$/mu);
+    expect(rootEnvExample).not.toContain("MCP_PRODUCTION_PRIVATE_BETA_");
+    expect(appEnvExample).toContain("server-only MCP_OAUTH_PRODUCTION_*");
   });
 
   it("does not downgrade production metadata or token parsing when the configured client_secret_post digest is malformed", async () => {
@@ -6117,7 +6154,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(metadataResponse.next).not.toHaveBeenCalled();
     expect(metadataResponse.statusCode).toBe(200);
     expect(JSON.parse(metadataResponse.body)).toMatchObject({
-      token_endpoint_auth_methods_supported: ["client_secret_post", "client_secret_basic"],
+      token_endpoint_auth_methods_supported: ["client_secret_post"],
     });
     expect(tokenResponse.next).not.toHaveBeenCalled();
     expect(tokenResponse.statusCode).toBe(400);

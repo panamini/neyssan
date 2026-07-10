@@ -646,13 +646,6 @@ const TOKEN_REQUEST_KEYS_WITH_CLIENT_SECRET_POST = Object.freeze([
   ...TOKEN_REQUEST_KEYS,
   "client_secret",
 ] as const);
-const TOKEN_REQUEST_KEYS_WITH_CLIENT_SECRET_BASIC = Object.freeze([
-  "grant_type",
-  "code",
-  "redirect_uri",
-  "resource",
-  "code_verifier",
-] as const);
 export const MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT = "mcp_oauth_production_v1";
 const BASE64_URL_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
@@ -2223,15 +2216,10 @@ function readTokenRequest(
   if (resourceValues.length === 0) {
     return Object.freeze({ ok: false, reason: "invalid_target", status: 400 });
   }
-  const basicClientAuth = readTokenBasicClientAuthentication(request.headers);
-  if (!clientSecretPost && basicClientAuth !== undefined) {
+  if (readHeaderValueByName(request.headers, "authorization") !== undefined) {
     return Object.freeze({ ok: false, reason: "invalid_request", status: 400 });
   }
-  if (basicClientAuth && !basicClientAuth.ok) {
-    return Object.freeze({ ok: false, reason: "invalid_request", status: 400 });
-  }
-  const usesClientSecretBasic = basicClientAuth?.ok === true;
-  if (!hasExactlyTokenRequestKeys(params, clientSecretPost !== undefined, usesClientSecretBasic)) {
+  if (!hasExactlyTokenRequestKeys(params, clientSecretPost !== undefined)) {
     return Object.freeze({ ok: false, reason: "invalid_request", status: 400 });
   }
   if (params.get("grant_type") !== "authorization_code") {
@@ -2239,17 +2227,13 @@ function readTokenRequest(
   }
 
   const code = params.get("code");
-  const clientId = usesClientSecretBasic
-    ? basicClientAuth.serverOnly.clientId
-    : readBoundedTokenParameter(params.get("client_id"), 512);
+  const clientId = readBoundedTokenParameter(params.get("client_id"), 512);
   const redirectUri = readTokenRedirectUri(params.get("redirect_uri"));
   const resource = readTokenResource(resourceValues[0]);
   const codeVerifier = readCodeVerifier(params.get("code_verifier"));
-  const clientSecret = usesClientSecretBasic
-    ? basicClientAuth.serverOnly.clientSecret
-    : clientSecretPost
-      ? readBoundedTokenParameter(params.get("client_secret"), 1_024)
-      : undefined;
+  const clientSecret = clientSecretPost
+    ? readBoundedTokenParameter(params.get("client_secret"), 1_024)
+    : undefined;
   if (!resource || resource !== expectedResource) {
     return Object.freeze({ ok: false, reason: "invalid_target", status: 400 });
   }
@@ -2338,13 +2322,10 @@ function readHeaderValueByName(
 function hasExactlyTokenRequestKeys(
   params: URLSearchParams,
   requireClientSecret: boolean,
-  usesClientSecretBasic: boolean,
 ): boolean {
-  const expectedKeys = usesClientSecretBasic
-    ? TOKEN_REQUEST_KEYS_WITH_CLIENT_SECRET_BASIC
-    : requireClientSecret
-      ? TOKEN_REQUEST_KEYS_WITH_CLIENT_SECRET_POST
-      : TOKEN_REQUEST_KEYS;
+  const expectedKeys = requireClientSecret
+    ? TOKEN_REQUEST_KEYS_WITH_CLIENT_SECRET_POST
+    : TOKEN_REQUEST_KEYS;
   const keys = [...params.keys()];
   return (
     keys.length === expectedKeys.length &&
@@ -2364,46 +2345,6 @@ function clientSecretPostMatches(
   const actual = Buffer.from(createHash("sha256").update(clientSecret).digest("hex"), "utf8");
   const expected = Buffer.from(policy.clientSecretSha256, "utf8");
   return actual.length === expected.length && timingSafeEqual(actual, expected);
-}
-
-function readTokenBasicClientAuthentication(
-  headers: McpOAuthProductionRouteAdapterRequestV1["headers"],
-): Readonly<
-  | {
-      ok: true;
-      serverOnly: {
-        clientId: string;
-        clientSecret: string;
-        version: 1;
-      };
-    }
-  | { ok: false }
-> | undefined {
-  const value = readHeaderValueByName(headers, "authorization");
-  if (value === undefined) return undefined;
-  if (value === "ambiguous" || value.length > 2_048 || hasControlCharacter(value)) return Object.freeze({ ok: false });
-  const match = /^Basic ([A-Za-z0-9+/]+={0,2})$/u.exec(value);
-  if (!match?.[1]) return Object.freeze({ ok: false });
-
-  let decoded: string;
-  try {
-    decoded = Buffer.from(match[1], "base64").toString("utf8");
-  } catch {
-    return Object.freeze({ ok: false });
-  }
-  const separatorIndex = decoded.indexOf(":");
-  if (separatorIndex <= 0) return Object.freeze({ ok: false });
-  const clientId = readBoundedTokenParameter(decoded.slice(0, separatorIndex), 512);
-  const clientSecret = readBoundedTokenParameter(decoded.slice(separatorIndex + 1), 1_024);
-  if (!clientId || !clientSecret) return Object.freeze({ ok: false });
-  return Object.freeze({
-    ok: true,
-    serverOnly: Object.freeze({
-      clientId,
-      clientSecret,
-      version: 1,
-    }),
-  });
 }
 
 function isFormUrlEncodedContentType(value: string | readonly string[] | undefined): boolean {

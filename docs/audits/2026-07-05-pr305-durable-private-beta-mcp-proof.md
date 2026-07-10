@@ -1,11 +1,11 @@
 # PR305 durable private-beta MCP connector proof
 
 Date: 2026-07-05
-Updated: 2026-07-07
+Updated: 2026-07-10
 Branch: `codex/pr305-durable-private-beta-mcp-endpoint`
 Base: `origin/application-os-foundation` at `d158768d28e418aeca5e176e504b8cf79fb1a8c1`
-Classification: `LOCAL_AND_PUBLIC_METADATA_PASS_WITH_LIMITATIONS`
-Live connector state: `PUBLIC_METADATA_RESTORED_CHATGPT_UI_NOT_PROVEN`
+Classification: `PRIVATE_BETA_CONNECTED_READ_ONLY_PROOF`
+Live connector state: `CHATGPT_TOKEN_TOOLS_LIST_AND_READ_ONLY_TOOLS_CALL_PROVEN`
 
 ## Scope
 
@@ -21,9 +21,11 @@ ChatGPT connector OAuth for this endpoint now requires a confidential OAuth clie
 
 Runtime configuration must use digest-only secret storage:
 
+- `MCP_OAUTH_PRODUCTION_RUNTIME`, `MCP_OAUTH_PRODUCTION_APPROVED`, and `MCP_OAUTH_PRODUCTION_ROUTE_WIRING`: exact strict activation flags.
 - `MCP_OAUTH_PRODUCTION_CLIENT_IDS`: exact allowlisted ChatGPT OAuth client id.
 - `MCP_OAUTH_PRODUCTION_PRIVATE_BETA_ENABLED`: enables the private-beta client gate.
 - `MCP_OAUTH_PRODUCTION_PRIVATE_BETA_CLIENT_IDS`: same private-beta client allowlist; must include the exact client id above.
+- `MCP_OAUTH_PRODUCTION_PRIVATE_BETA_RESOURCES`: exact `https://mcp.twoweeks.ai/mcp` resource allowlist.
 - `MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256`: lowercase SHA-256 hex digest of the raw client secret.
 
 Do not store the raw client secret in the repo, Dockerfile, logs, PR text, or audit output.
@@ -39,7 +41,7 @@ Wildcard redirect URIs are not allowed.
 Local synthetic Vite proof verifies the confidential-client behavior without using real secrets:
 
 1. With no `MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256` env key, authorization-server metadata advertises `token_endpoint_auth_methods_supported: ["none"]`.
-2. With a valid configured digest and matching private-beta client allowlist, metadata advertises `token_endpoint_auth_methods_supported: ["client_secret_post"]`.
+2. With a valid configured digest and matching private-beta client allowlist, metadata advertises exactly `token_endpoint_auth_methods_supported: ["client_secret_post"]`; `client_secret_basic` remains unsupported.
 3. With a malformed or empty configured digest, metadata does not downgrade to `["none"]`; the token endpoint requires `client_secret_post` and fails closed with `invalid_request` before quota, Convex, or token issuance.
 4. The token endpoint keeps exact `client_id`, `redirect_uri`, `resource`, PKCE, authorization-code validation, and no-refresh-token behavior.
 5. Missing or wrong `client_secret` returns a generic `invalid_request` and does not echo secrets, codes, states, tokens, or configured digests.
@@ -48,9 +50,21 @@ Focused Vitest coverage lives in:
 
 - `my-app/src/modules/local-mcp/__tests__/mcpOAuthProductionRouteAdapter.test.ts`
 
-## Live public endpoint status
+## Live ChatGPT proof
 
-The public metadata URL was re-checked on 2026-07-07 after restoring the local Vite origin and named Cloudflare tunnel:
+The private connector `twoweeks-mcp-pr305-rotated-0710` was proven connected on 2026-07-10 through the durable endpoint and named Cloudflare tunnel.
+
+Observed proof ladder:
+
+- authorization-server metadata returned `200` and advertised `client_secret_post`;
+- ChatGPT completed confidential OAuth and `POST /oauth/token` returned `200`;
+- MCP `initialize` returned `200` and `notifications/initialized` returned `202`;
+- `tools/list` returned `200` with the read-only `search` and `fetch` tools;
+- one safe read-only `tools/call` using `search` returned `200` and ChatGPT rendered four safe catalog results.
+
+The first `tools/call` attempt returned `400`; ChatGPT reinitialized the MCP session and the retry returned `200`. This remains a residual behavior to monitor, not a failed proof.
+
+The public metadata URL was also checked:
 
 `https://mcp.twoweeks.ai/.well-known/oauth-authorization-server`
 
@@ -68,22 +82,24 @@ Observed result:
 - HTTP status: `200`
 - `resource`: `https://mcp.twoweeks.ai/mcp`
 
-This proves the durable public metadata endpoint is reachable through the restored local origin and tunnel. ChatGPT connector activation is still not proven connected in this run.
+This proves the private connector path through token exchange, tool discovery, and one read-only tool execution. It does not authorize provider calls, writes, refresh tokens, billing, shared database mutation, account-link expansion, or public launch.
 
-## Not yet proven
+## Root cause and durable startup
 
-The following are not proven by this PR state:
+The final blocker was configuration drift, not ChatGPT callback handling. The runtime had stale `MCP_PRODUCTION_PRIVATE_BETA_*` aliases while active code requires `MCP_OAUTH_PRODUCTION_PRIVATE_BETA_*`. Vite configuration reads server-only values from `process.env`, so placing them only in `my-app/.env.local` did not configure the server plugin.
 
-- ChatGPT connector UI reaches `/oauth/token`.
-- ChatGPT connector activation completes.
-- ChatGPT `tools/list` works through the connector.
-- ChatGPT `tools/call` works through the connector.
+The durable local contract is:
 
-Do not report those as connected until the public endpoint returns metadata with `client_secret_post`, ChatGPT completes OAuth with the configured secret, and `tools/list` plus a read-only `tools/call` are observed through ChatGPT.
+- root `.env.local`, ignored by Git and mode `600`, owns server-only MCP, Convex admin, and tunnel values;
+- `my-app/.env.local` owns client-facing `VITE_*` values only;
+- `./run.sh mcp-check` validates canonical keys and formats without printing values;
+- `./run.sh mcp-private-beta` starts the exact local-Convex private-beta origin and named tunnel on port `5196`;
+- Cloudflare receives the existing named-tunnel credentials through its mode-`400` file mounted read-only, not a command-line token;
+- `.dockerignore` excludes all dotenv files from the Docker build context.
 
 ## Deployment note
 
-For Docker or another process manager, inject the three confidential-client env vars at runtime with an env file, systemd `Environment=`, Docker `--env-file`, or Compose `env_file`.
+The MCP OAuth server runs in the host Vite process, not the parser container. Load its server values through the root `.env.local` and `run.sh`; do not inject them into the parser image.
 
 Do not bake the raw secret or its digest into a Docker image.
 

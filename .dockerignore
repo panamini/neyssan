@@ -93,3 +93,6 @@ scripts/**
 **/*.pyo
 **/*.log
 **/*.tmp
+
+# Never send local runtime configuration or secret-bearing dotenv files to Docker.
+**/.env*

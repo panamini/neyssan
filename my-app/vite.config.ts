@@ -1509,7 +1509,7 @@ function sendProductionOAuthAuthorizationServerMetadata(
 ): void {
   const metadata = productionOAuthAuthorizationServerMetadata(
     dependencies.authorizationRequestConfig?.authorizationPageOrigin,
-    dependencies.clientSecretPost ? ["client_secret_post", "client_secret_basic"] : ["none"],
+    dependencies.clientSecretPost ? ["client_secret_post"] : ["none"],
   );
   if (!metadata) {
     sendInvalidLocalMcpDevRequest(res);
@@ -1535,7 +1535,7 @@ function isHeadRequest(req: IncomingMessage): boolean {
 
 function productionOAuthAuthorizationServerMetadata(
   authorizationPageOrigin: string | undefined,
-  tokenEndpointAuthMethodsSupported: readonly ["none"] | readonly ["client_secret_post", "client_secret_basic"],
+  tokenEndpointAuthMethodsSupported: readonly ["none"] | readonly ["client_secret_post"],
 ): unknown | undefined {
   const parsed = parseProductionOAuthHttpsOrigin(authorizationPageOrigin);
   if (!parsed) return undefined;
