@@ -227,6 +227,7 @@ mcp_check() {
   local app_env="${ROOT_DIR}/my-app/.env.local"
   local app_base_env="${ROOT_DIR}/my-app/.env"
   local root_base_env="${ROOT_DIR}/.env"
+  local candidate_env=""
   local key=""
   local canonical_server_keys=(
     MCP_OAUTH_PRODUCTION_RUNTIME
@@ -282,10 +283,16 @@ mcp_check() {
     echo "[run] mcp-check: MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256 must be lowercase SHA-256 hex" >&2
     failures=1
   fi
-  if grep -Eq '^[[:space:]]*(export[[:space:]]+)?MCP_OAUTH_PRODUCTION_' "${root_base_env}" "${app_base_env}" "${app_env}" 2>/dev/null; then
-    echo "[run] mcp-check: server-only MCP_OAUTH_PRODUCTION_* keys are allowed only in root .env.local" >&2
-    failures=1
-  fi
+  for candidate_env in "${root_base_env}" "${app_base_env}" "${app_env}"; do
+    [[ -f "${candidate_env}" ]] || continue
+    for key in "${canonical_server_keys[@]}"; do
+      if grep -Eq "^[[:space:]]*(export[[:space:]]+)?${key}=" "${candidate_env}"; then
+        echo "[run] mcp-check: canonical server keys are allowed only in root .env.local" >&2
+        failures=1
+        break 2
+      fi
+    done
+  done
   if [[ ! -f "${MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE}" ]]; then
     echo "[run] mcp-check: named MCP tunnel credentials file is missing" >&2
     failures=1
@@ -1393,6 +1400,7 @@ reload_env_stack() {
   fi
   if [[ "${STACK_MODE}" == "mcp-private-beta" ]]; then
     MCP_PRIVATE_BETA_TUNNEL=1
+    mcp_check
   fi
 
   current_env_hash="$(env_reload_hash)"

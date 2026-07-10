@@ -6164,7 +6164,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(runSource).toContain("mcp_derive_clerk_publishable_key");
     expect(runSource).toContain("mcp_resolve_clerk_publishable_key");
     expect(runSource).toContain("canonical_server_keys");
-    expect(runSource).toContain("server-only MCP_OAUTH_PRODUCTION_* keys are allowed only in root .env.local");
+    expect(runSource).toContain("canonical server keys are allowed only in root .env.local");
     expect(runSource).toContain("cloudflared-mcp-credentials.json");
     expect(runSource).toContain("http://host.docker.internal:${MCP_PRIVATE_BETA_VITE_PORT}");
     expect(runSource).toContain("--token-file /run/secrets/cloudflared-token");
@@ -6184,6 +6184,9 @@ describe("MCP OAuth production route adapter", () => {
     const fixtureAppDir = resolve(fixtureRoot, "my-app");
     const fixtureRootEnv = resolve(fixtureRoot, ".env.local");
     const fixtureAppEnv = resolve(fixtureAppDir, ".env.local");
+    const fixtureAppBaseEnv = resolve(fixtureAppDir, ".env");
+    const fixtureStateDir = resolve(fixtureRoot, "tmp/dev-stack");
+    const fixtureStateFile = resolve(fixtureStateDir, "pids.env");
     const fixtureTunnelCredentials = resolve(fixtureRoot, "tunnel-credentials.json");
     const fixtureEnvLines = [
       "MCP_OAUTH_PRODUCTION_RUNTIME=1",
@@ -6252,7 +6255,41 @@ describe("MCP OAuth production route adapter", () => {
       });
       expect(appOverride.status).not.toBe(0);
       expect(`${appOverride.stdout}${appOverride.stderr}`).toContain(
-        "server-only MCP_OAUTH_PRODUCTION_* keys are allowed only in root .env.local",
+        "canonical server keys are allowed only in root .env.local",
+      );
+
+      writeFileSync(fixtureAppEnv, "VITE_FIXTURE=1\n", { mode: 0o600 });
+      writeFileSync(fixtureAppBaseEnv, "CONVEX_URL=http://127.0.0.1:9999\n", { mode: 0o600 });
+      const nonMcpOverride = spawnSync("bash", [fixtureRunScript, "mcp-check"], {
+        cwd: fixtureRoot,
+        encoding: "utf8",
+        env: { ...process.env, VITE_CLERK_PUBLISHABLE_KEY: "" },
+      });
+      expect(nonMcpOverride.status).not.toBe(0);
+      expect(`${nonMcpOverride.stdout}${nonMcpOverride.stderr}`).toContain(
+        "canonical server keys are allowed only in root .env.local",
+      );
+
+      rmSync(fixtureAppBaseEnv, { force: true });
+      mkdirSync(fixtureStateDir, { recursive: true });
+      writeFileSync(fixtureStateFile, "STACK_MODE=mcp-private-beta\n", { mode: 0o600 });
+      writeFileSync(
+        fixtureRootEnv,
+        `${fixtureEnvLines
+          .map((line) =>
+            line.startsWith("CLERK_JWT_ISSUER_DOMAIN=") ? "CLERK_JWT_ISSUER_DOMAIN=invalid-issuer" : line,
+          )
+          .join("\n")}\n`,
+        { mode: 0o600 },
+      );
+      const reloadEnv = spawnSync("bash", [fixtureRunScript, "reload-env"], {
+        cwd: fixtureRoot,
+        encoding: "utf8",
+        env: { ...process.env, VITE_CLERK_PUBLISHABLE_KEY: "" },
+      });
+      expect(reloadEnv.status).not.toBe(0);
+      expect(`${reloadEnv.stdout}${reloadEnv.stderr}`).toContain(
+        "cannot derive the Clerk publishable key from CLERK_JWT_ISSUER_DOMAIN",
       );
     } finally {
       rmSync(fixtureRoot, { force: true, recursive: true });

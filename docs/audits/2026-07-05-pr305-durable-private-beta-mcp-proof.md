@@ -94,8 +94,9 @@ The durable local contract is:
 - root `.env.local`, ignored by Git and mode `600`, owns server-only MCP, Convex admin, and tunnel values;
 - `my-app/.env.local` owns client-facing `VITE_*` values only;
 - `./run.sh mcp-check` validates canonical keys and formats without printing values;
-- `./run.sh mcp-check` also proves every server key is defined in the root `.env.local` and rejects server OAuth keys in root `.env`, `my-app/.env`, or `my-app/.env.local`;
+- `./run.sh mcp-check` also proves every canonical server key is defined in the root `.env.local` and rejects those keys in root `.env`, `my-app/.env`, or `my-app/.env.local`;
 - for the signed-in browser return, `run.sh` derives the Clerk publishable browser key in memory from the exact Clerk issuer using Clerk's documented key format; it neither prints nor persists the derived value;
+- `./run.sh reload-env` reruns the same fail-closed check before restarting a tracked private-beta runtime, so the in-memory Clerk key is recreated on every Vite restart;
 - `./run.sh mcp-private-beta` starts the exact local-Convex private-beta origin and named tunnel on port `5196`;
 - Cloudflare receives the existing named-tunnel credentials through its mode-`400` file mounted read-only, not a command-line token;
 - `.dockerignore` excludes all dotenv files from the Docker build context.
