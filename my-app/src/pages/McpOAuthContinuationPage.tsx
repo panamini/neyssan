@@ -52,7 +52,11 @@ export function McpOAuthContinuationPage(): JSX.Element {
       try {
         setPhase("requesting_continuation");
         let response = await fetchContinuation(continuationHref);
-        if (response.status === 401) {
+        let body: unknown;
+        if (!response.ok) {
+          body = await response.json().catch(() => undefined);
+        }
+        if (response.status === 401 || readSafeRouteReason(body) === "owner_binding_failed") {
           const token = await getToken({ template: "convex" });
           if (canceled) return;
           if (!token) {
@@ -63,10 +67,11 @@ export function McpOAuthContinuationPage(): JSX.Element {
             return;
           }
           response = await fetchContinuation(continuationHref, token);
+          body = undefined;
         }
         if (canceled) return;
         setPhase("reading_response");
-        const body = await response.json().catch(() => undefined);
+        body ??= await response.json().catch(() => undefined);
         const redirectTo = readSafeRedirectTo(body);
         if (!response.ok) {
           setBlockReason(readSafeRouteReason(body) ?? "invalid_response");

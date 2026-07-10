@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { isIP, SocketAddress } from "node:net";
 import {
   buildMcpOAuthProductionRoutePreflight,
@@ -8,7 +8,6 @@ import {
 } from "./mcpOAuthProductionRoutePreflightBoundary";
 import {
   projectMcpOAuthPreAuthAuthorizationRequest,
-  redirectUriMatchesPathPrefixWildcard,
   type McpOAuthAuthorizationRequestBoundaryHandoffV1,
   type McpOAuthAuthorizationTrustedOwnerV1,
   type McpOAuthAuthorizationRequestBoundaryConfigV1,
@@ -507,8 +506,16 @@ export type McpOAuthProductionBrowserBoundContinuationNonceGeneratorV1 = () => s
 export type McpOAuthProductionAuthorizationCodeGeneratorV1 = () => string | undefined;
 export type McpOAuthProductionAccessTokenGeneratorV1 = () => string | undefined;
 
+export type McpOAuthProductionClientSecretPostPolicyV1 = Readonly<{
+  allowedClientId: string;
+  clientSecretSha256: string;
+  invalidConfiguration?: true;
+  version: 1;
+}>;
+
 export type McpOAuthProductionRouteAdapterDependenciesV1 = Readonly<{
   authorizationRequestConfig?: McpOAuthAuthorizationRequestBoundaryConfigV1;
+  clientSecretPost?: McpOAuthProductionClientSecretPostPolicyV1;
   checkPreAuthQuota?: McpOAuthProductionPreAuthQuotaPortV1;
   createPreAuthIntent?: McpOAuthProductionPreAuthIntentCreatePortV1;
   bindPreAuthIntentToAuthenticatedOwner?: McpOAuthProductionPreAuthOwnerBindingPortV1;
@@ -579,6 +586,7 @@ type McpOAuthProductionAuthorizationOriginV1 = Readonly<{
   hostname: string;
   port: string;
 }>;
+type OAuthTokenErrorV1 = "invalid_request" | "invalid_grant" | "invalid_target";
 
 const HANDLED_PATHS = Object.freeze([
   MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
@@ -619,6 +627,7 @@ const ACCESS_TOKEN_BYTE_LENGTH = 32;
 const AUTHORIZATION_CODE_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 const ACCESS_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 const AUTHORIZATION_CODE_DIGEST_PATTERN = /^[0-9a-f]{64}$/u;
+const CLIENT_SECRET_SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 const MCP_BEARER_VERIFICATION_QUOTA_CLIENT_ID = "mcp_bearer_verification";
 const MCP_PRODUCTION_PROTOCOL_VERSION = "2025-11-25";
 const PKCE_CODE_VERIFIER_PATTERN = /^[A-Za-z0-9._~-]{43,128}$/u;
@@ -631,6 +640,10 @@ const TOKEN_REQUEST_KEYS = Object.freeze([
   "redirect_uri",
   "resource",
   "code_verifier",
+] as const);
+const TOKEN_REQUEST_KEYS_WITH_CLIENT_SECRET_POST = Object.freeze([
+  ...TOKEN_REQUEST_KEYS,
+  "client_secret",
 ] as const);
 export const MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT = "mcp_oauth_production_v1";
 const BASE64_URL_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
@@ -678,6 +691,11 @@ export async function handleMcpOAuthProductionRouteRequest(
     return failClosedResponse(route, config.preflight, config.preflight.decision, 404);
   }
   if (!isAllowedMethod(route, request.method)) {
+    if (route === "oauth_token") {
+      return failClosedTokenResponse("invalid_request", 405, {
+        allow: allowedMethodForRoute(route),
+      });
+    }
     return failClosedResponse(route, config.preflight, "unsupported_method", 405, {
       allow: allowedMethodForRoute(route),
     });
@@ -952,31 +970,30 @@ async function handleTokenRequest(
   config: McpOAuthProductionRouteAdapterConfigV1,
   dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
 ): Promise<McpOAuthProductionRouteAdapterResponseV1> {
-  const preflight = config.preflight;
   if (!dependencies.authorizationRequestConfig || !dependencies.checkPreAuthQuota || !dependencies.issueAccessToken) {
-    return failClosedResponse("oauth_token", preflight, "dependency_unavailable", 503);
+    return failClosedTokenResponse("invalid_request", 503);
   }
   if (!authorizationRequestConfigMatchesGuard(dependencies.authorizationRequestConfig, config.authorizationRequestGuard)) {
-    return failClosedResponse("oauth_token", preflight, "invalid_configuration", 500);
+    return failClosedTokenResponse("invalid_request", 500);
   }
   const authorizationOrigin = readAuthorizationOrigin(dependencies.authorizationRequestConfig);
   if (!authorizationOrigin) {
-    return failClosedResponse("oauth_token", preflight, "invalid_configuration", 500);
+    return failClosedTokenResponse("invalid_request", 500);
   }
   if (!requestHostMatchesOrigin(request, authorizationOrigin)) {
-    return failClosedResponse("oauth_token", preflight, "invalid_host", 403);
+    return failClosedTokenResponse("invalid_request", 403);
   }
   const expectedResource = readTokenResource(dependencies.authorizationRequestConfig.canonicalResource);
   if (!expectedResource) {
-    return failClosedResponse("oauth_token", preflight, "invalid_configuration", 500);
+    return failClosedTokenResponse("invalid_request", 500);
   }
 
-  const tokenRequest = readTokenRequest(request, expectedResource);
+  const tokenRequest = readTokenRequest(request, expectedResource, dependencies.clientSecretPost);
   if (!tokenRequest.ok) {
-    return failClosedResponse("oauth_token", preflight, tokenRequest.reason, tokenRequest.status);
+    return failClosedTokenResponse(oauthTokenErrorForFailureReason(tokenRequest.reason), tokenRequest.status);
   }
   if (!dependencies.authorizationRequestConfig.clientIdPolicy.allowedClientIds.includes(tokenRequest.serverOnly.clientId)) {
-    return failClosedResponse("oauth_token", preflight, "invalid_request", 400);
+    return failClosedTokenResponse("invalid_request", 400);
   }
 
   const now = readNow(dependencies);
@@ -996,20 +1013,15 @@ async function handleTokenRequest(
       PRE_AUTH_QUOTA_TIMEOUT_MS,
     );
   } catch {
-    return failClosedResponse("oauth_token", preflight, "token_quota_denied", 503);
+    return failClosedTokenResponse("invalid_request", 503);
   }
   if (!isQuotaAccepted(quotaResult)) {
-    return failClosedResponse(
-      "oauth_token",
-      preflight,
-      "token_quota_denied",
-      statusForPreAuthQuotaFailure(quotaResult),
-    );
+    return failClosedTokenResponse("invalid_request", statusForPreAuthQuotaFailure(quotaResult));
   }
 
   const rawAccessToken = readGeneratedAccessToken(dependencies);
   if (!rawAccessToken) {
-    return failClosedResponse("oauth_token", preflight, "token_generation_failed", 500);
+    return failClosedTokenResponse("invalid_request", 500);
   }
 
   const issueNow = readNow(dependencies);
@@ -1032,15 +1044,10 @@ async function handleTokenRequest(
       ACCESS_TOKEN_ISSUE_TIMEOUT_MS,
     );
   } catch {
-    return failClosedResponse("oauth_token", preflight, "token_issue_failed", 503);
+    return failClosedTokenResponse("invalid_request", 503);
   }
   if (!isAccessTokenIssueSuccess(issueResult, tokenRequest.serverOnly, issueNow)) {
-    return failClosedResponse(
-      "oauth_token",
-      preflight,
-      "token_issue_failed",
-      statusForAccessTokenIssueFailure(issueResult),
-    );
+    return failClosedTokenResponse("invalid_grant", statusForAccessTokenIssueFailure(issueResult));
   }
 
   return oauthAccessTokenResponse(rawAccessToken, issueResult, readNow(dependencies));
@@ -1212,7 +1219,7 @@ function handleUnauthenticatedMcpDiscoveryRequest(
     const id = "id" in jsonRpcMessage ? jsonRpcMessage.id : null;
     return jsonResponse(403, buildMcpJsonRpcError(id, -32600, "Invalid Origin header."));
   }
-  if (!isMcpProtocolVersionHeaderAllowed(request, jsonRpcMessage)) {
+  if (!isUnauthenticatedMcpDiscoveryProtocolVersionHeaderAllowed(request, jsonRpcMessage)) {
     const id = "id" in jsonRpcMessage ? jsonRpcMessage.id : null;
     return jsonResponse(400, buildMcpJsonRpcError(id, -32600, "Unsupported MCP protocol version."));
   }
@@ -1259,7 +1266,9 @@ function authorizationRequestConfigMatchesGuard(
     guard.expectedResource.length > 0 &&
     config.canonicalResource === guard.expectedResource &&
     config.clientIdPolicy.mode === "predefined_allowlist" &&
-    isSameStringSet(config.clientIdPolicy.allowedClientIds, guard.allowedClientIds)
+    isSameStringSet(config.clientIdPolicy.allowedClientIds, guard.allowedClientIds) &&
+    config.allowedRedirectUris.length > 0 &&
+    config.allowedRedirectUris.every((redirectUri) => !redirectUri.includes("*"))
   );
 }
 
@@ -1643,6 +1652,20 @@ function failClosedResponse(
   }, headers);
 }
 
+function failClosedTokenResponse(
+  error: OAuthTokenErrorV1,
+  status: number,
+  headers: Readonly<Record<string, string>> = {},
+): McpOAuthProductionRouteAdapterResponseV1 {
+  return jsonResponse(status, { error }, headers);
+}
+
+function oauthTokenErrorForFailureReason(reason: McpOAuthProductionRouteFailureReasonV1): OAuthTokenErrorV1 {
+  if (reason === "invalid_target") return "invalid_target";
+  if (reason === "code_validation_failed" || reason === "token_issue_failed") return "invalid_grant";
+  return "invalid_request";
+}
+
 function mcpBearerAuthFailureResponse(
   preflight: McpOAuthProductionRoutePreflightResultV1,
   expectedResource: string,
@@ -1839,6 +1862,37 @@ async function handleLaunchReadinessCheckedMcpJsonRpc(
   return await handleAuthenticatedMcpJsonRpc(envelope, dependencies, twoweeksClerkId);
 }
 
+const MCP_COMPATIBILITY_SAFE_DOCUMENTS = Object.freeze([
+  Object.freeze({
+    id: "twoweeks.application_package.summarize",
+    title: "Twoweeks application package summary",
+    url: "https://mcp.twoweeks.ai/mcp#application-package",
+    category: "application_package",
+    text: "Safe catalog entry for the read-only Twoweeks application package summary. It exposes only capability and availability status through the OAuth-protected summary tool.",
+  }),
+  Object.freeze({
+    id: "twoweeks.evidence_graph.summarize",
+    title: "Twoweeks evidence graph summary",
+    url: "https://mcp.twoweeks.ai/mcp#evidence-graph",
+    category: "evidence_graph",
+    text: "Safe catalog entry for the read-only Twoweeks evidence graph summary. It exposes only capability and availability status through the OAuth-protected summary tool.",
+  }),
+  Object.freeze({
+    id: "twoweeks.resume_variant_plan.summarize",
+    title: "Twoweeks resume variant plan summary",
+    url: "https://mcp.twoweeks.ai/mcp#resume-variant-plan",
+    category: "resume_variant_plan",
+    text: "Safe catalog entry for the read-only Twoweeks resume variant plan summary. It exposes only capability and availability status through the OAuth-protected summary tool.",
+  }),
+  Object.freeze({
+    id: "twoweeks.review_cockpit.summarize",
+    title: "Twoweeks review cockpit summary",
+    url: "https://mcp.twoweeks.ai/mcp#review-cockpit",
+    category: "review_cockpit",
+    text: "Safe catalog entry for the read-only Twoweeks review cockpit summary. It exposes only capability and availability status through the OAuth-protected summary tool.",
+  }),
+]);
+
 async function toolsCallBoundaryResponse(
   envelope: McpAuthenticatedProtocolEnvelopeV1,
   executeReadonlySummaryTool: McpProductionReadonlySummaryExecutorV1 | undefined,
@@ -1855,6 +1909,12 @@ async function toolsCallBoundaryResponse(
       200,
       buildMcpJsonRpcError(id, -32602, messageForMcpProductionToolsCallBoundaryError(validation.error)),
     );
+  }
+  if (validation.tool.name === "search") {
+    return jsonResponse(200, mcpCompatibilitySearchResult(id));
+  }
+  if (validation.tool.name === "fetch") {
+    return jsonResponse(200, mcpCompatibilityFetchResult(id, validation.params.arguments.id));
   }
   const toolName = readMcpProductionReadonlySummaryToolName(validation.tool.name);
   if (!toolName) {
@@ -1903,6 +1963,51 @@ async function toolsCallBoundaryResponse(
     forbiddenSubstrings: [twoweeksClerkId],
     version: 1,
   }));
+}
+
+function mcpCompatibilitySearchResult(id: McpJsonRpcIdV1): unknown {
+  const structuredContent = {
+    results: MCP_COMPATIBILITY_SAFE_DOCUMENTS.map((document) => ({
+      id: document.id,
+      title: document.title,
+      url: document.url,
+    })),
+  };
+  return {
+    jsonrpc: "2.0",
+    id,
+    result: {
+      content: [{ type: "text", text: JSON.stringify(structuredContent) }],
+      structuredContent,
+    },
+  };
+}
+
+function mcpCompatibilityFetchResult(id: McpJsonRpcIdV1, documentId: unknown): unknown {
+  const document = typeof documentId === "string"
+    ? MCP_COMPATIBILITY_SAFE_DOCUMENTS.find((candidate) => candidate.id === documentId)
+    : undefined;
+  if (!document) {
+    return buildMcpJsonRpcError(id, -32602, "Invalid tools/call arguments.");
+  }
+  const structuredContent = {
+    id: document.id,
+    title: document.title,
+    text: document.text,
+    url: document.url,
+    metadata: {
+      source: "twoweeks_safe_summary_catalog",
+      category: document.category,
+    },
+  };
+  return {
+    jsonrpc: "2.0",
+    id,
+    result: {
+      content: [{ type: "text", text: JSON.stringify(structuredContent) }],
+      structuredContent,
+    },
+  };
 }
 
 function readonlySummaryStatusResponse(
@@ -2055,9 +2160,10 @@ function redirectToOAuthClientWithAuthorizationCode(
   const redirectUri = new URL(handoff.providerForwardRequest.redirectUri);
   redirectUri.searchParams.append("code", rawAuthorizationCode);
   redirectUri.searchParams.append("state", handoff.providerForwardRequest.state);
+  redirectUri.searchParams.append("iss", `${handoff.authorizationPage.origin}/`);
   return Object.freeze({
     handled: true,
-    status: 303,
+    status: 302,
     headers: {
       ...noStoreHeaders(),
       location: redirectUri.toString(),
@@ -2069,6 +2175,7 @@ function redirectToOAuthClientWithAuthorizationCode(
 function readTokenRequest(
   request: McpOAuthProductionRouteAdapterRequestV1,
   expectedResource: string,
+  clientSecretPost: McpOAuthProductionClientSecretPostPolicyV1 | undefined,
 ): Readonly<
   | {
       ok: true;
@@ -2110,7 +2217,10 @@ function readTokenRequest(
   if (resourceValues.length === 0) {
     return Object.freeze({ ok: false, reason: "invalid_target", status: 400 });
   }
-  if (!hasExactlyTokenRequestKeys(params)) {
+  if (readHeaderValueByName(request.headers, "authorization") !== undefined) {
+    return Object.freeze({ ok: false, reason: "invalid_request", status: 400 });
+  }
+  if (!clientSecretPost || !hasExactlyTokenRequestKeys(params, true)) {
     return Object.freeze({ ok: false, reason: "invalid_request", status: 400 });
   }
   if (params.get("grant_type") !== "authorization_code") {
@@ -2122,10 +2232,14 @@ function readTokenRequest(
   const redirectUri = readTokenRedirectUri(params.get("redirect_uri"));
   const resource = readTokenResource(resourceValues[0]);
   const codeVerifier = readCodeVerifier(params.get("code_verifier"));
+  const clientSecret = readBoundedTokenParameter(params.get("client_secret"), 1_024);
   if (!resource || resource !== expectedResource) {
     return Object.freeze({ ok: false, reason: "invalid_target", status: 400 });
   }
   if (!code || !AUTHORIZATION_CODE_PATTERN.test(code) || !clientId || !redirectUri || !codeVerifier) {
+    return Object.freeze({ ok: false, reason: "invalid_request", status: 400 });
+  }
+  if (!clientSecretPostMatches(clientSecretPost, clientId, clientSecret)) {
     return Object.freeze({ ok: false, reason: "invalid_request", status: 400 });
   }
 
@@ -2188,7 +2302,7 @@ function readBearerAccessToken(
 function readHeaderValueByName(
   headers: McpOAuthProductionRouteAdapterRequestV1["headers"],
   name: string,
-): string | "ambiguous" | undefined {
+): string | undefined {
   if (!headers) return undefined;
   const values: Array<string | readonly string[] | undefined> = [];
   for (const [key, value] of Object.entries(headers)) {
@@ -2204,13 +2318,32 @@ function readHeaderValueByName(
   return typeof value === "string" ? value.trim() : undefined;
 }
 
-function hasExactlyTokenRequestKeys(params: URLSearchParams): boolean {
+function hasExactlyTokenRequestKeys(
+  params: URLSearchParams,
+  requireClientSecret: boolean,
+): boolean {
+  const expectedKeys = requireClientSecret
+    ? TOKEN_REQUEST_KEYS_WITH_CLIENT_SECRET_POST
+    : TOKEN_REQUEST_KEYS;
   const keys = [...params.keys()];
   return (
-    keys.length === TOKEN_REQUEST_KEYS.length &&
-    TOKEN_REQUEST_KEYS.every((key) => params.getAll(key).length === 1) &&
-    keys.every((key) => TOKEN_REQUEST_KEYS.includes(key as never))
+    keys.length === expectedKeys.length &&
+    expectedKeys.every((key) => params.getAll(key).length === 1) &&
+    keys.every((key) => expectedKeys.includes(key as never))
   );
+}
+
+function clientSecretPostMatches(
+  policy: McpOAuthProductionClientSecretPostPolicyV1,
+  clientId: string,
+  clientSecret: string | undefined,
+): boolean {
+  if (policy.invalidConfiguration) return false;
+  if (clientId !== policy.allowedClientId) return false;
+  if (!clientSecret || !CLIENT_SECRET_SHA256_PATTERN.test(policy.clientSecretSha256)) return false;
+  const actual = Buffer.from(createHash("sha256").update(clientSecret).digest("hex"), "utf8");
+  const expected = Buffer.from(policy.clientSecretSha256, "utf8");
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
 function isFormUrlEncodedContentType(value: string | readonly string[] | undefined): boolean {
@@ -2460,6 +2593,15 @@ function isMcpProtocolVersionHeaderAllowed(
   if (message.method === "initialize") return true;
   const protocolVersion = readHeaderValueByName(request.headers, "mcp-protocol-version");
   return protocolVersion === MCP_PRODUCTION_PROTOCOL_VERSION;
+}
+
+function isUnauthenticatedMcpDiscoveryProtocolVersionHeaderAllowed(
+  request: McpOAuthProductionRouteAdapterRequestV1,
+  message: McpJsonRpcProtocolMessageV1,
+): boolean {
+  if (isMcpProtocolVersionHeaderAllowed(request, message)) return true;
+  const protocolVersion = readHeaderValueByName(request.headers, "mcp-protocol-version");
+  return protocolVersion === undefined && message.method === "tools/list";
 }
 
 function normalizeCallerKey(value: string | undefined): string | undefined {
@@ -2786,9 +2928,7 @@ function isAllowedRedirectUriForConfig(
   redirectUri: string,
   config: McpOAuthAuthorizationRequestBoundaryConfigV1,
 ): boolean {
-  return config.allowedRedirectUris.some((allowedRedirectUri) =>
-    redirectUri === allowedRedirectUri || redirectUriMatchesPathPrefixWildcard(redirectUri, allowedRedirectUri),
-  );
+  return config.allowedRedirectUris.includes(redirectUri);
 }
 
 function isPendingProviderValidation(

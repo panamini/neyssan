@@ -45,6 +45,7 @@ import {
   MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
   MCP_OAUTH_PRODUCTION_MCP_PATH,
   MCP_OAUTH_PRODUCTION_TOKEN_PATH,
+  type McpOAuthProductionClientSecretPostPolicyV1,
   type McpOAuthProductionAuthenticatedOwnerIdentityV1,
   type McpOAuthProductionRouteAdapterConfigV1,
   type McpOAuthProductionRouteAdapterDependenciesV1,
@@ -86,12 +87,16 @@ const LOCAL_MCP_DEV_AUTH_ISSUER_VAR = "LOCAL_MCP_DEV_AUTH_ISSUER";
 const LOCAL_MCP_DEV_AUTH_PROVIDER_ENVIRONMENT_VAR = "LOCAL_MCP_DEV_AUTH_PROVIDER_ENVIRONMENT";
 const LOCAL_MCP_DEV_AUTH_CLIENT_ID_VAR = "LOCAL_MCP_DEV_AUTH_CLIENT_ID";
 const WELL_KNOWN_OAUTH_AUTHORIZATION_SERVER_PATH = "/.well-known/oauth-authorization-server";
+const WELL_KNOWN_OAUTH_AUTHORIZATION_SERVER_MCP_PATH = `${WELL_KNOWN_OAUTH_AUTHORIZATION_SERVER_PATH}${MCP_OAUTH_PRODUCTION_MCP_PATH}`;
+const WELL_KNOWN_OAUTH_PROTECTED_RESOURCE_PATH = "/.well-known/oauth-protected-resource";
+const WELL_KNOWN_OPENID_CONFIGURATION_PATH = "/.well-known/openid-configuration";
 const MCP_OAUTH_PRODUCTION_RESOURCE_VAR = "MCP_OAUTH_PRODUCTION_RESOURCE";
 const MCP_OAUTH_PRODUCTION_ISSUER_VAR = "MCP_OAUTH_PRODUCTION_ISSUER";
 const MCP_OAUTH_PRODUCTION_PROVIDER_ENVIRONMENT_VAR = "MCP_OAUTH_PRODUCTION_PROVIDER_ENVIRONMENT";
 const MCP_OAUTH_PRODUCTION_CLIENT_IDS_VAR = "MCP_OAUTH_PRODUCTION_CLIENT_IDS";
 const MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN_VAR = "MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN";
 const MCP_OAUTH_PRODUCTION_REDIRECT_URIS_VAR = "MCP_OAUTH_PRODUCTION_REDIRECT_URIS";
+const MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256_VAR = "MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256";
 const CONVEX_KEY_VAR = "CONVEX_KEY";
 const CONVEX_AUTH_TOKEN_VAR = "CONVEX_AUTH_TOKEN";
 const CONVEX_URL_VAR = "CONVEX_URL";
@@ -102,6 +107,13 @@ const CLERK_CONVEX_AUDIENCE = "convex";
 const PRE_AUTH_QUOTA_WINDOW_MS = 60_000;
 const PRE_AUTH_QUOTA_LIMIT = 60;
 const PRODUCTION_OAUTH_TOKEN_MAX_REQUEST_BYTES = 4_096;
+const CLIENT_SECRET_SHA256_PATTERN = /^[0-9a-f]{64}$/u;
+const INVALID_CLIENT_SECRET_POST_POLICY = Object.freeze({
+  allowedClientId: "",
+  clientSecretSha256: "0".repeat(64),
+  invalidConfiguration: true,
+  version: 1,
+} satisfies McpOAuthProductionClientSecretPostPolicyV1);
 const DEFAULT_VITE_ALLOWED_HOSTS = Object.freeze(["host.docker.internal"]);
 const CREATE_MCP_OAUTH_PRE_AUTH_INTENT_MUTATION = makeFunctionReference(
   "mcpOAuthPreAuthIntents:internalCreateMcpOAuthPreAuthIntent",
@@ -263,10 +275,7 @@ function handleLocalMcpDevMiddlewareRequest(
     ) &&
     productionOAuthRequestHostMatchesRoute(req, pathName, productionOAuthAuthorizationDependencies)
   ) {
-    if (
-      isProductionOAuthBrowserContinuationDocumentRequest(req, pathName) &&
-      !hasCookieNamed(req.headers.cookie, "__session")
-    ) {
+    if (isProductionOAuthBrowserContinuationDocumentRequest(req, pathName) && !hasCookieNamed(req.headers.cookie, "__session")) {
       next();
       return;
     }
@@ -363,11 +372,15 @@ function handleProductionOAuthMetadataRequest(
     return false;
   }
   if (productionOAuthProtectedResourceMetadataRequestMatches(req, pathName, dependencies)) {
-    sendProductionOAuthProtectedResourceMetadata(res, dependencies);
+    sendProductionOAuthProtectedResourceMetadata(res, dependencies, isHeadRequest(req));
     return true;
   }
   if (productionOAuthAuthorizationServerMetadataRequestMatches(req, pathName, dependencies)) {
-    sendProductionOAuthAuthorizationServerMetadata(res, dependencies);
+    sendProductionOAuthAuthorizationServerMetadata(res, dependencies, isHeadRequest(req));
+    return true;
+  }
+  if (productionOAuthUnsupportedOpenIdConfigurationRequestMatches(req, pathName, dependencies)) {
+    sendProductionOAuthUnsupportedOpenIdConfiguration(res, isHeadRequest(req));
     return true;
   }
   return false;
@@ -466,6 +479,13 @@ async function respondToMcpOAuthProductionRouteRequestWithBody(
     );
     return;
   }
+  if (
+    isProductionOAuthBrowserContinuationDocumentRequest(req, pathName) &&
+    isProductionOAuthOwnerBindingFailureResponse(response)
+  ) {
+    next();
+    return;
+  }
   sendLocalMcpRouteResponse(res, response.status, response.headers, response.json, response.bodyText);
 }
 
@@ -515,6 +535,12 @@ function isHttpRedirectResponse(
     typeof response.headers.location === "string" &&
     response.headers.location.length > 0
   );
+}
+
+function isProductionOAuthOwnerBindingFailureResponse(response: McpOAuthProductionRouteAdapterResponseV1): boolean {
+  if (response.status !== 401 || !response.json || typeof response.json !== "object") return false;
+  const failure = response.json as { route?: unknown; reason?: unknown };
+  return failure.route === "oauth_login_return" && failure.reason === "owner_binding_failed";
 }
 
 async function respondToLocalMcpDevRequest(
@@ -764,6 +790,7 @@ function readProductionMcpOAuthConfigInput(env: Readonly<Record<string, string |
       requiredReadScopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
       version: 1,
     },
+    activationDependencies: buildProductionMcpOAuthActivationDependencyStubs(),
     privateBeta: {
       enabled: isStrictEnabledFlag(env, MCP_PRODUCTION_PRIVATE_BETA_ENABLED_FLAG),
       allowedClientIds: readCommaSeparatedEnv(env[MCP_PRODUCTION_PRIVATE_BETA_CLIENT_IDS_VAR]),
@@ -828,6 +855,47 @@ function readProductionMcpOAuthConfigInput(env: Readonly<Record<string, string |
   };
 }
 
+function buildProductionMcpOAuthActivationDependencyStubs(): NonNullable<
+  NonNullable<Parameters<typeof buildMcpOAuthProductionRouteAdapterConfig>[0]>["activationDependencies"]
+> {
+  const safeFailure = Object.freeze({
+    code: "mcp_oauth_production_activation_blocked",
+    message: "Production OAuth activation blocked.",
+    safeForModel: true,
+    tokenEchoed: false,
+    authorizationCodeEchoed: false,
+    providerSubjectExposed: false,
+    ownerExposed: false,
+    publicEndpointExposed: false,
+    frontendWired: false,
+    version: 1,
+  });
+  return Object.freeze({
+    providerAdapter: Object.freeze({
+      provider: "stytch",
+      exchangeAuthorizationCode: async () => Object.freeze({
+        kind: "mcp_oauth_production_token_exchange_result",
+        ok: false,
+        reason: "provider_adapter_unavailable",
+        safeFailure,
+        modelVisible: false,
+        safeForLogging: true,
+        version: 1,
+      }),
+      version: 1,
+    }),
+    executeAccountLinkLifecycle: async () => Object.freeze({
+      kind: "mcp_account_link_lifecycle_result",
+      operation: "link",
+      ok: false,
+      reason: "account_link_lifecycle_unavailable",
+      safeFailure,
+      modelVisible: false,
+      version: 1,
+    }),
+  });
+}
+
 function buildProductionMcpOAuthRouteDependencies(
   env: Readonly<Record<string, string | undefined>>,
 ): McpOAuthProductionRouteAdapterDependenciesV1 {
@@ -835,6 +903,7 @@ function buildProductionMcpOAuthRouteDependencies(
   const convexClient = readConvexHttpClient(convexConnection);
   return Object.freeze({
     authorizationRequestConfig: readProductionMcpOAuthAuthorizationRequestConfig(env),
+    clientSecretPost: readProductionMcpOAuthClientSecretPostPolicy(env),
     checkPreAuthQuota: checkProductionPreAuthQuota,
     createPreAuthIntent: buildProductionPreAuthIntentCreatePort(convexClient),
     bindPreAuthIntentToAuthenticatedOwner: buildProductionPreAuthOwnerBindingPort(convexConnection),
@@ -845,6 +914,30 @@ function buildProductionMcpOAuthRouteDependencies(
     verifyAccessToken: buildProductionAccessTokenVerifyPort(convexClient),
     executeReadonlySummaryTool: buildProductionReadonlySummaryExecutor(convexClient),
     readAuthenticatedOwnerIdentity: buildProductionAuthenticatedOwnerIdentityReader(env),
+  });
+}
+
+function readProductionMcpOAuthClientSecretPostPolicy(
+  env: Readonly<Record<string, string | undefined>>,
+): McpOAuthProductionClientSecretPostPolicyV1 {
+  const configuredDigest = env[MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256_VAR];
+  if (configuredDigest === undefined) return INVALID_CLIENT_SECRET_POST_POLICY;
+  const digest = configuredDigest.trim().toLowerCase();
+  const allowedClientIds = readCommaSeparatedEnv(env[MCP_OAUTH_PRODUCTION_CLIENT_IDS_VAR]);
+  const privateBetaClientIds = readCommaSeparatedEnv(env[MCP_PRODUCTION_PRIVATE_BETA_CLIENT_IDS_VAR]);
+  if (
+    !digest ||
+    !CLIENT_SECRET_SHA256_PATTERN.test(digest) ||
+    allowedClientIds.length !== 1 ||
+    !isStrictEnabledFlag(env, MCP_PRODUCTION_PRIVATE_BETA_ENABLED_FLAG) ||
+    !privateBetaClientIds.includes(allowedClientIds[0])
+  ) {
+    return INVALID_CLIENT_SECRET_POST_POLICY;
+  }
+  return Object.freeze({
+    allowedClientId: allowedClientIds[0],
+    clientSecretSha256: digest,
+    version: 1,
   });
 }
 
@@ -1313,15 +1406,19 @@ function productionOAuthProtectedResourceMetadataRequestMatches(
   pathName: string | undefined,
   dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
 ): boolean {
-  if ((req.method ?? "GET") !== "GET") return false;
+  if (!isMetadataRequestMethod(req)) return false;
+  const rootMetadataUrl = productionOAuthProtectedResourceRootMetadataUrl(
+    dependencies.authorizationRequestConfig?.canonicalResource,
+  );
   const metadataUrl = productionOAuthProtectedResourceMetadataUrl(
     dependencies.authorizationRequestConfig?.canonicalResource,
   );
-  if (!metadataUrl) return false;
+  if (!rootMetadataUrl || !metadataUrl) return false;
   try {
+    const parsedRootMetadataUrl = new URL(rootMetadataUrl);
     const parsedMetadataUrl = new URL(metadataUrl);
     return (
-      pathName === parsedMetadataUrl.pathname &&
+      (pathName === parsedRootMetadataUrl.pathname || pathName === parsedMetadataUrl.pathname) &&
       productionOAuthRequestHostMatchesUrlOrigin(req, parsedMetadataUrl.toString())
     );
   } catch {
@@ -1332,6 +1429,7 @@ function productionOAuthProtectedResourceMetadataRequestMatches(
 function sendProductionOAuthProtectedResourceMetadata(
   res: ServerResponse,
   dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+  omitBody: boolean,
 ): void {
   const config = dependencies.authorizationRequestConfig;
   const protectedResourceMetadataUrl = productionOAuthProtectedResourceMetadataUrl(config?.canonicalResource);
@@ -1350,7 +1448,7 @@ function sendProductionOAuthProtectedResourceMetadata(
       res,
       200,
       { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
-      metadata,
+      omitBody ? undefined : metadata,
       undefined,
     );
   } catch {
@@ -1363,17 +1461,51 @@ function productionOAuthAuthorizationServerMetadataRequestMatches(
   pathName: string | undefined,
   dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
 ): boolean {
-  if ((req.method ?? "GET") !== "GET") return false;
-  if (pathName !== WELL_KNOWN_OAUTH_AUTHORIZATION_SERVER_PATH) return false;
+  if (!isMetadataRequestMethod(req)) return false;
+  if (
+    pathName !== WELL_KNOWN_OAUTH_AUTHORIZATION_SERVER_PATH &&
+    pathName !== WELL_KNOWN_OAUTH_AUTHORIZATION_SERVER_MCP_PATH
+  ) {
+    return false;
+  }
   return productionOAuthRequestHostMatchesUrlOrigin(
     req,
     dependencies.authorizationRequestConfig?.authorizationPageOrigin,
   );
 }
 
+function productionOAuthUnsupportedOpenIdConfigurationRequestMatches(
+  req: IncomingMessage,
+  pathName: string | undefined,
+  dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+): boolean {
+  if (!isMetadataRequestMethod(req)) return false;
+  if (pathName !== WELL_KNOWN_OPENID_CONFIGURATION_PATH) return false;
+  return productionOAuthRequestHostMatchesUrlOrigin(
+    req,
+    dependencies.authorizationRequestConfig?.authorizationPageOrigin,
+  );
+}
+
+function sendProductionOAuthUnsupportedOpenIdConfiguration(res: ServerResponse, omitBody: boolean): void {
+  sendLocalMcpRouteResponse(
+    res,
+    404,
+    { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+    omitBody
+      ? undefined
+      : {
+          error: "not_found",
+          error_description: "OpenID Connect discovery is not available for this OAuth server.",
+        },
+    undefined,
+  );
+}
+
 function sendProductionOAuthAuthorizationServerMetadata(
   res: ServerResponse,
   dependencies: McpOAuthProductionRouteAdapterDependenciesV1,
+  omitBody: boolean,
 ): void {
   const metadata = productionOAuthAuthorizationServerMetadata(
     dependencies.authorizationRequestConfig?.authorizationPageOrigin,
@@ -1384,14 +1516,25 @@ function sendProductionOAuthAuthorizationServerMetadata(
   }
   sendLocalMcpRouteResponse(
     res,
-    200,
-    { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
-    metadata,
-    undefined,
-  );
+      200,
+      { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+      omitBody ? undefined : metadata,
+      undefined,
+    );
 }
 
-function productionOAuthAuthorizationServerMetadata(authorizationPageOrigin: string | undefined): unknown | undefined {
+function isMetadataRequestMethod(req: IncomingMessage): boolean {
+  const method = (req.method ?? "GET").toUpperCase();
+  return method === "GET" || method === "HEAD";
+}
+
+function isHeadRequest(req: IncomingMessage): boolean {
+  return (req.method ?? "GET").toUpperCase() === "HEAD";
+}
+
+function productionOAuthAuthorizationServerMetadata(
+  authorizationPageOrigin: string | undefined,
+): unknown | undefined {
   const parsed = parseProductionOAuthHttpsOrigin(authorizationPageOrigin);
   if (!parsed) return undefined;
   return Object.freeze({
@@ -1401,7 +1544,8 @@ function productionOAuthAuthorizationServerMetadata(authorizationPageOrigin: str
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code"],
     code_challenge_methods_supported: ["S256"],
-    token_endpoint_auth_methods_supported: ["none"],
+    authorization_response_iss_parameter_supported: true,
+    token_endpoint_auth_methods_supported: ["client_secret_post"],
     scopes_supported: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
   });
 }
@@ -1447,7 +1591,28 @@ function productionOAuthProtectedResourceMetadataUrl(resourceUrl: string | undef
       return undefined;
     }
     const normalizedPath = productionOAuthCanonicalResourcePath(parsed.pathname);
-    return `${parsed.origin}/.well-known/oauth-protected-resource${normalizedPath === "/" ? "" : normalizedPath}`;
+    return `${parsed.origin}${WELL_KNOWN_OAUTH_PROTECTED_RESOURCE_PATH}${normalizedPath === "/" ? "" : normalizedPath}`;
+  } catch {
+    return undefined;
+  }
+}
+
+function productionOAuthProtectedResourceRootMetadataUrl(resourceUrl: string | undefined): string | undefined {
+  if (typeof resourceUrl !== "string") return undefined;
+  try {
+    const parsed = new URL(resourceUrl);
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.origin === "null" ||
+      !parsed.hostname ||
+      parsed.username ||
+      parsed.password ||
+      parsed.search ||
+      parsed.hash
+    ) {
+      return undefined;
+    }
+    return `${parsed.origin}${WELL_KNOWN_OAUTH_PROTECTED_RESOURCE_PATH}`;
   } catch {
     return undefined;
   }
@@ -1564,12 +1729,12 @@ function readCommaSeparatedEnv(value: string | undefined): readonly string[] {
 export function normalizeMcpOAuthProductionRedirectUris(value: string | undefined): readonly string[] {
   const rawValues = readCommaSeparatedEnv(value);
   const normalizedValues = rawValues.map(readCanonicalProductionRedirectUri);
-  if (normalizedValues.some((item) => item === undefined)) return rawValues;
+  if (normalizedValues.some((item) => item === undefined)) return Object.freeze([]);
   return Object.freeze([...new Set(normalizedValues.filter((item): item is string => item !== undefined))]);
 }
 
 function readCanonicalProductionRedirectUri(value: string): string | undefined {
-  if (containsControlCharacters(value) || hasMalformedPercentEncoding(value)) return undefined;
+  if (value.includes("*") || containsControlCharacters(value) || hasMalformedPercentEncoding(value)) return undefined;
   let parsed: URL;
   try {
     parsed = new URL(value);

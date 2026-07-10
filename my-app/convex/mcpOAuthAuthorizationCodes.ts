@@ -1013,7 +1013,8 @@ function parseAccessTokenStorageRecord(value: unknown): StoredMcpOAuthAccessToke
   }
   const identity = parseAccessTokenOwnerBinding(record);
   const authorizationRequest = parseAccessTokenAuthorizationBinding(record);
-  if (!identity || !authorizationRequest || !hasValidAccessTokenStorageMetadata(record)) return undefined;
+  const storageMetadata = parseAccessTokenStorageMetadata(record);
+  if (!identity || !authorizationRequest || !storageMetadata) return undefined;
   return {
     kind: "mcp_oauth_access_token_record",
     version: 1,
@@ -1026,10 +1027,10 @@ function parseAccessTokenStorageRecord(value: unknown): StoredMcpOAuthAccessToke
     resource: authorizationRequest.resource,
     scopes: [...authorizationRequest.scopes],
     productionEnvironment: MCP_OAUTH_AUTHORIZATION_CODE_PRODUCTION_ENVIRONMENT,
-    status: record.status,
-    issuedAt: record.issuedAt,
-    updatedAt: record.updatedAt,
-    expiresAt: record.expiresAt,
+    status: storageMetadata.status,
+    issuedAt: storageMetadata.issuedAt,
+    updatedAt: storageMetadata.updatedAt,
+    expiresAt: storageMetadata.expiresAt,
     storageVersion: 1,
     ...(record._id !== undefined ? { _id: record._id } : {}),
     ...(typeof record._creationTime === "number" ? { _creationTime: record._creationTime } : {}),
@@ -1056,16 +1057,33 @@ function parseAccessTokenAuthorizationBinding(
   return { clientId, redirectUri, resource, scopes };
 }
 
-function hasValidAccessTokenStorageMetadata(record: Record<string, unknown>): boolean {
-  return (
-    record.productionEnvironment === MCP_OAUTH_AUTHORIZATION_CODE_PRODUCTION_ENVIRONMENT &&
-    isValidAccessTokenStatus(record.status) &&
-    isValidStorageTimestamp(record.issuedAt) &&
-    isValidStorageTimestamp(record.updatedAt) &&
-    isValidStorageTimestamp(record.expiresAt) &&
-    record.expiresAt - record.issuedAt === MCP_OAUTH_ACCESS_TOKEN_TTL_MS &&
-    record.storageVersion === 1
-  );
+function parseAccessTokenStorageMetadata(
+  record: Record<string, unknown>,
+):
+  | Readonly<{
+      status: McpOAuthAccessTokenStatusV1;
+      issuedAt: number;
+      updatedAt: number;
+      expiresAt: number;
+    }>
+  | undefined {
+  if (
+    record.productionEnvironment !== MCP_OAUTH_AUTHORIZATION_CODE_PRODUCTION_ENVIRONMENT ||
+    !isValidAccessTokenStatus(record.status) ||
+    !isValidStorageTimestamp(record.issuedAt) ||
+    !isValidStorageTimestamp(record.updatedAt) ||
+    !isValidStorageTimestamp(record.expiresAt) ||
+    record.expiresAt - record.issuedAt !== MCP_OAUTH_ACCESS_TOKEN_TTL_MS ||
+    record.storageVersion !== 1
+  ) {
+    return undefined;
+  }
+  return {
+    status: record.status,
+    issuedAt: record.issuedAt,
+    updatedAt: record.updatedAt,
+    expiresAt: record.expiresAt,
+  };
 }
 
 function readRecord(

@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { Authenticated, Unauthenticated } from "convex/react";
 import { SignIn } from "@clerk/clerk-react";
@@ -128,9 +128,14 @@ function AuthenticatedSignInReturnRedirect({
   documentNavigate: (path: string) => void;
 }): JSX.Element | null {
   const useDocumentNavigation = shouldUseDocumentNavigationForSignInReturn(signInReturn);
+  const documentNavigatedPathRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
-    if (useDocumentNavigation) {
+    if (
+      useDocumentNavigation &&
+      documentNavigatedPathRef.current !== signInReturn.path
+    ) {
+      documentNavigatedPathRef.current = signInReturn.path;
       documentNavigate(signInReturn.path);
     }
   }, [documentNavigate, signInReturn.path, useDocumentNavigation]);

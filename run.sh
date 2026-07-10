@@ -31,6 +31,8 @@ if [[ -f "${ROOT_DIR}/my-app/.env" ]]; then set -a; source "${ROOT_DIR}/my-app/.
 
 STATE_DIR="${ROOT_DIR}/tmp/dev-stack"
 STATE_FILE="${STATE_DIR}/pids.env"
+TUNNEL_TOKEN_FILE="${STATE_DIR}/cloudflared-token"
+MCP_TUNNEL_CONFIG_FILE="${STATE_DIR}/cloudflared-mcp.yml"
 LOG_DIR="${ROOT_DIR}/tmp"
 VITE_LOG="${LOG_DIR}/vite-dev.log"
 CONVEX_LOG="${LOG_DIR}/convex-dev.log"
@@ -44,6 +46,13 @@ CONVEX_TMPDIR="${CONVEX_TMPDIR:-${ROOT_DIR}/tmp/convex-tmp}"
 LOCAL_CONVEX_SYNC_SECRETS="${LOCAL_CONVEX_SYNC_SECRETS:-1}"
 CACHE_DIR="${ROOT_DIR}/.buildx-cache"
 DOCKER_STATE_DIR="${ROOT_DIR}/.docker"
+MCP_PRIVATE_BETA_VITE_PORT="${MCP_PRIVATE_BETA_VITE_PORT:-5196}"
+MCP_PRIVATE_BETA_CLIENT_ID="local-chatgpt-client"
+MCP_PRIVATE_BETA_RESOURCE="https://mcp.twoweeks.ai/mcp"
+MCP_PRIVATE_BETA_AUTHORIZATION_ORIGIN="https://mcp.twoweeks.ai"
+MCP_PRIVATE_BETA_REDIRECT_URI="https://chatgpt.com/connector/oauth/b7v_6OncLEsg"
+MCP_PRIVATE_BETA_TUNNEL_ID="935a2064-9473-41bc-bd73-174660892847"
+MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE="${MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE:-${HOME}/.cloudflared/${MCP_PRIVATE_BETA_TUNNEL_ID}.json}"
 
 mkdir -p "${STATE_DIR}" "${LOG_DIR}"
 mkdir -p "${CONVEX_TMPDIR}"
@@ -109,6 +118,8 @@ env_reload_hash() {
   local env_files=(
     "${ROOT_DIR}/.env"
     "${ROOT_DIR}/.env.local"
+    # Vite loads client-facing VITE_* values from this file after config resolution.
+    # Server-only MCP OAuth values belong in the root .env.local loaded above.
     "${ROOT_DIR}/my-app/.env.local"
     "${ROOT_DIR}/my-app/.env"
   )
@@ -136,6 +147,174 @@ convex_binding_hash() {
     payload+="${file}:${line}"$'\n'
   done
   hash_string "${payload}"
+}
+
+mcp_check_required_value() {
+  local name="${1:?env name required}"
+  local expected="${2:?expected value required}"
+  if [[ "${!name:-}" != "${expected}" ]]; then
+    echo "[run] mcp-check: ${name} is missing or does not match the private-beta contract" >&2
+    return 1
+  fi
+}
+
+mcp_check_required_secret() {
+  local name="${1:?env name required}"
+  if [[ -z "${!name:-}" ]]; then
+    echo "[run] mcp-check: ${name} is missing" >&2
+    return 1
+  fi
+}
+
+mcp_check_root_env_key() {
+  local file="${1:?env file required}"
+  local name="${2:?env name required}"
+  if ! grep -Eq "^[[:space:]]*(export[[:space:]]+)?${name}=" "${file}"; then
+    echo "[run] mcp-check: ${name} must be defined in root .env.local" >&2
+    return 1
+  fi
+}
+
+mcp_derive_clerk_publishable_key() {
+  CLERK_JWT_ISSUER_DOMAIN="${CLERK_JWT_ISSUER_DOMAIN:-}" node -e '
+const rawIssuer = process.env.CLERK_JWT_ISSUER_DOMAIN ?? "";
+let issuer;
+try {
+  issuer = new URL(rawIssuer);
+} catch {
+  process.exit(1);
+}
+if (
+  issuer.protocol !== "https:" ||
+  issuer.username ||
+  issuer.password ||
+  issuer.pathname !== "/" ||
+  issuer.search ||
+  issuer.hash
+) {
+  process.exit(1);
+}
+const prefix = issuer.hostname.endsWith(".clerk.accounts.dev") ? "pk_test_" : "pk_live_";
+process.stdout.write(`${prefix}${Buffer.from(`${issuer.hostname}$`, "utf8").toString("base64")}`);
+'
+}
+
+mcp_resolve_clerk_publishable_key() {
+  local derived=""
+  if ! derived="$(mcp_derive_clerk_publishable_key)" || [[ -z "${derived}" ]]; then
+    echo "[run] mcp-check: cannot derive the Clerk publishable key from CLERK_JWT_ISSUER_DOMAIN" >&2
+    return 1
+  fi
+  if [[ -n "${VITE_CLERK_PUBLISHABLE_KEY:-}" && "${VITE_CLERK_PUBLISHABLE_KEY}" != "${derived}" ]]; then
+    echo "[run] mcp-check: configured Clerk publishable key does not match CLERK_JWT_ISSUER_DOMAIN" >&2
+    return 1
+  fi
+  export VITE_CLERK_PUBLISHABLE_KEY="${derived}"
+}
+
+mcp_env_file_mode() {
+  local file="${1:?file required}"
+  if stat -f '%Lp' "${file}" >/dev/null 2>&1; then
+    stat -f '%Lp' "${file}"
+  else
+    stat -c '%a' "${file}"
+  fi
+}
+
+mcp_check() {
+  local failures=0
+  local root_env="${ROOT_DIR}/.env.local"
+  local app_env="${ROOT_DIR}/my-app/.env.local"
+  local app_base_env="${ROOT_DIR}/my-app/.env"
+  local root_base_env="${ROOT_DIR}/.env"
+  local candidate_env=""
+  local key=""
+  local canonical_server_keys=(
+    MCP_OAUTH_PRODUCTION_RUNTIME
+    MCP_OAUTH_PRODUCTION_APPROVED
+    MCP_OAUTH_PRODUCTION_ROUTE_WIRING
+    MCP_OAUTH_PRODUCTION_CLIENT_IDS
+    MCP_OAUTH_PRODUCTION_PRIVATE_BETA_ENABLED
+    MCP_OAUTH_PRODUCTION_PRIVATE_BETA_CLIENT_IDS
+    MCP_OAUTH_PRODUCTION_PRIVATE_BETA_RESOURCES
+    MCP_OAUTH_PRODUCTION_RESOURCE
+    MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN
+    MCP_OAUTH_PRODUCTION_REDIRECT_URIS
+    MCP_OAUTH_PRODUCTION_ISSUER
+    MCP_OAUTH_PRODUCTION_PROVIDER_ENVIRONMENT
+    MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256
+    CLERK_JWT_ISSUER_DOMAIN
+    CONVEX_URL
+    CONVEX_AUTH_TOKEN
+  )
+
+  if [[ ! -f "${root_env}" ]]; then
+    echo "[run] mcp-check: root .env.local is required" >&2
+    failures=1
+  elif [[ "$(mcp_env_file_mode "${root_env}")" != "600" ]]; then
+    echo "[run] mcp-check: root .env.local must have mode 600" >&2
+    failures=1
+  fi
+
+  if [[ -f "${root_env}" ]]; then
+    for key in "${canonical_server_keys[@]}"; do
+      mcp_check_root_env_key "${root_env}" "${key}" || failures=1
+    done
+  fi
+
+  mcp_check_required_value MCP_OAUTH_PRODUCTION_RUNTIME "1" || failures=1
+  mcp_check_required_value MCP_OAUTH_PRODUCTION_APPROVED "1" || failures=1
+  mcp_check_required_value MCP_OAUTH_PRODUCTION_ROUTE_WIRING "1" || failures=1
+  mcp_check_required_value MCP_OAUTH_PRODUCTION_CLIENT_IDS "${MCP_PRIVATE_BETA_CLIENT_ID}" || failures=1
+  mcp_check_required_value MCP_OAUTH_PRODUCTION_PRIVATE_BETA_ENABLED "1" || failures=1
+  mcp_check_required_value MCP_OAUTH_PRODUCTION_PRIVATE_BETA_CLIENT_IDS "${MCP_PRIVATE_BETA_CLIENT_ID}" || failures=1
+  mcp_check_required_value MCP_OAUTH_PRODUCTION_PRIVATE_BETA_RESOURCES "${MCP_PRIVATE_BETA_RESOURCE}" || failures=1
+  mcp_check_required_value MCP_OAUTH_PRODUCTION_RESOURCE "${MCP_PRIVATE_BETA_RESOURCE}" || failures=1
+  mcp_check_required_value MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN "${MCP_PRIVATE_BETA_AUTHORIZATION_ORIGIN}" || failures=1
+  mcp_check_required_value MCP_OAUTH_PRODUCTION_REDIRECT_URIS "${MCP_PRIVATE_BETA_REDIRECT_URI}" || failures=1
+  mcp_check_required_secret MCP_OAUTH_PRODUCTION_ISSUER || failures=1
+  mcp_check_required_secret MCP_OAUTH_PRODUCTION_PROVIDER_ENVIRONMENT || failures=1
+  mcp_check_required_secret MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256 || failures=1
+  mcp_check_required_secret CLERK_JWT_ISSUER_DOMAIN || failures=1
+  mcp_check_required_secret CONVEX_URL || failures=1
+  mcp_check_required_secret CONVEX_AUTH_TOKEN || failures=1
+
+  if [[ ! "${MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256:-}" =~ ^[0-9a-f]{64}$ ]]; then
+    echo "[run] mcp-check: MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256 must be lowercase SHA-256 hex" >&2
+    failures=1
+  fi
+  for candidate_env in "${root_base_env}" "${app_base_env}" "${app_env}"; do
+    [[ -f "${candidate_env}" ]] || continue
+    for key in "${canonical_server_keys[@]}"; do
+      if grep -Eq "^[[:space:]]*(export[[:space:]]+)?${key}=" "${candidate_env}"; then
+        echo "[run] mcp-check: canonical server keys are allowed only in root .env.local" >&2
+        failures=1
+        break 2
+      fi
+    done
+  done
+  if [[ ! -f "${MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE}" ]]; then
+    echo "[run] mcp-check: named MCP tunnel credentials file is missing" >&2
+    failures=1
+  else
+    local credentials_mode
+    credentials_mode="$(mcp_env_file_mode "${MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE}")"
+    if [[ "${credentials_mode}" != "400" && "${credentials_mode}" != "600" ]]; then
+      echo "[run] mcp-check: named MCP tunnel credentials file must have mode 400 or 600" >&2
+      failures=1
+    fi
+  fi
+  if grep -Eq '^[[:space:]]*MCP_PRODUCTION_PRIVATE_BETA_' "${root_env}" "${app_env}" 2>/dev/null; then
+    echo "[run] mcp-check: legacy MCP_PRODUCTION_PRIVATE_BETA_* aliases are forbidden" >&2
+    failures=1
+  fi
+  mcp_resolve_clerk_publishable_key || failures=1
+
+  if [[ "${failures}" -ne 0 ]]; then
+    echo "[run] mcp-check: FAIL (values were not printed)" >&2
+    return 1
+  fi
+  echo "[run] mcp-check: PASS (canonical keys present; values not printed)"
 }
 
 ensure_buildx() {
@@ -306,6 +485,8 @@ print_command_banner() {
   cat <<'EOF'
 
 Commands:
+  ./run.sh mcp-private-beta  reproducible private-beta MCP origin + tunnel
+  ./run.sh mcp-check         validate MCP runtime keys without printing values
   ./run.sh tunnel          stable full workflow
   ./run.sh local-fast      fast full-app parser development
   ./run.sh parser-dev      parser-only hacking
@@ -830,18 +1011,54 @@ stop_parser() {
 }
 
 start_tunnel() {
-  if [[ -z "${TUNNEL_TOKEN}" ]]; then
-    echo "[run] ERROR: TUNNEL_TOKEN is required for tunnel mode" >&2
-    exit 1
-  fi
   docker network create "${TUNNEL_NETWORK}" >/dev/null 2>&1 || true
   docker rm -f "${CLOUDFLARED_NAME}" >/dev/null 2>&1 || true
   echo "[run] starting cloudflared (${CLOUDFLARED_NAME})"
-  docker run -d --name "${CLOUDFLARED_NAME}" --restart=unless-stopped \
-    --network "${TUNNEL_NETWORK}" \
-    cloudflare/cloudflared:latest \
-    --loglevel debug tunnel --no-autoupdate run --protocol auto \
-    --token "${TUNNEL_TOKEN}" >/dev/null
+  if [[ "${MCP_PRIVATE_BETA_TUNNEL:-0}" == "1" ]]; then
+    local config_temp="${MCP_TUNNEL_CONFIG_FILE}.tmp.$$"
+    rm -f "${config_temp}" "${MCP_TUNNEL_CONFIG_FILE}"
+    (umask 077; cat > "${config_temp}" <<EOF
+tunnel: ${MCP_PRIVATE_BETA_TUNNEL_ID}
+credentials-file: /run/secrets/cloudflared-mcp-credentials.json
+ingress:
+  - hostname: mcp.twoweeks.ai
+    service: http://host.docker.internal:${MCP_PRIVATE_BETA_VITE_PORT}
+  - service: http_status:404
+EOF
+    )
+    chmod 600 "${config_temp}"
+    mv "${config_temp}" "${MCP_TUNNEL_CONFIG_FILE}"
+    if ! docker run -d --name "${CLOUDFLARED_NAME}" --restart=unless-stopped \
+      --network "${TUNNEL_NETWORK}" \
+      --mount "type=bind,source=${MCP_TUNNEL_CONFIG_FILE},target=/etc/cloudflared/config.yml,readonly" \
+      --mount "type=bind,source=${MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE},target=/run/secrets/cloudflared-mcp-credentials.json,readonly" \
+      cloudflare/cloudflared:latest \
+      --loglevel debug tunnel --config /etc/cloudflared/config.yml --no-autoupdate run >/dev/null; then
+      rm -f "${MCP_TUNNEL_CONFIG_FILE}"
+      echo "[run] ERROR: MCP cloudflared failed to start" >&2
+      exit 1
+    fi
+  else
+    if [[ -z "${TUNNEL_TOKEN}" ]]; then
+      echo "[run] ERROR: TUNNEL_TOKEN is required for tunnel mode" >&2
+      exit 1
+    fi
+    local token_temp="${TUNNEL_TOKEN_FILE}.tmp.$$"
+    rm -f "${token_temp}" "${TUNNEL_TOKEN_FILE}"
+    (umask 077; printf '%s' "${TUNNEL_TOKEN}" > "${token_temp}")
+    chmod 600 "${token_temp}"
+    mv "${token_temp}" "${TUNNEL_TOKEN_FILE}"
+    if ! docker run -d --name "${CLOUDFLARED_NAME}" --restart=unless-stopped \
+      --network "${TUNNEL_NETWORK}" \
+      --mount "type=bind,source=${TUNNEL_TOKEN_FILE},target=/run/secrets/cloudflared-token,readonly" \
+      cloudflare/cloudflared:latest \
+      --loglevel debug tunnel --no-autoupdate run --protocol auto \
+      --token-file /run/secrets/cloudflared-token >/dev/null; then
+      rm -f "${TUNNEL_TOKEN_FILE}"
+      echo "[run] ERROR: cloudflared failed to start" >&2
+      exit 1
+    fi
+  fi
   sleep 2
 }
 
@@ -850,6 +1067,7 @@ stop_tunnel() {
     echo "[run] stopping tunnel (${CLOUDFLARED_NAME})"
     docker stop "${CLOUDFLARED_NAME}" >/dev/null 2>&1 || true
   fi
+  rm -f "${TUNNEL_TOKEN_FILE}" "${MCP_TUNNEL_CONFIG_FILE}"
 }
 
 kill_stale_convex() {
@@ -1180,6 +1398,10 @@ reload_env_stack() {
     echo "[run] ERROR: no tracked stack to reload. Start one with ./run.sh up, ./run.sh local-fast, ./run.sh tunnel, or ./run.sh parser-dev." >&2
     exit 1
   fi
+  if [[ "${STACK_MODE}" == "mcp-private-beta" ]]; then
+    MCP_PRIVATE_BETA_TUNNEL=1
+    mcp_check
+  fi
 
   current_env_hash="$(env_reload_hash)"
   current_convex_binding_hash="$(convex_binding_hash)"
@@ -1290,8 +1512,13 @@ status() {
   echo "== status =="
   echo -n "local /ready: "
   curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8001/ready || true
-  echo -n "edge  /ready: "
-  curl -s -o /dev/null -w '%{http_code}\n' "$(normalize_origin "${PARSER_ORIGIN}")/ready" || true
+  if [[ "${STACK_MODE:-}" == "mcp-private-beta" ]]; then
+    echo -n "mcp metadata:   "
+    curl -s -o /dev/null -w '%{http_code}\n' "${MCP_PRIVATE_BETA_AUTHORIZATION_ORIGIN}/.well-known/oauth-authorization-server" || true
+  else
+    echo -n "edge  /ready: "
+    curl -s -o /dev/null -w '%{http_code}\n' "$(normalize_origin "${PARSER_ORIGIN}")/ready" || true
+  fi
   local convex_url=""
   convex_url="$(discover_local_convex_url)"
   if [[ -n "${convex_url}" ]] && is_convex_ready "${convex_url}"; then
@@ -1379,6 +1606,9 @@ up() {
     fi
   elif [[ "${RUNTIME_MODE}" == "workspace" && "${PARSER_RELOAD}" == "1" ]]; then
     TARGET_STACK_MODE="parser-dev"
+  fi
+  if [[ -n "${STACK_MODE_OVERRIDE:-}" ]]; then
+    TARGET_STACK_MODE="${STACK_MODE_OVERRIDE}"
   fi
 
   if handle_existing_stack_request \
@@ -1517,6 +1747,16 @@ local_fast_stack() {
   up --ui --local-origin --local-convex --workspace-mount --parser-reload "$@"
 }
 
+mcp_private_beta_stack() {
+  mcp_check
+  VITE_PORT="${MCP_PRIVATE_BETA_VITE_PORT}"
+  OPEN_BROWSER=0
+  PARSER_ORIGIN="${MCP_PRIVATE_BETA_AUTHORIZATION_ORIGIN}"
+  MCP_PRIVATE_BETA_TUNNEL=1
+  STACK_MODE_OVERRIDE="mcp-private-beta"
+  up --tunnel-stack --ui --local-origin --local-convex --image-runtime "$@"
+}
+
 tunnel_stack() {
   up --tunnel-stack --ui --edge-origin --cloud-convex "$@"
 }
@@ -1615,6 +1855,8 @@ smoke() {
 help() {
   cat <<'EOF'
 usage:
+  ./run.sh mcp-private-beta [--ocr auto|doctr|paddle|disabled]
+  ./run.sh mcp-check
   ./run.sh local-fast [--ocr auto|doctr|paddle|disabled]
   ./run.sh local [--ocr auto|doctr|paddle|disabled]
   ./run.sh local-convex [--ocr auto|doctr|paddle|disabled]
@@ -1633,6 +1875,8 @@ usage:
   ./run.sh kill-vite-ports
 
 notes:
+- mcp-private-beta = exact private-beta MCP origin on port 5196 with local Convex, image parser runtime, and the named Cloudflare tunnel.
+- mcp-check = fail-closed validation of canonical private-beta keys; it prints key names/status only, never values.
 - local-fast = recommended fast full-app parser workflow: local parser + local Convex + Vite + autoreload, with export/runtime deps preserved inside the container.
 - tunnel = stable validation mode on the validated image runtime.
 - local = local parser + export-capable image runtime + Vite pointed at http://127.0.0.1:8001.
@@ -1657,6 +1901,8 @@ EOF
 trap 'echo "[run] interrupt -> down"; down >/dev/null 2>&1 || true; exit 130' INT TERM
 
 case "${CMD}" in
+  mcp-private-beta) mcp_private_beta_stack "$@";;
+  mcp-check) mcp_check;;
   local-fast) local_fast_stack "$@";;
   local) local_stack "$@";;
   local-convex) local_convex_stack "$@";;
