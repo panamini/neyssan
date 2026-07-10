@@ -6197,10 +6197,12 @@ describe("MCP OAuth production route adapter", () => {
     const fixtureProjectConfig = resolve(fixtureRoot, ".infisical.json");
     const fixtureBinDir = resolve(fixtureRoot, "bin");
     const fixtureInfisical = resolve(fixtureBinDir, "infisical");
+    const fixtureChmod = resolve(fixtureBinDir, "chmod");
     const fixtureArgsFile = resolve(fixtureRoot, "infisical-args.txt");
     const rawFixtureSecret = "fixture-confidential-client-secret-that-is-never-real";
     const expectedDigest = createHash("sha256").update(rawFixtureSecret).digest("hex");
-    const originalRootEnv = `MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256=${"0".repeat(64)}\nUNRELATED_FIXTURE=value\n`;
+    const previousFixtureDigest = createHash("sha256").update("previous-fixture-secret").digest("hex");
+    const originalRootEnv = `MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256=${previousFixtureDigest}\nUNRELATED_FIXTURE=value\n`;
 
     try {
       mkdirSync(fixtureBinDir, { recursive: true });
@@ -6216,14 +6218,42 @@ describe("MCP OAuth production route adapter", () => {
         fixtureInfisical,
         `#!/usr/bin/env bash
 set -euo pipefail
-[[ "\${INFISICAL_FIXTURE_MODE:-success}" != "fail" ]] || exit 1
+if [[ "\${INFISICAL_FIXTURE_MODE:-success}" == "fail" ]]; then
+  printf '%s\\n' '${rawFixtureSecret}'
+  exit 1
+fi
 printf '%s\\n' "\$@" >"\${INFISICAL_FIXTURE_ARGS_FILE:?}"
 printf '%s\\n' '${rawFixtureSecret}'
 `,
         { mode: 0o700 },
       );
 
-      const failedRetrieval = spawnSync("bash", [fixtureRunScript, "mcp-secret-sync"], {
+      rmSync(fixtureProjectConfig);
+      const missingProjectConfig = spawnSync("bash", ["-x", fixtureRunScript, "mcp-secret-sync"], {
+        cwd: fixtureRoot,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          PATH: `${fixtureBinDir}:${process.env.PATH ?? ""}`,
+        },
+      });
+      const missingProjectConfigOutput = `${missingProjectConfig.stdout}${missingProjectConfig.stderr}`;
+
+      expect(missingProjectConfig.status).not.toBe(0);
+      expect(missingProjectConfigOutput).toContain(".infisical.json is required");
+      expect(missingProjectConfig.stderr).toMatch(/\+ echo .*\.infisical\.json is required/u);
+      expect(missingProjectConfigOutput).not.toContain(rawFixtureSecret);
+      expect(missingProjectConfigOutput).not.toContain(expectedDigest);
+      expect(missingProjectConfigOutput).not.toContain(previousFixtureDigest);
+      expect(readFileSync(fixtureRootEnv, "utf8")).toBe(originalRootEnv);
+
+      writeFileSync(
+        fixtureProjectConfig,
+        `${JSON.stringify({ workspaceId: "fixture", defaultEnvironment: "dev", domain: "https://eu.infisical.com" })}\n`,
+        { mode: 0o600 },
+      );
+
+      const failedRetrieval = spawnSync("bash", ["-x", fixtureRunScript, "mcp-secret-sync"], {
         cwd: fixtureRoot,
         encoding: "utf8",
         env: {
@@ -6236,11 +6266,34 @@ printf '%s\\n' '${rawFixtureSecret}'
 
       expect(failedRetrieval.status).not.toBe(0);
       expect(failedOutput).toContain("secret retrieval failed; value not printed");
+      expect(failedRetrieval.stderr).toMatch(/\+ echo .*secret retrieval failed/u);
       expect(failedOutput).not.toContain(rawFixtureSecret);
       expect(failedOutput).not.toContain(expectedDigest);
+      expect(failedOutput).not.toContain(previousFixtureDigest);
       expect(readFileSync(fixtureRootEnv, "utf8")).toBe(originalRootEnv);
 
-      const result = spawnSync("bash", [fixtureRunScript, "mcp-secret-sync"], {
+      writeFileSync(fixtureChmod, "#!/usr/bin/env bash\nexit 1\n", { mode: 0o700 });
+      const failedPermissions = spawnSync("bash", ["-x", fixtureRunScript, "mcp-secret-sync"], {
+        cwd: fixtureRoot,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          INFISICAL_FIXTURE_ARGS_FILE: fixtureArgsFile,
+          PATH: `${fixtureBinDir}:${process.env.PATH ?? ""}`,
+        },
+      });
+      const failedPermissionsOutput = `${failedPermissions.stdout}${failedPermissions.stderr}`;
+
+      expect(failedPermissions.status).not.toBe(0);
+      expect(failedPermissionsOutput).toContain("temporary env permissions failed; value not printed");
+      expect(failedPermissions.stderr).toMatch(/\+ echo .*temporary env permissions failed/u);
+      expect(failedPermissionsOutput).not.toContain(rawFixtureSecret);
+      expect(failedPermissionsOutput).not.toContain(expectedDigest);
+      expect(failedPermissionsOutput).not.toContain(previousFixtureDigest);
+      expect(readFileSync(fixtureRootEnv, "utf8")).toBe(originalRootEnv);
+      rmSync(fixtureChmod);
+
+      const result = spawnSync("bash", ["-x", fixtureRunScript, "mcp-secret-sync"], {
         cwd: fixtureRoot,
         encoding: "utf8",
         env: {
@@ -6255,8 +6308,10 @@ printf '%s\\n' '${rawFixtureSecret}'
 
       expect(result.status).toBe(0);
       expect(output).toContain("mcp-secret-sync: PASS");
+      expect(result.stderr).toMatch(/\+ echo .*mcp-secret-sync: PASS/u);
       expect(output).not.toContain(rawFixtureSecret);
       expect(output).not.toContain(expectedDigest);
+      expect(output).not.toContain(previousFixtureDigest);
       expect(infisicalArgs).toEqual([
         "secrets",
         "get",

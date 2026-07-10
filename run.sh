@@ -7,6 +7,14 @@ if [[ "${CMD}" == "-ui" ]]; then
   set -- --ui "$@"
   CMD="up"
 fi
+
+MCP_SECRET_SYNC_XTRACE_WAS_ENABLED=0
+if [[ "${CMD}" == "mcp-secret-sync" && "$-" == *x* ]]; then
+  MCP_SECRET_SYNC_XTRACE_WAS_ENABLED=1
+  set +x
+fi
+readonly MCP_SECRET_SYNC_XTRACE_WAS_ENABLED
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${ROOT_DIR}"
 
@@ -226,6 +234,12 @@ mcp_env_file_mode() {
   fi
 }
 
+mcp_secret_sync_restore_xtrace() {
+  if (( MCP_SECRET_SYNC_XTRACE_WAS_ENABLED )); then
+    set -x
+  fi
+}
+
 mcp_secret_sync() {
   local root_env="${ROOT_DIR}/.env.local"
   local raw_secret=""
@@ -233,19 +247,27 @@ mcp_secret_sync() {
   local temp_env=""
   local previous_umask=""
 
+  if [[ "$-" == *x* ]]; then
+    set +x
+  fi
+
   if ! command -v infisical >/dev/null 2>&1; then
+    mcp_secret_sync_restore_xtrace
     echo "[run] mcp-secret-sync: Infisical CLI is required" >&2
     return 1
   fi
   if [[ ! -f "${INFISICAL_MCP_PROJECT_CONFIG_FILE}" ]]; then
+    mcp_secret_sync_restore_xtrace
     echo "[run] mcp-secret-sync: .infisical.json is required" >&2
     return 1
   fi
   if [[ ! -f "${root_env}" ]]; then
+    mcp_secret_sync_restore_xtrace
     echo "[run] mcp-secret-sync: root .env.local is required" >&2
     return 1
   fi
   if [[ "$(mcp_env_file_mode "${root_env}")" != "600" ]]; then
+    mcp_secret_sync_restore_xtrace
     echo "[run] mcp-secret-sync: root .env.local must have mode 600" >&2
     return 1
   fi
@@ -258,26 +280,41 @@ mcp_secret_sync() {
       --plain \
       --silent 2>/dev/null
   )"; then
+    unset raw_secret
+    mcp_secret_sync_restore_xtrace
     echo "[run] mcp-secret-sync: secret retrieval failed; value not printed" >&2
     return 1
   fi
   if [[ ${#raw_secret} -lt 32 || "${raw_secret}" == *$'\n'* || "${raw_secret}" == *$'\r'* ]]; then
     unset raw_secret
+    mcp_secret_sync_restore_xtrace
     echo "[run] mcp-secret-sync: retrieved secret has an invalid shape; value not printed" >&2
     return 1
   fi
 
-  digest="$(hash_string "${raw_secret}")"
+  if ! digest="$(hash_string "${raw_secret}")"; then
+    unset raw_secret digest
+    mcp_secret_sync_restore_xtrace
+    echo "[run] mcp-secret-sync: digest generation failed; value not printed" >&2
+    return 1
+  fi
   unset raw_secret
   if [[ ! "${digest}" =~ ^[0-9a-f]{64}$ ]]; then
     unset digest
+    mcp_secret_sync_restore_xtrace
     echo "[run] mcp-secret-sync: digest generation failed; value not printed" >&2
     return 1
   fi
 
   previous_umask="$(umask)"
   umask 077
-  temp_env="$(mktemp "${root_env}.tmp.XXXXXX")"
+  if ! temp_env="$(mktemp "${root_env}.tmp.XXXXXX")"; then
+    umask "${previous_umask}"
+    unset digest
+    mcp_secret_sync_restore_xtrace
+    echo "[run] mcp-secret-sync: temporary env creation failed; value not printed" >&2
+    return 1
+  fi
   umask "${previous_umask}"
   if ! {
     printf '%s\n' "${digest}"
@@ -302,19 +339,28 @@ mcp_secret_sync() {
       }
     }
   ' >"${temp_env}"; then
-    rm -f "${temp_env}"
+    rm -f "${temp_env}" || true
     unset digest
+    mcp_secret_sync_restore_xtrace
     echo "[run] mcp-secret-sync: root .env.local update failed; value not printed" >&2
     return 1
   fi
-  chmod 600 "${temp_env}"
-  if ! mv -f "${temp_env}" "${root_env}"; then
-    rm -f "${temp_env}"
+  if ! chmod 600 "${temp_env}"; then
+    rm -f "${temp_env}" || true
     unset digest
+    mcp_secret_sync_restore_xtrace
+    echo "[run] mcp-secret-sync: temporary env permissions failed; value not printed" >&2
+    return 1
+  fi
+  if ! mv -f "${temp_env}" "${root_env}"; then
+    rm -f "${temp_env}" || true
+    unset digest
+    mcp_secret_sync_restore_xtrace
     echo "[run] mcp-secret-sync: root .env.local replacement failed; value not printed" >&2
     return 1
   fi
   unset digest
+  mcp_secret_sync_restore_xtrace
   echo "[run] mcp-secret-sync: PASS (digest updated; values not printed)"
 }
 
