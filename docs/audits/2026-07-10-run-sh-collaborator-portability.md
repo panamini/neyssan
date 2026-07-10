@@ -4,11 +4,13 @@ Change Contract: `CC-20260710-runsh-collaborator-portability-v1`
 
 ## Outcome
 
-`./run.sh doctor [local-fast|mcp-private-beta]` performs read-only startup diagnostics before a collaborator launches the stack. It checks the operating environment, required commands, repository dependencies, writable runtime locations, Docker readiness, the parser image, the Convex binding, relevant ports, and the selected target configuration. It prints status and key names only, never configured values.
+`./run.sh doctor [local-fast|mcp-private-beta]` performs read-only startup diagnostics before a collaborator launches the stack. It checks the operating environment, required commands, Node 20+ script execution, repository dependencies, writable runtime locations, Docker readiness, the parser image, the Convex binding, relevant ports, local Convex availability, and the selected target configuration. It prints status and key names only, never configured values.
 
 The command does not source or execute dotenv files, create runtime directories, start or stop services, retrieve Infisical secrets, read `~/.mistral_key`, or modify environment files. Configuration checks parse assignments as data and never evaluate their contents as shell code.
 
-The startup allowlist applies dotenv precedence for configured ports, parser image, and Convex temporary storage. Dynamic shell expressions in those overrides are rejected with the key name only; collaborators must use literal values so preflight and startup cannot diverge.
+The startup allowlist applies dotenv precedence for configured ports, parser image, Convex temporary storage, Convex team/project/deployment bindings, and `LOCAL_CONVEX_URL`. It accepts bare and `export` assignments. Dynamic shell expressions in these values are rejected with the key name only; collaborators must use literal values so preflight and startup cannot diverge.
+
+The diagnostic resolves named local Convex state before checking ports, including state-configured cloud/site ports and an explicit loopback `LOCAL_CONVEX_URL`. It also fails when the user's Convex configuration disables local deployments. These checks use the same resolver and opt-out boundary as startup.
 
 ## Supported environments
 

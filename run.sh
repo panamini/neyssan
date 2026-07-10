@@ -492,6 +492,35 @@ doctor_check_command() {
   fi
 }
 
+doctor_check_node_runtime() {
+  local version=""
+  local major=""
+  local probe=""
+  if ! version="$(node --version 2>/dev/null)"; then
+    doctor_fail "Node version cannot be determined"
+    return 1
+  fi
+  major="${version#v}"
+  major="${major%%.*}"
+  if [[ ! "${major}" =~ ^[0-9]+$ || "${major}" -lt 20 ]]; then
+    doctor_fail "Node 20 or newer is required"
+    return 1
+  fi
+  if ! probe="$(node -e 'process.stdout.write(typeof require === "function" ? "node-e-ok" : "")' 2>/dev/null)" || [[ "${probe}" != "node-e-ok" ]]; then
+    doctor_fail "Node cannot execute startup scripts with node -e"
+    return 1
+  fi
+  if ! probe="$(node - 2>/dev/null <<'NODE'
+process.stdout.write(typeof require === "function" ? "node-stdin-ok" : "");
+NODE
+  )" || [[ "${probe}" != "node-stdin-ok" ]]; then
+    doctor_fail "Node cannot execute doctor scripts from standard input"
+    return 1
+  fi
+  doctor_pass "Node 20+ startup script execution is available"
+  return 0
+}
+
 doctor_check_platform() {
   local kernel=""
   local kernel_release=""
@@ -566,27 +595,8 @@ doctor_check_executable() {
 doctor_load_runtime_overrides() {
   local key=""
   local value=""
-  while IFS=$'\t' read -r key value; do
-    case "${key}" in
-      VITE_PORT) VITE_PORT="${value}" ;;
-      LOCAL_CONVEX_CLOUD_PORT) LOCAL_CONVEX_CLOUD_PORT="${value}" ;;
-      LOCAL_CONVEX_SITE_PORT) LOCAL_CONVEX_SITE_PORT="${value}" ;;
-      MCP_PRIVATE_BETA_VITE_PORT) MCP_PRIVATE_BETA_VITE_PORT="${value}" ;;
-      IMAGE_NAME) IMAGE_NAME="${value}" ;;
-      CONVEX_TMPDIR) CONVEX_TMPDIR="${value}" ;;
-      EMPTY)
-        case "${value}" in
-          VITE_PORT) VITE_PORT="5173" ;;
-          LOCAL_CONVEX_CLOUD_PORT) LOCAL_CONVEX_CLOUD_PORT="3210" ;;
-          LOCAL_CONVEX_SITE_PORT) LOCAL_CONVEX_SITE_PORT="3211" ;;
-          MCP_PRIVATE_BETA_VITE_PORT) MCP_PRIVATE_BETA_VITE_PORT="5196" ;;
-          IMAGE_NAME) IMAGE_NAME="cv-parser-service:latest" ;;
-          CONVEX_TMPDIR) CONVEX_TMPDIR="${ROOT_DIR}/tmp/convex-tmp" ;;
-        esac
-        ;;
-      ERROR) doctor_fail "dotenv override for ${value} is not a supported literal" ;;
-    esac
-  done < <(node - "${ROOT_DIR}" <<'NODE'
+  local parsed=""
+  if ! parsed="$(node - "${ROOT_DIR}" <<'NODE'
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -598,6 +608,14 @@ const allowed = [
   "MCP_PRIVATE_BETA_VITE_PORT",
   "IMAGE_NAME",
   "CONVEX_TMPDIR",
+  "CONVEX_TEAM",
+  "CONVEX_TEAM_SLUG",
+  "CONVEX_PROJECT",
+  "CONVEX_PROJECT_SLUG",
+  "CONVEX_LOCAL_DEPLOYMENT_NAME",
+  "CONVEX_LOCAL_DEPLOYMENT",
+  "CONVEX_DEPLOYMENT",
+  "LOCAL_CONVEX_URL",
 ];
 const resolved = new Map(allowed.map((key) => [key, process.env[key] || ""]));
 
@@ -679,7 +697,48 @@ for (const [key, value] of resolved) {
   process.stdout.write(`${key}\t${value}\n`);
 }
 NODE
-  )
+  )"; then
+    doctor_fail "runtime dotenv parser failed"
+    return 1
+  fi
+  while IFS=$'\t' read -r key value; do
+    case "${key}" in
+      VITE_PORT) VITE_PORT="${value}" ;;
+      LOCAL_CONVEX_CLOUD_PORT) LOCAL_CONVEX_CLOUD_PORT="${value}" ;;
+      LOCAL_CONVEX_SITE_PORT) LOCAL_CONVEX_SITE_PORT="${value}" ;;
+      MCP_PRIVATE_BETA_VITE_PORT) MCP_PRIVATE_BETA_VITE_PORT="${value}" ;;
+      IMAGE_NAME) IMAGE_NAME="${value}" ;;
+      CONVEX_TMPDIR) CONVEX_TMPDIR="${value}" ;;
+      CONVEX_TEAM) CONVEX_TEAM="${value}" ;;
+      CONVEX_TEAM_SLUG) CONVEX_TEAM_SLUG="${value}" ;;
+      CONVEX_PROJECT) CONVEX_PROJECT="${value}" ;;
+      CONVEX_PROJECT_SLUG) CONVEX_PROJECT_SLUG="${value}" ;;
+      CONVEX_LOCAL_DEPLOYMENT_NAME) CONVEX_LOCAL_DEPLOYMENT_NAME="${value}" ;;
+      CONVEX_LOCAL_DEPLOYMENT) CONVEX_LOCAL_DEPLOYMENT="${value}" ;;
+      CONVEX_DEPLOYMENT) CONVEX_DEPLOYMENT="${value}" ;;
+      LOCAL_CONVEX_URL) LOCAL_CONVEX_URL="${value}" ;;
+      EMPTY)
+        case "${value}" in
+          VITE_PORT) VITE_PORT="5173" ;;
+          LOCAL_CONVEX_CLOUD_PORT) LOCAL_CONVEX_CLOUD_PORT="3210" ;;
+          LOCAL_CONVEX_SITE_PORT) LOCAL_CONVEX_SITE_PORT="3211" ;;
+          MCP_PRIVATE_BETA_VITE_PORT) MCP_PRIVATE_BETA_VITE_PORT="5196" ;;
+          IMAGE_NAME) IMAGE_NAME="cv-parser-service:latest" ;;
+          CONVEX_TMPDIR) CONVEX_TMPDIR="${ROOT_DIR}/tmp/convex-tmp" ;;
+          CONVEX_TEAM) CONVEX_TEAM="" ;;
+          CONVEX_TEAM_SLUG) CONVEX_TEAM_SLUG="" ;;
+          CONVEX_PROJECT) CONVEX_PROJECT="" ;;
+          CONVEX_PROJECT_SLUG) CONVEX_PROJECT_SLUG="" ;;
+          CONVEX_LOCAL_DEPLOYMENT_NAME) CONVEX_LOCAL_DEPLOYMENT_NAME="" ;;
+          CONVEX_LOCAL_DEPLOYMENT) CONVEX_LOCAL_DEPLOYMENT="" ;;
+          CONVEX_DEPLOYMENT) CONVEX_DEPLOYMENT="" ;;
+          LOCAL_CONVEX_URL) LOCAL_CONVEX_URL="" ;;
+        esac
+        ;;
+      ERROR) doctor_fail "dotenv override for ${value} is not a supported literal" ;;
+    esac
+  done <<< "${parsed}"
+  return 0
 }
 
 doctor_check_runtime_path() {
@@ -728,6 +787,26 @@ doctor_check_port() {
   fi
 }
 
+doctor_check_local_convex_url_port() {
+  local url="${1:-}"
+  local cloud_port="${2:-}"
+  local url_port=""
+  [[ -n "${url}" ]] || return 0
+  if [[ "${url}" =~ ^http://(127\.0\.0\.1|localhost):([0-9]+)$ ]]; then
+    url_port="${BASH_REMATCH[2]}"
+    if [[ "${url_port}" == 0 || "${url_port}" == 0* || "${#url_port}" -gt 5 ]] \
+      || (( url_port > 65535 )); then
+      doctor_fail "LOCAL_CONVEX_URL port must be between 1 and 65535"
+      return 0
+    fi
+    if [[ "${url_port}" != "${cloud_port}" ]]; then
+      doctor_check_port "${url_port}" "LOCAL_CONVEX_URL port"
+    fi
+  else
+    doctor_fail "LOCAL_CONVEX_URL must be a loopback HTTP URL with an explicit port"
+  fi
+}
+
 doctor_check_docker() {
   if ! command -v docker >/dev/null 2>&1; then
     return 0
@@ -747,8 +826,8 @@ doctor_check_docker() {
 }
 
 doctor_check_mcp_configuration() {
-  if ! command -v node >/dev/null 2>&1; then
-    doctor_fail "private-beta MCP configuration cannot be validated without node"
+  if [[ "${DOCTOR_NODE_READY:-0}" != "1" ]]; then
+    doctor_fail "private-beta MCP configuration cannot be validated without a working Node 20+ runtime"
     return 0
   fi
 
@@ -962,6 +1041,9 @@ NODE
 
 doctor() {
   local target="${1:-local-fast}"
+  local resolved_convex_cloud_port=""
+  local resolved_convex_site_port=""
+  local resolved_convex_url=""
   if [[ "${target}" != "local-fast" && "${target}" != "mcp-private-beta" ]]; then
     echo "usage: ./run.sh doctor [local-fast|mcp-private-beta]" >&2
     return 2
@@ -969,6 +1051,7 @@ doctor() {
 
   DOCTOR_FAILURES=0
   DOCTOR_WARNINGS=0
+  DOCTOR_NODE_READY=0
 
   echo "[run] doctor: checking ${target} (values are not printed)"
   doctor_check_platform
@@ -977,9 +1060,12 @@ doctor() {
   doctor_check_command npm
   doctor_check_command curl
   doctor_check_command lsof
-  if command -v node >/dev/null 2>&1; then
-    doctor_load_runtime_overrides
+  if command -v node >/dev/null 2>&1 && doctor_check_node_runtime; then
+    DOCTOR_NODE_READY=1
+    doctor_load_runtime_overrides || true
   fi
+  resolved_convex_cloud_port="${LOCAL_CONVEX_CLOUD_PORT}"
+  resolved_convex_site_port="${LOCAL_CONVEX_SITE_PORT}"
   doctor_check_file "${ROOT_DIR}/cv_parser_service/Dockerfile" "parser Dockerfile"
   doctor_check_file "${ROOT_DIR}/my-app/package.json" "frontend package manifest"
   doctor_check_file "${ROOT_DIR}/my-app/node_modules/vite/bin/vite.js" "Vite dependency"
@@ -990,13 +1076,24 @@ doctor() {
 
   if resolve_convex_project_binding >/dev/null 2>&1; then
     doctor_pass "Convex team/project binding is available"
+    resolve_local_convex_runtime "${CONVEX_DEPLOYMENT_NAME_RESULT:-}"
+    resolved_convex_cloud_port="${LOCAL_CONVEX_CLOUD_PORT_RESULT:-${LOCAL_CONVEX_CLOUD_PORT}}"
+    resolved_convex_site_port="${LOCAL_CONVEX_SITE_PORT_RESULT:-${LOCAL_CONVEX_SITE_PORT}}"
+    resolved_convex_url="${LOCAL_CONVEX_URL_RESULT:-}"
   else
     doctor_fail "Convex team/project binding is missing; configure CONVEX_TEAM and CONVEX_PROJECT"
   fi
 
+  if local_convex_deployments_disabled; then
+    doctor_fail "local Convex deployments are disabled; re-enable them before starting this target"
+  else
+    doctor_pass "local Convex deployments are enabled"
+  fi
+
   doctor_check_port 8001 "parser port"
-  doctor_check_port "${LOCAL_CONVEX_CLOUD_PORT}" "LOCAL_CONVEX_CLOUD_PORT"
-  doctor_check_port "${LOCAL_CONVEX_SITE_PORT}" "LOCAL_CONVEX_SITE_PORT"
+  doctor_check_port "${resolved_convex_cloud_port}" "resolved Convex cloud port"
+  doctor_check_port "${resolved_convex_site_port}" "resolved Convex site port"
+  doctor_check_local_convex_url_port "${resolved_convex_url}" "${resolved_convex_cloud_port}"
   if [[ "${target}" == "mcp-private-beta" ]]; then
     doctor_check_port "${MCP_PRIVATE_BETA_VITE_PORT}" "MCP_PRIVATE_BETA_VITE_PORT"
     doctor_check_mcp_configuration
@@ -1385,7 +1482,10 @@ json_number_field() {
   local file="${1:-}"
   local field="${2:-}"
   [[ -n "${file}" && -n "${field}" && -f "${file}" ]] || return 1
-  grep -Eo "\"${field}\":[0-9]+" "${file}" | head -n1 | cut -d: -f2
+  grep -Eo "\"${field}\"[[:space:]]*:[[:space:]]*[0-9]+" "${file}" \
+    | head -n1 \
+    | tr -d '[:space:]' \
+    | cut -d: -f2
 }
 
 local_convex_deployments_disabled() {

@@ -34,7 +34,16 @@ function findHostTool(name) {
 }
 
 function linkHostTools(binDirectory) {
-  for (const name of ["dirname", "grep", "stat", "tail", "tr", "xargs"]) {
+  for (const name of [
+    "cut",
+    "dirname",
+    "grep",
+    "head",
+    "stat",
+    "tail",
+    "tr",
+    "xargs",
+  ]) {
     symlinkSync(findHostTool(name), join(binDirectory, name));
   }
 }
@@ -86,9 +95,15 @@ esac
     join(binDirectory, "node"),
     `#!/bin/sh
 case "\${1:-}" in
-  --version|-v) printf '%s\\n' 'v20.0.0'; exit 0 ;;
-  *) exit 1 ;;
+  --version|-v) printf '%s\\n' "\${FAKE_NODE_VERSION:-v20.0.0}"; exit 0 ;;
+  -e|-)
+    if test "\${FAKE_NODE_EXEC_BROKEN:-0}" = 1; then exit 1; fi
+    if test "\${FAKE_NODE_NOOP:-0}" = 1; then exit 0; fi
+    if test "\${FAKE_NODE_STDIN_BROKEN:-0}" = 1 && test "\${1:-}" = - && test "\$#" -eq 1; then exit 1; fi
+    if test "\${FAKE_NODE_PARSER_BROKEN:-0}" = 1 && test "\${1:-}" = - && test "\$#" -gt 1; then exit 1; fi
+    ;;
 esac
+exec ${JSON.stringify(process.execPath)} "\$@"
 `,
   );
   for (const name of ["npm", "npx"]) {
@@ -333,6 +348,108 @@ test("doctor local-fast succeeds with fake tools and a minimal Convex binding", 
   assert.match(result.output, /(pass|ready|ok)/i);
 });
 
+test("doctor accepts exported Convex bindings without relying on xargs echo", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(
+    fixture.envFile,
+    "export CONVEX_TEAM=doctor-export-team\nexport CONVEX_PROJECT=doctor-export-project\n",
+    { mode: 0o600 },
+  );
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /Convex team\/project binding is available/i);
+  assert.doesNotMatch(result.output, /doctor-export-(team|project)/u);
+});
+
+test("doctor rejects disabled local Convex deployments", (t) => {
+  const fixture = createFixture(t);
+  const convexDirectory = join(fixture.root, "home", ".convex");
+  mkdirSync(convexDirectory, { recursive: true });
+  writeFileSync(
+    join(convexDirectory, "config.json"),
+    '{"optOutOfLocalDevDeploymentsUntilBetaOver": true}\n',
+  );
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assertFailure(result);
+  assert.match(result.output, /local Convex deployments are disabled/i);
+});
+
+test("doctor checks ports resolved from named local Convex state", (t) => {
+  const fixture = createFixture(t);
+  const deploymentName = "doctor-named-deployment";
+  const stateDirectory = join(
+    fixture.root,
+    "home",
+    ".convex",
+    "convex-backend-state",
+    deploymentName,
+  );
+  mkdirSync(stateDirectory, { recursive: true });
+  writeFileSync(
+    join(stateDirectory, "config.json"),
+    '{\n  "ports": {\n    "cloud": 7302,\n    "site": 7303\n  }\n}\n',
+  );
+  writeFileSync(
+    fixture.envFile,
+    `CONVEX_TEAM=doctor-fixture-team
+CONVEX_PROJECT=doctor-fixture-project
+CONVEX_DEPLOYMENT=local:${deploymentName}
+`,
+    { mode: 0o600 },
+  );
+  const lsofLogPath = join(fixture.root, "lsof.log");
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_LSOF_LOG: lsofLogPath,
+  });
+
+  assert.equal(result.status, 0, result.output);
+  const lsofLog = readFileSync(lsofLogPath, "utf8");
+  assert.match(lsofLog, /iTCP:7302/u);
+  assert.match(lsofLog, /iTCP:7303/u);
+  assert.doesNotMatch(lsofLog, /iTCP:3210|iTCP:3211/u);
+  assert.doesNotMatch(result.output, /7302|7303/u);
+});
+
+test("doctor checks a configured LOCAL_CONVEX_URL port", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(
+    fixture.envFile,
+    "CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nLOCAL_CONVEX_URL=http://127.0.0.1:7402\n",
+    { mode: 0o600 },
+  );
+  const lsofLogPath = join(fixture.root, "lsof.log");
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_LSOF_LOG: lsofLogPath,
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(readFileSync(lsofLogPath, "utf8"), /iTCP:7402/u);
+  assert.doesNotMatch(result.output, /7402/u);
+});
+
+for (const invalidPort of ["0", "65536"]) {
+  test(`doctor rejects an out-of-range LOCAL_CONVEX_URL port (${invalidPort})`, (t) => {
+    const fixture = createFixture(t);
+    writeFileSync(
+      fixture.envFile,
+      `CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nLOCAL_CONVEX_URL=http://127.0.0.1:${invalidPort}\n`,
+      { mode: 0o600 },
+    );
+
+    const result = runDoctor(fixture, ["local-fast"]);
+
+    assertFailure(result);
+    assert.match(result.output, /LOCAL_CONVEX_URL port must be between 1 and 65535/i);
+    assert.doesNotMatch(result.output, /127\.0\.0\.1/u);
+  });
+}
+
 for (const architecture of ["x86_64", "amd64", "arm64", "aarch64"]) {
   test(`doctor accepts the supported ${architecture} architecture`, (t) => {
     const fixture = createFixture(t);
@@ -452,6 +569,62 @@ test("doctor reports a missing Docker CLI by actionable name only", (t) => {
   assert.match(result.output, /(install|missing|required)/i);
   assert.doesNotMatch(result.output, new RegExp(escapeRegExp(fixture.root)));
   assert.doesNotMatch(result.output, /PATH=/);
+});
+
+test("doctor rejects Node versions older than the CI runtime", (t) => {
+  const fixture = createFixture(t);
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_NODE_VERSION: "v18.20.0",
+  });
+
+  assertFailure(result);
+  assert.match(result.output, /Node 20 or newer is required/i);
+  assert.doesNotMatch(result.output, /18\.20/u);
+});
+
+test("doctor rejects a Node binary that cannot execute node -e", (t) => {
+  const fixture = createFixture(t);
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_NODE_EXEC_BROKEN: "1",
+  });
+
+  assertFailure(result);
+  assert.match(result.output, /cannot execute startup scripts with node -e/i);
+});
+
+test("doctor rejects a Node wrapper that returns success without executing scripts", (t) => {
+  const fixture = createFixture(t);
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_NODE_NOOP: "1",
+  });
+
+  assertFailure(result);
+  assert.match(result.output, /cannot execute startup scripts with node -e/i);
+});
+
+test("doctor rejects a Node binary that cannot execute scripts from stdin", (t) => {
+  const fixture = createFixture(t);
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_NODE_STDIN_BROKEN: "1",
+  });
+
+  assertFailure(result);
+  assert.match(result.output, /cannot execute doctor scripts from standard input/i);
+});
+
+test("doctor fails when the runtime dotenv parser process fails", (t) => {
+  const fixture = createFixture(t);
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_NODE_PARSER_BROKEN: "1",
+  });
+
+  assertFailure(result);
+  assert.match(result.output, /runtime dotenv parser failed/i);
 });
 
 test("doctor fails when the Docker daemon is unavailable", (t) => {
