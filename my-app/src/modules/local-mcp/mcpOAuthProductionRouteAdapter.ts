@@ -8,7 +8,6 @@ import {
 } from "./mcpOAuthProductionRoutePreflightBoundary";
 import {
   projectMcpOAuthPreAuthAuthorizationRequest,
-  redirectUriMatchesPathPrefixWildcard,
   type McpOAuthAuthorizationRequestBoundaryHandoffV1,
   type McpOAuthAuthorizationTrustedOwnerV1,
   type McpOAuthAuthorizationRequestBoundaryConfigV1,
@@ -1267,7 +1266,9 @@ function authorizationRequestConfigMatchesGuard(
     guard.expectedResource.length > 0 &&
     config.canonicalResource === guard.expectedResource &&
     config.clientIdPolicy.mode === "predefined_allowlist" &&
-    isSameStringSet(config.clientIdPolicy.allowedClientIds, guard.allowedClientIds)
+    isSameStringSet(config.clientIdPolicy.allowedClientIds, guard.allowedClientIds) &&
+    config.allowedRedirectUris.length > 0 &&
+    config.allowedRedirectUris.every((redirectUri) => !redirectUri.includes("*"))
   );
 }
 
@@ -2219,7 +2220,7 @@ function readTokenRequest(
   if (readHeaderValueByName(request.headers, "authorization") !== undefined) {
     return Object.freeze({ ok: false, reason: "invalid_request", status: 400 });
   }
-  if (!hasExactlyTokenRequestKeys(params, clientSecretPost !== undefined)) {
+  if (!clientSecretPost || !hasExactlyTokenRequestKeys(params, true)) {
     return Object.freeze({ ok: false, reason: "invalid_request", status: 400 });
   }
   if (params.get("grant_type") !== "authorization_code") {
@@ -2231,16 +2232,14 @@ function readTokenRequest(
   const redirectUri = readTokenRedirectUri(params.get("redirect_uri"));
   const resource = readTokenResource(resourceValues[0]);
   const codeVerifier = readCodeVerifier(params.get("code_verifier"));
-  const clientSecret = clientSecretPost
-    ? readBoundedTokenParameter(params.get("client_secret"), 1_024)
-    : undefined;
+  const clientSecret = readBoundedTokenParameter(params.get("client_secret"), 1_024);
   if (!resource || resource !== expectedResource) {
     return Object.freeze({ ok: false, reason: "invalid_target", status: 400 });
   }
   if (!code || !AUTHORIZATION_CODE_PATTERN.test(code) || !clientId || !redirectUri || !codeVerifier) {
     return Object.freeze({ ok: false, reason: "invalid_request", status: 400 });
   }
-  if (clientSecretPost && !clientSecretPostMatches(clientSecretPost, clientId, clientSecret)) {
+  if (!clientSecretPostMatches(clientSecretPost, clientId, clientSecret)) {
     return Object.freeze({ ok: false, reason: "invalid_request", status: 400 });
   }
 
@@ -2929,9 +2928,7 @@ function isAllowedRedirectUriForConfig(
   redirectUri: string,
   config: McpOAuthAuthorizationRequestBoundaryConfigV1,
 ): boolean {
-  return config.allowedRedirectUris.some((allowedRedirectUri) =>
-    redirectUri === allowedRedirectUri || redirectUriMatchesPathPrefixWildcard(redirectUri, allowedRedirectUri),
-  );
+  return config.allowedRedirectUris.includes(redirectUri);
 }
 
 function isPendingProviderValidation(

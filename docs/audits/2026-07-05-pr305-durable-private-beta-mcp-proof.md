@@ -40,9 +40,9 @@ Wildcard redirect URIs are not allowed.
 
 Local synthetic Vite proof verifies the confidential-client behavior without using real secrets:
 
-1. With no `MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256` env key, authorization-server metadata advertises `token_endpoint_auth_methods_supported: ["none"]`.
+1. With no `MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256` env key, authorization-server metadata still advertises exactly `token_endpoint_auth_methods_supported: ["client_secret_post"]`, while token exchange fails closed with `invalid_request` before quota, Convex, or token issuance.
 2. With a valid configured digest and matching private-beta client allowlist, metadata advertises exactly `token_endpoint_auth_methods_supported: ["client_secret_post"]`; `client_secret_basic` remains unsupported.
-3. With a malformed or empty configured digest, metadata does not downgrade to `["none"]`; the token endpoint requires `client_secret_post` and fails closed with `invalid_request` before quota, Convex, or token issuance.
+3. With a malformed or empty configured digest, metadata does not downgrade to `["none"]`; token exchange fails closed at the same boundary.
 4. The token endpoint keeps exact `client_id`, `redirect_uri`, `resource`, PKCE, authorization-code validation, and no-refresh-token behavior.
 5. Missing or wrong `client_secret` returns a generic `invalid_request` and does not echo secrets, codes, states, tokens, or configured digests.
 
@@ -52,15 +52,16 @@ Focused Vitest coverage lives in:
 
 ## Live ChatGPT proof
 
-The private connector `twoweeks-mcp-pr305-rotated-0710` was proven connected on 2026-07-10 through the durable endpoint and named Cloudflare tunnel.
+The fresh private connector `twoweeks-mcp-pr305-final-0710` was proven connected on 2026-07-10 through the durable endpoint and named Cloudflare tunnel.
 
 Observed proof ladder:
 
 - authorization-server metadata returned `200` and advertised `client_secret_post`;
-- ChatGPT completed confidential OAuth and `POST /oauth/token` returned `200`;
+- a prior sanitized live diagnostic directly observed ChatGPT complete confidential OAuth and `POST /oauth/token` return `200`;
+- the fresh final connector reached the connected state, which behaviorally requires a successful token exchange, although its backend token request was not captured directly in the browser trace;
 - MCP `initialize` returned `200` and `notifications/initialized` returned `202`;
 - `tools/list` returned `200` with the read-only `search` and `fetch` tools;
-- one safe read-only `tools/call` using `search` returned `200` and ChatGPT rendered four safe catalog results.
+- one safe read-only `tools/call` using `search` completed successfully in ChatGPT without a connector or reconnection error.
 
 The first `tools/call` attempt returned `400`; ChatGPT reinitialized the MCP session and the retry returned `200`. This remains a residual behavior to monitor, not a failed proof.
 
@@ -93,6 +94,8 @@ The durable local contract is:
 - root `.env.local`, ignored by Git and mode `600`, owns server-only MCP, Convex admin, and tunnel values;
 - `my-app/.env.local` owns client-facing `VITE_*` values only;
 - `./run.sh mcp-check` validates canonical keys and formats without printing values;
+- `./run.sh mcp-check` also proves every server key is defined in the root `.env.local` and rejects server OAuth keys in root `.env`, `my-app/.env`, or `my-app/.env.local`;
+- for the signed-in browser return, `run.sh` derives the Clerk publishable browser key in memory from the exact Clerk issuer using Clerk's documented key format; it neither prints nor persists the derived value;
 - `./run.sh mcp-private-beta` starts the exact local-Convex private-beta origin and named tunnel on port `5196`;
 - Cloudflare receives the existing named-tunnel credentials through its mode-`400` file mounted read-only, not a command-line token;
 - `.dockerignore` excludes all dotenv files from the Docker build context.
@@ -105,7 +108,7 @@ Do not bake the raw secret or its digest into a Docker image.
 
 ## Rollback
 
-Runtime rollback is to remove or unset `MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256` and restart the Vite/MCP process, which returns metadata to the public-client `["none"]` behavior.
+Emergency runtime shutdown is to remove or unset `MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256` and restart the Vite/MCP process. Metadata remains confidential-client `client_secret_post`, but token exchange fails closed; it never downgrades to public-client `none`.
 
 Code rollback requires reverting the PR305 runtime hunks in:
 

@@ -919,9 +919,9 @@ function buildProductionMcpOAuthRouteDependencies(
 
 function readProductionMcpOAuthClientSecretPostPolicy(
   env: Readonly<Record<string, string | undefined>>,
-): McpOAuthProductionClientSecretPostPolicyV1 | undefined {
+): McpOAuthProductionClientSecretPostPolicyV1 {
   const configuredDigest = env[MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256_VAR];
-  if (configuredDigest === undefined) return undefined;
+  if (configuredDigest === undefined) return INVALID_CLIENT_SECRET_POST_POLICY;
   const digest = configuredDigest.trim().toLowerCase();
   const allowedClientIds = readCommaSeparatedEnv(env[MCP_OAUTH_PRODUCTION_CLIENT_IDS_VAR]);
   const privateBetaClientIds = readCommaSeparatedEnv(env[MCP_PRODUCTION_PRIVATE_BETA_CLIENT_IDS_VAR]);
@@ -1509,7 +1509,6 @@ function sendProductionOAuthAuthorizationServerMetadata(
 ): void {
   const metadata = productionOAuthAuthorizationServerMetadata(
     dependencies.authorizationRequestConfig?.authorizationPageOrigin,
-    dependencies.clientSecretPost ? ["client_secret_post"] : ["none"],
   );
   if (!metadata) {
     sendInvalidLocalMcpDevRequest(res);
@@ -1535,7 +1534,6 @@ function isHeadRequest(req: IncomingMessage): boolean {
 
 function productionOAuthAuthorizationServerMetadata(
   authorizationPageOrigin: string | undefined,
-  tokenEndpointAuthMethodsSupported: readonly ["none"] | readonly ["client_secret_post"],
 ): unknown | undefined {
   const parsed = parseProductionOAuthHttpsOrigin(authorizationPageOrigin);
   if (!parsed) return undefined;
@@ -1547,7 +1545,7 @@ function productionOAuthAuthorizationServerMetadata(
     grant_types_supported: ["authorization_code"],
     code_challenge_methods_supported: ["S256"],
     authorization_response_iss_parameter_supported: true,
-    token_endpoint_auth_methods_supported: [...tokenEndpointAuthMethodsSupported],
+    token_endpoint_auth_methods_supported: ["client_secret_post"],
     scopes_supported: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
   });
 }
@@ -1731,12 +1729,12 @@ function readCommaSeparatedEnv(value: string | undefined): readonly string[] {
 export function normalizeMcpOAuthProductionRedirectUris(value: string | undefined): readonly string[] {
   const rawValues = readCommaSeparatedEnv(value);
   const normalizedValues = rawValues.map(readCanonicalProductionRedirectUri);
-  if (normalizedValues.some((item) => item === undefined)) return rawValues;
+  if (normalizedValues.some((item) => item === undefined)) return Object.freeze([]);
   return Object.freeze([...new Set(normalizedValues.filter((item): item is string => item !== undefined))]);
 }
 
 function readCanonicalProductionRedirectUri(value: string): string | undefined {
-  if (containsControlCharacters(value) || hasMalformedPercentEncoding(value)) return undefined;
+  if (value.includes("*") || containsControlCharacters(value) || hasMalformedPercentEncoding(value)) return undefined;
   let parsed: URL;
   try {
     parsed = new URL(value);

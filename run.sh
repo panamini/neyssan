@@ -166,6 +166,52 @@ mcp_check_required_secret() {
   fi
 }
 
+mcp_check_root_env_key() {
+  local file="${1:?env file required}"
+  local name="${2:?env name required}"
+  if ! grep -Eq "^[[:space:]]*(export[[:space:]]+)?${name}=" "${file}"; then
+    echo "[run] mcp-check: ${name} must be defined in root .env.local" >&2
+    return 1
+  fi
+}
+
+mcp_derive_clerk_publishable_key() {
+  CLERK_JWT_ISSUER_DOMAIN="${CLERK_JWT_ISSUER_DOMAIN:-}" node -e '
+const rawIssuer = process.env.CLERK_JWT_ISSUER_DOMAIN ?? "";
+let issuer;
+try {
+  issuer = new URL(rawIssuer);
+} catch {
+  process.exit(1);
+}
+if (
+  issuer.protocol !== "https:" ||
+  issuer.username ||
+  issuer.password ||
+  issuer.pathname !== "/" ||
+  issuer.search ||
+  issuer.hash
+) {
+  process.exit(1);
+}
+const prefix = issuer.hostname.endsWith(".clerk.accounts.dev") ? "pk_test_" : "pk_live_";
+process.stdout.write(`${prefix}${Buffer.from(`${issuer.hostname}$`, "utf8").toString("base64")}`);
+'
+}
+
+mcp_resolve_clerk_publishable_key() {
+  local derived=""
+  if ! derived="$(mcp_derive_clerk_publishable_key)" || [[ -z "${derived}" ]]; then
+    echo "[run] mcp-check: cannot derive the Clerk publishable key from CLERK_JWT_ISSUER_DOMAIN" >&2
+    return 1
+  fi
+  if [[ -n "${VITE_CLERK_PUBLISHABLE_KEY:-}" && "${VITE_CLERK_PUBLISHABLE_KEY}" != "${derived}" ]]; then
+    echo "[run] mcp-check: configured Clerk publishable key does not match CLERK_JWT_ISSUER_DOMAIN" >&2
+    return 1
+  fi
+  export VITE_CLERK_PUBLISHABLE_KEY="${derived}"
+}
+
 mcp_env_file_mode() {
   local file="${1:?file required}"
   if stat -f '%Lp' "${file}" >/dev/null 2>&1; then
@@ -179,6 +225,27 @@ mcp_check() {
   local failures=0
   local root_env="${ROOT_DIR}/.env.local"
   local app_env="${ROOT_DIR}/my-app/.env.local"
+  local app_base_env="${ROOT_DIR}/my-app/.env"
+  local root_base_env="${ROOT_DIR}/.env"
+  local key=""
+  local canonical_server_keys=(
+    MCP_OAUTH_PRODUCTION_RUNTIME
+    MCP_OAUTH_PRODUCTION_APPROVED
+    MCP_OAUTH_PRODUCTION_ROUTE_WIRING
+    MCP_OAUTH_PRODUCTION_CLIENT_IDS
+    MCP_OAUTH_PRODUCTION_PRIVATE_BETA_ENABLED
+    MCP_OAUTH_PRODUCTION_PRIVATE_BETA_CLIENT_IDS
+    MCP_OAUTH_PRODUCTION_PRIVATE_BETA_RESOURCES
+    MCP_OAUTH_PRODUCTION_RESOURCE
+    MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN
+    MCP_OAUTH_PRODUCTION_REDIRECT_URIS
+    MCP_OAUTH_PRODUCTION_ISSUER
+    MCP_OAUTH_PRODUCTION_PROVIDER_ENVIRONMENT
+    MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256
+    CLERK_JWT_ISSUER_DOMAIN
+    CONVEX_URL
+    CONVEX_AUTH_TOKEN
+  )
 
   if [[ ! -f "${root_env}" ]]; then
     echo "[run] mcp-check: root .env.local is required" >&2
@@ -186,6 +253,12 @@ mcp_check() {
   elif [[ "$(mcp_env_file_mode "${root_env}")" != "600" ]]; then
     echo "[run] mcp-check: root .env.local must have mode 600" >&2
     failures=1
+  fi
+
+  if [[ -f "${root_env}" ]]; then
+    for key in "${canonical_server_keys[@]}"; do
+      mcp_check_root_env_key "${root_env}" "${key}" || failures=1
+    done
   fi
 
   mcp_check_required_value MCP_OAUTH_PRODUCTION_RUNTIME "1" || failures=1
@@ -209,8 +282,8 @@ mcp_check() {
     echo "[run] mcp-check: MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256 must be lowercase SHA-256 hex" >&2
     failures=1
   fi
-  if [[ -f "${app_env}" ]] && grep -Eq '^[[:space:]]*MCP_OAUTH_PRODUCTION_' "${app_env}"; then
-    echo "[run] mcp-check: move server-only MCP_OAUTH_PRODUCTION_* keys from my-app/.env.local to root .env.local" >&2
+  if grep -Eq '^[[:space:]]*(export[[:space:]]+)?MCP_OAUTH_PRODUCTION_' "${root_base_env}" "${app_base_env}" "${app_env}" 2>/dev/null; then
+    echo "[run] mcp-check: server-only MCP_OAUTH_PRODUCTION_* keys are allowed only in root .env.local" >&2
     failures=1
   fi
   if [[ ! -f "${MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE}" ]]; then
@@ -228,6 +301,7 @@ mcp_check() {
     echo "[run] mcp-check: legacy MCP_PRODUCTION_PRIVATE_BETA_* aliases are forbidden" >&2
     failures=1
   fi
+  mcp_resolve_clerk_publishable_key || failures=1
 
   if [[ "${failures}" -ne 0 ]]; then
     echo "[run] mcp-check: FAIL (values were not printed)" >&2
