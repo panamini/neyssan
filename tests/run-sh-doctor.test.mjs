@@ -352,6 +352,53 @@ test("doctor accepts a quoted multi-line runtime override", (t) => {
   assert.doesNotMatch(result.output, /fixture-convex-do-not-print|multiline-do-not-print/u);
 });
 
+test("doctor treats a leading hash in an assignment value as literal data", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(
+    fixture.envFile,
+    "CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nVITE_PORT=#6201\n",
+    { mode: 0o600 },
+  );
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assertFailure(result);
+  assert.match(result.output, /VITE_PORT is not a supported literal/i);
+  assert.doesNotMatch(result.output, /#6201/u);
+});
+
+test("doctor replays earlier dotenv assignments for later simple expansions", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(join(fixture.root, ".env"), "doctor_port=6205\n");
+  writeFileSync(
+    fixture.envFile,
+    "CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nVITE_PORT=$doctor_port\n",
+    { mode: 0o600 },
+  );
+  const lsofLogPath = join(fixture.root, "lsof.log");
+
+  const result = runDoctor(fixture, ["local-fast"], { FAKE_LSOF_LOG: lsofLogPath });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(readFileSync(lsofLogPath, "utf8"), /iTCP:6205/u);
+  assert.doesNotMatch(result.output, /doctor_port|6205/u);
+});
+
+test("doctor accepts safe concatenation of quoted and unquoted assignment segments", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(join(fixture.root, ".env"), 'VITE_PORT="$DOCTOR_PORT_PREFIX"06\n');
+  const lsofLogPath = join(fixture.root, "lsof.log");
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    DOCTOR_PORT_PREFIX: "62",
+    FAKE_LSOF_LOG: lsofLogPath,
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(readFileSync(lsofLogPath, "utf8"), /iTCP:6206/u);
+  assert.doesNotMatch(result.output, /DOCTOR_PORT_PREFIX|6206/u);
+});
+
 test("doctor rejects shell syntax errors in any sourced environment file", (t) => {
   const fixture = createFixture(t);
   const invalidSyntax = 'UNRELATED="unterminated-do-not-print\n';
@@ -635,6 +682,17 @@ test("doctor rejects PATH assignments that would change startup command resoluti
   assertFailure(result);
   assert.match(result.output, /startup environment files must contain literal assignments only/i);
   assert.doesNotMatch(result.output, new RegExp(configuredPath, "u"));
+});
+
+test("doctor rejects NODE_OPTIONS assignments that would change startup Node execution", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(join(fixture.root, ".env"), "NODE_OPTIONS=--bad-option-do-not-print\n");
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assertFailure(result);
+  assert.match(result.output, /startup environment files must contain literal assignments only/i);
+  assert.doesNotMatch(result.output, /bad-option-do-not-print/u);
 });
 
 for (const readonlyName of ["UID", "EUID", "PPID", "SHELLOPTS", "BASH_VERSINFO"]) {
@@ -1817,6 +1875,22 @@ test("doctor resolves a defined parameter in the MCP credentials path", (t) => {
 
   assert.equal(result.status, 0, result.output);
   assert.doesNotMatch(result.output, /HOME|cloudflared/u);
+  for (const value of Object.values(hiddenValues)) {
+    assert.doesNotMatch(result.output, new RegExp(escapeRegExp(value)));
+  }
+});
+
+test("doctor replays and concatenates MCP path assignments like startup", (t) => {
+  const fixture = createFixture(t);
+  const { hiddenValues } = configureValidMcpFixture(fixture, {
+    rootEnvExtra:
+      'doctor_credentials_dir="$HOME/.cloudflared"\nMCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE="$doctor_credentials_dir"/935a2064-9473-41bc-bd73-174660892847.json\n',
+  });
+
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+
+  assert.equal(result.status, 0, result.output);
+  assert.doesNotMatch(result.output, /doctor_credentials_dir|cloudflared/u);
   for (const value of Object.values(hiddenValues)) {
     assert.doesNotMatch(result.output, new RegExp(escapeRegExp(value)));
   }

@@ -653,7 +653,7 @@ function stripInlineComment(raw) {
       quote = character;
       continue;
     }
-    if (character === "#" && (index === 0 || /\s/u.test(raw[index - 1]))) {
+    if (character === "#" && index > 0 && /\s/u.test(raw[index - 1])) {
       return raw.slice(0, index);
     }
   }
@@ -714,41 +714,51 @@ function logicalStatements(source) {
   return statements;
 }
 
-function stripDefinedParameterExpansions(value) {
-  let valid = true;
-  const stripped = value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/gu, (_match, braced, bare) => {
-    const key = braced || bare;
-    if (!Object.prototype.hasOwnProperty.call(process.env, key)) valid = false;
-    return "";
-  });
-  if (!valid || stripped.includes("$")) return null;
-  return stripped;
-}
-
-function isLiteralAssignmentValue(raw) {
-  if (/^[ \t]/u.test(raw) && raw.trim() && !raw.trim().startsWith("#")) return false;
+function parseLiteralAssignmentValue(raw, environment) {
+  if (/^[ \t]/u.test(raw) && raw.trim() && !raw.trim().startsWith("#")) return null;
   const stripped = stripInlineComment(raw);
-  if (stripped === null) return false;
+  if (stripped === null) return null;
   const value = stripped.trim();
-  if (!value) return true;
-  const quoteCharacter = value[0];
-  if (quoteCharacter === '"' || quoteCharacter === "'") {
-    if (value[value.length - 1] !== quoteCharacter) return false;
-    const inner = value.slice(1, -1);
-    if (quoteCharacter === '"') {
-      const withoutParameters = stripDefinedParameterExpansions(inner);
-      if (withoutParameters === null || /[\\]/u.test(withoutParameters) || withoutParameters.includes(String.fromCharCode(96))) return false;
+  if (!value) return "";
+  let quote = "";
+  let parsed = "";
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (quote === "'") {
+      if (character === "'") quote = "";
+      else parsed += character;
+      continue;
     }
-    return true;
+    if (quote === '"') {
+      if (character === '"') {
+        quote = "";
+        continue;
+      }
+      if (character === "\\" || character === String.fromCharCode(96)) return null;
+    } else {
+      if (character === "'" || character === '"') {
+        quote = character;
+        continue;
+      }
+      if (index === 0 && character === "~") return null;
+      if (/\s/u.test(character) || /[\\;|&<>()]/u.test(character) || character === String.fromCharCode(96)) return null;
+    }
+    if (character !== "$") {
+      parsed += character;
+      continue;
+    }
+    const parameter = value.slice(index).match(/^\$\{([A-Za-z_][A-Za-z0-9_]*)\}|^\$([A-Za-z_][A-Za-z0-9_]*)/u);
+    if (!parameter) return null;
+    const key = parameter[1] || parameter[2];
+    if (!Object.prototype.hasOwnProperty.call(environment, key)) return null;
+    parsed += environment[key];
+    index += parameter[0].length - 1;
   }
-  if (value.startsWith("~")) return false;
-  const withoutParameters = stripDefinedParameterExpansions(value);
-  return withoutParameters !== null
-    && !/[\s'"\\;|&<>()]/u.test(withoutParameters)
-    && !withoutParameters.includes(String.fromCharCode(96));
+  return quote ? null : parsed;
 }
 
-const blockedStartupControlKeys = new Set(["PATH"]);
+const blockedStartupControlKeys = new Set(["NODE_OPTIONS", "PATH"]);
+const environment = { ...process.env };
 let valid = true;
 for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.local"), path.join(rootDir, "my-app", ".env")]) {
   if (!fs.existsSync(envPath)) continue;
@@ -767,15 +777,17 @@ for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.loca
   for (const statement of statements) {
     if (!statement.trim()) continue;
     const match = statement.match(/^\s*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)=([\s\S]*)$/u);
+    const parsedValue = match ? parseLiteralAssignmentValue(match[2], environment) : null;
     if (
       !match
       || blockedStartupControlKeys.has(match[1])
       || readonlyNames.has(match[1])
-      || !isLiteralAssignmentValue(match[2])
+      || parsedValue === null
     ) {
       valid = false;
       break;
     }
+    environment[match[1]] = parsedValue;
   }
   if (!valid) break;
 }
@@ -819,7 +831,8 @@ const allowed = [
 ];
 if (target === "mcp-private-beta") allowed.push("MCP_PRIVATE_BETA_VITE_PORT", "FORCE_REBUILD");
 else allowed.push("VITE_PORT");
-const resolved = new Map(allowed.map((key) => [key, process.env[key] || ""]));
+const environment = { ...process.env };
+const resolved = new Map(allowed.map((key) => [key, environment[key] || ""]));
 
 function stripInlineComment(raw) {
   let quote = "";
@@ -842,7 +855,7 @@ function stripInlineComment(raw) {
       quote = character;
       continue;
     }
-    if (character === "#" && (index === 0 || /\s/u.test(raw[index - 1]))) {
+    if (character === "#" && index > 0 && /\s/u.test(raw[index - 1])) {
       return raw.slice(0, index);
     }
   }
@@ -905,68 +918,49 @@ function logicalStatements(source) {
 
 function parseValue(raw) {
   if (/^[ \t]/u.test(raw) && raw.trim() && !raw.trim().startsWith("#")) return null;
-  let value = stripInlineComment(raw);
-  if (value === null) return null;
-  value = value.trim();
+  const stripped = stripInlineComment(raw);
+  if (stripped === null) return null;
+  const value = stripped.trim();
   if (!value) return "";
-  const quoteCharacter = value[0];
-  if (quoteCharacter === '"' || quoteCharacter === "'") {
-    if (value[value.length - 1] !== quoteCharacter) return null;
-    value = value.slice(1, -1);
-    if (quoteCharacter === "'") return value;
-    const withoutParameters = stripDefinedParameterExpansions(value);
-    if (withoutParameters === null || /[\\]/u.test(withoutParameters) || withoutParameters.includes(String.fromCharCode(96))) return null;
-    return expandDefinedParameterValues(value);
+  let quote = "";
+  let parsed = "";
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (quote === "'") {
+      if (character === "'") quote = "";
+      else parsed += character;
+      continue;
+    }
+    if (quote === '"') {
+      if (character === '"') {
+        quote = "";
+        continue;
+      }
+      if (character === "\\" || character === String.fromCharCode(96)) return null;
+    } else {
+      if (character === "'" || character === '"') {
+        quote = character;
+        continue;
+      }
+      if (index === 0 && character === "~") return null;
+      if (/\s/u.test(character) || /[\\;|&<>()]/u.test(character) || character === String.fromCharCode(96)) return null;
+    }
+    if (character !== "$") {
+      parsed += character;
+      continue;
+    }
+    const parameter = value.slice(index).match(/^\$\{([A-Za-z_][A-Za-z0-9_]*)\}|^\$([A-Za-z_][A-Za-z0-9_]*)/u);
+    if (!parameter) return null;
+    const key = parameter[1] || parameter[2];
+    if (!Object.prototype.hasOwnProperty.call(environment, key)) return null;
+    parsed += environment[key];
+    index += parameter[0].length - 1;
   }
-  if (value.startsWith("~")) return null;
-  const withoutParameters = stripDefinedParameterExpansions(value);
-  if (withoutParameters === null || !/^[A-Za-z0-9_./:@+=,-]*$/u.test(withoutParameters)) return null;
-  return expandDefinedParameterValues(value);
+  return quote ? null : parsed;
 }
 
 const invalid = new Set();
 const fatal = new Set();
-
-function stripDefinedParameterExpansions(value) {
-  let valid = true;
-  const stripped = value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/gu, (_match, braced, bare) => {
-    const key = braced || bare;
-    if (!Object.prototype.hasOwnProperty.call(process.env, key)) valid = false;
-    return "";
-  });
-  if (!valid || stripped.includes("$")) return null;
-  return stripped;
-}
-
-function expandDefinedParameterValues(value) {
-  const withoutParameters = stripDefinedParameterExpansions(value);
-  if (withoutParameters === null) return null;
-  return value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/gu, (_match, braced, bare) => {
-    const key = braced || bare;
-    return process.env[key];
-  });
-}
-
-function requiresStartupEvaluation(raw) {
-  const stripped = stripInlineComment(raw);
-  if (stripped === null) return true;
-  const value = stripped.trim();
-  if (!value) return false;
-  const quoteCharacter = value[0];
-  if (quoteCharacter === "'" && value[value.length - 1] === quoteCharacter) return false;
-  if (quoteCharacter === '"' && value[value.length - 1] === quoteCharacter) {
-    const inner = value.slice(1, -1);
-    const withoutParameters = stripDefinedParameterExpansions(inner);
-    return withoutParameters === null
-      || /[\\]/u.test(withoutParameters)
-      || withoutParameters.includes(String.fromCharCode(96));
-  }
-  const withoutParameters = stripDefinedParameterExpansions(value);
-  if (withoutParameters === null) return true;
-  return value.startsWith("~")
-    || /[\s\\;|&<>()]/u.test(withoutParameters)
-    || withoutParameters.includes(String.fromCharCode(96));
-}
 
 for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.local"), path.join(rootDir, "my-app", ".env")]) {
   if (!fs.existsSync(envPath)) continue;
@@ -979,19 +973,22 @@ for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.loca
   const statements = logicalStatements(source);
   if (statements === null) process.exit(1);
   for (const statement of statements) {
-    const match = statement.match(/^\s*(?:export[ \t]+)?([A-Z][A-Z0-9_]*)=([\s\S]*)$/u);
-    if (match && allowed.includes(match[1])) {
-      const value = parseValue(match[2]);
+    const match = statement.match(/^\s*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)=([\s\S]*)$/u);
+    if (match) {
+      const [key, rawValue] = [match[1], match[2]];
+      const value = parseValue(rawValue);
+      if (value !== null) environment[key] = value;
+      if (!allowed.includes(key)) continue;
       if (value === null) {
-        invalid.add(match[1]);
-        if (requiresStartupEvaluation(match[2])) fatal.add(match[1]);
+        invalid.add(key);
+        fatal.add(key);
       } else {
-        invalid.delete(match[1]);
-        resolved.set(match[1], value);
+        invalid.delete(key);
+        resolved.set(key, value);
       }
       continue;
     }
-    const malformed = statement.match(/^\s*(?:export[ \t]+)?([A-Z][A-Z0-9_]*)[ \t]+=/u);
+    const malformed = statement.match(/^\s*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]+=/u);
     if (malformed && allowed.includes(malformed[1])) {
       invalid.add(malformed[1]);
       fatal.add(malformed[1]);
@@ -1304,7 +1301,6 @@ const otherEnvPaths = [
   path.join(rootDir, "my-app", ".env.local"),
 ];
 let failures = 0;
-const invalidDotenvValue = "\u0000invalid";
 const fatalDotenvValue = "\u0000fatal";
 
 function fail(message) {
@@ -1333,7 +1329,7 @@ function stripInlineComment(raw) {
       quote = character;
       continue;
     }
-    if (character === "#" && (index === 0 || /\s/u.test(raw[index - 1]))) {
+    if (character === "#" && index > 0 && /\s/u.test(raw[index - 1])) {
       return raw.slice(0, index);
     }
   }
@@ -1341,46 +1337,50 @@ function stripInlineComment(raw) {
   return raw;
 }
 
-function stripDefinedParameterExpansions(value) {
-  let valid = true;
-  const stripped = value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/gu, (_match, braced, bare) => {
-    const key = braced || bare;
-    if (!Object.prototype.hasOwnProperty.call(process.env, key)) valid = false;
-    return "";
-  });
-  if (!valid || stripped.includes("$")) return null;
-  return stripped;
-}
-
-function expandDefinedParameterValues(value) {
-  const withoutParameters = stripDefinedParameterExpansions(value);
-  if (withoutParameters === null) return null;
-  return value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/gu, (_match, braced, bare) => {
-    const key = braced || bare;
-    return process.env[key];
-  });
-}
-
-function requiresStartupEvaluation(raw) {
-  const value = raw.trim();
-  if (!value) return false;
-  const quoteCharacter = value[0];
-  if (quoteCharacter === "'" && value[value.length - 1] === quoteCharacter) return false;
-  if (quoteCharacter === '"' && value[value.length - 1] === quoteCharacter) {
-    const inner = value.slice(1, -1);
-    const withoutParameters = stripDefinedParameterExpansions(inner);
-    return withoutParameters === null
-      || /[\\]/u.test(withoutParameters)
-      || withoutParameters.includes(String.fromCharCode(96));
+function parseLiteralAssignmentValue(raw, environment) {
+  if (/^[ \t]/u.test(raw) && raw.trim() && !raw.trim().startsWith("#")) return null;
+  const stripped = stripInlineComment(raw);
+  if (stripped === null) return null;
+  const value = stripped.trim();
+  if (!value) return "";
+  let quote = "";
+  let parsed = "";
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (quote === "'") {
+      if (character === "'") quote = "";
+      else parsed += character;
+      continue;
+    }
+    if (quote === '"') {
+      if (character === '"') {
+        quote = "";
+        continue;
+      }
+      if (character === "\\" || character === String.fromCharCode(96)) return null;
+    } else {
+      if (character === "'" || character === '"') {
+        quote = character;
+        continue;
+      }
+      if (index === 0 && character === "~") return null;
+      if (/\s/u.test(character) || /[\\;|&<>()]/u.test(character) || character === String.fromCharCode(96)) return null;
+    }
+    if (character !== "$") {
+      parsed += character;
+      continue;
+    }
+    const parameter = value.slice(index).match(/^\$\{([A-Za-z_][A-Za-z0-9_]*)\}|^\$([A-Za-z_][A-Za-z0-9_]*)/u);
+    if (!parameter) return null;
+    const key = parameter[1] || parameter[2];
+    if (!Object.prototype.hasOwnProperty.call(environment, key)) return null;
+    parsed += environment[key];
+    index += parameter[0].length - 1;
   }
-  const withoutParameters = stripDefinedParameterExpansions(value);
-  if (withoutParameters === null) return true;
-  return value.startsWith("~")
-    || /[\s\\;|&<>()]/u.test(withoutParameters)
-    || withoutParameters.includes(String.fromCharCode(96));
+  return quote ? null : parsed;
 }
 
-function parseDotenv(filePath) {
+function parseDotenv(filePath, environment) {
   const result = new Map();
   function record(key, value) {
     if (value === fatalDotenvValue || result.get(key) !== fatalDotenvValue) {
@@ -1396,53 +1396,19 @@ function parseDotenv(filePath) {
     return result;
   }
   for (const line of source.split(/\r?\n/u)) {
-    const match = line.match(/^\s*(?:export[ \t]+)?([A-Z][A-Z0-9_]*)=(.*)$/u);
+    const match = line.match(/^\s*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$/u);
     if (!match) {
-      const malformed = line.match(/^\s*(?:export[ \t]+)?([A-Z][A-Z0-9_]*)[ \t]+=/u);
+      const malformed = line.match(/^\s*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]+=/u);
       if (malformed) record(malformed[1], fatalDotenvValue);
       continue;
     }
-    const stripped = stripInlineComment(match[2]);
-    if (stripped === null) {
-      record(match[1], invalidDotenvValue);
-      continue;
-    }
-    if ((/^[ \t]/u.test(stripped) && stripped.trim()) || requiresStartupEvaluation(stripped)) {
+    const value = parseLiteralAssignmentValue(match[2], environment);
+    if (value === null) {
       record(match[1], fatalDotenvValue);
       continue;
     }
-    let value = stripped.trim();
-    const quoteCharacter = value[0] ?? "";
-    if (quoteCharacter === '"' || quoteCharacter === "'") {
-      if (value[value.length - 1] !== quoteCharacter) {
-        record(match[1], invalidDotenvValue);
-        continue;
-      }
-      value = value.slice(1, -1);
-      const withoutParameters = quoteCharacter === '"' ? stripDefinedParameterExpansions(value) : "";
-      if (
-        /[\t\r\n]/u.test(value) ||
-        (quoteCharacter === '"' && (withoutParameters === null || /[\\]/u.test(withoutParameters) || withoutParameters.includes(String.fromCharCode(96))))
-      ) {
-        record(match[1], invalidDotenvValue);
-        continue;
-      }
-    } else {
-      const withoutParameters = stripDefinedParameterExpansions(value);
-      if (withoutParameters === null || (withoutParameters && !/^[A-Za-z0-9_./:@+=,-]+$/u.test(withoutParameters))) {
-        record(match[1], invalidDotenvValue);
-        continue;
-      }
-    }
-    if (quoteCharacter !== "'") {
-      const expanded = expandDefinedParameterValues(value);
-      if (expanded === null) {
-        record(match[1], invalidDotenvValue);
-        continue;
-      }
-      value = expanded;
-    }
     record(match[1], value);
+    environment[match[1]] = value;
   }
   return result;
 }
@@ -1474,29 +1440,29 @@ try {
   else fail("root .env.local could not be inspected");
 }
 
-const rootEnv = parseDotenv(rootEnvPath);
 const startupEnvPaths = [otherEnvPaths[0], rootEnvPath, otherEnvPaths[1]];
-const startupEnvs = startupEnvPaths.map(parseDotenv);
+const rootEnvironment = { ...process.env };
+parseDotenv(otherEnvPaths[0], rootEnvironment);
+const rootEnv = parseDotenv(rootEnvPath, rootEnvironment);
+const startupEnvironment = { ...process.env };
+const startupEnvs = startupEnvPaths.map((envPath) => parseDotenv(envPath, startupEnvironment));
 
 function resolveStartupValue(key) {
   let value = process.env[key] ?? "";
-  let invalid = false;
   let fatal = false;
   for (const env of startupEnvs) {
     if (!env.has(key)) continue;
     const nextValue = env.get(key);
     if (nextValue === fatalDotenvValue) fatal = true;
-    else if (nextValue === invalidDotenvValue) invalid = true;
     else {
-      invalid = false;
       value = nextValue;
     }
   }
-  return { fatal, invalid, value };
+  return { fatal, value };
 }
 
 for (const key of canonicalKeys) {
-  if (rootEnv.get(key) === invalidDotenvValue || rootEnv.get(key) === fatalDotenvValue) fail(`${key} must use a supported literal assignment`);
+  if (rootEnv.get(key) === fatalDotenvValue) fail(`${key} must use a supported literal assignment`);
   else if (!rootEnv.has(key)) fail(`${key} must be defined in root .env.local`);
 }
 
@@ -1537,7 +1503,7 @@ try {
   const prefix = issuer.hostname.endsWith(".clerk.accounts.dev") ? "pk_test_" : "pk_live_";
   const derivedPublishableKey = `${prefix}${Buffer.from(`${issuer.hostname}$`, "utf8").toString("base64")}`;
   const configuredPublishableKey = resolveStartupValue("VITE_CLERK_PUBLISHABLE_KEY");
-  if (configuredPublishableKey.fatal || configuredPublishableKey.invalid) {
+  if (configuredPublishableKey.fatal) {
     fail("VITE_CLERK_PUBLISHABLE_KEY must use a supported literal assignment");
   } else if (configuredPublishableKey.value && configuredPublishableKey.value !== derivedPublishableKey) {
     fail("configured Clerk publishable key does not match CLERK_JWT_ISSUER_DOMAIN");
@@ -1547,18 +1513,18 @@ try {
 }
 
 for (const envPath of otherEnvPaths) {
-  const env = parseDotenv(envPath);
+  const env = parseDotenv(envPath, { ...process.env });
   if (canonicalKeys.some((key) => env.has(key))) {
     fail("canonical server keys are allowed only in root .env.local");
     break;
   }
 }
-if ([rootEnv, parseDotenv(otherEnvPaths[2])].some((env) => [...env.keys()].some((key) => key.startsWith("MCP_PRODUCTION_PRIVATE_BETA_")))) {
+if ([rootEnv, parseDotenv(otherEnvPaths[2], { ...process.env })].some((env) => [...env.keys()].some((key) => key.startsWith("MCP_PRODUCTION_PRIVATE_BETA_")))) {
   fail("legacy MCP_PRODUCTION_PRIVATE_BETA_* aliases are forbidden");
 }
 
 const configuredCredentialsFile = resolveStartupValue("MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE");
-if (configuredCredentialsFile.fatal || configuredCredentialsFile.invalid) {
+if (configuredCredentialsFile.fatal) {
   fail("MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE must use a supported literal assignment");
 }
 if (configuredCredentialsFile.value && configuredCredentialsFile.value.startsWith("~")) {
