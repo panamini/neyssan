@@ -588,6 +588,40 @@ test("doctor keeps parameter expansions blocking after a later literal override"
   assert.doesNotMatch(result.output, /UNSET_PORT|6201/u);
 });
 
+for (const [label, assignment] of [
+  ["unquoted", "VITE_PORT=$DOCTOR_EXPORTED_PORT"],
+  ["double-quoted", 'VITE_PORT="$DOCTOR_EXPORTED_PORT"'],
+  ["braced", 'VITE_PORT="${DOCTOR_EXPORTED_PORT}"'],
+]) {
+  test(`doctor resolves a defined ${label} parameter override like startup`, (t) => {
+    const fixture = createFixture(t);
+    const port = "6204";
+    writeFileSync(join(fixture.root, ".env"), `${assignment}\n`);
+    const lsofLogPath = join(fixture.root, "lsof.log");
+
+    const result = runDoctor(fixture, ["local-fast"], {
+      DOCTOR_EXPORTED_PORT: port,
+      FAKE_LSOF_LOG: lsofLogPath,
+    });
+
+    assert.equal(result.status, 0, result.output);
+    assert.match(readFileSync(lsofLogPath, "utf8"), /iTCP:6204/u);
+    assert.doesNotMatch(result.output, /DOCTOR_EXPORTED_PORT|6204/u);
+  });
+}
+
+test("doctor sanitizes startup environment read failures", (t) => {
+  const fixture = createFixture(t);
+  mkdirSync(join(fixture.root, ".env"));
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assertFailure(result);
+  assert.match(result.output, /startup environment files must contain literal assignments only/i);
+  assert.doesNotMatch(result.output, new RegExp(escapeRegExp(fixture.root), "u"));
+  assert.doesNotMatch(result.output, /EISDIR|readFileSync|node:fs|at Object/u);
+});
+
 test("doctor rejects commands attached to non-allowlisted environment keys", (t) => {
   const fixture = createFixture(t);
   writeFileSync(join(fixture.root, ".env"), "UNRELATED=bad command-does-not-exist\n");
@@ -599,7 +633,7 @@ test("doctor rejects commands attached to non-allowlisted environment keys", (t)
   assert.doesNotMatch(result.output, /UNRELATED|command-does-not-exist/u);
 });
 
-test("doctor fails closed for a non-literal runtime override", (t) => {
+test("doctor resolves a defined parameter in a path override without leaking it", (t) => {
   const fixture = createFixture(t);
   rmSync(join(fixture.binDirectory, "node"));
   symlinkSync(process.execPath, join(fixture.binDirectory, "node"));
@@ -611,9 +645,24 @@ test("doctor fails closed for a non-literal runtime override", (t) => {
 
   const result = runDoctor(fixture, ["local-fast"]);
 
-  assertFailure(result);
-  assert.match(result.output, /CONVEX_TMPDIR is not a supported literal/i);
+  assert.equal(result.status, 0, result.output);
+  assert.doesNotMatch(result.output, new RegExp(escapeRegExp(fixture.root), "u"));
   assert.doesNotMatch(result.output, /\/convex/u);
+});
+
+test("doctor keeps complex parameter expansions blocked", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(
+    fixture.envFile,
+    'CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nCONVEX_TMPDIR="${HOME:-complex-fallback-do-not-print}/convex"\n',
+    { mode: 0o600 },
+  );
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assertFailure(result);
+  assert.match(result.output, /startup environment files must contain literal assignments only/i);
+  assert.doesNotMatch(result.output, /complex-fallback-do-not-print|\/convex/u);
 });
 
 for (const [label, assignment] of [
@@ -1348,6 +1397,48 @@ CONVEX_AUTH_TOKEN=${configuredValues[4]}
     assert.doesNotMatch(result.output, new RegExp(escapeRegExp(value)));
   }
   assert.doesNotMatch(result.output, /configured-(resource|origin|redirect|provider|clerk|convex)-do-not-print/i);
+});
+
+test("doctor mcp-private-beta sanitizes startup environment read failures", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture);
+  mkdirSync(join(fixture.root, ".env"));
+
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+
+  assertFailure(result);
+  assert.match(result.output, /startup environment file could not be read/i);
+  assert.doesNotMatch(result.output, new RegExp(escapeRegExp(fixture.root), "u"));
+  assert.doesNotMatch(result.output, /EISDIR|readFileSync|node:fs|at Object/u);
+});
+
+test("doctor mcp-private-beta sanitizes root dotenv metadata races", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture);
+  const shimPath = join(fixture.root, "stat-failure-shim.cjs");
+  writeFileSync(
+    shimPath,
+    `const fs = require("node:fs");
+const originalStatSync = fs.statSync;
+fs.statSync = (path, ...args) => {
+  if (String(path).endsWith("/.env.local")) {
+    const error = new Error("metadata-race-do-not-print");
+    error.code = "EACCES";
+    throw error;
+  }
+  return originalStatSync(path, ...args);
+};
+`,
+  );
+
+  const result = runDoctor(fixture, ["mcp-private-beta"], {
+    NODE_OPTIONS: `--require=${shimPath}`,
+  });
+
+  assertFailure(result);
+  assert.match(result.output, /root \.env\.local could not be inspected/i);
+  assert.doesNotMatch(result.output, /metadata-race-do-not-print|stat-failure-shim|EACCES|at Object/u);
+  assert.doesNotMatch(result.output, new RegExp(escapeRegExp(fixture.root), "u"));
 });
 
 test("doctor rejects a quoted tilde in the MCP credentials path", (t) => {

@@ -738,7 +738,14 @@ function isLiteralAssignmentValue(raw) {
 let valid = true;
 for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.local"), path.join(rootDir, "my-app", ".env")]) {
   if (!fs.existsSync(envPath)) continue;
-  const statements = logicalStatements(fs.readFileSync(envPath, "utf8"));
+  let source = "";
+  try {
+    source = fs.readFileSync(envPath, "utf8");
+  } catch {
+    valid = false;
+    break;
+  }
+  const statements = logicalStatements(source);
   if (statements === null) {
     valid = false;
     break;
@@ -887,11 +894,15 @@ function parseValue(raw) {
   if (quoteCharacter === '"' || quoteCharacter === "'") {
     if (value[value.length - 1] !== quoteCharacter) return null;
     value = value.slice(1, -1);
-    if (quoteCharacter === '"' && (/[$\\]/u.test(value) || value.includes(String.fromCharCode(96)))) return null;
-    return value;
+    if (quoteCharacter === "'") return value;
+    const withoutParameters = stripDefinedParameterExpansions(value);
+    if (withoutParameters === null || /[\\]/u.test(withoutParameters) || withoutParameters.includes(String.fromCharCode(96))) return null;
+    return expandDefinedParameterValues(value);
   }
-  if (!/^[A-Za-z0-9_./:@+=,-]+$/u.test(value)) return null;
-  return value;
+  if (value.startsWith("~")) return null;
+  const withoutParameters = stripDefinedParameterExpansions(value);
+  if (withoutParameters === null || !/^[A-Za-z0-9_./:@+=,-]*$/u.test(withoutParameters)) return null;
+  return expandDefinedParameterValues(value);
 }
 
 const invalid = new Set();
@@ -906,6 +917,15 @@ function stripDefinedParameterExpansions(value) {
   });
   if (!valid || stripped.includes("$")) return null;
   return stripped;
+}
+
+function expandDefinedParameterValues(value) {
+  const withoutParameters = stripDefinedParameterExpansions(value);
+  if (withoutParameters === null) return null;
+  return value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/gu, (_match, braced, bare) => {
+    const key = braced || bare;
+    return process.env[key];
+  });
 }
 
 function requiresStartupEvaluation(raw) {
@@ -931,7 +951,13 @@ function requiresStartupEvaluation(raw) {
 
 for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.local"), path.join(rootDir, "my-app", ".env")]) {
   if (!fs.existsSync(envPath)) continue;
-  const statements = logicalStatements(fs.readFileSync(envPath, "utf8"));
+  let source = "";
+  try {
+    source = fs.readFileSync(envPath, "utf8");
+  } catch {
+    process.exit(1);
+  }
+  const statements = logicalStatements(source);
   if (statements === null) process.exit(1);
   for (const statement of statements) {
     const match = statement.match(/^\s*(?:export[ \t]+)?([A-Z][A-Z0-9_]*)=([\s\S]*)$/u);
@@ -1312,7 +1338,14 @@ function parseDotenv(filePath) {
     }
   }
   if (!fs.existsSync(filePath)) return result;
-  for (const line of fs.readFileSync(filePath, "utf8").split(/\r?\n/u)) {
+  let source = "";
+  try {
+    source = fs.readFileSync(filePath, "utf8");
+  } catch {
+    fail("startup environment file could not be read");
+    return result;
+  }
+  for (const line of source.split(/\r?\n/u)) {
     const match = line.match(/^\s*(?:export[ \t]+)?([A-Z][A-Z0-9_]*)=(.*)$/u);
     if (!match) {
       const malformed = line.match(/^\s*(?:export[ \t]+)?([A-Z][A-Z0-9_]*)[ \t]+=/u);
@@ -1371,11 +1404,12 @@ const canonicalKeys = [
   "CONVEX_AUTH_TOKEN",
 ];
 
-if (!fs.existsSync(rootEnvPath)) {
-  fail("root .env.local is required");
-} else {
+try {
   const mode = (fs.statSync(rootEnvPath).mode & 0o777).toString(8);
   if (mode !== "600") fail("root .env.local must have mode 600");
+} catch (error) {
+  if (error && error.code === "ENOENT") fail("root .env.local is required");
+  else fail("root .env.local could not be inspected");
 }
 
 const rootEnv = parseDotenv(rootEnvPath);
@@ -1472,10 +1506,14 @@ const credentialsFile = configuredCredentialsFile.value || defaultCredentialsFil
 if (!fs.existsSync(credentialsFile)) {
   fail("named MCP tunnel credentials file is missing");
 } else {
-  const credentialsStat = fs.statSync(credentialsFile);
-  if (!credentialsStat.isFile()) fail("named MCP tunnel credentials path must be a regular file");
-  const mode = (credentialsStat.mode & 0o777).toString(8);
-  if (mode !== "400" && mode !== "600") fail("named MCP tunnel credentials file must have mode 400 or 600");
+  try {
+    const credentialsStat = fs.statSync(credentialsFile);
+    if (!credentialsStat.isFile()) fail("named MCP tunnel credentials path must be a regular file");
+    const mode = (credentialsStat.mode & 0o777).toString(8);
+    if (mode !== "400" && mode !== "600") fail("named MCP tunnel credentials file must have mode 400 or 600");
+  } catch {
+    fail("named MCP tunnel credentials file could not be inspected");
+  }
 }
 
 process.exit(failures === 0 ? 0 : 1);
