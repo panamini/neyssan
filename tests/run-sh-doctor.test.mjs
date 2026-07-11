@@ -114,7 +114,7 @@ exec ${JSON.stringify(process.execPath)} "\$@"
   writeExecutable(join(binDirectory, "curl"), "#!/bin/sh\nexit 0\n");
   writeExecutable(
     join(binDirectory, "lsof"),
-    '#!/bin/sh\nif test -n "${FAKE_LSOF_LOG:-}"; then printf "%s\\n" "$*" >> "${FAKE_LSOF_LOG}"; fi\nexit 1\n',
+    '#!/bin/sh\nif test -n "${FAKE_LSOF_LOG:-}"; then printf "%s\\n" "$*" >> "${FAKE_LSOF_LOG}"; fi\nif test -n "${FAKE_LSOF_BUSY_PATTERN:-}"; then case "$*" in *"${FAKE_LSOF_BUSY_PATTERN}"*) exit 0 ;; esac; fi\nexit 1\n',
   );
 
   writeFileSync(join(root, "cv_parser_service", "Dockerfile"), "FROM scratch\n");
@@ -284,6 +284,18 @@ test("doctor parses dotenv files as data without executing shell content", (t) =
   assert.equal(existsSync(marker), false, "doctor executed dotenv shell content");
 });
 
+test("doctor rejects shell syntax errors in any sourced environment file", (t) => {
+  const fixture = createFixture(t);
+  const invalidSyntax = 'UNRELATED="unterminated-do-not-print\n';
+  writeFileSync(join(fixture.root, ".env"), invalidSyntax);
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assertFailure(result);
+  assert.match(result.output, /startup environment file syntax is invalid/i);
+  assert.doesNotMatch(result.output, /unterminated-do-not-print/u);
+});
+
 test("doctor applies literal local-fast dotenv overrides with startup precedence", (t) => {
   const fixture = createFixture(t);
   rmSync(join(fixture.binDirectory, "node"));
@@ -406,6 +418,22 @@ test("doctor accepts an empty higher-precedence value after an invalid lower val
   assert.equal(result.status, 0, result.output);
   assert.match(readFileSync(lsofLogPath, "utf8"), /iTCP:5173/u);
   assert.doesNotMatch(result.output, /5173|not-a-port/u);
+});
+
+test("doctor keeps command substitutions blocking after a later literal override", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(join(fixture.root, ".env"), "VITE_PORT=$(false)\n");
+  writeFileSync(
+    fixture.envFile,
+    "CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nVITE_PORT=6201\n",
+    { mode: 0o600 },
+  );
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assertFailure(result);
+  assert.match(result.output, /VITE_PORT is not a supported literal/i);
+  assert.doesNotMatch(result.output, /6201/u);
 });
 
 test("doctor fails closed for a non-literal runtime override", (t) => {
@@ -562,7 +590,7 @@ test("doctor checks a configured LOCAL_CONVEX_URL port", (t) => {
   const fixture = createFixture(t);
   writeFileSync(
     fixture.envFile,
-    "CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nLOCAL_CONVEX_URL=http://127.0.0.1:7402\n",
+    "CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nLOCAL_CONVEX_CLOUD_PORT=7402\nLOCAL_CONVEX_URL=http://127.0.0.1:7402\n",
     { mode: 0o600 },
   );
   const lsofLogPath = join(fixture.root, "lsof.log");
@@ -574,6 +602,21 @@ test("doctor checks a configured LOCAL_CONVEX_URL port", (t) => {
   assert.equal(result.status, 0, result.output);
   assert.match(readFileSync(lsofLogPath, "utf8"), /iTCP:7402/u);
   assert.doesNotMatch(result.output, /7402/u);
+});
+
+test("doctor rejects a LOCAL_CONVEX_URL port that differs from the resolved cloud port", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(
+    fixture.envFile,
+    "CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nLOCAL_CONVEX_CLOUD_PORT=7402\nLOCAL_CONVEX_URL=http://127.0.0.1:7403\n",
+    { mode: 0o600 },
+  );
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assertFailure(result);
+  assert.match(result.output, /LOCAL_CONVEX_URL port must match the resolved Convex cloud port/i);
+  assert.doesNotMatch(result.output, /7402|7403/u);
 });
 
 for (const invalidPort of ["0", "65536"]) {
@@ -722,6 +765,18 @@ test("doctor warns but does not fail when lsof is unavailable", (t) => {
 
   assert.equal(result.status, 0, result.output);
   assert.match(result.output, /WARN - lsof command is missing; port conflict checks will be skipped/i);
+});
+
+test("doctor rejects an untracked listener on a resolved Convex port", (t) => {
+  const fixture = createFixture(t);
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_LSOF_BUSY_PATTERN: "iTCP:3210",
+  });
+
+  assertFailure(result);
+  assert.match(result.output, /resolved Convex cloud port is already in use by an untracked process/i);
+  assert.doesNotMatch(result.output, /3210/u);
 });
 
 test("doctor warns but does not fail when npm is unavailable", (t) => {
@@ -1006,6 +1061,19 @@ test("doctor clears unsupported MCP values when later startup assignments win", 
 
   assert.equal(result.status, 0, result.output);
   assert.doesNotMatch(result.output, /lower-(key|credentials)|later-credentials-do-not-print/u);
+});
+
+test("doctor keeps MCP command substitutions blocking after later overrides", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture, {
+    baseEnv: "VITE_CLERK_PUBLISHABLE_KEY=$(false)\n",
+    rootEnvExtra: "VITE_CLERK_PUBLISHABLE_KEY=\n",
+  });
+
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+
+  assertFailure(result);
+  assert.match(result.output, /VITE_CLERK_PUBLISHABLE_KEY must use a supported literal assignment/i);
 });
 
 test("doctor matches mcp-check legacy alias scope", (t) => {

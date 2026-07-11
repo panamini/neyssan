@@ -592,6 +592,26 @@ doctor_check_executable() {
   fi
 }
 
+doctor_check_startup_env_syntax() {
+  local env_path=""
+  local invalid=0
+  for env_path in \
+    "${ROOT_DIR}/.env" \
+    "${ROOT_DIR}/.env.local" \
+    "${ROOT_DIR}/my-app/.env"; do
+    [[ -f "${env_path}" ]] || continue
+    if ! "${BASH}" -n "${env_path}" >/dev/null 2>&1; then
+      invalid=1
+    fi
+  done
+  if (( invalid )); then
+    doctor_fail "startup environment file syntax is invalid"
+    return 1
+  fi
+  doctor_pass "startup environment file syntax is valid"
+  return 0
+}
+
 doctor_load_runtime_overrides() {
   local target="${1:-local-fast}"
   local key=""
@@ -664,26 +684,39 @@ function parseValue(raw) {
 }
 
 const invalid = new Set();
+const fatal = new Set();
+
+function requiresStartupEvaluation(raw) {
+  return /(?:\$\(|[<>]\()/u.test(raw)
+    || raw.includes(String.fromCharCode(96))
+    || (/^[ \t]/u.test(raw) && raw.trim() && !raw.trim().startsWith("#"));
+}
+
 for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.local"), path.join(rootDir, "my-app", ".env")]) {
   if (!fs.existsSync(envPath)) continue;
   for (const line of fs.readFileSync(envPath, "utf8").split(/\r?\n/u)) {
     const match = line.match(/^\s*(?:export[ \t]+)?([A-Z][A-Z0-9_]*)=(.*)$/u);
     if (match && allowed.includes(match[1])) {
       const value = parseValue(match[2]);
-      if (value === null) invalid.add(match[1]);
-      else {
+      if (value === null) {
+        invalid.add(match[1]);
+        if (requiresStartupEvaluation(match[2])) fatal.add(match[1]);
+      } else {
         invalid.delete(match[1]);
         resolved.set(match[1], value);
       }
       continue;
     }
     const malformed = line.match(/^\s*(?:export[ \t]+)?([A-Z][A-Z0-9_]*)[ \t]+=/u);
-    if (malformed && allowed.includes(malformed[1])) invalid.add(malformed[1]);
+    if (malformed && allowed.includes(malformed[1])) {
+      invalid.add(malformed[1]);
+      fatal.add(malformed[1]);
+    }
   }
 }
 
 for (const [key, value] of resolved) {
-  if (invalid.has(key)) {
+  if (fatal.has(key) || invalid.has(key)) {
     process.stdout.write(`ERROR\t${key}\n`);
     continue;
   }
@@ -783,6 +816,7 @@ doctor_check_runtime_paths() {
 doctor_check_port() {
   local port="${1:?port required}"
   local label="${2:?port label required}"
+  local occupied_behavior="${3:-warn}"
   if ! doctor_port_value_is_valid "${port}"; then
     doctor_fail "${label} must be between 1 and 65535"
     return 0
@@ -791,7 +825,11 @@ doctor_check_port() {
     return 0
   fi
   if lsof -nP -iTCP:"${port}" -sTCP:LISTEN >/dev/null 2>&1; then
-    doctor_warn "${label} is already in use; stop the conflicting process or reuse the tracked stack"
+    if [[ "${occupied_behavior}" == "fail" ]]; then
+      doctor_fail "${label} is already in use by an untracked process"
+    else
+      doctor_warn "${label} is already in use; stop the conflicting process or reuse the tracked stack"
+    fi
   else
     doctor_pass "${label} is available"
   fi
@@ -816,7 +854,7 @@ doctor_check_local_convex_url_port() {
       return 0
     fi
     if [[ "${url_port}" != "${cloud_port}" ]]; then
-      doctor_check_port "${url_port}" "LOCAL_CONVEX_URL port"
+      doctor_fail "LOCAL_CONVEX_URL port must match the resolved Convex cloud port"
     fi
   else
     doctor_fail "LOCAL_CONVEX_URL must be a loopback HTTP URL with an explicit port"
@@ -882,6 +920,7 @@ const otherEnvPaths = [
 ];
 let failures = 0;
 const invalidDotenvValue = "\u0000invalid";
+const fatalDotenvValue = "\u0000fatal";
 
 function fail(message) {
   failures += 1;
@@ -895,11 +934,15 @@ function parseDotenv(filePath) {
     const match = line.match(/^\s*(?:export[ \t]+)?([A-Z][A-Z0-9_]*)=(.*)$/u);
     if (!match) {
       const malformed = line.match(/^\s*(?:export[ \t]+)?([A-Z][A-Z0-9_]*)[ \t]+=/u);
-      if (malformed) result.set(malformed[1], invalidDotenvValue);
+      if (malformed) result.set(malformed[1], fatalDotenvValue);
+      continue;
+    }
+    if (/(?:\$\(|[<>]\()/u.test(match[2]) || match[2].includes(String.fromCharCode(96))) {
+      result.set(match[1], fatalDotenvValue);
       continue;
     }
     if (/^[ \t]/u.test(match[2]) && match[2].trim() && !match[2].trim().startsWith("#")) {
-      result.set(match[1], invalidDotenvValue);
+      result.set(match[1], fatalDotenvValue);
       continue;
     }
     let value = match[2];
@@ -989,20 +1032,22 @@ const startupEnvs = startupEnvPaths.map(parseDotenv);
 function resolveStartupValue(key) {
   let value = process.env[key] ?? "";
   let invalid = false;
+  let fatal = false;
   for (const env of startupEnvs) {
     if (!env.has(key)) continue;
     const nextValue = env.get(key);
-    if (nextValue === invalidDotenvValue) invalid = true;
+    if (nextValue === fatalDotenvValue) fatal = true;
+    else if (nextValue === invalidDotenvValue) invalid = true;
     else {
       invalid = false;
       value = nextValue;
     }
   }
-  return { invalid, value };
+  return { fatal, invalid, value };
 }
 
 for (const key of canonicalKeys) {
-  if (rootEnv.get(key) === invalidDotenvValue) fail(`${key} must use a supported literal assignment`);
+  if (rootEnv.get(key) === invalidDotenvValue || rootEnv.get(key) === fatalDotenvValue) fail(`${key} must use a supported literal assignment`);
   else if (!rootEnv.has(key)) fail(`${key} must be defined in root .env.local`);
 }
 
@@ -1043,7 +1088,7 @@ try {
   const prefix = issuer.hostname.endsWith(".clerk.accounts.dev") ? "pk_test_" : "pk_live_";
   const derivedPublishableKey = `${prefix}${Buffer.from(`${issuer.hostname}$`, "utf8").toString("base64")}`;
   const configuredPublishableKey = resolveStartupValue("VITE_CLERK_PUBLISHABLE_KEY");
-  if (configuredPublishableKey.invalid) {
+  if (configuredPublishableKey.fatal || configuredPublishableKey.invalid) {
     fail("VITE_CLERK_PUBLISHABLE_KEY must use a supported literal assignment");
   } else if (configuredPublishableKey.value && configuredPublishableKey.value !== derivedPublishableKey) {
     fail("configured Clerk publishable key does not match CLERK_JWT_ISSUER_DOMAIN");
@@ -1064,7 +1109,7 @@ if ([rootEnv, parseDotenv(otherEnvPaths[2])].some((env) => [...env.keys()].some(
 }
 
 const configuredCredentialsFile = resolveStartupValue("MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE");
-if (configuredCredentialsFile.invalid) {
+if (configuredCredentialsFile.fatal || configuredCredentialsFile.invalid) {
   fail("MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE must use a supported literal assignment");
 }
 if (configuredCredentialsFile.value && configuredCredentialsFile.value.startsWith("~")) {
@@ -1092,6 +1137,7 @@ doctor() {
   local resolved_convex_cloud_port=""
   local resolved_convex_site_port=""
   local resolved_convex_url=""
+  local convex_reusable=0
   if [[ "${target}" != "local-fast" && "${target}" != "mcp-private-beta" ]]; then
     echo "usage: ./run.sh doctor [local-fast|mcp-private-beta]" >&2
     return 2
@@ -1116,6 +1162,7 @@ doctor() {
   else
     doctor_warn "lsof command is missing; port conflict checks will be skipped"
   fi
+  doctor_check_startup_env_syntax || true
   if command -v node >/dev/null 2>&1 && doctor_check_node_runtime; then
     DOCTOR_NODE_READY=1
     doctor_load_runtime_overrides "${target}" || true
@@ -1136,6 +1183,10 @@ doctor() {
     resolved_convex_cloud_port="${LOCAL_CONVEX_CLOUD_PORT_RESULT:-${LOCAL_CONVEX_CLOUD_PORT}}"
     resolved_convex_site_port="${LOCAL_CONVEX_SITE_PORT_RESULT:-${LOCAL_CONVEX_SITE_PORT}}"
     resolved_convex_url="${LOCAL_CONVEX_URL_RESULT:-}"
+    if reuse_running_local_convex_from_state "${CONVEX_DEPLOYMENT_NAME_RESULT:-}" >/dev/null 2>&1; then
+      convex_reusable=1
+      doctor_pass "tracked local Convex backend is reusable"
+    fi
   else
     doctor_fail "Convex team/project binding is missing; configure CONVEX_TEAM and CONVEX_PROJECT"
   fi
@@ -1147,8 +1198,12 @@ doctor() {
   fi
 
   doctor_check_port 8001 "parser port"
-  doctor_check_port "${resolved_convex_cloud_port}" "resolved Convex cloud port"
-  doctor_check_port "${resolved_convex_site_port}" "resolved Convex site port"
+  if (( convex_reusable )); then
+    doctor_pass "tracked local Convex ports are reusable"
+  else
+    doctor_check_port "${resolved_convex_cloud_port}" "resolved Convex cloud port" fail
+    doctor_check_port "${resolved_convex_site_port}" "resolved Convex site port" fail
+  fi
   doctor_check_local_convex_url_port "${resolved_convex_url}" "${resolved_convex_cloud_port}"
   if [[ "${target}" == "mcp-private-beta" ]]; then
     doctor_check_port "${MCP_PRIVATE_BETA_VITE_PORT}" "MCP_PRIVATE_BETA_VITE_PORT"

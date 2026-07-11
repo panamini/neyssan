@@ -10,9 +10,9 @@ The command does not source or execute dotenv files, create runtime directories,
 
 The startup allowlist applies dotenv precedence for configured ports, parser image, Convex temporary storage, Convex team/project/deployment bindings, and `LOCAL_CONVEX_URL`. It accepts bare and `export` assignments. Dynamic shell expressions in these values are rejected with the key name only; collaborators must use literal values so preflight and startup cannot diverge.
 
-Validation follows winning-assignment semantics: a later valid or empty assignment clears an earlier invalid value for the same key, matching shell source precedence. Legacy `MCP_PRODUCTION_PRIVATE_BETA_*` aliases are checked only in root `.env.local` and `my-app/.env.local`, matching `mcp-check`.
+Validation follows winning-assignment semantics for non-executing values: a later valid or empty assignment clears an earlier invalid literal for the same key. Shell syntax errors are blockers in every sourced environment file. Command/process substitutions and malformed assignment commands remain blockers even if a later file overrides the key, because startup evaluates the earlier command before reaching the override. Legacy `MCP_PRODUCTION_PRIVATE_BETA_*` aliases are checked only in root `.env.local` and `my-app/.env.local`, matching `mcp-check`.
 
-Port validation is target-specific: `local-fast` validates `VITE_PORT`, while `mcp-private-beta` validates `MCP_PRIVATE_BETA_VITE_PORT`. Both validate resolved Convex cloud/site ports and reject values outside `1..65535` before any listener probe. `lsof` is optional; when absent, the doctor warns and skips conflict detection just as startup treats those probes as best effort.
+Port validation is target-specific: `local-fast` validates `VITE_PORT`, while `mcp-private-beta` validates `MCP_PRIVATE_BETA_VITE_PORT`. Both validate resolved Convex cloud/site ports and reject values outside `1..65535` before any listener probe. An explicit `LOCAL_CONVEX_URL` must use the resolved cloud port. `lsof` is optional; when absent, the doctor warns and skips conflict detection. When available, an occupied Convex port is a blocker unless a matching tracked local backend is proven reusable, matching startup preflight behavior.
 
 The diagnostic resolves named local Convex state before checking ports, including state-configured cloud/site ports and an explicit loopback `LOCAL_CONVEX_URL`. It also fails when the user's Convex configuration disables local deployments. These checks use the same resolver and opt-out boundary as startup.
 
@@ -45,7 +45,7 @@ Native PowerShell, Command Prompt, MSYS2, Cygwin, and Git Bash are not supported
 ./run.sh doctor mcp-private-beta
 ```
 
-Exit `0` means no startup blocker was detected. Exit `1` means one or more blockers were reported. An occupied port is a warning because it may belong to the already tracked stack. Exit `2` means the requested doctor target is invalid.
+Exit `0` means no startup blocker was detected. Exit `1` means one or more blockers were reported. Occupied parser or UI ports are warnings. Occupied Convex ports are blockers unless the matching tracked backend is proven reusable. Exit `2` means the requested doctor target is invalid.
 
 `doctor` is a preflight, not proof that every image pull, external network request, or later service startup will succeed. Run the selected stack command after a passing result and keep its runtime logs as the final evidence.
 
