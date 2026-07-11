@@ -616,7 +616,8 @@ const allowed = [
   "CONVEX_DEPLOYMENT",
   "LOCAL_CONVEX_URL",
 ];
-allowed.push(target === "mcp-private-beta" ? "MCP_PRIVATE_BETA_VITE_PORT" : "VITE_PORT");
+if (target === "mcp-private-beta") allowed.push("MCP_PRIVATE_BETA_VITE_PORT", "FORCE_REBUILD");
+else allowed.push("VITE_PORT");
 const resolved = new Map(allowed.map((key) => [key, process.env[key] || ""]));
 
 function parseValue(raw) {
@@ -670,7 +671,10 @@ for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.loca
     if (match && allowed.includes(match[1])) {
       const value = parseValue(match[2]);
       if (value === null) invalid.add(match[1]);
-      else resolved.set(match[1], value);
+      else {
+        invalid.delete(match[1]);
+        resolved.set(match[1], value);
+      }
       continue;
     }
     const malformed = line.match(/^\s*(?:export[ \t]+)?([A-Z][A-Z0-9_]*)[ \t]+=/u);
@@ -707,6 +711,7 @@ NODE
       LOCAL_CONVEX_CLOUD_PORT) LOCAL_CONVEX_CLOUD_PORT="${value}" ;;
       LOCAL_CONVEX_SITE_PORT) LOCAL_CONVEX_SITE_PORT="${value}" ;;
       MCP_PRIVATE_BETA_VITE_PORT) MCP_PRIVATE_BETA_VITE_PORT="${value}" ;;
+      FORCE_REBUILD) FORCE_REBUILD="${value}" ;;
       IMAGE_NAME) IMAGE_NAME="${value}" ;;
       CONVEX_TMPDIR) CONVEX_TMPDIR="${value}" ;;
       CONVEX_TEAM) CONVEX_TEAM="${value}" ;;
@@ -723,6 +728,7 @@ NODE
           LOCAL_CONVEX_CLOUD_PORT) LOCAL_CONVEX_CLOUD_PORT="3210" ;;
           LOCAL_CONVEX_SITE_PORT) LOCAL_CONVEX_SITE_PORT="3211" ;;
           MCP_PRIVATE_BETA_VITE_PORT) MCP_PRIVATE_BETA_VITE_PORT="5196" ;;
+          FORCE_REBUILD) FORCE_REBUILD="false" ;;
           IMAGE_NAME) IMAGE_NAME="cv-parser-service:latest" ;;
           CONVEX_TMPDIR) CONVEX_TMPDIR="${ROOT_DIR}/tmp/convex-tmp" ;;
           CONVEX_TEAM) CONVEX_TEAM="" ;;
@@ -819,6 +825,7 @@ doctor_check_local_convex_url_port() {
 
 doctor_check_docker() {
   local target="${1:-local-fast}"
+  local force_rebuild_requested=0
   if ! command -v docker >/dev/null 2>&1; then
     return 0
   fi
@@ -829,7 +836,17 @@ doctor_check_docker() {
     return 0
   fi
 
-  if docker image inspect "${IMAGE_NAME}" >/dev/null 2>&1; then
+  if [[ "${target}" == "mcp-private-beta" && "$(to_bool "${FORCE_REBUILD}")" == "true" ]]; then
+    force_rebuild_requested=1
+  fi
+
+  if (( force_rebuild_requested )) && docker buildx inspect >/dev/null 2>&1; then
+    doctor_pass "forced parser rebuild has an available buildx builder"
+  elif (( force_rebuild_requested )) && docker buildx version >/dev/null 2>&1; then
+    doctor_warn "forced parser rebuild requires a builder; mcp-private-beta startup will configure it"
+  elif (( force_rebuild_requested )); then
+    doctor_fail "forced parser rebuild requires Docker buildx"
+  elif docker image inspect "${IMAGE_NAME}" >/dev/null 2>&1; then
     doctor_pass "parser runtime image is available"
   elif [[ "${target}" == "mcp-private-beta" ]] && docker buildx inspect >/dev/null 2>&1; then
     doctor_warn "parser runtime image is missing; mcp-private-beta startup will build it with the available builder"
@@ -976,7 +993,10 @@ function resolveStartupValue(key) {
     if (!env.has(key)) continue;
     const nextValue = env.get(key);
     if (nextValue === invalidDotenvValue) invalid = true;
-    else value = nextValue;
+    else {
+      invalid = false;
+      value = nextValue;
+    }
   }
   return { invalid, value };
 }
@@ -1039,7 +1059,7 @@ for (const envPath of otherEnvPaths) {
     break;
   }
 }
-if ([rootEnv, ...otherEnvPaths.map(parseDotenv)].some((env) => [...env.keys()].some((key) => key.startsWith("MCP_PRODUCTION_PRIVATE_BETA_")))) {
+if ([rootEnv, parseDotenv(otherEnvPaths[2])].some((env) => [...env.keys()].some((key) => key.startsWith("MCP_PRODUCTION_PRIVATE_BETA_")))) {
   fail("legacy MCP_PRODUCTION_PRIVATE_BETA_* aliases are forbidden");
 }
 
@@ -1085,7 +1105,11 @@ doctor() {
   doctor_check_platform
   doctor_check_command docker
   doctor_check_command node
-  doctor_check_command npm
+  if command -v npm >/dev/null 2>&1; then
+    doctor_pass "npm command is available"
+  else
+    doctor_warn "npm command is missing; dependency installation commands will be unavailable"
+  fi
   doctor_check_command curl
   if command -v lsof >/dev/null 2>&1; then
     doctor_pass "lsof command is available"

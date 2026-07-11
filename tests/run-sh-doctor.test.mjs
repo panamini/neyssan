@@ -370,6 +370,44 @@ test("doctor local-fast rejects an invalid local-fast Vite port", (t) => {
   assert.match(result.output, /VITE_PORT is not a supported literal/i);
 });
 
+test("doctor accepts a valid higher-precedence value after an invalid lower value", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(join(fixture.root, ".env"), "VITE_PORT=not-a-port\n");
+  writeFileSync(
+    fixture.envFile,
+    "CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nVITE_PORT=6201\n",
+    { mode: 0o600 },
+  );
+  const lsofLogPath = join(fixture.root, "lsof.log");
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_LSOF_LOG: lsofLogPath,
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(readFileSync(lsofLogPath, "utf8"), /iTCP:6201/u);
+  assert.doesNotMatch(result.output, /6201|not-a-port/u);
+});
+
+test("doctor accepts an empty higher-precedence value after an invalid lower value", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(join(fixture.root, ".env"), "VITE_PORT=not-a-port\n");
+  writeFileSync(
+    fixture.envFile,
+    "CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nVITE_PORT=\n",
+    { mode: 0o600 },
+  );
+  const lsofLogPath = join(fixture.root, "lsof.log");
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_LSOF_LOG: lsofLogPath,
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(readFileSync(lsofLogPath, "utf8"), /iTCP:5173/u);
+  assert.doesNotMatch(result.output, /5173|not-a-port/u);
+});
+
 test("doctor fails closed for a non-literal runtime override", (t) => {
   const fixture = createFixture(t);
   rmSync(join(fixture.binDirectory, "node"));
@@ -686,6 +724,16 @@ test("doctor warns but does not fail when lsof is unavailable", (t) => {
   assert.match(result.output, /WARN - lsof command is missing; port conflict checks will be skipped/i);
 });
 
+test("doctor warns but does not fail when npm is unavailable", (t) => {
+  const fixture = createFixture(t);
+  rmSync(join(fixture.binDirectory, "npm"));
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /WARN - npm command is missing; dependency installation commands will be unavailable/i);
+});
+
 test("doctor rejects Node versions older than the CI runtime", (t) => {
   const fixture = createFixture(t);
 
@@ -912,6 +960,21 @@ test("doctor mcp-private-beta reports when startup must configure the buildx bui
   assert.match(result.output, /WARN - parser runtime image and buildx builder are missing; mcp-private-beta startup will configure the builder and build the image/i);
 });
 
+test("doctor mcp-private-beta checks buildx for a forced rebuild even when the image exists", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture, {
+    rootEnvExtra: "FORCE_REBUILD=true\n",
+  });
+
+  const result = runDoctor(fixture, ["mcp-private-beta"], {
+    FAKE_DOCKER_BUILDX: "unavailable",
+  });
+
+  assertFailure(result);
+  assert.match(result.output, /forced parser rebuild requires Docker buildx/i);
+  assert.doesNotMatch(result.output, /parser runtime image is available/i);
+});
+
 test("doctor preserves an empty higher-precedence Clerk publishable key", (t) => {
   const fixture = createFixture(t);
   const lowerPrecedenceValue = "bad-lower-clerk-key-do-not-print";
@@ -927,6 +990,35 @@ test("doctor preserves an empty higher-precedence Clerk publishable key", (t) =>
   for (const value of Object.values(hiddenValues)) {
     assert.doesNotMatch(result.output, new RegExp(escapeRegExp(value)));
   }
+});
+
+test("doctor clears unsupported MCP values when later startup assignments win", (t) => {
+  const fixture = createFixture(t);
+  const alternateCredentials = join(fixture.root, "later-credentials-do-not-print.json");
+  writeFileSync(alternateCredentials, "{}\n", { mode: 0o600 });
+  configureValidMcpFixture(fixture, {
+    baseEnv: 'VITE_CLERK_PUBLISHABLE_KEY="$HOME/lower-key"\nMCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE="$HOME/lower-credentials"\n',
+    rootEnvExtra: "VITE_CLERK_PUBLISHABLE_KEY=\n",
+    appEnv: `MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE=${alternateCredentials}\n`,
+  });
+
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+
+  assert.equal(result.status, 0, result.output);
+  assert.doesNotMatch(result.output, /lower-(key|credentials)|later-credentials-do-not-print/u);
+});
+
+test("doctor matches mcp-check legacy alias scope", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture, {
+    baseEnv: "MCP_PRODUCTION_PRIVATE_BETA_CLIENT_IDS=legacy-base-value\n",
+    appEnv: "MCP_PRODUCTION_PRIVATE_BETA_RESOURCES=legacy-app-value\n",
+  });
+
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+
+  assert.equal(result.status, 0, result.output);
+  assert.doesNotMatch(result.output, /legacy-(base|app)-value/u);
 });
 
 test("doctor mcp-private-beta ignores an invalid local-fast Vite port", (t) => {

@@ -10,13 +10,17 @@ The command does not source or execute dotenv files, create runtime directories,
 
 The startup allowlist applies dotenv precedence for configured ports, parser image, Convex temporary storage, Convex team/project/deployment bindings, and `LOCAL_CONVEX_URL`. It accepts bare and `export` assignments. Dynamic shell expressions in these values are rejected with the key name only; collaborators must use literal values so preflight and startup cannot diverge.
 
+Validation follows winning-assignment semantics: a later valid or empty assignment clears an earlier invalid value for the same key, matching shell source precedence. Legacy `MCP_PRODUCTION_PRIVATE_BETA_*` aliases are checked only in root `.env.local` and `my-app/.env.local`, matching `mcp-check`.
+
 Port validation is target-specific: `local-fast` validates `VITE_PORT`, while `mcp-private-beta` validates `MCP_PRIVATE_BETA_VITE_PORT`. Both validate resolved Convex cloud/site ports and reject values outside `1..65535` before any listener probe. `lsof` is optional; when absent, the doctor warns and skips conflict detection just as startup treats those probes as best effort.
 
 The diagnostic resolves named local Convex state before checking ports, including state-configured cloud/site ports and an explicit loopback `LOCAL_CONVEX_URL`. It also fails when the user's Convex configuration disables local deployments. These checks use the same resolver and opt-out boundary as startup.
 
-Docker image readiness is target-aware. A missing parser image remains a blocker for `local-fast`, whose workspace container requires an existing base image. For `mcp-private-beta`, it is a warning when a buildx builder is ready or when the buildx plugin is available to configure one, because that startup path performs those steps automatically. A missing buildx plugin remains a blocker. The doctor does not create a builder or build an image.
+Docker image readiness is target-aware. A missing parser image remains a blocker for `local-fast`, whose workspace container requires an existing base image. For `mcp-private-beta`, it is a warning when a buildx builder is ready or when the buildx plugin is available to configure one, because that startup path performs those steps automatically. A requested `FORCE_REBUILD` checks buildx even when the image already exists. A missing buildx plugin remains a blocker. The doctor does not create a builder or build an image.
 
 Private-beta validation replays `.env`, `.env.local`, and `my-app/.env` in startup order for `VITE_CLERK_PUBLISHABLE_KEY` and `MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE`. Empty higher-precedence assignments are preserved, and an empty final credentials path uses the same default as startup. Values are compared or used for local file checks only and are never printed.
+
+`npm` is optional after dependencies are installed because selected startup paths execute Node, Vite, and Convex binaries directly. Its absence produces installation guidance as a warning rather than a startup blocker.
 
 ## Supported environments
 
