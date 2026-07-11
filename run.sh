@@ -612,10 +612,163 @@ doctor_check_startup_env_syntax() {
   return 0
 }
 
+doctor_check_startup_env_literals() {
+  if node - "${ROOT_DIR}" <<'NODE'
+const fs = require("node:fs");
+const path = require("node:path");
+
+const [rootDir] = process.argv.slice(2);
+
+function stripInlineComment(raw) {
+  let quote = "";
+  let escaped = false;
+  for (let index = 0; index < raw.length; index += 1) {
+    const character = raw[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (quote === '"' && character === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      if (character === quote) quote = "";
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character === "#" && (index === 0 || /\s/u.test(raw[index - 1]))) {
+      return raw.slice(0, index);
+    }
+  }
+  if (quote || escaped) return null;
+  return raw;
+}
+
+function logicalStatements(source) {
+  source = source.replace(/\r\n/gu, "\n");
+  const statements = [];
+  let current = "";
+  let quote = "";
+  let escaped = false;
+  let comment = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    if (comment) {
+      if (character === "\n") {
+        statements.push(current);
+        current = "";
+        comment = false;
+      }
+      continue;
+    }
+    if (escaped) {
+      current += character;
+      escaped = false;
+      continue;
+    }
+    if (quote === '"' && character === "\\") {
+      current += character;
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      current += character;
+      if (character === quote) quote = "";
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      current += character;
+      quote = character;
+      continue;
+    }
+    if (character === "#" && (!current || /\s/u.test(current[current.length - 1]))) {
+      comment = true;
+      continue;
+    }
+    if (character === "\n") {
+      statements.push(current);
+      current = "";
+      continue;
+    }
+    current += character;
+  }
+  if (quote || escaped) return null;
+  if (current || !source.endsWith("\n")) statements.push(current);
+  return statements;
+}
+
+function stripDefinedParameterExpansions(value) {
+  let valid = true;
+  const stripped = value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/gu, (_match, braced, bare) => {
+    const key = braced || bare;
+    if (!Object.prototype.hasOwnProperty.call(process.env, key)) valid = false;
+    return "";
+  });
+  if (!valid || stripped.includes("$")) return null;
+  return stripped;
+}
+
+function isLiteralAssignmentValue(raw) {
+  if (/^[ \t]/u.test(raw) && raw.trim() && !raw.trim().startsWith("#")) return false;
+  const stripped = stripInlineComment(raw);
+  if (stripped === null) return false;
+  const value = stripped.trim();
+  if (!value) return true;
+  const quoteCharacter = value[0];
+  if (quoteCharacter === '"' || quoteCharacter === "'") {
+    if (value[value.length - 1] !== quoteCharacter) return false;
+    const inner = value.slice(1, -1);
+    if (quoteCharacter === '"') {
+      const withoutParameters = stripDefinedParameterExpansions(inner);
+      if (withoutParameters === null || /[\\]/u.test(withoutParameters) || withoutParameters.includes(String.fromCharCode(96))) return false;
+    }
+    return true;
+  }
+  if (value.startsWith("~")) return false;
+  const withoutParameters = stripDefinedParameterExpansions(value);
+  return withoutParameters !== null
+    && !/[\s'"\\;|&<>()]/u.test(withoutParameters)
+    && !withoutParameters.includes(String.fromCharCode(96));
+}
+
+let valid = true;
+for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.local"), path.join(rootDir, "my-app", ".env")]) {
+  if (!fs.existsSync(envPath)) continue;
+  const statements = logicalStatements(fs.readFileSync(envPath, "utf8"));
+  if (statements === null) {
+    valid = false;
+    break;
+  }
+  for (const statement of statements) {
+    if (!statement.trim()) continue;
+    const match = statement.match(/^\s*(?:export[ \t]+)?[A-Za-z_][A-Za-z0-9_]*=([\s\S]*)$/u);
+    if (!match || !isLiteralAssignmentValue(match[1])) {
+      valid = false;
+      break;
+    }
+  }
+  if (!valid) break;
+}
+process.exit(valid ? 0 : 1);
+NODE
+  then
+    doctor_pass "startup environment files contain literal assignments only"
+    return 0
+  fi
+  doctor_fail "startup environment files must contain literal assignments only"
+  return 1
+}
+
 doctor_load_runtime_overrides() {
   local target="${1:-local-fast}"
+  local record_type=""
   local key=""
-  local value=""
+  local encoded=""
+  local decoded=""
   local parsed=""
   if ! parsed="$(node - "${ROOT_DIR}" "${target}" <<'NODE'
 const fs = require("node:fs");
@@ -635,18 +788,17 @@ const allowed = [
   "CONVEX_LOCAL_DEPLOYMENT",
   "CONVEX_DEPLOYMENT",
   "LOCAL_CONVEX_URL",
+  "LOCAL_CONVEX_STARTUP_TIMEOUT",
 ];
 if (target === "mcp-private-beta") allowed.push("MCP_PRIVATE_BETA_VITE_PORT", "FORCE_REBUILD");
 else allowed.push("VITE_PORT");
 const resolved = new Map(allowed.map((key) => [key, process.env[key] || ""]));
 
-function parseValue(raw) {
-  if (/^[ \t]/u.test(raw) && raw.trim() && !raw.trim().startsWith("#")) return null;
-  let value = raw;
+function stripInlineComment(raw) {
   let quote = "";
   let escaped = false;
-  for (let index = 0; index < value.length; index += 1) {
-    const character = value[index];
+  for (let index = 0; index < raw.length; index += 1) {
+    const character = raw[index];
     if (escaped) {
       escaped = false;
       continue;
@@ -663,19 +815,77 @@ function parseValue(raw) {
       quote = character;
       continue;
     }
-    if (character === "#" && (index === 0 || /\s/u.test(value[index - 1]))) {
-      value = value.slice(0, index);
-      break;
+    if (character === "#" && (index === 0 || /\s/u.test(raw[index - 1]))) {
+      return raw.slice(0, index);
     }
   }
   if (quote || escaped) return null;
+  return raw;
+}
+
+function logicalStatements(source) {
+  source = source.replace(/\r\n/gu, "\n");
+  const statements = [];
+  let current = "";
+  let quote = "";
+  let escaped = false;
+  let comment = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    if (comment) {
+      if (character === "\n") {
+        statements.push(current);
+        current = "";
+        comment = false;
+      }
+      continue;
+    }
+    if (escaped) {
+      current += character;
+      escaped = false;
+      continue;
+    }
+    if (quote === '"' && character === "\\") {
+      current += character;
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      current += character;
+      if (character === quote) quote = "";
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      current += character;
+      quote = character;
+      continue;
+    }
+    if (character === "#" && (!current || /\s/u.test(current[current.length - 1]))) {
+      comment = true;
+      continue;
+    }
+    if (character === "\n") {
+      statements.push(current);
+      current = "";
+      continue;
+    }
+    current += character;
+  }
+  if (quote || escaped) return null;
+  if (current || !source.endsWith("\n")) statements.push(current);
+  return statements;
+}
+
+function parseValue(raw) {
+  if (/^[ \t]/u.test(raw) && raw.trim() && !raw.trim().startsWith("#")) return null;
+  let value = stripInlineComment(raw);
+  if (value === null) return null;
   value = value.trim();
   if (!value) return "";
   const quoteCharacter = value[0];
   if (quoteCharacter === '"' || quoteCharacter === "'") {
     if (value[value.length - 1] !== quoteCharacter) return null;
     value = value.slice(1, -1);
-    if (/[\t\r\n]/u.test(value)) return null;
     if (quoteCharacter === '"' && (/[$\\]/u.test(value) || value.includes(String.fromCharCode(96)))) return null;
     return value;
   }
@@ -686,16 +896,44 @@ function parseValue(raw) {
 const invalid = new Set();
 const fatal = new Set();
 
+function stripDefinedParameterExpansions(value) {
+  let valid = true;
+  const stripped = value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/gu, (_match, braced, bare) => {
+    const key = braced || bare;
+    if (!Object.prototype.hasOwnProperty.call(process.env, key)) valid = false;
+    return "";
+  });
+  if (!valid || stripped.includes("$")) return null;
+  return stripped;
+}
+
 function requiresStartupEvaluation(raw) {
-  return /(?:\$\(|[<>]\()/u.test(raw)
-    || raw.includes(String.fromCharCode(96))
-    || (/^[ \t]/u.test(raw) && raw.trim() && !raw.trim().startsWith("#"));
+  const stripped = stripInlineComment(raw);
+  if (stripped === null) return true;
+  const value = stripped.trim();
+  if (!value) return false;
+  const quoteCharacter = value[0];
+  if (quoteCharacter === "'" && value[value.length - 1] === quoteCharacter) return false;
+  if (quoteCharacter === '"' && value[value.length - 1] === quoteCharacter) {
+    const inner = value.slice(1, -1);
+    const withoutParameters = stripDefinedParameterExpansions(inner);
+    return withoutParameters === null
+      || /[\\]/u.test(withoutParameters)
+      || withoutParameters.includes(String.fromCharCode(96));
+  }
+  const withoutParameters = stripDefinedParameterExpansions(value);
+  if (withoutParameters === null) return true;
+  return value.startsWith("~")
+    || /[\s\\;|&<>()]/u.test(withoutParameters)
+    || withoutParameters.includes(String.fromCharCode(96));
 }
 
 for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.local"), path.join(rootDir, "my-app", ".env")]) {
   if (!fs.existsSync(envPath)) continue;
-  for (const line of fs.readFileSync(envPath, "utf8").split(/\r?\n/u)) {
-    const match = line.match(/^\s*(?:export[ \t]+)?([A-Z][A-Z0-9_]*)=(.*)$/u);
+  const statements = logicalStatements(fs.readFileSync(envPath, "utf8"));
+  if (statements === null) process.exit(1);
+  for (const statement of statements) {
+    const match = statement.match(/^\s*(?:export[ \t]+)?([A-Z][A-Z0-9_]*)=([\s\S]*)$/u);
     if (match && allowed.includes(match[1])) {
       const value = parseValue(match[2]);
       if (value === null) {
@@ -707,7 +945,7 @@ for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.loca
       }
       continue;
     }
-    const malformed = line.match(/^\s*(?:export[ \t]+)?([A-Z][A-Z0-9_]*)[ \t]+=/u);
+    const malformed = statement.match(/^\s*(?:export[ \t]+)?([A-Z][A-Z0-9_]*)[ \t]+=/u);
     if (malformed && allowed.includes(malformed[1])) {
       invalid.add(malformed[1]);
       fatal.add(malformed[1]);
@@ -731,32 +969,45 @@ for (const [key, value] of resolved) {
       continue;
     }
   }
-  process.stdout.write(`${key}\t${value}\n`);
+  if (key === "LOCAL_CONVEX_STARTUP_TIMEOUT" && (!/^[0-9]+$/u.test(value) || !/[1-9]/u.test(value))) {
+    process.stdout.write(`ERROR\t${key}\n`);
+    continue;
+  }
+  process.stdout.write(`VALUE\t${key}\t${Buffer.from(value, "utf8").toString("base64")}\n`);
 }
 NODE
   )"; then
     doctor_fail "runtime dotenv parser failed"
     return 1
   fi
-  while IFS=$'\t' read -r key value; do
-    case "${key}" in
-      VITE_PORT) VITE_PORT="${value}" ;;
-      LOCAL_CONVEX_CLOUD_PORT) LOCAL_CONVEX_CLOUD_PORT="${value}" ;;
-      LOCAL_CONVEX_SITE_PORT) LOCAL_CONVEX_SITE_PORT="${value}" ;;
-      MCP_PRIVATE_BETA_VITE_PORT) MCP_PRIVATE_BETA_VITE_PORT="${value}" ;;
-      FORCE_REBUILD) FORCE_REBUILD="${value}" ;;
-      IMAGE_NAME) IMAGE_NAME="${value}" ;;
-      CONVEX_TMPDIR) CONVEX_TMPDIR="${value}" ;;
-      CONVEX_TEAM) CONVEX_TEAM="${value}" ;;
-      CONVEX_TEAM_SLUG) CONVEX_TEAM_SLUG="${value}" ;;
-      CONVEX_PROJECT) CONVEX_PROJECT="${value}" ;;
-      CONVEX_PROJECT_SLUG) CONVEX_PROJECT_SLUG="${value}" ;;
-      CONVEX_LOCAL_DEPLOYMENT_NAME) CONVEX_LOCAL_DEPLOYMENT_NAME="${value}" ;;
-      CONVEX_LOCAL_DEPLOYMENT) CONVEX_LOCAL_DEPLOYMENT="${value}" ;;
-      CONVEX_DEPLOYMENT) CONVEX_DEPLOYMENT="${value}" ;;
-      LOCAL_CONVEX_URL) LOCAL_CONVEX_URL="${value}" ;;
+  while IFS=$'\t' read -r record_type key encoded; do
+    case "${record_type}" in
+      VALUE)
+        if ! decoded="$(node -e 'process.stdout.write(Buffer.from(process.argv[1], "base64").toString("utf8"))' "${encoded}" 2>/dev/null)"; then
+          doctor_fail "runtime dotenv value decoder failed"
+          continue
+        fi
+        case "${key}" in
+          VITE_PORT) VITE_PORT="${decoded}" ;;
+          LOCAL_CONVEX_CLOUD_PORT) LOCAL_CONVEX_CLOUD_PORT="${decoded}" ;;
+          LOCAL_CONVEX_SITE_PORT) LOCAL_CONVEX_SITE_PORT="${decoded}" ;;
+          MCP_PRIVATE_BETA_VITE_PORT) MCP_PRIVATE_BETA_VITE_PORT="${decoded}" ;;
+          FORCE_REBUILD) FORCE_REBUILD="${decoded}" ;;
+          IMAGE_NAME) IMAGE_NAME="${decoded}" ;;
+          CONVEX_TMPDIR) CONVEX_TMPDIR="${decoded}" ;;
+          CONVEX_TEAM) CONVEX_TEAM="${decoded}" ;;
+          CONVEX_TEAM_SLUG) CONVEX_TEAM_SLUG="${decoded}" ;;
+          CONVEX_PROJECT) CONVEX_PROJECT="${decoded}" ;;
+          CONVEX_PROJECT_SLUG) CONVEX_PROJECT_SLUG="${decoded}" ;;
+          CONVEX_LOCAL_DEPLOYMENT_NAME) CONVEX_LOCAL_DEPLOYMENT_NAME="${decoded}" ;;
+          CONVEX_LOCAL_DEPLOYMENT) CONVEX_LOCAL_DEPLOYMENT="${decoded}" ;;
+          CONVEX_DEPLOYMENT) CONVEX_DEPLOYMENT="${decoded}" ;;
+          LOCAL_CONVEX_URL) LOCAL_CONVEX_URL="${decoded}" ;;
+          LOCAL_CONVEX_STARTUP_TIMEOUT) LOCAL_CONVEX_STARTUP_TIMEOUT="${decoded}" ;;
+        esac
+        ;;
       EMPTY)
-        case "${value}" in
+        case "${key}" in
           VITE_PORT) VITE_PORT="5173" ;;
           LOCAL_CONVEX_CLOUD_PORT) LOCAL_CONVEX_CLOUD_PORT="3210" ;;
           LOCAL_CONVEX_SITE_PORT) LOCAL_CONVEX_SITE_PORT="3211" ;;
@@ -772,9 +1023,16 @@ NODE
           CONVEX_LOCAL_DEPLOYMENT) CONVEX_LOCAL_DEPLOYMENT="" ;;
           CONVEX_DEPLOYMENT) CONVEX_DEPLOYMENT="" ;;
           LOCAL_CONVEX_URL) LOCAL_CONVEX_URL="" ;;
+          LOCAL_CONVEX_STARTUP_TIMEOUT) LOCAL_CONVEX_STARTUP_TIMEOUT="180" ;;
         esac
         ;;
-      ERROR) doctor_fail "dotenv override for ${value} is not a supported literal" ;;
+      ERROR)
+        if [[ "${key}" == "LOCAL_CONVEX_STARTUP_TIMEOUT" ]]; then
+          doctor_fail "LOCAL_CONVEX_STARTUP_TIMEOUT must be a positive integer"
+        else
+          doctor_fail "dotenv override for ${key} is not a supported literal"
+        fi
+        ;;
     esac
   done <<< "${parsed}"
   return 0
@@ -808,6 +1066,7 @@ doctor_check_runtime_path() {
 
 doctor_check_runtime_paths() {
   doctor_check_runtime_path "${ROOT_DIR}/tmp" "tmp runtime directory"
+  doctor_check_runtime_path "${STATE_DIR}" "dev stack state directory"
   doctor_check_runtime_path "${ROOT_DIR}/.docker" "Docker state directory"
   doctor_check_runtime_path "${ROOT_DIR}/.buildx-cache" "build cache directory"
   doctor_check_runtime_path "${CONVEX_TMPDIR}" "Convex temporary directory"
@@ -817,7 +1076,7 @@ doctor_check_port() {
   local port="${1:?port required}"
   local label="${2:?port label required}"
   local occupied_behavior="${3:-warn}"
-  if ! doctor_port_value_is_valid "${port}"; then
+  if ! port="$(doctor_normalize_port "${port}")"; then
     doctor_fail "${label} must be between 1 and 65535"
     return 0
   fi
@@ -835,11 +1094,19 @@ doctor_check_port() {
   fi
 }
 
-doctor_port_value_is_valid() {
+doctor_normalize_port() {
   local port="${1:-}"
   [[ "${port}" =~ ^[0-9]+$ ]] || return 1
-  [[ "${port}" != 0 && "${port}" != 0* && "${#port}" -le 5 ]] || return 1
-  (( port <= 65535 ))
+  while [[ "${port}" == 0* && "${#port}" -gt 1 ]]; do
+    port="${port#0}"
+  done
+  [[ "${port}" != 0 && "${#port}" -le 5 ]] || return 1
+  (( port <= 65535 )) || return 1
+  printf '%s' "${port}"
+}
+
+doctor_port_value_is_valid() {
+  doctor_normalize_port "${1:-}" >/dev/null
 }
 
 doctor_check_local_convex_url_port() {
@@ -849,16 +1116,57 @@ doctor_check_local_convex_url_port() {
   [[ -n "${url}" ]] || return 0
   if [[ "${url}" =~ ^http://(127\.0\.0\.1|localhost):([0-9]+)$ ]]; then
     url_port="${BASH_REMATCH[2]}"
-    if ! doctor_port_value_is_valid "${url_port}"; then
+    if ! url_port="$(doctor_normalize_port "${url_port}")"; then
       doctor_fail "LOCAL_CONVEX_URL port must be between 1 and 65535"
       return 0
     fi
+    cloud_port="$(doctor_normalize_port "${cloud_port}" 2>/dev/null || printf '%s' "${cloud_port}")"
     if [[ "${url_port}" != "${cloud_port}" ]]; then
       doctor_fail "LOCAL_CONVEX_URL port must match the resolved Convex cloud port"
     fi
   else
     doctor_fail "LOCAL_CONVEX_URL must be a loopback HTTP URL with an explicit port"
   fi
+}
+
+doctor_check_local_convex_state_config() {
+  local config_path="${1:-}"
+  [[ -n "${config_path}" ]] || return 0
+  if [[ "${DOCTOR_NODE_READY:-0}" != "1" ]]; then
+    return 1
+  fi
+  if node -e 'JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"))' "${config_path}" >/dev/null 2>&1; then
+    doctor_pass "local Convex state configuration is valid JSON"
+    return 0
+  fi
+  doctor_fail "local Convex state configuration is invalid JSON"
+  return 1
+}
+
+doctor_running_parser_is_reusable() {
+  local target="${1:-local-fast}"
+  local expected_runtime="workspace"
+  local current_runtime=""
+  local current_image=""
+  local expected_image=""
+  command -v docker >/dev/null 2>&1 || return 1
+  doctor_running_parser_is_tracked || return 1
+  if [[ "${target}" == "mcp-private-beta" ]]; then
+    expected_runtime="image"
+  fi
+  current_runtime="$(parser_runtime_mode)"
+  [[ "${current_runtime}" == "${expected_runtime}" ]] || return 1
+  if [[ "${expected_runtime}" == "workspace" ]]; then
+    return 0
+  fi
+  current_image="$(parser_image_id)"
+  expected_image="$(target_image_id)"
+  [[ -n "${current_image}" && -n "${expected_image}" && "${current_image}" == "${expected_image}" ]]
+}
+
+doctor_running_parser_is_tracked() {
+  command -v docker >/dev/null 2>&1 || return 1
+  docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "${PARSER_NAME}"
 }
 
 doctor_check_docker() {
@@ -927,59 +1235,94 @@ function fail(message) {
   process.stderr.write(`[run] doctor: MCP config - ${message}\n`);
 }
 
+function stripInlineComment(raw) {
+  let quote = "";
+  let escaped = false;
+  for (let index = 0; index < raw.length; index += 1) {
+    const character = raw[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (quote === '"' && character === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      if (character === quote) quote = "";
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character === "#" && (index === 0 || /\s/u.test(raw[index - 1]))) {
+      return raw.slice(0, index);
+    }
+  }
+  if (quote || escaped) return null;
+  return raw;
+}
+
+function stripDefinedParameterExpansions(value) {
+  let valid = true;
+  const stripped = value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/gu, (_match, braced, bare) => {
+    const key = braced || bare;
+    if (!Object.prototype.hasOwnProperty.call(process.env, key)) valid = false;
+    return "";
+  });
+  if (!valid || stripped.includes("$")) return null;
+  return stripped;
+}
+
+function requiresStartupEvaluation(raw) {
+  const value = raw.trim();
+  if (!value) return false;
+  const quoteCharacter = value[0];
+  if (quoteCharacter === "'" && value[value.length - 1] === quoteCharacter) return false;
+  if (quoteCharacter === '"' && value[value.length - 1] === quoteCharacter) {
+    const inner = value.slice(1, -1);
+    const withoutParameters = stripDefinedParameterExpansions(inner);
+    return withoutParameters === null
+      || /[\\]/u.test(withoutParameters)
+      || withoutParameters.includes(String.fromCharCode(96));
+  }
+  const withoutParameters = stripDefinedParameterExpansions(value);
+  if (withoutParameters === null) return true;
+  return value.startsWith("~")
+    || /[\s\\;|&<>()]/u.test(withoutParameters)
+    || withoutParameters.includes(String.fromCharCode(96));
+}
+
 function parseDotenv(filePath) {
   const result = new Map();
+  function record(key, value) {
+    if (value === fatalDotenvValue || result.get(key) !== fatalDotenvValue) {
+      result.set(key, value);
+    }
+  }
   if (!fs.existsSync(filePath)) return result;
   for (const line of fs.readFileSync(filePath, "utf8").split(/\r?\n/u)) {
     const match = line.match(/^\s*(?:export[ \t]+)?([A-Z][A-Z0-9_]*)=(.*)$/u);
     if (!match) {
       const malformed = line.match(/^\s*(?:export[ \t]+)?([A-Z][A-Z0-9_]*)[ \t]+=/u);
-      if (malformed) result.set(malformed[1], fatalDotenvValue);
+      if (malformed) record(malformed[1], fatalDotenvValue);
       continue;
     }
-    if (/(?:\$\(|[<>]\()/u.test(match[2]) || match[2].includes(String.fromCharCode(96))) {
-      result.set(match[1], fatalDotenvValue);
+    const stripped = stripInlineComment(match[2]);
+    if (stripped === null) {
+      record(match[1], invalidDotenvValue);
       continue;
     }
-    if (/^[ \t]/u.test(match[2]) && match[2].trim() && !match[2].trim().startsWith("#")) {
-      result.set(match[1], fatalDotenvValue);
+    if ((/^[ \t]/u.test(stripped) && stripped.trim()) || requiresStartupEvaluation(stripped)) {
+      record(match[1], fatalDotenvValue);
       continue;
     }
-    let value = match[2];
-    let quote = "";
-    let escaped = false;
-    for (let index = 0; index < value.length; index += 1) {
-      const character = value[index];
-      if (escaped) {
-        escaped = false;
-        continue;
-      }
-      if (quote === '"' && character === "\\") {
-        escaped = true;
-        continue;
-      }
-      if (quote) {
-        if (character === quote) quote = "";
-        continue;
-      }
-      if (character === '"' || character === "'") {
-        quote = character;
-        continue;
-      }
-      if (character === "#" && (index === 0 || /\s/u.test(value[index - 1]))) {
-        value = value.slice(0, index);
-        break;
-      }
-    }
-    if (quote || escaped) {
-      result.set(match[1], invalidDotenvValue);
-      continue;
-    }
-    value = value.trim();
+    let value = stripped.trim();
     const quoteCharacter = value[0] ?? "";
     if (quoteCharacter === '"' || quoteCharacter === "'") {
       if (value[value.length - 1] !== quoteCharacter) {
-        result.set(match[1], invalidDotenvValue);
+        record(match[1], invalidDotenvValue);
         continue;
       }
       value = value.slice(1, -1);
@@ -987,14 +1330,14 @@ function parseDotenv(filePath) {
         /[\t\r\n]/u.test(value) ||
         (quoteCharacter === '"' && (/[$\\]/u.test(value) || value.includes(String.fromCharCode(96))))
       ) {
-        result.set(match[1], invalidDotenvValue);
+        record(match[1], invalidDotenvValue);
         continue;
       }
     } else if (value && !/^[A-Za-z0-9_./:@+=,-]+$/u.test(value)) {
-      result.set(match[1], invalidDotenvValue);
+      record(match[1], invalidDotenvValue);
       continue;
     }
-    result.set(match[1], value);
+    record(match[1], value);
   }
   return result;
 }
@@ -1119,7 +1462,9 @@ const credentialsFile = configuredCredentialsFile.value || defaultCredentialsFil
 if (!fs.existsSync(credentialsFile)) {
   fail("named MCP tunnel credentials file is missing");
 } else {
-  const mode = (fs.statSync(credentialsFile).mode & 0o777).toString(8);
+  const credentialsStat = fs.statSync(credentialsFile);
+  if (!credentialsStat.isFile()) fail("named MCP tunnel credentials path must be a regular file");
+  const mode = (credentialsStat.mode & 0o777).toString(8);
   if (mode !== "400" && mode !== "600") fail("named MCP tunnel credentials file must have mode 400 or 600");
 }
 
@@ -1157,6 +1502,7 @@ doctor() {
     doctor_warn "npm command is missing; dependency installation commands will be unavailable"
   fi
   doctor_check_command curl
+  doctor_check_command seq
   if command -v lsof >/dev/null 2>&1; then
     doctor_pass "lsof command is available"
   else
@@ -1165,6 +1511,7 @@ doctor() {
   doctor_check_startup_env_syntax || true
   if command -v node >/dev/null 2>&1 && doctor_check_node_runtime; then
     DOCTOR_NODE_READY=1
+    doctor_check_startup_env_literals || true
     doctor_load_runtime_overrides "${target}" || true
   fi
   resolved_convex_cloud_port="${LOCAL_CONVEX_CLOUD_PORT}"
@@ -1183,7 +1530,8 @@ doctor() {
     resolved_convex_cloud_port="${LOCAL_CONVEX_CLOUD_PORT_RESULT:-${LOCAL_CONVEX_CLOUD_PORT}}"
     resolved_convex_site_port="${LOCAL_CONVEX_SITE_PORT_RESULT:-${LOCAL_CONVEX_SITE_PORT}}"
     resolved_convex_url="${LOCAL_CONVEX_URL_RESULT:-}"
-    if reuse_running_local_convex_from_state "${CONVEX_DEPLOYMENT_NAME_RESULT:-}" >/dev/null 2>&1; then
+    if doctor_check_local_convex_state_config "${LOCAL_CONVEX_STATE_CONFIG_RESULT:-}" \
+      && reuse_running_local_convex_from_state "${CONVEX_DEPLOYMENT_NAME_RESULT:-}" >/dev/null 2>&1; then
       convex_reusable=1
       doctor_pass "tracked local Convex backend is reusable"
     fi
@@ -1197,7 +1545,13 @@ doctor() {
     doctor_pass "local Convex deployments are enabled"
   fi
 
-  doctor_check_port 8001 "parser port"
+  if doctor_running_parser_is_reusable "${target}"; then
+    doctor_pass "tracked parser is reusable"
+  elif doctor_running_parser_is_tracked; then
+    doctor_pass "tracked parser can be replaced by startup"
+  else
+    doctor_check_port 8001 "parser port" fail
+  fi
   if (( convex_reusable )); then
     doctor_pass "tracked local Convex ports are reusable"
   else

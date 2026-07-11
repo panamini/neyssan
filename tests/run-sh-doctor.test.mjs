@@ -6,6 +6,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  realpathSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -39,6 +40,7 @@ function linkHostTools(binDirectory) {
     "dirname",
     "grep",
     "head",
+    "seq",
     "stat",
     "tail",
     "tr",
@@ -82,7 +84,21 @@ case "\${1:-}" in
   info) test "\${FAKE_DOCKER_DAEMON:-available}" = available ;;
   image)
     if test "\${2:-}" = inspect && test "\${FAKE_DOCKER_IMAGE:-available}" = missing; then exit 1; fi
-    if test "\${2:-}" = inspect && test -n "\${FAKE_DOCKER_EXPECT_IMAGE:-}"; then test "\${3:-}" = "\${FAKE_DOCKER_EXPECT_IMAGE}"; fi
+    if test "\${2:-}" = inspect && test -n "\${FAKE_DOCKER_EXPECT_IMAGE:-}"; then test "\${3:-}" = "\${FAKE_DOCKER_EXPECT_IMAGE}" || exit 1; fi
+    if test "\${2:-}" = inspect && test "\${4:-}" = --format && test -n "\${FAKE_DOCKER_TARGET_IMAGE_ID:-}"; then printf '%s\\n' "\${FAKE_DOCKER_TARGET_IMAGE_ID}"; fi
+    ;;
+  ps)
+    if test -n "\${FAKE_DOCKER_RUNNING_NAMES:-}"; then printf '%s\\n' "\${FAKE_DOCKER_RUNNING_NAMES}"; fi
+    ;;
+  inspect)
+    case "\$*" in
+      *Mounts*)
+        if test -n "\${FAKE_DOCKER_WORKSPACE_ROOT:-}"; then printf '%s -> /app\\n' "\${FAKE_DOCKER_WORKSPACE_ROOT}"; fi
+        ;;
+      *Image*)
+        if test -n "\${FAKE_DOCKER_PARSER_IMAGE_ID:-}"; then printf '%s\\n' "\${FAKE_DOCKER_PARSER_IMAGE_ID}"; fi
+        ;;
+    esac
     ;;
   buildx)
     if test "\${FAKE_DOCKER_BUILDX:-available}" != available; then exit 1; fi
@@ -181,7 +197,7 @@ function runDoctor(fixture, args = [], env = {}) {
   const result = spawnSync(bash, ["./run.sh", "doctor", ...args], {
     cwd: fixture.root,
     encoding: "utf8",
-    timeout: 5_000,
+    timeout: 10_000,
     env: {
       HOME: join(fixture.root, "home"),
       LANG: "C",
@@ -270,7 +286,18 @@ test("doctor defaults to a successful, read-only local-fast check", (t) => {
   }
 });
 
-test("doctor parses dotenv files as data without executing shell content", (t) => {
+test("doctor rejects a regular file where the dev-stack state directory is required", (t) => {
+  const fixture = createFixture(t);
+  mkdirSync(join(fixture.root, "tmp"));
+  writeFileSync(join(fixture.root, "tmp", "dev-stack"), "not-a-directory\n");
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assertFailure(result);
+  assert.match(result.output, /dev stack state directory is not a writable directory/i);
+});
+
+test("doctor rejects dotenv shell content without executing it", (t) => {
   const fixture = createFixture(t);
   const marker = join(fixture.root, "dotenv-command-ran");
   writeFileSync(
@@ -280,8 +307,37 @@ test("doctor parses dotenv files as data without executing shell content", (t) =
 
   const result = runDoctor(fixture, ["local-fast"]);
 
-  assert.equal(result.status, 0, result.output);
+  assertFailure(result);
+  assert.match(result.output, /startup environment files must contain literal assignments only/i);
   assert.equal(existsSync(marker), false, "doctor executed dotenv shell content");
+  assert.doesNotMatch(result.output, new RegExp(escapeRegExp(marker)));
+});
+
+test("doctor accepts a quoted multi-line literal assignment", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(
+    join(fixture.root, ".env"),
+    'MULTILINE_LITERAL="first-line-do-not-print\nsecond-line-do-not-print"\n',
+  );
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assert.equal(result.status, 0, result.output);
+  assert.doesNotMatch(result.output, /first-line-do-not-print|second-line-do-not-print/u);
+});
+
+test("doctor accepts a quoted multi-line runtime override", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(
+    fixture.envFile,
+    'CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nCONVEX_TMPDIR="fixture-convex-do-not-print\nmultiline-do-not-print"\n',
+    { mode: 0o600 },
+  );
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assert.equal(result.status, 0, result.output);
+  assert.doesNotMatch(result.output, /fixture-convex-do-not-print|multiline-do-not-print/u);
 });
 
 test("doctor rejects shell syntax errors in any sourced environment file", (t) => {
@@ -329,6 +385,42 @@ CONVEX_TMPDIR="fixture-convex-tmp" # relative to repository root
     assert.doesNotMatch(result.output, new RegExp(port));
   }
   assert.doesNotMatch(lsofLog, /iTCP:6101/u);
+});
+
+test("doctor normalizes a leading-zero Vite port before checking its listener", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(
+    fixture.envFile,
+    "CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nVITE_PORT=05200\n",
+    { mode: 0o600 },
+  );
+  const lsofLogPath = join(fixture.root, "lsof.log");
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_LSOF_LOG: lsofLogPath,
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(readFileSync(lsofLogPath, "utf8"), /iTCP:5200/u);
+  assert.doesNotMatch(result.output, /05200|5200/u);
+});
+
+test("doctor accepts CRLF-separated runtime assignments", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(
+    fixture.envFile,
+    "CONVEX_TEAM=doctor-fixture-team\r\nCONVEX_PROJECT=doctor-fixture-project\r\nVITE_PORT=5200\r\n",
+    { mode: 0o600 },
+  );
+  const lsofLogPath = join(fixture.root, "lsof.log");
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_LSOF_LOG: lsofLogPath,
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(readFileSync(lsofLogPath, "utf8"), /iTCP:5200/u);
+  assert.doesNotMatch(result.output, /5200/u);
 });
 
 test("doctor restores the startup default after a higher-precedence empty override", (t) => {
@@ -420,6 +512,25 @@ test("doctor accepts an empty higher-precedence value after an invalid lower val
   assert.doesNotMatch(result.output, /5173|not-a-port/u);
 });
 
+for (const invalidTimeout of ["0", "not-a-number"]) {
+  test(`doctor rejects an invalid local Convex startup timeout (${invalidTimeout})`, (t) => {
+    const fixture = createFixture(t);
+    writeFileSync(
+      fixture.envFile,
+      `CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nLOCAL_CONVEX_STARTUP_TIMEOUT=${invalidTimeout}\n`,
+      { mode: 0o600 },
+    );
+
+    const result = runDoctor(fixture, ["local-fast"]);
+
+    assertFailure(result);
+    assert.match(result.output, /LOCAL_CONVEX_STARTUP_TIMEOUT must be a positive integer/i);
+    if (invalidTimeout !== "0") {
+      assert.doesNotMatch(result.output, new RegExp(escapeRegExp(invalidTimeout)));
+    }
+  });
+}
+
 test("doctor keeps command substitutions blocking after a later literal override", (t) => {
   const fixture = createFixture(t);
   writeFileSync(join(fixture.root, ".env"), "VITE_PORT=$(false)\n");
@@ -434,6 +545,49 @@ test("doctor keeps command substitutions blocking after a later literal override
   assertFailure(result);
   assert.match(result.output, /VITE_PORT is not a supported literal/i);
   assert.doesNotMatch(result.output, /6201/u);
+});
+
+test("doctor keeps assignment commands blocking after a later literal override", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(join(fixture.root, ".env"), "VITE_PORT=bad command-does-not-exist\n");
+  writeFileSync(
+    fixture.envFile,
+    "CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nVITE_PORT=6201\n",
+    { mode: 0o600 },
+  );
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assertFailure(result);
+  assert.match(result.output, /startup environment files must contain literal assignments only/i);
+  assert.doesNotMatch(result.output, /command-does-not-exist|6201/u);
+});
+
+test("doctor keeps parameter expansions blocking after a later literal override", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(join(fixture.root, ".env"), "VITE_PORT=$UNSET_PORT\n");
+  writeFileSync(
+    fixture.envFile,
+    "CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nVITE_PORT=6201\n",
+    { mode: 0o600 },
+  );
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assertFailure(result);
+  assert.match(result.output, /startup environment files must contain literal assignments only/i);
+  assert.doesNotMatch(result.output, /UNSET_PORT|6201/u);
+});
+
+test("doctor rejects commands attached to non-allowlisted environment keys", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(join(fixture.root, ".env"), "UNRELATED=bad command-does-not-exist\n");
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assertFailure(result);
+  assert.match(result.output, /startup environment files must contain literal assignments only/i);
+  assert.doesNotMatch(result.output, /UNRELATED|command-does-not-exist/u);
 });
 
 test("doctor fails closed for a non-literal runtime override", (t) => {
@@ -476,7 +630,11 @@ for (const [label, assignment] of [
     const result = runDoctor(fixture, ["local-fast"]);
 
     assertFailure(result);
-    assert.match(result.output, /CONVEX_TMPDIR is not a supported literal/i);
+    if (label === "unmatched quote") {
+      assert.match(result.output, /startup environment file syntax is invalid/i);
+    } else {
+      assert.match(result.output, /CONVEX_TMPDIR is not a supported literal/i);
+    }
     assert.equal(existsSync(marker), false, `${label} was executed`);
   });
 }
@@ -584,6 +742,34 @@ test("doctor rejects an out-of-range port resolved from local Convex state", (t)
   assertFailure(result);
   assert.match(result.output, /resolved Convex site port must be between 1 and 65535/i);
   assert.doesNotMatch(result.output, /65536/u);
+});
+
+test("doctor rejects corrupt named local Convex state JSON", (t) => {
+  const fixture = createFixture(t);
+  const deploymentName = "doctor-corrupt-state-deployment";
+  const stateDirectory = join(
+    fixture.root,
+    "home",
+    ".convex",
+    "convex-backend-state",
+    deploymentName,
+  );
+  mkdirSync(stateDirectory, { recursive: true });
+  writeFileSync(
+    join(stateDirectory, "config.json"),
+    '{"ports":{"cloud":7302,"site":7303}, invalid}\n',
+  );
+  writeFileSync(
+    fixture.envFile,
+    `CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nCONVEX_DEPLOYMENT=local:${deploymentName}\n`,
+    { mode: 0o600 },
+  );
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assertFailure(result);
+  assert.match(result.output, /local Convex state configuration is invalid JSON/i);
+  assert.doesNotMatch(result.output, /7302|7303/u);
 });
 
 test("doctor checks a configured LOCAL_CONVEX_URL port", (t) => {
@@ -765,6 +951,55 @@ test("doctor warns but does not fail when lsof is unavailable", (t) => {
 
   assert.equal(result.status, 0, result.output);
   assert.match(result.output, /WARN - lsof command is missing; port conflict checks will be skipped/i);
+});
+
+test("doctor rejects a missing seq command required by startup loops", (t) => {
+  const fixture = createFixture(t);
+  rmSync(join(fixture.binDirectory, "seq"));
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assertFailure(result);
+  assert.match(result.output, /seq command is missing/i);
+});
+
+test("doctor rejects an untracked listener on the parser port", (t) => {
+  const fixture = createFixture(t);
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_LSOF_BUSY_PATTERN: "iTCP:8001",
+  });
+
+  assertFailure(result);
+  assert.match(result.output, /parser port is already in use by an untracked process/i);
+  assert.doesNotMatch(result.output, /8001/u);
+});
+
+test("doctor accepts the parser port held by a reusable tracked workspace parser", (t) => {
+  const fixture = createFixture(t);
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_DOCKER_RUNNING_NAMES: "cv-parser-service-dev",
+    FAKE_DOCKER_WORKSPACE_ROOT: realpathSync(fixture.root),
+    FAKE_LSOF_BUSY_PATTERN: "iTCP:8001",
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /tracked parser is reusable/i);
+  assert.doesNotMatch(result.output, /8001/u);
+});
+
+test("doctor accepts a tracked parser that startup will replace before rebinding", (t) => {
+  const fixture = createFixture(t);
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_DOCKER_RUNNING_NAMES: "cv-parser-service-dev",
+    FAKE_LSOF_BUSY_PATTERN: "iTCP:8001",
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /tracked parser can be replaced by startup/i);
+  assert.doesNotMatch(result.output, /8001/u);
 });
 
 test("doctor rejects an untracked listener on a resolved Convex port", (t) => {
@@ -974,6 +1209,23 @@ test("doctor mcp-private-beta validates a complete fixture without exposing valu
   }
 });
 
+test("doctor accepts the parser port held by a reusable tracked image parser", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture);
+  const imageId = "sha256:doctor-fixture-image";
+
+  const result = runDoctor(fixture, ["mcp-private-beta"], {
+    FAKE_DOCKER_RUNNING_NAMES: "cv-parser-service-dev",
+    FAKE_DOCKER_PARSER_IMAGE_ID: imageId,
+    FAKE_DOCKER_TARGET_IMAGE_ID: imageId,
+    FAKE_LSOF_BUSY_PATTERN: "iTCP:8001",
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /tracked parser is reusable/i);
+  assert.doesNotMatch(result.output, /doctor-fixture-image|8001/u);
+});
+
 test("doctor mcp-private-beta warns when startup can build a missing parser image", (t) => {
   const fixture = createFixture(t);
   const { hiddenValues } = configureValidMcpFixture(fixture);
@@ -1076,6 +1328,50 @@ test("doctor keeps MCP command substitutions blocking after later overrides", (t
   assert.match(result.output, /VITE_CLERK_PUBLISHABLE_KEY must use a supported literal assignment/i);
 });
 
+test("doctor keeps MCP assignment commands blocking after later overrides", (t) => {
+  const fixture = createFixture(t);
+  const alternateCredentials = join(fixture.root, "later-mcp-credentials-do-not-print.json");
+  writeFileSync(alternateCredentials, "{}\n", { mode: 0o600 });
+  configureValidMcpFixture(fixture, {
+    baseEnv: "MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE=bad command-does-not-exist\n",
+    appEnv: `MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE=${alternateCredentials}\n`,
+  });
+
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+
+  assertFailure(result);
+  assert.match(result.output, /startup environment files must contain literal assignments only/i);
+  assert.doesNotMatch(result.output, /command-does-not-exist|later-mcp-credentials/u);
+});
+
+test("doctor ignores shell-like text inside an MCP inline comment", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture);
+  const configured = readFileSync(fixture.envFile, "utf8").replace(
+    'MCP_OAUTH_PRODUCTION_RUNTIME="1" # enabled',
+    'MCP_OAUTH_PRODUCTION_RUNTIME="1" # $(example)',
+  );
+  writeFileSync(fixture.envFile, configured, { mode: 0o600 });
+
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+
+  assert.equal(result.status, 0, result.output);
+  assert.doesNotMatch(result.output, /example/u);
+});
+
+test("doctor preserves fatal duplicate MCP assignments within one file", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture, {
+    rootEnvExtra:
+      "MCP_OAUTH_PRODUCTION_RUNTIME=$(false)\nMCP_OAUTH_PRODUCTION_RUNTIME=1\n",
+  });
+
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+
+  assertFailure(result);
+  assert.match(result.output, /startup environment files must contain literal assignments only/i);
+});
+
 test("doctor matches mcp-check legacy alias scope", (t) => {
   const fixture = createFixture(t);
   configureValidMcpFixture(fixture, {
@@ -1125,6 +1421,21 @@ test("doctor honors a tunnel credentials path configured in root .env", (t) => {
   assertFailure(result);
   assert.match(result.output, /named MCP tunnel credentials file is missing/i);
   assert.doesNotMatch(result.output, /missing-credentials-do-not-print/u);
+});
+
+test("doctor rejects a tunnel credentials path that is not a regular file", (t) => {
+  const fixture = createFixture(t);
+  const credentialsDirectory = join(fixture.root, "credentials-directory-do-not-print");
+  mkdirSync(credentialsDirectory, { mode: 0o600 });
+  configureValidMcpFixture(fixture, {
+    baseEnv: `MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE=${credentialsDirectory}\n`,
+  });
+
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+
+  assertFailure(result);
+  assert.match(result.output, /named MCP tunnel credentials path must be a regular file/i);
+  assert.doesNotMatch(result.output, /credentials-directory-do-not-print/u);
 });
 
 test("doctor applies my-app .env last for the tunnel credentials path", (t) => {
