@@ -779,6 +779,7 @@ const allowed = [
   "LOCAL_CONVEX_CLOUD_PORT",
   "LOCAL_CONVEX_SITE_PORT",
   "IMAGE_NAME",
+  "PARSER_NAME",
   "CONVEX_TMPDIR",
   "CONVEX_TEAM",
   "CONVEX_TEAM_SLUG",
@@ -973,6 +974,10 @@ for (const [key, value] of resolved) {
     process.stdout.write(`ERROR\t${key}\n`);
     continue;
   }
+  if (key === "PARSER_NAME" && !/^[A-Za-z0-9][A-Za-z0-9_.-]+$/u.test(value)) {
+    process.stdout.write(`ERROR\t${key}\n`);
+    continue;
+  }
   process.stdout.write(`VALUE\t${key}\t${Buffer.from(value, "utf8").toString("base64")}\n`);
 }
 NODE
@@ -994,6 +999,7 @@ NODE
           MCP_PRIVATE_BETA_VITE_PORT) MCP_PRIVATE_BETA_VITE_PORT="${decoded}" ;;
           FORCE_REBUILD) FORCE_REBUILD="${decoded}" ;;
           IMAGE_NAME) IMAGE_NAME="${decoded}" ;;
+          PARSER_NAME) PARSER_NAME="${decoded}" ;;
           CONVEX_TMPDIR) CONVEX_TMPDIR="${decoded}" ;;
           CONVEX_TEAM) CONVEX_TEAM="${decoded}" ;;
           CONVEX_TEAM_SLUG) CONVEX_TEAM_SLUG="${decoded}" ;;
@@ -1014,6 +1020,7 @@ NODE
           MCP_PRIVATE_BETA_VITE_PORT) MCP_PRIVATE_BETA_VITE_PORT="5196" ;;
           FORCE_REBUILD) FORCE_REBUILD="false" ;;
           IMAGE_NAME) IMAGE_NAME="cv-parser-service:latest" ;;
+          PARSER_NAME) PARSER_NAME="cv-parser-service-dev" ;;
           CONVEX_TMPDIR) CONVEX_TMPDIR="${ROOT_DIR}/tmp/convex-tmp" ;;
           CONVEX_TEAM) CONVEX_TEAM="" ;;
           CONVEX_TEAM_SLUG) CONVEX_TEAM_SLUG="" ;;
@@ -1029,6 +1036,8 @@ NODE
       ERROR)
         if [[ "${key}" == "LOCAL_CONVEX_STARTUP_TIMEOUT" ]]; then
           doctor_fail "LOCAL_CONVEX_STARTUP_TIMEOUT must be a positive integer"
+        elif [[ "${key}" == "PARSER_NAME" ]]; then
+          doctor_fail "PARSER_NAME must be a valid Docker container name"
         else
           doctor_fail "dotenv override for ${key} is not a supported literal"
         fi
@@ -1143,25 +1152,14 @@ doctor_check_local_convex_state_config() {
   return 1
 }
 
-doctor_running_parser_is_reusable() {
+doctor_running_parser_matches_target() {
   local target="${1:-local-fast}"
   local expected_runtime="workspace"
-  local current_runtime=""
-  local current_image=""
-  local expected_image=""
   command -v docker >/dev/null 2>&1 || return 1
-  doctor_running_parser_is_tracked || return 1
   if [[ "${target}" == "mcp-private-beta" ]]; then
     expected_runtime="image"
   fi
-  current_runtime="$(parser_runtime_mode)"
-  [[ "${current_runtime}" == "${expected_runtime}" ]] || return 1
-  if [[ "${expected_runtime}" == "workspace" ]]; then
-    return 0
-  fi
-  current_image="$(parser_image_id)"
-  expected_image="$(target_image_id)"
-  [[ -n "${current_image}" && -n "${expected_image}" && "${current_image}" == "${expected_image}" ]]
+  parser_container_matches_runtime "${expected_runtime}"
 }
 
 doctor_running_parser_is_tracked() {
@@ -1169,8 +1167,18 @@ doctor_running_parser_is_tracked() {
   docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "${PARSER_NAME}"
 }
 
+parser_container_owns_port() {
+  command -v docker >/dev/null 2>&1 || return 1
+  docker port "${PARSER_NAME}" 8001/tcp 2>/dev/null | grep -Eq '(^|:)8001$'
+}
+
+workspace_runtime_surface_probe() {
+  docker exec "${PARSER_NAME}" node -e 'const fs = require("fs"); const platformTag = `${process.platform}-${process.arch}`; const checks = [["tsx loader", "/app/my-app/node_modules/tsx/dist/esm/index.mjs"], ["playwright package", "/app/node_modules/playwright"], ["playwright browsers", "/ms-playwright"], [`esbuild package (${platformTag})`, `/app/my-app/node_modules/@esbuild/${platformTag}`]]; const missing = checks.filter(([, path]) => !fs.existsSync(path)); if (missing.length) { console.error(missing.map(([label, path]) => `${label}: ${path}`).join("\n")); process.exit(1); }'
+}
+
 doctor_check_docker() {
   local target="${1:-local-fast}"
+  local parser_reusable="${2:-0}"
   local force_rebuild_requested=0
   if ! command -v docker >/dev/null 2>&1; then
     return 0
@@ -1192,6 +1200,8 @@ doctor_check_docker() {
     doctor_warn "forced parser rebuild requires a builder; mcp-private-beta startup will configure it"
   elif (( force_rebuild_requested )); then
     doctor_fail "forced parser rebuild requires Docker buildx"
+  elif [[ "${target}" == "local-fast" && "${parser_reusable}" == "1" ]]; then
+    doctor_pass "parser runtime image is not required while the tracked parser is reusable"
   elif docker image inspect "${IMAGE_NAME}" >/dev/null 2>&1; then
     doctor_pass "parser runtime image is available"
   elif [[ "${target}" == "mcp-private-beta" ]] && docker buildx inspect >/dev/null 2>&1; then
@@ -1483,6 +1493,7 @@ doctor() {
   local resolved_convex_site_port=""
   local resolved_convex_url=""
   local convex_reusable=0
+  local parser_reusable=0
   if [[ "${target}" != "local-fast" && "${target}" != "mcp-private-beta" ]]; then
     echo "usage: ./run.sh doctor [local-fast|mcp-private-beta]" >&2
     return 2
@@ -1522,7 +1533,6 @@ doctor() {
   doctor_check_executable "${ROOT_DIR}/my-app/node_modules/.bin/convex" "Convex CLI dependency"
   doctor_check_file "${ROOT_DIR}/scripts/local-convex-supervisor.cjs" "local Convex supervisor"
   doctor_check_runtime_paths
-  doctor_check_docker "${target}"
 
   if resolve_convex_project_binding >/dev/null 2>&1; then
     doctor_pass "Convex team/project binding is available"
@@ -1545,13 +1555,27 @@ doctor() {
     doctor_pass "local Convex deployments are enabled"
   fi
 
-  if doctor_running_parser_is_reusable "${target}"; then
-    doctor_pass "tracked parser is reusable"
+  if doctor_running_parser_matches_target "${target}"; then
+    if ! parser_container_owns_port; then
+      doctor_fail "tracked parser does not publish the required host port"
+    elif ! curl -fsS http://127.0.0.1:8001/ready >/dev/null 2>&1; then
+      doctor_fail "tracked parser is not ready"
+    elif [[ "${target}" == "local-fast" ]] && ! workspace_runtime_surface_probe >/dev/null 2>&1; then
+      doctor_fail "tracked workspace parser is missing runtime dependencies"
+    else
+      parser_reusable=1
+      doctor_pass "tracked parser is reusable"
+    fi
   elif doctor_running_parser_is_tracked; then
-    doctor_pass "tracked parser can be replaced by startup"
+    if parser_container_owns_port; then
+      doctor_pass "tracked parser can be replaced by startup"
+    else
+      doctor_check_port 8001 "parser port" fail
+    fi
   else
     doctor_check_port 8001 "parser port" fail
   fi
+  doctor_check_docker "${target}" "${parser_reusable}"
   if (( convex_reusable )); then
     doctor_pass "tracked local Convex ports are reusable"
   else
@@ -1774,6 +1798,22 @@ parser_container_running() {
   docker ps --format '{{.Names}}' | grep -qx "${PARSER_NAME}"
 }
 
+parser_container_matches_runtime() {
+  local expected_runtime="${1:-image}"
+  local current_runtime=""
+  local current_image=""
+  local expected_image=""
+  parser_container_running || return 1
+  current_runtime="$(parser_runtime_mode)"
+  [[ "${current_runtime}" == "${expected_runtime}" ]] || return 1
+  if [[ "${expected_runtime}" == "workspace" ]]; then
+    return 0
+  fi
+  current_image="$(parser_image_id)"
+  expected_image="$(target_image_id)"
+  [[ -n "${current_image}" && -n "${expected_image}" && "${current_image}" == "${expected_image}" ]]
+}
+
 tunnel_container_running() {
   docker ps --format '{{.Names}}' | grep -qx "${CLOUDFLARED_NAME}"
 }
@@ -1787,8 +1827,13 @@ convex_process_running() {
 }
 
 tracked_stack_is_live() {
-  if [[ "${PARSER_STARTED:-0}" == "1" ]] && ! parser_container_running; then
-    return 1
+  if [[ "${PARSER_STARTED:-0}" == "1" ]]; then
+    parser_container_matches_runtime "${PARSER_RUNTIME_MODE:-image}" || return 1
+    parser_container_owns_port || return 1
+    curl -fsS http://127.0.0.1:8001/ready >/dev/null 2>&1 || return 1
+    if [[ "${PARSER_RUNTIME_MODE:-image}" == "workspace" ]]; then
+      workspace_runtime_surface_probe >/dev/null 2>&1 || return 1
+    fi
   fi
   if state_requests_ui && ! vite_process_running; then
     return 1
@@ -1837,9 +1882,7 @@ handle_existing_stack_request() {
 
 ensure_workspace_runtime_surface() {
   local diagnostic=""
-  diagnostic="$(
-    docker exec "${PARSER_NAME}" node -e 'const fs = require("fs"); const platformTag = `${process.platform}-${process.arch}`; const checks = [["tsx loader", "/app/my-app/node_modules/tsx/dist/esm/index.mjs"], ["playwright package", "/app/node_modules/playwright"], ["playwright browsers", "/ms-playwright"], [`esbuild package (${platformTag})`, `/app/my-app/node_modules/@esbuild/${platformTag}`]]; const missing = checks.filter(([, path]) => !fs.existsSync(path)); if (missing.length) { console.error(missing.map(([label, path]) => `${label}: ${path}`).join("\n")); process.exit(1); }' 2>&1
-  )" || {
+  diagnostic="$(workspace_runtime_surface_probe 2>&1)" || {
     echo "[run] ERROR: workspace parser runtime is missing export dependencies." >&2
     if [[ -n "${diagnostic}" ]]; then
       echo "${diagnostic}" >&2
@@ -2161,15 +2204,13 @@ start_parser() {
   local PARSER_NEEDS_START=1
 
   if docker ps --format '{{.Names}}' | grep -qx "${PARSER_NAME}"; then
-    local current_mode current_image target_image
+    local current_mode
     current_mode="$(parser_runtime_mode)"
-    current_image="$(parser_image_id)"
-    target_image="$(target_image_id)"
-    if [[ "${current_mode}" == "${RUNTIME_MODE}" && ( "${RUNTIME_MODE}" == "workspace" || "${current_image}" == "${target_image}" ) ]]; then
+    if parser_container_matches_runtime "${RUNTIME_MODE}" && parser_container_owns_port; then
       echo "[run] parser already running in ${current_mode} runtime: ${PARSER_NAME}"
       PARSER_NEEDS_START=0
     else
-      echo "[run] replacing stale parser runtime: ${PARSER_NAME} (have ${current_mode}/${current_image}, want ${RUNTIME_MODE}/${target_image})"
+      echo "[run] replacing stale parser runtime: ${PARSER_NAME} (have ${current_mode}, want ${RUNTIME_MODE})"
       docker stop "${PARSER_NAME}" >/dev/null 2>&1 || true
     fi
   fi

@@ -100,6 +100,12 @@ case "\${1:-}" in
         ;;
     esac
     ;;
+  exec)
+    test "\${FAKE_DOCKER_WORKSPACE_SURFACE:-available}" = available
+    ;;
+  port)
+    if test -n "\${FAKE_DOCKER_PARSER_PORT:-}"; then printf '%s:%s\n' '0.0.0.0' "\${FAKE_DOCKER_PARSER_PORT}"; fi
+    ;;
   buildx)
     if test "\${FAKE_DOCKER_BUILDX:-available}" != available; then exit 1; fi
     if test "\${2:-}" = inspect && test "\${FAKE_DOCKER_BUILDER:-available}" != available; then exit 1; fi
@@ -127,7 +133,10 @@ exec ${JSON.stringify(process.execPath)} "\$@"
   for (const name of ["npm", "npx"]) {
     writeExecutable(join(binDirectory, name), "#!/bin/sh\nexit 0\n");
   }
-  writeExecutable(join(binDirectory, "curl"), "#!/bin/sh\nexit 0\n");
+  writeExecutable(
+    join(binDirectory, "curl"),
+    '#!/bin/sh\ncase "$*" in *127.0.0.1:8001/ready*) test "${FAKE_CURL_PARSER_READY:-ready}" = ready ;; *) exit 0 ;; esac\n',
+  );
   writeExecutable(
     join(binDirectory, "lsof"),
     '#!/bin/sh\nif test -n "${FAKE_LSOF_LOG:-}"; then printf "%s\\n" "$*" >> "${FAKE_LSOF_LOG}"; fi\nif test -n "${FAKE_LSOF_BUSY_PATTERN:-}"; then case "$*" in *"${FAKE_LSOF_BUSY_PATTERN}"*) exit 0 ;; esac; fi\nexit 1\n',
@@ -981,6 +990,7 @@ test("doctor accepts the parser port held by a reusable tracked workspace parser
   const result = runDoctor(fixture, ["local-fast"], {
     FAKE_DOCKER_RUNNING_NAMES: "cv-parser-service-dev",
     FAKE_DOCKER_WORKSPACE_ROOT: realpathSync(fixture.root),
+    FAKE_DOCKER_PARSER_PORT: "8001",
     FAKE_LSOF_BUSY_PATTERN: "iTCP:8001",
   });
 
@@ -989,7 +999,168 @@ test("doctor accepts the parser port held by a reusable tracked workspace parser
   assert.doesNotMatch(result.output, /8001/u);
 });
 
+test("doctor loads a custom parser name with startup dotenv precedence", (t) => {
+  const fixture = createFixture(t);
+  const parserName = "doctor-custom-parser-do-not-print";
+  writeFileSync(
+    join(fixture.root, ".env"),
+    "PARSER_NAME=doctor-lower-parser-do-not-print\n",
+  );
+  writeFileSync(
+    fixture.envFile,
+    "CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nPARSER_NAME=doctor-middle-parser-do-not-print\n",
+    { mode: 0o600 },
+  );
+  writeFileSync(
+    join(fixture.root, "my-app", ".env"),
+    `PARSER_NAME=${parserName}\n`,
+  );
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_DOCKER_RUNNING_NAMES: parserName,
+    FAKE_DOCKER_WORKSPACE_ROOT: realpathSync(fixture.root),
+    FAKE_DOCKER_PARSER_PORT: "8001",
+    FAKE_LSOF_BUSY_PATTERN: "iTCP:8001",
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /tracked parser is reusable/i);
+  assert.doesNotMatch(result.output, new RegExp(parserName, "u"));
+});
+
+test("doctor restores the default parser name after a higher-precedence empty override", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(
+    join(fixture.root, ".env"),
+    "PARSER_NAME=doctor-lower-parser-do-not-print\n",
+  );
+  writeFileSync(
+    join(fixture.root, "my-app", ".env"),
+    "PARSER_NAME=\n",
+  );
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_DOCKER_RUNNING_NAMES: "cv-parser-service-dev",
+    FAKE_DOCKER_WORKSPACE_ROOT: realpathSync(fixture.root),
+    FAKE_DOCKER_PARSER_PORT: "8001",
+    FAKE_LSOF_BUSY_PATTERN: "iTCP:8001",
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /tracked parser is reusable/i);
+  assert.doesNotMatch(result.output, /doctor-lower-parser-do-not-print/u);
+});
+
+test("doctor rejects a parser name that Docker cannot accept", (t) => {
+  const fixture = createFixture(t);
+  const invalidName = "invalid parser name do-not-print";
+  writeFileSync(
+    fixture.envFile,
+    `CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nPARSER_NAME='${invalidName}'\n`,
+    { mode: 0o600 },
+  );
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assertFailure(result);
+  assert.match(result.output, /PARSER_NAME must be a valid Docker container name/i);
+  assert.doesNotMatch(result.output, new RegExp(invalidName, "u"));
+});
+
+test("doctor local-fast accepts a missing image when a workspace parser is reusable", (t) => {
+  const fixture = createFixture(t);
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_DOCKER_IMAGE: "missing",
+    FAKE_DOCKER_RUNNING_NAMES: "cv-parser-service-dev",
+    FAKE_DOCKER_WORKSPACE_ROOT: realpathSync(fixture.root),
+    FAKE_DOCKER_PARSER_PORT: "8001",
+    FAKE_LSOF_BUSY_PATTERN: "iTCP:8001",
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /parser runtime image is not required.*tracked parser is reusable/i);
+});
+
+test("doctor rejects a tracked workspace parser that is not ready", (t) => {
+  const fixture = createFixture(t);
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_DOCKER_RUNNING_NAMES: "cv-parser-service-dev",
+    FAKE_DOCKER_WORKSPACE_ROOT: realpathSync(fixture.root),
+    FAKE_DOCKER_PARSER_PORT: "8001",
+    FAKE_CURL_PARSER_READY: "unavailable",
+  });
+
+  assertFailure(result);
+  assert.match(result.output, /tracked parser is not ready/i);
+});
+
+test("doctor rejects a tracked workspace parser missing runtime dependencies", (t) => {
+  const fixture = createFixture(t);
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_DOCKER_RUNNING_NAMES: "cv-parser-service-dev",
+    FAKE_DOCKER_WORKSPACE_ROOT: realpathSync(fixture.root),
+    FAKE_DOCKER_PARSER_PORT: "8001",
+    FAKE_DOCKER_WORKSPACE_SURFACE: "missing",
+  });
+
+  assertFailure(result);
+  assert.match(result.output, /tracked workspace parser is missing runtime dependencies/i);
+});
+
+test("doctor rejects a matching parser that does not publish the required host port", (t) => {
+  const fixture = createFixture(t);
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_DOCKER_RUNNING_NAMES: "cv-parser-service-dev",
+    FAKE_DOCKER_WORKSPACE_ROOT: realpathSync(fixture.root),
+    FAKE_LSOF_BUSY_PATTERN: "iTCP:8001",
+  });
+
+  assertFailure(result);
+  assert.match(result.output, /tracked parser does not publish the required host port/i);
+  assert.doesNotMatch(result.output, /8001/u);
+});
+
+test("all startup reuse paths require a healthy parser that owns the host port", () => {
+  const source = readFileSync(sourceRunScript, "utf8");
+  const startParser = source.slice(
+    source.indexOf("start_parser() {"),
+    source.indexOf("remove_parser_container() {"),
+  );
+  const trackedStack = source.slice(
+    source.indexOf("tracked_stack_is_live() {"),
+    source.indexOf("handle_existing_stack_request() {"),
+  );
+
+  assert.match(startParser, /&& parser_container_owns_port/u);
+  assert.match(startParser, /parser_container_matches_runtime "\$\{RUNTIME_MODE\}"/u);
+  assert.match(
+    trackedStack,
+    /parser_container_matches_runtime "\$\{PARSER_RUNTIME_MODE:-image\}" \|\| return 1/u,
+  );
+  assert.match(trackedStack, /parser_container_owns_port \|\| return 1/u);
+  assert.match(trackedStack, /127\.0\.0\.1:8001\/ready/u);
+  assert.match(trackedStack, /workspace_runtime_surface_probe/u);
+});
+
 test("doctor accepts a tracked parser that startup will replace before rebinding", (t) => {
+  const fixture = createFixture(t);
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_DOCKER_RUNNING_NAMES: "cv-parser-service-dev",
+    FAKE_DOCKER_PARSER_PORT: "8001",
+    FAKE_LSOF_BUSY_PATTERN: "iTCP:8001",
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /tracked parser can be replaced by startup/i);
+  assert.doesNotMatch(result.output, /8001/u);
+});
+
+test("doctor rejects a busy parser port not published by the tracked stale parser", (t) => {
   const fixture = createFixture(t);
 
   const result = runDoctor(fixture, ["local-fast"], {
@@ -997,8 +1168,8 @@ test("doctor accepts a tracked parser that startup will replace before rebinding
     FAKE_LSOF_BUSY_PATTERN: "iTCP:8001",
   });
 
-  assert.equal(result.status, 0, result.output);
-  assert.match(result.output, /tracked parser can be replaced by startup/i);
+  assertFailure(result);
+  assert.match(result.output, /parser port is already in use by an untracked process/i);
   assert.doesNotMatch(result.output, /8001/u);
 });
 
@@ -1218,6 +1389,7 @@ test("doctor accepts the parser port held by a reusable tracked image parser", (
     FAKE_DOCKER_RUNNING_NAMES: "cv-parser-service-dev",
     FAKE_DOCKER_PARSER_IMAGE_ID: imageId,
     FAKE_DOCKER_TARGET_IMAGE_ID: imageId,
+    FAKE_DOCKER_PARSER_PORT: "8001",
     FAKE_LSOF_BUSY_PATTERN: "iTCP:8001",
   });
 
