@@ -637,6 +637,48 @@ test("doctor rejects PATH assignments that would change startup command resoluti
   assert.doesNotMatch(result.output, new RegExp(configuredPath, "u"));
 });
 
+for (const readonlyName of ["UID", "EUID", "PPID", "SHELLOPTS", "BASH_VERSINFO"]) {
+  test(`doctor rejects assignment to readonly Bash variable ${readonlyName}`, (t) => {
+    const fixture = createFixture(t);
+    writeFileSync(join(fixture.root, ".env"), `${readonlyName}=readonly-do-not-print\n`);
+
+    const result = runDoctor(fixture, ["local-fast"]);
+
+    assertFailure(result);
+    assert.match(result.output, /startup environment files must contain literal assignments only/i);
+    assert.doesNotMatch(result.output, /readonly-do-not-print/u);
+  });
+}
+
+test("doctor rejects assignment to a readonly Bash variable declared without a value", (t) => {
+  const fixture = createFixture(t);
+  const bashEnvPath = join(fixture.root, "bash-env-do-not-print");
+  writeFileSync(bashEnvPath, "readonly DOCTOR_READONLY_WITHOUT_VALUE\n");
+  writeFileSync(
+    join(fixture.root, ".env"),
+    "DOCTOR_READONLY_WITHOUT_VALUE=readonly-do-not-print\n",
+  );
+
+  const result = runDoctor(fixture, ["local-fast"], { BASH_ENV: bashEnvPath });
+
+  assertFailure(result);
+  assert.match(result.output, /startup environment files must contain literal assignments only/i);
+  assert.doesNotMatch(result.output, /DOCTOR_READONLY_WITHOUT_VALUE|readonly-do-not-print/u);
+});
+
+test("doctor readonly detection cannot be bypassed by colliding with its transport name", (t) => {
+  const fixture = createFixture(t);
+  const bashEnvPath = join(fixture.root, "bash-env-do-not-print");
+  writeFileSync(bashEnvPath, "readonly DOCTOR_READONLY_NAMES\n");
+  writeFileSync(join(fixture.root, ".env"), "UID=readonly-do-not-print\n");
+
+  const result = runDoctor(fixture, ["local-fast"], { BASH_ENV: bashEnvPath });
+
+  assertFailure(result);
+  assert.match(result.output, /startup environment files must contain literal assignments only/i);
+  assert.doesNotMatch(result.output, /DOCTOR_READONLY_NAMES|readonly-do-not-print/u);
+});
+
 test("doctor rejects commands attached to non-allowlisted environment keys", (t) => {
   const fixture = createFixture(t);
   writeFileSync(join(fixture.root, ".env"), "UNRELATED=bad command-does-not-exist\n");
@@ -1181,6 +1223,32 @@ CONVEX_BINDING_HASH=stale-do-not-print
   assert.match(result.output, /tracked local-fast stack will restart the parser/i);
   assert.match(result.output, /parser runtime image is missing/i);
   assert.doesNotMatch(result.output, /stale-do-not-print|8001|3210/u);
+});
+
+test("doctor suppresses tracked local Convex reuse details", (t) => {
+  const fixture = createFixture(t);
+  const stateDirectory = join(fixture.root, "tmp", "dev-stack");
+  const hiddenConvexUrl = "http://127.0.0.1:3210";
+  mkdirSync(stateDirectory, { recursive: true });
+  writeFileSync(
+    join(stateDirectory, "pids.env"),
+    `VITE_PID=
+PARSER_STARTED=0
+CONVEX_PID=${process.pid}
+CONVEX_URL=${hiddenConvexUrl}
+TUNNEL_STARTED=0
+STACK_MODE=local-fast
+`,
+  );
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_NODE_CONVEX_READY: "1",
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /tracked local Convex backend is reusable/i);
+  assert.doesNotMatch(result.output, new RegExp(escapeRegExp(hiddenConvexUrl), "u"));
+  assert.doesNotMatch(result.output, /3210|unknown/u);
 });
 
 test("doctor rejects a tracked workspace parser that is not ready", (t) => {

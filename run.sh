@@ -613,11 +613,24 @@ doctor_check_startup_env_syntax() {
 }
 
 doctor_check_startup_env_literals() {
-  if node - "${ROOT_DIR}" <<'NODE'
+  local readonly_declaration=""
+  local readonly_name=""
+  local readonly_names=""
+  while IFS= read -r readonly_declaration; do
+    if [[ "${readonly_declaration}" =~ ^declare[[:space:]]+-[^[:space:]]*r[^[:space:]]*[[:space:]]+([A-Za-z_][A-Za-z0-9_]*)(=|$) ]]; then
+      readonly_name="${BASH_REMATCH[1]}"
+      readonly_names+="${readonly_name}"$'\n'
+    fi
+  done < <(readonly -p)
+
+  if node - "${ROOT_DIR}" "${readonly_names}" <<'NODE'
 const fs = require("node:fs");
 const path = require("node:path");
 
-const [rootDir] = process.argv.slice(2);
+const [rootDir, readonlyNamesInput = ""] = process.argv.slice(2);
+const readonlyNames = new Set(
+  readonlyNamesInput.split("\n").filter(Boolean),
+);
 
 function stripInlineComment(raw) {
   let quote = "";
@@ -754,7 +767,12 @@ for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.loca
   for (const statement of statements) {
     if (!statement.trim()) continue;
     const match = statement.match(/^\s*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)=([\s\S]*)$/u);
-    if (!match || blockedStartupControlKeys.has(match[1]) || !isLiteralAssignmentValue(match[2])) {
+    if (
+      !match
+      || blockedStartupControlKeys.has(match[1])
+      || readonlyNames.has(match[1])
+      || !isLiteralAssignmentValue(match[2])
+    ) {
       valid = false;
       break;
     }
