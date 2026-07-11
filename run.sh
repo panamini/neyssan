@@ -817,6 +817,7 @@ const [rootDir, target] = process.argv.slice(2);
 const allowed = [
   "LOCAL_CONVEX_CLOUD_PORT",
   "LOCAL_CONVEX_SITE_PORT",
+  "HOME",
   "IMAGE_NAME",
   "PARSER_NAME",
   "CLOUDFLARED_NAME",
@@ -1057,6 +1058,7 @@ NODE
           LOCAL_CONVEX_SITE_PORT) LOCAL_CONVEX_SITE_PORT="${decoded}" ;;
           MCP_PRIVATE_BETA_VITE_PORT) MCP_PRIVATE_BETA_VITE_PORT="${decoded}" ;;
           FORCE_REBUILD) FORCE_REBUILD="${decoded}" ;;
+          HOME) HOME="${decoded}" ;;
           IMAGE_NAME) IMAGE_NAME="${decoded}" ;;
           PARSER_NAME) PARSER_NAME="${decoded}" ;;
           CLOUDFLARED_NAME) CLOUDFLARED_NAME="${decoded}" ;;
@@ -1079,6 +1081,7 @@ NODE
           LOCAL_CONVEX_SITE_PORT) LOCAL_CONVEX_SITE_PORT="3211" ;;
           MCP_PRIVATE_BETA_VITE_PORT) MCP_PRIVATE_BETA_VITE_PORT="5196" ;;
           FORCE_REBUILD) FORCE_REBUILD="false" ;;
+          HOME) HOME="" ;;
           IMAGE_NAME) IMAGE_NAME="cv-parser-service:latest" ;;
           PARSER_NAME) PARSER_NAME="cv-parser-service-dev" ;;
           CLOUDFLARED_NAME) CLOUDFLARED_NAME="cloudflared" ;;
@@ -1118,7 +1121,7 @@ doctor_check_runtime_path() {
     path="${ROOT_DIR}/${path}"
   fi
   if [[ -e "${path}" ]]; then
-    if [[ -d "${path}" && -w "${path}" ]]; then
+    if [[ -d "${path}" && -w "${path}" && -x "${path}" ]]; then
       doctor_pass "${label} is writable"
     else
       doctor_fail "${label} is not a writable directory"
@@ -1129,7 +1132,7 @@ doctor_check_runtime_path() {
   while [[ ! -e "${parent}" && "${parent}" != "/" ]]; do
     parent="$(dirname "${parent}")"
   done
-  if [[ -d "${parent}" && -w "${parent}" ]]; then
+  if [[ -d "${parent}" && -w "${parent}" && -x "${parent}" ]]; then
     doctor_pass "${label} can be created"
   else
     doctor_fail "${label} cannot be created"
@@ -1319,6 +1322,7 @@ doctor_check_docker() {
 }
 
 doctor_check_mcp_configuration() {
+  local original_home="${1:-}"
   if [[ "${DOCTOR_NODE_READY:-0}" != "1" ]]; then
     doctor_fail "private-beta MCP configuration cannot be validated without a working Node 20+ runtime"
     return 0
@@ -1330,11 +1334,13 @@ doctor_check_mcp_configuration() {
     "${MCP_PRIVATE_BETA_CLIENT_ID}" \
     "${MCP_PRIVATE_BETA_RESOURCE}" \
     "${MCP_PRIVATE_BETA_AUTHORIZATION_ORIGIN}" \
-    "${MCP_PRIVATE_BETA_REDIRECT_URI}" <<'NODE'
+    "${MCP_PRIVATE_BETA_REDIRECT_URI}" \
+    "${original_home}" <<'NODE'
 const fs = require("node:fs");
 const path = require("node:path");
 
-const [rootDir, tunnelId, clientId, resource, authorizationOrigin, redirectUri] = process.argv.slice(2);
+const [rootDir, tunnelId, clientId, resource, authorizationOrigin, redirectUri, originalHome] = process.argv.slice(2);
+const baseEnvironment = { ...process.env, HOME: originalHome };
 const rootEnvPath = path.join(rootDir, ".env.local");
 const otherEnvPaths = [
   path.join(rootDir, ".env"),
@@ -1482,16 +1488,15 @@ try {
 }
 
 const startupEnvPaths = [otherEnvPaths[0], rootEnvPath, otherEnvPaths[1]];
-const rootEnvironment = { ...process.env, ROOT_DIR: rootDir };
+const rootEnvironment = { ...baseEnvironment, ROOT_DIR: rootDir };
 parseDotenv(otherEnvPaths[0], rootEnvironment);
 const rootEnv = parseDotenv(rootEnvPath, rootEnvironment);
-const startupEnvironment = { ...process.env, ROOT_DIR: rootDir };
+const startupEnvironment = { ...baseEnvironment, ROOT_DIR: rootDir };
 const startupEnvs = startupEnvPaths.map((envPath) => parseDotenv(envPath, startupEnvironment));
-const appLocalEnv = parseDotenv(otherEnvPaths[2], { ...startupEnvironment });
 
-function resolveStartupValue(key, includeAppLocal = false) {
-  let value = process.env[key] ?? "";
-  let present = Object.prototype.hasOwnProperty.call(process.env, key);
+function resolveStartupValue(key) {
+  let value = baseEnvironment[key] ?? "";
+  let present = Object.prototype.hasOwnProperty.call(baseEnvironment, key);
   let fatal = false;
   for (const env of startupEnvs) {
     if (!env.has(key)) continue;
@@ -1501,12 +1506,6 @@ function resolveStartupValue(key, includeAppLocal = false) {
     else {
       value = nextValue;
     }
-  }
-  if (includeAppLocal && !present && appLocalEnv.has(key)) {
-    present = true;
-    const nextValue = appLocalEnv.get(key);
-    if (nextValue === fatalDotenvValue) fatal = true;
-    else value = nextValue;
   }
   return { fatal, present, value };
 }
@@ -1552,7 +1551,7 @@ try {
   }
   const prefix = issuer.hostname.endsWith(".clerk.accounts.dev") ? "pk_test_" : "pk_live_";
   const derivedPublishableKey = `${prefix}${Buffer.from(`${issuer.hostname}$`, "utf8").toString("base64")}`;
-  const configuredPublishableKey = resolveStartupValue("VITE_CLERK_PUBLISHABLE_KEY", true);
+  const configuredPublishableKey = resolveStartupValue("VITE_CLERK_PUBLISHABLE_KEY");
   if (configuredPublishableKey.fatal) {
     fail("VITE_CLERK_PUBLISHABLE_KEY must use a supported literal assignment");
   } else if (configuredPublishableKey.value && configuredPublishableKey.value !== derivedPublishableKey) {
@@ -1609,6 +1608,7 @@ NODE
 
 doctor() {
   local target="${1:-local-fast}"
+  local original_home="${HOME:-}"
   local resolved_convex_cloud_port=""
   local resolved_convex_site_port=""
   local resolved_convex_url=""
@@ -1711,7 +1711,7 @@ doctor() {
   doctor_check_local_convex_url_port "${resolved_convex_url}" "${resolved_convex_cloud_port}"
   if [[ "${target}" == "mcp-private-beta" ]]; then
     doctor_check_vite_port "${MCP_PRIVATE_BETA_VITE_PORT}" "MCP_PRIVATE_BETA_VITE_PORT"
-    doctor_check_mcp_configuration
+    doctor_check_mcp_configuration "${original_home}"
   else
     doctor_check_vite_port "${VITE_PORT}" "VITE_PORT"
     doctor_pass "my-app/.env.local remains Vite-only; server configuration remains in root .env.local"

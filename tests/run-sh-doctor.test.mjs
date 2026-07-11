@@ -310,6 +310,37 @@ test("doctor rejects a regular file where the dev-stack state directory is requi
   assert.match(result.output, /dev stack state directory is not a writable directory/i);
 });
 
+test("doctor rejects an existing runtime directory without search permission", (t) => {
+  const fixture = createFixture(t);
+  const stateDirectory = join(fixture.root, "tmp", "dev-stack");
+  mkdirSync(stateDirectory, { recursive: true });
+  chmodSync(stateDirectory, 0o600);
+
+  const result = runDoctor(fixture, ["local-fast"]);
+  chmodSync(stateDirectory, 0o700);
+
+  assertFailure(result);
+  assert.match(result.output, /dev stack state directory is not a writable directory/i);
+});
+
+test("doctor rejects a creatable runtime path under a non-searchable parent", (t) => {
+  const fixture = createFixture(t);
+  const parent = join(fixture.root, "runtime-parent-do-not-print");
+  mkdirSync(parent, { mode: 0o600 });
+  writeFileSync(
+    fixture.envFile,
+    `CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nCONVEX_TMPDIR=${parent}/convex\n`,
+    { mode: 0o600 },
+  );
+
+  const result = runDoctor(fixture, ["local-fast"]);
+  chmodSync(parent, 0o700);
+
+  assertFailure(result);
+  assert.match(result.output, /Convex temporary directory cannot be created/i);
+  assert.doesNotMatch(result.output, /runtime-parent-do-not-print/u);
+});
+
 test("doctor rejects dotenv shell content without executing it", (t) => {
   const fixture = createFixture(t);
   const marker = join(fixture.root, "dotenv-command-ran");
@@ -879,6 +910,21 @@ test("doctor rejects disabled local Convex deployments", (t) => {
 
   assertFailure(result);
   assert.match(result.output, /local Convex deployments are disabled/i);
+});
+
+test("doctor replays sourced HOME before checking local Convex configuration", (t) => {
+  const fixture = createFixture(t);
+  const alternateHome = join(fixture.root, "alternate-home-do-not-print");
+  const convexDirectory = join(alternateHome, ".convex");
+  mkdirSync(convexDirectory, { recursive: true });
+  writeFileSync(join(convexDirectory, "config.json"), '{"optOutOfLocalDevDeploymentsUntilBetaOver": true}\n');
+  writeFileSync(join(fixture.root, ".env"), `HOME=${alternateHome}\n`);
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assertFailure(result);
+  assert.match(result.output, /local Convex deployments are disabled/i);
+  assert.doesNotMatch(result.output, /alternate-home-do-not-print/u);
 });
 
 test("doctor checks ports resolved from named local Convex state", (t) => {
@@ -1763,13 +1809,12 @@ test("doctor mcp-private-beta validates a complete fixture without exposing valu
   }
 });
 
-test("doctor validates the Clerk key from my-app .env.local", (t) => {
+test("doctor ignores an app-local Clerk key that MCP startup overrides", (t) => {
   const fixture = createFixture(t);
   configureValidMcpFixture(fixture);
   writeFileSync(join(fixture.root, "my-app", ".env.local"), "VITE_CLERK_PUBLISHABLE_KEY=wrong-do-not-print\n");
   const result = runDoctor(fixture, ["mcp-private-beta"]);
-  assertFailure(result);
-  assert.match(result.output, /configured Clerk publishable key does not match/i);
+  assert.equal(result.status, 0, result.output);
   assert.doesNotMatch(result.output, /wrong-do-not-print/u);
 });
 
@@ -1806,6 +1851,19 @@ test("doctor derives default MCP credentials from sourced HOME", (t) => {
   const result = runDoctor(fixture, ["mcp-private-beta"]);
   assert.equal(result.status, 0, result.output);
   assert.doesNotMatch(result.output, /alternate-home-do-not-print/u);
+});
+
+test("doctor replays a self-referential HOME exactly once for MCP credentials", (t) => {
+  const fixture = createFixture(t);
+  const nestedCloudflared = join(fixture.root, "home", "nested-home-do-not-print", ".cloudflared");
+  mkdirSync(nestedCloudflared, { recursive: true });
+  writeFileSync(join(nestedCloudflared, "935a2064-9473-41bc-bd73-174660892847.json"), "{}\n", { mode: 0o600 });
+  configureValidMcpFixture(fixture, { baseEnv: "HOME=$HOME/nested-home-do-not-print\n" });
+
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+
+  assert.equal(result.status, 0, result.output);
+  assert.doesNotMatch(result.output, /nested-home-do-not-print/u);
 });
 
 test("doctor rejects commas in MCP tunnel credentials paths", (t) => {
