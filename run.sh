@@ -808,6 +808,7 @@ doctor_check_local_convex_url_port() {
 }
 
 doctor_check_docker() {
+  local target="${1:-local-fast}"
   if ! command -v docker >/dev/null 2>&1; then
     return 0
   fi
@@ -820,8 +821,12 @@ doctor_check_docker() {
 
   if docker image inspect "${IMAGE_NAME}" >/dev/null 2>&1; then
     doctor_pass "parser runtime image is available"
+  elif [[ "${target}" == "mcp-private-beta" ]] && docker buildx inspect >/dev/null 2>&1; then
+    doctor_warn "parser runtime image is missing; mcp-private-beta startup will build it with the available builder"
+  elif [[ "${target}" == "mcp-private-beta" ]] && docker buildx version >/dev/null 2>&1; then
+    doctor_warn "parser runtime image and buildx builder are missing; mcp-private-beta startup will configure the builder and build the image"
   else
-    doctor_fail "parser runtime image is missing; run ./run.sh rebuild-docker"
+    doctor_fail "parser runtime image is missing and cannot be prepared by the selected startup"
   fi
 }
 
@@ -833,7 +838,7 @@ doctor_check_mcp_configuration() {
 
   if node - \
     "${ROOT_DIR}" \
-    "${MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE}" \
+    "${HOME}/.cloudflared/${MCP_PRIVATE_BETA_TUNNEL_ID}.json" \
     "${MCP_PRIVATE_BETA_CLIENT_ID}" \
     "${MCP_PRIVATE_BETA_RESOURCE}" \
     "${MCP_PRIVATE_BETA_AUTHORIZATION_ORIGIN}" \
@@ -951,6 +956,21 @@ if (!fs.existsSync(rootEnvPath)) {
 }
 
 const rootEnv = parseDotenv(rootEnvPath);
+const startupEnvPaths = [otherEnvPaths[0], rootEnvPath, otherEnvPaths[1]];
+const startupEnvs = startupEnvPaths.map(parseDotenv);
+
+function resolveStartupValue(key) {
+  let value = process.env[key] ?? "";
+  let invalid = false;
+  for (const env of startupEnvs) {
+    if (!env.has(key)) continue;
+    const nextValue = env.get(key);
+    if (nextValue === invalidDotenvValue) invalid = true;
+    else value = nextValue;
+  }
+  return { invalid, value };
+}
+
 for (const key of canonicalKeys) {
   if (rootEnv.get(key) === invalidDotenvValue) fail(`${key} must use a supported literal assignment`);
   else if (!rootEnv.has(key)) fail(`${key} must be defined in root .env.local`);
@@ -992,11 +1012,10 @@ try {
   }
   const prefix = issuer.hostname.endsWith(".clerk.accounts.dev") ? "pk_test_" : "pk_live_";
   const derivedPublishableKey = `${prefix}${Buffer.from(`${issuer.hostname}$`, "utf8").toString("base64")}`;
-  let configuredPublishableKey = process.env.VITE_CLERK_PUBLISHABLE_KEY || "";
-  for (const envPath of [otherEnvPaths[0], rootEnvPath, otherEnvPaths[1]]) {
-    configuredPublishableKey = parseDotenv(envPath).get("VITE_CLERK_PUBLISHABLE_KEY") || configuredPublishableKey;
-  }
-  if (configuredPublishableKey && configuredPublishableKey !== derivedPublishableKey) {
+  const configuredPublishableKey = resolveStartupValue("VITE_CLERK_PUBLISHABLE_KEY");
+  if (configuredPublishableKey.invalid) {
+    fail("VITE_CLERK_PUBLISHABLE_KEY must use a supported literal assignment");
+  } else if (configuredPublishableKey.value && configuredPublishableKey.value !== derivedPublishableKey) {
     fail("configured Clerk publishable key does not match CLERK_JWT_ISSUER_DOMAIN");
   }
 } catch {
@@ -1014,15 +1033,14 @@ if ([rootEnv, ...otherEnvPaths.map(parseDotenv)].some((env) => [...env.keys()].s
   fail("legacy MCP_PRODUCTION_PRIVATE_BETA_* aliases are forbidden");
 }
 
-const configuredCredentialsFile = rootEnv.get("MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE");
-if (configuredCredentialsFile === invalidDotenvValue) fail("MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE must use a supported literal assignment");
-if (configuredCredentialsFile && configuredCredentialsFile.startsWith("~")) {
+const configuredCredentialsFile = resolveStartupValue("MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE");
+if (configuredCredentialsFile.invalid) {
+  fail("MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE must use a supported literal assignment");
+}
+if (configuredCredentialsFile.value && configuredCredentialsFile.value.startsWith("~")) {
   fail("MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE must not use tilde expansion");
 }
-let credentialsFile = configuredCredentialsFile && configuredCredentialsFile !== invalidDotenvValue
-  ? configuredCredentialsFile
-  : defaultCredentialsFile;
-if (credentialsFile.startsWith("~")) credentialsFile = defaultCredentialsFile;
+const credentialsFile = configuredCredentialsFile.value || defaultCredentialsFile;
 if (!fs.existsSync(credentialsFile)) {
   fail("named MCP tunnel credentials file is missing");
 } else {
@@ -1072,7 +1090,7 @@ doctor() {
   doctor_check_executable "${ROOT_DIR}/my-app/node_modules/.bin/convex" "Convex CLI dependency"
   doctor_check_file "${ROOT_DIR}/scripts/local-convex-supervisor.cjs" "local Convex supervisor"
   doctor_check_runtime_paths
-  doctor_check_docker
+  doctor_check_docker "${target}"
 
   if resolve_convex_project_binding >/dev/null 2>&1; then
     doctor_pass "Convex team/project binding is available"

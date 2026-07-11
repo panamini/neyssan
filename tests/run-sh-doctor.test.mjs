@@ -81,11 +81,13 @@ case "\${1:-}" in
   --version) printf '%s\\n' 'Docker version doctor-fixture' ;;
   info) test "\${FAKE_DOCKER_DAEMON:-available}" = available ;;
   image)
-    if test "\${2:-}" = inspect && test -n "\${FAKE_DOCKER_EXPECT_IMAGE:-}"; then
-      test "\${3:-}" = "\${FAKE_DOCKER_EXPECT_IMAGE}"
-    else
-      exit 0
-    fi
+    if test "\${2:-}" = inspect && test "\${FAKE_DOCKER_IMAGE:-available}" = missing; then exit 1; fi
+    if test "\${2:-}" = inspect && test -n "\${FAKE_DOCKER_EXPECT_IMAGE:-}"; then test "\${3:-}" = "\${FAKE_DOCKER_EXPECT_IMAGE}"; fi
+    ;;
+  buildx)
+    if test "\${FAKE_DOCKER_BUILDX:-available}" != available; then exit 1; fi
+    if test "\${2:-}" = inspect && test "\${FAKE_DOCKER_BUILDER:-available}" != available; then exit 1; fi
+    exit 0
     ;;
   *) exit 0 ;;
 esac
@@ -201,6 +203,53 @@ function assertFailure(result) {
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function configureValidMcpFixture(
+  fixture,
+  { rootEnvExtra = "", baseEnv = "", appEnv = "" } = {},
+) {
+  rmSync(join(fixture.binDirectory, "node"));
+  symlinkSync(process.execPath, join(fixture.binDirectory, "node"));
+
+  const credentialsDirectory = join(fixture.root, "home", ".cloudflared");
+  const credentialsFile = join(
+    credentialsDirectory,
+    "935a2064-9473-41bc-bd73-174660892847.json",
+  );
+  mkdirSync(credentialsDirectory, { recursive: true });
+  writeFileSync(credentialsFile, "{}\n", { mode: 0o600 });
+
+  const hiddenValues = {
+    digest: "a".repeat(64),
+    convexToken: "doctor-valid#convex-token-do-not-print",
+  };
+  writeFileSync(
+    fixture.envFile,
+    `CONVEX_TEAM=doctor-fixture-team
+CONVEX_PROJECT=doctor-fixture-project
+MCP_OAUTH_PRODUCTION_RUNTIME="1" # enabled
+MCP_OAUTH_PRODUCTION_APPROVED='1' # enabled
+MCP_OAUTH_PRODUCTION_ROUTE_WIRING="1" # enabled
+MCP_OAUTH_PRODUCTION_CLIENT_IDS="local-chatgpt-client" # exact client
+MCP_OAUTH_PRODUCTION_PRIVATE_BETA_ENABLED="1" # enabled
+MCP_OAUTH_PRODUCTION_PRIVATE_BETA_CLIENT_IDS="local-chatgpt-client" # exact client
+MCP_OAUTH_PRODUCTION_PRIVATE_BETA_RESOURCES="https://mcp.twoweeks.ai/mcp" # exact resource
+MCP_OAUTH_PRODUCTION_RESOURCE="https://mcp.twoweeks.ai/mcp" # exact resource
+MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN="https://mcp.twoweeks.ai" # exact origin
+MCP_OAUTH_PRODUCTION_REDIRECT_URIS="https://chatgpt.com/connector/oauth/b7v_6OncLEsg" # exact redirect
+MCP_OAUTH_PRODUCTION_ISSUER="https://mcp.twoweeks.ai" # issuer
+MCP_OAUTH_PRODUCTION_PROVIDER_ENVIRONMENT="production" # environment
+MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256="${hiddenValues.digest}" # digest
+CLERK_JWT_ISSUER_DOMAIN="https://doctor.clerk.accounts.dev" # issuer
+CONVEX_URL="https://doctor-convex.invalid" # URL
+CONVEX_AUTH_TOKEN="${hiddenValues.convexToken}" # token
+${rootEnvExtra}`,
+    { mode: 0o600 },
+  );
+  if (baseEnv) writeFileSync(join(fixture.root, ".env"), baseEnv);
+  if (appEnv) writeFileSync(join(fixture.root, "my-app", ".env"), appEnv);
+  return { credentialsFile, hiddenValues };
 }
 
 test("doctor defaults to a successful, read-only local-fast check", (t) => {
@@ -639,6 +688,18 @@ test("doctor fails when the Docker daemon is unavailable", (t) => {
   assert.match(result.output, /(start|unavailable|not running|required)/i);
 });
 
+test("doctor local-fast rejects a missing parser image", (t) => {
+  const fixture = createFixture(t);
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_DOCKER_IMAGE: "missing",
+  });
+
+  assertFailure(result);
+  assert.match(result.output, /parser runtime image is missing/i);
+  assert.doesNotMatch(result.output, /startup will build it/i);
+});
+
 for (const dependency of ["vite", "convex"]) {
   test(`doctor fails when the ${dependency} dependency is missing`, (t) => {
     const fixture = createFixture(t);
@@ -733,44 +794,7 @@ test("doctor rejects a quoted tilde in the MCP credentials path", (t) => {
 
 test("doctor mcp-private-beta validates a complete fixture without exposing values", (t) => {
   const fixture = createFixture(t);
-  rmSync(join(fixture.binDirectory, "node"));
-  symlinkSync(process.execPath, join(fixture.binDirectory, "node"));
-
-  const credentialsDirectory = join(fixture.root, "home", ".cloudflared");
-  const credentialsFile = join(
-    credentialsDirectory,
-    "935a2064-9473-41bc-bd73-174660892847.json",
-  );
-  mkdirSync(credentialsDirectory, { recursive: true });
-  writeFileSync(credentialsFile, "{}\n", { mode: 0o600 });
-
-  const hiddenValues = {
-    digest: "a".repeat(64),
-    convexToken: "doctor-valid#convex-token-do-not-print",
-  };
-  writeFileSync(
-    fixture.envFile,
-    `CONVEX_TEAM=doctor-fixture-team
-CONVEX_PROJECT=doctor-fixture-project
-MCP_OAUTH_PRODUCTION_RUNTIME="1" # enabled
-MCP_OAUTH_PRODUCTION_APPROVED='1' # enabled
-MCP_OAUTH_PRODUCTION_ROUTE_WIRING="1" # enabled
-MCP_OAUTH_PRODUCTION_CLIENT_IDS="local-chatgpt-client" # exact client
-MCP_OAUTH_PRODUCTION_PRIVATE_BETA_ENABLED="1" # enabled
-MCP_OAUTH_PRODUCTION_PRIVATE_BETA_CLIENT_IDS="local-chatgpt-client" # exact client
-MCP_OAUTH_PRODUCTION_PRIVATE_BETA_RESOURCES="https://mcp.twoweeks.ai/mcp" # exact resource
-MCP_OAUTH_PRODUCTION_RESOURCE="https://mcp.twoweeks.ai/mcp" # exact resource
-MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN="https://mcp.twoweeks.ai" # exact origin
-MCP_OAUTH_PRODUCTION_REDIRECT_URIS="https://chatgpt.com/connector/oauth/b7v_6OncLEsg" # exact redirect
-MCP_OAUTH_PRODUCTION_ISSUER="https://mcp.twoweeks.ai" # issuer
-MCP_OAUTH_PRODUCTION_PROVIDER_ENVIRONMENT="production" # environment
-MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256="${hiddenValues.digest}" # digest
-CLERK_JWT_ISSUER_DOMAIN="https://doctor.clerk.accounts.dev" # issuer
-CONVEX_URL="https://doctor-convex.invalid" # URL
-CONVEX_AUTH_TOKEN="${hiddenValues.convexToken}" # token
-`,
-    { mode: 0o600 },
-  );
+  const { hiddenValues } = configureValidMcpFixture(fixture);
 
   const result = runDoctor(fixture, ["mcp-private-beta"]);
 
@@ -779,4 +803,91 @@ CONVEX_AUTH_TOKEN="${hiddenValues.convexToken}" # token
   for (const value of Object.values(hiddenValues)) {
     assert.doesNotMatch(result.output, new RegExp(escapeRegExp(value)));
   }
+});
+
+test("doctor mcp-private-beta warns when startup can build a missing parser image", (t) => {
+  const fixture = createFixture(t);
+  const { hiddenValues } = configureValidMcpFixture(fixture);
+
+  const result = runDoctor(fixture, ["mcp-private-beta"], {
+    FAKE_DOCKER_IMAGE: "missing",
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /WARN - parser runtime image is missing; mcp-private-beta startup will build it with the available builder/i);
+  for (const value of Object.values(hiddenValues)) {
+    assert.doesNotMatch(result.output, new RegExp(escapeRegExp(value)));
+  }
+});
+
+test("doctor mcp-private-beta rejects a missing image when buildx is unavailable", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture);
+
+  const result = runDoctor(fixture, ["mcp-private-beta"], {
+    FAKE_DOCKER_BUILDX: "unavailable",
+    FAKE_DOCKER_IMAGE: "missing",
+  });
+
+  assertFailure(result);
+  assert.match(result.output, /parser runtime image is missing and cannot be prepared/i);
+});
+
+test("doctor mcp-private-beta reports when startup must configure the buildx builder", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture);
+
+  const result = runDoctor(fixture, ["mcp-private-beta"], {
+    FAKE_DOCKER_BUILDER: "unavailable",
+    FAKE_DOCKER_IMAGE: "missing",
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /WARN - parser runtime image and buildx builder are missing; mcp-private-beta startup will configure the builder and build the image/i);
+});
+
+test("doctor preserves an empty higher-precedence Clerk publishable key", (t) => {
+  const fixture = createFixture(t);
+  const lowerPrecedenceValue = "bad-lower-clerk-key-do-not-print";
+  const { hiddenValues } = configureValidMcpFixture(fixture, {
+    baseEnv: `VITE_CLERK_PUBLISHABLE_KEY=${lowerPrecedenceValue}\n`,
+    rootEnvExtra: "VITE_CLERK_PUBLISHABLE_KEY=\n",
+  });
+
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+
+  assert.equal(result.status, 0, result.output);
+  assert.doesNotMatch(result.output, new RegExp(lowerPrecedenceValue, "u"));
+  for (const value of Object.values(hiddenValues)) {
+    assert.doesNotMatch(result.output, new RegExp(escapeRegExp(value)));
+  }
+});
+
+test("doctor honors a tunnel credentials path configured in root .env", (t) => {
+  const fixture = createFixture(t);
+  const missingCredentials = join(fixture.root, "missing-credentials-do-not-print.json");
+  configureValidMcpFixture(fixture, {
+    baseEnv: `MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE=${missingCredentials}\n`,
+  });
+
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+
+  assertFailure(result);
+  assert.match(result.output, /named MCP tunnel credentials file is missing/i);
+  assert.doesNotMatch(result.output, /missing-credentials-do-not-print/u);
+});
+
+test("doctor applies my-app .env last for the tunnel credentials path", (t) => {
+  const fixture = createFixture(t);
+  const alternateCredentials = join(fixture.root, "alternate-credentials-do-not-print.json");
+  writeFileSync(alternateCredentials, "{}\n", { mode: 0o600 });
+  configureValidMcpFixture(fixture, {
+    baseEnv: `MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE=${join(fixture.root, "missing-credentials.json")}\n`,
+    appEnv: `MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE=${alternateCredentials}\n`,
+  });
+
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+
+  assert.equal(result.status, 0, result.output);
+  assert.doesNotMatch(result.output, /alternate-credentials-do-not-print/u);
 });

@@ -12,6 +12,10 @@ The startup allowlist applies dotenv precedence for configured ports, parser ima
 
 The diagnostic resolves named local Convex state before checking ports, including state-configured cloud/site ports and an explicit loopback `LOCAL_CONVEX_URL`. It also fails when the user's Convex configuration disables local deployments. These checks use the same resolver and opt-out boundary as startup.
 
+Docker image readiness is target-aware. A missing parser image remains a blocker for `local-fast`, whose workspace container requires an existing base image. For `mcp-private-beta`, it is a warning when a buildx builder is ready or when the buildx plugin is available to configure one, because that startup path performs those steps automatically. A missing buildx plugin remains a blocker. The doctor does not create a builder or build an image.
+
+Private-beta validation replays `.env`, `.env.local`, and `my-app/.env` in startup order for `VITE_CLERK_PUBLISHABLE_KEY` and `MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE`. Empty higher-precedence assignments are preserved, and an empty final credentials path uses the same default as startup. Values are compared or used for local file checks only and are never printed.
+
 ## Supported environments
 
 | Host | Supported execution environment |
