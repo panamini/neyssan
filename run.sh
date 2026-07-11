@@ -593,19 +593,18 @@ doctor_check_executable() {
 }
 
 doctor_load_runtime_overrides() {
+  local target="${1:-local-fast}"
   local key=""
   local value=""
   local parsed=""
-  if ! parsed="$(node - "${ROOT_DIR}" <<'NODE'
+  if ! parsed="$(node - "${ROOT_DIR}" "${target}" <<'NODE'
 const fs = require("node:fs");
 const path = require("node:path");
 
-const rootDir = process.argv[2];
+const [rootDir, target] = process.argv.slice(2);
 const allowed = [
-  "VITE_PORT",
   "LOCAL_CONVEX_CLOUD_PORT",
   "LOCAL_CONVEX_SITE_PORT",
-  "MCP_PRIVATE_BETA_VITE_PORT",
   "IMAGE_NAME",
   "CONVEX_TMPDIR",
   "CONVEX_TEAM",
@@ -617,6 +616,7 @@ const allowed = [
   "CONVEX_DEPLOYMENT",
   "LOCAL_CONVEX_URL",
 ];
+allowed.push(target === "mcp-private-beta" ? "MCP_PRIVATE_BETA_VITE_PORT" : "VITE_PORT");
 const resolved = new Map(allowed.map((key) => [key, process.env[key] || ""]));
 
 function parseValue(raw) {
@@ -777,6 +777,10 @@ doctor_check_runtime_paths() {
 doctor_check_port() {
   local port="${1:?port required}"
   local label="${2:?port label required}"
+  if ! doctor_port_value_is_valid "${port}"; then
+    doctor_fail "${label} must be between 1 and 65535"
+    return 0
+  fi
   if ! command -v lsof >/dev/null 2>&1; then
     return 0
   fi
@@ -787,6 +791,13 @@ doctor_check_port() {
   fi
 }
 
+doctor_port_value_is_valid() {
+  local port="${1:-}"
+  [[ "${port}" =~ ^[0-9]+$ ]] || return 1
+  [[ "${port}" != 0 && "${port}" != 0* && "${#port}" -le 5 ]] || return 1
+  (( port <= 65535 ))
+}
+
 doctor_check_local_convex_url_port() {
   local url="${1:-}"
   local cloud_port="${2:-}"
@@ -794,8 +805,7 @@ doctor_check_local_convex_url_port() {
   [[ -n "${url}" ]] || return 0
   if [[ "${url}" =~ ^http://(127\.0\.0\.1|localhost):([0-9]+)$ ]]; then
     url_port="${BASH_REMATCH[2]}"
-    if [[ "${url_port}" == 0 || "${url_port}" == 0* || "${#url_port}" -gt 5 ]] \
-      || (( url_port > 65535 )); then
+    if ! doctor_port_value_is_valid "${url_port}"; then
       doctor_fail "LOCAL_CONVEX_URL port must be between 1 and 65535"
       return 0
     fi
@@ -1077,10 +1087,14 @@ doctor() {
   doctor_check_command node
   doctor_check_command npm
   doctor_check_command curl
-  doctor_check_command lsof
+  if command -v lsof >/dev/null 2>&1; then
+    doctor_pass "lsof command is available"
+  else
+    doctor_warn "lsof command is missing; port conflict checks will be skipped"
+  fi
   if command -v node >/dev/null 2>&1 && doctor_check_node_runtime; then
     DOCTOR_NODE_READY=1
-    doctor_load_runtime_overrides || true
+    doctor_load_runtime_overrides "${target}" || true
   fi
   resolved_convex_cloud_port="${LOCAL_CONVEX_CLOUD_PORT}"
   resolved_convex_site_port="${LOCAL_CONVEX_SITE_PORT}"

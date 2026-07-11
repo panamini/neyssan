@@ -342,6 +342,34 @@ test("doctor restores the startup default after a higher-precedence empty overri
   assert.doesNotMatch(result.output, /5173|7000/u);
 });
 
+test("doctor local-fast ignores an invalid MCP-only Vite port", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(
+    fixture.envFile,
+    "CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nMCP_PRIVATE_BETA_VITE_PORT=not-a-port\n",
+    { mode: 0o600 },
+  );
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assert.equal(result.status, 0, result.output);
+  assert.doesNotMatch(result.output, /MCP_PRIVATE_BETA_VITE_PORT/u);
+});
+
+test("doctor local-fast rejects an invalid local-fast Vite port", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(
+    fixture.envFile,
+    "CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nVITE_PORT=not-a-port\n",
+    { mode: 0o600 },
+  );
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assertFailure(result);
+  assert.match(result.output, /VITE_PORT is not a supported literal/i);
+});
+
 test("doctor fails closed for a non-literal runtime override", (t) => {
   const fixture = createFixture(t);
   rmSync(join(fixture.binDirectory, "node"));
@@ -462,6 +490,34 @@ CONVEX_DEPLOYMENT=local:${deploymentName}
   assert.match(lsofLog, /iTCP:7303/u);
   assert.doesNotMatch(lsofLog, /iTCP:3210|iTCP:3211/u);
   assert.doesNotMatch(result.output, /7302|7303/u);
+});
+
+test("doctor rejects an out-of-range port resolved from local Convex state", (t) => {
+  const fixture = createFixture(t);
+  const deploymentName = "doctor-invalid-port-deployment";
+  const stateDirectory = join(
+    fixture.root,
+    "home",
+    ".convex",
+    "convex-backend-state",
+    deploymentName,
+  );
+  mkdirSync(stateDirectory, { recursive: true });
+  writeFileSync(
+    join(stateDirectory, "config.json"),
+    '{\n  "ports": {\n    "cloud": 7302,\n    "site": 65536\n  }\n}\n',
+  );
+  writeFileSync(
+    fixture.envFile,
+    `CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nCONVEX_DEPLOYMENT=local:${deploymentName}\n`,
+    { mode: 0o600 },
+  );
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assertFailure(result);
+  assert.match(result.output, /resolved Convex site port must be between 1 and 65535/i);
+  assert.doesNotMatch(result.output, /65536/u);
 });
 
 test("doctor checks a configured LOCAL_CONVEX_URL port", (t) => {
@@ -618,6 +674,16 @@ test("doctor reports a missing Docker CLI by actionable name only", (t) => {
   assert.match(result.output, /(install|missing|required)/i);
   assert.doesNotMatch(result.output, new RegExp(escapeRegExp(fixture.root)));
   assert.doesNotMatch(result.output, /PATH=/);
+});
+
+test("doctor warns but does not fail when lsof is unavailable", (t) => {
+  const fixture = createFixture(t);
+  rmSync(join(fixture.binDirectory, "lsof"));
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /WARN - lsof command is missing; port conflict checks will be skipped/i);
 });
 
 test("doctor rejects Node versions older than the CI runtime", (t) => {
@@ -861,6 +927,30 @@ test("doctor preserves an empty higher-precedence Clerk publishable key", (t) =>
   for (const value of Object.values(hiddenValues)) {
     assert.doesNotMatch(result.output, new RegExp(escapeRegExp(value)));
   }
+});
+
+test("doctor mcp-private-beta ignores an invalid local-fast Vite port", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture, {
+    rootEnvExtra: "VITE_PORT=not-a-port\n",
+  });
+
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+
+  assert.equal(result.status, 0, result.output);
+  assert.doesNotMatch(result.output, /VITE_PORT is not a supported literal/u);
+});
+
+test("doctor mcp-private-beta rejects an invalid MCP Vite port", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture, {
+    rootEnvExtra: "MCP_PRIVATE_BETA_VITE_PORT=not-a-port\n",
+  });
+
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+
+  assertFailure(result);
+  assert.match(result.output, /MCP_PRIVATE_BETA_VITE_PORT is not a supported literal/i);
 });
 
 test("doctor honors a tunnel credentials path configured in root .env", (t) => {
