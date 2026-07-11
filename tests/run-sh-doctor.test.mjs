@@ -36,11 +36,13 @@ function findHostTool(name) {
 
 function linkHostTools(binDirectory) {
   for (const name of [
+    "awk",
     "cut",
     "dirname",
     "grep",
     "head",
     "seq",
+    "shasum",
     "stat",
     "tail",
     "tr",
@@ -125,6 +127,7 @@ case "\${1:-}" in
     if test "\${FAKE_NODE_NOOP:-0}" = 1; then exit 0; fi
     if test "\${FAKE_NODE_STDIN_BROKEN:-0}" = 1 && test "\${1:-}" = - && test "\$#" -eq 1; then exit 1; fi
     if test "\${FAKE_NODE_PARSER_BROKEN:-0}" = 1 && test "\${1:-}" = - && test "\$#" -gt 1; then exit 1; fi
+    if test "\${FAKE_NODE_CONVEX_READY:-0}" = 1; then case "\${2:-}" in *instance_name*) exit 0 ;; esac; fi
     ;;
 esac
 exec ${JSON.stringify(process.execPath)} "\$@"
@@ -620,6 +623,18 @@ test("doctor sanitizes startup environment read failures", (t) => {
   assert.match(result.output, /startup environment files must contain literal assignments only/i);
   assert.doesNotMatch(result.output, new RegExp(escapeRegExp(fixture.root), "u"));
   assert.doesNotMatch(result.output, /EISDIR|readFileSync|node:fs|at Object/u);
+});
+
+test("doctor rejects PATH assignments that would change startup command resolution", (t) => {
+  const fixture = createFixture(t);
+  const configuredPath = "/missing-command-path-do-not-print";
+  writeFileSync(join(fixture.root, ".env"), `PATH=${configuredPath}\n`);
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assertFailure(result);
+  assert.match(result.output, /startup environment files must contain literal assignments only/i);
+  assert.doesNotMatch(result.output, new RegExp(configuredPath, "u"));
 });
 
 test("doctor rejects commands attached to non-allowlisted environment keys", (t) => {
@@ -1129,6 +1144,43 @@ test("doctor local-fast accepts a missing image when a workspace parser is reusa
 
   assert.equal(result.status, 0, result.output);
   assert.match(result.output, /parser runtime image is not required.*tracked parser is reusable/i);
+});
+
+test("doctor local-fast requires the image when tracked env changes restart the parser", (t) => {
+  const fixture = createFixture(t);
+  const stateDirectory = join(fixture.root, "tmp", "dev-stack");
+  mkdirSync(stateDirectory, { recursive: true });
+  writeFileSync(
+    join(stateDirectory, "pids.env"),
+    `VITE_PID=${process.pid}
+PARSER_STARTED=1
+CONVEX_PID=${process.pid}
+CONVEX_URL=http://127.0.0.1:3210
+TUNNEL_STARTED=0
+STACK_MODE=local-fast
+ACTIVE_ORIGIN=http://127.0.0.1:8001
+PARSER_RUNTIME_MODE=workspace
+PARSER_RELOAD=1
+PARSER_OCR=auto
+CONVEX_MODE=local
+UI_STARTED=1
+ENV_HASH=stale-do-not-print
+CONVEX_BINDING_HASH=stale-do-not-print
+`,
+  );
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_DOCKER_IMAGE: "missing",
+    FAKE_DOCKER_RUNNING_NAMES: "cv-parser-service-dev",
+    FAKE_DOCKER_WORKSPACE_ROOT: realpathSync(fixture.root),
+    FAKE_DOCKER_PARSER_PORT: "8001",
+    FAKE_NODE_CONVEX_READY: "1",
+  });
+
+  assertFailure(result);
+  assert.match(result.output, /tracked local-fast stack will restart the parser/i);
+  assert.match(result.output, /parser runtime image is missing/i);
+  assert.doesNotMatch(result.output, /stale-do-not-print|8001|3210/u);
 });
 
 test("doctor rejects a tracked workspace parser that is not ready", (t) => {
@@ -1684,6 +1736,22 @@ test("doctor honors a tunnel credentials path configured in root .env", (t) => {
   assertFailure(result);
   assert.match(result.output, /named MCP tunnel credentials file is missing/i);
   assert.doesNotMatch(result.output, /missing-credentials-do-not-print/u);
+});
+
+test("doctor resolves a defined parameter in the MCP credentials path", (t) => {
+  const fixture = createFixture(t);
+  const { hiddenValues } = configureValidMcpFixture(fixture, {
+    rootEnvExtra:
+      "MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE=$HOME/.cloudflared/935a2064-9473-41bc-bd73-174660892847.json\n",
+  });
+
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+
+  assert.equal(result.status, 0, result.output);
+  assert.doesNotMatch(result.output, /HOME|cloudflared/u);
+  for (const value of Object.values(hiddenValues)) {
+    assert.doesNotMatch(result.output, new RegExp(escapeRegExp(value)));
+  }
 });
 
 test("doctor rejects a tunnel credentials path that is not a regular file", (t) => {

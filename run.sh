@@ -735,6 +735,7 @@ function isLiteralAssignmentValue(raw) {
     && !withoutParameters.includes(String.fromCharCode(96));
 }
 
+const blockedStartupControlKeys = new Set(["PATH"]);
 let valid = true;
 for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.local"), path.join(rootDir, "my-app", ".env")]) {
   if (!fs.existsSync(envPath)) continue;
@@ -752,8 +753,8 @@ for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.loca
   }
   for (const statement of statements) {
     if (!statement.trim()) continue;
-    const match = statement.match(/^\s*(?:export[ \t]+)?[A-Za-z_][A-Za-z0-9_]*=([\s\S]*)$/u);
-    if (!match || !isLiteralAssignmentValue(match[1])) {
+    const match = statement.match(/^\s*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)=([\s\S]*)$/u);
+    if (!match || blockedStartupControlKeys.has(match[1]) || !isLiteralAssignmentValue(match[2])) {
       valid = false;
       break;
     }
@@ -1202,6 +1203,28 @@ workspace_runtime_surface_probe() {
   docker exec "${PARSER_NAME}" node -e 'const fs = require("fs"); const platformTag = `${process.platform}-${process.arch}`; const checks = [["tsx loader", "/app/my-app/node_modules/tsx/dist/esm/index.mjs"], ["playwright package", "/app/node_modules/playwright"], ["playwright browsers", "/ms-playwright"], [`esbuild package (${platformTag})`, `/app/my-app/node_modules/@esbuild/${platformTag}`]]; const missing = checks.filter(([, path]) => !fs.existsSync(path)); if (missing.length) { console.error(missing.map(([label, path]) => `${label}: ${path}`).join("\n")); process.exit(1); }'
 }
 
+doctor_local_fast_tracked_stack_will_restart_parser() {
+  local VITE_PID=""; local PARSER_STARTED="0"; local CONVEX_PID=""; local CONVEX_URL=""; local TUNNEL_STARTED="0"; local STACK_MODE=""
+  local ACTIVE_ORIGIN=""; local PARSER_RUNTIME_MODE=""; local PARSER_RELOAD="0"; local PARSER_OCR="auto"; local CONVEX_MODE="cloud"; local UI_STARTED="0"; local ENV_HASH=""; local CONVEX_BINDING_HASH=""
+  local current_env_hash=""
+  [[ -f "${STATE_FILE}" ]] || return 1
+  read_state
+  [[ "${STACK_MODE:-}" == "local-fast" ]] || return 1
+  [[ "${ACTIVE_ORIGIN:-}" == "http://127.0.0.1:8001" ]] || return 1
+  [[ "${PARSER_STARTED:-0}" == "1" ]] || return 1
+  [[ "${PARSER_RUNTIME_MODE:-}" == "workspace" ]] || return 1
+  [[ "${PARSER_RELOAD:-0}" == "1" ]] || return 1
+  [[ "${PARSER_OCR:-auto}" == "auto" ]] || return 1
+  [[ "${CONVEX_MODE:-cloud}" == "local" ]] || return 1
+  [[ "${UI_STARTED:-0}" == "1" ]] || return 1
+  [[ "${TUNNEL_STARTED:-0}" == "0" ]] || return 1
+  tracked_stack_is_live || return 1
+  if ! current_env_hash="$(env_reload_hash 2>/dev/null)"; then
+    return 0
+  fi
+  [[ "${ENV_HASH:-}" != "${current_env_hash}" ]]
+}
+
 doctor_check_docker() {
   local target="${1:-local-fast}"
   local parser_reusable="${2:-0}"
@@ -1311,6 +1334,15 @@ function stripDefinedParameterExpansions(value) {
   return stripped;
 }
 
+function expandDefinedParameterValues(value) {
+  const withoutParameters = stripDefinedParameterExpansions(value);
+  if (withoutParameters === null) return null;
+  return value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/gu, (_match, braced, bare) => {
+    const key = braced || bare;
+    return process.env[key];
+  });
+}
+
 function requiresStartupEvaluation(raw) {
   const value = raw.trim();
   if (!value) return false;
@@ -1369,16 +1401,28 @@ function parseDotenv(filePath) {
         continue;
       }
       value = value.slice(1, -1);
+      const withoutParameters = quoteCharacter === '"' ? stripDefinedParameterExpansions(value) : "";
       if (
         /[\t\r\n]/u.test(value) ||
-        (quoteCharacter === '"' && (/[$\\]/u.test(value) || value.includes(String.fromCharCode(96))))
+        (quoteCharacter === '"' && (withoutParameters === null || /[\\]/u.test(withoutParameters) || withoutParameters.includes(String.fromCharCode(96))))
       ) {
         record(match[1], invalidDotenvValue);
         continue;
       }
-    } else if (value && !/^[A-Za-z0-9_./:@+=,-]+$/u.test(value)) {
-      record(match[1], invalidDotenvValue);
-      continue;
+    } else {
+      const withoutParameters = stripDefinedParameterExpansions(value);
+      if (withoutParameters === null || (withoutParameters && !/^[A-Za-z0-9_./:@+=,-]+$/u.test(withoutParameters))) {
+        record(match[1], invalidDotenvValue);
+        continue;
+      }
+    }
+    if (quoteCharacter !== "'") {
+      const expanded = expandDefinedParameterValues(value);
+      if (expanded === null) {
+        record(match[1], invalidDotenvValue);
+        continue;
+      }
+      value = expanded;
     }
     record(match[1], value);
   }
@@ -1612,6 +1656,12 @@ doctor() {
     fi
   else
     doctor_check_port 8001 "parser port" fail
+  fi
+  if (( parser_reusable )) \
+    && [[ "${target}" == "local-fast" ]] \
+    && doctor_local_fast_tracked_stack_will_restart_parser; then
+    parser_reusable=0
+    doctor_warn "tracked local-fast stack will restart the parser because environment files changed"
   fi
   doctor_check_docker "${target}" "${parser_reusable}"
   if (( convex_reusable )); then
