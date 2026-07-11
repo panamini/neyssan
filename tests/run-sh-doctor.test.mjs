@@ -85,6 +85,7 @@ case "\${1:-}" in
   --version) printf '%s\\n' 'Docker version doctor-fixture' ;;
   info) test "\${FAKE_DOCKER_DAEMON:-available}" = available ;;
   image)
+    if test "\${2:-}" = ls && test "\${FAKE_DOCKER_INVALID_REFERENCE:-0}" = 1; then exit 1; fi
     if test "\${2:-}" = inspect && test "\${FAKE_DOCKER_IMAGE:-available}" = missing; then exit 1; fi
     if test "\${2:-}" = inspect && test -n "\${FAKE_DOCKER_EXPECT_IMAGE:-}"; then test "\${3:-}" = "\${FAKE_DOCKER_EXPECT_IMAGE}" || exit 1; fi
     if test "\${2:-}" = inspect && test "\${4:-}" = --format && test -n "\${FAKE_DOCKER_TARGET_IMAGE_ID:-}"; then printf '%s\\n' "\${FAKE_DOCKER_TARGET_IMAGE_ID}"; fi
@@ -464,7 +465,7 @@ test("doctor normalizes a leading-zero Vite port before checking its listener", 
   assert.doesNotMatch(result.output, /05200|5200/u);
 });
 
-test("doctor accepts CRLF-separated runtime assignments", (t) => {
+test("doctor rejects CRLF assignments that startup would source with carriage returns", (t) => {
   const fixture = createFixture(t);
   writeFileSync(
     fixture.envFile,
@@ -477,9 +478,37 @@ test("doctor accepts CRLF-separated runtime assignments", (t) => {
     FAKE_LSOF_LOG: lsofLogPath,
   });
 
-  assert.equal(result.status, 0, result.output);
-  assert.match(readFileSync(lsofLogPath, "utf8"), /iTCP:5200/u);
+  assertFailure(result);
+  assert.match(result.output, /startup environment files must contain literal assignments only/i);
   assert.doesNotMatch(result.output, /5200/u);
+});
+
+test("doctor seeds simple expansions with the pre-source ROOT_DIR", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(fixture.envFile, "CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nCONVEX_TMPDIR=$ROOT_DIR/tmp/convex-tmp\n", { mode: 0o600 });
+  const result = runDoctor(fixture, ["local-fast"]);
+  assert.equal(result.status, 0, result.output);
+  assert.doesNotMatch(result.output, /ROOT_DIR|convex-tmp/u);
+});
+
+for (const controlKey of ["DOCKER_CONTEXT", "DOCKER_HOST", "IFS", "ROOT_DIR"]) {
+  test(`doctor rejects ${controlKey} assignments that change startup execution`, (t) => {
+    const fixture = createFixture(t);
+    writeFileSync(join(fixture.root, ".env"), `${controlKey}=unsafe-do-not-print\n`);
+    const result = runDoctor(fixture, ["local-fast"]);
+    assertFailure(result);
+    assert.match(result.output, /startup environment files must contain literal assignments only/i);
+    assert.doesNotMatch(result.output, /unsafe-do-not-print/u);
+  });
+}
+
+test("doctor fails an occupied custom Vite port outside startup cleanup", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(fixture.envFile, "CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nVITE_PORT=6207\n", { mode: 0o600 });
+  const result = runDoctor(fixture, ["local-fast"], { FAKE_LSOF_BUSY_PATTERN: "iTCP:6207" });
+  assertFailure(result);
+  assert.match(result.output, /VITE_PORT is already in use by an untracked process/i);
+  assert.doesNotMatch(result.output, /6207/u);
 });
 
 test("doctor restores the startup default after a higher-precedence empty override", (t) => {
@@ -1231,6 +1260,91 @@ test("doctor rejects a parser name that Docker cannot accept", (t) => {
   assert.doesNotMatch(result.output, new RegExp(invalidName, "u"));
 });
 
+test("doctor rejects a cloudflared name that Docker cannot accept", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(fixture.envFile, "CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nCLOUDFLARED_NAME=-invalid-do-not-print\n", { mode: 0o600 });
+  const result = runDoctor(fixture, ["local-fast"]);
+  assertFailure(result);
+  assert.match(result.output, /CLOUDFLARED_NAME must be a valid Docker container name/i);
+  assert.doesNotMatch(result.output, /invalid-do-not-print/u);
+});
+
+test("doctor rejects an invalid Docker image reference before treating it as buildable", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture, { rootEnvExtra: "IMAGE_NAME=invalid//image:latest\n" });
+  const result = runDoctor(fixture, ["mcp-private-beta"], { FAKE_DOCKER_INVALID_REFERENCE: "1" });
+  assertFailure(result);
+  assert.match(result.output, /IMAGE_NAME must be a valid Docker image reference/i);
+  assert.doesNotMatch(result.output, /invalid\/\/image/u);
+});
+
+test("doctor rejects a wildcard Docker image filter that startup cannot tag", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture, { rootEnvExtra: "IMAGE_NAME=review-invalid*\n" });
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+  assertFailure(result);
+  assert.match(result.output, /IMAGE_NAME must be a valid Docker image reference/i);
+  assert.doesNotMatch(result.output, /review-invalid/u);
+});
+
+test("doctor rejects a leading hexadecimal Docker character-class filter", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture, { rootEnvExtra: "IMAGE_NAME=[abc]/parser:latest\n" });
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+  assertFailure(result);
+  assert.match(result.output, /IMAGE_NAME must be a valid Docker image reference/i);
+  assert.doesNotMatch(result.output, /\[abc\]/u);
+});
+
+test("doctor rejects a colon-containing Docker character-class filter", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture, { rootEnvExtra: "IMAGE_NAME=[a:c]/parser:latest\n" });
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+  assertFailure(result);
+  assert.match(result.output, /IMAGE_NAME must be a valid Docker image reference/i);
+  assert.doesNotMatch(result.output, /\[a:c\]/u);
+});
+
+test("doctor accepts a Docker-compatible uppercase registry host", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture, { rootEnvExtra: "IMAGE_NAME=REGISTRY.example.com/team/parser:latest\n" });
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+  assert.equal(result.status, 0, result.output);
+  assert.doesNotMatch(result.output, /REGISTRY/u);
+});
+
+test("doctor accepts a bracketed IPv6 Docker registry authority", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture, { rootEnvExtra: "IMAGE_NAME=[2001:db8::1]:5000/team/parser:latest\n" });
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+  assert.equal(result.status, 0, result.output);
+  assert.doesNotMatch(result.output, /2001:db8/u);
+});
+
+for (const [label, authority] of [
+  ["IPv4-mapped", "[::ffff:192.0.2.1]:5000"],
+  ["zone-qualified", "[fe80::1%eth0]:5000"],
+]) {
+  test(`doctor rejects a Docker-incompatible ${label} IPv6 registry authority`, (t) => {
+    const fixture = createFixture(t);
+    configureValidMcpFixture(fixture, { rootEnvExtra: `IMAGE_NAME=${authority}/team/parser:latest\n` });
+    const result = runDoctor(fixture, ["mcp-private-beta"]);
+    assertFailure(result);
+    assert.match(result.output, /IMAGE_NAME must be a valid Docker image reference/i);
+    assert.doesNotMatch(result.output, new RegExp(escapeRegExp(authority), "u"));
+  });
+}
+
+test("doctor accepts a long Docker reference with a valid tag", (t) => {
+  const fixture = createFixture(t);
+  const repository = `registry.example.com/${"segment/".repeat(20)}parser`;
+  const tag = `release-${"x".repeat(100)}`;
+  configureValidMcpFixture(fixture, { rootEnvExtra: `IMAGE_NAME=${repository}:${tag}\n` });
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+  assert.equal(result.status, 0, result.output);
+  assert.doesNotMatch(result.output, /registry\.example\.com|release-/u);
+});
+
 test("doctor local-fast accepts a missing image when a workspace parser is reusable", (t) => {
   const fixture = createFixture(t);
 
@@ -1647,6 +1761,71 @@ test("doctor mcp-private-beta validates a complete fixture without exposing valu
   for (const value of Object.values(hiddenValues)) {
     assert.doesNotMatch(result.output, new RegExp(escapeRegExp(value)));
   }
+});
+
+test("doctor validates the Clerk key from my-app .env.local", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture);
+  writeFileSync(join(fixture.root, "my-app", ".env.local"), "VITE_CLERK_PUBLISHABLE_KEY=wrong-do-not-print\n");
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+  assertFailure(result);
+  assert.match(result.output, /configured Clerk publishable key does not match/i);
+  assert.doesNotMatch(result.output, /wrong-do-not-print/u);
+});
+
+test("doctor gives an exported Clerk key precedence over my-app .env.local like Vite", (t) => {
+  const fixture = createFixture(t);
+  const correctKey = `pk_test_${Buffer.from("doctor.clerk.accounts.dev$", "utf8").toString("base64")}`;
+  configureValidMcpFixture(fixture, { baseEnv: "VITE_CLERK_PUBLISHABLE_KEY=wrong-exported-do-not-print\n" });
+  writeFileSync(join(fixture.root, "my-app", ".env.local"), `VITE_CLERK_PUBLISHABLE_KEY=${correctKey}\n`);
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+  assertFailure(result);
+  assert.match(result.output, /configured Clerk publishable key does not match/i);
+  assert.doesNotMatch(result.output, /wrong-exported-do-not-print/u);
+  assert.doesNotMatch(result.output, new RegExp(escapeRegExp(correctKey), "u"));
+});
+
+test("doctor ignores an app-local Clerk key when the exported key is correct", (t) => {
+  const fixture = createFixture(t);
+  const correctKey = `pk_test_${Buffer.from("doctor.clerk.accounts.dev$", "utf8").toString("base64")}`;
+  configureValidMcpFixture(fixture, { baseEnv: `VITE_CLERK_PUBLISHABLE_KEY=${correctKey}\n` });
+  writeFileSync(join(fixture.root, "my-app", ".env.local"), "VITE_CLERK_PUBLISHABLE_KEY=wrong-app-local-do-not-print\n");
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+  assert.equal(result.status, 0, result.output);
+  assert.doesNotMatch(result.output, /wrong-app-local-do-not-print/u);
+  assert.doesNotMatch(result.output, new RegExp(escapeRegExp(correctKey), "u"));
+});
+
+test("doctor derives default MCP credentials from sourced HOME", (t) => {
+  const fixture = createFixture(t);
+  const alternateHome = join(fixture.root, "alternate-home-do-not-print");
+  const alternateCloudflared = join(alternateHome, ".cloudflared");
+  mkdirSync(alternateCloudflared, { recursive: true });
+  writeFileSync(join(alternateCloudflared, "935a2064-9473-41bc-bd73-174660892847.json"), "{}\n", { mode: 0o600 });
+  configureValidMcpFixture(fixture, { baseEnv: `HOME=${alternateHome}\n` });
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+  assert.equal(result.status, 0, result.output);
+  assert.doesNotMatch(result.output, /alternate-home-do-not-print/u);
+});
+
+test("doctor rejects commas in MCP tunnel credentials paths", (t) => {
+  const fixture = createFixture(t);
+  const credentials = join(fixture.root, "credentials,invalid-do-not-print.json");
+  writeFileSync(credentials, "{}\n", { mode: 0o600 });
+  configureValidMcpFixture(fixture, { baseEnv: `MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE=${credentials}\n` });
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+  assertFailure(result);
+  assert.match(result.output, /credentials.*must not contain commas/i);
+  assert.doesNotMatch(result.output, /credentials,invalid-do-not-print/u);
+});
+
+test("doctor fails an occupied custom MCP Vite port outside startup cleanup", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture, { rootEnvExtra: "MCP_PRIVATE_BETA_VITE_PORT=6208\n" });
+  const result = runDoctor(fixture, ["mcp-private-beta"], { FAKE_LSOF_BUSY_PATTERN: "iTCP:6208" });
+  assertFailure(result);
+  assert.match(result.output, /MCP_PRIVATE_BETA_VITE_PORT is already in use by an untracked process/i);
+  assert.doesNotMatch(result.output, /6208/u);
 });
 
 test("doctor accepts the parser port held by a reusable tracked image parser", (t) => {

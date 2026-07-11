@@ -662,7 +662,7 @@ function stripInlineComment(raw) {
 }
 
 function logicalStatements(source) {
-  source = source.replace(/\r\n/gu, "\n");
+  if (source.includes("\r")) return null;
   const statements = [];
   let current = "";
   let quote = "";
@@ -757,8 +757,8 @@ function parseLiteralAssignmentValue(raw, environment) {
   return quote ? null : parsed;
 }
 
-const blockedStartupControlKeys = new Set(["NODE_OPTIONS", "PATH"]);
-const environment = { ...process.env };
+const blockedStartupControlKeys = new Set(["DOCKER_CONTEXT", "DOCKER_HOST", "IFS", "NODE_OPTIONS", "PATH", "ROOT_DIR"]);
+const environment = { ...process.env, ROOT_DIR: rootDir };
 let valid = true;
 for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.local"), path.join(rootDir, "my-app", ".env")]) {
   if (!fs.existsSync(envPath)) continue;
@@ -810,6 +810,7 @@ doctor_load_runtime_overrides() {
   local parsed=""
   if ! parsed="$(node - "${ROOT_DIR}" "${target}" <<'NODE'
 const fs = require("node:fs");
+const net = require("node:net");
 const path = require("node:path");
 
 const [rootDir, target] = process.argv.slice(2);
@@ -818,6 +819,7 @@ const allowed = [
   "LOCAL_CONVEX_SITE_PORT",
   "IMAGE_NAME",
   "PARSER_NAME",
+  "CLOUDFLARED_NAME",
   "CONVEX_TMPDIR",
   "CONVEX_TEAM",
   "CONVEX_TEAM_SLUG",
@@ -831,7 +833,7 @@ const allowed = [
 ];
 if (target === "mcp-private-beta") allowed.push("MCP_PRIVATE_BETA_VITE_PORT", "FORCE_REBUILD");
 else allowed.push("VITE_PORT");
-const environment = { ...process.env };
+const environment = { ...process.env, ROOT_DIR: rootDir };
 const resolved = new Map(allowed.map((key) => [key, environment[key] || ""]));
 
 function stripInlineComment(raw) {
@@ -864,7 +866,7 @@ function stripInlineComment(raw) {
 }
 
 function logicalStatements(source) {
-  source = source.replace(/\r\n/gu, "\n");
+  if (source.includes("\r")) return null;
   const statements = [];
   let current = "";
   let quote = "";
@@ -1016,7 +1018,22 @@ for (const [key, value] of resolved) {
     process.stdout.write(`ERROR\t${key}\n`);
     continue;
   }
-  if (key === "PARSER_NAME" && !/^[A-Za-z0-9][A-Za-z0-9_.-]+$/u.test(value)) {
+  if (key === "IMAGE_NAME") {
+    // `docker image ls` accepts reference globs that `docker build -t` rejects.
+    // Preserve a bracketed IPv6 registry authority, then block only glob syntax;
+    // Docker validates the remaining reference grammar below.
+    const authority = value.match(/^\[([^\]]+)\](?::[0-9]+)?\//u);
+    const globCandidate = authority
+      && /^[0-9A-Fa-f:]+$/u.test(authority[1])
+      && net.isIP(authority[1]) === 6
+      ? value.slice(authority[0].length)
+      : value;
+    if (/[*?\[\]]/u.test(globCandidate)) {
+      process.stdout.write(`ERROR\t${key}\n`);
+      continue;
+    }
+  }
+  if ((key === "PARSER_NAME" || key === "CLOUDFLARED_NAME") && !/^[A-Za-z0-9][A-Za-z0-9_.-]+$/u.test(value)) {
     process.stdout.write(`ERROR\t${key}\n`);
     continue;
   }
@@ -1042,6 +1059,7 @@ NODE
           FORCE_REBUILD) FORCE_REBUILD="${decoded}" ;;
           IMAGE_NAME) IMAGE_NAME="${decoded}" ;;
           PARSER_NAME) PARSER_NAME="${decoded}" ;;
+          CLOUDFLARED_NAME) CLOUDFLARED_NAME="${decoded}" ;;
           CONVEX_TMPDIR) CONVEX_TMPDIR="${decoded}" ;;
           CONVEX_TEAM) CONVEX_TEAM="${decoded}" ;;
           CONVEX_TEAM_SLUG) CONVEX_TEAM_SLUG="${decoded}" ;;
@@ -1063,6 +1081,7 @@ NODE
           FORCE_REBUILD) FORCE_REBUILD="false" ;;
           IMAGE_NAME) IMAGE_NAME="cv-parser-service:latest" ;;
           PARSER_NAME) PARSER_NAME="cv-parser-service-dev" ;;
+          CLOUDFLARED_NAME) CLOUDFLARED_NAME="cloudflared" ;;
           CONVEX_TMPDIR) CONVEX_TMPDIR="${ROOT_DIR}/tmp/convex-tmp" ;;
           CONVEX_TEAM) CONVEX_TEAM="" ;;
           CONVEX_TEAM_SLUG) CONVEX_TEAM_SLUG="" ;;
@@ -1078,8 +1097,10 @@ NODE
       ERROR)
         if [[ "${key}" == "LOCAL_CONVEX_STARTUP_TIMEOUT" ]]; then
           doctor_fail "LOCAL_CONVEX_STARTUP_TIMEOUT must be a positive integer"
-        elif [[ "${key}" == "PARSER_NAME" ]]; then
-          doctor_fail "PARSER_NAME must be a valid Docker container name"
+        elif [[ "${key}" == "IMAGE_NAME" ]]; then
+          doctor_fail "IMAGE_NAME must be a valid Docker image reference"
+        elif [[ "${key}" == "PARSER_NAME" || "${key}" == "CLOUDFLARED_NAME" ]]; then
+          doctor_fail "${key} must be a valid Docker container name"
         else
           doctor_fail "dotenv override for ${key} is not a supported literal"
         fi
@@ -1142,6 +1163,21 @@ doctor_check_port() {
     fi
   else
     doctor_pass "${label} is available"
+  fi
+}
+
+doctor_check_vite_port() {
+  local port="${1:?port required}"
+  local label="${2:?port label required}"
+  local normalized=""
+  if ! normalized="$(doctor_normalize_port "${port}")"; then
+    doctor_fail "${label} must be between 1 and 65535"
+    return 0
+  fi
+  if (( normalized >= 5173 && normalized <= 5215 )); then
+    doctor_check_port "${normalized}" "${label}" warn
+  else
+    doctor_check_port "${normalized}" "${label}" fail
   fi
 }
 
@@ -1254,6 +1290,11 @@ doctor_check_docker() {
     return 0
   fi
 
+  if ! docker image ls "${IMAGE_NAME}" --format '{{.ID}}' >/dev/null 2>&1; then
+    doctor_fail "IMAGE_NAME must be a valid Docker image reference"
+    return 0
+  fi
+
   if [[ "${target}" == "mcp-private-beta" && "$(to_bool "${FORCE_REBUILD}")" == "true" ]]; then
     force_rebuild_requested=1
   fi
@@ -1285,7 +1326,7 @@ doctor_check_mcp_configuration() {
 
   if node - \
     "${ROOT_DIR}" \
-    "${HOME}/.cloudflared/${MCP_PRIVATE_BETA_TUNNEL_ID}.json" \
+    "${MCP_PRIVATE_BETA_TUNNEL_ID}" \
     "${MCP_PRIVATE_BETA_CLIENT_ID}" \
     "${MCP_PRIVATE_BETA_RESOURCE}" \
     "${MCP_PRIVATE_BETA_AUTHORIZATION_ORIGIN}" \
@@ -1293,7 +1334,7 @@ doctor_check_mcp_configuration() {
 const fs = require("node:fs");
 const path = require("node:path");
 
-const [rootDir, defaultCredentialsFile, clientId, resource, authorizationOrigin, redirectUri] = process.argv.slice(2);
+const [rootDir, tunnelId, clientId, resource, authorizationOrigin, redirectUri] = process.argv.slice(2);
 const rootEnvPath = path.join(rootDir, ".env.local");
 const otherEnvPaths = [
   path.join(rootDir, ".env"),
@@ -1441,24 +1482,33 @@ try {
 }
 
 const startupEnvPaths = [otherEnvPaths[0], rootEnvPath, otherEnvPaths[1]];
-const rootEnvironment = { ...process.env };
+const rootEnvironment = { ...process.env, ROOT_DIR: rootDir };
 parseDotenv(otherEnvPaths[0], rootEnvironment);
 const rootEnv = parseDotenv(rootEnvPath, rootEnvironment);
-const startupEnvironment = { ...process.env };
+const startupEnvironment = { ...process.env, ROOT_DIR: rootDir };
 const startupEnvs = startupEnvPaths.map((envPath) => parseDotenv(envPath, startupEnvironment));
+const appLocalEnv = parseDotenv(otherEnvPaths[2], { ...startupEnvironment });
 
-function resolveStartupValue(key) {
+function resolveStartupValue(key, includeAppLocal = false) {
   let value = process.env[key] ?? "";
+  let present = Object.prototype.hasOwnProperty.call(process.env, key);
   let fatal = false;
   for (const env of startupEnvs) {
     if (!env.has(key)) continue;
+    present = true;
     const nextValue = env.get(key);
     if (nextValue === fatalDotenvValue) fatal = true;
     else {
       value = nextValue;
     }
   }
-  return { fatal, value };
+  if (includeAppLocal && !present && appLocalEnv.has(key)) {
+    present = true;
+    const nextValue = appLocalEnv.get(key);
+    if (nextValue === fatalDotenvValue) fatal = true;
+    else value = nextValue;
+  }
+  return { fatal, present, value };
 }
 
 for (const key of canonicalKeys) {
@@ -1502,7 +1552,7 @@ try {
   }
   const prefix = issuer.hostname.endsWith(".clerk.accounts.dev") ? "pk_test_" : "pk_live_";
   const derivedPublishableKey = `${prefix}${Buffer.from(`${issuer.hostname}$`, "utf8").toString("base64")}`;
-  const configuredPublishableKey = resolveStartupValue("VITE_CLERK_PUBLISHABLE_KEY");
+  const configuredPublishableKey = resolveStartupValue("VITE_CLERK_PUBLISHABLE_KEY", true);
   if (configuredPublishableKey.fatal) {
     fail("VITE_CLERK_PUBLISHABLE_KEY must use a supported literal assignment");
   } else if (configuredPublishableKey.value && configuredPublishableKey.value !== derivedPublishableKey) {
@@ -1530,7 +1580,11 @@ if (configuredCredentialsFile.fatal) {
 if (configuredCredentialsFile.value && configuredCredentialsFile.value.startsWith("~")) {
   fail("MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE must not use tilde expansion");
 }
+const configuredHome = resolveStartupValue("HOME");
+if (configuredHome.fatal || !configuredHome.value) fail("HOME must use a supported non-empty literal assignment");
+const defaultCredentialsFile = path.join(configuredHome.value || process.env.HOME || "", ".cloudflared", `${tunnelId}.json`);
 const credentialsFile = configuredCredentialsFile.value || defaultCredentialsFile;
+if (credentialsFile.includes(",")) fail("MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE must not contain commas");
 if (!fs.existsSync(credentialsFile)) {
   fail("named MCP tunnel credentials file is missing");
 } else {
@@ -1656,10 +1710,10 @@ doctor() {
   fi
   doctor_check_local_convex_url_port "${resolved_convex_url}" "${resolved_convex_cloud_port}"
   if [[ "${target}" == "mcp-private-beta" ]]; then
-    doctor_check_port "${MCP_PRIVATE_BETA_VITE_PORT}" "MCP_PRIVATE_BETA_VITE_PORT"
+    doctor_check_vite_port "${MCP_PRIVATE_BETA_VITE_PORT}" "MCP_PRIVATE_BETA_VITE_PORT"
     doctor_check_mcp_configuration
   else
-    doctor_check_port "${VITE_PORT}" "VITE_PORT"
+    doctor_check_vite_port "${VITE_PORT}" "VITE_PORT"
     doctor_pass "my-app/.env.local remains Vite-only; server configuration remains in root .env.local"
   fi
 
