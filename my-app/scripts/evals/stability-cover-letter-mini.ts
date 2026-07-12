@@ -331,6 +331,7 @@ function printSummary(summaries: CaseStabilitySummary[]): void {
 }
 
 async function main(): Promise<void> {
+  loadEnv(process.cwd());
   const options = parseStabilityCoverLetterCliOptions(process.argv.slice(2));
   const budget = createCoverLetterEvalLiveBudget({
     caseIds: options.caseIds,
@@ -363,7 +364,6 @@ async function main(): Promise<void> {
     );
   }
 
-  loadEnv(process.cwd());
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) {
     throw new Error(

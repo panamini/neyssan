@@ -1310,6 +1310,7 @@ function printReplayReport(results: CoverLetterReplayResult[]): void {
 }
 
 async function main(): Promise<void> {
+  loadEnv(process.cwd());
   const options = parseCoverLetterBenchmarkCliOptions(process.argv.slice(2));
   if (!options.live) {
     printReplayReport(await replayRecordedCoverLetterFixtures());
@@ -1326,7 +1327,6 @@ async function main(): Promise<void> {
     writerCount: options.writerModels.length,
   });
 
-  loadEnv(process.cwd());
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) {
     throw new Error(

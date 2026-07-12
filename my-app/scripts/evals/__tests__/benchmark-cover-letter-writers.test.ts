@@ -1,3 +1,8 @@
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import * as path from "node:path";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { CoverLetterScore } from "../../../convex/lib/proposals/coverLetterEvaluation";
@@ -657,6 +662,56 @@ describe("benchmark-cover-letter-writers", () => {
         declaredMaxUsdPerCall: 0.1,
       },
     });
+  });
+
+  it("loads dotenv before choosing replay or live execution", () => {
+    const workdir = mkdtempSync(
+      path.join(tmpdir(), "cover-letter-benchmark-env-"),
+    );
+    try {
+      writeFileSync(
+        path.join(workdir, ".env.local"),
+        [
+          "COVER_LETTER_EVAL_LIVE=1",
+          "COVER_LETTER_PREMIUM_WRITER_MODEL=gpt-5.4",
+          "COVER_LETTER_EVAL_MODEL=gpt-5.4",
+        ].join("\n"),
+      );
+      const result = spawnSync(
+        path.resolve(process.cwd(), "node_modules/.bin/tsx"),
+        [
+          path.resolve(
+            process.cwd(),
+            "scripts/evals/benchmark-cover-letter-writers.ts",
+          ),
+          "--cases=security-hyatt",
+          "--max-calls=2",
+          "--max-repairs=0",
+          "--max-usd=0.2",
+          "--max-usd-per-call=0.1",
+        ],
+        {
+          cwd: workdir,
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            COVER_LETTER_EVAL_LIVE: "",
+            COVER_LETTER_PREMIUM_WRITER_MODEL: "",
+            COVER_LETTER_EVAL_MODEL: "",
+            OPENAI_API_KEY: "",
+            MISTRAL_API_KEY: "",
+          },
+        },
+      );
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(
+        "OPENAI_API_KEY is not configured in the current environment.",
+      );
+      expect(result.stdout).not.toContain("cover-letter replay contract: PASS");
+    } finally {
+      rmSync(workdir, { recursive: true, force: true });
+    }
   });
 
   it("aggregates per-writer scores, premium-ready counts, rank pass counts, and hard-fail reasons", () => {
