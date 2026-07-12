@@ -17,7 +17,10 @@ function normalizeOrigin(value) {
   } catch {
     fail("origin must be a valid URL");
   }
-  const loopback = url.hostname === "127.0.0.1" || url.hostname === "localhost" || url.hostname === "::1";
+  const loopback = url.hostname === "127.0.0.1"
+    || url.hostname === "localhost"
+    || url.hostname === "::1"
+    || url.hostname === "[::1]";
   if (url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) {
     fail("origin must use HTTPS unless it is loopback");
   }
@@ -75,12 +78,6 @@ function expectExactArray(value, expected, label) {
   }
 }
 
-function expectScope(value, label) {
-  if (!Array.isArray(value) || !value.includes(EXPECTED_SCOPE)) {
-    fail(`${label} must include the private-beta scope`);
-  }
-}
-
 async function checkAuthorizationMetadata(fetchImpl, canonicalOrigin, timeoutMs, log) {
   const { response, json: metadata } = await requestJson(
     fetchImpl,
@@ -94,7 +91,12 @@ async function checkAuthorizationMetadata(fetchImpl, canonicalOrigin, timeoutMs,
   if (metadata.token_endpoint !== `${canonicalOrigin}/oauth/token`) fail("token endpoint does not match the private-beta contract");
   expectExactArray(metadata.token_endpoint_auth_methods_supported, ["client_secret_post"], "token authentication methods");
   expectExactArray(metadata.code_challenge_methods_supported, ["S256"], "PKCE methods");
-  expectScope(metadata.scopes_supported, "authorization metadata");
+  expectExactArray(metadata.response_types_supported, ["code"], "OAuth response types");
+  expectExactArray(metadata.grant_types_supported, ["authorization_code"], "OAuth grant types");
+  expectExactArray(metadata.scopes_supported, [EXPECTED_SCOPE], "authorization scopes");
+  if (metadata.authorization_response_iss_parameter_supported !== true) {
+    fail("authorization response issuer parameter support is required");
+  }
   log("[run] mcp-smoke: PASS authorization metadata");
 }
 
@@ -108,11 +110,18 @@ async function checkProtectedResourceMetadata(fetchImpl, canonicalOrigin, timeou
   if (response.status !== 200) fail("protected-resource metadata must return 200");
   if (metadata.resource !== `${canonicalOrigin}/mcp`) fail("protected resource does not match the private-beta contract");
   expectExactArray(metadata.authorization_servers, [`${canonicalOrigin}/`], "authorization servers");
-  expectScope(metadata.scopes_supported, "protected-resource metadata");
+  expectExactArray(metadata.scopes_supported, [EXPECTED_SCOPE], "protected-resource scopes");
   log("[run] mcp-smoke: PASS protected-resource metadata");
 }
 
 function mcpRequest(method) {
+  const params = method === "initialize"
+    ? {
+        protocolVersion: "2025-11-25",
+        capabilities: {},
+        clientInfo: { name: "twoweeks-mcp-private-beta-smoke", version: "1.0.0" },
+      }
+    : {};
   return {
     method: "POST",
     headers: {
@@ -120,7 +129,7 @@ function mcpRequest(method) {
       "content-type": "application/json",
       "mcp-protocol-version": "2025-11-25",
     },
-    body: JSON.stringify({ jsonrpc: "2.0", id: "smoke", method, params: {} }),
+    body: JSON.stringify({ jsonrpc: "2.0", id: "smoke", method, params }),
   };
 }
 
@@ -139,8 +148,15 @@ async function checkMcpBoundary(fetchImpl, resource, timeoutMs, log) {
 
   const { response: toolCallResponse } = await requestJson(fetchImpl, resource, mcpRequest("tools/call"), timeoutMs);
   if (toolCallResponse.status !== 401) fail("unauthenticated MCP tool calls must return 401");
-  if (!(toolCallResponse.headers.get("www-authenticate") ?? "").toLowerCase().startsWith("bearer")) {
+  const challenge = toolCallResponse.headers.get("www-authenticate") ?? "";
+  if (!challenge.toLowerCase().startsWith("bearer ")) {
     fail("unauthenticated MCP tool calls must return a Bearer challenge");
+  }
+  if (!challenge.includes(`resource_metadata="${resource.replace(/\/mcp$/u, "/.well-known/oauth-protected-resource/mcp")}"`)) {
+    fail("Bearer challenge must include protected-resource metadata");
+  }
+  if (!challenge.includes(`scope="${EXPECTED_SCOPE}"`) || !challenge.includes('error="invalid_token"')) {
+    fail("Bearer challenge must require the private-beta scope");
   }
   log("[run] mcp-smoke: PASS unauthenticated MCP tool call fails closed");
 }

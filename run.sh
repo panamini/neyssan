@@ -15,8 +15,13 @@ if [[ "${CMD}" == "mcp-secret-sync" && "$-" == *x* ]]; then
 fi
 readonly MCP_SECRET_SYNC_XTRACE_WAS_ENABLED
 
-# Doctor may inspect configured values in memory but must never trace them.
-if [[ "${CMD}" == "doctor" && "$-" == *x* ]]; then
+# Read-only diagnostics must neither source nor trace local configuration.
+READ_ONLY_COMMAND=0
+if [[ "${CMD}" == "doctor" || "${CMD}" == "mcp-smoke" ]]; then
+  READ_ONLY_COMMAND=1
+fi
+readonly READ_ONLY_COMMAND
+if [[ "${READ_ONLY_COMMAND}" == "1" && "$-" == *x* ]]; then
   set +x
 fi
 
@@ -24,7 +29,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${ROOT_DIR}"
 
 # Load overrides
-if [[ "${CMD}" != "doctor" ]]; then
+if [[ "${READ_ONLY_COMMAND}" != "1" ]]; then
   if [[ -f "${ROOT_DIR}/.env" ]]; then set -a; source "${ROOT_DIR}/.env"; set +a; fi
   if [[ -f "${ROOT_DIR}/.env.local" ]]; then set -a; source "${ROOT_DIR}/.env.local"; set +a; fi
   if [[ -f "${ROOT_DIR}/my-app/.env" ]]; then set -a; source "${ROOT_DIR}/my-app/.env"; set +a; fi
@@ -74,14 +79,14 @@ INFISICAL_MCP_ENVIRONMENT="dev"
 INFISICAL_MCP_SECRET_PATH="/"
 INFISICAL_MCP_SECRET_KEY="MCP_OAUTH_PRODUCTION_CLIENT_SECRET"
 
-if [[ "${CMD}" != "doctor" ]]; then
+if [[ "${READ_ONLY_COMMAND}" != "1" ]]; then
   mkdir -p "${STATE_DIR}" "${LOG_DIR}"
   mkdir -p "${CONVEX_TMPDIR}"
   mkdir -p "${CACHE_DIR}" "${DOCKER_STATE_DIR}"
 fi
 
 # Auto-load Mistral key from file if not set
-if [[ "${CMD}" != "doctor" && -z "${MISTRAL_API_KEY:-}" && -f "${HOME}/.mistral_key" ]]; then
+if [[ "${READ_ONLY_COMMAND}" != "1" && -z "${MISTRAL_API_KEY:-}" && -f "${HOME}/.mistral_key" ]]; then
   MISTRAL_API_KEY="$(<"${HOME}/.mistral_key")"
   MISTRAL_API_KEY="${MISTRAL_API_KEY//$'\r'/}"
   MISTRAL_API_KEY="${MISTRAL_API_KEY//$'\n'/}"
@@ -3392,7 +3397,7 @@ EOF
 
 # Trap: ensure long-running stack commands do not leave Vite/Parser dangling.
 # Doctor is read-only, so interruption must never tear down an existing stack.
-if [[ "${CMD}" == "doctor" || "${CMD}" == "mcp-smoke" ]]; then
+if [[ "${READ_ONLY_COMMAND}" == "1" ]]; then
   trap 'exit 130' INT TERM
 else
   trap 'echo "[run] interrupt -> down"; down >/dev/null 2>&1 || true; exit 130' INT TERM

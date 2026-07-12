@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { runMcpPrivateBetaSmoke } from "../scripts/mcp-private-beta-smoke.mjs";
 
@@ -13,7 +16,10 @@ async function startFixture(t, override = {}) {
     for await (const chunk of request) body += chunk;
     requests.push({ body, headers: request.headers, method: request.method, url: request.url });
     const origin = `http://127.0.0.1:${server.address().port}`;
-    const route = override[request.url] ?? override.default;
+    const configuredRoute = override[request.url] ?? override.default;
+    const route = typeof configuredRoute === "function"
+      ? configuredRoute({ body, method: request.method, origin, url: request.url })
+      : configuredRoute;
     if (route) {
       response.writeHead(route.status, route.headers ?? { "content-type": "application/json" });
       response.end(JSON.stringify(typeof route.body === "function" ? route.body(origin) : (route.body ?? {})));
@@ -27,6 +33,9 @@ async function startFixture(t, override = {}) {
         token_endpoint: `${origin}/oauth/token`,
         token_endpoint_auth_methods_supported: ["client_secret_post"],
         code_challenge_methods_supported: ["S256"],
+        response_types_supported: ["code"],
+        grant_types_supported: ["authorization_code"],
+        authorization_response_iss_parameter_supported: true,
         scopes_supported: ["twoweeks:applications:read"],
       }));
       return;
@@ -51,7 +60,10 @@ async function startFixture(t, override = {}) {
         }));
         return;
       }
-      response.writeHead(401, { "content-type": "application/json", "www-authenticate": "Bearer" });
+      response.writeHead(401, {
+        "content-type": "application/json",
+        "www-authenticate": `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource/mcp", error="invalid_token", scope="twoweeks:applications:read"`,
+      });
       response.end(JSON.stringify({ error: "invalid_token" }));
       return;
     }
@@ -87,6 +99,12 @@ test("smoke validates the public no-credential contract without sending sensitiv
     ],
   );
   assert.equal(fixture.requests.find((request) => request.url === "/oauth/token").body, "grant_type=authorization_code");
+  const initialize = JSON.parse(fixture.requests.find((request) => request.url === "/mcp").body);
+  assert.deepEqual(initialize.params, {
+    protocolVersion: "2025-11-25",
+    capabilities: {},
+    clientInfo: { name: "twoweeks-mcp-private-beta-smoke", version: "1.0.0" },
+  });
   for (const request of fixture.requests) {
     assert.equal(request.headers.authorization, undefined);
     assert.equal(request.headers.cookie, undefined);
@@ -104,6 +122,9 @@ test("smoke rejects public-client metadata", async (t) => {
         token_endpoint: `${origin}/oauth/token`,
         token_endpoint_auth_methods_supported: ["none"],
         code_challenge_methods_supported: ["S256"],
+        response_types_supported: ["code"],
+        grant_types_supported: ["authorization_code"],
+        authorization_response_iss_parameter_supported: true,
         scopes_supported: ["twoweeks:applications:read"],
       }),
     },
@@ -111,6 +132,69 @@ test("smoke rejects public-client metadata", async (t) => {
   await assert.rejects(
     runMcpPrivateBetaSmoke({ origin: fixture.origin, log: () => {} }),
     /token authentication methods does not match/u,
+  );
+});
+
+test("smoke rejects broader authorization scopes", async (t) => {
+  const fixture = await startFixture(t, {
+    "/.well-known/oauth-authorization-server": {
+      status: 200,
+      body: (origin) => ({
+        issuer: `${origin}/`,
+        authorization_endpoint: `${origin}/oauth/authorize`,
+        token_endpoint: `${origin}/oauth/token`,
+        token_endpoint_auth_methods_supported: ["client_secret_post"],
+        code_challenge_methods_supported: ["S256"],
+        response_types_supported: ["code"],
+        grant_types_supported: ["authorization_code"],
+        authorization_response_iss_parameter_supported: true,
+        scopes_supported: ["twoweeks:applications:read", "twoweeks:applications:write"],
+      }),
+    },
+  });
+  await assert.rejects(
+    runMcpPrivateBetaSmoke({ origin: fixture.origin, log: () => {} }),
+    /authorization scopes does not match/u,
+  );
+});
+
+test("smoke rejects broader protected-resource scopes", async (t) => {
+  const fixture = await startFixture(t, {
+    "/.well-known/oauth-protected-resource/mcp": {
+      status: 200,
+      body: (origin) => ({
+        resource: `${origin}/mcp`,
+        authorization_servers: [`${origin}/`],
+        scopes_supported: ["twoweeks:applications:read", "twoweeks:applications:write"],
+      }),
+    },
+  });
+  await assert.rejects(
+    runMcpPrivateBetaSmoke({ origin: fixture.origin, log: () => {} }),
+    /protected-resource scopes does not match/u,
+  );
+});
+
+test("smoke rejects incomplete Bearer challenges", async (t) => {
+  const fixture = await startFixture(t, {
+    "/mcp": ({ body }) => {
+      const message = JSON.parse(body);
+      if (message.method === "initialize") {
+        return {
+          status: 200,
+          body: { jsonrpc: "2.0", id: message.id, result: { protocolVersion: "2025-11-25" } },
+        };
+      }
+      return {
+        status: 401,
+        headers: { "content-type": "application/json", "www-authenticate": "Bearer" },
+        body: { error: "invalid_token" },
+      };
+    },
+  });
+  await assert.rejects(
+    runMcpPrivateBetaSmoke({ origin: fixture.origin, log: () => {} }),
+    /must return a Bearer challenge/u,
   );
 });
 
@@ -168,12 +252,43 @@ test("smoke accepts only HTTPS or loopback origins", async () => {
     runMcpPrivateBetaSmoke({ origin: "https://user:password@example.test", fetchImpl: () => { throw new Error("must not run"); } }),
     /canonical origin/u,
   );
+  await assert.rejects(
+    runMcpPrivateBetaSmoke({
+      origin: "http://[::1]:5196",
+      fetchImpl: () => { throw new Error("IPv6 loopback accepted"); },
+    }),
+    /IPv6 loopback accepted/u,
+  );
 });
 
 test("run.sh exposes mcp-smoke as a read-only dispatch", async () => {
   const source = await readFile(RUN_SH, "utf8");
   assert.match(source, /mcp_smoke\(\) \{\s+node "\$\{ROOT_DIR\}\/scripts\/mcp-private-beta-smoke\.mjs" "\$@"\s+\}/u);
   assert.match(source, /\.\/run\.sh mcp-smoke \[--origin https:\/\/host\]/u);
-  assert.match(source, /if \[\[ "\$\{CMD\}" == "doctor" \|\| "\$\{CMD\}" == "mcp-smoke" \]\]; then/u);
+  assert.match(source, /if \[\[ "\$\{READ_ONLY_COMMAND\}" == "1" \]\]; then/u);
   assert.match(source, /mcp-smoke\) mcp_smoke "\$@";;/u);
+});
+
+test("run.sh mcp-smoke does not source or trace dotenv values", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "mcp-smoke-runsh-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const bin = join(root, "bin");
+  await mkdir(join(root, "scripts"), { recursive: true });
+  await mkdir(bin, { recursive: true });
+  await copyFile(RUN_SH, join(root, "run.sh"));
+  const privateMarker = "private-dotenv-marker-do-not-print";
+  await writeFile(join(root, ".env"), `PRIVATE_MARKER=${privateMarker}\n`, "utf8");
+  await writeFile(
+    join(bin, "node"),
+    '#!/bin/sh\nif [ -n "${PRIVATE_MARKER:-}" ]; then exit 23; fi\nexit 0\n',
+    { mode: 0o755 },
+  );
+
+  const result = spawnSync("/bin/bash", ["-x", join(root, "run.sh"), "mcp-smoke"], {
+    cwd: root,
+    encoding: "utf8",
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH ?? ""}` },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(`${result.stdout}${result.stderr}`, new RegExp(privateMarker, "u"));
 });

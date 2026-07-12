@@ -6,7 +6,7 @@ Change Contract: `CC-20260712-pr308-mcp-operational-smoke-v1`
 
 `./run.sh mcp-smoke` performs a read-only, no-credential check of the public private-beta boundary. It validates exact OAuth authorization-server metadata, protected-resource metadata, the unauthenticated `initialize` response required for mixed-auth discovery, the Bearer challenge on an unauthenticated `tools/call`, and a token request without a resource that must fail with `invalid_target`.
 
-The command sends no OAuth code, client secret, bearer token, refresh token, user identifier, private document text, or provider input. It never follows redirects, never prints response bodies, keeps a timeout through body consumption, and rejects JSON bodies over 64 KiB.
+The command skips all dotenv and local secret-file loading, including under `bash -x`. It sends no OAuth code, client secret, bearer token, refresh token, user identifier, private document text, or provider input. It never follows redirects, never prints response bodies, keeps a timeout through body consumption, and rejects JSON bodies over 64 KiB.
 
 ## Boundary
 
@@ -16,6 +16,6 @@ The command sends no OAuth code, client secret, bearer token, refresh token, use
 
 ## Verification
 
-- Isolated Node tests use a loopback fixture server and assert exact request bodies plus redacted failures.
+- Isolated Node tests use a loopback fixture server and assert exact request paths, initialize shape, metadata scopes, Bearer challenge fields, absence of authorization/cookie headers, bounded bodies, and redacted failures.
 - `run.sh` syntax and dispatch are checked separately.
 - A live invocation is optional operational evidence and must remain no-credential/read-only.
