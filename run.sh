@@ -3335,6 +3335,10 @@ smoke() {
   curl -sS http://127.0.0.1:8001/ready | jq .
 }
 
+mcp_smoke() {
+  node "${ROOT_DIR}/scripts/mcp-private-beta-smoke.mjs" "$@"
+}
+
 help() {
   cat <<'EOF'
 usage:
@@ -3342,6 +3346,7 @@ usage:
   ./run.sh mcp-private-beta [--ocr auto|doctr|paddle|disabled]
   ./run.sh mcp-secret-sync
   ./run.sh mcp-check
+  ./run.sh mcp-smoke [--origin https://host]
   ./run.sh local-fast [--ocr auto|doctr|paddle|disabled]
   ./run.sh local [--ocr auto|doctr|paddle|disabled]
   ./run.sh local-convex [--ocr auto|doctr|paddle|disabled]
@@ -3364,6 +3369,7 @@ notes:
 - mcp-private-beta = exact private-beta MCP origin on port 5196 with local Convex, image parser runtime, and the named Cloudflare tunnel.
 - mcp-secret-sync = retrieve the raw OAuth client secret from the linked Infisical EU project and atomically update only its digest in root .env.local.
 - mcp-check = fail-closed validation of canonical private-beta keys; it prints key names/status only, never values.
+- mcp-smoke = read-only public metadata/discovery/auth-challenge/error smoke; it sends no credentials or private data and never prints response bodies.
 - local-fast = recommended fast full-app parser workflow: local parser + local Convex + Vite + autoreload, with export/runtime deps preserved inside the container.
 - tunnel = stable validation mode on the validated image runtime.
 - local = local parser + export-capable image runtime + Vite pointed at http://127.0.0.1:8001.
@@ -3386,7 +3392,7 @@ EOF
 
 # Trap: ensure long-running stack commands do not leave Vite/Parser dangling.
 # Doctor is read-only, so interruption must never tear down an existing stack.
-if [[ "${CMD}" == "doctor" ]]; then
+if [[ "${CMD}" == "doctor" || "${CMD}" == "mcp-smoke" ]]; then
   trap 'exit 130' INT TERM
 else
   trap 'echo "[run] interrupt -> down"; down >/dev/null 2>&1 || true; exit 130' INT TERM
@@ -3397,6 +3403,7 @@ case "${CMD}" in
   mcp-private-beta) mcp_private_beta_stack "$@";;
   mcp-secret-sync) mcp_secret_sync;;
   mcp-check) mcp_check;;
+  mcp-smoke) mcp_smoke "$@";;
   local-fast) local_fast_stack "$@";;
   local) local_stack "$@";;
   local-convex) local_convex_stack "$@";;
