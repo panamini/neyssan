@@ -8,6 +8,7 @@ import {
   mkdtempSync,
   realpathSync,
   readFileSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -83,7 +84,10 @@ esac
     `#!/bin/sh
 case "\${1:-}" in
   --version) printf '%s\\n' 'Docker version doctor-fixture' ;;
-  info) test "\${FAKE_DOCKER_DAEMON:-available}" = available ;;
+  info)
+    test "\${FAKE_DOCKER_DAEMON:-available}" = available || exit 1
+    if test -n "\${FAKE_DOCKER_OPERATING_SYSTEM:-}"; then printf '%s\n' "\${FAKE_DOCKER_OPERATING_SYSTEM}"; fi
+    ;;
   image)
     if test "\${2:-}" = ls && test "\${FAKE_DOCKER_INVALID_REFERENCE:-0}" = 1; then exit 1; fi
     if test "\${2:-}" = inspect && test "\${FAKE_DOCKER_IMAGE:-available}" = missing; then exit 1; fi
@@ -522,7 +526,28 @@ test("doctor seeds simple expansions with the pre-source ROOT_DIR", (t) => {
   assert.doesNotMatch(result.output, /ROOT_DIR|convex-tmp/u);
 });
 
-for (const controlKey of ["DOCKER_CONTEXT", "DOCKER_HOST", "IFS", "ROOT_DIR"]) {
+for (const controlKey of [
+  "BUILDKIT_PROGRESS",
+  "DOCKER_API_VERSION",
+  "DOCKER_CERT_PATH",
+  "DOCKER_CONFIG",
+  "DOCKER_CONTEXT",
+  "DOCKER_CUSTOM_HEADERS",
+  "DOCKER_DEFAULT_PLATFORM",
+  "DOCKER_HIDE_LEGACY_COMMANDS",
+  "DOCKER_HOST",
+  "DOCKER_TLS",
+  "DOCKER_TLS_VERIFY",
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "NO_COLOR",
+  "NO_PROXY",
+  "IFS",
+  "ROOT_DIR",
+  "http_proxy",
+  "https_proxy",
+  "no_proxy",
+]) {
   test(`doctor rejects ${controlKey} assignments that change startup execution`, (t) => {
     const fixture = createFixture(t);
     writeFileSync(join(fixture.root, ".env"), `${controlKey}=unsafe-do-not-print\n`);
@@ -1143,6 +1168,36 @@ test("doctor recognizes a Linux shell running through WSL2", (t) => {
 
   assert.equal(result.status, 0, result.output);
   assert.match(result.output, /Windows through WSL2/i);
+});
+
+test("native Linux MCP tunnel uses host networking to reach loopback Vite", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture);
+
+  const result = runDoctor(fixture, ["mcp-private-beta"], {
+    FAKE_UNAME_S: "Linux",
+    FAKE_UNAME_R: "6.8.0-doctor-fixture",
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /native Linux host networking to reach loopback Vite/i);
+  const source = readFileSync(join(fixture.root, "run.sh"), "utf8");
+  assert.match(source, /tunnel_network_args=\(--network host\)/u);
+  assert.match(source, /service_host="127\.0\.0\.1"/u);
+});
+
+test("Linux Docker Desktop MCP tunnel keeps the Docker Desktop host gateway", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture);
+
+  const result = runDoctor(fixture, ["mcp-private-beta"], {
+    FAKE_UNAME_S: "Linux",
+    FAKE_UNAME_R: "6.8.0-doctor-fixture",
+    FAKE_DOCKER_OPERATING_SYSTEM: "Docker Desktop",
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /Docker Desktop host gateway to reach loopback Vite/i);
 });
 
 test("doctor rejects WSL1 instead of reporting it as WSL2", (t) => {
@@ -1777,6 +1832,40 @@ fs.statSync = (path, ...args) => {
   assert.match(result.output, /root \.env\.local could not be inspected/i);
   assert.doesNotMatch(result.output, /metadata-race-do-not-print|stat-failure-shim|EACCES|at Object/u);
   assert.doesNotMatch(result.output, new RegExp(escapeRegExp(fixture.root), "u"));
+});
+
+test("doctor rejects a symlinked root MCP environment like startup", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture);
+  const target = join(fixture.root, "root-env-target-do-not-print");
+  renameSync(fixture.envFile, target);
+  symlinkSync(target, fixture.envFile);
+
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+
+  assertFailure(result);
+  assert.match(result.output, /root \.env\.local must have mode 600/i);
+  assert.doesNotMatch(result.output, /root-env-target-do-not-print/u);
+});
+
+test("doctor rejects symlinked MCP credentials like startup", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture);
+  const credentials = join(
+    fixture.root,
+    "home",
+    ".cloudflared",
+    "935a2064-9473-41bc-bd73-174660892847.json",
+  );
+  const target = join(fixture.root, "credentials-target-do-not-print.json");
+  renameSync(credentials, target);
+  symlinkSync(target, credentials);
+
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+
+  assertFailure(result);
+  assert.match(result.output, /named MCP tunnel credentials file must have mode 400 or 600/i);
+  assert.doesNotMatch(result.output, /credentials-target-do-not-print/u);
 });
 
 test("doctor rejects a quoted tilde in the MCP credentials path", (t) => {

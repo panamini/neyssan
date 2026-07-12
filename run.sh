@@ -521,6 +521,25 @@ NODE
   return 0
 }
 
+is_wsl_runtime() {
+  local kernel_release=""
+  if [[ -n "${WSL_DISTRO_NAME:-}" || -n "${WSL_INTEROP:-}" ]] || grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null; then
+    kernel_release="$(uname -r 2>/dev/null || true)"
+    case "${kernel_release}" in
+      *microsoft-standard*|*Microsoft-standard*|*WSL2*|*wsl2*) return 0 ;;
+    esac
+  fi
+  return 1
+}
+
+mcp_tunnel_uses_native_linux_host_network() {
+  local docker_operating_system=""
+  [[ "$(uname -s 2>/dev/null || true)" == "Linux" ]] || return 1
+  is_wsl_runtime && return 1
+  docker_operating_system="$(docker info --format '{{.OperatingSystem}}' 2>/dev/null || true)"
+  [[ "${docker_operating_system}" != *"Docker Desktop"* ]]
+}
+
 doctor_check_platform() {
   local kernel=""
   local kernel_release=""
@@ -757,7 +776,30 @@ function parseLiteralAssignmentValue(raw, environment) {
   return quote ? null : parsed;
 }
 
-const blockedStartupControlKeys = new Set(["DOCKER_CONTEXT", "DOCKER_HOST", "IFS", "NODE_OPTIONS", "PATH", "ROOT_DIR"]);
+const blockedStartupControlKeys = new Set([
+  "BUILDKIT_PROGRESS",
+  "DOCKER_API_VERSION",
+  "DOCKER_CERT_PATH",
+  "DOCKER_CONFIG",
+  "DOCKER_CONTEXT",
+  "DOCKER_CUSTOM_HEADERS",
+  "DOCKER_DEFAULT_PLATFORM",
+  "DOCKER_HIDE_LEGACY_COMMANDS",
+  "DOCKER_HOST",
+  "DOCKER_TLS",
+  "DOCKER_TLS_VERIFY",
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "IFS",
+  "NODE_OPTIONS",
+  "NO_COLOR",
+  "NO_PROXY",
+  "PATH",
+  "ROOT_DIR",
+  "http_proxy",
+  "https_proxy",
+  "no_proxy",
+]);
 const environment = { ...process.env, ROOT_DIR: rootDir };
 let valid = true;
 for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.local"), path.join(rootDir, "my-app", ".env")]) {
@@ -1480,7 +1522,7 @@ const canonicalKeys = [
 ];
 
 try {
-  const mode = (fs.statSync(rootEnvPath).mode & 0o777).toString(8);
+  const mode = (fs.lstatSync(rootEnvPath).mode & 0o777).toString(8);
   if (mode !== "600") fail("root .env.local must have mode 600");
 } catch (error) {
   if (error && error.code === "ENOENT") fail("root .env.local is required");
@@ -1590,7 +1632,7 @@ if (!fs.existsSync(credentialsFile)) {
   try {
     const credentialsStat = fs.statSync(credentialsFile);
     if (!credentialsStat.isFile()) fail("named MCP tunnel credentials path must be a regular file");
-    const mode = (credentialsStat.mode & 0o777).toString(8);
+    const mode = (fs.lstatSync(credentialsFile).mode & 0o777).toString(8);
     if (mode !== "400" && mode !== "600") fail("named MCP tunnel credentials file must have mode 400 or 600");
   } catch {
     fail("named MCP tunnel credentials file could not be inspected");
@@ -1712,6 +1754,11 @@ doctor() {
   if [[ "${target}" == "mcp-private-beta" ]]; then
     doctor_check_vite_port "${MCP_PRIVATE_BETA_VITE_PORT}" "MCP_PRIVATE_BETA_VITE_PORT"
     doctor_check_mcp_configuration "${original_home}"
+    if mcp_tunnel_uses_native_linux_host_network; then
+      doctor_pass "MCP tunnel uses native Linux host networking to reach loopback Vite"
+    else
+      doctor_pass "MCP tunnel uses the Docker Desktop host gateway to reach loopback Vite"
+    fi
   else
     doctor_check_vite_port "${VITE_PORT}" "VITE_PORT"
     doctor_pass "my-app/.env.local remains Vite-only; server configuration remains in root .env.local"
@@ -2440,7 +2487,14 @@ stop_parser() {
 }
 
 start_tunnel() {
-  docker network create "${TUNNEL_NETWORK}" >/dev/null 2>&1 || true
+  local service_host="host.docker.internal"
+  local -a tunnel_network_args=(--network "${TUNNEL_NETWORK}")
+  if [[ "${MCP_PRIVATE_BETA_TUNNEL:-0}" == "1" ]] && mcp_tunnel_uses_native_linux_host_network; then
+    service_host="127.0.0.1"
+    tunnel_network_args=(--network host)
+  else
+    docker network create "${TUNNEL_NETWORK}" >/dev/null 2>&1 || true
+  fi
   docker rm -f "${CLOUDFLARED_NAME}" >/dev/null 2>&1 || true
   echo "[run] starting cloudflared (${CLOUDFLARED_NAME})"
   if [[ "${MCP_PRIVATE_BETA_TUNNEL:-0}" == "1" ]]; then
@@ -2451,14 +2505,14 @@ tunnel: ${MCP_PRIVATE_BETA_TUNNEL_ID}
 credentials-file: /run/secrets/cloudflared-mcp-credentials.json
 ingress:
   - hostname: mcp.twoweeks.ai
-    service: http://host.docker.internal:${MCP_PRIVATE_BETA_VITE_PORT}
+    service: http://${service_host}:${MCP_PRIVATE_BETA_VITE_PORT}
   - service: http_status:404
 EOF
     )
     chmod 600 "${config_temp}"
     mv "${config_temp}" "${MCP_TUNNEL_CONFIG_FILE}"
     if ! docker run -d --name "${CLOUDFLARED_NAME}" --restart=unless-stopped \
-      --network "${TUNNEL_NETWORK}" \
+      "${tunnel_network_args[@]}" \
       --mount "type=bind,source=${MCP_TUNNEL_CONFIG_FILE},target=/etc/cloudflared/config.yml,readonly" \
       --mount "type=bind,source=${MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE},target=/run/secrets/cloudflared-mcp-credentials.json,readonly" \
       cloudflare/cloudflared:latest \
