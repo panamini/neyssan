@@ -30,13 +30,8 @@ function normalizeOrigin(value) {
   return url.origin;
 }
 
-async function readJson(response) {
-  const contentType = response.headers.get("content-type") ?? "";
-  const mediaType = contentType.split(";", 1)[0].trim().toLowerCase();
-  if (mediaType !== "application/json") fail("response must use application/json");
-  const declaredLength = Number(response.headers.get("content-length") ?? "0");
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_JSON_BYTES) fail("response body is too large");
-  if (!response.body) fail("response body must be valid JSON");
+async function readBodyBytes(response) {
+  if (!response.body) return Buffer.alloc(0);
   const reader = response.body.getReader();
   const chunks = [];
   let receivedBytes = 0;
@@ -50,11 +45,36 @@ async function readJson(response) {
     }
     chunks.push(value);
   }
-  const text = Buffer.concat(chunks, receivedBytes).toString("utf8");
+  return Buffer.concat(chunks, receivedBytes);
+}
+
+async function readJson(response) {
+  const contentType = response.headers.get("content-type") ?? "";
+  const mediaType = contentType.split(";", 1)[0].trim().toLowerCase();
+  if (mediaType !== "application/json") fail("response must use application/json");
+  const declaredLength = Number(response.headers.get("content-length") ?? "0");
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_JSON_BYTES) fail("response body is too large");
+  const text = (await readBodyBytes(response)).toString("utf8");
   try {
     return JSON.parse(text);
   } catch {
     fail("response body must be valid JSON");
+  }
+}
+
+async function requestEmpty(fetchImpl, url, init, timeoutMs) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl(url, { ...init, redirect: "manual", signal: controller.signal });
+    if (response.status >= 300 && response.status < 400) fail("redirects are not allowed");
+    if ((await readBodyBytes(response)).length !== 0) fail("response body must be empty");
+    return response;
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") fail("request timed out");
+    throw error;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -123,6 +143,9 @@ function mcpRequest(method) {
         clientInfo: { name: "twoweeks-mcp-private-beta-smoke", version: "1.0.0" },
       }
     : {};
+  const message = method === "notifications/initialized"
+    ? { jsonrpc: "2.0", method, params }
+    : { jsonrpc: "2.0", id: "smoke", method, params };
   return {
     method: "POST",
     headers: {
@@ -130,7 +153,7 @@ function mcpRequest(method) {
       "content-type": "application/json",
       "mcp-protocol-version": "2025-11-25",
     },
-    body: JSON.stringify({ jsonrpc: "2.0", id: "smoke", method, params }),
+    body: JSON.stringify(message),
   };
 }
 
@@ -145,7 +168,7 @@ function readBearerChallenge(response) {
     if (!match || params.has(match[1])) fail("Bearer challenge parameters are malformed");
     params.set(match[1], match[2]);
   }
-  return params;
+  return { header: challenge, params };
 }
 
 async function checkMcpBoundary(fetchImpl, resource, timeoutMs, log) {
@@ -161,14 +184,43 @@ async function checkMcpBoundary(fetchImpl, resource, timeoutMs, log) {
   }
   log("[run] mcp-smoke: PASS unauthenticated MCP discovery");
 
-  const { response: toolCallResponse } = await requestJson(fetchImpl, resource, mcpRequest("tools/call"), timeoutMs);
+  const initializedResponse = await requestEmpty(
+    fetchImpl,
+    resource,
+    mcpRequest("notifications/initialized"),
+    timeoutMs,
+  );
+  if (initializedResponse.status !== 202) {
+    fail("MCP initialized notification must return an empty 202 response");
+  }
+  log("[run] mcp-smoke: PASS MCP initialized notification");
+
+  const { response: toolCallResponse, json: toolCallResult } = await requestJson(
+    fetchImpl,
+    resource,
+    mcpRequest("tools/call"),
+    timeoutMs,
+  );
   if (toolCallResponse.status !== 401) fail("unauthenticated MCP tool calls must return 401");
   const challenge = readBearerChallenge(toolCallResponse);
-  if (challenge.get("resource_metadata") !== resource.replace(/\/mcp$/u, "/.well-known/oauth-protected-resource/mcp")) {
+  if (challenge.params.get("resource_metadata") !== resource.replace(/\/mcp$/u, "/.well-known/oauth-protected-resource/mcp")) {
     fail("Bearer challenge must include protected-resource metadata");
   }
-  if (challenge.get("scope") !== EXPECTED_SCOPE || challenge.get("error") !== "invalid_token") {
+  if (
+    challenge.params.get("scope") !== EXPECTED_SCOPE
+    || challenge.params.get("error") !== "invalid_token"
+    || challenge.params.get("error_description") !== "Access token required."
+  ) {
     fail("Bearer challenge must require the private-beta scope");
+  }
+  if (
+    !toolCallResult
+    || typeof toolCallResult !== "object"
+    || Array.isArray(toolCallResult)
+    || toolCallResult._meta?.["mcp/www_authenticate"]?.length !== 1
+    || toolCallResult._meta["mcp/www_authenticate"][0] !== challenge.header
+  ) {
+    fail("MCP auth response must mirror the Bearer challenge in metadata");
   }
   log("[run] mcp-smoke: PASS unauthenticated MCP tool call fails closed");
 }
