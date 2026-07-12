@@ -1219,7 +1219,7 @@ test("doctor installs a non-mutating signal trap", () => {
 
   assert.match(
     source,
-    /if \[\[ "\$\{CMD\}" == "doctor" \]\]; then\s+trap 'exit 130' INT TERM/u,
+    /if \[\[ "\$\{READ_ONLY_COMMAND\}" == "1" \]\]; then\s+trap 'exit 130' INT TERM/u,
   );
 });
 
@@ -1812,15 +1812,16 @@ test("doctor mcp-private-beta sanitizes root dotenv metadata races", (t) => {
   writeFileSync(
     shimPath,
     `const fs = require("node:fs");
-const originalStatSync = fs.statSync;
-fs.statSync = (path, ...args) => {
+const originalLstatSync = fs.lstatSync;
+fs.lstatSync = (path, ...args) => {
   if (String(path).endsWith("/.env.local")) {
     const error = new Error("metadata-race-do-not-print");
     error.code = "EACCES";
     throw error;
   }
-  return originalStatSync(path, ...args);
+  return originalLstatSync(path, ...args);
 };
+require("node:module").syncBuiltinESMExports();
 `,
   );
 
