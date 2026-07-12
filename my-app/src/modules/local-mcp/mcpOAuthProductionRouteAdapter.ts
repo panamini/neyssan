@@ -629,6 +629,7 @@ const ACCESS_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 const AUTHORIZATION_CODE_DIGEST_PATTERN = /^[0-9a-f]{64}$/u;
 const CLIENT_SECRET_SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 const MCP_BEARER_VERIFICATION_QUOTA_CLIENT_ID = "mcp_bearer_verification";
+const MCP_PRODUCTION_PROTOCOL_VERSIONS = Object.freeze(["2025-06-18", "2025-11-25"] as const);
 const MCP_PRODUCTION_PROTOCOL_VERSION = "2025-11-25";
 const PKCE_CODE_VERIFIER_PATTERN = /^[A-Za-z0-9._~-]{43,128}$/u;
 const PKCE_CODE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43,128}$/u;
@@ -2053,7 +2054,7 @@ function allowedMcpPolicyDecisionResponse(
         jsonrpc: "2.0",
         id,
         result: {
-          protocolVersion: MCP_PRODUCTION_PROTOCOL_VERSION,
+          protocolVersion: negotiateMcpProductionProtocolVersion(envelope.jsonRpc.params),
           serverInfo: {
             name: "twoweeks-production-mcp-auth-boundary",
             version: "1.0.0",
@@ -2592,7 +2593,16 @@ function isMcpProtocolVersionHeaderAllowed(
 ): boolean {
   if (message.method === "initialize") return true;
   const protocolVersion = readHeaderValueByName(request.headers, "mcp-protocol-version");
-  return protocolVersion === MCP_PRODUCTION_PROTOCOL_VERSION;
+  return MCP_PRODUCTION_PROTOCOL_VERSIONS.some((supportedVersion) => supportedVersion === protocolVersion);
+}
+
+function negotiateMcpProductionProtocolVersion(params: unknown): string {
+  if (!isPlainRecord(params) || typeof params.protocolVersion !== "string") {
+    return MCP_PRODUCTION_PROTOCOL_VERSION;
+  }
+  return MCP_PRODUCTION_PROTOCOL_VERSIONS.some((supportedVersion) => supportedVersion === params.protocolVersion)
+    ? params.protocolVersion
+    : MCP_PRODUCTION_PROTOCOL_VERSION;
 }
 
 function isUnauthenticatedMcpDiscoveryProtocolVersionHeaderAllowed(

@@ -1391,11 +1391,47 @@ describe("MCP OAuth production route adapter", () => {
     expectNoRouteLeakage(response);
   });
 
-  it("allows unauthenticated production /mcp tools/list with OAuth-required tool metadata", async () => {
+  it.each([
+    ["2025-06-18", "2025-06-18"],
+    ["2099-01-01", "2025-11-25"],
+  ])("negotiates initialize protocol %s as %s", async (requestedVersion, expectedVersion) => {
+    const dependencies = routeDependencies(makeCtx());
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(null, {
+        jsonrpc: "2.0",
+        id: "initialize-version-negotiation",
+        method: "initialize",
+        params: {
+          protocolVersion: requestedVersion,
+          capabilities: {},
+          clientInfo: { name: "chatgpt-compatible-client", version: "1" },
+        },
+      }),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 200,
+      json: {
+        jsonrpc: "2.0",
+        id: "initialize-version-negotiation",
+        result: { protocolVersion: expectedVersion },
+      },
+    });
+    expect(dependencies.checkPreAuthQuota).not.toHaveBeenCalled();
+    expect(dependencies.verifyAccessToken).not.toHaveBeenCalled();
+    expectNoRouteLeakage(response);
+  });
+
+  it.each(["2025-06-18", "2025-11-25"])(
+    "allows unauthenticated production /mcp tools/list for negotiated protocol %s",
+    async (protocolVersion) => {
     const dependencies = routeDependencies(makeCtx());
     const response = await handleMcpOAuthProductionRouteRequest(
       mcpRequest(null, mcpJsonRpcRequest("tools/list", "tools-list-discovery"), {
-        "mcp-protocol-version": "2025-11-25",
+        "mcp-protocol-version": protocolVersion,
       }),
       routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
       dependencies,
@@ -1428,7 +1464,8 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
     expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
     expect(JSON.stringify(response)).not.toContain(OWNER_ID);
-  });
+    },
+  );
 
   it("allows unauthenticated production /mcp tools/list discovery without a protocol-version header", async () => {
     const dependencies = routeDependencies(makeCtx());
@@ -1521,7 +1558,9 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(OWNER_ID);
   });
 
-  it("returns authenticated production tools/list metadata only after bearer verification", async () => {
+  it.each(["2025-06-18", "2025-11-25"])(
+    "returns authenticated production tools/list metadata for negotiated protocol %s",
+    async (protocolVersion) => {
     const ctx = makeCtx();
     ctx.accessTokenRows.push(storedAccessToken());
     const activation = activationDependencies();
@@ -1530,7 +1569,7 @@ describe("MCP OAuth production route adapter", () => {
       mcpRequest(
         `Bearer ${RAW_ACCESS_TOKEN}`,
         { jsonrpc: "2.0", id: "tools-list-1", method: "tools/list" },
-        { "mcp-protocol-version": "2025-11-25" },
+        { "mcp-protocol-version": protocolVersion },
       ),
       routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }, activation),
       dependencies,
@@ -1627,7 +1666,8 @@ describe("MCP OAuth production route adapter", () => {
     expect(bodyText).not.toContain("local_mcp_dry_run");
     expect(bodyText).not.toContain("dry-run");
     expect(bodyText).not.toContain("https://");
-  });
+    },
+  );
 
   it("accepts safe tools/list metadata params without echoing progress tokens", async () => {
     const ctx = makeCtx();
