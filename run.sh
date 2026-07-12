@@ -545,6 +545,20 @@ mcp_tunnel_uses_native_linux_host_network() {
   [[ "${docker_operating_system}" != *"Docker Desktop"* ]]
 }
 
+doctor_check_mcp_tunnel_network() {
+  local docker_operating_system=""
+  if mcp_tunnel_uses_native_linux_host_network; then
+    doctor_pass "MCP tunnel uses native Linux host networking to reach loopback Vite"
+    return 0
+  fi
+  docker_operating_system="$(docker info --format '{{.OperatingSystem}}' 2>/dev/null || true)"
+  if is_wsl_runtime && [[ "${docker_operating_system}" != *"Docker Desktop"* ]]; then
+    doctor_fail "WSL2 MCP tunnel requires Docker Desktop integration"
+    return 0
+  fi
+  doctor_pass "MCP tunnel uses the Docker Desktop host gateway to reach loopback Vite"
+}
+
 doctor_check_platform() {
   local kernel=""
   local kernel_release=""
@@ -637,9 +651,22 @@ doctor_check_startup_env_syntax() {
 }
 
 doctor_check_startup_env_literals() {
+  local integer_declaration=""
+  local integer_name=""
+  local integer_names=""
   local readonly_declaration=""
   local readonly_name=""
   local readonly_names=""
+  while IFS= read -r integer_declaration; do
+    if [[ "${integer_declaration}" =~ ^declare[[:space:]]+-[^[:space:]]*i[^[:space:]]*[[:space:]]+([A-Za-z_][A-Za-z0-9_]*)(=|$) ]]; then
+      integer_name="${BASH_REMATCH[1]}"
+      integer_names+="${integer_name}"$'\n'
+    fi
+  done < <(
+    while IFS= read -r integer_name; do
+      declare -p "${integer_name}" 2>/dev/null || true
+    done < <(compgen -A variable)
+  )
   while IFS= read -r readonly_declaration; do
     if [[ "${readonly_declaration}" =~ ^declare[[:space:]]+-[^[:space:]]*r[^[:space:]]*[[:space:]]+([A-Za-z_][A-Za-z0-9_]*)(=|$) ]]; then
       readonly_name="${BASH_REMATCH[1]}"
@@ -647,13 +674,13 @@ doctor_check_startup_env_literals() {
     fi
   done < <(readonly -p)
 
-  if node - "${ROOT_DIR}" "${readonly_names}" <<'NODE'
+  if node - "${ROOT_DIR}" "${readonly_names}" "${integer_names}" <<'NODE'
 const fs = require("node:fs");
 const path = require("node:path");
 
-const [rootDir, readonlyNamesInput = ""] = process.argv.slice(2);
-const readonlyNames = new Set(
-  readonlyNamesInput.split("\n").filter(Boolean),
+const [rootDir, readonlyNamesInput = "", integerNamesInput = ""] = process.argv.slice(2);
+const blockedShellNames = new Set(
+  `${readonlyNamesInput}\n${integerNamesInput}`.split("\n").filter(Boolean),
 );
 
 function stripInlineComment(raw) {
@@ -828,7 +855,7 @@ for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.loca
     if (
       !match
       || blockedStartupControlKeys.has(match[1])
-      || readonlyNames.has(match[1])
+      || blockedShellNames.has(match[1])
       || parsedValue === null
     ) {
       valid = false;
@@ -1246,6 +1273,34 @@ doctor_port_value_is_valid() {
   doctor_normalize_port "${1:-}" >/dev/null
 }
 
+doctor_check_port_relationships() {
+  local target="${1:?target required}"
+  local cloud_port=""
+  local site_port=""
+  local vite_port=""
+  cloud_port="$(doctor_normalize_port "${2:-}" 2>/dev/null || true)"
+  site_port="$(doctor_normalize_port "${3:-}" 2>/dev/null || true)"
+  if [[ "${target}" == "mcp-private-beta" ]]; then
+    vite_port="$(doctor_normalize_port "${MCP_PRIVATE_BETA_VITE_PORT}" 2>/dev/null || true)"
+  else
+    vite_port="$(doctor_normalize_port "${VITE_PORT}" 2>/dev/null || true)"
+  fi
+  [[ -n "${cloud_port}" && -n "${site_port}" && -n "${vite_port}" ]] || return 0
+
+  if [[ "${cloud_port}" == "${site_port}" ]]; then
+    doctor_fail "resolved Convex cloud and site ports must be distinct"
+  fi
+  if [[ "${cloud_port}" == "8001" || "${site_port}" == "8001" ]]; then
+    doctor_fail "resolved Convex ports must not collide with the parser"
+  fi
+  if (( (cloud_port >= 5173 && cloud_port <= 5215) || (site_port >= 5173 && site_port <= 5215) )); then
+    doctor_fail "resolved Convex ports must stay outside the Vite cleanup range"
+  fi
+  if [[ "${vite_port}" == "8001" || "${vite_port}" == "${cloud_port}" || "${vite_port}" == "${site_port}" ]]; then
+    doctor_fail "selected Vite port must not collide with parser or Convex ports"
+  fi
+}
+
 doctor_check_local_convex_url_port() {
   local url="${1:-}"
   local cloud_port="${2:-}"
@@ -1326,6 +1381,22 @@ doctor_local_fast_tracked_stack_will_restart_parser() {
   [[ "${ENV_HASH:-}" != "${current_env_hash}" ]]
 }
 
+doctor_docker_endpoint_is_local() {
+  local context_name=""
+  local endpoint=""
+  if [[ -n "${DOCKER_HOST:-}" ]]; then
+    endpoint="${DOCKER_HOST}"
+  else
+    context_name="$(docker context show 2>/dev/null || true)"
+    [[ -n "${context_name}" ]] || return 1
+    endpoint="$(docker context inspect "${context_name}" --format '{{.Endpoints.docker.Host}}' 2>/dev/null || true)"
+  fi
+  case "${endpoint}" in
+    unix://*|npipe://*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 doctor_check_docker() {
   local target="${1:-local-fast}"
   local parser_reusable="${2:-0}"
@@ -1337,6 +1408,12 @@ doctor_check_docker() {
     doctor_pass "Docker daemon is reachable"
   else
     doctor_fail "Docker daemon is unavailable"
+    return 0
+  fi
+  if doctor_docker_endpoint_is_local; then
+    doctor_pass "Docker daemon uses a local socket"
+  else
+    doctor_fail "Docker daemon must use a local socket"
     return 0
   fi
 
@@ -1756,14 +1833,11 @@ doctor() {
     doctor_check_port "${resolved_convex_site_port}" "resolved Convex site port" fail
   fi
   doctor_check_local_convex_url_port "${resolved_convex_url}" "${resolved_convex_cloud_port}"
+  doctor_check_port_relationships "${target}" "${resolved_convex_cloud_port}" "${resolved_convex_site_port}"
   if [[ "${target}" == "mcp-private-beta" ]]; then
     doctor_check_vite_port "${MCP_PRIVATE_BETA_VITE_PORT}" "MCP_PRIVATE_BETA_VITE_PORT"
     doctor_check_mcp_configuration "${original_home}"
-    if mcp_tunnel_uses_native_linux_host_network; then
-      doctor_pass "MCP tunnel uses native Linux host networking to reach loopback Vite"
-    else
-      doctor_pass "MCP tunnel uses the Docker Desktop host gateway to reach loopback Vite"
-    fi
+    doctor_check_mcp_tunnel_network
   else
     doctor_check_vite_port "${VITE_PORT}" "VITE_PORT"
     doctor_pass "my-app/.env.local remains Vite-only; server configuration remains in root .env.local"
@@ -2832,7 +2906,7 @@ start_vite() {
       echo "[run] ERROR: missing Vite binary at ${vite_bin}" >&2
       exit 1
     fi
-    local -a vite_cmd=(node "${vite_bin}" --host 127.0.0.1 --port "${VITE_PORT}" --clearScreen false)
+    local -a vite_cmd=(node "${vite_bin}" --host 127.0.0.1 --port "${VITE_PORT}" --strictPort --clearScreen false)
     if [[ "${OPEN_BROWSER}" != "0" ]]; then
       vite_cmd+=(--open)
     fi

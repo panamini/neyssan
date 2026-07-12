@@ -88,6 +88,13 @@ case "\${1:-}" in
     test "\${FAKE_DOCKER_DAEMON:-available}" = available || exit 1
     if test -n "\${FAKE_DOCKER_OPERATING_SYSTEM:-}"; then printf '%s\n' "\${FAKE_DOCKER_OPERATING_SYSTEM}"; fi
     ;;
+  context)
+    case "\${2:-}" in
+      show) printf '%s\n' "\${FAKE_DOCKER_CONTEXT_NAME:-default}" ;;
+      inspect) printf '%s\n' "\${FAKE_DOCKER_CONTEXT_HOST:-unix:///var/run/docker.sock}" ;;
+      *) exit 1 ;;
+    esac
+    ;;
   image)
     if test "\${2:-}" = ls && test "\${FAKE_DOCKER_INVALID_REFERENCE:-0}" = 1; then exit 1; fi
     if test "\${2:-}" = inspect && test "\${FAKE_DOCKER_IMAGE:-available}" = missing; then exit 1; fi
@@ -315,6 +322,10 @@ test("doctor rejects a regular file where the dev-stack state directory is requi
 });
 
 test("doctor rejects an existing runtime directory without search permission", (t) => {
+  if (typeof process.getuid === "function" && process.getuid() === 0) {
+    t.skip("root bypasses chmod-only access fixtures");
+    return;
+  }
   const fixture = createFixture(t);
   const stateDirectory = join(fixture.root, "tmp", "dev-stack");
   mkdirSync(stateDirectory, { recursive: true });
@@ -328,6 +339,10 @@ test("doctor rejects an existing runtime directory without search permission", (
 });
 
 test("doctor rejects a creatable runtime path under a non-searchable parent", (t) => {
+  if (typeof process.getuid === "function" && process.getuid() === 0) {
+    t.skip("root bypasses chmod-only access fixtures");
+    return;
+  }
   const fixture = createFixture(t);
   const parent = join(fixture.root, "runtime-parent-do-not-print");
   mkdirSync(parent, { mode: 0o600 });
@@ -793,6 +808,19 @@ for (const readonlyName of ["UID", "EUID", "PPID", "SHELLOPTS", "BASH_VERSINFO"]
   });
 }
 
+for (const integerName of ["RANDOM", "OPTIND"]) {
+  test(`doctor rejects assignment to integer-special Bash variable ${integerName}`, (t) => {
+    const fixture = createFixture(t);
+    writeFileSync(join(fixture.root, ".env"), `${integerName}=invalid-integer-do-not-print\n`);
+
+    const result = runDoctor(fixture, ["local-fast"]);
+
+    assertFailure(result);
+    assert.match(result.output, /startup environment files must contain literal assignments only/i);
+    assert.doesNotMatch(result.output, /invalid-integer-do-not-print/u);
+  });
+}
+
 test("doctor rejects assignment to a readonly Bash variable declared without a value", (t) => {
   const fixture = createFixture(t);
   const bashEnvPath = join(fixture.root, "bash-env-do-not-print");
@@ -987,6 +1015,88 @@ CONVEX_DEPLOYMENT=local:${deploymentName}
   assert.match(lsofLog, /iTCP:7303/u);
   assert.doesNotMatch(lsofLog, /iTCP:3210|iTCP:3211/u);
   assert.doesNotMatch(result.output, /7302|7303/u);
+});
+
+for (const convexPortKey of ["LOCAL_CONVEX_CLOUD_PORT", "LOCAL_CONVEX_SITE_PORT"]) {
+  test(`doctor rejects ${convexPortKey} colliding with the parser`, (t) => {
+    const fixture = createFixture(t);
+    writeFileSync(
+      fixture.envFile,
+      `CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\n${convexPortKey}=8001\n`,
+      { mode: 0o600 },
+    );
+
+    const result = runDoctor(fixture, ["local-fast"]);
+
+    assertFailure(result);
+    assert.match(result.output, /resolved Convex ports must not collide with the parser/i);
+    assert.doesNotMatch(result.output, /8001/u);
+  });
+}
+
+for (const [convexPortKey, cleanupPort] of [
+  ["LOCAL_CONVEX_CLOUD_PORT", "5190"],
+  ["LOCAL_CONVEX_SITE_PORT", "5191"],
+]) {
+  test(`doctor rejects ${convexPortKey} inside the Vite cleanup range`, (t) => {
+    const fixture = createFixture(t);
+    writeFileSync(
+      fixture.envFile,
+      `CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\n${convexPortKey}=${cleanupPort}\n`,
+      { mode: 0o600 },
+    );
+
+    const result = runDoctor(fixture, ["local-fast"]);
+
+    assertFailure(result);
+    assert.match(result.output, /resolved Convex ports must stay outside the Vite cleanup range/i);
+    assert.doesNotMatch(result.output, new RegExp(cleanupPort, "u"));
+  });
+}
+
+test("doctor rejects identical resolved Convex ports", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(
+    fixture.envFile,
+    "CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nLOCAL_CONVEX_CLOUD_PORT=7302\nLOCAL_CONVEX_SITE_PORT=7302\n",
+    { mode: 0o600 },
+  );
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assertFailure(result);
+  assert.match(result.output, /resolved Convex cloud and site ports must be distinct/i);
+  assert.doesNotMatch(result.output, /7302/u);
+});
+
+test("doctor rejects local-fast Vite colliding with a resolved Convex port", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(
+    fixture.envFile,
+    "CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nLOCAL_CONVEX_CLOUD_PORT=7302\nVITE_PORT=7302\n",
+    { mode: 0o600 },
+  );
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assertFailure(result);
+  assert.match(result.output, /selected Vite port must not collide with parser or Convex ports/i);
+  assert.doesNotMatch(result.output, /7302/u);
+});
+
+test("doctor rejects local-fast Vite colliding with the parser", (t) => {
+  const fixture = createFixture(t);
+  writeFileSync(
+    fixture.envFile,
+    "CONVEX_TEAM=doctor-fixture-team\nCONVEX_PROJECT=doctor-fixture-project\nVITE_PORT=8001\n",
+    { mode: 0o600 },
+  );
+
+  const result = runDoctor(fixture, ["local-fast"]);
+
+  assertFailure(result);
+  assert.match(result.output, /selected Vite port must not collide with parser or Convex ports/i);
+  assert.doesNotMatch(result.output, /8001/u);
 });
 
 test("doctor rejects an out-of-range port resolved from local Convex state", (t) => {
@@ -1200,6 +1310,36 @@ test("Linux Docker Desktop MCP tunnel keeps the Docker Desktop host gateway", (t
   assert.match(result.output, /Docker Desktop host gateway to reach loopback Vite/i);
 });
 
+test("WSL2 MCP tunnel requires Docker Desktop integration", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture);
+
+  const result = runDoctor(fixture, ["mcp-private-beta"], {
+    FAKE_UNAME_S: "Linux",
+    FAKE_UNAME_R: "5.15.153.1-microsoft-standard-WSL2",
+    WSL_DISTRO_NAME: "Ubuntu",
+    FAKE_DOCKER_OPERATING_SYSTEM: "Docker Engine - Community",
+  });
+
+  assertFailure(result);
+  assert.match(result.output, /WSL2 MCP tunnel requires Docker Desktop integration/i);
+});
+
+test("WSL2 MCP tunnel accepts Docker Desktop integration", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture);
+
+  const result = runDoctor(fixture, ["mcp-private-beta"], {
+    FAKE_UNAME_S: "Linux",
+    FAKE_UNAME_R: "5.15.153.1-microsoft-standard-WSL2",
+    WSL_DISTRO_NAME: "Ubuntu",
+    FAKE_DOCKER_OPERATING_SYSTEM: "Docker Desktop",
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /Docker Desktop host gateway to reach loopback Vite/i);
+});
+
 test("doctor rejects WSL1 instead of reporting it as WSL2", (t) => {
   const fixture = createFixture(t);
 
@@ -1221,6 +1361,12 @@ test("doctor installs a non-mutating signal trap", () => {
     source,
     /if \[\[ "\$\{READ_ONLY_COMMAND\}" == "1" \]\]; then\s+trap 'exit 130' INT TERM/u,
   );
+});
+
+test("Vite startup refuses to move away from the validated port", () => {
+  const source = readFileSync(sourceRunScript, "utf8");
+
+  assert.match(source, /vite_cmd=\([^\n]*--port "\$\{VITE_PORT\}" --strictPort/u);
 });
 
 test("doctor rejects an unknown target without running checks", (t) => {
@@ -1705,6 +1851,21 @@ test("doctor fails when the Docker daemon is unavailable", (t) => {
   assert.match(result.output, /(start|unavailable|not running|required)/i);
 });
 
+for (const [label, env] of [
+  ["active Docker context", { FAKE_DOCKER_CONTEXT_HOST: "ssh://remote-do-not-print.invalid" }],
+  ["DOCKER_HOST override", { DOCKER_HOST: "tcp://remote-do-not-print.invalid:2376" }],
+]) {
+  test(`doctor rejects a remote Docker daemon selected by ${label}`, (t) => {
+    const fixture = createFixture(t);
+
+    const result = runDoctor(fixture, ["local-fast"], env);
+
+    assertFailure(result);
+    assert.match(result.output, /Docker daemon must use a local socket/i);
+    assert.doesNotMatch(result.output, /remote-do-not-print/u);
+  });
+}
+
 test("doctor local-fast rejects a missing parser image", (t) => {
   const fixture = createFixture(t);
 
@@ -1974,6 +2135,30 @@ test("doctor fails an occupied custom MCP Vite port outside startup cleanup", (t
   assertFailure(result);
   assert.match(result.output, /MCP_PRIVATE_BETA_VITE_PORT is already in use by an untracked process/i);
   assert.doesNotMatch(result.output, /6208/u);
+});
+
+test("doctor rejects the MCP Vite port colliding with the parser", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture, { rootEnvExtra: "MCP_PRIVATE_BETA_VITE_PORT=8001\n" });
+
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+
+  assertFailure(result);
+  assert.match(result.output, /selected Vite port must not collide with parser or Convex ports/i);
+  assert.doesNotMatch(result.output, /8001/u);
+});
+
+test("doctor rejects the MCP Vite port colliding with a resolved Convex port", (t) => {
+  const fixture = createFixture(t);
+  configureValidMcpFixture(fixture, {
+    rootEnvExtra: "LOCAL_CONVEX_CLOUD_PORT=7302\nMCP_PRIVATE_BETA_VITE_PORT=7302\n",
+  });
+
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+
+  assertFailure(result);
+  assert.match(result.output, /selected Vite port must not collide with parser or Convex ports/i);
+  assert.doesNotMatch(result.output, /7302/u);
 });
 
 test("doctor accepts the parser port held by a reusable tracked image parser", (t) => {
