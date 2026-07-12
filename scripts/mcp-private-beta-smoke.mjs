@@ -32,7 +32,8 @@ function normalizeOrigin(value) {
 
 async function readJson(response) {
   const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.toLowerCase().includes("application/json")) fail("response must use application/json");
+  const mediaType = contentType.split(";", 1)[0].trim().toLowerCase();
+  if (mediaType !== "application/json") fail("response must use application/json");
   const declaredLength = Number(response.headers.get("content-length") ?? "0");
   if (Number.isFinite(declaredLength) && declaredLength > MAX_JSON_BYTES) fail("response body is too large");
   if (!response.body) fail("response body must be valid JSON");
@@ -125,12 +126,26 @@ function mcpRequest(method) {
   return {
     method: "POST",
     headers: {
-      accept: "application/json",
+      accept: "application/json, text/event-stream",
       "content-type": "application/json",
       "mcp-protocol-version": "2025-11-25",
     },
     body: JSON.stringify({ jsonrpc: "2.0", id: "smoke", method, params }),
   };
+}
+
+function readBearerChallenge(response) {
+  const challenge = response.headers.get("www-authenticate") ?? "";
+  if (!challenge.toLowerCase().startsWith("bearer ")) {
+    fail("unauthenticated MCP tool calls must return a Bearer challenge");
+  }
+  const params = new Map();
+  for (const segment of challenge.slice("Bearer ".length).split(",")) {
+    const match = /^\s*([A-Za-z][A-Za-z0-9_-]*)="([^"\\]*)"\s*$/u.exec(segment);
+    if (!match || params.has(match[1])) fail("Bearer challenge parameters are malformed");
+    params.set(match[1], match[2]);
+  }
+  return params;
 }
 
 async function checkMcpBoundary(fetchImpl, resource, timeoutMs, log) {
@@ -141,21 +156,18 @@ async function checkMcpBoundary(fetchImpl, resource, timeoutMs, log) {
     timeoutMs,
   );
   if (discoveryResponse.status !== 200) fail("unauthenticated MCP discovery must return 200");
-  if (discovery?.jsonrpc !== "2.0" || discovery?.id !== "smoke" || typeof discovery?.result?.protocolVersion !== "string") {
+  if (discovery?.jsonrpc !== "2.0" || discovery?.id !== "smoke" || discovery?.result?.protocolVersion !== "2025-11-25") {
     fail("unauthenticated MCP discovery must return an initialize result");
   }
   log("[run] mcp-smoke: PASS unauthenticated MCP discovery");
 
   const { response: toolCallResponse } = await requestJson(fetchImpl, resource, mcpRequest("tools/call"), timeoutMs);
   if (toolCallResponse.status !== 401) fail("unauthenticated MCP tool calls must return 401");
-  const challenge = toolCallResponse.headers.get("www-authenticate") ?? "";
-  if (!challenge.toLowerCase().startsWith("bearer ")) {
-    fail("unauthenticated MCP tool calls must return a Bearer challenge");
-  }
-  if (!challenge.includes(`resource_metadata="${resource.replace(/\/mcp$/u, "/.well-known/oauth-protected-resource/mcp")}"`)) {
+  const challenge = readBearerChallenge(toolCallResponse);
+  if (challenge.get("resource_metadata") !== resource.replace(/\/mcp$/u, "/.well-known/oauth-protected-resource/mcp")) {
     fail("Bearer challenge must include protected-resource metadata");
   }
-  if (!challenge.includes(`scope="${EXPECTED_SCOPE}"`) || !challenge.includes('error="invalid_token"')) {
+  if (challenge.get("scope") !== EXPECTED_SCOPE || challenge.get("error") !== "invalid_token") {
     fail("Bearer challenge must require the private-beta scope");
   }
   log("[run] mcp-smoke: PASS unauthenticated MCP tool call fails closed");

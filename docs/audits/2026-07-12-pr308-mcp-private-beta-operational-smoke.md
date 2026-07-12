@@ -16,6 +16,6 @@ The command skips all dotenv and local secret-file loading, including under `bas
 
 ## Verification
 
-- Isolated Node tests use a loopback fixture server and assert exact request paths, initialize shape, metadata scopes, Bearer challenge fields, absence of authorization/cookie headers, bounded bodies, and redacted failures.
+- Isolated Node tests use a loopback fixture server and assert exact request paths, Streamable HTTP accept headers, initialize shape/version, exact JSON media types and metadata scopes, parsed Bearer challenge fields, absence of authorization/cookie headers, bounded bodies, and redacted failures.
 - `run.sh` syntax and dispatch are checked separately.
 - A live invocation is optional operational evidence and must remain no-credential/read-only.

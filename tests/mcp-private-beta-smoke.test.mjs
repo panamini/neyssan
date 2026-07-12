@@ -105,6 +105,9 @@ test("smoke validates the public no-credential contract without sending sensitiv
     capabilities: {},
     clientInfo: { name: "twoweeks-mcp-private-beta-smoke", version: "1.0.0" },
   });
+  for (const request of fixture.requests.filter((request) => request.url === "/mcp")) {
+    assert.equal(request.headers.accept, "application/json, text/event-stream");
+  }
   for (const request of fixture.requests) {
     assert.equal(request.headers.authorization, undefined);
     assert.equal(request.headers.cookie, undefined);
@@ -198,6 +201,48 @@ test("smoke rejects incomplete Bearer challenges", async (t) => {
   );
 });
 
+test("smoke rejects prefixed Bearer parameter names", async (t) => {
+  const fixture = await startFixture(t, {
+    "/mcp": ({ body, origin }) => {
+      const message = JSON.parse(body);
+      if (message.method === "initialize") {
+        return {
+          status: 200,
+          body: { jsonrpc: "2.0", id: message.id, result: { protocolVersion: "2025-11-25" } },
+        };
+      }
+      return {
+        status: 401,
+        headers: {
+          "content-type": "application/json",
+          "www-authenticate": `Bearer xresource_metadata="${origin}/.well-known/oauth-protected-resource/mcp", xerror="invalid_token", xscope="twoweeks:applications:read"`,
+        },
+        body: { error: "invalid_token" },
+      };
+    },
+  });
+  await assert.rejects(
+    runMcpPrivateBetaSmoke({ origin: fixture.origin, log: () => {} }),
+    /must include protected-resource metadata/u,
+  );
+});
+
+test("smoke rejects a mismatched negotiated MCP version", async (t) => {
+  const fixture = await startFixture(t, {
+    "/mcp": ({ body }) => {
+      const message = JSON.parse(body);
+      return {
+        status: 200,
+        body: { jsonrpc: "2.0", id: message.id, result: { protocolVersion: "2024-11-05" } },
+      };
+    },
+  });
+  await assert.rejects(
+    runMcpPrivateBetaSmoke({ origin: fixture.origin, log: () => {} }),
+    /must return an initialize result/u,
+  );
+});
+
 test("smoke rejects redirects without following them", async (t) => {
   const fixture = await startFixture(t, {
     "/.well-known/oauth-authorization-server": {
@@ -227,6 +272,20 @@ test("smoke failures do not include response bodies", async (t) => {
       assert.match(error.message, /authorization metadata must return 200/u);
       return true;
     },
+  );
+});
+
+test("smoke requires the exact application/json media type", async (t) => {
+  const fixture = await startFixture(t, {
+    "/.well-known/oauth-authorization-server": {
+      status: 200,
+      headers: { "content-type": "text/plain; note=application/json" },
+      body: {},
+    },
+  });
+  await assert.rejects(
+    runMcpPrivateBetaSmoke({ origin: fixture.origin, log: () => {} }),
+    /response must use application\/json/u,
   );
 });
 
