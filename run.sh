@@ -15,13 +15,20 @@ if [[ "${CMD}" == "mcp-secret-sync" && "$-" == *x* ]]; then
 fi
 readonly MCP_SECRET_SYNC_XTRACE_WAS_ENABLED
 
+# Doctor may inspect configured values in memory but must never trace them.
+if [[ "${CMD}" == "doctor" && "$-" == *x* ]]; then
+  set +x
+fi
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${ROOT_DIR}"
 
 # Load overrides
-if [[ -f "${ROOT_DIR}/.env" ]]; then set -a; source "${ROOT_DIR}/.env"; set +a; fi
-if [[ -f "${ROOT_DIR}/.env.local" ]]; then set -a; source "${ROOT_DIR}/.env.local"; set +a; fi
-if [[ -f "${ROOT_DIR}/my-app/.env" ]]; then set -a; source "${ROOT_DIR}/my-app/.env"; set +a; fi
+if [[ "${CMD}" != "doctor" ]]; then
+  if [[ -f "${ROOT_DIR}/.env" ]]; then set -a; source "${ROOT_DIR}/.env"; set +a; fi
+  if [[ -f "${ROOT_DIR}/.env.local" ]]; then set -a; source "${ROOT_DIR}/.env.local"; set +a; fi
+  if [[ -f "${ROOT_DIR}/my-app/.env" ]]; then set -a; source "${ROOT_DIR}/my-app/.env"; set +a; fi
+fi
 
 # Defaults
 : "${PARSER_ORIGIN:=https://parser.dasti.ai}"   # Edge origin (Cloudflare Zero Trust)
@@ -67,12 +74,14 @@ INFISICAL_MCP_ENVIRONMENT="dev"
 INFISICAL_MCP_SECRET_PATH="/"
 INFISICAL_MCP_SECRET_KEY="MCP_OAUTH_PRODUCTION_CLIENT_SECRET"
 
-mkdir -p "${STATE_DIR}" "${LOG_DIR}"
-mkdir -p "${CONVEX_TMPDIR}"
-mkdir -p "${CACHE_DIR}" "${DOCKER_STATE_DIR}"
+if [[ "${CMD}" != "doctor" ]]; then
+  mkdir -p "${STATE_DIR}" "${LOG_DIR}"
+  mkdir -p "${CONVEX_TMPDIR}"
+  mkdir -p "${CACHE_DIR}" "${DOCKER_STATE_DIR}"
+fi
 
 # Auto-load Mistral key from file if not set
-if [[ -z "${MISTRAL_API_KEY:-}" && -f "${HOME}/.mistral_key" ]]; then
+if [[ "${CMD}" != "doctor" && -z "${MISTRAL_API_KEY:-}" && -f "${HOME}/.mistral_key" ]]; then
   MISTRAL_API_KEY="$(<"${HOME}/.mistral_key")"
   MISTRAL_API_KEY="${MISTRAL_API_KEY//$'\r'/}"
   MISTRAL_API_KEY="${MISTRAL_API_KEY//$'\n'/}"
@@ -460,6 +469,1308 @@ mcp_check() {
   echo "[run] mcp-check: PASS (canonical keys present; values not printed)"
 }
 
+doctor_pass() {
+  echo "[run] doctor: PASS - $1"
+}
+
+doctor_warn() {
+  DOCTOR_WARNINGS=$((DOCTOR_WARNINGS + 1))
+  echo "[run] doctor: WARN - $1"
+}
+
+doctor_fail() {
+  DOCTOR_FAILURES=$((DOCTOR_FAILURES + 1))
+  echo "[run] doctor: FAIL - $1" >&2
+}
+
+doctor_check_command() {
+  local name="${1:?command name required}"
+  if command -v "${name}" >/dev/null 2>&1; then
+    doctor_pass "${name} command is available"
+  else
+    doctor_fail "${name} command is missing"
+  fi
+}
+
+doctor_check_node_runtime() {
+  local version=""
+  local major=""
+  local probe=""
+  if ! version="$(node --version 2>/dev/null)"; then
+    doctor_fail "Node version cannot be determined"
+    return 1
+  fi
+  major="${version#v}"
+  major="${major%%.*}"
+  if [[ ! "${major}" =~ ^[0-9]+$ || "${major}" -lt 20 ]]; then
+    doctor_fail "Node 20 or newer is required"
+    return 1
+  fi
+  if ! probe="$(node -e 'process.stdout.write(typeof require === "function" ? "node-e-ok" : "")' 2>/dev/null)" || [[ "${probe}" != "node-e-ok" ]]; then
+    doctor_fail "Node cannot execute startup scripts with node -e"
+    return 1
+  fi
+  if ! probe="$(node - 2>/dev/null <<'NODE'
+process.stdout.write(typeof require === "function" ? "node-stdin-ok" : "");
+NODE
+  )" || [[ "${probe}" != "node-stdin-ok" ]]; then
+    doctor_fail "Node cannot execute doctor scripts from standard input"
+    return 1
+  fi
+  doctor_pass "Node 20+ startup script execution is available"
+  return 0
+}
+
+is_wsl_runtime() {
+  local kernel_release=""
+  if [[ -n "${WSL_DISTRO_NAME:-}" || -n "${WSL_INTEROP:-}" ]] || grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null; then
+    kernel_release="$(uname -r 2>/dev/null || true)"
+    case "${kernel_release}" in
+      *microsoft-standard*|*Microsoft-standard*|*WSL2*|*wsl2*) return 0 ;;
+    esac
+  fi
+  return 1
+}
+
+mcp_tunnel_uses_native_linux_host_network() {
+  local docker_operating_system=""
+  [[ "$(uname -s 2>/dev/null || true)" == "Linux" ]] || return 1
+  is_wsl_runtime && return 1
+  docker_operating_system="$(docker info --format '{{.OperatingSystem}}' 2>/dev/null || true)"
+  [[ "${docker_operating_system}" != *"Docker Desktop"* ]]
+}
+
+doctor_check_platform() {
+  local kernel=""
+  local kernel_release=""
+  local architecture=""
+  kernel="$(uname -s 2>/dev/null || true)"
+  case "${kernel}" in
+    Darwin)
+      doctor_pass "platform is macOS (Bash 3.2+ supported)"
+      ;;
+    Linux)
+      if [[ -n "${WSL_DISTRO_NAME:-}" || -n "${WSL_INTEROP:-}" ]] || grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null; then
+        kernel_release="$(uname -r 2>/dev/null || true)"
+        case "${kernel_release}" in
+          *microsoft-standard*|*Microsoft-standard*|*WSL2*|*wsl2*)
+            doctor_pass "platform is Windows through WSL2"
+            ;;
+          *)
+            doctor_fail "WSL1 is unsupported; upgrade the distribution to WSL2"
+            ;;
+        esac
+      else
+        doctor_pass "platform is Linux"
+      fi
+      ;;
+    MINGW*|MSYS*|CYGWIN*)
+      doctor_fail "native Windows shells are unsupported; use WSL2 with Docker Desktop integration"
+      ;;
+    *)
+      doctor_fail "unsupported operating system"
+      ;;
+  esac
+
+  if [[ "${kernel}" == "Darwin" || "${kernel}" == "Linux" ]]; then
+    architecture="$(uname -m 2>/dev/null || true)"
+    case "${architecture}" in
+      x86_64|amd64|arm64|aarch64)
+        doctor_pass "CPU architecture is supported"
+        ;;
+      *)
+        doctor_fail "CPU architecture is unsupported"
+        ;;
+    esac
+  fi
+
+  if (( BASH_VERSINFO[0] > 3 || (BASH_VERSINFO[0] == 3 && BASH_VERSINFO[1] >= 2) )); then
+    doctor_pass "Bash version is compatible"
+  else
+    doctor_fail "Bash 3.2 or newer is required"
+  fi
+}
+
+doctor_check_file() {
+  local path="${1:?path required}"
+  local label="${2:?label required}"
+  if [[ -f "${path}" ]]; then
+    doctor_pass "${label} is available"
+  else
+    doctor_fail "${label} is missing"
+  fi
+}
+
+doctor_check_executable() {
+  local path="${1:?path required}"
+  local label="${2:?label required}"
+  if [[ -x "${path}" ]]; then
+    doctor_pass "${label} is available"
+  else
+    doctor_fail "${label} is missing or not executable"
+  fi
+}
+
+doctor_check_startup_env_syntax() {
+  local env_path=""
+  local invalid=0
+  for env_path in \
+    "${ROOT_DIR}/.env" \
+    "${ROOT_DIR}/.env.local" \
+    "${ROOT_DIR}/my-app/.env"; do
+    [[ -f "${env_path}" ]] || continue
+    if ! "${BASH}" -n "${env_path}" >/dev/null 2>&1; then
+      invalid=1
+    fi
+  done
+  if (( invalid )); then
+    doctor_fail "startup environment file syntax is invalid"
+    return 1
+  fi
+  doctor_pass "startup environment file syntax is valid"
+  return 0
+}
+
+doctor_check_startup_env_literals() {
+  local readonly_declaration=""
+  local readonly_name=""
+  local readonly_names=""
+  while IFS= read -r readonly_declaration; do
+    if [[ "${readonly_declaration}" =~ ^declare[[:space:]]+-[^[:space:]]*r[^[:space:]]*[[:space:]]+([A-Za-z_][A-Za-z0-9_]*)(=|$) ]]; then
+      readonly_name="${BASH_REMATCH[1]}"
+      readonly_names+="${readonly_name}"$'\n'
+    fi
+  done < <(readonly -p)
+
+  if node - "${ROOT_DIR}" "${readonly_names}" <<'NODE'
+const fs = require("node:fs");
+const path = require("node:path");
+
+const [rootDir, readonlyNamesInput = ""] = process.argv.slice(2);
+const readonlyNames = new Set(
+  readonlyNamesInput.split("\n").filter(Boolean),
+);
+
+function stripInlineComment(raw) {
+  let quote = "";
+  let escaped = false;
+  for (let index = 0; index < raw.length; index += 1) {
+    const character = raw[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (quote === '"' && character === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      if (character === quote) quote = "";
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character === "#" && index > 0 && /\s/u.test(raw[index - 1])) {
+      return raw.slice(0, index);
+    }
+  }
+  if (quote || escaped) return null;
+  return raw;
+}
+
+function logicalStatements(source) {
+  if (source.includes("\r")) return null;
+  const statements = [];
+  let current = "";
+  let quote = "";
+  let escaped = false;
+  let comment = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    if (comment) {
+      if (character === "\n") {
+        statements.push(current);
+        current = "";
+        comment = false;
+      }
+      continue;
+    }
+    if (escaped) {
+      current += character;
+      escaped = false;
+      continue;
+    }
+    if (quote === '"' && character === "\\") {
+      current += character;
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      current += character;
+      if (character === quote) quote = "";
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      current += character;
+      quote = character;
+      continue;
+    }
+    if (character === "#" && (!current || /\s/u.test(current[current.length - 1]))) {
+      comment = true;
+      continue;
+    }
+    if (character === "\n") {
+      statements.push(current);
+      current = "";
+      continue;
+    }
+    current += character;
+  }
+  if (quote || escaped) return null;
+  if (current || !source.endsWith("\n")) statements.push(current);
+  return statements;
+}
+
+function parseLiteralAssignmentValue(raw, environment) {
+  if (/^[ \t]/u.test(raw) && raw.trim() && !raw.trim().startsWith("#")) return null;
+  const stripped = stripInlineComment(raw);
+  if (stripped === null) return null;
+  const value = stripped.trim();
+  if (!value) return "";
+  let quote = "";
+  let parsed = "";
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (quote === "'") {
+      if (character === "'") quote = "";
+      else parsed += character;
+      continue;
+    }
+    if (quote === '"') {
+      if (character === '"') {
+        quote = "";
+        continue;
+      }
+      if (character === "\\" || character === String.fromCharCode(96)) return null;
+    } else {
+      if (character === "'" || character === '"') {
+        quote = character;
+        continue;
+      }
+      if (index === 0 && character === "~") return null;
+      if (/\s/u.test(character) || /[\\;|&<>()]/u.test(character) || character === String.fromCharCode(96)) return null;
+    }
+    if (character !== "$") {
+      parsed += character;
+      continue;
+    }
+    const parameter = value.slice(index).match(/^\$\{([A-Za-z_][A-Za-z0-9_]*)\}|^\$([A-Za-z_][A-Za-z0-9_]*)/u);
+    if (!parameter) return null;
+    const key = parameter[1] || parameter[2];
+    if (!Object.prototype.hasOwnProperty.call(environment, key)) return null;
+    parsed += environment[key];
+    index += parameter[0].length - 1;
+  }
+  return quote ? null : parsed;
+}
+
+const blockedStartupControlKeys = new Set([
+  "BUILDKIT_PROGRESS",
+  "DOCKER_API_VERSION",
+  "DOCKER_CERT_PATH",
+  "DOCKER_CONFIG",
+  "DOCKER_CONTEXT",
+  "DOCKER_CUSTOM_HEADERS",
+  "DOCKER_DEFAULT_PLATFORM",
+  "DOCKER_HIDE_LEGACY_COMMANDS",
+  "DOCKER_HOST",
+  "DOCKER_TLS",
+  "DOCKER_TLS_VERIFY",
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "IFS",
+  "NODE_OPTIONS",
+  "NO_COLOR",
+  "NO_PROXY",
+  "PATH",
+  "ROOT_DIR",
+  "http_proxy",
+  "https_proxy",
+  "no_proxy",
+]);
+const environment = { ...process.env, ROOT_DIR: rootDir };
+let valid = true;
+for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.local"), path.join(rootDir, "my-app", ".env")]) {
+  if (!fs.existsSync(envPath)) continue;
+  let source = "";
+  try {
+    source = fs.readFileSync(envPath, "utf8");
+  } catch {
+    valid = false;
+    break;
+  }
+  const statements = logicalStatements(source);
+  if (statements === null) {
+    valid = false;
+    break;
+  }
+  for (const statement of statements) {
+    if (!statement.trim()) continue;
+    const match = statement.match(/^\s*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)=([\s\S]*)$/u);
+    const parsedValue = match ? parseLiteralAssignmentValue(match[2], environment) : null;
+    if (
+      !match
+      || blockedStartupControlKeys.has(match[1])
+      || readonlyNames.has(match[1])
+      || parsedValue === null
+    ) {
+      valid = false;
+      break;
+    }
+    environment[match[1]] = parsedValue;
+  }
+  if (!valid) break;
+}
+process.exit(valid ? 0 : 1);
+NODE
+  then
+    doctor_pass "startup environment files contain literal assignments only"
+    return 0
+  fi
+  doctor_fail "startup environment files must contain literal assignments only"
+  return 1
+}
+
+doctor_load_runtime_overrides() {
+  local target="${1:-local-fast}"
+  local record_type=""
+  local key=""
+  local encoded=""
+  local decoded=""
+  local parsed=""
+  if ! parsed="$(node - "${ROOT_DIR}" "${target}" <<'NODE'
+const fs = require("node:fs");
+const net = require("node:net");
+const path = require("node:path");
+
+const [rootDir, target] = process.argv.slice(2);
+const allowed = [
+  "LOCAL_CONVEX_CLOUD_PORT",
+  "LOCAL_CONVEX_SITE_PORT",
+  "HOME",
+  "IMAGE_NAME",
+  "PARSER_NAME",
+  "CLOUDFLARED_NAME",
+  "CONVEX_TMPDIR",
+  "CONVEX_TEAM",
+  "CONVEX_TEAM_SLUG",
+  "CONVEX_PROJECT",
+  "CONVEX_PROJECT_SLUG",
+  "CONVEX_LOCAL_DEPLOYMENT_NAME",
+  "CONVEX_LOCAL_DEPLOYMENT",
+  "CONVEX_DEPLOYMENT",
+  "LOCAL_CONVEX_URL",
+  "LOCAL_CONVEX_STARTUP_TIMEOUT",
+];
+if (target === "mcp-private-beta") allowed.push("MCP_PRIVATE_BETA_VITE_PORT", "FORCE_REBUILD");
+else allowed.push("VITE_PORT");
+const environment = { ...process.env, ROOT_DIR: rootDir };
+const resolved = new Map(allowed.map((key) => [key, environment[key] || ""]));
+
+function stripInlineComment(raw) {
+  let quote = "";
+  let escaped = false;
+  for (let index = 0; index < raw.length; index += 1) {
+    const character = raw[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (quote === '"' && character === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      if (character === quote) quote = "";
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character === "#" && index > 0 && /\s/u.test(raw[index - 1])) {
+      return raw.slice(0, index);
+    }
+  }
+  if (quote || escaped) return null;
+  return raw;
+}
+
+function logicalStatements(source) {
+  if (source.includes("\r")) return null;
+  const statements = [];
+  let current = "";
+  let quote = "";
+  let escaped = false;
+  let comment = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    if (comment) {
+      if (character === "\n") {
+        statements.push(current);
+        current = "";
+        comment = false;
+      }
+      continue;
+    }
+    if (escaped) {
+      current += character;
+      escaped = false;
+      continue;
+    }
+    if (quote === '"' && character === "\\") {
+      current += character;
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      current += character;
+      if (character === quote) quote = "";
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      current += character;
+      quote = character;
+      continue;
+    }
+    if (character === "#" && (!current || /\s/u.test(current[current.length - 1]))) {
+      comment = true;
+      continue;
+    }
+    if (character === "\n") {
+      statements.push(current);
+      current = "";
+      continue;
+    }
+    current += character;
+  }
+  if (quote || escaped) return null;
+  if (current || !source.endsWith("\n")) statements.push(current);
+  return statements;
+}
+
+function parseValue(raw) {
+  if (/^[ \t]/u.test(raw) && raw.trim() && !raw.trim().startsWith("#")) return null;
+  const stripped = stripInlineComment(raw);
+  if (stripped === null) return null;
+  const value = stripped.trim();
+  if (!value) return "";
+  let quote = "";
+  let parsed = "";
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (quote === "'") {
+      if (character === "'") quote = "";
+      else parsed += character;
+      continue;
+    }
+    if (quote === '"') {
+      if (character === '"') {
+        quote = "";
+        continue;
+      }
+      if (character === "\\" || character === String.fromCharCode(96)) return null;
+    } else {
+      if (character === "'" || character === '"') {
+        quote = character;
+        continue;
+      }
+      if (index === 0 && character === "~") return null;
+      if (/\s/u.test(character) || /[\\;|&<>()]/u.test(character) || character === String.fromCharCode(96)) return null;
+    }
+    if (character !== "$") {
+      parsed += character;
+      continue;
+    }
+    const parameter = value.slice(index).match(/^\$\{([A-Za-z_][A-Za-z0-9_]*)\}|^\$([A-Za-z_][A-Za-z0-9_]*)/u);
+    if (!parameter) return null;
+    const key = parameter[1] || parameter[2];
+    if (!Object.prototype.hasOwnProperty.call(environment, key)) return null;
+    parsed += environment[key];
+    index += parameter[0].length - 1;
+  }
+  return quote ? null : parsed;
+}
+
+const invalid = new Set();
+const fatal = new Set();
+
+for (const envPath of [path.join(rootDir, ".env"), path.join(rootDir, ".env.local"), path.join(rootDir, "my-app", ".env")]) {
+  if (!fs.existsSync(envPath)) continue;
+  let source = "";
+  try {
+    source = fs.readFileSync(envPath, "utf8");
+  } catch {
+    process.exit(1);
+  }
+  const statements = logicalStatements(source);
+  if (statements === null) process.exit(1);
+  for (const statement of statements) {
+    const match = statement.match(/^\s*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)=([\s\S]*)$/u);
+    if (match) {
+      const [key, rawValue] = [match[1], match[2]];
+      const value = parseValue(rawValue);
+      if (value !== null) environment[key] = value;
+      if (!allowed.includes(key)) continue;
+      if (value === null) {
+        invalid.add(key);
+        fatal.add(key);
+      } else {
+        invalid.delete(key);
+        resolved.set(key, value);
+      }
+      continue;
+    }
+    const malformed = statement.match(/^\s*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]+=/u);
+    if (malformed && allowed.includes(malformed[1])) {
+      invalid.add(malformed[1]);
+      fatal.add(malformed[1]);
+    }
+  }
+}
+
+for (const [key, value] of resolved) {
+  if (fatal.has(key) || invalid.has(key)) {
+    process.stdout.write(`ERROR\t${key}\n`);
+    continue;
+  }
+  if (!value) {
+    process.stdout.write(`EMPTY\t${key}\n`);
+    continue;
+  }
+  if (key.endsWith("_PORT")) {
+    const port = Number(value);
+    if (!/^[0-9]+$/u.test(value) || port < 1 || port > 65535) {
+      process.stdout.write(`ERROR\t${key}\n`);
+      continue;
+    }
+  }
+  if (key === "LOCAL_CONVEX_STARTUP_TIMEOUT" && (!/^[0-9]+$/u.test(value) || !/[1-9]/u.test(value))) {
+    process.stdout.write(`ERROR\t${key}\n`);
+    continue;
+  }
+  if (key === "IMAGE_NAME") {
+    // `docker image ls` accepts reference globs that `docker build -t` rejects.
+    // Preserve a bracketed IPv6 registry authority, then block only glob syntax;
+    // Docker validates the remaining reference grammar below.
+    const authority = value.match(/^\[([^\]]+)\](?::[0-9]+)?\//u);
+    const globCandidate = authority
+      && /^[0-9A-Fa-f:]+$/u.test(authority[1])
+      && net.isIP(authority[1]) === 6
+      ? value.slice(authority[0].length)
+      : value;
+    if (/[*?\[\]]/u.test(globCandidate)) {
+      process.stdout.write(`ERROR\t${key}\n`);
+      continue;
+    }
+  }
+  if ((key === "PARSER_NAME" || key === "CLOUDFLARED_NAME") && !/^[A-Za-z0-9][A-Za-z0-9_.-]+$/u.test(value)) {
+    process.stdout.write(`ERROR\t${key}\n`);
+    continue;
+  }
+  process.stdout.write(`VALUE\t${key}\t${Buffer.from(value, "utf8").toString("base64")}\n`);
+}
+NODE
+  )"; then
+    doctor_fail "runtime dotenv parser failed"
+    return 1
+  fi
+  while IFS=$'\t' read -r record_type key encoded; do
+    case "${record_type}" in
+      VALUE)
+        if ! decoded="$(node -e 'process.stdout.write(Buffer.from(process.argv[1], "base64").toString("utf8"))' "${encoded}" 2>/dev/null)"; then
+          doctor_fail "runtime dotenv value decoder failed"
+          continue
+        fi
+        case "${key}" in
+          VITE_PORT) VITE_PORT="${decoded}" ;;
+          LOCAL_CONVEX_CLOUD_PORT) LOCAL_CONVEX_CLOUD_PORT="${decoded}" ;;
+          LOCAL_CONVEX_SITE_PORT) LOCAL_CONVEX_SITE_PORT="${decoded}" ;;
+          MCP_PRIVATE_BETA_VITE_PORT) MCP_PRIVATE_BETA_VITE_PORT="${decoded}" ;;
+          FORCE_REBUILD) FORCE_REBUILD="${decoded}" ;;
+          HOME) HOME="${decoded}" ;;
+          IMAGE_NAME) IMAGE_NAME="${decoded}" ;;
+          PARSER_NAME) PARSER_NAME="${decoded}" ;;
+          CLOUDFLARED_NAME) CLOUDFLARED_NAME="${decoded}" ;;
+          CONVEX_TMPDIR) CONVEX_TMPDIR="${decoded}" ;;
+          CONVEX_TEAM) CONVEX_TEAM="${decoded}" ;;
+          CONVEX_TEAM_SLUG) CONVEX_TEAM_SLUG="${decoded}" ;;
+          CONVEX_PROJECT) CONVEX_PROJECT="${decoded}" ;;
+          CONVEX_PROJECT_SLUG) CONVEX_PROJECT_SLUG="${decoded}" ;;
+          CONVEX_LOCAL_DEPLOYMENT_NAME) CONVEX_LOCAL_DEPLOYMENT_NAME="${decoded}" ;;
+          CONVEX_LOCAL_DEPLOYMENT) CONVEX_LOCAL_DEPLOYMENT="${decoded}" ;;
+          CONVEX_DEPLOYMENT) CONVEX_DEPLOYMENT="${decoded}" ;;
+          LOCAL_CONVEX_URL) LOCAL_CONVEX_URL="${decoded}" ;;
+          LOCAL_CONVEX_STARTUP_TIMEOUT) LOCAL_CONVEX_STARTUP_TIMEOUT="${decoded}" ;;
+        esac
+        ;;
+      EMPTY)
+        case "${key}" in
+          VITE_PORT) VITE_PORT="5173" ;;
+          LOCAL_CONVEX_CLOUD_PORT) LOCAL_CONVEX_CLOUD_PORT="3210" ;;
+          LOCAL_CONVEX_SITE_PORT) LOCAL_CONVEX_SITE_PORT="3211" ;;
+          MCP_PRIVATE_BETA_VITE_PORT) MCP_PRIVATE_BETA_VITE_PORT="5196" ;;
+          FORCE_REBUILD) FORCE_REBUILD="false" ;;
+          HOME) HOME="" ;;
+          IMAGE_NAME) IMAGE_NAME="cv-parser-service:latest" ;;
+          PARSER_NAME) PARSER_NAME="cv-parser-service-dev" ;;
+          CLOUDFLARED_NAME) CLOUDFLARED_NAME="cloudflared" ;;
+          CONVEX_TMPDIR) CONVEX_TMPDIR="${ROOT_DIR}/tmp/convex-tmp" ;;
+          CONVEX_TEAM) CONVEX_TEAM="" ;;
+          CONVEX_TEAM_SLUG) CONVEX_TEAM_SLUG="" ;;
+          CONVEX_PROJECT) CONVEX_PROJECT="" ;;
+          CONVEX_PROJECT_SLUG) CONVEX_PROJECT_SLUG="" ;;
+          CONVEX_LOCAL_DEPLOYMENT_NAME) CONVEX_LOCAL_DEPLOYMENT_NAME="" ;;
+          CONVEX_LOCAL_DEPLOYMENT) CONVEX_LOCAL_DEPLOYMENT="" ;;
+          CONVEX_DEPLOYMENT) CONVEX_DEPLOYMENT="" ;;
+          LOCAL_CONVEX_URL) LOCAL_CONVEX_URL="" ;;
+          LOCAL_CONVEX_STARTUP_TIMEOUT) LOCAL_CONVEX_STARTUP_TIMEOUT="180" ;;
+        esac
+        ;;
+      ERROR)
+        if [[ "${key}" == "LOCAL_CONVEX_STARTUP_TIMEOUT" ]]; then
+          doctor_fail "LOCAL_CONVEX_STARTUP_TIMEOUT must be a positive integer"
+        elif [[ "${key}" == "IMAGE_NAME" ]]; then
+          doctor_fail "IMAGE_NAME must be a valid Docker image reference"
+        elif [[ "${key}" == "PARSER_NAME" || "${key}" == "CLOUDFLARED_NAME" ]]; then
+          doctor_fail "${key} must be a valid Docker container name"
+        else
+          doctor_fail "dotenv override for ${key} is not a supported literal"
+        fi
+        ;;
+    esac
+  done <<< "${parsed}"
+  return 0
+}
+
+doctor_check_runtime_path() {
+  local path="${1:?path required}"
+  local label="${2:?label required}"
+  local parent=""
+  if [[ "${path}" != /* ]]; then
+    path="${ROOT_DIR}/${path}"
+  fi
+  if [[ -e "${path}" ]]; then
+    if [[ -d "${path}" && -w "${path}" && -x "${path}" ]]; then
+      doctor_pass "${label} is writable"
+    else
+      doctor_fail "${label} is not a writable directory"
+    fi
+    return 0
+  fi
+  parent="$(dirname "${path}")"
+  while [[ ! -e "${parent}" && "${parent}" != "/" ]]; do
+    parent="$(dirname "${parent}")"
+  done
+  if [[ -d "${parent}" && -w "${parent}" && -x "${parent}" ]]; then
+    doctor_pass "${label} can be created"
+  else
+    doctor_fail "${label} cannot be created"
+  fi
+}
+
+doctor_check_runtime_paths() {
+  doctor_check_runtime_path "${ROOT_DIR}/tmp" "tmp runtime directory"
+  doctor_check_runtime_path "${STATE_DIR}" "dev stack state directory"
+  doctor_check_runtime_path "${ROOT_DIR}/.docker" "Docker state directory"
+  doctor_check_runtime_path "${ROOT_DIR}/.buildx-cache" "build cache directory"
+  doctor_check_runtime_path "${CONVEX_TMPDIR}" "Convex temporary directory"
+}
+
+doctor_check_port() {
+  local port="${1:?port required}"
+  local label="${2:?port label required}"
+  local occupied_behavior="${3:-warn}"
+  if ! port="$(doctor_normalize_port "${port}")"; then
+    doctor_fail "${label} must be between 1 and 65535"
+    return 0
+  fi
+  if ! command -v lsof >/dev/null 2>&1; then
+    return 0
+  fi
+  if lsof -nP -iTCP:"${port}" -sTCP:LISTEN >/dev/null 2>&1; then
+    if [[ "${occupied_behavior}" == "fail" ]]; then
+      doctor_fail "${label} is already in use by an untracked process"
+    else
+      doctor_warn "${label} is already in use; stop the conflicting process or reuse the tracked stack"
+    fi
+  else
+    doctor_pass "${label} is available"
+  fi
+}
+
+doctor_check_vite_port() {
+  local port="${1:?port required}"
+  local label="${2:?port label required}"
+  local normalized=""
+  if ! normalized="$(doctor_normalize_port "${port}")"; then
+    doctor_fail "${label} must be between 1 and 65535"
+    return 0
+  fi
+  if (( normalized >= 5173 && normalized <= 5215 )); then
+    doctor_check_port "${normalized}" "${label}" warn
+  else
+    doctor_check_port "${normalized}" "${label}" fail
+  fi
+}
+
+doctor_normalize_port() {
+  local port="${1:-}"
+  [[ "${port}" =~ ^[0-9]+$ ]] || return 1
+  while [[ "${port}" == 0* && "${#port}" -gt 1 ]]; do
+    port="${port#0}"
+  done
+  [[ "${port}" != 0 && "${#port}" -le 5 ]] || return 1
+  (( port <= 65535 )) || return 1
+  printf '%s' "${port}"
+}
+
+doctor_port_value_is_valid() {
+  doctor_normalize_port "${1:-}" >/dev/null
+}
+
+doctor_check_local_convex_url_port() {
+  local url="${1:-}"
+  local cloud_port="${2:-}"
+  local url_port=""
+  [[ -n "${url}" ]] || return 0
+  if [[ "${url}" =~ ^http://(127\.0\.0\.1|localhost):([0-9]+)$ ]]; then
+    url_port="${BASH_REMATCH[2]}"
+    if ! url_port="$(doctor_normalize_port "${url_port}")"; then
+      doctor_fail "LOCAL_CONVEX_URL port must be between 1 and 65535"
+      return 0
+    fi
+    cloud_port="$(doctor_normalize_port "${cloud_port}" 2>/dev/null || printf '%s' "${cloud_port}")"
+    if [[ "${url_port}" != "${cloud_port}" ]]; then
+      doctor_fail "LOCAL_CONVEX_URL port must match the resolved Convex cloud port"
+    fi
+  else
+    doctor_fail "LOCAL_CONVEX_URL must be a loopback HTTP URL with an explicit port"
+  fi
+}
+
+doctor_check_local_convex_state_config() {
+  local config_path="${1:-}"
+  [[ -n "${config_path}" ]] || return 0
+  if [[ "${DOCTOR_NODE_READY:-0}" != "1" ]]; then
+    return 1
+  fi
+  if node -e 'JSON.parse(require("node:fs").readFileSync(process.argv[1], "utf8"))' "${config_path}" >/dev/null 2>&1; then
+    doctor_pass "local Convex state configuration is valid JSON"
+    return 0
+  fi
+  doctor_fail "local Convex state configuration is invalid JSON"
+  return 1
+}
+
+doctor_running_parser_matches_target() {
+  local target="${1:-local-fast}"
+  local expected_runtime="workspace"
+  command -v docker >/dev/null 2>&1 || return 1
+  if [[ "${target}" == "mcp-private-beta" ]]; then
+    expected_runtime="image"
+  fi
+  parser_container_matches_runtime "${expected_runtime}"
+}
+
+doctor_running_parser_is_tracked() {
+  command -v docker >/dev/null 2>&1 || return 1
+  docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "${PARSER_NAME}"
+}
+
+parser_container_owns_port() {
+  command -v docker >/dev/null 2>&1 || return 1
+  docker port "${PARSER_NAME}" 8001/tcp 2>/dev/null | grep -Eq '(^|:)8001$'
+}
+
+workspace_runtime_surface_probe() {
+  docker exec "${PARSER_NAME}" node -e 'const fs = require("fs"); const platformTag = `${process.platform}-${process.arch}`; const checks = [["tsx loader", "/app/my-app/node_modules/tsx/dist/esm/index.mjs"], ["playwright package", "/app/node_modules/playwright"], ["playwright browsers", "/ms-playwright"], [`esbuild package (${platformTag})`, `/app/my-app/node_modules/@esbuild/${platformTag}`]]; const missing = checks.filter(([, path]) => !fs.existsSync(path)); if (missing.length) { console.error(missing.map(([label, path]) => `${label}: ${path}`).join("\n")); process.exit(1); }'
+}
+
+doctor_local_fast_tracked_stack_will_restart_parser() {
+  local VITE_PID=""; local PARSER_STARTED="0"; local CONVEX_PID=""; local CONVEX_URL=""; local TUNNEL_STARTED="0"; local STACK_MODE=""
+  local ACTIVE_ORIGIN=""; local PARSER_RUNTIME_MODE=""; local PARSER_RELOAD="0"; local PARSER_OCR="auto"; local CONVEX_MODE="cloud"; local UI_STARTED="0"; local ENV_HASH=""; local CONVEX_BINDING_HASH=""
+  local current_env_hash=""
+  [[ -f "${STATE_FILE}" ]] || return 1
+  read_state
+  [[ "${STACK_MODE:-}" == "local-fast" ]] || return 1
+  [[ "${ACTIVE_ORIGIN:-}" == "http://127.0.0.1:8001" ]] || return 1
+  [[ "${PARSER_STARTED:-0}" == "1" ]] || return 1
+  [[ "${PARSER_RUNTIME_MODE:-}" == "workspace" ]] || return 1
+  [[ "${PARSER_RELOAD:-0}" == "1" ]] || return 1
+  [[ "${PARSER_OCR:-auto}" == "auto" ]] || return 1
+  [[ "${CONVEX_MODE:-cloud}" == "local" ]] || return 1
+  [[ "${UI_STARTED:-0}" == "1" ]] || return 1
+  [[ "${TUNNEL_STARTED:-0}" == "0" ]] || return 1
+  tracked_stack_is_live || return 1
+  if ! current_env_hash="$(env_reload_hash 2>/dev/null)"; then
+    return 0
+  fi
+  [[ "${ENV_HASH:-}" != "${current_env_hash}" ]]
+}
+
+doctor_check_docker() {
+  local target="${1:-local-fast}"
+  local parser_reusable="${2:-0}"
+  local force_rebuild_requested=0
+  if ! command -v docker >/dev/null 2>&1; then
+    return 0
+  fi
+  if docker info >/dev/null 2>&1; then
+    doctor_pass "Docker daemon is reachable"
+  else
+    doctor_fail "Docker daemon is unavailable"
+    return 0
+  fi
+
+  if ! docker image ls "${IMAGE_NAME}" --format '{{.ID}}' >/dev/null 2>&1; then
+    doctor_fail "IMAGE_NAME must be a valid Docker image reference"
+    return 0
+  fi
+
+  if [[ "${target}" == "mcp-private-beta" && "$(to_bool "${FORCE_REBUILD}")" == "true" ]]; then
+    force_rebuild_requested=1
+  fi
+
+  if (( force_rebuild_requested )) && docker buildx inspect >/dev/null 2>&1; then
+    doctor_pass "forced parser rebuild has an available buildx builder"
+  elif (( force_rebuild_requested )) && docker buildx version >/dev/null 2>&1; then
+    doctor_warn "forced parser rebuild requires a builder; mcp-private-beta startup will configure it"
+  elif (( force_rebuild_requested )); then
+    doctor_fail "forced parser rebuild requires Docker buildx"
+  elif [[ "${target}" == "local-fast" && "${parser_reusable}" == "1" ]]; then
+    doctor_pass "parser runtime image is not required while the tracked parser is reusable"
+  elif docker image inspect "${IMAGE_NAME}" >/dev/null 2>&1; then
+    doctor_pass "parser runtime image is available"
+  elif [[ "${target}" == "mcp-private-beta" ]] && docker buildx inspect >/dev/null 2>&1; then
+    doctor_warn "parser runtime image is missing; mcp-private-beta startup will build it with the available builder"
+  elif [[ "${target}" == "mcp-private-beta" ]] && docker buildx version >/dev/null 2>&1; then
+    doctor_warn "parser runtime image and buildx builder are missing; mcp-private-beta startup will configure the builder and build the image"
+  else
+    doctor_fail "parser runtime image is missing and cannot be prepared by the selected startup"
+  fi
+}
+
+doctor_check_mcp_configuration() {
+  local original_home="${1:-}"
+  if [[ "${DOCTOR_NODE_READY:-0}" != "1" ]]; then
+    doctor_fail "private-beta MCP configuration cannot be validated without a working Node 20+ runtime"
+    return 0
+  fi
+
+  if node - \
+    "${ROOT_DIR}" \
+    "${MCP_PRIVATE_BETA_TUNNEL_ID}" \
+    "${MCP_PRIVATE_BETA_CLIENT_ID}" \
+    "${MCP_PRIVATE_BETA_RESOURCE}" \
+    "${MCP_PRIVATE_BETA_AUTHORIZATION_ORIGIN}" \
+    "${MCP_PRIVATE_BETA_REDIRECT_URI}" \
+    "${original_home}" <<'NODE'
+const fs = require("node:fs");
+const path = require("node:path");
+
+const [rootDir, tunnelId, clientId, resource, authorizationOrigin, redirectUri, originalHome] = process.argv.slice(2);
+const baseEnvironment = { ...process.env, HOME: originalHome };
+const rootEnvPath = path.join(rootDir, ".env.local");
+const otherEnvPaths = [
+  path.join(rootDir, ".env"),
+  path.join(rootDir, "my-app", ".env"),
+  path.join(rootDir, "my-app", ".env.local"),
+];
+let failures = 0;
+const fatalDotenvValue = "\u0000fatal";
+
+function fail(message) {
+  failures += 1;
+  process.stderr.write(`[run] doctor: MCP config - ${message}\n`);
+}
+
+function stripInlineComment(raw) {
+  let quote = "";
+  let escaped = false;
+  for (let index = 0; index < raw.length; index += 1) {
+    const character = raw[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (quote === '"' && character === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (quote) {
+      if (character === quote) quote = "";
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character === "#" && index > 0 && /\s/u.test(raw[index - 1])) {
+      return raw.slice(0, index);
+    }
+  }
+  if (quote || escaped) return null;
+  return raw;
+}
+
+function parseLiteralAssignmentValue(raw, environment) {
+  if (/^[ \t]/u.test(raw) && raw.trim() && !raw.trim().startsWith("#")) return null;
+  const stripped = stripInlineComment(raw);
+  if (stripped === null) return null;
+  const value = stripped.trim();
+  if (!value) return "";
+  let quote = "";
+  let parsed = "";
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (quote === "'") {
+      if (character === "'") quote = "";
+      else parsed += character;
+      continue;
+    }
+    if (quote === '"') {
+      if (character === '"') {
+        quote = "";
+        continue;
+      }
+      if (character === "\\" || character === String.fromCharCode(96)) return null;
+    } else {
+      if (character === "'" || character === '"') {
+        quote = character;
+        continue;
+      }
+      if (index === 0 && character === "~") return null;
+      if (/\s/u.test(character) || /[\\;|&<>()]/u.test(character) || character === String.fromCharCode(96)) return null;
+    }
+    if (character !== "$") {
+      parsed += character;
+      continue;
+    }
+    const parameter = value.slice(index).match(/^\$\{([A-Za-z_][A-Za-z0-9_]*)\}|^\$([A-Za-z_][A-Za-z0-9_]*)/u);
+    if (!parameter) return null;
+    const key = parameter[1] || parameter[2];
+    if (!Object.prototype.hasOwnProperty.call(environment, key)) return null;
+    parsed += environment[key];
+    index += parameter[0].length - 1;
+  }
+  return quote ? null : parsed;
+}
+
+function parseDotenv(filePath, environment) {
+  const result = new Map();
+  function record(key, value) {
+    if (value === fatalDotenvValue || result.get(key) !== fatalDotenvValue) {
+      result.set(key, value);
+    }
+  }
+  if (!fs.existsSync(filePath)) return result;
+  let source = "";
+  try {
+    source = fs.readFileSync(filePath, "utf8");
+  } catch {
+    fail("startup environment file could not be read");
+    return result;
+  }
+  for (const line of source.split(/\r?\n/u)) {
+    const match = line.match(/^\s*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$/u);
+    if (!match) {
+      const malformed = line.match(/^\s*(?:export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]+=/u);
+      if (malformed) record(malformed[1], fatalDotenvValue);
+      continue;
+    }
+    const value = parseLiteralAssignmentValue(match[2], environment);
+    if (value === null) {
+      record(match[1], fatalDotenvValue);
+      continue;
+    }
+    record(match[1], value);
+    environment[match[1]] = value;
+  }
+  return result;
+}
+
+const canonicalKeys = [
+  "MCP_OAUTH_PRODUCTION_RUNTIME",
+  "MCP_OAUTH_PRODUCTION_APPROVED",
+  "MCP_OAUTH_PRODUCTION_ROUTE_WIRING",
+  "MCP_OAUTH_PRODUCTION_CLIENT_IDS",
+  "MCP_OAUTH_PRODUCTION_PRIVATE_BETA_ENABLED",
+  "MCP_OAUTH_PRODUCTION_PRIVATE_BETA_CLIENT_IDS",
+  "MCP_OAUTH_PRODUCTION_PRIVATE_BETA_RESOURCES",
+  "MCP_OAUTH_PRODUCTION_RESOURCE",
+  "MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN",
+  "MCP_OAUTH_PRODUCTION_REDIRECT_URIS",
+  "MCP_OAUTH_PRODUCTION_ISSUER",
+  "MCP_OAUTH_PRODUCTION_PROVIDER_ENVIRONMENT",
+  "MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256",
+  "CLERK_JWT_ISSUER_DOMAIN",
+  "CONVEX_URL",
+  "CONVEX_AUTH_TOKEN",
+];
+
+try {
+  const mode = (fs.lstatSync(rootEnvPath).mode & 0o777).toString(8);
+  if (mode !== "600") fail("root .env.local must have mode 600");
+} catch (error) {
+  if (error && error.code === "ENOENT") fail("root .env.local is required");
+  else fail("root .env.local could not be inspected");
+}
+
+const startupEnvPaths = [otherEnvPaths[0], rootEnvPath, otherEnvPaths[1]];
+const rootEnvironment = { ...baseEnvironment, ROOT_DIR: rootDir };
+parseDotenv(otherEnvPaths[0], rootEnvironment);
+const rootEnv = parseDotenv(rootEnvPath, rootEnvironment);
+const startupEnvironment = { ...baseEnvironment, ROOT_DIR: rootDir };
+const startupEnvs = startupEnvPaths.map((envPath) => parseDotenv(envPath, startupEnvironment));
+
+function resolveStartupValue(key) {
+  let value = baseEnvironment[key] ?? "";
+  let present = Object.prototype.hasOwnProperty.call(baseEnvironment, key);
+  let fatal = false;
+  for (const env of startupEnvs) {
+    if (!env.has(key)) continue;
+    present = true;
+    const nextValue = env.get(key);
+    if (nextValue === fatalDotenvValue) fatal = true;
+    else {
+      value = nextValue;
+    }
+  }
+  return { fatal, present, value };
+}
+
+for (const key of canonicalKeys) {
+  if (rootEnv.get(key) === fatalDotenvValue) fail(`${key} must use a supported literal assignment`);
+  else if (!rootEnv.has(key)) fail(`${key} must be defined in root .env.local`);
+}
+
+const expected = new Map([
+  ["MCP_OAUTH_PRODUCTION_RUNTIME", "1"],
+  ["MCP_OAUTH_PRODUCTION_APPROVED", "1"],
+  ["MCP_OAUTH_PRODUCTION_ROUTE_WIRING", "1"],
+  ["MCP_OAUTH_PRODUCTION_CLIENT_IDS", clientId],
+  ["MCP_OAUTH_PRODUCTION_PRIVATE_BETA_ENABLED", "1"],
+  ["MCP_OAUTH_PRODUCTION_PRIVATE_BETA_CLIENT_IDS", clientId],
+  ["MCP_OAUTH_PRODUCTION_PRIVATE_BETA_RESOURCES", resource],
+  ["MCP_OAUTH_PRODUCTION_RESOURCE", resource],
+  ["MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN", authorizationOrigin],
+  ["MCP_OAUTH_PRODUCTION_REDIRECT_URIS", redirectUri],
+]);
+for (const [key, expectedValue] of expected) {
+  if (rootEnv.get(key) !== expectedValue) fail(`${key} is missing or does not match the private-beta contract`);
+}
+
+for (const key of [
+  "MCP_OAUTH_PRODUCTION_ISSUER",
+  "MCP_OAUTH_PRODUCTION_PROVIDER_ENVIRONMENT",
+  "MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256",
+  "CLERK_JWT_ISSUER_DOMAIN",
+  "CONVEX_URL",
+  "CONVEX_AUTH_TOKEN",
+]) {
+  if (!rootEnv.get(key)) fail(`${key} is missing`);
+}
+if (!/^[0-9a-f]{64}$/u.test(rootEnv.get("MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256") ?? "")) {
+  fail("MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256 must be lowercase SHA-256 hex");
+}
+try {
+  const issuer = new URL(rootEnv.get("CLERK_JWT_ISSUER_DOMAIN") ?? "");
+  if (issuer.protocol !== "https:" || issuer.username || issuer.password || issuer.pathname !== "/" || issuer.search || issuer.hash) {
+    throw new Error("invalid issuer");
+  }
+  const prefix = issuer.hostname.endsWith(".clerk.accounts.dev") ? "pk_test_" : "pk_live_";
+  const derivedPublishableKey = `${prefix}${Buffer.from(`${issuer.hostname}$`, "utf8").toString("base64")}`;
+  const configuredPublishableKey = resolveStartupValue("VITE_CLERK_PUBLISHABLE_KEY");
+  if (configuredPublishableKey.fatal) {
+    fail("VITE_CLERK_PUBLISHABLE_KEY must use a supported literal assignment");
+  } else if (configuredPublishableKey.value && configuredPublishableKey.value !== derivedPublishableKey) {
+    fail("configured Clerk publishable key does not match CLERK_JWT_ISSUER_DOMAIN");
+  }
+} catch {
+  fail("CLERK_JWT_ISSUER_DOMAIN must be a canonical HTTPS origin");
+}
+
+for (const envPath of otherEnvPaths) {
+  const env = parseDotenv(envPath, { ...process.env });
+  if (canonicalKeys.some((key) => env.has(key))) {
+    fail("canonical server keys are allowed only in root .env.local");
+    break;
+  }
+}
+if ([rootEnv, parseDotenv(otherEnvPaths[2], { ...process.env })].some((env) => [...env.keys()].some((key) => key.startsWith("MCP_PRODUCTION_PRIVATE_BETA_")))) {
+  fail("legacy MCP_PRODUCTION_PRIVATE_BETA_* aliases are forbidden");
+}
+
+const configuredCredentialsFile = resolveStartupValue("MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE");
+if (configuredCredentialsFile.fatal) {
+  fail("MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE must use a supported literal assignment");
+}
+if (configuredCredentialsFile.value && configuredCredentialsFile.value.startsWith("~")) {
+  fail("MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE must not use tilde expansion");
+}
+const configuredHome = resolveStartupValue("HOME");
+if (configuredHome.fatal || !configuredHome.value) fail("HOME must use a supported non-empty literal assignment");
+const defaultCredentialsFile = path.join(configuredHome.value || process.env.HOME || "", ".cloudflared", `${tunnelId}.json`);
+const credentialsFile = configuredCredentialsFile.value || defaultCredentialsFile;
+if (credentialsFile.includes(",")) fail("MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE must not contain commas");
+if (!fs.existsSync(credentialsFile)) {
+  fail("named MCP tunnel credentials file is missing");
+} else {
+  try {
+    const credentialsStat = fs.statSync(credentialsFile);
+    if (!credentialsStat.isFile()) fail("named MCP tunnel credentials path must be a regular file");
+    const mode = (fs.lstatSync(credentialsFile).mode & 0o777).toString(8);
+    if (mode !== "400" && mode !== "600") fail("named MCP tunnel credentials file must have mode 400 or 600");
+  } catch {
+    fail("named MCP tunnel credentials file could not be inspected");
+  }
+}
+
+process.exit(failures === 0 ? 0 : 1);
+NODE
+  then
+    doctor_pass "private-beta MCP configuration is valid"
+  else
+    doctor_fail "private-beta MCP configuration is invalid"
+  fi
+}
+
+doctor() {
+  local target="${1:-local-fast}"
+  local original_home="${HOME:-}"
+  local resolved_convex_cloud_port=""
+  local resolved_convex_site_port=""
+  local resolved_convex_url=""
+  local convex_reusable=0
+  local parser_reusable=0
+  if [[ "${target}" != "local-fast" && "${target}" != "mcp-private-beta" ]]; then
+    echo "usage: ./run.sh doctor [local-fast|mcp-private-beta]" >&2
+    return 2
+  fi
+
+  DOCTOR_FAILURES=0
+  DOCTOR_WARNINGS=0
+  DOCTOR_NODE_READY=0
+
+  echo "[run] doctor: checking ${target} (values are not printed)"
+  doctor_check_platform
+  doctor_check_command docker
+  doctor_check_command node
+  if command -v npm >/dev/null 2>&1; then
+    doctor_pass "npm command is available"
+  else
+    doctor_warn "npm command is missing; dependency installation commands will be unavailable"
+  fi
+  doctor_check_command curl
+  doctor_check_command seq
+  if command -v lsof >/dev/null 2>&1; then
+    doctor_pass "lsof command is available"
+  else
+    doctor_warn "lsof command is missing; port conflict checks will be skipped"
+  fi
+  doctor_check_startup_env_syntax || true
+  if command -v node >/dev/null 2>&1 && doctor_check_node_runtime; then
+    DOCTOR_NODE_READY=1
+    doctor_check_startup_env_literals || true
+    doctor_load_runtime_overrides "${target}" || true
+  fi
+  resolved_convex_cloud_port="${LOCAL_CONVEX_CLOUD_PORT}"
+  resolved_convex_site_port="${LOCAL_CONVEX_SITE_PORT}"
+  doctor_check_file "${ROOT_DIR}/cv_parser_service/Dockerfile" "parser Dockerfile"
+  doctor_check_file "${ROOT_DIR}/my-app/package.json" "frontend package manifest"
+  doctor_check_file "${ROOT_DIR}/my-app/node_modules/vite/bin/vite.js" "Vite dependency"
+  doctor_check_executable "${ROOT_DIR}/my-app/node_modules/.bin/convex" "Convex CLI dependency"
+  doctor_check_file "${ROOT_DIR}/scripts/local-convex-supervisor.cjs" "local Convex supervisor"
+  doctor_check_runtime_paths
+
+  if resolve_convex_project_binding >/dev/null 2>&1; then
+    doctor_pass "Convex team/project binding is available"
+    resolve_local_convex_runtime "${CONVEX_DEPLOYMENT_NAME_RESULT:-}"
+    resolved_convex_cloud_port="${LOCAL_CONVEX_CLOUD_PORT_RESULT:-${LOCAL_CONVEX_CLOUD_PORT}}"
+    resolved_convex_site_port="${LOCAL_CONVEX_SITE_PORT_RESULT:-${LOCAL_CONVEX_SITE_PORT}}"
+    resolved_convex_url="${LOCAL_CONVEX_URL_RESULT:-}"
+    if doctor_check_local_convex_state_config "${LOCAL_CONVEX_STATE_CONFIG_RESULT:-}" \
+      && reuse_running_local_convex_from_state "${CONVEX_DEPLOYMENT_NAME_RESULT:-}" >/dev/null 2>&1; then
+      convex_reusable=1
+      doctor_pass "tracked local Convex backend is reusable"
+    fi
+  else
+    doctor_fail "Convex team/project binding is missing; configure CONVEX_TEAM and CONVEX_PROJECT"
+  fi
+
+  if local_convex_deployments_disabled; then
+    doctor_fail "local Convex deployments are disabled; re-enable them before starting this target"
+  else
+    doctor_pass "local Convex deployments are enabled"
+  fi
+
+  if doctor_running_parser_matches_target "${target}"; then
+    if ! parser_container_owns_port; then
+      doctor_fail "tracked parser does not publish the required host port"
+    elif ! curl -fsS http://127.0.0.1:8001/ready >/dev/null 2>&1; then
+      doctor_fail "tracked parser is not ready"
+    elif [[ "${target}" == "local-fast" ]] && ! workspace_runtime_surface_probe >/dev/null 2>&1; then
+      doctor_fail "tracked workspace parser is missing runtime dependencies"
+    else
+      parser_reusable=1
+      doctor_pass "tracked parser is reusable"
+    fi
+  elif doctor_running_parser_is_tracked; then
+    if parser_container_owns_port; then
+      doctor_pass "tracked parser can be replaced by startup"
+    else
+      doctor_check_port 8001 "parser port" fail
+    fi
+  else
+    doctor_check_port 8001 "parser port" fail
+  fi
+  if (( parser_reusable )) \
+    && [[ "${target}" == "local-fast" ]] \
+    && doctor_local_fast_tracked_stack_will_restart_parser; then
+    parser_reusable=0
+    doctor_warn "tracked local-fast stack will restart the parser because environment files changed"
+  fi
+  doctor_check_docker "${target}" "${parser_reusable}"
+  if (( convex_reusable )); then
+    doctor_pass "tracked local Convex ports are reusable"
+  else
+    doctor_check_port "${resolved_convex_cloud_port}" "resolved Convex cloud port" fail
+    doctor_check_port "${resolved_convex_site_port}" "resolved Convex site port" fail
+  fi
+  doctor_check_local_convex_url_port "${resolved_convex_url}" "${resolved_convex_cloud_port}"
+  if [[ "${target}" == "mcp-private-beta" ]]; then
+    doctor_check_vite_port "${MCP_PRIVATE_BETA_VITE_PORT}" "MCP_PRIVATE_BETA_VITE_PORT"
+    doctor_check_mcp_configuration "${original_home}"
+    if mcp_tunnel_uses_native_linux_host_network; then
+      doctor_pass "MCP tunnel uses native Linux host networking to reach loopback Vite"
+    else
+      doctor_pass "MCP tunnel uses the Docker Desktop host gateway to reach loopback Vite"
+    fi
+  else
+    doctor_check_vite_port "${VITE_PORT}" "VITE_PORT"
+    doctor_pass "my-app/.env.local remains Vite-only; server configuration remains in root .env.local"
+  fi
+
+  if (( DOCTOR_FAILURES > 0 )); then
+    echo "[run] doctor: FAIL (${DOCTOR_FAILURES} blocker(s), ${DOCTOR_WARNINGS} warning(s); values were not printed)" >&2
+    return 1
+  fi
+  echo "[run] doctor: PASS (${DOCTOR_WARNINGS} warning(s); values were not printed)"
+}
+
 ensure_buildx() {
   if ! docker buildx inspect >/dev/null 2>&1; then
     echo "[run] configuring docker buildx builder"
@@ -628,6 +1939,7 @@ print_command_banner() {
   cat <<'EOF'
 
 Commands:
+  ./run.sh doctor [target]  read-only startup diagnostics for local-fast or mcp-private-beta
   ./run.sh mcp-private-beta  reproducible private-beta MCP origin + tunnel
   ./run.sh mcp-secret-sync   refresh the OAuth digest from Infisical without printing values
   ./run.sh mcp-check         validate MCP runtime keys without printing values
@@ -659,6 +1971,22 @@ parser_container_running() {
   docker ps --format '{{.Names}}' | grep -qx "${PARSER_NAME}"
 }
 
+parser_container_matches_runtime() {
+  local expected_runtime="${1:-image}"
+  local current_runtime=""
+  local current_image=""
+  local expected_image=""
+  parser_container_running || return 1
+  current_runtime="$(parser_runtime_mode)"
+  [[ "${current_runtime}" == "${expected_runtime}" ]] || return 1
+  if [[ "${expected_runtime}" == "workspace" ]]; then
+    return 0
+  fi
+  current_image="$(parser_image_id)"
+  expected_image="$(target_image_id)"
+  [[ -n "${current_image}" && -n "${expected_image}" && "${current_image}" == "${expected_image}" ]]
+}
+
 tunnel_container_running() {
   docker ps --format '{{.Names}}' | grep -qx "${CLOUDFLARED_NAME}"
 }
@@ -672,8 +2000,13 @@ convex_process_running() {
 }
 
 tracked_stack_is_live() {
-  if [[ "${PARSER_STARTED:-0}" == "1" ]] && ! parser_container_running; then
-    return 1
+  if [[ "${PARSER_STARTED:-0}" == "1" ]]; then
+    parser_container_matches_runtime "${PARSER_RUNTIME_MODE:-image}" || return 1
+    parser_container_owns_port || return 1
+    curl -fsS http://127.0.0.1:8001/ready >/dev/null 2>&1 || return 1
+    if [[ "${PARSER_RUNTIME_MODE:-image}" == "workspace" ]]; then
+      workspace_runtime_surface_probe >/dev/null 2>&1 || return 1
+    fi
   fi
   if state_requests_ui && ! vite_process_running; then
     return 1
@@ -722,9 +2055,7 @@ handle_existing_stack_request() {
 
 ensure_workspace_runtime_surface() {
   local diagnostic=""
-  diagnostic="$(
-    docker exec "${PARSER_NAME}" node -e 'const fs = require("fs"); const platformTag = `${process.platform}-${process.arch}`; const checks = [["tsx loader", "/app/my-app/node_modules/tsx/dist/esm/index.mjs"], ["playwright package", "/app/node_modules/playwright"], ["playwright browsers", "/ms-playwright"], [`esbuild package (${platformTag})`, `/app/my-app/node_modules/@esbuild/${platformTag}`]]; const missing = checks.filter(([, path]) => !fs.existsSync(path)); if (missing.length) { console.error(missing.map(([label, path]) => `${label}: ${path}`).join("\n")); process.exit(1); }' 2>&1
-  )" || {
+  diagnostic="$(workspace_runtime_surface_probe 2>&1)" || {
     echo "[run] ERROR: workspace parser runtime is missing export dependencies." >&2
     if [[ -n "${diagnostic}" ]]; then
       echo "${diagnostic}" >&2
@@ -832,7 +2163,10 @@ json_number_field() {
   local file="${1:-}"
   local field="${2:-}"
   [[ -n "${file}" && -n "${field}" && -f "${file}" ]] || return 1
-  grep -Eo "\"${field}\":[0-9]+" "${file}" | head -n1 | cut -d: -f2
+  grep -Eo "\"${field}\"[[:space:]]*:[[:space:]]*[0-9]+" "${file}" \
+    | head -n1 \
+    | tr -d '[:space:]' \
+    | cut -d: -f2
 }
 
 local_convex_deployments_disabled() {
@@ -1043,15 +2377,13 @@ start_parser() {
   local PARSER_NEEDS_START=1
 
   if docker ps --format '{{.Names}}' | grep -qx "${PARSER_NAME}"; then
-    local current_mode current_image target_image
+    local current_mode
     current_mode="$(parser_runtime_mode)"
-    current_image="$(parser_image_id)"
-    target_image="$(target_image_id)"
-    if [[ "${current_mode}" == "${RUNTIME_MODE}" && ( "${RUNTIME_MODE}" == "workspace" || "${current_image}" == "${target_image}" ) ]]; then
+    if parser_container_matches_runtime "${RUNTIME_MODE}" && parser_container_owns_port; then
       echo "[run] parser already running in ${current_mode} runtime: ${PARSER_NAME}"
       PARSER_NEEDS_START=0
     else
-      echo "[run] replacing stale parser runtime: ${PARSER_NAME} (have ${current_mode}/${current_image}, want ${RUNTIME_MODE}/${target_image})"
+      echo "[run] replacing stale parser runtime: ${PARSER_NAME} (have ${current_mode}, want ${RUNTIME_MODE})"
       docker stop "${PARSER_NAME}" >/dev/null 2>&1 || true
     fi
   fi
@@ -1155,7 +2487,14 @@ stop_parser() {
 }
 
 start_tunnel() {
-  docker network create "${TUNNEL_NETWORK}" >/dev/null 2>&1 || true
+  local service_host="host.docker.internal"
+  local -a tunnel_network_args=(--network "${TUNNEL_NETWORK}")
+  if [[ "${MCP_PRIVATE_BETA_TUNNEL:-0}" == "1" ]] && mcp_tunnel_uses_native_linux_host_network; then
+    service_host="127.0.0.1"
+    tunnel_network_args=(--network host)
+  else
+    docker network create "${TUNNEL_NETWORK}" >/dev/null 2>&1 || true
+  fi
   docker rm -f "${CLOUDFLARED_NAME}" >/dev/null 2>&1 || true
   echo "[run] starting cloudflared (${CLOUDFLARED_NAME})"
   if [[ "${MCP_PRIVATE_BETA_TUNNEL:-0}" == "1" ]]; then
@@ -1166,14 +2505,14 @@ tunnel: ${MCP_PRIVATE_BETA_TUNNEL_ID}
 credentials-file: /run/secrets/cloudflared-mcp-credentials.json
 ingress:
   - hostname: mcp.twoweeks.ai
-    service: http://host.docker.internal:${MCP_PRIVATE_BETA_VITE_PORT}
+    service: http://${service_host}:${MCP_PRIVATE_BETA_VITE_PORT}
   - service: http_status:404
 EOF
     )
     chmod 600 "${config_temp}"
     mv "${config_temp}" "${MCP_TUNNEL_CONFIG_FILE}"
     if ! docker run -d --name "${CLOUDFLARED_NAME}" --restart=unless-stopped \
-      --network "${TUNNEL_NETWORK}" \
+      "${tunnel_network_args[@]}" \
       --mount "type=bind,source=${MCP_TUNNEL_CONFIG_FILE},target=/etc/cloudflared/config.yml,readonly" \
       --mount "type=bind,source=${MCP_PRIVATE_BETA_TUNNEL_CREDENTIALS_FILE},target=/run/secrets/cloudflared-mcp-credentials.json,readonly" \
       cloudflare/cloudflared:latest \
@@ -1999,6 +3338,7 @@ smoke() {
 help() {
   cat <<'EOF'
 usage:
+  ./run.sh doctor [local-fast|mcp-private-beta]
   ./run.sh mcp-private-beta [--ocr auto|doctr|paddle|disabled]
   ./run.sh mcp-secret-sync
   ./run.sh mcp-check
@@ -2020,6 +3360,7 @@ usage:
   ./run.sh kill-vite-ports
 
 notes:
+- doctor = read-only, secret-free startup diagnostics. macOS and Linux are supported directly; Windows uses WSL2 with Docker Desktop integration.
 - mcp-private-beta = exact private-beta MCP origin on port 5196 with local Convex, image parser runtime, and the named Cloudflare tunnel.
 - mcp-secret-sync = retrieve the raw OAuth client secret from the linked Infisical EU project and atomically update only its digest in root .env.local.
 - mcp-check = fail-closed validation of canonical private-beta keys; it prints key names/status only, never values.
@@ -2043,10 +3384,16 @@ EOF
   print_command_banner
 }
 
-# Trap: ensure we don't leave Vite/Parser dangling on Ctrl+C
-trap 'echo "[run] interrupt -> down"; down >/dev/null 2>&1 || true; exit 130' INT TERM
+# Trap: ensure long-running stack commands do not leave Vite/Parser dangling.
+# Doctor is read-only, so interruption must never tear down an existing stack.
+if [[ "${CMD}" == "doctor" ]]; then
+  trap 'exit 130' INT TERM
+else
+  trap 'echo "[run] interrupt -> down"; down >/dev/null 2>&1 || true; exit 130' INT TERM
+fi
 
 case "${CMD}" in
+  doctor) doctor "$@";;
   mcp-private-beta) mcp_private_beta_stack "$@";;
   mcp-secret-sync) mcp_secret_sync;;
   mcp-check) mcp_check;;
