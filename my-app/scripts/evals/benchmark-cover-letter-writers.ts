@@ -1,25 +1,54 @@
 import { existsSync } from "node:fs";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 
-import { HumanMessage, SystemMessage } from "@langchain/core/messages";
-import { ChatMistralAI } from "@langchain/mistralai";
 import * as dotenv from "dotenv";
 
+import { llmConfig } from "../../config/llmConfig";
 import type { CoverLetterScore } from "../../convex/lib/proposals/coverLetterEvaluation";
-import { resolveProposalOutputLanguage } from "../../convex/lib/proposals/proposalOutput";
 import {
-  PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA,
+  analyzeCompanyValues,
+  type CompanyValuesPack,
+} from "../../convex/lib/proposals/companyValues";
+import { buildProposalGenerationControlsBlock } from "../../convex/lib/proposals/generationControls";
+import {
+  PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA,
   PREMIUM_COVER_LETTER_WRITER_MODELS,
-  PREMIUM_WRITER_OUTPUT_V1_SCHEMA,
+  PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
   attemptPremiumCoverLetterGeneration,
+  generatePremiumCoverLetterBodyPartsWithMistral,
   generatePremiumCoverLetterBodyPartsWithOpenAI,
-  toCoverLetterBodyParts,
+  isCoverLetterPremiumPromptV2Enabled,
+  isCoverLetterQualityRepairV1Enabled,
+  resolvePremiumCoverLetterWriterModel,
   type PremiumCoverLetterAttemptResult,
   type PremiumCoverLetterFailureTrace,
   type PremiumCoverLetterQualityShadowResult,
+  type PremiumCoverLetterWriter,
   type PremiumCoverLetterWriterModel,
 } from "../../convex/lib/proposals/premiumCoverLetter";
+import {
+  resolveProposalOutputLanguage,
+  type ProposalOutputLanguage,
+} from "../../convex/lib/proposals/proposalOutput";
+import {
+  isProposalGenerationQualityLiveMode,
+  resolveProposalGenerationQualityMode,
+  type ProposalGenerationQualityMode,
+} from "../../convex/lib/proposals/proposalQualityMode";
+import { buildStableHash } from "../../src/modules/application-harness/fingerprints";
+import {
+  prepareCoverLetterEvalArtifact,
+  type CoverLetterEvalArtifact,
+  type CoverLetterEvalConfigVersions,
+  type CoverLetterEvalFrozenConfig,
+} from "./cover-letter-eval-artifact";
+import {
+  createCoverLetterEvalBudget,
+  type CoverLetterEvalBudget,
+  type CoverLetterEvalBudgetOptions,
+} from "./cover-letter-eval-budget";
 import {
   evaluateCoverLetterTextWithOpenAI,
   resolveCoverLetterEvalModel,
@@ -28,11 +57,20 @@ import {
   coverLetterBenchmarkCases,
   type CoverLetterBenchmarkCase,
 } from "./cases/cover-letter/cases";
+import {
+  RECORDED_COVER_LETTER_REPLAY_FIXTURES,
+  type RecordedCoverLetterReplayFixture,
+} from "./fixtures/cover-letter/recorded-writer-responses";
 
-type CliOptions = {
+export type CoverLetterBenchmarkCliOptions = {
   caseIds: string[] | null;
   writerModels: CoverLetterBenchmarkWriterModel[];
   evaluatorModel: string;
+  live: boolean;
+  maxCalls: number | null;
+  maxRepairs: number | null;
+  maxUsd: number | null;
+  declaredMaxUsdPerCall: number | null;
 };
 
 type MistralCoverLetterBenchmarkWriterModel =
@@ -46,6 +84,7 @@ type CoverLetterBenchmarkWriterModel =
 
 type BenchmarkGenerationFailureStatus =
   | "generation_failed"
+  | "finalization_failed"
   | "evaluation_failed";
 
 type ManualReviewVerdict = "unreviewed" | "pass" | "fail";
@@ -69,6 +108,7 @@ export type CoverLetterBenchmarkDiagnostics = {
   validationResult:
     | "premium_validation_passed"
     | "premium_generation_failed"
+    | "premium_finalization_failed"
     | "premium_evaluation_failed";
   telemetry: {
     attemptedPath: "premium path saved" | "premium generation failed";
@@ -77,8 +117,8 @@ export type CoverLetterBenchmarkDiagnostics = {
     premium_quality_shadow_passed: boolean | null;
   };
   qualityShadow: PremiumCoverLetterQualityShadowResult | null;
-  failureStage: PremiumCoverLetterFailureTrace["stage"] | null;
-  failureReason: PremiumCoverLetterFailureTrace["reason"] | null;
+  failureStage: string | null;
+  failureReason: string | null;
   failureIssues: string[];
 };
 
@@ -87,9 +127,10 @@ export type CoverLetterBenchmarkSuccessRecord = {
   caseId: string;
   preset: CoverLetterBenchmarkCase["preset"];
   writerModel: CoverLetterBenchmarkWriterModel;
-  outputLanguage: "English" | "French";
+  outputLanguage: ProposalOutputLanguage;
   expectedContextClass: CoverLetterBenchmarkCase["expectedContextClass"];
   generation: PremiumCoverLetterAttemptResult;
+  artifact: CoverLetterEvalArtifact;
   evaluation: CoverLetterScore;
   diagnostics: CoverLetterBenchmarkDiagnostics;
   manualReview: CoverLetterBenchmarkManualReview;
@@ -103,10 +144,11 @@ export type CoverLetterBenchmarkFailureRecord = {
   caseId: string;
   preset: CoverLetterBenchmarkCase["preset"];
   writerModel: CoverLetterBenchmarkWriterModel;
-  outputLanguage: "English" | "French";
+  outputLanguage: ProposalOutputLanguage;
   expectedContextClass: CoverLetterBenchmarkCase["expectedContextClass"];
   error: string;
   generation?: PremiumCoverLetterAttemptResult;
+  artifact?: CoverLetterEvalArtifact;
   debug?: PremiumCoverLetterFailureTrace;
   diagnostics: CoverLetterBenchmarkDiagnostics;
   manualReview: CoverLetterBenchmarkManualReview;
@@ -135,6 +177,10 @@ type GenerateBenchmarkLetter = (args: {
   writerModel: CoverLetterBenchmarkWriterModel;
   apiKey: string;
   mistralApiKey?: string;
+  productionInputs?: CoverLetterBenchmarkProductionInputs;
+  writerOverride?: PremiumCoverLetterWriter;
+  budget?: CoverLetterEvalBudget;
+  signal?: AbortSignal;
   onFailure?: (failure: PremiumCoverLetterFailureTrace) => void;
 }) => Promise<PremiumCoverLetterAttemptResult | null>;
 
@@ -144,9 +190,33 @@ type EvaluateBenchmarkLetter = (args: {
   model: string;
 }) => Promise<CoverLetterScore>;
 
-const DEFAULT_WRITERS = [
-  "gpt-5.5",
-] satisfies readonly CoverLetterBenchmarkWriterModel[];
+export type CoverLetterBenchmarkProductionInputs = Readonly<{
+  outputLanguage: ProposalOutputLanguage;
+  generationControlsBlock: string;
+  companyValuesPack: CompanyValuesPack | null;
+  proposalGenerationQualityMode: ProposalGenerationQualityMode;
+  hasCandidateContext: boolean;
+}>;
+
+export type CoverLetterReplayResult = Readonly<{
+  fixtureId: string;
+  sourceCaseId: string;
+  writerProvider: "openai" | "mistral";
+  writerModel: string;
+  writerCallCount: number;
+  artifact: CoverLetterEvalArtifact;
+}>;
+
+const COVER_LETTER_EVAL_CONFIG_VERSIONS = {
+  generationControls: "proposal_generation_controls_v1",
+  companyValues: "company_values_pack_v1",
+  writerSchema: "premium_writer_output_v1",
+  cancellation: "production_provider_specific_abort_v1",
+  finalizer: "premium_persistence_finalizer_v1",
+} as const satisfies CoverLetterEvalConfigVersions;
+
+const COVER_LETTER_EVAL_PROVIDER_MAX_RETRIES = 0;
+const COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS = 2_048;
 
 const MISTRAL_COVER_LETTER_BENCHMARK_WRITER_MODELS = [
   "mistral-medium-latest",
@@ -160,7 +230,7 @@ const COVER_LETTER_BENCHMARK_WRITER_MODELS = [
 ] as const satisfies readonly CoverLetterBenchmarkWriterModel[];
 
 export function resolveDefaultCoverLetterBenchmarkWriterModels(): CoverLetterBenchmarkWriterModel[] {
-  return [...DEFAULT_WRITERS];
+  return [resolvePremiumCoverLetterWriterModel()];
 }
 
 function printHelp(): void {
@@ -169,14 +239,14 @@ function printHelp(): void {
       "Premium cover-letter writer benchmark",
       "",
       "Usage:",
-      "  npx tsx scripts/evals/benchmark-cover-letter-writers.ts [--cases=id1,id2] [--writers=gpt-5.5] [--evaluator=MODEL]",
+      "  npx tsx scripts/evals/benchmark-cover-letter-writers.ts",
+      "  COVER_LETTER_EVAL_LIVE=1 npx tsx scripts/evals/benchmark-cover-letter-writers.ts --live --max-calls=N --max-repairs=N --max-usd=N --max-usd-per-call=N [--cases=id1,id2] [--writers=gpt-5.5] [--evaluator=MODEL]",
       "",
       "Examples:",
       "  npx tsx scripts/evals/benchmark-cover-letter-writers.ts",
-      "  npx tsx scripts/evals/benchmark-cover-letter-writers.ts --cases=security-hyatt,adjacent-warehouse",
-      "  npx tsx scripts/evals/benchmark-cover-letter-writers.ts --writers=gpt-5.5 --evaluator=gpt-5-mini",
-      "  npx tsx scripts/evals/benchmark-cover-letter-writers.ts --writers=gpt-5.5,gpt-5.4,gpt-5-mini --evaluator=gpt-5-mini",
-      "  npx tsx scripts/evals/benchmark-cover-letter-writers.ts --cases=security-securitas-adt-copwatch --writers=mistral-medium-latest,mistral-large-latest --evaluator=gpt-5-mini",
+      "  # Default: replay committed synthetic writer responses; zero provider calls.",
+      "  COVER_LETTER_EVAL_LIVE=1 npx tsx scripts/evals/benchmark-cover-letter-writers.ts --live --max-calls=4 --max-repairs=0 --max-usd=0.4 --max-usd-per-call=0.1 --cases=security-hyatt --writers=gpt-5.5",
+      `  # Live writer requests disable SDK retries and cap output at ${COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS} tokens. --max-usd-per-call must be a conservative worst-case reservation, not observed billing.`,
       "",
       `Available cases: ${coverLetterBenchmarkCases.map((item) => item.id).join(", ")}`,
     ].join("\n"),
@@ -190,7 +260,9 @@ function parseCsvList(rawValue: string): string[] {
     .filter(Boolean);
 }
 
-function parseWriterModels(rawValue: string): CoverLetterBenchmarkWriterModel[] {
+function parseWriterModels(
+  rawValue: string,
+): CoverLetterBenchmarkWriterModel[] {
   const requested = parseCsvList(rawValue);
   if (requested.length === 0) {
     throw new Error("Provide at least one writer model with --writers.");
@@ -215,11 +287,27 @@ function parseWriterModels(rawValue: string): CoverLetterBenchmarkWriterModel[] 
   return unique as CoverLetterBenchmarkWriterModel[];
 }
 
-function parseArgs(argv: string[]): CliOptions {
-  const options: CliOptions = {
+function parseNumericOption(args: { name: string; rawValue: string }): number {
+  const value = Number(args.rawValue);
+  if (!Number.isFinite(value)) {
+    throw new Error(`${args.name} must be a finite number.`);
+  }
+  return value;
+}
+
+export function parseCoverLetterBenchmarkCliOptions(
+  argv: string[],
+  liveEnvValue: string | undefined = process.env.COVER_LETTER_EVAL_LIVE,
+): CoverLetterBenchmarkCliOptions {
+  const options: CoverLetterBenchmarkCliOptions = {
     caseIds: null,
-    writerModels: [...DEFAULT_WRITERS],
+    writerModels: resolveDefaultCoverLetterBenchmarkWriterModels(),
     evaluatorModel: resolveCoverLetterEvalModel(),
+    live: liveEnvValue?.trim() === "1",
+    maxCalls: null,
+    maxRepairs: null,
+    maxUsd: null,
+    declaredMaxUsdPerCall: null,
   };
 
   for (const arg of argv) {
@@ -231,6 +319,28 @@ function parseArgs(argv: string[]): CliOptions {
       options.evaluatorModel =
         arg.slice("--evaluator=".length).trim() ||
         resolveCoverLetterEvalModel();
+    } else if (arg.startsWith("--max-calls=")) {
+      options.maxCalls = parseNumericOption({
+        name: "--max-calls",
+        rawValue: arg.slice("--max-calls=".length),
+      });
+    } else if (arg.startsWith("--max-repairs=")) {
+      options.maxRepairs = parseNumericOption({
+        name: "--max-repairs",
+        rawValue: arg.slice("--max-repairs=".length),
+      });
+    } else if (arg.startsWith("--max-usd=")) {
+      options.maxUsd = parseNumericOption({
+        name: "--max-usd",
+        rawValue: arg.slice("--max-usd=".length),
+      });
+    } else if (arg.startsWith("--max-usd-per-call=")) {
+      options.declaredMaxUsdPerCall = parseNumericOption({
+        name: "--max-usd-per-call",
+        rawValue: arg.slice("--max-usd-per-call=".length),
+      });
+    } else if (arg === "--live") {
+      options.live = true;
     } else if (arg === "--help") {
       printHelp();
       process.exit(0);
@@ -306,6 +416,23 @@ function resolveBenchmarkWriterProvider(
   return isMistralBenchmarkWriterModel(writerModel) ? "mistral" : "openai";
 }
 
+export function resolveCoverLetterBenchmarkAttemptSignal(
+  provider: CoverLetterBenchmarkDiagnostics["provider"],
+  signal?: AbortSignal,
+): AbortSignal | undefined {
+  return provider === "mistral" ? signal : undefined;
+}
+
+export function resolveCoverLetterBenchmarkProviderSignal(args: {
+  provider: CoverLetterBenchmarkDiagnostics["provider"];
+  configuredSignal?: AbortSignal;
+  callbackSignal?: AbortSignal;
+}): AbortSignal | undefined {
+  return args.provider === "openai"
+    ? args.configuredSignal
+    : args.callbackSignal;
+}
+
 function createEmptyManualReview(): CoverLetterBenchmarkManualReview {
   return {
     humanTone: "unreviewed",
@@ -331,6 +458,9 @@ function buildBenchmarkDiagnostics(args: {
   expectedContextClass: CoverLetterBenchmarkCase["expectedContextClass"];
   generation?: PremiumCoverLetterAttemptResult | null;
   failureTrace?: PremiumCoverLetterFailureTrace | null;
+  failureStage?: string | null;
+  failureReason?: string | null;
+  failureIssues?: string[];
   validationResult: CoverLetterBenchmarkDiagnostics["validationResult"];
 }): CoverLetterBenchmarkDiagnostics {
   const qualityShadow = getGenerationQualityShadow(args.generation);
@@ -352,130 +482,70 @@ function buildBenchmarkDiagnostics(args: {
       premium_quality_shadow_passed: qualityShadow?.passed ?? null,
     },
     qualityShadow,
-    failureStage: args.failureTrace?.stage ?? null,
-    failureReason: args.failureTrace?.reason ?? null,
-    failureIssues: args.failureTrace?.issues ?? [],
+    failureStage: args.failureStage ?? args.failureTrace?.stage ?? null,
+    failureReason: args.failureReason ?? args.failureTrace?.reason ?? null,
+    failureIssues: args.failureIssues ?? args.failureTrace?.issues ?? [],
   };
 }
 
-function extractChatMessageText(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    return content
-      .map((item) => {
-        if (typeof item === "string") return item;
-        if (!item || typeof item !== "object") return "";
-        const record = item as Record<string, unknown>;
-        return typeof record.text === "string"
-          ? record.text
-          : typeof record.content === "string"
-            ? record.content
-            : "";
-      })
-      .join("");
-  }
-  return "";
-}
-
-function findEmbeddedJsonObjectCandidates(content: string): string[] {
-  const candidates: string[] = [];
-  let depth = 0;
-  let start = -1;
-  let inString = false;
-  let escaped = false;
-
-  for (let index = 0; index < content.length; index += 1) {
-    const char = content[index];
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (char === "\\") {
-      escaped = inString;
-      continue;
-    }
-    if (char === "\"") {
-      inString = !inString;
-      continue;
-    }
-    if (inString) continue;
-    if (char === "{") {
-      if (depth === 0) start = index;
-      depth += 1;
-      continue;
-    }
-    if (char === "}") {
-      depth -= 1;
-      if (depth === 0 && start >= 0) {
-        candidates.push(content.slice(start, index + 1));
-        start = -1;
-      }
-    }
-  }
-
-  return candidates;
-}
-
-export function parsePremiumBodyPartsJson(content: string) {
-  const trimmed = content.trim();
-  const tryParse = (value: string) => {
-    const raw = JSON.parse(value);
-    const premiumOutput = PREMIUM_WRITER_OUTPUT_V1_SCHEMA.safeParse(raw);
-    if (premiumOutput.success) {
-      return toCoverLetterBodyParts(premiumOutput.data);
-    }
-
-    const rawRecord =
-      raw && typeof raw === "object" && !Array.isArray(raw)
-        ? (raw as Record<string, unknown>)
-        : null;
-    return PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(
-      rawRecord?.bodyParts ?? raw,
-    );
+export function resolveCoverLetterBenchmarkProductionInputs(args: {
+  benchmarkCase: CoverLetterBenchmarkCase;
+  outputLanguage?: ProposalOutputLanguage;
+}): CoverLetterBenchmarkProductionInputs {
+  const proposalGenerationQualityMode = resolveProposalGenerationQualityMode();
+  return {
+    outputLanguage:
+      args.outputLanguage ??
+      resolveProposalOutputLanguage(args.benchmarkCase.jobDescription),
+    generationControlsBlock: buildProposalGenerationControlsBlock({}),
+    companyValuesPack: isProposalGenerationQualityLiveMode(
+      proposalGenerationQualityMode,
+    )
+      ? analyzeCompanyValues(args.benchmarkCase.jobDescription)
+      : null,
+    proposalGenerationQualityMode,
+    hasCandidateContext: args.benchmarkCase.personalizationContext !== null,
   };
-
-  try {
-    return tryParse(trimmed);
-  } catch {
-    // Continue through fenced and embedded JSON fallbacks.
-  }
-
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(trimmed);
-  if (fenced?.[1]) {
-    return tryParse(fenced[1]);
-  }
-
-  const embedded = findEmbeddedJsonObjectCandidates(trimmed);
-  if (embedded.length === 1) {
-    return tryParse(embedded[0]!);
-  }
-
-  throw new Error("Mistral premium cover-letter response did not contain one parseable JSON body-parts object.");
 }
 
-async function generatePremiumCoverLetterBodyPartsWithMistral(args: {
-  apiKey: string;
-  prompt: string;
-  writerModel: MistralCoverLetterBenchmarkWriterModel;
-}) {
-  const model = new ChatMistralAI({
-    apiKey: args.apiKey,
-    modelName: args.writerModel,
-    temperature: 0.2,
-  });
-  const response = await model.invoke([
-    new SystemMessage(
-      "Return only a valid JSON object with keys opening, proofBlock, employerValueBlock, and closeLine. Do not include markdown, comments, greeting, signoff, or prose outside JSON. Never write meta-prose such as 'I have described', 'I described', 'as described', 'the evidence shows', 'this section shows', 'work surface', or 'concrete bridge'. Write the actual candidate action directly.",
-    ),
-    new HumanMessage(args.prompt),
-  ]);
-  const content = extractChatMessageText(response.content);
-  if (process.env.COVER_LETTER_BENCHMARK_DEBUG_WRITER_OUTPUT === "1") {
-    console.error(
-      `[cover-letter-benchmark] raw writer output model=${args.writerModel}\n${content}`,
-    );
-  }
-  return parsePremiumBodyPartsJson(content);
+async function buildCoverLetterEvalFrozenConfig(args: {
+  writerModel: CoverLetterBenchmarkWriterModel;
+  benchmarkCase: CoverLetterBenchmarkCase;
+  productionInputs: CoverLetterBenchmarkProductionInputs;
+}): Promise<CoverLetterEvalFrozenConfig> {
+  const provider = resolveBenchmarkWriterProvider(args.writerModel);
+  return {
+    provider,
+    model: args.writerModel,
+    outputLanguage: args.productionInputs.outputLanguage,
+    preset: args.benchmarkCase.preset,
+    proposalQualityMode: args.productionInputs.proposalGenerationQualityMode,
+    hasCandidateContext: args.productionInputs.hasCandidateContext,
+    providerMaxRetries: COVER_LETTER_EVAL_PROVIDER_MAX_RETRIES,
+    writerMaxOutputTokens: COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS,
+    promptV2: provider === "mistral" && isCoverLetterPremiumPromptV2Enabled(),
+    qualityRepair: isCoverLetterQualityRepairV1Enabled(),
+    reasoningEffort:
+      llmConfig.proposalModels?.openaiWriterReasoningEffort ?? "low",
+    generationControlsHash: await buildStableHash({
+      namespace: "cover-letter-eval-config",
+      type: "generation-controls",
+      version: 1,
+      value: args.productionInputs.generationControlsBlock,
+    }),
+    companyValuesHash: await buildStableHash({
+      namespace: "cover-letter-eval-config",
+      type: "company-values",
+      version: 1,
+      value: args.productionInputs.companyValuesPack,
+    }),
+    writerSchemaHash: await buildStableHash({
+      namespace: "cover-letter-eval-config",
+      type: "writer-schema",
+      version: 1,
+      value: PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
+    }),
+  };
 }
 
 export async function generatePremiumCoverLetterBenchmarkLetter(args: {
@@ -483,45 +553,294 @@ export async function generatePremiumCoverLetterBenchmarkLetter(args: {
   writerModel: CoverLetterBenchmarkWriterModel;
   apiKey: string;
   mistralApiKey?: string;
+  productionInputs?: CoverLetterBenchmarkProductionInputs;
+  writerOverride?: PremiumCoverLetterWriter;
+  budget?: CoverLetterEvalBudget;
+  signal?: AbortSignal;
   onFailure?: (failure: PremiumCoverLetterFailureTrace) => void;
 }): Promise<PremiumCoverLetterAttemptResult | null> {
   const writerProvider = isMistralBenchmarkWriterModel(args.writerModel)
     ? "mistral"
     : "openai";
+  const productionInputs =
+    args.productionInputs ??
+    resolveCoverLetterBenchmarkProductionInputs({
+      benchmarkCase: args.benchmarkCase,
+    });
+  if (!args.writerOverride && !args.budget) {
+    throw new Error(
+      "Live cover-letter writer execution requires an explicit evaluation budget.",
+    );
+  }
+  const writerAttemptBudget = args.budget?.beginWriterAttempt();
+  const attemptSignal = resolveCoverLetterBenchmarkAttemptSignal(
+    writerProvider,
+    args.signal,
+  );
 
   return attemptPremiumCoverLetterGeneration({
     personalizationContext: args.benchmarkCase.personalizationContext,
     voicePreset: args.benchmarkCase.preset,
-    outputLanguage: resolveProposalOutputLanguage(
-      args.benchmarkCase.jobDescription,
-    ),
+    outputLanguage: productionInputs.outputLanguage,
     jobTitle: args.benchmarkCase.jobTitle,
     jobDescription: args.benchmarkCase.jobDescription,
     candidateName: args.benchmarkCase.personalizationContext.name,
+    generationControlsBlock: productionInputs.generationControlsBlock,
+    companyValuesPack: productionInputs.companyValuesPack ?? undefined,
     onFailure: args.onFailure,
     writerProvider,
     writerModel: args.writerModel,
-    writer: async ({ prompt }) => {
-      if (isMistralBenchmarkWriterModel(args.writerModel)) {
-        if (!args.mistralApiKey) {
-          throw new Error(
-            "MISTRAL_API_KEY is required for Mistral cover-letter benchmark writers.",
-          );
-        }
-        return generatePremiumCoverLetterBodyPartsWithMistral({
-          apiKey: args.mistralApiKey,
+    signal: attemptSignal,
+    writer: async ({ prompt, schema, signal: callbackSignal }) => {
+      const providerSignal = resolveCoverLetterBenchmarkProviderSignal({
+        provider: writerProvider,
+        configuredSignal: args.signal,
+        callbackSignal,
+      });
+      if (args.writerOverride) {
+        return args.writerOverride({
           prompt,
-          writerModel: args.writerModel,
+          schema,
+          signal: providerSignal,
         });
       }
 
-      return generatePremiumCoverLetterBodyPartsWithOpenAI({
-        apiKey: args.apiKey,
-        prompt,
-        writerModel: args.writerModel,
-      });
+      const invokeProvider = async () => {
+        if (isMistralBenchmarkWriterModel(args.writerModel)) {
+          if (!args.mistralApiKey) {
+            throw new Error(
+              "MISTRAL_API_KEY is required for Mistral cover-letter benchmark writers.",
+            );
+          }
+          return generatePremiumCoverLetterBodyPartsWithMistral({
+            apiKey: args.mistralApiKey,
+            prompt,
+            writerModel: args.writerModel,
+            signal: providerSignal,
+            maxRetries: COVER_LETTER_EVAL_PROVIDER_MAX_RETRIES,
+            maxOutputTokens: COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS,
+          });
+        }
+
+        return generatePremiumCoverLetterBodyPartsWithOpenAI({
+          apiKey: args.apiKey,
+          prompt,
+          writerModel: args.writerModel,
+          schema,
+          signal: providerSignal,
+          maxRetries: COVER_LETTER_EVAL_PROVIDER_MAX_RETRIES,
+          maxOutputTokens: COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS,
+        });
+      };
+
+      if (writerAttemptBudget) {
+        return writerAttemptBudget.runProviderCall(invokeProvider);
+      }
+      return invokeProvider();
     },
   });
+}
+
+function resolveRecordedWriterSchemaId(
+  schema: Record<string, unknown>,
+): "premium_writer_output_v1" | "premium_cover_letter_body_parts" | null {
+  if (schema === PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA) {
+    return "premium_writer_output_v1";
+  }
+  if (schema === PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA) {
+    return "premium_cover_letter_body_parts";
+  }
+  return null;
+}
+
+function assertReplayFixtureMatchesFrozenProductionConfig(args: {
+  fixture: RecordedCoverLetterReplayFixture;
+  productionInputs: CoverLetterBenchmarkProductionInputs;
+}): void {
+  const expected = args.fixture.frozenConfig;
+  const actualPromptV2 =
+    args.fixture.writerProvider === "mistral" &&
+    isCoverLetterPremiumPromptV2Enabled();
+  const actualQualityRepair = isCoverLetterQualityRepairV1Enabled();
+  const actualReasoningEffort =
+    llmConfig.proposalModels?.openaiWriterReasoningEffort ?? "low";
+  const mismatches = [
+    args.productionInputs.outputLanguage === expected.outputLanguage
+      ? null
+      : "outputLanguage",
+    args.productionInputs.generationControlsBlock ===
+    expected.generationControlsBlock
+      ? null
+      : "generationControlsBlock",
+    isDeepStrictEqual(
+      args.productionInputs.companyValuesPack ?? null,
+      expected.companyValuesPack,
+    )
+      ? null
+      : "companyValuesPack",
+    args.productionInputs.proposalGenerationQualityMode ===
+    expected.proposalGenerationQualityMode
+      ? null
+      : "proposalGenerationQualityMode",
+    args.productionInputs.hasCandidateContext === expected.hasCandidateContext
+      ? null
+      : "hasCandidateContext",
+    COVER_LETTER_EVAL_PROVIDER_MAX_RETRIES === expected.providerMaxRetries
+      ? null
+      : "providerMaxRetries",
+    COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS ===
+    expected.writerMaxOutputTokens
+      ? null
+      : "writerMaxOutputTokens",
+    actualPromptV2 === expected.premiumPromptV2Enabled
+      ? null
+      : "premiumPromptV2Enabled",
+    actualQualityRepair === expected.qualityRepairV1Enabled
+      ? null
+      : "qualityRepairV1Enabled",
+    actualReasoningEffort === expected.openAIWriterReasoningEffort
+      ? null
+      : "openAIWriterReasoningEffort",
+  ].filter((value): value is string => Boolean(value));
+
+  if (mismatches.length > 0) {
+    throw new Error(
+      `Recorded cover-letter replay fixture ${args.fixture.id} has configuration drift: ${mismatches.join(", ")}.`,
+    );
+  }
+}
+
+export async function replayRecordedCoverLetterFixture(
+  fixture: RecordedCoverLetterReplayFixture,
+): Promise<CoverLetterReplayResult> {
+  const benchmarkCase = coverLetterBenchmarkCases.find(
+    (item) => item.id === fixture.sourceCaseId,
+  );
+  if (!benchmarkCase) {
+    throw new Error(
+      `Recorded cover-letter replay fixture ${fixture.id} references unknown case ${fixture.sourceCaseId}.`,
+    );
+  }
+  if (
+    !COVER_LETTER_BENCHMARK_WRITER_MODELS.includes(
+      fixture.writerModel as CoverLetterBenchmarkWriterModel,
+    )
+  ) {
+    throw new Error(
+      `Recorded cover-letter replay fixture ${fixture.id} uses unsupported writer ${fixture.writerModel}.`,
+    );
+  }
+  const writerModel = fixture.writerModel as CoverLetterBenchmarkWriterModel;
+  if (resolveBenchmarkWriterProvider(writerModel) !== fixture.writerProvider) {
+    throw new Error(
+      `Recorded cover-letter replay fixture ${fixture.id} has a provider/model mismatch.`,
+    );
+  }
+
+  const productionInputs = resolveCoverLetterBenchmarkProductionInputs({
+    benchmarkCase,
+    outputLanguage: fixture.frozenConfig.outputLanguage,
+  });
+  assertReplayFixtureMatchesFrozenProductionConfig({
+    fixture,
+    productionInputs,
+  });
+
+  let writerCallCount = 0;
+  const writerOverride: PremiumCoverLetterWriter = async ({ schema }) => {
+    const recorded = fixture.responses[writerCallCount];
+    if (!recorded) {
+      throw new Error(
+        `Recorded cover-letter replay fixture ${fixture.id} has no response for writer call ${writerCallCount + 1}.`,
+      );
+    }
+    const actualSchemaId = resolveRecordedWriterSchemaId(schema);
+    if (actualSchemaId !== recorded.schemaId) {
+      throw new Error(
+        `Recorded cover-letter replay fixture ${fixture.id} expected schema ${recorded.schemaId} but received ${actualSchemaId ?? "unknown"}.`,
+      );
+    }
+    writerCallCount += 1;
+    return structuredClone(recorded.payload);
+  };
+
+  let failureTrace: PremiumCoverLetterFailureTrace | null = null;
+  const generation = await generatePremiumCoverLetterBenchmarkLetter({
+    benchmarkCase,
+    writerModel,
+    apiKey: "replay-does-not-use-provider-credentials",
+    productionInputs,
+    writerOverride,
+    budget: createCoverLetterEvalBudget({
+      explicitLiveProviderOptIn: false,
+      maxCalls: 1,
+      maxRepairs: 0,
+      maxUsd: 1,
+      declaredMaxUsdPerCall: 1,
+    }),
+    onFailure: (failure) => {
+      failureTrace = failure;
+    },
+  });
+  if (!generation) {
+    throw new Error(
+      `Recorded cover-letter replay fixture ${fixture.id} failed generation: ${formatPremiumCoverLetterFailure(failureTrace)}.`,
+    );
+  }
+  if (writerCallCount !== fixture.responses.length) {
+    throw new Error(
+      `Recorded cover-letter replay fixture ${fixture.id} consumed ${writerCallCount}/${fixture.responses.length} responses.`,
+    );
+  }
+
+  const prepared = await prepareCoverLetterEvalArtifact({
+    caseId: benchmarkCase.id,
+    payload: generation,
+    outputLanguage: productionInputs.outputLanguage,
+    candidateName: benchmarkCase.personalizationContext.name,
+    voicePreset: benchmarkCase.preset,
+    hasCandidateContext: productionInputs.hasCandidateContext,
+    configVersions: COVER_LETTER_EVAL_CONFIG_VERSIONS,
+    frozenConfig: await buildCoverLetterEvalFrozenConfig({
+      writerModel,
+      benchmarkCase,
+      productionInputs,
+    }),
+  });
+  if (!prepared.finalizedPayload) {
+    throw new Error(
+      `Recorded cover-letter replay fixture ${fixture.id} was rejected by production finalization (${prepared.artifact.diagnostics.finalization.errorClass}).`,
+    );
+  }
+  if (prepared.artifact.artifactHash !== fixture.expectedArtifactHash) {
+    throw new Error(
+      `Recorded cover-letter replay fixture ${fixture.id} changed artifact hash: expected ${fixture.expectedArtifactHash}, received ${prepared.artifact.artifactHash}.`,
+    );
+  }
+  if (prepared.artifact.provenanceHash !== fixture.expectedProvenanceHash) {
+    throw new Error(
+      `Recorded cover-letter replay fixture ${fixture.id} changed provenance hash: expected ${fixture.expectedProvenanceHash}, received ${prepared.artifact.provenanceHash ?? "null"}.`,
+    );
+  }
+
+  return {
+    fixtureId: fixture.id,
+    sourceCaseId: fixture.sourceCaseId,
+    writerProvider: fixture.writerProvider,
+    writerModel: fixture.writerModel,
+    writerCallCount,
+    artifact: prepared.artifact,
+  };
+}
+
+export async function replayRecordedCoverLetterFixtures(): Promise<
+  CoverLetterReplayResult[]
+> {
+  const results: CoverLetterReplayResult[] = [];
+  for (const fixture of RECORDED_COVER_LETTER_REPLAY_FIXTURES) {
+    results.push(await replayRecordedCoverLetterFixture(fixture));
+  }
+  return results;
 }
 
 export async function benchmarkCoverLetterCase(args: {
@@ -530,12 +849,23 @@ export async function benchmarkCoverLetterCase(args: {
   evaluatorModel: string;
   apiKey: string;
   mistralApiKey?: string;
+  productionInputs?: CoverLetterBenchmarkProductionInputs;
+  budget?: CoverLetterEvalBudget;
+  signal?: AbortSignal;
   generateLetter?: GenerateBenchmarkLetter;
   evaluateLetter?: EvaluateBenchmarkLetter;
 }): Promise<CoverLetterBenchmarkRecord> {
-  const outputLanguage = resolveProposalOutputLanguage(
-    args.benchmarkCase.jobDescription,
-  );
+  if ((!args.generateLetter || !args.evaluateLetter) && !args.budget) {
+    throw new Error(
+      "Default live cover-letter writer and evaluator callbacks require an explicit evaluation budget.",
+    );
+  }
+  const productionInputs =
+    args.productionInputs ??
+    resolveCoverLetterBenchmarkProductionInputs({
+      benchmarkCase: args.benchmarkCase,
+    });
+  const outputLanguage = productionInputs.outputLanguage;
   let failureTrace: PremiumCoverLetterFailureTrace | null = null;
   const generateLetter =
     args.generateLetter ?? generatePremiumCoverLetterBenchmarkLetter;
@@ -554,6 +884,9 @@ export async function benchmarkCoverLetterCase(args: {
       writerModel: args.writerModel,
       apiKey: args.apiKey,
       mistralApiKey: args.mistralApiKey,
+      productionInputs,
+      budget: args.budget,
+      signal: args.signal,
       onFailure: (failure) => {
         failureTrace = failure;
       },
@@ -581,12 +914,62 @@ export async function benchmarkCoverLetterCase(args: {
       };
     }
 
+    const preparedArtifact = await prepareCoverLetterEvalArtifact({
+      caseId: args.benchmarkCase.id,
+      payload: generation,
+      outputLanguage,
+      candidateName: args.benchmarkCase.personalizationContext.name,
+      voicePreset: args.benchmarkCase.preset,
+      hasCandidateContext: productionInputs.hasCandidateContext,
+      configVersions: COVER_LETTER_EVAL_CONFIG_VERSIONS,
+      frozenConfig: await buildCoverLetterEvalFrozenConfig({
+        writerModel: args.writerModel,
+        benchmarkCase: args.benchmarkCase,
+        productionInputs,
+      }),
+    });
+    if (!preparedArtifact.finalizedPayload) {
+      const finalization = preparedArtifact.artifact.diagnostics.finalization;
+      return {
+        status: "finalization_failed",
+        caseId: args.benchmarkCase.id,
+        preset: args.benchmarkCase.preset,
+        writerModel: args.writerModel,
+        outputLanguage,
+        expectedContextClass: args.benchmarkCase.expectedContextClass,
+        generation,
+        artifact: preparedArtifact.artifact,
+        error: `Production cover-letter finalization rejected the generated artifact (${finalization.errorClass}).`,
+        diagnostics: buildBenchmarkDiagnostics({
+          writerModel: args.writerModel,
+          expectedContextClass: args.benchmarkCase.expectedContextClass,
+          generation,
+          validationResult: "premium_finalization_failed",
+          failureStage: finalization.failureStage ?? "finalization",
+          failureReason: finalization.errorClass,
+        }),
+        manualReview: createEmptyManualReview(),
+        notes: args.benchmarkCase.notes,
+        realismTag: args.benchmarkCase.realismTag,
+      };
+    }
+    const finalizedGeneration: PremiumCoverLetterAttemptResult = {
+      ...generation,
+      ...preparedArtifact.finalizedPayload,
+    };
+
     try {
-      const evaluation = await evaluateLetter({
-        letter: generation.content,
-        apiKey: args.apiKey,
-        model: args.evaluatorModel,
-      });
+      const evaluateFinalizedArtifact = () =>
+        evaluateLetter({
+          letter: finalizedGeneration.content,
+          apiKey: args.apiKey,
+          model: args.evaluatorModel,
+        });
+      const evaluation = args.budget
+        ? await args.budget
+            .beginWriterAttempt()
+            .runProviderCall(evaluateFinalizedArtifact)
+        : await evaluateFinalizedArtifact();
       return {
         status: "ok",
         caseId: args.benchmarkCase.id,
@@ -594,16 +977,17 @@ export async function benchmarkCoverLetterCase(args: {
         writerModel: args.writerModel,
         outputLanguage,
         expectedContextClass: args.benchmarkCase.expectedContextClass,
-        generation,
+        generation: finalizedGeneration,
+        artifact: preparedArtifact.artifact,
         evaluation,
         diagnostics: buildBenchmarkDiagnostics({
           writerModel: args.writerModel,
           expectedContextClass: args.benchmarkCase.expectedContextClass,
-          generation,
+          generation: finalizedGeneration,
           validationResult: "premium_validation_passed",
         }),
         manualReview: createEmptyManualReview(),
-        letter: generation.content,
+        letter: finalizedGeneration.content,
         notes: args.benchmarkCase.notes,
         realismTag: args.benchmarkCase.realismTag,
       };
@@ -615,16 +999,17 @@ export async function benchmarkCoverLetterCase(args: {
         writerModel: args.writerModel,
         outputLanguage,
         expectedContextClass: args.benchmarkCase.expectedContextClass,
-        generation,
+        generation: finalizedGeneration,
+        artifact: preparedArtifact.artifact,
         error: error instanceof Error ? error.message : String(error),
         diagnostics: buildBenchmarkDiagnostics({
           writerModel: args.writerModel,
           expectedContextClass: args.benchmarkCase.expectedContextClass,
-          generation,
+          generation: finalizedGeneration,
           validationResult: "premium_evaluation_failed",
         }),
         manualReview: createEmptyManualReview(),
-        letter: generation.content,
+        letter: finalizedGeneration.content,
         notes: args.benchmarkCase.notes,
         realismTag: args.benchmarkCase.realismTag,
       };
@@ -839,15 +1224,114 @@ function printBenchmarkReport(args: {
   }
 }
 
+export function createCoverLetterEvalLiveBudget(
+  options: CoverLetterBenchmarkCliOptions,
+): CoverLetterEvalBudget {
+  if (!options.live) {
+    throw new Error(
+      "Live cover-letter evaluation requires --live or COVER_LETTER_EVAL_LIVE=1.",
+    );
+  }
+  const required = {
+    maxCalls: options.maxCalls,
+    maxRepairs: options.maxRepairs,
+    maxUsd: options.maxUsd,
+    declaredMaxUsdPerCall: options.declaredMaxUsdPerCall,
+  };
+  const missing = Object.entries(required)
+    .filter(([, value]) => value === null)
+    .map(([key]) => key);
+  if (missing.length > 0) {
+    throw new Error(
+      `Live cover-letter evaluation requires explicit budgets: ${missing.join(", ")}.`,
+    );
+  }
+
+  return createCoverLetterEvalBudget({
+    explicitLiveProviderOptIn: true,
+    maxCalls: required.maxCalls!,
+    maxRepairs: required.maxRepairs!,
+    maxUsd: required.maxUsd!,
+    declaredMaxUsdPerCall: required.declaredMaxUsdPerCall!,
+  } satisfies CoverLetterEvalBudgetOptions);
+}
+
+function assertLiveBudgetCoversNoRepairPlan(args: {
+  options: CoverLetterBenchmarkCliOptions;
+  caseCount: number;
+  writerCount: number;
+}): void {
+  const minimumProviderCalls = args.caseCount * args.writerCount * 2;
+  const maxCalls = args.options.maxCalls!;
+  const maxUsd = args.options.maxUsd!;
+  const declaredMaxUsdPerCall = args.options.declaredMaxUsdPerCall!;
+  if (maxCalls < minimumProviderCalls) {
+    throw new Error(
+      `Live budget maxCalls=${maxCalls} cannot cover the no-repair plan of ${minimumProviderCalls} provider calls.`,
+    );
+  }
+  const minimumReservedUsd = Number(
+    (minimumProviderCalls * declaredMaxUsdPerCall).toFixed(12),
+  );
+  if (maxUsd < minimumReservedUsd) {
+    throw new Error(
+      `Live budget maxUsd=${maxUsd} cannot cover the no-repair reservation of ${minimumReservedUsd} USD.`,
+    );
+  }
+}
+
+function printReplayReport(results: CoverLetterReplayResult[]): void {
+  console.log("cover-letter replay contract: PASS");
+  for (const result of results) {
+    console.log(
+      JSON.stringify({
+        fixtureId: result.fixtureId,
+        sourceCaseId: result.sourceCaseId,
+        writerProvider: result.writerProvider,
+        writerModel: result.writerModel,
+        writerCallCount: result.writerCallCount,
+        decision: result.artifact.decision,
+        artifactHash: result.artifact.artifactHash,
+        provenanceHash: result.artifact.provenanceHash,
+        provenanceStatus: result.artifact.provenance?.status ?? null,
+        provenanceOrigin: result.artifact.provenance?.origin ?? null,
+        diagnosticClasses: {
+          finalization: result.artifact.diagnostics.finalization.errorClass,
+          qualityShadow:
+            result.artifact.diagnostics.qualityShadow?.issueClasses ?? [],
+          qualityRepair:
+            result.artifact.diagnostics.qualityRepair?.outcome ?? null,
+        },
+        contractVersions: result.artifact.contractVersions,
+        configVersions: result.artifact.configVersions,
+      }),
+    );
+  }
+}
+
 async function main(): Promise<void> {
-  loadEnv(process.cwd());
-  const options = parseArgs(process.argv.slice(2));
+  const options = parseCoverLetterBenchmarkCliOptions(process.argv.slice(2));
+  if (!options.live) {
+    printReplayReport(await replayRecordedCoverLetterFixtures());
+    return;
+  }
+
   const benchmarkCases = resolveRequestedCoverLetterBenchmarkCases(
     options.caseIds,
   );
+  const budget = createCoverLetterEvalLiveBudget(options);
+  assertLiveBudgetCoversNoRepairPlan({
+    options,
+    caseCount: benchmarkCases.length,
+    writerCount: options.writerModels.length,
+  });
+
+  loadEnv(process.cwd());
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured in the current environment.");
+    throw new Error(
+      "OPENAI_API_KEY is not configured in the current environment.",
+    );
   }
   const mistralApiKey = process.env.MISTRAL_API_KEY?.trim();
   if (
@@ -878,6 +1362,7 @@ async function main(): Promise<void> {
           evaluatorModel: effectiveEvaluatorModel,
           apiKey,
           mistralApiKey,
+          budget,
         }),
       );
     }
@@ -888,6 +1373,9 @@ async function main(): Promise<void> {
     records,
     writerModels: options.writerModels,
   });
+  console.error(
+    `[cover-letter-benchmark] budget=${JSON.stringify(budget.snapshot())}`,
+  );
 }
 
 const isDirectExecution =

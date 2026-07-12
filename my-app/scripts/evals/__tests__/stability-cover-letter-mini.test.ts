@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import type { CoverLetterScore } from "../../../convex/lib/proposals/coverLetterEvaluation";
-import { classifyWeaknessTheme, summarizeCaseStability } from "../stability-cover-letter-mini";
+import {
+  classifyWeaknessTheme,
+  parseStabilityCoverLetterCliOptions,
+  summarizeCaseStability,
+} from "../stability-cover-letter-mini";
 
 function makeScore(overrides?: Partial<CoverLetterScore>): CoverLetterScore {
   return {
@@ -29,6 +33,34 @@ function makeScore(overrides?: Partial<CoverLetterScore>): CoverLetterScore {
 }
 
 describe("stability-cover-letter-mini", () => {
+  it("defaults to offline-disabled live execution and requires explicit budget inputs", () => {
+    expect(parseStabilityCoverLetterCliOptions([], "0")).toMatchObject({
+      live: false,
+      maxCalls: null,
+      maxRepairs: null,
+      maxUsd: null,
+      declaredMaxUsdPerCall: null,
+    });
+    expect(
+      parseStabilityCoverLetterCliOptions(
+        [
+          "--live",
+          "--max-calls=6",
+          "--max-repairs=0",
+          "--max-usd=0.6",
+          "--max-usd-per-call=0.1",
+        ],
+        "0",
+      ),
+    ).toMatchObject({
+      live: true,
+      maxCalls: 6,
+      maxRepairs: 0,
+      maxUsd: 0.6,
+      declaredMaxUsdPerCall: 0.1,
+    });
+  });
+
   it("classifies recurring weakness themes conservatively", () => {
     expect(
       classifyWeaknessTheme(

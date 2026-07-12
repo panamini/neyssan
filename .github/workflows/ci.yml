@@ -40,3 +40,30 @@ jobs:
             convex/lib/jobs/__tests__/structuredMatchReview.test.ts \
             convex/lib/jobs/__tests__/structuredMatchRead.test.ts \
             convex/lib/jobs/__tests__/structuredMatchReadEvaluation.test.ts
+
+      - name: Run cover-letter evaluation truth contract
+        working-directory: my-app
+        env:
+          OPENAI_API_KEY: ""
+          MISTRAL_API_KEY: ""
+          COVER_LETTER_EVAL_LIVE: "0"
+          PROPOSAL_GENERATION_QUALITY_MODE: baseline
+          cover_letter_premium_prompt_v2: ""
+          COVER_LETTER_PREMIUM_PROMPT_V2: ""
+          ENABLE_COVER_LETTER_PREMIUM_PROMPT_V2: ""
+          ENABLE_COVER_LETTER_QUALITY_REPAIR_V1: ""
+        run: |
+          ./node_modules/.bin/vitest --run \
+            scripts/evals/__tests__/benchmark-cover-letter-writers.test.ts \
+            scripts/evals/__tests__/cover-letter-eval-artifact.test.ts \
+            scripts/evals/__tests__/cover-letter-eval-budget.test.ts \
+            scripts/evals/__tests__/stability-cover-letter-mini.test.ts
+          ./node_modules/.bin/tsx scripts/evals/benchmark-cover-letter-writers.ts
+          if ./node_modules/.bin/tsx scripts/evals/stability-cover-letter-mini.ts; then
+            echo "::error::The stability runner must refuse unflagged, unbudgeted live execution."
+            exit 1
+          fi
+
+      - name: Run premium cover-letter adapter contract
+        working-directory: my-app
+        run: ./node_modules/.bin/vitest --run convex/lib/proposals/__tests__/premiumCoverLetter.test.ts

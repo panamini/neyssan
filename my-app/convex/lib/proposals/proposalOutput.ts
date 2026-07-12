@@ -23,21 +23,25 @@ export const PROPOSAL_DOCUMENT_LANGUAGE_CODES = [
 export type ProposalDocumentLanguageCode =
   (typeof PROPOSAL_DOCUMENT_LANGUAGE_CODES)[number];
 
+export const PROPOSAL_OUTPUT_LANGUAGES = [
+  "English",
+  "French",
+  "Spanish",
+  "German",
+  "Italian",
+  "Portuguese",
+  "Polish",
+  "Dutch",
+  "Greek",
+  "Hungarian",
+  "Lithuanian",
+  "Estonian",
+  "Russian",
+  "Arabic",
+] as const;
+
 export type ProposalOutputLanguage =
-  | "English"
-  | "French"
-  | "Spanish"
-  | "German"
-  | "Italian"
-  | "Portuguese"
-  | "Polish"
-  | "Dutch"
-  | "Greek"
-  | "Hungarian"
-  | "Lithuanian"
-  | "Estonian"
-  | "Russian"
-  | "Arabic";
+  (typeof PROPOSAL_OUTPUT_LANGUAGES)[number];
 
 export type DeterministicCopyLanguage = "en" | "fr";
 
@@ -133,7 +137,7 @@ export function getDeterministicCopyLanguage(
 
 export function getProposalOutputLanguageLabel(
   value: string | null | undefined,
-): ProposalOutputLanguage | string {
+): string {
   const normalizedCode = value?.toLowerCase().split("-")[0]?.trim();
   if (isProposalDocumentLanguageCode(normalizedCode)) {
     return PROPOSAL_LANGUAGE_LABELS[normalizedCode];

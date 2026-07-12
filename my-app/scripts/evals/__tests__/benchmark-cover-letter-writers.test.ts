@@ -1,15 +1,29 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { CoverLetterScore } from "../../../convex/lib/proposals/coverLetterEvaluation";
-import { evaluatePremiumCoverLetterEligibility } from "../../../convex/lib/proposals/premiumCoverLetter";
+import { finalizePremiumCoverLetterPayloadForPersistence } from "../../../convex/generateProposalMutation";
+import {
+  evaluatePremiumCoverLetterEligibility,
+  type PremiumCoverLetterAttemptResult,
+} from "../../../convex/lib/proposals/premiumCoverLetter";
+import { PROPOSAL_OUTPUT_LANGUAGES } from "../../../convex/lib/proposals/proposalOutput";
 import {
   aggregateCoverLetterBenchmarkRecords,
   benchmarkCoverLetterCase,
-  parsePremiumBodyPartsJson,
+  createCoverLetterEvalLiveBudget,
+  parseCoverLetterBenchmarkCliOptions,
+  replayRecordedCoverLetterFixtures,
+  resolveCoverLetterBenchmarkAttemptSignal,
+  resolveCoverLetterBenchmarkProductionInputs,
+  resolveCoverLetterBenchmarkProviderSignal,
   resolveDefaultCoverLetterBenchmarkWriterModels,
   type CoverLetterBenchmarkRecord,
 } from "../benchmark-cover-letter-writers";
 import { coverLetterBenchmarkCases } from "../cases/cover-letter/cases";
+import {
+  RECORDED_COVER_LETTER_REPLAY_FIXTURES,
+  recordedCoverLetterReplayFixtureSchema,
+} from "../fixtures/cover-letter/recorded-writer-responses";
 
 const successfulEvaluation: CoverLetterScore = {
   score: {
@@ -46,6 +60,11 @@ const emptyManualReview = {
   reviewerNotes: "",
 } as const;
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+});
+
 describe("benchmark-cover-letter-writers", () => {
   it("defaults live benchmark runs to the production writer only unless extra writers are requested", () => {
     expect(resolveDefaultCoverLetterBenchmarkWriterModels()).toEqual([
@@ -53,11 +72,254 @@ describe("benchmark-cover-letter-writers", () => {
     ]);
   });
 
+  it("mirrors the provider-specific production cancellation contract", () => {
+    const configuredSignal = new AbortController().signal;
+    const callbackSignal = new AbortController().signal;
+
+    expect(
+      resolveCoverLetterBenchmarkAttemptSignal("openai", configuredSignal),
+    ).toBeUndefined();
+    expect(
+      resolveCoverLetterBenchmarkProviderSignal({
+        provider: "openai",
+        configuredSignal,
+        callbackSignal,
+      }),
+    ).toBe(configuredSignal);
+
+    expect(
+      resolveCoverLetterBenchmarkAttemptSignal("mistral", configuredSignal),
+    ).toBe(configuredSignal);
+    expect(
+      resolveCoverLetterBenchmarkProviderSignal({
+        provider: "mistral",
+        configuredSignal,
+        callbackSignal,
+      }),
+    ).toBe(callbackSignal);
+  });
+
+  it("uses the current production context-presence rule for name-only no-CV finalization", async () => {
+    const benchmarkCase = coverLetterBenchmarkCases.find(
+      (item) => item.id === "no-cv-entry-office",
+    )!;
+    const bodyParts = {
+      opening:
+        "Ce poste demande de la rigueur, une communication claire et un suivi régulier.",
+      proofBlock:
+        "La mission repose sur l’organisation des tâches quotidiennes et la gestion des échanges.",
+      employerValueBlock:
+        "J’aborderais ce travail avec méthode, attention aux détails et communication claire.",
+      closeLine:
+        "Je serais ravie d’échanger sur la manière dont j’aborderais ce type de mission.",
+    };
+    const content = [
+      "Madame, Monsieur,",
+      "",
+      bodyParts.opening,
+      "",
+      bodyParts.proofBlock,
+      "",
+      bodyParts.employerValueBlock,
+      "",
+      bodyParts.closeLine,
+      "",
+      "Veuillez agréer, Madame, Monsieur, l'expression de mes salutations distinguées.",
+    ].join("\n");
+    const generation = {
+      content,
+      sections: [{ type: "text" as const, content }],
+      prompt: "recorded synthetic prompt",
+      brief: {
+        language: "French" as const,
+        preset: benchmarkCase.preset,
+        contextClass: "no_cv" as const,
+        targetRole: benchmarkCase.jobTitle,
+        topEvidence: [],
+        supportEvidence: [],
+        requiredMoves: [],
+        forbiddenMoves: [],
+      },
+      contextClass: "no_cv" as const,
+      bodyParts,
+      mode: "direct" as const,
+      evidenceUsed: [],
+      omittedWeakEvidence: [],
+      qualityShadow: { passed: true, score: 100, issues: [] },
+    } satisfies PremiumCoverLetterAttemptResult;
+    const productionInputs = {
+      ...resolveCoverLetterBenchmarkProductionInputs({ benchmarkCase }),
+      outputLanguage: "French" as const,
+    };
+
+    expect(productionInputs.hasCandidateContext).toBe(true);
+    expect(
+      finalizePremiumCoverLetterPayloadForPersistence({
+        payload: generation,
+        format: "cover_letter",
+        outputLanguage: "French",
+        candidateName: benchmarkCase.personalizationContext.name,
+        voicePreset: benchmarkCase.preset,
+        hasCandidateContext: false,
+      }).content,
+    ).toContain(bodyParts.proofBlock);
+    expect(() =>
+      finalizePremiumCoverLetterPayloadForPersistence({
+        payload: generation,
+        format: "cover_letter",
+        outputLanguage: "French",
+        candidateName: benchmarkCase.personalizationContext.name,
+        voicePreset: benchmarkCase.preset,
+        hasCandidateContext: productionInputs.hasCandidateContext,
+      }),
+    ).toThrow(
+      /candidate-backed evidence|Cleanup removed all substantive body/iu,
+    );
+
+    const evaluateLetter = vi.fn().mockResolvedValue(successfulEvaluation);
+    const record = await benchmarkCoverLetterCase({
+      benchmarkCase,
+      writerModel: "gpt-5.5",
+      evaluatorModel: "gpt-5-mini",
+      apiKey: "unused-in-replay",
+      productionInputs,
+      generateLetter: vi.fn().mockResolvedValue(generation),
+      evaluateLetter,
+    });
+
+    expect(evaluateLetter).not.toHaveBeenCalled();
+    expect(record).toMatchObject({
+      status: "finalization_failed",
+      artifact: {
+        decision: "rejected",
+        frozenConfig: { hasCandidateContext: true },
+      },
+    });
+  });
+
+  it("fails closed before default live callbacks when no budget is supplied", async () => {
+    const benchmarkCase = coverLetterBenchmarkCases[0]!;
+    await expect(
+      benchmarkCoverLetterCase({
+        benchmarkCase,
+        writerModel: "gpt-5.5",
+        evaluatorModel: "gpt-5-mini",
+        apiKey: "must-not-be-used",
+      }),
+    ).rejects.toThrow(/explicit evaluation budget/iu);
+  });
+
+  it("evaluates the production-finalized artifact instead of the pre-finalized generation", async () => {
+    const benchmarkCase = coverLetterBenchmarkCases.find(
+      (item) => item.id === "clean-engaging-direct",
+    )!;
+    const recordedGeneration = {
+      content: [
+        "Dear Hiring Manager,",
+        "",
+        "I improved 90-day retention by 18% by redesigning onboarding checkpoints and escalation triggers.",
+        "",
+        "I also managed more than 40 enterprise accounts and led quarterly business reviews.",
+        "",
+        "That combination would support a customer success team focused on account health, onboarding, and retention.",
+        "",
+        "I would be glad to discuss the position further.",
+        "",
+        "Sincerely,",
+      ].join("\n"),
+      sections: [] as Array<{ type: "text"; content: string }>,
+      prompt: "recorded prompt",
+      brief: {
+        language: "English",
+        preset: benchmarkCase.preset,
+        contextClass: benchmarkCase.expectedContextClass,
+        targetRole: benchmarkCase.jobTitle,
+        topEvidence: [
+          "Improved 90-day retention by 18% by redesigning onboarding checkpoints and escalation triggers.",
+        ],
+        supportEvidence: [
+          "Managed a portfolio of 40+ enterprise accounts with quarterly business reviews.",
+        ],
+        requiredMoves: [],
+        forbiddenMoves: [],
+      },
+      contextClass: benchmarkCase.expectedContextClass,
+      bodyParts: {
+        opening:
+          "I improved 90-day retention by 18% by redesigning onboarding checkpoints and escalation triggers.",
+        proofBlock:
+          "I also managed more than 40 enterprise accounts and led quarterly business reviews.",
+        employerValueBlock:
+          "That combination would support a customer success team focused on account health, onboarding, and retention.",
+        closeLine: "I can bring that same discipline to the team.",
+      },
+      mode: "direct",
+      evidenceUsed: [
+        "Improved 90-day retention by 18% by redesigning onboarding checkpoints and escalation triggers.",
+      ],
+      omittedWeakEvidence: [],
+      qualityShadow: {
+        passed: true,
+        score: 100,
+        issues: [],
+      },
+    } satisfies PremiumCoverLetterAttemptResult;
+    const expectedProductionArtifact =
+      finalizePremiumCoverLetterPayloadForPersistence({
+        payload: recordedGeneration,
+        format: "cover_letter",
+        outputLanguage: "English",
+        candidateName: benchmarkCase.personalizationContext.name,
+        voicePreset: benchmarkCase.preset,
+        hasCandidateContext: true,
+      });
+    expect(expectedProductionArtifact.content).not.toBe(
+      recordedGeneration.content,
+    );
+
+    const evaluateLetter = vi.fn().mockResolvedValue(successfulEvaluation);
+    const record = await benchmarkCoverLetterCase({
+      benchmarkCase,
+      writerModel: "gpt-5.5",
+      evaluatorModel: "gpt-5-mini",
+      apiKey: "unused-in-replay",
+      generateLetter: vi.fn().mockResolvedValue(recordedGeneration),
+      evaluateLetter,
+    });
+
+    expect(evaluateLetter).toHaveBeenCalledWith({
+      letter: expectedProductionArtifact.content,
+      apiKey: "unused-in-replay",
+      model: "gpt-5-mini",
+    });
+    expect(record).toMatchObject({
+      status: "ok",
+      letter: expectedProductionArtifact.content,
+      generation: {
+        content: expectedProductionArtifact.content,
+        sections: expectedProductionArtifact.sections,
+        qualityShadow: expectedProductionArtifact.qualityShadow,
+      },
+    });
+  });
+
   it("benchmarks one case with a per-run writer model and returns a typed success record", async () => {
     const benchmarkCase = coverLetterBenchmarkCases[0]!;
-    const generateLetter = vi.fn().mockResolvedValue({
-      content:
-        "Dear Hiring Manager,\n\nI reduced overnight response times by 22% by tightening shift handoffs and escalation workflows.\n\nSincerely,\nDaniel Ruiz",
+    const generated = {
+      content: [
+        "Dear Hiring Manager,",
+        "",
+        "I reduced overnight response times by 22% by tightening shift handoffs and escalation workflows.",
+        "",
+        "I coordinated daily incident reporting, patrol coverage, and access control across a 320-room hotel.",
+        "",
+        "That combination would support hotel security operations that depend on clear escalation and dependable patrol coverage.",
+        "",
+        "I would bring the same reporting discipline and response focus to the team.",
+        "",
+        "Sincerely,",
+        "Daniel Ruiz",
+      ].join("\n"),
       sections: [],
       prompt: "prompt",
       brief: {
@@ -74,10 +336,14 @@ describe("benchmark-cover-letter-writers", () => {
       },
       contextClass: benchmarkCase.expectedContextClass,
       bodyParts: {
-        opening: "Opening.",
-        proofBlock: "Proof.",
-        employerValueBlock: "Employer value.",
-        closeLine: "Close.",
+        opening:
+          "I reduced overnight response times by 22% by tightening shift handoffs and escalation workflows.",
+        proofBlock:
+          "I coordinated daily incident reporting, patrol coverage, and access control across a 320-room hotel.",
+        employerValueBlock:
+          "That combination would support hotel security operations that depend on clear escalation and dependable patrol coverage.",
+        closeLine:
+          "I would bring the same reporting discipline and response focus to the team.",
       },
       mode: "direct",
       evidenceUsed: [
@@ -89,7 +355,17 @@ describe("benchmark-cover-letter-writers", () => {
         score: 4,
         issues: ["weak_employer_argument"],
       },
-    });
+    } satisfies PremiumCoverLetterAttemptResult;
+    const expectedProductionArtifact =
+      finalizePremiumCoverLetterPayloadForPersistence({
+        payload: generated,
+        format: "cover_letter",
+        outputLanguage: "English",
+        candidateName: benchmarkCase.personalizationContext.name,
+        voicePreset: benchmarkCase.preset,
+        hasCandidateContext: true,
+      });
+    const generateLetter = vi.fn().mockResolvedValue(generated);
     const evaluateLetter = vi.fn().mockResolvedValue(successfulEvaluation);
 
     const record = await benchmarkCoverLetterCase({
@@ -109,8 +385,7 @@ describe("benchmark-cover-letter-writers", () => {
       }),
     );
     expect(evaluateLetter).toHaveBeenCalledWith({
-      letter:
-        "Dear Hiring Manager,\n\nI reduced overnight response times by 22% by tightening shift handoffs and escalation workflows.\n\nSincerely,\nDaniel Ruiz",
+      letter: expectedProductionArtifact.content,
       apiKey: "sk-openai",
       model: "gpt-5-mini",
     });
@@ -132,17 +407,13 @@ describe("benchmark-cover-letter-writers", () => {
           attemptedPath: "premium path saved",
           premium_path_saved: true,
           premium_validation_passed: true,
-          premium_quality_shadow_passed: false,
+          premium_quality_shadow_passed:
+            expectedProductionArtifact.qualityShadow?.passed,
         },
-        qualityShadow: {
-          passed: false,
-          score: 4,
-          issues: ["weak_employer_argument"],
-        },
+        qualityShadow: expectedProductionArtifact.qualityShadow,
       },
       manualReview: emptyManualReview,
-      letter:
-        "Dear Hiring Manager,\n\nI reduced overnight response times by 22% by tightening shift handoffs and escalation workflows.\n\nSincerely,\nDaniel Ruiz",
+      letter: expectedProductionArtifact.content,
     });
   });
 
@@ -150,9 +421,21 @@ describe("benchmark-cover-letter-writers", () => {
     const benchmarkCase = coverLetterBenchmarkCases.find(
       (item) => item.id === "security-securitas-adt-copwatch",
     )!;
-    const generateLetter = vi.fn().mockResolvedValue({
-      content:
-        "Dear Hiring Manager,\n\nI completed reports by recording observations and surveillance activities.\n\nSincerely,\nRobert Cooper",
+    const generated = {
+      content: [
+        "Dear Hiring Manager,",
+        "",
+        "At ADT Security, I completed reports by recording information, observations, occurrences, and surveillance activities.",
+        "",
+        "I maintained environments by monitoring grounds and equipment controls, and at Copwatch I monitored selected areas through a CCTV app on smart devices.",
+        "",
+        "This reporting and monitoring background offers relevant preparation for structured patrols, access control, and clear escalation.",
+        "",
+        "I would bring the same careful reporting and site awareness to the officer team.",
+        "",
+        "Sincerely,",
+        "Robert Cooper",
+      ].join("\n"),
       sections: [],
       prompt: "prompt",
       brief: {
@@ -169,10 +452,14 @@ describe("benchmark-cover-letter-writers", () => {
       },
       contextClass: benchmarkCase.expectedContextClass,
       bodyParts: {
-        opening: "Opening.",
-        proofBlock: "Proof.",
-        employerValueBlock: "Employer value.",
-        closeLine: "Close.",
+        opening:
+          "At ADT Security, I completed reports by recording information, observations, occurrences, and surveillance activities.",
+        proofBlock:
+          "I maintained environments by monitoring grounds and equipment controls, and at Copwatch I monitored selected areas through a CCTV app on smart devices.",
+        employerValueBlock:
+          "This reporting and monitoring background offers relevant preparation for structured patrols, access control, and clear escalation.",
+        closeLine:
+          "I would bring the same careful reporting and site awareness to the officer team.",
       },
       mode: "transfer",
       evidenceUsed: [
@@ -184,7 +471,17 @@ describe("benchmark-cover-letter-writers", () => {
         score: 6,
         issues: [],
       },
-    });
+    } satisfies PremiumCoverLetterAttemptResult;
+    const expectedProductionArtifact =
+      finalizePremiumCoverLetterPayloadForPersistence({
+        payload: generated,
+        format: "cover_letter",
+        outputLanguage: "English",
+        candidateName: benchmarkCase.personalizationContext.name,
+        voicePreset: benchmarkCase.preset,
+        hasCandidateContext: true,
+      });
+    const generateLetter = vi.fn().mockResolvedValue(generated);
     const evaluateLetter = vi.fn().mockResolvedValue(successfulEvaluation);
 
     const record = await benchmarkCoverLetterCase({
@@ -205,8 +502,7 @@ describe("benchmark-cover-letter-writers", () => {
       }),
     );
     expect(evaluateLetter).toHaveBeenCalledWith({
-      letter:
-        "Dear Hiring Manager,\n\nI completed reports by recording observations and surveillance activities.\n\nSincerely,\nRobert Cooper",
+      letter: expectedProductionArtifact.content,
       apiKey: "sk-openai",
       model: "gpt-5-mini",
     });
@@ -218,7 +514,8 @@ describe("benchmark-cover-letter-writers", () => {
         telemetry: {
           premium_path_saved: true,
           premium_validation_passed: true,
-          premium_quality_shadow_passed: true,
+          premium_quality_shadow_passed:
+            expectedProductionArtifact.qualityShadow?.passed,
         },
       },
       evaluation: {
@@ -229,69 +526,136 @@ describe("benchmark-cover-letter-writers", () => {
     });
   });
 
-  it("accepts Mistral body-parts output when it is wrapped in premium writer JSON", () => {
-    expect(
-      parsePremiumBodyPartsJson(
-        JSON.stringify({
-          version: "premium_writer_output_v1",
-          bodyParts: {
-            opening: "Opening.",
-            proofBlock: "Proof.",
-            employerValueBlock: "Employer value.",
-            closeLine: "Close.",
+  it("keeps recorded fixtures synthetic, strict, and free of raw provider envelopes", () => {
+    const knownCaseIds = new Set(
+      coverLetterBenchmarkCases.map((item) => item.id),
+    );
+    const serializedFixtures = JSON.stringify(
+      RECORDED_COVER_LETTER_REPLAY_FIXTURES,
+    );
+
+    for (const fixture of RECORDED_COVER_LETTER_REPLAY_FIXTURES) {
+      expect(recordedCoverLetterReplayFixtureSchema.parse(fixture)).toEqual(
+        fixture,
+      );
+      expect(fixture.fixtureDataClass).toBe("synthetic");
+      expect(fixture.fixtureProvenance).toBe("authored_synthetic_case_v1");
+      expect(knownCaseIds.has(fixture.sourceCaseId)).toBe(true);
+    }
+    expect(serializedFixtures).not.toMatch(
+      /"(?:prompt|rawCv|rawJob|headers|authorization|apiKey|requestId|sessionId|rawResponse)"\s*:/i,
+    );
+    expect(serializedFixtures).not.toMatch(/Bearer\s+|\bsk-[A-Za-z0-9_-]+/i);
+    expect(serializedFixtures).not.toMatch(/ADT Security|Copwatch|Securitas/i);
+
+    expect(() =>
+      recordedCoverLetterReplayFixtureSchema.parse({
+        ...RECORDED_COVER_LETTER_REPLAY_FIXTURES[0],
+        rawResponse: { providerEnvelope: true },
+      }),
+    ).toThrow();
+  });
+
+  it("keeps the replay fixture contract open to all 14 configured languages", () => {
+    const fixture = RECORDED_COVER_LETTER_REPLAY_FIXTURES[0]!;
+    expect(PROPOSAL_OUTPUT_LANGUAGES).toHaveLength(14);
+    for (const outputLanguage of PROPOSAL_OUTPUT_LANGUAGES) {
+      expect(() =>
+        recordedCoverLetterReplayFixtureSchema.parse({
+          ...fixture,
+          frozenConfig: {
+            ...fixture.frozenConfig,
+            outputLanguage,
           },
         }),
-      ),
-    ).toEqual({
-      opening: "Opening.",
-      proofBlock: "Proof.",
-      employerValueBlock: "Employer value.",
-      closeLine: "Close.",
+      ).not.toThrow();
+    }
+  });
+
+  it("replays OpenAI and Mistral fixtures through final production preparation without provider calls", async () => {
+    vi.stubEnv("PROPOSAL_GENERATION_QUALITY_MODE", "baseline");
+    vi.stubEnv("cover_letter_premium_prompt_v2", "");
+    vi.stubEnv("COVER_LETTER_PREMIUM_PROMPT_V2", "");
+    vi.stubEnv("ENABLE_COVER_LETTER_PREMIUM_PROMPT_V2", "");
+    vi.stubEnv("ENABLE_COVER_LETTER_QUALITY_REPAIR_V1", "");
+    vi.stubEnv("OPENAI_API_KEY", "must-not-be-used");
+    vi.stubEnv("MISTRAL_API_KEY", "must-not-be-used");
+    const fetchSpy = vi.fn(() => {
+      throw new Error("network access is forbidden during replay");
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const first = await replayRecordedCoverLetterFixtures();
+    const second = await replayRecordedCoverLetterFixtures();
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(first).toEqual(second);
+    expect(first).toHaveLength(2);
+    expect(first.map((result) => result.writerCallCount)).toEqual([1, 1]);
+    for (const result of first) {
+      const fixture = RECORDED_COVER_LETTER_REPLAY_FIXTURES.find(
+        (item) => item.id === result.fixtureId,
+      )!;
+      expect(result.artifact).toMatchObject({
+        decision: "accepted",
+        finalContent: expect.any(String),
+        artifactHash: fixture.expectedArtifactHash,
+        provenanceHash: fixture.expectedProvenanceHash,
+      });
+      expect(result.artifact.sections).toEqual([
+        { type: "text", content: result.artifact.finalContent },
+      ]);
+    }
+
+    const mistral = first.find(
+      (result) => result.writerProvider === "mistral",
+    )!;
+    expect(mistral.artifact.provenance).toMatchObject({
+      origin: "provider_reported",
+      status: "validated_after_structured_repair",
+      sections: {
+        opening: {
+          claimIds: ["claim_opening_001"],
+          factIds: ["fact_experience_001_highlight_003"],
+        },
+        employerValueBlock: {
+          demandIds: ["demand_core_001"],
+        },
+      },
     });
   });
 
-  it("accepts Mistral premium writer output with rich body-part provenance", () => {
+  it("defaults the CLI to replay and refuses unbudgeted live execution", () => {
+    const replay = parseCoverLetterBenchmarkCliOptions([], "0");
+    expect(replay.live).toBe(false);
+    expect(() => createCoverLetterEvalLiveBudget(replay)).toThrow(/requires/u);
+
+    const unbudgetedLive = parseCoverLetterBenchmarkCliOptions(["--live"], "0");
+    expect(unbudgetedLive.live).toBe(true);
+    expect(() => createCoverLetterEvalLiveBudget(unbudgetedLive)).toThrow(
+      /explicit budgets/u,
+    );
+
+    const budgetedLive = parseCoverLetterBenchmarkCliOptions(
+      [
+        "--live",
+        "--max-calls=2",
+        "--max-repairs=0",
+        "--max-usd=0.2",
+        "--max-usd-per-call=0.1",
+      ],
+      "0",
+    );
     expect(
-      parsePremiumBodyPartsJson(
-        JSON.stringify({
-          version: "premium_writer_output_v1",
-          bodyParts: {
-            opening: {
-              section: "opening",
-              text: "Opening.",
-              claimIds: ["claim_1"],
-              factIds: ["fact_1"],
-              demandIds: [],
-            },
-            proofBlock: {
-              section: "proofBlock",
-              text: "Proof.",
-              claimIds: ["claim_2"],
-              factIds: ["fact_2"],
-              demandIds: [],
-            },
-            employerValueBlock: {
-              section: "employerValueBlock",
-              text: "Employer value.",
-              claimIds: ["claim_3"],
-              factIds: ["fact_3"],
-              demandIds: ["demand_1"],
-            },
-            closeLine: {
-              section: "closeLine",
-              text: "Close.",
-              claimIds: ["claim_4"],
-              factIds: [],
-              demandIds: [],
-            },
-          },
-        }),
-      ),
-    ).toEqual({
-      opening: "Opening.",
-      proofBlock: "Proof.",
-      employerValueBlock: "Employer value.",
-      closeLine: "Close.",
+      createCoverLetterEvalLiveBudget(budgetedLive).snapshot(),
+    ).toMatchObject({
+      liveProviderCallsEnabled: true,
+      limits: {
+        maxCalls: 2,
+        maxRepairs: 0,
+        maxUsd: 0.2,
+        declaredMaxUsdPerCall: 0.1,
+      },
     });
   });
 
@@ -305,6 +669,7 @@ describe("benchmark-cover-letter-writers", () => {
         outputLanguage: "English",
         expectedContextClass: "cv_direct",
         generation: {} as any,
+        artifact: {} as any,
         evaluation: successfulEvaluation,
         diagnostics: {
           provider: "openai",
@@ -333,6 +698,7 @@ describe("benchmark-cover-letter-writers", () => {
         outputLanguage: "English",
         expectedContextClass: "cv_adjacent",
         generation: {} as any,
+        artifact: {} as any,
         evaluation: {
           ...successfulEvaluation,
           globalScore: 3,
@@ -459,6 +825,7 @@ describe("benchmark-cover-letter-writers", () => {
       evaluatorModel: "gpt-5-mini",
       apiKey: "sk-openai",
       generateLetter,
+      evaluateLetter: vi.fn(),
     });
 
     expect(record).toMatchObject({

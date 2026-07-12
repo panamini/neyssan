@@ -1958,6 +1958,14 @@ describe("premium cover letter prompt contract", () => {
         },
       },
     });
+
+    expect(
+      buildPremiumCoverLetterOpenAIRequest({
+        prompt: "Structured brief: {}",
+        writerModel: "gpt-5.4",
+        maxOutputTokens: 2048,
+      }),
+    ).toMatchObject({ max_output_tokens: 2048 });
   });
 
   it("prefers parsed structured payloads from the Responses API envelope", () => {
