@@ -68,7 +68,16 @@ export interface ILLMConfig {
 export function resolveOpenAIProposalReasoningEffort(
   value = process.env.OPENAI_PROPOSAL_REASONING_EFFORT,
 ): OpenAIProposalReasoningEffort {
-  return (value as OpenAIProposalReasoningEffort | undefined) ?? "low";
+  const normalizedValue = value?.trim().toLowerCase();
+  switch (normalizedValue) {
+    case "minimal":
+    case "low":
+    case "medium":
+    case "high":
+      return normalizedValue;
+    default:
+      return "low";
+  }
 }
 
 const mistralSmallFallbackModel =

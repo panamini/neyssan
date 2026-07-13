@@ -1,18 +1,32 @@
 import { z } from "zod";
 
-import { PREMIUM_WRITER_OUTPUT_V1_SCHEMA } from "../../../../convex/lib/proposals/premiumCoverLetter";
+import {
+  PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA,
+  PREMIUM_WRITER_OUTPUT_V1_SCHEMA,
+} from "../../../../convex/lib/proposals/premiumCoverLetter";
 import { PROPOSAL_OUTPUT_LANGUAGES } from "../../../../convex/lib/proposals/proposalOutput";
 
 export const COVER_LETTER_REPLAY_FIXTURE_VERSION =
   "cover_letter_replay_fixture_v1" as const;
 
-const recordedWriterResponseSchema = z
-  .object({
-    schemaId: z.literal("premium_writer_output_v1"),
-    expectedWriterPromptHash: z.string().regex(/^[a-f0-9]{64}$/u),
-    payload: PREMIUM_WRITER_OUTPUT_V1_SCHEMA,
-  })
-  .strict();
+const recordedWriterPromptHashSchema = z.string().regex(/^[a-f0-9]{64}$/u);
+
+const recordedWriterResponseSchema = z.discriminatedUnion("schemaId", [
+  z
+    .object({
+      schemaId: z.literal("premium_writer_output_v1"),
+      expectedWriterPromptHash: recordedWriterPromptHashSchema,
+      payload: PREMIUM_WRITER_OUTPUT_V1_SCHEMA,
+    })
+    .strict(),
+  z
+    .object({
+      schemaId: z.literal("premium_cover_letter_body_parts"),
+      expectedWriterPromptHash: recordedWriterPromptHashSchema,
+      payload: PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA,
+    })
+    .strict(),
+]);
 
 export const recordedCoverLetterReplayFixtureSchema = z
   .object({

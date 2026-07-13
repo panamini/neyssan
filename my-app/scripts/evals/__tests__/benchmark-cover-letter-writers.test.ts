@@ -106,6 +106,25 @@ describe("benchmark-cover-letter-writers", () => {
     ).rejects.toThrow(/configuration drift: openAIWriterReasoningEffort/iu);
   });
 
+  it("normalizes invalid late reasoning effort before freezing replay config", async () => {
+    vi.stubEnv("PROPOSAL_GENERATION_QUALITY_MODE", "baseline");
+    vi.stubEnv("cover_letter_premium_prompt_v2", "");
+    vi.stubEnv("COVER_LETTER_PREMIUM_PROMPT_V2", "");
+    vi.stubEnv("ENABLE_COVER_LETTER_PREMIUM_PROMPT_V2", "");
+    vi.stubEnv("ENABLE_COVER_LETTER_QUALITY_REPAIR_V1", "");
+    vi.stubEnv("OPENAI_PROPOSAL_REASONING_EFFORT", "not-supported");
+
+    await expect(
+      replayRecordedCoverLetterFixture(
+        RECORDED_COVER_LETTER_REPLAY_FIXTURES[0]!,
+      ),
+    ).resolves.toMatchObject({
+      artifact: {
+        frozenConfig: { reasoningEffort: "low" },
+      },
+    });
+  });
+
   it("mirrors the provider-specific production cancellation contract", () => {
     const configuredSignal = new AbortController().signal;
     const callbackSignal = new AbortController().signal;
@@ -745,6 +764,73 @@ describe("benchmark-cover-letter-writers", () => {
     expect(result?.artifact.configVersions.writerSchema).toBe(
       "premium_writer_output_v1:premium_cover_letter_body_parts",
     );
+  });
+
+  it("replays recorded body-parts responses for model-assisted repair", async () => {
+    vi.stubEnv("PROPOSAL_GENERATION_QUALITY_MODE", "baseline");
+    vi.stubEnv("cover_letter_premium_prompt_v2", "");
+    vi.stubEnv("COVER_LETTER_PREMIUM_PROMPT_V2", "");
+    vi.stubEnv("ENABLE_COVER_LETTER_PREMIUM_PROMPT_V2", "");
+    vi.stubEnv("ENABLE_COVER_LETTER_QUALITY_REPAIR_V1", "");
+    vi.stubEnv("OPENAI_PROPOSAL_REASONING_EFFORT", "low");
+    vi.stubEnv("OPENAI_API_KEY", "must-not-be-used");
+    vi.stubEnv("MISTRAL_API_KEY", "must-not-be-used");
+    const fetchSpy = vi.fn(() => {
+      throw new Error("network access is forbidden during replay");
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const fixture = RECORDED_COVER_LETTER_REPLAY_FIXTURES[1]!;
+    const firstResponse = fixture.responses[0]!;
+    if (firstResponse.schemaId !== "premium_writer_output_v1") {
+      throw new Error("The repair replay fixture requires a writer response.");
+    }
+    const parsed = recordedCoverLetterReplayFixtureSchema.parse({
+      ...fixture,
+      id: "mistral-adjacent-repair-v1",
+      expectedArtifactHash: fixture.expectedArtifactHash,
+      expectedProvenanceHash: fixture.expectedProvenanceHash,
+      responses: [
+        {
+          ...firstResponse,
+          payload: {
+            ...firstResponse.payload,
+            bodyParts: {
+              ...firstResponse.payload.bodyParts,
+              opening: {
+                ...firstResponse.payload.bodyParts.opening,
+                text: "I have experience as an Implementation Analyst in cross-functional delivery environments.",
+              },
+            },
+          },
+        },
+        {
+          schemaId: "premium_cover_letter_body_parts",
+          expectedWriterPromptHash:
+            "33ec731f435a934272522d17d6a83792c60bdd19da29790bde14622dc2765ea7",
+          payload: {
+            opening: firstResponse.payload.bodyParts.opening.text,
+            proofBlock: firstResponse.payload.bodyParts.proofBlock.text,
+            employerValueBlock:
+              firstResponse.payload.bodyParts.employerValueBlock.text,
+            closeLine: firstResponse.payload.bodyParts.closeLine.text,
+          },
+        },
+      ],
+    });
+
+    const result = await replayRecordedCoverLetterFixture(parsed);
+    expect(result.writerCallCount).toBe(2);
+    expect(result.artifact).toMatchObject({
+      decision: "accepted",
+      artifactHash: fixture.expectedArtifactHash,
+      provenanceHash: fixture.expectedProvenanceHash,
+      provenance: {
+        origin: "provider_reported",
+        status: "validated_after_structured_repair",
+      },
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("rejects recorded responses when the production writer prompt drifts", async () => {
