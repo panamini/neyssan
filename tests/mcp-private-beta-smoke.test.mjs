@@ -8,6 +8,28 @@ import test from "node:test";
 import { runMcpPrivateBetaSmoke } from "../scripts/mcp-private-beta-smoke.mjs";
 
 const RUN_SH = new URL("../run.sh", import.meta.url);
+const ACTIVE_PROTOCOL_VERSION = "2025-11-25";
+const CLIENT_PROTOCOL_OFFERS = Object.freeze(["2025-06-18", ACTIVE_PROTOCOL_VERSION]);
+const EXPECTED_TOOL_NAMES = Object.freeze([
+  "search",
+  "fetch",
+  "twoweeks.application_package.summarize",
+  "twoweeks.evidence_graph.summarize",
+  "twoweeks.resume_variant_plan.summarize",
+  "twoweeks.review_cockpit.summarize",
+]);
+const READ_ONLY_ANNOTATIONS = Object.freeze({
+  readOnlyHint: true,
+  destructiveHint: false,
+  openWorldHint: false,
+});
+
+function toolDescriptors({ names = EXPECTED_TOOL_NAMES, annotationOverrides = {} } = {}) {
+  return names.map((name) => ({
+    name,
+    annotations: annotationOverrides[name] ?? READ_ONLY_ANNOTATIONS,
+  }));
+}
 
 async function startFixture(t, override = {}) {
   const requests = [];
@@ -16,9 +38,18 @@ async function startFixture(t, override = {}) {
     for await (const chunk of request) body += chunk;
     requests.push({ body, headers: request.headers, method: request.method, url: request.url });
     const origin = `http://127.0.0.1:${server.address().port}`;
-    const configuredRoute = override[request.url] ?? override.default;
+    let mcpMessage;
+    if (request.url === "/mcp") {
+      try {
+        mcpMessage = JSON.parse(body);
+      } catch {
+        mcpMessage = undefined;
+      }
+    }
+    const routeKey = mcpMessage?.method ? `${request.url}:${mcpMessage.method}` : request.url;
+    const configuredRoute = override[routeKey] ?? override[request.url] ?? override.default;
     const route = typeof configuredRoute === "function"
-      ? configuredRoute({ body, method: request.method, origin, url: request.url })
+      ? configuredRoute({ body, headers: request.headers, message: mcpMessage, method: request.method, origin, url: request.url })
       : configuredRoute;
     if (route) {
       response.writeHead(route.status, route.headers ?? { "content-type": "application/json" });
@@ -55,19 +86,28 @@ async function startFixture(t, override = {}) {
       return;
     }
     if (request.url === "/mcp") {
-      const message = JSON.parse(body);
+      const message = mcpMessage ?? JSON.parse(body);
       if (message.method === "initialize") {
         response.writeHead(200, { "content-type": "application/json" });
         response.end(JSON.stringify({
           jsonrpc: "2.0",
           id: message.id,
-          result: { protocolVersion: "2025-11-25" },
+          result: { protocolVersion: ACTIVE_PROTOCOL_VERSION },
         }));
         return;
       }
       if (message.method === "notifications/initialized") {
         response.writeHead(202);
         response.end();
+        return;
+      }
+      if (message.method === "tools/list") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({
+          jsonrpc: "2.0",
+          id: message.id,
+          result: { tools: toolDescriptors() },
+        }));
         return;
       }
       const challenge = `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource/mcp", error="invalid_token", error_description="Access token required.", scope="twoweeks:applications:read"`;
@@ -99,9 +139,9 @@ test("smoke validates the public no-credential contract without sending sensitiv
   const output = [];
   await runMcpPrivateBetaSmoke({ origin: fixture.origin, log: (message) => output.push(message) });
 
-  assert.equal(output.length, 7);
+  assert.equal(output.length, 11);
   assert.match(output.at(-1), /no credentials or private data sent/u);
-  assert.equal(fixture.requests.length, 6);
+  assert.equal(fixture.requests.length, 10);
   assert.deepEqual(
     fixture.requests.map((request) => request.url),
     [
@@ -110,22 +150,44 @@ test("smoke validates the public no-credential contract without sending sensitiv
       "/mcp",
       "/mcp",
       "/mcp",
+      "/mcp",
+      "/mcp",
+      "/mcp",
+      "/mcp",
       "/oauth/token",
     ],
   );
   assert.equal(fixture.requests.find((request) => request.url === "/oauth/token").body, "grant_type=authorization_code");
-  const initialize = JSON.parse(fixture.requests.find((request) => request.url === "/mcp").body);
-  assert.deepEqual(initialize.params, {
-    protocolVersion: "2025-11-25",
-    capabilities: {},
-    clientInfo: { name: "twoweeks-mcp-private-beta-smoke", version: "1.0.0" },
-  });
-  const initialized = fixture.requests
-    .filter((request) => request.url === "/mcp")
+  const mcpRequests = fixture.requests.filter((request) => request.url === "/mcp");
+  assert.deepEqual(
+    mcpRequests.map((request) => [JSON.parse(request.body).method, request.headers["mcp-protocol-version"]]),
+    [
+      ["initialize", "2025-06-18"],
+      ["notifications/initialized", ACTIVE_PROTOCOL_VERSION],
+      ["tools/list", ACTIVE_PROTOCOL_VERSION],
+      ["initialize", "2025-11-25"],
+      ["notifications/initialized", ACTIVE_PROTOCOL_VERSION],
+      ["tools/list", ACTIVE_PROTOCOL_VERSION],
+      ["tools/call", ACTIVE_PROTOCOL_VERSION],
+    ],
+  );
+  assert.deepEqual(
+    mcpRequests
+      .map((request) => JSON.parse(request.body))
+      .filter((message) => message.method === "initialize")
+      .map((message) => message.params),
+    CLIENT_PROTOCOL_OFFERS.map((protocolVersion) => ({
+      protocolVersion,
+      capabilities: {},
+      clientInfo: { name: "twoweeks-mcp-private-beta-smoke", version: "1.0.0" },
+    })),
+  );
+  for (const initialized of mcpRequests
     .map((request) => JSON.parse(request.body))
-    .find((message) => message.method === "notifications/initialized");
-  assert.equal("id" in initialized, false);
-  for (const request of fixture.requests.filter((request) => request.url === "/mcp")) {
+    .filter((message) => message.method === "notifications/initialized")) {
+    assert.equal("id" in initialized, false);
+  }
+  for (const request of mcpRequests) {
     assert.equal(request.headers.accept, "application/json, text/event-stream");
   }
   for (const request of fixture.requests) {
@@ -200,22 +262,10 @@ test("smoke rejects broader protected-resource scopes", async (t) => {
 
 test("smoke rejects incomplete Bearer challenges", async (t) => {
   const fixture = await startFixture(t, {
-    "/mcp": ({ body }) => {
-      const message = JSON.parse(body);
-      if (message.method === "initialize") {
-        return {
-          status: 200,
-          body: { jsonrpc: "2.0", id: message.id, result: { protocolVersion: "2025-11-25" } },
-        };
-      }
-      if (message.method === "notifications/initialized") {
-        return { status: 202, headers: {}, rawBody: "" };
-      }
-      return {
-        status: 401,
-        headers: { "content-type": "application/json", "www-authenticate": "Bearer" },
-        body: { error: "invalid_token" },
-      };
+    "/mcp:tools/call": {
+      status: 401,
+      headers: { "content-type": "application/json", "www-authenticate": "Bearer" },
+      body: { error: "invalid_token" },
     },
   });
   await assert.rejects(
@@ -226,17 +276,7 @@ test("smoke rejects incomplete Bearer challenges", async (t) => {
 
 test("smoke rejects prefixed Bearer parameter names", async (t) => {
   const fixture = await startFixture(t, {
-    "/mcp": ({ body, origin }) => {
-      const message = JSON.parse(body);
-      if (message.method === "initialize") {
-        return {
-          status: 200,
-          body: { jsonrpc: "2.0", id: message.id, result: { protocolVersion: "2025-11-25" } },
-        };
-      }
-      if (message.method === "notifications/initialized") {
-        return { status: 202, headers: {}, rawBody: "" };
-      }
+    "/mcp:tools/call": ({ origin }) => {
       return {
         status: 401,
         headers: {
@@ -255,17 +295,7 @@ test("smoke rejects prefixed Bearer parameter names", async (t) => {
 
 test("smoke rejects a missing MCP auth metadata mirror", async (t) => {
   const fixture = await startFixture(t, {
-    "/mcp": ({ body, origin }) => {
-      const message = JSON.parse(body);
-      if (message.method === "initialize") {
-        return {
-          status: 200,
-          body: { jsonrpc: "2.0", id: message.id, result: { protocolVersion: "2025-11-25" } },
-        };
-      }
-      if (message.method === "notifications/initialized") {
-        return { status: 202, headers: {}, rawBody: "" };
-      }
+    "/mcp:tools/call": ({ origin }) => {
       return {
         status: 401,
         headers: {
@@ -284,17 +314,7 @@ test("smoke rejects a missing MCP auth metadata mirror", async (t) => {
 
 test("smoke rejects a missing Bearer error description", async (t) => {
   const fixture = await startFixture(t, {
-    "/mcp": ({ body, origin }) => {
-      const message = JSON.parse(body);
-      if (message.method === "initialize") {
-        return {
-          status: 200,
-          body: { jsonrpc: "2.0", id: message.id, result: { protocolVersion: "2025-11-25" } },
-        };
-      }
-      if (message.method === "notifications/initialized") {
-        return { status: 202, headers: {}, rawBody: "" };
-      }
+    "/mcp:tools/call": ({ origin }) => {
       const challenge = `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource/mcp", error="invalid_token", scope="twoweeks:applications:read"`;
       return {
         status: 401,
@@ -309,20 +329,78 @@ test("smoke rejects a missing Bearer error description", async (t) => {
   );
 });
 
-test("smoke rejects a mismatched negotiated MCP version", async (t) => {
-  const fixture = await startFixture(t, {
-    "/mcp": ({ body }) => {
-      const message = JSON.parse(body);
-      return {
-        status: 200,
-        body: { jsonrpc: "2.0", id: message.id, result: { protocolVersion: "2024-11-05" } },
-      };
-    },
-  });
-  await assert.rejects(
-    runMcpPrivateBetaSmoke({ origin: fixture.origin, log: () => {} }),
-    /must return an initialize result/u,
-  );
+test("smoke rejects an unsupported negotiated MCP version for either client offer", async (t) => {
+  for (const offeredProtocolVersion of CLIENT_PROTOCOL_OFFERS) {
+    await t.test(offeredProtocolVersion, async (t) => {
+      const fixture = await startFixture(t, {
+        "/mcp:initialize": ({ message }) => ({
+          status: 200,
+          body: {
+            jsonrpc: "2.0",
+            id: message.id,
+            result: {
+              protocolVersion: message.params.protocolVersion === offeredProtocolVersion
+                ? "2024-11-05"
+                : ACTIVE_PROTOCOL_VERSION,
+            },
+          },
+        }),
+      });
+      await assert.rejects(
+        runMcpPrivateBetaSmoke({ origin: fixture.origin, log: () => {} }),
+        /must return an initialize result/u,
+      );
+    });
+  }
+});
+
+test("smoke rejects any drift from the exact six-tool inventory", async (t) => {
+  const inventoryCases = [
+    ["missing", EXPECTED_TOOL_NAMES.slice(0, -1)],
+    ["extra", [...EXPECTED_TOOL_NAMES, "twoweeks.unapproved.summarize"]],
+    ["reordered", [...EXPECTED_TOOL_NAMES].reverse()],
+  ];
+  for (const [label, names] of inventoryCases) {
+    await t.test(label, async (t) => {
+      const fixture = await startFixture(t, {
+        "/mcp:tools/list": ({ message }) => ({
+          status: 200,
+          body: { jsonrpc: "2.0", id: message.id, result: { tools: toolDescriptors({ names }) } },
+        }),
+      });
+      await assert.rejects(
+        runMcpPrivateBetaSmoke({ origin: fixture.origin, log: () => {} }),
+        /tool inventory does not match/u,
+      );
+    });
+  }
+});
+
+test("smoke rejects missing or unsafe read-only tool annotations", async (t) => {
+  const annotationCases = [
+    ["missing", undefined],
+    ["readOnlyHint", { ...READ_ONLY_ANNOTATIONS, readOnlyHint: false }],
+    ["destructiveHint", { ...READ_ONLY_ANNOTATIONS, destructiveHint: true }],
+    ["openWorldHint", { ...READ_ONLY_ANNOTATIONS, openWorldHint: true }],
+  ];
+  for (const [label, annotations] of annotationCases) {
+    await t.test(label, async (t) => {
+      const tools = toolDescriptors();
+      tools[0] = annotations === undefined
+        ? { name: tools[0].name }
+        : { ...tools[0], annotations };
+      const fixture = await startFixture(t, {
+        "/mcp:tools/list": ({ message }) => ({
+          status: 200,
+          body: { jsonrpc: "2.0", id: message.id, result: { tools } },
+        }),
+      });
+      await assert.rejects(
+        runMcpPrivateBetaSmoke({ origin: fixture.origin, log: () => {} }),
+        /tool annotations do not match/u,
+      );
+    });
+  }
 });
 
 test("smoke rejects redirects without following them", async (t) => {

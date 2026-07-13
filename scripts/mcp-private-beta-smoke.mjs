@@ -5,6 +5,16 @@ import { pathToFileURL } from "node:url";
 const DEFAULT_ORIGIN = "https://mcp.twoweeks.ai";
 const EXPECTED_SCOPE = "twoweeks:applications:read";
 const MAX_JSON_BYTES = 64 * 1024;
+const ACTIVE_PROTOCOL_VERSION = "2025-11-25";
+const CLIENT_PROTOCOL_OFFERS = Object.freeze(["2025-06-18", ACTIVE_PROTOCOL_VERSION]);
+const EXPECTED_TOOL_NAMES = Object.freeze([
+  "search",
+  "fetch",
+  "twoweeks.application_package.summarize",
+  "twoweeks.evidence_graph.summarize",
+  "twoweeks.resume_variant_plan.summarize",
+  "twoweeks.review_cockpit.summarize",
+]);
 
 function fail(message) {
   throw new Error(message);
@@ -135,10 +145,10 @@ async function checkProtectedResourceMetadata(fetchImpl, canonicalOrigin, timeou
   log("[run] mcp-smoke: PASS protected-resource metadata");
 }
 
-function mcpRequest(method) {
+function mcpRequest(method, protocolVersion) {
   const params = method === "initialize"
     ? {
-        protocolVersion: "2025-11-25",
+        protocolVersion,
         capabilities: {},
         clientInfo: { name: "twoweeks-mcp-private-beta-smoke", version: "1.0.0" },
       }
@@ -151,10 +161,39 @@ function mcpRequest(method) {
     headers: {
       accept: "application/json, text/event-stream",
       "content-type": "application/json",
-      "mcp-protocol-version": "2025-11-25",
+      "mcp-protocol-version": protocolVersion,
     },
     body: JSON.stringify(message),
   };
+}
+
+function checkToolInventory(toolListResult) {
+  if (
+    toolListResult?.jsonrpc !== "2.0"
+    || toolListResult?.id !== "smoke"
+    || !Array.isArray(toolListResult?.result?.tools)
+  ) {
+    fail("unauthenticated MCP tools/list must return a result");
+  }
+  const tools = toolListResult.result.tools;
+  const names = tools.map((tool) => (
+    tool && typeof tool === "object" && !Array.isArray(tool) && typeof tool.name === "string"
+      ? tool.name
+      : undefined
+  ));
+  expectExactArray(names, EXPECTED_TOOL_NAMES, "MCP tool inventory");
+  for (const tool of tools) {
+    if (
+      !tool.annotations
+      || typeof tool.annotations !== "object"
+      || Array.isArray(tool.annotations)
+      || tool.annotations.readOnlyHint !== true
+      || tool.annotations.destructiveHint !== false
+      || tool.annotations.openWorldHint !== false
+    ) {
+      fail("MCP tool annotations do not match the private-beta contract");
+    }
+  }
 }
 
 function readBearerChallenge(response) {
@@ -171,34 +210,55 @@ function readBearerChallenge(response) {
   return { header: challenge, params };
 }
 
-async function checkMcpBoundary(fetchImpl, resource, timeoutMs, log) {
+async function checkMcpProtocolVersion(fetchImpl, resource, offeredProtocolVersion, timeoutMs, log) {
   const { response: discoveryResponse, json: discovery } = await requestJson(
     fetchImpl,
     resource,
-    mcpRequest("initialize"),
+    mcpRequest("initialize", offeredProtocolVersion),
     timeoutMs,
   );
   if (discoveryResponse.status !== 200) fail("unauthenticated MCP discovery must return 200");
-  if (discovery?.jsonrpc !== "2.0" || discovery?.id !== "smoke" || discovery?.result?.protocolVersion !== "2025-11-25") {
+  if (
+    discovery?.jsonrpc !== "2.0"
+    || discovery?.id !== "smoke"
+    || discovery?.result?.protocolVersion !== ACTIVE_PROTOCOL_VERSION
+  ) {
     fail("unauthenticated MCP discovery must return an initialize result");
   }
-  log("[run] mcp-smoke: PASS unauthenticated MCP discovery");
+  const negotiatedProtocolVersion = discovery.result.protocolVersion;
+  log(`[run] mcp-smoke: PASS MCP negotiation (${offeredProtocolVersion} -> ${negotiatedProtocolVersion})`);
 
   const initializedResponse = await requestEmpty(
     fetchImpl,
     resource,
-    mcpRequest("notifications/initialized"),
+    mcpRequest("notifications/initialized", negotiatedProtocolVersion),
     timeoutMs,
   );
   if (initializedResponse.status !== 202) {
     fail("MCP initialized notification must return an empty 202 response");
   }
-  log("[run] mcp-smoke: PASS MCP initialized notification");
+  log(`[run] mcp-smoke: PASS MCP initialized notification (${negotiatedProtocolVersion})`);
+
+  const { response: toolListResponse, json: toolListResult } = await requestJson(
+    fetchImpl,
+    resource,
+    mcpRequest("tools/list", negotiatedProtocolVersion),
+    timeoutMs,
+  );
+  if (toolListResponse.status !== 200) fail("unauthenticated MCP tools/list must return 200");
+  checkToolInventory(toolListResult);
+  log(`[run] mcp-smoke: PASS exact read-only MCP tool inventory (${negotiatedProtocolVersion})`);
+}
+
+async function checkMcpBoundary(fetchImpl, resource, timeoutMs, log) {
+  for (const offeredProtocolVersion of CLIENT_PROTOCOL_OFFERS) {
+    await checkMcpProtocolVersion(fetchImpl, resource, offeredProtocolVersion, timeoutMs, log);
+  }
 
   const { response: toolCallResponse, json: toolCallResult } = await requestJson(
     fetchImpl,
     resource,
-    mcpRequest("tools/call"),
+    mcpRequest("tools/call", ACTIVE_PROTOCOL_VERSION),
     timeoutMs,
   );
   if (toolCallResponse.status !== 401) fail("unauthenticated MCP tool calls must return 401");

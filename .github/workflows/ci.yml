@@ -18,6 +18,19 @@ jobs:
       - name: Run run.sh doctor regression suite
         run: node --test tests/run-sh-doctor.test.mjs
 
+  mcp-private-beta-smoke:
+    name: MCP private-beta offline smoke contract
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run offline MCP private-beta smoke contract
+        run: node --test tests/mcp-private-beta-smoke.test.mjs
+
   js-tests:
     runs-on: ubuntu-latest
     steps:
