@@ -7,6 +7,10 @@ const EXPECTED_SCOPE = "twoweeks:applications:read";
 const MAX_JSON_BYTES = 64 * 1024;
 const ACTIVE_PROTOCOL_VERSION = "2025-11-25";
 const CLIENT_PROTOCOL_OFFERS = Object.freeze(["2025-06-18", ACTIVE_PROTOCOL_VERSION]);
+const ACCEPTED_PROTOCOL_NEGOTIATIONS = Object.freeze({
+  "2025-06-18": Object.freeze(["2025-06-18", ACTIVE_PROTOCOL_VERSION]),
+  [ACTIVE_PROTOCOL_VERSION]: Object.freeze([ACTIVE_PROTOCOL_VERSION]),
+});
 const EXPECTED_TOOL_NAMES = Object.freeze([
   "search",
   "fetch",
@@ -112,10 +116,16 @@ function expectExactArray(value, expected, label) {
 function hasExpectedOAuthSecurityScheme(value) {
   if (!Array.isArray(value) || value.length !== 1) return false;
   const scheme = value[0];
+  const keys = scheme && typeof scheme === "object" && !Array.isArray(scheme)
+    ? Object.keys(scheme)
+    : [];
   return Boolean(
     scheme
     && typeof scheme === "object"
     && !Array.isArray(scheme)
+    && keys.length === 2
+    && keys.includes("type")
+    && keys.includes("scopes")
     && scheme.type === "oauth2"
     && Array.isArray(scheme.scopes)
     && scheme.scopes.length === 1
@@ -182,14 +192,19 @@ function mcpRequest(method, protocolVersion) {
 }
 
 function checkToolInventory(toolListResult) {
+  const result = toolListResult?.result;
   if (
     toolListResult?.jsonrpc !== "2.0"
     || toolListResult?.id !== "smoke"
-    || !Array.isArray(toolListResult?.result?.tools)
+    || !result
+    || typeof result !== "object"
+    || Array.isArray(result)
+    || !Array.isArray(result.tools)
+    || Object.hasOwn(result, "nextCursor")
   ) {
     fail("unauthenticated MCP tools/list must return a result");
   }
-  const tools = toolListResult.result.tools;
+  const tools = result.tools;
   const names = tools.map((tool) => (
     tool && typeof tool === "object" && !Array.isArray(tool) && typeof tool.name === "string"
       ? tool.name
@@ -244,7 +259,10 @@ async function checkMcpProtocolVersion(fetchImpl, resource, offeredProtocolVersi
   if (
     discovery?.jsonrpc !== "2.0"
     || discovery?.id !== "smoke"
-    || discovery?.result?.protocolVersion !== ACTIVE_PROTOCOL_VERSION
+    || typeof discovery?.result?.protocolVersion !== "string"
+    || !ACCEPTED_PROTOCOL_NEGOTIATIONS[offeredProtocolVersion]?.includes(
+      discovery.result.protocolVersion,
+    )
   ) {
     fail("unauthenticated MCP discovery must return an initialize result");
   }
@@ -271,17 +289,28 @@ async function checkMcpProtocolVersion(fetchImpl, resource, offeredProtocolVersi
   if (toolListResponse.status !== 200) fail("unauthenticated MCP tools/list must return 200");
   checkToolInventory(toolListResult);
   log(`[run] mcp-smoke: PASS exact read-only MCP tool inventory (${negotiatedProtocolVersion})`);
+  return negotiatedProtocolVersion;
 }
 
 async function checkMcpBoundary(fetchImpl, resource, timeoutMs, log) {
+  let activeNegotiatedProtocolVersion;
   for (const offeredProtocolVersion of CLIENT_PROTOCOL_OFFERS) {
-    await checkMcpProtocolVersion(fetchImpl, resource, offeredProtocolVersion, timeoutMs, log);
+    const negotiatedProtocolVersion = await checkMcpProtocolVersion(
+      fetchImpl,
+      resource,
+      offeredProtocolVersion,
+      timeoutMs,
+      log,
+    );
+    if (offeredProtocolVersion === ACTIVE_PROTOCOL_VERSION) {
+      activeNegotiatedProtocolVersion = negotiatedProtocolVersion;
+    }
   }
 
   const { response: toolCallResponse, json: toolCallResult } = await requestJson(
     fetchImpl,
     resource,
-    mcpRequest("tools/call", ACTIVE_PROTOCOL_VERSION),
+    mcpRequest("tools/call", activeNegotiatedProtocolVersion),
     timeoutMs,
   );
   if (toolCallResponse.status !== 401) fail("unauthenticated MCP tool calls must return 401");

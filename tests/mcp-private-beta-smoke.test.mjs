@@ -8,6 +8,7 @@ import test from "node:test";
 import { runMcpPrivateBetaSmoke } from "../scripts/mcp-private-beta-smoke.mjs";
 
 const RUN_SH = new URL("../run.sh", import.meta.url);
+const CI_WORKFLOW = new URL("../.github/workflows/ci.yml", import.meta.url);
 const ACTIVE_PROTOCOL_VERSION = "2025-11-25";
 const CLIENT_PROTOCOL_OFFERS = Object.freeze(["2025-06-18", ACTIVE_PROTOCOL_VERSION]);
 const EXPECTED_TOOL_NAMES = Object.freeze([
@@ -100,7 +101,7 @@ async function startFixture(t, override = {}) {
         response.end(JSON.stringify({
           jsonrpc: "2.0",
           id: message.id,
-          result: { protocolVersion: ACTIVE_PROTOCOL_VERSION },
+          result: { protocolVersion: message.params.protocolVersion },
         }));
         return;
       }
@@ -171,8 +172,8 @@ test("smoke validates the public no-credential contract without sending sensitiv
     mcpRequests.map((request) => [JSON.parse(request.body).method, request.headers["mcp-protocol-version"]]),
     [
       ["initialize", "2025-06-18"],
-      ["notifications/initialized", ACTIVE_PROTOCOL_VERSION],
-      ["tools/list", ACTIVE_PROTOCOL_VERSION],
+      ["notifications/initialized", "2025-06-18"],
+      ["tools/list", "2025-06-18"],
       ["initialize", "2025-11-25"],
       ["notifications/initialized", ACTIVE_PROTOCOL_VERSION],
       ["tools/list", ACTIVE_PROTOCOL_VERSION],
@@ -362,6 +363,60 @@ test("smoke rejects an unsupported negotiated MCP version for either client offe
   }
 });
 
+test("smoke accepts an active-version fallback for the older offer and propagates it", async (t) => {
+  const fixture = await startFixture(t, {
+    "/mcp:initialize": ({ message }) => ({
+      status: 200,
+      body: {
+        jsonrpc: "2.0",
+        id: message.id,
+        result: { protocolVersion: ACTIVE_PROTOCOL_VERSION },
+      },
+    }),
+  });
+  await runMcpPrivateBetaSmoke({ origin: fixture.origin, log: () => {} });
+
+  const lifecycleRequests = fixture.requests
+    .filter((request) => request.url === "/mcp")
+    .map((request) => [JSON.parse(request.body).method, request.headers["mcp-protocol-version"]]);
+  assert.deepEqual(lifecycleRequests.slice(0, 3), [
+    ["initialize", "2025-06-18"],
+    ["notifications/initialized", ACTIVE_PROTOCOL_VERSION],
+    ["tools/list", ACTIVE_PROTOCOL_VERSION],
+  ]);
+});
+
+test("smoke rejects an older response to the active protocol offer", async (t) => {
+  const fixture = await startFixture(t, {
+    "/mcp:initialize": ({ message }) => ({
+      status: 200,
+      body: {
+        jsonrpc: "2.0",
+        id: message.id,
+        result: {
+          protocolVersion: message.params.protocolVersion === ACTIVE_PROTOCOL_VERSION
+            ? "2025-06-18"
+            : message.params.protocolVersion,
+        },
+      },
+    }),
+  });
+  await assert.rejects(
+    runMcpPrivateBetaSmoke({ origin: fixture.origin, log: () => {} }),
+    /must return an initialize result/u,
+  );
+
+  const lifecycleMethods = fixture.requests
+    .filter((request) => request.url === "/mcp")
+    .map((request) => JSON.parse(request.body).method);
+  assert.deepEqual(lifecycleMethods, [
+    "initialize",
+    "notifications/initialized",
+    "tools/list",
+    "initialize",
+  ]);
+});
+
 test("smoke rejects any drift from the exact six-tool inventory", async (t) => {
   const inventoryCases = [
     ["missing", EXPECTED_TOOL_NAMES.slice(0, -1)],
@@ -382,6 +437,23 @@ test("smoke rejects any drift from the exact six-tool inventory", async (t) => {
       );
     });
   }
+});
+
+test("smoke rejects a paginated tool inventory", async (t) => {
+  const fixture = await startFixture(t, {
+    "/mcp:tools/list": ({ message }) => ({
+      status: 200,
+      body: {
+        jsonrpc: "2.0",
+        id: message.id,
+        result: { tools: toolDescriptors(), nextCursor: "more-tools" },
+      },
+    }),
+  });
+  await assert.rejects(
+    runMcpPrivateBetaSmoke({ origin: fixture.origin, log: () => {} }),
+    /tools\/list must return a result/u,
+  );
 });
 
 test("smoke rejects missing or unsafe read-only tool annotations", async (t) => {
@@ -423,6 +495,11 @@ test("smoke rejects missing or unsafe OAuth tool security schemes", async (t) =>
         { type: "noauth" },
       ];
     }],
+    ["extra descriptor scheme field", (tool) => {
+      tool.securitySchemes = [
+        { type: "oauth2", scopes: ["twoweeks:applications:read"], audience: "unexpected" },
+      ];
+    }],
     ["missing metadata schemes", (tool) => { delete tool._meta.securitySchemes; }],
     ["wrong metadata scope", (tool) => {
       tool._meta.securitySchemes = [{ type: "oauth2", scopes: ["twoweeks:applications:write"] }];
@@ -434,6 +511,11 @@ test("smoke rejects missing or unsafe OAuth tool security schemes", async (t) =>
       tool._meta.securitySchemes = [
         { type: "oauth2", scopes: ["twoweeks:applications:read"] },
         { type: "noauth" },
+      ];
+    }],
+    ["extra metadata scheme field", (tool) => {
+      tool._meta.securitySchemes = [
+        { type: "oauth2", scopes: ["twoweeks:applications:read"], audience: "unexpected" },
       ];
     }],
   ];
@@ -538,6 +620,17 @@ test("run.sh exposes mcp-smoke as a read-only dispatch", async () => {
   assert.match(source, /\.\/run\.sh mcp-smoke \[--origin https:\/\/host\]/u);
   assert.match(source, /if \[\[ "\$\{READ_ONLY_COMMAND\}" == "1" \]\]; then/u);
   assert.match(source, /mcp-smoke\) mcp_smoke "\$@";;/u);
+});
+
+test("CI runs the PR-controlled smoke without persisted checkout credentials", async () => {
+  const source = await readFile(CI_WORKFLOW, "utf8");
+  const job = /^  mcp-private-beta-smoke:\n(?<body>[\s\S]*?)^  js-tests:/mu.exec(source)?.groups?.body;
+  assert.equal(typeof job, "string");
+  assert.match(job, /^    permissions: \{\}$/mu);
+  assert.match(job, /Checkout public source without credentials/u);
+  assert.match(job, /git -c protocol\.version=2 fetch --no-tags --depth=1 origin "\$\{REF\}"/u);
+  assert.match(job, /git -c advice\.detachedHead=false checkout --detach FETCH_HEAD/u);
+  assert.doesNotMatch(job, /actions\/checkout|github\.token|secrets\./u);
 });
 
 test("run.sh mcp-smoke does not source or trace dotenv values", async (t) => {
