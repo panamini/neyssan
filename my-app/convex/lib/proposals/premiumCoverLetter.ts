@@ -334,6 +334,15 @@ export type PremiumCoverLetterWriter = (args: {
   signal?: AbortSignal;
 }) => Promise<unknown>;
 
+export type PremiumCoverLetterProviderResponseMetadata = Readonly<{
+  returnedModel: string | null;
+  tokenUsage: Readonly<{
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  }> | null;
+}>;
+
 export const PREMIUM_COVER_LETTER_OPENAI_MODEL: PremiumCoverLetterWriterModel =
   "gpt-5.5";
 export const PREMIUM_COVER_LETTER_WRITER_MODELS = [
@@ -5449,22 +5458,28 @@ function hasExpectedCandidateSignature(args: {
   return lines[lines.length - 1] === expectedName;
 }
 
-export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
+type ExactPremiumCoverLetterOpenAIArgs = {
   apiKey: string;
   prompt: string;
-  writerModel?: PremiumCoverLetterWriterModel;
+  writerModel: string;
   schema?: Record<string, unknown>;
   signal?: AbortSignal;
   maxRetries?: number;
   maxOutputTokens?: number;
-}): Promise<unknown> {
-  const resolvedModel = resolvePremiumCoverLetterWriterModel(args.writerModel);
+  onResponseMetadata?: (
+    metadata: PremiumCoverLetterProviderResponseMetadata,
+  ) => void;
+};
+
+export async function generatePremiumCoverLetterBodyPartsWithExactOpenAIModel(
+  args: ExactPremiumCoverLetterOpenAIArgs,
+): Promise<unknown> {
   const responseFormat = resolvePremiumCoverLetterOpenAIResponseFormat({
     schema: args.schema,
   });
-  const requestBody = buildPremiumCoverLetterOpenAIRequest({
+  const requestBody = buildPremiumCoverLetterOpenAIRequestForExactModel({
     prompt: args.prompt,
-    writerModel: resolvedModel,
+    writerModel: args.writerModel,
     schema: responseFormat.jsonSchema,
     schemaName: responseFormat.name,
     maxOutputTokens: args.maxOutputTokens,
@@ -5487,7 +5502,7 @@ export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
     if (typeof client.responses?.parse === "function" && zodTextFormat) {
       const response = await client.responses.parse(
         {
-          model: resolvedModel,
+          model: args.writerModel,
           input: args.prompt,
           reasoning: {
             effort: resolveOpenAIProposalReasoningEffort(),
@@ -5503,6 +5518,10 @@ export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
         args.signal ? ({ signal: args.signal } as any) : undefined,
       );
 
+      args.onResponseMetadata?.(
+        extractPremiumProviderResponseMetadata(response),
+      );
+
       return responseFormat.zodSchema.parse(
         response?.output_parsed ?? extractOpenAIJsonPayload(response),
       );
@@ -5512,6 +5531,7 @@ export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
       requestBody as any,
       args.signal ? ({ signal: args.signal } as any) : undefined,
     );
+    args.onResponseMetadata?.(extractPremiumProviderResponseMetadata(response));
     return responseFormat.zodSchema.parse(extractOpenAIJsonPayload(response));
   }
 
@@ -5529,9 +5549,31 @@ export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
       `OpenAI premium cover-letter request failed: ${response.status} ${response.statusText} ${await response.text()}`,
     );
   }
-  return responseFormat.zodSchema.parse(
-    extractOpenAIJsonPayload(await response.json()),
+  const responseBody = await response.json();
+  args.onResponseMetadata?.(
+    extractPremiumProviderResponseMetadata(responseBody),
   );
+  return responseFormat.zodSchema.parse(
+    extractOpenAIJsonPayload(responseBody),
+  );
+}
+
+export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
+  apiKey: string;
+  prompt: string;
+  writerModel?: PremiumCoverLetterWriterModel;
+  schema?: Record<string, unknown>;
+  signal?: AbortSignal;
+  maxRetries?: number;
+  maxOutputTokens?: number;
+  onResponseMetadata?: (
+    metadata: PremiumCoverLetterProviderResponseMetadata,
+  ) => void;
+}): Promise<unknown> {
+  return generatePremiumCoverLetterBodyPartsWithExactOpenAIModel({
+    ...args,
+    writerModel: resolvePremiumCoverLetterWriterModel(args.writerModel),
+  });
 }
 
 function extractPremiumMistralText(content: unknown): string {
@@ -5612,6 +5654,9 @@ function parsePremiumMistralWriterJson(content: string): unknown {
   );
 }
 
+export const PREMIUM_COVER_LETTER_MISTRAL_SYSTEM_PROMPT =
+  "Return only a valid JSON object matching the requested schema. Do not include markdown, comments, greeting, signoff, or prose outside JSON. Never write meta-prose such as 'I have described', 'I described', 'as described', 'the evidence shows', 'this section shows', 'work surface', or 'concrete bridge'. Write the actual candidate action directly.";
+
 export async function generatePremiumCoverLetterBodyPartsWithMistral(args: {
   apiKey: string;
   prompt: string;
@@ -5619,6 +5664,9 @@ export async function generatePremiumCoverLetterBodyPartsWithMistral(args: {
   signal?: AbortSignal;
   maxRetries?: number;
   maxOutputTokens?: number;
+  onResponseMetadata?: (
+    metadata: PremiumCoverLetterProviderResponseMetadata,
+  ) => void;
 }): Promise<unknown> {
   const model = new ChatMistralAI({
     apiKey: args.apiKey,
@@ -5633,13 +5681,12 @@ export async function generatePremiumCoverLetterBodyPartsWithMistral(args: {
   });
   const response = await model.invoke(
     [
-      new SystemMessage(
-        "Return only a valid JSON object matching the requested schema. Do not include markdown, comments, greeting, signoff, or prose outside JSON. Never write meta-prose such as 'I have described', 'I described', 'as described', 'the evidence shows', 'this section shows', 'work surface', or 'concrete bridge'. Write the actual candidate action directly.",
-      ),
+      new SystemMessage(PREMIUM_COVER_LETTER_MISTRAL_SYSTEM_PROMPT),
       new HumanMessage(args.prompt),
     ],
     args.signal ? ({ signal: args.signal } as any) : undefined,
   );
+  args.onResponseMetadata?.(extractPremiumProviderResponseMetadata(response));
   const content = extractPremiumMistralText(response.content);
   return parsePremiumMistralWriterJson(content);
 }
@@ -5651,10 +5698,23 @@ export function buildPremiumCoverLetterOpenAIRequest(args: {
   schemaName?: string;
   maxOutputTokens?: number;
 }) {
+  return buildPremiumCoverLetterOpenAIRequestForExactModel({
+    ...args,
+    writerModel: resolvePremiumCoverLetterWriterModel(args.writerModel),
+  });
+}
+
+export function buildPremiumCoverLetterOpenAIRequestForExactModel(args: {
+  prompt: string;
+  writerModel: string;
+  schema?: Record<string, unknown>;
+  schemaName?: string;
+  maxOutputTokens?: number;
+}) {
   const schema = args.schema ?? PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA;
   const schemaName = args.schemaName ?? "premium_writer_output_v1";
   return {
-    model: resolvePremiumCoverLetterWriterModel(args.writerModel),
+    model: args.writerModel,
     input: args.prompt,
     ...(args.maxOutputTokens !== undefined
       ? { max_output_tokens: args.maxOutputTokens }
@@ -5676,6 +5736,24 @@ export function buildPremiumCoverLetterOpenAIRequest(args: {
         },
       },
     },
+  };
+}
+
+function extractPremiumProviderResponseMetadata(
+  response: any,
+): PremiumCoverLetterProviderResponseMetadata {
+  const usage = response?.usage ?? response?.usage_metadata ?? null;
+  const inputTokens = usage?.input_tokens ?? usage?.promptTokens;
+  const outputTokens = usage?.output_tokens ?? usage?.completionTokens;
+  const totalTokens = usage?.total_tokens ?? usage?.totalTokens;
+  const tokenUsage = [inputTokens, outputTokens, totalTokens].every(
+    (value) => Number.isInteger(value) && value >= 0,
+  )
+    ? { inputTokens, outputTokens, totalTokens }
+    : null;
+  return {
+    returnedModel: typeof response?.model === "string" ? response.model : null,
+    tokenUsage,
   };
 }
 

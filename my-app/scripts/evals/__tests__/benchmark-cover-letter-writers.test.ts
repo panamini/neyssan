@@ -17,11 +17,15 @@ import { PROPOSAL_OUTPUT_LANGUAGES } from "../../../convex/lib/proposals/proposa
 import { buildStableHash } from "../../../src/modules/application-harness/fingerprints";
 import {
   aggregateCoverLetterBenchmarkRecords,
+  assertQualityEval2BBudgetContract,
   benchmarkCoverLetterCase,
   benchmarkCoverLetterCaseForHumanReview,
+  buildCoverLetterBenchmarkOfflineCostPreflight,
+  buildCoverLetterHumanReviewPlan,
   calculateCoverLetterBenchmarkMinimumProviderCalls,
   coverLetterBenchmarkRequiresOpenAIKey,
   createCoverLetterEvalLiveBudget,
+  QUALITY_EVAL_2B_WRITER_MODELS,
   parseCoverLetterBenchmarkCliOptions,
   replayRecordedCoverLetterFixture,
   replayRecordedCoverLetterFixtures,
@@ -29,6 +33,7 @@ import {
   resolveCoverLetterBenchmarkProductionInputs,
   resolveCoverLetterBenchmarkProviderSignal,
   resolveDefaultCoverLetterBenchmarkWriterModels,
+  runCoverLetterHumanReviewCohort,
   type CoverLetterBenchmarkRecord,
 } from "../benchmark-cover-letter-writers";
 import { CoverLetterEvalBudgetError } from "../cover-letter-eval-budget";
@@ -151,6 +156,141 @@ describe("benchmark-cover-letter-writers", () => {
     expect(resolveDefaultCoverLetterBenchmarkWriterModels()).toEqual([
       "gpt-5.5",
     ]);
+  });
+
+  it("accepts only the exact QUALITY-EVAL-2B human-review writer set", () => {
+    const options = parseCoverLetterBenchmarkCliOptions(
+      [
+        "--human-review-only",
+        `--writers=${QUALITY_EVAL_2B_WRITER_MODELS.join(",")}`,
+      ],
+      "0",
+    );
+
+    expect(options.writerModels).toEqual(QUALITY_EVAL_2B_WRITER_MODELS);
+    expect(
+      parseCoverLetterBenchmarkCliOptions(["--human-review-only"], "0")
+        .writerModels,
+    ).toEqual(QUALITY_EVAL_2B_WRITER_MODELS);
+
+    for (const invalidWriter of ["gpt-5.6", "gpt-5.6-luna", "unknown-writer"]) {
+      expect(() =>
+        parseCoverLetterBenchmarkCliOptions(
+          ["--human-review-only", `--writers=${invalidWriter}`],
+          "0",
+        ),
+      ).toThrow(/unsupported premium writer model/iu);
+    }
+
+    expect(() =>
+      parseCoverLetterBenchmarkCliOptions(["--writers=gpt-5.5,gpt-5.5"], "0"),
+    ).toThrow(/duplicate premium writer model/iu);
+    expect(() =>
+      parseCoverLetterBenchmarkCliOptions(
+        ["--human-review-only", "--writers=gpt-5.5,gpt-5.6-sol"],
+        "0",
+      ),
+    ).toThrow(/exact writer set/iu);
+  });
+
+  it("freezes the cases-outer four-writer plan at 24 calls with no repair allowance", () => {
+    const plan = buildCoverLetterHumanReviewPlan({
+      cases: coverLetterBlindReviewCases,
+      writerModels: QUALITY_EVAL_2B_WRITER_MODELS,
+    });
+
+    expect(plan).toHaveLength(24);
+    expect(plan.slice(0, 4).map((item) => item.writerModel)).toEqual(
+      QUALITY_EVAL_2B_WRITER_MODELS,
+    );
+    expect(plan.slice(0, 4).map((item) => item.benchmarkCase.id)).toEqual(
+      Array(4).fill(coverLetterBlindReviewCases[0]!.id),
+    );
+    expect(
+      calculateCoverLetterBenchmarkMinimumProviderCalls({
+        caseCount: coverLetterBlindReviewCases.length,
+        writerCount: QUALITY_EVAL_2B_WRITER_MODELS.length,
+        evaluationMode: "human_review_only",
+      }),
+    ).toBe(24);
+  });
+
+  it("fails closed inside the first English case without a duplicate provider preflight", async () => {
+    const plan = buildCoverLetterHumanReviewPlan({
+      cases: coverLetterBlindReviewCases,
+      writerModels: QUALITY_EVAL_2B_WRITER_MODELS,
+    });
+    const generateRecord = vi
+      .fn()
+      .mockResolvedValueOnce({ status: "human_review_pending" })
+      .mockResolvedValueOnce({
+        status: "generation_failed",
+        caseId: plan[1]!.benchmarkCase.id,
+        writerModel: plan[1]!.writerModel,
+        error: "model compatibility failed",
+      });
+
+    await expect(
+      runCoverLetterHumanReviewCohort({ plan, generateRecord }),
+    ).rejects.toThrow(/model compatibility failed/iu);
+    expect(generateRecord).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses actual deterministic prompts for a conservative offline 24-call cost preflight", async () => {
+    const fetchSpy = vi.fn(() => {
+      throw new Error("provider calls are forbidden during offline preflight");
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const preflight = await buildCoverLetterBenchmarkOfflineCostPreflight({
+      cases: coverLetterBlindReviewCases,
+      writerModels: QUALITY_EVAL_2B_WRITER_MODELS,
+    });
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(preflight).toMatchObject({
+      version: "cover_letter_eval_cost_preflight_v1",
+      plannedProviderCalls: 24,
+      providerMaxRetries: 0,
+      maxRepairs: 0,
+      writerMaxOutputTokens: 2048,
+      declaredMaxUsdPerCall: 0.148455,
+      minimumSafeReservationUsd: 3.56292,
+      targetReservationUsd: 2.5,
+      targetReservationProven: false,
+    });
+    expect(preflight.entries).toHaveLength(24);
+    expect(preflight.worstCase).toMatchObject({
+      caseId: "blind-fr-implementation-adjacent",
+      writerModel: "gpt-5.6-sol",
+      serializedInputByteUpperBound: 17403,
+    });
+
+    const insufficient = parseCoverLetterBenchmarkCliOptions(
+      [
+        "--live",
+        "--human-review-only",
+        "--max-calls=24",
+        "--max-repairs=0",
+        "--max-usd=2.5",
+        "--max-usd-per-call=0.148455",
+      ],
+      "0",
+    );
+    expect(() =>
+      assertQualityEval2BBudgetContract({
+        options: insufficient,
+        preflight,
+      }),
+    ).toThrow(/minimum safe reservation of 3\.56292 USD/iu);
+
+    const safe = {
+      ...insufficient,
+      maxUsd: 3.56292,
+    };
+    expect(() =>
+      assertQualityEval2BBudgetContract({ options: safe, preflight }),
+    ).not.toThrow();
   });
 
   it("resolves the production writer after dotenv can update the environment", () => {
@@ -1056,10 +1196,10 @@ describe("benchmark-cover-letter-writers", () => {
         "--output-dir=/tmp/cover-letter-review",
         "--run-id=quality-eval-2a",
         "--source-ref=bbd96b5c",
-        "--max-calls=6",
+        "--max-calls=24",
         "--max-repairs=0",
-        "--max-usd=0.6",
-        "--max-usd-per-call=0.1",
+        "--max-usd=3.56292",
+        "--max-usd-per-call=0.148455",
       ],
       "0",
     );
@@ -1069,6 +1209,7 @@ describe("benchmark-cover-letter-writers", () => {
       outputDirectory: "/tmp/cover-letter-review",
       runId: "quality-eval-2a",
       sourceRef: "bbd96b5c",
+      writerModels: QUALITY_EVAL_2B_WRITER_MODELS,
     });
     expect(() =>
       parseCoverLetterBenchmarkCliOptions(
