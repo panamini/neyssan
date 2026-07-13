@@ -1,11 +1,75 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import * as path from "node:path";
 
+import { buildStableHash } from "../../src/modules/application-harness/fingerprints";
 import type { CoverLetterEvalBudgetSnapshot } from "./cover-letter-eval-budget";
-import type {
-  CoverLetterEvalPricedWriterModel,
-  CoverLetterEvalRunManifestEntry,
+import {
+  calculateCoverLetterEvalObservedCostUpperBound,
+  type CoverLetterEvalPricedWriterModel,
+  type CoverLetterEvalSdkVersions,
+  type CoverLetterEvalTokenUsage,
+  type CoverLetterEvalRunManifestEntry,
 } from "./cover-letter-eval-run-manifest";
+
+export type CoverLetterEvalFailureAttemptMetadata = Readonly<{
+  version: "cover_letter_eval_failure_attempt_metadata_v1";
+  caseId: string;
+  provider: "openai" | "mistral";
+  requestedModel: CoverLetterEvalPricedWriterModel;
+  returnedModel: string | null;
+  promptHash: string | null;
+  reasoningEffort: string | null;
+  writerMaxOutputTokens: number;
+  providerMaxRetries: number;
+  tokenUsage: CoverLetterEvalTokenUsage | null;
+  observedCostUpperBoundUsd: number | null;
+  sdkVersions: CoverLetterEvalSdkVersions;
+  artifactHash: string | null;
+  provenanceHash: string | null;
+}>;
+
+export async function buildCoverLetterEvalFailureAttemptMetadata(args: {
+  caseId: string;
+  provider: "openai" | "mistral";
+  requestedModel: CoverLetterEvalPricedWriterModel;
+  returnedModel: string | null;
+  prompt: string | null;
+  reasoningEffort: string | null;
+  writerMaxOutputTokens: number;
+  providerMaxRetries: number;
+  tokenUsage: CoverLetterEvalTokenUsage | null;
+  sdkVersions: CoverLetterEvalSdkVersions;
+  artifactHash: string | null;
+  provenanceHash: string | null;
+}): Promise<CoverLetterEvalFailureAttemptMetadata> {
+  return {
+    version: "cover_letter_eval_failure_attempt_metadata_v1",
+    caseId: args.caseId,
+    provider: args.provider,
+    requestedModel: args.requestedModel,
+    returnedModel: args.returnedModel,
+    promptHash:
+      args.prompt === null
+        ? null
+        : await buildStableHash({
+            namespace: "cover-letter-eval-writer-prompt",
+            type: "production-writer-prompt",
+            version: 1,
+            prompt: args.prompt,
+          }),
+    reasoningEffort: args.reasoningEffort,
+    writerMaxOutputTokens: args.writerMaxOutputTokens,
+    providerMaxRetries: args.providerMaxRetries,
+    tokenUsage: args.tokenUsage,
+    observedCostUpperBoundUsd: calculateCoverLetterEvalObservedCostUpperBound({
+      writerModel: args.requestedModel,
+      tokenUsage: args.tokenUsage,
+    }),
+    sdkVersions: args.sdkVersions,
+    artifactHash: args.artifactHash,
+    provenanceHash: args.provenanceHash,
+  };
+}
 
 const DIAGNOSTIC_TOKEN_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/u;
 
@@ -35,7 +99,7 @@ type CoverLetterEvalFailureReceiptInput = Readonly<{
   finalizationDiagnostics: CoverLetterEvalFinalizationDiagnostics | null;
   artifactHash: string | null;
   provenanceHash: string | null;
-  attemptMetadata: CoverLetterEvalRunManifestEntry | null;
+  attemptMetadata: CoverLetterEvalFailureAttemptMetadata | null;
 }> &
   Readonly<Record<string, unknown>>;
 
@@ -59,7 +123,7 @@ export type CoverLetterEvalFailureReceipt = Readonly<{
     finalizationDiagnostics: CoverLetterEvalFinalizationDiagnostics | null;
     artifactHash: string | null;
     provenanceHash: string | null;
-    attemptMetadata: CoverLetterEvalRunManifestEntry | null;
+    attemptMetadata: CoverLetterEvalFailureAttemptMetadata | null;
   }>;
   budget: CoverLetterEvalBudgetSnapshot;
 }>;

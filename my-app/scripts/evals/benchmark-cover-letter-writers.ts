@@ -58,8 +58,10 @@ import {
   type CoverLetterEvalBudgetOptions,
 } from "./cover-letter-eval-budget";
 import {
+  buildCoverLetterEvalFailureAttemptMetadata,
   buildCoverLetterEvalFailureReceipt,
   writeCoverLetterEvalFailureReceipt,
+  type CoverLetterEvalFailureAttemptMetadata,
 } from "./cover-letter-eval-failure-receipt";
 import {
   evaluateCoverLetterTextWithOpenAI,
@@ -217,7 +219,7 @@ export type CoverLetterBenchmarkFailureRecord = {
   diagnostics: CoverLetterBenchmarkDiagnostics;
   manualReview: CoverLetterBenchmarkManualReview;
   letter?: string;
-  runManifest?: CoverLetterEvalRunManifestEntry;
+  attemptMetadata?: CoverLetterEvalFailureAttemptMetadata;
   notes?: string;
   realismTag?: string;
 };
@@ -254,6 +256,7 @@ type GenerateBenchmarkLetter = (args: {
   onProviderResponseMetadata?: (
     metadata: PremiumCoverLetterProviderResponseMetadata,
   ) => void;
+  onWriterPrompt?: (prompt: string) => void;
 }) => Promise<PremiumCoverLetterAttemptResult | null>;
 
 type EvaluateBenchmarkLetter = (args: {
@@ -727,6 +730,7 @@ export async function generatePremiumCoverLetterBenchmarkLetter(args: {
   onProviderResponseMetadata?: (
     metadata: PremiumCoverLetterProviderResponseMetadata,
   ) => void;
+  onWriterPrompt?: (prompt: string) => void;
 }): Promise<PremiumCoverLetterAttemptResult | null> {
   const writerProvider = isMistralBenchmarkWriterModel(args.writerModel)
     ? "mistral"
@@ -761,6 +765,7 @@ export async function generatePremiumCoverLetterBenchmarkLetter(args: {
     writerModel: args.writerModel,
     signal: attemptSignal,
     writer: async ({ prompt, schema, signal: callbackSignal }) => {
+      args.onWriterPrompt?.(prompt);
       const providerSignal = resolveCoverLetterBenchmarkProviderSignal({
         provider: writerProvider,
         configuredSignal: args.signal,
@@ -1082,6 +1087,37 @@ async function buildBenchmarkRunManifestEntry(args: {
   });
 }
 
+async function buildBenchmarkFailureAttemptMetadata(args: {
+  benchmarkCase: CoverLetterBenchmarkCase;
+  writerModel: CoverLetterBenchmarkWriterModel;
+  prompt: string | null;
+  artifact: CoverLetterEvalArtifact | null;
+  providerResponseMetadata: PremiumCoverLetterProviderResponseMetadata | null;
+}): Promise<CoverLetterEvalFailureAttemptMetadata | undefined> {
+  if (
+    !isQualityEval2BWriterModel(args.writerModel) ||
+    (args.prompt === null && args.providerResponseMetadata === null)
+  ) {
+    return undefined;
+  }
+  const provider = resolveBenchmarkWriterProvider(args.writerModel);
+  return buildCoverLetterEvalFailureAttemptMetadata({
+    caseId: args.benchmarkCase.id,
+    provider,
+    requestedModel: args.writerModel,
+    returnedModel: args.providerResponseMetadata?.returnedModel ?? null,
+    prompt: args.prompt,
+    reasoningEffort:
+      provider === "openai" ? resolveOpenAIProposalReasoningEffort() : null,
+    writerMaxOutputTokens: COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS,
+    providerMaxRetries: COVER_LETTER_EVAL_PROVIDER_MAX_RETRIES,
+    tokenUsage: args.providerResponseMetadata?.tokenUsage ?? null,
+    sdkVersions: await resolveCoverLetterEvalInstalledSdkVersions(),
+    artifactHash: args.artifact?.artifactHash ?? null,
+    provenanceHash: args.artifact?.provenanceHash ?? null,
+  });
+}
+
 async function prepareCoverLetterBenchmarkCase(
   args: PrepareCoverLetterBenchmarkCaseArgs,
 ): Promise<
@@ -1096,6 +1132,7 @@ async function prepareCoverLetterBenchmarkCase(
   let failureTrace: PremiumCoverLetterFailureTrace | null = null;
   let providerResponseMetadata: PremiumCoverLetterProviderResponseMetadata | null =
     null;
+  let writerPrompt: string | null = null;
   const generateLetter =
     args.generateLetter ?? generatePremiumCoverLetterBenchmarkLetter;
 
@@ -1114,8 +1151,18 @@ async function prepareCoverLetterBenchmarkCase(
       onProviderResponseMetadata: (metadata) => {
         providerResponseMetadata = metadata;
       },
+      onWriterPrompt: (prompt) => {
+        writerPrompt = prompt;
+      },
     });
     if (!generation) {
+      const attemptMetadata = await buildBenchmarkFailureAttemptMetadata({
+        benchmarkCase: args.benchmarkCase,
+        writerModel: args.writerModel,
+        prompt: writerPrompt,
+        artifact: null,
+        providerResponseMetadata,
+      });
       return {
         status: "generation_failed",
         caseId: args.benchmarkCase.id,
@@ -1133,6 +1180,7 @@ async function prepareCoverLetterBenchmarkCase(
           validationResult: "premium_generation_failed",
         }),
         manualReview: createEmptyManualReview(),
+        ...(attemptMetadata ? { attemptMetadata } : {}),
         notes: args.benchmarkCase.notes,
         realismTag: args.benchmarkCase.realismTag,
       };
@@ -1154,10 +1202,10 @@ async function prepareCoverLetterBenchmarkCase(
     });
     if (!preparedArtifact.finalizedPayload) {
       const finalization = preparedArtifact.artifact.diagnostics.finalization;
-      const runManifest = await buildBenchmarkRunManifestEntry({
+      const attemptMetadata = await buildBenchmarkFailureAttemptMetadata({
         benchmarkCase: args.benchmarkCase,
         writerModel: args.writerModel,
-        generation,
+        prompt: generation.prompt,
         artifact: preparedArtifact.artifact,
         providerResponseMetadata,
       });
@@ -1180,7 +1228,7 @@ async function prepareCoverLetterBenchmarkCase(
           failureReason: finalization.errorClass,
         }),
         manualReview: createEmptyManualReview(),
-        ...(runManifest ? { runManifest } : {}),
+        ...(attemptMetadata ? { attemptMetadata } : {}),
         notes: args.benchmarkCase.notes,
         realismTag: args.benchmarkCase.realismTag,
       };
@@ -1213,6 +1261,13 @@ async function prepareCoverLetterBenchmarkCase(
     if (error instanceof CoverLetterEvalBudgetError) {
       throw error;
     }
+    const attemptMetadata = await buildBenchmarkFailureAttemptMetadata({
+      benchmarkCase: args.benchmarkCase,
+      writerModel: args.writerModel,
+      prompt: writerPrompt,
+      artifact: null,
+      providerResponseMetadata,
+    });
     return {
       status: "generation_failed",
       caseId: args.benchmarkCase.id,
@@ -1230,6 +1285,7 @@ async function prepareCoverLetterBenchmarkCase(
         validationResult: "premium_generation_failed",
       }),
       manualReview: createEmptyManualReview(),
+      ...(attemptMetadata ? { attemptMetadata } : {}),
       notes: args.benchmarkCase.notes,
       realismTag: args.benchmarkCase.realismTag,
     };
@@ -1989,7 +2045,7 @@ async function main(): Promise<void> {
             finalizationDiagnostics: finalization ?? null,
             artifactHash: failure.artifact?.artifactHash ?? null,
             provenanceHash: failure.artifact?.provenanceHash ?? null,
-            attemptMetadata: failure.runManifest ?? null,
+            attemptMetadata: failure.attemptMetadata ?? null,
           },
           budget: budget.snapshot(),
         });

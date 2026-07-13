@@ -479,8 +479,8 @@ describe("benchmark-cover-letter-writers", () => {
         decision: "rejected",
         frozenConfig: { hasCandidateContext: true },
       },
-      runManifest: {
-        version: "cover_letter_eval_run_manifest_entry_v1",
+      attemptMetadata: {
+        version: "cover_letter_eval_failure_attempt_metadata_v1",
         caseId: benchmarkCase.id,
         provider: "openai",
         requestedModel: "gpt-5.5",
@@ -1492,19 +1492,32 @@ describe("benchmark-cover-letter-writers", () => {
     const benchmarkCase = coverLetterBenchmarkCases.find(
       (item) => item.id === "strong-adjacent-honest-transfer",
     )!;
-    const generateLetter = vi.fn().mockImplementation(async ({ onFailure }) => {
-      onFailure?.({
-        stage: "validation",
-        reason: "non_repairable_validation",
-        contextClass: "cv_adjacent",
-        issues: ["adjacent_direct_fit"],
-      });
-      return null;
-    });
+    const generateLetter = vi
+      .fn()
+      .mockImplementation(
+        async ({ onFailure, onProviderResponseMetadata, onWriterPrompt }) => {
+          onWriterPrompt?.("captured production writer prompt");
+          onProviderResponseMetadata?.({
+            returnedModel: "gpt-5.5-2026-06-30",
+            tokenUsage: {
+              inputTokens: 3_000,
+              outputTokens: 900,
+              totalTokens: 3_900,
+            },
+          });
+          onFailure?.({
+            stage: "validation",
+            reason: "non_repairable_validation",
+            contextClass: "cv_adjacent",
+            issues: ["adjacent_direct_fit"],
+          });
+          return null;
+        },
+      );
 
     const record = await benchmarkCoverLetterCase({
       benchmarkCase,
-      writerModel: "gpt-5-mini",
+      writerModel: "gpt-5.5",
       evaluatorModel: "gpt-5-mini",
       apiKey: "sk-openai",
       generateLetter,
@@ -1513,7 +1526,7 @@ describe("benchmark-cover-letter-writers", () => {
 
     expect(record).toMatchObject({
       status: "generation_failed",
-      writerModel: "gpt-5-mini",
+      writerModel: "gpt-5.5",
       error:
         "Premium cover-letter generation failed at validation: non_repairable_validation, adjacent_direct_fit.",
       debug: {
@@ -1534,6 +1547,21 @@ describe("benchmark-cover-letter-writers", () => {
         failureStage: "validation",
         failureReason: "non_repairable_validation",
         failureIssues: ["adjacent_direct_fit"],
+      },
+      attemptMetadata: {
+        version: "cover_letter_eval_failure_attempt_metadata_v1",
+        caseId: benchmarkCase.id,
+        provider: "openai",
+        requestedModel: "gpt-5.5",
+        returnedModel: "gpt-5.5-2026-06-30",
+        promptHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+        tokenUsage: {
+          inputTokens: 3_000,
+          outputTokens: 900,
+          totalTokens: 3_900,
+        },
+        artifactHash: null,
+        provenanceHash: null,
       },
       manualReview: emptyManualReview,
     });

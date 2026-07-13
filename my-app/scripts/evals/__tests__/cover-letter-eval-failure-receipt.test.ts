@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   buildCoverLetterEvalFailureReceipt,
   writeCoverLetterEvalFailureReceipt,
+  type CoverLetterEvalFailureAttemptMetadata,
 } from "../cover-letter-eval-failure-receipt";
 import type { CoverLetterEvalRunManifestEntry } from "../cover-letter-eval-run-manifest";
 
@@ -29,6 +30,14 @@ const completedEntry: CoverLetterEvalRunManifestEntry = {
   },
   artifactHash: "b".repeat(64),
   provenanceHash: "c".repeat(64),
+};
+
+const failedAttemptMetadata: CoverLetterEvalFailureAttemptMetadata = {
+  ...completedEntry,
+  version: "cover_letter_eval_failure_attempt_metadata_v1",
+  caseId: "blind-fr-customer-success-direct",
+  artifactHash: "d".repeat(64),
+  provenanceHash: null,
 };
 
 const budget = {
@@ -84,10 +93,7 @@ describe("cover-letter eval failure receipt", () => {
         },
         artifactHash: "d".repeat(64),
         provenanceHash: null,
-        attemptMetadata: {
-          ...completedEntry,
-          caseId: "blind-fr-customer-success-direct",
-        },
+        attemptMetadata: failedAttemptMetadata,
         error: "RAW_ERROR_SENTINEL",
         letter: "RAW_LETTER_SENTINEL",
         providerOutput: "RAW_PROVIDER_SENTINEL",
