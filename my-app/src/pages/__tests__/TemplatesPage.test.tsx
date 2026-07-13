@@ -247,11 +247,14 @@ describe("TemplatesPage", () => {
   it.each([
     {
       label: "Minimal · US Letter",
-      href: "/proposal?templateId=workshop_proposal_margin",
+      href: "/proposal?templateId=workshop_proposal_margin&pageSize=letter",
     },
-    { label: "French · A4", href: "/proposal?templateId=modernist_signal" },
+    {
+      label: "French · A4",
+      href: "/proposal?templateId=modernist_signal&pageSize=a4",
+    },
   ])(
-    "creates $label without overriding the saved page format",
+    "creates $label with its canonical page format",
     async ({ label, href }) => {
       const user = userEvent.setup();
       render(

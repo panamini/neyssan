@@ -335,6 +335,14 @@ export function getCoverLetterRouteTemplateIntent(
   return getCoverLetterTemplateIntent(template.family);
 }
 
+function getCoverLetterCreationPageSizeIntent(
+  template: TemplateCard,
+): "a4" | "letter" | null {
+  if (template.family === "minimal") return "letter";
+  if (template.family === "bold") return "a4";
+  return null;
+}
+
 export function TemplateDocumentPreview({
   kind,
   family,
@@ -489,7 +497,15 @@ export function TemplatesPage(): JSX.Element {
       }
 
       const templateIdParam = getCoverLetterRouteTemplateIntent(template);
-      navigate(`/proposal${templateIdParam ? `?templateId=${templateIdParam}` : ""}`, {
+      const routeParams = new URLSearchParams();
+      if (templateIdParam) {
+        routeParams.set("templateId", templateIdParam);
+      }
+      const pageSizeIntent = getCoverLetterCreationPageSizeIntent(template);
+      if (pageSizeIntent) {
+        routeParams.set("pageSize", pageSizeIntent);
+      }
+      navigate(`/proposal${routeParams.size ? `?${routeParams.toString()}` : ""}`, {
         state: createProposalWorkspaceResetState(),
       });
     },

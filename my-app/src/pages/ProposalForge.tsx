@@ -10998,6 +10998,20 @@ export function ProposalForge(): JSX.Element {
       storedOutputDraft?.resolvedLanguage,
     ],
   );
+  const savedProposalDocument = React.useMemo(() => {
+    if (!openedSavedProposal || !savedProposalContent) {
+      return null;
+    }
+
+    const normalizedDocument = normalizeProposalDocument(
+      openedSavedProposal.metadata?.proposalDocument,
+    );
+    return normalizedDocument &&
+      serializeProposalDocumentToLegacyString(normalizedDocument).trim() ===
+        savedProposalContent.trim()
+      ? normalizedDocument
+      : null;
+  }, [openedSavedProposal, savedProposalContent]);
   const exportSavedProposalSource = React.useCallback(() => {
     if (!openedSavedProposal || !savedProposalContent) {
       return null;
@@ -11028,6 +11042,7 @@ export function ProposalForge(): JSX.Element {
 
     return buildProposalExportSource({
       content: savedProposalContent,
+      proposalDocument: savedProposalDocument,
       proposalType: savedProposalType,
       documentTitle:
         savedProposalDocumentTitle.trim() ||
@@ -11058,6 +11073,7 @@ export function ProposalForge(): JSX.Element {
     proposalSignatureSettings,
     resolvedProposalPageSize,
     savedProposalContent,
+    savedProposalDocument,
     savedProposalDocumentMeta,
     savedProposalDocumentTitle,
     savedProposalTemplateId,
@@ -11102,6 +11118,7 @@ export function ProposalForge(): JSX.Element {
 
     return buildProposalPreviewPrintSource({
       content: savedProposalContent,
+      proposalDocument: savedProposalDocument,
       proposalType: savedProposalType,
       voicePreset: savedProposalVoicePreset,
       railTitle: savedRailTitle ?? null,
@@ -11138,6 +11155,7 @@ export function ProposalForge(): JSX.Element {
     proposalSignatureSettings,
     resolvedProposalPageSize,
     savedProposalContent,
+    savedProposalDocument,
     savedProposalDocumentMeta,
     savedProposalDocumentTitle,
     savedProposalType,

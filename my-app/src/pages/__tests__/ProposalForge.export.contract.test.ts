@@ -36,7 +36,23 @@ describe("ProposalForge export contract", () => {
       "pageSize={resolvedProposalPageSize}",
     );
     expect(proposalForgeSource).toContain(
-      "onPageSizePreferenceChange: setProposalPageSizePreference",
+      "onPageSizePreferenceChange: handleProposalPageSizePreferenceChange",
+    );
+  });
+
+  it("preserves the validated structured document in both saved export sources", () => {
+    const atsSavedExport = proposalForgeSource.slice(
+      proposalForgeSource.indexOf("const exportSavedProposalSource"),
+      proposalForgeSource.indexOf("const exportSavedStyledProposalSource"),
+    );
+    const styledSavedExport = proposalForgeSource.slice(
+      proposalForgeSource.indexOf("const exportSavedStyledProposalSource"),
+      proposalForgeSource.indexOf("const handleExportProposalFile"),
+    );
+
+    expect(atsSavedExport).toContain("proposalDocument: savedProposalDocument");
+    expect(styledSavedExport).toContain(
+      "proposalDocument: savedProposalDocument",
     );
   });
 
