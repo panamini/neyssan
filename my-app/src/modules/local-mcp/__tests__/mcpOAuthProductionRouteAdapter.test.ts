@@ -6002,12 +6002,15 @@ describe("MCP OAuth production route adapter", () => {
         };
       }
       if (isPlainTestRecord(input) && isPlainTestRecord(input.applicationPackageRef)) {
-        const result = fakeReadonlySummaryExecutionResult({
-          toolName: toolCase.toolName,
-          twoweeksClerkId: OWNER_ID,
-          ref: { id: String(input.applicationPackageRef.id) },
-          version: 1,
-        });
+        const result = fakeReadonlySummaryExecutionResult(
+          {
+            toolName: toolCase.toolName,
+            twoweeksClerkId: OWNER_ID,
+            ref: { id: String(input.applicationPackageRef.id) },
+            version: 1,
+          },
+          Date.now(),
+        );
         if (!result.ok) throw new Error("expected fake read-only summary success");
         return result.structuredContent;
       }
@@ -6386,7 +6389,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(runSource).toContain("canonical server keys are allowed only in root .env.local");
     expect(runSource).toContain("cloudflared-mcp-credentials.json");
     expect(runSource).toContain('local service_host="host.docker.internal"');
-    expect(runSource).toContain("http://${service_host}:${MCP_PRIVATE_BETA_VITE_PORT}");
+    expect(runSource).toContain("service: http://${service_host}:${MCP_PRIVATE_BETA_VITE_PORT}");
     expect(runSource).toContain("--token-file /run/secrets/cloudflared-token");
     expect(runSource).not.toContain('--token "${TUNNEL_TOKEN}"');
     expect(dockerignore).toMatch(/^\*\*\/\.env\*$/mu);
@@ -7289,6 +7292,7 @@ function routeDependencies(ctx: ReturnType<typeof makeCtx>) {
 
 function fakeReadonlySummaryExecutionResult(
   input: McpProductionReadonlySummaryExecutionInputV1,
+  updatedAtEpochMs = NOW,
 ): McpProductionReadonlySummaryExecutionResultV1 {
   const toolCase = READONLY_SUMMARY_CASES.find((candidate) => candidate.toolName === input.toolName);
   if (!toolCase) return fakeReadonlySummaryExecutionFailure("unsupported_tool");
@@ -7304,14 +7308,14 @@ function fakeReadonlySummaryExecutionResult(
       kind: toolCase.expectedKind,
       allowed: true,
       status: "available",
-      updatedAt: new Date(NOW).toISOString(),
+      updatedAt: new Date(updatedAtEpochMs).toISOString(),
       [toolCase.resultRefKey]: Object.freeze({
         id: toolCase.safeRefId,
         label: "Safe summary availability",
         status: "available",
         category: toolCase.category,
         count: 1,
-        updatedAt: new Date(NOW).toISOString(),
+        updatedAt: new Date(updatedAtEpochMs).toISOString(),
         version: 1,
       }),
       availability: Object.freeze({
