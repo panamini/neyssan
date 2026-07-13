@@ -230,6 +230,10 @@ export async function buildCoverLetterBlindReviewArtifacts(args: {
 
   const recordsByCase = new Map<string, CoverLetterHumanReviewRecord[]>();
   const recordIdentities = new Set<string>();
+  const acceptedFinalContentByRecord = new Map<
+    CoverLetterHumanReviewRecord,
+    string
+  >();
   for (const record of args.records) {
     if (!caseById.has(record.caseId)) {
       throw new Error(`Unknown blind-review record case: ${record.caseId}.`);
@@ -242,11 +246,18 @@ export async function buildCoverLetterBlindReviewArtifacts(args: {
         `Blind-review record ${record.caseId}/${record.writerModel} is not an accepted finalized artifact.`,
       );
     }
-    const recordIdentity = [
-      record.caseId,
-      record.writerModel,
-      record.artifact.artifactHash,
-    ].join(":");
+    const finalContent = record.artifact.finalContent;
+    if (
+      typeof finalContent !== "string" ||
+      finalContent.length === 0 ||
+      record.letter !== finalContent
+    ) {
+      throw new Error(
+        `Blind-review record ${record.caseId}/${record.writerModel} does not match its accepted artifact final content.`,
+      );
+    }
+    acceptedFinalContentByRecord.set(record, finalContent);
+    const recordIdentity = [record.caseId, record.writerModel].join(":");
     if (recordIdentities.has(recordIdentity)) {
       throw new Error(`Duplicate blind-review record: ${recordIdentity}.`);
     }
@@ -315,7 +326,7 @@ export async function buildCoverLetterBlindReviewArtifacts(args: {
       candidateEvidence: benchmarkCase.personalizationContext,
       candidateEvidenceSourceLanguage: metadata.candidateEvidenceSourceLanguage,
       requiredReviewerLanguages: [...metadata.requiredReviewerLanguages],
-      finalizedLetter: record.letter,
+      finalizedLetter: acceptedFinalContentByRecord.get(record)!,
       contentHandling: CONTENT_HANDLING,
       rubricVersion: BLIND_REVIEW_RUBRIC_VERSION,
       reviewTemplate: createReviewTemplate(),
@@ -467,6 +478,12 @@ export function renderCoverLetterBlindReviewMarkdown(
     "## Reviewer instructions",
     "",
     ...pack.instructions.map((instruction) => `- ${instruction}`),
+    "",
+    "## Rubric",
+    "",
+    ...Object.entries(pack.rubric)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([criterion, definition]) => `- \`${criterion}\`: ${definition}`),
   ];
 
   for (const entry of pack.entries) {

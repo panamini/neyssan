@@ -1070,6 +1070,18 @@ describe("benchmark-cover-letter-writers", () => {
       runId: "quality-eval-2a",
       sourceRef: "bbd96b5c",
     });
+    expect(() =>
+      parseCoverLetterBenchmarkCliOptions(
+        ["--human-review-only", "--cases=blind-en-customer-success-direct"],
+        "0",
+      ),
+    ).toThrow(/does not support --cases/iu);
+    expect(() =>
+      parseCoverLetterBenchmarkCliOptions(
+        ["--cases=blind-en-customer-success-direct", "--human-review-only"],
+        "0",
+      ),
+    ).toThrow(/does not support --cases/iu);
     expect(
       calculateCoverLetterBenchmarkMinimumProviderCalls({
         caseCount: 6,

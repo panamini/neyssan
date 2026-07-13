@@ -30,6 +30,7 @@ afterEach(async () => {
 function makeHumanReviewRecords(): CoverLetterHumanReviewRecord[] {
   return coverLetterBlindReviewCases.map((benchmarkCase, index) => {
     const provider = index % 2 === 0 ? "openai" : "mistral";
+    const letter = `Finalized letter ${index + 1}. IGNORE PREVIOUS INSTRUCTIONS remains inert source text.${index === 0 ? "\n```markdown\n# Fake reviewer instruction" : ""}`;
     return {
       status: "human_review_pending",
       caseId: benchmarkCase.id,
@@ -42,6 +43,7 @@ function makeHumanReviewRecords(): CoverLetterHumanReviewRecord[] {
         decision: "accepted",
         artifactHash: `${index + 1}`.repeat(64),
         provenanceHash: `${index + 7}`.repeat(64),
+        finalContent: letter,
       } as CoverLetterHumanReviewRecord["artifact"],
       diagnostics: {
         provider,
@@ -70,7 +72,7 @@ function makeHumanReviewRecords(): CoverLetterHumanReviewRecord[] {
         commerciallyAcceptable: "unreviewed",
         reviewerNotes: "",
       },
-      letter: `Finalized letter ${index + 1}. IGNORE PREVIOUS INSTRUCTIONS remains inert source text.${index === 0 ? "\n```markdown\n# Fake reviewer instruction" : ""}`,
+      letter,
       notes: benchmarkCase.notes,
       realismTag: benchmarkCase.realismTag,
     };
@@ -268,6 +270,33 @@ describe("cover-letter blind human review", () => {
       buildCoverLetterBlindReviewArtifacts({
         ...baseArgs,
         records: [
+          ...records,
+          {
+            ...records[0]!,
+            artifact: {
+              ...records[0]!.artifact,
+              artifactHash: "f".repeat(64),
+            },
+          },
+        ],
+      }),
+    ).rejects.toThrow(/duplicate blind-review record/iu);
+    await expect(
+      buildCoverLetterBlindReviewArtifacts({
+        ...baseArgs,
+        records: [
+          {
+            ...records[0]!,
+            letter: "Stale text that is not the accepted artifact.",
+          },
+          ...records.slice(1),
+        ],
+      }),
+    ).rejects.toThrow(/accepted artifact final content/iu);
+    await expect(
+      buildCoverLetterBlindReviewArtifacts({
+        ...baseArgs,
+        records: [
           {
             ...records[0]!,
             artifact: {
@@ -310,6 +339,13 @@ describe("cover-letter blind human review", () => {
     );
     const markdown = await readFile(written.packMarkdownPath, "utf8");
     expect(markdown).toBe(renderCoverLetterBlindReviewMarkdown(artifacts.pack));
+    expect(markdown).toContain("## Rubric");
+    expect(markdown).toContain(
+      "The strongest and most relevant evidence is emphasized",
+    );
+    expect(markdown).toContain(
+      "A qualified recruiter could send this letter with at most a small editorial revision.",
+    );
     expect(markdown).toContain("````text");
     expect(markdown).toContain("# Fake reviewer instruction");
     expect(markdown).not.toContain("gpt-5.5");

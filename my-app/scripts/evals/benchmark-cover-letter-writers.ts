@@ -400,6 +400,15 @@ export function parseCoverLetterBenchmarkCliOptions(
     }
   }
 
+  if (
+    options.evaluationMode === "human_review_only" &&
+    options.caseIds !== null
+  ) {
+    throw new Error(
+      "Human-review-only execution does not support --cases; the complete blind-review cohort is required.",
+    );
+  }
+
   return options;
 }
 
