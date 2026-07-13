@@ -73,9 +73,13 @@ export function readStoredDocumentPageSizePreference(): DocumentPageSizePreferen
     return "auto";
   }
 
-  return resolveDocumentPageSizePreference(
-    window.localStorage.getItem(DOCUMENT_PAGE_SIZE_PREFERENCE_STORAGE_KEY),
-  );
+  try {
+    return resolveDocumentPageSizePreference(
+      window.localStorage.getItem(DOCUMENT_PAGE_SIZE_PREFERENCE_STORAGE_KEY),
+    );
+  } catch {
+    return "auto";
+  }
 }
 
 export function writeStoredDocumentPageSizePreference(
@@ -85,10 +89,14 @@ export function writeStoredDocumentPageSizePreference(
     return;
   }
 
-  window.localStorage.setItem(
-    DOCUMENT_PAGE_SIZE_PREFERENCE_STORAGE_KEY,
-    resolveDocumentPageSizePreference(preference),
-  );
+  try {
+    window.localStorage.setItem(
+      DOCUMENT_PAGE_SIZE_PREFERENCE_STORAGE_KEY,
+      resolveDocumentPageSizePreference(preference),
+    );
+  } catch {
+    // Storage can be disabled by browser privacy settings.
+  }
 }
 
 export function documentPageSizeToPx(

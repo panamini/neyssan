@@ -162,6 +162,13 @@ const TEMPLATES: TemplateCard[] = [
     descriptionKey: "templates.description.letterpressLetter",
   },
   {
+    id: "joella-frame-letterhead",
+    name: "Joella Frame Letterhead",
+    kind: "Cover letter",
+    family: "joella-frame-letterhead",
+    descriptionKey: "templates.description.letterpressLetter",
+  },
+  {
     id: "bayer-letterhead",
     name: "Bayer",
     kind: "Cover letter",

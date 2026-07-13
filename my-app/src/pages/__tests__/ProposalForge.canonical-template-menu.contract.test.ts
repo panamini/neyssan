@@ -23,6 +23,7 @@ describe("ProposalForge canonical template quick menu contract", () => {
       ["Volk Letterhead", "volk-letterhead"],
       ["Film und Foto Letterhead", "film-foto-letterhead"],
       ["MoMA Bauhaus Letterhead", "moma-bauhaus-letterhead"],
+      ["Joella Frame Letterhead", "joella-frame-letterhead"],
       ["Bayer", "bayer-letterhead"],
     ]);
 
