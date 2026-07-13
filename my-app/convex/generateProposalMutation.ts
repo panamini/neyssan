@@ -125,7 +125,7 @@ import {
 } from "./lib/proposals/proposalEnforcement";
 
 const action = actionGeneric as typeof GeneratedServer.action;
-const internal = anyApi as typeof GeneratedApi.internal;
+const internal = anyApi as unknown as typeof GeneratedApi.internal;
 
 export { getDeterministicProposalRenderPolicy };
 
