@@ -311,18 +311,20 @@ describe("benchmark-cover-letter-writers", () => {
       code: "repair_limit_exceeded",
       message: "Repair 1 would exceed maxRepairs=0.",
     });
+    const receiptError = new Error("receipt write failed");
 
     await expect(
       runCoverLetterHumanReviewCohort({
         plan,
         generateRecord: vi.fn().mockRejectedValue(budgetError),
-        onRejection: vi
-          .fn()
-          .mockRejectedValue(new Error("receipt write failed")),
+        onRejection: vi.fn().mockRejectedValue(receiptError),
       }),
-    ).rejects.toThrow(
-      "Repair 1 would exceed maxRepairs=0. Failure-receipt handling also failed.",
-    );
+    ).rejects.toBe(budgetError);
+    expect(budgetError).toMatchObject({
+      code: "repair_limit_exceeded",
+      message: "Repair 1 would exceed maxRepairs=0.",
+      cause: receiptError,
+    });
   });
 
   it("uses actual deterministic prompts for a conservative offline 24-call cost preflight", async () => {

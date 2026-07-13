@@ -1673,6 +1673,30 @@ type HumanReviewCohortResult = Readonly<{
   error?: string;
 }>;
 
+function attachFailureReceiptCause(
+  primaryError: Error,
+  receiptError: unknown,
+): boolean {
+  try {
+    const existingCause = primaryError.cause;
+    Object.defineProperty(primaryError, "cause", {
+      configurable: true,
+      enumerable: false,
+      writable: true,
+      value:
+        existingCause === undefined
+          ? receiptError
+          : new AggregateError(
+              [existingCause, receiptError],
+              "Failure-receipt handling also failed.",
+            ),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function runCoverLetterHumanReviewCohort<
   Result extends HumanReviewCohortResult,
 >(args: {
@@ -1709,6 +1733,12 @@ export async function runCoverLetterHumanReviewCohort<
           error,
         });
       } catch (receiptError) {
+        if (
+          error instanceof Error &&
+          attachFailureReceiptCause(error, receiptError)
+        ) {
+          throw error;
+        }
         const rejectionMessage =
           error instanceof Error
             ? error.message
