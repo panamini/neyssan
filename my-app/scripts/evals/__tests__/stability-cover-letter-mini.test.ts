@@ -1,7 +1,16 @@
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import * as path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import type { CoverLetterScore } from "../../../convex/lib/proposals/coverLetterEvaluation";
-import { classifyWeaknessTheme, summarizeCaseStability } from "../stability-cover-letter-mini";
+import {
+  classifyWeaknessTheme,
+  parseStabilityCoverLetterCliOptions,
+  summarizeCaseStability,
+} from "../stability-cover-letter-mini";
 
 function makeScore(overrides?: Partial<CoverLetterScore>): CoverLetterScore {
   return {
@@ -29,6 +38,84 @@ function makeScore(overrides?: Partial<CoverLetterScore>): CoverLetterScore {
 }
 
 describe("stability-cover-letter-mini", () => {
+  it("defaults to offline-disabled live execution and requires explicit budget inputs", () => {
+    expect(parseStabilityCoverLetterCliOptions([], "0")).toMatchObject({
+      live: false,
+      maxCalls: null,
+      maxRepairs: null,
+      maxUsd: null,
+      declaredMaxUsdPerCall: null,
+    });
+    expect(
+      parseStabilityCoverLetterCliOptions(
+        [
+          "--live",
+          "--max-calls=6",
+          "--max-repairs=0",
+          "--max-usd=0.6",
+          "--max-usd-per-call=0.1",
+        ],
+        "0",
+      ),
+    ).toMatchObject({
+      live: true,
+      maxCalls: 6,
+      maxRepairs: 0,
+      maxUsd: 0.6,
+      declaredMaxUsdPerCall: 0.1,
+    });
+  });
+
+  it("loads dotenv before choosing live execution and model defaults", () => {
+    const workdir = mkdtempSync(
+      path.join(tmpdir(), "cover-letter-stability-env-"),
+    );
+    try {
+      writeFileSync(
+        path.join(workdir, ".env.local"),
+        ["COVER_LETTER_EVAL_LIVE=1", "COVER_LETTER_EVAL_MODEL=gpt-5.4"].join(
+          "\n",
+        ),
+      );
+      const result = spawnSync(
+        path.resolve(process.cwd(), "node_modules/.bin/tsx"),
+        [
+          path.resolve(
+            process.cwd(),
+            "scripts/evals/stability-cover-letter-mini.ts",
+          ),
+          "--cases=ops-admin",
+          "--runs=1",
+          "--max-calls=2",
+          "--max-repairs=0",
+          "--max-usd=0.2",
+          "--max-usd-per-call=0.1",
+        ],
+        {
+          cwd: workdir,
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            COVER_LETTER_EVAL_LIVE: "",
+            COVER_LETTER_EVAL_MODEL: "",
+            OPENAI_API_KEY: "",
+            MISTRAL_API_KEY: "",
+          },
+        },
+      );
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(
+        "OPENAI_API_KEY is not configured in the current environment.",
+      );
+      expect(result.stderr).not.toContain(
+        "Live cover-letter evaluation requires --live",
+      );
+    } finally {
+      rmSync(workdir, { recursive: true, force: true });
+    }
+  });
+
   it("classifies recurring weakness themes conservatively", () => {
     expect(
       classifyWeaknessTheme(

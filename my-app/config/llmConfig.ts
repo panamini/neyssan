@@ -1,5 +1,11 @@
 export type LLMProvider = "mistral" | "openai" | "qwen" | "deepseek" | string;
 
+export type OpenAIProposalReasoningEffort =
+  | "minimal"
+  | "low"
+  | "medium"
+  | "high";
+
 export type HelperModelRoute = {
   provider: LLMProvider;
   model: string;
@@ -28,7 +34,7 @@ export interface ILLMConfig {
     qwenFallbackModel: string;
     mistralFallbackModel: string;
     deepseekFallbackModel: string;
-    openaiWriterReasoningEffort?: "minimal" | "low" | "medium" | "high" | null;
+    openaiWriterReasoningEffort?: OpenAIProposalReasoningEffort | null;
   };
   helperModels?: {
     editor: {
@@ -58,6 +64,22 @@ export interface ILLMConfig {
   // When true, force using GPT-5 Nano (skip Mistral entirely)
   forceGpt5NanoOnly?: boolean;
 }
+
+export function resolveOpenAIProposalReasoningEffort(
+  value = process.env.OPENAI_PROPOSAL_REASONING_EFFORT,
+): OpenAIProposalReasoningEffort {
+  const normalizedValue = value?.trim().toLowerCase();
+  switch (normalizedValue) {
+    case "minimal":
+    case "low":
+    case "medium":
+    case "high":
+      return normalizedValue;
+    default:
+      return "low";
+  }
+}
+
 const mistralSmallFallbackModel =
   process.env.MISTRAL_TOOLBAR_FALLBACK_MODEL ??
   process.env.MISTRAL_EDITOR_MODEL ??
@@ -116,13 +138,7 @@ export const llmConfig: ILLMConfig = {
       process.env.MISTRAL_PROPOSAL_MODEL ?? "mistral-large-latest",
     deepseekFallbackModel:
       process.env.DEEPSEEK_PROPOSAL_MODEL ?? "deepseek-v4-flash",
-    openaiWriterReasoningEffort:
-      (process.env.OPENAI_PROPOSAL_REASONING_EFFORT as
-        | "minimal"
-        | "low"
-        | "medium"
-        | "high"
-        | undefined) ?? "low",
+    openaiWriterReasoningEffort: resolveOpenAIProposalReasoningEffort(),
   },
   helperModels: {
     editor: {

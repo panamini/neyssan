@@ -1,8 +1,9 @@
 // convex/generateProposalMutation.ts
-import { action } from "./_generated/server";
+import { actionGeneric, anyApi } from "convex/server";
+import type * as GeneratedServer from "./_generated/server";
+import type * as GeneratedApi from "./_generated/api";
 import { v } from "convex/values";
 import { llmConfig } from "../config/llmConfig";
-import { internal } from "./_generated/api";
 import { ConvexError } from "convex/values";
 import { ProposalService } from "./langchain";
 import { OpenAICompatibleChatAdapter } from "./langchain/models/openai_compatible_chat_adapter";
@@ -122,6 +123,9 @@ import {
   hasStrictNoContextRepairViolation,
   repairProposalSentenceLocally,
 } from "./lib/proposals/proposalEnforcement";
+
+const action = actionGeneric as typeof GeneratedServer.action;
+const internal = anyApi as unknown as typeof GeneratedApi.internal;
 
 export { getDeterministicProposalRenderPolicy };
 

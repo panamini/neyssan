@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { resolveOpenAIProposalReasoningEffort } from "../../../../config/llmConfig";
 import {
   MISTRAL_PREMIUM_COVER_LETTER_ADAPTER,
   PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA,
@@ -33,6 +34,10 @@ import {
   validatePremiumClaimPlanV1,
   validatePremiumWriterOutputV1,
 } from "../premiumCoverLetter";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const directContext = {
   name: "Alex Martin",
@@ -1958,6 +1963,53 @@ describe("premium cover letter prompt contract", () => {
         },
       },
     });
+
+    expect(
+      buildPremiumCoverLetterOpenAIRequest({
+        prompt: "Structured brief: {}",
+        writerModel: "gpt-5.4",
+        maxOutputTokens: 2048,
+      }),
+    ).toMatchObject({ max_output_tokens: 2048 });
+  });
+
+  it("normalizes OpenAI proposal reasoning effort when the request is built", () => {
+    vi.stubEnv("OPENAI_PROPOSAL_REASONING_EFFORT", "  HiGh  ");
+
+    expect(
+      buildPremiumCoverLetterOpenAIRequest({
+        prompt: "Structured brief: {}",
+        writerModel: "gpt-5.4",
+      }).reasoning,
+    ).toEqual({ effort: "high" });
+
+    vi.stubEnv("OPENAI_PROPOSAL_REASONING_EFFORT", "not-supported");
+
+    expect(
+      buildPremiumCoverLetterOpenAIRequest({
+        prompt: "Structured brief: {}",
+        writerModel: "gpt-5.4",
+      }).reasoning,
+    ).toEqual({ effort: "low" });
+  });
+
+  it("whitelists every OpenAI proposal reasoning effort value", () => {
+    const cases: Array<
+      [string | undefined, "minimal" | "low" | "medium" | "high"]
+    > = [
+      [undefined, "low"],
+      ["", "low"],
+      ["   ", "low"],
+      ["not-supported", "low"],
+      ["minimal", "minimal"],
+      ["low", "low"],
+      [" MeDiUm ", "medium"],
+      [" high ", "high"],
+    ];
+
+    for (const [value, expected] of cases) {
+      expect(resolveOpenAIProposalReasoningEffort(value)).toBe(expected);
+    }
   });
 
   it("prefers parsed structured payloads from the Responses API envelope", () => {

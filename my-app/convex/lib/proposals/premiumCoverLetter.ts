@@ -2,7 +2,10 @@ import { z } from "zod";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { ChatMistralAI } from "@langchain/mistralai";
 
-import { llmConfig } from "../../../config/llmConfig";
+import {
+  llmConfig,
+  resolveOpenAIProposalReasoningEffort,
+} from "../../../config/llmConfig";
 import {
   getDeterministicCopyLanguage,
   type ProposalOutputLanguage,
@@ -5452,6 +5455,8 @@ export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
   writerModel?: PremiumCoverLetterWriterModel;
   schema?: Record<string, unknown>;
   signal?: AbortSignal;
+  maxRetries?: number;
+  maxOutputTokens?: number;
 }): Promise<unknown> {
   const resolvedModel = resolvePremiumCoverLetterWriterModel(args.writerModel);
   const responseFormat = resolvePremiumCoverLetterOpenAIResponseFormat({
@@ -5462,12 +5467,18 @@ export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
     writerModel: resolvedModel,
     schema: responseFormat.jsonSchema,
     schemaName: responseFormat.name,
+    maxOutputTokens: args.maxOutputTokens,
   });
 
   const openaiModule: any = await import("openai").catch(() => null);
   const OpenAI = openaiModule?.default ?? openaiModule?.OpenAI ?? null;
   if (OpenAI) {
-    const client = new OpenAI({ apiKey: args.apiKey });
+    const client = new OpenAI({
+      apiKey: args.apiKey,
+      ...(args.maxRetries !== undefined
+        ? { maxRetries: args.maxRetries }
+        : {}),
+    });
     const zodHelperModule: any = await import("openai/helpers/zod").catch(
       () => null,
     );
@@ -5479,12 +5490,15 @@ export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
           model: resolvedModel,
           input: args.prompt,
           reasoning: {
-            effort: llmConfig.proposalModels?.openaiWriterReasoningEffort ?? "low",
+            effort: resolveOpenAIProposalReasoningEffort(),
           },
           text: {
             verbosity: "medium",
             format: zodTextFormat(responseFormat.zodSchema, responseFormat.name),
           },
+          ...(args.maxOutputTokens !== undefined
+            ? { max_output_tokens: args.maxOutputTokens }
+            : {}),
         } as any,
         args.signal ? ({ signal: args.signal } as any) : undefined,
       );
@@ -5603,11 +5617,19 @@ export async function generatePremiumCoverLetterBodyPartsWithMistral(args: {
   prompt: string;
   writerModel: string;
   signal?: AbortSignal;
+  maxRetries?: number;
+  maxOutputTokens?: number;
 }): Promise<unknown> {
   const model = new ChatMistralAI({
     apiKey: args.apiKey,
     modelName: args.writerModel,
     temperature: 0.2,
+    ...(args.maxRetries !== undefined
+      ? { maxRetries: args.maxRetries }
+      : {}),
+    ...(args.maxOutputTokens !== undefined
+      ? { maxTokens: args.maxOutputTokens }
+      : {}),
   });
   const response = await model.invoke(
     [
@@ -5627,14 +5649,18 @@ export function buildPremiumCoverLetterOpenAIRequest(args: {
   writerModel?: PremiumCoverLetterWriterModel;
   schema?: Record<string, unknown>;
   schemaName?: string;
+  maxOutputTokens?: number;
 }) {
   const schema = args.schema ?? PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA;
   const schemaName = args.schemaName ?? "premium_writer_output_v1";
   return {
     model: resolvePremiumCoverLetterWriterModel(args.writerModel),
     input: args.prompt,
+    ...(args.maxOutputTokens !== undefined
+      ? { max_output_tokens: args.maxOutputTokens }
+      : {}),
     reasoning: {
-      effort: llmConfig.proposalModels?.openaiWriterReasoningEffort ?? "low",
+      effort: resolveOpenAIProposalReasoningEffort(),
     },
     text: {
       verbosity: "medium",
