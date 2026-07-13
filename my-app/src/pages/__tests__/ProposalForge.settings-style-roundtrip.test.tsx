@@ -323,7 +323,8 @@ describe("ProposalForge settings style round-trip", () => {
         initialEntries={[
           {
             pathname: "/proposal",
-            search: "?templateId=modernist_signal&templateStart=1",
+            search:
+              "?templateId=modernist_signal&styleSlot=direct&templateStart=1",
             state: createProposalWorkspaceResetState(),
           },
         ]}
@@ -334,7 +335,7 @@ describe("ProposalForge settings style round-trip", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("proposal-settings-style")).toHaveTextContent(
-        "modernist_signal",
+        "workshop|quiet-editorial|cobalt|modernist_signal",
       );
     });
     expect(

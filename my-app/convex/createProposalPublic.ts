@@ -271,6 +271,7 @@ export default mutation({
         premium_quality_gate_passed: v.optional(v.union(v.boolean(), v.null())),
         requestedLanguage: v.optional(v.union(v.string(), v.null())),
         resolvedLanguage: v.optional(v.union(v.string(), v.null())),
+        pageSize: v.optional(v.union(v.literal("a4"), v.literal("letter"))),
         languageSource: v.optional(v.string()),
         jobDetectedLanguage: v.optional(v.union(v.string(), v.null())),
         voicePreset: v.optional(proposalVoicePresetChoice),

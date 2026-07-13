@@ -7,7 +7,7 @@ import {
   within,
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, useLocation } from "react-router-dom";
+import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { ProposalForge as ProposalForgePage } from "../ProposalForge";
 import {
   readStoredProposalOutputDraft,
@@ -24,6 +24,9 @@ const mockProposalTopbarState = vi.hoisted(() => ({
   registration: null as null | {
     onDuplicateProposal: () => void;
     onDeleteProposal: () => void;
+    onPageSizePreferenceChange: (
+      preference: "auto" | "a4" | "letter",
+    ) => void;
   },
 }));
 const mockUpdateProposal = vi.hoisted(() =>
@@ -77,6 +80,7 @@ const SAVED_PROPOSALS = [
         palette: "bordeaux",
       },
       documentStyleVersion: 1,
+      pageSize: "letter",
       resolvedLanguage: "fr",
       verbatiStyle: {
         layout: "swiss",
@@ -409,6 +413,7 @@ vi.mock("../../components/ProposalDisplay", () => ({
     stylePreset,
     templateId,
     documentLanguage,
+    pageSize,
   }: {
     proposalContent: string | null;
     proposalDocument?: { blocks?: Array<{ text?: string }> } | null;
@@ -421,6 +426,7 @@ vi.mock("../../components/ProposalDisplay", () => ({
     } | null;
     templateId?: string | null;
     documentLanguage?: string | null;
+    pageSize?: { id?: string | null } | null;
   }) => (
     <>
       <div data-testid="proposal-display-state">
@@ -436,6 +442,7 @@ vi.mock("../../components/ProposalDisplay", () => ({
       <div data-testid="proposal-document-language">
         {documentLanguage ?? "no-language"}
       </div>
+      <div data-testid="proposal-page-size">{pageSize?.id ?? "no-size"}</div>
     </>
   ),
   fallbackCopyText: () => "",
@@ -466,7 +473,12 @@ function LocationProbe(): JSX.Element {
   );
 }
 
-function ProposalTopbarActionsProbe(): JSX.Element {
+function ProposalTopbarActionsProbe({
+  includeReviewControls = false,
+}: {
+  includeReviewControls?: boolean;
+}): JSX.Element {
+  const navigate = useNavigate();
   return (
     <div role="group" aria-label="Saved proposal actions">
       <button
@@ -483,15 +495,38 @@ function ProposalTopbarActionsProbe(): JSX.Element {
       >
         Delete proposal
       </button>
+      {includeReviewControls ? (
+        <>
+          <button
+            type="button"
+            onClick={() =>
+              mockProposalTopbarState.registration?.onPageSizePreferenceChange(
+                "a4",
+              )
+            }
+          >
+            Use A4
+          </button>
+          <button type="button" onClick={() => navigate("/proposal")}>
+            Return to compose
+          </button>
+        </>
+      ) : null}
     </div>
   );
 }
 
-function ProposalForge(): JSX.Element {
+function ProposalForge({
+  includeReviewControls = false,
+}: {
+  includeReviewControls?: boolean;
+}): JSX.Element {
   return (
     <>
       <ProposalForgePage />
-      <ProposalTopbarActionsProbe />
+      <ProposalTopbarActionsProbe
+        includeReviewControls={includeReviewControls}
+      />
     </>
   );
 }
@@ -535,6 +570,7 @@ describe("ProposalForge saved view", () => {
           "/proposal?view=saved&id=proposal_beta&templateId=modernist_signal",
         ]}
       >
+        <LocationProbe />
         <ProposalForge />
       </MemoryRouter>,
     );
@@ -560,6 +596,128 @@ describe("ProposalForge saved view", () => {
     );
     expect(persistedMetadata).not.toHaveProperty("verbatiStyleBaseSnapshot");
     expect(persistedMetadata).not.toHaveProperty("documentStyleVersion");
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-location")).toHaveTextContent(
+        /^\/proposal\?view=saved&id=proposal_beta$/,
+      );
+    });
+  });
+
+  it("keeps a failed saved gallery template intent in the URL for retry", async () => {
+    mockUpdateProposal.mockRejectedValueOnce(new Error("offline"));
+
+    render(
+      <MemoryRouter
+        initialEntries={[
+          "/proposal?view=saved&id=proposal_beta&templateId=modernist_signal",
+        ]}
+      >
+        <LocationProbe />
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(mockUpdateProposal).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "proposal_beta" }),
+      );
+    });
+    expect(screen.getByTestId("proposal-location")).toHaveTextContent(
+      "/proposal?view=saved&id=proposal_beta&templateId=modernist_signal",
+    );
+  });
+
+  it("restores a saved proposal's persisted page size", async () => {
+    render(
+      <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_beta"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByTestId("proposal-page-size")).toHaveTextContent(
+      "letter",
+    );
+  });
+
+  it("consumes a stale page-size query after the user changes the saved format", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={[
+          "/proposal?view=saved&id=proposal_beta&pageSize=letter",
+        ]}
+      >
+        <LocationProbe />
+        <ProposalForge includeReviewControls />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Use A4" }));
+
+    await waitFor(() => {
+      expect(mockUpdateProposal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "proposal_beta",
+          metadata: expect.objectContaining({ pageSize: "a4" }),
+        }),
+      );
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-location")).toHaveTextContent(
+        /^\/proposal\?view=saved&id=proposal_beta$/,
+      );
+    });
+  });
+
+  it("keeps a saved layout change out of the active compose draft", async () => {
+    writeStoredProposalOutputDraft({
+      proposalContent: "Independent compose draft.",
+      proposalType: "cover_letter",
+      proposalVoicePreset: "signature",
+      proposalTemplateId: "editorial_wide",
+      proposalVerbatiStyle: null,
+      proposalStyleLinkMode: "proposal_local",
+      proposalStyleChoice: "balanced",
+      proposalApplicantName: "Alex Martin",
+      proposalApplicantRole: "Operations Associate",
+      proposalDocumentTitle: "Independent compose draft",
+      proposalDocumentMeta: "Compose output",
+      generatedProposalId: "proposal_compose",
+      proposalOutputMode: "preview",
+      paletteOverride: null,
+      customAccentHex: null,
+      templateBundleId: null,
+      typographyOverride: null,
+      layoutOverride: null,
+      proposalDocumentTitleManual: false,
+      characterLimitMode: null,
+      characterLimitValue: null,
+    });
+
+    render(
+      <MemoryRouter
+        initialEntries={[
+          "/proposal?view=saved&id=proposal_beta&templateId=modernist_signal",
+        ]}
+      >
+        <LocationProbe />
+        <ProposalForge includeReviewControls />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(mockUpdateProposal).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "proposal_beta" }),
+      );
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Return to compose" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-location")).toHaveTextContent(
+        /^\/proposal$/,
+      );
+      const state = screen.getByTestId("proposal-display-state");
+      expect(state).not.toHaveTextContent("modernist_signal");
+    });
   });
 
   it("renders a saved letter with its document locale instead of the UI locale", async () => {

@@ -245,6 +245,7 @@ import {
   readStoredDocumentPageSizePreference,
   resolveDocumentPageSize,
   writeStoredDocumentPageSizePreference,
+  type DocumentPageSizeId,
   type DocumentPageSizePreference,
 } from "../lib/document-page-size";
 import { exportDocumentFile } from "../lib/exportDocumentFile";
@@ -848,6 +849,7 @@ type ProposalDocumentMetadata = DocumentStyleMetadata & {
   proposalDocument?: ProposalDocument | null;
   proposalDocumentRevision?: number;
   proposalDocumentUpdatedAt?: number;
+  pageSize?: DocumentPageSizeId;
 };
 
 function omitProposalTemplateBundleMetadata(
@@ -2940,10 +2942,12 @@ export function ProposalForge(): JSX.Element {
     [search],
   );
   const proposalStyleSlotIntent = React.useMemo(
-    () =>
-      resolveProposalStyleSlotIntent(
-        new URLSearchParams(search).get("templateId"),
-      ),
+    () => {
+      const params = new URLSearchParams(search);
+      return resolveProposalStyleSlotIntent(
+        params.get("styleSlot") ?? params.get("templateId"),
+      );
+    },
     [search],
   );
   const proposalDirectTemplateIntent = React.useMemo(() => {
@@ -3359,13 +3363,11 @@ export function ProposalForge(): JSX.Element {
     React.useState<DocumentPageSizePreference>(
       () => proposalPageSizeIntent ?? readStoredDocumentPageSizePreference(),
     );
-  const handleProposalPageSizePreferenceChange = React.useCallback(
-    (preference: DocumentPageSizePreference) => {
-      setProposalPageSizePreference(preference);
-      writeStoredDocumentPageSizePreference(preference);
-    },
-    [],
-  );
+  const [savedProposalPageSizeOverride, setSavedProposalPageSizeOverride] =
+    React.useState<{
+      proposalId: string;
+      preference: DocumentPageSizePreference;
+    } | null>(null);
   const [lastProposalRequest, setLastProposalRequest] =
     React.useState<FormValues | null>(null);
   const [composePreviewValues, setComposePreviewValues] =
@@ -5208,6 +5210,10 @@ export function ProposalForge(): JSX.Element {
     if (lastProposalRequest?.creativity) {
       nextMetadata.creativity = lastProposalRequest.creativity;
     }
+    nextMetadata.pageSize = resolveDocumentPageSize({
+      preference: proposalPageSizePreference,
+      locale: storedOutputDraft?.resolvedLanguage,
+    }).id;
     Object.assign(
       nextMetadata,
       buildProposalHeadingMetadataPatch({
@@ -5260,10 +5266,12 @@ export function ProposalForge(): JSX.Element {
     proposalContentForPersistence,
     proposalHeaderVisibility,
     proposalLetterDate,
+    proposalPageSizePreference,
     proposalRecipientDetails,
     proposalDocument,
     proposalType,
     proposalVoicePreset,
+    storedOutputDraft?.resolvedLanguage,
     storedOutputProposalClosingToken,
   ]);
   const buildComposeSaveSnapshot = React.useCallback(
@@ -5938,15 +5946,27 @@ export function ProposalForge(): JSX.Element {
         : null,
     [selectedProposalId, sortedSavedProposals],
   );
+  const persistedSavedProposalPageSize = isDocumentPageSizeId(
+    openedSavedProposal?.metadata?.pageSize,
+  )
+    ? openedSavedProposal.metadata.pageSize
+    : null;
+  const effectiveSavedProposalPageSizePreference =
+    savedProposalPageSizeOverride?.proposalId === selectedProposalId
+      ? savedProposalPageSizeOverride.preference
+      : persistedSavedProposalPageSize ?? proposalPageSizePreference;
   const resolvedProposalPageSize = React.useMemo(
     () =>
       resolveDocumentPageSize({
-        preference: proposalPageSizePreference,
+        preference: isSavedView
+          ? effectiveSavedProposalPageSizePreference
+          : proposalPageSizePreference,
         locale: isSavedView
           ? openedSavedProposal?.metadata?.resolvedLanguage
           : storedOutputDraft?.resolvedLanguage,
       }),
     [
+      effectiveSavedProposalPageSizePreference,
       isSavedView,
       openedSavedProposal?.metadata?.resolvedLanguage,
       proposalPageSizePreference,
@@ -6835,11 +6855,11 @@ export function ProposalForge(): JSX.Element {
       metadata?: SavedProposalRecord["metadata"];
     }) => {
       if (!openedSavedProposal) {
-        return;
+        return false;
       }
       if (!canPersistProposalState) {
         showConvexAuthRequiredToast("Save");
-        return;
+        return false;
       }
 
       await updateProposal({
@@ -6853,12 +6873,109 @@ export function ProposalForge(): JSX.Element {
           : {}),
         ...(patch.metadata ? { metadata: patch.metadata } : {}),
       });
+      return true;
     },
     [
       canPersistProposalState,
       openedSavedProposal,
       showConvexAuthRequiredToast,
       updateProposal,
+    ],
+  );
+
+  const clearProposalPageSizeIntent = React.useCallback(() => {
+    if (!proposalPageSizeIntent) {
+      return;
+    }
+
+    const params = new URLSearchParams(search);
+    params.delete("pageSize");
+    const nextSearch = params.toString();
+    void navigate(
+      {
+        pathname: location.pathname,
+        search: nextSearch ? `?${nextSearch}` : "",
+      },
+      { replace: true, state: location.state },
+    );
+  }, [
+    location.pathname,
+    location.state,
+    navigate,
+    proposalPageSizeIntent,
+    search,
+  ]);
+
+  React.useEffect(() => {
+    if (!savedProposalPageSizeOverride) {
+      return;
+    }
+
+    const storedPreference = persistedSavedProposalPageSize ?? "auto";
+    if (
+      savedProposalPageSizeOverride.proposalId === selectedProposalId &&
+      savedProposalPageSizeOverride.preference === storedPreference
+    ) {
+      setSavedProposalPageSizeOverride(null);
+    }
+  }, [
+    persistedSavedProposalPageSize,
+    savedProposalPageSizeOverride,
+    selectedProposalId,
+  ]);
+
+  const handleProposalPageSizePreferenceChange = React.useCallback(
+    (preference: DocumentPageSizePreference) => {
+      setProposalPageSizePreference(preference);
+      writeStoredDocumentPageSizePreference(preference);
+
+      if (!isSavedView || !openedSavedProposal || !selectedProposalId) {
+        clearProposalPageSizeIntent();
+        return;
+      }
+
+      setSavedProposalPageSizeOverride({
+        proposalId: selectedProposalId,
+        preference,
+      });
+      const nextMetadata: ProposalDocumentMetadata = {
+        ...(savedProposalRenderMetadata ?? openedSavedProposal.metadata ?? {}),
+      };
+      if (preference === "auto") {
+        delete nextMetadata.pageSize;
+      } else {
+        nextMetadata.pageSize = preference;
+      }
+
+      setIsSavingSavedProposal(true);
+      void persistOpenedSavedProposal({ metadata: nextMetadata })
+        .then((persisted) => {
+          if (!persisted) {
+            setSavedProposalPageSizeOverride(null);
+            return;
+          }
+          clearProposalPageSizeIntent();
+        })
+        .catch((error) => {
+          setSavedProposalPageSizeOverride(null);
+          console.error("Failed to persist saved proposal page size:", error);
+          showToast("Page size not saved.", {
+            variant: "error",
+            description: "Check your connection and try again.",
+          });
+        })
+        .finally(() => {
+          setIsSavingSavedProposal(false);
+        });
+    },
+    [
+      clearProposalPageSizeIntent,
+      isSavedView,
+      openedSavedProposal,
+      persistOpenedSavedProposal,
+      savedProposalRenderMetadata,
+      selectedProposalId,
+      showToast,
     ],
   );
 
@@ -8378,7 +8495,7 @@ export function ProposalForge(): JSX.Element {
   );
 
   const handleProposalLayoutSelect = React.useCallback(
-    (templateId: ProposalTemplateId) => {
+    async (templateId: ProposalTemplateId): Promise<boolean> => {
       const activeStylePreset = isSavedView
         ? effectiveSavedProposalStylePreset
         : effectiveProposalStylePresetWithPalette;
@@ -8389,33 +8506,34 @@ export function ProposalForge(): JSX.Element {
         }) ?? proposalStyleChoice;
 
       if (isSavedView && openedSavedProposal && savedProposalRenderMetadata) {
-        setSavedProposalTemplateId(templateId);
-        setSavedProposalStyleLinkMode("proposal_local");
-        setProposalTemplateId(templateId);
-        setProposalStyleLinkMode("proposal_local");
-        setProposalTemplateBundleId(null);
-        setProposalStyleChoice(nextStyleChoice);
-        setProposalWorkspaceStyle(activeStylePreset);
-        setHasUserEditedStyle(true);
-
         setIsSavingSavedProposal(true);
-        void persistOpenedSavedProposal({
-          metadata: {
-            ...omitProposalTemplateBundleMetadata(
-              savedProposalRenderMetadata,
-            ),
-            templateId,
-            styleLinkMode: "proposal_local",
-            styleChoice: nextStyleChoice,
-          },
-        })
-          .catch((error) => {
-            console.error("Failed to persist saved proposal layout:", error);
-          })
-          .finally(() => {
-            setIsSavingSavedProposal(false);
+        try {
+          const persisted = await persistOpenedSavedProposal({
+            metadata: {
+              ...omitProposalTemplateBundleMetadata(
+                savedProposalRenderMetadata,
+              ),
+              templateId,
+              styleLinkMode: "proposal_local",
+              styleChoice: nextStyleChoice,
+            },
           });
-        return;
+          if (!persisted) {
+            return false;
+          }
+          setSavedProposalTemplateId(templateId);
+          setSavedProposalStyleLinkMode("proposal_local");
+          return true;
+        } catch (error) {
+          console.error("Failed to persist saved proposal layout:", error);
+          showToast("Template not applied.", {
+            variant: "error",
+            description: "Check your connection and try again.",
+          });
+          return false;
+        } finally {
+          setIsSavingSavedProposal(false);
+        }
       }
 
       setProposalStyleLinkMode("proposal_local");
@@ -8459,6 +8577,7 @@ export function ProposalForge(): JSX.Element {
         styleChoice: nextStyleChoice,
         ...documentStyleMetadata,
       };
+      return true;
     },
     [
       effectiveSavedProposalStylePreset,
@@ -8469,10 +8588,12 @@ export function ProposalForge(): JSX.Element {
       proposalSettingsPresets,
       proposalStyleChoice,
       savedProposalRenderMetadata,
+      showToast,
     ],
   );
 
   const appliedSavedRouteTemplateIntentRef = React.useRef<string | null>(null);
+  const pendingSavedRouteTemplateIntentRef = React.useRef<string | null>(null);
   React.useEffect(() => {
     if (
       !isSavedView ||
@@ -8487,22 +8608,40 @@ export function ProposalForge(): JSX.Element {
     }
 
     const intentKey = `${selectedProposalId}:${proposalTemplateIntent}`;
-    if (appliedSavedRouteTemplateIntentRef.current === intentKey) {
+    if (
+      appliedSavedRouteTemplateIntentRef.current === intentKey ||
+      pendingSavedRouteTemplateIntentRef.current === intentKey
+    ) {
       return;
     }
-    appliedSavedRouteTemplateIntentRef.current = intentKey;
-    handleProposalLayoutSelect(proposalTemplateIntent);
+    pendingSavedRouteTemplateIntentRef.current = intentKey;
+    let cancelled = false;
+    void handleProposalLayoutSelect(proposalTemplateIntent)
+      .then((persisted) => {
+        if (!persisted || cancelled) {
+          return;
+        }
+        appliedSavedRouteTemplateIntentRef.current = intentKey;
+        const params = new URLSearchParams(search);
+        params.delete("templateId");
+        const nextSearch = params.toString();
+        void navigate(
+          {
+            pathname: location.pathname,
+            search: nextSearch ? `?${nextSearch}` : "",
+          },
+          { replace: true, state: null },
+        );
+      })
+      .finally(() => {
+        if (pendingSavedRouteTemplateIntentRef.current === intentKey) {
+          pendingSavedRouteTemplateIntentRef.current = null;
+        }
+      });
 
-    const params = new URLSearchParams(search);
-    params.delete("templateId");
-    const nextSearch = params.toString();
-    void navigate(
-      {
-        pathname: location.pathname,
-        search: nextSearch ? `?${nextSearch}` : "",
-      },
-      { replace: true, state: null },
-    );
+    return () => {
+      cancelled = true;
+    };
   }, [
     handleProposalLayoutSelect,
     isSavedView,
@@ -11879,7 +12018,9 @@ export function ProposalForge(): JSX.Element {
         });
       },
       onPageSizePreferenceChange: handleProposalPageSizePreferenceChange,
-      pageSizePreference: proposalPageSizePreference,
+      pageSizePreference: isSavedView
+        ? effectiveSavedProposalPageSizePreference
+        : proposalPageSizePreference,
       onShareSavedProposal: isSavedView
         ? () => {
             void handleShareSavedProposal();
@@ -11887,6 +12028,7 @@ export function ProposalForge(): JSX.Element {
         : undefined,
     }),
     [
+      effectiveSavedProposalPageSizePreference,
       handleCopyOutput,
       handleDeleteOutput,
       handleDeleteSavedProposal,

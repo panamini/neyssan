@@ -322,7 +322,9 @@ function getCoverLetterTemplateIntent(
 ): CoverLetterTemplateIntent | null {
   if (family === "minimal") return "minimal";
   if (family === "bold") return "direct";
-  if (family === "letterpress") return "editorial";
+  if (family === "letterpress" || family === "editorial-letterhead") {
+    return "editorial";
+  }
   return null;
 }
 
@@ -512,6 +514,10 @@ export function TemplatesPage(): JSX.Element {
       const pageSizeIntent = getCoverLetterCreationPageSizeIntent(template);
       if (pageSizeIntent) {
         routeParams.set("pageSize", pageSizeIntent);
+      }
+      const styleSlotIntent = getCoverLetterTemplateIntent(template.family);
+      if (styleSlotIntent) {
+        routeParams.set("styleSlot", styleSlotIntent);
       }
       if (isCanonicalCoverLetterTemplateStart(template)) {
         routeParams.set("templateStart", "1");

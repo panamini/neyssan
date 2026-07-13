@@ -868,6 +868,52 @@ describe("ProposalForge autosave", () => {
     });
   });
 
+  it("persists a canonical template page-size intent in proposal metadata", async () => {
+    window.localStorage.setItem(
+      PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        proposalContent: "Letter-sized autosave body.",
+        proposalType: "cover_letter",
+        proposalVoicePreset: "signature",
+        proposalTemplateId: "workshop_proposal_margin",
+        proposalVerbatiStyle: null,
+        proposalStyleLinkMode: "proposal_local",
+        proposalStyleChoice: "balanced",
+        proposalApplicantName: "Alex Martin",
+        proposalApplicantRole: "Operations Associate",
+        proposalDocumentTitle: "Letter-sized autosave title",
+        proposalDocumentMeta: "Compose output",
+        generatedProposalId: null,
+        proposalOutputMode: "preview",
+        paletteOverride: null,
+        customAccentHex: null,
+        templateBundleId: null,
+        typographyOverride: null,
+        layoutOverride: null,
+        proposalDocumentTitleManual: false,
+        characterLimitMode: null,
+        characterLimitValue: null,
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/proposal?pageSize=letter"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit content once" }));
+    await waitForAutosave();
+
+    await waitFor(() => {
+      expect(mockCreateProposal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ pageSize: "letter" }),
+        }),
+      );
+    });
+  });
+
   it("preserves source cv and detached style semantics when autosaving direct style edits", async () => {
     mockAttachedCvId = "cv_alpha";
     window.localStorage.setItem(

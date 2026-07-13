@@ -407,6 +407,7 @@ export default defineSchema({
       characterLimitValue: v.optional(v.union(v.number(), v.null())),
       requestedLanguage: v.optional(v.union(v.string(), v.null())),
       resolvedLanguage: v.optional(v.union(v.string(), v.null())),
+      pageSize: v.optional(v.union(v.literal("a4"), v.literal("letter"))),
       languageSource: v.optional(v.union(v.string(), v.null())),
       jobDetectedLanguage: v.optional(v.union(v.string(), v.null())),
       closing: v.optional(proposalClosingChoice),
