@@ -46,6 +46,7 @@ import {
   RECORDED_COVER_LETTER_REPLAY_FIXTURES,
   recordedCoverLetterReplayFixtureSchema,
 } from "../fixtures/cover-letter/recorded-writer-responses";
+import * as coverLetterEvalRunManifest from "../cover-letter-eval-run-manifest";
 
 const successfulEvaluation: CoverLetterScore = {
   score: {
@@ -83,6 +84,7 @@ const emptyManualReview = {
 } as const;
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
@@ -245,6 +247,31 @@ describe("benchmark-cover-letter-writers", () => {
         error: "model compatibility failed",
       },
     });
+  });
+
+  it("preserves the primary cohort failure when failure-receipt handling also fails", async () => {
+    const plan = buildCoverLetterHumanReviewPlan({
+      cases: coverLetterBlindReviewCases,
+      writerModels: QUALITY_EVAL_2B_WRITER_MODELS,
+    });
+    const failedItem = plan[0]!;
+    const generateRecord = vi.fn().mockResolvedValue({
+      status: "generation_failed",
+      caseId: failedItem.benchmarkCase.id,
+      writerModel: failedItem.writerModel,
+      error: "model compatibility failed",
+    });
+    const onFailure = vi
+      .fn()
+      .mockRejectedValue(new Error("receipt write failed"));
+
+    await expect(
+      runCoverLetterHumanReviewCohort({ plan, generateRecord, onFailure }),
+    ).rejects.toThrow(
+      `Human-review cohort generation failed at ${failedItem.benchmarkCase.id}/${failedItem.writerModel}: model compatibility failed. Failure-receipt handling also failed.`,
+    );
+    expect(generateRecord).toHaveBeenCalledOnce();
+    expect(onFailure).toHaveBeenCalledOnce();
   });
 
   it("uses actual deterministic prompts for a conservative offline 24-call cost preflight", async () => {
@@ -1564,6 +1591,54 @@ describe("benchmark-cover-letter-writers", () => {
         provenanceHash: null,
       },
       manualReview: emptyManualReview,
+    });
+  });
+
+  it("preserves a generation failure when failure metadata SDK discovery fails", async () => {
+    vi.spyOn(
+      coverLetterEvalRunManifest,
+      "resolveCoverLetterEvalInstalledSdkVersions",
+    ).mockRejectedValue(new Error("SDK lookup unavailable"));
+    const benchmarkCase = coverLetterBenchmarkCases.find(
+      (item) => item.id === "strong-adjacent-honest-transfer",
+    )!;
+    const generateLetter = vi
+      .fn()
+      .mockImplementation(
+        async ({ onFailure, onProviderResponseMetadata, onWriterPrompt }) => {
+          onWriterPrompt?.("captured production writer prompt");
+          onProviderResponseMetadata?.({
+            returnedModel: "gpt-5.5-2026-06-30",
+            tokenUsage: null,
+          });
+          onFailure?.({
+            stage: "validation",
+            reason: "non_repairable_validation",
+            contextClass: "cv_adjacent",
+            issues: ["adjacent_direct_fit"],
+          });
+          return null;
+        },
+      );
+
+    await expect(
+      benchmarkCoverLetterCase({
+        benchmarkCase,
+        writerModel: "gpt-5.5",
+        evaluatorModel: "gpt-5-mini",
+        apiKey: "sk-openai",
+        generateLetter,
+        evaluateLetter: vi.fn(),
+      }),
+    ).resolves.toMatchObject({
+      status: "generation_failed",
+      error:
+        "Premium cover-letter generation failed at validation: non_repairable_validation, adjacent_direct_fit.",
+      diagnostics: {
+        failureStage: "validation",
+        failureReason: "non_repairable_validation",
+        failureIssues: ["adjacent_direct_fit"],
+      },
     });
   });
 });

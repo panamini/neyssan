@@ -1101,21 +1101,25 @@ async function buildBenchmarkFailureAttemptMetadata(args: {
     return undefined;
   }
   const provider = resolveBenchmarkWriterProvider(args.writerModel);
-  return buildCoverLetterEvalFailureAttemptMetadata({
-    caseId: args.benchmarkCase.id,
-    provider,
-    requestedModel: args.writerModel,
-    returnedModel: args.providerResponseMetadata?.returnedModel ?? null,
-    prompt: args.prompt,
-    reasoningEffort:
-      provider === "openai" ? resolveOpenAIProposalReasoningEffort() : null,
-    writerMaxOutputTokens: COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS,
-    providerMaxRetries: COVER_LETTER_EVAL_PROVIDER_MAX_RETRIES,
-    tokenUsage: args.providerResponseMetadata?.tokenUsage ?? null,
-    sdkVersions: await resolveCoverLetterEvalInstalledSdkVersions(),
-    artifactHash: args.artifact?.artifactHash ?? null,
-    provenanceHash: args.artifact?.provenanceHash ?? null,
-  });
+  try {
+    return await buildCoverLetterEvalFailureAttemptMetadata({
+      caseId: args.benchmarkCase.id,
+      provider,
+      requestedModel: args.writerModel,
+      returnedModel: args.providerResponseMetadata?.returnedModel ?? null,
+      prompt: args.prompt,
+      reasoningEffort:
+        provider === "openai" ? resolveOpenAIProposalReasoningEffort() : null,
+      writerMaxOutputTokens: COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS,
+      providerMaxRetries: COVER_LETTER_EVAL_PROVIDER_MAX_RETRIES,
+      tokenUsage: args.providerResponseMetadata?.tokenUsage ?? null,
+      sdkVersions: await resolveCoverLetterEvalInstalledSdkVersions(),
+      artifactHash: args.artifact?.artifactHash ?? null,
+      provenanceHash: args.artifact?.provenanceHash ?? null,
+    });
+  } catch {
+    return undefined;
+  }
 }
 
 async function prepareCoverLetterBenchmarkCase(
@@ -1687,13 +1691,22 @@ export async function runCoverLetterHumanReviewCohort<
   for (const item of args.plan) {
     const result = await args.generateRecord(item);
     if (result.status !== "human_review_pending") {
-      await args.onFailure?.({
-        completedRecords: records,
-        failure: result as Exclude<Result, { status: "human_review_pending" }>,
-      });
-      throw new Error(
-        `Human-review cohort generation failed at ${result.caseId ?? item.benchmarkCase.id}/${result.writerModel ?? item.writerModel}: ${result.error ?? result.status}`,
-      );
+      const failureMessage = `Human-review cohort generation failed at ${result.caseId ?? item.benchmarkCase.id}/${result.writerModel ?? item.writerModel}: ${result.error ?? result.status}`;
+      try {
+        await args.onFailure?.({
+          completedRecords: records,
+          failure: result as Exclude<
+            Result,
+            { status: "human_review_pending" }
+          >,
+        });
+      } catch (receiptError) {
+        throw new Error(
+          `${failureMessage}. Failure-receipt handling also failed.`,
+          { cause: receiptError },
+        );
+      }
+      throw new Error(failureMessage);
     }
     records.push(result as Extract<Result, { status: "human_review_pending" }>);
   }

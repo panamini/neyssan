@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 
@@ -194,6 +194,10 @@ describe("cover-letter eval failure receipt", () => {
       ),
     );
     expect(JSON.parse(await readFile(receiptPath, "utf8"))).toEqual(receipt);
+    expect((await stat(receiptPath)).mode & 0o777).toBe(0o600);
+
+    await chmod(receiptPath, 0o644);
+    await writeCoverLetterEvalFailureReceipt({ outputDirectory, receipt });
     expect((await stat(receiptPath)).mode & 0o777).toBe(0o600);
   });
 });

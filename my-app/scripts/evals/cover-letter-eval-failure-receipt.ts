@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
 import * as path from "node:path";
 
 import { buildStableHash } from "../../src/modules/application-harness/fingerprints";
@@ -223,5 +223,6 @@ export async function writeCoverLetterEvalFailureReceipt(args: {
     encoding: "utf8",
     mode: 0o600,
   });
+  await chmod(receiptPath, 0o600);
   return receiptPath;
 }
