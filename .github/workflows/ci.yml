@@ -48,7 +48,6 @@ jobs:
           MISTRAL_API_KEY: ""
           COVER_LETTER_EVAL_LIVE: "0"
           PROPOSAL_GENERATION_QUALITY_MODE: baseline
-          cover_letter_premium_prompt_v2: ""
           COVER_LETTER_PREMIUM_PROMPT_V2: ""
           ENABLE_COVER_LETTER_PREMIUM_PROMPT_V2: ""
           ENABLE_COVER_LETTER_QUALITY_REPAIR_V1: ""
