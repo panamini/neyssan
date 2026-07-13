@@ -247,7 +247,12 @@ function escapeRegExp(value) {
 
 function configureValidMcpFixture(
   fixture,
-  { rootEnvExtra = "", baseEnv = "", appEnv = "" } = {},
+  {
+    rootEnvExtra = "",
+    baseEnv = "",
+    appEnv = "",
+    subjectDigest = "b".repeat(64),
+  } = {},
 ) {
   rmSync(join(fixture.binDirectory, "node"));
   symlinkSync(process.execPath, join(fixture.binDirectory, "node"));
@@ -262,6 +267,7 @@ function configureValidMcpFixture(
 
   const hiddenValues = {
     digest: "a".repeat(64),
+    subjectDigest,
     convexToken: "doctor-valid#convex-token-do-not-print",
   };
   writeFileSync(
@@ -275,6 +281,7 @@ MCP_OAUTH_PRODUCTION_CLIENT_IDS="local-chatgpt-client" # exact client
 MCP_OAUTH_PRODUCTION_PRIVATE_BETA_ENABLED="1" # enabled
 MCP_OAUTH_PRODUCTION_PRIVATE_BETA_CLIENT_IDS="local-chatgpt-client" # exact client
 MCP_OAUTH_PRODUCTION_PRIVATE_BETA_RESOURCES="https://mcp.twoweeks.ai/mcp" # exact resource
+MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECT_DIGESTS="${hiddenValues.subjectDigest}" # digest only
 MCP_OAUTH_PRODUCTION_RESOURCE="https://mcp.twoweeks.ai/mcp" # exact resource
 MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN="https://mcp.twoweeks.ai" # exact origin
 MCP_OAUTH_PRODUCTION_REDIRECT_URIS="https://chatgpt.com/connector/oauth/b7v_6OncLEsg" # exact redirect
@@ -1916,6 +1923,7 @@ test("doctor mcp-private-beta fails closed without printing configured values", 
     "configured-client-do-not-print",
     "configured-issuer-do-not-print.invalid",
     "configured-secret-digest-do-not-print",
+    "configured-subject-digest-do-not-print",
     "configured-convex-token-do-not-print",
   ];
   writeFileSync(
@@ -1929,6 +1937,7 @@ MCP_OAUTH_PRODUCTION_CLIENT_IDS=${configuredValues[1]}
 MCP_OAUTH_PRODUCTION_PRIVATE_BETA_ENABLED=1
 MCP_OAUTH_PRODUCTION_PRIVATE_BETA_CLIENT_IDS=${configuredValues[1]}
 MCP_OAUTH_PRODUCTION_PRIVATE_BETA_RESOURCES=https://configured-resource-do-not-print.invalid/mcp
+MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECT_DIGESTS=${configuredValues[4]}
 MCP_OAUTH_PRODUCTION_RESOURCE=https://configured-resource-do-not-print.invalid/mcp
 MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN=https://configured-origin-do-not-print.invalid
 MCP_OAUTH_PRODUCTION_REDIRECT_URIS=https://configured-redirect-do-not-print.invalid/oauth
@@ -1937,7 +1946,7 @@ MCP_OAUTH_PRODUCTION_PROVIDER_ENVIRONMENT=configured-provider-do-not-print
 MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256=${configuredValues[3]}
 CLERK_JWT_ISSUER_DOMAIN=https://configured-clerk-do-not-print.invalid
 CONVEX_URL=https://configured-convex-do-not-print.invalid
-CONVEX_AUTH_TOKEN=${configuredValues[4]}
+CONVEX_AUTH_TOKEN=${configuredValues[5]}
 `,
     { mode: 0o600 },
   );
@@ -2337,6 +2346,39 @@ test("doctor matches mcp-check legacy alias scope", (t) => {
   assert.equal(result.status, 0, result.output);
   assert.doesNotMatch(result.output, /legacy-(base|app)-value/u);
 });
+
+test("doctor rejects raw private-beta subject identifiers without printing them", (t) => {
+  const fixture = createFixture(t);
+  const rawSubject = "raw-subject-do-not-print";
+  configureValidMcpFixture(fixture, {
+    rootEnvExtra: `MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECTS=${rawSubject}\n`,
+  });
+
+  const result = runDoctor(fixture, ["mcp-private-beta"]);
+
+  assertFailure(result);
+  assert.match(result.output, /raw private-beta subject identifiers are forbidden/i);
+  assert.doesNotMatch(result.output, new RegExp(escapeRegExp(rawSubject), "u"));
+});
+
+for (const [label, subjectDigest] of [
+  ["uppercase private-beta subject digests", "B".repeat(64)],
+  ["a trailing private-beta subject digest separator", `${"b".repeat(64)},`],
+]) {
+  test(`doctor rejects ${label} without printing them`, (t) => {
+    const fixture = createFixture(t);
+    configureValidMcpFixture(fixture, { subjectDigest });
+
+    const result = runDoctor(fixture, ["mcp-private-beta"]);
+
+    assertFailure(result);
+    assert.match(
+      result.output,
+      /MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECT_DIGESTS must contain lowercase SHA-256 hex digests/u,
+    );
+    assert.doesNotMatch(result.output, new RegExp(escapeRegExp(subjectDigest), "u"));
+  });
+}
 
 test("doctor mcp-private-beta ignores an invalid local-fast Vite port", (t) => {
   const fixture = createFixture(t);

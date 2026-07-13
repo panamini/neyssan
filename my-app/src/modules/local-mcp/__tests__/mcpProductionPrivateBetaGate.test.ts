@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,6 +19,8 @@ const SOURCE_FILE = resolve(TEST_DIR, "../mcpProductionPrivateBetaGate.ts");
 const CLIENT_ID = "chatgpt_apps_sdk_client";
 const RESOURCE = "https://mcp.twoweeks.example.test/resource";
 const SUBJECT_ID = "user_twoweeks_fixture_123";
+const SUBJECT_DIGEST = sha256Hex(SUBJECT_ID);
+const OTHER_SUBJECT_DIGEST = sha256Hex("other_user");
 const NOW = Date.parse("2026-06-30T20:00:00.000Z");
 const FORBIDDEN_GATE_LAYER_PATTERNS = Object.freeze([
   /mcpOAuthProductionRouteAdapter/u,
@@ -47,6 +50,14 @@ describe("MCP production private beta gate", () => {
   });
 
   it("fails closed for malformed config and empty enabled allowlists", () => {
+    const sparseSubjectDigests = new Array<string>(2);
+    sparseSubjectDigests[0] = SUBJECT_DIGEST;
+    const iteratorMaskedSubjectDigests = [SUBJECT_DIGEST, "not-a-digest"];
+    Object.defineProperty(iteratorMaskedSubjectDigests, Symbol.iterator, {
+      value: function* maskedIterator() {
+        yield SUBJECT_DIGEST;
+      },
+    });
     expect(evaluateMcpProductionPrivateBetaGate({
       envelope: envelope(),
       config: { enabled: "1" } as never,
@@ -67,17 +78,53 @@ describe("MCP production private beta gate", () => {
         enabled: true,
         allowedClientIds: [CLIENT_ID],
         allowedResources: [RESOURCE],
-        allowedSubjectIds: [],
+        allowedSubjectDigests: [],
       },
     })).toMatchObject({
       allowed: false,
       code: "private_beta_empty_allowlist",
     });
+    expect(evaluateMcpProductionPrivateBetaGate({
+      envelope: envelope(),
+      config: {
+        enabled: true,
+        allowedClientIds: [CLIENT_ID],
+        allowedResources: [RESOURCE],
+      },
+    })).toMatchObject({
+      allowed: false,
+      code: "private_beta_malformed_config",
+    });
+    expect(evaluateMcpProductionPrivateBetaGate({
+      envelope: envelope(),
+      verifiedSubjectDigest: SUBJECT_DIGEST,
+      config: betaConfig({ allowedSubjectDigests: ["A".repeat(64)] }),
+    })).toMatchObject({
+      allowed: false,
+      code: "private_beta_malformed_config",
+    });
+    for (const allowedSubjectDigests of [
+      [` ${SUBJECT_DIGEST}`],
+      [`${SUBJECT_DIGEST} `],
+      [SUBJECT_DIGEST, ""],
+      sparseSubjectDigests,
+      iteratorMaskedSubjectDigests,
+    ]) {
+      expect(evaluateMcpProductionPrivateBetaGate({
+        envelope: envelope(),
+        verifiedSubjectDigest: SUBJECT_DIGEST,
+        config: betaConfig({ allowedSubjectDigests }),
+      })).toMatchObject({
+        allowed: false,
+        code: "private_beta_malformed_config",
+      });
+    }
   });
 
-  it("allows matching client and resource without constructing responses or policy decisions", () => {
+  it("allows matching client, resource, and subject digest without constructing responses", () => {
     const decision = evaluateMcpProductionPrivateBetaGate({
       envelope: envelope("twoweeks.unreviewed.future_method"),
+      verifiedSubjectDigest: SUBJECT_DIGEST,
       config: betaConfig(),
     });
 
@@ -97,6 +144,7 @@ describe("MCP production private beta gate", () => {
   it("denies non-allowlisted client, resource, or subject without echoing inputs", () => {
     expect(evaluateMcpProductionPrivateBetaGate({
       envelope: envelope("initialize", { verifiedClientId: "other_client" }),
+      verifiedSubjectDigest: SUBJECT_DIGEST,
       config: betaConfig(),
     })).toMatchObject({
       allowed: false,
@@ -106,6 +154,7 @@ describe("MCP production private beta gate", () => {
     });
     expect(evaluateMcpProductionPrivateBetaGate({
       envelope: envelope("initialize", { verifiedResource: "https://other.example.test/resource" }),
+      verifiedSubjectDigest: SUBJECT_DIGEST,
       config: betaConfig(),
     })).toMatchObject({
       allowed: false,
@@ -113,33 +162,33 @@ describe("MCP production private beta gate", () => {
     });
     expect(evaluateMcpProductionPrivateBetaGate({
       envelope: envelope(),
-      verifiedSubjectId: "other_user",
-      config: betaConfig({ allowedSubjectIds: [SUBJECT_ID] }),
+      verifiedSubjectDigest: OTHER_SUBJECT_DIGEST,
+      config: betaConfig(),
     })).toMatchObject({
       allowed: false,
       code: "private_beta_subject_not_allowed",
     });
   });
 
-  it("uses a subject allowlist only when it is configured and fails ambiguous subject state closed", () => {
+  it("requires a subject digest allowlist and fails ambiguous subject state closed", () => {
     expect(evaluateMcpProductionPrivateBetaGate({
       envelope: envelope(),
-      verifiedSubjectId: SUBJECT_ID,
-      config: betaConfig({ allowedSubjectIds: [SUBJECT_ID] }),
+      verifiedSubjectDigest: SUBJECT_DIGEST,
+      config: betaConfig({ allowedSubjectDigests: [OTHER_SUBJECT_DIGEST, SUBJECT_DIGEST] }),
     })).toMatchObject({
       allowed: true,
       code: "private_beta_allowed",
     });
     expect(evaluateMcpProductionPrivateBetaGate({
       envelope: envelope(),
-      config: betaConfig({ allowedSubjectIds: [SUBJECT_ID] }),
+      config: betaConfig(),
     })).toMatchObject({
       allowed: false,
       code: "private_beta_ambiguous_eligibility",
     });
     expect(evaluateMcpProductionPrivateBetaGate({
       envelope: envelope(),
-      verifiedSubjectId: "user\nunsafe",
+      verifiedSubjectDigest: "not-a-digest",
       config: betaConfig(),
     })).toMatchObject({
       allowed: false,
@@ -166,8 +215,13 @@ function betaConfig(
     enabled: true,
     allowedClientIds: [CLIENT_ID],
     allowedResources: [RESOURCE],
+    allowedSubjectDigests: [SUBJECT_DIGEST],
     ...overrides,
   };
+}
+
+function sha256Hex(value: string): string {
+  return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
 function envelope(

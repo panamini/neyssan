@@ -6,15 +6,16 @@ export const MCP_PRODUCTION_PRIVATE_BETA_CLIENT_IDS_VAR =
   "MCP_OAUTH_PRODUCTION_PRIVATE_BETA_CLIENT_IDS";
 export const MCP_PRODUCTION_PRIVATE_BETA_RESOURCES_VAR =
   "MCP_OAUTH_PRODUCTION_PRIVATE_BETA_RESOURCES";
-export const MCP_PRODUCTION_PRIVATE_BETA_SUBJECTS_VAR =
-  "MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECTS";
+export const MCP_PRODUCTION_PRIVATE_BETA_SUBJECT_DIGESTS_VAR =
+  "MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECT_DIGESTS";
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/u;
+const SHA256_HEX_PATTERN = /^[0-9a-f]{64}$/u;
 
 export type McpProductionPrivateBetaGateConfigInputV1 = Readonly<{
   enabled?: boolean;
   allowedClientIds?: readonly string[];
   allowedResources?: readonly string[];
-  allowedSubjectIds?: readonly string[];
+  allowedSubjectDigests?: readonly string[];
   version?: 1;
 }>;
 
@@ -43,7 +44,7 @@ export type McpProductionPrivateBetaGateDecisionV1 = Readonly<{
 
 export function evaluateMcpProductionPrivateBetaGate(input: Readonly<{
   envelope: McpAuthenticatedProtocolEnvelopeV1;
-  verifiedSubjectId?: string;
+  verifiedSubjectDigest?: string;
   config?: unknown;
 }>): McpProductionPrivateBetaGateDecisionV1 {
   const config = readPrivateBetaConfig(input.config);
@@ -58,15 +59,11 @@ export function evaluateMcpProductionPrivateBetaGate(input: Readonly<{
   if (!config.config.allowedResources.includes(input.envelope.verifiedResource)) {
     return denied("private_beta_resource_not_allowed");
   }
-  if (config.config.allowedSubjectIds) {
-    if (!isSafeIdentifier(input.verifiedSubjectId)) {
-      return denied("private_beta_ambiguous_eligibility");
-    }
-    if (!config.config.allowedSubjectIds.includes(input.verifiedSubjectId)) {
-      return denied("private_beta_subject_not_allowed");
-    }
-  } else if (input.verifiedSubjectId !== undefined && !isSafeIdentifier(input.verifiedSubjectId)) {
+  if (!isSha256Hex(input.verifiedSubjectDigest)) {
     return denied("private_beta_ambiguous_eligibility");
+  }
+  if (!config.config.allowedSubjectDigests.includes(input.verifiedSubjectDigest)) {
+    return denied("private_beta_subject_not_allowed");
   }
   return Object.freeze({
     kind: "mcp_production_private_beta_gate_decision",
@@ -88,7 +85,7 @@ function readPrivateBetaConfig(value: unknown):
         enabled: boolean;
         allowedClientIds: readonly string[];
         allowedResources: readonly string[];
-        allowedSubjectIds?: readonly string[];
+        allowedSubjectDigests: readonly string[];
       }>;
     }
   | {
@@ -120,6 +117,7 @@ function disabledPrivateBetaConfig(): {
     enabled: false;
     allowedClientIds: readonly string[];
     allowedResources: readonly string[];
+    allowedSubjectDigests: readonly string[];
   }>;
 } {
   return {
@@ -128,6 +126,7 @@ function disabledPrivateBetaConfig(): {
       enabled: false,
       allowedClientIds: Object.freeze([]),
       allowedResources: Object.freeze([]),
+      allowedSubjectDigests: Object.freeze([]),
     }),
   };
 }
@@ -139,7 +138,7 @@ function readEnabledPrivateBetaConfig(value: Record<string, unknown>):
         enabled: true;
         allowedClientIds: readonly string[];
         allowedResources: readonly string[];
-        allowedSubjectIds?: readonly string[];
+        allowedSubjectDigests: readonly string[];
       }>;
     }
   | {
@@ -148,7 +147,7 @@ function readEnabledPrivateBetaConfig(value: Record<string, unknown>):
     } {
   const requiredAllowlists = readRequiredPrivateBetaAllowlists(value);
   if (!requiredAllowlists.ok) return requiredAllowlists;
-  const subjectAllowlist = readOptionalSubjectAllowlist(value);
+  const subjectAllowlist = readRequiredSubjectDigestAllowlist(value);
   if (!subjectAllowlist.ok) return subjectAllowlist;
   return {
     ok: true,
@@ -156,7 +155,7 @@ function readEnabledPrivateBetaConfig(value: Record<string, unknown>):
       enabled: true,
       allowedClientIds: requiredAllowlists.allowedClientIds,
       allowedResources: requiredAllowlists.allowedResources,
-      ...(subjectAllowlist.allowedSubjectIds ? { allowedSubjectIds: subjectAllowlist.allowedSubjectIds } : {}),
+      allowedSubjectDigests: subjectAllowlist.allowedSubjectDigests,
     }),
   };
 }
@@ -186,22 +185,23 @@ function readRequiredPrivateBetaAllowlists(value: Record<string, unknown>):
   };
 }
 
-function readOptionalSubjectAllowlist(value: Record<string, unknown>):
+function readRequiredSubjectDigestAllowlist(value: Record<string, unknown>):
   | {
       ok: true;
-      allowedSubjectIds?: readonly string[];
+      allowedSubjectDigests: readonly string[];
     }
   | {
       ok: false;
       code: "private_beta_malformed_config" | "private_beta_empty_allowlist";
     } {
-  if (!Object.prototype.hasOwnProperty.call(value, "allowedSubjectIds")) {
-    return { ok: true };
+  const allowedSubjectDigests = readSha256HexList(value.allowedSubjectDigests);
+  if (allowedSubjectDigests === undefined) {
+    return { ok: false, code: "private_beta_malformed_config" };
   }
-  const allowedSubjectIds = readSafeIdentifierList(value.allowedSubjectIds);
-  if (allowedSubjectIds === undefined) return { ok: false, code: "private_beta_malformed_config" };
-  if (allowedSubjectIds.length === 0) return { ok: false, code: "private_beta_empty_allowlist" };
-  return { ok: true, allowedSubjectIds };
+  if (allowedSubjectDigests.length === 0) {
+    return { ok: false, code: "private_beta_empty_allowlist" };
+  }
+  return { ok: true, allowedSubjectDigests };
 }
 
 function denied(
@@ -246,9 +246,35 @@ function isSafeScopeList(value: unknown): value is readonly string[] {
 
 function readSafeIdentifierList(value: unknown): readonly string[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  const normalized = value.map((item) => (typeof item === "string" ? item.trim() : ""));
+  const normalized = mapArrayByIndex(value, (item) =>
+    typeof item === "string" ? item.trim() : "",
+  );
   if (normalized.some((item) => !isSafeIdentifier(item))) return undefined;
   return Object.freeze([...new Set(normalized)].sort());
+}
+
+function readSha256HexList(value: unknown): readonly string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const normalized = mapArrayByIndex(value, (item) =>
+    typeof item === "string" ? item : "",
+  );
+  if (normalized.some((item) => !isSha256Hex(item))) return undefined;
+  return Object.freeze([...new Set(normalized)].sort());
+}
+
+function mapArrayByIndex<T>(
+  value: readonly unknown[],
+  mapper: (item: unknown) => T,
+): T[] {
+  const mapped: T[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    mapped.push(mapper(value[index]));
+  }
+  return mapped;
+}
+
+function isSha256Hex(value: unknown): value is string {
+  return typeof value === "string" && SHA256_HEX_PATTERN.test(value);
 }
 
 function isSafeIdentifier(value: unknown): value is string {

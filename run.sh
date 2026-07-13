@@ -9,8 +9,10 @@ if [[ "${CMD}" == "-ui" ]]; then
 fi
 
 MCP_SECRET_SYNC_XTRACE_WAS_ENABLED=0
-if [[ "${CMD}" == "mcp-secret-sync" && "$-" == *x* ]]; then
-  MCP_SECRET_SYNC_XTRACE_WAS_ENABLED=1
+if [[ "$-" == *x* ]]; then
+  if [[ "${CMD}" == "mcp-secret-sync" ]]; then
+    MCP_SECRET_SYNC_XTRACE_WAS_ENABLED=1
+  fi
   set +x
 fi
 readonly MCP_SECRET_SYNC_XTRACE_WAS_ENABLED
@@ -394,6 +396,7 @@ mcp_check() {
     MCP_OAUTH_PRODUCTION_PRIVATE_BETA_ENABLED
     MCP_OAUTH_PRODUCTION_PRIVATE_BETA_CLIENT_IDS
     MCP_OAUTH_PRODUCTION_PRIVATE_BETA_RESOURCES
+    MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECT_DIGESTS
     MCP_OAUTH_PRODUCTION_RESOURCE
     MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN
     MCP_OAUTH_PRODUCTION_REDIRECT_URIS
@@ -426,6 +429,7 @@ mcp_check() {
   mcp_check_required_value MCP_OAUTH_PRODUCTION_PRIVATE_BETA_ENABLED "1" || failures=1
   mcp_check_required_value MCP_OAUTH_PRODUCTION_PRIVATE_BETA_CLIENT_IDS "${MCP_PRIVATE_BETA_CLIENT_ID}" || failures=1
   mcp_check_required_value MCP_OAUTH_PRODUCTION_PRIVATE_BETA_RESOURCES "${MCP_PRIVATE_BETA_RESOURCE}" || failures=1
+  mcp_check_required_secret MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECT_DIGESTS || failures=1
   mcp_check_required_value MCP_OAUTH_PRODUCTION_RESOURCE "${MCP_PRIVATE_BETA_RESOURCE}" || failures=1
   mcp_check_required_value MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN "${MCP_PRIVATE_BETA_AUTHORIZATION_ORIGIN}" || failures=1
   mcp_check_required_value MCP_OAUTH_PRODUCTION_REDIRECT_URIS "${MCP_PRIVATE_BETA_REDIRECT_URI}" || failures=1
@@ -438,6 +442,10 @@ mcp_check() {
 
   if [[ ! "${MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256:-}" =~ ^[0-9a-f]{64}$ ]]; then
     echo "[run] mcp-check: MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256 must be lowercase SHA-256 hex" >&2
+    failures=1
+  fi
+  if [[ ! "${MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECT_DIGESTS:-}" =~ ^([0-9a-f]{64})(,[0-9a-f]{64})*$ ]]; then
+    echo "[run] mcp-check: MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECT_DIGESTS must contain lowercase SHA-256 hex digests" >&2
     failures=1
   fi
   for candidate_env in "${root_base_env}" "${app_base_env}" "${app_env}"; do
@@ -465,6 +473,14 @@ mcp_check() {
     echo "[run] mcp-check: legacy MCP_PRODUCTION_PRIVATE_BETA_* aliases are forbidden" >&2
     failures=1
   fi
+  for candidate_env in "${root_base_env}" "${root_env}" "${app_base_env}" "${app_env}"; do
+    [[ -f "${candidate_env}" ]] || continue
+    if grep -Eq '^[[:space:]]*(export[[:space:]]+)?MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECTS=' "${candidate_env}"; then
+      echo "[run] mcp-check: raw private-beta subject identifiers are forbidden; configure only subject digests" >&2
+      failures=1
+      break
+    fi
+  done
   mcp_resolve_clerk_publishable_key || failures=1
 
   if [[ "${failures}" -ne 0 ]]; then
@@ -1592,6 +1608,7 @@ const canonicalKeys = [
   "MCP_OAUTH_PRODUCTION_PRIVATE_BETA_ENABLED",
   "MCP_OAUTH_PRODUCTION_PRIVATE_BETA_CLIENT_IDS",
   "MCP_OAUTH_PRODUCTION_PRIVATE_BETA_RESOURCES",
+  "MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECT_DIGESTS",
   "MCP_OAUTH_PRODUCTION_RESOURCE",
   "MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN",
   "MCP_OAUTH_PRODUCTION_REDIRECT_URIS",
@@ -1617,6 +1634,11 @@ parseDotenv(otherEnvPaths[0], rootEnvironment);
 const rootEnv = parseDotenv(rootEnvPath, rootEnvironment);
 const startupEnvironment = { ...baseEnvironment, ROOT_DIR: rootDir };
 const startupEnvs = startupEnvPaths.map((envPath) => parseDotenv(envPath, startupEnvironment));
+for (const env of [...startupEnvs, parseDotenv(otherEnvPaths[2], { ...startupEnvironment })]) {
+  if (env.has("MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECTS")) {
+    fail("raw private-beta subject identifiers are forbidden; configure only subject digests");
+  }
+}
 
 function resolveStartupValue(key) {
   let value = baseEnvironment[key] ?? "";
@@ -1659,6 +1681,7 @@ for (const key of [
   "MCP_OAUTH_PRODUCTION_ISSUER",
   "MCP_OAUTH_PRODUCTION_PROVIDER_ENVIRONMENT",
   "MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256",
+  "MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECT_DIGESTS",
   "CLERK_JWT_ISSUER_DOMAIN",
   "CONVEX_URL",
   "CONVEX_AUTH_TOKEN",
@@ -1667,6 +1690,9 @@ for (const key of [
 }
 if (!/^[0-9a-f]{64}$/u.test(rootEnv.get("MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256") ?? "")) {
   fail("MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256 must be lowercase SHA-256 hex");
+}
+if (!/^(?:[0-9a-f]{64})(?:,[0-9a-f]{64})*$/u.test(rootEnv.get("MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECT_DIGESTS") ?? "")) {
+  fail("MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECT_DIGESTS must contain lowercase SHA-256 hex digests");
 }
 try {
   const issuer = new URL(rootEnv.get("CLERK_JWT_ISSUER_DOMAIN") ?? "");
