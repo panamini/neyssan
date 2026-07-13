@@ -52,6 +52,18 @@ jobs:
         working-directory: my-app
         run: npm ci
 
+      - name: Run authenticated production tools/list projection contract
+        working-directory: my-app
+        env:
+          OPENAI_API_KEY: ""
+          MISTRAL_API_KEY: ""
+          COVER_LETTER_EVAL_LIVE: "0"
+        run: |
+          ./node_modules/.bin/vitest --run \
+            src/modules/local-mcp/__tests__/mcpOAuthProductionRouteAdapter.test.ts \
+            --reporter=dot \
+            --testNamePattern='returns authenticated production tools/list metadata for negotiated protocol'
+
       - name: Generate Convex client bindings
         working-directory: my-app
         run: |
