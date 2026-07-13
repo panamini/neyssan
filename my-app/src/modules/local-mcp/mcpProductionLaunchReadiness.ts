@@ -1,7 +1,10 @@
 import type { McpProductionPrivateBetaGateDecisionV1 } from "./mcpProductionPrivateBetaGate";
 
+export const MCP_PRODUCTION_PUBLIC_CATALOG_SUBMISSION_URL = "https://mcp.twoweeks.ai/mcp";
 export const MCP_PRODUCTION_LAUNCH_READINESS_PUBLIC_LAUNCH_REQUESTED_FLAG =
   "MCP_OAUTH_PRODUCTION_PUBLIC_LAUNCH_REQUESTED";
+export const MCP_PRODUCTION_LAUNCH_READINESS_PUBLIC_CATALOG_SUBMISSION_URL_REVIEWED_FLAG =
+  "MCP_OAUTH_PRODUCTION_LAUNCH_PUBLIC_CATALOG_SUBMISSION_URL_REVIEWED";
 export const MCP_PRODUCTION_LAUNCH_READINESS_PRIVATE_BETA_GATE_REVIEWED_FLAG =
   "MCP_OAUTH_PRODUCTION_LAUNCH_PRIVATE_BETA_GATE_REVIEWED";
 export const MCP_PRODUCTION_LAUNCH_READINESS_AUTHENTICATED_PROTOCOL_REVIEWED_FLAG =
@@ -26,6 +29,7 @@ export const MCP_PRODUCTION_LAUNCH_READINESS_UNRESOLVED_BLOCKING_FINDINGS_FLAG =
   "MCP_OAUTH_PRODUCTION_LAUNCH_UNRESOLVED_BLOCKING_FINDINGS";
 
 export type McpProductionLaunchReadinessEvidenceInputV1 = Readonly<{
+  publicCatalogSubmissionUrlReviewed?: boolean;
   privateBetaGateReviewed?: boolean;
   authenticatedMcpProtocolReviewed?: boolean;
   policyKernelReviewed?: boolean;
@@ -85,6 +89,7 @@ const LAUNCH_READINESS_CONFIG_KEYS = new Set([
   "version",
 ]);
 const LAUNCH_READINESS_EVIDENCE_KEYS = new Set([
+  "publicCatalogSubmissionUrlReviewed",
   "privateBetaGateReviewed",
   "authenticatedMcpProtocolReviewed",
   "policyKernelReviewed",
@@ -158,6 +163,7 @@ function isLaunchReadinessEvidence(value: unknown): value is McpProductionLaunch
     isPlainRecord(value) &&
     !hasUnknownKeys(value, LAUNCH_READINESS_EVIDENCE_KEYS) &&
     (value.version === undefined || value.version === 1) &&
+    optionalBoolean(value.publicCatalogSubmissionUrlReviewed) &&
     optionalBoolean(value.privateBetaGateReviewed) &&
     optionalBoolean(value.authenticatedMcpProtocolReviewed) &&
     optionalBoolean(value.policyKernelReviewed) &&
@@ -175,6 +181,7 @@ function isLaunchReadinessEvidence(value: unknown): value is McpProductionLaunch
 function isCompleteLaunchReadinessEvidence(value: unknown): boolean {
   return (
     isLaunchReadinessEvidence(value) &&
+    value.publicCatalogSubmissionUrlReviewed === true &&
     value.privateBetaGateReviewed === true &&
     value.authenticatedMcpProtocolReviewed === true &&
     value.policyKernelReviewed === true &&

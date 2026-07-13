@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   evaluateMcpProductionLaunchReadiness,
+  MCP_PRODUCTION_PUBLIC_CATALOG_SUBMISSION_URL,
   type McpProductionLaunchReadinessDecisionCodeV1,
   type McpProductionLaunchReadinessEvidenceInputV1,
 } from "../mcpProductionLaunchReadiness";
@@ -35,6 +36,14 @@ describe("MCP production launch readiness", () => {
   });
 
   it("fails the public launch decision closed for malformed launch config", () => {
+    expectLaunchReadinessDecision(
+      evaluateMcpProductionLaunchReadiness({
+        privateBetaDecision: allowedPrivateBetaDecision(),
+        config: { evidence: { publicCatalogSubmissionUrlReviewed: "yes" } },
+      }),
+      "launch_config_invalid",
+      true,
+    );
     expectLaunchReadinessDecision(
       evaluateMcpProductionLaunchReadiness({
         privateBetaDecision: allowedPrivateBetaDecision(),
@@ -120,6 +129,17 @@ describe("MCP production launch readiness", () => {
       "launch_evidence_missing",
       true,
     );
+    expectLaunchReadinessDecision(
+      evaluateMcpProductionLaunchReadiness({
+        privateBetaDecision: allowedPrivateBetaDecision(),
+        config: {
+          evidence: completeEvidence({ publicCatalogSubmissionUrlReviewed: false }),
+          version: 1,
+        },
+      }),
+      "launch_evidence_missing",
+      true,
+    );
   });
 
   it("blocks public launch even when complete readiness evidence requests it", () => {
@@ -150,6 +170,24 @@ describe("MCP production launch readiness", () => {
   });
 
   it("records private beta readiness separately from public launch exposure", () => {
+    expectLaunchReadinessDecision(
+      evaluateMcpProductionLaunchReadiness({
+        privateBetaDecision: allowedPrivateBetaDecision(),
+        config: {
+          publicLaunchRequested: false,
+          evidence: completeEvidence(),
+          version: 1,
+        },
+      }),
+      "private_beta_ready_public_launch_blocked",
+      true,
+    );
+  });
+
+  it("records the stable public catalog submission URL without enabling public launch", () => {
+    expect(MCP_PRODUCTION_PUBLIC_CATALOG_SUBMISSION_URL).toBe("https://mcp.twoweeks.ai/mcp");
+    expect(new URL(MCP_PRODUCTION_PUBLIC_CATALOG_SUBMISSION_URL).origin).toBe("https://mcp.twoweeks.ai");
+
     expectLaunchReadinessDecision(
       evaluateMcpProductionLaunchReadiness({
         privateBetaDecision: allowedPrivateBetaDecision(),
@@ -283,6 +321,7 @@ function completeEvidence(
   overrides: Partial<McpProductionLaunchReadinessEvidenceInputV1> = {},
 ): McpProductionLaunchReadinessEvidenceInputV1 {
   return {
+    publicCatalogSubmissionUrlReviewed: true,
     privateBetaGateReviewed: true,
     authenticatedMcpProtocolReviewed: true,
     policyKernelReviewed: true,

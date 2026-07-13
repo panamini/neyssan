@@ -79,6 +79,22 @@ jobs:
             --reporter=dot \
             --testNamePattern='returns authenticated production tools/list metadata|executes a safe read-only production tools/call summary|drops adversarial read-only summary executor sentinels'
 
+      - name: Run MCP public catalog URL readiness contract
+        working-directory: my-app
+        env:
+          OPENAI_API_KEY: ""
+          MISTRAL_API_KEY: ""
+          COVER_LETTER_EVAL_LIVE: "0"
+        run: |
+          ./node_modules/.bin/vitest --run \
+            src/modules/local-mcp/__tests__/mcpProductionLaunchReadiness.test.ts \
+            src/modules/local-mcp/__tests__/mcpOperationalStatus.test.ts \
+            --reporter=dot
+          ./node_modules/.bin/vitest --run \
+            src/modules/local-mcp/__tests__/mcpOAuthProductionRouteAdapter.test.ts \
+            --reporter=dot \
+            --testNamePattern='wires complete production launch readiness evidence env through the default Vite /mcp config|wires production public launch readiness env through the default Vite /mcp config'
+
       - name: Generate Convex client bindings
         working-directory: my-app
         run: |
