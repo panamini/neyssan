@@ -17,19 +17,23 @@ import {
 import { buildProposalGenerationControlsBlock } from "../../convex/lib/proposals/generationControls";
 import {
   PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA,
+  PREMIUM_COVER_LETTER_MISTRAL_SYSTEM_PROMPT,
   PREMIUM_COVER_LETTER_WRITER_MODELS,
   PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
   attemptPremiumCoverLetterGeneration,
   generatePremiumCoverLetterBodyPartsWithMistral,
+  generatePremiumCoverLetterBodyPartsWithExactOpenAIModel,
   generatePremiumCoverLetterBodyPartsWithOpenAI,
   isCoverLetterPremiumPromptV2Enabled,
   isCoverLetterQualityRepairV1Enabled,
   resolvePremiumCoverLetterWriterModel,
+  buildPremiumCoverLetterOpenAIRequestForExactModel,
   type PremiumCoverLetterAttemptResult,
   type PremiumCoverLetterFailureTrace,
   type PremiumCoverLetterQualityShadowResult,
   type PremiumCoverLetterWriter,
   type PremiumCoverLetterWriterModel,
+  type PremiumCoverLetterProviderResponseMetadata,
 } from "../../convex/lib/proposals/premiumCoverLetter";
 import {
   resolveProposalOutputLanguage,
@@ -68,6 +72,15 @@ import {
   writeCoverLetterBlindReviewArtifacts,
 } from "./cover-letter-blind-review";
 import {
+  buildCoverLetterEvalRunManifestEntry,
+  calculateCoverLetterEvalConservativeCallCeiling,
+  resolveCoverLetterEvalInstalledSdkVersions,
+  writeCoverLetterEvalRunManifest,
+  type CoverLetterEvalPricedWriterModel,
+  type CoverLetterEvalRunManifest,
+  type CoverLetterEvalRunManifestEntry,
+} from "./cover-letter-eval-run-manifest";
+import {
   RECORDED_COVER_LETTER_REPLAY_FIXTURES,
   type RecordedCoverLetterReplayFixture,
 } from "./fixtures/cover-letter/recorded-writer-responses";
@@ -92,9 +105,24 @@ type MistralCoverLetterBenchmarkWriterModel =
   | "mistral-large-latest"
   | "mistral-small-latest";
 
+export const COVER_LETTER_EVAL_ONLY_OPENAI_WRITER_MODELS = [
+  "gpt-5.6-sol",
+  "gpt-5.6-terra",
+] as const;
+type CoverLetterEvalOnlyOpenAIWriterModel =
+  (typeof COVER_LETTER_EVAL_ONLY_OPENAI_WRITER_MODELS)[number];
+
 type CoverLetterBenchmarkWriterModel =
   | PremiumCoverLetterWriterModel
+  | CoverLetterEvalOnlyOpenAIWriterModel
   | MistralCoverLetterBenchmarkWriterModel;
+
+export const QUALITY_EVAL_2B_WRITER_MODELS = [
+  "gpt-5.5",
+  "gpt-5.6-sol",
+  "gpt-5.6-terra",
+  "mistral-medium-latest",
+] as const satisfies readonly CoverLetterEvalPricedWriterModel[];
 
 type BenchmarkGenerationFailureStatus =
   | "generation_failed"
@@ -149,6 +177,7 @@ export type CoverLetterBenchmarkSuccessRecord = {
   diagnostics: CoverLetterBenchmarkDiagnostics;
   manualReview: CoverLetterBenchmarkManualReview;
   letter: string;
+  runManifest?: CoverLetterEvalRunManifestEntry;
   notes?: string;
   realismTag?: string;
 };
@@ -165,6 +194,7 @@ export type CoverLetterHumanReviewRecord = {
   diagnostics: CoverLetterBenchmarkDiagnostics;
   manualReview: CoverLetterBenchmarkManualReview;
   letter: string;
+  runManifest?: CoverLetterEvalRunManifestEntry;
   notes?: string;
   realismTag?: string;
 };
@@ -216,6 +246,9 @@ type GenerateBenchmarkLetter = (args: {
   budget?: CoverLetterEvalBudget;
   signal?: AbortSignal;
   onFailure?: (failure: PremiumCoverLetterFailureTrace) => void;
+  onProviderResponseMetadata?: (
+    metadata: PremiumCoverLetterProviderResponseMetadata,
+  ) => void;
 }) => Promise<PremiumCoverLetterAttemptResult | null>;
 
 type EvaluateBenchmarkLetter = (args: {
@@ -260,6 +293,7 @@ const MISTRAL_COVER_LETTER_BENCHMARK_WRITER_MODELS = [
 
 const COVER_LETTER_BENCHMARK_WRITER_MODELS = [
   ...PREMIUM_COVER_LETTER_WRITER_MODELS,
+  ...COVER_LETTER_EVAL_ONLY_OPENAI_WRITER_MODELS,
   ...MISTRAL_COVER_LETTER_BENCHMARK_WRITER_MODELS,
 ] as const satisfies readonly CoverLetterBenchmarkWriterModel[];
 
@@ -279,7 +313,7 @@ function printHelp(): void {
       "Usage:",
       "  npx tsx scripts/evals/benchmark-cover-letter-writers.ts",
       "  COVER_LETTER_EVAL_LIVE=1 npx tsx scripts/evals/benchmark-cover-letter-writers.ts --live --max-calls=N --max-repairs=N --max-usd=N --max-usd-per-call=N [--cases=id1,id2] [--writers=gpt-5.5] [--evaluator=MODEL]",
-      "  COVER_LETTER_EVAL_LIVE=1 npx tsx scripts/evals/benchmark-cover-letter-writers.ts --live --human-review-only --output-dir=PATH --run-id=ID --source-ref=SHA --max-calls=N --max-repairs=N --max-usd=N --max-usd-per-call=N [--writers=gpt-5.5]",
+      `  COVER_LETTER_EVAL_LIVE=1 npx tsx scripts/evals/benchmark-cover-letter-writers.ts --live --human-review-only --output-dir=PATH --run-id=ID --source-ref=SHA --max-calls=24 --max-repairs=0 --max-usd=N --max-usd-per-call=N --writers=${QUALITY_EVAL_2B_WRITER_MODELS.join(",")}`,
       "",
       "Examples:",
       "  npx tsx scripts/evals/benchmark-cover-letter-writers.ts",
@@ -308,11 +342,21 @@ function parseWriterModels(
     throw new Error("Provide at least one writer model with --writers.");
   }
 
-  const unique = Array.from(new Set(requested));
-  const invalid = unique.filter(
+  const duplicates = requested.filter(
+    (item, index) => requested.indexOf(item) !== index,
+  );
+  if (duplicates.length > 0) {
+    throw new Error(
+      `Duplicate premium writer model(s): ${[...new Set(duplicates)].join(", ")}.`,
+    );
+  }
+  const invalid = requested.filter(
     (item) =>
       !PREMIUM_COVER_LETTER_WRITER_MODELS.includes(
         item as PremiumCoverLetterWriterModel,
+      ) &&
+      !COVER_LETTER_EVAL_ONLY_OPENAI_WRITER_MODELS.includes(
+        item as CoverLetterEvalOnlyOpenAIWriterModel,
       ) &&
       !MISTRAL_COVER_LETTER_BENCHMARK_WRITER_MODELS.includes(
         item as MistralCoverLetterBenchmarkWriterModel,
@@ -324,7 +368,18 @@ function parseWriterModels(
     );
   }
 
-  return unique as CoverLetterBenchmarkWriterModel[];
+  return requested as CoverLetterBenchmarkWriterModel[];
+}
+
+function hasExactQualityEval2BWriterSet(
+  writerModels: readonly CoverLetterBenchmarkWriterModel[],
+): boolean {
+  return (
+    writerModels.length === QUALITY_EVAL_2B_WRITER_MODELS.length &&
+    QUALITY_EVAL_2B_WRITER_MODELS.every((writerModel) =>
+      writerModels.includes(writerModel),
+    )
+  );
 }
 
 function parseNumericOption(args: { name: string; rawValue: string }): number {
@@ -353,12 +408,14 @@ export function parseCoverLetterBenchmarkCliOptions(
     maxUsd: null,
     declaredMaxUsdPerCall: null,
   };
+  let writerModelsExplicitlyRequested = false;
 
   for (const arg of argv) {
     if (arg.startsWith("--cases=")) {
       options.caseIds = parseCsvList(arg.slice("--cases=".length));
     } else if (arg.startsWith("--writers=")) {
       options.writerModels = parseWriterModels(arg.slice("--writers=".length));
+      writerModelsExplicitlyRequested = true;
     } else if (arg.startsWith("--evaluator=")) {
       options.evaluatorModel =
         arg.slice("--evaluator=".length).trim() ||
@@ -407,6 +464,17 @@ export function parseCoverLetterBenchmarkCliOptions(
     throw new Error(
       "Human-review-only execution does not support --cases; the complete blind-review cohort is required.",
     );
+  }
+  if (options.evaluationMode === "human_review_only") {
+    if (!writerModelsExplicitlyRequested) {
+      options.writerModels = [...QUALITY_EVAL_2B_WRITER_MODELS];
+    } else if (!hasExactQualityEval2BWriterSet(options.writerModels)) {
+      throw new Error(
+        `Human-review-only execution requires the exact writer set: ${QUALITY_EVAL_2B_WRITER_MODELS.join(", ")}.`,
+      );
+    } else {
+      options.writerModels = [...QUALITY_EVAL_2B_WRITER_MODELS];
+    }
   }
 
   return options;
@@ -469,6 +537,22 @@ function isMistralBenchmarkWriterModel(
 ): writerModel is MistralCoverLetterBenchmarkWriterModel {
   return MISTRAL_COVER_LETTER_BENCHMARK_WRITER_MODELS.includes(
     writerModel as MistralCoverLetterBenchmarkWriterModel,
+  );
+}
+
+function isCoverLetterEvalOnlyOpenAIWriterModel(
+  writerModel: CoverLetterBenchmarkWriterModel,
+): writerModel is CoverLetterEvalOnlyOpenAIWriterModel {
+  return COVER_LETTER_EVAL_ONLY_OPENAI_WRITER_MODELS.includes(
+    writerModel as CoverLetterEvalOnlyOpenAIWriterModel,
+  );
+}
+
+function isQualityEval2BWriterModel(
+  writerModel: CoverLetterBenchmarkWriterModel,
+): writerModel is CoverLetterEvalPricedWriterModel {
+  return QUALITY_EVAL_2B_WRITER_MODELS.includes(
+    writerModel as CoverLetterEvalPricedWriterModel,
   );
 }
 
@@ -635,6 +719,9 @@ export async function generatePremiumCoverLetterBenchmarkLetter(args: {
   budget?: CoverLetterEvalBudget;
   signal?: AbortSignal;
   onFailure?: (failure: PremiumCoverLetterFailureTrace) => void;
+  onProviderResponseMetadata?: (
+    metadata: PremiumCoverLetterProviderResponseMetadata,
+  ) => void;
 }): Promise<PremiumCoverLetterAttemptResult | null> {
   const writerProvider = isMistralBenchmarkWriterModel(args.writerModel)
     ? "mistral"
@@ -696,10 +783,11 @@ export async function generatePremiumCoverLetterBenchmarkLetter(args: {
             signal: providerSignal,
             maxRetries: COVER_LETTER_EVAL_PROVIDER_MAX_RETRIES,
             maxOutputTokens: COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS,
+            onResponseMetadata: args.onProviderResponseMetadata,
           });
         }
 
-        return generatePremiumCoverLetterBodyPartsWithOpenAI({
+        const openAIArgs = {
           apiKey: args.apiKey,
           prompt,
           writerModel: args.writerModel,
@@ -707,7 +795,14 @@ export async function generatePremiumCoverLetterBenchmarkLetter(args: {
           signal: providerSignal,
           maxRetries: COVER_LETTER_EVAL_PROVIDER_MAX_RETRIES,
           maxOutputTokens: COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS,
-        });
+          onResponseMetadata: args.onProviderResponseMetadata,
+        } as const;
+        return isCoverLetterEvalOnlyOpenAIWriterModel(args.writerModel)
+          ? generatePremiumCoverLetterBodyPartsWithExactOpenAIModel(openAIArgs)
+          : generatePremiumCoverLetterBodyPartsWithOpenAI({
+              ...openAIArgs,
+              writerModel: args.writerModel,
+            });
       };
 
       if (writerAttemptBudget) {
@@ -953,6 +1048,7 @@ type PreparedCoverLetterBenchmarkCase = {
   generation: PremiumCoverLetterAttemptResult;
   artifact: CoverLetterEvalArtifact;
   diagnostics: CoverLetterBenchmarkDiagnostics;
+  runManifest?: CoverLetterEvalRunManifestEntry;
 };
 
 async function prepareCoverLetterBenchmarkCase(
@@ -967,6 +1063,8 @@ async function prepareCoverLetterBenchmarkCase(
     });
   const outputLanguage = productionInputs.outputLanguage;
   let failureTrace: PremiumCoverLetterFailureTrace | null = null;
+  let providerResponseMetadata: PremiumCoverLetterProviderResponseMetadata | null =
+    null;
   const generateLetter =
     args.generateLetter ?? generatePremiumCoverLetterBenchmarkLetter;
 
@@ -981,6 +1079,9 @@ async function prepareCoverLetterBenchmarkCase(
       signal: args.signal,
       onFailure: (failure) => {
         failureTrace = failure;
+      },
+      onProviderResponseMetadata: (metadata) => {
+        providerResponseMetadata = metadata;
       },
     });
     if (!generation) {
@@ -1049,6 +1150,26 @@ async function prepareCoverLetterBenchmarkCase(
       ...generation,
       ...preparedArtifact.finalizedPayload,
     };
+    const manifestProvider = resolveBenchmarkWriterProvider(args.writerModel);
+    const runManifest = isQualityEval2BWriterModel(args.writerModel)
+      ? await buildCoverLetterEvalRunManifestEntry({
+          caseId: args.benchmarkCase.id,
+          provider: manifestProvider,
+          requestedModel: args.writerModel,
+          returnedModel: providerResponseMetadata?.returnedModel ?? null,
+          prompt: generation.prompt,
+          reasoningEffort:
+            manifestProvider === "openai"
+              ? resolveOpenAIProposalReasoningEffort()
+              : null,
+          writerMaxOutputTokens: COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS,
+          providerMaxRetries: COVER_LETTER_EVAL_PROVIDER_MAX_RETRIES,
+          tokenUsage: providerResponseMetadata?.tokenUsage ?? null,
+          sdkVersions: await resolveCoverLetterEvalInstalledSdkVersions(),
+          artifactHash: preparedArtifact.artifact.artifactHash,
+          provenanceHash: preparedArtifact.artifact.provenanceHash,
+        })
+      : undefined;
     return {
       status: "prepared",
       outputLanguage,
@@ -1060,6 +1181,7 @@ async function prepareCoverLetterBenchmarkCase(
         generation: finalizedGeneration,
         validationResult: "premium_validation_passed",
       }),
+      ...(runManifest ? { runManifest } : {}),
     };
   } catch (error) {
     if (error instanceof CoverLetterEvalBudgetError) {
@@ -1143,6 +1265,7 @@ export async function benchmarkCoverLetterCase(args: {
       diagnostics: prepared.diagnostics,
       manualReview: createEmptyManualReview(),
       letter: prepared.generation.content,
+      ...(prepared.runManifest ? { runManifest: prepared.runManifest } : {}),
       notes: args.benchmarkCase.notes,
       realismTag: args.benchmarkCase.realismTag,
     };
@@ -1206,6 +1329,7 @@ export async function benchmarkCoverLetterCaseForHumanReview(args: {
     diagnostics: prepared.diagnostics,
     manualReview: createEmptyManualReview(),
     letter: prepared.generation.content,
+    ...(prepared.runManifest ? { runManifest: prepared.runManifest } : {}),
     notes: args.benchmarkCase.notes,
     realismTag: args.benchmarkCase.realismTag,
   };
@@ -1439,6 +1563,212 @@ export function calculateCoverLetterBenchmarkMinimumProviderCalls(args: {
   return args.caseCount * args.writerCount * providerCallsPerRun;
 }
 
+export type CoverLetterHumanReviewPlanItem = Readonly<{
+  benchmarkCase: CoverLetterBenchmarkCase;
+  writerModel: CoverLetterBenchmarkWriterModel;
+}>;
+
+export function buildCoverLetterHumanReviewPlan(args: {
+  cases: readonly CoverLetterBenchmarkCase[];
+  writerModels: readonly CoverLetterBenchmarkWriterModel[];
+}): CoverLetterHumanReviewPlanItem[] {
+  return args.cases.flatMap((benchmarkCase) =>
+    args.writerModels.map((writerModel) => ({
+      benchmarkCase,
+      writerModel,
+    })),
+  );
+}
+
+type HumanReviewCohortResult = Readonly<{
+  status: string;
+  caseId?: string;
+  writerModel?: string;
+  error?: string;
+}>;
+
+export async function runCoverLetterHumanReviewCohort<
+  Result extends HumanReviewCohortResult,
+>(args: {
+  plan: readonly CoverLetterHumanReviewPlanItem[];
+  generateRecord: (item: CoverLetterHumanReviewPlanItem) => Promise<Result>;
+}): Promise<Array<Extract<Result, { status: "human_review_pending" }>>> {
+  const records: Array<Extract<Result, { status: "human_review_pending" }>> =
+    [];
+  for (const item of args.plan) {
+    const result = await args.generateRecord(item);
+    if (result.status !== "human_review_pending") {
+      throw new Error(
+        `Human-review cohort generation failed at ${result.caseId ?? item.benchmarkCase.id}/${result.writerModel ?? item.writerModel}: ${result.error ?? result.status}`,
+      );
+    }
+    records.push(result as Extract<Result, { status: "human_review_pending" }>);
+  }
+  return records;
+}
+
+export type CoverLetterBenchmarkOfflineCostPreflight = Readonly<{
+  version: "cover_letter_eval_cost_preflight_v1";
+  plannedProviderCalls: number;
+  providerMaxRetries: 0;
+  maxRepairs: 0;
+  writerMaxOutputTokens: number;
+  declaredMaxUsdPerCall: number;
+  minimumSafeReservationUsd: number;
+  targetReservationUsd: 2.5;
+  targetReservationProven: boolean;
+  worstCase: Readonly<{
+    caseId: string;
+    writerModel: CoverLetterEvalPricedWriterModel;
+    serializedInputByteUpperBound: number;
+    conservativeCallCeilingUsd: number;
+  }>;
+  entries: readonly Readonly<{
+    caseId: string;
+    writerModel: CoverLetterEvalPricedWriterModel;
+    serializedInputByteUpperBound: number;
+    conservativeCallCeilingUsd: number;
+  }>[];
+}>;
+
+function roundBudgetUsd(value: number): number {
+  return Number(value.toFixed(12));
+}
+
+async function captureSerializedBenchmarkWriterInput(
+  item: CoverLetterHumanReviewPlanItem & {
+    writerModel: CoverLetterEvalPricedWriterModel;
+  },
+): Promise<string> {
+  const captureStop = Object.freeze({ type: "offline_prompt_capture" });
+  let captured:
+    | Readonly<{ prompt: string; schema: Record<string, unknown> }>
+    | undefined;
+  try {
+    await generatePremiumCoverLetterBenchmarkLetter({
+      benchmarkCase: item.benchmarkCase,
+      writerModel: item.writerModel,
+      apiKey: "offline-preflight-does-not-use-provider-credentials",
+      mistralApiKey: "offline-preflight-does-not-use-provider-credentials",
+      writerOverride: async ({ prompt, schema }) => {
+        captured = { prompt, schema };
+        throw captureStop;
+      },
+    });
+  } catch (error) {
+    if (error !== captureStop) throw error;
+  }
+  if (!captured) {
+    throw new Error(
+      `Offline cost preflight could not capture ${item.benchmarkCase.id}/${item.writerModel}.`,
+    );
+  }
+
+  if (item.writerModel === "mistral-medium-latest") {
+    return JSON.stringify({
+      model: item.writerModel,
+      messages: [
+        {
+          role: "system",
+          content: PREMIUM_COVER_LETTER_MISTRAL_SYSTEM_PROMPT,
+        },
+        { role: "user", content: captured.prompt },
+      ],
+      temperature: 0.2,
+      max_tokens: COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS,
+    });
+  }
+  return JSON.stringify(
+    buildPremiumCoverLetterOpenAIRequestForExactModel({
+      prompt: captured.prompt,
+      writerModel: item.writerModel,
+      schema: captured.schema,
+      maxOutputTokens: COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS,
+    }),
+  );
+}
+
+export async function buildCoverLetterBenchmarkOfflineCostPreflight(args: {
+  cases: readonly CoverLetterBenchmarkCase[];
+  writerModels: readonly CoverLetterEvalPricedWriterModel[];
+}): Promise<CoverLetterBenchmarkOfflineCostPreflight> {
+  const plan = buildCoverLetterHumanReviewPlan(args) as Array<
+    CoverLetterHumanReviewPlanItem & {
+      writerModel: CoverLetterEvalPricedWriterModel;
+    }
+  >;
+  const entries = [] as Array<
+    CoverLetterBenchmarkOfflineCostPreflight["entries"][number]
+  >;
+  for (const item of plan) {
+    const serializedInput = await captureSerializedBenchmarkWriterInput(item);
+    const serializedInputByteUpperBound = Buffer.byteLength(
+      serializedInput,
+      "utf8",
+    );
+    entries.push({
+      caseId: item.benchmarkCase.id,
+      writerModel: item.writerModel,
+      serializedInputByteUpperBound,
+      conservativeCallCeilingUsd:
+        calculateCoverLetterEvalConservativeCallCeiling({
+          writerModel: item.writerModel,
+          serializedInputByteUpperBound,
+          writerMaxOutputTokens: COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS,
+        }),
+    });
+  }
+  const worstCase = entries.reduce((worst, entry) =>
+    entry.conservativeCallCeilingUsd > worst.conservativeCallCeilingUsd
+      ? entry
+      : worst,
+  );
+  const minimumSafeReservationUsd = roundBudgetUsd(
+    worstCase.conservativeCallCeilingUsd * entries.length,
+  );
+  return {
+    version: "cover_letter_eval_cost_preflight_v1",
+    plannedProviderCalls: entries.length,
+    providerMaxRetries: COVER_LETTER_EVAL_PROVIDER_MAX_RETRIES,
+    maxRepairs: 0,
+    writerMaxOutputTokens: COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS,
+    declaredMaxUsdPerCall: worstCase.conservativeCallCeilingUsd,
+    minimumSafeReservationUsd,
+    targetReservationUsd: 2.5,
+    targetReservationProven: minimumSafeReservationUsd <= 2.5,
+    worstCase,
+    entries,
+  };
+}
+
+export function assertQualityEval2BBudgetContract(args: {
+  options: CoverLetterBenchmarkCliOptions;
+  preflight: CoverLetterBenchmarkOfflineCostPreflight;
+}): void {
+  if (args.options.maxCalls !== args.preflight.plannedProviderCalls) {
+    throw new Error(
+      `Human-review-only execution requires maxCalls=${args.preflight.plannedProviderCalls}.`,
+    );
+  }
+  if (args.options.maxRepairs !== 0) {
+    throw new Error(
+      "Human-review-only execution requires maxRepairs=0 to hard-disable model-assisted repair calls.",
+    );
+  }
+  if (
+    args.options.declaredMaxUsdPerCall! < args.preflight.declaredMaxUsdPerCall
+  ) {
+    throw new Error(
+      `Human-review-only declaredMaxUsdPerCall=${args.options.declaredMaxUsdPerCall} is below the conservative offline ceiling of ${args.preflight.declaredMaxUsdPerCall} USD.`,
+    );
+  }
+  if (args.options.maxUsd! < args.preflight.minimumSafeReservationUsd) {
+    throw new Error(
+      `Human-review-only maxUsd=${args.options.maxUsd} is below the minimum safe reservation of ${args.preflight.minimumSafeReservationUsd} USD under the current single-ceiling semantics.`,
+    );
+  }
+}
+
 function assertLiveBudgetCoversNoRepairPlan(args: {
   options: CoverLetterBenchmarkCliOptions;
   caseCount: number;
@@ -1516,6 +1846,29 @@ async function main(): Promise<void> {
       ? coverLetterBlindReviewCases
       : coverLetterBenchmarkCases,
   );
+  const humanReviewPlan =
+    options.evaluationMode === "human_review_only"
+      ? buildCoverLetterHumanReviewPlan({
+          cases: benchmarkCases,
+          writerModels: options.writerModels,
+        })
+      : null;
+  const offlineCostPreflight = humanReviewPlan
+    ? await buildCoverLetterBenchmarkOfflineCostPreflight({
+        cases: benchmarkCases,
+        writerModels:
+          options.writerModels as CoverLetterEvalPricedWriterModel[],
+      })
+    : null;
+  if (offlineCostPreflight) {
+    assertQualityEval2BBudgetContract({
+      options,
+      preflight: offlineCostPreflight,
+    });
+    console.error(
+      `[cover-letter-benchmark] offlineCostPreflight=${JSON.stringify(offlineCostPreflight)}`,
+    );
+  }
   const budget = createCoverLetterEvalLiveBudget(options);
   assertLiveBudgetCoversNoRepairPlan({
     options,
@@ -1559,24 +1912,17 @@ async function main(): Promise<void> {
         "Human-review-only execution requires --output-dir, --run-id, and --source-ref.",
       );
     }
-    const records: CoverLetterHumanReviewRecord[] = [];
-    for (const benchmarkCase of benchmarkCases) {
-      for (const writerModel of options.writerModels) {
-        const result = await benchmarkCoverLetterCaseForHumanReview({
+    const records = await runCoverLetterHumanReviewCohort({
+      plan: humanReviewPlan!,
+      generateRecord: ({ benchmarkCase, writerModel }) =>
+        benchmarkCoverLetterCaseForHumanReview({
           benchmarkCase,
           writerModel,
           apiKey,
           mistralApiKey,
           budget,
-        });
-        if (result.status !== "human_review_pending") {
-          throw new Error(
-            `Human-review cohort generation failed at ${result.caseId}/${result.writerModel}: ${result.error}`,
-          );
-        }
-        records.push(result);
-      }
-    }
+        }),
+    });
     const artifacts = await buildCoverLetterBlindReviewArtifacts({
       cohortId: COVER_LETTER_BLIND_REVIEW_COHORT_ID,
       runId,
@@ -1584,12 +1930,37 @@ async function main(): Promise<void> {
       cases: benchmarkCases,
       records,
     });
+    const runManifestEntries = records.map((record) => record.runManifest);
+    if (
+      runManifestEntries.some(
+        (entry): entry is undefined => entry === undefined,
+      )
+    ) {
+      throw new Error(
+        "Human-review cohort is missing required evaluation run-manifest metadata.",
+      );
+    }
+    const runManifest: CoverLetterEvalRunManifest = {
+      version: "cover_letter_eval_run_manifest_v1",
+      cohortId: COVER_LETTER_BLIND_REVIEW_COHORT_ID,
+      runId,
+      sourceRef,
+      plannedProviderCalls: humanReviewPlan!.length,
+      providerMaxRetries: COVER_LETTER_EVAL_PROVIDER_MAX_RETRIES,
+      maxRepairs: 0,
+      writerMaxOutputTokens: COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS,
+      entries: runManifestEntries,
+    };
     const written = await writeCoverLetterBlindReviewArtifacts({
       outputDirectory,
       ...artifacts,
     });
+    const runManifestPath = await writeCoverLetterEvalRunManifest({
+      outputDirectory,
+      manifest: runManifest,
+    });
     console.log("cover-letter blind human-review pack: READY");
-    console.log(JSON.stringify(written));
+    console.log(JSON.stringify({ ...written, runManifestPath }));
     console.error(
       `[cover-letter-benchmark] budget=${JSON.stringify(budget.snapshot())}`,
     );

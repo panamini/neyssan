@@ -14,6 +14,7 @@ import {
   buildPremiumJobDemandGraphV1,
   buildJobOfferPriorityPack,
   buildPremiumCoverLetterOpenAIRequest,
+  buildPremiumCoverLetterOpenAIRequestForExactModel,
   buildPremiumCoverLetterBrief,
   buildPremiumCoverLetterFinalProvenance,
   buildPremiumCoverLetterPrompt,
@@ -1972,6 +1973,33 @@ describe("premium cover letter prompt contract", () => {
       }),
     ).toMatchObject({ max_output_tokens: 2048 });
   });
+
+  it.each(["gpt-5.6-sol", "gpt-5.6-terra"] as const)(
+    "builds the shared OpenAI request with exact evaluation-only model id %s",
+    (writerModel) => {
+      expect(
+        buildPremiumCoverLetterOpenAIRequestForExactModel({
+          prompt: "Structured brief: {}",
+          writerModel,
+          maxOutputTokens: 2048,
+        }),
+      ).toMatchObject({
+        model: writerModel,
+        input: "Structured brief: {}",
+        max_output_tokens: 2048,
+        reasoning: { effort: "low" },
+        text: {
+          verbosity: "medium",
+          format: {
+            type: "json_schema",
+            name: "premium_writer_output_v1",
+            schema: PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
+            strict: true,
+          },
+        },
+      });
+    },
+  );
 
   it("normalizes OpenAI proposal reasoning effort when the request is built", () => {
     vi.stubEnv("OPENAI_PROPOSAL_REASONING_EFFORT", "  HiGh  ");
@@ -5380,6 +5408,12 @@ describe("premium cover letter generation and rendering", () => {
     expect(resolvePremiumCoverLetterWriterModel()).toBe("gpt-5-mini");
 
     process.env.COVER_LETTER_PREMIUM_WRITER_MODEL = "unsupported-model";
+    expect(resolvePremiumCoverLetterWriterModel()).toBe("gpt-5.5");
+
+    process.env.COVER_LETTER_PREMIUM_WRITER_MODEL = "gpt-5.6-sol";
+    expect(resolvePremiumCoverLetterWriterModel()).toBe("gpt-5.5");
+
+    process.env.COVER_LETTER_PREMIUM_WRITER_MODEL = "gpt-5.6-terra";
     expect(resolvePremiumCoverLetterWriterModel()).toBe("gpt-5.5");
 
     delete process.env.COVER_LETTER_PREMIUM_WRITER_MODEL;
