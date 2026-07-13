@@ -117,12 +117,11 @@ import { readStoredSavedProposalFixtures } from "../lib/proposal-saved-fixtures"
 import { resolveProposalStyleCommitTemplateId } from "../lib/proposal-style-commit";
 import {
   CANONICAL_PROPOSAL_TEMPLATE_ID,
-  PROPOSAL_TEMPLATE_DEFINITIONS,
+  getProposalTemplateDefinition,
   isProposalTemplateId,
   resolveProposalTemplateId,
   type ProposalTemplateId,
 } from "../../convex/lib/proposals/renderTemplates";
-import type { TemplateFamily } from "./TemplatesPage";
 import {
   DEFAULT_VERBATI_STYLE,
   getProposalTwinTemplateId,
@@ -242,7 +241,10 @@ import {
   setStyledProposalExportContext,
 } from "../lib/document-export-debug";
 import {
+  isDocumentPageSizeId,
+  readStoredDocumentPageSizePreference,
   resolveDocumentPageSize,
+  writeStoredDocumentPageSizePreference,
   type DocumentPageSizePreference,
 } from "../lib/document-page-size";
 import { exportDocumentFile } from "../lib/exportDocumentFile";
@@ -272,6 +274,10 @@ import {
   normalizeDocumentIconSettings,
   type DocumentIconSettings,
 } from "../lib/document-icons";
+import {
+  COVER_LETTER_TEMPLATES,
+  getCoverLetterRouteTemplateIntent,
+} from "./TemplatesPage";
 
 type CurrentProposalSettings = {
   voicePreset: string;
@@ -669,6 +675,7 @@ const PROPOSAL_SAVE_DEBOUNCE_MS =
         ? (process as any).env?.TEST_DEBOUNCE_MS
         : undefined),
   ) || 1000;
+const SAVED_PROPOSAL_RESTORE_PENDING_TOKEN = "saved-proposal-restore-pending";
 
 const COMPOSE_TOOLBAR_VISIBLE_VOICE_PRESETS = new Set<
   NonNullable<FormValues["voicePreset"]>
@@ -2929,6 +2936,10 @@ export function ProposalForge(): JSX.Element {
     const value = new URLSearchParams(search).get("templateId");
     return isProposalTemplateId(value) ? resolveProposalTemplateId(value) : null;
   }, [search]);
+  const proposalPageSizeIntent = React.useMemo(() => {
+    const value = new URLSearchParams(search).get("pageSize");
+    return isDocumentPageSizeId(value) ? value : null;
+  }, [search]);
   const proposalStyleIntent = React.useMemo(
     () =>
       proposalStyleSlotIntent
@@ -3327,7 +3338,16 @@ export function ProposalForge(): JSX.Element {
     string | null
   >(null);
   const [proposalPageSizePreference, setProposalPageSizePreference] =
-    React.useState<DocumentPageSizePreference>("auto");
+    React.useState<DocumentPageSizePreference>(
+      () => proposalPageSizeIntent ?? readStoredDocumentPageSizePreference(),
+    );
+  const handleProposalPageSizePreferenceChange = React.useCallback(
+    (preference: DocumentPageSizePreference) => {
+      setProposalPageSizePreference(preference);
+      writeStoredDocumentPageSizePreference(preference);
+    },
+    [],
+  );
   const [lastProposalRequest, setLastProposalRequest] =
     React.useState<FormValues | null>(null);
   const [composePreviewValues, setComposePreviewValues] =
@@ -3666,12 +3686,35 @@ export function ProposalForge(): JSX.Element {
     },
     [markHeadingFieldDirty],
   );
+  const syncProposalRecipientVisibility = React.useCallback(
+    (value: string) => {
+      const fields = parseProposalRecipientDetails(value);
+      const hasRecipient = Boolean(
+        fields.name ||
+          fields.role ||
+          fields.company ||
+          fields.address ||
+          fields.email ||
+          fields.city,
+      );
+      const inferredVisibility = buildProposalHeaderVisibilityFromContent(value);
+
+      setProposalHeaderVisibility((current) => ({
+        ...current,
+        showRecipient: hasRecipient,
+        showRecipientDetails:
+          hasRecipient && inferredVisibility.showRecipientDetails,
+      }));
+    },
+    [],
+  );
   const handleProposalRecipientDetailsChange = React.useCallback(
     (value: string) => {
       markHeadingFieldDirty("recipientDetails");
       setProposalRecipientDetails(value);
+      syncProposalRecipientVisibility(value);
     },
-    [markHeadingFieldDirty],
+    [markHeadingFieldDirty, syncProposalRecipientVisibility],
   );
   React.useEffect(() => {
     if (skipNextStructuredRecipientSyncRef.current) {
@@ -3693,14 +3736,20 @@ export function ProposalForge(): JSX.Element {
       };
       setProposalRecipientFieldDraft(nextRecipientFields);
       skipNextStructuredRecipientSyncRef.current = true;
-      setProposalRecipientDetails(
+      const nextRecipientDetails =
         buildProposalRecipientDetailsPreservingExtraLines({
           currentDetails: proposalRecipientDetails,
           fields: nextRecipientFields,
-        }),
-      );
+        });
+      setProposalRecipientDetails(nextRecipientDetails);
+      syncProposalRecipientVisibility(nextRecipientDetails);
     },
-    [markHeadingFieldDirty, proposalRecipientDetails, proposalRecipientFieldDraft],
+    [
+      markHeadingFieldDirty,
+      proposalRecipientDetails,
+      proposalRecipientFieldDraft,
+      syncProposalRecipientVisibility,
+    ],
   );
 
   React.useEffect(() => {
@@ -5169,6 +5218,10 @@ export function ProposalForge(): JSX.Element {
       nextMetadata.proposalDocument = proposalDocument;
       nextMetadata.proposalDocumentRevision = documentUpdatedAt;
       nextMetadata.proposalDocumentUpdatedAt = documentUpdatedAt;
+    } else {
+      delete nextMetadata.proposalDocument;
+      delete nextMetadata.proposalDocumentRevision;
+      delete nextMetadata.proposalDocumentUpdatedAt;
     }
 
     return Object.keys(nextMetadata).length > 0 ? nextMetadata : undefined;
@@ -5329,6 +5382,8 @@ export function ProposalForge(): JSX.Element {
     () => buildComposeSaveSnapshot(),
     [buildComposeSaveSnapshot],
   );
+  const latestComposeAutosaveTokenRef = React.useRef<string | null>(null);
+  latestComposeAutosaveTokenRef.current = composeAutosaveSnapshot?.token ?? null;
   React.useEffect(() => {
     latestComposeAutosaveSnapshotRef.current = composeAutosaveSnapshot;
   }, [composeAutosaveSnapshot]);
@@ -6073,6 +6128,27 @@ export function ProposalForge(): JSX.Element {
       savedProposalTemplateId ??
       getProposalTwinTemplateId(effectiveSavedProposalStylePreset),
     [effectiveSavedProposalStylePreset, savedProposalTemplateId],
+  );
+  const openedSavedProposalRestoreKey = React.useMemo(
+    () =>
+      openedSavedProposal
+        ? JSON.stringify({
+            requestedView,
+            selectedProposalId,
+            id: String(openedSavedProposal._id),
+            updatedAt: openedSavedProposal.updatedAt,
+            sourceCvStyle: openedSavedProposalSourceCvStylePreset,
+          })
+        : null,
+    [
+      openedSavedProposal,
+      openedSavedProposalSourceCvStylePreset,
+      requestedView,
+      selectedProposalId,
+    ],
+  );
+  const lastOpenedSavedProposalRestoreKeyRef = React.useRef<string | null>(
+    null,
   );
   const savedProposalRenderMetadata = React.useMemo<
     ProposalDocumentMetadata | undefined
@@ -7249,6 +7325,7 @@ export function ProposalForge(): JSX.Element {
 
   React.useEffect(() => {
     if (!openedSavedProposal) {
+      lastOpenedSavedProposalRestoreKeyRef.current = null;
       setSavedProposalContent(null);
       setSavedProposalType(null);
       setSavedProposalVoicePreset(null);
@@ -7260,6 +7337,15 @@ export function ProposalForge(): JSX.Element {
       setSavedProposalOutputMode("preview");
       return;
     }
+
+    if (
+      lastOpenedSavedProposalRestoreKeyRef.current ===
+      openedSavedProposalRestoreKey
+    ) {
+      return;
+    }
+    lastOpenedSavedProposalRestoreKeyRef.current =
+      openedSavedProposalRestoreKey;
 
     const storedRenderState = resolveProposalRenderState({
       storedTemplateId: openedSavedProposal.metadata?.templateId,
@@ -7284,7 +7370,7 @@ export function ProposalForge(): JSX.Element {
         ? String(generatedProposalId)
         : null,
       selectedProposalId,
-      composeToken: composeAutosaveSnapshot?.token ?? null,
+      composeToken: latestComposeAutosaveTokenRef.current,
       persistedToken: lastPersistedComposeTokenRef.current,
       winnerSource: savedRenderTraceWinner.winnerSource,
       winnerReason: savedRenderTraceWinner.winnerReason,
@@ -7336,6 +7422,18 @@ export function ProposalForge(): JSX.Element {
       content: openedSavedProposal.content,
       sections: openedSavedProposal.sections,
     });
+    const storedProposalDocument = normalizeProposalDocument(
+      openedSavedProposal.metadata?.proposalDocument,
+    );
+    const nextProposalDocument =
+      storedProposalDocument &&
+      serializeProposalDocumentToLegacyString(storedProposalDocument).trim() ===
+        nextContent.trim()
+        ? storedProposalDocument
+        : null;
+    const nextProposalSalutation =
+      nextProposalDocument?.blocks.find((block) => block.type === "salutation")
+        ?.text ?? readProposalSalutation(nextContent);
     const nextDocumentMeta = [
       nextProposalType ? formatProposalTypeLabel(nextProposalType) : "Proposal",
       buildProposalToneMetaLabel(
@@ -7384,6 +7482,18 @@ export function ProposalForge(): JSX.Element {
         showRecipientDetails:
           openedSavedProposal.metadata?.headerShowRecipientDetails,
       });
+      const inferredHeaderVisibility =
+        buildProposalHeaderVisibilityFromContent(nextRecipientDetails);
+      const nextRecipientFields =
+        parseProposalRecipientDetails(nextRecipientDetails);
+      const hasStoredRecipient = Boolean(
+        nextRecipientFields.name ||
+          nextRecipientFields.role ||
+          nextRecipientFields.company ||
+          nextRecipientFields.address ||
+          nextRecipientFields.email ||
+          nextRecipientFields.city,
+      );
       const nextDocumentDecoration = normalizeDocumentDecoration(
         openedSavedProposal.metadata?.documentDecoration ??
           createDefaultDocumentDecoration(),
@@ -7394,7 +7504,7 @@ export function ProposalForge(): JSX.Element {
       const nextSourceComposeDraft: StoredProposalComposeDraft | null = null;
 
       setProposalContent(nextContent);
-      setProposalDocument(null);
+      setProposalDocument(nextProposalDocument);
       setProposalType(nextProposalType);
       setProposalLibraryStatus("saved");
       setProposalVoicePreset(nextVoicePreset);
@@ -7454,7 +7564,18 @@ export function ProposalForge(): JSX.Element {
         ) ?? "",
       );
       setProposalRecipientDetails(nextRecipientDetails);
-      setProposalHeaderVisibility(nextHeaderVisibility);
+      setProposalHeaderVisibility({
+        ...nextHeaderVisibility,
+        showRecipient: hasStoredRecipient
+          ? true
+          : nextHeaderVisibility.showRecipient,
+        showRecipientDetails:
+          hasStoredRecipient && inferredHeaderVisibility.showRecipientDetails
+            ? true
+            : nextHeaderVisibility.showRecipientDetails,
+      });
+      setProposalSalutationValue(nextProposalSalutation);
+      proposalSalutationValueRef.current = nextProposalSalutation;
       setProposalDocumentTitle(openedSavedProposal.title || "Untitled proposal");
       setProposalDocumentTitleManual(true);
       setProposalDocumentMeta(nextDocumentMeta);
@@ -7469,8 +7590,15 @@ export function ProposalForge(): JSX.Element {
       lastSavedProposalContentRef.current = nextContent;
       lastSavedProposalTitleRef.current =
         openedSavedProposal.title || "Untitled proposal";
-      lastPersistedComposeTokenRef.current = null;
-      composeAutosavePrimedRef.current = true;
+      lastPersistedComposeTokenRef.current =
+        SAVED_PROPOSAL_RESTORE_PENDING_TOKEN;
+      pendingQueuedComposeSnapshotRef.current = null;
+      latestComposeAutosaveSnapshotRef.current = null;
+      if (composeAutosaveTimeoutRef.current !== null) {
+        window.clearTimeout(composeAutosaveTimeoutRef.current);
+        composeAutosaveTimeoutRef.current = null;
+      }
+      composeAutosavePrimedRef.current = false;
       setComposeSaveStatus("idle");
     }
   }, [
@@ -7478,10 +7606,10 @@ export function ProposalForge(): JSX.Element {
     formatProposalToneLabel,
     formatProposalTypeLabel,
     openedSavedProposal,
+    openedSavedProposalRestoreKey,
     savedProposalHasPersistedStyleSnapshot,
     openedSavedProposalSourceCvStylePreset,
     openedSavedProposalSourceCvId,
-    composeAutosaveSnapshot?.token,
     generatedProposalId,
     savedRawCvStyleSource,
     savedRenderTraceWinner.winnerReason,
@@ -8221,11 +8349,42 @@ export function ProposalForge(): JSX.Element {
 
   const handleProposalLayoutSelect = React.useCallback(
     (templateId: ProposalTemplateId) => {
+      const activeStylePreset = isSavedView
+        ? effectiveSavedProposalStylePreset
+        : effectiveProposalStylePresetWithPalette;
       const nextStyleChoice =
         resolveProposalStyleChoiceFromRenderState({
           templateId,
-          stylePreset: effectiveProposalStylePresetWithPalette,
+          stylePreset: activeStylePreset,
         }) ?? proposalStyleChoice;
+
+      if (isSavedView && openedSavedProposal && savedProposalRenderMetadata) {
+        setSavedProposalTemplateId(templateId);
+        setSavedProposalStyleLinkMode("proposal_local");
+        setProposalTemplateId(templateId);
+        setProposalStyleLinkMode("proposal_local");
+        setProposalTemplateBundleId(null);
+        setProposalStyleChoice(nextStyleChoice);
+        setProposalWorkspaceStyle(activeStylePreset);
+        setHasUserEditedStyle(true);
+
+        setIsSavingSavedProposal(true);
+        void persistOpenedSavedProposal({
+          metadata: {
+            ...savedProposalRenderMetadata,
+            templateId,
+            styleLinkMode: "proposal_local",
+            styleChoice: nextStyleChoice,
+          },
+        })
+          .catch((error) => {
+            console.error("Failed to persist saved proposal layout:", error);
+          })
+          .finally(() => {
+            setIsSavingSavedProposal(false);
+          });
+        return;
+      }
 
       setProposalStyleLinkMode("proposal_local");
       setProposalTemplateId(templateId);
@@ -8270,11 +8429,58 @@ export function ProposalForge(): JSX.Element {
       };
     },
     [
+      effectiveSavedProposalStylePreset,
       effectiveProposalStylePresetWithPalette,
+      isSavedView,
+      openedSavedProposal,
+      persistOpenedSavedProposal,
       proposalSettingsPresets,
       proposalStyleChoice,
+      savedProposalRenderMetadata,
     ],
   );
+
+  const appliedSavedRouteTemplateIntentRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (
+      !isSavedView ||
+      !selectedProposalId ||
+      !openedSavedProposal ||
+      !proposalTemplateIntent
+    ) {
+      if (!proposalTemplateIntent) {
+        appliedSavedRouteTemplateIntentRef.current = null;
+      }
+      return;
+    }
+
+    const intentKey = `${selectedProposalId}:${proposalTemplateIntent}`;
+    if (appliedSavedRouteTemplateIntentRef.current === intentKey) {
+      return;
+    }
+    appliedSavedRouteTemplateIntentRef.current = intentKey;
+    handleProposalLayoutSelect(proposalTemplateIntent);
+
+    const params = new URLSearchParams(search);
+    params.delete("templateId");
+    const nextSearch = params.toString();
+    void navigate(
+      {
+        pathname: location.pathname,
+        search: nextSearch ? `?${nextSearch}` : "",
+      },
+      { replace: true, state: null },
+    );
+  }, [
+    handleProposalLayoutSelect,
+    isSavedView,
+    location.pathname,
+    navigate,
+    openedSavedProposal,
+    proposalTemplateIntent,
+    search,
+    selectedProposalId,
+  ]);
 
   const handleProposalTypographySelect = React.useCallback(
     (typography: VerbatiStylePreset["typography"]) => {
@@ -8836,16 +9042,39 @@ export function ProposalForge(): JSX.Element {
   const handleProposalContentChange = React.useCallback(
     (nextContent: string) => {
       setProposalContent(nextContent);
-      setProposalDocument(null);
+      if (proposalOutputMode === "edit") {
+        setProposalDocument(null);
+      }
     },
-    [],
+    [proposalOutputMode],
   );
   const handleProposalDocumentChange = React.useCallback(
     (nextDocument: ProposalDocument) => {
       const normalizedDocument = normalizeProposalDocument(nextDocument);
       setProposalDocument(normalizedDocument);
+
+      if (!normalizedDocument) return;
+
+      const nextContent = serializeProposalDocumentToLegacyString(
+        normalizedDocument,
+      );
+      setProposalContent((current) =>
+        current === nextContent ? current : nextContent,
+      );
+
+      const nextSalutation = normalizedDocument.blocks.find(
+        (block) => block.type === "salutation",
+      );
+      const nextSalutationValue = nextSalutation?.text ?? "";
+      if (proposalSalutationValueRef.current === nextSalutationValue) {
+        return;
+      }
+
+      markHeadingFieldDirty("salutation");
+      proposalSalutationValueRef.current = nextSalutationValue;
+      setProposalSalutationValue(nextSalutationValue);
     },
-    [],
+    [markHeadingFieldDirty],
   );
   const handleRailAskAiChange = React.useCallback((value: string) => {
     setRailAskAiValue(value);
@@ -8982,6 +9211,47 @@ export function ProposalForge(): JSX.Element {
       const previousSalutation = proposalSalutationValueRef.current;
       setProposalSalutationValue(value);
       proposalSalutationValueRef.current = value;
+
+      const normalizedDocument = normalizeProposalDocument(proposalDocument);
+      if (normalizedDocument) {
+        const salutationIndex = normalizedDocument.blocks.findIndex(
+          (block) => block.type === "salutation",
+        );
+        const nextBlocks = value.trim()
+          ? salutationIndex >= 0
+            ? normalizedDocument.blocks.map((block, index) => {
+                if (index !== salutationIndex || block.type !== "salutation") {
+                  return block;
+                }
+                const { richText: _richText, ...salutationBlock } = block;
+                return {
+                  ...salutationBlock,
+                  text: value,
+                };
+              })
+            : [
+                {
+                  id: "salutation-heading",
+                  type: "salutation" as const,
+                  text: value,
+                },
+                ...normalizedDocument.blocks,
+              ]
+          : normalizedDocument.blocks.filter(
+              (block) => block.type !== "salutation",
+            );
+        const nextDocument: ProposalDocument = {
+          ...normalizedDocument,
+          source: "structured",
+          blocks: nextBlocks,
+        };
+        setProposalDocument(nextDocument);
+        setProposalContent(
+          serializeProposalDocumentToLegacyString(nextDocument),
+        );
+        return;
+      }
+
       setProposalContent((current) =>
         replaceProposalSalutation({
           content: current,
@@ -8990,7 +9260,7 @@ export function ProposalForge(): JSX.Element {
         }),
       );
     },
-    [markHeadingFieldDirty],
+    [markHeadingFieldDirty, proposalDocument],
   );
   const handleProposalSignOffChange = React.useCallback(
     (value: string) => {
@@ -9802,8 +10072,22 @@ export function ProposalForge(): JSX.Element {
               ? existingComposeDraft.modelType
               : composeToolbarModelType;
           const composeDraft: StoredProposalComposeDraft = {
+            ...existingComposeDraft,
+            jobTitle: restoredDocumentTitle,
+            jobDescription:
+              restoredSourceJobDescription ??
+              existingComposeDraft.jobDescription ??
+              "",
             proposalType: savedProposalType ?? "cover_letter",
             modelType: restoredModelType,
+            sourceUrl:
+              openedSavedProposal.metadata?.sourceUrl ??
+              existingComposeDraft.sourceUrl ??
+              null,
+            platform:
+              openedSavedProposal.metadata?.platform ??
+              existingComposeDraft.platform ??
+              null,
           };
 
           const normalizedRestoredToolbarVoicePreset =
@@ -11540,7 +11824,7 @@ export function ProposalForge(): JSX.Element {
           format: "docx",
         });
       },
-      onPageSizePreferenceChange: setProposalPageSizePreference,
+      onPageSizePreferenceChange: handleProposalPageSizePreferenceChange,
       pageSizePreference: proposalPageSizePreference,
       onShareSavedProposal: isSavedView
         ? () => {
@@ -11554,6 +11838,7 @@ export function ProposalForge(): JSX.Element {
       handleDeleteSavedProposal,
       handleDuplicateProposalDocument,
       handleExportProposalFile,
+      handleProposalPageSizePreferenceChange,
       handleNewProposalDocument,
       handleShareSavedProposal,
       handleProposalTopbarTitleCommit,
@@ -11658,38 +11943,27 @@ export function ProposalForge(): JSX.Element {
   );
   const proposalTemplatePanelItems = React.useMemo(
     () =>
-      PROPOSAL_TEMPLATE_DEFINITIONS.map((template) => {
-        const family: TemplateFamily =
-          template.id === "editorial_wide"
-            ? "editorial-letterhead"
-            : template.id === "twoweeks-letterhead"
-              ? "twoweeks-letterhead"
-              : template.id === "director-letterhead"
-                ? "director-letterhead"
-                : template.id === "volk-letterhead"
-                  ? "volk-letterhead"
-                  : template.id === "film-foto-letterhead"
-                    ? "film-foto-letterhead"
-                    : template.id === "moma-bauhaus-letterhead"
-                      ? "moma-bauhaus-letterhead"
-                      : template.id === "joella-frame-letterhead"
-                        ? "joella-frame-letterhead"
-                        : template.id === "bayer-letterhead"
-                          ? "bayer-letterhead"
-                          : template.id === "modernist_signal"
-                            ? "bold"
-                            : template.id === "quire_margin"
-                              ? "letterpress"
-                              : "minimal";
-        return {
-          id: template.id,
-          label: template.name,
-          description: template.description,
-          meta: template.shortLabel,
-          preview: { kind: "Cover letter" as const, family },
-        };
+      COVER_LETTER_TEMPLATES.flatMap((template) => {
+        const templateId = getCoverLetterRouteTemplateIntent(template);
+        if (!templateId || !isProposalTemplateId(templateId)) {
+          return [];
+        }
+
+        const definition = getProposalTemplateDefinition(templateId);
+        return [
+          {
+            id: templateId,
+            label: template.name,
+            description: translateUi(resolvedLanguage, template.descriptionKey),
+            meta: definition.shortLabel,
+            preview: {
+              kind: "Cover letter" as const,
+              family: template.family,
+            },
+          },
+        ];
       }),
-    [],
+    [resolvedLanguage],
   );
   const proposalTemplatePanelRegistration = React.useMemo(
     () => ({
@@ -11702,14 +11976,18 @@ export function ProposalForge(): JSX.Element {
         resolvedProposalPageSize.id === "letter"
           ? "US Letter · 21.59 × 27.94 cm"
           : "A4 · 21 × 29.7 cm",
-      activeItemId: effectiveProposalTemplateId,
+      activeItemId: isSavedView
+        ? effectiveSavedProposalTemplateId
+        : effectiveProposalTemplateId,
       items: proposalTemplatePanelItems,
       onSelect: (itemId: string) =>
         handleProposalLayoutSelect(resolveProposalTemplateId(itemId)),
     }),
     [
       effectiveProposalTemplateId,
+      effectiveSavedProposalTemplateId,
       handleProposalLayoutSelect,
+      isSavedView,
       proposalTemplatePanelItems,
       resolvedProposalPageSize.id,
       resolvedLanguage,
@@ -12003,7 +12281,11 @@ export function ProposalForge(): JSX.Element {
       ),
       renderContent: () => (
         <ProposalDesignFields
-          proposalTemplateId={effectiveProposalTemplateId}
+          proposalTemplateId={
+            isSavedView
+              ? effectiveSavedProposalTemplateId
+              : effectiveProposalTemplateId
+          }
           onSelectProposalLayout={handleProposalLayoutSelect}
           stylePreset={effectiveProposalStylePresetWithPalette}
           styleTemplateBundleBaseStyle={effectiveProposalTemplateBundleBaseStyle}
@@ -12042,6 +12324,7 @@ export function ProposalForge(): JSX.Element {
       effectiveProposalStylePresetWithPalette,
       effectiveProposalTemplateBundleBaseStyle,
       effectiveProposalTemplateId,
+      effectiveSavedProposalTemplateId,
       handleChooseSignature,
       handleProposalCustomAccentClear,
       handleProposalCustomAccentSelect,
@@ -12055,6 +12338,7 @@ export function ProposalForge(): JSX.Element {
       handleProposalTypographySelect,
       handleToggleHandwrittenSignature,
       handleToggleSignature,
+      isSavedView,
       proposalSignatureSettings.imageDataUrl,
       proposalTemplateBundleId,
       proposalDocumentIconSettings,
@@ -13249,12 +13533,16 @@ export function ProposalForge(): JSX.Element {
                             proposalType={proposalType}
                             voicePreset={proposalVoicePreset}
                             templateId={
-                              proposalRenderMetadata?.templateId ??
-                              effectiveProposalTemplateId ??
-                              fallbackProposalTemplateId
+                              isSavedView
+                                ? effectiveSavedProposalTemplateId
+                                : proposalRenderMetadata?.templateId ??
+                                  effectiveProposalTemplateId ??
+                                  fallbackProposalTemplateId
                             }
                             stylePreset={
-                              effectiveProposalStylePresetWithPalette
+                              isSavedView
+                                ? effectiveSavedProposalStylePreset
+                                : effectiveProposalStylePresetWithPalette
                             }
                             signatureSettings={proposalSignatureSettings}
                             closing={effectiveProposalClosing}
@@ -13281,6 +13569,7 @@ export function ProposalForge(): JSX.Element {
                             contactLine={proposalContactLine}
                             letterDate={proposalLetterDate}
                             recipientDetails={proposalRecipientDetails}
+                            documentLanguage={resolvedLanguage}
                             salutationValue={proposalSalutationValue || null}
                             applicantHeader={proposalDisplayApplicantHeader}
                             headerVisibility={proposalHeaderVisibility}

@@ -151,6 +151,7 @@ DEFAULT_LOCAL_CORS_ORIGINS = (
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 )
+DEFAULT_LOCAL_CORS_ORIGIN_REGEX = r"^https?://(?:localhost|127\.0\.0\.1)(?::[0-9]+)?$"
 DEFAULT_PRODUCTION_CORS_ORIGINS = (
     "https://dasti.ai",
     "https://www.dasti.ai",
@@ -233,6 +234,41 @@ def _resolve_cors_allowed_origins() -> List[str]:
     combined = list(DEFAULT_PRODUCTION_CORS_ORIGINS)
     combined.extend(DEFAULT_LOCAL_CORS_ORIGINS)
     return combined
+
+
+def _resolve_cors_allowed_origin_regex() -> Optional[str]:
+    configured = (
+        _split_csv_env(os.environ.get("CV_PARSER_CORS_ALLOW_ORIGINS"))
+        or _split_csv_env(os.environ.get("CLIENT_ORIGIN_WHITELIST"))
+        or _split_csv_env(os.environ.get("CLIENT_ORIGIN"))
+    )
+    if configured or _is_production_environment():
+        return None
+    return DEFAULT_LOCAL_CORS_ORIGIN_REGEX
+
+
+def _resolve_document_export_frontend_origin(request: Request) -> Optional[str]:
+    if _is_production_environment():
+        return None
+
+    raw_origin = (request.headers.get("origin") or "").strip().rstrip("/")
+    if not raw_origin:
+        return None
+
+    try:
+        parsed = urlparse(raw_origin)
+        parsed.port
+    except ValueError:
+        return None
+
+    if parsed.scheme not in {"http", "https"}:
+        return None
+    if parsed.hostname not in {"localhost", "127.0.0.1"}:
+        return None
+    if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+        return None
+
+    return raw_origin
 
 
 def _run_subproc_probe(
@@ -604,6 +640,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_resolve_cors_allowed_origins(),
+    allow_origin_regex=_resolve_cors_allowed_origin_regex(),
     allow_credentials=True,
     allow_methods=list(CORS_ALLOWED_METHODS),
     allow_headers=list(CORS_ALLOWED_HEADERS),
@@ -1868,42 +1905,54 @@ async def parse_cv(
 
 
 @app.post("/api/v1/document-export/resume/pdf")
-async def export_resume_pdf(payload: Dict[str, Any] = Body(...)) -> Response:
+async def export_resume_pdf(
+    request: Request, payload: Dict[str, Any] = Body(...)
+) -> Response:
     return create_document_export_response(
         payload,
         expected_kind="resume",
         expected_format="pdf",
         fallback_filename_base="Resume - ATS",
+        frontend_origin=_resolve_document_export_frontend_origin(request),
     )
 
 
 @app.post("/api/v1/document-export/resume/docx")
-async def export_resume_docx(payload: Dict[str, Any] = Body(...)) -> Response:
+async def export_resume_docx(
+    request: Request, payload: Dict[str, Any] = Body(...)
+) -> Response:
     return create_document_export_response(
         payload,
         expected_kind="resume",
         expected_format="docx",
         fallback_filename_base="Resume - Editable",
+        frontend_origin=_resolve_document_export_frontend_origin(request),
     )
 
 
 @app.post("/api/v1/document-export/proposal/pdf")
-async def export_proposal_pdf(payload: Dict[str, Any] = Body(...)) -> Response:
+async def export_proposal_pdf(
+    request: Request, payload: Dict[str, Any] = Body(...)
+) -> Response:
     return create_document_export_response(
         payload,
         expected_kind="proposal",
         expected_format="pdf",
         fallback_filename_base="Proposal - Styled",
+        frontend_origin=_resolve_document_export_frontend_origin(request),
     )
 
 
 @app.post("/api/v1/document-export/proposal/docx")
-async def export_proposal_docx(payload: Dict[str, Any] = Body(...)) -> Response:
+async def export_proposal_docx(
+    request: Request, payload: Dict[str, Any] = Body(...)
+) -> Response:
     return create_document_export_response(
         payload,
         expected_kind="proposal",
         expected_format="docx",
         fallback_filename_base="Proposal - Editable",
+        frontend_origin=_resolve_document_export_frontend_origin(request),
     )
 
 

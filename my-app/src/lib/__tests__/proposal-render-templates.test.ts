@@ -9,6 +9,21 @@ import {
 import { RESUME_TEMPLATE_IDS } from "../layout/resumeTemplates";
 
 describe("proposal render templates", () => {
+  it("keeps canonical ATS salutations near the first third without forcing a fixed page fraction", () => {
+    expect(getProposalTemplateDefinition("workshop_proposal_margin")).toEqual(
+      expect.objectContaining({
+        id: "workshop_proposal_margin",
+        bodyStartMm: 86,
+      }),
+    );
+    expect(getProposalTemplateDefinition("modernist_signal")).toEqual(
+      expect.objectContaining({
+        id: "modernist_signal",
+        bodyStartMm: 84,
+      }),
+    );
+  });
+
   it("registers the Twoweeks letterhead template as proposal cover-letter only", () => {
     expect(PROPOSAL_ACTIVE_TEMPLATE_IDS).toContain("twoweeks-letterhead");
     expect(isProposalTemplateId("twoweeks-letterhead")).toBe(true);

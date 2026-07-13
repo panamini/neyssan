@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { ProposalForge } from "../ProposalForge";
+import { ProposalForge as ProposalForgePage } from "../ProposalForge";
 import {
   readStoredProposalOutputDraft,
   writeStoredProposalOutputDraft,
@@ -19,6 +19,21 @@ import {
 } from "../../lib/proposal-workspace-state";
 
 const ATTACHED_CV_STORAGE_KEY = "dasti:proposal-attached-cv-id:v1";
+
+const mockProposalTopbarState = vi.hoisted(() => ({
+  registration: null as null | {
+    onDuplicateProposal: () => void;
+    onDeleteProposal: () => void;
+  },
+}));
+
+vi.mock("../../contexts/ProposalForgeTopbarContext", () => ({
+  useRegisterProposalForgeTopbar: (
+    registration: typeof mockProposalTopbarState.registration,
+  ) => {
+    mockProposalTopbarState.registration = registration;
+  },
+}));
 
 let mockAttachedCvId: string | null = null;
 const mockSourceCv = {
@@ -59,6 +74,67 @@ const SAVED_PROPOSALS = [
       platform: "linkedin",
       sourceJobDescription:
         "Lead recurring operations and keep cross-team communication on track.",
+      proposalDocument: {
+        schemaVersion: 1,
+        kind: "letter",
+        source: "structured",
+        blocks: [
+          {
+            id: "salutation-1",
+            type: "salutation",
+            text: "Dear team,",
+          },
+          {
+            id: "paragraph-1",
+            type: "paragraph",
+            text: "Saved proposal content.",
+          },
+          {
+            id: "closing-1",
+            type: "closing",
+            signOff: "Best,",
+            signatureName: "",
+          },
+        ],
+      },
+    },
+  },
+  {
+    _id: "proposal_custom_salutation",
+    _creationTime: 1710000000250,
+    title: "Saved custom salutation",
+    content: "o\n\nSaved proposal content.\n\nBest,",
+    status: "saved",
+    updatedAt: 1710000000250,
+    createdAt: 1710000000250,
+    sections: [{ type: "text", content: "Saved proposal content." }],
+    metadata: {
+      proposalType: "cover_letter",
+      voicePreset: "signature",
+      requestedVoicePreset: "signature",
+      proposalDocument: {
+        schemaVersion: 1,
+        kind: "letter",
+        source: "structured",
+        blocks: [
+          {
+            id: "salutation-custom",
+            type: "salutation",
+            text: "o",
+          },
+          {
+            id: "paragraph-custom",
+            type: "paragraph",
+            text: "Saved proposal content.",
+          },
+          {
+            id: "closing-custom",
+            type: "closing",
+            signOff: "Best,",
+            signatureName: "",
+          },
+        ],
+      },
     },
   },
   {
@@ -310,25 +386,35 @@ vi.mock("../../components/ProposalDisplay", () => ({
   default: ({
     proposalContent,
     proposalDocument,
+    salutationValue,
     documentTitle,
     mode,
     stylePreset,
+    templateId,
   }: {
     proposalContent: string | null;
     proposalDocument?: { blocks?: Array<{ text?: string }> } | null;
+    salutationValue?: string | null;
     documentTitle?: string | null;
     mode?: "preview" | "edit";
     stylePreset?: {
       layout?: string | null;
       palette?: string | null;
     } | null;
+    templateId?: string | null;
   }) => (
-    <div data-testid="proposal-display-state">
-      {documentTitle ?? "untitled"}|{proposalContent ?? "empty"}|
-      {mode ?? "preview"}|{stylePreset?.layout ?? "none"}|
-      {stylePreset?.palette ?? "none"}|
-      {proposalDocument?.blocks?.map((block) => block.text).join(" ") ?? "no-document"}
-    </div>
+    <>
+      <div data-testid="proposal-display-state">
+        {documentTitle ?? "untitled"}|{proposalContent ?? "empty"}|
+        {mode ?? "preview"}|{stylePreset?.layout ?? "none"}|
+        {stylePreset?.palette ?? "none"}|
+        {templateId ?? "no-template"}|
+        {proposalDocument?.blocks?.map((block) => block.text).join(" ") ?? "no-document"}
+      </div>
+      <div data-testid="proposal-salutation-state">
+        {salutationValue ?? "empty"}
+      </div>
+    </>
   ),
   fallbackCopyText: () => "",
   getDisplayedProposalText: (value: string) => value,
@@ -358,10 +444,83 @@ function LocationProbe(): JSX.Element {
   );
 }
 
+function ProposalTopbarActionsProbe(): JSX.Element {
+  return (
+    <div role="group" aria-label="Saved proposal actions">
+      <button
+        type="button"
+        onClick={() =>
+          mockProposalTopbarState.registration?.onDuplicateProposal()
+        }
+      >
+        Duplicate to draft
+      </button>
+      <button
+        type="button"
+        onClick={() => mockProposalTopbarState.registration?.onDeleteProposal()}
+      >
+        Delete proposal
+      </button>
+    </div>
+  );
+}
+
+function ProposalForge(): JSX.Element {
+  return (
+    <>
+      <ProposalForgePage />
+      <ProposalTopbarActionsProbe />
+    </>
+  );
+}
+
 describe("ProposalForge saved view", () => {
   beforeEach(() => {
     window.localStorage.clear();
     mockAttachedCvId = null;
+    mockProposalTopbarState.registration = null;
+  });
+
+  it("restores the structured document stored on an opened saved proposal", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={[
+          "/proposal?view=saved&id=proposal_custom_salutation",
+        ]}
+      >
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).not.toHaveTextContent(
+        "no-document",
+      );
+    });
+    expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+      "o Saved proposal content.",
+    );
+    expect(screen.getByTestId("proposal-salutation-state")).toHaveTextContent(
+      "o",
+    );
+  });
+
+  it("keeps the selected saved letter loaded when applying a gallery template intent", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={[
+          "/proposal?view=saved&id=proposal_beta&templateId=modernist_signal",
+        ]}
+      >
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      const state = screen.getByTestId("proposal-display-state");
+      expect(state).toHaveTextContent("Saved proposal content.");
+      expect(state).toHaveTextContent("modernist_signal");
+    });
   });
 
   it("opens a saved proposal without mutating the current draft", async () => {
@@ -406,8 +565,8 @@ describe("ProposalForge saved view", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId("saved-proposals-list")).toHaveTextContent(
-        "proposal_beta",
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Saved proposal content.",
       );
     });
 
@@ -476,8 +635,8 @@ describe("ProposalForge saved view", () => {
     });
   });
 
-  it("renders explicit saved proposal actions beside the saved stack", () => {
-    const { container } = render(
+  it("exposes saved proposal actions through the document topbar", () => {
+    render(
       <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_beta"]}>
         <ProposalForge />
       </MemoryRouter>,
@@ -489,34 +648,16 @@ describe("ProposalForge saved view", () => {
     expect(
       screen.getByRole("button", { name: "Duplicate to draft" }),
     ).toBeInTheDocument();
-    expect(screen.getByTestId("saved-proposals-list")).toHaveTextContent(
-      "proposal_beta",
-    );
-    const toolbar = container.querySelector(
-      ".dasti-proposal-saved-view-toolbar",
-    ) as HTMLElement | null;
-    const pageShell = container.querySelector(
-      ".dasti-page-shell",
-    ) as HTMLElement | null;
-    expect(toolbar).toBeTruthy();
-    expect(toolbar).toHaveClass("dasti-toolbar--surface-tooltips");
-    expect(
-      toolbar?.closest('[data-testid="saved-proposals-list"]'),
-    ).toBeTruthy();
-    expect(pageShell).toHaveClass("dasti-page-shell--proposal-saved");
-    expect(pageShell?.style.getPropertyValue("--page-shell-max-width")).toBe(
-      "100%",
-    );
-    const actionButtons = within(toolbar as HTMLElement)
+    const toolbar = screen.getByRole("group", {
+      name: "Saved proposal actions",
+    });
+    const actionButtons = within(toolbar)
       .getAllByRole("button")
-      .map((button) => button.getAttribute("aria-label"));
-    expect(actionButtons).toEqual([
-      "Duplicate to draft",
-      "Delete proposal",
-    ]);
+      .map((button) => button.textContent);
+    expect(actionButtons).toEqual(["Duplicate to draft", "Delete proposal"]);
     expect(toolbar).not.toHaveTextContent("Based on CV: Alex Martin Resume");
     expect(
-      within(toolbar as HTMLElement).queryByRole("group", {
+      within(toolbar).queryByRole("group", {
         name: "Saved proposal status",
       }),
     ).not.toBeInTheDocument();
@@ -535,32 +676,40 @@ describe("ProposalForge saved view", () => {
     expect(
       screen.getByRole("button", { name: "Duplicate to draft" }),
     ).toBeInTheDocument();
-    expect(screen.getByTestId("saved-proposals-list")).toHaveTextContent(
-      "proposal_beta",
+    expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+      "Saved proposal content.",
     );
   });
 
-  it("copies saved proposal content and source brief back into the live draft explicitly", () => {
+  it("copies saved proposal content and source brief back into the live draft explicitly", async () => {
     render(
       <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_beta"]}>
         <ProposalForge />
       </MemoryRouter>,
     );
 
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Saved proposal content.",
+      );
+    });
+
     fireEvent.click(screen.getByRole("button", { name: "Duplicate to draft" }));
 
-    expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
-      "Saved proposal beta",
-    );
-    expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
-      "Saved proposal content.",
-    );
-    expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
-      "|preview",
-    );
-    expect(screen.getByTestId("compose-job-title")).toHaveTextContent(
-      "Saved proposal beta",
-    );
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Saved proposal beta",
+      );
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Saved proposal content.",
+      );
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "|preview",
+      );
+      expect(screen.getByTestId("compose-job-title")).toHaveTextContent(
+        "Saved proposal beta",
+      );
+    });
     expect(screen.getByTestId("compose-job-description")).toHaveTextContent(
       "Lead recurring operations and keep cross-team communication on track.",
     );
@@ -697,7 +846,7 @@ describe("ProposalForge saved view", () => {
     });
   });
 
-  it("keeps the existing compose brief when the saved proposal lacks source brief metadata", () => {
+  it("keeps the existing compose brief when the saved proposal lacks source brief metadata", async () => {
     window.localStorage.setItem(
       PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
       JSON.stringify({
@@ -714,11 +863,19 @@ describe("ProposalForge saved view", () => {
       </MemoryRouter>,
     );
 
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Saved proposal without brief metadata.",
+      );
+    });
+
     fireEvent.click(screen.getByRole("button", { name: "Duplicate to draft" }));
 
-    expect(screen.getByTestId("compose-job-title")).toHaveTextContent(
-      "Saved proposal gamma",
-    );
+    await waitFor(() => {
+      expect(screen.getByTestId("compose-job-title")).toHaveTextContent(
+        "Saved proposal gamma",
+      );
+    });
     expect(screen.getByTestId("compose-job-description")).toHaveTextContent(
       "Existing compose brief should survive saved reopen.",
     );
@@ -740,20 +897,29 @@ describe("ProposalForge saved view", () => {
       </MemoryRouter>,
     );
 
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Auto tone saved proposal.",
+      );
+    });
+
     fireEvent.click(screen.getByRole("button", { name: "Duplicate to draft" }));
 
-    expect(
-      JSON.parse(
-        window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY) ?? "{}",
-      ),
-    ).toMatchObject({
-      jobTitle: "Saved proposal auto",
-      jobDescription:
-        "Coordinate operations, keep processes clean, and support team communication.",
-      proposalType: "cover_letter",
-      voicePreset: null,
-      sourceUrl: "https://example.com/jobs/operations-auto",
-      platform: "company_website",
+    await waitFor(() => {
+      expect(
+        JSON.parse(
+          window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY) ??
+            "{}",
+        ),
+      ).toMatchObject({
+        jobTitle: "Saved proposal auto",
+        jobDescription:
+          "Coordinate operations, keep processes clean, and support team communication.",
+        proposalType: "cover_letter",
+        voicePreset: null,
+        sourceUrl: "https://example.com/jobs/operations-auto",
+        platform: "company_website",
+      });
     });
 
     await waitFor(() => {

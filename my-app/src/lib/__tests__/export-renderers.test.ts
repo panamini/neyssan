@@ -7,6 +7,7 @@ import type {
   ResumePrintSource,
 } from "../document-export-models";
 import { buildResumeExportSource } from "../document-export-models";
+import { DOCUMENT_PAGE_SIZES } from "../document-page-size";
 import {
   buildProposalDocxBuffer,
   buildResumeDocxBuffer,
@@ -544,8 +545,8 @@ describe("export-renderers", () => {
       "proposal-shell--onecol",
     );
     expect(workshopStyledDocument.querySelector(".robial-sidebar")).toBeNull();
-    expect(workshopCss).toContain("--page-margin-left: 35mm;");
-    expect(workshopCss).toContain("--page-margin-right: 18mm;");
+    expect(workshopCss).toContain("--page-margin-left: 25.4mm;");
+    expect(workshopCss).toContain("--page-margin-right: 25.4mm;");
     expect(workshopCss).toContain("--robial-step-a: 17mm;");
     expect(workshopCss).toContain("--robial-step-b: 18mm;");
   });
@@ -2376,6 +2377,58 @@ describe("export-renderers", () => {
     expect(proposalStylesXml).toContain("Syne");
   });
 
+  it.each([
+    {
+      label: "US Letter",
+      templateId: "workshop_proposal_margin" as const,
+      pageSize: DOCUMENT_PAGE_SIZES.letter,
+      widthTwip: 12240,
+      heightTwip: 15840,
+    },
+    {
+      label: "A4",
+      templateId: "modernist_signal" as const,
+      pageSize: DOCUMENT_PAGE_SIZES.a4,
+      widthTwip: 11906,
+      heightTwip: 16838,
+    },
+  ])(
+    "preserves $label geometry and canonical hierarchy in proposal DOCX exports",
+    async ({ templateId, pageSize, widthTwip, heightTwip }) => {
+      const documentTitle = `Canonical subject ${templateId}`;
+      const { documentXml } = await readDocxMainXml(
+        await buildProposalDocxBuffer({
+          data: {
+            ...proposalFixture,
+            pageSize,
+            templateId,
+            documentTitle,
+            applicantHeader: {
+              ...proposalFixture.applicantHeader,
+              company: "Marlowe Studio",
+            },
+          },
+        }),
+      );
+      const subjectParagraph = documentXml
+        .match(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g)
+        ?.find((paragraph) => paragraph.includes(documentTitle));
+      const dateParagraph = documentXml
+        .match(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g)
+        ?.find((paragraph) => paragraph.includes("15 avril 2026"));
+
+      expect(documentXml).toMatch(
+        new RegExp(
+          `<w:pgSz[^>]*w:w="${widthTwip}"[^>]*w:h="${heightTwip}"[^>]*/>`,
+        ),
+      );
+      expect(documentXml).toContain("Marlowe Studio");
+      expect(subjectParagraph).toContain('<w:sz w:val="22"/>');
+      expect(subjectParagraph).toContain('<w:szCs w:val="22"/>');
+      expect(dateParagraph).toContain('<w:jc w:val="left"/>');
+    },
+  );
+
   it("emits Arabic DOCX document language and RTL metadata for resume and proposal exports", async () => {
     const resumeXml = await readDocxMainXml(
       await buildResumeDocxBuffer({
@@ -2553,8 +2606,9 @@ describe("export-renderers", () => {
       );
       expect(styledResumeDocument.body.className).toContain("resume-shell--split");
       expect(styledProposalDocument.body.className).toContain(
-        "proposal-shell--rail",
+        "proposal-shell--onecol",
       );
+      expect(styledProposalDocument.querySelector(".robial-sidebar")).toBeNull();
       expect(resumeCss).toContain(preset.headingFont);
       expect(resumeCss).toContain(preset.bodyFont);
       expect(proposalCss).toContain(preset.headingFont);

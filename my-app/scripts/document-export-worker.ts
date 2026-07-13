@@ -209,8 +209,24 @@ function resolveFrontendBaseUrls(): string[] {
     const trimmed = String(candidate ?? "").trim();
     if (trimmed) {
       const normalized = trimmed.replace(/\/+$/, "");
-      if (!resolved.includes(normalized)) {
-        resolved.push(normalized);
+      const expanded = [normalized];
+      try {
+        const parsed = new URL(normalized);
+        if (
+          parsed.hostname === "localhost" ||
+          parsed.hostname === "127.0.0.1"
+        ) {
+          parsed.hostname = "host.docker.internal";
+          expanded.unshift(parsed.toString().replace(/\/$/, ""));
+        }
+      } catch {
+        // Keep the original candidate; navigation will surface an actionable error.
+      }
+
+      for (const value of expanded) {
+        if (!resolved.includes(value)) {
+          resolved.push(value);
+        }
       }
     }
   }

@@ -37,6 +37,50 @@ function descriptorNames(values: Array<{ name: string }>) {
 }
 
 describe("document token system", () => {
+  it("keeps canonical cover-letter preview type within the readable Workshop range", () => {
+    const documentTypography = {
+      fontFamily: "Syne, sans-serif",
+      fontSize: "10.74pt",
+      lineHeight: 1.65,
+      fontWeight: 400,
+      letterSpacing: "0em",
+    };
+
+    const minimal = normalizeProposalPreviewTokens({
+      templateId: "workshop_proposal_margin",
+      documentTypography,
+    });
+    const french = normalizeProposalPreviewTokens({
+      templateId: "modernist_signal",
+      documentTypography,
+    });
+    const editorial = normalizeProposalPreviewTokens({
+      templateId: "editorial_wide",
+      documentTypography,
+    });
+
+    expect(minimal.flow.type.body.lineHeight).toBe(1.46);
+    expect(french.flow.type.body.lineHeight).toBe(1.46);
+    expect(minimal.flow.type.body.sizePt).toBe(11);
+    expect(french.flow.type.body.sizePt).toBe(11);
+    expect(editorial.flow.type.body.sizePt).toBe(10.74);
+    expect(editorial.flow.type.body.lineHeight).toBe(1.65);
+  });
+
+  it.each(["workshop_proposal_margin", "modernist_signal"] as const)(
+    "keeps %s export and DOCX body type at the canonical 11pt floor",
+    (proposalTemplateId) => {
+      const exportTokens = normalizeProposalExportTokens({
+        mode: "styled",
+        proposalTemplateId,
+      }).canonical;
+      const docxTokens = resolveProposalDocxSurfaceTokens(exportTokens);
+
+      expect(exportTokens.flow.type.body.sizePt).toBe(11);
+      expect(docxTokens.bodySizeHalfPt).toBe(22);
+    },
+  );
+
   it("covers the active preview and export vars with canonical mappings", () => {
     expect(descriptorNames(RESUME_PREVIEW_VAR_DESCRIPTORS)).toEqual(
       [
@@ -335,14 +379,14 @@ describe("document token system", () => {
     const exportVars = serializeExportVars(exportTokens);
 
     expect(previewTokens.geometry.template).toMatchObject({
-      leftZoneMm: 35,
+      leftZoneMm: 17,
       topOffsetMm: 35,
-      bodyStartMm: 96,
-      rightMarginMm: 18,
-      bottomMarginMm: 18,
+      bodyStartMm: 86,
+      rightMarginMm: 25.4,
+      bottomMarginMm: 25.4,
     });
     expect(previewTokens.geometry.columns).toMatchObject({
-      sidebarMm: 35,
+      sidebarMm: 17,
       gutterMm: 18,
     });
     expect(previewTokens.geometry.primitives?.robialStep).toEqual({
@@ -353,7 +397,7 @@ describe("document token system", () => {
     expect(previewVars["--proposal-grid-step-a-inline"]).toBe(
       "calc(var(--proposal-inline-mm) * 17)",
     );
-    expect(previewVars["--proposal-template-left-zone-mm"]).toBe("35");
+    expect(previewVars["--proposal-template-left-zone-mm"]).toBe("17");
     expect(previewVars["--font-heading-family"]).toBe(
       exportVars["--heading-font"],
     );
@@ -382,15 +426,15 @@ describe("document token system", () => {
     );
 
     expect(exportProfile.shell).toBe("onecol");
-    expect(exportTokens.geometry.page.margin.leftMm).toBe(35);
-    expect(exportTokens.geometry.page.margin.rightMm).toBe(18);
+    expect(exportTokens.geometry.page.margin.leftMm).toBe(25.4);
+    expect(exportTokens.geometry.page.margin.rightMm).toBe(25.4);
     expect(exportTokens.geometry.template).toEqual(
       previewTokens.geometry.template,
     );
     expect(exportTokens.geometry.primitives?.robialStep).toEqual(
       previewTokens.geometry.primitives?.robialStep,
     );
-    expect(exportVars["--page-margin-left"]).toBe("35mm");
+    expect(exportVars["--page-margin-left"]).toBe("25.4mm");
     expect(exportVars["--robial-step-a"]).toBe("17mm");
     expect(exportVars["--robial-step-b"]).toBe("18mm");
   });
@@ -410,7 +454,7 @@ describe("document token system", () => {
     expect(previewVars["--text-display-size"]).toBeDefined();
     expect(previewVars["--text-body-size"]).toBeDefined();
     expect(previewVars["--text-caption-size"]).toBeDefined();
-    expect(previewVars["--display-size-adjust"]).toBe("-0.15mm");
+    expect(previewVars["--display-size-adjust"]).toBe("0mm");
   });
 
   it("serializes canonical volk grid primitives for the active volk preview", () => {
@@ -581,6 +625,13 @@ describe("document token system", () => {
     );
     expect(docxTokens.pageMarginsTwip.left).toBe(
       mmToTwip(exportTokens.geometry.page.margin.leftMm),
+    );
+    expect(docxTokens.pageSizeTwip).toEqual({
+      width: mmToTwip(exportTokens.geometry.page.widthMm),
+      height: mmToTwip(exportTokens.geometry.page.heightMm),
+    });
+    expect(docxTokens.compactGapTwip).toBe(
+      mmToTwip(exportTokens.flow.rhythm.listGapMm ?? 1.3),
     );
     expect(docxTokens.subjectSizeHalfPt).toBeGreaterThan(
       docxTokens.bodySizeHalfPt,

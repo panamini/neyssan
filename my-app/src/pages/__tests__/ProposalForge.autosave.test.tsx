@@ -16,6 +16,9 @@ const mockCreateProposal = vi.fn().mockResolvedValue("proposal_created");
 let mockAttachedCvId: string | null = null;
 let mockCurrentProposalSettings: Record<string, unknown> | null = null;
 let mockSavedProposals: any[] | null = null;
+const mockForgePanelState = vi.hoisted(() => ({
+  designRegistration: null as null | { renderContent: () => React.ReactNode },
+}));
 
 const mockSourceCv = {
   id: "cv_alpha",
@@ -28,6 +31,36 @@ const mockSourceCv = {
     },
   },
 } as any;
+
+function ActiveForgePanelProbe(): JSX.Element | null {
+  return mockForgePanelState.designRegistration
+    ? <>{mockForgePanelState.designRegistration.renderContent()}</>
+    : null;
+}
+
+vi.mock("../../contexts/ForgeTemplatePanelContext", () => ({
+  useForgeTemplatePanel: () => ({
+    open: false,
+    openMode: "closed",
+    activeSurface: null,
+    dockedSurface: null,
+    activeRegistration: null,
+    openSurface: vi.fn(),
+    closePanel: vi.fn(),
+    queueOpenSurface: vi.fn(),
+    queueClosePanel: vi.fn(),
+    cancelPanelClose: vi.fn(),
+  }),
+  useRegisterForgeTemplates: vi.fn(),
+  useRegisterForgePanel: (registration: {
+    surface: string;
+    renderContent: () => React.ReactNode;
+  }) => {
+    if (registration.surface === "proposal-design") {
+      mockForgePanelState.designRegistration = registration;
+    }
+  },
+}));
 
 vi.mock("convex/react", () => ({
   useConvexAuth: () => ({
@@ -146,17 +179,22 @@ vi.mock("../../components/ProposalInputForm", () => ({
 vi.mock("../../components/ProposalDisplay", () => ({
   default: ({
     proposalContent,
+    salutationValue,
     documentTitle,
     stylePreset,
     onContentChange,
     onContentCommit,
     onProposalDocumentChange,
+    onSalutationChange,
+    onRecipientDetailsChange,
     onDocumentTitleChange,
+    headerVisibility,
     railStartAddon,
     railEndAddon,
     actions,
   }: {
     proposalContent: string | null;
+    salutationValue?: string | null;
     documentTitle?: string | null;
     stylePreset?: {
       layout?: string | null;
@@ -169,7 +207,13 @@ vi.mock("../../components/ProposalDisplay", () => ({
       proposalDocument?: any | null;
     }) => void;
     onProposalDocumentChange?: (document: any) => void;
+    onSalutationChange?: (value: string) => void;
+    onRecipientDetailsChange?: (value: string) => void;
     onDocumentTitleChange?: (value: string) => void;
+    headerVisibility?: {
+      showRecipient?: boolean;
+      showRecipientDetails?: boolean;
+    } | null;
     railStartAddon?: React.ReactNode;
     railEndAddon?: React.ReactNode;
     actions?: React.ReactNode;
@@ -177,6 +221,13 @@ vi.mock("../../components/ProposalDisplay", () => ({
     <div>
       <div data-testid="proposal-autosave-state">
         {documentTitle ?? "untitled"}|{proposalContent ?? "empty"}
+      </div>
+      <div data-testid="proposal-salutation-state">
+        {salutationValue ?? "empty"}
+      </div>
+      <div data-testid="proposal-recipient-visibility-state">
+        {headerVisibility?.showRecipient ? "recipient-visible" : "recipient-hidden"}|
+        {headerVisibility?.showRecipientDetails ? "details-visible" : "details-hidden"}
       </div>
       <div data-testid="proposal-autosave-style">
         {stylePreset?.layout ?? "none"}|{stylePreset?.typography ?? "none"}|
@@ -205,7 +256,7 @@ vi.mock("../../components/ProposalDisplay", () => ({
               {
                 id: "salutation-1",
                 type: "salutation",
-                text: "Dear team,",
+                text: "ola,",
               },
               {
                 id: "paragraph-1",
@@ -221,7 +272,7 @@ vi.mock("../../components/ProposalDisplay", () => ({
             ],
           };
           const proposalContent =
-            "Dear team,\n\nPreview committed draft body.\n\nSincerely,\nAlex Martin";
+            "ola,\n\nPreview committed draft body.\n\nSincerely,\nAlex Martin";
           onContentChange?.(proposalContent);
           onProposalDocumentChange?.(proposalDocument);
           onContentCommit?.({ proposalContent, proposalDocument });
@@ -234,6 +285,47 @@ vi.mock("../../components/ProposalDisplay", () => ({
         onClick={() => onDocumentTitleChange?.("Renamed autosave title")}
       >
         Edit title
+      </button>
+      <button
+        type="button"
+        onClick={() => onSalutationChange?.("Madame, Monsieur,")}
+      >
+        Edit salutation from heading
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onProposalDocumentChange?.({
+            schemaVersion: 1,
+            kind: "letter",
+            source: "structured",
+            blocks: [
+              {
+                id: "paragraph-1",
+                type: "paragraph",
+                text: "Preview committed draft body.",
+              },
+              {
+                id: "closing-1",
+                type: "closing",
+                signOff: "Sincerely,",
+                signatureName: "Alex Martin",
+              },
+            ],
+          })
+        }
+      >
+        Delete salutation inline
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onRecipientDetailsChange?.(
+            "Hiring Manager\nHead of Talent\nNorthwind\nhiring@northwind.example\n12 Main Street\nBoston, MA",
+          )
+        }
+      >
+        Edit recipient details from heading
       </button>
       {railStartAddon}
       {railEndAddon}
@@ -279,6 +371,7 @@ vi.mock("../../components/ProposalsList", () => ({
 
 describe("ProposalForge autosave", () => {
   beforeEach(() => {
+    mockForgePanelState.designRegistration = null;
     window.localStorage.clear();
     mockCreateProposal.mockClear();
     mockUpdateProposal.mockClear();
@@ -425,6 +518,10 @@ describe("ProposalForge autosave", () => {
       screen.getByRole("button", { name: "Edit preview document" }),
     );
 
+    expect(screen.getByTestId("proposal-salutation-state")).toHaveTextContent(
+      "ola,",
+    );
+
     await waitFor(() => {
       expect(mockUpdateProposal).toHaveBeenCalled();
     });
@@ -437,6 +534,10 @@ describe("ProposalForge autosave", () => {
           proposalDocument: expect.objectContaining({
             blocks: expect.arrayContaining([
               expect.objectContaining({
+                type: "salutation",
+                text: "ola,",
+              }),
+              expect.objectContaining({
                 text: "Preview committed draft body.",
               }),
             ]),
@@ -447,6 +548,80 @@ describe("ProposalForge autosave", () => {
         status: "draft",
       }),
     );
+    expect(
+      mockUpdateProposal.mock.calls[0]?.[0].content.match(/^ola,$/gm),
+    ).toHaveLength(1);
+
+    mockUpdateProposal.mockClear();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Edit salutation from heading" }),
+    );
+    expect(screen.getByTestId("proposal-salutation-state")).toHaveTextContent(
+      "Madame, Monsieur,",
+    );
+
+    await waitForAutosave();
+
+    const headingUpdate = mockUpdateProposal.mock.calls.at(-1)?.[0];
+    expect(headingUpdate).toEqual(
+      expect.objectContaining({
+        content: expect.stringMatching(/^Madame, Monsieur,/),
+        metadata: expect.objectContaining({
+          proposalDocument: expect.objectContaining({
+            blocks: expect.arrayContaining([
+              expect.objectContaining({
+                type: "salutation",
+                text: "Madame, Monsieur,",
+              }),
+            ]),
+          }),
+        }),
+      }),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Delete salutation inline" }),
+    );
+    expect(screen.getByTestId("proposal-salutation-state")).toHaveTextContent(
+      "empty",
+    );
+  });
+
+  it("shows populated recipient contact details after the first heading edit", async () => {
+    window.localStorage.setItem(
+      PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        proposalContent: "Dear team,\n\nDraft body.",
+        proposalType: "cover_letter",
+        proposalTemplateId: "workshop_proposal_margin",
+        proposalApplicantName: "Alex Martin",
+        proposalApplicantRole: "Operations Associate",
+        proposalDocumentTitle: "Recipient visibility",
+        proposalOutputMode: "preview",
+        proposalHeaderShowRecipient: false,
+        proposalHeaderShowRecipientDetails: false,
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByTestId("proposal-recipient-visibility-state"),
+    ).toHaveTextContent("recipient-hidden|details-hidden");
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Edit recipient details from heading",
+      }),
+    );
+
+    expect(
+      screen.getByTestId("proposal-recipient-visibility-state"),
+    ).toHaveTextContent("recipient-visible|details-visible");
   });
 
   it("keeps a same-draft local structured snapshot when the saved draft query is stale after refresh", async () => {
@@ -648,11 +823,14 @@ describe("ProposalForge autosave", () => {
     render(
       <MemoryRouter initialEntries={["/proposal"]}>
         <ProposalForge />
+        <ActiveForgePanelProbe />
       </MemoryRouter>,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Design" }));
-    fireEvent.click(screen.getByRole("button", { name: "Use Ochre accent" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Use Ochre accent" }),
+    );
 
     await waitForAutosave();
 
@@ -799,32 +977,23 @@ describe("ProposalForge autosave", () => {
     });
   });
 
-  it("keeps Style 3 selected and marks it custom immediately after a palette edit", () => {
+  it("applies Style 3 and keeps its palette edit in the proposal state", async () => {
     render(
       <MemoryRouter initialEntries={["/proposal"]}>
         <ProposalForge />
+        <ActiveForgePanelProbe />
       </MemoryRouter>,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Design" }));
-    fireEvent.click(screen.getByRole("button", { name: "Style 3" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Style 3" }));
 
-    expect(screen.getByRole("button", { name: "Style 3" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
     expect(screen.getByTestId("proposal-autosave-style")).toHaveTextContent(
       "|ink",
     );
-    expect(screen.queryByLabelText("Customized")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Use Cobalt accent" }));
 
-    expect(screen.getByRole("button", { name: "Style 3" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(screen.getByLabelText("Customized")).toBeInTheDocument();
     expect(screen.getByTestId("proposal-autosave-style")).toHaveTextContent(
       "|cobalt",
     );

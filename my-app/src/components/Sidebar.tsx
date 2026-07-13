@@ -26,8 +26,42 @@ import {
 } from "../lib/settings-tabs";
 import { translateUi, type UiMessageKey } from "../lib/i18n";
 import { useUiLanguagePreference } from "../lib/ui-preferences";
+import { createProposalTemplateGalleryState } from "../lib/proposal-workspace-state";
 
 const COMPACT_RAIL_WIDTH = 768;
+const LAST_SAVED_PROPOSAL_PATH_KEY = "twoweeks:last-saved-proposal-path";
+
+function getSavedProposalPath(pathname: string, search: string): string | null {
+  if (pathname !== "/proposal") return null;
+
+  const searchParams = new URLSearchParams(search);
+  const proposalId = searchParams.get("id")?.trim();
+  if (searchParams.get("view") !== "saved" || !proposalId) return null;
+
+  const savedProposalParams = new URLSearchParams({
+    view: "saved",
+    id: proposalId,
+  });
+  return `/proposal?${savedProposalParams.toString()}`;
+}
+
+function readLastSavedProposalPath(): string | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const storedPath = window.sessionStorage.getItem(
+      LAST_SAVED_PROPOSAL_PATH_KEY,
+    );
+    if (!storedPath) return null;
+
+    const storedUrl = new URL(storedPath, window.location.origin);
+    if (storedUrl.origin !== window.location.origin) return null;
+
+    return getSavedProposalPath(storedUrl.pathname, storedUrl.search);
+  } catch {
+    return null;
+  }
+}
 
 const SETTINGS_DRAWER_GROUPS: Array<{
   labelKey: UiMessageKey;
@@ -64,6 +98,7 @@ type SidebarRailLinkProps = {
   hoverEnabled?: boolean;
   compact?: boolean;
   className?: string;
+  state?: Record<string, string>;
   onClick?: () => void;
   onHoverIntent?: () => void;
   onHoverLeave?: () => void;
@@ -126,6 +161,7 @@ function SidebarRailLink({
   hoverEnabled = true,
   compact = false,
   className,
+  state,
   onClick,
   onHoverIntent,
   onHoverLeave,
@@ -134,6 +170,7 @@ function SidebarRailLink({
   return (
     <Link
       to={href}
+      state={state}
       className={clsx(
         "sb-rail-button",
         active && "sb-rail-button--route-active",
@@ -266,6 +303,13 @@ function SettingsDrawerContent({
 export const Sidebar: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const currentSavedProposalPath = React.useMemo(
+    () => getSavedProposalPath(location.pathname, location.search),
+    [location.pathname, location.search],
+  );
+  const [lastSavedProposalPath, setLastSavedProposalPath] = React.useState(
+    () => currentSavedProposalPath ?? readLastSavedProposalPath(),
+  );
   const { resolvedLanguage } = useUiLanguagePreference();
   const navLabel = React.useCallback(
     (key: UiMessageKey) => translateUi(resolvedLanguage, key),
@@ -282,6 +326,14 @@ export const Sidebar: React.FC = () => {
   } = useForgeTemplatePanel();
   const activeSettingsTab = normalizeSettingsTab(
     new URLSearchParams(location.search).get("tab"),
+  );
+  const proposalTemplateGalleryState = React.useMemo(
+    () =>
+      createProposalTemplateGalleryState(
+        location.pathname,
+        location.search,
+      ),
+    [location.pathname, location.search],
   );
   const settingsSectionsLabel = navLabel("settings.drawer.sections");
   useRegisterForgePanel(
@@ -312,6 +364,20 @@ export const Sidebar: React.FC = () => {
     typeof window === "undefined" ? 1280 : window.innerWidth,
   );
   const pendingSettingsPanelOpenRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!currentSavedProposalPath) return;
+
+    setLastSavedProposalPath(currentSavedProposalPath);
+    try {
+      window.sessionStorage.setItem(
+        LAST_SAVED_PROPOSAL_PATH_KEY,
+        currentSavedProposalPath,
+      );
+    } catch {
+      // Navigation continuity is best effort when browser storage is unavailable.
+    }
+  }, [currentSavedProposalPath]);
 
   React.useEffect(() => {
     const handleResize = () => {
@@ -597,7 +663,7 @@ export const Sidebar: React.FC = () => {
         ) : (
           <SidebarRailLink
             label={navLabel(NAV_MESSAGE_KEYS.proposal)}
-            href="/proposal"
+            href={lastSavedProposalPath ?? "/proposal"}
             active={proposalActive}
             icon={FileText}
             compact={compactRail}
@@ -663,6 +729,7 @@ export const Sidebar: React.FC = () => {
           <SidebarRailLink
             label={navLabel(NAV_MESSAGE_KEYS.templates)}
             href="/templates"
+            state={proposalTemplateGalleryState}
             active={templatesActive}
             panelOpen={templatesOpen}
             expanded={templatesOpen}

@@ -1167,6 +1167,22 @@ describe("ProposalRail style tab", () => {
     );
   });
 
+  it("selects the canonical French proposal layout from the Style tab", () => {
+    const onSelectProposalLayout = vi.fn();
+
+    renderDesignFields({
+      proposalTemplateId: CANONICAL_PROPOSAL_TEMPLATE_ID,
+      onSelectProposalLayout,
+    });
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "French layout",
+      }),
+    );
+
+    expect(onSelectProposalLayout).toHaveBeenCalledWith("modernist_signal");
+  });
+
   it("selects the editorial proposal layout from the Style tab", () => {
     const onSelectProposalLayout = vi.fn();
 

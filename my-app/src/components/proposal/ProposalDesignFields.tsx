@@ -97,6 +97,8 @@ export const PROPOSAL_STYLE_OPTIONS: ProposalRailStyleOption[] = [
 
 const CANONICAL_PROPOSAL_TEMPLATE_DEFINITION =
   getProposalTemplateDefinition(CANONICAL_PROPOSAL_TEMPLATE_ID);
+const FRENCH_PROPOSAL_TEMPLATE_DEFINITION =
+  getProposalTemplateDefinition("modernist_signal");
 const EDITORIAL_PROPOSAL_TEMPLATE_DEFINITION =
   getProposalTemplateDefinition("editorial_wide");
 
@@ -106,6 +108,12 @@ const PROPOSAL_LAYOUT_OPTIONS: ProposalRailLayoutOption[] = [
     eyebrow: CANONICAL_PROPOSAL_TEMPLATE_DEFINITION.shortLabel,
     label: "Minimal",
     description: CANONICAL_PROPOSAL_TEMPLATE_DEFINITION.description,
+  },
+  {
+    id: "modernist_signal",
+    eyebrow: FRENCH_PROPOSAL_TEMPLATE_DEFINITION.shortLabel,
+    label: "French",
+    description: FRENCH_PROPOSAL_TEMPLATE_DEFINITION.description,
   },
   {
     id: "editorial_wide",

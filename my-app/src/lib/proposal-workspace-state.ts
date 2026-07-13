@@ -13,6 +13,7 @@ export const PROPOSAL_WORKSPACE_RESET_STATE_KEY =
   "proposalWorkspaceResetToken";
 export const PROPOSAL_ENTRY_INTENT_STATE_KEY = "proposalEntryIntent";
 export const PROPOSAL_JOB_IMPORT_FOCUS_STATE_KEY = "jobImportFocus";
+export const PROPOSAL_TEMPLATE_RETURN_TO_STATE_KEY = "proposalReturnTo";
 export const PROPOSAL_DRAWER_QUERY_PARAM = "drawer";
 export const PROPOSAL_DRAFT_DRAWER_QUERY_VALUE = "proposal-draft";
 
@@ -20,6 +21,57 @@ export type ProposalEntryIntent = "cover-letter-start";
 export type JobImportFocus = "supported-sites";
 export type ProposalDrawerRouteIntent =
   typeof PROPOSAL_DRAFT_DRAWER_QUERY_VALUE;
+
+export function createProposalTemplateGalleryState(
+  pathname: string,
+  search: string,
+): Record<string, string> | undefined {
+  if (pathname !== "/proposal") return undefined;
+
+  const params = new URLSearchParams(search);
+  params.delete("templateId");
+  const nextSearch = params.toString();
+
+  return {
+    [PROPOSAL_TEMPLATE_RETURN_TO_STATE_KEY]: `/proposal${
+      nextSearch ? `?${nextSearch}` : ""
+    }`,
+  };
+}
+
+export function readProposalTemplateReturnTo(value: unknown): string | null {
+  if (!value || typeof value !== "object") return null;
+  const route = (value as Record<string, unknown>)[
+    PROPOSAL_TEMPLATE_RETURN_TO_STATE_KEY
+  ];
+  if (typeof route !== "string" || !route.startsWith("/")) return null;
+
+  try {
+    const parsed = new URL(route, "https://twoweeks.local");
+    if (
+      parsed.origin !== "https://twoweeks.local" ||
+      parsed.pathname !== "/proposal"
+    ) {
+      return null;
+    }
+
+    parsed.searchParams.delete("templateId");
+    const nextSearch = parsed.searchParams.toString();
+    return `/proposal${nextSearch ? `?${nextSearch}` : ""}`;
+  } catch {
+    return null;
+  }
+}
+
+export function buildProposalTemplateApplyRoute(
+  locationState: unknown,
+  templateId: string,
+): string {
+  const returnTo = readProposalTemplateReturnTo(locationState) ?? "/proposal";
+  const parsed = new URL(returnTo, "https://twoweeks.local");
+  parsed.searchParams.set("templateId", templateId);
+  return `${parsed.pathname}?${parsed.searchParams.toString()}`;
+}
 
 export type StoredProposalComposeDraft = {
   jobTitle?: string;
