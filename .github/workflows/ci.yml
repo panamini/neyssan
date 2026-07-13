@@ -66,11 +66,14 @@ jobs:
           ENABLE_COVER_LETTER_QUALITY_REPAIR_V1: ""
         run: |
           ./node_modules/.bin/vitest --run \
+            convex/lib/proposals/__tests__/coverLetterPolicyCandidate.test.ts \
             scripts/evals/__tests__/benchmark-cover-letter-writers.test.ts \
+            scripts/evals/__tests__/cover-letter-policy-shadow.test.ts \
             scripts/evals/__tests__/cover-letter-eval-artifact.test.ts \
             scripts/evals/__tests__/cover-letter-eval-budget.test.ts \
             scripts/evals/__tests__/stability-cover-letter-mini.test.ts
           ./node_modules/.bin/tsx scripts/evals/benchmark-cover-letter-writers.ts
+          ./node_modules/.bin/tsx scripts/evals/cover-letter-policy-shadow.ts
           if ./node_modules/.bin/tsx scripts/evals/stability-cover-letter-mini.ts; then
             echo "::error::The stability runner must refuse unflagged, unbudgeted live execution."
             exit 1
