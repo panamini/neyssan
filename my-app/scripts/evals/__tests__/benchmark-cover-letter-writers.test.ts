@@ -229,11 +229,22 @@ describe("benchmark-cover-letter-writers", () => {
         writerModel: plan[1]!.writerModel,
         error: "model compatibility failed",
       });
+    const onFailure = vi.fn();
 
     await expect(
-      runCoverLetterHumanReviewCohort({ plan, generateRecord }),
+      runCoverLetterHumanReviewCohort({ plan, generateRecord, onFailure }),
     ).rejects.toThrow(/model compatibility failed/iu);
     expect(generateRecord).toHaveBeenCalledTimes(2);
+    expect(onFailure).toHaveBeenCalledOnce();
+    expect(onFailure).toHaveBeenCalledWith({
+      completedRecords: [{ status: "human_review_pending" }],
+      failure: {
+        status: "generation_failed",
+        caseId: plan[1]!.benchmarkCase.id,
+        writerModel: plan[1]!.writerModel,
+        error: "model compatibility failed",
+      },
+    });
   });
 
   it("uses actual deterministic prompts for a conservative offline 24-call cost preflight", async () => {
@@ -447,7 +458,17 @@ describe("benchmark-cover-letter-writers", () => {
       evaluatorModel: "gpt-5-mini",
       apiKey: "unused-in-replay",
       productionInputs,
-      generateLetter: vi.fn().mockResolvedValue(generation),
+      generateLetter: vi.fn().mockImplementation(async (args) => {
+        args.onProviderResponseMetadata?.({
+          returnedModel: "gpt-5.5-2026-06-30",
+          tokenUsage: {
+            inputTokens: 3_000,
+            outputTokens: 900,
+            totalTokens: 3_900,
+          },
+        });
+        return generation;
+      }),
       evaluateLetter,
     });
 
@@ -457,6 +478,20 @@ describe("benchmark-cover-letter-writers", () => {
       artifact: {
         decision: "rejected",
         frozenConfig: { hasCandidateContext: true },
+      },
+      runManifest: {
+        version: "cover_letter_eval_run_manifest_entry_v1",
+        caseId: benchmarkCase.id,
+        provider: "openai",
+        requestedModel: "gpt-5.5",
+        returnedModel: "gpt-5.5-2026-06-30",
+        promptHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+        tokenUsage: {
+          inputTokens: 3_000,
+          outputTokens: 900,
+          totalTokens: 3_900,
+        },
+        artifactHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
       },
     });
   });

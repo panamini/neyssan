@@ -58,6 +58,10 @@ import {
   type CoverLetterEvalBudgetOptions,
 } from "./cover-letter-eval-budget";
 import {
+  buildCoverLetterEvalFailureReceipt,
+  writeCoverLetterEvalFailureReceipt,
+} from "./cover-letter-eval-failure-receipt";
+import {
   evaluateCoverLetterTextWithOpenAI,
   resolveCoverLetterEvalModel,
 } from "./evaluate-cover-letter";
@@ -213,6 +217,7 @@ export type CoverLetterBenchmarkFailureRecord = {
   diagnostics: CoverLetterBenchmarkDiagnostics;
   manualReview: CoverLetterBenchmarkManualReview;
   letter?: string;
+  runManifest?: CoverLetterEvalRunManifestEntry;
   notes?: string;
   realismTag?: string;
 };
@@ -1051,6 +1056,32 @@ type PreparedCoverLetterBenchmarkCase = {
   runManifest?: CoverLetterEvalRunManifestEntry;
 };
 
+async function buildBenchmarkRunManifestEntry(args: {
+  benchmarkCase: CoverLetterBenchmarkCase;
+  writerModel: CoverLetterBenchmarkWriterModel;
+  generation: PremiumCoverLetterAttemptResult;
+  artifact: CoverLetterEvalArtifact;
+  providerResponseMetadata: PremiumCoverLetterProviderResponseMetadata | null;
+}): Promise<CoverLetterEvalRunManifestEntry | undefined> {
+  if (!isQualityEval2BWriterModel(args.writerModel)) return undefined;
+  const provider = resolveBenchmarkWriterProvider(args.writerModel);
+  return buildCoverLetterEvalRunManifestEntry({
+    caseId: args.benchmarkCase.id,
+    provider,
+    requestedModel: args.writerModel,
+    returnedModel: args.providerResponseMetadata?.returnedModel ?? null,
+    prompt: args.generation.prompt,
+    reasoningEffort:
+      provider === "openai" ? resolveOpenAIProposalReasoningEffort() : null,
+    writerMaxOutputTokens: COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS,
+    providerMaxRetries: COVER_LETTER_EVAL_PROVIDER_MAX_RETRIES,
+    tokenUsage: args.providerResponseMetadata?.tokenUsage ?? null,
+    sdkVersions: await resolveCoverLetterEvalInstalledSdkVersions(),
+    artifactHash: args.artifact.artifactHash,
+    provenanceHash: args.artifact.provenanceHash,
+  });
+}
+
 async function prepareCoverLetterBenchmarkCase(
   args: PrepareCoverLetterBenchmarkCaseArgs,
 ): Promise<
@@ -1123,6 +1154,13 @@ async function prepareCoverLetterBenchmarkCase(
     });
     if (!preparedArtifact.finalizedPayload) {
       const finalization = preparedArtifact.artifact.diagnostics.finalization;
+      const runManifest = await buildBenchmarkRunManifestEntry({
+        benchmarkCase: args.benchmarkCase,
+        writerModel: args.writerModel,
+        generation,
+        artifact: preparedArtifact.artifact,
+        providerResponseMetadata,
+      });
       return {
         status: "finalization_failed",
         caseId: args.benchmarkCase.id,
@@ -1142,6 +1180,7 @@ async function prepareCoverLetterBenchmarkCase(
           failureReason: finalization.errorClass,
         }),
         manualReview: createEmptyManualReview(),
+        ...(runManifest ? { runManifest } : {}),
         notes: args.benchmarkCase.notes,
         realismTag: args.benchmarkCase.realismTag,
       };
@@ -1150,26 +1189,13 @@ async function prepareCoverLetterBenchmarkCase(
       ...generation,
       ...preparedArtifact.finalizedPayload,
     };
-    const manifestProvider = resolveBenchmarkWriterProvider(args.writerModel);
-    const runManifest = isQualityEval2BWriterModel(args.writerModel)
-      ? await buildCoverLetterEvalRunManifestEntry({
-          caseId: args.benchmarkCase.id,
-          provider: manifestProvider,
-          requestedModel: args.writerModel,
-          returnedModel: providerResponseMetadata?.returnedModel ?? null,
-          prompt: generation.prompt,
-          reasoningEffort:
-            manifestProvider === "openai"
-              ? resolveOpenAIProposalReasoningEffort()
-              : null,
-          writerMaxOutputTokens: COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS,
-          providerMaxRetries: COVER_LETTER_EVAL_PROVIDER_MAX_RETRIES,
-          tokenUsage: providerResponseMetadata?.tokenUsage ?? null,
-          sdkVersions: await resolveCoverLetterEvalInstalledSdkVersions(),
-          artifactHash: preparedArtifact.artifact.artifactHash,
-          provenanceHash: preparedArtifact.artifact.provenanceHash,
-        })
-      : undefined;
+    const runManifest = await buildBenchmarkRunManifestEntry({
+      benchmarkCase: args.benchmarkCase,
+      writerModel: args.writerModel,
+      generation,
+      artifact: preparedArtifact.artifact,
+      providerResponseMetadata,
+    });
     return {
       status: "prepared",
       outputLanguage,
@@ -1592,12 +1618,23 @@ export async function runCoverLetterHumanReviewCohort<
 >(args: {
   plan: readonly CoverLetterHumanReviewPlanItem[];
   generateRecord: (item: CoverLetterHumanReviewPlanItem) => Promise<Result>;
+  onFailure?: (args: {
+    completedRecords: readonly Extract<
+      Result,
+      { status: "human_review_pending" }
+    >[];
+    failure: Exclude<Result, { status: "human_review_pending" }>;
+  }) => void | Promise<void>;
 }): Promise<Array<Extract<Result, { status: "human_review_pending" }>>> {
   const records: Array<Extract<Result, { status: "human_review_pending" }>> =
     [];
   for (const item of args.plan) {
     const result = await args.generateRecord(item);
     if (result.status !== "human_review_pending") {
+      await args.onFailure?.({
+        completedRecords: records,
+        failure: result as Exclude<Result, { status: "human_review_pending" }>,
+      });
       throw new Error(
         `Human-review cohort generation failed at ${result.caseId ?? item.benchmarkCase.id}/${result.writerModel ?? item.writerModel}: ${result.error ?? result.status}`,
       );
@@ -1922,6 +1959,48 @@ async function main(): Promise<void> {
           mistralApiKey,
           budget,
         }),
+      onFailure: async ({ completedRecords, failure }) => {
+        if (!isQualityEval2BWriterModel(failure.writerModel)) {
+          throw new Error(
+            `Human-review failure receipt does not support writer ${failure.writerModel}.`,
+          );
+        }
+        const finalization = failure.artifact?.diagnostics.finalization;
+        const failureReceipt = buildCoverLetterEvalFailureReceipt({
+          cohortId: COVER_LETTER_BLIND_REVIEW_COHORT_ID,
+          runId,
+          sourceRef,
+          plannedProviderCalls: humanReviewPlan!.length,
+          completedCalls: completedRecords.flatMap((record) =>
+            record.runManifest ? [record.runManifest] : [],
+          ),
+          failure: {
+            caseId: failure.caseId,
+            provider: resolveBenchmarkWriterProvider(failure.writerModel),
+            requestedModel: failure.writerModel,
+            status: failure.status,
+            failureStage:
+              finalization?.failureStage ?? failure.diagnostics.failureStage,
+            failureReason:
+              finalization && finalization.errorClass !== "none"
+                ? finalization.errorClass
+                : failure.diagnostics.failureReason,
+            failureIssues: failure.diagnostics.failureIssues,
+            finalizationDiagnostics: finalization ?? null,
+            artifactHash: failure.artifact?.artifactHash ?? null,
+            provenanceHash: failure.artifact?.provenanceHash ?? null,
+            attemptMetadata: failure.runManifest ?? null,
+          },
+          budget: budget.snapshot(),
+        });
+        const failureReceiptPath = await writeCoverLetterEvalFailureReceipt({
+          outputDirectory,
+          receipt: failureReceipt,
+        });
+        console.error(
+          `[cover-letter-benchmark] failureReceiptPath=${failureReceiptPath}`,
+        );
+      },
     });
     const artifacts = await buildCoverLetterBlindReviewArtifacts({
       cohortId: COVER_LETTER_BLIND_REVIEW_COHORT_ID,
