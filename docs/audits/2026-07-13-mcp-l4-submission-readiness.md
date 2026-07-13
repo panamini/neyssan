@@ -24,7 +24,7 @@ No scenario below uses credentials, sends a provider request, writes application
 
 | ID | Scenario | Expected result | Offline evidence |
 | --- | --- | --- | --- |
-| P1 | Search the safe summary catalog, then fetch the application-package entry. | Four fixed catalog entries are returned; fetch returns only fixed safe metadata; the summary executor is not called. | `mcpOAuthProductionRouteAdapter.test.ts`: `executes safe search and fetch compatibility tools after bearer token` |
+| P1 | Search the safe summary catalog, then fetch the application-package entry. | Four fixed catalog entries are returned; fetch returns fixed safe metadata plus fixed explanatory text; the summary executor is not called. | `mcpOAuthProductionRouteAdapter.test.ts`: `executes safe search and fetch compatibility tools after bearer token`, including exact text and `content`/`structuredContent` mirror assertions |
 | P2 | Read the application-package summary using its canonical safe ref. | One read-only status object is returned; no raw package content, owner identifier, token, provider data, or write effect is exposed. | Parametrized route test: `executes a safe read-only production tools/call summary...` |
 | P3 | Read the evidence-graph summary using its canonical safe ref. | Same bounded status envelope and no-leak guarantees as P2. | Same parametrized route test, evidence-graph case |
 | P4 | Read the resume-variant-plan summary using its canonical safe ref. | Same bounded status envelope and no-leak guarantees as P2. | Same parametrized route test, resume-variant-plan case |
@@ -40,25 +40,28 @@ Supporting negative coverage also rejects malformed arguments and non-allowliste
 | Surface | Model-visible data | Explicitly excluded |
 | --- | --- | --- |
 | `tools/list` | Tool name, title, description, schemas, OAuth scope, and read-only annotations. | Runtime handlers, internal tool identifiers, tokens, owner identifiers, provider configuration. |
-| `search` / `fetch` | Fixed summary-catalog identifiers, titles, categories, and fixed catalog URLs. | User documents, prompts, provider output, account data, arbitrary URLs. |
+| `search` / `fetch` | Fixed summary-catalog identifiers, titles, categories, fixed source label `twoweeks_safe_summary_catalog`, fixed explanatory text, and fixed catalog URLs. Fetch mirrors its fixed payload in `structuredContent` and serialized `content[0].text`. | User documents, prompts, provider output, account data, arbitrary URLs. |
 | Four summary tools | Coarse status, canonical safe ref category, update timestamp, and fixed capability flags. | Raw CV, job, proposal, file bytes, prompt text, provider output, email, user ID, OAuth material, write effects. |
 
-The current summary response includes timestamps and internal read-category labels. Their necessity and wording require a separate data-minimization decision before any public submission. The fixed catalog URLs also require a separate reviewer-usability decision; this dossier does not claim that they are user-openable pages.
+The current summary response includes timestamps and internal read-category labels. Their necessity and wording require a separate data-minimization decision before any public submission. Each fixed catalog URL must also be verified as an absolute user-openable HTTP(S) page or changed to an empty URL before submission; this dossier does not claim that the current URLs satisfy that requirement.
 
 ## Submission prerequisites
 
-OpenAI's current submission guidance requires a real publicly reachable non-testing MCP endpoint, organization verification and app-management permissions, a qualifying published privacy policy, tool scanning, test prompts and responses, localization information, and an exact-domain CSP for a plugin containing an app. The submission project must use global data residency; projects with EU data residency are currently ineligible. The portal, automated scan, and manual review remain external gates.
+OpenAI's current plugin-submission guidance requires a real publicly reachable non-testing MCP endpoint, verified domain control, organization verification and app-management permissions, a qualifying published privacy policy, OAuth and demo credentials for an authenticated server, tool scanning, complete listing metadata, starter prompts, exactly five positive and three negative reviewer cases, country availability, release notes, policy attestations, and an exact-domain CSP for a plugin containing an app. The submission project must use global data residency; projects with EU data residency are currently ineligible. The portal, automated scan, and manual review remain external gates.
 
 | Area | Current offline status | Required before submission |
 | --- | --- | --- |
 | Private-beta auth and subject isolation | Covered by existing focused tests; L1 hardening is tracked separately. | Merge and deploy the approved digest-based allowlist migration, then re-prove live auth. |
 | Tool inventory and annotations | Enforced by the L2 offline CI contract. | Confirm the deployed endpoint scans to the same exact inventory. |
+| Listing metadata and localization | Plugin name, short and long descriptions, logo, category, verified publisher identity, website, support, privacy-policy, terms URLs, and localization information are not finalized by this dossier. | Complete every required public listing and localization field with production-ready assets, translated copy where applicable, and public URLs matching the verified publisher. |
 | Privacy policy | Internal policy material exists but no qualifying published policy URL is established here. | Publish and review a policy that states personal-data categories, purposes, recipient categories, retention timelines, and user controls. |
-| Output minimization | Raw private content is excluded by tests. | Resolve whether timestamps, read-category labels, and fixed catalog URLs are necessary. |
-| Domain and endpoint | No live check in this dossier. | Use a public, non-testing endpoint and complete portal tool scanning. |
+| Output minimization | Raw private content is excluded by tests. | Resolve whether timestamps, read-category labels, and fixed source labels are necessary; verify every catalog URL is user-openable or make it empty. |
+| Domain and endpoint | No live check or domain challenge was completed by this dossier. | Use a public, non-testing endpoint, complete the portal's generated domain-verification challenge, and scan the tools again. |
 | CSP and UI | No MCP UI resource is claimed by this dossier, but CSP remains a submission requirement for a plugin containing an app. | Define and verify an exact-domain CSP for the submitted app contract. Record screenshots as not applicable only if the submitted app has no UI. |
 | Web and mobile | Not run. | Execute reviewer scenarios on supported web and mobile surfaces. |
-| Reviewer access | No credentials are stored or documented here. | Provide the portal a login and password for a fully featured demo account with sample data, no MFA, sign-up, or inaccessible verification step; transmit them only through the approved submission secret channel. |
+| Reviewer access | No credentials are stored or documented here. | Provide the portal the configured OAuth client credentials plus a login and password for a fully featured demo account with sample data, no MFA, sign-up, or inaccessible verification step; transmit every credential only through the approved submission secret channel. |
+| Prompts and reviewer cases | This dossier maps five positive and three negative scenarios to offline evidence, but it does not provide final user prompts, expected result shapes, negative-case rationales, or reviewer fixture instructions. | Submit exactly five positive and three negative cases with the portal-required prompt/scenario, expected behavior and result shape, reproducible account or fixture data, and, for every negative case, why the plugin must not complete the action. |
+| Availability and submission controls | Countries, starter prompts, release notes, and policy attestations are not selected or completed here. | Select only supported countries, finalize realistic starter prompts and release notes, then complete attestations after rechecking the listing, server, tests, and availability. |
 | Data residency | Not checked. | Use and verify an OpenAI project with global data residency; EU-data-residency projects are currently ineligible for app review. |
 | OpenAI review and approval | Not started. | Submit only after separate public-launch authorization; record the portal result without overstating it. |
 
@@ -80,6 +83,7 @@ rtk git diff --check
 ## References
 
 - OpenAI Apps SDK, [Prepare and maintain an app for plugin submission](https://developers.openai.com/apps-sdk/deploy/submission)
+- ChatGPT Learn, [Submit plugins](https://learn.chatgpt.com/docs/submit-plugins)
 - OpenAI Apps SDK, [App guidelines](https://developers.openai.com/apps-sdk/app-guidelines)
 - OpenAI Apps SDK, [Build your MCP server](https://developers.openai.com/apps-sdk/build/mcp-server)
 - `scripts/mcp-private-beta-smoke.mjs`

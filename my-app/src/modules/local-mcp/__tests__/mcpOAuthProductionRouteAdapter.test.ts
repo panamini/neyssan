@@ -2074,6 +2074,27 @@ describe("MCP OAuth production route adapter", () => {
         },
       },
     });
+    const fetchResult = (
+      fetchResponse.json as {
+        result: {
+          content: readonly [{ type: string; text: string }];
+          structuredContent: {
+            id: string;
+            title: string;
+            text: string;
+            url: string;
+            metadata: { source: string; category: string };
+          };
+        };
+      }
+    ).result;
+    expect(fetchResult.structuredContent.text).toBe(
+      "Safe catalog entry for the read-only Twoweeks application package summary. It exposes only capability and availability status through the OAuth-protected summary tool.",
+    );
+    expect(fetchResult.structuredContent.metadata.source).toBe("twoweeks_safe_summary_catalog");
+    expect(fetchResult.content).toHaveLength(1);
+    expect(fetchResult.content[0].type).toBe("text");
+    expect(JSON.parse(fetchResult.content[0].text)).toEqual(fetchResult.structuredContent);
     expect(
       (
         searchResponse.json as {
