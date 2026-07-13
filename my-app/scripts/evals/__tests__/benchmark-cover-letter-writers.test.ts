@@ -18,6 +18,9 @@ import { buildStableHash } from "../../../src/modules/application-harness/finger
 import {
   aggregateCoverLetterBenchmarkRecords,
   benchmarkCoverLetterCase,
+  benchmarkCoverLetterCaseForHumanReview,
+  calculateCoverLetterBenchmarkMinimumProviderCalls,
+  coverLetterBenchmarkRequiresOpenAIKey,
   createCoverLetterEvalLiveBudget,
   parseCoverLetterBenchmarkCliOptions,
   replayRecordedCoverLetterFixture,
@@ -29,7 +32,11 @@ import {
   type CoverLetterBenchmarkRecord,
 } from "../benchmark-cover-letter-writers";
 import { CoverLetterEvalBudgetError } from "../cover-letter-eval-budget";
-import { coverLetterBenchmarkCases } from "../cases/cover-letter/cases";
+import {
+  COVER_LETTER_BLIND_REVIEW_COHORT_ID,
+  coverLetterBenchmarkCases,
+  coverLetterBlindReviewCases,
+} from "../cases/cover-letter/cases";
 import {
   RECORDED_COVER_LETTER_REPLAY_FIXTURES,
   recordedCoverLetterReplayFixtureSchema,
@@ -76,6 +83,70 @@ afterEach(() => {
 });
 
 describe("benchmark-cover-letter-writers", () => {
+  it("selects exactly two explicit review cohorts for English, French, and Arabic", () => {
+    expect(coverLetterBlindReviewCases).toHaveLength(6);
+    expect(
+      coverLetterBlindReviewCases.map(
+        (benchmarkCase) => benchmarkCase.reviewMetadata?.cohortId,
+      ),
+    ).toEqual(Array(6).fill(COVER_LETTER_BLIND_REVIEW_COHORT_ID));
+
+    for (const language of ["English", "French", "Arabic"] as const) {
+      const cases = coverLetterBlindReviewCases.filter(
+        (benchmarkCase) =>
+          benchmarkCase.reviewMetadata?.requestedOutputLanguage === language,
+      );
+      expect(cases).toHaveLength(2);
+      expect(
+        cases.map((item) => item.reviewMetadata?.reviewCohort).sort(),
+      ).toEqual(["challenging", "strong"]);
+      for (const benchmarkCase of cases) {
+        expect(benchmarkCase.reviewMetadata).toMatchObject({
+          sourceDataClass: "authored_synthetic",
+        });
+        expect(
+          benchmarkCase.reviewMetadata?.requiredReviewerLanguages,
+        ).toContain(language);
+        expect(
+          benchmarkCase.reviewMetadata?.requiredReviewerLanguages,
+        ).toContain(benchmarkCase.reviewMetadata?.jobSourceLanguage);
+        if (benchmarkCase.reviewMetadata?.candidateEvidenceSourceLanguage) {
+          expect(
+            benchmarkCase.reviewMetadata.requiredReviewerLanguages,
+          ).toContain(
+            benchmarkCase.reviewMetadata.candidateEvidenceSourceLanguage,
+          );
+        }
+        expect(
+          evaluatePremiumCoverLetterEligibility({
+            personalizationContext: benchmarkCase.personalizationContext,
+            voicePreset: benchmarkCase.preset,
+            jobTitle: benchmarkCase.jobTitle,
+            jobDescription: benchmarkCase.jobDescription,
+          }),
+        ).toEqual({
+          eligible: true,
+          contextClass: benchmarkCase.expectedContextClass,
+        });
+      }
+    }
+  });
+
+  it("uses explicit review output language instead of inferring it from source text", () => {
+    const arabicOutputCase = coverLetterBlindReviewCases.find(
+      (item) =>
+        item.reviewMetadata?.requestedOutputLanguage === "Arabic" &&
+        item.reviewMetadata.reviewCohort === "strong",
+    )!;
+
+    expect(arabicOutputCase.reviewMetadata?.jobSourceLanguage).toBe("English");
+    expect(
+      resolveCoverLetterBenchmarkProductionInputs({
+        benchmarkCase: arabicOutputCase,
+      }).outputLanguage,
+    ).toBe("Arabic");
+  });
+
   it("defaults live benchmark runs to the production writer only unless extra writers are requested", () => {
     expect(resolveDefaultCoverLetterBenchmarkWriterModels()).toEqual([
       "gpt-5.5",
@@ -373,6 +444,79 @@ describe("benchmark-cover-letter-writers", () => {
         qualityShadow: expectedProductionArtifact.qualityShadow,
       },
     });
+  });
+
+  it("finalizes a human-review-only record without invoking an evaluator", async () => {
+    const benchmarkCase = coverLetterBlindReviewCases.find(
+      (item) => item.id === "blind-en-clean-engaging-direct",
+    )!;
+    const generation = {
+      content: [
+        "Dear Hiring Manager,",
+        "",
+        "I improved 90-day retention by 18% by redesigning onboarding checkpoints and escalation triggers.",
+        "",
+        "I managed more than 40 enterprise accounts and led quarterly business reviews.",
+        "",
+        "That experience is relevant to customer success work focused on onboarding and retention.",
+        "",
+        "I would welcome the opportunity to discuss the role.",
+        "",
+        "Sincerely,",
+        "Priya Sharma",
+      ].join("\n"),
+      sections: [],
+      prompt: "synthetic prompt",
+      brief: {
+        language: "English" as const,
+        preset: benchmarkCase.preset,
+        contextClass: benchmarkCase.expectedContextClass,
+        targetRole: benchmarkCase.jobTitle,
+        topEvidence: [
+          "Improved 90-day retention by 18% by redesigning onboarding checkpoints and escalation triggers.",
+        ],
+        supportEvidence: [
+          "Managed a portfolio of 40+ enterprise accounts with quarterly business reviews.",
+        ],
+        requiredMoves: [],
+        forbiddenMoves: [],
+      },
+      contextClass: benchmarkCase.expectedContextClass,
+      bodyParts: {
+        opening:
+          "I improved 90-day retention by 18% by redesigning onboarding checkpoints and escalation triggers.",
+        proofBlock:
+          "I managed more than 40 enterprise accounts and led quarterly business reviews.",
+        employerValueBlock:
+          "That experience is relevant to customer success work focused on onboarding and retention.",
+        closeLine: "I would welcome the opportunity to discuss the role.",
+      },
+      mode: "direct" as const,
+      evidenceUsed: [
+        "Improved 90-day retention by 18% by redesigning onboarding checkpoints and escalation triggers.",
+      ],
+      omittedWeakEvidence: [],
+      qualityShadow: { passed: true, score: 100, issues: [] },
+    } satisfies PremiumCoverLetterAttemptResult;
+    const evaluateLetter = vi.fn().mockResolvedValue(successfulEvaluation);
+
+    const record = await benchmarkCoverLetterCaseForHumanReview({
+      benchmarkCase,
+      writerModel: "gpt-5.5",
+      apiKey: "unused-in-synthetic-test",
+      generateLetter: vi.fn().mockResolvedValue(generation),
+      evaluateLetter,
+    });
+
+    expect(evaluateLetter).not.toHaveBeenCalled();
+    expect(record).toMatchObject({
+      status: "human_review_pending",
+      outputLanguage: "English",
+      manualReview: emptyManualReview,
+      letter: expect.stringContaining("90-day retention by 18%"),
+      artifact: { decision: "accepted" },
+    });
+    expect(record).not.toHaveProperty("evaluation");
   });
 
   it("benchmarks one case with a per-run writer model and returns a typed success record", async () => {
@@ -904,6 +1048,72 @@ describe("benchmark-cover-letter-writers", () => {
         declaredMaxUsdPerCall: 0.1,
       },
     });
+
+    const humanReviewOnly = parseCoverLetterBenchmarkCliOptions(
+      [
+        "--live",
+        "--human-review-only",
+        "--output-dir=/tmp/cover-letter-review",
+        "--run-id=quality-eval-2a",
+        "--source-ref=bbd96b5c",
+        "--max-calls=6",
+        "--max-repairs=0",
+        "--max-usd=0.6",
+        "--max-usd-per-call=0.1",
+      ],
+      "0",
+    );
+    expect(humanReviewOnly).toMatchObject({
+      live: true,
+      evaluationMode: "human_review_only",
+      outputDirectory: "/tmp/cover-letter-review",
+      runId: "quality-eval-2a",
+      sourceRef: "bbd96b5c",
+    });
+    expect(() =>
+      parseCoverLetterBenchmarkCliOptions(
+        ["--human-review-only", "--cases=blind-en-customer-success-direct"],
+        "0",
+      ),
+    ).toThrow(/does not support --cases/iu);
+    expect(() =>
+      parseCoverLetterBenchmarkCliOptions(
+        ["--cases=blind-en-customer-success-direct", "--human-review-only"],
+        "0",
+      ),
+    ).toThrow(/does not support --cases/iu);
+    expect(
+      calculateCoverLetterBenchmarkMinimumProviderCalls({
+        caseCount: 6,
+        writerCount: 1,
+        evaluationMode: humanReviewOnly.evaluationMode,
+      }),
+    ).toBe(6);
+    expect(
+      calculateCoverLetterBenchmarkMinimumProviderCalls({
+        caseCount: 6,
+        writerCount: 1,
+        evaluationMode: "llm",
+      }),
+    ).toBe(12);
+    expect(
+      coverLetterBenchmarkRequiresOpenAIKey({
+        evaluationMode: "human_review_only",
+        writerModels: ["mistral-medium-latest"],
+      }),
+    ).toBe(false);
+    expect(
+      coverLetterBenchmarkRequiresOpenAIKey({
+        evaluationMode: "human_review_only",
+        writerModels: ["gpt-5.5"],
+      }),
+    ).toBe(true);
+    expect(
+      coverLetterBenchmarkRequiresOpenAIKey({
+        evaluationMode: "llm",
+        writerModels: ["mistral-medium-latest"],
+      }),
+    ).toBe(true);
   });
 
   it("loads dotenv before choosing replay or live execution", () => {

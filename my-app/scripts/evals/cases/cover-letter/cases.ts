@@ -3,6 +3,17 @@ import type {
   PremiumCoverLetterPersonalizationContext,
   PremiumCoverLetterPreset,
 } from "../../../../convex/lib/proposals/premiumCoverLetter";
+import type { ProposalOutputLanguage } from "../../../../convex/lib/proposals/proposalOutput";
+
+export type CoverLetterBlindReviewMetadata = Readonly<{
+  cohortId: string;
+  requestedOutputLanguage: ProposalOutputLanguage;
+  jobSourceLanguage: ProposalOutputLanguage;
+  candidateEvidenceSourceLanguage: ProposalOutputLanguage | null;
+  reviewCohort: "strong" | "challenging";
+  requiredReviewerLanguages: readonly ProposalOutputLanguage[];
+  sourceDataClass: "authored_synthetic";
+}>;
 
 export type CoverLetterBenchmarkCase = {
   id: string;
@@ -13,6 +24,7 @@ export type CoverLetterBenchmarkCase = {
   expectedContextClass: PremiumCoverLetterContextClass;
   notes?: string;
   realismTag?: string;
+  reviewMetadata?: CoverLetterBlindReviewMetadata;
 };
 
 const securityHyattContext: PremiumCoverLetterPersonalizationContext = {
@@ -245,6 +257,32 @@ const cleanEngagingDirectContext: PremiumCoverLetterPersonalizationContext = {
   ],
 };
 
+const frenchCustomerSuccessContext: PremiumCoverLetterPersonalizationContext = {
+  name: "Camille Moreau",
+  summary:
+    "Responsable de la réussite client spécialisée dans l'onboarding structuré, la fidélisation et le pilotage de comptes stratégiques.",
+  topSkills: [
+    "Gestion de comptes",
+    "Onboarding client",
+    "Communication parties prenantes",
+    "Reporting de satisfaction",
+  ],
+  recentExperience: [
+    {
+      company: "Nova Santé",
+      position: "Responsable réussite client",
+      highlights: [
+        "Amélioration de 21 % de la fidélisation à 90 jours grâce à de nouveaux jalons d'onboarding et d'escalade.",
+        "Gestion d'un portefeuille de 35 comptes entreprises avec revues trimestrielles.",
+        "Création d'un tableau de bord de santé client utilisé pour prioriser les comptes à risque.",
+      ],
+    },
+  ],
+  standoutAchievements: [
+    "Meilleure responsable réussite client du trimestre selon la satisfaction et la fidélisation.",
+  ],
+};
+
 const securitasAdtCopwatchAdjacentContext: PremiumCoverLetterPersonalizationContext =
   {
     name: "Robert Cooper",
@@ -406,5 +444,137 @@ export const coverLetterBenchmarkCases: CoverLetterBenchmarkCase[] = [
     notes:
       "Real-world adjacent security case from ADT/Copwatch into Securitas; catches premium validation failures and bad legacy fallback quality.",
     realismTag: "real_world_cv_adjacent_security",
+  },
+];
+
+export const COVER_LETTER_BLIND_REVIEW_COHORT_ID =
+  "quality-eval-2a-multilingual-v1";
+
+export const coverLetterBlindReviewCases: CoverLetterBenchmarkCase[] = [
+  {
+    id: "blind-en-clean-engaging-direct",
+    preset: "engaging",
+    jobTitle: "Customer Success Manager",
+    jobDescription:
+      "Own enterprise account health, lead quarterly business reviews, coordinate onboarding for new customers, and build reporting that keeps the CS team focused on retention and expansion.",
+    personalizationContext: cleanEngagingDirectContext,
+    expectedContextClass: "cv_direct",
+    notes:
+      "Strong English direct-match cohort with quantified retention and account-management proof.",
+    realismTag: "blind_strong_direct_en",
+    reviewMetadata: {
+      cohortId: COVER_LETTER_BLIND_REVIEW_COHORT_ID,
+      requestedOutputLanguage: "English",
+      jobSourceLanguage: "English",
+      candidateEvidenceSourceLanguage: "English",
+      reviewCohort: "strong",
+      requiredReviewerLanguages: ["English"],
+      sourceDataClass: "authored_synthetic",
+    },
+  },
+  {
+    id: "blind-en-checklist-challenging",
+    preset: "signature",
+    jobTitle: "Facilities Support Coordinator",
+    jobDescription:
+      "Coordinate maintenance requests, schedule vendors, update service records, manage Excel trackers, answer emails, support Word documentation, stay flexible, and help across office operations. Candidates should be organized, reliable, adaptable, willing to learn, and comfortable with Windows, Microsoft Word, and Microsoft Excel.",
+    personalizationContext: weakDirectChecklistRiskContext,
+    expectedContextClass: "cv_direct",
+    notes:
+      "Challenging English direct-match cohort with thin evidence and heavy checklist pressure.",
+    realismTag: "blind_challenging_checklist_en",
+    reviewMetadata: {
+      cohortId: COVER_LETTER_BLIND_REVIEW_COHORT_ID,
+      requestedOutputLanguage: "English",
+      jobSourceLanguage: "English",
+      candidateEvidenceSourceLanguage: "English",
+      reviewCohort: "challenging",
+      requiredReviewerLanguages: ["English"],
+      sourceDataClass: "authored_synthetic",
+    },
+  },
+  {
+    id: "blind-fr-customer-success-direct",
+    preset: "engaging",
+    jobTitle: "Responsable réussite client",
+    jobDescription:
+      "Piloter la santé des comptes entreprises, conduire les revues trimestrielles, coordonner l'onboarding des nouveaux clients et construire un reporting qui soutient la fidélisation et le développement des comptes.",
+    personalizationContext: frenchCustomerSuccessContext,
+    expectedContextClass: "cv_direct",
+    notes:
+      "Cohorte française forte avec offre et preuves candidat rédigées directement en français.",
+    realismTag: "blind_strong_direct_fr",
+    reviewMetadata: {
+      cohortId: COVER_LETTER_BLIND_REVIEW_COHORT_ID,
+      requestedOutputLanguage: "French",
+      jobSourceLanguage: "French",
+      candidateEvidenceSourceLanguage: "French",
+      reviewCohort: "strong",
+      requiredReviewerLanguages: ["French"],
+      sourceDataClass: "authored_synthetic",
+    },
+  },
+  {
+    id: "blind-fr-implementation-adjacent",
+    preset: "expert",
+    jobTitle: "Analyste déploiement client",
+    jobDescription:
+      "Coordonner les déploiements clients, suivre les livrables, organiser les relais entre équipes, maintenir le reporting et signaler rapidement les risques de lancement.",
+    personalizationContext: strongAdjacentHonestTransferContext,
+    expectedContextClass: "cv_adjacent",
+    notes:
+      "Cohorte française difficile avec offre française et preuves candidat anglaises transférables mais non identiques au poste.",
+    realismTag: "blind_challenging_cross_language_fr",
+    reviewMetadata: {
+      cohortId: COVER_LETTER_BLIND_REVIEW_COHORT_ID,
+      requestedOutputLanguage: "French",
+      jobSourceLanguage: "French",
+      candidateEvidenceSourceLanguage: "English",
+      reviewCohort: "challenging",
+      requiredReviewerLanguages: ["French", "English"],
+      sourceDataClass: "authored_synthetic",
+    },
+  },
+  {
+    id: "blind-ar-customer-success-direct",
+    preset: "engaging",
+    jobTitle: "Customer Success Manager",
+    jobDescription:
+      "Own enterprise account health, lead quarterly business reviews, coordinate onboarding for new customers, and build reporting that keeps the CS team focused on retention and expansion.",
+    personalizationContext: cleanEngagingDirectContext,
+    expectedContextClass: "cv_direct",
+    notes:
+      "Strong Arabic-output cohort using English source evidence so output-language quality is reviewed separately from source parsing.",
+    realismTag: "blind_strong_cross_language_ar",
+    reviewMetadata: {
+      cohortId: COVER_LETTER_BLIND_REVIEW_COHORT_ID,
+      requestedOutputLanguage: "Arabic",
+      jobSourceLanguage: "English",
+      candidateEvidenceSourceLanguage: "English",
+      reviewCohort: "strong",
+      requiredReviewerLanguages: ["Arabic", "English"],
+      sourceDataClass: "authored_synthetic",
+    },
+  },
+  {
+    id: "blind-ar-implementation-adjacent",
+    preset: "expert",
+    jobTitle: "Implementation Analyst",
+    jobDescription:
+      "Coordinate implementation workflows, track deliverables, manage cross-functional handoffs, maintain reporting, and keep stakeholders aligned during customer rollouts.",
+    personalizationContext: adjacentWarehouseContext,
+    expectedContextClass: "cv_adjacent",
+    notes:
+      "Challenging Arabic-output cohort with adjacent English operational evidence and no exact target-role match.",
+    realismTag: "blind_challenging_adjacent_ar",
+    reviewMetadata: {
+      cohortId: COVER_LETTER_BLIND_REVIEW_COHORT_ID,
+      requestedOutputLanguage: "Arabic",
+      jobSourceLanguage: "English",
+      candidateEvidenceSourceLanguage: "English",
+      reviewCohort: "challenging",
+      requiredReviewerLanguages: ["Arabic", "English"],
+      sourceDataClass: "authored_synthetic",
+    },
   },
 ];
