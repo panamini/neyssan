@@ -43,6 +43,7 @@ import {
   MCP_PRODUCTION_LAUNCH_READINESS_AUTHENTICATED_PROTOCOL_REVIEWED_FLAG,
   MCP_PRODUCTION_LAUNCH_READINESS_POLICY_KERNEL_REVIEWED_FLAG,
   MCP_PRODUCTION_LAUNCH_READINESS_PRIVATE_BETA_GATE_REVIEWED_FLAG,
+  MCP_PRODUCTION_LAUNCH_READINESS_PUBLIC_CATALOG_SUBMISSION_URL_REVIEWED_FLAG,
   MCP_PRODUCTION_LAUNCH_READINESS_PROVIDER_WRITE_EXPANSION_BLOCKED_FLAG,
   MCP_PRODUCTION_LAUNCH_READINESS_PUBLIC_LAUNCH_REQUESTED_FLAG,
   MCP_PRODUCTION_LAUNCH_READINESS_READONLY_SUMMARY_EXECUTION_REVIEWED_FLAG,
@@ -5024,6 +5025,8 @@ describe("MCP OAuth production route adapter", () => {
     expect(source).toContain("mcpEvidenceGraphSummary:internalSummarizeMcpEvidenceGraph");
     expect(source).toContain("mcpResumeVariantPlanSummary:internalSummarizeMcpResumeVariantPlan");
     expect(source).toContain("mcpReviewCockpitSummary:internalSummarizeMcpReviewCockpit");
+    expect(source).toContain("publicCatalogSubmissionUrlReviewed: isStrictEnabledFlag");
+    expect(source).toContain("MCP_PRODUCTION_LAUNCH_READINESS_PUBLIC_CATALOG_SUBMISSION_URL_REVIEWED_FLAG");
     expect(source).toContain("toolsCallSyntheticMetadataCleanupReviewed: isStrictEnabledFlag");
     expect(source).toContain(
       "MCP_PRODUCTION_LAUNCH_READINESS_TOOLS_CALL_SYNTHETIC_METADATA_CLEANUP_REVIEWED_FLAG",
@@ -5710,6 +5713,7 @@ describe("MCP OAuth production route adapter", () => {
     const plugin = createLocalMcpDevEndpointPlugin({
       env: {
         ...prodRouteEnv(),
+        [MCP_PRODUCTION_LAUNCH_READINESS_PUBLIC_CATALOG_SUBMISSION_URL_REVIEWED_FLAG]: "1",
         [MCP_PRODUCTION_LAUNCH_READINESS_PRIVATE_BETA_GATE_REVIEWED_FLAG]: "1",
         [MCP_PRODUCTION_LAUNCH_READINESS_AUTHENTICATED_PROTOCOL_REVIEWED_FLAG]: "1",
         [MCP_PRODUCTION_LAUNCH_READINESS_POLICY_KERNEL_REVIEWED_FLAG]: "1",
@@ -7324,6 +7328,7 @@ function completeLaunchReadinessEvidence(
   overrides: Partial<McpProductionLaunchReadinessEvidenceInputV1> = {},
 ): McpProductionLaunchReadinessEvidenceInputV1 {
   return {
+    publicCatalogSubmissionUrlReviewed: true,
     privateBetaGateReviewed: true,
     authenticatedMcpProtocolReviewed: true,
     policyKernelReviewed: true,

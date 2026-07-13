@@ -468,11 +468,14 @@ function completeLaunchReadinessEvidence(
   overrides: Partial<McpProductionLaunchReadinessEvidenceInputV1> = {},
 ): McpProductionLaunchReadinessEvidenceInputV1 {
   return {
+    publicCatalogSubmissionUrlReviewed: true,
     privateBetaGateReviewed: true,
     authenticatedMcpProtocolReviewed: true,
     policyKernelReviewed: true,
     toolsListMetadataReviewed: true,
     toolsCallReadOnlyReviewed: true,
+    readonlySummaryExecutionReviewed: true,
+    readonlySummaryStatusReviewed: true,
     schemaMatcherReviewed: true,
     providerWriteExpansionBlocked: true,
     unresolvedBlockingFindings: false,

@@ -40,6 +40,7 @@ import {
 } from "./mcpProductionPrivateBetaGate";
 import {
   evaluateMcpProductionLaunchReadiness,
+  MCP_PRODUCTION_PUBLIC_CATALOG_SUBMISSION_URL,
   type McpProductionLaunchReadinessConfigInputV1,
   type McpProductionLaunchReadinessDecisionV1,
 } from "./mcpProductionLaunchReadiness";
@@ -1878,28 +1879,28 @@ const MCP_COMPATIBILITY_SAFE_DOCUMENTS = Object.freeze([
   Object.freeze({
     id: "twoweeks.application_package.summarize",
     title: "Twoweeks application package summary",
-    url: "https://mcp.twoweeks.ai/mcp#application-package",
+    url: `${MCP_PRODUCTION_PUBLIC_CATALOG_SUBMISSION_URL}#application-package`,
     category: "application_package",
     text: "Safe catalog entry for the read-only Twoweeks application package summary. It exposes only capability and availability status through the OAuth-protected summary tool.",
   }),
   Object.freeze({
     id: "twoweeks.evidence_graph.summarize",
     title: "Twoweeks evidence graph summary",
-    url: "https://mcp.twoweeks.ai/mcp#evidence-graph",
+    url: `${MCP_PRODUCTION_PUBLIC_CATALOG_SUBMISSION_URL}#evidence-graph`,
     category: "evidence_graph",
     text: "Safe catalog entry for the read-only Twoweeks evidence graph summary. It exposes only capability and availability status through the OAuth-protected summary tool.",
   }),
   Object.freeze({
     id: "twoweeks.resume_variant_plan.summarize",
     title: "Twoweeks resume variant plan summary",
-    url: "https://mcp.twoweeks.ai/mcp#resume-variant-plan",
+    url: `${MCP_PRODUCTION_PUBLIC_CATALOG_SUBMISSION_URL}#resume-variant-plan`,
     category: "resume_variant_plan",
     text: "Safe catalog entry for the read-only Twoweeks resume variant plan summary. It exposes only capability and availability status through the OAuth-protected summary tool.",
   }),
   Object.freeze({
     id: "twoweeks.review_cockpit.summarize",
     title: "Twoweeks review cockpit summary",
-    url: "https://mcp.twoweeks.ai/mcp#review-cockpit",
+    url: `${MCP_PRODUCTION_PUBLIC_CATALOG_SUBMISSION_URL}#review-cockpit`,
     category: "review_cockpit",
     text: "Safe catalog entry for the read-only Twoweeks review cockpit summary. It exposes only capability and availability status through the OAuth-protected summary tool.",
   }),
