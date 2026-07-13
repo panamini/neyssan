@@ -2055,6 +2055,17 @@ describe("MCP OAuth production route adapter", () => {
         },
       },
     });
+    const searchResult = (
+      searchResponse.json as {
+        result: {
+          content: readonly [{ type: string; text: string }];
+          structuredContent: { results: readonly unknown[] };
+        };
+      }
+    ).result;
+    expect(searchResult.content).toHaveLength(1);
+    expect(searchResult.content[0].type).toBe("text");
+    expect(JSON.parse(searchResult.content[0].text)).toEqual(searchResult.structuredContent);
     expect(fetchResponse).toMatchObject({
       handled: true,
       status: 200,
@@ -2096,11 +2107,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(fetchResult.content[0].type).toBe("text");
     expect(JSON.parse(fetchResult.content[0].text)).toEqual(fetchResult.structuredContent);
     expect(
-      (
-        searchResponse.json as {
-          result: { structuredContent: { results: readonly unknown[] } };
-        }
-      ).result.structuredContent.results,
+      searchResult.structuredContent.results,
     ).toHaveLength(4);
     const bodyText = JSON.stringify({ searchResponse, fetchResponse });
     expect(dependencies.executeReadonlySummaryTool).not.toHaveBeenCalled();
