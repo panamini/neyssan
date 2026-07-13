@@ -37,7 +37,9 @@ export const recordedCoverLetterReplayFixtureSchema = z
         premiumPromptV2Enabled: z.literal(false),
         qualityRepairV1Enabled: z.literal(false),
         openAIWriterReasoningEffort: z.literal("low"),
-        writerSchemaVersion: z.literal("premium_writer_output_v1"),
+        writerSchemaVersion: z.literal(
+          "premium_writer_output_v1:premium_cover_letter_body_parts",
+        ),
       })
       .strict(),
     responses: z.array(recordedWriterResponseSchema).min(1),
@@ -58,7 +60,7 @@ const rawRecordedCoverLetterReplayFixtures = [
     writerProvider: "openai",
     writerModel: "gpt-5.5",
     expectedArtifactHash:
-      "1a1614a468b23a66336a1202effb1b27b1cd03c970f4a6bc0febbe54de1873a6",
+      "ba450d1c42cade962278f2f20ebaf42f51f9ad9e4fd352eab00c12343430e494",
     expectedProvenanceHash:
       "fcc559d0ab92833c8f0ea5fc02d8125e58e7a10c4159d47a54a8169e16935acf",
     frozenConfig: {
@@ -72,7 +74,8 @@ const rawRecordedCoverLetterReplayFixtures = [
       premiumPromptV2Enabled: false,
       qualityRepairV1Enabled: false,
       openAIWriterReasoningEffort: "low",
-      writerSchemaVersion: "premium_writer_output_v1",
+      writerSchemaVersion:
+        "premium_writer_output_v1:premium_cover_letter_body_parts",
     },
     responses: [
       {
@@ -134,7 +137,7 @@ const rawRecordedCoverLetterReplayFixtures = [
     writerProvider: "mistral",
     writerModel: "mistral-medium-latest",
     expectedArtifactHash:
-      "3fdbd41bb0da5b021761e6531f65f107ff70bc8422697231f5a9f933d92007a2",
+      "7f23421f89e66497f25e51de8649cf79828c169cd8077cb25db1250d4e4a467b",
     expectedProvenanceHash:
       "f182807ad2b0adb9a1a952c1470a13bb3d419d5d46186e9918bb7b4e6e74a5d6",
     frozenConfig: {
@@ -148,7 +151,8 @@ const rawRecordedCoverLetterReplayFixtures = [
       premiumPromptV2Enabled: false,
       qualityRepairV1Enabled: false,
       openAIWriterReasoningEffort: "low",
-      writerSchemaVersion: "premium_writer_output_v1",
+      writerSchemaVersion:
+        "premium_writer_output_v1:premium_cover_letter_body_parts",
     },
     responses: [
       {

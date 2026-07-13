@@ -2,7 +2,10 @@ import { z } from "zod";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { ChatMistralAI } from "@langchain/mistralai";
 
-import { llmConfig } from "../../../config/llmConfig";
+import {
+  llmConfig,
+  resolveOpenAIProposalReasoningEffort,
+} from "../../../config/llmConfig";
 import {
   getDeterministicCopyLanguage,
   type ProposalOutputLanguage,
@@ -5487,7 +5490,7 @@ export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
           model: resolvedModel,
           input: args.prompt,
           reasoning: {
-            effort: llmConfig.proposalModels?.openaiWriterReasoningEffort ?? "low",
+            effort: resolveOpenAIProposalReasoningEffort(),
           },
           text: {
             verbosity: "medium",
@@ -5657,7 +5660,7 @@ export function buildPremiumCoverLetterOpenAIRequest(args: {
       ? { max_output_tokens: args.maxOutputTokens }
       : {}),
     reasoning: {
-      effort: llmConfig.proposalModels?.openaiWriterReasoningEffort ?? "low",
+      effort: resolveOpenAIProposalReasoningEffort(),
     },
     text: {
       verbosity: "medium",

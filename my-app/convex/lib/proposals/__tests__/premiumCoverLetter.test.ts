@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   MISTRAL_PREMIUM_COVER_LETTER_ADAPTER,
@@ -33,6 +33,10 @@ import {
   validatePremiumClaimPlanV1,
   validatePremiumWriterOutputV1,
 } from "../premiumCoverLetter";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 const directContext = {
   name: "Alex Martin",
@@ -1966,6 +1970,17 @@ describe("premium cover letter prompt contract", () => {
         maxOutputTokens: 2048,
       }),
     ).toMatchObject({ max_output_tokens: 2048 });
+  });
+
+  it("resolves OpenAI proposal reasoning effort when the request is built", () => {
+    vi.stubEnv("OPENAI_PROPOSAL_REASONING_EFFORT", "high");
+
+    expect(
+      buildPremiumCoverLetterOpenAIRequest({
+        prompt: "Structured brief: {}",
+        writerModel: "gpt-5.4",
+      }).reasoning,
+    ).toEqual({ effort: "high" });
   });
 
   it("prefers parsed structured payloads from the Responses API envelope", () => {

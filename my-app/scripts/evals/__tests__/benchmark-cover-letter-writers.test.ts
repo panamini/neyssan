@@ -8,10 +8,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CoverLetterScore } from "../../../convex/lib/proposals/coverLetterEvaluation";
 import { finalizePremiumCoverLetterPayloadForPersistence } from "../../../convex/generateProposalMutation";
 import {
+  PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA,
+  PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
   evaluatePremiumCoverLetterEligibility,
   type PremiumCoverLetterAttemptResult,
 } from "../../../convex/lib/proposals/premiumCoverLetter";
 import { PROPOSAL_OUTPUT_LANGUAGES } from "../../../convex/lib/proposals/proposalOutput";
+import { buildStableHash } from "../../../src/modules/application-harness/fingerprints";
 import {
   aggregateCoverLetterBenchmarkRecords,
   benchmarkCoverLetterCase,
@@ -25,6 +28,7 @@ import {
   resolveDefaultCoverLetterBenchmarkWriterModels,
   type CoverLetterBenchmarkRecord,
 } from "../benchmark-cover-letter-writers";
+import { CoverLetterEvalBudgetError } from "../cover-letter-eval-budget";
 import { coverLetterBenchmarkCases } from "../cases/cover-letter/cases";
 import {
   RECORDED_COVER_LETTER_REPLAY_FIXTURES,
@@ -85,6 +89,21 @@ describe("benchmark-cover-letter-writers", () => {
     expect(resolveDefaultCoverLetterBenchmarkWriterModels()).toEqual([
       "gpt-5.4",
     ]);
+  });
+
+  it("detects reasoning-effort changes made after module initialization", async () => {
+    vi.stubEnv("PROPOSAL_GENERATION_QUALITY_MODE", "baseline");
+    vi.stubEnv("cover_letter_premium_prompt_v2", "");
+    vi.stubEnv("COVER_LETTER_PREMIUM_PROMPT_V2", "");
+    vi.stubEnv("ENABLE_COVER_LETTER_PREMIUM_PROMPT_V2", "");
+    vi.stubEnv("ENABLE_COVER_LETTER_QUALITY_REPAIR_V1", "");
+    vi.stubEnv("OPENAI_PROPOSAL_REASONING_EFFORT", "high");
+
+    await expect(
+      replayRecordedCoverLetterFixture(
+        RECORDED_COVER_LETTER_REPLAY_FIXTURES[0]!,
+      ),
+    ).rejects.toThrow(/configuration drift: openAIWriterReasoningEffort/iu);
   });
 
   it("mirrors the provider-specific production cancellation contract", () => {
@@ -222,6 +241,25 @@ describe("benchmark-cover-letter-writers", () => {
         apiKey: "must-not-be-used",
       }),
     ).rejects.toThrow(/explicit evaluation budget/iu);
+  });
+
+  it("propagates budget-limit errors instead of reporting a normal failed record", async () => {
+    const benchmarkCase = coverLetterBenchmarkCases[0]!;
+    const budgetError = new CoverLetterEvalBudgetError({
+      code: "call_limit_exceeded",
+      message: "Cover-letter evaluation call limit exceeded.",
+    });
+
+    await expect(
+      benchmarkCoverLetterCase({
+        benchmarkCase,
+        writerModel: "gpt-5.5",
+        evaluatorModel: "gpt-5-mini",
+        apiKey: "must-not-be-used",
+        generateLetter: vi.fn().mockRejectedValue(budgetError),
+        evaluateLetter: vi.fn(),
+      }),
+    ).rejects.toBe(budgetError);
   });
 
   it("evaluates the production-finalized artifact instead of the pre-finalized generation", async () => {
@@ -568,7 +606,7 @@ describe("benchmark-cover-letter-writers", () => {
     ).toEqual([
       {
         artifact:
-          "1a1614a468b23a66336a1202effb1b27b1cd03c970f4a6bc0febbe54de1873a6",
+          "ba450d1c42cade962278f2f20ebaf42f51f9ad9e4fd352eab00c12343430e494",
         provenance:
           "fcc559d0ab92833c8f0ea5fc02d8125e58e7a10c4159d47a54a8169e16935acf",
         prompts: [
@@ -577,7 +615,7 @@ describe("benchmark-cover-letter-writers", () => {
       },
       {
         artifact:
-          "3fdbd41bb0da5b021761e6531f65f107ff70bc8422697231f5a9f933d92007a2",
+          "7f23421f89e66497f25e51de8649cf79828c169cd8077cb25db1250d4e4a467b",
         provenance:
           "f182807ad2b0adb9a1a952c1470a13bb3d419d5d46186e9918bb7b4e6e74a5d6",
         prompts: [
@@ -682,6 +720,33 @@ describe("benchmark-cover-letter-writers", () => {
     });
   });
 
+  it("fingerprints both the writer and model-assisted repair schemas", async () => {
+    vi.stubEnv("PROPOSAL_GENERATION_QUALITY_MODE", "baseline");
+    vi.stubEnv("cover_letter_premium_prompt_v2", "");
+    vi.stubEnv("COVER_LETTER_PREMIUM_PROMPT_V2", "");
+    vi.stubEnv("ENABLE_COVER_LETTER_PREMIUM_PROMPT_V2", "");
+    vi.stubEnv("ENABLE_COVER_LETTER_QUALITY_REPAIR_V1", "");
+    vi.stubEnv("OPENAI_PROPOSAL_REASONING_EFFORT", "low");
+
+    const expectedSchemaHash = await buildStableHash({
+      namespace: "cover-letter-eval-config",
+      type: "writer-schema",
+      version: 2,
+      value: {
+        writerOutput: PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
+        bodyPartsRepair: PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA,
+      },
+    });
+    const [result] = await replayRecordedCoverLetterFixtures();
+
+    expect(result?.artifact.frozenConfig.writerSchemaHash).toBe(
+      expectedSchemaHash,
+    );
+    expect(result?.artifact.configVersions.writerSchema).toBe(
+      "premium_writer_output_v1:premium_cover_letter_body_parts",
+    );
+  });
+
   it("rejects recorded responses when the production writer prompt drifts", async () => {
     const fixture = RECORDED_COVER_LETTER_REPLAY_FIXTURES[0]!;
     await expect(
@@ -706,6 +771,19 @@ describe("benchmark-cover-letter-writers", () => {
         },
       }),
     ).rejects.toThrow(/configuration drift: outputLanguage/u);
+  });
+
+  it("detects a recorded writer-or-repair schema version drift", async () => {
+    const fixture = RECORDED_COVER_LETTER_REPLAY_FIXTURES[0]!;
+    await expect(
+      replayRecordedCoverLetterFixture({
+        ...fixture,
+        frozenConfig: {
+          ...fixture.frozenConfig,
+          writerSchemaVersion: "premium_writer_output_v1",
+        },
+      } as any),
+    ).rejects.toThrow(/configuration drift: writerSchemaVersion/u);
   });
 
   it("defaults the CLI to replay and refuses unbudgeted live execution", () => {

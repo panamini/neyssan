@@ -5,7 +5,10 @@ import { isDeepStrictEqual } from "node:util";
 
 import * as dotenv from "dotenv";
 
-import { llmConfig } from "../../config/llmConfig";
+import {
+  llmConfig,
+  resolveOpenAIProposalReasoningEffort,
+} from "../../config/llmConfig";
 import type { CoverLetterScore } from "../../convex/lib/proposals/coverLetterEvaluation";
 import {
   analyzeCompanyValues,
@@ -45,6 +48,7 @@ import {
   type CoverLetterEvalFrozenConfig,
 } from "./cover-letter-eval-artifact";
 import {
+  CoverLetterEvalBudgetError,
   createCoverLetterEvalBudget,
   type CoverLetterEvalBudget,
   type CoverLetterEvalBudgetOptions,
@@ -210,7 +214,7 @@ export type CoverLetterReplayResult = Readonly<{
 const COVER_LETTER_EVAL_CONFIG_VERSIONS = {
   generationControls: "proposal_generation_controls_v1",
   companyValues: "company_values_pack_v1",
-  writerSchema: "premium_writer_output_v1",
+  writerSchema: "premium_writer_output_v1:premium_cover_letter_body_parts",
   cancellation: "production_provider_specific_abort_v1",
   finalizer: "premium_persistence_finalizer_v1",
 } as const satisfies CoverLetterEvalConfigVersions;
@@ -529,8 +533,7 @@ async function buildCoverLetterEvalFrozenConfig(args: {
     writerMaxOutputTokens: COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS,
     promptV2: provider === "mistral" && isCoverLetterPremiumPromptV2Enabled(),
     qualityRepair: isCoverLetterQualityRepairV1Enabled(),
-    reasoningEffort:
-      llmConfig.proposalModels?.openaiWriterReasoningEffort ?? "low",
+    reasoningEffort: resolveOpenAIProposalReasoningEffort(),
     generationControlsHash: await buildStableHash({
       namespace: "cover-letter-eval-config",
       type: "generation-controls",
@@ -546,8 +549,11 @@ async function buildCoverLetterEvalFrozenConfig(args: {
     writerSchemaHash: await buildStableHash({
       namespace: "cover-letter-eval-config",
       type: "writer-schema",
-      version: 1,
-      value: PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
+      version: 2,
+      value: {
+        writerOutput: PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
+        bodyPartsRepair: PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA,
+      },
     }),
   };
 }
@@ -666,8 +672,7 @@ function assertReplayFixtureMatchesFrozenProductionConfig(args: {
     args.fixture.writerProvider === "mistral" &&
     isCoverLetterPremiumPromptV2Enabled();
   const actualQualityRepair = isCoverLetterQualityRepairV1Enabled();
-  const actualReasoningEffort =
-    llmConfig.proposalModels?.openaiWriterReasoningEffort ?? "low";
+  const actualReasoningEffort = resolveOpenAIProposalReasoningEffort();
   const mismatches = [
     args.productionInputs.outputLanguage === expected.outputLanguage
       ? null
@@ -705,6 +710,10 @@ function assertReplayFixtureMatchesFrozenProductionConfig(args: {
     actualReasoningEffort === expected.openAIWriterReasoningEffort
       ? null
       : "openAIWriterReasoningEffort",
+    COVER_LETTER_EVAL_CONFIG_VERSIONS.writerSchema ===
+    expected.writerSchemaVersion
+      ? null
+      : "writerSchemaVersion",
   ].filter((value): value is string => Boolean(value));
 
   if (mismatches.length > 0) {
@@ -1009,6 +1018,9 @@ export async function benchmarkCoverLetterCase(args: {
         realismTag: args.benchmarkCase.realismTag,
       };
     } catch (error) {
+      if (error instanceof CoverLetterEvalBudgetError) {
+        throw error;
+      }
       return {
         status: "evaluation_failed",
         caseId: args.benchmarkCase.id,
@@ -1032,6 +1044,9 @@ export async function benchmarkCoverLetterCase(args: {
       };
     }
   } catch (error) {
+    if (error instanceof CoverLetterEvalBudgetError) {
+      throw error;
+    }
     return {
       status: "generation_failed",
       caseId: args.benchmarkCase.id,
