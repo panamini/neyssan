@@ -64,6 +64,21 @@ jobs:
             --reporter=dot \
             --testNamePattern='returns authenticated production tools/list metadata for negotiated protocol'
 
+      - name: Run MCP output minimization regression contract
+        working-directory: my-app
+        env:
+          OPENAI_API_KEY: ""
+          MISTRAL_API_KEY: ""
+          COVER_LETTER_EVAL_LIVE: "0"
+        run: |
+          ./node_modules/.bin/vitest --run \
+            src/modules/local-mcp/__tests__/mcpProductionReadonlySummaryStatusNormalizer.test.ts \
+            --reporter=dot
+          ./node_modules/.bin/vitest --run \
+            src/modules/local-mcp/__tests__/mcpOAuthProductionRouteAdapter.test.ts \
+            --reporter=dot \
+            --testNamePattern='returns authenticated production tools/list metadata|executes a safe read-only production tools/call summary|drops adversarial read-only summary executor sentinels'
+
       - name: Generate Convex client bindings
         working-directory: my-app
         run: |

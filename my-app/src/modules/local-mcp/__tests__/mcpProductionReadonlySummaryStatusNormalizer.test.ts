@@ -26,6 +26,22 @@ const STRICT_STATUSES: readonly McpProductionReadonlySummaryStatusV1[] = Object.
   "DEPENDENCY_MISSING",
 ]);
 
+const SENSITIVE_SENTINELS = Object.freeze([
+  "raw CV text sentinel",
+  "raw job description sentinel",
+  "raw proposal body sentinel",
+  "system prompt sentinel",
+  "provider output sentinel",
+  "quoted source sentence sentinel",
+  "user@example.test",
+  "access_token_secret_sentinel",
+  "refresh_token_secret_sentinel",
+  "https://private.example.test/path?token=secret",
+  "Error: private stack trace sentinel",
+  "jd7c0nveXsentinel000000000000",
+  "internalQueryRefSentinel",
+]);
+
 const TOOL_CASES = Object.freeze([
   {
     toolName: "twoweeks.application_package.summarize",
@@ -69,50 +85,45 @@ describe("MCP production read-only summary status normalizer", () => {
   it.each(TOOL_CASES)("wraps a fresh available $toolName summary as OK", (toolCase) => {
     const result = normalize(toolCase, safeExecutionResult(toolCase, { updatedAt: FRESH_UPDATED_AT }));
 
-    expect(result).toMatchObject({
+    expect(result).toEqual({
       content: [{ type: "text", text: "Read-only summary status: OK." }],
       structuredContent: {
         kind: MCP_PRODUCTION_READONLY_SUMMARY_STATUS_RESULT_KIND,
         status: "OK",
         toolName: toolCase.toolName,
-        summary: {
-          kind: toolCase.expectedKind,
-          status: "available",
-          updatedAt: FRESH_UPDATED_AT,
-          [toolCase.resultRefKey]: {
-            id: toolCase.safeRefId,
-            updatedAt: FRESH_UPDATED_AT,
-          },
-        },
         version: 1,
       },
     });
+    expectStatusOnlyStructuredContent(result.structuredContent, "OK", toolCase.toolName);
+    expect(JSON.stringify(result)).not.toContain(toolCase.expectedKind);
+    expect(JSON.stringify(result)).not.toContain(toolCase.safeRefId);
+    expect(JSON.stringify(result)).not.toContain(FRESH_UPDATED_AT);
   });
 
   it("marks old available summaries as STALE", () => {
     const toolCase = TOOL_CASES[0];
     const result = normalize(toolCase, safeExecutionResult(toolCase, { updatedAt: OLD_UPDATED_AT }));
 
-    expect(result.structuredContent.status).toBe("STALE");
-    expect(result.structuredContent.summary).toMatchObject({ updatedAt: OLD_UPDATED_AT });
+    expectStatusOnlyStructuredContent(result.structuredContent, "STALE", toolCase.toolName);
+    expect(JSON.stringify(result)).not.toContain(OLD_UPDATED_AT);
   });
 
   it("marks otherwise safe summaries without a safe timestamp as STALE", () => {
     const toolCase = TOOL_CASES[0];
     const result = normalize(toolCase, safeExecutionResult(toolCase));
 
-    expect(result.structuredContent.status).toBe("STALE");
-    expect(result.structuredContent.summary).toMatchObject({ status: "available" });
+    expectStatusOnlyStructuredContent(result.structuredContent, "STALE", toolCase.toolName);
+    expect(result.structuredContent).not.toHaveProperty("summary");
   });
 
   it("maps safe no-data and onboarding states to explicit statuses", () => {
     const noData = normalize(TOOL_CASES[0], safeExecutionResult(TOOL_CASES[0], { status: "no_data_available" }));
     const onboarding = normalize(TOOL_CASES[1], safeExecutionResult(TOOL_CASES[1], { status: "onboarding_required" }));
 
-    expect(noData.structuredContent.status).toBe("NO_DATA");
-    expect(noData.structuredContent.summary).toMatchObject({ status: "no_data_available" });
-    expect(onboarding.structuredContent.status).toBe("ONBOARDING_REQUIRED");
-    expect(onboarding.structuredContent.summary).toMatchObject({ status: "onboarding_required" });
+    expectStatusOnlyStructuredContent(noData.structuredContent, "NO_DATA", TOOL_CASES[0].toolName);
+    expectStatusOnlyStructuredContent(onboarding.structuredContent, "ONBOARDING_REQUIRED", TOOL_CASES[1].toolName);
+    expect(JSON.stringify({ noData, onboarding })).not.toContain("no_data_available");
+    expect(JSON.stringify({ noData, onboarding })).not.toContain("onboarding_required");
   });
 
   it.each([
@@ -138,8 +149,29 @@ describe("MCP production read-only summary status normalizer", () => {
       toolName: toolCase.toolName,
       version: 1,
     });
+    expectStatusOnlyStructuredContent(result.structuredContent, "MALFORMED", toolCase.toolName);
     expect(JSON.stringify(result)).not.toContain(OWNER_ID);
     expect(JSON.stringify(result)).not.toContain("provider.example.test");
+  });
+
+  it("drops adversarial executor sentinels from all model-visible normalizer output", () => {
+    const toolCase = TOOL_CASES[0];
+    const result = normalize(
+      toolCase,
+      safeExecutionResult(toolCase, {
+        safeCategories: Object.freeze({ sentinel: SENSITIVE_SENTINELS[0], version: 1 }),
+      }),
+      { forbiddenSubstrings: SENSITIVE_SENTINELS },
+    );
+    const serialized = JSON.stringify(result);
+
+    expectStatusOnlyStructuredContent(result.structuredContent, "MALFORMED", toolCase.toolName);
+    expect(result.content).toEqual([{ type: "text", text: "Read-only summary status: MALFORMED." }]);
+    for (const sentinel of SENSITIVE_SENTINELS) {
+      expect(serialized).not.toContain(sentinel);
+    }
+    expect(serialized).not.toContain('"summary"');
+    expect(serialized).not.toContain("safeCategories");
   });
 
   it("maps missing dependency, timeout, and executor query failures without leaking internals", () => {
@@ -163,12 +195,12 @@ describe("MCP production read-only summary status normalizer", () => {
     expect(queryFailed.structuredContent.status).toBe("MALFORMED");
     expect(JSON.stringify({ missing, timeout, queryFailed })).not.toContain("stack");
     expect(JSON.stringify({ missing, timeout, queryFailed })).not.toContain("storage unavailable");
-    expect(missing.structuredContent).not.toHaveProperty("summary");
-    expect(timeout.structuredContent).not.toHaveProperty("summary");
-    expect(queryFailed.structuredContent).not.toHaveProperty("summary");
+    expectStatusOnlyStructuredContent(missing.structuredContent, "DEPENDENCY_MISSING", toolCase.toolName);
+    expectStatusOnlyStructuredContent(timeout.structuredContent, "TIMEOUT", toolCase.toolName);
+    expectStatusOnlyStructuredContent(queryFailed.structuredContent, "MALFORMED", toolCase.toolName);
   });
 
-  it("does not mutate the raw PR106 executor output before PR107 wrapping", () => {
+  it("does not mutate the raw PR106 executor output before status-only wrapping", () => {
     const toolCase = TOOL_CASES[0];
     const executionResult = safeExecutionResult(toolCase, { updatedAt: FRESH_UPDATED_AT });
     const before = JSON.stringify(executionResult);
@@ -176,7 +208,8 @@ describe("MCP production read-only summary status normalizer", () => {
     const result = normalize(toolCase, executionResult);
 
     expect(JSON.stringify(executionResult)).toBe(before);
-    expect(result.structuredContent.summary).toEqual(executionResult.structuredContent);
+    expectStatusOnlyStructuredContent(result.structuredContent, "OK", toolCase.toolName);
+    expect(JSON.stringify(result)).not.toContain(JSON.stringify(executionResult.structuredContent));
   });
 
   it("never emits a status outside the strict PR107 enum", () => {
@@ -205,8 +238,30 @@ describe("MCP production read-only summary status normalizer", () => {
     expect(outcomes.map((outcome) => outcome.structuredContent.status).every((status) =>
       STRICT_STATUSES.includes(status)
     )).toBe(true);
+    for (const outcome of outcomes) {
+      expect(Object.keys(outcome.structuredContent).sort()).toEqual([
+        "kind",
+        "status",
+        "toolName",
+        "version",
+      ]);
+    }
   });
 });
+
+function expectStatusOnlyStructuredContent(
+  structuredContent: Readonly<Record<string, unknown>>,
+  status: McpProductionReadonlySummaryStatusV1,
+  toolName: string,
+) {
+  expect(Object.keys(structuredContent).sort()).toEqual(["kind", "status", "toolName", "version"]);
+  expect(structuredContent).toEqual({
+    kind: MCP_PRODUCTION_READONLY_SUMMARY_STATUS_RESULT_KIND,
+    status,
+    toolName,
+    version: 1,
+  });
+}
 
 function normalize(
   toolCase: typeof TOOL_CASES[number],
