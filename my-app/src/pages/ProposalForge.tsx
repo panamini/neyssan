@@ -2954,6 +2954,10 @@ export function ProposalForge(): JSX.Element {
     const value = new URLSearchParams(search).get("pageSize");
     return isDocumentPageSizeId(value) ? value : null;
   }, [search]);
+  const proposalTemplateStartIntent = React.useMemo(
+    () => new URLSearchParams(search).get("templateStart") === "1",
+    [search],
+  );
   const proposalStyleIntent = React.useMemo(
     () =>
       proposalStyleSlotIntent
@@ -10011,6 +10015,8 @@ export function ProposalForge(): JSX.Element {
       const restoredJobId = openedSavedProposal.metadata?.jobId?.trim() || null;
       const restoredSourceJobDescription =
         openedSavedProposal.metadata?.sourceJobDescription?.trim() || null;
+      const restoredSourceJobTitle =
+        openedSavedProposal.metadata?.sourceJobTitle?.trim() || null;
       const restoredApplicantName =
         resolveProposalHeadingText(
           openedSavedProposal.metadata,
@@ -10103,7 +10109,7 @@ export function ProposalForge(): JSX.Element {
               : composeToolbarModelType;
           const composeDraft: StoredProposalComposeDraft = {
             ...existingComposeDraft,
-            jobTitle: restoredDocumentTitle,
+            jobTitle: restoredSourceJobTitle ?? restoredDocumentTitle,
             jobDescription:
               restoredSourceJobDescription ??
               existingComposeDraft.jobDescription ??
@@ -11436,7 +11442,7 @@ export function ProposalForge(): JSX.Element {
           (isConvexAuthenticated && canonicalJobRecord === undefined))));
   const shouldShowTemplateJobContextEmptyState =
     !isSavedView &&
-    Boolean(proposalStyleSlotIntent) &&
+    (Boolean(proposalStyleSlotIntent) || proposalTemplateStartIntent) &&
     !hasActiveProposalJobContext &&
     !isTemplateJobContextEmptyStateDismissed &&
     !handoffId &&
@@ -12335,9 +12341,16 @@ export function ProposalForge(): JSX.Element {
               : effectiveProposalTemplateId
           }
           onSelectProposalLayout={handleProposalLayoutSelect}
-          stylePreset={effectiveProposalStylePresetWithPalette}
-          styleTemplateBundleBaseStyle={effectiveProposalTemplateBundleBaseStyle}
-          styleTemplateBundleId={proposalTemplateBundleId}
+          styleControlsDisabled={isSavedView}
+          stylePreset={
+            isSavedView
+              ? effectiveSavedProposalStylePreset
+              : effectiveProposalStylePresetWithPalette
+          }
+          styleTemplateBundleBaseStyle={
+            isSavedView ? null : effectiveProposalTemplateBundleBaseStyle
+          }
+          styleTemplateBundleId={isSavedView ? null : proposalTemplateBundleId}
           onSelectStyleBundle={handleProposalStyleBundleSelect}
           onResetStyleBundle={handleProposalStyleBundleReset}
           onSelectStyleTypography={handleProposalTypographySelect}
@@ -12369,6 +12382,7 @@ export function ProposalForge(): JSX.Element {
       effectiveProposalClosing?.enabled,
       effectiveProposalClosing?.handwrittenSignatureEnabled,
       effectiveProposalClosing?.signatureName,
+      effectiveSavedProposalStylePreset,
       effectiveProposalStylePresetWithPalette,
       effectiveProposalTemplateBundleBaseStyle,
       effectiveProposalTemplateId,

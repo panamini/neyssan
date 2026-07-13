@@ -235,7 +235,7 @@ describe("TemplatesPage", () => {
     await user.click(screen.getByRole("button", { name: "Create new proposal" }));
 
     expect(navigateMock).toHaveBeenCalledWith(
-      "/proposal?templateId=editorial_wide",
+      "/proposal?templateId=editorial_wide&templateStart=1",
       {
         state: expect.objectContaining({
           proposalWorkspaceResetToken: expect.any(String),
@@ -247,11 +247,11 @@ describe("TemplatesPage", () => {
   it.each([
     {
       label: "Minimal · US Letter",
-      href: "/proposal?templateId=workshop_proposal_margin&pageSize=letter",
+      href: "/proposal?templateId=workshop_proposal_margin&pageSize=letter&templateStart=1",
     },
     {
       label: "French · A4",
-      href: "/proposal?templateId=modernist_signal&pageSize=a4",
+      href: "/proposal?templateId=modernist_signal&pageSize=a4&templateStart=1",
     },
   ])(
     "creates $label with its canonical page format",
@@ -448,7 +448,7 @@ describe("TemplatesPage", () => {
     await user.click(screen.getByRole("button", { name: "Create new proposal" }));
 
     expect(navigateMock).toHaveBeenCalledWith(
-      "/proposal?templateId=editorial_wide",
+      "/proposal?templateId=editorial_wide&templateStart=1",
       {
         state: expect.objectContaining({
           proposalWorkspaceResetToken: expect.any(String),

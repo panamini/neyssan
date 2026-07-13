@@ -323,7 +323,7 @@ describe("ProposalForge settings style round-trip", () => {
         initialEntries={[
           {
             pathname: "/proposal",
-            search: "?templateId=modernist_signal",
+            search: "?templateId=modernist_signal&templateStart=1",
             state: createProposalWorkspaceResetState(),
           },
         ]}
@@ -337,6 +337,9 @@ describe("ProposalForge settings style round-trip", () => {
         "modernist_signal",
       );
     });
+    expect(
+      await screen.findByText("Load a job to tailor this letter."),
+    ).toBeInTheDocument();
   });
 
   it("shows a job-context empty state for Templates-driven proposal starts", async () => {

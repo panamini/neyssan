@@ -177,9 +177,11 @@ function railStylesEqual(
 function ProposalDesignFontPairMenu({
   value,
   onSelectFontPair,
+  disabled = false,
 }: {
   value: VerbatiStylePreset["typography"];
   onSelectFontPair: (fontPairId: VerbatiFontPairId) => void;
+  disabled?: boolean;
 }): JSX.Element {
   const activeOption = getVerbatiFontPairOption(value);
 
@@ -219,7 +221,11 @@ function ProposalDesignFontPairMenu({
         },
       ]}
       trigger={
-        <button type="button" className="dasti-proposal-font-menu-trigger">
+        <button
+          type="button"
+          className="dasti-proposal-font-menu-trigger"
+          disabled={disabled}
+        >
           <span
             className="dasti-proposal-font-menu-trigger__label"
             style={
@@ -243,6 +249,7 @@ export type ProposalDesignFieldsProps = {
   proposalTemplateId?: ProposalTemplateId | null;
   onSelectProposalLayout?: (templateId: ProposalTemplateId) => void;
   stylePreset: VerbatiStylePreset;
+  styleControlsDisabled?: boolean;
   styleTemplateBundleBaseStyle?: VerbatiStylePreset | null;
   styleTemplateBundleId: ProposalTemplateBundleId | null;
   onSelectStyleBundle: (bundleId: ProposalTemplateBundleId) => void;
@@ -271,6 +278,7 @@ export function ProposalDesignFields({
   proposalTemplateId,
   onSelectProposalLayout,
   stylePreset,
+  styleControlsDisabled = false,
   styleTemplateBundleBaseStyle,
   styleTemplateBundleId,
   onSelectStyleBundle,
@@ -388,6 +396,12 @@ export function ProposalDesignFields({
     [onDocumentDecorationUpload, resolvedDocumentDecoration],
   );
   React.useEffect(() => {
+    if (styleControlsDisabled) {
+      setIsCustomColorPickerOpen(false);
+    }
+  }, [styleControlsDisabled]);
+
+  React.useEffect(() => {
     if (!isDocumentImagePopoverOpen) return;
 
     const handlePointerDown = (event: PointerEvent) => {
@@ -448,6 +462,7 @@ export function ProposalDesignFields({
               data-selected={isSelected ? "true" : undefined}
               aria-pressed={isSelected}
               title={option.description}
+              disabled={styleControlsDisabled}
               onClick={() => {
                 setIsCustomColorPickerOpen(false);
                 onSelectStyleBundle(option.id);
@@ -475,6 +490,7 @@ export function ProposalDesignFields({
             className="dasti-proposal-skeleton-rail__style-reset dasti-proposal-design-fields__reset"
             aria-label={`Reset ${activeTemplateBundleLabel}`}
             title={`Reset ${activeTemplateBundleLabel} to the current Settings color, font, and layout.`}
+            disabled={styleControlsDisabled}
             onClick={() => {
               setIsCustomColorPickerOpen(false);
               onResetStyleBundle(activeTemplateBundleId);
@@ -495,6 +511,7 @@ export function ProposalDesignFields({
       <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Typography</div>
       <ProposalDesignFontPairMenu
         value={stylePreset.typography}
+        disabled={styleControlsDisabled}
         onSelectFontPair={(typography) => {
           setIsCustomColorPickerOpen(false);
           onSelectStyleTypography(typography);
@@ -528,6 +545,7 @@ export function ProposalDesignFields({
               }
               aria-label={`Use ${swatch.label} accent`}
               aria-pressed={isSelected}
+              disabled={styleControlsDisabled}
               data-selected={isSelected ? "true" : undefined}
               onClick={() => {
                 setIsCustomColorPickerOpen(false);
@@ -555,6 +573,7 @@ export function ProposalDesignFields({
               title={isSelected ? `Custom accent ${customAccentColor}` : "Open custom color picker"}
               aria-label="Open custom color picker"
               aria-pressed={isSelected}
+              disabled={styleControlsDisabled}
               data-selected={isSelected ? "true" : undefined}
               onClick={() => setIsCustomColorPickerOpen(true)}
             >

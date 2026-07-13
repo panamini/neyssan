@@ -85,6 +85,7 @@ const SAVED_PROPOSALS = [
       },
       sourceUrl: "https://www.linkedin.com/jobs/view/123456",
       platform: "linkedin",
+      sourceJobTitle: "Operations Lead",
       sourceJobDescription:
         "Lead recurring operations and keep cross-team communication on track.",
       proposalDocument: {
@@ -759,7 +760,7 @@ describe("ProposalForge saved view", () => {
         "|preview",
       );
       expect(screen.getByTestId("compose-job-title")).toHaveTextContent(
-        "Saved proposal beta",
+        "Operations Lead",
       );
     });
     expect(screen.getByTestId("compose-job-description")).toHaveTextContent(

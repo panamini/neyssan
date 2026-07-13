@@ -343,6 +343,14 @@ function getCoverLetterCreationPageSizeIntent(
   return null;
 }
 
+function isCanonicalCoverLetterTemplateStart(template: TemplateCard): boolean {
+  return (
+    template.family === "minimal" ||
+    template.family === "bold" ||
+    template.family === "editorial-letterhead"
+  );
+}
+
 export function TemplateDocumentPreview({
   kind,
   family,
@@ -504,6 +512,9 @@ export function TemplatesPage(): JSX.Element {
       const pageSizeIntent = getCoverLetterCreationPageSizeIntent(template);
       if (pageSizeIntent) {
         routeParams.set("pageSize", pageSizeIntent);
+      }
+      if (isCanonicalCoverLetterTemplateStart(template)) {
+        routeParams.set("templateStart", "1");
       }
       navigate(`/proposal${routeParams.size ? `?${routeParams.toString()}` : ""}`, {
         state: createProposalWorkspaceResetState(),

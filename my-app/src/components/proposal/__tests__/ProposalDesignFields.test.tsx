@@ -12,6 +12,39 @@ const stylePreset: VerbatiStylePreset = {
 };
 
 describe("ProposalDesignFields", () => {
+  it("disables draft-only style controls while keeping saved layout selection available", () => {
+    const onSelectStyleBundle = vi.fn();
+    const onSelectProposalLayout = vi.fn();
+
+    const { container } = render(
+      <ProposalDesignFields
+        proposalTemplateId="modernist_signal"
+        onSelectProposalLayout={onSelectProposalLayout}
+        stylePreset={stylePreset}
+        styleTemplateBundleId={null}
+        styleControlsDisabled
+        onSelectStyleBundle={onSelectStyleBundle}
+        onSelectStyleTypography={vi.fn()}
+        onSelectStylePalette={vi.fn()}
+        onSelectStyleCustomAccent={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Style 1" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Use Terre accent" })).toBeDisabled();
+    expect(
+      container.querySelector(".dasti-proposal-font-menu-trigger"),
+    ).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Style 1" }));
+    expect(onSelectStyleBundle).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Minimal layout" }));
+    expect(onSelectProposalLayout).toHaveBeenCalledWith(
+      "workshop_proposal_margin",
+    );
+  });
+
   it("uses the shared bullet style control without the old marker grid at rest", () => {
     const onDocumentIconSettingsChange = vi.fn();
 
