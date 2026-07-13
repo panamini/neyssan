@@ -7129,12 +7129,12 @@ export function ProposalForge(): JSX.Element {
           stylePreset: proposalStyleIntent,
         }) ?? settingsStyleChoice,
       );
-    } else if (proposalTemplateIntent) {
+    } else if (proposalDirectTemplateIntent) {
       setProposalStyleLinkMode("proposal_local");
       setProposalTemplateBundleId(null);
       setProposalPaletteOverride(null);
       setProposalCustomAccentHex(null);
-      setProposalTemplateId(proposalTemplateIntent);
+      setProposalTemplateId(proposalDirectTemplateIntent);
       setHasUserEditedStyle(true);
     }
     void navigate(
@@ -7160,6 +7160,7 @@ export function ProposalForge(): JSX.Element {
     location.search,
     navigate,
     proposalEntryIntent,
+    proposalDirectTemplateIntent,
     proposalJobImportFocus,
     proposalStyleIntent,
     proposalTemplateBundleIntent,
