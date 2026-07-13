@@ -141,7 +141,6 @@ const READONLY_SUMMARY_STATUS_OUTPUT_SCHEMA = Object.freeze({
       enum: Object.freeze(["OK", "STALE", "NO_DATA", "ONBOARDING_REQUIRED", "MALFORMED", "TIMEOUT", "DEPENDENCY_MISSING"]),
     }),
     toolName: Object.freeze({ type: "string" as const }),
-    summary: Object.freeze({ type: "object" as const }),
     version: Object.freeze({ type: "integer" as const, const: 1 }),
   }),
   required: Object.freeze(["kind", "status", "toolName", "version"]),
