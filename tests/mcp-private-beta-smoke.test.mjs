@@ -23,11 +23,19 @@ const READ_ONLY_ANNOTATIONS = Object.freeze({
   destructiveHint: false,
   openWorldHint: false,
 });
+const OAUTH_SECURITY_SCHEMES = Object.freeze([
+  Object.freeze({
+    type: "oauth2",
+    scopes: Object.freeze(["twoweeks:applications:read"]),
+  }),
+]);
 
 function toolDescriptors({ names = EXPECTED_TOOL_NAMES, annotationOverrides = {} } = {}) {
   return names.map((name) => ({
     name,
     annotations: annotationOverrides[name] ?? READ_ONLY_ANNOTATIONS,
+    securitySchemes: OAUTH_SECURITY_SCHEMES,
+    _meta: { securitySchemes: OAUTH_SECURITY_SCHEMES },
   }));
 }
 
@@ -398,6 +406,50 @@ test("smoke rejects missing or unsafe read-only tool annotations", async (t) => 
       await assert.rejects(
         runMcpPrivateBetaSmoke({ origin: fixture.origin, log: () => {} }),
         /tool annotations do not match/u,
+      );
+    });
+  }
+});
+
+test("smoke rejects missing or unsafe OAuth tool security schemes", async (t) => {
+  const securityCases = [
+    ["missing descriptor schemes", (tool) => { delete tool.securitySchemes; }],
+    ["wrong descriptor scope", (tool) => {
+      tool.securitySchemes = [{ type: "oauth2", scopes: ["twoweeks:applications:write"] }];
+    }],
+    ["extra descriptor scheme", (tool) => {
+      tool.securitySchemes = [
+        { type: "oauth2", scopes: ["twoweeks:applications:read"] },
+        { type: "noauth" },
+      ];
+    }],
+    ["missing metadata schemes", (tool) => { delete tool._meta.securitySchemes; }],
+    ["wrong metadata scope", (tool) => {
+      tool._meta.securitySchemes = [{ type: "oauth2", scopes: ["twoweeks:applications:write"] }];
+    }],
+    ["wrong metadata type", (tool) => {
+      tool._meta.securitySchemes = [{ type: "noauth" }];
+    }],
+    ["extra metadata scheme", (tool) => {
+      tool._meta.securitySchemes = [
+        { type: "oauth2", scopes: ["twoweeks:applications:read"] },
+        { type: "noauth" },
+      ];
+    }],
+  ];
+  for (const [label, mutate] of securityCases) {
+    await t.test(label, async (t) => {
+      const tools = toolDescriptors();
+      mutate(tools[0]);
+      const fixture = await startFixture(t, {
+        "/mcp:tools/list": ({ message }) => ({
+          status: 200,
+          body: { jsonrpc: "2.0", id: message.id, result: { tools } },
+        }),
+      });
+      await assert.rejects(
+        runMcpPrivateBetaSmoke({ origin: fixture.origin, log: () => {} }),
+        /tool OAuth security schemes do not match/u,
       );
     });
   }

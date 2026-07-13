@@ -109,6 +109,20 @@ function expectExactArray(value, expected, label) {
   }
 }
 
+function hasExpectedOAuthSecurityScheme(value) {
+  if (!Array.isArray(value) || value.length !== 1) return false;
+  const scheme = value[0];
+  return Boolean(
+    scheme
+    && typeof scheme === "object"
+    && !Array.isArray(scheme)
+    && scheme.type === "oauth2"
+    && Array.isArray(scheme.scopes)
+    && scheme.scopes.length === 1
+    && scheme.scopes[0] === EXPECTED_SCOPE
+  );
+}
+
 async function checkAuthorizationMetadata(fetchImpl, canonicalOrigin, timeoutMs, log) {
   const { response, json: metadata } = await requestJson(
     fetchImpl,
@@ -192,6 +206,15 @@ function checkToolInventory(toolListResult) {
       || tool.annotations.openWorldHint !== false
     ) {
       fail("MCP tool annotations do not match the private-beta contract");
+    }
+    if (
+      !hasExpectedOAuthSecurityScheme(tool.securitySchemes)
+      || !tool._meta
+      || typeof tool._meta !== "object"
+      || Array.isArray(tool._meta)
+      || !hasExpectedOAuthSecurityScheme(tool._meta.securitySchemes)
+    ) {
+      fail("MCP tool OAuth security schemes do not match the private-beta contract");
     }
   }
 }
