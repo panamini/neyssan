@@ -197,7 +197,9 @@ describe("cover-letter eval failure receipt", () => {
     expect((await stat(receiptPath)).mode & 0o777).toBe(0o600);
 
     await chmod(receiptPath, 0o644);
+    const permissiveReceiptInode = (await stat(receiptPath)).ino;
     await writeCoverLetterEvalFailureReceipt({ outputDirectory, receipt });
     expect((await stat(receiptPath)).mode & 0o777).toBe(0o600);
+    expect((await stat(receiptPath)).ino).not.toBe(permissiveReceiptInode);
   });
 });

@@ -1685,11 +1685,41 @@ export async function runCoverLetterHumanReviewCohort<
     >[];
     failure: Exclude<Result, { status: "human_review_pending" }>;
   }) => void | Promise<void>;
+  onRejection?: (args: {
+    completedRecords: readonly Extract<
+      Result,
+      { status: "human_review_pending" }
+    >[];
+    item: CoverLetterHumanReviewPlanItem;
+    error: unknown;
+  }) => void | Promise<void>;
 }): Promise<Array<Extract<Result, { status: "human_review_pending" }>>> {
   const records: Array<Extract<Result, { status: "human_review_pending" }>> =
     [];
   for (const item of args.plan) {
-    const result = await args.generateRecord(item);
+    let result: Result;
+    try {
+      result = await args.generateRecord(item);
+    } catch (error) {
+      if (!args.onRejection) throw error;
+      try {
+        await args.onRejection({
+          completedRecords: records,
+          item,
+          error,
+        });
+      } catch (receiptError) {
+        const rejectionMessage =
+          error instanceof Error
+            ? error.message
+            : `Human-review cohort generation rejected at ${item.benchmarkCase.id}/${item.writerModel}.`;
+        throw new Error(
+          `${rejectionMessage} Failure-receipt handling also failed.`,
+          { cause: receiptError },
+        );
+      }
+      throw error;
+    }
     if (result.status !== "human_review_pending") {
       const failureMessage = `Human-review cohort generation failed at ${result.caseId ?? item.benchmarkCase.id}/${result.writerModel ?? item.writerModel}: ${result.error ?? result.status}`;
       try {
@@ -2018,6 +2048,31 @@ async function main(): Promise<void> {
         "Human-review-only execution requires --output-dir, --run-id, and --source-ref.",
       );
     }
+    const persistFailureReceipt = async (args: {
+      completedRecords: readonly CoverLetterHumanReviewRecord[];
+      failure: Parameters<
+        typeof buildCoverLetterEvalFailureReceipt
+      >[0]["failure"];
+    }): Promise<void> => {
+      const failureReceipt = buildCoverLetterEvalFailureReceipt({
+        cohortId: COVER_LETTER_BLIND_REVIEW_COHORT_ID,
+        runId,
+        sourceRef,
+        plannedProviderCalls: humanReviewPlan!.length,
+        completedCalls: args.completedRecords.flatMap((record) =>
+          record.runManifest ? [record.runManifest] : [],
+        ),
+        failure: args.failure,
+        budget: budget.snapshot(),
+      });
+      const failureReceiptPath = await writeCoverLetterEvalFailureReceipt({
+        outputDirectory,
+        receipt: failureReceipt,
+      });
+      console.error(
+        `[cover-letter-benchmark] failureReceiptPath=${failureReceiptPath}`,
+      );
+    };
     const records = await runCoverLetterHumanReviewCohort({
       plan: humanReviewPlan!,
       generateRecord: ({ benchmarkCase, writerModel }) =>
@@ -2035,14 +2090,8 @@ async function main(): Promise<void> {
           );
         }
         const finalization = failure.artifact?.diagnostics.finalization;
-        const failureReceipt = buildCoverLetterEvalFailureReceipt({
-          cohortId: COVER_LETTER_BLIND_REVIEW_COHORT_ID,
-          runId,
-          sourceRef,
-          plannedProviderCalls: humanReviewPlan!.length,
-          completedCalls: completedRecords.flatMap((record) =>
-            record.runManifest ? [record.runManifest] : [],
-          ),
+        await persistFailureReceipt({
+          completedRecords,
           failure: {
             caseId: failure.caseId,
             provider: resolveBenchmarkWriterProvider(failure.writerModel),
@@ -2060,15 +2109,36 @@ async function main(): Promise<void> {
             provenanceHash: failure.artifact?.provenanceHash ?? null,
             attemptMetadata: failure.attemptMetadata ?? null,
           },
-          budget: budget.snapshot(),
         });
-        const failureReceiptPath = await writeCoverLetterEvalFailureReceipt({
-          outputDirectory,
-          receipt: failureReceipt,
+      },
+      onRejection: async ({ completedRecords, item, error }) => {
+        if (!isQualityEval2BWriterModel(item.writerModel)) {
+          throw new Error(
+            `Human-review failure receipt does not support writer ${item.writerModel}.`,
+          );
+        }
+        await persistFailureReceipt({
+          completedRecords,
+          failure: {
+            caseId: item.benchmarkCase.id,
+            provider: resolveBenchmarkWriterProvider(item.writerModel),
+            requestedModel: item.writerModel,
+            status: "generation_failed",
+            failureStage:
+              error instanceof CoverLetterEvalBudgetError
+                ? "budget_reservation"
+                : "writer_attempt",
+            failureReason:
+              error instanceof CoverLetterEvalBudgetError
+                ? error.code
+                : "writer_attempt_rejected",
+            failureIssues: [],
+            finalizationDiagnostics: null,
+            artifactHash: null,
+            provenanceHash: null,
+            attemptMetadata: null,
+          },
         });
-        console.error(
-          `[cover-letter-benchmark] failureReceiptPath=${failureReceiptPath}`,
-        );
       },
     });
     const artifacts = await buildCoverLetterBlindReviewArtifacts({

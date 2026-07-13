@@ -1,4 +1,5 @@
-import { chmod, mkdir, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { chmod, mkdir, rename, rm, writeFile } from "node:fs/promises";
 import * as path from "node:path";
 
 import { buildStableHash } from "../../src/modules/application-harness/fingerprints";
@@ -215,14 +216,30 @@ export async function writeCoverLetterEvalFailureReceipt(args: {
     "private-reveal",
   );
   await mkdir(privateDirectory, { recursive: true, mode: 0o700 });
+  await chmod(privateDirectory, 0o700);
   const receiptPath = path.join(
     privateDirectory,
     "cover-letter-eval-failure-receipt.json",
   );
-  await writeFile(receiptPath, `${JSON.stringify(args.receipt, null, 2)}\n`, {
-    encoding: "utf8",
-    mode: 0o600,
-  });
+  const temporaryReceiptPath = path.join(
+    privateDirectory,
+    `.cover-letter-eval-failure-receipt.${randomUUID()}.tmp`,
+  );
+  try {
+    await writeFile(
+      temporaryReceiptPath,
+      `${JSON.stringify(args.receipt, null, 2)}\n`,
+      {
+        encoding: "utf8",
+        flag: "wx",
+        mode: 0o600,
+      },
+    );
+    await chmod(temporaryReceiptPath, 0o600);
+    await rename(temporaryReceiptPath, receiptPath);
+  } finally {
+    await rm(temporaryReceiptPath, { force: true });
+  }
   await chmod(receiptPath, 0o600);
   return receiptPath;
 }

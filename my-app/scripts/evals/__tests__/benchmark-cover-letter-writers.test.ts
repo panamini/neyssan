@@ -274,6 +274,57 @@ describe("benchmark-cover-letter-writers", () => {
     expect(onFailure).toHaveBeenCalledOnce();
   });
 
+  it("captures rejected writer attempts before rethrowing the original error", async () => {
+    const plan = buildCoverLetterHumanReviewPlan({
+      cases: coverLetterBlindReviewCases,
+      writerModels: QUALITY_EVAL_2B_WRITER_MODELS,
+    });
+    const budgetError = new CoverLetterEvalBudgetError({
+      code: "repair_limit_exceeded",
+      message: "Repair 1 would exceed maxRepairs=0.",
+    });
+    const generateRecord = vi.fn().mockRejectedValue(budgetError);
+    const onRejection = vi.fn();
+
+    await expect(
+      runCoverLetterHumanReviewCohort({
+        plan,
+        generateRecord,
+        onRejection,
+      }),
+    ).rejects.toBe(budgetError);
+    expect(generateRecord).toHaveBeenCalledOnce();
+    expect(onRejection).toHaveBeenCalledOnce();
+    expect(onRejection).toHaveBeenCalledWith({
+      completedRecords: [],
+      item: plan[0],
+      error: budgetError,
+    });
+  });
+
+  it("keeps the rejected writer error primary when rejection receipt handling fails", async () => {
+    const plan = buildCoverLetterHumanReviewPlan({
+      cases: coverLetterBlindReviewCases,
+      writerModels: QUALITY_EVAL_2B_WRITER_MODELS,
+    });
+    const budgetError = new CoverLetterEvalBudgetError({
+      code: "repair_limit_exceeded",
+      message: "Repair 1 would exceed maxRepairs=0.",
+    });
+
+    await expect(
+      runCoverLetterHumanReviewCohort({
+        plan,
+        generateRecord: vi.fn().mockRejectedValue(budgetError),
+        onRejection: vi
+          .fn()
+          .mockRejectedValue(new Error("receipt write failed")),
+      }),
+    ).rejects.toThrow(
+      "Repair 1 would exceed maxRepairs=0. Failure-receipt handling also failed.",
+    );
+  });
+
   it("uses actual deterministic prompts for a conservative offline 24-call cost preflight", async () => {
     const fetchSpy = vi.fn(() => {
       throw new Error("provider calls are forbidden during offline preflight");
