@@ -220,6 +220,36 @@ const READONLY_SUMMARY_CASES = Object.freeze([
     dataReads: "convex_review_cockpit_summary",
   },
 ] as const);
+const COMPATIBILITY_CATALOG_CASES = Object.freeze([
+  {
+    id: "twoweeks.application_package.summarize",
+    title: "Twoweeks application package summary",
+    url: "https://mcp.twoweeks.ai/mcp#application-package",
+    category: "application_package",
+    text: "Safe catalog entry for the read-only Twoweeks application package summary. It exposes only capability and availability status through the OAuth-protected summary tool.",
+  },
+  {
+    id: "twoweeks.evidence_graph.summarize",
+    title: "Twoweeks evidence graph summary",
+    url: "https://mcp.twoweeks.ai/mcp#evidence-graph",
+    category: "evidence_graph",
+    text: "Safe catalog entry for the read-only Twoweeks evidence graph summary. It exposes only capability and availability status through the OAuth-protected summary tool.",
+  },
+  {
+    id: "twoweeks.resume_variant_plan.summarize",
+    title: "Twoweeks resume variant plan summary",
+    url: "https://mcp.twoweeks.ai/mcp#resume-variant-plan",
+    category: "resume_variant_plan",
+    text: "Safe catalog entry for the read-only Twoweeks resume variant plan summary. It exposes only capability and availability status through the OAuth-protected summary tool.",
+  },
+  {
+    id: "twoweeks.review_cockpit.summarize",
+    title: "Twoweeks review cockpit summary",
+    url: "https://mcp.twoweeks.ai/mcp#review-cockpit",
+    category: "review_cockpit",
+    text: "Safe catalog entry for the read-only Twoweeks review cockpit summary. It exposes only capability and availability status through the OAuth-protected summary tool.",
+  },
+] as const);
 
 type StoredPreAuthIntentRecord = {
   kind: "mcp_oauth_pre_auth_intent_record";
@@ -1995,7 +2025,9 @@ describe("MCP OAuth production route adapter", () => {
   it("executes safe search and fetch compatibility tools after bearer token", async () => {
     const ctx = makeCtx();
     ctx.accessTokenRows.push(storedAccessToken());
+    const activation = activationDependencies();
     const dependencies = routeDependencies(ctx);
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }, activation);
     const searchResponse = await handleMcpOAuthProductionRouteRequest(
       mcpRequest(
         `Bearer ${RAW_ACCESS_TOKEN}`,
@@ -2005,19 +2037,7 @@ describe("MCP OAuth production route adapter", () => {
         }),
         { "mcp-protocol-version": "2025-11-25" },
       ),
-      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }, activationDependencies()),
-      dependencies,
-    );
-    const fetchResponse = await handleMcpOAuthProductionRouteRequest(
-      mcpRequest(
-        `Bearer ${RAW_ACCESS_TOKEN}`,
-        mcpJsonRpcRequest("tools/call", "compat-fetch", {
-          name: "fetch",
-          arguments: { id: "twoweeks.application_package.summarize" },
-        }),
-        { "mcp-protocol-version": "2025-11-25" },
-      ),
-      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }, activationDependencies()),
+      config,
       dependencies,
     );
 
@@ -2029,28 +2049,7 @@ describe("MCP OAuth production route adapter", () => {
         id: "compat-search",
         result: {
           structuredContent: {
-            results: [
-              {
-                id: "twoweeks.application_package.summarize",
-                title: "Twoweeks application package summary",
-                url: "https://mcp.twoweeks.ai/mcp#application-package",
-              },
-              {
-                id: "twoweeks.evidence_graph.summarize",
-                title: "Twoweeks evidence graph summary",
-                url: "https://mcp.twoweeks.ai/mcp#evidence-graph",
-              },
-              {
-                id: "twoweeks.resume_variant_plan.summarize",
-                title: "Twoweeks resume variant plan summary",
-                url: "https://mcp.twoweeks.ai/mcp#resume-variant-plan",
-              },
-              {
-                id: "twoweeks.review_cockpit.summarize",
-                title: "Twoweeks review cockpit summary",
-                url: "https://mcp.twoweeks.ai/mcp#review-cockpit",
-              },
-            ],
+            results: COMPATIBILITY_CATALOG_CASES.map(({ id, title, url }) => ({ id, title, url })),
           },
         },
       },
@@ -2063,54 +2062,91 @@ describe("MCP OAuth production route adapter", () => {
         };
       }
     ).result;
+    expect(Object.keys(searchResult).sort()).toEqual(["content", "structuredContent"]);
+    expect(Object.keys(searchResult.structuredContent)).toEqual(["results"]);
+    expect(searchResult.structuredContent.results).toEqual(
+      COMPATIBILITY_CATALOG_CASES.map(({ id, title, url }) => ({ id, title, url })),
+    );
+    for (const result of searchResult.structuredContent.results as readonly Record<string, unknown>[]) {
+      expect(Object.keys(result).sort()).toEqual(["id", "title", "url"]);
+    }
     expect(searchResult.content).toHaveLength(1);
+    expect(Object.keys(searchResult.content[0]).sort()).toEqual(["text", "type"]);
     expect(searchResult.content[0].type).toBe("text");
     expect(JSON.parse(searchResult.content[0].text)).toEqual(searchResult.structuredContent);
-    expect(fetchResponse).toMatchObject({
-      handled: true,
-      status: 200,
-      json: {
-        jsonrpc: "2.0",
-        id: "compat-fetch",
-        result: {
-          structuredContent: {
-            id: "twoweeks.application_package.summarize",
-            title: "Twoweeks application package summary",
-            url: "https://mcp.twoweeks.ai/mcp#application-package",
-            metadata: {
-              source: "twoweeks_safe_summary_catalog",
-              category: "application_package",
-            },
-          },
-        },
-      },
-    });
-    const fetchResult = (
-      fetchResponse.json as {
-        result: {
-          content: readonly [{ type: string; text: string }];
-          structuredContent: {
-            id: string;
-            title: string;
-            text: string;
-            url: string;
-            metadata: { source: string; category: string };
+    const fetchResponses = [];
+    for (const [index, catalogCase] of COMPATIBILITY_CATALOG_CASES.entries()) {
+      const fetchResponse = await handleMcpOAuthProductionRouteRequest(
+        mcpRequest(
+          `Bearer ${RAW_ACCESS_TOKEN}`,
+          mcpJsonRpcRequest("tools/call", `compat-fetch-${index}`, {
+            name: "fetch",
+            arguments: { id: catalogCase.id },
+          }),
+          { "mcp-protocol-version": "2025-11-25" },
+        ),
+        config,
+        dependencies,
+      );
+      expect(fetchResponse).toMatchObject({
+        handled: true,
+        status: 200,
+        json: { jsonrpc: "2.0", id: `compat-fetch-${index}` },
+      });
+      const fetchResult = (
+        fetchResponse.json as {
+          result: {
+            content: readonly [{ type: string; text: string }];
+            structuredContent: {
+              id: string;
+              title: string;
+              text: string;
+              url: string;
+              metadata: { source: string; category: string };
+            };
           };
-        };
-      }
-    ).result;
-    expect(fetchResult.structuredContent.text).toBe(
-      "Safe catalog entry for the read-only Twoweeks application package summary. It exposes only capability and availability status through the OAuth-protected summary tool.",
-    );
-    expect(fetchResult.structuredContent.metadata.source).toBe("twoweeks_safe_summary_catalog");
-    expect(fetchResult.content).toHaveLength(1);
-    expect(fetchResult.content[0].type).toBe("text");
-    expect(JSON.parse(fetchResult.content[0].text)).toEqual(fetchResult.structuredContent);
-    expect(
-      searchResult.structuredContent.results,
-    ).toHaveLength(4);
-    const bodyText = JSON.stringify({ searchResponse, fetchResponse });
+        }
+      ).result;
+      expect(Object.keys(fetchResult).sort()).toEqual(["content", "structuredContent"]);
+      expect(Object.keys(fetchResult.structuredContent).sort()).toEqual([
+        "id",
+        "metadata",
+        "text",
+        "title",
+        "url",
+      ]);
+      expect(Object.keys(fetchResult.structuredContent.metadata).sort()).toEqual([
+        "category",
+        "source",
+      ]);
+      expect(fetchResult.structuredContent).toEqual({
+        id: catalogCase.id,
+        title: catalogCase.title,
+        text: catalogCase.text,
+        url: catalogCase.url,
+        metadata: {
+          source: "twoweeks_safe_summary_catalog",
+          category: catalogCase.category,
+        },
+      });
+      expect(fetchResult.content).toHaveLength(1);
+      expect(Object.keys(fetchResult.content[0]).sort()).toEqual(["text", "type"]);
+      expect(fetchResult.content[0].type).toBe("text");
+      expect(JSON.parse(fetchResult.content[0].text)).toEqual(fetchResult.structuredContent);
+      fetchResponses.push(fetchResponse);
+    }
+    const bodyText = JSON.stringify({ searchResponse, fetchResponses });
+    expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(5);
+    expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(5);
     expect(dependencies.executeReadonlySummaryTool).not.toHaveBeenCalled();
+    expect(dependencies.createPreAuthIntent).not.toHaveBeenCalled();
+    expect(dependencies.consumeAuthorizationIntent).not.toHaveBeenCalled();
+    expect(dependencies.createAuthorizationCode).not.toHaveBeenCalled();
+    expect(dependencies.validateAuthorizationCode).not.toHaveBeenCalled();
+    expect(dependencies.issueAccessToken).not.toHaveBeenCalled();
+    expect(dependencies.bindPreAuthIntentToAuthenticatedOwner).not.toHaveBeenCalled();
+    expect(activation.providerAdapter.exchangeAuthorizationCode).not.toHaveBeenCalled();
+    expect(activation.executeAccountLinkLifecycle).not.toHaveBeenCalled();
     expect(bodyText).not.toContain(RAW_ACCESS_TOKEN);
     expect(bodyText).not.toContain(ACCESS_TOKEN_DIGEST);
     expect(bodyText).not.toContain(OWNER_ID);

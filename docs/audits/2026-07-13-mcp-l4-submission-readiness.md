@@ -85,7 +85,7 @@ Run from the repository root without loading live credentials. The route cases u
 rtk node --test tests/mcp-private-beta-smoke.test.mjs
 rtk npm --prefix my-app run test -- \
   src/modules/local-mcp/__tests__/mcpOAuthProductionRouteAdapter.test.ts --run \
-  --testNamePattern='returns authenticated production tools/list metadata only after bearer verification|executes safe search and fetch|executes a safe read-only production tools/call summary|fails stale or typo production summary refs|fails unknown production tools/call tools distinctly|denies non-allowlisted private beta identities before tools/call validation|blocks public launch readiness requests'
+  --testNamePattern='returns authenticated production tools/list metadata for negotiated protocol|executes safe search and fetch|executes a safe read-only production tools/call summary|fails stale or typo production summary refs|fails unknown production tools/call tools distinctly|denies non-allowlisted private beta identities before tools/call validation|blocks public launch readiness requests'
 rtk npm --prefix my-app run test -- \
   src/modules/local-mcp/__tests__/mcpProductionReadonlySummaryExecutor.test.ts \
   src/modules/local-mcp/__tests__/mcpProductionToolsCallBoundary.test.ts --run
