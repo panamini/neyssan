@@ -27,11 +27,10 @@ jobs:
         env:
           EXPECTED_SHA: ${{ github.sha }}
           REPOSITORY: ${{ github.repository }}
-          REF: ${{ github.ref }}
         run: |
           git init .
           git remote add origin "https://github.com/${REPOSITORY}.git"
-          git -c protocol.version=2 fetch --no-tags --depth=1 origin "${REF}"
+          git -c protocol.version=2 fetch --no-tags --depth=1 origin "${EXPECTED_SHA}"
           git -c advice.detachedHead=false checkout --detach FETCH_HEAD
           test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}"
 
