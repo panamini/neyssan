@@ -25,6 +25,7 @@ jobs:
     steps:
       - name: Checkout public source without credentials
         env:
+          EXPECTED_SHA: ${{ github.sha }}
           REPOSITORY: ${{ github.repository }}
           REF: ${{ github.ref }}
         run: |
@@ -32,6 +33,7 @@ jobs:
           git remote add origin "https://github.com/${REPOSITORY}.git"
           git -c protocol.version=2 fetch --no-tags --depth=1 origin "${REF}"
           git -c advice.detachedHead=false checkout --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}"
 
       - name: Run offline MCP private-beta smoke contract
         run: node --test tests/mcp-private-beta-smoke.test.mjs

@@ -628,8 +628,10 @@ test("CI runs the PR-controlled smoke without persisted checkout credentials", a
   assert.equal(typeof job, "string");
   assert.match(job, /^    permissions: \{\}$/mu);
   assert.match(job, /Checkout public source without credentials/u);
+  assert.match(job, /EXPECTED_SHA: \$\{\{ github\.sha \}\}/u);
   assert.match(job, /git -c protocol\.version=2 fetch --no-tags --depth=1 origin "\$\{REF\}"/u);
   assert.match(job, /git -c advice\.detachedHead=false checkout --detach FETCH_HEAD/u);
+  assert.match(job, /test "\$\(git rev-parse HEAD\)" = "\$\{EXPECTED_SHA\}"/u);
   assert.doesNotMatch(job, /actions\/checkout|github\.token|secrets\./u);
 });
 
