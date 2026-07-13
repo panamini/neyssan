@@ -149,6 +149,8 @@ const RAW_CONFIDENTIAL_CLIENT_SECRET = "confidential_client_post_secret_fixture"
 const CONFIDENTIAL_CLIENT_SECRET_DIGEST = sha256Hex(RAW_CONFIDENTIAL_CLIENT_SECRET);
 const OWNER_ID = "user_twoweeks_fixture_123";
 const OTHER_OWNER_ID = "user_twoweeks_fixture_456";
+const OWNER_DIGEST = sha256Hex(OWNER_ID);
+const OTHER_OWNER_DIGEST = sha256Hex(OTHER_OWNER_ID);
 const CLERK_ISSUER = "https://clerk.twoweeks.example.test";
 const CLERK_JWT = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJmaXh0dXJlIn0.signature";
 const NOW = Date.parse("2026-06-27T09:00:00.000Z");
@@ -2357,7 +2359,7 @@ describe("MCP OAuth production route adapter", () => {
       routeConfig(
         { runtime: "1", approved: "1", routeWiring: "1" },
         activationDependencies(),
-        privateBetaConfig({ allowedSubjectIds: [OTHER_OWNER_ID] }),
+        privateBetaConfig({ allowedSubjectDigests: [OTHER_OWNER_DIGEST] }),
       ),
       dependencies,
     );
@@ -2380,6 +2382,86 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(OTHER_OWNER_ID);
   });
 
+  it("rejects private beta subject digest arrays with iterator-masked invalid slots", async () => {
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push(storedAccessToken());
+    const dependencies = routeDependencies(ctx);
+    const iteratorMaskedSubjectDigests = [OWNER_DIGEST, "not-a-digest"];
+    Object.defineProperty(iteratorMaskedSubjectDigests, Symbol.iterator, {
+      value: function* maskedIterator() {
+        yield OWNER_DIGEST;
+      },
+    });
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(
+        `Bearer ${RAW_ACCESS_TOKEN}`,
+        mcpJsonRpcRequest("tools/list", "iterator-masked-digest"),
+        { "mcp-protocol-version": "2025-11-25" },
+      ),
+      routeConfig(
+        { runtime: "1", approved: "1", routeWiring: "1" },
+        activationDependencies(),
+        privateBetaConfig({ allowedSubjectDigests: iteratorMaskedSubjectDigests }),
+      ),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 403,
+      json: {
+        status: "blocked",
+        reason: "private_beta_gate_denied",
+        route: "mcp",
+        privateBetaGateCode: "private_beta_malformed_config",
+      },
+    });
+    expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
+    expect(dependencies.executeReadonlySummaryTool).not.toHaveBeenCalled();
+    expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
+    expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+  });
+
+  it("rejects array-like private beta subject digest config at the route builder", async () => {
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push(storedAccessToken());
+    const dependencies = routeDependencies(ctx);
+    const arrayLikeSubjectDigests = {
+      0: OWNER_DIGEST,
+      length: 1,
+    } as unknown as readonly string[];
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(
+        `Bearer ${RAW_ACCESS_TOKEN}`,
+        mcpJsonRpcRequest("tools/list", "array-like-subject-digests"),
+        { "mcp-protocol-version": "2025-11-25" },
+      ),
+      routeConfig(
+        { runtime: "1", approved: "1", routeWiring: "1" },
+        activationDependencies(),
+        privateBetaConfig({ allowedSubjectDigests: arrayLikeSubjectDigests }),
+      ),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 403,
+      json: {
+        status: "blocked",
+        reason: "private_beta_gate_denied",
+        route: "mcp",
+        privateBetaGateCode: "private_beta_malformed_config",
+      },
+    });
+    expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
+    expect(dependencies.executeReadonlySummaryTool).not.toHaveBeenCalled();
+    expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
+    expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
+    expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+  });
+
   it("does not let public-launch-shaped readiness config bypass private beta eligibility", async () => {
     const ctx = makeCtx();
     ctx.accessTokenRows.push(storedAccessToken());
@@ -2396,7 +2478,7 @@ describe("MCP OAuth production route adapter", () => {
       routeConfig(
         { runtime: "1", approved: "1", routeWiring: "1" },
         activationDependencies(),
-        privateBetaConfig({ allowedSubjectIds: [OTHER_OWNER_ID] }),
+        privateBetaConfig({ allowedSubjectDigests: [OTHER_OWNER_DIGEST] }),
         launchReadinessConfig({ publicLaunchRequested: true }),
       ),
       dependencies,
@@ -5734,7 +5816,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(wrongHostResponse)).not.toContain(ACCESS_TOKEN_DIGEST);
   });
 
-  it("wires default production /mcp through auth-level preflight without activation dependencies or subject allowlist env", async () => {
+  it("fails default production /mcp closed without the subject digest allowlist env", async () => {
     convexHttpClientQuery.mockResolvedValue({
       kind: "mcp_oauth_access_token_verify_result",
       ok: true,
@@ -5760,7 +5842,7 @@ describe("MCP OAuth production route adapter", () => {
       safeForLogging: false,
       version: 1,
     });
-    const plugin = createLocalMcpDevEndpointPlugin({ env: prodRouteEnvWithoutPrivateBetaSubjects() });
+    const plugin = createLocalMcpDevEndpointPlugin({ env: prodRouteEnvWithoutPrivateBetaSubjectDigests() });
     const middleware = readConfiguredMiddleware(plugin);
     const response = await invokeStreamingMiddleware(middleware, {
       method: "POST",
@@ -5775,18 +5857,11 @@ describe("MCP OAuth production route adapter", () => {
     });
 
     expect(response.next).not.toHaveBeenCalled();
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode).toBe(403);
     expect(JSON.parse(response.body)).toMatchObject({
-      jsonrpc: "2.0",
-      id: "initialize",
-      result: {
-        protocolVersion: "2025-11-25",
-        capabilities: {
-          tools: {
-            listChanged: false,
-          },
-        },
-      },
+      status: "blocked",
+      reason: "private_beta_gate_denied",
+      privateBetaGateCode: "private_beta_empty_allowlist",
     });
     expect(convexHttpClientQuery).toHaveBeenCalledTimes(1);
     expect(convexHttpClientMutation).not.toHaveBeenCalled();
@@ -5802,7 +5877,73 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(OWNER_ID);
   });
 
+  it("fails default production /mcp closed for malformed subject digest CSV", async () => {
+    convexHttpClientQuery.mockResolvedValue({
+      kind: "mcp_oauth_access_token_verify_result",
+      ok: true,
+      reason: "verified",
+      serverOnly: {
+        status: "active",
+        twoweeksClerkId: OWNER_ID,
+        ownerIssuer: CLERK_ISSUER,
+        clientId: CLIENT_ID,
+        resource: RESOURCE,
+        scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE],
+        productionEnvironment: MCP_OAUTH_PRODUCTION_AUTHORIZATION_CODE_ENVIRONMENT,
+        expiresAt: Date.now() + 60 * 60 * 1_000,
+        tokenActive: true,
+        tokenExpired: false,
+        tokenRevoked: false,
+        rawAccessTokenPersisted: false,
+        rawAccessTokenEchoed: false,
+        digestEchoed: false,
+        version: 1,
+      },
+      modelVisible: false,
+      safeForLogging: false,
+      version: 1,
+    });
+    const malformedValues = [
+      `,${OWNER_DIGEST}`,
+      `${OWNER_DIGEST},`,
+      `${OWNER_DIGEST},,${OWNER_DIGEST}`,
+      ` ${OWNER_DIGEST}`,
+      `${OWNER_DIGEST} `,
+    ];
+
+    for (const malformedValue of malformedValues) {
+      const env = prodRouteEnv();
+      env.MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECT_DIGESTS = malformedValue;
+      const plugin = createLocalMcpDevEndpointPlugin({ env });
+      const middleware = readConfiguredMiddleware(plugin);
+      const response = await invokeStreamingMiddleware(middleware, {
+        method: "POST",
+        url: MCP_OAUTH_PRODUCTION_MCP_PATH,
+        remoteAddress: "198.51.100.9",
+        headers: {
+          host: "mcp.twoweeks.example.test",
+          authorization: `Bearer ${RAW_ACCESS_TOKEN}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(mcpInitializeRequest()),
+      });
+
+      expect(response.next).not.toHaveBeenCalled();
+      expect(response.statusCode).toBe(403);
+      expect(JSON.parse(response.body)).toMatchObject({
+        status: "blocked",
+        reason: "private_beta_gate_denied",
+        privateBetaGateCode: "private_beta_malformed_config",
+      });
+      expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
+      expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
+      expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+    }
+    expect(convexHttpClientMutation).not.toHaveBeenCalled();
+  });
+
   it("wires default Vite production tools/call to the Convex read-only summary query", async () => {
+    const dateNow = vi.spyOn(Date, "now").mockReturnValue(NOW);
     const toolCase = READONLY_SUMMARY_CASES[0];
     convexHttpClientQuery.mockImplementation(async (_query, input) => {
       if (isPlainTestRecord(input) && input.accessTokenDigest === ACCESS_TOKEN_DIGEST) {
@@ -5908,6 +6049,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
     expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
     expect(JSON.stringify(response)).not.toContain(LEGACY_TOOLS_CALL_SYNTHETIC_RESULT_KIND);
+    dateNow.mockRestore();
   });
 
   it("wires default production /mcp through the resource host when auth and resource origins differ", async () => {
@@ -6202,6 +6344,7 @@ describe("MCP OAuth production route adapter", () => {
       "MCP_OAUTH_PRODUCTION_PRIVATE_BETA_ENABLED",
       "MCP_OAUTH_PRODUCTION_PRIVATE_BETA_CLIENT_IDS",
       "MCP_OAUTH_PRODUCTION_PRIVATE_BETA_RESOURCES",
+      "MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECT_DIGESTS",
       "MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256",
     ] as const;
 
@@ -6214,7 +6357,8 @@ describe("MCP OAuth production route adapter", () => {
     expect(runSource).toContain("canonical_server_keys");
     expect(runSource).toContain("canonical server keys are allowed only in root .env.local");
     expect(runSource).toContain("cloudflared-mcp-credentials.json");
-    expect(runSource).toContain("http://host.docker.internal:${MCP_PRIVATE_BETA_VITE_PORT}");
+    expect(runSource).toContain('local service_host="host.docker.internal"');
+    expect(runSource).toContain("http://${service_host}:${MCP_PRIVATE_BETA_VITE_PORT}");
     expect(runSource).toContain("--token-file /run/secrets/cloudflared-token");
     expect(runSource).not.toContain('--token "${TUNNEL_TOKEN}"');
     expect(dockerignore).toMatch(/^\*\*\/\.env\*$/mu);
@@ -6224,6 +6368,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(rootEnvExample).toMatch(/^MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256=$/mu);
     expect(rootEnvExample).toContain("MCP_OAUTH_PRODUCTION_CLIENT_SECRET");
     expect(rootEnvExample).not.toContain("MCP_PRODUCTION_PRIVATE_BETA_");
+    expect(rootEnvExample).not.toContain("MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECTS=");
     expect(appEnvExample).toContain("server-only MCP_OAUTH_PRODUCTION_*");
     expect(infisicalProjectConfig.workspaceId).toMatch(/^[0-9a-f-]{36}$/u);
     expect(infisicalProjectConfig.defaultEnvironment).toBe("dev");
@@ -6388,6 +6533,7 @@ printf '%s\\n' '${rawFixtureSecret}'
       "MCP_OAUTH_PRODUCTION_PRIVATE_BETA_ENABLED=1",
       "MCP_OAUTH_PRODUCTION_PRIVATE_BETA_CLIENT_IDS=local-chatgpt-client",
       "MCP_OAUTH_PRODUCTION_PRIVATE_BETA_RESOURCES=https://mcp.twoweeks.ai/mcp",
+      `MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECT_DIGESTS=${OWNER_DIGEST}`,
       "MCP_OAUTH_PRODUCTION_RESOURCE=https://mcp.twoweeks.ai/mcp",
       "MCP_OAUTH_PRODUCTION_AUTHORIZATION_ORIGIN=https://mcp.twoweeks.ai",
       "MCP_OAUTH_PRODUCTION_REDIRECT_URIS=https://chatgpt.com/connector/oauth/b7v_6OncLEsg",
@@ -6408,15 +6554,37 @@ printf '%s\\n' '${rawFixtureSecret}'
       writeFileSync(fixtureRootEnv, `${fixtureEnvLines.join("\n")}\n`, { mode: 0o600 });
       writeFileSync(fixtureAppEnv, "VITE_FIXTURE=1\n", { mode: 0o600 });
 
-      const accepted = spawnSync("bash", [fixtureRunScript, "mcp-check"], {
+      const accepted = spawnSync("bash", ["-x", fixtureRunScript, "mcp-check"], {
         cwd: fixtureRoot,
         encoding: "utf8",
         env: { ...process.env, VITE_CLERK_PUBLISHABLE_KEY: "" },
       });
+      const acceptedOutput = `${accepted.stdout}${accepted.stderr}`;
       expect(accepted.status).toBe(0);
-      expect(`${accepted.stdout}${accepted.stderr}`).toContain("mcp-check: PASS");
-      expect(`${accepted.stdout}${accepted.stderr}`).not.toContain("pk_test_");
-      expect(`${accepted.stdout}${accepted.stderr}`).not.toContain("pk_live_");
+      expect(acceptedOutput).toContain("mcp-check: PASS");
+      expect(acceptedOutput).not.toContain("pk_test_");
+      expect(acceptedOutput).not.toContain("pk_live_");
+      expect(acceptedOutput).not.toContain(OWNER_DIGEST);
+      expect(acceptedOutput).not.toContain("fixture-admin-token");
+      expect(acceptedOutput).not.toContain("0".repeat(64));
+
+      const rawSubject = "raw-subject-fixture-do-not-print";
+      writeFileSync(
+        fixtureRootEnv,
+        `${fixtureEnvLines.join("\n")}\nMCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECTS=${rawSubject}\n`,
+        { mode: 0o600 },
+      );
+      const rawSubjectRejected = spawnSync("bash", ["-x", fixtureRunScript, "mcp-check"], {
+        cwd: fixtureRoot,
+        encoding: "utf8",
+        env: { ...process.env, VITE_CLERK_PUBLISHABLE_KEY: "" },
+      });
+      const rawSubjectOutput = `${rawSubjectRejected.stdout}${rawSubjectRejected.stderr}`;
+      expect(rawSubjectRejected.status).not.toBe(0);
+      expect(rawSubjectOutput).toContain("raw private-beta subject identifiers are forbidden");
+      expect(rawSubjectOutput).not.toContain(rawSubject);
+      expect(rawSubjectOutput).not.toContain(OWNER_DIGEST);
+      expect(rawSubjectOutput).not.toContain("fixture-admin-token");
 
       writeFileSync(
         fixtureRootEnv,
@@ -6980,6 +7148,7 @@ function privateBetaConfig(
     enabled: true,
     allowedClientIds: [CLIENT_ID],
     allowedResources: [RESOURCE],
+    allowedSubjectDigests: [OWNER_DIGEST],
     ...overrides,
   };
 }
@@ -8213,7 +8382,7 @@ function prodRouteEnv(): Record<string, string> {
     MCP_OAUTH_PRODUCTION_PRIVATE_BETA_ENABLED: "1",
     MCP_OAUTH_PRODUCTION_PRIVATE_BETA_CLIENT_IDS: CLIENT_ID,
     MCP_OAUTH_PRODUCTION_PRIVATE_BETA_RESOURCES: RESOURCE,
-    MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECTS: OWNER_ID,
+    MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECT_DIGESTS: OWNER_DIGEST,
     MCP_OAUTH_PRODUCTION_CLIENT_SECRET_SHA256: CONFIDENTIAL_CLIENT_SECRET_DIGEST,
     CLERK_JWT_ISSUER_DOMAIN: CLERK_ISSUER,
     CONVEX_URL: "http://127.0.0.1:3210",
@@ -8221,9 +8390,9 @@ function prodRouteEnv(): Record<string, string> {
   };
 }
 
-function prodRouteEnvWithoutPrivateBetaSubjects(): Record<string, string> {
+function prodRouteEnvWithoutPrivateBetaSubjectDigests(): Record<string, string> {
   const env = prodRouteEnv();
-  delete env.MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECTS;
+  delete env.MCP_OAUTH_PRODUCTION_PRIVATE_BETA_SUBJECT_DIGESTS;
   return env;
 }
 

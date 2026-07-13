@@ -60,7 +60,7 @@ import {
   MCP_PRODUCTION_PRIVATE_BETA_CLIENT_IDS_VAR,
   MCP_PRODUCTION_PRIVATE_BETA_ENABLED_FLAG,
   MCP_PRODUCTION_PRIVATE_BETA_RESOURCES_VAR,
-  MCP_PRODUCTION_PRIVATE_BETA_SUBJECTS_VAR,
+  MCP_PRODUCTION_PRIVATE_BETA_SUBJECT_DIGESTS_VAR,
 } from "./src/modules/local-mcp/mcpProductionPrivateBetaGate";
 import {
   MCP_PRODUCTION_LAUNCH_READINESS_AUTHENTICATED_PROTOCOL_REVIEWED_FLAG,
@@ -108,6 +108,7 @@ const PRE_AUTH_QUOTA_WINDOW_MS = 60_000;
 const PRE_AUTH_QUOTA_LIMIT = 60;
 const PRODUCTION_OAUTH_TOKEN_MAX_REQUEST_BYTES = 4_096;
 const CLIENT_SECRET_SHA256_PATTERN = /^[0-9a-f]{64}$/u;
+const PRIVATE_BETA_SUBJECT_SHA256_PATTERN = /^[0-9a-f]{64}$/u;
 const INVALID_CLIENT_SECRET_POST_POLICY = Object.freeze({
   allowedClientId: "",
   clientSecretSha256: "0".repeat(64),
@@ -774,7 +775,9 @@ function readLocalMcpDevOAuthConfigInput(env: Readonly<Record<string, string | u
 }
 
 function readProductionMcpOAuthConfigInput(env: Readonly<Record<string, string | undefined>>): Parameters<typeof buildMcpOAuthProductionRouteAdapterConfig>[0] {
-  const privateBetaSubjectIds = readCommaSeparatedEnv(env[MCP_PRODUCTION_PRIVATE_BETA_SUBJECTS_VAR]);
+  const privateBetaSubjectDigests = readPrivateBetaSubjectDigestEnv(
+    env[MCP_PRODUCTION_PRIVATE_BETA_SUBJECT_DIGESTS_VAR],
+  );
   return {
     flags: {
       runtime: env[MCP_OAUTH_PRODUCTION_RUNTIME_FLAG],
@@ -795,7 +798,7 @@ function readProductionMcpOAuthConfigInput(env: Readonly<Record<string, string |
       enabled: isStrictEnabledFlag(env, MCP_PRODUCTION_PRIVATE_BETA_ENABLED_FLAG),
       allowedClientIds: readCommaSeparatedEnv(env[MCP_PRODUCTION_PRIVATE_BETA_CLIENT_IDS_VAR]),
       allowedResources: readCommaSeparatedEnv(env[MCP_PRODUCTION_PRIVATE_BETA_RESOURCES_VAR]),
-      ...(privateBetaSubjectIds.length > 0 ? { allowedSubjectIds: privateBetaSubjectIds } : {}),
+      allowedSubjectDigests: privateBetaSubjectDigests,
       version: 1,
     },
     launchReadiness: {
@@ -1724,6 +1727,15 @@ function readCommaSeparatedEnv(value: string | undefined): readonly string[] {
       .map((item) => item.trim())
       .filter((item) => item.length > 0),
   );
+}
+
+function readPrivateBetaSubjectDigestEnv(value: string | undefined): readonly string[] | undefined {
+  if (value === undefined || value.length === 0) return Object.freeze([]);
+  const digests = value.split(",");
+  if (digests.some((digest) => !PRIVATE_BETA_SUBJECT_SHA256_PATTERN.test(digest))) {
+    return undefined;
+  }
+  return Object.freeze(digests);
 }
 
 export function normalizeMcpOAuthProductionRedirectUris(value: string | undefined): readonly string[] {

@@ -1187,7 +1187,7 @@ async function handleMcpRequest(
   });
   const privateBetaDecision = evaluateMcpProductionPrivateBetaGate({
     envelope,
-    verifiedSubjectId: verifyResult.serverOnly.twoweeksClerkId,
+    verifiedSubjectDigest: hashPrivateBetaSubject(verifyResult.serverOnly.twoweeksClerkId),
     config: config.privateBeta,
   });
   if (!privateBetaDecision.allowed) {
@@ -1287,11 +1287,22 @@ function freezePrivateBetaConfigInput(
 ): McpProductionPrivateBetaGateConfigInputV1 {
   return Object.freeze({
     ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
-    ...(input.allowedClientIds ? { allowedClientIds: Object.freeze([...input.allowedClientIds]) } : {}),
-    ...(input.allowedResources ? { allowedResources: Object.freeze([...input.allowedResources]) } : {}),
-    ...(input.allowedSubjectIds ? { allowedSubjectIds: Object.freeze([...input.allowedSubjectIds]) } : {}),
+    ...(input.allowedClientIds ? { allowedClientIds: freezeArrayByIndex(input.allowedClientIds) } : {}),
+    ...(input.allowedResources ? { allowedResources: freezeArrayByIndex(input.allowedResources) } : {}),
+    ...(input.allowedSubjectDigests
+      ? { allowedSubjectDigests: freezeArrayByIndex(input.allowedSubjectDigests) }
+      : {}),
     ...(input.version !== undefined ? { version: input.version } : {}),
   });
+}
+
+function freezeArrayByIndex<T>(value: readonly T[]): readonly T[] {
+  if (!Array.isArray(value)) return value;
+  const copy: T[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    copy.push(value[index]);
+  }
+  return Object.freeze(copy);
 }
 
 function freezeLaunchReadinessConfigInput(
@@ -2695,6 +2706,10 @@ function hashAccessToken(rawAccessToken: string): string {
   const digest = createHash("sha256").update(rawAccessToken, "utf8").digest("hex");
   if (!isValidAuthorizationCodeDigest(digest)) throw new TypeError("invalid_access_token_digest");
   return digest;
+}
+
+function hashPrivateBetaSubject(subjectId: string): string {
+  return createHash("sha256").update(subjectId, "utf8").digest("hex");
 }
 
 function generateDefaultBrowserBoundContinuationNonce(): string | undefined {
