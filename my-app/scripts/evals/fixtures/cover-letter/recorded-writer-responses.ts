@@ -9,6 +9,7 @@ export const COVER_LETTER_REPLAY_FIXTURE_VERSION =
 const recordedWriterResponseSchema = z
   .object({
     schemaId: z.literal("premium_writer_output_v1"),
+    expectedWriterPromptHash: z.string().regex(/^[a-f0-9]{64}$/u),
     payload: PREMIUM_WRITER_OUTPUT_V1_SCHEMA,
   })
   .strict();
@@ -76,6 +77,8 @@ const rawRecordedCoverLetterReplayFixtures = [
     responses: [
       {
         schemaId: "premium_writer_output_v1",
+        expectedWriterPromptHash:
+          "70f95f919494ec3a0eb4d3cde406445a814d820f731f375181a0c27c15e9c482",
         payload: {
           version: "premium_writer_output_v1",
           bodyParts: {
@@ -150,6 +153,8 @@ const rawRecordedCoverLetterReplayFixtures = [
     responses: [
       {
         schemaId: "premium_writer_output_v1",
+        expectedWriterPromptHash:
+          "26975eaca25cb7ed352ce841b108b8e5442980655e9061fb733b3397f6ec1c3a",
         payload: {
           version: "premium_writer_output_v1",
           bodyParts: {

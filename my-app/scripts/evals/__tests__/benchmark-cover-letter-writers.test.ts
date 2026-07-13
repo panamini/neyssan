@@ -17,6 +17,7 @@ import {
   benchmarkCoverLetterCase,
   createCoverLetterEvalLiveBudget,
   parseCoverLetterBenchmarkCliOptions,
+  replayRecordedCoverLetterFixture,
   replayRecordedCoverLetterFixtures,
   resolveCoverLetterBenchmarkAttemptSignal,
   resolveCoverLetterBenchmarkProductionInputs,
@@ -556,6 +557,34 @@ describe("benchmark-cover-letter-writers", () => {
       expect(fixture.fixtureProvenance).toBe("authored_synthetic_case_v1");
       expect(knownCaseIds.has(fixture.sourceCaseId)).toBe(true);
     }
+    expect(
+      RECORDED_COVER_LETTER_REPLAY_FIXTURES.map((fixture) => ({
+        artifact: fixture.expectedArtifactHash,
+        provenance: fixture.expectedProvenanceHash,
+        prompts: fixture.responses.map(
+          (response) => response.expectedWriterPromptHash,
+        ),
+      })),
+    ).toEqual([
+      {
+        artifact:
+          "1a1614a468b23a66336a1202effb1b27b1cd03c970f4a6bc0febbe54de1873a6",
+        provenance:
+          "fcc559d0ab92833c8f0ea5fc02d8125e58e7a10c4159d47a54a8169e16935acf",
+        prompts: [
+          "70f95f919494ec3a0eb4d3cde406445a814d820f731f375181a0c27c15e9c482",
+        ],
+      },
+      {
+        artifact:
+          "3fdbd41bb0da5b021761e6531f65f107ff70bc8422697231f5a9f933d92007a2",
+        provenance:
+          "f182807ad2b0adb9a1a952c1470a13bb3d419d5d46186e9918bb7b4e6e74a5d6",
+        prompts: [
+          "26975eaca25cb7ed352ce841b108b8e5442980655e9061fb733b3397f6ec1c3a",
+        ],
+      },
+    ]);
     expect(serializedFixtures).not.toMatch(
       /"(?:prompt|rawCv|rawJob|headers|authorization|apiKey|requestId|sessionId|rawResponse)"\s*:/i,
     );
@@ -566,6 +595,20 @@ describe("benchmark-cover-letter-writers", () => {
       recordedCoverLetterReplayFixtureSchema.parse({
         ...RECORDED_COVER_LETTER_REPLAY_FIXTURES[0],
         rawResponse: { providerEnvelope: true },
+      }),
+    ).toThrow();
+
+    const fixture = RECORDED_COVER_LETTER_REPLAY_FIXTURES[0]!;
+    const {
+      expectedWriterPromptHash: _missingPromptHash,
+      ...responseWithoutPromptHash
+    } = fixture.responses[0] as (typeof fixture.responses)[number] & {
+      expectedWriterPromptHash?: string;
+    };
+    expect(() =>
+      recordedCoverLetterReplayFixtureSchema.parse({
+        ...fixture,
+        responses: [responseWithoutPromptHash],
       }),
     ).toThrow();
   });
@@ -637,6 +680,32 @@ describe("benchmark-cover-letter-writers", () => {
         },
       },
     });
+  });
+
+  it("rejects recorded responses when the production writer prompt drifts", async () => {
+    const fixture = RECORDED_COVER_LETTER_REPLAY_FIXTURES[0]!;
+    await expect(
+      replayRecordedCoverLetterFixture({
+        ...fixture,
+        responses: fixture.responses.map((response) => ({
+          ...response,
+          expectedWriterPromptHash: "0".repeat(64),
+        })),
+      } as any),
+    ).rejects.toThrow(/writer prompt drift/u);
+  });
+
+  it("detects production output-language drift before replaying a response", async () => {
+    const fixture = RECORDED_COVER_LETTER_REPLAY_FIXTURES[0]!;
+    await expect(
+      replayRecordedCoverLetterFixture({
+        ...fixture,
+        frozenConfig: {
+          ...fixture.frozenConfig,
+          outputLanguage: "French",
+        },
+      }),
+    ).rejects.toThrow(/configuration drift: outputLanguage/u);
   });
 
   it("defaults the CLI to replay and refuses unbudgeted live execution", () => {

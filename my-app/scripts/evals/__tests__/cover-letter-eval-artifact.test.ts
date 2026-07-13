@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import ts from "typescript";
 
 import type { PremiumCoverLetterFinalProvenance } from "../../../convex/lib/proposals/premiumCoverLetter";
+import generationMutationSource from "../../../convex/generateProposalMutation.ts?raw";
 import artifactSource from "../cover-letter-eval-artifact.ts?raw";
 import {
   COVER_LETTER_EVAL_CONTRACT_VERSIONS,
@@ -37,6 +39,29 @@ const FROZEN_CONFIG: CoverLetterEvalFrozenConfig = {
   companyValuesHash: "b".repeat(64),
   writerSchemaHash: "c".repeat(64),
 };
+
+it("keeps the production finalizer runtime importable without Convex codegen", () => {
+  const sourceFile = ts.createSourceFile(
+    "generateProposalMutation.ts",
+    generationMutationSource,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const runtimeGeneratedImports = sourceFile.statements
+    .filter(ts.isImportDeclaration)
+    .filter((statement) =>
+      /^\.\/_generated\/(?:server|api)$/u.test(
+        (statement.moduleSpecifier as ts.StringLiteral).text,
+      ),
+    )
+    .filter((statement) => !statement.importClause?.isTypeOnly)
+    .map((statement) => statement.getText(sourceFile));
+
+  expect(runtimeGeneratedImports).toEqual([]);
+  expect(generationMutationSource).toMatch(/\bactionGeneric\b/u);
+  expect(generationMutationSource).toMatch(/\banyApi\b/u);
+});
 
 function acceptedArgs(): PrepareCoverLetterEvalArtifactArgs {
   const opening =

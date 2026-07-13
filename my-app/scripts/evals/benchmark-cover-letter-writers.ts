@@ -743,7 +743,6 @@ export async function replayRecordedCoverLetterFixture(
 
   const productionInputs = resolveCoverLetterBenchmarkProductionInputs({
     benchmarkCase,
-    outputLanguage: fixture.frozenConfig.outputLanguage,
   });
   assertReplayFixtureMatchesFrozenProductionConfig({
     fixture,
@@ -751,7 +750,10 @@ export async function replayRecordedCoverLetterFixture(
   });
 
   let writerCallCount = 0;
-  const writerOverride: PremiumCoverLetterWriter = async ({ schema }) => {
+  const writerOverride: PremiumCoverLetterWriter = async ({
+    prompt,
+    schema,
+  }) => {
     const recorded = fixture.responses[writerCallCount];
     if (!recorded) {
       throw new Error(
@@ -762,6 +764,17 @@ export async function replayRecordedCoverLetterFixture(
     if (actualSchemaId !== recorded.schemaId) {
       throw new Error(
         `Recorded cover-letter replay fixture ${fixture.id} expected schema ${recorded.schemaId} but received ${actualSchemaId ?? "unknown"}.`,
+      );
+    }
+    const actualPromptHash = await buildStableHash({
+      namespace: "cover-letter-eval-writer-prompt",
+      type: "production-writer-prompt",
+      version: 1,
+      prompt,
+    });
+    if (actualPromptHash !== recorded.expectedWriterPromptHash) {
+      throw new Error(
+        `Recorded cover-letter replay fixture ${fixture.id} writer prompt drift on call ${writerCallCount + 1}: expected ${recorded.expectedWriterPromptHash}, received ${actualPromptHash}.`,
       );
     }
     writerCallCount += 1;
