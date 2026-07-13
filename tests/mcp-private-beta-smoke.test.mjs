@@ -171,10 +171,10 @@ test("smoke validates the public no-credential contract without sending sensitiv
   assert.deepEqual(
     mcpRequests.map((request) => [JSON.parse(request.body).method, request.headers["mcp-protocol-version"]]),
     [
-      ["initialize", "2025-06-18"],
+      ["initialize", undefined],
       ["notifications/initialized", "2025-06-18"],
       ["tools/list", "2025-06-18"],
-      ["initialize", "2025-11-25"],
+      ["initialize", undefined],
       ["notifications/initialized", ACTIVE_PROTOCOL_VERSION],
       ["tools/list", ACTIVE_PROTOCOL_VERSION],
       ["tools/call", ACTIVE_PROTOCOL_VERSION],
@@ -380,7 +380,7 @@ test("smoke accepts an active-version fallback for the older offer and propagate
     .filter((request) => request.url === "/mcp")
     .map((request) => [JSON.parse(request.body).method, request.headers["mcp-protocol-version"]]);
   assert.deepEqual(lifecycleRequests.slice(0, 3), [
-    ["initialize", "2025-06-18"],
+    ["initialize", undefined],
     ["notifications/initialized", ACTIVE_PROTOCOL_VERSION],
     ["tools/list", ACTIVE_PROTOCOL_VERSION],
   ]);

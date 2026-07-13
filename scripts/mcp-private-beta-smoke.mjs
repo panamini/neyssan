@@ -180,13 +180,16 @@ function mcpRequest(method, protocolVersion) {
   const message = method === "notifications/initialized"
     ? { jsonrpc: "2.0", method, params }
     : { jsonrpc: "2.0", id: "smoke", method, params };
+  const headers = {
+    accept: "application/json, text/event-stream",
+    "content-type": "application/json",
+  };
+  if (method !== "initialize") {
+    headers["mcp-protocol-version"] = protocolVersion;
+  }
   return {
     method: "POST",
-    headers: {
-      accept: "application/json, text/event-stream",
-      "content-type": "application/json",
-      "mcp-protocol-version": protocolVersion,
-    },
+    headers,
     body: JSON.stringify(message),
   };
 }
