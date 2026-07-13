@@ -13,7 +13,7 @@ This checkpoint maps the private-beta MCP authorization boundary to deterministi
 | Property | Fail-closed behavior | Direct evidence |
 | --- | --- | --- |
 | Cross-subject isolation | A verified subject whose digest is absent from the private-beta allowlist is rejected before tool argument validation or execution; neither subject identifier is echoed. | `mcpOAuthProductionRouteAdapter.test.ts`: `denies non-allowlisted private beta identities before tools/call validation`; `mcpProductionPrivateBetaGate.test.ts`: non-matching digest case |
-| Wrong client binding | Access-token verification rejects a token stored for another client and does not dispatch MCP policy or tools. | Route adapter table case `wrong client binding`; Convex tests `rejects duplicate, malformed, and client-mismatched code digest access` and `rejects expired, consumed, mismatched, and malformed validation without consuming` |
+| Wrong client binding | Access-token verification rejects a token stored for another client and does not dispatch MCP policy or tools. | Route adapter table case `wrong client binding`; Convex verifier table test `fails access-token verification for wrong client`, which returns `wrong_client`, performs no storage patch, and does not echo the raw token or digest |
 | Wrong resource binding | Access-token verification rejects a token stored for another resource and does not dispatch tools. | Route adapter table case `wrong resource binding`; Convex active-token verification cases |
 | Expired token | Expired bearer state is rejected with the bounded Bearer challenge; tool execution is not reached. | Route adapter table case `expired token`; Convex storage-time expiry tests |
 | Revoked token | Revoked bearer state is rejected before MCP policy and tool execution. | Route adapter table case `revoked token`; Convex active-token verification cases |
@@ -44,19 +44,31 @@ Fresh checks on the exact L1 base used by this documentation leaf:
 - changed-file Fallow audit: exit `0`, with inherited complexity, duplication, and unused-dependency advisories excluded from the changed-file gate
 - independent exact-artifact review: `LOCAL_REVIEW_CLEAR`
 
-Reproduce the security-focused suites without credentials:
+Reproduce the credential-free route suites; these do not require generated Convex bindings:
 
 ```bash
 rtk npm --prefix my-app run test -- \
   src/modules/local-mcp/__tests__/mcpProductionPrivateBetaGate.test.ts \
-  src/modules/local-mcp/__tests__/mcpOAuthProductionRouteAdapter.test.ts \
+  src/modules/local-mcp/__tests__/mcpOAuthProductionRouteAdapter.test.ts --run
+```
+
+The Convex suite is also offline and needs no credentials when the ignored generated bindings already exist at `my-app/convex/_generated`. This checkout had those bindings pre-generated. A fresh checkout does not track them, and `convex/mcpOAuthAuthorizationCodes.ts` imports `./_generated/server`; if they are absent, stop rather than running credentialed or network-dependent codegen as part of this proof.
+
+```bash
+rtk npm --prefix my-app run test -- \
   convex/__tests__/mcpOAuthAuthorizationCodes.test.ts --run
+```
+
+Before committing, validate the local patch; after committing, validate the committed leaf range:
+
+```bash
 rtk git diff --check
+rtk git diff --check HEAD^ HEAD
 ```
 
 ## Remaining limits
 
-- No live endpoint, ChatGPT connector, `tools/list`, or `tools/call` was exercised by this documentation-only leaf.
+- No live deployed endpoint or ChatGPT connector was invoked by this documentation-only leaf. Offline route tests did exercise `tools/list` and `tools/call`; they do not constitute a live deployed ChatGPT endpoint invocation.
 - Concurrent storage transactions were not exercised; the concurrent-redemption evidence is limited to the route contract described above.
 - No production/shared database was read or mutated.
 - No provider/model call or application write occurred.
