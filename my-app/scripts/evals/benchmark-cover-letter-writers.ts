@@ -230,7 +230,11 @@ const COVER_LETTER_BENCHMARK_WRITER_MODELS = [
 ] as const satisfies readonly CoverLetterBenchmarkWriterModel[];
 
 export function resolveDefaultCoverLetterBenchmarkWriterModels(): CoverLetterBenchmarkWriterModel[] {
-  return [resolvePremiumCoverLetterWriterModel()];
+  const dotenvAwareProductionModel =
+    process.env.COVER_LETTER_PREMIUM_WRITER_MODEL?.trim() ||
+    process.env.OPENAI_PROPOSAL_MODEL?.trim() ||
+    llmConfig.proposalModels?.openaiWriterModel;
+  return [resolvePremiumCoverLetterWriterModel(dotenvAwareProductionModel)];
 }
 
 function printHelp(): void {

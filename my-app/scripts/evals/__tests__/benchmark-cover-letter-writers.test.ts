@@ -77,6 +77,15 @@ describe("benchmark-cover-letter-writers", () => {
     ]);
   });
 
+  it("resolves the production writer after dotenv can update the environment", () => {
+    vi.stubEnv("COVER_LETTER_PREMIUM_WRITER_MODEL", "");
+    vi.stubEnv("OPENAI_PROPOSAL_MODEL", "gpt-5.4");
+
+    expect(resolveDefaultCoverLetterBenchmarkWriterModels()).toEqual([
+      "gpt-5.4",
+    ]);
+  });
+
   it("mirrors the provider-specific production cancellation contract", () => {
     const configuredSignal = new AbortController().signal;
     const callbackSignal = new AbortController().signal;
