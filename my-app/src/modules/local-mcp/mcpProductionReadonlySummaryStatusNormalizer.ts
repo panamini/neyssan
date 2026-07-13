@@ -26,7 +26,6 @@ export type McpProductionReadonlySummaryStatusResultV1 = Readonly<{
   kind: typeof MCP_PRODUCTION_READONLY_SUMMARY_STATUS_RESULT_KIND;
   status: McpProductionReadonlySummaryStatusV1;
   toolName: McpProductionReadonlySummaryToolNameV1;
-  summary?: Readonly<Record<string, unknown>>;
   version: 1;
 }>;
 
@@ -213,34 +212,31 @@ function normalizeStatusResult(input: Readonly<{
 
   const pr106Status = summary.status as Pr106SummaryStatusV1;
   if (pr106Status === "no_data_available") {
-    return statusEnvelope(input.toolName, "NO_DATA", summary);
+    return statusEnvelope(input.toolName, "NO_DATA");
   }
   if (pr106Status === "onboarding_required") {
-    return statusEnvelope(input.toolName, "ONBOARDING_REQUIRED", summary);
+    return statusEnvelope(input.toolName, "ONBOARDING_REQUIRED");
   }
 
   const timestamp = readFreshnessTimestamp(summary, mapping.resultRefKey);
-  if (!timestamp) return statusEnvelope(input.toolName, "STALE", summary);
+  if (!timestamp) return statusEnvelope(input.toolName, "STALE");
   const ageMs = input.nowEpochMs - Date.parse(timestamp);
   const freshnessThresholdMs = MCP_PRODUCTION_READONLY_SUMMARY_FRESHNESS_THRESHOLD_DAYS * 24 * 60 * 60 * 1_000;
   return statusEnvelope(
     input.toolName,
     ageMs <= freshnessThresholdMs ? "OK" : "STALE",
-    summary,
   );
 }
 
 function statusEnvelope(
   toolName: McpProductionReadonlySummaryToolNameV1,
   status: McpProductionReadonlySummaryStatusV1,
-  summary?: Readonly<Record<string, unknown>>,
 ): McpProductionReadonlySummaryStatusResultV1 {
   if (!STRICT_STATUSES.includes(status)) return statusEnvelope(toolName, "MALFORMED");
   return Object.freeze({
     kind: MCP_PRODUCTION_READONLY_SUMMARY_STATUS_RESULT_KIND,
     status,
     toolName,
-    ...(summary ? { summary: cloneAndFreezeRecord(summary) } : {}),
     version: 1 as const,
   });
 }
@@ -255,7 +251,10 @@ function isSafeReadonlySummary(
   if (value.kind !== mapping.expectedKind) return false;
   if (value.allowed !== true || value.modelVisible !== true || value.version !== 1) return false;
   if (!PR106_SUMMARY_STATUSES.has(value.status as Pr106SummaryStatusV1)) return false;
-  if (value.missingDataReason !== undefined && !mapping.missingDataReasons.includes(String(value.missingDataReason))) {
+  if (
+    value.missingDataReason !== undefined &&
+    (typeof value.missingDataReason !== "string" || !mapping.missingDataReasons.includes(value.missingDataReason))
+  ) {
     return false;
   }
   if (value.updatedAt !== undefined && !isIsoTimestamp(value.updatedAt)) return false;
@@ -361,20 +360,6 @@ function isIsoTimestamp(value: unknown): value is string {
     /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/u.test(value) &&
     Number.isFinite(Date.parse(value))
   );
-}
-
-function cloneAndFreezeRecord(value: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
-  return Object.freeze(
-    Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, cloneAndFreezeJsonValue(nested)])),
-  );
-}
-
-function cloneAndFreezeJsonValue(value: unknown): unknown {
-  if (value === null || typeof value === "string" || typeof value === "boolean" || typeof value === "number") {
-    return value;
-  }
-  if (Array.isArray(value)) return Object.freeze(value.map(cloneAndFreezeJsonValue));
-  return cloneAndFreezeRecord(value as Record<string, unknown>);
 }
 
 function hasOnlyAllowedKeys(value: Record<string, unknown>, allowedKeys: readonly string[]): boolean {

@@ -635,6 +635,75 @@ test("CI runs the PR-controlled smoke without persisted checkout credentials", a
   assert.doesNotMatch(job, /actions\/checkout|github\.token|github\.ref|secrets\.|\bREF:/u);
 });
 
+test("CI runs the authenticated production tools/list projection contract offline", async () => {
+  const source = await readFile(CI_WORKFLOW, "utf8");
+  const job =
+    /^  js-tests:\n(?<body>[\s\S]*?)(?=^  [a-zA-Z0-9_-]+:\n|(?![\s\S]))/mu.exec(
+      source,
+    )?.groups?.body;
+  assert.equal(typeof job, "string");
+
+  const workflowHeader = source.slice(0, source.indexOf("\njobs:\n"));
+  const stepsStart = job.indexOf("    steps:\n");
+  assert.notEqual(stepsStart, -1);
+  const jobHeader = job.slice(0, stepsStart);
+  assert.doesNotMatch(workflowHeader, /^env:/mu);
+  assert.doesNotMatch(jobHeader, /^    env:/mu);
+
+  const stepName =
+    "      - name: Run authenticated production tools/list projection contract";
+  const stepStart = job.indexOf(stepName);
+  assert.notEqual(stepStart, -1);
+  assert.equal(job.indexOf(stepName, stepStart + 1), -1);
+  const nextStepStart = job.indexOf(
+    "\n      - name:",
+    stepStart + stepName.length,
+  );
+  const step = job.slice(
+    stepStart,
+    nextStepStart === -1 ? undefined : nextStepStart,
+  );
+
+  assert.equal(
+    step,
+    [
+      stepName,
+      "        working-directory: my-app",
+      "        env:",
+      '          OPENAI_API_KEY: ""',
+      '          MISTRAL_API_KEY: ""',
+      '          COVER_LETTER_EVAL_LIVE: "0"',
+      "        run: |",
+      "          ./node_modules/.bin/vitest --run \\",
+      "            src/modules/local-mcp/__tests__/mcpOAuthProductionRouteAdapter.test.ts \\",
+      "            --reporter=dot \\",
+      "            --testNamePattern='returns authenticated production tools/list metadata for negotiated protocol'",
+    ].join("\n") + "\n",
+  );
+  const installStart = job.indexOf("      - name: Install dependencies");
+  const codegenStart = job.indexOf(
+    "      - name: Generate Convex client bindings",
+  );
+  const matchReviewStart = job.indexOf(
+    "      - name: Run Match Review guardrail tests",
+  );
+  for (const index of [
+    installStart,
+    stepStart,
+    codegenStart,
+    matchReviewStart,
+  ]) {
+    assert.notEqual(index, -1);
+  }
+  assert.ok(installStart < stepStart);
+  assert.ok(stepStart < codegenStart);
+  assert.ok(codegenStart < matchReviewStart);
+  assert.doesNotMatch(
+    `${workflowHeader}\n${jobHeader}\n${step}`,
+    /https?:\/\/|\$\{\{\s*(?:env|secrets|vars)\.|\$\{\{\s*github\.token\b/u,
+  );
+});
+
 test("run.sh mcp-smoke does not source or trace dotenv values", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "mcp-smoke-runsh-"));
   t.after(() => rm(root, { force: true, recursive: true }));

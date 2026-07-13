@@ -17,8 +17,15 @@ import { PROPOSAL_OUTPUT_LANGUAGES } from "../../../convex/lib/proposals/proposa
 import { buildStableHash } from "../../../src/modules/application-harness/fingerprints";
 import {
   aggregateCoverLetterBenchmarkRecords,
+  assertQualityEval2BBudgetContract,
   benchmarkCoverLetterCase,
+  benchmarkCoverLetterCaseForHumanReview,
+  buildCoverLetterBenchmarkOfflineCostPreflight,
+  buildCoverLetterHumanReviewPlan,
+  calculateCoverLetterBenchmarkMinimumProviderCalls,
+  coverLetterBenchmarkRequiresOpenAIKey,
   createCoverLetterEvalLiveBudget,
+  QUALITY_EVAL_2B_WRITER_MODELS,
   parseCoverLetterBenchmarkCliOptions,
   replayRecordedCoverLetterFixture,
   replayRecordedCoverLetterFixtures,
@@ -26,14 +33,20 @@ import {
   resolveCoverLetterBenchmarkProductionInputs,
   resolveCoverLetterBenchmarkProviderSignal,
   resolveDefaultCoverLetterBenchmarkWriterModels,
+  runCoverLetterHumanReviewCohort,
   type CoverLetterBenchmarkRecord,
 } from "../benchmark-cover-letter-writers";
 import { CoverLetterEvalBudgetError } from "../cover-letter-eval-budget";
-import { coverLetterBenchmarkCases } from "../cases/cover-letter/cases";
+import {
+  COVER_LETTER_BLIND_REVIEW_COHORT_ID,
+  coverLetterBenchmarkCases,
+  coverLetterBlindReviewCases,
+} from "../cases/cover-letter/cases";
 import {
   RECORDED_COVER_LETTER_REPLAY_FIXTURES,
   recordedCoverLetterReplayFixtureSchema,
 } from "../fixtures/cover-letter/recorded-writer-responses";
+import * as coverLetterEvalRunManifest from "../cover-letter-eval-run-manifest";
 
 const successfulEvaluation: CoverLetterScore = {
   score: {
@@ -71,15 +84,304 @@ const emptyManualReview = {
 } as const;
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
 
 describe("benchmark-cover-letter-writers", () => {
+  it("selects exactly two explicit review cohorts for English, French, and Arabic", () => {
+    expect(coverLetterBlindReviewCases).toHaveLength(6);
+    expect(
+      coverLetterBlindReviewCases.map(
+        (benchmarkCase) => benchmarkCase.reviewMetadata?.cohortId,
+      ),
+    ).toEqual(Array(6).fill(COVER_LETTER_BLIND_REVIEW_COHORT_ID));
+
+    for (const language of ["English", "French", "Arabic"] as const) {
+      const cases = coverLetterBlindReviewCases.filter(
+        (benchmarkCase) =>
+          benchmarkCase.reviewMetadata?.requestedOutputLanguage === language,
+      );
+      expect(cases).toHaveLength(2);
+      expect(
+        cases.map((item) => item.reviewMetadata?.reviewCohort).sort(),
+      ).toEqual(["challenging", "strong"]);
+      for (const benchmarkCase of cases) {
+        expect(benchmarkCase.reviewMetadata).toMatchObject({
+          sourceDataClass: "authored_synthetic",
+        });
+        expect(
+          benchmarkCase.reviewMetadata?.requiredReviewerLanguages,
+        ).toContain(language);
+        expect(
+          benchmarkCase.reviewMetadata?.requiredReviewerLanguages,
+        ).toContain(benchmarkCase.reviewMetadata?.jobSourceLanguage);
+        if (benchmarkCase.reviewMetadata?.candidateEvidenceSourceLanguage) {
+          expect(
+            benchmarkCase.reviewMetadata.requiredReviewerLanguages,
+          ).toContain(
+            benchmarkCase.reviewMetadata.candidateEvidenceSourceLanguage,
+          );
+        }
+        expect(
+          evaluatePremiumCoverLetterEligibility({
+            personalizationContext: benchmarkCase.personalizationContext,
+            voicePreset: benchmarkCase.preset,
+            jobTitle: benchmarkCase.jobTitle,
+            jobDescription: benchmarkCase.jobDescription,
+          }),
+        ).toEqual({
+          eligible: true,
+          contextClass: benchmarkCase.expectedContextClass,
+        });
+      }
+    }
+  });
+
+  it("uses explicit review output language instead of inferring it from source text", () => {
+    const arabicOutputCase = coverLetterBlindReviewCases.find(
+      (item) =>
+        item.reviewMetadata?.requestedOutputLanguage === "Arabic" &&
+        item.reviewMetadata.reviewCohort === "strong",
+    )!;
+
+    expect(arabicOutputCase.reviewMetadata?.jobSourceLanguage).toBe("English");
+    expect(
+      resolveCoverLetterBenchmarkProductionInputs({
+        benchmarkCase: arabicOutputCase,
+      }).outputLanguage,
+    ).toBe("Arabic");
+  });
+
   it("defaults live benchmark runs to the production writer only unless extra writers are requested", () => {
     expect(resolveDefaultCoverLetterBenchmarkWriterModels()).toEqual([
       "gpt-5.5",
     ]);
+  });
+
+  it("accepts only the exact QUALITY-EVAL-2B human-review writer set", () => {
+    const options = parseCoverLetterBenchmarkCliOptions(
+      [
+        "--human-review-only",
+        `--writers=${QUALITY_EVAL_2B_WRITER_MODELS.join(",")}`,
+      ],
+      "0",
+    );
+
+    expect(options.writerModels).toEqual(QUALITY_EVAL_2B_WRITER_MODELS);
+    expect(
+      parseCoverLetterBenchmarkCliOptions(["--human-review-only"], "0")
+        .writerModels,
+    ).toEqual(QUALITY_EVAL_2B_WRITER_MODELS);
+
+    for (const invalidWriter of ["gpt-5.6", "gpt-5.6-luna", "unknown-writer"]) {
+      expect(() =>
+        parseCoverLetterBenchmarkCliOptions(
+          ["--human-review-only", `--writers=${invalidWriter}`],
+          "0",
+        ),
+      ).toThrow(/unsupported premium writer model/iu);
+    }
+
+    expect(() =>
+      parseCoverLetterBenchmarkCliOptions(["--writers=gpt-5.5,gpt-5.5"], "0"),
+    ).toThrow(/duplicate premium writer model/iu);
+    expect(() =>
+      parseCoverLetterBenchmarkCliOptions(
+        ["--human-review-only", "--writers=gpt-5.5,gpt-5.6-sol"],
+        "0",
+      ),
+    ).toThrow(/exact writer set/iu);
+  });
+
+  it("freezes the cases-outer four-writer plan at 24 calls with no repair allowance", () => {
+    const plan = buildCoverLetterHumanReviewPlan({
+      cases: coverLetterBlindReviewCases,
+      writerModels: QUALITY_EVAL_2B_WRITER_MODELS,
+    });
+
+    expect(plan).toHaveLength(24);
+    expect(plan.slice(0, 4).map((item) => item.writerModel)).toEqual(
+      QUALITY_EVAL_2B_WRITER_MODELS,
+    );
+    expect(plan.slice(0, 4).map((item) => item.benchmarkCase.id)).toEqual(
+      Array(4).fill(coverLetterBlindReviewCases[0]!.id),
+    );
+    expect(
+      calculateCoverLetterBenchmarkMinimumProviderCalls({
+        caseCount: coverLetterBlindReviewCases.length,
+        writerCount: QUALITY_EVAL_2B_WRITER_MODELS.length,
+        evaluationMode: "human_review_only",
+      }),
+    ).toBe(24);
+  });
+
+  it("fails closed inside the first English case without a duplicate provider preflight", async () => {
+    const plan = buildCoverLetterHumanReviewPlan({
+      cases: coverLetterBlindReviewCases,
+      writerModels: QUALITY_EVAL_2B_WRITER_MODELS,
+    });
+    const generateRecord = vi
+      .fn()
+      .mockResolvedValueOnce({ status: "human_review_pending" })
+      .mockResolvedValueOnce({
+        status: "generation_failed",
+        caseId: plan[1]!.benchmarkCase.id,
+        writerModel: plan[1]!.writerModel,
+        error: "model compatibility failed",
+      });
+    const onFailure = vi.fn();
+
+    await expect(
+      runCoverLetterHumanReviewCohort({ plan, generateRecord, onFailure }),
+    ).rejects.toThrow(/model compatibility failed/iu);
+    expect(generateRecord).toHaveBeenCalledTimes(2);
+    expect(onFailure).toHaveBeenCalledOnce();
+    expect(onFailure).toHaveBeenCalledWith({
+      completedRecords: [{ status: "human_review_pending" }],
+      failure: {
+        status: "generation_failed",
+        caseId: plan[1]!.benchmarkCase.id,
+        writerModel: plan[1]!.writerModel,
+        error: "model compatibility failed",
+      },
+    });
+  });
+
+  it("preserves the primary cohort failure when failure-receipt handling also fails", async () => {
+    const plan = buildCoverLetterHumanReviewPlan({
+      cases: coverLetterBlindReviewCases,
+      writerModels: QUALITY_EVAL_2B_WRITER_MODELS,
+    });
+    const failedItem = plan[0]!;
+    const generateRecord = vi.fn().mockResolvedValue({
+      status: "generation_failed",
+      caseId: failedItem.benchmarkCase.id,
+      writerModel: failedItem.writerModel,
+      error: "model compatibility failed",
+    });
+    const onFailure = vi
+      .fn()
+      .mockRejectedValue(new Error("receipt write failed"));
+
+    await expect(
+      runCoverLetterHumanReviewCohort({ plan, generateRecord, onFailure }),
+    ).rejects.toThrow(
+      `Human-review cohort generation failed at ${failedItem.benchmarkCase.id}/${failedItem.writerModel}: model compatibility failed. Failure-receipt handling also failed.`,
+    );
+    expect(generateRecord).toHaveBeenCalledOnce();
+    expect(onFailure).toHaveBeenCalledOnce();
+  });
+
+  it("captures rejected writer attempts before rethrowing the original error", async () => {
+    const plan = buildCoverLetterHumanReviewPlan({
+      cases: coverLetterBlindReviewCases,
+      writerModels: QUALITY_EVAL_2B_WRITER_MODELS,
+    });
+    const budgetError = new CoverLetterEvalBudgetError({
+      code: "repair_limit_exceeded",
+      message: "Repair 1 would exceed maxRepairs=0.",
+    });
+    const generateRecord = vi.fn().mockRejectedValue(budgetError);
+    const onRejection = vi.fn();
+
+    await expect(
+      runCoverLetterHumanReviewCohort({
+        plan,
+        generateRecord,
+        onRejection,
+      }),
+    ).rejects.toBe(budgetError);
+    expect(generateRecord).toHaveBeenCalledOnce();
+    expect(onRejection).toHaveBeenCalledOnce();
+    expect(onRejection).toHaveBeenCalledWith({
+      completedRecords: [],
+      item: plan[0],
+      error: budgetError,
+    });
+  });
+
+  it("keeps the rejected writer error primary when rejection receipt handling fails", async () => {
+    const plan = buildCoverLetterHumanReviewPlan({
+      cases: coverLetterBlindReviewCases,
+      writerModels: QUALITY_EVAL_2B_WRITER_MODELS,
+    });
+    const budgetError = new CoverLetterEvalBudgetError({
+      code: "repair_limit_exceeded",
+      message: "Repair 1 would exceed maxRepairs=0.",
+    });
+    const receiptError = new Error("receipt write failed");
+
+    await expect(
+      runCoverLetterHumanReviewCohort({
+        plan,
+        generateRecord: vi.fn().mockRejectedValue(budgetError),
+        onRejection: vi.fn().mockRejectedValue(receiptError),
+      }),
+    ).rejects.toBe(budgetError);
+    expect(budgetError).toMatchObject({
+      code: "repair_limit_exceeded",
+      message: "Repair 1 would exceed maxRepairs=0.",
+      cause: receiptError,
+    });
+  });
+
+  it("uses actual deterministic prompts for a conservative offline 24-call cost preflight", async () => {
+    const fetchSpy = vi.fn(() => {
+      throw new Error("provider calls are forbidden during offline preflight");
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const preflight = await buildCoverLetterBenchmarkOfflineCostPreflight({
+      cases: coverLetterBlindReviewCases,
+      writerModels: QUALITY_EVAL_2B_WRITER_MODELS,
+    });
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(preflight).toMatchObject({
+      version: "cover_letter_eval_cost_preflight_v1",
+      plannedProviderCalls: 24,
+      providerMaxRetries: 0,
+      maxRepairs: 0,
+      writerMaxOutputTokens: 2048,
+      declaredMaxUsdPerCall: 0.148455,
+      minimumSafeReservationUsd: 3.56292,
+      targetReservationUsd: 2.5,
+      targetReservationProven: false,
+    });
+    expect(preflight.entries).toHaveLength(24);
+    expect(preflight.worstCase).toMatchObject({
+      caseId: "blind-fr-implementation-adjacent",
+      writerModel: "gpt-5.6-sol",
+      serializedInputByteUpperBound: 17403,
+    });
+
+    const insufficient = parseCoverLetterBenchmarkCliOptions(
+      [
+        "--live",
+        "--human-review-only",
+        "--max-calls=24",
+        "--max-repairs=0",
+        "--max-usd=2.5",
+        "--max-usd-per-call=0.148455",
+      ],
+      "0",
+    );
+    expect(() =>
+      assertQualityEval2BBudgetContract({
+        options: insufficient,
+        preflight,
+      }),
+    ).toThrow(/minimum safe reservation of 3\.56292 USD/iu);
+
+    const safe = {
+      ...insufficient,
+      maxUsd: 3.56292,
+    };
+    expect(() =>
+      assertQualityEval2BBudgetContract({ options: safe, preflight }),
+    ).not.toThrow();
   });
 
   it("resolves the production writer after dotenv can update the environment", () => {
@@ -236,7 +538,17 @@ describe("benchmark-cover-letter-writers", () => {
       evaluatorModel: "gpt-5-mini",
       apiKey: "unused-in-replay",
       productionInputs,
-      generateLetter: vi.fn().mockResolvedValue(generation),
+      generateLetter: vi.fn().mockImplementation(async (args) => {
+        args.onProviderResponseMetadata?.({
+          returnedModel: "gpt-5.5-2026-06-30",
+          tokenUsage: {
+            inputTokens: 3_000,
+            outputTokens: 900,
+            totalTokens: 3_900,
+          },
+        });
+        return generation;
+      }),
       evaluateLetter,
     });
 
@@ -246,6 +558,20 @@ describe("benchmark-cover-letter-writers", () => {
       artifact: {
         decision: "rejected",
         frozenConfig: { hasCandidateContext: true },
+      },
+      attemptMetadata: {
+        version: "cover_letter_eval_failure_attempt_metadata_v1",
+        caseId: benchmarkCase.id,
+        provider: "openai",
+        requestedModel: "gpt-5.5",
+        returnedModel: "gpt-5.5-2026-06-30",
+        promptHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+        tokenUsage: {
+          inputTokens: 3_000,
+          outputTokens: 900,
+          totalTokens: 3_900,
+        },
+        artifactHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
       },
     });
   });
@@ -373,6 +699,79 @@ describe("benchmark-cover-letter-writers", () => {
         qualityShadow: expectedProductionArtifact.qualityShadow,
       },
     });
+  });
+
+  it("finalizes a human-review-only record without invoking an evaluator", async () => {
+    const benchmarkCase = coverLetterBlindReviewCases.find(
+      (item) => item.id === "blind-en-clean-engaging-direct",
+    )!;
+    const generation = {
+      content: [
+        "Dear Hiring Manager,",
+        "",
+        "I improved 90-day retention by 18% by redesigning onboarding checkpoints and escalation triggers.",
+        "",
+        "I managed more than 40 enterprise accounts and led quarterly business reviews.",
+        "",
+        "That experience is relevant to customer success work focused on onboarding and retention.",
+        "",
+        "I would welcome the opportunity to discuss the role.",
+        "",
+        "Sincerely,",
+        "Priya Sharma",
+      ].join("\n"),
+      sections: [],
+      prompt: "synthetic prompt",
+      brief: {
+        language: "English" as const,
+        preset: benchmarkCase.preset,
+        contextClass: benchmarkCase.expectedContextClass,
+        targetRole: benchmarkCase.jobTitle,
+        topEvidence: [
+          "Improved 90-day retention by 18% by redesigning onboarding checkpoints and escalation triggers.",
+        ],
+        supportEvidence: [
+          "Managed a portfolio of 40+ enterprise accounts with quarterly business reviews.",
+        ],
+        requiredMoves: [],
+        forbiddenMoves: [],
+      },
+      contextClass: benchmarkCase.expectedContextClass,
+      bodyParts: {
+        opening:
+          "I improved 90-day retention by 18% by redesigning onboarding checkpoints and escalation triggers.",
+        proofBlock:
+          "I managed more than 40 enterprise accounts and led quarterly business reviews.",
+        employerValueBlock:
+          "That experience is relevant to customer success work focused on onboarding and retention.",
+        closeLine: "I would welcome the opportunity to discuss the role.",
+      },
+      mode: "direct" as const,
+      evidenceUsed: [
+        "Improved 90-day retention by 18% by redesigning onboarding checkpoints and escalation triggers.",
+      ],
+      omittedWeakEvidence: [],
+      qualityShadow: { passed: true, score: 100, issues: [] },
+    } satisfies PremiumCoverLetterAttemptResult;
+    const evaluateLetter = vi.fn().mockResolvedValue(successfulEvaluation);
+
+    const record = await benchmarkCoverLetterCaseForHumanReview({
+      benchmarkCase,
+      writerModel: "gpt-5.5",
+      apiKey: "unused-in-synthetic-test",
+      generateLetter: vi.fn().mockResolvedValue(generation),
+      evaluateLetter,
+    });
+
+    expect(evaluateLetter).not.toHaveBeenCalled();
+    expect(record).toMatchObject({
+      status: "human_review_pending",
+      outputLanguage: "English",
+      manualReview: emptyManualReview,
+      letter: expect.stringContaining("90-day retention by 18%"),
+      artifact: { decision: "accepted" },
+    });
+    expect(record).not.toHaveProperty("evaluation");
   });
 
   it("benchmarks one case with a per-run writer model and returns a typed success record", async () => {
@@ -904,6 +1303,73 @@ describe("benchmark-cover-letter-writers", () => {
         declaredMaxUsdPerCall: 0.1,
       },
     });
+
+    const humanReviewOnly = parseCoverLetterBenchmarkCliOptions(
+      [
+        "--live",
+        "--human-review-only",
+        "--output-dir=/tmp/cover-letter-review",
+        "--run-id=quality-eval-2a",
+        "--source-ref=bbd96b5c",
+        "--max-calls=24",
+        "--max-repairs=0",
+        "--max-usd=3.56292",
+        "--max-usd-per-call=0.148455",
+      ],
+      "0",
+    );
+    expect(humanReviewOnly).toMatchObject({
+      live: true,
+      evaluationMode: "human_review_only",
+      outputDirectory: "/tmp/cover-letter-review",
+      runId: "quality-eval-2a",
+      sourceRef: "bbd96b5c",
+      writerModels: QUALITY_EVAL_2B_WRITER_MODELS,
+    });
+    expect(() =>
+      parseCoverLetterBenchmarkCliOptions(
+        ["--human-review-only", "--cases=blind-en-customer-success-direct"],
+        "0",
+      ),
+    ).toThrow(/does not support --cases/iu);
+    expect(() =>
+      parseCoverLetterBenchmarkCliOptions(
+        ["--cases=blind-en-customer-success-direct", "--human-review-only"],
+        "0",
+      ),
+    ).toThrow(/does not support --cases/iu);
+    expect(
+      calculateCoverLetterBenchmarkMinimumProviderCalls({
+        caseCount: 6,
+        writerCount: 1,
+        evaluationMode: humanReviewOnly.evaluationMode,
+      }),
+    ).toBe(6);
+    expect(
+      calculateCoverLetterBenchmarkMinimumProviderCalls({
+        caseCount: 6,
+        writerCount: 1,
+        evaluationMode: "llm",
+      }),
+    ).toBe(12);
+    expect(
+      coverLetterBenchmarkRequiresOpenAIKey({
+        evaluationMode: "human_review_only",
+        writerModels: ["mistral-medium-latest"],
+      }),
+    ).toBe(false);
+    expect(
+      coverLetterBenchmarkRequiresOpenAIKey({
+        evaluationMode: "human_review_only",
+        writerModels: ["gpt-5.5"],
+      }),
+    ).toBe(true);
+    expect(
+      coverLetterBenchmarkRequiresOpenAIKey({
+        evaluationMode: "llm",
+        writerModels: ["mistral-medium-latest"],
+      }),
+    ).toBe(true);
   });
 
   it("loads dotenv before choosing replay or live execution", () => {
@@ -1106,19 +1572,32 @@ describe("benchmark-cover-letter-writers", () => {
     const benchmarkCase = coverLetterBenchmarkCases.find(
       (item) => item.id === "strong-adjacent-honest-transfer",
     )!;
-    const generateLetter = vi.fn().mockImplementation(async ({ onFailure }) => {
-      onFailure?.({
-        stage: "validation",
-        reason: "non_repairable_validation",
-        contextClass: "cv_adjacent",
-        issues: ["adjacent_direct_fit"],
-      });
-      return null;
-    });
+    const generateLetter = vi
+      .fn()
+      .mockImplementation(
+        async ({ onFailure, onProviderResponseMetadata, onWriterPrompt }) => {
+          onWriterPrompt?.("captured production writer prompt");
+          onProviderResponseMetadata?.({
+            returnedModel: "gpt-5.5-2026-06-30",
+            tokenUsage: {
+              inputTokens: 3_000,
+              outputTokens: 900,
+              totalTokens: 3_900,
+            },
+          });
+          onFailure?.({
+            stage: "validation",
+            reason: "non_repairable_validation",
+            contextClass: "cv_adjacent",
+            issues: ["adjacent_direct_fit"],
+          });
+          return null;
+        },
+      );
 
     const record = await benchmarkCoverLetterCase({
       benchmarkCase,
-      writerModel: "gpt-5-mini",
+      writerModel: "gpt-5.5",
       evaluatorModel: "gpt-5-mini",
       apiKey: "sk-openai",
       generateLetter,
@@ -1127,7 +1606,7 @@ describe("benchmark-cover-letter-writers", () => {
 
     expect(record).toMatchObject({
       status: "generation_failed",
-      writerModel: "gpt-5-mini",
+      writerModel: "gpt-5.5",
       error:
         "Premium cover-letter generation failed at validation: non_repairable_validation, adjacent_direct_fit.",
       debug: {
@@ -1149,7 +1628,70 @@ describe("benchmark-cover-letter-writers", () => {
         failureReason: "non_repairable_validation",
         failureIssues: ["adjacent_direct_fit"],
       },
+      attemptMetadata: {
+        version: "cover_letter_eval_failure_attempt_metadata_v1",
+        caseId: benchmarkCase.id,
+        provider: "openai",
+        requestedModel: "gpt-5.5",
+        returnedModel: "gpt-5.5-2026-06-30",
+        promptHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+        tokenUsage: {
+          inputTokens: 3_000,
+          outputTokens: 900,
+          totalTokens: 3_900,
+        },
+        artifactHash: null,
+        provenanceHash: null,
+      },
       manualReview: emptyManualReview,
+    });
+  });
+
+  it("preserves a generation failure when failure metadata SDK discovery fails", async () => {
+    vi.spyOn(
+      coverLetterEvalRunManifest,
+      "resolveCoverLetterEvalInstalledSdkVersions",
+    ).mockRejectedValue(new Error("SDK lookup unavailable"));
+    const benchmarkCase = coverLetterBenchmarkCases.find(
+      (item) => item.id === "strong-adjacent-honest-transfer",
+    )!;
+    const generateLetter = vi
+      .fn()
+      .mockImplementation(
+        async ({ onFailure, onProviderResponseMetadata, onWriterPrompt }) => {
+          onWriterPrompt?.("captured production writer prompt");
+          onProviderResponseMetadata?.({
+            returnedModel: "gpt-5.5-2026-06-30",
+            tokenUsage: null,
+          });
+          onFailure?.({
+            stage: "validation",
+            reason: "non_repairable_validation",
+            contextClass: "cv_adjacent",
+            issues: ["adjacent_direct_fit"],
+          });
+          return null;
+        },
+      );
+
+    await expect(
+      benchmarkCoverLetterCase({
+        benchmarkCase,
+        writerModel: "gpt-5.5",
+        evaluatorModel: "gpt-5-mini",
+        apiKey: "sk-openai",
+        generateLetter,
+        evaluateLetter: vi.fn(),
+      }),
+    ).resolves.toMatchObject({
+      status: "generation_failed",
+      error:
+        "Premium cover-letter generation failed at validation: non_repairable_validation, adjacent_direct_fit.",
+      diagnostics: {
+        failureStage: "validation",
+        failureReason: "non_repairable_validation",
+        failureIssues: ["adjacent_direct_fit"],
+      },
     });
   });
 });

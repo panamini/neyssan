@@ -43,6 +43,7 @@ import {
   MCP_PRODUCTION_LAUNCH_READINESS_AUTHENTICATED_PROTOCOL_REVIEWED_FLAG,
   MCP_PRODUCTION_LAUNCH_READINESS_POLICY_KERNEL_REVIEWED_FLAG,
   MCP_PRODUCTION_LAUNCH_READINESS_PRIVATE_BETA_GATE_REVIEWED_FLAG,
+  MCP_PRODUCTION_LAUNCH_READINESS_PUBLIC_CATALOG_SUBMISSION_URL_REVIEWED_FLAG,
   MCP_PRODUCTION_LAUNCH_READINESS_PROVIDER_WRITE_EXPANSION_BLOCKED_FLAG,
   MCP_PRODUCTION_LAUNCH_READINESS_PUBLIC_LAUNCH_REQUESTED_FLAG,
   MCP_PRODUCTION_LAUNCH_READINESS_READONLY_SUMMARY_EXECUTION_REVIEWED_FLAG,
@@ -151,6 +152,21 @@ const OWNER_ID = "user_twoweeks_fixture_123";
 const OTHER_OWNER_ID = "user_twoweeks_fixture_456";
 const OWNER_DIGEST = sha256Hex(OWNER_ID);
 const OTHER_OWNER_DIGEST = sha256Hex(OTHER_OWNER_ID);
+const SENSITIVE_ROUTE_SENTINELS = Object.freeze([
+  "raw CV text sentinel",
+  "raw job description sentinel",
+  "raw proposal body sentinel",
+  "system prompt sentinel",
+  "provider output sentinel",
+  "quoted source sentence sentinel",
+  "user@example.test",
+  "access_token_secret_sentinel",
+  "refresh_token_secret_sentinel",
+  "https://private.example.test/path?token=secret",
+  "Error: private stack trace sentinel",
+  "jd7c0nveXsentinel000000000000",
+  "internalQueryRefSentinel",
+]);
 const CLERK_ISSUER = "https://clerk.twoweeks.example.test";
 const CLERK_JWT = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJmaXh0dXJlIn0.signature";
 const NOW = Date.parse("2026-06-27T09:00:00.000Z");
@@ -1665,6 +1681,21 @@ describe("MCP OAuth production route adapter", () => {
         expect(["search", "fetch"]).toContain(tool.name);
         continue;
       }
+      expect(tool.outputSchema).toEqual({
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          kind: { type: "string", const: MCP_PRODUCTION_READONLY_SUMMARY_STATUS_RESULT_KIND },
+          status: {
+            type: "string",
+            enum: ["OK", "STALE", "NO_DATA", "ONBOARDING_REQUIRED", "MALFORMED", "TIMEOUT", "DEPENDENCY_MISSING"],
+          },
+          toolName: { type: "string" },
+          version: { type: "integer", const: 1 },
+        },
+        required: ["kind", "status", "toolName", "version"],
+      });
+      expect(JSON.stringify(tool.outputSchema)).not.toContain('"summary"');
       expect(String(tool.description)).toMatch(/^Use this to inspect read-only /u);
       const refSchema = (
         tool.inputSchema as {
@@ -1956,27 +1987,17 @@ describe("MCP OAuth production route adapter", () => {
             kind: MCP_PRODUCTION_READONLY_SUMMARY_STATUS_RESULT_KIND,
             status: "OK",
             toolName: toolCase.toolName,
-            summary: {
-              kind: toolCase.expectedKind,
-              updatedAt: new Date(NOW).toISOString(),
-              [toolCase.resultRefKey]: {
-                id: toolCase.safeRefId,
-                category: toolCase.category,
-                updatedAt: new Date(NOW).toISOString(),
-              },
-              capabilities: {
-                dataReads: toolCase.dataReads,
-                dataWrites: "blocked",
-                networkAccess: "blocked",
-                modelCalls: "blocked",
-                writeActions: "blocked",
-              },
-            },
             version: 1,
           },
         },
       },
     });
+    const structuredContent = (
+      response.json as {
+        result: { structuredContent: Record<string, unknown> };
+      }
+    ).result.structuredContent;
+    expect(Object.keys(structuredContent).sort()).toEqual(["kind", "status", "toolName", "version"]);
     const bodyText = JSON.stringify(response);
     expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(1);
     expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
@@ -1999,7 +2020,16 @@ describe("MCP OAuth production route adapter", () => {
     expect(bodyText).not.toContain(ACCESS_TOKEN_DIGEST);
     expect(bodyText).not.toContain(OWNER_ID);
     expect(bodyText).not.toContain(toolCase.rawRefId);
+    expect(bodyText).not.toContain(toolCase.expectedKind);
+    expect(bodyText).not.toContain(toolCase.safeRefId);
+    expect(bodyText).not.toContain(toolCase.dataReads);
+    expect(bodyText).not.toContain(new Date(NOW).toISOString());
     expect(bodyText).not.toContain(LEGACY_TOOLS_CALL_SYNTHETIC_RESULT_KIND);
+    expect(bodyText).not.toContain('"summary"');
+    expect(bodyText).not.toContain("capabilities");
+    expect(bodyText).not.toContain("safeCounts");
+    expect(bodyText).not.toContain("safeCategories");
+    expect(bodyText).not.toContain("modelVisible");
     expect(bodyText).not.toContain("progress-token-secret");
     expect(bodyText).not.toContain("rawArgumentsEchoed");
     expect(bodyText).not.toContain("progressTokenEchoed");
@@ -2154,6 +2184,67 @@ describe("MCP OAuth production route adapter", () => {
     expect(bodyText).not.toContain("provider");
     expect(bodyText).not.toContain("client_secret");
     expect(bodyText).not.toContain("refresh_token");
+  });
+
+  it("drops adversarial read-only summary executor sentinels from production tools/call output", async () => {
+    const ctx = makeCtx();
+    ctx.accessTokenRows.push(storedAccessToken());
+    const toolCase = READONLY_SUMMARY_CASES[0];
+    const dependencies = {
+      ...routeDependencies(ctx),
+      executeReadonlySummaryTool: vi.fn(async (input) => {
+        const base = fakeReadonlySummaryExecutionResult(input);
+        if (!base.ok) return base;
+        return Object.freeze({
+          ...base,
+          structuredContent: Object.freeze({
+            ...base.structuredContent,
+            safeCategories: Object.freeze(
+              Object.fromEntries(SENSITIVE_ROUTE_SENTINELS.map((sentinel, index) => [`sentinel${index}`, sentinel])),
+            ),
+          }),
+        });
+      }),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+    const response = await handleMcpOAuthProductionRouteRequest(
+      mcpRequest(
+        `Bearer ${RAW_ACCESS_TOKEN}`,
+        mcpJsonRpcRequest("tools/call", "adversarial-summary-sentinels", {
+          name: toolCase.toolName,
+          arguments: { [toolCase.argumentKey]: { id: toolCase.safeRefId } },
+        }),
+        { "mcp-protocol-version": "2025-11-25" },
+      ),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }, activationDependencies()),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({
+      handled: true,
+      status: 200,
+      json: {
+        jsonrpc: "2.0",
+        id: "adversarial-summary-sentinels",
+        result: {
+          content: [{ type: "text", text: "Read-only summary status: MALFORMED." }],
+          structuredContent: {
+            kind: MCP_PRODUCTION_READONLY_SUMMARY_STATUS_RESULT_KIND,
+            status: "MALFORMED",
+            toolName: toolCase.toolName,
+            version: 1,
+          },
+        },
+      },
+    });
+    const bodyText = JSON.stringify(response);
+    expect(dependencies.executeReadonlySummaryTool).toHaveBeenCalledTimes(1);
+    expect(bodyText).not.toContain('"summary"');
+    expect(bodyText).not.toContain("safeCategories");
+    expect(bodyText).not.toContain("capabilities");
+    expect(bodyText).not.toContain(toolCase.safeRefId);
+    for (const sentinel of SENSITIVE_ROUTE_SENTINELS) {
+      expect(bodyText).not.toContain(sentinel);
+    }
   });
 
   it.each(READONLY_SUMMARY_CASES)(
@@ -4934,6 +5025,8 @@ describe("MCP OAuth production route adapter", () => {
     expect(source).toContain("mcpEvidenceGraphSummary:internalSummarizeMcpEvidenceGraph");
     expect(source).toContain("mcpResumeVariantPlanSummary:internalSummarizeMcpResumeVariantPlan");
     expect(source).toContain("mcpReviewCockpitSummary:internalSummarizeMcpReviewCockpit");
+    expect(source).toContain("publicCatalogSubmissionUrlReviewed: isStrictEnabledFlag");
+    expect(source).toContain("MCP_PRODUCTION_LAUNCH_READINESS_PUBLIC_CATALOG_SUBMISSION_URL_REVIEWED_FLAG");
     expect(source).toContain("toolsCallSyntheticMetadataCleanupReviewed: isStrictEnabledFlag");
     expect(source).toContain(
       "MCP_PRODUCTION_LAUNCH_READINESS_TOOLS_CALL_SYNTHETIC_METADATA_CLEANUP_REVIEWED_FLAG",
@@ -5620,6 +5713,7 @@ describe("MCP OAuth production route adapter", () => {
     const plugin = createLocalMcpDevEndpointPlugin({
       env: {
         ...prodRouteEnv(),
+        [MCP_PRODUCTION_LAUNCH_READINESS_PUBLIC_CATALOG_SUBMISSION_URL_REVIEWED_FLAG]: "1",
         [MCP_PRODUCTION_LAUNCH_READINESS_PRIVATE_BETA_GATE_REVIEWED_FLAG]: "1",
         [MCP_PRODUCTION_LAUNCH_READINESS_AUTHENTICATED_PROTOCOL_REVIEWED_FLAG]: "1",
         [MCP_PRODUCTION_LAUNCH_READINESS_POLICY_KERNEL_REVIEWED_FLAG]: "1",
@@ -6072,7 +6166,8 @@ describe("MCP OAuth production route adapter", () => {
 
     expect(response.next).not.toHaveBeenCalled();
     expect(response.statusCode).toBe(200);
-    expect(JSON.parse(response.body)).toMatchObject({
+    const body = JSON.parse(response.body);
+    expect(body).toMatchObject({
       jsonrpc: "2.0",
       id: "vite-readonly-summary",
       result: {
@@ -6081,16 +6176,11 @@ describe("MCP OAuth production route adapter", () => {
           kind: MCP_PRODUCTION_READONLY_SUMMARY_STATUS_RESULT_KIND,
           status: "OK",
           toolName: toolCase.toolName,
-          summary: {
-            kind: toolCase.expectedKind,
-            [toolCase.resultRefKey]: {
-              id: toolCase.safeRefId,
-            },
-          },
           version: 1,
         },
       },
     });
+    expect(Object.keys(body.result.structuredContent).sort()).toEqual(["kind", "status", "toolName", "version"]);
     expect(convexHttpClientQuery).toHaveBeenCalledTimes(2);
     expect(convexHttpClientMutation).not.toHaveBeenCalled();
     expect(convexHttpClientQuery.mock.calls[0]?.[1]).toMatchObject({
@@ -6115,6 +6205,9 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(OWNER_ID);
     expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
     expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
+    expect(JSON.stringify(response)).not.toContain('"summary"');
+    expect(JSON.stringify(response)).not.toContain(toolCase.expectedKind);
+    expect(JSON.stringify(response)).not.toContain(toolCase.safeRefId);
     expect(JSON.stringify(response)).not.toContain(LEGACY_TOOLS_CALL_SYNTHETIC_RESULT_KIND);
     dateNow.mockRestore();
   });
@@ -6474,7 +6567,7 @@ if [[ "\${INFISICAL_FIXTURE_MODE:-success}" == "fail" ]]; then
   printf '%s\\n' '${rawFixtureSecret}'
   exit 1
 fi
-printf '%s\\n' "\$@" >"\${INFISICAL_FIXTURE_ARGS_FILE:?}"
+printf '%s\\n' "$@" >"\${INFISICAL_FIXTURE_ARGS_FILE:?}"
 printf '%s\\n' '${rawFixtureSecret}'
 `,
         { mode: 0o700 },
@@ -7235,6 +7328,7 @@ function completeLaunchReadinessEvidence(
   overrides: Partial<McpProductionLaunchReadinessEvidenceInputV1> = {},
 ): McpProductionLaunchReadinessEvidenceInputV1 {
   return {
+    publicCatalogSubmissionUrlReviewed: true,
     privateBetaGateReviewed: true,
     authenticatedMcpProtocolReviewed: true,
     policyKernelReviewed: true,
