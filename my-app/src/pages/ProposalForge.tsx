@@ -665,6 +665,7 @@ type RailAskAiReviewState =
   | {
       status: "applied";
       previousProposalContent: string;
+      previousProposalDocument: ProposalDocument | null;
     };
 
 const PROPOSAL_SAVE_DEBOUNCE_MS =
@@ -9119,18 +9120,22 @@ export function ProposalForge(): JSX.Element {
       return;
     }
     const previousProposalContent = proposalContent ?? "";
+    const previousProposalDocument = proposalDocument;
     setProposalContent(railAskAiReview.resultText);
+    setProposalDocument(null);
     setRailAskAiValue("");
     setRailAskAiReview({
       status: "applied",
       previousProposalContent,
+      previousProposalDocument,
     });
-  }, [proposalContent, railAskAiReview]);
+  }, [proposalContent, proposalDocument, railAskAiReview]);
 
   const handleRailAskAiUndo = React.useCallback(() => {
     setRailAskAiReview((current) => {
       if (current.status !== "applied") return current;
       setProposalContent(current.previousProposalContent);
+      setProposalDocument(current.previousProposalDocument);
       return { status: "idle" };
     });
   }, []);
