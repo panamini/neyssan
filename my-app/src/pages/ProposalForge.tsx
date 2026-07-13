@@ -849,6 +849,19 @@ type ProposalDocumentMetadata = DocumentStyleMetadata & {
   proposalDocumentUpdatedAt?: number;
 };
 
+function omitProposalTemplateBundleMetadata(
+  metadata: ProposalDocumentMetadata,
+): ProposalDocumentMetadata {
+  const nextMetadata = { ...metadata };
+  delete nextMetadata.templateBundleId;
+  delete nextMetadata.verbatiStyleSlotId;
+  delete nextMetadata.verbatiStyleSlotSource;
+  delete nextMetadata.verbatiStyleSlotNameSnapshot;
+  delete nextMetadata.verbatiStyleBaseSnapshot;
+  delete nextMetadata.documentStyleVersion;
+  return nextMetadata;
+}
+
 type ProposalWorkspaceCssVars = React.CSSProperties & {
   "--document-viewer-shell-inline-size"?: string;
   "--proposal-paper-visual-inline-size"?: string;
@@ -5935,6 +5948,10 @@ export function ProposalForge(): JSX.Element {
       storedOutputDraft?.resolvedLanguage,
     ],
   );
+  const proposalDocumentLanguage =
+    (isSavedView
+      ? openedSavedProposal?.metadata?.resolvedLanguage
+      : storedOutputDraft?.resolvedLanguage) ?? resolvedLanguage;
   const querySelectedSavedProposal = React.useMemo(
     () =>
       selectedProposalId
@@ -7112,6 +7129,13 @@ export function ProposalForge(): JSX.Element {
           stylePreset: proposalStyleIntent,
         }) ?? settingsStyleChoice,
       );
+    } else if (proposalTemplateIntent) {
+      setProposalStyleLinkMode("proposal_local");
+      setProposalTemplateBundleId(null);
+      setProposalPaletteOverride(null);
+      setProposalCustomAccentHex(null);
+      setProposalTemplateId(proposalTemplateIntent);
+      setHasUserEditedStyle(true);
     }
     void navigate(
       {
@@ -8371,7 +8395,9 @@ export function ProposalForge(): JSX.Element {
         setIsSavingSavedProposal(true);
         void persistOpenedSavedProposal({
           metadata: {
-            ...savedProposalRenderMetadata,
+            ...omitProposalTemplateBundleMetadata(
+              savedProposalRenderMetadata,
+            ),
             templateId,
             styleLinkMode: "proposal_local",
             styleChoice: nextStyleChoice,
@@ -9042,11 +9068,9 @@ export function ProposalForge(): JSX.Element {
   const handleProposalContentChange = React.useCallback(
     (nextContent: string) => {
       setProposalContent(nextContent);
-      if (proposalOutputMode === "edit") {
-        setProposalDocument(null);
-      }
+      setProposalDocument(null);
     },
-    [proposalOutputMode],
+    [],
   );
   const handleProposalDocumentChange = React.useCallback(
     (nextDocument: ProposalDocument) => {
@@ -13569,7 +13593,7 @@ export function ProposalForge(): JSX.Element {
                             contactLine={proposalContactLine}
                             letterDate={proposalLetterDate}
                             recipientDetails={proposalRecipientDetails}
-                            documentLanguage={resolvedLanguage}
+                            documentLanguage={proposalDocumentLanguage}
                             salutationValue={proposalSalutationValue || null}
                             applicantHeader={proposalDisplayApplicantHeader}
                             headerVisibility={proposalHeaderVisibility}

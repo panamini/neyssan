@@ -366,18 +366,31 @@ export const Sidebar: React.FC = () => {
   const pendingSettingsPanelOpenRef = React.useRef(false);
 
   React.useEffect(() => {
-    if (!currentSavedProposalPath) return;
+    if (currentSavedProposalPath) {
+      setLastSavedProposalPath(currentSavedProposalPath);
+      try {
+        window.sessionStorage.setItem(
+          LAST_SAVED_PROPOSAL_PATH_KEY,
+          currentSavedProposalPath,
+        );
+      } catch {
+        // Navigation continuity is best effort when browser storage is unavailable.
+      }
+      return;
+    }
 
-    setLastSavedProposalPath(currentSavedProposalPath);
+    if (location.pathname !== "/proposal") return;
+
+    const params = new URLSearchParams(location.search);
+    if (params.get("view") !== "saved" || params.get("id")?.trim()) return;
+
+    setLastSavedProposalPath(null);
     try {
-      window.sessionStorage.setItem(
-        LAST_SAVED_PROPOSAL_PATH_KEY,
-        currentSavedProposalPath,
-      );
+      window.sessionStorage.removeItem(LAST_SAVED_PROPOSAL_PATH_KEY);
     } catch {
       // Navigation continuity is best effort when browser storage is unavailable.
     }
-  }, [currentSavedProposalPath]);
+  }, [currentSavedProposalPath, location.pathname, location.search]);
 
   React.useEffect(() => {
     const handleResize = () => {

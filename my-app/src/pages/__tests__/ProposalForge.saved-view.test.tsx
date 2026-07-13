@@ -26,6 +26,9 @@ const mockProposalTopbarState = vi.hoisted(() => ({
     onDeleteProposal: () => void;
   },
 }));
+const mockUpdateProposal = vi.hoisted(() =>
+  vi.fn().mockResolvedValue(undefined),
+);
 
 vi.mock("../../contexts/ProposalForgeTopbarContext", () => ({
   useRegisterProposalForgeTopbar: (
@@ -65,6 +68,16 @@ const SAVED_PROPOSALS = [
       sourceCvId: "cv_alpha",
       styleLinkMode: "inherit_cv",
       templateId: "swiss_margin",
+      templateBundleId: "swiss_serif",
+      verbatiStyleSlotId: 1,
+      verbatiStyleSlotSource: "factory",
+      verbatiStyleSlotNameSnapshot: "Style 1",
+      verbatiStyleBaseSnapshot: {
+        typography: "signature",
+        palette: "bordeaux",
+      },
+      documentStyleVersion: 1,
+      resolvedLanguage: "fr",
       verbatiStyle: {
         layout: "swiss",
         typography: "signature",
@@ -232,7 +245,10 @@ vi.mock("convex/react", () => ({
     }
     return null;
   },
-  useMutation: () => vi.fn().mockResolvedValue(undefined),
+  useMutation: (query: string) =>
+    query === "updateProposalPublic.default"
+      ? mockUpdateProposal
+      : vi.fn().mockResolvedValue(undefined),
   useAction: () => vi.fn().mockResolvedValue(null),
 }));
 
@@ -391,6 +407,7 @@ vi.mock("../../components/ProposalDisplay", () => ({
     mode,
     stylePreset,
     templateId,
+    documentLanguage,
   }: {
     proposalContent: string | null;
     proposalDocument?: { blocks?: Array<{ text?: string }> } | null;
@@ -402,6 +419,7 @@ vi.mock("../../components/ProposalDisplay", () => ({
       palette?: string | null;
     } | null;
     templateId?: string | null;
+    documentLanguage?: string | null;
   }) => (
     <>
       <div data-testid="proposal-display-state">
@@ -413,6 +431,9 @@ vi.mock("../../components/ProposalDisplay", () => ({
       </div>
       <div data-testid="proposal-salutation-state">
         {salutationValue ?? "empty"}
+      </div>
+      <div data-testid="proposal-document-language">
+        {documentLanguage ?? "no-language"}
       </div>
     </>
   ),
@@ -479,6 +500,7 @@ describe("ProposalForge saved view", () => {
     window.localStorage.clear();
     mockAttachedCvId = null;
     mockProposalTopbarState.registration = null;
+    mockUpdateProposal.mockClear();
   });
 
   it("restores the structured document stored on an opened saved proposal", async () => {
@@ -520,6 +542,36 @@ describe("ProposalForge saved view", () => {
       const state = screen.getByTestId("proposal-display-state");
       expect(state).toHaveTextContent("Saved proposal content.");
       expect(state).toHaveTextContent("modernist_signal");
+    });
+    await waitFor(() => {
+      expect(mockUpdateProposal).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "proposal_beta" }),
+      );
+    });
+    const persistedMetadata = mockUpdateProposal.mock.calls.find(
+      ([input]) => input.id === "proposal_beta",
+    )?.[0]?.metadata;
+    expect(persistedMetadata).not.toHaveProperty("templateBundleId");
+    expect(persistedMetadata).not.toHaveProperty("verbatiStyleSlotId");
+    expect(persistedMetadata).not.toHaveProperty("verbatiStyleSlotSource");
+    expect(persistedMetadata).not.toHaveProperty(
+      "verbatiStyleSlotNameSnapshot",
+    );
+    expect(persistedMetadata).not.toHaveProperty("verbatiStyleBaseSnapshot");
+    expect(persistedMetadata).not.toHaveProperty("documentStyleVersion");
+  });
+
+  it("renders a saved letter with its document locale instead of the UI locale", async () => {
+    render(
+      <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_beta"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-document-language")).toHaveTextContent(
+        "fr",
+      );
     });
   });
 

@@ -179,6 +179,7 @@ vi.mock("../../components/ProposalInputForm", () => ({
 vi.mock("../../components/ProposalDisplay", () => ({
   default: ({
     proposalContent,
+    proposalDocument,
     salutationValue,
     documentTitle,
     stylePreset,
@@ -194,6 +195,7 @@ vi.mock("../../components/ProposalDisplay", () => ({
     actions,
   }: {
     proposalContent: string | null;
+    proposalDocument?: { blocks?: Array<{ text?: string }> } | null;
     salutationValue?: string | null;
     documentTitle?: string | null;
     stylePreset?: {
@@ -222,6 +224,10 @@ vi.mock("../../components/ProposalDisplay", () => ({
       <div data-testid="proposal-autosave-state">
         {documentTitle ?? "untitled"}|{proposalContent ?? "empty"}
       </div>
+      <div data-testid="proposal-document-state">
+        {proposalDocument?.blocks?.map((block) => block.text).join(" ") ??
+          "no-document"}
+      </div>
       <div data-testid="proposal-salutation-state">
         {salutationValue ?? "empty"}
       </div>
@@ -244,6 +250,12 @@ vi.mock("../../components/ProposalDisplay", () => ({
         onClick={() => onContentChange?.("Second autosave draft.")}
       >
         Edit content twice
+      </button>
+      <button
+        type="button"
+        onClick={() => onContentChange?.("Whole draft rewritten by Ask AI.")}
+      >
+        Rewrite whole draft
       </button>
       <button
         type="button"
@@ -585,6 +597,75 @@ describe("ProposalForge autosave", () => {
     expect(screen.getByTestId("proposal-salutation-state")).toHaveTextContent(
       "empty",
     );
+  });
+
+  it("drops stale structured blocks when Ask AI rewrites the whole draft", async () => {
+    window.localStorage.setItem(
+      PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        proposalContent: "Dear team,\n\nOriginal structured body.",
+        proposalDocument: {
+          schemaVersion: 1,
+          kind: "letter",
+          source: "structured",
+          blocks: [
+            {
+              id: "paragraph-1",
+              type: "paragraph",
+              text: "Original structured body.",
+            },
+          ],
+        },
+        proposalType: "cover_letter",
+        proposalVoicePreset: "signature",
+        proposalTemplateId: null,
+        proposalVerbatiStyle: null,
+        proposalStyleLinkMode: "proposal_local",
+        proposalStyleChoice: "balanced",
+        proposalApplicantName: "Alex Martin",
+        proposalApplicantRole: "Operations Associate",
+        proposalDocumentTitle: "Ask AI rewrite",
+        proposalDocumentMeta: "Compose output",
+        generatedProposalId: "proposal_rewrite_existing",
+        proposalOutputMode: "preview",
+        paletteOverride: null,
+        customAccentHex: null,
+        templateBundleId: null,
+        typographyOverride: null,
+        layoutOverride: null,
+        proposalDocumentTitleManual: false,
+        characterLimitMode: null,
+        characterLimitValue: null,
+      }),
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/proposal"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+    mockUpdateProposal.mockClear();
+
+    expect(screen.getByTestId("proposal-document-state")).toHaveTextContent(
+      "Original structured body.",
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Rewrite whole draft" }),
+    );
+
+    expect(screen.getByTestId("proposal-document-state")).toHaveTextContent(
+      "no-document",
+    );
+    await waitForAutosave();
+    expect(mockUpdateProposal).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        id: "proposal_rewrite_existing",
+        content: "Whole draft rewritten by Ask AI.",
+      }),
+    );
+    expect(
+      mockUpdateProposal.mock.calls.at(-1)?.[0]?.metadata,
+    ).not.toHaveProperty("proposalDocument");
   });
 
   it("shows populated recipient contact details after the first heading edit", async () => {

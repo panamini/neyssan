@@ -317,6 +317,28 @@ describe("ProposalForge settings style round-trip", () => {
     },
   );
 
+  it("keeps a direct canonical template id after a Templates workspace reset", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: "/proposal",
+            search: "?templateId=modernist_signal",
+            state: createProposalWorkspaceResetState(),
+          },
+        ]}
+      >
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-settings-style")).toHaveTextContent(
+        "modernist_signal",
+      );
+    });
+  });
+
   it("shows a job-context empty state for Templates-driven proposal starts", async () => {
     const user = userEvent.setup();
     const windowOpenSpy = vi

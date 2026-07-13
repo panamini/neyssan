@@ -669,6 +669,23 @@ describe("Sidebar permanent rail", () => {
     expect(screen.getByTestId("location")).toHaveTextContent(savedLetterPath);
   });
 
+  it("clears a deleted saved-letter shortcut on the empty saved route", async () => {
+    const savedLetterPath = "/proposal?view=saved&id=deleted-letter";
+    window.sessionStorage.setItem(
+      "twoweeks:last-saved-proposal-path",
+      savedLetterPath,
+    );
+
+    renderSidebar("/proposal?view=saved", <RegisterProposalPanels />);
+
+    await waitFor(() => {
+      expect(
+        window.sessionStorage.getItem("twoweeks:last-saved-proposal-path"),
+      ).toBeNull();
+    });
+    expect(screen.getByRole("button", { name: "Letter" })).toBeInTheDocument();
+  });
+
   it("opens the proposal template panel from hover and navigates on click", () => {
     vi.useFakeTimers();
     mockFinePointer(true);
