@@ -18,6 +18,25 @@ jobs:
       - name: Run run.sh doctor regression suite
         run: node --test tests/run-sh-doctor.test.mjs
 
+  mcp-private-beta-smoke:
+    name: MCP private-beta offline smoke contract
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Checkout public source without credentials
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          git init .
+          git remote add origin "https://github.com/${REPOSITORY}.git"
+          git -c protocol.version=2 fetch --no-tags --depth=1 origin "${EXPECTED_SHA}"
+          git -c advice.detachedHead=false checkout --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}"
+
+      - name: Run offline MCP private-beta smoke contract
+        run: node --test tests/mcp-private-beta-smoke.test.mjs
+
   js-tests:
     runs-on: ubuntu-latest
     steps:
