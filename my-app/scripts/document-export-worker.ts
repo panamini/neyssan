@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -194,6 +195,27 @@ async function resolveRenderedResumePageLocator(
   );
 }
 
+function isDockerRuntime(): boolean {
+  const override = process.env.DOCUMENT_EXPORT_DOCKER_HOST_FALLBACK_FIRST;
+  if (override === "1" || override === "true") {
+    return true;
+  }
+  if (override === "0" || override === "false") {
+    return false;
+  }
+
+  if (existsSync("/.dockerenv")) {
+    return true;
+  }
+
+  try {
+    const cgroup = readFileSync("/proc/self/cgroup", "utf8");
+    return /\b(docker|containerd|kubepods)\b/i.test(cgroup);
+  } catch {
+    return false;
+  }
+}
+
 function expandFrontendBaseUrlCandidate(candidate: unknown): string[] {
   const trimmed = String(candidate ?? "").trim();
   if (!trimmed) {
@@ -209,7 +231,12 @@ function expandFrontendBaseUrlCandidate(candidate: unknown): string[] {
       parsed.hostname === "127.0.0.1"
     ) {
       parsed.hostname = "host.docker.internal";
-      expanded.push(parsed.toString().replace(/\/$/, ""));
+      const dockerHostCandidate = parsed.toString().replace(/\/$/, "");
+      if (isDockerRuntime()) {
+        expanded.unshift(dockerHostCandidate);
+      } else {
+        expanded.push(dockerHostCandidate);
+      }
     }
   } catch {
     // Keep the original candidate; navigation will surface an actionable error.
