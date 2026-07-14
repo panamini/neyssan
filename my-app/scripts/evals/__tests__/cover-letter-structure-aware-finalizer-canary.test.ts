@@ -8,10 +8,13 @@ import {
   finalizeCoverLetterStructureAwareCandidate,
 } from "../cover-letter-structure-aware-finalizer-canary";
 
-const TRUSTED_QUALITATIVE_PACK_HASH =
-  "2406c5e85f6bf5c9779180f86939cb3e14448da7e022b33c9aae85144bc06eae";
-const TRUSTED_FINAL_ARTIFACT_PACK_HASH =
-  "4bf698ea8166e721dc3c7e12b47b95e921f936cf6c4815878bebd08384ac8894";
+const { TRUSTED_QUALITATIVE_PACK_HASH, TRUSTED_FINAL_ARTIFACT_PACK_HASH } =
+  vi.hoisted(() => ({
+    TRUSTED_QUALITATIVE_PACK_HASH:
+      "2406c5e85f6bf5c9779180f86939cb3e14448da7e022b33c9aae85144bc06eae",
+    TRUSTED_FINAL_ARTIFACT_PACK_HASH:
+      "4bf698ea8166e721dc3c7e12b47b95e921f936cf6c4815878bebd08384ac8894",
+  }));
 const TRUSTED_SOURCE_REF = "07b2c3e136f4d9062dd28c90a22afbe257e68778";
 
 vi.mock(
