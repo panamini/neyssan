@@ -491,7 +491,7 @@ describe("QUALITY-CL-2 structure-aware finalizer canary", () => {
     );
   });
 
-  it("uses the normalized finalizer-boundary variant instead of raw provider body parts", async () => {
+  it("accepts only deterministic repetition cleanup between structured source and finalizer boundary", async () => {
     const packs = await buildReviewerSafePacks({ authoritative: true });
     const firstEntry = packs.qualitativePack.entries[0]!;
     const sourceBodyParts = firstEntry.parsedCandidate.bodyParts as Record<
@@ -499,6 +499,7 @@ describe("QUALITY-CL-2 structure-aware finalizer canary", () => {
       Readonly<{ section: string; text: string }>
     >;
     const opening = sourceBodyParts.opening!;
+    const proofBlock = sourceBodyParts.proofBlock!;
     const qualitativePack = {
       ...packs.qualitativePack,
       entries: [
@@ -508,9 +509,9 @@ describe("QUALITY-CL-2 structure-aware finalizer canary", () => {
             ...firstEntry.parsedCandidate,
             bodyParts: {
               ...sourceBodyParts,
-              opening: {
-                ...opening,
-                text: `${opening.text} This raw provider sentence is removed by deterministic normalization.`,
+              proofBlock: {
+                ...proofBlock,
+                text: `${proofBlock.text} ${opening.text}`,
               },
             },
           },
@@ -527,9 +528,64 @@ describe("QUALITY-CL-2 structure-aware finalizer canary", () => {
     expect(result.entries[0]!.structureAwareCanary.content).toBe(
       candidateLetter,
     );
-    expect(result.entries[0]!.structureAwareCanary.content).not.toContain(
-      "raw provider sentence",
-    );
+  });
+
+  it("rejects a finalizer-boundary variant that lost a unique trusted structured sentence", async () => {
+    const packs = await buildReviewerSafePacks({ authoritative: true });
+    const firstEntry = packs.qualitativePack.entries[0]!;
+    const sourceBodyParts = firstEntry.parsedCandidate.bodyParts as Record<
+      string,
+      Readonly<{ section: string; text: string }>
+    >;
+    const proofBlock = sourceBodyParts.proofBlock!;
+    const qualitativePack = {
+      ...packs.qualitativePack,
+      entries: [
+        {
+          ...firstEntry,
+          parsedCandidate: {
+            ...firstEntry.parsedCandidate,
+            bodyParts: {
+              ...sourceBodyParts,
+              proofBlock: {
+                ...proofBlock,
+                text: `${proofBlock.text} This unique trusted sentence must survive the finalizer boundary.`,
+              },
+            },
+          },
+        },
+        ...packs.qualitativePack.entries.slice(1),
+      ],
+    } as CoverLetterQualitativeSamplePack;
+
+    await expect(
+      buildCoverLetterStructureAwareFinalizerCanary({
+        qualitativePack,
+        finalArtifactPack: packs.finalArtifactPack,
+      }),
+    ).rejects.toThrow(/deterministic trusted-source projection/iu);
+  });
+
+  it("accepts semantically identical reviewer context with different object key order", async () => {
+    const packs = await buildReviewerSafePacks({ authoritative: true });
+    const firstPair = packs.finalArtifactPack.entries[0]!;
+    const reorderedProfileEvidence = Object.fromEntries(
+      Object.entries(firstPair.profileEvidence).reverse(),
+    ) as typeof firstPair.profileEvidence;
+    const finalArtifactPack = {
+      ...packs.finalArtifactPack,
+      entries: [
+        { ...firstPair, profileEvidence: reorderedProfileEvidence },
+        ...packs.finalArtifactPack.entries.slice(1),
+      ],
+    } as CoverLetterFinalArtifactShadowPack;
+
+    await expect(
+      buildCoverLetterStructureAwareFinalizerCanary({
+        qualitativePack: packs.qualitativePack,
+        finalArtifactPack,
+      }),
+    ).resolves.toMatchObject({ providerCalls: 0, retries: 0, repairs: 0 });
   });
 
   it("fails closed on whitespace drift in the trusted finalizer-boundary variant", async () => {

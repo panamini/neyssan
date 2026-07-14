@@ -6,7 +6,11 @@ import {
   type CoverLetterBodyParts,
   type PremiumCoverLetterQualityShadowResult,
 } from "../../convex/lib/proposals/premiumCoverLetter";
-import { buildStableHash } from "../../src/modules/application-harness/fingerprints";
+import {
+  buildStableHash,
+  stableSerialize,
+} from "../../src/modules/application-harness/fingerprints";
+import { normalizeProposalConstraintText } from "../../convex/lib/proposals/proposalPlanner";
 import type { CoverLetterFinalArtifactShadowPack } from "./cover-letter-final-artifact-attribution-shadow";
 import {
   evaluateCoverLetterFinalSendability,
@@ -50,6 +54,9 @@ type RhetoricalSection = (typeof RHETORICAL_ORDER)[number];
 type ReviewerSafeJob = Readonly<{ title: string; description: string }>;
 type ReviewerSafeProfileEvidence =
   CoverLetterFinalArtifactShadowPack["entries"][number]["profileEvidence"];
+type QualitativeEntry = CoverLetterQualitativeSamplePack["entries"][number];
+type FinalArtifactPair = CoverLetterFinalArtifactShadowPack["entries"][number];
+type CanaryEntry = CoverLetterStructureAwareFinalizerCanary["entries"][number];
 
 const SALUTATION_PATTERN =
   /^(?:dear\s+(?:hiring\s+manager|recruiting\s+team)|bonjour|madame(?:,\s*monsieur)?|monsieur),?$/iu;
@@ -139,6 +146,39 @@ function splitParagraphs(value: string): string[] {
     .split(/\n\s*\n/gu)
     .map((paragraph) => paragraph.trim())
     .filter(Boolean);
+}
+
+function splitSentences(value: string): string[] {
+  const compact = compactWhitespace(value);
+  if (!compact) return [];
+  return compact
+    .split(/(?<=[.!?])\s+(?=[A-Z0-9])/gu)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+function normalizeRepetitionKey(value: string): string {
+  return normalizeProposalConstraintText(value)
+    .split(/\s+/gu)
+    .filter((token) => token.length > 3)
+    .join(" ");
+}
+
+function isDeterministicallyRepeatedSentence(
+  sentence: string,
+  previousSentences: readonly string[],
+): boolean {
+  const normalized = normalizeRepetitionKey(sentence);
+  if (!normalized || normalized.split(/\s+/gu).length < 6) return false;
+  return previousSentences.some((previous) => {
+    const previousNormalized = normalizeRepetitionKey(previous);
+    return (
+      previousNormalized.length > 0 &&
+      (previousNormalized === normalized ||
+        previousNormalized.includes(normalized) ||
+        normalized.includes(previousNormalized))
+    );
+  });
 }
 
 function countWords(value: string): number {
@@ -292,6 +332,63 @@ function extractTrustedFinalizerBoundaryBodyParts(args: {
       const text = compactWhitespace(paragraphs[index]!);
       validateVisibleSection({ section, text, expectedText: text });
       return [section, text];
+    }),
+  ) as CoverLetterBodyParts;
+}
+
+function extractTrustedStructuredBodyParts(
+  parsedCandidate: Readonly<Record<string, unknown>>,
+): CoverLetterBodyParts {
+  const bodyParts = parsedCandidate.bodyParts;
+  if (!bodyParts || typeof bodyParts !== "object" || Array.isArray(bodyParts)) {
+    throw new Error("QUALITY-CL-2 trusted structured body parts are missing.");
+  }
+  return Object.fromEntries(
+    RHETORICAL_ORDER.map((section) => {
+      const part = (bodyParts as Record<string, unknown>)[section];
+      if (!part || typeof part !== "object" || Array.isArray(part)) {
+        throw new Error(
+          `QUALITY-CL-2 trusted structured ${section} section is missing.`,
+        );
+      }
+      const rawText = (part as Readonly<Record<string, unknown>>).text;
+      if (typeof rawText !== "string") {
+        throw new Error(
+          `QUALITY-CL-2 trusted structured ${section} text is missing.`,
+        );
+      }
+      const text = compactWhitespace(rawText);
+      validateVisibleSection({ section, text, expectedText: text });
+      return [section, text];
+    }),
+  ) as CoverLetterBodyParts;
+}
+
+function deriveExpectedFinalizerBoundaryBodyParts(args: {
+  trustedStructuredBodyParts: CoverLetterBodyParts;
+  recordedBoundaryBodyParts: CoverLetterBodyParts;
+}): CoverLetterBodyParts {
+  const previousKeptSentences: string[] = [];
+  return Object.fromEntries(
+    RHETORICAL_ORDER.map((section) => {
+      const keptSentences = splitSentences(
+        args.trustedStructuredBodyParts[section],
+      ).filter((sentence) => {
+        if (
+          isDeterministicallyRepeatedSentence(sentence, previousKeptSentences)
+        ) {
+          return false;
+        }
+        previousKeptSentences.push(sentence);
+        return true;
+      });
+      const expectedText = compactWhitespace(keptSentences.join(" "));
+      if (args.recordedBoundaryBodyParts[section] !== expectedText) {
+        throw new Error(
+          `QUALITY-CL-2 ${section} finalizer-boundary text is not the deterministic trusted-source projection.`,
+        );
+      }
+      return [section, expectedText];
     }),
   ) as CoverLetterBodyParts;
 }
@@ -508,6 +605,105 @@ async function hashCanaryBody(
   return hashVisibleContent("canary", body);
 }
 
+function resolvePairSource(args: {
+  pair: FinalArtifactPair;
+  qualitativeByContent: ReadonlyMap<string, QualitativeEntry>;
+  usedSourceLabels: Set<string>;
+}): Readonly<{
+  source: QualitativeEntry;
+  candidateContent: string;
+}> {
+  const aSource = args.qualitativeByContent.get(args.pair.variantA.letter);
+  const bSource = args.qualitativeByContent.get(args.pair.variantB.letter);
+  if (Boolean(aSource) === Boolean(bSource)) {
+    throw new Error(
+      `QUALITY-CL-2 pair ${args.pair.pairLabel} must contain exactly one recorded baseline.`,
+    );
+  }
+  const source = aSource ?? bSource!;
+  if (args.usedSourceLabels.has(source.blindLabel)) {
+    throw new Error("QUALITY-CL-2 reused a qualitative source cell.");
+  }
+  args.usedSourceLabels.add(source.blindLabel);
+  return {
+    source,
+    candidateContent: aSource
+      ? args.pair.variantB.letter
+      : args.pair.variantA.letter,
+  };
+}
+
+function assertPairContext(
+  pair: FinalArtifactPair,
+  source: QualitativeEntry,
+): asserts pair is FinalArtifactPair & { outputLanguage: "English" } {
+  if (
+    pair.outputLanguage !== source.outputLanguage ||
+    pair.job.title !== source.job.title ||
+    pair.job.description !== source.job.description ||
+    stableSerialize(pair.profileEvidence) !==
+      stableSerialize(source.candidateEvidence)
+  ) {
+    throw new Error(
+      `QUALITY-CL-2 pair ${pair.pairLabel} reviewer context drifted.`,
+    );
+  }
+  if (pair.outputLanguage !== "English") {
+    throw new Error(
+      "QUALITY-CL-2 is pinned to the exact English five-cell source cohort.",
+    );
+  }
+}
+
+async function buildCanaryEntry(args: {
+  pair: FinalArtifactPair;
+  qualitativeByContent: ReadonlyMap<string, QualitativeEntry>;
+  usedSourceLabels: Set<string>;
+}): Promise<CanaryEntry> {
+  const { source, candidateContent } = resolvePairSource(args);
+  assertPairContext(args.pair, source);
+  const candidateName = extractCandidateName(args.pair.profileEvidence);
+  const recordedBoundaryBodyParts = extractTrustedFinalizerBoundaryBodyParts({
+    content: candidateContent,
+    candidateName,
+  });
+  const expectedBodyParts = deriveExpectedFinalizerBoundaryBodyParts({
+    trustedStructuredBodyParts: extractTrustedStructuredBodyParts(
+      source.parsedCandidate,
+    ),
+    recordedBoundaryBodyParts,
+  });
+  const structureAwareCanary = await finalizeCoverLetterStructureAwareCandidate(
+    {
+      content: candidateContent,
+      expectedBodyParts,
+      outputLanguage: args.pair.outputLanguage,
+      job: args.pair.job,
+      profileEvidence: args.pair.profileEvidence,
+    },
+  );
+  const baselineContent = source.finalizedLetter!;
+  return {
+    pairLabel: args.pair.pairLabel,
+    sourceCellLabel: source.blindLabel,
+    outputLanguage: args.pair.outputLanguage,
+    job: args.pair.job,
+    profileEvidence: args.pair.profileEvidence,
+    currentFinalizer: {
+      content: baselineContent,
+      sendability: await evaluateCoverLetterFinalSendability({
+        content: baselineContent,
+        outputLanguage: args.pair.outputLanguage,
+        job: args.pair.job,
+        profileEvidence: args.pair.profileEvidence,
+      }),
+    },
+    structureAwareCanary,
+    trustedStructuredSectionTextPreserved:
+      structureAwareCanary.trustedStructuredSectionTextPreserved,
+  };
+}
+
 export async function buildCoverLetterStructureAwareFinalizerCanary(args: {
   qualitativePack: CoverLetterQualitativeSamplePack;
   finalArtifactPack: CoverLetterFinalArtifactShadowPack;
@@ -536,71 +732,13 @@ export async function buildCoverLetterStructureAwareFinalizerCanary(args: {
   for (const pair of [...args.finalArtifactPack.entries].sort((left, right) =>
     left.pairLabel.localeCompare(right.pairLabel),
   )) {
-    const aSource = qualitativeByContent.get(pair.variantA.letter);
-    const bSource = qualitativeByContent.get(pair.variantB.letter);
-    if (Boolean(aSource) === Boolean(bSource)) {
-      throw new Error(
-        `QUALITY-CL-2 pair ${pair.pairLabel} must contain exactly one recorded baseline.`,
-      );
-    }
-    const source = aSource ?? bSource!;
-    if (usedSourceLabels.has(source.blindLabel)) {
-      throw new Error("QUALITY-CL-2 reused a qualitative source cell.");
-    }
-    usedSourceLabels.add(source.blindLabel);
-    if (
-      pair.outputLanguage !== source.outputLanguage ||
-      pair.job.title !== source.job.title ||
-      pair.job.description !== source.job.description ||
-      JSON.stringify(pair.profileEvidence) !==
-        JSON.stringify(source.candidateEvidence)
-    ) {
-      throw new Error(
-        `QUALITY-CL-2 pair ${pair.pairLabel} reviewer context drifted.`,
-      );
-    }
-    if (pair.outputLanguage !== "English") {
-      throw new Error(
-        "QUALITY-CL-2 is pinned to the exact English five-cell source cohort.",
-      );
-    }
-    const baselineContent = source.finalizedLetter!;
-    const candidateContent = aSource
-      ? pair.variantB.letter
-      : pair.variantA.letter;
-    const candidateName = extractCandidateName(pair.profileEvidence);
-    const expectedBodyParts = extractTrustedFinalizerBoundaryBodyParts({
-      content: candidateContent,
-      candidateName,
-    });
-    const structureAwareCanary =
-      await finalizeCoverLetterStructureAwareCandidate({
-        content: candidateContent,
-        expectedBodyParts,
-        outputLanguage: pair.outputLanguage,
-        job: pair.job,
-        profileEvidence: pair.profileEvidence,
-      });
-    const currentFinalizer = {
-      content: baselineContent,
-      sendability: await evaluateCoverLetterFinalSendability({
-        content: baselineContent,
-        outputLanguage: pair.outputLanguage,
-        job: pair.job,
-        profileEvidence: pair.profileEvidence,
+    entries.push(
+      await buildCanaryEntry({
+        pair,
+        qualitativeByContent,
+        usedSourceLabels,
       }),
-    };
-    entries.push({
-      pairLabel: pair.pairLabel,
-      sourceCellLabel: source.blindLabel,
-      outputLanguage: pair.outputLanguage,
-      job: pair.job,
-      profileEvidence: pair.profileEvidence,
-      currentFinalizer,
-      structureAwareCanary,
-      trustedStructuredSectionTextPreserved:
-        structureAwareCanary.trustedStructuredSectionTextPreserved,
-    });
+    );
   }
   if (!labelsAreExact([...usedSourceLabels], SOURCE_CELL_LABELS)) {
     throw new Error(
