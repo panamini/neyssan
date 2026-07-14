@@ -5993,6 +5993,7 @@ function renderProposalHtml(args: {
   const senderLines = [
     args.data.applicantHeader.name,
     args.data.applicantHeader.role,
+    args.data.applicantHeader.company,
     args.data.contactLine
       ? normalizeLocaleTypography(args.data.contactLine, locale)
       : "",

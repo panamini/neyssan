@@ -449,7 +449,13 @@ describe("export-renderers", () => {
 
   it("renders proposal ATS as a one-column export and styled templates as Robial-safe structural variants", () => {
     const atsDocument = parseExportHtml(
-      renderProposalAtsExportDocument(proposalFixture, {
+      renderProposalAtsExportDocument({
+        ...proposalFixture,
+        applicantHeader: {
+          ...proposalFixture.applicantHeader,
+          company: "Mercer Systems Studio",
+        },
+      }, {
         layout: "swiss",
         typography: "quiet-editorial",
         palette: "sauge",
@@ -505,6 +511,9 @@ describe("export-renderers", () => {
     expect(atsDocument.documentElement.dir).toBe("ltr");
     expect(atsDocument.body.className).toContain("proposal-shell--onecol");
     expect(atsDocument.querySelector(".robial-sidebar")).toBeNull();
+    expect(
+      atsDocument.querySelector('[data-block="sender"]')?.textContent,
+    ).toContain("Mercer Systems Studio");
     expect(atsCss).toContain("--heading-font: Fraunces");
     expect(atsCss).toContain("--body-font: Syne");
     expect(atsDocument.body.innerHTML).toContain("«&nbsp;Produit&nbsp;»");

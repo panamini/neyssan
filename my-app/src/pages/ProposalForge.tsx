@@ -6292,6 +6292,10 @@ export function ProposalForge(): JSX.Element {
     traceProposalStyle,
   ]);
 
+  const previousProposalViewRef = React.useRef<ProposalForgeView>(requestedView);
+  const isRestoringComposeViewRef = React.useRef(false);
+  const skipNextSavedToComposeRestoreRef = React.useRef(false);
+
   React.useEffect(() => {
     if (!optimisticSavedDraftProposal) {
       return;
@@ -7103,6 +7107,138 @@ export function ProposalForge(): JSX.Element {
     ],
   );
 
+  React.useEffect(() => {
+    const previousView = previousProposalViewRef.current;
+    previousProposalViewRef.current = requestedView;
+
+    if (
+      previousView !== "saved" ||
+      requestedView !== "compose" ||
+      selectedDraftProposalId
+    ) {
+      if (
+        isRestoringComposeViewRef.current &&
+        requestedView === "compose" &&
+        previousView === "compose"
+      ) {
+        isRestoringComposeViewRef.current = false;
+      }
+      return;
+    }
+
+    if (skipNextSavedToComposeRestoreRef.current) {
+      skipNextSavedToComposeRestoreRef.current = false;
+      return;
+    }
+
+    isRestoringComposeViewRef.current = true;
+    const draft = storedOutputDraft;
+    if (!draft) {
+      resetProposalWorkspace();
+      return;
+    }
+
+    const nextStylePreset = draft.proposalVerbatiStyle
+      ? resolveVerbatiStyle(draft.proposalVerbatiStyle)
+      : null;
+    const nextStyleLinkMode = resolveProposalStyleLinkMode(
+      draft.proposalStyleLinkMode,
+    );
+    const nextContent = draft.proposalContent;
+    const nextContactLine = draft.proposalContactLine ?? "";
+    const nextRecipientDetails = draft.proposalRecipientDetails ?? "";
+    const nextHeaderVisibility = resolveProposalHeaderVisibility({
+      ...buildProposalHeaderVisibilityFromContent(nextRecipientDetails),
+      showSender: draft.proposalHeaderShowSender,
+      showDate: draft.proposalHeaderShowDate,
+      showSubject: draft.proposalHeaderShowSubject,
+      showRecipient: draft.proposalHeaderShowRecipient,
+      showRecipientDetails: draft.proposalHeaderShowRecipientDetails,
+    });
+    const nextSalutation = readProposalSalutation(nextContent);
+    const nextGeneratedId = draft.generatedProposalId;
+
+    setProposalContent(nextContent);
+    setProposalDocument(normalizeProposalDocument(draft.proposalDocument));
+    setProposalType(draft.proposalType);
+    setProposalVoicePreset(draft.proposalVoicePreset);
+    setProposalTemplateId(
+      draft.proposalTemplateId ?? fallbackProposalTemplateId,
+    );
+    setProposalStylePreset(nextStylePreset);
+    setProposalStyleLinkMode(nextStyleLinkMode);
+    setProposalStyleChoice(
+      resolveProposalStyleChoice(draft.proposalStyleChoice),
+    );
+    setHasUserEditedStyle(
+      Boolean(
+        nextStyleLinkMode === "proposal_local" &&
+          (nextStylePreset || draft.proposalTemplateId),
+      ),
+    );
+    setProposalWorkspaceStyle(
+      nextStyleLinkMode === "proposal_local" && nextStylePreset
+        ? nextStylePreset
+        : null,
+    );
+    setProposalPaletteOverride(draft.paletteOverride ?? null);
+    setProposalCustomAccentHex(draft.customAccentHex ?? null);
+    setProposalTemplateBundleId(draft.templateBundleId ?? null);
+    setOutputSourceComposeDraft(draft.sourceComposeDraft ?? null);
+    setComposePreviewValues(draft.sourceComposeDraft ?? null);
+    setComposeDraftInitialSeed(draft.sourceComposeDraft ?? null);
+    setProposalApplicantName(draft.proposalApplicantName ?? "");
+    setProposalApplicantRole(draft.proposalApplicantRole ?? "");
+    setProposalApplicantCompany(draft.proposalApplicantCompany ?? "");
+    setProposalContactLine(nextContactLine);
+    setProposalStructuredContactDraft(parseProposalContactLine(nextContactLine));
+    setProposalLetterDate(draft.proposalLetterDate ?? "");
+    setProposalRecipientDetails(nextRecipientDetails);
+    setProposalRecipientFieldDraft(
+      parseProposalRecipientDetails(nextRecipientDetails),
+    );
+    setProposalHeaderVisibility(nextHeaderVisibility);
+    setProposalSalutationValue(nextSalutation);
+    proposalSalutationValueRef.current = nextSalutation;
+    setProposalDocumentTitle(draft.proposalDocumentTitle ?? "");
+    setProposalDocumentTitleManual(draft.proposalDocumentTitleManual === true);
+    setProposalDocumentMeta(draft.proposalDocumentMeta ?? "");
+    setDocumentDecoration(
+      normalizeDocumentDecoration(
+        draft.documentDecoration ?? createDefaultDocumentDecoration(),
+      ),
+    );
+    setProposalDocumentIconSettings(
+      normalizeDocumentIconSettings(draft.documentIconSettings),
+    );
+    setProposalClosingOverride(null);
+    setGeneratedProposalId(nextGeneratedId);
+    generatedProposalIdRef.current = nextGeneratedId;
+    setProposalOutputMode(draft.proposalOutputMode ?? "preview");
+    setProposalLibraryStatus("draft");
+    setIsComposePanelVisible(true);
+    setIsBriefExpanded(false);
+    lastSavedProposalContentRef.current = nextContent ?? "";
+    lastSavedProposalTitleRef.current = draft.proposalDocumentTitle ?? "";
+    lastPersistedComposeTokenRef.current = nextGeneratedId
+      ? SAVED_PROPOSAL_RESTORE_PENDING_TOKEN
+      : null;
+    pendingQueuedComposeSnapshotRef.current = null;
+    latestComposeAutosaveSnapshotRef.current = null;
+    if (composeAutosaveTimeoutRef.current !== null) {
+      window.clearTimeout(composeAutosaveTimeoutRef.current);
+      composeAutosaveTimeoutRef.current = null;
+    }
+    composeAutosavePrimedRef.current = false;
+    setComposeSaveStatus("idle");
+  }, [
+    fallbackProposalTemplateId,
+    requestedView,
+    resetProposalWorkspace,
+    selectedDraftProposalId,
+    storedOutputDraft,
+  ]);
+
   const handleNewProposalDraft = React.useCallback(() => {
     const canonicalWorkshopStyle = resolveVerbatiStyle(DEFAULT_VERBATI_STYLE);
     const nextApplicantName = defaultPreviewApplicantHeader.name || "";
@@ -7824,17 +7960,19 @@ export function ProposalForge(): JSX.Element {
         })
       : null;
     const nextTemplateId =
+      proposalTemplateIntent ??
       resolvedDraftRenderState?.templateId ??
       draftProposal.metadata?.templateId ??
       fallbackProposalTemplateId;
     const nextStylePreset =
+      proposalStyleIntent ??
       resolvedDraftRenderState?.stylePreset ??
       (draftProposal.metadata?.verbatiStyle
         ? resolveVerbatiStyle(draftProposal.metadata.verbatiStyle)
         : null);
-    const nextStyleLinkMode = resolveProposalStyleLinkMode(
-      draftProposal.metadata?.styleLinkMode,
-    );
+    const nextStyleLinkMode = proposalTemplateIntent
+      ? "proposal_local"
+      : resolveProposalStyleLinkMode(draftProposal.metadata?.styleLinkMode);
     const nextTitle = draftProposal.title || "Untitled proposal";
     const nextTitleManual = Boolean(draftProposal.title?.trim());
     const nextMeta = nextType ? formatProposalTypeLabel(nextType) : "Draft";
@@ -7871,14 +8009,15 @@ export function ProposalForge(): JSX.Element {
       nextStylePreset?.palette === "custom"
         ? nextStylePreset.accentHex ?? null
         : null;
-    const nextTemplateBundleId =
-      resolveProposalTemplateBundleId(
-        draftProposal.metadata?.templateBundleId,
-      ) ??
-      getProposalBundleForDocumentStyleSlot(
-        draftProposal.metadata?.verbatiStyleSlotId,
-      ) ??
-      findProposalTemplateBundleIdByStylePreset(nextStylePreset);
+    const nextTemplateBundleId = proposalTemplateIntent
+      ? proposalTemplateBundleIntent
+      : resolveProposalTemplateBundleId(
+          draftProposal.metadata?.templateBundleId,
+        ) ??
+        getProposalBundleForDocumentStyleSlot(
+          draftProposal.metadata?.verbatiStyleSlotId,
+        ) ??
+        findProposalTemplateBundleIdByStylePreset(nextStylePreset);
     const nextStyleChoice = resolveProposalStyleChoice(
       draftProposal.metadata?.styleChoice ??
         resolveProposalStyleChoiceFromRenderState({
@@ -7887,6 +8026,37 @@ export function ProposalForge(): JSX.Element {
         }) ??
         "auto",
     );
+    if (proposalTemplateIntent && canPersistProposalState) {
+      const nextMetadata: ProposalDocumentMetadata = {
+        ...(draftProposal.metadata ?? {}),
+        templateId: nextTemplateId,
+        styleLinkMode: nextStyleLinkMode,
+        styleChoice: nextStyleChoice,
+      };
+      if (nextStylePreset) {
+        nextMetadata.verbatiStyle = nextStylePreset;
+      } else {
+        delete nextMetadata.verbatiStyle;
+      }
+      if (nextTemplateBundleId) {
+        nextMetadata.templateBundleId = nextTemplateBundleId;
+      } else {
+        delete nextMetadata.templateBundleId;
+      }
+      if (proposalPageSizeIntent) {
+        nextMetadata.pageSize = proposalPageSizeIntent;
+      }
+      void updateProposal({
+        id: nextGeneratedId,
+        metadata: nextMetadata,
+      }).catch((error) => {
+        console.error("Failed to persist restored draft template:", error);
+        showToast("Template not saved.", {
+          variant: "error",
+          description: "Check your connection and try again.",
+        });
+      });
+    }
     const nextDocumentDecoration = normalizeDocumentDecoration(
       draftProposal.metadata?.documentDecoration ??
         createDefaultDocumentDecoration(),
@@ -8014,13 +8184,20 @@ export function ProposalForge(): JSX.Element {
     });
   }, [
     cancelPendingComposeDraftSync,
+    canPersistProposalState,
     draftCharacterLimitMode,
     fallbackProposalTemplateId,
     formatProposalTypeLabel,
+    proposalStyleIntent,
+    proposalPageSizeIntent,
+    proposalTemplateBundleIntent,
+    proposalTemplateIntent,
     requestedView,
     savedProposals,
     selectedDraftProposalId,
     storedOutputDraft,
+    showToast,
+    updateProposal,
     writeStoredOutputDraft,
   ]);
 
@@ -9778,6 +9955,22 @@ export function ProposalForge(): JSX.Element {
   ]);
 
   React.useEffect(() => {
+    if (requestedView !== "compose") {
+      pendingQueuedComposeSnapshotRef.current = null;
+      if (composeAutosaveTimeoutRef.current !== null) {
+        window.clearTimeout(composeAutosaveTimeoutRef.current);
+        composeAutosaveTimeoutRef.current = null;
+      }
+      setComposeSaveStatus((currentStatus) =>
+        currentStatus === "error" ? currentStatus : "idle",
+      );
+      return;
+    }
+
+    if (isRestoringComposeViewRef.current) {
+      return;
+    }
+
     if (!composeAutosaveSnapshot) {
       pendingQueuedComposeSnapshotRef.current = null;
       if (composeAutosaveTimeoutRef.current !== null) {
@@ -9796,7 +9989,6 @@ export function ProposalForge(): JSX.Element {
     }
 
     if (
-      requestedView === "compose" &&
       selectedDraftProposalId &&
       String(composeAutosaveSnapshot.id ?? "") !== selectedDraftProposalId
     ) {
@@ -10358,6 +10550,7 @@ export function ProposalForge(): JSX.Element {
             : "A detached draft copy is ready. Review the brief in Compose before refining.",
         });
       }
+      skipNextSavedToComposeRestoreRef.current = true;
       updateProposalRoute("compose");
     },
     [

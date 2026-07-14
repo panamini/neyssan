@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -13,6 +14,7 @@ import {
   readStoredProposalOutputDraft,
   writeStoredProposalOutputDraft,
 } from "../../lib/proposal-output-draft";
+import { writeStoredDocumentPageSizePreference } from "../../lib/document-page-size";
 import {
   PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
   readStoredProposalComposeDraft,
@@ -507,6 +509,16 @@ function ProposalTopbarActionsProbe({
           >
             Use A4
           </button>
+          <button
+            type="button"
+            onClick={() =>
+              mockProposalTopbarState.registration?.onPageSizePreferenceChange(
+                "auto",
+              )
+            }
+          >
+            Use Auto
+          </button>
           <button type="button" onClick={() => navigate("/proposal")}>
             Return to compose
           </button>
@@ -668,6 +680,34 @@ describe("ProposalForge saved view", () => {
     });
   });
 
+  it("keeps Auto page size on a saved proposal without a compose autosave overwrite", async () => {
+    writeStoredDocumentPageSizePreference("letter");
+    render(
+      <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_beta"]}>
+        <ProposalForge includeReviewControls />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Use Auto" }));
+
+    await waitFor(() => {
+      expect(mockUpdateProposal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "proposal_beta",
+          metadata: expect.not.objectContaining({ pageSize: expect.anything() }),
+        }),
+      );
+    });
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 1_200));
+    });
+
+    expect(mockUpdateProposal).toHaveBeenCalledTimes(1);
+    expect(mockUpdateProposal.mock.calls[0]?.[0]?.metadata).not.toHaveProperty(
+      "pageSize",
+    );
+  });
+
   it("keeps a saved layout change out of the active compose draft", async () => {
     writeStoredProposalOutputDraft({
       proposalContent: "Independent compose draft.",
@@ -716,8 +756,42 @@ describe("ProposalForge saved view", () => {
         /^\/proposal$/,
       );
       const state = screen.getByTestId("proposal-display-state");
-      expect(state).not.toHaveTextContent("modernist_signal");
+      expect(state).toHaveTextContent("Independent compose draft.");
+      expect(state).toHaveTextContent("editorial_wide");
+      expect(state).not.toHaveTextContent("Saved proposal content.");
     });
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 1_200));
+    });
+    const savedUpdates = mockUpdateProposal.mock.calls.filter(
+      ([payload]) => payload.id === "proposal_beta",
+    );
+    const composeUpdates = mockUpdateProposal.mock.calls.filter(
+      ([payload]) => payload.id === "proposal_compose",
+    );
+    expect(savedUpdates.length).toBeGreaterThan(0);
+    expect(savedUpdates).toEqual(
+      expect.arrayContaining([
+        [
+          expect.objectContaining({
+            metadata: expect.objectContaining({
+              templateId: "modernist_signal",
+            }),
+          }),
+        ],
+      ]),
+    );
+    expect(composeUpdates.length).toBeGreaterThan(0);
+    for (const [payload] of composeUpdates) {
+      expect(payload).toEqual(
+        expect.objectContaining({
+          content: "Independent compose draft.",
+          metadata: expect.objectContaining({
+            templateId: "editorial_wide",
+          }),
+        }),
+      );
+    }
   });
 
   it("renders a saved letter with its document locale instead of the UI locale", async () => {
@@ -844,6 +918,40 @@ describe("ProposalForge saved view", () => {
       expect(state).toHaveTextContent("no-document");
       expect(state).not.toHaveTextContent("Stale structured document");
     });
+  });
+
+  it("applies a gallery template intent after restoring a draftId proposal", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={[
+          "/proposal?draftId=proposal_draft_restore&templateId=modernist_signal&styleSlot=direct&pageSize=a4&templateStart=1",
+        ]}
+      >
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      const state = screen.getByTestId("proposal-display-state");
+      expect(state).toHaveTextContent("Restored draft proposal content.");
+      expect(state).toHaveTextContent("modernist_signal");
+      expect(state).not.toHaveTextContent("swiss_margin");
+    });
+
+    await waitFor(
+      () => {
+        expect(mockUpdateProposal).toHaveBeenCalledWith(
+          expect.objectContaining({
+            id: "proposal_draft_restore",
+            metadata: expect.objectContaining({
+              pageSize: "a4",
+              templateId: "modernist_signal",
+            }),
+          }),
+        );
+      },
+      { timeout: 2_500 },
+    );
   });
 
   it("exposes saved proposal actions through the document topbar", () => {
