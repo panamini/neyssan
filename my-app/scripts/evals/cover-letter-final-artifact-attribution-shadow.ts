@@ -6,10 +6,12 @@ import {
   mkdir,
   readFile,
   readdir,
+  realpath,
   rename,
   rm,
   writeFile,
 } from "node:fs/promises";
+import { platform } from "node:os";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -941,10 +943,10 @@ async function writePrivateFileAtomic(args: {
   fileName: string;
   content: string;
 }): Promise<string> {
-  await ensurePrivateDirectory(args.directory);
-  const filePath = path.join(args.directory, args.fileName);
+  const directory = await ensurePrivateDirectory(args.directory);
+  const filePath = path.join(directory, args.fileName);
   const temporaryPath = path.join(
-    args.directory,
+    directory,
     `.${args.fileName}.${randomUUID()}.tmp`,
   );
   try {
@@ -962,15 +964,99 @@ async function writePrivateFileAtomic(args: {
   return filePath;
 }
 
-async function ensurePrivateDirectory(directory: string): Promise<void> {
-  await mkdir(directory, { recursive: true, mode: 0o700 });
-  const directoryStats = await lstat(directory);
+async function ensurePrivateDirectory(directory: string): Promise<string> {
+  const safeDirectory = await resolveNonSymlinkDirectoryTree({
+    absolutePath: directory,
+    mustExist: false,
+    label: "output",
+  });
+  await mkdir(safeDirectory, { recursive: true, mode: 0o700 });
+  const directoryStats = await lstat(safeDirectory);
   if (!directoryStats.isDirectory()) {
     throw new Error(
-      `QUALITY-EVAL-2E refuses a non-directory or symlink output path: ${directory}.`,
+      `QUALITY-EVAL-2E refuses a non-directory or symlink output path: ${safeDirectory}.`,
     );
   }
-  await chmod(directory, 0o700);
+  await chmod(safeDirectory, 0o700);
+  return safeDirectory;
+}
+
+function isMissingPathError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ENOENT"
+  );
+}
+
+async function resolveNonSymlinkDirectoryTree(args: {
+  absolutePath: string;
+  mustExist: boolean;
+  label: "input" | "output";
+}): Promise<string> {
+  const root = path.parse(args.absolutePath).root;
+  const segments = args.absolutePath
+    .slice(root.length)
+    .split(path.sep)
+    .filter(Boolean);
+  let canonicalPath = root;
+  for (let index = 0; index < segments.length; index += 1) {
+    const candidate = path.join(canonicalPath, segments[index]!);
+    let candidateStats;
+    try {
+      candidateStats = await lstat(candidate);
+    } catch (error) {
+      if (!isMissingPathError(error)) {
+        throw error;
+      }
+      if (args.mustExist) {
+        throw new Error(
+          `QUALITY-EVAL-2E ${args.label} directory must already exist: ${args.absolutePath}.`,
+        );
+      }
+      return path.join(canonicalPath, ...segments.slice(index));
+    }
+    if (candidateStats.isSymbolicLink()) {
+      const isTrustedSystemAlias =
+        platform() === "darwin" &&
+        canonicalPath === root &&
+        (segments[index] === "var" || segments[index] === "tmp");
+      if (isTrustedSystemAlias) {
+        const resolvedCandidate = await realpath(candidate);
+        const resolvedStats = await lstat(resolvedCandidate);
+        if (resolvedStats.isDirectory()) {
+          canonicalPath = resolvedCandidate;
+          continue;
+        }
+      }
+    }
+    if (!candidateStats.isDirectory()) {
+      throw new Error(
+        `QUALITY-EVAL-2E refuses a non-directory or symlink ${args.label} path: ${candidate}.`,
+      );
+    }
+    canonicalPath = await realpath(candidate);
+  }
+  return canonicalPath;
+}
+
+async function preparePrivateDirectories(
+  directories: readonly string[],
+): Promise<void> {
+  const safeDirectories: string[] = [];
+  for (const directory of directories) {
+    safeDirectories.push(
+      await resolveNonSymlinkDirectoryTree({
+        absolutePath: directory,
+        mustExist: false,
+        label: "output",
+      }),
+    );
+  }
+  for (const directory of safeDirectories) {
+    await ensurePrivateDirectory(directory);
+  }
 }
 
 export async function writeCoverLetterFinalArtifactShadowArtifacts(args: {
@@ -990,8 +1076,18 @@ export async function writeCoverLetterFinalArtifactShadowArtifacts(args: {
       "QUALITY-EVAL-2E requires explicit input and output directories.",
     );
   }
-  const inputDirectory = path.resolve(args.inputDirectory);
-  const outputDirectory = path.resolve(args.outputDirectory);
+  const requestedInputDirectory = path.resolve(args.inputDirectory);
+  const requestedOutputDirectory = path.resolve(args.outputDirectory);
+  const inputDirectory = await resolveNonSymlinkDirectoryTree({
+    absolutePath: requestedInputDirectory,
+    mustExist: true,
+    label: "input",
+  });
+  const outputDirectory = await resolveNonSymlinkDirectoryTree({
+    absolutePath: requestedOutputDirectory,
+    mustExist: false,
+    label: "output",
+  });
   const isSameOrDescendant = (parent: string, candidate: string): boolean => {
     const relative = path.relative(parent, candidate);
     return (
@@ -1009,10 +1105,15 @@ export async function writeCoverLetterFinalArtifactShadowArtifacts(args: {
       "QUALITY-EVAL-2E input and output directory trees must not overlap.",
     );
   }
-  await ensurePrivateDirectory(outputDirectory);
   const reviewDirectory = path.join(outputDirectory, "private-review");
   const evidenceDirectory = path.join(outputDirectory, "private-evidence");
   const revealDirectory = path.join(outputDirectory, "private-reveal");
+  await preparePrivateDirectories([
+    outputDirectory,
+    reviewDirectory,
+    evidenceDirectory,
+    revealDirectory,
+  ]);
   return {
     packJsonPath: await writePrivateFileAtomic({
       directory: reviewDirectory,

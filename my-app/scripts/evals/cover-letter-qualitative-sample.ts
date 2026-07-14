@@ -1,5 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { chmod, mkdir, rename, rm, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  lstat,
+  mkdir,
+  realpath,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { platform } from "node:os";
 import * as path from "node:path";
 
 import { buildStableHash } from "../../src/modules/application-harness/fingerprints";
@@ -591,11 +600,10 @@ async function writePrivateFileAtomic(args: {
   fileName: string;
   content: string;
 }): Promise<string> {
-  await mkdir(args.directory, { recursive: true, mode: 0o700 });
-  await chmod(args.directory, 0o700);
-  const filePath = path.join(args.directory, args.fileName);
+  const directory = await ensurePrivateDirectory(args.directory);
+  const filePath = path.join(directory, args.fileName);
   const temporaryPath = path.join(
-    args.directory,
+    directory,
     `.${args.fileName}.${randomUUID()}.tmp`,
   );
   try {
@@ -613,6 +621,98 @@ async function writePrivateFileAtomic(args: {
   return filePath;
 }
 
+function isMissingPathError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ENOENT"
+  );
+}
+
+async function resolveNonSymlinkOutputDirectoryTree(args: {
+  absolutePath: string;
+  mustExist: boolean;
+}): Promise<string> {
+  const root = path.parse(args.absolutePath).root;
+  const segments = args.absolutePath
+    .slice(root.length)
+    .split(path.sep)
+    .filter(Boolean);
+  let canonicalPath = root;
+  for (let index = 0; index < segments.length; index += 1) {
+    const candidate = path.join(canonicalPath, segments[index]!);
+    let candidateStats;
+    try {
+      candidateStats = await lstat(candidate);
+    } catch (error) {
+      if (!isMissingPathError(error)) {
+        throw error;
+      }
+      if (args.mustExist) {
+        throw new Error(
+          `QUALITY-EVAL-2D output directory must already exist: ${args.absolutePath}.`,
+        );
+      }
+      return path.join(canonicalPath, ...segments.slice(index));
+    }
+    if (candidateStats.isSymbolicLink()) {
+      const isTrustedSystemAlias =
+        platform() === "darwin" &&
+        canonicalPath === root &&
+        (segments[index] === "var" || segments[index] === "tmp");
+      if (isTrustedSystemAlias) {
+        const resolvedCandidate = await realpath(candidate);
+        const resolvedStats = await lstat(resolvedCandidate);
+        if (resolvedStats.isDirectory()) {
+          canonicalPath = resolvedCandidate;
+          continue;
+        }
+      }
+    }
+    if (!candidateStats.isDirectory()) {
+      throw new Error(
+        `QUALITY-EVAL-2D refuses a non-directory or symlink output path: ${candidate}.`,
+      );
+    }
+    canonicalPath = await realpath(candidate);
+  }
+  return canonicalPath;
+}
+
+async function ensurePrivateDirectory(directory: string): Promise<string> {
+  const safeDirectory = await resolveNonSymlinkOutputDirectoryTree({
+    absolutePath: directory,
+    mustExist: false,
+  });
+  await mkdir(safeDirectory, { recursive: true, mode: 0o700 });
+  const directoryStats = await lstat(safeDirectory);
+  if (!directoryStats.isDirectory()) {
+    throw new Error(
+      `QUALITY-EVAL-2D refuses a non-directory or symlink output path: ${safeDirectory}.`,
+    );
+  }
+  await chmod(safeDirectory, 0o700);
+  return safeDirectory;
+}
+
+async function preparePrivateDirectories(
+  directories: readonly string[],
+): Promise<void> {
+  const safeDirectories: string[] = [];
+  for (const directory of directories) {
+    safeDirectories.push(
+      await resolveNonSymlinkOutputDirectoryTree({
+        absolutePath: directory,
+        mustExist: false,
+      }),
+    );
+  }
+  for (const directory of safeDirectories) {
+    await ensurePrivateDirectory(directory);
+  }
+}
+
 export async function writeCoverLetterQualitativeSampleCellEvidence(args: {
   outputDirectory: string;
   index: number;
@@ -627,11 +727,15 @@ export async function writeCoverLetterQualitativeSampleCellEvidence(args: {
       `Qualitative sample cell ${args.index + 1} expected ${expectedModel}; received ${args.cell.requestedModel}.`,
     );
   }
-  const outputDirectory = path.resolve(args.outputDirectory);
-  await mkdir(outputDirectory, { recursive: true, mode: 0o700 });
-  await chmod(outputDirectory, 0o700);
+  const requestedOutputDirectory = path.resolve(args.outputDirectory);
+  const outputDirectory = await resolveNonSymlinkOutputDirectoryTree({
+    absolutePath: requestedOutputDirectory,
+    mustExist: false,
+  });
+  const evidenceDirectory = path.join(outputDirectory, "private-evidence");
+  await preparePrivateDirectories([outputDirectory, evidenceDirectory]);
   return writePrivateFileAtomic({
-    directory: path.join(outputDirectory, "private-evidence"),
+    directory: evidenceDirectory,
     fileName: `sample-cell-${String(args.index + 1).padStart(3, "0")}.json`,
     content: `${JSON.stringify(args.cell, null, 2)}\n`,
   });
@@ -651,11 +755,18 @@ export async function writeCoverLetterQualitativeSampleArtifacts(args: {
       "An explicit qualitative sample output directory is required.",
     );
   }
-  const outputDirectory = path.resolve(args.outputDirectory);
-  await mkdir(outputDirectory, { recursive: true, mode: 0o700 });
-  await chmod(outputDirectory, 0o700);
+  const requestedOutputDirectory = path.resolve(args.outputDirectory);
+  const outputDirectory = await resolveNonSymlinkOutputDirectoryTree({
+    absolutePath: requestedOutputDirectory,
+    mustExist: false,
+  });
   const reviewDirectory = path.join(outputDirectory, "private-review");
   const revealDirectory = path.join(outputDirectory, "private-reveal");
+  await preparePrivateDirectories([
+    outputDirectory,
+    reviewDirectory,
+    revealDirectory,
+  ]);
   const packJsonPath = await writePrivateFileAtomic({
     directory: reviewDirectory,
     fileName: "qualitative-sample-pack.json",
