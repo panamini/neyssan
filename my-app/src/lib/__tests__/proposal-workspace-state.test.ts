@@ -154,9 +154,13 @@ describe("proposal workspace state", () => {
       proposalReturnTo: "/proposal?draftId=proposal_draft",
     });
     expect(
-      buildProposalTemplateApplyRoute(galleryState, "modernist_signal"),
+      buildProposalTemplateApplyRoute(
+        galleryState,
+        "modernist_signal",
+        "direct",
+      ),
     ).toBe(
-      "/proposal?draftId=proposal_draft&templateId=modernist_signal",
+      "/proposal?draftId=proposal_draft&templateId=modernist_signal&styleSlot=direct",
     );
   });
 

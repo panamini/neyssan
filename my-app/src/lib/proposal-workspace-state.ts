@@ -79,10 +79,14 @@ export function readProposalTemplateReturnTo(value: unknown): string | null {
 export function buildProposalTemplateApplyRoute(
   locationState: unknown,
   templateId: string,
+  styleSlot?: "minimal" | "direct" | "editorial",
 ): string {
   const returnTo = readProposalTemplateReturnTo(locationState) ?? "/proposal";
   const parsed = new URL(returnTo, "https://twoweeks.local");
   parsed.searchParams.set("templateId", templateId);
+  if (styleSlot) {
+    parsed.searchParams.set("styleSlot", styleSlot);
+  }
   return `${parsed.pathname}?${parsed.searchParams.toString()}`;
 }
 

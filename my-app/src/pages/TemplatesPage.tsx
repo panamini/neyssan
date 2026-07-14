@@ -536,9 +536,14 @@ export function TemplatesPage(): JSX.Element {
       }
 
       const templateIdParam = getCoverLetterRouteTemplateIntent(template);
+      const styleSlotIntent = getCoverLetterTemplateIntent(template.family);
       navigate(
         templateIdParam
-          ? buildProposalTemplateApplyRoute(location.state, templateIdParam)
+          ? buildProposalTemplateApplyRoute(
+              location.state,
+              templateIdParam,
+              styleSlotIntent ?? undefined,
+            )
           : readProposalTemplateReturnTo(location.state) ?? "/proposal",
       );
     },

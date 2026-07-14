@@ -308,7 +308,7 @@ describe("TemplatesPage", () => {
 
     expect(navigateMock).toHaveBeenCalledTimes(1);
     expect(navigateMock).toHaveBeenCalledWith(
-      "/proposal?view=saved&id=proposal_beta&templateId=editorial_wide",
+      "/proposal?view=saved&id=proposal_beta&templateId=editorial_wide&styleSlot=editorial",
     );
   });
 
