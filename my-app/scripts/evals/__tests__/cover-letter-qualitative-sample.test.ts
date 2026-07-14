@@ -1,5 +1,6 @@
 import {
   chmod,
+  lstat,
   mkdir,
   mkdtemp,
   readdir,
@@ -420,6 +421,11 @@ describe("QUALITY-EVAL-2D qualitative sample", () => {
             ...artifacts,
           }),
         ).rejects.toThrow(/symlink output path/iu);
+        if (directoryName === "private-reveal") {
+          await expect(
+            lstat(path.join(outputDirectory, "private-review")),
+          ).rejects.toMatchObject({ code: "ENOENT" });
+        }
         expect(await readdir(redirectedDirectory)).toEqual([]);
         expect((await stat(redirectedDirectory)).mode & 0o777).toBe(0o755);
       }
@@ -452,6 +458,44 @@ describe("QUALITY-EVAL-2D qualitative sample", () => {
       expect((await stat(redirectedEvidenceDirectory)).mode & 0o777).toBe(
         0o755,
       );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a symlinked output ancestor before creating the requested tree", async () => {
+    const root = await mkdtemp(
+      path.join(tmpdir(), "cover-letter-qualitative-symlink-parent-"),
+    );
+    try {
+      const benchmarkCase = coverLetterBlindReviewCases.find(
+        (item) => item.id === QUALITY_EVAL_2D_CASE_ID,
+      )!;
+      const cells = await Promise.all(
+        QUALITY_EVAL_2D_WRITER_MODELS.map((writerModel) =>
+          buildCell(writerModel),
+        ),
+      );
+      const artifacts = await buildCoverLetterQualitativeSampleArtifacts({
+        cohortId: QUALITY_EVAL_2D_COHORT_ID,
+        runId: "quality-eval-2d-symlink-parent-guard",
+        sourceRef: "f".repeat(40),
+        benchmarkCase,
+        cells,
+      });
+      const redirectedRoot = path.join(root, "redirected-root");
+      const symlinkedRoot = path.join(root, "symlinked-root");
+      await mkdir(redirectedRoot, { mode: 0o755 });
+      await symlink(redirectedRoot, symlinkedRoot, "dir");
+
+      await expect(
+        writeCoverLetterQualitativeSampleArtifacts({
+          outputDirectory: path.join(symlinkedRoot, "new-output"),
+          ...artifacts,
+        }),
+      ).rejects.toThrow(/symlink/iu);
+      expect(await readdir(redirectedRoot)).toEqual([]);
+      expect((await stat(redirectedRoot)).mode & 0o777).toBe(0o755);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

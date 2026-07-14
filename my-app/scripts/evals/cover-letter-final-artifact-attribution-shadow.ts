@@ -942,10 +942,10 @@ async function writePrivateFileAtomic(args: {
   fileName: string;
   content: string;
 }): Promise<string> {
-  await ensurePrivateDirectory(args.directory);
-  const filePath = path.join(args.directory, args.fileName);
+  const directory = await ensurePrivateDirectory(args.directory);
+  const filePath = path.join(directory, args.fileName);
   const temporaryPath = path.join(
-    args.directory,
+    directory,
     `.${args.fileName}.${randomUUID()}.tmp`,
   );
   try {
@@ -963,37 +963,21 @@ async function writePrivateFileAtomic(args: {
   return filePath;
 }
 
-async function ensurePrivateDirectory(directory: string): Promise<void> {
-  await mkdir(directory, { recursive: true, mode: 0o700 });
-  const directoryStats = await lstat(directory);
+async function ensurePrivateDirectory(directory: string): Promise<string> {
+  const safeDirectory = await resolveNonSymlinkDirectoryTree({
+    absolutePath: directory,
+    mustExist: false,
+    label: "output",
+  });
+  await mkdir(safeDirectory, { recursive: true, mode: 0o700 });
+  const directoryStats = await lstat(safeDirectory);
   if (!directoryStats.isDirectory()) {
     throw new Error(
-      `QUALITY-EVAL-2E refuses a non-directory or symlink output path: ${directory}.`,
+      `QUALITY-EVAL-2E refuses a non-directory or symlink output path: ${safeDirectory}.`,
     );
   }
-  await chmod(directory, 0o700);
-}
-
-function sharedDirectoryAncestor(left: string, right: string): string | null {
-  const leftRoot = path.parse(left).root;
-  const rightRoot = path.parse(right).root;
-  if (leftRoot !== rightRoot) {
-    return null;
-  }
-  const leftParts = left.slice(leftRoot.length).split(path.sep).filter(Boolean);
-  const rightParts = right
-    .slice(rightRoot.length)
-    .split(path.sep)
-    .filter(Boolean);
-  const sharedParts: string[] = [];
-  const sharedLength = Math.min(leftParts.length, rightParts.length);
-  for (let index = 0; index < sharedLength; index += 1) {
-    if (leftParts[index] !== rightParts[index]) {
-      break;
-    }
-    sharedParts.push(leftParts[index]!);
-  }
-  return path.join(leftRoot, ...sharedParts);
+  await chmod(safeDirectory, 0o700);
+  return safeDirectory;
 }
 
 function isMissingPathError(error: unknown): boolean {
@@ -1007,29 +991,15 @@ function isMissingPathError(error: unknown): boolean {
 
 async function resolveNonSymlinkDirectoryTree(args: {
   absolutePath: string;
-  trustedAncestor: string;
   mustExist: boolean;
   label: "input" | "output";
 }): Promise<string> {
-  const ancestorStats = await lstat(args.trustedAncestor);
-  if (!ancestorStats.isDirectory()) {
-    throw new Error(
-      `QUALITY-EVAL-2E refuses a symlinked ${args.label} directory ancestor: ${args.trustedAncestor}.`,
-    );
-  }
-  const canonicalAncestor = await realpath(args.trustedAncestor);
-  const relative = path.relative(args.trustedAncestor, args.absolutePath);
-  if (
-    relative === ".." ||
-    relative.startsWith(`..${path.sep}`) ||
-    path.isAbsolute(relative)
-  ) {
-    throw new Error(
-      `QUALITY-EVAL-2E could not establish the ${args.label} directory tree.`,
-    );
-  }
-  const segments = relative.split(path.sep).filter(Boolean);
-  let canonicalPath = canonicalAncestor;
+  const root = path.parse(args.absolutePath).root;
+  const segments = args.absolutePath
+    .slice(root.length)
+    .split(path.sep)
+    .filter(Boolean);
+  let canonicalPath = root;
   for (let index = 0; index < segments.length; index += 1) {
     const candidate = path.join(canonicalPath, segments[index]!);
     let candidateStats;
@@ -1046,14 +1016,47 @@ async function resolveNonSymlinkDirectoryTree(args: {
       }
       return path.join(canonicalPath, ...segments.slice(index));
     }
+    if (candidateStats.isSymbolicLink()) {
+      const parentStats = await lstat(canonicalPath);
+      const isTrustedSystemAlias =
+        candidateStats.uid === 0 &&
+        parentStats.uid === 0 &&
+        (parentStats.mode & 0o022) === 0;
+      if (isTrustedSystemAlias) {
+        const resolvedCandidate = await realpath(candidate);
+        const resolvedStats = await lstat(resolvedCandidate);
+        if (resolvedStats.isDirectory()) {
+          canonicalPath = resolvedCandidate;
+          continue;
+        }
+      }
+    }
     if (!candidateStats.isDirectory()) {
       throw new Error(
         `QUALITY-EVAL-2E refuses a non-directory or symlink ${args.label} path: ${candidate}.`,
       );
     }
-    canonicalPath = candidate;
+    canonicalPath = await realpath(candidate);
   }
   return canonicalPath;
+}
+
+async function preparePrivateDirectories(
+  directories: readonly string[],
+): Promise<void> {
+  const safeDirectories: string[] = [];
+  for (const directory of directories) {
+    safeDirectories.push(
+      await resolveNonSymlinkDirectoryTree({
+        absolutePath: directory,
+        mustExist: false,
+        label: "output",
+      }),
+    );
+  }
+  for (const directory of safeDirectories) {
+    await ensurePrivateDirectory(directory);
+  }
 }
 
 export async function writeCoverLetterFinalArtifactShadowArtifacts(args: {
@@ -1075,20 +1078,13 @@ export async function writeCoverLetterFinalArtifactShadowArtifacts(args: {
   }
   const requestedInputDirectory = path.resolve(args.inputDirectory);
   const requestedOutputDirectory = path.resolve(args.outputDirectory);
-  const sharedAncestor = sharedDirectoryAncestor(
-    requestedInputDirectory,
-    requestedOutputDirectory,
-  );
   const inputDirectory = await resolveNonSymlinkDirectoryTree({
     absolutePath: requestedInputDirectory,
-    trustedAncestor: sharedAncestor ?? path.parse(requestedInputDirectory).root,
     mustExist: true,
     label: "input",
   });
   const outputDirectory = await resolveNonSymlinkDirectoryTree({
     absolutePath: requestedOutputDirectory,
-    trustedAncestor:
-      sharedAncestor ?? path.parse(requestedOutputDirectory).root,
     mustExist: false,
     label: "output",
   });
@@ -1109,10 +1105,15 @@ export async function writeCoverLetterFinalArtifactShadowArtifacts(args: {
       "QUALITY-EVAL-2E input and output directory trees must not overlap.",
     );
   }
-  await ensurePrivateDirectory(outputDirectory);
   const reviewDirectory = path.join(outputDirectory, "private-review");
   const evidenceDirectory = path.join(outputDirectory, "private-evidence");
   const revealDirectory = path.join(outputDirectory, "private-reveal");
+  await preparePrivateDirectories([
+    outputDirectory,
+    reviewDirectory,
+    evidenceDirectory,
+    revealDirectory,
+  ]);
   return {
     packJsonPath: await writePrivateFileAtomic({
       directory: reviewDirectory,
