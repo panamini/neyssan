@@ -427,6 +427,7 @@ vi.mock("../../components/ProposalDisplay", () => ({
     templateId,
     documentLanguage,
     pageSize,
+    onContentChange,
     onContentCommit,
   }: {
     proposalContent: string | null;
@@ -441,6 +442,7 @@ vi.mock("../../components/ProposalDisplay", () => ({
     templateId?: string | null;
     documentLanguage?: string | null;
     pageSize?: { id?: string | null } | null;
+    onContentChange?: (value: string) => void;
     onContentCommit?: (snapshot?: {
       proposalContent?: string | null;
       proposalDocument?: null;
@@ -461,6 +463,16 @@ vi.mock("../../components/ProposalDisplay", () => ({
         {documentLanguage ?? "no-language"}
       </div>
       <div data-testid="proposal-page-size">{pageSize?.id ?? "no-size"}</div>
+      {onContentChange ? (
+        <button
+          type="button"
+          onClick={() =>
+            onContentChange("Edited compose content after saved view.")
+          }
+        >
+          Edit proposal content
+        </button>
+      ) : null}
       {onContentCommit ? (
         <button
           type="button"
@@ -580,6 +592,41 @@ function ProposalForge({
       />
     </>
   );
+}
+
+function seedComposeDraftBeforeSavedView(): void {
+  window.localStorage.setItem(
+    PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
+    JSON.stringify({
+      jobTitle: "Existing draft title",
+      jobDescription: "Existing draft brief.",
+      proposalType: "cover_letter",
+      voicePreset: "signature",
+    }),
+  );
+  writeStoredProposalOutputDraft({
+    proposalContent: "Existing draft output.",
+    proposalType: "cover_letter",
+    proposalVoicePreset: "signature",
+    proposalTemplateId: null,
+    proposalVerbatiStyle: null,
+    proposalStyleLinkMode: "inherit_cv",
+    proposalStyleChoice: "auto",
+    proposalApplicantName: "Alex Martin",
+    proposalApplicantRole: "Operations Associate",
+    proposalDocumentTitle: "Existing draft output",
+    proposalDocumentMeta: "Compose output",
+    generatedProposalId: "proposal_current_draft",
+    proposalOutputMode: "preview",
+    paletteOverride: null,
+    customAccentHex: null,
+    templateBundleId: null,
+    typographyOverride: null,
+    layoutOverride: null,
+    proposalDocumentTitleManual: false,
+    characterLimitMode: null,
+    characterLimitValue: null,
+  });
 }
 
 describe("ProposalForge saved view", () => {
@@ -941,38 +988,7 @@ describe("ProposalForge saved view", () => {
   });
 
   it("opens a saved proposal without mutating the current draft", async () => {
-    window.localStorage.setItem(
-      PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
-      JSON.stringify({
-        jobTitle: "Existing draft title",
-        jobDescription: "Existing draft brief.",
-        proposalType: "cover_letter",
-        voicePreset: "signature",
-      }),
-    );
-    writeStoredProposalOutputDraft({
-      proposalContent: "Existing draft output.",
-      proposalType: "cover_letter",
-      proposalVoicePreset: "signature",
-      proposalTemplateId: null,
-      proposalVerbatiStyle: null,
-      proposalStyleLinkMode: "inherit_cv",
-      proposalStyleChoice: "auto",
-      proposalApplicantName: "Alex Martin",
-      proposalApplicantRole: "Operations Associate",
-      proposalDocumentTitle: "Existing draft output",
-      proposalDocumentMeta: "Compose output",
-      generatedProposalId: "proposal_current_draft",
-      proposalOutputMode: "preview",
-      paletteOverride: null,
-      customAccentHex: null,
-      templateBundleId: null,
-      typographyOverride: null,
-      layoutOverride: null,
-      proposalDocumentTitleManual: false,
-      characterLimitMode: null,
-      characterLimitValue: null,
-    });
+    seedComposeDraftBeforeSavedView();
 
     render(
       <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_beta"]}>
@@ -998,6 +1014,54 @@ describe("ProposalForge saved view", () => {
       proposalContent: "Existing draft output.",
       generatedProposalId: "proposal_current_draft",
     });
+  });
+
+  it("resumes compose autosave after returning from a saved proposal", async () => {
+    seedComposeDraftBeforeSavedView();
+
+    render(
+      <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_beta"]}>
+        <LocationProbe />
+        <ProposalForge includeReviewControls />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Saved proposal content.",
+      );
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Return to compose" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-location")).toHaveTextContent(
+        "/proposal",
+      );
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Existing draft output.",
+      );
+    });
+
+    mockUpdateProposal.mockClear();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Edit proposal content" }),
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Edited compose content after saved view.",
+      );
+    });
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 1_200));
+    });
+    expect(mockUpdateProposal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "proposal_current_draft",
+        content: "Edited compose content after saved view.",
+        status: "draft",
+      }),
+    );
   });
 
   it("clears stale structured output when restoring a draftId proposal", async () => {
