@@ -695,6 +695,43 @@ describe("QUALITY-CL-2 structure-aware finalizer canary", () => {
     ).resolves.toMatchObject({ providerCalls: 0, retries: 0, repairs: 0 });
   });
 
+  it("removes employer-value sentences duplicated by closeLine like production", async () => {
+    const packs = await buildReviewerSafePacks({ authoritative: true });
+    const firstEntry = packs.qualitativePack.entries[0]!;
+    const sourceBodyParts = firstEntry.parsedCandidate.bodyParts as Record<
+      string,
+      Readonly<{ section: string; text: string }>
+    >;
+    const employerValueBlock = sourceBodyParts.employerValueBlock!;
+    const closeLine = sourceBodyParts.closeLine!;
+    const qualitativePack = {
+      ...packs.qualitativePack,
+      entries: [
+        {
+          ...firstEntry,
+          parsedCandidate: {
+            ...firstEntry.parsedCandidate,
+            bodyParts: {
+              ...sourceBodyParts,
+              employerValueBlock: {
+                ...employerValueBlock,
+                text: `${employerValueBlock.text} ${closeLine.text}`,
+              },
+            },
+          },
+        },
+        ...packs.qualitativePack.entries.slice(1),
+      ],
+    } as CoverLetterQualitativeSamplePack;
+
+    await expect(
+      buildCoverLetterStructureAwareFinalizerCanary({
+        qualitativePack,
+        finalArtifactPack: packs.finalArtifactPack,
+      }),
+    ).resolves.toMatchObject({ providerCalls: 0, retries: 0, repairs: 0 });
+  });
+
   it("rejects a finalizer-boundary variant that lost a unique trusted structured sentence", async () => {
     const packs = await buildReviewerSafePacks({ authoritative: true });
     const firstEntry = packs.qualitativePack.entries[0]!;
