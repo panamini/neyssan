@@ -1146,6 +1146,7 @@ describe("ProposalForge saved view", () => {
           "/proposal?draftId=proposal_draft_restore&templateId=modernist_signal&styleSlot=direct&pageSize=a4&templateStart=1",
         ]}
       >
+        <LocationProbe />
         <ProposalForge />
       </MemoryRouter>,
     );
@@ -1170,6 +1171,41 @@ describe("ProposalForge saved view", () => {
         );
       },
       { timeout: 2_500 },
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-location")).toHaveTextContent(
+        /^\/proposal\?draftId=proposal_draft_restore$/,
+      );
+    });
+  });
+
+  it("keeps a failed draftId gallery template intent in the URL for retry", async () => {
+    mockUpdateProposal.mockRejectedValueOnce(new Error("offline"));
+
+    render(
+      <MemoryRouter
+        initialEntries={[
+          "/proposal?draftId=proposal_draft_restore&templateId=modernist_signal&styleSlot=direct&pageSize=a4&templateStart=1",
+        ]}
+      >
+        <LocationProbe />
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(mockUpdateProposal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "proposal_draft_restore",
+          metadata: expect.objectContaining({
+            pageSize: "a4",
+            templateId: "modernist_signal",
+          }),
+        }),
+      );
+    });
+    expect(screen.getByTestId("proposal-location")).toHaveTextContent(
+      "/proposal?draftId=proposal_draft_restore&templateId=modernist_signal&styleSlot=direct&pageSize=a4&templateStart=1",
     );
   });
 

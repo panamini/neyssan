@@ -8053,6 +8053,12 @@ export function ProposalForge(): JSX.Element {
       styleSlot: proposalStyleSlotIntent,
       stylePreset: proposalStyleIntent,
     });
+    const consumedDraftRouteIntentKey = JSON.stringify({
+      id: selectedDraftProposalId,
+      templateId: null,
+      styleSlot: null,
+      stylePreset: null,
+    });
     if (loadedDraftProposalIdRef.current === draftRestoreKey) {
       return;
     }
@@ -8211,13 +8217,27 @@ export function ProposalForge(): JSX.Element {
           templateBundle: true,
           ...(proposalStyleSlotIntent ? {} : { documentStyleSlot: true }),
         },
-      }).catch((error) => {
-        console.error("Failed to persist restored draft template:", error);
-        showToast("Template not saved.", {
-          variant: "error",
-          description: "Check your connection and try again.",
+      })
+        .then(() => {
+          const params = new URLSearchParams(search);
+          clearProposalTemplateOneShotParams(params);
+          const nextSearch = params.toString();
+          loadedDraftProposalIdRef.current = consumedDraftRouteIntentKey;
+          void navigate(
+            {
+              pathname: location.pathname,
+              search: nextSearch ? `?${nextSearch}` : "",
+            },
+            { replace: true, state: null },
+          );
+        })
+        .catch((error) => {
+          console.error("Failed to persist restored draft template:", error);
+          showToast("Template not saved.", {
+            variant: "error",
+            description: "Check your connection and try again.",
+          });
         });
-      });
     }
     const nextDocumentDecoration = normalizeDocumentDecoration(
       draftProposal.metadata?.documentDecoration ??
@@ -8354,6 +8374,8 @@ export function ProposalForge(): JSX.Element {
     fallbackProposalTemplateId,
     formatProposalTypeLabel,
     isConvexAuthenticated,
+    location.pathname,
+    navigate,
     proposalStyleIntent,
     proposalStyleSlotIntent,
     proposalSettingsPresets,
@@ -8363,6 +8385,7 @@ export function ProposalForge(): JSX.Element {
     requestedView,
     savedProposals,
     selectedDraftProposalId,
+    search,
     storedOutputDraft,
     showToast,
     updateProposal,
