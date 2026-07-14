@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { chmod, mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, rename, rm, writeFile } from "node:fs/promises";
 import * as path from "node:path";
 
 import { buildStableHash } from "../../src/modules/application-harness/fingerprints";
@@ -591,8 +591,7 @@ async function writePrivateFileAtomic(args: {
   fileName: string;
   content: string;
 }): Promise<string> {
-  await mkdir(args.directory, { recursive: true, mode: 0o700 });
-  await chmod(args.directory, 0o700);
+  await ensurePrivateDirectory(args.directory);
   const filePath = path.join(args.directory, args.fileName);
   const temporaryPath = path.join(
     args.directory,
@@ -613,6 +612,17 @@ async function writePrivateFileAtomic(args: {
   return filePath;
 }
 
+async function ensurePrivateDirectory(directory: string): Promise<void> {
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  const directoryStats = await lstat(directory);
+  if (!directoryStats.isDirectory()) {
+    throw new Error(
+      `QUALITY-EVAL-2D refuses a non-directory or symlink output path: ${directory}.`,
+    );
+  }
+  await chmod(directory, 0o700);
+}
+
 export async function writeCoverLetterQualitativeSampleCellEvidence(args: {
   outputDirectory: string;
   index: number;
@@ -628,8 +638,7 @@ export async function writeCoverLetterQualitativeSampleCellEvidence(args: {
     );
   }
   const outputDirectory = path.resolve(args.outputDirectory);
-  await mkdir(outputDirectory, { recursive: true, mode: 0o700 });
-  await chmod(outputDirectory, 0o700);
+  await ensurePrivateDirectory(outputDirectory);
   return writePrivateFileAtomic({
     directory: path.join(outputDirectory, "private-evidence"),
     fileName: `sample-cell-${String(args.index + 1).padStart(3, "0")}.json`,
@@ -652,8 +661,7 @@ export async function writeCoverLetterQualitativeSampleArtifacts(args: {
     );
   }
   const outputDirectory = path.resolve(args.outputDirectory);
-  await mkdir(outputDirectory, { recursive: true, mode: 0o700 });
-  await chmod(outputDirectory, 0o700);
+  await ensurePrivateDirectory(outputDirectory);
   const reviewDirectory = path.join(outputDirectory, "private-review");
   const revealDirectory = path.join(outputDirectory, "private-reveal");
   const packJsonPath = await writePrivateFileAtomic({

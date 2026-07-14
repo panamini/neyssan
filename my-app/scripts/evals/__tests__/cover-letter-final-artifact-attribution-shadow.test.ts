@@ -662,4 +662,54 @@ describe("QUALITY-EVAL-2E final-artifact attribution shadow", () => {
     ).rejects.toThrow(/symlink output path/iu);
     await rm(root, { recursive: true, force: true });
   });
+
+  it("rejects output trees redirected into private evidence by a symlinked parent", async () => {
+    const root = await mkdtemp(
+      path.join(tmpdir(), "cover-letter-final-artifact-symlink-parent-"),
+    );
+    try {
+      const inputDirectory = path.join(root, "private-evidence");
+      await mkdir(inputDirectory, { recursive: true, mode: 0o700 });
+      const cells = await buildFiveCells();
+      await Promise.all(
+        cells.map((cell, index) =>
+          writeFile(
+            path.join(
+              inputDirectory,
+              `sample-cell-${String(index + 1).padStart(3, "0")}.json`,
+            ),
+            `${JSON.stringify(cell)}\n`,
+            { mode: 0o600 },
+          ),
+        ),
+      );
+      const loaded = await loadCoverLetterFinalArtifactShadowCells({
+        inputDirectory,
+      });
+      const replay = await replayCoverLetterFinalArtifactShadow({
+        benchmarkCase,
+        cells: loaded,
+      });
+      const artifacts = await buildCoverLetterFinalArtifactShadowArtifacts({
+        runId: "quality-eval-2e-symlink-parent-guard",
+        sourceRef: "test-source",
+        benchmarkCase,
+        replay,
+      });
+      const inputNamesBefore = await readdir(inputDirectory);
+      const symlinkedParent = path.join(root, "symlinked-parent");
+      await symlink(inputDirectory, symlinkedParent, "dir");
+
+      await expect(
+        writeCoverLetterFinalArtifactShadowArtifacts({
+          inputDirectory,
+          outputDirectory: path.join(symlinkedParent, "redirected-output"),
+          ...artifacts,
+        }),
+      ).rejects.toThrow(/symlink|overlap/iu);
+      expect(await readdir(inputDirectory)).toEqual(inputNamesBefore);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });

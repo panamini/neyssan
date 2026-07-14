@@ -1,4 +1,13 @@
-import { mkdtemp, readdir, readFile, stat } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  symlink,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 
@@ -364,5 +373,87 @@ describe("QUALITY-EVAL-2D qualitative sample", () => {
     expect(await readFile(written.revealMapJsonPath, "utf8")).toContain(
       "gpt-5.6-luna",
     );
+  });
+
+  it("rejects symlinked private output directories before writing through them", async () => {
+    const root = await mkdtemp(
+      path.join(tmpdir(), "cover-letter-qualitative-symlink-"),
+    );
+    try {
+      const benchmarkCase = coverLetterBlindReviewCases.find(
+        (item) => item.id === QUALITY_EVAL_2D_CASE_ID,
+      )!;
+      const cells = await Promise.all(
+        QUALITY_EVAL_2D_WRITER_MODELS.map((writerModel) =>
+          buildCell(writerModel),
+        ),
+      );
+      const artifacts = await buildCoverLetterQualitativeSampleArtifacts({
+        cohortId: QUALITY_EVAL_2D_COHORT_ID,
+        runId: "quality-eval-2d-symlink-guard",
+        sourceRef: "f".repeat(40),
+        benchmarkCase,
+        cells,
+      });
+
+      for (const directoryName of [
+        "private-review",
+        "private-reveal",
+      ] as const) {
+        const outputDirectory = path.join(root, `${directoryName}-output`);
+        const redirectedDirectory = path.join(
+          root,
+          `${directoryName}-redirected`,
+        );
+        await mkdir(outputDirectory, { mode: 0o700 });
+        await mkdir(redirectedDirectory, { mode: 0o755 });
+        await chmod(redirectedDirectory, 0o755);
+        await symlink(
+          redirectedDirectory,
+          path.join(outputDirectory, directoryName),
+          "dir",
+        );
+
+        await expect(
+          writeCoverLetterQualitativeSampleArtifacts({
+            outputDirectory,
+            ...artifacts,
+          }),
+        ).rejects.toThrow(/symlink output path/iu);
+        expect(await readdir(redirectedDirectory)).toEqual([]);
+        expect((await stat(redirectedDirectory)).mode & 0o777).toBe(0o755);
+      }
+
+      const evidenceOutputDirectory = path.join(
+        root,
+        "private-evidence-output",
+      );
+      const redirectedEvidenceDirectory = path.join(
+        root,
+        "private-evidence-redirected",
+      );
+      await mkdir(evidenceOutputDirectory, { mode: 0o700 });
+      await mkdir(redirectedEvidenceDirectory, { mode: 0o755 });
+      await chmod(redirectedEvidenceDirectory, 0o755);
+      await symlink(
+        redirectedEvidenceDirectory,
+        path.join(evidenceOutputDirectory, "private-evidence"),
+        "dir",
+      );
+
+      await expect(
+        writeCoverLetterQualitativeSampleCellEvidence({
+          outputDirectory: evidenceOutputDirectory,
+          index: 0,
+          cell: cells[0]!,
+        }),
+      ).rejects.toThrow(/symlink output path/iu);
+      expect(await readdir(redirectedEvidenceDirectory)).toEqual([]);
+      expect((await stat(redirectedEvidenceDirectory)).mode & 0o777).toBe(
+        0o755,
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

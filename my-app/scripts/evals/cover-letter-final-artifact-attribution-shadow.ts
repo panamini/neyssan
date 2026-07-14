@@ -6,6 +6,7 @@ import {
   mkdir,
   readFile,
   readdir,
+  realpath,
   rename,
   rm,
   writeFile,
@@ -973,6 +974,88 @@ async function ensurePrivateDirectory(directory: string): Promise<void> {
   await chmod(directory, 0o700);
 }
 
+function sharedDirectoryAncestor(left: string, right: string): string | null {
+  const leftRoot = path.parse(left).root;
+  const rightRoot = path.parse(right).root;
+  if (leftRoot !== rightRoot) {
+    return null;
+  }
+  const leftParts = left.slice(leftRoot.length).split(path.sep).filter(Boolean);
+  const rightParts = right
+    .slice(rightRoot.length)
+    .split(path.sep)
+    .filter(Boolean);
+  const sharedParts: string[] = [];
+  const sharedLength = Math.min(leftParts.length, rightParts.length);
+  for (let index = 0; index < sharedLength; index += 1) {
+    if (leftParts[index] !== rightParts[index]) {
+      break;
+    }
+    sharedParts.push(leftParts[index]!);
+  }
+  return path.join(leftRoot, ...sharedParts);
+}
+
+function isMissingPathError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ENOENT"
+  );
+}
+
+async function resolveNonSymlinkDirectoryTree(args: {
+  absolutePath: string;
+  trustedAncestor: string;
+  mustExist: boolean;
+  label: "input" | "output";
+}): Promise<string> {
+  const ancestorStats = await lstat(args.trustedAncestor);
+  if (!ancestorStats.isDirectory()) {
+    throw new Error(
+      `QUALITY-EVAL-2E refuses a symlinked ${args.label} directory ancestor: ${args.trustedAncestor}.`,
+    );
+  }
+  const canonicalAncestor = await realpath(args.trustedAncestor);
+  const relative = path.relative(args.trustedAncestor, args.absolutePath);
+  if (
+    relative === ".." ||
+    relative.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relative)
+  ) {
+    throw new Error(
+      `QUALITY-EVAL-2E could not establish the ${args.label} directory tree.`,
+    );
+  }
+  const segments = relative.split(path.sep).filter(Boolean);
+  let canonicalPath = canonicalAncestor;
+  for (let index = 0; index < segments.length; index += 1) {
+    const candidate = path.join(canonicalPath, segments[index]!);
+    let candidateStats;
+    try {
+      candidateStats = await lstat(candidate);
+    } catch (error) {
+      if (!isMissingPathError(error)) {
+        throw error;
+      }
+      if (args.mustExist) {
+        throw new Error(
+          `QUALITY-EVAL-2E ${args.label} directory must already exist: ${args.absolutePath}.`,
+        );
+      }
+      return path.join(canonicalPath, ...segments.slice(index));
+    }
+    if (!candidateStats.isDirectory()) {
+      throw new Error(
+        `QUALITY-EVAL-2E refuses a non-directory or symlink ${args.label} path: ${candidate}.`,
+      );
+    }
+    canonicalPath = candidate;
+  }
+  return canonicalPath;
+}
+
 export async function writeCoverLetterFinalArtifactShadowArtifacts(args: {
   inputDirectory: string;
   outputDirectory: string;
@@ -990,8 +1073,25 @@ export async function writeCoverLetterFinalArtifactShadowArtifacts(args: {
       "QUALITY-EVAL-2E requires explicit input and output directories.",
     );
   }
-  const inputDirectory = path.resolve(args.inputDirectory);
-  const outputDirectory = path.resolve(args.outputDirectory);
+  const requestedInputDirectory = path.resolve(args.inputDirectory);
+  const requestedOutputDirectory = path.resolve(args.outputDirectory);
+  const sharedAncestor = sharedDirectoryAncestor(
+    requestedInputDirectory,
+    requestedOutputDirectory,
+  );
+  const inputDirectory = await resolveNonSymlinkDirectoryTree({
+    absolutePath: requestedInputDirectory,
+    trustedAncestor: sharedAncestor ?? path.parse(requestedInputDirectory).root,
+    mustExist: true,
+    label: "input",
+  });
+  const outputDirectory = await resolveNonSymlinkDirectoryTree({
+    absolutePath: requestedOutputDirectory,
+    trustedAncestor:
+      sharedAncestor ?? path.parse(requestedOutputDirectory).root,
+    mustExist: false,
+    label: "output",
+  });
   const isSameOrDescendant = (parent: string, candidate: string): boolean => {
     const relative = path.relative(parent, candidate);
     return (
