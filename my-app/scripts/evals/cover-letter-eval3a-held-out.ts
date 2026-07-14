@@ -50,7 +50,7 @@ export const QUALITY_EVAL3A_WRITER_MODELS = [
 ] as const satisfies readonly CoverLetterEvalPricedWriterModel[];
 export const QUALITY_EVAL3A_LIVE_MAX_USD = 2;
 const QUALITY_EVAL3A_APPROVAL_PHRASE_VERSION =
-  "quality_eval3a_approval_phrase_v2";
+  "quality_eval3a_approval_phrase_v3";
 const QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC = {
   runMode: "finalization_failure_diagnostic_v1",
   caseId: "blind-fr-customer-success-direct",
@@ -110,8 +110,9 @@ function projectCoverLetterEval3aFailureDiagnostic(
 }
 
 export type CoverLetterEval3aPlan = Readonly<{
-  version: "cover_letter_eval3a_plan_v2";
+  version: "cover_letter_eval3a_plan_v3";
   status: "READY_FOR_APPROVAL";
+  sourceRef: string;
   cohortId: typeof QUALITY_EVAL3A_COHORT_ID;
   developmentCaseIds: typeof QUALITY_EVAL3A_DEVELOPMENT_CASE_IDS;
   heldOutCaseIds: typeof QUALITY_EVAL3A_HELD_OUT_CASE_IDS;
@@ -210,11 +211,17 @@ export function getCoverLetterEval3aHeldOutCases(): CoverLetterBenchmarkCase[] {
 function buildApprovalPhrase(args: {
   plannedProviderCalls: number;
   planHash: string;
+  sourceRef: string;
 }): string {
-  if (!/^[a-f0-9]{64}$/u.test(args.planHash)) {
-    throw new Error("QUALITY-EVAL-3A approval requires an exact planHash.");
+  if (
+    !/^[a-f0-9]{64}$/u.test(args.planHash) ||
+    !/^[a-f0-9]{40}$/u.test(args.sourceRef)
+  ) {
+    throw new Error(
+      "QUALITY-EVAL-3A approval requires exact planHash and sourceRef values.",
+    );
   }
-  return `J’approuve EVAL3A v2 : planHash ${args.planHash}, ${args.plannedProviderCalls} appels provider maximum, budget USD ${QUALITY_EVAL3A_LIVE_MAX_USD.toFixed(2)}, modèles gpt-5.5 et gpt-5.6-sol, retries 0, repairs 0, aucun évaluateur LLM.`;
+  return `J’approuve EVAL3A v3 : sourceRef ${args.sourceRef}, planHash ${args.planHash}, ${args.plannedProviderCalls} appels provider maximum, budget USD ${QUALITY_EVAL3A_LIVE_MAX_USD.toFixed(2)}, modèles gpt-5.5 et gpt-5.6-sol, retries 0, repairs 0, aucun évaluateur LLM.`;
 }
 
 async function hashPlanBody(
@@ -228,7 +235,14 @@ async function hashPlanBody(
   });
 }
 
-export async function buildCoverLetterEval3aPlan(): Promise<CoverLetterEval3aPlan> {
+export async function buildCoverLetterEval3aPlan(args: {
+  sourceRef: string;
+}): Promise<CoverLetterEval3aPlan> {
+  if (!/^[a-f0-9]{40}$/u.test(args.sourceRef)) {
+    throw new Error(
+      "QUALITY-EVAL-3A plan requires an exact 40-character sourceRef.",
+    );
+  }
   const cases = getCoverLetterEval3aHeldOutCases();
   const preflight = await buildCoverLetterBenchmarkOfflineCostPreflight({
     cases,
@@ -247,8 +261,9 @@ export async function buildCoverLetterEval3aPlan(): Promise<CoverLetterEval3aPla
     );
   }
   const body: Omit<CoverLetterEval3aPlan, "approvalPhrase" | "planHash"> = {
-    version: "cover_letter_eval3a_plan_v2",
+    version: "cover_letter_eval3a_plan_v3",
     status: "READY_FOR_APPROVAL",
+    sourceRef: args.sourceRef,
     cohortId: QUALITY_EVAL3A_COHORT_ID,
     developmentCaseIds: QUALITY_EVAL3A_DEVELOPMENT_CASE_IDS,
     heldOutCaseIds: QUALITY_EVAL3A_HELD_OUT_CASE_IDS,
@@ -296,6 +311,7 @@ export async function buildCoverLetterEval3aPlan(): Promise<CoverLetterEval3aPla
     approvalPhrase: buildApprovalPhrase({
       plannedProviderCalls: preflight.plannedProviderCalls,
       planHash,
+      sourceRef: args.sourceRef,
     }),
     planHash,
   };
@@ -413,14 +429,19 @@ export function assertCoverLetterEval3aLiveGate(args: {
   if (args.plan.status !== "READY_FOR_APPROVAL") {
     throw new Error("QUALITY-EVAL-3A plan is not READY_FOR_APPROVAL.");
   }
-  if (args.approvalPhrase !== args.plan.approvalPhrase) {
-    throw new Error(
-      "QUALITY-EVAL-3A requires the exact versioned approval phrase.",
-    );
-  }
   if (args.sourceRef !== args.currentHeadSourceRef) {
     throw new Error(
       "QUALITY-EVAL-3A requires sourceRef to match the current Git HEAD.",
+    );
+  }
+  if (args.plan.sourceRef !== args.sourceRef) {
+    throw new Error(
+      "QUALITY-EVAL-3A approval sourceRef does not match the requested run sourceRef.",
+    );
+  }
+  if (args.approvalPhrase !== args.plan.approvalPhrase) {
+    throw new Error(
+      "QUALITY-EVAL-3A requires the exact versioned approval phrase.",
     );
   }
   if (!args.explicitLiveProviderOptIn) {
@@ -570,11 +591,27 @@ function assertPrivateDirectoryEntry(
   }
 }
 
-async function ensurePrivateDirectory(directory: string): Promise<string> {
+async function ensurePrivateDirectory(
+  directory: string,
+  options: Readonly<{ allowExistingSharedDirectory?: boolean }> = {},
+): Promise<string> {
   const safeDirectory = await resolveNonSymlinkOutputTree(directory);
-  await mkdir(safeDirectory, { recursive: true, mode: 0o700 });
-  assertPrivateDirectoryEntry(await lstat(safeDirectory), safeDirectory);
-  await chmod(safeDirectory, 0o700);
+  const createdDirectory = await mkdir(safeDirectory, {
+    recursive: true,
+    mode: 0o700,
+  });
+  const directoryStats = await lstat(safeDirectory);
+  assertPrivateDirectoryEntry(directoryStats, safeDirectory);
+  if (createdDirectory !== undefined) {
+    await chmod(safeDirectory, 0o700);
+  } else if (
+    !options.allowExistingSharedDirectory &&
+    (directoryStats.mode & 0o077) !== 0
+  ) {
+    throw new Error(
+      `QUALITY-EVAL-3A refuses an existing non-private artifact directory: ${safeDirectory}.`,
+    );
+  }
   return safeDirectory;
 }
 
@@ -593,7 +630,9 @@ async function preparePrivateOutputDirectories(
       "QUALITY-EVAL-3A requires an explicit private output directory.",
     );
   }
-  const root = await ensurePrivateDirectory(outputDirectory);
+  const root = await ensurePrivateDirectory(outputDirectory, {
+    allowExistingSharedDirectory: true,
+  });
   return {
     root,
     review: await ensurePrivateDirectory(path.join(root, "private-review")),
@@ -671,6 +710,79 @@ function assertReviewerPackHasNoProviderIdentity(
   }
 }
 
+async function assertPrivateArtifactHashes(args: {
+  pack: CoverLetterBlindReviewPack;
+  revealMap: CoverLetterBlindReviewRevealMap;
+}): Promise<void> {
+  const { packHash, ...packBody } = args.pack;
+  const expectedPackHash = await buildStableHash({
+    namespace: "cover-letter-blind-review",
+    type: "pack",
+    version: 1,
+    value: packBody,
+  });
+  if (expectedPackHash !== packHash) {
+    throw new Error("QUALITY-EVAL-3A blind-review pack hash mismatch.");
+  }
+  const { revealMapHash, ...revealMapBody } = args.revealMap;
+  const expectedRevealMapHash = await buildStableHash({
+    namespace: "cover-letter-blind-review",
+    type: "reveal-map",
+    version: 1,
+    value: revealMapBody,
+  });
+  if (expectedRevealMapHash !== revealMapHash) {
+    throw new Error("QUALITY-EVAL-3A blind-review reveal-map hash mismatch.");
+  }
+}
+
+async function publishPrivateArtifactSet(args: {
+  rootDirectory: string;
+  targets: readonly Readonly<{
+    filePath: string;
+    fileName: string;
+    content: string;
+  }>[];
+}): Promise<void> {
+  const stagingDirectory = await ensurePrivateDirectory(
+    path.join(args.rootDirectory, `.eval3a-artifacts-${randomUUID()}`),
+  );
+  const stagedTargets = args.targets.map((target, index) => ({
+    ...target,
+    stagingPath: path.join(stagingDirectory, `${index}-${target.fileName}`),
+  }));
+  const publishedPaths: string[] = [];
+  try {
+    for (const target of stagedTargets) {
+      await writePrivateTemporaryFile(target.stagingPath, target.content);
+    }
+    for (const target of stagedTargets) {
+      await publishPrivateFile({
+        temporaryPath: target.stagingPath,
+        filePath: target.filePath,
+      });
+      publishedPaths.push(target.filePath);
+      await chmod(target.filePath, 0o600);
+    }
+  } catch (error) {
+    const rollbackResults = await Promise.allSettled(
+      publishedPaths.map((filePath) => rm(filePath, { force: true })),
+    );
+    const rollbackErrors = rollbackResults.flatMap((result) =>
+      result.status === "rejected" ? [result.reason] : [],
+    );
+    if (rollbackErrors.length > 0) {
+      throw new AggregateError(
+        [error, ...rollbackErrors],
+        "QUALITY-EVAL-3A artifact publication failed and rollback was incomplete.",
+      );
+    }
+    throw error;
+  } finally {
+    await rm(stagingDirectory, { recursive: true, force: true });
+  }
+}
+
 export async function writeCoverLetterEval3aPrivateArtifacts(args: {
   outputDirectory: string;
   pack: CoverLetterBlindReviewPack;
@@ -693,31 +805,54 @@ export async function writeCoverLetterEval3aPrivateArtifacts(args: {
       "QUALITY-EVAL-3A private artifacts do not share the exact cohort and pack hash.",
     );
   }
+  await assertPrivateArtifactHashes(args);
   assertReviewerPackHasNoProviderIdentity(args.pack);
   const directories = await preparePrivateOutputDirectories(
     args.outputDirectory,
   );
+  const packJsonPath = path.join(directories.review, "blind-review-pack.json");
+  const packMarkdownPath = path.join(
+    directories.review,
+    "blind-review-pack.md",
+  );
+  const revealMapJsonPath = path.join(
+    directories.reveal,
+    "blind-review-reveal-map.json",
+  );
+  const ledgerJsonPath = path.join(
+    directories.evidence,
+    "eval3a-run-ledger.json",
+  );
+  await publishPrivateArtifactSet({
+    rootDirectory: directories.root,
+    targets: [
+      {
+        filePath: packJsonPath,
+        fileName: "blind-review-pack.json",
+        content: `${JSON.stringify(args.pack, null, 2)}\n`,
+      },
+      {
+        filePath: packMarkdownPath,
+        fileName: "blind-review-pack.md",
+        content: renderCoverLetterBlindReviewMarkdown(args.pack),
+      },
+      {
+        filePath: revealMapJsonPath,
+        fileName: "blind-review-reveal-map.json",
+        content: `${JSON.stringify(args.revealMap, null, 2)}\n`,
+      },
+      {
+        filePath: ledgerJsonPath,
+        fileName: "eval3a-run-ledger.json",
+        content: `${JSON.stringify(args.ledger, null, 2)}\n`,
+      },
+    ],
+  });
   return {
-    packJsonPath: await writePrivateFileAtomic({
-      directory: directories.review,
-      fileName: "blind-review-pack.json",
-      content: `${JSON.stringify(args.pack, null, 2)}\n`,
-    }),
-    packMarkdownPath: await writePrivateFileAtomic({
-      directory: directories.review,
-      fileName: "blind-review-pack.md",
-      content: renderCoverLetterBlindReviewMarkdown(args.pack),
-    }),
-    revealMapJsonPath: await writePrivateFileAtomic({
-      directory: directories.reveal,
-      fileName: "blind-review-reveal-map.json",
-      content: `${JSON.stringify(args.revealMap, null, 2)}\n`,
-    }),
-    ledgerJsonPath: await writePrivateFileAtomic({
-      directory: directories.evidence,
-      fileName: "eval3a-run-ledger.json",
-      content: `${JSON.stringify(args.ledger, null, 2)}\n`,
-    }),
+    packJsonPath,
+    packMarkdownPath,
+    revealMapJsonPath,
+    ledgerJsonPath,
   };
 }
 
@@ -1017,9 +1152,12 @@ function assertCoverLetterEval3aRunIdentity(args: {
   runId: string;
   sourceRef: string;
 }): void {
-  if (!args.runId.trim() || !/^[a-f0-9]{40}$/u.test(args.sourceRef)) {
+  if (
+    !/^quality-eval-3a-held-out-[a-z0-9-]+$/u.test(args.runId) ||
+    !/^[a-f0-9]{40}$/u.test(args.sourceRef)
+  ) {
     throw new Error(
-      "QUALITY-EVAL-3A requires a non-empty runId and exact 40-character sourceRef.",
+      "QUALITY-EVAL-3A requires a safe held-out runId and exact 40-character sourceRef.",
     );
   }
 }
@@ -1171,7 +1309,9 @@ async function writeCoverLetterEval3aHeldOutExecutionFailure(args: {
 async function runCoverLetterEval3aFullHeldOut(
   args: CoverLetterEval3aRunArgs,
 ): Promise<CoverLetterEval3aHeldOutRunResult> {
-  const plan = await buildCoverLetterEval3aPlan();
+  const plan = await buildCoverLetterEval3aPlan({
+    sourceRef: args.sourceRef,
+  });
   assertCoverLetterEval3aLiveGate({
     plan,
     approvalPhrase: args.approvalPhrase,

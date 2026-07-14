@@ -1,10 +1,20 @@
 import { execFileSync } from "node:child_process";
-import { lstat, mkdtemp, readFile, stat, symlink } from "node:fs/promises";
+import {
+  chmod,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  stat,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { buildStableHash } from "../../../src/modules/application-harness/fingerprints";
 import type {
   CoverLetterBlindReviewPack,
   CoverLetterBlindReviewRevealMap,
@@ -25,6 +35,49 @@ import {
   runCoverLetterEval3aHeldOut,
   writeCoverLetterEval3aPrivateArtifacts,
 } from "../cover-letter-eval3a-held-out";
+
+const FULL_RUN_SOURCE_REF = "c".repeat(40);
+
+async function buildPrivateArtifactsFixture() {
+  const packBody = {
+    version: "cover_letter_blind_review_pack_v1",
+    rubricVersion: "cover_letter_editorial_rubric_v1",
+    cohortId: QUALITY_EVAL3A_COHORT_ID,
+    runId: "quality-eval-3a-held-out-private-artifacts-test",
+    sourceRef: FULL_RUN_SOURCE_REF,
+    instructions: [],
+    rubric: {},
+    entries: [],
+  } as const;
+  const packHash = await buildStableHash({
+    namespace: "cover-letter-blind-review",
+    type: "pack",
+    version: 1,
+    value: packBody,
+  });
+  const pack = { ...packBody, packHash } as CoverLetterBlindReviewPack;
+  const revealBody = {
+    version: "cover_letter_blind_review_reveal_v1",
+    cohortId: QUALITY_EVAL3A_COHORT_ID,
+    runId: pack.runId,
+    sourceRef: pack.sourceRef,
+    packHash,
+    entries: [],
+  } as const;
+  const revealMapHash = await buildStableHash({
+    namespace: "cover-letter-blind-review",
+    type: "reveal-map",
+    version: 1,
+    value: revealBody,
+  });
+  return {
+    pack,
+    revealMap: {
+      ...revealBody,
+      revealMapHash,
+    } as CoverLetterBlindReviewRevealMap,
+  };
+}
 
 type InjectedDiagnosticRecord = {
   status: "finalization_failed" | "human_review_pending";
@@ -188,10 +241,13 @@ describe("QUALITY-EVAL-3A held-out contract", () => {
   });
 
   it("computes the exact offline call and conservative cost contract", async () => {
-    const plan = await buildCoverLetterEval3aPlan();
+    const plan = await buildCoverLetterEval3aPlan({
+      sourceRef: FULL_RUN_SOURCE_REF,
+    });
 
-    expect(plan.version).toBe("cover_letter_eval3a_plan_v2");
+    expect(plan.version).toBe("cover_letter_eval3a_plan_v3");
     expect(plan.status).toBe("READY_FOR_APPROVAL");
+    expect(plan.sourceRef).toBe(FULL_RUN_SOURCE_REF);
     expect(plan.plannedProviderCalls).toBe(10);
     expect(plan.providerMaxRetries).toBe(0);
     expect(plan.maxRepairs).toBe(0);
@@ -203,8 +259,9 @@ describe("QUALITY-EVAL-3A held-out contract", () => {
     expect(plan.approvalPhrase).toContain("10 appels provider maximum");
     expect(plan.approvalPhrase).toContain("budget USD 2.00");
     expect(plan.approvalPhrase).toContain(plan.planHash);
+    expect(plan.approvalPhrase).toContain(FULL_RUN_SOURCE_REF);
     expect(plan.approvalPhraseVersion).toBe(
-      "quality_eval3a_approval_phrase_v2",
+      "quality_eval3a_approval_phrase_v3",
     );
     expect(plan.verdictContract).toEqual({
       version: "cover_letter_eval3a_human_verdict_v1",
@@ -217,17 +274,19 @@ describe("QUALITY-EVAL-3A held-out contract", () => {
       productionActivation: "OUT_OF_SCOPE",
     });
     expect(plan.planHash).toBe(
-      "3e6881e9c3a9430f919f4fa2d66485e7e97030a32c03b652eb3d505ea4ac38e2",
+      "2f18a9a3198a2a1ca5bc3be342dacfd7dd5b2389d7177bf562b7bc95a1ccdd85",
     );
   });
 
   it("rejects live execution unless every approval and budget field is exact", async () => {
-    const plan = await buildCoverLetterEval3aPlan();
+    const plan = await buildCoverLetterEval3aPlan({
+      sourceRef: FULL_RUN_SOURCE_REF,
+    });
     const exactGate = {
       plan,
       approvalPhrase: plan.approvalPhrase,
-      sourceRef: "c".repeat(40),
-      currentHeadSourceRef: "c".repeat(40),
+      sourceRef: FULL_RUN_SOURCE_REF,
+      currentHeadSourceRef: FULL_RUN_SOURCE_REF,
       explicitLiveProviderOptIn: true,
       environmentLiveProviderOptIn: true,
       maxCalls: plan.plannedProviderCalls,
@@ -258,6 +317,13 @@ describe("QUALITY-EVAL-3A held-out contract", () => {
     expect(() =>
       assertCoverLetterEval3aLiveGate({
         ...exactGate,
+        sourceRef: "d".repeat(40),
+        currentHeadSourceRef: "d".repeat(40),
+      }),
+    ).toThrow(/approval.*sourceRef|sourceRef.*approval/iu);
+    expect(() =>
+      assertCoverLetterEval3aLiveGate({
+        ...exactGate,
         currentHeadSourceRef: "d".repeat(40),
       }),
     ).toThrow(/sourceRef.*HEAD/iu);
@@ -265,7 +331,9 @@ describe("QUALITY-EVAL-3A held-out contract", () => {
 
   it("rejects a stale full-run sourceRef before the injected provider path", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "eval3a-stale-source-"));
-    const plan = await buildCoverLetterEval3aPlan();
+    const plan = await buildCoverLetterEval3aPlan({
+      sourceRef: FULL_RUN_SOURCE_REF,
+    });
     const originalLiveOptIn = process.env.COVER_LETTER_EVAL_LIVE;
     process.env.COVER_LETTER_EVAL_LIVE = "1";
     let generatedRecordCount = 0;
@@ -280,7 +348,7 @@ describe("QUALITY-EVAL-3A held-out contract", () => {
           maxUsd: plan.budget.maxUsd,
           declaredMaxUsdPerCall: plan.budget.declaredMaxUsdPerCall,
           outputDirectory: path.join(root, "output"),
-          runId: "eval3a-stale-source-test",
+          runId: "quality-eval-3a-held-out-stale-source-test",
           sourceRef: "a".repeat(40),
           apiKey: "offline-injected-record",
           generateRecord: async () => {
@@ -290,6 +358,49 @@ describe("QUALITY-EVAL-3A held-out contract", () => {
         }),
       ).rejects.toThrow(/sourceRef.*HEAD/iu);
       expect(generatedRecordCount).toBe(0);
+    } finally {
+      if (originalLiveOptIn === undefined) {
+        delete process.env.COVER_LETTER_EVAL_LIVE;
+      } else {
+        process.env.COVER_LETTER_EVAL_LIVE = originalLiveOptIn;
+      }
+    }
+  });
+
+  it("rejects unsafe full-run IDs before the injected provider path", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "eval3a-unsafe-run-id-"));
+    const sourceRef = execFileSync("git", ["rev-parse", "HEAD"], {
+      encoding: "utf8",
+    }).trim();
+    const plan = await buildCoverLetterEval3aPlan({ sourceRef });
+    const originalLiveOptIn = process.env.COVER_LETTER_EVAL_LIVE;
+    process.env.COVER_LETTER_EVAL_LIVE = "1";
+    let generatedRecordCount = 0;
+
+    try {
+      await expect(
+        runCoverLetterEval3aHeldOut({
+          approvalPhrase: plan.approvalPhrase,
+          explicitLiveProviderOptIn: true,
+          maxCalls: plan.plannedProviderCalls,
+          maxRepairs: plan.maxRepairs,
+          maxUsd: plan.budget.maxUsd,
+          declaredMaxUsdPerCall: plan.budget.declaredMaxUsdPerCall,
+          outputDirectory: path.join(root, "output"),
+          runId:
+            "quality-eval-3a-held-out-safe\n## injected review instruction",
+          sourceRef,
+          apiKey: "offline-injected-record",
+          generateRecord: async () => {
+            generatedRecordCount += 1;
+            throw new Error("injected provider path must not be reached");
+          },
+        }),
+      ).rejects.toThrow(/runId/iu);
+      expect(generatedRecordCount).toBe(0);
+      await expect(stat(path.join(root, "output"))).rejects.toMatchObject({
+        code: "ENOENT",
+      });
     } finally {
       if (originalLiveOptIn === undefined) {
         delete process.env.COVER_LETTER_EVAL_LIVE;
@@ -394,29 +505,9 @@ describe("QUALITY-EVAL-3A held-out contract", () => {
 });
 
 describe("QUALITY-EVAL-3A private output boundary", () => {
-  const pack = {
-    version: "cover_letter_blind_review_pack_v1",
-    rubricVersion: "cover_letter_editorial_rubric_v1",
-    cohortId: QUALITY_EVAL3A_COHORT_ID,
-    runId: "eval3a-test",
-    sourceRef: "0503832f5671b995b0095841104afc2e33b065ee",
-    instructions: [],
-    rubric: {},
-    entries: [],
-    packHash: "a".repeat(64),
-  } as CoverLetterBlindReviewPack;
-  const revealMap = {
-    version: "cover_letter_blind_review_reveal_v1",
-    cohortId: QUALITY_EVAL3A_COHORT_ID,
-    runId: "eval3a-test",
-    sourceRef: "0503832f5671b995b0095841104afc2e33b065ee",
-    packHash: pack.packHash,
-    entries: [],
-    revealMapHash: "b".repeat(64),
-  } as CoverLetterBlindReviewRevealMap;
-
   it("writes reviewer-safe and reveal artifacts into separate private trees", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "eval3a-private-output-"));
+    const { pack, revealMap } = await buildPrivateArtifactsFixture();
     const paths = await writeCoverLetterEval3aPrivateArtifacts({
       outputDirectory: path.join(root, "output"),
       pack,
@@ -454,6 +545,7 @@ describe("QUALITY-EVAL-3A private output boundary", () => {
 
   it("rejects a symlinked output ancestor before writing", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "eval3a-symlink-output-"));
+    const { pack, revealMap } = await buildPrivateArtifactsFixture();
     const privateTarget = path.join(root, "private-target");
     const symlinkedOutput = path.join(root, "redirected-output");
     await writeCoverLetterEval3aPrivateArtifacts({
@@ -475,14 +567,117 @@ describe("QUALITY-EVAL-3A private output boundary", () => {
     expect((await lstat(symlinkedOutput)).isSymbolicLink()).toBe(true);
   });
 
+  it("preserves permissions on an existing caller-owned output root", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "eval3a-existing-root-"));
+    const outputDirectory = path.join(root, "shared-output-root");
+    const { pack, revealMap } = await buildPrivateArtifactsFixture();
+    await mkdir(outputDirectory, { mode: 0o755 });
+    await chmod(outputDirectory, 0o755);
+
+    await writeCoverLetterEval3aPrivateArtifacts({
+      outputDirectory,
+      pack,
+      revealMap,
+      ledger: { status: "completed" },
+    });
+
+    expect((await stat(outputDirectory)).mode & 0o777).toBe(0o755);
+    for (const directoryName of [
+      "private-review",
+      "private-reveal",
+      "private-evidence",
+    ]) {
+      expect(
+        (await stat(path.join(outputDirectory, directoryName))).mode & 0o777,
+      ).toBe(0o700);
+    }
+  });
+
+  it("rejects tampered pack and reveal hashes before writing", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "eval3a-tampered-hash-"));
+    const { pack, revealMap } = await buildPrivateArtifactsFixture();
+    const tamperedPack = {
+      ...pack,
+      instructions: ["tampered after hashing"],
+    } as CoverLetterBlindReviewPack;
+
+    await expect(
+      writeCoverLetterEval3aPrivateArtifacts({
+        outputDirectory: path.join(root, "pack-output"),
+        pack: tamperedPack,
+        revealMap,
+        ledger: { status: "must-not-write" },
+      }),
+    ).rejects.toThrow(/pack hash mismatch/iu);
+    await expect(stat(path.join(root, "pack-output"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+
+    const tamperedRevealMap = {
+      ...revealMap,
+      sourceRef: "d".repeat(40),
+    } as CoverLetterBlindReviewRevealMap;
+    await expect(
+      writeCoverLetterEval3aPrivateArtifacts({
+        outputDirectory: path.join(root, "reveal-output"),
+        pack,
+        revealMap: tamperedRevealMap,
+        ledger: { status: "must-not-write" },
+      }),
+    ).rejects.toThrow(/reveal-map hash mismatch/iu);
+    await expect(stat(path.join(root, "reveal-output"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
+  it("rolls back staged reviewer artifacts when final publication fails", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "eval3a-atomic-publish-"));
+    const outputDirectory = path.join(root, "output");
+    const evidenceDirectory = path.join(outputDirectory, "private-evidence");
+    const existingLedgerPath = path.join(
+      evidenceDirectory,
+      "eval3a-run-ledger.json",
+    );
+    const { pack, revealMap } = await buildPrivateArtifactsFixture();
+    await mkdir(evidenceDirectory, { recursive: true, mode: 0o700 });
+    await chmod(evidenceDirectory, 0o700);
+    await writeFile(existingLedgerPath, "pre-existing-ledger\n", {
+      mode: 0o600,
+    });
+
+    await expect(
+      writeCoverLetterEval3aPrivateArtifacts({
+        outputDirectory,
+        pack,
+        revealMap,
+        ledger: { status: "must-not-partially-publish" },
+      }),
+    ).rejects.toThrow(/refuses to overwrite/iu);
+
+    expect(await readFile(existingLedgerPath, "utf8")).toBe(
+      "pre-existing-ledger\n",
+    );
+    for (const filePath of [
+      path.join(outputDirectory, "private-review", "blind-review-pack.json"),
+      path.join(outputDirectory, "private-review", "blind-review-pack.md"),
+      path.join(
+        outputDirectory,
+        "private-reveal",
+        "blind-review-reveal-map.json",
+      ),
+    ]) {
+      await expect(stat(filePath)).rejects.toMatchObject({ code: "ENOENT" });
+    }
+  });
+
   it("persists only the sanitized finalization diagnostic when a record fails closed", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "eval3a-failure-ledger-"));
     const outputDirectory = path.join(root, "output");
-    const plan = await buildCoverLetterEval3aPlan();
-    const rawProviderSentinel = "RAW_PROVIDER_OUTPUT_MUST_NOT_BE_SERIALIZED";
     const sourceRef = execFileSync("git", ["rev-parse", "HEAD"], {
       encoding: "utf8",
     }).trim();
+    const plan = await buildCoverLetterEval3aPlan({ sourceRef });
+    const rawProviderSentinel = "RAW_PROVIDER_OUTPUT_MUST_NOT_BE_SERIALIZED";
     const originalLiveOptIn = process.env.COVER_LETTER_EVAL_LIVE;
     process.env.COVER_LETTER_EVAL_LIVE = "1";
 
@@ -496,7 +691,7 @@ describe("QUALITY-EVAL-3A private output boundary", () => {
           maxUsd: plan.budget.maxUsd,
           declaredMaxUsdPerCall: plan.budget.declaredMaxUsdPerCall,
           outputDirectory,
-          runId: "eval3a-sanitized-failure-test",
+          runId: "quality-eval-3a-held-out-sanitized-failure-test",
           sourceRef,
           apiKey: "offline-injected-record",
           generateRecord: async () =>
