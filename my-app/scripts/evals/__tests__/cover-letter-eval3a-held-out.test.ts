@@ -190,6 +190,7 @@ describe("QUALITY-EVAL-3A held-out contract", () => {
   it("computes the exact offline call and conservative cost contract", async () => {
     const plan = await buildCoverLetterEval3aPlan();
 
+    expect(plan.version).toBe("cover_letter_eval3a_plan_v2");
     expect(plan.status).toBe("READY_FOR_APPROVAL");
     expect(plan.plannedProviderCalls).toBe(10);
     expect(plan.providerMaxRetries).toBe(0);
@@ -201,6 +202,10 @@ describe("QUALITY-EVAL-3A held-out contract", () => {
     );
     expect(plan.approvalPhrase).toContain("10 appels provider maximum");
     expect(plan.approvalPhrase).toContain("budget USD 2.00");
+    expect(plan.approvalPhrase).toContain(plan.planHash);
+    expect(plan.approvalPhraseVersion).toBe(
+      "quality_eval3a_approval_phrase_v2",
+    );
     expect(plan.verdictContract).toEqual({
       version: "cover_letter_eval3a_human_verdict_v1",
       positiveRequires: [
@@ -212,7 +217,7 @@ describe("QUALITY-EVAL-3A held-out contract", () => {
       productionActivation: "OUT_OF_SCOPE",
     });
     expect(plan.planHash).toBe(
-      "a181a21d7e79494966f345dc161b6de2ece0c4c3d0eec88f15c0a4312f1183c1",
+      "3e6881e9c3a9430f919f4fa2d66485e7e97030a32c03b652eb3d505ea4ac38e2",
     );
   });
 
@@ -221,6 +226,8 @@ describe("QUALITY-EVAL-3A held-out contract", () => {
     const exactGate = {
       plan,
       approvalPhrase: plan.approvalPhrase,
+      sourceRef: "c".repeat(40),
+      currentHeadSourceRef: "c".repeat(40),
       explicitLiveProviderOptIn: true,
       environmentLiveProviderOptIn: true,
       maxCalls: plan.plannedProviderCalls,
@@ -248,6 +255,48 @@ describe("QUALITY-EVAL-3A held-out contract", () => {
         environmentLiveProviderOptIn: false,
       }),
     ).toThrow(/COVER_LETTER_EVAL_LIVE=1/iu);
+    expect(() =>
+      assertCoverLetterEval3aLiveGate({
+        ...exactGate,
+        currentHeadSourceRef: "d".repeat(40),
+      }),
+    ).toThrow(/sourceRef.*HEAD/iu);
+  });
+
+  it("rejects a stale full-run sourceRef before the injected provider path", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "eval3a-stale-source-"));
+    const plan = await buildCoverLetterEval3aPlan();
+    const originalLiveOptIn = process.env.COVER_LETTER_EVAL_LIVE;
+    process.env.COVER_LETTER_EVAL_LIVE = "1";
+    let generatedRecordCount = 0;
+
+    try {
+      await expect(
+        runCoverLetterEval3aHeldOut({
+          approvalPhrase: plan.approvalPhrase,
+          explicitLiveProviderOptIn: true,
+          maxCalls: plan.plannedProviderCalls,
+          maxRepairs: plan.maxRepairs,
+          maxUsd: plan.budget.maxUsd,
+          declaredMaxUsdPerCall: plan.budget.declaredMaxUsdPerCall,
+          outputDirectory: path.join(root, "output"),
+          runId: "eval3a-stale-source-test",
+          sourceRef: "a".repeat(40),
+          apiKey: "offline-injected-record",
+          generateRecord: async () => {
+            generatedRecordCount += 1;
+            throw new Error("injected provider path must not be reached");
+          },
+        }),
+      ).rejects.toThrow(/sourceRef.*HEAD/iu);
+      expect(generatedRecordCount).toBe(0);
+    } finally {
+      if (originalLiveOptIn === undefined) {
+        delete process.env.COVER_LETTER_EVAL_LIVE;
+      } else {
+        process.env.COVER_LETTER_EVAL_LIVE = originalLiveOptIn;
+      }
+    }
   });
 
   it("freezes the exact one-cell finalization diagnostic gate offline", async () => {
@@ -431,6 +480,9 @@ describe("QUALITY-EVAL-3A private output boundary", () => {
     const outputDirectory = path.join(root, "output");
     const plan = await buildCoverLetterEval3aPlan();
     const rawProviderSentinel = "RAW_PROVIDER_OUTPUT_MUST_NOT_BE_SERIALIZED";
+    const sourceRef = execFileSync("git", ["rev-parse", "HEAD"], {
+      encoding: "utf8",
+    }).trim();
     const originalLiveOptIn = process.env.COVER_LETTER_EVAL_LIVE;
     process.env.COVER_LETTER_EVAL_LIVE = "1";
 
@@ -445,15 +497,14 @@ describe("QUALITY-EVAL-3A private output boundary", () => {
           declaredMaxUsdPerCall: plan.budget.declaredMaxUsdPerCall,
           outputDirectory,
           runId: "eval3a-sanitized-failure-test",
-          sourceRef: "a".repeat(40),
+          sourceRef,
           apiKey: "offline-injected-record",
           generateRecord: async () =>
             ({
               status: "finalization_failed",
               caseId: "blind-fr-customer-success-direct",
               writerModel: "gpt-5.5",
-              error:
-                "Production cover-letter finalization rejected the generated artifact (proposal_finalization_error).",
+              error: rawProviderSentinel,
               generation: {
                 content: rawProviderSentinel,
                 prompt: "PRIVATE_PROMPT_MUST_NOT_BE_SERIALIZED",

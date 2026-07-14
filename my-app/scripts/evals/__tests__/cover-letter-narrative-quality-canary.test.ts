@@ -1,4 +1,35 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { TRUSTED_CL2_CANARY_HASH, cl2HashMockState } = vi.hoisted(() => ({
+  TRUSTED_CL2_CANARY_HASH:
+    "d6cdf2fb9c5aca9cc5fa391b3e602e0f753f4461aa79b009882ff1af3c99bef2",
+  cl2HashMockState: { trustPinnedFixture: true },
+}));
+
+vi.mock(
+  "../../../src/modules/application-harness/fingerprints",
+  async (importOriginal) => {
+    const actual =
+      await importOriginal<
+        typeof import("../../../src/modules/application-harness/fingerprints")
+      >();
+    return {
+      ...actual,
+      buildStableHash: async (
+        args: Parameters<typeof actual.buildStableHash>[0],
+      ) => {
+        if (
+          args.namespace === "cover-letter-structure-aware-finalizer-canary" &&
+          args.type === "canary" &&
+          cl2HashMockState.trustPinnedFixture
+        ) {
+          return TRUSTED_CL2_CANARY_HASH;
+        }
+        return actual.buildStableHash(args);
+      },
+    };
+  },
+);
 
 import type { CoverLetterBodyParts } from "../../../convex/lib/proposals/premiumCoverLetter";
 import {
@@ -101,6 +132,10 @@ function buildPinnedSourceCanary(
 }
 
 describe("QUALITY-CL-3 narrative-quality canary", () => {
+  beforeEach(() => {
+    cl2HashMockState.trustPinnedFixture = true;
+  });
+
   it("classifies only the narrative defects observed in the frozen development cohort", () => {
     expect(evaluateCoverLetterNarrativeQuality(narrativeRedBodyParts)).toEqual({
       version: "cover_letter_narrative_quality_result_v1",
@@ -159,6 +194,35 @@ describe("QUALITY-CL-3 narrative-quality canary", () => {
 
     await expect(
       buildCoverLetterNarrativeQualityCanary({ sourceCanary }),
+    ).rejects.toThrow(/exact frozen CL2 canary/iu);
+  });
+
+  it("fails closed when CL2 entries mutate under a copied frozen hash", async () => {
+    const sourceCanary = buildPinnedSourceCanary(narrativeRedBodyParts);
+    const firstEntry = sourceCanary.entries[0]!;
+    const mutatedSourceCanary = {
+      ...sourceCanary,
+      entries: [
+        {
+          ...firstEntry,
+          structureAwareCanary: {
+            ...firstEntry.structureAwareCanary,
+            content: firstEntry.structureAwareCanary.content.replace(
+              narrativeRedBodyParts.opening,
+              `${narrativeRedBodyParts.opening} MUTATED`,
+            ),
+          },
+        },
+        ...sourceCanary.entries.slice(1),
+      ],
+      canaryHash: QUALITY_CL3_SOURCE_CANARY_HASH,
+    } as CoverLetterStructureAwareFinalizerCanary;
+    cl2HashMockState.trustPinnedFixture = false;
+
+    await expect(
+      buildCoverLetterNarrativeQualityCanary({
+        sourceCanary: mutatedSourceCanary,
+      }),
     ).rejects.toThrow(/exact frozen CL2 canary/iu);
   });
 });

@@ -50,7 +50,7 @@ export const QUALITY_EVAL3A_WRITER_MODELS = [
 ] as const satisfies readonly CoverLetterEvalPricedWriterModel[];
 export const QUALITY_EVAL3A_LIVE_MAX_USD = 2;
 const QUALITY_EVAL3A_APPROVAL_PHRASE_VERSION =
-  "quality_eval3a_approval_phrase_v1";
+  "quality_eval3a_approval_phrase_v2";
 const QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC = {
   runMode: "finalization_failure_diagnostic_v1",
   caseId: "blind-fr-customer-success-direct",
@@ -110,7 +110,7 @@ function projectCoverLetterEval3aFailureDiagnostic(
 }
 
 export type CoverLetterEval3aPlan = Readonly<{
-  version: "cover_letter_eval3a_plan_v1";
+  version: "cover_letter_eval3a_plan_v2";
   status: "READY_FOR_APPROVAL";
   cohortId: typeof QUALITY_EVAL3A_COHORT_ID;
   developmentCaseIds: typeof QUALITY_EVAL3A_DEVELOPMENT_CASE_IDS;
@@ -207,12 +207,18 @@ export function getCoverLetterEval3aHeldOutCases(): CoverLetterBenchmarkCase[] {
   return cases;
 }
 
-function buildApprovalPhrase(plannedProviderCalls: number): string {
-  return `J’approuve EVAL3A v1 : ${plannedProviderCalls} appels provider maximum, budget USD ${QUALITY_EVAL3A_LIVE_MAX_USD.toFixed(2)}, modèles gpt-5.5 et gpt-5.6-sol, retries 0, repairs 0, aucun évaluateur LLM.`;
+function buildApprovalPhrase(args: {
+  plannedProviderCalls: number;
+  planHash: string;
+}): string {
+  if (!/^[a-f0-9]{64}$/u.test(args.planHash)) {
+    throw new Error("QUALITY-EVAL-3A approval requires an exact planHash.");
+  }
+  return `J’approuve EVAL3A v2 : planHash ${args.planHash}, ${args.plannedProviderCalls} appels provider maximum, budget USD ${QUALITY_EVAL3A_LIVE_MAX_USD.toFixed(2)}, modèles gpt-5.5 et gpt-5.6-sol, retries 0, repairs 0, aucun évaluateur LLM.`;
 }
 
 async function hashPlanBody(
-  body: Omit<CoverLetterEval3aPlan, "planHash">,
+  body: Omit<CoverLetterEval3aPlan, "approvalPhrase" | "planHash">,
 ): Promise<string> {
   return buildStableHash({
     namespace: "cover-letter-eval3a-held-out",
@@ -240,8 +246,8 @@ export async function buildCoverLetterEval3aPlan(): Promise<CoverLetterEval3aPla
       "QUALITY-EVAL-3A conservative offline preflight exceeds the exact call or USD contract.",
     );
   }
-  const body: Omit<CoverLetterEval3aPlan, "planHash"> = {
-    version: "cover_letter_eval3a_plan_v1",
+  const body: Omit<CoverLetterEval3aPlan, "approvalPhrase" | "planHash"> = {
+    version: "cover_letter_eval3a_plan_v2",
     status: "READY_FOR_APPROVAL",
     cohortId: QUALITY_EVAL3A_COHORT_ID,
     developmentCaseIds: QUALITY_EVAL3A_DEVELOPMENT_CASE_IDS,
@@ -283,9 +289,16 @@ export async function buildCoverLetterEval3aPlan(): Promise<CoverLetterEval3aPla
       productionActivation: "OUT_OF_SCOPE",
     },
     approvalPhraseVersion: QUALITY_EVAL3A_APPROVAL_PHRASE_VERSION,
-    approvalPhrase: buildApprovalPhrase(preflight.plannedProviderCalls),
   };
-  return { ...body, planHash: await hashPlanBody(body) };
+  const planHash = await hashPlanBody(body);
+  return {
+    ...body,
+    approvalPhrase: buildApprovalPhrase({
+      plannedProviderCalls: preflight.plannedProviderCalls,
+      planHash,
+    }),
+    planHash,
+  };
 }
 
 function getCoverLetterEval3aFinalizationDiagnosticCase(): CoverLetterBenchmarkCase {
@@ -388,6 +401,8 @@ export function buildCoverLetterEval3aFinalizationDiagnosticApprovalPhrase(args:
 export function assertCoverLetterEval3aLiveGate(args: {
   plan: CoverLetterEval3aPlan;
   approvalPhrase: string;
+  sourceRef: string;
+  currentHeadSourceRef: string;
   explicitLiveProviderOptIn: boolean;
   environmentLiveProviderOptIn: boolean;
   maxCalls: number;
@@ -401,6 +416,11 @@ export function assertCoverLetterEval3aLiveGate(args: {
   if (args.approvalPhrase !== args.plan.approvalPhrase) {
     throw new Error(
       "QUALITY-EVAL-3A requires the exact versioned approval phrase.",
+    );
+  }
+  if (args.sourceRef !== args.currentHeadSourceRef) {
+    throw new Error(
+      "QUALITY-EVAL-3A requires sourceRef to match the current Git HEAD.",
     );
   }
   if (!args.explicitLiveProviderOptIn) {
@@ -986,7 +1006,7 @@ class CoverLetterEval3aRecordFailure extends Error {
 
   constructor(record: CoverLetterHumanReviewResult) {
     super(
-      `QUALITY-EVAL-3A failed closed at ${record.caseId}/${record.writerModel}: ${record.error ?? record.status}.`,
+      `QUALITY-EVAL-3A failed closed at ${record.caseId}/${record.writerModel} with status ${record.status}.`,
     );
     this.name = "CoverLetterEval3aRecordFailure";
     this.failureDiagnostic = projectCoverLetterEval3aFailureDiagnostic(record);
@@ -1128,7 +1148,9 @@ async function writeCoverLetterEval3aHeldOutExecutionFailure(args: {
         completedRecordCount: args.completedRecordCount,
         failureDiagnostic,
         error:
-          args.error instanceof Error ? args.error.message : String(args.error),
+          args.error instanceof CoverLetterEval3aRecordFailure
+            ? args.error.message
+            : "QUALITY-EVAL-3A failed before a sanitized record diagnostic was available.",
       },
     });
   } catch (ledgerError) {
@@ -1153,6 +1175,8 @@ async function runCoverLetterEval3aFullHeldOut(
   assertCoverLetterEval3aLiveGate({
     plan,
     approvalPhrase: args.approvalPhrase,
+    sourceRef: args.sourceRef,
+    currentHeadSourceRef: resolveCurrentGitHeadSourceRef(),
     explicitLiveProviderOptIn: args.explicitLiveProviderOptIn,
     environmentLiveProviderOptIn: process.env.COVER_LETTER_EVAL_LIVE === "1",
     maxCalls: args.maxCalls,

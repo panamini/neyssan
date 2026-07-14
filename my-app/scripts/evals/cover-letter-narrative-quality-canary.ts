@@ -256,12 +256,20 @@ function extractFinalVisibleBodyParts(content: string): CoverLetterBodyParts {
   };
 }
 
-function assertExactCl2Source(
+async function assertExactCl2Source(
   sourceCanary: CoverLetterStructureAwareFinalizerCanary,
-): void {
+): Promise<void> {
+  const { canaryHash, ...canaryBody } = sourceCanary;
+  const computedCanaryHash = await buildStableHash({
+    namespace: "cover-letter-structure-aware-finalizer-canary",
+    type: "canary",
+    version: 1,
+    content: canaryBody,
+  });
   const exactTopLevel = [
     sourceCanary.version === "cover_letter_structure_aware_finalizer_canary_v1",
-    sourceCanary.canaryHash === QUALITY_CL3_SOURCE_CANARY_HASH,
+    canaryHash === QUALITY_CL3_SOURCE_CANARY_HASH,
+    computedCanaryHash === canaryHash,
     sourceCanary.sourceQualitativePackHash ===
       QUALITY_CL3_QUALITATIVE_PACK_HASH,
     sourceCanary.sourceFinalArtifactPackHash ===
@@ -313,7 +321,7 @@ async function hashCanaryBody(
 export async function buildCoverLetterNarrativeQualityCanary(args: {
   sourceCanary: CoverLetterStructureAwareFinalizerCanary;
 }): Promise<CoverLetterNarrativeQualityCanary> {
-  assertExactCl2Source(args.sourceCanary);
+  await assertExactCl2Source(args.sourceCanary);
   const entries = await Promise.all(
     args.sourceCanary.entries.map(async (entry) => ({
       pairLabel: entry.pairLabel,
