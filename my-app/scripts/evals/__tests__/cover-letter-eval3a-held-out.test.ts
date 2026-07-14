@@ -17,6 +17,7 @@ import {
   assertCoverLetterEval3aLiveGate,
   buildCoverLetterEval3aPlan,
   getCoverLetterEval3aHeldOutCases,
+  runCoverLetterEval3aHeldOut,
   writeCoverLetterEval3aPrivateArtifacts,
 } from "../cover-letter-eval3a-held-out";
 
@@ -182,5 +183,116 @@ describe("QUALITY-EVAL-3A private output boundary", () => {
       }),
     ).rejects.toThrow(/symlink output path/iu);
     expect((await lstat(symlinkedOutput)).isSymbolicLink()).toBe(true);
+  });
+
+  it("persists only the sanitized finalization diagnostic when a record fails closed", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "eval3a-failure-ledger-"));
+    const outputDirectory = path.join(root, "output");
+    const plan = await buildCoverLetterEval3aPlan();
+    const rawProviderSentinel = "RAW_PROVIDER_OUTPUT_MUST_NOT_BE_SERIALIZED";
+    const originalLiveOptIn = process.env.COVER_LETTER_EVAL_LIVE;
+    process.env.COVER_LETTER_EVAL_LIVE = "1";
+
+    try {
+      await expect(
+        runCoverLetterEval3aHeldOut({
+          approvalPhrase: plan.approvalPhrase,
+          explicitLiveProviderOptIn: true,
+          maxCalls: plan.plannedProviderCalls,
+          maxRepairs: plan.maxRepairs,
+          maxUsd: plan.budget.maxUsd,
+          declaredMaxUsdPerCall: plan.budget.declaredMaxUsdPerCall,
+          outputDirectory,
+          runId: "eval3a-sanitized-failure-test",
+          sourceRef: "a".repeat(40),
+          apiKey: "offline-injected-record",
+          generateRecord: async () =>
+            ({
+              status: "finalization_failed",
+              caseId: "blind-fr-customer-success-direct",
+              writerModel: "gpt-5.5",
+              error:
+                "Production cover-letter finalization rejected the generated artifact (proposal_finalization_error).",
+              generation: {
+                content: rawProviderSentinel,
+                prompt: "PRIVATE_PROMPT_MUST_NOT_BE_SERIALIZED",
+              },
+              artifact: {
+                artifactHash: "c".repeat(64),
+                diagnostics: {
+                  finalization: {
+                    acceptanceMode: "strict",
+                    errorClass: "proposal_finalization_error",
+                    failureStage: "substantive_body_assertion",
+                    selectedBodyCandidate: "conservative",
+                    substantiveBodyPassed: false,
+                    removedBridgeSentenceCount: 1,
+                    removedLastGroundedSentence: false,
+                    rawGeneratedBody: rawProviderSentinel,
+                  },
+                },
+              },
+              debug: { rawGeneratedBody: rawProviderSentinel },
+              letter: rawProviderSentinel,
+            }) as any,
+        }),
+      ).rejects.toThrow(/failed closed/iu);
+    } finally {
+      if (originalLiveOptIn === undefined) {
+        delete process.env.COVER_LETTER_EVAL_LIVE;
+      } else {
+        process.env.COVER_LETTER_EVAL_LIVE = originalLiveOptIn;
+      }
+    }
+
+    const ledgerPath = path.join(
+      outputDirectory,
+      "private-evidence",
+      "eval3a-run-failure.json",
+    );
+    const serializedLedger = await readFile(ledgerPath, "utf8");
+    const ledger = JSON.parse(serializedLedger);
+
+    expect(ledger).toMatchObject({
+      version: "cover_letter_eval3a_failure_ledger_v2",
+      status: "FAILED_CLOSED",
+      completedRecordCount: 0,
+      failureDiagnostic: {
+        version: "cover_letter_eval3a_failure_diagnostic_v1",
+        status: "finalization_failed",
+        artifactHash: "c".repeat(64),
+        finalization: {
+          acceptanceMode: "strict",
+          errorClass: "proposal_finalization_error",
+          failureStage: "substantive_body_assertion",
+          selectedBodyCandidate: "conservative",
+          substantiveBodyPassed: false,
+          removedBridgeSentenceCount: 1,
+          removedLastGroundedSentence: false,
+        },
+      },
+    });
+    expect(Object.keys(ledger.failureDiagnostic).sort()).toEqual([
+      "artifactHash",
+      "finalization",
+      "status",
+      "version",
+    ]);
+    expect(Object.keys(ledger.failureDiagnostic.finalization).sort()).toEqual([
+      "acceptanceMode",
+      "errorClass",
+      "failureStage",
+      "removedBridgeSentenceCount",
+      "removedLastGroundedSentence",
+      "selectedBodyCandidate",
+      "substantiveBodyPassed",
+    ]);
+    expect(serializedLedger).not.toContain(rawProviderSentinel);
+    expect(serializedLedger).not.toContain(
+      "PRIVATE_PROMPT_MUST_NOT_BE_SERIALIZED",
+    );
+    expect(serializedLedger).not.toMatch(
+      /"(?:generation|letter|debug|rawGeneratedBody|prompt)"/u,
+    );
   });
 });

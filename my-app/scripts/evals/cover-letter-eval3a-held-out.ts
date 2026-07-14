@@ -54,6 +54,55 @@ export const QUALITY_EVAL3A_APPROVAL_PHRASE_VERSION =
 type CoverLetterEval3aWriterModel =
   (typeof QUALITY_EVAL3A_WRITER_MODELS)[number];
 
+type CoverLetterEval3aFailureRecord = Exclude<
+  CoverLetterHumanReviewResult,
+  CoverLetterHumanReviewRecord
+>;
+
+type CoverLetterEval3aFinalizationDiagnosticSource = NonNullable<
+  CoverLetterEval3aFailureRecord["artifact"]
+>["diagnostics"]["finalization"];
+
+type CoverLetterEval3aFailureDiagnostic = Readonly<{
+  version: "cover_letter_eval3a_failure_diagnostic_v1";
+  status: CoverLetterEval3aFailureRecord["status"];
+  artifactHash: string | null;
+  finalization: Readonly<
+    Pick<
+      CoverLetterEval3aFinalizationDiagnosticSource,
+      | "acceptanceMode"
+      | "errorClass"
+      | "failureStage"
+      | "selectedBodyCandidate"
+      | "substantiveBodyPassed"
+      | "removedBridgeSentenceCount"
+      | "removedLastGroundedSentence"
+    >
+  > | null;
+}>;
+
+function projectCoverLetterEval3aFailureDiagnostic(
+  record: CoverLetterEval3aFailureRecord,
+): CoverLetterEval3aFailureDiagnostic {
+  const finalization = record.artifact?.diagnostics.finalization;
+  return {
+    version: "cover_letter_eval3a_failure_diagnostic_v1",
+    status: record.status,
+    artifactHash: record.artifact?.artifactHash ?? null,
+    finalization: finalization
+      ? {
+          acceptanceMode: finalization.acceptanceMode,
+          errorClass: finalization.errorClass,
+          failureStage: finalization.failureStage,
+          selectedBodyCandidate: finalization.selectedBodyCandidate,
+          substantiveBodyPassed: finalization.substantiveBodyPassed,
+          removedBridgeSentenceCount: finalization.removedBridgeSentenceCount,
+          removedLastGroundedSentence: finalization.removedLastGroundedSentence,
+        }
+      : null,
+  };
+}
+
 export type CoverLetterEval3aPlan = Readonly<{
   version: "cover_letter_eval3a_plan_v1";
   status: "READY_FOR_APPROVAL";
@@ -548,6 +597,7 @@ export async function runCoverLetterEval3aHeldOut(args: {
     writerModels: QUALITY_EVAL3A_WRITER_MODELS,
   });
   const records: CoverLetterHumanReviewRecord[] = [];
+  let failureDiagnostic: CoverLetterEval3aFailureDiagnostic | null = null;
   try {
     for (const item of executionPlan) {
       const writerModel = item.writerModel as CoverLetterEval3aWriterModel;
@@ -565,6 +615,7 @@ export async function runCoverLetterEval3aHeldOut(args: {
             budget,
           });
       if (record.status !== "human_review_pending") {
+        failureDiagnostic = projectCoverLetterEval3aFailureDiagnostic(record);
         throw new Error(
           `QUALITY-EVAL-3A failed closed at ${record.caseId}/${record.writerModel}: ${record.error ?? record.status}.`,
         );
@@ -621,13 +672,14 @@ export async function runCoverLetterEval3aHeldOut(args: {
       await writeFailureLedger({
         outputDirectory: args.outputDirectory,
         ledger: {
-          version: "cover_letter_eval3a_failure_ledger_v1",
+          version: "cover_letter_eval3a_failure_ledger_v2",
           status: "FAILED_CLOSED",
           planHash: plan.planHash,
           runId: args.runId,
           sourceRef: args.sourceRef,
           budget: budget.snapshot(),
           completedRecordCount: records.length,
+          failureDiagnostic,
           error: error instanceof Error ? error.message : String(error),
         },
       });
