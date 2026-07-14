@@ -26,14 +26,16 @@ const mockProposalTopbarState = vi.hoisted(() => ({
   registration: null as null | {
     onDuplicateProposal: () => void;
     onDeleteProposal: () => void;
-    onPageSizePreferenceChange: (
-      preference: "auto" | "a4" | "letter",
-    ) => void;
+    onPageSizePreferenceChange: (preference: "auto" | "a4" | "letter") => void;
   },
 }));
 const mockUpdateProposal = vi.hoisted(() =>
   vi.fn().mockResolvedValue(undefined),
 );
+const mockCreateProposal = vi.hoisted(() =>
+  vi.fn().mockResolvedValue("proposal_duplicate"),
+);
+let mockProposalSettingsPresets: any = null;
 
 vi.mock("../../contexts/ProposalForgeTopbarContext", () => ({
   useRegisterProposalForgeTopbar: (
@@ -251,12 +253,17 @@ vi.mock("convex/react", () => ({
     if (query === "proposalsPublic.default") {
       return SAVED_PROPOSALS;
     }
+    if (query === "proposalSettings.getPresets") {
+      return mockProposalSettingsPresets;
+    }
     return null;
   },
   useMutation: (query: string) =>
     query === "updateProposalPublic.default"
       ? mockUpdateProposal
-      : vi.fn().mockResolvedValue(undefined),
+      : query === "createProposalPublic.default"
+        ? mockCreateProposal
+        : vi.fn().mockResolvedValue(undefined),
   useAction: () => vi.fn().mockResolvedValue(null),
 }));
 
@@ -266,7 +273,10 @@ vi.mock("../../../convex/_generated/api", () => ({
       generateProposal: "functions.generateProposal",
     },
     proposalHandoffs: { get: "proposalHandoffs.get" },
-    proposalSettings: { getCurrent: "proposalSettings.getCurrent" },
+    proposalSettings: {
+      getCurrent: "proposalSettings.getCurrent",
+      getPresets: "proposalSettings.getPresets",
+    },
     proposalsPublic: { default: "proposalsPublic.default" },
     updateProposalPublic: { default: "updateProposalPublic.default" },
     deleteProposalPublic: { default: "deleteProposalPublic.default" },
@@ -440,9 +450,9 @@ vi.mock("../../components/ProposalDisplay", () => ({
       <div data-testid="proposal-display-state">
         {documentTitle ?? "untitled"}|{proposalContent ?? "empty"}|
         {mode ?? "preview"}|{stylePreset?.layout ?? "none"}|
-        {stylePreset?.palette ?? "none"}|
-        {templateId ?? "no-template"}|
-        {proposalDocument?.blocks?.map((block) => block.text).join(" ") ?? "no-document"}
+        {stylePreset?.palette ?? "none"}|{templateId ?? "no-template"}|
+        {proposalDocument?.blocks?.map((block) => block.text).join(" ") ??
+          "no-document"}
       </div>
       <div data-testid="proposal-salutation-state">
         {salutationValue ?? "empty"}
@@ -541,6 +551,16 @@ function ProposalTopbarActionsProbe({
           <button type="button" onClick={() => navigate("/proposal")}>
             Return to compose
           </button>
+          <button
+            type="button"
+            onClick={() =>
+              navigate(
+                "/proposal?draftId=proposal_draft_restore&templateId=modernist_signal&styleSlot=direct",
+              )
+            }
+          >
+            Apply template to loaded draft
+          </button>
         </>
       ) : null}
     </div>
@@ -568,23 +588,24 @@ describe("ProposalForge saved view", () => {
     mockAttachedCvId = null;
     mockProposalTopbarState.registration = null;
     mockUpdateProposal.mockClear();
+    mockCreateProposal.mockClear();
+    mockCreateProposal.mockResolvedValue("proposal_duplicate");
+    mockProposalSettingsPresets = null;
   });
 
   it("restores the structured document stored on an opened saved proposal", async () => {
     render(
       <MemoryRouter
-        initialEntries={[
-          "/proposal?view=saved&id=proposal_custom_salutation",
-        ]}
+        initialEntries={["/proposal?view=saved&id=proposal_custom_salutation"]}
       >
         <ProposalForge />
       </MemoryRouter>,
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId("proposal-display-state")).not.toHaveTextContent(
-        "no-document",
-      );
+      expect(
+        screen.getByTestId("proposal-display-state"),
+      ).not.toHaveTextContent("no-document");
     });
     expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
       "o Saved proposal content.",
@@ -636,6 +657,61 @@ describe("ProposalForge saved view", () => {
     await waitFor(() => {
       expect(screen.getByTestId("proposal-location")).toHaveTextContent(
         /^\/proposal\?view=saved&id=proposal_beta$/,
+      );
+    });
+  });
+
+  it("waits for Settings presets before applying a saved style-slot intent", async () => {
+    mockProposalSettingsPresets = undefined;
+    const route =
+      "/proposal?view=saved&id=proposal_beta&templateId=modernist_signal&styleSlot=direct";
+    const buildView = () => (
+      <MemoryRouter initialEntries={[route]}>
+        <LocationProbe />
+        <ProposalForge />
+      </MemoryRouter>
+    );
+    const { rerender } = render(buildView());
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Saved proposal content.",
+      );
+    });
+    expect(mockUpdateProposal).not.toHaveBeenCalled();
+
+    mockProposalSettingsPresets = {
+      preset1: null,
+      preset2: {
+        fontPairId: "ledger-sans",
+        styleChoice: "balanced",
+        paletteOverride: "cobalt",
+        accentHex: null,
+        verbatiStyle: {
+          layout: "workshop",
+          typography: "ledger-sans",
+          palette: "cobalt",
+        },
+      },
+      preset3: null,
+      activeSlot: 2,
+    };
+    rerender(buildView());
+
+    await waitFor(() => {
+      expect(mockUpdateProposal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "proposal_beta",
+          metadata: expect.objectContaining({
+            templateId: "modernist_signal",
+            verbatiStyle: expect.objectContaining({
+              typography: "ledger-sans",
+              palette: "cobalt",
+            }),
+            verbatiStyleSlotId: 2,
+            verbatiStyleSlotSource: "settings",
+          }),
+        }),
       );
     });
   });
@@ -743,7 +819,9 @@ describe("ProposalForge saved view", () => {
         expect.objectContaining({
           id: "proposal_beta",
           clearMetadata: { pageSize: true },
-          metadata: expect.not.objectContaining({ pageSize: expect.anything() }),
+          metadata: expect.not.objectContaining({
+            pageSize: expect.anything(),
+          }),
         }),
       );
     });
@@ -856,9 +934,9 @@ describe("ProposalForge saved view", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId("proposal-document-language")).toHaveTextContent(
-        "fr",
-      );
+      expect(
+        screen.getByTestId("proposal-document-language"),
+      ).toHaveTextContent("fr");
     });
   });
 
@@ -960,7 +1038,9 @@ describe("ProposalForge saved view", () => {
     });
 
     render(
-      <MemoryRouter initialEntries={["/proposal?draftId=proposal_draft_restore"]}>
+      <MemoryRouter
+        initialEntries={["/proposal?draftId=proposal_draft_restore"]}
+      >
         <ProposalForge />
       </MemoryRouter>,
     );
@@ -978,7 +1058,9 @@ describe("ProposalForge saved view", () => {
     writeStoredDocumentPageSizePreference("a4");
 
     render(
-      <MemoryRouter initialEntries={["/proposal?draftId=proposal_draft_restore"]}>
+      <MemoryRouter
+        initialEntries={["/proposal?draftId=proposal_draft_restore"]}
+      >
         <ProposalForge />
       </MemoryRouter>,
     );
@@ -1024,6 +1106,46 @@ describe("ProposalForge saved view", () => {
         );
       },
       { timeout: 2_500 },
+    );
+  });
+
+  it("applies a template intent after the draftId proposal is already loaded", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={["/proposal?draftId=proposal_draft_restore"]}
+      >
+        <LocationProbe />
+        <ProposalForge includeReviewControls />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "swiss_margin",
+      );
+    });
+    mockUpdateProposal.mockClear();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Apply template to loaded draft" }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "modernist_signal",
+      );
+    });
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 1_200));
+    });
+    expect(mockUpdateProposal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "proposal_draft_restore",
+        metadata: expect.objectContaining({
+          templateId: "modernist_signal",
+        }),
+        clearMetadata: expect.objectContaining({ templateBundle: true }),
+      }),
     );
   });
 
@@ -1122,6 +1244,31 @@ describe("ProposalForge saved view", () => {
     expect(window.localStorage.getItem(ATTACHED_CV_STORAGE_KEY)).toBe(
       "cv_alpha",
     );
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 1_200));
+    });
+    expect(mockCreateProposal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          proposalDocument: expect.objectContaining({ kind: "letter" }),
+        }),
+      }),
+    );
+    expect(mockUpdateProposal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "proposal_duplicate",
+        status: "draft",
+        metadata: expect.objectContaining({
+          proposalDocument: expect.objectContaining({ kind: "letter" }),
+        }),
+      }),
+    );
+    const duplicateUpdates = mockUpdateProposal.mock.calls.filter(
+      ([payload]) => payload.id === "proposal_duplicate",
+    );
+    for (const [payload] of duplicateUpdates) {
+      expect(payload.clearMetadata?.proposalDocument).not.toBe(true);
+    }
   });
 
   it("keeps saved proposal cv provenance visible on reopen even when the saved artifact is stable", () => {

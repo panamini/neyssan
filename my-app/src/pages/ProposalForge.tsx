@@ -853,6 +853,13 @@ type ProposalDocumentMetadata = DocumentStyleMetadata & {
   pageSize?: DocumentPageSizeId;
 };
 
+type ProposalMetadataClearFlags = {
+  pageSize?: boolean;
+  proposalDocument?: boolean;
+  templateBundle?: boolean;
+  documentStyleSlot?: boolean;
+};
+
 function omitProposalTemplateBundleMetadata(
   metadata: ProposalDocumentMetadata,
 ): ProposalDocumentMetadata {
@@ -897,16 +904,18 @@ function forgeDrawerSourceId(item: LibraryItem): string {
 
 function forgeDrawerProposalContext(item: LibraryItem): string {
   if (item.type === "cv") return "CV profile";
-  return [
-    item.jobId || item.jobTitle ? "Job linked" : null,
-    item.linkedCvTitle
-      ? `CV: ${item.linkedCvTitle}`
-      : item.linkedCvId
-        ? "CV linked"
-        : null,
-  ]
-    .filter(Boolean)
-    .join(" · ") || "Proposal";
+  return (
+    [
+      item.jobId || item.jobTitle ? "Job linked" : null,
+      item.linkedCvTitle
+        ? `CV: ${item.linkedCvTitle}`
+        : item.linkedCvId
+          ? "CV linked"
+          : null,
+    ]
+      .filter(Boolean)
+      .join(" · ") || "Proposal"
+  );
 }
 
 function readForgeDrawerRecentSearches(storageKey: string): string[] {
@@ -1071,10 +1080,9 @@ export function ProposalDraftDrawer({
   const hasStagedSource = Boolean(stagedJobTitleValue || stagedCvTitleValue);
   const shouldShowGenerateFooter = !askReviewReady;
   const { resolvedLanguage } = useUiLanguagePreference();
-  const footerGenerateLabel =
-    hasExistingDraft
-      ? translateUi(resolvedLanguage, "workspace.regenerate")
-      : generateLabel;
+  const footerGenerateLabel = hasExistingDraft
+    ? translateUi(resolvedLanguage, "workspace.regenerate")
+    : generateLabel;
   const resolvedJobTitle =
     jobTitle ||
     (jobContextKind === "pasted"
@@ -1085,11 +1093,11 @@ export function ProposalDraftDrawer({
     resolvedLanguage,
     "workspace.stagedLetterUnchanged",
   );
-  const displayedJobMeta =
-    stagedJobTitleValue
-      ? stagedJobMetaValue || stagedSourceMeta
-      : jobMeta || jobSummary;
-  const hasDisplayedJobContext = hasActiveJobContext || Boolean(stagedJobTitleValue);
+  const displayedJobMeta = stagedJobTitleValue
+    ? stagedJobMetaValue || stagedSourceMeta
+    : jobMeta || jobSummary;
+  const hasDisplayedJobContext =
+    hasActiveJobContext || Boolean(stagedJobTitleValue);
   const displayedCvTitle = stagedCvTitleValue || sourceCvTitle;
   const hasDisplayedCv = Boolean(displayedCvTitle);
   const canCancelStagedCv = Boolean(stagedCvTitleValue && onCancelStagedSource);
@@ -1182,7 +1190,9 @@ export function ProposalDraftDrawer({
                 className="forge-rail-drawer__draft-row"
                 onClick={onOpenJobs}
               >
-                <span>{translateUi(resolvedLanguage, "workspace.chooseSavedJob")}</span>
+                <span>
+                  {translateUi(resolvedLanguage, "workspace.chooseSavedJob")}
+                </span>
                 <CaretRight size={14} aria-hidden="true" />
               </button>
               {onOpenPasteJob ? (
@@ -1191,7 +1201,9 @@ export function ProposalDraftDrawer({
                   className="forge-rail-drawer__draft-row"
                   onClick={onOpenPasteJob}
                 >
-                  <span>{translateUi(resolvedLanguage, "jobs.pasteJobOffer")}</span>
+                  <span>
+                    {translateUi(resolvedLanguage, "jobs.pasteJobOffer")}
+                  </span>
                   <CaretRight size={14} aria-hidden="true" />
                 </button>
               ) : null}
@@ -1228,7 +1240,10 @@ export function ProposalDraftDrawer({
                         resolvedLanguage,
                         "workspace.cancelStagedSourceChange",
                       )
-                    : translateUi(resolvedLanguage, "workspace.removeAttachedCv")
+                    : translateUi(
+                        resolvedLanguage,
+                        "workspace.removeAttachedCv",
+                      )
                 }
                 onClick={
                   canCancelStagedCv && onCancelStagedSource
@@ -1253,7 +1268,9 @@ export function ProposalDraftDrawer({
 
         <section className="forge-rail-drawer__draft-section">
           <div className="forge-rail-drawer__section-title">
-            <span>{translateUi(resolvedLanguage, "workspace.settingsSection")}</span>
+            <span>
+              {translateUi(resolvedLanguage, "workspace.settingsSection")}
+            </span>
           </div>
           <Menu
             ariaLabel={translateUi(resolvedLanguage, "workspace.documentType")}
@@ -1264,16 +1281,23 @@ export function ProposalDraftDrawer({
             trigger={
               <button
                 type="button"
-                aria-label={translateUi(resolvedLanguage, "workspace.documentType")}
+                aria-label={translateUi(
+                  resolvedLanguage,
+                  "workspace.documentType",
+                )}
                 className="dasti-proposal-skeleton-rail__setup-row dasti-proposal-skeleton-rail__setup-row--button"
               >
                 <span className="dasti-proposal-skeleton-rail__setup-label">
                   {translateUi(resolvedLanguage, "workspace.type")}
                 </span>
                 <span className="dasti-proposal-skeleton-rail__setup-value">
-                  {proposalTypeLabel || translateUi(resolvedLanguage, "workspace.letter")}
+                  {proposalTypeLabel ||
+                    translateUi(resolvedLanguage, "workspace.letter")}
                 </span>
-                <CaretRight className="dasti-proposal-skeleton-rail__chevron" aria-hidden="true" />
+                <CaretRight
+                  className="dasti-proposal-skeleton-rail__chevron"
+                  aria-hidden="true"
+                />
               </button>
             }
           />
@@ -1295,7 +1319,10 @@ export function ProposalDraftDrawer({
                 <span className="dasti-proposal-skeleton-rail__setup-value">
                   {toneLabel}
                 </span>
-                <CaretRight className="dasti-proposal-skeleton-rail__chevron" aria-hidden="true" />
+                <CaretRight
+                  className="dasti-proposal-skeleton-rail__chevron"
+                  aria-hidden="true"
+                />
               </button>
             }
           />
@@ -1655,10 +1682,7 @@ export function ProposalCvDrawer({
   const allResultsRef = React.useRef<HTMLDivElement | null>(null);
   const attachedLabel = translateUi(resolvedLanguage, "workspace.attached");
   const attachCvLabel = translateUi(resolvedLanguage, "workspace.attachCv");
-  const openFullCvLabel = translateUi(
-    resolvedLanguage,
-    "workspace.openFullCv",
-  );
+  const openFullCvLabel = translateUi(resolvedLanguage, "workspace.openFullCv");
   const normalizedQuery = query.trim().toLowerCase();
   const filteredItems = items.filter((item) =>
     normalizedQuery
@@ -2013,9 +2037,7 @@ export function ProjectsLibraryDrawer({
               : `${openProposalsLibraryLabel}: ${item.title}`
           }
           data-toolbar-tooltip={
-            item.type === "cv"
-              ? openCvLibraryLabel
-              : openProposalsLibraryLabel
+            item.type === "cv" ? openCvLibraryLabel : openProposalsLibraryLabel
           }
           onClick={(event) => {
             event.stopPropagation();
@@ -2102,7 +2124,10 @@ export function ProjectsLibraryDrawer({
           <button
             type="button"
             onClick={() => setSelectedIds(new Set())}
-            aria-label={translateUi(resolvedLanguage, "workspace.clearSelection")}
+            aria-label={translateUi(
+              resolvedLanguage,
+              "workspace.clearSelection",
+            )}
           >
             <X size={14} aria-hidden="true" />
           </button>
@@ -2711,11 +2736,10 @@ export function ProposalForge(): JSX.Element {
       storedOutputDraft?.proposalType,
     ],
   );
-  const [proposalClosingOverride, setProposalClosingOverride] =
-    React.useState<{
-      baseToken: string;
-      closing: ProposalClosingRef;
-    } | null>(null);
+  const [proposalClosingOverride, setProposalClosingOverride] = React.useState<{
+    baseToken: string;
+    closing: ProposalClosingRef;
+  } | null>(null);
   const storedOutputProposalClosing =
     proposalClosingOverride?.baseToken === persistedOutputDraftClosingBaseToken
       ? proposalClosingOverride.closing
@@ -2979,18 +3003,17 @@ export function ProposalForge(): JSX.Element {
     () => new URLSearchParams(search).get("draftId"),
     [search],
   );
-  const proposalStyleSlotIntent = React.useMemo(
-    () => {
-      const params = new URLSearchParams(search);
-      return resolveProposalStyleSlotIntent(
-        params.get("styleSlot") ?? params.get("templateId"),
-      );
-    },
-    [search],
-  );
+  const proposalStyleSlotIntent = React.useMemo(() => {
+    const params = new URLSearchParams(search);
+    return resolveProposalStyleSlotIntent(
+      params.get("styleSlot") ?? params.get("templateId"),
+    );
+  }, [search]);
   const proposalDirectTemplateIntent = React.useMemo(() => {
     const value = new URLSearchParams(search).get("templateId");
-    return isProposalTemplateId(value) ? resolveProposalTemplateId(value) : null;
+    return isProposalTemplateId(value)
+      ? resolveProposalTemplateId(value)
+      : null;
   }, [search]);
   const proposalPageSizeIntent = React.useMemo(() => {
     const value = new URLSearchParams(search).get("pageSize");
@@ -3026,8 +3049,8 @@ export function ProposalForge(): JSX.Element {
       proposalDirectTemplateIntent
         ? null
         : proposalStyleSlotIntent
-        ? getProposalBundleForDocumentStyleSlot(proposalStyleSlotIntent)
-        : null,
+          ? getProposalBundleForDocumentStyleSlot(proposalStyleSlotIntent)
+          : null,
     [proposalDirectTemplateIntent, proposalStyleSlotIntent],
   );
   const requestedView = React.useMemo<ProposalForgeView>(() => {
@@ -3344,7 +3367,9 @@ export function ProposalForge(): JSX.Element {
     React.useState<string>(storedOutputDraft?.proposalRecipientDetails || "");
   const [proposalRecipientFieldDraft, setProposalRecipientFieldDraft] =
     React.useState<ProposalRecipientFields>(() =>
-      parseProposalRecipientDetails(storedOutputDraft?.proposalRecipientDetails),
+      parseProposalRecipientDetails(
+        storedOutputDraft?.proposalRecipientDetails,
+      ),
     );
   const [proposalHeaderVisibility, setProposalHeaderVisibility] =
     React.useState<ProposalHeaderVisibility>(initialProposalHeaderVisibility);
@@ -3368,7 +3393,8 @@ export function ProposalForge(): JSX.Element {
   const [documentDecoration, setDocumentDecoration] =
     React.useState<DocumentDecoration>(() =>
       normalizeDocumentDecoration(
-        storedOutputDraft?.documentDecoration ?? createDefaultDocumentDecoration(),
+        storedOutputDraft?.documentDecoration ??
+          createDefaultDocumentDecoration(),
       ),
     );
   const proposalDecorationPreviewUrlRef = React.useRef<string | null>(null);
@@ -3744,28 +3770,25 @@ export function ProposalForge(): JSX.Element {
     },
     [markHeadingFieldDirty],
   );
-  const syncProposalRecipientVisibility = React.useCallback(
-    (value: string) => {
-      const fields = parseProposalRecipientDetails(value);
-      const hasRecipient = Boolean(
-        fields.name ||
-          fields.role ||
-          fields.company ||
-          fields.address ||
-          fields.email ||
-          fields.city,
-      );
-      const inferredVisibility = buildProposalHeaderVisibilityFromContent(value);
+  const syncProposalRecipientVisibility = React.useCallback((value: string) => {
+    const fields = parseProposalRecipientDetails(value);
+    const hasRecipient = Boolean(
+      fields.name ||
+        fields.role ||
+        fields.company ||
+        fields.address ||
+        fields.email ||
+        fields.city,
+    );
+    const inferredVisibility = buildProposalHeaderVisibilityFromContent(value);
 
-      setProposalHeaderVisibility((current) => ({
-        ...current,
-        showRecipient: hasRecipient,
-        showRecipientDetails:
-          hasRecipient && inferredVisibility.showRecipientDetails,
-      }));
-    },
-    [],
-  );
+    setProposalHeaderVisibility((current) => ({
+      ...current,
+      showRecipient: hasRecipient,
+      showRecipientDetails:
+        hasRecipient && inferredVisibility.showRecipientDetails,
+    }));
+  }, []);
   const handleProposalRecipientDetailsChange = React.useCallback(
     (value: string) => {
       markHeadingFieldDirty("recipientDetails");
@@ -3921,12 +3944,13 @@ export function ProposalForge(): JSX.Element {
     React.useRef<Promise<Id<"proposals"> | null> | null>(null);
   type ComposeSaveSnapshot = {
     id: Id<"proposals"> | null;
-  title: string;
-  content: string;
-  metadata: ProposalDocumentMetadata | undefined;
-  status: "draft" | "saved";
-  token: string;
-};
+    title: string;
+    content: string;
+    metadata: ProposalDocumentMetadata | undefined;
+    clearMetadata: ProposalMetadataClearFlags;
+    status: "draft" | "saved";
+    token: string;
+  };
   const pendingQueuedComposeSnapshotRef =
     React.useRef<ComposeSaveSnapshot | null>(null);
   const latestComposeAutosaveSnapshotRef =
@@ -4241,14 +4265,15 @@ export function ProposalForge(): JSX.Element {
         resolveProposalWorkspaceSourceDraft({
           allowStoredDraftCandidates:
             !shouldStartFromEmptyProposalWorkspace && !jobContextCleared,
-          canonicalJobRecord: !jobContextCleared && canonicalJobRecord
-            ? {
-                title: canonicalJobRecord.title,
-                rawDescription: canonicalJobRecord.rawDescription,
-                sourceUrl: canonicalJobRecord.sourceUrl,
-                sourceDomain: canonicalJobRecord.sourceDomain,
-              }
-            : null,
+          canonicalJobRecord:
+            !jobContextCleared && canonicalJobRecord
+              ? {
+                  title: canonicalJobRecord.title,
+                  rawDescription: canonicalJobRecord.rawDescription,
+                  sourceUrl: canonicalJobRecord.sourceUrl,
+                  sourceDomain: canonicalJobRecord.sourceDomain,
+                }
+              : null,
           storedOutputSourceDraft:
             shouldStartFromEmptyProposalWorkspace || jobContextCleared
               ? null
@@ -4268,14 +4293,15 @@ export function ProposalForge(): JSX.Element {
             stagedProposalSourceDraft
               ? null
               : storedComposeDraft,
-          prefill: !jobContextCleared && prefill
-            ? {
-                jobTitle: prefill.jobTitle,
-                jobDescription: prefill.jobDescription,
-                sourceUrl: prefill.sourceUrl ?? null,
-                platform: prefill.platform ?? null,
-              }
-            : null,
+          prefill:
+            !jobContextCleared && prefill
+              ? {
+                  jobTitle: prefill.jobTitle,
+                  jobDescription: prefill.jobDescription,
+                  sourceUrl: prefill.sourceUrl ?? null,
+                  platform: prefill.platform ?? null,
+                }
+              : null,
           stickyImportedSource:
             !jobContextCleared &&
             !stagedProposalSourceDraft &&
@@ -5251,8 +5277,7 @@ export function ProposalForge(): JSX.Element {
     const selectedSavedProposalForPersistence =
       isSavedView && selectedProposalId
         ? (savedProposals ?? fallbackSavedProposals).find(
-            (proposal) =>
-              String(proposal._id) === String(selectedProposalId),
+            (proposal) => String(proposal._id) === String(selectedProposalId),
           ) ?? null
         : null;
     const savedPageSizePreference =
@@ -5446,16 +5471,27 @@ export function ProposalForge(): JSX.Element {
             return mergedMetadata;
           })()
         : renderedMetadata;
+      const clearMetadata: ProposalMetadataClearFlags = {
+        ...(snapshotDocument ? {} : { proposalDocument: true }),
+        ...(canApplyLatestStyleCommit && !latestStyleCommit.templateBundleId
+          ? { templateBundle: true }
+          : {}),
+        ...(canApplyLatestStyleCommit && !latestStyleCommit.verbatiStyleSlotId
+          ? { documentStyleSlot: true }
+          : {}),
+      };
       return {
         id: generatedProposalId,
         title: normalizedTitle,
         content: trimmedContent,
         metadata,
+        clearMetadata,
         status,
         token: JSON.stringify({
           title: normalizedTitle,
           content: trimmedContent,
           metadata: metadata ?? null,
+          clearMetadata,
           status,
         }),
       };
@@ -5475,7 +5511,8 @@ export function ProposalForge(): JSX.Element {
     [buildComposeSaveSnapshot],
   );
   const latestComposeAutosaveTokenRef = React.useRef<string | null>(null);
-  latestComposeAutosaveTokenRef.current = composeAutosaveSnapshot?.token ?? null;
+  latestComposeAutosaveTokenRef.current =
+    composeAutosaveSnapshot?.token ?? null;
   React.useEffect(() => {
     latestComposeAutosaveSnapshotRef.current = composeAutosaveSnapshot;
   }, [composeAutosaveSnapshot]);
@@ -5556,9 +5593,7 @@ export function ProposalForge(): JSX.Element {
                 sections: [{ type: "text", content: nextSnapshot.content }],
                 status: nextSnapshot.status,
                 metadata: nextSnapshot.metadata,
-                ...(nextSnapshot.metadata?.proposalDocument
-                  ? {}
-                  : { clearMetadata: { proposalDocument: true } }),
+                clearMetadata: nextSnapshot.clearMetadata,
               });
               lastPersistedId = generatedProposalIdRef.current;
             } else {
@@ -5843,7 +5878,9 @@ export function ProposalForge(): JSX.Element {
   );
   const handleDocumentIconSettingsChange = React.useCallback(
     (nextSettings: DocumentIconSettings) => {
-      setProposalDocumentIconSettings(normalizeDocumentIconSettings(nextSettings));
+      setProposalDocumentIconSettings(
+        normalizeDocumentIconSettings(nextSettings),
+      );
     },
     [],
   );
@@ -5878,7 +5915,8 @@ export function ProposalForge(): JSX.Element {
         }
         const fileName = file.name.slice(0, 160);
         const previewUrl =
-          typeof URL !== "undefined" && typeof URL.createObjectURL === "function"
+          typeof URL !== "undefined" &&
+          typeof URL.createObjectURL === "function"
             ? URL.createObjectURL(file)
             : "";
         revokeProposalDecorationPreviewUrl();
@@ -5932,9 +5970,14 @@ export function ProposalForge(): JSX.Element {
             resolvedUrl: pendingDecoration.resolvedUrl,
           }),
         );
-        const snapshot = buildComposeSaveSnapshot(undefined, "draft", undefined, {
-          documentDecoration: persistedDecoration,
-        });
+        const snapshot = buildComposeSaveSnapshot(
+          undefined,
+          "draft",
+          undefined,
+          {
+            documentDecoration: persistedDecoration,
+          },
+        );
         void flushScheduledProposalSave(undefined, {
           force: true,
           snapshot: snapshot ?? undefined,
@@ -5943,7 +5986,9 @@ export function ProposalForge(): JSX.Element {
         revokeProposalDecorationPreviewUrl();
         setDocumentDecoration(normalizeDocumentDecoration(baseDecoration));
         showToast(
-          error instanceof Error ? error.message : "Could not upload this image.",
+          error instanceof Error
+            ? error.message
+            : "Could not upload this image.",
           { variant: "error" },
         );
       });
@@ -6361,7 +6406,8 @@ export function ProposalForge(): JSX.Element {
     traceProposalStyle,
   ]);
 
-  const previousProposalViewRef = React.useRef<ProposalForgeView>(requestedView);
+  const previousProposalViewRef =
+    React.useRef<ProposalForgeView>(requestedView);
   const isRestoringComposeViewRef = React.useRef(false);
   const skipNextSavedToComposeRestoreRef = React.useRef(false);
   const releaseComposeViewRestoreGuard = React.useCallback(() => {
@@ -6931,10 +6977,7 @@ export function ProposalForge(): JSX.Element {
       content?: string;
       title?: string;
       metadata?: SavedProposalRecord["metadata"];
-      clearMetadata?: {
-        pageSize?: boolean;
-        proposalDocument?: boolean;
-      };
+      clearMetadata?: ProposalMetadataClearFlags;
     }) => {
       if (!openedSavedProposal) {
         return false;
@@ -6954,9 +6997,7 @@ export function ProposalForge(): JSX.Element {
             }
           : {}),
         ...(patch.metadata ? { metadata: patch.metadata } : {}),
-        ...(patch.clearMetadata
-          ? { clearMetadata: patch.clearMetadata }
-          : {}),
+        ...(patch.clearMetadata ? { clearMetadata: patch.clearMetadata } : {}),
       });
       return true;
     },
@@ -7035,9 +7076,7 @@ export function ProposalForge(): JSX.Element {
       setIsSavingSavedProposal(true);
       void persistOpenedSavedProposal({
         metadata: nextMetadata,
-        ...(preference === "auto"
-          ? { clearMetadata: { pageSize: true } }
-          : {}),
+        ...(preference === "auto" ? { clearMetadata: { pageSize: true } } : {}),
       })
         .then((persisted) => {
           if (!persisted) {
@@ -7278,7 +7317,9 @@ export function ProposalForge(): JSX.Element {
     setProposalApplicantRole(draft.proposalApplicantRole ?? "");
     setProposalApplicantCompany(draft.proposalApplicantCompany ?? "");
     setProposalContactLine(nextContactLine);
-    setProposalStructuredContactDraft(parseProposalContactLine(nextContactLine));
+    setProposalStructuredContactDraft(
+      parseProposalContactLine(nextContactLine),
+    );
     setProposalLetterDate(draft.proposalLetterDate ?? "");
     setProposalRecipientDetails(nextRecipientDetails);
     setProposalRecipientFieldDraft(
@@ -7948,7 +7989,9 @@ export function ProposalForge(): JSX.Element {
       });
       setProposalSalutationValue(nextProposalSalutation);
       proposalSalutationValueRef.current = nextProposalSalutation;
-      setProposalDocumentTitle(openedSavedProposal.title || "Untitled proposal");
+      setProposalDocumentTitle(
+        openedSavedProposal.title || "Untitled proposal",
+      );
       setProposalDocumentTitleManual(true);
       setProposalDocumentMeta(nextDocumentMeta);
       setDocumentDecoration(nextDocumentDecoration);
@@ -7997,7 +8040,20 @@ export function ProposalForge(): JSX.Element {
       loadedDraftProposalIdRef.current = null;
       return;
     }
-    if (loadedDraftProposalIdRef.current === selectedDraftProposalId) {
+    if (
+      isConvexAuthenticated &&
+      proposalStyleSlotIntent &&
+      proposalSettingsPresets === undefined
+    ) {
+      return;
+    }
+    const draftRestoreKey = JSON.stringify({
+      id: selectedDraftProposalId,
+      templateId: proposalTemplateIntent,
+      styleSlot: proposalStyleSlotIntent,
+      stylePreset: proposalStyleIntent,
+    });
+    if (loadedDraftProposalIdRef.current === draftRestoreKey) {
       return;
     }
 
@@ -8140,9 +8196,21 @@ export function ProposalForge(): JSX.Element {
       if (proposalPageSizeIntent) {
         nextMetadata.pageSize = proposalPageSizeIntent;
       }
+      Object.assign(
+        nextMetadata,
+        buildProposalRouteDocumentStyleMetadata({
+          stylePresetOverride: proposalStyleIntent ?? undefined,
+          styleSlotOverride: proposalStyleSlotIntent ?? undefined,
+          proposalSettingsPresets,
+        }),
+      );
       void updateProposal({
         id: nextGeneratedId,
         metadata: nextMetadata,
+        clearMetadata: {
+          templateBundle: true,
+          ...(proposalStyleSlotIntent ? {} : { documentStyleSlot: true }),
+        },
       }).catch((error) => {
         console.error("Failed to persist restored draft template:", error);
         showToast("Template not saved.", {
@@ -8163,7 +8231,7 @@ export function ProposalForge(): JSX.Element {
     );
     const nextSourceComposeDraft: StoredProposalComposeDraft | null = null;
 
-    loadedDraftProposalIdRef.current = selectedDraftProposalId;
+    loadedDraftProposalIdRef.current = draftRestoreKey;
     latestProposalStyleCommitRef.current = null;
     cancelPendingComposeDraftSync();
     setDuplicateSourceJobId(draftProposal.metadata?.jobId ?? null);
@@ -8285,7 +8353,10 @@ export function ProposalForge(): JSX.Element {
     draftCharacterLimitMode,
     fallbackProposalTemplateId,
     formatProposalTypeLabel,
+    isConvexAuthenticated,
     proposalStyleIntent,
+    proposalStyleSlotIntent,
+    proposalSettingsPresets,
     proposalPageSizeIntent,
     proposalTemplateBundleIntent,
     proposalTemplateIntent,
@@ -8811,6 +8882,10 @@ export function ProposalForge(): JSX.Element {
               styleLinkMode: "proposal_local",
               styleChoice: nextStyleChoice,
             },
+            clearMetadata: {
+              templateBundle: true,
+              ...(styleSlotOverride ? {} : { documentStyleSlot: true }),
+            },
           });
           if (!persisted) {
             return false;
@@ -8902,7 +8977,20 @@ export function ProposalForge(): JSX.Element {
       return;
     }
 
-    const intentKey = `${selectedProposalId}:${proposalTemplateIntent}`;
+    if (
+      isConvexAuthenticated &&
+      proposalStyleSlotIntent &&
+      proposalSettingsPresets === undefined
+    ) {
+      return;
+    }
+
+    const intentKey = JSON.stringify({
+      proposalId: selectedProposalId,
+      templateId: proposalTemplateIntent,
+      styleSlot: proposalStyleSlotIntent,
+      stylePreset: proposalStyleIntent,
+    });
     if (
       appliedSavedRouteTemplateIntentRef.current === intentKey ||
       pendingSavedRouteTemplateIntentRef.current === intentKey
@@ -8943,12 +9031,14 @@ export function ProposalForge(): JSX.Element {
     };
   }, [
     handleProposalLayoutSelect,
+    isConvexAuthenticated,
     isSavedView,
     location.pathname,
     navigate,
     openedSavedProposal,
     proposalStyleIntent,
     proposalStyleSlotIntent,
+    proposalSettingsPresets,
     proposalTemplateIntent,
     search,
     selectedProposalId,
@@ -9525,9 +9615,8 @@ export function ProposalForge(): JSX.Element {
 
       if (!normalizedDocument) return;
 
-      const nextContent = serializeProposalDocumentToLegacyString(
-        normalizedDocument,
-      );
+      const nextContent =
+        serializeProposalDocumentToLegacyString(normalizedDocument);
       setProposalContent((current) =>
         current === nextContent ? current : nextContent,
       );
@@ -9625,7 +9714,8 @@ export function ProposalForge(): JSX.Element {
       if (!normalizedResult) {
         setRailAskAiReview({
           status: "error",
-          errorMessage: "Ask AI returned no text. Try a more specific instruction.",
+          errorMessage:
+            "Ask AI returned no text. Try a more specific instruction.",
         });
         return;
       }
@@ -9636,7 +9726,8 @@ export function ProposalForge(): JSX.Element {
     } catch {
       setRailAskAiReview({
         status: "error",
-        errorMessage: "Ask AI could not update the draft. Please try again in a moment.",
+        errorMessage:
+          "Ask AI could not update the draft. Please try again in a moment.",
       });
     } finally {
       setRailAskAiBusy(false);
@@ -10515,6 +10606,16 @@ export function ProposalForge(): JSX.Element {
         openedSavedProposal.metadata?.documentDecoration ??
           createDefaultDocumentDecoration(),
       );
+      const normalizedRestoredProposalDocument = normalizeProposalDocument(
+        openedSavedProposal.metadata?.proposalDocument,
+      );
+      const restoredProposalDocument =
+        normalizedRestoredProposalDocument &&
+        serializeProposalDocumentToLegacyString(
+          normalizedRestoredProposalDocument,
+        ).trim() === savedProposalContent.trim()
+          ? normalizedRestoredProposalDocument
+          : null;
       let duplicatedDraftId: Id<"proposals"> | null = null;
       const restoredDocumentTitle =
         savedProposalDocumentTitle.trim() ||
@@ -10548,20 +10649,18 @@ export function ProposalForge(): JSX.Element {
             metadata: duplicateMetadata,
           })) as Id<"proposals">;
         } catch (error) {
-          console.error(
-            "Failed to duplicate saved proposal to draft:",
-            error,
-          );
+          console.error("Failed to duplicate saved proposal to draft:", error);
         }
       }
 
       if (typeof window !== "undefined") {
         try {
           const existingComposeDraft = readStoredProposalComposeDraft() ?? {};
-          restoredModelType =
-            isProposalLlmModelType(existingComposeDraft.modelType)
-              ? existingComposeDraft.modelType
-              : composeToolbarModelType;
+          restoredModelType = isProposalLlmModelType(
+            existingComposeDraft.modelType,
+          )
+            ? existingComposeDraft.modelType
+            : composeToolbarModelType;
           const composeDraft: StoredProposalComposeDraft = {
             ...existingComposeDraft,
             jobTitle: restoredSourceJobTitle ?? restoredDocumentTitle,
@@ -10604,8 +10703,9 @@ export function ProposalForge(): JSX.Element {
       }
 
       setProposalContent(savedProposalContent);
-      setProposalDocument(null);
+      setProposalDocument(restoredProposalDocument);
       setProposalType(savedProposalType);
+      setProposalLibraryStatus("draft");
       setComposeToolbarModelType(restoredModelType);
       setProposalVoicePreset(savedProposalVoicePreset);
       setComposeToolbarVoicePreset(
@@ -10756,10 +10856,7 @@ export function ProposalForge(): JSX.Element {
     showToast,
   ]);
   const handleDeleteOutput = React.useCallback(async () => {
-    if (
-      typeof window !== "undefined" &&
-      !window.confirm("Delete proposal?")
-    ) {
+    if (typeof window !== "undefined" && !window.confirm("Delete proposal?")) {
       return;
     }
     if (generatedProposalId && !canPersistProposalState) {
@@ -10844,10 +10941,7 @@ export function ProposalForge(): JSX.Element {
   ]);
   const handleDeleteSavedProposal = React.useCallback(async () => {
     if (!openedSavedProposal) return;
-    if (
-      typeof window !== "undefined" &&
-      !window.confirm("Delete proposal?")
-    ) {
+    if (typeof window !== "undefined" && !window.confirm("Delete proposal?")) {
       return;
     }
     if (!canPersistProposalState) {
@@ -11856,15 +11950,15 @@ export function ProposalForge(): JSX.Element {
   const hasActiveProposalJobContext = Boolean(
     !jobContextCleared &&
       (canonicalJobRecord?.title?.trim() ||
-      canonicalJobRecord?.rawDescription?.trim() ||
-      resolvedProposalWorkspaceSourceDraft?.jobTitle?.trim() ||
-      resolvedProposalWorkspaceSourceDraft?.jobDescription?.trim() ||
-      resolvedProposalWorkspaceSourceDraft?.sourceUrl?.trim() ||
-      resolvedProposalWorkspaceSourceDraft?.platform?.trim() ||
-      proposalDraftMetadataSource?.sourceJobTitle?.trim() ||
-      proposalDraftMetadataSource?.sourceJobDescription?.trim() ||
-      proposalDraftMetadataSource?.sourceUrl?.trim() ||
-      proposalDraftMetadataSource?.platform?.trim()),
+        canonicalJobRecord?.rawDescription?.trim() ||
+        resolvedProposalWorkspaceSourceDraft?.jobTitle?.trim() ||
+        resolvedProposalWorkspaceSourceDraft?.jobDescription?.trim() ||
+        resolvedProposalWorkspaceSourceDraft?.sourceUrl?.trim() ||
+        resolvedProposalWorkspaceSourceDraft?.platform?.trim() ||
+        proposalDraftMetadataSource?.sourceJobTitle?.trim() ||
+        proposalDraftMetadataSource?.sourceJobDescription?.trim() ||
+        proposalDraftMetadataSource?.sourceUrl?.trim() ||
+        proposalDraftMetadataSource?.platform?.trim()),
   );
   const hasProposalDraftJobContext = Boolean(
     !jobContextCleared &&
@@ -12047,11 +12141,7 @@ export function ProposalForge(): JSX.Element {
       return "saved" as const;
     }
     return "draft" as const;
-  }, [
-    composeSaveStatus,
-    isSavingOutputToLibrary,
-    proposalLibraryStatus,
-  ]);
+  }, [composeSaveStatus, isSavingOutputToLibrary, proposalLibraryStatus]);
   const proposalGeneratedDocumentTitle = React.useMemo(
     () =>
       buildProfessionalApplicationSubject({
@@ -12234,7 +12324,8 @@ export function ProposalForge(): JSX.Element {
     setComposeSaveStatus("idle");
     const currentOutputDraft = readStoredProposalOutputDraft();
     writeStoredOutputDraft({
-      proposalTemplateId: effectiveProposalTemplateId ?? fallbackProposalTemplateId,
+      proposalTemplateId:
+        effectiveProposalTemplateId ?? fallbackProposalTemplateId,
       proposalVerbatiStyle: serializeVerbatiStyle(
         effectiveProposalStylePresetWithPalette,
       ),
@@ -12481,10 +12572,7 @@ export function ProposalForge(): JSX.Element {
   const proposalTemplatePanelRegistration = React.useMemo(
     () => ({
       surface: "proposal" as const,
-      title: translateUi(
-        resolvedLanguage,
-        "workspace.proposalTemplatesPanel",
-      ),
+      title: translateUi(resolvedLanguage, "workspace.proposalTemplatesPanel"),
       subtitle:
         resolvedProposalPageSize.id === "letter"
           ? "US Letter · 21.59 × 27.94 cm"
@@ -12788,10 +12876,7 @@ export function ProposalForge(): JSX.Element {
     () => ({
       surface: "proposal-design" as const,
       title: translateUi(resolvedLanguage, "workspace.design"),
-      ariaLabel: translateUi(
-        resolvedLanguage,
-        "workspace.proposalDesignPanel",
-      ),
+      ariaLabel: translateUi(resolvedLanguage, "workspace.proposalDesignPanel"),
       renderContent: () => (
         <ProposalDesignFields
           proposalTemplateId={
@@ -13230,7 +13315,9 @@ export function ProposalForge(): JSX.Element {
   }, [openTemplateSurface]);
   const proposalDraftOpen =
     templatePanelOpen && activeTemplateSurface === "proposal-draft";
-  const proposalDraftJobContextKind = React.useMemo<"empty" | "saved" | "pasted">(() => {
+  const proposalDraftJobContextKind = React.useMemo<
+    "empty" | "saved" | "pasted"
+  >(() => {
     if (jobContextCleared) {
       return "empty";
     }
@@ -13292,16 +13379,15 @@ export function ProposalForge(): JSX.Element {
     stagedProposalSourceDraft?.jobTitle?.trim() ||
     stagedProposalSourceSummary?.role ||
     null;
-  const stagedProposalSourceMeta =
-    stagedProposalSourceDraft
-      ? [
-          stagedProposalSourceSummary?.company,
-          stagedProposalSourceDraft.platform,
-          stagedProposalSourceSummary?.location,
-        ]
-          .filter(Boolean)
-          .join(" · ") || null
-      : null;
+  const stagedProposalSourceMeta = stagedProposalSourceDraft
+    ? [
+        stagedProposalSourceSummary?.company,
+        stagedProposalSourceDraft.platform,
+        stagedProposalSourceSummary?.location,
+      ]
+        .filter(Boolean)
+        .join(" · ") || null
+    : null;
   const stagedProposalSourcePreview =
     stagedProposalSourceDraft?.jobDescription?.trim() || null;
   const stagedProposalCvTitle =
@@ -13312,13 +13398,12 @@ export function ProposalForge(): JSX.Element {
   );
   const proposalDraftLinkedJobCvTitle =
     proposalDraftLinkedJobRecord?.resumeName?.trim() || null;
-  const proposalDraftSourceCvId =
-    (isSavedView
-      ? openedSavedProposalSourceCvId || proposalDraftLinkedJobCvId
-      : attachedCvId ||
-        normalizeSourceCvId(proposalDraftMetadataSource?.sourceCvId) ||
-        openedSavedProposalSourceCvId ||
-        proposalDraftLinkedJobCvId);
+  const proposalDraftSourceCvId = isSavedView
+    ? openedSavedProposalSourceCvId || proposalDraftLinkedJobCvId
+    : attachedCvId ||
+      normalizeSourceCvId(proposalDraftMetadataSource?.sourceCvId) ||
+      openedSavedProposalSourceCvId ||
+      proposalDraftLinkedJobCvId;
   const proposalDraftSourceCvTitle = resolveProposalDraftDrawerCvTitle({
     attachedCvTitle: isSavedView ? null : attachedCvDisplayTitle,
     sourceCvId: proposalDraftSourceCvId,
@@ -13375,7 +13460,9 @@ export function ProposalForge(): JSX.Element {
           toneOptions={proposalRailToneOptions}
           onSelectTone={(toneId) => {
             handleToolbarVoicePresetChange(
-              toneId === "engaging" || toneId === "signature" || toneId === "expert"
+              toneId === "engaging" ||
+                toneId === "signature" ||
+                toneId === "expert"
                 ? toneId
                 : null,
             );
@@ -13540,62 +13627,66 @@ export function ProposalForge(): JSX.Element {
   ]);
 
   const shouldShowSavedList = isSavedView && !selectedProposalId;
-  const proposalDocumentStageLabels = React.useMemo<ProposalDocumentStageLabels>(
-    () => ({
-      proposalToolbar: translateUi(resolvedLanguage, "workspace.proposalToolbar"),
-      proposalViewMode: translateUi(
-        resolvedLanguage,
-        "workspace.proposalViewMode",
-      ),
-      documentControls: translateUi(
-        resolvedLanguage,
-        "workspace.documentControls",
-      ),
-      switchToPreview: translateUi(
-        resolvedLanguage,
-        "workspace.switchToPreview",
-      ),
-      switchToEdit: translateUi(resolvedLanguage, "workspace.switchToEdit"),
-      edit: translateUi(resolvedLanguage, "workspace.edit"),
-      preview: translateUi(resolvedLanguage, "workspace.preview"),
-      editProposal: translateUi(resolvedLanguage, "workspace.editProposal"),
-      previewProposal: translateUi(
-        resolvedLanguage,
-        "workspace.previewProposal",
-      ),
-      heading: translateUi(resolvedLanguage, "workspace.heading"),
-      design: translateUi(resolvedLanguage, "workspace.design"),
-      templates: translateUi(resolvedLanguage, "workspace.templates"),
-      proposalUndoRedoActions: translateUi(
-        resolvedLanguage,
-        "workspace.proposalUndoRedoActions",
-      ),
-      undo: translateUi(resolvedLanguage, "workspace.undo"),
-      redo: translateUi(resolvedLanguage, "workspace.redo"),
-      proposalLibraryActions: translateUi(
-        resolvedLanguage,
-        "workspace.proposalLibraryActions",
-      ),
-      saveProposalToLibrary: translateUi(
-        resolvedLanguage,
-        "workspace.saveProposalToLibrary",
-      ),
-      saveToLibrary: translateUi(resolvedLanguage, "workspace.saveToLibrary"),
-      deleteDraft: translateUi(resolvedLanguage, "workspace.deleteDraft"),
-      primaryWritingAction: translateUi(
-        resolvedLanguage,
-        "workspace.primaryWritingAction",
-      ),
-      draftProposal: translateUi(resolvedLanguage, "workspace.draftProposal"),
-      draftProposalShort: translateUi(
-        resolvedLanguage,
-        "workspace.draftProposalShort",
-      ),
-      jobAndCv: translateUi(resolvedLanguage, "workspace.jobAndCv"),
-      ask: translateUi(resolvedLanguage, "workspace.ask"),
-    }),
-    [resolvedLanguage],
-  );
+  const proposalDocumentStageLabels =
+    React.useMemo<ProposalDocumentStageLabels>(
+      () => ({
+        proposalToolbar: translateUi(
+          resolvedLanguage,
+          "workspace.proposalToolbar",
+        ),
+        proposalViewMode: translateUi(
+          resolvedLanguage,
+          "workspace.proposalViewMode",
+        ),
+        documentControls: translateUi(
+          resolvedLanguage,
+          "workspace.documentControls",
+        ),
+        switchToPreview: translateUi(
+          resolvedLanguage,
+          "workspace.switchToPreview",
+        ),
+        switchToEdit: translateUi(resolvedLanguage, "workspace.switchToEdit"),
+        edit: translateUi(resolvedLanguage, "workspace.edit"),
+        preview: translateUi(resolvedLanguage, "workspace.preview"),
+        editProposal: translateUi(resolvedLanguage, "workspace.editProposal"),
+        previewProposal: translateUi(
+          resolvedLanguage,
+          "workspace.previewProposal",
+        ),
+        heading: translateUi(resolvedLanguage, "workspace.heading"),
+        design: translateUi(resolvedLanguage, "workspace.design"),
+        templates: translateUi(resolvedLanguage, "workspace.templates"),
+        proposalUndoRedoActions: translateUi(
+          resolvedLanguage,
+          "workspace.proposalUndoRedoActions",
+        ),
+        undo: translateUi(resolvedLanguage, "workspace.undo"),
+        redo: translateUi(resolvedLanguage, "workspace.redo"),
+        proposalLibraryActions: translateUi(
+          resolvedLanguage,
+          "workspace.proposalLibraryActions",
+        ),
+        saveProposalToLibrary: translateUi(
+          resolvedLanguage,
+          "workspace.saveProposalToLibrary",
+        ),
+        saveToLibrary: translateUi(resolvedLanguage, "workspace.saveToLibrary"),
+        deleteDraft: translateUi(resolvedLanguage, "workspace.deleteDraft"),
+        primaryWritingAction: translateUi(
+          resolvedLanguage,
+          "workspace.primaryWritingAction",
+        ),
+        draftProposal: translateUi(resolvedLanguage, "workspace.draftProposal"),
+        draftProposalShort: translateUi(
+          resolvedLanguage,
+          "workspace.draftProposalShort",
+        ),
+        jobAndCv: translateUi(resolvedLanguage, "workspace.jobAndCv"),
+        ask: translateUi(resolvedLanguage, "workspace.ask"),
+      }),
+      [resolvedLanguage],
+    );
 
   return (
     <div
@@ -13707,13 +13798,14 @@ export function ProposalForge(): JSX.Element {
                         "--proposal-workspace-stage-inline-size":
                           "var(--proposal-paper-visual-inline-size)",
                         "--proposal-workspace-rail-inline-size": "360px",
-                        "--grid-columns": isForgeDrawerDockedDesktop && showComposeGridColumn
-                          ? "minmax(0, 1fr) var(--proposal-workspace-rail-inline-size)"
-                          : isCompactComposeLayout
-                            ? "minmax(0, 1fr)"
-                            : showComposeGridColumn
-                              ? "minmax(0, var(--proposal-workspace-stage-inline-size)) var(--proposal-workspace-rail-inline-size)"
-                              : "minmax(0, 1fr)",
+                        "--grid-columns":
+                          isForgeDrawerDockedDesktop && showComposeGridColumn
+                            ? "minmax(0, 1fr) var(--proposal-workspace-rail-inline-size)"
+                            : isCompactComposeLayout
+                              ? "minmax(0, 1fr)"
+                              : showComposeGridColumn
+                                ? "minmax(0, var(--proposal-workspace-stage-inline-size)) var(--proposal-workspace-rail-inline-size)"
+                                : "minmax(0, 1fr)",
                         "--grid-gap": showComposeGridColumn
                           ? "var(--layout-card-grid)"
                           : "0px",
@@ -13912,7 +14004,8 @@ export function ProposalForge(): JSX.Element {
                             composePreviewValues
                           }
                           sourceUrl={
-                            stagedProposalSourceDraft?.sourceUrl ?? briefSourceUrl
+                            stagedProposalSourceDraft?.sourceUrl ??
+                            briefSourceUrl
                           }
                           sourcePlatform={
                             stagedProposalSourceDraft?.platform ??
@@ -14008,7 +14101,11 @@ export function ProposalForge(): JSX.Element {
                                 aria-label="Hide job prompt"
                                 data-toolbar-tooltip="Hide"
                               >
-                                <X size={14} strokeWidth={1.8} aria-hidden="true" />
+                                <X
+                                  size={14}
+                                  strokeWidth={1.8}
+                                  aria-hidden="true"
+                                />
                               </button>
                             </div>
                             <div className="dasti-proposal-template-job-empty__actions">
@@ -14134,9 +14231,7 @@ export function ProposalForge(): JSX.Element {
                             onRailTitleChange={
                               handleProposalApplicantNameChange
                             }
-                            onRailMetaChange={
-                              handleProposalApplicantRoleChange
-                            }
+                            onRailMetaChange={handleProposalApplicantRoleChange}
                             contactLineEditable={proposalOutputMode === "edit"}
                             onContactLineChange={
                               handleProposalContactLineChange
@@ -14158,7 +14253,9 @@ export function ProposalForge(): JSX.Element {
                             }
                             onSalutationChange={handleProposalSalutationChange}
                             signOffEditable={proposalOutputMode === "edit"}
-                            signOffValue={effectiveProposalClosing?.signOff ?? ""}
+                            signOffValue={
+                              effectiveProposalClosing?.signOff ?? ""
+                            }
                             signOffPlaceholder="Kind regards,"
                             onSignOffChange={handleProposalSignOffChange}
                             onHeaderVisibilityChange={(value) => {

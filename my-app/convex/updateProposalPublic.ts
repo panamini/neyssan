@@ -238,7 +238,9 @@ function mergeProposalMetadataTags(
     return undefined;
   }
 
-  return Array.from(new Set([...(existingTags ?? []), ...(incomingTags ?? [])]));
+  return Array.from(
+    new Set([...(existingTags ?? []), ...(incomingTags ?? [])]),
+  );
 }
 
 /**
@@ -270,6 +272,8 @@ export default mutation({
       v.object({
         pageSize: v.optional(v.boolean()),
         proposalDocument: v.optional(v.boolean()),
+        templateBundle: v.optional(v.boolean()),
+        documentStyleSlot: v.optional(v.boolean()),
       }),
     ),
     metadata: v.optional(
@@ -378,10 +382,16 @@ export default mutation({
     const shouldClearPageSize = args.clearMetadata?.pageSize === true;
     const shouldClearProposalDocument =
       args.clearMetadata?.proposalDocument === true;
+    const shouldClearTemplateBundle =
+      args.clearMetadata?.templateBundle === true;
+    const shouldClearDocumentStyleSlot =
+      args.clearMetadata?.documentStyleSlot === true;
     const hasMetadataPatch =
       typeof args.metadata === "object" ||
       shouldClearPageSize ||
-      shouldClearProposalDocument;
+      shouldClearProposalDocument ||
+      shouldClearTemplateBundle ||
+      shouldClearDocumentStyleSlot;
 
     if (
       !hasTitlePatch &&
@@ -468,6 +478,16 @@ export default mutation({
         delete nextMetadata.proposalDocument;
         delete nextMetadata.proposalDocumentRevision;
         delete nextMetadata.proposalDocumentUpdatedAt;
+      }
+      if (shouldClearTemplateBundle) {
+        delete nextMetadata.templateBundleId;
+      }
+      if (shouldClearDocumentStyleSlot) {
+        delete nextMetadata.verbatiStyleSlotId;
+        delete nextMetadata.verbatiStyleSlotSource;
+        delete nextMetadata.verbatiStyleSlotNameSnapshot;
+        delete nextMetadata.verbatiStyleBaseSnapshot;
+        delete nextMetadata.documentStyleVersion;
       }
       patch.metadata = sanitizeRemoteMetadataImages(
         nextMetadata,
