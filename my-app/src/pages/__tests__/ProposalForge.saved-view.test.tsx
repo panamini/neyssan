@@ -694,6 +694,7 @@ describe("ProposalForge saved view", () => {
       expect(mockUpdateProposal).toHaveBeenCalledWith(
         expect.objectContaining({
           id: "proposal_beta",
+          clearMetadata: { pageSize: true },
           metadata: expect.not.objectContaining({ pageSize: expect.anything() }),
         }),
       );

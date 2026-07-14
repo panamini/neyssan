@@ -5490,6 +5490,9 @@ export function ProposalForge(): JSX.Element {
                 sections: [{ type: "text", content: nextSnapshot.content }],
                 status: nextSnapshot.status,
                 metadata: nextSnapshot.metadata,
+                ...(nextSnapshot.metadata?.proposalDocument
+                  ? {}
+                  : { clearMetadata: { proposalDocument: true } }),
               });
               lastPersistedId = generatedProposalIdRef.current;
             } else {
@@ -6857,6 +6860,10 @@ export function ProposalForge(): JSX.Element {
       content?: string;
       title?: string;
       metadata?: SavedProposalRecord["metadata"];
+      clearMetadata?: {
+        pageSize?: boolean;
+        proposalDocument?: boolean;
+      };
     }) => {
       if (!openedSavedProposal) {
         return false;
@@ -6876,6 +6883,9 @@ export function ProposalForge(): JSX.Element {
             }
           : {}),
         ...(patch.metadata ? { metadata: patch.metadata } : {}),
+        ...(patch.clearMetadata
+          ? { clearMetadata: patch.clearMetadata }
+          : {}),
       });
       return true;
     },
@@ -6952,7 +6962,12 @@ export function ProposalForge(): JSX.Element {
       }
 
       setIsSavingSavedProposal(true);
-      void persistOpenedSavedProposal({ metadata: nextMetadata })
+      void persistOpenedSavedProposal({
+        metadata: nextMetadata,
+        ...(preference === "auto"
+          ? { clearMetadata: { pageSize: true } }
+          : {}),
+      })
         .then((persisted) => {
           if (!persisted) {
             setSavedProposalPageSizeOverride(null);

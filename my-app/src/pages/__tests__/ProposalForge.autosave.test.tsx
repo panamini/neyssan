@@ -661,6 +661,7 @@ describe("ProposalForge autosave", () => {
       expect.objectContaining({
         id: "proposal_rewrite_existing",
         content: "Whole draft rewritten by Ask AI.",
+        clearMetadata: { proposalDocument: true },
       }),
     );
     expect(

@@ -266,6 +266,12 @@ export default mutation({
       ),
     ),
     status: v.optional(v.string()),
+    clearMetadata: v.optional(
+      v.object({
+        pageSize: v.optional(v.boolean()),
+        proposalDocument: v.optional(v.boolean()),
+      }),
+    ),
     metadata: v.optional(
       v.object({
         platform: v.optional(v.string()),
@@ -369,7 +375,13 @@ export default mutation({
     const hasContentPatch = typeof args.content === "string";
     const hasSectionsPatch = Array.isArray(args.sections);
     const hasStatusPatch = typeof args.status === "string";
-    const hasMetadataPatch = typeof args.metadata === "object";
+    const shouldClearPageSize = args.clearMetadata?.pageSize === true;
+    const shouldClearProposalDocument =
+      args.clearMetadata?.proposalDocument === true;
+    const hasMetadataPatch =
+      typeof args.metadata === "object" ||
+      shouldClearPageSize ||
+      shouldClearProposalDocument;
 
     if (
       !hasTitlePatch &&
@@ -444,11 +456,22 @@ export default mutation({
         proposal.metadata?.tags,
         args.metadata?.tags,
       );
-      patch.metadata = sanitizeRemoteMetadataImages({
+      const nextMetadata = {
         ...proposal.metadata,
         ...args.metadata,
         ...(mergedTags ? { tags: mergedTags } : null),
-      }) as typeof proposal.metadata;
+      };
+      if (shouldClearPageSize) {
+        delete nextMetadata.pageSize;
+      }
+      if (shouldClearProposalDocument) {
+        delete nextMetadata.proposalDocument;
+        delete nextMetadata.proposalDocumentRevision;
+        delete nextMetadata.proposalDocumentUpdatedAt;
+      }
+      patch.metadata = sanitizeRemoteMetadataImages(
+        nextMetadata,
+      ) as typeof proposal.metadata;
       patch.jobId = args.metadata?.jobId ?? proposal.jobId;
     }
 

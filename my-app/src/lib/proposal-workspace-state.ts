@@ -17,6 +17,19 @@ export const PROPOSAL_TEMPLATE_RETURN_TO_STATE_KEY = "proposalReturnTo";
 export const PROPOSAL_DRAWER_QUERY_PARAM = "drawer";
 export const PROPOSAL_DRAFT_DRAWER_QUERY_VALUE = "proposal-draft";
 
+const PROPOSAL_TEMPLATE_ONE_SHOT_QUERY_PARAMS = [
+  "templateId",
+  "pageSize",
+  "styleSlot",
+  "templateStart",
+] as const;
+
+function clearProposalTemplateOneShotParams(params: URLSearchParams): void {
+  for (const param of PROPOSAL_TEMPLATE_ONE_SHOT_QUERY_PARAMS) {
+    params.delete(param);
+  }
+}
+
 export type ProposalEntryIntent = "cover-letter-start";
 export type JobImportFocus = "supported-sites";
 export type ProposalDrawerRouteIntent =
@@ -29,7 +42,7 @@ export function createProposalTemplateGalleryState(
   if (pathname !== "/proposal") return undefined;
 
   const params = new URLSearchParams(search);
-  params.delete("templateId");
+  clearProposalTemplateOneShotParams(params);
   const nextSearch = params.toString();
 
   return {
@@ -55,7 +68,7 @@ export function readProposalTemplateReturnTo(value: unknown): string | null {
       return null;
     }
 
-    parsed.searchParams.delete("templateId");
+    clearProposalTemplateOneShotParams(parsed.searchParams);
     const nextSearch = parsed.searchParams.toString();
     return `/proposal${nextSearch ? `?${nextSearch}` : ""}`;
   } catch {

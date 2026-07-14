@@ -144,6 +144,22 @@ describe("proposal workspace state", () => {
     );
   });
 
+  it("drops stale one-shot template intents before applying another template", () => {
+    const galleryState = createProposalTemplateGalleryState(
+      "/proposal",
+      "?draftId=proposal_draft&templateId=workshop_proposal_margin&pageSize=letter&styleSlot=minimal&templateStart=1",
+    );
+
+    expect(galleryState).toEqual({
+      proposalReturnTo: "/proposal?draftId=proposal_draft",
+    });
+    expect(
+      buildProposalTemplateApplyRoute(galleryState, "modernist_signal"),
+    ).toBe(
+      "/proposal?draftId=proposal_draft&templateId=modernist_signal",
+    );
+  });
+
   it("rejects unsafe template return routes and falls back to a fresh proposal", () => {
     const externalState = {
       proposalReturnTo: "https://example.com/proposal?view=saved&id=proposal_beta",
