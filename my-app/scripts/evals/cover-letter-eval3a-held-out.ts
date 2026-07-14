@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import {
   chmod,
   link,
@@ -50,22 +51,27 @@ export const QUALITY_EVAL3A_WRITER_MODELS = [
 export const QUALITY_EVAL3A_LIVE_MAX_USD = 2;
 export const QUALITY_EVAL3A_APPROVAL_PHRASE_VERSION =
   "quality_eval3a_approval_phrase_v1";
+const QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC = {
+  runMode: "finalization_failure_diagnostic_v1",
+  caseId: "blind-fr-customer-success-direct",
+  writerModel: "gpt-5.5",
+  maxCalls: 1,
+  maxUsd: 0.15,
+  declaredMaxUsdPerCall: 0.135595,
+  approvalPhraseVersion:
+    "quality_eval3a_finalization_diagnostic_approval_phrase_v1",
+} as const;
 
 type CoverLetterEval3aWriterModel =
   (typeof QUALITY_EVAL3A_WRITER_MODELS)[number];
 
-type CoverLetterEval3aFailureRecord = Exclude<
-  CoverLetterHumanReviewResult,
-  CoverLetterHumanReviewRecord
->;
-
 type CoverLetterEval3aFinalizationDiagnosticSource = NonNullable<
-  CoverLetterEval3aFailureRecord["artifact"]
+  CoverLetterHumanReviewResult["artifact"]
 >["diagnostics"]["finalization"];
 
 type CoverLetterEval3aFailureDiagnostic = Readonly<{
   version: "cover_letter_eval3a_failure_diagnostic_v1";
-  status: CoverLetterEval3aFailureRecord["status"];
+  status: CoverLetterHumanReviewResult["status"];
   artifactHash: string | null;
   finalization: Readonly<
     Pick<
@@ -82,7 +88,7 @@ type CoverLetterEval3aFailureDiagnostic = Readonly<{
 }>;
 
 function projectCoverLetterEval3aFailureDiagnostic(
-  record: CoverLetterEval3aFailureRecord,
+  record: CoverLetterHumanReviewResult,
 ): CoverLetterEval3aFailureDiagnostic {
   const finalization = record.artifact?.diagnostics.finalization;
   return {
@@ -282,6 +288,103 @@ export async function buildCoverLetterEval3aPlan(): Promise<CoverLetterEval3aPla
   return { ...body, planHash: await hashPlanBody(body) };
 }
 
+function getCoverLetterEval3aFinalizationDiagnosticCase(): CoverLetterBenchmarkCase {
+  const benchmarkCase = getCoverLetterEval3aHeldOutCases().find(
+    (candidate) =>
+      candidate.id === QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.caseId,
+  );
+  if (!benchmarkCase) {
+    throw new Error(
+      "QUALITY-EVAL-3A finalization diagnostic case is missing from the held-out cohort.",
+    );
+  }
+  return benchmarkCase;
+}
+
+export async function buildCoverLetterEval3aFinalizationDiagnosticPlan() {
+  const benchmarkCase = getCoverLetterEval3aFinalizationDiagnosticCase();
+  const preflight = await buildCoverLetterBenchmarkOfflineCostPreflight({
+    cases: [benchmarkCase],
+    writerModels: [QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.writerModel],
+    targetReservationUsd: QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.maxUsd,
+  });
+  if (
+    preflight.plannedProviderCalls !==
+      QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.maxCalls ||
+    preflight.providerMaxRetries !== 0 ||
+    preflight.maxRepairs !== 0 ||
+    !preflight.targetReservationProven ||
+    preflight.declaredMaxUsdPerCall !==
+      QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.declaredMaxUsdPerCall ||
+    preflight.minimumSafeReservationUsd !==
+      QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.declaredMaxUsdPerCall ||
+    preflight.worstCase.caseId !==
+      QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.caseId ||
+    preflight.worstCase.writerModel !==
+      QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.writerModel
+  ) {
+    throw new Error(
+      "QUALITY-EVAL-3A finalization diagnostic preflight drifted from the exact one-cell budget contract.",
+    );
+  }
+  const body = {
+    version: "cover_letter_eval3a_finalization_diagnostic_plan_v1",
+    status: "READY_FOR_APPROVAL",
+    runMode: QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.runMode,
+    caseId: QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.caseId,
+    writerModel: QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.writerModel,
+    plannedProviderCalls: QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.maxCalls,
+    providerMaxRetries: 0,
+    maxRepairs: 0,
+    llmEvaluator: "none",
+    budget: {
+      maxUsd: QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.maxUsd,
+      declaredMaxUsdPerCall:
+        QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.declaredMaxUsdPerCall,
+      minimumSafeReservationUsd:
+        QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.declaredMaxUsdPerCall,
+      reservationBasis: "conservative_offline_transport_ceiling",
+    },
+    outputs: {
+      failureLedgerVersion: "cover_letter_eval3a_failure_ledger_v2",
+      reviewerPack: false,
+      revealMap: false,
+    },
+    approvalPhraseVersion:
+      QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.approvalPhraseVersion,
+  } as const;
+  return {
+    ...body,
+    planHash: await buildStableHash({
+      namespace: "cover-letter-eval3a-finalization-diagnostic",
+      type: "plan",
+      version: 1,
+      body,
+    }),
+  };
+}
+
+export type CoverLetterEval3aFinalizationDiagnosticPlan = Awaited<
+  ReturnType<typeof buildCoverLetterEval3aFinalizationDiagnosticPlan>
+>;
+
+export function buildCoverLetterEval3aFinalizationDiagnosticApprovalPhrase(args: {
+  sourceRef: string;
+  planHash: string;
+  runId: string;
+}): string {
+  if (
+    !/^[a-f0-9]{40}$/u.test(args.sourceRef) ||
+    !/^[a-f0-9]{64}$/u.test(args.planHash) ||
+    !/^quality-eval-3a-finalization-diagnostic-[a-z0-9-]+$/u.test(args.runId)
+  ) {
+    throw new Error(
+      "QUALITY-EVAL-3A finalization diagnostic approval requires exact sourceRef and planHash values.",
+    );
+  }
+  return `J’approuve EVAL3A diagnostic finalization v1 : runId ${args.runId}, sourceRef ${args.sourceRef}, planHash ${args.planHash}, cellule blind-fr-customer-success-direct / gpt-5.5, 1 appel provider maximum, budget USD 0.15, plafond conservateur USD 0.135595, retries 0, repairs 0, aucun évaluateur LLM, aucun pack reviewer/reveal.`;
+}
+
 export function assertCoverLetterEval3aLiveGate(args: {
   plan: CoverLetterEval3aPlan;
   approvalPhrase: string;
@@ -322,6 +425,44 @@ export function assertCoverLetterEval3aLiveGate(args: {
   if (args.declaredMaxUsdPerCall !== args.plan.budget.declaredMaxUsdPerCall) {
     throw new Error(
       `QUALITY-EVAL-3A requires declaredMaxUsdPerCall=${args.plan.budget.declaredMaxUsdPerCall}.`,
+    );
+  }
+}
+
+export function assertCoverLetterEval3aFinalizationDiagnosticLiveGate(args: {
+  plan: CoverLetterEval3aFinalizationDiagnosticPlan;
+  approvalPhrase: string;
+  sourceRef: string;
+  currentHeadSourceRef: string;
+  runId: string;
+  explicitLiveProviderOptIn: boolean;
+  environmentLiveProviderOptIn: boolean;
+  maxCalls: number;
+  maxRepairs: number;
+  maxUsd: number;
+  declaredMaxUsdPerCall: number;
+}): void {
+  if (!args.explicitLiveProviderOptIn || !args.environmentLiveProviderOptIn) {
+    throw new Error(
+      "QUALITY-EVAL-3A finalization diagnostic requires both explicit and environment live opt-in.",
+    );
+  }
+  if (
+    args.plan.status !== "READY_FOR_APPROVAL" ||
+    args.sourceRef !== args.currentHeadSourceRef ||
+    args.approvalPhrase !==
+      buildCoverLetterEval3aFinalizationDiagnosticApprovalPhrase({
+        sourceRef: args.sourceRef,
+        planHash: args.plan.planHash,
+        runId: args.runId,
+      }) ||
+    args.maxCalls !== args.plan.plannedProviderCalls ||
+    args.maxRepairs !== args.plan.maxRepairs ||
+    args.maxUsd !== args.plan.budget.maxUsd ||
+    args.declaredMaxUsdPerCall !== args.plan.budget.declaredMaxUsdPerCall
+  ) {
+    throw new Error(
+      "QUALITY-EVAL-3A finalization diagnostic requires the exact one-cell approval and budget contract.",
     );
   }
 }
@@ -536,7 +677,15 @@ async function writeFailureLedger(args: {
   });
 }
 
-export async function runCoverLetterEval3aHeldOut(args: {
+type CoverLetterEval3aGenerateRecord = (args: {
+  benchmarkCase: CoverLetterBenchmarkCase;
+  writerModel: CoverLetterEval3aWriterModel;
+  apiKey: string;
+  budget: ReturnType<typeof createCoverLetterEvalBudget>;
+}) => Promise<CoverLetterHumanReviewResult>;
+
+type CoverLetterEval3aRunArgs = {
+  mode?: string;
   approvalPhrase: string;
   explicitLiveProviderOptIn: boolean;
   maxCalls: number;
@@ -547,23 +696,256 @@ export async function runCoverLetterEval3aHeldOut(args: {
   runId: string;
   sourceRef: string;
   apiKey: string;
-  generateRecord?: (args: {
-    benchmarkCase: CoverLetterBenchmarkCase;
-    writerModel: CoverLetterEval3aWriterModel;
-    apiKey: string;
-    budget: ReturnType<typeof createCoverLetterEvalBudget>;
-  }) => Promise<CoverLetterHumanReviewResult>;
-}): Promise<
-  Readonly<{
-    status: "HUMAN_REVIEW_PENDING";
-    plan: CoverLetterEval3aPlan;
-    records: readonly CoverLetterHumanReviewRecord[];
-    budget: ReturnType<
-      ReturnType<typeof createCoverLetterEvalBudget>["snapshot"]
-    >;
-    paths: Awaited<ReturnType<typeof writeCoverLetterEval3aPrivateArtifacts>>;
-  }>
+  generateRecord?: CoverLetterEval3aGenerateRecord;
+};
+
+type CoverLetterEval3aHeldOutRunResult = Readonly<{
+  status: "HUMAN_REVIEW_PENDING";
+  plan: CoverLetterEval3aPlan;
+  records: readonly CoverLetterHumanReviewRecord[];
+  budget: ReturnType<
+    ReturnType<typeof createCoverLetterEvalBudget>["snapshot"]
+  >;
+  paths: Awaited<ReturnType<typeof writeCoverLetterEval3aPrivateArtifacts>>;
+}>;
+
+export type CoverLetterEval3aFinalizationDiagnosticRunResult = Readonly<{
+  status:
+    | "DIAGNOSTIC_REPRODUCED"
+    | "DIAGNOSTIC_NOT_REPRODUCED"
+    | "DIAGNOSTIC_INCONCLUSIVE";
+  plan: CoverLetterEval3aFinalizationDiagnosticPlan;
+  recordStatus: CoverLetterHumanReviewResult["status"];
+  budget: ReturnType<
+    ReturnType<typeof createCoverLetterEvalBudget>["snapshot"]
+  >;
+  ledgerPath: string;
+}>;
+
+function resolveCurrentGitHeadSourceRef(): string {
+  const sourceRef = execFileSync("git", ["rev-parse", "HEAD"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim();
+  if (!/^[a-f0-9]{40}$/u.test(sourceRef)) {
+    throw new Error(
+      "QUALITY-EVAL-3A finalization diagnostic could not resolve an exact Git HEAD.",
+    );
+  }
+  return sourceRef;
+}
+
+function classifyCoverLetterEval3aFinalizationDiagnostic(
+  status: CoverLetterHumanReviewResult["status"],
+) {
+  if (status === "finalization_failed") {
+    return {
+      status: "DIAGNOSTIC_REPRODUCED",
+      verdict: "REPRODUCED_FINALIZATION_FAILURE",
+      message:
+        "QUALITY-EVAL-3A finalization diagnostic reproduced the fixed-cell finalization failure.",
+    } as const;
+  }
+  if (status === "human_review_pending") {
+    return {
+      status: "DIAGNOSTIC_NOT_REPRODUCED",
+      verdict: "NOT_REPRODUCED_FINALIZATION_SUCCEEDED",
+      message:
+        "QUALITY-EVAL-3A finalization diagnostic did not reproduce the fixed-cell finalization failure.",
+    } as const;
+  }
+  return {
+    status: "DIAGNOSTIC_INCONCLUSIVE",
+    verdict: "INCONCLUSIVE_NON_FINALIZATION_STATUS",
+    message:
+      "QUALITY-EVAL-3A finalization diagnostic ended with a non-finalization failure status.",
+  } as const;
+}
+
+function buildCoverLetterEval3aFinalizationDiagnosticLedger(args: {
+  plan: CoverLetterEval3aFinalizationDiagnosticPlan;
+  runId: string;
+  sourceRef: string;
+  budget: ReturnType<
+    ReturnType<typeof createCoverLetterEvalBudget>["snapshot"]
+  >;
+  failureDiagnostic: CoverLetterEval3aFailureDiagnostic | null;
+  diagnosticVerdict:
+    | "REPRODUCED_FINALIZATION_FAILURE"
+    | "NOT_REPRODUCED_FINALIZATION_SUCCEEDED"
+    | "INCONCLUSIVE_NON_FINALIZATION_STATUS"
+    | "EXECUTION_FAILED_BEFORE_CLASSIFICATION";
+  recordStatus: CoverLetterHumanReviewResult["status"] | null;
+  error: string;
+}) {
+  return {
+    version: "cover_letter_eval3a_failure_ledger_v2",
+    status: "FAILED_CLOSED",
+    runMode: QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.runMode,
+    planHash: args.plan.planHash,
+    approvalPhraseVersion: args.plan.approvalPhraseVersion,
+    runId: args.runId,
+    sourceRef: args.sourceRef,
+    target: {
+      caseId: QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.caseId,
+      writerModel: QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.writerModel,
+    },
+    budget: args.budget,
+    completedRecordCount: 0,
+    failureDiagnostic: args.failureDiagnostic,
+    diagnosticVerdict: args.diagnosticVerdict,
+    recordStatus: args.recordStatus,
+    llmEvaluator: "none",
+    reviewerPackWritten: false,
+    revealMapWritten: false,
+    error: args.error,
+  } as const;
+}
+
+async function runCoverLetterEval3aFinalizationDiagnostic(
+  args: CoverLetterEval3aRunArgs & {
+    mode: typeof QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.runMode;
+  },
+): Promise<CoverLetterEval3aFinalizationDiagnosticRunResult> {
+  const plan = await buildCoverLetterEval3aFinalizationDiagnosticPlan();
+  assertCoverLetterEval3aFinalizationDiagnosticLiveGate({
+    plan,
+    approvalPhrase: args.approvalPhrase,
+    sourceRef: args.sourceRef,
+    currentHeadSourceRef: resolveCurrentGitHeadSourceRef(),
+    runId: args.runId,
+    explicitLiveProviderOptIn: args.explicitLiveProviderOptIn,
+    environmentLiveProviderOptIn: process.env.COVER_LETTER_EVAL_LIVE === "1",
+    maxCalls: args.maxCalls,
+    maxRepairs: args.maxRepairs,
+    maxUsd: args.maxUsd,
+    declaredMaxUsdPerCall: args.declaredMaxUsdPerCall,
+  });
+  if (
+    !/^quality-eval-3a-finalization-diagnostic-[a-z0-9-]+$/u.test(args.runId) ||
+    !/^[a-f0-9]{40}$/u.test(args.sourceRef)
+  ) {
+    throw new Error(
+      "QUALITY-EVAL-3A finalization diagnostic requires a unique diagnostic runId and exact 40-character sourceRef.",
+    );
+  }
+  await preparePrivateOutputDirectories(args.outputDirectory);
+  if (!args.apiKey.trim()) {
+    throw new Error(
+      "QUALITY-EVAL-3A finalization diagnostic requires OPENAI_API_KEY after approval.",
+    );
+  }
+  const budget = createCoverLetterEvalBudget({
+    explicitLiveProviderOptIn: true,
+    maxCalls: QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.maxCalls,
+    maxRepairs: 0,
+    maxUsd: QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.maxUsd,
+    declaredMaxUsdPerCall:
+      QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.declaredMaxUsdPerCall,
+  });
+  const benchmarkCase = getCoverLetterEval3aFinalizationDiagnosticCase();
+  let failureDiagnostic: CoverLetterEval3aFailureDiagnostic | null = null;
+  try {
+    const record = args.generateRecord
+      ? await args.generateRecord({
+          benchmarkCase,
+          writerModel: QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.writerModel,
+          apiKey: args.apiKey,
+          budget,
+        })
+      : await benchmarkCoverLetterCaseForHumanReview({
+          benchmarkCase,
+          writerModel: QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.writerModel,
+          apiKey: args.apiKey,
+          budget,
+        });
+    failureDiagnostic = projectCoverLetterEval3aFailureDiagnostic(record);
+    const snapshot = budget.snapshot();
+    if (
+      snapshot.usage.reservedCalls !==
+        QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.maxCalls ||
+      snapshot.usage.reservedRepairs !== 0 ||
+      snapshot.usage.reservedUsd !==
+        QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.declaredMaxUsdPerCall
+    ) {
+      throw new Error(
+        "QUALITY-EVAL-3A finalization diagnostic stopped on inexact provider-call accounting.",
+      );
+    }
+    const classification = classifyCoverLetterEval3aFinalizationDiagnostic(
+      record.status,
+    );
+    const ledgerPath = await writeFailureLedger({
+      outputDirectory: args.outputDirectory,
+      ledger: buildCoverLetterEval3aFinalizationDiagnosticLedger({
+        plan,
+        runId: args.runId,
+        sourceRef: args.sourceRef,
+        budget: snapshot,
+        failureDiagnostic,
+        diagnosticVerdict: classification.verdict,
+        recordStatus: record.status,
+        error: classification.message,
+      }),
+    });
+    return {
+      status: classification.status,
+      plan,
+      recordStatus: record.status,
+      budget: snapshot,
+      ledgerPath,
+    };
+  } catch (error) {
+    try {
+      await writeFailureLedger({
+        outputDirectory: args.outputDirectory,
+        ledger: buildCoverLetterEval3aFinalizationDiagnosticLedger({
+          plan,
+          runId: args.runId,
+          sourceRef: args.sourceRef,
+          budget: budget.snapshot(),
+          failureDiagnostic,
+          diagnosticVerdict: "EXECUTION_FAILED_BEFORE_CLASSIFICATION",
+          recordStatus: null,
+          error:
+            "QUALITY-EVAL-3A finalization diagnostic failed before safe capture completed.",
+        }),
+      });
+    } catch (ledgerError) {
+      if (error instanceof Error) {
+        Object.defineProperty(error, "cause", {
+          configurable: true,
+          value: ledgerError,
+        });
+      } else {
+        throw new Error(
+          "QUALITY-EVAL-3A finalization diagnostic failed and its private failure ledger could not be written.",
+          { cause: new AggregateError([error, ledgerError]) },
+        );
+      }
+    }
+    throw error;
+  }
+}
+
+export async function runCoverLetterEval3aHeldOut(
+  args: CoverLetterEval3aRunArgs,
+): Promise<
+  | CoverLetterEval3aHeldOutRunResult
+  | CoverLetterEval3aFinalizationDiagnosticRunResult
 > {
+  if (
+    args.mode !== undefined &&
+    args.mode !== QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.runMode
+  ) {
+    throw new Error("QUALITY-EVAL-3A refuses an unsupported run mode.");
+  }
+  if (args.mode === QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.runMode) {
+    return runCoverLetterEval3aFinalizationDiagnostic({
+      ...args,
+      mode: args.mode,
+    });
+  }
   const plan = await buildCoverLetterEval3aPlan();
   assertCoverLetterEval3aLiveGate({
     plan,
