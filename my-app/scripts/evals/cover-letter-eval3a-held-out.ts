@@ -802,6 +802,63 @@ function buildCoverLetterEval3aFinalizationDiagnosticLedger(args: {
   } as const;
 }
 
+function assertExactCoverLetterEval3aFinalizationDiagnosticBudget(
+  snapshot: ReturnType<
+    ReturnType<typeof createCoverLetterEvalBudget>["snapshot"]
+  >,
+): void {
+  if (
+    snapshot.usage.reservedCalls !==
+      QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.maxCalls ||
+    snapshot.usage.reservedRepairs !== 0 ||
+    snapshot.usage.reservedUsd !==
+      QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.declaredMaxUsdPerCall
+  ) {
+    throw new Error(
+      "QUALITY-EVAL-3A finalization diagnostic stopped on inexact provider-call accounting.",
+    );
+  }
+}
+
+async function writeCoverLetterEval3aFinalizationDiagnosticExecutionFailure(args: {
+  outputDirectory: string;
+  plan: CoverLetterEval3aFinalizationDiagnosticPlan;
+  runId: string;
+  sourceRef: string;
+  budget: ReturnType<typeof createCoverLetterEvalBudget>;
+  failureDiagnostic: CoverLetterEval3aFailureDiagnostic | null;
+  error: unknown;
+}): Promise<void> {
+  try {
+    await writeFailureLedger({
+      outputDirectory: args.outputDirectory,
+      ledger: buildCoverLetterEval3aFinalizationDiagnosticLedger({
+        plan: args.plan,
+        runId: args.runId,
+        sourceRef: args.sourceRef,
+        budget: args.budget.snapshot(),
+        failureDiagnostic: args.failureDiagnostic,
+        diagnosticVerdict: "EXECUTION_FAILED_BEFORE_CLASSIFICATION",
+        recordStatus: null,
+        error:
+          "QUALITY-EVAL-3A finalization diagnostic failed before safe capture completed.",
+      }),
+    });
+  } catch (ledgerError) {
+    if (args.error instanceof Error) {
+      Object.defineProperty(args.error, "cause", {
+        configurable: true,
+        value: ledgerError,
+      });
+      return;
+    }
+    throw new Error(
+      "QUALITY-EVAL-3A finalization diagnostic failed and its private failure ledger could not be written.",
+      { cause: new AggregateError([args.error, ledgerError]) },
+    );
+  }
+}
+
 async function runCoverLetterEval3aFinalizationDiagnostic(
   args: CoverLetterEval3aRunArgs & {
     mode: typeof QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.runMode;
@@ -821,14 +878,6 @@ async function runCoverLetterEval3aFinalizationDiagnostic(
     maxUsd: args.maxUsd,
     declaredMaxUsdPerCall: args.declaredMaxUsdPerCall,
   });
-  if (
-    !/^quality-eval-3a-finalization-diagnostic-[a-z0-9-]+$/u.test(args.runId) ||
-    !/^[a-f0-9]{40}$/u.test(args.sourceRef)
-  ) {
-    throw new Error(
-      "QUALITY-EVAL-3A finalization diagnostic requires a unique diagnostic runId and exact 40-character sourceRef.",
-    );
-  }
   await preparePrivateOutputDirectories(args.outputDirectory);
   if (!args.apiKey.trim()) {
     throw new Error(
@@ -844,34 +893,19 @@ async function runCoverLetterEval3aFinalizationDiagnostic(
       QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.declaredMaxUsdPerCall,
   });
   const benchmarkCase = getCoverLetterEval3aFinalizationDiagnosticCase();
+  const generateRecord =
+    args.generateRecord ?? benchmarkCoverLetterCaseForHumanReview;
   let failureDiagnostic: CoverLetterEval3aFailureDiagnostic | null = null;
   try {
-    const record = args.generateRecord
-      ? await args.generateRecord({
-          benchmarkCase,
-          writerModel: QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.writerModel,
-          apiKey: args.apiKey,
-          budget,
-        })
-      : await benchmarkCoverLetterCaseForHumanReview({
-          benchmarkCase,
-          writerModel: QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.writerModel,
-          apiKey: args.apiKey,
-          budget,
-        });
+    const record = await generateRecord({
+      benchmarkCase,
+      writerModel: QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.writerModel,
+      apiKey: args.apiKey,
+      budget,
+    });
     failureDiagnostic = projectCoverLetterEval3aFailureDiagnostic(record);
     const snapshot = budget.snapshot();
-    if (
-      snapshot.usage.reservedCalls !==
-        QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.maxCalls ||
-      snapshot.usage.reservedRepairs !== 0 ||
-      snapshot.usage.reservedUsd !==
-        QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.declaredMaxUsdPerCall
-    ) {
-      throw new Error(
-        "QUALITY-EVAL-3A finalization diagnostic stopped on inexact provider-call accounting.",
-      );
-    }
+    assertExactCoverLetterEval3aFinalizationDiagnosticBudget(snapshot);
     const classification = classifyCoverLetterEval3aFinalizationDiagnostic(
       record.status,
     );
@@ -896,34 +930,15 @@ async function runCoverLetterEval3aFinalizationDiagnostic(
       ledgerPath,
     };
   } catch (error) {
-    try {
-      await writeFailureLedger({
-        outputDirectory: args.outputDirectory,
-        ledger: buildCoverLetterEval3aFinalizationDiagnosticLedger({
-          plan,
-          runId: args.runId,
-          sourceRef: args.sourceRef,
-          budget: budget.snapshot(),
-          failureDiagnostic,
-          diagnosticVerdict: "EXECUTION_FAILED_BEFORE_CLASSIFICATION",
-          recordStatus: null,
-          error:
-            "QUALITY-EVAL-3A finalization diagnostic failed before safe capture completed.",
-        }),
-      });
-    } catch (ledgerError) {
-      if (error instanceof Error) {
-        Object.defineProperty(error, "cause", {
-          configurable: true,
-          value: ledgerError,
-        });
-      } else {
-        throw new Error(
-          "QUALITY-EVAL-3A finalization diagnostic failed and its private failure ledger could not be written.",
-          { cause: new AggregateError([error, ledgerError]) },
-        );
-      }
-    }
+    await writeCoverLetterEval3aFinalizationDiagnosticExecutionFailure({
+      outputDirectory: args.outputDirectory,
+      plan,
+      runId: args.runId,
+      sourceRef: args.sourceRef,
+      budget,
+      failureDiagnostic,
+      error,
+    });
     throw error;
   }
 }
