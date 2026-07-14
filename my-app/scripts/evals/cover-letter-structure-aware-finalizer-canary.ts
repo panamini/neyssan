@@ -206,12 +206,19 @@ function splitParagraphs(value: string): string[] {
 }
 
 function splitSentences(value: string): string[] {
+  const matches = compactWhitespace(value).match(/[^.!?\n]+(?:[.!?]+|$)/g);
+  if (!matches) return [];
+  return matches.map((sentence) => compactWhitespace(sentence)).filter(Boolean);
+}
+
+function ensureSentenceEnding(value: string): string {
   const compact = compactWhitespace(value);
-  if (!compact) return [];
-  return compact
-    .split(/(?<=[.!?])\s+(?=[A-Z0-9])/gu)
-    .map((sentence) => sentence.trim())
-    .filter(Boolean);
+  if (!compact) return "";
+  return /[.!?]$/u.test(compact) ? compact : `${compact}.`;
+}
+
+function joinSentences(sentences: readonly string[]): string {
+  return sentences.map((sentence) => ensureSentenceEnding(sentence)).join(" ");
 }
 
 function normalizeRepetitionKey(value: string): string {
@@ -428,18 +435,15 @@ function deriveExpectedFinalizerBoundaryBodyParts(args: {
   const previousKeptSentences: string[] = [];
   return Object.fromEntries(
     RHETORICAL_ORDER.map((section) => {
-      const keptSentences = splitSentences(
-        args.trustedStructuredBodyParts[section],
-      ).filter((sentence) => {
-        if (
-          isDeterministicallyRepeatedSentence(sentence, previousKeptSentences)
-        ) {
-          return false;
-        }
-        previousKeptSentences.push(sentence);
-        return true;
-      });
-      const expectedText = compactWhitespace(keptSentences.join(" "));
+      const trustedText = args.trustedStructuredBodyParts[section];
+      const keptSentences = splitSentences(trustedText).filter(
+        (sentence) =>
+          !isDeterministicallyRepeatedSentence(sentence, previousKeptSentences),
+      );
+      previousKeptSentences.push(...keptSentences);
+      const expectedText = compactWhitespace(
+        keptSentences.length > 0 ? joinSentences(keptSentences) : trustedText,
+      );
       if (args.recordedBoundaryBodyParts[section] !== expectedText) {
         throw new Error(
           `QUALITY-CL-2 ${section} finalizer-boundary text is not the deterministic trusted-source projection.`,

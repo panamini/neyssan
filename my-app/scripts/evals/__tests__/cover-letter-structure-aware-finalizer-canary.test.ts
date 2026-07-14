@@ -534,6 +534,164 @@ describe("QUALITY-CL-2 structure-aware finalizer canary", () => {
     );
   });
 
+  it("mirrors production splitting before lowercase sentence starts", async () => {
+    const packs = await buildReviewerSafePacks({ authoritative: true });
+    const firstEntry = packs.qualitativePack.entries[0]!;
+    const firstPair = packs.finalArtifactPack.entries[0]!;
+    const sourceBodyParts = firstEntry.parsedCandidate.bodyParts as Record<
+      string,
+      Readonly<{ section: string; text: string }>
+    >;
+    const opening = sourceBodyParts.opening!;
+    const proofBlock = sourceBodyParts.proofBlock!;
+    const stopwordVariant = opening.text
+      .replace("For the ", "This ")
+      .replace("your focus", "focus")
+      .replace("I have supported", "I supported");
+    const lowercaseSentence =
+      "a lowercase continuation remains visible after repetition cleanup.";
+    const expectedProof = `${proofBlock.text} ${lowercaseSentence}`;
+    const qualitativePack = {
+      ...packs.qualitativePack,
+      entries: [
+        {
+          ...firstEntry,
+          parsedCandidate: {
+            ...firstEntry.parsedCandidate,
+            bodyParts: {
+              ...sourceBodyParts,
+              proofBlock: {
+                ...proofBlock,
+                text: `${proofBlock.text} ${stopwordVariant} ${lowercaseSentence}`,
+              },
+            },
+          },
+        },
+        ...packs.qualitativePack.entries.slice(1),
+      ],
+    } as CoverLetterQualitativeSamplePack;
+    const expectedLetter = firstPair.variantB.letter.replace(
+      proofBlock.text,
+      expectedProof,
+    );
+    const finalArtifactPack = {
+      ...packs.finalArtifactPack,
+      entries: [
+        {
+          ...firstPair,
+          variantB: { ...firstPair.variantB, letter: expectedLetter },
+        },
+        ...packs.finalArtifactPack.entries.slice(1),
+      ],
+    } as CoverLetterFinalArtifactShadowPack;
+
+    const result = await buildCoverLetterStructureAwareFinalizerCanary({
+      qualitativePack,
+      finalArtifactPack,
+    });
+    expect(result.entries[0]!.structureAwareCanary.content).toBe(
+      expectedLetter,
+    );
+  });
+
+  it("preserves duplicates within one body part like production", async () => {
+    const packs = await buildReviewerSafePacks({ authoritative: true });
+    const firstEntry = packs.qualitativePack.entries[0]!;
+    const firstPair = packs.finalArtifactPack.entries[0]!;
+    const sourceBodyParts = firstEntry.parsedCandidate.bodyParts as Record<
+      string,
+      Readonly<{ section: string; text: string }>
+    >;
+    const proofBlock = sourceBodyParts.proofBlock!;
+    const repeatedProof = `${proofBlock.text} ${proofBlock.text}`;
+    const qualitativePack = {
+      ...packs.qualitativePack,
+      entries: [
+        {
+          ...firstEntry,
+          parsedCandidate: {
+            ...firstEntry.parsedCandidate,
+            bodyParts: {
+              ...sourceBodyParts,
+              proofBlock: { ...proofBlock, text: repeatedProof },
+            },
+          },
+        },
+        ...packs.qualitativePack.entries.slice(1),
+      ],
+    } as CoverLetterQualitativeSamplePack;
+    const expectedLetter = firstPair.variantB.letter.replace(
+      proofBlock.text,
+      repeatedProof,
+    );
+    const finalArtifactPack = {
+      ...packs.finalArtifactPack,
+      entries: [
+        {
+          ...firstPair,
+          variantB: { ...firstPair.variantB, letter: expectedLetter },
+        },
+        ...packs.finalArtifactPack.entries.slice(1),
+      ],
+    } as CoverLetterFinalArtifactShadowPack;
+
+    await expect(
+      buildCoverLetterStructureAwareFinalizerCanary({
+        qualitativePack,
+        finalArtifactPack,
+      }),
+    ).resolves.toMatchObject({ providerCalls: 0, retries: 0, repairs: 0 });
+  });
+
+  it("uses the production fallback when an entire body part repeats earlier text", async () => {
+    const packs = await buildReviewerSafePacks({ authoritative: true });
+    const firstEntry = packs.qualitativePack.entries[0]!;
+    const firstPair = packs.finalArtifactPack.entries[0]!;
+    const sourceBodyParts = firstEntry.parsedCandidate.bodyParts as Record<
+      string,
+      Readonly<{ section: string; text: string }>
+    >;
+    const opening = sourceBodyParts.opening!;
+    const proofBlock = sourceBodyParts.proofBlock!;
+    const qualitativePack = {
+      ...packs.qualitativePack,
+      entries: [
+        {
+          ...firstEntry,
+          parsedCandidate: {
+            ...firstEntry.parsedCandidate,
+            bodyParts: {
+              ...sourceBodyParts,
+              proofBlock: { ...proofBlock, text: opening.text },
+            },
+          },
+        },
+        ...packs.qualitativePack.entries.slice(1),
+      ],
+    } as CoverLetterQualitativeSamplePack;
+    const expectedLetter = firstPair.variantB.letter.replace(
+      proofBlock.text,
+      opening.text,
+    );
+    const finalArtifactPack = {
+      ...packs.finalArtifactPack,
+      entries: [
+        {
+          ...firstPair,
+          variantB: { ...firstPair.variantB, letter: expectedLetter },
+        },
+        ...packs.finalArtifactPack.entries.slice(1),
+      ],
+    } as CoverLetterFinalArtifactShadowPack;
+
+    await expect(
+      buildCoverLetterStructureAwareFinalizerCanary({
+        qualitativePack,
+        finalArtifactPack,
+      }),
+    ).resolves.toMatchObject({ providerCalls: 0, retries: 0, repairs: 0 });
+  });
+
   it("rejects a finalizer-boundary variant that lost a unique trusted structured sentence", async () => {
     const packs = await buildReviewerSafePacks({ authoritative: true });
     const firstEntry = packs.qualitativePack.entries[0]!;
