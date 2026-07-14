@@ -237,6 +237,7 @@ const SAVED_PROPOSALS = [
       requestedVoicePreset: "signature",
       templateId: "swiss_margin",
       styleLinkMode: "proposal_local",
+      pageSize: "letter",
     },
   },
 ] as const;
@@ -808,6 +809,9 @@ describe("ProposalForge saved view", () => {
       expect(state).toHaveTextContent("editorial_wide");
       expect(state).not.toHaveTextContent("Saved proposal content.");
     });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Commit saved content edit" }),
+    );
     await act(async () => {
       await new Promise((resolve) => window.setTimeout(resolve, 1_200));
     });
@@ -830,16 +834,18 @@ describe("ProposalForge saved view", () => {
       ]),
     );
     expect(composeUpdates.length).toBeGreaterThan(0);
-    for (const [payload] of composeUpdates) {
-      expect(payload).toEqual(
-        expect.objectContaining({
-          content: "Independent compose draft.",
-          metadata: expect.objectContaining({
-            templateId: "editorial_wide",
+    expect(composeUpdates).toEqual(
+      expect.arrayContaining([
+        [
+          expect.objectContaining({
+            content: "Edited saved proposal content.",
+            metadata: expect.objectContaining({
+              templateId: "editorial_wide",
+            }),
           }),
-        }),
-      );
-    }
+        ],
+      ]),
+    );
   });
 
   it("renders a saved letter with its document locale instead of the UI locale", async () => {
@@ -965,6 +971,25 @@ describe("ProposalForge saved view", () => {
       expect(state).toHaveTextContent("Restored draft proposal content.");
       expect(state).toHaveTextContent("no-document");
       expect(state).not.toHaveTextContent("Stale structured document");
+    });
+  });
+
+  it("restores a draftId proposal with its persisted page size", async () => {
+    writeStoredDocumentPageSizePreference("a4");
+
+    render(
+      <MemoryRouter initialEntries={["/proposal?draftId=proposal_draft_restore"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Restored draft proposal content.",
+      );
+      expect(screen.getByTestId("proposal-page-size")).toHaveTextContent(
+        "letter",
+      );
     });
   });
 

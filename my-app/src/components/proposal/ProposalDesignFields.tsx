@@ -262,6 +262,7 @@ export type ProposalDesignFieldsProps = {
   handwrittenSignatureAvailable?: boolean;
   handwrittenSignatureEnabled?: boolean;
   documentDecoration?: DocumentDecoration | null;
+  documentDecorationControlsDisabled?: boolean;
   onDocumentDecorationChange?: (decoration: DocumentDecoration) => void;
   onDocumentDecorationUpload?: (
     file: File,
@@ -291,6 +292,7 @@ export function ProposalDesignFields({
   handwrittenSignatureAvailable = false,
   handwrittenSignatureEnabled = false,
   documentDecoration,
+  documentDecorationControlsDisabled = false,
   onDocumentDecorationChange,
   onDocumentDecorationUpload,
   documentIconSettings,
@@ -376,16 +378,17 @@ export function ProposalDesignFields({
   const documentDecorationMeta = `${documentDecorationFitLabel} • ${documentDecorationSizeLabel}`;
   const updateDocumentDecoration = React.useCallback(
     (nextDecoration: DocumentDecoration) => {
+      if (documentDecorationControlsDisabled) return;
       setDocumentDecorationUploadError(null);
       onDocumentDecorationChange?.(normalizeDocumentDecoration(nextDecoration));
     },
-    [onDocumentDecorationChange],
+    [documentDecorationControlsDisabled, onDocumentDecorationChange],
   );
   const handleDocumentDecorationUpload = React.useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       const [file] = Array.from(event.currentTarget.files ?? []);
       event.currentTarget.value = "";
-      if (!file) return;
+      if (!file || documentDecorationControlsDisabled) return;
       setDocumentDecorationUploadError(null);
       if (!onDocumentDecorationUpload) {
         setDocumentDecorationUploadError("Image upload is unavailable.");
@@ -393,7 +396,11 @@ export function ProposalDesignFields({
       }
       onDocumentDecorationUpload(file, resolvedDocumentDecoration);
     },
-    [onDocumentDecorationUpload, resolvedDocumentDecoration],
+    [
+      documentDecorationControlsDisabled,
+      onDocumentDecorationUpload,
+      resolvedDocumentDecoration,
+    ],
   );
   React.useEffect(() => {
     if (styleControlsDisabled) {
@@ -635,7 +642,9 @@ export function ProposalDesignFields({
           type="file"
           aria-label="Upload decoration image"
           accept={DOCUMENT_DECORATION_UPLOAD_ACCEPT}
-          disabled={!onDocumentDecorationUpload}
+          disabled={
+            documentDecorationControlsDisabled || !onDocumentDecorationUpload
+          }
           onChange={handleDocumentDecorationUpload}
         />
         {!hasDocumentDecorationAsset ? (
@@ -703,7 +712,10 @@ export function ProposalDesignFields({
                       type="button"
                       aria-pressed={isSelected}
                       data-selected={isSelected ? "true" : undefined}
-                      disabled={!onDocumentDecorationChange}
+                      disabled={
+                        documentDecorationControlsDisabled ||
+                        !onDocumentDecorationChange
+                      }
                       onClick={() => {
                         updateDocumentDecoration(
                           applyDocumentDecorationSizePreset(
@@ -733,7 +745,10 @@ export function ProposalDesignFields({
                       type="button"
                       aria-pressed={isSelected}
                       data-selected={isSelected ? "true" : undefined}
-                      disabled={!onDocumentDecorationChange}
+                      disabled={
+                        documentDecorationControlsDisabled ||
+                        !onDocumentDecorationChange
+                      }
                       onClick={() => {
                         updateDocumentDecoration({
                           ...resolvedDocumentDecoration,
@@ -758,8 +773,12 @@ export function ProposalDesignFields({
             <button
               type="button"
               className="dasti-proposal-design-image__remove"
-              disabled={!onDocumentDecorationChange}
+              disabled={
+                documentDecorationControlsDisabled ||
+                !onDocumentDecorationChange
+              }
               onClick={() => {
+                if (documentDecorationControlsDisabled) return;
                 setDocumentDecorationUploadError(null);
                 onDocumentDecorationChange?.(
                   removeDocumentDecorationAsset(resolvedDocumentDecoration),

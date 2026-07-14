@@ -6364,6 +6364,11 @@ export function ProposalForge(): JSX.Element {
   const previousProposalViewRef = React.useRef<ProposalForgeView>(requestedView);
   const isRestoringComposeViewRef = React.useRef(false);
   const skipNextSavedToComposeRestoreRef = React.useRef(false);
+  const releaseComposeViewRestoreGuard = React.useCallback(() => {
+    window.setTimeout(() => {
+      isRestoringComposeViewRef.current = false;
+    }, 0);
+  }, []);
 
   React.useEffect(() => {
     if (!optimisticSavedDraftProposal) {
@@ -7216,6 +7221,7 @@ export function ProposalForge(): JSX.Element {
     const draft = storedOutputDraft;
     if (!draft) {
       resetProposalWorkspace();
+      releaseComposeViewRestoreGuard();
       return;
     }
 
@@ -7312,8 +7318,10 @@ export function ProposalForge(): JSX.Element {
     }
     composeAutosavePrimedRef.current = false;
     setComposeSaveStatus("idle");
+    releaseComposeViewRestoreGuard();
   }, [
     fallbackProposalTemplateId,
+    releaseComposeViewRestoreGuard,
     requestedView,
     resetProposalWorkspace,
     selectedDraftProposalId,
@@ -8107,6 +8115,11 @@ export function ProposalForge(): JSX.Element {
         }) ??
         "auto",
     );
+    const nextPageSizePreference =
+      proposalPageSizeIntent ??
+      (isDocumentPageSizeId(draftProposal.metadata?.pageSize)
+        ? draftProposal.metadata.pageSize
+        : null);
     if (proposalTemplateIntent && canPersistProposalState) {
       const nextMetadata: ProposalDocumentMetadata = {
         ...(draftProposal.metadata ?? {}),
@@ -8172,6 +8185,9 @@ export function ProposalForge(): JSX.Element {
     setProposalPaletteOverride(nextPaletteOverride);
     setProposalCustomAccentHex(nextCustomAccentHex);
     setProposalTemplateBundleId(nextTemplateBundleId);
+    if (nextPageSizePreference) {
+      setProposalPageSizePreference(nextPageSizePreference);
+    }
     setOutputSourceComposeDraft(nextSourceComposeDraft);
     setComposePreviewValues(nextSourceComposeDraft);
     setComposeDraftInitialSeed(nextSourceComposeDraft);
@@ -12801,6 +12817,7 @@ export function ProposalForge(): JSX.Element {
           onSelectStyleCustomAccent={handleProposalCustomAccentSelect}
           onClearStyleCustomAccent={handleProposalCustomAccentClear}
           documentDecoration={documentDecoration}
+          documentDecorationControlsDisabled={isSavedView}
           onDocumentDecorationChange={handleDocumentDecorationCommit}
           onDocumentDecorationUpload={handleDocumentDecorationUpload}
           documentIconSettings={proposalDocumentIconSettings}

@@ -140,6 +140,34 @@ describe("ProposalDesignFields", () => {
     );
   });
 
+  it("disables decoration image edits when the document is read-only", () => {
+    const onDocumentDecorationUpload = vi.fn();
+
+    render(
+      <ProposalDesignFields
+        documentDecorationControlsDisabled
+        stylePreset={stylePreset}
+        styleTemplateBundleId="swiss_serif"
+        onSelectStyleBundle={vi.fn()}
+        onSelectStyleTypography={vi.fn()}
+        onSelectStylePalette={vi.fn()}
+        onSelectStyleCustomAccent={vi.fn()}
+        onDocumentDecorationChange={vi.fn()}
+        onDocumentDecorationUpload={onDocumentDecorationUpload}
+      />,
+    );
+
+    const uploadInput = screen.getByLabelText("Upload decoration image");
+    expect(uploadInput).toBeDisabled();
+
+    fireEvent.change(uploadInput, {
+      target: {
+        files: [new File(["image"], "proposal-mark.png", { type: "image/png" })],
+      },
+    });
+    expect(onDocumentDecorationUpload).not.toHaveBeenCalled();
+  });
+
   it("marks drawer image removal as an explicit user suppression", () => {
     const onDocumentDecorationChange = vi.fn();
 
