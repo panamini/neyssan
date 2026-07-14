@@ -32,6 +32,7 @@ describe("ProposalDesignFields", () => {
 
     expect(screen.getByRole("button", { name: "Style 1" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Use Terre accent" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Bullets:/ })).toBeDisabled();
     expect(
       container.querySelector(".dasti-proposal-font-menu-trigger"),
     ).toBeDisabled();

@@ -243,6 +243,23 @@ const SAVED_PROPOSALS = [
       pageSize: "letter",
     },
   },
+  {
+    _id: "proposal_draft_auto",
+    _creationTime: 1710000004000,
+    title: "Draft auto title",
+    content: "Dear team,\n\nDraft without explicit page size.\n\nBest,",
+    status: "draft",
+    updatedAt: 1710000004000,
+    createdAt: 1710000004000,
+    sections: [{ type: "text", content: "Draft without explicit page size." }],
+    metadata: {
+      proposalType: "cover_letter",
+      voicePreset: "signature",
+      requestedVoicePreset: "signature",
+      templateId: "editorial_wide",
+      styleLinkMode: "proposal_local",
+    },
+  },
 ] as const;
 
 vi.mock("convex/react", () => ({
@@ -573,6 +590,12 @@ function ProposalTopbarActionsProbe({
             }
           >
             Apply template to loaded draft
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate("/proposal?draftId=proposal_draft_auto")}
+          >
+            Open draft without page size
           </button>
         </>
       ) : null}
@@ -1154,6 +1177,35 @@ describe("ProposalForge saved view", () => {
     });
   });
 
+  it("resets page size from a previous draft when the next draft has no page-size metadata", async () => {
+    writeStoredDocumentPageSizePreference("a4");
+
+    render(
+      <MemoryRouter
+        initialEntries={["/proposal?draftId=proposal_draft_restore"]}
+      >
+        <ProposalForge includeReviewControls />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-page-size")).toHaveTextContent(
+        "letter",
+      );
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open draft without page size" }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
+        "Draft without explicit page size.",
+      );
+      expect(screen.getByTestId("proposal-page-size")).toHaveTextContent("a4");
+    });
+  });
+
   it("applies a gallery template intent after restoring a draftId proposal", async () => {
     render(
       <MemoryRouter
@@ -1553,6 +1605,8 @@ describe("ProposalForge saved view", () => {
   });
 
   it("preserves Auto when a saved proposal is duplicated back into the live draft", async () => {
+    writeStoredDocumentPageSizePreference("letter");
+
     render(
       <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_auto"]}>
         <ProposalForge />
@@ -1566,6 +1620,10 @@ describe("ProposalForge saved view", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Duplicate to draft" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-page-size")).toHaveTextContent("a4");
+    });
 
     await waitFor(() => {
       expect(

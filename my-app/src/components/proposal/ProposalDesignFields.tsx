@@ -632,7 +632,7 @@ export function ProposalDesignFields({
       <BulletStyleControl
         settings={resolvedDocumentIconSettings}
         onChange={(settings) => onDocumentIconSettingsChange?.(settings)}
-        disabled={!onDocumentIconSettingsChange}
+        disabled={styleControlsDisabled || !onDocumentIconSettingsChange}
       />
       <div ref={documentImageControlRef} className="dasti-proposal-design-image">
         <div className="forge__rail-label dasti-proposal-skeleton-rail__label">Image</div>

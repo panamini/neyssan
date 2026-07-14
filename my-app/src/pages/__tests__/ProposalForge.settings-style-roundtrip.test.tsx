@@ -27,7 +27,27 @@ const defaultCurrentProposalSettings = {
 
 let mockCurrentProposalSettings: typeof defaultCurrentProposalSettings =
   defaultCurrentProposalSettings;
-let mockProposalPresets = {
+let mockProposalPresets: {
+  preset1: null;
+  preset2: {
+    fontPairId: string;
+    styleChoice: "balanced";
+    paletteOverride: "cobalt";
+    accentHex: null;
+    voicePreset: null;
+    signatureSettings: null;
+    name: string;
+    verbatiStyle: {
+      familyId: "workshop";
+      layout: "workshop";
+      typography: string;
+      palette: "cobalt";
+      resumeTemplateId: "workshop_resume_twocol_ats";
+    };
+  };
+  preset3: null;
+  activeSlot: 2;
+} | undefined = {
   preset1: null,
   preset2: {
     fontPairId: "quiet-editorial",
@@ -351,6 +371,92 @@ describe("ProposalForge settings style round-trip", () => {
     expect(
       await screen.findByText("Load a job to tailor this letter."),
     ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-location")).toHaveTextContent(
+        /^\/proposal$/,
+      );
+    });
+  });
+
+  it("waits for Settings-backed template slots before clearing a workspace reset intent", async () => {
+    mockProposalPresets = undefined;
+    const route = {
+      pathname: "/proposal",
+      search:
+        "?templateId=modernist_signal&pageSize=a4&styleSlot=direct&templateStart=1",
+      state: createProposalWorkspaceResetState(),
+    };
+
+    const { rerender } = render(
+      <MemoryRouter initialEntries={[route]}>
+        <LocationProbe />
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-location")).toHaveTextContent(
+        "styleSlot=direct",
+      );
+    });
+
+    mockProposalPresets = {
+      preset1: null,
+      preset2: {
+        fontPairId: "quiet-editorial",
+        styleChoice: "balanced",
+        paletteOverride: "cobalt",
+        accentHex: null,
+        voicePreset: null,
+        signatureSettings: null,
+        name: "Style 2",
+        verbatiStyle: {
+          familyId: "workshop",
+          layout: "workshop",
+          typography: "quiet-editorial",
+          palette: "cobalt",
+          resumeTemplateId: "workshop_resume_twocol_ats",
+        },
+      },
+      preset3: null,
+      activeSlot: 2,
+    };
+    rerender(
+      <MemoryRouter initialEntries={[route]}>
+        <LocationProbe />
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-settings-style")).toHaveTextContent(
+        "workshop|quiet-editorial|cobalt|modernist_signal",
+      );
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-location")).toHaveTextContent(
+        /^\/proposal$/,
+      );
+    });
+  });
+
+  it("clears one-shot template params after applying a template to the plain compose route", async () => {
+    render(
+      <MemoryRouter
+        initialEntries={[
+          "/proposal?templateId=modernist_signal&pageSize=a4&styleSlot=direct&templateStart=1",
+        ]}
+      >
+        <LocationProbe />
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-settings-style")).toHaveTextContent(
+        "workshop|quiet-editorial|cobalt|modernist_signal",
+      );
+    });
     await waitFor(() => {
       expect(screen.getByTestId("proposal-location")).toHaveTextContent(
         /^\/proposal$/,
