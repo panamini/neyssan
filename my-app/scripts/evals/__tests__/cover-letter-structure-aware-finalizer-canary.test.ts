@@ -500,6 +500,10 @@ describe("QUALITY-CL-2 structure-aware finalizer canary", () => {
     >;
     const opening = sourceBodyParts.opening!;
     const proofBlock = sourceBodyParts.proofBlock!;
+    const stopwordVariant = opening.text
+      .replace("For the ", "This ")
+      .replace("your focus", "focus")
+      .replace("I have supported", "I supported");
     const qualitativePack = {
       ...packs.qualitativePack,
       entries: [
@@ -511,7 +515,7 @@ describe("QUALITY-CL-2 structure-aware finalizer canary", () => {
               ...sourceBodyParts,
               proofBlock: {
                 ...proofBlock,
-                text: `${proofBlock.text} ${opening.text}`,
+                text: `${proofBlock.text} ${stopwordVariant}`,
               },
             },
           },

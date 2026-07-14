@@ -74,6 +74,63 @@ const UNREADABLE_CODE_POINT_RANGES = [
   [0x80, 0x9f],
   [0xd800, 0xdfff],
 ] as const;
+// Mirrors premiumCoverLetter.ts STOPWORDS so the pinned canary replays the
+// production removeRepeatedBodyPartSentences boundary exactly.
+const REPETITION_STOPWORDS = new Set([
+  "about",
+  "across",
+  "after",
+  "also",
+  "and",
+  "been",
+  "between",
+  "build",
+  "built",
+  "candidate",
+  "clear",
+  "close",
+  "company",
+  "cover",
+  "create",
+  "daily",
+  "deliver",
+  "described",
+  "description",
+  "details",
+  "drive",
+  "from",
+  "have",
+  "help",
+  "into",
+  "join",
+  "lead",
+  "more",
+  "must",
+  "need",
+  "opportunity",
+  "position",
+  "professional",
+  "proof",
+  "role",
+  "same",
+  "show",
+  "skills",
+  "strong",
+  "support",
+  "team",
+  "their",
+  "this",
+  "through",
+  "used",
+  "using",
+  "value",
+  "what",
+  "with",
+  "work",
+  "worked",
+  "working",
+  "your",
+]);
 
 export type CoverLetterStructureAwareVisibleProvenance = Readonly<{
   version: "cover_letter_structure_aware_visible_provenance_v1";
@@ -160,7 +217,7 @@ function splitSentences(value: string): string[] {
 function normalizeRepetitionKey(value: string): string {
   return normalizeProposalConstraintText(value)
     .split(/\s+/gu)
-    .filter((token) => token.length > 3)
+    .filter((token) => token.length > 3 && !REPETITION_STOPWORDS.has(token))
     .join(" ");
 }
 
