@@ -293,7 +293,7 @@ export function getRenderableDocumentDecoration(
   const renderUrl = decoration.dataUrl ?? decoration.resolvedUrl;
   if (!decoration.visible || !renderUrl) {
     if (
-      import.meta.env.DEV &&
+      import.meta.env?.DEV &&
       decoration.visible &&
       decoration.assetId &&
       !decoration.dataUrl &&

@@ -21,8 +21,40 @@ if "mistralai" not in sys.modules:
     sdk_module.Mistral = object
     sys.modules["mistralai.sdk"] = sdk_module
 
-from cv_parser_service.main import app, mistral_ocr_parse
+from cv_parser_service.main import (
+    _resolve_cors_allowed_origin_regex,
+    app,
+    mistral_ocr_parse,
+)
 from cv_parser_service.mistral_resume_v3 import INTERNAL_CANONICAL_PAYLOAD_DIAGNOSTIC_KEY
+
+
+def test_document_export_preflight_allows_dynamic_local_vite_origin():
+    client = TestClient(app)
+    origin = "http://127.0.0.1:5197"
+
+    response = client.options(
+        "/api/v1/document-export/proposal/pdf",
+        headers={
+            "Origin": origin,
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == origin
+    assert "POST" in response.headers["access-control-allow-methods"]
+    assert "Content-Type" in response.headers["access-control-allow-headers"]
+
+
+def test_dynamic_local_cors_origin_regex_is_disabled_in_production(monkeypatch):
+    monkeypatch.setenv("CV_PARSER_ENV", "production")
+    monkeypatch.delenv("CV_PARSER_CORS_ALLOW_ORIGINS", raising=False)
+    monkeypatch.delenv("CLIENT_ORIGIN_WHITELIST", raising=False)
+    monkeypatch.delenv("CLIENT_ORIGIN", raising=False)
+
+    assert _resolve_cors_allowed_origin_regex() is None
 
 
 def test_mistral_ocr_parse_surfaces_runtime_evidence(monkeypatch):
@@ -72,11 +104,13 @@ def test_resume_docx_export_route_uses_active_document_export_pipeline(monkeypat
         expected_kind,
         expected_format,
         fallback_filename_base,
+        frontend_origin=None,
     ):
         captured["payload"] = payload
         captured["expected_kind"] = expected_kind
         captured["expected_format"] = expected_format
         captured["fallback_filename_base"] = fallback_filename_base
+        captured["frontend_origin"] = frontend_origin
         return Response(
             content=b"docx",
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -90,6 +124,7 @@ def test_resume_docx_export_route_uses_active_document_export_pipeline(monkeypat
     client = TestClient(app)
     response = client.post(
         "/api/v1/document-export/resume/docx",
+        headers={"Origin": "http://127.0.0.1:5197"},
         json={
             "kind": "resume",
             "format": "docx",
@@ -128,6 +163,7 @@ def test_resume_docx_export_route_uses_active_document_export_pipeline(monkeypat
     assert captured["expected_kind"] == "resume"
     assert captured["expected_format"] == "docx"
     assert captured["fallback_filename_base"] == "Resume - Editable"
+    assert captured["frontend_origin"] == "http://127.0.0.1:5197"
     assert captured["payload"]["stylePreset"]["typography"] == "quiet-editorial"
 
 

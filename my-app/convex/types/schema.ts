@@ -132,6 +132,7 @@ export interface ProposalDoc extends Doc<"proposals"> {
     characterLimitValue?: number | null;
     requestedLanguage?: string | null;
     resolvedLanguage?: string | null;
+    pageSize?: "a4" | "letter";
     languageSource?: string | null;
     jobDetectedLanguage?: string | null;
     documentIcons?: {

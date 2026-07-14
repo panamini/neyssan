@@ -12,6 +12,40 @@ const stylePreset: VerbatiStylePreset = {
 };
 
 describe("ProposalDesignFields", () => {
+  it("disables draft-only style controls while keeping saved layout selection available", () => {
+    const onSelectStyleBundle = vi.fn();
+    const onSelectProposalLayout = vi.fn();
+
+    const { container } = render(
+      <ProposalDesignFields
+        proposalTemplateId="modernist_signal"
+        onSelectProposalLayout={onSelectProposalLayout}
+        stylePreset={stylePreset}
+        styleTemplateBundleId={null}
+        styleControlsDisabled
+        onSelectStyleBundle={onSelectStyleBundle}
+        onSelectStyleTypography={vi.fn()}
+        onSelectStylePalette={vi.fn()}
+        onSelectStyleCustomAccent={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Style 1" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Use Terre accent" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Bullets:/ })).toBeDisabled();
+    expect(
+      container.querySelector(".dasti-proposal-font-menu-trigger"),
+    ).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Style 1" }));
+    expect(onSelectStyleBundle).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Minimal layout" }));
+    expect(onSelectProposalLayout).toHaveBeenCalledWith(
+      "workshop_proposal_margin",
+    );
+  });
+
   it("uses the shared bullet style control without the old marker grid at rest", () => {
     const onDocumentIconSettingsChange = vi.fn();
 
@@ -105,6 +139,34 @@ describe("ProposalDesignFields", () => {
         yMm: 39,
       }),
     );
+  });
+
+  it("disables decoration image edits when the document is read-only", () => {
+    const onDocumentDecorationUpload = vi.fn();
+
+    render(
+      <ProposalDesignFields
+        documentDecorationControlsDisabled
+        stylePreset={stylePreset}
+        styleTemplateBundleId="swiss_serif"
+        onSelectStyleBundle={vi.fn()}
+        onSelectStyleTypography={vi.fn()}
+        onSelectStylePalette={vi.fn()}
+        onSelectStyleCustomAccent={vi.fn()}
+        onDocumentDecorationChange={vi.fn()}
+        onDocumentDecorationUpload={onDocumentDecorationUpload}
+      />,
+    );
+
+    const uploadInput = screen.getByLabelText("Upload decoration image");
+    expect(uploadInput).toBeDisabled();
+
+    fireEvent.change(uploadInput, {
+      target: {
+        files: [new File(["image"], "proposal-mark.png", { type: "image/png" })],
+      },
+    });
+    expect(onDocumentDecorationUpload).not.toHaveBeenCalled();
   });
 
   it("marks drawer image removal as an explicit user suppression", () => {

@@ -171,6 +171,29 @@ describe("ProposalPrintPage", () => {
     },
   );
 
+  it("renders French correspondence labels from the print payload locale", () => {
+    window.__DASTI_PROPOSAL_PRINT_PAYLOAD__ = {
+      ...buildPayload(),
+      locale: "fr",
+      templateId: "modernist_signal",
+    };
+
+    const { container } = render(<ProposalPrintPage />);
+
+    expect(
+      container.querySelector(".dasti-proposal-document__sender-header")
+        ?.textContent,
+    ).toContain("Expéditeur :");
+    expect(
+      container.querySelector(".dasti-proposal-document__structured-header")
+        ?.textContent,
+    ).toContain("Destinataire");
+    expect(
+      container.querySelector(".dasti-proposal-document__structured-header")
+        ?.textContent,
+    ).toContain("Objet");
+  });
+
   it("reports an explicit error when the print payload is missing", async () => {
     render(<ProposalPrintPage />);
 

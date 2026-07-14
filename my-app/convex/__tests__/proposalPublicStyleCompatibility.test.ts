@@ -35,6 +35,23 @@ function createQuery(profiles: any[]) {
   };
 }
 
+function createUpdateContext(existingProposal: Record<string, unknown>) {
+  const patch = vi.fn().mockResolvedValue(undefined);
+  return {
+    patch,
+    ctx: {
+      auth: {
+        getUserIdentity: async () => ({ subject: "clerk_1" }),
+      },
+      db: {
+        query: createQuery([{ _id: "user_1", clerkId: "clerk_1" }]),
+        get: vi.fn().mockResolvedValue(existingProposal),
+        patch,
+      },
+    } as any,
+  };
+}
+
 describe("proposal public document style compatibility metadata", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -186,6 +203,136 @@ describe("proposal public document style compatibility metadata", () => {
     );
   });
 
+  it("explicitly clears a saved page size while preserving other metadata", async () => {
+    const existingProposal = {
+      _id: "proposal_1",
+      userId: "user_1",
+      title: "Existing proposal",
+      content: "Existing body",
+      status: "draft",
+      version: 3,
+      metadata: {
+        sourceCvId: "cv_1",
+        pageSize: "letter",
+        proposalType: "cover_letter",
+      },
+    };
+    const { ctx, patch } = createUpdateContext(existingProposal);
+
+    await updateProposalPublic._handler(ctx, {
+      id: "proposal_1",
+      metadata: { proposalType: "cover_letter" },
+      clearMetadata: { pageSize: true },
+    });
+
+    const metadata = patch.mock.calls[0][1].metadata;
+    expect(metadata).toEqual(
+      expect.objectContaining({
+        sourceCvId: "cv_1",
+        proposalType: "cover_letter",
+      }),
+    );
+    expect(metadata).not.toHaveProperty("pageSize");
+  });
+
+  it("explicitly clears a stale structured document and its revisions", async () => {
+    const existingProposal = {
+      _id: "proposal_1",
+      userId: "user_1",
+      title: "Existing proposal",
+      content: "Original structured body",
+      status: "draft",
+      version: 3,
+      metadata: {
+        proposalType: "cover_letter",
+        proposalDocument: {
+          schemaVersion: 1,
+          kind: "letter",
+          source: "structured",
+          blocks: [
+            {
+              id: "paragraph-1",
+              type: "paragraph",
+              text: "Original structured body",
+            },
+          ],
+        },
+        proposalDocumentRevision: 10,
+        proposalDocumentUpdatedAt: 10,
+      },
+    };
+    const patch = vi.fn().mockResolvedValue(undefined);
+    const ctx = {
+      auth: {
+        getUserIdentity: async () => ({ subject: "clerk_1" }),
+      },
+      db: {
+        query: createQuery([{ _id: "user_1", clerkId: "clerk_1" }]),
+        get: vi.fn().mockResolvedValue(existingProposal),
+        patch,
+      },
+    } as any;
+
+    await updateProposalPublic._handler(ctx, {
+      id: "proposal_1",
+      content: "Whole draft rewritten as text",
+      metadata: { proposalType: "cover_letter" },
+      clearMetadata: { proposalDocument: true },
+    });
+
+    const metadata = patch.mock.calls[0][1].metadata;
+    expect(metadata).not.toHaveProperty("proposalDocument");
+    expect(metadata).not.toHaveProperty("proposalDocumentRevision");
+    expect(metadata).not.toHaveProperty("proposalDocumentUpdatedAt");
+    expect(patch).toHaveBeenCalledWith(
+      "proposal_1",
+      expect.objectContaining({
+        content: "Whole draft rewritten as text",
+      }),
+    );
+  });
+
+  it("explicitly clears stale proposal template bundle provenance", async () => {
+    const existingProposal = {
+      _id: "proposal_1",
+      userId: "user_1",
+      title: "Existing proposal",
+      content: "Existing body",
+      status: "draft",
+      version: 3,
+      metadata: {
+        proposalType: "cover_letter",
+        templateBundleId: "magazine_editorial",
+        verbatiStyleSlotId: 3,
+        verbatiStyleSlotSource: "settings",
+        verbatiStyleSlotNameSnapshot: "Style 3",
+        verbatiStyleBaseSnapshot: {
+          typography: "quiet-editorial",
+          palette: "ink",
+        },
+        documentStyleVersion: 1,
+      },
+    };
+    const { ctx, patch } = createUpdateContext(existingProposal);
+
+    await updateProposalPublic._handler(ctx, {
+      id: "proposal_1",
+      metadata: { templateId: "modernist_signal" },
+      clearMetadata: { templateBundle: true, documentStyleSlot: true },
+    } as any);
+
+    const metadata = patch.mock.calls[0][1].metadata;
+    expect(metadata).toEqual(
+      expect.objectContaining({ templateId: "modernist_signal" }),
+    );
+    expect(metadata).not.toHaveProperty("templateBundleId");
+    expect(metadata).not.toHaveProperty("verbatiStyleSlotId");
+    expect(metadata).not.toHaveProperty("verbatiStyleSlotSource");
+    expect(metadata).not.toHaveProperty("verbatiStyleSlotNameSnapshot");
+    expect(metadata).not.toHaveProperty("verbatiStyleBaseSnapshot");
+    expect(metadata).not.toHaveProperty("documentStyleVersion");
+  });
+
   it("strips proposal decoration runtime image URLs on update while keeping asset metadata", async () => {
     const existingProposal = {
       _id: "proposal_1",
@@ -312,7 +459,9 @@ describe("proposal public document style compatibility metadata", () => {
         }),
       },
       storage: {
-        getUrl: vi.fn().mockResolvedValue("https://files.example.test/proposal.png"),
+        getUrl: vi
+          .fn()
+          .mockResolvedValue("https://files.example.test/proposal.png"),
       },
     } as any;
 
@@ -406,10 +555,7 @@ describe("proposal public document style compatibility metadata", () => {
         ...existingProposal,
         metadata: {
           ...existingProposal.metadata,
-          tags: [
-            ...existingProposal.metadata.tags,
-            "ui_metadata_patch",
-          ],
+          tags: [...existingProposal.metadata.tags, "ui_metadata_patch"],
           templateBundleId: "magazine_editorial",
         },
       });

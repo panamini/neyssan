@@ -1,11 +1,12 @@
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, ArrowSquareOut, CaretLeft, Pin } from "../lib/icons";
 import { useForgeTemplatePanel } from "../contexts/ForgeTemplatePanelContext";
 import { TemplateDocumentPreview } from "../pages/TemplatesPage";
 import { A4_PAGE_HEIGHT_PX, A4_PAGE_WIDTH_PX } from "../lib/document-stage";
 import { translateUi } from "../lib/i18n";
 import { useUiLanguagePreference } from "../lib/ui-preferences";
+import { createProposalTemplateGalleryState } from "../lib/proposal-workspace-state";
 
 const TEMPLATE_THUMBNAIL_WIDTH_PX = 156;
 const TEMPLATE_THUMBNAIL_SCALE =
@@ -23,10 +24,15 @@ export function ForgeTemplatePanel(): JSX.Element | null {
     queueClosePanel,
   } = useForgeTemplatePanel();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleBrowseAllTemplates = () => {
     closePanel();
-    navigate("/templates");
+    const state = createProposalTemplateGalleryState(
+      location.pathname,
+      location.search,
+    );
+    navigate("/templates", state ? { state } : undefined);
   };
 
   React.useEffect(() => {

@@ -213,6 +213,7 @@ function mockFinePointer(matches = true) {
 describe("Sidebar permanent rail", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
       writable: true,
@@ -648,6 +649,42 @@ describe("Sidebar permanent rail", () => {
       expect(screen.getByTestId("location")).toHaveTextContent("/templates");
     },
   );
+
+  it("returns to the last opened saved letter after navigating to another page", async () => {
+    mockFinePointer(true);
+    const savedLetterPath =
+      "/proposal?view=saved&id=jn76drefbk099524d4cgjdm8x984tme3";
+    renderSidebar(savedLetterPath, <RegisterProposalPanels />);
+
+    await waitFor(() => {
+      expect(window.sessionStorage.getItem("twoweeks:last-saved-proposal-path")).toBe(
+        savedLetterPath,
+      );
+    });
+
+    fireEvent.click(screen.getByRole("link", { name: "Templates" }));
+    expect(screen.getByTestId("location")).toHaveTextContent("/templates");
+
+    fireEvent.click(screen.getByRole("link", { name: "Letter" }));
+    expect(screen.getByTestId("location")).toHaveTextContent(savedLetterPath);
+  });
+
+  it("clears a deleted saved-letter shortcut on the empty saved route", async () => {
+    const savedLetterPath = "/proposal?view=saved&id=deleted-letter";
+    window.sessionStorage.setItem(
+      "twoweeks:last-saved-proposal-path",
+      savedLetterPath,
+    );
+
+    renderSidebar("/proposal?view=saved", <RegisterProposalPanels />);
+
+    await waitFor(() => {
+      expect(
+        window.sessionStorage.getItem("twoweeks:last-saved-proposal-path"),
+      ).toBeNull();
+    });
+    expect(screen.getByRole("button", { name: "Letter" })).toBeInTheDocument();
+  });
 
   it("opens the proposal template panel from hover and navigates on click", () => {
     vi.useFakeTimers();

@@ -13,13 +13,84 @@ export const PROPOSAL_WORKSPACE_RESET_STATE_KEY =
   "proposalWorkspaceResetToken";
 export const PROPOSAL_ENTRY_INTENT_STATE_KEY = "proposalEntryIntent";
 export const PROPOSAL_JOB_IMPORT_FOCUS_STATE_KEY = "jobImportFocus";
+export const PROPOSAL_TEMPLATE_RETURN_TO_STATE_KEY = "proposalReturnTo";
 export const PROPOSAL_DRAWER_QUERY_PARAM = "drawer";
 export const PROPOSAL_DRAFT_DRAWER_QUERY_VALUE = "proposal-draft";
+
+const PROPOSAL_TEMPLATE_ONE_SHOT_QUERY_PARAMS = [
+  "templateId",
+  "pageSize",
+  "styleSlot",
+  "templateStart",
+] as const;
+
+export function clearProposalTemplateOneShotParams(
+  params: URLSearchParams,
+): void {
+  for (const param of PROPOSAL_TEMPLATE_ONE_SHOT_QUERY_PARAMS) {
+    params.delete(param);
+  }
+}
 
 export type ProposalEntryIntent = "cover-letter-start";
 export type JobImportFocus = "supported-sites";
 export type ProposalDrawerRouteIntent =
   typeof PROPOSAL_DRAFT_DRAWER_QUERY_VALUE;
+
+export function createProposalTemplateGalleryState(
+  pathname: string,
+  search: string,
+): Record<string, string> | undefined {
+  if (pathname !== "/proposal") return undefined;
+
+  const params = new URLSearchParams(search);
+  clearProposalTemplateOneShotParams(params);
+  const nextSearch = params.toString();
+
+  return {
+    [PROPOSAL_TEMPLATE_RETURN_TO_STATE_KEY]: `/proposal${
+      nextSearch ? `?${nextSearch}` : ""
+    }`,
+  };
+}
+
+export function readProposalTemplateReturnTo(value: unknown): string | null {
+  if (!value || typeof value !== "object") return null;
+  const route = (value as Record<string, unknown>)[
+    PROPOSAL_TEMPLATE_RETURN_TO_STATE_KEY
+  ];
+  if (typeof route !== "string" || !route.startsWith("/")) return null;
+
+  try {
+    const parsed = new URL(route, "https://twoweeks.local");
+    if (
+      parsed.origin !== "https://twoweeks.local" ||
+      parsed.pathname !== "/proposal"
+    ) {
+      return null;
+    }
+
+    clearProposalTemplateOneShotParams(parsed.searchParams);
+    const nextSearch = parsed.searchParams.toString();
+    return `/proposal${nextSearch ? `?${nextSearch}` : ""}`;
+  } catch {
+    return null;
+  }
+}
+
+export function buildProposalTemplateApplyRoute(
+  locationState: unknown,
+  templateId: string,
+  styleSlot?: "minimal" | "direct" | "editorial",
+): string {
+  const returnTo = readProposalTemplateReturnTo(locationState) ?? "/proposal";
+  const parsed = new URL(returnTo, "https://twoweeks.local");
+  parsed.searchParams.set("templateId", templateId);
+  if (styleSlot) {
+    parsed.searchParams.set("styleSlot", styleSlot);
+  }
+  return `${parsed.pathname}?${parsed.searchParams.toString()}`;
+}
 
 export type StoredProposalComposeDraft = {
   jobTitle?: string;

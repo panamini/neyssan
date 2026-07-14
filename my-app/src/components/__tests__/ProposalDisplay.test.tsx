@@ -224,6 +224,14 @@ function getEditableProposalParagraphs(): HTMLElement[] {
   );
 }
 
+function getEditableProposalSalutation(): HTMLElement {
+  const salutation = document.querySelector<HTMLElement>(
+    "[data-proposal-body-editor='true'] [data-proposal-edit-target='text-block'][data-proposal-edit-field-kind='salutation']",
+  );
+  expect(salutation).toBeTruthy();
+  return salutation!;
+}
+
 function getEditableProposalListItems(): HTMLElement[] {
   return Array.from(
     document.querySelectorAll<HTMLElement>(
@@ -443,6 +451,49 @@ describe("ProposalDisplay", () => {
     });
     expect(paragraph).toHaveTextContent("Updated paragraph.");
     expect(onContentCommit).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the editable document mounted when the salutation is changed inline", async () => {
+    const { onContentCommit } = renderPreviewEditableProposal(
+      "Madame, Monsieur,\n\nOriginal paragraph.\n\nCordialement,\nAlex",
+    );
+
+    const bodyEditor = getProposalBodyEditor();
+    const salutation = getEditableProposalSalutation();
+    bodyEditor.focus();
+    setEditableNodeText(salutation, "Bonjour Madame, Monsieur,");
+
+    expect(() => fireEvent.blur(bodyEditor)).not.toThrow();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-content")).toHaveTextContent(
+        "Bonjour Madame, Monsieur,",
+      );
+    });
+    expect(getProposalBodyEditor()).toBeInTheDocument();
+    expect(getEditableProposalSalutation()).toHaveTextContent(
+      "Bonjour Madame, Monsieur,",
+    );
+    expect(onContentCommit).toHaveBeenCalledTimes(1);
+  });
+
+  it("remounts the browser-owned editable subtree after an inline deletion commits", async () => {
+    renderPreviewEditableProposal(
+      "Madame, Monsieur,\n\nOriginal paragraph.\n\nCordialement,\nAlex",
+    );
+
+    const bodyEditor = getProposalBodyEditor();
+    const salutation = getEditableProposalSalutation();
+    bodyEditor.focus();
+    setEditableNodeText(salutation, "");
+
+    expect(() => fireEvent.blur(bodyEditor)).not.toThrow();
+
+    await waitFor(() => {
+      expect(getProposalBodyEditor()).not.toBe(bodyEditor);
+    });
+    expect(bodyEditor.isConnected).toBe(false);
+    expect(getProposalBodyEditor()).toBeInTheDocument();
   });
 
   it("uses one continuous editable root for proposal body text", () => {
@@ -1126,11 +1177,15 @@ describe("ProposalDisplay", () => {
 
     const emptyItem = getEditableProposalListItems()[1];
     expect(getEditableNodeText(emptyItem)).toBe("");
-    fireEvent.keyDown(bodyEditor, { key: "Enter" });
+    fireEvent.keyDown(getProposalBodyEditor(), { key: "Enter" });
 
     await waitFor(() => {
-      expect(getEditableProposalParagraphs()).toHaveLength(1);
-      expect(getEditableProposalListItems()).toHaveLength(1);
+      expect(screen.getByTestId("proposal-document")).toHaveTextContent(
+        '"id":"list-2-paragraph"',
+      );
+      expect(screen.getByTestId("proposal-document")).not.toHaveTextContent(
+        '"id":"list-2-item-1-item"',
+      );
     });
   });
 

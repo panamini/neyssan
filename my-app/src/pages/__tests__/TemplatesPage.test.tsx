@@ -36,19 +36,20 @@ describe("TemplatesPage", () => {
     expect(screen.getByRole("heading", { name: "Templates" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Cover letters" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "Resume" })).toBeInTheDocument();
-    expect(screen.getByText("Minimal")).toBeInTheDocument();
-    expect(screen.getByText("French")).toBeInTheDocument();
+    expect(screen.getByText("Minimal · US Letter")).toBeInTheDocument();
+    expect(screen.getByText("French · A4")).toBeInTheDocument();
     expect(screen.getByText("Editorial", { selector: ".dasti-template-card__title" })).toBeInTheDocument();
     expect(screen.getByText("Twoweeks Letterhead")).toBeInTheDocument();
     expect(screen.getByText("Director Letterhead")).toBeInTheDocument();
     expect(screen.getByText("Volk Letterhead")).toBeInTheDocument();
     expect(screen.getByText("Film und Foto Letterhead")).toBeInTheDocument();
     expect(screen.getByText("MoMA Bauhaus Letterhead")).toBeInTheDocument();
+    expect(screen.getByText("Joella Frame Letterhead")).toBeInTheDocument();
     expect(screen.getByText("Bayer")).toBeInTheDocument();
-    expect(screen.getAllByText("Cover letter")).toHaveLength(9);
+    expect(screen.getAllByText("Cover letter")).toHaveLength(10);
     expect(document.querySelector(".dasti-template-card__badge")).toBeNull();
     expect(screen.queryByRole("tab", { name: "CVs" })).toBeNull();
-    expect(screen.getAllByTestId("template-document-preview")).toHaveLength(9);
+    expect(screen.getAllByTestId("template-document-preview")).toHaveLength(10);
     const editorialCard = screen
       .getByText("Editorial", { selector: ".dasti-template-card__title" })
       .closest(".dasti-template-card");
@@ -56,6 +57,40 @@ describe("TemplatesPage", () => {
     expect(
       editorialCard?.querySelector(".proposal-cover-letter--editorial"),
     ).toBeTruthy();
+  });
+
+  it("previews the US layout on Letter and the French layout on A4", () => {
+    render(
+      <MemoryRouter initialEntries={["/templates"]}>
+        <TemplatesPage />
+      </MemoryRouter>,
+    );
+
+    const minimalCard = screen
+      .getByText("Minimal · US Letter", { selector: ".dasti-template-card__title" })
+      .closest(".dasti-template-card");
+    const frenchCard = screen
+      .getByText("French · A4", { selector: ".dasti-template-card__title" })
+      .closest(".dasti-template-card");
+    const minimalDocument = minimalCard?.querySelector<HTMLElement>(
+      ".dasti-proposal-document--workshop-proposal-margin",
+    );
+    const frenchDocument = frenchCard?.querySelector<HTMLElement>(
+      ".dasti-proposal-document--modernist-signal",
+    );
+
+    expect(
+      minimalDocument?.style.getPropertyValue("--proposal-page-width-mm"),
+    ).toBe("215.9");
+    expect(
+      minimalDocument?.style.getPropertyValue("--proposal-page-height-mm"),
+    ).toBe("279.4");
+    expect(
+      frenchDocument?.style.getPropertyValue("--proposal-page-width-mm"),
+    ).toBe("210");
+    expect(
+      frenchDocument?.style.getPropertyValue("--proposal-page-height-mm"),
+    ).toBe("297");
   });
 
   it("renders template chrome in French without renaming templates", () => {
@@ -71,7 +106,7 @@ describe("TemplatesPage", () => {
     expect(screen.getByRole("heading", { name: "Modèles" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Lettres" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("button", { name: "Personnaliser le style" })).toBeInTheDocument();
-    expect(screen.getAllByText("Lettre", { selector: ".dasti-template-card__kind" })).toHaveLength(9);
+    expect(screen.getAllByText("Lettre", { selector: ".dasti-template-card__kind" })).toHaveLength(10);
     expect(screen.queryByText("Espacement calme, hiérarchie nette.")).not.toBeInTheDocument();
     expect(screen.queryByText("Ouverture directe, ton net.")).not.toBeInTheDocument();
     expect(screen.queryByText("Plus chaleureux, plus personnel.")).not.toBeInTheDocument();
@@ -94,7 +129,7 @@ describe("TemplatesPage", () => {
     expect(screen.getByRole("heading", { name: "Plantillas" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Cartas" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("button", { name: "Personalizar estilo" })).toBeInTheDocument();
-    expect(screen.getAllByText("Carta", { selector: ".dasti-template-card__kind" })).toHaveLength(9);
+    expect(screen.getAllByText("Carta", { selector: ".dasti-template-card__kind" })).toHaveLength(10);
     expect(screen.queryByText("Espaciado sobrio, jerarquía clara.")).not.toBeInTheDocument();
     expect(screen.queryByText("Apertura directa, tono claro.")).not.toBeInTheDocument();
     expect(screen.queryByText("Más cercano, más personal.")).not.toBeInTheDocument();
@@ -200,7 +235,7 @@ describe("TemplatesPage", () => {
     await user.click(screen.getByRole("button", { name: "Create new proposal" }));
 
     expect(navigateMock).toHaveBeenCalledWith(
-      "/proposal?templateId=editorial_wide",
+      "/proposal?templateId=editorial_wide&styleSlot=editorial&templateStart=1",
       {
         state: expect.objectContaining({
           proposalWorkspaceResetToken: expect.any(String),
@@ -209,10 +244,55 @@ describe("TemplatesPage", () => {
     );
   });
 
-  it("applies a cover-letter template without proposal reset state", async () => {
+  it.each([
+    {
+      label: "Minimal · US Letter",
+      href: "/proposal?templateId=workshop_proposal_margin&pageSize=letter&styleSlot=minimal&templateStart=1",
+    },
+    {
+      label: "French · A4",
+      href: "/proposal?templateId=modernist_signal&pageSize=a4&styleSlot=direct&templateStart=1",
+    },
+  ])(
+    "creates $label with its canonical page format",
+    async ({ label, href }) => {
+      const user = userEvent.setup();
+      render(
+        <MemoryRouter initialEntries={["/templates"]}>
+          <TemplatesPage />
+        </MemoryRouter>,
+      );
+
+      const templateCard = screen
+        .getByText(label, { selector: ".dasti-template-card__title" })
+        .closest(".dasti-template-card");
+      expect(templateCard).toBeTruthy();
+      await user.click(templateCard as HTMLElement);
+      await user.click(
+        screen.getByRole("button", { name: "Create new proposal" }),
+      );
+
+      expect(navigateMock).toHaveBeenCalledWith(href, {
+        state: expect.objectContaining({
+          proposalWorkspaceResetToken: expect.any(String),
+        }),
+      });
+    },
+  );
+
+  it("applies a cover-letter template back to the current saved proposal", async () => {
     const user = userEvent.setup();
     render(
-      <MemoryRouter initialEntries={["/templates"]}>
+      <MemoryRouter
+        initialEntries={[
+          {
+            pathname: "/templates",
+            state: {
+              proposalReturnTo: "/proposal?view=saved&id=proposal_beta",
+            },
+          },
+        ]}
+      >
         <TemplatesPage />
       </MemoryRouter>,
     );
@@ -227,7 +307,9 @@ describe("TemplatesPage", () => {
     );
 
     expect(navigateMock).toHaveBeenCalledTimes(1);
-    expect(navigateMock).toHaveBeenCalledWith("/proposal?templateId=editorial_wide");
+    expect(navigateMock).toHaveBeenCalledWith(
+      "/proposal?view=saved&id=proposal_beta&templateId=editorial_wide&styleSlot=editorial",
+    );
   });
 
   it("keeps template cards compact without an explicit arrow action", () => {
@@ -238,14 +320,14 @@ describe("TemplatesPage", () => {
     );
 
     const selectedCard = screen
-      .getByText("Minimal", { selector: ".dasti-template-card__title" })
+      .getByText("Minimal · US Letter", { selector: ".dasti-template-card__title" })
       .closest(".dasti-template-card");
     expect(selectedCard).toBeTruthy();
-    expect(selectedCard).toHaveAccessibleName("Use Minimal template");
+    expect(selectedCard).toHaveAccessibleName("Use Minimal · US Letter template");
     expect(selectedCard?.querySelector(".dasti-template-card__quick-action")).toBeNull();
 
     const frenchCard = screen
-      .getByText("French", { selector: ".dasti-template-card__title" })
+      .getByText("French · A4", { selector: ".dasti-template-card__title" })
       .closest(".dasti-template-card");
     expect(frenchCard).toBeTruthy();
     expect(frenchCard?.querySelector(".dasti-template-card__quick-action")).toBeNull();
@@ -331,14 +413,14 @@ describe("TemplatesPage", () => {
     );
 
     const minimalCard = screen.getByRole("button", {
-      name: "Use Minimal template",
+      name: "Use Minimal · US Letter template",
     });
     minimalCard.focus();
     await user.keyboard("{Enter}");
 
     expect(navigateMock).not.toHaveBeenCalled();
     expect(
-      screen.getByRole("dialog", { name: "Minimal" }),
+      screen.getByRole("dialog", { name: "Minimal · US Letter" }),
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Close" }));
@@ -346,7 +428,7 @@ describe("TemplatesPage", () => {
     await user.keyboard(" ");
 
     expect(
-      screen.getByRole("dialog", { name: "Minimal" }),
+      screen.getByRole("dialog", { name: "Minimal · US Letter" }),
     ).toBeInTheDocument();
   });
 
@@ -366,7 +448,7 @@ describe("TemplatesPage", () => {
     await user.click(screen.getByRole("button", { name: "Create new proposal" }));
 
     expect(navigateMock).toHaveBeenCalledWith(
-      "/proposal?templateId=editorial_wide",
+      "/proposal?templateId=editorial_wide&styleSlot=editorial&templateStart=1",
       {
         state: expect.objectContaining({
           proposalWorkspaceResetToken: expect.any(String),
@@ -382,6 +464,7 @@ describe("TemplatesPage", () => {
     ["Twoweeks Letterhead", "twoweeks-letterhead"],
     ["Director Letterhead", "director-letterhead"],
     ["MoMA Bauhaus Letterhead", "moma-bauhaus-letterhead"],
+    ["Joella Frame Letterhead", "joella-frame-letterhead"],
     ["Bayer", "bayer-letterhead"],
   ])(
     "starts cover-letter creation with selected %s template id",
