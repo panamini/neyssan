@@ -3350,6 +3350,11 @@ export type PremiumCoverLetterFailureTrace = {
   issues?: string[];
 };
 
+export type PremiumCoverLetterModelRepairRequiredDiagnostic = Readonly<{
+  stage: "writer_output_validation" | "body_parts_validation";
+  issues: readonly string[];
+}>;
+
 function summarizeValidationIssueCodes(
   issues: PremiumBodyPartValidationIssue[],
 ): PremiumBodyPartValidationIssue["code"][] {
@@ -6301,6 +6306,9 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   systemInferenceHints?: string[];
   writer: PremiumCoverLetterWriter;
   onFailure?: (failure: PremiumCoverLetterFailureTrace) => void;
+  onModelRepairRequired?: (
+    diagnostic: PremiumCoverLetterModelRepairRequiredDiagnostic,
+  ) => void;
 }): Promise<PremiumCoverLetterAttemptResult | null> {
   const eligibility = evaluatePremiumCoverLetterEligibility({
     personalizationContext: args.personalizationContext,
@@ -6442,6 +6450,10 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     ? []
     : writerOutputIssues.filter((issue) => issue.repairable);
   if (repairableWriterOutputIssues.length > 0) {
+    args.onModelRepairRequired?.({
+      stage: "writer_output_validation",
+      issues: repairableWriterOutputIssues.map((issue) => issue.code),
+    });
     const repairedParsedWriterOutput = parsePremiumWriterOutputV1({
       rawOutput: await args.writer({
         prompt: buildPremiumWriterOutputRepairPrompt({
@@ -6589,6 +6601,10 @@ export async function attemptPremiumCoverLetterGeneration(args: {
       return null;
     }
 
+    args.onModelRepairRequired?.({
+      stage: "body_parts_validation",
+      issues: remainingIssueCodes,
+    });
     const repairedBodyParts = parseCoverLetterBodyPartsWriterPayload(
       await args.writer({
         prompt: buildPremiumCoverLetterRepairPrompt({

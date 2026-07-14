@@ -18,6 +18,8 @@ import { buildStableHash } from "../../../src/modules/application-harness/finger
 import {
   aggregateCoverLetterBenchmarkRecords,
   assertQualityEval2BBudgetContract,
+  assertQualityEval2DSampleBudgetContract,
+  assertQualityEval2DSharedPromptContract,
   benchmarkCoverLetterCase,
   benchmarkCoverLetterCaseForHumanReview,
   buildCoverLetterBenchmarkOfflineCostPreflight,
@@ -25,7 +27,9 @@ import {
   calculateCoverLetterBenchmarkMinimumProviderCalls,
   coverLetterBenchmarkRequiresOpenAIKey,
   createCoverLetterEvalLiveBudget,
+  generatePremiumCoverLetterBenchmarkLetter,
   QUALITY_EVAL_2B_WRITER_MODELS,
+  QUALITY_EVAL_2D_SHARED_PROMPT_MAX_CHARACTERS,
   parseCoverLetterBenchmarkCliOptions,
   replayRecordedCoverLetterFixture,
   replayRecordedCoverLetterFixtures,
@@ -37,6 +41,10 @@ import {
   type CoverLetterBenchmarkRecord,
 } from "../benchmark-cover-letter-writers";
 import { CoverLetterEvalBudgetError } from "../cover-letter-eval-budget";
+import {
+  QUALITY_EVAL_2D_CASE_ID,
+  QUALITY_EVAL_2D_WRITER_MODELS,
+} from "../cover-letter-qualitative-sample";
 import {
   COVER_LETTER_BLIND_REVIEW_COHORT_ID,
   coverLetterBenchmarkCases,
@@ -181,7 +189,7 @@ describe("benchmark-cover-letter-writers", () => {
           ["--human-review-only", `--writers=${invalidWriter}`],
           "0",
         ),
-      ).toThrow(/unsupported premium writer model/iu);
+      ).toThrow(/unsupported premium writer model|exact writer set/iu);
     }
 
     expect(() =>
@@ -193,6 +201,52 @@ describe("benchmark-cover-letter-writers", () => {
         "0",
       ),
     ).toThrow(/exact writer set/iu);
+  });
+
+  it("accepts only the exact QUALITY-EVAL-2D qualitative sample contract", () => {
+    const options = parseCoverLetterBenchmarkCliOptions(
+      [
+        "--qualitative-sample",
+        `--writers=${QUALITY_EVAL_2D_WRITER_MODELS.join(",")}`,
+      ],
+      "0",
+    );
+
+    expect(options.evaluationMode).toBe("qualitative_sample");
+    expect(options.caseIds).toEqual([QUALITY_EVAL_2D_CASE_ID]);
+    expect(options.writerModels).toEqual(QUALITY_EVAL_2D_WRITER_MODELS);
+    expect(
+      parseCoverLetterBenchmarkCliOptions(["--qualitative-sample"], "0")
+        .writerModels,
+    ).toEqual(QUALITY_EVAL_2D_WRITER_MODELS);
+
+    for (const invalidWriter of [
+      "gpt-5.6",
+      "gpt-5.6-luna-pro",
+      "unknown-writer",
+    ]) {
+      expect(() =>
+        parseCoverLetterBenchmarkCliOptions(
+          ["--qualitative-sample", `--writers=${invalidWriter}`],
+          "0",
+        ),
+      ).toThrow(/unsupported premium writer model|exact writer set/iu);
+    }
+    expect(() =>
+      parseCoverLetterBenchmarkCliOptions(
+        [
+          "--qualitative-sample",
+          "--writers=gpt-5.5,gpt-5.6-sol,gpt-5.6-terra,gpt-5.6-luna,gpt-5.6-luna",
+        ],
+        "0",
+      ),
+    ).toThrow(/duplicate premium writer model/iu);
+    expect(() =>
+      parseCoverLetterBenchmarkCliOptions(
+        ["--qualitative-sample", "--cases=blind-fr-strong-direct"],
+        "0",
+      ),
+    ).toThrow(/fixed synthetic case/iu);
   });
 
   it("freezes the cases-outer four-writer plan at 24 calls with no repair allowance", () => {
@@ -382,6 +436,110 @@ describe("benchmark-cover-letter-writers", () => {
     expect(() =>
       assertQualityEval2BBudgetContract({ options: safe, preflight }),
     ).not.toThrow();
+  });
+
+  it("preflights the actual five-model qualitative sample below its USD 0.75 cap", async () => {
+    const fetchSpy = vi.fn(() => {
+      throw new Error("provider calls are forbidden during offline preflight");
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+    const sampleCase = coverLetterBlindReviewCases.filter(
+      (benchmarkCase) => benchmarkCase.id === QUALITY_EVAL_2D_CASE_ID,
+    );
+    const preflight = await buildCoverLetterBenchmarkOfflineCostPreflight({
+      cases: sampleCase,
+      writerModels: QUALITY_EVAL_2D_WRITER_MODELS,
+      targetReservationUsd: 0.75,
+    });
+    const options = parseCoverLetterBenchmarkCliOptions(
+      [
+        "--qualitative-sample",
+        "--max-calls=5",
+        "--max-repairs=0",
+        "--max-usd=0.75",
+        `--max-usd-per-call=${preflight.declaredMaxUsdPerCall}`,
+      ],
+      "1",
+    );
+
+    expect(preflight).toMatchObject({
+      plannedProviderCalls: 5,
+      providerMaxRetries: 0,
+      maxRepairs: 0,
+      writerMaxOutputTokens: 2_048,
+      targetReservationUsd: 0.75,
+      targetReservationProven: true,
+    });
+    expect(preflight.minimumSafeReservationUsd).toBeLessThanOrEqual(0.75);
+    expect(preflight.entries.map((entry) => entry.writerModel)).toEqual(
+      QUALITY_EVAL_2D_WRITER_MODELS,
+    );
+    expect(
+      preflight.entries.find(
+        (entry) => entry.writerModel === "mistral-medium-latest",
+      ),
+    ).toMatchObject({ serializedInputByteUpperBound: 11_594 });
+    expect(() =>
+      assertQualityEval2DSampleBudgetContract({ options, preflight }),
+    ).not.toThrow();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("freezes one shared effective user prompt under the 12k-character evaluation ceiling", async () => {
+    const fetchSpy = vi.fn(() => {
+      throw new Error("provider calls are forbidden during prompt preflight");
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+    const benchmarkCase = coverLetterBlindReviewCases.find(
+      (candidate) => candidate.id === QUALITY_EVAL_2D_CASE_ID,
+    )!;
+
+    const contract = await assertQualityEval2DSharedPromptContract({
+      benchmarkCase,
+    });
+
+    expect(contract).toMatchObject({
+      promptCharacterLength: 10_537,
+      maxPromptCharacters: 12_000,
+    });
+    expect(contract.promptCharacterLength).toBeLessThanOrEqual(
+      QUALITY_EVAL_2D_SHARED_PROMPT_MAX_CHARACTERS,
+    );
+    expect(contract.promptHash).toMatch(/^[a-f0-9]{64}$/u);
+    expect(contract.schemaHash).toMatch(/^[a-f0-9]{64}$/u);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("passes exact canonical prompt bytes through both evaluation writer paths", async () => {
+    const benchmarkCase = coverLetterBlindReviewCases.find(
+      (candidate) => candidate.id === QUALITY_EVAL_2D_CASE_ID,
+    )!;
+    const canonicalPrompt = "canonical provider-neutral evaluation prompt";
+    const observedPrompts: string[] = [];
+    const observedCallbacks: string[] = [];
+
+    for (const writerModel of ["gpt-5.5", "mistral-medium-latest"] as const) {
+      const captureComplete = Symbol(writerModel);
+      try {
+        await generatePremiumCoverLetterBenchmarkLetter({
+          benchmarkCase,
+          writerModel,
+          apiKey: "offline",
+          mistralApiKey: "offline",
+          writerPromptOverride: canonicalPrompt,
+          onWriterPrompt: (prompt) => observedCallbacks.push(prompt),
+          writerOverride: async ({ prompt }) => {
+            observedPrompts.push(prompt);
+            throw captureComplete;
+          },
+        });
+      } catch (error) {
+        expect(error).toBe(captureComplete);
+      }
+    }
+
+    expect(observedPrompts).toEqual([canonicalPrompt, canonicalPrompt]);
+    expect(observedCallbacks).toEqual([canonicalPrompt, canonicalPrompt]);
   });
 
   it("resolves the production writer after dotenv can update the environment", () => {

@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import * as path from "node:path";
@@ -8,6 +9,7 @@ export type CoverLetterEvalPricedWriterModel =
   | "gpt-5.5"
   | "gpt-5.6-sol"
   | "gpt-5.6-terra"
+  | "gpt-5.6-luna"
   | "mistral-medium-latest";
 
 export type CoverLetterEvalTokenUsage = Readonly<{
@@ -22,6 +24,33 @@ export type CoverLetterEvalSdkVersions = Readonly<{
   langchainMistral: string;
 }>;
 
+export type CoverLetterEvalSchemaEnforcementMode =
+  | "openai_responses_json_schema_strict"
+  | "mistral_prompt_contract_with_local_parser";
+
+export type CoverLetterEvalPromptContract =
+  | "provider_native_v1"
+  | "quality_eval_2d_shared_v1";
+
+export type CoverLetterEvalTransportInput = Readonly<{
+  serializedRequest: string;
+  systemPrompt: string | null;
+  schemaTarget: Record<string, unknown>;
+  schemaEnforcementMode: CoverLetterEvalSchemaEnforcementMode;
+  promptContract: CoverLetterEvalPromptContract;
+}>;
+
+export type CoverLetterEvalTransportMetadata = Readonly<{
+  version: "cover_letter_eval_transport_metadata_v1";
+  requestProjectionHash: string;
+  requestProjectionByteLength: number;
+  requestProjectionScope: "application_controlled_request_projection_without_credentials_or_signal";
+  systemPromptHash: string | null;
+  schemaTargetHash: string;
+  schemaEnforcementMode: CoverLetterEvalSchemaEnforcementMode;
+  promptContract: CoverLetterEvalPromptContract;
+}>;
+
 export type CoverLetterEvalRunManifestEntry = Readonly<{
   version: "cover_letter_eval_run_manifest_entry_v1";
   caseId: string;
@@ -29,6 +58,8 @@ export type CoverLetterEvalRunManifestEntry = Readonly<{
   requestedModel: CoverLetterEvalPricedWriterModel;
   returnedModel: string | null;
   promptHash: string;
+  promptHashScope: "effective_user_prompt";
+  transport: CoverLetterEvalTransportMetadata;
   reasoningEffort: string | null;
   writerMaxOutputTokens: number;
   providerMaxRetries: number;
@@ -55,6 +86,7 @@ const SHORT_CONTEXT_RATES_USD_PER_MILLION = Object.freeze({
   "gpt-5.5": { input: 5, output: 30 },
   "gpt-5.6-sol": { input: 5, output: 30 },
   "gpt-5.6-terra": { input: 2.5, output: 15 },
+  "gpt-5.6-luna": { input: 1, output: 6 },
   "mistral-medium-latest": { input: 1.5, output: 7.5 },
 } as const satisfies Record<
   CoverLetterEvalPricedWriterModel,
@@ -91,12 +123,49 @@ export function calculateCoverLetterEvalConservativeCallCeiling(args: {
   );
 }
 
+export async function buildCoverLetterEvalTransportMetadata(
+  input: CoverLetterEvalTransportInput,
+): Promise<CoverLetterEvalTransportMetadata> {
+  return {
+    version: "cover_letter_eval_transport_metadata_v1",
+    requestProjectionHash: await buildStableHash({
+      namespace: "cover-letter-eval-transport",
+      type: "application-request-projection",
+      version: 1,
+      serializedRequest: input.serializedRequest,
+    }),
+    requestProjectionByteLength: Buffer.byteLength(
+      input.serializedRequest,
+      "utf8",
+    ),
+    requestProjectionScope:
+      "application_controlled_request_projection_without_credentials_or_signal",
+    systemPromptHash: input.systemPrompt
+      ? await buildStableHash({
+          namespace: "cover-letter-eval-transport",
+          type: "system-prompt",
+          version: 1,
+          systemPrompt: input.systemPrompt,
+        })
+      : null,
+    schemaTargetHash: await buildStableHash({
+      namespace: "cover-letter-eval-transport",
+      type: "writer-schema-target",
+      version: 1,
+      schema: input.schemaTarget,
+    }),
+    schemaEnforcementMode: input.schemaEnforcementMode,
+    promptContract: input.promptContract,
+  };
+}
+
 export async function buildCoverLetterEvalRunManifestEntry(args: {
   caseId: string;
   provider: "openai" | "mistral";
   requestedModel: CoverLetterEvalPricedWriterModel;
   returnedModel: string | null;
   prompt: string;
+  transport: CoverLetterEvalTransportInput;
   reasoningEffort: string | null;
   writerMaxOutputTokens: number;
   providerMaxRetries: number;
@@ -117,6 +186,8 @@ export async function buildCoverLetterEvalRunManifestEntry(args: {
       version: 1,
       prompt: args.prompt,
     }),
+    promptHashScope: "effective_user_prompt",
+    transport: await buildCoverLetterEvalTransportMetadata(args.transport),
     reasoningEffort: args.reasoningEffort,
     writerMaxOutputTokens: args.writerMaxOutputTokens,
     providerMaxRetries: args.providerMaxRetries,
