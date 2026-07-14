@@ -432,10 +432,22 @@ function deriveExpectedFinalizerBoundaryBodyParts(args: {
   trustedStructuredBodyParts: CoverLetterBodyParts;
   recordedBoundaryBodyParts: CoverLetterBodyParts;
 }): CoverLetterBodyParts {
+  const closeSentences = splitSentences(
+    args.trustedStructuredBodyParts.closeLine,
+  ).map((sentence) => normalizeProposalConstraintText(sentence));
+  const trustedStructuredBodyParts = {
+    ...args.trustedStructuredBodyParts,
+    employerValueBlock: joinSentences(
+      splitSentences(args.trustedStructuredBodyParts.employerValueBlock).filter(
+        (sentence) =>
+          !closeSentences.includes(normalizeProposalConstraintText(sentence)),
+      ),
+    ),
+  };
   const previousKeptSentences: string[] = [];
   return Object.fromEntries(
     RHETORICAL_ORDER.map((section) => {
-      const trustedText = args.trustedStructuredBodyParts[section];
+      const trustedText = trustedStructuredBodyParts[section];
       const keptSentences = splitSentences(trustedText).filter(
         (sentence) =>
           !isDeterministicallyRepeatedSentence(sentence, previousKeptSentences),
