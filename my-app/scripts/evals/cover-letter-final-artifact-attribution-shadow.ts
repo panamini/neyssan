@@ -11,6 +11,7 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
+import { platform } from "node:os";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -1017,11 +1018,10 @@ async function resolveNonSymlinkDirectoryTree(args: {
       return path.join(canonicalPath, ...segments.slice(index));
     }
     if (candidateStats.isSymbolicLink()) {
-      const parentStats = await lstat(canonicalPath);
       const isTrustedSystemAlias =
-        candidateStats.uid === 0 &&
-        parentStats.uid === 0 &&
-        (parentStats.mode & 0o022) === 0;
+        platform() === "darwin" &&
+        canonicalPath === root &&
+        (segments[index] === "var" || segments[index] === "tmp");
       if (isTrustedSystemAlias) {
         const resolvedCandidate = await realpath(candidate);
         const resolvedStats = await lstat(resolvedCandidate);
