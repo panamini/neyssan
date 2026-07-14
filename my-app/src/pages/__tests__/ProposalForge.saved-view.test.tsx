@@ -416,6 +416,7 @@ vi.mock("../../components/ProposalDisplay", () => ({
     templateId,
     documentLanguage,
     pageSize,
+    onContentCommit,
   }: {
     proposalContent: string | null;
     proposalDocument?: { blocks?: Array<{ text?: string }> } | null;
@@ -429,6 +430,10 @@ vi.mock("../../components/ProposalDisplay", () => ({
     templateId?: string | null;
     documentLanguage?: string | null;
     pageSize?: { id?: string | null } | null;
+    onContentCommit?: (snapshot?: {
+      proposalContent?: string | null;
+      proposalDocument?: null;
+    }) => void;
   }) => (
     <>
       <div data-testid="proposal-display-state">
@@ -445,6 +450,19 @@ vi.mock("../../components/ProposalDisplay", () => ({
         {documentLanguage ?? "no-language"}
       </div>
       <div data-testid="proposal-page-size">{pageSize?.id ?? "no-size"}</div>
+      {onContentCommit ? (
+        <button
+          type="button"
+          onClick={() =>
+            onContentCommit({
+              proposalContent: "Edited saved proposal content.",
+              proposalDocument: null,
+            })
+          }
+        >
+          Commit saved content edit
+        </button>
+      ) : null}
     </>
   ),
   fallbackCopyText: () => "",
@@ -579,7 +597,7 @@ describe("ProposalForge saved view", () => {
     render(
       <MemoryRouter
         initialEntries={[
-          "/proposal?view=saved&id=proposal_beta&templateId=modernist_signal",
+          "/proposal?view=saved&id=proposal_beta&templateId=modernist_signal&styleSlot=direct&pageSize=letter&templateStart=1",
         ]}
       >
         <LocationProbe />
@@ -600,14 +618,20 @@ describe("ProposalForge saved view", () => {
     const persistedMetadata = mockUpdateProposal.mock.calls.find(
       ([input]) => input.id === "proposal_beta",
     )?.[0]?.metadata;
-    expect(persistedMetadata).not.toHaveProperty("templateBundleId");
-    expect(persistedMetadata).not.toHaveProperty("verbatiStyleSlotId");
-    expect(persistedMetadata).not.toHaveProperty("verbatiStyleSlotSource");
-    expect(persistedMetadata).not.toHaveProperty(
-      "verbatiStyleSlotNameSnapshot",
+    expect(persistedMetadata).toEqual(
+      expect.objectContaining({
+        templateId: "modernist_signal",
+        verbatiStyle: expect.objectContaining({
+          typography: "quiet-editorial",
+          palette: "ink",
+        }),
+        verbatiStyleSlotId: 2,
+        verbatiStyleSlotSource: "factory",
+        verbatiStyleSlotNameSnapshot: "Style 2",
+        documentStyleVersion: 1,
+      }),
     );
-    expect(persistedMetadata).not.toHaveProperty("verbatiStyleBaseSnapshot");
-    expect(persistedMetadata).not.toHaveProperty("documentStyleVersion");
+    expect(persistedMetadata).not.toHaveProperty("templateBundleId");
     await waitFor(() => {
       expect(screen.getByTestId("proposal-location")).toHaveTextContent(
         /^\/proposal\?view=saved&id=proposal_beta$/,
@@ -649,6 +673,29 @@ describe("ProposalForge saved view", () => {
     expect(await screen.findByTestId("proposal-page-size")).toHaveTextContent(
       "letter",
     );
+  });
+
+  it("preserves the saved page size when committing a content edit", async () => {
+    writeStoredDocumentPageSizePreference("a4");
+    render(
+      <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_beta"]}>
+        <ProposalForge />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Commit saved content edit" }),
+    );
+
+    await waitFor(() => {
+      expect(mockUpdateProposal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "proposal_beta",
+          content: "Edited saved proposal content.",
+          metadata: expect.objectContaining({ pageSize: "letter" }),
+        }),
+      );
+    });
   });
 
   it("consumes a stale page-size query after the user changes the saved format", async () => {

@@ -99,6 +99,7 @@ import type {
   DocumentLanguageSource,
 } from "../lib/document-language";
 import {
+  clearProposalTemplateOneShotParams,
   PROPOSAL_DRAWER_QUERY_PARAM,
   PROPOSAL_DRAFT_DRAWER_QUERY_VALUE,
   readProposalEntryIntent,
@@ -2367,6 +2368,43 @@ function getProposalSettingsPresetForSlot(
     default:
       return presets?.preset3 ?? null;
   }
+}
+
+function resolveProposalLayoutActiveStylePreset(args: {
+  stylePresetOverride?: VerbatiStylePreset;
+  isSavedView: boolean;
+  savedStylePreset: VerbatiStylePreset;
+  composeStylePreset: VerbatiStylePreset;
+}): VerbatiStylePreset {
+  if (args.stylePresetOverride) {
+    return args.stylePresetOverride;
+  }
+  return args.isSavedView ? args.savedStylePreset : args.composeStylePreset;
+}
+
+function buildProposalRouteDocumentStyleMetadata(args: {
+  stylePresetOverride?: VerbatiStylePreset;
+  styleSlotOverride?: DocumentStyleSlotId;
+  proposalSettingsPresets?: ProposalSettingsPresets;
+}): DocumentStyleMetadata {
+  if (!args.stylePresetOverride || !args.styleSlotOverride) {
+    return {};
+  }
+
+  return {
+    verbatiStyleSlotId: args.styleSlotOverride,
+    verbatiStyleSlotSource: getProposalSettingsPresetForSlot(
+      args.proposalSettingsPresets,
+      args.styleSlotOverride,
+    )
+      ? "settings"
+      : "factory",
+    verbatiStyleSlotNameSnapshot: `Style ${args.styleSlotOverride}`,
+    verbatiStyleBaseSnapshot: buildProposalDocumentAppearanceSnapshot(
+      args.stylePresetOverride,
+    ),
+    documentStyleVersion: DOCUMENT_STYLE_VERSION,
+  };
 }
 
 function resolveProposalStyleForDocumentSlot(args: {
@@ -5210,10 +5248,33 @@ export function ProposalForge(): JSX.Element {
     if (lastProposalRequest?.creativity) {
       nextMetadata.creativity = lastProposalRequest.creativity;
     }
-    nextMetadata.pageSize = resolveDocumentPageSize({
-      preference: proposalPageSizePreference,
-      locale: storedOutputDraft?.resolvedLanguage,
-    }).id;
+    const selectedSavedProposalForPersistence =
+      isSavedView && selectedProposalId
+        ? (savedProposals ?? fallbackSavedProposals).find(
+            (proposal) =>
+              String(proposal._id) === String(selectedProposalId),
+          ) ?? null
+        : null;
+    const savedPageSizePreference =
+      savedProposalPageSizeOverride?.proposalId === selectedProposalId
+        ? savedProposalPageSizeOverride.preference
+        : isDocumentPageSizeId(
+              selectedSavedProposalForPersistence?.metadata?.pageSize,
+            )
+          ? selectedSavedProposalForPersistence.metadata.pageSize
+          : "auto";
+    if (isSavedView) {
+      if (savedPageSizePreference === "auto") {
+        delete nextMetadata.pageSize;
+      } else {
+        nextMetadata.pageSize = savedPageSizePreference;
+      }
+    } else {
+      nextMetadata.pageSize = resolveDocumentPageSize({
+        preference: proposalPageSizePreference,
+        locale: storedOutputDraft?.resolvedLanguage,
+      }).id;
+    }
     Object.assign(
       nextMetadata,
       buildProposalHeadingMetadataPatch({
@@ -5271,6 +5332,11 @@ export function ProposalForge(): JSX.Element {
     proposalDocument,
     proposalType,
     proposalVoicePreset,
+    fallbackSavedProposals,
+    isSavedView,
+    savedProposalPageSizeOverride,
+    savedProposals,
+    selectedProposalId,
     storedOutputDraft?.resolvedLanguage,
     storedOutputProposalClosingToken,
   ]);
@@ -8687,10 +8753,17 @@ export function ProposalForge(): JSX.Element {
   );
 
   const handleProposalLayoutSelect = React.useCallback(
-    async (templateId: ProposalTemplateId): Promise<boolean> => {
-      const activeStylePreset = isSavedView
-        ? effectiveSavedProposalStylePreset
-        : effectiveProposalStylePresetWithPalette;
+    async (
+      templateId: ProposalTemplateId,
+      stylePresetOverride?: VerbatiStylePreset,
+      styleSlotOverride?: DocumentStyleSlotId,
+    ): Promise<boolean> => {
+      const activeStylePreset = resolveProposalLayoutActiveStylePreset({
+        stylePresetOverride,
+        isSavedView,
+        savedStylePreset: effectiveSavedProposalStylePreset,
+        composeStylePreset: effectiveProposalStylePresetWithPalette,
+      });
       const nextStyleChoice =
         resolveProposalStyleChoiceFromRenderState({
           templateId,
@@ -8698,6 +8771,12 @@ export function ProposalForge(): JSX.Element {
         }) ?? proposalStyleChoice;
 
       if (isSavedView && openedSavedProposal && savedProposalRenderMetadata) {
+        const savedDocumentStyleMetadata =
+          buildProposalRouteDocumentStyleMetadata({
+            stylePresetOverride,
+            styleSlotOverride,
+            proposalSettingsPresets,
+          });
         setIsSavingSavedProposal(true);
         try {
           const persisted = await persistOpenedSavedProposal({
@@ -8706,6 +8785,13 @@ export function ProposalForge(): JSX.Element {
                 savedProposalRenderMetadata,
               ),
               templateId,
+              ...(stylePresetOverride
+                ? {
+                    verbatiStyle:
+                      serializeProposalMetadataVerbatiStyle(activeStylePreset),
+                  }
+                : {}),
+              ...savedDocumentStyleMetadata,
               styleLinkMode: "proposal_local",
               styleChoice: nextStyleChoice,
             },
@@ -8714,6 +8800,7 @@ export function ProposalForge(): JSX.Element {
             return false;
           }
           setSavedProposalTemplateId(templateId);
+          setSavedProposalStylePreset(activeStylePreset);
           setSavedProposalStyleLinkMode("proposal_local");
           return true;
         } catch (error) {
@@ -8808,14 +8895,18 @@ export function ProposalForge(): JSX.Element {
     }
     pendingSavedRouteTemplateIntentRef.current = intentKey;
     let cancelled = false;
-    void handleProposalLayoutSelect(proposalTemplateIntent)
+    void handleProposalLayoutSelect(
+      proposalTemplateIntent,
+      proposalStyleIntent ?? undefined,
+      proposalStyleSlotIntent ?? undefined,
+    )
       .then((persisted) => {
         if (!persisted || cancelled) {
           return;
         }
         appliedSavedRouteTemplateIntentRef.current = intentKey;
         const params = new URLSearchParams(search);
-        params.delete("templateId");
+        clearProposalTemplateOneShotParams(params);
         const nextSearch = params.toString();
         void navigate(
           {
@@ -8840,6 +8931,8 @@ export function ProposalForge(): JSX.Element {
     location.pathname,
     navigate,
     openedSavedProposal,
+    proposalStyleIntent,
+    proposalStyleSlotIntent,
     proposalTemplateIntent,
     search,
     selectedProposalId,

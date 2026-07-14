@@ -24,7 +24,9 @@ const PROPOSAL_TEMPLATE_ONE_SHOT_QUERY_PARAMS = [
   "templateStart",
 ] as const;
 
-function clearProposalTemplateOneShotParams(params: URLSearchParams): void {
+export function clearProposalTemplateOneShotParams(
+  params: URLSearchParams,
+): void {
   for (const param of PROPOSAL_TEMPLATE_ONE_SHOT_QUERY_PARAMS) {
     params.delete(param);
   }
