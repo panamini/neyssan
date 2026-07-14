@@ -3517,6 +3517,12 @@ export function ProposalForge(): JSX.Element {
     isTemplateJobContextEmptyStateDismissed,
     setIsTemplateJobContextEmptyStateDismissed,
   ] = React.useState(false);
+  const [
+    hasTemplateJobContextEmptyStateIntent,
+    setHasTemplateJobContextEmptyStateIntent,
+  ] = React.useState(
+    () => Boolean(proposalStyleSlotIntent) || proposalTemplateStartIntent,
+  );
   const templateJobSiteLinks = React.useMemo(
     () => getProposalExtensionSourceLinks(),
     [],
@@ -6068,7 +6074,7 @@ export function ProposalForge(): JSX.Element {
   const effectiveSavedProposalPageSizePreference =
     savedProposalPageSizeOverride?.proposalId === selectedProposalId
       ? savedProposalPageSizeOverride.preference
-      : persistedSavedProposalPageSize ?? proposalPageSizePreference;
+      : persistedSavedProposalPageSize ?? "auto";
   const resolvedProposalPageSize = React.useMemo(
     () =>
       resolveDocumentPageSize({
@@ -7198,6 +7204,7 @@ export function ProposalForge(): JSX.Element {
       setComposePreviewValues(null);
       setOutputSourceComposeDraft(null);
       setComposeDraftInitialSeed(null);
+      setHasTemplateJobContextEmptyStateIntent(false);
       setStickyImportedSource({ sourceUrl: null, platform: null });
       setComposeSaveStatus("idle");
       setIsSavingOutputToLibrary(false);
@@ -7502,6 +7509,9 @@ export function ProposalForge(): JSX.Element {
 
     setComposeFormInstanceKey((currentKey) => currentKey + 1);
     resetProposalWorkspace();
+    if (proposalStyleSlotIntent || proposalTemplateStartIntent) {
+      setHasTemplateJobContextEmptyStateIntent(true);
+    }
     if (proposalStyleIntent && proposalTemplateIntent) {
       setProposalStyleLinkMode("proposal_local");
       setProposalTemplateBundleId(proposalTemplateBundleIntent ?? null);
@@ -7525,10 +7535,13 @@ export function ProposalForge(): JSX.Element {
       setProposalTemplateId(proposalDirectTemplateIntent);
       setHasUserEditedStyle(true);
     }
+    const params = new URLSearchParams(location.search);
+    clearProposalTemplateOneShotParams(params);
+    const nextSearch = params.toString();
     void navigate(
       {
         pathname: location.pathname,
-        search: location.search,
+        search: nextSearch ? `?${nextSearch}` : "",
       },
       {
         replace: true,
@@ -7551,8 +7564,10 @@ export function ProposalForge(): JSX.Element {
     proposalDirectTemplateIntent,
     proposalJobImportFocus,
     proposalStyleIntent,
+    proposalStyleSlotIntent,
     proposalTemplateBundleIntent,
     proposalTemplateIntent,
+    proposalTemplateStartIntent,
     proposalWorkspaceResetToken,
     resetProposalWorkspace,
     settingsStyleChoice,
@@ -10687,20 +10702,11 @@ export function ProposalForge(): JSX.Element {
           const composeDraft: StoredProposalComposeDraft = {
             ...existingComposeDraft,
             jobTitle: restoredSourceJobTitle ?? restoredDocumentTitle,
-            jobDescription:
-              restoredSourceJobDescription ??
-              existingComposeDraft.jobDescription ??
-              "",
+            jobDescription: restoredSourceJobDescription ?? "",
             proposalType: savedProposalType ?? "cover_letter",
             modelType: restoredModelType,
-            sourceUrl:
-              openedSavedProposal.metadata?.sourceUrl ??
-              existingComposeDraft.sourceUrl ??
-              null,
-            platform:
-              openedSavedProposal.metadata?.platform ??
-              existingComposeDraft.platform ??
-              null,
+            sourceUrl: openedSavedProposal.metadata?.sourceUrl ?? null,
+            platform: openedSavedProposal.metadata?.platform ?? null,
           };
 
           const normalizedRestoredToolbarVoicePreset =
@@ -12015,7 +12021,9 @@ export function ProposalForge(): JSX.Element {
           (isConvexAuthenticated && canonicalJobRecord === undefined))));
   const shouldShowTemplateJobContextEmptyState =
     !isSavedView &&
-    (Boolean(proposalStyleSlotIntent) || proposalTemplateStartIntent) &&
+    (hasTemplateJobContextEmptyStateIntent ||
+      Boolean(proposalStyleSlotIntent) ||
+      proposalTemplateStartIntent) &&
     !hasActiveProposalJobContext &&
     !isTemplateJobContextEmptyStateDismissed &&
     !handoffId &&

@@ -218,6 +218,7 @@ const SAVED_PROPOSALS = [
       voicePreset: "expert",
       requestedVoicePreset: null,
       resolvedVoicePreset: "expert",
+      resolvedLanguage: "fr",
       sourceUrl: "https://example.com/jobs/operations-auto",
       platform: "company_website",
       sourceJobDescription:
@@ -882,6 +883,20 @@ describe("ProposalForge saved view", () => {
     );
   });
 
+  it("resolves saved Auto page size from the saved proposal locale instead of the browser preference", async () => {
+    writeStoredDocumentPageSizePreference("letter");
+
+    render(
+      <MemoryRouter initialEntries={["/proposal?view=saved&id=proposal_auto"]}>
+        <ProposalForge includeReviewControls />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-page-size")).toHaveTextContent("a4");
+    });
+  });
+
   it("keeps a saved layout change out of the active compose draft", async () => {
     writeStoredProposalOutputDraft({
       proposalContent: "Independent compose draft.",
@@ -1485,12 +1500,14 @@ describe("ProposalForge saved view", () => {
     });
   });
 
-  it("keeps the existing compose brief when the saved proposal lacks source brief metadata", async () => {
+  it("clears stale compose brief when the saved proposal lacks source brief metadata", async () => {
     window.localStorage.setItem(
       PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY,
       JSON.stringify({
         jobTitle: "Marketing Specialist",
         jobDescription: "Existing compose brief should survive saved reopen.",
+        sourceUrl: "https://example.com/jobs/stale",
+        platform: "linkedin",
         proposalType: "cover_letter",
         voicePreset: "signature",
       }),
@@ -1515,9 +1532,15 @@ describe("ProposalForge saved view", () => {
         "Saved proposal gamma",
       );
     });
-    expect(screen.getByTestId("compose-job-description")).toHaveTextContent(
-      "Existing compose brief should survive saved reopen.",
-    );
+    expect(screen.getByTestId("compose-job-description").textContent).toBe("");
+    expect(
+      JSON.parse(
+        window.localStorage.getItem(PROPOSAL_COMPOSE_DRAFT_STORAGE_KEY) ?? "{}",
+      ),
+    ).toMatchObject({
+      sourceUrl: null,
+      platform: null,
+    });
     expect(screen.getByTestId("proposal-display-state")).toHaveTextContent(
       "Saved proposal gamma",
     );

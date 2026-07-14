@@ -2,7 +2,7 @@ import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 
 import { ProposalForge } from "../ProposalForge";
 import { PROPOSAL_OUTPUT_DRAFT_STORAGE_KEY } from "../../lib/proposal-output-draft";
@@ -48,6 +48,15 @@ let mockProposalPresets = {
   preset3: null,
   activeSlot: 2,
 };
+
+function LocationProbe(): JSX.Element {
+  const location = useLocation();
+  return (
+    <div data-testid="proposal-location">
+      {`${location.pathname}${location.search}`}
+    </div>
+  );
+}
 
 vi.mock("convex/react", () => ({
   useConvexAuth: () => ({
@@ -329,6 +338,7 @@ describe("ProposalForge settings style round-trip", () => {
           },
         ]}
       >
+        <LocationProbe />
         <ProposalForge />
       </MemoryRouter>,
     );
@@ -341,6 +351,11 @@ describe("ProposalForge settings style round-trip", () => {
     expect(
       await screen.findByText("Load a job to tailor this letter."),
     ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId("proposal-location")).toHaveTextContent(
+        /^\/proposal$/,
+      );
+    });
   });
 
   it("shows a job-context empty state for Templates-driven proposal starts", async () => {
