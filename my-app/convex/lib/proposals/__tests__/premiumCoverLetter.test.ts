@@ -1974,7 +1974,7 @@ describe("premium cover letter prompt contract", () => {
     ).toMatchObject({ max_output_tokens: 2048 });
   });
 
-  it.each(["gpt-5.6-sol", "gpt-5.6-terra"] as const)(
+  it.each(["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"] as const)(
     "builds the shared OpenAI request with exact evaluation-only model id %s",
     (writerModel) => {
       expect(
@@ -2629,8 +2629,66 @@ describe("premium cover letter generation and rendering", () => {
     );
   });
 
+  it("reports writer-output validation before invoking model repair", async () => {
+    const events: string[] = [];
+    const onModelRepairRequired = vi.fn();
+    let writerCallCount = 0;
+    const validBodyParts = {
+      opening:
+        "I improved signup conversion by 11% after iterative UI experiments.",
+      proofBlock:
+        "I led a design system migration used across 4 product squads.",
+      employerValueBlock:
+        "That work is relevant to customer-facing React and TypeScript delivery.",
+      closeLine:
+        "I bring grounded frontend evidence around experimentation, reusable systems, and product-facing interfaces.",
+    };
+
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: directContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      candidateName: "Alex Martin",
+      onModelRepairRequired: (diagnostic) => {
+        events.push(`repair:${diagnostic.stage}`);
+        onModelRepairRequired(diagnostic);
+      },
+      writer: async ({ prompt }) => {
+        writerCallCount += 1;
+        events.push(`writer:${writerCallCount}`);
+        if (writerCallCount === 2) {
+          expect(prompt).toContain(
+            "Repair PremiumWriterOutputV1 without changing claim strategy.",
+          );
+        }
+        return buildDirectPremiumWriterOutputFixture({
+          ...validBodyParts,
+          opening:
+            writerCallCount === 1
+              ? ""
+              : validBodyParts.opening,
+        });
+      },
+    });
+
+    expect(events).toEqual([
+      "writer:1",
+      "repair:writer_output_validation",
+      "writer:2",
+    ]);
+    expect(onModelRepairRequired).toHaveBeenCalledOnce();
+    expect(onModelRepairRequired).toHaveBeenCalledWith({
+      stage: "writer_output_validation",
+      issues: expect.arrayContaining(["empty_section"]),
+    });
+    expect(result).not.toBeNull();
+  });
+
   it("retries Mistral once on adjacent_direct_fit and accepts repaired cv_adjacent output", async () => {
     const calls: string[] = [];
+    const onModelRepairRequired = vi.fn();
     const result = await attemptPremiumCoverLetterGeneration({
       personalizationContext: adjacentContext,
       voicePreset: "signature",
@@ -2640,6 +2698,7 @@ describe("premium cover letter generation and rendering", () => {
       candidateName: "Camille Bernard",
       writerProvider: "mistral",
       writerModel: "mistral-medium-latest",
+      onModelRepairRequired,
       writer: async ({ prompt }) => {
         calls.push(prompt);
         if (calls.length === 1) {
@@ -2668,6 +2727,11 @@ describe("premium cover letter generation and rendering", () => {
     });
 
     expect(calls).toHaveLength(2);
+    expect(onModelRepairRequired).toHaveBeenCalledOnce();
+    expect(onModelRepairRequired).toHaveBeenCalledWith({
+      stage: "body_parts_validation",
+      issues: expect.arrayContaining(["adjacent_direct_fit"]),
+    });
     expect(calls[1]).toContain(
       "Rewrite the cover-letter body parts to satisfy validation.",
     );
@@ -5414,6 +5478,9 @@ describe("premium cover letter generation and rendering", () => {
     expect(resolvePremiumCoverLetterWriterModel()).toBe("gpt-5.5");
 
     process.env.COVER_LETTER_PREMIUM_WRITER_MODEL = "gpt-5.6-terra";
+    expect(resolvePremiumCoverLetterWriterModel()).toBe("gpt-5.5");
+
+    process.env.COVER_LETTER_PREMIUM_WRITER_MODEL = "gpt-5.6-luna";
     expect(resolvePremiumCoverLetterWriterModel()).toBe("gpt-5.5");
 
     delete process.env.COVER_LETTER_PREMIUM_WRITER_MODEL;
