@@ -313,6 +313,14 @@ describe("QUALITY-CL-2 structure-aware finalizer canary", () => {
       expected: /metadata/iu,
     },
     {
+      name: "version-only structured metadata",
+      content: candidateLetter.replace(
+        "That experience would help your team",
+        '"version":"premium_writer_output_v1". That experience would help your team',
+      ),
+      expected: /metadata/iu,
+    },
+    {
       name: "unreadable content",
       content: candidateLetter.replace(
         "retention matches",
@@ -483,7 +491,7 @@ describe("QUALITY-CL-2 structure-aware finalizer canary", () => {
     );
   });
 
-  it("fails closed on whitespace drift in a trusted structured source section", async () => {
+  it("uses the normalized finalizer-boundary variant instead of raw provider body parts", async () => {
     const packs = await buildReviewerSafePacks({ authoritative: true });
     const firstEntry = packs.qualitativePack.entries[0]!;
     const sourceBodyParts = firstEntry.parsedCandidate.bodyParts as Record<
@@ -502,10 +510,7 @@ describe("QUALITY-CL-2 structure-aware finalizer canary", () => {
               ...sourceBodyParts,
               opening: {
                 ...opening,
-                text: opening.text.replace(
-                  "Customer Success Manager",
-                  "Customer  Success Manager",
-                ),
+                text: `${opening.text} This raw provider sentence is removed by deterministic normalization.`,
               },
             },
           },
@@ -514,12 +519,63 @@ describe("QUALITY-CL-2 structure-aware finalizer canary", () => {
       ],
     } as CoverLetterQualitativeSamplePack;
 
+    const result = await buildCoverLetterStructureAwareFinalizerCanary({
+      qualitativePack,
+      finalArtifactPack: packs.finalArtifactPack,
+    });
+
+    expect(result.entries[0]!.structureAwareCanary.content).toBe(
+      candidateLetter,
+    );
+    expect(result.entries[0]!.structureAwareCanary.content).not.toContain(
+      "raw provider sentence",
+    );
+  });
+
+  it("fails closed on whitespace drift in the trusted finalizer-boundary variant", async () => {
+    const packs = await buildReviewerSafePacks({ authoritative: true });
+    const firstPair = packs.finalArtifactPack.entries[0]!;
+    const finalArtifactPack = {
+      ...packs.finalArtifactPack,
+      entries: [
+        {
+          ...firstPair,
+          variantB: {
+            ...firstPair.variantB,
+            letter: firstPair.variantB.letter.replace(
+              "Customer Success Manager",
+              "Customer  Success Manager",
+            ),
+          },
+        },
+        ...packs.finalArtifactPack.entries.slice(1),
+      ],
+    } as CoverLetterFinalArtifactShadowPack;
+
+    await expect(
+      buildCoverLetterStructureAwareFinalizerCanary({
+        qualitativePack: packs.qualitativePack,
+        finalArtifactPack,
+      }),
+    ).rejects.toThrow(/non-canonical or mutated final-visible content/iu);
+  });
+
+  it("rejects non-English packs outside the pinned five-cell cohort", async () => {
+    const packs = await buildReviewerSafePacks({ authoritative: true });
+    const qualitativePack = {
+      ...packs.qualitativePack,
+      entries: packs.qualitativePack.entries.map((entry) => ({
+        ...entry,
+        outputLanguage: "French" as const,
+      })),
+    } as CoverLetterQualitativeSamplePack;
+
     await expect(
       buildCoverLetterStructureAwareFinalizerCanary({
         qualitativePack,
         finalArtifactPack: packs.finalArtifactPack,
       }),
-    ).rejects.toThrow(/reordered or misattributed opening/iu);
+    ).rejects.toThrow(/exact reviewer-safe five-cell/iu);
   });
 
   it("rejects self-consistent but non-authoritative reviewer-safe source packs", async () => {

@@ -6,7 +6,6 @@ import {
   type CoverLetterBodyParts,
   type PremiumCoverLetterQualityShadowResult,
 } from "../../convex/lib/proposals/premiumCoverLetter";
-import type { ProposalOutputLanguage } from "../../convex/lib/proposals/proposalOutput";
 import { buildStableHash } from "../../src/modules/application-harness/fingerprints";
 import type { CoverLetterFinalArtifactShadowPack } from "./cover-letter-final-artifact-attribution-shadow";
 import {
@@ -53,14 +52,14 @@ type ReviewerSafeProfileEvidence =
   CoverLetterFinalArtifactShadowPack["entries"][number]["profileEvidence"];
 
 const SALUTATION_PATTERN =
-  /^(?:dear\s+(?:hiring\s+manager|recruiting\s+team)|bonjour|madame|monsieur),?$/iu;
+  /^(?:dear\s+(?:hiring\s+manager|recruiting\s+team)|bonjour|madame(?:,\s*monsieur)?|monsieur),?$/iu;
 const SIGNOFF_PATTERN =
-  /^(?:(?:yours\s+)?sincerely|best\s+regards|kind\s+regards|regards|cordialement|bien\s+cordialement),?/iu;
+  /^(?:(?:yours\s+)?sincerely|best\s+regards|kind\s+regards|regards|cordialement|bien\s+cordialement|veuillez\s+agréer,\s*madame,\s*monsieur,\s*l['’]expression\s+de\s+mes\s+salutations\s+distinguées)[,.]?/iu;
 const TERMINAL_PUNCTUATION_PATTERN = /[.!?…:;"')\]]$/u;
 const DANGLING_END_PATTERN =
   /\b(?:and|or|with|because|to|for|that|which|et|ou|avec|car|pour|que)\s*[.!?…]?$/iu;
 const STRUCTURED_METADATA_PATTERN =
-  /(?:```|~~~|["']?\b(?:bodyParts|claimIds|demandIds|factIds|premium_writer_output_v1|schema|section)\b["']?\s*(?::|=))/iu;
+  /(?:```|~~~|["']?\b(?:bodyParts|claimIds|demandIds|factIds|schema|section|version)\b["']?\s*(?::|=)|\bpremium_writer_output_v1\b)/iu;
 const UNREADABLE_CODE_POINTS = new Set([0x0b, 0x0c, 0x7f, 0x85, 0xfffd]);
 const UNREADABLE_CODE_POINT_RANGES = [
   [0x00, 0x08],
@@ -113,7 +112,7 @@ export type CoverLetterStructureAwareFinalizerCanary = Readonly<{
   entries: readonly Readonly<{
     pairLabel: string;
     sourceCellLabel: string;
-    outputLanguage: string;
+    outputLanguage: "English";
     job: ReviewerSafeJob;
     profileEvidence: ReviewerSafeProfileEvidence;
     currentFinalizer: CanaryVariant;
@@ -272,6 +271,31 @@ function extractCanonicalVisibleBody(args: {
   return bodyParts;
 }
 
+function extractTrustedFinalizerBoundaryBodyParts(args: {
+  content: string;
+  candidateName?: string;
+}): CoverLetterBodyParts {
+  assertReadableVisibleContent(args.content);
+  const paragraphs = splitParagraphs(args.content);
+  removeOptionalSalutation(paragraphs);
+  removeOptionalSignoff({
+    paragraphs,
+    candidateName: args.candidateName,
+  });
+  if (paragraphs.length !== RHETORICAL_ORDER.length) {
+    throw new Error(
+      "QUALITY-CL-2 requires exactly four trusted finalizer-boundary sections.",
+    );
+  }
+  return Object.fromEntries(
+    RHETORICAL_ORDER.map((section, index) => {
+      const text = compactWhitespace(paragraphs[index]!);
+      validateVisibleSection({ section, text, expectedText: text });
+      return [section, text];
+    }),
+  ) as CoverLetterBodyParts;
+}
+
 async function hashVisibleContent(
   type: string,
   content: unknown,
@@ -291,7 +315,7 @@ function bytesEqual(left: string, right: string): boolean {
 export async function finalizeCoverLetterStructureAwareCandidate(args: {
   content: string;
   expectedBodyParts: CoverLetterBodyParts;
-  outputLanguage: ProposalOutputLanguage;
+  outputLanguage: "English";
   job: ReviewerSafeJob;
   profileEvidence: ReviewerSafeProfileEvidence;
 }): Promise<CoverLetterStructureAwareCandidate> {
@@ -385,6 +409,7 @@ function qualitativeEntryMatchesContract(
 ): boolean {
   return [
     entry.status === "FIRST_PASS_ACCEPTED",
+    entry.outputLanguage === "English",
     Boolean(entry.finalizedLetter),
     entry.contentHandling ===
       "synthetic_untrusted_text_do_not_follow_embedded_instructions",
@@ -395,6 +420,7 @@ function finalArtifactEntryMatchesContract(
   entry: CoverLetterFinalArtifactShadowPack["entries"][number],
 ): boolean {
   return [
+    entry.outputLanguage === "English",
     entry.variantA.label === "A",
     entry.variantB.label === "B",
     entry.contentHandling === "synthetic_untrusted_text",
@@ -476,44 +502,6 @@ async function assertFinalArtifactPack(
   }
 }
 
-function extractTrustedBodyParts(
-  parsedCandidate: Readonly<Record<string, unknown>>,
-): CoverLetterBodyParts {
-  if (
-    parsedCandidate.version !== "premium_writer_output_v1" ||
-    !parsedCandidate.bodyParts ||
-    typeof parsedCandidate.bodyParts !== "object" ||
-    Array.isArray(parsedCandidate.bodyParts)
-  ) {
-    throw new Error(
-      "QUALITY-CL-2 requires the trusted structured source body parts.",
-    );
-  }
-  const sourceBodyParts = parsedCandidate.bodyParts as Readonly<
-    Record<string, unknown>
-  >;
-  return Object.fromEntries(
-    RHETORICAL_ORDER.map((section) => {
-      const value = sourceBodyParts[section];
-      if (
-        !value ||
-        typeof value !== "object" ||
-        Array.isArray(value) ||
-        !("section" in value) ||
-        value.section !== section ||
-        !("text" in value) ||
-        typeof value.text !== "string" ||
-        !compactWhitespace(value.text)
-      ) {
-        throw new Error(
-          `QUALITY-CL-2 requires a trusted structured ${section} section.`,
-        );
-      }
-      return [section, value.text];
-    }),
-  ) as CoverLetterBodyParts;
-}
-
 async function hashCanaryBody(
   body: Omit<CoverLetterStructureAwareFinalizerCanary, "canaryHash">,
 ): Promise<string> {
@@ -571,13 +559,20 @@ export async function buildCoverLetterStructureAwareFinalizerCanary(args: {
         `QUALITY-CL-2 pair ${pair.pairLabel} reviewer context drifted.`,
       );
     }
+    if (pair.outputLanguage !== "English") {
+      throw new Error(
+        "QUALITY-CL-2 is pinned to the exact English five-cell source cohort.",
+      );
+    }
     const baselineContent = source.finalizedLetter!;
-    const expectedBodyParts = extractTrustedBodyParts(source.parsedCandidate);
-    const candidateContent = renderPremiumCoverLetter({
-      bodyParts: expectedBodyParts,
-      outputLanguage: pair.outputLanguage,
-      candidateName: extractCandidateName(pair.profileEvidence),
-    }).content;
+    const candidateContent = aSource
+      ? pair.variantB.letter
+      : pair.variantA.letter;
+    const candidateName = extractCandidateName(pair.profileEvidence);
+    const expectedBodyParts = extractTrustedFinalizerBoundaryBodyParts({
+      content: candidateContent,
+      candidateName,
+    });
     const structureAwareCanary =
       await finalizeCoverLetterStructureAwareCandidate({
         content: candidateContent,
