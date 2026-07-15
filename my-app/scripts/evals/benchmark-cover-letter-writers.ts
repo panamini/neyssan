@@ -8,6 +8,7 @@ import * as dotenv from "dotenv";
 import {
   llmConfig,
   resolveOpenAIProposalReasoningEffort,
+  type OpenAIProposalReasoningEffort,
 } from "../../config/llmConfig";
 import type { CoverLetterScore } from "../../convex/lib/proposals/coverLetterEvaluation";
 import {
@@ -270,6 +271,7 @@ type GenerateBenchmarkLetter = (args: {
   writerOverride?: PremiumCoverLetterWriter;
   budget?: CoverLetterEvalBudget;
   signal?: AbortSignal;
+  reasoningEffort?: OpenAIProposalReasoningEffort;
   onFailure?: (failure: PremiumCoverLetterFailureTrace) => void;
   onProviderResponseMetadata?: (
     metadata: PremiumCoverLetterProviderResponseMetadata,
@@ -622,6 +624,22 @@ function isQualityEval2BWriterModel(
   );
 }
 
+const COVER_LETTER_EVAL_PRICED_WRITER_MODELS = [
+  "gpt-5.5",
+  "gpt-5.6-sol",
+  "gpt-5.6-terra",
+  "gpt-5.6-luna",
+  "mistral-medium-latest",
+] as const satisfies readonly CoverLetterEvalPricedWriterModel[];
+
+function isCoverLetterEvalPricedWriterModel(
+  writerModel: CoverLetterBenchmarkWriterModel,
+): writerModel is CoverLetterEvalPricedWriterModel {
+  return COVER_LETTER_EVAL_PRICED_WRITER_MODELS.includes(
+    writerModel as CoverLetterEvalPricedWriterModel,
+  );
+}
+
 export function coverLetterBenchmarkRequiresOpenAIKey(args: {
   evaluationMode: CoverLetterBenchmarkCliOptions["evaluationMode"];
   writerModels: readonly CoverLetterBenchmarkWriterModel[];
@@ -737,6 +755,7 @@ export async function buildCoverLetterEvalFrozenConfig(args: {
   writerModel: CoverLetterBenchmarkWriterModel;
   benchmarkCase: CoverLetterBenchmarkCase;
   productionInputs: CoverLetterBenchmarkProductionInputs;
+  reasoningEffort?: OpenAIProposalReasoningEffort;
 }): Promise<CoverLetterEvalFrozenConfig> {
   const provider = resolveBenchmarkWriterProvider(args.writerModel);
   return {
@@ -750,7 +769,8 @@ export async function buildCoverLetterEvalFrozenConfig(args: {
     writerMaxOutputTokens: COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS,
     promptV2: provider === "mistral" && isCoverLetterPremiumPromptV2Enabled(),
     qualityRepair: isCoverLetterQualityRepairV1Enabled(),
-    reasoningEffort: resolveOpenAIProposalReasoningEffort(),
+    reasoningEffort:
+      args.reasoningEffort ?? resolveOpenAIProposalReasoningEffort(),
     generationControlsHash: await buildStableHash({
       namespace: "cover-letter-eval-config",
       type: "generation-controls",
@@ -784,6 +804,7 @@ export async function generatePremiumCoverLetterBenchmarkLetter(args: {
   writerOverride?: PremiumCoverLetterWriter;
   budget?: CoverLetterEvalBudget;
   signal?: AbortSignal;
+  reasoningEffort?: OpenAIProposalReasoningEffort;
   onFailure?: (failure: PremiumCoverLetterFailureTrace) => void;
   onProviderResponseMetadata?: (
     metadata: PremiumCoverLetterProviderResponseMetadata,
@@ -874,6 +895,7 @@ export async function generatePremiumCoverLetterBenchmarkLetter(args: {
           signal: providerSignal,
           maxRetries: COVER_LETTER_EVAL_PROVIDER_MAX_RETRIES,
           maxOutputTokens: COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS,
+          reasoningEffort: args.reasoningEffort,
           onResponseMetadata: args.onProviderResponseMetadata,
         } as const;
         return isCoverLetterEvalOnlyOpenAIWriterModel(args.writerModel)
@@ -1272,6 +1294,7 @@ type PrepareCoverLetterBenchmarkCaseArgs = {
   productionInputs?: CoverLetterBenchmarkProductionInputs;
   budget?: CoverLetterEvalBudget;
   signal?: AbortSignal;
+  reasoningEffort?: OpenAIProposalReasoningEffort;
   generateLetter?: GenerateBenchmarkLetter;
   onFailure?: (failure: PremiumCoverLetterFailureTrace) => void;
   onProviderResponseMetadata?: (
@@ -1300,6 +1323,7 @@ function buildBenchmarkWriterTransportInput(args: {
   prompt: string;
   schema: Record<string, unknown>;
   promptContract?: CoverLetterEvalTransportInput["promptContract"];
+  reasoningEffort?: OpenAIProposalReasoningEffort;
 }): CoverLetterEvalTransportInput {
   if (isMistralBenchmarkWriterModel(args.writerModel)) {
     return {
@@ -1328,6 +1352,7 @@ function buildBenchmarkWriterTransportInput(args: {
         writerModel: args.writerModel,
         schema: args.schema,
         maxOutputTokens: COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS,
+        reasoningEffort: args.reasoningEffort,
       }),
     ),
     systemPrompt: null,
@@ -1345,8 +1370,9 @@ async function buildBenchmarkRunManifestEntry(args: {
   writerSchema: Record<string, unknown>;
   promptContract: CoverLetterEvalTransportInput["promptContract"];
   providerResponseMetadata: PremiumCoverLetterProviderResponseMetadata | null;
+  reasoningEffort?: OpenAIProposalReasoningEffort;
 }): Promise<CoverLetterEvalRunManifestEntry | undefined> {
-  if (!isQualityEval2BWriterModel(args.writerModel)) return undefined;
+  if (!isCoverLetterEvalPricedWriterModel(args.writerModel)) return undefined;
   const provider = resolveBenchmarkWriterProvider(args.writerModel);
   return buildCoverLetterEvalRunManifestEntry({
     caseId: args.benchmarkCase.id,
@@ -1359,9 +1385,12 @@ async function buildBenchmarkRunManifestEntry(args: {
       prompt: args.generation.prompt,
       schema: args.writerSchema,
       promptContract: args.promptContract,
+      reasoningEffort: args.reasoningEffort,
     }),
     reasoningEffort:
-      provider === "openai" ? resolveOpenAIProposalReasoningEffort() : null,
+      provider === "openai"
+        ? args.reasoningEffort ?? resolveOpenAIProposalReasoningEffort()
+        : null,
     writerMaxOutputTokens: COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS,
     providerMaxRetries: COVER_LETTER_EVAL_PROVIDER_MAX_RETRIES,
     tokenUsage: args.providerResponseMetadata?.tokenUsage ?? null,
@@ -1377,9 +1406,10 @@ async function buildBenchmarkFailureAttemptMetadata(args: {
   prompt: string | null;
   artifact: CoverLetterEvalArtifact | null;
   providerResponseMetadata: PremiumCoverLetterProviderResponseMetadata | null;
+  reasoningEffort?: OpenAIProposalReasoningEffort;
 }): Promise<CoverLetterEvalFailureAttemptMetadata | undefined> {
   if (
-    !isQualityEval2BWriterModel(args.writerModel) ||
+    !isCoverLetterEvalPricedWriterModel(args.writerModel) ||
     (args.prompt === null && args.providerResponseMetadata === null)
   ) {
     return undefined;
@@ -1393,7 +1423,9 @@ async function buildBenchmarkFailureAttemptMetadata(args: {
       returnedModel: args.providerResponseMetadata?.returnedModel ?? null,
       prompt: args.prompt,
       reasoningEffort:
-        provider === "openai" ? resolveOpenAIProposalReasoningEffort() : null,
+        provider === "openai"
+          ? args.reasoningEffort ?? resolveOpenAIProposalReasoningEffort()
+          : null,
       writerMaxOutputTokens: COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS,
       providerMaxRetries: COVER_LETTER_EVAL_PROVIDER_MAX_RETRIES,
       tokenUsage: args.providerResponseMetadata?.tokenUsage ?? null,
@@ -1434,6 +1466,7 @@ async function prepareCoverLetterBenchmarkCase(
       productionInputs,
       budget: args.budget,
       signal: args.signal,
+      reasoningEffort: args.reasoningEffort,
       writerPromptOverride: args.writerPromptOverride,
       onFailure: (failure) => {
         failureTrace = failure;
@@ -1461,6 +1494,7 @@ async function prepareCoverLetterBenchmarkCase(
         prompt: writerPrompt,
         artifact: null,
         providerResponseMetadata,
+        reasoningEffort: args.reasoningEffort,
       });
       return {
         status: "generation_failed",
@@ -1497,6 +1531,7 @@ async function prepareCoverLetterBenchmarkCase(
         writerModel: args.writerModel,
         benchmarkCase: args.benchmarkCase,
         productionInputs,
+        reasoningEffort: args.reasoningEffort,
       }),
     });
     if (!preparedArtifact.finalizedPayload) {
@@ -1507,6 +1542,7 @@ async function prepareCoverLetterBenchmarkCase(
         prompt: generation.prompt,
         artifact: preparedArtifact.artifact,
         providerResponseMetadata,
+        reasoningEffort: args.reasoningEffort,
       });
       return {
         status: "finalization_failed",
@@ -1546,6 +1582,7 @@ async function prepareCoverLetterBenchmarkCase(
         ? "quality_eval_2d_shared_v1"
         : "provider_native_v1",
       providerResponseMetadata,
+      reasoningEffort: args.reasoningEffort,
     });
     return {
       status: "prepared",
@@ -1570,6 +1607,7 @@ async function prepareCoverLetterBenchmarkCase(
       prompt: writerPrompt,
       artifact: null,
       providerResponseMetadata,
+      reasoningEffort: args.reasoningEffort,
     });
     return {
       status: "generation_failed",
@@ -1690,6 +1728,7 @@ export async function benchmarkCoverLetterCaseForHumanReview(args: {
   productionInputs?: CoverLetterBenchmarkProductionInputs;
   budget?: CoverLetterEvalBudget;
   signal?: AbortSignal;
+  reasoningEffort?: OpenAIProposalReasoningEffort;
   generateLetter?: GenerateBenchmarkLetter;
   evaluateLetter?: EvaluateBenchmarkLetter;
   onFailure?: (failure: PremiumCoverLetterFailureTrace) => void;
@@ -2115,6 +2154,7 @@ async function captureSerializedBenchmarkWriterInput(
     writerModel: CoverLetterEvalPricedWriterModel;
   },
   writerPromptOverride?: string,
+  reasoningEffort?: OpenAIProposalReasoningEffort,
 ): Promise<string> {
   const captureStop = Object.freeze({ type: "offline_prompt_capture" });
   let captured:
@@ -2126,6 +2166,7 @@ async function captureSerializedBenchmarkWriterInput(
       writerModel: item.writerModel,
       apiKey: "offline-preflight-does-not-use-provider-credentials",
       mistralApiKey: "offline-preflight-does-not-use-provider-credentials",
+      reasoningEffort,
       ...(writerPromptOverride ? { writerPromptOverride } : {}),
       writerOverride: async ({ prompt, schema }) => {
         captured = { prompt, schema };
@@ -2145,6 +2186,7 @@ async function captureSerializedBenchmarkWriterInput(
     writerModel: item.writerModel,
     prompt: captured.prompt,
     schema: captured.schema,
+    reasoningEffort,
   }).serializedRequest;
 }
 
@@ -2152,6 +2194,7 @@ export async function buildCoverLetterBenchmarkOfflineCostPreflight(args: {
   cases: readonly CoverLetterBenchmarkCase[];
   writerModels: readonly CoverLetterEvalPricedWriterModel[];
   targetReservationUsd?: number;
+  reasoningEffort?: OpenAIProposalReasoningEffort;
 }): Promise<CoverLetterBenchmarkOfflineCostPreflight> {
   const qualityEval2DSharedPrompt =
     args.cases.length === 1 &&
@@ -2175,6 +2218,7 @@ export async function buildCoverLetterBenchmarkOfflineCostPreflight(args: {
     const serializedInput = await captureSerializedBenchmarkWriterInput(
       item,
       qualityEval2DSharedPrompt,
+      args.reasoningEffort,
     );
     const serializedInputByteUpperBound = Buffer.byteLength(
       serializedInput,

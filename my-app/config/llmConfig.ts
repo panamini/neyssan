@@ -1,6 +1,7 @@
 export type LLMProvider = "mistral" | "openai" | "qwen" | "deepseek" | string;
 
 export type OpenAIProposalReasoningEffort =
+  | "none"
   | "minimal"
   | "low"
   | "medium"
@@ -70,6 +71,7 @@ export function resolveOpenAIProposalReasoningEffort(
 ): OpenAIProposalReasoningEffort {
   const normalizedValue = value?.trim().toLowerCase();
   switch (normalizedValue) {
+    case "none":
     case "minimal":
     case "low":
     case "medium":

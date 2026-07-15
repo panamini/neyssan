@@ -915,8 +915,9 @@ describe("benchmark-cover-letter-writers", () => {
 
     const record = await benchmarkCoverLetterCaseForHumanReview({
       benchmarkCase,
-      writerModel: "gpt-5.5",
+      writerModel: "gpt-5.6-luna",
       apiKey: "unused-in-synthetic-test",
+      reasoningEffort: "none",
       generateLetter: vi.fn().mockResolvedValue(generation),
       evaluateLetter,
     });
@@ -927,7 +928,18 @@ describe("benchmark-cover-letter-writers", () => {
       outputLanguage: "English",
       manualReview: emptyManualReview,
       letter: expect.stringContaining("90-day retention by 18%"),
-      artifact: { decision: "accepted" },
+      artifact: {
+        decision: "accepted",
+        frozenConfig: { reasoningEffort: "none" },
+      },
+      runManifest: {
+        requestedModel: "gpt-5.6-luna",
+        reasoningEffort: "none",
+        providerMaxRetries: 0,
+        transport: {
+          requestProjectionHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+        },
+      },
     });
     expect(record).not.toHaveProperty("evaluation");
   });

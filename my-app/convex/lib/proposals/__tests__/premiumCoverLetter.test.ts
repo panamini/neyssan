@@ -2021,14 +2021,30 @@ describe("premium cover letter prompt contract", () => {
     ).toEqual({ effort: "low" });
   });
 
+  it("prefers an explicit per-call OpenAI reasoning effort", () => {
+    vi.stubEnv("OPENAI_PROPOSAL_REASONING_EFFORT", "high");
+
+    expect(
+      buildPremiumCoverLetterOpenAIRequestForExactModel({
+        prompt: "Structured brief: {}",
+        writerModel: "gpt-5.6-luna",
+        reasoningEffort: "none",
+      }).reasoning,
+    ).toEqual({ effort: "none" });
+  });
+
   it("whitelists every OpenAI proposal reasoning effort value", () => {
     const cases: Array<
-      [string | undefined, "minimal" | "low" | "medium" | "high"]
+      [
+        string | undefined,
+        "none" | "minimal" | "low" | "medium" | "high",
+      ]
     > = [
       [undefined, "low"],
       ["", "low"],
       ["   ", "low"],
       ["not-supported", "low"],
+      ["none", "none"],
       ["minimal", "minimal"],
       ["low", "low"],
       [" MeDiUm ", "medium"],
