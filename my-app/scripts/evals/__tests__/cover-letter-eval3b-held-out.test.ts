@@ -700,6 +700,65 @@ describe("QUALITY-EVAL-3B verdict gates", () => {
     expect(verdict.validPairCount).toBe(5);
   });
 
+  it("rejects reveal artifacts that omit a cell from the outcome matrix", async () => {
+    const benchmarkCase = getCoverLetterEval3bHeldOutCases()[0];
+    const cellOutcomes = completeCellOutcomes({
+      [`${benchmarkCase.id}::gpt-5.5`]: "safety_veto",
+    });
+    const fixture = await buildVerdictFixture({ cellOutcomes });
+    const omittedEntry = fixture.revealMap.entries.find(
+      (entry) =>
+        entry.caseId === benchmarkCase.id && entry.writerModel === "gpt-5.5",
+    );
+    expect(omittedEntry).toBeDefined();
+
+    const { packHash: _originalPackHash, ...originalPackBody } = fixture.pack;
+    const incompletePackBody = {
+      ...originalPackBody,
+      failureMatrix: originalPackBody.failureMatrix.filter(
+        (entry) => entry.blindLabel !== omittedEntry!.blindLabel,
+      ),
+    };
+    const packHash = await buildStableHash({
+      namespace: "cover-letter-blind-review",
+      type: "pack",
+      version: 1,
+      value: incompletePackBody,
+    });
+    const pack = { ...incompletePackBody, packHash };
+
+    const { revealMapHash: _originalRevealMapHash, ...originalRevealBody } =
+      fixture.revealMap;
+    const incompleteRevealBody = {
+      ...originalRevealBody,
+      packHash,
+      entries: originalRevealBody.entries.filter(
+        (entry) => entry.blindLabel !== omittedEntry!.blindLabel,
+      ),
+    };
+    const revealMapHash = await buildStableHash({
+      namespace: "cover-letter-blind-review",
+      type: "reveal-map",
+      version: 1,
+      value: incompleteRevealBody,
+    });
+    const revealMap = { ...incompleteRevealBody, revealMapHash };
+    const reviews = fixture.reviews.map((review) => ({
+      ...review,
+      packHash,
+    }));
+
+    await expect(
+      evaluateCoverLetterEval3bVerdict({
+        cases: getCoverLetterEval3bHeldOutCases(),
+        cellOutcomes,
+        pack,
+        revealMap,
+        reviews,
+      }),
+    ).rejects.toThrow(/does not cover the cell outcome matrix exactly/u);
+  });
+
   it("rejects tampered pack/reveal hashes and protocol identity", async () => {
     const cellOutcomes = completeCellOutcomes();
     const fixture = await buildVerdictFixture({ cellOutcomes });

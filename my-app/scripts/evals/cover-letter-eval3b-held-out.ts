@@ -1279,8 +1279,15 @@ async function validateCoverLetterEval3bVerdictInputs(args: {
   const revealByLabel = new Map(
     args.revealMap.entries.map((entry) => [entry.blindLabel, entry]),
   );
+  const revealKeys = new Set<string>();
   for (const entry of args.revealMap.entries) {
     const key = cellKey(entry.caseId, entry.writerModel);
+    if (revealKeys.has(key)) {
+      throw new Error(
+        "QUALITY-EVAL-3B reveal map does not cover the cell outcome matrix exactly.",
+      );
+    }
+    revealKeys.add(key);
     const outcome = outcomeByKey.get(key);
     const isReviewable = packEntryLabels.has(entry.blindLabel);
     const isFailure = failureMatrixLabels.has(entry.blindLabel);
@@ -1301,6 +1308,14 @@ async function validateCoverLetterEval3bVerdictInputs(args: {
         "QUALITY-EVAL-3B reviewable reveal entry lacks an artifact hash.",
       );
     }
+  }
+  if (
+    revealKeys.size !== outcomeByKey.size ||
+    [...outcomeByKey.keys()].some((key) => !revealKeys.has(key))
+  ) {
+    throw new Error(
+      "QUALITY-EVAL-3B reveal map does not cover the cell outcome matrix exactly.",
+    );
   }
 
   const reviewByLabel = new Map<string, CompletedCoverLetterBlindReview>();
