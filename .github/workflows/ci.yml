@@ -73,6 +73,7 @@ jobs:
         run: |
           ./node_modules/.bin/vitest --run \
             src/modules/local-mcp/__tests__/mcpProductionReadonlySummaryStatusNormalizer.test.ts \
+            src/modules/local-mcp/__tests__/mcpProductionReadonlySummaryProjectorV2.test.ts \
             --reporter=dot
           ./node_modules/.bin/vitest --run \
             src/modules/local-mcp/__tests__/mcpOAuthProductionRouteAdapter.test.ts \
