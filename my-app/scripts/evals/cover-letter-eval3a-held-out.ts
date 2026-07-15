@@ -663,6 +663,7 @@ type CoverLetterEval3aPrivateArtifactPaths = Readonly<{
   packMarkdownPath: string;
   revealMapJsonPath: string;
   ledgerJsonPath: string;
+  failureLedgerJsonPath: string;
 }>;
 
 function getCoverLetterEval3aPrivateArtifactPaths(
@@ -680,6 +681,10 @@ function getCoverLetterEval3aPrivateArtifactPaths(
       "blind-review-reveal-map.json",
     ),
     ledgerJsonPath: path.join(directories.evidence, "eval3a-run-ledger.json"),
+    failureLedgerJsonPath: path.join(
+      directories.evidence,
+      "eval3a-run-failure.json",
+    ),
   };
 }
 
@@ -990,8 +995,8 @@ export function assertCoverLetterEval3aWorktreeClean(
   }
 }
 
-function assertCurrentGitWorktreeClean(): void {
-  const porcelainStatus = execFileSync(
+function resolveCurrentGitWorktreeStatus(): string {
+  return execFileSync(
     "git",
     ["status", "--porcelain=v1", "--untracked-files=all"],
     {
@@ -999,7 +1004,15 @@ function assertCurrentGitWorktreeClean(): void {
       stdio: ["ignore", "pipe", "ignore"],
     },
   );
-  assertCoverLetterEval3aWorktreeClean(porcelainStatus);
+}
+
+export function assertCoverLetterEval3aDefaultProviderWorktreeClean(args: {
+  generateRecord: unknown;
+  resolvePorcelainStatus: () => string;
+}): void {
+  if (args.generateRecord === undefined) {
+    assertCoverLetterEval3aWorktreeClean(args.resolvePorcelainStatus());
+  }
 }
 
 function classifyCoverLetterEval3aFinalizationDiagnostic(
@@ -1144,6 +1157,10 @@ async function runCoverLetterEval3aFinalizationDiagnostic(
     maxRepairs: args.maxRepairs,
     maxUsd: args.maxUsd,
     declaredMaxUsdPerCall: args.declaredMaxUsdPerCall,
+  });
+  assertCoverLetterEval3aDefaultProviderWorktreeClean({
+    generateRecord: args.generateRecord,
+    resolvePorcelainStatus: resolveCurrentGitWorktreeStatus,
   });
   await preparePrivateOutputDirectories(args.outputDirectory);
   if (!args.apiKey.trim()) {
@@ -1401,9 +1418,10 @@ async function runCoverLetterEval3aFullHeldOut(
     declaredMaxUsdPerCall: args.declaredMaxUsdPerCall,
   });
   assertCoverLetterEval3aRunIdentity(args);
-  if (args.generateRecord === undefined) {
-    assertCurrentGitWorktreeClean();
-  }
+  assertCoverLetterEval3aDefaultProviderWorktreeClean({
+    generateRecord: args.generateRecord,
+    resolvePorcelainStatus: resolveCurrentGitWorktreeStatus,
+  });
   const outputDirectories = await preparePrivateOutputDirectories(
     args.outputDirectory,
   );

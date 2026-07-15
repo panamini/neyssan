@@ -27,6 +27,7 @@ import {
   QUALITY_EVAL3A_LIVE_MAX_USD,
   QUALITY_EVAL3A_WRITER_MODELS,
   assertCoverLetterEval3aFinalizationDiagnosticLiveGate,
+  assertCoverLetterEval3aDefaultProviderWorktreeClean,
   assertCoverLetterEval3aLiveGate,
   assertCoverLetterEval3aWorktreeClean,
   buildCoverLetterEval3aFinalizationDiagnosticApprovalPhrase,
@@ -435,61 +436,92 @@ describe("QUALITY-EVAL-3A held-out contract", () => {
     expect(() => assertCoverLetterEval3aWorktreeClean("\n")).not.toThrow();
   });
 
-  it("rejects existing private artifacts before the injected provider path", async () => {
-    const root = await mkdtemp(
-      path.join(tmpdir(), "eval3a-existing-artifact-"),
-    );
-    const outputDirectory = path.join(root, "output");
-    const staleArtifactPath = path.join(
-      outputDirectory,
-      "private-review",
-      "blind-review-pack.json",
-    );
-    await mkdir(path.dirname(staleArtifactPath), {
-      recursive: true,
-      mode: 0o700,
-    });
-    await writeFile(staleArtifactPath, "stale-artifact\n", { mode: 0o600 });
-    const sourceRef = execFileSync("git", ["rev-parse", "HEAD"], {
-      encoding: "utf8",
-    }).trim();
-    const runId = "quality-eval-3a-held-out-existing-artifact-test";
-    const plan = await buildCoverLetterEval3aPlan({ sourceRef, runId });
-    const originalLiveOptIn = process.env.COVER_LETTER_EVAL_LIVE;
-    process.env.COVER_LETTER_EVAL_LIVE = "1";
-    let generatedRecordCount = 0;
+  it("requires a clean worktree only for the default provider path", () => {
+    let statusReadCount = 0;
+    const resolveDirtyStatus = () => {
+      statusReadCount += 1;
+      return " M prompts.ts\n";
+    };
 
-    try {
-      await expect(
-        runCoverLetterEval3aHeldOut({
-          approvalPhrase: plan.approvalPhrase,
-          explicitLiveProviderOptIn: true,
-          maxCalls: plan.plannedProviderCalls,
-          maxRepairs: plan.maxRepairs,
-          maxUsd: plan.budget.maxUsd,
-          declaredMaxUsdPerCall: plan.budget.declaredMaxUsdPerCall,
-          outputDirectory,
-          runId,
-          sourceRef,
-          apiKey: "offline-injected-record",
-          generateRecord: async () => {
-            generatedRecordCount += 1;
-            throw new Error("provider path must not be reached");
-          },
-        }),
-      ).rejects.toThrow(/existing private output artifacts/iu);
-      expect(generatedRecordCount).toBe(0);
-      expect(await readFile(staleArtifactPath, "utf8")).toBe(
-        "stale-artifact\n",
-      );
-    } finally {
-      if (originalLiveOptIn === undefined) {
-        delete process.env.COVER_LETTER_EVAL_LIVE;
-      } else {
-        process.env.COVER_LETTER_EVAL_LIVE = originalLiveOptIn;
-      }
-    }
+    expect(() =>
+      assertCoverLetterEval3aDefaultProviderWorktreeClean({
+        generateRecord: undefined,
+        resolvePorcelainStatus: resolveDirtyStatus,
+      }),
+    ).toThrow(/clean Git worktree/iu);
+    expect(statusReadCount).toBe(1);
+
+    expect(() =>
+      assertCoverLetterEval3aDefaultProviderWorktreeClean({
+        generateRecord: async () => {
+          throw new Error("unused injected provider path");
+        },
+        resolvePorcelainStatus: resolveDirtyStatus,
+      }),
+    ).not.toThrow();
+    expect(statusReadCount).toBe(1);
   });
+
+  it.each([
+    ["success artifact", ["private-review", "blind-review-pack.json"]],
+    ["failure ledger", ["private-evidence", "eval3a-run-failure.json"]],
+  ] as const)(
+    "rejects an existing %s before the injected provider path",
+    async (artifactLabel, artifactPathParts) => {
+      const root = await mkdtemp(
+        path.join(tmpdir(), "eval3a-existing-artifact-"),
+      );
+      const outputDirectory = path.join(root, "output");
+      const staleArtifactPath = path.join(
+        outputDirectory,
+        ...artifactPathParts,
+      );
+      await mkdir(path.dirname(staleArtifactPath), {
+        recursive: true,
+        mode: 0o700,
+      });
+      await writeFile(staleArtifactPath, "stale-artifact\n", { mode: 0o600 });
+      const sourceRef = execFileSync("git", ["rev-parse", "HEAD"], {
+        encoding: "utf8",
+      }).trim();
+      const runId = `quality-eval-3a-held-out-existing-${artifactLabel.replaceAll(" ", "-")}-test`;
+      const plan = await buildCoverLetterEval3aPlan({ sourceRef, runId });
+      const originalLiveOptIn = process.env.COVER_LETTER_EVAL_LIVE;
+      process.env.COVER_LETTER_EVAL_LIVE = "1";
+      let generatedRecordCount = 0;
+
+      try {
+        await expect(
+          runCoverLetterEval3aHeldOut({
+            approvalPhrase: plan.approvalPhrase,
+            explicitLiveProviderOptIn: true,
+            maxCalls: plan.plannedProviderCalls,
+            maxRepairs: plan.maxRepairs,
+            maxUsd: plan.budget.maxUsd,
+            declaredMaxUsdPerCall: plan.budget.declaredMaxUsdPerCall,
+            outputDirectory,
+            runId,
+            sourceRef,
+            apiKey: "offline-injected-record",
+            generateRecord: async () => {
+              generatedRecordCount += 1;
+              throw new Error("provider path must not be reached");
+            },
+          }),
+        ).rejects.toThrow(/existing private output artifacts/iu);
+        expect(generatedRecordCount).toBe(0);
+        expect(await readFile(staleArtifactPath, "utf8")).toBe(
+          "stale-artifact\n",
+        );
+      } finally {
+        if (originalLiveOptIn === undefined) {
+          delete process.env.COVER_LETTER_EVAL_LIVE;
+        } else {
+          process.env.COVER_LETTER_EVAL_LIVE = originalLiveOptIn;
+        }
+      }
+    },
+  );
 
   it("freezes the exact one-cell finalization diagnostic gate offline", async () => {
     const plan = await buildCoverLetterEval3aFinalizationDiagnosticPlan();
