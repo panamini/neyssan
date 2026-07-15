@@ -710,6 +710,59 @@ async function assertCoverLetterEval3aPrivateArtifactTargetsAvailable(
   }
 }
 
+export async function assertCoverLetterEvalPrivateArtifactTargetsAvailable(args: {
+  outputDirectory: string;
+  ledgerFileName: string;
+}): Promise<void> {
+  if (
+    args.ledgerFileName === "." ||
+    args.ledgerFileName === ".." ||
+    !/^[A-Za-z0-9._-]+$/u.test(args.ledgerFileName)
+  ) {
+    throw new Error("Cover-letter eval ledger file name is unsafe.");
+  }
+  const directories = await preparePrivateOutputDirectories(
+    args.outputDirectory,
+  );
+  const paths = {
+    ...getCoverLetterEval3aPrivateArtifactPaths(directories),
+    ledgerJsonPath: path.join(directories.evidence, args.ledgerFileName),
+  };
+  for (const filePath of Object.values(paths)) {
+    try {
+      await lstat(filePath);
+    } catch (error) {
+      if (isMissingPathError(error)) continue;
+      throw error;
+    }
+    throw new Error(
+      "Cover-letter eval refuses to start with existing private output artifacts.",
+    );
+  }
+}
+
+export async function writeCoverLetterEvalPrivateEvidenceFile(args: {
+  outputDirectory: string;
+  fileName: string;
+  content: string;
+}): Promise<string> {
+  if (
+    args.fileName === "." ||
+    args.fileName === ".." ||
+    !/^[A-Za-z0-9._-]+$/u.test(args.fileName)
+  ) {
+    throw new Error("Cover-letter eval evidence file name is unsafe.");
+  }
+  const directories = await preparePrivateOutputDirectories(
+    args.outputDirectory,
+  );
+  return writePrivateFileAtomic({
+    directory: directories.evidence,
+    fileName: args.fileName,
+    content: args.content,
+  });
+}
+
 async function writePrivateFileAtomic(args: {
   directory: string;
   fileName: string;
@@ -758,7 +811,7 @@ async function publishPrivateFile(args: {
   } catch (error) {
     if (isAlreadyExistsError(error)) {
       throw new Error(
-        `QUALITY-EVAL-3A refuses to overwrite private evidence: ${args.filePath}.`,
+        `Cover-letter eval refuses to overwrite private evidence: ${args.filePath}.`,
       );
     }
     throw error;
@@ -774,7 +827,7 @@ function assertReviewerPackHasNoProviderIdentity(
     QUALITY_EVAL3A_WRITER_MODELS.some((model) => serialized.includes(model))
   ) {
     throw new Error(
-      "QUALITY-EVAL-3A reviewer-safe pack leaked provider identity.",
+      "Cover-letter eval reviewer-safe pack leaked provider identity.",
     );
   }
 }
@@ -814,7 +867,10 @@ async function publishPrivateArtifactSet(args: {
   }>[];
 }): Promise<void> {
   const stagingDirectory = await ensurePrivateDirectory(
-    path.join(args.rootDirectory, `.eval3a-artifacts-${randomUUID()}`),
+    path.join(
+      args.rootDirectory,
+      `.cover-letter-eval-artifacts-${randomUUID()}`,
+    ),
   );
   const stagedTargets = args.targets.map((target, index) => ({
     ...target,
@@ -843,13 +899,93 @@ async function publishPrivateArtifactSet(args: {
     if (rollbackErrors.length > 0) {
       throw new AggregateError(
         [error, ...rollbackErrors],
-        "QUALITY-EVAL-3A artifact publication failed and rollback was incomplete.",
+        "Cover-letter eval artifact publication failed and rollback was incomplete.",
       );
     }
     throw error;
   } finally {
     await rm(stagingDirectory, { recursive: true, force: true });
   }
+}
+
+export async function writeCoverLetterEvalPrivateArtifacts(args: {
+  outputDirectory: string;
+  expectedCohortId: string;
+  pack: CoverLetterBlindReviewPack;
+  revealMap: CoverLetterBlindReviewRevealMap;
+  ledger: unknown;
+  packMarkdown: string;
+  ledgerFileName: string;
+}): Promise<
+  Readonly<{
+    packJsonPath: string;
+    packMarkdownPath: string;
+    revealMapJsonPath: string;
+    ledgerJsonPath: string;
+  }>
+> {
+  if (
+    !args.expectedCohortId.trim() ||
+    args.pack.cohortId !== args.expectedCohortId ||
+    args.revealMap.cohortId !== args.expectedCohortId ||
+    args.revealMap.packHash !== args.pack.packHash
+  ) {
+    throw new Error(
+      "Cover-letter eval private artifacts do not share the exact cohort and pack hash.",
+    );
+  }
+  if (
+    args.ledgerFileName === "." ||
+    args.ledgerFileName === ".." ||
+    !/^[A-Za-z0-9._-]+$/u.test(args.ledgerFileName)
+  ) {
+    throw new Error("Cover-letter eval ledger file name is unsafe.");
+  }
+  await assertPrivateArtifactHashes(args);
+  assertReviewerPackHasNoProviderIdentity(args.pack);
+  const canonicalPackMarkdown = renderCoverLetterBlindReviewMarkdown(args.pack);
+  if (args.packMarkdown !== canonicalPackMarkdown) {
+    throw new Error(
+      "Cover-letter eval private Markdown does not match the canonical reviewer pack.",
+    );
+  }
+  const directories = await preparePrivateOutputDirectories(
+    args.outputDirectory,
+  );
+  const { packJsonPath, packMarkdownPath, revealMapJsonPath } =
+    getCoverLetterEval3aPrivateArtifactPaths(directories);
+  const ledgerJsonPath = path.join(directories.evidence, args.ledgerFileName);
+  await publishPrivateArtifactSet({
+    rootDirectory: directories.root,
+    targets: [
+      {
+        filePath: packJsonPath,
+        fileName: "blind-review-pack.json",
+        content: `${JSON.stringify(args.pack, null, 2)}\n`,
+      },
+      {
+        filePath: packMarkdownPath,
+        fileName: "blind-review-pack.md",
+        content: args.packMarkdown,
+      },
+      {
+        filePath: revealMapJsonPath,
+        fileName: "blind-review-reveal-map.json",
+        content: `${JSON.stringify(args.revealMap, null, 2)}\n`,
+      },
+      {
+        filePath: ledgerJsonPath,
+        fileName: args.ledgerFileName,
+        content: `${JSON.stringify(args.ledger, null, 2)}\n`,
+      },
+    ],
+  });
+  return {
+    packJsonPath,
+    packMarkdownPath,
+    revealMapJsonPath,
+    ledgerJsonPath,
+  };
 }
 
 export async function writeCoverLetterEval3aPrivateArtifacts(args: {
@@ -865,53 +1001,12 @@ export async function writeCoverLetterEval3aPrivateArtifacts(args: {
     ledgerJsonPath: string;
   }>
 > {
-  if (
-    args.pack.cohortId !== QUALITY_EVAL3A_COHORT_ID ||
-    args.revealMap.cohortId !== QUALITY_EVAL3A_COHORT_ID ||
-    args.revealMap.packHash !== args.pack.packHash
-  ) {
-    throw new Error(
-      "QUALITY-EVAL-3A private artifacts do not share the exact cohort and pack hash.",
-    );
-  }
-  await assertPrivateArtifactHashes(args);
-  assertReviewerPackHasNoProviderIdentity(args.pack);
-  const directories = await preparePrivateOutputDirectories(
-    args.outputDirectory,
-  );
-  const { packJsonPath, packMarkdownPath, revealMapJsonPath, ledgerJsonPath } =
-    getCoverLetterEval3aPrivateArtifactPaths(directories);
-  await publishPrivateArtifactSet({
-    rootDirectory: directories.root,
-    targets: [
-      {
-        filePath: packJsonPath,
-        fileName: "blind-review-pack.json",
-        content: `${JSON.stringify(args.pack, null, 2)}\n`,
-      },
-      {
-        filePath: packMarkdownPath,
-        fileName: "blind-review-pack.md",
-        content: renderCoverLetterBlindReviewMarkdown(args.pack),
-      },
-      {
-        filePath: revealMapJsonPath,
-        fileName: "blind-review-reveal-map.json",
-        content: `${JSON.stringify(args.revealMap, null, 2)}\n`,
-      },
-      {
-        filePath: ledgerJsonPath,
-        fileName: "eval3a-run-ledger.json",
-        content: `${JSON.stringify(args.ledger, null, 2)}\n`,
-      },
-    ],
+  return writeCoverLetterEvalPrivateArtifacts({
+    ...args,
+    expectedCohortId: QUALITY_EVAL3A_COHORT_ID,
+    packMarkdown: renderCoverLetterBlindReviewMarkdown(args.pack),
+    ledgerFileName: "eval3a-run-ledger.json",
   });
-  return {
-    packJsonPath,
-    packMarkdownPath,
-    revealMapJsonPath,
-    ledgerJsonPath,
-  };
 }
 
 async function writeFailureLedger(args: {
