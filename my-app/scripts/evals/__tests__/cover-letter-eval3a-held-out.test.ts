@@ -28,6 +28,7 @@ import {
   QUALITY_EVAL3A_WRITER_MODELS,
   assertCoverLetterEval3aFinalizationDiagnosticLiveGate,
   assertCoverLetterEval3aLiveGate,
+  assertCoverLetterEval3aWorktreeClean,
   buildCoverLetterEval3aFinalizationDiagnosticApprovalPhrase,
   buildCoverLetterEval3aFinalizationDiagnosticPlan,
   buildCoverLetterEval3aPlan,
@@ -37,6 +38,7 @@ import {
 } from "../cover-letter-eval3a-held-out";
 
 const FULL_RUN_SOURCE_REF = "c".repeat(40);
+const FULL_RUN_ID = "quality-eval-3a-held-out-test-run";
 
 async function buildPrivateArtifactsFixture() {
   const packBody = {
@@ -243,11 +245,13 @@ describe("QUALITY-EVAL-3A held-out contract", () => {
   it("computes the exact offline call and conservative cost contract", async () => {
     const plan = await buildCoverLetterEval3aPlan({
       sourceRef: FULL_RUN_SOURCE_REF,
+      runId: FULL_RUN_ID,
     });
 
-    expect(plan.version).toBe("cover_letter_eval3a_plan_v3");
+    expect(plan.version).toBe("cover_letter_eval3a_plan_v4");
     expect(plan.status).toBe("READY_FOR_APPROVAL");
     expect(plan.sourceRef).toBe(FULL_RUN_SOURCE_REF);
+    expect(plan.runId).toBe(FULL_RUN_ID);
     expect(plan.plannedProviderCalls).toBe(10);
     expect(plan.providerMaxRetries).toBe(0);
     expect(plan.maxRepairs).toBe(0);
@@ -260,8 +264,9 @@ describe("QUALITY-EVAL-3A held-out contract", () => {
     expect(plan.approvalPhrase).toContain("budget USD 2.00");
     expect(plan.approvalPhrase).toContain(plan.planHash);
     expect(plan.approvalPhrase).toContain(FULL_RUN_SOURCE_REF);
+    expect(plan.approvalPhrase).toContain(FULL_RUN_ID);
     expect(plan.approvalPhraseVersion).toBe(
-      "quality_eval3a_approval_phrase_v3",
+      "quality_eval3a_approval_phrase_v4",
     );
     expect(plan.verdictContract).toEqual({
       version: "cover_letter_eval3a_human_verdict_v1",
@@ -274,18 +279,20 @@ describe("QUALITY-EVAL-3A held-out contract", () => {
       productionActivation: "OUT_OF_SCOPE",
     });
     expect(plan.planHash).toBe(
-      "2f18a9a3198a2a1ca5bc3be342dacfd7dd5b2389d7177bf562b7bc95a1ccdd85",
+      "44abcfbd2e7f1872a677131b696d795ae25c93bbd78a0b14a0c6695afc68e7dd",
     );
   });
 
   it("rejects live execution unless every approval and budget field is exact", async () => {
     const plan = await buildCoverLetterEval3aPlan({
       sourceRef: FULL_RUN_SOURCE_REF,
+      runId: FULL_RUN_ID,
     });
     const exactGate = {
       plan,
       approvalPhrase: plan.approvalPhrase,
       sourceRef: FULL_RUN_SOURCE_REF,
+      runId: FULL_RUN_ID,
       currentHeadSourceRef: FULL_RUN_SOURCE_REF,
       explicitLiveProviderOptIn: true,
       environmentLiveProviderOptIn: true,
@@ -318,9 +325,16 @@ describe("QUALITY-EVAL-3A held-out contract", () => {
       assertCoverLetterEval3aLiveGate({
         ...exactGate,
         sourceRef: "d".repeat(40),
+        runId: FULL_RUN_ID,
         currentHeadSourceRef: "d".repeat(40),
       }),
     ).toThrow(/approval.*sourceRef|sourceRef.*approval/iu);
+    expect(() =>
+      assertCoverLetterEval3aLiveGate({
+        ...exactGate,
+        runId: "quality-eval-3a-held-out-other-run",
+      }),
+    ).toThrow(/approval.*runId|runId.*approval/iu);
     expect(() =>
       assertCoverLetterEval3aLiveGate({
         ...exactGate,
@@ -333,6 +347,7 @@ describe("QUALITY-EVAL-3A held-out contract", () => {
     const root = await mkdtemp(path.join(tmpdir(), "eval3a-stale-source-"));
     const plan = await buildCoverLetterEval3aPlan({
       sourceRef: FULL_RUN_SOURCE_REF,
+      runId: FULL_RUN_ID,
     });
     const originalLiveOptIn = process.env.COVER_LETTER_EVAL_LIVE;
     process.env.COVER_LETTER_EVAL_LIVE = "1";
@@ -372,7 +387,10 @@ describe("QUALITY-EVAL-3A held-out contract", () => {
     const sourceRef = execFileSync("git", ["rev-parse", "HEAD"], {
       encoding: "utf8",
     }).trim();
-    const plan = await buildCoverLetterEval3aPlan({ sourceRef });
+    const plan = await buildCoverLetterEval3aPlan({
+      sourceRef,
+      runId: FULL_RUN_ID,
+    });
     const originalLiveOptIn = process.env.COVER_LETTER_EVAL_LIVE;
     process.env.COVER_LETTER_EVAL_LIVE = "1";
     let generatedRecordCount = 0;
@@ -401,6 +419,69 @@ describe("QUALITY-EVAL-3A held-out contract", () => {
       await expect(stat(path.join(root, "output"))).rejects.toMatchObject({
         code: "ENOENT",
       });
+    } finally {
+      if (originalLiveOptIn === undefined) {
+        delete process.env.COVER_LETTER_EVAL_LIVE;
+      } else {
+        process.env.COVER_LETTER_EVAL_LIVE = originalLiveOptIn;
+      }
+    }
+  });
+
+  it("rejects a dirty worktree status before live provider calls", () => {
+    expect(() =>
+      assertCoverLetterEval3aWorktreeClean(" M prompts.ts\n"),
+    ).toThrow(/clean Git worktree/iu);
+    expect(() => assertCoverLetterEval3aWorktreeClean("\n")).not.toThrow();
+  });
+
+  it("rejects existing private artifacts before the injected provider path", async () => {
+    const root = await mkdtemp(
+      path.join(tmpdir(), "eval3a-existing-artifact-"),
+    );
+    const outputDirectory = path.join(root, "output");
+    const staleArtifactPath = path.join(
+      outputDirectory,
+      "private-review",
+      "blind-review-pack.json",
+    );
+    await mkdir(path.dirname(staleArtifactPath), {
+      recursive: true,
+      mode: 0o700,
+    });
+    await writeFile(staleArtifactPath, "stale-artifact\n", { mode: 0o600 });
+    const sourceRef = execFileSync("git", ["rev-parse", "HEAD"], {
+      encoding: "utf8",
+    }).trim();
+    const runId = "quality-eval-3a-held-out-existing-artifact-test";
+    const plan = await buildCoverLetterEval3aPlan({ sourceRef, runId });
+    const originalLiveOptIn = process.env.COVER_LETTER_EVAL_LIVE;
+    process.env.COVER_LETTER_EVAL_LIVE = "1";
+    let generatedRecordCount = 0;
+
+    try {
+      await expect(
+        runCoverLetterEval3aHeldOut({
+          approvalPhrase: plan.approvalPhrase,
+          explicitLiveProviderOptIn: true,
+          maxCalls: plan.plannedProviderCalls,
+          maxRepairs: plan.maxRepairs,
+          maxUsd: plan.budget.maxUsd,
+          declaredMaxUsdPerCall: plan.budget.declaredMaxUsdPerCall,
+          outputDirectory,
+          runId,
+          sourceRef,
+          apiKey: "offline-injected-record",
+          generateRecord: async () => {
+            generatedRecordCount += 1;
+            throw new Error("provider path must not be reached");
+          },
+        }),
+      ).rejects.toThrow(/existing private output artifacts/iu);
+      expect(generatedRecordCount).toBe(0);
+      expect(await readFile(staleArtifactPath, "utf8")).toBe(
+        "stale-artifact\n",
+      );
     } finally {
       if (originalLiveOptIn === undefined) {
         delete process.env.COVER_LETTER_EVAL_LIVE;
@@ -676,7 +757,10 @@ describe("QUALITY-EVAL-3A private output boundary", () => {
     const sourceRef = execFileSync("git", ["rev-parse", "HEAD"], {
       encoding: "utf8",
     }).trim();
-    const plan = await buildCoverLetterEval3aPlan({ sourceRef });
+    const plan = await buildCoverLetterEval3aPlan({
+      sourceRef,
+      runId: "quality-eval-3a-held-out-sanitized-failure-test",
+    });
     const rawProviderSentinel = "RAW_PROVIDER_OUTPUT_MUST_NOT_BE_SERIALIZED";
     const originalLiveOptIn = process.env.COVER_LETTER_EVAL_LIVE;
     process.env.COVER_LETTER_EVAL_LIVE = "1";

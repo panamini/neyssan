@@ -50,7 +50,9 @@ export const QUALITY_EVAL3A_WRITER_MODELS = [
 ] as const satisfies readonly CoverLetterEvalPricedWriterModel[];
 export const QUALITY_EVAL3A_LIVE_MAX_USD = 2;
 const QUALITY_EVAL3A_APPROVAL_PHRASE_VERSION =
-  "quality_eval3a_approval_phrase_v3";
+  "quality_eval3a_approval_phrase_v4";
+const QUALITY_EVAL3A_FULL_RUN_ID_PATTERN =
+  /^quality-eval-3a-held-out-[a-z0-9-]+$/u;
 const QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC = {
   runMode: "finalization_failure_diagnostic_v1",
   caseId: "blind-fr-customer-success-direct",
@@ -110,9 +112,10 @@ function projectCoverLetterEval3aFailureDiagnostic(
 }
 
 export type CoverLetterEval3aPlan = Readonly<{
-  version: "cover_letter_eval3a_plan_v3";
+  version: "cover_letter_eval3a_plan_v4";
   status: "READY_FOR_APPROVAL";
   sourceRef: string;
+  runId: string;
   cohortId: typeof QUALITY_EVAL3A_COHORT_ID;
   developmentCaseIds: typeof QUALITY_EVAL3A_DEVELOPMENT_CASE_IDS;
   heldOutCaseIds: typeof QUALITY_EVAL3A_HELD_OUT_CASE_IDS;
@@ -212,16 +215,18 @@ function buildApprovalPhrase(args: {
   plannedProviderCalls: number;
   planHash: string;
   sourceRef: string;
+  runId: string;
 }): string {
   if (
     !/^[a-f0-9]{64}$/u.test(args.planHash) ||
-    !/^[a-f0-9]{40}$/u.test(args.sourceRef)
+    !/^[a-f0-9]{40}$/u.test(args.sourceRef) ||
+    !QUALITY_EVAL3A_FULL_RUN_ID_PATTERN.test(args.runId)
   ) {
     throw new Error(
-      "QUALITY-EVAL-3A approval requires exact planHash and sourceRef values.",
+      "QUALITY-EVAL-3A approval requires exact planHash, sourceRef, and runId values.",
     );
   }
-  return `J’approuve EVAL3A v3 : sourceRef ${args.sourceRef}, planHash ${args.planHash}, ${args.plannedProviderCalls} appels provider maximum, budget USD ${QUALITY_EVAL3A_LIVE_MAX_USD.toFixed(2)}, modèles gpt-5.5 et gpt-5.6-sol, retries 0, repairs 0, aucun évaluateur LLM.`;
+  return `J’approuve EVAL3A v4 : runId ${args.runId}, sourceRef ${args.sourceRef}, planHash ${args.planHash}, ${args.plannedProviderCalls} appels provider maximum, budget USD ${QUALITY_EVAL3A_LIVE_MAX_USD.toFixed(2)}, modèles gpt-5.5 et gpt-5.6-sol, retries 0, repairs 0, aucun évaluateur LLM.`;
 }
 
 async function hashPlanBody(
@@ -237,10 +242,14 @@ async function hashPlanBody(
 
 export async function buildCoverLetterEval3aPlan(args: {
   sourceRef: string;
+  runId: string;
 }): Promise<CoverLetterEval3aPlan> {
-  if (!/^[a-f0-9]{40}$/u.test(args.sourceRef)) {
+  if (
+    !/^[a-f0-9]{40}$/u.test(args.sourceRef) ||
+    !QUALITY_EVAL3A_FULL_RUN_ID_PATTERN.test(args.runId)
+  ) {
     throw new Error(
-      "QUALITY-EVAL-3A plan requires an exact 40-character sourceRef.",
+      "QUALITY-EVAL-3A plan requires exact sourceRef and safe held-out runId values.",
     );
   }
   const cases = getCoverLetterEval3aHeldOutCases();
@@ -261,9 +270,10 @@ export async function buildCoverLetterEval3aPlan(args: {
     );
   }
   const body: Omit<CoverLetterEval3aPlan, "approvalPhrase" | "planHash"> = {
-    version: "cover_letter_eval3a_plan_v3",
+    version: "cover_letter_eval3a_plan_v4",
     status: "READY_FOR_APPROVAL",
     sourceRef: args.sourceRef,
+    runId: args.runId,
     cohortId: QUALITY_EVAL3A_COHORT_ID,
     developmentCaseIds: QUALITY_EVAL3A_DEVELOPMENT_CASE_IDS,
     heldOutCaseIds: QUALITY_EVAL3A_HELD_OUT_CASE_IDS,
@@ -312,6 +322,7 @@ export async function buildCoverLetterEval3aPlan(args: {
       plannedProviderCalls: preflight.plannedProviderCalls,
       planHash,
       sourceRef: args.sourceRef,
+      runId: args.runId,
     }),
     planHash,
   };
@@ -418,6 +429,7 @@ export function assertCoverLetterEval3aLiveGate(args: {
   plan: CoverLetterEval3aPlan;
   approvalPhrase: string;
   sourceRef: string;
+  runId: string;
   currentHeadSourceRef: string;
   explicitLiveProviderOptIn: boolean;
   environmentLiveProviderOptIn: boolean;
@@ -437,6 +449,11 @@ export function assertCoverLetterEval3aLiveGate(args: {
   if (args.plan.sourceRef !== args.sourceRef) {
     throw new Error(
       "QUALITY-EVAL-3A approval sourceRef does not match the requested run sourceRef.",
+    );
+  }
+  if (args.plan.runId !== args.runId) {
+    throw new Error(
+      "QUALITY-EVAL-3A approval runId does not match the requested run runId.",
     );
   }
   if (args.approvalPhrase !== args.plan.approvalPhrase) {
@@ -641,6 +658,52 @@ async function preparePrivateOutputDirectories(
   };
 }
 
+type CoverLetterEval3aPrivateArtifactPaths = Readonly<{
+  packJsonPath: string;
+  packMarkdownPath: string;
+  revealMapJsonPath: string;
+  ledgerJsonPath: string;
+}>;
+
+function getCoverLetterEval3aPrivateArtifactPaths(
+  directories: Readonly<{
+    review: string;
+    reveal: string;
+    evidence: string;
+  }>,
+): CoverLetterEval3aPrivateArtifactPaths {
+  return {
+    packJsonPath: path.join(directories.review, "blind-review-pack.json"),
+    packMarkdownPath: path.join(directories.review, "blind-review-pack.md"),
+    revealMapJsonPath: path.join(
+      directories.reveal,
+      "blind-review-reveal-map.json",
+    ),
+    ledgerJsonPath: path.join(directories.evidence, "eval3a-run-ledger.json"),
+  };
+}
+
+async function assertCoverLetterEval3aPrivateArtifactTargetsAvailable(
+  directories: Readonly<{
+    review: string;
+    reveal: string;
+    evidence: string;
+  }>,
+): Promise<void> {
+  const paths = getCoverLetterEval3aPrivateArtifactPaths(directories);
+  for (const filePath of Object.values(paths)) {
+    try {
+      await lstat(filePath);
+    } catch (error) {
+      if (isMissingPathError(error)) continue;
+      throw error;
+    }
+    throw new Error(
+      "QUALITY-EVAL-3A refuses to start with existing private output artifacts.",
+    );
+  }
+}
+
 async function writePrivateFileAtomic(args: {
   directory: string;
   fileName: string;
@@ -810,19 +873,8 @@ export async function writeCoverLetterEval3aPrivateArtifacts(args: {
   const directories = await preparePrivateOutputDirectories(
     args.outputDirectory,
   );
-  const packJsonPath = path.join(directories.review, "blind-review-pack.json");
-  const packMarkdownPath = path.join(
-    directories.review,
-    "blind-review-pack.md",
-  );
-  const revealMapJsonPath = path.join(
-    directories.reveal,
-    "blind-review-reveal-map.json",
-  );
-  const ledgerJsonPath = path.join(
-    directories.evidence,
-    "eval3a-run-ledger.json",
-  );
+  const { packJsonPath, packMarkdownPath, revealMapJsonPath, ledgerJsonPath } =
+    getCoverLetterEval3aPrivateArtifactPaths(directories);
   await publishPrivateArtifactSet({
     rootDirectory: directories.root,
     targets: [
@@ -926,6 +978,28 @@ function resolveCurrentGitHeadSourceRef(): string {
     );
   }
   return sourceRef;
+}
+
+export function assertCoverLetterEval3aWorktreeClean(
+  porcelainStatus: string,
+): void {
+  if (porcelainStatus.trim()) {
+    throw new Error(
+      "QUALITY-EVAL-3A requires a clean Git worktree before live provider calls.",
+    );
+  }
+}
+
+function assertCurrentGitWorktreeClean(): void {
+  const porcelainStatus = execFileSync(
+    "git",
+    ["status", "--porcelain=v1", "--untracked-files=all"],
+    {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    },
+  );
+  assertCoverLetterEval3aWorktreeClean(porcelainStatus);
 }
 
 function classifyCoverLetterEval3aFinalizationDiagnostic(
@@ -1311,11 +1385,13 @@ async function runCoverLetterEval3aFullHeldOut(
 ): Promise<CoverLetterEval3aHeldOutRunResult> {
   const plan = await buildCoverLetterEval3aPlan({
     sourceRef: args.sourceRef,
+    runId: args.runId,
   });
   assertCoverLetterEval3aLiveGate({
     plan,
     approvalPhrase: args.approvalPhrase,
     sourceRef: args.sourceRef,
+    runId: args.runId,
     currentHeadSourceRef: resolveCurrentGitHeadSourceRef(),
     explicitLiveProviderOptIn: args.explicitLiveProviderOptIn,
     environmentLiveProviderOptIn: process.env.COVER_LETTER_EVAL_LIVE === "1",
@@ -1325,7 +1401,15 @@ async function runCoverLetterEval3aFullHeldOut(
     declaredMaxUsdPerCall: args.declaredMaxUsdPerCall,
   });
   assertCoverLetterEval3aRunIdentity(args);
-  await preparePrivateOutputDirectories(args.outputDirectory);
+  if (args.generateRecord === undefined) {
+    assertCurrentGitWorktreeClean();
+  }
+  const outputDirectories = await preparePrivateOutputDirectories(
+    args.outputDirectory,
+  );
+  await assertCoverLetterEval3aPrivateArtifactTargetsAvailable(
+    outputDirectories,
+  );
   assertCoverLetterEval3aApiKey(args.apiKey);
   const budget = createCoverLetterEvalBudget({
     explicitLiveProviderOptIn: true,
