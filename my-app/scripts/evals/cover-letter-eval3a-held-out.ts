@@ -11,6 +11,7 @@ import {
 } from "node:fs/promises";
 import { platform } from "node:os";
 import * as path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { buildStableHash } from "../../src/modules/application-harness/fingerprints";
 import {
@@ -972,6 +973,59 @@ export type CoverLetterEval3aFinalizationDiagnosticRunResult = Readonly<{
   ledgerPath: string;
 }>;
 
+type CoverLetterEval3aBudgetSnapshot = ReturnType<
+  ReturnType<typeof createCoverLetterEvalBudget>["snapshot"]
+>;
+
+export type CoverLetterEval3aCliSafeResult = Readonly<{
+  status:
+    | CoverLetterEval3aHeldOutRunResult["status"]
+    | CoverLetterEval3aFinalizationDiagnosticRunResult["status"];
+  planHash: string;
+  runId: string;
+  sourceRef: string;
+  budget: Readonly<{
+    maxCalls: number;
+    maxRepairs: number;
+    maxUsd: number;
+    declaredMaxUsdPerCall: number;
+    reservedCalls: number;
+    reservedRepairs: number;
+    reservedUsd: number;
+  }>;
+  privatePaths: Readonly<Record<string, string>>;
+}>;
+
+export function projectCoverLetterEval3aCliResult(args: {
+  result:
+    | CoverLetterEval3aHeldOutRunResult
+    | CoverLetterEval3aFinalizationDiagnosticRunResult;
+  runId: string;
+  sourceRef: string;
+}): CoverLetterEval3aCliSafeResult {
+  const snapshot: CoverLetterEval3aBudgetSnapshot = args.result.budget;
+  const privatePaths =
+    "paths" in args.result
+      ? args.result.paths
+      : { failureLedgerPath: args.result.ledgerPath };
+  return {
+    status: args.result.status,
+    planHash: args.result.plan.planHash,
+    runId: args.runId,
+    sourceRef: args.sourceRef,
+    budget: {
+      maxCalls: snapshot.limits.maxCalls,
+      maxRepairs: snapshot.limits.maxRepairs,
+      maxUsd: snapshot.limits.maxUsd,
+      declaredMaxUsdPerCall: snapshot.limits.declaredMaxUsdPerCall,
+      reservedCalls: snapshot.usage.reservedCalls,
+      reservedRepairs: snapshot.usage.reservedRepairs,
+      reservedUsd: snapshot.usage.reservedUsd,
+    },
+    privatePaths: { ...privatePaths },
+  };
+}
+
 function resolveCurrentGitHeadSourceRef(): string {
   const sourceRef = execFileSync("git", ["rev-parse", "HEAD"], {
     encoding: "utf8",
@@ -1162,7 +1216,12 @@ async function runCoverLetterEval3aFinalizationDiagnostic(
     generateRecord: args.generateRecord,
     resolvePorcelainStatus: resolveCurrentGitWorktreeStatus,
   });
-  await preparePrivateOutputDirectories(args.outputDirectory);
+  const outputDirectories = await preparePrivateOutputDirectories(
+    args.outputDirectory,
+  );
+  await assertCoverLetterEval3aPrivateArtifactTargetsAvailable(
+    outputDirectories,
+  );
   if (!args.apiKey.trim()) {
     throw new Error(
       "QUALITY-EVAL-3A finalization diagnostic requires OPENAI_API_KEY after approval.",
@@ -1484,4 +1543,193 @@ export async function runCoverLetterEval3aHeldOut(
     });
   }
   return runCoverLetterEval3aFullHeldOut(args);
+}
+
+export type CoverLetterEval3aCliOptions = Readonly<{
+  help: boolean;
+  planOnly: boolean;
+  live: boolean;
+  mode: typeof QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.runMode | undefined;
+  runId: string | undefined;
+  sourceRef: string | undefined;
+  outputDirectory: string | undefined;
+  approvalPhrase: string | undefined;
+}>;
+
+type MutableCoverLetterEval3aCliOptions = {
+  -readonly [Key in keyof CoverLetterEval3aCliOptions]: CoverLetterEval3aCliOptions[Key];
+};
+
+const COVER_LETTER_EVAL3A_CLI_USAGE = `Usage:
+  npx tsx scripts/evals/cover-letter-eval3a-held-out.ts --run-id=<id> --source-ref=<sha> --plan-only
+  COVER_LETTER_EVAL_LIVE=1 OPENAI_API_KEY=... npx tsx scripts/evals/cover-letter-eval3a-held-out.ts --run-id=<id> --source-ref=<sha> --output-dir=<path> --approval-phrase='<exact phrase>' --live
+
+Optional:
+  --mode=full|finalization_failure_diagnostic_v1
+  --help`;
+
+function createCoverLetterEval3aCliOptions(
+  argv: readonly string[],
+): MutableCoverLetterEval3aCliOptions {
+  return {
+    help: argv.length === 0,
+    planOnly: false,
+    live: false,
+    mode: undefined,
+    runId: undefined,
+    sourceRef: undefined,
+    outputDirectory: undefined,
+    approvalPhrase: undefined,
+  };
+}
+
+function validateCoverLetterEval3aCliOptions(
+  options: MutableCoverLetterEval3aCliOptions,
+): CoverLetterEval3aCliOptions {
+  if (options.help) return options;
+  if (!options.runId || !options.sourceRef) {
+    throw new Error(
+      "QUALITY-EVAL-3A CLI requires --run-id and --source-ref. Use --help for usage.",
+    );
+  }
+  if (options.planOnly === options.live) {
+    throw new Error(
+      "QUALITY-EVAL-3A CLI requires exactly one of --plan-only or --live.",
+    );
+  }
+  if (options.live && (!options.outputDirectory || !options.approvalPhrase)) {
+    throw new Error(
+      "QUALITY-EVAL-3A live CLI requires --output-dir and --approval-phrase.",
+    );
+  }
+  return options;
+}
+
+const COVER_LETTER_EVAL3A_CLI_ASSIGNMENTS = [
+  { prefix: "--run-id=", key: "runId" },
+  { prefix: "--source-ref=", key: "sourceRef" },
+  { prefix: "--output-dir=", key: "outputDirectory" },
+  { prefix: "--approval-phrase=", key: "approvalPhrase" },
+] as const;
+
+function applyCoverLetterEval3aCliArgument(
+  options: MutableCoverLetterEval3aCliOptions,
+  argument: string,
+): void {
+  if (argument === "--help") {
+    options.help = true;
+    return;
+  }
+  if (argument === "--plan-only") {
+    options.planOnly = true;
+    return;
+  }
+  if (argument === "--live") {
+    options.live = true;
+    return;
+  }
+  if (argument.startsWith("--mode=")) {
+    const mode = argument.slice("--mode=".length);
+    if (
+      mode !== "full" &&
+      mode !== QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.runMode
+    ) {
+      throw new Error(
+        `QUALITY-EVAL-3A CLI refuses an unsupported mode: ${mode}`,
+      );
+    }
+    options.mode =
+      mode === QUALITY_EVAL3A_FINALIZATION_DIAGNOSTIC.runMode
+        ? mode
+        : undefined;
+    return;
+  }
+  const assignment = COVER_LETTER_EVAL3A_CLI_ASSIGNMENTS.find(({ prefix }) =>
+    argument.startsWith(prefix),
+  );
+  if (assignment) {
+    options[assignment.key] = argument.slice(assignment.prefix.length);
+    return;
+  }
+  throw new Error(
+    `QUALITY-EVAL-3A CLI refuses an unsupported argument: ${argument}`,
+  );
+}
+
+export function parseCoverLetterEval3aCliOptions(
+  argv: readonly string[],
+): CoverLetterEval3aCliOptions {
+  const options = createCoverLetterEval3aCliOptions(argv);
+  argv.forEach((argument) =>
+    applyCoverLetterEval3aCliArgument(options, argument),
+  );
+  return validateCoverLetterEval3aCliOptions(options);
+}
+
+async function main(): Promise<void> {
+  const options = parseCoverLetterEval3aCliOptions(process.argv.slice(2));
+  if (options.help) {
+    console.log(COVER_LETTER_EVAL3A_CLI_USAGE);
+    return;
+  }
+  const sourceRef = options.sourceRef!;
+  const runId = options.runId!;
+  const plan = options.mode
+    ? await buildCoverLetterEval3aFinalizationDiagnosticPlan()
+    : await buildCoverLetterEval3aPlan({ sourceRef, runId });
+  const expectedApprovalPhrase = options.mode
+    ? buildCoverLetterEval3aFinalizationDiagnosticApprovalPhrase({
+        sourceRef,
+        planHash: plan.planHash,
+        runId,
+      })
+    : plan.approvalPhrase;
+
+  if (options.planOnly) {
+    console.log(
+      JSON.stringify(
+        { ...plan, approvalPhrase: expectedApprovalPhrase },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+  if (options.approvalPhrase !== expectedApprovalPhrase) {
+    throw new Error(
+      "QUALITY-EVAL-3A CLI requires the exact approval phrase for this plan, sourceRef, and runId.",
+    );
+  }
+  const result = await runCoverLetterEval3aHeldOut({
+    ...(options.mode ? { mode: options.mode } : {}),
+    approvalPhrase: options.approvalPhrase,
+    explicitLiveProviderOptIn: true,
+    maxCalls: plan.plannedProviderCalls,
+    maxRepairs: plan.maxRepairs,
+    maxUsd: plan.budget.maxUsd,
+    declaredMaxUsdPerCall: plan.budget.declaredMaxUsdPerCall,
+    outputDirectory: options.outputDirectory!,
+    runId,
+    sourceRef,
+    apiKey: process.env.OPENAI_API_KEY?.trim() ?? "",
+  });
+  console.log(
+    JSON.stringify(
+      projectCoverLetterEval3aCliResult({ result, runId, sourceRef }),
+      null,
+      2,
+    ),
+  );
+}
+
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
+) {
+  void main().catch(() => {
+    console.error(
+      "Cover-letter EVAL3A held-out runner failed closed; inspect private-evidence/eval3a-run-failure.json for the sanitized diagnostic.",
+    );
+    process.exitCode = 1;
+  });
 }

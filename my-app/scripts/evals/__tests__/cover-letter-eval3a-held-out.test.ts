@@ -34,6 +34,8 @@ import {
   buildCoverLetterEval3aFinalizationDiagnosticPlan,
   buildCoverLetterEval3aPlan,
   getCoverLetterEval3aHeldOutCases,
+  parseCoverLetterEval3aCliOptions,
+  projectCoverLetterEval3aCliResult,
   runCoverLetterEval3aHeldOut,
   writeCoverLetterEval3aPrivateArtifacts,
 } from "../cover-letter-eval3a-held-out";
@@ -522,6 +524,171 @@ describe("QUALITY-EVAL-3A held-out contract", () => {
       }
     },
   );
+
+  it("rejects an existing diagnostic failure ledger before the injected provider path", async () => {
+    const root = await mkdtemp(
+      path.join(tmpdir(), "eval3a-diagnostic-existing-artifact-"),
+    );
+    const outputDirectory = path.join(root, "output");
+    const staleLedgerPath = path.join(
+      outputDirectory,
+      "private-evidence",
+      "eval3a-run-failure.json",
+    );
+    await mkdir(path.dirname(staleLedgerPath), {
+      recursive: true,
+      mode: 0o700,
+    });
+    await writeFile(staleLedgerPath, "stale-diagnostic-ledger\n", {
+      mode: 0o600,
+    });
+    const sourceRef = execFileSync("git", ["rev-parse", "HEAD"], {
+      encoding: "utf8",
+    }).trim();
+    const plan = await buildCoverLetterEval3aFinalizationDiagnosticPlan();
+    const runId = "quality-eval-3a-finalization-diagnostic-stale-test";
+    const approvalPhrase =
+      buildCoverLetterEval3aFinalizationDiagnosticApprovalPhrase({
+        sourceRef,
+        planHash: plan.planHash,
+        runId,
+      });
+    const originalLiveOptIn = process.env.COVER_LETTER_EVAL_LIVE;
+    process.env.COVER_LETTER_EVAL_LIVE = "1";
+    let generatedRecordCount = 0;
+
+    try {
+      await expect(
+        runCoverLetterEval3aHeldOut({
+          mode: plan.runMode,
+          approvalPhrase,
+          explicitLiveProviderOptIn: true,
+          maxCalls: plan.plannedProviderCalls,
+          maxRepairs: plan.maxRepairs,
+          maxUsd: plan.budget.maxUsd,
+          declaredMaxUsdPerCall: plan.budget.declaredMaxUsdPerCall,
+          outputDirectory,
+          runId,
+          sourceRef,
+          apiKey: "offline-injected-record",
+          generateRecord: async () => {
+            generatedRecordCount += 1;
+            throw new Error("diagnostic provider path must not be reached");
+          },
+        }),
+      ).rejects.toThrow(/existing private output artifacts/iu);
+      expect(generatedRecordCount).toBe(0);
+      expect(await readFile(staleLedgerPath, "utf8")).toBe(
+        "stale-diagnostic-ledger\n",
+      );
+    } finally {
+      if (originalLiveOptIn === undefined) {
+        delete process.env.COVER_LETTER_EVAL_LIVE;
+      } else {
+        process.env.COVER_LETTER_EVAL_LIVE = originalLiveOptIn;
+      }
+    }
+  });
+
+  it("exposes a strict CLI without widening the held-out contract", () => {
+    expect(parseCoverLetterEval3aCliOptions([])).toMatchObject({
+      help: true,
+      live: false,
+      planOnly: false,
+    });
+    expect(
+      parseCoverLetterEval3aCliOptions([
+        "--run-id=quality-eval-3a-held-out-cli-test",
+        `--source-ref=${FULL_RUN_SOURCE_REF}`,
+        "--plan-only",
+      ]),
+    ).toMatchObject({
+      help: false,
+      live: false,
+      planOnly: true,
+      mode: undefined,
+    });
+    expect(() =>
+      parseCoverLetterEval3aCliOptions([
+        "--run-id=quality-eval-3a-held-out-cli-test",
+        `--source-ref=${FULL_RUN_SOURCE_REF}`,
+        "--mode=unknown",
+        "--plan-only",
+      ]),
+    ).toThrow(/unsupported mode/iu);
+    expect(() =>
+      parseCoverLetterEval3aCliOptions([
+        "--run-id=quality-eval-3a-held-out-cli-test",
+        `--source-ref=${FULL_RUN_SOURCE_REF}`,
+        "--live",
+      ]),
+    ).toThrow(/output-dir.*approval-phrase/iu);
+  });
+
+  it("projects only sanitized CLI fields from a full-run result", async () => {
+    const sourceRef = execFileSync("git", ["rev-parse", "HEAD"], {
+      encoding: "utf8",
+    }).trim();
+    const runId = "quality-eval-3a-held-out-cli-projection-test";
+    const plan = await buildCoverLetterEval3aPlan({ sourceRef, runId });
+    const privateSentinel = "PRIVATE_HELD_OUT_RESULT_SENTINEL";
+    const result = {
+      status: "HUMAN_REVIEW_PENDING",
+      plan,
+      records: [
+        {
+          generation: { content: privateSentinel },
+          letter: privateSentinel,
+          debug: { rawGeneratedBody: privateSentinel },
+        },
+      ],
+      budget: {
+        limits: {
+          maxCalls: 10,
+          maxRepairs: 0,
+          maxUsd: 2,
+          declaredMaxUsdPerCall: 0.2,
+        },
+        usage: { reservedCalls: 10, reservedRepairs: 0, reservedUsd: 2 },
+      },
+      paths: {
+        packJsonPath: "/private-review/blind-review-pack.json",
+        packMarkdownPath: "/private-review/blind-review-pack.md",
+        revealMapJsonPath: "/private-reveal/blind-review-reveal-map.json",
+        ledgerJsonPath: "/private-evidence/eval3a-run-ledger.json",
+      },
+    } as unknown as Parameters<
+      typeof projectCoverLetterEval3aCliResult
+    >[0]["result"];
+
+    const projected = projectCoverLetterEval3aCliResult({
+      result,
+      runId,
+      sourceRef,
+    });
+    expect(projected).toEqual({
+      status: "HUMAN_REVIEW_PENDING",
+      planHash: plan.planHash,
+      runId,
+      sourceRef,
+      budget: {
+        maxCalls: 10,
+        maxRepairs: 0,
+        maxUsd: 2,
+        declaredMaxUsdPerCall: 0.2,
+        reservedCalls: 10,
+        reservedRepairs: 0,
+        reservedUsd: 2,
+      },
+      privatePaths: {
+        packJsonPath: "/private-review/blind-review-pack.json",
+        packMarkdownPath: "/private-review/blind-review-pack.md",
+        revealMapJsonPath: "/private-reveal/blind-review-reveal-map.json",
+        ledgerJsonPath: "/private-evidence/eval3a-run-ledger.json",
+      },
+    });
+    expect(JSON.stringify(projected)).not.toContain(privateSentinel);
+  });
 
   it("freezes the exact one-cell finalization diagnostic gate offline", async () => {
     const plan = await buildCoverLetterEval3aFinalizationDiagnosticPlan();
