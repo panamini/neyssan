@@ -111,7 +111,7 @@ export type CoverLetterBlindReviewRevealMap = Readonly<{
     caseId: string;
     writerProvider: CoverLetterHumanReviewRecord["diagnostics"]["provider"];
     writerModel: CoverLetterHumanReviewRecord["writerModel"];
-    artifactHash: string;
+    artifactHash: string | null;
     provenanceHash: string | null;
   }>[];
   revealMapHash: string;
