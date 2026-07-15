@@ -354,4 +354,72 @@ describe("QUALITY-EVAL-3C adaptive Luna/Sol screen", () => {
       ]),
     );
   });
+
+  it("preserves the first completed cell when the second status is unauthorized", async () => {
+    const outputDirectory = await createOutputDirectory();
+    const plan = await buildCoverLetterEval3cPlan({
+      sourceRef: SOURCE_REF,
+      runId: `${RUN_ID}-partial-ledger`,
+    });
+    let callCount = 0;
+
+    await expect(
+      runCoverLetterEval3cInitialScreen({
+        approvalPhrase: plan.approvalPhrase,
+        explicitLiveProviderOptIn: true,
+        maxCalls: 2,
+        maxRepairs: 0,
+        maxUsd: plan.budget.maxUsd,
+        declaredMaxUsdPerCall: plan.budget.declaredMaxUsdPerCall,
+        outputDirectory,
+        runId: `${RUN_ID}-partial-ledger`,
+        sourceRef: SOURCE_REF,
+        apiKey: "offline-test-key",
+        generateRecord: async ({
+          benchmarkCase,
+          writerModel,
+          reasoningEffort,
+          budget,
+        }) =>
+          budget.beginWriterAttempt().runProviderCall(async () => {
+            callCount += 1;
+            if (callCount === 2) {
+              return { status: "generation_failed", raw: RAW_SENTINEL };
+            }
+            return buildSyntheticResult({
+              benchmarkCase,
+              writerModel,
+              reasoningEffort,
+              failure: false,
+            });
+          }),
+      }),
+    ).rejects.toThrow(/non-authorized result status/u);
+
+    expect(callCount).toBe(2);
+    const ledger = JSON.parse(
+      await readFile(
+        path.join(
+          outputDirectory,
+          "private-evidence",
+          "eval3c-run-ledger.json",
+        ),
+        "utf8",
+      ),
+    ) as {
+      completedCellCount: number;
+      completedCells: Array<{
+        writerModel: string;
+        reasoningEffort: string;
+      }>;
+    };
+    expect(ledger.completedCellCount).toBe(1);
+    expect(ledger.completedCells).toEqual([
+      expect.objectContaining({
+        writerModel: "gpt-5.6-luna",
+        reasoningEffort: "low",
+      }),
+    ]);
+    expect(JSON.stringify(ledger)).not.toContain(RAW_SENTINEL);
+  });
 });

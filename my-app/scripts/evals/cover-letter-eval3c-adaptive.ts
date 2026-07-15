@@ -524,6 +524,13 @@ async function buildFailureReceipt(args: {
   const artifactHash = args.record.artifact
     ? await assertArtifactHash(args.record.artifact)
     : null;
+  if (
+    args.record.artifact?.provenanceHash !== undefined &&
+    args.record.artifact.provenanceHash !== null &&
+    !isHash(args.record.artifact.provenanceHash)
+  ) {
+    throw new Error("QUALITY-EVAL-3C received an invalid provenance hash.");
+  }
   return {
     version: "cover_letter_eval3c_failure_receipt_v1",
     cohortId: QUALITY_EVAL3C_COHORT_ID,
@@ -707,8 +714,8 @@ async function collectCells(args: {
   budget: ReturnType<typeof createCoverLetterEvalBudget>;
   apiKey: string;
   generateRecord: CoverLetterEval3cGenerateRecord;
-}): Promise<CoverLetterEval3cCell[]> {
-  const cells: CoverLetterEval3cCell[] = [];
+  cells: CoverLetterEval3cCell[];
+}): Promise<void> {
   for (const variant of QUALITY_EVAL3C_INITIAL_VARIANTS) {
     const rawResult = await args.generateRecord({
       benchmarkCase: args.benchmarkCase,
@@ -727,7 +734,7 @@ async function collectCells(args: {
         variant,
         record,
       });
-      cells.push({
+      args.cells.push({
         key: cellKey(args.benchmarkCase.id, variant.writerModel),
         variant,
         caseId: args.benchmarkCase.id,
@@ -748,7 +755,7 @@ async function collectCells(args: {
         variant,
         record,
       });
-      cells.push({
+      args.cells.push({
         key: cellKey(args.benchmarkCase.id, variant.writerModel),
         variant,
         caseId: args.benchmarkCase.id,
@@ -765,10 +772,12 @@ async function collectCells(args: {
       "QUALITY-EVAL-3C stopped fail-closed on a non-authorized result status.",
     );
   }
-  if (cells.length !== 2 || new Set(cells.map((cell) => cell.key)).size !== 2) {
+  if (
+    args.cells.length !== 2 ||
+    new Set(args.cells.map((cell) => cell.key)).size !== 2
+  ) {
     throw new Error("QUALITY-EVAL-3C did not complete its exact cell matrix.");
   }
-  return cells;
 }
 
 function buildFailureLedger(args: {
@@ -845,12 +854,13 @@ export async function runCoverLetterEval3cInitialScreen(
     args.generateRecord ?? benchmarkCoverLetterCaseForHumanReview;
   let cells: CoverLetterEval3cCell[] = [];
   try {
-    cells = await collectCells({
+    await collectCells({
       plan,
       benchmarkCase,
       budget,
       apiKey: args.apiKey,
       generateRecord,
+      cells,
     });
     const artifacts = await buildBlindArtifacts({
       plan,
