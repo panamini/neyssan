@@ -5,6 +5,7 @@ import { ChatMistralAI } from "@langchain/mistralai";
 import {
   llmConfig,
   resolveOpenAIProposalReasoningEffort,
+  type OpenAIProposalReasoningEffort,
 } from "../../../config/llmConfig";
 import {
   getDeterministicCopyLanguage,
@@ -5471,6 +5472,7 @@ type ExactPremiumCoverLetterOpenAIArgs = {
   signal?: AbortSignal;
   maxRetries?: number;
   maxOutputTokens?: number;
+  reasoningEffort?: OpenAIProposalReasoningEffort;
   onResponseMetadata?: (
     metadata: PremiumCoverLetterProviderResponseMetadata,
   ) => void;
@@ -5488,6 +5490,7 @@ export async function generatePremiumCoverLetterBodyPartsWithExactOpenAIModel(
     schema: responseFormat.jsonSchema,
     schemaName: responseFormat.name,
     maxOutputTokens: args.maxOutputTokens,
+    reasoningEffort: args.reasoningEffort,
   });
 
   const openaiModule: any = await import("openai").catch(() => null);
@@ -5509,9 +5512,7 @@ export async function generatePremiumCoverLetterBodyPartsWithExactOpenAIModel(
         {
           model: args.writerModel,
           input: args.prompt,
-          reasoning: {
-            effort: resolveOpenAIProposalReasoningEffort(),
-          },
+          reasoning: requestBody.reasoning,
           text: {
             verbosity: "medium",
             format: zodTextFormat(responseFormat.zodSchema, responseFormat.name),
@@ -5571,6 +5572,7 @@ export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
   signal?: AbortSignal;
   maxRetries?: number;
   maxOutputTokens?: number;
+  reasoningEffort?: OpenAIProposalReasoningEffort;
   onResponseMetadata?: (
     metadata: PremiumCoverLetterProviderResponseMetadata,
   ) => void;
@@ -5702,6 +5704,7 @@ export function buildPremiumCoverLetterOpenAIRequest(args: {
   schema?: Record<string, unknown>;
   schemaName?: string;
   maxOutputTokens?: number;
+  reasoningEffort?: OpenAIProposalReasoningEffort;
 }) {
   return buildPremiumCoverLetterOpenAIRequestForExactModel({
     ...args,
@@ -5715,6 +5718,7 @@ export function buildPremiumCoverLetterOpenAIRequestForExactModel(args: {
   schema?: Record<string, unknown>;
   schemaName?: string;
   maxOutputTokens?: number;
+  reasoningEffort?: OpenAIProposalReasoningEffort;
 }) {
   const schema = args.schema ?? PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA;
   const schemaName = args.schemaName ?? "premium_writer_output_v1";
@@ -5725,7 +5729,8 @@ export function buildPremiumCoverLetterOpenAIRequestForExactModel(args: {
       ? { max_output_tokens: args.maxOutputTokens }
       : {}),
     reasoning: {
-      effort: resolveOpenAIProposalReasoningEffort(),
+      effort:
+        args.reasoningEffort ?? resolveOpenAIProposalReasoningEffort(),
     },
     text: {
       verbosity: "medium",
