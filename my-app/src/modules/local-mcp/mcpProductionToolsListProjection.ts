@@ -1,5 +1,9 @@
 import { buildLocalMcpDescriptorRegistryMetadataOnly } from "./mcpDescriptorRegistry";
 import { TWOWEEKS_APPLICATIONS_READ_SCOPE } from "./mcpAuthPolicyBoundary";
+import {
+  buildMcpProductionReadonlySummaryOutputSchemaV2,
+} from "./mcpProductionReadonlySummaryProjectorV2";
+import { readMcpProductionReadonlySummaryToolName } from "./mcpProductionReadonlySummaryStatusNormalizer";
 import type { LocalMcpProjectedToolDescriptorV1 } from "./mcpSchemaProjection";
 
 type McpProductionToolSecuritySchemeV1 = Readonly<{
@@ -8,23 +12,32 @@ type McpProductionToolSecuritySchemeV1 = Readonly<{
 }>;
 
 type McpProductionJsonSchemaV1 = Readonly<{
-  type: "array" | "boolean" | "integer" | "number" | "object" | "string";
+  type?: "array" | "boolean" | "integer" | "number" | "object" | "string";
   description?: string;
   const?: string | number | boolean;
   enum?: readonly string[];
   minLength?: number;
+  minimum?: number;
+  maximum?: number;
   properties?: Readonly<Record<string, McpProductionJsonSchemaV1>>;
   required?: readonly string[];
   additionalProperties?: false | McpProductionJsonSchemaV1;
   items?: McpProductionJsonSchemaV1;
+  oneOf?: readonly McpProductionJsonSchemaV1[];
 }>;
+
+type McpProductionOutputSchemaV1 = Readonly<
+  McpProductionJsonSchemaV1 & {
+    type: "object";
+  }
+>;
 
 export type McpProductionToolDescriptorV1 = Readonly<{
   name: string;
   title: string;
   description: string;
   inputSchema: LocalMcpProjectedToolDescriptorV1["inputSchema"];
-  outputSchema: McpProductionJsonSchemaV1;
+  outputSchema: McpProductionOutputSchemaV1;
   annotations: LocalMcpProjectedToolDescriptorV1["annotations"];
   securitySchemes: readonly McpProductionToolSecuritySchemeV1[];
   _meta: Readonly<{
@@ -131,20 +144,6 @@ const FETCH_OUTPUT_SCHEMA = Object.freeze({
   }),
   required: Object.freeze(["id", "title", "text", "url"]),
 });
-const READONLY_SUMMARY_STATUS_OUTPUT_SCHEMA = Object.freeze({
-  type: "object" as const,
-  additionalProperties: false as const,
-  properties: Object.freeze({
-    kind: Object.freeze({ type: "string" as const, const: "mcp_readonly_summary_status_result" }),
-    status: Object.freeze({
-      type: "string" as const,
-      enum: Object.freeze(["OK", "STALE", "NO_DATA", "ONBOARDING_REQUIRED", "MALFORMED", "TIMEOUT", "DEPENDENCY_MISSING"]),
-    }),
-    toolName: Object.freeze({ type: "string" as const }),
-    version: Object.freeze({ type: "integer" as const, const: 1 }),
-  }),
-  required: Object.freeze(["kind", "status", "toolName", "version"]),
-});
 const COMPATIBILITY_TOOL_DESCRIPTORS: readonly McpProductionToolDescriptorV1[] = Object.freeze([
   Object.freeze({
     name: "search",
@@ -194,12 +193,16 @@ function readOnlyApplicationsScopeTuple(): readonly [typeof TWOWEEKS_APPLICATION
 function projectProductionToolDescriptor(
   descriptor: LocalMcpProjectedToolDescriptorV1,
 ): McpProductionToolDescriptorV1 {
+  const toolName = readMcpProductionReadonlySummaryToolName(descriptor.name);
+  if (!toolName) {
+    throw new TypeError("Production tools/list descriptor is not a read-only summary tool");
+  }
   return Object.freeze({
     name: descriptor.name,
     title: descriptor.title,
     description: productionToolDescription(descriptor),
     inputSchema: productionInputSchema(descriptor),
-    outputSchema: READONLY_SUMMARY_STATUS_OUTPUT_SCHEMA,
+    outputSchema: buildMcpProductionReadonlySummaryOutputSchemaV2(toolName),
     annotations: Object.freeze({ ...descriptor.annotations }),
     securitySchemes: OAUTH_READ_SECURITY_SCHEMES,
     _meta: Object.freeze({

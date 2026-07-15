@@ -292,6 +292,11 @@ export type McpProductionReadonlySummaryJsonSchemaV2 = Readonly<{
   oneOf?: readonly McpProductionReadonlySummaryJsonSchemaV2[];
 }>;
 
+export type McpProductionReadonlySummaryOutputSchemaV2 = Readonly<{
+  type: "object";
+  oneOf: readonly McpProductionReadonlySummaryJsonSchemaV2[];
+}>;
+
 type PublicDataAndActionV2 = Readonly<{
   data:
     | McpApplicationPackageSummaryDataV2
@@ -672,9 +677,10 @@ export function buildMcpProductionReadonlySummaryMcpResultV2(input: Readonly<{
 
 export function buildMcpProductionReadonlySummaryOutputSchemaV2(
   toolName: McpProductionReadonlySummaryToolNameV1,
-): McpProductionReadonlySummaryJsonSchemaV2 {
+): McpProductionReadonlySummaryOutputSchemaV2 {
   const contract = TOOL_SCHEMA_CONTRACTS[toolName];
   return Object.freeze({
+    type: "object" as const,
     oneOf: Object.freeze([
       resultBranchSchema(toolName, "OK", {
         freshness: constSchema("FRESH"),
