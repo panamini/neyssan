@@ -78,7 +78,7 @@ jobs:
           ./node_modules/.bin/vitest --run \
             src/modules/local-mcp/__tests__/mcpOAuthProductionRouteAdapter.test.ts \
             --reporter=dot \
-            --testNamePattern='returns authenticated production tools/list metadata|executes a safe read-only production tools/call summary|drops adversarial read-only summary executor sentinels'
+            --testNamePattern='returns authenticated production tools/list metadata|executes a safe V2 production tools/call summary|drops adversarial read-only summary executor sentinels'
 
       - name: Run MCP public catalog URL readiness contract
         working-directory: my-app
