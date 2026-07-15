@@ -15,6 +15,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { ListToolsResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildMcpOAuthProductionViteAllowedHosts,
@@ -62,7 +63,11 @@ import {
   type McpProductionReadonlySummaryExecutionInputV1,
   type McpProductionReadonlySummaryExecutionResultV1,
 } from "../mcpProductionReadonlySummaryExecutor";
-import { MCP_PRODUCTION_READONLY_SUMMARY_STATUS_RESULT_KIND } from "../mcpProductionReadonlySummaryStatusNormalizer";
+import {
+  buildMcpProductionReadonlySummaryMcpResultV2,
+  buildMcpProductionReadonlySummaryOutputSchemaV2,
+  MCP_PRODUCTION_READONLY_SUMMARY_RESULT_KIND_V2,
+} from "../mcpProductionReadonlySummaryProjectorV2";
 import { buildMcpProductionToolsListResult } from "../mcpProductionToolsListProjection";
 import type { McpOAuthProductionActivationDependenciesV1 } from "../mcpOAuthProductionActivationBoundary";
 import {
@@ -204,6 +209,7 @@ const READONLY_SUMMARY_CASES = Object.freeze([
     safeRefId: "mcp-safe-ref:application-package:latest",
     category: "application_package",
     dataReads: "convex_application_package_summary",
+    missingDataReason: "application_package_not_available",
   },
   {
     toolName: "twoweeks.evidence_graph.summarize",
@@ -214,6 +220,7 @@ const READONLY_SUMMARY_CASES = Object.freeze([
     safeRefId: "mcp-safe-ref:evidence-graph:profile",
     category: "evidence_graph",
     dataReads: "convex_evidence_graph_summary",
+    missingDataReason: "evidence_graph_not_available",
   },
   {
     toolName: "twoweeks.resume_variant_plan.summarize",
@@ -224,6 +231,7 @@ const READONLY_SUMMARY_CASES = Object.freeze([
     safeRefId: "mcp-safe-ref:resume-variant-plan:latest",
     category: "resume_variant_plan",
     dataReads: "convex_resume_variant_plan_summary",
+    missingDataReason: "resume_variant_plan_not_available",
   },
   {
     toolName: "twoweeks.review_cockpit.summarize",
@@ -234,6 +242,7 @@ const READONLY_SUMMARY_CASES = Object.freeze([
     safeRefId: "mcp-safe-ref:review-cockpit:latest",
     category: "review_cockpit",
     dataReads: "convex_review_cockpit_summary",
+    missingDataReason: "review_cockpit_not_available",
   },
 ] as const);
 const COMPATIBILITY_CATALOG_CASES = Object.freeze([
@@ -1635,7 +1644,11 @@ describe("MCP OAuth production route adapter", () => {
       },
     });
     const bodyText = JSON.stringify(response);
-    const tools = (response.json as { result: { tools: readonly Record<string, unknown>[] } }).result.tools;
+    const result = (response.json as {
+      result: { tools: readonly Record<string, unknown>[] };
+    }).result;
+    expect(() => ListToolsResultSchema.parse(result)).not.toThrow();
+    const tools = result.tools;
     expect(tools).toHaveLength(6);
     expect(tools.map((tool) => tool.name)).toEqual([
       "search",
@@ -1667,7 +1680,6 @@ describe("MCP OAuth production route adapter", () => {
       expect(tool._meta).toEqual({
         securitySchemes: [{ type: "oauth2", scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE] }],
       });
-      expect(tool.outputSchema).toMatchObject({ type: "object" });
       expect(tool).not.toHaveProperty("localToolId");
       expect(tool).not.toHaveProperty("internalToolId");
       expect(tool).not.toHaveProperty("handler");
@@ -1679,23 +1691,51 @@ describe("MCP OAuth production route adapter", () => {
       const toolCase = READONLY_SUMMARY_CASES.find((candidate) => candidate.toolName === tool.name);
       if (!toolCase) {
         expect(["search", "fetch"]).toContain(tool.name);
+        expect(tool.outputSchema).toEqual(tool.name === "search"
+          ? {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                results: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    properties: {
+                      id: { type: "string" },
+                      title: { type: "string" },
+                      url: { type: "string" },
+                    },
+                    required: ["id", "title", "url"],
+                  },
+                },
+              },
+              required: ["results"],
+            }
+          : {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                id: { type: "string" },
+                title: { type: "string" },
+                text: { type: "string" },
+                url: { type: "string" },
+                metadata: {
+                  type: "object",
+                  additionalProperties: { type: "string" },
+                },
+              },
+              required: ["id", "title", "text", "url"],
+            });
         continue;
       }
-      expect(tool.outputSchema).toEqual({
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          kind: { type: "string", const: MCP_PRODUCTION_READONLY_SUMMARY_STATUS_RESULT_KIND },
-          status: {
-            type: "string",
-            enum: ["OK", "STALE", "NO_DATA", "ONBOARDING_REQUIRED", "MALFORMED", "TIMEOUT", "DEPENDENCY_MISSING"],
-          },
-          toolName: { type: "string" },
-          version: { type: "integer", const: 1 },
-        },
-        required: ["kind", "status", "toolName", "version"],
-      });
+      expect(tool.outputSchema).toEqual(
+        buildMcpProductionReadonlySummaryOutputSchemaV2(toolCase.toolName),
+      );
       expect(JSON.stringify(tool.outputSchema)).not.toContain('"summary"');
+      expect(JSON.stringify(tool.outputSchema)).not.toContain("safeCounts");
+      expect(JSON.stringify(tool.outputSchema)).not.toContain("safeCategories");
+      expect(JSON.stringify(tool.outputSchema)).not.toContain("safeFlags");
       expect(String(tool.description)).toMatch(/^Use this to inspect read-only /u);
       const refSchema = (
         tool.inputSchema as {
@@ -1954,13 +1994,28 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(OWNER_ID);
   });
 
-  it.each(READONLY_SUMMARY_CASES)(
-    "executes a safe read-only production tools/call summary for $toolName after bearer token",
+  it.each(
+    READONLY_SUMMARY_CASES.flatMap((toolCase) =>
+      (["2025-06-18", "2025-11-25"] as const).map((protocolVersion) => ({
+        ...toolCase,
+        protocolVersion,
+      })),
+    ),
+  )(
+    "executes a safe V2 production tools/call summary for $toolName under protocol $protocolVersion",
     async (toolCase) => {
       const ctx = makeCtx();
       ctx.accessTokenRows.push(storedAccessToken());
       const activation = activationDependencies();
-      const dependencies = routeDependencies(ctx);
+      const executionResults: McpProductionReadonlySummaryExecutionResultV1[] = [];
+      const dependencies = {
+        ...routeDependencies(ctx),
+        executeReadonlySummaryTool: vi.fn(async (input) => {
+          const result = fakeReadonlySummaryExecutionResult(input);
+          executionResults.push(result);
+          return result;
+        }),
+      } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
       const response = await handleMcpOAuthProductionRouteRequest(
         mcpRequest(
           `Bearer ${RAW_ACCESS_TOKEN}`,
@@ -1969,7 +2024,7 @@ describe("MCP OAuth production route adapter", () => {
             arguments: { [toolCase.argumentKey]: { id: toolCase.safeRefId } },
             _meta: { progressToken: "progress-token-secret" },
           }),
-          { "mcp-protocol-version": "2025-11-25" },
+          { "mcp-protocol-version": toolCase.protocolVersion },
         ),
         routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }, activation),
         dependencies,
@@ -1981,23 +2036,34 @@ describe("MCP OAuth production route adapter", () => {
       json: {
         jsonrpc: "2.0",
         id: "tools-call-preserved",
-        result: {
-          content: [{ type: "text", text: "Read-only summary status: OK." }],
-          structuredContent: {
-            kind: MCP_PRODUCTION_READONLY_SUMMARY_STATUS_RESULT_KIND,
-            status: "OK",
-            toolName: toolCase.toolName,
-            version: 1,
-          },
-        },
       },
     });
-    const structuredContent = (
+    expect(executionResults).toHaveLength(1);
+    const executionResult = executionResults[0];
+    if (!executionResult) throw new Error("expected one read-only summary execution result");
+    const expectedMcpResult = buildMcpProductionReadonlySummaryMcpResultV2({
+      toolName: toolCase.toolName,
+      executionResult,
+      nowEpochMs: NOW,
+      forbiddenSubstrings: [OWNER_ID],
+      version: 2,
+    });
+    const result = (
       response.json as {
-        result: { structuredContent: Record<string, unknown> };
+        result: {
+          content: readonly unknown[];
+          structuredContent: Record<string, unknown>;
+        };
       }
-    ).result.structuredContent;
-    expect(Object.keys(structuredContent).sort()).toEqual(["kind", "status", "toolName", "version"]);
+    ).result;
+    expect(result).toEqual(expectedMcpResult);
+    expect(Object.keys(result).sort()).toEqual(["content", "structuredContent"]);
+    expect(result.structuredContent).toMatchObject({
+      kind: MCP_PRODUCTION_READONLY_SUMMARY_RESULT_KIND_V2,
+      status: "OK",
+      toolName: toolCase.toolName,
+      version: 2,
+    });
     const bodyText = JSON.stringify(response);
     expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(1);
     expect(dependencies.verifyAccessToken).toHaveBeenCalledTimes(1);
@@ -2049,6 +2115,93 @@ describe("MCP OAuth production route adapter", () => {
     expect(bodyText).not.toContain("refresh_token");
     expect(bodyText).not.toContain("authorizationCodeDigest");
     expect(bodyText).not.toContain("stack");
+    },
+  );
+
+  it.each([
+    {
+      expectedStatus: "STALE",
+      internalStatus: "available",
+      protocolVersion: "2025-06-18",
+      toolCase: READONLY_SUMMARY_CASES[1],
+      updatedAtEpochMs: NOW - 60 * 24 * 60 * 60 * 1_000,
+    },
+    {
+      expectedStatus: "NO_DATA",
+      internalStatus: "no_data_available",
+      protocolVersion: "2025-11-25",
+      toolCase: READONLY_SUMMARY_CASES[2],
+      updatedAtEpochMs: NOW,
+    },
+    {
+      expectedStatus: "ONBOARDING_REQUIRED",
+      internalStatus: "onboarding_required",
+      protocolVersion: "2025-06-18",
+      toolCase: READONLY_SUMMARY_CASES[3],
+      updatedAtEpochMs: NOW,
+    },
+  ] as const)(
+    "projects a valid summary call to V2 $expectedStatus without retrying the reader",
+    async ({ expectedStatus, internalStatus, protocolVersion, toolCase, updatedAtEpochMs }) => {
+      const ctx = makeCtx();
+      ctx.accessTokenRows.push(storedAccessToken());
+      const executionResults: McpProductionReadonlySummaryExecutionResultV1[] = [];
+      const dependencies = {
+        ...routeDependencies(ctx),
+        executeReadonlySummaryTool: vi.fn(async (input) => {
+          const result = fakeReadonlySummaryExecutionResult(input, updatedAtEpochMs, internalStatus);
+          executionResults.push(result);
+          return result;
+        }),
+      } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+      const response = await handleMcpOAuthProductionRouteRequest(
+        mcpRequest(
+          `Bearer ${RAW_ACCESS_TOKEN}`,
+          mcpJsonRpcRequest("tools/call", `tools-call-${expectedStatus.toLowerCase()}`, {
+            name: toolCase.toolName,
+            arguments: { [toolCase.argumentKey]: { id: toolCase.safeRefId } },
+          }),
+          { "mcp-protocol-version": protocolVersion },
+        ),
+        routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }, activationDependencies()),
+        dependencies,
+      );
+
+      expect(executionResults).toHaveLength(1);
+      const executionResult = executionResults[0];
+      if (!executionResult) throw new Error("expected one read-only summary execution result");
+      const expectedMcpResult = buildMcpProductionReadonlySummaryMcpResultV2({
+        toolName: toolCase.toolName,
+        executionResult,
+        nowEpochMs: NOW,
+        forbiddenSubstrings: [OWNER_ID],
+        version: 2,
+      });
+      const result = (
+        response.json as {
+          result: {
+            content: readonly unknown[];
+            structuredContent: Record<string, unknown>;
+          };
+        }
+      ).result;
+      expect(result).toEqual(expectedMcpResult);
+      expect(Object.keys(result).sort()).toEqual(["content", "structuredContent"]);
+      expect(result.structuredContent).toMatchObject({
+        kind: MCP_PRODUCTION_READONLY_SUMMARY_RESULT_KIND_V2,
+        status: expectedStatus,
+        toolName: toolCase.toolName,
+        version: 2,
+      });
+      expect(dependencies.executeReadonlySummaryTool).toHaveBeenCalledTimes(1);
+      const bodyText = JSON.stringify(response);
+      expect(bodyText).not.toContain("safeCounts");
+      expect(bodyText).not.toContain("safeCategories");
+      expect(bodyText).not.toContain("safeFlags");
+      expect(bodyText).not.toContain("capabilities");
+      expect(bodyText).not.toContain(toolCase.safeRefId);
+      expect(bodyText).not.toContain(OWNER_ID);
+      expect(bodyText).not.toContain('"summary"');
     },
   );
 
@@ -2190,12 +2343,13 @@ describe("MCP OAuth production route adapter", () => {
     const ctx = makeCtx();
     ctx.accessTokenRows.push(storedAccessToken());
     const toolCase = READONLY_SUMMARY_CASES[0];
+    const executionResults: McpProductionReadonlySummaryExecutionResultV1[] = [];
     const dependencies = {
       ...routeDependencies(ctx),
       executeReadonlySummaryTool: vi.fn(async (input) => {
         const base = fakeReadonlySummaryExecutionResult(input);
         if (!base.ok) return base;
-        return Object.freeze({
+        const result = Object.freeze({
           ...base,
           structuredContent: Object.freeze({
             ...base.structuredContent,
@@ -2204,6 +2358,8 @@ describe("MCP OAuth production route adapter", () => {
             ),
           }),
         });
+        executionResults.push(result);
+        return result;
       }),
     } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
     const response = await handleMcpOAuthProductionRouteRequest(
@@ -2228,14 +2384,28 @@ describe("MCP OAuth production route adapter", () => {
         result: {
           content: [{ type: "text", text: "Read-only summary status: MALFORMED." }],
           structuredContent: {
-            kind: MCP_PRODUCTION_READONLY_SUMMARY_STATUS_RESULT_KIND,
+            kind: MCP_PRODUCTION_READONLY_SUMMARY_RESULT_KIND_V2,
             status: "MALFORMED",
             toolName: toolCase.toolName,
-            version: 1,
+            nextActionCode: "contact_support",
+            retryable: false,
+            version: 2,
           },
         },
       },
     });
+    expect(executionResults).toHaveLength(1);
+    const executionResult = executionResults[0];
+    if (!executionResult) throw new Error("expected one adversarial summary execution result");
+    expect((response.json as { result: unknown }).result).toEqual(
+      buildMcpProductionReadonlySummaryMcpResultV2({
+        toolName: toolCase.toolName,
+        executionResult,
+        nowEpochMs: NOW,
+        forbiddenSubstrings: [OWNER_ID],
+        version: 2,
+      }),
+    );
     const bodyText = JSON.stringify(response);
     expect(dependencies.executeReadonlySummaryTool).toHaveBeenCalledTimes(1);
     expect(bodyText).not.toContain('"summary"');
@@ -2283,6 +2453,7 @@ describe("MCP OAuth production route adapter", () => {
       expect(JSON.stringify(response)).not.toContain(toolCase.rawRefId);
       expect(JSON.stringify(response)).not.toContain(OWNER_ID);
       expect(JSON.stringify(response)).not.toContain(LEGACY_TOOLS_CALL_SYNTHETIC_RESULT_KIND);
+      expect(JSON.stringify(response)).not.toContain(MCP_PRODUCTION_READONLY_SUMMARY_RESULT_KIND_V2);
     },
   );
 
@@ -2321,6 +2492,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(JSON.stringify(response)).not.toContain(RAW_ACCESS_TOKEN);
     expect(JSON.stringify(response)).not.toContain(ACCESS_TOKEN_DIGEST);
     expect(JSON.stringify(response)).not.toContain(OWNER_ID);
+    expect(JSON.stringify(response)).not.toContain(MCP_PRODUCTION_READONLY_SUMMARY_RESULT_KIND_V2);
   });
 
   it("fails malformed production tools/call params closed without executing a boundary result", async () => {
@@ -2356,6 +2528,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(dependencies.executeReadonlySummaryTool).not.toHaveBeenCalled();
     expect(JSON.stringify(response)).not.toContain("raw-ref-should-not-echo");
     expect(JSON.stringify(response)).not.toContain(LEGACY_TOOLS_CALL_SYNTHETIC_RESULT_KIND);
+    expect(JSON.stringify(response)).not.toContain(MCP_PRODUCTION_READONLY_SUMMARY_RESULT_KIND_V2);
   });
 
   it("fails a valid production tools/call safely when the read-only summary executor dependency is missing", async () => {
@@ -2384,14 +2557,24 @@ describe("MCP OAuth production route adapter", () => {
         result: {
           content: [{ type: "text", text: "Read-only summary status: DEPENDENCY_MISSING." }],
           structuredContent: {
-            kind: MCP_PRODUCTION_READONLY_SUMMARY_STATUS_RESULT_KIND,
+            kind: MCP_PRODUCTION_READONLY_SUMMARY_RESULT_KIND_V2,
             status: "DEPENDENCY_MISSING",
             toolName: "twoweeks.application_package.summarize",
-            version: 1,
+            nextActionCode: "try_again_later",
+            retryable: true,
+            version: 2,
           },
         },
       },
     });
+    expect((response.json as { result: unknown }).result).toEqual(
+      buildMcpProductionReadonlySummaryMcpResultV2({
+        toolName: "twoweeks.application_package.summarize",
+        failure: "dependency_missing",
+        nowEpochMs: NOW,
+        version: 2,
+      }),
+    );
     expect(JSON.stringify(response)).not.toContain("Invalid tools/call");
     expect(JSON.stringify(response)).not.toContain("raw-ref-missing-executor");
     expect(JSON.stringify(response)).not.toContain(LEGACY_TOOLS_CALL_SYNTHETIC_RESULT_KIND);
@@ -2428,14 +2611,24 @@ describe("MCP OAuth production route adapter", () => {
         result: {
           content: [{ type: "text", text: "Read-only summary status: MALFORMED." }],
           structuredContent: {
-            kind: MCP_PRODUCTION_READONLY_SUMMARY_STATUS_RESULT_KIND,
+            kind: MCP_PRODUCTION_READONLY_SUMMARY_RESULT_KIND_V2,
             status: "MALFORMED",
             toolName: "twoweeks.application_package.summarize",
-            version: 1,
+            nextActionCode: "contact_support",
+            retryable: false,
+            version: 2,
           },
         },
       },
     });
+    expect((response.json as { result: unknown }).result).toEqual(
+      buildMcpProductionReadonlySummaryMcpResultV2({
+        toolName: "twoweeks.application_package.summarize",
+        failure: "malformed",
+        nowEpochMs: NOW,
+        version: 2,
+      }),
+    );
     expect(dependencies.executeReadonlySummaryTool).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(response)).not.toContain("Invalid tools/call");
     expect(JSON.stringify(response)).not.toContain("raw-ref-executor-throw");
@@ -2480,14 +2673,24 @@ describe("MCP OAuth production route adapter", () => {
           result: {
             content: [{ type: "text", text: "Read-only summary status: TIMEOUT." }],
             structuredContent: {
-              kind: MCP_PRODUCTION_READONLY_SUMMARY_STATUS_RESULT_KIND,
+              kind: MCP_PRODUCTION_READONLY_SUMMARY_RESULT_KIND_V2,
               status: "TIMEOUT",
               toolName: "twoweeks.application_package.summarize",
-              version: 1,
+              nextActionCode: "retry_request",
+              retryable: true,
+              version: 2,
             },
           },
         },
       });
+      expect((response.json as { result: unknown }).result).toEqual(
+        buildMcpProductionReadonlySummaryMcpResultV2({
+          toolName: "twoweeks.application_package.summarize",
+          failure: "timeout",
+          nowEpochMs: NOW,
+          version: 2,
+        }),
+      );
       expect(dependencies.executeReadonlySummaryTool).toHaveBeenCalledTimes(1);
       expect(JSON.stringify(response)).not.toContain("Invalid tools/call");
       expect(JSON.stringify(response)).not.toContain("raw-ref-executor-timeout");
@@ -2764,7 +2967,16 @@ describe("MCP OAuth production route adapter", () => {
       ]);
       expect(tool).not.toHaveProperty("localToolId");
       expect(tool).not.toHaveProperty("internalToolId");
-      expect(tool.outputSchema).toMatchObject({ type: "object" });
+      const readonlySummaryCase = READONLY_SUMMARY_CASES.find(
+        ({ toolName }) => toolName === tool.name,
+      );
+      if (readonlySummaryCase) {
+        expect(tool.outputSchema).toEqual(
+          buildMcpProductionReadonlySummaryOutputSchemaV2(readonlySummaryCase.toolName),
+        );
+      } else {
+        expect(tool.outputSchema).toMatchObject({ type: "object" });
+      }
     }
   });
 
@@ -6167,20 +6379,26 @@ describe("MCP OAuth production route adapter", () => {
     expect(response.next).not.toHaveBeenCalled();
     expect(response.statusCode).toBe(200);
     const body = JSON.parse(response.body);
-    expect(body).toMatchObject({
+    const expectedExecutionResult = fakeReadonlySummaryExecutionResult(
+      {
+        toolName: toolCase.toolName,
+        twoweeksClerkId: OWNER_ID,
+        ref: { id: toolCase.safeRefId },
+        version: 1,
+      },
+      NOW,
+    );
+    if (!expectedExecutionResult.ok) throw new Error("expected fake read-only summary success");
+    expect(body).toEqual({
       jsonrpc: "2.0",
       id: "vite-readonly-summary",
-      result: {
-        content: [{ type: "text", text: "Read-only summary status: OK." }],
-        structuredContent: {
-          kind: MCP_PRODUCTION_READONLY_SUMMARY_STATUS_RESULT_KIND,
-          status: "OK",
-          toolName: toolCase.toolName,
-          version: 1,
-        },
-      },
+      result: buildMcpProductionReadonlySummaryMcpResultV2({
+        toolName: toolCase.toolName,
+        executionResult: expectedExecutionResult,
+        nowEpochMs: NOW,
+        version: 2,
+      }),
     });
-    expect(Object.keys(body.result.structuredContent).sort()).toEqual(["kind", "status", "toolName", "version"]);
     expect(convexHttpClientQuery).toHaveBeenCalledTimes(2);
     expect(convexHttpClientMutation).not.toHaveBeenCalled();
     expect(convexHttpClientQuery.mock.calls[0]?.[1]).toMatchObject({
@@ -7423,9 +7641,16 @@ function routeDependencies(ctx: ReturnType<typeof makeCtx>) {
 function fakeReadonlySummaryExecutionResult(
   input: McpProductionReadonlySummaryExecutionInputV1,
   updatedAtEpochMs = NOW,
+  status: "available" | "no_data_available" | "onboarding_required" = "available",
 ): McpProductionReadonlySummaryExecutionResultV1 {
   const toolCase = READONLY_SUMMARY_CASES.find((candidate) => candidate.toolName === input.toolName);
   if (!toolCase) return fakeReadonlySummaryExecutionFailure("unsupported_tool");
+  const projectionData = fakeReadonlySummaryProjectionData(input.toolName);
+  const missingDataReason = status === "onboarding_required"
+    ? "owner_onboarding_required"
+    : status === "no_data_available"
+      ? toolCase.missingDataReason
+      : undefined;
   return Object.freeze({
     ok: true as const,
     content: Object.freeze([
@@ -7437,26 +7662,28 @@ function fakeReadonlySummaryExecutionResult(
     structuredContent: Object.freeze({
       kind: toolCase.expectedKind,
       allowed: true,
-      status: "available",
+      status,
       updatedAt: new Date(updatedAtEpochMs).toISOString(),
       [toolCase.resultRefKey]: Object.freeze({
         id: toolCase.safeRefId,
         label: "Safe summary availability",
-        status: "available",
+        status,
         category: toolCase.category,
-        count: 1,
+        count: status === "available" ? 1 : 0,
         updatedAt: new Date(updatedAtEpochMs).toISOString(),
         version: 1,
       }),
       availability: Object.freeze({
         source: toolCase.dataReads,
-        ownerState: "resolved",
+        ownerState: status === "onboarding_required" ? "onboarding_required" : "resolved",
         version: 1,
       }),
-      safeCounts: Object.freeze({ version: 1 }),
-      safeCategories: Object.freeze({ version: 1 }),
+      safeCounts: projectionData.safeCounts,
+      safeCategories: projectionData.safeCategories,
+      ...(projectionData.safeFlags ? { safeFlags: projectionData.safeFlags } : {}),
+      ...(missingDataReason ? { missingDataReason } : {}),
       capabilities: Object.freeze({
-        ownerResolution: "server_only",
+        ownerResolution: status === "onboarding_required" ? "blocked" : "server_only",
         dataReads: toolCase.dataReads,
         dataWrites: "blocked",
         handlerExecution: "blocked",
@@ -7473,6 +7700,67 @@ function fakeReadonlySummaryExecutionResult(
     modelVisible: true as const,
     version: 1 as const,
   });
+}
+
+function fakeReadonlySummaryProjectionData(
+  toolName: McpProductionReadonlySummaryExecutionInputV1["toolName"],
+): Readonly<{
+  safeCounts: Readonly<Record<string, unknown>>;
+  safeCategories: Readonly<Record<string, unknown>>;
+  safeFlags?: Readonly<Record<string, unknown>>;
+}> {
+  switch (toolName) {
+    case "twoweeks.application_package.summarize":
+      return Object.freeze({
+        safeCounts: Object.freeze({ artifacts: 2, reviewItems: 0, warnings: 0, blockers: 0, version: 1 }),
+        safeCategories: Object.freeze({ packageStatus: "ready_for_review", version: 1 }),
+      });
+    case "twoweeks.evidence_graph.summarize":
+      return Object.freeze({
+        safeCounts: Object.freeze({ approvedFacts: 6, missingEvidence: 0, staleSources: 0, blockers: 0, version: 1 }),
+        safeCategories: Object.freeze({
+          evidenceCoverage: "complete",
+          provenanceCoverage: "complete",
+          qualityStatus: "ready_for_review",
+          blockerCategory: "none",
+          nextReviewHint: "ready_for_review",
+          version: 1,
+        }),
+      });
+    case "twoweeks.resume_variant_plan.summarize":
+      return Object.freeze({
+        safeCounts: Object.freeze({ planItems: 7, claimBackedItems: 7, reviewNeededItems: 0, blockers: 0, version: 1 }),
+        safeCategories: Object.freeze({
+          planStatus: "ready_for_review",
+          targetDocumentKind: "resume",
+          tailoringCompleteness: "complete",
+          blockerCategory: "none",
+          missingInputCategory: "none",
+          nextReviewHint: "ready_for_review",
+          version: 1,
+        }),
+      });
+    case "twoweeks.review_cockpit.summarize":
+      return Object.freeze({
+        safeCounts: Object.freeze({
+          pendingReviews: 0,
+          approvedReviews: 1,
+          blockedReviews: 0,
+          missingReviewItems: 0,
+          version: 1,
+        }),
+        safeCategories: Object.freeze({
+          reviewReadiness: "ready_for_review",
+          reviewGateStatus: "ready",
+          blockerCategory: "none",
+          missingReviewCategory: "none",
+          nextReviewHint: "ready_for_review",
+          nextUserAction: "none",
+          version: 1,
+        }),
+        safeFlags: Object.freeze({ approvalNeeded: false, staleData: false, overLimit: false, version: 1 }),
+      });
+  }
 }
 
 function fakeReadonlySummaryExecutionFailure(
