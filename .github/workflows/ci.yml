@@ -130,10 +130,16 @@ jobs:
         run: |
           ./node_modules/.bin/vitest --run \
             convex/lib/proposals/__tests__/coverLetterPolicyCandidate.test.ts \
+            convex/lib/proposals/__tests__/proposalWriterPrompt.test.ts \
             scripts/evals/__tests__/benchmark-cover-letter-writers.test.ts \
             scripts/evals/__tests__/cover-letter-policy-shadow.test.ts \
             scripts/evals/__tests__/cover-letter-eval-artifact.test.ts \
             scripts/evals/__tests__/cover-letter-eval-budget.test.ts \
+            scripts/evals/__tests__/cover-letter-eval3c-adaptive.test.ts \
+            scripts/evals/__tests__/cover-letter-eval3c-v2.test.ts \
+            scripts/evals/__tests__/cover-letter-final-artifact-attribution-shadow.test.ts \
+            scripts/evals/__tests__/cover-letter-final-sendability-shadow.test.ts \
+            scripts/evals/__tests__/cover-letter-structure-aware-finalizer-canary.test.ts \
             scripts/evals/__tests__/stability-cover-letter-mini.test.ts
           ./node_modules/.bin/tsx scripts/evals/benchmark-cover-letter-writers.ts
           ./node_modules/.bin/tsx scripts/evals/cover-letter-policy-shadow.ts
