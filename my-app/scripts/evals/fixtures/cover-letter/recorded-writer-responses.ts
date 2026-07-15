@@ -74,7 +74,7 @@ const rawRecordedCoverLetterReplayFixtures = [
     writerProvider: "openai",
     writerModel: "gpt-5.5",
     expectedArtifactHash:
-      "ba450d1c42cade962278f2f20ebaf42f51f9ad9e4fd352eab00c12343430e494",
+      "eb98705be57c3d687afa215fb5c127260e9ff7933fa8d32d1f98f4223b71dfb3",
     expectedProvenanceHash:
       "fcc559d0ab92833c8f0ea5fc02d8125e58e7a10c4159d47a54a8169e16935acf",
     frozenConfig: {
@@ -151,9 +151,9 @@ const rawRecordedCoverLetterReplayFixtures = [
     writerProvider: "mistral",
     writerModel: "mistral-medium-latest",
     expectedArtifactHash:
-      "7f23421f89e66497f25e51de8649cf79828c169cd8077cb25db1250d4e4a467b",
+      "ca29a27fdba65c332596554ebd542bc253186424aab10a6b9f9de712d8133a08",
     expectedProvenanceHash:
-      "f182807ad2b0adb9a1a952c1470a13bb3d419d5d46186e9918bb7b4e6e74a5d6",
+      "e4e737318e397fbf7bdcd1dc52834ffaad1600797fe29cc00037fdf635cd1860",
     frozenConfig: {
       outputLanguage: "English",
       generationControlsBlock: "",

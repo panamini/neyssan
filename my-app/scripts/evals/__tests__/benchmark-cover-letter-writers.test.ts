@@ -1194,7 +1194,7 @@ describe("benchmark-cover-letter-writers", () => {
     ).toEqual([
       {
         artifact:
-          "ba450d1c42cade962278f2f20ebaf42f51f9ad9e4fd352eab00c12343430e494",
+          "eb98705be57c3d687afa215fb5c127260e9ff7933fa8d32d1f98f4223b71dfb3",
         provenance:
           "fcc559d0ab92833c8f0ea5fc02d8125e58e7a10c4159d47a54a8169e16935acf",
         prompts: [
@@ -1203,9 +1203,9 @@ describe("benchmark-cover-letter-writers", () => {
       },
       {
         artifact:
-          "7f23421f89e66497f25e51de8649cf79828c169cd8077cb25db1250d4e4a467b",
+          "ca29a27fdba65c332596554ebd542bc253186424aab10a6b9f9de712d8133a08",
         provenance:
-          "f182807ad2b0adb9a1a952c1470a13bb3d419d5d46186e9918bb7b4e6e74a5d6",
+          "e4e737318e397fbf7bdcd1dc52834ffaad1600797fe29cc00037fdf635cd1860",
         prompts: [
           "26975eaca25cb7ed352ce841b108b8e5442980655e9061fb733b3397f6ec1c3a",
         ],
@@ -1295,7 +1295,7 @@ describe("benchmark-cover-letter-writers", () => {
     )!;
     expect(mistral.artifact.provenance).toMatchObject({
       origin: "provider_reported",
-      status: "validated_after_structured_repair",
+      status: "validated_final_text",
       sections: {
         opening: {
           claimIds: ["claim_opening_001"],
@@ -1357,8 +1357,10 @@ describe("benchmark-cover-letter-writers", () => {
     const parsed = recordedCoverLetterReplayFixtureSchema.parse({
       ...fixture,
       id: "mistral-adjacent-repair-v1",
-      expectedArtifactHash: fixture.expectedArtifactHash,
-      expectedProvenanceHash: fixture.expectedProvenanceHash,
+      expectedArtifactHash:
+        "8cbeebf601ca3914d01e5dce1f12cb25795f1154f2b30ed8c66146251064802b",
+      expectedProvenanceHash:
+        "f182807ad2b0adb9a1a952c1470a13bb3d419d5d46186e9918bb7b4e6e74a5d6",
       responses: [
         {
           ...firstResponse,
@@ -1392,8 +1394,8 @@ describe("benchmark-cover-letter-writers", () => {
     expect(result.writerCallCount).toBe(2);
     expect(result.artifact).toMatchObject({
       decision: "accepted",
-      artifactHash: fixture.expectedArtifactHash,
-      provenanceHash: fixture.expectedProvenanceHash,
+      artifactHash: parsed.expectedArtifactHash,
+      provenanceHash: parsed.expectedProvenanceHash,
       provenance: {
         origin: "provider_reported",
         status: "validated_after_structured_repair",

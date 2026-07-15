@@ -103,6 +103,7 @@ import {
   isCoverLetterPremiumPathV1Enabled,
   premiumCoverLetterFinalProvenanceSatisfiesCandidateEvidence,
   refreshPremiumCoverLetterFinalProvenanceForContent,
+  renderPremiumCoverLetter,
   resolvePremiumCoverLetterWriterModel,
   type CoverLetterBodyParts,
   type PremiumCoverLetterFailureTrace,
@@ -5290,6 +5291,9 @@ function isClosingDiscussionSentence(sentence: string): boolean {
     /^i\s+would\s+(?:be\s+glad|be\s+happy|welcome)\b[^.!?\n]{0,120}\bdiscuss\s+my\s+interest\s+in\s+(?:the\s+)?(?:role|position|opportunity)\b/.test(
       normalized,
     ) ||
+    /^i\s+would\s+(?:be\s+glad|be\s+happy|welcome(?:\s+the\s+(?:opportunity|chance))?)\b[^.!?\n]{0,120}\bdiscuss\s+(?:the\s+)?(?:role|position|opportunity)\s+further\b/.test(
+      normalized,
+    ) ||
     /^merci\b[^.!?\n]{0,120}\b(?:ma candidature|l['’]attention portee a ma candidature)\b/.test(
       normalized,
     ) ||
@@ -9706,6 +9710,7 @@ export function finalizeProposalForSave(args: {
   voicePreset: ProposalVoicePreset;
   noContextMode: boolean;
   acceptanceMode?: ProposalBodyAcceptanceMode;
+  finalSentenceOverride?: string | null;
   debugTrace?: ProposalFinalizationDebugTrace;
 }): string {
   if (args.format !== "cover_letter" && args.format !== "application_message") {
@@ -9747,15 +9752,20 @@ export function finalizeProposalForSave(args: {
             debugTrace: args.debugTrace,
           })
         : selectedBody;
+  const bodyWithFinalSentenceOverride =
+    args.format === "cover_letter" && args.finalSentenceOverride !== undefined
+      ? stripTrailingClosingDiscussion(bodyForBoundaryRendering)
+      : bodyForBoundaryRendering;
 
   try {
     const rendered = applyDeterministicProposalBoundaries({
-      body: bodyForBoundaryRendering,
+      body: bodyWithFinalSentenceOverride,
       format: args.format,
       outputLanguage: args.outputLanguage,
       candidateName: args.candidateName,
       voicePreset: args.voicePreset,
       noContextMode: args.noContextMode,
+      finalSentenceOverride: args.finalSentenceOverride,
     });
     if (args.debugTrace) {
       args.debugTrace.deterministicBoundaryApplication = {
@@ -9781,6 +9791,7 @@ export function finalizeProposalForPersistence(args: {
   noContextMode: boolean;
   requiresCandidateEvidence?: boolean;
   acceptanceMode?: ProposalBodyAcceptanceMode;
+  finalSentenceOverride?: string | null;
   premiumFinalProvenance?: PremiumCoverLetterFinalProvenance;
   debugTrace?: ProposalFinalizationDebugTrace;
 }): string {
@@ -9901,6 +9912,7 @@ export function finalizeProposalForPersistence(args: {
           candidateName: args.candidateName,
           voicePreset: args.voicePreset,
           noContextMode: args.noContextMode,
+          finalSentenceOverride: args.finalSentenceOverride,
         });
         guarded = applyFinalSavedOutputBridgeGuard({
           content: guarded,
@@ -10068,15 +10080,8 @@ function buildPremiumQualityShadowBodyPartsFromSavedContent(args: {
     .map((paragraph) => compactWhitespace(paragraph))
     .filter(Boolean);
 
-  if (paragraphs.length < 4) {
-    return args.fallbackBodyParts;
-  }
-
-  const [opening, proofBlock, ...remaining] = paragraphs;
-  const closeLine = remaining.pop();
-  if (!opening || !proofBlock || !closeLine || remaining.length === 0) {
-    return args.fallbackBodyParts;
-  }
+  const [opening = "", proofBlock = "", ...remaining] = paragraphs;
+  const closeLine = remaining.length > 0 ? remaining.pop() ?? "" : "";
 
   return {
     opening,
@@ -10084,6 +10089,53 @@ function buildPremiumQualityShadowBodyPartsFromSavedContent(args: {
     employerValueBlock: remaining.join(" "),
     closeLine,
   };
+}
+
+const PREMIUM_STRUCTURED_SECTION_ORDER = [
+  "opening",
+  "proofBlock",
+  "employerValueBlock",
+  "closeLine",
+] as const satisfies readonly (keyof CoverLetterBodyParts)[];
+
+function hasTrustedStructuredPremiumPersistenceSource(args: {
+  content: string;
+  bodyParts: CoverLetterBodyParts | undefined;
+  finalProvenance: PremiumCoverLetterFinalProvenance | undefined;
+  outputLanguage: ProposalOutputLanguage;
+  candidateName?: string;
+}): args is {
+  content: string;
+  bodyParts: CoverLetterBodyParts;
+  finalProvenance: PremiumCoverLetterFinalProvenance;
+  outputLanguage: ProposalOutputLanguage;
+  candidateName?: string;
+} {
+  if (
+    !args.bodyParts ||
+    !args.finalProvenance ||
+    ![
+      "validated_final_text",
+      "validated_after_structured_repair",
+    ].includes(args.finalProvenance.status)
+  ) {
+    return false;
+  }
+  const canonicalContent = renderPremiumCoverLetter({
+    bodyParts: args.bodyParts,
+    outputLanguage: args.outputLanguage,
+    candidateName: args.candidateName,
+  }).content;
+  if (args.content !== canonicalContent) {
+    return false;
+  }
+  return PREMIUM_STRUCTURED_SECTION_ORDER.every(
+    (section) =>
+      normalizeProposalConstraintText(args.bodyParts![section]) ===
+      normalizeProposalConstraintText(
+        args.finalProvenance!.sections[section].text,
+      ),
+  );
 }
 
 export function finalizePremiumCoverLetterPayloadForPersistence(args: {
@@ -10111,18 +10163,50 @@ export function finalizePremiumCoverLetterPayloadForPersistence(args: {
 } {
   const noContextMode =
     args.format === "cover_letter" && !args.hasCandidateContext;
-  const content = finalizeProposalForPersistence({
+  const structuredSource = {
     content: args.payload.content,
-    format: args.format,
+    bodyParts: args.payload.bodyParts,
+    finalProvenance: args.payload.finalProvenance,
     outputLanguage: args.outputLanguage,
     candidateName: args.candidateName,
-    voicePreset: args.voicePreset,
-    noContextMode,
-    requiresCandidateEvidence:
-      args.format === "cover_letter" && args.hasCandidateContext,
-    premiumFinalProvenance: args.payload.finalProvenance,
-    debugTrace: args.debugTrace,
-  });
+  };
+  const trustedStructuredSource =
+    hasTrustedStructuredPremiumPersistenceSource(structuredSource);
+  const content = trustedStructuredSource
+    ? renderPremiumCoverLetter({
+        bodyParts: structuredSource.bodyParts,
+        outputLanguage: args.outputLanguage,
+        candidateName: args.candidateName,
+      }).content
+    : finalizeProposalForPersistence({
+        content: args.payload.content,
+        format: args.format,
+        outputLanguage: args.outputLanguage,
+        candidateName: args.candidateName,
+        voicePreset: args.voicePreset,
+        noContextMode,
+        finalSentenceOverride: args.payload.bodyParts?.closeLine,
+        requiresCandidateEvidence:
+          args.format === "cover_letter" && args.hasCandidateContext,
+        premiumFinalProvenance: args.payload.finalProvenance,
+        debugTrace: args.debugTrace,
+      });
+  if (trustedStructuredSource) {
+    assertCvBackedCoverLetterHasCandidateEvidence({
+      content,
+      format: args.format,
+      outputLanguage: args.outputLanguage,
+      candidateName: args.candidateName,
+      requiresCandidateEvidence:
+        args.format === "cover_letter" && args.hasCandidateContext,
+      premiumFinalProvenance: structuredSource.finalProvenance,
+      debugTrace: args.debugTrace,
+    });
+    if (args.debugTrace) {
+      args.debugTrace.deterministicBoundaryApplication = { content };
+      args.debugTrace.finalOutput = content;
+    }
+  }
 
   const finalProvenance = args.payload.finalProvenance
     ? refreshPremiumCoverLetterFinalProvenanceForContent({

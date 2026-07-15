@@ -5,9 +5,13 @@ import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PremiumCoverLetterAttemptResult } from "../../../convex/lib/proposals/premiumCoverLetter";
-import { benchmarkCoverLetterCaseForHumanReview } from "../benchmark-cover-letter-writers";
+import {
+  benchmarkCoverLetterCaseForHumanReview,
+  type CoverLetterHumanReviewRecord,
+} from "../benchmark-cover-letter-writers";
 import type { CoverLetterBenchmarkCase } from "../cases/cover-letter/cases";
 import { QUALITY_EVAL3A_HELD_OUT_CASE_IDS } from "../cover-letter-eval3a-held-out";
+import { buildCoverLetterEvalArtifactHash } from "../cover-letter-eval-artifact";
 import {
   QUALITY_EVAL3C_INITIAL_VARIANTS,
   buildCoverLetterEval3cPlan,
@@ -22,6 +26,32 @@ const SOURCE_REF = execFileSync("git", ["rev-parse", "HEAD"], {
 }).trim();
 const RUN_ID = "quality-eval-3c-adaptive-test-run";
 const RAW_SENTINEL = "RAW_PROVIDER_SENTINEL_MUST_NOT_SERIALIZE";
+const HARD_BLOCKED_LETTER = [
+  "Dear Hiring Manager,",
+  "",
+  "I improved 90-day retention by 18% by redesigning onboarding checkpoints and escalation triggers.",
+  "",
+  "As Customer Success Manager at Lumio Health, I managed a portfolio of 40+ enterprise accounts with quarterly business reviews.",
+  "",
+  "I would be glad to discuss the position further.",
+  "",
+  "Sincerely,",
+  "Priya Sharma",
+].join("\n");
+const REVIEWABLE_LETTER = [
+  "Dear Hiring Manager,",
+  "",
+  "Customer success work is most useful when onboarding, account health, and business reviews operate as one retention system rather than separate activities.",
+  "",
+  "At Lumio Health, I improved 90-day retention by 18% by redesigning onboarding checkpoints and escalation triggers, while managing a portfolio of 40+ enterprise accounts with quarterly business reviews. I also built a customer health-score dashboard used by the CS team to prioritize at-risk accounts.",
+  "",
+  "For a role focused on enterprise account health, onboarding, retention, and expansion, that combination of account management and reporting would help keep risk visible and follow-through clear.",
+  "",
+  "I would bring the same disciplined, data-led approach to the health of your enterprise accounts.",
+  "",
+  "Sincerely,",
+  "Priya Sharma",
+].join("\n");
 const temporaryDirectories: string[] = [];
 
 const bodyParts = {
@@ -160,6 +190,34 @@ async function buildSyntheticResult(args: {
   };
 }
 
+async function replaceFinalContent(
+  result: unknown,
+  finalContent: string,
+): Promise<CoverLetterHumanReviewRecord> {
+  const record = result as CoverLetterHumanReviewRecord;
+  const { artifactHash: _artifactHash, ...projection } = record.artifact;
+  const updatedProjection = {
+    ...projection,
+    finalContent,
+    sections: [{ type: "text" as const, content: finalContent }],
+  };
+  const artifactHash = await buildCoverLetterEvalArtifactHash(updatedProjection);
+  return {
+    ...record,
+    letter: finalContent,
+    artifact: { ...updatedProjection, artifactHash },
+    runManifest: record.runManifest
+      ? { ...record.runManifest, artifactHash }
+      : record.runManifest,
+  };
+}
+
+async function replaceFinalContentWithHardBlockedLetter(
+  result: unknown,
+): Promise<CoverLetterHumanReviewRecord> {
+  return replaceFinalContent(result, HARD_BLOCKED_LETTER);
+}
+
 afterEach(async () => {
   await Promise.all(
     temporaryDirectories
@@ -283,12 +341,15 @@ describe("QUALITY-EVAL-3C adaptive Luna/Sol screen", () => {
       }) =>
         budget.beginWriterAttempt().runProviderCall(async () => {
           calls.push(`${writerModel}@${reasoningEffort}`);
-          return buildSyntheticResult({
+          const syntheticResult = await buildSyntheticResult({
             benchmarkCase,
             writerModel,
             reasoningEffort,
             failure: writerModel === "gpt-5.6-luna",
           });
+          return writerModel === "gpt-5.6-luna"
+            ? syntheticResult
+            : replaceFinalContent(syntheticResult, REVIEWABLE_LETTER);
         }),
     });
 
@@ -298,6 +359,7 @@ describe("QUALITY-EVAL-3C adaptive Luna/Sol screen", () => {
       completedCellCount: 2,
       reviewableCellCount: 1,
       safetyVetoCount: 1,
+      editorialVetoCount: 0,
     });
     expect(result.failureReceipts[0]).toMatchObject({
       variantId: "luna-low",
@@ -353,6 +415,71 @@ describe("QUALITY-EVAL-3C adaptive Luna/Sol screen", () => {
         },
       ]),
     );
+  });
+
+  it("classifies final-visible HARD_BLOCKED letters as editorial vetoes", async () => {
+    const outputDirectory = await createOutputDirectory();
+    const plan = await buildCoverLetterEval3cPlan({
+      sourceRef: SOURCE_REF,
+      runId: `${RUN_ID}-editorial-veto`,
+    });
+    const result = await runCoverLetterEval3cInitialScreen({
+      approvalPhrase: plan.approvalPhrase,
+      explicitLiveProviderOptIn: true,
+      maxCalls: 2,
+      maxRepairs: 0,
+      maxUsd: plan.budget.maxUsd,
+      declaredMaxUsdPerCall: plan.budget.declaredMaxUsdPerCall,
+      outputDirectory,
+      runId: `${RUN_ID}-editorial-veto`,
+      sourceRef: SOURCE_REF,
+      apiKey: "offline-test-key",
+      generateRecord: async ({
+        benchmarkCase,
+        writerModel,
+        reasoningEffort,
+        budget,
+      }) =>
+        budget.beginWriterAttempt().runProviderCall(async () =>
+          replaceFinalContentWithHardBlockedLetter(
+            await buildSyntheticResult({
+              benchmarkCase,
+              writerModel,
+              reasoningEffort,
+              failure: false,
+            }),
+          ),
+        ),
+    });
+
+    expect(result).toMatchObject({
+      status: "OUTCOME_COMPLETE_NO_REVIEWABLE_ARTIFACTS",
+      completedCellCount: 2,
+      reviewableCellCount: 0,
+      safetyVetoCount: 0,
+      editorialVetoCount: 2,
+    });
+    const [packJson, revealJson, ledgerJson] = await Promise.all(
+      [
+        result.paths.packJsonPath,
+        result.paths.revealMapJsonPath,
+        result.paths.ledgerJsonPath,
+      ].map((filePath) => readFile(filePath, "utf8")),
+    );
+    const pack = JSON.parse(packJson) as CoverLetterEval3cBlindReviewPack;
+    const reveal = JSON.parse(
+      revealJson,
+    ) as CoverLetterEval3cBlindReviewRevealMap;
+    expect(pack.entries).toHaveLength(0);
+    expect(pack.failureMatrix).toEqual([
+      expect.objectContaining({ outcome: "editorial_veto" }),
+      expect.objectContaining({ outcome: "editorial_veto" }),
+    ]);
+    expect(reveal.entries.every((entry) => entry.outcome === "editorial_veto")).toBe(
+      true,
+    );
+    expect(ledgerJson).toContain("visible_structure_loss_signature");
+    expect(ledgerJson).not.toContain(HARD_BLOCKED_LETTER);
   });
 
   it("preserves the first completed cell when the second status is unauthorized", async () => {

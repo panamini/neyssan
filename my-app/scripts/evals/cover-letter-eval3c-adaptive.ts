@@ -20,6 +20,10 @@ import {
   buildCoverLetterEvalArtifactHash,
   type CoverLetterEvalArtifact,
 } from "./cover-letter-eval-artifact";
+import {
+  evaluateCoverLetterFinalSendability,
+  type CoverLetterFinalSendabilityResult,
+} from "./cover-letter-final-sendability-shadow";
 import { createCoverLetterEvalBudget } from "./cover-letter-eval-budget";
 import {
   assertCoverLetterEvalPrivateArtifactTargetsAvailable,
@@ -144,7 +148,10 @@ export type CoverLetterEval3cFailureReceipt = Readonly<{
   }>;
 }>;
 
-type CoverLetterEval3cCellOutcome = "human_review_pending" | "safety_veto";
+type CoverLetterEval3cCellOutcome =
+  | "human_review_pending"
+  | "safety_veto"
+  | "editorial_veto";
 
 type CoverLetterEval3cCell = Readonly<{
   key: string;
@@ -156,11 +163,12 @@ type CoverLetterEval3cCell = Readonly<{
   provenanceHash: string | null;
   record: CoverLetterHumanReviewRecord | CoverLetterBenchmarkFailureRecord;
   failureReceipt: CoverLetterEval3cFailureReceipt | null;
+  sendability: CoverLetterFinalSendabilityResult | null;
 }>;
 
 type CoverLetterEval3cFailureMatrixEntry = Readonly<{
   blindLabel: string;
-  outcome: "safety_veto";
+  outcome: "safety_veto" | "editorial_veto";
   textIncluded: false;
 }>;
 
@@ -222,6 +230,7 @@ export type CoverLetterEval3cRunResult = Readonly<{
   completedCellCount: 2;
   reviewableCellCount: number;
   safetyVetoCount: number;
+  editorialVetoCount: number;
   failureReceipts: readonly CoverLetterEval3cFailureReceipt[];
   paths: Awaited<ReturnType<typeof writeCoverLetterEvalPrivateArtifacts>>;
 }>;
@@ -629,11 +638,11 @@ async function buildBlindArtifacts(args: {
     return [{ ...entry, blindLabel: labelByKey.get(cell.key)! }];
   });
   const failureMatrix = orderedCells.flatMap(({ cell }) =>
-    cell.outcome === "safety_veto"
+    cell.outcome !== "human_review_pending"
       ? [
           {
             blindLabel: labelByKey.get(cell.key)!,
-            outcome: "safety_veto" as const,
+            outcome: cell.outcome,
             textIncluded: false as const,
           },
         ]
@@ -646,10 +655,10 @@ async function buildBlindArtifacts(args: {
     instructions: [
       ...sourcePackBody.instructions,
       "Review every supplied development letter independently before consulting the private reveal map.",
-      "A failure-matrix label is an automatic safety veto and intentionally contains no generated text.",
+      "A failure-matrix label is a non-reviewable automatic veto and intentionally contains no generated text.",
       ...failureMatrix.map(
         (entry) =>
-          `Failure matrix: ${entry.blindLabel} is a safety_veto; generated text intentionally absent.`,
+          `Failure matrix: ${entry.blindLabel} is an ${entry.outcome}; generated text intentionally absent.`,
       ),
     ],
     entries: remappedEntries,
@@ -734,16 +743,29 @@ async function collectCells(args: {
         variant,
         record,
       });
+      const sendability = await evaluateCoverLetterFinalSendability({
+        content: record.artifact.finalContent!,
+        outputLanguage: record.outputLanguage,
+        job: {
+          title: args.benchmarkCase.jobTitle,
+          description: args.benchmarkCase.jobDescription,
+        },
+        profileEvidence: args.benchmarkCase.personalizationContext,
+      });
       args.cells.push({
         key: cellKey(args.benchmarkCase.id, variant.writerModel),
         variant,
         caseId: args.benchmarkCase.id,
         writerProvider: "openai",
-        outcome: "human_review_pending",
+        outcome:
+          sendability.verdict === "HARD_BLOCKED"
+            ? "editorial_veto"
+            : "human_review_pending",
         artifactHash: hashes.artifactHash,
         provenanceHash: hashes.provenanceHash,
         record,
         failureReceipt: null,
+        sendability,
       });
       continue;
     }
@@ -765,6 +787,7 @@ async function collectCells(args: {
         provenanceHash: record.artifact?.provenanceHash ?? null,
         record,
         failureReceipt,
+        sendability: null,
       });
       continue;
     }
@@ -800,6 +823,7 @@ function buildFailureLedger(args: {
       reasoningEffort: cell.variant.reasoningEffort,
       outcome: cell.outcome,
       artifactHash: cell.artifactHash,
+      sendability: cell.sendability,
     })),
     budget: args.budget.snapshot(),
     providerMaxRetries: 0,
@@ -881,6 +905,9 @@ export async function runCoverLetterEval3cInitialScreen(
     const reviewableCellCount = cells.filter(
       (cell) => cell.outcome === "human_review_pending",
     ).length;
+    const editorialVetoCount = cells.filter(
+      (cell) => cell.outcome === "editorial_veto",
+    ).length;
     const status: CoverLetterEval3cRunStatus =
       reviewableCellCount > 0
         ? "HUMAN_REVIEW_PENDING"
@@ -901,9 +928,11 @@ export async function runCoverLetterEval3cInitialScreen(
         reasoningEffort: cell.variant.reasoningEffort,
         outcome: cell.outcome,
         artifactHash: cell.artifactHash,
+        sendability: cell.sendability,
       })),
       reviewableCellCount,
       safetyVetoCount: failureReceipts.length,
+      editorialVetoCount,
       failureReceipts,
       llmEvaluator: "none",
       providerMaxRetries: 0,
@@ -926,6 +955,7 @@ export async function runCoverLetterEval3cInitialScreen(
       completedCellCount: 2,
       reviewableCellCount,
       safetyVetoCount: failureReceipts.length,
+      editorialVetoCount,
       failureReceipts,
       paths,
     };
@@ -1044,6 +1074,7 @@ async function main(): Promise<void> {
         completedCellCount: result.completedCellCount,
         reviewableCellCount: result.reviewableCellCount,
         safetyVetoCount: result.safetyVetoCount,
+        editorialVetoCount: result.editorialVetoCount,
         budget: result.budget,
         privatePaths: result.paths,
       },

@@ -1819,10 +1819,139 @@ describe("proposal writer prompt contract", () => {
     });
 
     expect(saved.content).toContain(
+      "I can bring that same discipline to the store team.",
+    );
+    expect(saved.content).not.toContain(
+      "I would be glad to discuss the position further.",
+    );
+    expect(saved.qualityShadow?.issues).not.toContain("generic_tone");
+  });
+
+  it("reports a thin premium artifact from final-visible text instead of fallback body parts", () => {
+    const fallbackBodyParts = {
+      opening:
+        "I improved 90-day retention by 18% by redesigning onboarding checkpoints and escalation triggers.",
+      proofBlock:
+        "As a Customer Success Manager at Lumio Health, I managed a portfolio of 40+ enterprise accounts with quarterly business reviews.",
+      employerValueBlock:
+        "This experience would help the team identify account risk earlier and strengthen retention.",
+      closeLine:
+        "I would bring that same structured approach to your enterprise accounts.",
+    };
+    const thinContent = [
+      "Dear Hiring Manager,",
+      "",
+      fallbackBodyParts.opening,
+      "",
+      fallbackBodyParts.proofBlock,
+      "",
+      "Sincerely,",
+      "Priya Sharma",
+    ].join("\n");
+
+    const saved = finalizePremiumCoverLetterPayloadForPersistence({
+      payload: {
+        content: thinContent,
+        sections: [{ type: "text", content: thinContent }],
+        bodyParts: fallbackBodyParts,
+        qualityShadow: { passed: true, score: 100, issues: [] },
+      },
+      format: "cover_letter",
+      outputLanguage: "English",
+      candidateName: "Priya Sharma",
+      voicePreset: "engaging",
+      hasCandidateContext: true,
+    });
+
+    expect(saved.content).toContain(fallbackBodyParts.closeLine);
+    expect(saved.content).not.toContain(
       "I would be glad to discuss the position further.",
     );
     expect(saved.qualityShadow?.passed).toBe(false);
-    expect(saved.qualityShadow?.issues).toContain("generic_tone");
+    expect(saved.qualityShadow?.issues).toContain("weak_employer_argument");
+  });
+
+  it("preserves trusted structured premium employer value and close text", () => {
+    const bodyParts = {
+      opening:
+        "My customer-success work has centered on structured onboarding and proactive account management.",
+      proofBlock:
+        "At Lumio Health, I improved 90-day retention by 18% by redesigning onboarding checkpoints and escalation triggers.",
+      employerValueBlock:
+        "For a team focused on account health, that combination of onboarding discipline and reporting would keep risk visible earlier.",
+      closeLine:
+        "I would bring that same structured approach to your enterprise accounts.",
+    };
+    const content = [
+      "Dear Hiring Manager,",
+      "",
+      bodyParts.opening,
+      "",
+      bodyParts.proofBlock,
+      "",
+      bodyParts.employerValueBlock,
+      "",
+      bodyParts.closeLine,
+      "",
+      "Sincerely,",
+      "Priya Sharma",
+    ].join("\n");
+    const candidateFact = {
+      id: "fact_retention",
+      section: "proofBlock" as const,
+      text: bodyParts.proofBlock,
+      source: "cv" as const,
+      metrics: ["18%"],
+      entities: ["Lumio Health"],
+    };
+    const section = (
+      name: keyof typeof bodyParts,
+      factIds: string[] = [],
+    ) => ({
+      section: name,
+      text: bodyParts[name],
+      claimIds: [`claim_${name}`],
+      factIds,
+      demandIds: name === "employerValueBlock" ? ["demand_account_health"] : [],
+      candidateFactIds: factIds,
+      verifiedCandidateFactIds: factIds,
+    });
+    const finalProvenance: PremiumCoverLetterFinalProvenance = {
+      version: "premium_cover_letter_final_provenance_v1",
+      status: "validated_final_text",
+      origin: "provider_reported",
+      contextClass: "cv_direct",
+      candidateFactIds: [candidateFact.id],
+      verifiedCandidateFactIds: [candidateFact.id],
+      candidateFacts: [candidateFact],
+      sections: {
+        opening: section("opening"),
+        proofBlock: section("proofBlock", [candidateFact.id]),
+        employerValueBlock: section("employerValueBlock"),
+        closeLine: section("closeLine"),
+      },
+    };
+
+    const saved = finalizePremiumCoverLetterPayloadForPersistence({
+      payload: {
+        content,
+        sections: [{ type: "text", content }],
+        bodyParts,
+        finalProvenance,
+      },
+      format: "cover_letter",
+      outputLanguage: "English",
+      candidateName: "Priya Sharma",
+      voicePreset: "engaging",
+      hasCandidateContext: true,
+    });
+
+    expect(saved.content).toBe(content);
+    expect(saved.content).toContain(bodyParts.employerValueBlock);
+    expect(saved.content).toContain(bodyParts.closeLine);
+    expect(saved.content).not.toContain(
+      "I would be glad to discuss the position further.",
+    );
   });
 
   it("applies the same candidate-evidence guard to premium persistence payloads", () => {

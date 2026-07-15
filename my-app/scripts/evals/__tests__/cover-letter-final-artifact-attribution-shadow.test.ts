@@ -339,32 +339,22 @@ describe("QUALITY-EVAL-2E final-artifact attribution shadow", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("attributes section loss and makes the qualityShadow fallback signature explicit", async () => {
+  it("preserves final-visible sections without a quality-shadow fallback", async () => {
     const result = await replayCoverLetterFinalArtifactShadow({
       benchmarkCase,
       cells: await buildFiveCells(),
     });
 
     expect(
-      result.some((entry) =>
-        entry.sections.some(
-          (section) =>
-            section.production.status !== "retained_exact" &&
-            section.candidate.status === "retained_exact",
-        ),
-      ),
-    ).toBe(true);
-    expect(
-      result.some(
+      result.every(
         (entry) =>
-          entry.qualityShadowFallback.signatureObserved === true &&
-          entry.qualityShadowFallback.visibleStructureLoss &&
-          entry.qualityShadowFallback.diagnostic === "structure_loss",
-      ),
-    ).toBe(true);
-    expect(
-      result.some(
-        (entry) =>
+          entry.sections.every(
+            (section) =>
+              section.production.status === "retained_exact" &&
+              section.candidate.status === "retained_exact",
+          ) &&
+          entry.qualityShadowFallback.conditionTriggered === false &&
+          entry.qualityShadowFallback.visibleStructureLoss === false &&
           entry.qualityShadowFallback.signatureObserved === false &&
           entry.qualityShadowFallback.diagnostic === "none",
       ),
@@ -372,6 +362,8 @@ describe("QUALITY-EVAL-2E final-artifact attribution shadow", () => {
     expect(
       result.every(
         (entry) =>
+          entry.baseline.bodyParagraphCount >= 4 &&
+          entry.baseline.structurePreserved &&
           entry.candidate.bodyParagraphCount >= 4 &&
           entry.candidate.structurePreserved,
       ),

@@ -208,6 +208,7 @@ export function applyDeterministicProposalBoundaries(args: {
   candidateName?: string;
   voicePreset: ProposalVoicePreset;
   noContextMode: boolean;
+  finalSentenceOverride?: string | null;
 }): string {
   const policy = getDeterministicProposalRenderPolicy({
     format: args.format,
@@ -215,9 +216,13 @@ export function applyDeterministicProposalBoundaries(args: {
     voicePreset: args.voicePreset,
     noContextMode: args.noContextMode,
   });
+  const finalSentence =
+    args.finalSentenceOverride === undefined
+      ? policy.finalSentence
+      : compactWhitespace(args.finalSentenceOverride ?? "") || undefined;
   const paragraphs = splitParagraphs(args.body);
   const normalizedFinalSentence = normalizeProposalConstraintText(
-    policy.finalSentence ?? "",
+    finalSentence ?? "",
   );
 
   if (args.format === "application_message") {
@@ -226,14 +231,14 @@ export function applyDeterministicProposalBoundaries(args: {
   }
 
   if (
-    policy.finalSentence &&
+    finalSentence &&
     (paragraphs.length === 0 ||
       !paragraphAlreadyEndsWithFinalSentence({
         paragraph: paragraphs[paragraphs.length - 1],
         normalizedFinalSentence,
       }))
   ) {
-    paragraphs.push(policy.finalSentence);
+    paragraphs.push(finalSentence);
   }
 
   const lines: string[] = [];
