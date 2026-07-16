@@ -48,7 +48,7 @@ type IntentRecord = {
   state: string;
   codeChallenge: string;
   codeChallengeMethod: "S256";
-  approvedOptionalParameters?: Partial<Record<"nonce" | "prompt", string>>;
+  approvedOptionalParameters?: Partial<Record<"nonce" | "prompt" | "ui_locales", string>>;
   providerValidationStatus: "pending";
   status: "pending" | "consumed" | "expired";
   createdAt: number;
@@ -318,6 +318,30 @@ describe("Convex MCP OAuth authorization intents", () => {
     expect(patches).toHaveLength(1);
   });
 
+  it("round-trips bounded ui_locales through storage and canonical authorization reconstruction", async () => {
+    const optionalParameters = { ui_locales: "fr-FR en-US" };
+    const handoff = validHandoff({ overrides: optionalParameters });
+    const created = await createWith(handoff);
+    expect(created.rows[0]).toMatchObject({ approvedOptionalParameters: optionalParameters });
+
+    const { ctx } = makeCtx([rowsToStored(created.rows[0])]);
+    const consumed = await internalConsumeMcpOAuthAuthorizationIntent._handler(ctx as any, {
+      trustedOwner: trustedOwner(),
+      intentHandleHash: VALID_HANDLE_HASH,
+      now: NOW + 1,
+      version: 1,
+    });
+
+    expect(consumed).toMatchObject({ ok: true, reason: "consumed" });
+    if (!consumed.ok) throw new Error("Expected consume to succeed");
+    expect(
+      consumed.serverOnly.authorizationRequestHandoff.providerForwardRequest.approvedOptionalParameters,
+    ).toEqual(optionalParameters);
+    expect(consumed.serverOnly.authorizationRequestHandoff.loginReturn.path).toContain(
+      "ui_locales=fr-FR+en-US",
+    );
+  });
+
   it("marks expired pending records atomically and never returns the handoff", async () => {
     const { ctx, rows, patches } = makeCtx([storedIntent()]);
 
@@ -531,7 +555,7 @@ function buildConfig(
     allowedRedirectUris: [CHATGPT_REDIRECT_URI],
     requiredScope: TWOWEEKS_APPLICATIONS_READ_SCOPE,
     approvedOptionalScopes: [],
-    allowedOptionalParameters: ["nonce", "prompt", "login_hint", "id_token_hint"],
+    allowedOptionalParameters: ["nonce", "prompt", "ui_locales", "login_hint", "id_token_hint"],
     maxUrlLength: 512,
     maxParameterLength: 256,
     maxStateLength: 128,

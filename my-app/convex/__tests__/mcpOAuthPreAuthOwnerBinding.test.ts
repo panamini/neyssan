@@ -234,6 +234,7 @@ describe("Convex MCP OAuth pre-auth owner binding", () => {
           approvedOptionalParameters: {
             nonce: "nonce_fixture",
             prompt: "consent",
+            ui_locales: "fr-FR en-US",
           },
         }),
       ],
@@ -270,7 +271,11 @@ describe("Convex MCP OAuth pre-auth owner binding", () => {
       authorizationPagePath: AUTHORIZATION_PATH,
       scopes: [TWOWEEKS_APPLICATIONS_READ_SCOPE, "openid"],
       status: "pending",
-      approvedOptionalParameters: { nonce: "nonce_fixture", prompt: "consent" },
+      approvedOptionalParameters: {
+        nonce: "nonce_fixture",
+        prompt: "consent",
+        ui_locales: "fr-FR en-US",
+      },
     });
     expect(JSON.stringify(authorizationRows[0])).not.toContain(
       `${AUTHORIZATION_ORIGIN}${AUTHORIZATION_PATH}?`,

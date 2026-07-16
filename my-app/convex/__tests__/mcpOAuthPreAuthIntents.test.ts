@@ -44,7 +44,7 @@ type PreAuthIntentRecord = {
   state: string;
   codeChallenge: string;
   codeChallengeMethod: "S256";
-  approvedOptionalParameters?: Partial<Record<"nonce" | "prompt", string>>;
+  approvedOptionalParameters?: Partial<Record<"nonce" | "prompt" | "ui_locales", string>>;
   providerValidationStatus: "pending";
   status: "pre_auth_pending" | "claimed" | "expired";
   createdAt: number;
@@ -349,6 +349,26 @@ describe("Convex MCP OAuth pre-auth intents", () => {
     expect(patches).toHaveLength(1);
   });
 
+  it("round-trips bounded ui_locales through pre-auth storage and claim", async () => {
+    const optionalParameters = { ui_locales: "fr-FR en-US" };
+    const projection = validProjection(optionalParameters);
+    const created = await createWith(projection);
+    expect(created.rows[0]).toMatchObject({ approvedOptionalParameters: optionalParameters });
+
+    const { ctx } = makeCtx([rowsToStored(created.rows[0])]);
+    const claimed = await internalClaimMcpOAuthPreAuthIntent._handler(ctx as any, {
+      preAuthHandleHash: VALID_HANDLE_HASH,
+      now: NOW + 1,
+      version: 1,
+    });
+
+    expect(claimed).toMatchObject({ ok: true, reason: "claimed" });
+    if (!claimed.ok) throw new Error("Expected claim to succeed");
+    expect(
+      claimed.serverOnly.authorizationRequestProjection.providerForwardRequest.approvedOptionalParameters,
+    ).toEqual(optionalParameters);
+  });
+
   it("marks expired pending records atomically and never returns the projection", async () => {
     const { ctx, rows, patches } = makeCtx([storedPreAuthIntent()]);
 
@@ -542,7 +562,7 @@ function buildConfig(
     allowedRedirectUris: [CHATGPT_REDIRECT_URI],
     requiredScope: TWOWEEKS_APPLICATIONS_READ_SCOPE,
     approvedOptionalScopes: [],
-    allowedOptionalParameters: ["nonce", "prompt", "login_hint", "id_token_hint"],
+    allowedOptionalParameters: ["nonce", "prompt", "ui_locales", "login_hint", "id_token_hint"],
     maxUrlLength: 512,
     maxParameterLength: 256,
     maxStateLength: 128,
