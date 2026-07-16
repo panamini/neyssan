@@ -231,6 +231,35 @@ describe("QUALITY-CL-1 final-sendability shadow", () => {
     expect(result.stats.bodyParagraphCount).toBe(3);
   });
 
+  it("parses a complete French letter without inventing structure loss", async () => {
+    const frenchLetter = [
+      "Madame, Monsieur,",
+      "Le poste de Responsable de la réussite client, centré sur la fidélisation, l’intégration et le suivi des comptes, correspond directement aux missions que j’ai menées chez Lumio Health.",
+      "J’ai amélioré la rétention à 90 jours de 18 % en restructurant les étapes d’intégration et les règles d’escalade. J’ai également piloté un portefeuille de plus de 40 comptes entreprises avec des revues trimestrielles, afin de rendre les risques et les prochaines actions visibles.",
+      "Cette expérience me permettrait de relier vos indicateurs de santé client à des actions concrètes d’intégration et de suivi, pour concentrer l’équipe sur la fidélisation et le développement plutôt que sur les urgences tardives.",
+      "Je serais ravie d’échanger avec vous sur la manière dont cette approche structurée pourrait soutenir vos clients entreprises.",
+      "Veuillez agréer, Madame, Monsieur, l'expression de mes salutations distinguées.\nPriya Sharma",
+    ].join("\n\n");
+
+    const result = await evaluateCoverLetterFinalSendability({
+      content: frenchLetter,
+      outputLanguage: "French",
+      job: {
+        title: "Responsable de la réussite client",
+        description:
+          "Piloter la santé des comptes entreprises, structurer l’intégration, conduire les revues trimestrielles et soutenir la fidélisation.",
+      },
+      profileEvidence,
+    });
+
+    expect(result.hardIssues).not.toContain("wrong_language");
+    expect(result.hardIssues).not.toContain("visible_structure_loss_signature");
+    expect(result.stats.bodyParagraphCount).toBe(4);
+    expect(result.stats.substantiveBodyParagraphCount).toBeGreaterThanOrEqual(
+      3,
+    );
+  });
+
   it("projects the blinded five-pair pack with exactly four hard blocks and no provider clues", async () => {
     const fetchSpy = vi.fn(() => {
       throw new Error("network access is forbidden in QUALITY-CL-1");

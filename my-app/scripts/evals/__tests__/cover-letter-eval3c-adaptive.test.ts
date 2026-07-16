@@ -545,6 +545,12 @@ describe("QUALITY-EVAL-3C adaptive Luna/Sol screen", () => {
       expect.objectContaining({
         writerModel: "gpt-5.6-luna",
         reasoningEffort: "low",
+        diagnostic: expect.objectContaining({
+          version: "cover_letter_eval_cell_diagnostic_v1",
+          evidenceAvailability: "candidate_evidence_present",
+          pipelineOutcome: "editorial_veto",
+          outputAssessment: "editorial_hard_block",
+        }),
       }),
     ]);
     expect(JSON.stringify(ledger)).not.toContain(RAW_SENTINEL);

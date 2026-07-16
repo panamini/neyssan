@@ -54,6 +54,10 @@ import {
   type CoverLetterEvalFrozenConfig,
 } from "./cover-letter-eval-artifact";
 import {
+  buildCoverLetterEvalCellDiagnostic,
+  type CoverLetterEvalCellDiagnostic,
+} from "./cover-letter-eval-cell-diagnostic";
+import {
   CoverLetterEvalBudgetError,
   createCoverLetterEvalBudget,
   type CoverLetterEvalBudget,
@@ -75,6 +79,10 @@ import {
   coverLetterBlindReviewCases,
   type CoverLetterBenchmarkCase,
 } from "./cases/cover-letter/cases";
+import {
+  evaluateCoverLetterFinalSendability,
+  type CoverLetterFinalSendabilityResult,
+} from "./cover-letter-final-sendability-shadow";
 import {
   buildCoverLetterBlindReviewArtifacts,
   writeCoverLetterBlindReviewArtifacts,
@@ -306,6 +314,8 @@ export type CoverLetterReplayResult = Readonly<{
   writerModel: string;
   writerCallCount: number;
   artifact: CoverLetterEvalArtifact;
+  sendability: CoverLetterFinalSendabilityResult;
+  diagnostic: CoverLetterEvalCellDiagnostic;
 }>;
 
 const COVER_LETTER_EVAL_CONFIG_VERSIONS = {
@@ -1266,6 +1276,20 @@ export async function replayRecordedCoverLetterFixture(
     );
   }
 
+  const sendability = await evaluateCoverLetterFinalSendability({
+    content: prepared.artifact.finalContent!,
+    outputLanguage: productionInputs.outputLanguage,
+    job: {
+      title: benchmarkCase.jobTitle,
+      description: benchmarkCase.jobDescription,
+    },
+    profileEvidence: benchmarkCase.personalizationContext,
+  });
+  const outcome =
+    sendability.verdict === "HARD_BLOCKED"
+      ? "editorial_veto"
+      : "human_review_pending";
+
   return {
     fixtureId: fixture.id,
     sourceCaseId: fixture.sourceCaseId,
@@ -1273,6 +1297,13 @@ export async function replayRecordedCoverLetterFixture(
     writerModel: fixture.writerModel,
     writerCallCount,
     artifact: prepared.artifact,
+    sendability,
+    diagnostic: buildCoverLetterEvalCellDiagnostic({
+      expectedContextClass: benchmarkCase.expectedContextClass,
+      outcome,
+      sendability,
+      failureReceipt: null,
+    }),
   };
 }
 
@@ -2372,6 +2403,7 @@ function printReplayReport(results: CoverLetterReplayResult[]): void {
         provenanceHash: result.artifact.provenanceHash,
         provenanceStatus: result.artifact.provenance?.status ?? null,
         provenanceOrigin: result.artifact.provenance?.origin ?? null,
+        cellDiagnostic: result.diagnostic,
         diagnosticClasses: {
           finalization: result.artifact.diagnostics.finalization.errorClass,
           qualityShadow:

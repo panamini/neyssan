@@ -21,6 +21,10 @@ import {
   type CoverLetterEvalArtifact,
 } from "./cover-letter-eval-artifact";
 import {
+  buildCoverLetterEvalCellDiagnostic,
+  type CoverLetterEvalCellDiagnostic,
+} from "./cover-letter-eval-cell-diagnostic";
+import {
   evaluateCoverLetterFinalSendability,
   type CoverLetterFinalSendabilityResult,
 } from "./cover-letter-final-sendability-shadow";
@@ -164,6 +168,7 @@ type CoverLetterEval3cCell = Readonly<{
   record: CoverLetterHumanReviewRecord | CoverLetterBenchmarkFailureRecord;
   failureReceipt: CoverLetterEval3cFailureReceipt | null;
   sendability: CoverLetterFinalSendabilityResult | null;
+  diagnostic: CoverLetterEvalCellDiagnostic;
 }>;
 
 type CoverLetterEval3cFailureMatrixEntry = Readonly<{
@@ -752,20 +757,27 @@ async function collectCells(args: {
         },
         profileEvidence: args.benchmarkCase.personalizationContext,
       });
+      const outcome =
+        sendability.verdict === "HARD_BLOCKED"
+          ? "editorial_veto"
+          : "human_review_pending";
       args.cells.push({
         key: cellKey(args.benchmarkCase.id, variant.writerModel),
         variant,
         caseId: args.benchmarkCase.id,
         writerProvider: "openai",
-        outcome:
-          sendability.verdict === "HARD_BLOCKED"
-            ? "editorial_veto"
-            : "human_review_pending",
+        outcome,
         artifactHash: hashes.artifactHash,
         provenanceHash: hashes.provenanceHash,
         record,
         failureReceipt: null,
         sendability,
+        diagnostic: buildCoverLetterEvalCellDiagnostic({
+          expectedContextClass: args.benchmarkCase.expectedContextClass,
+          outcome,
+          sendability,
+          failureReceipt: null,
+        }),
       });
       continue;
     }
@@ -788,6 +800,12 @@ async function collectCells(args: {
         record,
         failureReceipt,
         sendability: null,
+        diagnostic: buildCoverLetterEvalCellDiagnostic({
+          expectedContextClass: args.benchmarkCase.expectedContextClass,
+          outcome: "safety_veto",
+          sendability: null,
+          failureReceipt,
+        }),
       });
       continue;
     }
@@ -824,6 +842,7 @@ function buildFailureLedger(args: {
       outcome: cell.outcome,
       artifactHash: cell.artifactHash,
       sendability: cell.sendability,
+      diagnostic: cell.diagnostic,
     })),
     budget: args.budget.snapshot(),
     providerMaxRetries: 0,
@@ -929,6 +948,7 @@ export async function runCoverLetterEval3cInitialScreen(
         outcome: cell.outcome,
         artifactHash: cell.artifactHash,
         sendability: cell.sendability,
+        diagnostic: cell.diagnostic,
       })),
       reviewableCellCount,
       safetyVetoCount: failureReceipts.length,

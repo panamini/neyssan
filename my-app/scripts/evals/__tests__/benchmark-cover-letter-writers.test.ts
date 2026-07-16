@@ -1288,6 +1288,18 @@ describe("benchmark-cover-letter-writers", () => {
       expect(result.artifact.sections).toEqual([
         { type: "text", content: result.artifact.finalContent },
       ]);
+      expect(result.sendability).toMatchObject({
+        version: "cover_letter_final_sendability_result_v1",
+        inputScope: "final_visible_artifact_only",
+        contentHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      });
+      expect(result.diagnostic).toMatchObject({
+        version: "cover_letter_eval_cell_diagnostic_v1",
+        evidenceAvailability: "candidate_evidence_present",
+        pipelineOutcome: expect.stringMatching(
+          /^(?:human_review_pending|editorial_veto)$/u,
+        ),
+      });
     }
 
     const mistral = first.find(

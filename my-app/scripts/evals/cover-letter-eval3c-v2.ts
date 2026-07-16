@@ -33,6 +33,10 @@ import {
   buildCoverLetterEvalArtifactHash,
   type CoverLetterEvalArtifact,
 } from "./cover-letter-eval-artifact";
+import {
+  buildCoverLetterEvalCellDiagnostic,
+  type CoverLetterEvalCellDiagnostic,
+} from "./cover-letter-eval-cell-diagnostic";
 import { createCoverLetterEvalBudget } from "./cover-letter-eval-budget";
 import { buildCoverLetterEvalFailureAttemptMetadata } from "./cover-letter-eval-failure-receipt";
 import {
@@ -329,6 +333,7 @@ type Cell = Readonly<{
   record: CoverLetterHumanReviewRecord | CoverLetterBenchmarkFailureRecord;
   failureReceipt: Readonly<Record<string, unknown>> | null;
   sendability: CoverLetterFinalSendabilityResult | null;
+  diagnostic: CoverLetterEvalCellDiagnostic;
 }>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -943,6 +948,11 @@ async function validateFailure(args: {
   record: CoverLetterBenchmarkFailureRecord;
 }): Promise<Readonly<Record<string, unknown>>> {
   const { artifactHash } = await assertFailureRecord(args);
+  const finalization = args.record.artifact?.diagnostics.finalization;
+  const errorClass =
+    finalization?.errorClass ?? args.record.diagnostics.failureReason;
+  const failureStage =
+    finalization?.failureStage ?? args.record.diagnostics.failureStage;
   return {
     version: "cover_letter_eval3c_failure_receipt_v2",
     cohortId: QUALITY_EVAL3C_V2_COHORT_ID,
@@ -957,9 +967,9 @@ async function validateFailure(args: {
     safetyVeto: "automatic",
     artifactHash,
     diagnostics: {
-      errorClass: "redacted",
-      failureStage: null,
-      failureIssues: [],
+      errorClass,
+      failureStage: failureStage ?? null,
+      failureIssues: [...new Set(args.record.diagnostics.failureIssues)].sort(),
     },
   };
 }
@@ -992,19 +1002,26 @@ async function collectCell(args: {
       },
       profileEvidence: args.benchmarkCase.personalizationContext,
     });
+    const outcome =
+      sendability.verdict === "HARD_BLOCKED"
+        ? "editorial_veto"
+        : "human_review_pending";
     return {
       key,
       variant: args.variant,
       caseId: args.benchmarkCase.id,
-      outcome:
-        sendability.verdict === "HARD_BLOCKED"
-          ? "editorial_veto"
-          : "human_review_pending",
+      outcome,
       artifactHash: hashes.artifactHash,
       provenanceHash: hashes.provenanceHash,
       record,
       failureReceipt: null,
       sendability,
+      diagnostic: buildCoverLetterEvalCellDiagnostic({
+        expectedContextClass: args.benchmarkCase.expectedContextClass,
+        outcome,
+        sendability,
+        failureReceipt: null,
+      }),
     };
   }
   if (args.rawResult.status === "finalization_failed") {
@@ -1021,6 +1038,12 @@ async function collectCell(args: {
       record,
       failureReceipt,
       sendability: null,
+      diagnostic: buildCoverLetterEvalCellDiagnostic({
+        expectedContextClass: args.benchmarkCase.expectedContextClass,
+        outcome: "safety_veto",
+        sendability: null,
+        failureReceipt,
+      }),
     };
   }
   throw new Error("QUALITY-EVAL-3C v2 refused an unauthorized result status.");
@@ -1345,6 +1368,7 @@ export async function runCoverLetterEval3cV2InitialScreen(
         outcome: cell.outcome,
         artifactHash: cell.artifactHash,
         sendability: cell.sendability,
+        diagnostic: cell.diagnostic,
       })),
       failureReceipts: cells.flatMap((cell) =>
         cell.failureReceipt ? [cell.failureReceipt] : [],
@@ -1394,6 +1418,7 @@ export async function runCoverLetterEval3cV2InitialScreen(
               artifactHash: cell.artifactHash,
               failureReceipt: cell.failureReceipt,
               sendability: cell.sendability,
+              diagnostic: cell.diagnostic,
             })),
             budget: budget.snapshot(),
           },
@@ -2227,6 +2252,7 @@ export async function runCoverLetterEval3cV2FollowUpCell(
       artifactHash: cell.artifactHash,
       failureReceipts: cell.failureReceipt ? [cell.failureReceipt] : [],
       sendability: cell.sendability,
+      diagnostic: cell.diagnostic,
       budget: snapshot,
       providerMaxRetries: 0,
       maxRepairs: 0,
@@ -2276,6 +2302,7 @@ export async function runCoverLetterEval3cV2FollowUpCell(
                     artifactHash: completedCell.artifactHash,
                     failureReceipt: completedCell.failureReceipt,
                     sendability: completedCell.sendability,
+                    diagnostic: completedCell.diagnostic,
                   },
                 ]
               : [],
