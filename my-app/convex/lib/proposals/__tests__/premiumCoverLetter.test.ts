@@ -944,7 +944,7 @@ describe("premium cover letter evidence ranking", () => {
 });
 
 describe("premium cover letter prompt contract", () => {
-  const buildDirectBrief = () => {
+  const buildDirectBrief = (outputLanguage = "English") => {
     const allowedFactsPack = buildAllowedFactsPack({
       personalizationContext: directContext,
       jobTitle: directJob.jobTitle,
@@ -958,7 +958,7 @@ describe("premium cover letter prompt contract", () => {
     });
     return buildPremiumCoverLetterBrief({
       preset: "signature",
-      outputLanguage: "English",
+      outputLanguage,
       jobTitle: directJob.jobTitle,
       jobDescription: directJob.jobDescription,
       contextClass: "cv_direct",
@@ -967,7 +967,7 @@ describe("premium cover letter prompt contract", () => {
     });
   };
 
-  const buildAdjacentAdminBrief = () => {
+  const buildAdjacentAdminBrief = (outputLanguage = "English") => {
     const allowedFactsPack = buildAllowedFactsPack({
       personalizationContext: {
         name: "Camille Bernard",
@@ -995,7 +995,7 @@ describe("premium cover letter prompt contract", () => {
     });
     return buildPremiumCoverLetterBrief({
       preset: "signature",
-      outputLanguage: "English",
+      outputLanguage,
       jobTitle: "Administrative Coordinator",
       jobDescription:
         "The Administrative Coordinator will manage schedules, documentation, vendor communication, and general office support. Highly organized communication and process follow-through required.",
@@ -1010,6 +1010,85 @@ describe("premium cover letter prompt contract", () => {
       }),
     });
   };
+
+  it("adds the CV-backed editorial quality contract to English and French direct and adjacent prompts only", () => {
+    const inScopePrompts = [
+      buildPremiumCoverLetterPrompt({ brief: buildDirectBrief("English") }),
+      buildPremiumCoverLetterPrompt({
+        brief: buildAdjacentAdminBrief("English"),
+      }),
+      buildPremiumCoverLetterPrompt({ brief: buildDirectBrief("French") }),
+      buildPremiumCoverLetterPrompt({
+        brief: buildAdjacentAdminBrief("French"),
+      }),
+    ];
+
+    for (const prompt of inScopePrompts) {
+      expect(prompt).toContain("CV-backed editorial quality contract:");
+      expect(prompt).toContain("select one or two concrete candidate proofs");
+      expect(prompt).toContain("one role-specific opening");
+      expect(prompt).toContain("why each proof is relevant");
+      expect(prompt).toContain("rather than an interview request");
+      expect(prompt).toContain(
+        "Across cv_direct and cv_adjacent modes, sound like a person making a case, not a memo.",
+      );
+      expect(prompt).toContain(
+        "Use one cautious employer-facing implication. Avoid formula bridges ('That is useful...', 'That matters...', 'day-to-day depends...', 'those habits matter'); write the concrete team consequence plainly.",
+      );
+    }
+
+    expect(inScopePrompts[0]).toContain("English editorial contract:");
+    expect(inScopePrompts[1]).toContain("English editorial contract:");
+    expect(inScopePrompts[2]).toContain("French editorial contract:");
+    expect(inScopePrompts[3]).toContain("French editorial contract:");
+    expect(inScopePrompts[2]).toContain(
+      "compose in idiomatic professional French",
+    );
+    expect(inScopePrompts[3]).toContain("je serais ravi de");
+
+    const spanishPrompt = buildPremiumCoverLetterPrompt({
+      brief: buildDirectBrief("Spanish"),
+    });
+    expect(spanishPrompt).toContain("CV-backed editorial quality contract:");
+    expect(spanishPrompt).not.toContain("English editorial contract:");
+    expect(spanishPrompt).not.toContain("French editorial contract:");
+
+    const noCvFacts = buildAllowedFactsPack({
+      personalizationContext: null,
+      jobTitle: "Operations Assistant",
+      jobDescription: "Coordinate schedules and maintain records.",
+    });
+    const noCvBrief = buildPremiumCoverLetterBrief({
+      preset: "signature",
+      outputLanguage: "French",
+      jobTitle: "Operations Assistant",
+      jobDescription: "Coordinate schedules and maintain records.",
+      contextClass: "no_cv",
+      allowedFactsPack: noCvFacts,
+      rankedEvidencePack: rankAllowedFacts({
+        allowedFactsPack: noCvFacts,
+        jobTitle: "Operations Assistant",
+        jobDescription: "Coordinate schedules and maintain records.",
+        contextClass: "no_cv",
+      }),
+    });
+
+    const noCvPrompt = buildPremiumCoverLetterPrompt({ brief: noCvBrief });
+    expect(noCvPrompt).toContain(
+      [
+        "Preset affects rhetorical texture only. It must not change truthfulness, claim strength, or evidence priority. Do not change ownership, metrics, tools, responsibilities, or boundaries.",
+        "Across cv_direct and cv_adjacent modes, sound like a person making a case, not a memo.",
+        "Avoid clunky inanimate-object phrasing and evaluator/meta phrases like 'the evidence I would bring'.",
+        "Do not narrate the writing plan or provenance. Never write 'I have described', 'I described', 'as described', 'the evidence shows', 'this section shows', 'this letter shows', 'the claim is', 'work surface', or 'concrete bridge'.",
+        "Do not use self-scoring or section-label openings such as 'my strongest match', 'my best match', 'the strongest evidence', 'my fit for this role', or 'the main reason I am a fit'.",
+        "Use one cautious employer-facing implication. Avoid formula bridges ('That is useful...', 'That matters...', 'day-to-day depends...', 'those habits matter'); write the concrete team consequence plainly.",
+        "closeLine: concise evidence-grounded contribution, not generic interview-request wording.",
+      ].join("\n"),
+    );
+    expect(noCvPrompt).not.toContain("CV-backed editorial quality contract:");
+    expect(noCvPrompt).not.toContain("English editorial contract:");
+    expect(noCvPrompt).not.toContain("French editorial contract:");
+  });
 
   it("scopes premium provider adapters to Mistral and Qwen without changing GPT/default prompts", () => {
     const brief = buildDirectBrief();
@@ -2119,7 +2198,7 @@ describe("premium cover letter prompt contract", () => {
 });
 
 describe("premium cover letter generation and rendering", () => {
-  const buildDirectFrontendBrief = () => {
+  const buildDirectFrontendBrief = (outputLanguage = "English") => {
     const allowedFactsPack = buildAllowedFactsPack({
       personalizationContext: directContext,
       jobTitle: directJob.jobTitle,
@@ -2127,7 +2206,7 @@ describe("premium cover letter generation and rendering", () => {
     });
     return buildPremiumCoverLetterBrief({
       preset: "signature",
-      outputLanguage: "English",
+      outputLanguage,
       jobTitle: directJob.jobTitle,
       jobDescription: directJob.jobDescription,
       contextClass: "cv_direct",
@@ -2164,7 +2243,7 @@ describe("premium cover letter generation and rendering", () => {
     });
   };
 
-  const buildAdjacentAdminBrief = () => {
+  const buildAdjacentAdminBrief = (outputLanguage = "English") => {
     const allowedFactsPack = buildAllowedFactsPack({
       personalizationContext: {
         name: "Camille Bernard",
@@ -2192,7 +2271,7 @@ describe("premium cover letter generation and rendering", () => {
     });
     return buildPremiumCoverLetterBrief({
       preset: "signature",
-      outputLanguage: "English",
+      outputLanguage,
       jobTitle: "Administrative Coordinator",
       jobDescription:
         "The Administrative Coordinator will manage schedules, documentation, vendor communication, and general office support. Highly organized communication and process follow-through required.",
@@ -2422,6 +2501,281 @@ describe("premium cover letter generation and rendering", () => {
       /Veuillez agréer, Madame, Monsieur, l'expression de mes salutations distinguées\.\nAlex Martin$/u,
     );
     expect(result?.bodyParts.proofBlock).toContain("4 équipes produit");
+  });
+
+  it("repairs generic closes and missing bridges for English and French direct and adjacent CV evidence", () => {
+    const cases = [
+      {
+        brief: buildDirectFrontendBrief("English"),
+        opening: "I improved signup conversion by 11% through iterative UI experiments.",
+        proofBlock: "I led a design-system migration used across 4 product squads.",
+        genericClose: "I welcome the opportunity to discuss the role further.",
+        closePattern:
+          /^That experience continues to inform my work\.$/u,
+        bridgePattern: /^In .+ work, that background supports /u,
+      },
+      {
+        brief: buildAdjacentAdminBrief("English"),
+        opening: "I coordinated workflows and documented procedures.",
+        proofBlock: "I tracked deadlines and handled vendor correspondence.",
+        genericClose:
+          "I would welcome the opportunity to discuss the position further.",
+        closePattern: /^I bring discipline around /u,
+        bridgePattern: /^In .+ work, that kind of background supports /u,
+      },
+      {
+        brief: buildDirectFrontendBrief("French"),
+        opening:
+          "J'ai amélioré la conversion des inscriptions de 11 % grâce à des expérimentations d'interface.",
+        proofBlock:
+          "J'ai dirigé une migration de design system utilisée par 4 équipes produit.",
+        genericClose: "Je serais ravi d'en discuter.",
+        closePattern:
+          /^Cette expérience continue de nourrir ma pratique professionnelle\.$/u,
+        bridgePattern: /^Dans .+, cette expérience apporte /u,
+      },
+      {
+        brief: buildAdjacentAdminBrief("French"),
+        opening:
+          "J'ai coordonné des flux de travail et documenté des procédures.",
+        proofBlock:
+          "J'ai suivi les échéances et géré les échanges avec les fournisseurs.",
+        genericClose: "Je serais ravie de discuter de cette opportunité.",
+        closePattern: /^J'apporte de la rigueur dans /u,
+        bridgePattern:
+          /^Cette expérience est pertinente pour .+, où les priorités incluent /u,
+      },
+    ];
+
+    for (const testCase of cases) {
+      const repaired = repairPremiumCoverLetterBodyParts({
+        brief: testCase.brief,
+        bodyParts: {
+          opening: testCase.opening,
+          proofBlock: testCase.proofBlock,
+          employerValueBlock: "",
+          closeLine: testCase.genericClose,
+        },
+      });
+
+      expect(repaired.closeLine).toMatch(testCase.closePattern);
+      expect(repaired.closeLine).not.toBe(testCase.genericClose);
+      expect(repaired.employerValueBlock).toMatch(testCase.bridgePattern);
+    }
+
+    const mixedClose = repairPremiumCoverLetterBodyParts({
+      brief: buildDirectFrontendBrief("English"),
+      bodyParts: {
+        opening:
+          "I improved signup conversion by 11% through iterative UI experiments.",
+        proofBlock:
+          "I led a design-system migration used across 4 product squads.",
+        employerValueBlock:
+          "That evidence is relevant to customer-facing product work.",
+        closeLine:
+          "I would bring the same design-system discipline and would welcome the opportunity to discuss the role further.",
+      },
+    });
+    expect(mixedClose.closeLine).toBe(
+      "I would bring the same design-system discipline.",
+    );
+
+    const frenchGenericClose = repairPremiumCoverLetterBodyParts({
+      brief: buildDirectFrontendBrief("French"),
+      bodyParts: {
+        opening:
+          "J'ai amélioré la conversion des inscriptions de 11 % grâce à des expérimentations d'interface.",
+        proofBlock:
+          "J'ai dirigé une migration de design system utilisée par 4 équipes produit.",
+        employerValueBlock:
+          "Cette expérience est pertinente pour des applications destinées aux utilisateurs.",
+        closeLine: "Au plaisir d'échanger avec vous.",
+      },
+    });
+    expect(frenchGenericClose.closeLine).toBe(
+      "Cette expérience continue de nourrir ma pratique professionnelle.",
+    );
+
+    const frenchMixedClose = repairPremiumCoverLetterBodyParts({
+      brief: buildDirectFrontendBrief("French"),
+      bodyParts: {
+        opening:
+          "J'ai amélioré la conversion des inscriptions de 11 % grâce à des expérimentations d'interface.",
+        proofBlock:
+          "J'ai dirigé une migration de design system utilisée par 4 équipes produit.",
+        employerValueBlock:
+          "Cette expérience est pertinente pour des applications destinées aux utilisateurs.",
+        closeLine:
+          "Cette expérience nourrit ma pratique, au plaisir d'échanger avec vous.",
+      },
+    });
+    expect(frenchMixedClose.closeLine).toBe(
+      "Cette expérience nourrit ma pratique.",
+    );
+
+    const frenchAdjacent = cases[3];
+    const repairedFrenchAdjacent = repairPremiumCoverLetterBodyParts({
+      brief: frenchAdjacent.brief,
+      bodyParts: {
+        opening: frenchAdjacent.opening,
+        proofBlock: frenchAdjacent.proofBlock,
+        employerValueBlock: "",
+        closeLine: frenchAdjacent.genericClose,
+      },
+    });
+    expect(repairedFrenchAdjacent.employerValueBlock).not.toContain(
+      "sont essentiels",
+    );
+
+    for (const testCase of cases.slice(2)) {
+      const repaired = repairPremiumCoverLetterBodyParts({
+        brief: testCase.brief,
+        bodyParts: {
+          opening: testCase.opening,
+          proofBlock: testCase.proofBlock,
+          employerValueBlock: "",
+          closeLine: testCase.genericClose,
+        },
+      });
+      expect(`${repaired.employerValueBlock} ${repaired.closeLine}`).not.toMatch(
+        /\b(?:In|work|supports|background|and|follow-through|handoffs)\b/u,
+      );
+    }
+  });
+
+  it("preserves no-CV generic-close repair behavior byte-for-byte", () => {
+    const original = {
+      opening:
+        "I am interested in this role because it centers on careful coordination.",
+      proofBlock:
+        "The work requires accurate records and steady follow-through.",
+      employerValueBlock:
+        "The role points to operations and scheduling work that calls for organized coordination and steady follow-through.",
+      closeLine: "I would be glad to discuss the role further.",
+    };
+
+    expect(
+      repairPremiumCoverLetterBodyParts({
+        brief: buildNoCvBrief(),
+        bodyParts: original,
+      }),
+    ).toEqual(original);
+
+    const repairedMissingFields = repairPremiumCoverLetterBodyParts({
+      brief: buildNoCvBrief(),
+      bodyParts: {
+        ...original,
+        employerValueBlock: "",
+        closeLine: "",
+      },
+    });
+    expect(repairedMissingFields.employerValueBlock).toBe(
+      "The role points to reporting and documentation work that calls for accurate records and clear handoffs.",
+    );
+    expect(repairedMissingFields.closeLine).toBe(
+      "I would approach the work with care, clear communication, and steady follow-through.",
+    );
+  });
+
+  it("removes a duplicated generic close before replacing it", () => {
+    const genericClose = "Je serais ravi d'échanger sur le rôle.";
+    const repaired = repairPremiumCoverLetterBodyParts({
+      brief: buildDirectFrontendBrief("French"),
+      bodyParts: {
+        opening:
+          "J'ai amélioré la conversion des inscriptions de 11 % grâce à des expérimentations d'interface.",
+        proofBlock:
+          "J'ai dirigé une migration de design system utilisée par 4 équipes produit.",
+        employerValueBlock: [
+          "Cette expérience est pertinente pour les interfaces produit.",
+          genericClose,
+        ].join(" "),
+        closeLine: genericClose,
+      },
+    });
+
+    expect(repaired.employerValueBlock).toBe(
+      "Cette expérience est pertinente pour les interfaces produit.",
+    );
+    expect(repaired.employerValueBlock).not.toContain(genericClose);
+    expect(repaired.closeLine).not.toBe(genericClose);
+  });
+
+  it("refills employer value when the duplicated close was its only sentence", () => {
+    const genericClose = "Je serais ravi d'échanger sur le rôle.";
+    const repaired = repairPremiumCoverLetterBodyParts({
+      brief: buildDirectFrontendBrief("French"),
+      bodyParts: {
+        opening:
+          "J'ai amélioré la conversion des inscriptions de 11 % grâce à des expérimentations d'interface.",
+        proofBlock:
+          "J'ai dirigé une migration de design system utilisée par 4 équipes produit.",
+        employerValueBlock: genericClose,
+        closeLine: genericClose,
+      },
+    });
+
+    expect(repaired.employerValueBlock).toMatch(/^Dans .+, cette expérience apporte /u);
+    expect(repaired.employerValueBlock).not.toContain(genericClose);
+    expect(repaired.closeLine).not.toBe(genericClose);
+  });
+
+  it("removes a bare welcome clause after a grounded English close", () => {
+    const repaired = repairPremiumCoverLetterBodyParts({
+      brief: buildDirectFrontendBrief("English"),
+      bodyParts: {
+        opening: "I improved signup conversion by 11% through iterative UI experiments.",
+        proofBlock: "I led a design-system migration used across 4 product squads.",
+        employerValueBlock:
+          "That evidence is relevant to customer-facing product work.",
+        closeLine:
+          "I bring the same design-system discipline and welcome the opportunity to discuss the role further.",
+      },
+    });
+
+    expect(repaired.closeLine).toBe(
+      "I bring the same design-system discipline.",
+    );
+  });
+
+  it("falls back to deterministic close repair when model quality repair fails", async () => {
+    await withQualityRepairFlag("1", async () => {
+      const calls: string[] = [];
+      const genericClose = "I would welcome the opportunity to discuss the role further.";
+      const result = await attemptPremiumCoverLetterGeneration({
+        personalizationContext: directContext,
+        voicePreset: "signature",
+        outputLanguage: "English",
+        jobTitle: directJob.jobTitle,
+        jobDescription: directJob.jobDescription,
+        candidateName: "Alex Martin",
+        writer: async ({ prompt }) => {
+          calls.push(prompt);
+          if (calls.length === 1) {
+            return buildDirectPremiumWriterOutputFixture({
+              opening:
+                "I improved signup conversion by 11% through iterative UI experiments.",
+              proofBlock:
+                "I led a design-system migration used across 4 product squads.",
+              employerValueBlock:
+                "That evidence is relevant to customer-facing product work.",
+              closeLine: genericClose,
+            });
+          }
+          return { notBodyParts: true };
+        },
+      });
+
+      expect(calls).toHaveLength(2);
+      expect(result?.qualityRepair).toMatchObject({
+        enabled: true,
+        attempted: true,
+        outcome: "rejected_invalid_output",
+      });
+      expect(result?.bodyParts.closeLine).not.toBe(genericClose);
+      expect(result?.bodyParts.closeLine).not.toMatch(/welcome.+discuss/iu);
+      expect(result?.qualityShadow?.issues).not.toContain("generic_tone");
+    });
   });
 
   it("fails unsupported generated numeric claims", () => {
@@ -3852,6 +4206,164 @@ describe("premium cover letter generation and rendering", () => {
     expect(result.issues).toContain("generic_tone");
   });
 
+  it("accepts deterministic French employer bridges in shadow quality", () => {
+    const result = evaluatePremiumCoverLetterQualityShadow({
+      contextClass: "cv_direct",
+      bodyParts: {
+        opening:
+          "J’ai amélioré la conversion de 11 % grâce à des expérimentations d’interface.",
+        proofBlock:
+          "J’ai mené la migration d’un design system utilisé par quatre équipes produit.",
+        employerValueBlock:
+          "Dans le travail sur les interfaces produit, cette expérience apporte une pratique structurée des systèmes réutilisables.",
+        closeLine:
+          "Cette expérience continue de nourrir ma pratique professionnelle.",
+      },
+      content: [
+        "Madame, Monsieur,",
+        "",
+        "J’ai amélioré la conversion de 11 % grâce à des expérimentations d’interface.",
+        "",
+        "J’ai mené la migration d’un design system utilisé par quatre équipes produit.",
+        "",
+        "Dans le travail sur les interfaces produit, cette expérience apporte une pratique structurée des systèmes réutilisables.",
+        "",
+        "Cette expérience continue de nourrir ma pratique professionnelle.",
+        "",
+        "Cordialement,",
+        "Alex Martin",
+      ].join("\n"),
+    });
+
+    expect(result.issues).not.toContain("weak_employer_argument");
+  });
+
+  it("does not treat experience alone as a French employer argument", () => {
+    const result = evaluatePremiumCoverLetterQualityShadow({
+      contextClass: "cv_direct",
+      bodyParts: {
+        opening:
+          "J’ai amélioré la conversion de 11 % grâce à des expérimentations d’interface.",
+        proofBlock:
+          "J’ai mené la migration d’un design system utilisé par quatre équipes produit.",
+        employerValueBlock: "Cette expérience est solide.",
+        closeLine:
+          "Cette expérience continue de nourrir ma pratique professionnelle.",
+      },
+      content:
+        "J’ai amélioré la conversion de 11 %. Cette expérience est solide.",
+    });
+
+    expect(result.issues).toContain("weak_employer_argument");
+  });
+
+  it("does not treat apporte alone as a French employer argument", () => {
+    const result = evaluatePremiumCoverLetterQualityShadow({
+      contextClass: "cv_direct",
+      bodyParts: {
+        opening:
+          "J’ai amélioré la conversion de 11 % grâce à des expérimentations d’interface.",
+        proofBlock:
+          "J’ai mené la migration d’un design system utilisé par quatre équipes produit.",
+        employerValueBlock: "J’apporte de la rigueur.",
+        closeLine:
+          "Cette expérience continue de nourrir ma pratique professionnelle.",
+      },
+      content: "J’ai amélioré la conversion de 11 %. J’apporte de la rigueur.",
+    });
+
+    expect(result.issues).toContain("weak_employer_argument");
+  });
+
+  it.each([
+    "Cette expérience aide vos équipes.",
+    "Cette expérience est utile là où les priorités évoluent.",
+  ])("recognizes Unicode-safe French employer bridge markers: %s", (employerValueBlock) => {
+    const result = evaluatePremiumCoverLetterQualityShadow({
+      contextClass: "cv_direct",
+      bodyParts: {
+        opening:
+          "J’ai amélioré la conversion de 11 % grâce à des expérimentations d’interface.",
+        proofBlock:
+          "J’ai mené la migration d’un design system utilisé par quatre équipes produit.",
+        employerValueBlock,
+        closeLine:
+          "Cette expérience continue de nourrir ma pratique professionnelle.",
+      },
+      content: `J’ai amélioré la conversion de 11 %. ${employerValueBlock}`,
+    });
+
+    expect(result.issues).not.toContain("weak_employer_argument");
+  });
+
+  it("does not flag the legacy French no-CV discussion close as generic tone", () => {
+    const result = evaluatePremiumCoverLetterQualityShadow({
+      contextClass: "no_cv",
+      bodyParts: {
+        opening:
+          "Votre offre met l’accent sur la coordination quotidienne des activités.",
+        proofBlock:
+          "Le poste demande un suivi clair des demandes et des échéances.",
+        employerValueBlock:
+          "Le rôle exige une organisation fiable pour garder les priorités visibles.",
+        closeLine: "Je serais ravi d’en discuter.",
+      },
+      content: [
+        "Madame, Monsieur,",
+        "",
+        "Votre offre met l’accent sur la coordination quotidienne des activités.",
+        "",
+        "Le poste demande un suivi clair des demandes et des échéances.",
+        "",
+        "Le rôle exige une organisation fiable pour garder les priorités visibles.",
+        "",
+        "Je serais ravi d’en discuter.",
+        "",
+        "Cordialement,",
+        "Sophie Martin",
+      ].join("\n"),
+    });
+
+    expect(result.issues).not.toContain("generic_tone");
+  });
+
+  it.each([
+    "I would be glad to discuss the role further.",
+    "I would welcome the chance to discuss the position further.",
+  ])(
+    "does not flag a legacy English no-CV discussion close as generic tone: %s",
+    (closeLine) => {
+      const result = evaluatePremiumCoverLetterQualityShadow({
+        contextClass: "no_cv",
+        bodyParts: {
+          opening:
+            "The role centers on careful coordination and accurate records.",
+          proofBlock:
+            "The work requires clear communication and steady follow-through.",
+          employerValueBlock:
+            "The role points to operations work that requires organized coordination.",
+          closeLine,
+        },
+        content: [
+          "Dear Hiring Manager,",
+          "",
+          "The role centers on careful coordination and accurate records.",
+          "",
+          "The work requires clear communication and steady follow-through.",
+          "",
+          "The role points to operations work that requires organized coordination.",
+          "",
+          closeLine,
+          "",
+          "Sincerely,",
+          "Alex Martin",
+        ].join("\n"),
+      });
+
+      expect(result.issues).not.toContain("generic_tone");
+    },
+  );
+
   it("does not run quality repair when the only shadow issue is non-repairable specificity", async () => {
     const calls: string[] = [];
     const result = await withQualityRepairFlag("on", () =>
@@ -5075,10 +5587,13 @@ describe("premium cover letter generation and rendering", () => {
     expect(result?.bodyParts.employerValueBlock.split(/\s+/).length).toBeGreaterThan(
       10,
     );
-    expect(result?.content).toContain(
+    expect(result?.bodyParts.closeLine).toBe(
+      "That experience continues to inform my work.",
+    );
+    expect(result?.content).not.toContain(
       "I would welcome the opportunity to discuss the role further.",
     );
-    expect(result?.qualityShadow?.issues ?? []).toContain("generic_tone");
+    expect(result?.qualityShadow?.issues ?? []).not.toContain("generic_tone");
   });
 
   it("compacts verbose Mistral body parts after validation without affecting premium success", async () => {

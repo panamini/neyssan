@@ -2139,9 +2139,31 @@ function resolveCloseFallback(language: string): string {
 function isGenericPremiumClosingLine(value: string): boolean {
   const normalized = compactWhitespace(value);
   if (!normalized) return false;
-  return /\b(?:i\s+would\s+(?:welcome|be\s+glad|be\s+happy)\s+(?:the\s+)?(?:opportunity|chance)?\s*(?:to\s+)?(?:discuss|speak|talk)\s+(?:the\s+)?(?:position|role|opportunity)\s+further|i\s+would\s+(?:welcome|be\s+glad|be\s+happy)\s+(?:the\s+)?(?:opportunity|chance)?\s*(?:to\s+)?(?:discuss|speak|talk)\s+my\s+interest\s+in\s+(?:the\s+)?(?:position|role|opportunity)|would\s+welcome\s+the\s+(?:opportunity|chance)\s+to\s+(?:discuss|speak)\s+(?:the\s+)?(?:position|role|opportunity)|discuss\s+(?:the\s+)?(?:position|role|opportunity)\s+further|speak\s+further\s+about\s+(?:the\s+)?(?:position|role|opportunity))\b/i.test(
+  return /\b(?:i\s+(?:welcome|would\s+(?:welcome|be\s+glad|be\s+happy))\s+(?:the\s+)?(?:opportunity|chance)?\s*(?:to\s+)?(?:discuss|speak|talk)\s+(?:the\s+)?(?:position|role|opportunity)\s+further|i\s+(?:welcome|would\s+(?:welcome|be\s+glad|be\s+happy))\s+(?:the\s+)?(?:opportunity|chance)?\s*(?:to\s+)?(?:discuss|speak|talk)\s+my\s+interest\s+in\s+(?:the\s+)?(?:position|role|opportunity)|(?:would\s+)?welcome\s+the\s+(?:opportunity|chance)\s+to\s+(?:discuss|speak)\s+(?:the\s+)?(?:position|role|opportunity)(?:\s+further)?|discuss\s+(?:the\s+)?(?:position|role|opportunity)\s+further|speak\s+further\s+about\s+(?:the\s+)?(?:position|role|opportunity)|je\s+serais\s+(?:ravi|ravie|heureux|heureuse)\s+(?:d['’]|de\s+(?:pouvoir\s+)?)(?:en\s+)?(?:échanger|discuter)|au\s+plaisir\s+d['’]échanger(?:\s+davantage)?(?:\s+(?:sur|à\s+propos\s+de|avec\s+vous))?)\b/iu.test(
     normalized,
   );
+}
+
+function preserveGroundedPremiumClosingClause(value: string): string {
+  const normalized = compactWhitespace(value);
+  const clauseBoundaries = [
+    /,\s+(?=(?:and\s+)?(?:i\s+)?(?:welcome|would\s+(?:welcome|be\s+glad|be\s+happy))\b)/giu,
+    /\s+and\s+(?=(?:i\s+)?(?:welcome|would\s+(?:welcome|be\s+glad|be\s+happy))\b)/giu,
+    /,\s+(?=(?:et\s+)?je\s+serais\s+(?:ravi|ravie|heureux|heureuse)\b)/giu,
+    /\s+et\s+(?=je\s+serais\s+(?:ravi|ravie|heureux|heureuse)\b)/giu,
+    /,\s+(?=(?:et\s+)?au\s+plaisir\s+d['’]échanger\b)/giu,
+    /\s+et\s+(?=au\s+plaisir\s+d['’]échanger\b)/giu,
+  ];
+
+  for (const boundaryPattern of clauseBoundaries) {
+    const match = boundaryPattern.exec(normalized);
+    if (!match) continue;
+    const suffix = normalized.slice(match.index + match[0].length);
+    if (!isGenericPremiumClosingLine(suffix)) continue;
+    return ensureSentenceEnding(normalized.slice(0, match.index));
+  }
+
+  return normalized;
 }
 
 function buildEvidenceGroundedCloseLine(brief: CoverLetterBrief): string {
@@ -2151,12 +2173,33 @@ function buildEvidenceGroundedCloseLine(brief: CoverLetterBrief): string {
     return resolveCloseFallback(brief.language);
   }
 
-  const anchors = adjacentOperatingAnchors(brief).slice(0, 3);
-  const anchorText = listAsNaturalText(anchors);
+  const anchors = adjacentOperatingAnchors(brief, brief.language, false).slice(
+    0,
+    3,
+  );
+  if (anchors.length === 0) {
+    return deterministicLanguage === "fr"
+      ? "Cette expérience continue de nourrir ma pratique professionnelle."
+      : "That experience continues to inform my work.";
+  }
+  const anchorText = listAsNaturalTextForLanguage(anchors, brief.language);
   if (deterministicLanguage === "fr") {
-    return ensureSentenceEnding(`J'apporte de la rigueur autour de ${anchorText}`);
+    return ensureSentenceEnding(`J'apporte de la rigueur dans ${anchorText}`);
   }
   return ensureSentenceEnding(`I bring discipline around ${anchorText}`);
+}
+
+function repairGenericPremiumClosingLine(args: {
+  closeLine: string;
+  brief: CoverLetterBrief;
+}): string {
+  const specificSentences = splitSentences(args.closeLine)
+    .map(preserveGroundedPremiumClosingClause)
+    .filter((sentence) => !isGenericPremiumClosingLine(sentence));
+  if (specificSentences.length > 0) {
+    return joinSentences(specificSentences);
+  }
+  return buildEvidenceGroundedCloseLine(args.brief) || args.closeLine;
 }
 
 export function isPremiumCoverLetterPreset(
@@ -2984,6 +3027,8 @@ export function buildPremiumCoverLetterPrompt(args: {
   const promptVersionGuidance = resolvePremiumCoverLetterPromptVersionGuidance({
     writerProvider: args.writerProvider,
   });
+  const editorialQualityGuidance =
+    resolvePremiumCoverLetterEditorialQualityGuidance(args.brief);
   return [
     "Write premium cover-letter body parts.",
     "The ClaimPlan owns strategy. Do not choose claims. Realize only the claim assigned to each section.",
@@ -3012,11 +3057,21 @@ export function buildPremiumCoverLetterPrompt(args: {
     "Avoid clunky inanimate-object phrasing and evaluator/meta phrases like 'the evidence I would bring'.",
     "Do not narrate the writing plan or provenance. Never write 'I have described', 'I described', 'as described', 'the evidence shows', 'this section shows', 'this letter shows', 'the claim is', 'work surface', or 'concrete bridge'.",
     "Do not use self-scoring or section-label openings such as 'my strongest match', 'my best match', 'the strongest evidence', 'my fit for this role', or 'the main reason I am a fit'.",
-    "Use one cautious employer-facing implication. Avoid formula bridges ('That is useful...', 'That matters...', 'day-to-day depends...', 'those habits matter'); write the concrete team consequence plainly.",
-    "closeLine: concise evidence-grounded contribution, not generic interview-request wording.",
+    ...(args.brief.contextClass !== "no_cv"
+      ? [
+          "Use one cautious employer-facing implication. Avoid formula bridges ('That is useful...', 'That matters...', 'day-to-day depends...', 'those habits matter'); write the concrete team consequence plainly.",
+        ]
+      : []),
+    ...(args.brief.contextClass === "no_cv"
+      ? [
+          "Use one cautious employer-facing implication. Avoid formula bridges ('That is useful...', 'That matters...', 'day-to-day depends...', 'those habits matter'); write the concrete team consequence plainly.",
+          "closeLine: concise evidence-grounded contribution, not generic interview-request wording.",
+        ]
+      : []),
     presetGuidance,
     args.generationControlsBlock,
     ...promptVersionGuidance,
+    ...editorialQualityGuidance,
     ...contextGuidance,
     "Do not include greeting, signoff, signature, candidate name, date, subject, sender block, recipient block, markdown, XML, citations, audit, or explanation.",
     "Return only PremiumWriterOutputV1 JSON.",
@@ -3058,6 +3113,32 @@ export function buildPremiumCoverLetterPrompt(args: {
     providerAdapter,
     `Structured brief: ${JSON.stringify(structuredBrief)}`,
   ].filter((line): line is string => typeof line === "string").join("\n");
+}
+
+function resolvePremiumCoverLetterEditorialQualityGuidance(
+  brief: CoverLetterBrief,
+): string[] {
+  if (brief.contextClass === "no_cv") return [];
+
+  const shared =
+    "CV-backed editorial quality contract: build one hiring case, not a CV inventory; use one role-specific opening, select one or two concrete candidate proofs, state why each proof is relevant to one top responsibility, and end with one short evidence-grounded sentence rather than an interview request.";
+
+  const deterministicLanguage = getDeterministicCopyLanguage(brief.language);
+  if (deterministicLanguage === "fr") {
+    return [
+      shared,
+      "French editorial contract: compose in idiomatic professional French, not translated English cadence; avoid 'je serais ravi de', 'se traduit par', 's'aligne avec', 'apporter de la valeur', and repeated discussion invitations.",
+    ];
+  }
+
+  if (deterministicLanguage === "en") {
+    return [
+      shared,
+      "English editorial contract: use concise professional English, direct verbs, and concrete nouns; avoid résumé-summary cadence, 'I am writing to apply', generic enthusiasm, alignment claims, and discussion invitations.",
+    ];
+  }
+
+  return [shared];
 }
 
 function isMistralWriterIdentity(args: {
@@ -3819,6 +3900,8 @@ const FABRICATED_MISSION_CLAIM_PATTERN =
   /\b(?:mission of|mission to|mission is|mission of safeguarding|reimagining healthcare security|contribute to reimagining healthcare|passionate about (?:your|the) mission|drawn to (?:your|the) mission|inspired by (?:your|the) mission|culture fit)\b/i;
 const WRITER_META_PROSE_PATTERN =
   /\b(?:i have described|i described|as described|as mentioned|as noted|the evidence (?:shows|demonstrates|suggests)|this (?:letter|paragraph|section) (?:shows|demonstrates|describes)|the claim (?:is|shows|demonstrates)|my strongest match|my best match|the strongest evidence|my fit for this role|the main reason i am a fit|work surface|concrete bridge)\b/i;
+const EMPLOYER_ARGUMENT_BRIDGE_PATTERN =
+  /(?:^|[^\p{L}\p{N}_])(?:that|this|for|where|because|matters|relevant|role|team|environment|work|needs?|requires?|dans|pour|où|parce\s+que|pertinent(?:e|es|s)?|rôles?|équipes?|environnement|travail|besoins?|exige(?:nt)?|priorités?)(?=$|[^\p{L}\p{N}_])/iu;
 const CANDIDATE_LIKE_FULL_NAME_LINE_PATTERN =
   /^[A-Z][A-Za-z'’-]+(?:\s+[A-Z][A-Za-z'’-]+){1,3}$/;
 const PERCENTAGE_NUMERIC_CLAIM_PATTERN =
@@ -4152,6 +4235,22 @@ function listAsNaturalText(items: string[]): string {
   return `${cleaned.slice(0, -1).join(", ")}, and ${cleaned[cleaned.length - 1]}`;
 }
 
+function listAsNaturalTextForLanguage(
+  items: string[],
+  language: string,
+): string {
+  const cleaned = dedupeStrings(items).map((item) =>
+    compactWhitespace(item).replace(/[.!?]$/u, ""),
+  );
+  const conjunction =
+    getDeterministicCopyLanguage(language) === "fr" ? "et" : "and";
+  if (cleaned.length <= 1) return cleaned[0] ?? "";
+  if (cleaned.length === 2) {
+    return `${cleaned[0]} ${conjunction} ${cleaned[1]}`;
+  }
+  return `${cleaned.slice(0, -1).join(", ")} ${conjunction} ${cleaned[cleaned.length - 1]}`;
+}
+
 function selectAdjacentWorkSurfaces(brief: CoverLetterBrief): string[] {
   const normalizedTargetRole = normalizeProposalConstraintText(brief.targetRole);
   return dedupeStrings([
@@ -4171,28 +4270,55 @@ function selectAdjacentWorkSurfaces(brief: CoverLetterBrief): string[] {
     .slice(0, 3);
 }
 
-function adjacentOperatingAnchors(brief: CoverLetterBrief): string[] {
+function adjacentOperatingAnchors(
+  brief: CoverLetterBrief,
+  language = "English",
+  includeFallback = true,
+): string[] {
   const evidence = [
     ...brief.topEvidence,
     ...brief.supportEvidence,
     ...(brief.transferCore ?? []),
   ].join(" ");
+  const french = getDeterministicCopyLanguage(language) === "fr";
+  const labels = french
+    ? {
+        observation: "une observation attentive",
+        records: "des dossiers fiables",
+        handoffs: "des transmissions claires",
+        followThrough: "un suivi régulier",
+        fallback: [
+          "des dossiers clairs",
+          "une communication constante",
+          "un suivi régulier",
+        ],
+      }
+    : {
+        observation: "careful observation",
+        records: "accurate records",
+        handoffs: "clear handoffs",
+        followThrough: "consistent follow-through",
+        fallback: [
+          "clear records",
+          "steady communication",
+          "consistent follow-through",
+        ],
+      };
   const anchors: string[] = [];
   if (/\b(?:monitor|surveillance|scan|patrol|observation|watch)\b/i.test(evidence)) {
-    anchors.push("careful observation");
+    anchors.push(labels.observation);
   }
   if (/\b(?:reports?|records?|documents?|documented|logs?|notes?|recording)\b/i.test(evidence)) {
-    anchors.push("accurate records");
+    anchors.push(labels.records);
   }
   if (/\b(?:witness(?:es)?|interview|communicat|handoffs?|stakeholders?|updates?)\b/i.test(evidence)) {
-    anchors.push("clear handoffs");
+    anchors.push(labels.handoffs);
   }
   if (/\b(?:coordinat|schedul|track|follow)\b/i.test(evidence)) {
-    anchors.push("consistent follow-through");
+    anchors.push(labels.followThrough);
   }
-  return anchors.length > 0
-    ? dedupeStrings(anchors).slice(0, 4)
-    : ["clear records", "steady communication", "consistent follow-through"];
+  if (anchors.length > 0) return dedupeStrings(anchors).slice(0, 4);
+  return includeFallback ? labels.fallback : [];
 }
 
 type PremiumWorkSurfaceId =
@@ -4209,6 +4335,8 @@ type PremiumWorkSurfaceDefinition = {
   jobPattern: RegExp;
   contextPhrase: string;
   anchorPhrase: string;
+  frenchContextPhrase: string;
+  frenchAnchorPhrase: string;
 };
 
 const PREMIUM_WORK_SURFACE_DEFINITIONS = [
@@ -4220,6 +4348,8 @@ const PREMIUM_WORK_SURFACE_DEFINITIONS = [
       /\b(?:customer success|account health|retention|onboarding|qbrs?|quarterly business reviews?|expansion|churn|customer reporting)\b/i,
     contextPhrase: "customer success and retention work",
     anchorPhrase: "clear account signals and consistent follow-through",
+    frenchContextPhrase: "le suivi et la fidélisation des clients",
+    frenchAnchorPhrase: "des signaux client clairs et un suivi régulier",
   },
   {
     id: "revenue_forecasting",
@@ -4229,6 +4359,9 @@ const PREMIUM_WORK_SURFACE_DEFINITIONS = [
       /\b(?:revenue operations?|forecast(?:s|ing)?|pipeline|salesforce|crm|dashboard|operating cadence|sales|finance)\b/i,
     contextPhrase: "revenue reporting and forecasting",
     anchorPhrase: "clear reporting cadence and reliable operating visibility",
+    frenchContextPhrase: "le reporting et les prévisions de revenus",
+    frenchAnchorPhrase:
+      "un reporting régulier et une visibilité opérationnelle fiable",
   },
   {
     id: "facilities_maintenance",
@@ -4238,6 +4371,8 @@ const PREMIUM_WORK_SURFACE_DEFINITIONS = [
       /\b(?:facilities|maintenance|work-?order|service records?|repairs?|equipment)\b/i,
     contextPhrase: "facilities and maintenance coordination",
     anchorPhrase: "current service records and timely follow-up",
+    frenchContextPhrase: "la coordination des installations et de la maintenance",
+    frenchAnchorPhrase: "des dossiers d'intervention à jour et un suivi rapide",
   },
   {
     id: "security_observation",
@@ -4247,6 +4382,8 @@ const PREMIUM_WORK_SURFACE_DEFINITIONS = [
       /\b(?:security|guard|patrols?|surveillance|cctv|observation|observe|monitor(?:ed|ing)?|witness(?:es)?|access control|site safety|incident response)\b/i,
     contextPhrase: "security observation and patrol work",
     anchorPhrase: "careful observation and clear records",
+    frenchContextPhrase: "la surveillance et les rondes de sécurité",
+    frenchAnchorPhrase: "une observation attentive et des dossiers clairs",
   },
   {
     id: "reporting_documentation",
@@ -4256,6 +4393,8 @@ const PREMIUM_WORK_SURFACE_DEFINITIONS = [
       /\b(?:reports?|reporting|records?|documentation|documents?|documented|logs?|notes?|observations?|incidents?|status)\b/i,
     contextPhrase: "reporting and documentation",
     anchorPhrase: "accurate records and clear handoffs",
+    frenchContextPhrase: "le reporting et la documentation",
+    frenchAnchorPhrase: "des dossiers fiables et des transmissions claires",
   },
   {
     id: "operations_scheduling",
@@ -4265,6 +4404,8 @@ const PREMIUM_WORK_SURFACE_DEFINITIONS = [
       /\b(?:operations?|scheduling|schedule|coordination|coordinate|handoffs?|follow-up|track(?:ed|ing)?|intake|workflow|process)\b/i,
     contextPhrase: "operations and scheduling",
     anchorPhrase: "organized coordination and steady follow-through",
+    frenchContextPhrase: "les opérations et la planification",
+    frenchAnchorPhrase: "une coordination structurée et un suivi régulier",
   },
 ] as const satisfies readonly PremiumWorkSurfaceDefinition[];
 
@@ -4305,29 +4446,73 @@ function resolvePremiumWorkSurfaces(
   return jobMatches;
 }
 
-function buildWorkSurfaceEmployerValueBridge(brief: CoverLetterBrief): string {
-  const surfaces = resolvePremiumWorkSurfaces(brief);
-  const primarySurface = surfaces[0];
+function buildNoCvWorkSurfaceEmployerValueBridge(
+  brief: CoverLetterBrief,
+  primarySurface: PremiumWorkSurfaceDefinition | undefined,
+): string {
   const anchors = primarySurface
     ? [primarySurface.anchorPhrase]
-    : adjacentOperatingAnchors(brief).slice(0, 3);
+    : adjacentOperatingAnchors(brief, "English").slice(0, 3);
   const anchorText = listAsNaturalText(anchors);
   const contextText = (primarySurface?.contextPhrase ?? "the work").replace(
     /\s+work$/i,
     "",
   );
-  const riskPhrase = primarySurface
-    ? `small misses in ${contextText} can become unclear handoffs or unresolved site issues`
-    : "small misses can become unclear handoffs or unresolved site issues";
+  return `The role points to ${contextText} work that calls for ${anchorText}.`;
+}
 
-  if (brief.contextClass === "no_cv") {
-    return `The role points to ${contextText} work that calls for ${anchorText}.`;
+function resolveLocalizedWorkSurfaceCopy(
+  brief: CoverLetterBrief,
+  primarySurface: PremiumWorkSurfaceDefinition | undefined,
+): { french: boolean; anchorText: string; contextText: string } {
+  const french = getDeterministicCopyLanguage(brief.language) === "fr";
+  if (french) {
+    const anchors = primarySurface
+      ? [primarySurface.frenchAnchorPhrase]
+      : adjacentOperatingAnchors(brief, brief.language).slice(0, 3);
+    return {
+      french,
+      anchorText: listAsNaturalTextForLanguage(anchors, brief.language),
+      contextText: primarySurface?.frenchContextPhrase ?? "ce travail",
+    };
   }
 
+  const anchors = primarySurface
+    ? [primarySurface.anchorPhrase]
+    : adjacentOperatingAnchors(brief, brief.language).slice(0, 3);
+  return {
+    french,
+    anchorText: listAsNaturalTextForLanguage(anchors, brief.language),
+    contextText: (primarySurface?.contextPhrase ?? "the work").replace(
+      /\s+work$/i,
+      "",
+    ),
+  };
+}
+
+function buildWorkSurfaceEmployerValueBridge(brief: CoverLetterBrief): string {
+  const surfaces = resolvePremiumWorkSurfaces(brief);
+  const primarySurface = surfaces[0];
+
+  if (brief.contextClass === "no_cv") {
+    return buildNoCvWorkSurfaceEmployerValueBridge(brief, primarySurface);
+  }
+
+  const { french, anchorText, contextText } = resolveLocalizedWorkSurfaceCopy(
+    brief,
+    primarySurface,
+  );
+
   if (brief.contextClass === "cv_adjacent") {
+    if (french) {
+      return `Cette expérience est pertinente pour ${contextText}, où les priorités incluent ${anchorText}.`;
+    }
     return `In ${contextText} work, that kind of background supports ${anchorText} without turning small issues into unclear handoffs.`;
   }
 
+  if (french) {
+    return `Dans ${contextText}, cette expérience apporte ${anchorText}.`;
+  }
   return `In ${contextText} work, that background supports ${anchorText}.`;
 }
 
@@ -5123,6 +5308,7 @@ export function validatePremiumCoverLetterBodyParts(args: {
 export function evaluatePremiumCoverLetterQualityShadow(args: {
   bodyParts: CoverLetterBodyParts;
   content: string;
+  contextClass?: PremiumCoverLetterContextClass;
 }): PremiumCoverLetterQualityShadowResult {
   const issues: PremiumCoverLetterQualityShadowIssueCode[] = [];
   const bodyParts = PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(args.bodyParts);
@@ -5144,29 +5330,27 @@ export function evaluatePremiumCoverLetterQualityShadow(args: {
     issues.push("generic_tone");
   }
   if (
+    args.contextClass !== "no_cv" &&
     /\b(?:that is useful in\b|that matters where|day-to-day depends on|those habits matter|would welcome the chance to (?:discuss|speak)|discuss the position further|discuss the role further)\b/i.test(
       bodyText,
     )
   ) {
     issues.push("generic_tone");
   }
-  if (isGenericPremiumClosingLine(bodyParts.closeLine)) {
+  if (
+    args.contextClass !== "no_cv" &&
+    isGenericPremiumClosingLine(bodyParts.closeLine)
+  ) {
     issues.push("generic_tone");
   }
   if (
     /^(?:i|at)\b/i.test(opening) &&
     /^(?:i|at)\b/i.test(proof) &&
-    !/\b(?:that|this|for|where|because|matters|relevant|role|team|environment|work)\b/i.test(
-      employerValue,
-    )
+    !EMPLOYER_ARGUMENT_BRIDGE_PATTERN.test(employerValue)
   ) {
     issues.push("factual_inventory");
   }
-  if (
-    !/\b(?:that|this|for|where|because|matters|relevant|role|team|environment|work|needs?|requires?)\b/i.test(
-      employerValue,
-    )
-  ) {
+  if (!EMPLOYER_ARGUMENT_BRIDGE_PATTERN.test(employerValue)) {
     issues.push("weak_employer_argument");
   }
   if (LOW_VALUE_JOB_ECHO_PATTERN.test(employerValue)) {
@@ -5212,6 +5396,7 @@ function premiumCoverLetterQualityShadowImproved(args: {
 export function repairPremiumCoverLetterBodyParts(args: {
   bodyParts: CoverLetterBodyParts;
   brief: CoverLetterBrief;
+  forceGenericCloseRepair?: boolean;
 }): CoverLetterBodyParts {
   const cleanBodyPart = (value: string) =>
     dedupeSentenceSequence(
@@ -5241,10 +5426,39 @@ export function repairPremiumCoverLetterBodyParts(args: {
     cleaned.employerValueBlock = buildWorkSurfaceEmployerValueBridge(args.brief);
   }
 
+  const originalCloseSentences = splitSentences(cleaned.closeLine).map(
+    (sentence) => normalizeProposalConstraintText(sentence),
+  );
+  cleaned.employerValueBlock = joinSentences(
+    splitSentences(cleaned.employerValueBlock).filter(
+      (sentence) =>
+        !originalCloseSentences.includes(
+          normalizeProposalConstraintText(sentence),
+        ),
+    ),
+  );
+  if (
+    !compactWhitespace(cleaned.employerValueBlock) &&
+    getDeterministicCopyLanguage(args.brief.language)
+  ) {
+    cleaned.employerValueBlock = ensureSentenceEnding(
+      buildWorkSurfaceEmployerValueBridge(args.brief),
+    );
+  }
+
   if (!compactWhitespace(cleaned.closeLine)) {
     cleaned.closeLine =
       buildEvidenceGroundedCloseLine(args.brief) ||
       resolveCloseFallback(args.brief.language);
+  } else if (
+    args.brief.contextClass !== "no_cv" &&
+    (args.forceGenericCloseRepair || !isCoverLetterQualityRepairV1Enabled()) &&
+    isGenericPremiumClosingLine(cleaned.closeLine)
+  ) {
+    cleaned.closeLine = repairGenericPremiumClosingLine({
+      closeLine: cleaned.closeLine,
+      brief: args.brief,
+    });
   }
 
   const closeSentences = splitSentences(cleaned.closeLine).map((sentence) =>
@@ -6197,6 +6411,7 @@ async function tryRepairPremiumCoverLetterQualityShadow(args: {
   const repairedQualityShadow = evaluatePremiumCoverLetterQualityShadow({
     bodyParts: repairedBodyParts,
     content: repairedRendered.content,
+    contextClass: args.brief.contextClass,
   });
   if (
     !premiumCoverLetterQualityShadowImproved({
@@ -6688,6 +6903,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   let qualityShadow = evaluatePremiumCoverLetterQualityShadow({
     bodyParts,
     content: rendered.content,
+    contextClass: brief.contextClass,
   });
   let qualityRepairTrace: PremiumCoverLetterQualityRepairTrace | undefined;
 
@@ -6710,6 +6926,32 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     bodyParts = qualityRepair.bodyParts;
     rendered = qualityRepair.rendered;
     qualityShadow = qualityRepair.qualityShadow;
+  } else if (
+    brief.contextClass !== "no_cv" &&
+    isGenericPremiumClosingLine(bodyParts.closeLine)
+  ) {
+    const deterministicFallbackBodyParts = repairPremiumCoverLetterBodyParts({
+      bodyParts,
+      brief,
+      forceGenericCloseRepair: true,
+    });
+    const deterministicFallbackIssues = validatePremiumCoverLetterBodyParts({
+      bodyParts: deterministicFallbackBodyParts,
+      brief,
+    });
+    if (deterministicFallbackIssues.length === 0) {
+      bodyParts = deterministicFallbackBodyParts;
+      rendered = renderPremiumCoverLetter({
+        bodyParts,
+        outputLanguage: args.outputLanguage,
+        candidateName: args.candidateName,
+      });
+      qualityShadow = evaluatePremiumCoverLetterQualityShadow({
+        bodyParts,
+        content: rendered.content,
+        contextClass: brief.contextClass,
+      });
+    }
   }
 
   const finalProvenance = buildPremiumCoverLetterFinalProvenance({

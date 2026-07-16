@@ -5171,6 +5171,7 @@ describe("proposal writer prompt contract", () => {
     expect(finalized.content).toContain(bodyParts.proofBlock);
     expect(finalized.content).toContain(bodyParts.employerValueBlock);
     expect(finalized.content).toContain(bodyParts.closeLine);
+    expect(finalized.qualityShadow?.issues ?? []).not.toContain("generic_tone");
   });
 
   it("preserves French no-CV role-surface content when the operational detail is in the consequence sentence", () => {
