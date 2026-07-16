@@ -797,6 +797,21 @@ describe("QUALITY-EVAL-3C v2 protocol", () => {
               firstOutcome === "editorial_veto"
                 ? expect.objectContaining({ verdict: "HARD_BLOCKED" })
                 : null,
+            diagnostic:
+              firstOutcome === "safety_veto"
+                ? expect.objectContaining({
+                    pipelineOutcome: "safety_veto",
+                    outputAssessment: "not_available_due_to_safety",
+                    failure: expect.objectContaining({
+                      errorClass: "proposal_finalization_error",
+                      failureStage: expect.any(String),
+                      failureIssues: expect.any(Array),
+                    }),
+                  })
+                : expect.objectContaining({
+                    pipelineOutcome: "editorial_veto",
+                    outputAssessment: "editorial_hard_block",
+                  }),
           },
         ],
       });
@@ -2087,6 +2102,12 @@ describe("QUALITY-EVAL-3C v2 protocol", () => {
           artifactHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
           failureReceipt: null,
           sendability: expect.any(Object),
+          diagnostic: expect.objectContaining({
+            version: "cover_letter_eval_cell_diagnostic_v1",
+            evidenceAvailability: "candidate_evidence_present",
+            pipelineOutcome: "human_review_pending",
+            outputAssessment: "reviewable",
+          }),
         },
       ],
     });
@@ -2130,6 +2151,10 @@ describe("QUALITY-EVAL-3C v2 protocol", () => {
       status: "OUTCOME_COMPLETE_NO_REVIEWABLE_ARTIFACTS",
       outcome: "editorial_veto",
       sendability: { verdict: "HARD_BLOCKED" },
+      diagnostic: expect.objectContaining({
+        pipelineOutcome: "editorial_veto",
+        outputAssessment: "editorial_hard_block",
+      }),
       failureReceipts: [],
       executionCommitment: vetoResult.executionCommitment,
     });

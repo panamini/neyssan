@@ -100,9 +100,9 @@ export type CoverLetterFinalSendabilityShadow = Readonly<{
 const ENGLISH_BOUNDARY_PATTERN =
   /(?:^|\n)\s*(?:dear\s+(?:hiring\s+manager|recruiting\s+team)|(?:sincerely|best\s+regards|kind\s+regards),?)/iu;
 const FRENCH_BOUNDARY_PATTERN =
-  /(?:^|\n)\s*(?:bonjour|madame|monsieur|(?:bien\s+)?cordialement),?/iu;
+  /(?:^|\n)\s*(?:bonjour|madame|monsieur|(?:bien\s+)?cordialement|veuillez\s+agréer\b),?/iu;
 const SIGNOFF_PATTERN =
-  /^(?:(?:yours\s+)?sincerely|best\s+regards|kind\s+regards|regards|cordialement|bien\s+cordialement),?/iu;
+  /^(?:(?:yours\s+)?sincerely|best\s+regards|kind\s+regards|regards|cordialement|bien\s+cordialement|veuillez\s+agréer\b),?/iu;
 const SALUTATION_PATTERN =
   /^(?:dear\b|bonjour\b|madame\b|monsieur\b|to\s+the\s+hiring\s+team\b)/iu;
 const TERMINAL_PUNCTUATION_PATTERN = /[.!?…:;"')\]]$/u;

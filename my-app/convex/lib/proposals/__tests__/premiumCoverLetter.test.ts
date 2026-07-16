@@ -2396,6 +2396,34 @@ describe("premium cover letter generation and rendering", () => {
     expect(result?.content).not.toContain("Camille Bernard");
   });
 
+  it("finalizes a grounded French CV-backed letter with canonical boundaries", async () => {
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: directContext,
+      voicePreset: "signature",
+      outputLanguage: "French",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      candidateName: "Alex Martin",
+      writer: async () => ({
+        opening:
+          "J’ai amélioré la conversion des inscriptions de 11 % grâce à des expériences d’interface itératives.",
+        proofBlock:
+          "J’ai dirigé une migration de design system utilisée par 4 équipes produit.",
+        employerValueBlock:
+          "Cette expérience correspond à votre besoin de piloter des applications React et TypeScript ainsi que des systèmes de design.",
+        closeLine:
+          "Je serais ravi d’échanger sur la manière dont cette approche pourrait soutenir vos équipes.",
+      }),
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.content).toMatch(/^Madame, Monsieur,/u);
+    expect(result?.content).toMatch(
+      /Veuillez agréer, Madame, Monsieur, l'expression de mes salutations distinguées\.\nAlex Martin$/u,
+    );
+    expect(result?.bodyParts.proofBlock).toContain("4 équipes produit");
+  });
+
   it("fails unsupported generated numeric claims", () => {
     expect(
       directFrontendIssueCodesFor(
