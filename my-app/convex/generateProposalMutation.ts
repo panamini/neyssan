@@ -10229,6 +10229,11 @@ export function finalizePremiumCoverLetterPayloadForPersistence(args: {
           fallbackBodyParts: args.payload.bodyParts,
         }),
         content,
+        contextClass:
+          args.payload.finalProvenance?.contextClass ??
+          (args.format === "cover_letter" && !args.hasCandidateContext
+            ? "no_cv"
+            : undefined),
       })
     : args.payload.qualityShadow;
   const qualityRepair =

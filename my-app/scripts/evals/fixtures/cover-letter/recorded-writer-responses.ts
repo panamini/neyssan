@@ -95,7 +95,7 @@ const rawRecordedCoverLetterReplayFixtures = [
       {
         schemaId: "premium_writer_output_v1",
         expectedWriterPromptHash:
-          "70f95f919494ec3a0eb4d3cde406445a814d820f731f375181a0c27c15e9c482",
+          "b0baf7bdcbd9aa3e0f492f46c7cae108d7c411d0e6ef60f0a555ac435c600e3e",
         payload: {
           version: "premium_writer_output_v1",
           bodyParts: {
@@ -172,7 +172,7 @@ const rawRecordedCoverLetterReplayFixtures = [
       {
         schemaId: "premium_writer_output_v1",
         expectedWriterPromptHash:
-          "26975eaca25cb7ed352ce841b108b8e5442980655e9061fb733b3397f6ec1c3a",
+          "a1f5341f65cd4054c491e37c25713ecb5c519af1a72c5fea352687bb1ecea823",
         payload: {
           version: "premium_writer_output_v1",
           bodyParts: {

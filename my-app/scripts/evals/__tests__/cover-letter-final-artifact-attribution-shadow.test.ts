@@ -404,7 +404,7 @@ describe("QUALITY-EVAL-2E final-artifact attribution shadow", () => {
         sourceRef: "test-source",
         benchmarkCase,
         replay,
-        blindingSecret: "c".repeat(64),
+        blindingSecret: "b".repeat(64),
       });
 
     expect(first).toEqual(second);
