@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
 import * as path from "node:path";
 
 import { z } from "zod";
@@ -113,8 +113,15 @@ export type CoverLetterBlindReviewRevealMap = Readonly<{
     writerModel: CoverLetterHumanReviewRecord["writerModel"];
     artifactHash: string | null;
     provenanceHash: string | null;
+    opaqueArmId?: string;
   }>[];
   revealMapHash: string;
+}>;
+
+export type CoverLetterBlindReviewOpaqueArmBinding = Readonly<{
+  caseId: string;
+  writerModel: CoverLetterHumanReviewRecord["writerModel"];
+  opaqueArmId: string;
 }>;
 
 export type CoverLetterBlindReviewArtifacts = Readonly<{
@@ -194,6 +201,7 @@ export async function buildCoverLetterBlindReviewArtifacts(args: {
   sourceRef: string;
   cases: readonly CoverLetterBenchmarkCase[];
   records: readonly CoverLetterHumanReviewRecord[];
+  opaqueArmBindings?: readonly CoverLetterBlindReviewOpaqueArmBinding[];
 }): Promise<CoverLetterBlindReviewArtifacts> {
   if (!args.cohortId.trim() || !args.runId.trim() || !args.sourceRef.trim()) {
     throw new Error("cohortId, runId, and sourceRef must be non-empty.");
@@ -274,6 +282,26 @@ export async function buildCoverLetterBlindReviewArtifacts(args: {
       `Blind-review cohort is missing successful records for: ${missingCases.join(", ")}.`,
     );
   }
+  const opaqueArmIdByRecordIdentity = new Map<string, string>();
+  const opaqueArmIds = new Set<string>();
+  if (args.opaqueArmBindings) {
+    for (const binding of args.opaqueArmBindings) {
+      const recordIdentity = [binding.caseId, binding.writerModel].join(":");
+      if (
+        !recordIdentities.has(recordIdentity) ||
+        opaqueArmIdByRecordIdentity.has(recordIdentity) ||
+        opaqueArmIds.has(binding.opaqueArmId) ||
+        !/^arm-[a-f0-9]{64}$/u.test(binding.opaqueArmId)
+      ) {
+        throw new Error("Blind-review opaque-arm bindings are invalid.");
+      }
+      opaqueArmIdByRecordIdentity.set(recordIdentity, binding.opaqueArmId);
+      opaqueArmIds.add(binding.opaqueArmId);
+    }
+    if (opaqueArmIdByRecordIdentity.size !== recordIdentities.size) {
+      throw new Error("Blind-review opaque-arm bindings are incomplete.");
+    }
+  }
 
   const deterministicallyShuffledRecords = await Promise.all(
     args.records.map(async (record) => ({
@@ -331,6 +359,9 @@ export async function buildCoverLetterBlindReviewArtifacts(args: {
       rubricVersion: BLIND_REVIEW_RUBRIC_VERSION,
       reviewTemplate: createReviewTemplate(),
     });
+    const opaqueArmId = opaqueArmIdByRecordIdentity.get(
+      [record.caseId, record.writerModel].join(":"),
+    );
     revealEntries.push({
       blindLabel,
       caseId: record.caseId,
@@ -338,6 +369,7 @@ export async function buildCoverLetterBlindReviewArtifacts(args: {
       writerModel: record.writerModel,
       artifactHash: record.artifact.artifactHash,
       provenanceHash: record.artifact.provenanceHash,
+      ...(opaqueArmId ? { opaqueArmId } : {}),
     });
   }
 
@@ -548,8 +580,9 @@ export async function writeCoverLetterBlindReviewArtifacts(args: {
   const privateDirectory = path.join(outputDirectory, "private-reveal");
   await Promise.all([
     mkdir(reviewerDirectory, { recursive: true }),
-    mkdir(privateDirectory, { recursive: true }),
+    mkdir(privateDirectory, { recursive: true, mode: 0o700 }),
   ]);
+  await chmod(privateDirectory, 0o700);
   const packJsonPath = path.join(reviewerDirectory, "blind-review-pack.json");
   const revealMapJsonPath = path.join(
     privateDirectory,
@@ -569,5 +602,6 @@ export async function writeCoverLetterBlindReviewArtifacts(args: {
       "utf8",
     ),
   ]);
+  await chmod(revealMapJsonPath, 0o600);
   return { packJsonPath, revealMapJsonPath, packMarkdownPath };
 }

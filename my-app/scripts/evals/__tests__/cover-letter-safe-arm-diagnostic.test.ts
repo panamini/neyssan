@@ -7,7 +7,9 @@ import {
   createCoverLetterOpaqueArmIdBlindingKey,
   deriveCoverLetterOpaqueArmId,
   redactCoverLetterSafeArmDiagnosticInput,
+  releaseCoverLetterOpaqueArmIdBlindingKey,
   validateCoverLetterSafeArmDiagnostic,
+  type CoverLetterOpaqueArmIdBlindingKey,
   type CoverLetterSafeArmDiagnosticInput,
 } from "../cover-letter-safe-arm-diagnostic";
 import type { PremiumCoverLetterQualityShadowIssueCode } from "../../../convex/lib/proposals/premiumCoverLetter";
@@ -233,6 +235,35 @@ describe("cover-letter safe arm diagnostics", () => {
         }),
       ).resolves.not.toBe(armId);
     }
+  });
+
+  it("releases a process-local blinding key and rejects reuse", async () => {
+    const blindingKey = createCoverLetterOpaqueArmIdBlindingKey();
+    const args = {
+      runId: "quality-eval-5-local-test",
+      fixtureId: "fixture-en-direct-001",
+      armKey: "arm-a",
+      blindingKey,
+    };
+    await expect(deriveCoverLetterOpaqueArmId(args)).resolves.toMatch(
+      /^arm-[a-f0-9]{64}$/u,
+    );
+
+    releaseCoverLetterOpaqueArmIdBlindingKey(blindingKey);
+
+    await expect(deriveCoverLetterOpaqueArmId(args)).rejects.toThrow(
+      "safe arm diagnostic validation failed",
+    );
+    expect(() => releaseCoverLetterOpaqueArmIdBlindingKey(blindingKey)).toThrow(
+      "safe arm diagnostic validation failed",
+    );
+    expect(() =>
+      releaseCoverLetterOpaqueArmIdBlindingKey(
+        structuredClone(
+          createCoverLetterOpaqueArmIdBlindingKey(),
+        ) as CoverLetterOpaqueArmIdBlindingKey,
+      ),
+    ).toThrow("safe arm diagnostic validation failed");
   });
 
   it("rejects missing, weak, and content-bearing arm-id secrets without echo", async () => {
