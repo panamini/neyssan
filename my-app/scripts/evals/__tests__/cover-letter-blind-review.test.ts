@@ -150,6 +150,8 @@ describe("cover-letter blind human review", () => {
     );
     expect(serializedPack).not.toContain("gpt-5.5");
     expect(serializedPack).not.toContain("mistral-medium-latest");
+    expect(serializedPack).not.toContain("safeArmDiagnostic");
+    expect(serializedPack).not.toContain("opaqueArmId");
 
     const serializedRevealMap = JSON.stringify(first.revealMap);
     expect(serializedRevealMap).toContain("gpt-5.5");
