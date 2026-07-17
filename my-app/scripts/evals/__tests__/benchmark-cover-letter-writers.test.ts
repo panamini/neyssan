@@ -1512,6 +1512,26 @@ describe("benchmark-cover-letter-writers", () => {
     });
     expect(() =>
       parseCoverLetterBenchmarkCliOptions(
+        [
+          "--human-review-only",
+          "--run-id=invalid run id",
+          "--source-ref=bbd96b5c",
+        ],
+        "0",
+      ),
+    ).toThrow(/safe arm diagnostic bundle validation failed/iu);
+    expect(() =>
+      parseCoverLetterBenchmarkCliOptions(
+        [
+          "--human-review-only",
+          "--run-id=quality-eval-2a",
+          "--source-ref=not-a-source-ref",
+        ],
+        "0",
+      ),
+    ).toThrow(/safe arm diagnostic bundle validation failed/iu);
+    expect(() =>
+      parseCoverLetterBenchmarkCliOptions(
         ["--human-review-only", "--cases=blind-en-customer-success-direct"],
         "0",
       ),

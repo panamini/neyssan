@@ -88,6 +88,17 @@ import {
   writeCoverLetterBlindReviewArtifacts,
 } from "./cover-letter-blind-review";
 import {
+  buildCoverLetterSafeArmDiagnosticBundle,
+  extractCoverLetterSafeArmDiagnostic,
+  validateCoverLetterSafeArmDiagnosticRunIdentity,
+  writeCoverLetterSafeArmDiagnosticBundle,
+} from "./cover-letter-safe-arm-diagnostic-bundle";
+import {
+  createCoverLetterOpaqueArmIdBlindingKey,
+  deriveCoverLetterOpaqueArmId,
+  releaseCoverLetterOpaqueArmIdBlindingKey,
+} from "./cover-letter-safe-arm-diagnostic";
+import {
   buildCoverLetterEvalRunManifestEntry,
   calculateCoverLetterEvalConservativeCallCeiling,
   calculateCoverLetterEvalObservedCostUpperBound,
@@ -535,6 +546,12 @@ export function parseCoverLetterBenchmarkCliOptions(
       );
     } else {
       options.writerModels = [...QUALITY_EVAL_2B_WRITER_MODELS];
+    }
+    if (options.runId !== null && options.sourceRef !== null) {
+      validateCoverLetterSafeArmDiagnosticRunIdentity({
+        runId: options.runId,
+        sourceRef: options.sourceRef,
+      });
     }
   }
   if (options.evaluationMode === "qualitative_sample") {
@@ -2863,12 +2880,30 @@ async function main(): Promise<void> {
         });
       },
     });
+    const blindingKey = createCoverLetterOpaqueArmIdBlindingKey();
+    const opaqueArmBindings = await Promise.all(
+      records.map((record) =>
+        deriveCoverLetterOpaqueArmId({
+          runId,
+          fixtureId: record.caseId,
+          armKey: `${record.diagnostics.provider}:${record.writerModel}`,
+          blindingKey,
+        }).then((opaqueArmId) => ({
+          caseId: record.caseId,
+          writerModel: record.writerModel,
+          opaqueArmId,
+        })),
+      ),
+    ).finally(() => {
+      releaseCoverLetterOpaqueArmIdBlindingKey(blindingKey);
+    });
     const artifacts = await buildCoverLetterBlindReviewArtifacts({
       cohortId: COVER_LETTER_BLIND_REVIEW_COHORT_ID,
       runId,
       sourceRef,
       cases: benchmarkCases,
       records,
+      opaqueArmBindings,
     });
     const runManifestEntries = records.map((record) => record.runManifest);
     if (
@@ -2891,16 +2926,67 @@ async function main(): Promise<void> {
       writerMaxOutputTokens: COVER_LETTER_EVAL_WRITER_MAX_OUTPUT_TOKENS,
       entries: runManifestEntries,
     };
+    const safeArmDiagnostics = await Promise.all(
+      records.map((record) => {
+        const benchmarkCase = benchmarkCases.find(
+          (item) => item.id === record.caseId,
+        );
+        const opaqueArmBinding = opaqueArmBindings.find(
+          (binding) =>
+            binding.caseId === record.caseId &&
+            binding.writerModel === record.writerModel,
+        );
+        if (!benchmarkCase || !opaqueArmBinding) {
+          throw new Error(
+            "Human-review cohort is missing safe-arm diagnostic bindings.",
+          );
+        }
+        return extractCoverLetterSafeArmDiagnostic({
+          runId,
+          sourceRef,
+          opaqueArmId: opaqueArmBinding.opaqueArmId,
+          benchmarkCase,
+          source: {
+            caseId: record.caseId,
+            outputLanguage: record.outputLanguage,
+            artifact: record.artifact,
+            bodyParts: record.generation.bodyParts,
+            finalVisibleContent: record.letter,
+            ...(record.runManifest ? { runManifest: record.runManifest } : {}),
+          },
+        });
+      }),
+    );
+    const safeArmDiagnosticBundle =
+      await buildCoverLetterSafeArmDiagnosticBundle({
+        cohortId: COVER_LETTER_BLIND_REVIEW_COHORT_ID,
+        runId,
+        sourceRef,
+        diagnostics: safeArmDiagnostics,
+        ...artifacts,
+      });
     const written = await writeCoverLetterBlindReviewArtifacts({
       outputDirectory,
       ...artifacts,
     });
+    const safeArmDiagnosticPath = await writeCoverLetterSafeArmDiagnosticBundle(
+      {
+        outputDirectory,
+        bundle: safeArmDiagnosticBundle,
+      },
+    );
     const runManifestPath = await writeCoverLetterEvalRunManifest({
       outputDirectory,
       manifest: runManifest,
     });
     console.log("cover-letter blind human-review pack: READY");
-    console.log(JSON.stringify({ ...written, runManifestPath }));
+    console.log(
+      JSON.stringify({
+        ...written,
+        runManifestPath,
+        safeArmDiagnosticPath,
+      }),
+    );
     console.error(
       `[cover-letter-benchmark] budget=${JSON.stringify(budget.snapshot())}`,
     );

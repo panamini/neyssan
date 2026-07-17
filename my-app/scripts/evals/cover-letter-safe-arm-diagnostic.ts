@@ -708,6 +708,12 @@ export function createCoverLetterOpaqueArmIdBlindingKey(): CoverLetterOpaqueArmI
   return handle;
 }
 
+export function releaseCoverLetterOpaqueArmIdBlindingKey(
+  blindingKey: CoverLetterOpaqueArmIdBlindingKey,
+): void {
+  if (!opaqueArmIdBlindingKeys.delete(blindingKey)) fail();
+}
+
 export async function deriveCoverLetterOpaqueArmId(args: {
   runId: string;
   fixtureId: string;
