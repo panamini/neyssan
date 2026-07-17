@@ -12,7 +12,7 @@ The path has safe hashes and allowlisted cell diagnostics, but no separate seale
 
 At generation/finalization time, the active runner should:
 
-1. Derive one `opaqueArmId` from the run id, fixture/cell id, and a bounded arm key; retain only the derived id.
+1. Create one process-local blinding-key handle per run with `createCoverLetterOpaqueArmIdBlindingKey`; the module generates and retains the underlying 32-byte CSPRNG secret and accepts no caller-supplied key bytes. Derive each `opaqueArmId` with the module's domain-separated HMAC over run id, fixture/cell id, and bounded arm key. Keep the handle out of reviewer material and diagnostics; retain only the opaque-to-real-arm mapping in the separately sealed reveal file, then release the handle after generation.
 2. Capture prompt-contract hash status from the existing prompt/schema callbacks and the finalizer/artifact hashes from the finalized record. Never pass prompt, letter, rationale, provider response, or error text to the diagnostic builder.
 3. Build one `cover_letter_safe_arm_diagnostic_v1` record with the allowlisted codes, booleans, counts, hashes, and explicit provenance values from `cover-letter-safe-arm-diagnostic.ts`.
 4. Write diagnostics to a separately permissioned private-reveal file whose body is independently hashed. Do not add the diagnostic or arm id to the reviewer pack, Markdown, blind decision input, or reviewer-safe projection.

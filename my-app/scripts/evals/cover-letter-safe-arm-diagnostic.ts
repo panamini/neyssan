@@ -1,3 +1,5 @@
+import { createHmac, randomBytes } from "node:crypto";
+
 import { buildStableHash } from "../../src/modules/application-harness/fingerprints";
 import type { PremiumCoverLetterQualityShadowIssueCode } from "../../convex/lib/proposals/premiumCoverLetter";
 import type { ProposalDocumentLanguageCode } from "../../convex/lib/proposals/proposalOutput";
@@ -12,6 +14,11 @@ export type CoverLetterSafeArmDiagnosticProvenance =
 
 type Hash = string;
 type NullableHash = Hash | null;
+declare const opaqueArmIdBlindingKeyBrand: unique symbol;
+
+export type CoverLetterOpaqueArmIdBlindingKey = Readonly<{
+  [opaqueArmIdBlindingKeyBrand]: true;
+}>;
 
 const PROVENANCE_VALUES = [
   "RETAINED",
@@ -33,10 +40,13 @@ const FINALIZER_REPAIR_CODES = [
   "quality_repair_accepted",
   "quality_repair_rejected",
 ] as const;
-const QUALITY_REPAIR_CODES = [
-  "quality_repair_attempted",
+const QUALITY_REPAIR_OUTCOME_CODES = [
   "quality_repair_accepted",
   "quality_repair_rejected",
+] as const satisfies readonly (typeof FINALIZER_REPAIR_CODES)[number][];
+const QUALITY_REPAIR_CODES = [
+  "quality_repair_attempted",
+  ...QUALITY_REPAIR_OUTCOME_CODES,
 ] as const satisfies readonly (typeof FINALIZER_REPAIR_CODES)[number][];
 const FINAL_OUTPUT_CLEANUP_REPAIR_CODES = [
   "bridge_sentence_removed",
@@ -163,6 +173,11 @@ const SOURCE_REF_RE = /^(?:[a-f0-9]{7,40}|[a-f0-9]{64})$/u;
 const OPAQUE_ARM_ID_RE = /^arm-[a-f0-9]{64}$/u;
 const MAX_COUNT = 10_000;
 const QUALITY_SHADOW_SCORE_DEDUCTION_PER_CODE = 18;
+const OPAQUE_ARM_ID_BLINDING_KEY_BYTES = 32;
+const opaqueArmIdBlindingKeys = new WeakMap<
+  CoverLetterOpaqueArmIdBlindingKey,
+  Uint8Array
+>();
 
 function fail(): never {
   throw new TypeError(VALIDATION_ERROR);
@@ -333,6 +348,18 @@ function assertFinalizerConsistency(
   ) {
     fail();
   }
+  const qualityRepairAttempted = finalizer.repairCodes.includes(
+    "quality_repair_attempted",
+  );
+  const qualityRepairOutcomeCount = QUALITY_REPAIR_OUTCOME_CODES.filter(
+    (code) => finalizer.repairCodes.includes(code),
+  ).length;
+  if (
+    qualityRepairOutcomeCount > 1 ||
+    (qualityRepairOutcomeCount === 1 && !qualityRepairAttempted)
+  ) {
+    fail();
+  }
 }
 
 function assertQualityShadowConsistency(
@@ -385,6 +412,13 @@ function assertStructureConsistency(
     if (structure.codes.includes(code) !== expectedCodeStates[code]) {
       fail();
     }
+  }
+  if (
+    structure.bodyParagraphCount !== null &&
+    (structure.paragraphCount === null ||
+      structure.bodyParagraphCount > structure.paragraphCount)
+  ) {
+    fail();
   }
 }
 
@@ -663,21 +697,36 @@ export function redactCoverLetterSafeArmDiagnosticInput(
   }
 }
 
+export function createCoverLetterOpaqueArmIdBlindingKey(): CoverLetterOpaqueArmIdBlindingKey {
+  const handle = Object.freeze(
+    Object.create(null),
+  ) as CoverLetterOpaqueArmIdBlindingKey;
+  opaqueArmIdBlindingKeys.set(
+    handle,
+    randomBytes(OPAQUE_ARM_ID_BLINDING_KEY_BYTES),
+  );
+  return handle;
+}
+
 export async function deriveCoverLetterOpaqueArmId(args: {
   runId: string;
   fixtureId: string;
   armKey: string;
+  blindingKey: CoverLetterOpaqueArmIdBlindingKey;
 }): Promise<string> {
+  if (!isRecord(args)) fail();
+  exactKeys(args, ["runId", "fixtureId", "armKey", "blindingKey"]);
   const normalizedRunId = token(args.runId);
   const normalizedFixtureId = token(args.fixtureId);
   const normalizedArmKey = token(args.armKey);
-  const digest = await buildStableHash({
-    namespace: "cover-letter-safe-arm-diagnostic",
-    type: "opaque-arm-id",
-    version: 1,
-    runId: normalizedRunId,
-    fixtureId: normalizedFixtureId,
-    armKey: normalizedArmKey,
-  });
+  const blindingKey = opaqueArmIdBlindingKeys.get(args.blindingKey);
+  if (!blindingKey) fail();
+  const digest = createHmac("sha256", blindingKey)
+    .update("cover-letter-safe-arm-diagnostic:opaque-arm-id:v1\0", "utf8")
+    .update(
+      JSON.stringify([normalizedRunId, normalizedFixtureId, normalizedArmKey]),
+      "utf8",
+    )
+    .digest("hex");
   return `arm-${digest}`;
 }

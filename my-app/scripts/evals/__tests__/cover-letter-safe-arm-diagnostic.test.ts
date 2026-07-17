@@ -4,6 +4,7 @@ import {
   buildCoverLetterSafeArmDiagnostic,
   COVER_LETTER_SAFE_ARM_LANGUAGE_CODES,
   COVER_LETTER_SAFE_ARM_QUALITY_SHADOW_CODES,
+  createCoverLetterOpaqueArmIdBlindingKey,
   deriveCoverLetterOpaqueArmId,
   redactCoverLetterSafeArmDiagnosticInput,
   validateCoverLetterSafeArmDiagnostic,
@@ -204,14 +205,68 @@ describe("cover-letter safe arm diagnostics", () => {
   });
 
   it("derives an opaque arm id without exposing the arm key", async () => {
-    const armId = await deriveCoverLetterOpaqueArmId({
+    const blindingKey = createCoverLetterOpaqueArmIdBlindingKey();
+    const args = {
       runId: "quality-eval-5-local-test",
       fixtureId: "fixture-en-direct-001",
       armKey: "arm-a",
-    });
+      blindingKey,
+    };
+    const armId = await deriveCoverLetterOpaqueArmId(args);
 
     expect(armId).toMatch(/^arm-[a-f0-9]{64}$/u);
     expect(armId).not.toContain("arm-a");
+    expect(JSON.stringify(blindingKey)).toBe("{}");
+    await expect(deriveCoverLetterOpaqueArmId(args)).resolves.toBe(armId);
+    await expect(
+      deriveCoverLetterOpaqueArmId({
+        ...args,
+        blindingKey: createCoverLetterOpaqueArmIdBlindingKey(),
+      }),
+    ).resolves.not.toBe(armId);
+    for (const candidateArmKey of ["arm-a", "arm-b", "arm-c"]) {
+      await expect(
+        deriveCoverLetterOpaqueArmId({
+          ...args,
+          armKey: candidateArmKey,
+          blindingKey: createCoverLetterOpaqueArmIdBlindingKey(),
+        }),
+      ).resolves.not.toBe(armId);
+    }
+  });
+
+  it("rejects missing, weak, and content-bearing arm-id secrets without echo", async () => {
+    const sentinel = "private-arm-id-blinding-secret";
+    const base = {
+      runId: "quality-eval-5-local-test",
+      fixtureId: "fixture-en-direct-001",
+      armKey: "arm-a",
+    };
+    const invalidInputs = [
+      base,
+      { ...base, blindingKey: sentinel },
+      { ...base, blindingKey: new Uint8Array(32) },
+      { ...base, blindingKey: Object.freeze(Object.create(null)) },
+      {
+        ...base,
+        blindingKey: structuredClone(createCoverLetterOpaqueArmIdBlindingKey()),
+      },
+      {
+        ...base,
+        blindingKey: createCoverLetterOpaqueArmIdBlindingKey(),
+        secretRationale: sentinel,
+      },
+    ];
+
+    for (const invalid of invalidInputs) {
+      const error = await deriveCoverLetterOpaqueArmId(
+        invalid as Parameters<typeof deriveCoverLetterOpaqueArmId>[0],
+      ).catch((value: unknown) => value);
+      expect(String(error)).toBe(
+        "TypeError: safe arm diagnostic validation failed.",
+      );
+      expect(String(error)).not.toContain(sentinel);
+    }
   });
 
   it("fails closed on unknown fields and content-bearing strings", async () => {
@@ -482,6 +537,16 @@ describe("cover-letter safe arm diagnostics", () => {
         ...input.signals.structure,
         codes: ["counts_unavailable" as const],
       },
+      {
+        ...input.signals.structure,
+        paragraphCount: 1,
+        bodyParagraphCount: 2,
+      },
+      {
+        ...input.signals.structure,
+        paragraphCount: null,
+        codes: withoutCode("paragraph_count_available"),
+      },
     ];
 
     for (const structure of contradictions) {
@@ -609,22 +674,34 @@ describe("cover-letter safe arm diagnostics", () => {
 
   it("accepts only the active finalizer repair-path compatibility matrix", async () => {
     const allowed = [
-      ["legacy_thin", "bridge_sentence_removed"],
-      ["legacy_thin", "last_grounded_sentence_removed"],
-      ["legacy_thin", "quality_repair_attempted"],
-      ["legacy_thin", "quality_repair_accepted"],
-      ["legacy_thin", "quality_repair_rejected"],
-      ["structured_success", "quality_repair_attempted"],
-      ["structured_success", "quality_repair_accepted"],
-      ["structured_success", "quality_repair_rejected"],
-      ["structured_repaired_success", "bridge_sentence_removed"],
-      ["structured_repaired_success", "last_grounded_sentence_removed"],
-      ["structured_repaired_success", "structured_repair_applied"],
-      ["structured_repaired_success", "quality_repair_attempted"],
-      ["structured_repaired_success", "quality_repair_accepted"],
-      ["structured_repaired_success", "quality_repair_rejected"],
+      ["legacy_thin", ["bridge_sentence_removed"]],
+      ["legacy_thin", ["last_grounded_sentence_removed"]],
+      ["legacy_thin", ["quality_repair_attempted"]],
+      ["legacy_thin", ["quality_repair_attempted", "quality_repair_accepted"]],
+      ["legacy_thin", ["quality_repair_attempted", "quality_repair_rejected"]],
+      ["structured_success", ["quality_repair_attempted"]],
+      [
+        "structured_success",
+        ["quality_repair_attempted", "quality_repair_accepted"],
+      ],
+      [
+        "structured_success",
+        ["quality_repair_attempted", "quality_repair_rejected"],
+      ],
+      ["structured_repaired_success", ["bridge_sentence_removed"]],
+      ["structured_repaired_success", ["last_grounded_sentence_removed"]],
+      ["structured_repaired_success", ["structured_repair_applied"]],
+      ["structured_repaired_success", ["quality_repair_attempted"]],
+      [
+        "structured_repaired_success",
+        ["quality_repair_attempted", "quality_repair_accepted"],
+      ],
+      [
+        "structured_repaired_success",
+        ["quality_repair_attempted", "quality_repair_rejected"],
+      ],
     ] as const;
-    for (const [pathCode, repairCode] of allowed) {
+    for (const [pathCode, repairCodes] of allowed) {
       await expect(
         buildCoverLetterSafeArmDiagnostic({
           ...diagnosticInput(),
@@ -632,7 +709,7 @@ describe("cover-letter safe arm diagnostics", () => {
             ...diagnosticInput().signals,
             finalizer: {
               pathCode,
-              repairCodes: [repairCode],
+              repairCodes,
               finalizerPassed: true,
             },
           },
@@ -640,12 +717,22 @@ describe("cover-letter safe arm diagnostics", () => {
       ).resolves.toBeDefined();
     }
 
-    for (const [pathCode, repairCode] of [
-      ["legacy_thin", "structured_repair_applied"],
-      ["structured_success", "bridge_sentence_removed"],
-      ["structured_success", "last_grounded_sentence_removed"],
-      ["structured_success", "structured_repair_applied"],
-      ["missing", "quality_repair_attempted"],
+    for (const [pathCode, repairCodes] of [
+      ["legacy_thin", ["structured_repair_applied"]],
+      ["structured_success", ["bridge_sentence_removed"]],
+      ["structured_success", ["last_grounded_sentence_removed"]],
+      ["structured_success", ["structured_repair_applied"]],
+      ["missing", ["quality_repair_attempted"]],
+      ["legacy_thin", ["quality_repair_accepted"]],
+      ["legacy_thin", ["quality_repair_rejected"]],
+      [
+        "legacy_thin",
+        [
+          "quality_repair_attempted",
+          "quality_repair_accepted",
+          "quality_repair_rejected",
+        ],
+      ],
     ] as const) {
       await expect(
         buildCoverLetterSafeArmDiagnostic({
@@ -654,7 +741,7 @@ describe("cover-letter safe arm diagnostics", () => {
             ...diagnosticInput().signals,
             finalizer: {
               pathCode,
-              repairCodes: [repairCode],
+              repairCodes,
               finalizerPassed: true,
             },
           },
