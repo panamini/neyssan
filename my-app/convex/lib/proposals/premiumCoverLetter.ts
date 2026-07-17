@@ -1086,11 +1086,11 @@ const STOPWORDS = new Set([
 const ACHIEVEMENT_VERB_PATTERN =
   /\b(?:improv(?:e|ed|es|ing)|reduc(?:e|ed|es|ing)|increas(?:e|ed|es|ing)|grew|grown|boost(?:ed|ing)?|cut|sav(?:ed|ing)|deliver(?:ed|ing)|achiev(?:ed|ing)|drove|driven|expand(?:ed|ing)|optimiz(?:ed|ing)|streamlin(?:ed|ing)|accelerat(?:ed|ing)|surpass(?:ed|ing)|launched?)\b/i;
 const QUANTIFIED_PATTERN =
-  /(?:\d+(?:\.\d+)?%|\b\d+(?:\.\d+)?\s*(?:percent|points|hours|days|weeks|months|years|clients|projects|tickets|cases|units|stores|sites|teams|squads|markets|campaigns|experiments|deliverables)\b)/i;
+  /(?:\d+(?:\.\d+)?\s*%|\b\d+(?:\.\d+)?(?:\s+|[-‑–—])(?:(?:customer|client)\s+)?(?:percent|points|hours|days|weeks|months|years|accounts?|clients?|projects?|tickets?|cases?|units?|stores?|sites?|teams?|squads?|markets?|campaigns?|experiments?|deliverables?|comptes?|projets?|jours?|semaines?|mois|années?|équipes?)\b)/i;
 const RESPONSIBILITY_PATTERN =
   /\b(?:led|managed|owned|oversaw|coordinated|handled|supervised|supported|built|developed|implemented|maintained|operated|executed|delivered|trained|documented|reviewed|monitored)\b/i;
 const WORKFLOW_PATTERN =
-  /\b(?:workflow|process|operations?|handoffs?|sla|qa|quality|ticket|queue|dashboard|reports?|records?|logs?|recording|observations?|surveillance|patrols?|reporting|experiments?|testing|revision|coordination|support|intake|triage|delivery|planning|collaboration)\b/i;
+  /\b(?:workflow|process|operations?|handoffs?|sla|qa|quality|ticket|queue|dashboard|reports?|records?|logs?|recording|observations?|surveillance|patrols?|reporting|experiments?|testing|revision|coordination|support|intake|triage|delivery|planning|collaboration|tableau de bord|comptes? à risque|revues? trimestrielles?)\b/i;
 const TRAIT_PATTERN =
   /\b(?:reliable|adaptable|flexible|motivated|organized|detail-oriented|communicative|curious|proactive)\b/i;
 const TOOL_PATTERN =
@@ -2391,15 +2391,17 @@ export function rankAllowedFacts(args: {
       score: scoreFact({ fact, jobTokens, jobTitleTokens }),
     }))
     .sort((a, b) => b.score - a.score);
-  const cvAdjacentOperationalFacts =
-    args.contextClass === "cv_adjacent"
+  const cvBackedOperationalFacts =
+    args.contextClass !== "no_cv"
       ? scored
           .map((entry) => entry.fact)
           .filter(
             (fact) =>
               fact.source === "cv" &&
               !isWeakOrDoNotLeadWith(fact) &&
-              (fact.category === "achievement" ||
+              !isSecondaryQualification(fact) &&
+              (QUANTIFIED_PATTERN.test(fact.text) ||
+                fact.category === "achievement" ||
                 fact.category === "responsibility" ||
                 fact.category === "workflow"),
           )
@@ -2446,8 +2448,8 @@ export function rankAllowedFacts(args: {
         fact.category === "responsibility" ||
         fact.category === "workflow" ||
         (fact.category === "domain" &&
-          (args.contextClass !== "cv_adjacent" ||
-            strongestEvidence.length >= cvAdjacentOperationalFacts.length)))
+          (QUANTIFIED_PATTERN.test(fact.text) ||
+            strongestEvidence.length >= cvBackedOperationalFacts.length)))
     ) {
       strongestEvidence.push(fact);
       continue;

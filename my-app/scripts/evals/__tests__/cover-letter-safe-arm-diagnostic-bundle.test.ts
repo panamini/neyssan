@@ -345,6 +345,67 @@ describe("cover-letter safe-arm diagnostic bundle", () => {
     ).rejects.toThrow(/missing/iu);
   });
 
+  it("rejects a resealed reveal map that reuses an opaque arm id", async () => {
+    const artifacts = await buildTestArtifacts();
+    const reviews = artifacts.pack.entries.map((entry) =>
+      completedReviewFor({
+        blindLabel: entry.blindLabel,
+        packHash: artifacts.pack.packHash,
+        reviewerLanguages: entry.requiredReviewerLanguages,
+      }),
+    );
+    const [firstReveal, secondReveal, ...remainingReveals] =
+      artifacts.revealMap.entries;
+    const { revealMapHash: _revealMapHash, ...revealBody } =
+      artifacts.revealMap;
+    const resealedRevealBody = {
+      ...revealBody,
+      entries: [
+        firstReveal!,
+        {
+          ...secondReveal!,
+          caseId: firstReveal!.caseId,
+          artifactHash: firstReveal!.artifactHash,
+          opaqueArmId: firstReveal!.opaqueArmId,
+        },
+        ...remainingReveals,
+      ],
+    };
+    const resealedRevealMap = {
+      ...resealedRevealBody,
+      revealMapHash: await buildStableHash({
+        namespace: "cover-letter-blind-review",
+        type: "reveal-map",
+        version: 1,
+        value: resealedRevealBody,
+      }),
+    };
+    const { bundleHash: _bundleHash, ...bundleBody } =
+      artifacts.diagnosticBundle;
+    const resealedBundleBody = {
+      ...bundleBody,
+      revealMapHash: resealedRevealMap.revealMapHash,
+    };
+    const resealedBundle = {
+      ...resealedBundleBody,
+      bundleHash: await buildStableHash({
+        namespace: "cover-letter-safe-arm-diagnostic",
+        type: "bundle",
+        version: 1,
+        value: resealedBundleBody,
+      }),
+    };
+
+    await expect(
+      revealCompletedCoverLetterBlindReviewsWithSafeArmDiagnostics({
+        pack: artifacts.pack,
+        revealMap: resealedRevealMap,
+        reviews,
+        diagnosticBundle: resealedBundle,
+      }),
+    ).rejects.toThrow(/safe arm diagnostic bundle validation failed/iu);
+  });
+
   it("fails closed on incomplete bindings and tampered diagnostic joins", async () => {
     const records = makeHumanReviewRecords();
     await expect(

@@ -693,6 +693,52 @@ describe("premium cover letter evidence ranking", () => {
     ).toBe(true);
   });
 
+
+  it("prioritizes quantified and operational French proof over generic role context", () => {
+    const personalizationContext = {
+      name: "Camille Martin",
+      summary:
+        "Responsable réussite client avec une expérience en intégration et fidélisation.",
+      topSkills: ["Réussite client", "Fidélisation", "Intégration"],
+      recentExperience: [
+        {
+          company: "Acme",
+          position: "Responsable réussite client",
+          highlights: [
+            "Hausse de 21 % de la fidélisation à 90 jours grâce à des jalons d'intégration et d'escalade.",
+            "Pilotage d'un portefeuille de 35 comptes clients avec revues trimestrielles.",
+            "Création d'un tableau de bord de santé client pour prioriser les comptes à risque.",
+          ],
+        },
+      ],
+      standoutAchievements: [],
+    };
+    const jobTitle = "Responsable Customer Success";
+    const jobDescription =
+      "Piloter l'intégration, la fidélisation, les revues de comptes et le suivi des comptes à risque.";
+    const allowedFactsPack = buildAllowedFactsPack({
+      personalizationContext,
+      jobTitle,
+      jobDescription,
+    });
+    const rankedEvidencePack = rankAllowedFacts({
+      allowedFactsPack,
+      jobTitle,
+      jobDescription,
+      contextClass: "cv_direct",
+    });
+    const strongestEvidence = rankedEvidencePack.strongestEvidence
+      .map((fact) => fact.text)
+      .join(" ");
+
+    expect(strongestEvidence).toContain("21 %");
+    expect(strongestEvidence).toContain("35 comptes clients");
+    expect(strongestEvidence).toContain("tableau de bord de santé client");
+    expect(strongestEvidence).not.toContain(
+      "Responsable réussite client avec une expérience",
+    );
+  });
+
   it("demotes secondary qualifications when stronger evidence exists", () => {
     const allowedFactsPack = buildAllowedFactsPack({
       personalizationContext: directContext,

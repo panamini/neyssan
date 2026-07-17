@@ -564,8 +564,11 @@ export async function revealCompletedCoverLetterBlindReviewsWithSafeArmDiagnosti
     ]),
   );
   if (diagnosticByOpaqueArmId.size !== revealed.length) fail();
-  return revealed.map(({ review, reveal }) => {
-    if (!reveal.opaqueArmId) fail();
+  const consumedOpaqueArmIds = new Set<string>();
+  const joined = revealed.map(({ review, reveal }) => {
+    if (!reveal.opaqueArmId || consumedOpaqueArmIds.has(reveal.opaqueArmId)) {
+      fail();
+    }
     const diagnostic = diagnosticByOpaqueArmId.get(reveal.opaqueArmId);
     if (
       !diagnostic ||
@@ -576,6 +579,9 @@ export async function revealCompletedCoverLetterBlindReviewsWithSafeArmDiagnosti
     ) {
       fail();
     }
+    consumedOpaqueArmIds.add(reveal.opaqueArmId);
     return { review, reveal, diagnostic };
   });
+  if (consumedOpaqueArmIds.size !== diagnosticByOpaqueArmId.size) fail();
+  return joined;
 }
