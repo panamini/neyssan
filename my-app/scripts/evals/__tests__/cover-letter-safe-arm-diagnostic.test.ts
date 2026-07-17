@@ -81,8 +81,8 @@ function diagnosticInput(): CoverLetterSafeArmDiagnosticInput {
         postCodes: [],
         prePassed: false,
         postPassed: true,
-        preScore: 62,
-        postScore: 94,
+        preScore: 82,
+        postScore: 100,
       },
       structure: {
         paragraphCount: 6,
@@ -91,6 +91,7 @@ function diagnosticInput(): CoverLetterSafeArmDiagnosticInput {
         bridgeCount: 1,
         proofCount: 2,
         codes: [
+          "body_paragraph_count_available",
           "paragraph_count_available",
           "close_present",
           "bridge_present",
@@ -356,7 +357,7 @@ describe("cover-letter safe arm diagnostics", () => {
     ).rejects.toThrow("safe arm diagnostic validation failed");
   });
 
-  it("enforces active quality-shadow pass semantics", async () => {
+  it("enforces active quality-shadow pass and score semantics", async () => {
     const input = diagnosticInput();
     await expect(
       buildCoverLetterSafeArmDiagnostic({
@@ -382,6 +383,135 @@ describe("cover-letter safe arm diagnostics", () => {
         },
       }),
     ).rejects.toThrow("safe arm diagnostic validation failed");
+    await expect(
+      buildCoverLetterSafeArmDiagnostic({
+        ...input,
+        signals: {
+          ...input.signals,
+          qualityShadow: {
+            ...input.signals.qualityShadow,
+            preScore: 100,
+          },
+        },
+      }),
+    ).rejects.toThrow("safe arm diagnostic validation failed");
+    await expect(
+      buildCoverLetterSafeArmDiagnostic({
+        ...input,
+        signals: {
+          ...input.signals,
+          qualityShadow: {
+            ...input.signals.qualityShadow,
+            preScore: null,
+          },
+        },
+      }),
+    ).rejects.toThrow("safe arm diagnostic validation failed");
+    await expect(
+      buildCoverLetterSafeArmDiagnostic({
+        ...input,
+        signals: {
+          ...input.signals,
+          qualityShadow: {
+            ...input.signals.qualityShadow,
+            postCodes: [],
+            postPassed: null,
+            postScore: null,
+          },
+        },
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it("binds every structure code bidirectionally to its count state", async () => {
+    const input = diagnosticInput();
+    const codes = input.signals.structure.codes;
+    const withoutCode = (
+      code: (typeof input.signals.structure.codes)[number],
+    ) => codes.filter((candidate) => candidate !== code);
+    const contradictions = [
+      {
+        ...input.signals.structure,
+        paragraphCount: null,
+      },
+      {
+        ...input.signals.structure,
+        codes: withoutCode("paragraph_count_available"),
+      },
+      {
+        ...input.signals.structure,
+        bodyParagraphCount: null,
+      },
+      {
+        ...input.signals.structure,
+        codes: withoutCode("body_paragraph_count_available"),
+      },
+      {
+        ...input.signals.structure,
+        closeCount: 0,
+      },
+      {
+        ...input.signals.structure,
+        codes: withoutCode("close_present"),
+      },
+      {
+        ...input.signals.structure,
+        bridgeCount: 0,
+      },
+      {
+        ...input.signals.structure,
+        codes: withoutCode("bridge_present"),
+      },
+      {
+        ...input.signals.structure,
+        proofCount: 0,
+      },
+      {
+        ...input.signals.structure,
+        codes: withoutCode("proof_present"),
+      },
+      {
+        paragraphCount: null,
+        bodyParagraphCount: null,
+        closeCount: null,
+        bridgeCount: null,
+        proofCount: null,
+        codes: [],
+      },
+      {
+        ...input.signals.structure,
+        codes: ["counts_unavailable" as const],
+      },
+    ];
+
+    for (const structure of contradictions) {
+      await expect(
+        buildCoverLetterSafeArmDiagnostic({
+          ...input,
+          signals: { ...input.signals, structure },
+        }),
+      ).rejects.toThrow("safe arm diagnostic validation failed");
+    }
+
+    await expect(
+      buildCoverLetterSafeArmDiagnostic({
+        ...input,
+        signals: {
+          ...input.signals,
+          structure: {
+            paragraphCount: 0,
+            bodyParagraphCount: 0,
+            closeCount: 0,
+            bridgeCount: 0,
+            proofCount: 0,
+            codes: [
+              "body_paragraph_count_available",
+              "paragraph_count_available",
+            ],
+          },
+        },
+      }),
+    ).resolves.toBeDefined();
   });
 
   it("binds each signal provenance to its exact missing sentinel", async () => {
@@ -482,14 +612,17 @@ describe("cover-letter safe arm diagnostics", () => {
       ["legacy_thin", "bridge_sentence_removed"],
       ["legacy_thin", "last_grounded_sentence_removed"],
       ["legacy_thin", "quality_repair_attempted"],
+      ["legacy_thin", "quality_repair_accepted"],
       ["legacy_thin", "quality_repair_rejected"],
       ["structured_success", "quality_repair_attempted"],
+      ["structured_success", "quality_repair_accepted"],
       ["structured_success", "quality_repair_rejected"],
       ["structured_repaired_success", "bridge_sentence_removed"],
       ["structured_repaired_success", "last_grounded_sentence_removed"],
       ["structured_repaired_success", "structured_repair_applied"],
       ["structured_repaired_success", "quality_repair_attempted"],
       ["structured_repaired_success", "quality_repair_accepted"],
+      ["structured_repaired_success", "quality_repair_rejected"],
     ] as const;
     for (const [pathCode, repairCode] of allowed) {
       await expect(
@@ -509,11 +642,10 @@ describe("cover-letter safe arm diagnostics", () => {
 
     for (const [pathCode, repairCode] of [
       ["legacy_thin", "structured_repair_applied"],
-      ["legacy_thin", "quality_repair_accepted"],
       ["structured_success", "bridge_sentence_removed"],
       ["structured_success", "last_grounded_sentence_removed"],
       ["structured_success", "structured_repair_applied"],
-      ["structured_repaired_success", "quality_repair_rejected"],
+      ["missing", "quality_repair_attempted"],
     ] as const) {
       await expect(
         buildCoverLetterSafeArmDiagnostic({

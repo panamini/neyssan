@@ -33,20 +33,22 @@ const FINALIZER_REPAIR_CODES = [
   "quality_repair_accepted",
   "quality_repair_rejected",
 ] as const;
+const QUALITY_REPAIR_CODES = [
+  "quality_repair_attempted",
+  "quality_repair_accepted",
+  "quality_repair_rejected",
+] as const satisfies readonly (typeof FINALIZER_REPAIR_CODES)[number][];
+const FINAL_OUTPUT_CLEANUP_REPAIR_CODES = [
+  "bridge_sentence_removed",
+  "last_grounded_sentence_removed",
+] as const satisfies readonly (typeof FINALIZER_REPAIR_CODES)[number][];
 const FINALIZER_REPAIR_CODES_BY_PATH = {
-  legacy_thin: [
-    "bridge_sentence_removed",
-    "last_grounded_sentence_removed",
-    "quality_repair_attempted",
-    "quality_repair_rejected",
-  ],
-  structured_success: ["quality_repair_attempted", "quality_repair_rejected"],
+  legacy_thin: [...FINAL_OUTPUT_CLEANUP_REPAIR_CODES, ...QUALITY_REPAIR_CODES],
+  structured_success: [...QUALITY_REPAIR_CODES],
   structured_repaired_success: [
-    "bridge_sentence_removed",
-    "last_grounded_sentence_removed",
+    ...FINAL_OUTPUT_CLEANUP_REPAIR_CODES,
     "structured_repair_applied",
-    "quality_repair_attempted",
-    "quality_repair_accepted",
+    ...QUALITY_REPAIR_CODES,
   ],
   missing: [],
 } as const satisfies Record<
@@ -160,6 +162,7 @@ const HASH_RE = /^[a-f0-9]{64}$/u;
 const SOURCE_REF_RE = /^(?:[a-f0-9]{7,40}|[a-f0-9]{64})$/u;
 const OPAQUE_ARM_ID_RE = /^arm-[a-f0-9]{64}$/u;
 const MAX_COUNT = 10_000;
+const QUALITY_SHADOW_SCORE_DEDUCTION_PER_CODE = 18;
 
 function fail(): never {
   throw new TypeError(VALIDATION_ERROR);
@@ -336,11 +339,50 @@ function assertQualityShadowConsistency(
   qualityShadow: CoverLetterSafeArmDiagnosticInput["signals"]["qualityShadow"],
 ): void {
   const qualityShadowSignals = [
-    [qualityShadow.preCodes, qualityShadow.prePassed],
-    [qualityShadow.postCodes, qualityShadow.postPassed],
+    [qualityShadow.preCodes, qualityShadow.prePassed, qualityShadow.preScore],
+    [
+      qualityShadow.postCodes,
+      qualityShadow.postPassed,
+      qualityShadow.postScore,
+    ],
   ] as const;
-  for (const [codes, passed] of qualityShadowSignals) {
-    if (passed !== null && passed !== (codes.length === 0)) {
+  for (const [codes, passed, score] of qualityShadowSignals) {
+    if (passed === null || score === null) {
+      if (passed !== null || score !== null || codes.length !== 0) {
+        fail();
+      }
+      continue;
+    }
+    const expectedScore = Math.max(
+      0,
+      100 - codes.length * QUALITY_SHADOW_SCORE_DEDUCTION_PER_CODE,
+    );
+    if (passed !== (codes.length === 0) || score !== expectedScore) {
+      fail();
+    }
+  }
+}
+
+function assertStructureConsistency(
+  structure: CoverLetterSafeArmDiagnosticInput["signals"]["structure"],
+): void {
+  const counts = [
+    structure.paragraphCount,
+    structure.bodyParagraphCount,
+    structure.closeCount,
+    structure.bridgeCount,
+    structure.proofCount,
+  ] as const;
+  const expectedCodeStates = {
+    paragraph_count_available: structure.paragraphCount !== null,
+    body_paragraph_count_available: structure.bodyParagraphCount !== null,
+    close_present: structure.closeCount !== null && structure.closeCount > 0,
+    bridge_present: structure.bridgeCount !== null && structure.bridgeCount > 0,
+    proof_present: structure.proofCount !== null && structure.proofCount > 0,
+    counts_unavailable: counts.every((count) => count === null),
+  } satisfies Record<StructureCode, boolean>;
+  for (const code of STRUCTURE_CODES) {
+    if (structure.codes.includes(code) !== expectedCodeStates[code]) {
       fail();
     }
   }
@@ -410,6 +452,7 @@ function assertDiagnosticConsistency(
   );
   assertFinalizerConsistency(input.signals.finalizer);
   assertQualityShadowConsistency(input.signals.qualityShadow);
+  assertStructureConsistency(input.signals.structure);
   assertSignalProvenanceConsistency(input.provenance, input.signals);
 }
 
