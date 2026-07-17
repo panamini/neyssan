@@ -506,6 +506,45 @@ describe("cover-letter safe-arm diagnostic bundle", () => {
     ).rejects.toThrow(/safe arm diagnostic bundle validation failed/iu);
   });
 
+  it("rejects consistently resealed entries from another run or source", async () => {
+    const artifacts = await buildTestArtifacts();
+    const identityOverrides = [
+      { runId: "different-run", sourceRef: SOURCE_REF },
+      { runId: RUN_ID, sourceRef: "f".repeat(40) },
+    ];
+
+    for (const identityOverride of identityOverrides) {
+      const entries = await Promise.all(
+        artifacts.diagnosticBundle.entries.map(
+          async ({ diagnosticHash: _diagnosticHash, ...diagnostic }) =>
+            buildCoverLetterSafeArmDiagnostic({
+              ...diagnostic,
+              identity: {
+                ...diagnostic.identity,
+                ...identityOverride,
+              },
+            }),
+        ),
+      );
+      const { bundleHash: _bundleHash, ...currentBody } =
+        artifacts.diagnosticBundle;
+      const resealedBody = { ...currentBody, entries };
+      const resealedBundle = {
+        ...resealedBody,
+        bundleHash: await buildStableHash({
+          namespace: "cover-letter-safe-arm-diagnostic",
+          type: "bundle",
+          version: 1,
+          value: resealedBody,
+        }),
+      };
+
+      await expect(
+        validateCoverLetterSafeArmDiagnosticBundle(resealedBundle),
+      ).rejects.toThrow(/safe arm diagnostic bundle validation failed/iu);
+    }
+  });
+
   it("writes reveal-only diagnostics with private filesystem permissions", async () => {
     const outputDirectory = await mkdtemp(
       path.join(tmpdir(), "cover-letter-safe-arm-bundle-"),

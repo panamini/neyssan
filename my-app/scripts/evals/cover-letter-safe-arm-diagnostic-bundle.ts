@@ -478,6 +478,8 @@ export async function validateCoverLetterSafeArmDiagnosticBundle(
   );
   const expectedExtractorHash =
     await buildCoverLetterSafeArmDiagnosticExtractorHash();
+  const runId = token(value.runId);
+  const bundleSourceRef = sourceRef(value.sourceRef);
   const opaqueArmIds = entries.map((entry) => entry.identity.opaqueArmId);
   const canonicalOpaqueArmIds = [...opaqueArmIds].sort();
   if (
@@ -486,7 +488,10 @@ export async function validateCoverLetterSafeArmDiagnosticBundle(
       (opaqueArmId, index) => opaqueArmId !== canonicalOpaqueArmIds[index],
     ) ||
     entries.some(
-      (entry) => entry.identity.extractorHash !== expectedExtractorHash,
+      (entry) =>
+        entry.identity.runId !== runId ||
+        entry.identity.sourceRef !== bundleSourceRef ||
+        entry.identity.extractorHash !== expectedExtractorHash,
     )
   ) {
     fail();
@@ -494,8 +499,8 @@ export async function validateCoverLetterSafeArmDiagnosticBundle(
   const body: Omit<CoverLetterSafeArmDiagnosticBundle, "bundleHash"> = {
     version: COVER_LETTER_SAFE_ARM_DIAGNOSTIC_BUNDLE_VERSION,
     cohortId: token(value.cohortId),
-    runId: token(value.runId),
-    sourceRef: sourceRef(value.sourceRef),
+    runId,
+    sourceRef: bundleSourceRef,
     packHash: hash(value.packHash),
     revealMapHash: hash(value.revealMapHash),
     extractorHash: hash(value.extractorHash),
