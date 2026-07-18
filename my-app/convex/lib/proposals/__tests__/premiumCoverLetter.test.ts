@@ -162,6 +162,33 @@ function buildDirectClaimPlanFixture() {
   return { factGraph, jobDemandGraph, rankedEvidencePack, claimPlan, brief };
 }
 
+function buildAdjacentClaimPlanFixture() {
+  const factGraph = buildPremiumFactGraphV1({
+    personalizationContext: adjacentMonitoringContext,
+    jobDescription: adjacentMonitoringJob.jobDescription,
+  });
+  const jobDemandGraph = buildPremiumJobDemandGraphV1(
+    adjacentMonitoringJob.jobDescription,
+  );
+  const allowedFactsPack = buildAllowedFactsPackFromFactGraph(factGraph);
+  const rankedEvidencePack = rankAllowedFacts({
+    allowedFactsPack,
+    jobTitle: adjacentMonitoringJob.jobTitle,
+    jobDescription: adjacentMonitoringJob.jobDescription,
+    contextClass: "cv_adjacent",
+  });
+  const claimPlan = buildPremiumClaimPlanV1({
+    factGraph,
+    jobDemandGraph,
+    rankedEvidencePack,
+    contextClass: "cv_adjacent",
+    preset: "signature",
+    outputLanguage: "English",
+    jobTitle: adjacentMonitoringJob.jobTitle,
+  });
+  return { factGraph, jobDemandGraph, claimPlan };
+}
+
 function buildDirectPremiumWriterOutputFixture(bodyParts: {
   opening: string;
   proofBlock: string;
@@ -259,6 +286,9 @@ describe("premium ClaimPlan provenance v1", () => {
       factGraph.facts.find((fact) => fact.text.includes("Led a design system"))
         ?.ownershipLevel,
     ).toBe("leadership");
+    expect(
+      factGraph.facts.find((fact) => fact.id === "fact_skill_001")?.allowedVerbs,
+    ).toEqual([]);
   });
 
   it("wraps job priority buckets into stable JobDemandGraphV1 demand ids", () => {
@@ -296,18 +326,29 @@ describe("premium ClaimPlan provenance v1", () => {
       "claim_employer_value_001",
       "claim_close_001",
     ]);
-    expect(claimPlan.claims.every((claim) => claim.factIds.length > 0)).toBe(true);
+    expect(claimPlan.claims.every((claim) => claim.factIds.length > 0)).toBe(
+      true,
+    );
+    expect(
+      claimPlan.claims.find((claim) => claim.section === "opening")
+        ?.demandIds[0],
+    ).toMatch(/^demand_core_/);
+    expect(
+      claimPlan.claims.find((claim) => claim.section === "opening")
+        ?.allowEmployerBridge,
+    ).toBe(true);
     expect(
       claimPlan.claims.find((claim) => claim.section === "employerValueBlock")
         ?.demandIds[0],
     ).toMatch(/^demand_core_/);
-    expect(validatePremiumClaimPlanV1({ claimPlan, factGraph, jobDemandGraph })).toEqual(
-      [],
-    );
+    expect(
+      validatePremiumClaimPlanV1({ claimPlan, factGraph, jobDemandGraph }),
+    ).toEqual([]);
   });
 
   it("fails ClaimPlanV1 with unknown facts, low-value proof, and company fluff motivation", () => {
-    const { claimPlan, factGraph, jobDemandGraph } = buildDirectClaimPlanFixture();
+    const { claimPlan, factGraph, jobDemandGraph } =
+      buildDirectClaimPlanFixture();
     const lowValueDemand = {
       id: "demand_low_value_999",
       text: "Reliable and organized.",
@@ -384,10 +425,10 @@ describe("premium ClaimPlan provenance v1", () => {
       bodyParts: {
         opening: {
           section: "opening" as const,
-          text: "I improved signup conversion by 11% after iterative UI experiments.",
+          text: "For customer-facing React and TypeScript delivery, I improved signup conversion by 11% after iterative UI experiments.",
           claimIds: [openingClaim.id],
           factIds: openingClaim.factIds,
-          demandIds: [],
+          demandIds: openingClaim.demandIds,
         },
         proofBlock: {
           section: "proofBlock" as const,
@@ -422,12 +463,1014 @@ describe("premium ClaimPlan provenance v1", () => {
         brief,
       }),
     ).toEqual([]);
+
+    const openingDemand = jobDemandGraph.demands.find(
+      (demand) => demand.id === openingClaim.demandIds[0],
+    )!;
+    const demandAsOpeningContext = {
+      ...writerOutput,
+      bodyParts: {
+        ...writerOutput.bodyParts,
+        opening: {
+          ...writerOutput.bodyParts.opening,
+          text: `For ${openingDemand.text.replace(/[.!?]$/u, "")}, I improved signup conversion by 11% after iterative UI experiments.`,
+        },
+      },
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: demandAsOpeningContext,
+        claimPlan,
+        factGraph,
+        jobDemandGraph,
+        brief,
+      }),
+    ).toEqual([]);
+    const demandWithGenericResidual = {
+      ...demandAsOpeningContext,
+      bodyParts: {
+        ...demandAsOpeningContext.bodyParts,
+        opening: {
+          ...demandAsOpeningContext.bodyParts.opening,
+          text: `For ${openingDemand.text.replace(/[.!?]$/u, "")}, I am interested in this work.`,
+        },
+      },
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: demandWithGenericResidual,
+        claimPlan,
+        factGraph,
+        jobDemandGraph,
+        brief,
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "opening_candidate_proof_missing",
+          section: "opening",
+          repairable: false,
+        }),
+      ]),
+    );
+    expect(
+      validatePremiumCoverLetterBodyParts({
+        bodyParts: toCoverLetterBodyParts(demandWithGenericResidual),
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("opening_candidate_proof_missing");
+    const fallbackLeadWithGenericResidual = {
+      ...demandAsOpeningContext,
+      bodyParts: {
+        ...demandAsOpeningContext.bodyParts,
+        opening: {
+          ...demandAsOpeningContext.bodyParts.opening,
+          text: `For the ${brief.targetRole} role, I am interested in this work.`,
+        },
+      },
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: fallbackLeadWithGenericResidual,
+        claimPlan,
+        factGraph,
+        jobDemandGraph,
+        brief,
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "opening_candidate_proof_missing",
+          section: "opening",
+          repairable: false,
+        }),
+      ]),
+    );
+    expect(
+      validatePremiumCoverLetterBodyParts({
+        bodyParts: toCoverLetterBodyParts(fallbackLeadWithGenericResidual),
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("opening_candidate_proof_missing");
+    const commaDelimitedLeadWithGenericResidual = {
+      ...demandAsOpeningContext,
+      bodyParts: {
+        ...demandAsOpeningContext.bodyParts,
+        opening: {
+          ...demandAsOpeningContext.bodyParts.opening,
+          text: "For React, TypeScript, and design-system delivery, I am interested in this work.",
+        },
+      },
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: commaDelimitedLeadWithGenericResidual,
+        claimPlan,
+        factGraph,
+        jobDemandGraph,
+        brief,
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "opening_candidate_proof_missing",
+          section: "opening",
+          repairable: false,
+        }),
+      ]),
+    );
+    expect(
+      validatePremiumCoverLetterBodyParts({
+        bodyParts: toCoverLetterBodyParts(
+          commaDelimitedLeadWithGenericResidual,
+        ),
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("opening_candidate_proof_missing");
+    const secondaryFactOpening = {
+      ...demandAsOpeningContext,
+      bodyParts: {
+        ...demandAsOpeningContext.bodyParts,
+        opening: {
+          ...demandAsOpeningContext.bodyParts.opening,
+          text: `For ${openingDemand.text.replace(/[.!?]$/u, "")}, I led a design system migration used across 4 product squads.`,
+        },
+      },
+    };
+    expect(
+      validatePremiumCoverLetterBodyParts({
+        bodyParts: toCoverLetterBodyParts(secondaryFactOpening),
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("opening_candidate_proof_missing");
+    const frenchDemandWithProof = {
+      ...demandAsOpeningContext,
+      bodyParts: {
+        ...demandAsOpeningContext.bodyParts,
+        opening: {
+          ...demandAsOpeningContext.bodyParts.opening,
+          text: `Pour ${openingDemand.text.replace(/[.!?]$/u, "")}, j'ai amélioré la conversion des inscriptions de 11 % après des expérimentations UI.`,
+        },
+      },
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: frenchDemandWithProof,
+        claimPlan,
+        factGraph,
+        jobDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).not.toContain("opening_candidate_proof_missing");
+    const frenchDemandWithTranslatedProof = {
+      ...frenchDemandWithProof,
+      bodyParts: {
+        ...frenchDemandWithProof.bodyParts,
+        opening: {
+          ...frenchDemandWithProof.bodyParts.opening,
+          text: `Pour ${openingDemand.text.replace(/[.!?]$/u, "")}, j'ai amélioré la conversion des inscriptions grâce à des expérimentations UI.`,
+        },
+      },
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: frenchDemandWithTranslatedProof,
+        claimPlan,
+        factGraph,
+        jobDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).not.toContain("opening_candidate_proof_missing");
+    const frenchDemandWithUnrelatedAction = {
+      ...frenchDemandWithProof,
+      bodyParts: {
+        ...frenchDemandWithProof.bodyParts,
+        opening: {
+          ...frenchDemandWithProof.bodyParts.opening,
+          text: `Pour ${openingDemand.text.replace(/[.!?]$/u, "")}, j'ai amélioré le suivi d'essais cliniques.`,
+        },
+      },
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: frenchDemandWithUnrelatedAction,
+        claimPlan,
+        factGraph,
+        jobDemandGraph,
+        brief,
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "opening_candidate_proof_missing",
+          section: "opening",
+          repairable: false,
+        }),
+      ]),
+    );
+    const expectCrossLanguageProofValidation = (args: {
+      candidateEvidence: string;
+      generatedCandidateClaim: string;
+      supported: boolean;
+    }) => {
+      const evidenceFactId = openingClaim.factIds[0]!;
+      const evidenceFactGraph = {
+        ...factGraph,
+        facts: factGraph.facts.map((fact) =>
+          fact.id === evidenceFactId
+            ? {
+                ...fact,
+                text: args.candidateEvidence,
+                tokens: args.candidateEvidence.toLowerCase().split(/\W+/u),
+                metrics: [],
+                entities: [],
+              }
+            : fact,
+        ),
+      };
+      const evidenceClaimPlan = {
+        ...claimPlan,
+        claims: claimPlan.claims.map((claim) =>
+          claim.id === openingClaim.id
+            ? { ...claim, factIds: [evidenceFactId] }
+            : claim,
+        ),
+      };
+      const evidenceBrief = {
+        ...brief,
+        claimPlan: evidenceClaimPlan,
+        referencedFacts: (brief.referencedFacts ?? []).map((fact) =>
+          fact.id === evidenceFactId
+            ? { ...fact, text: args.candidateEvidence, source: "cv" }
+            : fact,
+        ),
+        topEvidence: [args.candidateEvidence],
+        supportEvidence: [],
+        transferCore: [],
+      };
+      const frenchDemandWithDomainShift = {
+        ...frenchDemandWithProof,
+        bodyParts: {
+          ...frenchDemandWithProof.bodyParts,
+          opening: {
+            ...frenchDemandWithProof.bodyParts.opening,
+            text: `Pour ${openingDemand.text.replace(/[.!?]$/u, "")}, ${args.generatedCandidateClaim}`,
+            factIds: [evidenceFactId],
+          },
+        },
+      };
+      const writerIssues = validatePremiumWriterOutputV1({
+        writerOutput: frenchDemandWithDomainShift,
+        claimPlan: evidenceClaimPlan,
+        factGraph: evidenceFactGraph,
+        jobDemandGraph,
+        brief: evidenceBrief,
+      });
+      const bodyIssueCodes = validatePremiumCoverLetterBodyParts({
+        bodyParts: toCoverLetterBodyParts(frenchDemandWithDomainShift),
+        brief: evidenceBrief,
+      }).map((issue) => issue.code);
+      if (args.supported) {
+        expect(writerIssues.map((issue) => issue.code)).not.toContain(
+          "opening_candidate_proof_missing",
+        );
+        expect(bodyIssueCodes).not.toContain("opening_candidate_proof_missing");
+        return;
+      }
+      expect(writerIssues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: "opening_candidate_proof_missing",
+            section: "opening",
+            repairable: false,
+          }),
+        ]),
+      );
+      expect(bodyIssueCodes).toContain("opening_candidate_proof_missing");
+    };
+    expectCrossLanguageProofValidation({
+      candidateEvidence: "Improved equipment service and maintenance.",
+      generatedCandidateClaim: "j'ai amélioré le service client.",
+      supported: false,
+    });
+    expectCrossLanguageProofValidation({
+      candidateEvidence: "Coordinated product teams.",
+      generatedCandidateClaim: "j'ai coordonné les équipes cliniques.",
+      supported: false,
+    });
+    expectCrossLanguageProofValidation({
+      candidateEvidence: "Built an API integration for a product system.",
+      generatedCandidateClaim:
+        "j'ai construit un programme d'intégration des patients.",
+      supported: false,
+    });
+    expectCrossLanguageProofValidation({
+      candidateEvidence: "Led a database migration.",
+      generatedCandidateClaim: "j'ai mené une migration de patients.",
+      supported: false,
+    });
+    expectCrossLanguageProofValidation({
+      candidateEvidence: "Reported incidents.",
+      generatedCandidateClaim: "j'ai signalé des incidents.",
+      supported: true,
+    });
+    expectCrossLanguageProofValidation({
+      candidateEvidence: "Reported incidents.",
+      generatedCandidateClaim:
+        "j'ai signalé des incidents majeurs à la direction.",
+      supported: false,
+    });
+    expectCrossLanguageProofValidation({
+      candidateEvidence: "Reported incidents.",
+      generatedCandidateClaim: "j'ai signalé et surveillé des incidents.",
+      supported: false,
+    });
+    expectCrossLanguageProofValidation({
+      candidateEvidence: "Reported incidents.",
+      generatedCandidateClaim: "I reported incidents and monitored them.",
+      supported: false,
+    });
+    expectCrossLanguageProofValidation({
+      candidateEvidence: "Built an API integration for a product system.",
+      generatedCandidateClaim:
+        "I built an API integration for a product system. I documented nuclear launch procedures.",
+      supported: false,
+    });
+    expectCrossLanguageProofValidation({
+      candidateEvidence: "Built React.js interfaces.",
+      generatedCandidateClaim: "I built React.js interfaces.",
+      supported: true,
+    });
+    expectCrossLanguageProofValidation({
+      candidateEvidence: "Reduced processing time by 3.5%.",
+      generatedCandidateClaim: "I reduced processing time by 3.5%.",
+      supported: true,
+    });
+    expectCrossLanguageProofValidation({
+      candidateEvidence: "Built interfaces for U.S. clients.",
+      generatedCandidateClaim: "I built interfaces for U.S. clients.",
+      supported: true,
+    });
+    expectCrossLanguageProofValidation({
+      candidateEvidence: "Built interfaces for U.S. Government clients.",
+      generatedCandidateClaim:
+        "I built interfaces for U.S. Government clients.",
+      supported: true,
+    });
+    expectCrossLanguageProofValidation({
+      candidateEvidence: "Supported clients in the U.S.",
+      generatedCandidateClaim:
+        "I supported clients in the U.S. I was named employee of the year.",
+      supported: false,
+    });
+    expectCrossLanguageProofValidation({
+      candidateEvidence: "Supported clients in the U.S.",
+      generatedCandidateClaim:
+        "I supported clients in the U.S. The program received industry recognition.",
+      supported: false,
+    });
+    expectCrossLanguageProofValidation({
+      candidateEvidence:
+        "Built product integrations, e.g. Salesforce integrations.",
+      generatedCandidateClaim:
+        "I built product integrations, e.g. Salesforce integrations.",
+      supported: true,
+    });
+    expectCrossLanguageProofValidation({
+      candidateEvidence: "Built an API integration for a product system.",
+      generatedCandidateClaim:
+        "j'ai construit une intégration API pour un système produit.",
+      supported: true,
+    });
+    const frenchEvidenceFactId = openingClaim.factIds[0]!;
+    const frenchEvidence =
+      "J'ai construit une intégration API pour un système produit.";
+    const frenchEvidenceFactGraph = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === frenchEvidenceFactId
+          ? {
+              ...fact,
+              text: frenchEvidence,
+              tokens: frenchEvidence.toLowerCase().split(/\W+/u),
+              metrics: [],
+              entities: ["API"],
+            }
+          : fact,
+      ),
+    };
+    const frenchEvidenceClaimPlan = {
+      ...claimPlan,
+      claims: claimPlan.claims.map((claim) =>
+        claim.id === openingClaim.id
+          ? { ...claim, factIds: [frenchEvidenceFactId] }
+          : claim,
+      ),
+    };
+    const englishBriefWithFrenchEvidence = {
+      ...brief,
+      language: "English",
+      claimPlan: frenchEvidenceClaimPlan,
+      referencedFacts: (brief.referencedFacts ?? []).map((fact) =>
+        fact.id === frenchEvidenceFactId
+          ? { ...fact, text: frenchEvidence, source: "cv" as const }
+          : fact,
+      ),
+      topEvidence: [frenchEvidence],
+      supportEvidence: [],
+      transferCore: [],
+    };
+    const englishDemandWithTranslatedProof = {
+      ...demandAsOpeningContext,
+      bodyParts: {
+        ...demandAsOpeningContext.bodyParts,
+        opening: {
+          ...demandAsOpeningContext.bodyParts.opening,
+          text: `For ${openingDemand.text.replace(/[.!?]$/u, "")}, I built an API integration for a product system.`,
+          factIds: [frenchEvidenceFactId],
+        },
+      },
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: englishDemandWithTranslatedProof,
+        claimPlan: frenchEvidenceClaimPlan,
+        factGraph: frenchEvidenceFactGraph,
+        jobDemandGraph,
+        brief: englishBriefWithFrenchEvidence,
+      }).map((issue) => issue.code),
+    ).not.toContain("opening_candidate_proof_missing");
+    expect(
+      validatePremiumCoverLetterBodyParts({
+        bodyParts: toCoverLetterBodyParts(englishDemandWithTranslatedProof),
+        brief: englishBriefWithFrenchEvidence,
+      }).map((issue) => issue.code),
+    ).not.toContain("opening_candidate_proof_missing");
+    const englishDemandWithDomainShift = {
+      ...englishDemandWithTranslatedProof,
+      bodyParts: {
+        ...englishDemandWithTranslatedProof.bodyParts,
+        opening: {
+          ...englishDemandWithTranslatedProof.bodyParts.opening,
+          text: `For ${openingDemand.text.replace(/[.!?]$/u, "")}, I built an API integration for patient records.`,
+        },
+      },
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: englishDemandWithDomainShift,
+        claimPlan: frenchEvidenceClaimPlan,
+        factGraph: frenchEvidenceFactGraph,
+        jobDemandGraph,
+        brief: englishBriefWithFrenchEvidence,
+      }).map((issue) => issue.code),
+    ).toContain("opening_candidate_proof_missing");
+    expect(
+      validatePremiumCoverLetterBodyParts({
+        bodyParts: toCoverLetterBodyParts(englishDemandWithDomainShift),
+        brief: englishBriefWithFrenchEvidence,
+      }).map((issue) => issue.code),
+    ).toContain("opening_candidate_proof_missing");
+    const frenchBriefWithFrenchEvidence = {
+      ...englishBriefWithFrenchEvidence,
+      language: "French",
+    };
+    const frenchDemandWithSameLanguageDomainShift = {
+      ...frenchDemandWithProof,
+      bodyParts: {
+        ...frenchDemandWithProof.bodyParts,
+        opening: {
+          ...frenchDemandWithProof.bodyParts.opening,
+          text: `Pour ${openingDemand.text.replace(/[.!?]$/u, "")}, j'ai construit une intégration API pour des dossiers patients.`,
+          factIds: [frenchEvidenceFactId],
+        },
+      },
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: frenchDemandWithSameLanguageDomainShift,
+        claimPlan: frenchEvidenceClaimPlan,
+        factGraph: frenchEvidenceFactGraph,
+        jobDemandGraph,
+        brief: frenchBriefWithFrenchEvidence,
+      }).map((issue) => issue.code),
+    ).toContain("opening_candidate_proof_missing");
+    expect(
+      validatePremiumCoverLetterBodyParts({
+        bodyParts: toCoverLetterBodyParts(
+          frenchDemandWithSameLanguageDomainShift,
+        ),
+        brief: frenchBriefWithFrenchEvidence,
+      }).map((issue) => issue.code),
+    ).toContain("opening_candidate_proof_missing");
+    const englishEvidence =
+      "Built an API integration for a product system.";
+    const englishEvidenceFactGraph = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === frenchEvidenceFactId
+          ? {
+              ...fact,
+              text: englishEvidence,
+              tokens: englishEvidence.toLowerCase().split(/\W+/u),
+              metrics: [],
+              entities: ["API"],
+            }
+          : fact,
+      ),
+    };
+    const englishBriefWithEnglishEvidence = {
+      ...englishBriefWithFrenchEvidence,
+      referencedFacts: (
+        englishBriefWithFrenchEvidence.referencedFacts ?? []
+      ).map((fact) =>
+        fact.id === frenchEvidenceFactId
+          ? { ...fact, text: englishEvidence }
+          : fact,
+      ),
+      topEvidence: [englishEvidence],
+    };
+    const englishDemandWithSameLanguageDomainShift = {
+      ...englishDemandWithTranslatedProof,
+      bodyParts: {
+        ...englishDemandWithTranslatedProof.bodyParts,
+        opening: {
+          ...englishDemandWithTranslatedProof.bodyParts.opening,
+          text: `For ${openingDemand.text.replace(/[.!?]$/u, "")}, I built an API integration for patient records.`,
+        },
+      },
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: englishDemandWithSameLanguageDomainShift,
+        claimPlan: frenchEvidenceClaimPlan,
+        factGraph: englishEvidenceFactGraph,
+        jobDemandGraph,
+        brief: englishBriefWithEnglishEvidence,
+      }).map((issue) => issue.code),
+    ).toContain("opening_candidate_proof_missing");
+    expect(
+      validatePremiumCoverLetterBodyParts({
+        bodyParts: toCoverLetterBodyParts(
+          englishDemandWithSameLanguageDomainShift,
+        ),
+        brief: englishBriefWithEnglishEvidence,
+      }).map((issue) => issue.code),
+    ).toContain("opening_candidate_proof_missing");
+    const patientEvidenceFactId = "fact_cv_opening_patient_support";
+    const patientEvidence = "Supported patients with account access.";
+    const patientEvidenceFact = {
+      ...englishEvidenceFactGraph.facts.find(
+        (fact) => fact.id === frenchEvidenceFactId,
+      )!,
+      id: patientEvidenceFactId,
+      text: patientEvidence,
+      tokens: patientEvidence.toLowerCase().split(/\W+/u),
+      metrics: [],
+      entities: ["patients", "account access"],
+    };
+    const multiFactClaimPlan = {
+      ...frenchEvidenceClaimPlan,
+      claims: frenchEvidenceClaimPlan.claims.map((claim) =>
+        claim.id === openingClaim.id
+          ? {
+              ...claim,
+              factIds: [frenchEvidenceFactId, patientEvidenceFactId],
+            }
+          : claim,
+      ),
+    };
+    const multiFactGraph = {
+      ...englishEvidenceFactGraph,
+      facts: [...englishEvidenceFactGraph.facts, patientEvidenceFact],
+    };
+    const sourceOpeningReference =
+      englishBriefWithEnglishEvidence.referencedFacts?.find(
+        (fact) => fact.id === frenchEvidenceFactId,
+      )!;
+    const multiFactBrief = {
+      ...englishBriefWithEnglishEvidence,
+      claimPlan: multiFactClaimPlan,
+      referencedFacts: [
+        ...(englishBriefWithEnglishEvidence.referencedFacts ?? []),
+        {
+          ...sourceOpeningReference,
+          id: patientEvidenceFactId,
+          text: patientEvidence,
+        },
+      ],
+      topEvidence: [englishEvidence, patientEvidence],
+    };
+    const englishDemandWithCrossFactSynthesis = {
+      ...englishDemandWithTranslatedProof,
+      bodyParts: {
+        ...englishDemandWithTranslatedProof.bodyParts,
+        opening: {
+          ...englishDemandWithTranslatedProof.bodyParts.opening,
+          text: `For ${openingDemand.text.replace(/[.!?]$/u, "")}, I built an API integration for a patient system.`,
+          factIds: [frenchEvidenceFactId, patientEvidenceFactId],
+        },
+      },
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: englishDemandWithCrossFactSynthesis,
+        claimPlan: multiFactClaimPlan,
+        factGraph: multiFactGraph,
+        jobDemandGraph,
+        brief: multiFactBrief,
+      }).map((issue) => issue.code),
+    ).toContain("opening_candidate_proof_missing");
+    expect(
+      validatePremiumCoverLetterBodyParts({
+        bodyParts: toCoverLetterBodyParts(
+          englishDemandWithCrossFactSynthesis,
+        ),
+        brief: multiFactBrief,
+      }).map((issue) => issue.code),
+    ).toContain("opening_candidate_proof_missing");
+    const patientOnlyClaimPlan = {
+      ...multiFactClaimPlan,
+      claims: multiFactClaimPlan.claims.map((claim) =>
+        claim.id === openingClaim.id
+          ? { ...claim, factIds: [patientEvidenceFactId] }
+          : claim,
+      ),
+    };
+    const patientOnlyBrief = {
+      ...multiFactBrief,
+      claimPlan: patientOnlyClaimPlan,
+    };
+    const englishDemandWithUnsupportedCoordinatedClaim = {
+      ...englishDemandWithTranslatedProof,
+      bodyParts: {
+        ...englishDemandWithTranslatedProof.bodyParts,
+        opening: {
+          ...englishDemandWithTranslatedProof.bodyParts.opening,
+          text: `For ${openingDemand.text.replace(/[.!?]$/u, "")}, I built an API integration and supported patients with account access.`,
+          factIds: [patientEvidenceFactId],
+        },
+      },
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: englishDemandWithUnsupportedCoordinatedClaim,
+        claimPlan: patientOnlyClaimPlan,
+        factGraph: multiFactGraph,
+        jobDemandGraph,
+        brief: patientOnlyBrief,
+      }).map((issue) => issue.code),
+    ).toContain("opening_candidate_proof_missing");
+    expect(
+      validatePremiumCoverLetterBodyParts({
+        bodyParts: toCoverLetterBodyParts(
+          englishDemandWithUnsupportedCoordinatedClaim,
+        ),
+        brief: patientOnlyBrief,
+      }).map((issue) => issue.code),
+    ).toContain("opening_candidate_proof_missing");
+    const supportOnlyEvidence =
+      "Supported an API integration for patient access.";
+    const supportOnlyFactGraph = {
+      ...multiFactGraph,
+      facts: multiFactGraph.facts.map((fact) =>
+        fact.id === patientEvidenceFactId
+          ? {
+              ...fact,
+              text: supportOnlyEvidence,
+              tokens: supportOnlyEvidence.toLowerCase().split(/\W+/u),
+              metrics: [],
+              entities: ["API"],
+            }
+          : fact,
+      ),
+    };
+    const supportOnlyBrief = {
+      ...patientOnlyBrief,
+      referencedFacts: (patientOnlyBrief.referencedFacts ?? []).map((fact) =>
+        fact.id === patientEvidenceFactId
+          ? { ...fact, text: supportOnlyEvidence }
+          : fact,
+      ),
+      topEvidence: [supportOnlyEvidence],
+    };
+    const englishDemandWithUnsupportedActionUpgrade = {
+      ...englishDemandWithTranslatedProof,
+      bodyParts: {
+        ...englishDemandWithTranslatedProof.bodyParts,
+        opening: {
+          ...englishDemandWithTranslatedProof.bodyParts.opening,
+          text: `For ${openingDemand.text.replace(/[.!?]$/u, "")}, I built an API integration for patient access.`,
+          factIds: [patientEvidenceFactId],
+        },
+      },
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: englishDemandWithUnsupportedActionUpgrade,
+        claimPlan: patientOnlyClaimPlan,
+        factGraph: supportOnlyFactGraph,
+        jobDemandGraph,
+        brief: supportOnlyBrief,
+      }).map((issue) => issue.code),
+    ).toContain("opening_candidate_proof_missing");
+    expect(
+      validatePremiumCoverLetterBodyParts({
+        bodyParts: toCoverLetterBodyParts(
+          englishDemandWithUnsupportedActionUpgrade,
+        ),
+        brief: supportOnlyBrief,
+      }).map((issue) => issue.code),
+    ).toContain("opening_candidate_proof_missing");
+    for (const unsupportedClaim of [
+      "I developed an API integration for patient access.",
+      "I built and supported an API integration for patient access.",
+    ]) {
+      const unsupportedWriterOutput = {
+        ...englishDemandWithUnsupportedActionUpgrade,
+        bodyParts: {
+          ...englishDemandWithUnsupportedActionUpgrade.bodyParts,
+          opening: {
+            ...englishDemandWithUnsupportedActionUpgrade.bodyParts.opening,
+            text: `For ${openingDemand.text.replace(/[.!?]$/u, "")}, ${unsupportedClaim}`,
+          },
+        },
+      };
+      expect(
+        validatePremiumWriterOutputV1({
+          writerOutput: unsupportedWriterOutput,
+          claimPlan: patientOnlyClaimPlan,
+          factGraph: supportOnlyFactGraph,
+          jobDemandGraph,
+          brief: supportOnlyBrief,
+        }).map((issue) => issue.code),
+      ).toContain("opening_candidate_proof_missing");
+      expect(
+        validatePremiumCoverLetterBodyParts({
+          bodyParts: toCoverLetterBodyParts(unsupportedWriterOutput),
+          brief: supportOnlyBrief,
+        }).map((issue) => issue.code),
+      ).toContain("opening_candidate_proof_missing");
+    }
+    for (const compatibleAuthorshipEvidence of [
+      "Designed an API integration for patient access.",
+      "J'ai conçu une intégration API pour l'accès des patients.",
+    ]) {
+      const compatibleAuthorshipFactGraph = {
+        ...supportOnlyFactGraph,
+        facts: supportOnlyFactGraph.facts.map((fact) =>
+          fact.id === patientEvidenceFactId
+            ? {
+                ...fact,
+                text: compatibleAuthorshipEvidence,
+                tokens: compatibleAuthorshipEvidence
+                  .toLowerCase()
+                  .split(/\W+/u),
+                metrics: [],
+                entities: ["API"],
+              }
+            : fact,
+        ),
+      };
+      const compatibleAuthorshipBrief = {
+        ...supportOnlyBrief,
+        referencedFacts: (supportOnlyBrief.referencedFacts ?? []).map(
+          (fact) =>
+            fact.id === patientEvidenceFactId
+              ? { ...fact, text: compatibleAuthorshipEvidence }
+              : fact,
+        ),
+        topEvidence: [compatibleAuthorshipEvidence],
+      };
+      expect(
+        validatePremiumWriterOutputV1({
+          writerOutput: {
+            ...englishDemandWithUnsupportedActionUpgrade,
+            bodyParts: {
+              ...englishDemandWithUnsupportedActionUpgrade.bodyParts,
+              opening: {
+                ...englishDemandWithUnsupportedActionUpgrade.bodyParts
+                  .opening,
+                text: `For ${openingDemand.text.replace(/[.!?]$/u, "")}, I built an API integration for patient access.`,
+              },
+            },
+          },
+          claimPlan: patientOnlyClaimPlan,
+          factGraph: compatibleAuthorshipFactGraph,
+          jobDemandGraph,
+          brief: compatibleAuthorshipBrief,
+        }).map((issue) => issue.code),
+      ).not.toContain("opening_candidate_proof_missing");
+      expect(
+        validatePremiumCoverLetterBodyParts({
+          bodyParts: {
+            ...toCoverLetterBodyParts(
+              englishDemandWithUnsupportedActionUpgrade,
+            ),
+            opening: `For ${openingDemand.text.replace(/[.!?]$/u, "")}, I built an API integration for patient access.`,
+          },
+          brief: compatibleAuthorshipBrief,
+        }).map((issue) => issue.code),
+      ).not.toContain("opening_candidate_proof_missing");
+    }
+    for (const documentationEvidence of [
+      "Documented an API integration.",
+      "Reported an API integration status.",
+    ]) {
+      const documentationFactGraph = {
+        ...supportOnlyFactGraph,
+        facts: supportOnlyFactGraph.facts.map((fact) =>
+          fact.id === patientEvidenceFactId
+            ? {
+                ...fact,
+                text: documentationEvidence,
+                tokens: documentationEvidence.toLowerCase().split(/\W+/u),
+                metrics: [],
+                entities: ["API"],
+              }
+            : fact,
+        ),
+      };
+      const documentationBrief = {
+        ...supportOnlyBrief,
+        referencedFacts: (supportOnlyBrief.referencedFacts ?? []).map((fact) =>
+          fact.id === patientEvidenceFactId
+            ? { ...fact, text: documentationEvidence }
+            : fact,
+        ),
+        topEvidence: [documentationEvidence],
+      };
+      const unsupportedCompletion = {
+        ...englishDemandWithUnsupportedActionUpgrade,
+        bodyParts: {
+          ...englishDemandWithUnsupportedActionUpgrade.bodyParts,
+          opening: {
+            ...englishDemandWithUnsupportedActionUpgrade.bodyParts.opening,
+            text: `For ${openingDemand.text.replace(/[.!?]$/u, "")}, I completed an API integration.`,
+          },
+        },
+      };
+      expect(
+        validatePremiumWriterOutputV1({
+          writerOutput: unsupportedCompletion,
+          claimPlan: patientOnlyClaimPlan,
+          factGraph: documentationFactGraph,
+          jobDemandGraph,
+          brief: documentationBrief,
+        }).map((issue) => issue.code),
+      ).toContain("opening_candidate_proof_missing");
+      expect(
+        validatePremiumCoverLetterBodyParts({
+          bodyParts: toCoverLetterBodyParts(unsupportedCompletion),
+          brief: documentationBrief,
+        }).map((issue) => issue.code),
+      ).toContain("opening_candidate_proof_missing");
+    }
+    const unsupportedEnglishRepair = repairPremiumCoverLetterBodyParts({
+      bodyParts: {
+        ...toCoverLetterBodyParts(englishDemandWithTranslatedProof),
+        opening: `For ${openingDemand.text.replace(/[.!?]$/u, "")}, I value clear collaboration.`,
+      },
+      brief: englishBriefWithFrenchEvidence,
+    });
+    expect(unsupportedEnglishRepair.opening).not.toContain("J'ai construit");
+    expect(
+      validatePremiumCoverLetterBodyParts({
+        bodyParts: unsupportedEnglishRepair,
+        brief: englishBriefWithFrenchEvidence,
+      }),
+    ).not.toEqual([]);
+    const frenchDemandWithGenericResidual = {
+      ...frenchDemandWithProof,
+      bodyParts: {
+        ...frenchDemandWithProof.bodyParts,
+        opening: {
+          ...frenchDemandWithProof.bodyParts.opening,
+          text: `Pour ${openingDemand.text.replace(/[.!?]$/u, "")}, je souhaite contribuer à ce travail.`,
+        },
+      },
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: frenchDemandWithGenericResidual,
+        claimPlan,
+        factGraph,
+        jobDemandGraph,
+        brief,
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "opening_candidate_proof_missing",
+          section: "opening",
+          repairable: false,
+        }),
+      ]),
+    );
+    for (const text of [
+      "I described routine patrol observations.",
+      "Described routine patrol observations.",
+      "For work centered on the role's core responsibilities, described routine patrol observations.",
+    ]) {
+      const describedOpening = {
+        ...writerOutput,
+        bodyParts: {
+          ...writerOutput.bodyParts,
+          opening: {
+            ...writerOutput.bodyParts.opening,
+            text,
+          },
+        },
+      };
+      expect(
+        validatePremiumWriterOutputV1({
+          writerOutput: describedOpening,
+          claimPlan,
+          factGraph,
+          jobDemandGraph,
+          brief,
+        }),
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: "meta_prose",
+            section: "opening",
+          }),
+        ]),
+      );
+    }
+    expect(
+      validatePremiumCoverLetterBodyParts({
+        bodyParts: toCoverLetterBodyParts(demandAsOpeningContext),
+        brief,
+      }).map((issue) => issue.code),
+    ).not.toContain("unsupported_ownership_verb");
+    const demandWithResidualCandidateHistory = {
+      ...demandAsOpeningContext,
+      bodyParts: {
+        ...demandAsOpeningContext.bodyParts,
+        opening: {
+          ...demandAsOpeningContext.bodyParts.opening,
+          text: `For my 99 years leading Acme and ${openingDemand.text.replace(/[.!?]$/u, "")}, I improved signup conversion by 11% after iterative UI experiments.`,
+        },
+      },
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: demandWithResidualCandidateHistory,
+        claimPlan,
+        factGraph,
+        jobDemandGraph,
+        brief,
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "unsupported_numeric_claim",
+          section: "opening",
+        }),
+      ]),
+    );
+    expect(
+      validatePremiumCoverLetterBodyParts({
+        bodyParts: toCoverLetterBodyParts(demandWithResidualCandidateHistory),
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("unsupported_numeric_claim");
     expect(toCoverLetterBodyParts(writerOutput)).toEqual({
       opening: writerOutput.bodyParts.opening.text,
       proofBlock: writerOutput.bodyParts.proofBlock.text,
       employerValueBlock: writerOutput.bodyParts.employerValueBlock.text,
       closeLine: writerOutput.bodyParts.closeLine.text,
     });
+
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: {
+          ...writerOutput,
+          bodyParts: {
+            ...writerOutput.bodyParts,
+            opening: {
+              ...writerOutput.bodyParts.opening,
+              demandIds: [],
+            },
+          },
+        },
+        claimPlan,
+        factGraph,
+        jobDemandGraph,
+        brief,
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "section_demand_missing",
+          section: "opening",
+          claimId: openingClaim.id,
+          repairable: false,
+        }),
+      ]),
+    );
   });
 
   it("validates premium final provenance from final text instead of cited ids alone", () => {
@@ -1091,11 +2134,30 @@ describe("premium cover letter prompt contract", () => {
       "compose in idiomatic professional French",
     );
     expect(inScopePrompts[3]).toContain("je serais ravi de");
+    for (const prompt of [inScopePrompts[0], inScopePrompts[2]]) {
+      expect(prompt).toContain(
+        "Opening: one sentence: employer need, then supported proof",
+      );
+      expect(prompt).not.toContain(
+        "Opening: position through the strongest relevant evidence",
+      );
+    }
+    for (const prompt of [inScopePrompts[1], inScopePrompts[3]]) {
+      expect(prompt).toContain(
+        "opening: one sentence: JD work surface first, supported candidate proof second",
+      );
+      expect(prompt).not.toContain(
+        "opening: one factual first-person sentence grounded in the strongest concrete candidate action",
+      );
+    }
 
     const spanishPrompt = buildPremiumCoverLetterPrompt({
       brief: buildDirectBrief("Spanish"),
     });
     expect(spanishPrompt).toContain("CV-backed editorial quality contract:");
+    expect(spanishPrompt).toContain(
+      "Opening: one sentence: employer need, then supported proof",
+    );
     expect(spanishPrompt).not.toContain("English editorial contract:");
     expect(spanishPrompt).not.toContain("French editorial contract:");
 
@@ -1134,6 +2196,9 @@ describe("premium cover letter prompt contract", () => {
     expect(noCvPrompt).not.toContain("CV-backed editorial quality contract:");
     expect(noCvPrompt).not.toContain("English editorial contract:");
     expect(noCvPrompt).not.toContain("French editorial contract:");
+    expect(noCvPrompt).not.toContain(
+      "Opening: one sentence: employer need, then supported proof",
+    );
   });
 
   it("scopes premium provider adapters to Mistral and Qwen without changing GPT/default prompts", () => {
@@ -1205,6 +2270,12 @@ describe("premium cover letter prompt contract", () => {
     expect(mistralPrompt).toContain("Truth outranks fluency");
     expect(mistralPrompt).toContain(
       "CV evidence outranks job-description keywords",
+    );
+    expect(mistralPrompt).toContain(
+      "Use job facts as bounded opening role context and to choose relevant CV-backed candidate facts",
+    );
+    expect(mistralPrompt).not.toContain(
+      "Use job facts only to choose which CV-backed candidate facts are relevant.",
     );
     expect(mistralPrompt).toContain("monitored ≠ managed");
     expect(mistralPrompt).toContain("documented ≠ managed");
@@ -1641,13 +2712,19 @@ describe("premium cover letter prompt contract", () => {
 
     expect(defaultPrompt).not.toContain(contractMarker);
     expect(mistralPrompt).not.toContain(contractMarker);
-    expect(
-      qwenPrompt.split(contractMarker).length - 1,
-    ).toBe(1);
+    expect(qwenPrompt.split(contractMarker).length - 1).toBe(1);
   });
 
-  it("keeps shared cv_adjacent guidance evidence-first for GPT/default and narrows provider prompts to grounded bridges", () => {
+  it("uses a provenance-safe opening role-context lead for cv_adjacent across provider prompts", () => {
     const brief = buildAdjacentAdminBrief();
+    const { claimPlan, factGraph, jobDemandGraph } =
+      buildAdjacentClaimPlanFixture();
+    const openingClaim = claimPlan.claims.find(
+      (claim) => claim.section === "opening",
+    );
+    const employerValueClaim = claimPlan.claims.find(
+      (claim) => claim.section === "employerValueBlock",
+    );
     const defaultPrompt = buildPremiumCoverLetterPrompt({ brief });
     const mistralPrompt = buildPremiumCoverLetterPrompt({
       brief,
@@ -1664,7 +2741,7 @@ describe("premium cover letter prompt contract", () => {
       "keep candidate evidence candidate-side and job facts work-surface-side",
     );
     expect(defaultPrompt).toContain(
-      "prioritize concrete CV-backed actions before any employer bridge",
+      "name one bounded JD work surface before CV-backed proof in the opening",
     );
     expect(defaultPrompt).toContain(
       "do not use the target role title, job requirements, employer needs, direct-fit wording, role-mapping language, or future-value promises as proof",
@@ -1672,14 +2749,21 @@ describe("premium cover letter prompt contract", () => {
     expect(defaultPrompt).toContain(
       "make persuasion from the operating discipline already present in the CV facts",
     );
+    expect(defaultPrompt).toContain("cv_adjacent body-part contract:");
+    for (const prompt of [defaultPrompt, mistralPrompt, qwenPrompt]) {
+      expect(prompt).toContain(
+        "opening: one sentence: JD work surface first, supported candidate proof second",
+      );
+      expect(prompt).toContain("JD context is never candidate evidence");
+      expect(prompt).toContain(
+        "no CV-bullet, metric-first, or direct-role lead",
+      );
+    }
     expect(defaultPrompt).toContain(
-      "cv_adjacent body-part contract:",
+      "proofBlock: develop the strongest concrete CV-backed evidence without listing duties flatly",
     );
     expect(defaultPrompt).toContain(
-      "proofBlock: strongest concrete CV-backed evidence first, before employer context; develop what the work required instead of listing duties flatly",
-    );
-    expect(defaultPrompt).toContain(
-      "The bridge should explain the operating discipline behind the evidence, not just name overlapping duties.",
+      "employerValueBlock: either more concrete CV-backed evidence or one restrained bridge grounded in both candidate evidence and a JD work surface.",
     );
     expect(defaultPrompt).toContain(
       "closeLine: one short sentence restating CV-backed operating strengths only",
@@ -1689,10 +2773,10 @@ describe("premium cover letter prompt contract", () => {
     );
 
     expect(mistralPrompt).toContain(
-      "grounded adjacent letter with at most one restrained employer-facing bridge",
+      "grounded adjacent letter with one bounded opening role-context lead and at most one later employer-facing bridge",
     );
     expect(mistralPrompt).toContain(
-      "Mistral cv_adjacent may include one restrained employer-facing bridge",
+      "Ground the opening in BOTH candidate evidence and one JD work surface",
     );
     expect(mistralPrompt).toContain(
       "The bridge must stay at the level of overlap, relevance, or operating context",
@@ -1710,7 +2794,7 @@ describe("premium cover letter prompt contract", () => {
       "Sentence budget: opening 1 sentence, proofBlock at most 2 sentences, employerValueBlock 1 sentence, closeLine 1 sentence.",
     );
     expect(mistralPrompt).toContain(
-      "If topResponsibilities or workContext are present, employerValueBlock should be the restrained bridge, not another evidence-only sentence.",
+      "Use employerValueBlock for the one restrained employer-facing bridge when safe role context exists.",
     );
     expect(mistralPrompt).toContain(
       "Evidence reuse budget: each employer, duty, cadence, credential, environment, artifact, or workflow may appear in only one body part.",
@@ -1733,14 +2817,12 @@ describe("premium cover letter prompt contract", () => {
     expect(mistralPrompt).not.toContain(
       "CloseLine: one short role-specific sentence",
     );
+    expect(qwenPrompt).toContain("Qwen cv_adjacent contract:");
     expect(qwenPrompt).toContain(
-      "Qwen cv_adjacent contract:",
+      "Evidence boundary: keep candidate facts candidate-side and JD facts work-surface context only.",
     );
     expect(qwenPrompt).toContain(
-      "Evidence first: keep candidate facts candidate-side and JD facts work-surface context only.",
-    );
-    expect(qwenPrompt).toContain(
-      "Allow at most one restrained employer-facing bridge.",
+      "Keep the opening role-context lead factual; allow at most one later employer-facing bridge.",
     );
     expect(qwenPrompt).toContain(
       "Do not use the target role title, job requirements, or employer goals as proof.",
@@ -1792,6 +2874,24 @@ describe("premium cover letter prompt contract", () => {
     expect(qwenPrompt).not.toContain(
       "Qwen cv_direct ownership and scope contract:",
     );
+    expect(openingClaim?.demandIds[0]).toMatch(/^demand_core_/);
+    expect(openingClaim?.allowEmployerBridge).toBe(true);
+    expect(employerValueClaim?.demandIds[0]).toMatch(/^demand_core_/);
+    expect(employerValueClaim?.allowEmployerBridge).toBe(true);
+    expect(
+      validatePremiumClaimPlanV1({ claimPlan, factGraph, jobDemandGraph }),
+    ).toEqual([]);
+    for (const prompt of [defaultPrompt, mistralPrompt, qwenPrompt]) {
+      expect(prompt).not.toContain(
+        "prioritize concrete CV-backed actions before any employer bridge",
+      );
+      expect(prompt).not.toContain(
+        "Use job facts only to select which candidate facts to include.",
+      );
+      expect(prompt).not.toContain(
+        "Evidence first: keep candidate facts candidate-side and JD facts work-surface context only.",
+      );
+    }
   });
 
   it("keeps provider adapter order between the shared premium prompt and structured brief", () => {
@@ -1848,7 +2948,7 @@ describe("premium cover letter prompt contract", () => {
       "If evidence is modest, let the best available concrete proof carry the case.",
     );
     expect(prompt).toContain(
-      "Opening: position through the strongest relevant evidence",
+      "Opening: one sentence: employer need, then supported proof",
     );
     expect(prompt).toContain(
       "EmployerValueBlock: move directly to an employer-facing implication",
@@ -2050,13 +3150,19 @@ describe("premium cover letter prompt contract", () => {
       "Never convert JOB SURFACE into CANDIDATE EXPERIENCE.",
     );
     expect(mistralPrompt).toContain(
-      "Allowed no_cv stems include \"I am interested in this role because\"",
+      'Allowed no_cv stems include "I am interested in this role because"',
     );
     expect(mistralPrompt).toContain(
-      "Forbidden no_cv stems include \"I coordinate\"",
+      'Forbidden no_cv stems include "I coordinate"',
     );
     expect(mistralPrompt).toContain(
-      "Do not begin closeLine with \"Experience includes\"",
+      'Do not begin closeLine with "Experience includes"',
+    );
+    expect(mistralPrompt).toContain(
+      "Use job facts only to choose which CV-backed candidate facts are relevant.",
+    );
+    expect(mistralPrompt).not.toContain(
+      "Use job facts as bounded opening role context and to choose relevant CV-backed candidate facts",
     );
     expect(prompt.length).toBeLessThan(6500);
     expect(prompt.split("\n").length).toBeLessThan(44);
@@ -2531,7 +3637,7 @@ describe("premium cover letter generation and rendering", () => {
       candidateName: "Alex Martin",
       writer: async () => ({
         opening:
-          "J’ai amélioré la conversion des inscriptions de 11 % grâce à des expériences d’interface itératives.",
+          "Pour des interfaces React et TypeScript destinées aux utilisateurs, j’ai amélioré la conversion des inscriptions de 11 % grâce à des expérimentations UI itératives.",
         proofBlock:
           "J’ai dirigé une migration de design system utilisée par 4 équipes produit.",
         employerValueBlock:
@@ -2544,6 +3650,9 @@ describe("premium cover letter generation and rendering", () => {
     expect(result).not.toBeNull();
     expect(result?.content).toMatch(/^Madame, Monsieur,/u);
     expect(result?.content).toMatch(
+      /^Madame, Monsieur,\n\nPour le poste de Senior Frontend Engineer, j’ai amélioré la conversion des inscriptions de 11 % grâce à des expérimentations UI itératives\./u,
+    );
+    expect(result?.content).toMatch(
       /Veuillez agréer, Madame, Monsieur, l'expression de mes salutations distinguées\.\nAlex Martin$/u,
     );
     expect(result?.bodyParts.proofBlock).toContain("4 équipes produit");
@@ -2553,43 +3662,143 @@ describe("premium cover letter generation and rendering", () => {
     const cases = [
       {
         brief: buildDirectFrontendBrief("English"),
-        opening: "I improved signup conversion by 11% through iterative UI experiments.",
-        proofBlock: "I led a design-system migration used across 4 product squads.",
+        opening:
+          "I improved signup conversion by 11% through iterative UI experiments.",
+        proofBlock:
+          "I led a design-system migration used across 4 product squads.",
         genericClose: "I welcome the opportunity to discuss the role further.",
-        closePattern:
-          /^That experience continues to inform my work\.$/u,
+        closePattern: /^That experience continues to inform my work\.$/u,
         bridgePattern: /^In .+ work, that background supports /u,
+        employerFirstOpeningPattern:
+          /^For the Senior Frontend Engineer role,/u,
+        candidateContextLeadPattern: /^I improved/u,
       },
       {
         brief: buildAdjacentAdminBrief("English"),
-        opening: "I coordinated workflows and documented procedures.",
+        opening:
+          "In my previous role, I coordinated workflows and documented procedures.",
         proofBlock: "I tracked deadlines and handled vendor correspondence.",
         genericClose:
           "I would welcome the opportunity to discuss the position further.",
         closePattern: /^I bring discipline around /u,
         bridgePattern: /^In .+ work, that kind of background supports /u,
+        employerFirstOpeningPattern:
+          /^For work centered on the role's core responsibilities,/u,
+        candidateContextLeadPattern: /^In my previous role/u,
+      },
+      {
+        brief: buildAdjacentAdminBrief("English"),
+        opening:
+          "In operations and scheduling at ADT, I coordinated workflows and documented procedures.",
+        proofBlock: "I tracked deadlines and handled vendor correspondence.",
+        genericClose:
+          "I would welcome the opportunity to discuss the position further.",
+        closePattern: /^I bring discipline around /u,
+        bridgePattern: /^In .+ work, that kind of background supports /u,
+        employerFirstOpeningPattern:
+          /^For work centered on the role's core responsibilities,/u,
+        candidateContextLeadPattern:
+          /^In operations and scheduling at ADT/u,
       },
       {
         brief: buildDirectFrontendBrief("French"),
         opening:
-          "J'ai amélioré la conversion des inscriptions de 11 % grâce à des expérimentations d'interface.",
+          "J'ai amélioré la conversion des inscriptions de 11 % grâce à des expérimentations UI.",
         proofBlock:
           "J'ai dirigé une migration de design system utilisée par 4 équipes produit.",
         genericClose: "Je serais ravi d'en discuter.",
         closePattern:
           /^Cette expérience continue de nourrir ma pratique professionnelle\.$/u,
         bridgePattern: /^Dans .+, cette expérience apporte /u,
+        employerFirstOpeningPattern:
+          /^Pour le poste de Senior Frontend Engineer,/u,
+        candidateContextLeadPattern: /^J'ai amélioré/u,
       },
       {
         brief: buildAdjacentAdminBrief("French"),
         opening:
-          "J'ai coordonné des flux de travail et documenté des procédures.",
+          "Dans mon précédent poste, j'ai coordonné des flux de travail et suivi les échéances.",
         proofBlock:
           "J'ai suivi les échéances et géré les échanges avec les fournisseurs.",
         genericClose: "Je serais ravie de discuter de cette opportunité.",
         closePattern: /^J'apporte de la rigueur dans /u,
         bridgePattern:
           /^Cette expérience est pertinente pour .+, où les priorités incluent /u,
+        employerFirstOpeningPattern:
+          /^Pour un travail centré sur les responsabilités principales du poste,/u,
+        candidateContextLeadPattern: /^Dans mon précédent poste/u,
+      },
+      {
+        brief: buildAdjacentAdminBrief("French"),
+        opening:
+          "Dans mon précédent poste, j'ai coordonné des flux de travail et suivi les échéances.",
+        proofBlock:
+          "J'ai suivi les échéances et géré les échanges avec les fournisseurs.",
+        genericClose:
+          "Mon expérience comprend huit années de coordination opérationnelle.",
+        closePattern: /^J'apporte de la rigueur dans /u,
+        bridgePattern:
+          /^Cette expérience est pertinente pour .+, où les priorités incluent /u,
+        employerFirstOpeningPattern:
+          /^Pour un travail centré sur les responsabilités principales du poste,/u,
+        candidateContextLeadPattern: /^Dans mon précédent poste/u,
+      },
+      {
+        brief: buildAdjacentAdminBrief("French"),
+        opening:
+          "Dans les opérations et la planification chez ADT, j'ai coordonné des flux de travail et suivi les échéances.",
+        proofBlock:
+          "J'ai suivi les échéances et géré les échanges avec les fournisseurs.",
+        genericClose: "Je serais ravie de discuter de cette opportunité.",
+        closePattern: /^J'apporte de la rigueur dans /u,
+        bridgePattern:
+          /^Cette expérience est pertinente pour .+, où les priorités incluent /u,
+        employerFirstOpeningPattern:
+          /^Pour un travail centré sur les responsabilités principales du poste,/u,
+        candidateContextLeadPattern:
+          /^Dans les opérations et la planification chez ADT/u,
+      },
+      {
+        brief: buildAdjacentAdminBrief("English"),
+        opening:
+          "In recent roles with ADT Security and Copwatch, I coordinated workflows and documented procedures.",
+        proofBlock: "I tracked deadlines and handled vendor correspondence.",
+        genericClose:
+          "I would welcome the opportunity to discuss the position further.",
+        closePattern: /^I bring discipline around /u,
+        bridgePattern: /^In .+ work, that kind of background supports /u,
+        employerFirstOpeningPattern:
+          /^For work centered on the role's core responsibilities,/u,
+        candidateContextLeadPattern:
+          /^In recent roles with ADT Security and Copwatch/u,
+      },
+      {
+        brief: buildAdjacentAdminBrief("English"),
+        opening:
+          "Within FabricatedCo operations, I coordinated workflows and documented procedures.",
+        proofBlock: "I tracked deadlines and handled vendor correspondence.",
+        genericClose:
+          "I would welcome the opportunity to discuss the position further.",
+        closePattern: /^I bring discipline around /u,
+        bridgePattern: /^In .+ work, that kind of background supports /u,
+        employerFirstOpeningPattern:
+          /^For work centered on the role's core responsibilities,/u,
+        candidateContextLeadPattern: /^Within FabricatedCo operations/u,
+      },
+      {
+        brief: buildAdjacentAdminBrief("French"),
+        opening:
+          "Dans les opérations de Nexa Services, j'ai coordonné des flux de travail et suivi les échéances.",
+        proofBlock:
+          "J'ai suivi les échéances et géré les échanges avec les fournisseurs.",
+        genericClose: "Je serais ravie de discuter de cette opportunité.",
+        closePattern: /^J'apporte de la rigueur dans /u,
+        bridgePattern:
+          /^Cette expérience est pertinente pour .+, où les priorités incluent /u,
+        employerFirstOpeningPattern:
+          /^Pour un travail centré sur les responsabilités principales du poste,/u,
+        candidateContextLeadPattern:
+          /^Dans les opérations de Nexa Services/u,
       },
     ];
 
@@ -2607,6 +3816,22 @@ describe("premium cover letter generation and rendering", () => {
       expect(repaired.closeLine).toMatch(testCase.closePattern);
       expect(repaired.closeLine).not.toBe(testCase.genericClose);
       expect(repaired.employerValueBlock).toMatch(testCase.bridgePattern);
+      if (testCase.employerFirstOpeningPattern) {
+        expect(repaired.opening).toMatch(testCase.employerFirstOpeningPattern);
+      }
+      if (testCase.candidateContextLeadPattern) {
+        expect(repaired.opening).not.toMatch(
+          testCase.candidateContextLeadPattern,
+        );
+      }
+      if (testCase.brief.contextClass === "cv_adjacent") {
+        expect(
+          validatePremiumCoverLetterBodyParts({
+            brief: testCase.brief,
+            bodyParts: repaired,
+          }).map((issue) => issue.code),
+        ).not.toContain("adjacent_direct_fit");
+      }
     }
 
     const mixedClose = repairPremiumCoverLetterBodyParts({
@@ -2659,7 +3884,7 @@ describe("premium cover letter generation and rendering", () => {
       "Cette expérience nourrit ma pratique.",
     );
 
-    const frenchAdjacent = cases[3];
+    const frenchAdjacent = cases[4];
     const repairedFrenchAdjacent = repairPremiumCoverLetterBodyParts({
       brief: frenchAdjacent.brief,
       bodyParts: {
@@ -2673,7 +3898,7 @@ describe("premium cover letter generation and rendering", () => {
       "sont essentiels",
     );
 
-    for (const testCase of cases.slice(2)) {
+    for (const testCase of cases.slice(3, 6)) {
       const repaired = repairPremiumCoverLetterBodyParts({
         brief: testCase.brief,
         bodyParts: {
@@ -2721,6 +3946,500 @@ describe("premium cover letter generation and rendering", () => {
     expect(repairedMissingFields.closeLine).toBe(
       "I would approach the work with care, clear communication, and steady follow-through.",
     );
+  });
+
+  it("rejects unrelated English and French context leads before CV-backed proof", () => {
+    const cases = [
+      {
+        brief: buildDirectFrontendBrief("English"),
+        opening:
+          "In legal compliance work, I improved signup conversion by 11% through iterative UI experiments.",
+        expectedLead: "For the Senior Frontend Engineer role,",
+        rejectedContext: "legal compliance",
+      },
+      {
+        brief: buildDirectFrontendBrief("French"),
+        opening:
+          "Dans la conformité juridique, j'ai amélioré la conversion des inscriptions de 11 % grâce à des expérimentations UI.",
+        expectedLead: "Pour le poste de Senior Frontend Engineer,",
+        rejectedContext: "conformité juridique",
+      },
+      {
+        brief: buildDirectFrontendBrief("English"),
+        opening:
+          "At BrightLayer, Inc., I improved signup conversion by 11% through iterative UI experiments.",
+        expectedLead: "For the Senior Frontend Engineer role,",
+        rejectedContext: "Inc.",
+      },
+      {
+        brief: buildDirectFrontendBrief("French"),
+        opening:
+          "Dans la conformité, la réglementation et l'audit, j'ai amélioré la conversion des inscriptions de 11 % grâce à des expérimentations UI.",
+        expectedLead: "Pour le poste de Senior Frontend Engineer,",
+        rejectedContext: "réglementation",
+      },
+      {
+        brief: buildDirectFrontendBrief("English"),
+        opening:
+          "At BrightLayer, reduced page load time through bundle and rendering improvements.",
+        expectedLead: "For the Senior Frontend Engineer role,",
+        rejectedContext: "BrightLayer",
+        expectedContinuation:
+          "I improved signup conversion by 11% after iterative UI experiments",
+      },
+      {
+        brief: buildDirectFrontendBrief("French"),
+        opening:
+          "Chez BrightLayer, amélioré la conversion des inscriptions de 11 % grâce à des expérimentations UI.",
+        expectedLead: "Pour le poste de Senior Frontend Engineer,",
+        rejectedContext: "BrightLayer",
+        expectedContinuation: "j'ai amélioré la conversion des inscriptions",
+      },
+    ];
+
+    for (const testCase of cases) {
+      const repaired = repairPremiumCoverLetterBodyParts({
+        brief: testCase.brief,
+        bodyParts: {
+          opening: testCase.opening,
+          proofBlock:
+            "I led a design-system migration used across 4 product squads.",
+          employerValueBlock:
+            "That experience is relevant to customer-facing product work.",
+          closeLine: "That experience continues to inform my work.",
+        },
+      });
+
+      expect(
+        repaired.opening.startsWith(testCase.expectedLead),
+        testCase.opening,
+      ).toBe(true);
+      expect(repaired.opening).not.toBe(testCase.opening);
+      expect(repaired.opening).not.toContain(testCase.rejectedContext);
+      if ("expectedContinuation" in testCase) {
+        expect(repaired.opening).toContain(testCase.expectedContinuation);
+      }
+    }
+  });
+
+  it("keeps employer-first openings grammatical and selects only candidate-supported job surfaces", () => {
+    const multiSurfaceBrief = {
+      ...buildAdjacentAdminBrief("English"),
+      targetRole: "Revenue Operations Coordinator",
+      topEvidence: [
+        "Coordinated scheduling, handoffs, and follow-up across operational workflows.",
+      ],
+      supportEvidence: [
+        "Tracked deadlines and coordinated handoffs for cross-team work.",
+      ],
+      transferCore: [
+        "Coordinated scheduling, handoffs, and follow-up across operational workflows.",
+      ],
+      topResponsibilities: [
+        "Review revenue forecasts and coordinate operational scheduling.",
+      ],
+      keyRequirements: [
+        "Maintain revenue dashboards and reliable scheduling workflows.",
+      ],
+      workContext: [
+        "Revenue reporting, forecasting, operations, and scheduling.",
+      ],
+    };
+    const supportedSurface = repairPremiumCoverLetterBodyParts({
+      brief: multiSurfaceBrief,
+      bodyParts: {
+        opening:
+          "Across eight years, coordinated scheduling handoffs and tracked deadlines.",
+        proofBlock:
+          "I tracked deadlines and coordinated handoffs for cross-team work.",
+        employerValueBlock: "",
+        closeLine: "I bring disciplined follow-through.",
+      },
+    });
+
+    expect(supportedSurface.opening).toMatch(
+      /^In operations and scheduling, I coordinated/u,
+    );
+    expect(supportedSurface.opening).not.toMatch(
+      /^In revenue reporting and forecasting/u,
+    );
+
+    const openingFactBoundBrief = {
+      ...multiSurfaceBrief,
+      supportEvidence: [
+        "Maintained revenue dashboards and forecasts for finance reviews.",
+      ],
+      referencedFacts: [
+        {
+          id: "fact-opening-operations",
+          text: multiSurfaceBrief.topEvidence[0],
+          source: "cv" as const,
+          sourcePath: "recentExperience[0].highlights[0]",
+          confidence: "high" as const,
+          category: "responsibility" as const,
+          metrics: [],
+          entities: [],
+          allowedVerbs: ["coordinate"],
+          forbiddenUpgrades: [],
+          ownershipLevel: "coordination" as const,
+        },
+        {
+          id: "fact-secondary-revenue",
+          text: "Maintained revenue dashboards and forecasts for finance reviews.",
+          source: "cv" as const,
+          sourcePath: "recentExperience[0].highlights[1]",
+          confidence: "high" as const,
+          category: "responsibility" as const,
+          metrics: [],
+          entities: [],
+          allowedVerbs: ["maintain"],
+          forbiddenUpgrades: [],
+          ownershipLevel: "support" as const,
+        },
+      ],
+      claimPlan: {
+        version: "claim_plan_v1" as const,
+        contextClass: "cv_adjacent" as const,
+        language: "English" as const,
+        targetRole: multiSurfaceBrief.targetRole,
+        preset: multiSurfaceBrief.preset,
+        claims: [
+          {
+            id: "claim-opening",
+            section: "opening" as const,
+            factIds: ["fact-opening-operations"],
+            demandIds: [],
+            claimType: "adjacent_safe_bridge" as const,
+            requiredElements: [],
+            allowedVerbs: ["coordinate"],
+            forbiddenVerbs: [],
+            forbiddenClaims: [],
+            maxOwnership: "coordination" as const,
+            allowEmployerBridge: true,
+            editorialGuideline: "",
+          },
+        ],
+        globalForbidden: [],
+      },
+    };
+    const openingFactBoundSurface = repairPremiumCoverLetterBodyParts({
+      brief: openingFactBoundBrief,
+      bodyParts: {
+        opening:
+          "Coordinated scheduling, handoffs, and follow-up across operational workflows.",
+        proofBlock:
+          "I maintained revenue dashboards and forecasts for finance reviews.",
+        employerValueBlock: "",
+        closeLine: "I bring disciplined follow-through.",
+      },
+    });
+
+    expect(openingFactBoundSurface.opening).toMatch(
+      /^In operations and scheduling, I coordinated/u,
+    );
+    expect(openingFactBoundSurface.opening).not.toMatch(
+      /^In revenue reporting and forecasting/u,
+    );
+
+    const lowerCaseEnglishSubject = repairPremiumCoverLetterBodyParts({
+      brief: multiSurfaceBrief,
+      bodyParts: {
+        opening:
+          "i coordinated scheduling, handoffs, and follow-up across operational workflows.",
+        proofBlock:
+          "I tracked deadlines and coordinated handoffs for cross-team work.",
+        employerValueBlock: "",
+        closeLine: "I bring disciplined follow-through.",
+      },
+    });
+
+    expect(lowerCaseEnglishSubject.opening).toMatch(
+      /^In operations and scheduling, I coordinated/u,
+    );
+
+    const lowerCaseAcceptedEnglishSubject =
+      repairPremiumCoverLetterBodyParts({
+        brief: multiSurfaceBrief,
+        bodyParts: {
+          opening:
+            "In operations and scheduling, i coordinated scheduling, handoffs, and follow-up.",
+          proofBlock:
+            "I tracked deadlines and coordinated handoffs for cross-team work.",
+          employerValueBlock: "",
+          closeLine: "I bring disciplined follow-through.",
+        },
+      });
+
+    expect(lowerCaseAcceptedEnglishSubject.opening).toMatch(
+      /^In operations and scheduling, I coordinated/u,
+    );
+
+    const englishNounFragment = repairPremiumCoverLetterBodyParts({
+      brief: {
+        ...buildDirectFrontendBrief("English"),
+        targetRole: "Frontend Engineer",
+        topEvidence: [
+          "Created React interfaces for customer onboarding.",
+        ],
+        supportEvidence: [],
+        transferCore: undefined,
+        topResponsibilities: [
+          "Build customer-facing React interfaces for onboarding.",
+        ],
+        keyRequirements: ["React and TypeScript delivery."],
+        workContext: ["Customer-facing React delivery."],
+      },
+      bodyParts: {
+        opening:
+          "For customer-facing React delivery, React interfaces for customer onboarding.",
+        proofBlock:
+          "I created React interfaces for customer onboarding.",
+        employerValueBlock: "",
+        closeLine: "I bring disciplined frontend delivery.",
+      },
+    });
+
+    expect(englishNounFragment.opening).toMatch(
+      /^For customer-facing React delivery, I created/u,
+    );
+
+    const frenchNounFragment = repairPremiumCoverLetterBodyParts({
+      brief: {
+        ...buildDirectFrontendBrief("French"),
+        language: "French",
+        targetRole: "Coordinateur",
+        topEvidence: [
+          "Créé des interfaces React pour l'onboarding client.",
+        ],
+        supportEvidence: [],
+        transferCore: undefined,
+        topResponsibilities: ["Coordonner les projets d'onboarding client."],
+        keyRequirements: ["Connaissance de React."],
+        workContext: ["Onboarding client."],
+      },
+      bodyParts: {
+        opening:
+          "Pour le poste de Coordinateur, interfaces React pour l'onboarding client.",
+        proofBlock:
+          "J'ai créé des interfaces React pour l'onboarding client.",
+        employerValueBlock: "",
+        closeLine: "J'apporte une exécution rigoureuse.",
+      },
+    });
+
+    expect(frenchNounFragment.opening).toMatch(
+      /^Pour le poste de Coordinateur, j'ai créé/u,
+    );
+
+    const disjointSurface = repairPremiumCoverLetterBodyParts({
+      brief: {
+        ...multiSurfaceBrief,
+        topEvidence: ["Built API integrations for internal product systems."],
+        supportEvidence: ["Developed reusable TypeScript service modules."],
+        transferCore: ["Built and maintained internal product integrations."],
+      },
+      bodyParts: {
+        opening: "Built API integrations for internal product systems.",
+        proofBlock: "I developed reusable TypeScript service modules.",
+        employerValueBlock: "",
+        closeLine: "I bring disciplined implementation work.",
+      },
+    });
+
+    expect(disjointSurface.opening).toMatch(
+      /^For work centered on the role's core responsibilities, I built/u,
+    );
+    expect(disjointSurface.opening).not.toMatch(
+      /^In revenue reporting and forecasting/u,
+    );
+
+    const unknownFragment =
+      "At BrightLayer, design-system migration across product squads.";
+    const preservedUnknown = repairPremiumCoverLetterBodyParts({
+      brief: buildDirectFrontendBrief("English"),
+      bodyParts: {
+        opening: unknownFragment,
+        proofBlock:
+          "I led a design-system migration used across 4 product squads.",
+        employerValueBlock:
+          "That experience is relevant to customer-facing product work.",
+        closeLine: "That experience continues to inform my work.",
+      },
+    });
+    expect(preservedUnknown.opening).toBe(
+      "For the Senior Frontend Engineer role, I improved signup conversion by 11% after iterative UI experiments.",
+    );
+
+    const clippedAcceptedLeads = [
+      {
+        brief: buildAdjacentAdminBrief("English"),
+        opening:
+          "For work centered on the role's core responsibilities, coordinated workflows and documented procedures.",
+        expectedLead: "For work centered on the role's core responsibilities,",
+        expectedContinuation:
+          /I coordinated workflows and documented procedures/u,
+      },
+      {
+        brief: buildAdjacentAdminBrief("French"),
+        opening:
+          "Pour un travail centré sur les responsabilités principales du poste, coordonné les workflows et documenté les procédures.",
+        expectedLead:
+          "Pour un travail centré sur les responsabilités principales du poste,",
+        expectedContinuation:
+          /[Jj]['’]ai coordonné les workflows et documenté les procédures/u,
+      },
+      {
+        brief: {
+          ...buildAdjacentAdminBrief("English"),
+          topEvidence: ["Reported weekly status across operational workflows."],
+        },
+        opening:
+          "For work centered on the role's core responsibilities, reported weekly status across operational workflows.",
+        expectedLead: "For work centered on the role's core responsibilities,",
+        expectedContinuation:
+          /I reported weekly status across operational workflows/u,
+      },
+      {
+        brief: {
+          ...buildAdjacentAdminBrief("English"),
+          topEvidence: ["Assisted with vendor follow-up and team handoffs."],
+        },
+        opening:
+          "For work centered on the role's core responsibilities, assisted with vendor follow-up and team handoffs.",
+        expectedLead: "For work centered on the role's core responsibilities,",
+        expectedContinuation:
+          /I assisted with vendor follow-up and team handoffs/u,
+      },
+    ];
+    for (const testCase of clippedAcceptedLeads) {
+      const repaired = repairPremiumCoverLetterBodyParts({
+        brief: testCase.brief,
+        bodyParts: {
+          opening: testCase.opening,
+          proofBlock:
+            "J'ai coordonné les workflows et documenté les procédures.",
+          employerValueBlock:
+            "Cette expérience soutient une coordination administrative fiable.",
+          closeLine: "Je souhaite contribuer à ces responsabilités.",
+        },
+      });
+      expect(repaired.opening.startsWith(testCase.expectedLead)).toBe(true);
+      expect(repaired.opening).toMatch(testCase.expectedContinuation);
+    }
+
+    const describedFragment =
+      "For work centered on the role's core responsibilities, described routine patrol observations.";
+    const describedRepair = repairPremiumCoverLetterBodyParts({
+      brief: buildAdjacentAdminBrief("English"),
+      bodyParts: {
+        opening: describedFragment,
+        proofBlock:
+          "I tracked deadlines and coordinated handoffs for cross-team work.",
+        employerValueBlock: "",
+        closeLine: "I bring disciplined follow-through.",
+      },
+    });
+    expect(describedRepair.opening).toBe(
+      "For work centered on the role's core responsibilities, I coordinated workflows, documented procedures, tracked deadlines, handled vendor correspondence, and communicated updates across teams.",
+    );
+    const describedRepairIssues = validatePremiumCoverLetterBodyParts({
+      bodyParts: describedRepair,
+      brief: buildAdjacentAdminBrief("English"),
+    }).map((issue) => issue.code);
+    expect(describedRepairIssues).not.toContain("meta_prose");
+    expect(describedRepairIssues).not.toContain(
+      "opening_candidate_proof_missing",
+    );
+
+    for (const testCase of [
+      {
+        opening:
+          "Pour un travail centré sur les responsabilités principales du poste, Coordonne les transmissions entre équipes.",
+        expected: /je coordonne les transmissions entre équipes/u,
+      },
+      {
+        opening:
+          "Pour un travail centré sur les responsabilités principales du poste, Gère la planification opérationnelle.",
+        expected: /je gère la planification opérationnelle/u,
+      },
+      {
+        opening:
+          "Pour un travail centré sur les responsabilités principales du poste, Coordonné les transmissions entre équipes.",
+        expected: /j'ai coordonné les transmissions entre équipes/u,
+      },
+      {
+        opening:
+          "Pour un travail centré sur les responsabilités principales du poste, Géré la planification opérationnelle.",
+        expected: /j'ai géré la planification opérationnelle/u,
+      },
+    ]) {
+      const repaired = repairPremiumCoverLetterBodyParts({
+        brief: buildAdjacentAdminBrief("French"),
+        bodyParts: {
+          opening: testCase.opening,
+          proofBlock:
+            "J'ai suivi les échéances et coordonné les transmissions entre équipes.",
+          employerValueBlock: "",
+          closeLine: "J'apporte un suivi rigoureux.",
+        },
+      });
+      expect(repaired.opening).toMatch(testCase.expected);
+      expect(repaired.opening).not.toMatch(/\bj'ai (?:coordonne|gère)\b/iu);
+    }
+
+    for (const fabricatedLead of [
+      "Within fabricatedco operations, I coordinated scheduling handoffs.",
+      "Within FabricatedCo operations, I coordinated scheduling handoffs.",
+      "Within eBay operations, I coordinated scheduling handoffs.",
+      "Within Meta operations, I coordinated scheduling handoffs.",
+      "Within pharmaceutical operations, I coordinated scheduling handoffs.",
+      "Within eBay operations and scheduling, I coordinated scheduling handoffs.",
+      "Within operations and scheduling at eBay, I coordinated scheduling handoffs.",
+      "Within operations and scheduling in fabricatedco, I coordinated scheduling handoffs.",
+      "Within sap operations, I coordinated scheduling handoffs.",
+      "Within operations and scheduling for ibm, I coordinated scheduling handoffs.",
+      "Within X operations, I coordinated scheduling handoffs.",
+      "Within operations and scheduling for X, I coordinated scheduling handoffs.",
+    ]) {
+      const repaired = repairPremiumCoverLetterBodyParts({
+        brief: multiSurfaceBrief,
+        bodyParts: {
+          opening: fabricatedLead,
+          proofBlock:
+            "I tracked deadlines and coordinated handoffs for cross-team work.",
+          employerValueBlock: "",
+          closeLine: "I bring disciplined follow-through.",
+        },
+      });
+
+      expect(repaired.opening).toMatch(/^In operations and scheduling, I coordinated/u);
+      expect(repaired.opening).not.toMatch(/fabricatedco/iu);
+      expect(repaired.opening).not.toMatch(/ebay/iu);
+    }
+
+    for (const fabricatedLead of [
+      "Dans les opérations eBay et la planification, j'ai coordonné les workflows et suivi les échéances.",
+      "Dans les opérations et la planification chez eBay, j'ai coordonné les workflows et suivi les échéances.",
+      "Dans les opérations et la planification pour edf, j'ai coordonné les workflows et suivi les échéances.",
+      "Dans X les opérations et la planification, j'ai coordonné les workflows et suivi les échéances.",
+      "Dans les opérations et la planification pour X, j'ai coordonné les workflows et suivi les échéances.",
+    ]) {
+      const repaired = repairPremiumCoverLetterBodyParts({
+        brief: buildAdjacentAdminBrief("French"),
+        bodyParts: {
+          opening: fabricatedLead,
+          proofBlock:
+            "J'ai suivi les échéances et coordonné les transmissions entre équipes.",
+          employerValueBlock: "",
+          closeLine: "J'apporte un suivi rigoureux.",
+        },
+      });
+
+      expect(repaired.opening).toMatch(
+        /^Pour un travail centré sur les responsabilités principales du poste, j'ai coordonné/iu,
+      );
+      expect(repaired.opening).not.toMatch(/ebay/iu);
+    }
   });
 
   it("removes a duplicated generic close before replacing it", () => {
@@ -3063,7 +4782,7 @@ describe("premium cover letter generation and rendering", () => {
     expect(result).not.toBeNull();
     expect(failures).toHaveLength(0);
     expect(result?.content).toContain(
-      "I led a design-system migration used across four product squads.",
+      "I improved signup conversion by 11% after iterative UI experiments.",
     );
     expect(result?.content).toContain(
       "I improved release consistency across shared interface work",
@@ -3184,7 +4903,7 @@ describe("premium cover letter generation and rendering", () => {
     );
     expect(result).not.toBeNull();
     expect(result?.content).toContain(
-      "I coordinated workflows, documented procedures, tracked deadlines, and handled vendor correspondence.",
+      "I reduced backlog response times by 18% through queue and handoff changes.",
     );
     expect(result?.content).toContain(
       "I bring experience in coordination, documentation, scheduling, vendor correspondence, and stakeholder communication.",
@@ -3355,7 +5074,7 @@ describe("premium cover letter generation and rendering", () => {
     ]);
     expect(safeResult).not.toBeNull();
     expect(safeResult?.content).toContain(
-      "I coordinated onboarding handoffs and documented rollout workflows across customers and internal teams.",
+      "I reduced backlog response times by 18% through queue and handoff changes.",
     );
     expect(safeResult?.content).toContain(
       "The overlap is strongest around onboarding handoffs, rollout documentation, and feedback tracking.",
@@ -3463,7 +5182,7 @@ describe("premium cover letter generation and rendering", () => {
     expect(safeFailure).toHaveLength(0);
   });
 
-  it("does not overwrite valid adjacent writer output with the evidence-order normalizer", async () => {
+  it("keeps the opening claim strategy when adjacent writer output selects secondary evidence", async () => {
     const result = await attemptPremiumCoverLetterGeneration({
       personalizationContext: {
         name: "Robert Cooper",
@@ -3514,7 +5233,7 @@ describe("premium cover letter generation and rendering", () => {
     });
 
     expect(result?.content).toContain(
-      "I supported equipment readiness through preventive maintenance, manufacturer instructions, troubleshooting, and repair coordination.",
+      "I completed reports by recording information, observations, occurrences, surveillance activities, interviewing witnesses, and acquiring signatures.",
     );
     expect(result?.content).toContain(
       "I maintained environments by monitoring grounds and equipment controls.",
@@ -3525,6 +5244,7 @@ describe("premium cover letter generation and rendering", () => {
   });
 
   it("repairs low-value direct employer-value echo without dropping security evidence", async () => {
+    let failure: unknown = null;
     const result = await attemptPremiumCoverLetterGeneration({
       personalizationContext: {
         name: "Robert Cooper",
@@ -3567,10 +5287,17 @@ describe("premium cover letter generation and rendering", () => {
         closeLine:
           "I bring discipline around accurate records, steady monitoring, and clear communication.",
       }),
+      onFailure: (value) => {
+        failure = value;
+      },
     });
 
+    expect(failure).toBeNull();
     expect(result).not.toBeNull();
     expect(result?.content).toContain("At ADT Security");
+    expect(result?.bodyParts.opening).toMatch(
+      /I completed reports (?:by recording|documenting) information, observations, occurrences, and surveillance activity/u,
+    );
     expect(result?.bodyParts.employerValueBlock).toMatch(
       /In .* work, that kind of background supports/i,
     );
@@ -3597,7 +5324,7 @@ describe("premium cover letter generation and rendering", () => {
       writerModel: "mistral-medium-latest",
       writer: async () => ({
         opening:
-          "For eight years I completed reports by recording observations, occurrences, and witness statements while monitoring grounds and CCTV feeds.",
+          "For structured incident reporting, I completed reports by recording observations, occurrences, and witness statements while monitoring grounds and CCTV feeds.",
         proofBlock:
           "Reports included field notes, surveillance logs from CCTV monitoring via mobile app, and signed witness statements. I monitored selected areas via CCTV app on smart devices and scanned grounds for suspicious items.",
         employerValueBlock:
@@ -3609,9 +5336,14 @@ describe("premium cover letter generation and rendering", () => {
 
     expect(result).not.toBeNull();
     expect(result?.bodyParts.opening).toMatch(
-      /As a security guard at .*for eight years I completed reports/i,
+      /^For structured incident reporting, I completed reports documenting observations, occurrences, surveillance activities, and interviewing witnesses\.$/i,
     );
-    expect(result?.bodyParts.proofBlock).toContain("Reports included field notes");
+    expect(result?.bodyParts.opening).not.toContain(
+      "this is supported by my experience",
+    );
+    expect(result?.bodyParts.proofBlock).toContain(
+      "Reports included field notes",
+    );
     expect(result?.bodyParts.employerValueBlock).toContain(
       "Surveillance activities used smart-device CCTV apps",
     );
@@ -3739,10 +5471,14 @@ describe("premium cover letter generation and rendering", () => {
     expect(capturedPrompt).toContain(
       "Avoid clunky inanimate-object phrasing and evaluator/meta phrases like 'the evidence I would bring'",
     );
-    expect(result?.bodyParts).toEqual(bodyParts);
+    expect(result?.bodyParts).toEqual({
+      ...bodyParts,
+      opening:
+        "For the Senior Frontend Engineer role, I improved signup conversion by 11 percent after iterative UI experiments.",
+    });
     expect(result?.content).toContain("Dear Hiring Manager,");
-    expect(result?.content).toContain("design-system migration used across four product squads");
-    expect(result?.content).toContain("page-load time by 28 percent");
+    expect(result?.content).toContain("signup conversion by 11 percent");
+    expect(result?.content).toContain("iterative UI experiments");
     expect(result?.content).toContain("React and TypeScript");
     expect(result?.content).toContain("partnered directly with design");
     expect(result?.content).toContain("experimentation dashboards");
@@ -3822,7 +5558,11 @@ describe("premium cover letter generation and rendering", () => {
       }),
     });
 
-    expect(result?.bodyParts).toEqual(bodyParts);
+    expect(result?.bodyParts).toEqual({
+      ...bodyParts,
+      opening:
+        "For the Senior Frontend Engineer role, I improved signup conversion by 11 percent after iterative UI experiments.",
+    });
     expect(result?.content).toContain("Dear Hiring Manager,");
     expect(result?.content).toContain("signup conversion by 11 percent");
     expect(result?.content).not.toContain("Warm regards");
@@ -4050,7 +5790,9 @@ describe("premium cover letter generation and rendering", () => {
     });
 
     expect(result).not.toBeNull();
-    expect(result?.content).toContain("completed reports documenting");
+    expect(result?.content).toContain(
+      "I reduced backlog response times by 18% through queue and handoff changes.",
+    );
     expect(result?.content).not.toMatch(/work surfaces?|reports that described/i);
   });
 
@@ -4066,7 +5808,7 @@ describe("premium cover letter generation and rendering", () => {
       writerModel: "mistral-medium-latest",
       writer: async () => ({
         opening:
-          "Reports were completed by recording observations, occurrences, and surveillance activities, with witness interviews and signatures included.",
+          "For accurate incident reporting, I completed reports documenting observations, occurrences, surveillance activities, witness interviews, and signatures.",
         proofBlock:
           "Grounds and equipment controls were monitored to maintain secure environments. Selected areas were tracked using CCTV applications on smart devices.",
         employerValueBlock:
@@ -4083,7 +5825,12 @@ describe("premium cover letter generation and rendering", () => {
     expect(result?.bodyParts.employerValueBlock).toContain(
       "Detailed reports documented incidents, observations, and surveillance logs.",
     );
-    expect(result?.bodyParts.opening).toMatch(/As .* at /i);
+    expect(result?.bodyParts.opening).toMatch(
+      /^For accurate incident reporting, I completed reports documenting observations, occurrences, surveillance activities, witness interviews, and signatures\.$/i,
+    );
+    expect(result?.bodyParts.opening).not.toContain(
+      "this is supported by my experience",
+    );
     expect(result?.bodyParts.employerValueBlock).not.toMatch(
       /That is useful in .* work where the day-to-day depends on/i,
     );
@@ -4529,6 +6276,8 @@ describe("premium cover letter generation and rendering", () => {
     const calls: string[] = [];
     const originalEmployerValue =
       "I built experimentation dashboards used by product and growth teams.";
+    const originalOpening =
+      "For customer-facing React and TypeScript delivery, I improved signup conversion by 11% after iterative UI experiments.";
     const repairedCloseLine =
       "I led a design system migration used across 4 product squads.";
     const result = await withQualityRepairFlag("1", () =>
@@ -4543,8 +6292,7 @@ describe("premium cover letter generation and rendering", () => {
           calls.push(prompt);
           if (calls.length === 1) {
             return buildDirectPremiumWriterOutputFixture({
-              opening:
-                "I improved signup conversion by 11% after iterative UI experiments.",
+              opening: originalOpening,
               proofBlock:
                 "I led a design system migration used across 4 product squads.",
               employerValueBlock: originalEmployerValue,
@@ -4553,7 +6301,7 @@ describe("premium cover letter generation and rendering", () => {
           }
           return {
             opening:
-              "I improved signup conversion by 11% after iterative UI experiments.",
+              "At Acme, I improved signup conversion by 11% after iterative UI experiments.",
             proofBlock:
               "I led a design system migration used across 4 product squads.",
             employerValueBlock: originalEmployerValue,
@@ -4566,6 +6314,8 @@ describe("premium cover letter generation and rendering", () => {
     expect(result).not.toBeNull();
     expect(calls).toHaveLength(2);
     expect(calls[1]).toContain("Repair cover-letter body parts for quality only.");
+    expect(calls[1]).toContain("return the previous opening unchanged");
+    expect(result?.bodyParts.opening).toBe(originalOpening);
     expect(result?.bodyParts.closeLine).toBe(repairedCloseLine);
     expect(result?.qualityShadow?.issues).not.toContain("generic_tone");
     expect(result?.qualityRepair).toMatchObject({
@@ -4629,9 +6379,7 @@ describe("premium cover letter generation and rendering", () => {
       outcome: "rejected_invalid_output",
       rejectionCategory: "rejected_invalid_output",
     });
-    expect(result?.qualityShadow?.issues).toEqual(
-      expect.arrayContaining(["factual_inventory", "weak_employer_argument"]),
-    );
+    expect(result?.qualityShadow?.issues).toEqual(["weak_employer_argument"]);
   });
 
   it("rejects quality repair that would drop candidate-evidence provenance", async () => {
@@ -4685,7 +6433,9 @@ describe("premium cover letter generation and rendering", () => {
     expect(result?.content).not.toContain(
       "The opportunity calls for organized planning",
     );
-    expect(result?.finalProvenance?.status).toBe("validated_final_text");
+    expect(result?.finalProvenance?.status).toBe(
+      "validated_after_structured_repair",
+    );
     expect(
       result?.finalProvenance?.verifiedCandidateFactIds.length ?? 0,
     ).toBeGreaterThan(0);
@@ -5666,7 +7416,7 @@ describe("premium cover letter generation and rendering", () => {
 
     expect(result).not.toBeNull();
     expect(result?.bodyParts.opening).toBe(
-      "I improved signup conversion by 11% after iterative UI experiments.",
+      "For the Senior Frontend Engineer role, I improved signup conversion by 11% after iterative UI experiments.",
     );
     expect(result?.bodyParts.proofBlock).toBe(
       "I led a design system migration used across 4 product squads. I built experimentation dashboards used by product and growth teams.",
@@ -5745,7 +7495,11 @@ describe("premium cover letter generation and rendering", () => {
     expect(result?.content).toContain(
       "I reduced backlog response times by 18% through queue and handoff changes.",
     );
-    expect(result?.content).not.toContain("experience as an Implementation Analyst");
+    expect(result?.content).not.toContain(
+      "experience as an Implementation Analyst",
+    );
+    expect(result?.bodyParts.opening).toMatch(/^In /u);
+    expect(result?.bodyParts.opening).not.toMatch(/^(?:I|At|Across)\b/u);
   });
 
   it("generates a no-CV premium cover letter without inventing candidate history", async () => {

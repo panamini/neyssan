@@ -1811,9 +1811,7 @@ export function buildPremiumFactGraphV1(args: {
           highlightCounter += 1;
           const category = classifyCvFactCategory(snippet, "cv");
           pushFact(
-            `fact_experience_${experienceOrdinal}_highlight_${formatStableOrdinal(
-              highlightCounter - 1,
-            )}`,
+            `fact_experience_${experienceOrdinal}_highlight_${formatStableOrdinal(highlightCounter - 1)}`,
             `recentExperience[${entryIndex}].highlights[${highlightIndex}]`,
             {
               text: ensureSentenceEnding(snippet),
@@ -1913,7 +1911,6 @@ function extractAllowedVerbs(text: string): string[] {
       verbs.add(verb);
     }
   }
-  if (verbs.size === 0) verbs.add("described");
   return Array.from(verbs);
 }
 
@@ -2139,6 +2136,13 @@ function resolveCloseFallback(language: string): string {
 function isGenericPremiumClosingLine(value: string): boolean {
   const normalized = compactWhitespace(value);
   if (!normalized) return false;
+  if (
+    /^(?:(?:my\s+)?(?:experience|background)\s+includes|(?:mon\s+(?:exp[ée]rience|parcours)|mes\s+exp[ée]riences)\s+(?:comprend|comprennent|inclut|incluent))\b/iu.test(
+      normalized,
+    )
+  ) {
+    return true;
+  }
   return /\b(?:i\s+(?:welcome|would\s+(?:welcome|be\s+glad|be\s+happy))\s+(?:the\s+)?(?:opportunity|chance)?\s*(?:to\s+)?(?:discuss|speak|talk)\s+(?:the\s+)?(?:position|role|opportunity)\s+further|i\s+(?:welcome|would\s+(?:welcome|be\s+glad|be\s+happy))\s+(?:the\s+)?(?:opportunity|chance)?\s*(?:to\s+)?(?:discuss|speak|talk)\s+my\s+interest\s+in\s+(?:the\s+)?(?:position|role|opportunity)|(?:would\s+)?welcome\s+the\s+(?:opportunity|chance)\s+to\s+(?:discuss|speak)\s+(?:the\s+)?(?:position|role|opportunity)(?:\s+further)?|discuss\s+(?:the\s+)?(?:position|role|opportunity)\s+further|speak\s+further\s+about\s+(?:the\s+)?(?:position|role|opportunity)|je\s+serais\s+(?:ravi|ravie|heureux|heureuse)\s+(?:d['’]|de\s+(?:pouvoir\s+)?)(?:en\s+)?(?:échanger|discuter)|au\s+plaisir\s+d['’]échanger(?:\s+davantage)?(?:\s+(?:sur|à\s+propos\s+de|avec\s+vous))?)\b/iu.test(
     normalized,
   );
@@ -2655,7 +2659,8 @@ export function buildPremiumClaimPlanV1(args: {
             : ["unsupported metric", "unsupported credential", "job demand as history"],
       maxOwnership,
       allowEmployerBridge:
-        section === "employerValueBlock" && args.contextClass !== "no_cv",
+        args.contextClass !== "no_cv" &&
+        (section === "opening" || section === "employerValueBlock"),
       editorialGuideline,
     };
   };
@@ -2675,11 +2680,11 @@ export function buildPremiumClaimPlanV1(args: {
           makeClaim(
             "opening",
             primaryCvFact ? [primaryCvFact] : [],
-            [],
+            roleContextDemandIds,
             "source_backed",
             args.contextClass === "cv_adjacent"
-              ? "Open with a CV-backed operating strength, not direct target-role fit."
-              : "Open with the strongest CV-backed evidence.",
+              ? "Open with one bounded job work surface as role context, immediately grounded by CV-backed proof; never claim direct target-role fit."
+              : "Open with one core responsibility as role context, immediately grounded by the strongest CV-backed evidence.",
           ),
           makeClaim(
             "proofBlock",
@@ -2708,7 +2713,7 @@ export function buildPremiumClaimPlanV1(args: {
               ? "adjacent_safe_bridge"
               : "source_backed",
             args.contextClass === "cv_adjacent"
-              ? "Use the one restrained bridge; job demands are role context only."
+              ? "Use one restrained employer-value bridge after the opening; job demands are role context only."
               : "Reference a core responsibility only as role context, never candidate history.",
           ),
           makeClaim(
@@ -2994,6 +2999,7 @@ export function buildPremiumCoverLetterPrompt(args: {
     args.brief.preset,
   );
   const providerAdapter = resolvePremiumCoverLetterProviderAdapter({
+    contextClass: args.brief.contextClass,
     writerProvider: args.writerProvider,
     writerModel: args.writerModel,
   });
@@ -3191,8 +3197,8 @@ function resolvePremiumCoverLetterContextGuidance(args: {
   if (args.contextClass === "cv_adjacent" && isQwenWriterIdentity(args)) {
     return [
       "Qwen cv_adjacent contract:",
-      "- Evidence first: keep candidate facts candidate-side and JD facts work-surface context only.",
-      "- Allow at most one restrained employer-facing bridge.",
+      "- Evidence boundary: keep candidate facts candidate-side and JD facts work-surface context only.",
+      "- Keep the opening role-context lead factual; allow at most one later employer-facing bridge.",
       "- The bridge must stay at overlap, relevance, or operating-context level.",
       "- Do not use the target role title, job requirements, or employer goals as proof.",
       "- Do not write generic fit explanations.",
@@ -3232,24 +3238,24 @@ function resolvePremiumCoverLetterContextGuidance(args: {
     if (args.contextClass === "cv_adjacent") {
       return [
         "Mistral cv_adjacent context guidance:",
-        "- This is a grounded adjacent letter with at most one restrained employer-facing bridge.",
-        "- Mistral cv_adjacent may include one restrained employer-facing bridge when grounded in BOTH candidate evidence and a JD work surface.",
+        "- This is a grounded adjacent letter with one bounded opening role-context lead and at most one later employer-facing bridge.",
+        "- Ground the opening in BOTH candidate evidence and one JD work surface.",
         "- The bridge must stay at the level of overlap, relevance, or operating context.",
         "- Do not map the background to the target role.",
         "- Do not state direct target-role experience, unsupported ownership, future contribution, promised impact, or unsupported requirement satisfaction.",
-        "- Use job facts only to select which candidate facts to include.",
+        "- Use job facts as bounded opening context and to select candidate facts; never turn them into candidate experience.",
         "- Write only candidate-backed actions, artifacts, scopes, stakeholders, responsibilities, tools, metrics, cadence, or deliverables.",
         "- Keep opening and closeLine to one sentence each; proofBlock may use at most two sentences; employerValueBlock must be one sentence.",
         "- Do not reuse the same employer, duty, cadence, credential, or environment across body parts.",
         "- Do not summarize the whole CV in the opening.",
         "- Use past or present factual statements.",
         "- Do not use future contribution claims.",
-        "- Never use meta-writing language such as \"I have described\", \"I described\", \"as described\", \"the evidence shows\", \"this section shows\", \"work surface\", or \"concrete bridge\".",
-        "- Safe bridge examples: \"That background is relevant to work where clear handoffs, documentation, and reporting matter.\" \"The overlap is strongest around coordination, reporting, and documentation.\"",
-        "- Forbidden bridge examples: \"I have direct experience as an Implementation Analyst.\" \"I can own your implementation workflows.\" \"This will improve your delivery speed.\" \"I am passionate about your mission.\"",
-        "- Do not use employerValueBlock as another evidence-only sentence when the brief includes topResponsibilities or workContext; use one restrained employer-facing bridge instead.",
+        '- Never use meta-writing language such as "I have described", "I described", "as described", "the evidence shows", "this section shows", "work surface", or "concrete bridge".',
+        '- Safe bridge examples: "That background is relevant to work where clear handoffs, documentation, and reporting matter." "The overlap is strongest around coordination, reporting, and documentation."',
+        '- Forbidden bridge examples: "I have direct experience as an Implementation Analyst." "I can own your implementation workflows." "This will improve your delivery speed." "I am passionate about your mission."',
+        "- Use employerValueBlock for the one restrained employer-facing bridge when safe role context exists.",
         "- Do not repeat duration, employers, or the same evidence anchor in closeLine.",
-        "- closeLine must be first person and must restate operating strengths, such as \"I bring discipline around accurate records, steady monitoring, and clear handoffs.\"",
+        '- closeLine must be first person and must restate operating strengths, such as "I bring discipline around accurate records, steady monitoring, and clear handoffs."',
         "- If evidence is limited, return shorter body parts instead of filling space.",
       ];
     }
@@ -3276,7 +3282,7 @@ function resolvePremiumCoverLetterContextGuidance(args: {
   if (args.contextClass === "cv_adjacent") {
     return [
       "For cv_adjacent, keep candidate evidence candidate-side and job facts work-surface-side; do not turn adjacent evidence into direct target-role experience, future contribution, or requirement satisfaction.",
-      "For cv_adjacent, prioritize concrete CV-backed actions before any employer bridge. Use at most one restrained bridge, and keep it at overlap, relevance, or operating-context level.",
+      "For cv_adjacent, name one bounded JD work surface before CV-backed proof in the opening. Then prioritize concrete candidate actions before the single restrained employerValueBlock bridge.",
       "For cv_adjacent, do not use the target role title, job requirements, employer needs, direct-fit wording, role-mapping language, or future-value promises as proof.",
       "For cv_adjacent, make persuasion from the operating discipline already present in the CV facts: explain what the concrete work required, such as careful observation, accurate records, clear handoffs, stakeholder communication, or consistent follow-through. Do not add outcomes.",
       "For cv_adjacent, if the safest material is modest, write shorter body parts anchored in monitoring, documentation, reporting, coordination, records, handoffs, tools, environments, stakeholders, or other source-backed facts.",
@@ -3300,7 +3306,7 @@ function resolvePremiumCoverLetterBodyPartGuidance(args: {
   if (args.contextClass === "cv_adjacent" && isQwenWriterIdentity(args)) {
     return [
       "Qwen cv_adjacent body-part contract:",
-      "- opening: one factual first-person sentence grounded in candidate evidence.",
+      "- opening: one sentence: JD work surface first, supported candidate proof second; JD context is never candidate evidence; no CV-bullet, metric-first, or direct-role lead.",
       "- proofBlock: concrete CV-backed evidence only.",
       "- employerValueBlock: one restrained bridge or one concrete CV-backed implication, never a generic fit explanation.",
       "- Any bridge must stay at overlap, relevance, or operating-context level.",
@@ -3316,7 +3322,7 @@ function resolvePremiumCoverLetterBodyPartGuidance(args: {
   if (args.contextClass === "cv_adjacent" && isMistralWriterIdentity(args)) {
     return [
       "Mistral cv_adjacent body-part contract:",
-      "- opening: one factual first-person sentence grounded in candidate evidence.",
+      "- opening: one sentence: JD work surface first, supported candidate proof second; JD context is never candidate evidence; no CV-bullet, metric-first, or direct-role lead.",
       "- proofBlock: concrete CV-backed evidence only.",
       "- employerValueBlock: concrete CV-backed evidence or one restrained employer-facing bridge grounded in both candidate evidence and a JD work surface.",
       "- If topResponsibilities or workContext are present, employerValueBlock should be the restrained bridge, not another evidence-only sentence.",
@@ -3339,8 +3345,8 @@ function resolvePremiumCoverLetterBodyPartGuidance(args: {
   if (args.contextClass === "cv_adjacent") {
     return [
       "cv_adjacent body-part contract:",
-      "- opening: one factual first-person sentence grounded in the strongest concrete candidate action before duration, employer names, or domain summary; do not attach the target role title to the candidate's experience.",
-      "- proofBlock: strongest concrete CV-backed evidence first, before employer context; develop what the work required instead of listing duties flatly.",
+      "- opening: one sentence: JD work surface first, supported candidate proof second; JD context is never candidate evidence; no CV-bullet, metric-first, or direct-role lead.",
+      "- proofBlock: develop the strongest concrete CV-backed evidence without listing duties flatly.",
       "- employerValueBlock: either more concrete CV-backed evidence or one restrained bridge grounded in both candidate evidence and a JD work surface. The bridge should explain the operating discipline behind the evidence, not just name overlapping duties.",
       "- Any bridge must stay at overlap, relevance, or operating-context level; it must not claim direct role experience, future performance, unsupported ownership, or invented impact.",
       "- closeLine: one short sentence restating CV-backed operating strengths only.",
@@ -3353,7 +3359,9 @@ function resolvePremiumCoverLetterBodyPartGuidance(args: {
   }
   return [
     "Body-part rules: complete natural sentences only; no greeting, signoff, markdown, bullets, generic excitement, mission praise, defensive gaps, keyword lists, clipped fragments like 'St.' or guessed facility/team names.",
-    "Opening: position through the strongest relevant evidence, not generic fit language. ProofBlock: develop top evidence first. EmployerValueBlock: move directly to an employer-facing implication from the candidate evidence; do not name company hierarchy, career-growth language, support-staff boilerplate, or the target role title as proof. Use topResponsibilities before requirements. Never echo preferredQualifications or checklist noise. CloseLine: one short role-specific sentence.",
+    args.contextClass === "no_cv"
+      ? "Opening: position through the strongest relevant evidence, not generic fit language. ProofBlock: develop top evidence first. EmployerValueBlock: move directly to an employer-facing implication from the candidate evidence; do not name company hierarchy, career-growth language, support-staff boilerplate, or the target role title as proof. Use topResponsibilities before requirements. Never echo preferredQualifications or checklist noise. CloseLine: one short role-specific sentence."
+      : "Opening: one sentence: employer need, then supported proof; JD is not CV proof; no CV-bullet or metric-first lead. ProofBlock: develop top proof. EmployerValueBlock: move directly to an employer-facing implication from the candidate evidence; do not name company hierarchy, career-growth language, support-staff boilerplate, or the target role title as proof. Use topResponsibilities before requirements. Never echo preferredQualifications or checklist noise. CloseLine: one short role-specific sentence.",
   ];
 }
 
@@ -3368,13 +3376,19 @@ function resolvePremiumCoverLetterPromptVersionGuidance(args: {
 }
 
 function resolvePremiumCoverLetterProviderAdapter(args: {
+  contextClass: PremiumCoverLetterContextClass;
   writerProvider?: PremiumCoverLetterWriterProvider;
   writerModel?: string;
 }): string | undefined {
   const normalizedProvider = args.writerProvider ?? "unknown";
   const normalizedModel = compactWhitespace(args.writerModel ?? "").toLowerCase();
   if (isMistralWriterIdentity(args)) {
-    return MISTRAL_PREMIUM_COVER_LETTER_ADAPTER;
+    return args.contextClass === "no_cv"
+      ? MISTRAL_PREMIUM_COVER_LETTER_ADAPTER
+      : MISTRAL_PREMIUM_COVER_LETTER_ADAPTER.replace(
+          "Use job facts only to choose which CV-backed candidate facts are relevant.",
+          "Use job facts as bounded opening role context and to choose relevant CV-backed candidate facts; never turn them into candidate experience.",
+        );
   }
   if (
     normalizedProvider === "qwen" ||
@@ -3418,7 +3432,8 @@ type PremiumBodyPartValidationIssue = {
     | "meta_prose"
     | "unsupported_numeric_claim"
     | "unsupported_ownership_verb"
-    | "candidate_name_mismatch";
+    | "candidate_name_mismatch"
+    | "opening_candidate_proof_missing";
   repairable: boolean;
 };
 
@@ -3452,9 +3467,11 @@ export type PremiumWriterOutputValidationIssue = {
     | "unknown_demand_id"
     | "section_claim_mismatch"
     | "section_fact_not_allowed"
+    | "section_demand_missing"
     | "section_demand_not_allowed"
     | "no_cv_uses_candidate_fact"
     | "direct_claim_missing_fact"
+    | "opening_candidate_proof_missing"
     | "unsupported_numeric_claim"
     | "unsupported_ownership_verb"
     | "unsupported_credential_claim"
@@ -3546,7 +3563,10 @@ function wrapLegacyBodyPartsAsPremiumWriterOutputV1(args: {
 function parsePremiumWriterOutputV1(args: {
   rawOutput: unknown;
   claimPlan: ClaimPlanV1;
-}): { writerOutput: PremiumWriterOutputV1; legacyWrapped: boolean } {
+}): {
+  writerOutput: PremiumWriterOutputV1;
+  legacyWrapped: boolean;
+} {
   const premiumParse = PREMIUM_WRITER_OUTPUT_V1_SCHEMA.safeParse(args.rawOutput);
   if (premiumParse.success) {
     return { writerOutput: premiumParse.data, legacyWrapped: false };
@@ -3576,6 +3596,515 @@ function parseCoverLetterBodyPartsWriterPayload(rawOutput: unknown): CoverLetter
   return PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(
     rawRecord?.bodyParts ?? rawOutput,
   );
+}
+
+function candidateClaimSurfaceAfterExactOpeningDemand(args: {
+  generatedText: string;
+  referencedDemands: readonly Pick<JobDemandNodeV1, "text">[];
+}): string {
+  const compact = compactWhitespace(args.generatedText);
+  const separatorIndexes = Array.from(
+    compact.matchAll(/[,;:—–]/gu),
+    (match) => match.index,
+  );
+  for (const separatorIndex of separatorIndexes.reverse()) {
+    const lead = compact.slice(0, separatorIndex);
+    if (!/^(?:for|in|within|on|dans|pour|sur)\b/i.test(lead)) {
+      continue;
+    }
+    const normalizedLead = normalizeProposalConstraintText(lead)
+      .replace(/^(?:for|in|within|on|dans|pour|sur)\s+/u, "")
+      .replace(/^(?:the|a|an|le|la|les|un|une|des|du)\s+/u, "");
+    const isExactDemand = args.referencedDemands.some(
+      (demand) =>
+        normalizedLead ===
+        normalizeProposalConstraintText(demand.text.replace(/[.!?]$/u, "")),
+    );
+    if (isExactDemand) {
+      return compactWhitespace(compact.slice(separatorIndex + 1));
+    }
+  }
+  return compact;
+}
+
+function candidateClaimSurfaceAfterOpeningContext(args: {
+  generatedText: string;
+  referencedDemands: readonly Pick<JobDemandNodeV1, "text">[];
+  brief: CoverLetterBrief;
+}): string {
+  const compact = compactWhitespace(args.generatedText);
+  const exactDemandResidual =
+    candidateClaimSurfaceAfterExactOpeningDemand(args);
+  if (exactDemandResidual !== compact) return exactDemandResidual;
+  if (
+    !openingAlreadyHasEmployerContextLead({
+      opening: compact,
+      brief: args.brief,
+    })
+  ) {
+    return compact;
+  }
+  const separatorIndex = openingEmployerContextSeparatorIndex({
+    opening: compact,
+    brief: args.brief,
+  });
+  return separatorIndex > 0
+    ? compactWhitespace(compact.slice(separatorIndex + 1))
+    : compact;
+}
+
+const CROSS_LANGUAGE_CANDIDATE_PROOF_ACTIONS = [
+  {
+    key: "assist",
+    pattern: /\b(?:assist(?:ed|ing)?|assist[ée]e?|aid[ée]e?)\b/iu,
+  },
+  {
+    key: "build",
+    pattern: /\b(?:built|build(?:ing)?|construit|construite|b[aâ]ti|b[aâ]tie)\b/iu,
+  },
+  {
+    key: "coordinate",
+    pattern: /\b(?:coordinat(?:ed|ing)?|coordonn[ée]e?)\b/iu,
+  },
+  {
+    key: "complete",
+    pattern: /\b(?:complet(?:ed|ing)?|achev[ée]e?|termin[ée]e?)\b/iu,
+  },
+  {
+    key: "deliver",
+    pattern: /\b(?:deliver(?:ed|ing)?|livr[ée]e?)\b/iu,
+  },
+  {
+    key: "develop",
+    pattern:
+      /\b(?:author(?:ed|ing)?|architect(?:ed|ing)?|creat(?:ed|ing)?|design(?:ed|ing)?|develop(?:ed|ing)?|engineer(?:ed|ing)?|implement(?:ed|ing)?|con[cç]u(?:e)?|cr[ée][ée]e?|d[ée]velopp[ée]e?|impl[ée]ment[ée]e?)\b/iu,
+  },
+  {
+    key: "document",
+    pattern:
+      /\b(?:describ(?:e|es|ed|ing)|document(?:ed|ing)?|document[ée]e?|record(?:ed|ing))\b/iu,
+  },
+  {
+    key: "improve",
+    pattern: /\b(?:improv(?:ed|ing)?|am[ée]lior[ée]e?)\b/iu,
+  },
+  {
+    key: "lead",
+    pattern: /\b(?:led|lead(?:ing)?|dirig[ée]e?|men[ée]e?)\b/iu,
+  },
+  {
+    key: "maintain",
+    pattern: /\b(?:maintain(?:ed|ing)?|maintenu|maintenue)\b/iu,
+  },
+  {
+    key: "manage",
+    pattern: /\b(?:manag(?:ed|ing)?|g[ée]r[ée]e?)\b/iu,
+  },
+  {
+    key: "monitor",
+    pattern: /\b(?:monitor(?:ed|ing)?|surveill[ée]e?|suivi|suivie)\b/iu,
+  },
+  {
+    key: "reduce",
+    pattern: /\b(?:reduc(?:ed|ing)?|r[ée]duit|r[ée]duite)\b/iu,
+  },
+  {
+    key: "report",
+    pattern: /\b(?:report(?:ed|ing)?|signal[ée]e?|rapport[ée]e?)\b/iu,
+  },
+  {
+    key: "support",
+    pattern: /\b(?:support(?:ed|ing)?|soutenu|soutenue)\b/iu,
+  },
+  {
+    key: "track",
+    pattern: /\b(?:track(?:ed|ing)?|suivi|suivie)\b/iu,
+  },
+] as const;
+
+const CROSS_LANGUAGE_CANDIDATE_PROOF_TOPICS = [
+  {
+    key: "customer",
+    pattern: /\b(?:clients?|customers?)\b/iu,
+  },
+  {
+    key: "equipment",
+    pattern: /\b(?:equipment|equipement)\b/iu,
+  },
+  {
+    key: "facility",
+    pattern: /\b(?:facilit(?:y|ies)|installations?)\b/iu,
+  },
+  {
+    key: "maintenance",
+    pattern: /\bmaintenance\b/iu,
+  },
+  {
+    key: "repair",
+    pattern: /\b(?:repairs?|reparations?)\b/iu,
+  },
+  {
+    key: "deadline",
+    pattern: /\b(?:deadlines?|echeances?)\b/iu,
+  },
+  {
+    key: "handoff",
+    pattern: /\b(?:handoffs?|transmissions?)\b/iu,
+  },
+  {
+    key: "vendor",
+    pattern: /\b(?:vendors?|fournisseurs?)\b/iu,
+  },
+  {
+    key: "workflow",
+    pattern: /\b(?:workflows?|flux\s+de\s+travail)\b/iu,
+  },
+  {
+    key: "design_system",
+    pattern: /\b(?:design systems?|systemes?\s+de\s+design)\b/iu,
+  },
+  {
+    key: "experiment",
+    pattern: /\b(?:experiments?|experimentations?)\b/iu,
+  },
+  {
+    key: "frontend",
+    pattern: /\bfrontend\b/iu,
+  },
+  {
+    key: "interface",
+    pattern: /\binterfaces?\b/iu,
+  },
+  {
+    key: "migration",
+    pattern: /\bmigrations?\b/iu,
+  },
+  {
+    key: "api",
+    pattern: /\bapi\b/iu,
+  },
+  {
+    key: "integration",
+    pattern: /\bintegrations?\b/iu,
+  },
+  {
+    key: "product",
+    pattern: /\b(?:products?|produits?)\b/iu,
+  },
+  {
+    key: "system",
+    pattern: /\b(?:systems?|systemes?)\b/iu,
+  },
+  {
+    key: "patient",
+    pattern: /\bpatients?\b/iu,
+  },
+  {
+    key: "clinical",
+    pattern: /\b(?:clinical|clinique)\b/iu,
+  },
+  {
+    key: "record",
+    pattern: /\b(?:records?|dossiers?)\b/iu,
+  },
+  {
+    key: "database",
+    pattern: /\b(?:databases?|bases?\s+de\s+donnees)\b/iu,
+  },
+  {
+    key: "react",
+    pattern: /\breact\b/iu,
+  },
+  {
+    key: "typescript",
+    pattern: /\btypescript\b/iu,
+  },
+  {
+    key: "ui",
+    pattern: /\bui\b/iu,
+  },
+  {
+    key: "dashboard",
+    pattern: /\b(?:dashboards?|tableaux?\s+de\s+bord)\b/iu,
+  },
+  {
+    key: "forecast",
+    pattern: /\b(?:forecasts?|previsions?)\b/iu,
+  },
+  {
+    key: "revenue",
+    pattern: /\b(?:revenue|revenus?)\b/iu,
+  },
+  {
+    key: "sales",
+    pattern: /\b(?:sales|ventes?)\b/iu,
+  },
+  {
+    key: "access",
+    pattern: /\b(?:access|acces)\b/iu,
+  },
+  {
+    key: "cctv",
+    pattern: /\bcctv\b/iu,
+  },
+  {
+    key: "incident",
+    pattern: /\bincidents?\b/iu,
+  },
+  {
+    key: "patrol",
+    pattern: /\b(?:patrols?|rondes?)\b/iu,
+  },
+  {
+    key: "security",
+    pattern: /\b(?:safety|security|securite)\b/iu,
+  },
+  {
+    key: "surveillance",
+    pattern: /\bsurveillance\b/iu,
+  },
+] as const;
+
+const CANDIDATE_PROOF_LOW_OWNERSHIP_ACTION_KEYS = new Set([
+  "assist",
+  "support",
+]);
+const CANDIDATE_PROOF_HIGH_OWNERSHIP_ACTION_KEYS = new Set([
+  "build",
+  "develop",
+  "lead",
+  "manage",
+]);
+const CANDIDATE_PROOF_SHORT_CLAUSE_GRAMMAR_TOKENS = new Set([
+  "a",
+  "ai",
+  "an",
+  "and",
+  "d",
+  "de",
+  "des",
+  "du",
+  "et",
+  "for",
+  "i",
+  "j",
+  "je",
+  "la",
+  "le",
+  "les",
+  "ma",
+  "mes",
+  "mon",
+  "my",
+  "of",
+  "the",
+  "to",
+  "un",
+  "une",
+  "with",
+]);
+
+function candidateProofActionKeys(value: string): Set<string> {
+  const normalized = value.normalize("NFD").replace(/\p{M}/gu, "");
+  return new Set(
+    CROSS_LANGUAGE_CANDIDATE_PROOF_ACTIONS.filter(({ pattern }) =>
+      pattern.test(normalized),
+    ).map(({ key }) => key),
+  );
+}
+
+function candidateProofActionOwnershipRank(keys: ReadonlySet<string>): number {
+  let rank = 0;
+  for (const key of keys) {
+    if (CANDIDATE_PROOF_HIGH_OWNERSHIP_ACTION_KEYS.has(key)) return 2;
+    if (!CANDIDATE_PROOF_LOW_OWNERSHIP_ACTION_KEYS.has(key)) rank = 1;
+  }
+  return rank;
+}
+
+function candidateProofActionFamilies(keys: ReadonlySet<string>): Set<string> {
+  return new Set(
+    Array.from(keys, (key) => {
+      if (key === "build" || key === "develop") return "authorship";
+      if (key === "assist" || key === "support") return "support";
+      if (key === "lead" || key === "manage") return "leadership";
+      if (key === "monitor" || key === "track") return "monitoring";
+      if (key === "document" || key === "report") {
+        return "documentation";
+      }
+      return key;
+    }),
+  );
+}
+
+function candidateProofTopicKeys(value: string): Set<string> {
+  const normalized = value.normalize("NFD").replace(/\p{M}/gu, "");
+  return new Set(
+    CROSS_LANGUAGE_CANDIDATE_PROOF_TOPICS.filter(({ pattern }) =>
+      pattern.test(normalized),
+    ).map(({ key }) => key),
+  );
+}
+
+function candidateProofHasOnlyActionAndTopicSurface(value: string): boolean {
+  let residual = value
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase();
+  for (const { pattern } of [
+    ...CROSS_LANGUAGE_CANDIDATE_PROOF_ACTIONS,
+    ...CROSS_LANGUAGE_CANDIDATE_PROOF_TOPICS,
+  ]) {
+    residual = residual.replace(
+      new RegExp(pattern.source, `${pattern.flags}g`),
+      " ",
+    );
+  }
+  const residualTokens = residual.match(/\p{L}+/gu) ?? [];
+  return residualTokens.every((token) =>
+    CANDIDATE_PROOF_SHORT_CLAUSE_GRAMMAR_TOKENS.has(token),
+  );
+}
+
+function splitCandidateProofClauses(value: string): string[] {
+  const compact = compactWhitespace(value);
+  const sentences: string[] = [];
+  let sentenceStart = 0;
+  for (let index = 0; index < compact.length; index += 1) {
+    const punctuation = compact[index];
+    if (
+      !punctuation ||
+      !/[.!?]/u.test(punctuation) ||
+      !/\s/u.test(compact[index + 1] ?? "")
+    ) {
+      continue;
+    }
+    const sentencePrefix = compact.slice(sentenceStart, index + 1);
+    if (punctuation === ".") {
+      const isAbbreviation =
+        /(?:\b(?:co|corp|dr|e\.g|etc|i\.e|inc|jr|ltd|mr|mrs|ms|prof|sr|vs)\.|(?:\b\p{L}\.){2,})$/iu.test(
+          sentencePrefix,
+        );
+      const isAlwaysMidSentenceAbbreviation =
+        /\b(?:dr|e\.g|i\.e|jr|mr|mrs|ms|prof|sr)\.$/iu.test(sentencePrefix);
+      const nextText = compact.slice(index + 1).trimStart();
+      const startsClearSentence =
+        /^[“"'‘([]*(?:I|My|We|Our|They|Their|The|This|That|These|Those|It|He|His|She|Her|J['’]ai|Je|Mon|Ma|Mes|Nous|Notre|Nos|Ils|Elles|Le|La|Les|Ce|Cet|Cette|Ces|Il|Elle|Son|Sa|Ses)\b/u.test(
+          nextText,
+        );
+      if (
+        isAbbreviation &&
+        (isAlwaysMidSentenceAbbreviation || !startsClearSentence)
+      ) {
+        continue;
+      }
+    }
+    sentences.push(sentencePrefix);
+    sentenceStart = index + 1;
+  }
+  sentences.push(compact.slice(sentenceStart));
+  return sentences
+    .flatMap((sentence) => sentence.split(/\s*;\s*/u))
+    .map((clause) => compactWhitespace(clause))
+    .filter(Boolean);
+}
+
+function candidateClaimSurfaceSupportsEvidence(args: {
+  generatedText: string;
+  evidence: readonly Pick<FactNodeV1, "text" | "source" | "metrics" | "entities">[];
+}): boolean {
+  const compact = compactWhitespace(args.generatedText);
+  if (!compact) return false;
+  const clauses = splitCandidateProofClauses(compact);
+  return clauses.every((clause) => {
+    const generatedActionKeys = candidateProofActionKeys(clause);
+    const generatedTopicKeys = candidateProofTopicKeys(clause);
+    const isCandidateProof =
+      /^(?:i|my|j['’]ai|je|mon|ma|mes)\b/iu.test(clause);
+    return args.evidence.some((fact) => {
+      if (fact.source !== "cv") return false;
+      const factActionKeys = candidateProofActionKeys(fact.text);
+      const factTopicKeys = candidateProofTopicKeys(fact.text);
+      const introducedTopic = Array.from(generatedTopicKeys).some(
+        (key) => !factTopicKeys.has(key),
+      );
+      if (introducedTopic) {
+        return false;
+      }
+      const generatedActionFamilies =
+        candidateProofActionFamilies(generatedActionKeys);
+      const factActionFamilies = candidateProofActionFamilies(factActionKeys);
+      const hasOnlyCompatibleActions = Array.from(
+        generatedActionFamilies,
+      ).every((family) =>
+        factActionFamilies.has(family),
+      );
+      if (generatedActionKeys.size > 0 && !hasOnlyCompatibleActions) {
+        return false;
+      }
+      if (
+        candidateProofActionOwnershipRank(generatedActionKeys) >
+        candidateProofActionOwnershipRank(factActionKeys)
+      ) {
+        return false;
+      }
+      if (
+        premiumTextSupportsCandidateFact({
+          generatedText: clause,
+          fact,
+        })
+      ) {
+        return true;
+      }
+      if (
+        !isCandidateProof ||
+        generatedActionKeys.size === 0 ||
+        generatedTopicKeys.size === 0
+      ) {
+        return false;
+      }
+      const sharedTopicCount = Array.from(factTopicKeys).filter((key) =>
+        generatedTopicKeys.has(key),
+      ).length;
+      return (
+        hasOnlyCompatibleActions &&
+        (sharedTopicCount >= 2 ||
+          (sharedTopicCount === 1 &&
+            candidateProofHasOnlyActionAndTopicSurface(clause)))
+      );
+    });
+  });
+}
+
+function buildOpeningCandidateEvidence(
+  brief: CoverLetterBrief,
+): Array<Pick<FactNodeV1, "text" | "source" | "metrics" | "entities">> {
+  const openingClaim = brief.claimPlan?.claims.find(
+    (claim) => claim.section === "opening",
+  );
+  if (openingClaim && brief.referencedFacts !== undefined) {
+    const openingFactIds = new Set(openingClaim.factIds);
+    return (brief.referencedFacts ?? [])
+      .filter(
+        (fact) => openingFactIds.has(fact.id) && fact.source === "cv",
+      )
+      .map((fact) => ({
+        text: compactWhitespace(fact.text),
+        source: "cv" as const,
+        metrics: extractNumericClaims(fact.text),
+        entities: extractFactEntities(fact.text),
+      }))
+      .filter((fact) => Boolean(fact.text));
+  }
+  return [brief.topEvidence, brief.supportEvidence, brief.transferCore ?? []]
+    .flat()
+    .map((text) => ({
+      text: compactWhitespace(text),
+      source: "cv" as const,
+      metrics: extractNumericClaims(text),
+      entities: [] as string[],
+    }))
+    .filter((fact) => Boolean(fact.text));
 }
 
 export function validatePremiumWriterOutputV1(args: {
@@ -3693,6 +4222,23 @@ export function validatePremiumWriterOutputV1(args: {
         });
       }
     }
+    if (
+      section === "opening" &&
+      args.claimPlan.contextClass !== "no_cv" &&
+      assignedClaim?.demandIds.length &&
+      !assignedClaim.demandIds.some((demandId) =>
+        part.demandIds.includes(demandId),
+      )
+    ) {
+      issues.push({
+        code: "section_demand_missing",
+        section,
+        claimId: assignedClaim.id,
+        message:
+          "CV-backed opening must cite its assigned role-context demand.",
+        repairable: false,
+      });
+    }
     for (const demandId of part.demandIds) {
       const demand = demandById.get(demandId);
       if (!demand) {
@@ -3757,9 +4303,36 @@ export function validatePremiumWriterOutputV1(args: {
       .map((id) => demandById.get(id))
       .filter((demand): demand is JobDemandNodeV1 => Boolean(demand));
     const referencedFactSurface = referencedFacts.map((fact) => fact.text).join(" ");
+    const candidateClaimSurface =
+      section === "opening"
+        ? candidateClaimSurfaceAfterOpeningContext({
+            generatedText: compact,
+            referencedDemands,
+            brief: args.brief,
+          })
+        : compact;
+    if (
+      section === "opening" &&
+      args.claimPlan.contextClass !== "no_cv" &&
+      candidateClaimSurface !== compact &&
+      referencedFacts.length > 0 &&
+      !candidateClaimSurfaceSupportsEvidence({
+        generatedText: candidateClaimSurface,
+        evidence: referencedFacts,
+      })
+    ) {
+      issues.push({
+        code: "opening_candidate_proof_missing",
+        section,
+        claimId: assignedClaim?.id,
+        message:
+          "CV-backed opening must retain candidate proof after role context is removed.",
+        repairable: false,
+      });
+    }
     if (
       hasUnsupportedNumericClaim({
-        generatedText: compact,
+        generatedText: candidateClaimSurface,
         sourceSurface: referencedFactSurface,
       })
     ) {
@@ -3774,11 +4347,13 @@ export function validatePremiumWriterOutputV1(args: {
     if (
       assignedClaim &&
       HIGH_OWNERSHIP_VERB_PATTERNS.some(({ verb, pattern }) => {
-        if (!pattern.test(compact)) return false;
+        if (!pattern.test(candidateClaimSurface)) return false;
         return (
           assignedClaim.forbiddenVerbs.includes(verb) ||
           !assignedClaim.allowedVerbs.some((allowedVerb) =>
-            new RegExp(`\\b${escapeRegExp(allowedVerb)}\\b`, "i").test(compact),
+            new RegExp(`\\b${escapeRegExp(allowedVerb)}\\b`, "i").test(
+              candidateClaimSurface,
+            ),
           )
         );
       })
@@ -3792,8 +4367,8 @@ export function validatePremiumWriterOutputV1(args: {
       });
     }
     if (
-      UNSUPPORTED_LICENSE_CLAIM_PATTERN.test(compact) ||
-      UNSUPPORTED_EDUCATION_CREDENTIAL_PATTERN.test(compact)
+      UNSUPPORTED_LICENSE_CLAIM_PATTERN.test(candidateClaimSurface) ||
+      UNSUPPORTED_EDUCATION_CREDENTIAL_PATTERN.test(candidateClaimSurface)
     ) {
       const sourceAllowsCredential =
         UNSUPPORTED_LICENSE_CLAIM_PATTERN.test(referencedFactSurface) ||
@@ -3809,7 +4384,9 @@ export function validatePremiumWriterOutputV1(args: {
       }
     }
     if (
-      COMPLIANCE_FRAMEWORK_PATTERNS.some((pattern) => pattern.test(compact)) &&
+      COMPLIANCE_FRAMEWORK_PATTERNS.some((pattern) =>
+        pattern.test(candidateClaimSurface),
+      ) &&
       !COMPLIANCE_FRAMEWORK_PATTERNS.some((pattern) =>
         pattern.test(referencedFactSurface),
       )
@@ -3824,12 +4401,12 @@ export function validatePremiumWriterOutputV1(args: {
     }
     if (
       referencedDemands.some((demand) =>
-        compact.toLowerCase().includes(
-          demand.text.replace(/[.!?]$/u, "").toLowerCase(),
-        ),
+        candidateClaimSurface
+          .toLowerCase()
+          .includes(demand.text.replace(/[.!?]$/u, "").toLowerCase()),
       ) &&
       /\b(?:i|my)\s+(?:led|managed|owned|built|improved|delivered|maintained|coordinated|handled|tracked|documented)\b/i.test(
-        compact,
+        candidateClaimSurface,
       )
     ) {
       issues.push({
@@ -3842,7 +4419,7 @@ export function validatePremiumWriterOutputV1(args: {
     }
     if (
       args.claimPlan.contextClass === "no_cv" &&
-      hasNoCvHistoryClaim(compact)
+      hasNoCvHistoryClaim(candidateClaimSurface)
     ) {
       issues.push({
         code: "no_cv_uses_candidate_fact",
@@ -3866,6 +4443,7 @@ function isBlockingPremiumWriterOutputIssue(
     "unsupported_ownership_verb",
     "unsupported_credential_claim",
     "unsupported_compliance_framework",
+    "opening_candidate_proof_missing",
   ].includes(issue.code);
 }
 
@@ -3901,7 +4479,7 @@ const UNSUPPORTED_EDUCATION_CREDENTIAL_PATTERN =
 const FABRICATED_MISSION_CLAIM_PATTERN =
   /\b(?:mission of|mission to|mission is|mission of safeguarding|reimagining healthcare security|contribute to reimagining healthcare|passionate about (?:your|the) mission|drawn to (?:your|the) mission|inspired by (?:your|the) mission|culture fit)\b/i;
 const WRITER_META_PROSE_PATTERN =
-  /\b(?:i have described|i described|as described|as mentioned|as noted|the evidence (?:shows|demonstrates|suggests)|this (?:letter|paragraph|section) (?:shows|demonstrates|describes)|the claim (?:is|shows|demonstrates)|my strongest match|my best match|the strongest evidence|my fit for this role|the main reason i am a fit|work surface|concrete bridge)\b/i;
+  /(?:(?:^|[,;:]\s*)described\b|\b(?:i have described|i described|as described|as mentioned|as noted|the evidence (?:shows|demonstrates|suggests)|this (?:letter|paragraph|section) (?:shows|demonstrates|describes)|the claim (?:is|shows|demonstrates)|my strongest match|my best match|the strongest evidence|my fit for this role|the main reason i am a fit|work surface|concrete bridge)\b)/i;
 const EMPLOYER_ARGUMENT_BRIDGE_PATTERN =
   /(?:^|[^\p{L}\p{N}_])(?:that|this|for|where|because|matters|relevant|role|team|environment|work|needs?|requires?|dans|pour|où|parce\s+que|pertinent(?:e|es|s)?|rôles?|équipes?|environnement|travail|besoins?|exige(?:nt)?|priorités?)(?=$|[^\p{L}\p{N}_])/iu;
 const CANDIDATE_LIKE_FULL_NAME_LINE_PATTERN =
@@ -4198,9 +4776,7 @@ function adjacentRoleCompanyContext(values: string[]): string | null {
   if (parsed.every((item) => item.role === firstRole) && companies.length > 0) {
     return `while working as a ${firstRole} at ${listAsNaturalText(companies)}`;
   }
-  return `with experience as ${listAsNaturalText(
-    parsed.map((item) => `${item.role} at ${item.company}`),
-  )}`;
+  return `with experience as ${listAsNaturalText(parsed.map((item) => `${item.role} at ${item.company}`))}`;
 }
 
 function roleCompanySubject(value: string): string {
@@ -4411,6 +4987,69 @@ const PREMIUM_WORK_SURFACE_DEFINITIONS = [
   },
 ] as const satisfies readonly PremiumWorkSurfaceDefinition[];
 
+const PREMIUM_WORK_SURFACE_GROUNDING_TOKENS = {
+  customer_success_retention: [
+    "account",
+    "client",
+    "customer",
+    "health",
+    "onboarding",
+    "retention",
+    "qbr",
+  ],
+  revenue_forecasting: [
+    "dashboard",
+    "finance",
+    "forecast",
+    "pipeline",
+    "reporting",
+    "revenue",
+    "sales",
+  ],
+  facilities_maintenance: [
+    "equipment",
+    "facilities",
+    "maintenance",
+    "record",
+    "repair",
+    "service",
+  ],
+  security_observation: [
+    "access",
+    "cctv",
+    "control",
+    "incident",
+    "observation",
+    "patrol",
+    "safety",
+    "security",
+    "surveillance",
+  ],
+  reporting_documentation: [
+    "document",
+    "documentation",
+    "incident",
+    "log",
+    "observation",
+    "record",
+    "report",
+    "reporting",
+    "status",
+  ],
+  operations_scheduling: [
+    "coordination",
+    "follow",
+    "handoff",
+    "intake",
+    "operation",
+    "operations",
+    "process",
+    "schedule",
+    "scheduling",
+    "workflow",
+  ],
+} as const satisfies Record<PremiumWorkSurfaceId, readonly string[]>;
+
 function collectCandidateSurfaceText(brief: CoverLetterBrief): string {
   return [
     ...brief.topEvidence,
@@ -4446,6 +5085,19 @@ function resolvePremiumWorkSurfaces(
   if (brief.contextClass === "no_cv" && jobMatches.length > 0) return jobMatches;
   if (candidateMatches.length > 0) return candidateMatches;
   return jobMatches;
+}
+
+function resolvePremiumOpeningWorkSurfaces(
+  brief: CoverLetterBrief,
+): PremiumWorkSurfaceDefinition[] {
+  const candidateSurfaceText = buildOpeningCandidateEvidence(brief)
+    .map((fact) => fact.text)
+    .join(" ");
+  const jobSurfaceText = collectJobSurfaceText(brief);
+  return PREMIUM_WORK_SURFACE_DEFINITIONS.filter((surface) =>
+    surface.evidencePattern.test(candidateSurfaceText) &&
+    surface.jobPattern.test(jobSurfaceText),
+  );
 }
 
 function buildNoCvWorkSurfaceEmployerValueBridge(
@@ -4611,10 +5263,16 @@ function normalizeProviderWriterOutputProvenance(args: {
       (factId) =>
         !factIds.has(factId) || !assignedClaim.factIds.includes(factId),
     );
-    const demandIdsNeedNormalization = part.demandIds.some(
-      (demandId) =>
-        !demandIds.has(demandId) || !assignedClaim.demandIds.includes(demandId),
-    );
+    const demandIdsNeedNormalization =
+      part.demandIds.some(
+        (demandId) =>
+          !demandIds.has(demandId) ||
+          !assignedClaim.demandIds.includes(demandId),
+      ) ||
+      (section === "opening" &&
+        args.claimPlan.contextClass !== "no_cv" &&
+        assignedClaim.demandIds.length > 0 &&
+        part.demandIds.length === 0);
 
     normalizedParts[section] = {
       ...part,
@@ -5101,12 +5759,16 @@ function normalizeAdjacentEvidenceOrder(args: {
 
   const anchors = adjacentOperatingAnchors(args.brief);
   const anchorText = listAsNaturalText(anchors);
-  const opening =
+  const evidenceOpening =
     reportingSentence && durationContext
       ? `Across ${conciseDurationEvidenceLead(durationContext)}, ${reportingSentence.replace(/[.!?]$/u, "")}`
       : durationContext
         ? `Across ${durationContext}${roleCompanyContext ? `, ${roleCompanyContext}` : ""}, ${evidenceSentences[0]!.replace(/[.!?]$/u, "")}`
         : evidenceSentences[0] ?? args.bodyParts.opening;
+  const opening = ensureCvBackedEmployerFirstOpening({
+    opening: evidenceOpening,
+    brief: args.brief,
+  });
   const proofSentences =
     reportingSentence && monitoringSentence
       ? [
@@ -5195,14 +5857,56 @@ export function validatePremiumCoverLetterBodyParts(args: {
 }): PremiumBodyPartValidationIssue[] {
   const bodyParts = PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(args.bodyParts);
   const issues: PremiumBodyPartValidationIssue[] = [];
-  const values = Object.values(bodyParts);
   const sourceSurface = buildValidationSourceSurface(args);
   const candidateEvidenceSurface = buildCandidateEvidenceSurface(args);
-  for (const value of values) {
+  const openingClaim = args.brief.claimPlan
+    ? claimForSection(args.brief.claimPlan, "opening")
+    : undefined;
+  const referencedDemandById = new Map(
+    (args.brief.referencedDemands ?? []).map((demand) => [demand.id, demand]),
+  );
+  const openingReferencedDemands = (openingClaim?.demandIds ?? [])
+    .map((demandId) => referencedDemandById.get(demandId))
+    .filter(
+      (
+        demand,
+      ): demand is {
+        id: string;
+        text: string;
+        bucket: string;
+      } => Boolean(demand),
+    );
+  const openingCandidateEvidence = buildOpeningCandidateEvidence(args.brief);
+  for (const [section, value] of Object.entries(bodyParts) as Array<
+    [ClaimPlanSection, string]
+  >) {
     const compact = compactWhitespace(value);
     if (!compact) {
       issues.push({ code: "missing_field", repairable: true });
       continue;
+    }
+    const candidateClaimSurface =
+      section === "opening" && args.brief.contextClass !== "no_cv"
+        ? candidateClaimSurfaceAfterOpeningContext({
+            generatedText: compact,
+            referencedDemands: openingReferencedDemands,
+            brief: args.brief,
+          })
+        : compact;
+    if (
+      section === "opening" &&
+      args.brief.contextClass !== "no_cv" &&
+      candidateClaimSurface !== compact &&
+      openingCandidateEvidence.length > 0 &&
+      !candidateClaimSurfaceSupportsEvidence({
+        generatedText: candidateClaimSurface,
+        evidence: openingCandidateEvidence,
+      })
+    ) {
+      issues.push({
+        code: "opening_candidate_proof_missing",
+        repairable: true,
+      });
     }
     if (GREETING_PATTERN.test(compact)) {
       issues.push({ code: "greeting_leakage", repairable: true });
@@ -5215,9 +5919,9 @@ export function validatePremiumCoverLetterBodyParts(args: {
     }
     if (
       args.brief.contextClass === "cv_adjacent" &&
-      (DIRECT_FIT_PATTERN.test(compact) ||
+      (DIRECT_FIT_PATTERN.test(candidateClaimSurface) ||
         hasAdjacentRoleMappingLeak({
-          compact,
+          compact: candidateClaimSurface,
           brief: args.brief,
           candidateEvidenceSurface,
         }) ||
@@ -5227,7 +5931,7 @@ export function validatePremiumCoverLetterBodyParts(args: {
             .map(escapeRegExp)
             .join("\\s+")}\\b`,
           "i",
-        ).test(compact))
+        ).test(candidateClaimSurface))
     ) {
       issues.push({ code: "adjacent_direct_fit", repairable: false });
     }
@@ -5247,12 +5951,16 @@ export function validatePremiumCoverLetterBodyParts(args: {
       issues.push({ code: "clipped_source_fragment", repairable: false });
     }
     for (const pattern of COMPLIANCE_FRAMEWORK_PATTERNS) {
-      if (pattern.test(compact) && !pattern.test(sourceSurface)) {
+      if (pattern.test(candidateClaimSurface) && !pattern.test(sourceSurface)) {
         issues.push({ code: "unsupported_compliance_framework", repairable: false });
         break;
       }
     }
-    if (UNSUPPORTED_SECURITY_OWNERSHIP_PATTERNS.some((pattern) => pattern.test(compact))) {
+    if (
+      UNSUPPORTED_SECURITY_OWNERSHIP_PATTERNS.some((pattern) =>
+        pattern.test(candidateClaimSurface),
+      )
+    ) {
       const sourceAllowsEmergencyOwnership = UNSUPPORTED_SECURITY_OWNERSHIP_PATTERNS.some(
         (pattern) => pattern.test(candidateEvidenceSurface),
       );
@@ -5261,13 +5969,13 @@ export function validatePremiumCoverLetterBodyParts(args: {
       }
     }
     if (
-      UNSUPPORTED_LICENSE_CLAIM_PATTERN.test(compact) &&
+      UNSUPPORTED_LICENSE_CLAIM_PATTERN.test(candidateClaimSurface) &&
       !UNSUPPORTED_LICENSE_CLAIM_PATTERN.test(candidateEvidenceSurface)
     ) {
       issues.push({ code: "unsupported_license_claim", repairable: false });
     }
     if (
-      UNSUPPORTED_EDUCATION_CREDENTIAL_PATTERN.test(compact) &&
+      UNSUPPORTED_EDUCATION_CREDENTIAL_PATTERN.test(candidateClaimSurface) &&
       !UNSUPPORTED_EDUCATION_CREDENTIAL_PATTERN.test(candidateEvidenceSurface)
     ) {
       issues.push({ code: "unsupported_education_credential", repairable: false });
@@ -5278,12 +5986,17 @@ export function validatePremiumCoverLetterBodyParts(args: {
     if (WRITER_META_PROSE_PATTERN.test(compact)) {
       issues.push({ code: "meta_prose", repairable: false });
     }
-    if (hasUnsupportedNumericClaim({ generatedText: compact, sourceSurface })) {
+    if (
+      hasUnsupportedNumericClaim({
+        generatedText: candidateClaimSurface,
+        sourceSurface,
+      })
+    ) {
       issues.push({ code: "unsupported_numeric_claim", repairable: false });
     }
     if (
       hasUnsupportedOwnershipVerb({
-        generatedText: compact,
+        generatedText: candidateClaimSurface,
         candidateEvidenceSurface,
       })
     ) {
@@ -5358,7 +6071,7 @@ export function evaluatePremiumCoverLetterQualityShadow(args: {
   if (LOW_VALUE_JOB_ECHO_PATTERN.test(employerValue)) {
     issues.push("low_value_job_echo");
   }
-  if (!/\d|\bAt\s+[A-Z][\w&'.-]+/u.test(content)) {
+  if (!/\d|\b[Aa]t\s+[A-Z][\w&'.-]+/u.test(content)) {
     issues.push("low_specificity");
   }
   if (content.length > 1900 || sentenceCount > 8) {
@@ -5413,6 +6126,10 @@ export function repairPremiumCoverLetterBodyParts(args: {
     employerValueBlock: cleanBodyPart(args.bodyParts.employerValueBlock),
     closeLine: cleanBodyPart(args.bodyParts.closeLine),
   };
+  cleaned.opening = ensureCvBackedEmployerFirstOpening({
+    opening: cleaned.opening,
+    brief: args.brief,
+  });
 
   if (!compactWhitespace(cleaned.employerValueBlock)) {
     if (getDeterministicCopyLanguage(args.brief.language)) {
@@ -5563,10 +6280,425 @@ function hasRestrainedEmployerBridgeLanguage(value: string): boolean {
   );
 }
 
-function startsLowercase(value: string): string {
-  const compact = compactWhitespace(value);
-  if (!compact) return "";
-  return compact.charAt(0).toLowerCase() + compact.slice(1);
+function resolveCvBackedEmployerFirstFallbackLead(
+  brief: CoverLetterBrief,
+  french: boolean,
+): string {
+  if (brief.contextClass === "cv_adjacent") {
+    return french
+      ? "Pour un travail centré sur les responsabilités principales du poste"
+      : "For work centered on the role's core responsibilities";
+  }
+  return french
+    ? `Pour le poste de ${brief.targetRole}`
+    : `For the ${brief.targetRole} role`;
+}
+
+function collectCandidateEmployerNames(brief: CoverLetterBrief): string[] {
+  return dedupeStrings(
+    [
+      ...brief.topEvidence,
+      ...brief.supportEvidence,
+      ...(brief.transferCore ?? []),
+    ]
+      .map(parseRoleCompanyFact)
+      .filter(
+        (item): item is { role: string; company: string } => item !== null,
+      )
+      .map((item) => item.company),
+  );
+}
+
+const EMPLOYER_CONTEXT_GRAMMAR_TOKENS = new Set([
+  "a",
+  "an",
+  "and",
+  "at",
+  "aux",
+  "chez",
+  "dans",
+  "d",
+  "de",
+  "des",
+  "du",
+  "en",
+  "et",
+  "for",
+  "in",
+  "la",
+  "l",
+  "le",
+  "les",
+  "of",
+  "on",
+  "ou",
+  "pour",
+  "sur",
+  "the",
+  "to",
+  "un",
+  "une",
+  "within",
+]);
+
+function normalizeEmployerContextTokens(value: string): string[] {
+  return (
+    compactWhitespace(value)
+      .normalize("NFKD")
+      .replace(/\p{M}/gu, "")
+      .toLowerCase()
+      .match(/[\p{L}\p{N}]+/gu) ?? []
+  ).filter(
+    (token) =>
+      token.length >= 1 &&
+      !STOPWORDS.has(token) &&
+      !EMPLOYER_CONTEXT_GRAMMAR_TOKENS.has(token),
+  );
+}
+
+function isGroundedEmployerContextLead(args: {
+  lead: string;
+  brief: CoverLetterBrief;
+}): boolean {
+  const lead = compactWhitespace(args.lead);
+  const normalizedLead = normalizeProposalConstraintText(lead);
+  const french = getDeterministicCopyLanguage(args.brief.language) === "fr";
+  const fallbackLead = resolveCvBackedEmployerFirstFallbackLead(
+    args.brief,
+    french,
+  );
+  if (
+    normalizedLead === normalizeProposalConstraintText(fallbackLead)
+  ) {
+    return true;
+  }
+  if (
+    !/^(?:in|within|when|where|on|for|dans|pour|lorsque|sur)\b/i.test(
+      lead,
+    ) ||
+    /\b(?:my|previous|current|recent|roles?|experience|years?|months?|at|with|mon|ma|mes|précédent|actuel|récent(?:e|es|s)?|postes?|expérience|ans?|mois|chez|avec|auprès)\b/i.test(
+      lead,
+    )
+  ) {
+    return false;
+  }
+  if (
+    collectCandidateEmployerNames(args.brief).some((company) =>
+      normalizedLead.includes(normalizeProposalConstraintText(company)),
+    )
+  ) {
+    return false;
+  }
+  const supportedLeadEntitySurface = normalizeProposalConstraintText(
+    [
+      collectJobSurfaceText(args.brief),
+      ...(args.brief.referencedDemands ?? []).map((demand) => demand.text),
+      args.brief.employerName ?? "",
+    ].join(" "),
+  );
+  const unsupportedLeadEntity = extractFactEntities(lead).some((entity) => {
+    const normalizedEntity = normalizeProposalConstraintText(entity);
+    return (
+      !["for", "in", "within", "when", "where", "on", "dans", "pour", "lorsque", "sur"].includes(
+        normalizedEntity,
+      ) && !supportedLeadEntitySurface.includes(normalizedEntity)
+    );
+  });
+  if (unsupportedLeadEntity) return false;
+
+  const normalizedContextLead = normalizedLead
+    .replace(/^(?:in|within|when|where|on|for|dans|pour|lorsque|sur)\s+/u, "")
+    .replace(/^(?:the|a|an|le|la|les|un|une|des|du)\s+/u, "");
+  const groundedJobContexts = [
+    ...(args.brief.topResponsibilities ?? []),
+    ...(args.brief.workContext ?? []),
+    ...(args.brief.keyRequirements ?? []),
+    ...(args.brief.referencedDemands ?? []).map((demand) => demand.text),
+    ...resolvePremiumOpeningWorkSurfaces(args.brief).map((surface) =>
+      french ? surface.frenchContextPhrase : surface.contextPhrase,
+    ),
+  ];
+  if (
+    groundedJobContexts.some(
+      (context) =>
+        normalizedContextLead ===
+        normalizeProposalConstraintText(context.replace(/[.!?]$/u, "")),
+    )
+  ) {
+    return true;
+  }
+  const supportedLeadTokens = new Set(
+    normalizeEmployerContextTokens(
+      [
+        supportedLeadEntitySurface,
+        ...groundedJobContexts,
+      ].join(" "),
+    ),
+  );
+  for (const surface of resolvePremiumOpeningWorkSurfaces(args.brief)) {
+    for (const token of PREMIUM_WORK_SURFACE_GROUNDING_TOKENS[surface.id]) {
+      supportedLeadTokens.add(token);
+    }
+  }
+  if (
+    supportedLeadTokens.has("customer") &&
+    supportedLeadTokens.has("facing")
+  ) {
+    for (const token of [
+      "client",
+      "clients",
+      "destine",
+      "destinee",
+      "destinees",
+      "destines",
+      "utilisateur",
+      "utilisateurs",
+    ]) {
+      supportedLeadTokens.add(token);
+    }
+  }
+
+  const allowedContextQualifiers = new Set([
+    "accurate",
+    "careful",
+    "clear",
+    "consistent",
+    "delivery",
+    "detailed",
+    "reliable",
+    "structured",
+    "fiable",
+    "precis",
+    "precise",
+    "structure",
+  ]);
+  const contextTokens = normalizeEmployerContextTokens(normalizedContextLead);
+  const hasUnsupportedContextToken = contextTokens.some(
+    (token) =>
+      !supportedLeadTokens.has(token) &&
+      !allowedContextQualifiers.has(token),
+  );
+  if (hasUnsupportedContextToken) return false;
+
+  return contextTokens.some((token) => supportedLeadTokens.has(token));
+}
+
+function openingEmployerContextSeparatorIndex(args: {
+  opening: string;
+  brief: CoverLetterBrief;
+}): number {
+  const compact = compactWhitespace(args.opening);
+  const separatorIndexes = Array.from(
+    compact.matchAll(/[,;:—–]/gu),
+    (match) => match.index,
+  );
+  for (const separatorIndex of separatorIndexes.reverse()) {
+    if (
+      isGroundedEmployerContextLead({
+        lead: compact.slice(0, separatorIndex),
+        brief: args.brief,
+      })
+    ) {
+      return separatorIndex;
+    }
+  }
+  return -1;
+}
+
+function openingAlreadyHasEmployerContextLead(args: {
+  opening: string;
+  brief: CoverLetterBrief;
+}): boolean {
+  return openingEmployerContextSeparatorIndex(args) > 0;
+}
+
+function openingContinuation(value: string): string {
+  const opening = compactWhitespace(value).replace(/[.!?]$/u, "");
+  if (!opening) return "";
+  if (/^i\b/i.test(opening)) return `I${opening.slice(1)}`;
+  return opening.charAt(0).toLowerCase() + opening.slice(1);
+}
+
+const CV_BACKED_OPENING_FIRST_PERSON_PATTERN = {
+  en: /^(?:I|My)\b/iu,
+  fr: /^(?:J['’]|Je|Mon|Ma|Mes)\b/iu,
+} as const satisfies Record<"en" | "fr", RegExp>;
+const CV_BACKED_OPENING_SUBJECT_RULES = {
+  en: [
+    {
+      pattern: /^(?:responsible|accountable)\b/i,
+      prefix: "I was ",
+    },
+    {
+      pattern:
+        /^(?:assisted|built|coordinated|delivered|documented|drove|handled|improved|led|maintained|managed|monitored|owned|reported|supported|tracked|developed|implemented|reduced|increased|created|designed|launched|completed|prepared|operated|executed|trained|reviewed)\b/i,
+      prefix: "I ",
+    },
+  ],
+  fr: [
+    {
+      pattern: /^(?:responsable|charg[eé]e?)(?=\s|$)/iu,
+      prefix: "j'étais ",
+    },
+    {
+      pattern:
+        /^(?:coordonn(?:é|ée)|gér(?:é|ée)|suivi|document(?:é|ée)|amélior(?:é|ée)|réduit|augment(?:é|ée)|cré(?:é|ée)|développ(?:é|ée)|mis|men(?:é|ée)|dirig(?:é|ée)|conçu|conçue|lanc(?:é|ée)|prépar(?:é|ée)|réalis(?:é|ée)|assur(?:é|ée))(?=\s|$)/iu,
+      prefix: "j'ai ",
+    },
+    {
+      pattern:
+        /^(?:coordonne|gère|gere|suis|documente|améliore|ameliore|réduis|reduis|augmente|crée|cree|développe|developpe|mets|mène|mene|dirige|conçois|concois|lance|prépare|prepare|réalise|realise|assure)(?=\s|$)/iu,
+      prefix: "je ",
+    },
+  ],
+} as const satisfies Record<
+  "en" | "fr",
+  readonly { pattern: RegExp; prefix: string }[]
+>;
+
+function subjectCvBackedOpeningContinuation(
+  value: string,
+  language: "en" | "fr",
+): string {
+  const continuation = openingContinuation(value);
+  if (CV_BACKED_OPENING_FIRST_PERSON_PATTERN[language].test(continuation)) {
+    return continuation;
+  }
+  const subjectRule = CV_BACKED_OPENING_SUBJECT_RULES[language].find(
+    ({ pattern }) => pattern.test(continuation),
+  );
+  return subjectRule ? `${subjectRule.prefix}${continuation}` : "";
+}
+
+function cvBackedOpeningProofContinuation(
+  value: string,
+  language: "en" | "fr",
+): string {
+  const opening = compactWhitespace(value).replace(/[.!?]$/u, "");
+  if (
+    /^(?:in|within|when|where|on|for|at|across|during|while|as|dans|pour|lorsque|sur|chez|avec|auprès|après)\b/i.test(
+      opening,
+    )
+  ) {
+    const firstPersonProof = opening.match(
+      /[,;:—–]\s*((?:I\b|My\b|J['’]|Je\b|Mon\b|Ma\b|Mes\b)[\s\S]*)$/iu,
+    )?.[1];
+    if (firstPersonProof) {
+      return openingContinuation(firstPersonProof);
+    }
+  }
+  const separatorIndex = opening.search(/[,;:—–]/u);
+  if (separatorIndex > 0) {
+    const rejectedLead = opening.slice(0, separatorIndex);
+    if (
+      /^(?:in|within|when|where|on|for|at|across|during|while|as|dans|pour|lorsque|sur|chez|avec|auprès|après)\b/i.test(
+        rejectedLead,
+      )
+    ) {
+      return subjectCvBackedOpeningContinuation(
+        opening.slice(separatorIndex + 1),
+        language,
+      );
+    }
+  }
+  return subjectCvBackedOpeningContinuation(opening, language);
+}
+
+function repairAcceptedCvBackedEmployerContextLead(
+  opening: string,
+  language: "en" | "fr",
+  brief: CoverLetterBrief,
+): string {
+  const separatorIndex = openingEmployerContextSeparatorIndex({
+    opening,
+    brief,
+  });
+  if (separatorIndex <= 0) return opening;
+  const originalContinuation = compactWhitespace(
+    opening.slice(separatorIndex + 1),
+  ).replace(/[.!?]$/u, "");
+  const repairedContinuation = subjectCvBackedOpeningContinuation(
+    originalContinuation,
+    language,
+  );
+  if (!repairedContinuation || repairedContinuation === originalContinuation) {
+    return opening;
+  }
+  const terminalPunctuation = opening.match(/[.!?]$/u)?.[0] ?? "";
+  return `${opening.slice(0, separatorIndex)}, ${repairedContinuation}${terminalPunctuation}`;
+}
+
+function ensureCvBackedEmployerFirstOpening(args: {
+  opening: string;
+  brief: CoverLetterBrief;
+}): string {
+  const opening = compactWhitespace(args.opening);
+  const language = getDeterministicCopyLanguage(args.brief.language);
+  if (args.brief.contextClass === "no_cv" || !language || !opening) {
+    return opening;
+  }
+  if (
+    openingAlreadyHasEmployerContextLead({
+      opening,
+      brief: args.brief,
+    })
+  ) {
+    const repairedOpening = repairAcceptedCvBackedEmployerContextLead(
+      opening,
+      language,
+      args.brief,
+    );
+    const separatorIndex = openingEmployerContextSeparatorIndex({
+      opening: repairedOpening,
+      brief: args.brief,
+    });
+    if (separatorIndex <= 0) return repairedOpening;
+    const candidateContinuation = compactWhitespace(
+      repairedOpening.slice(separatorIndex + 1),
+    );
+    const openingEvidence = buildOpeningCandidateEvidence(args.brief);
+    const subjectContinuation = subjectCvBackedOpeningContinuation(
+      candidateContinuation,
+      language,
+    );
+    if (
+      subjectContinuation &&
+      candidateClaimSurfaceSupportsEvidence({
+        generatedText: subjectContinuation,
+        evidence: openingEvidence,
+      })
+    ) {
+      return repairedOpening;
+    }
+    const evidenceContinuation = openingEvidence
+      .map((fact) => cvBackedOpeningProofContinuation(fact.text, language))
+      .find(Boolean);
+    if (!evidenceContinuation) return repairedOpening;
+    const terminalPunctuation = repairedOpening.match(/[.!?]$/u)?.[0] ?? ".";
+    return `${repairedOpening.slice(0, separatorIndex)}, ${evidenceContinuation}${terminalPunctuation}`;
+  }
+  const primarySurface = resolvePremiumOpeningWorkSurfaces(args.brief)[0];
+  const french = language === "fr";
+  const lead = primarySurface
+    ? french
+      ? `Pour ${primarySurface.frenchContextPhrase}`
+      : `In ${primarySurface.contextPhrase}`
+    : resolveCvBackedEmployerFirstFallbackLead(args.brief, french);
+  const openingEvidence = buildOpeningCandidateEvidence(args.brief);
+  const proofContinuation = cvBackedOpeningProofContinuation(opening, language);
+  if (
+    proofContinuation &&
+    candidateClaimSurfaceSupportsEvidence({
+      generatedText: proofContinuation,
+      evidence: openingEvidence,
+    })
+  ) {
+    return `${lead}, ${proofContinuation}`;
+  }
+  const evidenceContinuation = openingEvidence
+    .map((fact) => cvBackedOpeningProofContinuation(fact.text, language))
+    .find(Boolean);
+  return evidenceContinuation ? `${lead}, ${evidenceContinuation}` : opening;
 }
 
 function addAdjacentRoleCompanyContextToOpening(args: {
@@ -5579,9 +6711,16 @@ function addAdjacentRoleCompanyContextToOpening(args: {
   ]);
   if (!roleCompanyContext) return args.opening;
 
+  const employerFirstOpening = ensureCvBackedEmployerFirstOpening({
+    opening: args.opening,
+    brief: args.brief,
+  });
+  if (getDeterministicCopyLanguage(args.brief.language) !== "en") {
+    return employerFirstOpening;
+  }
   const existingText = compactWhitespace(
     [
-      args.opening,
+      employerFirstOpening,
       args.brief.supportEvidence.join(" "),
       args.brief.topEvidence.join(" "),
     ].join(" "),
@@ -5592,17 +6731,20 @@ function addAdjacentRoleCompanyContextToOpening(args: {
     .map((item) => compactWhitespace(item))
     .filter(Boolean);
   const openingAlreadyHasCompany = companies.some((company) =>
-    compactWhitespace(args.opening).includes(company),
+    employerFirstOpening.includes(company),
   );
-  if (openingAlreadyHasCompany || !existingText) return args.opening;
+  if (openingAlreadyHasCompany || !existingText) return employerFirstOpening;
 
   const subject = roleCompanySubject(roleCompanyContext).replace(/[.!?]$/u, "");
-  const opening = compactWhitespace(args.opening);
+  const opening = compactWhitespace(employerFirstOpening);
   if (!opening) return ensureSentenceEnding(subject);
-  if (/^I\b/.test(opening)) {
-    return ensureSentenceEnding(`${subject}, ${opening}`);
-  }
-  return ensureSentenceEnding(`${subject}, ${startsLowercase(opening)}`);
+  const openingWithoutEnding = opening.replace(/[.!?]$/u, "");
+  const evidenceContext = roleCompanyContext
+    .replace(/^while\s+working\s+as\s+/i, "my experience as ")
+    .replace(/^with\s+experience\s+as\s+/i, "my experience as ");
+  return ensureSentenceEnding(
+    `${openingWithoutEnding}; this is supported by ${evidenceContext}`,
+  );
 }
 
 function normalizeMistralAdjacentBridgeBodyParts(args: {
@@ -6047,7 +7189,9 @@ function buildPremiumCoverLetterRepairPrompt(args: {
     "- lower-ownership verbs such as built, improved, maintained, documented, tracked, coordinated, partnered, supported, or contributed when source-backed",
     "",
     "Structure:",
-    "- opening: factual candidate role/responsibility sentence",
+    args.brief.contextClass === "no_cv"
+      ? "- opening: factual candidate role/responsibility sentence"
+      : "- opening: one bounded job work surface first, immediately grounded by factual candidate evidence",
     "- proofBlock: concrete CV evidence",
     "- employerValueBlock: more concrete CV evidence, not employer value",
     "- closeLine: one short factual sentence",
@@ -6080,6 +7224,8 @@ function buildPremiumCoverLetterQualityRepairPrompt(args: {
     "",
     "Allowed repairs:",
     "- remove meta-writing and generic cover-letter phrases",
+    "- preserve a CV-backed opening that starts with one bounded job work surface and then grounds it in candidate evidence",
+    "- return the previous opening unchanged; this quality pass may edit only the other body parts",
     "- make the employerValueBlock use the job context as an angle instead of listing the job offer",
     "- replace low-value job echo with candidate-backed overlap already present in the brief",
     "- reduce verbosity by shortening or deduplicating sentences",
@@ -6302,7 +7448,7 @@ async function tryRepairPremiumCoverLetterQualityShadow(args: {
 
   let repairedBodyParts: CoverLetterBodyParts;
   try {
-    repairedBodyParts = parseCoverLetterBodyPartsWriterPayload(
+    const proposedBodyParts = parseCoverLetterBodyPartsWriterPayload(
       await args.writer({
         prompt: buildPremiumCoverLetterQualityRepairPrompt({
           brief: args.brief,
@@ -6314,6 +7460,13 @@ async function tryRepairPremiumCoverLetterQualityShadow(args: {
         signal: args.signal,
       }),
     );
+    repairedBodyParts = repairPremiumCoverLetterBodyParts({
+      bodyParts: {
+        ...proposedBodyParts,
+        opening: args.bodyParts.opening,
+      },
+      brief: args.brief,
+    });
   } catch (error) {
     if (isAbortLikeError(error, args.signal)) {
       throw error;

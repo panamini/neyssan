@@ -399,8 +399,8 @@ describe("benchmark-cover-letter-writers", () => {
       providerMaxRetries: 0,
       maxRepairs: 0,
       writerMaxOutputTokens: 2048,
-      declaredMaxUsdPerCall: 0.15064,
-      minimumSafeReservationUsd: 3.61536,
+      declaredMaxUsdPerCall: 0.150455,
+      minimumSafeReservationUsd: 3.61092,
       targetReservationUsd: 2.5,
       targetReservationProven: false,
     });
@@ -408,7 +408,7 @@ describe("benchmark-cover-letter-writers", () => {
     expect(preflight.worstCase).toMatchObject({
       caseId: "blind-fr-implementation-adjacent",
       writerModel: "gpt-5.6-sol",
-      serializedInputByteUpperBound: 17840,
+      serializedInputByteUpperBound: 17803,
     });
 
     const insufficient = parseCoverLetterBenchmarkCliOptions(
@@ -418,7 +418,7 @@ describe("benchmark-cover-letter-writers", () => {
         "--max-calls=24",
         "--max-repairs=0",
         "--max-usd=2.5",
-        "--max-usd-per-call=0.15064",
+        "--max-usd-per-call=0.150455",
       ],
       "0",
     );
@@ -427,11 +427,11 @@ describe("benchmark-cover-letter-writers", () => {
         options: insufficient,
         preflight,
       }),
-    ).toThrow(/minimum safe reservation of 3\.61536 USD/iu);
+    ).toThrow(/minimum safe reservation of 3\.61092 USD/iu);
 
     const safe = {
       ...insufficient,
-      maxUsd: 3.61536,
+      maxUsd: 3.61092,
     };
     expect(() =>
       assertQualityEval2BBudgetContract({ options: safe, preflight }),
@@ -478,7 +478,7 @@ describe("benchmark-cover-letter-writers", () => {
       preflight.entries.find(
         (entry) => entry.writerModel === "mistral-medium-latest",
       ),
-    ).toMatchObject({ serializedInputByteUpperBound: 12_025 });
+    ).toMatchObject({ serializedInputByteUpperBound: 12_087 });
     expect(() =>
       assertQualityEval2DSampleBudgetContract({ options, preflight }),
     ).not.toThrow();
@@ -499,7 +499,7 @@ describe("benchmark-cover-letter-writers", () => {
     });
 
     expect(contract).toMatchObject({
-      promptCharacterLength: 10_965,
+      promptCharacterLength: 11_031,
       maxPromptCharacters: 12_000,
     });
     expect(contract.promptCharacterLength).toBeLessThanOrEqual(
@@ -1194,20 +1194,20 @@ describe("benchmark-cover-letter-writers", () => {
     ).toEqual([
       {
         artifact:
-          "eb98705be57c3d687afa215fb5c127260e9ff7933fa8d32d1f98f4223b71dfb3",
+          "1460169306568ac30ab1560c91cd1ea0e219254ca8d815053add5c475f6432be",
         provenance:
-          "fcc559d0ab92833c8f0ea5fc02d8125e58e7a10c4159d47a54a8169e16935acf",
+          "7730713dcf543c45e87f24cb581e7ea8eadb912947e86a7c811f127fede74e11",
         prompts: [
-          "b0baf7bdcbd9aa3e0f492f46c7cae108d7c411d0e6ef60f0a555ac435c600e3e",
+          "eeaa255113162c1da0895cd3f730b170857d14c552fedb6b822da9c50e777331",
         ],
       },
       {
         artifact:
-          "ca29a27fdba65c332596554ebd542bc253186424aab10a6b9f9de712d8133a08",
+          "e8672c1940aa68c96f3f43e2287614ff9af53c4a39e5a2b25b8f8bf504a51c06",
         provenance:
-          "e4e737318e397fbf7bdcd1dc52834ffaad1600797fe29cc00037fdf635cd1860",
+          "28aa105abba0005c246cc5cbc91ecb9f7fc93e08442cab54a5e779a19ca61c99",
         prompts: [
-          "a1f5341f65cd4054c491e37c25713ecb5c519af1a72c5fea352687bb1ecea823",
+          "2f893c01a2d94278d3fe639bfa10656eb9d2b0a2176640b129460670f010f41a",
         ],
       },
     ]);
@@ -1307,7 +1307,7 @@ describe("benchmark-cover-letter-writers", () => {
     )!;
     expect(mistral.artifact.provenance).toMatchObject({
       origin: "provider_reported",
-      status: "validated_final_text",
+      status: "validated_after_structured_repair",
       sections: {
         opening: {
           claimIds: ["claim_opening_001"],
@@ -1370,9 +1370,9 @@ describe("benchmark-cover-letter-writers", () => {
       ...fixture,
       id: "mistral-adjacent-repair-v1",
       expectedArtifactHash:
-        "8cbeebf601ca3914d01e5dce1f12cb25795f1154f2b30ed8c66146251064802b",
+        "e8672c1940aa68c96f3f43e2287614ff9af53c4a39e5a2b25b8f8bf504a51c06",
       expectedProvenanceHash:
-        "f182807ad2b0adb9a1a952c1470a13bb3d419d5d46186e9918bb7b4e6e74a5d6",
+        "28aa105abba0005c246cc5cbc91ecb9f7fc93e08442cab54a5e779a19ca61c99",
       responses: [
         {
           ...firstResponse,
@@ -1390,7 +1390,7 @@ describe("benchmark-cover-letter-writers", () => {
         {
           schemaId: "premium_cover_letter_body_parts",
           expectedWriterPromptHash:
-            "33ec731f435a934272522d17d6a83792c60bdd19da29790bde14622dc2765ea7",
+            "37146909ac37299e86fc7a91a79b0ebc607d2b9c93d2a44a967f9f20c62dfa8d",
           payload: {
             opening: firstResponse.payload.bodyParts.opening.text,
             proofBlock: firstResponse.payload.bodyParts.proofBlock.text,

@@ -201,9 +201,9 @@ function getLoggedMistralDiagnostics(infoSpy: ReturnType<typeof vi.spyOn>) {
 
 const qwenPremiumBodyPartsFixture = {
   opening:
-    "I am applying for the Senior Frontend Engineer role because my recent work has centered on shipping customer-facing React and TypeScript products.",
+    "For customer-facing React and TypeScript delivery, I led a design system migration used across four product squads at Acme.",
   proofBlock:
-    "At Acme, I led a design system migration used across four product squads and improved release consistency across shared interface work.",
+    "At Acme, I improved release consistency across shared interface work.",
   employerValueBlock:
     "That background is most relevant in roles where interface quality, collaboration, and iteration all shape the final product experience.",
   closeLine: "I would welcome the opportunity to discuss the role further.",
@@ -503,10 +503,10 @@ describe("proposal provider busy handling", () => {
                 bodyParts: {
                   opening: {
                     section: "opening",
-                    text: "At Acme, I led a design system migration used across four product squads.",
+                    text: "For customer-facing React and TypeScript delivery, I led a design system migration used across four product squads at Acme.",
                     claimIds: ["claim_opening_001"],
                     factIds: ["fact_experience_001_highlight_001"],
-                    demandIds: [],
+                    demandIds: ["demand_core_001"],
                   },
                   proofBlock: {
                     section: "proofBlock",
@@ -591,6 +591,9 @@ describe("proposal provider busy handling", () => {
         fallbackTriggerCode: null,
       });
       expect(result.proposalContent).toMatch(/^Dear Hiring Manager,/);
+      expect(result.proposalContent).toMatch(
+        /^Dear Hiring Manager,\n\nFor customer-facing React and TypeScript delivery,/,
+      );
       expect(mockOpenAIResponsesCreate).toHaveBeenCalledTimes(1);
       expect(mockOpenAIResponsesCreate.mock.calls[0]?.[0]).toEqual(
         expect.objectContaining({
@@ -667,10 +670,10 @@ describe("proposal provider busy handling", () => {
                   bodyParts: {
                     opening: {
                       section: "opening",
-                      text: "At Acme, I led a design system migration used across four product squads.",
+                      text: "For customer-facing React and TypeScript delivery, I led a design system migration used across four product squads at Acme.",
                       claimIds: ["claim_opening_001"],
                       factIds: ["fact_experience_001_highlight_001"],
-                      demandIds: [],
+                      demandIds: ["demand_core_001"],
                     },
                     proofBlock: {
                       section: "proofBlock",
@@ -817,10 +820,10 @@ describe("proposal provider busy handling", () => {
                   bodyParts: {
                     opening: {
                       section: "opening",
-                      text: "At Acme, I led a design system migration used across four product squads.",
+                      text: "For customer-facing React and TypeScript delivery, I led a design system migration used across four product squads at Acme.",
                       claimIds: ["claim_opening_001"],
                       factIds: ["fact_experience_001_highlight_001"],
-                      demandIds: [],
+                      demandIds: ["demand_core_001"],
                     },
                     proofBlock: {
                       section: "proofBlock",
@@ -913,9 +916,9 @@ describe("proposal provider busy handling", () => {
         return {
           content: JSON.stringify({
             opening:
-              "I am applying for the Senior Frontend Engineer role because my recent work has centered on customer-facing React and TypeScript products.",
+              "For customer-facing React and TypeScript delivery, I led a design system migration used across four product squads at Acme.",
             proofBlock:
-              "At Acme, I led a design system migration used across four product squads and improved release consistency across shared interface work.",
+              "At Acme, I improved release consistency across shared interface work.",
             employerValueBlock:
               "That background is most relevant in roles where interface quality, collaboration, and iteration all shape the final product experience.",
             closeLine:
@@ -1075,10 +1078,10 @@ describe("proposal provider busy handling", () => {
                 bodyParts: {
                   opening: {
                     section: "opening",
-                    text: "At Acme, I led a design system migration used across four product squads.",
+                    text: "For customer-facing React and TypeScript delivery, I led a design system migration used across four product squads at Acme.",
                     claimIds: ["claim_opening_001"],
                     factIds: ["fact_experience_001_highlight_001"],
-                    demandIds: [],
+                    demandIds: ["demand_core_001"],
                   },
                   proofBlock: {
                     section: "proofBlock",
@@ -1256,10 +1259,10 @@ describe("proposal provider busy handling", () => {
                 bodyParts: {
                   opening: {
                     section: "opening",
-                    text: "In recent roles with ADT Security and Copwatch, I monitored sites and documented observations.",
+                    text: "For work centered on site safety and clear reporting, I monitored sites and documented observations at ADT Security and Copwatch.",
                     claimIds: ["claim_opening_001"],
                     factIds: ["fact_experience_001_highlight_001"],
-                    demandIds: [],
+                    demandIds: ["demand_core_001"],
                   },
                   proofBlock: {
                     section: "proofBlock",
