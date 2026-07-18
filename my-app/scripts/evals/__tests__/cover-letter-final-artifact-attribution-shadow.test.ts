@@ -57,7 +57,7 @@ function buildWriterOutput(): PremiumWriterOutputV1 {
         text: "At Lumio Health, I improved 90-day retention by 18% by redesigning onboarding checkpoints and escalation triggers.",
         claimIds: ["claim_opening_001"],
         factIds: ["fact_experience_001_highlight_001"],
-        demandIds: ["demand_core_001"],
+        demandIds: [],
       },
       proofBlock: {
         section: "proofBlock",

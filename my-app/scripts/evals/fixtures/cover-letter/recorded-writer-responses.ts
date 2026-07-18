@@ -74,9 +74,9 @@ const rawRecordedCoverLetterReplayFixtures = [
     writerProvider: "openai",
     writerModel: "gpt-5.5",
     expectedArtifactHash:
-      "1460169306568ac30ab1560c91cd1ea0e219254ca8d815053add5c475f6432be",
+      "eb98705be57c3d687afa215fb5c127260e9ff7933fa8d32d1f98f4223b71dfb3",
     expectedProvenanceHash:
-      "7730713dcf543c45e87f24cb581e7ea8eadb912947e86a7c811f127fede74e11",
+      "fcc559d0ab92833c8f0ea5fc02d8125e58e7a10c4159d47a54a8169e16935acf",
     frozenConfig: {
       outputLanguage: "English",
       generationControlsBlock: "",
@@ -95,7 +95,7 @@ const rawRecordedCoverLetterReplayFixtures = [
       {
         schemaId: "premium_writer_output_v1",
         expectedWriterPromptHash:
-          "eeaa255113162c1da0895cd3f730b170857d14c552fedb6b822da9c50e777331",
+          "c9d8cc4b60fbcff3c88a2eecf328237f0b1b0b8d309fc1819d6adbac995d07e0",
         payload: {
           version: "premium_writer_output_v1",
           bodyParts: {
@@ -104,7 +104,7 @@ const rawRecordedCoverLetterReplayFixtures = [
               text: "At Lumio Health, I improved 90-day retention by 18% by redesigning onboarding checkpoints and escalation triggers.",
               claimIds: ["claim_opening_001"],
               factIds: ["fact_experience_001_highlight_001"],
-              demandIds: ["demand_core_001"],
+              demandIds: [],
             },
             proofBlock: {
               section: "proofBlock",
@@ -151,9 +151,9 @@ const rawRecordedCoverLetterReplayFixtures = [
     writerProvider: "mistral",
     writerModel: "mistral-medium-latest",
     expectedArtifactHash:
-      "e8672c1940aa68c96f3f43e2287614ff9af53c4a39e5a2b25b8f8bf504a51c06",
+      "ca29a27fdba65c332596554ebd542bc253186424aab10a6b9f9de712d8133a08",
     expectedProvenanceHash:
-      "28aa105abba0005c246cc5cbc91ecb9f7fc93e08442cab54a5e779a19ca61c99",
+      "e4e737318e397fbf7bdcd1dc52834ffaad1600797fe29cc00037fdf635cd1860",
     frozenConfig: {
       outputLanguage: "English",
       generationControlsBlock: "",
@@ -172,7 +172,7 @@ const rawRecordedCoverLetterReplayFixtures = [
       {
         schemaId: "premium_writer_output_v1",
         expectedWriterPromptHash:
-          "2f893c01a2d94278d3fe639bfa10656eb9d2b0a2176640b129460670f010f41a",
+          "33622298a9b71dd77d66e58eb63328bd0acefb19843e31b00067b15ca0d459ff",
         payload: {
           version: "premium_writer_output_v1",
           bodyParts: {
@@ -181,7 +181,7 @@ const rawRecordedCoverLetterReplayFixtures = [
               text: "At Northline Logistics, I reduced delayed-order escalations by 17% through tighter exception routing and follow-up.",
               claimIds: ["claim_opening_001"],
               factIds: ["fact_experience_001_highlight_003"],
-              demandIds: ["demand_core_001"],
+              demandIds: [],
             },
             proofBlock: {
               section: "proofBlock",

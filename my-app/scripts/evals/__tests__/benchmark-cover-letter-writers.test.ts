@@ -391,7 +391,6 @@ describe("benchmark-cover-letter-writers", () => {
       cases: coverLetterBlindReviewCases,
       writerModels: QUALITY_EVAL_2B_WRITER_MODELS,
     });
-
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(preflight).toMatchObject({
       version: "cover_letter_eval_cost_preflight_v1",
@@ -399,8 +398,8 @@ describe("benchmark-cover-letter-writers", () => {
       providerMaxRetries: 0,
       maxRepairs: 0,
       writerMaxOutputTokens: 2048,
-      declaredMaxUsdPerCall: 0.150455,
-      minimumSafeReservationUsd: 3.61092,
+      declaredMaxUsdPerCall: 0.150785,
+      minimumSafeReservationUsd: 3.61884,
       targetReservationUsd: 2.5,
       targetReservationProven: false,
     });
@@ -408,7 +407,7 @@ describe("benchmark-cover-letter-writers", () => {
     expect(preflight.worstCase).toMatchObject({
       caseId: "blind-fr-implementation-adjacent",
       writerModel: "gpt-5.6-sol",
-      serializedInputByteUpperBound: 17803,
+      serializedInputByteUpperBound: 17_869,
     });
 
     const insufficient = parseCoverLetterBenchmarkCliOptions(
@@ -418,7 +417,7 @@ describe("benchmark-cover-letter-writers", () => {
         "--max-calls=24",
         "--max-repairs=0",
         "--max-usd=2.5",
-        "--max-usd-per-call=0.150455",
+        "--max-usd-per-call=0.150785",
       ],
       "0",
     );
@@ -427,11 +426,11 @@ describe("benchmark-cover-letter-writers", () => {
         options: insufficient,
         preflight,
       }),
-    ).toThrow(/minimum safe reservation of 3\.61092 USD/iu);
+    ).toThrow(/minimum safe reservation of 3\.61884 USD/iu);
 
     const safe = {
       ...insufficient,
-      maxUsd: 3.61092,
+      maxUsd: 3.61884,
     };
     expect(() =>
       assertQualityEval2BBudgetContract({ options: safe, preflight }),
@@ -478,7 +477,7 @@ describe("benchmark-cover-letter-writers", () => {
       preflight.entries.find(
         (entry) => entry.writerModel === "mistral-medium-latest",
       ),
-    ).toMatchObject({ serializedInputByteUpperBound: 12_087 });
+    ).toMatchObject({ serializedInputByteUpperBound: 12_054 });
     expect(() =>
       assertQualityEval2DSampleBudgetContract({ options, preflight }),
     ).not.toThrow();
@@ -497,9 +496,8 @@ describe("benchmark-cover-letter-writers", () => {
     const contract = await assertQualityEval2DSharedPromptContract({
       benchmarkCase,
     });
-
     expect(contract).toMatchObject({
-      promptCharacterLength: 11_031,
+      promptCharacterLength: 10_994,
       maxPromptCharacters: 12_000,
     });
     expect(contract.promptCharacterLength).toBeLessThanOrEqual(
@@ -1194,20 +1192,20 @@ describe("benchmark-cover-letter-writers", () => {
     ).toEqual([
       {
         artifact:
-          "1460169306568ac30ab1560c91cd1ea0e219254ca8d815053add5c475f6432be",
+          "eb98705be57c3d687afa215fb5c127260e9ff7933fa8d32d1f98f4223b71dfb3",
         provenance:
-          "7730713dcf543c45e87f24cb581e7ea8eadb912947e86a7c811f127fede74e11",
+          "fcc559d0ab92833c8f0ea5fc02d8125e58e7a10c4159d47a54a8169e16935acf",
         prompts: [
-          "eeaa255113162c1da0895cd3f730b170857d14c552fedb6b822da9c50e777331",
+          "c9d8cc4b60fbcff3c88a2eecf328237f0b1b0b8d309fc1819d6adbac995d07e0",
         ],
       },
       {
         artifact:
-          "e8672c1940aa68c96f3f43e2287614ff9af53c4a39e5a2b25b8f8bf504a51c06",
+          "ca29a27fdba65c332596554ebd542bc253186424aab10a6b9f9de712d8133a08",
         provenance:
-          "28aa105abba0005c246cc5cbc91ecb9f7fc93e08442cab54a5e779a19ca61c99",
+          "e4e737318e397fbf7bdcd1dc52834ffaad1600797fe29cc00037fdf635cd1860",
         prompts: [
-          "2f893c01a2d94278d3fe639bfa10656eb9d2b0a2176640b129460670f010f41a",
+          "33622298a9b71dd77d66e58eb63328bd0acefb19843e31b00067b15ca0d459ff",
         ],
       },
     ]);
@@ -1307,7 +1305,7 @@ describe("benchmark-cover-letter-writers", () => {
     )!;
     expect(mistral.artifact.provenance).toMatchObject({
       origin: "provider_reported",
-      status: "validated_after_structured_repair",
+      status: "validated_final_text",
       sections: {
         opening: {
           claimIds: ["claim_opening_001"],
@@ -1370,9 +1368,9 @@ describe("benchmark-cover-letter-writers", () => {
       ...fixture,
       id: "mistral-adjacent-repair-v1",
       expectedArtifactHash:
-        "e8672c1940aa68c96f3f43e2287614ff9af53c4a39e5a2b25b8f8bf504a51c06",
+        "8cbeebf601ca3914d01e5dce1f12cb25795f1154f2b30ed8c66146251064802b",
       expectedProvenanceHash:
-        "28aa105abba0005c246cc5cbc91ecb9f7fc93e08442cab54a5e779a19ca61c99",
+        "f182807ad2b0adb9a1a952c1470a13bb3d419d5d46186e9918bb7b4e6e74a5d6",
       responses: [
         {
           ...firstResponse,
@@ -1390,7 +1388,7 @@ describe("benchmark-cover-letter-writers", () => {
         {
           schemaId: "premium_cover_letter_body_parts",
           expectedWriterPromptHash:
-            "37146909ac37299e86fc7a91a79b0ebc607d2b9c93d2a44a967f9f20c62dfa8d",
+            "33ec731f435a934272522d17d6a83792c60bdd19da29790bde14622dc2765ea7",
           payload: {
             opening: firstResponse.payload.bodyParts.opening.text,
             proofBlock: firstResponse.payload.bodyParts.proofBlock.text,
