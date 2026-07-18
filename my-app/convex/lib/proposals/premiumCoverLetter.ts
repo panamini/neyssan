@@ -3124,18 +3124,20 @@ function resolvePremiumCoverLetterEditorialQualityGuidance(
 
   const shared =
     "CV-backed editorial quality contract: build one hiring case, not a CV inventory; use one role-specific opening, select one or two concrete candidate proofs, state why each proof is relevant to one top responsibility, and end with one short evidence-grounded sentence rather than an interview request.";
+  const employerFirstShared =
+    "CV-backed editorial quality contract: make the target role, not a candidate metric or career summary, the grammatical frame of the opening; connect that frame to one source-backed CV proof without presenting job-post language as candidate history; use at most one other proof, and close with one short evidence-grounded sentence.";
 
   const deterministicLanguage = getDeterministicCopyLanguage(brief.language);
   if (deterministicLanguage === "fr") {
     return [
-      shared,
+      employerFirstShared,
       "French editorial contract: compose in idiomatic professional French, not translated English cadence; avoid 'je serais ravi de', 'se traduit par', 's'aligne avec', 'apporter de la valeur', and repeated discussion invitations.",
     ];
   }
 
   if (deterministicLanguage === "en") {
     return [
-      shared,
+      employerFirstShared,
       "English editorial contract: use concise professional English, direct verbs, and concrete nouns; avoid résumé-summary cadence, 'I am writing to apply', generic enthusiasm, alignment claims, and discussion invitations.",
     ];
   }

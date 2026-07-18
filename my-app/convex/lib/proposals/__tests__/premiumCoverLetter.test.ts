@@ -1071,10 +1071,18 @@ describe("premium cover letter prompt contract", () => {
 
     for (const prompt of inScopePrompts) {
       expect(prompt).toContain("CV-backed editorial quality contract:");
-      expect(prompt).toContain("select one or two concrete candidate proofs");
-      expect(prompt).toContain("one role-specific opening");
-      expect(prompt).toContain("why each proof is relevant");
-      expect(prompt).toContain("rather than an interview request");
+      expect(prompt).toContain(
+        "make the target role, not a candidate metric or career summary",
+      );
+      expect(prompt).toContain("the grammatical frame of the opening");
+      expect(prompt).toContain(
+        "connect that frame to one source-backed CV proof",
+      );
+      expect(prompt).toContain(
+        "without presenting job-post language as candidate history",
+      );
+      expect(prompt).toContain("use at most one other proof");
+      expect(prompt).toContain("one short evidence-grounded sentence");
       expect(prompt).toContain(
         "Across cv_direct and cv_adjacent modes, sound like a person making a case, not a memo.",
       );
@@ -1092,12 +1100,31 @@ describe("premium cover letter prompt contract", () => {
     );
     expect(inScopePrompts[3]).toContain("je serais ravi de");
 
-    const spanishPrompt = buildPremiumCoverLetterPrompt({
-      brief: buildDirectBrief("Spanish"),
-    });
-    expect(spanishPrompt).toContain("CV-backed editorial quality contract:");
-    expect(spanishPrompt).not.toContain("English editorial contract:");
-    expect(spanishPrompt).not.toContain("French editorial contract:");
+    for (const language of [
+      "Spanish",
+      "German",
+      "Italian",
+      "Portuguese",
+      "Polish",
+      "Dutch",
+      "Greek",
+      "Hungarian",
+      "Lithuanian",
+      "Estonian",
+      "Russian",
+      "Arabic",
+    ] as const) {
+      const prompt = buildPremiumCoverLetterPrompt({
+        brief: buildDirectBrief(language),
+      });
+      expect(prompt).toContain("CV-backed editorial quality contract:");
+      expect(prompt).toContain("use one role-specific opening");
+      expect(prompt).not.toContain(
+        "make the target role, not a candidate metric or career summary",
+      );
+      expect(prompt).not.toContain("English editorial contract:");
+      expect(prompt).not.toContain("French editorial contract:");
+    }
 
     const noCvFacts = buildAllowedFactsPack({
       personalizationContext: null,
@@ -1132,6 +1159,9 @@ describe("premium cover letter prompt contract", () => {
       ].join("\n"),
     );
     expect(noCvPrompt).not.toContain("CV-backed editorial quality contract:");
+    expect(noCvPrompt).not.toContain(
+      "make the target role, not a candidate metric or career summary",
+    );
     expect(noCvPrompt).not.toContain("English editorial contract:");
     expect(noCvPrompt).not.toContain("French editorial contract:");
   });
