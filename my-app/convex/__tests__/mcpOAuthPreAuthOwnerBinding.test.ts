@@ -50,7 +50,7 @@ const CHATGPT_REDIRECT_URI =
 const CLIENT_ID = "chatgpt-apps-sdk-client-fixture";
 const STATE = "opaque_state_1234567890";
 const PKCE_CHALLENGE = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-const RAW_HANDLE = "A".repeat(43);
+const RAW_HANDLE = "a".repeat(64);
 const VALID_HANDLE_HASH = sha256Hex(RAW_HANDLE);
 
 type StoredPreAuthIntentRecord = McpOAuthPreAuthIntentRecordV1 & {

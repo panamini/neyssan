@@ -18,8 +18,6 @@ export const MCP_OAUTH_ACCESS_TOKEN_TTL_MS = 60 * 60 * 1_000;
 export const MCP_OAUTH_AUTHORIZATION_CODE_PRODUCTION_ENVIRONMENT = "mcp_oauth_production_v1";
 const MAX_SAFE_TIMESTAMP_BEFORE_TTL = Number.MAX_SAFE_INTEGER - MCP_OAUTH_AUTHORIZATION_CODE_TTL_MS;
 const MAX_SAFE_TIMESTAMP_BEFORE_ACCESS_TOKEN_TTL = Number.MAX_SAFE_INTEGER - MCP_OAUTH_ACCESS_TOKEN_TTL_MS;
-const MAX_EXPIRED_CODE_CLEANUP_BATCH = 100;
-const MAX_EXPIRED_ACCESS_TOKEN_CLEANUP_BATCH = 100;
 const ACCESS_TOKEN_ISSUE_CLOCK_SKEW_MS = 60_000;
 const ACCESS_TOKEN_VERIFY_CLOCK_SKEW_MS = 60_000;
 const ACCESS_TOKEN_ISSUE_COMMIT_SAFETY_MARGIN_MS = 100;
@@ -87,7 +85,6 @@ const VERIFY_ACCESS_TOKEN_ARGS_KEYS = [
   "now",
   "version",
 ] as const;
-const CLEANUP_ARGS_KEYS = ["now", "version"] as const;
 const OWNER_IDENTITY_KEYS = ["subject", "issuer", "version"] as const;
 const TRUSTED_OWNER_KEYS = ["kind", "twoweeksClerkId", "version"] as const;
 const AUTHORIZATION_REQUEST_KEYS = [
@@ -302,24 +299,6 @@ export type McpOAuthAuthorizationCodeConsumeResultV1 = Readonly<
       version: 1;
     }
 >;
-
-export type McpOAuthAuthorizationCodeCleanupResultV1 = Readonly<{
-  kind: "mcp_oauth_authorization_code_cleanup_result";
-  ok: true;
-  deletedCount: number;
-  modelVisible: false;
-  safeForLogging: true;
-  version: 1;
-}>;
-
-export type McpOAuthAccessTokenCleanupResultV1 = Readonly<{
-  kind: "mcp_oauth_access_token_cleanup_result";
-  ok: true;
-  deletedCount: number;
-  modelVisible: false;
-  safeForLogging: true;
-  version: 1;
-}>;
 
 type SafeAuthorizationCodeFailureV1 = Readonly<{
   code: "mcp_oauth_authorization_code_denied";
@@ -692,48 +671,6 @@ export const internalVerifyMcpOAuthAccessTokenForMcpBoundary = internalQuery({
       safeForLogging: false,
       version: 1,
     };
-  },
-});
-
-export const internalDeleteExpiredMcpOAuthAuthorizationCodes = internalMutation({
-  args: {
-    now: v.number(),
-    version: v.literal(1),
-  },
-  returns: v.any(),
-  handler: async (ctx, args): Promise<McpOAuthAuthorizationCodeCleanupResultV1> => {
-    if (!readRecord(args, CLEANUP_ARGS_KEYS) || !isValidStorageTimestamp(args.now)) {
-      return cleanupResult(0);
-    }
-    const expiredRows = await ctx.db
-      .query("mcpOAuthAuthorizationCodes")
-      .withIndex("by_expires_at", (q) => q.lte("expiresAt", args.now))
-      .take(MAX_EXPIRED_CODE_CLEANUP_BATCH);
-    for (const row of expiredRows) {
-      await ctx.db.delete(row._id);
-    }
-    return cleanupResult(expiredRows.length);
-  },
-});
-
-export const internalDeleteExpiredMcpOAuthAccessTokens = internalMutation({
-  args: {
-    now: v.number(),
-    version: v.literal(1),
-  },
-  returns: v.any(),
-  handler: async (ctx, args): Promise<McpOAuthAccessTokenCleanupResultV1> => {
-    if (!readRecord(args, CLEANUP_ARGS_KEYS) || !isValidStorageTimestamp(args.now)) {
-      return accessTokenCleanupResult(0);
-    }
-    const expiredRows = await ctx.db
-      .query("mcpOAuthAccessTokens")
-      .withIndex("by_expires_at", (q) => q.lte("expiresAt", args.now))
-      .take(MAX_EXPIRED_ACCESS_TOKEN_CLEANUP_BATCH);
-    for (const row of expiredRows) {
-      await ctx.db.delete(row._id);
-    }
-    return accessTokenCleanupResult(expiredRows.length);
   },
 });
 
@@ -1345,28 +1282,6 @@ function safeFailure(): SafeAuthorizationCodeFailureV1 {
     digestEchoed: false,
     identityEchoed: false,
     sensitiveValuesEchoed: false,
-    version: 1,
-  };
-}
-
-function cleanupResult(deletedCount: number): McpOAuthAuthorizationCodeCleanupResultV1 {
-  return {
-    kind: "mcp_oauth_authorization_code_cleanup_result",
-    ok: true,
-    deletedCount,
-    modelVisible: false,
-    safeForLogging: true,
-    version: 1,
-  };
-}
-
-function accessTokenCleanupResult(deletedCount: number): McpOAuthAccessTokenCleanupResultV1 {
-  return {
-    kind: "mcp_oauth_access_token_cleanup_result",
-    ok: true,
-    deletedCount,
-    modelVisible: false,
-    safeForLogging: true,
     version: 1,
   };
 }

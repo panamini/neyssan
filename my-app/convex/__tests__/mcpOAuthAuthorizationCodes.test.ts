@@ -9,7 +9,6 @@ import {
   classifyMcpOAuthAuthorizationCodeStorageRecord,
   internalConsumeMcpOAuthAuthorizationCode,
   internalCreateMcpOAuthAuthorizationCode,
-  internalDeleteExpiredMcpOAuthAccessTokens,
   internalIssueMcpOAuthAccessTokenFromAuthorizationCode,
   internalValidateMcpOAuthAuthorizationCodeForTokenBoundary,
   internalVerifyMcpOAuthAccessTokenForMcpBoundary,
@@ -47,10 +46,9 @@ type StoredAccessTokenRecord = McpOAuthAccessTokenRecordV1 & {
   _creationTime: number;
 };
 
-type Constraint = Readonly<{ field: string; op: "eq" | "lte"; value: unknown }>;
+type Constraint = Readonly<{ field: string; value: unknown }>;
 type IndexConstraintBuilder = Readonly<{
   eq: (field: string, value: unknown) => IndexConstraintBuilder;
-  lte: (field: string, value: unknown) => IndexConstraintBuilder;
 }>;
 
 describe("Convex MCP OAuth authorization codes", () => {
@@ -571,35 +569,6 @@ describe("Convex MCP OAuth authorization codes", () => {
     expect(JSON.stringify(result)).not.toContain(CODE_DIGEST);
   });
 
-  it("deletes expired access-token records in a bounded internal cleanup pass", async () => {
-    const expiredAccessToken = storedAccessToken({ _id: "mcpOAuthAccessTokens_expired_active" });
-    const activeAccessToken = storedAccessToken({
-      _id: "mcpOAuthAccessTokens_active",
-      accessTokenDigest: sha256Hex("V".repeat(43)),
-      issuedAt: NOW + 2,
-      updatedAt: NOW + 2,
-      expiresAt: NOW + 2 + MCP_OAUTH_ACCESS_TOKEN_TTL_MS,
-    });
-    const { ctx, accessTokenRows, deletes } = makeCtx([], [expiredAccessToken, activeAccessToken]);
-
-    const result = await internalDeleteExpiredMcpOAuthAccessTokens._handler(ctx as any, {
-      now: NOW + MCP_OAUTH_ACCESS_TOKEN_TTL_MS,
-      version: 1,
-    });
-
-    expect(result).toEqual({
-      kind: "mcp_oauth_access_token_cleanup_result",
-      ok: true,
-      deletedCount: 1,
-      modelVisible: false,
-      safeForLogging: true,
-      version: 1,
-    });
-    expect(deletes).toEqual(["mcpOAuthAccessTokens_expired_active"]);
-    expect(accessTokenRows).toHaveLength(1);
-    expect(accessTokenRows[0]._id).toBe("mcpOAuthAccessTokens_active");
-  });
-
   it("rejects duplicate, malformed, and client-mismatched code digest access", async () => {
     await expect(consumeWith([], consumeArgs())).resolves.toMatchObject({
       ok: false,
@@ -710,7 +679,6 @@ function makeCtx(seed: StoredCodeRecord[] = [], accessTokenSeed: StoredAccessTok
   const accessTokenRows = accessTokenSeed.map((row) => ({ ...row, scopes: [...row.scopes] }));
   const inserts: Array<{ tableName: string; record: unknown }> = [];
   const patches: Array<{ id: string; patch: Record<string, unknown> }> = [];
-  const deletes: string[] = [];
   let nextId = rows.length + 1;
   let nextAccessTokenId = accessTokenRows.length + 1;
 
@@ -725,22 +693,20 @@ function makeCtx(seed: StoredCodeRecord[] = [], accessTokenSeed: StoredAccessTok
             const constraints: Constraint[] = [];
             const query: IndexConstraintBuilder = {
               eq(field: string, value: unknown) {
-                constraints.push({ field, op: "eq", value });
-                return query;
-              },
-              lte(field: string, value: unknown) {
-                constraints.push({ field, op: "lte", value });
+                constraints.push({ field, value });
                 return query;
               },
             };
             buildQuery(query);
-            expect(["by_authorization_code_digest", "by_access_token_digest", "by_expires_at"]).toContain(indexName);
+            expect([
+              "by_authorization_code_digest",
+              "by_access_token_digest",
+            ]).toContain(indexName);
             const sourceRows = tableName === "mcpOAuthAuthorizationCodes" ? rows : accessTokenRows;
             const matching = sourceRows.filter((row) =>
               constraints.every((constraint) => {
                 const fieldValue = row[constraint.field as keyof typeof row];
-                if (constraint.op === "eq") return fieldValue === constraint.value;
-                return typeof fieldValue === "number" && fieldValue <= constraint.value;
+                return fieldValue === constraint.value;
               }),
             );
             return {
@@ -771,23 +737,10 @@ function makeCtx(seed: StoredCodeRecord[] = [], accessTokenSeed: StoredAccessTok
         patches.push({ id, patch });
         Object.assign(row, patch);
       },
-      delete: async (id: string) => {
-        const index = rows.findIndex((candidate) => candidate._id === id);
-        const accessTokenIndex = accessTokenRows.findIndex((candidate) => candidate._id === id);
-        if (index !== -1) {
-          rows.splice(index, 1);
-          deletes.push(id);
-          return;
-        }
-        if (accessTokenIndex !== -1) {
-          accessTokenRows.splice(accessTokenIndex, 1);
-          deletes.push(id);
-        }
-      },
     },
   };
 
-  return { ctx, rows, accessTokenRows, inserts, patches, deletes };
+  return { ctx, rows, accessTokenRows, inserts, patches };
 }
 
 function createArgs(overrides: Partial<Parameters<typeof internalCreateMcpOAuthAuthorizationCode._handler>[1]> = {}) {

@@ -1170,7 +1170,9 @@ describe("MCP OAuth production route adapter", () => {
     expect(authorizeResponse).toMatchObject({ handled: true, status: 303 });
     expect(authorizeResponse.headers["set-cookie"]).toContain(BROWSER_NONCE_COOKIE);
     expect(authorizeResponse.headers["set-cookie"]).toContain("HttpOnly");
-    expect(authorizeResponse.headers["set-cookie"]).toContain("SameSite=Lax");
+    expect(authorizeResponse.headers["set-cookie"]).toContain("SameSite=None");
+    expect(authorizeResponse.headers["set-cookie"]).toContain("Partitioned");
+    expect(authorizeResponse.headers["set-cookie"]).not.toContain("SameSite=Lax");
     const signInRedirect = new URL(authorizeResponse.headers.location);
     expect(signInRedirect.searchParams.get(MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER)).toBe(RAW_HANDLE);
     expect(signInRedirect.searchParams.get(MCP_OAUTH_CONTINUATION_BROWSER_NONCE_PARAMETER)).toBe(BROWSER_NONCE);
@@ -3960,6 +3962,107 @@ describe("MCP OAuth production route adapter", () => {
     expect(dependencies.checkPreAuthQuota).toHaveBeenCalledTimes(2);
     expect(dependencies.issueAccessToken).toHaveBeenCalledTimes(1);
     expectNoRouteLeakage(response, [RAW_CONFIDENTIAL_CLIENT_SECRET], { allowAccessTokenResponse: true });
+  });
+
+  it("accepts the exact allowlisted client_secret_post flow without PKCE", async () => {
+    const ctx = makeCtx();
+    const dependencies = {
+      ...routeDependencies(ctx),
+      clientSecretPost: clientSecretPostPolicy(),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
+
+    const authorizeResponse = await handleMcpOAuthProductionRouteRequest(
+      request(
+        MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
+        "GET",
+        confidentialAuthorizationRequestPath(),
+      ),
+      config,
+      dependencies,
+    );
+    expect(authorizeResponse).toMatchObject({ handled: true, status: 303 });
+    expect(ctx.preAuthRows).toHaveLength(1);
+
+    const continuationResponse = await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPath()),
+      config,
+      dependencies,
+    );
+    expect(continuationResponse).toMatchObject({ handled: true, status: 302 });
+
+    const tokenResponse = await handleMcpOAuthProductionRouteRequest(
+      tokenRequest(
+        tokenRequestBody({
+          code_verifier: "",
+          client_secret: RAW_CONFIDENTIAL_CLIENT_SECRET,
+        }),
+      ),
+      config,
+      dependencies,
+    );
+
+    expect(tokenResponse).toMatchObject({
+      handled: true,
+      status: 200,
+      json: { access_token: RAW_ACCESS_TOKEN, token_type: "Bearer" },
+    });
+    expect(dependencies.issueAccessToken).toHaveBeenCalledTimes(1);
+    expectNoRouteLeakage(tokenResponse, [RAW_CONFIDENTIAL_CLIENT_SECRET], {
+      allowAccessTokenResponse: true,
+    });
+  });
+
+  it("keeps no-PKCE authorization closed without the exact confidential client policy", async () => {
+    const ctx = makeCtx();
+    const dependencies = {
+      ...routeDependencies(ctx),
+      clientSecretPost: undefined,
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+    const response = await handleMcpOAuthProductionRouteRequest(
+      request(
+        MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
+        "GET",
+        confidentialAuthorizationRequestPath(),
+      ),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(response).toMatchObject({ handled: true, status: 400 });
+    expect(dependencies.createPreAuthIntent).not.toHaveBeenCalled();
+    expect(ctx.preAuthRows).toHaveLength(0);
+    expectNoRouteLeakage(response);
+  });
+
+  it("does not let a PKCE authorization code redeem without its verifier", async () => {
+    const ctx = makeCtx();
+    const dependencies = routeDependencies(ctx);
+    const config = routeConfig({ runtime: "1", approved: "1", routeWiring: "1" });
+    await handleMcpOAuthProductionRouteRequest(
+      request(
+        MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH,
+        "GET",
+        authorizationRequestPath(),
+      ),
+      config,
+      dependencies,
+    );
+    await handleMcpOAuthProductionRouteRequest(
+      request(MCP_OAUTH_CONTINUATION_PATH, "GET", continuationPath()),
+      config,
+      dependencies,
+    );
+
+    const response = await handleMcpOAuthProductionRouteRequest(
+      tokenRequest(tokenRequestBody({ code_verifier: "" })),
+      config,
+      dependencies,
+    );
+
+    expectOAuthTokenErrorResponse(response, 400, "invalid_grant");
+    expect(dependencies.issueAccessToken).toHaveBeenCalledTimes(1);
+    expectNoRouteLeakage(response);
   });
 
   it("rejects client_secret_basic even when its credentials match the allowlisted client", async () => {
@@ -7831,6 +7934,16 @@ function authorizationRequestPath(
   return `${MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH}?${params.toString()}`;
 }
 
+function confidentialAuthorizationRequestPath(
+  overrides: Readonly<Partial<Record<string, string>>> = {},
+): string {
+  const path = authorizationRequestPath(overrides);
+  const parsed = new URL(path, PROD_APP_ORIGIN);
+  parsed.searchParams.delete("code_challenge");
+  parsed.searchParams.delete("code_challenge_method");
+  return `${parsed.pathname}?${parsed.searchParams.toString()}`;
+}
+
 function continuationPath(): string {
   const params = new URLSearchParams({
     [MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER]: RAW_HANDLE,
@@ -7863,7 +7976,12 @@ function tokenRequestBody(
   if (overrides.client_id !== "") params.append("client_id", overrides.client_id ?? CLIENT_ID);
   params.append("redirect_uri", overrides.redirect_uri ?? REDIRECT_URI);
   if (overrides.resource !== "") params.append("resource", overrides.resource ?? RESOURCE);
-  params.append("code_verifier", overrides.code_verifier ?? RAW_CODE_VERIFIER);
+  if (overrides.code_verifier !== "") {
+    params.append(
+      "code_verifier",
+      overrides.code_verifier ?? RAW_CODE_VERIFIER,
+    );
+  }
   if (overrides.client_secret !== "") {
     params.append("client_secret", overrides.client_secret ?? RAW_CONFIDENTIAL_CLIENT_SECRET);
   }
