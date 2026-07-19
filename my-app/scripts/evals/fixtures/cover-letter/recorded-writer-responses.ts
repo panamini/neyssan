@@ -95,7 +95,7 @@ const rawRecordedCoverLetterReplayFixtures = [
       {
         schemaId: "premium_writer_output_v1",
         expectedWriterPromptHash:
-          "c9d8cc4b60fbcff3c88a2eecf328237f0b1b0b8d309fc1819d6adbac995d07e0",
+          "df85e57fe83d961d0d3a55a6a68394b67926ef0f7668f9bc9373c3e2253ba4cc",
         payload: {
           version: "premium_writer_output_v1",
           bodyParts: {
@@ -151,9 +151,9 @@ const rawRecordedCoverLetterReplayFixtures = [
     writerProvider: "mistral",
     writerModel: "mistral-medium-latest",
     expectedArtifactHash:
-      "ca29a27fdba65c332596554ebd542bc253186424aab10a6b9f9de712d8133a08",
+      "7f8bf328428a52c216f1d17f29b707567421330a92e42b917f2d24fca8f3b8c7",
     expectedProvenanceHash:
-      "e4e737318e397fbf7bdcd1dc52834ffaad1600797fe29cc00037fdf635cd1860",
+      "66b985847db72fdda72ab114b69ee9e502784cc82b7f57ebb509efe7038a3c56",
     frozenConfig: {
       outputLanguage: "English",
       generationControlsBlock: "",
@@ -172,7 +172,7 @@ const rawRecordedCoverLetterReplayFixtures = [
       {
         schemaId: "premium_writer_output_v1",
         expectedWriterPromptHash:
-          "33622298a9b71dd77d66e58eb63328bd0acefb19843e31b00067b15ca0d459ff",
+          "a18ac57bf35cc6fc9f4d9e331668a7399a8b3d58ef672f2e3b89cc1d56aec165",
         payload: {
           version: "premium_writer_output_v1",
           bodyParts: {
@@ -185,11 +185,11 @@ const rawRecordedCoverLetterReplayFixtures = [
             },
             proofBlock: {
               section: "proofBlock",
-              text: "I also owned dispatch handoffs, exception tracking, and daily shipment reporting across warehouse and transport teams, and built weekly backlog and on-time dashboards to surface bottlenecks.",
+              text: "I documented standard handoff steps for inbound, picking, and carrier issue escalation, and owned dispatch handoffs, exception tracking, and daily shipment reporting across warehouse and transport teams.",
               claimIds: ["claim_proof_001"],
               factIds: [
+                "fact_achievement_001",
                 "fact_experience_001_highlight_001",
-                "fact_experience_001_highlight_002",
               ],
               demandIds: [],
             },

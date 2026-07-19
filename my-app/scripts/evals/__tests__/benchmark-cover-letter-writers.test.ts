@@ -398,8 +398,8 @@ describe("benchmark-cover-letter-writers", () => {
       providerMaxRetries: 0,
       maxRepairs: 0,
       writerMaxOutputTokens: 2048,
-      declaredMaxUsdPerCall: 0.150785,
-      minimumSafeReservationUsd: 3.61884,
+      declaredMaxUsdPerCall: 0.153785,
+      minimumSafeReservationUsd: 3.69084,
       targetReservationUsd: 2.5,
       targetReservationProven: false,
     });
@@ -407,7 +407,7 @@ describe("benchmark-cover-letter-writers", () => {
     expect(preflight.worstCase).toMatchObject({
       caseId: "blind-fr-implementation-adjacent",
       writerModel: "gpt-5.6-sol",
-      serializedInputByteUpperBound: 17_869,
+      serializedInputByteUpperBound: 18_469,
     });
 
     const insufficient = parseCoverLetterBenchmarkCliOptions(
@@ -417,7 +417,7 @@ describe("benchmark-cover-letter-writers", () => {
         "--max-calls=24",
         "--max-repairs=0",
         "--max-usd=2.5",
-        "--max-usd-per-call=0.150785",
+        "--max-usd-per-call=0.153785",
       ],
       "0",
     );
@@ -426,11 +426,11 @@ describe("benchmark-cover-letter-writers", () => {
         options: insufficient,
         preflight,
       }),
-    ).toThrow(/minimum safe reservation of 3\.61884 USD/iu);
+    ).toThrow(/minimum safe reservation of 3\.69084 USD/iu);
 
     const safe = {
       ...insufficient,
-      maxUsd: 3.61884,
+      maxUsd: 3.69084,
     };
     expect(() =>
       assertQualityEval2BBudgetContract({ options: safe, preflight }),
@@ -476,8 +476,8 @@ describe("benchmark-cover-letter-writers", () => {
     expect(
       preflight.entries.find(
         (entry) => entry.writerModel === "mistral-medium-latest",
-      ),
-    ).toMatchObject({ serializedInputByteUpperBound: 12_054 });
+      )?.serializedInputByteUpperBound,
+    ).toBe(12_593);
     expect(() =>
       assertQualityEval2DSampleBudgetContract({ options, preflight }),
     ).not.toThrow();
@@ -496,10 +496,8 @@ describe("benchmark-cover-letter-writers", () => {
     const contract = await assertQualityEval2DSharedPromptContract({
       benchmarkCase,
     });
-    expect(contract).toMatchObject({
-      promptCharacterLength: 10_994,
-      maxPromptCharacters: 12_000,
-    });
+    expect(contract.promptCharacterLength).toBe(11_534);
+    expect(contract.maxPromptCharacters).toBe(12_000);
     expect(contract.promptCharacterLength).toBeLessThanOrEqual(
       QUALITY_EVAL_2D_SHARED_PROMPT_MAX_CHARACTERS,
     );
@@ -1196,16 +1194,16 @@ describe("benchmark-cover-letter-writers", () => {
         provenance:
           "fcc559d0ab92833c8f0ea5fc02d8125e58e7a10c4159d47a54a8169e16935acf",
         prompts: [
-          "c9d8cc4b60fbcff3c88a2eecf328237f0b1b0b8d309fc1819d6adbac995d07e0",
+          "df85e57fe83d961d0d3a55a6a68394b67926ef0f7668f9bc9373c3e2253ba4cc",
         ],
       },
       {
         artifact:
-          "ca29a27fdba65c332596554ebd542bc253186424aab10a6b9f9de712d8133a08",
+          "7f8bf328428a52c216f1d17f29b707567421330a92e42b917f2d24fca8f3b8c7",
         provenance:
-          "e4e737318e397fbf7bdcd1dc52834ffaad1600797fe29cc00037fdf635cd1860",
+          "66b985847db72fdda72ab114b69ee9e502784cc82b7f57ebb509efe7038a3c56",
         prompts: [
-          "33622298a9b71dd77d66e58eb63328bd0acefb19843e31b00067b15ca0d459ff",
+          "a18ac57bf35cc6fc9f4d9e331668a7399a8b3d58ef672f2e3b89cc1d56aec165",
         ],
       },
     ]);
@@ -1303,19 +1301,17 @@ describe("benchmark-cover-letter-writers", () => {
     const mistral = first.find(
       (result) => result.writerProvider === "mistral",
     )!;
-    expect(mistral.artifact.provenance).toMatchObject({
-      origin: "provider_reported",
-      status: "validated_final_text",
-      sections: {
-        opening: {
-          claimIds: ["claim_opening_001"],
-          factIds: ["fact_experience_001_highlight_003"],
-        },
-        employerValueBlock: {
-          demandIds: ["demand_core_001"],
-        },
-      },
-    });
+    expect(mistral.artifact.provenance.origin).toBe("provider_reported");
+    expect(mistral.artifact.provenance.status).toBe("validated_final_text");
+    expect(mistral.artifact.provenance.sections.opening.claimIds).toEqual([
+      "claim_opening_001",
+    ]);
+    expect(mistral.artifact.provenance.sections.opening.factIds).toEqual([
+      "fact_experience_001_highlight_003",
+    ]);
+    expect(
+      mistral.artifact.provenance.sections.employerValueBlock.demandIds,
+    ).toEqual(["demand_core_001"]);
   });
 
   it("fingerprints both the writer and model-assisted repair schemas", async () => {
@@ -1368,9 +1364,9 @@ describe("benchmark-cover-letter-writers", () => {
       ...fixture,
       id: "mistral-adjacent-repair-v1",
       expectedArtifactHash:
-        "8cbeebf601ca3914d01e5dce1f12cb25795f1154f2b30ed8c66146251064802b",
+        "5e4f3aa1efe8fa50b6f9d1c3345f9ab1cf8a7d9deb8dbdf57fb0cdd288bed4a4",
       expectedProvenanceHash:
-        "f182807ad2b0adb9a1a952c1470a13bb3d419d5d46186e9918bb7b4e6e74a5d6",
+        "549ae715917a9a4173fd476f82d85bbca17eeb1a1afeba6e4267553587212757",
       responses: [
         {
           ...firstResponse,
@@ -1388,7 +1384,7 @@ describe("benchmark-cover-letter-writers", () => {
         {
           schemaId: "premium_cover_letter_body_parts",
           expectedWriterPromptHash:
-            "33ec731f435a934272522d17d6a83792c60bdd19da29790bde14622dc2765ea7",
+            "48f2078bb99f43bd24f79525b2b3c63d7ef68d7dcc36ed296dbf52b1be17609e",
           payload: {
             opening: firstResponse.payload.bodyParts.opening.text,
             proofBlock: firstResponse.payload.bodyParts.proofBlock.text,
@@ -1402,15 +1398,13 @@ describe("benchmark-cover-letter-writers", () => {
 
     const result = await replayRecordedCoverLetterFixture(parsed);
     expect(result.writerCallCount).toBe(2);
-    expect(result.artifact).toMatchObject({
-      decision: "accepted",
-      artifactHash: parsed.expectedArtifactHash,
-      provenanceHash: parsed.expectedProvenanceHash,
-      provenance: {
-        origin: "provider_reported",
-        status: "validated_after_structured_repair",
-      },
-    });
+    expect(result.artifact.decision).toBe("accepted");
+    expect(result.artifact.artifactHash).toBe(parsed.expectedArtifactHash);
+    expect(result.artifact.provenanceHash).toBe(parsed.expectedProvenanceHash);
+    expect(result.artifact.provenance.origin).toBe("provider_reported");
+    expect(result.artifact.provenance.status).toBe(
+      "validated_after_structured_repair",
+    );
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 

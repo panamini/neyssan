@@ -2565,6 +2565,142 @@ function firstDemandId(
   return demand ? [demand.id] : [];
 }
 
+function dedupeFactNodes(facts: FactNodeV1[]): FactNodeV1[] {
+  const seen = new Set<string>();
+  return facts.filter((fact) => {
+    if (seen.has(fact.id)) return false;
+    seen.add(fact.id);
+    return true;
+  });
+}
+
+function selectDistinctPremiumProofFacts(args: {
+  cvFacts: FactNodeV1[];
+  primaryCvFact: FactNodeV1 | undefined;
+}): FactNodeV1[] {
+  const concreteFacts = dedupeFactNodes(args.cvFacts).filter(
+    (fact) =>
+      fact.id !== args.primaryCvFact?.id &&
+      isConcretePremiumProofFact(fact),
+  );
+  const primaryMetrics = new Set(args.primaryCvFact?.metrics ?? []);
+  const factsWithDistinctMetrics = concreteFacts.filter((fact) =>
+    fact.metrics.every((metric) => !primaryMetrics.has(metric)),
+  );
+  const selected =
+    factsWithDistinctMetrics.length > 0 ? factsWithDistinctMetrics : concreteFacts;
+  return selected.slice(0, 2);
+}
+
+function isConcretePremiumProofFact(fact: FactNodeV1): boolean {
+  return (
+    fact.category === "achievement" ||
+    fact.category === "responsibility" ||
+    fact.category === "workflow"
+  );
+}
+
+type PremiumClaimPlanEditorialPolicyArgs = {
+  contextClass: PremiumCoverLetterContextClass;
+  outputLanguage: ProposalOutputLanguage;
+  cvFacts: FactNodeV1[];
+  primaryCvFact: FactNodeV1 | undefined;
+  secondaryCvFact: FactNodeV1 | undefined;
+  sectionCvFacts: FactNodeV1[];
+  roleContextDemandIds: string[];
+};
+
+type PremiumClaimPlanEditorialPolicy = Readonly<{
+  openingDemandIds: string[];
+  openingGuideline: string;
+  proofFacts: FactNodeV1[];
+  proofGuideline: string;
+  closeDemandIds: string[];
+  closeGuideline: string;
+}>;
+
+function resolveLegacyPremiumProofFacts(
+  args: PremiumClaimPlanEditorialPolicyArgs,
+): FactNodeV1[] {
+  if (args.sectionCvFacts.length > 0) return args.sectionCvFacts;
+  if (args.secondaryCvFact) return [args.secondaryCvFact];
+  return args.primaryCvFact ? [args.primaryCvFact] : [];
+}
+
+function buildLegacyPremiumClaimPlanEditorialPolicy(
+  args: PremiumClaimPlanEditorialPolicyArgs,
+  proofFacts: FactNodeV1[],
+): PremiumClaimPlanEditorialPolicy {
+  return {
+    openingDemandIds: [],
+    openingGuideline:
+      args.contextClass === "cv_adjacent"
+        ? "Open with a CV-backed operating strength, not direct target-role fit."
+        : "Open with the strongest CV-backed evidence.",
+    proofFacts,
+    proofGuideline:
+      "Develop one CV-backed proof point without upgrading ownership or metrics.",
+    closeDemandIds: [],
+    closeGuideline:
+      args.contextClass === "cv_adjacent"
+        ? "Restate CV-backed operating strengths only."
+        : "Restate grounded strengths only.",
+  };
+}
+
+function buildDeterministicPremiumClaimPlanEditorialPolicy(
+  args: PremiumClaimPlanEditorialPolicyArgs,
+  legacyProofFacts: FactNodeV1[],
+): PremiumClaimPlanEditorialPolicy {
+  const distinctProofFacts = selectDistinctPremiumProofFacts({
+    cvFacts: args.cvFacts,
+    primaryCvFact: args.primaryCvFact,
+  });
+  const hasAssignedRoleContext = args.roleContextDemandIds.length > 0;
+  const hasDistinctProof = distinctProofFacts.length > 0;
+  const hasConcreteProof = args.cvFacts.some(isConcretePremiumProofFact);
+  return {
+    openingDemandIds: args.roleContextDemandIds,
+    openingGuideline: hasAssignedRoleContext
+      ? args.contextClass === "cv_adjacent"
+        ? "Open with one concrete role responsibility as context, then connect it naturally to the strongest CV-backed operating proof without claiming direct target-role experience."
+        : "Open with one concrete role responsibility as context, then connect it naturally to the strongest CV-backed evidence."
+      : args.contextClass === "cv_adjacent"
+        ? "No role responsibility is assigned; open with concise professional context around the strongest CV-backed operating proof without claiming direct target-role experience or inventing job context."
+        : "No role responsibility is assigned; open with concise professional context around the strongest CV-backed evidence without inventing job context.",
+    proofFacts: hasDistinctProof ? distinctProofFacts : legacyProofFacts,
+    proofGuideline: hasDistinctProof
+      ? "Develop the distinct assigned CV-backed proof without repeating the opening evidence or upgrading ownership or metrics."
+      : hasConcreteProof
+        ? "Only one concrete CV proof is available; develop a different supported aspect of it once without restating its metric or result or upgrading ownership."
+        : "No concrete CV proof is available; use the assigned CV context only as bounded background, keep the section concise, and do not invent actions, ownership, metrics, or results.",
+    closeDemandIds: args.roleContextDemandIds,
+    closeGuideline: hasAssignedRoleContext
+      ? args.contextClass === "cv_adjacent"
+        ? "Close with one specific CV-backed operating contribution to the assigned responsibility, without a skills inventory or future-impact promise."
+        : "Close with one specific evidence-grounded contribution to the assigned responsibility, without a skills inventory."
+      : args.contextClass === "cv_adjacent"
+        ? "Close with one specific CV-backed operating contribution, without inventing job context, a skills inventory, or a future-impact promise."
+        : "Close with one specific evidence-grounded contribution, without inventing job context or using a skills inventory.",
+  };
+}
+
+function resolvePremiumClaimPlanEditorialPolicy(
+  args: PremiumClaimPlanEditorialPolicyArgs,
+): PremiumClaimPlanEditorialPolicy {
+  const legacyProofFacts = resolveLegacyPremiumProofFacts(args);
+  if (
+    args.contextClass === "no_cv" ||
+    getDeterministicCopyLanguage(args.outputLanguage) === null
+  ) {
+    return buildLegacyPremiumClaimPlanEditorialPolicy(args, legacyProofFacts);
+  }
+  return buildDeterministicPremiumClaimPlanEditorialPolicy(
+    args,
+    legacyProofFacts,
+  );
+}
+
 export function buildPremiumClaimPlanV1(args: {
   factGraph: FactGraphV1;
   jobDemandGraph: JobDemandGraphV1;
@@ -2599,6 +2735,15 @@ export function buildPremiumClaimPlanV1(args: {
     "key_requirement",
     "preferred_qualification",
   ]);
+  const editorialPolicy = resolvePremiumClaimPlanEditorialPolicy({
+    contextClass: args.contextClass,
+    outputLanguage: args.outputLanguage,
+    cvFacts,
+    primaryCvFact,
+    secondaryCvFact,
+    sectionCvFacts,
+    roleContextDemandIds,
+  });
 
   const makeClaim = (
     section: ClaimPlanSection,
@@ -2675,24 +2820,16 @@ export function buildPremiumClaimPlanV1(args: {
           makeClaim(
             "opening",
             primaryCvFact ? [primaryCvFact] : [],
-            [],
+            editorialPolicy.openingDemandIds,
             "source_backed",
-            args.contextClass === "cv_adjacent"
-              ? "Open with a CV-backed operating strength, not direct target-role fit."
-              : "Open with the strongest CV-backed evidence.",
+            editorialPolicy.openingGuideline,
           ),
           makeClaim(
             "proofBlock",
-            sectionCvFacts.length > 0
-              ? sectionCvFacts
-              : secondaryCvFact
-                ? [secondaryCvFact]
-                : primaryCvFact
-                  ? [primaryCvFact]
-                  : [],
+            editorialPolicy.proofFacts,
             [],
             "source_backed",
-            "Develop one CV-backed proof point without upgrading ownership or metrics.",
+            editorialPolicy.proofGuideline,
           ),
           makeClaim(
             "employerValueBlock",
@@ -2718,13 +2855,11 @@ export function buildPremiumClaimPlanV1(args: {
               : closeCvFact
                 ? [closeCvFact]
                 : primaryCvFact
-                  ? [primaryCvFact]
-                  : [],
-            [],
+                ? [primaryCvFact]
+                : [],
+            editorialPolicy.closeDemandIds,
             "source_backed",
-            args.contextClass === "cv_adjacent"
-              ? "Restate CV-backed operating strengths only."
-              : "Restate grounded strengths only.",
+            editorialPolicy.closeGuideline,
           ),
         ];
 
@@ -3117,6 +3252,55 @@ export function buildPremiumCoverLetterPrompt(args: {
   ].filter((line): line is string => typeof line === "string").join("\n");
 }
 
+function resolvePremiumEditorialAllocationState(brief: CoverLetterBrief): {
+  hasAssignedRoleContext: boolean;
+  hasConcreteProof: boolean;
+  hasDistinctProof: boolean;
+} {
+  if (!brief.claimPlan) {
+    return {
+      hasAssignedRoleContext: true,
+      hasConcreteProof: true,
+      hasDistinctProof: true,
+    };
+  }
+  const openingClaim = claimForSection(brief.claimPlan, "opening");
+  const proofClaim = claimForSection(brief.claimPlan, "proofBlock");
+  const openingFactIds = new Set(openingClaim?.factIds ?? []);
+  return {
+    hasAssignedRoleContext: (openingClaim?.demandIds.length ?? 0) > 0,
+    hasConcreteProof:
+      proofClaim?.requiredElements.some((text) =>
+        ["achievement", "responsibility", "workflow"].includes(
+          classifyCvFactCategory(text, "cv"),
+        ),
+      ) ?? false,
+    hasDistinctProof:
+      (proofClaim?.factIds.length ?? 0) > 0 &&
+      (proofClaim?.factIds.every((factId) => !openingFactIds.has(factId)) ??
+        false),
+  };
+}
+
+function buildNaturalCvBackedEditorialGuidance(brief: CoverLetterBrief): string[] {
+  const { hasAssignedRoleContext, hasConcreteProof, hasDistinctProof } =
+    resolvePremiumEditorialAllocationState(brief);
+  return [
+    "CV-backed editorial quality contract: write the opening as a natural first paragraph, not a résumé bullet, headline, or abstract maxim; do not begin with a standalone metric or force the template 'For this role, my experience...'.",
+    hasAssignedRoleContext
+      ? "Start from one concrete assigned responsibility and connect it smoothly to the assigned CV proof; keep the responsibility as role context, never candidate history."
+      : "No role responsibility is assigned; open with concise professional context around the assigned CV proof and do not invent or select unassigned job context.",
+    hasDistinctProof
+      ? "Use the distinct fact assigned to proofBlock and never repeat an opening metric, result, employer, duty, or cadence."
+      : hasConcreteProof
+        ? "Only one concrete CV proof is assigned; develop a different supported aspect of it once without restating the same metric or result."
+        : "No concrete CV proof is assigned; use the assigned CV context only as bounded background, keep the proof section concise, and do not invent actions, ownership, metrics, or results.",
+    hasAssignedRoleContext
+      ? "Every sentence must contain a complete thought with a subject and finite predicate, never a CV fragment; explain why the selected evidence matters to the assigned responsibility rather than stating abstract advice; close with one specific evidence-grounded contribution to the assigned responsibility, not a skills inventory or résumé-summary label."
+      : "Every sentence must contain a complete thought with a subject and finite predicate, never a CV fragment; explain the concrete value of the selected evidence without inventing job context or stating abstract advice; close with one specific evidence-grounded contribution, not a skills inventory or résumé-summary label.",
+  ];
+}
+
 function resolvePremiumCoverLetterEditorialQualityGuidance(
   brief: CoverLetterBrief,
 ): string[] {
@@ -3124,20 +3308,19 @@ function resolvePremiumCoverLetterEditorialQualityGuidance(
 
   const shared =
     "CV-backed editorial quality contract: build one hiring case, not a CV inventory; use one role-specific opening, select one or two concrete candidate proofs, state why each proof is relevant to one top responsibility, and end with one short evidence-grounded sentence rather than an interview request.";
-  const employerFirstShared =
-    "CV-backed editorial quality contract: make the target role, not a candidate metric or career summary, the grammatical frame of the opening; connect that frame to one source-backed CV proof without presenting job-post language as candidate history; use at most one other proof, and close with one short evidence-grounded sentence.";
+  const naturalCvBackedShared = buildNaturalCvBackedEditorialGuidance(brief);
 
   const deterministicLanguage = getDeterministicCopyLanguage(brief.language);
   if (deterministicLanguage === "fr") {
     return [
-      employerFirstShared,
-      "French editorial contract: compose in idiomatic professional French, not translated English cadence; avoid 'je serais ravi de', 'se traduit par', 's'aligne avec', 'apporter de la valeur', and repeated discussion invitations.",
+      ...naturalCvBackedShared,
+      "French editorial contract: compose in idiomatic professional French, not translated English cadence; avoid 'je serais ravi de', 'se traduit par', 's'aligne avec', 'apporter de la valeur', 'mon socle', repeated discussion invitations, and untranslated handoffs, rollouts, or enterprise when normal French equivalents exist.",
     ];
   }
 
   if (deterministicLanguage === "en") {
     return [
-      employerFirstShared,
+      ...naturalCvBackedShared,
       "English editorial contract: use concise professional English, direct verbs, and concrete nouns; avoid résumé-summary cadence, 'I am writing to apply', generic enthusiasm, alignment claims, and discussion invitations.",
     ];
   }
@@ -3580,6 +3763,499 @@ function parseCoverLetterBodyPartsWriterPayload(rawOutput: unknown): CoverLetter
   );
 }
 
+const PREMIUM_ENGLISH_CAPABILITY_VERB_FAMILIES = [
+  { source: "lead(?:s|ing)?|led", canonical: "lead" },
+  { source: "manag(?:e|es|ed|ing)", canonical: "manage" },
+  { source: "own(?:s|ed|ing)?", canonical: "own" },
+  { source: "build(?:s|ing)?|built", canonical: "build" },
+  { source: "improv(?:e|es|ed|ing)", canonical: "improve" },
+  { source: "drive|drives|drove|driven|driving", canonical: "drive" },
+  { source: "deliver(?:s|ed|ing)?", canonical: "deliver" },
+  { source: "maintain(?:s|ed|ing)?", canonical: "maintain" },
+  { source: "coordinat(?:e|es|ed|ing)", canonical: "coordinate" },
+  { source: "handl(?:e|es|ed|ing)", canonical: "handle" },
+  { source: "track(?:s|ed|ing)?", canonical: "track" },
+  { source: "answer(?:s|ed|ing)?", canonical: "answer" },
+  { source: "updat(?:e|es|ed|ing)", canonical: "update" },
+  { source: "prepar(?:e|es|ed|ing)", canonical: "prepare" },
+  { source: "document(?:s|ed|ing)?", canonical: "document" },
+  { source: "design(?:s|ed|ing)?", canonical: "design" },
+  { source: "analy[sz](?:e|es|ed|ing)", canonical: "analyze" },
+  { source: "mentor(?:s|ed|ing)?", canonical: "mentor" },
+  { source: "supervis(?:e|es|ed|ing)", canonical: "supervise" },
+  { source: "support(?:s|ed|ing)?", canonical: "support" },
+  { source: "assist(?:s|ed|ing)?", canonical: "assist" },
+  { source: "monitor(?:s|ed|ing)?", canonical: "monitor" },
+  { source: "report(?:s|ed|ing)?", canonical: "report" },
+  { source: "keep|keeps|kept|keeping", canonical: "keep" },
+  { source: "develop(?:s|ed|ing)?", canonical: "develop" },
+  { source: "creat(?:e|es|ed|ing)", canonical: "create" },
+  { source: "review(?:s|ed|ing)?", canonical: "review" },
+  { source: "operat(?:e|es|ed|ing)", canonical: "operate" },
+  { source: "collaborat(?:e|es|ed|ing)", canonical: "collaborate" },
+  { source: "implement(?:s|ed|ing)?", canonical: "implement" },
+  { source: "schedul(?:e|es|ed|ing)", canonical: "schedule" },
+] as const;
+const CANDIDATE_HISTORY_ENGLISH_ACTION_VERB_SOURCE =
+  PREMIUM_ENGLISH_CAPABILITY_VERB_FAMILIES.map(
+    ({ source }) => `(?:${source})`,
+  ).join("|");
+const CANDIDATE_HISTORY_ENGLISH_COPULAR_SOURCE =
+  "(?:i\\s+(?:am|was|have\\s+been)|i['’](?:m|ve\\s+been))";
+const PREMIUM_ENGLISH_CAPABILITY_VERB_PATTERNS =
+  PREMIUM_ENGLISH_CAPABILITY_VERB_FAMILIES.map(({ source, canonical }) => ({
+    pattern: new RegExp(`^(?:${source})$`, "u"),
+    canonical,
+  }));
+const CANDIDATE_HISTORY_FRENCH_PAST_ACTION_SOURCE =
+  "dirigé(?:e|s|es)?|géré(?:e|s|es)?|construit(?:e|s|es)?|créé(?:e|s|es)?|amélioré(?:e|s|es)?|livré(?:e|s|es)?|maintenu(?:e|s|es)?|coordonné(?:e|s|es)?|traité(?:e|s|es)?|suivi(?:e|s|es)?|documenté(?:e|s|es)?|piloté(?:e|s|es)?|assuré(?:e|s|es)?|pris(?:e|es)?\\s+en\\s+charge";
+const CANDIDATE_HISTORY_FRENCH_PRESENT_ACTION_SOURCE =
+  "dirige|gère|construis|crée|améliore|livre|maintiens|coordonne|traite|documente|pilote|assure|prends\\s+en\\s+charge";
+const CANDIDATE_HISTORY_FRENCH_FIRST_PERSON_ACTION_SOURCE =
+  `(?:j['’]\\s*ai\\s+(?:${CANDIDATE_HISTORY_FRENCH_PAST_ACTION_SOURCE})|(?:je\\s+|j['’]\\s*)(?:${CANDIDATE_HISTORY_FRENCH_PRESENT_ACTION_SOURCE}))`;
+const CANDIDATE_HISTORY_FRENCH_OWNERSHIP_PREFIX_SOURCE =
+  "(?:responsable|en\\s+charge)\\s+(?:(?:de|du|des)\\s+|d['’]\\s*)";
+const PREMIUM_FRENCH_DEMAND_LEADER_SOURCE =
+  "diriger|gérer|construire|créer|améliorer|livrer|maintenir|coordonner|traiter|suivre|documenter|piloter|assurer|prendre\\s+en\\s+charge|être";
+const PREMIUM_OWNERSHIP_DEMAND_PREFIX_PATTERN =
+  new RegExp(
+    `^(?:(?:responsible\\s+for|in\\s+charge\\s+of|accountable\\s+for|tasked\\s+with)\\s+|${CANDIDATE_HISTORY_FRENCH_OWNERSHIP_PREFIX_SOURCE})`,
+    "iu",
+  );
+const PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE =
+  "(?=$|[,.!?;:]|\\s+(?:for|at|across|with|within|during|pour|chez|dans|pendant|lors\\s+(?:de|du|des)|auprès\\s+de)\\b)";
+const PREMIUM_GENERATED_DEMAND_SURFACE_BOUNDARY_SOURCE =
+  "(?=$|[,.!?;:])";
+
+function extractPremiumDemandLeaderVerb(value: string): string | null {
+  const jobOfferLeader = extractJobOfferLeaderVerb(value);
+  if (jobOfferLeader) return jobOfferLeader;
+  const frenchMatch = compactWhitespace(value).match(
+    new RegExp(`^(${PREMIUM_FRENCH_DEMAND_LEADER_SOURCE})\\b`, "iu"),
+  );
+  return frenchMatch?.[1]?.toLowerCase() ?? null;
+}
+
+function resolvePremiumDemandSurface(value: string): {
+  surface: string;
+  leader: string | null;
+  objectSurface: string;
+  ownershipPrefixStripped: boolean;
+} | null {
+  const surface = compactWhitespace(value).replace(/[.!?]$/u, "");
+  if (!surface) return null;
+  const englishLeaderMatch = surface.match(JOB_OFFER_LIST_LEADER_PATTERN);
+  const leader =
+    englishLeaderMatch?.[1]?.toLowerCase() ??
+    extractPremiumDemandLeaderVerb(value);
+  const withoutLeader = englishLeaderMatch?.[0]
+    ? surface.slice(englishLeaderMatch[0].length).trim()
+    : leader
+      ? surface.replace(new RegExp(`^${escapeRegExp(leader)}\\s+`, "iu"), "")
+      : surface;
+  const objectSurface = withoutLeader.replace(
+    PREMIUM_OWNERSHIP_DEMAND_PREFIX_PATTERN,
+    "",
+  );
+  if (!objectSurface) return null;
+  return {
+    surface,
+    leader,
+    objectSurface,
+    ownershipPrefixStripped: objectSurface !== withoutLeader,
+  };
+}
+
+function usesJobDemandAsCandidateExperience(args: {
+  generatedText: string;
+  referencedDemands: JobDemandNodeV1[];
+  referencedFacts: FactNodeV1[];
+}): boolean {
+  const compact = compactWhitespace(args.generatedText);
+  return args.referencedDemands.some((demand) => {
+    if (
+      args.referencedFacts.some((fact) =>
+        premiumCandidateFactSupportsDemand({
+          fact,
+          demand,
+          generatedText: compact,
+        }),
+      )
+    ) {
+      return false;
+    }
+    const resolvedDemand = resolvePremiumDemandSurface(demand.text);
+    if (!resolvedDemand) return false;
+    const escapedDemand = escapeRegExp(resolvedDemand.surface);
+    const escapedDemandObject = escapeRegExp(resolvedDemand.objectSurface);
+    const escapedDemandReference =
+      resolvedDemand.surface !== resolvedDemand.objectSurface
+        ? `(?:${escapedDemand}|${escapedDemandObject})`
+      : escapedDemandObject;
+    const ownershipPatterns = [
+      new RegExp(`\\bi\\s+${escapedDemand}(?=\\s|[,.!?;:]|$)`, "i"),
+      new RegExp(
+        `\\bi\\s+(?:${CANDIDATE_HISTORY_ENGLISH_ACTION_VERB_SOURCE})\\s+(?:(?:the|this|that|my)\\s+)?${escapedDemandReference}(?=\\s|[,.!?;:]|$)`,
+        "i",
+      ),
+      new RegExp(
+        `\\b${CANDIDATE_HISTORY_ENGLISH_COPULAR_SOURCE}\\s+(?:responsible\\s+for|in\\s+charge\\s+of|accountable\\s+for|tasked\\s+with)\\s+${escapedDemandReference}(?=\\s|[,.!?;:]|$)`,
+        "i",
+      ),
+      new RegExp(
+        `\\b(?:j['’]\\s*ai|je)\\s+${escapedDemand}(?=\\s|[,.!?;:]|$)`,
+        "iu",
+      ),
+      new RegExp(
+        `\\b${CANDIDATE_HISTORY_FRENCH_FIRST_PERSON_ACTION_SOURCE}\\s+(?:(?:le|la|les|du|des)\\s+|l['’]\\s*)?${escapedDemandReference}(?=\\s|[,.!?;:]|$)`,
+        "iu",
+      ),
+      new RegExp(
+        `\\b(?:je\\s+suis|j['’]\\s*(?:étais|ai\\s+été))\\s+${CANDIDATE_HISTORY_FRENCH_OWNERSHIP_PREFIX_SOURCE}${escapedDemandReference}(?=\\s|[,.!?;:]|$)`,
+        "iu",
+      ),
+      new RegExp(
+        `${escapedDemandReference}\\s*,?\\s+(?:which|that)\\s+i\\s+(?:${CANDIDATE_HISTORY_ENGLISH_ACTION_VERB_SOURCE})\\b`,
+        "i",
+      ),
+      new RegExp(
+        `${escapedDemandReference}\\s*,?\\s+(?:que|ce\\s+que)\\s+${CANDIDATE_HISTORY_FRENCH_FIRST_PERSON_ACTION_SOURCE}(?=\\s|[,.!?;:]|$)`,
+        "iu",
+      ),
+      new RegExp(
+        `${escapedDemandReference}\\s+(?:was|were|is|are)\\s+(?:among\\s+)?(?:the\\s+)?(?:work|something|responsibilit(?:y|ies)|dut(?:y|ies)|tasks?)\\s+(?:that\\s+)?i\\s+(?:${CANDIDATE_HISTORY_ENGLISH_ACTION_VERB_SOURCE})\\b`,
+        "i",
+      ),
+      new RegExp(
+        `${escapedDemandReference}\\s+(?:était|étaient|est|sont)\\s+(?:parmi\\s+)?(?:le|la|les|un|une|des)?\\s*(?:travail|responsabilit(?:é|és)|tâche(?:s)?)\\s+(?:que\\s+)?${CANDIDATE_HISTORY_FRENCH_FIRST_PERSON_ACTION_SOURCE}(?=\\s|[,.!?;:]|$)`,
+        "iu",
+      ),
+      new RegExp(
+        `${escapedDemandReference}\\s*[-–—,:]\\s*(?:(?:a|the|one\\s+of\\s+the)\\s+)?(?:responsibilit(?:y|ies)|dut(?:y|ies)|tasks?|work)\\s+(?:that\\s+)?i\\s+(?:${CANDIDATE_HISTORY_ENGLISH_ACTION_VERB_SOURCE})\\b`,
+        "i",
+      ),
+      new RegExp(
+        `${escapedDemandReference}\\s*[-–—,:]\\s*(?:(?:une|des|la|les)\\s+)?(?:responsabilit(?:é|és)|tâche(?:s)?|travail)\\s+(?:que\\s+)?${CANDIDATE_HISTORY_FRENCH_FIRST_PERSON_ACTION_SOURCE}(?=\\s|[,.!?;:]|$)`,
+        "iu",
+      ),
+    ];
+    const canonicalLeader = resolvedDemand.leader
+      ? canonicalizePremiumCapabilityVerb(resolvedDemand.leader)
+      : null;
+    const usesGenericCopularDemand =
+      !resolvedDemand.ownershipPrefixStripped &&
+      ((canonicalLeader === "be" &&
+        new RegExp(
+          `\\b${CANDIDATE_HISTORY_ENGLISH_COPULAR_SOURCE}\\s+${escapedDemandObject}(?=\\s|[,.!?;:]|$)`,
+          "i",
+        ).test(compact)) ||
+        (canonicalLeader === "être" &&
+          new RegExp(
+            `\\b(?:je\\s+suis|j['’]\\s*(?:étais|ai\\s+été))\\s+${escapedDemandObject}(?=\\s|[,.!?;:]|$)`,
+            "iu",
+          ).test(compact)));
+    const usesFrenchSuivreDemand =
+      canonicalLeader === "suivre" &&
+      new RegExp(
+        `\\bje\\s+suis\\s+${escapedDemandObject}(?=\\s|[,.!?;:]|$)`,
+        "iu",
+      ).test(compact);
+    return (
+      usesGenericCopularDemand ||
+      usesFrenchSuivreDemand ||
+      ownershipPatterns.some((pattern) => pattern.test(compact))
+    );
+  });
+}
+
+function premiumCandidateFactSupportsDemand(args: {
+  fact: FactNodeV1;
+  demand: JobDemandNodeV1;
+  generatedText: string;
+}): boolean {
+  if (args.fact.source !== "cv") return false;
+  const normalizedDemand = normalizePremiumProvenanceText(
+    args.demand.text,
+  ).replace(/[.!?]+$/u, "");
+  const normalizedFact = normalizePremiumProvenanceText(args.fact.text);
+  const factSupportsDemand =
+    normalizedDemand.length >= 12 &&
+    normalizedFact.includes(normalizedDemand)
+      ? true
+      : (() => {
+          const demandTokens = args.demand.tokens;
+          if (demandTokens.length < 2) return false;
+          const factTokens = new Set(normalizeTokens(args.fact.text));
+          const overlap = countOverlap(demandTokens, factTokens);
+          const threshold = Math.max(2, Math.ceil(demandTokens.length * 0.75));
+          if (overlap < threshold) return false;
+
+          const demandLeader = extractPremiumDemandLeaderVerb(args.demand.text);
+          if (!demandLeader) return true;
+          const canonicalDemandLeader =
+            canonicalizePremiumCapabilityVerb(demandLeader);
+          if (
+            canonicalDemandLeader === "be" ||
+            canonicalDemandLeader === "être"
+          ) {
+            return true;
+          }
+          return args.fact.allowedVerbs.some(
+            (verb) =>
+              canonicalizePremiumCapabilityVerb(verb) ===
+              canonicalDemandLeader,
+          );
+        })();
+  if (!factSupportsDemand) return false;
+
+  const generatedVerb = extractGeneratedPremiumCapabilityVerbForDemand({
+    generatedText: args.generatedText,
+    demand: args.demand,
+    allowContextualComplements: normalizedFact.includes(
+      normalizePremiumProvenanceText(args.generatedText),
+    ),
+  });
+  if (!generatedVerb) return false;
+  const factVerb = extractCandidateFactCapabilityVerbForDemand({
+    factText: args.fact.text,
+    demand: args.demand,
+  });
+  return factVerb === generatedVerb;
+}
+
+function canonicalizePremiumCapabilityVerb(value: string): string {
+  const normalized = compactWhitespace(value).toLowerCase();
+  const englishFamily = PREMIUM_ENGLISH_CAPABILITY_VERB_PATTERNS.find(
+    ({ pattern }) => pattern.test(normalized),
+  );
+  if (englishFamily) return englishFamily.canonical;
+  if (/^dirig(?:é(?:e|s|es)?|e)$/u.test(normalized)) return "diriger";
+  if (/^gér(?:é(?:e|s|es)?|e)$/u.test(normalized)) return "gérer";
+  if (/^construit(?:e|s|es)?$|^construis$/u.test(normalized)) {
+    return "construire";
+  }
+  if (/^cré(?:é(?:e|s|es)?|e)$/u.test(normalized)) return "créer";
+  if (/^amélior(?:é(?:e|s|es)?|e)$/u.test(normalized)) return "améliorer";
+  if (/^livr(?:é(?:e|s|es)?|e)$/u.test(normalized)) return "livrer";
+  if (/^maintenu(?:e|s|es)?$|^maintiens$/u.test(normalized)) {
+    return "maintenir";
+  }
+  if (/^coordonn(?:é(?:e|s|es)?|e)$/u.test(normalized)) {
+    return "coordonner";
+  }
+  if (/^trait(?:é(?:e|s|es)?|e)$/u.test(normalized)) return "traiter";
+  if (/^suivi(?:e|s|es)?$/u.test(normalized)) return "suivre";
+  if (/^document(?:é(?:e|s|es)?|e)$/u.test(normalized)) {
+    return "documenter";
+  }
+  if (/^pilot(?:é(?:e|s|es)?|e)$/u.test(normalized)) return "piloter";
+  if (/^assur(?:é(?:e|s|es)?|e)$/u.test(normalized)) return "assurer";
+  if (/^pris(?:e|es)? en charge$|^prends en charge$/u.test(normalized)) {
+    return "prendre en charge";
+  }
+  return normalized;
+}
+
+function extractCandidateFactCapabilityVerbForDemand(args: {
+  factText: string;
+  demand: JobDemandNodeV1;
+}): string | null {
+  const resolvedDemand = resolvePremiumDemandSurface(args.demand.text);
+  if (!resolvedDemand) return null;
+  const escapedDemandObject = escapeRegExp(resolvedDemand.objectSurface).replace(
+    /\s+/g,
+    "\\s+",
+  );
+  const directActionPatterns = [
+    new RegExp(
+      `\\b(${CANDIDATE_HISTORY_ENGLISH_ACTION_VERB_SOURCE})\\s+(?:(?:the|this|that|my)\\s+)?${escapedDemandObject}${PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE}`,
+      "i",
+    ),
+    new RegExp(
+      `\\b(${CANDIDATE_HISTORY_FRENCH_PAST_ACTION_SOURCE})\\s+(?:(?:le|la|les|du|des)\\s+|l['’]\\s*)?${escapedDemandObject}${PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE}`,
+      "iu",
+    ),
+    new RegExp(
+      `\\b(${CANDIDATE_HISTORY_FRENCH_PRESENT_ACTION_SOURCE})\\s+(?:(?:le|la|les|du|des)\\s+|l['’]\\s*)?${escapedDemandObject}${PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE}`,
+      "iu",
+    ),
+  ];
+  for (const pattern of directActionPatterns) {
+    const match = pattern.exec(args.factText);
+    if (match?.[1]) return canonicalizePremiumCapabilityVerb(match[1]);
+  }
+  const canonicalLeader = resolvedDemand.leader
+    ? canonicalizePremiumCapabilityVerb(resolvedDemand.leader)
+    : null;
+  if (
+    !resolvedDemand.ownershipPrefixStripped &&
+    canonicalLeader === "be" &&
+    new RegExp(
+      `(?:^|[.!?]\\s+)(?:(?:${CANDIDATE_HISTORY_ENGLISH_COPULAR_SOURCE}|was|were|is|are)\\s+)?${escapedDemandObject}${PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE}`,
+      "i",
+    ).test(args.factText)
+  ) {
+    return "be";
+  }
+  if (
+    !resolvedDemand.ownershipPrefixStripped &&
+    canonicalLeader === "être" &&
+    new RegExp(
+      `(?:^|[.!?]\\s+)(?:(?:je\\s+suis|j['’]\\s*(?:étais|ai\\s+été)|(?:était|étaient))\\s+)?${escapedDemandObject}${PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE}`,
+      "iu",
+    ).test(args.factText)
+  ) {
+    return "être";
+  }
+  if (
+    canonicalLeader === "suivre" &&
+    new RegExp(
+      `(?:^|[.!?]\\s+)(?:je\\s+)?suis\\s+${escapedDemandObject}${PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE}`,
+      "iu",
+    ).test(args.factText)
+  ) {
+    return "suivre";
+  }
+  if (
+    new RegExp(
+      `\\b(?:responsible\\s+for|in\\s+charge\\s+of|accountable\\s+for|tasked\\s+with)\\s+${escapedDemandObject}${PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE}`,
+      "i",
+    ).test(args.factText) ||
+    new RegExp(
+      `\\b${CANDIDATE_HISTORY_FRENCH_OWNERSHIP_PREFIX_SOURCE}${escapedDemandObject}${PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE}`,
+      "iu",
+    ).test(args.factText)
+  ) {
+    return "own";
+  }
+  return null;
+}
+
+function extractGeneratedPremiumCapabilityVerbForDemand(args: {
+  generatedText: string;
+  demand: JobDemandNodeV1;
+  allowContextualComplements: boolean;
+}): string | null {
+  const resolvedDemand = resolvePremiumDemandSurface(args.demand.text);
+  if (!resolvedDemand) return null;
+  const escapedDemand = escapeRegExp(resolvedDemand.surface);
+  const escapedDemandObject = escapeRegExp(resolvedDemand.objectSurface);
+  const escapedDemandReference =
+    resolvedDemand.surface !== resolvedDemand.objectSurface
+      ? `(?:${escapedDemand}|${escapedDemandObject})`
+    : escapedDemandObject;
+  const generatedDemandBoundary = args.allowContextualComplements
+    ? PREMIUM_DEMAND_SURFACE_BOUNDARY_SOURCE
+    : PREMIUM_GENERATED_DEMAND_SURFACE_BOUNDARY_SOURCE;
+  const verbs = new Set<string>();
+  const directActionPatterns = [
+    new RegExp(
+      `\\bi\\s+(${CANDIDATE_HISTORY_ENGLISH_ACTION_VERB_SOURCE})\\s+(?:(?:the|this|that|my)\\s+)?${escapedDemandReference}${generatedDemandBoundary}`,
+      "gi",
+    ),
+    new RegExp(
+      `\\bj['’]\\s*ai\\s+(${CANDIDATE_HISTORY_FRENCH_PAST_ACTION_SOURCE})\\s+(?:(?:le|la|les|du|des)\\s+|l['’]\\s*)?${escapedDemandReference}${generatedDemandBoundary}`,
+      "giu",
+    ),
+    new RegExp(
+      `\\b(?:je\\s+|j['’]\\s*)(${CANDIDATE_HISTORY_FRENCH_PRESENT_ACTION_SOURCE})\\s+(?:(?:le|la|les|du|des)\\s+|l['’]\\s*)?${escapedDemandReference}${generatedDemandBoundary}`,
+      "giu",
+    ),
+  ];
+  for (const pattern of directActionPatterns) {
+    for (const match of args.generatedText.matchAll(pattern)) {
+      if (match[1]) {
+        verbs.add(canonicalizePremiumCapabilityVerb(match[1]));
+      }
+    }
+  }
+
+  const canonicalLeader = resolvedDemand.leader
+    ? canonicalizePremiumCapabilityVerb(resolvedDemand.leader)
+    : null;
+  if (
+    !resolvedDemand.ownershipPrefixStripped &&
+    canonicalLeader === "be" &&
+    new RegExp(
+      `\\b${CANDIDATE_HISTORY_ENGLISH_COPULAR_SOURCE}\\s+${escapedDemandObject}${generatedDemandBoundary}`,
+      "i",
+    ).test(args.generatedText)
+  ) {
+    verbs.add("be");
+  }
+  if (
+    !resolvedDemand.ownershipPrefixStripped &&
+    canonicalLeader === "être" &&
+    new RegExp(
+      `\\b(?:je\\s+suis|j['’]\\s*(?:étais|ai\\s+été))\\s+${escapedDemandObject}${generatedDemandBoundary}`,
+      "iu",
+    ).test(args.generatedText)
+  ) {
+    verbs.add("être");
+  }
+  if (
+    canonicalLeader === "suivre" &&
+    new RegExp(
+      `\\bje\\s+suis\\s+${escapedDemandObject}${generatedDemandBoundary}`,
+      "iu",
+    ).test(args.generatedText)
+  ) {
+    verbs.add("suivre");
+  }
+
+  if (
+    new RegExp(
+      `\\b${CANDIDATE_HISTORY_ENGLISH_COPULAR_SOURCE}\\s+(?:responsible\\s+for|in\\s+charge\\s+of|accountable\\s+for|tasked\\s+with)\\s+${escapedDemandReference}${generatedDemandBoundary}`,
+      "i",
+    ).test(args.generatedText) ||
+    new RegExp(
+      `\\b(?:je\\s+suis|j['’]\\s*(?:étais|ai\\s+été))\\s+${CANDIDATE_HISTORY_FRENCH_OWNERSHIP_PREFIX_SOURCE}${escapedDemandReference}${generatedDemandBoundary}`,
+      "iu",
+    ).test(args.generatedText)
+  ) {
+    verbs.add("own");
+  }
+
+  if (
+    resolvedDemand.leader &&
+    (new RegExp(
+      `\\bi\\s+${escapedDemand}${generatedDemandBoundary}`,
+      "i",
+    ).test(
+      args.generatedText,
+    ) ||
+      new RegExp(
+        `\\b(?:j['’]\\s*ai|je)\\s+${escapedDemand}${generatedDemandBoundary}`,
+        "iu",
+      ).test(args.generatedText))
+  ) {
+    verbs.add(canonicalizePremiumCapabilityVerb(resolvedDemand.leader));
+  }
+
+  const trailingActionPatterns = [
+    new RegExp(
+      `${escapedDemandReference}${generatedDemandBoundary}(?:(?![.!?]).){0,100}\\bi\\s+(${CANDIDATE_HISTORY_ENGLISH_ACTION_VERB_SOURCE})\\b`,
+      "gi",
+    ),
+    new RegExp(
+      `${escapedDemandReference}${generatedDemandBoundary}(?:(?![.!?]).){0,100}\\bj['’]\\s*ai\\s+(${CANDIDATE_HISTORY_FRENCH_PAST_ACTION_SOURCE})\\b`,
+      "giu",
+    ),
+    new RegExp(
+      `${escapedDemandReference}${generatedDemandBoundary}(?:(?![.!?]).){0,100}\\b(?:je\\s+|j['’]\\s*)(${CANDIDATE_HISTORY_FRENCH_PRESENT_ACTION_SOURCE})\\b`,
+      "giu",
+    ),
+  ];
+  for (const pattern of trailingActionPatterns) {
+    for (const match of args.generatedText.matchAll(pattern)) {
+      if (match[1]) {
+        verbs.add(canonicalizePremiumCapabilityVerb(match[1]));
+      }
+    }
+  }
+  return verbs.size === 1 ? (verbs.values().next().value ?? null) : null;
+}
+
 export function validatePremiumWriterOutputV1(args: {
   writerOutput: PremiumWriterOutputV1;
   claimPlan: ClaimPlanV1;
@@ -3758,6 +4434,17 @@ export function validatePremiumWriterOutputV1(args: {
     const referencedDemands = part.demandIds
       .map((id) => demandById.get(id))
       .filter((demand): demand is JobDemandNodeV1 => Boolean(demand));
+    const assignedDemands = (assignedClaim?.demandIds ?? [])
+      .map((id) => demandById.get(id))
+      .filter((demand): demand is JobDemandNodeV1 => Boolean(demand));
+    const candidateHistoryDemands = Array.from(
+      new Map(
+        [...referencedDemands, ...assignedDemands].map((demand) => [
+          demand.id,
+          demand,
+        ]),
+      ).values(),
+    );
     const referencedFactSurface = referencedFacts.map((fact) => fact.text).join(" ");
     if (
       hasUnsupportedNumericClaim({
@@ -3825,14 +4512,11 @@ export function validatePremiumWriterOutputV1(args: {
       });
     }
     if (
-      referencedDemands.some((demand) =>
-        compact.toLowerCase().includes(
-          demand.text.replace(/[.!?]$/u, "").toLowerCase(),
-        ),
-      ) &&
-      /\b(?:i|my)\s+(?:led|managed|owned|built|improved|delivered|maintained|coordinated|handled|tracked|documented)\b/i.test(
-        compact,
-      )
+      usesJobDemandAsCandidateExperience({
+        generatedText: compact,
+        referencedDemands: candidateHistoryDemands,
+        referencedFacts,
+      })
     ) {
       issues.push({
         code: "job_demand_as_candidate_experience",
@@ -4582,6 +5266,13 @@ function cleanPremiumWriterOutputText(
   };
 }
 
+function containsOnlyUnknownProviderIds(
+  ids: readonly string[],
+  knownIds: ReadonlySet<string>,
+): boolean {
+  return ids.length > 0 && ids.every((id) => !knownIds.has(id));
+}
+
 function normalizeProviderWriterOutputProvenance(args: {
   writerOutput: PremiumWriterOutputV1;
   claimPlan: ClaimPlanV1;
@@ -4597,7 +5288,6 @@ function normalizeProviderWriterOutputProvenance(args: {
     return args.writerOutput;
   }
 
-  const factIds = new Set(args.factGraph.facts.map((fact) => fact.id));
   const demandIds = new Set(args.jobDemandGraph.demands.map((demand) => demand.id));
   const normalizedParts = { ...args.writerOutput.bodyParts };
 
@@ -4609,19 +5299,15 @@ function normalizeProviderWriterOutputProvenance(args: {
     const claimIdsNeedNormalization =
       part.claimIds.length === 0 ||
       part.claimIds.some((claimId) => claimId !== assignedClaim.id);
-    const factIdsNeedNormalization = part.factIds.some(
-      (factId) =>
-        !factIds.has(factId) || !assignedClaim.factIds.includes(factId),
-    );
-    const demandIdsNeedNormalization = part.demandIds.some(
-      (demandId) =>
-        !demandIds.has(demandId) || !assignedClaim.demandIds.includes(demandId),
+    const demandIdsNeedNormalization = containsOnlyUnknownProviderIds(
+      part.demandIds,
+      demandIds,
     );
 
     normalizedParts[section] = {
       ...part,
       claimIds: claimIdsNeedNormalization ? [assignedClaim.id] : part.claimIds,
-      factIds: factIdsNeedNormalization ? assignedClaim.factIds : part.factIds,
+      factIds: part.factIds,
       demandIds: demandIdsNeedNormalization
         ? assignedClaim.demandIds
         : part.demandIds,

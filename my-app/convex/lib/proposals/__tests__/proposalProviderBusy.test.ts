@@ -1265,7 +1265,7 @@ describe("proposal provider busy handling", () => {
                     section: "proofBlock",
                     text: "I maintained HIPAA compliance standards across incident documentation.",
                     claimIds: ["claim_proof_001"],
-                    factIds: ["fact_experience_001_highlight_001"],
+                    factIds: ["fact_experience_002_highlight_001"],
                     demandIds: [],
                   },
                   employerValueBlock: {
