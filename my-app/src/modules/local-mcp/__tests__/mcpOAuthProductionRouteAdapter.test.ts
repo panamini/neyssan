@@ -4959,7 +4959,7 @@ describe("MCP OAuth production route adapter", () => {
     expect(dependencies.createPreAuthIntent).toHaveBeenCalledTimes(1);
   });
 
-  it("scopes pre-auth quota checks to the forwarded caller when present", async () => {
+  it("uses the transport socket for pre-auth quota checks", async () => {
     const dependencies = routeDependencies(makeCtx());
 
     const response = await handleMcpOAuthProductionRouteRequest(
@@ -4977,8 +4977,46 @@ describe("MCP OAuth production route adapter", () => {
 
     expect(response).toMatchObject({ handled: true, status: 303 });
     expect(dependencies.checkPreAuthQuota.mock.calls[0]?.[0]).toMatchObject({
-      callerKey: "203.0.113.9",
+      callerKey: "198.51.100.9",
     });
+  });
+
+  it("does not let a caller rotate pre-auth quota buckets via the first forwarded entry", async () => {
+    const callerKeys: string[] = [];
+    const dependencies = {
+      ...routeDependencies(makeCtx()),
+      checkPreAuthQuota: vi.fn(async (input) => {
+        callerKeys.push(input.callerKey);
+        return Object.freeze({
+          kind: "mcp_oauth_pre_auth_quota_result",
+          ok: true,
+          reason: "accepted",
+          safeForLogging: true,
+          version: 1,
+        });
+      }),
+    } satisfies McpOAuthProductionRouteAdapterDependenciesV1;
+    const requestWithForwardedEntries = (attackerEntry: string) => ({
+      ...request(MCP_OAUTH_PRODUCTION_AUTHORIZATION_PATH, "GET", authorizationRequestPath()),
+      headers: {
+        host: "mcp.twoweeks.example.test",
+        "x-forwarded-for": `${attackerEntry}, 198.51.100.1`,
+      },
+      remoteAddress: "198.51.100.9",
+    } satisfies McpOAuthProductionRouteAdapterRequestV1);
+
+    await handleMcpOAuthProductionRouteRequest(
+      requestWithForwardedEntries("203.0.113.9"),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+    await handleMcpOAuthProductionRouteRequest(
+      requestWithForwardedEntries("203.0.113.10"),
+      routeConfig({ runtime: "1", approved: "1", routeWiring: "1" }),
+      dependencies,
+    );
+
+    expect(callerKeys).toEqual(["198.51.100.9", "198.51.100.9"]);
   });
 
   it("refreshes the pre-auth create deadline after quota succeeds", async () => {

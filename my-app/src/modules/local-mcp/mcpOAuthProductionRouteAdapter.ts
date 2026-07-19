@@ -2536,13 +2536,10 @@ function requestHostMatchesOrigin(
 }
 
 function readQuotaCallerKey(request: McpOAuthProductionRouteAdapterRequestV1): string {
-  return (
-    readForwardedCallerKey(request.headers?.["x-forwarded-for"]) ??
-    readHeaderCallerKey(request.headers?.["cf-connecting-ip"]) ??
-    readHeaderCallerKey(request.headers?.["x-real-ip"]) ??
-    normalizeCallerKey(request.remoteAddress) ??
-    "unknown"
-  );
+  // Pre-auth requests are unauthenticated, so every forwarding header is
+  // caller-controlled at this boundary. Use only the transport socket for
+  // quota isolation; the bearer path follows the same rule.
+  return normalizeCallerKey(request.remoteAddress) ?? "unknown";
 }
 
 function readBearerVerificationQuotaCallerKey(request: McpOAuthProductionRouteAdapterRequestV1): string | undefined {
@@ -2576,17 +2573,6 @@ function readIpv4MappedIpv6Address(value: string): string | undefined {
   const match = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/u.exec(value.toLowerCase());
   const ipv4Address = match?.[1];
   return ipv4Address && isIP(ipv4Address) === 4 ? ipv4Address : undefined;
-}
-
-function readForwardedCallerKey(value: string | readonly string[] | undefined): string | undefined {
-  const header = readSingleHeaderValue(value);
-  if (!header) return undefined;
-  return normalizeCallerKey(header.split(",")[0] ?? "");
-}
-
-function readHeaderCallerKey(value: string | readonly string[] | undefined): string | undefined {
-  const header = readSingleHeaderValue(value);
-  return header ? normalizeCallerKey(header) : undefined;
 }
 
 function isMcpTransportOriginAllowed(

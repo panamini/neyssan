@@ -100,6 +100,9 @@ export function McpOAuthContinuationPage(): JSX.Element {
     })();
     return () => {
       canceled = true;
+      if (window.sessionStorage.getItem(storageKey) === "working:v2") {
+        window.sessionStorage.removeItem(storageKey);
+      }
     };
   }, [continuationHref, getToken, intentHandle, isLoaded, isSignedIn]);
 

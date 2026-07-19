@@ -96,4 +96,23 @@ describe("McpOAuthContinuationPage", () => {
       "owner_binding_failed",
     );
   });
+
+  it("restarts the continuation request after React StrictMode cleanup", async () => {
+    authState.isSignedIn = true;
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => undefined)));
+
+    render(
+      <React.StrictMode>
+        <MemoryRouter
+          initialEntries={[
+            "/oauth/continue?mcp_oauth_intent=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          ]}
+        >
+          <McpOAuthContinuationPage />
+        </MemoryRouter>
+      </React.StrictMode>,
+    );
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+  });
 });
