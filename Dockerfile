@@ -87,6 +87,13 @@ RUN --mount=type=cache,target=/root/.npm \
     npm ci --prefix /app/my-app && \
     PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH}" npx playwright install --with-deps chromium
 
+RUN set -eux; \
+    groupadd --system app; \
+    useradd --system --gid app --home-dir /app --shell /usr/sbin/nologin app; \
+    chown -R app:app /app "${PLAYWRIGHT_BROWSERS_PATH}"
+
+USER app
+
 EXPOSE 8000
 
 CMD ["/opt/venv/bin/python", "-m", "uvicorn", "--app-dir", "/app", "cv_parser_service.main:app", "--host", "0.0.0.0", "--port", "8000"]
