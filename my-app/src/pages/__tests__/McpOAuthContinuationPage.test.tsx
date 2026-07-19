@@ -97,7 +97,7 @@ describe("McpOAuthContinuationPage", () => {
     );
   });
 
-  it("restarts the continuation request after React StrictMode cleanup", async () => {
+  it("keeps one continuation request in flight across React StrictMode cleanup", async () => {
     authState.isSignedIn = true;
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => undefined)));
 
@@ -113,6 +113,9 @@ describe("McpOAuthContinuationPage", () => {
       </React.StrictMode>,
     );
 
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    expect(window.sessionStorage.getItem(
+      "mcp-oauth-continuation-document-request:/oauth/continue?mcp_oauth_intent=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    )).toBe("working:v2");
   });
 });

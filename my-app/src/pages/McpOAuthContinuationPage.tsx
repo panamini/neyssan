@@ -44,7 +44,6 @@ export function McpOAuthContinuationPage(): JSX.Element {
     const storageKey = `mcp-oauth-continuation-document-request:${continuationHref}`;
     if (window.sessionStorage.getItem(storageKey) === "working:v2") return;
     window.sessionStorage.setItem(storageKey, "working:v2");
-    let canceled = false;
     setStatus("working");
     setPhase("requesting_token");
     setBlockReason("none");
@@ -58,7 +57,6 @@ export function McpOAuthContinuationPage(): JSX.Element {
         }
         if (response.status === 401 || readSafeRouteReason(body) === "owner_binding_failed") {
           const token = await getToken({ template: "convex" });
-          if (canceled) return;
           if (!token) {
             setBlockReason("no_token");
             setStatus("blocked");
@@ -69,7 +67,6 @@ export function McpOAuthContinuationPage(): JSX.Element {
           response = await fetchContinuation(continuationHref, token);
           body = undefined;
         }
-        if (canceled) return;
         setPhase("reading_response");
         body ??= await response.json().catch(() => undefined);
         const redirectTo = readSafeRedirectTo(body);
@@ -90,20 +87,12 @@ export function McpOAuthContinuationPage(): JSX.Element {
         setPhase("redirecting");
         window.location.assign(redirectTo);
       } catch {
-        if (!canceled) {
-          window.sessionStorage.removeItem(storageKey);
-          setBlockReason("request_failed");
-          setStatus("blocked");
-          setPhase("idle");
-        }
+        window.sessionStorage.removeItem(storageKey);
+        setBlockReason("request_failed");
+        setStatus("blocked");
+        setPhase("idle");
       }
     })();
-    return () => {
-      canceled = true;
-      if (window.sessionStorage.getItem(storageKey) === "working:v2") {
-        window.sessionStorage.removeItem(storageKey);
-      }
-    };
   }, [continuationHref, getToken, intentHandle, isLoaded, isSignedIn]);
 
   return (

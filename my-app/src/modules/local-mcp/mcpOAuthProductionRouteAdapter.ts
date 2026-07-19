@@ -2536,10 +2536,16 @@ function requestHostMatchesOrigin(
 }
 
 function readQuotaCallerKey(request: McpOAuthProductionRouteAdapterRequestV1): string {
-  // Pre-auth requests are unauthenticated, so every forwarding header is
-  // caller-controlled at this boundary. Use only the transport socket for
-  // quota isolation; the bearer path follows the same rule.
-  return normalizeCallerKey(request.remoteAddress) ?? "unknown";
+  // The configured tunnel appends its observed caller address to the end of
+  // X-Forwarded-For. Earlier entries are caller-controlled and must not be
+  // used to rotate unauthenticated quota buckets. Fall back to the socket
+  // only when the trusted proxy boundary did not provide a caller address.
+  return (
+    readTrustedForwardedCallerKey(request.headers?.["x-forwarded-for"]) ??
+    readHeaderCallerKey(request.headers?.["cf-connecting-ip"]) ??
+    normalizeCallerKey(request.remoteAddress) ??
+    "unknown"
+  );
 }
 
 function readBearerVerificationQuotaCallerKey(request: McpOAuthProductionRouteAdapterRequestV1): string | undefined {
@@ -2573,6 +2579,21 @@ function readIpv4MappedIpv6Address(value: string): string | undefined {
   const match = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/u.exec(value.toLowerCase());
   const ipv4Address = match?.[1];
   return ipv4Address && isIP(ipv4Address) === 4 ? ipv4Address : undefined;
+}
+
+function readTrustedForwardedCallerKey(value: string | readonly string[] | undefined): string | undefined {
+  const header = readSingleHeaderValue(value);
+  if (!header) return undefined;
+  const entries = header
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  return normalizeCallerKey(entries[entries.length - 1] ?? "");
+}
+
+function readHeaderCallerKey(value: string | readonly string[] | undefined): string | undefined {
+  const header = readSingleHeaderValue(value);
+  return header ? normalizeCallerKey(header) : undefined;
 }
 
 function isMcpTransportOriginAllowed(

@@ -4977,7 +4977,7 @@ describe("MCP OAuth production route adapter", () => {
 
     expect(response).toMatchObject({ handled: true, status: 303 });
     expect(dependencies.checkPreAuthQuota.mock.calls[0]?.[0]).toMatchObject({
-      callerKey: "198.51.100.9",
+      callerKey: "198.51.100.1",
     });
   });
 
@@ -5016,7 +5016,7 @@ describe("MCP OAuth production route adapter", () => {
       dependencies,
     );
 
-    expect(callerKeys).toEqual(["198.51.100.9", "198.51.100.9"]);
+    expect(callerKeys).toEqual(["198.51.100.1", "198.51.100.1"]);
   });
 
   it("refreshes the pre-auth create deadline after quota succeeds", async () => {
