@@ -29,7 +29,7 @@ export type NormalizedProfile = {
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf";
 // Use Vite's asset URL handling to load the worker script at runtime.
 // The `?url` suffix tells Vite to return a URL string to the asset.
-import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.js?url";
+import workerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
 // Configure pdfjs worker using GlobalWorkerOptions import to avoid readonly getter issues
 import { GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf";

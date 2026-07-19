@@ -2,7 +2,7 @@ import React from "react";
 import { render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("pdfjs-dist/legacy/build/pdf.worker.min.js?url", () => ({
+vi.mock("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url", () => ({
   default: "/mock-pdf-worker.js",
 }));
 
