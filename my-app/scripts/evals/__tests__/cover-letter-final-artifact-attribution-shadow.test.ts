@@ -64,10 +64,8 @@ function buildWriterOutput(): PremiumWriterOutputV1 {
         text: "I managed a portfolio of 40+ enterprise accounts with quarterly business reviews. I also built a customer health-score dashboard used by the CS team to prioritize at-risk accounts.",
         claimIds: ["claim_proof_001"],
         factIds: [
-          "fact_experience_001_role",
           "fact_experience_001_highlight_002",
           "fact_experience_001_highlight_003",
-          "fact_experience_001_highlight_001",
         ],
         demandIds: [],
       },

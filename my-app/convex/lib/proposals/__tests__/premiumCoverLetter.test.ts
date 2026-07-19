@@ -289,6 +289,9 @@ describe("premium ClaimPlan provenance v1", () => {
 
   it("builds and validates deterministic cv_direct ClaimPlanV1 sections", () => {
     const { claimPlan, factGraph, jobDemandGraph } = buildDirectClaimPlanFixture();
+    const openingClaim = claimPlan.claims.find((claim) => claim.section === "opening")!;
+    const proofClaim = claimPlan.claims.find((claim) => claim.section === "proofBlock")!;
+    const closeClaim = claimPlan.claims.find((claim) => claim.section === "closeLine")!;
 
     expect(claimPlan.claims.map((claim) => claim.id)).toEqual([
       "claim_opening_001",
@@ -297,6 +300,14 @@ describe("premium ClaimPlan provenance v1", () => {
       "claim_close_001",
     ]);
     expect(claimPlan.claims.every((claim) => claim.factIds.length > 0)).toBe(true);
+    expect(openingClaim.demandIds[0]).toMatch(/^demand_core_/);
+    expect(proofClaim.factIds).not.toEqual(
+      expect.arrayContaining(openingClaim.factIds),
+    );
+    expect(proofClaim.factIds).toHaveLength(2);
+    expect(closeClaim.factIds).toEqual(
+      expect.arrayContaining(proofClaim.factIds),
+    );
     expect(
       claimPlan.claims.find((claim) => claim.section === "employerValueBlock")
         ?.demandIds[0],
@@ -304,6 +315,281 @@ describe("premium ClaimPlan provenance v1", () => {
     expect(validatePremiumClaimPlanV1({ claimPlan, factGraph, jobDemandGraph })).toEqual(
       [],
     );
+  });
+
+  it("keeps the English and French proof contract satisfiable with one concrete CV fact", () => {
+    const { rankedEvidencePack, factGraph, jobDemandGraph } =
+      buildDirectClaimPlanFixture();
+    const singleFactRankedEvidencePack = {
+      ...rankedEvidencePack,
+      strongestEvidence: rankedEvidencePack.strongestEvidence.slice(0, 1),
+      supportingEvidence: [],
+      transferCore: [],
+    };
+
+    for (const outputLanguage of ["English", "French"] as const) {
+      const claimPlan = buildPremiumClaimPlanV1({
+        factGraph,
+        jobDemandGraph,
+        rankedEvidencePack: singleFactRankedEvidencePack,
+        contextClass: "cv_direct",
+        preset: "signature",
+        outputLanguage,
+        jobTitle: directJob.jobTitle,
+      });
+      const openingClaim = claimPlan.claims.find(
+        (claim) => claim.section === "opening",
+      )!;
+      const proofClaim = claimPlan.claims.find(
+        (claim) => claim.section === "proofBlock",
+      )!;
+      const brief = buildPremiumCoverLetterBrief({
+        preset: "signature",
+        outputLanguage,
+        jobTitle: directJob.jobTitle,
+        jobDescription: directJob.jobDescription,
+        contextClass: "cv_direct",
+        allowedFactsPack: buildAllowedFactsPackFromFactGraph(factGraph),
+        rankedEvidencePack: singleFactRankedEvidencePack,
+        claimPlan,
+        factGraph,
+        jobDemandGraph,
+      });
+      const prompt = buildPremiumCoverLetterPrompt({ brief });
+
+      expect(proofClaim.factIds).toEqual(openingClaim.factIds);
+      expect(proofClaim.editorialGuideline).toContain(
+        "Only one concrete CV proof is available",
+      );
+      expect(prompt).toContain(
+        "Only one concrete CV proof is assigned; develop a different supported aspect of it once",
+      );
+      expect(prompt).not.toContain(
+        "use the distinct fact assigned to proofBlock",
+      );
+    }
+
+    const allowedFactsPack = buildAllowedFactsPackFromFactGraph(factGraph);
+    const nonConcreteFact = allowedFactsPack.facts.find(
+      (fact) =>
+        fact.source === "cv" &&
+        ["domain", "tool", "trait"].includes(fact.category),
+    )!;
+    const sparseRankedEvidencePack = {
+      ...singleFactRankedEvidencePack,
+      strongestEvidence: [
+        singleFactRankedEvidencePack.strongestEvidence[0]!,
+        nonConcreteFact,
+      ],
+    };
+    const sparseClaimPlan = buildPremiumClaimPlanV1({
+      factGraph,
+      jobDemandGraph,
+      rankedEvidencePack: sparseRankedEvidencePack,
+      contextClass: "cv_direct",
+      preset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+    });
+    const sparseOpeningClaim = sparseClaimPlan.claims.find(
+      (claim) => claim.section === "opening",
+    )!;
+    const sparseProofClaim = sparseClaimPlan.claims.find(
+      (claim) => claim.section === "proofBlock",
+    )!;
+    const sparsePrompt = buildPremiumCoverLetterPrompt({
+      brief: buildPremiumCoverLetterBrief({
+        preset: "signature",
+        outputLanguage: "English",
+        jobTitle: directJob.jobTitle,
+        jobDescription: directJob.jobDescription,
+        contextClass: "cv_direct",
+        allowedFactsPack,
+        rankedEvidencePack: sparseRankedEvidencePack,
+        claimPlan: sparseClaimPlan,
+        factGraph,
+        jobDemandGraph,
+      }),
+    });
+
+    expect(sparseProofClaim.factIds).toContain(sparseOpeningClaim.factIds[0]);
+    expect(sparseProofClaim.editorialGuideline).toContain(
+      "Only one concrete CV proof is available",
+    );
+    expect(sparsePrompt).toContain(
+      "Only one concrete CV proof is assigned",
+    );
+    expect(sparsePrompt).not.toContain(
+      "Use the distinct fact assigned to proofBlock",
+    );
+
+    const noConcreteRankedEvidencePack = {
+      ...singleFactRankedEvidencePack,
+      strongestEvidence: [nonConcreteFact],
+      supportingEvidence: [],
+      transferCore: [],
+    };
+    const noConcreteClaimPlan = buildPremiumClaimPlanV1({
+      factGraph,
+      jobDemandGraph,
+      rankedEvidencePack: noConcreteRankedEvidencePack,
+      contextClass: "cv_direct",
+      preset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+    });
+    const noConcreteProofClaim = noConcreteClaimPlan.claims.find(
+      (claim) => claim.section === "proofBlock",
+    )!;
+    const noConcretePrompt = buildPremiumCoverLetterPrompt({
+      brief: buildPremiumCoverLetterBrief({
+        preset: "signature",
+        outputLanguage: "English",
+        jobTitle: directJob.jobTitle,
+        jobDescription: directJob.jobDescription,
+        contextClass: "cv_direct",
+        allowedFactsPack,
+        rankedEvidencePack: noConcreteRankedEvidencePack,
+        claimPlan: noConcreteClaimPlan,
+        factGraph,
+        jobDemandGraph,
+      }),
+    });
+
+    expect(noConcreteProofClaim.editorialGuideline).toContain(
+      "No concrete CV proof is available",
+    );
+    expect(noConcretePrompt).toContain(
+      "No concrete CV proof is assigned; use the assigned CV context only as bounded background",
+    );
+    expect(noConcretePrompt).not.toContain(
+      "Only one concrete CV proof is assigned",
+    );
+  });
+
+  it("falls back safely when no role responsibility can be assigned", () => {
+    const { rankedEvidencePack, factGraph } = buildDirectClaimPlanFixture();
+    const sparseJobDescription =
+      "Outstanding benefits and a mission-led culture are part of the package.";
+    const jobDemandGraph = buildPremiumJobDemandGraphV1(sparseJobDescription);
+    const claimPlan = buildPremiumClaimPlanV1({
+      factGraph,
+      jobDemandGraph,
+      rankedEvidencePack,
+      contextClass: "cv_direct",
+      preset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+    });
+    const openingClaim = claimPlan.claims.find(
+      (claim) => claim.section === "opening",
+    )!;
+    const closeClaim = claimPlan.claims.find(
+      (claim) => claim.section === "closeLine",
+    )!;
+    const brief = buildPremiumCoverLetterBrief({
+      preset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: sparseJobDescription,
+      contextClass: "cv_direct",
+      allowedFactsPack: buildAllowedFactsPackFromFactGraph(factGraph),
+      rankedEvidencePack,
+      claimPlan,
+      factGraph,
+      jobDemandGraph,
+    });
+    const prompt = buildPremiumCoverLetterPrompt({ brief });
+
+    expect(
+      jobDemandGraph.demands.some((demand) =>
+        ["core_responsibility", "key_requirement"].includes(demand.bucket),
+      ),
+    ).toBe(false);
+    expect(openingClaim.demandIds).toEqual([]);
+    expect(closeClaim.demandIds).toEqual([]);
+    expect(openingClaim.editorialGuideline).toContain(
+      "No role responsibility is assigned",
+    );
+    expect(closeClaim.editorialGuideline).not.toContain(
+      "assigned responsibility",
+    );
+    expect(prompt).toContain(
+      "No role responsibility is assigned; open with concise professional context around the assigned CV proof",
+    );
+    expect(prompt).not.toContain(
+      "start from one concrete assigned responsibility",
+    );
+  });
+
+  it("keeps legacy ClaimPlan evidence allocation outside English and French", () => {
+    const { rankedEvidencePack, factGraph, jobDemandGraph } =
+      buildDirectClaimPlanFixture();
+    const claimPlan = buildPremiumClaimPlanV1({
+      factGraph,
+      jobDemandGraph,
+      rankedEvidencePack,
+      contextClass: "cv_direct",
+      preset: "signature",
+      outputLanguage: "Spanish",
+      jobTitle: directJob.jobTitle,
+    });
+    const openingClaim = claimPlan.claims.find((claim) => claim.section === "opening")!;
+    const proofClaim = claimPlan.claims.find((claim) => claim.section === "proofBlock")!;
+    const closeClaim = claimPlan.claims.find((claim) => claim.section === "closeLine")!;
+
+    expect(openingClaim.demandIds).toEqual([]);
+    expect(proofClaim.factIds).toEqual(closeClaim.factIds);
+    expect(proofClaim.factIds).toEqual(
+      expect.arrayContaining(openingClaim.factIds),
+    );
+  });
+
+  it("allocates distinct concrete proof facts for English and French adjacent letters", () => {
+    const factGraph = buildPremiumFactGraphV1({
+      personalizationContext: adjacentContext,
+      jobDescription: adjacentJob.jobDescription,
+    });
+    const jobDemandGraph = buildPremiumJobDemandGraphV1(
+      adjacentJob.jobDescription,
+    );
+    const allowedFactsPack = buildAllowedFactsPackFromFactGraph(factGraph);
+    const rankedEvidencePack = rankAllowedFacts({
+      allowedFactsPack,
+      jobTitle: adjacentJob.jobTitle,
+      jobDescription: adjacentJob.jobDescription,
+      contextClass: "cv_adjacent",
+    });
+
+    for (const outputLanguage of ["English", "French"] as const) {
+      const claimPlan = buildPremiumClaimPlanV1({
+        factGraph,
+        jobDemandGraph,
+        rankedEvidencePack,
+        contextClass: "cv_adjacent",
+        preset: "signature",
+        outputLanguage,
+        jobTitle: adjacentJob.jobTitle,
+      });
+      const openingClaim = claimPlan.claims.find(
+        (claim) => claim.section === "opening",
+      )!;
+      const proofClaim = claimPlan.claims.find(
+        (claim) => claim.section === "proofBlock",
+      )!;
+
+      expect(openingClaim.demandIds[0]).toMatch(/^demand_core_/);
+      expect(proofClaim.factIds).not.toEqual(
+        expect.arrayContaining(openingClaim.factIds),
+      );
+      expect(proofClaim.factIds.length).toBeGreaterThan(0);
+      expect(proofClaim.factIds.length).toBeLessThanOrEqual(2);
+      expect(
+        proofClaim.factIds.map(
+          (id) => factGraph.facts.find((fact) => fact.id === id)?.category,
+        ),
+      ).toEqual(expect.not.arrayContaining(["domain", "tool", "trait"]));
+    }
   });
 
   it("fails ClaimPlanV1 with unknown facts, low-value proof, and company fluff motivation", () => {
@@ -428,6 +714,1163 @@ describe("premium ClaimPlan provenance v1", () => {
       employerValueBlock: writerOutput.bodyParts.employerValueBlock.text,
       closeLine: writerOutput.bodyParts.closeLine.text,
     });
+  });
+
+  it("allows exact job-demand text as role context beside separate candidate evidence", () => {
+    const { claimPlan, factGraph, jobDemandGraph, brief } =
+      buildDirectClaimPlanFixture();
+    const openingClaim = claimPlan.claims.find(
+      (claim) => claim.section === "opening",
+    )!;
+    const referencedDemand = jobDemandGraph.demands.find(
+      (demand) => demand.id === openingClaim.demandIds[0],
+    )!;
+    const demandSurface = referencedDemand.text.replace(/[.!?]$/u, "");
+    const writerOutput = buildDirectPremiumWriterOutputFixture({
+      opening: `The role centers on this responsibility: ${demandSurface}. I improved signup conversion by 11% after iterative UI experiments.`,
+      proofBlock:
+        "I led a design system migration used across 4 product squads.",
+      employerValueBlock:
+        "That work supports reliable customer-facing interfaces.",
+      closeLine: `${demandSurface} is central to the work. I built experimentation dashboards used by product and growth teams.`,
+    });
+
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput,
+        claimPlan,
+        factGraph,
+        jobDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).not.toContain("job_demand_as_candidate_experience");
+
+    const evidenceBridgeWriterOutput = {
+      ...writerOutput,
+      bodyParts: {
+        ...writerOutput.bodyParts,
+        opening: {
+          ...writerOutput.bodyParts.opening,
+          text: `I improved signup conversion by 11%, experience relevant to ${demandSurface}.`,
+        },
+      },
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: evidenceBridgeWriterOutput,
+        claimPlan,
+        factGraph,
+        jobDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).not.toContain("job_demand_as_candidate_experience");
+
+    const invalidWriterOutput = {
+      ...writerOutput,
+      bodyParts: {
+        ...writerOutput.bodyParts,
+        opening: {
+          ...writerOutput.bodyParts.opening,
+          text: `${demandSurface} was work I managed.`,
+        },
+      },
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: invalidWriterOutput,
+        claimPlan,
+        factGraph,
+        jobDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("job_demand_as_candidate_experience");
+
+    const appositiveOwnershipWriterOutput = {
+      ...writerOutput,
+      bodyParts: {
+        ...writerOutput.bodyParts,
+        opening: {
+          ...writerOutput.bodyParts.opening,
+          text: `${demandSurface}—responsibilities I managed at BrightLayer.`,
+        },
+      },
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: appositiveOwnershipWriterOutput,
+        claimPlan,
+        factGraph,
+        jobDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("job_demand_as_candidate_experience");
+
+    for (const text of [
+      `I was responsible for ${demandSurface}.`,
+      `I coordinate ${demandSurface}.`,
+      `I manage ${demandSurface}.`,
+      `I supported ${demandSurface}.`,
+    ]) {
+      const ownershipWriterOutput = {
+        ...writerOutput,
+        bodyParts: {
+          ...writerOutput.bodyParts,
+          opening: {
+            ...writerOutput.bodyParts.opening,
+            text,
+          },
+        },
+      };
+      expect(
+        validatePremiumWriterOutputV1({
+          writerOutput: ownershipWriterOutput,
+          claimPlan,
+          factGraph,
+          jobDemandGraph,
+          brief,
+        }).map((issue) => issue.code),
+      ).toContain("job_demand_as_candidate_experience");
+    }
+
+    const openingFactId = writerOutput.bodyParts.opening.factIds[0]!;
+    const cvSupportedFactGraph = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === openingFactId
+          ? {
+              ...fact,
+              text: "Supported product launches for enterprise customers.",
+              allowedVerbs: ["supported"],
+            }
+          : fact,
+      ),
+    };
+    const cvSupportedDemandGraph = {
+      ...jobDemandGraph,
+      demands: jobDemandGraph.demands.map((demand) =>
+        demand.id === referencedDemand.id
+          ? {
+              ...demand,
+              text: "Support product launches.",
+              tokens: ["product", "launches"],
+            }
+          : demand,
+      ),
+    };
+    const cvSupportedDemandWriterOutput = {
+      ...writerOutput,
+      bodyParts: {
+        ...writerOutput.bodyParts,
+        opening: {
+          ...writerOutput.bodyParts.opening,
+          text: "I support product launches.",
+          demandIds: [],
+        },
+      },
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: cvSupportedDemandWriterOutput,
+        claimPlan,
+        factGraph: cvSupportedFactGraph,
+        jobDemandGraph: cvSupportedDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).not.toContain("job_demand_as_candidate_experience");
+
+    for (const scenario of [
+      {
+        factText: "Managed service tickets for regional offices.",
+        allowedVerbs: ["managed"],
+        demandText: "Manage vendor relationships.",
+        demandTokens: ["vendor", "relationships"],
+        generatedText: "I managed vendor relationships.",
+      },
+      {
+        factText: "J’ai géré les demandes de service des bureaux régionaux.",
+        allowedVerbs: ["géré"],
+        demandText: "Gérer les relations fournisseurs.",
+        demandTokens: ["relations", "fournisseurs"],
+        generatedText: "J’ai géré les relations fournisseurs.",
+      },
+      {
+        factText: "Supported service tickets for regional offices.",
+        allowedVerbs: ["supported"],
+        demandText: "Prepare weekly reports.",
+        demandTokens: ["weekly", "reports"],
+        generatedText: "I prepared weekly reports.",
+      },
+      {
+        factText: "Managed service tickets for regional offices.",
+        allowedVerbs: ["managed"],
+        demandText: "This role will manage vendor relationships.",
+        demandTokens: ["vendor", "relationships"],
+        generatedText: "I managed vendor relationships.",
+      },
+      {
+        factText: "Supported service tickets for regional offices.",
+        allowedVerbs: ["supported"],
+        demandText: "Candidates should prepare weekly reports.",
+        demandTokens: ["weekly", "reports"],
+        generatedText: "I prepared weekly reports.",
+      },
+      {
+        factText: "Managed service tickets for regional offices.",
+        allowedVerbs: ["managed"],
+        demandText: "Be responsible for vendor relationships.",
+        demandTokens: ["responsible", "vendor", "relationships"],
+        generatedText: "I was responsible for vendor relationships.",
+      },
+      {
+        factText: "J’ai géré les demandes de service des bureaux régionaux.",
+        allowedVerbs: ["géré"],
+        demandText: "Être responsable des relations fournisseurs.",
+        demandTokens: ["responsable", "relations", "fournisseurs"],
+        generatedText: "J’étais responsable des relations fournisseurs.",
+      },
+      {
+        factText: "Supported service tickets for regional offices.",
+        allowedVerbs: ["supported"],
+        demandText: "Be proficient in Salesforce.",
+        demandTokens: ["proficient", "salesforce"],
+        generatedText: "I was proficient in Salesforce.",
+      },
+      {
+        factText: "Supported service tickets for regional offices.",
+        allowedVerbs: ["supported"],
+        demandText: "Be proficient in Salesforce.",
+        demandTokens: ["proficient", "salesforce"],
+        generatedText: "I'm proficient in Salesforce.",
+      },
+      {
+        factText: "Managed service tickets for regional offices.",
+        allowedVerbs: ["managed"],
+        demandText: "Be responsible for vendor relationships.",
+        demandTokens: ["responsible", "vendor", "relationships"],
+        generatedText: "I'm responsible for vendor relationships.",
+      },
+      {
+        factText: "J’ai traité les demandes de service des bureaux régionaux.",
+        allowedVerbs: ["traité"],
+        demandText: "Être à l’aise avec Salesforce.",
+        demandTokens: ["aise", "salesforce"],
+        generatedText: "Je suis à l’aise avec Salesforce.",
+      },
+      {
+        factText: "J’ai traité les demandes de service des bureaux régionaux.",
+        allowedVerbs: ["traité"],
+        demandText: "Suivre les relations fournisseurs.",
+        demandTokens: ["relations", "fournisseurs"],
+        generatedText: "Je suis les relations fournisseurs.",
+      },
+      {
+        factText: "J’ai traité les demandes de service des bureaux régionaux.",
+        allowedVerbs: ["traité"],
+        demandText: "Responsable d’un portefeuille clients.",
+        demandTokens: ["portefeuille", "clients"],
+        generatedText: "J’étais responsable d’un portefeuille clients.",
+      },
+    ] as const) {
+      const unrelatedActionFactGraph = {
+        ...factGraph,
+        facts: factGraph.facts.map((fact) =>
+          fact.id === openingFactId
+            ? {
+                ...fact,
+                text: scenario.factText,
+                allowedVerbs: [...scenario.allowedVerbs],
+              }
+            : fact,
+        ),
+      };
+      const actionLedDemandGraph = {
+        ...jobDemandGraph,
+        demands: jobDemandGraph.demands.map((demand) =>
+          demand.id === referencedDemand.id
+            ? {
+                ...demand,
+                text: scenario.demandText,
+                tokens: [...scenario.demandTokens],
+              }
+            : demand,
+        ),
+      };
+      const actionLedIssueCodes = validatePremiumWriterOutputV1({
+          writerOutput: {
+            ...writerOutput,
+            bodyParts: {
+              ...writerOutput.bodyParts,
+              opening: {
+                ...writerOutput.bodyParts.opening,
+                text: scenario.generatedText,
+              },
+            },
+          },
+          claimPlan,
+          factGraph: unrelatedActionFactGraph,
+          jobDemandGraph: actionLedDemandGraph,
+          brief,
+        }).map((issue) => issue.code);
+      expect(actionLedIssueCodes, scenario.generatedText).toContain(
+        "job_demand_as_candidate_experience",
+      );
+    }
+
+    for (const scenario of [
+      {
+        factText: "Managed service tickets for regional offices.",
+        allowedVerbs: ["managed"],
+        demandText: "Manage vendor relationships.",
+        demandTokens: ["vendor", "relationships"],
+        generatedText:
+          "Vendor relationships were among the responsibilities I managed.",
+      },
+      {
+        factText: "J’ai géré les demandes de service des bureaux régionaux.",
+        allowedVerbs: ["géré"],
+        demandText: "Gérer les relations fournisseurs.",
+        demandTokens: ["relations", "fournisseurs"],
+        generatedText:
+          "Les relations fournisseurs étaient parmi les responsabilités que j’ai gérées.",
+      },
+    ] as const) {
+      const unrelatedActionFactGraph = {
+        ...factGraph,
+        facts: factGraph.facts.map((fact) =>
+          fact.id === openingFactId
+            ? {
+                ...fact,
+                text: scenario.factText,
+                allowedVerbs: [...scenario.allowedVerbs],
+              }
+            : fact,
+        ),
+      };
+      const actionLedDemandGraph = {
+        ...jobDemandGraph,
+        demands: jobDemandGraph.demands.map((demand) =>
+          demand.id === referencedDemand.id
+            ? {
+                ...demand,
+                text: scenario.demandText,
+                tokens: [...scenario.demandTokens],
+              }
+            : demand,
+        ),
+      };
+      const actionLedIssueCodes = validatePremiumWriterOutputV1({
+        writerOutput: {
+          ...writerOutput,
+          bodyParts: {
+            ...writerOutput.bodyParts,
+            opening: {
+              ...writerOutput.bodyParts.opening,
+              text: scenario.generatedText,
+            },
+          },
+        },
+        claimPlan,
+        factGraph: unrelatedActionFactGraph,
+        jobDemandGraph: actionLedDemandGraph,
+        brief,
+      }).map((issue) => issue.code);
+      expect(actionLedIssueCodes, scenario.generatedText).toContain(
+        "job_demand_as_candidate_experience",
+      );
+    }
+
+    for (const scenario of [
+      {
+        factText: "Managed vendor relationships for regional accounts.",
+        allowedVerbs: ["managed"],
+        demandText: "Manage vendor relationships.",
+        demandTokens: ["vendor", "relationships"],
+        generatedText: "I managed vendor relationships.",
+      },
+      {
+        factText: "J’ai géré les relations fournisseurs dans trois régions.",
+        allowedVerbs: ["géré"],
+        demandText: "Gérer les relations fournisseurs.",
+        demandTokens: ["relations", "fournisseurs"],
+        generatedText: "J’ai géré les relations fournisseurs.",
+      },
+      {
+        factText: "Prepared weekly reports for regional operations.",
+        allowedVerbs: ["prepared"],
+        demandText: "Prepare weekly reports.",
+        demandTokens: ["weekly", "reports"],
+        generatedText: "I prepared weekly reports.",
+      },
+      {
+        factText: "Managed vendor relationships for regional accounts.",
+        allowedVerbs: ["managed"],
+        demandText: "This role will manage vendor relationships.",
+        demandTokens: ["vendor", "relationships"],
+        generatedText: "I managed vendor relationships.",
+      },
+      {
+        factText: "Prepared weekly reports for regional operations.",
+        allowedVerbs: ["prepared"],
+        demandText: "Candidates should prepare weekly reports.",
+        demandTokens: ["weekly", "reports"],
+        generatedText: "I prepared weekly reports.",
+      },
+      {
+        factText:
+          "Was responsible for vendor relationships across three regions.",
+        allowedVerbs: ["owned"],
+        demandText: "Be responsible for vendor relationships.",
+        demandTokens: ["responsible", "vendor", "relationships"],
+        generatedText: "I was responsible for vendor relationships.",
+      },
+      {
+        factText:
+          "J’étais responsable des relations fournisseurs dans trois régions.",
+        allowedVerbs: ["géré"],
+        demandText: "Être responsable des relations fournisseurs.",
+        demandTokens: ["responsable", "relations", "fournisseurs"],
+        generatedText: "J’étais responsable des relations fournisseurs.",
+      },
+      {
+        factText: "Was proficient in Salesforce during CRM rollouts.",
+        allowedVerbs: ["supported"],
+        demandText: "Be proficient in Salesforce.",
+        demandTokens: ["proficient", "salesforce"],
+        generatedText: "I was proficient in Salesforce.",
+      },
+      {
+        factText: "I've been proficient in Salesforce during CRM rollouts.",
+        allowedVerbs: ["supported"],
+        demandText: "Be proficient in Salesforce.",
+        demandTokens: ["proficient", "salesforce"],
+        generatedText: "I'm proficient in Salesforce.",
+      },
+      {
+        factText:
+          "I've been responsible for vendor relationships across three regions.",
+        allowedVerbs: ["owned"],
+        demandText: "Be responsible for vendor relationships.",
+        demandTokens: ["responsible", "vendor", "relationships"],
+        generatedText: "I'm responsible for vendor relationships.",
+      },
+      {
+        factText:
+          "J’étais à l’aise avec Salesforce lors des déploiements CRM.",
+        allowedVerbs: ["traité"],
+        demandText: "Être à l’aise avec Salesforce.",
+        demandTokens: ["aise", "salesforce"],
+        generatedText: "Je suis à l’aise avec Salesforce.",
+      },
+      {
+        factText:
+          "J’ai suivi les relations fournisseurs dans trois régions.",
+        allowedVerbs: ["suivi"],
+        demandText: "Suivre les relations fournisseurs.",
+        demandTokens: ["relations", "fournisseurs"],
+        generatedText: "Je suis les relations fournisseurs.",
+      },
+      {
+        factText: "Responsable d’un portefeuille clients.",
+        allowedVerbs: ["géré"],
+        demandText: "Responsable d’un portefeuille clients.",
+        demandTokens: ["portefeuille", "clients"],
+        generatedText: "J’étais responsable d’un portefeuille clients.",
+      },
+    ] as const) {
+      const supportedActionFactGraph = {
+        ...factGraph,
+        facts: factGraph.facts.map((fact) =>
+          fact.id === openingFactId
+            ? {
+                ...fact,
+                text: scenario.factText,
+                allowedVerbs: [...scenario.allowedVerbs],
+              }
+            : fact,
+        ),
+      };
+      const actionLedDemandGraph = {
+        ...jobDemandGraph,
+        demands: jobDemandGraph.demands.map((demand) =>
+          demand.id === referencedDemand.id
+            ? {
+                ...demand,
+                text: scenario.demandText,
+                tokens: [...scenario.demandTokens],
+              }
+            : demand,
+        ),
+      };
+      const actionLedIssueCodes = validatePremiumWriterOutputV1({
+        writerOutput: {
+          ...writerOutput,
+          bodyParts: {
+            ...writerOutput.bodyParts,
+            opening: {
+              ...writerOutput.bodyParts.opening,
+              text: scenario.generatedText,
+            },
+          },
+        },
+        claimPlan,
+        factGraph: supportedActionFactGraph,
+        jobDemandGraph: actionLedDemandGraph,
+        brief,
+      }).map((issue) => issue.code);
+      expect(actionLedIssueCodes, scenario.generatedText).not.toContain(
+        "job_demand_as_candidate_experience",
+      );
+    }
+
+    const strongerDemandGraph = {
+      ...cvSupportedDemandGraph,
+      demands: cvSupportedDemandGraph.demands.map((demand) =>
+        demand.id === referencedDemand.id
+          ? { ...demand, text: "Lead product launches." }
+          : demand,
+      ),
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: {
+          ...cvSupportedDemandWriterOutput,
+          bodyParts: {
+            ...cvSupportedDemandWriterOutput.bodyParts,
+            opening: {
+              ...cvSupportedDemandWriterOutput.bodyParts.opening,
+              text: "I lead product launches.",
+            },
+          },
+        },
+        claimPlan,
+        factGraph: cvSupportedFactGraph,
+        jobDemandGraph: strongerDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("job_demand_as_candidate_experience");
+
+    const nounLedDemandGraph = {
+      ...cvSupportedDemandGraph,
+      demands: cvSupportedDemandGraph.demands.map((demand) =>
+        demand.id === referencedDemand.id
+          ? {
+              ...demand,
+              text: "Product launches.",
+              tokens: ["product", "launches"],
+            }
+          : demand,
+      ),
+    };
+    for (const [text, expected] of [
+      ["I support product launches.", false],
+      ["I coordinated product launches.", true],
+      ["I lead product launches.", true],
+    ] as const) {
+      const issueCodes = validatePremiumWriterOutputV1({
+        writerOutput: {
+          ...cvSupportedDemandWriterOutput,
+          bodyParts: {
+            ...cvSupportedDemandWriterOutput.bodyParts,
+            opening: {
+              ...cvSupportedDemandWriterOutput.bodyParts.opening,
+              text,
+            },
+          },
+        },
+        claimPlan,
+        factGraph: cvSupportedFactGraph,
+        jobDemandGraph: nounLedDemandGraph,
+        brief,
+      }).map((issue) => issue.code);
+      if (expected) {
+        expect(issueCodes).toContain("job_demand_as_candidate_experience");
+      } else {
+        expect(issueCodes).not.toContain("job_demand_as_candidate_experience");
+      }
+    }
+
+    const englishCrossClauseFactGraph = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === openingFactId
+          ? {
+              ...fact,
+              text: "I supported customer onboarding and coordinated product launches.",
+              allowedVerbs: ["supported", "coordinated"],
+            }
+          : fact,
+      ),
+    };
+    const englishCrossClauseDemandGraph = {
+      ...jobDemandGraph,
+      demands: jobDemandGraph.demands.map((demand) =>
+        demand.id === referencedDemand.id
+          ? {
+              ...demand,
+              text: "Customer onboarding.",
+              tokens: ["customer", "onboarding"],
+            }
+          : demand,
+      ),
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: {
+          ...cvSupportedDemandWriterOutput,
+          bodyParts: {
+            ...cvSupportedDemandWriterOutput.bodyParts,
+            opening: {
+              ...cvSupportedDemandWriterOutput.bodyParts.opening,
+              text: "I coordinated customer onboarding.",
+            },
+          },
+        },
+        claimPlan,
+        factGraph: englishCrossClauseFactGraph,
+        jobDemandGraph: englishCrossClauseDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("job_demand_as_candidate_experience");
+
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: {
+          ...cvSupportedDemandWriterOutput,
+          bodyParts: {
+            ...cvSupportedDemandWriterOutput.bodyParts,
+            opening: {
+              ...cvSupportedDemandWriterOutput.bodyParts.opening,
+              text: "I support customer onboarding systems.",
+            },
+          },
+        },
+        claimPlan,
+        factGraph: englishCrossClauseFactGraph,
+        jobDemandGraph: englishCrossClauseDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("job_demand_as_candidate_experience");
+
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: {
+          ...cvSupportedDemandWriterOutput,
+          bodyParts: {
+            ...cvSupportedDemandWriterOutput.bodyParts,
+            opening: {
+              ...cvSupportedDemandWriterOutput.bodyParts.opening,
+              text: "I support customer onboarding with Salesforce automation.",
+            },
+          },
+        },
+        claimPlan,
+        factGraph: englishCrossClauseFactGraph,
+        jobDemandGraph: englishCrossClauseDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("job_demand_as_candidate_experience");
+
+    const englishGroundedComplementFactGraph = {
+      ...englishCrossClauseFactGraph,
+      facts: englishCrossClauseFactGraph.facts.map((fact) =>
+        fact.id === openingFactId
+          ? {
+              ...fact,
+              text: "I supported customer onboarding across three regions.",
+              allowedVerbs: ["supported"],
+            }
+          : fact,
+      ),
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: {
+          ...cvSupportedDemandWriterOutput,
+          bodyParts: {
+            ...cvSupportedDemandWriterOutput.bodyParts,
+            opening: {
+              ...cvSupportedDemandWriterOutput.bodyParts.opening,
+              text: "I supported customer onboarding across three regions.",
+            },
+          },
+        },
+        claimPlan,
+        factGraph: englishGroundedComplementFactGraph,
+        jobDemandGraph: englishCrossClauseDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).not.toContain("job_demand_as_candidate_experience");
+
+    const englishIndirectSupportFactGraph = {
+      ...englishCrossClauseFactGraph,
+      facts: englishCrossClauseFactGraph.facts.map((fact) =>
+        fact.id === openingFactId
+          ? {
+              ...fact,
+              text: "I supported documentation for customer onboarding.",
+              allowedVerbs: ["supported"],
+            }
+          : fact,
+      ),
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: {
+          ...cvSupportedDemandWriterOutput,
+          bodyParts: {
+            ...cvSupportedDemandWriterOutput.bodyParts,
+            opening: {
+              ...cvSupportedDemandWriterOutput.bodyParts.opening,
+              text: "I supported customer onboarding.",
+            },
+          },
+        },
+        claimPlan,
+        factGraph: englishIndirectSupportFactGraph,
+        jobDemandGraph: englishCrossClauseDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("job_demand_as_candidate_experience");
+
+    const englishNarrowObjectFactGraph = {
+      ...englishCrossClauseFactGraph,
+      facts: englishCrossClauseFactGraph.facts.map((fact) =>
+        fact.id === openingFactId
+          ? {
+              ...fact,
+              text: "I supported customer onboarding documentation.",
+              allowedVerbs: ["supported"],
+            }
+          : fact,
+      ),
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: {
+          ...cvSupportedDemandWriterOutput,
+          bodyParts: {
+            ...cvSupportedDemandWriterOutput.bodyParts,
+            opening: {
+              ...cvSupportedDemandWriterOutput.bodyParts.opening,
+              text: "I support customer onboarding.",
+            },
+          },
+        },
+        claimPlan,
+        factGraph: englishNarrowObjectFactGraph,
+        jobDemandGraph: englishCrossClauseDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("job_demand_as_candidate_experience");
+
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: {
+          ...cvSupportedDemandWriterOutput,
+          bodyParts: {
+            ...cvSupportedDemandWriterOutput.bodyParts,
+            opening: {
+              ...cvSupportedDemandWriterOutput.bodyParts.opening,
+              text: "I supported customer onboarding, a responsibility I managed.",
+            },
+          },
+        },
+        claimPlan,
+        factGraph: englishCrossClauseFactGraph,
+        jobDemandGraph: englishCrossClauseDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("job_demand_as_candidate_experience");
+
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: {
+          ...cvSupportedDemandWriterOutput,
+          bodyParts: {
+            ...cvSupportedDemandWriterOutput.bodyParts,
+            opening: {
+              ...cvSupportedDemandWriterOutput.bodyParts.opening,
+              text: "I support customer onboarding. I coordinated customer onboarding.",
+            },
+          },
+        },
+        claimPlan,
+        factGraph: englishCrossClauseFactGraph,
+        jobDemandGraph: englishCrossClauseDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("job_demand_as_candidate_experience");
+
+    const frenchSupportedFactGraph = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === openingFactId
+          ? {
+              ...fact,
+              text: "J’ai suivi les déploiements clients.",
+              allowedVerbs: ["described"],
+              ownershipLevel: "support" as const,
+            }
+          : fact,
+      ),
+    };
+    const frenchNounLedDemandGraph = {
+      ...jobDemandGraph,
+      demands: jobDemandGraph.demands.map((demand) =>
+        demand.id === referencedDemand.id
+          ? {
+              ...demand,
+              text: "Déploiements clients.",
+              tokens: ["déploiements", "clients"],
+            }
+          : demand,
+      ),
+    };
+    for (const [text, expected] of [
+      ["J’ai suivi les déploiements clients.", false],
+      ["J’ai coordonné les déploiements clients.", true],
+      ["J’ai piloté les déploiements clients.", true],
+    ] as const) {
+      const issueCodes = validatePremiumWriterOutputV1({
+        writerOutput: {
+          ...cvSupportedDemandWriterOutput,
+          bodyParts: {
+            ...cvSupportedDemandWriterOutput.bodyParts,
+            opening: {
+              ...cvSupportedDemandWriterOutput.bodyParts.opening,
+              text,
+            },
+          },
+        },
+        claimPlan,
+        factGraph: frenchSupportedFactGraph,
+        jobDemandGraph: frenchNounLedDemandGraph,
+        brief,
+      }).map((issue) => issue.code);
+      if (expected) {
+        expect(issueCodes).toContain("job_demand_as_candidate_experience");
+      } else {
+        expect(issueCodes).not.toContain("job_demand_as_candidate_experience");
+      }
+    }
+
+    const frenchCrossClauseFactGraph = {
+      ...frenchSupportedFactGraph,
+      facts: frenchSupportedFactGraph.facts.map((fact) =>
+        fact.id === openingFactId
+          ? {
+              ...fact,
+              text: "J’ai suivi les déploiements clients et piloté les audits internes.",
+            }
+          : fact,
+      ),
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: {
+          ...cvSupportedDemandWriterOutput,
+          bodyParts: {
+            ...cvSupportedDemandWriterOutput.bodyParts,
+            opening: {
+              ...cvSupportedDemandWriterOutput.bodyParts.opening,
+              text: "J’ai piloté les déploiements clients.",
+            },
+          },
+        },
+        claimPlan,
+        factGraph: frenchCrossClauseFactGraph,
+        jobDemandGraph: frenchNounLedDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("job_demand_as_candidate_experience");
+
+    const frenchIndirectSupportFactGraph = {
+      ...frenchSupportedFactGraph,
+      facts: frenchSupportedFactGraph.facts.map((fact) =>
+        fact.id === openingFactId
+          ? {
+              ...fact,
+              text: "J’ai suivi des rapports sur les déploiements clients.",
+            }
+          : fact,
+      ),
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: {
+          ...cvSupportedDemandWriterOutput,
+          bodyParts: {
+            ...cvSupportedDemandWriterOutput.bodyParts,
+            opening: {
+              ...cvSupportedDemandWriterOutput.bodyParts.opening,
+              text: "J’ai suivi les déploiements clients.",
+            },
+          },
+        },
+        claimPlan,
+        factGraph: frenchIndirectSupportFactGraph,
+        jobDemandGraph: frenchNounLedDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("job_demand_as_candidate_experience");
+
+    const frenchNarrowObjectFactGraph = {
+      ...frenchSupportedFactGraph,
+      facts: frenchSupportedFactGraph.facts.map((fact) =>
+        fact.id === openingFactId
+          ? {
+              ...fact,
+              text: "J’ai suivi les déploiements clients pilotes.",
+            }
+          : fact,
+      ),
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: {
+          ...cvSupportedDemandWriterOutput,
+          bodyParts: {
+            ...cvSupportedDemandWriterOutput.bodyParts,
+            opening: {
+              ...cvSupportedDemandWriterOutput.bodyParts.opening,
+              text: "J’ai suivi les déploiements clients.",
+            },
+          },
+        },
+        claimPlan,
+        factGraph: frenchNarrowObjectFactGraph,
+        jobDemandGraph: frenchNounLedDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("job_demand_as_candidate_experience");
+
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: {
+          ...cvSupportedDemandWriterOutput,
+          bodyParts: {
+            ...cvSupportedDemandWriterOutput.bodyParts,
+            opening: {
+              ...cvSupportedDemandWriterOutput.bodyParts.opening,
+              text: "J’ai suivi les déploiements clients pilotes.",
+            },
+          },
+        },
+        claimPlan,
+        factGraph: frenchSupportedFactGraph,
+        jobDemandGraph: frenchNounLedDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("job_demand_as_candidate_experience");
+
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: {
+          ...cvSupportedDemandWriterOutput,
+          bodyParts: {
+            ...cvSupportedDemandWriterOutput.bodyParts,
+            opening: {
+              ...cvSupportedDemandWriterOutput.bodyParts.opening,
+              text: "J’ai suivi les déploiements clients avec Salesforce.",
+            },
+          },
+        },
+        claimPlan,
+        factGraph: frenchSupportedFactGraph,
+        jobDemandGraph: frenchNounLedDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("job_demand_as_candidate_experience");
+
+    const frenchGroundedComplementFactGraph = {
+      ...frenchSupportedFactGraph,
+      facts: frenchSupportedFactGraph.facts.map((fact) =>
+        fact.id === openingFactId
+          ? {
+              ...fact,
+              text: "J’ai suivi les déploiements clients dans trois régions.",
+            }
+          : fact,
+      ),
+    };
+    const frenchGroundedComplementIssues = validatePremiumWriterOutputV1({
+      writerOutput: {
+        ...cvSupportedDemandWriterOutput,
+        bodyParts: {
+          ...cvSupportedDemandWriterOutput.bodyParts,
+          opening: {
+            ...cvSupportedDemandWriterOutput.bodyParts.opening,
+            text: "J’ai suivi les déploiements clients dans trois régions.",
+          },
+        },
+      },
+      claimPlan,
+      factGraph: frenchGroundedComplementFactGraph,
+      jobDemandGraph: frenchNounLedDemandGraph,
+      brief,
+    });
+    expect(
+      frenchGroundedComplementIssues.map((issue) => issue.code),
+    ).not.toContain("job_demand_as_candidate_experience");
+
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: {
+          ...cvSupportedDemandWriterOutput,
+          bodyParts: {
+            ...cvSupportedDemandWriterOutput.bodyParts,
+            opening: {
+              ...cvSupportedDemandWriterOutput.bodyParts.opening,
+              text: "J’ai suivi les déploiements clients — des responsabilités que j’ai pilotées.",
+            },
+          },
+        },
+        claimPlan,
+        factGraph: frenchSupportedFactGraph,
+        jobDemandGraph: frenchNounLedDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("job_demand_as_candidate_experience");
+
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: {
+          ...cvSupportedDemandWriterOutput,
+          bodyParts: {
+            ...cvSupportedDemandWriterOutput.bodyParts,
+            opening: {
+              ...cvSupportedDemandWriterOutput.bodyParts.opening,
+              text: "J’ai suivi les déploiements clients. J’ai piloté les déploiements clients.",
+            },
+          },
+        },
+        claimPlan,
+        factGraph: frenchSupportedFactGraph,
+        jobDemandGraph: frenchNounLedDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("job_demand_as_candidate_experience");
+
+    const omittedDemandWriterOutput = {
+      ...writerOutput,
+      bodyParts: {
+        ...writerOutput.bodyParts,
+        opening: {
+          ...writerOutput.bodyParts.opening,
+          text: `I documented ${demandSurface}.`,
+          demandIds: [],
+        },
+      },
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: omittedDemandWriterOutput,
+        claimPlan,
+        factGraph,
+        jobDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("job_demand_as_candidate_experience");
+
+    const frenchDemandSurface =
+      "Coordonner les déploiements et suivre les livrables";
+    const frenchJobDemandGraph = {
+      ...jobDemandGraph,
+      demands: jobDemandGraph.demands.map((demand) =>
+        demand.id === referencedDemand.id
+          ? { ...demand, text: `${frenchDemandSurface}.` }
+          : demand,
+      ),
+    };
+    const omittedFrenchDemandWriterOutput = {
+      ...writerOutput,
+      bodyParts: {
+        ...writerOutput.bodyParts,
+        opening: {
+          ...writerOutput.bodyParts.opening,
+          text: `J’ai géré ${frenchDemandSurface}.`,
+          demandIds: [],
+        },
+      },
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: omittedFrenchDemandWriterOutput,
+        claimPlan,
+        factGraph,
+        jobDemandGraph: frenchJobDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("job_demand_as_candidate_experience");
+
+    const frenchEvidenceBridgeWriterOutput = {
+      ...writerOutput,
+      bodyParts: {
+        ...writerOutput.bodyParts,
+        opening: {
+          ...writerOutput.bodyParts.opening,
+          text: `J’ai amélioré les délais de 11 %, une expérience pertinente pour ${frenchDemandSurface.toLowerCase()}.`,
+          demandIds: [],
+        },
+      },
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: frenchEvidenceBridgeWriterOutput,
+        claimPlan,
+        factGraph,
+        jobDemandGraph: frenchJobDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).not.toContain("job_demand_as_candidate_experience");
+
+    const frenchAppositiveOwnershipWriterOutput = {
+      ...writerOutput,
+      bodyParts: {
+        ...writerOutput.bodyParts,
+        opening: {
+          ...writerOutput.bodyParts.opening,
+          text: `${frenchDemandSurface} — des responsabilités que j’ai gérées.`,
+          demandIds: [],
+        },
+      },
+    };
+    expect(
+      validatePremiumWriterOutputV1({
+        writerOutput: frenchAppositiveOwnershipWriterOutput,
+        claimPlan,
+        factGraph,
+        jobDemandGraph: frenchJobDemandGraph,
+        brief,
+      }).map((issue) => issue.code),
+    ).toContain("job_demand_as_candidate_experience");
+
+    for (const text of [
+      `J’étais responsable de ${frenchDemandSurface.toLowerCase()}.`,
+      `J’améliore ${frenchDemandSurface.toLowerCase()}.`,
+      `J’assure ${frenchDemandSurface.toLowerCase()}.`,
+    ]) {
+      const ownershipWriterOutput = {
+        ...writerOutput,
+        bodyParts: {
+          ...writerOutput.bodyParts,
+          opening: {
+            ...writerOutput.bodyParts.opening,
+            text,
+            demandIds: [],
+          },
+        },
+      };
+      expect(
+        validatePremiumWriterOutputV1({
+          writerOutput: ownershipWriterOutput,
+          claimPlan,
+          factGraph,
+          jobDemandGraph: frenchJobDemandGraph,
+          brief,
+        }).map((issue) => issue.code),
+      ).toContain("job_demand_as_candidate_experience");
+    }
   });
 
   it("validates premium final provenance from final text instead of cited ids alone", () => {
@@ -1072,17 +2515,23 @@ describe("premium cover letter prompt contract", () => {
     for (const prompt of inScopePrompts) {
       expect(prompt).toContain("CV-backed editorial quality contract:");
       expect(prompt).toContain(
-        "make the target role, not a candidate metric or career summary",
-      );
-      expect(prompt).toContain("the grammatical frame of the opening");
-      expect(prompt).toContain(
-        "connect that frame to one source-backed CV proof",
+        "write the opening as a natural first paragraph, not a résumé bullet, headline, or abstract maxim",
       );
       expect(prompt).toContain(
-        "without presenting job-post language as candidate history",
+        "Start from one concrete assigned responsibility and connect it smoothly to the assigned CV proof",
       );
-      expect(prompt).toContain("use at most one other proof");
-      expect(prompt).toContain("one short evidence-grounded sentence");
+      expect(prompt).toContain(
+        "do not begin with a standalone metric or force the template 'For this role, my experience...'",
+      );
+      expect(prompt).toContain(
+        "Use the distinct fact assigned to proofBlock and never repeat an opening metric, result, employer, duty, or cadence",
+      );
+      expect(prompt).toContain(
+        "Every sentence must contain a complete thought with a subject and finite predicate",
+      );
+      expect(prompt).toContain(
+        "close with one specific evidence-grounded contribution to the assigned responsibility",
+      );
       expect(prompt).toContain(
         "Across cv_direct and cv_adjacent modes, sound like a person making a case, not a memo.",
       );
@@ -1099,6 +2548,8 @@ describe("premium cover letter prompt contract", () => {
       "compose in idiomatic professional French",
     );
     expect(inScopePrompts[3]).toContain("je serais ravi de");
+    expect(inScopePrompts[2]).toContain("'mon socle'");
+    expect(inScopePrompts[3]).toContain("handoffs, rollouts, or enterprise");
 
     for (const language of [
       "Spanish",
@@ -1120,7 +2571,7 @@ describe("premium cover letter prompt contract", () => {
       expect(prompt).toContain("CV-backed editorial quality contract:");
       expect(prompt).toContain("use one role-specific opening");
       expect(prompt).not.toContain(
-        "make the target role, not a candidate metric or career summary",
+        "write the opening as a natural first paragraph",
       );
       expect(prompt).not.toContain("English editorial contract:");
       expect(prompt).not.toContain("French editorial contract:");
@@ -1160,7 +2611,7 @@ describe("premium cover letter prompt contract", () => {
     );
     expect(noCvPrompt).not.toContain("CV-backed editorial quality contract:");
     expect(noCvPrompt).not.toContain(
-      "make the target role, not a candidate metric or career summary",
+      "write the opening as a natural first paragraph",
     );
     expect(noCvPrompt).not.toContain("English editorial contract:");
     expect(noCvPrompt).not.toContain("French editorial contract:");
@@ -1895,7 +3346,7 @@ describe("premium cover letter prompt contract", () => {
       "employerValueBlock",
       "closeLine",
     ]);
-    expect(prompt.length).toBeLessThan(6200);
+    expect(prompt.length).toBeLessThan(6800);
     expect(prompt.split("\n").length).toBeLessThan(42);
   });
 
@@ -3986,7 +5437,7 @@ describe("premium cover letter generation and rendering", () => {
     });
   });
 
-  it("normalizes Mistral writer provenance ids to the section claim plan", async () => {
+  it("rejects Mistral provider-local fact ids instead of assigning planned facts", async () => {
     let failure: any = null;
 
     const result = await attemptPremiumCoverLetterGeneration({
@@ -4024,27 +5475,102 @@ describe("premium cover letter generation and rendering", () => {
           opening: {
             section: "opening",
             text: "I have led design-system work across product squads in React and TypeScript environments.",
+            claimIds: ["mistral_claim_opening"],
+            factIds: ["mistral_fact_opening"],
+            demandIds: ["mistral_demand_opening"],
+          },
+          proofBlock: {
+            section: "proofBlock",
+            text: "I reduced page load time by 28 percent through bundle and rendering optimizations.",
+            claimIds: ["mistral_claim_proof"],
+            factIds: ["mistral_fact_proof"],
+            demandIds: ["mistral_demand_proof"],
+          },
+          employerValueBlock: {
+            section: "employerValueBlock",
+            text: "That background is relevant to teams building reusable UI systems where performance, collaboration, and product-facing quality matter.",
+            claimIds: ["mistral_claim_employer_value"],
+            factIds: ["fact_experience_001_highlight_001"],
+            demandIds: ["mistral_demand_employer_value"],
+          },
+          closeLine: {
+            section: "closeLine",
+            text: "I bring discipline around reliable interfaces, reusable systems, and clean product collaboration.",
+            claimIds: ["mistral_claim_close"],
+            factIds: ["fact_experience_001_highlight_001"],
+            demandIds: ["mistral_demand_close"],
+          },
+        },
+      }),
+    });
+
+    expect(result).toBeNull();
+    expect(failure).toMatchObject({
+      stage: "validation",
+      reason: "non_repairable_validation",
+      issues: expect.arrayContaining(["unknown_fact_id"]),
+    });
+  });
+
+  it("does not relabel a known opening fact as an allowed Mistral proof fact", async () => {
+    let failure: any = null;
+
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: {
+        name: "Alex Martin",
+        summary:
+          "Frontend engineer focused on React, TypeScript, design systems, and product-facing web apps.",
+        desiredPosition: "Senior Frontend Engineer",
+        topSkills: ["React", "TypeScript", "Design Systems"],
+        recentExperience: [
+          {
+            company: "BrightLayer",
+            position: "Frontend Engineer",
+            highlights: [
+              "Led a design system migration used across 4 product squads.",
+              "Reduced page load time by 28 percent through bundle and rendering optimizations.",
+            ],
+          },
+        ],
+      },
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: "Senior Frontend Engineer",
+      jobDescription:
+        "Lead React and TypeScript development for a customer-facing SaaS platform, build reusable UI systems, improve performance, and collaborate with product and design.",
+      candidateName: "Alex Martin",
+      writerProvider: "mistral",
+      writerModel: "mistral-medium-latest",
+      onFailure: (trace) => {
+        failure = trace;
+      },
+      writer: async () => ({
+        version: "premium_writer_output_v1",
+        bodyParts: {
+          opening: {
+            section: "opening",
+            text: "I led a design system migration used across 4 product squads.",
             claimIds: ["claim_opening_001"],
             factIds: ["fact_experience_001_highlight_001"],
             demandIds: [],
           },
           proofBlock: {
             section: "proofBlock",
-            text: "At BrightLayer, I led a design system migration used across 4 product squads and reduced page load time by 28 percent through bundle and rendering optimizations.",
+            text: "I led a design system migration used across 4 product squads.",
             claimIds: ["claim_proof_001"],
-            factIds: ["fact_experience_001_highlight_002"],
+            factIds: ["fact_experience_001_highlight_001"],
             demandIds: [],
           },
           employerValueBlock: {
             section: "employerValueBlock",
-            text: "That background is relevant to teams building reusable UI systems where performance, collaboration, and product-facing quality matter.",
+            text: "That experience supports reusable UI work across product teams.",
             claimIds: ["claim_employer_value_001"],
             factIds: ["fact_experience_001_highlight_001"],
             demandIds: ["demand_core_001"],
           },
           closeLine: {
             section: "closeLine",
-            text: "I bring discipline around reliable interfaces, reusable systems, and clean product collaboration.",
+            text: "I would bring disciplined interface delivery and product collaboration.",
             claimIds: ["claim_close_001"],
             factIds: ["fact_experience_001_highlight_001"],
             demandIds: [],
@@ -4053,10 +5579,87 @@ describe("premium cover letter generation and rendering", () => {
       }),
     });
 
-    expect(failure).toBeNull();
-    expect(result).not.toBeNull();
-    expect(result?.content).toContain("Dear Hiring Manager,");
-    expect(result?.content).toContain("BrightLayer");
+    expect(result).toBeNull();
+    expect(failure).toMatchObject({
+      stage: "validation",
+      reason: "non_repairable_validation",
+      issues: expect.arrayContaining(["section_fact_not_allowed"]),
+    });
+  });
+
+  it("does not relabel unknown Mistral proof ids without section-level evidence", async () => {
+    let failure: any = null;
+
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: {
+        name: "Alex Martin",
+        summary:
+          "Frontend engineer focused on React, TypeScript, design systems, and product-facing web apps.",
+        desiredPosition: "Senior Frontend Engineer",
+        topSkills: ["React", "TypeScript", "Design Systems"],
+        recentExperience: [
+          {
+            company: "BrightLayer",
+            position: "Frontend Engineer",
+            highlights: [
+              "Led a design system migration used across 4 product squads.",
+              "Reduced page load time by 28 percent through bundle and rendering optimizations.",
+            ],
+          },
+        ],
+      },
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: "Senior Frontend Engineer",
+      jobDescription:
+        "Lead React and TypeScript development for a customer-facing SaaS platform, build reusable UI systems, improve performance, and collaborate with product and design.",
+      candidateName: "Alex Martin",
+      writerProvider: "mistral",
+      writerModel: "mistral-medium-latest",
+      onFailure: (trace) => {
+        failure = trace;
+      },
+      writer: async () => ({
+        version: "premium_writer_output_v1",
+        bodyParts: {
+          opening: {
+            section: "opening",
+            text: "I led a design system migration used across 4 product squads.",
+            claimIds: ["claim_opening_001"],
+            factIds: ["fact_experience_001_highlight_001"],
+            demandIds: [],
+          },
+          proofBlock: {
+            section: "proofBlock",
+            text: "I led a design system migration used across 4 product squads.",
+            claimIds: ["claim_proof_001"],
+            factIds: ["mistral_local_repeated_opening_fact"],
+            demandIds: [],
+          },
+          employerValueBlock: {
+            section: "employerValueBlock",
+            text: "That experience supports reusable UI work across product teams.",
+            claimIds: ["claim_employer_value_001"],
+            factIds: ["fact_experience_001_highlight_001"],
+            demandIds: ["demand_core_001"],
+          },
+          closeLine: {
+            section: "closeLine",
+            text: "I would bring disciplined interface delivery and product collaboration.",
+            claimIds: ["claim_close_001"],
+            factIds: ["fact_experience_001_highlight_001"],
+            demandIds: [],
+          },
+        },
+      }),
+    });
+
+    expect(result).toBeNull();
+    expect(failure).toMatchObject({
+      stage: "validation",
+      reason: "non_repairable_validation",
+      issues: expect.arrayContaining(["unknown_fact_id"]),
+    });
   });
 
   it("normalizes writer-output jargon before validation while preserving hard meta failures", async () => {
