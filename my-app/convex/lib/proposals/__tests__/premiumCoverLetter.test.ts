@@ -301,6 +301,12 @@ describe("premium ClaimPlan provenance v1", () => {
     ]);
     expect(claimPlan.claims.every((claim) => claim.factIds.length > 0)).toBe(true);
     expect(openingClaim.demandIds[0]).toMatch(/^demand_core_/);
+    expect(openingClaim.editorialGuideline).toContain(
+      "candidate's relevant experience",
+    );
+    expect(openingClaim.editorialGuideline).toContain(
+      "without teaching the employer",
+    );
     expect(proofClaim.factIds).not.toEqual(
       expect.arrayContaining(openingClaim.factIds),
     );
@@ -646,6 +652,12 @@ describe("premium ClaimPlan provenance v1", () => {
     const prompt = buildPremiumCoverLetterPrompt({ brief });
 
     expect(prompt).toContain("The ClaimPlan owns strategy");
+    expect(prompt).toContain(
+      "natural first paragraph rooted in the candidate's relevant experience",
+    );
+    expect(prompt).toContain(
+      "do not use generic setups such as 'X is most valuable when...'",
+    );
     expect(prompt).toContain("claim_plan_v1");
     expect(prompt).toContain("fact_experience_001_highlight_001");
     expect(prompt).toContain("demand_core_001");
@@ -2515,13 +2527,13 @@ describe("premium cover letter prompt contract", () => {
     for (const prompt of inScopePrompts) {
       expect(prompt).toContain("CV-backed editorial quality contract:");
       expect(prompt).toContain(
-        "write the opening as a natural first paragraph, not a résumé bullet, headline, or abstract maxim",
+        "write a natural first paragraph rooted in the candidate's relevant experience",
       );
       expect(prompt).toContain(
-        "Start from one concrete assigned responsibility and connect it smoothly to the assigned CV proof",
+        "Connect that experience to the assigned responsibility as role context",
       );
       expect(prompt).toContain(
-        "do not begin with a standalone metric or force the template 'For this role, my experience...'",
+        "do not use generic setups such as 'X is most valuable when...'",
       );
       expect(prompt).toContain(
         "Use the distinct fact assigned to proofBlock and never repeat an opening metric, result, employer, duty, or cadence",
@@ -2571,7 +2583,7 @@ describe("premium cover letter prompt contract", () => {
       expect(prompt).toContain("CV-backed editorial quality contract:");
       expect(prompt).toContain("use one role-specific opening");
       expect(prompt).not.toContain(
-        "write the opening as a natural first paragraph",
+        "write a natural first paragraph rooted in the candidate's relevant experience",
       );
       expect(prompt).not.toContain("English editorial contract:");
       expect(prompt).not.toContain("French editorial contract:");
@@ -2611,7 +2623,7 @@ describe("premium cover letter prompt contract", () => {
     );
     expect(noCvPrompt).not.toContain("CV-backed editorial quality contract:");
     expect(noCvPrompt).not.toContain(
-      "write the opening as a natural first paragraph",
+      "write a natural first paragraph rooted in the candidate's relevant experience",
     );
     expect(noCvPrompt).not.toContain("English editorial contract:");
     expect(noCvPrompt).not.toContain("French editorial contract:");
