@@ -27,6 +27,10 @@ import {
   generateOpenAIResponsesStructured,
   type OpenAIResponsesProviderResponseMetadata,
 } from "./premiumCoverLetterOpenAITransport";
+import {
+  allocateEnglishCvBackedEvidence,
+  type PremiumEvidenceAllocationResult,
+} from "./premiumCoverLetterEvidenceAllocation";
 import type { ProposalVoicePreset } from "./voicePresets";
 import type { CompanyValuesPack } from "./companyValues";
 
@@ -3349,6 +3353,25 @@ function isQwenWriterIdentity(args: {
   return normalizedProvider === "qwen" || /^qwen(?:\b|[-_.0-9])/.test(normalizedModel);
 }
 
+export function isEnglishCvBackedEvidenceAllocationActive(args: {
+  outputLanguage: ProposalOutputLanguage;
+  contextClass: PremiumCoverLetterContextClass;
+  writerProvider?: PremiumCoverLetterWriterProvider;
+  writerModel?: string;
+  legacyWrapped: boolean;
+}): boolean {
+  return (
+    getDeterministicCopyLanguage(args.outputLanguage) === "en" &&
+    (args.contextClass === "cv_direct" || args.contextClass === "cv_adjacent") &&
+    !isMistralWriterIdentity({
+      writerProvider: args.writerProvider,
+      writerModel: args.writerModel,
+    }) &&
+    !(args.writerProvider === "openai" && args.writerModel === "gpt-5-mini") &&
+    !args.legacyWrapped
+  );
+}
+
 function resolvePremiumCoverLetterContextGuidance(args: {
   contextClass: PremiumCoverLetterContextClass;
   writerProvider?: PremiumCoverLetterWriterProvider;
@@ -4262,6 +4285,7 @@ export function validatePremiumWriterOutputV1(args: {
   factGraph: FactGraphV1;
   jobDemandGraph: JobDemandGraphV1;
   brief: CoverLetterBrief;
+  allowNeutralCloseWithoutFact?: boolean;
 }): PremiumWriterOutputValidationIssue[] {
   const issues: PremiumWriterOutputValidationIssue[] = [];
   const claimById = new Map(args.claimPlan.claims.map((claim) => [claim.id, claim]));
@@ -4418,7 +4442,8 @@ export function validatePremiumWriterOutputV1(args: {
     if (
       assignedClaim?.claimType === "source_backed" &&
       args.claimPlan.contextClass !== "no_cv" &&
-      part.factIds.length === 0
+      part.factIds.length === 0 &&
+      !(section === "closeLine" && args.allowNeutralCloseWithoutFact)
     ) {
       issues.push({
         code: "direct_claim_missing_fact",
@@ -6860,6 +6885,7 @@ async function tryRepairPremiumCoverLetterQualityShadow(args: {
   factGraph: FactGraphV1;
   legacyWrapped: boolean;
   provenanceIdsNormalized: boolean;
+  neutralClose: boolean;
 }): Promise<{
   bodyParts?: CoverLetterBodyParts;
   rendered?: { content: string; sections: Array<{ type: "text"; content: string }> };
@@ -6879,7 +6905,11 @@ async function tryRepairPremiumCoverLetterQualityShadow(args: {
     };
   }
 
-  if (args.legacyWrapped || args.brief.contextClass === "no_cv") {
+  if (
+    args.legacyWrapped ||
+    args.brief.contextClass === "no_cv" ||
+    args.neutralClose
+  ) {
     return {
       trace: buildPremiumCoverLetterQualityRepairTrace({
         enabled: true,
@@ -7178,6 +7208,30 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   });
   let legacyWrapped = parsedWriterOutput.legacyWrapped;
   let provenanceIdsNormalized = false;
+  const allocateEnglishEvidence = (
+    candidate: PremiumWriterOutputV1,
+    candidateLegacyWrapped: boolean,
+  ): PremiumEvidenceAllocationResult => {
+    if (
+      !isEnglishCvBackedEvidenceAllocationActive({
+        outputLanguage: brief.language,
+        contextClass: brief.contextClass,
+        writerProvider: args.writerProvider,
+        writerModel: args.writerModel,
+        legacyWrapped: candidateLegacyWrapped,
+      })
+    ) {
+      return {
+        writerOutput: candidate,
+        issues: [],
+        neutralClose: false,
+      };
+    }
+    return allocateEnglishCvBackedEvidence({
+      writerOutput: candidate,
+      claimPlan,
+    });
+  };
   let writerOutput = cleanPremiumWriterOutputText(
     parsedWriterOutput.writerOutput,
   );
@@ -7193,13 +7247,34 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     writerOutput,
     normalizedWriterOutput,
   );
-  writerOutput = normalizedWriterOutput;
+  const allocatedWriterOutput = allocateEnglishEvidence(
+    normalizedWriterOutput,
+    legacyWrapped,
+  );
+  if (allocatedWriterOutput.issues.length > 0) {
+    args.onFailure?.({
+      stage: "validation",
+      reason: "non_repairable_validation",
+      contextClass,
+      issues: allocatedWriterOutput.issues.map((issue) => issue.code),
+    });
+    return null;
+  }
+  provenanceIdsNormalized =
+    provenanceIdsNormalized ||
+    writerOutputProvenanceChanged(
+      normalizedWriterOutput,
+      allocatedWriterOutput.writerOutput,
+    );
+  writerOutput = allocatedWriterOutput.writerOutput;
+  let neutralClose = allocatedWriterOutput.neutralClose;
   let writerOutputIssues = validatePremiumWriterOutputV1({
     writerOutput,
     claimPlan,
     factGraph,
     jobDemandGraph,
     brief,
+    allowNeutralCloseWithoutFact: neutralClose,
   });
   const blockingWriterOutputIssues = writerOutputIssues.filter(
     isBlockingPremiumWriterOutputIssue,
@@ -7249,12 +7324,35 @@ export async function attemptPremiumCoverLetterGeneration(args: {
       repairedWriterOutput,
       normalizedRepairedWriterOutput,
     );
+    const allocatedRepairedWriterOutput = allocateEnglishEvidence(
+      normalizedRepairedWriterOutput,
+      legacyWrapped,
+    );
+    if (allocatedRepairedWriterOutput.issues.length > 0) {
+      args.onFailure?.({
+        stage: "validation",
+        reason: "repair_failed_validation",
+        contextClass,
+        issues: allocatedRepairedWriterOutput.issues.map(
+          (issue) => issue.code,
+        ),
+      });
+      return null;
+    }
+    provenanceIdsNormalized =
+      provenanceIdsNormalized ||
+      writerOutputProvenanceChanged(
+        normalizedRepairedWriterOutput,
+        allocatedRepairedWriterOutput.writerOutput,
+      );
+    neutralClose = allocatedRepairedWriterOutput.neutralClose;
     writerOutputIssues = validatePremiumWriterOutputV1({
-      writerOutput: normalizedRepairedWriterOutput,
+      writerOutput: allocatedRepairedWriterOutput.writerOutput,
       claimPlan,
       factGraph,
       jobDemandGraph,
       brief,
+      allowNeutralCloseWithoutFact: neutralClose,
     });
     const repairedBlockingWriterOutputIssues = writerOutputIssues.filter(
       isBlockingPremiumWriterOutputIssue,
@@ -7277,7 +7375,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
       });
       return null;
     }
-    writerOutput = normalizedRepairedWriterOutput;
+    writerOutput = allocatedRepairedWriterOutput.writerOutput;
   }
 
   let bodyParts = PREMIUM_COVER_LETTER_BODY_PARTS_SCHEMA.parse(
@@ -7467,6 +7565,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     factGraph,
     legacyWrapped,
     provenanceIdsNormalized,
+    neutralClose,
   });
   qualityRepairTrace = qualityRepair.trace;
   if (qualityRepair.bodyParts && qualityRepair.rendered && qualityRepair.qualityShadow) {
@@ -7475,6 +7574,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     qualityShadow = qualityRepair.qualityShadow;
   } else if (
     brief.contextClass !== "no_cv" &&
+    !neutralClose &&
     isGenericPremiumClosingLine(bodyParts.closeLine)
   ) {
     const deterministicFallbackBodyParts = repairPremiumCoverLetterBodyParts({
