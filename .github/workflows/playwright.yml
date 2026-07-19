@@ -41,21 +41,15 @@ jobs:
       run: npm exec -- playwright install-deps chromium
     - name: Verify system Chrome
       run: command -v google-chrome-stable || command -v google-chrome || command -v chromium || command -v chromium-browser
-    - name: Generate Convex client bindings
+    - name: Verify checked-in Convex client bindings
       run: |
-        if [ -z "${CONVEX_DEPLOY_KEY:-}" ]; then
-          echo "::error::Set the repository secret CONVEX_DEPLOY_KEY to a deploy key for the dev Convex deployment."
-          exit 1
-        fi
-        if [ -z "${CONVEX_DEPLOYMENT:-}" ]; then
-          echo "::error::Set the repository variable CONVEX_DEPLOYMENT to the dev deployment used for Playwright CI."
-          exit 1
-        fi
         cd my-app
-        npx convex codegen --typecheck disable
-      env:
-        CONVEX_DEPLOYMENT: ${{ vars.CONVEX_DEPLOYMENT }}
-        CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        test -s convex/_generated/api.d.ts
+        test -s convex/_generated/dataModel.d.ts
+        test -s convex/_generated/server.d.ts
+        test -s convex/_generated/api.js
+        test -s convex/_generated/server.js
+        npx tsc -p convex/tsconfig.json --noEmit
     - name: Start local Vite app
       run: |
         if [ -z "${VITE_CONVEX_URL:-}" ]; then

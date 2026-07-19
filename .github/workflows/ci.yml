@@ -99,15 +99,12 @@ jobs:
       - name: Generate Convex client bindings
         working-directory: my-app
         run: |
-          if [ -z "${CONVEX_DEPLOY_KEY:-}" ]; then
-            echo "::error::Set the repository secret CONVEX_DEPLOY_KEY for Convex codegen."
-            exit 1
-          fi
-          echo "CONVEX_DEPLOY_KEY is present."
-          npx convex codegen --typecheck disable
-        env:
-          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-          CONVEX_DEPLOYMENT: ${{ vars.CONVEX_DEPLOYMENT }}
+          test -s convex/_generated/api.d.ts
+          test -s convex/_generated/dataModel.d.ts
+          test -s convex/_generated/server.d.ts
+          test -s convex/_generated/api.js
+          test -s convex/_generated/server.js
+          npx tsc -p convex/tsconfig.json --noEmit
 
       - name: Run Match Review guardrail tests
         working-directory: my-app
