@@ -118,4 +118,26 @@ describe("McpOAuthContinuationPage", () => {
       "mcp-oauth-continuation-document-request:/oauth/continue?mcp_oauth_intent=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     )).toBe("working:v2");
   });
+
+  it("clears the continuation marker when the page is abandoned", async () => {
+    authState.isSignedIn = true;
+    vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => undefined)));
+    const storageKey =
+      "mcp-oauth-continuation-document-request:/oauth/continue?mcp_oauth_intent=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    render(
+      <MemoryRouter
+        initialEntries={[
+          "/oauth/continue?mcp_oauth_intent=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ]}
+      >
+        <McpOAuthContinuationPage />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    expect(window.sessionStorage.getItem(storageKey)).toBe("working:v2");
+    window.dispatchEvent(new Event("pagehide"));
+    expect(window.sessionStorage.getItem(storageKey)).toBeNull();
+  });
 });

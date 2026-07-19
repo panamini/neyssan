@@ -133,7 +133,7 @@ esac
     join(binDirectory, "node"),
     `#!/bin/sh
 case "\${1:-}" in
-  --version|-v) printf '%s\\n' "\${FAKE_NODE_VERSION:-v20.0.0}"; exit 0 ;;
+  --version|-v) printf '%s\\n' "\${FAKE_NODE_VERSION:-v20.19.0}"; exit 0 ;;
   -e|-)
     if test "\${FAKE_NODE_EXEC_BROKEN:-0}" = 1; then exit 1; fi
     if test "\${FAKE_NODE_NOOP:-0}" = 1; then exit 0; fi
@@ -1798,8 +1798,30 @@ test("doctor rejects Node versions older than the CI runtime", (t) => {
   });
 
   assertFailure(result);
-  assert.match(result.output, /Node 20 or newer is required/i);
+  assert.match(result.output, /Node 20\.19\+ or 22\.12\+ is required for Vite 8/i);
   assert.doesNotMatch(result.output, /18\.20/u);
+});
+
+test("doctor rejects Node 20 versions below the Vite 8 engine floor", (t) => {
+  const fixture = createFixture(t);
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_NODE_VERSION: "v20.18.0",
+  });
+
+  assertFailure(result);
+  assert.match(result.output, /Node 20\.19\+ or 22\.12\+ is required for Vite 8/i);
+});
+
+test("doctor accepts the Vite 8 Node 22 engine floor", (t) => {
+  const fixture = createFixture(t);
+
+  const result = runDoctor(fixture, ["local-fast"], {
+    FAKE_NODE_VERSION: "v22.12.0",
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /Node 20\.19\+ or 22\.12\+ startup script execution is available/i);
 });
 
 test("doctor rejects a Node binary that cannot execute node -e", (t) => {

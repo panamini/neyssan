@@ -33,6 +33,20 @@ export function McpOAuthContinuationPage(): JSX.Element {
   const continuationHref = `${location.pathname}${location.search}`;
 
   React.useEffect(() => {
+    if (!intentHandle) return;
+    const storageKey = `mcp-oauth-continuation-document-request:${continuationHref}`;
+    const clearMarker = () => {
+      window.sessionStorage.removeItem(storageKey);
+    };
+    window.addEventListener("pagehide", clearMarker);
+    window.addEventListener("beforeunload", clearMarker);
+    return () => {
+      window.removeEventListener("pagehide", clearMarker);
+      window.removeEventListener("beforeunload", clearMarker);
+    };
+  }, [continuationHref, intentHandle]);
+
+  React.useEffect(() => {
     if (
       !isLoaded ||
       !isSignedIn ||

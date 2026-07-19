@@ -516,15 +516,20 @@ doctor_check_command() {
 doctor_check_node_runtime() {
   local version=""
   local major=""
+  local minor=""
   local probe=""
   if ! version="$(node --version 2>/dev/null)"; then
     doctor_fail "Node version cannot be determined"
     return 1
   fi
-  major="${version#v}"
-  major="${major%%.*}"
-  if [[ ! "${major}" =~ ^[0-9]+$ || "${major}" -lt 20 ]]; then
-    doctor_fail "Node 20 or newer is required"
+  IFS=. read -r major minor _ <<< "${version#v}"
+  if [[ ! "${major}" =~ ^[0-9]+$ || ! "${minor:-0}" =~ ^[0-9]+$ ]]; then
+    doctor_fail "Node version cannot be parsed"
+    return 1
+  fi
+  minor="${minor:-0}"
+  if (( major < 20 || (major == 20 && minor < 19) || major == 21 || (major == 22 && minor < 12) )); then
+    doctor_fail "Node 20.19+ or 22.12+ is required for Vite 8"
     return 1
   fi
   if ! probe="$(node -e 'process.stdout.write(typeof require === "function" ? "node-e-ok" : "")' 2>/dev/null)" || [[ "${probe}" != "node-e-ok" ]]; then
@@ -538,7 +543,7 @@ NODE
     doctor_fail "Node cannot execute doctor scripts from standard input"
     return 1
   fi
-  doctor_pass "Node 20+ startup script execution is available"
+  doctor_pass "Node 20.19+ or 22.12+ startup script execution is available"
   return 0
 }
 
@@ -1464,7 +1469,7 @@ doctor_check_docker() {
 doctor_check_mcp_configuration() {
   local original_home="${1:-}"
   if [[ "${DOCTOR_NODE_READY:-0}" != "1" ]]; then
-    doctor_fail "private-beta MCP configuration cannot be validated without a working Node 20+ runtime"
+    doctor_fail "private-beta MCP configuration cannot be validated without a working Node 20.19+ or 22.12+ runtime"
     return 0
   fi
 
