@@ -208,4 +208,4 @@ finally:
 PY
 
 EXPOSE 8000
-CMD ["python", "-c", "import platform, paddle; print('Ready on', platform.machine(), 'Paddle', paddle.__version__)"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
