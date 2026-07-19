@@ -41,7 +41,7 @@ docling==2.55.0 ; platform_machine not in "arm64,aarch64"
 docling-core[chunking]==2.48.4 ; platform_machine not in "arm64,aarch64"
 typer==0.19.2
 phonenumbers==9.0.15
-numpy==1.24.3
+numpy==1.24.4
 pandas==2.3.3
 scikit-learn==1.4.2
 

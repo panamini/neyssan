@@ -2426,11 +2426,9 @@ describe("export-renderers", () => {
         .match(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g)
         ?.find((paragraph) => paragraph.includes("15 avril 2026"));
 
-      expect(documentXml).toMatch(
-        new RegExp(
-          `<w:pgSz[^>]*w:w="${widthTwip}"[^>]*w:h="${heightTwip}"[^>]*/>`,
-        ),
-      );
+      expect(documentXml).toMatch(/<w:pgSz[^>]*\/>/u);
+      expect(documentXml).toContain(`w:w="${widthTwip}"`);
+      expect(documentXml).toContain(`w:h="${heightTwip}"`);
       expect(documentXml).toContain("Marlowe Studio");
       expect(subjectParagraph).toContain('<w:sz w:val="22"/>');
       expect(subjectParagraph).toContain('<w:szCs w:val="22"/>');

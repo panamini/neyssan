@@ -65,7 +65,7 @@ multidict==6.6.4
 multiprocess==0.70.15
 networkx==3.4.2
 ninja==1.13.0
-numpy==1.24.3
+numpy==1.24.4
 opencv-contrib-python==4.10.0.84
 opencv-python==4.10.0.84
 openpyxl==3.1.5

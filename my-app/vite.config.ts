@@ -508,8 +508,10 @@ function isProductionOAuthBrowserContinuationDocumentRequest(
 function hasCookieNamed(cookieHeader: string | readonly string[] | undefined, name: string): boolean {
   const cookie = headerValue(cookieHeader);
   if (!cookie) return false;
-  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-  return new RegExp(`(?:^|;)\\s*${escapedName}=`, "u").test(cookie);
+  return cookie.split(";").some((part) => {
+    const separatorIndex = part.indexOf("=");
+    return separatorIndex >= 0 && part.slice(0, separatorIndex).trim() === name;
+  });
 }
 
 function isProductionOAuthBrowserContinuationFetch(

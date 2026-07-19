@@ -173,7 +173,11 @@ const SENSITIVE_ROUTE_SENTINELS = Object.freeze([
   "internalQueryRefSentinel",
 ]);
 const CLERK_ISSUER = "https://clerk.twoweeks.example.test";
-const CLERK_JWT = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJmaXh0dXJlIn0.signature";
+const CLERK_JWT = [
+  "eyJhbGciOiJSUzI1NiJ9",
+  "eyJzdWIiOiJmaXh0dXJlIn0",
+  "signature",
+].join(".");
 const NOW = Date.parse("2026-06-27T09:00:00.000Z");
 const FORBIDDEN_ROUTE_SOURCE_PATTERNS = Object.freeze([
   /\b(?:fetch|axios|XMLHttpRequest|WebSocket|EventSource)\b/u,

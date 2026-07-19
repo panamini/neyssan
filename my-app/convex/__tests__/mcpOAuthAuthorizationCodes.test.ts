@@ -655,11 +655,13 @@ describe("Convex MCP OAuth authorization codes", () => {
 });
 
 function exportedArgsBlock(source: string, exportName: string): string {
-  const match = source.match(
-    new RegExp(`export const ${exportName}[\\s\\S]*?args: \\{([\\s\\S]*?)\\n  \\},\\n  returns:`, "u"),
-  );
-  expect(match?.[1]).toBeTypeOf("string");
-  return match?.[1] ?? "";
+  const exportStart = source.indexOf(`export const ${exportName}`);
+  const argsMarkerStart = source.indexOf("args: {", exportStart);
+  const argsEnd = source.indexOf("\n  },\n  returns:", argsMarkerStart);
+  expect(exportStart).toBeGreaterThanOrEqual(0);
+  expect(argsMarkerStart).toBeGreaterThanOrEqual(0);
+  expect(argsEnd).toBeGreaterThan(argsMarkerStart);
+  return source.slice(argsMarkerStart + "args: {".length, argsEnd);
 }
 
 async function consumeWith(seed: StoredCodeRecord[], args: ReturnType<typeof consumeArgs>) {
