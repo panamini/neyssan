@@ -2663,8 +2663,8 @@ function buildDeterministicPremiumClaimPlanEditorialPolicy(
     openingDemandIds: args.roleContextDemandIds,
     openingGuideline: hasAssignedRoleContext
       ? args.contextClass === "cv_adjacent"
-        ? "Open with one concrete role responsibility as context, then connect it naturally to the strongest CV-backed operating proof without claiming direct target-role experience."
-        : "Open with one concrete role responsibility as context, then connect it naturally to the strongest CV-backed evidence."
+        ? "Open from the candidate's relevant experience, then relate it to the assigned responsibility without claiming direct target-role experience or teaching the employer how its work functions."
+        : "Open from the candidate's relevant experience, then relate it to the assigned responsibility without teaching the employer how its work functions."
       : args.contextClass === "cv_adjacent"
         ? "No role responsibility is assigned; open with concise professional context around the strongest CV-backed operating proof without claiming direct target-role experience or inventing job context."
         : "No role responsibility is assigned; open with concise professional context around the strongest CV-backed evidence without inventing job context.",
@@ -3286,9 +3286,9 @@ function buildNaturalCvBackedEditorialGuidance(brief: CoverLetterBrief): string[
   const { hasAssignedRoleContext, hasConcreteProof, hasDistinctProof } =
     resolvePremiumEditorialAllocationState(brief);
   return [
-    "CV-backed editorial quality contract: write the opening as a natural first paragraph, not a résumé bullet, headline, or abstract maxim; do not begin with a standalone metric or force the template 'For this role, my experience...'.",
+    "CV-backed editorial quality contract: write a natural first paragraph rooted in the candidate's relevant experience, not a résumé bullet, standalone metric, abstract maxim, or lesson about the employer's work.",
     hasAssignedRoleContext
-      ? "Start from one concrete assigned responsibility and connect it smoothly to the assigned CV proof; keep the responsibility as role context, never candidate history."
+      ? "Connect that experience to the assigned responsibility as role context, never candidate history; do not use generic setups such as 'X is most valuable when...' or 'X demande/exige...' before the proof."
       : "No role responsibility is assigned; open with concise professional context around the assigned CV proof and do not invent or select unassigned job context.",
     hasDistinctProof
       ? "Use the distinct fact assigned to proofBlock and never repeat an opening metric, result, employer, duty, or cadence."
