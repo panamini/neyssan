@@ -4,6 +4,7 @@ import { resolveOpenAIProposalReasoningEffort } from "../../../../config/llmConf
 import {
   MISTRAL_PREMIUM_COVER_LETTER_ADAPTER,
   PREMIUM_COVER_LETTER_BODY_PARTS_JSON_SCHEMA,
+  PREMIUM_WRITER_OUTPUT_V1_SCHEMA,
   PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
   QWEN_PREMIUM_COVER_LETTER_ADAPTER,
   attemptPremiumCoverLetterGeneration,
@@ -35,6 +36,10 @@ import {
   validatePremiumClaimPlanV1,
   validatePremiumWriterOutputV1,
 } from "../premiumCoverLetter";
+import {
+  generateOpenAIResponsesStructured,
+  type OpenAIResponsesSchemaContract,
+} from "../premiumCoverLetterOpenAITransport";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -3574,14 +3579,10 @@ describe("premium cover letter prompt contract", () => {
           name: "premium_writer_output_v1",
           schema: PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
           strict: true,
-          json_schema: {
-            name: "premium_writer_output_v1",
-            schema: PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
-            strict: true,
-          },
         },
       },
     });
+    expect(request.text.format).not.toHaveProperty("json_schema");
 
     expect(
       buildPremiumCoverLetterOpenAIRequest({
@@ -3590,6 +3591,147 @@ describe("premium cover letter prompt contract", () => {
         maxOutputTokens: 2048,
       }),
     ).toMatchObject({ max_output_tokens: 2048 });
+  });
+
+  it("shares the direct Responses JSON-schema contract across parse, create, and raw fetch", async () => {
+    const responseFormat = {
+      name: "premium_writer_output_v1",
+      jsonSchema: PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
+      zodSchema: PREMIUM_WRITER_OUTPUT_V1_SCHEMA,
+    } satisfies OpenAIResponsesSchemaContract;
+    const structuredOutput = {
+      version: "premium_writer_output_v1",
+      bodyParts: {
+        opening: {
+          section: "opening",
+          text: "Opening.",
+          claimIds: [],
+          factIds: [],
+          demandIds: [],
+        },
+        proofBlock: {
+          section: "proofBlock",
+          text: "Proof.",
+          claimIds: [],
+          factIds: [],
+          demandIds: [],
+        },
+        employerValueBlock: {
+          section: "employerValueBlock",
+          text: "Value.",
+          claimIds: [],
+          factIds: [],
+          demandIds: [],
+        },
+        closeLine: {
+          section: "closeLine",
+          text: "Close.",
+          claimIds: [],
+          factIds: [],
+          demandIds: [],
+        },
+      },
+    } as const;
+    const expectDirectFormat = (request: any) => {
+      expect(request.text.format).toEqual(
+        expect.objectContaining({
+          type: "json_schema",
+          name: responseFormat.name,
+          schema: responseFormat.jsonSchema,
+          strict: true,
+        }),
+      );
+      expect(request.text.format).not.toHaveProperty("json_schema");
+    };
+    const makeOpenAIModule = (responses: Record<string, unknown>) => ({
+      OpenAI: class {
+        responses = responses;
+      },
+    });
+
+    const parse = vi.fn(async () => ({
+      output_parsed: structuredOutput,
+      model: "gpt-5.5",
+    }));
+    const zodTextFormat = vi.fn((schema: unknown, name: string) => {
+      void schema;
+      return {
+        type: "json_schema",
+        name,
+        schema: responseFormat.jsonSchema,
+        strict: true,
+      };
+    });
+    await generateOpenAIResponsesStructured({
+      apiKey: "offline",
+      prompt: "parse prompt",
+      writerModel: "gpt-5.5",
+      responseFormat,
+      maxOutputTokens: 1101,
+      reasoningEffort: "low",
+      dependencies: {
+        loadOpenAIModule: async () =>
+          makeOpenAIModule({ parse, create: undefined }),
+        loadZodHelperModule: async () => ({ zodTextFormat }),
+        fetchImpl: vi.fn(),
+      },
+    });
+    const parseRequest = parse.mock.calls[0]?.[0];
+    expect(parseRequest).toBeDefined();
+    expectDirectFormat(parseRequest);
+    expect(parseRequest.max_output_tokens).toBe(1101);
+    expect(zodTextFormat).toHaveBeenCalledWith(
+      responseFormat.zodSchema,
+      responseFormat.name,
+    );
+
+    const create = vi.fn(async () => ({
+      output_parsed: structuredOutput,
+      model: "gpt-5.5",
+    }));
+    await generateOpenAIResponsesStructured({
+      apiKey: "offline",
+      prompt: "create prompt",
+      writerModel: "gpt-5.5",
+      responseFormat,
+      maxOutputTokens: 1202,
+      reasoningEffort: "low",
+      dependencies: {
+        loadOpenAIModule: async () =>
+          makeOpenAIModule({ parse: undefined, create }),
+        loadZodHelperModule: async () => null,
+        fetchImpl: vi.fn(),
+      },
+    });
+    const createRequest = create.mock.calls[0]?.[0];
+    expect(createRequest).toBeDefined();
+    expectDirectFormat(createRequest);
+    expect(createRequest.max_output_tokens).toBe(1202);
+
+    const fetchImpl = vi.fn(async () =>
+      ({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        json: async () => ({ output_parsed: structuredOutput }),
+        text: async () => "",
+      }) as any,
+    );
+    await generateOpenAIResponsesStructured({
+      apiKey: "offline",
+      prompt: "raw fetch prompt",
+      writerModel: "gpt-5.5",
+      responseFormat,
+      maxOutputTokens: 1303,
+      reasoningEffort: "low",
+      dependencies: {
+        loadOpenAIModule: async () => null,
+        fetchImpl,
+      },
+    });
+    const rawRequest = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body));
+    expectDirectFormat(rawRequest);
+    expect(rawRequest.max_output_tokens).toBe(1303);
   });
 
   it.each(["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"] as const)(

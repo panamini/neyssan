@@ -398,8 +398,8 @@ describe("benchmark-cover-letter-writers", () => {
       providerMaxRetries: 0,
       maxRepairs: 0,
       writerMaxOutputTokens: 2048,
-      declaredMaxUsdPerCall: 0.153955,
-      minimumSafeReservationUsd: 3.69492,
+      declaredMaxUsdPerCall: 0.144955,
+      minimumSafeReservationUsd: 3.47892,
       targetReservationUsd: 2.5,
       targetReservationProven: false,
     });
@@ -407,7 +407,7 @@ describe("benchmark-cover-letter-writers", () => {
     expect(preflight.worstCase).toMatchObject({
       caseId: "blind-fr-implementation-adjacent",
       writerModel: "gpt-5.6-sol",
-      serializedInputByteUpperBound: 18_503,
+      serializedInputByteUpperBound: 16_703,
     });
 
     const insufficient = parseCoverLetterBenchmarkCliOptions(
@@ -417,7 +417,7 @@ describe("benchmark-cover-letter-writers", () => {
         "--max-calls=24",
         "--max-repairs=0",
         "--max-usd=2.5",
-        "--max-usd-per-call=0.153955",
+        "--max-usd-per-call=0.144955",
       ],
       "0",
     );
@@ -426,11 +426,11 @@ describe("benchmark-cover-letter-writers", () => {
         options: insufficient,
         preflight,
       }),
-    ).toThrow(/minimum safe reservation of 3\.69492 USD/iu);
+    ).toThrow(/minimum safe reservation of 3\.47892 USD/iu);
 
     const safe = {
       ...insufficient,
-      maxUsd: 3.69492,
+      maxUsd: 3.47892,
     };
     expect(() =>
       assertQualityEval2BBudgetContract({ options: safe, preflight }),

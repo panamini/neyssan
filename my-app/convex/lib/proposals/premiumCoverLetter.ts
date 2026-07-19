@@ -21,6 +21,12 @@ import {
   FRENCH_DEFAULT_SIGNOFF,
   FRENCH_SALUTATION,
 } from "./proposalRenderer";
+import {
+  buildOpenAIResponsesRequest,
+  extractOpenAIJsonPayload as extractOpenAIJsonPayloadFromTransport,
+  generateOpenAIResponsesStructured,
+  type OpenAIResponsesProviderResponseMetadata,
+} from "./premiumCoverLetterOpenAITransport";
 import type { ProposalVoicePreset } from "./voicePresets";
 import type { CompanyValuesPack } from "./companyValues";
 
@@ -335,14 +341,8 @@ export type PremiumCoverLetterWriter = (args: {
   signal?: AbortSignal;
 }) => Promise<unknown>;
 
-export type PremiumCoverLetterProviderResponseMetadata = Readonly<{
-  returnedModel: string | null;
-  tokenUsage: Readonly<{
-    inputTokens: number;
-    outputTokens: number;
-    totalTokens: number;
-  }> | null;
-}>;
+export type PremiumCoverLetterProviderResponseMetadata =
+  OpenAIResponsesProviderResponseMetadata;
 
 export const PREMIUM_COVER_LETTER_OPENAI_MODEL: PremiumCoverLetterWriterModel =
   "gpt-5.5";
@@ -6388,84 +6388,18 @@ export async function generatePremiumCoverLetterBodyPartsWithExactOpenAIModel(
   const responseFormat = resolvePremiumCoverLetterOpenAIResponseFormat({
     schema: args.schema,
   });
-  const requestBody = buildPremiumCoverLetterOpenAIRequestForExactModel({
+  return generateOpenAIResponsesStructured({
+    apiKey: args.apiKey,
     prompt: args.prompt,
     writerModel: args.writerModel,
-    schema: responseFormat.jsonSchema,
-    schemaName: responseFormat.name,
-    maxOutputTokens: args.maxOutputTokens,
-    reasoningEffort: args.reasoningEffort,
-  });
-
-  const openaiModule: any = await import("openai").catch(() => null);
-  const OpenAI = openaiModule?.default ?? openaiModule?.OpenAI ?? null;
-  if (OpenAI) {
-    const client = new OpenAI({
-      apiKey: args.apiKey,
-      ...(args.maxRetries !== undefined
-        ? { maxRetries: args.maxRetries }
-        : {}),
-    });
-    const zodHelperModule: any = await import("openai/helpers/zod").catch(
-      () => null,
-    );
-    const zodTextFormat = zodHelperModule?.zodTextFormat ?? null;
-
-    if (typeof client.responses?.parse === "function" && zodTextFormat) {
-      const response = await client.responses.parse(
-        {
-          model: args.writerModel,
-          input: args.prompt,
-          reasoning: requestBody.reasoning,
-          text: {
-            verbosity: "medium",
-            format: zodTextFormat(responseFormat.zodSchema, responseFormat.name),
-          },
-          ...(args.maxOutputTokens !== undefined
-            ? { max_output_tokens: args.maxOutputTokens }
-            : {}),
-        } as any,
-        args.signal ? ({ signal: args.signal } as any) : undefined,
-      );
-
-      args.onResponseMetadata?.(
-        extractPremiumProviderResponseMetadata(response),
-      );
-
-      return responseFormat.zodSchema.parse(
-        response?.output_parsed ?? extractOpenAIJsonPayload(response),
-      );
-    }
-
-    const response = await client.responses.create(
-      requestBody as any,
-      args.signal ? ({ signal: args.signal } as any) : undefined,
-    );
-    args.onResponseMetadata?.(extractPremiumProviderResponseMetadata(response));
-    return responseFormat.zodSchema.parse(extractOpenAIJsonPayload(response));
-  }
-
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${args.apiKey}`,
-    },
+    responseFormat,
     signal: args.signal,
-    body: JSON.stringify(requestBody),
+    maxRetries: args.maxRetries,
+    maxOutputTokens: args.maxOutputTokens,
+    reasoningEffort:
+      args.reasoningEffort ?? resolveOpenAIProposalReasoningEffort(),
+    onResponseMetadata: args.onResponseMetadata,
   });
-  if (!response.ok) {
-    throw new Error(
-      `OpenAI premium cover-letter request failed: ${response.status} ${response.statusText} ${await response.text()}`,
-    );
-  }
-  const responseBody = await response.json();
-  args.onResponseMetadata?.(
-    extractPremiumProviderResponseMetadata(responseBody),
-  );
-  return responseFormat.zodSchema.parse(
-    extractOpenAIJsonPayload(responseBody),
-  );
 }
 
 export async function generatePremiumCoverLetterBodyPartsWithOpenAI(args: {
@@ -6626,31 +6560,15 @@ export function buildPremiumCoverLetterOpenAIRequestForExactModel(args: {
 }) {
   const schema = args.schema ?? PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA;
   const schemaName = args.schemaName ?? "premium_writer_output_v1";
-  return {
-    model: args.writerModel,
-    input: args.prompt,
-    ...(args.maxOutputTokens !== undefined
-      ? { max_output_tokens: args.maxOutputTokens }
-      : {}),
-    reasoning: {
-      effort:
-        args.reasoningEffort ?? resolveOpenAIProposalReasoningEffort(),
-    },
-    text: {
-      verbosity: "medium",
-      format: {
-        type: "json_schema",
-        name: schemaName,
-        schema,
-        strict: true,
-        json_schema: {
-          name: schemaName,
-          schema,
-          strict: true,
-        },
-      },
-    },
-  };
+  return buildOpenAIResponsesRequest({
+    prompt: args.prompt,
+    writerModel: args.writerModel,
+    schema,
+    schemaName,
+    maxOutputTokens: args.maxOutputTokens,
+    reasoningEffort:
+      args.reasoningEffort ?? resolveOpenAIProposalReasoningEffort(),
+  });
 }
 
 function extractPremiumProviderResponseMetadata(
@@ -7137,68 +7055,7 @@ async function tryRepairPremiumCoverLetterQualityShadow(args: {
 }
 
 export function extractOpenAIJsonPayload(response: any): unknown {
-  if (response?.output_parsed && typeof response.output_parsed === "object") {
-    return response.output_parsed;
-  }
-
-  const contentArrays = [
-    ...(Array.isArray(response?.output) ? response.output : []),
-    ...(Array.isArray(response?.outputs) ? response.outputs : []),
-  ]
-    .flatMap((entry: any) =>
-      Array.isArray(entry?.content) ? entry.content : entry ? [entry] : [],
-    )
-    .filter(Boolean);
-
-  for (const item of contentArrays) {
-    if (item?.json && typeof item.json === "object") {
-      return item.json;
-    }
-    if (item?.parsed && typeof item.parsed === "object") {
-      return item.parsed;
-    }
-    if (typeof item?.text === "string") {
-      try {
-        return JSON.parse(item.text);
-      } catch {
-        // Keep scanning: some envelopes include plain text alongside parseable content.
-      }
-    }
-    if (typeof item?.output_text === "string") {
-      try {
-        return JSON.parse(item.output_text);
-      } catch {
-        // Keep scanning: some envelopes include plain text alongside parseable content.
-      }
-    }
-  }
-
-  if (typeof response?.output_text === "string") {
-    try {
-      return JSON.parse(response.output_text);
-    } catch {
-      // Fall through to other extraction attempts.
-    }
-  }
-
-  const chatContent =
-    response?.choices?.[0]?.message?.content ??
-    response?.full_response?.choices?.[0]?.message?.content ??
-    null;
-  if (typeof chatContent === "string") {
-    try {
-      return JSON.parse(chatContent);
-    } catch {
-      // Fall through to the fenced JSON scan below.
-    }
-  }
-
-  const serialized = JSON.stringify(response);
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(serialized);
-  if (fenced?.[1]) {
-    return JSON.parse(fenced[1]);
-  }
-  throw new Error("Premium cover-letter response did not contain parsed JSON");
+  return extractOpenAIJsonPayloadFromTransport(response);
 }
 
 export async function attemptPremiumCoverLetterGeneration(args: {
