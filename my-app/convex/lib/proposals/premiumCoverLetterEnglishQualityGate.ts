@@ -10,6 +10,7 @@ import {
   canonicalizePremiumCoverLetterToken,
   normalizePremiumCoverLetterNumericToken,
 } from "./premiumCoverLetterTokenNormalization";
+import { isFiniteEnglishPredicateAt } from "./premiumCoverLetterEnglishSyntaxAdapter";
 
 const ENGLISH_CV_BACKED_SECTIONS: readonly ClaimPlanSection[] = [
   "opening",
@@ -324,8 +325,6 @@ const FINITE_PREDICATE_TOKENS = new Set([
   "drive",
   "enable",
   "ensure",
-  "evolve",
-  "grow",
   "grew",
   "had",
   "has",
@@ -343,8 +342,6 @@ const FINITE_PREDICATE_TOKENS = new Set([
   "shall",
   "should",
   "sustain",
-  "strengthen",
-  "translate",
   "was",
   "were",
   "will",
@@ -1193,6 +1190,67 @@ function numericOccurrenceIsPartOfWrittenNumberEntity(args: {
   });
 }
 
+function isNumericEntityName(entity: string): boolean {
+  return /\p{L}/u.test(entity) && /\p{N}/u.test(entity);
+}
+
+function hasWholeEntityNameBoundaries(args: {
+  value: string;
+  start: number;
+  length: number;
+}): boolean {
+  const precedingCharacter = args.value[args.start - 1] ?? "";
+  const followingCharacter = args.value[args.start + args.length] ?? "";
+  return (
+    !/[\p{L}\p{N}&'.-]/u.test(precedingCharacter) &&
+    !/[\p{L}\p{N}&'.-]/u.test(followingCharacter)
+  );
+}
+
+function entityContainsNumericOccurrence(args: {
+  entityStart: number;
+  entityLength: number;
+  occurrenceIndex: number;
+}): boolean {
+  return (
+    args.occurrenceIndex >= args.entityStart &&
+    args.occurrenceIndex < args.entityStart + args.entityLength
+  );
+}
+
+function numericOccurrenceIsInsideExactEntity(args: {
+  value: string;
+  occurrence: NumericTokenOccurrence;
+  rawEntity: string;
+}): boolean {
+  const entity = args.rawEntity.trim();
+  if (!isNumericEntityName(entity)) return false;
+
+  const searchableValue = args.value.toLocaleLowerCase("en-US");
+  const searchableEntity = entity.toLocaleLowerCase("en-US");
+  let entityIndex = searchableValue.indexOf(searchableEntity);
+  while (entityIndex >= 0) {
+    const matchesWholeEntity =
+      hasWholeEntityNameBoundaries({
+        value: searchableValue,
+        start: entityIndex,
+        length: searchableEntity.length,
+      }) &&
+      entityContainsNumericOccurrence({
+        entityStart: entityIndex,
+        entityLength: searchableEntity.length,
+        occurrenceIndex: args.occurrence.index,
+      });
+    if (matchesWholeEntity) return true;
+
+    entityIndex = searchableValue.indexOf(
+      searchableEntity,
+      entityIndex + searchableEntity.length,
+    );
+  }
+  return false;
+}
+
 function numericOccurrenceIsPartOfEntity(args: {
   value: string;
   occurrence: NumericTokenOccurrence;
@@ -1204,26 +1262,13 @@ function numericOccurrenceIsPartOfEntity(args: {
   ) {
     return true;
   }
-  const searchableValue = args.value.toLocaleLowerCase("en-US");
-  return args.entities.some((rawEntity) => {
-    const entity = rawEntity.trim();
-    if (!/\p{L}/u.test(entity) || !/\p{N}/u.test(entity)) return false;
-    const searchableEntity = entity.toLocaleLowerCase("en-US");
-    let entityIndex = searchableValue.indexOf(searchableEntity);
-    while (entityIndex >= 0) {
-      if (
-        args.occurrence.index >= entityIndex &&
-        args.occurrence.index < entityIndex + searchableEntity.length
-      ) {
-        return true;
-      }
-      entityIndex = searchableValue.indexOf(
-        searchableEntity,
-        entityIndex + searchableEntity.length,
-      );
-    }
-    return false;
-  });
+  return args.entities.some((rawEntity) =>
+    numericOccurrenceIsInsideExactEntity({
+      value: args.value,
+      occurrence: args.occurrence,
+      rawEntity,
+    }),
+  );
 }
 
 function evidenceAnchorTokens(args: {
@@ -1493,7 +1538,8 @@ function hasSupportedSubjectForUnlistedPredicate(args: {
     args.index === 2 ||
     hasNounPhraseSubjectForUnlistedPredicate(args) ||
     hasMultiwordNounSubjectAfterLeadingParticiple(args) ||
-    hasFrontedBareNounSubject(args)
+    hasFrontedBareNounSubject(args) ||
+    (args.index >= 2 && isFiniteEnglishPredicateAt(args))
   );
 }
 
@@ -1520,7 +1566,8 @@ function isAmbiguousAdverbOnlyPredicate(args: {
     args.token.endsWith("s") &&
     args.index === args.tokens.length - 2 &&
     followingToken.endsWith("ly") &&
-    hasMultiwordNounSubjectAfterLeadingParticiple(args)
+    hasMultiwordNounSubjectAfterLeadingParticiple(args) &&
+    !isFiniteEnglishPredicateAt(args)
   );
 }
 
@@ -1598,7 +1645,7 @@ function isFinitePredicateCandidate(args: {
   const canonicalToken = canonicalizePremiumCoverLetterToken(args.token);
   if (
     FINITE_PREDICATE_TOKENS.has(canonicalToken) &&
-    args.tokens[args.index - 1] !== "to"
+    isFiniteEnglishPredicateAt(args)
   ) {
     return true;
   }

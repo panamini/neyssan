@@ -2700,6 +2700,16 @@ describe("premium cover letter prompt contract", () => {
       jobDescription: `Join 3-Day Blinds as an implementation analyst. ${directJob.jobDescription}`,
       employerName: "3-Day Blinds",
     },
+    {
+      jobTitle: "Implementation Analyst at U.S. Bank",
+      jobDescription: directJob.jobDescription,
+      employerName: "U.S. Bank",
+    },
+    {
+      jobTitle: directJob.jobTitle,
+      jobDescription: `Join Our Team. Work at Acme Corp. ${directJob.jobDescription}`,
+      employerName: "Acme Corp",
+    },
   ])(
     "preserves the numeric employer $employerName in the structured brief",
     ({ jobTitle, jobDescription, employerName }) => {

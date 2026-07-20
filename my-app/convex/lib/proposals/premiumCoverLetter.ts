@@ -2145,16 +2145,48 @@ function isSecondaryQualification(fact: AllowedFact): boolean {
   );
 }
 
+const EMPLOYER_NAME_TOKEN_SOURCE =
+  String.raw`(?:(?:[A-Z]\.){2,}|[A-Z0-9](?:[\w&'.-]*[\w&'-])?)`;
+const EMPLOYER_AFTER_AT_PATTERN = new RegExp(
+  String.raw`\b[Aa]t\s+(${EMPLOYER_NAME_TOKEN_SOURCE}(?:\s+${EMPLOYER_NAME_TOKEN_SOURCE}){0,3})`,
+  "gu",
+);
+const EMPLOYER_AFTER_JOIN_PATTERN = new RegExp(
+  String.raw`\b[Jj]oin\s+(${EMPLOYER_NAME_TOKEN_SOURCE}(?:\s+${EMPLOYER_NAME_TOKEN_SOURCE}){0,3})`,
+  "gu",
+);
+const GENERIC_EMPLOYER_CANDIDATES = new Set([
+  "our company",
+  "our team",
+  "the company",
+  "the team",
+]);
+
+function firstSpecificEmployerCandidate(
+  value: string,
+  pattern: RegExp,
+): string | undefined {
+  return Array.from(value.matchAll(pattern), (match) =>
+    compactWhitespace(match[1] ?? ""),
+  ).find(
+    (candidate) =>
+      candidate.length > 0 &&
+      !GENERIC_EMPLOYER_CANDIDATES.has(candidate.toLocaleLowerCase("en-US")),
+  );
+}
+
 function extractEmployerName(jobTitle: string, jobDescription: string): string | undefined {
-  const candidate = (
-    jobTitle.match(
-      /\b[Aa]t\s+([A-Z0-9](?:[\w&'.-]*[\w&'-])?(?:\s+[A-Z0-9](?:[\w&'.-]*[\w&'-])?){0,3})/,
-    )?.[1] ??
-    jobDescription.match(
-      /\b(?:[Jj]oin|[Aa]t)\s+([A-Z0-9](?:[\w&'.-]*[\w&'-])?(?:\s+[A-Z0-9](?:[\w&'.-]*[\w&'-])?){0,3})/,
-    )?.[1]
-  )?.trim();
-  return candidate ? compactWhitespace(candidate) : undefined;
+  return (
+    firstSpecificEmployerCandidate(jobTitle, EMPLOYER_AFTER_AT_PATTERN) ??
+    firstSpecificEmployerCandidate(
+      jobDescription,
+      EMPLOYER_AFTER_AT_PATTERN,
+    ) ??
+    firstSpecificEmployerCandidate(
+      jobDescription,
+      EMPLOYER_AFTER_JOIN_PATTERN,
+    )
+  );
 }
 
 function resolveCloseFallback(language: string): string {

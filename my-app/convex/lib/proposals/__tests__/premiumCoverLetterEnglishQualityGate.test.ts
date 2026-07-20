@@ -1296,6 +1296,26 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
+  it("does not exempt a numeric claim that merely prefixes the target employer", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "I maintained a 4-hour response window.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+      targetEmployerName: "4-H",
+    });
+
+    expect(issues).toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "employerValueBlock",
+      metric: "4",
+    });
+  });
+
   it("does not exempt a capitalized numeric duration as a company name", () => {
     const durationFactGraph: FactGraphV1 = {
       ...factGraph,
@@ -3582,6 +3602,25 @@ describe("English CV-backed quality gate", () => {
     },
   );
 
+  it("rejects a verb-led fragment whose predicate is nested in an infinitival clause", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock:
+          "I documented handoffs. Managed client reporting to make teams grow.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "incomplete_sentence",
+      section: "proofBlock",
+    });
+  });
+
   it("rejects a verb-led fragment with a hyphenated modifier", () => {
     const issues = validateEnglishCvBackedQualityGate({
       writerOutput: output({
@@ -3713,6 +3752,7 @@ describe("English CV-backed quality gate", () => {
     "Managed services experience grows steadily.",
     "Managed services experience translates directly.",
     "Managed services experience evolves continually.",
+    "Managed services delivery improves rapidly.",
     "Improved client reporting processes supported weekly delivery.",
     "Built platform operations experience improved stakeholder alignment.",
   ])(
