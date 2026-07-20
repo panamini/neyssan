@@ -497,6 +497,68 @@ describe("English CV-backed quality gate", () => {
     );
   });
 
+  it("does not split title and number abbreviations into duplicate fragments", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "Dr. Smith improved onboarding handoffs in No. 5 unit.",
+        proofBlock: "Dr. Jones documented migration handoffs in No. 7 unit.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).not.toContainEqual(
+      expect.objectContaining({ code: "duplicate_visible_sentence" }),
+    );
+  });
+
+  it("does not treat numeric identifiers as evidence metrics", () => {
+    const identifierFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Built 3D workflows for 5G systems under ISO 27001.",
+              metrics: [],
+            }
+          : fact,
+      ),
+    };
+    const overlappingClaimPlan: ClaimPlanV1 = {
+      ...claimPlan,
+      claims: claimPlan.claims.map((claim) =>
+        claim.section === "proofBlock"
+          ? {
+              ...claim,
+              factIds: ["fact_opening"],
+            }
+          : claim,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I built 3D workflows for 5G systems under ISO 27001.",
+        proofBlock:
+          "I documented 3D assets for 5G programs aligned with ISO 27001.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+        proofFacts: ["fact_opening"],
+      }),
+      claimPlan: overlappingClaimPlan,
+      factGraph: identifierFactGraph,
+    });
+
+    expect(issues).not.toContainEqual(
+      expect.objectContaining({ code: "duplicate_visible_metric" }),
+    );
+    expect(issues).not.toContainEqual(
+      expect.objectContaining({ code: "unsupported_visible_metric" }),
+    );
+  });
+
   it("detects a supported metric repeated within one section", () => {
     const issues = validateEnglishCvBackedQualityGate({
       writerOutput: output({
@@ -658,6 +720,68 @@ describe("English CV-backed quality gate", () => {
     });
 
     expect(issues).not.toContainEqual({
+      code: "employer_value_not_grounded",
+      section: "employerValueBlock",
+    });
+  });
+
+  it("canonicalizes inflected evidence anchors for employer grounding", () => {
+    const inflectedFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_close"
+          ? {
+              ...fact,
+              text: "Coordinated schedules and tracked handoffs.",
+              entities: [],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock:
+          "That coordination and scheduling experience supports reliable delivery.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: inflectedFactGraph,
+    });
+
+    expect(issues).not.toContainEqual({
+      code: "employer_value_not_grounded",
+      section: "employerValueBlock",
+    });
+  });
+
+  it("grounds an adjacent employer bridge against assigned facts when fact IDs are omitted", () => {
+    const adjacentClaimPlan: ClaimPlanV1 = {
+      ...claimPlan,
+      contextClass: "cv_adjacent",
+      claims: claimPlan.claims.map((claim) =>
+        claim.section === "employerValueBlock"
+          ? {
+              ...claim,
+              claimType: "adjacent_safe_bridge",
+            }
+          : claim,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That experience is relevant to this work.",
+        closeLine: "I would bring that discipline to the team.",
+        employerFacts: [],
+      }),
+      claimPlan: adjacentClaimPlan,
+      factGraph,
+    });
+
+    expect(issues).toContainEqual({
       code: "employer_value_not_grounded",
       section: "employerValueBlock",
     });

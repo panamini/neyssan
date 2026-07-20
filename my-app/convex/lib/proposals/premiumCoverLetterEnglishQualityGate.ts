@@ -4,6 +4,7 @@ import type {
   FactGraphV1,
   PremiumWriterOutputV1,
 } from "./premiumCoverLetter";
+import { expandPremiumCoverLetterTokenVariants } from "./premiumCoverLetterTokenNormalization";
 
 const ENGLISH_CV_BACKED_SECTIONS: readonly ClaimPlanSection[] = [
   "opening",
@@ -92,37 +93,60 @@ type SentenceRange = Readonly<{
   end: number;
 }>;
 
+const NON_TERMINAL_PERIOD_ABBREVIATION_PATTERN =
+  /(?:(?:\b[a-z]\.){2,}|\b(?:dr|mr|mrs|ms|prof|sr|jr|st|no|fig|vs|etc)\.)$/iu;
+
+function buildSentenceRange(
+  value: string,
+  start: number,
+  end: number,
+): SentenceRange | null {
+  const surface = value.slice(start, end);
+  const text = surface.trim();
+  if (!text) return null;
+  return {
+    text,
+    start: start + (surface.match(/^\s*/u)?.[0].length ?? 0),
+    end,
+  };
+}
+
+function isSentenceBoundary(args: {
+  value: string;
+  match: RegExpMatchArray;
+  start: number;
+}): boolean {
+  const matchIndex = args.match.index ?? args.start;
+  const end = matchIndex + args.match[0].length;
+  const nextCharacter = args.value.slice(end).match(/\S/u)?.[0];
+  if (!nextCharacter || /[!?]/u.test(args.match[0])) return true;
+
+  const punctuationLength =
+    args.match[0].match(/^[.!?]+/u)?.[0].length ?? 0;
+  if (
+    NON_TERMINAL_PERIOD_ABBREVIATION_PATTERN.test(
+      args.value.slice(0, matchIndex + punctuationLength),
+    )
+  ) {
+    return false;
+  }
+  return /[\p{Lu}\p{N}"'“‘(]/u.test(nextCharacter);
+}
+
 function splitSentenceRanges(value: string): SentenceRange[] {
   const sentences: SentenceRange[] = [];
   let start = 0;
-  const pushSentence = (end: number) => {
-    const surface = value.slice(start, end);
-    const leadingWhitespaceLength = surface.match(/^\s*/u)?.[0].length ?? 0;
-    const text = surface.trim();
-    if (text) {
-      sentences.push({
-        text,
-        start: start + leadingWhitespaceLength,
-        end,
-      });
-    }
-    start = end;
-  };
   for (const match of value.matchAll(
     /[.!?]+(?:["'”’»)\]}]+)?(?=\s|$)/gu,
   )) {
     const end = (match.index ?? start) + match[0].length;
-    const nextCharacter = value.slice(end).match(/\S/u)?.[0];
-    if (
-      !/[!?]/u.test(match[0]) &&
-      nextCharacter &&
-      !/[\p{Lu}\p{N}"'“‘(]/u.test(nextCharacter)
-    ) {
-      continue;
-    }
-    pushSentence(end);
+    if (!isSentenceBoundary({ value, match, start })) continue;
+    const sentence = buildSentenceRange(value, start, end);
+    if (sentence) sentences.push(sentence);
+    start = end;
   }
-  pushSentence(value.length);
+  const trailing = buildSentenceRange(value, start, value.length);
+  if (trailing) sentences.push(trailing);
   return sentences;
 }
 
@@ -134,7 +158,11 @@ type NumericTokenOccurrence = Readonly<{
 function numericTokenOccurrences(value: string): NumericTokenOccurrence[] {
   const tokens: NumericTokenOccurrence[] = [];
   for (const match of value
-    .matchAll(/\b\d[\d,]*(?:\.\d+)?\s*(?:%|percent\b)?/gi)) {
+    .matchAll(/\b\d[\d,]*(?:\.\d+)?\s*(?:%|percent\b)?(?![A-Za-z])/gi)) {
+    const prefix = value.slice(Math.max(0, match.index - 16), match.index);
+    if (/\b(?:(?:iso|iec|soc|rfc)\s+|no\.\s*)$/iu.test(prefix)) {
+      continue;
+    }
     const compact = match[0].toLowerCase().replace(/[\s,]+/g, "");
     const percentage = compact.endsWith("%") || compact.endsWith("percent");
     const numericSurface = compact.replace(/(?:%|percent)$/u, "");
@@ -178,13 +206,15 @@ function evidenceAnchorTokensFromValues(values: readonly string[]): Set<string> 
         normalized: token.toLowerCase(),
         shortAcronym: /^[A-Z][A-Z0-9]{1,3}$/u.test(token),
       }))
-      .filter(
-        ({ normalized, shortAcronym }) =>
+      .flatMap(({ normalized, shortAcronym }) =>
+        (
           (normalized.length >= 4 || shortAcronym) &&
           !numericTokens(normalized).length &&
-          !EVIDENCE_ANCHOR_STOP_WORDS.has(normalized),
+          !EVIDENCE_ANCHOR_STOP_WORDS.has(normalized)
+        )
+          ? expandPremiumCoverLetterTokenVariants(normalized)
+          : [],
       )
-      .map(({ normalized }) => normalized),
   );
 }
 
@@ -431,9 +461,16 @@ export function validateEnglishCvBackedQualityGate(args: {
       factIds: part.factIds,
       factGraph: args.factGraph,
     });
-    if (section === "employerValueBlock" && part.factIds.length > 0) {
+    const employerGroundingFactIds =
+      part.factIds.length > 0
+        ? part.factIds
+        : assignedClaim?.factIds ?? [];
+    if (
+      section === "employerValueBlock" &&
+      employerGroundingFactIds.length > 0
+    ) {
       const anchors = evidenceAnchorTokens({
-        factIds: part.factIds,
+        factIds: employerGroundingFactIds,
         factGraph: args.factGraph,
       });
       const textTokens = evidenceAnchorTokensFromValues([text]);
