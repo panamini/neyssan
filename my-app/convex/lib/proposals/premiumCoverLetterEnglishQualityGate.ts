@@ -172,6 +172,7 @@ function splitSentenceRanges(value: string): SentenceRange[] {
 type NumericTokenOccurrence = Readonly<{
   metric: string;
   key: string;
+  baseKey: string;
   index: number;
 }>;
 
@@ -262,9 +263,11 @@ function normalizeNumericTokenOccurrence(args: {
     percentage,
   });
   const metric = `${metricValue}${percentage ? "%" : ""}`;
+  const baseKey = [metricUnit({ currency, percentage }), metricValue].join(":");
   return {
     metric,
-    key: [metricUnit({ currency, percentage }), metricValue, measurement]
+    baseKey,
+    key: [baseKey, measurement]
       .filter((part) => part !== "")
       .join(":"),
     index,
@@ -301,6 +304,36 @@ function evidenceAnchorTokens(args: {
       .map((factId) => factById.get(factId))
       .filter((fact): fact is FactGraphV1["facts"][number] => Boolean(fact))
       .flatMap((fact) => [fact.text, ...fact.entities]),
+  );
+}
+
+function evidenceEntityAnchorTokens(args: {
+  factIds: readonly string[];
+  factGraph: FactGraphV1;
+}): Set<string> {
+  const factById = new Map(args.factGraph.facts.map((fact) => [fact.id, fact]));
+  return evidenceAnchorTokensFromValues(
+    args.factIds.flatMap((factId) => {
+      const fact = factById.get(factId);
+      if (!fact) return [];
+      const allowedVerbTokens = new Set(
+        fact.allowedVerbs.map((verb) =>
+          canonicalizePremiumCoverLetterToken(verb),
+        ),
+      );
+      return fact.entities.filter((entity) => {
+        const entityTokens = entity
+          .normalize("NFKC")
+          .split(/[^A-Za-z0-9%]+/u)
+          .filter(Boolean);
+        return (
+          entityTokens.length !== 1 ||
+          !allowedVerbTokens.has(
+            canonicalizePremiumCoverLetterToken(entityTokens[0]),
+          )
+        );
+      });
+    }),
   );
 }
 
@@ -594,14 +627,10 @@ export function validateEnglishCvBackedQualityGate(args: {
         factIds: employerGroundingFactIds,
         factGraph: args.factGraph,
       });
-      const factById = new Map(
-        args.factGraph.facts.map((fact) => [fact.id, fact]),
-      );
-      const entityAnchors = evidenceAnchorTokensFromValues(
-        employerGroundingFactIds.flatMap(
-          (factId) => factById.get(factId)?.entities ?? [],
-        ),
-      );
+      const entityAnchors = evidenceEntityAnchorTokens({
+        factIds: employerGroundingFactIds,
+        factGraph: args.factGraph,
+      });
       const textTokens = evidenceAnchorTokensFromValues([text]);
       const anchorOverlapCount = Array.from(textTokens).filter((token) =>
         anchors.has(token),
@@ -618,7 +647,13 @@ export function validateEnglishCvBackedQualityGate(args: {
     }
     for (const occurrence of numericTokenOccurrences(text)) {
       const { key, metric } = occurrence;
-      if (!sourceMetricFacts.has(key)) {
+      const resolvedMetricKey = sourceMetricFacts.has(key)
+        ? key
+        : sourceMetricFacts.has(occurrence.baseKey)
+          ? occurrence.baseKey
+          : key;
+      const supportingMetricFactIds = sourceMetricFacts.get(resolvedMetricKey);
+      if (!supportingMetricFactIds) {
         pushUnique(issues, {
           code: "unsupported_visible_metric",
           section,
@@ -633,12 +668,11 @@ export function validateEnglishCvBackedQualityGate(args: {
         )?.text ?? text;
       const metricFactIds = attributedMetricFactIds({
         visibleText: localText,
-        candidateFactIds:
-          sourceMetricFacts.get(key) ?? new Set<string>(),
+        candidateFactIds: supportingMetricFactIds ?? new Set<string>(),
         factGraph: args.factGraph,
       });
       const previousOccurrence = seenMetricSections
-        .get(key)
+        .get(resolvedMetricKey)
         ?.find(
           (occurrence) =>
             setsOverlap(occurrence.factIds, metricFactIds),
@@ -653,9 +687,9 @@ export function validateEnglishCvBackedQualityGate(args: {
           metric,
         });
       }
-      const occurrences = seenMetricSections.get(key) ?? [];
+      const occurrences = seenMetricSections.get(resolvedMetricKey) ?? [];
       occurrences.push({ section, factIds: metricFactIds });
-      seenMetricSections.set(key, occurrences);
+      seenMetricSections.set(resolvedMetricKey, occurrences);
     }
   }
 

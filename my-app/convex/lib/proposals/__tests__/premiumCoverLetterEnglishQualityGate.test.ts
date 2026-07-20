@@ -401,6 +401,35 @@ describe("English CV-backed quality gate", () => {
     );
   });
 
+  it("matches a metric when its quantified noun moves before the number", () => {
+    const metricFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Managed a portfolio budget of $4M.",
+              metrics: ["$4M"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I managed a $4M portfolio budget.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: metricFactGraph,
+    });
+
+    expect(issues).not.toContainEqual(
+      expect.objectContaining({ code: "unsupported_visible_metric" }),
+    );
+  });
+
   it("allows the same metric value when distinct section facts support it", () => {
     const sameNumberFactGraph: FactGraphV1 = {
       ...factGraph,
@@ -1079,6 +1108,38 @@ describe("English CV-backed quality gate", () => {
       }),
       claimPlan,
       factGraph: genericDeliveryFactGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "employer_value_not_grounded",
+      section: "employerValueBlock",
+    });
+  });
+
+  it("does not treat a sentence-leading action verb as an entity anchor", () => {
+    const verbEntityFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_close"
+          ? {
+              ...fact,
+              text: "Managed schedules and tracked handoffs.",
+              entities: ["Managed"],
+              allowedVerbs: ["managed", "tracked"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock:
+          "That management experience would help in this role.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: verbEntityFactGraph,
     });
 
     expect(issues).toContainEqual({

@@ -6843,7 +6843,7 @@ function repairSectionUsesUncitedCandidateFact(args: {
   );
   const evidenceFragments = splitSentences(args.text).flatMap((sentence) =>
     sentence
-      .split(/\s*(?:[;:]|\b(?:and|while|plus|along with)\b)\s*/iu)
+      .split(/\s*(?:[;:,]|\b(?:and|while|plus|along with)\b)\s*/iu)
       .map((fragment) => compactWhitespace(fragment))
       .filter(Boolean),
   );
@@ -7590,7 +7590,11 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   const blockingEnglishCvBackedQualityGateIssues =
     englishCvBackedQualityGateIssues.filter((issue) =>
       (
-        legacyWrapped
+        legacyWrapped &&
+        !isQwenWriterIdentity({
+          writerProvider: args.writerProvider,
+          writerModel: args.writerModel,
+        })
           ? ENGLISH_CV_BACKED_LEGACY_PRODUCTION_GATE_CODES
           : ENGLISH_CV_BACKED_PRODUCTION_GATE_CODES
       ).has(issue.code),

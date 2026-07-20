@@ -205,7 +205,7 @@ const qwenPremiumBodyPartsFixture = {
   proofBlock:
     "At Acme, I led a design system migration used across four product squads and improved release consistency across shared interface work.",
   employerValueBlock:
-    "That background is most relevant in roles where interface quality, collaboration, and iteration all shape the final product experience.",
+    "That design-system migration and shared interface work are relevant to product-facing delivery.",
   closeLine: "I would welcome the opportunity to discuss the role further.",
 };
 

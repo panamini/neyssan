@@ -4787,6 +4787,41 @@ describe("premium cover letter generation and rendering", () => {
     );
   });
 
+  it("applies employer-grounding enforcement to legacy-shaped Qwen output", async () => {
+    const failures: any[] = [];
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: directContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      candidateName: "Alex Martin",
+      writerProvider: "qwen",
+      writerModel: "qwen3.7-max",
+      onFailure: (trace) => {
+        failures.push(trace);
+      },
+      writer: async () => ({
+        opening:
+          "I improved signup conversion by 11% after iterative UI experiments.",
+        proofBlock:
+          "I led a design-system migration used across four product squads.",
+        employerValueBlock: "Delivery matters.",
+        closeLine:
+          "That experience is relevant to frontend work where reusable systems and product iteration matter.",
+      }),
+    });
+
+    expect(result).toBeNull();
+    expect(failures).toEqual([
+      expect.objectContaining({
+        stage: "validation",
+        reason: "non_repairable_validation",
+        issues: expect.arrayContaining(["employer_value_not_grounded"]),
+      }),
+    ]);
+  });
+
   it("reports writer-output validation before invoking model repair", async () => {
     const events: string[] = [];
     const onModelRepairRequired = vi.fn();
@@ -5040,7 +5075,7 @@ describe("premium cover letter generation and rendering", () => {
       proofBlock:
         "I maintained clear records and scheduling follow-through for cross-functional projects.",
       employerValueBlock:
-        "The overlap is strongest around coordination, documentation, and cross-team updates.",
+        "The overlap is strongest around reporting, handoffs, and process documentation.",
       closeLine:
         "I bring experience in coordination, documentation, scheduling, vendor correspondence, and stakeholder communication.",
     };
@@ -6548,6 +6583,43 @@ describe("premium cover letter generation and rendering", () => {
     expect(result?.qualityRepair).toMatchObject({
       attempted: true,
       outcome: "attempted_accepted",
+    });
+  });
+
+  it("rejects a repair that appends an uncited fact after a comma", async () => {
+    const calls: string[] = [];
+    const originalProof =
+      "I led a design system migration used across 4 product squads.";
+    const originalEmployerValue =
+      "I built experimentation dashboards used by product and growth teams.";
+    const result = await attemptDirectQualityRepair(async () => {
+      calls.push("writer");
+      if (calls.length === 1) {
+        return buildDirectPremiumWriterOutputFixture({
+          opening:
+            "I improved signup conversion by 11% after iterative UI experiments.",
+          proofBlock: originalProof,
+          employerValueBlock: originalEmployerValue,
+          closeLine: "I would be glad to discuss the position further.",
+        });
+      }
+      return {
+        opening:
+          "I improved signup conversion by 11% after iterative UI experiments.",
+        proofBlock:
+          "I led a design system migration used across 4 product squads, improving signup conversion through iterative UI experiments.",
+        employerValueBlock: originalEmployerValue,
+        closeLine:
+          "I would bring that design-system discipline to product-facing interface work.",
+      };
+    });
+
+    expect(calls).toHaveLength(2);
+    expect(result?.bodyParts.proofBlock).toBe(originalProof);
+    expect(result?.qualityRepair).toMatchObject({
+      attempted: true,
+      outcome: "rejected_provenance",
+      rejectionCategory: "rejected_provenance",
     });
   });
 
