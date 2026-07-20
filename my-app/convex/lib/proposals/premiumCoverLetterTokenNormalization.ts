@@ -53,6 +53,12 @@ const SINGULAR_S_ENDING_TOKENS = new Set([
   "gas",
 ]);
 
+function shortTechnicalPluralSingular(value: string): string | null {
+  return /^\p{Lu}{2,4}s$/u.test(value)
+    ? value.slice(0, -1).toLowerCase()
+    : null;
+}
+
 export function normalizePremiumCoverLetterNumericToken(
   value: string,
 ): string {
@@ -79,6 +85,8 @@ export function expandPremiumCoverLetterTokenVariants(
 ): string[] {
   const token = value.toLowerCase();
   const variants = new Set([token]);
+  const shortTechnicalSingular = shortTechnicalPluralSingular(value);
+  if (shortTechnicalSingular) variants.add(shortTechnicalSingular);
   if (
     INVARIANT_S_ENDING_TOKENS.has(token) ||
     SINGULAR_S_ENDING_TOKENS.has(token)
@@ -106,6 +114,8 @@ export function expandPremiumCoverLetterTokenVariants(
 }
 
 export function canonicalizePremiumCoverLetterToken(value: string): string {
+  const shortTechnicalSingular = shortTechnicalPluralSingular(value);
+  if (shortTechnicalSingular) return shortTechnicalSingular;
   const token = value.toLowerCase();
   const canonicalRule = TOKEN_CANONICALIZATION_RULES.find((rule) =>
     rule.pattern.test(token),

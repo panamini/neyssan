@@ -1278,6 +1278,58 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
+  it.each([
+    {
+      source: "Achieved a 20% reduction in churn.",
+      generated: "I reduced churn by 20%.",
+      metric: "20%",
+    },
+    {
+      source: "Delivered 15% growth in revenue.",
+      generated: "I increased revenue by 15%.",
+      metric: "15%",
+    },
+    {
+      source: "Recorded a 10% increase in retention.",
+      generated: "Retention rose 10%.",
+      metric: "10%",
+    },
+    {
+      source: "Achieved a 12% churn reduction.",
+      generated: "I reduced churn by 12%.",
+      metric: "12%",
+    },
+  ])(
+    "recognizes the post-percentage outcome in $source",
+    ({ source, generated, metric }) => {
+      const issues = openingMetricIssues({
+        sourceText: source,
+        sourceMetrics: [metric],
+        generatedText: generated,
+      });
+
+      expect(issues).not.toContainEqual({
+        code: "unsupported_visible_metric",
+        section: "opening",
+        metric,
+      });
+    },
+  );
+
+  it("preserves direction when the percentage outcome is nominal", () => {
+    const issues = openingMetricIssues({
+      sourceText: "Achieved a 20% reduction in churn.",
+      sourceMetrics: ["20%"],
+      generatedText: "I increased churn by 20%.",
+    });
+
+    expect(issues).toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "opening",
+      metric: "20%",
+    });
+  });
+
   it("keeps percentage outcome direction in the metric identity", () => {
     const percentageFactGraph: FactGraphV1 = {
       ...factGraph,
@@ -2328,37 +2380,56 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
-  it("does not use an unlisted action verb as a grounding anchor", () => {
-    const actionVerbFactGraph: FactGraphV1 = {
-      ...factGraph,
-      facts: factGraph.facts.map((fact) =>
-        fact.id === "fact_close"
-          ? {
-              ...fact,
-              text: "Designed internal dashboards.",
-              entities: [],
-              allowedVerbs: ["described"],
-            }
-          : fact,
-      ),
-    };
-    const issues = validateEnglishCvBackedQualityGate({
-      writerOutput: output({
-        opening: "I reduced the onboarding backlog by 24%.",
-        proofBlock: "I documented handoffs for three implementation teams.",
-        employerValueBlock:
-          "I designed an unrelated process for this role.",
-        closeLine: "I would bring that discipline to the team.",
-      }),
-      claimPlan,
-      factGraph: actionVerbFactGraph,
-    });
+  it.each([
+    {
+      fact: "Designed internal dashboards.",
+      generated: "I designed an unrelated process for this role.",
+    },
+    {
+      fact: "Facilitated executive meetings.",
+      generated: "I facilitated an unrelated migration for this role.",
+    },
+    {
+      fact: "Orchestrated vendor workshops.",
+      generated: "I orchestrated an unrelated rollout for this role.",
+    },
+    {
+      fact: "Streamlined approval workflows.",
+      generated: "I streamlined an unrelated intake for this role.",
+    },
+  ])(
+    "does not use the unlisted action in $fact as a grounding anchor",
+    ({ fact: factText, generated }) => {
+      const actionVerbFactGraph: FactGraphV1 = {
+        ...factGraph,
+        facts: factGraph.facts.map((fact) =>
+          fact.id === "fact_close"
+            ? {
+                ...fact,
+                text: factText,
+                entities: [],
+                allowedVerbs: ["described"],
+              }
+            : fact,
+        ),
+      };
+      const issues = validateEnglishCvBackedQualityGate({
+        writerOutput: output({
+          opening: "I reduced the onboarding backlog by 24%.",
+          proofBlock: "I documented handoffs for three implementation teams.",
+          employerValueBlock: generated,
+          closeLine: "I would bring that discipline to the team.",
+        }),
+        claimPlan,
+        factGraph: actionVerbFactGraph,
+      });
 
-    expect(issues).toContainEqual({
-      code: "employer_value_not_grounded",
-      section: "employerValueBlock",
-    });
-  });
+      expect(issues).toContainEqual({
+        code: "employer_value_not_grounded",
+        section: "employerValueBlock",
+      });
+    },
+  );
 
   it("rejects employer grounding based only on a generic team anchor", () => {
     const genericTeamFactGraph: FactGraphV1 = {
@@ -2866,6 +2937,48 @@ describe("English CV-backed quality gate", () => {
       expect(expandPremiumCoverLetterTokenVariants(token)).toEqual([token]);
     },
   );
+
+  it.each([
+    ["APIs", "api"],
+    ["SDKs", "sdk"],
+    ["KPIs", "kpi"],
+    ["OKRs", "okr"],
+  ])("canonicalizes the short technical plural %s", (plural, singular) => {
+    expect(canonicalizePremiumCoverLetterToken(plural)).toBe(singular);
+    expect(expandPremiumCoverLetterTokenVariants(plural)).toContain(singular);
+  });
+
+  it("grounds a singular technical acronym from its cited plural", () => {
+    const technicalFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_close"
+          ? {
+              ...fact,
+              text: "Built APIs.",
+              entities: [],
+              allowedVerbs: ["built"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock:
+          "That API background would support the role.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: technicalFactGraph,
+    });
+
+    expect(issues).not.toContainEqual({
+      code: "employer_value_not_grounded",
+      section: "employerValueBlock",
+    });
+  });
 
   it("does not derive a Canva overlap from the singular noun canvas", () => {
     expect(expandPremiumCoverLetterTokenVariants("canvas")).toEqual(["canvas"]);

@@ -95,30 +95,28 @@ const EVIDENCE_ANCHOR_STOP_WORDS = new Set([
   "would",
   "your",
 ]);
-const EVIDENCE_ACTION_WORDS = new Set([
-  "assisted",
+const EVIDENCE_IRREGULAR_ACTION_WORDS = new Set([
   "built",
-  "coordinated",
-  "created",
-  "delivered",
-  "designed",
-  "developed",
-  "documented",
+  "brought",
   "drove",
-  "handled",
-  "implemented",
-  "improved",
+  "grew",
   "led",
-  "maintained",
-  "managed",
-  "monitored",
-  "owned",
-  "reduced",
-  "reported",
-  "supported",
-  "tracked",
-  "worked",
+  "made",
+  "oversaw",
+  "ran",
+  "sought",
+  "taught",
+  "won",
+  "wrote",
 ]);
+
+function isEvidenceActionWord(value: string): boolean {
+  return (
+    EVIDENCE_IRREGULAR_ACTION_WORDS.has(value) ||
+    (value.length > 4 && value.endsWith("ed"))
+  );
+}
+
 const METRIC_MEASUREMENT_STOP_WORDS = new Set([
   "a",
   "across",
@@ -259,6 +257,20 @@ const PERCENTAGE_DIRECTIONS = new Map<string, "increase" | "decrease">([
   ["shrink", "decrease"],
   ["shrinks", "decrease"],
   ["shrunk", "decrease"],
+]);
+const PERCENTAGE_NOMINAL_DIRECTIONS = new Map<
+  string,
+  "increase" | "decrease"
+>([
+  ["gain", "increase"],
+  ["growth", "increase"],
+  ["improvement", "increase"],
+  ["increase", "increase"],
+  ["lift", "increase"],
+  ["decline", "decrease"],
+  ["decrease", "decrease"],
+  ["drop", "decrease"],
+  ["reduction", "decrease"],
 ]);
 const GENERIC_PERCENTAGE_MEASUREMENTS = new Set([
   "change",
@@ -690,6 +702,65 @@ function metricSentencePrefix(args: {
   return args.value.slice(sentenceStart, args.start);
 }
 
+function percentageOutcomeMeasurement(value: string): string {
+  const tokens = value.split(/\s+/u);
+  const stopIndex = tokens.findIndex((token) =>
+    METRIC_MEASUREMENT_STOP_WORDS.has(token.toLowerCase()),
+  );
+  return canonicalMetricMeasurement(
+    tokens
+      .slice(0, stopIndex >= 0 ? stopIndex : undefined)
+      .filter((token) => !token.toLowerCase().endsWith("ly"))
+      .at(-1) ?? "",
+  );
+}
+
+type PercentageOutcome = Readonly<{
+  measurement: string;
+  direction: "increase" | "decrease";
+}>;
+
+function buildPercentageOutcome(
+  nominal: string,
+  measurementSurface: string,
+): PercentageOutcome | null {
+  const direction = PERCENTAGE_NOMINAL_DIRECTIONS.get(nominal.toLowerCase());
+  if (!direction) return null;
+  const measurement = percentageOutcomeMeasurement(measurementSurface);
+  return measurement ? { measurement, direction } : null;
+}
+
+function nominalPercentageOutcomeAfterMetric(
+  suffix: string,
+): PercentageOutcome | null {
+  const match = suffix.match(
+    /^\s*(gain|growth|improvement|increase|lift|decline|decrease|drop|reduction)\s+(?:in|of)\s+([A-Za-z][A-Za-z-]*(?:\s+[A-Za-z][A-Za-z-]*){0,2})/iu,
+  );
+  return match ? buildPercentageOutcome(match[1], match[2]) : null;
+}
+
+function measurementPercentageOutcomeAfterMetric(
+  suffix: string,
+): PercentageOutcome | null {
+  const match = suffix.match(
+    /^\s*([A-Za-z][A-Za-z-]*(?:\s+[A-Za-z][A-Za-z-]*){0,2})\s+(gain|growth|improvement|increase|lift|decline|decrease|drop|reduction)\b/iu,
+  );
+  return match ? buildPercentageOutcome(match[2], match[1]) : null;
+}
+
+function followingPercentageOutcome(args: {
+  value: string;
+  end: number;
+  percentage: boolean;
+}): PercentageOutcome | null {
+  if (!args.percentage) return null;
+  const suffix = args.value.slice(args.end);
+  return (
+    nominalPercentageOutcomeAfterMetric(suffix) ??
+    measurementPercentageOutcomeAfterMetric(suffix)
+  );
+}
+
 function precedingPercentageMeasurement(args: {
   value: string;
   start: number;
@@ -717,9 +788,12 @@ function precedingPercentageMeasurement(args: {
 function percentageDirection(args: {
   value: string;
   start: number;
+  end: number;
   percentage: boolean;
 }): "increase" | "decrease" | "" {
   if (!args.percentage) return "";
+  const followingOutcome = followingPercentageOutcome(args);
+  if (followingOutcome) return followingOutcome.direction;
   const directionTokens = Array.from(
     metricSentencePrefix(args)
       .toLowerCase()
@@ -748,6 +822,8 @@ function metricMeasurement(args: {
   end: number;
   percentage: boolean;
 }): string {
+  const followingOutcome = followingPercentageOutcome(args);
+  if (followingOutcome) return followingOutcome.measurement;
   const percentageMeasurement = precedingPercentageMeasurement(args);
   if (percentageMeasurement !== null) return percentageMeasurement;
   const measurementSurface =
@@ -854,6 +930,7 @@ function normalizeNumericTokenOccurrence(args: {
   const direction = percentageDirection({
     value: args.value,
     start: index,
+    end,
     percentage,
   });
   const metric = metricLabel({
@@ -977,6 +1054,7 @@ function writtenNumericTokenOccurrences(
     const direction = percentageDirection({
       value,
       start: index,
+      end,
       percentage,
     });
     const immediateMeasurement =
@@ -1178,18 +1256,19 @@ function evidenceAnchorTokensFromValues(values: readonly string[]): Set<string> 
           value.normalize("NFKC").split(/[^\p{L}\p{N}%]+/u),
         )
         .map((token) => ({
+          source: token,
           normalized: token.toLowerCase(),
           shortAcronym: /^\p{Lu}[\p{Lu}\p{N}]{1,3}$/u.test(token),
         }))
-        .flatMap(({ normalized, shortAcronym }) =>
+        .flatMap(({ source, normalized, shortAcronym }) =>
           (
             (normalized.length >= 4 || shortAcronym) &&
             !numericTokens(normalized).length &&
             !isWrittenNumberLexeme(normalized) &&
-            !EVIDENCE_ACTION_WORDS.has(normalized) &&
+            !isEvidenceActionWord(normalized) &&
             !EVIDENCE_ANCHOR_STOP_WORDS.has(normalized)
           )
-            ? [canonicalizePremiumCoverLetterToken(normalized)]
+            ? [canonicalizePremiumCoverLetterToken(source)]
             : [],
         ),
     ),
