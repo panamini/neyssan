@@ -2692,7 +2692,7 @@ describe("premium cover letter prompt contract", () => {
     },
     {
       jobTitle: directJob.jobTitle,
-      jobDescription: `Join 5-Hour Energy as an implementation analyst. ${directJob.jobDescription}`,
+      jobDescription: `Join 5-Hour Energy. The role is open. ${directJob.jobDescription}`,
       employerName: "5-Hour Energy",
     },
     {

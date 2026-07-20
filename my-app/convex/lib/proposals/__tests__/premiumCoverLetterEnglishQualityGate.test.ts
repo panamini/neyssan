@@ -3560,6 +3560,28 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
+  it.each(["grow", "strengthen", "translate"])(
+    "rejects a verb-led fragment whose later %s token is infinitival",
+    (verb) => {
+      const issues = validateEnglishCvBackedQualityGate({
+        writerOutput: output({
+          opening: "I reduced the onboarding backlog by 24%.",
+          proofBlock: `I documented handoffs. Managed client reporting to ${verb} delivery.`,
+          employerValueBlock:
+            "That reporting supports clear delivery handoffs.",
+          closeLine: "I would bring that discipline to the team.",
+        }),
+        claimPlan,
+        factGraph,
+      });
+
+      expect(issues).toContainEqual({
+        code: "incomplete_sentence",
+        section: "proofBlock",
+      });
+    },
+  );
+
   it("rejects a verb-led fragment with a hyphenated modifier", () => {
     const issues = validateEnglishCvBackedQualityGate({
       writerOutput: output({
@@ -3690,6 +3712,7 @@ describe("English CV-backed quality gate", () => {
     "Managed services experience strengthens my delivery approach.",
     "Managed services experience grows steadily.",
     "Managed services experience translates directly.",
+    "Managed services experience evolves continually.",
     "Improved client reporting processes supported weekly delivery.",
     "Built platform operations experience improved stakeholder alignment.",
   ])(

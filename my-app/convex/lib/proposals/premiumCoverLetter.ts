@@ -2148,10 +2148,10 @@ function isSecondaryQualification(fact: AllowedFact): boolean {
 function extractEmployerName(jobTitle: string, jobDescription: string): string | undefined {
   const candidate = (
     jobTitle.match(
-      /\b[Aa]t\s+([A-Z0-9][\w&'.-]+(?:\s+[A-Z0-9][\w&'.-]+){0,3})/,
+      /\b[Aa]t\s+([A-Z0-9](?:[\w&'.-]*[\w&'-])?(?:\s+[A-Z0-9](?:[\w&'.-]*[\w&'-])?){0,3})/,
     )?.[1] ??
     jobDescription.match(
-      /\b(?:[Jj]oin|[Aa]t)\s+([A-Z0-9][\w&'.-]+(?:\s+[A-Z0-9][\w&'.-]+){0,3})/,
+      /\b(?:[Jj]oin|[Aa]t)\s+([A-Z0-9](?:[\w&'.-]*[\w&'-])?(?:\s+[A-Z0-9](?:[\w&'.-]*[\w&'-])?){0,3})/,
     )?.[1]
   )?.trim();
   return candidate ? compactWhitespace(candidate) : undefined;

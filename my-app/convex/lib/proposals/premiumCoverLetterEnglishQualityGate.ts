@@ -324,6 +324,7 @@ const FINITE_PREDICATE_TOKENS = new Set([
   "drive",
   "enable",
   "ensure",
+  "evolve",
   "grow",
   "grew",
   "had",
@@ -1595,7 +1596,12 @@ function isFinitePredicateCandidate(args: {
   hasFrontedClause: boolean;
 }): boolean {
   const canonicalToken = canonicalizePremiumCoverLetterToken(args.token);
-  if (FINITE_PREDICATE_TOKENS.has(canonicalToken)) return true;
+  if (
+    FINITE_PREDICATE_TOKENS.has(canonicalToken) &&
+    args.tokens[args.index - 1] !== "to"
+  ) {
+    return true;
+  }
   if (
     /(?:ed|en)$/u.test(args.token) &&
     hasSupportedSubjectForRegularPastPredicate(args)
