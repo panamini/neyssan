@@ -7605,6 +7605,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
       writerOutput: finalWriterOutput,
       claimPlan,
       factGraph,
+      jobDemandGraph,
     });
   const blockingEnglishCvBackedQualityGateIssues =
     englishCvBackedQualityGateIssues.filter((issue) =>

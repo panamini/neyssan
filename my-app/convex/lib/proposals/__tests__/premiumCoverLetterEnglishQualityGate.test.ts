@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type {
   ClaimPlanV1,
   FactGraphV1,
+  JobDemandGraphV1,
   PremiumWriterOutputV1,
 } from "../premiumCoverLetter";
 import {
@@ -485,6 +486,100 @@ describe("English CV-backed quality gate", () => {
 
     expect(issues).not.toContainEqual(
       expect.objectContaining({ code: "unsupported_visible_metric" }),
+    );
+  });
+
+  it.each([
+    {
+      name: "client and customer",
+      sourceText: "Served 100 clients.",
+      sourceMetrics: ["100"],
+      generatedText: "I served 100 customers.",
+    },
+    {
+      name: "currency symbol and ISO currency code",
+      sourceText: "Managed a $4M portfolio.",
+      sourceMetrics: ["$4M"],
+      generatedText: "I managed a USD 4 million portfolio.",
+    },
+  ])(
+    "matches semantic metric paraphrases for $name",
+    ({ sourceText, sourceMetrics, generatedText }) => {
+      const metricFactGraph: FactGraphV1 = {
+        ...factGraph,
+        facts: factGraph.facts.map((fact) =>
+          fact.id === "fact_opening"
+            ? {
+                ...fact,
+                text: sourceText,
+                metrics: sourceMetrics,
+              }
+            : fact,
+        ),
+      };
+      const issues = validateEnglishCvBackedQualityGate({
+        writerOutput: output({
+          opening: generatedText,
+          proofBlock: "I documented handoffs for three implementation teams.",
+          employerValueBlock:
+            "That reporting supports clear delivery handoffs.",
+          closeLine: "I would bring that discipline to the team.",
+        }),
+        claimPlan,
+        factGraph: metricFactGraph,
+      });
+
+      expect(issues).not.toContainEqual(
+        expect.objectContaining({ code: "unsupported_visible_metric" }),
+      );
+    },
+  );
+
+  it("accepts a numeral supported by the section's assigned job demand", () => {
+    const demandId = "demand_always_on";
+    const demandClaimPlan: ClaimPlanV1 = {
+      ...claimPlan,
+      claims: claimPlan.claims.map((claim) =>
+        claim.section === "employerValueBlock"
+          ? { ...claim, demandIds: [demandId] }
+          : claim,
+      ),
+    };
+    const jobDemandGraph: JobDemandGraphV1 = {
+      version: "job_demand_graph_v1",
+      priorityTokens: ["operation"],
+      demands: [
+        {
+          id: demandId,
+          text: "Support 24/7 operations.",
+          bucket: "core_responsibility",
+          requiredness: "core",
+          tokens: ["support", "operation"],
+          mustNotBecomeCandidateClaim: true,
+        },
+      ],
+    };
+    const writerOutput = output({
+      opening: "I reduced the onboarding backlog by 24%.",
+      proofBlock: "I documented handoffs for three implementation teams.",
+      employerValueBlock:
+        "That reporting supports accurate coverage for 24/7 operations.",
+      closeLine: "I would bring that discipline to the team.",
+    });
+    writerOutput.bodyParts.employerValueBlock.demandIds = [demandId];
+
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput,
+      claimPlan: demandClaimPlan,
+      factGraph,
+      jobDemandGraph,
+    });
+
+    expect(issues).not.toContainEqual(
+      expect.objectContaining({
+        code: "unsupported_visible_metric",
+        section: "employerValueBlock",
+      }),
     );
   });
 
@@ -1300,6 +1395,37 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
+  it("accepts one distinctive lexical employer-grounding anchor", () => {
+    const payrollFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_close"
+          ? {
+              ...fact,
+              text: "Maintained payroll reconciliations.",
+              entities: [],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock:
+          "That payroll background supports accurate financial operations.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: payrollFactGraph,
+    });
+
+    expect(issues).not.toContainEqual({
+      code: "employer_value_not_grounded",
+      section: "employerValueBlock",
+    });
+  });
+
   it("aligns singular nouns ending in s with irregular plurals", () => {
     const irregularPluralFactGraph: FactGraphV1 = {
       ...factGraph,
@@ -1568,6 +1694,25 @@ describe("English CV-backed quality gate", () => {
     });
 
     expect(issues).toContainEqual({
+      code: "incomplete_sentence",
+      section: "proofBlock",
+    });
+  });
+
+  it("accepts participial adjectives when a later finite predicate completes the sentence", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock:
+          "Managed services are central to this role. Improved processes sustained the result.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).not.toContainEqual({
       code: "incomplete_sentence",
       section: "proofBlock",
     });

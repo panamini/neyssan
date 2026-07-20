@@ -2,6 +2,7 @@ import type {
   ClaimPlanSection,
   ClaimPlanV1,
   FactGraphV1,
+  JobDemandGraphV1,
   PremiumWriterOutputV1,
 } from "./premiumCoverLetter";
 import { canonicalizePremiumCoverLetterToken } from "./premiumCoverLetterTokenNormalization";
@@ -120,6 +121,58 @@ const METRIC_MEASUREMENT_STOP_WORDS = new Set([
   "who",
   "with",
 ]);
+const METRIC_MEASUREMENT_ALIASES = new Map([
+  ["customer", "client"],
+]);
+const GENERIC_SINGLE_EVIDENCE_ANCHORS = new Set([
+  "communication",
+  "coordination",
+  "delivery",
+  "discipline",
+  "handoff",
+  "operation",
+  "process",
+  "reporting",
+  "support",
+  "workflow",
+]);
+const VERB_LED_FRAGMENT_PATTERN =
+  /^(?:managed|maintained|documented|coordinated|reduced|tracked|supported|handled|worked|led|built|improved|created|reported)\b/u;
+const FINITE_PREDICATE_TOKENS = new Set([
+  "am",
+  "are",
+  "be",
+  "been",
+  "being",
+  "can",
+  "could",
+  "depend",
+  "did",
+  "do",
+  "does",
+  "drive",
+  "enable",
+  "ensure",
+  "had",
+  "has",
+  "have",
+  "help",
+  "is",
+  "keep",
+  "matter",
+  "may",
+  "might",
+  "must",
+  "remain",
+  "scale",
+  "shall",
+  "should",
+  "sustain",
+  "was",
+  "were",
+  "will",
+  "would",
+]);
 
 function normalizeText(value: string): string {
   return value.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
@@ -229,16 +282,20 @@ function numericMagnitudeMultiplier(suffix: string): number {
 }
 
 function canonicalMetricMeasurement(value: string): string {
-  return canonicalizePremiumCoverLetterToken(value);
+  const canonical = canonicalizePremiumCoverLetterToken(value);
+  return METRIC_MEASUREMENT_ALIASES.get(canonical) ?? canonical;
 }
 
 function metricCurrency(symbol: string): "usd" | "eur" | "gbp" | null {
-  switch (symbol) {
+  switch (symbol.toLowerCase()) {
     case "$":
+    case "usd":
       return "usd";
     case "€":
+    case "eur":
       return "eur";
     case "£":
+    case "gbp":
       return "gbp";
     default:
       return null;
@@ -316,7 +373,7 @@ function numericTokenOccurrences(value: string): NumericTokenOccurrence[] {
   const tokens: NumericTokenOccurrence[] = [];
   for (const match of value
     .matchAll(
-      /(?<![A-Za-z0-9])([+-]?)\s*([$€£]?)\s*(\d[\d,]*(?:\.\d+)?)\s*(%|percent\b|[KMB]\b|thousand\b|million\b|billion\b)?(?![A-Za-z0-9])/gi,
+      /(?<![A-Za-z0-9])([+-]?)\s*((?:USD|EUR|GBP|[$€£])?)\s*(\d[\d,]*(?:\.\d+)?)\s*(%|percent\b|[KMB]\b|thousand\b|million\b|billion\b)?(?![A-Za-z0-9])/gi,
     )) {
     const occurrence = normalizeNumericTokenOccurrence({ value, match });
     if (occurrence) tokens.push(occurrence);
@@ -337,12 +394,16 @@ function evidenceAnchorTokens(args: {
   factGraph: FactGraphV1;
 }): Set<string> {
   const factById = new Map(args.factGraph.facts.map((fact) => [fact.id, fact]));
-  return evidenceAnchorTokensFromValues(
-    args.factIds
-      .map((factId) => factById.get(factId))
-      .filter((fact): fact is FactGraphV1["facts"][number] => Boolean(fact))
-      .flatMap((fact) => [fact.text, ...fact.entities]),
+  const facts = args.factIds
+    .map((factId) => factById.get(factId))
+    .filter((fact): fact is FactGraphV1["facts"][number] => Boolean(fact));
+  const tokens = evidenceAnchorTokensFromValues(
+    facts.flatMap((fact) => [fact.text, ...fact.entities]),
   );
+  for (const verb of facts.flatMap((fact) => fact.allowedVerbs)) {
+    tokens.delete(canonicalizePremiumCoverLetterToken(verb));
+  }
+  return tokens;
 }
 
 function evidenceEntityAnchorTokens(args: {
@@ -417,42 +478,73 @@ function evidenceAnchorTokensFromValues(values: readonly string[]): Set<string> 
   );
 }
 
-function sourceMetricFactIds(args: {
+function sourceMetricOccurrences(args: {
   factIds: readonly string[];
+  demandIds: readonly string[];
   factGraph: FactGraphV1;
-}): SourceMetricFacts {
+  jobDemandGraph?: JobDemandGraphV1;
+}): Array<{ occurrence: NumericTokenOccurrence; sourceId: string }> {
   const factById = new Map(args.factGraph.facts.map((fact) => [fact.id, fact]));
-  const factIdsByMetric = new Map<string, Set<string>>();
-  const baseKeysWithUnmeasuredSource = new Set<string>();
-  const addOccurrence = (
-    occurrence: NumericTokenOccurrence,
-    factId: string,
-  ) => {
-    for (const key of new Set([occurrence.key, occurrence.baseKey])) {
-      const supportingFactIds = factIdsByMetric.get(key) ?? new Set<string>();
-      supportingFactIds.add(factId);
-      factIdsByMetric.set(key, supportingFactIds);
-    }
-    if (occurrence.key === occurrence.baseKey) {
-      baseKeysWithUnmeasuredSource.add(occurrence.baseKey);
-    }
-  };
-  for (const factId of args.factIds) {
+  const demandById = new Map(
+    (args.jobDemandGraph?.demands ?? []).map((demand) => [demand.id, demand]),
+  );
+  const factOccurrences = args.factIds.flatMap((factId) => {
     const fact = factById.get(factId);
-    if (!fact) continue;
+    if (!fact) return [];
     const textMetrics = numericTokenOccurrences(fact.text);
     const metrics =
       textMetrics.length > 0
         ? textMetrics
         : fact.metrics.flatMap((metric) => numericTokenOccurrences(metric));
-    for (const metric of metrics) {
-      addOccurrence(metric, factId);
+    return metrics.map((occurrence) => ({ occurrence, sourceId: factId }));
+  });
+  const demandOccurrences = args.demandIds.flatMap((demandId) => {
+    const demand = demandById.get(demandId);
+    if (!demand) return [];
+    return numericTokenOccurrences(demand.text).map((occurrence) => ({
+      occurrence,
+      sourceId: demandId,
+    }));
+  });
+  return [...factOccurrences, ...demandOccurrences];
+}
+
+function sourceMetricFactIds(args: {
+  factIds: readonly string[];
+  demandIds: readonly string[];
+  factGraph: FactGraphV1;
+  jobDemandGraph?: JobDemandGraphV1;
+}): SourceMetricFacts {
+  const factIdsByMetric = new Map<string, Set<string>>();
+  const baseKeysWithUnmeasuredSource = new Set<string>();
+  for (const { occurrence, sourceId } of sourceMetricOccurrences(args)) {
+    for (const key of new Set([occurrence.key, occurrence.baseKey])) {
+      const supportingFactIds = factIdsByMetric.get(key) ?? new Set<string>();
+      supportingFactIds.add(sourceId);
+      factIdsByMetric.set(key, supportingFactIds);
+    }
+    if (occurrence.key === occurrence.baseKey) {
+      baseKeysWithUnmeasuredSource.add(occurrence.baseKey);
     }
   }
   return {
     factIdsByKey: factIdsByMetric,
     baseKeysWithUnmeasuredSource,
   };
+}
+
+function isVerbLedFragment(normalizedSentence: string): boolean {
+  if (!VERB_LED_FRAGMENT_PATTERN.test(normalizedSentence)) return false;
+  const tokens = normalizedSentence.split(/[^a-z0-9]+/u).filter(Boolean);
+  const hasLaterFinitePredicate = tokens.slice(2).some((token, index) => {
+    const canonicalToken = canonicalizePremiumCoverLetterToken(token);
+    return (
+      FINITE_PREDICATE_TOKENS.has(canonicalToken) ||
+      (/(?:ed|en)$/u.test(token) &&
+        (index === 0 || ["that", "which", "who"].includes(tokens[index + 1])))
+    );
+  });
+  return !hasLaterFinitePredicate;
 }
 
 function attributedMetricFactIds(args: {
@@ -548,6 +640,7 @@ export function validateEnglishCvBackedQualityGate(args: {
   writerOutput: PremiumWriterOutputV1;
   claimPlan: ClaimPlanV1;
   factGraph: FactGraphV1;
+  jobDemandGraph?: JobDemandGraphV1;
 }): EnglishCvBackedQualityGateIssue[] {
   if (
     args.claimPlan.language !== "English" ||
@@ -655,11 +748,7 @@ export function validateEnglishCvBackedQualityGate(args: {
     const sentenceRanges = splitSentenceRanges(text);
     for (const { text: sentence } of sentenceRanges) {
       const normalizedSentence = normalizeSentenceKey(sentence);
-      if (
-        /^(?:managed|maintained|documented|coordinated|reduced|tracked|supported|handled|worked|led|built|improved|created|reported)\b/u.test(
-          normalizedSentence,
-        )
-      ) {
+      if (isVerbLedFragment(normalizedSentence)) {
         pushUnique(issues, { code: "incomplete_sentence", section });
       }
       const previousSection = seenSentenceSections.get(normalizedSentence);
@@ -678,7 +767,9 @@ export function validateEnglishCvBackedQualityGate(args: {
 
     const sourceMetricFacts = sourceMetricFactIds({
       factIds: part.factIds,
+      demandIds: part.demandIds,
       factGraph: args.factGraph,
+      jobDemandGraph: args.jobDemandGraph,
     });
     const employerGroundingFactIds =
       part.factIds.length > 0
@@ -700,10 +791,19 @@ export function validateEnglishCvBackedQualityGate(args: {
       const anchorOverlapCount = Array.from(textTokens).filter((token) =>
         anchors.has(token),
       ).length;
+      const hasDistinctiveLexicalAnchor = Array.from(textTokens).some(
+        (token) =>
+          anchors.has(token) &&
+          !GENERIC_SINGLE_EVIDENCE_ANCHORS.has(token),
+      );
       const hasDistinctiveEntityAnchor = Array.from(textTokens).some((token) =>
         entityAnchors.has(token),
       );
-      if (anchorOverlapCount < 2 && !hasDistinctiveEntityAnchor) {
+      if (
+        anchorOverlapCount < 2 &&
+        !hasDistinctiveLexicalAnchor &&
+        !hasDistinctiveEntityAnchor
+      ) {
         pushUnique(issues, {
           code: "employer_value_not_grounded",
           section,
@@ -775,6 +875,7 @@ export function analyzeEnglishCvBackedQualityGate(args: {
   writerOutput: PremiumWriterOutputV1;
   claimPlan: ClaimPlanV1;
   factGraph: FactGraphV1;
+  jobDemandGraph?: JobDemandGraphV1;
 }): EnglishCvBackedQualityGateAnalysis {
   const issues = validateEnglishCvBackedQualityGate(args);
   if (
