@@ -347,6 +347,8 @@ const TITLE_PERIOD_ABBREVIATION_PATTERN =
 const CONTEXTUAL_PERIOD_ABBREVIATION_PATTERN =
   /\b(?:etc|vs|approx|dept|co|corp|inc|ltd|llc|plc|gmbh|e\.g|i\.e|u\.s|u\.k)\.$/iu;
 const DOTTED_INITIALISM_CONTINUATION_PATTERN = /\b(?:[A-Z]\.){2,}$/u;
+const DOTTED_INITIALISM_ENTITY_PREFIX_PATTERN =
+  /\b(?:at|for|from|to|with|joined|consulted)\s+(?:[A-Z]\.){2,}$/u;
 const LOWERCASE_STYLED_SENTENCE_STARTERS = new Set(["npm"]);
 
 function startsWithLowercaseStyledProperNoun(value: string): boolean {
@@ -377,10 +379,19 @@ function continuesDottedInitialism(args: {
   textThroughPunctuation: string;
   remainingText: string;
 }): boolean {
-  return (
-    DOTTED_INITIALISM_CONTINUATION_PATTERN.test(
+  if (
+    !DOTTED_INITIALISM_CONTINUATION_PATTERN.test(
       args.textThroughPunctuation,
-    ) && /^\s*[A-Z][A-Za-z]+\b/u.test(args.remainingText)
+    )
+  ) {
+    return false;
+  }
+  return (
+    (DOTTED_INITIALISM_ENTITY_PREFIX_PATTERN.test(
+      args.textThroughPunctuation,
+    ) &&
+      /^\s*[A-Z][A-Za-z]+\b/u.test(args.remainingText)) ||
+    /^\s*[A-Z][A-Za-z]+\s+[A-Z][A-Za-z]+\b/u.test(args.remainingText)
   );
 }
 
@@ -545,12 +556,52 @@ function numericSignMultiplier(sign: string, prefix: string): number {
   return ["-", "−", "minus", "negative"].includes(sign.toLowerCase()) ? -1 : 1;
 }
 
+function repeatsPercentageSurfaceInSentence(args: {
+  value: string;
+  start: number;
+  end: number;
+}): boolean {
+  const sentence = splitSentenceRanges(args.value).find(
+    (range) => args.start >= range.start && args.start < range.end,
+  )?.text;
+  if (!sentence) return false;
+  const surface = args.value.slice(args.start, args.end).trim().toLowerCase();
+  if (!surface) return false;
+  const escapedSurface = surface.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const percentagePattern = new RegExp(
+    `(?<![A-Za-z0-9])${escapedSurface}(?![A-Za-z0-9])`,
+    "gu",
+  );
+  return (
+    Array.from(sentence.toLowerCase().matchAll(percentagePattern)).length > 1
+  );
+}
+
+function repeatedPercentageMeasurement(args: {
+  value: string;
+  start: number;
+  end: number;
+  percentage: boolean;
+}): string | null {
+  if (!args.percentage) return null;
+  if (!repeatsPercentageSurfaceInSentence(args)) return "";
+  const precedingMeasurement =
+    args.value
+      .slice(0, args.start)
+      .match(/\b([A-Za-z][A-Za-z-]*)\s+(?:by|of|at|to)\s*$/u)?.[1] ?? "";
+  return precedingMeasurement
+    ? canonicalMetricMeasurement(precedingMeasurement)
+    : null;
+}
+
 function metricMeasurement(args: {
   value: string;
+  start: number;
   end: number;
   percentage: boolean;
 }): string {
-  if (args.percentage) return "";
+  const percentageMeasurement = repeatedPercentageMeasurement(args);
+  if (percentageMeasurement !== null) return percentageMeasurement;
   const measurementSurface =
     args.value
       .slice(args.end)
@@ -627,6 +678,7 @@ function normalizeNumericTokenOccurrence(args: {
   const end = index + args.match[0].length;
   const measurement = metricMeasurement({
     value: args.value,
+    start: index,
     end,
     percentage,
   });
@@ -743,7 +795,12 @@ function writtenNumericTokenOccurrences(
     ) {
       return [];
     }
-    const measurement = metricMeasurement({ value, end, percentage });
+    const measurement = metricMeasurement({
+      value,
+      start: index,
+      end,
+      percentage,
+    });
     const immediateMeasurement =
       value
         .slice(end)
@@ -1040,6 +1097,17 @@ function hasSupportedSubjectForUnlistedPredicate(args: {
   );
 }
 
+function isTerminalUnlistedFinitePredicate(args: {
+  tokens: readonly string[];
+  token: string;
+  index: number;
+}): boolean {
+  return (
+    /(?:e|s|ify|ise|ize|ate)$/u.test(args.token) &&
+    hasNounPhraseSubjectForUnlistedPredicate(args)
+  );
+}
+
 function isLikelyUnlistedFinitePredicate(args: {
   tokens: readonly string[];
   token: string;
@@ -1061,10 +1129,14 @@ function isLikelyUnlistedFinitePredicate(args: {
     return false;
   }
   const followingToken = args.tokens[args.index + 1];
-  if (!followingToken || FINITE_PREDICATE_BLOCKERS.has(followingToken)) {
+  const hasPredicateShape = /(?:e|s|ify|ise|ize|ate)$/u.test(args.token);
+  if (!followingToken) {
+    return isTerminalUnlistedFinitePredicate(args);
+  }
+  if (FINITE_PREDICATE_BLOCKERS.has(followingToken)) {
     return false;
   }
-  if (/(?:e|s|ify|ise|ize|ate)$/u.test(args.token)) return true;
+  if (hasPredicateShape) return true;
   return hasPluralSubjectForUnlistedPredicate(args);
 }
 

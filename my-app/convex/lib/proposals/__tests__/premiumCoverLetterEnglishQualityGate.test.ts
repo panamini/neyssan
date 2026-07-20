@@ -909,6 +909,39 @@ describe("English CV-backed quality gate", () => {
     );
   });
 
+  it("keeps percentage measurements distinct in metric keys", () => {
+    const percentageFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Improved conversion by 10% and retention by 10%.",
+              metrics: ["10%"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I improved conversion by 10% and retention by 10%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: percentageFactGraph,
+    });
+
+    expect(issues).not.toContainEqual(
+      expect.objectContaining({
+        code: "duplicate_visible_metric",
+        section: "opening",
+        metric: "10%",
+      }),
+    );
+  });
+
   it.each([
     {
       sourceText: "Managed 5 product squads.",
@@ -1421,6 +1454,25 @@ describe("English CV-backed quality gate", () => {
         opening:
           "I coordinated teams across the U.S. Acme values disciplined delivery.",
         proofBlock: "Acme values disciplined delivery.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "duplicate_visible_sentence",
+      section: "proofBlock",
+      otherSection: "opening",
+    });
+  });
+
+  it("splits after a terminal dotted initialism before a new sentence", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I presented to the U.N. Results improved.",
+        proofBlock: "Results improved.",
         employerValueBlock: "That reporting supports clear delivery handoffs.",
         closeLine: "I would bring that discipline to the team.",
       }),
@@ -2739,6 +2791,25 @@ describe("English CV-backed quality gate", () => {
         opening: "I reduced the onboarding backlog by 24%.",
         proofBlock:
           "Built on user research, my work emphasizes reliable delivery.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).not.toContainEqual({
+      code: "incomplete_sentence",
+      section: "proofBlock",
+    });
+  });
+
+  it("accepts a fronted participial clause with a terminal predicate", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock:
+          "Built around modular components, my approach adapts.",
         employerValueBlock: "That reporting supports clear delivery handoffs.",
         closeLine: "I would bring that discipline to the team.",
       }),
