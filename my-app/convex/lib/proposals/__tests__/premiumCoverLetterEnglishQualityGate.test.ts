@@ -546,6 +546,37 @@ describe("English CV-backed quality gate", () => {
     },
   );
 
+  it("does not misread a compound written hundred as its leading unit", () => {
+    const metricFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Supported 100 customers.",
+              metrics: ["100"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I supported one hundred customers.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: metricFactGraph,
+    });
+
+    expect(issues).not.toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "opening",
+      metric: "1",
+    });
+  });
+
   it("preserves distinct quantified head nouns with the same derivational root", () => {
     const metricFactGraph: FactGraphV1 = {
       ...factGraph,
@@ -824,6 +855,27 @@ describe("English CV-backed quality gate", () => {
       metric: "5%",
     });
   });
+
+  it.each(["built", "led"])(
+    "accepts the irregular finite verb %s after a participial opener",
+    (predicate) => {
+      const issues = validateEnglishCvBackedQualityGate({
+        writerOutput: output({
+          opening: "I reduced the onboarding backlog by 24%.",
+          proofBlock: `Supported by product data, I ${predicate} a renewal workflow.`,
+          employerValueBlock: "That reporting supports clear delivery handoffs.",
+          closeLine: "I would bring that discipline to the team.",
+        }),
+        claimPlan,
+        factGraph,
+      });
+
+      expect(issues).not.toContainEqual({
+        code: "incomplete_sentence",
+        section: "proofBlock",
+      });
+    },
+  );
 
   it.each(["minus 5%", "negative 5%"])(
     "normalizes the verbal sign in %s",

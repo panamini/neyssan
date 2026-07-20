@@ -173,6 +173,7 @@ const FINITE_PREDICATE_TOKENS = new Set([
   "be",
   "been",
   "being",
+  "built",
   "can",
   "could",
   "depend",
@@ -188,6 +189,7 @@ const FINITE_PREDICATE_TOKENS = new Set([
   "help",
   "is",
   "keep",
+  "led",
   "matter",
   "may",
   "might",
@@ -553,6 +555,9 @@ function writtenNumericTokenOccurrences(
     const percentage = Boolean(match[2]);
     const index = match.index ?? 0;
     const end = index + match[0].length;
+    if (/^\s+(?:hundred|thousand|million|billion)\b/iu.test(value.slice(end))) {
+      return [];
+    }
     const measurement = metricMeasurement({ value, end, percentage });
     const immediateMeasurement =
       value

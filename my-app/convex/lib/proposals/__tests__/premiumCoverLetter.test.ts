@@ -3962,9 +3962,12 @@ describe("premium cover letter prompt contract", () => {
 });
 
 describe("premium cover letter generation and rendering", () => {
-  const buildDirectFrontendBrief = (outputLanguage = "English") => {
+  const buildDirectFrontendBrief = (
+    outputLanguage = "English",
+    personalizationContext = directContext,
+  ) => {
     const allowedFactsPack = buildAllowedFactsPack({
-      personalizationContext: directContext,
+      personalizationContext,
       jobTitle: directJob.jobTitle,
       jobDescription: directJob.jobDescription,
     });
@@ -4591,6 +4594,56 @@ describe("premium cover letter generation and rendering", () => {
     expect(
       directFrontendIssueCodesFor(
         "I led a design system migration used across 4 product squads.",
+      ),
+    ).not.toContain("unsupported_numeric_claim");
+  });
+
+  it("normalizes decimal commas without accepting a tenfold metric inflation", () => {
+    const issueCodesFor = (sourceClaim: string, opening: string) => {
+      const personalizationContext = {
+        ...directContext,
+        recentExperience: [
+          {
+            ...directContext.recentExperience[0],
+            highlights: [
+              sourceClaim,
+              directContext.recentExperience[0].highlights[1],
+            ],
+          },
+        ],
+      };
+      return validatePremiumCoverLetterBodyParts({
+        brief: buildDirectFrontendBrief("English", personalizationContext),
+        bodyParts: {
+          opening,
+          proofBlock:
+            "I led a design system migration used across 4 product squads.",
+          employerValueBlock:
+            "I built experimentation dashboards used by product and growth teams.",
+          closeLine:
+            "I bring experience in React, TypeScript, design systems, and experimentation dashboards.",
+        },
+      }).map((issue) => issue.code);
+    };
+    const decimalSource =
+      "Improved signup conversion by 11,5% after iterative UI experiments.";
+
+    expect(
+      issueCodesFor(
+        decimalSource,
+        "I improved signup conversion by 11.5% after iterative UI experiments.",
+      ),
+    ).not.toContain("unsupported_numeric_claim");
+    expect(
+      issueCodesFor(
+        decimalSource,
+        "I improved signup conversion by 115% after iterative UI experiments.",
+      ),
+    ).toContain("unsupported_numeric_claim");
+    expect(
+      issueCodesFor(
+        "Supported 1,000 customers through onboarding.",
+        "I supported 1000 customers through onboarding.",
       ),
     ).not.toContain("unsupported_numeric_claim");
   });
