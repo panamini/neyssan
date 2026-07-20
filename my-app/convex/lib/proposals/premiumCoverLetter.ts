@@ -6808,11 +6808,45 @@ function repairTextHasCandidateUnsupportedClaim(args: {
   });
 }
 
+function repairAddsNumericClaimToSection(args: {
+  before: string;
+  after: string;
+}): boolean {
+  const previousClaims = new Set(extractNumericClaims(args.before));
+  return extractNumericClaims(args.after).some(
+    (claim) => !previousClaims.has(claim),
+  );
+}
+
+function repairSectionUsesUncitedCandidateFact(args: {
+  text: string;
+  citedFactIds: Set<string>;
+  factGraph: FactGraphV1;
+}): boolean {
+  const candidateFacts = args.factGraph.facts.filter(
+    (fact) => fact.source === "cv",
+  );
+  return splitSentences(args.text).some((sentence) => {
+    const matchedFacts = candidateFacts.filter((fact) =>
+      premiumTextSupportsCandidateFact({
+        generatedText: sentence,
+        fact,
+      }),
+    );
+    return (
+      matchedFacts.some((fact) => !args.citedFactIds.has(fact.id)) &&
+      !matchedFacts.some((fact) => args.citedFactIds.has(fact.id))
+    );
+  });
+}
+
 function premiumCoverLetterQualityRepairPreservesCandidateGrounding(args: {
   before: CoverLetterBodyParts;
   after: CoverLetterBodyParts;
   brief: CoverLetterBrief;
   repairedProvenance: PremiumCoverLetterFinalProvenance;
+  writerOutput: PremiumWriterOutputV1;
+  factGraph: FactGraphV1;
 }): boolean {
   const changedSections = getChangedPremiumCoverLetterSections({
     before: args.before,
@@ -6825,8 +6859,21 @@ function premiumCoverLetterQualityRepairPreservesCandidateGrounding(args: {
   });
   return changedSections.every((section) => {
     const repairedSection = args.repairedProvenance.sections[section];
+    const citedFactIds = new Set(
+      args.writerOutput.bodyParts[section].factIds,
+    );
+    const usesUncitedCandidateFact = repairSectionUsesUncitedCandidateFact({
+      text: args.after[section],
+      citedFactIds,
+      factGraph: args.factGraph,
+    });
     return (
       repairedSection.verifiedCandidateFactIds.length > 0 &&
+      !usesUncitedCandidateFact &&
+      !repairAddsNumericClaimToSection({
+        before: args.before[section],
+        after: args.after[section],
+      }) &&
       !repairTextHasCandidateUnsupportedClaim({
         text: args.after[section],
         candidateEvidenceSurface,
@@ -6968,6 +7015,8 @@ async function tryRepairPremiumCoverLetterQualityShadow(args: {
       after: repairedBodyParts,
       brief: args.brief,
       repairedProvenance,
+      writerOutput: args.writerOutput,
+      factGraph: args.factGraph,
     })
   ) {
     return {

@@ -236,6 +236,22 @@ async function withQualityRepairFlag<T>(
   }
 }
 
+function attemptDirectQualityRepair(
+  writer: Parameters<typeof attemptPremiumCoverLetterGeneration>[0]["writer"],
+) {
+  return withQualityRepairFlag("1", () =>
+    attemptPremiumCoverLetterGeneration({
+      personalizationContext: directContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      candidateName: "Alex Martin",
+      writer,
+    }),
+  );
+}
+
 describe("premium ClaimPlan provenance v1", () => {
   it("builds stable FactGraphV1 ids with metrics and ownership levels", () => {
     const factGraph = buildPremiumFactGraphV1({
@@ -6417,37 +6433,27 @@ describe("premium cover letter generation and rendering", () => {
       "I built experimentation dashboards used by product and growth teams.";
     const repairedCloseLine =
       "I would bring that design-system discipline to product-facing interface work.";
-    const result = await withQualityRepairFlag("1", () =>
-      attemptPremiumCoverLetterGeneration({
-        personalizationContext: directContext,
-        voicePreset: "signature",
-        outputLanguage: "English",
-        jobTitle: directJob.jobTitle,
-        jobDescription: directJob.jobDescription,
-        candidateName: "Alex Martin",
-        writer: async ({ prompt }) => {
-          calls.push(prompt);
-          if (calls.length === 1) {
-            return buildDirectPremiumWriterOutputFixture({
-              opening:
-                "I improved signup conversion by 11% after iterative UI experiments.",
-              proofBlock:
-                "I led a design system migration used across 4 product squads.",
-              employerValueBlock: originalEmployerValue,
-              closeLine: "I would be glad to discuss the position further.",
-            });
-          }
-          return {
+    const result = await attemptDirectQualityRepair(async ({ prompt }) => {
+      calls.push(prompt);
+      if (calls.length === 1) {
+        return buildDirectPremiumWriterOutputFixture({
+          opening:
+            "I improved signup conversion by 11% after iterative UI experiments.",
+          proofBlock:
+            "I led a design system migration used across 4 product squads.",
+          employerValueBlock: originalEmployerValue,
+          closeLine: "I would be glad to discuss the position further.",
+        });
+      }
+      return {
             opening:
               "I improved signup conversion by 11% after iterative UI experiments.",
             proofBlock:
               "I led a design system migration used across 4 product squads.",
             employerValueBlock: originalEmployerValue,
             closeLine: repairedCloseLine,
-          };
-        },
-      }),
-    );
+      };
+    });
 
     expect(result).not.toBeNull();
     expect(calls).toHaveLength(2);
@@ -6471,34 +6477,24 @@ describe("premium cover letter generation and rendering", () => {
   });
 
   it("rejects a quality repair that moves a supported metric to the wrong section", async () => {
-    const failures: any[] = [];
     const calls: string[] = [];
+    const originalProof =
+      "I led a design system migration used across 4 product squads.";
     const originalEmployerValue =
       "I built experimentation dashboards used by product and growth teams.";
-    const result = await withQualityRepairFlag("1", () =>
-      attemptPremiumCoverLetterGeneration({
-        personalizationContext: directContext,
-        voicePreset: "signature",
-        outputLanguage: "English",
-        jobTitle: directJob.jobTitle,
-        jobDescription: directJob.jobDescription,
-        candidateName: "Alex Martin",
-        onFailure: (trace) => {
-          failures.push(trace);
-        },
-        writer: async ({ prompt }) => {
-          calls.push(prompt);
-          if (calls.length === 1) {
-            return buildDirectPremiumWriterOutputFixture({
-              opening:
-                "I improved signup conversion by 11% after iterative UI experiments.",
-              proofBlock:
-                "I led a design system migration used across 4 product squads.",
-              employerValueBlock: originalEmployerValue,
-              closeLine: "I would be glad to discuss the position further.",
-            });
-          }
-          return {
+    const originalOutput = buildDirectPremiumWriterOutputFixture({
+      opening:
+        "I improved signup conversion by 11% after iterative UI experiments.",
+      proofBlock: originalProof,
+      employerValueBlock: originalEmployerValue,
+      closeLine: "I would be glad to discuss the position further.",
+    });
+    const result = await attemptDirectQualityRepair(async ({ prompt }) => {
+      calls.push(prompt);
+      if (calls.length === 1) {
+        return originalOutput;
+      }
+      return {
             opening:
               "I improved signup conversion through iterative UI experiments.",
             proofBlock:
@@ -6506,20 +6502,55 @@ describe("premium cover letter generation and rendering", () => {
             employerValueBlock: originalEmployerValue,
             closeLine:
               "I would bring that design-system discipline to product-facing interface work.",
-          };
-        },
-      }),
-    );
+      };
+    });
 
     expect(calls).toHaveLength(2);
-    expect(result).toBeNull();
-    expect(failures).toEqual([
-      expect.objectContaining({
-        stage: "validation",
-        reason: "non_repairable_validation",
-        issues: expect.arrayContaining(["unsupported_visible_metric"]),
-      }),
-    ]);
+    expect(result).not.toBeNull();
+    expect(result?.bodyParts.proofBlock).toBe(originalProof);
+    expect(result?.qualityRepair).toMatchObject({
+      attempted: true,
+      outcome: "rejected_provenance",
+      rejectionCategory: "rejected_provenance",
+    });
+  });
+
+  it("rejects a quality repair that moves a nonnumeric fact without updating section provenance", async () => {
+    const calls: string[] = [];
+    const originalProof =
+      "I led a design system migration used across 4 product squads.";
+    const originalEmployerValue =
+      "I built experimentation dashboards used by product and growth teams.";
+    const result = await attemptDirectQualityRepair(async ({ prompt }) => {
+      calls.push(prompt);
+      if (calls.length === 1) {
+        return buildDirectPremiumWriterOutputFixture({
+          opening:
+            "I improved signup conversion by 11% after iterative UI experiments.",
+          proofBlock: originalProof,
+          employerValueBlock: originalEmployerValue,
+          closeLine: "I would be glad to discuss the position further.",
+        });
+      }
+      return {
+            opening:
+              "I improved signup conversion by 11% after iterative UI experiments.",
+            proofBlock:
+              `${originalProof} I also improved signup conversion through iterative UI experiments.`,
+            employerValueBlock: originalEmployerValue,
+            closeLine:
+              "I would bring that design-system discipline to product-facing interface work.",
+      };
+    });
+
+    expect(result).not.toBeNull();
+    expect(calls).toHaveLength(2);
+    expect(result?.bodyParts.proofBlock).toBe(originalProof);
+    expect(result?.qualityRepair).toMatchObject({
+      attempted: true,
+      outcome: "rejected_provenance",
+      rejectionCategory: "rejected_provenance",
+    });
   });
 
   it("keeps the original safe output when quality repair returns invalid JSON", async () => {

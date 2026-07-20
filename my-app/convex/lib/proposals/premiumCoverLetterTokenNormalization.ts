@@ -29,6 +29,12 @@ export function expandPremiumCoverLetterTokenVariants(
   if (token.endsWith("ies") && token.length > 5) {
     variants.add(`${token.slice(0, -3)}y`);
   }
+  if (token.endsWith("es") && token.length > 5) {
+    variants.add(token.slice(0, -2));
+  }
+  if (token.endsWith("s") && !token.endsWith("ss") && token.length > 4) {
+    variants.add(token.slice(0, -1));
+  }
 
   for (const rule of TOKEN_CANONICALIZATION_RULES) {
     if (rule.pattern.test(token)) {

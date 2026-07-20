@@ -70,6 +70,8 @@ const EVIDENCE_ANCHOR_STOP_WORDS = new Set([
   "this",
   "those",
   "through",
+  "team",
+  "teams",
   "with",
   "work",
   "worked",
@@ -93,8 +95,11 @@ type SentenceRange = Readonly<{
   end: number;
 }>;
 
-const NON_TERMINAL_PERIOD_ABBREVIATION_PATTERN =
-  /(?:(?:\b[a-z]\.){2,}|\b(?:dr|mr|mrs|ms|prof|sr|jr|st|no|fig|vs|etc)\.)$/iu;
+const INITIALISM_PERIOD_ABBREVIATION_PATTERN = /(?:\b[a-z]\.){2,}$/iu;
+const TITLE_PERIOD_ABBREVIATION_PATTERN =
+  /\b(?:dr|mr|mrs|ms|prof|sr|jr|st|no|fig|vs|etc)\.$/iu;
+const SENTENCE_START_AFTER_ABBREVIATION_PATTERN =
+  /^(?:["'“‘(]\s*)?(?:I|We|The|This|That|These|Those|He|She|They|It|My|Our|Then)\b/u;
 
 function buildSentenceRange(
   value: string,
@@ -123,12 +128,17 @@ function isSentenceBoundary(args: {
 
   const punctuationLength =
     args.match[0].match(/^[.!?]+/u)?.[0].length ?? 0;
-  if (
-    NON_TERMINAL_PERIOD_ABBREVIATION_PATTERN.test(
-      args.value.slice(0, matchIndex + punctuationLength),
-    )
-  ) {
+  const textThroughPunctuation = args.value.slice(
+    0,
+    matchIndex + punctuationLength,
+  );
+  if (TITLE_PERIOD_ABBREVIATION_PATTERN.test(textThroughPunctuation)) {
     return false;
+  }
+  if (INITIALISM_PERIOD_ABBREVIATION_PATTERN.test(textThroughPunctuation)) {
+    return SENTENCE_START_AFTER_ABBREVIATION_PATTERN.test(
+      args.value.slice(end).trimStart(),
+    );
   }
   return /[\p{Lu}\p{N}"'“‘(]/u.test(nextCharacter);
 }
@@ -155,24 +165,47 @@ type NumericTokenOccurrence = Readonly<{
   index: number;
 }>;
 
+function numericMagnitudeMultiplier(suffix: string): number {
+  switch (suffix) {
+    case "k":
+      return 1_000;
+    case "m":
+      return 1_000_000;
+    case "b":
+      return 1_000_000_000;
+    default:
+      return 1;
+  }
+}
+
+function normalizeNumericTokenOccurrence(args: {
+  value: string;
+  match: RegExpMatchArray;
+}): NumericTokenOccurrence | null {
+  const index = args.match.index ?? 0;
+  const prefix = args.value.slice(Math.max(0, index - 16), index);
+  if (/\b(?:(?:iso|iec|soc|rfc)\s+|no\.\s*)$/iu.test(prefix)) return null;
+
+  const numericValue = Number(args.match[2].replace(/,/g, ""));
+  if (!Number.isFinite(numericValue)) return null;
+
+  const suffix = (args.match[3] ?? "").toLowerCase();
+  const metricValue = numericValue * numericMagnitudeMultiplier(suffix);
+  const percentage = suffix === "%" || suffix === "percent";
+  return {
+    metric: `${metricValue}${percentage ? "%" : ""}`,
+    index,
+  };
+}
+
 function numericTokenOccurrences(value: string): NumericTokenOccurrence[] {
   const tokens: NumericTokenOccurrence[] = [];
   for (const match of value
-    .matchAll(/\b\d[\d,]*(?:\.\d+)?\s*(?:%|percent\b)?(?![A-Za-z])/gi)) {
-    const prefix = value.slice(Math.max(0, match.index - 16), match.index);
-    if (/\b(?:(?:iso|iec|soc|rfc)\s+|no\.\s*)$/iu.test(prefix)) {
-      continue;
-    }
-    const compact = match[0].toLowerCase().replace(/[\s,]+/g, "");
-    const percentage = compact.endsWith("%") || compact.endsWith("percent");
-    const numericSurface = compact.replace(/(?:%|percent)$/u, "");
-    const numericValue = Number(numericSurface);
-    if (Number.isFinite(numericValue)) {
-      tokens.push({
-        metric: `${numericValue}${percentage ? "%" : ""}`,
-        index: match.index,
-      });
-    }
+    .matchAll(
+      /(?<![A-Za-z0-9])([$€£]?)\s*(\d[\d,]*(?:\.\d+)?)\s*(%|percent\b|[KMB]\b)?(?![A-Za-z0-9])/gi,
+    )) {
+    const occurrence = normalizeNumericTokenOccurrence({ value, match });
+    if (occurrence) tokens.push(occurrence);
   }
   return tokens;
 }

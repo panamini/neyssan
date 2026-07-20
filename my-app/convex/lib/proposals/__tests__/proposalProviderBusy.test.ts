@@ -713,7 +713,7 @@ describe("proposal provider busy handling", () => {
                   employerValueBlock:
                     "That design-system work is relevant to customer-facing product surfaces where React, TypeScript, and collaboration shape interface quality.",
                   closeLine:
-                    "I led a design system migration used across four product squads.",
+                    "Experience coordinating that migration across four squads would inform Acme's interface work.",
                 },
               },
             ],
