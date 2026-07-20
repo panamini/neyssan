@@ -4765,6 +4765,45 @@ describe("premium cover letter generation and rendering", () => {
     expect(result).not.toBeNull();
   });
 
+  it("rejects visible duplication through the active English CV-backed quality gate", async () => {
+    const failures: any[] = [];
+    const duplicateSentence =
+      "I bring grounded frontend delivery experience.";
+    const writer = vi.fn(async () =>
+      buildDirectPremiumWriterOutputFixture({
+        opening: duplicateSentence,
+        proofBlock: duplicateSentence,
+        employerValueBlock:
+          "That experimentation experience supports product-facing delivery.",
+        closeLine:
+          "I would bring reusable-system discipline to the frontend team.",
+      }),
+    );
+
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: directContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      candidateName: "Alex Martin",
+      onFailure: (trace) => {
+        failures.push(trace);
+      },
+      writer,
+    });
+
+    expect(writer).toHaveBeenCalledOnce();
+    expect(result).toBeNull();
+    expect(failures).toEqual([
+      expect.objectContaining({
+        stage: "validation",
+        reason: "non_repairable_validation",
+        issues: expect.arrayContaining(["duplicate_visible_sentence"]),
+      }),
+    ]);
+  });
+
   it("retries Mistral once on adjacent_direct_fit and accepts repaired cv_adjacent output", async () => {
     const calls: string[] = [];
     const onModelRepairRequired = vi.fn();
@@ -6317,7 +6356,7 @@ describe("premium cover letter generation and rendering", () => {
     const originalEmployerValue =
       "I built experimentation dashboards used by product and growth teams.";
     const repairedCloseLine =
-      "I led a design system migration used across 4 product squads.";
+      "I would bring that design-system discipline to product-facing interface work.";
     const result = await withQualityRepairFlag("1", () =>
       attemptPremiumCoverLetterGeneration({
         personalizationContext: directContext,
@@ -7445,7 +7484,7 @@ describe("premium cover letter generation and rendering", () => {
         proofBlock:
           "I led a design system migration used across 4 product squads. I built experimentation dashboards used by product and growth teams. I worked with React and TypeScript.",
         employerValueBlock:
-          "I built experimentation dashboards used by product and growth teams. I improved signup conversion by 11% after iterative UI experiments.",
+          "That experimentation work supports product-facing iteration.",
         closeLine:
           "I bring experience in React and TypeScript. I would be glad to discuss the position further.",
       }),
@@ -7459,7 +7498,7 @@ describe("premium cover letter generation and rendering", () => {
       "I led a design system migration used across 4 product squads. I built experimentation dashboards used by product and growth teams.",
     );
     expect(result?.bodyParts.employerValueBlock).toBe(
-      "I built experimentation dashboards used by product and growth teams.",
+      "That experimentation work supports product-facing iteration.",
     );
     expect(result?.bodyParts.closeLine).toBe(
       "I bring experience in React and TypeScript.",

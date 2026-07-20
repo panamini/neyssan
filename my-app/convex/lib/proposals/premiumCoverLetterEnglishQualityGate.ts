@@ -16,7 +16,8 @@ export type EnglishCvBackedQualityGateIssueCode =
   | "incomplete_sentence"
   | "missing_employer_value"
   | "missing_close_line"
-  | "fact_reused_across_sections"
+  | "missing_fact_reference"
+  | "unexpected_writer_reuse"
   | "duplicate_visible_sentence"
   | "duplicate_visible_metric"
   | "unsupported_visible_metric"
@@ -35,6 +36,46 @@ export type EnglishCvBackedQualityGateIssue = Readonly<{
   metric?: string;
 }>;
 
+export type EnglishCvBackedQualityGateObservation = Readonly<{
+  code: "intentional_claim_overlap";
+  section: ClaimPlanSection;
+  otherSection: ClaimPlanSection;
+  factId: string;
+}>;
+
+export type EnglishCvBackedQualityGateAnalysis = Readonly<{
+  issues: EnglishCvBackedQualityGateIssue[];
+  observations: EnglishCvBackedQualityGateObservation[];
+}>;
+
+const EVIDENCE_ANCHOR_STOP_WORDS = new Set([
+  "about",
+  "after",
+  "also",
+  "been",
+  "bring",
+  "could",
+  "from",
+  "have",
+  "into",
+  "more",
+  "that",
+  "their",
+  "them",
+  "then",
+  "there",
+  "these",
+  "they",
+  "this",
+  "those",
+  "through",
+  "with",
+  "work",
+  "worked",
+  "would",
+  "your",
+]);
+
 function normalizeText(value: string): string {
   return value.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
 }
@@ -48,8 +89,16 @@ function splitSentences(value: string): string[] {
 
 function numericTokens(value: string): string[] {
   const tokens = new Set<string>();
-  for (const match of value.toLowerCase().matchAll(/\b\d+(?:\.\d+)?\s*%?/g)) {
-    tokens.add(match[0].replace(/\s+/g, ""));
+  for (const match of value
+    .toLowerCase()
+    .matchAll(/\b\d[\d,]*(?:\.\d+)?\s*(?:%|percent\b)?/g)) {
+    const compact = match[0].replace(/[\s,]+/g, "");
+    const percentage = compact.endsWith("%") || compact.endsWith("percent");
+    const numericSurface = compact.replace(/(?:%|percent)$/u, "");
+    const numericValue = Number(numericSurface);
+    if (Number.isFinite(numericValue)) {
+      tokens.add(`${numericValue}${percentage ? "%" : ""}`);
+    }
   }
   return [...tokens];
 }
@@ -65,7 +114,10 @@ function evidenceAnchorTokens(args: {
       .filter((fact): fact is FactGraphV1["facts"][number] => Boolean(fact))
       .flatMap((fact) => [fact.text, ...fact.entities])
       .flatMap((value) => normalizeText(value).split(/[^a-z0-9%]+/u))
-      .filter((token) => token.length >= 4),
+      .filter(
+        (token) =>
+          token.length >= 4 && !EVIDENCE_ANCHOR_STOP_WORDS.has(token),
+      ),
   );
 }
 
@@ -81,26 +133,57 @@ function sourceMetricTokens(args: {
   return new Set(source.flatMap(numericTokens));
 }
 
-function pushUnique(
-  issues: EnglishCvBackedQualityGateIssue[],
-  issue: EnglishCvBackedQualityGateIssue,
-): void {
+function pushUnique<T>(items: T[], item: T): void {
   if (
-    issues.some(
-      (existing) => JSON.stringify(existing) === JSON.stringify(issue),
-    )
+    items.some((existing) => JSON.stringify(existing) === JSON.stringify(item))
   ) {
     return;
   }
-  issues.push(issue);
+  items.push(item);
+}
+
+function collectIntentionalClaimOverlapObservations(args: {
+  writerOutput: PremiumWriterOutputV1;
+  claimPlan: ClaimPlanV1;
+}): EnglishCvBackedQualityGateObservation[] {
+  const observations: EnglishCvBackedQualityGateObservation[] = [];
+  const claimBySection = new Map(
+    args.claimPlan.claims.map((claim) => [claim.section, claim]),
+  );
+  const seenFactSections = new Map<string, ClaimPlanSection>();
+  for (const section of ENGLISH_CV_BACKED_SECTIONS) {
+    const allowedFactIds = new Set(
+      claimBySection.get(section)?.factIds ?? [],
+    );
+    for (const factId of args.writerOutput.bodyParts[section].factIds) {
+      const previousSection = seenFactSections.get(factId);
+      if (!previousSection) {
+        seenFactSections.set(factId, section);
+        continue;
+      }
+      if (
+        previousSection !== section &&
+        allowedFactIds.has(factId) &&
+        claimBySection.get(previousSection)?.factIds.includes(factId)
+      ) {
+        pushUnique(observations, {
+          code: "intentional_claim_overlap",
+          section,
+          otherSection: previousSection,
+          factId,
+        });
+      }
+    }
+  }
+  return observations;
 }
 
 /**
  * Provider-free, text-preserving quality gate for English CV-backed output.
  *
- * The gate deliberately fails closed. It never drops IDs, rewrites prose, or
- * chooses a replacement fact. Callers should reject the candidate and leave
- * any repair/retry decision to a separately authorized path.
+ * Claim-authorized fact overlap is not blocking. Unexpected writer reuse
+ * remains fail-closed. The gate never drops IDs, rewrites prose, or chooses a
+ * replacement fact.
  */
 export function validateEnglishCvBackedQualityGate(args: {
   writerOutput: PremiumWriterOutputV1;
@@ -141,7 +224,7 @@ export function validateEnglishCvBackedQualityGate(args: {
       continue;
     }
 
-    if (!/[.!?]$/u.test(text)) {
+    if (!/[.!?](?:["'”’»)\]}]+)?$/u.test(text)) {
       pushUnique(issues, { code: "incomplete_sentence", section });
     }
 
@@ -167,6 +250,13 @@ export function validateEnglishCvBackedQualityGate(args: {
       }
     }
     const allowedFactIds = new Set(assignedClaim?.factIds ?? []);
+    if (
+      assignedClaim?.claimType === "source_backed" &&
+      allowedFactIds.size > 0 &&
+      part.factIds.length === 0
+    ) {
+      pushUnique(issues, { code: "missing_fact_reference", section });
+    }
     for (const factId of part.factIds) {
       if (!factById.has(factId)) {
         pushUnique(issues, {
@@ -184,12 +274,17 @@ export function validateEnglishCvBackedQualityGate(args: {
       }
       const previousSection = seenFactSections.get(factId);
       if (previousSection && previousSection !== section) {
-        pushUnique(issues, {
-          code: "fact_reused_across_sections",
-          section,
-          otherSection: previousSection,
-          factId,
-        });
+        const previousClaim = claimBySection.get(previousSection);
+        const previousClaimAllowsFact =
+          previousClaim?.factIds.includes(factId) ?? false;
+        if (!previousClaimAllowsFact || !allowedFactIds.has(factId)) {
+          pushUnique(issues, {
+            code: "unexpected_writer_reuse",
+            section,
+            otherSection: previousSection,
+            factId,
+          });
+        }
       } else if (!previousSection) {
         seenFactSections.set(factId, section);
       }
@@ -205,11 +300,13 @@ export function validateEnglishCvBackedQualityGate(args: {
         pushUnique(issues, { code: "incomplete_sentence", section });
       }
       const previousSection = seenSentenceSections.get(normalizedSentence);
-      if (previousSection && previousSection !== section) {
+      if (previousSection) {
         pushUnique(issues, {
           code: "duplicate_visible_sentence",
           section,
-          otherSection: previousSection,
+          ...(previousSection !== section
+            ? { otherSection: previousSection }
+            : {}),
         });
       } else if (!previousSection) {
         seenSentenceSections.set(normalizedSentence, section);
@@ -260,4 +357,26 @@ export function validateEnglishCvBackedQualityGate(args: {
   }
 
   return issues;
+}
+
+/**
+ * Quality-gate issues plus non-blocking ClaimPlan-authorized overlap.
+ */
+export function analyzeEnglishCvBackedQualityGate(args: {
+  writerOutput: PremiumWriterOutputV1;
+  claimPlan: ClaimPlanV1;
+  factGraph: FactGraphV1;
+}): EnglishCvBackedQualityGateAnalysis {
+  const issues = validateEnglishCvBackedQualityGate(args);
+  if (
+    args.claimPlan.language !== "English" ||
+    (args.claimPlan.contextClass !== "cv_direct" &&
+      args.claimPlan.contextClass !== "cv_adjacent")
+  ) {
+    return { issues, observations: [] };
+  }
+  return {
+    issues,
+    observations: collectIntentionalClaimOverlapObservations(args),
+  };
 }

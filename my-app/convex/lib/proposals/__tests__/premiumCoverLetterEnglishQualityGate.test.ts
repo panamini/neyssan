@@ -5,7 +5,10 @@ import type {
   FactGraphV1,
   PremiumWriterOutputV1,
 } from "../premiumCoverLetter";
-import { validateEnglishCvBackedQualityGate } from "../premiumCoverLetterEnglishQualityGate";
+import {
+  analyzeEnglishCvBackedQualityGate,
+  validateEnglishCvBackedQualityGate,
+} from "../premiumCoverLetterEnglishQualityGate";
 
 const factGraph: FactGraphV1 = {
   version: "fact_graph_v1",
@@ -218,6 +221,74 @@ describe("English CV-backed quality gate", () => {
     ).toEqual([]);
   });
 
+  it("does not block cross-section fact overlap authorized by both claims", () => {
+    const overlappingClaimPlan: ClaimPlanV1 = {
+      ...claimPlan,
+      claims: claimPlan.claims.map((claim) =>
+        claim.section === "employerValueBlock" || claim.section === "closeLine"
+          ? {
+              ...claim,
+              factIds: [...claim.factIds, "fact_opening"],
+            }
+          : claim,
+      ),
+    };
+
+    const analysis = analyzeEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock:
+          "That onboarding experience supports disciplined delivery handoffs.",
+        closeLine: "I would bring that backlog discipline to the team.",
+        employerFacts: ["fact_opening"],
+        closeFacts: ["fact_opening"],
+      }),
+      claimPlan: overlappingClaimPlan,
+      factGraph,
+    });
+
+    expect(analysis.issues).toEqual([]);
+    expect(analysis.observations).toEqual([
+      {
+        code: "intentional_claim_overlap",
+        section: "employerValueBlock",
+        otherSection: "opening",
+        factId: "fact_opening",
+      },
+      {
+        code: "intentional_claim_overlap",
+        section: "closeLine",
+        otherSection: "opening",
+        factId: "fact_opening",
+      },
+    ]);
+  });
+
+  it("reports unexpected reuse separately from visible duplication", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I coordinated implementation handoffs.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+        proofFacts: ["fact_opening"],
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "unexpected_writer_reuse",
+      section: "proofBlock",
+      otherSection: "opening",
+      factId: "fact_opening",
+    });
+    expect(issues).not.toContainEqual(
+      expect.objectContaining({ code: "duplicate_visible_sentence" }),
+    );
+  });
+
   it("fails closed on repeated visible evidence and repeated fact IDs, without rewriting text", () => {
     const writerOutput = output({
       opening: "I reduced the onboarding backlog by 24%.",
@@ -245,7 +316,7 @@ describe("English CV-backed quality gate", () => {
 
     expect(issues.map((issue) => issue.code)).toEqual(
       expect.arrayContaining([
-        "fact_reused_across_sections",
+        "unexpected_writer_reuse",
         "duplicate_visible_sentence",
         "duplicate_visible_metric",
       ]),
@@ -269,6 +340,135 @@ describe("English CV-backed quality gate", () => {
       code: "unsupported_visible_metric",
       section: "opening",
       metric: "99%",
+    });
+  });
+
+  it("normalizes decimal precision and thousands separators in metrics", () => {
+    const metricFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Reduced a backlog of 1,000 items by 24%.",
+              metrics: ["1,000", "24%"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced a backlog of 1000 items by 24.0%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: metricFactGraph,
+    });
+
+    expect(issues).not.toContainEqual(
+      expect.objectContaining({ code: "unsupported_visible_metric" }),
+    );
+  });
+
+  it("requires a fact reference when the assigned source-backed claim has facts", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I bring relevant implementation experience.",
+        proofBlock: "I support dependable delivery.",
+        employerValueBlock: "I would contribute effectively.",
+        closeLine: "I would bring that discipline to the team.",
+        openingFacts: [],
+        proofFacts: [],
+        employerFacts: [],
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        {
+          code: "missing_fact_reference",
+          section: "opening",
+        },
+        {
+          code: "missing_fact_reference",
+          section: "proofBlock",
+        },
+        {
+          code: "missing_fact_reference",
+          section: "employerValueBlock",
+        },
+      ]),
+    );
+  });
+
+  it("rejects employer grounding based only on common anchor words", () => {
+    const commonWordFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_close"
+          ? {
+              ...fact,
+              text: "Worked with Acme.",
+              entities: ["Acme"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "I would work with your team.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: commonWordFactGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "employer_value_not_grounded",
+      section: "employerValueBlock",
+    });
+  });
+
+  it("detects a repeated visible sentence within one section", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock:
+          "I documented the handoffs. I documented the handoffs.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "duplicate_visible_sentence",
+      section: "proofBlock",
+    });
+  });
+
+  it("accepts terminal punctuation followed by a closing quote", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I described the approach as “reliable.”",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).not.toContainEqual({
+      code: "incomplete_sentence",
+      section: "proofBlock",
     });
   });
 

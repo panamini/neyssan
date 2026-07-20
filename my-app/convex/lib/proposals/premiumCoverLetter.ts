@@ -27,6 +27,10 @@ import {
   generateOpenAIResponsesStructured,
   type OpenAIResponsesProviderResponseMetadata,
 } from "./premiumCoverLetterOpenAITransport";
+import {
+  validateEnglishCvBackedQualityGate,
+  type EnglishCvBackedQualityGateIssueCode,
+} from "./premiumCoverLetterEnglishQualityGate";
 import type { ProposalVoicePreset } from "./voicePresets";
 import type { CompanyValuesPack } from "./companyValues";
 
@@ -44,6 +48,13 @@ export type PremiumCoverLetterWriterProvider =
   | "mistral"
   | "qwen"
   | "unknown";
+
+const ENGLISH_CV_BACKED_PRODUCTION_GATE_CODES =
+  new Set<EnglishCvBackedQualityGateIssueCode>([
+    "unexpected_writer_reuse",
+    "duplicate_visible_sentence",
+    "duplicate_visible_metric",
+  ]);
 
 export type AllowedFact = {
   text: string;
@@ -7499,6 +7510,51 @@ export async function attemptPremiumCoverLetterGeneration(args: {
         contextClass: brief.contextClass,
       });
     }
+  }
+
+  const finalWriterOutput: PremiumWriterOutputV1 = {
+    ...writerOutput,
+    bodyParts: {
+      opening: {
+        ...writerOutput.bodyParts.opening,
+        text: bodyParts.opening,
+      },
+      proofBlock: {
+        ...writerOutput.bodyParts.proofBlock,
+        text: bodyParts.proofBlock,
+      },
+      employerValueBlock: {
+        ...writerOutput.bodyParts.employerValueBlock,
+        text: bodyParts.employerValueBlock,
+      },
+      closeLine: {
+        ...writerOutput.bodyParts.closeLine,
+        text: bodyParts.closeLine,
+      },
+    },
+  };
+  const englishCvBackedQualityGateIssues =
+    validateEnglishCvBackedQualityGate({
+      writerOutput: finalWriterOutput,
+      claimPlan,
+      factGraph,
+    });
+  const blockingEnglishCvBackedQualityGateIssues =
+    englishCvBackedQualityGateIssues.filter((issue) =>
+      ENGLISH_CV_BACKED_PRODUCTION_GATE_CODES.has(issue.code),
+    );
+  if (blockingEnglishCvBackedQualityGateIssues.length > 0) {
+    args.onFailure?.({
+      stage: "validation",
+      reason: "non_repairable_validation",
+      contextClass,
+      issues: Array.from(
+        new Set(
+          blockingEnglishCvBackedQualityGateIssues.map((issue) => issue.code),
+        ),
+      ),
+    });
+    return null;
   }
 
   const finalProvenance = buildPremiumCoverLetterFinalProvenance({
