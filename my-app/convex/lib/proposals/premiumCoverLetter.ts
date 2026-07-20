@@ -6840,8 +6840,17 @@ function repairSectionUsesUncitedCandidateFact(args: {
         fact,
       }),
     );
+    const citedFacts = matchedFacts.filter((fact) =>
+      args.citedFactIds.has(fact.id),
+    );
     return matchedFacts.some(
-      (fact) => !args.citedFactIds.has(fact.id),
+      (fact) =>
+        !args.citedFactIds.has(fact.id) &&
+        !citedFacts.some(
+          (citedFact) =>
+            normalizePremiumProvenanceText(citedFact.text) ===
+            normalizePremiumProvenanceText(fact.text),
+        ),
     );
   });
 }

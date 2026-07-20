@@ -56,6 +56,8 @@ const EVIDENCE_ANCHOR_STOP_WORDS = new Set([
   "been",
   "bring",
   "could",
+  "experience",
+  "experiences",
   "from",
   "have",
   "into",
@@ -110,7 +112,7 @@ type SentenceRange = Readonly<{
 }>;
 
 const TITLE_PERIOD_ABBREVIATION_PATTERN =
-  /\b(?:dr|mr|mrs|ms|prof|sr|jr|st|no|fig|vs|etc)\.$/iu;
+  /\b(?:dr|mr|mrs|ms|prof|sr|jr|st|no|fig)\.$/iu;
 
 function buildSentenceRange(
   value: string,
@@ -224,7 +226,9 @@ function metricMeasurement(args: {
     measurementSurface
       .split(/\s+/u)
       .filter(
-        (token) => !METRIC_MEASUREMENT_STOP_WORDS.has(token.toLowerCase()),
+        (token) =>
+          !METRIC_MEASUREMENT_STOP_WORDS.has(token.toLowerCase()) &&
+          !token.toLowerCase().endsWith("ly"),
       )
       .at(-1) ?? "";
   return canonicalMetricMeasurement(measurement);
@@ -306,7 +310,7 @@ function evidenceAnchorTokensFromValues(values: readonly string[]): Set<string> 
   const technologyAnchors = values.flatMap((value) =>
     Array.from(
       value.matchAll(
-        /(?:^|[^\p{L}\p{N}_])((?:C\+\+|C#|R))(?=$|[^\p{L}\p{N}_+#])/gu,
+        /(?:^|[^\p{L}\p{N}_])((?:C\+\+|C#|R|Go))(?=$|[^\p{L}\p{N}_+#])/gu,
       ),
       (match) => match[1].toLowerCase(),
     ),

@@ -554,6 +554,26 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
+  it("detects a repeated sentence after a terminal list abbreviation", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening:
+          "I handled scheduling, reporting, etc. I documented handoffs.",
+        proofBlock: "I documented handoffs.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "duplicate_visible_sentence",
+      section: "proofBlock",
+      otherSection: "opening",
+    });
+  });
+
   it("does not treat numeric identifiers as evidence metrics", () => {
     const identifierFactGraph: FactGraphV1 = {
       ...factGraph,
@@ -716,6 +736,35 @@ describe("English CV-backed quality gate", () => {
 
     expect(issues).not.toContainEqual(
       expect.objectContaining({ code: "duplicate_visible_metric" }),
+    );
+  });
+
+  it("keeps a quantified noun stable when the paraphrase adds an adverb", () => {
+    const reportFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Managed 12 direct reports.",
+              metrics: ["12"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I managed 12 reports directly.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: reportFactGraph,
+    });
+
+    expect(issues).not.toContainEqual(
+      expect.objectContaining({ code: "unsupported_visible_metric" }),
     );
   });
 
@@ -915,7 +964,7 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
-  it.each(["C++", "C#", "R"])(
+  it.each(["C++", "C#", "R", "Go"])(
     "preserves the punctuation-bearing or single-letter technology anchor %s",
     (technology) => {
       const technologyFactGraph: FactGraphV1 = {
@@ -947,7 +996,37 @@ describe("English CV-backed quality gate", () => {
         section: "employerValueBlock",
       });
     },
-  );
+    );
+
+  it("rejects generic experience as the only employer grounding anchor", () => {
+    const genericExperienceFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_close"
+          ? {
+              ...fact,
+              text: "Gained experience supporting delivery.",
+              entities: [],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That experience would help in this role.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: genericExperienceFactGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "employer_value_not_grounded",
+      section: "employerValueBlock",
+    });
+  });
 
   it("canonicalizes inflected evidence anchors for employer grounding", () => {
     const inflectedFactGraph: FactGraphV1 = {
