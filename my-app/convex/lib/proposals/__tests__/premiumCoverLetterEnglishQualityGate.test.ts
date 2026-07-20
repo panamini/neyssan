@@ -534,6 +534,26 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
+  it("detects a repeated proper-noun sentence after a terminal initialism", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening:
+          "I coordinated teams across the U.S. Acme values disciplined delivery.",
+        proofBlock: "Acme values disciplined delivery.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "duplicate_visible_sentence",
+      section: "proofBlock",
+      otherSection: "opening",
+    });
+  });
+
   it("does not treat numeric identifiers as evidence metrics", () => {
     const identifierFactGraph: FactGraphV1 = {
       ...factGraph,
@@ -608,6 +628,95 @@ describe("English CV-backed quality gate", () => {
       section: "opening",
       metric: "5000000",
     });
+  });
+
+  it("normalizes compact and spelled-out magnitude suffixes equivalently", () => {
+    const compactMetricFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Supported a $4M portfolio.",
+              metrics: ["$4M"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I supported a $4 million portfolio.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: compactMetricFactGraph,
+    });
+
+    expect(issues).not.toContainEqual(
+      expect.objectContaining({ code: "unsupported_visible_metric" }),
+    );
+  });
+
+  it("preserves currency in normalized metric identities", () => {
+    const currencyFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Supported a $4M portfolio.",
+              metrics: ["$4M"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I supported a €4M portfolio.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: currencyFactGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "opening",
+      metric: "4000000",
+    });
+  });
+
+  it("does not conflate equal counts for different measurements in one fact", () => {
+    const measurementFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Led 4 teams across 4 countries.",
+              metrics: ["4"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I led 4 teams across 4 countries.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: measurementFactGraph,
+    });
+
+    expect(issues).not.toContainEqual(
+      expect.objectContaining({ code: "duplicate_visible_metric" }),
+    );
   });
 
   it("detects a supported metric repeated within one section", () => {
@@ -805,6 +914,40 @@ describe("English CV-backed quality gate", () => {
       section: "employerValueBlock",
     });
   });
+
+  it.each(["C++", "C#", "R"])(
+    "preserves the punctuation-bearing or single-letter technology anchor %s",
+    (technology) => {
+      const technologyFactGraph: FactGraphV1 = {
+        ...factGraph,
+        facts: factGraph.facts.map((fact) =>
+          fact.id === "fact_close"
+            ? {
+                ...fact,
+                text: `Built APIs in ${technology}.`,
+                entities: [technology],
+              }
+            : fact,
+        ),
+      };
+      const issues = validateEnglishCvBackedQualityGate({
+        writerOutput: output({
+          opening: "I reduced the onboarding backlog by 24%.",
+          proofBlock: "I documented handoffs for three implementation teams.",
+          employerValueBlock:
+            `That ${technology} background supports systems work.`,
+          closeLine: "I would bring that discipline to the team.",
+        }),
+        claimPlan,
+        factGraph: technologyFactGraph,
+      });
+
+      expect(issues).not.toContainEqual({
+        code: "employer_value_not_grounded",
+        section: "employerValueBlock",
+      });
+    },
+  );
 
   it("canonicalizes inflected evidence anchors for employer grounding", () => {
     const inflectedFactGraph: FactGraphV1 = {

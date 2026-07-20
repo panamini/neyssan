@@ -52,6 +52,7 @@ export type PremiumCoverLetterWriterProvider =
 
 const ENGLISH_CV_BACKED_PRODUCTION_GATE_CODES =
   new Set<EnglishCvBackedQualityGateIssueCode>([
+    "missing_fact_reference",
     "unexpected_writer_reuse",
     "duplicate_visible_sentence",
     "duplicate_visible_metric",
@@ -6826,16 +6827,21 @@ function repairSectionUsesUncitedCandidateFact(args: {
   const candidateFacts = args.factGraph.facts.filter(
     (fact) => fact.source === "cv",
   );
-  return splitSentences(args.text).some((sentence) => {
+  const evidenceFragments = splitSentences(args.text).flatMap((sentence) =>
+    sentence
+      .split(/\s*(?:[;:]|\b(?:and|while|plus|along with)\b)\s*/iu)
+      .map((fragment) => compactWhitespace(fragment))
+      .filter(Boolean),
+  );
+  return evidenceFragments.some((fragment) => {
     const matchedFacts = candidateFacts.filter((fact) =>
       premiumTextSupportsCandidateFact({
-        generatedText: sentence,
+        generatedText: fragment,
         fact,
       }),
     );
-    return (
-      matchedFacts.some((fact) => !args.citedFactIds.has(fact.id)) &&
-      !matchedFacts.some((fact) => args.citedFactIds.has(fact.id))
+    return matchedFacts.some(
+      (fact) => !args.citedFactIds.has(fact.id),
     );
   });
 }

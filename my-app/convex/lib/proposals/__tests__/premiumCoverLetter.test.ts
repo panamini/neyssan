@@ -6536,7 +6536,7 @@ describe("premium cover letter generation and rendering", () => {
             opening:
               "I improved signup conversion by 11% after iterative UI experiments.",
             proofBlock:
-              `${originalProof} I also improved signup conversion through iterative UI experiments.`,
+              `${originalProof.replace(/\.$/u, "")} and I also improved signup conversion through iterative UI experiments.`,
             employerValueBlock: originalEmployerValue,
             closeLine:
               "I would bring that design-system discipline to product-facing interface work.",

@@ -78,6 +78,20 @@ const EVIDENCE_ANCHOR_STOP_WORDS = new Set([
   "would",
   "your",
 ]);
+const METRIC_MEASUREMENT_STOP_WORDS = new Set([
+  "across",
+  "and",
+  "by",
+  "for",
+  "from",
+  "in",
+  "of",
+  "over",
+  "per",
+  "to",
+  "under",
+  "with",
+]);
 
 function normalizeText(value: string): string {
   return value.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
@@ -95,11 +109,8 @@ type SentenceRange = Readonly<{
   end: number;
 }>;
 
-const INITIALISM_PERIOD_ABBREVIATION_PATTERN = /(?:\b[a-z]\.){2,}$/iu;
 const TITLE_PERIOD_ABBREVIATION_PATTERN =
   /\b(?:dr|mr|mrs|ms|prof|sr|jr|st|no|fig|vs|etc)\.$/iu;
-const SENTENCE_START_AFTER_ABBREVIATION_PATTERN =
-  /^(?:["'“‘(]\s*)?(?:I|We|The|This|That|These|Those|He|She|They|It|My|Our|Then)\b/u;
 
 function buildSentenceRange(
   value: string,
@@ -135,11 +146,6 @@ function isSentenceBoundary(args: {
   if (TITLE_PERIOD_ABBREVIATION_PATTERN.test(textThroughPunctuation)) {
     return false;
   }
-  if (INITIALISM_PERIOD_ABBREVIATION_PATTERN.test(textThroughPunctuation)) {
-    return SENTENCE_START_AFTER_ABBREVIATION_PATTERN.test(
-      args.value.slice(end).trimStart(),
-    );
-  }
   return /[\p{Lu}\p{N}"'“‘(]/u.test(nextCharacter);
 }
 
@@ -162,20 +168,74 @@ function splitSentenceRanges(value: string): SentenceRange[] {
 
 type NumericTokenOccurrence = Readonly<{
   metric: string;
+  key: string;
   index: number;
 }>;
 
 function numericMagnitudeMultiplier(suffix: string): number {
   switch (suffix) {
     case "k":
+    case "thousand":
       return 1_000;
     case "m":
+    case "million":
       return 1_000_000;
     case "b":
+    case "billion":
       return 1_000_000_000;
     default:
       return 1;
   }
+}
+
+function canonicalMetricMeasurement(value: string): string {
+  const normalized = value.toLowerCase();
+  return [...expandPremiumCoverLetterTokenVariants(normalized)].sort(
+    (left, right) => left.length - right.length || left.localeCompare(right),
+  )[0];
+}
+
+function metricCurrency(symbol: string): "usd" | "eur" | "gbp" | null {
+  switch (symbol) {
+    case "$":
+      return "usd";
+    case "€":
+      return "eur";
+    case "£":
+      return "gbp";
+    default:
+      return null;
+  }
+}
+
+function metricMeasurement(args: {
+  value: string;
+  end: number;
+  percentage: boolean;
+}): string {
+  if (args.percentage) return "";
+  const measurementSurface =
+    args.value
+      .slice(args.end)
+      .match(
+        /^\s*(?:[+-]\s*)?([A-Za-z][A-Za-z-]*(?:\s+[A-Za-z][A-Za-z-]*)?)/u,
+      )?.[1] ?? "";
+  const measurement =
+    measurementSurface
+      .split(/\s+/u)
+      .filter(
+        (token) => !METRIC_MEASUREMENT_STOP_WORDS.has(token.toLowerCase()),
+      )
+      .at(-1) ?? "";
+  return canonicalMetricMeasurement(measurement);
+}
+
+function metricUnit(args: {
+  currency: "usd" | "eur" | "gbp" | null;
+  percentage: boolean;
+}): string {
+  if (args.currency) return args.currency;
+  return args.percentage ? "percent" : "number";
 }
 
 function normalizeNumericTokenOccurrence(args: {
@@ -192,8 +252,19 @@ function normalizeNumericTokenOccurrence(args: {
   const suffix = (args.match[3] ?? "").toLowerCase();
   const metricValue = numericValue * numericMagnitudeMultiplier(suffix);
   const percentage = suffix === "%" || suffix === "percent";
+  const currency = metricCurrency(args.match[1]);
+  const end = index + args.match[0].length;
+  const measurement = metricMeasurement({
+    value: args.value,
+    end,
+    percentage,
+  });
+  const metric = `${metricValue}${percentage ? "%" : ""}`;
   return {
-    metric: `${metricValue}${percentage ? "%" : ""}`,
+    metric,
+    key: [metricUnit({ currency, percentage }), metricValue, measurement]
+      .filter((part) => part !== "")
+      .join(":"),
     index,
   };
 }
@@ -202,7 +273,7 @@ function numericTokenOccurrences(value: string): NumericTokenOccurrence[] {
   const tokens: NumericTokenOccurrence[] = [];
   for (const match of value
     .matchAll(
-      /(?<![A-Za-z0-9])([$€£]?)\s*(\d[\d,]*(?:\.\d+)?)\s*(%|percent\b|[KMB]\b)?(?![A-Za-z0-9])/gi,
+      /(?<![A-Za-z0-9])([$€£]?)\s*(\d[\d,]*(?:\.\d+)?)\s*(%|percent\b|[KMB]\b|thousand\b|million\b|billion\b)?(?![A-Za-z0-9])/gi,
     )) {
     const occurrence = normalizeNumericTokenOccurrence({ value, match });
     if (occurrence) tokens.push(occurrence);
@@ -213,7 +284,7 @@ function numericTokenOccurrences(value: string): NumericTokenOccurrence[] {
 function numericTokens(value: string): string[] {
   return [
     ...new Set(
-      numericTokenOccurrences(value).map((occurrence) => occurrence.metric),
+      numericTokenOccurrences(value).map((occurrence) => occurrence.key),
     ),
   ];
 }
@@ -232,22 +303,32 @@ function evidenceAnchorTokens(args: {
 }
 
 function evidenceAnchorTokensFromValues(values: readonly string[]): Set<string> {
+  const technologyAnchors = values.flatMap((value) =>
+    Array.from(
+      value.matchAll(
+        /(?:^|[^\p{L}\p{N}_])((?:C\+\+|C#|R))(?=$|[^\p{L}\p{N}_+#])/gu,
+      ),
+      (match) => match[1].toLowerCase(),
+    ),
+  );
   return new Set(
-    values
-      .flatMap((value) => value.normalize("NFKC").split(/[^A-Za-z0-9%]+/u))
-      .map((token) => ({
-        normalized: token.toLowerCase(),
-        shortAcronym: /^[A-Z][A-Z0-9]{1,3}$/u.test(token),
-      }))
-      .flatMap(({ normalized, shortAcronym }) =>
-        (
-          (normalized.length >= 4 || shortAcronym) &&
-          !numericTokens(normalized).length &&
-          !EVIDENCE_ANCHOR_STOP_WORDS.has(normalized)
-        )
-          ? expandPremiumCoverLetterTokenVariants(normalized)
-          : [],
-      )
+    technologyAnchors.concat(
+      values
+        .flatMap((value) => value.normalize("NFKC").split(/[^A-Za-z0-9%]+/u))
+        .map((token) => ({
+          normalized: token.toLowerCase(),
+          shortAcronym: /^[A-Z][A-Z0-9]{1,3}$/u.test(token),
+        }))
+        .flatMap(({ normalized, shortAcronym }) =>
+          (
+            (normalized.length >= 4 || shortAcronym) &&
+            !numericTokens(normalized).length &&
+            !EVIDENCE_ANCHOR_STOP_WORDS.has(normalized)
+          )
+            ? expandPremiumCoverLetterTokenVariants(normalized)
+            : [],
+        ),
+    ),
   );
 }
 
@@ -260,7 +341,12 @@ function sourceMetricFactIds(args: {
   for (const factId of args.factIds) {
     const fact = factById.get(factId);
     if (!fact) continue;
-    for (const metric of [fact.text, ...fact.metrics].flatMap(numericTokens)) {
+    const textMetrics = numericTokens(fact.text);
+    const metrics =
+      textMetrics.length > 0
+        ? textMetrics
+        : fact.metrics.flatMap((metric) => numericTokens(metric));
+    for (const metric of metrics) {
       const supportingFactIds = factIdsByMetric.get(metric) ?? new Set<string>();
       supportingFactIds.add(factId);
       factIdsByMetric.set(metric, supportingFactIds);
@@ -515,8 +601,8 @@ export function validateEnglishCvBackedQualityGate(args: {
       }
     }
     for (const occurrence of numericTokenOccurrences(text)) {
-      const { metric } = occurrence;
-      if (!sourceMetricFacts.has(metric)) {
+      const { key, metric } = occurrence;
+      if (!sourceMetricFacts.has(key)) {
         pushUnique(issues, {
           code: "unsupported_visible_metric",
           section,
@@ -532,11 +618,11 @@ export function validateEnglishCvBackedQualityGate(args: {
       const metricFactIds = attributedMetricFactIds({
         visibleText: localText,
         candidateFactIds:
-          sourceMetricFacts.get(metric) ?? new Set<string>(),
+          sourceMetricFacts.get(key) ?? new Set<string>(),
         factGraph: args.factGraph,
       });
       const previousOccurrence = seenMetricSections
-        .get(metric)
+        .get(key)
         ?.find(
           (occurrence) =>
             setsOverlap(occurrence.factIds, metricFactIds),
@@ -551,9 +637,9 @@ export function validateEnglishCvBackedQualityGate(args: {
           metric,
         });
       }
-      const occurrences = seenMetricSections.get(metric) ?? [];
+      const occurrences = seenMetricSections.get(key) ?? [];
       occurrences.push({ section, factIds: metricFactIds });
-      seenMetricSections.set(metric, occurrences);
+      seenMetricSections.set(key, occurrences);
     }
   }
 
