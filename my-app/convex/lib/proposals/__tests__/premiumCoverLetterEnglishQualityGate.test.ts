@@ -643,6 +643,56 @@ describe("English CV-backed quality gate", () => {
     },
   );
 
+  it.each([
+    {
+      source: "1.2 million dollars",
+      compact: "$1.2M",
+      metric: "1200000",
+    },
+    {
+      source: "2.3 million euros",
+      compact: "€2.3M",
+      metric: "2300000",
+    },
+    {
+      source: "3.4 million pounds",
+      compact: "£3.4M",
+      metric: "3400000",
+    },
+  ])(
+    "recognizes $source as the currency in a numeric magnitude",
+    ({ source, compact, metric }) => {
+      const currencyFactGraph: FactGraphV1 = {
+        ...factGraph,
+        facts: factGraph.facts.map((fact) =>
+          fact.id === "fact_opening"
+            ? {
+                ...fact,
+                text: `Managed a ${source} portfolio.`,
+                metrics: [source],
+              }
+            : fact,
+        ),
+      };
+      const issues = validateEnglishCvBackedQualityGate({
+        writerOutput: output({
+          opening: `I managed a ${compact} portfolio.`,
+          proofBlock: "I documented handoffs for three implementation teams.",
+          employerValueBlock: "That reporting supports clear delivery handoffs.",
+          closeLine: "I would bring that discipline to the team.",
+        }),
+        claimPlan,
+        factGraph: currencyFactGraph,
+      });
+
+      expect(issues).not.toContainEqual({
+        code: "unsupported_visible_metric",
+        section: "opening",
+        metric,
+      });
+    },
+  );
+
   it("does not misread a compound written hundred as its leading unit", () => {
     const metricFactGraph: FactGraphV1 = {
       ...factGraph,
@@ -1008,6 +1058,32 @@ describe("English CV-backed quality gate", () => {
     );
   });
 
+  it.each([
+    ["7-Eleven", "7"],
+    ["1-800-Flowers", "1"],
+  ])(
+    "does not treat the contextual target employer %s as a visible metric",
+    (employer, metric) => {
+      const issues = validateEnglishCvBackedQualityGate({
+        writerOutput: output({
+          opening: "I reduced the onboarding backlog by 24%.",
+          proofBlock: "I documented handoffs for three implementation teams.",
+          employerValueBlock:
+            `At ${employer}, that reporting supports clear delivery handoffs.`,
+          closeLine: "I would bring that discipline to the team.",
+        }),
+        claimPlan,
+        factGraph,
+      });
+
+      expect(issues).not.toContainEqual({
+        code: "unsupported_visible_metric",
+        section: "employerValueBlock",
+        metric,
+      });
+    },
+  );
+
   it("keeps percentage measurements distinct in metric keys", () => {
     const percentageFactGraph: FactGraphV1 = {
       ...factGraph,
@@ -1066,6 +1142,131 @@ describe("English CV-backed quality gate", () => {
     });
 
     expect(issues).toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "opening",
+      metric: "10%",
+    });
+  });
+
+  it("retains the measured noun when the outcome precedes its predicate", () => {
+    const percentageFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Improved conversion by 24%.",
+              metrics: ["24%"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "Conversion improved by 24%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: percentageFactGraph,
+    });
+
+    expect(issues).not.toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "opening",
+      metric: "24%",
+    });
+  });
+
+  it("keeps percentage outcome direction in the metric identity", () => {
+    const percentageFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Reduced churn by 20%.",
+              metrics: ["20%"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I increased churn by 20%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: percentageFactGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "opening",
+      metric: "20%",
+    });
+  });
+
+  it("canonicalizes equivalent percentage direction verbs", () => {
+    const percentageFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Reduced churn by 20%.",
+              metrics: ["20%"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I lowered churn by 20%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: percentageFactGraph,
+    });
+
+    expect(issues).not.toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "opening",
+      metric: "20%",
+    });
+  });
+
+  it("does not inherit percentage direction across sentence boundaries", () => {
+    const percentageFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text:
+                "Increased retention by 5%. Maintained conversion at 10%.",
+              metrics: ["5%", "10%"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I maintained conversion at 10%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: percentageFactGraph,
+    });
+
+    expect(issues).not.toContainEqual({
       code: "unsupported_visible_metric",
       section: "opening",
       metric: "10%",
@@ -2028,6 +2229,38 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
+  it("does not use an unlisted action verb as a grounding anchor", () => {
+    const actionVerbFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_close"
+          ? {
+              ...fact,
+              text: "Designed internal dashboards.",
+              entities: [],
+              allowedVerbs: ["described"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock:
+          "I designed an unrelated process for this role.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: actionVerbFactGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "employer_value_not_grounded",
+      section: "employerValueBlock",
+    });
+  });
+
   it("rejects employer grounding based only on a generic team anchor", () => {
     const genericTeamFactGraph: FactGraphV1 = {
       ...factGraph,
@@ -2960,6 +3193,31 @@ describe("English CV-backed quality gate", () => {
         writerOutput: output({
           opening: "I reduced the onboarding backlog by 24%.",
           proofBlock: `Built around modular components, the platform ${predicate}.`,
+          employerValueBlock:
+            "That reporting supports clear delivery handoffs.",
+          closeLine: "I would bring that discipline to the team.",
+        }),
+        claimPlan,
+        factGraph,
+      });
+
+      expect(issues).not.toContainEqual({
+        code: "incomplete_sentence",
+        section: "proofBlock",
+      });
+    },
+  );
+
+  it.each([
+    "Supported by careful analysis, conversion improved.",
+    "Built around modular components, retention stabilized.",
+  ])(
+    "accepts a bare-noun subject after a fronted participial clause: %s",
+    (proofBlock) => {
+      const issues = validateEnglishCvBackedQualityGate({
+        writerOutput: output({
+          opening: "I reduced the onboarding backlog by 24%.",
+          proofBlock,
           employerValueBlock:
             "That reporting supports clear delivery handoffs.",
           closeLine: "I would bring that discipline to the team.",

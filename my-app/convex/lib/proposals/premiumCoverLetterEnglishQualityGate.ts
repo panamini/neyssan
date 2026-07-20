@@ -95,6 +95,30 @@ const EVIDENCE_ANCHOR_STOP_WORDS = new Set([
   "would",
   "your",
 ]);
+const EVIDENCE_ACTION_WORDS = new Set([
+  "assisted",
+  "built",
+  "coordinated",
+  "created",
+  "delivered",
+  "designed",
+  "developed",
+  "documented",
+  "drove",
+  "handled",
+  "implemented",
+  "improved",
+  "led",
+  "maintained",
+  "managed",
+  "monitored",
+  "owned",
+  "reduced",
+  "reported",
+  "supported",
+  "tracked",
+  "worked",
+]);
 const METRIC_MEASUREMENT_STOP_WORDS = new Set([
   "a",
   "across",
@@ -168,6 +192,47 @@ const METRIC_CURRENCIES = new Map<string, "usd" | "eur" | "gbp">([
   ["pound", "gbp"],
   ["pounds", "gbp"],
   ["gbp", "gbp"],
+]);
+const PERCENTAGE_DIRECTIONS = new Map<string, "increase" | "decrease">([
+  ["boost", "increase"],
+  ["boosted", "increase"],
+  ["boosts", "increase"],
+  ["expand", "increase"],
+  ["expanded", "increase"],
+  ["expands", "increase"],
+  ["grew", "increase"],
+  ["grow", "increase"],
+  ["grown", "increase"],
+  ["grows", "increase"],
+  ["improve", "increase"],
+  ["improved", "increase"],
+  ["improves", "increase"],
+  ["increase", "increase"],
+  ["increased", "increase"],
+  ["increases", "increase"],
+  ["lift", "increase"],
+  ["lifted", "increase"],
+  ["lifts", "increase"],
+  ["raise", "increase"],
+  ["raised", "increase"],
+  ["raises", "increase"],
+  ["cut", "decrease"],
+  ["cuts", "decrease"],
+  ["decrease", "decrease"],
+  ["decreased", "decrease"],
+  ["decreases", "decrease"],
+  ["drop", "decrease"],
+  ["dropped", "decrease"],
+  ["drops", "decrease"],
+  ["lower", "decrease"],
+  ["lowered", "decrease"],
+  ["lowers", "decrease"],
+  ["reduce", "decrease"],
+  ["reduced", "decrease"],
+  ["reduces", "decrease"],
+  ["shrink", "decrease"],
+  ["shrinks", "decrease"],
+  ["shrunk", "decrease"],
 ]);
 const GENERIC_PERCENTAGE_MEASUREMENTS = new Set([
   "change",
@@ -571,19 +636,67 @@ function numericSignMultiplier(sign: string, prefix: string): number {
   return ["-", "−", "minus", "negative"].includes(sign.toLowerCase()) ? -1 : 1;
 }
 
+function metricSentencePrefix(args: {
+  value: string;
+  start: number;
+}): string {
+  const sentenceStart =
+    splitSentenceRanges(args.value).find(
+      (range) => args.start >= range.start && args.start < range.end,
+    )?.start ?? 0;
+  return args.value.slice(sentenceStart, args.start);
+}
+
 function precedingPercentageMeasurement(args: {
   value: string;
   start: number;
   percentage: boolean;
 }): string | null {
   if (!args.percentage) return null;
+  const prefix = metricSentencePrefix(args);
+  const reorderedOutcome = prefix.match(
+    /\b([A-Za-z][A-Za-z-]*)\s+(?:(?:was|were|is|has|had|been)\s+){0,2}([A-Za-z][A-Za-z-]*)\s+(?:by|of|at|to)\s*$/u,
+  );
+  if (
+    reorderedOutcome &&
+    PERCENTAGE_DIRECTIONS.has(reorderedOutcome[2].toLowerCase())
+  ) {
+    return canonicalMetricMeasurement(reorderedOutcome[1]);
+  }
   const precedingMeasurement =
-    args.value
-      .slice(0, args.start)
-      .match(/\b([A-Za-z][A-Za-z-]*)\s+(?:by|of|at|to)\s*$/u)?.[1] ?? "";
+    prefix.match(/\b([A-Za-z][A-Za-z-]*)\s+(?:by|of|at|to)\s*$/u)?.[1] ??
+    "";
   return precedingMeasurement
     ? canonicalMetricMeasurement(precedingMeasurement)
     : null;
+}
+
+function percentageDirection(args: {
+  value: string;
+  start: number;
+  percentage: boolean;
+}): "increase" | "decrease" | "" {
+  if (!args.percentage) return "";
+  const directionTokens = Array.from(
+    metricSentencePrefix(args)
+      .toLowerCase()
+      .matchAll(/\b[a-z]+\b/gu),
+    (match) => match[0],
+  ).filter((token) => PERCENTAGE_DIRECTIONS.has(token));
+  const directionToken = directionTokens.at(-1);
+  return directionToken
+    ? (PERCENTAGE_DIRECTIONS.get(directionToken) ?? "")
+    : "";
+}
+
+function metricOccurrenceKey(args: {
+  baseKey: string;
+  measurement: string;
+  direction: string;
+}): string {
+  return [args.baseKey, args.measurement, args.direction]
+    .filter((part) => part !== "")
+    .join(":");
 }
 
 function metricMeasurement(args: {
@@ -691,6 +804,11 @@ function normalizeNumericTokenOccurrence(args: {
     end,
     percentage,
   });
+  const direction = percentageDirection({
+    value: args.value,
+    start: index,
+    percentage,
+  });
   const metric = metricLabel({
     value: metricValue,
     percentage,
@@ -703,9 +821,7 @@ function normalizeNumericTokenOccurrence(args: {
   return {
     metric,
     baseKey,
-    key: [baseKey, measurement]
-      .filter((part) => part !== "")
-      .join(":"),
+    key: metricOccurrenceKey({ baseKey, measurement, direction }),
     measurement,
     index,
   };
@@ -811,6 +927,11 @@ function writtenNumericTokenOccurrences(
       end,
       percentage,
     });
+    const direction = percentageDirection({
+      value,
+      start: index,
+      percentage,
+    });
     const immediateMeasurement =
       value
         .slice(end)
@@ -839,9 +960,7 @@ function writtenNumericTokenOccurrences(
           multiplier: false,
         }),
         baseKey,
-        key: [baseKey, measurement]
-          .filter((part) => part !== "")
-          .join(":"),
+        key: metricOccurrenceKey({ baseKey, measurement, direction }),
         measurement,
         index,
       },
@@ -853,7 +972,7 @@ function numericTokenOccurrences(value: string): NumericTokenOccurrence[] {
   const tokens: NumericTokenOccurrence[] = [];
   for (const match of value
     .matchAll(
-      /(?<![A-Za-z0-9])([+−-]|minus\b|negative\b|plus\b|positive\b)?\s*((?:USD|EUR|GBP|[$€£])?)\s*(\d[\d,]*(?:\.\d+)?)\s*(%|percent\b|[KMB]\b|thousand\b|million\b|billion\b|[x×])?(?:\s*((?:USD|EUR|GBP)\b))?(?![A-Za-z0-9])/gi,
+      /(?<![A-Za-z0-9])([+−-]|minus\b|negative\b|plus\b|positive\b)?\s*((?:USD|EUR|GBP|[$€£])?)\s*(\d[\d,]*(?:\.\d+)?)\s*(%|percent\b|[KMB]\b|thousand\b|million\b|billion\b|[x×])?(?:\s*((?:USD|EUR|GBP|dollars?|euros?|pounds?)\b))?(?![A-Za-z0-9])/gi,
     )) {
     const occurrence = normalizeNumericTokenOccurrence({ value, match });
     if (occurrence) tokens.push(occurrence);
@@ -869,11 +988,30 @@ function numericTokens(value: string): string[] {
   ];
 }
 
+function numericOccurrenceIsPartOfContextualEntity(args: {
+  value: string;
+  occurrence: NumericTokenOccurrence;
+}): boolean {
+  return Array.from(
+    args.value.matchAll(
+      /\b(?:[Aa]t|[Ff]or|[Ww]ith|[Jj]oined)\s+(\d+(?:[-–—]\d+)*(?:[-–—]?[A-Z][A-Za-z0-9&'.-]*))\b/gu,
+    ),
+  ).some((match) => {
+    const entity = match[1] ?? "";
+    const entityStart = (match.index ?? 0) + match[0].lastIndexOf(entity);
+    return (
+      args.occurrence.index >= entityStart &&
+      args.occurrence.index < entityStart + entity.length
+    );
+  });
+}
+
 function numericOccurrenceIsPartOfEntity(args: {
   value: string;
   occurrence: NumericTokenOccurrence;
   entities: readonly string[];
 }): boolean {
+  if (numericOccurrenceIsPartOfContextualEntity(args)) return true;
   const searchableValue = args.value.toLocaleLowerCase("en-US");
   return args.entities.some((rawEntity) => {
     const entity = rawEntity.trim();
@@ -979,6 +1117,7 @@ function evidenceAnchorTokensFromValues(values: readonly string[]): Set<string> 
             (normalized.length >= 4 || shortAcronym) &&
             !numericTokens(normalized).length &&
             !isWrittenNumberLexeme(normalized) &&
+            !EVIDENCE_ACTION_WORDS.has(normalized) &&
             !EVIDENCE_ANCHOR_STOP_WORDS.has(normalized)
           )
             ? [canonicalizePremiumCoverLetterToken(normalized)]
@@ -1187,10 +1326,25 @@ function isLikelyUnlistedFinitePredicate(args: {
   return hasPluralSubjectForUnlistedPredicate(args);
 }
 
+function hasFrontedBareNounSubject(args: {
+  tokens: readonly string[];
+  index: number;
+  hasFrontedClause: boolean;
+}): boolean {
+  const subject = args.tokens[args.index - 1] ?? "";
+  return (
+    args.hasFrontedClause &&
+    args.index >= 4 &&
+    /^[a-z][a-z-]*$/u.test(subject) &&
+    !FINITE_PREDICATE_BLOCKERS.has(subject)
+  );
+}
+
 function isFinitePredicateCandidate(args: {
   tokens: readonly string[];
   token: string;
   index: number;
+  hasFrontedClause: boolean;
 }): boolean {
   const canonicalToken = canonicalizePremiumCoverLetterToken(args.token);
   if (FINITE_PREDICATE_TOKENS.has(canonicalToken)) return true;
@@ -1201,6 +1355,7 @@ function isFinitePredicateCandidate(args: {
         args.tokens[args.index - 1],
       ) ||
       hasNounPhraseSubjectForUnlistedPredicate(args) ||
+      hasFrontedBareNounSubject(args) ||
       args.tokens[args.index - 1]?.endsWith("s") === true ||
       ["that", "which", "who"].includes(args.tokens[args.index + 1]))
   ) {
@@ -1223,7 +1378,13 @@ function isVerbLedFragment(normalizedSentence: string): boolean {
   }
   const hasLaterFinitePredicate = tokens.some(
     (token, index) =>
-      index >= 2 && isFinitePredicateCandidate({ tokens, token, index }),
+      index >= 2 &&
+      isFinitePredicateCandidate({
+        tokens,
+        token,
+        index,
+        hasFrontedClause: normalizedSentence.includes(","),
+      }),
   );
   return !hasLaterFinitePredicate;
 }
