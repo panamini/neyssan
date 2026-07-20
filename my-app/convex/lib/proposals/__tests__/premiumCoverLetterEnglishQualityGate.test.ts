@@ -372,6 +372,43 @@ describe("English CV-backed quality gate", () => {
     );
   });
 
+  it("allows the same metric value when distinct section facts support it", () => {
+    const sameNumberFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) => {
+        if (fact.id === "fact_opening") {
+          return {
+            ...fact,
+            text: "Led delivery across 4 product squads.",
+            metrics: ["4"],
+          };
+        }
+        if (fact.id === "fact_proof") {
+          return {
+            ...fact,
+            text: "Delivered 4 migration projects.",
+            metrics: ["4"],
+          };
+        }
+        return fact;
+      }),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I led delivery across 4 product squads.",
+        proofBlock: "I delivered 4 migration projects.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: sameNumberFactGraph,
+    });
+
+    expect(issues).not.toContainEqual(
+      expect.objectContaining({ code: "duplicate_visible_metric" }),
+    );
+  });
+
   it("requires a fact reference when the assigned source-backed claim has facts", () => {
     const issues = validateEnglishCvBackedQualityGate({
       writerOutput: output({
@@ -451,6 +488,25 @@ describe("English CV-backed quality gate", () => {
     expect(issues).toContainEqual({
       code: "duplicate_visible_sentence",
       section: "proofBlock",
+    });
+  });
+
+  it("detects repeated visible prose despite different terminal punctuation", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I bring grounded frontend delivery experience.",
+        proofBlock: "I bring grounded frontend delivery experience!",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "duplicate_visible_sentence",
+      section: "proofBlock",
+      otherSection: "opening",
     });
   });
 

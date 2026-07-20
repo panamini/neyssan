@@ -80,6 +80,12 @@ function normalizeText(value: string): string {
   return value.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
+function normalizeSentenceKey(value: string): string {
+  return normalizeText(value)
+    .replace(/[.!?]+(?:["'”’»)\]}]+)?$/u, "")
+    .trim();
+}
+
 function splitSentences(value: string): string[] {
   return value
     .split(/(?<=[.!?])\s+/u)
@@ -121,16 +127,29 @@ function evidenceAnchorTokens(args: {
   );
 }
 
-function sourceMetricTokens(args: {
+function sourceMetricFactIds(args: {
   factIds: readonly string[];
   factGraph: FactGraphV1;
-}): Set<string> {
+}): Map<string, Set<string>> {
   const factById = new Map(args.factGraph.facts.map((fact) => [fact.id, fact]));
-  const source = args.factIds
-    .map((factId) => factById.get(factId))
-    .filter((fact): fact is FactGraphV1["facts"][number] => Boolean(fact))
-    .flatMap((fact) => [fact.text, ...fact.metrics]);
-  return new Set(source.flatMap(numericTokens));
+  const factIdsByMetric = new Map<string, Set<string>>();
+  for (const factId of args.factIds) {
+    const fact = factById.get(factId);
+    if (!fact) continue;
+    for (const metric of [fact.text, ...fact.metrics].flatMap(numericTokens)) {
+      const supportingFactIds = factIdsByMetric.get(metric) ?? new Set<string>();
+      supportingFactIds.add(factId);
+      factIdsByMetric.set(metric, supportingFactIds);
+    }
+  }
+  return factIdsByMetric;
+}
+
+function setsOverlap(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
+  for (const value of left) {
+    if (right.has(value)) return true;
+  }
+  return false;
 }
 
 function pushUnique<T>(items: T[], item: T): void {
@@ -205,7 +224,10 @@ export function validateEnglishCvBackedQualityGate(args: {
   );
   const seenFactSections = new Map<string, ClaimPlanSection>();
   const seenSentenceSections = new Map<string, ClaimPlanSection>();
-  const seenMetricSections = new Map<string, ClaimPlanSection>();
+  const seenMetricSections = new Map<
+    string,
+    Array<{ section: ClaimPlanSection; factIds: ReadonlySet<string> }>
+  >();
 
   for (const section of ENGLISH_CV_BACKED_SECTIONS) {
     const part = args.writerOutput.bodyParts[section];
@@ -291,7 +313,7 @@ export function validateEnglishCvBackedQualityGate(args: {
     }
 
     for (const sentence of splitSentences(text)) {
-      const normalizedSentence = normalizeText(sentence);
+      const normalizedSentence = normalizeSentenceKey(sentence);
       if (
         /^(?:managed|maintained|documented|coordinated|reduced|tracked|supported|handled|worked|led|built|improved|created|reported)\b/u.test(
           normalizedSentence,
@@ -313,7 +335,7 @@ export function validateEnglishCvBackedQualityGate(args: {
       }
     }
 
-    const sourceMetrics = sourceMetricTokens({
+    const sourceMetricFacts = sourceMetricFactIds({
       factIds: part.factIds,
       factGraph: args.factGraph,
     });
@@ -335,24 +357,32 @@ export function validateEnglishCvBackedQualityGate(args: {
       }
     }
     for (const metric of numericTokens(text)) {
-      if (!sourceMetrics.has(metric)) {
+      if (!sourceMetricFacts.has(metric)) {
         pushUnique(issues, {
           code: "unsupported_visible_metric",
           section,
           metric,
         });
       }
-      const previousSection = seenMetricSections.get(metric);
-      if (previousSection && previousSection !== section) {
+      const metricFactIds = sourceMetricFacts.get(metric) ?? new Set<string>();
+      const previousOccurrence = seenMetricSections
+        .get(metric)
+        ?.find(
+          (occurrence) =>
+            occurrence.section !== section &&
+            setsOverlap(occurrence.factIds, metricFactIds),
+        );
+      if (previousOccurrence) {
         pushUnique(issues, {
           code: "duplicate_visible_metric",
           section,
-          otherSection: previousSection,
+          otherSection: previousOccurrence.section,
           metric,
         });
-      } else if (!previousSection) {
-        seenMetricSections.set(metric, section);
       }
+      const occurrences = seenMetricSections.get(metric) ?? [];
+      occurrences.push({ section, factIds: metricFactIds });
+      seenMetricSections.set(metric, occurrences);
     }
   }
 

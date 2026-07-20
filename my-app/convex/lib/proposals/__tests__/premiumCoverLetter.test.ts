@@ -4419,6 +4419,28 @@ describe("premium cover letter generation and rendering", () => {
     );
   });
 
+  it("preserves terminal closing quotes through active validation and repair", () => {
+    const bodyParts = {
+      opening:
+        "I improved signup conversion by 11% through iterative UI experiments.",
+      proofBlock: "The approach remained “reliable.”",
+      employerValueBlock:
+        "That experience supports dependable product-facing delivery.",
+      closeLine:
+        "I would bring the same discipline to reusable interface work.",
+    };
+    const brief = buildDirectFrontendBrief("English");
+
+    expect(
+      validatePremiumCoverLetterBodyParts({ bodyParts, brief }),
+    ).not.toContainEqual(
+      expect.objectContaining({ code: "incomplete_sentence" }),
+    );
+    expect(
+      repairPremiumCoverLetterBodyParts({ bodyParts, brief }).proofBlock,
+    ).toBe(bodyParts.proofBlock);
+  });
+
   it("falls back to deterministic close repair when model quality repair fails", async () => {
     await withQualityRepairFlag("1", async () => {
       const calls: string[] = [];

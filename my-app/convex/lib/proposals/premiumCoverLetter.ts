@@ -1496,8 +1496,10 @@ function countOverlap(a: string[], b: Set<string>): number {
   return a.reduce((count, token) => count + (b.has(token) ? 1 : 0), 0);
 }
 
+const SENTENCE_ENDING_PATTERN = /[.!?]+(?:["'”’»)\]}]+)?$/u;
+
 function hasSentenceEnding(value: string): boolean {
-  return /[.!?]$/u.test(compactWhitespace(value));
+  return SENTENCE_ENDING_PATTERN.test(compactWhitespace(value));
 }
 
 function ensureSentenceEnding(value: string): string {
@@ -1507,7 +1509,9 @@ function ensureSentenceEnding(value: string): string {
 }
 
 function splitSentences(value: string): string[] {
-  const matches = compactWhitespace(value).match(/[^.!?\n]+(?:[.!?]+|$)/g);
+  const matches = compactWhitespace(value).match(
+    /[^.!?\n]+(?:[.!?]+(?:["'”’»)\]}]+)?|$)/gu,
+  );
   if (!matches) return [];
   return matches.map((sentence) => compactWhitespace(sentence)).filter(Boolean);
 }
