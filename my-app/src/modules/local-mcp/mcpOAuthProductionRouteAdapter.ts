@@ -634,6 +634,12 @@ const MCP_PRODUCTION_PROTOCOL_VERSIONS = Object.freeze(["2025-06-18", "2025-11-2
 const MCP_PRODUCTION_PROTOCOL_VERSION = "2025-11-25";
 const PKCE_CODE_VERIFIER_PATTERN = /^[A-Za-z0-9._~-]{43,128}$/u;
 const PKCE_CODE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43,128}$/u;
+// The allowlisted confidential client authenticates with client_secret_post
+// and does not send PKCE. This non-secret marker keeps that path bound without
+// weakening the existing PKCE S256 path for every other client.
+const CONFIDENTIAL_CLIENT_SECRET_POST_NO_PKCE_CHALLENGE = createHash("sha256")
+  .update("mcp-oauth-confidential-client-secret-post-no-pkce-v1", "utf8")
+  .digest("base64url");
 const WELL_KNOWN_PROTECTED_RESOURCE_PATH = "/.well-known/oauth-protected-resource";
 const TOKEN_REQUEST_KEYS = Object.freeze([
   "grant_type",
@@ -746,9 +752,14 @@ async function handleAuthorizationRequest(
     return failClosedResponse("oauth_authorize", preflight, "invalid_authorization_request", 400);
   }
 
+  const boundaryAuthorizationUrl = normalizeConfidentialClientAuthorizationUrl(
+    authorizationUrl,
+    dependencies.authorizationRequestConfig,
+    dependencies.clientSecretPost,
+  );
   const projection = projectMcpOAuthPreAuthAuthorizationRequest({
     kind: "mcp_oauth_pre_auth_authorization_request_projection_input",
-    authorizationUrl,
+    authorizationUrl: boundaryAuthorizationUrl,
     config: dependencies.authorizationRequestConfig,
     version: 1,
   });
@@ -2233,7 +2244,11 @@ function readTokenRequest(
   if (readHeaderValueByName(request.headers, "authorization") !== undefined) {
     return Object.freeze({ ok: false, reason: "invalid_request", status: 400 });
   }
-  if (!clientSecretPost || !hasExactlyTokenRequestKeys(params, true)) {
+  if (
+    !clientSecretPost ||
+    (!hasExactlyTokenRequestKeys(params, true) &&
+      !hasExactlyTokenRequestKeys(params, true, true))
+  ) {
     return Object.freeze({ ok: false, reason: "invalid_request", status: 400 });
   }
   if (params.get("grant_type") !== "authorization_code") {
@@ -2244,12 +2259,21 @@ function readTokenRequest(
   const clientId = readBoundedTokenParameter(params.get("client_id"), 512);
   const redirectUri = readTokenRedirectUri(params.get("redirect_uri"));
   const resource = readTokenResource(resourceValues[0]);
-  const codeVerifier = readCodeVerifier(params.get("code_verifier"));
+  const hasCodeVerifier = params.has("code_verifier");
+  const codeVerifier = hasCodeVerifier
+    ? readCodeVerifier(params.get("code_verifier"))
+    : undefined;
   const clientSecret = readBoundedTokenParameter(params.get("client_secret"), 1_024);
   if (!resource || resource !== expectedResource) {
     return Object.freeze({ ok: false, reason: "invalid_target", status: 400 });
   }
-  if (!code || !AUTHORIZATION_CODE_PATTERN.test(code) || !clientId || !redirectUri || !codeVerifier) {
+  if (
+    !code ||
+    !AUTHORIZATION_CODE_PATTERN.test(code) ||
+    !clientId ||
+    !redirectUri ||
+    (hasCodeVerifier && !codeVerifier)
+  ) {
     return Object.freeze({ ok: false, reason: "invalid_request", status: 400 });
   }
   if (!clientSecretPostMatches(clientSecretPost, clientId, clientSecret)) {
@@ -2263,7 +2287,9 @@ function readTokenRequest(
       clientId,
       redirectUri,
       resource,
-      codeChallenge: hashPkceCodeVerifierS256(codeVerifier),
+      codeChallenge: codeVerifier
+        ? hashPkceCodeVerifierS256(codeVerifier)
+        : CONFIDENTIAL_CLIENT_SECRET_POST_NO_PKCE_CHALLENGE,
       version: 1,
     }),
   });
@@ -2334,10 +2360,14 @@ function readHeaderValueByName(
 function hasExactlyTokenRequestKeys(
   params: URLSearchParams,
   requireClientSecret: boolean,
+  allowMissingCodeVerifier = false,
 ): boolean {
-  const expectedKeys = requireClientSecret
+  const baseExpectedKeys = requireClientSecret
     ? TOKEN_REQUEST_KEYS_WITH_CLIENT_SECRET_POST
     : TOKEN_REQUEST_KEYS;
+  const expectedKeys = allowMissingCodeVerifier
+    ? baseExpectedKeys.filter((key) => key !== "code_verifier")
+    : baseExpectedKeys;
   const keys = [...params.keys()];
   return (
     keys.length === expectedKeys.length &&
@@ -2449,6 +2479,49 @@ function readSameOriginAuthorizationUrl(
   }
 }
 
+function normalizeConfidentialClientAuthorizationUrl(
+  authorizationUrl: string,
+  config: McpOAuthAuthorizationRequestBoundaryConfigV1,
+  clientSecretPost: McpOAuthProductionClientSecretPostPolicyV1 | undefined,
+): string {
+  if (
+    !clientSecretPost ||
+    clientSecretPost.invalidConfiguration ||
+    clientSecretPost.allowedClientId.length === 0 ||
+    !CLIENT_SECRET_SHA256_PATTERN.test(clientSecretPost.clientSecretSha256) ||
+    !config.clientIdPolicy.allowedClientIds.includes(
+      clientSecretPost.allowedClientId,
+    )
+  ) {
+    return authorizationUrl;
+  }
+
+  try {
+    const parsed = new URL(authorizationUrl);
+    const clientIds = parsed.searchParams.getAll("client_id");
+    const codeChallenges = parsed.searchParams.getAll("code_challenge");
+    const codeChallengeMethods = parsed.searchParams.getAll(
+      "code_challenge_method",
+    );
+    if (
+      clientIds.length !== 1 ||
+      clientIds[0] !== clientSecretPost.allowedClientId ||
+      codeChallenges.length !== 0 ||
+      codeChallengeMethods.length !== 0
+    ) {
+      return authorizationUrl;
+    }
+    parsed.searchParams.set(
+      "code_challenge",
+      CONFIDENTIAL_CLIENT_SECRET_POST_NO_PKCE_CHALLENGE,
+    );
+    parsed.searchParams.set("code_challenge_method", "S256");
+    return parsed.toString();
+  } catch {
+    return authorizationUrl;
+  }
+}
+
 function requestHostMatchesOrigin(
   request: McpOAuthProductionRouteAdapterRequestV1,
   origin: McpOAuthProductionAuthorizationOriginV1,
@@ -2463,10 +2536,13 @@ function requestHostMatchesOrigin(
 }
 
 function readQuotaCallerKey(request: McpOAuthProductionRouteAdapterRequestV1): string {
+  // The configured tunnel appends its observed caller address to the end of
+  // X-Forwarded-For. Earlier entries are caller-controlled and must not be
+  // used to rotate unauthenticated quota buckets. Fall back to the socket
+  // only when the trusted proxy boundary did not provide a caller address.
   return (
-    readForwardedCallerKey(request.headers?.["x-forwarded-for"]) ??
+    readTrustedForwardedCallerKey(request.headers?.["x-forwarded-for"]) ??
     readHeaderCallerKey(request.headers?.["cf-connecting-ip"]) ??
-    readHeaderCallerKey(request.headers?.["x-real-ip"]) ??
     normalizeCallerKey(request.remoteAddress) ??
     "unknown"
   );
@@ -2505,10 +2581,14 @@ function readIpv4MappedIpv6Address(value: string): string | undefined {
   return ipv4Address && isIP(ipv4Address) === 4 ? ipv4Address : undefined;
 }
 
-function readForwardedCallerKey(value: string | readonly string[] | undefined): string | undefined {
+function readTrustedForwardedCallerKey(value: string | readonly string[] | undefined): string | undefined {
   const header = readSingleHeaderValue(value);
   if (!header) return undefined;
-  return normalizeCallerKey(header.split(",")[0] ?? "");
+  const entries = header
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  return normalizeCallerKey(entries[entries.length - 1] ?? "");
 }
 
 function readHeaderCallerKey(value: string | readonly string[] | undefined): string | undefined {
@@ -2754,7 +2834,8 @@ function browserBoundContinuationCookie(browserNonce: string): string {
     `Path=${MCP_OAUTH_CONTINUATION_PATH}`,
     "HttpOnly",
     "Secure",
-    "SameSite=Lax",
+    "SameSite=None",
+    "Partitioned",
   ].join("; ");
 }
 

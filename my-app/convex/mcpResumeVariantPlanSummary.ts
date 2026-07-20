@@ -295,8 +295,8 @@ async function summarizeMcpResumeVariantPlan(
     );
   }
 
-  const profile = await readPrimaryProfileForOwner(db, args.twoweeksClerkId);
-  if (!profile) {
+  const profileIds = await readProfileIdsForOwner(db, args.twoweeksClerkId);
+  if (profileIds.length === 0) {
     return buildUnavailableSummary(
       { ...resumeVariantPlanRef, status: "onboarding_required", count: 0 },
       "owner_onboarding_required",
@@ -304,13 +304,16 @@ async function summarizeMcpResumeVariantPlan(
     );
   }
 
-  const ownerStorageRef = String(profile._id);
   const artifacts = sortLatestArtifacts(
     (
-      await queryByFields(db, "applicationArtifacts", "by_user_type", [
-        { field: "userId", value: ownerStorageRef },
-        { field: "type", value: "resume_variant_plan" },
-      ])
+      await queryByFieldsForProfileIds(
+        db,
+        "applicationArtifacts",
+        "by_user_type",
+        "userId",
+        profileIds,
+        [{ field: "type", value: "resume_variant_plan" }],
+      )
     ).filter(isResumeVariantPlanArtifact),
   );
 
@@ -355,15 +358,35 @@ async function summarizeMcpResumeVariantPlan(
   };
 }
 
-async function readPrimaryProfileForOwner(
+async function readProfileIdsForOwner(
   db: DbReader,
   twoweeksClerkId: string,
-): Promise<Record<string, unknown> | null> {
+): Promise<readonly string[]> {
   const profiles = await queryByFields(db, "userProfiles", "by_clerk_id", [
     { field: "clerkId", value: twoweeksClerkId },
   ]);
-  if (profiles.length === 0) return null;
-  return [...profiles].sort(compareLatestProfile)[0] ?? null;
+  return profiles
+    .map((profile) => (typeof profile._id === "string" ? profile._id : undefined))
+    .filter((profileId): profileId is string => profileId !== undefined);
+}
+
+async function queryByFieldsForProfileIds(
+  db: DbReader,
+  tableName: string,
+  indexName: string,
+  profileField: string,
+  profileIds: readonly string[],
+  extraConstraints: readonly { field: string; value: unknown }[] = [],
+): Promise<readonly Record<string, unknown>[]> {
+  const rows = await Promise.all(
+    profileIds.map((profileId) =>
+      queryByFields(db, tableName, indexName, [
+        { field: profileField, value: profileId },
+        ...extraConstraints,
+      ]),
+    ),
+  );
+  return rows.flat();
 }
 
 async function queryByFields(
@@ -774,20 +797,6 @@ function maxUpdatedAt(
     return next > max ? next : max;
   }, 0);
   return timestamp > 0 ? new Date(timestamp).toISOString() : undefined;
-}
-
-function compareLatestProfile(
-  left: Record<string, unknown>,
-  right: Record<string, unknown>,
-): number {
-  const leftUpdated =
-    readFiniteTimestamp(left.updatedAt) ||
-    readFiniteTimestamp(left._creationTime);
-  const rightUpdated =
-    readFiniteTimestamp(right.updatedAt) ||
-    readFiniteTimestamp(right._creationTime);
-  if (rightUpdated !== leftUpdated) return rightUpdated - leftUpdated;
-  return String(right._id ?? "").localeCompare(String(left._id ?? ""));
 }
 
 function readFiniteTimestamp(value: unknown): number {

@@ -269,6 +269,31 @@ describe("PR60 Convex application package summary", () => {
     assertSafeResult(result);
   });
 
+  it("aggregates packages across every profile owned by the Clerk user", async () => {
+    const secondProfileId = "profile_storage_id_SECOND_DO_NOT_ECHO";
+    const { ctx } = makeCtx({
+      userProfiles: [profile(), profile({ _id: secondProfileId, updatedAt: NOW - 1 })],
+      applicationPackages: [
+        applicationPackage(),
+        applicationPackage({
+          _id: "package_storage_id_SECOND_DO_NOT_ECHO",
+          applicationPackageId: "application-package:second_DO_NOT_ECHO",
+          userId: secondProfileId,
+        }),
+      ],
+    });
+
+    const result = await internalSummarizeMcpApplicationPackage._handler(ctx as any, {
+      twoweeksClerkId: "clerk_DO_NOT_ECHO",
+      applicationPackageRef: applicationPackageRef(),
+    });
+
+    expect(result.status).toBe("available");
+    expect(result.safeCounts.packages).toBe(2);
+    expect(result.packageRef.count).toBe(2);
+    assertSafeResult(result);
+  });
+
   it("omits raw package content, generated artifacts, source text, identities, and database ids", async () => {
     const { ctx } = makeCtx({
       userProfiles: [profile()],
