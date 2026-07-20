@@ -1219,12 +1219,40 @@ describe("English CV-backed quality gate", () => {
   );
 
   it.each([
-    ["7-Eleven offers a customer-focused environment.", ["7", "11"]],
-    ["1-800-Flowers offers a customer-focused environment.", ["1", "800"]],
-    ["4-H offers a collaborative environment.", ["4"]],
+    {
+      employerName: "7-Eleven",
+      employerValueBlock: "7-Eleven offers a customer-focused environment.",
+      metrics: ["7", "11"],
+    },
+    {
+      employerName: "1-800-Flowers",
+      employerValueBlock:
+        "1-800-Flowers offers a customer-focused environment.",
+      metrics: ["1", "800"],
+    },
+    {
+      employerName: "4-H",
+      employerValueBlock: "4-H offers a collaborative environment.",
+      metrics: ["4"],
+    },
+    {
+      employerName: "5-Hour Energy",
+      employerValueBlock: "5-Hour Energy offers a collaborative environment.",
+      metrics: ["5"],
+    },
+    {
+      employerName: "3-Day Blinds",
+      employerValueBlock: "3-Day Blinds offers a customer-focused environment.",
+      metrics: ["3"],
+    },
+    {
+      employerName: "10-Year Labs",
+      employerValueBlock: "10-Year Labs offers a collaborative environment.",
+      metrics: ["10"],
+    },
   ])(
-    "does not treat the sentence-leading employer in %s as a metric",
-    (employerValueBlock, metrics) => {
+    "does not treat the sentence-leading employer $employerName as a metric",
+    ({ employerName, employerValueBlock, metrics }) => {
       const issues = validateEnglishCvBackedQualityGate({
         writerOutput: output({
           opening: "I reduced the onboarding backlog by 24%.",
@@ -1234,6 +1262,7 @@ describe("English CV-backed quality gate", () => {
         }),
         claimPlan,
         factGraph,
+        targetEmployerName: employerName,
       });
 
       for (const metric of metrics) {
@@ -1245,6 +1274,27 @@ describe("English CV-backed quality gate", () => {
       }
     },
   );
+
+  it("does not trust a different numeric employer name", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock:
+          "3-Day Blinds offers a customer-focused environment.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+      targetEmployerName: "5-Hour Energy",
+    });
+
+    expect(issues).toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "employerValueBlock",
+      metric: "3",
+    });
+  });
 
   it("does not exempt a capitalized numeric duration as a company name", () => {
     const durationFactGraph: FactGraphV1 = {
@@ -3638,6 +3688,8 @@ describe("English CV-backed quality gate", () => {
   it.each([
     "Managed services experience strengthened my delivery approach.",
     "Managed services experience strengthens my delivery approach.",
+    "Managed services experience grows steadily.",
+    "Managed services experience translates directly.",
     "Improved client reporting processes supported weekly delivery.",
     "Built platform operations experience improved stakeholder alignment.",
   ])(

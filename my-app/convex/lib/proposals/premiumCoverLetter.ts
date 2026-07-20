@@ -2147,8 +2147,12 @@ function isSecondaryQualification(fact: AllowedFact): boolean {
 
 function extractEmployerName(jobTitle: string, jobDescription: string): string | undefined {
   const candidate = (
-    jobTitle.match(/\bat\s+([A-Z][\w&'.-]+(?:\s+[A-Z][\w&'.-]+){0,3})/)?.[1] ??
-    jobDescription.match(/\b(?:join|at)\s+([A-Z][\w&'.-]+(?:\s+[A-Z][\w&'.-]+){0,3})/)?.[1]
+    jobTitle.match(
+      /\b[Aa]t\s+([A-Z0-9][\w&'.-]+(?:\s+[A-Z0-9][\w&'.-]+){0,3})/,
+    )?.[1] ??
+    jobDescription.match(
+      /\b(?:[Jj]oin|[Aa]t)\s+([A-Z0-9][\w&'.-]+(?:\s+[A-Z0-9][\w&'.-]+){0,3})/,
+    )?.[1]
   )?.trim();
   return candidate ? compactWhitespace(candidate) : undefined;
 }
@@ -7644,6 +7648,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     claimPlan,
     factGraph,
     jobDemandGraph,
+    targetEmployerName: brief.employerName,
   });
   let blockingEnglishCvBackedQualityGateIssues =
     englishCvBackedQualityGateIssues.filter((issue) =>
@@ -7678,6 +7683,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
       claimPlan,
       factGraph,
       jobDemandGraph,
+      targetEmployerName: brief.employerName,
     });
     blockingEnglishCvBackedQualityGateIssues =
       englishCvBackedQualityGateIssues.filter((issue) =>

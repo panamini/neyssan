@@ -324,6 +324,7 @@ const FINITE_PREDICATE_TOKENS = new Set([
   "drive",
   "enable",
   "ensure",
+  "grow",
   "grew",
   "had",
   "has",
@@ -341,6 +342,8 @@ const FINITE_PREDICATE_TOKENS = new Set([
   "shall",
   "should",
   "sustain",
+  "strengthen",
+  "translate",
   "was",
   "were",
   "will",
@@ -1172,36 +1175,6 @@ function numericOccurrenceIsPartOfContextualEntity(args: {
   });
 }
 
-function numericOccurrenceIsPartOfHyphenatedProperName(args: {
-  value: string;
-  occurrence: NumericTokenOccurrence;
-}): boolean {
-  return Array.from(
-    args.value.matchAll(
-      /\b\d+(?:[-–—]\d+)*(?:[-–—][A-Z][A-Za-z0-9&'.-]*)+\b/gu,
-    ),
-  ).some((match) => {
-    const parts = match[0].split(/[-–—]/u);
-    const numericPrefixLength = parts.findIndex(
-      (part) => !/^\d+$/u.test(part),
-    );
-    const firstNamePart = parts[numericPrefixLength]?.toLowerCase() ?? "";
-    if (
-      numericPrefixLength < 2 &&
-      !WRITTEN_NUMBER_UNITS.has(firstNamePart) &&
-      !WRITTEN_NUMBER_TENS.has(firstNamePart) &&
-      firstNamePart.length > 2
-    ) {
-      return false;
-    }
-    const entityStart = match.index ?? 0;
-    return (
-      args.occurrence.index >= entityStart &&
-      args.occurrence.index < entityStart + match[0].length
-    );
-  });
-}
-
 function numericOccurrenceIsPartOfWrittenNumberEntity(args: {
   value: string;
   occurrence: NumericTokenOccurrence;
@@ -1226,7 +1199,6 @@ function numericOccurrenceIsPartOfEntity(args: {
 }): boolean {
   if (
     numericOccurrenceIsPartOfContextualEntity(args) ||
-    numericOccurrenceIsPartOfHyphenatedProperName(args) ||
     numericOccurrenceIsPartOfWrittenNumberEntity(args)
   ) {
     return true;
@@ -1752,6 +1724,7 @@ export function validateEnglishCvBackedQualityGate(args: {
   claimPlan: ClaimPlanV1;
   factGraph: FactGraphV1;
   jobDemandGraph?: JobDemandGraphV1;
+  targetEmployerName?: string;
 }): EnglishCvBackedQualityGateIssue[] {
   if (
     args.claimPlan.language !== "English" ||
@@ -1891,6 +1864,9 @@ export function validateEnglishCvBackedQualityGate(args: {
       (factId) =>
         args.factGraph.facts.find((fact) => fact.id === factId)?.entities ?? [],
     );
+    if (args.targetEmployerName) {
+      visibleMetricEntities.push(args.targetEmployerName);
+    }
     const employerGroundingFactIds = effectiveFactIds;
     if (
       section === "employerValueBlock" &&
@@ -2000,6 +1976,7 @@ export function analyzeEnglishCvBackedQualityGate(args: {
   claimPlan: ClaimPlanV1;
   factGraph: FactGraphV1;
   jobDemandGraph?: JobDemandGraphV1;
+  targetEmployerName?: string;
 }): EnglishCvBackedQualityGateAnalysis {
   const issues = validateEnglishCvBackedQualityGate(args);
   if (

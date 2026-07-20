@@ -2684,6 +2684,44 @@ describe("premium cover letter prompt contract", () => {
     });
   };
 
+  it.each([
+    {
+      jobTitle: "Implementation Analyst at 4-H",
+      jobDescription: directJob.jobDescription,
+      employerName: "4-H",
+    },
+    {
+      jobTitle: directJob.jobTitle,
+      jobDescription: `Join 5-Hour Energy as an implementation analyst. ${directJob.jobDescription}`,
+      employerName: "5-Hour Energy",
+    },
+    {
+      jobTitle: directJob.jobTitle,
+      jobDescription: `Join 3-Day Blinds as an implementation analyst. ${directJob.jobDescription}`,
+      employerName: "3-Day Blinds",
+    },
+  ])(
+    "preserves the numeric employer $employerName in the structured brief",
+    ({ jobTitle, jobDescription, employerName }) => {
+      const { factGraph, jobDemandGraph, rankedEvidencePack, claimPlan } =
+        buildDirectClaimPlanFixture();
+      const brief = buildPremiumCoverLetterBrief({
+        preset: "signature",
+        outputLanguage: "English",
+        jobTitle,
+        jobDescription,
+        contextClass: "cv_direct",
+        allowedFactsPack: buildAllowedFactsPackFromFactGraph(factGraph),
+        rankedEvidencePack,
+        claimPlan,
+        factGraph,
+        jobDemandGraph,
+      });
+
+      expect(brief.employerName).toBe(employerName);
+    },
+  );
+
   it("adds the CV-backed editorial quality contract to English and French direct and adjacent prompts only", () => {
     const inScopePrompts = [
       buildPremiumCoverLetterPrompt({ brief: buildDirectBrief("English") }),
