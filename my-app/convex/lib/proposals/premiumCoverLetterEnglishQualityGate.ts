@@ -184,6 +184,7 @@ const FINITE_PREDICATE_TOKENS = new Set([
   "drive",
   "enable",
   "ensure",
+  "grew",
   "had",
   "has",
   "have",
@@ -257,8 +258,14 @@ const WRITTEN_NUMBER_TENS = new Map([
   ["eighty", 80],
   ["ninety", 90],
 ]);
+const WRITTEN_NUMBER_SCALES = new Map([
+  ["hundred", 100],
+  ["thousand", 1_000],
+  ["million", 1_000_000],
+  ["billion", 1_000_000_000],
+]);
 const WRITTEN_NUMBER_PATTERN =
-  /\b((?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen)|(?:(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[-\s]+(?:one|two|three|four|five|six|seven|eight|nine))?))(?:\s+(percent)\b)?/giu;
+  /\b((?:(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion)(?:[-\s]+)){0,5}(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion))(?:\s+(percent)\b)?/giu;
 const NON_QUANTITATIVE_WRITTEN_NUMBER_MEASUREMENTS = new Set([
   "advantage",
   "benefit",
@@ -303,6 +310,31 @@ function startsWithLowercaseStyledProperNoun(value: string): boolean {
   );
 }
 
+function continuesContextualAbbreviation(args: {
+  textThroughPunctuation: string;
+  remainingText: string;
+}): boolean {
+  if (/\b(?:e\.g|i\.e)\.$/iu.test(args.textThroughPunctuation)) return true;
+  return (
+    /\b(?:u\.s|u\.k)\.$/iu.test(args.textThroughPunctuation) &&
+    /^\s*(?:Bank|Bancorp|Airways|Airlines|Army|Navy|Department|Government|Steel)\b/u.test(
+      args.remainingText,
+    )
+  );
+}
+
+function isContextualPeriodSentenceBoundary(args: {
+  textThroughPunctuation: string;
+  remainingText: string;
+  nextCharacter: string;
+}): boolean {
+  if (continuesContextualAbbreviation(args)) return false;
+  return (
+    /[\p{Lu}\p{N}"'“‘(]/u.test(args.nextCharacter) ||
+    startsWithLowercaseStyledProperNoun(args.remainingText)
+  );
+}
+
 function buildSentenceRange(
   value: string,
   start: number,
@@ -338,10 +370,11 @@ function isSentenceBoundary(args: {
     return false;
   }
   if (CONTEXTUAL_PERIOD_ABBREVIATION_PATTERN.test(textThroughPunctuation)) {
-    return (
-      /[\p{Lu}\p{N}"'“‘(]/u.test(nextCharacter) ||
-      startsWithLowercaseStyledProperNoun(args.value.slice(end))
-    );
+    return isContextualPeriodSentenceBoundary({
+      textThroughPunctuation,
+      remainingText: args.value.slice(end),
+      nextCharacter,
+    });
   }
   return true;
 }
@@ -440,7 +473,7 @@ function isIgnoredNumericOccurrence(args: {
 
 function numericSignMultiplier(sign: string, prefix: string): number {
   if (sign === "-" && /\d\s*$/u.test(prefix)) return 1;
-  return ["-", "minus", "negative"].includes(sign.toLowerCase()) ? -1 : 1;
+  return ["-", "−", "minus", "negative"].includes(sign.toLowerCase()) ? -1 : 1;
 }
 
 function metricMeasurement(args: {
@@ -463,7 +496,9 @@ function metricMeasurement(args: {
     (token, index) =>
       index > 0 &&
       (token.toLowerCase() === "responsible" ||
-        /(?:ed|en|ing)$/iu.test(token)),
+        /(?:ed|en)$/iu.test(token) ||
+        (token.toLowerCase().endsWith("ing") &&
+          measurementTokens[index - 1]?.toLowerCase().endsWith("s"))),
   );
   const boundaryIndexes = [stopIndex, postmodifierIndex].filter(
     (index) => index >= 0,
@@ -547,11 +582,37 @@ function normalizeNumericTokenOccurrence(args: {
 
 function writtenNumberValue(value: string): number | null {
   const parts = value.toLowerCase().split(/[-\s]+/u);
-  const unit = WRITTEN_NUMBER_UNITS.get(parts[0]);
-  if (unit !== undefined) return unit;
-  const tens = WRITTEN_NUMBER_TENS.get(parts[0]);
-  if (tens === undefined) return null;
-  return tens + (WRITTEN_NUMBER_UNITS.get(parts[1] ?? "") ?? 0);
+  let total = 0;
+  let current = 0;
+  for (const part of parts) {
+    const unit = WRITTEN_NUMBER_UNITS.get(part);
+    if (unit !== undefined) {
+      current += unit;
+      continue;
+    }
+    const tens = WRITTEN_NUMBER_TENS.get(part);
+    if (tens !== undefined) {
+      current += tens;
+      continue;
+    }
+    const scale = WRITTEN_NUMBER_SCALES.get(part);
+    if (scale === undefined) return null;
+    if (scale === 100) {
+      current = Math.max(current, 1) * scale;
+    } else {
+      total += Math.max(current, 1) * scale;
+      current = 0;
+    }
+  }
+  return total + current;
+}
+
+function isWrittenNumberLexeme(value: string): boolean {
+  return (
+    WRITTEN_NUMBER_UNITS.has(value) ||
+    WRITTEN_NUMBER_TENS.has(value) ||
+    WRITTEN_NUMBER_SCALES.has(value)
+  );
 }
 
 function isNonQuantitativeWrittenNumberMeasurement(args: {
@@ -564,6 +625,20 @@ function isNonQuantitativeWrittenNumberMeasurement(args: {
   );
 }
 
+function isIgnoredWrittenNumberOccurrence(args: {
+  value: string;
+  matchedNumber: string;
+  index: number;
+  end: number;
+}): boolean {
+  const standaloneScaleAfterDigit =
+    WRITTEN_NUMBER_SCALES.has(args.matchedNumber.toLowerCase()) &&
+    /\d\s*$/u.test(args.value.slice(0, args.index));
+  const partOfHyphenatedIdiom =
+    args.value[args.index - 1] === "-" || args.value[args.end] === "-";
+  return standaloneScaleAfterDigit || partOfHyphenatedIdiom;
+}
+
 function writtenNumericTokenOccurrences(
   value: string,
 ): NumericTokenOccurrence[] {
@@ -573,7 +648,14 @@ function writtenNumericTokenOccurrences(
     const percentage = Boolean(match[2]);
     const index = match.index ?? 0;
     const end = index + match[0].length;
-    if (/^\s+(?:hundred|thousand|million|billion)\b/iu.test(value.slice(end))) {
+    if (
+      isIgnoredWrittenNumberOccurrence({
+        value,
+        matchedNumber: match[1],
+        index,
+        end,
+      })
+    ) {
       return [];
     }
     const measurement = metricMeasurement({ value, end, percentage });
@@ -585,7 +667,6 @@ function writtenNumericTokenOccurrences(
     if (
       !percentage &&
       (!measurement ||
-        value[end] === "-" ||
         isNonQuantitativeWrittenNumberMeasurement({
           measurement,
           immediateMeasurement,
@@ -618,7 +699,7 @@ function numericTokenOccurrences(value: string): NumericTokenOccurrence[] {
   const tokens: NumericTokenOccurrence[] = [];
   for (const match of value
     .matchAll(
-      /(?<![A-Za-z0-9])([+-]|minus\b|negative\b|plus\b|positive\b)?\s*((?:USD|EUR|GBP|[$€£])?)\s*(\d[\d,]*(?:\.\d+)?)\s*(%|percent\b|[KMB]\b|thousand\b|million\b|billion\b|[x×])?(?:\s*((?:USD|EUR|GBP)\b))?(?![A-Za-z0-9])/gi,
+      /(?<![A-Za-z0-9])([+−-]|minus\b|negative\b|plus\b|positive\b)?\s*((?:USD|EUR|GBP|[$€£])?)\s*(\d[\d,]*(?:\.\d+)?)\s*(%|percent\b|[KMB]\b|thousand\b|million\b|billion\b|[x×])?(?:\s*((?:USD|EUR|GBP)\b))?(?![A-Za-z0-9])/gi,
     )) {
     const occurrence = normalizeNumericTokenOccurrence({ value, match });
     if (occurrence) tokens.push(occurrence);
@@ -716,6 +797,7 @@ function evidenceAnchorTokensFromValues(values: readonly string[]): Set<string> 
           (
             (normalized.length >= 4 || shortAcronym) &&
             !numericTokens(normalized).length &&
+            !isWrittenNumberLexeme(normalized) &&
             !EVIDENCE_ANCHOR_STOP_WORDS.has(normalized)
           )
             ? [canonicalizePremiumCoverLetterToken(normalized)]

@@ -40,6 +40,13 @@ const INVARIANT_S_ENDING_TOKENS = new Set([
   "series",
   "species",
 ]);
+const SINGULAR_S_ENDING_TOKENS = new Set([
+  "atlas",
+  "bias",
+  "canvas",
+  "chaos",
+  "gas",
+]);
 
 export function normalizePremiumCoverLetterNumericToken(
   value: string,
@@ -67,7 +74,12 @@ export function expandPremiumCoverLetterTokenVariants(
 ): string[] {
   const token = value.toLowerCase();
   const variants = new Set([token]);
-  if (INVARIANT_S_ENDING_TOKENS.has(token)) return [...variants];
+  if (
+    INVARIANT_S_ENDING_TOKENS.has(token) ||
+    SINGULAR_S_ENDING_TOKENS.has(token)
+  ) {
+    return [...variants];
+  }
 
   if (token.endsWith("ies") && token.length > 5) {
     variants.add(`${token.slice(0, -3)}y`);
@@ -100,7 +112,12 @@ export function canonicalizePremiumCoverLetterToken(value: string): string {
 
 export function canonicalizePremiumCoverLetterNoun(value: string): string {
   const token = value.toLowerCase();
-  if (INVARIANT_S_ENDING_TOKENS.has(token)) return token;
+  if (
+    INVARIANT_S_ENDING_TOKENS.has(token) ||
+    SINGULAR_S_ENDING_TOKENS.has(token)
+  ) {
+    return token;
+  }
   const irregularPlural = IRREGULAR_PLURAL_CANONICALS.get(token);
   if (irregularPlural) return irregularPlural;
 

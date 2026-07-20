@@ -511,6 +511,37 @@ describe("English CV-backed quality gate", () => {
     );
   });
 
+  it("preserves the head noun through a gerund compound modifier", () => {
+    const engineeringFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Supported 20 software engineering teams.",
+              metrics: ["20"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I supported 20 engineering teams.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: engineeringFactGraph,
+    });
+
+    expect(issues).not.toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "opening",
+      metric: "20",
+    });
+  });
+
   it.each([
     {
       name: "client and customer",
@@ -658,9 +689,30 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
+  it("rejects unsupported compound written-out quantitative claims", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I supported one hundred clients.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "opening",
+      metric: "100",
+    });
+  });
+
   it.each([
     "One reason I improved delivery was clearer handoffs.",
     "One practical advantage is my structured follow-through.",
+    "I held one-on-one meetings with delivery teams.",
+    "I provided one-to-one coaching across the team.",
     "I maintained two-way communication across teams.",
   ])("does not treat non-quantitative cardinal prose as a metric: %s", (opening) => {
     const issues = validateEnglishCvBackedQualityGate({
@@ -895,7 +947,7 @@ describe("English CV-backed quality gate", () => {
     },
   );
 
-  it.each(["minus 5%", "negative 5%"])(
+  it.each(["minus 5%", "negative 5%", "−5%"])(
     "normalizes the verbal sign in %s",
     (generatedMetric) => {
       const signedMetricFactGraph: FactGraphV1 = {
@@ -1123,6 +1175,27 @@ describe("English CV-backed quality gate", () => {
       expect.objectContaining({ code: "duplicate_visible_sentence" }),
     );
   });
+
+  it.each(["U.S. Bank", "e.g. React"])(
+    "keeps %s inside an uppercase proper-name continuation",
+    (properName) => {
+      const issues = validateEnglishCvBackedQualityGate({
+        writerOutput: output({
+          opening: `I worked with ${properName}.`,
+          proofBlock: `I consulted ${properName}.`,
+          employerValueBlock:
+            "That reporting supports clear delivery handoffs.",
+          closeLine: "I would bring that discipline to the team.",
+        }),
+        claimPlan,
+        factGraph,
+      });
+
+      expect(issues).not.toContainEqual(
+        expect.objectContaining({ code: "duplicate_visible_sentence" }),
+      );
+    },
+  );
 
   it("detects a repeated sentence after an abbreviation ends the prior sentence", () => {
     const issues = validateEnglishCvBackedQualityGate({
@@ -1658,6 +1731,37 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
+  it("does not use a standalone written number as an evidence anchor", () => {
+    const writtenNumberFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_close"
+          ? {
+              ...fact,
+              text: "Supported three teams.",
+              entities: [],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock:
+          "Three priorities matter to your organization.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: writtenNumberFactGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "employer_value_not_grounded",
+      section: "employerValueBlock",
+    });
+  });
+
   it("preserves short CV acronyms as employer grounding anchors", () => {
     const acronymFactGraph: FactGraphV1 = {
       ...factGraph,
@@ -2010,6 +2114,11 @@ describe("English CV-backed quality gate", () => {
     },
   );
 
+  it("does not derive a Canva overlap from the singular noun canvas", () => {
+    expect(expandPremiumCoverLetterTokenVariants("canvas")).toEqual(["canvas"]);
+    expect(canonicalizePremiumCoverLetterNoun("canvas")).toBe("canvas");
+  });
+
   it("canonicalizes inflected evidence anchors for employer grounding", () => {
     const inflectedFactGraph: FactGraphV1 = {
       ...factGraph,
@@ -2340,6 +2449,24 @@ describe("English CV-backed quality gate", () => {
         opening: "I reduced the onboarding backlog by 24%.",
         proofBlock:
           "Managed services improve reliability. Improved processes sustained the result.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).not.toContainEqual({
+      code: "incomplete_sentence",
+      section: "proofBlock",
+    });
+  });
+
+  it("accepts an irregular finite predicate after a verb-led subject", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "Tracked adoption grew steadily.",
         employerValueBlock: "That reporting supports clear delivery handoffs.",
         closeLine: "I would bring that discipline to the team.",
       }),
