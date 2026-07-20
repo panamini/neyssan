@@ -1221,6 +1221,7 @@ describe("English CV-backed quality gate", () => {
   it.each([
     ["7-Eleven offers a customer-focused environment.", ["7", "11"]],
     ["1-800-Flowers offers a customer-focused environment.", ["1", "800"]],
+    ["4-H offers a collaborative environment.", ["4"]],
   ])(
     "does not treat the sentence-leading employer in %s as a metric",
     (employerValueBlock, metrics) => {
@@ -3636,6 +3637,7 @@ describe("English CV-backed quality gate", () => {
 
   it.each([
     "Managed services experience strengthened my delivery approach.",
+    "Managed services experience strengthens my delivery approach.",
     "Improved client reporting processes supported weekly delivery.",
     "Built platform operations experience improved stakeholder alignment.",
   ])(

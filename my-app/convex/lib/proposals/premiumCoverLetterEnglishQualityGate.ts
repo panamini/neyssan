@@ -1189,7 +1189,8 @@ function numericOccurrenceIsPartOfHyphenatedProperName(args: {
     if (
       numericPrefixLength < 2 &&
       !WRITTEN_NUMBER_UNITS.has(firstNamePart) &&
-      !WRITTEN_NUMBER_TENS.has(firstNamePart)
+      !WRITTEN_NUMBER_TENS.has(firstNamePart) &&
+      firstNamePart.length > 2
     ) {
       return false;
     }
@@ -1518,6 +1519,7 @@ function hasSupportedSubjectForUnlistedPredicate(args: {
   return (
     args.index === 2 ||
     hasNounPhraseSubjectForUnlistedPredicate(args) ||
+    hasMultiwordNounSubjectAfterLeadingParticiple(args) ||
     hasFrontedBareNounSubject(args)
   );
 }
@@ -1532,6 +1534,20 @@ function isTerminalUnlistedFinitePredicate(args: {
     /(?:e|s|ify|ise|ize|ate)$/u.test(args.token) &&
     (hasNounPhraseSubjectForUnlistedPredicate(args) ||
       hasFrontedBareNounSubject(args))
+  );
+}
+
+function isAmbiguousAdverbOnlyPredicate(args: {
+  tokens: readonly string[];
+  token: string;
+  index: number;
+}): boolean {
+  const followingToken = args.tokens[args.index + 1] ?? "";
+  return (
+    args.token.endsWith("s") &&
+    args.index === args.tokens.length - 2 &&
+    followingToken.endsWith("ly") &&
+    hasMultiwordNounSubjectAfterLeadingParticiple(args)
   );
 }
 
@@ -1564,7 +1580,7 @@ function isLikelyUnlistedFinitePredicate(args: {
   if (FINITE_PREDICATE_BLOCKERS.has(followingToken)) {
     return false;
   }
-  if (hasPredicateShape) return true;
+  if (hasPredicateShape) return !isAmbiguousAdverbOnlyPredicate(args);
   return hasPluralSubjectForUnlistedPredicate(args);
 }
 
