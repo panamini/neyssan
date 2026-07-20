@@ -323,6 +323,24 @@ describe("premium ClaimPlan provenance v1", () => {
     ).toContain("3M");
   });
 
+  it.each(["7-Eleven", "1-800-Flowers"])(
+    "extracts the contextual digit-leading employer %s with separators",
+    (employer) => {
+      const factGraph = buildPremiumFactGraphV1({
+        personalizationContext: {
+          ...directContext,
+          summary: `Worked at ${employer} improving onboarding.`,
+        },
+        jobDescription: directJob.jobDescription,
+      });
+
+      expect(
+        factGraph.facts.find((fact) => fact.id === "fact_summary_001")
+          ?.entities,
+      ).toContain(employer);
+    },
+  );
+
   it("wraps job priority buckets into stable JobDemandGraphV1 demand ids", () => {
     const jobDemandGraph = buildPremiumJobDemandGraphV1(
       "Coordinate implementation workflows. Must have reporting experience. Excel is a plus. Reliable and organized. Great benefits and mission-led culture.",
@@ -2085,6 +2103,57 @@ describe("premium ClaimPlan provenance v1", () => {
       provenance.sections.opening.verifiedCandidateFactIds,
     ).not.toContain(citedFactId);
   });
+
+  it.each([
+    ["AWS", "GCP"],
+    ["SQL", "AWS"],
+    ["R", "Go"],
+    ["Go", "R"],
+    ["C#", "C++"],
+  ])(
+    "keeps short technical identifiers distinct in final provenance: %s vs %s",
+    (sourceIdentifier, generatedIdentifier) => {
+      const { claimPlan, factGraph } = buildDirectClaimPlanFixture();
+      const openingClaim = claimPlan.claims.find(
+        (claim) => claim.section === "opening",
+      )!;
+      const citedFactId = openingClaim.factIds[0];
+      const technicalFactGraph = {
+        ...factGraph,
+        facts: factGraph.facts.map((fact) =>
+          fact.id === citedFactId
+            ? {
+                ...fact,
+                text: `Built APIs with ${sourceIdentifier}.`,
+                metrics: [],
+                entities: [sourceIdentifier],
+              }
+            : fact,
+        ),
+      };
+      const writerOutput = buildDirectPremiumWriterOutputFixture({
+        opening: `I built APIs with ${generatedIdentifier}.`,
+        proofBlock:
+          "I led a design system migration used across 4 product squads.",
+        employerValueBlock:
+          "I built experimentation dashboards used by product and growth teams.",
+        closeLine:
+          "I would bring that design-system discipline to product-facing interface work.",
+      });
+      const provenance = buildPremiumCoverLetterFinalProvenance({
+        writerOutput,
+        finalBodyParts: toCoverLetterBodyParts(writerOutput),
+        claimPlan,
+        factGraph: technicalFactGraph,
+        legacyWrapped: false,
+        provenanceIdsNormalized: false,
+      });
+
+      expect(
+        provenance.sections.opening.verifiedCandidateFactIds,
+      ).not.toContain(citedFactId);
+    },
+  );
 
   it("fails non-repairable writer provenance and keeps greeting leakage repairable", () => {
     const { claimPlan, factGraph, jobDemandGraph, brief } = buildDirectClaimPlanFixture();

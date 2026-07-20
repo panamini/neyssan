@@ -155,6 +155,31 @@ const METRIC_MEASUREMENT_STOP_WORDS = new Set([
 const METRIC_MEASUREMENT_ALIASES = new Map([
   ["customer", "client"],
 ]);
+const METRIC_CURRENCIES = new Map<string, "usd" | "eur" | "gbp">([
+  ["$", "usd"],
+  ["dollar", "usd"],
+  ["dollars", "usd"],
+  ["usd", "usd"],
+  ["€", "eur"],
+  ["euro", "eur"],
+  ["euros", "eur"],
+  ["eur", "eur"],
+  ["£", "gbp"],
+  ["pound", "gbp"],
+  ["pounds", "gbp"],
+  ["gbp", "gbp"],
+]);
+const GENERIC_PERCENTAGE_MEASUREMENTS = new Set([
+  "change",
+  "decrease",
+  "gain",
+  "growth",
+  "improvement",
+  "increase",
+  "lift",
+  "reduction",
+  "result",
+]);
 const GENERIC_SINGLE_EVIDENCE_ANCHORS = new Set([
   "communication",
   "coordinate",
@@ -480,12 +505,14 @@ type NumericTokenOccurrence = Readonly<{
   metric: string;
   key: string;
   baseKey: string;
+  measurement: string;
   index: number;
 }>;
 
 type SourceMetricFacts = Readonly<{
   factIdsByKey: Map<string, Set<string>>;
   baseKeysWithUnmeasuredSource: Set<string>;
+  measuredKeysByBase: Map<string, Set<string>>;
 }>;
 
 function numericMagnitudeMultiplier(suffix: string): number {
@@ -510,19 +537,7 @@ function canonicalMetricMeasurement(value: string): string {
 }
 
 function metricCurrency(symbol: string): "usd" | "eur" | "gbp" | null {
-  switch (symbol.toLowerCase()) {
-    case "$":
-    case "usd":
-      return "usd";
-    case "€":
-    case "eur":
-      return "eur";
-    case "£":
-    case "gbp":
-      return "gbp";
-    default:
-      return null;
-  }
+  return METRIC_CURRENCIES.get(symbol.toLowerCase()) ?? null;
 }
 
 function isPlainToolVersion(args: {
@@ -556,35 +571,12 @@ function numericSignMultiplier(sign: string, prefix: string): number {
   return ["-", "−", "minus", "negative"].includes(sign.toLowerCase()) ? -1 : 1;
 }
 
-function repeatsPercentageSurfaceInSentence(args: {
+function precedingPercentageMeasurement(args: {
   value: string;
   start: number;
-  end: number;
-}): boolean {
-  const sentence = splitSentenceRanges(args.value).find(
-    (range) => args.start >= range.start && args.start < range.end,
-  )?.text;
-  if (!sentence) return false;
-  const surface = args.value.slice(args.start, args.end).trim().toLowerCase();
-  if (!surface) return false;
-  const escapedSurface = surface.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-  const percentagePattern = new RegExp(
-    `(?<![A-Za-z0-9])${escapedSurface}(?![A-Za-z0-9])`,
-    "gu",
-  );
-  return (
-    Array.from(sentence.toLowerCase().matchAll(percentagePattern)).length > 1
-  );
-}
-
-function repeatedPercentageMeasurement(args: {
-  value: string;
-  start: number;
-  end: number;
   percentage: boolean;
 }): string | null {
   if (!args.percentage) return null;
-  if (!repeatsPercentageSurfaceInSentence(args)) return "";
   const precedingMeasurement =
     args.value
       .slice(0, args.start)
@@ -600,7 +592,7 @@ function metricMeasurement(args: {
   end: number;
   percentage: boolean;
 }): string {
-  const percentageMeasurement = repeatedPercentageMeasurement(args);
+  const percentageMeasurement = precedingPercentageMeasurement(args);
   if (percentageMeasurement !== null) return percentageMeasurement;
   const measurementSurface =
     args.value
@@ -653,6 +645,20 @@ function metricLabel(args: {
   return String(args.value);
 }
 
+function normalizeMetricNumericToken(args: {
+  value: string;
+  percentage: boolean;
+}): string {
+  if (
+    args.percentage &&
+    /^\d+,\d{1,3}$/u.test(args.value) &&
+    !args.value.includes(".")
+  ) {
+    return args.value.replace(",", ".");
+  }
+  return normalizePremiumCoverLetterNumericToken(args.value);
+}
+
 function normalizeNumericTokenOccurrence(args: {
   value: string;
   match: RegExpMatchArray;
@@ -666,14 +672,17 @@ function normalizeNumericTokenOccurrence(args: {
     return null;
   }
 
+  const percentage = suffix === "%" || suffix === "percent";
   const numericValue = Number(
-    normalizePremiumCoverLetterNumericToken(args.match[3]),
+    normalizeMetricNumericToken({
+      value: args.match[3],
+      percentage,
+    }),
   );
   const metricValue =
     numericValue *
     numericSignMultiplier(sign, prefix) *
     numericMagnitudeMultiplier(suffix);
-  const percentage = suffix === "%" || suffix === "percent";
   const multiplier = suffix === "x" || suffix === "×";
   const end = index + args.match[0].length;
   const measurement = metricMeasurement({
@@ -697,6 +706,7 @@ function normalizeNumericTokenOccurrence(args: {
     key: [baseKey, measurement]
       .filter((part) => part !== "")
       .join(":"),
+    measurement,
     index,
   };
 }
@@ -806,6 +816,7 @@ function writtenNumericTokenOccurrences(
         .slice(end)
         .match(/^\s*([A-Za-z][A-Za-z-]*)/u)?.[1]
         .toLowerCase() ?? "";
+    const currency = metricCurrency(immediateMeasurement);
     if (
       !percentage &&
       (!measurement ||
@@ -817,7 +828,7 @@ function writtenNumericTokenOccurrences(
       return [];
     }
     const baseKey = [
-      metricUnit({ currency: null, percentage, multiplier: false }),
+      metricUnit({ currency, percentage, multiplier: false }),
       metricValue,
     ].join(":");
     return [
@@ -831,6 +842,7 @@ function writtenNumericTokenOccurrences(
         key: [baseKey, measurement]
           .filter((part) => part !== "")
           .join(":"),
+        measurement,
         index,
       },
     ];
@@ -1048,6 +1060,7 @@ function sourceMetricFactIds(args: {
 }): SourceMetricFacts {
   const factIdsByMetric = new Map<string, Set<string>>();
   const baseKeysWithUnmeasuredSource = new Set<string>();
+  const measuredKeysByBase = new Map<string, Set<string>>();
   for (const { occurrence, sourceId } of sourceMetricOccurrences(args)) {
     for (const key of new Set([occurrence.key, occurrence.baseKey])) {
       const supportingFactIds = factIdsByMetric.get(key) ?? new Set<string>();
@@ -1056,12 +1069,46 @@ function sourceMetricFactIds(args: {
     }
     if (occurrence.key === occurrence.baseKey) {
       baseKeysWithUnmeasuredSource.add(occurrence.baseKey);
+    } else {
+      const measuredKeys =
+        measuredKeysByBase.get(occurrence.baseKey) ?? new Set<string>();
+      measuredKeys.add(occurrence.key);
+      measuredKeysByBase.set(occurrence.baseKey, measuredKeys);
     }
   }
   return {
     factIdsByKey: factIdsByMetric,
     baseKeysWithUnmeasuredSource,
+    measuredKeysByBase,
   };
+}
+
+function resolveSourceMetricKey(args: {
+  occurrence: NumericTokenOccurrence;
+  sourceMetricFacts: SourceMetricFacts;
+}): string {
+  if (args.sourceMetricFacts.factIdsByKey.has(args.occurrence.key)) {
+    return args.occurrence.key;
+  }
+  if (
+    (args.occurrence.key === args.occurrence.baseKey ||
+      args.sourceMetricFacts.baseKeysWithUnmeasuredSource.has(
+        args.occurrence.baseKey,
+      )) &&
+    args.sourceMetricFacts.factIdsByKey.has(args.occurrence.baseKey)
+  ) {
+    return args.occurrence.baseKey;
+  }
+  const measuredKeys = args.sourceMetricFacts.measuredKeysByBase.get(
+    args.occurrence.baseKey,
+  );
+  if (
+    GENERIC_PERCENTAGE_MEASUREMENTS.has(args.occurrence.measurement) &&
+    measuredKeys?.size === 1
+  ) {
+    return Array.from(measuredKeys)[0] ?? args.occurrence.key;
+  }
+  return args.occurrence.key;
 }
 
 function hasPluralSubjectForUnlistedPredicate(args: {
@@ -1153,6 +1200,7 @@ function isFinitePredicateCandidate(args: {
       ["i", "we", "you", "they", "he", "she", "it"].includes(
         args.tokens[args.index - 1],
       ) ||
+      hasNounPhraseSubjectForUnlistedPredicate(args) ||
       args.tokens[args.index - 1]?.endsWith("s") === true ||
       ["that", "which", "who"].includes(args.tokens[args.index + 1]))
   ) {
@@ -1464,18 +1512,11 @@ export function validateEnglishCvBackedQualityGate(args: {
           entities: visibleMetricEntities,
         }),
     )) {
-      const { key, metric } = occurrence;
-      const resolvedMetricKey = sourceMetricFacts.factIdsByKey.has(key)
-        ? key
-        : (
-              key === occurrence.baseKey ||
-              sourceMetricFacts.baseKeysWithUnmeasuredSource.has(
-                occurrence.baseKey,
-              )
-            ) &&
-            sourceMetricFacts.factIdsByKey.has(occurrence.baseKey)
-          ? occurrence.baseKey
-          : key;
+      const { metric } = occurrence;
+      const resolvedMetricKey = resolveSourceMetricKey({
+        occurrence,
+        sourceMetricFacts,
+      });
       const supportingMetricFactIds =
         sourceMetricFacts.factIdsByKey.get(resolvedMetricKey);
       if (!supportingMetricFactIds) {

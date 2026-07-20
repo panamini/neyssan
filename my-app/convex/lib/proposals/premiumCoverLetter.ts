@@ -1471,13 +1471,23 @@ function expandNormalizedTokenVariants(token: string): string[] {
   );
 }
 
+function isShortTechnicalIdentifierToken(value: string): boolean {
+  return (
+    /^[A-Z]{2,3}$/u.test(value) ||
+    ["R", "Go", "C#", "C++"].includes(value)
+  );
+}
+
 function normalizeCanonicalTokens(value: string): string[] {
-  const tokens = compactWhitespace(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter((token) => token.length >= 4 && !STOPWORDS.has(token))
-    .map((token) => canonicalizePremiumCoverLetterToken(token));
+  const tokens = (
+    compactWhitespace(value).match(/[A-Za-z0-9]+(?:\+\+|#)?/gu) ?? []
+  )
+    .filter(
+      (token) =>
+        (token.length >= 4 || isShortTechnicalIdentifierToken(token)) &&
+        !STOPWORDS.has(token.toLowerCase()),
+    )
+    .map((token) => canonicalizePremiumCoverLetterToken(token.toLowerCase()));
 
   return Array.from(new Set(tokens));
 }
@@ -1892,7 +1902,7 @@ function extractFactEntities(text: string): string[] {
   const namedEntities = compact.match(/\b[A-Z][A-Za-z0-9&'.-]{2,}\b/g) ?? [];
   const contextualDigitLeadingEntities = Array.from(
     compact.matchAll(
-      /\b(?:at|for|with|joined)\s+(\d+[A-Z][A-Za-z0-9&'.-]*)\b/gi,
+      /\b(?:at|for|with|joined)\s+(\d+(?:[-–—]\d+)*(?:[-–—]?[A-Z][A-Za-z0-9&'.-]*))\b/gi,
     ),
     (match) => match[1],
   );
