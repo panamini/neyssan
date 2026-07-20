@@ -708,9 +708,41 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
+  it("does not treat the tail of a conjunction compound as supported", () => {
+    const conjunctionFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Supported one hundred and twenty clients.",
+              metrics: ["120"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I supported twenty clients.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: conjunctionFactGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "opening",
+      metric: "20",
+    });
+  });
+
   it.each([
     "One reason I improved delivery was clearer handoffs.",
     "One practical advantage is my structured follow-through.",
+    "One thing I value most is client onboarding.",
     "I held one-on-one meetings with delivery teams.",
     "I provided one-to-one coaching across the team.",
     "I maintained two-way communication across teams.",
@@ -1176,7 +1208,7 @@ describe("English CV-backed quality gate", () => {
     );
   });
 
-  it.each(["U.S. Bank", "e.g. React"])(
+  it.each(["U.S. Bank", "e.g. React", "J.P. Morgan"])(
     "keeps %s inside an uppercase proper-name continuation",
     (properName) => {
       const issues = validateEnglishCvBackedQualityGate({
@@ -2422,6 +2454,24 @@ describe("English CV-backed quality gate", () => {
       writerOutput: output({
         opening: "I reduced the onboarding backlog by 24%.",
         proofBlock: "I documented handoffs. Managed services efficiently.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "incomplete_sentence",
+      section: "proofBlock",
+    });
+  });
+
+  it("rejects a verb-led fragment with a hyphenated modifier", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs. Led large-scale migrations across teams.",
         employerValueBlock: "That reporting supports clear delivery handoffs.",
         closeLine: "I would bring that discipline to the team.",
       }),

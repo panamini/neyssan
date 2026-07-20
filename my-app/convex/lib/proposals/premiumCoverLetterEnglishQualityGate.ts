@@ -265,7 +265,7 @@ const WRITTEN_NUMBER_SCALES = new Map([
   ["billion", 1_000_000_000],
 ]);
 const WRITTEN_NUMBER_PATTERN =
-  /\b((?:(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion)(?:[-\s]+)){0,5}(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion))(?:\s+(percent)\b)?/giu;
+  /\b((?:(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|and)(?:[-\s]+)){0,6}(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion))(?:\s+(percent)\b)?/giu;
 const NON_QUANTITATIVE_WRITTEN_NUMBER_MEASUREMENTS = new Set([
   "advantage",
   "benefit",
@@ -273,6 +273,8 @@ const NON_QUANTITATIVE_WRITTEN_NUMBER_MEASUREMENTS = new Set([
   "point",
   "priority",
   "reason",
+  "thing",
+  "things",
   "way",
 ]);
 
@@ -297,6 +299,7 @@ const TITLE_PERIOD_ABBREVIATION_PATTERN =
   /\b(?:dr|mr|mrs|ms|prof|sr|jr|st|no|fig)\.$/iu;
 const CONTEXTUAL_PERIOD_ABBREVIATION_PATTERN =
   /\b(?:etc|vs|approx|dept|co|corp|inc|ltd|llc|plc|gmbh|e\.g|i\.e|u\.s|u\.k)\.$/iu;
+const DOTTED_INITIALISM_CONTINUATION_PATTERN = /\b(?:[A-Z]\.){2,}$/u;
 const LOWERCASE_STYLED_SENTENCE_STARTERS = new Set(["npm"]);
 
 function startsWithLowercaseStyledProperNoun(value: string): boolean {
@@ -375,6 +378,12 @@ function isSentenceBoundary(args: {
       remainingText: args.value.slice(end),
       nextCharacter,
     });
+  }
+  if (
+    DOTTED_INITIALISM_CONTINUATION_PATTERN.test(textThroughPunctuation) &&
+    /^\s*[A-Z][A-Za-z]+\b/u.test(args.value.slice(end))
+  ) {
+    return false;
   }
   return true;
 }
@@ -585,6 +594,7 @@ function writtenNumberValue(value: string): number | null {
   let total = 0;
   let current = 0;
   for (const part of parts) {
+    if (part === "and") continue;
     const unit = WRITTEN_NUMBER_UNITS.get(part);
     if (unit !== undefined) {
       current += unit;
@@ -868,6 +878,7 @@ function isLikelyUnlistedFinitePredicate(args: {
   index: number;
 }): boolean {
   if (args.index !== 2 || args.tokens.length < 4) return false;
+  if (args.token.includes("-")) return false;
   if (FINITE_PREDICATE_BLOCKERS.has(args.token)) return false;
   if (
     /(?:ing|tion|ment|ity|ness|ance|ence|ship|ure|age|ery|ory|ism)$/u.test(
@@ -909,7 +920,7 @@ function isFinitePredicateCandidate(args: {
 
 function isVerbLedFragment(normalizedSentence: string): boolean {
   if (!VERB_LED_FRAGMENT_PATTERN.test(normalizedSentence)) return false;
-  const tokens = normalizedSentence.split(/[^a-z0-9]+/u).filter(Boolean);
+  const tokens = normalizedSentence.split(/[^a-z0-9-]+/u).filter(Boolean);
   const hasLaterFinitePredicate = tokens.some(
     (token, index) =>
       index >= 2 && isFinitePredicateCandidate({ tokens, token, index }),
