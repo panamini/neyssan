@@ -1181,6 +1181,18 @@ function numericOccurrenceIsPartOfHyphenatedProperName(args: {
       /\b\d+(?:[-–—]\d+)*(?:[-–—][A-Z][A-Za-z0-9&'.-]*)+\b/gu,
     ),
   ).some((match) => {
+    const parts = match[0].split(/[-–—]/u);
+    const numericPrefixLength = parts.findIndex(
+      (part) => !/^\d+$/u.test(part),
+    );
+    const firstNamePart = parts[numericPrefixLength]?.toLowerCase() ?? "";
+    if (
+      numericPrefixLength < 2 &&
+      !WRITTEN_NUMBER_UNITS.has(firstNamePart) &&
+      !WRITTEN_NUMBER_TENS.has(firstNamePart)
+    ) {
+      return false;
+    }
     const entityStart = match.index ?? 0;
     return (
       args.occurrence.index >= entityStart &&
@@ -1506,7 +1518,6 @@ function hasSupportedSubjectForUnlistedPredicate(args: {
   return (
     args.index === 2 ||
     hasNounPhraseSubjectForUnlistedPredicate(args) ||
-    hasMultiwordNounSubjectAfterLeadingParticiple(args) ||
     hasFrontedBareNounSubject(args)
   );
 }

@@ -1245,6 +1245,38 @@ describe("English CV-backed quality gate", () => {
     },
   );
 
+  it("does not exempt a capitalized numeric duration as a company name", () => {
+    const durationFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Completed a 5-year program.",
+              metrics: ["5 years"],
+              entities: ["program"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "10-Year program delivery strengthened retention.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: durationFactGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "opening",
+      metric: "10",
+    });
+  });
+
   it("keeps percentage measurements distinct in metric keys", () => {
     const percentageFactGraph: FactGraphV1 = {
       ...factGraph,
@@ -3443,6 +3475,27 @@ describe("English CV-backed quality gate", () => {
       writerOutput: output({
         opening: "I reduced the onboarding backlog by 24%.",
         proofBlock: "I documented handoffs. Managed services efficiently.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "incomplete_sentence",
+      section: "proofBlock",
+    });
+  });
+
+  it.each([
+    "Managed enterprise customer accounts effectively.",
+    "Improved client reporting processes consistently.",
+  ])("rejects a multiword verb-led fragment: %s", (fragment) => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: `I documented handoffs. ${fragment}`,
         employerValueBlock: "That reporting supports clear delivery handoffs.",
         closeLine: "I would bring that discipline to the team.",
       }),
