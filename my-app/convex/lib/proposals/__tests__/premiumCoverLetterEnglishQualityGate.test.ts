@@ -1165,11 +1165,56 @@ describe("English CV-backed quality gate", () => {
     );
   });
 
+  it("rejects a contextual numeric token without structured employer provenance", () => {
+    const writerOutput = output({
+      opening: "I reduced the onboarding backlog by 24%.",
+      proofBlock: "I documented handoffs for three implementation teams.",
+      employerValueBlock:
+        "At 100M, that reporting supports clear delivery handoffs.",
+      closeLine: "I would bring that discipline to the team.",
+    });
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput,
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "employerValueBlock",
+      metric: "100000000",
+    });
+
+    const structuredFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_close"
+          ? {
+              ...fact,
+              text: "Maintained reporting at 100M for delivery teams.",
+              entities: [...fact.entities, "100M"],
+            }
+          : fact,
+      ),
+    };
+    const structuredIssues = validateEnglishCvBackedQualityGate({
+      writerOutput,
+      claimPlan,
+      factGraph: structuredFactGraph,
+    });
+
+    expect(structuredIssues).not.toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "employerValueBlock",
+      metric: "100000000",
+    });
+  });
+
   it.each([
     ["7-Eleven", "7"],
     ["1-800-Flowers", "1"],
   ])(
-    "does not treat the contextual target employer %s as a visible metric",
+    "fails closed for the contextual numeric name %s without structured provenance",
     (employer, metric) => {
       const issues = validateEnglishCvBackedQualityGate({
         writerOutput: output({
@@ -1183,7 +1228,7 @@ describe("English CV-backed quality gate", () => {
         factGraph,
       });
 
-      expect(issues).not.toContainEqual({
+      expect(issues).toContainEqual({
         code: "unsupported_visible_metric",
         section: "employerValueBlock",
         metric,
@@ -1196,7 +1241,7 @@ describe("English CV-backed quality gate", () => {
     ["One Medical", "1"],
     ["Four Seasons", "4"],
   ])(
-    "does not treat the written-number proper name %s as a visible metric",
+    "fails closed for the written-number name %s without structured provenance",
     (employer, metric) => {
       const issues = validateEnglishCvBackedQualityGate({
         writerOutput: output({
@@ -1210,7 +1255,7 @@ describe("English CV-backed quality gate", () => {
         factGraph,
       });
 
-      expect(issues).not.toContainEqual({
+      expect(issues).toContainEqual({
         code: "unsupported_visible_metric",
         section: "employerValueBlock",
         metric,
@@ -1222,7 +1267,7 @@ describe("English CV-backed quality gate", () => {
     ["7-Eleven offers a customer-focused environment.", ["7", "11"]],
     ["1-800-Flowers offers a customer-focused environment.", ["1", "800"]],
   ])(
-    "does not treat the sentence-leading employer in %s as a metric",
+    "fails closed for the sentence-leading numeric name in %s without structured provenance",
     (employerValueBlock, metrics) => {
       const issues = validateEnglishCvBackedQualityGate({
         writerOutput: output({
@@ -1236,7 +1281,7 @@ describe("English CV-backed quality gate", () => {
       });
 
       for (const metric of metrics) {
-        expect(issues).not.toContainEqual({
+        expect(issues).toContainEqual({
           code: "unsupported_visible_metric",
           section: "employerValueBlock",
           metric,
@@ -3425,6 +3470,42 @@ describe("English CV-backed quality gate", () => {
       writerOutput: output({
         opening: "I reduced the onboarding backlog by 24%.",
         proofBlock: "I documented handoffs. Managed reporting.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "incomplete_sentence",
+      section: "proofBlock",
+    });
+  });
+
+  it("rejects the approved infinitive fragment regression", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "Managed client reporting to help teams grow.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "incomplete_sentence",
+      section: "proofBlock",
+    });
+  });
+
+  it("keeps the known invalid make-teams-grow fragment rejected", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "Managed client reporting to make teams grow.",
         employerValueBlock: "That reporting supports clear delivery handoffs.",
         closeLine: "I would bring that discipline to the team.",
       }),

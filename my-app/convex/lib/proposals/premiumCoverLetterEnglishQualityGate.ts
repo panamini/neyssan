@@ -1154,70 +1154,11 @@ function numericTokens(value: string): string[] {
   ];
 }
 
-function numericOccurrenceIsPartOfContextualEntity(args: {
-  value: string;
-  occurrence: NumericTokenOccurrence;
-}): boolean {
-  return Array.from(
-    args.value.matchAll(
-      /\b(?:[Aa]t|[Ff]or|[Ww]ith|[Jj]oined)\s+(\d+(?:[-–—]\d+)*(?:[-–—]?[A-Z][A-Za-z0-9&'.-]*))\b/gu,
-    ),
-  ).some((match) => {
-    const entity = match[1] ?? "";
-    const entityStart = (match.index ?? 0) + match[0].lastIndexOf(entity);
-    return (
-      args.occurrence.index >= entityStart &&
-      args.occurrence.index < entityStart + entity.length
-    );
-  });
-}
-
-function numericOccurrenceIsPartOfHyphenatedProperName(args: {
-  value: string;
-  occurrence: NumericTokenOccurrence;
-}): boolean {
-  return Array.from(
-    args.value.matchAll(
-      /\b\d+(?:[-–—]\d+)*(?:[-–—][A-Z][A-Za-z0-9&'.-]*)+\b/gu,
-    ),
-  ).some((match) => {
-    const entityStart = match.index ?? 0;
-    return (
-      args.occurrence.index >= entityStart &&
-      args.occurrence.index < entityStart + match[0].length
-    );
-  });
-}
-
-function numericOccurrenceIsPartOfWrittenNumberEntity(args: {
-  value: string;
-  occurrence: NumericTokenOccurrence;
-}): boolean {
-  return Array.from(
-    args.value.matchAll(
-      /\b(?:One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Eleven|Twelve|Thirteen|Fourteen|Fifteen|Sixteen|Seventeen|Eighteen|Nineteen|Twenty|Thirty|Forty|Fifty|Sixty|Seventy|Eighty|Ninety)(?:\s+[A-Z][A-Za-z0-9&'.-]*)+\b/gu,
-    ),
-  ).some((match) => {
-    const entityStart = match.index ?? 0;
-    return (
-      args.occurrence.index >= entityStart &&
-      args.occurrence.index < entityStart + match[0].length
-    );
-  });
-}
-
 function numericOccurrenceIsPartOfEntity(args: {
   value: string;
   occurrence: NumericTokenOccurrence;
   entities: readonly string[];
 }): boolean {
-  if (
-    numericOccurrenceIsPartOfContextualEntity(args) ||
-    numericOccurrenceIsPartOfHyphenatedProperName(args) ||
-    numericOccurrenceIsPartOfWrittenNumberEntity(args)
-  ) {
-    return true;
-  }
   const searchableValue = args.value.toLocaleLowerCase("en-US");
   return args.entities.some((rawEntity) => {
     const entity = rawEntity.trim();
@@ -1595,6 +1536,7 @@ function isFinitePredicateCandidate(args: {
   index: number;
   hasFrontedClause: boolean;
 }): boolean {
+  if (args.tokens[args.index - 1] === "to") return false;
   const canonicalToken = canonicalizePremiumCoverLetterToken(args.token);
   if (FINITE_PREDICATE_TOKENS.has(canonicalToken)) return true;
   if (
