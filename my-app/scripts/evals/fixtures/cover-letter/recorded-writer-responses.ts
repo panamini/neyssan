@@ -151,9 +151,9 @@ const rawRecordedCoverLetterReplayFixtures = [
     writerProvider: "mistral",
     writerModel: "mistral-medium-latest",
     expectedArtifactHash:
-      "7f8bf328428a52c216f1d17f29b707567421330a92e42b917f2d24fca8f3b8c7",
+      "aa028cf973184a88360cb9d5324d2cf683f74e175b0dc8bb533a7ee73d8b650b",
     expectedProvenanceHash:
-      "66b985847db72fdda72ab114b69ee9e502784cc82b7f57ebb509efe7038a3c56",
+      "86fdbf7ab4de64baaa06a5593089c85fb09150467c9af7d14d52782bcc2f15f2",
     frozenConfig: {
       outputLanguage: "English",
       generationControlsBlock: "",
@@ -172,7 +172,7 @@ const rawRecordedCoverLetterReplayFixtures = [
       {
         schemaId: "premium_writer_output_v1",
         expectedWriterPromptHash:
-          "04e9630267a4eafea4a05c28be08760438938658c9437e88d178e4e1167f7cbf",
+          "854a7d7242541549ff05e9b167c2c619eb83c80565ad40626be12e3f2fc37497",
         payload: {
           version: "premium_writer_output_v1",
           bodyParts: {
@@ -199,8 +199,8 @@ const rawRecordedCoverLetterReplayFixtures = [
               claimIds: ["claim_employer_value_001"],
               factIds: [
                 "fact_experience_001_highlight_001",
-                "fact_experience_001_highlight_002",
                 "fact_experience_001_highlight_003",
+                "fact_achievement_001",
               ],
               demandIds: ["demand_core_001"],
             },
@@ -210,7 +210,7 @@ const rawRecordedCoverLetterReplayFixtures = [
               claimIds: ["claim_close_001"],
               factIds: [
                 "fact_experience_001_highlight_001",
-                "fact_experience_001_highlight_002",
+                "fact_experience_001_highlight_003",
               ],
               demandIds: [],
             },

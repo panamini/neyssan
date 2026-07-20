@@ -1199,11 +1199,11 @@ describe("benchmark-cover-letter-writers", () => {
       },
       {
         artifact:
-          "7f8bf328428a52c216f1d17f29b707567421330a92e42b917f2d24fca8f3b8c7",
+          "aa028cf973184a88360cb9d5324d2cf683f74e175b0dc8bb533a7ee73d8b650b",
         provenance:
-          "66b985847db72fdda72ab114b69ee9e502784cc82b7f57ebb509efe7038a3c56",
+          "86fdbf7ab4de64baaa06a5593089c85fb09150467c9af7d14d52782bcc2f15f2",
         prompts: [
-          "04e9630267a4eafea4a05c28be08760438938658c9437e88d178e4e1167f7cbf",
+          "854a7d7242541549ff05e9b167c2c619eb83c80565ad40626be12e3f2fc37497",
         ],
       },
     ]);
@@ -1364,9 +1364,9 @@ describe("benchmark-cover-letter-writers", () => {
       ...fixture,
       id: "mistral-adjacent-repair-v1",
       expectedArtifactHash:
-        "5e4f3aa1efe8fa50b6f9d1c3345f9ab1cf8a7d9deb8dbdf57fb0cdd288bed4a4",
+        "6a6eced63f197951c5070e170e6b363ded46e461bcfc817e6f70f9c7a83631a5",
       expectedProvenanceHash:
-        "549ae715917a9a4173fd476f82d85bbca17eeb1a1afeba6e4267553587212757",
+        "274f47c0674bae8cfc979d422dff7aa7a3edd4f6a8576de5cac18c454d1e7a4f",
       responses: [
         {
           ...firstResponse,
@@ -1384,7 +1384,7 @@ describe("benchmark-cover-letter-writers", () => {
         {
           schemaId: "premium_cover_letter_body_parts",
           expectedWriterPromptHash:
-            "ad2d0136922ac3d30fb75d30f516cfc736ac6bb18de6165a1eae2d8cc115c1fc",
+            "839ff1eb14b06e541d3ec83c2bd6589a046977f7896d6de745d4ed37bbb87f6d",
           payload: {
             opening: firstResponse.payload.bodyParts.opening.text,
             proofBlock: firstResponse.payload.bodyParts.proofBlock.text,
