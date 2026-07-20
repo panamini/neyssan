@@ -256,6 +256,10 @@ const WRITTEN_NUMBER_TENS = new Map([
 ]);
 const WRITTEN_NUMBER_PATTERN =
   /\b((?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen)|(?:(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[-\s]+(?:one|two|three|four|five|six|seven|eight|nine))?))(?:\s+(percent)\b)?/giu;
+const NON_QUANTITATIVE_WRITTEN_NUMBER_MEASUREMENTS = new Set([
+  "example",
+  "reason",
+]);
 
 function normalizeText(value: string): string {
   return value.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
@@ -278,6 +282,18 @@ const TITLE_PERIOD_ABBREVIATION_PATTERN =
   /\b(?:dr|mr|mrs|ms|prof|sr|jr|st|no|fig)\.$/iu;
 const CONTEXTUAL_PERIOD_ABBREVIATION_PATTERN =
   /\b(?:etc|vs|approx|dept|co|corp|inc|ltd|llc|plc|gmbh|e\.g|i\.e|u\.s|u\.k)\.$/iu;
+const LOWERCASE_STYLED_SENTENCE_STARTERS = new Set(["npm"]);
+
+function startsWithLowercaseStyledProperNoun(value: string): boolean {
+  const token =
+    value
+      .trimStart()
+      .match(/^[A-Za-z][A-Za-z0-9+#.-]*/u)?.[0] ?? "";
+  return (
+    /^[a-z]+[A-Z]/u.test(token) ||
+    LOWERCASE_STYLED_SENTENCE_STARTERS.has(token.toLowerCase())
+  );
+}
 
 function buildSentenceRange(
   value: string,
@@ -314,7 +330,10 @@ function isSentenceBoundary(args: {
     return false;
   }
   if (CONTEXTUAL_PERIOD_ABBREVIATION_PATTERN.test(textThroughPunctuation)) {
-    return /[\p{Lu}\p{N}"'“‘(]/u.test(nextCharacter);
+    return (
+      /[\p{Lu}\p{N}"'“‘(]/u.test(nextCharacter) ||
+      startsWithLowercaseStyledProperNoun(args.value.slice(end))
+    );
   }
   return true;
 }
@@ -535,7 +554,21 @@ function writtenNumericTokenOccurrences(
     const index = match.index ?? 0;
     const end = index + match[0].length;
     const measurement = metricMeasurement({ value, end, percentage });
-    if (!percentage && !measurement) return [];
+    const immediateMeasurement =
+      value
+        .slice(end)
+        .match(/^\s*([A-Za-z][A-Za-z-]*)/u)?.[1]
+        .toLowerCase() ?? "";
+    if (
+      !percentage &&
+      (!measurement ||
+        value[end] === "-" ||
+        NON_QUANTITATIVE_WRITTEN_NUMBER_MEASUREMENTS.has(
+          canonicalMetricMeasurement(immediateMeasurement),
+        ))
+    ) {
+      return [];
+    }
     const baseKey = [
       metricUnit({ currency: null, percentage, multiplier: false }),
       metricValue,
@@ -735,7 +768,14 @@ function isLikelyUnlistedFinitePredicate(args: {
   ) {
     return false;
   }
-  return /(?:e|s|ify|ise|ize|ate)$/u.test(args.token);
+  const followingToken = args.tokens[args.index + 3];
+  if (!followingToken || FINITE_PREDICATE_BLOCKERS.has(followingToken)) {
+    return false;
+  }
+  if (/(?:e|s|ify|ise|ize|ate)$/u.test(args.token)) return true;
+  return (
+    args.tokens[1]?.endsWith("s") === true && /^[a-z]+$/u.test(args.token)
+  );
 }
 
 function isFinitePredicateCandidate(args: {

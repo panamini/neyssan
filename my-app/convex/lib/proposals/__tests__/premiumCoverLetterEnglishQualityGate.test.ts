@@ -611,6 +611,29 @@ describe("English CV-backed quality gate", () => {
   });
 
   it.each([
+    "One reason I improved delivery was clearer handoffs.",
+    "I maintained two-way communication across teams.",
+  ])("does not treat non-quantitative cardinal prose as a metric: %s", (opening) => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening,
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).not.toContainEqual(
+      expect.objectContaining({
+        code: "unsupported_visible_metric",
+        section: "opening",
+      }),
+    );
+  });
+
+  it.each([
     {
       sourceText: "Managed 5 product squads.",
       generatedText: "I managed five product squads.",
@@ -1050,6 +1073,29 @@ describe("English CV-backed quality gate", () => {
       otherSection: "opening",
     });
   });
+
+  it.each(["iOS", "eBay", "npm"])(
+    "splits before the lowercase-styled proper noun %s after a terminal abbreviation",
+    (properNoun) => {
+      const repeatedSentence = `${properNoun} releases stayed reliable.`;
+      const issues = validateEnglishCvBackedQualityGate({
+        writerOutput: output({
+          opening: `I worked at Acme Inc. ${repeatedSentence}`,
+          proofBlock: repeatedSentence,
+          employerValueBlock: "That reporting supports clear delivery handoffs.",
+          closeLine: "I would bring that discipline to the team.",
+        }),
+        claimPlan,
+        factGraph,
+      });
+
+      expect(issues).toContainEqual({
+        code: "duplicate_visible_sentence",
+        section: "proofBlock",
+        otherSection: "opening",
+      });
+    },
+  );
 
   it("detects a repeated proper-noun sentence after a terminal initialism", () => {
     const issues = validateEnglishCvBackedQualityGate({
@@ -2099,6 +2145,28 @@ describe("English CV-backed quality gate", () => {
         opening: "I reduced the onboarding backlog by 24%.",
         proofBlock:
           "Managed services improve reliability. Improved processes sustained the result.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).not.toContainEqual({
+      code: "incomplete_sentence",
+      section: "proofBlock",
+    });
+  });
+
+  it.each([
+    "Improved processes yield clearer handoffs.",
+    "Improved processes offer clearer handoffs.",
+    "Improved processes foster clearer handoffs.",
+  ])("accepts an unlisted finite predicate in a complete sentence: %s", (proofBlock) => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock,
         employerValueBlock: "That reporting supports clear delivery handoffs.",
         closeLine: "I would bring that discipline to the team.",
       }),

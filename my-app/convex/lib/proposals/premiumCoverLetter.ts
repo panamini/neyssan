@@ -5379,15 +5379,15 @@ function premiumTextSupportsCandidateFact(args: {
 
   const normalizedGenerated = normalizePremiumProvenanceText(generatedText);
   const normalizedFact = normalizePremiumProvenanceText(factText);
+  const factTokens = normalizeCanonicalTokens(factText);
   if (
-    normalizedFact.length >= 24 &&
+    (normalizedFact.length >= 12 || factTokens.length >= 2) &&
     normalizedGenerated.includes(normalizedFact)
   ) {
     return true;
   }
 
   const generatedTokens = new Set(normalizeCanonicalTokens(generatedText));
-  const factTokens = normalizeCanonicalTokens(factText);
   const overlap = countOverlap(factTokens, generatedTokens);
   const threshold = Math.min(5, Math.max(3, Math.ceil(factTokens.length * 0.35)));
   if (overlap >= threshold) {

@@ -238,10 +238,11 @@ async function withQualityRepairFlag<T>(
 
 function attemptDirectQualityRepair(
   writer: Parameters<typeof attemptPremiumCoverLetterGeneration>[0]["writer"],
+  personalizationContext = directContext,
 ) {
   return withQualityRepairFlag("1", () =>
     attemptPremiumCoverLetterGeneration({
-      personalizationContext: directContext,
+      personalizationContext,
       voicePreset: "signature",
       outputLanguage: "English",
       jobTitle: directJob.jobTitle,
@@ -6692,6 +6693,48 @@ describe("premium cover letter generation and rendering", () => {
           "I would bring that design-system discipline to product-facing interface work.",
       };
     });
+
+    expect(calls).toHaveLength(2);
+    expect(result?.bodyParts.proofBlock).toBe(originalProof);
+    expect(result?.qualityRepair).toMatchObject({
+      attempted: true,
+      outcome: "rejected_provenance",
+      rejectionCategory: "rejected_provenance",
+    });
+  });
+
+  it("rejects a repair that appends an uncited short CV fact", async () => {
+    const calls: string[] = [];
+    const originalProof =
+      "I led a design system migration used across 4 product squads.";
+    const originalEmployerValue =
+      "I built experimentation dashboards used by product and growth teams.";
+    const result = await attemptDirectQualityRepair(
+      async () => {
+        calls.push("writer");
+        if (calls.length === 1) {
+          return buildDirectPremiumWriterOutputFixture({
+            opening:
+              "I improved signup conversion by 11% after iterative UI experiments.",
+            proofBlock: originalProof,
+            employerValueBlock: originalEmployerValue,
+            closeLine: "I would be glad to discuss the position further.",
+          });
+        }
+        return {
+          opening:
+            "I improved signup conversion by 11% after iterative UI experiments.",
+          proofBlock: `${originalProof} Used Salesforce.`,
+          employerValueBlock: originalEmployerValue,
+          closeLine:
+            "I would bring that design-system discipline to product-facing interface work.",
+        };
+      },
+      {
+        ...directContext,
+        topSkills: [...directContext.topSkills, "Used Salesforce"],
+      },
+    );
 
     expect(calls).toHaveLength(2);
     expect(result?.bodyParts.proofBlock).toBe(originalProof);
