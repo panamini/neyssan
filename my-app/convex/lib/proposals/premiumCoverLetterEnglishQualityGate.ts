@@ -95,34 +95,60 @@ const EVIDENCE_ANCHOR_STOP_WORDS = new Set([
   "your",
 ]);
 const METRIC_MEASUREMENT_STOP_WORDS = new Set([
+  "a",
   "across",
   "after",
+  "am",
   "and",
+  "an",
+  "are",
   "as",
   "at",
+  "be",
+  "been",
+  "being",
   "because",
   "before",
   "by",
+  "can",
+  "could",
+  "did",
+  "do",
+  "does",
   "during",
   "for",
   "from",
+  "had",
+  "has",
+  "have",
   "if",
   "in",
+  "is",
+  "may",
+  "might",
+  "must",
   "once",
   "of",
   "over",
   "per",
+  "shall",
+  "should",
   "since",
   "than",
   "that",
+  "the",
   "to",
   "under",
+  "was",
   "when",
   "where",
   "which",
   "while",
   "who",
+  "will",
   "with",
+  "would",
+  "were",
 ]);
 const METRIC_MEASUREMENT_ALIASES = new Map([
   ["customer", "client"],
@@ -196,6 +222,40 @@ const FINITE_PREDICATE_BLOCKERS = new Set([
   "under",
   "with",
 ]);
+const WRITTEN_NUMBER_UNITS = new Map([
+  ["zero", 0],
+  ["one", 1],
+  ["two", 2],
+  ["three", 3],
+  ["four", 4],
+  ["five", 5],
+  ["six", 6],
+  ["seven", 7],
+  ["eight", 8],
+  ["nine", 9],
+  ["ten", 10],
+  ["eleven", 11],
+  ["twelve", 12],
+  ["thirteen", 13],
+  ["fourteen", 14],
+  ["fifteen", 15],
+  ["sixteen", 16],
+  ["seventeen", 17],
+  ["eighteen", 18],
+  ["nineteen", 19],
+]);
+const WRITTEN_NUMBER_TENS = new Map([
+  ["twenty", 20],
+  ["thirty", 30],
+  ["forty", 40],
+  ["fifty", 50],
+  ["sixty", 60],
+  ["seventy", 70],
+  ["eighty", 80],
+  ["ninety", 90],
+]);
+const WRITTEN_NUMBER_PATTERN =
+  /\b((?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen)|(?:(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[-\s]+(?:one|two|three|four|five|six|seven|eight|nine))?))(?:\s+(percent)\b)?/giu;
 
 function normalizeText(value: string): string {
   return value.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
@@ -217,7 +277,7 @@ type SentenceRange = Readonly<{
 const TITLE_PERIOD_ABBREVIATION_PATTERN =
   /\b(?:dr|mr|mrs|ms|prof|sr|jr|st|no|fig)\.$/iu;
 const CONTEXTUAL_PERIOD_ABBREVIATION_PATTERN =
-  /\b(?:etc|vs|approx|dept|inc|ltd|e\.g|i\.e|u\.s|u\.k)\.$/iu;
+  /\b(?:etc|vs|approx|dept|co|corp|inc|ltd|llc|plc|gmbh|e\.g|i\.e|u\.s|u\.k)\.$/iu;
 
 function buildSentenceRange(
   value: string,
@@ -372,9 +432,20 @@ function metricMeasurement(args: {
   const stopIndex = measurementTokens.findIndex((token) =>
     METRIC_MEASUREMENT_STOP_WORDS.has(token.toLowerCase()),
   );
+  const postmodifierIndex = measurementTokens.findIndex(
+    (token, index) =>
+      index > 0 &&
+      (token.toLowerCase() === "responsible" ||
+        /(?:ed|en|ing)$/iu.test(token)),
+  );
+  const boundaryIndexes = [stopIndex, postmodifierIndex].filter(
+    (index) => index >= 0,
+  );
+  const boundaryIndex =
+    boundaryIndexes.length > 0 ? Math.min(...boundaryIndexes) : undefined;
   const measurement =
     measurementTokens
-      .slice(0, stopIndex < 0 ? undefined : stopIndex)
+      .slice(0, boundaryIndex)
       .filter((token) => !token.toLowerCase().endsWith("ly"))
       .at(-1) ?? "";
   return canonicalMetricMeasurement(measurement);
@@ -445,6 +516,47 @@ function normalizeNumericTokenOccurrence(args: {
   };
 }
 
+function writtenNumberValue(value: string): number | null {
+  const parts = value.toLowerCase().split(/[-\s]+/u);
+  const unit = WRITTEN_NUMBER_UNITS.get(parts[0]);
+  if (unit !== undefined) return unit;
+  const tens = WRITTEN_NUMBER_TENS.get(parts[0]);
+  if (tens === undefined) return null;
+  return tens + (WRITTEN_NUMBER_UNITS.get(parts[1] ?? "") ?? 0);
+}
+
+function writtenNumericTokenOccurrences(
+  value: string,
+): NumericTokenOccurrence[] {
+  return Array.from(value.matchAll(WRITTEN_NUMBER_PATTERN)).flatMap((match) => {
+    const metricValue = writtenNumberValue(match[1]);
+    if (metricValue === null) return [];
+    const percentage = Boolean(match[2]);
+    const index = match.index ?? 0;
+    const end = index + match[0].length;
+    const measurement = metricMeasurement({ value, end, percentage });
+    if (!percentage && !measurement) return [];
+    const baseKey = [
+      metricUnit({ currency: null, percentage, multiplier: false }),
+      metricValue,
+    ].join(":");
+    return [
+      {
+        metric: metricLabel({
+          value: metricValue,
+          percentage,
+          multiplier: false,
+        }),
+        baseKey,
+        key: [baseKey, measurement]
+          .filter((part) => part !== "")
+          .join(":"),
+        index,
+      },
+    ];
+  });
+}
+
 function numericTokenOccurrences(value: string): NumericTokenOccurrence[] {
   const tokens: NumericTokenOccurrence[] = [];
   for (const match of value
@@ -454,7 +566,7 @@ function numericTokenOccurrences(value: string): NumericTokenOccurrence[] {
     const occurrence = normalizeNumericTokenOccurrence({ value, match });
     if (occurrence) tokens.push(occurrence);
   }
-  return tokens;
+  return [...tokens, ...writtenNumericTokenOccurrences(value)];
 }
 
 function numericTokens(value: string): string[] {
@@ -623,7 +735,7 @@ function isLikelyUnlistedFinitePredicate(args: {
   ) {
     return false;
   }
-  return args.tokens[1].endsWith("s") || args.token.endsWith("s");
+  return /(?:e|s|ify|ise|ize|ate)$/u.test(args.token);
 }
 
 function isFinitePredicateCandidate(args: {

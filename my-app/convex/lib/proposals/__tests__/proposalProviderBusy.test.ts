@@ -493,6 +493,7 @@ describe("proposal provider busy handling", () => {
 
   it("routes an eligible chatgpt cover letter request through the premium path first without the legacy flag gate", async () => {
     process.env.COVER_LETTER_PREMIUM_WRITER_MODEL = "gpt-5-mini";
+    const { handleGenerateProposal } = await loadProposalModule();
     mockOpenAIResponsesCreate.mockResolvedValue({
       output: [
         {
@@ -510,7 +511,7 @@ describe("proposal provider busy handling", () => {
                   },
                   proofBlock: {
                     section: "proofBlock",
-                    text: "That migration gave four product squads a shared design-system foundation.",
+                    text: "That migration gave product squads a shared design-system foundation.",
                     claimIds: ["claim_proof_001"],
                     factIds: ["fact_experience_001_highlight_001"],
                     demandIds: [],
@@ -537,7 +538,6 @@ describe("proposal provider busy handling", () => {
       ],
     });
 
-    const { handleGenerateProposal } = await loadProposalModule();
     const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
 
     const ctx = {
@@ -667,14 +667,14 @@ describe("proposal provider busy handling", () => {
                   bodyParts: {
                     opening: {
                       section: "opening",
-                      text: "At Acme, I led a design system migration used across four product squads.",
+                      text: "At Acme, I led a design system migration used across product squads.",
                       claimIds: ["claim_opening_001"],
                       factIds: ["fact_experience_001_highlight_001"],
                       demandIds: [],
                     },
                     proofBlock: {
                       section: "proofBlock",
-                      text: "That migration gave four product squads a shared design-system foundation.",
+                      text: "That migration gave product squads a shared design-system foundation.",
                       claimIds: ["claim_proof_001"],
                       factIds: ["fact_experience_001_highlight_001"],
                       demandIds: [],
@@ -707,13 +707,13 @@ describe("proposal provider busy handling", () => {
               {
                 json: {
                   opening:
-                    "At Acme, I led a design system migration used across four product squads.",
+                    "At Acme, I led a design system migration used across product squads.",
                   proofBlock:
-                    "That migration gave four product squads a shared design-system foundation.",
+                    "That migration gave product squads a shared design-system foundation.",
                   employerValueBlock:
                     "That design-system work is relevant to customer-facing product surfaces where React, TypeScript, and collaboration shape interface quality.",
                   closeLine:
-                    "Experience coordinating that migration across four squads would inform Acme's interface work.",
+                    "I would bring that design-system migration experience to Acme's interface work.",
                 },
               },
             ],
@@ -824,7 +824,7 @@ describe("proposal provider busy handling", () => {
                     },
                     proofBlock: {
                       section: "proofBlock",
-                      text: "That migration gave four product squads a shared design-system foundation.",
+                      text: "That migration gave product squads a shared design-system foundation.",
                       claimIds: ["claim_proof_001"],
                       factIds: ["fact_experience_001_highlight_001"],
                       demandIds: [],
@@ -1082,7 +1082,7 @@ describe("proposal provider busy handling", () => {
                   },
                   proofBlock: {
                     section: "proofBlock",
-                    text: "That migration gave four product squads a shared design-system foundation.",
+                    text: "That migration gave product squads a shared design-system foundation.",
                     claimIds: ["claim_proof_001"],
                     factIds: ["fact_experience_001_highlight_001"],
                     demandIds: [],

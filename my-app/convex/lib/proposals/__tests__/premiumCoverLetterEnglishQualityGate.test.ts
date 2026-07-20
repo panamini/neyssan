@@ -579,6 +579,150 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
+  it("rejects unsupported written-out quantitative claims", () => {
+    const unmeasuredFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Managed product squads.",
+              metrics: [],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I managed five product squads.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: unmeasuredFactGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "opening",
+      metric: "5",
+    });
+  });
+
+  it.each([
+    {
+      sourceText: "Managed 5 product squads.",
+      generatedText: "I managed five product squads.",
+    },
+    {
+      sourceText: "Managed twenty-five product squads.",
+      generatedText: "I managed 25 product squads.",
+    },
+    {
+      sourceText: "Improved conversion by 5%.",
+      generatedText: "I improved conversion by five percent.",
+    },
+  ])(
+    "normalizes written and digit quantitative forms: $generatedText",
+    ({ sourceText, generatedText }) => {
+      const measuredFactGraph: FactGraphV1 = {
+        ...factGraph,
+        facts: factGraph.facts.map((fact) =>
+          fact.id === "fact_opening"
+            ? {
+                ...fact,
+                text: sourceText,
+                metrics: [],
+              }
+            : fact,
+        ),
+      };
+      const issues = validateEnglishCvBackedQualityGate({
+        writerOutput: output({
+          opening: generatedText,
+          proofBlock: "I documented handoffs for three implementation teams.",
+          employerValueBlock:
+            "That reporting supports clear delivery handoffs.",
+          closeLine: "I would bring that discipline to the team.",
+        }),
+        claimPlan,
+        factGraph: measuredFactGraph,
+      });
+
+      expect(issues).not.toContainEqual(
+        expect.objectContaining({ code: "unsupported_visible_metric" }),
+      );
+    },
+  );
+
+  it.each([
+    "Led 4 teams responsible for onboarding.",
+    "Led 4 teams focused on onboarding.",
+    "Led 4 teams based in Europe.",
+    "Led 4 teams supporting onboarding.",
+  ])("preserves a quantified head noun in: %s", (sourceText) => {
+    const metricFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: sourceText,
+              metrics: ["4"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I led 4 onboarding teams.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: metricFactGraph,
+    });
+
+    expect(issues).not.toContainEqual(
+      expect.objectContaining({ code: "unsupported_visible_metric" }),
+    );
+  });
+
+  it.each([
+    "I gave 4 product squads a shared foundation.",
+    "Those 4 product squads would use a shared foundation.",
+    "Those 4 product squads were responsible for onboarding.",
+  ])("stops a metric head noun before a new clause: %s", (generatedText) => {
+    const metricFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Led 4 product squads.",
+              metrics: ["4"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: generatedText,
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: metricFactGraph,
+    });
+
+    expect(issues).not.toContainEqual(
+      expect.objectContaining({ code: "unsupported_visible_metric" }),
+    );
+  });
+
   it("accepts a numeral supported by the section's assigned job demand", () => {
     const demandId = "demand_always_on";
     const demandClaimPlan: ClaimPlanV1 = {
@@ -848,6 +992,27 @@ describe("English CV-backed quality gate", () => {
       expect.objectContaining({ code: "duplicate_visible_sentence" }),
     );
   });
+
+  it.each(["Co.", "Corp.", "LLC.", "Ltd."])(
+    "keeps the company suffix %s inside a continuing sentence",
+    (suffix) => {
+      const issues = validateEnglishCvBackedQualityGate({
+        writerOutput: output({
+          opening: `I worked at Acme ${suffix} on reporting workflows.`,
+          proofBlock: `I worked at Acme ${suffix} before moving into onboarding.`,
+          employerValueBlock:
+            "That reporting supports clear delivery handoffs.",
+          closeLine: "I would bring that discipline to the team.",
+        }),
+        claimPlan,
+        factGraph,
+      });
+
+      expect(issues).not.toContainEqual(
+        expect.objectContaining({ code: "duplicate_visible_sentence" }),
+      );
+    },
+  );
 
   it("does not split title and number abbreviations into duplicate fragments", () => {
     const issues = validateEnglishCvBackedQualityGate({
@@ -1897,6 +2062,24 @@ describe("English CV-backed quality gate", () => {
       writerOutput: output({
         opening: "I reduced the onboarding backlog by 24%.",
         proofBlock: "I documented handoffs. Managed reporting.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "incomplete_sentence",
+      section: "proofBlock",
+    });
+  });
+
+  it("rejects a verb-led fragment with a plural object and trailing adverb", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs. Managed services efficiently.",
         employerValueBlock: "That reporting supports clear delivery handoffs.",
         closeLine: "I would bring that discipline to the team.",
       }),

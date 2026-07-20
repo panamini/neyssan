@@ -4781,7 +4781,7 @@ describe("premium cover letter generation and rendering", () => {
       },
       writer: async () => ({
         opening:
-          "I led a design-system migration used across four product squads.",
+          "I led a design-system migration used across product squads.",
         proofBlock:
           "I improved release consistency across shared interface work and built experimentation dashboards used by product and growth teams.",
         employerValueBlock:
@@ -4794,7 +4794,7 @@ describe("premium cover letter generation and rendering", () => {
     expect(result).not.toBeNull();
     expect(failures).toHaveLength(0);
     expect(result?.content).toContain(
-      "I led a design-system migration used across four product squads.",
+      "I led a design-system migration used across product squads.",
     );
     expect(result?.content).toContain(
       "I improved release consistency across shared interface work",
