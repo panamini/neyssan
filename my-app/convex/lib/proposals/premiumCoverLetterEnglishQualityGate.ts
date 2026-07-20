@@ -117,6 +117,7 @@ const METRIC_MEASUREMENT_STOP_WORDS = new Set([
   "do",
   "does",
   "during",
+  "experience",
   "for",
   "from",
   "had",
@@ -226,6 +227,34 @@ const FINITE_PREDICATE_BLOCKERS = new Set([
   "under",
   "with",
 ]);
+const PREPOSITIONAL_FRAGMENT_STARTERS = new Set([
+  "across",
+  "at",
+  "by",
+  "for",
+  "from",
+  "in",
+  "into",
+  "of",
+  "on",
+  "over",
+  "through",
+  "to",
+  "under",
+  "with",
+]);
+const FINITE_PREDICATE_SUBJECT_TOKENS = new Set([
+  "he",
+  "i",
+  "it",
+  "she",
+  "that",
+  "they",
+  "we",
+  "which",
+  "who",
+  "you",
+]);
 const WRITTEN_NUMBER_UNITS = new Map([
   ["zero", 0],
   ["one", 1],
@@ -266,6 +295,8 @@ const WRITTEN_NUMBER_SCALES = new Map([
 ]);
 const WRITTEN_NUMBER_PATTERN =
   /\b((?:(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|and)(?:[-\s]+)){0,6}(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion))(?:\s+(percent)\b)?/giu;
+const NON_QUANTITATIVE_HYPHENATED_NUMBER_PATTERN =
+  /\b(?:one-on-one|one-to-one|two-way)\b/giu;
 const NON_QUANTITATIVE_WRITTEN_NUMBER_MEASUREMENTS = new Set([
   "advantage",
   "benefit",
@@ -326,6 +357,17 @@ function continuesContextualAbbreviation(args: {
   );
 }
 
+function continuesDottedInitialism(args: {
+  textThroughPunctuation: string;
+  remainingText: string;
+}): boolean {
+  return (
+    DOTTED_INITIALISM_CONTINUATION_PATTERN.test(
+      args.textThroughPunctuation,
+    ) && /^\s*[A-Z][A-Za-z]+\b/u.test(args.remainingText)
+  );
+}
+
 function isContextualPeriodSentenceBoundary(args: {
   textThroughPunctuation: string;
   remainingText: string;
@@ -380,8 +422,10 @@ function isSentenceBoundary(args: {
     });
   }
   if (
-    DOTTED_INITIALISM_CONTINUATION_PATTERN.test(textThroughPunctuation) &&
-    /^\s*[A-Z][A-Za-z]+\b/u.test(args.value.slice(end))
+    continuesDottedInitialism({
+      textThroughPunctuation,
+      remainingText: args.value.slice(end),
+    })
   ) {
     return false;
   }
@@ -644,20 +688,35 @@ function isIgnoredWrittenNumberOccurrence(args: {
   const standaloneScaleAfterDigit =
     WRITTEN_NUMBER_SCALES.has(args.matchedNumber.toLowerCase()) &&
     /\d\s*$/u.test(args.value.slice(0, args.index));
-  const partOfHyphenatedIdiom =
-    args.value[args.index - 1] === "-" || args.value[args.end] === "-";
+  const partOfHyphenatedIdiom = Array.from(
+    args.value.matchAll(NON_QUANTITATIVE_HYPHENATED_NUMBER_PATTERN),
+  ).some((match) => {
+    const idiomStart = match.index ?? 0;
+    const idiomEnd = idiomStart + match[0].length;
+    return idiomStart <= args.index && args.end <= idiomEnd;
+  });
   return standaloneScaleAfterDigit || partOfHyphenatedIdiom;
+}
+
+function writtenNumberSignMultiplier(value: string, index: number): number {
+  const sign =
+    value
+      .slice(Math.max(0, index - 16), index)
+      .match(/\b(minus|negative|plus|positive)\s*$/iu)?.[1] ?? "";
+  return numericSignMultiplier(sign, "");
 }
 
 function writtenNumericTokenOccurrences(
   value: string,
 ): NumericTokenOccurrence[] {
   return Array.from(value.matchAll(WRITTEN_NUMBER_PATTERN)).flatMap((match) => {
-    const metricValue = writtenNumberValue(match[1]);
-    if (metricValue === null) return [];
+    const unsignedMetricValue = writtenNumberValue(match[1]);
+    if (unsignedMetricValue === null) return [];
     const percentage = Boolean(match[2]);
     const index = match.index ?? 0;
     const end = index + match[0].length;
+    const metricValue =
+      unsignedMetricValue * writtenNumberSignMultiplier(value, index);
     if (
       isIgnoredWrittenNumberOccurrence({
         value,
@@ -817,6 +876,31 @@ function evidenceAnchorTokensFromValues(values: readonly string[]): Set<string> 
   );
 }
 
+function hasExactSparseFactGrounding(args: {
+  factIds: readonly string[];
+  factGraph: FactGraphV1;
+  textTokens: ReadonlySet<string>;
+}): boolean {
+  const factById = new Map(args.factGraph.facts.map((fact) => [fact.id, fact]));
+  return args.factIds.some((factId) => {
+    const fact = factById.get(factId);
+    if (!fact) return false;
+    const factAnchors = evidenceAnchorTokens({
+      factIds: [factId],
+      factGraph: args.factGraph,
+    });
+    if (
+      factAnchors.size !== 1 ||
+      !Array.from(factAnchors).every((token) => args.textTokens.has(token))
+    ) {
+      return false;
+    }
+    return fact.allowedVerbs
+      .map((verb) => canonicalizePremiumCoverLetterToken(verb))
+      .some((verb) => args.textTokens.has(verb));
+  });
+}
+
 function sourceMetricOccurrences(args: {
   factIds: readonly string[];
   demandIds: readonly string[];
@@ -872,6 +956,17 @@ function sourceMetricFactIds(args: {
   };
 }
 
+function hasPluralSubjectForUnlistedPredicate(args: {
+  tokens: readonly string[];
+  token: string;
+  index: number;
+}): boolean {
+  return (
+    args.tokens[args.index - 1]?.endsWith("s") === true &&
+    /^[a-z]+$/u.test(args.token)
+  );
+}
+
 function isLikelyUnlistedFinitePredicate(args: {
   tokens: readonly string[];
   token: string;
@@ -892,10 +987,7 @@ function isLikelyUnlistedFinitePredicate(args: {
     return false;
   }
   if (/(?:e|s|ify|ise|ize|ate)$/u.test(args.token)) return true;
-  return (
-    args.tokens[args.index - 1]?.endsWith("s") === true &&
-    /^[a-z]+$/u.test(args.token)
-  );
+  return hasPluralSubjectForUnlistedPredicate(args);
 }
 
 function isFinitePredicateCandidate(args: {
@@ -911,6 +1003,7 @@ function isFinitePredicateCandidate(args: {
       ["i", "we", "you", "they", "he", "she", "it"].includes(
         args.tokens[args.index - 1],
       ) ||
+      args.tokens[args.index - 1]?.endsWith("s") === true ||
       ["that", "which", "who"].includes(args.tokens[args.index + 1]))
   ) {
     return true;
@@ -921,6 +1014,15 @@ function isFinitePredicateCandidate(args: {
 function isVerbLedFragment(normalizedSentence: string): boolean {
   if (!VERB_LED_FRAGMENT_PATTERN.test(normalizedSentence)) return false;
   const tokens = normalizedSentence.split(/[^a-z0-9-]+/u).filter(Boolean);
+  if (
+    PREPOSITIONAL_FRAGMENT_STARTERS.has(tokens[1] ?? "") &&
+    !normalizedSentence.includes(",") &&
+    !tokens
+      .slice(2)
+      .some((token) => FINITE_PREDICATE_SUBJECT_TOKENS.has(token))
+  ) {
+    return true;
+  }
   const hasLaterFinitePredicate = tokens.some(
     (token, index) =>
       index >= 2 && isFinitePredicateCandidate({ tokens, token, index }),
@@ -1183,10 +1285,16 @@ export function validateEnglishCvBackedQualityGate(args: {
         entityAnchors.has(token) &&
         !GENERIC_SINGLE_EVIDENCE_ANCHORS.has(token),
       );
+      const hasExactSparseFactAnchor = hasExactSparseFactGrounding({
+        factIds: employerGroundingFactIds,
+        factGraph: args.factGraph,
+        textTokens,
+      });
       if (
         anchorOverlapCount < 2 &&
         !hasDistinctiveLexicalAnchor &&
-        !hasDistinctiveEntityAnchor
+        !hasDistinctiveEntityAnchor &&
+        !hasExactSparseFactAnchor
       ) {
         pushUnique(issues, {
           code: "employer_value_not_grounded",

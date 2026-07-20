@@ -17,6 +17,7 @@ const TOKEN_CANONICALIZATION_RULES = [
   { pattern: /^record(?:ed|ing|s)?$/, canonical: "record" },
   { pattern: /^report(?:ed|ing|s)?$/, canonical: "report" },
   { pattern: /^schedul(?:e|ed|es|ing|er|ers)$/, canonical: "schedule" },
+  { pattern: /^support(?:ed|ing|s)?$/, canonical: "support" },
   { pattern: /^track(?:ed|ing|ers|er|s)?$/, canonical: "track" },
 ] as const;
 

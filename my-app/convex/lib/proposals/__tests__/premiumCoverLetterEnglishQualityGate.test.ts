@@ -739,6 +739,99 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
+  it("preserves signs on written-out percentage claims", () => {
+    const signedWrittenFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Changed churn by five percent.",
+              metrics: ["5%"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I changed churn by negative five percent.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: signedWrittenFactGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "opening",
+      metric: "-5%",
+    });
+  });
+
+  it("validates measurable hyphenated written quantities", () => {
+    const durationFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Completed a five-year program.",
+              metrics: ["5"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I completed a ten-year program.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: durationFactGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "opening",
+      metric: "10",
+    });
+  });
+
+  it("keeps the quantified duration head before experience", () => {
+    const experienceFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Brought 5 years of experience.",
+              metrics: ["5"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I bring 5 years experience.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: experienceFactGraph,
+    });
+
+    expect(issues).not.toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "opening",
+      metric: "5",
+    });
+  });
+
   it.each([
     "One reason I improved delivery was clearer handoffs.",
     "One practical advantage is my structured follow-through.",
@@ -1950,6 +2043,38 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
+  it("accepts an exact noun-and-verb echo from a sparse cited workflow fact", () => {
+    const sparseWorkflowFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_close"
+          ? {
+              ...fact,
+              text: "Supported workflows.",
+              entities: [],
+              allowedVerbs: ["supported"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock:
+          "That workflow support is relevant to this work.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: sparseWorkflowFactGraph,
+    });
+
+    expect(issues).not.toContainEqual({
+      code: "employer_value_not_grounded",
+      section: "employerValueBlock",
+    });
+  });
+
   it("compares generic employer anchors in canonical form", () => {
     const genericOperationsFactGraph: FactGraphV1 = {
       ...factGraph,
@@ -2480,6 +2605,43 @@ describe("English CV-backed quality gate", () => {
     });
 
     expect(issues).toContainEqual({
+      code: "incomplete_sentence",
+      section: "proofBlock",
+    });
+  });
+
+  it("rejects an inferred predicate that follows a preposition", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs. Built for enterprise scale.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "incomplete_sentence",
+      section: "proofBlock",
+    });
+  });
+
+  it("accepts a fronted participial clause with a later subject", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock:
+          "I documented handoffs. Supported by product data, teams improved workflows.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).not.toContainEqual({
       code: "incomplete_sentence",
       section: "proofBlock",
     });
