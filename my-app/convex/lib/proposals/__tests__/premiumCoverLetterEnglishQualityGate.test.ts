@@ -372,6 +372,35 @@ describe("English CV-backed quality gate", () => {
     );
   });
 
+  it("preserves the quantified noun through inserted adjectives", () => {
+    const metricFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_proof"
+          ? {
+              ...fact,
+              text: "Led delivery across 4 product squads.",
+              metrics: ["4"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I led delivery across 4 cross-functional product squads.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: metricFactGraph,
+    });
+
+    expect(issues).not.toContainEqual(
+      expect.objectContaining({ code: "unsupported_visible_metric" }),
+    );
+  });
+
   it("allows the same metric value when distinct section facts support it", () => {
     const sameNumberFactGraph: FactGraphV1 = {
       ...factGraph,
@@ -1028,6 +1057,36 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
+  it("rejects a single generic employer grounding token", () => {
+    const genericDeliveryFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_close"
+          ? {
+              ...fact,
+              text: "Led delivery across product squads.",
+              entities: [],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "Delivery matters.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: genericDeliveryFactGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "employer_value_not_grounded",
+      section: "employerValueBlock",
+    });
+  });
+
   it("canonicalizes inflected evidence anchors for employer grounding", () => {
     const inflectedFactGraph: FactGraphV1 = {
       ...factGraph,
@@ -1145,6 +1204,25 @@ describe("English CV-backed quality gate", () => {
       writerOutput: output({
         opening: "I bring grounded frontend delivery experience.",
         proofBlock: "I bring grounded frontend delivery experience!",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "duplicate_visible_sentence",
+      section: "proofBlock",
+      otherSection: "opening",
+    });
+  });
+
+  it("detects repeated visible prose inside opening quotation marks", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I documented the handoffs.",
+        proofBlock: "“I documented the handoffs.”",
         employerValueBlock: "That reporting supports clear delivery handoffs.",
         closeLine: "I would bring that discipline to the team.",
       }),

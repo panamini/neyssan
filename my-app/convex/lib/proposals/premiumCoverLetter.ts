@@ -31,7 +31,10 @@ import {
   validateEnglishCvBackedQualityGate,
   type EnglishCvBackedQualityGateIssueCode,
 } from "./premiumCoverLetterEnglishQualityGate";
-import { expandPremiumCoverLetterTokenVariants } from "./premiumCoverLetterTokenNormalization";
+import {
+  canonicalizePremiumCoverLetterToken,
+  expandPremiumCoverLetterTokenVariants,
+} from "./premiumCoverLetterTokenNormalization";
 import type { ProposalVoicePreset } from "./voicePresets";
 import type { CompanyValuesPack } from "./companyValues";
 
@@ -1464,6 +1467,17 @@ function expandNormalizedTokenVariants(token: string): string[] {
   return expandPremiumCoverLetterTokenVariants(token).filter(
     (variant) => variant.length >= 4 && !STOPWORDS.has(variant),
   );
+}
+
+function normalizeCanonicalTokens(value: string): string[] {
+  const tokens = compactWhitespace(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length >= 4 && !STOPWORDS.has(token))
+    .map((token) => canonicalizePremiumCoverLetterToken(token));
+
+  return Array.from(new Set(tokens));
 }
 
 function countOverlap(a: string[], b: Set<string>): number {
@@ -5368,8 +5382,8 @@ function premiumTextSupportsCandidateFact(args: {
     return true;
   }
 
-  const generatedTokens = new Set(normalizeTokens(generatedText));
-  const factTokens = normalizeTokens(factText);
+  const generatedTokens = new Set(normalizeCanonicalTokens(generatedText));
+  const factTokens = normalizeCanonicalTokens(factText);
   const overlap = countOverlap(factTokens, generatedTokens);
   const threshold = Math.min(5, Math.max(3, Math.ceil(factTokens.length * 0.35)));
   if (overlap >= threshold) {
@@ -6843,15 +6857,8 @@ function repairSectionUsesUncitedCandidateFact(args: {
     const citedFacts = matchedFacts.filter((fact) =>
       args.citedFactIds.has(fact.id),
     );
-    return matchedFacts.some(
-      (fact) =>
-        !args.citedFactIds.has(fact.id) &&
-        !citedFacts.some(
-          (citedFact) =>
-            normalizePremiumProvenanceText(citedFact.text) ===
-            normalizePremiumProvenanceText(fact.text),
-        ),
-    );
+    if (citedFacts.length > 0) return false;
+    return matchedFacts.some((fact) => !args.citedFactIds.has(fact.id));
   });
 }
 

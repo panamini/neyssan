@@ -44,3 +44,29 @@ export function expandPremiumCoverLetterTokenVariants(
 
   return [...variants];
 }
+
+export function canonicalizePremiumCoverLetterToken(value: string): string {
+  const token = value.toLowerCase();
+  const canonicalRule = TOKEN_CANONICALIZATION_RULES.find((rule) =>
+    rule.pattern.test(token),
+  );
+  if (canonicalRule) return canonicalRule.canonical;
+
+  let canonical = token;
+  if (token.endsWith("ies") && token.length > 5) {
+    canonical = `${token.slice(0, -3)}y`;
+  } else if (
+    /(?:sses|xes|zes|ches|shes|oes)$/u.test(token) &&
+    token.length > 5
+  ) {
+    canonical = token.slice(0, -2);
+  } else if (
+    token.endsWith("s") &&
+    !token.endsWith("ss") &&
+    token.length > 4
+  ) {
+    canonical = token.slice(0, -1);
+  }
+
+  return canonical;
+}

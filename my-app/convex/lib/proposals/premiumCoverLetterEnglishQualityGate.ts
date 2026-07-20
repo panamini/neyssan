@@ -4,7 +4,7 @@ import type {
   FactGraphV1,
   PremiumWriterOutputV1,
 } from "./premiumCoverLetter";
-import { expandPremiumCoverLetterTokenVariants } from "./premiumCoverLetterTokenNormalization";
+import { canonicalizePremiumCoverLetterToken } from "./premiumCoverLetterTokenNormalization";
 
 const ENGLISH_CV_BACKED_SECTIONS: readonly ClaimPlanSection[] = [
   "opening",
@@ -101,6 +101,7 @@ function normalizeText(value: string): string {
 
 function normalizeSentenceKey(value: string): string {
   return normalizeText(value)
+    .replace(/^["'“‘«([{]+/u, "")
     .replace(/[.!?]+(?:["'”’»)\]}]+)?$/u, "")
     .trim();
 }
@@ -191,10 +192,7 @@ function numericMagnitudeMultiplier(suffix: string): number {
 }
 
 function canonicalMetricMeasurement(value: string): string {
-  const normalized = value.toLowerCase();
-  return [...expandPremiumCoverLetterTokenVariants(normalized)].sort(
-    (left, right) => left.length - right.length || left.localeCompare(right),
-  )[0];
+  return canonicalizePremiumCoverLetterToken(value);
 }
 
 function metricCurrency(symbol: string): "usd" | "eur" | "gbp" | null {
@@ -220,16 +218,16 @@ function metricMeasurement(args: {
     args.value
       .slice(args.end)
       .match(
-        /^\s*(?:[+-]\s*)?([A-Za-z][A-Za-z-]*(?:\s+[A-Za-z][A-Za-z-]*)?)/u,
+        /^\s*(?:[+-]\s*)?([A-Za-z][A-Za-z-]*(?:\s+[A-Za-z][A-Za-z-]*){0,3})/u,
       )?.[1] ?? "";
+  const measurementTokens = measurementSurface.split(/\s+/u);
+  const stopIndex = measurementTokens.findIndex((token) =>
+    METRIC_MEASUREMENT_STOP_WORDS.has(token.toLowerCase()),
+  );
   const measurement =
-    measurementSurface
-      .split(/\s+/u)
-      .filter(
-        (token) =>
-          !METRIC_MEASUREMENT_STOP_WORDS.has(token.toLowerCase()) &&
-          !token.toLowerCase().endsWith("ly"),
-      )
+    measurementTokens
+      .slice(0, stopIndex < 0 ? undefined : stopIndex)
+      .filter((token) => !token.toLowerCase().endsWith("ly"))
       .at(-1) ?? "";
   return canonicalMetricMeasurement(measurement);
 }
@@ -329,7 +327,7 @@ function evidenceAnchorTokensFromValues(values: readonly string[]): Set<string> 
             !numericTokens(normalized).length &&
             !EVIDENCE_ANCHOR_STOP_WORDS.has(normalized)
           )
-            ? expandPremiumCoverLetterTokenVariants(normalized)
+            ? [canonicalizePremiumCoverLetterToken(normalized)]
             : [],
         ),
     ),
@@ -596,8 +594,22 @@ export function validateEnglishCvBackedQualityGate(args: {
         factIds: employerGroundingFactIds,
         factGraph: args.factGraph,
       });
+      const factById = new Map(
+        args.factGraph.facts.map((fact) => [fact.id, fact]),
+      );
+      const entityAnchors = evidenceAnchorTokensFromValues(
+        employerGroundingFactIds.flatMap(
+          (factId) => factById.get(factId)?.entities ?? [],
+        ),
+      );
       const textTokens = evidenceAnchorTokensFromValues([text]);
-      if (!Array.from(textTokens).some((token) => anchors.has(token))) {
+      const anchorOverlapCount = Array.from(textTokens).filter((token) =>
+        anchors.has(token),
+      ).length;
+      const hasDistinctiveEntityAnchor = Array.from(textTokens).some((token) =>
+        entityAnchors.has(token),
+      );
+      if (anchorOverlapCount < 2 && !hasDistinctiveEntityAnchor) {
         pushUnique(issues, {
           code: "employer_value_not_grounded",
           section,

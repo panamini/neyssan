@@ -2004,6 +2004,47 @@ describe("premium ClaimPlan provenance v1", () => {
     expect(legacyWrapped.status).toBe("untrusted_legacy_wrapped");
   });
 
+  it("counts a pluralized lexical concept once in final provenance", () => {
+    const { claimPlan, factGraph } = buildDirectClaimPlanFixture();
+    const openingClaim = claimPlan.claims.find(
+      (claim) => claim.section === "opening",
+    )!;
+    const citedFactId = openingClaim.factIds[0];
+    const narrowedFactGraph = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === citedFactId
+          ? {
+              ...fact,
+              text: "Customer services.",
+              metrics: [],
+              entities: [],
+            }
+          : fact,
+      ),
+    };
+    const writerOutput = buildDirectPremiumWriterOutputFixture({
+      opening: "These services are relevant.",
+      proofBlock: "I led a design system migration used across 4 product squads.",
+      employerValueBlock:
+        "I built experimentation dashboards used by product and growth teams.",
+      closeLine:
+        "I would bring that design-system discipline to product-facing interface work.",
+    });
+    const provenance = buildPremiumCoverLetterFinalProvenance({
+      writerOutput,
+      finalBodyParts: toCoverLetterBodyParts(writerOutput),
+      claimPlan,
+      factGraph: narrowedFactGraph,
+      legacyWrapped: false,
+      provenanceIdsNormalized: false,
+    });
+
+    expect(
+      provenance.sections.opening.verifiedCandidateFactIds,
+    ).not.toContain(citedFactId);
+  });
+
   it("fails non-repairable writer provenance and keeps greeting leakage repairable", () => {
     const { claimPlan, factGraph, jobDemandGraph, brief } = buildDirectClaimPlanFixture();
     const openingClaim = claimPlan.claims.find((claim) => claim.section === "opening")!;
@@ -6474,6 +6515,40 @@ describe("premium cover letter generation and rendering", () => {
     expect(
       result?.finalProvenance?.verifiedCandidateFactIds.length ?? 0,
     ).toBeGreaterThan(0);
+  });
+
+  it("accepts a cited repair when similar uncited CV evidence also overlaps", async () => {
+    const calls: string[] = [];
+    const originalEmployerValue =
+      "I built experimentation dashboards used by product and growth teams.";
+    const result = await attemptDirectQualityRepair(async () => {
+      calls.push("writer");
+      if (calls.length === 1) {
+        return buildDirectPremiumWriterOutputFixture({
+          opening:
+            "I improved signup conversion by 11% after iterative UI experiments.",
+          proofBlock:
+            "I led a design system migration used across 4 product squads.",
+          employerValueBlock: originalEmployerValue,
+          closeLine: "I would be glad to discuss the position further.",
+        });
+      }
+      return {
+        opening:
+          "I improved signup conversion by 11% after iterative UI experiments.",
+        proofBlock:
+          "I led a design system migration across 4 product squads for customer-facing web applications.",
+        employerValueBlock: originalEmployerValue,
+        closeLine:
+          "I would bring that design-system discipline to product-facing interface work.",
+      };
+    });
+
+    expect(calls).toHaveLength(2);
+    expect(result?.qualityRepair).toMatchObject({
+      attempted: true,
+      outcome: "attempted_accepted",
+    });
   });
 
   it("rejects a quality repair that moves a supported metric to the wrong section", async () => {
