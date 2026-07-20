@@ -87,8 +87,10 @@ function normalizeSentenceKey(value: string): string {
 }
 
 function splitSentences(value: string): string[] {
-  return value
-    .split(/(?<=[.!?])\s+/u)
+  return Array.from(
+    value.matchAll(/[^.!?\n]+(?:[.!?]+(?:["'”’»)\]}]+)?|$)/gu),
+    (match) => match[0],
+  )
     .map((sentence) => sentence.trim())
     .filter(Boolean);
 }
@@ -114,15 +116,23 @@ function evidenceAnchorTokens(args: {
   factGraph: FactGraphV1;
 }): Set<string> {
   const factById = new Map(args.factGraph.facts.map((fact) => [fact.id, fact]));
-  return new Set(
+  return evidenceAnchorTokensFromValues(
     args.factIds
       .map((factId) => factById.get(factId))
       .filter((fact): fact is FactGraphV1["facts"][number] => Boolean(fact))
-      .flatMap((fact) => [fact.text, ...fact.entities])
+      .flatMap((fact) => [fact.text, ...fact.entities]),
+  );
+}
+
+function evidenceAnchorTokensFromValues(values: readonly string[]): Set<string> {
+  return new Set(
+    values
       .flatMap((value) => normalizeText(value).split(/[^a-z0-9%]+/u))
       .filter(
         (token) =>
-          token.length >= 4 && !EVIDENCE_ANCHOR_STOP_WORDS.has(token),
+          token.length >= 4 &&
+          !numericTokens(token).length &&
+          !EVIDENCE_ANCHOR_STOP_WORDS.has(token),
       ),
   );
 }
@@ -143,6 +153,36 @@ function sourceMetricFactIds(args: {
     }
   }
   return factIdsByMetric;
+}
+
+function attributedMetricFactIds(args: {
+  visibleText: string;
+  candidateFactIds: ReadonlySet<string>;
+  factGraph: FactGraphV1;
+}): Set<string> {
+  if (args.candidateFactIds.size <= 1) {
+    return new Set(args.candidateFactIds);
+  }
+
+  const visibleTokens = evidenceAnchorTokensFromValues([args.visibleText]);
+  const factById = new Map(args.factGraph.facts.map((fact) => [fact.id, fact]));
+  const scores = Array.from(args.candidateFactIds, (factId) => {
+    const fact = factById.get(factId);
+    const anchors = fact
+      ? evidenceAnchorTokensFromValues([fact.text, ...fact.entities])
+      : new Set<string>();
+    return {
+      factId,
+      score: Array.from(anchors).filter((token) => visibleTokens.has(token))
+        .length,
+    };
+  });
+  const highestScore = Math.max(...scores.map(({ score }) => score));
+  const bestMatches = scores.filter(({ score }) => score === highestScore);
+  if (highestScore === 0 || bestMatches.length !== 1) {
+    return new Set();
+  }
+  return new Set([bestMatches[0].factId]);
 }
 
 function setsOverlap(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
@@ -364,7 +404,12 @@ export function validateEnglishCvBackedQualityGate(args: {
           metric,
         });
       }
-      const metricFactIds = sourceMetricFacts.get(metric) ?? new Set<string>();
+      const metricFactIds = attributedMetricFactIds({
+        visibleText: text,
+        candidateFactIds:
+          sourceMetricFacts.get(metric) ?? new Set<string>(),
+        factGraph: args.factGraph,
+      });
       const previousOccurrence = seenMetricSections
         .get(metric)
         ?.find(

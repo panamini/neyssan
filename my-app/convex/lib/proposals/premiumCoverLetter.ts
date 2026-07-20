@@ -54,6 +54,7 @@ const ENGLISH_CV_BACKED_PRODUCTION_GATE_CODES =
     "unexpected_writer_reuse",
     "duplicate_visible_sentence",
     "duplicate_visible_metric",
+    "unsupported_visible_metric",
   ]);
 
 export type AllowedFact = {

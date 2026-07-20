@@ -5358,9 +5358,9 @@ describe("premium cover letter generation and rendering", () => {
     let capturedSchema: Record<string, unknown> | null = null;
     const bodyParts = {
       opening:
-        "At BrightLayer, I led a design-system migration used across four product squads and reduced page-load time by 28 percent through bundle and rendering improvements.",
+        "At BrightLayer, I led a design-system migration across product squads and improved page-load performance through bundle and rendering improvements.",
       proofBlock:
-        "At Northline Labs, I built experimentation dashboards for product and growth teams and partnered directly with design on customer-facing workflow improvements; targeted UI experiments improved signup conversion by 11 percent.",
+        "At Northline Labs, I built experimentation dashboards for product and growth teams and partnered directly with design on customer-facing workflow improvements; targeted UI experiments improved signup conversion.",
       employerValueBlock:
         "That experience maps cleanly to frontend work where reusable systems, performance, and product iteration matter together, with React and TypeScript as the base.",
       closeLine:
@@ -5437,16 +5437,16 @@ describe("premium cover letter generation and rendering", () => {
     );
     expect(result?.bodyParts).toEqual(bodyParts);
     expect(result?.content).toContain("Dear Hiring Manager,");
-    expect(result?.content).toContain("design-system migration used across four product squads");
-    expect(result?.content).toContain("page-load time by 28 percent");
+    expect(result?.content).toContain("design-system migration across product squads");
+    expect(result?.content).toContain("page-load performance");
     expect(result?.content).toContain("React and TypeScript");
     expect(result?.content).toContain("partnered directly with design");
     expect(result?.content).toContain("experimentation dashboards");
-    expect(result?.content).toContain("targeted UI experiments improved signup conversion by 11 percent");
+    expect(result?.content).toContain("targeted UI experiments improved signup conversion");
     expect(result?.content).toContain(
       "That experience maps cleanly to frontend work where reusable systems, performance, and product iteration matter together",
     );
-    expect(result?.content).toContain("signup conversion by 11 percent");
+    expect(result?.content).toContain("signup conversion");
     expect(result?.content).not.toContain("Your frontend role sits where");
     expect(result?.content).not.toMatch(
       /helped targeted UI experiments improve|evidence I would bring/i,
@@ -5460,9 +5460,9 @@ describe("premium cover letter generation and rendering", () => {
   it("wraps nested legacy bodyParts returned by Mistral-compatible writers", async () => {
     const bodyParts = {
       opening:
-        "At BrightLayer, I led a design-system migration used across four product squads and reduced page-load time by 28 percent through bundle and rendering improvements.",
+        "At BrightLayer, I led a design-system migration across product squads and improved page-load performance through bundle and rendering improvements.",
       proofBlock:
-        "At Northline Labs, I built experimentation dashboards for product and growth teams and partnered directly with design on customer-facing workflow improvements; targeted UI experiments improved signup conversion by 11 percent.",
+        "At Northline Labs, I built experimentation dashboards for product and growth teams and partnered directly with design on customer-facing workflow improvements; targeted UI experiments improved signup conversion.",
       employerValueBlock:
         "That experience maps cleanly to frontend work where reusable systems, performance, and product iteration matter together, with React and TypeScript as the base.",
       closeLine:
@@ -5520,7 +5520,7 @@ describe("premium cover letter generation and rendering", () => {
 
     expect(result?.bodyParts).toEqual(bodyParts);
     expect(result?.content).toContain("Dear Hiring Manager,");
-    expect(result?.content).toContain("signup conversion by 11 percent");
+    expect(result?.content).toContain("targeted UI experiments");
     expect(result?.content).not.toContain("Warm regards");
   });
 
@@ -6430,6 +6430,58 @@ describe("premium cover letter generation and rendering", () => {
     expect(
       result?.finalProvenance?.verifiedCandidateFactIds.length ?? 0,
     ).toBeGreaterThan(0);
+  });
+
+  it("rejects a quality repair that moves a supported metric to the wrong section", async () => {
+    const failures: any[] = [];
+    const calls: string[] = [];
+    const originalEmployerValue =
+      "I built experimentation dashboards used by product and growth teams.";
+    const result = await withQualityRepairFlag("1", () =>
+      attemptPremiumCoverLetterGeneration({
+        personalizationContext: directContext,
+        voicePreset: "signature",
+        outputLanguage: "English",
+        jobTitle: directJob.jobTitle,
+        jobDescription: directJob.jobDescription,
+        candidateName: "Alex Martin",
+        onFailure: (trace) => {
+          failures.push(trace);
+        },
+        writer: async ({ prompt }) => {
+          calls.push(prompt);
+          if (calls.length === 1) {
+            return buildDirectPremiumWriterOutputFixture({
+              opening:
+                "I improved signup conversion by 11% after iterative UI experiments.",
+              proofBlock:
+                "I led a design system migration used across 4 product squads.",
+              employerValueBlock: originalEmployerValue,
+              closeLine: "I would be glad to discuss the position further.",
+            });
+          }
+          return {
+            opening:
+              "I improved signup conversion through iterative UI experiments.",
+            proofBlock:
+              "I led a design system migration used across 4 product squads and improved signup conversion by 11%.",
+            employerValueBlock: originalEmployerValue,
+            closeLine:
+              "I would bring that design-system discipline to product-facing interface work.",
+          };
+        },
+      }),
+    );
+
+    expect(calls).toHaveLength(2);
+    expect(result).toBeNull();
+    expect(failures).toEqual([
+      expect.objectContaining({
+        stage: "validation",
+        reason: "non_repairable_validation",
+        issues: expect.arrayContaining(["unsupported_visible_metric"]),
+      }),
+    ]);
   });
 
   it("keeps the original safe output when quality repair returns invalid JSON", async () => {
@@ -7430,9 +7482,9 @@ describe("premium cover letter generation and rendering", () => {
         expect(schema).toEqual(PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA);
         return {
           opening:
-            "I am applying for the Senior Frontend Engineer role with a background in customer-facing web applications and reusable UI systems.",
+            "I improved signup conversion by 11% after iterative UI experiments.",
           proofBlock:
-            "I improved signup conversion by 11% after iterative UI experiments and led a design system migration used across 4 product squads.",
+            "I led a design system migration used across 4 product squads.",
           employerValueBlock:
             "That mix of experimentation and system-level UI work is directly relevant to a role centered on design systems and customer-facing web applications.",
           closeLine:
@@ -7463,9 +7515,9 @@ describe("premium cover letter generation and rendering", () => {
       candidateName: "Alex Martin",
       writer: async () => ({
         opening:
-          "The Senior Frontend Engineer role is a strong match for work I have done in customer-facing product environments.",
+          "I improved signup conversion by 11% after iterative UI experiments.",
         proofBlock:
-          "I improved signup conversion by 11% after iterative UI experiments, led a design system migration used across 4 product squads, and built experimentation dashboards used by product and growth teams.",
+          "I led a design system migration used across 4 product squads and built experimentation dashboards used by product and growth teams.",
         employerValueBlock:
           "That combination is relevant to a role that depends on design-system discipline, experimentation workflows, and clear delivery across product teams.",
         closeLine:
@@ -7541,9 +7593,9 @@ describe("premium cover letter generation and rendering", () => {
       candidateName: "Maya Chen",
       writer: async () => ({
         opening:
-          "Dear Hiring Manager,\nI am interested in the Implementation Analyst role because my background stays close to reporting and cross-functional handoffs",
+          "Dear Hiring Manager,\nI reduced backlog response times by 18% through queue and handoff changes",
         proofBlock:
-          "I reduced backlog response times by 18% through queue and handoff changes, and I built weekly dashboards to track bottlenecks and response times.",
+          "I built weekly dashboards to track bottlenecks and response times.",
         employerValueBlock: "",
         closeLine:
           "Sincerely,\nI would welcome the opportunity to discuss the role further.",

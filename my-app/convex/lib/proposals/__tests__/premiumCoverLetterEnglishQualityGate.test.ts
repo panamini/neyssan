@@ -409,6 +409,57 @@ describe("English CV-backed quality gate", () => {
     );
   });
 
+  it("does not attribute an ambiguous metric to every cited fact", () => {
+    const sameNumberFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) => {
+        if (fact.id === "fact_opening") {
+          return {
+            ...fact,
+            text: "Led delivery across 4 product squads.",
+            metrics: ["4"],
+            entities: ["product squads"],
+          };
+        }
+        if (fact.id === "fact_proof") {
+          return {
+            ...fact,
+            text: "Delivered 4 migration projects.",
+            metrics: ["4"],
+            entities: ["migration projects"],
+          };
+        }
+        return fact;
+      }),
+    };
+    const overlappingClaimPlan: ClaimPlanV1 = {
+      ...claimPlan,
+      claims: claimPlan.claims.map((claim) =>
+        claim.section === "opening"
+          ? {
+              ...claim,
+              factIds: ["fact_opening", "fact_proof"],
+            }
+          : claim,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I led delivery across 4 product squads.",
+        proofBlock: "I delivered 4 migration projects.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+        openingFacts: ["fact_opening", "fact_proof"],
+      }),
+      claimPlan: overlappingClaimPlan,
+      factGraph: sameNumberFactGraph,
+    });
+
+    expect(issues).not.toContainEqual(
+      expect.objectContaining({ code: "duplicate_visible_metric" }),
+    );
+  });
+
   it("requires a fact reference when the assigned source-backed claim has facts", () => {
     const issues = validateEnglishCvBackedQualityGate({
       writerOutput: output({
@@ -496,6 +547,26 @@ describe("English CV-backed quality gate", () => {
       writerOutput: output({
         opening: "I bring grounded frontend delivery experience.",
         proofBlock: "I bring grounded frontend delivery experience!",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "duplicate_visible_sentence",
+      section: "proofBlock",
+      otherSection: "opening",
+    });
+  });
+
+  it("detects a repeated sentence after terminal punctuation and a closing quote", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening:
+          "The process was “reliable.” I documented the handoffs.",
+        proofBlock: "I documented the handoffs.",
         employerValueBlock: "That reporting supports clear delivery handoffs.",
         closeLine: "I would bring that discipline to the team.",
       }),
