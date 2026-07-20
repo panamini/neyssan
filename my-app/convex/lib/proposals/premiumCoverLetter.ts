@@ -27,6 +27,15 @@ import {
   generateOpenAIResponsesStructured,
   type OpenAIResponsesProviderResponseMetadata,
 } from "./premiumCoverLetterOpenAITransport";
+import {
+  validateEnglishCvBackedQualityGate,
+  type EnglishCvBackedQualityGateIssueCode,
+} from "./premiumCoverLetterEnglishQualityGate";
+import {
+  canonicalizePremiumCoverLetterToken,
+  expandPremiumCoverLetterTokenVariants,
+  normalizePremiumCoverLetterNumericToken,
+} from "./premiumCoverLetterTokenNormalization";
 import type { ProposalVoicePreset } from "./voicePresets";
 import type { CompanyValuesPack } from "./companyValues";
 
@@ -44,6 +53,22 @@ export type PremiumCoverLetterWriterProvider =
   | "mistral"
   | "qwen"
   | "unknown";
+
+const ENGLISH_CV_BACKED_PRODUCTION_GATE_CODES =
+  new Set<EnglishCvBackedQualityGateIssueCode>([
+    "incomplete_sentence",
+    "missing_fact_reference",
+    "unexpected_writer_reuse",
+    "duplicate_visible_sentence",
+    "duplicate_visible_metric",
+    "unsupported_visible_metric",
+    "employer_value_not_grounded",
+  ]);
+
+const ENGLISH_CV_BACKED_LEGACY_PRODUCTION_GATE_CODES =
+  new Set<EnglishCvBackedQualityGateIssueCode>([
+    "duplicate_visible_sentence",
+  ]);
 
 export type AllowedFact = {
   text: string;
@@ -1005,28 +1030,6 @@ const MAX_KEY_REQUIREMENTS = 2;
 const MAX_PREFERRED_QUALIFICATIONS = 2;
 const MAX_LOW_VALUE_CHECKLIST_ITEMS = 5;
 
-const TOKEN_CANONICALIZATION_RULES = [
-  { pattern: /^admin(?:istrat(?:ion|ive|or|ors)?)$/, canonical: "admin" },
-  {
-    pattern: /^coordinat(?:e|ed|es|ing|ion|or|ors)$/,
-    canonical: "coordinate",
-  },
-  {
-    pattern: /^document(?:ation|ed|ing|s)?$/,
-    canonical: "document",
-  },
-  { pattern: /^implement(?:ation|ed|ing|s|er|ers)?$/, canonical: "implement" },
-  { pattern: /^manag(?:e|ed|es|ing|ement|er|ers)$/, canonical: "manage" },
-  {
-    pattern: /^operat(?:e|ed|es|ing|ion|ions|ional|or|ors)$/,
-    canonical: "operate",
-  },
-  { pattern: /^record(?:ed|ing|s)?$/, canonical: "record" },
-  { pattern: /^report(?:ed|ing|s)?$/, canonical: "report" },
-  { pattern: /^schedul(?:e|ed|es|ing|er|ers)$/, canonical: "schedule" },
-  { pattern: /^track(?:ed|ing|ers|er|s)?$/, canonical: "track" },
-] as const;
-
 const STOPWORDS = new Set([
   "about",
   "across",
@@ -1461,32 +1464,42 @@ function normalizeTokens(value: string): string[] {
 }
 
 function expandNormalizedTokenVariants(token: string): string[] {
-  const variants = new Set<string>();
   if (token.length < 4 || STOPWORDS.has(token)) return [];
 
-  variants.add(token);
-
-  if (token.endsWith("ies") && token.length > 5) {
-    variants.add(`${token.slice(0, -3)}y`);
-  }
-
-  for (const rule of TOKEN_CANONICALIZATION_RULES) {
-    if (rule.pattern.test(token)) {
-      variants.add(rule.canonical);
-    }
-  }
-
-  return Array.from(variants).filter(
+  return expandPremiumCoverLetterTokenVariants(token).filter(
     (variant) => variant.length >= 4 && !STOPWORDS.has(variant),
   );
+}
+
+function isShortTechnicalIdentifierToken(value: string): boolean {
+  return (
+    /^[A-Z]{2,3}$/u.test(value) ||
+    ["R", "Go", "C#", "C++"].includes(value)
+  );
+}
+
+function normalizeCanonicalTokens(value: string): string[] {
+  const tokens = (
+    compactWhitespace(value).match(/[A-Za-z0-9]+(?:\+\+|#)?/gu) ?? []
+  )
+    .filter(
+      (token) =>
+        (token.length >= 4 || isShortTechnicalIdentifierToken(token)) &&
+        !STOPWORDS.has(token.toLowerCase()),
+    )
+    .map((token) => canonicalizePremiumCoverLetterToken(token.toLowerCase()));
+
+  return Array.from(new Set(tokens));
 }
 
 function countOverlap(a: string[], b: Set<string>): number {
   return a.reduce((count, token) => count + (b.has(token) ? 1 : 0), 0);
 }
 
+const SENTENCE_ENDING_PATTERN = /[.!?]+(?:["'”’»)\]}]+)?$/u;
+
 function hasSentenceEnding(value: string): boolean {
-  return /[.!?]$/u.test(compactWhitespace(value));
+  return SENTENCE_ENDING_PATTERN.test(compactWhitespace(value));
 }
 
 function ensureSentenceEnding(value: string): string {
@@ -1496,7 +1509,9 @@ function ensureSentenceEnding(value: string): string {
 }
 
 function splitSentences(value: string): string[] {
-  const matches = compactWhitespace(value).match(/[^.!?\n]+(?:[.!?]+|$)/g);
+  const matches = compactWhitespace(value).match(
+    /[^.!?\n]+(?:[.!?]+(?:["'”’»)\]}]+)?|$)/gu,
+  );
   if (!matches) return [];
   return matches.map((sentence) => compactWhitespace(sentence)).filter(Boolean);
 }
@@ -1883,8 +1898,18 @@ export function buildAllowedFactsPackFromFactGraph(
 }
 
 function extractFactEntities(text: string): string[] {
-  const matches = compactWhitespace(text).match(/\b[A-Z][A-Za-z0-9&'.-]{2,}\b/g);
-  return dedupeStrings(matches ?? []).slice(0, 6);
+  const compact = compactWhitespace(text);
+  const namedEntities = compact.match(/\b[A-Z][A-Za-z0-9&'.-]{2,}\b/g) ?? [];
+  const contextualDigitLeadingEntities = Array.from(
+    compact.matchAll(
+      /\b(?:at|for|with|joined)\s+(\d+(?:[-–—]\d+)*(?:[-–—]?[A-Z][A-Za-z0-9&'.-]*))\b/gi,
+    ),
+    (match) => match[1],
+  );
+  return dedupeStrings([
+    ...namedEntities,
+    ...contextualDigitLeadingEntities,
+  ]).slice(0, 6);
 }
 
 function extractAllowedVerbs(text: string): string[] {
@@ -4593,8 +4618,8 @@ const EMPLOYER_ARGUMENT_BRIDGE_PATTERN =
 const CANDIDATE_LIKE_FULL_NAME_LINE_PATTERN =
   /^[A-Z][A-Za-z'’-]+(?:\s+[A-Z][A-Za-z'’-]+){1,3}$/;
 const PERCENTAGE_NUMERIC_CLAIM_PATTERN =
-  /\b\d+(?:\.\d+)?\s*(?:%|percent|percentage\s+points?)\b/gi;
-const DIGIT_NUMERIC_CLAIM_PATTERN = /\b\d+(?:\.\d+)?\b/g;
+  /\b\d[\d,]*(?:\.\d+)?\s*(?:%|percent|percentage\s+points?)\b/gi;
+const DIGIT_NUMERIC_CLAIM_PATTERN = /\b\d[\d,]*(?:\.\d+)?\b/g;
 const WORD_NUMBER_DURATION_CLAIM_PATTERN =
   /\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:day|days|week|weeks|month|months|year|years)\b/gi;
 const HIGH_OWNERSHIP_VERB_PATTERNS = [
@@ -4732,7 +4757,11 @@ function normalizeNumericClaim(value: string): string {
   return compactWhitespace(value)
     .toLowerCase()
     .replace(/percentage\s+points?/g, "percent")
-    .replace(/%/g, " percent");
+    .replace(/%/g, " percent")
+    .replace(
+      /\d[\d,]*(?:\.\d+)?/gu,
+      normalizePremiumCoverLetterNumericToken,
+    );
 }
 
 function extractNumericClaims(value: string): string[] {
@@ -5353,6 +5382,33 @@ function premiumBodyPartTextChanged(
   );
 }
 
+function replacePremiumWriterOutputBodyParts(args: {
+  writerOutput: PremiumWriterOutputV1;
+  bodyParts: CoverLetterBodyParts;
+}): PremiumWriterOutputV1 {
+  return {
+    ...args.writerOutput,
+    bodyParts: {
+      opening: {
+        ...args.writerOutput.bodyParts.opening,
+        text: args.bodyParts.opening,
+      },
+      proofBlock: {
+        ...args.writerOutput.bodyParts.proofBlock,
+        text: args.bodyParts.proofBlock,
+      },
+      employerValueBlock: {
+        ...args.writerOutput.bodyParts.employerValueBlock,
+        text: args.bodyParts.employerValueBlock,
+      },
+      closeLine: {
+        ...args.writerOutput.bodyParts.closeLine,
+        text: args.bodyParts.closeLine,
+      },
+    },
+  };
+}
+
 function normalizePremiumProvenanceText(value: string): string {
   return normalizeProposalConstraintText(value);
 }
@@ -5372,15 +5428,16 @@ function premiumTextSupportsCandidateFact(args: {
 
   const normalizedGenerated = normalizePremiumProvenanceText(generatedText);
   const normalizedFact = normalizePremiumProvenanceText(factText);
+  const factTokens = normalizeCanonicalTokens(factText);
+  const generatedTokens = new Set(normalizeCanonicalTokens(generatedText));
   if (
-    normalizedFact.length >= 24 &&
-    normalizedGenerated.includes(normalizedFact)
+    ((normalizedFact.length >= 12 || factTokens.length >= 2) &&
+      normalizedGenerated.includes(normalizedFact)) ||
+    (factTokens.length === 1 && generatedTokens.has(factTokens[0]))
   ) {
     return true;
   }
 
-  const generatedTokens = new Set(normalizeTokens(generatedText));
-  const factTokens = normalizeTokens(factText);
   const overlap = countOverlap(factTokens, generatedTokens);
   const threshold = Math.min(5, Math.max(3, Math.ceil(factTokens.length * 0.35)));
   if (overlap >= threshold) {
@@ -6820,11 +6877,70 @@ function repairTextHasCandidateUnsupportedClaim(args: {
   });
 }
 
+function repairAddsNumericClaimToSection(args: {
+  before: string;
+  after: string;
+}): boolean {
+  const previousClaims = new Set(extractNumericClaims(args.before));
+  return extractNumericClaims(args.after).some(
+    (claim) => !previousClaims.has(claim),
+  );
+}
+
+function repairSectionUsesUncitedCandidateFact(args: {
+  text: string;
+  citedFactIds: Set<string>;
+  factGraph: FactGraphV1;
+}): boolean {
+  const candidateFacts = args.factGraph.facts.filter(
+    (fact) => fact.source === "cv",
+  );
+  const evidenceFragments = splitSentences(args.text).flatMap((sentence) =>
+    sentence
+      .split(/\s*(?:[;:,]|\b(?:and|while|plus|along with)\b)\s*/iu)
+      .map((fragment) => compactWhitespace(fragment))
+      .filter(Boolean),
+  );
+  return evidenceFragments.some((fragment) => {
+    const matchedFacts = candidateFacts.filter((fact) =>
+      premiumTextSupportsCandidateFact({
+        generatedText: fragment,
+        fact,
+      }),
+    );
+    const citedFacts = matchedFacts.filter((fact) =>
+      args.citedFactIds.has(fact.id),
+    );
+    const uncitedFacts = matchedFacts.filter(
+      (fact) => !args.citedFactIds.has(fact.id),
+    );
+    if (uncitedFacts.length === 0) return false;
+    if (citedFacts.length === 0) return true;
+
+    const fragmentTokens = new Set(normalizeCanonicalTokens(fragment));
+    const citedVisibleTokens = new Set(
+      citedFacts.flatMap((fact) =>
+        normalizeCanonicalTokens([fact.text, ...fact.entities].join(" ")).filter(
+          (token) => fragmentTokens.has(token),
+        ),
+      ),
+    );
+    return uncitedFacts.some((fact) =>
+      normalizeCanonicalTokens([fact.text, ...fact.entities].join(" ")).some(
+        (token) =>
+          fragmentTokens.has(token) && !citedVisibleTokens.has(token),
+      ),
+    );
+  });
+}
+
 function premiumCoverLetterQualityRepairPreservesCandidateGrounding(args: {
   before: CoverLetterBodyParts;
   after: CoverLetterBodyParts;
   brief: CoverLetterBrief;
   repairedProvenance: PremiumCoverLetterFinalProvenance;
+  writerOutput: PremiumWriterOutputV1;
+  factGraph: FactGraphV1;
 }): boolean {
   const changedSections = getChangedPremiumCoverLetterSections({
     before: args.before,
@@ -6837,8 +6953,21 @@ function premiumCoverLetterQualityRepairPreservesCandidateGrounding(args: {
   });
   return changedSections.every((section) => {
     const repairedSection = args.repairedProvenance.sections[section];
+    const citedFactIds = new Set(
+      args.writerOutput.bodyParts[section].factIds,
+    );
+    const usesUncitedCandidateFact = repairSectionUsesUncitedCandidateFact({
+      text: args.after[section],
+      citedFactIds,
+      factGraph: args.factGraph,
+    });
     return (
       repairedSection.verifiedCandidateFactIds.length > 0 &&
+      !usesUncitedCandidateFact &&
+      !repairAddsNumericClaimToSection({
+        before: args.before[section],
+        after: args.after[section],
+      }) &&
       !repairTextHasCandidateUnsupportedClaim({
         text: args.after[section],
         candidateEvidenceSurface,
@@ -6980,6 +7109,8 @@ async function tryRepairPremiumCoverLetterQualityShadow(args: {
       after: repairedBodyParts,
       brief: args.brief,
       repairedProvenance,
+      writerOutput: args.writerOutput,
+      factGraph: args.factGraph,
     })
   ) {
     return {
@@ -7452,7 +7583,9 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     content: rendered.content,
     contextClass: brief.contextClass,
   });
+  const preQualityRepairState = { bodyParts, rendered, qualityShadow };
   let qualityRepairTrace: PremiumCoverLetterQualityRepairTrace | undefined;
+  let qualityRepairApplied = false;
 
   const qualityRepair = await tryRepairPremiumCoverLetterQualityShadow({
     bodyParts,
@@ -7470,6 +7603,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   });
   qualityRepairTrace = qualityRepair.trace;
   if (qualityRepair.bodyParts && qualityRepair.rendered && qualityRepair.qualityShadow) {
+    qualityRepairApplied = true;
     bodyParts = qualityRepair.bodyParts;
     rendered = qualityRepair.rendered;
     qualityShadow = qualityRepair.qualityShadow;
@@ -7499,6 +7633,77 @@ export async function attemptPremiumCoverLetterGeneration(args: {
         contextClass: brief.contextClass,
       });
     }
+  }
+
+  let finalWriterOutput = replacePremiumWriterOutputBodyParts({
+    writerOutput,
+    bodyParts,
+  });
+  let englishCvBackedQualityGateIssues = validateEnglishCvBackedQualityGate({
+    writerOutput: finalWriterOutput,
+    claimPlan,
+    factGraph,
+    jobDemandGraph,
+  });
+  let blockingEnglishCvBackedQualityGateIssues =
+    englishCvBackedQualityGateIssues.filter((issue) =>
+      (
+        legacyWrapped &&
+        !isQwenWriterIdentity({
+          writerProvider: args.writerProvider,
+          writerModel: args.writerModel,
+        })
+          ? ENGLISH_CV_BACKED_LEGACY_PRODUCTION_GATE_CODES
+          : ENGLISH_CV_BACKED_PRODUCTION_GATE_CODES
+      ).has(issue.code),
+    );
+  if (
+    qualityRepairApplied &&
+    blockingEnglishCvBackedQualityGateIssues.length > 0
+  ) {
+    bodyParts = preQualityRepairState.bodyParts;
+    rendered = preQualityRepairState.rendered;
+    qualityShadow = preQualityRepairState.qualityShadow;
+    qualityRepairTrace = {
+      ...qualityRepair.trace,
+      outcome: "rejected_validation",
+      rejectionCategory: "rejected_validation",
+    };
+    finalWriterOutput = replacePremiumWriterOutputBodyParts({
+      writerOutput,
+      bodyParts,
+    });
+    englishCvBackedQualityGateIssues = validateEnglishCvBackedQualityGate({
+      writerOutput: finalWriterOutput,
+      claimPlan,
+      factGraph,
+      jobDemandGraph,
+    });
+    blockingEnglishCvBackedQualityGateIssues =
+      englishCvBackedQualityGateIssues.filter((issue) =>
+      (
+        legacyWrapped &&
+        !isQwenWriterIdentity({
+          writerProvider: args.writerProvider,
+          writerModel: args.writerModel,
+        })
+          ? ENGLISH_CV_BACKED_LEGACY_PRODUCTION_GATE_CODES
+          : ENGLISH_CV_BACKED_PRODUCTION_GATE_CODES
+      ).has(issue.code),
+    );
+  }
+  if (blockingEnglishCvBackedQualityGateIssues.length > 0) {
+    args.onFailure?.({
+      stage: "validation",
+      reason: "non_repairable_validation",
+      contextClass,
+      issues: Array.from(
+        new Set(
+          blockingEnglishCvBackedQualityGateIssues.map((issue) => issue.code),
+        ),
+      ),
+    });
+    return null;
   }
 
   const finalProvenance = buildPremiumCoverLetterFinalProvenance({
