@@ -11,6 +11,7 @@ import {
   validateEnglishCvBackedQualityGate,
 } from "../premiumCoverLetterEnglishQualityGate";
 import {
+  canonicalizePremiumCoverLetterNoun,
   canonicalizePremiumCoverLetterToken,
   expandPremiumCoverLetterTokenVariants,
 } from "../premiumCoverLetterTokenNormalization";
@@ -545,6 +546,39 @@ describe("English CV-backed quality gate", () => {
     },
   );
 
+  it("preserves distinct quantified head nouns with the same derivational root", () => {
+    const metricFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Supported 4 operations.",
+              metrics: ["4"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I supported 4 operators.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: metricFactGraph,
+    });
+
+    expect(canonicalizePremiumCoverLetterNoun("operations")).toBe("operation");
+    expect(canonicalizePremiumCoverLetterNoun("operators")).toBe("operator");
+    expect(issues).toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "opening",
+      metric: "4",
+    });
+  });
+
   it("accepts a numeral supported by the section's assigned job demand", () => {
     const demandId = "demand_always_on";
     const demandClaimPlan: ClaimPlanV1 = {
@@ -649,6 +683,39 @@ describe("English CV-backed quality gate", () => {
         }),
         claimPlan,
         factGraph: signedMetricFactGraph,
+      });
+
+      expect(issues).not.toContainEqual(
+        expect.objectContaining({ code: "unsupported_visible_metric" }),
+      );
+    },
+  );
+
+  it.each(["2019-2021", "2019 - 2021"])(
+    "treats the hyphen in the date range %s as a separator",
+    (generatedRange) => {
+      const rangeFactGraph: FactGraphV1 = {
+        ...factGraph,
+        facts: factGraph.facts.map((fact) =>
+          fact.id === "fact_opening"
+            ? {
+                ...fact,
+                text: "Supported onboarding from 2019–2021.",
+                metrics: ["2019", "2021"],
+              }
+            : fact,
+        ),
+      };
+      const issues = validateEnglishCvBackedQualityGate({
+        writerOutput: output({
+          opening: `I supported onboarding from ${generatedRange}.`,
+          proofBlock: "I documented handoffs for three implementation teams.",
+          employerValueBlock:
+            "That reporting supports clear delivery handoffs.",
+          closeLine: "I would bring that discipline to the team.",
+        }),
+        claimPlan,
+        factGraph: rangeFactGraph,
       });
 
       expect(issues).not.toContainEqual(
@@ -889,7 +956,7 @@ describe("English CV-backed quality gate", () => {
         opening:
           "I built 3D workflows for 5G systems under ISO 27001 using Windows 10 and Python 3.",
         proofBlock:
-          "I documented 3D assets for 5G programs aligned with ISO 27001 on Windows 10 and Python 3.",
+          "I documented 3D assets for 5G programs aligned with ISO-27001 on Windows 10 and Python 3.",
         employerValueBlock: "That reporting supports clear delivery handoffs.",
         closeLine: "I would bring that discipline to the team.",
         proofFacts: ["fact_opening"],
@@ -935,6 +1002,66 @@ describe("English CV-backed quality gate", () => {
       section: "opening",
       metric: "5000000",
     });
+  });
+
+  it("detects unsupported compact multiplier metrics", () => {
+    const multiplierFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Grew revenue 2x.",
+              metrics: ["2x"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I grew revenue 3x.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: multiplierFactGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "opening",
+      metric: "3x",
+    });
+  });
+
+  it("normalizes x and multiplication-sign multiplier metrics equivalently", () => {
+    const multiplierFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Grew revenue 3x.",
+              metrics: ["3x"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I grew revenue 3×.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: multiplierFactGraph,
+    });
+
+    expect(issues).not.toContainEqual(
+      expect.objectContaining({ code: "unsupported_visible_metric" }),
+    );
   });
 
   it("normalizes compact and spelled-out magnitude suffixes equivalently", () => {
@@ -1337,6 +1464,37 @@ describe("English CV-backed quality gate", () => {
       }),
       claimPlan,
       factGraph: genericDeliveryFactGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "employer_value_not_grounded",
+      section: "employerValueBlock",
+    });
+  });
+
+  it("compares generic employer anchors in canonical form", () => {
+    const genericOperationsFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_close"
+          ? {
+              ...fact,
+              text: "Coordinated operations.",
+              entities: [],
+              allowedVerbs: ["coordinated"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "Operations matter.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: genericOperationsFactGraph,
     });
 
     expect(issues).toContainEqual({
@@ -1757,7 +1915,7 @@ describe("English CV-backed quality gate", () => {
       writerOutput: output({
         opening: "I reduced the onboarding backlog by 24%.",
         proofBlock:
-          "Managed services are central to this role. Improved processes sustained the result.",
+          "Managed services improve reliability. Improved processes sustained the result.",
         employerValueBlock: "That reporting supports clear delivery handoffs.",
         closeLine: "I would bring that discipline to the team.",
       }),

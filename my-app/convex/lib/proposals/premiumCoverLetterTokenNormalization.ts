@@ -69,13 +69,19 @@ export function expandPremiumCoverLetterTokenVariants(
 
 export function canonicalizePremiumCoverLetterToken(value: string): string {
   const token = value.toLowerCase();
-  if (INVARIANT_S_ENDING_TOKENS.has(token)) return token;
-  const irregularPlural = IRREGULAR_PLURAL_CANONICALS.get(token);
-  if (irregularPlural) return irregularPlural;
   const canonicalRule = TOKEN_CANONICALIZATION_RULES.find((rule) =>
     rule.pattern.test(token),
   );
   if (canonicalRule) return canonicalRule.canonical;
+
+  return canonicalizePremiumCoverLetterNoun(token);
+}
+
+export function canonicalizePremiumCoverLetterNoun(value: string): string {
+  const token = value.toLowerCase();
+  if (INVARIANT_S_ENDING_TOKENS.has(token)) return token;
+  const irregularPlural = IRREGULAR_PLURAL_CANONICALS.get(token);
+  if (irregularPlural) return irregularPlural;
 
   let canonical = token;
   if (token.endsWith("ies") && token.length > 5) {

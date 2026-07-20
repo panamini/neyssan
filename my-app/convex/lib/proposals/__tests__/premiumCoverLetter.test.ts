@@ -6589,6 +6589,44 @@ describe("premium cover letter generation and rendering", () => {
     ).toBeGreaterThan(0);
   });
 
+  it("accepts a quality repair that only normalizes supported numeric formatting", async () => {
+    const calls: string[] = [];
+    const originalEmployerValue =
+      "I built experimentation dashboards used by product and growth teams.";
+    const repairedCloseLine =
+      "I would bring that design-system discipline to product-facing interface work.";
+    const result = await attemptDirectQualityRepair(async () => {
+      calls.push("writer");
+      if (calls.length === 1) {
+        return buildDirectPremiumWriterOutputFixture({
+          opening:
+            "I improved signup conversion by 11.0% after iterative UI experiments.",
+          proofBlock:
+            "I led a design system migration used across 4.0 product squads.",
+          employerValueBlock: originalEmployerValue,
+          closeLine: "I would be glad to discuss the position further.",
+        });
+      }
+      return {
+        opening:
+          "I improved signup conversion by 11% after iterative UI experiments.",
+        proofBlock:
+          "I led a design system migration used across 4 product squads.",
+        employerValueBlock: originalEmployerValue,
+        closeLine: repairedCloseLine,
+      };
+    });
+
+    expect(calls).toHaveLength(2);
+    expect(result?.bodyParts.opening).toContain("11%");
+    expect(result?.bodyParts.proofBlock).toContain("4 product squads");
+    expect(result?.qualityRepair).toMatchObject({
+      attempted: true,
+      outcome: "attempted_accepted",
+      finalProvenanceStatus: "validated_after_structured_repair",
+    });
+  });
+
   it("rejects a cited repair when it adds distinguishing uncited CV detail", async () => {
     const calls: string[] = [];
     const originalEmployerValue =

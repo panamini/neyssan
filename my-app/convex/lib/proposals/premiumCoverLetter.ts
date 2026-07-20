@@ -4597,8 +4597,8 @@ const EMPLOYER_ARGUMENT_BRIDGE_PATTERN =
 const CANDIDATE_LIKE_FULL_NAME_LINE_PATTERN =
   /^[A-Z][A-Za-z'’-]+(?:\s+[A-Z][A-Za-z'’-]+){1,3}$/;
 const PERCENTAGE_NUMERIC_CLAIM_PATTERN =
-  /\b\d+(?:\.\d+)?\s*(?:%|percent|percentage\s+points?)\b/gi;
-const DIGIT_NUMERIC_CLAIM_PATTERN = /\b\d+(?:\.\d+)?\b/g;
+  /\b\d[\d,]*(?:\.\d+)?\s*(?:%|percent|percentage\s+points?)\b/gi;
+const DIGIT_NUMERIC_CLAIM_PATTERN = /\b\d[\d,]*(?:\.\d+)?\b/g;
 const WORD_NUMBER_DURATION_CLAIM_PATTERN =
   /\b(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:day|days|week|weeks|month|months|year|years)\b/gi;
 const HIGH_OWNERSHIP_VERB_PATTERNS = [
@@ -4736,7 +4736,10 @@ function normalizeNumericClaim(value: string): string {
   return compactWhitespace(value)
     .toLowerCase()
     .replace(/percentage\s+points?/g, "percent")
-    .replace(/%/g, " percent");
+    .replace(/%/g, " percent")
+    .replace(/\d[\d,]*(?:\.\d+)?/gu, (number) =>
+      String(Number(number.replace(/,/g, ""))),
+    );
 }
 
 function extractNumericClaims(value: string): string[] {

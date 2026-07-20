@@ -5,7 +5,10 @@ import type {
   JobDemandGraphV1,
   PremiumWriterOutputV1,
 } from "./premiumCoverLetter";
-import { canonicalizePremiumCoverLetterToken } from "./premiumCoverLetterTokenNormalization";
+import {
+  canonicalizePremiumCoverLetterNoun,
+  canonicalizePremiumCoverLetterToken,
+} from "./premiumCoverLetterTokenNormalization";
 
 const ENGLISH_CV_BACKED_SECTIONS: readonly ClaimPlanSection[] = [
   "opening",
@@ -126,13 +129,13 @@ const METRIC_MEASUREMENT_ALIASES = new Map([
 ]);
 const GENERIC_SINGLE_EVIDENCE_ANCHORS = new Set([
   "communication",
-  "coordination",
+  "coordinate",
   "delivery",
   "discipline",
   "handoff",
-  "operation",
+  "operate",
   "process",
-  "reporting",
+  "report",
   "support",
   "workflow",
 ]);
@@ -172,6 +175,26 @@ const FINITE_PREDICATE_TOKENS = new Set([
   "were",
   "will",
   "would",
+]);
+const FINITE_PREDICATE_BLOCKERS = new Set([
+  "across",
+  "and",
+  "as",
+  "at",
+  "by",
+  "delivery",
+  "for",
+  "from",
+  "in",
+  "into",
+  "of",
+  "on",
+  "or",
+  "over",
+  "through",
+  "to",
+  "under",
+  "with",
 ]);
 
 function normalizeText(value: string): string {
@@ -282,7 +305,7 @@ function numericMagnitudeMultiplier(suffix: string): number {
 }
 
 function canonicalMetricMeasurement(value: string): string {
-  const canonical = canonicalizePremiumCoverLetterToken(value);
+  const canonical = canonicalizePremiumCoverLetterNoun(value);
   return METRIC_MEASUREMENT_ALIASES.get(canonical) ?? canonical;
 }
 
@@ -321,12 +344,15 @@ function isIgnoredNumericOccurrence(args: {
   currency: "usd" | "eur" | "gbp" | null;
 }): boolean {
   return (
-    /\b(?:(?:iso|iec|soc|rfc)\s+|no\.\s*)$/iu.test(args.prefix) ||
+    /\b(?:(?:iso|iec|soc|rfc)(?:\s+|\s*[-–—]\s*)|no\.\s*)$/iu.test(
+      args.prefix,
+    ) ||
     isPlainToolVersion(args)
   );
 }
 
-function numericSignMultiplier(sign: string): number {
+function numericSignMultiplier(sign: string, prefix: string): number {
+  if (sign === "-" && /\d\s*$/u.test(prefix)) return 1;
   return ["-", "minus", "negative"].includes(sign.toLowerCase()) ? -1 : 1;
 }
 
@@ -357,9 +383,21 @@ function metricMeasurement(args: {
 function metricUnit(args: {
   currency: "usd" | "eur" | "gbp" | null;
   percentage: boolean;
+  multiplier: boolean;
 }): string {
   if (args.currency) return args.currency;
+  if (args.multiplier) return "multiplier";
   return args.percentage ? "percent" : "number";
+}
+
+function metricLabel(args: {
+  value: number;
+  percentage: boolean;
+  multiplier: boolean;
+}): string {
+  if (args.percentage) return `${args.value}%`;
+  if (args.multiplier) return `${args.value}x`;
+  return String(args.value);
 }
 
 function normalizeNumericTokenOccurrence(args: {
@@ -378,17 +416,25 @@ function normalizeNumericTokenOccurrence(args: {
   const numericValue = Number(args.match[3].replace(/,/g, ""));
   const metricValue =
     numericValue *
-    numericSignMultiplier(sign) *
+    numericSignMultiplier(sign, prefix) *
     numericMagnitudeMultiplier(suffix);
   const percentage = suffix === "%" || suffix === "percent";
+  const multiplier = suffix === "x" || suffix === "×";
   const end = index + args.match[0].length;
   const measurement = metricMeasurement({
     value: args.value,
     end,
     percentage,
   });
-  const metric = `${metricValue}${percentage ? "%" : ""}`;
-  const baseKey = [metricUnit({ currency, percentage }), metricValue].join(":");
+  const metric = metricLabel({
+    value: metricValue,
+    percentage,
+    multiplier,
+  });
+  const baseKey = [
+    metricUnit({ currency, percentage, multiplier }),
+    metricValue,
+  ].join(":");
   return {
     metric,
     baseKey,
@@ -403,7 +449,7 @@ function numericTokenOccurrences(value: string): NumericTokenOccurrence[] {
   const tokens: NumericTokenOccurrence[] = [];
   for (const match of value
     .matchAll(
-      /(?<![A-Za-z0-9])([+-]|minus\b|negative\b|plus\b|positive\b)?\s*((?:USD|EUR|GBP|[$€£])?)\s*(\d[\d,]*(?:\.\d+)?)\s*(%|percent\b|[KMB]\b|thousand\b|million\b|billion\b)?(?:\s*((?:USD|EUR|GBP)\b))?(?![A-Za-z0-9])/gi,
+      /(?<![A-Za-z0-9])([+-]|minus\b|negative\b|plus\b|positive\b)?\s*((?:USD|EUR|GBP|[$€£])?)\s*(\d[\d,]*(?:\.\d+)?)\s*(%|percent\b|[KMB]\b|thousand\b|million\b|billion\b|[x×])?(?:\s*((?:USD|EUR|GBP)\b))?(?![A-Za-z0-9])/gi,
     )) {
     const occurrence = normalizeNumericTokenOccurrence({ value, match });
     if (occurrence) tokens.push(occurrence);
@@ -563,17 +609,48 @@ function sourceMetricFactIds(args: {
   };
 }
 
+function isLikelyUnlistedFinitePredicate(args: {
+  tokens: readonly string[];
+  token: string;
+  index: number;
+}): boolean {
+  if (args.index !== 0 || args.tokens.length < 4) return false;
+  if (FINITE_PREDICATE_BLOCKERS.has(args.token)) return false;
+  if (
+    /(?:ing|tion|ment|ity|ness|ance|ence|ship|ure|age|ery|ory|ism)$/u.test(
+      args.token,
+    )
+  ) {
+    return false;
+  }
+  return args.tokens[1].endsWith("s") || args.token.endsWith("s");
+}
+
+function isFinitePredicateCandidate(args: {
+  tokens: readonly string[];
+  token: string;
+  index: number;
+}): boolean {
+  const canonicalToken = canonicalizePremiumCoverLetterToken(args.token);
+  if (FINITE_PREDICATE_TOKENS.has(canonicalToken)) return true;
+  if (
+    /(?:ed|en)$/u.test(args.token) &&
+    (args.index === 0 ||
+      ["that", "which", "who"].includes(args.tokens[args.index + 1]))
+  ) {
+    return true;
+  }
+  return isLikelyUnlistedFinitePredicate(args);
+}
+
 function isVerbLedFragment(normalizedSentence: string): boolean {
   if (!VERB_LED_FRAGMENT_PATTERN.test(normalizedSentence)) return false;
   const tokens = normalizedSentence.split(/[^a-z0-9]+/u).filter(Boolean);
-  const hasLaterFinitePredicate = tokens.slice(2).some((token, index) => {
-    const canonicalToken = canonicalizePremiumCoverLetterToken(token);
-    return (
-      FINITE_PREDICATE_TOKENS.has(canonicalToken) ||
-      (/(?:ed|en)$/u.test(token) &&
-        (index === 0 || ["that", "which", "who"].includes(tokens[index + 1])))
+  const hasLaterFinitePredicate = tokens
+    .slice(2)
+    .some((token, index) =>
+      isFinitePredicateCandidate({ tokens, token, index }),
     );
-  });
   return !hasLaterFinitePredicate;
 }
 
