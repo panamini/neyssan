@@ -86,9 +86,28 @@ function normalizeSentenceKey(value: string): string {
     .trim();
 }
 
-function splitSentences(value: string): string[] {
-  const sentences: string[] = [];
+type SentenceRange = Readonly<{
+  text: string;
+  start: number;
+  end: number;
+}>;
+
+function splitSentenceRanges(value: string): SentenceRange[] {
+  const sentences: SentenceRange[] = [];
   let start = 0;
+  const pushSentence = (end: number) => {
+    const surface = value.slice(start, end);
+    const leadingWhitespaceLength = surface.match(/^\s*/u)?.[0].length ?? 0;
+    const text = surface.trim();
+    if (text) {
+      sentences.push({
+        text,
+        start: start + leadingWhitespaceLength,
+        end,
+      });
+    }
+    start = end;
+  };
   for (const match of value.matchAll(
     /[.!?]+(?:["'”’»)\]}]+)?(?=\s|$)/gu,
   )) {
@@ -101,33 +120,41 @@ function splitSentences(value: string): string[] {
     ) {
       continue;
     }
-    const sentence = value.slice(start, end).trim();
-    if (sentence) sentences.push(sentence);
-    start = end;
+    pushSentence(end);
   }
-  const trailing = value.slice(start).trim();
-  if (trailing) sentences.push(trailing);
+  pushSentence(value.length);
   return sentences;
 }
 
-function numericTokenOccurrences(value: string): string[] {
-  const tokens: string[] = [];
+type NumericTokenOccurrence = Readonly<{
+  metric: string;
+  index: number;
+}>;
+
+function numericTokenOccurrences(value: string): NumericTokenOccurrence[] {
+  const tokens: NumericTokenOccurrence[] = [];
   for (const match of value
-    .toLowerCase()
-    .matchAll(/\b\d[\d,]*(?:\.\d+)?\s*(?:%|percent\b)?/g)) {
-    const compact = match[0].replace(/[\s,]+/g, "");
+    .matchAll(/\b\d[\d,]*(?:\.\d+)?\s*(?:%|percent\b)?/gi)) {
+    const compact = match[0].toLowerCase().replace(/[\s,]+/g, "");
     const percentage = compact.endsWith("%") || compact.endsWith("percent");
     const numericSurface = compact.replace(/(?:%|percent)$/u, "");
     const numericValue = Number(numericSurface);
     if (Number.isFinite(numericValue)) {
-      tokens.push(`${numericValue}${percentage ? "%" : ""}`);
+      tokens.push({
+        metric: `${numericValue}${percentage ? "%" : ""}`,
+        index: match.index,
+      });
     }
   }
   return tokens;
 }
 
 function numericTokens(value: string): string[] {
-  return [...new Set(numericTokenOccurrences(value))];
+  return [
+    ...new Set(
+      numericTokenOccurrences(value).map((occurrence) => occurrence.metric),
+    ),
+  ];
 }
 
 function evidenceAnchorTokens(args: {
@@ -146,13 +173,18 @@ function evidenceAnchorTokens(args: {
 function evidenceAnchorTokensFromValues(values: readonly string[]): Set<string> {
   return new Set(
     values
-      .flatMap((value) => normalizeText(value).split(/[^a-z0-9%]+/u))
+      .flatMap((value) => value.normalize("NFKC").split(/[^A-Za-z0-9%]+/u))
+      .map((token) => ({
+        normalized: token.toLowerCase(),
+        shortAcronym: /^[A-Z][A-Z0-9]{1,3}$/u.test(token),
+      }))
       .filter(
-        (token) =>
-          token.length >= 4 &&
-          !numericTokens(token).length &&
-          !EVIDENCE_ANCHOR_STOP_WORDS.has(token),
-      ),
+        ({ normalized, shortAcronym }) =>
+          (normalized.length >= 4 || shortAcronym) &&
+          !numericTokens(normalized).length &&
+          !EVIDENCE_ANCHOR_STOP_WORDS.has(normalized),
+      )
+      .map(({ normalized }) => normalized),
   );
 }
 
@@ -371,7 +403,8 @@ export function validateEnglishCvBackedQualityGate(args: {
       }
     }
 
-    for (const sentence of splitSentences(text)) {
+    const sentenceRanges = splitSentenceRanges(text);
+    for (const { text: sentence } of sentenceRanges) {
       const normalizedSentence = normalizeSentenceKey(sentence);
       if (
         /^(?:managed|maintained|documented|coordinated|reduced|tracked|supported|handled|worked|led|built|improved|created|reported)\b/u.test(
@@ -403,11 +436,7 @@ export function validateEnglishCvBackedQualityGate(args: {
         factIds: part.factIds,
         factGraph: args.factGraph,
       });
-      const textTokens = new Set(
-        normalizeText(text)
-          .split(/[^a-z0-9%]+/u)
-          .filter((token) => token.length >= 4),
-      );
+      const textTokens = evidenceAnchorTokensFromValues([text]);
       if (!Array.from(textTokens).some((token) => anchors.has(token))) {
         pushUnique(issues, {
           code: "employer_value_not_grounded",
@@ -415,7 +444,8 @@ export function validateEnglishCvBackedQualityGate(args: {
         });
       }
     }
-    for (const metric of numericTokenOccurrences(text)) {
+    for (const occurrence of numericTokenOccurrences(text)) {
+      const { metric } = occurrence;
       if (!sourceMetricFacts.has(metric)) {
         pushUnique(issues, {
           code: "unsupported_visible_metric",
@@ -423,8 +453,14 @@ export function validateEnglishCvBackedQualityGate(args: {
           metric,
         });
       }
+      const localText =
+        sentenceRanges.find(
+          (sentence) =>
+            occurrence.index >= sentence.start &&
+            occurrence.index < sentence.end,
+        )?.text ?? text;
       const metricFactIds = attributedMetricFactIds({
-        visibleText: text,
+        visibleText: localText,
         candidateFactIds:
           sourceMetricFacts.get(metric) ?? new Set<string>(),
         factGraph: args.factGraph,

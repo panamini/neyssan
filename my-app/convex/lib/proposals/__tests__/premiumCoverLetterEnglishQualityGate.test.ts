@@ -517,6 +517,58 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
+  it("attributes repeated metric values using each occurrence's sentence", () => {
+    const sameNumberFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) => {
+        if (fact.id === "fact_opening") {
+          return {
+            ...fact,
+            text: "Led delivery across 4 product squads.",
+            metrics: ["4"],
+            entities: ["product squads"],
+          };
+        }
+        if (fact.id === "fact_proof") {
+          return {
+            ...fact,
+            text: "Delivered 4 migration projects.",
+            metrics: ["4"],
+            entities: ["migration projects"],
+          };
+        }
+        return fact;
+      }),
+    };
+    const overlappingClaimPlan: ClaimPlanV1 = {
+      ...claimPlan,
+      claims: claimPlan.claims.map((claim) =>
+        claim.section === "opening"
+          ? {
+              ...claim,
+              factIds: ["fact_opening", "fact_proof"],
+            }
+          : claim,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening:
+          "I led delivery across 4 product squads. I delivered 4 migration projects.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+        openingFacts: ["fact_opening", "fact_proof"],
+      }),
+      claimPlan: overlappingClaimPlan,
+      factGraph: sameNumberFactGraph,
+    });
+
+    expect(issues).not.toContainEqual(
+      expect.objectContaining({ code: "duplicate_visible_metric" }),
+    );
+  });
+
   it("requires a fact reference when the assigned source-backed claim has facts", () => {
     const issues = validateEnglishCvBackedQualityGate({
       writerOutput: output({
@@ -575,6 +627,37 @@ describe("English CV-backed quality gate", () => {
     });
 
     expect(issues).toContainEqual({
+      code: "employer_value_not_grounded",
+      section: "employerValueBlock",
+    });
+  });
+
+  it("preserves short CV acronyms as employer grounding anchors", () => {
+    const acronymFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_close"
+          ? {
+              ...fact,
+              text: "Worked in QA at IBM.",
+              entities: ["QA", "IBM"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock:
+          "That QA experience at IBM supports reliable delivery.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: acronymFactGraph,
+    });
+
+    expect(issues).not.toContainEqual({
       code: "employer_value_not_grounded",
       section: "employerValueBlock",
     });
