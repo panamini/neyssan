@@ -1354,6 +1354,26 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
+  it("does not treat a numeric total as a numeric-only target employer", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "99 was the final onboarding total.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+      targetEmployerName: "99",
+    });
+
+    expect(issues).toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "employerValueBlock",
+      metric: "99",
+    });
+  });
+
   it("does not exempt a numeric claim that merely prefixes the target employer", () => {
     const issues = validateEnglishCvBackedQualityGate({
       writerOutput: output({
@@ -3731,6 +3751,16 @@ describe("English CV-backed quality gate", () => {
       section: "proofBlock",
     });
   });
+
+  it.each([
+    "Managed services for enterprises remain reliable.",
+    "Managed services and products remain reliable.",
+  ])(
+    "accepts a finite predicate after a compound or modified subject in %s",
+    (proofBlock) => {
+      expectCompleteProofBlock(proofBlock);
+    },
+  );
 
   it("rejects a verb-led fragment with a hyphenated modifier", () => {
     const issues = validateEnglishCvBackedQualityGate({

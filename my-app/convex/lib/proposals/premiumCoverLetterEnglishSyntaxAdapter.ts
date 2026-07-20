@@ -1,6 +1,17 @@
 import createWinkPosTagger from "wink-pos-tagger";
 
 const FINITE_PREDICATE_POS_TAGS = new Set(["MD", "VBD", "VBP", "VBZ"]);
+const SUBJECT_POS_TAGS = new Set([
+  "EX",
+  "NN",
+  "NNP",
+  "NNPS",
+  "NNS",
+  "PRP",
+  "WDT",
+  "WP",
+]);
+const SUBJECT_TRAILING_MODIFIER_POS_TAGS = new Set(["RB", "RBR", "RBS"]);
 const englishPosTagger = createWinkPosTagger();
 
 function lexicalTokens(value: string) {
@@ -33,21 +44,23 @@ export function isFiniteEnglishPredicateAt(args: {
     .some((token) => token.pos === "TO");
 }
 
-export function isNumericOnlyEnglishEntityMentionAt(args: {
-  value: string;
-  start: number;
-  length: number;
+export function hasEnglishSubjectBeforePredicateAt(args: {
+  tokens: readonly string[];
+  index: number;
+  clauseStartIndex: number;
 }): boolean {
-  const prefix = args.value.slice(0, args.start);
-  const suffix = args.value.slice(args.start + args.length);
-  if (/^['’]s(?![\p{L}\p{N}&'.-])/u.test(suffix)) return true;
-  if (!/(?:^|[.!?;:]\s*)$/u.test(prefix)) return false;
-
-  const followingToken = /^\s+([\p{L}][\p{L}'-]*)/u.exec(suffix)?.[1];
-  if (!followingToken) return false;
-  return isFiniteEnglishPredicateAt({
-    tokens: [args.value.slice(args.start, args.start + args.length), followingToken],
-    index: 1,
-    clauseStartIndex: 0,
-  });
+  const taggedTokens = lexicalTokens(args.tokens.join(" "));
+  let subjectIndex = args.index - 1;
+  while (
+    subjectIndex >= args.clauseStartIndex &&
+    SUBJECT_TRAILING_MODIFIER_POS_TAGS.has(
+      taggedTokens[subjectIndex]?.pos ?? "",
+    )
+  ) {
+    subjectIndex -= 1;
+  }
+  return (
+    subjectIndex >= args.clauseStartIndex &&
+    SUBJECT_POS_TAGS.has(taggedTokens[subjectIndex]?.pos ?? "")
+  );
 }

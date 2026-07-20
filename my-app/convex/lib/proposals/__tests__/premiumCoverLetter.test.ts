@@ -2742,8 +2742,18 @@ describe("premium cover letter prompt contract", () => {
       employerName: "Acme Corp",
     },
     {
+      jobTitle: "Software Engineer at 100 Remote",
+      jobDescription: `Work at Acme Corp. ${directJob.jobDescription}`,
+      employerName: "Acme Corp",
+    },
+    {
       jobTitle: directJob.jobTitle,
       jobDescription: `Join 5 teams at Acme Corp. ${directJob.jobDescription}`,
+      employerName: "Acme Corp",
+    },
+    {
+      jobTitle: directJob.jobTitle,
+      jobDescription: `Join 5 Teams at Acme Corp. ${directJob.jobDescription}`,
       employerName: "Acme Corp",
     },
     {
@@ -2770,6 +2780,31 @@ describe("premium cover letter prompt contract", () => {
       });
 
       expect(brief.employerName).toBe(employerName);
+    },
+  );
+
+  it.each([
+    "Software Engineer is responsible for customer-facing delivery.",
+    "Product Manager seeks opportunities to improve onboarding.",
+  ])(
+    "does not infer a role-led description as the employer: %s",
+    (jobDescription) => {
+      const { factGraph, jobDemandGraph, rankedEvidencePack, claimPlan } =
+        buildDirectClaimPlanFixture();
+      const brief = buildPremiumCoverLetterBrief({
+        preset: "signature",
+        outputLanguage: "English",
+        jobTitle: directJob.jobTitle,
+        jobDescription,
+        contextClass: "cv_direct",
+        allowedFactsPack: buildAllowedFactsPackFromFactGraph(factGraph),
+        rankedEvidencePack,
+        claimPlan,
+        factGraph,
+        jobDemandGraph,
+      });
+
+      expect(brief.employerName).toBeUndefined();
     },
   );
 

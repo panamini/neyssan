@@ -17,7 +17,9 @@ const DESCRIPTION_LEADING_EMPLOYER_PATTERN = new RegExp(
   "gu",
 );
 const DIGIT_LEADING_PROPER_NAME_PATTERN =
-  /\b(\d+(?:[-–—]\d+)*(?:[-–—][A-Z][A-Za-z0-9&'.-]*)(?:\s+[A-Z][A-Za-z0-9&'.-]*){0,3})\b/gu;
+  /\b((?:\d+[A-Z][A-Za-z0-9&'.-]*|\d+(?:[-–—]\d+)*(?:[-–—][A-Z][A-Za-z0-9&'.-]*))(?:\s+[A-Z][A-Za-z0-9&'.-]*){0,3})\b/gu;
+const DIGIT_LEADING_PROPER_NAME_SHAPE =
+  /^(?:\d+[A-Z][A-Za-z0-9&'.-]*|\d+(?:[-–—]\d+)*(?:[-–—][A-Z][A-Za-z0-9&'.-]*))(?:\s+[A-Z][A-Za-z0-9&'.-]*){0,3}$/u;
 const GENERIC_EMPLOYER_CANDIDATES = new Set([
   "our company",
   "our team",
@@ -40,6 +42,18 @@ const DURATION_NAME_SUFFIXES = new Set([
   "year",
   "years",
 ]);
+const NUMERIC_EMPLOYER_PREDICATES = new Set([
+  "builds",
+  "focuses",
+  "hires",
+  "offers",
+  "operates",
+  "provides",
+  "seeks",
+  "serves",
+  "supports",
+  "values",
+]);
 
 type EmployerCandidate = Readonly<{
   name: string;
@@ -55,7 +69,10 @@ function isCredibleEmployerCandidate(args: {
   value: string;
   end: number;
 }): boolean {
-  if (/\p{L}/u.test(args.name)) return true;
+  if (!/^\p{N}/u.test(args.name)) return true;
+  if (/\p{L}/u.test(args.name)) {
+    return DIGIT_LEADING_PROPER_NAME_SHAPE.test(args.name);
+  }
   return /^\s*(?:$|[.,;:!?)]|[-–—|])/u.test(args.value.slice(args.end));
 }
 
@@ -102,13 +119,14 @@ function numericTitleSuffix(jobTitle: string): string | undefined {
 function firstDescriptionEmployerCandidate(
   jobDescription: string,
 ): string | undefined {
+  const leadingNumericCandidates = employerCandidates(
+    jobDescription,
+    DESCRIPTION_LEADING_EMPLOYER_PATTERN,
+  ).filter(({ name }) => /\p{N}/u.test(name));
   return [
     ...employerCandidates(jobDescription, EMPLOYER_AFTER_AT_PATTERN),
     ...employerCandidates(jobDescription, EMPLOYER_AFTER_JOIN_PATTERN),
-    ...employerCandidates(
-      jobDescription,
-      DESCRIPTION_LEADING_EMPLOYER_PATTERN,
-    ),
+    ...leadingNumericCandidates,
   ].sort((left, right) => left.index - right.index)[0]?.name;
 }
 
@@ -143,4 +161,19 @@ export function extractTargetEmployerName(
     numericTitleSuffix(jobTitle) ??
     firstDescriptionEmployerCandidate(jobDescription)
   );
+}
+
+export function isNumericOnlyTargetEmployerMentionAt(args: {
+  value: string;
+  start: number;
+  length: number;
+}): boolean {
+  const prefix = args.value.slice(0, args.start);
+  const suffix = args.value.slice(args.start + args.length);
+  if (/^['’]s(?![\p{L}\p{N}&'.-])/u.test(suffix)) return true;
+  if (!/(?:^|[.!?;:]\s*)$/u.test(prefix)) return false;
+
+  const followingToken =
+    /^\s+([\p{L}][\p{L}'-]*)/u.exec(suffix)?.[1].toLowerCase() ?? "";
+  return NUMERIC_EMPLOYER_PREDICATES.has(followingToken);
 }

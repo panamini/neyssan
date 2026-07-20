@@ -11,10 +11,13 @@ import {
   normalizePremiumCoverLetterNumericToken,
 } from "./premiumCoverLetterTokenNormalization";
 import {
+  hasEnglishSubjectBeforePredicateAt,
   isFiniteEnglishPredicateAt,
-  isNumericOnlyEnglishEntityMentionAt,
 } from "./premiumCoverLetterEnglishSyntaxAdapter";
-import { extractDigitLeadingEnglishProperNames } from "./premiumCoverLetterEnglishEntityAdapter";
+import {
+  extractDigitLeadingEnglishProperNames,
+  isNumericOnlyTargetEmployerMentionAt,
+} from "./premiumCoverLetterEnglishEntityAdapter";
 
 const ENGLISH_CV_BACKED_SECTIONS: readonly ClaimPlanSection[] = [
   "opening",
@@ -1276,7 +1279,7 @@ function numericOccurrenceIsInsideExactEntity(args: {
         occurrenceIndex: args.occurrence.index,
       }) &&
       (!isNumericOnlyEntityName(entity) ||
-        isNumericOnlyEnglishEntityMentionAt({
+        isNumericOnlyTargetEmployerMentionAt({
           value: args.value,
           start: entityIndex,
           length: searchableEntity.length,
@@ -1296,6 +1299,7 @@ function numericOccurrenceIsPartOfEntity(args: {
   occurrence: NumericTokenOccurrence;
   entities: readonly string[];
   targetEmployerName?: string;
+  allowNumericOnlyTargetEmployer?: boolean;
 }): boolean {
   if (
     numericOccurrenceIsPartOfContextualEntity(args) ||
@@ -1309,7 +1313,7 @@ function numericOccurrenceIsPartOfEntity(args: {
       value: args.value,
       occurrence: args.occurrence,
       rawEntity: args.targetEmployerName,
-      allowNumericOnly: true,
+      allowNumericOnly: args.allowNumericOnlyTargetEmployer === true,
     })
   ) {
     return true;
@@ -1592,6 +1596,7 @@ function hasSupportedSubjectForPredicate(args: {
   clauseStartIndex: number;
 }): boolean {
   return (
+    hasEnglishSubjectBeforePredicateAt(args) ||
     args.index === 2 ||
     hasNounPhraseSubjectForUnlistedPredicate(args) ||
     hasMultiwordNounSubjectAfterLeadingParticiple(args) ||
@@ -2050,6 +2055,7 @@ export function validateEnglishCvBackedQualityGate(args: {
           occurrence: candidate,
           entities: visibleMetricEntities,
           targetEmployerName: args.targetEmployerName,
+          allowNumericOnlyTargetEmployer: section === "employerValueBlock",
         }),
     )) {
       const { metric } = occurrence;
