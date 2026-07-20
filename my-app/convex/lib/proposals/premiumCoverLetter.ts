@@ -2162,30 +2162,45 @@ const GENERIC_EMPLOYER_CANDIDATES = new Set([
   "the team",
 ]);
 
+type EmployerCandidate = Readonly<{
+  name: string;
+  index: number;
+}>;
+
+function specificEmployerCandidates(
+  value: string,
+  pattern: RegExp,
+): EmployerCandidate[] {
+  return Array.from(value.matchAll(pattern), (match) => ({
+    name: compactWhitespace(match[1] ?? ""),
+    index: match.index ?? Number.MAX_SAFE_INTEGER,
+  })).filter(
+    (candidate) =>
+      candidate.name.length > 0 &&
+      !GENERIC_EMPLOYER_CANDIDATES.has(
+        candidate.name.toLocaleLowerCase("en-US"),
+      ),
+  );
+}
+
 function firstSpecificEmployerCandidate(
   value: string,
   pattern: RegExp,
 ): string | undefined {
-  return Array.from(value.matchAll(pattern), (match) =>
-    compactWhitespace(match[1] ?? ""),
-  ).find(
-    (candidate) =>
-      candidate.length > 0 &&
-      !GENERIC_EMPLOYER_CANDIDATES.has(candidate.toLocaleLowerCase("en-US")),
-  );
+  return specificEmployerCandidates(value, pattern)[0]?.name;
+}
+
+function firstDescriptionEmployerCandidate(value: string): string | undefined {
+  return [
+    ...specificEmployerCandidates(value, EMPLOYER_AFTER_AT_PATTERN),
+    ...specificEmployerCandidates(value, EMPLOYER_AFTER_JOIN_PATTERN),
+  ].sort((left, right) => left.index - right.index)[0]?.name;
 }
 
 function extractEmployerName(jobTitle: string, jobDescription: string): string | undefined {
   return (
     firstSpecificEmployerCandidate(jobTitle, EMPLOYER_AFTER_AT_PATTERN) ??
-    firstSpecificEmployerCandidate(
-      jobDescription,
-      EMPLOYER_AFTER_AT_PATTERN,
-    ) ??
-    firstSpecificEmployerCandidate(
-      jobDescription,
-      EMPLOYER_AFTER_JOIN_PATTERN,
-    )
+    firstDescriptionEmployerCandidate(jobDescription)
   );
 }
 

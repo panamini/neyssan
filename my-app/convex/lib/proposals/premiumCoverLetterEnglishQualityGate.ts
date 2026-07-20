@@ -10,7 +10,10 @@ import {
   canonicalizePremiumCoverLetterToken,
   normalizePremiumCoverLetterNumericToken,
 } from "./premiumCoverLetterTokenNormalization";
-import { isFiniteEnglishPredicateAt } from "./premiumCoverLetterEnglishSyntaxAdapter";
+import {
+  isFiniteEnglishPredicateAt,
+  isNumericOnlyEnglishEntityMentionAt,
+} from "./premiumCoverLetterEnglishSyntaxAdapter";
 
 const ENGLISH_CV_BACKED_SECTIONS: readonly ClaimPlanSection[] = [
   "opening",
@@ -1190,8 +1193,30 @@ function numericOccurrenceIsPartOfWrittenNumberEntity(args: {
   });
 }
 
-function isNumericEntityName(entity: string): boolean {
+function isMixedNumericEntityName(entity: string): boolean {
   return /\p{L}/u.test(entity) && /\p{N}/u.test(entity);
+}
+
+function isNumericOnlyEntityName(entity: string): boolean {
+  return !/\p{L}/u.test(entity) && /\p{N}/u.test(entity);
+}
+
+function canTrustNumericEntityName(
+  entity: string,
+  allowNumericOnly: boolean,
+): boolean {
+  return (
+    isMixedNumericEntityName(entity) ||
+    (allowNumericOnly && isNumericOnlyEntityName(entity))
+  );
+}
+
+function isEntityNameContinuationCharacter(value: string): boolean {
+  return /[\p{L}\p{N}&'.-]/u.test(value);
+}
+
+function hasPossessiveEntitySuffix(value: string, start: number): boolean {
+  return /^['’]s(?![\p{L}\p{N}&'.-])/u.test(value.slice(start));
 }
 
 function hasWholeEntityNameBoundaries(args: {
@@ -1200,10 +1225,14 @@ function hasWholeEntityNameBoundaries(args: {
   length: number;
 }): boolean {
   const precedingCharacter = args.value[args.start - 1] ?? "";
-  const followingCharacter = args.value[args.start + args.length] ?? "";
+  const suffixStart = args.start + args.length;
+  const followingCharacter = args.value[suffixStart] ?? "";
+  const hasFollowingBoundary =
+    !isEntityNameContinuationCharacter(followingCharacter) ||
+    hasPossessiveEntitySuffix(args.value, suffixStart);
   return (
-    !/[\p{L}\p{N}&'.-]/u.test(precedingCharacter) &&
-    !/[\p{L}\p{N}&'.-]/u.test(followingCharacter)
+    !isEntityNameContinuationCharacter(precedingCharacter) &&
+    hasFollowingBoundary
   );
 }
 
@@ -1222,9 +1251,10 @@ function numericOccurrenceIsInsideExactEntity(args: {
   value: string;
   occurrence: NumericTokenOccurrence;
   rawEntity: string;
+  allowNumericOnly: boolean;
 }): boolean {
   const entity = args.rawEntity.trim();
-  if (!isNumericEntityName(entity)) return false;
+  if (!canTrustNumericEntityName(entity, args.allowNumericOnly)) return false;
 
   const searchableValue = args.value.toLocaleLowerCase("en-US");
   const searchableEntity = entity.toLocaleLowerCase("en-US");
@@ -1240,7 +1270,13 @@ function numericOccurrenceIsInsideExactEntity(args: {
         entityStart: entityIndex,
         entityLength: searchableEntity.length,
         occurrenceIndex: args.occurrence.index,
-      });
+      }) &&
+      (!isNumericOnlyEntityName(entity) ||
+        isNumericOnlyEnglishEntityMentionAt({
+          value: args.value,
+          start: entityIndex,
+          length: searchableEntity.length,
+        }));
     if (matchesWholeEntity) return true;
 
     entityIndex = searchableValue.indexOf(
@@ -1255,10 +1291,22 @@ function numericOccurrenceIsPartOfEntity(args: {
   value: string;
   occurrence: NumericTokenOccurrence;
   entities: readonly string[];
+  targetEmployerName?: string;
 }): boolean {
   if (
     numericOccurrenceIsPartOfContextualEntity(args) ||
     numericOccurrenceIsPartOfWrittenNumberEntity(args)
+  ) {
+    return true;
+  }
+  if (
+    args.targetEmployerName &&
+    numericOccurrenceIsInsideExactEntity({
+      value: args.value,
+      occurrence: args.occurrence,
+      rawEntity: args.targetEmployerName,
+      allowNumericOnly: true,
+    })
   ) {
     return true;
   }
@@ -1267,6 +1315,7 @@ function numericOccurrenceIsPartOfEntity(args: {
       value: args.value,
       occurrence: args.occurrence,
       rawEntity,
+      allowNumericOnly: false,
     }),
   );
 }
@@ -1533,6 +1582,7 @@ function hasSupportedSubjectForUnlistedPredicate(args: {
   tokens: readonly string[];
   index: number;
   hasFrontedClause: boolean;
+  clauseStartIndex: number;
 }): boolean {
   return (
     args.index === 2 ||
@@ -1560,6 +1610,7 @@ function isAmbiguousAdverbOnlyPredicate(args: {
   tokens: readonly string[];
   token: string;
   index: number;
+  clauseStartIndex: number;
 }): boolean {
   const followingToken = args.tokens[args.index + 1] ?? "";
   return (
@@ -1576,6 +1627,7 @@ function isLikelyUnlistedFinitePredicate(args: {
   token: string;
   index: number;
   hasFrontedClause: boolean;
+  clauseStartIndex: number;
 }): boolean {
   if (
     !hasSupportedSubjectForUnlistedPredicate(args) ||
@@ -1641,6 +1693,7 @@ function isFinitePredicateCandidate(args: {
   token: string;
   index: number;
   hasFrontedClause: boolean;
+  clauseStartIndex: number;
 }): boolean {
   const canonicalToken = canonicalizePremiumCoverLetterToken(args.token);
   if (
@@ -1661,6 +1714,14 @@ function isFinitePredicateCandidate(args: {
 function isVerbLedFragment(normalizedSentence: string): boolean {
   if (!VERB_LED_FRAGMENT_PATTERN.test(normalizedSentence)) return false;
   const tokens = normalizedSentence.split(/[^a-z0-9-]+/u).filter(Boolean);
+  const firstCommaIndex = normalizedSentence.indexOf(",");
+  const clauseStartIndex =
+    firstCommaIndex >= 0
+      ? normalizedSentence
+          .slice(0, firstCommaIndex)
+          .split(/[^a-z0-9-]+/u)
+          .filter(Boolean).length
+      : 1;
   if (
     PREPOSITIONAL_FRAGMENT_STARTERS.has(tokens[1] ?? "") &&
     !normalizedSentence.includes(",") &&
@@ -1678,6 +1739,7 @@ function isVerbLedFragment(normalizedSentence: string): boolean {
         token,
         index,
         hasFrontedClause: normalizedSentence.includes(","),
+        clauseStartIndex,
       }),
   );
   return !hasLaterFinitePredicate;
@@ -1917,9 +1979,6 @@ export function validateEnglishCvBackedQualityGate(args: {
       (factId) =>
         args.factGraph.facts.find((fact) => fact.id === factId)?.entities ?? [],
     );
-    if (args.targetEmployerName) {
-      visibleMetricEntities.push(args.targetEmployerName);
-    }
     const employerGroundingFactIds = effectiveFactIds;
     if (
       section === "employerValueBlock" &&
@@ -1969,6 +2028,7 @@ export function validateEnglishCvBackedQualityGate(args: {
           value: text,
           occurrence: candidate,
           entities: visibleMetricEntities,
+          targetEmployerName: args.targetEmployerName,
         }),
     )) {
       const { metric } = occurrence;

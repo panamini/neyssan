@@ -18,6 +18,7 @@ function lexicalTokens(value: string) {
 export function isFiniteEnglishPredicateAt(args: {
   tokens: readonly string[];
   index: number;
+  clauseStartIndex: number;
 }): boolean {
   const taggedTokens = lexicalTokens(args.tokens.join(" "));
   const candidate = taggedTokens[args.index];
@@ -25,5 +26,28 @@ export function isFiniteEnglishPredicateAt(args: {
     return false;
   }
 
-  return !taggedTokens.slice(1, args.index).some((token) => token.pos === "TO");
+  const clauseStartIndex =
+    args.clauseStartIndex < args.index ? args.clauseStartIndex : 1;
+  return !taggedTokens
+    .slice(clauseStartIndex, args.index)
+    .some((token) => token.pos === "TO");
+}
+
+export function isNumericOnlyEnglishEntityMentionAt(args: {
+  value: string;
+  start: number;
+  length: number;
+}): boolean {
+  const prefix = args.value.slice(0, args.start);
+  const suffix = args.value.slice(args.start + args.length);
+  if (/^['’]s(?![\p{L}\p{N}&'.-])/u.test(suffix)) return true;
+  if (!/(?:^|[.!?;:]\s*)$/u.test(prefix)) return false;
+
+  const followingToken = /^\s+([\p{L}][\p{L}'-]*)/u.exec(suffix)?.[1];
+  if (!followingToken) return false;
+  return isFiniteEnglishPredicateAt({
+    tokens: [args.value.slice(args.start, args.start + args.length), followingToken],
+    index: 1,
+    clauseStartIndex: 0,
+  });
 }

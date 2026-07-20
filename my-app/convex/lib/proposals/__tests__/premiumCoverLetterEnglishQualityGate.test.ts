@@ -1250,6 +1250,11 @@ describe("English CV-backed quality gate", () => {
       employerValueBlock: "10-Year Labs offers a collaborative environment.",
       metrics: ["10"],
     },
+    {
+      employerName: "99",
+      employerValueBlock: "99 offers a collaborative environment.",
+      metrics: ["99"],
+    },
   ])(
     "does not treat the sentence-leading employer $employerName as a metric",
     ({ employerName, employerValueBlock, metrics }) => {
@@ -1296,6 +1301,26 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
+  it("does not let a numeric-only target employer exempt an unsupported metric", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 99%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+      targetEmployerName: "99",
+    });
+
+    expect(issues).toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "opening",
+      metric: "99%",
+    });
+  });
+
   it("does not exempt a numeric claim that merely prefixes the target employer", () => {
     const issues = validateEnglishCvBackedQualityGate({
       writerOutput: output({
@@ -1313,6 +1338,29 @@ describe("English CV-backed quality gate", () => {
       code: "unsupported_visible_metric",
       section: "employerValueBlock",
       metric: "4",
+    });
+  });
+
+  it.each([
+    "5-Hour Energy's focus supports clear delivery handoffs.",
+    "5-Hour Energy’s focus supports clear delivery handoffs.",
+  ])("accepts a possessive numeric employer name in %s", (employerValueBlock) => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock,
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+      targetEmployerName: "5-Hour Energy",
+    });
+
+    expect(issues).not.toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "employerValueBlock",
+      metric: "5",
     });
   });
 
@@ -3619,6 +3667,12 @@ describe("English CV-backed quality gate", () => {
       code: "incomplete_sentence",
       section: "proofBlock",
     });
+  });
+
+  it("accepts a finite predicate after an infinitival fronted clause", () => {
+    expectCompleteProofBlock(
+      "Built to foster reliability, the workflow could grow.",
+    );
   });
 
   it("rejects a verb-led fragment with a hyphenated modifier", () => {
