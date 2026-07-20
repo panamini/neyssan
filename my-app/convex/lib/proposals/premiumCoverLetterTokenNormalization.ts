@@ -20,6 +20,17 @@ const TOKEN_CANONICALIZATION_RULES = [
   { pattern: /^track(?:ed|ing|ers|er|s)?$/, canonical: "track" },
 ] as const;
 
+const IRREGULAR_PLURAL_CANONICALS = new Map([
+  ["analyses", "analysis"],
+  ["bases", "basis"],
+  ["crises", "crisis"],
+  ["diagnoses", "diagnosis"],
+  ["emphases", "emphasis"],
+  ["hypotheses", "hypothesis"],
+  ["statuses", "status"],
+  ["theses", "thesis"],
+]);
+
 export function expandPremiumCoverLetterTokenVariants(
   value: string,
 ): string[] {
@@ -47,6 +58,8 @@ export function expandPremiumCoverLetterTokenVariants(
 
 export function canonicalizePremiumCoverLetterToken(value: string): string {
   const token = value.toLowerCase();
+  const irregularPlural = IRREGULAR_PLURAL_CANONICALS.get(token);
+  if (irregularPlural) return irregularPlural;
   const canonicalRule = TOKEN_CANONICALIZATION_RULES.find((rule) =>
     rule.pattern.test(token),
   );
@@ -63,6 +76,8 @@ export function canonicalizePremiumCoverLetterToken(value: string): string {
   } else if (
     token.endsWith("s") &&
     !token.endsWith("ss") &&
+    !token.endsWith("is") &&
+    !token.endsWith("us") &&
     token.length > 4
   ) {
     canonical = token.slice(0, -1);

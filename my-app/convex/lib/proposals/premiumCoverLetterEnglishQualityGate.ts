@@ -58,10 +58,20 @@ const EVIDENCE_ANCHOR_STOP_WORDS = new Set([
   "could",
   "experience",
   "experiences",
+  "clear",
+  "effective",
+  "excellent",
+  "experienced",
   "from",
   "have",
   "into",
   "more",
+  "organized",
+  "proven",
+  "reliable",
+  "skilled",
+  "solid",
+  "strong",
   "that",
   "their",
   "them",
@@ -176,6 +186,11 @@ type NumericTokenOccurrence = Readonly<{
   index: number;
 }>;
 
+type SourceMetricFacts = Readonly<{
+  factIdsByKey: Map<string, Set<string>>;
+  baseKeysWithUnmeasuredSource: Set<string>;
+}>;
+
 function numericMagnitudeMultiplier(suffix: string): number {
   switch (suffix) {
     case "k":
@@ -249,13 +264,15 @@ function normalizeNumericTokenOccurrence(args: {
   const prefix = args.value.slice(Math.max(0, index - 16), index);
   if (/\b(?:(?:iso|iec|soc|rfc)\s+|no\.\s*)$/iu.test(prefix)) return null;
 
-  const numericValue = Number(args.match[2].replace(/,/g, ""));
+  const numericValue = Number(
+    `${args.match[1] ?? ""}${args.match[3].replace(/,/g, "")}`,
+  );
   if (!Number.isFinite(numericValue)) return null;
 
-  const suffix = (args.match[3] ?? "").toLowerCase();
+  const suffix = (args.match[4] ?? "").toLowerCase();
   const metricValue = numericValue * numericMagnitudeMultiplier(suffix);
   const percentage = suffix === "%" || suffix === "percent";
-  const currency = metricCurrency(args.match[1]);
+  const currency = metricCurrency(args.match[2]);
   const end = index + args.match[0].length;
   const measurement = metricMeasurement({
     value: args.value,
@@ -278,7 +295,7 @@ function numericTokenOccurrences(value: string): NumericTokenOccurrence[] {
   const tokens: NumericTokenOccurrence[] = [];
   for (const match of value
     .matchAll(
-      /(?<![A-Za-z0-9])([$€£]?)\s*(\d[\d,]*(?:\.\d+)?)\s*(%|percent\b|[KMB]\b|thousand\b|million\b|billion\b)?(?![A-Za-z0-9])/gi,
+      /(?<![A-Za-z0-9])([+-]?)\s*([$€£]?)\s*(\d[\d,]*(?:\.\d+)?)\s*(%|percent\b|[KMB]\b|thousand\b|million\b|billion\b)?(?![A-Za-z0-9])/gi,
     )) {
     const occurrence = normalizeNumericTokenOccurrence({ value, match });
     if (occurrence) tokens.push(occurrence);
@@ -370,24 +387,39 @@ function evidenceAnchorTokensFromValues(values: readonly string[]): Set<string> 
 function sourceMetricFactIds(args: {
   factIds: readonly string[];
   factGraph: FactGraphV1;
-}): Map<string, Set<string>> {
+}): SourceMetricFacts {
   const factById = new Map(args.factGraph.facts.map((fact) => [fact.id, fact]));
   const factIdsByMetric = new Map<string, Set<string>>();
+  const baseKeysWithUnmeasuredSource = new Set<string>();
+  const addOccurrence = (
+    occurrence: NumericTokenOccurrence,
+    factId: string,
+  ) => {
+    for (const key of new Set([occurrence.key, occurrence.baseKey])) {
+      const supportingFactIds = factIdsByMetric.get(key) ?? new Set<string>();
+      supportingFactIds.add(factId);
+      factIdsByMetric.set(key, supportingFactIds);
+    }
+    if (occurrence.key === occurrence.baseKey) {
+      baseKeysWithUnmeasuredSource.add(occurrence.baseKey);
+    }
+  };
   for (const factId of args.factIds) {
     const fact = factById.get(factId);
     if (!fact) continue;
-    const textMetrics = numericTokens(fact.text);
+    const textMetrics = numericTokenOccurrences(fact.text);
     const metrics =
       textMetrics.length > 0
         ? textMetrics
-        : fact.metrics.flatMap((metric) => numericTokens(metric));
+        : fact.metrics.flatMap((metric) => numericTokenOccurrences(metric));
     for (const metric of metrics) {
-      const supportingFactIds = factIdsByMetric.get(metric) ?? new Set<string>();
-      supportingFactIds.add(factId);
-      factIdsByMetric.set(metric, supportingFactIds);
+      addOccurrence(metric, factId);
     }
   }
-  return factIdsByMetric;
+  return {
+    factIdsByKey: factIdsByMetric,
+    baseKeysWithUnmeasuredSource,
+  };
 }
 
 function attributedMetricFactIds(args: {
@@ -647,12 +679,19 @@ export function validateEnglishCvBackedQualityGate(args: {
     }
     for (const occurrence of numericTokenOccurrences(text)) {
       const { key, metric } = occurrence;
-      const resolvedMetricKey = sourceMetricFacts.has(key)
+      const resolvedMetricKey = sourceMetricFacts.factIdsByKey.has(key)
         ? key
-        : sourceMetricFacts.has(occurrence.baseKey)
+        : (
+              key === occurrence.baseKey ||
+              sourceMetricFacts.baseKeysWithUnmeasuredSource.has(
+                occurrence.baseKey,
+              )
+            ) &&
+            sourceMetricFacts.factIdsByKey.has(occurrence.baseKey)
           ? occurrence.baseKey
           : key;
-      const supportingMetricFactIds = sourceMetricFacts.get(resolvedMetricKey);
+      const supportingMetricFactIds =
+        sourceMetricFacts.factIdsByKey.get(resolvedMetricKey);
       if (!supportingMetricFactIds) {
         pushUnique(issues, {
           code: "unsupported_visible_metric",
