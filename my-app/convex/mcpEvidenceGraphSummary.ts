@@ -230,8 +230,8 @@ async function summarizeMcpEvidenceGraph(
     return buildUnavailableSummary(evidenceGraphRef, "evidence_graph_not_available", "server_only");
   }
 
-  const profile = await readPrimaryProfileForOwner(db, args.twoweeksClerkId);
-  if (!profile) {
+  const profileIds = await readProfileIdsForOwner(db, args.twoweeksClerkId);
+  if (profileIds.length === 0) {
     return buildUnavailableSummary(
       { ...evidenceGraphRef, status: "onboarding_required", count: 0 },
       "owner_onboarding_required",
@@ -239,19 +239,18 @@ async function summarizeMcpEvidenceGraph(
     );
   }
 
-  const ownerStorageRef = String(profile._id);
   const [sourceDocuments, candidateFacts, applicationPackages, evidenceRuns] = await Promise.all([
-    queryByFields(db, "candidateSourceDocuments", "by_user_id", [
-      { field: "userId", value: ownerStorageRef },
-    ]),
-    queryByFields(db, "candidateFacts", "by_user_id", [{ field: "userId", value: ownerStorageRef }]),
-    queryByFields(db, "applicationPackages", "by_user_id", [
-      { field: "userId", value: ownerStorageRef },
-    ]),
-    queryByFields(db, "applicationRuns", "by_user_operation", [
-      { field: "userId", value: ownerStorageRef },
-      { field: "operation", value: "build_evidence_graph" },
-    ]),
+    queryByFieldsForProfileIds(db, "candidateSourceDocuments", "by_user_id", "userId", profileIds),
+    queryByFieldsForProfileIds(db, "candidateFacts", "by_user_id", "userId", profileIds),
+    queryByFieldsForProfileIds(db, "applicationPackages", "by_user_id", "userId", profileIds),
+    queryByFieldsForProfileIds(
+      db,
+      "applicationRuns",
+      "by_user_operation",
+      "userId",
+      profileIds,
+      [{ field: "operation", value: "build_evidence_graph" }],
+    ),
   ]);
 
   const safeCounts = buildSafeCounts({
@@ -305,15 +304,35 @@ async function summarizeMcpEvidenceGraph(
   };
 }
 
-async function readPrimaryProfileForOwner(
+async function readProfileIdsForOwner(
   db: DbReader,
   twoweeksClerkId: string,
-): Promise<Record<string, unknown> | null> {
+): Promise<readonly string[]> {
   const profiles = await queryByFields(db, "userProfiles", "by_clerk_id", [
     { field: "clerkId", value: twoweeksClerkId },
   ]);
-  if (profiles.length === 0) return null;
-  return [...profiles].sort(compareLatestProfile)[0] ?? null;
+  return profiles
+    .map((profile) => (typeof profile._id === "string" ? profile._id : undefined))
+    .filter((profileId): profileId is string => profileId !== undefined);
+}
+
+async function queryByFieldsForProfileIds(
+  db: DbReader,
+  tableName: string,
+  indexName: string,
+  profileField: string,
+  profileIds: readonly string[],
+  extraConstraints: readonly { field: string; value: unknown }[] = [],
+): Promise<readonly Record<string, unknown>[]> {
+  const rows = await Promise.all(
+    profileIds.map((profileId) =>
+      queryByFields(db, tableName, indexName, [
+        { field: profileField, value: profileId },
+        ...extraConstraints,
+      ]),
+    ),
+  );
+  return rows.flat();
 }
 
 async function queryByFields(
@@ -607,13 +626,6 @@ function maxFiniteTimestamp(rows: readonly Record<string, unknown>[]): number {
     const timestamp = Math.max(readFiniteTimestamp(row.updatedAt), readFiniteTimestamp(row.createdAt));
     return timestamp > max ? timestamp : max;
   }, 0);
-}
-
-function compareLatestProfile(left: Record<string, unknown>, right: Record<string, unknown>): number {
-  const leftUpdated = readFiniteTimestamp(left.updatedAt) || readFiniteTimestamp(left._creationTime);
-  const rightUpdated = readFiniteTimestamp(right.updatedAt) || readFiniteTimestamp(right._creationTime);
-  if (rightUpdated !== leftUpdated) return rightUpdated - leftUpdated;
-  return String(right._id ?? "").localeCompare(String(left._id ?? ""));
 }
 
 function readFiniteTimestamp(value: unknown): number {

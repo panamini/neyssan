@@ -244,12 +244,11 @@ async function listMcpReadOnlyTwoweeksDataRefs(
     return buildResult("onboarding_required", false, zeroCounts(), grantedScopes);
   }
 
-  const profile = await readPrimaryProfileForOwner(db, args.twoweeksClerkId);
-  if (!profile) {
+  const profileIds = await readProfileIdsForOwner(db, args.twoweeksClerkId);
+  if (profileIds.length === 0) {
     return buildResult("onboarding_required", false, zeroCounts(), grantedScopes);
   }
 
-  const ownerStorageRef = String(profile._id);
   const [
     applicationPackages,
     sourceDocuments,
@@ -258,12 +257,12 @@ async function listMcpReadOnlyTwoweeksDataRefs(
     applicationRuns,
     applicationArtifacts,
   ] = await Promise.all([
-    queryByField(db, "applicationPackages", "by_user_id", "userId", ownerStorageRef),
-    queryByField(db, "candidateSourceDocuments", "by_user_id", "userId", ownerStorageRef),
-    queryByField(db, "candidateFacts", "by_user_id", "userId", ownerStorageRef),
-    queryByField(db, "applicationContexts", "by_user", "userId", ownerStorageRef),
-    queryByField(db, "applicationRuns", "by_user", "userId", ownerStorageRef),
-    queryByField(db, "applicationArtifacts", "by_user", "userId", ownerStorageRef),
+    queryByFieldForProfileIds(db, "applicationPackages", "by_user_id", "userId", profileIds),
+    queryByFieldForProfileIds(db, "candidateSourceDocuments", "by_user_id", "userId", profileIds),
+    queryByFieldForProfileIds(db, "candidateFacts", "by_user_id", "userId", profileIds),
+    queryByFieldForProfileIds(db, "applicationContexts", "by_user", "userId", profileIds),
+    queryByFieldForProfileIds(db, "applicationRuns", "by_user", "userId", profileIds),
+    queryByFieldForProfileIds(db, "applicationArtifacts", "by_user", "userId", profileIds),
   ]);
 
   return buildResult(
@@ -289,13 +288,27 @@ async function listMcpReadOnlyTwoweeksDataRefs(
   );
 }
 
-async function readPrimaryProfileForOwner(
+async function readProfileIdsForOwner(
   db: DbReader,
   twoweeksClerkId: string,
-): Promise<Record<string, unknown> | null> {
+): Promise<readonly string[]> {
   const profiles = await queryByField(db, "userProfiles", "by_clerk_id", "clerkId", twoweeksClerkId);
-  if (profiles.length === 0) return null;
-  return [...profiles].sort(compareLatestProfile)[0] ?? null;
+  return profiles
+    .map((profile) => (typeof profile._id === "string" ? profile._id : undefined))
+    .filter((profileId): profileId is string => profileId !== undefined);
+}
+
+async function queryByFieldForProfileIds(
+  db: DbReader,
+  tableName: string,
+  indexName: string,
+  field: string,
+  profileIds: readonly string[],
+): Promise<readonly Record<string, unknown>[]> {
+  const rows = await Promise.all(
+    profileIds.map((profileId) => queryByField(db, tableName, indexName, field, profileId)),
+  );
+  return rows.flat();
 }
 
 async function queryByField(
@@ -430,11 +443,4 @@ function readUpdatedAtTimestamp(row: Record<string, unknown>): number | undefine
 
 function readFiniteTimestamp(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
-function compareLatestProfile(left: Record<string, unknown>, right: Record<string, unknown>): number {
-  const leftUpdated = readUpdatedAtTimestamp(left) ?? readFiniteTimestamp(left._creationTime) ?? 0;
-  const rightUpdated = readUpdatedAtTimestamp(right) ?? readFiniteTimestamp(right._creationTime) ?? 0;
-  if (rightUpdated !== leftUpdated) return rightUpdated - leftUpdated;
-  return String(right._id ?? "").localeCompare(String(left._id ?? ""));
 }

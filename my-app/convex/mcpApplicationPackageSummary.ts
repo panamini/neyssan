@@ -178,8 +178,8 @@ async function summarizeMcpApplicationPackage(
     return buildUnavailableSummary(packageRef, "application_package_not_available", "server_only");
   }
 
-  const profile = await readPrimaryProfileForOwner(db, args.twoweeksClerkId);
-  if (!profile) {
+  const profileIds = await readProfileIdsForOwner(db, args.twoweeksClerkId);
+  if (profileIds.length === 0) {
     return buildUnavailableSummary(
       { ...packageRef, status: "onboarding_required", count: 0 },
       "owner_onboarding_required",
@@ -187,9 +187,14 @@ async function summarizeMcpApplicationPackage(
     );
   }
 
-  const ownerStorageRef = String(profile._id);
   const packages = sortLatestApplicationPackages(
-    await queryByField(db, "applicationPackages", "by_user_id", "userId", ownerStorageRef),
+    await queryByFieldForProfileIds(
+      db,
+      "applicationPackages",
+      "by_user_id",
+      "userId",
+      profileIds,
+    ),
   );
   if (packages.length === 0) {
     return buildUnavailableSummary(
@@ -224,13 +229,27 @@ async function summarizeMcpApplicationPackage(
   };
 }
 
-async function readPrimaryProfileForOwner(
+async function readProfileIdsForOwner(
   db: DbReader,
   twoweeksClerkId: string,
-): Promise<Record<string, unknown> | null> {
+): Promise<readonly string[]> {
   const profiles = await queryByField(db, "userProfiles", "by_clerk_id", "clerkId", twoweeksClerkId);
-  if (profiles.length === 0) return null;
-  return [...profiles].sort(compareLatestProfile)[0] ?? null;
+  return profiles
+    .map((profile) => (typeof profile._id === "string" ? profile._id : undefined))
+    .filter((profileId): profileId is string => profileId !== undefined);
+}
+
+async function queryByFieldForProfileIds(
+  db: DbReader,
+  tableName: string,
+  indexName: string,
+  field: string,
+  profileIds: readonly string[],
+): Promise<readonly Record<string, unknown>[]> {
+  const rows = await Promise.all(
+    profileIds.map((profileId) => queryByField(db, tableName, indexName, field, profileId)),
+  );
+  return rows.flat();
 }
 
 async function queryByField(
@@ -384,13 +403,6 @@ function maxUpdatedAt(
 ): Pick<McpApplicationPackageSummaryResultV1, "updatedAt"> | Record<string, never> {
   const timestamp = readFiniteTimestamp(row.updatedAt) || readFiniteTimestamp(row.createdAt);
   return timestamp > 0 ? { updatedAt: new Date(timestamp).toISOString() } : {};
-}
-
-function compareLatestProfile(left: Record<string, unknown>, right: Record<string, unknown>): number {
-  const leftUpdated = readFiniteTimestamp(left.updatedAt) || readFiniteTimestamp(left._creationTime);
-  const rightUpdated = readFiniteTimestamp(right.updatedAt) || readFiniteTimestamp(right._creationTime);
-  if (rightUpdated !== leftUpdated) return rightUpdated - leftUpdated;
-  return String(right._id ?? "").localeCompare(String(left._id ?? ""));
 }
 
 function readFiniteTimestamp(value: unknown): number {

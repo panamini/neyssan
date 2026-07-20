@@ -24,6 +24,7 @@ export function McpOAuthContinuationPage(): JSX.Element {
   const [status, setStatus] = React.useState<ContinuationStatus>("idle");
   const [phase, setPhase] = React.useState<ContinuationPhase>("idle");
   const [blockReason, setBlockReason] = React.useState<ContinuationBlockReason>("none");
+  const activeContinuationHrefRef = React.useRef<string | null>(null);
   const intentHandle = new URLSearchParams(location.search).get(
     MCP_OAUTH_CONTINUATION_HANDLE_PARAMETER,
   );
@@ -31,6 +32,29 @@ export function McpOAuthContinuationPage(): JSX.Element {
     MCP_OAUTH_CONTINUATION_BROWSER_NONCE_PARAMETER,
   );
   const continuationHref = `${location.pathname}${location.search}`;
+
+  React.useEffect(() => {
+    if (!intentHandle) return;
+    const storageKey = `mcp-oauth-continuation-document-request:${continuationHref}`;
+    activeContinuationHrefRef.current = continuationHref;
+    const clearMarker = () => {
+      window.sessionStorage.removeItem(storageKey);
+    };
+    window.addEventListener("pagehide", clearMarker);
+    window.addEventListener("beforeunload", clearMarker);
+    return () => {
+      if (activeContinuationHrefRef.current === continuationHref) {
+        activeContinuationHrefRef.current = null;
+      }
+      window.removeEventListener("pagehide", clearMarker);
+      window.removeEventListener("beforeunload", clearMarker);
+      queueMicrotask(() => {
+        if (activeContinuationHrefRef.current !== continuationHref) {
+          clearMarker();
+        }
+      });
+    };
+  }, [continuationHref, intentHandle]);
 
   React.useEffect(() => {
     if (
@@ -44,21 +68,24 @@ export function McpOAuthContinuationPage(): JSX.Element {
     const storageKey = `mcp-oauth-continuation-document-request:${continuationHref}`;
     if (window.sessionStorage.getItem(storageKey) === "working:v2") return;
     window.sessionStorage.setItem(storageKey, "working:v2");
-    let canceled = false;
     setStatus("working");
     setPhase("requesting_token");
     setBlockReason("none");
     void (async () => {
+      const isCurrentContinuation = () =>
+        activeContinuationHrefRef.current === continuationHref;
       try {
         setPhase("requesting_continuation");
         let response = await fetchContinuation(continuationHref);
+        if (!isCurrentContinuation()) return;
         let body: unknown;
         if (!response.ok) {
           body = await response.json().catch(() => undefined);
+          if (!isCurrentContinuation()) return;
         }
         if (response.status === 401 || readSafeRouteReason(body) === "owner_binding_failed") {
           const token = await getToken({ template: "convex" });
-          if (canceled) return;
+          if (!isCurrentContinuation()) return;
           if (!token) {
             setBlockReason("no_token");
             setStatus("blocked");
@@ -67,11 +94,12 @@ export function McpOAuthContinuationPage(): JSX.Element {
             return;
           }
           response = await fetchContinuation(continuationHref, token);
+          if (!isCurrentContinuation()) return;
           body = undefined;
         }
-        if (canceled) return;
         setPhase("reading_response");
         body ??= await response.json().catch(() => undefined);
+        if (!isCurrentContinuation()) return;
         const redirectTo = readSafeRedirectTo(body);
         if (!response.ok) {
           setBlockReason(readSafeRouteReason(body) ?? "invalid_response");
@@ -90,17 +118,13 @@ export function McpOAuthContinuationPage(): JSX.Element {
         setPhase("redirecting");
         window.location.assign(redirectTo);
       } catch {
-        if (!canceled) {
-          window.sessionStorage.removeItem(storageKey);
-          setBlockReason("request_failed");
-          setStatus("blocked");
-          setPhase("idle");
-        }
+        if (!isCurrentContinuation()) return;
+        window.sessionStorage.removeItem(storageKey);
+        setBlockReason("request_failed");
+        setStatus("blocked");
+        setPhase("idle");
       }
     })();
-    return () => {
-      canceled = true;
-    };
   }, [continuationHref, getToken, intentHandle, isLoaded, isSignedIn]);
 
   return (

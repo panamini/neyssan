@@ -75,6 +75,7 @@ describe("Auth/OAuth blocked boundary", () => {
       "authorization_endpoint",
       "token_endpoint",
       "access_token",
+      "client_secret",
     ]);
 
     for (const path of ACTIVE_BOUNDARY_SOURCES) {
