@@ -14,6 +14,7 @@ import {
   isFiniteEnglishPredicateAt,
   isNumericOnlyEnglishEntityMentionAt,
 } from "./premiumCoverLetterEnglishSyntaxAdapter";
+import { extractDigitLeadingEnglishProperNames } from "./premiumCoverLetterEnglishEntityAdapter";
 
 const ENGLISH_CV_BACKED_SECTIONS: readonly ClaimPlanSection[] = [
   "opening",
@@ -370,6 +371,9 @@ const FINITE_PREDICATE_BLOCKERS = new Set([
   "under",
   "with",
 ]);
+const FINITE_PREDICATE_SUBJECT_BLOCKERS = new Set(
+  [...FINITE_PREDICATE_BLOCKERS].filter((token) => token !== "delivery"),
+);
 const PREPOSITIONAL_FRAGMENT_STARTERS = new Set([
   "across",
   "at",
@@ -1458,7 +1462,10 @@ function sourceMetricOccurrences(args: {
         !numericOccurrenceIsPartOfEntity({
           value: fact.text,
           occurrence,
-          entities: fact.entities,
+          entities: [
+            ...fact.entities,
+            ...extractDigitLeadingEnglishProperNames(fact.text),
+          ],
         }),
     );
     const metrics =
@@ -1572,13 +1579,13 @@ function hasMultiwordNounSubjectAfterLeadingParticiple(args: {
     subjectTokens.every(
       (token) =>
         /^[a-z][a-z-]*$/u.test(token) &&
-        !FINITE_PREDICATE_BLOCKERS.has(token),
+        !FINITE_PREDICATE_SUBJECT_BLOCKERS.has(token),
     ) &&
     (!followingToken || !FINITE_PREDICATE_BLOCKERS.has(followingToken))
   );
 }
 
-function hasSupportedSubjectForUnlistedPredicate(args: {
+function hasSupportedSubjectForPredicate(args: {
   tokens: readonly string[];
   index: number;
   hasFrontedClause: boolean;
@@ -1588,8 +1595,7 @@ function hasSupportedSubjectForUnlistedPredicate(args: {
     args.index === 2 ||
     hasNounPhraseSubjectForUnlistedPredicate(args) ||
     hasMultiwordNounSubjectAfterLeadingParticiple(args) ||
-    hasFrontedBareNounSubject(args) ||
-    (args.index >= 2 && isFiniteEnglishPredicateAt(args))
+    hasFrontedBareNounSubject(args)
   );
 }
 
@@ -1630,7 +1636,7 @@ function isLikelyUnlistedFinitePredicate(args: {
   clauseStartIndex: number;
 }): boolean {
   if (
-    !hasSupportedSubjectForUnlistedPredicate(args) ||
+    !hasSupportedSubjectForPredicate(args) ||
     args.tokens.length < 4
   ) {
     return false;
@@ -1698,7 +1704,8 @@ function isFinitePredicateCandidate(args: {
   const canonicalToken = canonicalizePremiumCoverLetterToken(args.token);
   if (
     FINITE_PREDICATE_TOKENS.has(canonicalToken) &&
-    isFiniteEnglishPredicateAt(args)
+    isFiniteEnglishPredicateAt(args) &&
+    hasSupportedSubjectForPredicate(args)
   ) {
     return true;
   }
@@ -1711,17 +1718,28 @@ function isFinitePredicateCandidate(args: {
   return isLikelyUnlistedFinitePredicate(args);
 }
 
+function clauseStartIndexForPredicate(
+  normalizedSentence: string,
+  predicateIndex: number,
+): number {
+  let tokensSeen = 0;
+  let clauseStartIndex = 1;
+  for (const clause of normalizedSentence.split(",")) {
+    const clauseTokenCount = clause
+      .split(/[^a-z0-9-]+/u)
+      .filter(Boolean).length;
+    if (predicateIndex < tokensSeen + clauseTokenCount) {
+      return clauseStartIndex;
+    }
+    tokensSeen += clauseTokenCount;
+    clauseStartIndex = tokensSeen;
+  }
+  return clauseStartIndex;
+}
+
 function isVerbLedFragment(normalizedSentence: string): boolean {
   if (!VERB_LED_FRAGMENT_PATTERN.test(normalizedSentence)) return false;
   const tokens = normalizedSentence.split(/[^a-z0-9-]+/u).filter(Boolean);
-  const firstCommaIndex = normalizedSentence.indexOf(",");
-  const clauseStartIndex =
-    firstCommaIndex >= 0
-      ? normalizedSentence
-          .slice(0, firstCommaIndex)
-          .split(/[^a-z0-9-]+/u)
-          .filter(Boolean).length
-      : 1;
   if (
     PREPOSITIONAL_FRAGMENT_STARTERS.has(tokens[1] ?? "") &&
     !normalizedSentence.includes(",") &&
@@ -1739,7 +1757,10 @@ function isVerbLedFragment(normalizedSentence: string): boolean {
         token,
         index,
         hasFrontedClause: normalizedSentence.includes(","),
-        clauseStartIndex,
+        clauseStartIndex: clauseStartIndexForPredicate(
+          normalizedSentence,
+          index,
+        ),
       }),
   );
   return !hasLaterFinitePredicate;

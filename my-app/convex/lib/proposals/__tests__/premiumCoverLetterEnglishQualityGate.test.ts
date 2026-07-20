@@ -396,6 +396,39 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
+  it("does not authorize a bare metric from a numeric brand in source evidence", () => {
+    const brandFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Managed 7-Eleven accounts.",
+              metrics: ["7"],
+              entities: [],
+              allowedVerbs: ["managed"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I managed 7.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: brandFactGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "opening",
+      metric: "7",
+    });
+  });
+
   it("normalizes decimal precision, decimal commas, and thousands separators in metrics", () => {
     const metricFactGraph: FactGraphV1 = {
       ...factGraph,
@@ -3673,6 +3706,30 @@ describe("English CV-backed quality gate", () => {
     expectCompleteProofBlock(
       "Built to foster reliability, the workflow could grow.",
     );
+  });
+
+  it("resets infinitive scope at every fronted clause boundary", () => {
+    expectCompleteProofBlock(
+      "Built to improve reliability, designed to scale, the workflow could grow.",
+    );
+  });
+
+  it("rejects a coordinated finite predicate without its own subject", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs. Managed services and grows steadily.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "incomplete_sentence",
+      section: "proofBlock",
+    });
   });
 
   it("rejects a verb-led fragment with a hyphenated modifier", () => {

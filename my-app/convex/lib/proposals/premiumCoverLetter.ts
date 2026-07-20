@@ -32,6 +32,10 @@ import {
   type EnglishCvBackedQualityGateIssueCode,
 } from "./premiumCoverLetterEnglishQualityGate";
 import {
+  extractDigitLeadingEnglishProperNames,
+  extractTargetEmployerName,
+} from "./premiumCoverLetterEnglishEntityAdapter";
+import {
   canonicalizePremiumCoverLetterToken,
   expandPremiumCoverLetterTokenVariants,
   normalizePremiumCoverLetterNumericToken,
@@ -1900,6 +1904,8 @@ export function buildAllowedFactsPackFromFactGraph(
 function extractFactEntities(text: string): string[] {
   const compact = compactWhitespace(text);
   const namedEntities = compact.match(/\b[A-Z][A-Za-z0-9&'.-]{2,}\b/g) ?? [];
+  const digitLeadingProperNames =
+    extractDigitLeadingEnglishProperNames(compact);
   const contextualDigitLeadingEntities = Array.from(
     compact.matchAll(
       /\b(?:at|for|with|joined)\s+(\d+(?:[-–—]\d+)*(?:[-–—]?[A-Z][A-Za-z0-9&'.-]*))\b/gi,
@@ -1908,6 +1914,7 @@ function extractFactEntities(text: string): string[] {
   );
   return dedupeStrings([
     ...namedEntities,
+    ...digitLeadingProperNames,
     ...contextualDigitLeadingEntities,
   ]).slice(0, 6);
 }
@@ -2142,65 +2149,6 @@ function isSecondaryQualification(fact: AllowedFact): boolean {
     fact.category === "tool" ||
     fact.category === "trait" ||
     WEAK_QUALIFICATION_PATTERN.test(fact.text)
-  );
-}
-
-const EMPLOYER_NAME_TOKEN_SOURCE =
-  String.raw`(?:(?:[A-Z]\.){2,}|[A-Z0-9](?:[\w&'.-]*[\w&'-])?)`;
-const EMPLOYER_AFTER_AT_PATTERN = new RegExp(
-  String.raw`\b[Aa]t\s+(${EMPLOYER_NAME_TOKEN_SOURCE}(?:\s+${EMPLOYER_NAME_TOKEN_SOURCE}){0,3})`,
-  "gu",
-);
-const EMPLOYER_AFTER_JOIN_PATTERN = new RegExp(
-  String.raw`\b[Jj]oin\s+(${EMPLOYER_NAME_TOKEN_SOURCE}(?:\s+${EMPLOYER_NAME_TOKEN_SOURCE}){0,3})`,
-  "gu",
-);
-const GENERIC_EMPLOYER_CANDIDATES = new Set([
-  "our company",
-  "our team",
-  "the company",
-  "the team",
-]);
-
-type EmployerCandidate = Readonly<{
-  name: string;
-  index: number;
-}>;
-
-function specificEmployerCandidates(
-  value: string,
-  pattern: RegExp,
-): EmployerCandidate[] {
-  return Array.from(value.matchAll(pattern), (match) => ({
-    name: compactWhitespace(match[1] ?? ""),
-    index: match.index ?? Number.MAX_SAFE_INTEGER,
-  })).filter(
-    (candidate) =>
-      candidate.name.length > 0 &&
-      !GENERIC_EMPLOYER_CANDIDATES.has(
-        candidate.name.toLocaleLowerCase("en-US"),
-      ),
-  );
-}
-
-function firstSpecificEmployerCandidate(
-  value: string,
-  pattern: RegExp,
-): string | undefined {
-  return specificEmployerCandidates(value, pattern)[0]?.name;
-}
-
-function firstDescriptionEmployerCandidate(value: string): string | undefined {
-  return [
-    ...specificEmployerCandidates(value, EMPLOYER_AFTER_AT_PATTERN),
-    ...specificEmployerCandidates(value, EMPLOYER_AFTER_JOIN_PATTERN),
-  ].sort((left, right) => left.index - right.index)[0]?.name;
-}
-
-function extractEmployerName(jobTitle: string, jobDescription: string): string | undefined {
-  return (
-    firstSpecificEmployerCandidate(jobTitle, EMPLOYER_AFTER_AT_PATTERN) ??
-    firstDescriptionEmployerCandidate(jobDescription)
   );
 }
 
@@ -3105,7 +3053,10 @@ export function buildPremiumCoverLetterBrief(args: {
     contextClass: args.contextClass,
     candidateEvidenceAvailable: args.contextClass !== "no_cv",
     targetRole: compactWhitespace(args.jobTitle),
-    employerName: extractEmployerName(args.jobTitle, args.jobDescription),
+    employerName: extractTargetEmployerName(
+      args.jobTitle,
+      args.jobDescription,
+    ),
     topEvidence: args.rankedEvidencePack.strongestEvidence
       .slice(0, MAX_EVIDENCE_ITEMS)
       .map((fact) => fact.text),

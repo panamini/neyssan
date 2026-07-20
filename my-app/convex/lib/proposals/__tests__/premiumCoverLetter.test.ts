@@ -341,6 +341,22 @@ describe("premium ClaimPlan provenance v1", () => {
     },
   );
 
+  it("extracts a non-contextual digit-leading brand without treating a duration as an entity", () => {
+    const factGraph = buildPremiumFactGraphV1({
+      personalizationContext: {
+        ...directContext,
+        summary: "Managed 7-Eleven accounts during a 10-Year program.",
+      },
+      jobDescription: directJob.jobDescription,
+    });
+    const summaryFact = factGraph.facts.find(
+      (fact) => fact.id === "fact_summary_001",
+    );
+
+    expect(summaryFact?.entities).toContain("7-Eleven");
+    expect(summaryFact?.entities).not.toContain("10-Year");
+  });
+
   it("wraps job priority buckets into stable JobDemandGraphV1 demand ids", () => {
     const jobDemandGraph = buildPremiumJobDemandGraphV1(
       "Coordinate implementation workflows. Must have reporting experience. Excel is a plus. Reliable and organized. Great benefits and mission-led culture.",
@@ -2719,6 +2735,21 @@ describe("premium cover letter prompt contract", () => {
       jobTitle: "Implementation Analyst at 99",
       jobDescription: directJob.jobDescription,
       employerName: "99",
+    },
+    {
+      jobTitle: "Software Engineer at 100% Remote",
+      jobDescription: `Work at Acme Corp. ${directJob.jobDescription}`,
+      employerName: "Acme Corp",
+    },
+    {
+      jobTitle: directJob.jobTitle,
+      jobDescription: `Join 5 teams at Acme Corp. ${directJob.jobDescription}`,
+      employerName: "Acme Corp",
+    },
+    {
+      jobTitle: "Implementation Analyst — 7-Eleven",
+      jobDescription: `7-Eleven is hiring. ${directJob.jobDescription}`,
+      employerName: "7-Eleven",
     },
   ])(
     "preserves the numeric employer $employerName in the structured brief",
