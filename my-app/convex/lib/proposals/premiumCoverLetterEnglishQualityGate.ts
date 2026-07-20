@@ -8,6 +8,7 @@ import type {
 import {
   canonicalizePremiumCoverLetterNoun,
   canonicalizePremiumCoverLetterToken,
+  normalizePremiumCoverLetterNumericToken,
 } from "./premiumCoverLetterTokenNormalization";
 
 const ENGLISH_CV_BACKED_SECTIONS: readonly ClaimPlanSection[] = [
@@ -505,7 +506,9 @@ function normalizeNumericTokenOccurrence(args: {
     return null;
   }
 
-  const numericValue = Number(args.match[3].replace(/,/g, ""));
+  const numericValue = Number(
+    normalizePremiumCoverLetterNumericToken(args.match[3]),
+  );
   const metricValue =
     numericValue *
     numericSignMultiplier(sign, prefix) *
@@ -649,7 +652,7 @@ function evidenceEntityAnchorTokens(args: {
       return fact.entities.filter((entity) => {
         const entityTokens = entity
           .normalize("NFKC")
-          .split(/[^A-Za-z0-9%]+/u)
+          .split(/[^\p{L}\p{N}%]+/u)
           .filter(Boolean);
         const canonicalEntityToken =
           entityTokens.length === 1
@@ -657,7 +660,7 @@ function evidenceEntityAnchorTokens(args: {
             : "";
         const firstFactToken = fact.text
           .normalize("NFKC")
-          .match(/[A-Za-z0-9%]+/u)?.[0];
+          .match(/[\p{L}\p{N}%]+/u)?.[0];
         const isGenericSentenceOpener =
           entityTokens.length === 1 &&
           fact.category !== "tool" &&
@@ -686,10 +689,12 @@ function evidenceAnchorTokensFromValues(values: readonly string[]): Set<string> 
   return new Set(
     technologyAnchors.concat(
       values
-        .flatMap((value) => value.normalize("NFKC").split(/[^A-Za-z0-9%]+/u))
+        .flatMap((value) =>
+          value.normalize("NFKC").split(/[^\p{L}\p{N}%]+/u),
+        )
         .map((token) => ({
           normalized: token.toLowerCase(),
-          shortAcronym: /^[A-Z][A-Z0-9]{1,3}$/u.test(token),
+          shortAcronym: /^\p{Lu}[\p{Lu}\p{N}]{1,3}$/u.test(token),
         }))
         .flatMap(({ normalized, shortAcronym }) =>
           (
@@ -764,7 +769,7 @@ function isLikelyUnlistedFinitePredicate(args: {
   token: string;
   index: number;
 }): boolean {
-  if (args.index !== 0 || args.tokens.length < 4) return false;
+  if (args.index !== 2 || args.tokens.length < 4) return false;
   if (FINITE_PREDICATE_BLOCKERS.has(args.token)) return false;
   if (
     /(?:ing|tion|ment|ity|ness|ance|ence|ship|ure|age|ery|ory|ism)$/u.test(
@@ -773,13 +778,14 @@ function isLikelyUnlistedFinitePredicate(args: {
   ) {
     return false;
   }
-  const followingToken = args.tokens[args.index + 3];
+  const followingToken = args.tokens[args.index + 1];
   if (!followingToken || FINITE_PREDICATE_BLOCKERS.has(followingToken)) {
     return false;
   }
   if (/(?:e|s|ify|ise|ize|ate)$/u.test(args.token)) return true;
   return (
-    args.tokens[1]?.endsWith("s") === true && /^[a-z]+$/u.test(args.token)
+    args.tokens[args.index - 1]?.endsWith("s") === true &&
+    /^[a-z]+$/u.test(args.token)
   );
 }
 
@@ -792,7 +798,10 @@ function isFinitePredicateCandidate(args: {
   if (FINITE_PREDICATE_TOKENS.has(canonicalToken)) return true;
   if (
     /(?:ed|en)$/u.test(args.token) &&
-    (args.index === 0 ||
+    (args.index === 2 ||
+      ["i", "we", "you", "they", "he", "she", "it"].includes(
+        args.tokens[args.index - 1],
+      ) ||
       ["that", "which", "who"].includes(args.tokens[args.index + 1]))
   ) {
     return true;
@@ -803,11 +812,10 @@ function isFinitePredicateCandidate(args: {
 function isVerbLedFragment(normalizedSentence: string): boolean {
   if (!VERB_LED_FRAGMENT_PATTERN.test(normalizedSentence)) return false;
   const tokens = normalizedSentence.split(/[^a-z0-9]+/u).filter(Boolean);
-  const hasLaterFinitePredicate = tokens
-    .slice(2)
-    .some((token, index) =>
-      isFinitePredicateCandidate({ tokens, token, index }),
-    );
+  const hasLaterFinitePredicate = tokens.some(
+    (token, index) =>
+      index >= 2 && isFinitePredicateCandidate({ tokens, token, index }),
+  );
   return !hasLaterFinitePredicate;
 }
 

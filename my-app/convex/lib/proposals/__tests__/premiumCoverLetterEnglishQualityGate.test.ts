@@ -349,22 +349,22 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
-  it("normalizes decimal precision and thousands separators in metrics", () => {
+  it("normalizes decimal precision, decimal commas, and thousands separators in metrics", () => {
     const metricFactGraph: FactGraphV1 = {
       ...factGraph,
       facts: factGraph.facts.map((fact) =>
         fact.id === "fact_opening"
           ? {
               ...fact,
-              text: "Reduced a backlog of 1,000 items by 24%.",
-              metrics: ["1,000", "24%"],
+              text: "Reduced a backlog of 1,000 items by 24% over 3,5 years.",
+              metrics: ["1,000", "24%", "3,5 years"],
             }
           : fact,
       ),
     };
     const issues = validateEnglishCvBackedQualityGate({
       writerOutput: output({
-        opening: "I reduced a backlog of 1000 items by 24.0%.",
+        opening: "I reduced a backlog of 1000 items by 24.0% over 3.5 years.",
         proofBlock: "I documented handoffs for three implementation teams.",
         employerValueBlock: "That reporting supports clear delivery handoffs.",
         closeLine: "I would bring that discipline to the team.",
@@ -376,6 +376,23 @@ describe("English CV-backed quality gate", () => {
     expect(issues).not.toContainEqual(
       expect.objectContaining({ code: "unsupported_visible_metric" }),
     );
+
+    const misreadIssues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced a backlog of 1000 items by 24.0% over 35 years.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: metricFactGraph,
+    });
+
+    expect(misreadIssues).toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "opening",
+      metric: "35",
+    });
   });
 
   it("preserves the quantified noun through inserted adjectives", () => {
@@ -856,8 +873,8 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
-  it.each(["built", "led"])(
-    "accepts the irregular finite verb %s after a participial opener",
+  it.each(["built", "led", "improved"])(
+    "accepts the finite verb %s after a participial opener",
     (predicate) => {
       const issues = validateEnglishCvBackedQualityGate({
         writerOutput: output({
@@ -1633,6 +1650,37 @@ describe("English CV-backed quality gate", () => {
       }),
       claimPlan,
       factGraph: acronymFactGraph,
+    });
+
+    expect(issues).not.toContainEqual({
+      code: "employer_value_not_grounded",
+      section: "employerValueBlock",
+    });
+  });
+
+  it("preserves accented CV entities as employer grounding anchors", () => {
+    const accentedFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_close"
+          ? {
+              ...fact,
+              text: "Worked at Café.",
+              entities: ["Café"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock:
+          "That Café experience supports reliable delivery.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: accentedFactGraph,
     });
 
     expect(issues).not.toContainEqual({

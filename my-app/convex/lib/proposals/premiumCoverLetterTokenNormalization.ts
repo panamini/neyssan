@@ -41,6 +41,27 @@ const INVARIANT_S_ENDING_TOKENS = new Set([
   "species",
 ]);
 
+export function normalizePremiumCoverLetterNumericToken(
+  value: string,
+): string {
+  if (!value.includes(",")) return String(Number(value));
+  if (value.includes(".")) {
+    return String(Number(value.replace(/,/g, "")));
+  }
+  const commaParts = value.split(",");
+  const usesThousandsGrouping =
+    commaParts.length > 1 &&
+    commaParts[0] !== "0" &&
+    commaParts.slice(1).every((part) => part.length === 3);
+  const normalizedValue = usesThousandsGrouping
+    ? commaParts.join("")
+    : commaParts.length === 2
+      ? commaParts.join(".")
+      : value;
+  const parsedValue = Number(normalizedValue);
+  return Number.isFinite(parsedValue) ? String(parsedValue) : value;
+}
+
 export function expandPremiumCoverLetterTokenVariants(
   value: string,
 ): string[] {
