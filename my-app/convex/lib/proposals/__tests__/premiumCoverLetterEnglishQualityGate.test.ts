@@ -194,6 +194,35 @@ function output(args: {
   };
 }
 
+function openingMetricIssues(args: {
+  sourceText: string;
+  sourceMetrics: string[];
+  generatedText: string;
+}) {
+  const metricFactGraph: FactGraphV1 = {
+    ...factGraph,
+    facts: factGraph.facts.map((fact) =>
+      fact.id === "fact_opening"
+        ? {
+            ...fact,
+            text: args.sourceText,
+            metrics: args.sourceMetrics,
+          }
+        : fact,
+    ),
+  };
+  return validateEnglishCvBackedQualityGate({
+    writerOutput: output({
+      opening: args.generatedText,
+      proofBlock: "I documented handoffs for three implementation teams.",
+      employerValueBlock: "That reporting supports clear delivery handoffs.",
+      closeLine: "I would bring that discipline to the team.",
+    }),
+    claimPlan,
+    factGraph: metricFactGraph,
+  });
+}
+
 describe("English CV-backed quality gate", () => {
   it("accepts complete, disjoint evidence across all four sections", () => {
     expect(
@@ -395,22 +424,37 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
-  it("does not equate a three-digit decimal-comma percentage with a grouped integer", () => {
+  it.each([
+    {
+      grouped: "1,000%",
+      plain: "1000%",
+      reduced: "1%",
+    },
+    {
+      grouped: "12,500%",
+      plain: "12500%",
+      reduced: "12.5%",
+    },
+  ])("preserves English thousands separators in $grouped", ({
+    grouped,
+    plain,
+    reduced,
+  }) => {
     const metricFactGraph: FactGraphV1 = {
       ...factGraph,
       facts: factGraph.facts.map((fact) =>
         fact.id === "fact_opening"
           ? {
               ...fact,
-              text: "Improved conversion by 1,234%.",
-              metrics: ["1,234%"],
+              text: `Improved conversion by ${grouped}.`,
+              metrics: [grouped],
             }
           : fact,
       ),
     };
     const issues = validateEnglishCvBackedQualityGate({
       writerOutput: output({
-        opening: "I improved conversion by 1234%.",
+        opening: `I improved conversion by ${plain}.`,
         proofBlock: "I documented handoffs for three implementation teams.",
         employerValueBlock: "That reporting supports clear delivery handoffs.",
         closeLine: "I would bring that discipline to the team.",
@@ -419,29 +463,29 @@ describe("English CV-backed quality gate", () => {
       factGraph: metricFactGraph,
     });
 
-    expect(issues).toContainEqual({
-      code: "unsupported_visible_metric",
-      section: "opening",
-      metric: "1234%",
-    });
-
-    const equivalentIssues = validateEnglishCvBackedQualityGate({
-      writerOutput: output({
-        opening: "I improved conversion by 1.234%.",
-        proofBlock: "I documented handoffs for three implementation teams.",
-        employerValueBlock: "That reporting supports clear delivery handoffs.",
-        closeLine: "I would bring that discipline to the team.",
-      }),
-      claimPlan,
-      factGraph: metricFactGraph,
-    });
-
-    expect(equivalentIssues).not.toContainEqual(
+    expect(issues).not.toContainEqual(
       expect.objectContaining({
         code: "unsupported_visible_metric",
         section: "opening",
       }),
     );
+
+    const reducedIssues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: `I improved conversion by ${reduced}.`,
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: metricFactGraph,
+    });
+
+    expect(reducedIssues).toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "opening",
+      metric: reduced,
+    });
   });
 
   it("preserves the quantified noun through inserted adjectives", () => {
@@ -613,33 +657,48 @@ describe("English CV-backed quality gate", () => {
   ])(
     "matches semantic metric paraphrases for $name",
     ({ sourceText, sourceMetrics, generatedText }) => {
-      const metricFactGraph: FactGraphV1 = {
-        ...factGraph,
-        facts: factGraph.facts.map((fact) =>
-          fact.id === "fact_opening"
-            ? {
-                ...fact,
-                text: sourceText,
-                metrics: sourceMetrics,
-              }
-            : fact,
-        ),
-      };
-      const issues = validateEnglishCvBackedQualityGate({
-        writerOutput: output({
-          opening: generatedText,
-          proofBlock: "I documented handoffs for three implementation teams.",
-          employerValueBlock:
-            "That reporting supports clear delivery handoffs.",
-          closeLine: "I would bring that discipline to the team.",
-        }),
-        claimPlan,
-        factGraph: metricFactGraph,
+      const issues = openingMetricIssues({
+        sourceText,
+        sourceMetrics,
+        generatedText,
       });
 
       expect(issues).not.toContainEqual(
         expect.objectContaining({ code: "unsupported_visible_metric" }),
       );
+    },
+  );
+
+  it.each([
+    {
+      source: "CAD $50,000",
+      generated: "USD $50,000",
+      metric: "50000",
+    },
+    {
+      source: "AUD $75,000",
+      generated: "CAD $75,000",
+      metric: "75000",
+    },
+    {
+      source: "NZD $80,000",
+      generated: "USD $80,000",
+      metric: "80000",
+    },
+  ])(
+    "preserves the qualified dollar currency in $source",
+    ({ source, generated, metric }) => {
+      const issues = openingMetricIssues({
+        sourceText: `Managed a ${source} portfolio.`,
+        sourceMetrics: [source],
+        generatedText: `I managed a ${generated} portfolio.`,
+      });
+
+      expect(issues).toContainEqual({
+        code: "unsupported_visible_metric",
+        section: "opening",
+        metric,
+      });
     },
   );
 
@@ -662,27 +721,10 @@ describe("English CV-backed quality gate", () => {
   ])(
     "recognizes $source as the currency in a numeric magnitude",
     ({ source, compact, metric }) => {
-      const currencyFactGraph: FactGraphV1 = {
-        ...factGraph,
-        facts: factGraph.facts.map((fact) =>
-          fact.id === "fact_opening"
-            ? {
-                ...fact,
-                text: `Managed a ${source} portfolio.`,
-                metrics: [source],
-              }
-            : fact,
-        ),
-      };
-      const issues = validateEnglishCvBackedQualityGate({
-        writerOutput: output({
-          opening: `I managed a ${compact} portfolio.`,
-          proofBlock: "I documented handoffs for three implementation teams.",
-          employerValueBlock: "That reporting supports clear delivery handoffs.",
-          closeLine: "I would bring that discipline to the team.",
-        }),
-        claimPlan,
-        factGraph: currencyFactGraph,
+      const issues = openingMetricIssues({
+        sourceText: `Managed a ${source} portfolio.`,
+        sourceMetrics: [source],
+        generatedText: `I managed a ${compact} portfolio.`,
       });
 
       expect(issues).not.toContainEqual({
@@ -888,27 +930,10 @@ describe("English CV-backed quality gate", () => {
   ])(
     "preserves currency for the written-out amount $written",
     ({ source, written, metric }) => {
-      const currencyFactGraph: FactGraphV1 = {
-        ...factGraph,
-        facts: factGraph.facts.map((fact) =>
-          fact.id === "fact_opening"
-            ? {
-                ...fact,
-                text: `Managed a ${source} portfolio.`,
-                metrics: [source],
-              }
-            : fact,
-        ),
-      };
-      const issues = validateEnglishCvBackedQualityGate({
-        writerOutput: output({
-          opening: `I managed a ${written} portfolio.`,
-          proofBlock: "I documented handoffs for three implementation teams.",
-          employerValueBlock: "That reporting supports clear delivery handoffs.",
-          closeLine: "I would bring that discipline to the team.",
-        }),
-        claimPlan,
-        factGraph: currencyFactGraph,
+      const issues = openingMetricIssues({
+        sourceText: `Managed a ${source} portfolio.`,
+        sourceMetrics: [source],
+        generatedText: `I managed a ${written} portfolio.`,
       });
 
       expect(issues).not.toContainEqual({
@@ -1084,6 +1109,33 @@ describe("English CV-backed quality gate", () => {
     },
   );
 
+  it.each([
+    ["Two Sigma", "2"],
+    ["One Medical", "1"],
+    ["Four Seasons", "4"],
+  ])(
+    "does not treat the written-number proper name %s as a visible metric",
+    (employer, metric) => {
+      const issues = validateEnglishCvBackedQualityGate({
+        writerOutput: output({
+          opening: "I reduced the onboarding backlog by 24%.",
+          proofBlock: "I documented handoffs for three implementation teams.",
+          employerValueBlock:
+            `At ${employer}, that reporting supports clear delivery handoffs.`,
+          closeLine: "I would bring that discipline to the team.",
+        }),
+        claimPlan,
+        factGraph,
+      });
+
+      expect(issues).not.toContainEqual({
+        code: "unsupported_visible_metric",
+        section: "employerValueBlock",
+        metric,
+      });
+    },
+  );
+
   it("keeps percentage measurements distinct in metric keys", () => {
     const percentageFactGraph: FactGraphV1 = {
       ...factGraph,
@@ -1176,6 +1228,53 @@ describe("English CV-backed quality gate", () => {
       code: "unsupported_visible_metric",
       section: "opening",
       metric: "24%",
+    });
+  });
+
+  it.each([
+    {
+      source: "Increased revenue by 20%.",
+      generated: "Revenue grew 20%.",
+    },
+    {
+      source: "Reduced churn by 20%.",
+      generated: "Churn fell 20%.",
+    },
+    {
+      source: "Increased adoption by 20%.",
+      generated: "Adoption rose 20%.",
+    },
+  ])("recognizes the percentage paraphrase $generated", ({
+    source,
+    generated,
+  }) => {
+    const percentageFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: source,
+              metrics: ["20%"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: generated,
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: percentageFactGraph,
+    });
+
+    expect(issues).not.toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "opening",
+      metric: "20%",
     });
   });
 
@@ -3211,6 +3310,8 @@ describe("English CV-backed quality gate", () => {
   it.each([
     "Supported by careful analysis, conversion improved.",
     "Built around modular components, retention stabilized.",
+    "Built on trust, customer relationships thrive.",
+    "Supported by analysis, client outcomes improve.",
   ])(
     "accepts a bare-noun subject after a fronted participial clause: %s",
     (proofBlock) => {

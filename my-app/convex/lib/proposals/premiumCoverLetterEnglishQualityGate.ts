@@ -179,8 +179,23 @@ const METRIC_MEASUREMENT_STOP_WORDS = new Set([
 const METRIC_MEASUREMENT_ALIASES = new Map([
   ["customer", "client"],
 ]);
-const METRIC_CURRENCIES = new Map<string, "usd" | "eur" | "gbp">([
+type MetricCurrency =
+  | "usd"
+  | "eur"
+  | "gbp"
+  | "cad"
+  | "aud"
+  | "nzd"
+  | "sgd"
+  | "hkd";
+
+const METRIC_CURRENCIES = new Map<string, MetricCurrency>([
   ["$", "usd"],
+  ["aud", "aud"],
+  ["cad", "cad"],
+  ["hkd", "hkd"],
+  ["nzd", "nzd"],
+  ["sgd", "sgd"],
   ["dollar", "usd"],
   ["dollars", "usd"],
   ["usd", "usd"],
@@ -216,14 +231,25 @@ const PERCENTAGE_DIRECTIONS = new Map<string, "increase" | "decrease">([
   ["raise", "increase"],
   ["raised", "increase"],
   ["raises", "increase"],
+  ["rise", "increase"],
+  ["risen", "increase"],
+  ["rises", "increase"],
+  ["rose", "increase"],
   ["cut", "decrease"],
   ["cuts", "decrease"],
+  ["decline", "decrease"],
+  ["declined", "decrease"],
+  ["declines", "decrease"],
   ["decrease", "decrease"],
   ["decreased", "decrease"],
   ["decreases", "decrease"],
   ["drop", "decrease"],
   ["dropped", "decrease"],
   ["drops", "decrease"],
+  ["fall", "decrease"],
+  ["fallen", "decrease"],
+  ["falls", "decrease"],
+  ["fell", "decrease"],
   ["lower", "decrease"],
   ["lowered", "decrease"],
   ["lowers", "decrease"],
@@ -601,15 +627,32 @@ function canonicalMetricMeasurement(value: string): string {
   return METRIC_MEASUREMENT_ALIASES.get(canonical) ?? canonical;
 }
 
-function metricCurrency(symbol: string): "usd" | "eur" | "gbp" | null {
-  return METRIC_CURRENCIES.get(symbol.toLowerCase()) ?? null;
+function metricCurrency(symbol: string): MetricCurrency | null {
+  return METRIC_CURRENCIES.get(symbol.trim().toLowerCase()) ?? null;
+}
+
+function qualifiedMetricCurrency(value: string): MetricCurrency | null {
+  return metricCurrency(
+    value.match(/\b(?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD)\s*$/iu)?.[0] ?? "",
+  );
+}
+
+function numericOccurrenceCurrency(args: {
+  prefix: string;
+  leadingCurrency: string;
+  trailingCurrency: string;
+}): MetricCurrency | null {
+  return (
+    qualifiedMetricCurrency(args.prefix) ??
+    metricCurrency(args.leadingCurrency || args.trailingCurrency)
+  );
 }
 
 function isPlainToolVersion(args: {
   prefix: string;
   sign: string;
   suffix: string;
-  currency: "usd" | "eur" | "gbp" | null;
+  currency: MetricCurrency | null;
 }): boolean {
   if (args.sign || args.suffix || args.currency) return false;
   return /\b(?:version|ver|v|windows|python|node(?:\.js)?|java|typescript|react|angular|vue|ios|android|macos|ubuntu|debian|rhel|postgres(?:ql)?|mysql|redis|mongodb|kubernetes|docker|terraform|aws|azure|gcp|excel|office)\s*$/iu.test(
@@ -621,7 +664,7 @@ function isIgnoredNumericOccurrence(args: {
   prefix: string;
   sign: string;
   suffix: string;
-  currency: "usd" | "eur" | "gbp" | null;
+  currency: MetricCurrency | null;
 }): boolean {
   return (
     /\b(?:(?:iso|iec|soc|rfc)(?:\s+|\s*[-–—]\s*)|no\.\s*)$/iu.test(
@@ -655,7 +698,7 @@ function precedingPercentageMeasurement(args: {
   if (!args.percentage) return null;
   const prefix = metricSentencePrefix(args);
   const reorderedOutcome = prefix.match(
-    /\b([A-Za-z][A-Za-z-]*)\s+(?:(?:was|were|is|has|had|been)\s+){0,2}([A-Za-z][A-Za-z-]*)\s+(?:by|of|at|to)\s*$/u,
+    /\b([A-Za-z][A-Za-z-]*)\s+(?:(?:was|were|is|has|had|been)\s+){0,2}([A-Za-z][A-Za-z-]*)(?:\s+(?:by|of|at|to))?\s*$/u,
   );
   if (
     reorderedOutcome &&
@@ -739,7 +782,7 @@ function metricMeasurement(args: {
 }
 
 function metricUnit(args: {
-  currency: "usd" | "eur" | "gbp" | null;
+  currency: MetricCurrency | null;
   percentage: boolean;
   multiplier: boolean;
 }): string {
@@ -764,7 +807,7 @@ function normalizeMetricNumericToken(args: {
 }): string {
   if (
     args.percentage &&
-    /^\d+,\d{1,3}$/u.test(args.value) &&
+    /^\d+,\d{1,2}$/u.test(args.value) &&
     !args.value.includes(".")
   ) {
     return args.value.replace(",", ".");
@@ -780,7 +823,11 @@ function normalizeNumericTokenOccurrence(args: {
   const prefix = args.value.slice(Math.max(0, index - 16), index);
   const sign = args.match[1] ?? "";
   const suffix = (args.match[4] ?? "").toLowerCase();
-  const currency = metricCurrency(args.match[2] || args.match[5] || "");
+  const currency = numericOccurrenceCurrency({
+    prefix,
+    leadingCurrency: args.match[2] ?? "",
+    trailingCurrency: args.match[5] ?? "",
+  });
   if (isIgnoredNumericOccurrence({ prefix, sign, suffix, currency })) {
     return null;
   }
@@ -972,7 +1019,7 @@ function numericTokenOccurrences(value: string): NumericTokenOccurrence[] {
   const tokens: NumericTokenOccurrence[] = [];
   for (const match of value
     .matchAll(
-      /(?<![A-Za-z0-9])([+−-]|minus\b|negative\b|plus\b|positive\b)?\s*((?:USD|EUR|GBP|[$€£])?)\s*(\d[\d,]*(?:\.\d+)?)\s*(%|percent\b|[KMB]\b|thousand\b|million\b|billion\b|[x×])?(?:\s*((?:USD|EUR|GBP|dollars?|euros?|pounds?)\b))?(?![A-Za-z0-9])/gi,
+      /(?<![A-Za-z0-9])([+−-]|minus\b|negative\b|plus\b|positive\b)?\s*((?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|[$€£])?)\s*(\d[\d,]*(?:\.\d+)?)\s*(%|percent\b|[KMB]\b|thousand\b|million\b|billion\b|[x×])?(?:\s*((?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|dollars?|euros?|pounds?)\b))?(?![A-Za-z0-9])/gi,
     )) {
     const occurrence = normalizeNumericTokenOccurrence({ value, match });
     if (occurrence) tokens.push(occurrence);
@@ -1006,12 +1053,34 @@ function numericOccurrenceIsPartOfContextualEntity(args: {
   });
 }
 
+function numericOccurrenceIsPartOfWrittenNumberEntity(args: {
+  value: string;
+  occurrence: NumericTokenOccurrence;
+}): boolean {
+  return Array.from(
+    args.value.matchAll(
+      /\b(?:One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Eleven|Twelve|Thirteen|Fourteen|Fifteen|Sixteen|Seventeen|Eighteen|Nineteen|Twenty|Thirty|Forty|Fifty|Sixty|Seventy|Eighty|Ninety)(?:\s+[A-Z][A-Za-z0-9&'.-]*)+\b/gu,
+    ),
+  ).some((match) => {
+    const entityStart = match.index ?? 0;
+    return (
+      args.occurrence.index >= entityStart &&
+      args.occurrence.index < entityStart + match[0].length
+    );
+  });
+}
+
 function numericOccurrenceIsPartOfEntity(args: {
   value: string;
   occurrence: NumericTokenOccurrence;
   entities: readonly string[];
 }): boolean {
-  if (numericOccurrenceIsPartOfContextualEntity(args)) return true;
+  if (
+    numericOccurrenceIsPartOfContextualEntity(args) ||
+    numericOccurrenceIsPartOfWrittenNumberEntity(args)
+  ) {
+    return true;
+  }
   const searchableValue = args.value.toLocaleLowerCase("en-US");
   return args.entities.some((rawEntity) => {
     const entity = rawEntity.trim();
@@ -1277,9 +1346,12 @@ function hasNounPhraseSubjectForUnlistedPredicate(args: {
 function hasSupportedSubjectForUnlistedPredicate(args: {
   tokens: readonly string[];
   index: number;
+  hasFrontedClause: boolean;
 }): boolean {
   return (
-    args.index === 2 || hasNounPhraseSubjectForUnlistedPredicate(args)
+    args.index === 2 ||
+    hasNounPhraseSubjectForUnlistedPredicate(args) ||
+    hasFrontedBareNounSubject(args)
   );
 }
 
@@ -1287,10 +1359,12 @@ function isTerminalUnlistedFinitePredicate(args: {
   tokens: readonly string[];
   token: string;
   index: number;
+  hasFrontedClause: boolean;
 }): boolean {
   return (
     /(?:e|s|ify|ise|ize|ate)$/u.test(args.token) &&
-    hasNounPhraseSubjectForUnlistedPredicate(args)
+    (hasNounPhraseSubjectForUnlistedPredicate(args) ||
+      hasFrontedBareNounSubject(args))
   );
 }
 
@@ -1298,6 +1372,7 @@ function isLikelyUnlistedFinitePredicate(args: {
   tokens: readonly string[];
   token: string;
   index: number;
+  hasFrontedClause: boolean;
 }): boolean {
   if (
     !hasSupportedSubjectForUnlistedPredicate(args) ||
