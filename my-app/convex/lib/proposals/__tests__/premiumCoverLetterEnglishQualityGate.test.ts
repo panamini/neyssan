@@ -459,6 +459,35 @@ describe("English CV-backed quality gate", () => {
     );
   });
 
+  it("stops metric measurement at a trailing clause boundary", () => {
+    const metricFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Led delivery across 4 product squads during a migration.",
+              metrics: ["4"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I led delivery across 4 product squads.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: metricFactGraph,
+    });
+
+    expect(issues).not.toContainEqual(
+      expect.objectContaining({ code: "unsupported_visible_metric" }),
+    );
+  });
+
   it("preserves explicit metric signs", () => {
     const signedMetricFactGraph: FactGraphV1 = {
       ...factGraph,
@@ -1240,6 +1269,37 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
+  it("does not treat an ordinary title-cased noun as an entity anchor", () => {
+    const genericEntityFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_close"
+          ? {
+              ...fact,
+              text: "Delivery coordination.",
+              entities: ["Delivery"],
+              allowedVerbs: [],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "Delivery matters.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: genericEntityFactGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "employer_value_not_grounded",
+      section: "employerValueBlock",
+    });
+  });
+
   it("aligns singular nouns ending in s with irregular plurals", () => {
     const irregularPluralFactGraph: FactGraphV1 = {
       ...factGraph,
@@ -1407,6 +1467,25 @@ describe("English CV-backed quality gate", () => {
       writerOutput: output({
         opening: "I documented the handoffs.",
         proofBlock: "“I documented the handoffs.”",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "duplicate_visible_sentence",
+      section: "proofBlock",
+      otherSection: "opening",
+    });
+  });
+
+  it("detects a repeated sentence that begins with a lowercase brand", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I built dashboards. iOS teams used them.",
+        proofBlock: "iOS teams used them.",
         employerValueBlock: "That reporting supports clear delivery handoffs.",
         closeLine: "I would bring that discipline to the team.",
       }),

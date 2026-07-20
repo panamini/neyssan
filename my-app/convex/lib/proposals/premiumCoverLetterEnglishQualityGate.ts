@@ -92,16 +92,32 @@ const EVIDENCE_ANCHOR_STOP_WORDS = new Set([
 ]);
 const METRIC_MEASUREMENT_STOP_WORDS = new Set([
   "across",
+  "after",
   "and",
+  "as",
+  "at",
+  "because",
+  "before",
   "by",
+  "during",
   "for",
   "from",
+  "if",
   "in",
+  "once",
   "of",
   "over",
   "per",
+  "since",
+  "than",
+  "that",
   "to",
   "under",
+  "when",
+  "where",
+  "which",
+  "while",
+  "who",
   "with",
 ]);
 
@@ -124,6 +140,8 @@ type SentenceRange = Readonly<{
 
 const TITLE_PERIOD_ABBREVIATION_PATTERN =
   /\b(?:dr|mr|mrs|ms|prof|sr|jr|st|no|fig)\.$/iu;
+const CONTEXTUAL_PERIOD_ABBREVIATION_PATTERN =
+  /\b(?:etc|vs|approx|dept|inc|ltd|e\.g|i\.e|u\.s|u\.k)\.$/iu;
 
 function buildSentenceRange(
   value: string,
@@ -159,7 +177,10 @@ function isSentenceBoundary(args: {
   if (TITLE_PERIOD_ABBREVIATION_PATTERN.test(textThroughPunctuation)) {
     return false;
   }
-  return /[\p{Lu}\p{N}"'“‘(]/u.test(nextCharacter);
+  if (CONTEXTUAL_PERIOD_ABBREVIATION_PATTERN.test(textThroughPunctuation)) {
+    return /[\p{Lu}\p{N}"'“‘(]/u.test(nextCharacter);
+  }
+  return true;
 }
 
 function splitSentenceRanges(value: string): SentenceRange[] {
@@ -343,11 +364,23 @@ function evidenceEntityAnchorTokens(args: {
           .normalize("NFKC")
           .split(/[^A-Za-z0-9%]+/u)
           .filter(Boolean);
+        const canonicalEntityToken =
+          entityTokens.length === 1
+            ? canonicalizePremiumCoverLetterToken(entityTokens[0])
+            : "";
+        const firstFactToken = fact.text
+          .normalize("NFKC")
+          .match(/[A-Za-z0-9%]+/u)?.[0];
+        const isGenericSentenceOpener =
+          entityTokens.length === 1 &&
+          fact.category !== "tool" &&
+          firstFactToken !== undefined &&
+          canonicalizePremiumCoverLetterToken(firstFactToken) ===
+            canonicalEntityToken;
         return (
-          entityTokens.length !== 1 ||
-          !allowedVerbTokens.has(
-            canonicalizePremiumCoverLetterToken(entityTokens[0]),
-          )
+          !isGenericSentenceOpener &&
+          (entityTokens.length !== 1 ||
+            !allowedVerbTokens.has(canonicalEntityToken))
         );
       });
     }),

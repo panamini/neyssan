@@ -252,6 +252,31 @@ function attemptDirectQualityRepair(
   );
 }
 
+function attemptDirectQwenLegacyBodyParts(args: {
+  bodyParts: {
+    opening: string;
+    proofBlock: string;
+    employerValueBlock: string;
+    closeLine: string;
+  };
+  onFailure: NonNullable<
+    Parameters<typeof attemptPremiumCoverLetterGeneration>[0]["onFailure"]
+  >;
+}) {
+  return attemptPremiumCoverLetterGeneration({
+    personalizationContext: directContext,
+    voicePreset: "signature",
+    outputLanguage: "English",
+    jobTitle: directJob.jobTitle,
+    jobDescription: directJob.jobDescription,
+    candidateName: "Alex Martin",
+    writerProvider: "qwen",
+    writerModel: "qwen3.7-max",
+    onFailure: args.onFailure,
+    writer: async () => args.bodyParts,
+  });
+}
+
 describe("premium ClaimPlan provenance v1", () => {
   it("builds stable FactGraphV1 ids with metrics and ownership levels", () => {
     const factGraph = buildPremiumFactGraphV1({
@@ -4678,19 +4703,11 @@ describe("premium cover letter generation and rendering", () => {
 
   it("rejects Qwen cv_direct body parts that upgrade source evidence into unsupported ownership", async () => {
     const failures: any[] = [];
-    const result = await attemptPremiumCoverLetterGeneration({
-      personalizationContext: directContext,
-      voicePreset: "signature",
-      outputLanguage: "English",
-      jobTitle: directJob.jobTitle,
-      jobDescription: directJob.jobDescription,
-      candidateName: "Alex Martin",
-      writerProvider: "qwen",
-      writerModel: "qwen3.7-max",
+    const result = await attemptDirectQwenLegacyBodyParts({
       onFailure: (trace) => {
         failures.push(trace);
       },
-      writer: async () => ({
+      bodyParts: {
         opening:
           "I improved signup conversion by 11% after iterative UI experiments.",
         proofBlock:
@@ -4699,7 +4716,7 @@ describe("premium cover letter generation and rendering", () => {
           "I built experimentation dashboards used by product and growth teams.",
         closeLine:
           "The strongest overlap is around React, TypeScript, design systems, and product-facing interface work.",
-      }),
+      },
     });
 
     expect(result).toBeNull();
@@ -4789,19 +4806,11 @@ describe("premium cover letter generation and rendering", () => {
 
   it("applies employer-grounding enforcement to legacy-shaped Qwen output", async () => {
     const failures: any[] = [];
-    const result = await attemptPremiumCoverLetterGeneration({
-      personalizationContext: directContext,
-      voicePreset: "signature",
-      outputLanguage: "English",
-      jobTitle: directJob.jobTitle,
-      jobDescription: directJob.jobDescription,
-      candidateName: "Alex Martin",
-      writerProvider: "qwen",
-      writerModel: "qwen3.7-max",
+    const result = await attemptDirectQwenLegacyBodyParts({
       onFailure: (trace) => {
         failures.push(trace);
       },
-      writer: async () => ({
+      bodyParts: {
         opening:
           "I improved signup conversion by 11% after iterative UI experiments.",
         proofBlock:
@@ -4809,7 +4818,7 @@ describe("premium cover letter generation and rendering", () => {
         employerValueBlock: "Delivery matters.",
         closeLine:
           "That experience is relevant to frontend work where reusable systems and product iteration matter.",
-      }),
+      },
     });
 
     expect(result).toBeNull();
@@ -4818,6 +4827,34 @@ describe("premium cover letter generation and rendering", () => {
         stage: "validation",
         reason: "non_repairable_validation",
         issues: expect.arrayContaining(["employer_value_not_grounded"]),
+      }),
+    ]);
+  });
+
+  it("blocks fragment issues in legacy-shaped Qwen output", async () => {
+    const failures: any[] = [];
+    const result = await attemptDirectQwenLegacyBodyParts({
+      onFailure: (trace) => {
+        failures.push(trace);
+      },
+      bodyParts: {
+        opening:
+          "I improved signup conversion by 11% after iterative UI experiments.",
+        proofBlock:
+          "Led a design-system migration used across four product squads.",
+        employerValueBlock:
+          "I built experimentation dashboards used by product and growth teams.",
+        closeLine:
+          "That experience is relevant to frontend work where reusable systems and product iteration matter.",
+      },
+    });
+
+    expect(result).toBeNull();
+    expect(failures).toEqual([
+      expect.objectContaining({
+        stage: "validation",
+        reason: "non_repairable_validation",
+        issues: expect.arrayContaining(["incomplete_sentence"]),
       }),
     ]);
   });
@@ -6552,7 +6589,7 @@ describe("premium cover letter generation and rendering", () => {
     ).toBeGreaterThan(0);
   });
 
-  it("accepts a cited repair when similar uncited CV evidence also overlaps", async () => {
+  it("rejects a cited repair when it adds distinguishing uncited CV detail", async () => {
     const calls: string[] = [];
     const originalEmployerValue =
       "I built experimentation dashboards used by product and growth teams.";
@@ -6582,8 +6619,12 @@ describe("premium cover letter generation and rendering", () => {
     expect(calls).toHaveLength(2);
     expect(result?.qualityRepair).toMatchObject({
       attempted: true,
-      outcome: "attempted_accepted",
+      outcome: "rejected_provenance",
+      rejectionCategory: "rejected_provenance",
     });
+    expect(result?.bodyParts.proofBlock).toBe(
+      "I led a design system migration used across 4 product squads.",
+    );
   });
 
   it("rejects a repair that appends an uncited fact after a comma", async () => {
