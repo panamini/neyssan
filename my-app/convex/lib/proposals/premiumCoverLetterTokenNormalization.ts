@@ -30,12 +30,23 @@ const IRREGULAR_PLURAL_CANONICALS = new Map([
   ["statuses", "status"],
   ["theses", "thesis"],
 ]);
+const INVARIANT_S_ENDING_TOKENS = new Set([
+  "barracks",
+  "corps",
+  "crossroads",
+  "headquarters",
+  "means",
+  "news",
+  "series",
+  "species",
+]);
 
 export function expandPremiumCoverLetterTokenVariants(
   value: string,
 ): string[] {
   const token = value.toLowerCase();
   const variants = new Set([token]);
+  if (INVARIANT_S_ENDING_TOKENS.has(token)) return [...variants];
 
   if (token.endsWith("ies") && token.length > 5) {
     variants.add(`${token.slice(0, -3)}y`);
@@ -58,6 +69,7 @@ export function expandPremiumCoverLetterTokenVariants(
 
 export function canonicalizePremiumCoverLetterToken(value: string): string {
   const token = value.toLowerCase();
+  if (INVARIANT_S_ENDING_TOKENS.has(token)) return token;
   const irregularPlural = IRREGULAR_PLURAL_CANONICALS.get(token);
   if (irregularPlural) return irregularPlural;
   const canonicalRule = TOKEN_CANONICALIZATION_RULES.find((rule) =>

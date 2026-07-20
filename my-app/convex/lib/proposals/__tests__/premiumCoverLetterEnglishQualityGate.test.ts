@@ -10,6 +10,10 @@ import {
   analyzeEnglishCvBackedQualityGate,
   validateEnglishCvBackedQualityGate,
 } from "../premiumCoverLetterEnglishQualityGate";
+import {
+  canonicalizePremiumCoverLetterToken,
+  expandPremiumCoverLetterTokenVariants,
+} from "../premiumCoverLetterTokenNormalization";
 
 const factGraph: FactGraphV1 = {
   version: "fact_graph_v1",
@@ -502,6 +506,12 @@ describe("English CV-backed quality gate", () => {
       sourceMetrics: ["$4M"],
       generatedText: "I managed a USD 4 million portfolio.",
     },
+    {
+      name: "currency symbol and trailing ISO currency code",
+      sourceText: "Managed a $4M portfolio.",
+      sourceMetrics: ["$4M"],
+      generatedText: "I managed a 4 million USD portfolio.",
+    },
   ])(
     "matches semantic metric paraphrases for $name",
     ({ sourceText, sourceMetrics, generatedText }) => {
@@ -613,6 +623,39 @@ describe("English CV-backed quality gate", () => {
       metric: "5%",
     });
   });
+
+  it.each(["minus 5%", "negative 5%"])(
+    "normalizes the verbal sign in %s",
+    (generatedMetric) => {
+      const signedMetricFactGraph: FactGraphV1 = {
+        ...factGraph,
+        facts: factGraph.facts.map((fact) =>
+          fact.id === "fact_opening"
+            ? {
+                ...fact,
+                text: "Changed churn by -5%.",
+                metrics: ["-5%"],
+              }
+            : fact,
+        ),
+      };
+      const issues = validateEnglishCvBackedQualityGate({
+        writerOutput: output({
+          opening: `I changed churn by ${generatedMetric}.`,
+          proofBlock: "I documented handoffs for three implementation teams.",
+          employerValueBlock:
+            "That reporting supports clear delivery handoffs.",
+          closeLine: "I would bring that discipline to the team.",
+        }),
+        claimPlan,
+        factGraph: signedMetricFactGraph,
+      });
+
+      expect(issues).not.toContainEqual(
+        expect.objectContaining({ code: "unsupported_visible_metric" }),
+      );
+    },
+  );
 
   it("allows the same metric value when distinct section facts support it", () => {
     const sameNumberFactGraph: FactGraphV1 = {
@@ -823,7 +866,8 @@ describe("English CV-backed quality gate", () => {
         fact.id === "fact_opening"
           ? {
               ...fact,
-              text: "Built 3D workflows for 5G systems under ISO 27001.",
+              text:
+                "Built 3D workflows for 5G systems under ISO 27001 using Windows 10 and Python 3.",
               metrics: [],
             }
           : fact,
@@ -842,9 +886,10 @@ describe("English CV-backed quality gate", () => {
     };
     const issues = validateEnglishCvBackedQualityGate({
       writerOutput: output({
-        opening: "I built 3D workflows for 5G systems under ISO 27001.",
+        opening:
+          "I built 3D workflows for 5G systems under ISO 27001 using Windows 10 and Python 3.",
         proofBlock:
-          "I documented 3D assets for 5G programs aligned with ISO 27001.",
+          "I documented 3D assets for 5G programs aligned with ISO 27001 on Windows 10 and Python 3.",
         employerValueBlock: "That reporting supports clear delivery handoffs.",
         closeLine: "I would bring that discipline to the team.",
         proofFacts: ["fact_opening"],
@@ -1456,6 +1501,14 @@ describe("English CV-backed quality gate", () => {
       section: "employerValueBlock",
     });
   });
+
+  it.each(["news", "series", "species"])(
+    "does not singularize the invariant noun %s",
+    (token) => {
+      expect(canonicalizePremiumCoverLetterToken(token)).toBe(token);
+      expect(expandPremiumCoverLetterTokenVariants(token)).toEqual([token]);
+    },
+  );
 
   it("canonicalizes inflected evidence anchors for employer grounding", () => {
     const inflectedFactGraph: FactGraphV1 = {

@@ -302,6 +302,34 @@ function metricCurrency(symbol: string): "usd" | "eur" | "gbp" | null {
   }
 }
 
+function isPlainToolVersion(args: {
+  prefix: string;
+  sign: string;
+  suffix: string;
+  currency: "usd" | "eur" | "gbp" | null;
+}): boolean {
+  if (args.sign || args.suffix || args.currency) return false;
+  return /\b(?:version|ver|v|windows|python|node(?:\.js)?|java|typescript|react|angular|vue|ios|android|macos|ubuntu|debian|rhel|postgres(?:ql)?|mysql|redis|mongodb|kubernetes|docker|terraform|aws|azure|gcp|excel|office)\s*$/iu.test(
+    args.prefix,
+  );
+}
+
+function isIgnoredNumericOccurrence(args: {
+  prefix: string;
+  sign: string;
+  suffix: string;
+  currency: "usd" | "eur" | "gbp" | null;
+}): boolean {
+  return (
+    /\b(?:(?:iso|iec|soc|rfc)\s+|no\.\s*)$/iu.test(args.prefix) ||
+    isPlainToolVersion(args)
+  );
+}
+
+function numericSignMultiplier(sign: string): number {
+  return ["-", "minus", "negative"].includes(sign.toLowerCase()) ? -1 : 1;
+}
+
 function metricMeasurement(args: {
   value: string;
   end: number;
@@ -340,17 +368,19 @@ function normalizeNumericTokenOccurrence(args: {
 }): NumericTokenOccurrence | null {
   const index = args.match.index ?? 0;
   const prefix = args.value.slice(Math.max(0, index - 16), index);
-  if (/\b(?:(?:iso|iec|soc|rfc)\s+|no\.\s*)$/iu.test(prefix)) return null;
-
-  const numericValue = Number(
-    `${args.match[1] ?? ""}${args.match[3].replace(/,/g, "")}`,
-  );
-  if (!Number.isFinite(numericValue)) return null;
-
+  const sign = args.match[1] ?? "";
   const suffix = (args.match[4] ?? "").toLowerCase();
-  const metricValue = numericValue * numericMagnitudeMultiplier(suffix);
+  const currency = metricCurrency(args.match[2] || args.match[5] || "");
+  if (isIgnoredNumericOccurrence({ prefix, sign, suffix, currency })) {
+    return null;
+  }
+
+  const numericValue = Number(args.match[3].replace(/,/g, ""));
+  const metricValue =
+    numericValue *
+    numericSignMultiplier(sign) *
+    numericMagnitudeMultiplier(suffix);
   const percentage = suffix === "%" || suffix === "percent";
-  const currency = metricCurrency(args.match[2]);
   const end = index + args.match[0].length;
   const measurement = metricMeasurement({
     value: args.value,
@@ -373,7 +403,7 @@ function numericTokenOccurrences(value: string): NumericTokenOccurrence[] {
   const tokens: NumericTokenOccurrence[] = [];
   for (const match of value
     .matchAll(
-      /(?<![A-Za-z0-9])([+-]?)\s*((?:USD|EUR|GBP|[$€£])?)\s*(\d[\d,]*(?:\.\d+)?)\s*(%|percent\b|[KMB]\b|thousand\b|million\b|billion\b)?(?![A-Za-z0-9])/gi,
+      /(?<![A-Za-z0-9])([+-]|minus\b|negative\b|plus\b|positive\b)?\s*((?:USD|EUR|GBP|[$€£])?)\s*(\d[\d,]*(?:\.\d+)?)\s*(%|percent\b|[KMB]\b|thousand\b|million\b|billion\b)?(?:\s*((?:USD|EUR|GBP)\b))?(?![A-Za-z0-9])/gi,
     )) {
     const occurrence = normalizeNumericTokenOccurrence({ value, match });
     if (occurrence) tokens.push(occurrence);
