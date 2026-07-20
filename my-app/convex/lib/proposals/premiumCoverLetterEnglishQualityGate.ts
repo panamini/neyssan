@@ -260,8 +260,13 @@ const WRITTEN_NUMBER_TENS = new Map([
 const WRITTEN_NUMBER_PATTERN =
   /\b((?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen)|(?:(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[-\s]+(?:one|two|three|four|five|six|seven|eight|nine))?))(?:\s+(percent)\b)?/giu;
 const NON_QUANTITATIVE_WRITTEN_NUMBER_MEASUREMENTS = new Set([
+  "advantage",
+  "benefit",
   "example",
+  "point",
+  "priority",
   "reason",
+  "way",
 ]);
 
 function normalizeText(value: string): string {
@@ -549,6 +554,16 @@ function writtenNumberValue(value: string): number | null {
   return tens + (WRITTEN_NUMBER_UNITS.get(parts[1] ?? "") ?? 0);
 }
 
+function isNonQuantitativeWrittenNumberMeasurement(args: {
+  measurement: string;
+  immediateMeasurement: string;
+}): boolean {
+  return [args.measurement, canonicalMetricMeasurement(args.immediateMeasurement)].some(
+    (measurement) =>
+      NON_QUANTITATIVE_WRITTEN_NUMBER_MEASUREMENTS.has(measurement),
+  );
+}
+
 function writtenNumericTokenOccurrences(
   value: string,
 ): NumericTokenOccurrence[] {
@@ -571,9 +586,10 @@ function writtenNumericTokenOccurrences(
       !percentage &&
       (!measurement ||
         value[end] === "-" ||
-        NON_QUANTITATIVE_WRITTEN_NUMBER_MEASUREMENTS.has(
-          canonicalMetricMeasurement(immediateMeasurement),
-        ))
+        isNonQuantitativeWrittenNumberMeasurement({
+          measurement,
+          immediateMeasurement,
+        }))
     ) {
       return [];
     }
@@ -1020,7 +1036,10 @@ export function validateEnglishCvBackedQualityGate(args: {
     const sentenceRanges = splitSentenceRanges(text);
     for (const { text: sentence } of sentenceRanges) {
       const normalizedSentence = normalizeSentenceKey(sentence);
-      if (isVerbLedFragment(normalizedSentence)) {
+      const hasVerbLedFragment = sentence
+        .split(";")
+        .some((clause) => isVerbLedFragment(normalizeSentenceKey(clause)));
+      if (hasVerbLedFragment) {
         pushUnique(issues, { code: "incomplete_sentence", section });
       }
       const previousSection = seenSentenceSections.get(normalizedSentence);
@@ -1037,16 +1056,15 @@ export function validateEnglishCvBackedQualityGate(args: {
       }
     }
 
+    const effectiveFactIds =
+      part.factIds.length > 0 ? part.factIds : assignedClaim?.factIds ?? [];
     const sourceMetricFacts = sourceMetricFactIds({
-      factIds: part.factIds,
+      factIds: effectiveFactIds,
       demandIds: part.demandIds,
       factGraph: args.factGraph,
       jobDemandGraph: args.jobDemandGraph,
     });
-    const employerGroundingFactIds =
-      part.factIds.length > 0
-        ? part.factIds
-        : assignedClaim?.factIds ?? [];
+    const employerGroundingFactIds = effectiveFactIds;
     if (
       section === "employerValueBlock" &&
       employerGroundingFactIds.length > 0
@@ -1069,7 +1087,8 @@ export function validateEnglishCvBackedQualityGate(args: {
           !GENERIC_SINGLE_EVIDENCE_ANCHORS.has(token),
       );
       const hasDistinctiveEntityAnchor = Array.from(textTokens).some((token) =>
-        entityAnchors.has(token),
+        entityAnchors.has(token) &&
+        !GENERIC_SINGLE_EVIDENCE_ANCHORS.has(token),
       );
       if (
         anchorOverlapCount < 2 &&

@@ -660,6 +660,7 @@ describe("English CV-backed quality gate", () => {
 
   it.each([
     "One reason I improved delivery was clearer handoffs.",
+    "One practical advantage is my structured follow-through.",
     "I maintained two-way communication across teams.",
   ])("does not treat non-quantitative cardinal prose as a metric: %s", (opening) => {
     const issues = validateEnglishCvBackedQualityGate({
@@ -1627,6 +1628,36 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
+  it("rejects a generic token extracted from a title entity as grounding", () => {
+    const genericTitleFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_close"
+          ? {
+              ...fact,
+              text: "Worked as a Customer Support Specialist.",
+              entities: ["Customer Support Specialist"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That support would help your team.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: genericTitleFactGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "employer_value_not_grounded",
+      section: "employerValueBlock",
+    });
+  });
+
   it("preserves short CV acronyms as employer grounding anchors", () => {
     const acronymFactGraph: FactGraphV1 = {
       ...factGraph,
@@ -2072,6 +2103,52 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
+  it("uses assigned facts for adjacent bridge metrics when fact IDs are omitted", () => {
+    const adjacentClaimPlan: ClaimPlanV1 = {
+      ...claimPlan,
+      contextClass: "cv_adjacent",
+      claims: claimPlan.claims.map((claim) =>
+        claim.section === "employerValueBlock"
+          ? {
+              ...claim,
+              claimType: "adjacent_safe_bridge",
+            }
+          : claim,
+      ),
+    };
+    const adjacentMetricFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_close"
+          ? {
+              ...fact,
+              text: "Reduced the onboarding backlog by 24%.",
+              entities: ["onboarding backlog"],
+              metrics: ["24%"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock:
+          "That 24% onboarding backlog reduction is relevant to this work.",
+        closeLine: "I would bring that discipline to the team.",
+        employerFacts: [],
+      }),
+      claimPlan: adjacentClaimPlan,
+      factGraph: adjacentMetricFactGraph,
+    });
+
+    expect(issues).not.toContainEqual({
+      code: "unsupported_visible_metric",
+      section: "employerValueBlock",
+      metric: "24%",
+    });
+  });
+
   it("detects a repeated visible sentence within one section", () => {
     const issues = validateEnglishCvBackedQualityGate({
       writerOutput: output({
@@ -2226,6 +2303,24 @@ describe("English CV-backed quality gate", () => {
       writerOutput: output({
         opening: "I reduced the onboarding backlog by 24%.",
         proofBlock: "I documented handoffs. Managed services efficiently.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "incomplete_sentence",
+      section: "proofBlock",
+    });
+  });
+
+  it("rejects a verb-led fragment after a semicolon", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I improved reporting; Led weekly handoffs.",
         employerValueBlock: "That reporting supports clear delivery handoffs.",
         closeLine: "I would bring that discipline to the team.",
       }),
