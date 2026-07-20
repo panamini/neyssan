@@ -1888,8 +1888,18 @@ export function buildAllowedFactsPackFromFactGraph(
 }
 
 function extractFactEntities(text: string): string[] {
-  const matches = compactWhitespace(text).match(/\b[A-Z][A-Za-z0-9&'.-]{2,}\b/g);
-  return dedupeStrings(matches ?? []).slice(0, 6);
+  const compact = compactWhitespace(text);
+  const namedEntities = compact.match(/\b[A-Z][A-Za-z0-9&'.-]{2,}\b/g) ?? [];
+  const contextualDigitLeadingEntities = Array.from(
+    compact.matchAll(
+      /\b(?:at|for|with|joined)\s+(\d+[A-Z][A-Za-z0-9&'.-]*)\b/gi,
+    ),
+    (match) => match[1],
+  );
+  return dedupeStrings([
+    ...namedEntities,
+    ...contextualDigitLeadingEntities,
+  ]).slice(0, 6);
 }
 
 function extractAllowedVerbs(text: string): string[] {
@@ -5362,6 +5372,33 @@ function premiumBodyPartTextChanged(
   );
 }
 
+function replacePremiumWriterOutputBodyParts(args: {
+  writerOutput: PremiumWriterOutputV1;
+  bodyParts: CoverLetterBodyParts;
+}): PremiumWriterOutputV1 {
+  return {
+    ...args.writerOutput,
+    bodyParts: {
+      opening: {
+        ...args.writerOutput.bodyParts.opening,
+        text: args.bodyParts.opening,
+      },
+      proofBlock: {
+        ...args.writerOutput.bodyParts.proofBlock,
+        text: args.bodyParts.proofBlock,
+      },
+      employerValueBlock: {
+        ...args.writerOutput.bodyParts.employerValueBlock,
+        text: args.bodyParts.employerValueBlock,
+      },
+      closeLine: {
+        ...args.writerOutput.bodyParts.closeLine,
+        text: args.bodyParts.closeLine,
+      },
+    },
+  };
+}
+
 function normalizePremiumProvenanceText(value: string): string {
   return normalizeProposalConstraintText(value);
 }
@@ -5382,14 +5419,15 @@ function premiumTextSupportsCandidateFact(args: {
   const normalizedGenerated = normalizePremiumProvenanceText(generatedText);
   const normalizedFact = normalizePremiumProvenanceText(factText);
   const factTokens = normalizeCanonicalTokens(factText);
+  const generatedTokens = new Set(normalizeCanonicalTokens(generatedText));
   if (
-    (normalizedFact.length >= 12 || factTokens.length >= 2) &&
-    normalizedGenerated.includes(normalizedFact)
+    ((normalizedFact.length >= 12 || factTokens.length >= 2) &&
+      normalizedGenerated.includes(normalizedFact)) ||
+    (factTokens.length === 1 && generatedTokens.has(factTokens[0]))
   ) {
     return true;
   }
 
-  const generatedTokens = new Set(normalizeCanonicalTokens(generatedText));
   const overlap = countOverlap(factTokens, generatedTokens);
   const threshold = Math.min(5, Math.max(3, Math.ceil(factTokens.length * 0.35)));
   if (overlap >= threshold) {
@@ -7535,7 +7573,9 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     content: rendered.content,
     contextClass: brief.contextClass,
   });
+  const preQualityRepairState = { bodyParts, rendered, qualityShadow };
   let qualityRepairTrace: PremiumCoverLetterQualityRepairTrace | undefined;
+  let qualityRepairApplied = false;
 
   const qualityRepair = await tryRepairPremiumCoverLetterQualityShadow({
     bodyParts,
@@ -7553,6 +7593,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   });
   qualityRepairTrace = qualityRepair.trace;
   if (qualityRepair.bodyParts && qualityRepair.rendered && qualityRepair.qualityShadow) {
+    qualityRepairApplied = true;
     bodyParts = qualityRepair.bodyParts;
     rendered = qualityRepair.rendered;
     qualityShadow = qualityRepair.qualityShadow;
@@ -7584,35 +7625,17 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     }
   }
 
-  const finalWriterOutput: PremiumWriterOutputV1 = {
-    ...writerOutput,
-    bodyParts: {
-      opening: {
-        ...writerOutput.bodyParts.opening,
-        text: bodyParts.opening,
-      },
-      proofBlock: {
-        ...writerOutput.bodyParts.proofBlock,
-        text: bodyParts.proofBlock,
-      },
-      employerValueBlock: {
-        ...writerOutput.bodyParts.employerValueBlock,
-        text: bodyParts.employerValueBlock,
-      },
-      closeLine: {
-        ...writerOutput.bodyParts.closeLine,
-        text: bodyParts.closeLine,
-      },
-    },
-  };
-  const englishCvBackedQualityGateIssues =
-    validateEnglishCvBackedQualityGate({
-      writerOutput: finalWriterOutput,
-      claimPlan,
-      factGraph,
-      jobDemandGraph,
-    });
-  const blockingEnglishCvBackedQualityGateIssues =
+  let finalWriterOutput = replacePremiumWriterOutputBodyParts({
+    writerOutput,
+    bodyParts,
+  });
+  let englishCvBackedQualityGateIssues = validateEnglishCvBackedQualityGate({
+    writerOutput: finalWriterOutput,
+    claimPlan,
+    factGraph,
+    jobDemandGraph,
+  });
+  let blockingEnglishCvBackedQualityGateIssues =
     englishCvBackedQualityGateIssues.filter((issue) =>
       (
         legacyWrapped &&
@@ -7624,6 +7647,41 @@ export async function attemptPremiumCoverLetterGeneration(args: {
           : ENGLISH_CV_BACKED_PRODUCTION_GATE_CODES
       ).has(issue.code),
     );
+  if (
+    qualityRepairApplied &&
+    blockingEnglishCvBackedQualityGateIssues.length > 0
+  ) {
+    bodyParts = preQualityRepairState.bodyParts;
+    rendered = preQualityRepairState.rendered;
+    qualityShadow = preQualityRepairState.qualityShadow;
+    qualityRepairTrace = {
+      ...qualityRepair.trace,
+      outcome: "rejected_validation",
+      rejectionCategory: "rejected_validation",
+    };
+    finalWriterOutput = replacePremiumWriterOutputBodyParts({
+      writerOutput,
+      bodyParts,
+    });
+    englishCvBackedQualityGateIssues = validateEnglishCvBackedQualityGate({
+      writerOutput: finalWriterOutput,
+      claimPlan,
+      factGraph,
+      jobDemandGraph,
+    });
+    blockingEnglishCvBackedQualityGateIssues =
+      englishCvBackedQualityGateIssues.filter((issue) =>
+      (
+        legacyWrapped &&
+        !isQwenWriterIdentity({
+          writerProvider: args.writerProvider,
+          writerModel: args.writerModel,
+        })
+          ? ENGLISH_CV_BACKED_LEGACY_PRODUCTION_GATE_CODES
+          : ENGLISH_CV_BACKED_PRODUCTION_GATE_CODES
+      ).has(issue.code),
+    );
+  }
   if (blockingEnglishCvBackedQualityGateIssues.length > 0) {
     args.onFailure?.({
       stage: "validation",

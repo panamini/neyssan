@@ -255,6 +255,19 @@ const FINITE_PREDICATE_SUBJECT_TOKENS = new Set([
   "who",
   "you",
 ]);
+const FINITE_PREDICATE_SUBJECT_DETERMINERS = new Set([
+  "a",
+  "an",
+  "her",
+  "his",
+  "its",
+  "my",
+  "our",
+  "the",
+  "their",
+  "this",
+  "your",
+]);
 const WRITTEN_NUMBER_UNITS = new Map([
   ["zero", 0],
   ["one", 1],
@@ -300,10 +313,13 @@ const NON_QUANTITATIVE_HYPHENATED_NUMBER_PATTERN =
 const NON_QUANTITATIVE_WRITTEN_NUMBER_MEASUREMENTS = new Set([
   "advantage",
   "benefit",
+  "contribution",
   "example",
   "point",
   "priority",
   "reason",
+  "specific",
+  "strength",
   "thing",
   "things",
   "way",
@@ -784,6 +800,33 @@ function numericTokens(value: string): string[] {
   ];
 }
 
+function numericOccurrenceIsPartOfEntity(args: {
+  value: string;
+  occurrence: NumericTokenOccurrence;
+  entities: readonly string[];
+}): boolean {
+  const searchableValue = args.value.toLocaleLowerCase("en-US");
+  return args.entities.some((rawEntity) => {
+    const entity = rawEntity.trim();
+    if (!/\p{L}/u.test(entity) || !/\p{N}/u.test(entity)) return false;
+    const searchableEntity = entity.toLocaleLowerCase("en-US");
+    let entityIndex = searchableValue.indexOf(searchableEntity);
+    while (entityIndex >= 0) {
+      if (
+        args.occurrence.index >= entityIndex &&
+        args.occurrence.index < entityIndex + searchableEntity.length
+      ) {
+        return true;
+      }
+      entityIndex = searchableValue.indexOf(
+        searchableEntity,
+        entityIndex + searchableEntity.length,
+      );
+    }
+    return false;
+  });
+}
+
 function evidenceAnchorTokens(args: {
   factIds: readonly string[];
   factGraph: FactGraphV1;
@@ -847,7 +890,7 @@ function evidenceAnchorTokensFromValues(values: readonly string[]): Set<string> 
   const technologyAnchors = values.flatMap((value) =>
     Array.from(
       value.matchAll(
-        /(?:^|[^\p{L}\p{N}_])((?:C\+\+|C#|R|Go))(?=$|[^\p{L}\p{N}_+#])/gu,
+        /(?:^|[^\p{L}\p{N}_])((?:C\+\+|C#|R|Go|Git|Vue))(?=$|[^\p{L}\p{N}_+#])/gu,
       ),
       (match) => match[1].toLowerCase(),
     ),
@@ -914,9 +957,17 @@ function sourceMetricOccurrences(args: {
   const factOccurrences = args.factIds.flatMap((factId) => {
     const fact = factById.get(factId);
     if (!fact) return [];
-    const textMetrics = numericTokenOccurrences(fact.text);
+    const rawTextMetrics = numericTokenOccurrences(fact.text);
+    const textMetrics = rawTextMetrics.filter(
+      (occurrence) =>
+        !numericOccurrenceIsPartOfEntity({
+          value: fact.text,
+          occurrence,
+          entities: fact.entities,
+        }),
+    );
     const metrics =
-      textMetrics.length > 0
+      rawTextMetrics.length > 0
         ? textMetrics
         : fact.metrics.flatMap((metric) => numericTokenOccurrences(metric));
     return metrics.map((occurrence) => ({ occurrence, sourceId: factId }));
@@ -967,12 +1018,39 @@ function hasPluralSubjectForUnlistedPredicate(args: {
   );
 }
 
+function hasNounPhraseSubjectForUnlistedPredicate(args: {
+  tokens: readonly string[];
+  index: number;
+}): boolean {
+  return (
+    args.index >= 2 &&
+    FINITE_PREDICATE_SUBJECT_DETERMINERS.has(
+      args.tokens[args.index - 2] ?? "",
+    ) &&
+    /^[a-z][a-z-]*$/u.test(args.tokens[args.index - 1] ?? "")
+  );
+}
+
+function hasSupportedSubjectForUnlistedPredicate(args: {
+  tokens: readonly string[];
+  index: number;
+}): boolean {
+  return (
+    args.index === 2 || hasNounPhraseSubjectForUnlistedPredicate(args)
+  );
+}
+
 function isLikelyUnlistedFinitePredicate(args: {
   tokens: readonly string[];
   token: string;
   index: number;
 }): boolean {
-  if (args.index !== 2 || args.tokens.length < 4) return false;
+  if (
+    !hasSupportedSubjectForUnlistedPredicate(args) ||
+    args.tokens.length < 4
+  ) {
+    return false;
+  }
   if (args.token.includes("-")) return false;
   if (FINITE_PREDICATE_BLOCKERS.has(args.token)) return false;
   if (
@@ -1259,6 +1337,10 @@ export function validateEnglishCvBackedQualityGate(args: {
       factGraph: args.factGraph,
       jobDemandGraph: args.jobDemandGraph,
     });
+    const visibleMetricEntities = effectiveFactIds.flatMap(
+      (factId) =>
+        args.factGraph.facts.find((fact) => fact.id === factId)?.entities ?? [],
+    );
     const employerGroundingFactIds = effectiveFactIds;
     if (
       section === "employerValueBlock" &&
@@ -1302,7 +1384,14 @@ export function validateEnglishCvBackedQualityGate(args: {
         });
       }
     }
-    for (const occurrence of numericTokenOccurrences(text)) {
+    for (const occurrence of numericTokenOccurrences(text).filter(
+      (candidate) =>
+        !numericOccurrenceIsPartOfEntity({
+          value: text,
+          occurrence: candidate,
+          entities: visibleMetricEntities,
+        }),
+    )) {
       const { key, metric } = occurrence;
       const resolvedMetricKey = sourceMetricFacts.factIdsByKey.has(key)
         ? key

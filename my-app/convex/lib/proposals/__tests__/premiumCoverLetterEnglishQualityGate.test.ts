@@ -835,6 +835,8 @@ describe("English CV-backed quality gate", () => {
   it.each([
     "One reason I improved delivery was clearer handoffs.",
     "One practical advantage is my structured follow-through.",
+    "One specific contribution I would bring is clearer reporting.",
+    "One strength I would bring is structured follow-through.",
     "One thing I value most is client onboarding.",
     "I held one-on-one meetings with delivery teams.",
     "I provided one-to-one coaching across the team.",
@@ -855,6 +857,54 @@ describe("English CV-backed quality gate", () => {
       expect.objectContaining({
         code: "unsupported_visible_metric",
         section: "opening",
+      }),
+    );
+  });
+
+  it("does not treat a cited numeric employer name as a visible metric", () => {
+    const brandFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_opening"
+          ? {
+              ...fact,
+              text: "Worked at 3M improving onboarding.",
+              metrics: [],
+              entities: ["3M"],
+            }
+          : fact,
+      ),
+    };
+    const brandClaimPlan: ClaimPlanV1 = {
+      ...claimPlan,
+      claims: claimPlan.claims.map((claim) =>
+        claim.section === "proofBlock"
+          ? { ...claim, factIds: ["fact_opening"] }
+          : claim,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "At 3M, I improved onboarding.",
+        proofBlock: "My work at 3M supported delivery teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+        proofFacts: ["fact_opening"],
+      }),
+      claimPlan: brandClaimPlan,
+      factGraph: brandFactGraph,
+    });
+
+    expect(issues).not.toContainEqual(
+      expect.objectContaining({
+        code: "unsupported_visible_metric",
+        metric: "3000000",
+      }),
+    );
+    expect(issues).not.toContainEqual(
+      expect.objectContaining({
+        code: "duplicate_visible_metric",
+        metric: "3000000",
       }),
     );
   });
@@ -1918,6 +1968,38 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
+  it("preserves a short title-case technology as a grounding anchor", () => {
+    const technologyFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) =>
+        fact.id === "fact_close"
+          ? {
+              ...fact,
+              text: "Used Git.",
+              entities: ["Git"],
+              allowedVerbs: ["used"],
+            }
+          : fact,
+      ),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock:
+          "That Git experience supports reliable delivery.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: technologyFactGraph,
+    });
+
+    expect(issues).not.toContainEqual({
+      code: "employer_value_not_grounded",
+      section: "employerValueBlock",
+    });
+  });
+
   it("preserves accented CV entities as employer grounding anchors", () => {
     const accentedFactGraph: FactGraphV1 = {
       ...factGraph,
@@ -2348,6 +2430,10 @@ describe("English CV-backed quality gate", () => {
     });
   });
 
+  it("preserves the ordinary plural meaning of bases", () => {
+    expect(canonicalizePremiumCoverLetterNoun("bases")).toBe("base");
+  });
+
   it("grounds an adjacent employer bridge against assigned facts when fact IDs are omitted", () => {
     const adjacentClaimPlan: ClaimPlanV1 = {
       ...claimPlan,
@@ -2634,6 +2720,25 @@ describe("English CV-backed quality gate", () => {
         opening: "I reduced the onboarding backlog by 24%.",
         proofBlock:
           "I documented handoffs. Supported by product data, teams improved workflows.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).not.toContainEqual({
+      code: "incomplete_sentence",
+      section: "proofBlock",
+    });
+  });
+
+  it("accepts a fronted participial clause with a possessive subject", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I reduced the onboarding backlog by 24%.",
+        proofBlock:
+          "Built on user research, my work emphasizes reliable delivery.",
         employerValueBlock: "That reporting supports clear delivery handoffs.",
         closeLine: "I would bring that discipline to the team.",
       }),
