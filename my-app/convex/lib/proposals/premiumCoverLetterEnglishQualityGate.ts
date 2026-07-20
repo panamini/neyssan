@@ -87,16 +87,31 @@ function normalizeSentenceKey(value: string): string {
 }
 
 function splitSentences(value: string): string[] {
-  return Array.from(
-    value.matchAll(/[^.!?\n]+(?:[.!?]+(?:["'”’»)\]}]+)?|$)/gu),
-    (match) => match[0],
-  )
-    .map((sentence) => sentence.trim())
-    .filter(Boolean);
+  const sentences: string[] = [];
+  let start = 0;
+  for (const match of value.matchAll(
+    /[.!?]+(?:["'”’»)\]}]+)?(?=\s|$)/gu,
+  )) {
+    const end = (match.index ?? start) + match[0].length;
+    const nextCharacter = value.slice(end).match(/\S/u)?.[0];
+    if (
+      !/[!?]/u.test(match[0]) &&
+      nextCharacter &&
+      !/[\p{Lu}\p{N}"'“‘(]/u.test(nextCharacter)
+    ) {
+      continue;
+    }
+    const sentence = value.slice(start, end).trim();
+    if (sentence) sentences.push(sentence);
+    start = end;
+  }
+  const trailing = value.slice(start).trim();
+  if (trailing) sentences.push(trailing);
+  return sentences;
 }
 
-function numericTokens(value: string): string[] {
-  const tokens = new Set<string>();
+function numericTokenOccurrences(value: string): string[] {
+  const tokens: string[] = [];
   for (const match of value
     .toLowerCase()
     .matchAll(/\b\d[\d,]*(?:\.\d+)?\s*(?:%|percent\b)?/g)) {
@@ -105,10 +120,14 @@ function numericTokens(value: string): string[] {
     const numericSurface = compact.replace(/(?:%|percent)$/u, "");
     const numericValue = Number(numericSurface);
     if (Number.isFinite(numericValue)) {
-      tokens.add(`${numericValue}${percentage ? "%" : ""}`);
+      tokens.push(`${numericValue}${percentage ? "%" : ""}`);
     }
   }
-  return [...tokens];
+  return tokens;
+}
+
+function numericTokens(value: string): string[] {
+  return [...new Set(numericTokenOccurrences(value))];
 }
 
 function evidenceAnchorTokens(args: {
@@ -396,7 +415,7 @@ export function validateEnglishCvBackedQualityGate(args: {
         });
       }
     }
-    for (const metric of numericTokens(text)) {
+    for (const metric of numericTokenOccurrences(text)) {
       if (!sourceMetricFacts.has(metric)) {
         pushUnique(issues, {
           code: "unsupported_visible_metric",
@@ -414,14 +433,15 @@ export function validateEnglishCvBackedQualityGate(args: {
         .get(metric)
         ?.find(
           (occurrence) =>
-            occurrence.section !== section &&
             setsOverlap(occurrence.factIds, metricFactIds),
         );
       if (previousOccurrence) {
         pushUnique(issues, {
           code: "duplicate_visible_metric",
           section,
-          otherSection: previousOccurrence.section,
+          ...(previousOccurrence.section !== section
+            ? { otherSection: previousOccurrence.section }
+            : {}),
           metric,
         });
       }

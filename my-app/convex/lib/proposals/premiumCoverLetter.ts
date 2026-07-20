@@ -55,6 +55,12 @@ const ENGLISH_CV_BACKED_PRODUCTION_GATE_CODES =
     "duplicate_visible_sentence",
     "duplicate_visible_metric",
     "unsupported_visible_metric",
+    "employer_value_not_grounded",
+  ]);
+
+const ENGLISH_CV_BACKED_LEGACY_PRODUCTION_GATE_CODES =
+  new Set<EnglishCvBackedQualityGateIssueCode>([
+    "duplicate_visible_sentence",
   ]);
 
 export type AllowedFact = {
@@ -7546,7 +7552,11 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     });
   const blockingEnglishCvBackedQualityGateIssues =
     englishCvBackedQualityGateIssues.filter((issue) =>
-      ENGLISH_CV_BACKED_PRODUCTION_GATE_CODES.has(issue.code),
+      (
+        legacyWrapped
+          ? ENGLISH_CV_BACKED_LEGACY_PRODUCTION_GATE_CODES
+          : ENGLISH_CV_BACKED_PRODUCTION_GATE_CODES
+      ).has(issue.code),
     );
   if (blockingEnglishCvBackedQualityGateIssues.length > 0) {
     args.onFailure?.({

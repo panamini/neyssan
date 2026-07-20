@@ -460,6 +460,63 @@ describe("English CV-backed quality gate", () => {
     );
   });
 
+  it("does not split decimal metrics or abbreviations into duplicate fragments", () => {
+    const decimalFactGraph: FactGraphV1 = {
+      ...factGraph,
+      facts: factGraph.facts.map((fact) => {
+        if (fact.id === "fact_opening") {
+          return {
+            ...fact,
+            text: "Improved conversion by 24.5% for U.S. delivery teams.",
+            metrics: ["24.5%"],
+          };
+        }
+        if (fact.id === "fact_proof") {
+          return {
+            ...fact,
+            text: "Improved conversion by 24.7% for U.K. delivery teams.",
+            metrics: ["24.7%"],
+          };
+        }
+        return fact;
+      }),
+    };
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening: "I improved conversion by 24.5% for U.S. delivery teams.",
+        proofBlock: "I improved conversion by 24.7% for U.K. delivery teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph: decimalFactGraph,
+    });
+
+    expect(issues).not.toContainEqual(
+      expect.objectContaining({ code: "duplicate_visible_sentence" }),
+    );
+  });
+
+  it("detects a supported metric repeated within one section", () => {
+    const issues = validateEnglishCvBackedQualityGate({
+      writerOutput: output({
+        opening:
+          "I reduced the onboarding backlog by 24%. That 24% result improved handoffs.",
+        proofBlock: "I documented handoffs for three implementation teams.",
+        employerValueBlock: "That reporting supports clear delivery handoffs.",
+        closeLine: "I would bring that discipline to the team.",
+      }),
+      claimPlan,
+      factGraph,
+    });
+
+    expect(issues).toContainEqual({
+      code: "duplicate_visible_metric",
+      section: "opening",
+      metric: "24%",
+    });
+  });
+
   it("requires a fact reference when the assigned source-backed claim has facts", () => {
     const issues = validateEnglishCvBackedQualityGate({
       writerOutput: output({
