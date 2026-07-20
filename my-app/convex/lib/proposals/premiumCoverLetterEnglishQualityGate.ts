@@ -206,6 +206,17 @@ const METRIC_CURRENCIES = new Map<string, MetricCurrency>([
   ["pounds", "gbp"],
   ["gbp", "gbp"],
 ]);
+const NUMERIC_MAGNITUDE_MULTIPLIERS = new Map<string, number>([
+  ["k", 1_000],
+  ["thousand", 1_000],
+  ["m", 1_000_000],
+  ["mm", 1_000_000],
+  ["mn", 1_000_000],
+  ["million", 1_000_000],
+  ["b", 1_000_000_000],
+  ["bn", 1_000_000_000],
+  ["billion", 1_000_000_000],
+]);
 const PERCENTAGE_DIRECTIONS = new Map<string, "increase" | "decrease">([
   ["boost", "increase"],
   ["boosted", "increase"],
@@ -438,6 +449,8 @@ const WRITTEN_NUMBER_PATTERN =
   /\b((?:(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|and)(?:[-\s]+)){0,6}(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion))(?:\s+(percent)\b)?/giu;
 const NON_QUANTITATIVE_HYPHENATED_NUMBER_PATTERN =
   /\b(?:one-on-one|one-to-one|two-way)\b/giu;
+const NON_QUANTITATIVE_WRITTEN_NUMBER_PHRASE_PATTERN =
+  /\b(?:as\s+one\s+(?:team|unit)|one\s+source\s+of\s+truth)\b/giu;
 const NON_QUANTITATIVE_WRITTEN_NUMBER_MEASUREMENTS = new Set([
   "advantage",
   "benefit",
@@ -619,19 +632,7 @@ type SourceMetricFacts = Readonly<{
 }>;
 
 function numericMagnitudeMultiplier(suffix: string): number {
-  switch (suffix) {
-    case "k":
-    case "thousand":
-      return 1_000;
-    case "m":
-    case "million":
-      return 1_000_000;
-    case "b":
-    case "billion":
-      return 1_000_000_000;
-    default:
-      return 1;
-  }
+  return NUMERIC_MAGNITUDE_MULTIPLIERS.get(suffix) ?? 1;
 }
 
 function canonicalMetricMeasurement(value: string): string {
@@ -860,9 +861,11 @@ function metricMeasurement(args: {
 function metricUnit(args: {
   currency: MetricCurrency | null;
   percentage: boolean;
+  percentagePoint: boolean;
   multiplier: boolean;
 }): string {
   if (args.currency) return args.currency;
+  if (args.percentagePoint) return "percentage_point";
   if (args.multiplier) return "multiplier";
   return args.percentage ? "percent" : "number";
 }
@@ -870,9 +873,13 @@ function metricUnit(args: {
 function metricLabel(args: {
   value: number;
   percentage: boolean;
+  percentagePoint: boolean;
   multiplier: boolean;
 }): string {
   if (args.percentage) return `${args.value}%`;
+  if (args.percentagePoint) {
+    return `${args.value} percentage point${Math.abs(args.value) === 1 ? "" : "s"}`;
+  }
   if (args.multiplier) return `${args.value}x`;
   return String(args.value);
 }
@@ -889,6 +896,25 @@ function normalizeMetricNumericToken(args: {
     return args.value.replace(",", ".");
   }
   return normalizePremiumCoverLetterNumericToken(args.value);
+}
+
+type NumericMetricFormat = Readonly<{
+  percentage: boolean;
+  percentagePoint: boolean;
+  percentageLike: boolean;
+  multiplier: boolean;
+}>;
+
+function numericMetricFormat(suffix: string): NumericMetricFormat {
+  const percentage = suffix === "%" || suffix === "percent";
+  const percentagePoint =
+    suffix === "percentage point" || suffix === "percentage points";
+  return {
+    percentage,
+    percentagePoint,
+    percentageLike: percentage || percentagePoint,
+    multiplier: suffix === "x" || suffix === "×",
+  };
 }
 
 function normalizeNumericTokenOccurrence(args: {
@@ -908,38 +934,36 @@ function normalizeNumericTokenOccurrence(args: {
     return null;
   }
 
-  const percentage = suffix === "%" || suffix === "percent";
+  const format = numericMetricFormat(suffix);
   const numericValue = Number(
     normalizeMetricNumericToken({
       value: args.match[3],
-      percentage,
+      percentage: format.percentageLike,
     }),
   );
   const metricValue =
     numericValue *
     numericSignMultiplier(sign, prefix) *
     numericMagnitudeMultiplier(suffix);
-  const multiplier = suffix === "x" || suffix === "×";
   const end = index + args.match[0].length;
   const measurement = metricMeasurement({
     value: args.value,
     start: index,
     end,
-    percentage,
+    percentage: format.percentageLike,
   });
   const direction = percentageDirection({
     value: args.value,
     start: index,
     end,
-    percentage,
+    percentage: format.percentageLike,
   });
   const metric = metricLabel({
     value: metricValue,
-    percentage,
-    multiplier,
+    ...format,
   });
   const baseKey = [
-    metricUnit({ currency, percentage, multiplier }),
+    metricUnit({ currency, ...format }),
     metricValue,
   ].join(":");
   return {
@@ -997,6 +1021,18 @@ function isNonQuantitativeWrittenNumberMeasurement(args: {
   );
 }
 
+function writtenNumberOccurrenceMatchesPattern(args: {
+  value: string;
+  index: number;
+  end: number;
+  pattern: RegExp;
+}): boolean {
+  return Array.from(args.value.matchAll(args.pattern)).some((match) => {
+    const phraseStart = match.index ?? 0;
+    return phraseStart <= args.index && args.end <= phraseStart + match[0].length;
+  });
+}
+
 function isIgnoredWrittenNumberOccurrence(args: {
   value: string;
   matchedNumber: string;
@@ -1006,14 +1042,13 @@ function isIgnoredWrittenNumberOccurrence(args: {
   const standaloneScaleAfterDigit =
     WRITTEN_NUMBER_SCALES.has(args.matchedNumber.toLowerCase()) &&
     /\d\s*$/u.test(args.value.slice(0, args.index));
-  const partOfHyphenatedIdiom = Array.from(
-    args.value.matchAll(NON_QUANTITATIVE_HYPHENATED_NUMBER_PATTERN),
-  ).some((match) => {
-    const idiomStart = match.index ?? 0;
-    const idiomEnd = idiomStart + match[0].length;
-    return idiomStart <= args.index && args.end <= idiomEnd;
-  });
-  return standaloneScaleAfterDigit || partOfHyphenatedIdiom;
+  const partOfIdiom = [
+    NON_QUANTITATIVE_HYPHENATED_NUMBER_PATTERN,
+    NON_QUANTITATIVE_WRITTEN_NUMBER_PHRASE_PATTERN,
+  ].some((pattern) =>
+    writtenNumberOccurrenceMatchesPattern({ ...args, pattern }),
+  );
+  return standaloneScaleAfterDigit || partOfIdiom;
 }
 
 function writtenNumberSignMultiplier(value: string, index: number): number {
@@ -1074,7 +1109,12 @@ function writtenNumericTokenOccurrences(
       return [];
     }
     const baseKey = [
-      metricUnit({ currency, percentage, multiplier: false }),
+      metricUnit({
+        currency,
+        percentage,
+        percentagePoint: false,
+        multiplier: false,
+      }),
       metricValue,
     ].join(":");
     return [
@@ -1082,6 +1122,7 @@ function writtenNumericTokenOccurrences(
         metric: metricLabel({
           value: metricValue,
           percentage,
+          percentagePoint: false,
           multiplier: false,
         }),
         baseKey,
@@ -1097,7 +1138,7 @@ function numericTokenOccurrences(value: string): NumericTokenOccurrence[] {
   const tokens: NumericTokenOccurrence[] = [];
   for (const match of value
     .matchAll(
-      /(?<![A-Za-z0-9])([+−-]|minus\b|negative\b|plus\b|positive\b)?\s*((?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|[$€£])?)\s*(\d[\d,]*(?:\.\d+)?)\s*(%|percent\b|[KMB]\b|thousand\b|million\b|billion\b|[x×])?(?:\s*((?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|dollars?|euros?|pounds?)\b))?(?![A-Za-z0-9])/gi,
+      /(?<![A-Za-z0-9])([+−-]|minus\b|negative\b|plus\b|positive\b)?\s*((?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|[$€£])?)\s*(\d[\d,]*(?:\.\d+)?)\s*(percentage\s+points?\b|%|percent\b|bn\b|mn\b|mm\b|[KMB]\b|thousand\b|million\b|billion\b|[x×])?(?:\s*((?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|dollars?|euros?|pounds?)\b))?(?![A-Za-z0-9])/gi,
     )) {
     const occurrence = normalizeNumericTokenOccurrence({ value, match });
     if (occurrence) tokens.push(occurrence);
@@ -1131,6 +1172,23 @@ function numericOccurrenceIsPartOfContextualEntity(args: {
   });
 }
 
+function numericOccurrenceIsPartOfHyphenatedProperName(args: {
+  value: string;
+  occurrence: NumericTokenOccurrence;
+}): boolean {
+  return Array.from(
+    args.value.matchAll(
+      /\b\d+(?:[-–—]\d+)*(?:[-–—][A-Z][A-Za-z0-9&'.-]*)+\b/gu,
+    ),
+  ).some((match) => {
+    const entityStart = match.index ?? 0;
+    return (
+      args.occurrence.index >= entityStart &&
+      args.occurrence.index < entityStart + match[0].length
+    );
+  });
+}
+
 function numericOccurrenceIsPartOfWrittenNumberEntity(args: {
   value: string;
   occurrence: NumericTokenOccurrence;
@@ -1155,6 +1213,7 @@ function numericOccurrenceIsPartOfEntity(args: {
 }): boolean {
   if (
     numericOccurrenceIsPartOfContextualEntity(args) ||
+    numericOccurrenceIsPartOfHyphenatedProperName(args) ||
     numericOccurrenceIsPartOfWrittenNumberEntity(args)
   ) {
     return true;
@@ -1422,6 +1481,23 @@ function hasNounPhraseSubjectForUnlistedPredicate(args: {
   );
 }
 
+function hasMultiwordNounSubjectAfterLeadingParticiple(args: {
+  tokens: readonly string[];
+  index: number;
+}): boolean {
+  const subjectTokens = args.tokens.slice(1, args.index);
+  const followingToken = args.tokens[args.index + 1];
+  return (
+    subjectTokens.length >= 2 &&
+    subjectTokens.every(
+      (token) =>
+        /^[a-z][a-z-]*$/u.test(token) &&
+        !FINITE_PREDICATE_BLOCKERS.has(token),
+    ) &&
+    (!followingToken || !FINITE_PREDICATE_BLOCKERS.has(followingToken))
+  );
+}
+
 function hasSupportedSubjectForUnlistedPredicate(args: {
   tokens: readonly string[];
   index: number;
@@ -1430,6 +1506,7 @@ function hasSupportedSubjectForUnlistedPredicate(args: {
   return (
     args.index === 2 ||
     hasNounPhraseSubjectForUnlistedPredicate(args) ||
+    hasMultiwordNounSubjectAfterLeadingParticiple(args) ||
     hasFrontedBareNounSubject(args)
   );
 }
@@ -1494,6 +1571,24 @@ function hasFrontedBareNounSubject(args: {
   );
 }
 
+function hasSupportedSubjectForRegularPastPredicate(args: {
+  tokens: readonly string[];
+  index: number;
+  hasFrontedClause: boolean;
+}): boolean {
+  return (
+    args.index === 2 ||
+    ["i", "we", "you", "they", "he", "she", "it"].includes(
+      args.tokens[args.index - 1],
+    ) ||
+    hasNounPhraseSubjectForUnlistedPredicate(args) ||
+    hasMultiwordNounSubjectAfterLeadingParticiple(args) ||
+    hasFrontedBareNounSubject(args) ||
+    args.tokens[args.index - 1]?.endsWith("s") === true ||
+    ["that", "which", "who"].includes(args.tokens[args.index + 1])
+  );
+}
+
 function isFinitePredicateCandidate(args: {
   tokens: readonly string[];
   token: string;
@@ -1504,14 +1599,7 @@ function isFinitePredicateCandidate(args: {
   if (FINITE_PREDICATE_TOKENS.has(canonicalToken)) return true;
   if (
     /(?:ed|en)$/u.test(args.token) &&
-    (args.index === 2 ||
-      ["i", "we", "you", "they", "he", "she", "it"].includes(
-        args.tokens[args.index - 1],
-      ) ||
-      hasNounPhraseSubjectForUnlistedPredicate(args) ||
-      hasFrontedBareNounSubject(args) ||
-      args.tokens[args.index - 1]?.endsWith("s") === true ||
-      ["that", "which", "who"].includes(args.tokens[args.index + 1]))
+    hasSupportedSubjectForRegularPastPredicate(args)
   ) {
     return true;
   }
