@@ -22,10 +22,15 @@ const TOKEN_CANONICALIZATION_RULES = [
 
 const IRREGULAR_PLURAL_CANONICALS = new Map([
   ["analyses", "analysis"],
+  ["atlases", "atlas"],
   ["bases", "basis"],
+  ["biases", "bias"],
+  ["canvases", "canvas"],
+  ["chaoses", "chaos"],
   ["crises", "crisis"],
   ["diagnoses", "diagnosis"],
   ["emphases", "emphasis"],
+  ["gases", "gas"],
   ["hypotheses", "hypothesis"],
   ["statuses", "status"],
   ["theses", "thesis"],

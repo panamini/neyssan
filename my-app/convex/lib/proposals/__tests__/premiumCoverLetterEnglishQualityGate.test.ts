@@ -2119,6 +2119,16 @@ describe("English CV-backed quality gate", () => {
     expect(canonicalizePremiumCoverLetterNoun("canvas")).toBe("canvas");
   });
 
+  it.each([
+    ["atlases", "atlas"],
+    ["biases", "bias"],
+    ["canvases", "canvas"],
+    ["chaoses", "chaos"],
+    ["gases", "gas"],
+  ])("canonicalizes the s-ending plural %s", (plural, singular) => {
+    expect(canonicalizePremiumCoverLetterNoun(plural)).toBe(singular);
+  });
+
   it("canonicalizes inflected evidence anchors for employer grounding", () => {
     const inflectedFactGraph: FactGraphV1 = {
       ...factGraph,
