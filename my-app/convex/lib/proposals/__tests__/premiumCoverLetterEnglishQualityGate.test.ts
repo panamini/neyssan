@@ -23,6 +23,9 @@ import {
 } from "../premiumCoverLetterTokenNormalization";
 import {
   ENGLISH_QUALITY_GATE_CHARACTERIZATION_CASES,
+  ENGLISH_QUALITY_GATE_EXPECTED_CASE_IDS,
+  ENGLISH_QUALITY_GATE_EXPECTED_DIVERGENT_CASE_IDS,
+  ENGLISH_QUALITY_GATE_EXPECTED_DIVERGENT_OBSERVATIONS,
   ENGLISH_QUALITY_GATE_KNOWN_FAILURE_IDS,
   type EnglishQualityGateCharacterizationCase,
   type EnglishQualityGateKnownFailureId,
@@ -3850,15 +3853,18 @@ function characterizationEmployerName(
     { axis: "target_employer" }
   >,
 ): string | null {
+  const jobDescription = input.canonicalEmployer
+    ? `Target employer: ${input.canonicalEmployer}.\n${input.jobDescription}`
+    : input.jobDescription;
   const allowedFactsPack = buildAllowedFactsPack({
     personalizationContext: null,
     jobTitle: input.jobTitle,
-    jobDescription: input.jobDescription,
+    jobDescription,
   });
   const rankedEvidencePack = rankAllowedFacts({
     allowedFactsPack,
     jobTitle: input.jobTitle,
-    jobDescription: input.jobDescription,
+    jobDescription,
     contextClass: "no_cv",
   });
   return (
@@ -3866,7 +3872,7 @@ function characterizationEmployerName(
       preset: "signature",
       outputLanguage: "English",
       jobTitle: input.jobTitle,
-      jobDescription: input.jobDescription,
+      jobDescription,
       contextClass: "no_cv",
       allowedFactsPack,
       rankedEvidencePack,
@@ -3936,31 +3942,46 @@ function characterizationProseIsIncomplete(
   );
 }
 
-function characterizationCaseMatchesExpected(
+function characterizationCaseObservation(
   input: EnglishQualityGateCharacterizationCase,
-): boolean {
+): string {
   switch (input.axis) {
     case "target_employer":
-      return characterizationEmployerName(input) === input.expectedEmployerName;
+      return JSON.stringify(characterizationEmployerName(input));
     case "numeric_evidence":
-      return (
-        JSON.stringify(characterizationUnsupportedMetrics(input)) ===
-        JSON.stringify([...input.expectedUnsupportedMetrics].sort())
-      );
+      return JSON.stringify(characterizationUnsupportedMetrics(input));
     case "english_prose":
-      return (
-        characterizationProseIsIncomplete(input) === input.expectedIncomplete
-      );
+      return JSON.stringify(characterizationProseIsIncomplete(input));
+  }
+}
+
+function characterizationCaseExpectedObservation(
+  input: EnglishQualityGateCharacterizationCase,
+): string {
+  switch (input.axis) {
+    case "target_employer":
+      return JSON.stringify(input.expectedEmployerName);
+    case "numeric_evidence":
+      return JSON.stringify([...input.expectedUnsupportedMetrics].sort());
+    case "english_prose":
+      return JSON.stringify(input.expectedIncomplete);
   }
 }
 
 describe("English quality-gate shared characterization corpus", () => {
   it("executes every case and permits only the explicit temporary ledger", () => {
+    const divergentCaseIds: string[] = [];
+    const divergentObservations: Record<string, string> = {};
     const divergentFailureIds = new Set<EnglishQualityGateKnownFailureId>();
     const unexpectedDivergences: string[] = [];
 
     for (const input of ENGLISH_QUALITY_GATE_CHARACTERIZATION_CASES) {
-      if (characterizationCaseMatchesExpected(input)) continue;
+      const observation = characterizationCaseObservation(input);
+      if (observation === characterizationCaseExpectedObservation(input)) {
+        continue;
+      }
+      divergentCaseIds.push(input.id);
+      divergentObservations[input.id] = observation;
       if (input.knownFailureId) {
         divergentFailureIds.add(input.knownFailureId);
       } else {
@@ -3970,18 +3991,30 @@ describe("English quality-gate shared characterization corpus", () => {
 
     expect({
       unexpectedDivergences,
+      divergentCaseIds: divergentCaseIds.sort(),
       divergentFailureIds: [...divergentFailureIds].sort(),
     }).toEqual({
       unexpectedDivergences: [],
+      divergentCaseIds: [
+        ...ENGLISH_QUALITY_GATE_EXPECTED_DIVERGENT_CASE_IDS,
+      ].sort(),
       divergentFailureIds: [...ENGLISH_QUALITY_GATE_KNOWN_FAILURE_IDS].sort(),
     });
+    expect(divergentObservations).toEqual(
+      ENGLISH_QUALITY_GATE_EXPECTED_DIVERGENT_OBSERVATIONS,
+    );
   });
 
   it("keeps stable IDs, required provenance, and explicit paired variants", () => {
     const ids = ENGLISH_QUALITY_GATE_CHARACTERIZATION_CASES.map(
       (input) => input.id,
     );
-    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toEqual([...ENGLISH_QUALITY_GATE_EXPECTED_CASE_IDS]);
+    expect(
+      ENGLISH_QUALITY_GATE_CHARACTERIZATION_CASES.flatMap((input) =>
+        input.knownFailureId ? [input.id] : [],
+      ),
+    ).toEqual([...ENGLISH_QUALITY_GATE_EXPECTED_DIVERGENT_CASE_IDS]);
     expect(
       ENGLISH_QUALITY_GATE_CHARACTERIZATION_CASES.filter(
         (input) => input.provenance === "P1",

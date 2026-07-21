@@ -6,6 +6,60 @@ export const ENGLISH_QUALITY_GATE_KNOWN_FAILURE_IDS = [
   "p2-numeric-only-employer",
 ] as const;
 
+export const ENGLISH_QUALITY_GATE_EXPECTED_CASE_IDS = [
+  "p2-employer-job-level-em-dash",
+  "p2-employer-job-level-case-variation",
+  "p2-employer-heading-before-authority",
+  "p2-employer-heading-punctuation-variation",
+  "history-employer-explicit-at-minimal-pair",
+  "history-employer-explicit-at-punctuation-variation",
+  "history-employer-missing-fails-safe",
+  "history-employer-missing-case-variation",
+  "p2-employer-numeric-only-authority",
+  "p1-numeric-context-100m-unstructured",
+  "p1-numeric-context-100m-structured",
+  "p2-duration-three-day-paraphrase",
+  "p2-duration-three-day-case-punctuation",
+  "p2-brand-7-eleven-legal-suffix",
+  "p2-brand-7-eleven-case-punctuation",
+  "p2-employer-99-authorized",
+  "p2-employer-99-elsewhere-is-metric",
+  "p1-prose-make-teams-grow-fragment",
+  "history-prose-help-teams-grow-fragment",
+  "p2-prose-main-predicate-after-infinitive",
+  "p2-prose-main-predicate-case-punctuation",
+  "p2-prose-main-predicate-removed-minimal-pair",
+  "history-prose-finite-subject-control",
+  "history-prose-finite-subject-punctuation-variation",
+] as const;
+
+export const ENGLISH_QUALITY_GATE_EXPECTED_DIVERGENT_CASE_IDS = [
+  "p2-employer-job-level-em-dash",
+  "p2-employer-job-level-case-variation",
+  "p2-employer-heading-before-authority",
+  "p2-employer-heading-punctuation-variation",
+  "p2-employer-numeric-only-authority",
+  "p2-duration-three-day-paraphrase",
+  "p2-duration-three-day-case-punctuation",
+  "p2-brand-7-eleven-legal-suffix",
+] as const;
+
+export const ENGLISH_QUALITY_GATE_EXPECTED_DIVERGENT_OBSERVATIONS = {
+  "p2-employer-job-level-em-dash": "null",
+  "p2-employer-job-level-case-variation": "null",
+  "p2-employer-heading-before-authority": '"Acme Corp."',
+  "p2-employer-heading-punctuation-variation": '"Acme Corp."',
+  "p2-employer-numeric-only-authority": "null",
+  "p2-duration-three-day-paraphrase": '["3"]',
+  "p2-duration-three-day-case-punctuation": '["3"]',
+  "p2-brand-7-eleven-legal-suffix": '["11","7"]',
+} as const satisfies Readonly<
+  Record<
+    (typeof ENGLISH_QUALITY_GATE_EXPECTED_DIVERGENT_CASE_IDS)[number],
+    string
+  >
+>;
+
 export type EnglishQualityGateKnownFailureId =
   (typeof ENGLISH_QUALITY_GATE_KNOWN_FAILURE_IDS)[number];
 
@@ -211,7 +265,6 @@ const numericEvidenceCases: readonly NumericEvidenceCharacterizationCase[] = [
     id: "p2-brand-7-eleven-case-punctuation",
     provenance: "PR349",
     pairId: "numeric-brand-legal-suffix",
-    knownFailureId: "p2-numeric-brand-legal-suffix",
     axis: "numeric_evidence",
     sourceText: "Target employer: 7-Eleven, Inc.",
     sourceMetrics: [],
@@ -223,7 +276,6 @@ const numericEvidenceCases: readonly NumericEvidenceCharacterizationCase[] = [
     id: "p2-employer-99-authorized",
     provenance: "P2",
     pairId: "numeric-only-employer",
-    knownFailureId: "p2-numeric-only-employer",
     axis: "numeric_evidence",
     sourceText: "Target employer: 99.",
     sourceMetrics: [],
