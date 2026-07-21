@@ -81,7 +81,7 @@ export function normalizeTargetEmployerName(value: string): string {
 
 function terminalLegalSuffixLength(tokens: readonly EmployerToken[]): number {
   for (const suffix of LEGAL_SUFFIX_TOKEN_SEQUENCES) {
-    if (suffix.length > tokens.length) continue;
+    if (suffix.length >= tokens.length) continue;
     const offset = tokens.length - suffix.length;
     if (
       suffix.every(
@@ -212,6 +212,59 @@ export function targetEmployerOwnsOccurrence(args: {
   return targetEmployerAliasSpans(args).some(
     (span) =>
       /\p{N}/u.test(span.alias) &&
+      numericAliasHasEmployerContext(args.value, span) &&
       args.occurrenceIndex >= span.start && args.occurrenceIndex < span.end,
   );
+}
+
+function numericAliasHasEmployerContext(
+  value: string,
+  span: Readonly<{ start: number; end: number }>,
+): boolean {
+  const prefix = value.slice(0, span.start);
+  const suffix = value.slice(span.end);
+  if (/\b(?:at|join|joining)\s+$/iu.test(prefix)) return true;
+  if (/^\s*['’]s\b/iu.test(suffix)) return true;
+  return (
+    (span.start === 0 || /[.!?]\s*$/u.test(prefix)) &&
+    /^\s*(?:offers?|is|seeks?|needs?|values?|provides?|builds?|supports?)\b/iu.test(
+      suffix,
+    )
+  );
+}
+
+const GENERIC_AT_CONTEXT_TOKENS = new Set([
+  "a",
+  "an",
+  "my",
+  "our",
+  "scale",
+  "the",
+  "this",
+  "that",
+]);
+
+export function hasConflictingTargetEmployerMention(args: {
+  value: string;
+  targetEmployer?: TargetEmployerResolution;
+}): boolean {
+  if (args.targetEmployer?.status !== "RESOLVED") return false;
+  const spans = targetEmployerAliasSpans({
+    value: args.value,
+    targetEmployer: args.targetEmployer,
+  });
+  for (const match of args.value.matchAll(
+    /\b(?:[Aa]t|[Jj]oining)\s+(?=[\p{Lu}\p{N}])/gu,
+  )) {
+    const mentionStart = match.index + match[0].length;
+    const mentionToken = employerTokens(args.value.slice(mentionStart))[0];
+    if (
+      !mentionToken ||
+      GENERIC_AT_CONTEXT_TOKENS.has(mentionToken.normalized)
+    ) {
+      continue;
+    }
+    if (!spans.some((span) => span.start === mentionStart)) return true;
+  }
+  return false;
 }

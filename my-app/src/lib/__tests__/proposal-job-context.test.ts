@@ -139,6 +139,26 @@ describe("resolveProposalWorkspaceSourceDraft", () => {
 });
 
 describe("resolveProposalDraftDrawerSourceDraft", () => {
+  it("keeps target employer authority from saved metadata through normalization", () => {
+    expect(
+      resolveProposalDraftDrawerSourceDraft({
+        activeWorkspaceSourceDraft: null,
+        storedOutputSourceDraft: null,
+        linkedJobSourceDraft: null,
+        metadataSource: {
+          sourceJobTitle: "Operations Associate",
+          sourceJobDescription: "Coordinate reliable delivery handoffs.",
+          targetEmployerName: "Northwind Inc.",
+          sourceUrl: null,
+          platform: null,
+        },
+      }),
+    ).toMatchObject({
+      mode: "saved-historical-origin",
+      targetEmployerName: "Northwind Inc.",
+    });
+  });
+
   it("keeps a generated output source ahead of an empty active compose source for the Job & CV drawer", () => {
     expect(
       resolveProposalDraftDrawerSourceDraft({

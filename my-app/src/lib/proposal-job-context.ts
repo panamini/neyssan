@@ -41,6 +41,7 @@ export type ResolvedProposalWorkspaceSourceDraft = {
     | "saved-historical-origin";
   jobTitle: string;
   jobDescription: string;
+  targetEmployerName?: string;
   sourceUrl: string | null;
   platform: string | null;
 };
@@ -57,6 +58,7 @@ export type BuildProposalSourceDraftFromJobInput = {
 export type ProposalDraftDrawerMetadataSource = {
   sourceJobTitle?: string | null;
   sourceJobDescription?: string | null;
+  targetEmployerName?: string | null;
   sourceUrl?: string | null;
   platform?: string | null;
 };
@@ -91,6 +93,25 @@ function normalizeDraftUrl(value: string | null | undefined): string | null {
   return normalized || null;
 }
 
+function targetEmployerDraftPatch(
+  value: string | null | undefined,
+): Partial<Pick<ResolvedProposalWorkspaceSourceDraft, "targetEmployerName">> {
+  const targetEmployerName = normalizeDraftText(value);
+  return targetEmployerName ? { targetEmployerName } : {};
+}
+
+function targetEmployerDraftPatchFromComposeDraft(
+  draft: StoredProposalComposeDraft | null | undefined,
+): Partial<Pick<ResolvedProposalWorkspaceSourceDraft, "targetEmployerName">> {
+  return targetEmployerDraftPatch(draft?.targetEmployerName);
+}
+
+function targetEmployerDraftPatchFromJob(
+  job: ProposalWorkspaceSourceRecord | null | undefined,
+): Partial<Pick<ResolvedProposalWorkspaceSourceDraft, "targetEmployerName">> {
+  return targetEmployerDraftPatch(job?.company);
+}
+
 function normalizeCandidate(
   draft: StoredProposalComposeDraft | null | undefined,
   mode: ResolvedProposalWorkspaceSourceDraft["mode"],
@@ -106,7 +127,14 @@ function normalizeCandidate(
     normalized.jobDescription ||
     normalized.sourceUrl ||
     normalized.platform
-    ? { mode, ...normalized }
+    ? {
+        mode,
+        jobTitle: normalized.jobTitle,
+        jobDescription: normalized.jobDescription,
+        ...targetEmployerDraftPatchFromComposeDraft(draft),
+        sourceUrl: normalized.sourceUrl,
+        platform: normalized.platform,
+      }
     : null;
 }
 
@@ -157,6 +185,7 @@ export function resolveProposalWorkspaceSourceDraft(
       mode: "explicit-live-job",
       jobTitle: canonicalJobTitle,
       jobDescription: canonicalJobDescription,
+      ...targetEmployerDraftPatchFromJob(input.canonicalJobRecord),
       sourceUrl: canonicalSourceUrl,
       platform: canonicalPlatform,
     };
@@ -203,6 +232,7 @@ export function resolveProposalDraftDrawerSourceDraft(
     ? {
         jobTitle: input.metadataSource.sourceJobTitle ?? undefined,
         jobDescription: input.metadataSource.sourceJobDescription ?? undefined,
+        targetEmployerName: input.metadataSource.targetEmployerName ?? undefined,
         sourceUrl: input.metadataSource.sourceUrl ?? null,
         platform: input.metadataSource.platform ?? null,
       }

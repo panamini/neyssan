@@ -810,6 +810,7 @@ function resolveStoredComposeToolbarVoicePreset(args: {
 type ProposalDocumentMetadata = DocumentStyleMetadata & {
   sourceJobTitle?: string;
   sourceJobDescription?: string;
+  targetEmployerName?: string;
   sourceUrl?: string;
   sourceCvId?: string;
   platform?: string;
@@ -5265,6 +5266,13 @@ export function ProposalForge(): JSX.Element {
     if (sourceJobDescription) {
       nextMetadata.sourceJobDescription = sourceJobDescription;
     }
+    const targetEmployerName =
+      resolvedProposalWorkspaceSourceDraft?.targetEmployerName?.trim() ||
+      lastProposalRequest?.targetEmployerName?.trim() ||
+      "";
+    if (targetEmployerName) {
+      nextMetadata.targetEmployerName = targetEmployerName;
+    }
     const sourceUrl =
       resolvedProposalWorkspaceSourceDraft?.sourceUrl?.trim() || "";
     if (sourceUrl) {
@@ -5349,10 +5357,12 @@ export function ProposalForge(): JSX.Element {
     resolvedProposalJobId,
     resolvedProposalWorkspaceSourceDraft?.jobDescription,
     resolvedProposalWorkspaceSourceDraft?.jobTitle,
+    resolvedProposalWorkspaceSourceDraft?.targetEmployerName,
     resolvedProposalWorkspaceSourceDraft?.platform,
     resolvedProposalWorkspaceSourceDraft?.sourceUrl,
     lastProposalRequest?.creativity,
     lastProposalRequest?.formalityLevel,
+    lastProposalRequest?.targetEmployerName,
     lastProposalRequest?.voicePreset,
     proposalRenderMetadata,
     proposalApplicantName,

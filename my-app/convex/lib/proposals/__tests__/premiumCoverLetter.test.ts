@@ -7,6 +7,7 @@ import {
   PREMIUM_WRITER_OUTPUT_V1_SCHEMA,
   PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
   QWEN_PREMIUM_COVER_LETTER_ADAPTER,
+  type PremiumCoverLetterFailureTrace,
   attemptPremiumCoverLetterGeneration,
   buildAllowedFactsPack,
   buildAllowedFactsPackFromFactGraph,
@@ -4708,6 +4709,40 @@ describe("premium cover letter generation and rendering", () => {
 
     expect(result).not.toBeNull();
     expect(result?.bodyParts.employerValueBlock).toContain("7-Eleven");
+  });
+
+  it("fails closed before persistence when output names a conflicting employer", async () => {
+    let failure: PremiumCoverLetterFailureTrace | undefined;
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: directContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: "Join Northwind and build reliable services.",
+      targetEmployerName: "Acme Corp.",
+      candidateName: "Alex Martin",
+      writerProvider: "openai",
+      writerModel: "gpt-5.5",
+      writer: async () =>
+        buildDirectPremiumWriterOutputFixture({
+          opening: "At Northwind, reliable delivery matters.",
+          proofBlock:
+            "I led a design-system migration used across 4 product squads.",
+          employerValueBlock:
+            "That product discipline supports reliable delivery.",
+          closeLine:
+            "I bring the same product discipline to reliable delivery work.",
+        }),
+      onFailure: (nextFailure) => {
+        failure = nextFailure;
+      },
+    });
+
+    expect(result).toBeNull();
+    expect(failure).toMatchObject({
+      stage: "validation",
+      issues: expect.arrayContaining(["conflicting_target_employer"]),
+    });
   });
 
   it("normalizes decimal commas without accepting a tenfold metric inflation", () => {

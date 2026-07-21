@@ -7,8 +7,10 @@ import {
   buildPremiumCoverLetterBrief,
   buildPremiumCoverLetterPrompt,
   rankAllowedFacts,
+  validatePremiumCoverLetterBodyParts,
 } from "../premiumCoverLetter";
 import {
+  hasConflictingTargetEmployerMention,
   resolveTargetEmployerAuthorities,
   targetEmployerAliasSpans,
   targetEmployerOwnsOccurrence,
@@ -95,6 +97,12 @@ describe("Target Employer Module", () => {
       status: "RESOLVED",
       displayName: "The Honest Company",
     });
+    expect(resolveTargetEmployerAuthorities(["SAS"])).toMatchObject({
+      status: "RESOLVED",
+      canonicalName: "SAS",
+      displayName: "SAS",
+      aliases: ["sas"],
+    });
   });
 
   it("supports numeric names and matches aliases only on full normalized token boundaries", () => {
@@ -116,6 +124,13 @@ describe("Target Employer Module", () => {
       targetEmployerOwnsOccurrence({
         value: "At 199, reporting supports delivery.",
         occurrenceIndex: 3,
+        targetEmployer: numeric,
+      }),
+    ).toBe(false);
+    expect(
+      targetEmployerOwnsOccurrence({
+        value: "I managed 99 enterprise accounts.",
+        occurrenceIndex: 10,
         targetEmployer: numeric,
       }),
     ).toBe(false);
@@ -142,6 +157,45 @@ describe("Target Employer Module", () => {
         targetEmployer: writtenNumberBrand,
       }),
     ).toBe(false);
+  });
+
+  it("rejects employer-context mentions that conflict with the structured authority", () => {
+    const acme = resolveTargetEmployerAuthorities(["Acme Corp."]);
+    expect(
+      hasConflictingTargetEmployerMention({
+        value: "At Northwind, I would support reliable delivery.",
+        targetEmployer: acme,
+      }),
+    ).toBe(true);
+    expect(
+      hasConflictingTargetEmployerMention({
+        value: "At Acme, I would support reliable delivery.",
+        targetEmployer: acme,
+      }),
+    ).toBe(false);
+    expect(
+      hasConflictingTargetEmployerMention({
+        value: "At my previous role, I supported reliable delivery.",
+        targetEmployer: acme,
+      }),
+    ).toBe(false);
+
+    const { brief } = buildNoCvBrief({
+      targetEmployerName: "Acme Corp.",
+      jobTitle: "Software Engineer at Northwind",
+      jobDescription: "Join Northwind and build reliable services.",
+    });
+    expect(
+      validatePremiumCoverLetterBodyParts({
+        brief,
+        bodyParts: {
+          opening: "At Northwind, reliable delivery matters.",
+          proofBlock: "The role calls for reliable service delivery.",
+          employerValueBlock: "That focus supports clear handoffs.",
+          closeLine: "I am interested in contributing to the role.",
+        },
+      }).map((issue) => issue.code),
+    ).toContain("conflicting_target_employer");
   });
 
   it("keeps one resolved result in the brief and prompt despite conflicting diagnostics", () => {
