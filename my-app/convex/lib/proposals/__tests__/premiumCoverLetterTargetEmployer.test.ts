@@ -257,12 +257,33 @@ describe("Target Employer Module", () => {
   });
 
   it("forwards the structured employer from the active extension caller", () => {
-    const source = readFileSync(
+    const extensionSource = readFileSync(
       "../clerk-chrome-extension-final/src/background/index.ts",
       "utf8",
     );
-    expect(source).toMatch(
+    expect(extensionSource).toMatch(
       /targetEmployerName:\s*message\.jobData\?\.company\?\.trim\(\)\s*\|\|\s*null/,
+    );
+    expect(extensionSource).toMatch(
+      /saveProposalHandler[\s\S]*jobData:\s*\{[\s\S]*\.\.\.message\.jobData![\s\S]*company:\s*message\.jobData\?\.company\?\.trim\(\)\s*\|\|\s*undefined/,
+    );
+
+    const saveSource = readFileSync("convex/saveJobAndProposal.ts", "utf8");
+    expect(saveSource.match(/company:\s*v\.optional\(v\.string\(\)\)/g)).toHaveLength(
+      2,
+    );
+    expect(saveSource).toMatch(
+      /const targetEmployerName\s*=\s*args\.company\?\.trim\(\)/,
+    );
+    expect(saveSource).toMatch(
+      /targetEmployerName\s*\?\s*\{\s*targetEmployerName\s*\}\s*:\s*\{\}/,
+    );
+  });
+
+  it("projects the persisted employer through proposalsPublic", () => {
+    const source = readFileSync("convex/proposalsPublic.ts", "utf8");
+    expect(source).toMatch(
+      /targetEmployerName:\s*proposal\.metadata\.targetEmployerName\s*\?\?\s*undefined/,
     );
   });
 });

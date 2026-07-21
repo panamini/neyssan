@@ -1,4 +1,5 @@
 import React from "react";
+import { readFileSync } from "node:fs";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -314,6 +315,23 @@ describe("ProposalForge job resume scope", () => {
     });
     expect(screen.getByTestId("proposal-input-active-cv")).toHaveTextContent(
       "cv_alpha",
+    );
+  });
+
+  it("clears structured employer authority when the job text is edited", () => {
+    const source = readFileSync("src/pages/ProposalForge.tsx", "utf8");
+    expect(source).toMatch(
+      /const handleRailJobOfferTextChange[\s\S]*const nextDraft:\s*StoredProposalComposeDraft\s*=\s*\{[\s\S]*jobDescription:\s*value,[\s\S]*targetEmployerName:\s*null/,
+    );
+  });
+
+  it("copies saved employer authority explicitly instead of retaining compose state", () => {
+    const source = readFileSync("src/pages/ProposalForge.tsx", "utf8");
+    expect(source).toMatch(
+      /const restoredTargetEmployerName\s*=\s*openedSavedProposal\.metadata\?\.targetEmployerName\?\.trim\(\)\s*\|\|\s*null/,
+    );
+    expect(source).toMatch(
+      /const composeDraft:\s*StoredProposalComposeDraft\s*=\s*\{[\s\S]*targetEmployerName:\s*restoredTargetEmployerName/,
     );
   });
 

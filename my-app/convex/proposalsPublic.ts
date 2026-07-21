@@ -468,6 +468,8 @@ export default query({
         sourceJobTitle: proposal.metadata.sourceJobTitle ?? undefined,
         sourceJobDescription:
           proposal.metadata.sourceJobDescription ?? undefined,
+        targetEmployerName:
+          proposal.metadata.targetEmployerName ?? undefined,
         sourceUrl: proposal.metadata.sourceUrl ?? undefined,
         sourceCvId: proposal.metadata.sourceCvId ?? undefined,
         planned_path: proposal.metadata.planned_path ?? undefined,

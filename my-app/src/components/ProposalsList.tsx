@@ -840,6 +840,12 @@ export default function ProposalsList({
       ? { jobId: selected.metadata.jobId }
       : "skip",
   ) as { company?: string | null } | null | undefined;
+  const isLinkedJobEmployerBackfillPending = Boolean(
+    isConvexAuthenticated &&
+      selected?.metadata?.jobId &&
+      !selected.metadata.targetEmployerName?.trim() &&
+      selectedLinkedJob === undefined,
+  );
   const resolvedRegenerateTargetEmployerName =
     selected?.metadata?.targetEmployerName?.trim() ||
     selectedLinkedJob?.company?.trim() ||
@@ -1452,7 +1458,14 @@ export default function ProposalsList({
   async function handleRegenerate(
     nextVoicePreset?: ProposalVoicePreset | null,
   ) {
-    if (!selected || !selectedRenderState || isRegenerating) return;
+    if (
+      !selected ||
+      !selectedRenderState ||
+      isRegenerating ||
+      isLinkedJobEmployerBackfillPending
+    ) {
+      return;
+    }
     if (!isConvexAuthenticated) {
       showConvexAuthRequiredToast("Refine");
       return;
@@ -1732,7 +1745,9 @@ export default function ProposalsList({
         });
       }}
       copyFeedback={copied ? "copied" : "idle"}
-      isRegenerating={Boolean(isRegenerating)}
+      isRegenerating={
+        Boolean(isRegenerating) || isLinkedJobEmployerBackfillPending
+      }
       typographyValue={selectedTypographyValue}
       onTypographyChange={(value) => {
         setSelectedTypographyOverride(

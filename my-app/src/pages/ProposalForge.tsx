@@ -10761,6 +10761,8 @@ export function ProposalForge(): JSX.Element {
         openedSavedProposal.metadata?.sourceJobDescription?.trim() || null;
       const restoredSourceJobTitle =
         openedSavedProposal.metadata?.sourceJobTitle?.trim() || null;
+      const restoredTargetEmployerName =
+        openedSavedProposal.metadata?.targetEmployerName?.trim() || null;
       const restoredApplicantName =
         resolveProposalHeadingText(
           openedSavedProposal.metadata,
@@ -10870,6 +10872,7 @@ export function ProposalForge(): JSX.Element {
             ...existingComposeDraft,
             jobTitle: restoredSourceJobTitle ?? restoredDocumentTitle,
             jobDescription: restoredSourceJobDescription ?? "",
+            targetEmployerName: restoredTargetEmployerName,
             proposalType: savedProposalType ?? "cover_letter",
             modelType: restoredModelType,
             sourceUrl: openedSavedProposal.metadata?.sourceUrl ?? null,
@@ -13438,6 +13441,7 @@ export function ProposalForge(): JSX.Element {
         ...(composePreviewValues ?? {}),
         jobTitle: composePreviewValues?.jobTitle ?? "",
         jobDescription: value,
+        targetEmployerName: null,
         sourceUrl: composePreviewValues?.sourceUrl ?? null,
         platform: composePreviewValues?.platform ?? null,
         proposalType:

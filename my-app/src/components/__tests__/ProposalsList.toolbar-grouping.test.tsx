@@ -5,6 +5,12 @@ import ProposalsList from "../ProposalsList";
 
 const proposalDisplaySpy = vi.fn();
 const generateProposalActionMock = vi.fn().mockResolvedValue(null);
+const linkedJobQueryState = vi.hoisted(() => ({
+  value: { id: "job_alpha", company: "Acme Corp." } as
+    | { id: string; company: string | null }
+    | null
+    | undefined,
+}));
 
 const SAVED_PROPOSALS = [
   {
@@ -46,7 +52,7 @@ vi.mock("convex/react", () => ({
     query === "proposalsPublic.default"
       ? SAVED_PROPOSALS
       : query === "jobsPublic.getById"
-        ? { id: "job_alpha", company: "Acme Corp." }
+        ? linkedJobQueryState.value
         : null,
   useMutation: () => vi.fn().mockResolvedValue(undefined),
   useAction: () => generateProposalActionMock,
@@ -118,6 +124,10 @@ describe("ProposalsList toolbar grouping", () => {
       | Record<string, unknown>
       | undefined;
   }
+
+  beforeEach(() => {
+    linkedJobQueryState.value = { id: "job_alpha", company: "Acme Corp." };
+  });
 
   beforeEach(() => {
     proposalDisplaySpy.mockClear();
@@ -338,6 +348,54 @@ describe("ProposalsList toolbar grouping", () => {
         expect.objectContaining({
           targetEmployerName: "Acme Corp.",
         }),
+      );
+    });
+  });
+
+  it("guards Refine until the linked employer backfill resolves", async () => {
+    linkedJobQueryState.value = undefined;
+    render(<ProposalsList selectedProposalId="proposal_alpha" />);
+
+    let toolbar: React.ReactElement<{
+      onRefine?: () => void;
+      isRegenerating?: boolean;
+    }> | null = null;
+    await waitFor(() => {
+      const candidate = getMainProposalDisplayCall()
+        ?.detachedActionHeaderSupplement;
+      expect(React.isValidElement(candidate)).toBe(true);
+      toolbar = candidate as React.ReactElement<{
+        onRefine?: () => void;
+        isRegenerating?: boolean;
+      }>;
+      expect(toolbar.props.isRegenerating).toBe(true);
+    });
+
+    await act(async () => {
+      toolbar?.props.onRefine?.();
+    });
+    expect(generateProposalActionMock).not.toHaveBeenCalled();
+  });
+
+  it("treats a resolved linked job without company as MISSING", async () => {
+    linkedJobQueryState.value = { id: "job_alpha", company: null };
+    render(<ProposalsList selectedProposalId="proposal_alpha" />);
+
+    let refine: (() => void) | undefined;
+    await waitFor(() => {
+      const toolbar = getMainProposalDisplayCall()
+        ?.detachedActionHeaderSupplement;
+      expect(React.isValidElement(toolbar)).toBe(true);
+      refine = (toolbar as React.ReactElement<{ onRefine?: () => void }>).props
+        .onRefine;
+    });
+    await act(async () => {
+      refine?.();
+    });
+
+    await waitFor(() => {
+      expect(generateProposalActionMock).toHaveBeenCalledWith(
+        expect.objectContaining({ targetEmployerName: null }),
       );
     });
   });
