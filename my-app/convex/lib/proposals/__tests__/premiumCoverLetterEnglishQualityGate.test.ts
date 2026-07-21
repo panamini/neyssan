@@ -1,10 +1,16 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
-import type {
-  ClaimPlanV1,
-  FactGraphV1,
-  JobDemandGraphV1,
-  PremiumWriterOutputV1,
+import {
+  buildAllowedFactsPack,
+  buildPremiumCoverLetterBrief,
+  rankAllowedFacts,
+  type ClaimPlanV1,
+  type FactGraphV1,
+  type JobDemandGraphV1,
+  type PremiumWriterOutputV1,
 } from "../premiumCoverLetter";
 import {
   analyzeEnglishCvBackedQualityGate,
@@ -15,6 +21,16 @@ import {
   canonicalizePremiumCoverLetterToken,
   expandPremiumCoverLetterTokenVariants,
 } from "../premiumCoverLetterTokenNormalization";
+import {
+  ENGLISH_QUALITY_GATE_CHARACTERIZATION_CASES,
+  ENGLISH_QUALITY_GATE_EXPECTED_CASE_IDS,
+  ENGLISH_QUALITY_GATE_EXPECTED_DIVERGENT_CASE_IDS,
+  ENGLISH_QUALITY_GATE_EXPECTED_DIVERGENT_OBSERVATIONS,
+  ENGLISH_QUALITY_GATE_KNOWN_FAILURE_IDS,
+  type EnglishQualityGateCharacterizationCase,
+  type EnglishQualityGateKnownFailureId,
+  type NumericEvidenceCharacterizationCase,
+} from "../../../../scripts/evals/cases/cover-letter/english-quality-gate-characterization-cases";
 
 const factGraph: FactGraphV1 = {
   version: "fact_graph_v1",
@@ -3828,5 +3844,254 @@ describe("English CV-backed quality gate", () => {
         factGraph,
       }),
     ).toEqual([]);
+  });
+});
+
+function characterizationEmployerName(
+  input: Extract<
+    EnglishQualityGateCharacterizationCase,
+    { axis: "target_employer" }
+  >,
+): string | null {
+  const jobDescription = input.canonicalEmployer
+    ? `Target employer: ${input.canonicalEmployer}.\n${input.jobDescription}`
+    : input.jobDescription;
+  const allowedFactsPack = buildAllowedFactsPack({
+    personalizationContext: null,
+    jobTitle: input.jobTitle,
+    jobDescription,
+  });
+  const rankedEvidencePack = rankAllowedFacts({
+    allowedFactsPack,
+    jobTitle: input.jobTitle,
+    jobDescription,
+    contextClass: "no_cv",
+  });
+  return (
+    buildPremiumCoverLetterBrief({
+      preset: "signature",
+      outputLanguage: "English",
+      jobTitle: input.jobTitle,
+      jobDescription,
+      contextClass: "no_cv",
+      allowedFactsPack,
+      rankedEvidencePack,
+    }).employerName ?? null
+  );
+}
+
+function characterizationNumericIssues(
+  input: NumericEvidenceCharacterizationCase,
+) {
+  const metricFactGraph: FactGraphV1 = {
+    ...factGraph,
+    facts: factGraph.facts.map((fact) =>
+      fact.id === "fact_close"
+        ? {
+            ...fact,
+            text: input.sourceText,
+            metrics: [...input.sourceMetrics],
+            entities: [...input.sourceEntities],
+          }
+        : fact,
+    ),
+  };
+  return validateEnglishCvBackedQualityGate({
+    writerOutput: output({
+      opening: "I reduced the onboarding backlog by 24%.",
+      proofBlock: "I documented handoffs for three implementation teams.",
+      employerValueBlock: input.visibleText,
+      closeLine: "I would bring that discipline to the team.",
+    }),
+    claimPlan,
+    factGraph: metricFactGraph,
+  });
+}
+
+function characterizationUnsupportedMetrics(
+  input: NumericEvidenceCharacterizationCase,
+): string[] {
+  return characterizationNumericIssues(input)
+    .filter(
+      (issue) =>
+        issue.code === "unsupported_visible_metric" &&
+        issue.section === "employerValueBlock",
+    )
+    .flatMap((issue) => (issue.metric ? [issue.metric] : []))
+    .sort();
+}
+
+function characterizationProseIsIncomplete(
+  input: Extract<
+    EnglishQualityGateCharacterizationCase,
+    { axis: "english_prose" }
+  >,
+): boolean {
+  return validateEnglishCvBackedQualityGate({
+    writerOutput: output({
+      opening: "I reduced the onboarding backlog by 24%.",
+      proofBlock: input.visibleText,
+      employerValueBlock: "That reporting supports clear delivery handoffs.",
+      closeLine: "I would bring that discipline to the team.",
+    }),
+    claimPlan,
+    factGraph,
+  }).some(
+    (issue) =>
+      issue.code === "incomplete_sentence" && issue.section === "proofBlock",
+  );
+}
+
+function characterizationCaseObservation(
+  input: EnglishQualityGateCharacterizationCase,
+): string {
+  switch (input.axis) {
+    case "target_employer":
+      return JSON.stringify(characterizationEmployerName(input));
+    case "numeric_evidence":
+      return JSON.stringify(characterizationUnsupportedMetrics(input));
+    case "english_prose":
+      return JSON.stringify(characterizationProseIsIncomplete(input));
+  }
+}
+
+function characterizationCaseExpectedObservation(
+  input: EnglishQualityGateCharacterizationCase,
+): string {
+  switch (input.axis) {
+    case "target_employer":
+      return JSON.stringify(input.expectedEmployerName);
+    case "numeric_evidence":
+      return JSON.stringify([...input.expectedUnsupportedMetrics].sort());
+    case "english_prose":
+      return JSON.stringify(input.expectedIncomplete);
+  }
+}
+
+describe("English quality-gate shared characterization corpus", () => {
+  it("executes every case and permits only the explicit temporary ledger", () => {
+    const divergentCaseIds: string[] = [];
+    const divergentObservations: Record<string, string> = {};
+    const divergentFailureIds = new Set<EnglishQualityGateKnownFailureId>();
+    const unexpectedDivergences: string[] = [];
+
+    for (const input of ENGLISH_QUALITY_GATE_CHARACTERIZATION_CASES) {
+      const observation = characterizationCaseObservation(input);
+      if (observation === characterizationCaseExpectedObservation(input)) {
+        continue;
+      }
+      divergentCaseIds.push(input.id);
+      divergentObservations[input.id] = observation;
+      if (input.knownFailureId) {
+        divergentFailureIds.add(input.knownFailureId);
+      } else {
+        unexpectedDivergences.push(input.id);
+      }
+    }
+
+    expect({
+      unexpectedDivergences,
+      divergentCaseIds: divergentCaseIds.sort(),
+      divergentFailureIds: [...divergentFailureIds].sort(),
+    }).toEqual({
+      unexpectedDivergences: [],
+      divergentCaseIds: [
+        ...ENGLISH_QUALITY_GATE_EXPECTED_DIVERGENT_CASE_IDS,
+      ].sort(),
+      divergentFailureIds: [...ENGLISH_QUALITY_GATE_KNOWN_FAILURE_IDS].sort(),
+    });
+    expect(divergentObservations).toEqual(
+      ENGLISH_QUALITY_GATE_EXPECTED_DIVERGENT_OBSERVATIONS,
+    );
+  });
+
+  it("keeps stable IDs, required provenance, and explicit paired variants", () => {
+    const ids = ENGLISH_QUALITY_GATE_CHARACTERIZATION_CASES.map(
+      (input) => input.id,
+    );
+    expect(ids).toEqual([...ENGLISH_QUALITY_GATE_EXPECTED_CASE_IDS]);
+    expect(
+      ENGLISH_QUALITY_GATE_CHARACTERIZATION_CASES.flatMap((input) =>
+        input.knownFailureId ? [input.id] : [],
+      ),
+    ).toEqual([...ENGLISH_QUALITY_GATE_EXPECTED_DIVERGENT_CASE_IDS]);
+    expect(
+      ENGLISH_QUALITY_GATE_CHARACTERIZATION_CASES.filter(
+        (input) => input.provenance === "P1",
+      ).length,
+    ).toBeGreaterThanOrEqual(2);
+    expect(
+      new Set(
+        ENGLISH_QUALITY_GATE_CHARACTERIZATION_CASES.flatMap((input) =>
+          input.knownFailureId ? [input.knownFailureId] : [],
+        ),
+      ),
+    ).toEqual(new Set(ENGLISH_QUALITY_GATE_KNOWN_FAILURE_IDS));
+
+    const pairCounts = new Map<string, number>();
+    for (const input of ENGLISH_QUALITY_GATE_CHARACTERIZATION_CASES) {
+      pairCounts.set(input.pairId, (pairCounts.get(input.pairId) ?? 0) + 1);
+    }
+    expect([...pairCounts.values()].every((count) => count >= 2)).toBe(true);
+  });
+
+  it("executes metamorphic variants without cross-axis interference", () => {
+    const invariantPairIds = new Set([
+      "employer-job-level",
+      "employer-heading",
+      "employer-missing",
+      "numeric-three-day-duration",
+      "numeric-brand-legal-suffix",
+      "prose-infinitive-fragment",
+      "prose-main-predicate",
+      "prose-finite-control",
+    ]);
+    for (const pairId of invariantPairIds) {
+      const variants = ENGLISH_QUALITY_GATE_CHARACTERIZATION_CASES.filter(
+        (input) => input.pairId === pairId,
+      );
+      expect(variants.length).toBeGreaterThanOrEqual(2);
+      expect(new Set(variants.map((input) => input.axis)).size).toBe(1);
+    }
+
+    for (const input of ENGLISH_QUALITY_GATE_CHARACTERIZATION_CASES) {
+      if (input.axis === "numeric_evidence") {
+        expect(
+          characterizationNumericIssues(input).filter(
+            (issue) => issue.code === "incomplete_sentence",
+          ),
+        ).toEqual([]);
+      }
+      if (input.axis === "english_prose") {
+        const metricIssues = validateEnglishCvBackedQualityGate({
+          writerOutput: output({
+            opening: "I reduced the onboarding backlog by 24%.",
+            proofBlock: input.visibleText,
+            employerValueBlock:
+              "That reporting supports clear delivery handoffs.",
+            closeLine: "I would bring that discipline to the team.",
+          }),
+          claimPlan,
+          factGraph,
+        }).filter((issue) => issue.code === "unsupported_visible_metric");
+        expect(metricIssues).toEqual([]);
+      }
+    }
+  });
+
+  it("keeps the shared corpus provider-free and free of hidden skips", () => {
+    const source = readFileSync(
+      join(
+        process.cwd(),
+        "scripts/evals/cases/cover-letter/english-quality-gate-characterization-cases.ts",
+      ),
+      "utf8",
+    );
+    const testSource = readFileSync(new URL(import.meta.url), "utf8");
+    const combined = `${source}\n${testSource}`;
+
+    expect(combined).not.toMatch(
+      /\b(?:[f]etch|[d]escribe\.skip|[i]t\.skip|[t]est\.skip|[d]escribe\.todo|[i]t\.todo|[t]est\.todo|\.[o]nly)\b|OPENAI_[A]PI_KEY|MISTRAL_[A]PI_KEY|Chat[O]penAI|Chat[M]istralAI/,
+    );
   });
 });
