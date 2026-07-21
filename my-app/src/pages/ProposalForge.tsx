@@ -5263,11 +5263,10 @@ export function ProposalForge(): JSX.Element {
   );
   const resolvedTargetEmployerName = React.useMemo(() => {
     if (stagedProposalSourceDraft) {
-      return (
-        stagedProposalSourceDraft.targetEmployerName?.trim() ||
-        stagedSourceJobRecord?.company?.trim() ||
-        null
-      );
+      if (hasOwnProperty(stagedProposalSourceDraft, "targetEmployerName")) {
+        return stagedProposalSourceDraft.targetEmployerName?.trim() || null;
+      }
+      return stagedSourceJobRecord?.company?.trim() || null;
     }
     if (isSavedView) {
       return (
@@ -13461,6 +13460,15 @@ export function ProposalForge(): JSX.Element {
   const handleRailJobOfferTextChange = React.useCallback(
     (value: string) => {
       setJobContextCleared(false);
+      setStagedProposalSourceDraft((current) =>
+        current
+          ? {
+              ...current,
+              jobDescription: value,
+              targetEmployerName: null,
+            }
+          : current,
+      );
       const nextDraft: StoredProposalComposeDraft = {
         ...(composePreviewValues ?? {}),
         jobTitle: composePreviewValues?.jobTitle ?? "",

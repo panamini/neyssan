@@ -162,6 +162,39 @@ describe("Target Employer Module", () => {
         targetEmployer: writtenNumberBrand,
       }),
     ).toBe(false);
+
+    for (const [value, expected] of [
+      ["I am applying to 99.", true],
+      ["I increased throughput to 99.", false],
+      ["I would support 99 as it grows.", true],
+      ["I supported 99 users.", false],
+      ["I supported 99 accounts.", false],
+    ] as const) {
+      expect(
+        targetEmployerOwnsOccurrence({
+          value,
+          occurrenceIndex: value.indexOf("99"),
+          targetEmployer: numeric,
+        }),
+      ).toBe(expected);
+    }
+  });
+
+  it("preserves branded terminal punctuation with and without legal suffixes", () => {
+    for (const [authority, displayName] of [
+      ["Yahoo!", "Yahoo!"],
+      ["Which?", "Which?"],
+      ["C++", "C++"],
+      ["Yahoo! Inc.", "Yahoo!"],
+      ["Which?, Ltd.", "Which?"],
+      ["C++ LLC", "C++"],
+    ] as const) {
+      expect(resolveTargetEmployerAuthorities([authority])).toMatchObject({
+        status: "RESOLVED",
+        canonicalName: authority,
+        displayName,
+      });
+    }
   });
 
   it("keeps one resolved result in the brief and prompt despite conflicting diagnostics", () => {

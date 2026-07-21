@@ -94,8 +94,8 @@ function terminalLegalSuffixLength(tokens: readonly EmployerToken[]): number {
   return 0;
 }
 
-function trimTerminalPunctuation(value: string): string {
-  return value.replace(/[\s\p{P}\p{S}]+$/gu, "").trim();
+function trimLegalSuffixSeparator(value: string): string {
+  return value.replace(/[\s,]+$/gu, "").trim();
 }
 
 function resolveSingleAuthority(value: string): TargetEmployerResolved | null {
@@ -110,10 +110,10 @@ function resolveSingleAuthority(value: string): TargetEmployerResolved | null {
 
   const displayName =
     suffixLength > 0
-      ? trimTerminalPunctuation(
+      ? trimLegalSuffixSeparator(
           canonicalName.slice(0, tokens[tokens.length - suffixLength].start),
         )
-      : trimTerminalPunctuation(canonicalName);
+      : canonicalName;
   if (!displayName) return null;
 
   const normalizedName = tokens.map((token) => token.normalized).join(" ");
@@ -225,6 +225,8 @@ function numericAliasHasEmployerContext(
   const prefix = value.slice(0, span.start);
   const suffix = value.slice(span.end);
   if (/\b(?:at|join|joining)\s+$/iu.test(prefix)) return true;
+  if (/\bapplying\s+to\s+$/iu.test(prefix)) return true;
+  if (/^\s+as\s+it\s+grows\b/iu.test(suffix)) return true;
   if (/^\s*['’]s\b/iu.test(suffix)) return true;
   return (
     (span.start === 0 || /[.!?]\s*$/u.test(prefix)) &&

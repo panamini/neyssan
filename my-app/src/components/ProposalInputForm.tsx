@@ -1053,6 +1053,15 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
     );
 
     const normalizedValues = normalizeProposalFormValues(values);
+    const submittedTargetEmployerName =
+      targetEmployerName &&
+      externalComposeDraft &&
+      (normalizedValues.jobTitle.trim() !==
+        (externalComposeDraft.jobTitle ?? "").trim() ||
+        normalizedValues.jobDescription.trim() !==
+          (externalComposeDraft.jobDescription ?? "").trim())
+        ? null
+        : targetEmployerName;
 
     try {
       shouldNotifySubmitAnimationCompleteRef.current = false;
@@ -1075,7 +1084,7 @@ const ProposalInputForm: React.FC<ProposalInputFormProps> = ({
           undefined,
           canonicalJobId,
           languageMetadata,
-          targetEmployerName,
+          submittedTargetEmployerName,
         ),
         clientRunId,
       };

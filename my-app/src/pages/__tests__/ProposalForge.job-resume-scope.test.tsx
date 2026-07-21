@@ -345,6 +345,16 @@ describe("ProposalForge job resume scope", () => {
     );
   });
 
+  it("locks an explicit employer clear into the staged source draft", () => {
+    const source = readFileSync("src/pages/ProposalForge.tsx", "utf8");
+    expect(source).toMatch(
+      /if \(stagedProposalSourceDraft\) \{[\s\S]*hasOwnProperty\(stagedProposalSourceDraft, "targetEmployerName"\)[\s\S]*return stagedProposalSourceDraft\.targetEmployerName\?\.trim\(\) \|\| null/,
+    );
+    expect(source).toMatch(
+      /handleRailJobOfferTextChange[\s\S]*setStagedProposalSourceDraft\(\(current\)[\s\S]*targetEmployerName:\s*null/,
+    );
+  });
+
   it("prefers saved metadata and its linked job over unrelated compose state", () => {
     const source = readFileSync("src/pages/ProposalForge.tsx", "utf8");
     expect(source).toMatch(

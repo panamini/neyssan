@@ -245,6 +245,42 @@ describe("ProposalInputForm auto tone submit", () => {
     );
   });
 
+  it("clears a bound employer when edited job text is submitted before parent sync", async () => {
+    const sourceDraft = {
+      jobTitle: "Operations Associate",
+      jobDescription:
+        "Support Acme operations, update internal records, and coordinate communication across teams.",
+      proposalType: "cover_letter" as const,
+    };
+
+    render(
+      <ProposalInputForm
+        onSubmit={vi.fn()}
+        externalComposeDraft={sourceDraft}
+        targetEmployerName="Acme Corp."
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Paste job offer")).toHaveValue(
+        sourceDraft.jobDescription,
+      );
+    });
+    fireEvent.change(screen.getByPlaceholderText("Paste job offer"), {
+      target: {
+        value:
+          "Support replacement operations, publish new records, and coordinate a different team.",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+
+    await waitFor(() => {
+      expect(mockGenerateProposalAction).toHaveBeenCalledWith(
+        expect.objectContaining({ targetEmployerName: null }),
+      );
+    });
+  });
+
   it("uses an explicit personalization source override when the local CV lookup is empty", async () => {
     render(
       <ProposalInputForm
