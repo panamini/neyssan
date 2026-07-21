@@ -350,6 +350,7 @@ export default defineSchema({
       tags: v.optional(v.array(v.string())),
       sourceJobTitle: v.optional(v.string()),
       sourceJobDescription: v.optional(v.string()),
+      targetEmployerName: v.optional(v.string()),
       sourceUrl: v.optional(v.string()),
       sourceCvId: v.optional(v.string()),
       planned_path: v.optional(v.string()),

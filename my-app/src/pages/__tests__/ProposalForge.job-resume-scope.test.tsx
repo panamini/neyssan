@@ -1,4 +1,5 @@
 import React from "react";
+import { readFileSync } from "node:fs";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -183,14 +184,19 @@ vi.mock("../../components/ProposalInputForm", () => ({
     onActiveCvChange,
     activeCvId,
     canonicalJobId,
+    targetEmployerName,
   }: {
     onActiveCvChange?: (cvId: string | null) => void;
     activeCvId?: string | null;
     canonicalJobId?: string | null;
+    targetEmployerName?: string | null;
   }) => (
     <div>
       <div data-testid="proposal-input-active-cv">{activeCvId ?? "none"}</div>
       <div data-testid="proposal-input-job">{canonicalJobId ?? "none"}</div>
+      <div data-testid="proposal-input-employer">
+        {targetEmployerName ?? "none"}
+      </div>
       <button type="button" onClick={() => onActiveCvChange?.("cv_alpha")}>
         Attach CV from form
       </button>
@@ -258,6 +264,9 @@ describe("ProposalForge job resume scope", () => {
     expect(screen.getByTestId("proposal-input-job")).toHaveTextContent(
       "job_alpha",
     );
+    expect(screen.getByTestId("proposal-input-employer")).toHaveTextContent(
+      "Acme",
+    );
     expect(screen.getByTestId("proposal-input-active-cv")).toHaveTextContent(
       "none",
     );
@@ -306,6 +315,50 @@ describe("ProposalForge job resume scope", () => {
     });
     expect(screen.getByTestId("proposal-input-active-cv")).toHaveTextContent(
       "cv_alpha",
+    );
+  });
+
+  it("clears structured employer authority when the job text is edited", () => {
+    const source = readFileSync("src/pages/ProposalForge.tsx", "utf8");
+    expect(source).toMatch(
+      /const handleRailJobOfferTextChange[\s\S]*const nextDraft:\s*StoredProposalComposeDraft\s*=\s*\{[\s\S]*jobDescription:\s*value,[\s\S]*targetEmployerName:\s*null/,
+    );
+  });
+
+  it("copies saved employer authority explicitly instead of retaining compose state", () => {
+    const source = readFileSync("src/pages/ProposalForge.tsx", "utf8");
+    expect(source).toMatch(
+      /const restoredTargetEmployerName\s*=\s*openedSavedProposal\.metadata\?\.targetEmployerName\?\.trim\(\)\s*\|\|\s*null/,
+    );
+    expect(source).toMatch(
+      /const composeDraft:\s*StoredProposalComposeDraft\s*=\s*\{[\s\S]*targetEmployerName:\s*restoredTargetEmployerName/,
+    );
+  });
+
+  it("keeps an explicit edited-text employer clear ahead of the canonical job", () => {
+    const source = readFileSync("src/pages/ProposalForge.tsx", "utf8");
+    expect(source).toMatch(
+      /hasOwnProperty\(composePreviewValues, "targetEmployerName"\)[\s\S]*composePreviewValues\.targetEmployerName === null[\s\S]*return null;[\s\S]*if \(canonicalJobRecord\)/,
+    );
+    expect(source).toMatch(
+      /handleRailJobOfferTextChange[\s\S]*targetEmployerName:\s*null/,
+    );
+  });
+
+  it("locks an explicit employer clear into the staged source draft", () => {
+    const source = readFileSync("src/pages/ProposalForge.tsx", "utf8");
+    expect(source).toMatch(
+      /if \(stagedProposalSourceDraft\) \{[\s\S]*hasOwnProperty\(stagedProposalSourceDraft, "targetEmployerName"\)[\s\S]*return stagedProposalSourceDraft\.targetEmployerName\?\.trim\(\) \|\| null/,
+    );
+    expect(source).toMatch(
+      /handleRailJobOfferTextChange[\s\S]*setStagedProposalSourceDraft\(\(current\)[\s\S]*targetEmployerName:\s*null/,
+    );
+  });
+
+  it("prefers saved metadata and its linked job over unrelated compose state", () => {
+    const source = readFileSync("src/pages/ProposalForge.tsx", "utf8");
+    expect(source).toMatch(
+      /if \(isSavedView\) \{[\s\S]*selectedPersistedProposal\?\.metadata\?\.targetEmployerName\?\.trim\(\)[\s\S]*linkedProposalEmployerName[\s\S]*resolvedProposalWorkspaceSourceDraft\?\.targetEmployerName\?\.trim\(\)/,
     );
   });
 

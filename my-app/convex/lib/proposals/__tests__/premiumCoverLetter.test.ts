@@ -7,6 +7,7 @@ import {
   PREMIUM_WRITER_OUTPUT_V1_SCHEMA,
   PREMIUM_WRITER_OUTPUT_V1_JSON_SCHEMA,
   QWEN_PREMIUM_COVER_LETTER_ADAPTER,
+  type PremiumCoverLetterFailureTrace,
   attemptPremiumCoverLetterGeneration,
   buildAllowedFactsPack,
   buildAllowedFactsPackFromFactGraph,
@@ -3530,7 +3531,7 @@ describe("premium cover letter prompt contract", () => {
       "employerValueBlock",
       "closeLine",
     ]);
-    expect(prompt.length).toBeLessThan(6800);
+    expect(prompt.length).toBeLessThan(6900);
     expect(prompt.split("\n").length).toBeLessThan(42);
   });
 
@@ -3723,7 +3724,7 @@ describe("premium cover letter prompt contract", () => {
     expect(mistralPrompt).toContain(
       "Do not begin closeLine with \"Experience includes\"",
     );
-    expect(prompt.length).toBeLessThan(6500);
+    expect(prompt.length).toBeLessThan(6600);
     expect(prompt.split("\n").length).toBeLessThan(44);
   });
 
@@ -4680,6 +4681,34 @@ describe("premium cover letter generation and rendering", () => {
         "I led a design system migration used across 4 product squads.",
       ),
     ).not.toContain("unsupported_numeric_claim");
+  });
+
+  it("accepts a resolved numeric employer through the early writer validators", async () => {
+    const result = await attemptPremiumCoverLetterGeneration({
+      personalizationContext: directContext,
+      voicePreset: "signature",
+      outputLanguage: "English",
+      jobTitle: directJob.jobTitle,
+      jobDescription: directJob.jobDescription,
+      targetEmployerName: "7-Eleven Inc.",
+      candidateName: "Alex Martin",
+      writerProvider: "openai",
+      writerModel: "gpt-5.5",
+      writer: async () =>
+        buildDirectPremiumWriterOutputFixture({
+          opening:
+            "I improved signup conversion by 11% through iterative UI experiments.",
+          proofBlock:
+            "I led a design-system migration used across 4 product squads.",
+          employerValueBlock:
+            "At 7-Eleven, that product discipline supports reliable delivery.",
+          closeLine:
+            "I bring the same product discipline to reliable delivery work.",
+        }),
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.bodyParts.employerValueBlock).toContain("7-Eleven");
   });
 
   it("normalizes decimal commas without accepting a tenfold metric inflation", () => {

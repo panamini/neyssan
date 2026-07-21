@@ -139,6 +139,26 @@ describe("resolveProposalWorkspaceSourceDraft", () => {
 });
 
 describe("resolveProposalDraftDrawerSourceDraft", () => {
+  it("keeps target employer authority from saved metadata through normalization", () => {
+    expect(
+      resolveProposalDraftDrawerSourceDraft({
+        activeWorkspaceSourceDraft: null,
+        storedOutputSourceDraft: null,
+        linkedJobSourceDraft: null,
+        metadataSource: {
+          sourceJobTitle: "Operations Associate",
+          sourceJobDescription: "Coordinate reliable delivery handoffs.",
+          targetEmployerName: "Northwind Inc.",
+          sourceUrl: null,
+          platform: null,
+        },
+      }),
+    ).toMatchObject({
+      mode: "saved-historical-origin",
+      targetEmployerName: "Northwind Inc.",
+    });
+  });
+
   it("keeps a generated output source ahead of an empty active compose source for the Job & CV drawer", () => {
     expect(
       resolveProposalDraftDrawerSourceDraft({
@@ -165,6 +185,67 @@ describe("resolveProposalDraftDrawerSourceDraft", () => {
         "Support recurring processes and coordinate communication.",
       sourceUrl: "https://example.com/jobs/operations",
       platform: "Example Jobs",
+    });
+  });
+
+  it("backfills structured employer authority when the leading stored draft predates the field", () => {
+    expect(
+      resolveProposalDraftDrawerSourceDraft({
+        storedOutputSourceDraft: {
+          jobTitle: "Operations Associate",
+          jobDescription: "Coordinate reliable delivery handoffs.",
+        },
+        linkedJobSourceDraft: {
+          jobTitle: "Operations Associate",
+          jobDescription: "Coordinate reliable delivery handoffs.",
+          targetEmployerName: "Northwind Inc.",
+        },
+      }),
+    ).toMatchObject({
+      mode: "saved-historical-origin",
+      targetEmployerName: "Northwind Inc.",
+    });
+  });
+
+  it("keeps employer precedence field-level when another draft supplies the visible brief", () => {
+    expect(
+      resolveProposalDraftDrawerSourceDraft({
+        storedOutputSourceDraft: {
+          jobTitle: "Operations Associate",
+          jobDescription: "Coordinate reliable delivery handoffs.",
+        },
+        metadataSource: {
+          targetEmployerName: "Persisted Employer",
+        },
+        linkedJobSourceDraft: {
+          targetEmployerName: "Linked Employer",
+        },
+      }),
+    ).toMatchObject({
+      mode: "saved-historical-origin",
+      jobTitle: "Operations Associate",
+      targetEmployerName: "Persisted Employer",
+    });
+
+    expect(
+      resolveProposalDraftDrawerSourceDraft({
+        activeWorkspaceSourceDraft: {
+          mode: "explicit-live-job",
+          jobTitle: "Current Role",
+          jobDescription: "Current brief.",
+          targetEmployerName: "Current Employer",
+          sourceUrl: null,
+          platform: null,
+        },
+        metadataSource: {
+          targetEmployerName: "Persisted Employer",
+        },
+        linkedJobSourceDraft: {
+          targetEmployerName: "Linked Employer",
+        },
+      }),
+    ).toMatchObject({
+      targetEmployerName: "Current Employer",
     });
   });
 
@@ -261,6 +342,7 @@ describe("buildProposalSourceDraftFromJob", () => {
       buildProposalSourceDraftFromJob({
         job: {
           title: "Updated Operations Lead",
+          company: "Northwind Inc.",
           rawDescription:
             "Lead updated operations workflows and coordinate a new job context.",
           sourceUrl: "https://example.test/jobs/updated",
@@ -277,6 +359,7 @@ describe("buildProposalSourceDraftFromJob", () => {
       }),
     ).toEqual({
       jobTitle: "Updated Operations Lead",
+      targetEmployerName: "Northwind Inc.",
       jobDescription:
         "Lead updated operations workflows and coordinate a new job context.",
       sourceUrl: "https://example.test/jobs/updated",

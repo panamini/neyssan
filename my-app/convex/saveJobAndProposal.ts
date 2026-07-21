@@ -17,13 +17,16 @@ function buildProposalMetadata(args: {
   url: string;
   jobId?: string;
   description?: string;
+  company?: string;
   proposalType?: "cover_letter" | "application_message" | "freelance_proposal";
 }) {
+  const targetEmployerName = args.company?.trim();
   return {
     platform: args.platform,
     jobId: args.jobId ?? args.url,
     tags: [],
     ...(args.description ? { sourceJobDescription: args.description } : {}),
+    ...(targetEmployerName ? { targetEmployerName } : {}),
     ...(args.proposalType ? { proposalType: args.proposalType } : {}),
   };
 }
@@ -34,6 +37,7 @@ export const saveJobAndProposal = internalMutation({
       platform: v.string(),
       title: v.string(),
       description: v.optional(v.string()),
+      company: v.optional(v.string()),
       url: v.string(),
       jobId: v.optional(v.string()),
     }),
@@ -73,6 +77,7 @@ export const saveJobAndProposal = internalMutation({
         url: args.jobData.url,
         jobId: args.jobData.jobId,
         description: args.jobData.description,
+        company: args.jobData.company,
         proposalType: args.proposalType,
       }),
     });
@@ -85,6 +90,7 @@ export default mutation({
       platform: v.string(),
       title: v.string(),
       description: v.optional(v.string()),
+      company: v.optional(v.string()),
       url: v.string(),
       jobId: v.optional(v.string()),
     }),
@@ -117,6 +123,7 @@ export default mutation({
         url: args.jobData.url,
         jobId: args.jobData.jobId,
         description: args.jobData.description,
+        company: args.jobData.company,
         proposalType: args.proposalType,
       }),
     });

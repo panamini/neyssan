@@ -94,8 +94,10 @@ type SavedProposalRecord = {
     content?: string;
   }>;
   metadata?: DocumentStyleMetadata & {
+    jobId?: string;
     sourceJobTitle?: string;
     sourceJobDescription?: string;
+    targetEmployerName?: string;
     proposalType?: SavedProposalType;
     requestedModelType?: string;
     actualModelType?: string;
@@ -142,6 +144,7 @@ type SavedProposalViewMode = "focused" | "stack" | "library";
 type RegeneratePayload = {
   jobTitle: string;
   jobDescription: string;
+  targetEmployerName: string | null;
   proposalType: SavedProposalType;
   voicePreset: ProposalVoicePreset | null;
   formalityLevel?: ProposalFormalityLevel;
@@ -829,6 +832,24 @@ export default function ProposalsList({
     (proposal) => proposal.status === "saved",
   ).length;
   const selected = displayList.find((p) => p._id === selectedId) ?? null;
+  const selectedLinkedJob = useQuery(
+    api.jobsPublic.getById as any,
+    isConvexAuthenticated &&
+      selected?.metadata?.jobId &&
+      !selected.metadata.targetEmployerName?.trim()
+      ? { jobId: selected.metadata.jobId }
+      : "skip",
+  ) as { company?: string | null } | null | undefined;
+  const isLinkedJobEmployerBackfillPending = Boolean(
+    isConvexAuthenticated &&
+      selected?.metadata?.jobId &&
+      !selected.metadata.targetEmployerName?.trim() &&
+      selectedLinkedJob === undefined,
+  );
+  const resolvedRegenerateTargetEmployerName =
+    selected?.metadata?.targetEmployerName?.trim() ||
+    selectedLinkedJob?.company?.trim() ||
+    null;
   const resolveSavedProposalRenderState = React.useCallback(
     (proposal: SavedProposalRecord | null) => {
       if (!proposal) return null;
@@ -1437,7 +1458,14 @@ export default function ProposalsList({
   async function handleRegenerate(
     nextVoicePreset?: ProposalVoicePreset | null,
   ) {
-    if (!selected || !selectedRenderState || isRegenerating) return;
+    if (
+      !selected ||
+      !selectedRenderState ||
+      isRegenerating ||
+      isLinkedJobEmployerBackfillPending
+    ) {
+      return;
+    }
     if (!isConvexAuthenticated) {
       showConvexAuthRequiredToast("Refine");
       return;
@@ -1461,6 +1489,7 @@ export default function ProposalsList({
       const payload: RegeneratePayload = {
         jobTitle,
         jobDescription: sourceJobDescription,
+        targetEmployerName: resolvedRegenerateTargetEmployerName,
         proposalType,
         voicePreset,
         characterLimitMode: selected.metadata?.characterLimitMode,
@@ -1492,6 +1521,9 @@ export default function ProposalsList({
         actualModelType: res.actualModelType,
         fallbackTriggerCode: res.fallbackTriggerCode,
       };
+      if (resolvedRegenerateTargetEmployerName) {
+        nextMetadata.targetEmployerName = resolvedRegenerateTargetEmployerName;
+      }
       if (voicePreset) {
         nextMetadata.voicePreset = voicePreset;
         nextMetadata.resolvedVoicePreset = voicePreset;
@@ -1713,7 +1745,9 @@ export default function ProposalsList({
         });
       }}
       copyFeedback={copied ? "copied" : "idle"}
-      isRegenerating={Boolean(isRegenerating)}
+      isRegenerating={
+        Boolean(isRegenerating) || isLinkedJobEmployerBackfillPending
+      }
       typographyValue={selectedTypographyValue}
       onTypographyChange={(value) => {
         setSelectedTypographyOverride(

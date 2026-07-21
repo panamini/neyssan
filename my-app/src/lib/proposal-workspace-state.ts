@@ -95,6 +95,7 @@ export function buildProposalTemplateApplyRoute(
 export type StoredProposalComposeDraft = {
   jobTitle?: string;
   jobDescription?: string;
+  targetEmployerName?: string | null;
   proposalType?: string;
   modelType?: string | null;
   voicePreset?: string | null;

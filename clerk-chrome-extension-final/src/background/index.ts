@@ -410,6 +410,7 @@ async function generateProposalHandler(
     const generateArgs: Record<string, unknown> = {
       jobTitle: message.jobData!.title,
       jobDescription: message.jobData!.description || "No description provided",
+      targetEmployerName: message.jobData?.company?.trim() || null,
       proposalType,
       modelType,
     };
@@ -507,7 +508,10 @@ async function saveProposalHandler(
     logAuthDebug("save-proposal-auth", { hasConvexToken: Boolean(currentToken) });
     console.log("Calling mutation:", api.saveJobAndProposal.default._name);
     await convex.mutation(api.saveJobAndProposal.default, {
-      jobData: message.jobData!,
+      jobData: {
+        ...message.jobData!,
+        company: message.jobData?.company?.trim() || undefined,
+      },
       proposalText: message.proposalText || "",
     });
     console.log("Proposal saved successfully");

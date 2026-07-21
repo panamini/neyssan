@@ -328,6 +328,7 @@ export default query({
         tags: v.optional(v.array(v.string())),
         sourceJobTitle: v.optional(v.string()),
         sourceJobDescription: v.optional(v.string()),
+        targetEmployerName: v.optional(v.string()),
         sourceUrl: v.optional(v.string()),
         sourceCvId: v.optional(v.string()),
         planned_path: v.optional(v.string()),
@@ -467,6 +468,8 @@ export default query({
         sourceJobTitle: proposal.metadata.sourceJobTitle ?? undefined,
         sourceJobDescription:
           proposal.metadata.sourceJobDescription ?? undefined,
+        targetEmployerName:
+          proposal.metadata.targetEmployerName ?? undefined,
         sourceUrl: proposal.metadata.sourceUrl ?? undefined,
         sourceCvId: proposal.metadata.sourceCvId ?? undefined,
         planned_path: proposal.metadata.planned_path ?? undefined,
