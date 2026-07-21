@@ -261,6 +261,7 @@ describe("buildProposalSourceDraftFromJob", () => {
       buildProposalSourceDraftFromJob({
         job: {
           title: "Updated Operations Lead",
+          company: "Northwind Inc.",
           rawDescription:
             "Lead updated operations workflows and coordinate a new job context.",
           sourceUrl: "https://example.test/jobs/updated",
@@ -277,6 +278,7 @@ describe("buildProposalSourceDraftFromJob", () => {
       }),
     ).toEqual({
       jobTitle: "Updated Operations Lead",
+      targetEmployerName: "Northwind Inc.",
       jobDescription:
         "Lead updated operations workflows and coordinate a new job context.",
       sourceUrl: "https://example.test/jobs/updated",

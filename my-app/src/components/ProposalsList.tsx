@@ -96,6 +96,7 @@ type SavedProposalRecord = {
   metadata?: DocumentStyleMetadata & {
     sourceJobTitle?: string;
     sourceJobDescription?: string;
+    targetEmployerName?: string;
     proposalType?: SavedProposalType;
     requestedModelType?: string;
     actualModelType?: string;
@@ -142,6 +143,7 @@ type SavedProposalViewMode = "focused" | "stack" | "library";
 type RegeneratePayload = {
   jobTitle: string;
   jobDescription: string;
+  targetEmployerName: string | null;
   proposalType: SavedProposalType;
   voicePreset: ProposalVoicePreset | null;
   formalityLevel?: ProposalFormalityLevel;
@@ -1461,6 +1463,7 @@ export default function ProposalsList({
       const payload: RegeneratePayload = {
         jobTitle,
         jobDescription: sourceJobDescription,
+        targetEmployerName: selected.metadata?.targetEmployerName ?? null,
         proposalType,
         voicePreset,
         characterLimitMode: selected.metadata?.characterLimitMode,

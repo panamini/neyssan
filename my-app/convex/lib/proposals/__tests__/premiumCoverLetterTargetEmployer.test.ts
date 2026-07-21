@@ -84,6 +84,17 @@ describe("Target Employer Module", () => {
       status: "RESOLVED",
       displayName: "Acme",
     });
+    expect(resolveTargetEmployerAuthorities(["Fast Company"])).toMatchObject({
+      status: "RESOLVED",
+      displayName: "Fast Company",
+      aliases: ["fast company"],
+    });
+    expect(
+      resolveTargetEmployerAuthorities(["The Honest Company"]),
+    ).toMatchObject({
+      status: "RESOLVED",
+      displayName: "The Honest Company",
+    });
   });
 
   it("supports numeric names and matches aliases only on full normalized token boundaries", () => {
@@ -122,6 +133,15 @@ describe("Target Employer Module", () => {
         targetEmployer: sevenEleven,
       }),
     ).toEqual([]);
+
+    const writtenNumberBrand = resolveTargetEmployerAuthorities(["One Inc."]);
+    expect(
+      targetEmployerOwnsOccurrence({
+        value: "I supported one million users.",
+        occurrenceIndex: 12,
+        targetEmployer: writtenNumberBrand,
+      }),
+    ).toBe(false);
   });
 
   it("keeps one resolved result in the brief and prompt despite conflicting diagnostics", () => {
@@ -157,7 +177,9 @@ describe("Target Employer Module", () => {
     const prompt = buildPremiumCoverLetterPrompt({ brief });
     expect(prompt).not.toContain('"targetEmployer"');
     expect(prompt).not.toContain('"employerName"');
-    expect(prompt).not.toContain("Structured target employer:");
+    expect(prompt).toContain(
+      "No structured target employer is resolved: do not infer, name, or personalize an employer from the title or description.",
+    );
   });
 
   it("threads targetEmployerName through all three active premium attempts", () => {
@@ -173,5 +195,45 @@ describe("Target Employer Module", () => {
         /targetEmployerName:\s*args\.targetEmployerName/,
       );
     }
+  });
+
+  it("persists targetEmployerName and reuses it for saved-proposal regeneration", () => {
+    const mutationSource = readFileSync(
+      "convex/generateProposalMutation.ts",
+      "utf8",
+    );
+    expect(mutationSource).toMatch(
+      /proposalMetadataBase\s*=\s*\{[\s\S]*targetEmployerName:\s*normalizedTargetEmployerName/,
+    );
+
+    const regenerateSource = readFileSync(
+      "src/components/ProposalsList.tsx",
+      "utf8",
+    );
+    expect(regenerateSource).toMatch(
+      /targetEmployerName:\s*selected\.metadata\?\.targetEmployerName\s*\?\?\s*null/,
+    );
+
+    for (const path of [
+      "convex/schema.ts",
+      "convex/proposals.ts",
+      "convex/proposalsPublic.ts",
+      "convex/createProposalPublic.ts",
+      "convex/updateProposalPublic.ts",
+    ]) {
+      expect(readFileSync(path, "utf8")).toMatch(
+        /targetEmployerName:\s*v\.optional\(v\.string\(\)\)/,
+      );
+    }
+  });
+
+  it("forwards the structured employer from the active extension caller", () => {
+    const source = readFileSync(
+      "../clerk-chrome-extension-final/src/background/index.ts",
+      "utf8",
+    );
+    expect(source).toMatch(
+      /targetEmployerName:\s*message\.jobData\?\.company\?\.trim\(\)\s*\|\|\s*null/,
+    );
   });
 });

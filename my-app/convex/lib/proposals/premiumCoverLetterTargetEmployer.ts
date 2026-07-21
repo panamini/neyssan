@@ -34,7 +34,6 @@ export const MISSING_TARGET_EMPLOYER: TargetEmployerMissing = Object.freeze({
 const LEGAL_SUFFIX_TOKEN_SEQUENCES: readonly (readonly string[])[] = [
   ["incorporated"],
   ["corporation"],
-  ["company"],
   ["limited"],
   ["gmbh"],
   ["s", "a", "r", "l"],
@@ -54,7 +53,6 @@ const LEGAL_SUFFIX_TOKEN_SEQUENCES: readonly (readonly string[])[] = [
   ["inc"],
   ["corp"],
   ["ltd"],
-  ["co"],
 ];
 
 type EmployerToken = Readonly<{
@@ -213,6 +211,7 @@ export function targetEmployerOwnsOccurrence(args: {
 }): boolean {
   return targetEmployerAliasSpans(args).some(
     (span) =>
+      /\p{N}/u.test(span.alias) &&
       args.occurrenceIndex >= span.start && args.occurrenceIndex < span.end,
   );
 }

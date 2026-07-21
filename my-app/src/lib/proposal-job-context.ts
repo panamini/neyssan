@@ -2,6 +2,7 @@ import type { StoredProposalComposeDraft } from "./proposal-workspace-state";
 
 export type ProposalWorkspaceSourceRecord = {
   title?: string | null;
+  company?: string | null;
   rawDescription?: string | null;
   sourceUrl?: string | null;
   sourceDomain?: string | null;
@@ -117,6 +118,7 @@ export function buildProposalSourceDraftFromJob(
   return {
     ...existingDraft,
     jobTitle: normalizeDraftText(input.job.title),
+    targetEmployerName: normalizeDraftText(input.job.company) || null,
     jobDescription:
       normalizeDraftText(input.job.rawDescription) ||
       normalizeDraftText(input.job.summary) ||

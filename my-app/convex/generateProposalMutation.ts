@@ -10964,10 +10964,14 @@ export async function handleGenerateProposal(
       outputFormat,
     });
   const normalizedSourceJobDescription = compactWhitespace(args.jobDescription);
+  const normalizedTargetEmployerName = args.targetEmployerName?.trim();
   const proposalMetadataBase = {
     platform: "web",
     ...(normalizedSourceJobDescription
       ? { sourceJobDescription: args.jobDescription }
+      : {}),
+    ...(normalizedTargetEmployerName
+      ? { targetEmployerName: normalizedTargetEmployerName }
       : {}),
     voicePreset: resolvedVoicePreset,
     requestedVoicePreset:

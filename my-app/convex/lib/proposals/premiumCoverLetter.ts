@@ -41,6 +41,7 @@ import type { CompanyValuesPack } from "./companyValues";
 import {
   MISSING_TARGET_EMPLOYER,
   resolveTargetEmployerAuthorities,
+  targetEmployerOwnsOccurrence,
   type TargetEmployerResolution,
 } from "./premiumCoverLetterTargetEmployer";
 
@@ -3142,6 +3143,14 @@ export function buildPremiumCoverLetterBrief(args: {
   };
 }
 
+function targetEmployerPromptGuidance(
+  targetEmployer: TargetEmployerResolution,
+): string {
+  return targetEmployer.status === "RESOLVED"
+    ? `Structured target employer: use displayName "${targetEmployer.displayName}"; never override it from title/description.`
+    : "No structured target employer is resolved: do not infer, name, or personalize an employer from the title or description.";
+}
+
 export function buildPremiumCoverLetterPrompt(args: {
   brief: CoverLetterBrief;
   generationControlsBlock?: string;
@@ -3213,11 +3222,7 @@ export function buildPremiumCoverLetterPrompt(args: {
     "topResponsibilities lead; keyRequirements sharpen; the rest stay secondary.",
     "lowValueChecklist is diagnostic-only. Do not quote it, paraphrase it, or use it as employer-value language in the letter.",
     "A JD keyword, tool, certification, compliance framework, domain, or responsibility may appear as candidate experience only when the CV supports that exact capability. Bind ATS terms to a concrete action or result; never list them. Bind ATS and JD terms to a concrete CV-backed action, artifact, responsibility, or result. Never use a JD keyword as a floating adjective or implied experience.",
-    ...(targetEmployer.status === "RESOLVED"
-      ? [
-          `Structured target employer: use displayName "${targetEmployer.displayName}"; never override it from title/description.`,
-        ]
-      : []),
+    targetEmployerPromptGuidance(targetEmployer),
     ...(companyValuesPack
       ? [
           "Company values are bounded secondary context only: use at most one explicit bridge, only when grounded and tied to source-backed candidate evidence; never replace stronger proof or infer personal alignment.",
@@ -4484,6 +4489,7 @@ export function validatePremiumWriterOutputV1(args: {
       hasUnsupportedNumericClaim({
         generatedText: compact,
         sourceSurface: referencedFactSurface,
+        targetEmployer: args.brief.targetEmployer,
       })
     ) {
       issues.push({
@@ -4774,27 +4780,49 @@ function normalizeNumericClaim(value: string): string {
 }
 
 function extractNumericClaims(value: string): string[] {
-  const claims = new Set<string>();
+  return [
+    ...new Set(
+      extractNumericClaimOccurrences(value).map((occurrence) => occurrence.claim),
+    ),
+  ];
+}
+
+function extractNumericClaimOccurrences(
+  value: string,
+): Array<Readonly<{ claim: string; index: number }>> {
+  const occurrences = new Map<string, Readonly<{ claim: string; index: number }>>();
   for (const match of value.matchAll(PERCENTAGE_NUMERIC_CLAIM_PATTERN)) {
-    claims.add(normalizeNumericClaim(match[0]));
+    const claim = normalizeNumericClaim(match[0]);
+    occurrences.set(`${match.index}:${claim}`, { claim, index: match.index });
   }
   for (const match of value.matchAll(DIGIT_NUMERIC_CLAIM_PATTERN)) {
-    claims.add(normalizeNumericClaim(match[0]));
+    const claim = normalizeNumericClaim(match[0]);
+    occurrences.set(`${match.index}:${claim}`, { claim, index: match.index });
   }
   for (const match of value.matchAll(WORD_NUMBER_DURATION_CLAIM_PATTERN)) {
-    claims.add(normalizeNumericClaim(match[0]));
+    const claim = normalizeNumericClaim(match[0]);
+    occurrences.set(`${match.index}:${claim}`, { claim, index: match.index });
   }
-  return Array.from(claims);
+  return Array.from(occurrences.values());
 }
 
 function hasUnsupportedNumericClaim(args: {
   generatedText: string;
   sourceSurface: string;
+  targetEmployer?: TargetEmployerResolution;
 }): boolean {
-  const generatedClaims = extractNumericClaims(args.generatedText);
+  const generatedClaims = extractNumericClaimOccurrences(args.generatedText);
   if (generatedClaims.length === 0) return false;
   const sourceClaims = new Set(extractNumericClaims(args.sourceSurface));
-  return generatedClaims.some((claim) => !sourceClaims.has(claim));
+  return generatedClaims.some(
+    (occurrence) =>
+      !sourceClaims.has(occurrence.claim) &&
+      !targetEmployerOwnsOccurrence({
+        value: args.generatedText,
+        occurrenceIndex: occurrence.index,
+        targetEmployer: args.targetEmployer ?? MISSING_TARGET_EMPLOYER,
+      }),
+  );
 }
 
 function hasUnsupportedOwnershipVerb(args: {
@@ -6032,7 +6060,13 @@ export function validatePremiumCoverLetterBodyParts(args: {
     if (WRITER_META_PROSE_PATTERN.test(compact)) {
       issues.push({ code: "meta_prose", repairable: false });
     }
-    if (hasUnsupportedNumericClaim({ generatedText: compact, sourceSurface })) {
+    if (
+      hasUnsupportedNumericClaim({
+        generatedText: compact,
+        sourceSurface,
+        targetEmployer: args.brief.targetEmployer,
+      })
+    ) {
       issues.push({ code: "unsupported_numeric_claim", repairable: false });
     }
     if (
@@ -6694,6 +6728,7 @@ function buildPremiumCoverLetterRepairPrompt(args: {
 }): string {
   return [
     "Rewrite the cover-letter body parts to satisfy validation.",
+    targetEmployerPromptGuidance(args.brief.targetEmployer),
     "",
     "The previous output failed because it used adjacent role-mapping, future-impact language, meta-commentary, unsupported ownership verbs, or unsupported outcome claims.",
     "",
@@ -6756,6 +6791,7 @@ function buildPremiumCoverLetterQualityRepairPrompt(args: {
 }): string {
   return [
     "Repair cover-letter body parts for quality only.",
+    targetEmployerPromptGuidance(args.brief.targetEmployer),
     "",
     "This is a bounded quality pass after the output already passed safety validation.",
     "Make at most small wording changes that address the listed quality issues.",
@@ -6790,6 +6826,7 @@ function buildPremiumWriterOutputRepairPrompt(args: {
 }): string {
   return [
     "Repair PremiumWriterOutputV1 without changing claim strategy.",
+    targetEmployerPromptGuidance(args.brief.targetEmployer),
     "The ClaimPlan owns strategy. Do not choose claims.",
     "Fix only invalid body parts.",
     "Allowed repairs: strip greeting/signoff, dedupe repeated sentences, add punctuation, remove duplicate closeLine from employerValueBlock, or fill empty closeLine with deterministic safe wording only if no unsupported claim is involved.",

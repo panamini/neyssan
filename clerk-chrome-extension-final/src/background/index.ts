@@ -410,6 +410,7 @@ async function generateProposalHandler(
     const generateArgs: Record<string, unknown> = {
       jobTitle: message.jobData!.title,
       jobDescription: message.jobData!.description || "No description provided",
+      targetEmployerName: message.jobData?.company?.trim() || null,
       proposalType,
       modelType,
     };

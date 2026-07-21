@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ProposalsList from "../ProposalsList";
 
@@ -29,6 +29,7 @@ const SAVED_PROPOSALS = [
     metadata: {
       proposalType: "cover_letter",
       voicePreset: "signature",
+      targetEmployerName: "Northwind Inc.",
       sourceJobDescription: "Support operations and scheduling.",
     },
     sections: [{ type: "text", content: "Saved proposal beta." }],
@@ -281,5 +282,31 @@ describe("ProposalsList toolbar grouping", () => {
     expect(
       screen.queryByRole("button", { name: /open proposal library overview/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it("preserves the structured employer when refining a saved proposal", async () => {
+    render(<ProposalsList />);
+
+    let refine: (() => void) | undefined;
+    await waitFor(() => {
+      const toolbar = getMainProposalDisplayCall()
+        ?.detachedActionHeaderSupplement;
+      expect(React.isValidElement(toolbar)).toBe(true);
+      refine = (
+        toolbar as React.ReactElement<{ onRefine?: () => void }>
+      ).props.onRefine;
+      expect(refine).toBeTypeOf("function");
+    });
+    await act(async () => {
+      refine?.();
+    });
+
+    await waitFor(() => {
+      expect(generateProposalActionMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetEmployerName: "Northwind Inc.",
+        }),
+      );
+    });
   });
 });

@@ -12033,6 +12033,7 @@ export function ProposalForge(): JSX.Element {
     return buildProposalSourceDraftFromJob({
       job: {
         title: proposalDraftLinkedJobRecord.title,
+        company: proposalDraftLinkedJobRecord.company,
         rawDescription: proposalDraftLinkedJobRecord.rawDescription,
         sourceUrl: proposalDraftLinkedJobRecord.sourceUrl,
         sourceDomain: proposalDraftLinkedJobRecord.sourceDomain,
@@ -14151,7 +14152,10 @@ export function ProposalForge(): JSX.Element {
                           }
                           canonicalJobId={canonicalJobId}
                           targetEmployerName={
-                            canonicalJobRecord?.company?.trim() || null
+                            stagedProposalSourceDraft?.targetEmployerName ??
+                            proposalDraftSourceDraft?.targetEmployerName ??
+                            canonicalJobRecord?.company?.trim() ??
+                            null
                           }
                           jobSourceLanguage={
                             stagedSourceJobRecord?.sourceLanguage ??
