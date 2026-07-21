@@ -335,6 +335,23 @@ describe("ProposalForge job resume scope", () => {
     );
   });
 
+  it("keeps an explicit edited-text employer clear ahead of the canonical job", () => {
+    const source = readFileSync("src/pages/ProposalForge.tsx", "utf8");
+    expect(source).toMatch(
+      /hasOwnProperty\(composePreviewValues, "targetEmployerName"\)[\s\S]*composePreviewValues\.targetEmployerName === null[\s\S]*return null;[\s\S]*if \(canonicalJobRecord\)/,
+    );
+    expect(source).toMatch(
+      /handleRailJobOfferTextChange[\s\S]*targetEmployerName:\s*null/,
+    );
+  });
+
+  it("prefers saved metadata and its linked job over unrelated compose state", () => {
+    const source = readFileSync("src/pages/ProposalForge.tsx", "utf8");
+    expect(source).toMatch(
+      /if \(isSavedView\) \{[\s\S]*selectedPersistedProposal\?\.metadata\?\.targetEmployerName\?\.trim\(\)[\s\S]*linkedProposalEmployerName[\s\S]*resolvedProposalWorkspaceSourceDraft\?\.targetEmployerName\?\.trim\(\)/,
+    );
+  });
+
   it("keeps the canonical jobId when opened from the jobs page reset-navigation path", async () => {
     queryState.jobsById.job_alpha = {
       ...queryState.jobsById.job_alpha,

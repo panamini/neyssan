@@ -182,6 +182,9 @@ describe("Target Employer Module", () => {
       '"targetEmployer":{"status":"RESOLVED","canonicalName":"Acme Corp.","displayName":"Acme"',
     );
     expect(prompt).toContain(
+      "Structured target employer: use only the targetEmployer.displayName value from the structured brief",
+    );
+    expect(prompt).not.toContain(
       'Structured target employer: use displayName "Acme"',
     );
   });

@@ -3147,7 +3147,7 @@ function targetEmployerPromptGuidance(
   targetEmployer: TargetEmployerResolution,
 ): string {
   return targetEmployer.status === "RESOLVED"
-    ? `Structured target employer: use displayName "${targetEmployer.displayName}"; never override it from title/description.`
+    ? "Structured target employer: use only the targetEmployer.displayName value from the structured brief; never override it from title/description."
     : "No structured target employer is resolved: do not infer, name, or personalize an employer from the title or description.";
 }
 

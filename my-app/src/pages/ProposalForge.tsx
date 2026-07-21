@@ -5269,8 +5269,30 @@ export function ProposalForge(): JSX.Element {
         null
       );
     }
+    if (isSavedView) {
+      return (
+        selectedPersistedProposal?.metadata?.targetEmployerName?.trim() ||
+        linkedProposalEmployerName ||
+        resolvedProposalWorkspaceSourceDraft?.targetEmployerName?.trim() ||
+        lastProposalRequest?.targetEmployerName?.trim() ||
+        null
+      );
+    }
+    if (
+      composePreviewValues &&
+      hasOwnProperty(composePreviewValues, "targetEmployerName") &&
+      composePreviewValues.targetEmployerName === null
+    ) {
+      return null;
+    }
     if (canonicalJobRecord) {
       return canonicalJobRecord.company?.trim() || null;
+    }
+    if (
+      composePreviewValues &&
+      hasOwnProperty(composePreviewValues, "targetEmployerName")
+    ) {
+      return composePreviewValues.targetEmployerName?.trim() || null;
     }
 
     return (
@@ -5282,6 +5304,8 @@ export function ProposalForge(): JSX.Element {
     );
   }, [
     canonicalJobRecord?.company,
+    composePreviewValues,
+    isSavedView,
     lastProposalRequest?.targetEmployerName,
     linkedProposalEmployerName,
     resolvedProposalWorkspaceSourceDraft?.targetEmployerName,
