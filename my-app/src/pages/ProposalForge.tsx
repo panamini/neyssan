@@ -14150,6 +14150,9 @@ export function ProposalForge(): JSX.Element {
                             briefSourcePlatform
                           }
                           canonicalJobId={canonicalJobId}
+                          targetEmployerName={
+                            canonicalJobRecord?.company?.trim() || null
+                          }
                           jobSourceLanguage={
                             stagedSourceJobRecord?.sourceLanguage ??
                             canonicalJobRecord?.sourceLanguage ??

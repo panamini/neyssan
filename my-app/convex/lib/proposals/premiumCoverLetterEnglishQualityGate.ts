@@ -10,6 +10,11 @@ import {
   canonicalizePremiumCoverLetterToken,
   normalizePremiumCoverLetterNumericToken,
 } from "./premiumCoverLetterTokenNormalization";
+import {
+  MISSING_TARGET_EMPLOYER,
+  targetEmployerOwnsOccurrence,
+  type TargetEmployerResolution,
+} from "./premiumCoverLetterTargetEmployer";
 
 const ENGLISH_CV_BACKED_SECTIONS: readonly ClaimPlanSection[] = [
   "opening",
@@ -1667,6 +1672,7 @@ export function validateEnglishCvBackedQualityGate(args: {
   claimPlan: ClaimPlanV1;
   factGraph: FactGraphV1;
   jobDemandGraph?: JobDemandGraphV1;
+  targetEmployer?: TargetEmployerResolution;
 }): EnglishCvBackedQualityGateIssue[] {
   if (
     args.claimPlan.language !== "English" ||
@@ -1677,6 +1683,7 @@ export function validateEnglishCvBackedQualityGate(args: {
   }
 
   const issues: EnglishCvBackedQualityGateIssue[] = [];
+  const targetEmployer = args.targetEmployer ?? MISSING_TARGET_EMPLOYER;
   const factById = new Map(args.factGraph.facts.map((fact) => [fact.id, fact]));
   const claimBySection = new Map(
     args.claimPlan.claims.map((claim) => [claim.section, claim]),
@@ -1851,6 +1858,11 @@ export function validateEnglishCvBackedQualityGate(args: {
     }
     for (const occurrence of numericTokenOccurrences(text).filter(
       (candidate) =>
+        !targetEmployerOwnsOccurrence({
+          value: text,
+          occurrenceIndex: candidate.index,
+          targetEmployer,
+        }) &&
         !numericOccurrenceIsPartOfEntity({
           value: text,
           occurrence: candidate,
@@ -1915,6 +1927,7 @@ export function analyzeEnglishCvBackedQualityGate(args: {
   claimPlan: ClaimPlanV1;
   factGraph: FactGraphV1;
   jobDemandGraph?: JobDemandGraphV1;
+  targetEmployer?: TargetEmployerResolution;
 }): EnglishCvBackedQualityGateAnalysis {
   const issues = validateEnglishCvBackedQualityGate(args);
   if (

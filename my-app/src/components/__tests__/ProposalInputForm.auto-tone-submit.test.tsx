@@ -191,6 +191,7 @@ describe("ProposalInputForm auto tone submit", () => {
       <ProposalInputForm
         onSubmit={handleSubmit}
         canonicalJobId="job_alpha"
+        targetEmployerName="Acme Corp."
         activeCvId="cv_job_alpha"
       />,
     );
@@ -214,6 +215,7 @@ describe("ProposalInputForm auto tone submit", () => {
       expect(mockGenerateProposalAction).toHaveBeenCalledWith(
         expect.objectContaining({
           jobId: "job_alpha",
+          targetEmployerName: "Acme Corp.",
           personalizationContext: expect.objectContaining({
             desiredPosition: "Operations Associate",
           }),

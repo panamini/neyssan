@@ -38,6 +38,11 @@ import {
 } from "./premiumCoverLetterTokenNormalization";
 import type { ProposalVoicePreset } from "./voicePresets";
 import type { CompanyValuesPack } from "./companyValues";
+import {
+  MISSING_TARGET_EMPLOYER,
+  resolveTargetEmployerAuthorities,
+  type TargetEmployerResolution,
+} from "./premiumCoverLetterTargetEmployer";
 
 export type PremiumCoverLetterContextClass =
   | "cv_direct"
@@ -200,7 +205,7 @@ export type CoverLetterBrief = {
   contextClass: PremiumCoverLetterContextClass;
   candidateEvidenceAvailable: boolean;
   targetRole: string;
-  employerName?: string;
+  targetEmployer: TargetEmployerResolution;
   topEvidence: string[];
   supportEvidence: string[];
   transferCore?: string[];
@@ -2145,14 +2150,6 @@ function isSecondaryQualification(fact: AllowedFact): boolean {
   );
 }
 
-function extractEmployerName(jobTitle: string, jobDescription: string): string | undefined {
-  const candidate = (
-    jobTitle.match(/\bat\s+([A-Z][\w&'.-]+(?:\s+[A-Z][\w&'.-]+){0,3})/)?.[1] ??
-    jobDescription.match(/\b(?:join|at)\s+([A-Z][\w&'.-]+(?:\s+[A-Z][\w&'.-]+){0,3})/)?.[1]
-  )?.trim();
-  return candidate ? compactWhitespace(candidate) : undefined;
-}
-
 function resolveCloseFallback(language: string): string {
   const deterministicLanguage = getDeterministicCopyLanguage(language);
   if (!deterministicLanguage) return "";
@@ -3034,6 +3031,7 @@ export function buildPremiumCoverLetterBrief(args: {
   claimPlan?: ClaimPlanV1;
   factGraph?: FactGraphV1;
   jobDemandGraph?: JobDemandGraphV1;
+  targetEmployer?: TargetEmployerResolution;
 }): CoverLetterBrief {
   const jobOfferPriorityPack = buildJobOfferPriorityPack(args.jobDescription);
   const jobPostFacts = args.allowedFactsPack.facts
@@ -3054,7 +3052,7 @@ export function buildPremiumCoverLetterBrief(args: {
     contextClass: args.contextClass,
     candidateEvidenceAvailable: args.contextClass !== "no_cv",
     targetRole: compactWhitespace(args.jobTitle),
-    employerName: extractEmployerName(args.jobTitle, args.jobDescription),
+    targetEmployer: args.targetEmployer ?? MISSING_TARGET_EMPLOYER,
     topEvidence: args.rankedEvidencePack.strongestEvidence
       .slice(0, MAX_EVIDENCE_ITEMS)
       .map((fact) => fact.text),
@@ -3157,10 +3155,16 @@ export function buildPremiumCoverLetterPrompt(args: {
     writerProvider: args.writerProvider,
     writerModel: args.writerModel,
   });
-  const { requiredMoves, forbiddenMoves, companyValuesPack, ...briefRest } =
-    args.brief;
+  const {
+    requiredMoves,
+    forbiddenMoves,
+    companyValuesPack,
+    targetEmployer,
+    ...briefRest
+  } = args.brief;
   const structuredBrief = {
     ...briefRest,
+    ...(targetEmployer.status === "RESOLVED" ? { targetEmployer } : {}),
     ...(companyValuesPack
       ? {
           companyValuesPack: {
@@ -3209,6 +3213,11 @@ export function buildPremiumCoverLetterPrompt(args: {
     "topResponsibilities lead; keyRequirements sharpen; the rest stay secondary.",
     "lowValueChecklist is diagnostic-only. Do not quote it, paraphrase it, or use it as employer-value language in the letter.",
     "A JD keyword, tool, certification, compliance framework, domain, or responsibility may appear as candidate experience only when the CV supports that exact capability. Bind ATS terms to a concrete action or result; never list them. Bind ATS and JD terms to a concrete CV-backed action, artifact, responsibility, or result. Never use a JD keyword as a floating adjective or implied experience.",
+    ...(targetEmployer.status === "RESOLVED"
+      ? [
+          `Structured target employer: use displayName "${targetEmployer.displayName}"; never override it from title/description.`,
+        ]
+      : []),
     ...(companyValuesPack
       ? [
           "Company values are bounded secondary context only: use at most one explicit bridge, only when grounded and tied to source-backed candidate evidence; never replace stronger proof or infer personal alignment.",
@@ -6667,6 +6676,17 @@ function resolvePremiumCoverLetterOpenAIResponseFormat(args: {
   };
 }
 
+function buildPremiumCoverLetterPromptBriefProjection(
+  brief: CoverLetterBrief,
+): Omit<CoverLetterBrief, "targetEmployer"> &
+  Partial<Pick<CoverLetterBrief, "targetEmployer">> {
+  const { targetEmployer, ...briefWithoutTargetEmployer } = brief;
+  return {
+    ...briefWithoutTargetEmployer,
+    ...(targetEmployer.status === "RESOLVED" ? { targetEmployer } : {}),
+  };
+}
+
 function buildPremiumCoverLetterRepairPrompt(args: {
   brief: CoverLetterBrief;
   previousBodyParts: CoverLetterBodyParts;
@@ -6724,7 +6744,7 @@ function buildPremiumCoverLetterRepairPrompt(args: {
     "",
     `Validation issues: ${JSON.stringify(args.issues)}`,
     `Previous body parts: ${JSON.stringify(args.previousBodyParts)}`,
-    `Structured brief: ${JSON.stringify(args.brief)}`,
+    `Structured brief: ${JSON.stringify(buildPremiumCoverLetterPromptBriefProjection(args.brief))}`,
   ].join("\n");
 }
 
@@ -6759,7 +6779,7 @@ function buildPremiumCoverLetterQualityRepairPrompt(args: {
     `Quality issues: ${JSON.stringify(args.issues)}`,
     `Quality shadow: ${JSON.stringify(args.qualityShadow)}`,
     `Previous body parts: ${JSON.stringify(args.previousBodyParts)}`,
-    `Structured brief: ${JSON.stringify(args.brief)}`,
+    `Structured brief: ${JSON.stringify(buildPremiumCoverLetterPromptBriefProjection(args.brief))}`,
   ].join("\n");
 }
 
@@ -6779,7 +6799,7 @@ function buildPremiumWriterOutputRepairPrompt(args: {
     `Validation issue codes: ${JSON.stringify(args.issues)}`,
     `ClaimPlan: ${JSON.stringify(args.brief.claimPlan)}`,
     `Previous PremiumWriterOutputV1: ${JSON.stringify(args.previousWriterOutput)}`,
-    `Structured brief: ${JSON.stringify(args.brief)}`,
+    `Structured brief: ${JSON.stringify(buildPremiumCoverLetterPromptBriefProjection(args.brief))}`,
   ].join("\n");
 }
 
@@ -7195,6 +7215,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   outputLanguage: ProposalOutputLanguage;
   jobTitle: string;
   jobDescription: string;
+  targetEmployerName?: string | null;
   candidateName?: string;
   generationControlsBlock?: string;
   companyValuesPack?: CompanyValuesPack;
@@ -7232,6 +7253,9 @@ export async function attemptPremiumCoverLetterGeneration(args: {
   }
   const contextClass = eligibility.contextClass;
   const voicePreset = args.voicePreset;
+  const targetEmployer = resolveTargetEmployerAuthorities([
+    args.targetEmployerName,
+  ]);
 
   const factGraph = buildPremiumFactGraphV1({
     personalizationContext: args.personalizationContext,
@@ -7292,6 +7316,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     claimPlan,
     factGraph,
     jobDemandGraph,
+    targetEmployer,
   });
   const prompt = buildPremiumCoverLetterPrompt({
     brief,
@@ -7644,6 +7669,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
     claimPlan,
     factGraph,
     jobDemandGraph,
+    targetEmployer,
   });
   let blockingEnglishCvBackedQualityGateIssues =
     englishCvBackedQualityGateIssues.filter((issue) =>
@@ -7678,6 +7704,7 @@ export async function attemptPremiumCoverLetterGeneration(args: {
       claimPlan,
       factGraph,
       jobDemandGraph,
+      targetEmployer,
     });
     blockingEnglishCvBackedQualityGateIssues =
       englishCvBackedQualityGateIssues.filter((issue) =>

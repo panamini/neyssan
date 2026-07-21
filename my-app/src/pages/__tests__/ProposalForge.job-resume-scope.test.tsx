@@ -183,14 +183,19 @@ vi.mock("../../components/ProposalInputForm", () => ({
     onActiveCvChange,
     activeCvId,
     canonicalJobId,
+    targetEmployerName,
   }: {
     onActiveCvChange?: (cvId: string | null) => void;
     activeCvId?: string | null;
     canonicalJobId?: string | null;
+    targetEmployerName?: string | null;
   }) => (
     <div>
       <div data-testid="proposal-input-active-cv">{activeCvId ?? "none"}</div>
       <div data-testid="proposal-input-job">{canonicalJobId ?? "none"}</div>
+      <div data-testid="proposal-input-employer">
+        {targetEmployerName ?? "none"}
+      </div>
       <button type="button" onClick={() => onActiveCvChange?.("cv_alpha")}>
         Attach CV from form
       </button>
@@ -257,6 +262,9 @@ describe("ProposalForge job resume scope", () => {
 
     expect(screen.getByTestId("proposal-input-job")).toHaveTextContent(
       "job_alpha",
+    );
+    expect(screen.getByTestId("proposal-input-employer")).toHaveTextContent(
+      "Acme",
     );
     expect(screen.getByTestId("proposal-input-active-cv")).toHaveTextContent(
       "none",

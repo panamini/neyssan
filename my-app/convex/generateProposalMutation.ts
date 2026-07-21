@@ -567,6 +567,7 @@ type PersonalizationMode = "default" | "explicit_only";
 export type GenerateProposalArgs = {
   jobTitle: string;
   jobDescription: string;
+  targetEmployerName?: string | null;
   jobId?: string;
   clientRunId?: string;
   proposalType:
@@ -601,6 +602,7 @@ export type GenerateProposalArgs = {
 export const generateProposalArgs = {
   jobTitle: v.string(),
   jobDescription: v.string(),
+  targetEmployerName: v.optional(v.union(v.string(), v.null())),
   jobId: v.optional(v.string()),
   clientRunId: v.optional(v.string()),
   proposalType: proposalTypeChoice,
@@ -11248,6 +11250,7 @@ export async function handleGenerateProposal(
                   outputLanguage,
                   jobTitle: effectiveJobTitle,
                   jobDescription: args.jobDescription,
+                  targetEmployerName: args.targetEmployerName,
                   candidateName,
                   generationControlsBlock,
                   companyValuesPack,
@@ -11357,6 +11360,7 @@ export async function handleGenerateProposal(
                   outputLanguage,
                   jobTitle: effectiveJobTitle,
                   jobDescription: args.jobDescription,
+                  targetEmployerName: args.targetEmployerName,
                   candidateName,
                   generationControlsBlock,
                   companyValuesPack,
@@ -11580,6 +11584,7 @@ export async function handleGenerateProposal(
                   outputLanguage,
                   jobTitle: effectiveJobTitle,
                   jobDescription: args.jobDescription,
+                  targetEmployerName: args.targetEmployerName,
                   candidateName,
                   generationControlsBlock,
                   companyValuesPack,

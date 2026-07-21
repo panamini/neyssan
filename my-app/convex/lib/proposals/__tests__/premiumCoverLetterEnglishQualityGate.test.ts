@@ -21,6 +21,7 @@ import {
   canonicalizePremiumCoverLetterToken,
   expandPremiumCoverLetterTokenVariants,
 } from "../premiumCoverLetterTokenNormalization";
+import { resolveTargetEmployerAuthorities } from "../premiumCoverLetterTargetEmployer";
 import {
   ENGLISH_QUALITY_GATE_CHARACTERIZATION_CASES,
   ENGLISH_QUALITY_GATE_EXPECTED_CASE_IDS,
@@ -3853,9 +3854,10 @@ function characterizationEmployerName(
     { axis: "target_employer" }
   >,
 ): string | null {
-  const jobDescription = input.canonicalEmployer
-    ? `Target employer: ${input.canonicalEmployer}.\n${input.jobDescription}`
-    : input.jobDescription;
+  const jobDescription = input.jobDescription;
+  const targetEmployer = resolveTargetEmployerAuthorities([
+    input.canonicalEmployer,
+  ]);
   const allowedFactsPack = buildAllowedFactsPack({
     personalizationContext: null,
     jobTitle: input.jobTitle,
@@ -3867,17 +3869,19 @@ function characterizationEmployerName(
     jobDescription,
     contextClass: "no_cv",
   });
-  return (
-    buildPremiumCoverLetterBrief({
-      preset: "signature",
-      outputLanguage: "English",
-      jobTitle: input.jobTitle,
-      jobDescription,
-      contextClass: "no_cv",
-      allowedFactsPack,
-      rankedEvidencePack,
-    }).employerName ?? null
-  );
+  const brief = buildPremiumCoverLetterBrief({
+    preset: "signature",
+    outputLanguage: "English",
+    jobTitle: input.jobTitle,
+    jobDescription,
+    contextClass: "no_cv",
+    allowedFactsPack,
+    rankedEvidencePack,
+    targetEmployer,
+  });
+  return brief.targetEmployer.status === "RESOLVED"
+    ? brief.targetEmployer.displayName
+    : null;
 }
 
 function characterizationNumericIssues(
@@ -3905,6 +3909,9 @@ function characterizationNumericIssues(
     }),
     claimPlan,
     factGraph: metricFactGraph,
+    targetEmployer: resolveTargetEmployerAuthorities([
+      input.canonicalEmployer,
+    ]),
   });
 }
 

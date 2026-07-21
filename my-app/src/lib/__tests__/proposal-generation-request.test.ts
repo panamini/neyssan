@@ -25,6 +25,7 @@ describe("proposal generation request", () => {
         languageSource: "document-preference",
         jobDetectedLanguage: "en",
       },
+      "Acme Corp.",
     );
 
     expect(payload).toMatchObject({
@@ -33,6 +34,7 @@ describe("proposal generation request", () => {
       resolvedLanguage: "fr",
       languageSource: "document-preference",
       jobDetectedLanguage: "en",
+      targetEmployerName: "Acme Corp.",
     });
   });
 });

@@ -1,9 +1,5 @@
 export const ENGLISH_QUALITY_GATE_KNOWN_FAILURE_IDS = [
-  "p2-job-level-not-employer",
-  "p2-heading-not-employer",
   "p2-hyphenated-duration-paraphrase",
-  "p2-numeric-brand-legal-suffix",
-  "p2-numeric-only-employer",
 ] as const;
 
 export const ENGLISH_QUALITY_GATE_EXPECTED_CASE_IDS = [
@@ -34,25 +30,13 @@ export const ENGLISH_QUALITY_GATE_EXPECTED_CASE_IDS = [
 ] as const;
 
 export const ENGLISH_QUALITY_GATE_EXPECTED_DIVERGENT_CASE_IDS = [
-  "p2-employer-job-level-em-dash",
-  "p2-employer-job-level-case-variation",
-  "p2-employer-heading-before-authority",
-  "p2-employer-heading-punctuation-variation",
-  "p2-employer-numeric-only-authority",
   "p2-duration-three-day-paraphrase",
   "p2-duration-three-day-case-punctuation",
-  "p2-brand-7-eleven-legal-suffix",
 ] as const;
 
 export const ENGLISH_QUALITY_GATE_EXPECTED_DIVERGENT_OBSERVATIONS = {
-  "p2-employer-job-level-em-dash": "null",
-  "p2-employer-job-level-case-variation": "null",
-  "p2-employer-heading-before-authority": '"Acme Corp."',
-  "p2-employer-heading-punctuation-variation": '"Acme Corp."',
-  "p2-employer-numeric-only-authority": "null",
   "p2-duration-three-day-paraphrase": '["3"]',
   "p2-duration-three-day-case-punctuation": '["3"]',
-  "p2-brand-7-eleven-legal-suffix": '["11","7"]',
 } as const satisfies Readonly<
   Record<
     (typeof ENGLISH_QUALITY_GATE_EXPECTED_DIVERGENT_CASE_IDS)[number],
@@ -84,6 +68,7 @@ export type TargetEmployerCharacterizationCase = CharacterizationCaseBase &
 export type NumericEvidenceCharacterizationCase = CharacterizationCaseBase &
   Readonly<{
     axis: "numeric_evidence";
+    canonicalEmployer: string | null;
     sourceText: string;
     sourceMetrics: readonly string[];
     sourceEntities: readonly string[];
@@ -108,7 +93,6 @@ const targetEmployerCases: readonly TargetEmployerCharacterizationCase[] = [
     id: "p2-employer-job-level-em-dash",
     provenance: "P2",
     pairId: "employer-job-level",
-    knownFailureId: "p2-job-level-not-employer",
     axis: "target_employer",
     canonicalEmployer: "Acme",
     jobTitle: "Software Engineer — Level 3",
@@ -119,7 +103,6 @@ const targetEmployerCases: readonly TargetEmployerCharacterizationCase[] = [
     id: "p2-employer-job-level-case-variation",
     provenance: "PR349",
     pairId: "employer-job-level",
-    knownFailureId: "p2-job-level-not-employer",
     axis: "target_employer",
     canonicalEmployer: "Acme",
     jobTitle: "SOFTWARE ENGINEER - LEVEL 3",
@@ -130,7 +113,6 @@ const targetEmployerCases: readonly TargetEmployerCharacterizationCase[] = [
     id: "p2-employer-heading-before-authority",
     provenance: "P2",
     pairId: "employer-heading",
-    knownFailureId: "p2-heading-not-employer",
     axis: "target_employer",
     canonicalEmployer: "Acme",
     jobTitle: "Software Engineer",
@@ -141,7 +123,6 @@ const targetEmployerCases: readonly TargetEmployerCharacterizationCase[] = [
     id: "p2-employer-heading-punctuation-variation",
     provenance: "PR349",
     pairId: "employer-heading",
-    knownFailureId: "p2-heading-not-employer",
     axis: "target_employer",
     canonicalEmployer: "Acme",
     jobTitle: "Software Engineer",
@@ -166,7 +147,7 @@ const targetEmployerCases: readonly TargetEmployerCharacterizationCase[] = [
     canonicalEmployer: "Acme",
     jobTitle: "Software Engineer at Acme.",
     jobDescription: "Build reliable platform services.",
-    expectedEmployerName: "Acme.",
+    expectedEmployerName: "Acme",
   },
   {
     id: "history-employer-missing-fails-safe",
@@ -192,7 +173,6 @@ const targetEmployerCases: readonly TargetEmployerCharacterizationCase[] = [
     id: "p2-employer-numeric-only-authority",
     provenance: "P2",
     pairId: "numeric-only-employer",
-    knownFailureId: "p2-numeric-only-employer",
     axis: "target_employer",
     canonicalEmployer: "99",
     jobTitle: "Data Analyst",
@@ -207,6 +187,7 @@ const numericEvidenceCases: readonly NumericEvidenceCharacterizationCase[] = [
     provenance: "P1",
     pairId: "numeric-100m-authority",
     axis: "numeric_evidence",
+    canonicalEmployer: null,
     sourceText: "Maintained weekly reporting for delivery teams.",
     sourceMetrics: [],
     sourceEntities: ["weekly reporting", "delivery teams"],
@@ -218,6 +199,7 @@ const numericEvidenceCases: readonly NumericEvidenceCharacterizationCase[] = [
     provenance: "P1",
     pairId: "numeric-100m-authority",
     axis: "numeric_evidence",
+    canonicalEmployer: null,
     sourceText: "Maintained reporting at 100M for delivery teams.",
     sourceMetrics: [],
     sourceEntities: ["100M", "delivery teams"],
@@ -230,6 +212,7 @@ const numericEvidenceCases: readonly NumericEvidenceCharacterizationCase[] = [
     pairId: "numeric-three-day-duration",
     knownFailureId: "p2-hyphenated-duration-paraphrase",
     axis: "numeric_evidence",
+    canonicalEmployer: null,
     sourceText: "Completed a 3-Day Training Program.",
     sourceMetrics: ["3-Day"],
     sourceEntities: ["Training Program"],
@@ -243,6 +226,7 @@ const numericEvidenceCases: readonly NumericEvidenceCharacterizationCase[] = [
     pairId: "numeric-three-day-duration",
     knownFailureId: "p2-hyphenated-duration-paraphrase",
     axis: "numeric_evidence",
+    canonicalEmployer: null,
     sourceText: "Completed a 3-day training program.",
     sourceMetrics: ["3-day"],
     sourceEntities: ["training program"],
@@ -253,11 +237,11 @@ const numericEvidenceCases: readonly NumericEvidenceCharacterizationCase[] = [
     id: "p2-brand-7-eleven-legal-suffix",
     provenance: "P2",
     pairId: "numeric-brand-legal-suffix",
-    knownFailureId: "p2-numeric-brand-legal-suffix",
     axis: "numeric_evidence",
-    sourceText: "Target employer: 7-Eleven Inc.",
+    canonicalEmployer: "7-Eleven Inc.",
+    sourceText: "Maintained reliable delivery handoffs.",
     sourceMetrics: [],
-    sourceEntities: ["7-Eleven Inc."],
+    sourceEntities: ["delivery handoffs"],
     visibleText: "7-Eleven offers clear delivery handoffs.",
     expectedUnsupportedMetrics: [],
   },
@@ -266,9 +250,10 @@ const numericEvidenceCases: readonly NumericEvidenceCharacterizationCase[] = [
     provenance: "PR349",
     pairId: "numeric-brand-legal-suffix",
     axis: "numeric_evidence",
-    sourceText: "Target employer: 7-Eleven, Inc.",
+    canonicalEmployer: "7-Eleven, Inc.",
+    sourceText: "Maintained reliable delivery reporting.",
     sourceMetrics: [],
-    sourceEntities: ["7-Eleven, Inc."],
+    sourceEntities: ["delivery reporting"],
     visibleText: "At 7-ELEVEN, reporting supports delivery.",
     expectedUnsupportedMetrics: [],
   },
@@ -277,9 +262,10 @@ const numericEvidenceCases: readonly NumericEvidenceCharacterizationCase[] = [
     provenance: "P2",
     pairId: "numeric-only-employer",
     axis: "numeric_evidence",
-    sourceText: "Target employer: 99.",
+    canonicalEmployer: "99",
+    sourceText: "Maintained reliable delivery reporting.",
     sourceMetrics: [],
-    sourceEntities: ["99"],
+    sourceEntities: ["delivery reporting"],
     visibleText: "At 99, that reporting supports clear delivery handoffs.",
     expectedUnsupportedMetrics: [],
   },
@@ -288,6 +274,7 @@ const numericEvidenceCases: readonly NumericEvidenceCharacterizationCase[] = [
     provenance: "P2",
     pairId: "numeric-only-employer",
     axis: "numeric_evidence",
+    canonicalEmployer: null,
     sourceText: "Maintained weekly reporting for delivery teams.",
     sourceMetrics: [],
     sourceEntities: ["delivery teams"],
